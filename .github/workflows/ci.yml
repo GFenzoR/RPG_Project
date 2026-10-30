@@ -62,5 +62,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the ids.lock.yaml append-only check compares with the base branch
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: content and maps
         run: make validate
+        env:
+          CONTENT_BASE_REF: origin/${{ github.base_ref || 'main' }}

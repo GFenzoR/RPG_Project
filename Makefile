@@ -57,9 +57,16 @@ lint-ts:
 	pnpm lint
 	pnpm typecheck
 
+# Content tooling runs TypeScript directly (Node strips types; the flag is needed < 22.18).
+CONTENT_CLI := node --experimental-strip-types packages/content-schema/src/cli.ts
+
 .PHONY: validate
-validate: ## Validate data/ YAML and world/ maps against the schemas
-	$(call pending,T0.3 (content) / T0.4 (maps))
+validate: ## Validate data/ YAML and i18n/ against the schemas (maps: T0.4)
+	$(CONTENT_CLI) validate
+
+.PHONY: gen-ids
+gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
+	$(CONTENT_CLI) gen-ids
 
 .PHONY: fmt
 fmt: ## Format Go and TS code
