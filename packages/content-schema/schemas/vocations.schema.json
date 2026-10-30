@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/vocations.schema.json",
+  "title": "Vocations (data/vocations.yaml)",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "name",
+      "description",
+      "start",
+      "per_level",
+      "regen",
+      "skill_factors",
+      "weapons"
+    ],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
+      "description": { "$ref": "common.schema.json#/$defs/i18nKey" },
+      "start": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["health", "mana", "capacity", "speed"],
+        "properties": {
+          "health": { "$ref": "common.schema.json#/$defs/positiveInt" },
+          "mana": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "capacity": { "description": "Grams.", "$ref": "common.schema.json#/$defs/positiveInt" },
+          "speed": { "$ref": "common.schema.json#/$defs/positiveInt" }
+        }
+      },
+      "per_level": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["health", "mana", "capacity", "speed"],
+        "properties": {
+          "health": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "mana": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "capacity": {
+            "description": "Grams.",
+            "$ref": "common.schema.json#/$defs/nonNegativeInt"
+          },
+          "speed": { "$ref": "common.schema.json#/$defs/nonNegativeInt" }
+        }
+      },
+      "regen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["health", "mana", "interval_ms"],
+        "properties": {
+          "health": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "mana": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "interval_ms": { "$ref": "common.schema.json#/$defs/positiveInt" }
+        }
+      },
+      "skill_factors": {
+        "description": "Training cost multiplier per combat skill (lower = learns faster).",
+        "type": "object",
+        "propertyNames": { "$ref": "common.schema.json#/$defs/combatSkill" },
+        "additionalProperties": { "type": "number", "minimum": 1 }
+      },
+      "weapons": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": { "enum": ["sword", "axe", "club", "distance", "wand"] }
+      },
+      "spells": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": { "$ref": "common.schema.json#/$defs/spellRef" }
+      },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

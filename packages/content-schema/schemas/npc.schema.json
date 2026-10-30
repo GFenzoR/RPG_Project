@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/npc.schema.json",
+  "title": "NPC (data/npcs/<id>.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "sprite"],
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/id" },
+    "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
+    "sprite": { "$ref": "common.schema.json#/$defs/sprite" },
+    "dialog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "nodes"],
+      "properties": {
+        "start": { "$ref": "common.schema.json#/$defs/id" },
+        "nodes": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
+          "additionalProperties": { "$ref": "#/$defs/node" }
+        }
+      }
+    },
+    "shop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/id" },
+        "sells": { "type": "array", "items": { "$ref": "#/$defs/offer" } },
+        "buys": { "type": "array", "items": { "$ref": "#/$defs/offer" } }
+      }
+    },
+    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "options"],
+      "properties": {
+        "text": { "$ref": "common.schema.json#/$defs/i18nKey" },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 9,
+          "items": { "$ref": "#/$defs/option" }
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "anyOf": [{ "required": ["goto"] }, { "required": ["action"] }],
+      "properties": {
+        "text": { "$ref": "common.schema.json#/$defs/i18nKey" },
+        "goto": {
+          "description": "Dialog node id in this NPC.",
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "if": { "$ref": "common.schema.json#/$defs/conditions" },
+        "action": { "$ref": "common.schema.json#/$defs/actions" }
+      }
+    },
+    "offer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item", "price"],
+      "properties": {
+        "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+        "price": { "$ref": "common.schema.json#/$defs/nonNegativeInt" }
+      }
+    }
+  }
+}

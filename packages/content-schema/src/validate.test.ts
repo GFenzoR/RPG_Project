@@ -1,0 +1,198 @@
+import {
+  appendFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { formatDiagnostic, SchemaSet, validateContent } from "./index.ts";
+import type { SchemaName } from "./index.ts";
+
+const REPO = new URL("../../../", import.meta.url).pathname;
+
+function messages(root: string): string[] {
+  const out = validateContent(root).diagnostics.map(formatDiagnostic);
+  if (process.env["DEBUG_CONTENT"]) console.log(out.join("\n"));
+  return out;
+}
+
+describe("repository content", () => {
+  it("validates data/ and i18n/ with no errors or warnings", () => {
+    const report = validateContent(REPO);
+    expect(report.diagnostics.map(formatDiagnostic)).toEqual([]);
+  });
+
+  it("compiles every schema", () => {
+    const set = new SchemaSet();
+    const names: SchemaName[] = [
+      "balance",
+      "vocations",
+      "items",
+      "monster",
+      "npc",
+      "quest",
+      "spells",
+      "recipes",
+      "borders",
+      "i18n",
+      "ids-lock",
+    ];
+    for (const name of names) expect(() => set.validate(name, {})).not.toThrow();
+  });
+});
+
+describe("validator diagnostics", () => {
+  let root: string;
+  const file = (rel: string): string => join(root, rel);
+  const edit = (rel: string, from: string, to: string): void => {
+    const text = readFileSync(file(rel), "utf8");
+    expect(text).toContain(from);
+    writeFileSync(file(rel), text.replace(from, to));
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "content-"));
+    cpSync(join(REPO, "data"), join(root, "data"), { recursive: true });
+    cpSync(join(REPO, "i18n"), join(root, "i18n"), { recursive: true });
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it("points at file:line:col and suggests the closest id for unknown references", () => {
+    edit("data/monsters/wolf.yaml", "item: wolf_pelt,", "item: wolf_pelts,");
+    expect(messages(root)).toContain(
+      'error data/monsters/wolf.yaml:17:7 loot[0].item: unknown item "wolf_pelts" (did you mean "wolf_pelt"?)',
+    );
+  });
+
+  it("reports unknown fields and missing required fields", () => {
+    edit("data/monsters/wolf.yaml", "speed: 190\n", "sped: 190\n");
+    const out = messages(root);
+    expect(out).toContain('error data/monsters/wolf.yaml:6:1 sped: unknown field "sped"');
+    expect(out).toContain('error data/monsters/wolf.yaml:1:1 missing required field "speed"');
+  });
+
+  it("checks dialog graphs and shop references", () => {
+    edit("data/npcs/harbor_master.yaml", "goto: island", "goto: islnd");
+    edit("data/npcs/harbor_master.yaml", "open_shop: harbor_shop", "open_shop: harbour_shop");
+    const out = messages(root);
+    expect(out).toContain(
+      'error data/npcs/harbor_master.yaml:11:11 dialog.nodes.greet.options[0].goto: unknown dialog node "islnd" (did you mean "island"?)',
+    );
+    expect(
+      out.some((m) => m.includes('unknown shop "harbour_shop" (did you mean "harbor_shop"?)')),
+    ).toBe(true);
+    expect(
+      out.some((m) => m.startsWith("warning") && m.includes('"island" is never reached')),
+    ).toBe(true);
+  });
+
+  it("requires the same keys and placeholders in every language", () => {
+    edit("i18n/en/monsters.yaml", 'monster.bilge_rat.name: "bilge rat"\n', "");
+    edit("i18n/es/npcs.yaml", "{name}", "{nombre}");
+    appendFileSync(file("i18n/en/dialog.yaml"), 'dialog.extra: "extra"\n');
+    const out = messages(root);
+    expect(out).toContain(
+      'error data/monsters/bilge_rat.yaml:2:1 name: i18n key "monster.bilge_rat.name" is missing in: en',
+    );
+    expect(out.some((m) => m.includes("placeholders {name} differ from es {nombre}"))).toBe(true);
+    expect(out.some((m) => m.includes("dialog.extra: missing in es"))).toBe(true);
+  });
+
+  it("rejects duplicate ids, file name mismatches and kind-specific blocks on other kinds", () => {
+    appendFileSync(
+      file("data/items/tools.yaml"),
+      "\n- id: grass\n  kind: decoration\n  sprite: deco/grass\n  name: item.grass.name\n  weapon: { type: sword, attack: 1 }\n",
+    );
+    edit("data/monsters/tide_crab.yaml", "id: tide_crab", "id: crab");
+    const out = messages(root);
+    expect(
+      out.some((m) =>
+        m.includes('duplicate item id "grass" (first defined in data/items/ground.yaml:2)'),
+      ),
+    ).toBe(true);
+    expect(out.some((m) => m.includes('"weapon" is only allowed on items with kind: weapon'))).toBe(
+      true,
+    );
+    expect(out.some((m) => m.includes('id "crab" must match the file name "tide_crab.yaml"'))).toBe(
+      true,
+    );
+  });
+
+  it("rejects loot counts above 1 for items that do not stack", () => {
+    edit(
+      "data/monsters/wolf.yaml",
+      "{ item: wolf_pelt, chance: 0.25 }",
+      "{ item: iron_sword, chance: 0.25, count: [1, 3] }",
+    );
+    expect(messages(root).some((m) => m.includes('item "iron_sword" is not stackable'))).toBe(true);
+  });
+
+  it("validates optional files and quest step references", () => {
+    mkdirSync(file("data/quests"));
+    writeFileSync(
+      file("data/quests/lost_net.yaml"),
+      [
+        "id: lost_net",
+        "name: quest.lost_net.name",
+        "steps:",
+        "  - id: find_net",
+        "    description: quest.lost_net.step_find",
+        "    complete_when: { kill: { monster: tide_crab, count: 3 } }",
+        "rewards:",
+        "  - { xp: 50 }",
+        "",
+      ].join("\n"),
+    );
+    for (const lang of ["es", "en"]) {
+      writeFileSync(
+        file(`i18n/${lang}/quests.yaml`),
+        'quest.lost_net.name: "x"\nquest.lost_net.step_find: "x"\n',
+      );
+    }
+    edit(
+      "data/npcs/harbor_master.yaml",
+      "action: { open_shop: harbor_shop }",
+      "action: [{ open_shop: harbor_shop }, { set_quest_step: { quest: lost_net, step: find_nett } }]",
+    );
+    writeFileSync(
+      file("data/spells.yaml"),
+      '- id: spark\n  name: spell.spark.name\n  words: "ignis parva"\n  vocations: [arcanist, druid]\n  level: 1\n  mana: 5\n  group: attack\n  cooldown_ms: 2000\n  effect: { damage: { base: 5, element: fire, power: 2 } }\n',
+    );
+    writeFileSync(
+      file("data/recipes.yaml"),
+      "- id: fish_stew\n  craft: cooking\n  level: 1\n  inputs: [{ item: raw_fish, count: 2 }]\n  output: { item: fish_stew, count: 1 }\n  base_success: 0.8\n  xp: 3\n",
+    );
+    writeFileSync(
+      file("data/borders.yaml"),
+      "- id: grass_sand\n  from: grass\n  to: rope\n  pieces: { n: grass, s: grass, e: grass, w: grass, ne: grass, nw: grass, se: grass, sw: grass }\n",
+    );
+    const out = messages(root);
+    expect(out.some((m) => m.includes('quest "lost_net" has no step "find_nett"'))).toBe(true);
+    expect(out.some((m) => m.includes('unknown vocation "druid"'))).toBe(true);
+    expect(out.some((m) => m.includes('effect.damage.power: unknown field "power"'))).toBe(true);
+    expect(out.some((m) => m.includes('i18n key "spell.spark.name" is missing in: es, en'))).toBe(
+      true,
+    );
+    expect(out.some((m) => m.includes('unknown item "fish_stew"'))).toBe(true);
+    expect(out.some((m) => m.includes('"rope" must be a ground item'))).toBe(true);
+  });
+
+  it("reports YAML syntax errors with their position", () => {
+    writeFileSync(file("data/monsters/wolf.yaml"), "id: wolf\nid: wolf2\n");
+    expect(
+      messages(root).some((m) => m.startsWith("error data/monsters/wolf.yaml:2:1 invalid YAML")),
+    ).toBe(true);
+  });
+
+  it("rejects files that have no schema", () => {
+    writeFileSync(file("data/effects.yaml"), "[]\n");
+    expect(messages(root)).toContain(
+      "error data/effects.yaml unexpected file: there is no schema for it (see docs/06-content-data.md)",
+    );
+  });
+});

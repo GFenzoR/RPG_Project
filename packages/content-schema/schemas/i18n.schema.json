@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/i18n.schema.json",
+  "title": "Translation file (i18n/<lang>/<file>.yaml)",
+  "description": "Flat map of translation key to text. Parameters use {name}.",
+  "type": "object",
+  "propertyNames": { "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$" },
+  "additionalProperties": { "type": "string", "minLength": 1 }
+}
