@@ -1,0 +1,52 @@
+# Balance constants (docs/02-game-design.md). Initial values: tune here, never in code.
+movement:
+  base_step_ms: 1000        # step = base_step_ms * terrain% / speed (see 02-game-design)
+  diagonal_cost: 1.5
+  max_path_tiles: 100
+
+experience:
+  # Total XP for level n = a*n^3 + b*n^2 + c*n (+ d). Own curve, zero at level 1.
+  # Pace target: level 8 in ~1 h, 20 in ~8 h, 50 in ~80 h.
+  curve: { a: 12, b: -24, c: 12 }
+  max_level: 1000
+
+skills:
+  base:
+    fist: { start_level: 10, base_tries: 50 }
+    sword: { start_level: 10, base_tries: 50 }
+    axe: { start_level: 10, base_tries: 50 }
+    club: { start_level: 10, base_tries: 50 }
+    distance: { start_level: 10, base_tries: 30 }
+    shield: { start_level: 10, base_tries: 100 }
+    magic: { start_level: 0, base_tries: 1600 }   # tries = mana spent
+    fishing: { start_level: 10, base_tries: 20 }
+    mining: { start_level: 1, base_tries: 20 }
+    woodcutting: { start_level: 1, base_tries: 20 }
+    smithing: { start_level: 1, base_tries: 20 }
+    cooking: { start_level: 1, base_tries: 20 }
+    alchemy: { start_level: 1, base_tries: 20 }
+  shield_max_tries_per_round: 2
+  afk:
+    after_ms: 600000          # 10 min against a target that does not fight back
+    factor: 0.25
+
+combat:
+  attack_interval_ms: 2000
+  modes:
+    offensive: { attack: 1.2, defense: 0.6 }
+    balanced: { attack: 1.0, defense: 1.0 }
+    defensive: { attack: 0.6, defense: 1.6 }
+
+death:
+  xp_loss_pct: 10
+  skill_loss_pct: 10
+  equipment_drop_pct: 10
+  backpack_drop_pct: 100
+  max_blessings: 5
+  xp_loss_pct_all_blessings: 3
+  novice_max_level: 8
+  corpse_ms: 600000
+  corpse_owner_only_ms: 120000
+
+economy:
+  coin_ratio: 100

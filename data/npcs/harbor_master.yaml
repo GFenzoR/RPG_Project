@@ -1,0 +1,28 @@
+id: harbor_master
+name: npc.harbor_master.name
+sprite: npcs/sailor_old
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.harbor_master.greet
+      options:
+        - text: npc.harbor_master.opt_island
+          goto: island
+        - text: dialog.trade
+          action: { open_shop: harbor_shop }
+        - text: dialog.bye
+          action: close
+    island:
+      text: npc.harbor_master.island
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+shop:
+  id: harbor_shop
+  sells:
+    - { item: fishing_rod, price: 150 }
+    - { item: rope, price: 50 }
+  buys:
+    - { item: wolf_pelt, price: 15 }
+    - { item: raw_fish, price: 2 }

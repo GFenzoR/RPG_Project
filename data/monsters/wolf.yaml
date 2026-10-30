@@ -1,0 +1,19 @@
+id: wolf
+name: monster.wolf.name
+sprite: creatures/wolf
+health: 25
+experience: 18
+speed: 190
+armor: 2
+defense: 5
+behavior:
+  aggressive: true
+  flee_at_health_pct: 10
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 12, interval_ms: 2000 }
+resistances: { physical: 0, fire: -10, ice: 10 }
+loot:
+  - { item: wolf_pelt, chance: 0.25 }
+  - { item: copper_coin, chance: 0.6, count: [1, 8] }
+tags: [beast, puerto]

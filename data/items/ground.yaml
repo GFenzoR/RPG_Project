@@ -1,0 +1,30 @@
+# Basic grounds. ground.speed is the terrain cost in percent (100 = normal).
+- id: grass
+  kind: ground
+  sprite: ground/grass
+  name: item.grass.name
+  ground: { walkable: true, speed: 150 }
+
+- id: sand
+  kind: ground
+  sprite: ground/sand
+  name: item.sand.name
+  ground: { walkable: true, speed: 160 }
+
+- id: dirt
+  kind: ground
+  sprite: ground/dirt
+  name: item.dirt.name
+  ground: { walkable: true, speed: 140 }
+
+- id: stone_floor
+  kind: ground
+  sprite: ground/stone_floor
+  name: item.stone_floor.name
+  ground: { walkable: true, speed: 100 }
+
+- id: water_shallow
+  kind: ground
+  sprite: ground/water_shallow
+  name: item.water_shallow.name
+  ground: { walkable: false }
