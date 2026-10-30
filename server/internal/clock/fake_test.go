@@ -96,3 +96,17 @@ func TestRealClock(t *testing.T) {
 		t.Fatal("real clock did not move")
 	}
 }
+
+func TestFakeSetForwardFiresTimers(t *testing.T) {
+	f := NewFake(time.Time{})
+	ch := f.After(time.Minute)
+	f.Set(Epoch.Add(2 * time.Minute))
+	select {
+	case got := <-ch:
+		if want := Epoch.Add(2 * time.Minute); !got.Equal(want) {
+			t.Fatalf("fired with %v, want %v", got, want)
+		}
+	default:
+		t.Fatal("Set forward did not fire the due timer")
+	}
+}

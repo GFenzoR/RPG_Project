@@ -298,3 +298,80 @@ func TestRunStopsOnCancelledContext(t *testing.T) {
 		t.Fatalf("Run with cancelled context processed %d ticks", l.Tick())
 	}
 }
+
+// crash fails like a buggy handler would: with a runtime panic.
+func crash(ctx *TickContext) {
+	var empty []int
+	_ = empty[ctx.Tick]
+}
+
+func TestPanicsAreRecoveredAndDropped(t *testing.T) {
+	var logs bytes.Buffer
+	var got []string
+	l, _ := newTestLoop(t, Config{
+		Logger: slog.New(slog.NewTextHandler(&logs, nil)),
+		Systems: []System{
+			SystemFunc(crash),
+			SystemFunc(func(*TickContext) { got = append(got, "sys") }),
+		},
+	})
+	l.Scheduler().At(1, crash)
+	l.Scheduler().At(1, func(*TickContext) { got = append(got, "event") })
+	_ = l.Enqueue(CommandFunc(crash))
+	_ = l.Enqueue(CommandFunc(func(*TickContext) { got = append(got, "cmd") }))
+
+	s := l.Step()
+	if want := []string{"cmd", "event", "sys"}; !slices.Equal(got, want) {
+		t.Fatalf("ran %v, want %v", got, want)
+	}
+	if s.Panics != 3 || s.Commands != 2 || s.Events != 2 {
+		t.Fatalf("stats = %+v, want 3 panics, 2 commands, 2 events", s)
+	}
+	if n := strings.Count(logs.String(), "recovered panic"); n != 3 {
+		t.Errorf("logged %d recovered panics, want 3", n)
+	}
+	for _, msg := range []string{"kind=command", "kind=event", "kind=system", "index out of range"} {
+		if !strings.Contains(logs.String(), msg) {
+			t.Errorf("log does not mention %q", msg)
+		}
+	}
+	// The next tick starts clean.
+	if s := l.Step(); s.Panics != 1 || s.Tick != 2 {
+		t.Fatalf("tick 2 stats = %+v, want 1 panic (the system)", s)
+	}
+}
+
+func TestCommandCancelsEventOfSameTick(t *testing.T) {
+	l, _ := newTestLoop(t, Config{})
+	ran := false
+	id := l.Scheduler().At(1, func(*TickContext) { ran = true })
+	_ = l.Enqueue(CommandFunc(func(ctx *TickContext) {
+		if !ctx.Sched.Cancel(id) {
+			t.Error("Cancel from command returned false")
+		}
+	}))
+	if s := l.Step(); ran || s.Events != 0 {
+		t.Fatalf("event cancelled by a command still ran (stats %+v)", s)
+	}
+}
+
+func TestOnTickReportsPendingCommands(t *testing.T) {
+	var stats []TickStats
+	l, _ := newTestLoop(t, Config{
+		MaxCommandsPerTick: 2,
+		OnTick:             func(s TickStats) { stats = append(stats, s) },
+	})
+	for range 5 {
+		_ = l.Enqueue(CommandFunc(func(*TickContext) {}))
+	}
+	l.Step()
+	l.Step()
+	l.Step()
+	var pending []int
+	for _, s := range stats {
+		pending = append(pending, s.Pending)
+	}
+	if want := []int{3, 1, 0}; !slices.Equal(pending, want) {
+		t.Fatalf("pending per tick = %v, want %v", pending, want)
+	}
+}

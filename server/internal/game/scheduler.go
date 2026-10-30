@@ -50,9 +50,14 @@ func (s *Scheduler) At(at Tick, fn EventFunc) EventID {
 	return id
 }
 
-// After schedules fn to run delay ticks from now (at least one tick).
+// After schedules fn to run delay ticks from now (at least one tick). A delay that would
+// overflow saturates to the last representable tick.
 func (s *Scheduler) After(delay Tick, fn EventFunc) EventID {
-	return s.At(s.now+delay, fn)
+	at := s.now + delay
+	if at < s.now {
+		at = ^Tick(0)
+	}
+	return s.At(at, fn)
 }
 
 // Cancel removes a pending event. It reports whether the event was still pending.
@@ -73,15 +78,15 @@ func (s *Scheduler) NextDue() (Tick, bool) {
 	return s.heap[0].at, true
 }
 
-// runDue positions the scheduler at ctx.Tick and runs every event due at or before it.
-// Events scheduled while running land on later ticks, so this always terminates.
-func (s *Scheduler) runDue(ctx *TickContext) int {
-	s.now = ctx.Tick
+// runDue positions the scheduler at tick and passes every event due at or before it to
+// exec. Events scheduled while running land on later ticks, so this always terminates.
+func (s *Scheduler) runDue(tick Tick, exec func(EventFunc)) int {
+	s.now = tick
 	n := 0
 	for len(s.heap) > 0 && s.heap[0].at <= s.now {
 		fn := s.heap[0].fn
 		s.removeAt(0)
-		fn(ctx)
+		exec(fn)
 		n++
 	}
 	return n

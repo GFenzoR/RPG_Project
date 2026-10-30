@@ -40,7 +40,9 @@ func (f *Fake) Now() time.Time {
 	return f.now
 }
 
-// After returns a channel that fires once the fake time reaches Now()+d.
+// After returns a channel that fires once the fake time reaches Now()+d. A timer whose
+// receiver stops listening stays pending until time reaches it, and still counts for
+// Waiters and BlockUntil: use a fresh Fake per test.
 func (f *Fake) After(d time.Duration) <-chan time.Time {
 	f.mu.Lock()
 	defer f.mu.Unlock()

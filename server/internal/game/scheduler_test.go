@@ -6,9 +6,10 @@ import (
 	"testing"
 )
 
-// runTick positions s at tick and runs its due events, returning the context used.
+// runTick positions s at tick and runs its due events, returning how many ran.
 func runTick(s *Scheduler, tick Tick) int {
-	return s.runDue(&TickContext{Tick: tick, Sched: s})
+	ctx := &TickContext{Tick: tick, Sched: s}
+	return s.runDue(tick, func(fn EventFunc) { fn(ctx) })
 }
 
 func TestSchedulerRunsInTickThenInsertionOrder(t *testing.T) {
@@ -153,5 +154,17 @@ func TestSchedulerMatchesSortedOrder(t *testing.T) {
 		if got[i] != pending[i].id {
 			t.Fatalf("event %d: ran id %d, want %d", i, got[i], pending[i].id)
 		}
+	}
+}
+
+func TestSchedulerAfterSaturatesOnOverflow(t *testing.T) {
+	s := NewScheduler()
+	runTick(s, 10)
+	s.After(^Tick(0), func(*TickContext) {})
+	if due, _ := s.NextDue(); due != ^Tick(0) {
+		t.Fatalf("overflowing delay scheduled at %d, want max tick", due)
+	}
+	if n := runTick(s, 1_000_000); n != 0 {
+		t.Fatalf("saturated event ran early (%d events)", n)
 	}
 }

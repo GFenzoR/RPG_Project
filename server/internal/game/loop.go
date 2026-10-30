@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 
@@ -49,6 +50,8 @@ type TickStats struct {
 	Events   int
 	// Pending is the number of commands left in the queue after the tick.
 	Pending int
+	// Panics counts commands, events and systems that panicked and were dropped.
+	Panics int
 	// Overrun reports that the tick took longer than TickDuration.
 	Overrun bool
 }
@@ -68,6 +71,10 @@ type Loop struct {
 	ctx      TickContext
 	running  atomic.Bool
 	stepping bool
+	panics   int
+	// Method values bound once in New so Step does not allocate them every tick.
+	execCmd   func(Command)
+	execEvent func(EventFunc)
 }
 
 // New validates cfg and returns a Loop positioned before tick 1.
@@ -106,6 +113,8 @@ func New(cfg Config) (*Loop, error) {
 		logger:  cfg.Logger,
 		onTick:  cfg.OnTick,
 	}
+	l.execCmd = l.runCommand
+	l.execEvent = l.runEvent
 	return l, nil
 }
 
@@ -127,7 +136,11 @@ func (l *Loop) Tick() Tick { return l.tick }
 func (l *Loop) Scheduler() *Scheduler { return l.sched }
 
 // Step processes exactly one tick synchronously and returns its stats. It is what Run
-// calls every TickDuration, and what the sim harness calls directly.
+// calls every TickDuration, and what the sim harness calls directly. Never call it from
+// another goroutine while Run is active.
+//
+// A command, event or system that panics is logged with its stack and dropped; the rest
+// of the tick goes on. One buggy handler must not take every player offline.
 func (l *Loop) Step() TickStats {
 	if l.stepping {
 		// Step was called from inside a command, event or system: refuse instead of
@@ -142,15 +155,16 @@ func (l *Loop) Step() TickStats {
 	l.tick++
 	l.sched.now = l.tick // commands may schedule events; they must land after this tick
 	l.ctx = TickContext{Tick: l.tick, Now: start, Rand: l.rand, Sched: l.sched}
-	ctx := &l.ctx
 
+	l.panics = 0
 	stats := TickStats{Tick: l.tick}
-	stats.Commands = l.queue.drain(ctx, l.maxCmds)
-	stats.Events = l.sched.runDue(ctx)
+	stats.Commands = l.queue.drain(l.maxCmds, l.execCmd)
+	stats.Events = l.sched.runDue(l.tick, l.execEvent)
 	for _, sys := range l.systems {
-		sys.Update(ctx)
+		l.runSystem(sys)
 	}
 
+	stats.Panics = l.panics
 	stats.Pending = l.queue.len()
 	stats.Duration = l.clock.Now().Sub(start)
 	stats.Overrun = stats.Duration > TickDuration
@@ -165,6 +179,45 @@ func (l *Loop) Step() TickStats {
 		l.onTick(stats)
 	}
 	return stats
+}
+
+func (l *Loop) runCommand(cmd Command) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.reportPanic(r, "command", cmd)
+		}
+	}()
+	cmd.Execute(&l.ctx)
+}
+
+func (l *Loop) runEvent(fn EventFunc) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.reportPanic(r, "event", nil)
+		}
+	}()
+	fn(&l.ctx)
+}
+
+func (l *Loop) runSystem(sys System) {
+	defer func() {
+		if r := recover(); r != nil {
+			l.reportPanic(r, "system", sys)
+		}
+	}()
+	sys.Update(&l.ctx)
+}
+
+// reportPanic logs a recovered panic of one unit of work. unit, if not nil, is the
+// command or system that panicked; its type is logged to identify it.
+func (l *Loop) reportPanic(r any, kind string, unit any) {
+	l.panics++
+	attrs := []any{"kind", kind, "tick", uint64(l.tick), "panic", fmt.Sprint(r)}
+	if unit != nil {
+		attrs = append(attrs, "type", fmt.Sprintf("%T", unit))
+	}
+	attrs = append(attrs, "stack", string(debug.Stack()))
+	l.logger.Error("game: recovered panic, unit dropped", attrs...)
 }
 
 // ErrAlreadyRunning is returned by Run when the loop is already running.

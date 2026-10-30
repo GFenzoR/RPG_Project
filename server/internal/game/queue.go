@@ -25,14 +25,14 @@ func (q *commandQueue) enqueue(cmd Command) error {
 	}
 }
 
-// drain executes up to limit queued commands in arrival order and returns how many ran.
-// Commands beyond the limit stay queued for the next tick.
-func (q *commandQueue) drain(ctx *TickContext, limit int) int {
+// drain passes up to limit queued commands to exec in arrival order and returns how
+// many it took. Commands beyond the limit stay queued for the next tick.
+func (q *commandQueue) drain(limit int, exec func(Command)) int {
 	n := 0
 	for n < limit {
 		select {
 		case cmd := <-q.ch:
-			cmd.Execute(ctx)
+			exec(cmd)
 			n++
 		default:
 			return n
