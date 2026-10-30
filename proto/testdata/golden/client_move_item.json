@@ -1,0 +1,17 @@
+{
+  "moveItem": {
+    "from": {
+      "pos": {
+        "x": 1000,
+        "y": 1000,
+        "z": 8
+      }
+    },
+    "itemId": 120,
+    "stackIndex": 2,
+    "to": {
+      "slot": "EQUIPMENT_SLOT_RIGHT_HAND"
+    },
+    "count": 1
+  }
+}

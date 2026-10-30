@@ -1,0 +1,101 @@
+{
+  "tick": "98765432101",
+  "events": [
+    {
+      "creatureMove": {
+        "id": 40001,
+        "from": {
+          "x": 994,
+          "y": 994,
+          "z": 7
+        },
+        "to": {
+          "x": 993,
+          "y": 994,
+          "z": 7
+        },
+        "durationMs": 400
+      }
+    },
+    {
+      "floatingText": {
+        "pos": {
+          "x": 993,
+          "y": 994,
+          "z": 7
+        },
+        "kind": "FLOATING_TEXT_KIND_DAMAGE",
+        "amount": "17"
+      }
+    },
+    {
+      "chatMessage": {
+        "kind": "MESSAGE_KIND_SAY",
+        "speakerId": 7,
+        "speakerName": "Aldara",
+        "pos": {
+          "x": 993,
+          "y": 995,
+          "z": 7
+        },
+        "text": "¡Hola, mundo! ⚓"
+      }
+    },
+    {
+      "chatMessage": {
+        "kind": "MESSAGE_KIND_SYSTEM",
+        "localized": {
+          "key": "system.loot",
+          "params": [
+            {
+              "name": "monster",
+              "value": "mossback_toad"
+            },
+            {
+              "name": "items",
+              "value": "3 gold"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dialogOpen": {
+        "dialogId": 1,
+        "npcId": 50002,
+        "text": {
+          "key": "npc.ferry_keeper.greet"
+        },
+        "options": [
+          {
+            "optionId": 1,
+            "text": {
+              "key": "npc.ferry_keeper.option.travel"
+            }
+          },
+          {
+            "optionId": 2,
+            "text": {
+              "key": "dialog.bye"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "walkRejected": {
+        "pos": {
+          "x": 993,
+          "y": 995,
+          "z": 7
+        },
+        "dir": "DIRECTION_NORTH"
+      }
+    },
+    {
+      "disconnect": {
+        "reason": "DISCONNECT_REASON_OUTDATED_CLIENT"
+      }
+    }
+  ]
+}
