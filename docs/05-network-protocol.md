@@ -25,7 +25,12 @@
 - `ActionTarget`: `oneof` de `pos` o `creature_id`.
 - `ItemStack {item_id, count}`: `item_id` es el ID estable de `data/ids.lock.yaml`.
 - `LocalizedText {key, params[]}`: texto visible como clave i18n + parámetros
-  `{name, value}`. Es una lista y no un `map` para que la codificación sea determinista.
+  `TextParam {name, value}`. Es una lista y no un `map` para que la codificación sea
+  determinista. `value` tiene tipo (`text` sin traducir, `number`, `content_id` o
+  `item`), así el cliente formatea números y plurales y traduce nombres: el servidor
+  nunca pone texto armado o traducido en un parámetro.
+- Ids de criatura: todo id de jugador, monstruo o NPC en el protocolo es el id de
+  criatura de la sesión (`creature_id`, `npc_creature_id`…), nunca el id de base de datos.
 
 ## Handshake
 ```
@@ -33,7 +38,7 @@
 2. Cliente → HTTP GET /api/characters                  → lista de personajes
 3. Cliente → HTTP POST /api/play {character_id}        → session_token (vive 60 s)
 4. Cliente abre WS y envía Hello {session_token, client_version, locale}
-5. Servidor → Welcome {player_id, server_time, tick_ms} + FullMapView + Stats + Inventory + Skills
+5. Servidor → Welcome {creature_id, server_time, tick_ms} + FullMapView + Stats + Inventory + Skills
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
@@ -50,10 +55,10 @@ Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 | `UseItem` | `from` (pos, slot o contenedor), `item_id`, `stack_index` |
 | `UseItemOn` | `from`, `item_id`, `stack_index`, `to` (pos o criatura) |
 | `MoveItem` | `from`, `item_id`, `stack_index`, `to`, `count` |
-| `LookAt` | `pos`, `stack_index` |
+| `LookAt` | `from` (pos, slot o contenedor), `item_id`, `stack_index` |
 | `Say` | `channel` (decir, gritar, susurrar, global), `text` (máx. 255) |
 | `DialogChoose` | `dialog_id`, `option_id` |
-| `TradeRequest` | `player_id`, `item`, `item_id`, `stack_index` |
+| `TradeRequest` | `creature_id`, `item`, `item_id`, `stack_index` |
 | `TradeOffer` | `item`, `item_id`, `stack_index` |
 | `TradeAccept` / `TradeCancel` | — |
 | `Ping` | `client_time` |
@@ -88,7 +93,8 @@ Los textos del servidor viajan como **clave i18n + parámetros** (`LocalizedText
 como texto final. El cliente traduce según su idioma. El chat escrito por jugadores
 viaja tal cual (`Message.text`); lo que escribe el servidor va en `Message.localized`.
 Monstruos y NPCs se identifican con su `content_id` de `data/` y el cliente traduce su
-nombre; solo los jugadores llevan `name`.
+nombre; solo los jugadores llevan `name` (en `Message`: `speaker_name` solo para
+jugadores, `speaker_content_id` para NPCs y monstruos).
 
 ### Formato de mapa en `FullMapView` / `MapSlice`
 Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}`:
@@ -116,7 +122,8 @@ Cada lenguaje verifica que su codificación no cambió y que decodifica **ambos*
 al mismo JSON (`server/internal/net/golden_test.go`, `packages/protocol/src/golden.test.ts`).
 No se exige igualdad de bytes entre lenguajes: protobuf no define una codificación
 canónica (protobuf-go escribe los campos `oneof` al final, protobuf-es en orden de
-declaración). Al agregar o cambiar un fixture:
+declaración). Al agregar o cambiar un fixture (en modo update cada lenguaje tolera que
+falte el binario del otro):
 ```
 cd server && go test ./internal/net -update
 UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test

@@ -3,7 +3,9 @@ package net_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -84,6 +86,10 @@ func TestGoldenRoundTrip(t *testing.T) {
 			// Go's and TypeScript's bytes -> JSON must be the fixture as written.
 			for _, path := range []string{binPath, base + ".ts.bin"} {
 				data, err := os.ReadFile(path)
+				if *update && errors.Is(err, fs.ErrNotExist) {
+					t.Logf("%s missing; create it with the TypeScript update", path)
+					continue
+				}
 				if err != nil {
 					t.Fatalf("read golden (the .ts.bin files come from UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test): %v", err)
 				}

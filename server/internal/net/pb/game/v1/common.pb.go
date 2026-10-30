@@ -569,11 +569,19 @@ func (x *LocalizedText) GetParams() []*TextParam {
 }
 
 // TextParam is one named parameter of a LocalizedText. A list (not a map) keeps the
-// binary encoding deterministic across Go and TypeScript.
+// binary encoding deterministic across Go and TypeScript. The value is typed so the
+// client can format numbers and plurals and translate names itself: the server never
+// puts translated or assembled text in a parameter.
 type TextParam struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Value         string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Types that are valid to be assigned to Value:
+	//
+	//	*TextParam_Text
+	//	*TextParam_Number
+	//	*TextParam_ContentId
+	//	*TextParam_Item
+	Value         isTextParam_Value `protobuf_oneof:"value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -615,12 +623,79 @@ func (x *TextParam) GetName() string {
 	return ""
 }
 
-func (x *TextParam) GetValue() string {
+func (x *TextParam) GetValue() isTextParam_Value {
 	if x != nil {
 		return x.Value
 	}
+	return nil
+}
+
+func (x *TextParam) GetText() string {
+	if x != nil {
+		if x, ok := x.Value.(*TextParam_Text); ok {
+			return x.Text
+		}
+	}
 	return ""
 }
+
+func (x *TextParam) GetNumber() int64 {
+	if x != nil {
+		if x, ok := x.Value.(*TextParam_Number); ok {
+			return x.Number
+		}
+	}
+	return 0
+}
+
+func (x *TextParam) GetContentId() string {
+	if x != nil {
+		if x, ok := x.Value.(*TextParam_ContentId); ok {
+			return x.ContentId
+		}
+	}
+	return ""
+}
+
+func (x *TextParam) GetItem() *ItemStack {
+	if x != nil {
+		if x, ok := x.Value.(*TextParam_Item); ok {
+			return x.Item
+		}
+	}
+	return nil
+}
+
+type isTextParam_Value interface {
+	isTextParam_Value()
+}
+
+type TextParam_Text struct {
+	// Text that is not translated: player names, typed text.
+	Text string `protobuf:"bytes,2,opt,name=text,proto3,oneof"`
+}
+
+type TextParam_Number struct {
+	Number int64 `protobuf:"varint,3,opt,name=number,proto3,oneof"`
+}
+
+type TextParam_ContentId struct {
+	// Monster, NPC, spell or skill id from data/; the client shows its translated name.
+	ContentId string `protobuf:"bytes,4,opt,name=content_id,json=contentId,proto3,oneof"`
+}
+
+type TextParam_Item struct {
+	// An item and amount; the client shows its translated name, pluralized.
+	Item *ItemStack `protobuf:"bytes,5,opt,name=item,proto3,oneof"`
+}
+
+func (*TextParam_Text) isTextParam_Value() {}
+
+func (*TextParam_Number) isTextParam_Value() {}
+
+func (*TextParam_ContentId) isTextParam_Value() {}
+
+func (*TextParam_Item) isTextParam_Value() {}
 
 var File_game_v1_common_proto protoreflect.FileDescriptor
 
@@ -650,10 +725,15 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"\x05count\x18\x02 \x01(\rR\x05count\"M\n" +
 	"\rLocalizedText\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12*\n" +
-	"\x06params\x18\x02 \x03(\v2\x12.game.v1.TextParamR\x06params\"5\n" +
+	"\x06params\x18\x02 \x03(\v2\x12.game.v1.TextParamR\x06params\"\xa3\x01\n" +
 	"\tTextParam\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value*\xe0\x01\n" +
+	"\x04text\x18\x02 \x01(\tH\x00R\x04text\x12\x18\n" +
+	"\x06number\x18\x03 \x01(\x03H\x00R\x06number\x12\x1f\n" +
+	"\n" +
+	"content_id\x18\x04 \x01(\tH\x00R\tcontentId\x12(\n" +
+	"\x04item\x18\x05 \x01(\v2\x12.game.v1.ItemStackH\x00R\x04itemB\a\n" +
+	"\x05value*\xe0\x01\n" +
 	"\tDirection\x12\x19\n" +
 	"\x15DIRECTION_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fDIRECTION_NORTH\x10\x01\x12\x18\n" +
@@ -709,11 +789,12 @@ var file_game_v1_common_proto_depIdxs = []int32{
 	3, // 2: game.v1.ItemLocation.container:type_name -> game.v1.ContainerSlot
 	2, // 3: game.v1.ActionTarget.pos:type_name -> game.v1.Position
 	8, // 4: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	6, // 5: game.v1.TextParam.item:type_name -> game.v1.ItemStack
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_common_proto_init() }
@@ -729,6 +810,12 @@ func file_game_v1_common_proto_init() {
 	file_game_v1_common_proto_msgTypes[3].OneofWrappers = []any{
 		(*ActionTarget_Pos)(nil),
 		(*ActionTarget_CreatureId)(nil),
+	}
+	file_game_v1_common_proto_msgTypes[6].OneofWrappers = []any{
+		(*TextParam_Text)(nil),
+		(*TextParam_Number)(nil),
+		(*TextParam_ContentId)(nil),
+		(*TextParam_Item)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

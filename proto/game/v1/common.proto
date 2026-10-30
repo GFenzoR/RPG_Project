@@ -81,8 +81,18 @@ message LocalizedText {
 }
 
 // TextParam is one named parameter of a LocalizedText. A list (not a map) keeps the
-// binary encoding deterministic across Go and TypeScript.
+// binary encoding deterministic across Go and TypeScript. The value is typed so the
+// client can format numbers and plurals and translate names itself: the server never
+// puts translated or assembled text in a parameter.
 message TextParam {
   string name = 1;
-  string value = 2;
+  oneof value {
+    // Text that is not translated: player names, typed text.
+    string text = 2;
+    int64 number = 3;
+    // Monster, NPC, spell or skill id from data/; the client shows its translated name.
+    string content_id = 4;
+    // An item and amount; the client shows its translated name, pluralized.
+    ItemStack item = 5;
+  }
 }

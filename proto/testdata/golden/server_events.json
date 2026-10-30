@@ -49,11 +49,18 @@
           "params": [
             {
               "name": "monster",
-              "value": "mossback_toad"
+              "contentId": "mossback_toad"
             },
             {
-              "name": "items",
-              "value": "3 gold"
+              "name": "loot",
+              "item": {
+                "itemId": 3031,
+                "count": 3
+              }
+            },
+            {
+              "name": "experience",
+              "number": "-12"
             }
           ]
         }
@@ -62,7 +69,7 @@
     {
       "dialogOpen": {
         "dialogId": 1,
-        "npcId": 50002,
+        "npcCreatureId": 50002,
         "text": {
           "key": "npc.ferry_keeper.greet"
         },

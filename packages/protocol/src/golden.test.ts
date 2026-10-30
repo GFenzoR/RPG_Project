@@ -5,7 +5,7 @@
 //
 // Regenerate the .ts.bin files after changing a fixture:
 //   UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fromBinary, fromJson, toBinary, toJson } from "@bufbuild/protobuf";
@@ -41,6 +41,7 @@ describe("golden fixtures shared with Go", () => {
 
     // Our bytes and Go's bytes -> JSON must be the fixture.
     for (const suffix of [".ts.bin", ".go.bin"]) {
+      if (update && !existsSync(base + suffix)) continue;
       const decoded = fromBinary(schema, new Uint8Array(readFileSync(base + suffix)), {
         readUnknownFields: true,
       });

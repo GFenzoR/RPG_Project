@@ -103,6 +103,8 @@ message UseItemOn {
   ActionTarget to = 4;
 }
 
+// MoveItem moves count units of a stackable item (count must be at least 1 and at most
+// the stack size); count is ignored for items that do not stack.
 message MoveItem {
   ItemLocation from = 1;
   uint32 item_id = 2;
@@ -111,9 +113,12 @@ message MoveItem {
   uint32 count = 5;
 }
 
+// LookAt inspects an item or creature on a tile, or an item in the equipment or an
+// open container.
 message LookAt {
-  Position pos = 1;
-  uint32 stack_index = 2;
+  ItemLocation from = 1;
+  uint32 item_id = 2;
+  uint32 stack_index = 3;
 }
 
 enum ChatChannel {
@@ -137,9 +142,10 @@ message DialogChoose {
   uint32 option_id = 2;
 }
 
-// TradeRequest starts a trade with another player, offering one item (or container).
+// TradeRequest starts a trade with another player (by creature id), offering one item
+// (or container).
 message TradeRequest {
-  uint32 player_id = 1;
+  uint32 creature_id = 1;
   ItemLocation item = 2;
   uint32 item_id = 3;
   uint32 stack_index = 4;

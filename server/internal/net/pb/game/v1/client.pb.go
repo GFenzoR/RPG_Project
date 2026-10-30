@@ -1052,6 +1052,8 @@ func (x *UseItemOn) GetTo() *ActionTarget {
 	return nil
 }
 
+// MoveItem moves count units of a stackable item (count must be at least 1 and at most
+// the stack size); count is ignored for items that do not stack.
 type MoveItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	From          *ItemLocation          `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
@@ -1128,10 +1130,13 @@ func (x *MoveItem) GetCount() uint32 {
 	return 0
 }
 
+// LookAt inspects an item or creature on a tile, or an item in the equipment or an
+// open container.
 type LookAt struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pos           *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
-	StackIndex    uint32                 `protobuf:"varint,2,opt,name=stack_index,json=stackIndex,proto3" json:"stack_index,omitempty"`
+	From          *ItemLocation          `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	StackIndex    uint32                 `protobuf:"varint,3,opt,name=stack_index,json=stackIndex,proto3" json:"stack_index,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1166,11 +1171,18 @@ func (*LookAt) Descriptor() ([]byte, []int) {
 	return file_game_v1_client_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *LookAt) GetPos() *Position {
+func (x *LookAt) GetFrom() *ItemLocation {
 	if x != nil {
-		return x.Pos
+		return x.From
 	}
 	return nil
+}
+
+func (x *LookAt) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
 }
 
 func (x *LookAt) GetStackIndex() uint32 {
@@ -1287,10 +1299,11 @@ func (x *DialogChoose) GetOptionId() uint32 {
 	return 0
 }
 
-// TradeRequest starts a trade with another player, offering one item (or container).
+// TradeRequest starts a trade with another player (by creature id), offering one item
+// (or container).
 type TradeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	CreatureId    uint32                 `protobuf:"varint,1,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
 	Item          *ItemLocation          `protobuf:"bytes,2,opt,name=item,proto3" json:"item,omitempty"`
 	ItemId        uint32                 `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	StackIndex    uint32                 `protobuf:"varint,4,opt,name=stack_index,json=stackIndex,proto3" json:"stack_index,omitempty"`
@@ -1328,9 +1341,9 @@ func (*TradeRequest) Descriptor() ([]byte, []int) {
 	return file_game_v1_client_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *TradeRequest) GetPlayerId() uint32 {
+func (x *TradeRequest) GetCreatureId() uint32 {
 	if x != nil {
-		return x.PlayerId
+		return x.CreatureId
 	}
 	return 0
 }
@@ -1642,19 +1655,21 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\vstack_index\x18\x03 \x01(\rR\n" +
 	"stackIndex\x12%\n" +
 	"\x02to\x18\x04 \x01(\v2\x15.game.v1.ItemLocationR\x02to\x12\x14\n" +
-	"\x05count\x18\x05 \x01(\rR\x05count\"N\n" +
-	"\x06LookAt\x12#\n" +
-	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12\x1f\n" +
-	"\vstack_index\x18\x02 \x01(\rR\n" +
+	"\x05count\x18\x05 \x01(\rR\x05count\"m\n" +
+	"\x06LookAt\x12)\n" +
+	"\x04from\x18\x01 \x01(\v2\x15.game.v1.ItemLocationR\x04from\x12\x17\n" +
+	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x1f\n" +
+	"\vstack_index\x18\x03 \x01(\rR\n" +
 	"stackIndex\"I\n" +
 	"\x03Say\x12.\n" +
 	"\achannel\x18\x01 \x01(\x0e2\x14.game.v1.ChatChannelR\achannel\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\"H\n" +
 	"\fDialogChoose\x12\x1b\n" +
 	"\tdialog_id\x18\x01 \x01(\rR\bdialogId\x12\x1b\n" +
-	"\toption_id\x18\x02 \x01(\rR\boptionId\"\x90\x01\n" +
-	"\fTradeRequest\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12)\n" +
+	"\toption_id\x18\x02 \x01(\rR\boptionId\"\x94\x01\n" +
+	"\fTradeRequest\x12\x1f\n" +
+	"\vcreature_id\x18\x01 \x01(\rR\n" +
+	"creatureId\x12)\n" +
 	"\x04item\x18\x02 \x01(\v2\x15.game.v1.ItemLocationR\x04item\x12\x17\n" +
 	"\aitem_id\x18\x03 \x01(\rR\x06itemId\x12\x1f\n" +
 	"\vstack_index\x18\x04 \x01(\rR\n" +
@@ -1724,7 +1739,6 @@ var file_game_v1_client_proto_goTypes = []any{
 	(Direction)(0),        // 23: game.v1.Direction
 	(*ActionTarget)(nil),  // 24: game.v1.ActionTarget
 	(*ItemLocation)(nil),  // 25: game.v1.ItemLocation
-	(*Position)(nil),      // 26: game.v1.Position
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	3,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -1757,7 +1771,7 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	24, // 27: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
 	25, // 28: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
 	25, // 29: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	26, // 30: game.v1.LookAt.pos:type_name -> game.v1.Position
+	25, // 30: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
 	1,  // 31: game.v1.Say.channel:type_name -> game.v1.ChatChannel
 	25, // 32: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
 	25, // 33: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation

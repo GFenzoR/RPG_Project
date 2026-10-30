@@ -3,7 +3,7 @@
   "events": [
     {
       "welcome": {
-        "playerId": 7,
+        "creatureId": 7,
         "serverTime": "1793400000500",
         "tickMs": 50
       }

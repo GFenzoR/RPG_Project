@@ -40,6 +40,10 @@ proto-lint: ## buf lint + buf format check on proto/
 	buf lint proto
 	buf format --diff --exit-code proto
 
+.PHONY: proto-breaking
+proto-breaking: ## buf breaking: proto/ must stay wire- and JSON-compatible with main
+	buf breaking proto --against '.git#branch=main,subdir=proto'
+
 ## ---- quality gates ---------------------------------------------------------
 
 .PHONY: test

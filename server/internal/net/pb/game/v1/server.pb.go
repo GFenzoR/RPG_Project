@@ -869,8 +869,10 @@ func (*ServerMessage_Disconnect) isServerMessage_Message() {}
 // Welcome answers a valid Hello. It is followed in the same batch by FullMapView,
 // PlayerStats, Inventory and PlayerSkills.
 type Welcome struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Creature id of the player's own character in this session (the id used by
+	// CreatureMove, SetTarget and the rest). It is not the database character id.
+	CreatureId uint32 `protobuf:"varint,1,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
 	// Server clock in Unix milliseconds.
 	ServerTime    uint64 `protobuf:"varint,2,opt,name=server_time,json=serverTime,proto3" json:"server_time,omitempty"`
 	TickMs        uint32 `protobuf:"varint,3,opt,name=tick_ms,json=tickMs,proto3" json:"tick_ms,omitempty"`
@@ -908,9 +910,9 @@ func (*Welcome) Descriptor() ([]byte, []int) {
 	return file_game_v1_server_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Welcome) GetPlayerId() uint32 {
+func (x *Welcome) GetCreatureId() uint32 {
 	if x != nil {
-		return x.PlayerId
+		return x.CreatureId
 	}
 	return 0
 }
@@ -2497,10 +2499,13 @@ type Message struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Kind  MessageKind            `protobuf:"varint,1,opt,name=kind,proto3,enum=game.v1.MessageKind" json:"kind,omitempty"`
 	// Speaking creature, 0 for system messages.
-	SpeakerId   uint32 `protobuf:"varint,2,opt,name=speaker_id,json=speakerId,proto3" json:"speaker_id,omitempty"`
+	SpeakerId uint32 `protobuf:"varint,2,opt,name=speaker_id,json=speakerId,proto3" json:"speaker_id,omitempty"`
+	// Name of a speaking player. Empty for NPCs and monsters, which use speaker_content_id.
 	SpeakerName string `protobuf:"bytes,3,opt,name=speaker_name,json=speakerName,proto3" json:"speaker_name,omitempty"`
+	// Monster or NPC id from data/ (the client shows its translated name).
+	SpeakerContentId string `protobuf:"bytes,4,opt,name=speaker_content_id,json=speakerContentId,proto3" json:"speaker_content_id,omitempty"`
 	// Where it was said, for speech bubbles. Unset for global and system messages.
-	Pos *Position `protobuf:"bytes,4,opt,name=pos,proto3" json:"pos,omitempty"`
+	Pos *Position `protobuf:"bytes,5,opt,name=pos,proto3" json:"pos,omitempty"`
 	// Types that are valid to be assigned to Body:
 	//
 	//	*Message_Text
@@ -2561,6 +2566,13 @@ func (x *Message) GetSpeakerName() string {
 	return ""
 }
 
+func (x *Message) GetSpeakerContentId() string {
+	if x != nil {
+		return x.SpeakerContentId
+	}
+	return ""
+}
+
 func (x *Message) GetPos() *Position {
 	if x != nil {
 		return x.Pos
@@ -2598,11 +2610,11 @@ type isMessage_Body interface {
 }
 
 type Message_Text struct {
-	Text string `protobuf:"bytes,5,opt,name=text,proto3,oneof"`
+	Text string `protobuf:"bytes,6,opt,name=text,proto3,oneof"`
 }
 
 type Message_Localized struct {
-	Localized *LocalizedText `protobuf:"bytes,6,opt,name=localized,proto3,oneof"`
+	Localized *LocalizedText `protobuf:"bytes,7,opt,name=localized,proto3,oneof"`
 }
 
 func (*Message_Text) isMessage_Body() {}
@@ -2665,7 +2677,7 @@ func (x *DialogOption) GetText() *LocalizedText {
 type DialogOpen struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DialogId      uint32                 `protobuf:"varint,1,opt,name=dialog_id,json=dialogId,proto3" json:"dialog_id,omitempty"`
-	NpcId         uint32                 `protobuf:"varint,2,opt,name=npc_id,json=npcId,proto3" json:"npc_id,omitempty"`
+	NpcCreatureId uint32                 `protobuf:"varint,2,opt,name=npc_creature_id,json=npcCreatureId,proto3" json:"npc_creature_id,omitempty"`
 	Text          *LocalizedText         `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
 	Options       []*DialogOption        `protobuf:"bytes,4,rep,name=options,proto3" json:"options,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2709,9 +2721,9 @@ func (x *DialogOpen) GetDialogId() uint32 {
 	return 0
 }
 
-func (x *DialogOpen) GetNpcId() uint32 {
+func (x *DialogOpen) GetNpcCreatureId() uint32 {
 	if x != nil {
-		return x.NpcId
+		return x.NpcCreatureId
 	}
 	return 0
 }
@@ -2838,7 +2850,7 @@ func (x *ShopOffer) GetSellPrice() uint64 {
 
 type ShopOpen struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	NpcId         uint32                 `protobuf:"varint,1,opt,name=npc_id,json=npcId,proto3" json:"npc_id,omitempty"`
+	NpcCreatureId uint32                 `protobuf:"varint,1,opt,name=npc_creature_id,json=npcCreatureId,proto3" json:"npc_creature_id,omitempty"`
 	Offers        []*ShopOffer           `protobuf:"bytes,2,rep,name=offers,proto3" json:"offers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2874,9 +2886,9 @@ func (*ShopOpen) Descriptor() ([]byte, []int) {
 	return file_game_v1_server_proto_rawDescGZIP(), []int{34}
 }
 
-func (x *ShopOpen) GetNpcId() uint32 {
+func (x *ShopOpen) GetNpcCreatureId() uint32 {
 	if x != nil {
-		return x.NpcId
+		return x.NpcCreatureId
 	}
 	return 0
 }
@@ -2889,10 +2901,10 @@ func (x *ShopOpen) GetOffers() []*ShopOffer {
 }
 
 type TradeUpdate struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	State       TradeState             `protobuf:"varint,1,opt,name=state,proto3,enum=game.v1.TradeState" json:"state,omitempty"`
-	PartnerId   uint32                 `protobuf:"varint,2,opt,name=partner_id,json=partnerId,proto3" json:"partner_id,omitempty"`
-	PartnerName string                 `protobuf:"bytes,3,opt,name=partner_name,json=partnerName,proto3" json:"partner_name,omitempty"`
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	State             TradeState             `protobuf:"varint,1,opt,name=state,proto3,enum=game.v1.TradeState" json:"state,omitempty"`
+	PartnerCreatureId uint32                 `protobuf:"varint,2,opt,name=partner_creature_id,json=partnerCreatureId,proto3" json:"partner_creature_id,omitempty"`
+	PartnerName       string                 `protobuf:"bytes,3,opt,name=partner_name,json=partnerName,proto3" json:"partner_name,omitempty"`
 	// Offered items, flattened (a container is sent with its contents after it).
 	OwnOffer        []*ItemStack `protobuf:"bytes,4,rep,name=own_offer,json=ownOffer,proto3" json:"own_offer,omitempty"`
 	PartnerOffer    []*ItemStack `protobuf:"bytes,5,rep,name=partner_offer,json=partnerOffer,proto3" json:"partner_offer,omitempty"`
@@ -2939,9 +2951,9 @@ func (x *TradeUpdate) GetState() TradeState {
 	return TradeState_TRADE_STATE_UNSPECIFIED
 }
 
-func (x *TradeUpdate) GetPartnerId() uint32 {
+func (x *TradeUpdate) GetPartnerCreatureId() uint32 {
 	if x != nil {
-		return x.PartnerId
+		return x.PartnerCreatureId
 	}
 	return 0
 }
@@ -3184,9 +3196,10 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\n" +
 	"disconnect\x18\x1c \x01(\v2\x13.game.v1.DisconnectH\x00R\n" +
 	"disconnectB\t\n" +
-	"\amessage\"`\n" +
-	"\aWelcome\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x1f\n" +
+	"\amessage\"d\n" +
+	"\aWelcome\x12\x1f\n" +
+	"\vcreature_id\x18\x01 \x01(\rR\n" +
+	"creatureId\x12\x1f\n" +
 	"\vserver_time\x18\x02 \x01(\x04R\n" +
 	"serverTime\x12\x17\n" +
 	"\atick_ms\x18\x03 \x01(\rR\x06tickMs\"0\n" +
@@ -3304,23 +3317,24 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId\x12(\n" +
 	"\x05items\x18\x02 \x03(\v2\x12.game.v1.ItemStackR\x05items\"3\n" +
 	"\x0eContainerClose\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId\"\xf0\x01\n" +
+	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId\"\x9e\x02\n" +
 	"\aMessage\x12(\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x14.game.v1.MessageKindR\x04kind\x12\x1d\n" +
 	"\n" +
 	"speaker_id\x18\x02 \x01(\rR\tspeakerId\x12!\n" +
-	"\fspeaker_name\x18\x03 \x01(\tR\vspeakerName\x12#\n" +
-	"\x03pos\x18\x04 \x01(\v2\x11.game.v1.PositionR\x03pos\x12\x14\n" +
-	"\x04text\x18\x05 \x01(\tH\x00R\x04text\x126\n" +
-	"\tlocalized\x18\x06 \x01(\v2\x16.game.v1.LocalizedTextH\x00R\tlocalizedB\x06\n" +
+	"\fspeaker_name\x18\x03 \x01(\tR\vspeakerName\x12,\n" +
+	"\x12speaker_content_id\x18\x04 \x01(\tR\x10speakerContentId\x12#\n" +
+	"\x03pos\x18\x05 \x01(\v2\x11.game.v1.PositionR\x03pos\x12\x14\n" +
+	"\x04text\x18\x06 \x01(\tH\x00R\x04text\x126\n" +
+	"\tlocalized\x18\a \x01(\v2\x16.game.v1.LocalizedTextH\x00R\tlocalizedB\x06\n" +
 	"\x04body\"W\n" +
 	"\fDialogOption\x12\x1b\n" +
 	"\toption_id\x18\x01 \x01(\rR\boptionId\x12*\n" +
-	"\x04text\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\x04text\"\x9d\x01\n" +
+	"\x04text\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\x04text\"\xae\x01\n" +
 	"\n" +
 	"DialogOpen\x12\x1b\n" +
-	"\tdialog_id\x18\x01 \x01(\rR\bdialogId\x12\x15\n" +
-	"\x06npc_id\x18\x02 \x01(\rR\x05npcId\x12*\n" +
+	"\tdialog_id\x18\x01 \x01(\rR\bdialogId\x12&\n" +
+	"\x0fnpc_creature_id\x18\x02 \x01(\rR\rnpcCreatureId\x12*\n" +
 	"\x04text\x18\x03 \x01(\v2\x16.game.v1.LocalizedTextR\x04text\x12/\n" +
 	"\aoptions\x18\x04 \x03(\v2\x15.game.v1.DialogOptionR\aoptions\"*\n" +
 	"\vDialogClose\x12\x1b\n" +
@@ -3329,14 +3343,13 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1b\n" +
 	"\tbuy_price\x18\x02 \x01(\x04R\bbuyPrice\x12\x1d\n" +
 	"\n" +
-	"sell_price\x18\x03 \x01(\x04R\tsellPrice\"M\n" +
-	"\bShopOpen\x12\x15\n" +
-	"\x06npc_id\x18\x01 \x01(\rR\x05npcId\x12*\n" +
-	"\x06offers\x18\x02 \x03(\v2\x12.game.v1.ShopOfferR\x06offers\"\xb2\x02\n" +
+	"sell_price\x18\x03 \x01(\x04R\tsellPrice\"^\n" +
+	"\bShopOpen\x12&\n" +
+	"\x0fnpc_creature_id\x18\x01 \x01(\rR\rnpcCreatureId\x12*\n" +
+	"\x06offers\x18\x02 \x03(\v2\x12.game.v1.ShopOfferR\x06offers\"\xc3\x02\n" +
 	"\vTradeUpdate\x12)\n" +
-	"\x05state\x18\x01 \x01(\x0e2\x13.game.v1.TradeStateR\x05state\x12\x1d\n" +
-	"\n" +
-	"partner_id\x18\x02 \x01(\rR\tpartnerId\x12!\n" +
+	"\x05state\x18\x01 \x01(\x0e2\x13.game.v1.TradeStateR\x05state\x12.\n" +
+	"\x13partner_creature_id\x18\x02 \x01(\rR\x11partnerCreatureId\x12!\n" +
 	"\fpartner_name\x18\x03 \x01(\tR\vpartnerName\x12/\n" +
 	"\town_offer\x18\x04 \x03(\v2\x12.game.v1.ItemStackR\bownOffer\x127\n" +
 	"\rpartner_offer\x18\x05 \x03(\v2\x12.game.v1.ItemStackR\fpartnerOffer\x12!\n" +

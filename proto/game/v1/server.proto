@@ -51,7 +51,9 @@ message ServerMessage {
 // Welcome answers a valid Hello. It is followed in the same batch by FullMapView,
 // PlayerStats, Inventory and PlayerSkills.
 message Welcome {
-  uint32 player_id = 1;
+  // Creature id of the player's own character in this session (the id used by
+  // CreatureMove, SetTarget and the rest). It is not the database character id.
+  uint32 creature_id = 1;
   // Server clock in Unix milliseconds.
   uint64 server_time = 2;
   uint32 tick_ms = 3;
@@ -271,12 +273,15 @@ message Message {
   MessageKind kind = 1;
   // Speaking creature, 0 for system messages.
   uint32 speaker_id = 2;
+  // Name of a speaking player. Empty for NPCs and monsters, which use speaker_content_id.
   string speaker_name = 3;
+  // Monster or NPC id from data/ (the client shows its translated name).
+  string speaker_content_id = 4;
   // Where it was said, for speech bubbles. Unset for global and system messages.
-  Position pos = 4;
+  Position pos = 5;
   oneof body {
-    string text = 5;
-    LocalizedText localized = 6;
+    string text = 6;
+    LocalizedText localized = 7;
   }
 }
 
@@ -288,7 +293,7 @@ message DialogOption {
 // DialogOpen shows (or advances) an NPC dialog. dialog_id is session-local.
 message DialogOpen {
   uint32 dialog_id = 1;
-  uint32 npc_id = 2;
+  uint32 npc_creature_id = 2;
   LocalizedText text = 3;
   repeated DialogOption options = 4;
 }
@@ -306,7 +311,7 @@ message ShopOffer {
 }
 
 message ShopOpen {
-  uint32 npc_id = 1;
+  uint32 npc_creature_id = 1;
   repeated ShopOffer offers = 2;
 }
 
@@ -321,7 +326,7 @@ enum TradeState {
 
 message TradeUpdate {
   TradeState state = 1;
-  uint32 partner_id = 2;
+  uint32 partner_creature_id = 2;
   string partner_name = 3;
   // Offered items, flattened (a container is sent with its contents after it).
   repeated ItemStack own_offer = 4;

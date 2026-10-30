@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/common.proto.
  */
 export const file_game_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChRnYW1lL3YxL2NvbW1vbi5wcm90bxIHZ2FtZS52MSIrCghQb3NpdGlvbhIJCgF4GAEgASgNEgkKAXkYAiABKA0SCQoBehgDIAEoDSI0Cg1Db250YWluZXJTbG90EhQKDGNvbnRhaW5lcl9pZBgBIAEoDRINCgVpbmRleBgCIAEoDSKRAQoMSXRlbUxvY2F0aW9uEiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABImCgRzbG90GAIgASgOMhYuZ2FtZS52MS5FcXVpcG1lbnRTbG90SAASKwoJY29udGFpbmVyGAMgASgLMhYuZ2FtZS52MS5Db250YWluZXJTbG90SABCCgoIbG9jYXRpb24iUQoMQWN0aW9uVGFyZ2V0EiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABIVCgtjcmVhdHVyZV9pZBgCIAEoDUgAQggKBnRhcmdldCIrCglJdGVtU3RhY2sSDwoHaXRlbV9pZBgBIAEoDRINCgVjb3VudBgCIAEoDSJACg1Mb2NhbGl6ZWRUZXh0EgsKA2tleRgBIAEoCRIiCgZwYXJhbXMYAiADKAsyEi5nYW1lLnYxLlRleHRQYXJhbSIoCglUZXh0UGFyYW0SDAoEbmFtZRgBIAEoCRINCgV2YWx1ZRgCIAEoCSrgAQoJRGlyZWN0aW9uEhkKFURJUkVDVElPTl9VTlNQRUNJRklFRBAAEhMKD0RJUkVDVElPTl9OT1JUSBABEhgKFERJUkVDVElPTl9OT1JUSF9FQVNUEAISEgoORElSRUNUSU9OX0VBU1QQAxIYChRESVJFQ1RJT05fU09VVEhfRUFTVBAEEhMKD0RJUkVDVElPTl9TT1VUSBAFEhgKFERJUkVDVElPTl9TT1VUSF9XRVNUEAYSEgoORElSRUNUSU9OX1dFU1QQBxIYChRESVJFQ1RJT05fTk9SVEhfV0VTVBAIKrkCCg1FcXVpcG1lbnRTbG90Eh4KGkVRVUlQTUVOVF9TTE9UX1VOU1BFQ0lGSUVEEAASFwoTRVFVSVBNRU5UX1NMT1RfSEVBRBABEhcKE0VRVUlQTUVOVF9TTE9UX05FQ0sQAhIbChdFUVVJUE1FTlRfU0xPVF9CQUNLUEFDSxADEhgKFEVRVUlQTUVOVF9TTE9UX0FSTU9SEAQSHQoZRVFVSVBNRU5UX1NMT1RfUklHSFRfSEFORBAFEhwKGEVRVUlQTUVOVF9TTE9UX0xFRlRfSEFORBAGEhcKE0VRVUlQTUVOVF9TTE9UX0xFR1MQBxIXChNFUVVJUE1FTlRfU0xPVF9GRUVUEAgSFwoTRVFVSVBNRU5UX1NMT1RfUklORxAJEhcKE0VRVUlQTUVOVF9TTE9UX0FNTU8QCkJGWkRnaXRodWIuY29tL0dGZW56b1IvUlBHX1Byb2plY3Qvc2VydmVyL2ludGVybmFsL25ldC9wYi9nYW1lL3YxO2dhbWV2MWIGcHJvdG8z");
+  fileDesc("ChRnYW1lL3YxL2NvbW1vbi5wcm90bxIHZ2FtZS52MSIrCghQb3NpdGlvbhIJCgF4GAEgASgNEgkKAXkYAiABKA0SCQoBehgDIAEoDSI0Cg1Db250YWluZXJTbG90EhQKDGNvbnRhaW5lcl9pZBgBIAEoDRINCgVpbmRleBgCIAEoDSKRAQoMSXRlbUxvY2F0aW9uEiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABImCgRzbG90GAIgASgOMhYuZ2FtZS52MS5FcXVpcG1lbnRTbG90SAASKwoJY29udGFpbmVyGAMgASgLMhYuZ2FtZS52MS5Db250YWluZXJTbG90SABCCgoIbG9jYXRpb24iUQoMQWN0aW9uVGFyZ2V0EiAKA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb25IABIVCgtjcmVhdHVyZV9pZBgCIAEoDUgAQggKBnRhcmdldCIrCglJdGVtU3RhY2sSDwoHaXRlbV9pZBgBIAEoDRINCgVjb3VudBgCIAEoDSJACg1Mb2NhbGl6ZWRUZXh0EgsKA2tleRgBIAEoCRIiCgZwYXJhbXMYAiADKAsyEi5nYW1lLnYxLlRleHRQYXJhbSJ+CglUZXh0UGFyYW0SDAoEbmFtZRgBIAEoCRIOCgR0ZXh0GAIgASgJSAASEAoGbnVtYmVyGAMgASgDSAASFAoKY29udGVudF9pZBgEIAEoCUgAEiIKBGl0ZW0YBSABKAsyEi5nYW1lLnYxLkl0ZW1TdGFja0gAQgcKBXZhbHVlKuABCglEaXJlY3Rpb24SGQoVRElSRUNUSU9OX1VOU1BFQ0lGSUVEEAASEwoPRElSRUNUSU9OX05PUlRIEAESGAoURElSRUNUSU9OX05PUlRIX0VBU1QQAhISCg5ESVJFQ1RJT05fRUFTVBADEhgKFERJUkVDVElPTl9TT1VUSF9FQVNUEAQSEwoPRElSRUNUSU9OX1NPVVRIEAUSGAoURElSRUNUSU9OX1NPVVRIX1dFU1QQBhISCg5ESVJFQ1RJT05fV0VTVBAHEhgKFERJUkVDVElPTl9OT1JUSF9XRVNUEAgquQIKDUVxdWlwbWVudFNsb3QSHgoaRVFVSVBNRU5UX1NMT1RfVU5TUEVDSUZJRUQQABIXChNFUVVJUE1FTlRfU0xPVF9IRUFEEAESFwoTRVFVSVBNRU5UX1NMT1RfTkVDSxACEhsKF0VRVUlQTUVOVF9TTE9UX0JBQ0tQQUNLEAMSGAoURVFVSVBNRU5UX1NMT1RfQVJNT1IQBBIdChlFUVVJUE1FTlRfU0xPVF9SSUdIVF9IQU5EEAUSHAoYRVFVSVBNRU5UX1NMT1RfTEVGVF9IQU5EEAYSFwoTRVFVSVBNRU5UX1NMT1RfTEVHUxAHEhcKE0VRVUlQTUVOVF9TTE9UX0ZFRVQQCBIXChNFUVVJUE1FTlRfU0xPVF9SSU5HEAkSFwoTRVFVSVBNRU5UX1NMT1RfQU1NTxAKQkZaRGdpdGh1Yi5jb20vR0ZlbnpvUi9SUEdfUHJvamVjdC9zZXJ2ZXIvaW50ZXJuYWwvbmV0L3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM");
 
 /**
  * Position is a tile in the global world space: x, y in [0, 65535], z (floor) in
@@ -188,7 +188,9 @@ export const LocalizedTextSchema: GenMessage<LocalizedText> = /*@__PURE__*/
 
 /**
  * TextParam is one named parameter of a LocalizedText. A list (not a map) keeps the
- * binary encoding deterministic across Go and TypeScript.
+ * binary encoding deterministic across Go and TypeScript. The value is typed so the
+ * client can format numbers and plurals and translate names itself: the server never
+ * puts translated or assembled text in a parameter.
  *
  * @generated from message game.v1.TextParam
  */
@@ -199,9 +201,39 @@ export type TextParam = Message<"game.v1.TextParam"> & {
   name: string;
 
   /**
-   * @generated from field: string value = 2;
+   * @generated from oneof game.v1.TextParam.value
    */
-  value: string;
+  value: {
+    /**
+     * Text that is not translated: player names, typed text.
+     *
+     * @generated from field: string text = 2;
+     */
+    value: string;
+    case: "text";
+  } | {
+    /**
+     * @generated from field: int64 number = 3;
+     */
+    value: bigint;
+    case: "number";
+  } | {
+    /**
+     * Monster, NPC, spell or skill id from data/; the client shows its translated name.
+     *
+     * @generated from field: string content_id = 4;
+     */
+    value: string;
+    case: "contentId";
+  } | {
+    /**
+     * An item and amount; the client shows its translated name, pluralized.
+     *
+     * @generated from field: game.v1.ItemStack item = 5;
+     */
+    value: ItemStack;
+    case: "item";
+  } | { case: undefined; value?: undefined };
 };
 
 /**
