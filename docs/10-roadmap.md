@@ -39,7 +39,7 @@ Objetivo: entrar desde el navegador, caminar por una isla chica, matar monstruos
 skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor básico.
 
 **Servidor base**
-- [ ] **T1.1 Núcleo del servidor.** `clock`, game loop de 50 ms, cola de comandos,
+- [x] **T1.1 Núcleo del servidor.** (#2) `clock`, game loop de 50 ms, cola de comandos,
   scheduler min-heap, harness `sim` y primeros tests deterministas. [T0.1]
 - [ ] **T1.2 Mundo en el servidor.** `mapcompile` → `world.bin`, carga, sectores,
   flags de tile, pathfinding A*, línea de visión. Benchmarks. [T1.1, T0.4]
