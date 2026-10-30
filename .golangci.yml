@@ -17,10 +17,15 @@ linters:
     - unconvert
   settings:
     forbidigo:
+      analyze-types: true
       forbid:
         # Game logic must use the injected clock (see CLAUDE.md, principle 3).
-        - pattern: ^time\.Now$
-          msg: "use the injected clock.Clock instead of time.Now"
+        - pattern: ^time\.(Now|Since|Until|After|AfterFunc|Tick|NewTimer|NewTicker|Sleep)$
+          msg: "use the injected clock.Clock instead of the wall clock"
+        # Randomness must come from an injected, seeded *rand.Rand (see server/CLAUDE.md).
+        - pattern: ^rand\.(Int|Intn|IntN|Int31|Int31n|Int32|Int32N|Int63|Int63n|Int64|Int64N|Uint|UintN|Uint32|Uint32N|Uint64|Uint64N|Float32|Float64|ExpFloat64|NormFloat64|N|Perm|Shuffle|Seed|Read)$
+          pkg: ^math/rand(/v2)?$
+          msg: "use the injected *rand.Rand instead of the global math/rand functions"
         # Runtime game code must not panic (see CLAUDE.md conventions).
         - pattern: ^panic$
           msg: "return an error instead of panicking"
@@ -33,10 +38,10 @@ linters:
       - std-error-handling
     rules:
       # The clock package is the one place allowed to read the wall clock.
-      - path: internal/clock/
+      - path: ^server/internal/clock/
         linters: [forbidigo]
       # Load-testing bots measure real latency and are not game logic.
-      - path: tools/bots/
+      - path: ^tools/bots/
         linters: [forbidigo]
 
 formatters:

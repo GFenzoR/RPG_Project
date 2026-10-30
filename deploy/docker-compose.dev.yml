@@ -10,7 +10,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: rpg
     ports:
-      - "${PG_PORT:-5432}:5432"
+      # Bound to localhost only: the dev credentials must not be reachable from the LAN.
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./dev/initdb:/docker-entrypoint-initdb.d:ro

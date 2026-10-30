@@ -7,7 +7,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# Pinned tool versions (keep in sync with .github/workflows/ci.yml).
+# Pinned tool versions. golangci-lint must match .github/workflows/ci.yml.
+# staticcheck is also run by golangci-lint; the standalone binary is for quick checks.
 BUF_VERSION=v1.75.0
 SQLC_VERSION=v1.31.1
 GOOSE_VERSION=v3.29.0
@@ -22,11 +23,13 @@ have() { command -v "$1" >/dev/null 2>&1; }
 have git || fail "git is not installed"
 have go || fail "Go is not installed (use the version in server/go.mod: https://go.dev/dl/)"
 have node || fail "Node 22 is not installed (https://nodejs.org or nvm)"
-node_major=$(node -p 'process.versions.node.split(".")[0]')
-[ "$node_major" -ge 22 ] || fail "Node >= 22 required, found $(node --version)"
+# Must match "engines" in package.json.
+node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 13) ? 0 : 1)' \
+  || fail "Node >= 22.13 required, found $(node --version)"
 if ! have pnpm; then
   log "pnpm not found; enabling it with corepack"
-  corepack enable || fail "could not enable pnpm; run 'corepack enable' (may need sudo)"
+  corepack enable || true
+  have pnpm || fail "pnpm is still missing; run 'corepack enable' (may need sudo) or 'npm i -g pnpm'"
 fi
 have docker || log "WARNING: Docker not found. 'make db-up' needs it for local Postgres."
 
@@ -39,9 +42,16 @@ case ":$PATH:" in
 esac
 
 install_go_tool() { # binary module@version
-  local bin=$1 pkg=$2
-  if have "$bin" || [ -x "$gobin/$bin" ]; then
-    log "$bin already installed"
+  local bin=$1 pkg=$2 want installed
+  want=${pkg##*@v}
+  want=${want##*@}
+  if have "$bin"; then
+    installed=$("$bin" --version 2>/dev/null || "$bin" version 2>/dev/null || "$bin" -version 2>/dev/null || true)
+    case "$installed" in
+      *"$want"*) log "$bin $want already installed" ;;
+      *) log "WARNING: $bin is installed but not version $want (found: ${installed%%$'\n'*})."
+         log "         Reinstall with: go install $pkg" ;;
+    esac
   else
     log "installing $bin ($pkg)"
     go install "$pkg"
