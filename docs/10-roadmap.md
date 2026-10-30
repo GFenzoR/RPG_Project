@@ -12,7 +12,7 @@ Leyenda: 👤 = requiere acción tuya (cuentas, claves, decisiones, assets).
 ## Hito 0 — Fundaciones
 Objetivo: repo que compila, se testea y valida, con los contratos base definidos.
 
-- [ ] **T0.1 Esqueleto del monorepo.** pnpm workspaces (`client`, `editor`, `packages/*`,
+- [x] **T0.1 Esqueleto del monorepo.** (PR #1) pnpm workspaces (`client`, `editor`, `packages/*`,
   `tools/*`), `go.mod` en `server/` y `tools/bots`, Makefile con todos los targets de
   CLAUDE.md (aunque algunos digan "pendiente"), ESLint/Prettier/tsconfig base,
   golangci-lint, `.editorconfig`, workflow `ci.yml` (lint + test). README con cómo correr.
