@@ -1,0 +1,10 @@
+# buf workspace for the game protocol. Run from the repo root via `make gen` / `make proto-lint`.
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - WIRE_JSON

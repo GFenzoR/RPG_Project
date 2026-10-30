@@ -25,8 +25,20 @@ setup: ## Install tools and dependencies (scripts/local-setup.sh), then generate
 	$(MAKE) gen
 
 .PHONY: gen
-gen: ## buf generate + sqlc generate (+ ids.lock.yaml)
-	$(call pending,T0.2 (buf) / T1.3 (sqlc) / T0.3 (ids.lock.yaml))
+gen: gen-proto ## buf generate + sqlc generate (+ ids.lock.yaml)
+	$(call pending,T1.3 (sqlc) / T0.3 (ids.lock.yaml))
+
+# Protobuf plugins run locally, pinned by server/go.mod and packages/protocol/package.json.
+.PHONY: gen-proto
+gen-proto: ## buf generate: Go (server/internal/net/pb) and TS (packages/protocol/src/gen)
+	cd server && go build -o bin/protoc-gen-go google.golang.org/protobuf/cmd/protoc-gen-go
+	test -x packages/protocol/node_modules/.bin/protoc-gen-es || pnpm install --frozen-lockfile
+	buf generate --template proto/buf.gen.yaml
+
+.PHONY: proto-lint
+proto-lint: ## buf lint + buf format check on proto/
+	buf lint proto
+	buf format --diff --exit-code proto
 
 ## ---- quality gates ---------------------------------------------------------
 
