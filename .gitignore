@@ -1,0 +1,36 @@
+# Dependencias y builds
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.vite/
+apps/desktop/src-tauri/target/
+
+# Go
+server/bin/
+tools/bots/bin/
+*.test
+*.prof
+
+# Generados (se regeneran con make gen)
+server/internal/net/pb/
+packages/protocol/src/gen/
+assets/atlas/
+
+# Resultados de pruebas
+client/e2e/screenshots/actual/
+editor/e2e/screenshots/actual/
+playwright-report/
+test-results/
+reports/
+
+# Secretos y local
+.env
+.env.*
+!.env.example
+deploy/.env
+*.local
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
