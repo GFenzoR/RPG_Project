@@ -1,0 +1,18 @@
+# Prettier only formats code and config; docs and content have their own conventions.
+*.md
+*.yaml
+*.yml
+!.github/workflows/*.yml
+pnpm-lock.yaml
+node_modules/
+dist/
+build/
+packages/protocol/src/gen/
+world/
+data/
+i18n/
+assets/
+server/
+tools/bots/
+playwright-report/
+test-results/

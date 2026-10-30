@@ -1,0 +1,12 @@
+{
+  "name": "@rpg/mcp-world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server over map-format. Built in T1.15.",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

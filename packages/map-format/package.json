@@ -1,0 +1,12 @@
+{
+  "name": "@rpg/map-format",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chunk read/write, validation and edit ops. Built in T0.4.",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

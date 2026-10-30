@@ -1,0 +1,45 @@
+# golangci-lint v2 configuration, shared by server/ and tools/bots/.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - errorlint
+    - forbidigo
+    - gocritic
+    - misspell
+    - nolintlint
+    - revive
+    - unconvert
+  settings:
+    forbidigo:
+      forbid:
+        # Game logic must use the injected clock (see CLAUDE.md, principle 3).
+        - pattern: ^time\.Now$
+          msg: "use the injected clock.Clock instead of time.Now"
+        # Runtime game code must not panic (see CLAUDE.md conventions).
+        - pattern: ^panic$
+          msg: "return an error instead of panicking"
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # The clock package is the one place allowed to read the wall clock.
+      - path: internal/clock/
+        linters: [forbidigo]
+      # Load-testing bots measure real latency and are not game logic.
+      - path: tools/bots/
+        linters: [forbidigo]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
