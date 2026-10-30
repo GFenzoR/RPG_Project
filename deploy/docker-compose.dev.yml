@@ -1,0 +1,25 @@
+# Local development database. Used by `make db-up` / `make db-down`.
+# Cloud sessions use the VM's PostgreSQL service instead (see Makefile).
+name: rpg-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rpg
+    ports:
+      # Bound to localhost only: the dev credentials must not be reachable from the LAN.
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./dev/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rpg"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

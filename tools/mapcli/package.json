@@ -1,0 +1,12 @@
+{
+  "name": "@rpg/mapcli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Map CLI over map-format. Built in T0.4/T1.15.",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

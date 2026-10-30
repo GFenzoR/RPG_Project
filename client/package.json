@@ -1,0 +1,12 @@
+{
+  "name": "@rpg/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Game client (Vite + PixiJS + Preact). Built in T1.5.",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

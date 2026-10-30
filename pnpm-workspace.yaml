@@ -1,0 +1,6 @@
+packages:
+  - client
+  - editor
+  - packages/*
+  - tools/*
+  # tools/bots is a Go module, not a pnpm package (it has no package.json).
