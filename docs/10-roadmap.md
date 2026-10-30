@@ -19,7 +19,7 @@ Objetivo: repo que compila, se testea y valida, con los contratos base definidos
   Debe funcionar igual en la sesión cloud y en local (WSL2/macOS/Linux): agrega
   `scripts/local-setup.sh` (lo llama `make setup`), `deploy/docker-compose.dev.yml` con
   Postgres y los targets `make db-up` / `make db-down`. Ver `12-local-development.md`.
-- [ ] **T0.2 Protocolo v1.** `proto/game/v1/*.proto` con los mensajes de
+- [x] **T0.2 Protocolo v1.** (PR #?) `proto/game/v1/*.proto` con los mensajes de
   `05-network-protocol.md`, `buf.yaml`/`buf.gen.yaml`, generación Go y TS, test de
   ida y vuelta Go↔TS con golden files. [T0.1]
 - [ ] **T0.3 Esquemas de contenido.** JSON Schemas para balance, vocations, items,
