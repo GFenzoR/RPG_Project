@@ -1,0 +1,62 @@
+id: puerto_priest
+name: npc.puerto_priest.name
+sprite: npcs/priestess
+notes: >-
+  Temple of the Lantern (respawn point of the island). Sells the five blessings
+  (balance.yaml death.max_blessings) at a flat 200 coins each and heals for free.
+  Refusing a blessing the player already holds is the death/blessing engine's job (T1.11):
+  there is no "has blessing" condition yet.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.puerto_priest.greet
+      options:
+        - text: npc.puerto_priest.opt_blessings
+          goto: blessings
+        - text: npc.puerto_priest.opt_heal
+          action: { heal: true }
+          goto: healed
+        - text: npc.puerto_priest.opt_faith
+          goto: faith
+        - text: dialog.bye
+          action: close
+    blessings:
+      text: npc.puerto_priest.blessings
+      options:
+        - text: npc.puerto_priest.bless_shore
+          action: { bless: { blessing: shore_light, price: 200 } }
+          goto: blessed
+        - text: npc.puerto_priest.bless_hearth
+          action: { bless: { blessing: hearth_light, price: 200 } }
+          goto: blessed
+        - text: npc.puerto_priest.bless_keel
+          action: { bless: { blessing: keel_light, price: 200 } }
+          goto: blessed
+        - text: npc.puerto_priest.bless_star
+          action: { bless: { blessing: star_light, price: 200 } }
+          goto: blessed
+        - text: npc.puerto_priest.bless_deep
+          action: { bless: { blessing: deep_light, price: 200 } }
+          goto: blessed
+        - { text: dialog.back, goto: greet }
+    blessed:
+      text: npc.puerto_priest.blessed
+      options:
+        - { text: npc.puerto_priest.opt_more, goto: blessings }
+        - { text: dialog.bye, action: close }
+    healed:
+      text: npc.puerto_priest.healed
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    faith:
+      text: npc.puerto_priest.faith
+      options:
+        - { text: npc.puerto_priest.opt_wreck, goto: wreck }
+        - { text: dialog.back, goto: greet }
+    wreck:
+      text: npc.puerto_priest.wreck
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }

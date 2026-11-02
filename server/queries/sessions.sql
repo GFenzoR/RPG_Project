@@ -18,3 +18,14 @@ DELETE FROM sessions WHERE token_hash = sqlc.arg(token_hash);
 
 -- name: DeleteExpiredSessions :execrows
 DELETE FROM sessions WHERE expires_at <= sqlc.arg(now);
+
+-- name: ConsumeSession :one
+-- Deletes a token and returns it if it was active: play tokens are single-use.
+DELETE FROM sessions s
+USING accounts a
+WHERE s.token_hash = sqlc.arg(token_hash)
+  AND s.kind = sqlc.arg(kind)
+  AND s.expires_at > sqlc.arg(now)
+  AND a.id = s.account_id
+  AND a.disabled_at IS NULL
+RETURNING s.account_id, s.character_id, s.expires_at;

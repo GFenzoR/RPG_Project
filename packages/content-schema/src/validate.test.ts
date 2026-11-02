@@ -78,13 +78,13 @@ describe("validator diagnostics", () => {
 
   it("checks dialog graphs and shop references", () => {
     edit("data/npcs/harbor_master.yaml", "goto: island", "goto: islnd");
-    edit("data/npcs/harbor_master.yaml", "open_shop: harbor_shop", "open_shop: harbour_shop");
+    edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:11:11 dialog.nodes.greet.options[0].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:46:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
-      out.some((m) => m.includes('unknown shop "harbour_shop" (did you mean "harbor_shop"?)')),
+      out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),
     ).toBe(true);
     expect(
       out.some((m) => m.startsWith("warning") && m.includes('"island" is never reached')),
@@ -133,7 +133,7 @@ describe("validator diagnostics", () => {
   });
 
   it("validates optional files and quest step references", () => {
-    mkdirSync(file("data/quests"));
+    mkdirSync(file("data/quests"), { recursive: true });
     writeFileSync(
       file("data/quests/lost_net.yaml"),
       [
@@ -155,9 +155,9 @@ describe("validator diagnostics", () => {
       );
     }
     edit(
-      "data/npcs/harbor_master.yaml",
-      "action: { open_shop: harbor_shop }",
-      "action: [{ open_shop: harbor_shop }, { set_quest_step: { quest: lost_net, step: find_nett } }]",
+      "data/npcs/puerto_provisioner.yaml",
+      "action: { open_shop: provisions_shop }",
+      "action: [{ open_shop: provisions_shop }, { set_quest_step: { quest: lost_net, step: find_nett } }]",
     );
     writeFileSync(
       file("data/spells.yaml"),
@@ -173,6 +173,9 @@ describe("validator diagnostics", () => {
     );
     const out = messages(root);
     expect(out.some((m) => m.includes('quest "lost_net" has no step "find_nett"'))).toBe(true);
+    expect(
+      out.some((m) => m.startsWith("warning") && m.includes('quest "lost_net" is never started')),
+    ).toBe(true);
     expect(out.some((m) => m.includes('unknown vocation "druid"'))).toBe(true);
     expect(out.some((m) => m.includes('effect.damage.power: unknown field "power"'))).toBe(true);
     expect(out.some((m) => m.includes('i18n key "spell.spark.name" is missing in: es, en'))).toBe(
@@ -180,6 +183,88 @@ describe("validator diagnostics", () => {
     );
     expect(out.some((m) => m.includes('unknown item "fish_stew"'))).toBe(true);
     expect(out.some((m) => m.includes('"rope" must be a ground item'))).toBe(true);
+  });
+
+  it("rejects quest completions that point at a missing dialog node", () => {
+    edit("data/quests/ch1_shipwreck.yaml", "node: ch1_logbook_read", "node: ch1_logbook_red");
+    expect(
+      messages(root).some((m) =>
+        m.includes('npc "harbor_master" has no dialog node "ch1_logbook_red"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("only lets an NPC open its own shop", () => {
+    edit("data/npcs/puerto_priest.yaml", "goto: faith\n", "action: { open_shop: armorer_shop }\n");
+    expect(
+      messages(root).some(
+        (m) =>
+          m.startsWith("error data/npcs/puerto_priest.yaml:") &&
+          m.includes('opens shop "armorer_shop" of data/npcs/puerto_armorer.yaml'),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects buy prices that reach a sell price and warns on buys above the item value", () => {
+    edit(
+      "data/npcs/puerto_provisioner.yaml",
+      "{ item: rope, price: 15 }",
+      "{ item: rope, price: 50 }",
+    );
+    edit(
+      "data/npcs/puerto_armorer.yaml",
+      "{ item: driftwood_club, price: 1 }",
+      "{ item: driftwood_club, price: 9 }",
+    );
+    const out = messages(root);
+    expect(out).toContain(
+      'error data/npcs/puerto_provisioner.yaml:42:21 shop.buys[0].price: shop "provisions_shop" buys "rope" for 50 but shop "provisions_shop" sells it for 50: buy prices must be lower than every sell price',
+    );
+    expect(
+      out.some(
+        (m) =>
+          m.startsWith("warning") && m.includes('buys "driftwood_club" for 9, above its value 5'),
+      ),
+    ).toBe(true);
+  });
+
+  it("limits the number of different blessings to balance.yaml max_blessings", () => {
+    edit("data/balance.yaml", "max_blessings: 5", "max_blessings: 4");
+    expect(
+      messages(root).some((m) =>
+        m.includes("5 different blessings are sold, but balance.yaml death.max_blessings is 4"),
+      ),
+    ).toBe(true);
+  });
+
+  it("requires a way to obtain the item of every has_item quest step", () => {
+    edit("data/monsters/wreck_looter.yaml", "  - { item: tarnished_locket, chance: 0.08 }\n", "");
+    edit("data/monsters/drowned_miner.yaml", "  - { item: tarnished_locket, chance: 0.08 }\n", "");
+    edit(
+      "data/npcs/puerto_provisioner.yaml",
+      "{ item: tarnished_locket, price: 40 }",
+      "{ item: rope, price: 1 }",
+    );
+    expect(
+      messages(root).some(
+        (m) =>
+          m.startsWith("error data/quests/diver_locket.yaml:") &&
+          m.includes('no way to obtain "tarnished_locket"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts lacks_item and checks its item reference", () => {
+    edit(
+      "data/npcs/puerto_foreman.yaml",
+      "lacks_item: { item: bosun_logbook }",
+      "lacks_item: { item: bosun_logbok }",
+    );
+    expect(
+      messages(root).some((m) =>
+        m.includes('unknown item "bosun_logbok" (did you mean "bosun_logbook"?)'),
+      ),
+    ).toBe(true);
   });
 
   it("reports YAML syntax errors with their position", () => {

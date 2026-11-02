@@ -1,0 +1,17 @@
+id: foreman_ore
+name: quest.foreman_ore.name
+min_level: 10
+notes: >-
+  Side quest from puerto_foreman. Iron ore drops from ore beetles and drowned miners
+  (deep mine, levels 11-15) and will be mineable with T1.12. The pickaxe reward points
+  the player at mining.
+steps:
+  - id: gather_ore
+    description: quest.foreman_ore.step_gather_ore
+    complete_when: { has_item: { item: iron_ore, count: 5 } }
+  - id: deliver_ore
+    description: quest.foreman_ore.step_deliver_ore
+    complete_when: { dialog_action: { npc: puerto_foreman, node: ore_delivered } }
+rewards:
+  - { xp: 1200 }
+  - { item: pickaxe }

@@ -92,6 +92,9 @@ Valores iniciales (balance.yaml):
   **100 %** salvo con bendiciones.
 - **Bendiciones** (hasta 5, se compran con oro del juego a NPCs en templos):
   cada una reduce la pérdida; con las 5 no pierdes items y la pérdida de XP baja a ~3 %.
+  En la Isla del Puerto las vende la hermana Liora (templo del Farol) a 200 monedas cada
+  una, precio fijo; las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
+  y `deep_light`. Se pierden al morir. Un precio que escale con el nivel queda para T1.11.
 - Reapareces en el templo de tu ciudad de residencia.
 - Niveles 1–8: protección de novato (pérdida mínima, sin drop).
 - El cuerpo queda en el suelo X minutos con el loot (solo el dueño puede tomarlo

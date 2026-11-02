@@ -1,0 +1,17 @@
+- id: mini_temple
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 38, y: 38, w: 5, h: 5 }
+
+- id: mini_dock
+  type: no_logout
+  floors: [7, 8]
+  rects:
+    - { x: 60, y: 50, w: 8, h: 3 }
+
+- id: mini_plot
+  type: community_plot
+  floors: [7]
+  rects:
+    - { x: 32, y: 32, w: 64, h: 32 }

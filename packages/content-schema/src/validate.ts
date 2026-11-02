@@ -80,7 +80,9 @@ class Validator {
     i18nKeys: [],
   };
   private readonly npcs: SourceFile[] = [];
+  private readonly monsters: SourceFile[] = [];
   private readonly quests: SourceFile[] = [];
+  private balance: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -98,6 +100,9 @@ class Validator {
     this.checkRefs();
     this.checkDialogs();
     this.checkQuestSteps();
+    this.checkNpcActions();
+    this.checkShopPrices();
+    this.checkQuestItemSources();
     this.checkI18n();
     const lockFile = join(dataDir, "ids.lock.yaml");
     const lock = existsSync(lockFile)
@@ -132,6 +137,7 @@ class Validator {
     };
 
     const balance = single("balance.yaml", "balance", true);
+    this.balance = balance;
     if (balance) this.checkBalance(balance);
 
     const vocations = single("vocations.yaml", "vocations", true);
@@ -161,7 +167,10 @@ class Validator {
           this.error(src, ["id"], `id "${id}" must match the file name "${expected}.yaml"`);
         }
         this.register(kind, src.data, src, []);
-        if (kind === "monster") this.checkMonster(src);
+        if (kind === "monster") {
+          this.monsters.push(src);
+          this.checkMonster(src);
+        }
         if (kind === "npc") {
           this.npcs.push(src);
           const shop = isObj(src.data) ? src.data["shop"] : undefined;
@@ -467,6 +476,154 @@ class Validator {
     for (const src of [...this.npcs, ...this.quests]) visit(src, src.data, []);
   }
 
+  /**
+   * Rules on dialog actions across all NPCs: an NPC only opens its own shop, the blessings
+   * sold fit in balance.yaml death.max_blessings, and every quest has a way to start.
+   */
+  private checkNpcActions(): void {
+    const blessings = new Map<string, { src: SourceFile; path: PathSegment[] }>();
+    const started = new Set<string>();
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      const ownShop = npc ? idOf(npc["shop"]) : undefined;
+      for (const { key, value, path } of actionsOf(npc?.["dialog"], ["dialog"])) {
+        if (key === "open_shop" && typeof value === "string" && value !== ownShop) {
+          const owner = this.index.ids.shop.get(value);
+          if (owner) {
+            this.error(
+              src,
+              path,
+              `opens shop "${value}" of ${owner.src.file}; an NPC can only open its own shop${ownShop ? ` ("${ownShop}")` : ""}`,
+            );
+          }
+        }
+        if (key === "bless" && isObj(value) && typeof value["blessing"] === "string") {
+          if (!blessings.has(value["blessing"])) blessings.set(value["blessing"], { src, path });
+        }
+        if (key === "start_quest" && typeof value === "string") started.add(value);
+      }
+    }
+
+    const death = isObj(this.balance?.data) ? this.balance.data["death"] : undefined;
+    const max = isObj(death) ? death["max_blessings"] : undefined;
+    if (typeof max === "number" && blessings.size > max) {
+      const [, extra] = [...blessings.entries()][max] ?? [];
+      if (extra) {
+        this.error(
+          extra.src,
+          [...extra.path, "blessing"],
+          `${blessings.size} different blessings are sold, but balance.yaml death.max_blessings is ${max} (${[...blessings.keys()].join(", ")})`,
+        );
+      }
+    }
+
+    for (const src of this.quests) {
+      const id = idOf(src.data);
+      if (id !== undefined && !started.has(id)) {
+        this.warn(
+          src,
+          ["id"],
+          `quest "${id}" is never started (no start_quest action in data/npcs/)`,
+        );
+      }
+    }
+  }
+
+  /**
+   * NPCs buy cheap (docs/02-game-design.md): no shop may buy an item for as much as any shop
+   * sells it (an endless gold loop), and a buy price above the item's value is suspicious.
+   */
+  private checkShopPrices(): void {
+    interface Offer {
+      price: number;
+      src: SourceFile;
+      path: PathSegment[];
+      shop: string;
+    }
+    const sells = new Map<string, Offer>();
+    const buys: (Offer & { item: string })[] = [];
+    for (const src of this.npcs) {
+      const shop = isObj(src.data) ? src.data["shop"] : undefined;
+      if (!isObj(shop)) continue;
+      const shopId = idOf(shop) ?? "?";
+      for (const side of ["sells", "buys"] as const) {
+        for (const [i, offer] of asList(shop[side]).entries()) {
+          if (!isObj(offer) || typeof offer["item"] !== "string") continue;
+          if (typeof offer["price"] !== "number") continue;
+          const o = { price: offer["price"], src, path: ["shop", side, i], shop: shopId };
+          if (side === "buys") {
+            buys.push({ ...o, item: offer["item"] });
+          } else {
+            const prev = sells.get(offer["item"]);
+            if (!prev || o.price < prev.price) sells.set(offer["item"], o);
+          }
+        }
+      }
+    }
+    for (const b of buys) {
+      const s = sells.get(b.item);
+      if (s && b.price >= s.price) {
+        this.error(
+          b.src,
+          [...b.path, "price"],
+          `shop "${b.shop}" buys "${b.item}" for ${b.price} but shop "${s.shop}" sells it for ${s.price}: buy prices must be lower than every sell price`,
+        );
+      }
+      const owned = this.index.ids.item.get(b.item);
+      const value = owned ? this.itemDef(owned)?.["value"] : undefined;
+      if (typeof value === "number" && b.price > value) {
+        this.warn(
+          b.src,
+          [...b.path, "price"],
+          `shop "${b.shop}" buys "${b.item}" for ${b.price}, above its value ${value}; NPCs should buy cheap`,
+        );
+      }
+    }
+  }
+
+  /**
+   * A quest step that waits for an item (has_item) needs a way to get it: monster loot, a
+   * shop that sells it, a dialog give_item or another quest's reward. Whether that source
+   * fits the quest's level is checked by the balance tests, which know monster levels.
+   */
+  private checkQuestItemSources(): void {
+    const sources = new Set<string>();
+    for (const src of this.monsters) {
+      const loot = isObj(src.data) ? asList(src.data["loot"]) : [];
+      for (const drop of loot)
+        if (isObj(drop) && typeof drop["item"] === "string") sources.add(drop["item"]);
+    }
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      const shop = npc?.["shop"];
+      for (const offer of isObj(shop) ? asList(shop["sells"]) : []) {
+        if (isObj(offer) && typeof offer["item"] === "string") sources.add(offer["item"]);
+      }
+      for (const { key, value } of actionsOf(npc?.["dialog"], ["dialog"])) {
+        if (key === "give_item" && typeof value === "string") sources.add(value);
+      }
+    }
+    for (const src of this.quests) {
+      const rewards = isObj(src.data) ? asList(src.data["rewards"]) : [];
+      for (const r of rewards)
+        if (isObj(r) && typeof r["item"] === "string") sources.add(r["item"]);
+    }
+    for (const src of this.quests) {
+      const steps = isObj(src.data) ? asList(src.data["steps"]) : [];
+      for (const [i, step] of steps.entries()) {
+        const when = isObj(step) ? step["complete_when"] : undefined;
+        const need = isObj(when) ? when["has_item"] : undefined;
+        if (!isObj(need) || typeof need["item"] !== "string") continue;
+        if (!this.index.ids.item.has(need["item"]) || sources.has(need["item"])) continue;
+        this.error(
+          src,
+          ["steps", i, "complete_when", "has_item", "item"],
+          `no way to obtain "${need["item"]}": no monster drops it, no shop sells it and no give_item or quest reward gives it`,
+        );
+      }
+    }
+  }
+
   private checkI18n(): void {
     const i18nDir = join(this.root, "i18n");
     const catalogs = new Map<string, Map<string, { src: SourceFile; text: string }>>();
@@ -603,6 +760,31 @@ class Validator {
       ...(pos ? { line: pos.line, col: pos.col } : {}),
     });
   }
+}
+
+/** Every dialog action (key and value) under `value`, including those inside action lists. */
+function actionsOf(
+  value: unknown,
+  path: PathSegment[],
+): { key: string; value: unknown; path: PathSegment[] }[] {
+  const out: { key: string; value: unknown; path: PathSegment[] }[] = [];
+  const nodes = isObj(value) && isObj(value["nodes"]) ? value["nodes"] : {};
+  for (const [name, node] of Object.entries(nodes)) {
+    const options = isObj(node) ? asList(node["options"]) : [];
+    for (const [i, opt] of options.entries()) {
+      if (!isObj(opt)) continue;
+      const at: PathSegment[] = [...path, "nodes", name, "options", i, "action"];
+      const action = opt["action"];
+      const list = Array.isArray(action) ? action : [action];
+      for (const [j, a] of list.entries()) {
+        if (!isObj(a)) continue;
+        const here = Array.isArray(action) ? [...at, j] : at;
+        for (const [key, inner] of Object.entries(a))
+          out.push({ key, value: inner, path: [...here, key] });
+      }
+    }
+  }
+  return out;
 }
 
 function fileName(src: SourceFile): string {

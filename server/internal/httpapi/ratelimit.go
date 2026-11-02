@@ -31,18 +31,23 @@ var (
 	DefaultLoginEmailRateLimit = RateLimit{Burst: 30, Every: 2 * time.Minute}
 )
 
-// limiterSlots is the fixed size of every limiter table (24 B per slot, ~1.5 MiB).
-const limiterSlots = 1 << 16
+// limiterSlots is the fixed size of every limiter table: 2^14 sets of limiterWays slots
+// (24 B per slot, ~1.5 MiB per table).
+const (
+	limiterWays  = 4
+	limiterSets  = 1 << 14
+	limiterSlots = limiterSets * limiterWays
+)
 
 // bucket is one slot. tag identifies the key that owns it (0 = never used).
 type bucket struct {
 	tag    uint64
 	tokens float64
-	last   int64 // unix nanoseconds; an int keeps the table pointer-free for the GC
+	last   int64 // nanoseconds since the limiter's start; an int keeps the table pointer-free
 }
 
-// collisionPolicy says what to do when both candidate slots of a key are owned by other
-// keys whose buckets are still in use.
+// collisionPolicy says what to do when every slot of a key's set is owned by other keys
+// whose buckets are still in use.
 type collisionPolicy int
 
 const (
@@ -50,27 +55,36 @@ const (
 	// table with drained buckets (cheap junk requests from many /64s) must not turn into
 	// a denial of service for everyone else.
 	failOpen collisionPolicy = iota
-	// failClosed makes the key share the fuller of its two slots. Used for the per-account
-	// login limits: only real password checks spend them (impossible passwords are
-	// rejected before), and those are capped by the argon2 slots far below the table's
-	// refill rate, so the table cannot be kept full of drained buckets.
+	// failClosed makes the key share the fullest slot of its set. Used for the
+	// per-account login limits: only real password checks spend them, capped by the
+	// argon2 slots, so an attacker can drain only a small fraction f of the slots. A key
+	// is affected only if all limiterWays slots of its set are drained; drained buckets
+	// land in sets in Poisson-like counts, so that is P(Poisson(4f) >= 4) ~ (4f)^4/24,
+	// about 10*f^4 per table (0.08% of keys at f = 10%), versus ~2*f^2 with 2 ways.
 	failClosed
 )
 
-// limiter is a token-bucket rate limiter over a fixed-size table, so memory is bounded
-// whatever the number of distinct keys. Each key has two candidate slots and a 64-bit
-// tag, all derived from HMAC-SHA256(key) under a random per-process secret: an attacker
-// cannot pick keys that land on a victim's slots.
+// limiter is a token-bucket rate limiter over a fixed-size, set-associative table, so
+// memory is bounded whatever the number of distinct keys. A key maps to one set of
+// limiterWays slots and carries a 64-bit tag, both derived from HMAC-SHA256(key) under a
+// random per-process secret: an attacker cannot pick keys that land on a victim's set.
 //
-// A slot changes owner only when its bucket is unused or full again: forgetting a full
-// bucket changes nothing (a new bucket starts full), so a drained bucket can never be
-// reset or evicted by spraying keys.
+// Two rules keep it safe:
+//   - a key whose tag is in any slot of its set always uses that slot, so a drained
+//     bucket is found again even when other slots of the set could be reclaimed;
+//   - a slot changes owner only when unused or full again. Forgetting a full bucket
+//     changes nothing (a new bucket starts full), so spraying keys never resets a limit.
+//
+// Time is measured as an offset from the limiter's start (monotonic with the real
+// clock), and a bucket whose last refill lies in the future is rebased, so wall-clock
+// jumps neither freeze buckets nor refill them all at once.
 //
 // It is shared by HTTP handler goroutines and holds no game state, so a mutex is fine.
 type limiter struct {
 	cfg    RateLimit
 	policy collisionPolicy
 	clock  clock.Clock
+	start  time.Time
 	secret [32]byte
 
 	mu    sync.Mutex
@@ -78,7 +92,7 @@ type limiter struct {
 }
 
 func newLimiter(cfg RateLimit, policy collisionPolicy, clk clock.Clock) (*limiter, error) {
-	l := &limiter{cfg: cfg, policy: policy, clock: clk, slots: make([]bucket, limiterSlots)}
+	l := &limiter{cfg: cfg, policy: policy, clock: clk, start: clk.Now(), slots: make([]bucket, limiterSlots)}
 	if _, err := rand.Read(l.secret[:]); err != nil {
 		return nil, fmt.Errorf("limiter secret: %w", err)
 	}
@@ -86,8 +100,8 @@ func newLimiter(cfg RateLimit, policy collisionPolicy, clk clock.Clock) (*limite
 }
 
 type slotRef struct {
-	i1, i2 int
-	tag    uint64
+	set int // index of the set's first slot
+	tag uint64
 }
 
 // locate hashes key; it runs outside the mutex.
@@ -96,19 +110,24 @@ func (l *limiter) locate(key string) slotRef {
 	m.Write([]byte(key))
 	sum := m.Sum(nil)
 	return slotRef{
-		i1:  int(binary.LittleEndian.Uint64(sum[0:8]) % limiterSlots),
-		i2:  int(binary.LittleEndian.Uint64(sum[8:16]) % limiterSlots),
-		tag: binary.LittleEndian.Uint64(sum[16:24]) | 1, // never 0
+		set: int(binary.LittleEndian.Uint64(sum[0:8])%limiterSets) * limiterWays,
+		tag: binary.LittleEndian.Uint64(sum[8:16]) | 1, // never 0
 	}
 }
+
+// now returns the time elapsed since the limiter started.
+func (l *limiter) now() int64 { return int64(l.clock.Now().Sub(l.start)) }
 
 func (l *limiter) refill(b *bucket, now int64) {
 	if b.tag == 0 {
 		return
 	}
-	if elapsed := now - b.last; elapsed > 0 {
+	switch elapsed := now - b.last; {
+	case elapsed > 0:
 		b.tokens = min(float64(l.cfg.Burst), b.tokens+float64(elapsed)/float64(l.cfg.Every))
 		b.last = now
+	case elapsed < 0:
+		b.last = now // the clock went back: refill normally from here instead of freezing
 	}
 }
 
@@ -118,35 +137,39 @@ const untracked = -1
 // slotFor returns the index of key's bucket, claiming a free slot if needed, or
 // untracked (failOpen collision). Caller holds mu.
 func (l *limiter) slotFor(ref slotRef) int {
-	now := l.clock.Now().UnixNano()
-	b1, b2 := &l.slots[ref.i1], &l.slots[ref.i2]
-	l.refill(b1, now)
-	l.refill(b2, now)
-	idx := [2]int{ref.i1, ref.i2}
-	for k, b := range []*bucket{b1, b2} {
-		if b.tag == ref.tag {
-			return idx[k]
+	now := l.now()
+	set := l.slots[ref.set : ref.set+limiterWays]
+	for i := range set {
+		l.refill(&set[i], now)
+	}
+	for i := range set {
+		if set[i].tag == ref.tag {
+			return ref.set + i
 		}
 	}
 	full := float64(l.cfg.Burst)
-	for k, b := range []*bucket{b1, b2} {
-		if b.tag == 0 || b.tokens >= full {
-			*b = bucket{tag: ref.tag, tokens: full, last: now}
-			return idx[k]
+	for i := range set {
+		if set[i].tag == 0 || set[i].tokens >= full {
+			set[i] = bucket{tag: ref.tag, tokens: full, last: now}
+			return ref.set + i
 		}
 	}
 	if l.policy == failOpen {
 		return untracked
 	}
-	if b2.tokens > b1.tokens {
-		return ref.i2
+	best := 0
+	for i := range set {
+		if set[i].tokens > set[best].tokens {
+			best = i
+		}
 	}
-	return ref.i1
+	return ref.set + best
 }
 
 // reservation is a token taken by allow; pass it to refund to give it back.
 type reservation struct {
-	slot int // untracked if nothing was taken
+	slot int    // untracked if nothing was taken
+	tag  uint64 // owner of the slot when charged
 }
 
 // allow consumes one token for key and reports whether the request may proceed. The
@@ -164,10 +187,12 @@ func (l *limiter) allow(key string) (bool, reservation) {
 		return false, reservation{slot: untracked}
 	}
 	b.tokens--
-	return true, reservation{slot: i}
+	return true, reservation{slot: i, tag: b.tag}
 }
 
 // refund gives back the token of r to the slot it was taken from (never above Burst).
+// If the slot changed owner in between, the token is dropped rather than given to
+// another key.
 func (l *limiter) refund(r reservation) {
 	if r.slot == untracked {
 		return
@@ -175,5 +200,8 @@ func (l *limiter) refund(r reservation) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	b := &l.slots[r.slot]
+	if b.tag != r.tag {
+		return
+	}
 	b.tokens = min(float64(l.cfg.Burst), b.tokens+1)
 }

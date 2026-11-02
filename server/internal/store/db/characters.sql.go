@@ -7,7 +7,27 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const characterBelongsToAccount = `-- name: CharacterBelongsToAccount :one
+SELECT EXISTS (
+    SELECT 1 FROM characters WHERE id = $1 AND account_id = $2
+)
+`
+
+type CharacterBelongsToAccountParams struct {
+	ID        int64
+	AccountID int64
+}
+
+func (q *Queries) CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error) {
+	row := q.db.QueryRow(ctx, characterBelongsToAccount, arg.ID, arg.AccountID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
 
 const countCharactersByAccount = `-- name: CountCharactersByAccount :one
 SELECT count(*) FROM characters WHERE account_id = $1
@@ -59,6 +79,54 @@ func (q *Queries) CreateCharacter(ctx context.Context, arg CreateCharacterParams
 	return i, err
 }
 
+const getCharacterForPlay = `-- name: GetCharacterForPlay :one
+SELECT id, account_id, name, vocation, level, experience, health, mana,
+       pos_x, pos_y, pos_z, town
+FROM characters
+WHERE id = $1 AND account_id = $2
+`
+
+type GetCharacterForPlayParams struct {
+	ID        int64
+	AccountID int64
+}
+
+type GetCharacterForPlayRow struct {
+	ID         int64
+	AccountID  int64
+	Name       string
+	Vocation   string
+	Level      int32
+	Experience int64
+	Health     int32
+	Mana       int32
+	PosX       pgtype.Int4
+	PosY       pgtype.Int4
+	PosZ       pgtype.Int2
+	Town       string
+}
+
+// Loads what the game server needs to put a character in the world.
+func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error) {
+	row := q.db.QueryRow(ctx, getCharacterForPlay, arg.ID, arg.AccountID)
+	var i GetCharacterForPlayRow
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Name,
+		&i.Vocation,
+		&i.Level,
+		&i.Experience,
+		&i.Health,
+		&i.Mana,
+		&i.PosX,
+		&i.PosY,
+		&i.PosZ,
+		&i.Town,
+	)
+	return i, err
+}
+
 const listCharactersByAccount = `-- name: ListCharactersByAccount :many
 SELECT id, name, vocation, level
 FROM characters
@@ -96,4 +164,62 @@ func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveCharacterState = `-- name: SaveCharacterState :execrows
+UPDATE characters
+SET level        = $1,
+    experience   = $2,
+    health       = $3,
+    mana         = $4,
+    pos_x        = $5,
+    pos_y        = $6,
+    pos_z        = $7,
+    last_save_at = $8
+WHERE id = $9
+`
+
+type SaveCharacterStateParams struct {
+	Level      int32
+	Experience int64
+	Health     int32
+	Mana       int32
+	PosX       pgtype.Int4
+	PosY       pgtype.Int4
+	PosZ       pgtype.Int2
+	SavedAt    pgtype.Timestamptz
+	ID         int64
+}
+
+// Written by the persistence goroutine from an immutable snapshot of the game loop.
+func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, saveCharacterState,
+		arg.Level,
+		arg.Experience,
+		arg.Health,
+		arg.Mana,
+		arg.PosX,
+		arg.PosY,
+		arg.PosZ,
+		arg.SavedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const touchCharacterLogin = `-- name: TouchCharacterLogin :exec
+UPDATE characters SET last_login_at = $1 WHERE id = $2
+`
+
+type TouchCharacterLoginParams struct {
+	At pgtype.Timestamptz
+	ID int64
+}
+
+func (q *Queries) TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error {
+	_, err := q.db.Exec(ctx, touchCharacterLogin, arg.At, arg.ID)
+	return err
 }

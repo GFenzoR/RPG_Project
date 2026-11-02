@@ -1,0 +1,11 @@
+items:
+  grass: 1
+  road: 2
+  plain_floor: 3
+  water: 4
+  stone_wall: 5
+  open_gate: 6
+  crate: 7
+  banner: 8
+  flower: 9
+  coin: 10

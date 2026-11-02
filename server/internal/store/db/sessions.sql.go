@@ -11,6 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const consumeSession = `-- name: ConsumeSession :one
+DELETE FROM sessions s
+USING accounts a
+WHERE s.token_hash = $1
+  AND s.kind = $2
+  AND s.expires_at > $3
+  AND a.id = s.account_id
+  AND a.disabled_at IS NULL
+RETURNING s.account_id, s.character_id, s.expires_at
+`
+
+type ConsumeSessionParams struct {
+	TokenHash []byte
+	Kind      string
+	Now       pgtype.Timestamptz
+}
+
+type ConsumeSessionRow struct {
+	AccountID   int64
+	CharacterID pgtype.Int8
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// Deletes a token and returns it if it was active: play tokens are single-use.
+func (q *Queries) ConsumeSession(ctx context.Context, arg ConsumeSessionParams) (ConsumeSessionRow, error) {
+	row := q.db.QueryRow(ctx, consumeSession, arg.TokenHash, arg.Kind, arg.Now)
+	var i ConsumeSessionRow
+	err := row.Scan(&i.AccountID, &i.CharacterID, &i.ExpiresAt)
+	return i, err
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, expires_at)
 VALUES ($1, $2, $3,

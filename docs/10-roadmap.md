@@ -41,17 +41,17 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 **Servidor base**
 - [x] **T1.1 Núcleo del servidor.** (#2) `clock`, game loop de 50 ms, cola de comandos,
   scheduler min-heap, harness `sim` y primeros tests deterministas. [T0.1]
-- [ ] **T1.2 Mundo en el servidor.** `mapcompile` → `world.bin`, carga, sectores,
+- [x] **T1.2 Mundo en el servidor.** (#15) `mapcompile` → `world.bin`, carga, sectores,
   flags de tile, pathfinding A*, línea de visión. Benchmarks. [T1.1, T0.4]
 - [x] **T1.3 Base de datos y cuentas.** (PR #9) Migraciones goose (accounts, characters,
   inventory, skills, quest_state, sessions, economy_log, cosmetics), sqlc, API HTTP de
   registro/login con email y contraseña, lista y creación de personajes. [T1.1]
-- [ ] **T1.4 Red y caminar.** Gateway WS, handshake, sesiones, AOI, Walk/WalkPath,
+- [x] **T1.4 Red y caminar.** (PR #23) Gateway WS, handshake, sesiones, AOI, Walk/WalkPath,
   FullMapView/MapSlice/CreatureMove, rate limits, logout y guardado. Bot mínimo que
   entra y camina (test de integración). [T0.2, T1.2, T1.3]
 
 **Cliente base**
-- [ ] **T1.5 Cliente: login y mundo.** Vite + Pixi + Preact, `packages/renderer`,
+- [x] **T1.5 Cliente: login y mundo.** (PR #24) Vite + Pixi + Preact, `packages/renderer`,
   pantalla de login/creación de personaje, render de mapa con orden de capas, caminar con
   teclado y click, predicción e interpolación. Playwright con screenshot. [T1.4, T0.5]
 
@@ -77,7 +77,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   global, mensajes del sistema por clave i18n, selector de idioma es/en. [T1.5]
 
 **Editor e IA**
-- [ ] **T1.14 Map editor v1.** Funciones del hito 1 en `04-map-editor-and-ai.md`, con
+- [x] **T1.14 Map editor v1.** (PR #13) Funciones del hito 1 en `04-map-editor-and-ai.md`, con
   ops de map-format, deshacer/rehacer, validación en vivo, E2E. [T0.4, T0.5]
 - [ ] **T1.15 mapcli completo + mcp-world.** Todas las ops, `render` a PNG, `generate`
   procedural básico, servidor MCP registrado en `.mcp.json`. [T1.14]

@@ -318,6 +318,35 @@ describe("Isla del Puerto balance", () => {
     expect(to15).toBeLessThanOrEqual(5);
   });
 
+  it("lets players get every quest item close to the quest's min_level", () => {
+    // Shops and dialog give_item count as level 1; loot counts at the monster's target level.
+    const npcDir = join(REPO, "data/npcs");
+    const easy = new Set<string>();
+    for (const f of readdirSync(npcDir).filter((f) => f.endsWith(".yaml"))) {
+      const text = readFileSync(join(npcDir, f), "utf8");
+      for (const m of text.matchAll(/give_item:\s*([a-z0-9_]+)/g)) if (m[1]) easy.add(m[1]);
+      const npc = parse(text) as { shop?: { sells?: { item: string }[] } };
+      for (const o of npc.shop?.sells ?? []) easy.add(o.item);
+    }
+    const questDir = join(REPO, "data/quests");
+    for (const f of readdirSync(questDir).filter((f) => f.endsWith(".yaml"))) {
+      const q = readYaml<{
+        id: string;
+        min_level?: number;
+        steps: { complete_when: { has_item?: { item: string } } }[];
+      }>(`data/quests/${f}`);
+      for (const step of q.steps) {
+        const want = step.complete_when.has_item?.item;
+        if (!want) continue;
+        const dropLevels = [...monsters.values()]
+          .filter((m) => m.loot?.some((l) => l.item === want))
+          .map((m) => TARGET_LEVEL[m.id] ?? Infinity);
+        const sourceLevel = easy.has(want) ? 1 : Math.min(...dropLevels);
+        expect(sourceLevel, `${q.id}: ${want}`).toBeLessThanOrEqual((q.min_level ?? 1) + 4);
+      }
+    }
+  });
+
   it("keeps loot a small gold faucet (0.1-1.5 copper per XP)", () => {
     for (const id of Object.keys(TARGET_LEVEL)) {
       const m = monsters.get(id);

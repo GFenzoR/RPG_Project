@@ -11,6 +11,9 @@ import (
 )
 
 type Querier interface {
+	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
+	// Deletes a token and returns it if it was active: play tokens are single-use.
+	ConsumeSession(ctx context.Context, arg ConsumeSessionParams) (ConsumeSessionRow, error)
 	CountCharactersByAccount(ctx context.Context, accountID int64) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error)
 	CreateCharacter(ctx context.Context, arg CreateCharacterParams) (CreateCharacterRow, error)
@@ -20,10 +23,15 @@ type Querier interface {
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	// The caller passes "now" (injected clock) so expiry is testable.
 	GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error)
+	// Loads what the game server needs to put a character in the world.
+	GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error)
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
+	// Written by the persistence goroutine from an immutable snapshot of the game loop.
+	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
+	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -50,9 +50,38 @@ y describir en el PR qué vio.
 - `proto`: un mensaje de ejemplo serializado en Go se decodifica en TS y viceversa.
 
 ## CI (GitHub Actions)
-Workflow `ci.yml` en cada PR: lint, tests Go y TS, validate, build del cliente y editor,
-E2E con Playwright, y un benchmark corto del tick. Los artefactos (screenshots, reporte
-de bots) se suben al run.
+Workflow `ci.yml` en cada PR y en cada push a `main`. Los jobs corren en paralelo y una
+corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pnpm
+(`setup-node`) y de módulos/build de Go (`setup-go`).
+
+| Job | Qué corre | Artefactos |
+|---|---|---|
+| `go (server)`, `go (tools/bots)` | gofmt, `go vet`, golangci-lint, `go test -race ./...` | — |
+| `ts` | ESLint + Prettier, `pnpm typecheck`, Vitest | — |
+| `validate` | `make validate` (contenido, i18n, mapas, IDs append-only) y `make test-parity` | — |
+| `actionlint` | lint de `.github/workflows/` (actionlint fijado) | — |
+| `build` | `make build`: bundle de producción del editor y del cliente (`build/client`, con el atlas en `atlas/`) | — |
+| `e2e` | E2E del editor y del cliente en Chromium (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor | `e2e-screenshots`, `playwright-report` (también si falla) |
+| `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |
+| `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
+
+El job `bench` **no falla por tiempos**: los runners compartidos son ruidosos. Por ahora la
+regla de "no empeorar más de 10 %" (ver 07) se comprueba a mano: descargar el artefacto
+`bench` del PR y el del último run de `main`, y comparar con
+`benchstat main.txt pr.txt`. Las asignaciones (`allocs/op`) sí son estables: cualquier
+subida en el hot path del tick se explica en el PR.
+
+### E2E del cliente (`client/e2e`)
+`make e2e` corre también el E2E del cliente: Playwright levanta el servidor Go (compila
+`world/` con `mapcompile` y lo arranca en `:18080` contra `DATABASE_URL`, que debe tener
+Postgres arriba; aplica las migraciones solo) y el Vite del cliente en `:5176`, que hace de
+proxy de `/api` y `/ws`. El test crea cuenta y personaje por la API, entra por la UI
+(login con error y luego correcto, lista de personajes, Jugar), comprueba que el canvas es
+15x11 casillas con escala entera, camina 3 pasos con teclado (flechas y WASD, cada uno
+predicho y confirmado) y 2 con click (`WalkPath`), y sale del juego. Cualquier error de
+consola o excepción no capturada hace fallar el test. Screenshots en
+`client/e2e/screenshots/actual/` (`01-register` … `06-walked-click`); el job `e2e` los sube
+junto con los del editor.
 
 ## Checklist del PR
 - [ ] `make lint test validate` pasa
