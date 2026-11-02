@@ -2,7 +2,7 @@
 // and the plain model types. The editor imports this; Node tools can use either entry.
 export * from "../types.ts";
 export { applyOps } from "./apply.ts";
-export type { ApplyResult } from "./apply.ts";
+export type { ApplyResult, TouchedChunk } from "./apply.ts";
 export { MAP_OP_NAMES, OpError } from "./types.ts";
 export type {
   Cell,

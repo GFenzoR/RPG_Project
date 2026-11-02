@@ -5,7 +5,7 @@ import { formatChunk } from "../chunk.ts";
 import { loadContent } from "../content.ts";
 import { loadWorld } from "../io.ts";
 import { chunkKey } from "../types.ts";
-import type { World } from "../types.ts";
+import type { Island, World } from "../types.ts";
 import { applyOps, OpError } from "./index.ts";
 import type { MapOp, OpOptions } from "./index.ts";
 
@@ -71,7 +71,7 @@ describe("applyOps", () => {
       [{ op: "paint_ground", floor: 8, cells: [{ x: 1030, y: 1030 }], item: "dirt" }],
       opts,
     );
-    expect(touched).toEqual([key]);
+    expect(touched).toEqual([{ island: "testisle", z: 8, cx: 32, cy: 32 }]);
     expect(world.islands.get("testisle")?.chunks.has(key)).toBe(true);
     const back = applyOps(world, inverse, opts).world;
     expect(back.islands.get("testisle")?.chunks.has(key)).toBe(false);
@@ -243,6 +243,52 @@ describe("applyOps", () => {
   it("returns the same world object when nothing changes", () => {
     const w = testisle();
     expect(applyOps(w, []).world).toBe(w);
+  });
+});
+
+describe("islands that share a chunk", () => {
+  // Rectangles are chunk-aligned in valid worlds, but ops must not mix islands if not.
+  function twoIslands(): World {
+    const island = (id: string, x: number, w: number): Island => ({
+      meta: {
+        id,
+        name: `island.${id}.name`,
+        rect: { x, y: 0, w, h: 32 },
+        floors: [7],
+        temple: { x, y: 0, z: 7 },
+        level_hint: [1, 1],
+      },
+      chunks: new Map(),
+      spawns: [],
+      npcs: [],
+      zones: [],
+      portals: [],
+      texts: [],
+    });
+    return {
+      meta: { format: 1, islands: [], boat_routes: [] },
+      islands: new Map([
+        ["a", island("a", 0, 40)],
+        ["b", island("b", 40, 24)],
+      ]),
+    };
+  }
+
+  it("keeps each island's copy of the chunk apart, and undoes both", () => {
+    const w = twoIslands();
+    const { world, touched, inverse } = applyOps(w, [
+      { op: "paint_ground", floor: 7, cells: [{ x: 35, y: 1 }], item: "sand" },
+      { op: "paint_ground", floor: 7, cells: [{ x: 45, y: 1 }], item: "dirt" },
+    ]);
+    expect(touched).toEqual([
+      { island: "a", z: 7, cx: 1, cy: 0 },
+      { island: "b", z: 7, cx: 1, cy: 0 },
+    ]);
+    const chunk = (id: string) => world.islands.get(id)?.chunks.get(chunkKey(7, 1, 0));
+    expect(chunk("a")?.ground.filter((g) => g !== null)).toEqual(["sand"]);
+    expect(chunk("b")?.ground.filter((g) => g !== null)).toEqual(["dirt"]);
+    const back = applyOps(world, inverse).world;
+    expect([...back.islands.values()].map((i) => i.chunks.size)).toEqual([0, 0]);
   });
 });
 

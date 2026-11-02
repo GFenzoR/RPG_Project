@@ -14,12 +14,20 @@ import type { Chunk, Island, ItemStack, Position, World } from "../types.ts";
 import { OpError } from "./types.ts";
 import type { Cell, EraseOp, MapOp, OpOptions, PaintGroundOp, RemoveItemOp } from "./types.ts";
 
+/** A chunk an op list changed. Chunks are per island: two islands never share one. */
+export interface TouchedChunk {
+  island: string;
+  z: number;
+  cx: number;
+  cy: number;
+}
+
 export interface ApplyResult {
   world: World;
   /** Applying these ops to `world` gives back the input world. */
   inverse: MapOp[];
-  /** chunkKey(z, cx, cy) of every chunk that changed, was created or was removed. */
-  touched: string[];
+  /** Every chunk that changed, was created or was removed, with the island that owns it. */
+  touched: TouchedChunk[];
 }
 
 /** Applies `ops` in order. Throws OpError (and applies nothing) if one is invalid. */
@@ -36,7 +44,7 @@ export function applyOps(world: World, ops: readonly MapOp[], opts: OpOptions = 
   }
   // Undo runs the inverses of later ops first.
   const inverse = inverses.reverse().flat();
-  return { world: draft.finish(), inverse, touched: [...draft.touched] };
+  return { world: draft.finish(), inverse, touched: [...draft.touched.values()] };
 }
 
 class InvalidOp extends Error {}
@@ -218,10 +226,10 @@ interface TileRef {
 
 /** Copy-on-write view of a world: islands and chunks are cloned the first time they change. */
 class Draft {
-  readonly touched = new Set<string>();
+  /** Keyed by `${island}:${chunkKey}`, so islands sharing a chunk never mix. */
+  readonly touched = new Map<string, TouchedChunk>();
   private readonly src: World;
   private readonly islands = new Map<string, Island>();
-  private readonly owner = new Map<string, string>(); // chunk key -> island id
 
   constructor(world: World) {
     this.src = world;
@@ -272,7 +280,8 @@ class Draft {
     const cy = Math.floor(y / CHUNK_SIZE);
     const key = chunkKey(z, cx, cy);
     const isl = this.island(id);
-    if (!this.touched.has(key)) {
+    const owned = `${id}:${key}`;
+    if (!this.touched.has(owned)) {
       const orig = isl.chunks.get(key);
       const copy: Chunk = orig
         ? {
@@ -290,15 +299,15 @@ class Draft {
             items: [],
           };
       isl.chunks.set(key, copy);
-      this.touched.add(key);
-      this.owner.set(key, id);
+      this.touched.set(owned, { island: id, z, cx, cy });
     }
     return this.ref(isl.chunks.get(key) as Chunk, x, y);
   }
 
   finish(): World {
-    for (const key of this.touched) {
-      const isl = this.island(this.owner.get(key) as string);
+    for (const t of this.touched.values()) {
+      const key = chunkKey(t.z, t.cx, t.cy);
+      const isl = this.island(t.island);
       const c = isl.chunks.get(key) as Chunk;
       c.items = c.items.filter((s) => s.stack.length > 0).sort((a, b) => a.y - b.y || a.x - b.x);
       if (c.items.length === 0 && c.ground.every((g) => g === null)) isl.chunks.delete(key);
