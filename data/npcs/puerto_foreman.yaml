@@ -1,0 +1,78 @@
+id: puerto_foreman
+name: npc.puerto_foreman.name
+sprite: npcs/miner_old
+notes: >-
+  Stands at the old mine entrance (surface). Hands over the bosun's logbook in Chapter 1
+  and gives the foreman_ore side quest.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.puerto_foreman.greet
+      options:
+        - text: npc.puerto_foreman.opt_ch1_bosun
+          if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: talk_foreman } }
+          action: { give_item: bosun_logbook }
+          goto: ch1_logbook
+        - text: npc.puerto_foreman.opt_ch1_lost
+          if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: return_logbook } }
+          action: { give_item: bosun_logbook }
+          goto: ch1_logbook_again
+        - text: npc.puerto_foreman.opt_work
+          if:
+            - { quest_not_started: foreman_ore }
+            - { level_at_least: 10 }
+          goto: ore_offer
+        - text: npc.puerto_foreman.opt_ore_progress
+          if: { quest_state: { quest: foreman_ore, state: in_progress, step: gather_ore } }
+          goto: ore_hint
+        - text: npc.puerto_foreman.opt_ore_deliver
+          if:
+            - { quest_state: { quest: foreman_ore, state: in_progress, step: deliver_ore } }
+            - { has_item: { item: iron_ore, count: 5 } }
+          action: { take_item: { item: iron_ore, count: 5 } }
+          goto: ore_delivered
+        - text: npc.puerto_foreman.opt_mine
+          goto: mine
+        - text: dialog.bye
+          action: close
+    ch1_logbook:
+      text: npc.puerto_foreman.ch1_logbook
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch1_logbook_again:
+      text: npc.puerto_foreman.ch1_logbook_again
+      options:
+        - { text: dialog.bye, action: close }
+    mine:
+      text: npc.puerto_foreman.mine
+      options:
+        - { text: npc.puerto_foreman.opt_flood, goto: flood }
+        - { text: dialog.back, goto: greet }
+    flood:
+      text: npc.puerto_foreman.flood
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ore_offer:
+      text: npc.puerto_foreman.ore_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: foreman_ore }
+          goto: ore_accepted
+        - text: dialog.decline
+          goto: greet
+    ore_accepted:
+      text: npc.puerto_foreman.ore_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    ore_hint:
+      text: npc.puerto_foreman.ore_hint
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ore_delivered:
+      text: npc.puerto_foreman.ore_delivered
+      options:
+        - { text: dialog.bye, action: close }

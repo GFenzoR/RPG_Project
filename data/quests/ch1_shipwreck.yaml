@@ -1,0 +1,27 @@
+id: ch1_shipwreck
+name: quest.ch1_shipwreck.name
+chapter: 1
+min_level: 1
+notes: >-
+  Main line, Chapter 1 "Náufrago". Started by harbor_master. Route: town -> wolf field
+  (levels 1-4) -> old mine entrance (gloom bats, levels 3-6) -> puerto_foreman -> back to
+  harbor_master. Expected finish around level 6-7. The ending reveals that the wreck looters
+  shipped a sealed coffer to the forest island: hook for Chapter 2.
+steps:
+  - id: clear_wolves
+    description: quest.ch1_shipwreck.step_clear_wolves
+    complete_when: { kill: { monster: wolf, count: 6 } }
+  - id: mine_bats
+    description: quest.ch1_shipwreck.step_mine_bats
+    complete_when: { kill: { monster: gloom_bat, count: 5 } }
+  - id: talk_foreman
+    description: quest.ch1_shipwreck.step_talk_foreman
+    complete_when: { dialog_action: { npc: puerto_foreman, node: ch1_logbook } }
+  - id: return_logbook
+    description: quest.ch1_shipwreck.step_return_logbook
+    complete_when: { dialog_action: { npc: harbor_master, node: ch1_logbook_read } }
+rewards:
+  - { xp: 800 }
+  - { gold: 150 }
+  - { item: iron_sword }
+  - { set_flag: { key: forest_route_unlocked, value: 1 } }

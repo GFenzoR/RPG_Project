@@ -1,0 +1,67 @@
+id: puerto_diver
+name: npc.puerto_diver.name
+sprite: npcs/diver_old
+notes: >-
+  Retired reef diver on the beach near the wreck. Lore about the sunken empire, the
+  diver_locket side quest and a one-item shop (coral wands he carves himself).
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.puerto_diver.greet
+      options:
+        - text: npc.puerto_diver.opt_reef
+          goto: reef
+        - text: npc.puerto_diver.opt_locket
+          if:
+            - { quest_not_started: diver_locket }
+            - { level_at_least: 8 }
+          goto: locket_offer
+        - text: npc.puerto_diver.opt_locket_return
+          if:
+            - { quest_state: { quest: diver_locket, state: in_progress, step: return_locket } }
+            - { has_item: { item: tarnished_locket } }
+          action: { take_item: { item: tarnished_locket } }
+          goto: locket_returned
+        - text: npc.puerto_diver.opt_wands
+          goto: wands
+        - text: dialog.bye
+          action: close
+    reef:
+      text: npc.puerto_diver.reef
+      options:
+        - { text: npc.puerto_diver.opt_empire, goto: empire }
+        - { text: dialog.back, goto: greet }
+    empire:
+      text: npc.puerto_diver.empire
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    locket_offer:
+      text: npc.puerto_diver.locket_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: diver_locket }
+          goto: locket_accepted
+        - text: dialog.decline
+          goto: greet
+    locket_accepted:
+      text: npc.puerto_diver.locket_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    locket_returned:
+      text: npc.puerto_diver.locket_returned
+      options:
+        - { text: dialog.bye, action: close }
+    wands:
+      text: npc.puerto_diver.wands
+      options:
+        - text: dialog.trade
+          action: { open_shop: diver_shop }
+        - { text: dialog.back, goto: greet }
+shop:
+  id: diver_shop
+  sells:
+    - { item: coral_wand, price: 300 }
+  buys:
+    - { item: coral_wand, price: 100 }

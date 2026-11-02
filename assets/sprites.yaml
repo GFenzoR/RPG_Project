@@ -58,6 +58,7 @@ sprites:
   materials/beetle_carapace: { placeholder: { label: BC, color: "#3e5248" } }
   materials/iron_ore: { placeholder: { label: IO, color: "#8a4e3a" } }
   materials/tarnished_locket: { placeholder: { label: TL, color: "#7c7448" } }
+  quest/bosun_logbook: { placeholder: { label: BL, color: "#6e5a3a" } }
   decor/mooring_post: { placeholder: { label: MP, color: "#5a4632" } }
   decor/cargo_crate: { placeholder: { label: CR, color: "#9a7a4e" } }
 
@@ -75,3 +76,8 @@ sprites:
 
   # NPCs
   npcs/sailor_old: { placeholder: { label: SO, color: "#2f5d8a" } }
+  npcs/armorer: { placeholder: { label: AR, color: "#7a3e2a" } }
+  npcs/merchant: { placeholder: { label: ME, color: "#8a7a2a" } }
+  npcs/priestess: { placeholder: { label: PR, color: "#d8c890" } }
+  npcs/miner_old: { placeholder: { label: MO, color: "#5a4a3a" } }
+  npcs/diver_old: { placeholder: { label: DV, color: "#2a6a6e" } }

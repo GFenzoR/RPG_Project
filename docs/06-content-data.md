@@ -36,6 +36,12 @@ i18n/
   - En `monsters/`, `npcs/` y `quests/` el `id` es igual al nombre del archivo.
   - Referencias cruzadas, nodos de diálogo (`start`, `goto`; aviso si un nodo no se
     alcanza), pasos de quest en `set_quest_step`/`quest_state`, nodos en `dialog_action`.
+  - Un NPC solo abre su propia tienda con `open_shop`.
+  - Tiendas: ninguna tienda compra un item a un precio igual o mayor que el menor precio
+    al que alguna lo vende (bucle de oro infinito); aviso si compra por encima del `value`.
+  - Bendiciones: los `blessing` distintos que venden los NPCs no superan
+    `death.max_blessings` de `balance.yaml`.
+  - Aviso si una quest no tiene ningún `start_quest` en `data/npcs/`.
   - Un bloque por tipo de item (`weapon:` solo con `kind: weapon`, etc.), `max_stack`
     solo con `stackable: true`, `count` de loot > 1 solo para items apilables,
     `min <= max` en ataques, bordes solo entre items `ground`.
@@ -196,6 +202,18 @@ rewards:
   - { item: leather_backpack }
   - { set_flag: { key: unlocked_forest_route, value: 1 } }
 ```
+
+Semántica que asume el contenido (la implementa el motor de T1.10):
+- Los pasos se cumplen en orden; solo se evalúa el `complete_when` del paso actual. Al
+  cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`.
+- `quest_state` con `step` se cumple si la quest está `in_progress` y su paso actual es ese.
+- `dialog_action` se cumple cuando el jugador llega a ese nodo del NPC (las acciones de la
+  opción se ejecutan antes de entrar al nodo). Las opciones que llevan a ese nodo deben
+  estar condicionadas al paso correcto con `quest_state`.
+- `kill` cuenta las muertes desde que el paso pasó a ser el actual.
+
+Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1) y las quests secundarias
+`foreman_ore` y `diver_locket`.
 
 ## Hechizo
 ```yaml

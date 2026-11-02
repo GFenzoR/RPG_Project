@@ -1,0 +1,66 @@
+id: puerto_armorer
+name: npc.puerto_armorer.name
+sprite: npcs/armorer
+notes: >-
+  Weapons, armor and shields for levels 1-10. Sells at the item value; buys back at about a
+  third of it, so trading between players stays worth it (docs/02-game-design.md).
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.puerto_armorer.greet
+      options:
+        - text: dialog.trade
+          action: { open_shop: armorer_shop }
+        - text: npc.puerto_armorer.opt_advice
+          goto: advice
+        - text: npc.puerto_armorer.opt_salvage
+          goto: salvage
+        - text: dialog.bye
+          action: close
+    advice:
+      text: npc.puerto_armorer.advice
+      options:
+        - text: dialog.trade
+          action: { open_shop: armorer_shop }
+        - { text: dialog.back, goto: greet }
+    salvage:
+      text: npc.puerto_armorer.salvage
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+shop:
+  id: armorer_shop
+  sells:
+    - { item: belaying_pin, price: 20 }
+    - { item: rusty_cutlass, price: 25 }
+    - { item: hatchet, price: 60 }
+    - { item: iron_sword, price: 120 }
+    - { item: spiked_cudgel, price: 140 }
+    - { item: boarding_saber, price: 400 }
+    - { item: bearded_axe, price: 420 }
+    - { item: sailcloth_cap, price: 10 }
+    - { item: patched_tunic, price: 20 }
+    - { item: canvas_trousers, price: 15 }
+    - { item: tarred_boots, price: 15 }
+    - { item: leather_jerkin, price: 150 }
+    - { item: barrel_lid_shield, price: 10 }
+    - { item: plank_shield, price: 25 }
+    - { item: riveted_round_shield, price: 220 }
+  buys:
+    - { item: driftwood_club, price: 1 }
+    - { item: belaying_pin, price: 6 }
+    - { item: rusty_cutlass, price: 8 }
+    - { item: hatchet, price: 20 }
+    - { item: iron_sword, price: 40 }
+    - { item: spiked_cudgel, price: 45 }
+    - { item: boarding_saber, price: 130 }
+    - { item: bearded_axe, price: 140 }
+    - { item: sailcloth_cap, price: 3 }
+    - { item: patched_tunic, price: 6 }
+    - { item: canvas_trousers, price: 5 }
+    - { item: tarred_boots, price: 5 }
+    - { item: leather_jerkin, price: 50 }
+    - { item: barrel_lid_shield, price: 3 }
+    - { item: plank_shield, price: 8 }
+    - { item: riveted_round_shield, price: 70 }
