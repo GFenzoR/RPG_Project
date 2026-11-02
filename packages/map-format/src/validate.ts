@@ -5,6 +5,7 @@ import type { ContentIndex } from "./content.ts";
 import { Reporter } from "./diagnostics.ts";
 import type { Diagnostic, PathSegment } from "./diagnostics.ts";
 import { islandDir, loadWorld, worldFile } from "./io.ts";
+import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
 import { TileMap, isWalkable } from "./tiles.ts";
 import { CHUNK_SIZE, formatPos, rectContains, rectsOverlap } from "./types.ts";
@@ -85,7 +86,7 @@ export function validateLoaded(
   opts: ValidateLoadedOptions = {},
 ): MapReport {
   const v = new WorldValidator(
-    { world, lines: opts.lines ?? new Map(), files: [], diagnostics: [] },
+    { world, lines: opts.lines ?? new Map(), files: [], diagnostics: [], prefabs: new Map() },
     content,
   );
   v.run();
@@ -135,6 +136,17 @@ class WorldValidator {
     for (const island of this.world.islands.values()) this.checkIsland(island);
     this.checkUniqueAcrossWorld();
     this.checkBoatRoutes();
+    this.checkPrefabs();
+  }
+
+  // ---- world/prefabs -----------------------------------------------------------
+
+  private checkPrefabs(): void {
+    for (const [name, p] of this.loaded.prefabs) {
+      const file = `${PREFAB_DIR}/${name}.yaml`;
+      if (p.id !== name) this.err(file, ["id"], `id "${p.id}" must match the file name "${name}"`);
+      for (const e of checkPrefab(p, this.content)) this.err(file, e.path, e.message);
+    }
   }
 
   // ---- world.yaml ------------------------------------------------------------

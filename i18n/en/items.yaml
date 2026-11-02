@@ -62,3 +62,7 @@ item.iron_ore.name: "iron ore"
 item.iron_ore.desc: "Heavy, reddish stone. A smith would know what to do with it."
 item.tarnished_locket.name: "tarnished locket"
 item.tarnished_locket.desc: "Inside is a portrait the water wiped away long ago."
+
+# Autoborder pieces
+item.border_grass_sand.name: "grass edge"
+item.border_sand_water.name: "sandy shore"

@@ -18,6 +18,8 @@ import { checkSchema } from "./schemas.ts";
 import type { MapSchemaName } from "./schemas.ts";
 import { chunkKey } from "./types.ts";
 import type { Island, IslandMeta, World, WorldMeta } from "./types.ts";
+import type { Prefab } from "./ops/prefab.ts";
+import { PREFAB_DIR, formatPrefab } from "./prefabs.ts";
 import { formatYaml, parseYamlText } from "./yaml.ts";
 
 export const AUX_FILES = ["spawns", "npcs", "zones", "portals", "texts"] as const;
@@ -40,6 +42,8 @@ export interface LoadResult {
   /** Every map file that parsed, so `fmt` can rewrite it and `validate` can check layout. */
   files: FileState[];
   diagnostics: Diagnostic[];
+  /** Prefabs of world/prefabs/ that passed their schema, by file name (without .yaml). */
+  prefabs: Map<string, Prefab>;
 }
 
 type EntryType = "file" | "dir" | "other" | "error";
@@ -114,7 +118,13 @@ class Loader {
     }
   }
 
-  yaml<T>(file: string, schema: MapSchemaName, required: boolean, fallback: T): T {
+  yaml<T>(
+    file: string,
+    schema: MapSchemaName,
+    required: boolean,
+    fallback: T,
+    canonical: (data: T) => string = formatYaml,
+  ): T {
     const kind = this.kind(file);
     if (kind === undefined) {
       if (required) this.r.error(file, [], "required file is missing");
@@ -132,7 +142,7 @@ class Loader {
     const errors = checkSchema(schema, parsed.data);
     for (const e of errors) this.r.error(file, e.path, e.message, undefined, parsed.lineOf(e.path));
     if (errors.length > 0) return fallback;
-    this.files.push({ file, text, canonical: formatYaml(parsed.data) });
+    this.files.push({ file, text, canonical: canonical(parsed.data as T) });
     return parsed.data as T;
   }
 
@@ -250,7 +260,34 @@ export function loadWorld(root: string): LoadResult {
     if (worldLoaded && !seen.has(name))
       r.error(`${islandDir(name)}/`, [], `island is not listed in ${worldFile}`);
   }
-  return { world: { meta, islands }, files: l.files, lines: l.lines, diagnostics: l.diags };
+  const prefabs = new Map<string, Prefab>();
+  const prefabKind = l.kind(PREFAB_DIR);
+  if (prefabKind === "dir") {
+    for (const e of l.list(PREFAB_DIR)) {
+      const file = `${PREFAB_DIR}/${e.name}`;
+      if (!/^[a-z][a-z0-9_]*\.yaml$/.test(e.name)) {
+        r.error(file, [], "prefab files are named <id>.yaml (lowercase snake_case)");
+        continue;
+      }
+      if (e.type !== "file") {
+        if (e.type !== "error") r.error(file, [], "expected a file");
+        continue;
+      }
+      const p = l.yaml<Prefab | undefined>(file, "prefab", true, undefined, (d) =>
+        formatPrefab(d as Prefab),
+      );
+      if (p) prefabs.set(e.name.slice(0, -".yaml".length), p);
+    }
+  } else if (prefabKind !== undefined && prefabKind !== "error") {
+    r.error(`${PREFAB_DIR}/`, [], "expected a directory");
+  }
+  return {
+    world: { meta, islands },
+    files: l.files,
+    lines: l.lines,
+    diagnostics: l.diags,
+    prefabs,
+  };
 }
 
 function write(root: string, file: string, text: string): void {

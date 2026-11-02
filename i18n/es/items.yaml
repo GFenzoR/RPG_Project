@@ -62,3 +62,7 @@ item.iron_ore.name: "mineral de hierro"
 item.iron_ore.desc: "Piedra rojiza y pesada. Un herrero sabría qué hacer con ella."
 item.tarnished_locket.name: "relicario ennegrecido"
 item.tarnished_locket.desc: "Dentro hay un retrato que el agua borró hace tiempo."
+
+# Autoborder pieces
+item.border_grass_sand.name: "borde de pasto"
+item.border_sand_water.name: "orilla de arena"

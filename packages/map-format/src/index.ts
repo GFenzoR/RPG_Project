@@ -22,6 +22,8 @@ export { islandInfo, worldInfo } from "./info.ts";
 export type { IslandInfo, WorldInfo } from "./info.ts";
 export { AUX_FILES, islandDir, loadWorld, worldFile, writeIsland, writeWorldMeta } from "./io.ts";
 export type { AuxFile, FileState, LoadResult } from "./io.ts";
+export { PREFAB_DIR, checkPrefab, formatPrefab } from "./prefabs.ts";
+export type { PrefabProblem } from "./prefabs.ts";
 export { SCHEMA_DIR, checkSchema } from "./schemas.ts";
 export type { MapSchemaName, SchemaError } from "./schemas.ts";
 export { TileMap, isWalkable } from "./tiles.ts";
@@ -32,3 +34,16 @@ export { MAX_VIEW_SIZE, renderAsciiView, viewArea } from "./view.ts";
 export type { AsciiView } from "./view.ts";
 export { formatYaml, parseYamlText } from "./yaml.ts";
 export type { ParsedYaml } from "./yaml.ts";
+export { changedFiles, saveApplied } from "./save.ts";
+export type { SaveResult } from "./save.ts";
+export type {
+  ApplyResult,
+  BorderRule,
+  MapOp,
+  OpOptions,
+  Prefab,
+  PrefabLegendEntry,
+  TouchedAux,
+  TouchedChunk,
+} from "./ops/index.ts";
+export { applyOps, MAP_OP_NAMES, OpError, prefabSize } from "./ops/index.ts";

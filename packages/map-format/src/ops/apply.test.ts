@@ -298,7 +298,9 @@ describe("ops module", () => {
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".ts") && !n.endsWith(".test.ts"))) {
       const src = readFileSync(new URL(f, dir), "utf8");
       const imports = [...src.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
-      for (const i of imports) expect(["./types.ts", "./apply.ts", "../types.ts"]).toContain(i);
+      // Only siblings in ops/ and the plain model types.
+      for (const i of imports)
+        expect(i === "../types.ts" || /^\.\/[a-z-]+\.ts$/.test(i ?? "")).toBe(true);
     }
   });
 });
