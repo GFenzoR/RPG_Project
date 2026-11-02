@@ -19,7 +19,9 @@ mapcli patch create|apply|diff             trabajar con map patches
 mapcli ops apply ops.json                  aplica una lista de operaciones en lote
 ```
 Hoy existen `info`, `fmt`, `validate` y `view` (T0.4); el resto llega en T1.15.
-Se ejecuta con `node tools/mapcli/src/cli.ts <comando>` desde la raíz (`--root` para otra).
+Se ejecuta desde la raíz (`--root` para otra) con
+`node --experimental-strip-types tools/mapcli/src/cli.ts <comando>`; el flag hace falta en
+Node 22.13–22.17 (desde 22.18 los tipos se quitan sin él). `make validate` lo usa así.
 `mapcli render` es clave para la IA: después de editar, renderiza el área y revisa la
 imagen con la herramienta Read.
 
