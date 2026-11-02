@@ -171,6 +171,7 @@ type Map struct {
 func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint16) (*Map, error) {
 	m := &Map{groundSpeed: groundSpeed}
 	npcs := map[string]bool{}
+	npcTiles := map[Pos]bool{}
 	for i, is := range islands {
 		if err := checkIsland(is); err != nil {
 			return nil, err
@@ -180,6 +181,10 @@ func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint1
 				return nil, fmt.Errorf("island %q: NPC %q is placed twice", is.ID, n.NPC)
 			}
 			npcs[n.NPC] = true
+			if npcTiles[n.Pos] {
+				return nil, fmt.Errorf("island %q: NPC %q shares tile %v with another NPC", is.ID, n.NPC, n.Pos)
+			}
+			npcTiles[n.Pos] = true
 		}
 		r := is.Rect
 		for _, other := range islands[:i] {

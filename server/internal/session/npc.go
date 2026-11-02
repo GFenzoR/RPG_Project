@@ -92,7 +92,13 @@ func (w *World) initNPCs() error {
 			w.coins = append(w.coins, it)
 		}
 	}
-	sort.Slice(w.coins, func(i, j int) bool { return w.coins[i].Currency.Worth > w.coins[j].Currency.Worth })
+	sort.Slice(w.coins, func(i, j int) bool {
+		a, b := w.coins[i], w.coins[j]
+		if a.Currency.Worth != b.Currency.Worth {
+			return a.Currency.Worth > b.Currency.Worth
+		}
+		return a.ID < b.ID
+	})
 	if w.cfg.NPCs == nil {
 		return nil
 	}
@@ -187,6 +193,7 @@ func (w *World) npcTalk(p *Player, id uint32) {
 	w.closeDialog(p)
 	p.nextDialog++
 	p.dialog = &openDialog{id: p.nextDialog, npc: n, node: n.def.Dialog.Start}
+	w.quests.ReachedNode(p.storage, n.def.ID, n.def.Dialog.Start, &questHost{w: w, p: p})
 	w.sendDialog(p)
 }
 
@@ -310,7 +317,9 @@ func (w *World) shopBuy(p *Player, dialogID, itemID, count uint32) {
 		p.emit(systemMsg(msgShopNoMoney))
 		return
 	}
-	if !w.canReceive(p, l.def, n) {
+	// Paying may break a coin: keep a slot free for each smaller coin of the change, so
+	// neither the change nor the purchase ends up on the floor.
+	if !w.canReceive(p, l.def, n, max(len(w.coins)-1, 0)) {
 		p.emit(systemMsg(msgShopNoRoom))
 		return
 	}
@@ -397,18 +406,24 @@ func (w *World) countItem(p *Player, def *content.Item, equipped bool) int {
 		return 0
 	}
 	p.eachCarried(equipped, func(it *Item) {
-		if it.def == def {
+		if takeable(it, def) {
 			n += units(it)
 		}
 	})
 	return n
 }
 
+// takeable reports whether it is a unit of def that can be counted, sold or taken: a
+// container that holds something never is (its content would be lost with it).
+func takeable(it *Item, def *content.Item) bool {
+	return it.def == def && len(it.items) == 0
+}
+
 // takeItem removes n units of def from p (the caller checked p has them).
 func (w *World) takeItem(p *Player, def *content.Item, n int, equipped bool) {
 	var found []*Item
 	p.eachCarried(equipped, func(it *Item) {
-		if it.def == def {
+		if takeable(it, def) {
 			found = append(found, it)
 		}
 	})
@@ -445,7 +460,7 @@ func (w *World) removeItem(it *Item) {
 
 // room returns where n units of def would go in p's backpack (top level): how many
 // merge into existing stacks and how many new stacks are needed and fit.
-func (w *World) room(p *Player, def *content.Item, n int) (fits bool) {
+func (w *World) room(p *Player, def *content.Item, n, extra int) (fits bool) {
 	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
 	if bp == nil || bp.def.Container == nil {
 		return false
@@ -458,18 +473,19 @@ func (w *World) room(p *Player, def *content.Item, n int) (fits bool) {
 		}
 	}
 	if n <= 0 {
-		return true
+		return len(bp.items)+extra <= bp.def.Slots()
 	}
 	stacks := n
 	if def.Stackable {
 		stacks = (n + def.StackLimit() - 1) / def.StackLimit()
 	}
-	return len(bp.items)+stacks <= bp.def.Slots()
+	return len(bp.items)+stacks+extra <= bp.def.Slots()
 }
 
-// canReceive reports whether n units of def fit in p's capacity and backpack.
-func (w *World) canReceive(p *Player, def *content.Item, n int) bool {
-	return def.Weight*n <= p.capacity-p.carried() && w.room(p, def, n)
+// canReceive reports whether n units of def fit in p's capacity and backpack, with
+// extra backpack slots left free.
+func (w *World) canReceive(p *Player, def *content.Item, n, extra int) bool {
+	return def.Weight*n <= p.capacity-p.carried() && w.room(p, def, n, extra)
 }
 
 // giveItem puts n units of def in p's backpack, merging stacks. What does not fit (no

@@ -356,7 +356,8 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   diálogo. Cada `ShopOffer` trae `buy_price` (lo que paga el jugador; 0 = no lo vende),
   `sell_price` (lo que recibe; 0 = no lo compra) y `owned` (unidades en sus contenedores).
 - `ShopBuy` es todo o nada: dinero suficiente, capacidad y lugar en la mochila (se
-  apila con lo que ya hay) o `shop.no_money` / `shop.no_room`. `ShopSell` toma de los
+  apila con lo que ya hay, y queda un lugar libre por cada moneda menor para el vuelto)
+  o `shop.no_money` / `shop.no_room`. `ShopSell` toma de los
   contenedores, nunca lo equipado (`shop.not_enough`). Tras cada compra o venta: `Message`
   `shop.bought`/`shop.sold`, `PlayerStats` y un `ShopOpen` actualizado.
 - **Dinero:** la suma de `worth × count` de los items `currency` que lleva (equipo y

@@ -736,6 +736,10 @@ func TestNPCPlacementChecks(t *testing.T) {
 	if _, err := NewMap([]*Island{is}, map[string][]*Sector{is.ID: is.Sectors()}, nil); err == nil || !strings.Contains(err.Error(), "placed twice") {
 		t.Fatalf("err = %v, want a duplicate NPC rejected", err)
 	}
+	is.NPCs = []NPCPlacement{{NPC: "a", Pos: pt(31, 30)}, {NPC: "b", Pos: pt(31, 30)}}
+	if _, err := NewMap([]*Island{is}, map[string][]*Sector{is.ID: is.Sectors()}, nil); err == nil || !strings.Contains(err.Error(), "shares tile") {
+		t.Fatalf("err = %v, want two NPCs on one tile rejected", err)
+	}
 	is.NPCs = []NPCPlacement{{NPC: "a", Pos: Pos{X: 31, Y: 30, Z: 3}}}
 	if _, err := NewMap([]*Island{is}, map[string][]*Sector{is.ID: is.Sectors()}, nil); err == nil || !strings.Contains(err.Error(), "inside the island") {
 		t.Fatalf("err = %v, want an NPC on an unlisted floor rejected", err)

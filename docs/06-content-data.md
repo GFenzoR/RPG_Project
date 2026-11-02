@@ -201,6 +201,12 @@ Semántica del motor (T1.10):
   las acciones en orden y luego sigue el `goto`. Una opción sin `goto` deja el diálogo en
   el mismo nodo (por ejemplo `open_shop`); `close`, `travel` y `teleport` lo cierran.
 - `has_item`/`lacks_item` cuentan todo el inventario (equipo y contenedores anidados).
+  Un contenedor con algo adentro no cuenta ni se puede quitar o vender (se perdería su
+  contenido).
+- Abrir el diálogo cuenta como llegar a su nodo `start` (`dialog_action`).
+- Tiendas: precio entre 0 y 1 000 000 000, y ningún NPC puede comprar un item por más de
+  lo que otro lo vende (`make test` lo verifica con `content.CheckRefs`; el servidor no
+  arranca si no se cumple).
 - `give_item` da una unidad a la mochila; si no cabe (lugar o capacidad) cae al suelo
   bajo el jugador. `give_gold`/`take_gold` usan el dinero (`currency.worth`).
 - `bless` guarda la bendición en `quest_state` (`bless.<id>` = 1) y cobra el precio; su

@@ -351,6 +351,17 @@ func TestShopBuyAndSell(t *testing.T) {
 	if evs := buy(itemNum(t, h, p, "wolf_pelt"), 1); !messageKeys(evs)["inventory.not_possible"] {
 		t.Fatal("bought an item the shop does not sell")
 	}
+	// A full backpack refuses the purchase instead of dropping it on the floor.
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "copper_coin", 100); h.w.GiveForTest(p, "rope", 30) }))
+	h.sim.Step()
+	cl.take()
+	money, ropes := h.w.Money(p), h.w.CountItem(p, "rope")
+	if evs := buy(rope.ItemId, 1); !messageKeys(evs)["shop.no_room"] {
+		t.Fatalf("buying with a full backpack: %v", messageKeys(evs))
+	}
+	if h.w.Money(p) != money || h.w.CountItem(p, "rope") != ropes {
+		t.Fatal("a refused purchase changed the inventory")
+	}
 }
 
 func itemNum(t *testing.T, h *harness, _ *session.Player, id string) uint32 {

@@ -3,8 +3,10 @@ package content
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -199,6 +201,9 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 			}
 		}
 	}
+	if err := checkShopPrices(npcs); err != nil {
+		return err
+	}
 	for id, q := range quests {
 		where := fmt.Sprintf("quest %q", id)
 		for _, s := range q.Steps {
@@ -225,6 +230,44 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 					return err
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// checkShopPrices rejects an item some NPC buys for more than any NPC sells it: buying
+// and selling it back would make money out of nothing.
+func checkShopPrices(npcs NPCs) error {
+	type best struct {
+		buy, sell     int64
+		buyer, seller string
+	}
+	prices := map[string]*best{}
+	at := func(item string) *best {
+		if prices[item] == nil {
+			prices[item] = &best{sell: -1}
+		}
+		return prices[item]
+	}
+	for _, id := range npcs.IDs() {
+		s := npcs[id].Shop
+		if s == nil {
+			continue
+		}
+		for _, o := range s.Sells {
+			if b := at(o.Item); b.sell < 0 || o.Price < b.sell {
+				b.sell, b.seller = o.Price, id
+			}
+		}
+		for _, o := range s.Buys {
+			if b := at(o.Item); o.Price > b.buy {
+				b.buy, b.buyer = o.Price, id
+			}
+		}
+	}
+	for _, item := range slices.Sorted(maps.Keys(prices)) {
+		if b := prices[item]; b.sell >= 0 && b.buy > b.sell {
+			return fmt.Errorf("shop prices: %s buys %q for %d but %s sells it for %d", b.buyer, item, b.buy, b.seller, b.sell)
 		}
 	}
 	return nil

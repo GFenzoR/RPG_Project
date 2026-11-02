@@ -56,3 +56,22 @@ func TestParseNPCRejectsBrokenTrees(t *testing.T) {
 		t.Errorf("quest without completion: err = %v", err)
 	}
 }
+
+// A shop that buys an item for more than another sells it is a money printer.
+func TestCheckRefsRejectsProfitableLoops(t *testing.T) {
+	a, err := ParseNPC([]byte("id: a\nshop: { id: sa, sells: [{ item: rope, price: 10 }] }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := ParseNPC([]byte("id: b\nshop: { id: sb, buys: [{ item: rope, price: 11 }] }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := Items{"rope": &Item{ID: "rope"}}
+	if err := CheckRefs(NPCs{"a": a, "b": b}, Quests{}, items, nil, nil); err == nil || !strings.Contains(err.Error(), "buys \"rope\"") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := ParseNPC([]byte("id: c\nshop: { id: sc, sells: [{ item: rope, price: 2000000000 }] }\n")); err == nil {
+		t.Fatal("a price over MaxPrice was accepted")
+	}
+}

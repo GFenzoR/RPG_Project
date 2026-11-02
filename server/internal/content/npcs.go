@@ -216,6 +216,9 @@ type ShopOffer struct {
 	Price int64  `yaml:"price"`
 }
 
+// MaxPrice bounds a shop price, so price × count (at most 100) never overflows.
+const MaxPrice = 1_000_000_000
+
 // NPCs maps NPC id to its definition.
 type NPCs map[string]*NPC
 
@@ -290,8 +293,8 @@ func ParseNPC(raw []byte) (*NPC, error) {
 	}
 	if s := n.Shop; s != nil {
 		for _, o := range append(append([]ShopOffer(nil), s.Sells...), s.Buys...) {
-			if o.Item == "" || o.Price < 0 {
-				return nil, fmt.Errorf("npc %q: shop offer needs an item and a price >= 0", n.ID)
+			if o.Item == "" || o.Price < 0 || o.Price > MaxPrice {
+				return nil, fmt.Errorf("npc %q: shop offer %q needs a price in 0..%d", n.ID, o.Item, MaxPrice)
 			}
 		}
 	}
