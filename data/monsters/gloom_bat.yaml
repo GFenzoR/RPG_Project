@@ -1,0 +1,19 @@
+id: gloom_bat
+name: monster.gloom_bat.name
+sprite: creatures/gloom_bat
+health: 30
+experience: 26
+speed: 230
+armor: 1
+defense: 6
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 14, interval_ms: 2000 }
+resistances: { death: 20, holy: -10, earth: -10 }
+loot:
+  - { item: bat_wing, chance: 0.3 }
+  - { item: copper_coin, chance: 0.5, count: [1, 6] }
+tags: [bat, cave, puerto]
+notes: Mine entrance, levels 3-6. Fast, so it is hard to outrun but fragile.

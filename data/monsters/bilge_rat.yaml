@@ -11,7 +11,7 @@ behavior:
   flee_at_health_pct: 20
   target_distance: 1
 attacks:
-  - { type: melee, min: 0, max: 5, interval_ms: 2000 }
+  - { type: melee, min: 0, max: 8, interval_ms: 2000 }
 resistances: { earth: 10, fire: -10 }
 loot:
   - { item: copper_coin, chance: 0.4, count: [1, 3] }

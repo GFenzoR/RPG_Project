@@ -1,0 +1,22 @@
+id: wreck_looter
+name: monster.wreck_looter.name
+sprite: creatures/wreck_looter
+health: 110
+experience: 85
+speed: 200
+armor: 6
+defense: 10
+behavior:
+  aggressive: true
+  flee_at_health_pct: 10
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 22, interval_ms: 2000 }
+  - { type: distance, min: 0, max: 14, interval_ms: 2000, chance: 0.3, range: 4 }
+loot:
+  - { item: copper_coin, chance: 0.8, count: [5, 25] }
+  - { item: ship_biscuit, chance: 0.3, count: [1, 3] }
+  - { item: rusty_cutlass, chance: 0.05 }
+  - { item: sailcloth_cap, chance: 0.04 }
+tags: [human, shore, puerto]
+notes: Scavengers picking over the Chapter 1 wreck. Throws bottles (physical) at range.

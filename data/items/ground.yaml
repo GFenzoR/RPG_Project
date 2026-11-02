@@ -28,3 +28,22 @@
   sprite: ground/water_shallow
   name: item.water_shallow.name
   ground: { walkable: false }
+
+# Harbour grounds (Isla del Puerto).
+- id: wet_sand
+  kind: ground
+  sprite: ground/wet_sand
+  name: item.wet_sand.name
+  ground: { walkable: true, speed: 170 }
+
+- id: dock_planks
+  kind: ground
+  sprite: ground/dock_planks
+  name: item.dock_planks.name
+  ground: { walkable: true, speed: 100 }
+
+- id: wooden_floor
+  kind: ground
+  sprite: ground/wooden_floor
+  name: item.wooden_floor.name
+  ground: { walkable: true, speed: 100 }
