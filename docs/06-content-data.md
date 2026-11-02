@@ -77,17 +77,22 @@ items:
   sprite: weapons/iron_sword
   name: item.iron_sword.name
   description: item.iron_sword.desc
-  weight: 3500            # en gramos (capacidad en "oz" se muestra derivada)
+  weight: 3300            # en gramos (capacidad en "oz" se muestra derivada)
   stackable: false
   tradeable: true
   weapon:
     type: sword           # sword | axe | club | distance | wand
-    attack: 14
-    defense: 10
+    attack: 13
+    defense: 9
     hands: 1
   requires: { level: 5 }
   value: 120              # precio base que usan los NPCs como referencia
 ```
+- **Paso bloqueado** (regla del contrato, la aplican el validador de mapas y
+  `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
+  `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
+  atravesable (arco, cortina) declara `blocks_movement: false`. El suelo decide con
+  `ground.walkable`.
 
 ## Monstruo
 ```yaml
@@ -197,14 +202,14 @@ rewards:
 - id: light_heal
   name: spell.light_heal.name
   words: "vita lumen"        # palabras propias, nunca las de Tibia
-  vocations: [druid, arcanist, ranger]
-  level: 8
-  mana: 20
+  vocations: [druid, arcanist]
+  level: 6
+  mana: 25
   group: healing
-  cooldown_ms: 1000
+  cooldown_ms: 1500
   group_cooldown_ms: 1000
-  effect: { heal: { base: 15, per_level: 0.2, per_magic_level: 1.5 } }
-  visual: magic_blue
+  effect: { heal: { base: 18, per_level: 0.25, per_magic_level: 1.4 } }
+  visual: heal_sparkle
 ```
 
 ## Receta de oficio

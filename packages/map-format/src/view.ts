@@ -2,7 +2,7 @@
 // tile, legend generated from what is visible. Markers (temple, spawns, NPCs, portals,
 // texts) win over the top item of the stack, which wins over the ground.
 import { TileMap } from "./tiles.ts";
-import { rectContains } from "./types.ts";
+import { MAX_COORD, MAX_FLOOR, rectContains } from "./types.ts";
 import type { Island, Rect } from "./types.ts";
 
 export const MAX_VIEW_SIZE = 64;
@@ -55,6 +55,13 @@ interface Marker {
 export function viewArea(island: Island, floor: number, area: Rect): AsciiView {
   if (area.w > MAX_VIEW_SIZE || area.h > MAX_VIEW_SIZE)
     throw new RangeError(`view area is limited to ${MAX_VIEW_SIZE}x${MAX_VIEW_SIZE} tiles`);
+  const ints = [area.x, area.y, area.w, area.h].every(Number.isSafeInteger);
+  if (!ints || area.x < 0 || area.y < 0 || area.w < 1 || area.h < 1)
+    throw new RangeError("view area needs integer x,y >= 0 and w,h >= 1");
+  if (area.x + area.w > MAX_COORD + 1 || area.y + area.h > MAX_COORD + 1)
+    throw new RangeError(`view area leaves the world (coordinates go up to ${MAX_COORD})`);
+  if (!Number.isInteger(floor) || floor < 0 || floor > MAX_FLOOR)
+    throw new RangeError(`floor must be an integer 0..${MAX_FLOOR}`);
   const tiles = new TileMap([island]);
   const legend = new Map<string, string>();
   const itemChars = new Map<string, string>();

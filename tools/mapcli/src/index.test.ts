@@ -34,7 +34,7 @@ describe("mapcli", () => {
     expect(world.code).toBe(0);
     expect(JSON.parse(world.out)).toMatchObject({
       islands: [{ id: "testisle", chunks: 6 }],
-      load_errors: 0,
+      load_errors: [],
     });
     const isle = JSON.parse(mapcli("info", "testisle", "--root", repo).out) as Record<
       string,
@@ -135,5 +135,59 @@ describe("mapcli", () => {
       mapcli("view", "testisle", "--floor", "7", "--area", "0,0,65,10", "--root", repo),
     ).toMatchObject({ code: 2, err: expect.stringContaining("64x64") as unknown });
     expect(mapcli("info", "nowhere", "--root", repo).code).toBe(1);
+  });
+
+  it("parses --floor and --area strictly", () => {
+    const view = (floor: string, area: string) =>
+      mapcli("view", "testisle", "--floor", floor, "--area", area, "--root", repo).code;
+    for (const area of [
+      "1e3,0,1,1",
+      "0x10,0,1,1",
+      "-1,0,1,1",
+      " 1,0,1,1",
+      "1.0,0,1,1",
+      "65536,0,1,1",
+      "65535,0,2,1",
+      "0,65000,1,537",
+      "0,65535,1,2",
+      "0,0,0,1",
+    ])
+      expect([area, view("7", area)]).toEqual([area, 2]);
+    for (const floor of ["7.0", " 7", "0x7", "16", "-1", ""])
+      expect([floor, view(floor, "1024,1024,4,4")]).toEqual([floor, 2]);
+    expect(view("7", "65532,65532,4,4")).toBe(0); // inside the world, just no tiles there
+  });
+
+  it("info and view report load errors and exit non-zero", () => {
+    const missing = mapcli("info", "--root", join(tmpdir(), "mapcli-does-not-exist"));
+    expect(missing.code).toBe(1);
+    expect(JSON.parse(missing.out)).toMatchObject({
+      load_errors: [
+        expect.stringContaining("world/world.yaml required file is missing") as unknown,
+      ],
+    });
+    const root = sandbox();
+    writeFileSync(join(root, "world/islands/testisle/chunks/z08/c0033_0033.json"), "{");
+    const info = mapcli("info", "testisle", "--root", root);
+    expect(info.code).toBe(1);
+    expect(JSON.parse(info.out)).toMatchObject({
+      id: "testisle",
+      load_errors: [expect.stringContaining("invalid JSON") as unknown],
+    });
+    const view = mapcli(
+      "view",
+      "testisle",
+      "--floor",
+      "7",
+      "--area",
+      "1056,1056,2,2",
+      "--root",
+      root,
+    );
+    expect(view.code).toBe(1);
+    expect(JSON.parse(view.out)).toMatchObject({
+      rows: ["@_", "__"],
+      load_errors: [expect.stringContaining("c0033_0033.json") as unknown],
+    });
   });
 });

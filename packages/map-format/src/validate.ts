@@ -36,8 +36,27 @@ export function validateWorld(root: string, opts: ValidateWorldOptions = {}): Ma
   v.run();
   let diags = [...loaded.diagnostics, ...v.diags];
   if (opts.island !== undefined) {
-    const prefix = `${islandDir(opts.island)}/`;
-    diags = diags.filter((d) => d.file.startsWith(prefix));
+    const id = opts.island;
+    const prefix = `${islandDir(id)}/`;
+    // world.yaml findings about this island: its entry in `islands` and routes sailing to it.
+    const entries = new Set<number>();
+    loaded.world.meta.islands.forEach((e, i) => e.id === id && entries.add(i));
+    const routes = new Set<number>();
+    loaded.world.meta.boat_routes.forEach((b, i) => b.to.island === id && routes.add(i));
+    // If world.yaml itself did not load, every world.yaml finding concerns every island.
+    const worldBroken = !loaded.files.some((f) => f.file === worldFile);
+    const aboutIsland = (d: Diagnostic): boolean => {
+      if (d.file.startsWith(prefix)) return true;
+      if (d.file !== worldFile) return false;
+      if (worldBroken) return true;
+      const [section, index] = d.path;
+      if (typeof index !== "number") return false;
+      return (
+        (section === "islands" && entries.has(index)) ||
+        (section === "boat_routes" && routes.has(index))
+      );
+    };
+    diags = diags.filter(aboutIsland);
     if (!loaded.world.islands.has(opts.island) && !diags.some((d) => d.severity === "error")) {
       diags.push({
         severity: "error",
@@ -58,6 +77,8 @@ export function summarize(diagnostics: Diagnostic[]): MapReport {
 class WorldValidator {
   readonly diags: Diagnostic[] = [];
   private readonly r = new Reporter(this.diags);
+  /** Island directory (the world.yaml / directory name), which may differ from meta.id. */
+  private readonly dirs = new Map<Island, string>();
   private readonly world: World;
   private readonly tiles: TileMap;
   private readonly loaded: LoadResult;
@@ -68,6 +89,11 @@ class WorldValidator {
     this.world = loaded.world;
     this.content = content;
     this.tiles = new TileMap(loaded.world.islands.values());
+    for (const [id, island] of loaded.world.islands) this.dirs.set(island, islandDir(id));
+  }
+
+  private dirOf(island: Island): string {
+    return this.dirs.get(island) ?? islandDir(island.meta.id);
   }
 
   private err(file: string, path: PathSegment[], message: string, pos?: Position): void {
@@ -93,6 +119,13 @@ class WorldValidator {
   private checkWorldIndex(): void {
     const entries = this.world.meta.islands;
     for (const [i, e] of entries.entries()) {
+      const { x, y, w, h } = e.rect;
+      if ([x, y, w, h].some((n) => n % CHUNK_SIZE !== 0))
+        this.err(
+          worldFile,
+          ["islands", i, "rect"],
+          `island rectangles must be aligned to chunks: x, y, w and h multiples of ${CHUNK_SIZE}`,
+        );
       if (e.rect.x + e.rect.w > 65536 || e.rect.y + e.rect.h > 65536)
         this.err(
           worldFile,
@@ -105,9 +138,9 @@ class WorldValidator {
           ["islands", i, "level_hint"],
           "level_hint is [min, max]; min is larger than max",
         );
-      for (let j = 0; j < i; j++) {
-        const other = entries[j];
-        if (other && rectsOverlap(e.rect, other.rect))
+      // Reported on both entries, so filtering by either island shows it.
+      for (const [j, other] of entries.entries()) {
+        if (j !== i && rectsOverlap(e.rect, other.rect))
           this.err(worldFile, ["islands", i, "rect"], `overlaps island "${other.id}"`);
       }
       const island = this.world.islands.get(e.id);
@@ -127,7 +160,7 @@ class WorldValidator {
   // ---- one island --------------------------------------------------------------
 
   private checkIsland(island: Island): void {
-    const dir = islandDir(island.meta.id);
+    const dir = this.dirOf(island);
     const meta = island.meta;
     const file = `${dir}/island.yaml`;
     const floors = new Set(meta.floors);
@@ -245,7 +278,7 @@ class WorldValidator {
   }
 
   private checkChunks(island: Island, floors: Set<number>): void {
-    const dir = islandDir(island.meta.id);
+    const dir = this.dirOf(island);
     const rect = island.meta.rect;
     for (const c of island.chunks.values()) {
       const file = `${dir}/chunks/z${String(c.z).padStart(2, "0")}/c${String(c.cx).padStart(4, "0")}_${String(c.cy).padStart(4, "0")}.json`;
@@ -315,7 +348,7 @@ class WorldValidator {
       else seen.set(key, file);
     };
     for (const island of this.world.islands.values()) {
-      const dir = islandDir(island.meta.id);
+      const dir = this.dirOf(island);
       for (const [i, s] of island.spawns.entries())
         claim("spawn", s.id, `${dir}/spawns.yaml`, [i, "id"]);
       for (const [i, z] of island.zones.entries())
@@ -422,7 +455,7 @@ class WorldValidator {
         queue.push(n);
       }
     }
-    const dir = islandDir(meta.id);
+    const dir = this.dirOf(island);
     const ok = (p: Position): boolean => reached.has(formatPos(p));
     const walkable = (p: Position): boolean => isWalkable(this.tiles.tileAt(p), this.content);
     for (const [i, s] of island.spawns.entries())
@@ -443,7 +476,9 @@ class WorldValidator {
         );
     for (const [i, z] of island.zones.entries()) {
       if (z.type === "community_plot") continue;
-      const any = z.floors.some((f) => z.rects.some((r) => anyIn(r, (x, y) => ok({ x, y, z: f }))));
+      const any = z.floors.some((f) =>
+        z.rects.some((r) => anyIn(clip(r, meta.rect), (x, y) => ok({ x, y, z: f }))),
+      );
       if (!any)
         this.err(`${dir}/zones.yaml`, [i], `zone "${z.id}" has no tile reachable from the temple`);
     }
@@ -457,6 +492,15 @@ function rectInside(inner: Rect, outer: Rect): boolean {
     inner.x + inner.w <= outer.x + outer.w &&
     inner.y + inner.h <= outer.y + outer.h
   );
+}
+
+/** Intersection of two rects (w/h may be 0 when they do not overlap). */
+function clip(r: Rect, bounds: Rect): Rect {
+  const x = Math.max(r.x, bounds.x);
+  const y = Math.max(r.y, bounds.y);
+  const w = Math.max(0, Math.min(r.x + r.w, bounds.x + bounds.w) - x);
+  const h = Math.max(0, Math.min(r.y + r.h, bounds.y + bounds.h) - y);
+  return { x, y, w, h };
 }
 
 function anyIn(r: Rect, fn: (x: number, y: number) => boolean): boolean {

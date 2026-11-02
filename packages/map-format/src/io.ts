@@ -1,6 +1,15 @@
 // Reading and writing world/ on disk. Loading never throws on bad content: problems become
 // diagnostics, and whatever parsed is still returned so validation can report everything.
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import type { Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { chunkFileName, floorDir, formatChunk, parseChunk, parseChunkPath } from "./chunk.ts";
 import { Reporter } from "./diagnostics.ts";
@@ -33,6 +42,13 @@ export interface LoadResult {
   diagnostics: Diagnostic[];
 }
 
+type EntryType = "file" | "dir" | "other" | "error";
+
+interface Entry {
+  name: string;
+  type: EntryType;
+}
+
 class Loader {
   readonly diags: Diagnostic[] = [];
   readonly files: FileState[] = [];
@@ -43,13 +59,73 @@ class Loader {
     this.root = root;
   }
 
+  /**
+   * Entries of a directory, sorted, without dotfiles (.DS_Store, .gitkeep...). Symlinks are
+   * followed; an entry that cannot be inspected (broken link, ELOOP...) is reported and
+   * comes back as "error" so callers skip it without a second message.
+   */
+  list(rel: string): Entry[] {
+    let dirents: Dirent[];
+    try {
+      dirents = readdirSync(join(this.root, rel), { withFileTypes: true });
+    } catch (err) {
+      this.r.error(`${rel}/`, [], `cannot read directory: ${errorMessage(err)}`);
+      return [];
+    }
+    return dirents
+      .filter((e) => !e.name.startsWith("."))
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+      .map((e) => {
+        if (!e.isSymbolicLink())
+          return { name: e.name, type: e.isFile() ? "file" : e.isDirectory() ? "dir" : "other" };
+        return { name: e.name, type: this.kind(`${rel}/${e.name}`) ?? "error" };
+      });
+  }
+
+  /**
+   * What is at rel (following symlinks): undefined when it does not exist; "error" when it
+   * exists but cannot be inspected (ELOOP, EACCES...), which is reported here.
+   */
+  kind(rel: string): EntryType | undefined {
+    try {
+      const st = statSync(join(this.root, rel));
+      return st.isFile() ? "file" : st.isDirectory() ? "dir" : "other";
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR") {
+        // A dangling symlink is not "missing": it is there and points nowhere.
+        try {
+          lstatSync(join(this.root, rel));
+        } catch {
+          return undefined;
+        }
+      }
+      this.r.error(rel, [], `cannot read: ${errorMessage(err)}`);
+      return "error";
+    }
+  }
+
+  read(rel: string): string | undefined {
+    try {
+      return readFileSync(join(this.root, rel), "utf8");
+    } catch (err) {
+      this.r.error(rel, [], `cannot read file: ${errorMessage(err)}`);
+      return undefined;
+    }
+  }
+
   yaml<T>(file: string, schema: MapSchemaName, required: boolean, fallback: T): T {
-    const abs = join(this.root, file);
-    if (!existsSync(abs)) {
+    const kind = this.kind(file);
+    if (kind === undefined) {
       if (required) this.r.error(file, [], "required file is missing");
       return fallback;
     }
-    const text = readFileSync(abs, "utf8");
+    if (kind !== "file") {
+      if (kind !== "error") this.r.error(file, [], "expected a file");
+      return fallback;
+    }
+    const text = this.read(file);
+    if (text === undefined) return fallback;
     const parsed = parseYamlText(text, file, this.diags);
     if (!parsed) return fallback;
     this.lines.set(file, parsed.lineOf);
@@ -73,23 +149,30 @@ class Loader {
       portals: this.yaml(`${dir}/portals.yaml`, "portals", false, []),
       texts: this.yaml(`${dir}/texts.yaml`, "texts", false, []),
     };
-    const known = new Set(["island.yaml", "chunks", ...AUX_FILES.map((a) => `${a}.yaml`)]);
-    for (const entry of readdirSync(join(this.root, dir)).sort()) {
-      if (!known.has(entry))
-        this.r.error(`${dir}/${entry}`, [], "unexpected file in an island directory");
+    const known = new Set(["island.yaml", ...AUX_FILES.map((a) => `${a}.yaml`)]);
+    let hasChunks = false;
+    for (const entry of this.list(dir)) {
+      if (entry.name === "chunks") {
+        if (entry.type === "dir") hasChunks = true;
+        else if (entry.type !== "error") this.r.error(`${dir}/chunks`, [], "expected a directory");
+      } else if (!known.has(entry.name)) {
+        this.r.error(`${dir}/${entry.name}`, [], "unexpected entry in an island directory");
+      }
     }
-    const chunksDir = join(this.root, dir, "chunks");
-    if (!existsSync(chunksDir)) return island;
-    for (const floor of readdirSync(chunksDir).sort()) {
-      const floorPath = join(chunksDir, floor);
-      if (!/^z\d{2}$/.test(floor)) {
-        this.r.error(`${dir}/chunks/${floor}`, [], "expected floor directories named z00..z15");
+    if (!hasChunks) return island;
+    for (const floor of this.list(`${dir}/chunks`)) {
+      const floorRel = `${dir}/chunks/${floor.name}`;
+      if (!/^z\d{2}$/.test(floor.name)) {
+        this.r.error(floorRel, [], "expected floor directories named z00..z15");
         continue;
       }
-      for (const entry of readdirSync(floorPath).sort()) {
-        const rel = `${floor}/${entry}`;
-        const file = `${dir}/chunks/${rel}`;
-        const name = parseChunkPath(rel);
+      if (floor.type !== "dir") {
+        if (floor.type !== "error") this.r.error(floorRel, [], "expected a directory");
+        continue;
+      }
+      for (const entry of this.list(floorRel)) {
+        const file = `${floorRel}/${entry.name}`;
+        const name = parseChunkPath(`${floor.name}/${entry.name}`);
         if (!name) {
           this.r.error(
             file,
@@ -98,7 +181,12 @@ class Loader {
           );
           continue;
         }
-        const text = readFileSync(join(floorPath, entry), "utf8");
+        if (entry.type !== "file") {
+          if (entry.type !== "error") this.r.error(file, [], "expected a file");
+          continue;
+        }
+        const text = this.read(file);
+        if (text === undefined) continue;
         const chunk = parseChunk(text, file, this.diags);
         if (!chunk) continue;
         if (chunk.cx !== name.cx || chunk.cy !== name.cy || chunk.z !== name.z) {
@@ -117,6 +205,10 @@ class Loader {
   }
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /** Loads world/world.yaml and every island under world/islands/. */
 export function loadWorld(root: string): LoadResult {
   const l = new Loader(root);
@@ -127,23 +219,36 @@ export function loadWorld(root: string): LoadResult {
     boat_routes: [],
   });
   const islands = new Map<string, Island>();
-  const islandsRoot = join(root, "world", "islands");
-  const onDisk = existsSync(islandsRoot) ? readdirSync(islandsRoot).sort() : [];
-  const listed = new Set(meta.islands.map((i) => i.id));
+  const islandsRel = "world/islands";
+  const onDisk = new Map<string, Entry>();
+  const islandsKind = l.kind(islandsRel);
+  if (islandsKind === "dir") for (const e of l.list(islandsRel)) onDisk.set(e.name, e);
+  else if (islandsKind !== undefined && islandsKind !== "error")
+    r.error(`${islandsRel}/`, [], "expected a directory");
+  const seen = new Set<string>();
   for (const [i, entry] of meta.islands.entries()) {
-    if (islands.has(entry.id)) {
+    if (seen.has(entry.id)) {
       r.error(worldFile, ["islands", i, "id"], `island "${entry.id}" is listed twice`);
       continue;
     }
-    if (!onDisk.includes(entry.id)) {
+    seen.add(entry.id);
+    const d = onDisk.get(entry.id);
+    if (!d) {
       r.error(worldFile, ["islands", i, "id"], `no directory ${islandDir(entry.id)}/`);
+      continue;
+    }
+    if (d.type !== "dir") {
+      if (d.type !== "error") r.error(`${islandDir(entry.id)}/`, [], "expected a directory");
       continue;
     }
     const island = l.island(entry.id);
     if (island) islands.set(entry.id, island);
   }
-  for (const dir of onDisk) {
-    if (!listed.has(dir)) r.error(`${islandDir(dir)}/`, [], `island is not listed in ${worldFile}`);
+  // With a broken world.yaml nothing is listed; saying so for every island would mislead.
+  const worldLoaded = l.files.some((f) => f.file === worldFile);
+  for (const name of onDisk.keys()) {
+    if (worldLoaded && !seen.has(name))
+      r.error(`${islandDir(name)}/`, [], `island is not listed in ${worldFile}`);
   }
   return { world: { meta, islands }, files: l.files, lines: l.lines, diagnostics: l.diags };
 }
