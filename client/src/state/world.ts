@@ -60,8 +60,26 @@ export interface LogMessage {
 export interface PlayerStatsState {
   health: number;
   maxHealth: number;
+  mana: number;
+  maxMana: number;
   level: number;
   experience: number;
+  /** Progress to the next level, 0-99. */
+  levelPercent: number;
+}
+
+/** One skill as PlayerSkills reports it (skill ids from data/balance.yaml). */
+export interface SkillState {
+  id: string;
+  level: number;
+  /** Progress to the next level, 0-99. */
+  percent: number;
+}
+
+/** The last level-up (progress.level_up), for the on-screen notice. */
+export interface LevelUpState {
+  level: number;
+  at: number;
 }
 
 /** Effect ids (server/internal/session/combat.go). */
@@ -96,6 +114,8 @@ export class WorldState implements TileSource {
   /** The creature the player attacks (SetTarget), if any. */
   target: number | undefined;
   stats: PlayerStatsState | undefined;
+  skills: SkillState[] = [];
+  levelUp: LevelUpState | undefined;
   effects: EffectState[] = [];
   floatingTexts: FloatingTextState[] = [];
   log: LogMessage[] = [];
@@ -223,6 +243,10 @@ export class WorldState implements TileSource {
         const key = m.body.value.key;
         // The server refused the target: drop it like the server did.
         if (key === "combat.cannot_attack") this.target = undefined;
+        if (key === "progress.level_up") {
+          const p = m.body.value.params.find((x) => x.name === "level");
+          if (p?.value.case === "number") this.levelUp = { level: Number(p.value.value), at: now };
+        }
         this.log.push({ key, params: m.body.value.params, at: now });
         if (this.log.length > LOG_SIZE) this.log.shift();
         break;
@@ -254,11 +278,21 @@ export class WorldState implements TileSource {
         this.stats = {
           health: v.health,
           maxHealth: v.maxHealth,
+          mana: v.mana,
+          maxMana: v.maxMana,
           level: v.level,
           experience: Number(v.experience),
+          levelPercent: v.levelPercent,
         };
         break;
       }
+      case "playerSkills":
+        this.skills = msg.value.skills.map((s) => ({
+          id: s.skillId,
+          level: s.level,
+          percent: s.percent,
+        }));
+        break;
       case "walkRejected": {
         this.pending = undefined;
         const s = this.self;

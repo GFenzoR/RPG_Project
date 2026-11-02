@@ -43,6 +43,29 @@ exponencialmente más (`tries(n) = base × factor_vocación^(n − 10)`).
 | Nivel mágico | Gastas maná (por maná gastado, no por hechizo) |
 | Pesca | Pescas en agua con peces |
 
+Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progress.go`):
+- `tries(n)` es lo que cuesta pasar del nivel `n` al `n+1`; el progreso vuelve a cero al
+  subir y el sobrante pasa al nivel siguiente. Una vocación sin factor para una skill usa 1.
+- Armas y puños: cada ronda de ataque (`combat.attack_interval_ms`) cuenta un intento de
+  la skill del arma (`weapon.type` en `data/items`), acierte o no; sin arma, `fist`. El
+  daño usa ese nivel de skill en la fórmula de "Combate".
+- Escudo: cada ataque físico cuerpo a cuerpo recibido con escudo equipado cuenta un
+  intento, hasta `skills.shield_max_tries_per_round` por ronda de ataque (ventanas fijas
+  de `attack_interval_ms` contadas desde el tick 0). La fórmula de bloqueo de "Combate" no
+  usa la skill de escudo (sin cambios en T1.7).
+- Anti-AFK: si el objetivo no te ataca durante `skills.afk.after_ms` (cuenta desde que
+  empiezas a pegarle o desde su último intento de ataque contra ti), los intentos valen
+  `skills.afk.factor` (se acumulan fracciones). Solo un objetivo distinto reinicia la
+  cuenta: volver a elegir el mismo no. Los monstruos cuyos únicos ataques son a distancia
+  o hechizos (hasta T1.9) cuentan como que no responden.
+- Nivel: el que corresponde a la XP total por la curva, hasta `experience.max_level`. Al
+  subir, máximos de vida/maná, capacidad y velocidad pasan a los de la vocación en ese
+  nivel, y la vida y el maná actuales suben lo mismo que subió el máximo.
+- Regeneración: cada `regen.interval_ms` (evento del scheduler por jugador) recupera
+  `regen.health` y `regen.mana` sin pasar del máximo. No depende de comida todavía.
+- Persistencia: el snapshot de guardado lleva todas las skills y se escriben en
+  `character_skills` en la misma transacción que el personaje.
+
 ### Oficios
 | Oficio | Acción | Produce |
 |---|---|---|

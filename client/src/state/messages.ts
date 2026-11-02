@@ -24,7 +24,8 @@ function itemText(p: TextParam, content: ClientContent, t: Translate): string {
 
 /**
  * Formats a log message. Repeated "item" parameters become one comma-separated
- * {items} list (the loot message); a content id is a monster or NPC by its parameter name.
+ * {items} list (the loot message); a content id is a monster, NPC or skill by its
+ * parameter name.
  */
 export function formatMessage(m: LogMessage, content: ClientContent, t: Translate): string {
   const params: Record<string, string | number> = {};
@@ -39,7 +40,11 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
         break;
       case "contentId":
         params[p.name] =
-          p.name === "npc" ? t(`npc.${p.value.value}.name`) : t(`monster.${p.value.value}.name`);
+          p.name === "npc"
+            ? t(`npc.${p.value.value}.name`)
+            : p.name === "skill"
+              ? t(`skill.${p.value.value}.name`)
+              : t(`monster.${p.value.value}.name`);
         break;
       case "item":
         items.push(itemText(p, content, t));

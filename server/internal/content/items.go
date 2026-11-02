@@ -16,8 +16,10 @@ type Item struct {
 	Stackable bool   `yaml:"stackable"`
 	Value     int    `yaml:"value"`
 	Weapon    *struct {
-		Attack  int `yaml:"attack"`
-		Defense int `yaml:"defense"`
+		// Type is the skill the weapon trains and uses (sword, axe, club...).
+		Type    string `yaml:"type"`
+		Attack  int    `yaml:"attack"`
+		Defense int    `yaml:"defense"`
 	} `yaml:"weapon"`
 	Armor *struct {
 		Armor int `yaml:"armor"`

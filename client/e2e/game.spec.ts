@@ -242,6 +242,24 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     .toBeGreaterThan(0);
   await shot(page, "07-combat");
 
+  // Every swing trains fists (no weapon yet): the skills panel shows the progress.
+  const skills = page.getByTestId("skills-panel");
+  await expect(skills.getByText("Puños")).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => window.__rpgClient?.skills().find((s) => s.id === "fist")?.percent ?? 0,
+        ),
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThan(0);
+  await expect(skills.locator('[data-skill="fist"] [role="progressbar"]')).not.toHaveAttribute(
+    "aria-valuenow",
+    "0",
+  );
+  await skills.screenshot({ path: join(shots, "08-skills-panel.png") });
+
   await page.getByRole("button", { name: "Salir del juego" }).click();
   await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
   expect(errors).toEqual([]);

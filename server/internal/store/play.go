@@ -26,6 +26,15 @@ type PlayCharacter struct {
 	X, Y   int
 	Z      int
 	Town   string
+	// Skills are the saved skills; a skill without a row is at its base level.
+	Skills []Skill
+}
+
+// Skill is one row of character_skills.
+type Skill struct {
+	ID    string
+	Level int
+	Tries int64
 }
 
 // CharacterState is the part of a character the game loop saves (logout and autosave).
@@ -36,7 +45,9 @@ type CharacterState struct {
 	Health     int
 	Mana       int
 	X, Y, Z    int
-	SavedAt    time.Time
+	// Skills are upserted with the character row, in the same transaction.
+	Skills  []Skill
+	SavedAt time.Time
 }
 
 // CharacterBelongsTo reports whether characterID is a character of accountID.
@@ -75,7 +86,16 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	if err := s.q.TouchCharacterLogin(ctx, db.TouchCharacterLoginParams{ID: id, At: ts(now)}); err != nil {
 		return PlayCharacter{}, fmt.Errorf("touch character login: %w", err)
 	}
+	rows, err := s.q.GetCharacterSkills(ctx, id)
+	if err != nil {
+		return PlayCharacter{}, fmt.Errorf("character skills: %w", err)
+	}
+	skills := make([]Skill, len(rows))
+	for i, r := range rows {
+		skills[i] = Skill{ID: r.Skill, Level: int(r.Level), Tries: r.Tries}
+	}
 	return PlayCharacter{
+		Skills:     skills,
 		ID:         row.ID,
 		AccountID:  row.AccountID,
 		Name:       row.Name,
@@ -95,7 +115,11 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 // SaveCharacterState writes a snapshot of the character. ErrNotFound means the
 // character no longer exists (deleted while online); there is nothing to retry.
 func (s *Store) SaveCharacterState(ctx context.Context, c CharacterState) error {
-	n, err := s.q.SaveCharacterState(ctx, db.SaveCharacterStateParams{
+	return s.inTx(ctx, func(q *db.Queries) error { return saveCharacterState(ctx, q, c) })
+}
+
+func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) error {
+	n, err := q.SaveCharacterState(ctx, db.SaveCharacterStateParams{
 		ID:         c.ID,
 		Level:      int32(c.Level),
 		Experience: c.Experience,
@@ -111,6 +135,17 @@ func (s *Store) SaveCharacterState(ctx context.Context, c CharacterState) error 
 	}
 	if n == 0 {
 		return fmt.Errorf("save character %d: %w", c.ID, ErrNotFound)
+	}
+	if len(c.Skills) == 0 {
+		return nil
+	}
+	p := db.SaveCharacterSkillsParams{CharacterID: c.ID, Skills: make([]string, len(c.Skills)),
+		Levels: make([]int32, len(c.Skills)), Tries: make([]int64, len(c.Skills))}
+	for i, sk := range c.Skills {
+		p.Skills[i], p.Levels[i], p.Tries[i] = sk.ID, int32(sk.Level), sk.Tries
+	}
+	if err := q.SaveCharacterSkills(ctx, p); err != nil {
+		return fmt.Errorf("save skills of character %d: %w", c.ID, err)
 	}
 	return nil
 }

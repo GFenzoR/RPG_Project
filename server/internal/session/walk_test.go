@@ -54,7 +54,7 @@ func TestJoinSendsWelcomeAndFullView(t *testing.T) {
 	if st.GetHealth() != 145 || st.GetMaxHealth() != 145 || st.GetSpeed() != 200 || st.GetLevel() != 1 {
 		t.Fatalf("stats %v", st)
 	}
-	if sk := evs[4].GetPlayerSkills().GetSkills(); len(sk) != 2 || sk[0].GetSkillId() != "fist" || sk[0].GetLevel() != 10 {
+	if sk := evs[4].GetPlayerSkills().GetSkills(); len(sk) != 3 || sk[0].GetSkillId() != "fist" || sk[0].GetLevel() != 10 {
 		t.Fatalf("skills %v", sk)
 	}
 	if !other.Knows(p.ID()) {

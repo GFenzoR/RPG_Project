@@ -127,6 +127,40 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 	return i, err
 }
 
+const getCharacterSkills = `-- name: GetCharacterSkills :many
+SELECT skill, level, tries
+FROM character_skills
+WHERE character_id = $1
+ORDER BY skill
+`
+
+type GetCharacterSkillsRow struct {
+	Skill string
+	Level int32
+	Tries int64
+}
+
+// Skills without a row are at their base level (data/balance.yaml).
+func (q *Queries) GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error) {
+	rows, err := q.db.Query(ctx, getCharacterSkills, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCharacterSkillsRow{}
+	for rows.Next() {
+		var i GetCharacterSkillsRow
+		if err := rows.Scan(&i.Skill, &i.Level, &i.Tries); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCharactersByAccount = `-- name: ListCharactersByAccount :many
 SELECT id, name, vocation, level
 FROM characters
@@ -164,6 +198,32 @@ func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveCharacterSkills = `-- name: SaveCharacterSkills :exec
+INSERT INTO character_skills (character_id, skill, level, tries)
+SELECT $1::bigint, unnest($2::text[]),
+       unnest($3::int[]), unnest($4::bigint[])
+ON CONFLICT (character_id, skill)
+DO UPDATE SET level = EXCLUDED.level, tries = EXCLUDED.tries
+`
+
+type SaveCharacterSkillsParams struct {
+	CharacterID int64
+	Skills      []string
+	Levels      []int32
+	Tries       []int64
+}
+
+// Upserts every skill of a snapshot in one statement (parallel arrays).
+func (q *Queries) SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error {
+	_, err := q.db.Exec(ctx, saveCharacterSkills,
+		arg.CharacterID,
+		arg.Skills,
+		arg.Levels,
+		arg.Tries,
+	)
+	return err
 }
 
 const saveCharacterState = `-- name: SaveCharacterState :execrows

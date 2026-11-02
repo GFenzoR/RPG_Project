@@ -39,3 +39,18 @@ SET level        = sqlc.arg(level),
     pos_z        = sqlc.arg(pos_z),
     last_save_at = sqlc.arg(saved_at)
 WHERE id = sqlc.arg(id);
+
+-- name: GetCharacterSkills :many
+-- Skills without a row are at their base level (data/balance.yaml).
+SELECT skill, level, tries
+FROM character_skills
+WHERE character_id = sqlc.arg(character_id)
+ORDER BY skill;
+
+-- name: SaveCharacterSkills :exec
+-- Upserts every skill of a snapshot in one statement (parallel arrays).
+INSERT INTO character_skills (character_id, skill, level, tries)
+SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(skills)::text[]),
+       unnest(sqlc.arg(levels)::int[]), unnest(sqlc.arg(tries)::bigint[])
+ON CONFLICT (character_id, skill)
+DO UPDATE SET level = EXCLUDED.level, tries = EXCLUDED.tries;

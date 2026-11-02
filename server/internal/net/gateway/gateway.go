@@ -326,6 +326,9 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 		Mana:       pc.Mana,
 		Town:       pc.Town,
 	}
+	for _, s := range pc.Skills {
+		c.Skills = append(c.Skills, session.SkillState{ID: s.ID, Level: s.Level, Tries: s.Tries})
+	}
 	if pc.HasPos && pc.X >= 0 && pc.X <= 0xFFFF && pc.Y >= 0 && pc.Y <= 0xFFFF && pc.Z >= 0 && pc.Z <= world.MaxFloor {
 		c.HasPos = true
 		c.Pos = world.Pos{X: uint16(pc.X), Y: uint16(pc.Y), Z: uint8(pc.Z)}

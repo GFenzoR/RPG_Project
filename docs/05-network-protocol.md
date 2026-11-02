@@ -54,8 +54,8 @@ Detalles (T1.4, `server/internal/net/gateway`):
   (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
   antes del token, así un cliente viejo no gasta su token.
 - **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
-  `Inventory` (vacío hasta T1.8) y `PlayerSkills` (nivel inicial de
-  `balance.yaml → skills.base` hasta T1.7).
+  `Inventory` (vacío hasta T1.8) y `PlayerSkills` (todas las skills de
+  `balance.yaml → skills.base`, con el nivel guardado del personaje).
 - **Posición inicial:** la guardada; si el personaje nunca jugó (o su casilla dejó de
   ser caminable) el templo de su isla (`town`, o la primera isla del mundo). Si está
   ocupada, la casilla libre más cercana (hasta 3 de distancia).
@@ -233,7 +233,7 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   hacia su objetivo cuando no está pegado a él y no tiene pasos en cola.
 - Ronda: con el objetivo a una casilla (también en diagonal) el jugador golpea cada
   `combat.attack_interval_ms` (2000 ms). Fórmulas en `server/internal/combat` (doc 02).
-  Hasta T1.7/T1.8 golpea con los puños (`combat.fist_attack`, skill `fist` inicial) y sin
+  Hasta T1.8 golpea con los puños (`combat.fist_attack`, con su skill `fist`) y sin
   armadura ni escudo.
 - Cada golpe (de jugador o de monstruo) manda a quien ve la casilla: `Effect`
   (`effect_id` 1 = golpe con daño, 2 = bloqueado o fallado) y, si hubo daño,
@@ -247,6 +247,14 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `Message` de sistema `combat.loot` con un parámetro `monster` (`content_id`) y un
   parámetro `item` por pila del botín (el cliente los junta en `{items}`), o
   `combat.loot_none` si no hubo botín.
+- Progreso (T1.7): cuando cambia el nivel o el % de una skill el jugador recibe
+  `PlayerSkills` completo; si subió de nivel, además el `Message` de sistema
+  `progress.skill_up` con `skill` (`content_id`, el cliente muestra `skill.<id>.name`) y
+  `level` (`number`). Al subir de nivel por experiencia recibe `progress.level_up` con
+  `from` y `level`, `PlayerStats` con los nuevos máximos, y quien lo ve recibe
+  `CreatureSpeed` (si cambió) y `CreatureHealth` (si cambió el %).
+- La regeneración manda `PlayerStats` al jugador (y `CreatureHealth` a quien lo ve si
+  cambió el %) solo cuando le faltaba vida o maná.
 - Hasta la muerte real (T1.11), un jugador con 0 de vida despierta en el templo con la vida
   llena, sin perder nada, y recibe `combat.defeated`.
 

@@ -42,6 +42,8 @@ type Character struct {
 	Experience int64
 	Health     int
 	Mana       int
+	// Skills holds the saved skills; the ones missing start at their base level.
+	Skills []SkillState
 	// HasPos is false for a character that never played: it starts at the temple.
 	HasPos bool
 	Pos    world.Pos
@@ -59,6 +61,8 @@ type Snapshot struct {
 	Health     int
 	Mana       int
 	Pos        world.Pos
+	// Skills is every skill of the character (World skill order).
+	Skills []SkillState
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -132,7 +136,11 @@ type World struct {
 	pathTick   game.Tick
 	pathBuf    []world.Direction
 
-	skills []*pb.SkillProgress
+	// Progress (T1.7): skill ids in balance.yaml order (sorted), their index, and the
+	// anti-AFK delay in ticks (0 = off).
+	skillIDs []string
+	skillIdx map[string]int
+	afkAfter game.Tick
 
 	// Monsters (T1.6), owned by the loop like everything else.
 	monsters   []*Monster // ordered by creature id: deterministic iteration
@@ -149,7 +157,6 @@ type World struct {
 	corpseItem uint16
 	corpseFor  game.Tick
 	attackFor  game.Tick
-	fistSkill  int
 }
 
 // New validates cfg and builds an empty World.
@@ -195,9 +202,7 @@ func New(cfg Config) (*World, error) {
 	if err := w.initCombat(); err != nil {
 		return nil, err
 	}
-	for _, id := range cfg.Balance.SkillIDs() {
-		w.skills = append(w.skills, &pb.SkillProgress{SkillId: id, Level: uint32(max(cfg.Balance.Skills.Base[id].StartLevel, 0))})
-	}
+	w.initProgress()
 	return w, nil
 }
 
