@@ -30,6 +30,12 @@ func URL() string {
 // migrate is true, applies every migration. The store is closed when the test ends.
 func Open(t testing.TB, schema string, migrate bool) *store.Store {
 	t.Helper()
+	return OpenParams(t, schema, migrate, nil)
+}
+
+// OpenParams is Open with extra URL query parameters (e.g. pool_max_conns).
+func OpenParams(t testing.TB, schema string, migrate bool, params url.Values) *store.Store {
+	t.Helper()
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, URL())
 	if err != nil {
@@ -43,7 +49,11 @@ func Open(t testing.TB, schema string, migrate bool) *store.Store {
 	}
 	_ = conn.Close(ctx)
 
-	st, err := store.Open(ctx, schemaURL(t, schema))
+	u := schemaURL(t, schema)
+	if len(params) > 0 {
+		u += "&" + params.Encode()
+	}
+	st, err := store.Open(ctx, u)
 	if err != nil {
 		t.Fatal(err)
 	}

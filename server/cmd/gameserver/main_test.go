@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"log/slog"
 	"net"
 	"net/http"
@@ -70,7 +69,14 @@ func TestHTTPServerErrorsGoToSlog(t *testing.T) {
 	if !strings.Contains(logs.String(), `"level":"ERROR"`) || !strings.Contains(logs.String(), "TLS handshake error") {
 		t.Fatalf("not logged as JSON error: %s", logs.String())
 	}
-	if srv.BaseContext(nil) == context.Background() {
-		t.Fatal("requests must derive from a cancellable base context")
+	base := srv.BaseContext(nil)
+	if base.Err() != nil {
+		t.Fatal("base context cancelled too early")
+	}
+	cancel()
+	select {
+	case <-base.Done():
+	default:
+		t.Fatal("cancel must end the context every request derives from")
 	}
 }

@@ -92,12 +92,25 @@ func (s *Store) MigrateDownAll(ctx context.Context) error {
 	})
 }
 
-// withGoose runs fn on a separate connection without the pool's statement timeout, so
+// migrationConfig is the connection config for migrations: the database URL without
+// the pool_* options (pgxpool.ParseConfig strips them; Postgres would reject them as
+// runtime parameters) and with statement_timeout disabled, even if the URL sets one, so
 // long migrations (index builds) are not cut off.
-func (s *Store) withGoose(fn func(*goose.Provider) error) error {
-	cfg, err := pgx.ParseConfig(s.url)
+func migrationConfig(url string) (*pgx.ConnConfig, error) {
+	pcfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
-		return fmt.Errorf("parse postgres url: %w", err)
+		return nil, fmt.Errorf("parse postgres url: %w", err)
+	}
+	cfg := pcfg.ConnConfig.Copy()
+	cfg.RuntimeParams["statement_timeout"] = "0"
+	return cfg, nil
+}
+
+// withGoose runs fn on a separate connection configured by migrationConfig.
+func (s *Store) withGoose(fn func(*goose.Provider) error) error {
+	cfg, err := migrationConfig(s.url)
+	if err != nil {
+		return err
 	}
 	sqlDB := stdlib.OpenDB(*cfg)
 	defer func() { _ = sqlDB.Close() }()
