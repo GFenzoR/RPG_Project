@@ -3,10 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "MCP server over map-format. Built in T1.15.",
-  "exports": "./src/index.ts",
+  "description": "MCP server over map-format: map_info, map_view, map_render, map_apply_ops, map_validate, map_find, content_search, map_patch_create.",
+  "exports": "./src/server.ts",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
+  },
+  "bin": {
+    "mcp-world": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@rpg/content-schema": "workspace:*",
+    "@rpg/map-format": "workspace:*",
+    "@rpg/mapcli": "workspace:*",
+    "yaml": "2.9.1"
   }
 }

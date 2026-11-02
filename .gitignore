@@ -16,6 +16,9 @@ tools/bots/bin/
 # (server/internal/net/pb, packages/protocol/src/gen) para compilar sin buf.
 assets/atlas/
 
+# Map patches generados por mapcli/MCP (se envían, no se commitean)
+world/patches/
+
 # Resultados de pruebas
 client/e2e/screenshots/actual/
 editor/e2e/screenshots/actual/

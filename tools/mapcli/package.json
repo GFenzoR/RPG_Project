@@ -4,7 +4,12 @@
   "private": true,
   "type": "module",
   "description": "Map CLI over map-format: info, fmt, validate, view, render, edit commands, ops, patches, generate.",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./edit": "./src/edit.ts",
+    "./patch": "./src/patch.ts",
+    "./render": "./src/render.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
