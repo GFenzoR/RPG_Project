@@ -1,0 +1,13 @@
+id: small_dock
+notes: "Wooden dock reaching into the water: planks, two mooring posts and a cargo crate. Stamp it with its top-left on the shore."
+legend:
+  - { char: "=", ground: dock_planks, items: [] }
+  - { char: "P", ground: dock_planks, items: [mooring_post] }
+  - { char: "C", ground: dock_planks, items: [cargo_crate] }
+rows:
+  - " === "
+  - " =C= "
+  - " === "
+  - "P===P"
+  - " === "
+  - "P===P"

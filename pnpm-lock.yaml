@@ -130,8 +130,24 @@ importers:
       '@rpg/map-format':
         specifier: workspace:*
         version: link:../../packages/map-format
+      '@rpg/spritepack':
+        specifier: workspace:*
+        version: link:../spritepack
 
-  tools/mcp-world: {}
+  tools/mcp-world:
+    dependencies:
+      '@rpg/content-schema':
+        specifier: workspace:*
+        version: link:../../packages/content-schema
+      '@rpg/map-format':
+        specifier: workspace:*
+        version: link:../../packages/map-format
+      '@rpg/mapcli':
+        specifier: workspace:*
+        version: link:../mapcli
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
 
   tools/spritepack:
     dependencies:

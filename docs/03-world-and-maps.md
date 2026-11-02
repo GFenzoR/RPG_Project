@@ -23,6 +23,9 @@ world/
       zones.yaml                 zonas: protección, no-logout, pvp (futuro), community-plot
       portals.yaml               teletransportes y conexiones especiales
       texts.yaml                 carteles y libros (claves i18n)
+  prefabs/
+    small_dock.yaml              piezas reutilizables para la op `stamp`
+  patches/                       map patches generados (ignorado por git)
 ```
 
 ## Formato de chunk (versión 1)
@@ -139,6 +142,28 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   from: { x: 3290, y: 6402, z: 8 }
   to: { x: 3289, y: 6402, z: 7 }
 ```
+
+## Prefabs (`world/prefabs/<id>.yaml`)
+Piezas de mapa reutilizables (muelle, casa) que la op `stamp` copia con su esquina superior
+izquierda en `pos`, sobre un solo piso. `rows` es un dibujo, un carácter por casilla, que
+se busca en `legend`: `ground` pinta ese suelo; `items` reemplaza la pila de la casilla
+(`[]` la vacía); sin `items` la pila queda igual. El espacio nunca está en la leyenda y deja
+la casilla intacta.
+```yaml
+id: small_dock
+notes: "Muelle de madera..."
+legend:
+  - { char: "=", ground: dock_planks, items: [] }
+  - { char: "P", ground: dock_planks, items: [mooring_post] }
+rows:
+  - " === "
+  - "P===P"
+```
+Formato canónico (lo escribe `mapcli fmt`): claves `id`, `notes`, `legend`, `rows`; una
+entrada de leyenda por línea en estilo flow, una fila por línea entre comillas dobles.
+La validación revisa esquema, que `id` coincida con el nombre de archivo, caracteres de
+leyenda únicos, filas sin caracteres fuera de la leyenda, items existentes, `ground` con
+`kind: ground` e `items` sin suelos. Máximo 64x64.
 
 ## world.yaml
 ```yaml

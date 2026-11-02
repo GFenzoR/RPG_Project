@@ -79,8 +79,8 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 **Editor e IA**
 - [x] **T1.14 Map editor v1.** (PR #13) Funciones del hito 1 en `04-map-editor-and-ai.md`, con
   ops de map-format, deshacer/rehacer, validación en vivo, E2E. [T0.4, T0.5]
-- [ ] **T1.15 mapcli completo + mcp-world.** Todas las ops, `render` a PNG, `generate`
-  procedural básico, servidor MCP registrado en `.mcp.json`. [T1.14]
+- [x] **T1.15 mapcli completo + mcp-world.** Todas las ops, `render` a PNG, `generate`
+  procedural básico, servidor MCP registrado en `.mcp.json`. [T1.14] (#35)
 - [ ] **T1.16 Isla del Puerto.** Construir con mapcli/MCP la isla inicial (~192x192):
   ciudad con templo, puerto, tiendas, campo de lobos, cueva con mina y monstruos de
   nivel 5–15, un subsuelo. Validar, renderizar y revisar imágenes. [T1.15, T1.10, T1.12]

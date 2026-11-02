@@ -79,3 +79,7 @@ item.rough_stone.name: "piedra tosca"
 item.rough_stone.desc: "Un trozo de roca sin valor... casi."
 item.quartz_crystal.name: "cristal de cuarzo"
 item.quartz_crystal.desc: "Un cristal claro que brilla al trasluz."
+
+# Autoborder pieces
+item.border_grass_sand.name: "borde de pasto"
+item.border_sand_water.name: "orilla de arena"

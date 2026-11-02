@@ -79,3 +79,7 @@ item.rough_stone.name: "rough stone"
 item.rough_stone.desc: "A lump of rock, almost worthless."
 item.quartz_crystal.name: "quartz crystal"
 item.quartz_crystal.desc: "A clear crystal that glows against the light."
+
+# Autoborder pieces
+item.border_grass_sand.name: "grass edge"
+item.border_sand_water.name: "sandy shore"

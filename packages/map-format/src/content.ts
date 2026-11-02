@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { LANGUAGES } from "@rpg/content-schema";
 import { parse } from "yaml";
+import type { BorderRule } from "./ops/borders.ts";
 
 export interface ItemInfo {
   id: string;
@@ -11,6 +12,8 @@ export interface ItemInfo {
   /** Ground items: whether creatures can stand on it. */
   walkable?: boolean;
   blocksMovement: boolean;
+  /** Sprite path (assets/sprites.yaml key), for renders. */
+  sprite?: string;
 }
 
 export interface ContentIndex {
@@ -19,6 +22,8 @@ export interface ContentIndex {
   npcs: Set<string>;
   /** Configured language (LANGUAGES of @rpg/content-schema) → keys in i18n/<lang>/*.yaml. */
   i18n: Map<string, Set<string>>;
+  /** Autoborder rules of data/borders.yaml (well-formed entries only; content-schema checks the rest). */
+  borders: BorderRule[];
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -61,6 +66,7 @@ export function loadContent(root: string): ContentIndex {
         blocksMovement:
           raw["blocks_movement"] === true || (kind === "wall" && raw["blocks_movement"] !== false),
       };
+      if (typeof raw["sprite"] === "string") info.sprite = raw["sprite"];
       const g = raw["ground"];
       if (isObj(g)) info.walkable = g["walkable"] === true;
       items.set(info.id, info);
@@ -81,5 +87,24 @@ export function loadContent(root: string): ContentIndex {
     }
     i18n.set(lang, keys);
   }
-  return { items, monsters: idsIn("monsters"), npcs: idsIn("npcs"), i18n };
+  const borders: BorderRule[] = [];
+  const rules = readYaml(join(root, "data", "borders.yaml"));
+  if (Array.isArray(rules))
+    for (const r of rules) {
+      if (!isObj(r) || !isObj(r["pieces"])) continue;
+      const { id, from, to, priority, pieces } = r;
+      if (typeof id !== "string" || typeof from !== "string" || typeof to !== "string") continue;
+      const p = pieces as Record<string, unknown>;
+      const required = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+      if (!Object.values(p).every((v) => typeof v === "string")) continue;
+      if (!required.every((k) => typeof p[k] === "string")) continue;
+      borders.push({
+        id,
+        from,
+        to,
+        ...(typeof priority === "number" ? { priority } : {}),
+        pieces: p as BorderRule["pieces"],
+      });
+    }
+  return { items, monsters: idsIn("monsters"), npcs: idsIn("npcs"), i18n, borders };
 }

@@ -9,7 +9,7 @@ export const SCHEMA_DIR = new URL("../schemas/", import.meta.url);
 const SCHEMA_BASE = "https://rpg-project.local/map-schemas/";
 
 export type MapSchemaName =
-  "chunk" | "world" | "island" | "spawns" | "npcs" | "zones" | "portals" | "texts";
+  "chunk" | "world" | "island" | "spawns" | "npcs" | "zones" | "portals" | "texts" | "prefab";
 
 export interface SchemaError {
   path: PathSegment[];

@@ -28,6 +28,12 @@ dependencias de Node para que el editor la use en el navegador).
 - Un chunk que queda sin suelo ni items se elimina (y su archivo desaparece al guardar).
 - `touched` lista cada chunk modificado con su isla (`{ island, z, cx, cy }`): los chunks
   son por isla, así que dos islas que compartieran un chunk nunca se mezclan.
+  `touchedAux` lista las listas auxiliares cambiadas (`{ island, file }`, con `file` =
+  `spawns`/`zones`/`portals`/`npcs`). `saveApplied(root, world, result)` escribe solo esos
+  archivos (temporal + rename) y borra los que quedaron vacíos.
+- `OpOptions` inyecta lo que vive en disco, para que el módulo siga sin Node: `itemKind`,
+  `monsterKnown`, `npcKnown`, `borders` (reglas de `data/borders.yaml`, las necesita
+  `autoborder`) y `prefab` (lookup de `world/prefabs/`, lo necesita `stamp`).
 
 | op | Campos | Efecto |
 |---|---|---|
@@ -44,8 +50,34 @@ dependencias de Node para que el editor la use en el navegador).
 | `add_portal` / `remove_portal` | campos de portals.yaml | |
 | `stamp` | `pos`, `prefab` | Coloca un prefab (casa, muelle, templo) de `world/prefabs/` |
 
+Detalle de las ops de T1.15 (las inversas se expresan siempre con ops primitivas):
+- `fill`: inundación en 4 direcciones dentro del rectángulo de la isla de `pos`; también
+  rellena casillas vacías.
+- `autoborder`: en cada casilla del rect quita las piezas de borde que tenga (cualquier
+  pieza de `data/borders.yaml`) y apila abajo las que tocan, en orden de `priority`; lo
+  demás de la pila queda encima. Repetirlo no cambia nada. Nombres de pieza en `06`.
+- `scatter`: PRNG mulberry32 con `seed`; dos números por casilla en orden de filas, pase lo
+  que pase, así una casilla no desplaza el patrón del resto. Solo decora casillas con pila
+  vacía y suelo en `on_ground` (cualquiera si se omite).
+- Entidades: los IDs son únicos en todo el mundo y cada NPC se coloca una vez. La isla es
+  la que contiene el centro del spawn, el primer rect de la zona (todos deben caer dentro),
+  el `from` del portal o el `pos` del NPC. Las ops `add_*`/`place_npc` aceptan `index?`
+  (posición en la lista; por defecto al final): la inversa de un `remove_*` lo usa para
+  devolver el archivo byte a byte. Que el spawn o NPC esté sobre suelo caminable lo revisa
+  el validador, no la op.
+- `stamp`: la esquina superior izquierda del prefab va en `pos`. Formato en `03`.
+
+Generación procedural (`generate` en map-format, `mapcli generate`): una receta convierte
+una semilla en una lista de ops, así que pasa por `applyOps` (atómica, reversible). Receta
+`island`: masa de tierra de `size`x`size` centrada en la isla (ruido de valor + caída
+radial), agua alrededor, arena en la costa, pasto adentro (el pasto nunca toca agua y el
+centro siempre es tierra) y `autoborder` al final.
+
 `mapcli ops apply ops.json` y la herramienta MCP `map_apply_ops` reciben una lista y la
-aplican de forma atómica: si una falla la validación, no se aplica ninguna.
+aplican de forma atómica: si una falla la validación, no se aplica ninguna. Después de
+escribir validan las islas tocadas y devuelven errores y advertencias (el mapa puede
+quedar con errores mientras se construye: p. ej. un spawn antes de pintar su suelo). No
+escriben nada si `world/` tiene errores de carga (un archivo roto se sobrescribiría).
 
 ## Cómo "ve" el mapa una IA
 Leer JSON de chunks es caro y poco legible. Hay dos vistas pensadas para IA:
@@ -76,6 +108,34 @@ Leer JSON de chunks es caro y poco legible. Hay dos vistas pensadas para IA:
 Límites de seguridad del MCP: solo escribe dentro de `world/` del repo, nunca hace push
 ni modifica `data/`, y cada llamada a `map_apply_ops` tiene un máximo de operaciones.
 Se registra en `.mcp.json` en la raíz para que Claude Code lo cargue.
+
+Implementación (T1.15): `tools/mcp-world`, transporte stdio (JSON-RPC 2.0, un mensaje por
+línea) escrito a mano, sin SDK, para no sumar dependencias; usa las funciones de
+`tools/mapcli` (`edit.ts`, `render.ts`, `patch.ts`). Límites concretos:
+- `map_apply_ops`: máximo 200 ops por llamada; `island` opcional rechaza ops que toquen
+  otra isla; `dry_run` valida sin escribir. Las ediciones solo escriben chunks y YAML de
+  `world/islands/<id>/` (rutas construidas desde IDs validados y comprobadas otra vez).
+- `map_patch_create` escribe en `world/patches/<name>.rpgpatch.json` (ignorado por git);
+  solo corre `git diff`, `git ls-files` y `git show` de lectura.
+- `map_render` escribe el PNG en el directorio temporal del sistema (fuera del repo) y
+  devuelve también la imagen en la respuesta.
+- `content_search` y el resto solo leen.
+
+`mapcli render` / `map_render`: mismo orden de dibujo que `packages/renderer`, con el atlas
+de `tools/spritepack` armado en memoria (no hace falta `make sprites`). Agrega reglas con
+coordenadas absolutas, grilla y overlays: zonas (cian protección, naranja no_logout, rojo
+pvp, verde no_pvp, violeta community_plot), spawns (anillo rojo del radio), NPCs (rombo
+amarillo), portales (cuadro magenta; triángulo abajo = baja, arriba = sube), carteles
+(cuadrito blanco) y templo (cruz blanca). Máximo 256x256 casillas; 4/8/16/32 px por casilla.
+
+Map patch mínimo (`mapcli patch`, formato 1):
+`{ format: 1, kind: "rpg-map-patch", base_ref, files: [{ path, base, content }] }`, con
+`base` = `sha256:<hex>` de la versión base (o `null` si el patch crea el archivo) y
+`content` = texto nuevo (o `null` si lo borra). Solo admite rutas de mapas de `world/`
+(`world.yaml`, archivos de islas, chunks, prefabs). `create` toma los cambios del árbol de
+trabajo contra un ref de git; `apply` escribe todo o nada y solo si cada base coincide (si
+no, lista los conflictos); `diff` resume casillas cambiadas por chunk y entradas
+agregadas/quitadas/cambiadas por YAML. Pendiente: merge a nivel de casilla.
 
 ## Flujo recomendado para que una IA construya una zona
 1. `map_info` y `content_search` para saber qué hay disponible.

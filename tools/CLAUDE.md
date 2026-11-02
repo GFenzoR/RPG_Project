@@ -18,7 +18,9 @@ mapcli validate [isla] [--format text]     mismo validador que el editor y la CI
 mapcli patch create|apply|diff             trabajar con map patches
 mapcli ops apply ops.json                  aplica una lista de operaciones en lote
 ```
-Hoy existen `info`, `fmt`, `validate` y `view` (T0.4); el resto llega en T1.15.
+Todos existen desde T1.15 (además `erase`, `fill`, `remove`, `autoborder`, `stamp`); la
+lista exacta de opciones está en `mapcli` sin argumentos. Los comandos de edición aceptan
+`--dry-run` y escriben solo los archivos tocados.
 Se ejecuta desde la raíz (`--root` para otra) con
 `node --experimental-strip-types tools/mapcli/src/cli.ts <comando>`; el flag hace falta en
 Node 22.13–22.17 (desde 22.18 los tipos se quitan sin él). `make validate` lo usa así.
@@ -26,9 +28,11 @@ Node 22.13–22.17 (desde 22.18 los tipos se quitan sin él). `make validate` lo
 imagen con la herramienta Read.
 
 ## mcp-world (servidor MCP, TypeScript)
-Expone las mismas operaciones de map-format como herramientas MCP (`map_info`,
-`map_render`, `map_apply_ops`, `map_validate`, `content_search`). Se registra en `.mcp.json`
-para que Claude Code lo use directamente. Detalle en `docs/04-map-editor-and-ai.md`.
+Expone las mismas operaciones de map-format como herramientas MCP (`map_info`, `map_view`,
+`map_render`, `map_apply_ops`, `map_validate`, `map_find`, `content_search`,
+`map_patch_create`). Se registra en `.mcp.json` (servidor `rpg-world`) para que Claude Code
+lo use directamente; a mano: `node --experimental-strip-types tools/mcp-world/src/cli.ts
+[--root DIR]`. Límites y detalle en `docs/04-map-editor-and-ai.md`.
 
 ## bots (Go)
 `tools/bots`: clientes headless que hacen login, caminan, atacan y chatean. Se usan para
@@ -37,6 +41,8 @@ pruebas de carga (`make bots N=200`) y deben reportar latencia p50/p95/p99 y des
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera
 placeholders (cuadros de color con la sigla del item) cuando falta un sprite.
-Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
+Los PNG de bordes de `assets/sprites/borders/` salen de
+`node --experimental-strip-types tools/spritepack/src/gen-borders.ts` (regenéralos si
+cambia `data/borders.yaml` o el color de un suelo). Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
 `assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
 terceros: `assets/README.md`.

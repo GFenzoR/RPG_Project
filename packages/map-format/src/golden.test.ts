@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { formatChunk, parseChunk } from "./chunk.ts";
 import type { Diagnostic } from "./diagnostics.ts";
+import type { Prefab } from "./ops/prefab.ts";
+import { formatPrefab } from "./prefabs.ts";
 import { formatYaml, parseYamlText } from "./yaml.ts";
 
 const dir = new URL("../testdata/golden/", import.meta.url);
@@ -66,7 +68,13 @@ describe("docs/03-world-and-maps.md", () => {
   it("has YAML examples", () => expect(blocks.length).toBeGreaterThanOrEqual(7));
 
   it("shows every YAML example in canonical form", () => {
-    for (const block of blocks) expect(canonical("docs.yaml", block)).toBe(block);
+    for (const block of blocks) {
+      // Prefabs have their own canonical writer (world/prefabs/, see prefabs.ts).
+      if (/^legend:$/m.test(block)) {
+        const data = parseYamlText(block, "docs.yaml", [])?.data as Prefab;
+        expect(formatPrefab(data)).toBe(block);
+      } else expect(canonical("docs.yaml", block)).toBe(block);
+    }
   });
 });
 

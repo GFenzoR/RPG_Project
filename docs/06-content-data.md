@@ -347,6 +347,13 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   pieces: { n: border_grass_sand_n, s: ..., e: ..., w: ..., ne: ..., nw: ..., se: ..., sw: ... }
   # opcionales: inner_ne, inner_nw, inner_se, inner_sw (esquinas cóncavas)
 ```
+Cada nombre de pieza dice dónde está el suelo `from` respecto de la casilla `to`:
+`n`/`s`/`e`/`w` = de ese lado; `ne`/`nw`/`se`/`sw` = solo en esa diagonal (ninguno de los
+dos lados vecinos); `inner_*` = en los dos lados vecinos (si falta, se apilan los dos
+lados). Las piezas son items `kind: decoration`, `pickupable: false`, sin bloquear. Hoy hay
+reglas `grass_sand` y `sand_water`; su arte placeholder propio lo genera
+`tools/spritepack/src/gen-borders.ts` en `assets/sprites/borders/` (un test verifica que
+los PNG commiteados son los que produce).
 
 ## i18n
 ```yaml
