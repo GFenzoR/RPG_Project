@@ -29,6 +29,9 @@ type Item struct {
 		Attack  int    `yaml:"attack"`
 		Defense int    `yaml:"defense"`
 		Hands   int    `yaml:"hands"`
+		// Range and Element are a wand's (T1.9): it hits at up to Range tiles.
+		Range   int    `yaml:"range"`
+		Element string `yaml:"element"`
 	} `yaml:"weapon"`
 	Armor *struct {
 		Slot  string `yaml:"slot"`
@@ -45,6 +48,12 @@ type Item struct {
 		HealMP int `yaml:"heal_mp"`
 		FoodMs int `yaml:"food_ms"`
 	} `yaml:"consumable"`
+	// Rune casts Spell's effect (no mana, no words) and spends a charge per use (T1.9).
+	Rune *struct {
+		Spell      string `yaml:"spell"`
+		Charges    int    `yaml:"charges"`
+		MagicLevel int    `yaml:"magic_level"`
+	} `yaml:"rune"`
 	Requires struct {
 		Level     int      `yaml:"level"`
 		Vocations []string `yaml:"vocations"`
@@ -56,8 +65,12 @@ type Item struct {
 // CanPickUp reports whether the item can be moved off its tile.
 func (it *Item) CanPickUp() bool { return it.Pickupable == nil || *it.Pickupable }
 
-// StackLimit is the largest stack of the item (1 if it does not stack).
+// StackLimit is the largest stack of the item (1 if it does not stack). A rune does not
+// stack: its count is its charges, up to rune.charges.
 func (it *Item) StackLimit() int {
+	if it.Rune != nil && !it.Stackable {
+		return max(it.Rune.Charges, 1)
+	}
 	if !it.Stackable {
 		return 1
 	}

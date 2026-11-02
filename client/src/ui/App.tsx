@@ -12,6 +12,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
 import { InventoryPanel } from "./Inventory.tsx";
+import { Hotbar, SayLine } from "./Hotbar.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -317,6 +318,7 @@ function GameScreen(props: {
     log: [],
     inventory: new Map(),
     containers: [],
+    hotkeys: [],
   });
   const [levelNotice, setLevelNotice] = useState<number | undefined>(undefined);
   const [stance, setStance] = useState(FightStance.BALANCED);
@@ -330,6 +332,8 @@ function GameScreen(props: {
       t,
       locale: props.locale,
       sessionToken: props.sessionToken,
+      vocation: props.character.vocation,
+      storage: safeStorage(),
       entered: () => setEntered(true),
       ended: (reason) => props.onEnd(reason),
       update: setUi,
@@ -386,6 +390,7 @@ function GameScreen(props: {
               <span>{t("client.characters.level", { level: levelNotice })}</span>
             </div>
           )}
+          {entered && <Hotbar t={t} content={props.content} game={game.current} ui={ui} />}
         </div>
         <aside class="side">
           <section class="battle" data-testid="battle-list" aria-label={t("client.battle.title")}>
@@ -445,6 +450,7 @@ function GameScreen(props: {
           </section>
           <InventoryPanel t={t} content={props.content} game={game.current} ui={ui} />
           <SkillsPanel t={t} skills={ui.skills} />
+          <SayLine t={t} game={game.current} />
           <ul class="log" data-testid="game-log" aria-live="polite">
             {ui.log.map((m, i) => (
               <li key={`${m.at}-${i}`}>{formatMessage(m, props.content, t)}</li>
@@ -454,6 +460,15 @@ function GameScreen(props: {
       </div>
     </div>
   );
+}
+
+/** localStorage, or undefined where the browser blocks it. */
+function safeStorage(): Storage | undefined {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
 }
 
 /** How long the level-up notice stays on screen, ms. */

@@ -337,3 +337,79 @@ body.dragging-item,
 body.dragging-item * {
   cursor: grabbing !important;
 }
+
+/* Spell hotkeys F1–F12 (T1.9): a bar along the bottom of the viewport. */
+.hotbar {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.25rem;
+  align-items: stretch;
+  max-width: calc(100% - 1rem);
+}
+.hotbar ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.2rem;
+  overflow-x: auto;
+}
+.hotbar li button,
+.hotbar li select {
+  position: relative;
+  width: 4.6rem;
+  height: 3.1rem;
+  padding: 0.1rem 0.2rem;
+  font-size: 0.65rem;
+  line-height: 1.1;
+  color: #eee;
+  background: rgba(20, 20, 30, 0.92);
+  border: 1px solid #555;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.hotbar li button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.hotbar li button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.hotbar .key {
+  font-weight: bold;
+  color: #d0a030;
+}
+.hotbar .spell {
+  text-align: left;
+}
+.hotbar .cd {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.hotbar .edit {
+  width: 1.8rem;
+  background: rgba(20, 20, 30, 0.82);
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 3px;
+}
+.say label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+}
+.say input {
+  width: 100%;
+  box-sizing: border-box;
+}

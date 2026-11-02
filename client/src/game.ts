@@ -1,11 +1,12 @@
 // One play session: the WebSocket, the world state, the keyboard and the canvas wired
 // together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
 // the server says; the one thing it predicts is the next own step.
-import { Direction } from "@rpg/protocol";
+import { ChatChannel, Direction } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
 import { MovementKeys, typingInField } from "./input/keyboard.ts";
+import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
@@ -34,6 +35,8 @@ export interface GameUi {
   log: LogMessage[];
   inventory: Map<EquipmentSlot, ItemView>;
   containers: ContainerState[];
+  /** Spell ID of each hotkey F1..F12 (undefined = empty). */
+  hotkeys: (string | undefined)[];
 }
 
 /** Read-only hooks for the E2E tests (client/e2e). */
@@ -59,6 +62,8 @@ export interface ClientTestHooks {
   tile(x: number, y: number, z: number): readonly number[] | undefined;
   /** Numeric ID of a data/items content ID. */
   itemNumber(id: string): number | undefined;
+  /** Projectiles and effects (IDs) drawn less than `ms` ago. */
+  magic(ms: number): { projectiles: number; effects: number[] };
 }
 
 /** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */
@@ -76,6 +81,10 @@ export interface GameOptions {
   t: Translate;
   locale: string;
   sessionToken: string;
+  /** The character's vocation (default spell hotkeys). */
+  vocation: string;
+  /** Where the hotkey bar is remembered (localStorage; undefined in tests). */
+  storage?: Storage | undefined;
   /** The world is on screen. */
   entered(): void;
   /** The session ended (Disconnect or lost connection). */
@@ -94,9 +103,11 @@ export class Game {
   /** A click that arrived while a predicted step was unconfirmed. */
   private clickTarget: Pos | undefined;
   private readonly opts: GameOptions;
+  private hotkeys: (string | undefined)[];
 
   constructor(opts: GameOptions) {
     this.opts = opts;
+    this.hotkeys = loadHotkeys(opts.content.spells, opts.vocation, opts.storage);
     this.world = new WorldState(opts.content);
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
@@ -130,6 +141,40 @@ export class Game {
 
   setFightMode(stance: FightStance, chase: boolean): void {
     this.conn.send({ case: "setFightMode", value: { stance, chase } });
+  }
+
+  // ---- magic (T1.9): the server checks vocation, level, mana, cooldowns and sight -------
+
+  /** Casts a spell by ID (hotkey) on the current target, if any. */
+  castSpell(spellId: string): void {
+    this.conn.send({ case: "castSpell", value: { spell: { case: "spellId", value: spellId } } });
+  }
+
+  /** Says text on the local channel: the server casts it if it is a spell's words. */
+  say(text: string): void {
+    const trimmed = text.trim().slice(0, 255);
+    if (trimmed)
+      this.conn.send({ case: "say", value: { channel: ChatChannel.SAY, text: trimmed } });
+  }
+
+  /** Assigns a spell (or nothing) to hotkey slot 0..11 and remembers it. */
+  setHotkey(slot: number, spellId: string | undefined): void {
+    if (slot < 0 || slot >= this.hotkeys.length) return;
+    this.hotkeys = this.hotkeys.map((k, i) => (i === slot ? spellId : k));
+    saveHotkeys(this.opts.vocation, this.hotkeys, this.opts.storage);
+    this.publish();
+  }
+
+  /** Remaining fraction (0..1) of a spell's cooldown (its own or its group's). */
+  spellCooldown(spellId: string, now: number): number {
+    const def = this.opts.content.spells.find((s) => s.id === spellId);
+    return cooldownLeft(
+      [
+        this.world.spellCooldowns.get(spellId),
+        def ? this.world.groupCooldowns.get(def.group) : undefined,
+      ],
+      now,
+    );
   }
 
   // ---- items (T1.8): the server validates every one of these ---------------------------
@@ -231,6 +276,7 @@ export class Game {
       log: [...w.log],
       inventory: w.inventory,
       containers: w.containers,
+      hotkeys: this.hotkeys,
     });
   }
 
@@ -299,6 +345,13 @@ export class Game {
         [...world.inventory].map(([slot, it]) => ({ slot, itemId: it.itemId, count: it.count })),
       containers: () => world.containers,
       tile: (x, y, z) => world.tile(x, y, z),
+      magic: (ms) => {
+        const now = performance.now();
+        return {
+          projectiles: world.projectiles.filter((p) => now - p.start < ms).length,
+          effects: world.effects.filter((e) => now - e.start < ms).map((e) => e.effectId),
+        };
+      },
       itemNumber: (id) => {
         const found = Object.entries(this.opts.content.items).find(([, d]) => d.id === id);
         return found ? Number(found[0]) : undefined;
@@ -331,6 +384,13 @@ export class Game {
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
+    const slot = hotkeySlot(e.code);
+    if (slot !== undefined) {
+      e.preventDefault(); // F5 must not reload the page in the middle of a fight
+      const spell = this.hotkeys[slot];
+      if (spell && !e.repeat) this.castSpell(spell);
+      return;
+    }
     if (typingInField(e)) return;
     if (this.keys.down(e.code)) e.preventDefault();
   };

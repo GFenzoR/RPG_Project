@@ -58,6 +58,8 @@ type monsterKind struct {
 	target      combat.MonsterTarget
 	loot        []lootItem
 	attackTicks []game.Tick
+	// reach is the longest range of its attacks (1 = melee only).
+	reach int
 }
 
 type lootItem struct {
@@ -173,8 +175,12 @@ func (w *World) initCombat() error {
 		k := &monsterKind{def: def, target: combat.MonsterTarget{
 			Armor: def.Armor, Defense: def.Defense, PhysicalResistance: def.Resistances["physical"],
 		}}
+		k.reach = 1
 		for _, a := range def.Attacks {
 			k.attackTicks = append(k.attackTicks, ticksFor(a.IntervalMs))
+			if a.Type != "melee" {
+				k.reach = max(k.reach, a.Range)
+			}
 		}
 		for _, l := range def.Loot {
 			it := w.cfg.Items[l.Item]
@@ -456,11 +462,15 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 				w.stepMonster(ctx, m, dir)
 			}
 		}
-		return
+		if m.kind.reach <= 1 {
+			return
+		}
+		// A monster with distance attacks shoots while it closes in.
+		d = chebyshev(m.pos, t.pos)
 	default:
 		m.state = StateAttack
 	}
-	if d <= 1 {
+	if d <= m.kind.reach {
 		w.face(m, t.pos)
 		w.monsterAttacks(ctx, m)
 	}

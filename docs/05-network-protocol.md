@@ -297,6 +297,41 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
 - **Login:** `Inventory` lleva el equipo guardado; un personaje que nunca jugó recibe
   `inventory.start_container` en el slot de mochila.
 
+### Magia (T1.9, `server/internal/session/magic.go`)
+Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
+- **`CastSpell`**: `spell_id` (hotkey) o `words`; `target` opcional (criatura o tile; sin él,
+  el objetivo actual). Un `Say` en el canal `SAY` cuyo texto, en minúsculas y con los
+  espacios colapsados, coincide con las palabras de un hechizo lo lanza igual (el chat en sí
+  llega con T1.13; los demás textos se ignoran por ahora). Ids o palabras desconocidas se
+  ignoran.
+- **Rechazos** (`Message` de sistema, no se gasta nada ni empieza ningún cooldown):
+  `magic.vocation`, `magic.level_required` (`level`), `magic.magic_level_required`
+  (`level`), `magic.not_ready`, `magic.no_mana`, `magic.no_target`, `magic.out_of_range`,
+  `magic.no_sight`, `magic.protection_zone`, `magic.no_room` e `inventory.too_heavy` (al
+  conjurar).
+- **Lanzado**: el jugador recibe `SpellCooldown{spell_id, cooldown_ms, group,
+  group_cooldown_ms}` (ya redondeados a ticks) y `PlayerStats` con el maná gastado; si
+  cambió el nivel mágico, `PlayerSkills` (y `progress.skill_up`).
+- **Efectos** (`effect_id`, constantes del protocolo hasta `data/effects.yaml`): 3 =
+  curación, 4 = conjurar, `10 + elemento` = golpe elemental o casilla de un hechizo de
+  área, con elemento en el orden `physical, fire, ice, energy, earth, holy, death`
+  (0..6). Un golpe mágico con daño usa el efecto de su elemento en vez del 1; con 0 de daño,
+  el 2.
+- **`Projectile{from, to, projectile_id}`** con `projectile_id = 1 + elemento`: hechizos de
+  un objetivo, disparos de varita y ataques a distancia o hechizos de monstruos. Lo recibe
+  quien ve cualquiera de las dos puntas.
+- **Curación**: `Effect` 3, `FloatingText{HEAL}` si curó algo y `CreatureHealth` si cambió
+  el %.
+- **Conjurar**: la runa aparece en la mochila equipada (`ContainerUpdate` a quien la tiene
+  abierta), `Effect` 4 y `magic.conjured` con el parámetro `item`.
+- **Runas**: `UseItemOn{from, item_id, stack_index, to}` (criatura o tile) o `UseItem`
+  (sobre el objetivo actual) lanza el hechizo de la runa sin maná; en `ItemStack.count` una
+  runa lleva sus cargas. Cada uso gasta una carga (la última la quita) y manda
+  `SpellCooldown` solo con el cooldown del grupo.
+- **Varitas**: con una varita en la mano derecha el ataque automático es un `Projectile` del
+  elemento de la varita cada ronda, a `weapon.range` casillas y con línea de visión; con
+  `chase` el jugador se acerca hasta tenerlo a tiro.
+
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
 |---|---|
@@ -311,6 +346,7 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
 | `FloatingText` | Daño, curación, XP |
 | `PlayerStats` | HP, MP, nivel, XP, capacidad, velocidad, alma |
 | `PlayerSkills` | Nivel y % de cada skill |
+| `SpellCooldown` | Cooldown propio y de grupo de un hechizo lanzado (T1.9) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |
 | `DialogOpen` / `DialogClose` | Diálogo de NPC con texto y opciones |

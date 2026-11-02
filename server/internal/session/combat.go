@@ -102,6 +102,10 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 	if w.inProtection(p.pos) {
 		return
 	}
+	if wp := p.weapon; wp != nil && wp.Weapon != nil && wp.Weapon.Type == WeaponWand {
+		w.wandFight(ctx, p, m)
+		return
+	}
 	if chebyshev(p.pos, m.pos) > 1 {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
 			if d, ok := w.chaseStep(p.pos, m.pos, false); ok {
@@ -119,17 +123,17 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 	skill, attack := w.meleeSkill(p)
 	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.skillLevel(p, skill), 1), attack, p.level, w.mode(p).Attack)
 	w.train(p, skill, w.afk(ctx, p))
-	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target))
+	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target), ElementPhysical)
 }
 
-// damageMonster applies one hit of player p to m.
-func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg int) {
+// damageMonster applies one hit of player p, of element, to m.
+func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg int, element string) {
 	dmg = min(dmg, m.health)
 	m.health -= dmg
 	if dmg > 0 {
 		w.addShare(m, p.id, dmg)
 	}
-	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth))
+	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), element)
 	if m.health <= 0 {
 		w.killMonster(ctx, m)
 		return
@@ -149,11 +153,14 @@ func (w *World) addShare(m *Monster, id uint32, dmg int) {
 	m.damage = append(m.damage, damageShare{player: id, amount: dmg})
 }
 
-// hitEvents tells everyone who sees pos about a hit on creature id: the effect, the
-// damage number and the new health bar.
-func (w *World) hitEvents(id uint32, pos world.Pos, dmg int, pct uint32) {
+// hitEvents tells everyone who sees pos about a hit of element on creature id: the
+// effect, the damage number and the new health bar.
+func (w *World) hitEvents(id uint32, pos world.Pos, dmg int, pct uint32, element string) {
 	effect := uint32(EffectBlock)
-	if dmg > 0 {
+	switch {
+	case dmg > 0 && element != ElementPhysical:
+		effect = elementEffect(element)
+	case dmg > 0:
 		effect = EffectHit
 	}
 	w.eachObserver(nil, pos, func(o *Player) {
@@ -169,12 +176,18 @@ func (w *World) hitEvents(id uint32, pos world.Pos, dmg int, pct uint32) {
 
 // ---- monster attacks -------------------------------------------------------------
 
-// monsterAttacks runs m's melee attacks that are due against its adjacent target.
-// Distance attacks and spells arrive with T1.9 (magic) and are skipped.
+// monsterAttacks runs m's attacks that are due against its target: melee ones when it
+// is adjacent, distance attacks and spells (T1.9) within their range and line of sight,
+// with a projectile. A monster spell hits only its target (no area yet).
 func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 	t := m.target
+	d := chebyshev(m.pos, t.pos)
 	for i, a := range m.kind.def.Attacks {
-		if a.Type != "melee" || ctx.Tick < m.nextAttack[i] {
+		if ctx.Tick < m.nextAttack[i] || m.pos.Z != t.pos.Z {
+			continue
+		}
+		ranged := a.Type != "melee"
+		if !ranged && d > 1 || ranged && (d > max(a.Range, 1) || !w.m.LineOfSight(m.pos, t.pos)) {
 			continue
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.attackTicks[i]
@@ -184,7 +197,10 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue
 		}
-		physical := a.Element == "physical"
+		if ranged {
+			w.projectile(m.pos, t.pos, a.Element)
+		}
+		physical := a.Element == ElementPhysical
 		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense}
 		if physical {
 			pt.Armor = t.armor
@@ -194,17 +210,17 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 			w.trainShield(ctx, t)
 		}
 		dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, a.Min, a.Max, physical, pt)
-		w.damagePlayer(ctx, t, dmg)
+		w.damagePlayer(ctx, t, dmg, a.Element)
 		if m.target != t { // t was defeated and left
 			return
 		}
 	}
 }
 
-func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int) {
+func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element string) {
 	dmg = min(dmg, p.health)
 	p.health -= dmg
-	w.hitEvents(p.id, p.pos, dmg, healthPercent(p.health, p.maxHealth))
+	w.hitEvents(p.id, p.pos, dmg, healthPercent(p.health, p.maxHealth), element)
 	if dmg > 0 {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}
@@ -275,7 +291,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		n := combat.Roll(ctx.Rand, l.lo, l.hi)
 		if !l.def.Stackable {
 			for range n {
-				add(newItem(l.def, 1))
+				add(newItem(l.def, l.def.StackLimit())) // a rune drops with all its charges
 			}
 			continue
 		}

@@ -97,6 +97,9 @@ type Config struct {
 	// CorpseItem. Without Monsters the world has no monsters (tests, tools).
 	Monsters content.Monsters
 	Items    content.Items
+	// Spells come from data/spells.yaml (T1.9). Every rune item must name one of them
+	// and every conjured item must exist in Items.
+	Spells content.Spells
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
 	Save func(Snapshot) bool
@@ -171,6 +174,10 @@ type World struct {
 	useFor         game.Tick
 	reach          int
 	maxOpen        int
+
+	// Magic (T1.9): spells by normalized words, and the index of the magic skill.
+	spellWords map[string]*content.Spell
+	magicIdx   int
 }
 
 // New validates cfg and builds an empty World.
@@ -218,6 +225,9 @@ func New(cfg Config) (*World, error) {
 	}
 	w.initProgress()
 	if err := w.initItems(); err != nil {
+		return nil, err
+	}
+	if err := w.initMagic(); err != nil {
 		return nil, err
 	}
 	return w, nil

@@ -15,8 +15,24 @@ import type { Translate } from "../i18n/i18n.ts";
 import { delta } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
-import { EFFECT_HIT, EFFECT_MS, FLOATING_TEXT_MS } from "../state/world.ts";
-import type { CreatureState, EffectState, FloatingTextState, WorldState } from "../state/world.ts";
+import {
+  EFFECT_CONJURE,
+  EFFECT_ELEMENT,
+  EFFECT_HEAL,
+  EFFECT_HIT,
+  EFFECT_MS,
+  ELEMENTS,
+  FLOATING_TEXT_MS,
+  PROJECTILE_ELEMENT,
+  PROJECTILE_MS,
+} from "../state/world.ts";
+import type {
+  CreatureState,
+  EffectState,
+  FloatingTextState,
+  ProjectileState,
+  WorldState,
+} from "../state/world.ts";
 
 const COLORS = {
   background: 0x000000,
@@ -45,6 +61,35 @@ const BAR_H = 4;
 
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
+
+/** Colour of each element (state/world.ts ELEMENTS order), for magic effects and projectiles. */
+const ELEMENT_COLORS = [0xd8d0c0, 0xff7a1a, 0x8fd8ff, 0xc890ff, 0x7fc94a, 0xfff2a0, 0x5a3a6a];
+const elementColor = (i: number): number => ELEMENT_COLORS[i] ?? ELEMENT_COLORS[0] ?? 0xffffff;
+
+/** Procedural drawing of an Effect (until data/effects.yaml brings sprites). */
+function drawEffect(g: Graphics, id: number): void {
+  if (id === EFFECT_HIT)
+    g.circle(16, 16, 7)
+      .fill(COLORS.hit)
+      .circle(9, 11, 3)
+      .fill(COLORS.hit)
+      .circle(23, 21, 3)
+      .fill(COLORS.hit);
+  else if (id === EFFECT_HEAL)
+    g.circle(16, 16, 10)
+      .stroke({ width: 2, color: COLORS.heal })
+      .circle(10, 9, 2)
+      .fill(COLORS.heal)
+      .circle(22, 12, 2)
+      .fill(COLORS.heal)
+      .circle(16, 24, 2)
+      .fill(COLORS.heal);
+  else if (id === EFFECT_CONJURE) g.star(16, 16, 5, 11, 5).fill({ color: 0xb08cff, alpha: 0.85 });
+  else if (id >= EFFECT_ELEMENT && id < EFFECT_ELEMENT + ELEMENTS.length) {
+    const c = elementColor(id - EFFECT_ELEMENT);
+    g.rect(2, 2, 28, 28).fill({ color: c, alpha: 0.35 }).star(16, 16, 6, 12, 6).fill(c);
+  } else g.circle(16, 16, 9).stroke({ width: 3, color: COLORS.block });
+}
 
 const textColor = (k: FloatingTextKind): number =>
   k === FloatingTextKind.HEAL
@@ -254,6 +299,7 @@ export async function createGameCanvas(
   // Effects and floating texts: drawn while the world state keeps them (it expires them).
   const effectGfx = new Map<EffectState, Graphics>();
   const textObjs = new Map<FloatingTextState, Text>();
+  const projectileGfx = new Map<ProjectileState, Graphics>();
   const drawEffects = (now: number, floor: number): void => {
     const live = new Set(world.effects);
     for (const [e, g] of effectGfx)
@@ -266,14 +312,7 @@ export async function createGameCanvas(
       let g = effectGfx.get(e);
       if (!g) {
         g = new Graphics();
-        if (e.effectId === EFFECT_HIT)
-          g.circle(16, 16, 7)
-            .fill(COLORS.hit)
-            .circle(9, 11, 3)
-            .fill(COLORS.hit)
-            .circle(23, 21, 3)
-            .fill(COLORS.hit);
-        else g.circle(16, 16, 9).stroke({ width: 3, color: COLORS.block });
+        drawEffect(g, e.effectId);
         effectLayer.addChild(g);
         effectGfx.set(e, g);
       }
@@ -281,6 +320,31 @@ export async function createGameCanvas(
       g.position.set(Math.round(p.x), Math.round(p.y));
       g.scale.set(scale);
       g.alpha = 1 - Math.min(1, (now - e.start) / EFFECT_MS) * 0.6;
+    }
+    const liveShots = new Set(world.projectiles);
+    for (const [pr, g] of projectileGfx)
+      if (!liveShots.has(pr)) {
+        g.destroy();
+        projectileGfx.delete(pr);
+      }
+    for (const pr of world.projectiles) {
+      if (pr.from.z !== floor) continue;
+      let g = projectileGfx.get(pr);
+      if (!g) {
+        const c = elementColor(pr.projectileId - PROJECTILE_ELEMENT);
+        g = new Graphics().circle(0, 0, 5).fill(c).circle(0, 0, 8).fill({ color: c, alpha: 0.35 });
+        effectLayer.addChild(g);
+        projectileGfx.set(pr, g);
+      }
+      const k = Math.min(1, (now - pr.start) / PROJECTILE_MS);
+      const p = tileToScreen(
+        cam,
+        pr.from.x + 0.5 + (pr.to.x - pr.from.x) * k,
+        pr.from.y + 0.5 + (pr.to.y - pr.from.y) * k,
+        T,
+      );
+      g.position.set(Math.round(p.x), Math.round(p.y));
+      g.scale.set(scale);
     }
     const liveTexts = new Set(world.floatingTexts);
     for (const [f, o] of textObjs)
@@ -430,6 +494,7 @@ export async function createGameCanvas(
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);
       for (const g of effectGfx.values()) g.destroy();
+      for (const g of projectileGfx.values()) g.destroy();
       for (const o of textObjs.values()) o.destroy();
       view.destroy();
       app.destroy(true, { children: true });

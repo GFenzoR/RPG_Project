@@ -64,3 +64,24 @@ func HitPlayer(r *rand.Rand, c content.Combat, lo, hi int, physical bool, p Play
 	}
 	return max(dmg, 0)
 }
+
+// Scaled rolls a spell amount (docs/02-game-design.md, "Daño mágico"):
+// base + level × per_level + magic level × per_magic_level, then a uniform roll within
+// ±spread of it. It never goes below zero.
+func Scaled(r *rand.Rand, s content.Scaling, level, magicLevel int) int {
+	v := s.Base + float64(level)*s.PerLevel + float64(magicLevel)*s.PerMagicLevel
+	lo := int(math.Floor(v * (1 - s.Spread)))
+	hi := int(math.Floor(v * (1 + s.Spread)))
+	return max(Roll(r, max(lo, 0), max(hi, 0)), 0)
+}
+
+// Resist applies an elemental resistance in percent (negative = weakness) to dmg.
+// Resistances of 100 or more make the target immune.
+func Resist(dmg, resistance int) int {
+	return max(int(math.Round(float64(dmg)*(1-float64(min(resistance, 100))/100))), 0)
+}
+
+// WandHit rolls one wand shot of attack value attack: random(attack × minFactor, attack).
+func WandHit(r *rand.Rand, attack int, minFactor float64) int {
+	return Roll(r, int(math.Floor(float64(attack)*minFactor)), attack)
+}

@@ -37,6 +37,7 @@ type Combat struct {
 	LevelDivisor       int                   `yaml:"level_divisor"`
 	ShieldBlockDivisor int                   `yaml:"shield_block_divisor"`
 	MonsterCorpseMs    int                   `yaml:"monster_corpse_ms"`
+	WandMinFactor      float64               `yaml:"wand_min_factor"`
 	Modes              map[string]CombatMode `yaml:"modes"`
 }
 

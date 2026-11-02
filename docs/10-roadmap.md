@@ -63,7 +63,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   experiencia y niveles, stats por vocación, regeneración. Panel de skills. Escenarios sim. [T1.6]
 - [x] **T1.8 Items, inventario y contenedores.** Slots de equipo, mochila, mover items
   (suelo↔inventario↔contenedor), capacidad, usar items, mirar. UI de inventario. [T1.6]
-- [ ] **T1.9 Magia (Arcanista).** Maná, nivel mágico, 4 hechizos (ataque, área, curación,
+- [x] **T1.9 Magia (Arcanista).** (PR #30) Maná, nivel mágico, 4 hechizos (ataque, área, curación,
   utilidad), palabras propias, cooldowns, hotkeys F1–F12, runas básicas. [T1.7, T1.8]
 - [ ] **T1.10 NPCs, diálogos, tiendas y quest.** Motor de diálogos YAML, ventana de
   diálogo, tienda compra/venta, motor de quests con pasos y flags, Capítulo 1 jugable.

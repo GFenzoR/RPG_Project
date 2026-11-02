@@ -119,6 +119,13 @@ func (w *World) train(p *Player, id string, afk bool) {
 			return
 		}
 	}
+	w.addTries(p, i, n)
+}
+
+// addTries adds n tries to p's skill at index i and tells the client when its level or
+// percent changed.
+func (w *World) addTries(p *Player, i int, n int64) {
+	id, s := w.skillIDs[i], &p.skills[i]
 	base, factor := w.cfg.Balance.Skills.Base[id], p.vocation.SkillFactor(id)
 	before := s.Percent(base, factor)
 	gained := s.Add(base, factor, n)

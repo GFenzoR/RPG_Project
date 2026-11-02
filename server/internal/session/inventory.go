@@ -95,7 +95,10 @@ func newItem(def *content.Item, count int) *Item {
 
 // weight is the item's weight in grams, with its content.
 func (it *Item) weight() int {
-	w := it.def.Weight * it.count
+	w := it.def.Weight
+	if it.def.Stackable {
+		w *= it.count
+	}
 	for _, c := range it.items {
 		w += c.weight()
 	}
@@ -140,8 +143,8 @@ func (it *Item) contains(c *Item) bool {
 
 func (it *Item) stack() *pb.ItemStack {
 	s := &pb.ItemStack{ItemId: uint32(it.def.Numeric)}
-	if it.def.Stackable {
-		s.Count = uint32(it.count)
+	if it.def.Stackable || it.def.Rune != nil {
+		s.Count = uint32(it.count) // a rune's count is its charges
 	}
 	return s
 }
@@ -785,7 +788,7 @@ func (w *World) forgetContainers(p *Player) {
 // ---- UseItem and LookAt --------------------------------------------------------
 
 // useItem runs a UseItem intent: containers open or close, consumables heal and are
-// eaten. Other items have no use yet (tools and runes arrive with their tasks).
+// eaten, runes are cast (T1.9). Other items have no use yet (tools arrive with T1.12).
 func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
 	if it == nil {
@@ -806,6 +809,8 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 		}
 		p.nextUse = ctx.Tick + w.useFor
 		w.consume(p, it)
+	case it.def.Rune != nil:
+		w.useRune(ctx, p, it, nil) // on the current target, or the caster for a heal
 	default:
 		p.emit(systemMsg(msgCannotUse))
 	}
@@ -819,22 +824,7 @@ func (w *World) consume(p *Player, it *Item) {
 	pct := healthPercent(p.health, p.maxHealth)
 	p.health += hp
 	p.mana += mp
-	if it.count > 1 {
-		it.count--
-		w.changed(it)
-	} else {
-		parent, owner, ground, pos := it.parent, it.owner, it.onGround, it.pos
-		w.detach(it)
-		switch {
-		case parent != nil:
-			w.containerChanged(parent)
-		case owner != nil:
-			w.sendInventory(owner)
-			w.equipmentChanged(owner)
-		case ground:
-			w.tileChanged(pos)
-		}
-	}
+	w.useUp(it)
 	if c.HealHP == 0 && c.HealMP == 0 {
 		p.emit(systemMsg(msgAte, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: &pb.ItemStack{ItemId: uint32(it.def.Numeric)}}}))
 	}
@@ -856,6 +846,26 @@ func (w *World) consume(p *Player, it *Item) {
 		}}})
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
+}
+
+// useUp spends one unit (or charge) of it; the last one removes it.
+func (w *World) useUp(it *Item) {
+	if it.count > 1 {
+		it.count--
+		w.changed(it)
+		return
+	}
+	parent, owner, ground, pos := it.parent, it.owner, it.onGround, it.pos
+	w.detach(it)
+	switch {
+	case parent != nil:
+		w.containerChanged(parent)
+	case owner != nil:
+		w.sendInventory(owner)
+		w.equipmentChanged(owner)
+	case ground:
+		w.tileChanged(pos)
+	}
 }
 
 // lookAt answers a LookAt with a system message: the item (the client adds its
@@ -900,7 +910,7 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 		def, weight, count = it.def, it.weight(), it.count
 	}
 	stack := &pb.ItemStack{ItemId: uint32(def.Numeric)}
-	if def.Stackable {
+	if def.Stackable || def.Rune != nil {
 		stack.Count = uint32(count)
 	}
 	num := func(name string, v int) *pb.TextParam {

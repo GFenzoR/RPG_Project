@@ -69,3 +69,5 @@ item.creature_remains.name: "restos de criatura"
 # Containers (T1.8)
 item.backpack.name: "mochila"
 item.backpack.desc: "Una mochila de lona con correas de cuero."
+item.arc_rune.name: "runa de arco"
+item.arc_rune.desc: "Una piedra tallada que guarda un rayo. Se gasta con cada uso."

@@ -69,3 +69,5 @@ item.creature_remains.name: "creature remains"
 # Containers (T1.8)
 item.backpack.name: "backpack"
 item.backpack.desc: "A canvas backpack with leather straps."
+item.arc_rune.name: "arc rune"
+item.arc_rune.desc: "A carved stone holding a bolt of lightning. Each use spends a charge."
