@@ -84,6 +84,11 @@ validate: ## Validate data/ YAML and i18n/ against the schemas (maps: T0.4)
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 	$(CONTENT_CLI) gen-ids
 
+# spritepack runs TypeScript directly, like the content tooling.
+.PHONY: sprites
+sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeholders for missing art)
+	node --experimental-strip-types tools/spritepack/src/cli.ts build $(if $(STRICT),--strict)
+
 .PHONY: fmt
 fmt: ## Format Go and TS code
 	@for m in $(GO_MODULES); do (cd $$m && gofmt -w .); done
