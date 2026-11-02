@@ -450,6 +450,13 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
     ).status(),
   ).toBe(201);
   await apiCtx.dispose();
+  // Puerto's NPCs live on Isla del Puerto (T1.16): this character's residence is Farol, so
+  // it wakes up at that temple, next to the priestess and the provisioner.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto' WHERE name = '${name}'`,
+  ]);
 
   await page.goto("/?lang=es");
   const loginForm = page.getByTestId("login-form");
@@ -588,11 +595,22 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
     if (!p) throw new Error("no canvas");
     await page.mouse.click(p.x, p.y);
   };
-  await click(start.x, start.y - 5);
-  await arrived(page, start.x, start.y - 5);
-  await click(start.x, start.y - 9);
-
   const screen = page.getByTestId("death-screen");
+  await click(start.x, start.y - 5);
+  // A roaming wolf may bite first, on the way: then the character is already back at the
+  // temple and the second click is not needed.
+  await expect
+    .poll(
+      async () => {
+        if (await screen.isVisible()) return true;
+        const s = await self(page);
+        return s?.x === start.x && s.y === start.y - 5;
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(true);
+  if (!(await screen.isVisible())) await click(start.x, start.y - 9);
+
   await expect(screen).toBeVisible({ timeout: 60_000 });
   await expect(screen).toContainText("Has muerto");
   await page.waitForTimeout(300);

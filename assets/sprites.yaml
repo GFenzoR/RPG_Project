@@ -69,6 +69,15 @@ sprites:
   decor/cargo_crate: { placeholder: { label: CR, color: "#9a7a4e" } }
 
   # Creatures
+  decor/oak_tree: { placeholder: { label: "", color: "#2f5a26" } }
+  decor/pine_tree: { placeholder: { label: "", color: "#1f4a2e" } }
+  decor/bush: { placeholder: { label: "", color: "#5f9a40" } }
+  decor/boulder: { placeholder: { label: "", color: "#6e6a62" } }
+  decor/stairs_down: { placeholder: { label: "DN", color: "#4a3a2a" } }
+  decor/stairs_up: { placeholder: { label: "UP", color: "#b09a7a" } }
+  walls/stone_wall: { placeholder: { label: "", color: "#5c5a57" } }
+  walls/wooden_wall: { placeholder: { label: "", color: "#6a4a2c" } }
+  walls/rock_wall: { placeholder: { label: "", color: "#3b342e" } }
   decor/creature_remains: { placeholder: { label: "", color: "#6b2a24", size: [32, 32] } }
   creatures/bilge_rat: { placeholder: { label: BR, color: "#5e534c" } }
   creatures/tide_crab: { placeholder: { label: TC, color: "#c4553c" } }

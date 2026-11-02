@@ -1,0 +1,24 @@
+- id: puerto_temple
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 3150, y: 6380, w: 13, h: 13 }
+
+- id: puerto_depot
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 3163, y: 6370, w: 11, h: 10 }
+  notes: "Depot building of Farol; the depot item does not exist yet (docs/03)."
+
+- id: puerto_plaza
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 3163, y: 6380, w: 15, h: 12 }
+
+- id: puerto_dock
+  type: no_logout
+  floors: [7]
+  rects:
+    - { x: 3199, y: 6429, w: 5, h: 6 }

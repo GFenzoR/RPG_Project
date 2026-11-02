@@ -1,0 +1,14 @@
+- id: puerto_temple_sign
+  kind: sign
+  pos: { x: 3163, y: 6384, z: 7 }
+  text: text.puerto.temple_sign
+
+- id: puerto_harbour_sign
+  kind: sign
+  pos: { x: 3198, y: 6428, z: 7 }
+  text: text.puerto.harbour_sign
+
+- id: puerto_mine_sign
+  kind: sign
+  pos: { x: 3175, y: 6328, z: 7 }
+  text: text.puerto.mine_sign

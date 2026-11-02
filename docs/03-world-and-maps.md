@@ -292,6 +292,20 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Pendiente: alcanzabilidad entre islas por rutas de barco (falta decidir la isla de
   inicio).
 
+## Islas actuales
+- `testisle` (64x64, pisos 7–8): isla de pruebas de herramientas, tests y E2E. Va primera en
+  `world.yaml`, así que sigue siendo la isla de inicio de un personaje sin `town`. Desde
+  T1.16 ya no tiene NPCs (cada NPC se coloca una vez en el mundo).
+- `puerto` (192x192 en 3072,6272; pisos 7–8; nivel 1–15; T1.16): forma base con
+  `mapcli generate --recipe island --seed 42 --size 184`, luego ops. Superficie: pueblo del
+  Farol (templo, plaza, depósito, armería, casas y almacén con muros), muelle (prefab
+  `small_dock`) en la bahía sureste, playa del naufragio (NO: saqueadores, cangrejos,
+  gaviotas), bosque (O: jabalíes, arañas), campo de lobos (NE). Piso 8: la mina vieja
+  (escalera en 3176,6322): murciélagos al oeste, galería de vetas de hierro con escarabajos
+  al este y mina inundada con mineros ahogados al norte. Los 6 NPCs del Capítulo 1 viven
+  aquí. Protección en templo, plaza y depósito (el item depósito aún no existe).
+  Pendiente: la ruta de barco del capitán de puerto a `bosque` (T3.6).
+
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:
 

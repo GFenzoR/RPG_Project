@@ -33,7 +33,10 @@ describe("mapcli", () => {
     const world = mapcli("info", "--root", repo);
     expect(world.code).toBe(0);
     expect(JSON.parse(world.out)).toMatchObject({
-      islands: [{ id: "testisle", chunks: 6 }],
+      islands: [
+        { id: "testisle", chunks: 6 },
+        { id: "puerto", chunks: 43 },
+      ],
       load_errors: [],
     });
     const isle = JSON.parse(mapcli("info", "testisle", "--root", repo).out) as Record<
@@ -48,6 +51,12 @@ describe("mapcli", () => {
         { z: 7, chunks: 4, tiles: 4096 },
         { z: 8, chunks: 2 },
       ],
+      npcs: [],
+    });
+    expect(JSON.parse(mapcli("info", "puerto", "--root", repo).out)).toMatchObject({
+      id: "puerto",
+      rect: { x: 3072, y: 6272, w: 192, h: 192 },
+      level_hint: [1, 15],
       npcs: [
         { npc: "harbor_master" },
         { npc: "puerto_priest" },
@@ -65,9 +74,9 @@ describe("mapcli", () => {
       out: "maps: 0 error(s), 0 warning(s)\n",
     });
     const root = sandbox();
-    const npcs = join(root, "world/islands/testisle/npcs.yaml");
-    writeFileSync(npcs, readFileSync(npcs, "utf8").replace("y: 1082", "y: 1086"));
-    const r = mapcli("validate", "testisle", "--root", root);
+    const npcs = join(root, "world/islands/puerto/npcs.yaml");
+    writeFileSync(npcs, readFileSync(npcs, "utf8").replace("y: 6433", "y: 6440"));
+    const r = mapcli("validate", "puerto", "--root", root);
     expect(r.code).toBe(1);
     const report = JSON.parse(r.out) as {
       errors: number;
@@ -76,7 +85,7 @@ describe("mapcli", () => {
     expect(report.errors).toBe(1);
     expect(report.diagnostics[0]).toMatchObject({
       message: "NPC is not on a walkable tile",
-      pos: { x: 1056, y: 1086, z: 7 },
+      pos: { x: 3201, y: 6440, z: 7 },
       line: 2,
     });
   });
@@ -99,11 +108,11 @@ describe("mapcli", () => {
   it("view draws the temple area with a legend", () => {
     const r = mapcli(
       "view",
-      "testisle",
+      "puerto",
       "--floor",
       "7",
       "--area",
-      "1053,1053,9,7",
+      "3153,6382,13,6",
       "--root",
       repo,
       "--format",
@@ -112,18 +121,18 @@ describe("mapcli", () => {
     expect(r.code).toBe(0);
     expect(r.out).toBe(
       [
-        "legend: . grass  : dirt  @ temple  N npc  _ stone_floor",
-        "y\\x  1053",
-        "1053 _______..",
-        "1054 _____N_..",
-        "1055 _______..",
-        "1056 ___@___::",
-        "1057 _______..",
-        "1058 _______.N",
-        "1059 _______..",
-        "N 1058,1054: npc puerto_priest",
-        "@ 1056,1056: temple",
-        "N 1061,1058: npc puerto_provisioner",
+        "legend: ? text  @ temple  N npc  _ stone_floor  s stone_wall",
+        "y\\x  3153      3163",
+        "6382 _________s___",
+        "6383 _________s___",
+        "6384 ___N_____s?__",
+        "6385 _____________",
+        "6386 _____@_____N_",
+        "6387 _____________",
+        "N 3156,6384: npc puerto_priest",
+        "? 3163,6384: sign puerto_temple_sign: text.puerto.temple_sign",
+        "@ 3158,6386: temple",
+        "N 3164,6386: npc puerto_provisioner",
         "",
       ].join("\n"),
     );

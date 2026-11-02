@@ -81,9 +81,11 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   ops de map-format, deshacer/rehacer, validación en vivo, E2E. [T0.4, T0.5]
 - [x] **T1.15 mapcli completo + mcp-world.** Todas las ops, `render` a PNG, `generate`
   procedural básico, servidor MCP registrado en `.mcp.json`. [T1.14] (#35)
-- [ ] **T1.16 Isla del Puerto.** Construir con mapcli/MCP la isla inicial (~192x192):
+- [x] **T1.16 Isla del Puerto.** Construir con mapcli/MCP la isla inicial (~192x192):
   ciudad con templo, puerto, tiendas, campo de lobos, cueva con mina y monstruos de
   nivel 5–15, un subsuelo. Validar, renderizar y revisar imágenes. [T1.15, T1.10, T1.12]
+  Hecho: `world/islands/puerto` (192x192, pisos 7–8), ver "Islas actuales" en `03`.
+  Pendiente: ruta de barco a Bosque (T3.6, `world.yaml` exige que la isla exista).
 
 **Operación**
 - [ ] **T1.17 Prueba de carga.** `tools/bots` completo, escenario de 100 y 300 bots,

@@ -1,3 +1,7 @@
 # Map texts: island names, signs and books placed in world/.
 island.testisle.name: "Test island"
+island.puerto.name: "Harbour Isle"
 text.testisle.temple_sign: "Temple of the test island. Nobody can hurt you here."
+text.puerto.temple_sign: "Temple of Farol. Nobody can hurt you within its walls."
+text.puerto.harbour_sign: "Farol dock. Ships sail when the harbour master says so."
+text.puerto.mine_sign: "Old mine. Beware of the bats, and of what hides further down."

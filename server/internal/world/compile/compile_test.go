@@ -209,6 +209,44 @@ func TestCompileTestisle(t *testing.T) {
 	}
 }
 
+// TestCompilePuerto: the starting island (T1.16) compiles with its town walls blocking
+// walking and sight, the six NPCs of Chapter 1 and a walkable way down to the mine.
+func TestCompilePuerto(t *testing.T) {
+	m := mustCompile(t, repoRoot(t))
+	is := m.Island("puerto")
+	if is == nil {
+		t.Fatal("puerto missing")
+	}
+	if m.Flags(is.Temple)&world.FlagProtection == 0 {
+		t.Errorf("temple %v is not in a protection zone", is.Temple)
+	}
+	// 3150,6386 is the temple's west wall (stone_wall).
+	wall := p(3150, 6386, 7)
+	if f := m.Flags(wall); f&world.FlagBlocksMovement == 0 || f&world.FlagBlocksSight == 0 {
+		t.Errorf("temple wall %v flags = %b, want blocks movement and sight", wall, f)
+	}
+	if m.LineOfSight(p(3149, 6386, 7), is.Temple) {
+		t.Error("line of sight crosses the temple wall")
+	}
+	if !m.LineOfSight(p(3166, 6386, 7), is.Temple) {
+		t.Error("no line of sight through the temple door")
+	}
+	got := map[string]bool{}
+	for _, n := range is.NPCs {
+		got[n.NPC] = true
+	}
+	for _, id := range []string{"harbor_master", "puerto_priest", "puerto_provisioner",
+		"puerto_armorer", "puerto_foreman", "puerto_diver"} {
+		if !got[id] {
+			t.Errorf("NPC %s is not on puerto", id)
+		}
+	}
+	pf := world.NewPathfinder(m, 0)
+	if path, ok := pf.Find(is.Temple, p(3176, 6322, 7), nil); !ok || len(path) == 0 {
+		t.Fatal("no path from the temple to the mine stairs")
+	}
+}
+
 // TestCompileDeterministic: the same sources give the same world.bin bytes, and decoding
 // them gives back the same map.
 func TestCompileDeterministic(t *testing.T) {

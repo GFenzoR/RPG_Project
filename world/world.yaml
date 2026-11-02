@@ -3,4 +3,7 @@ islands:
   - id: testisle
     rect: { x: 1024, y: 1024, w: 64, h: 64 }
     level_hint: [1, 8]
+  - id: puerto
+    rect: { x: 3072, y: 6272, w: 192, h: 192 }
+    level_hint: [1, 15]
 boat_routes: []

@@ -1,0 +1,9 @@
+- id: puerto_mine_down
+  kind: stairs
+  from: { x: 3176, y: 6322, z: 7 }
+  to: { x: 3176, y: 6323, z: 8 }
+
+- id: puerto_mine_up
+  kind: stairs
+  from: { x: 3176, y: 6322, z: 8 }
+  to: { x: 3176, y: 6323, z: 7 }
