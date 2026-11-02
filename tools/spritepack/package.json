@@ -3,10 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Sprite atlas packer and placeholder generator. Built in T0.5.",
+  "description": "Sprite atlas packer and placeholder generator (make sprites). Built in T0.5.",
   "exports": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "pngjs": "7.0.0",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/pngjs": "6.0.5"
   }
 }

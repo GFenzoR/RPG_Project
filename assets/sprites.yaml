@@ -1,0 +1,38 @@
+# Sprite manifest: where the pixels of each sprite path used in data/ come from.
+# How to integrate a vendor pack: assets/README.md. Built by `make sprites` (tools/spritepack).
+#
+# Keys are the `sprite:` values of data/ (paths without extension). Each entry has exactly one of:
+#   placeholder: { label: IS, color: "#rrggbb", size: [32, 32] }   all fields optional
+#   source: vendor/<pack>/<file>.png   + optional  tile: [col, row]  (32 px grid)
+#                                      or          rect: [x, y, w, h] (pixels, multiples of 32)
+# A file at assets/sprites/<path>.png (original art) wins over nothing: it must NOT also be
+# listed here. Sprites used in data/ with no entry get an automatic placeholder (warning).
+#
+# Everything below is a placeholder until the user's packs land in assets/vendor/ (T0.5).
+sprites:
+  # Ground: plain colour, no label, so map renders stay readable.
+  ground/grass: { placeholder: { label: "", color: "#4f8a3c" } }
+  ground/sand: { placeholder: { label: "", color: "#d8c27a" } }
+  ground/dirt: { placeholder: { label: "", color: "#7a5a3a" } }
+  ground/stone_floor: { placeholder: { label: "", color: "#8a8a86" } }
+  ground/water_shallow: { placeholder: { label: "", color: "#3f7fb5" } }
+
+  # Items
+  armor/patched_tunic: { placeholder: { label: PT, color: "#8c6d4f" } }
+  shields/plank_shield: { placeholder: { label: PS, color: "#9a7444" } }
+  currency/copper_coin: { placeholder: { label: CC, color: "#c07a3a" } }
+  materials/wolf_pelt: { placeholder: { label: WP, color: "#8e8478" } }
+  food/raw_fish: { placeholder: { label: RF, color: "#7fb0b8" } }
+  tools/fishing_rod: { placeholder: { label: FR, color: "#6d7f4a" } }
+  tools/rope: { placeholder: { label: RO, color: "#b49a64" } }
+  weapons/iron_sword: { placeholder: { label: IS, color: "#7d8794" } }
+  weapons/hatchet: { placeholder: { label: HA, color: "#6f7a86" } }
+  weapons/driftwood_club: { placeholder: { label: DC, color: "#8a7458" } }
+
+  # Creatures
+  creatures/bilge_rat: { placeholder: { label: BR, color: "#5e534c" } }
+  creatures/tide_crab: { placeholder: { label: TC, color: "#c4553c" } }
+  creatures/wolf: { placeholder: { label: WO, color: "#5c5f66" } }
+
+  # NPCs
+  npcs/sailor_old: { placeholder: { label: SO, color: "#2f5d8a" } }
