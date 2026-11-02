@@ -83,6 +83,10 @@ validate: ## Validate data/ and i18n/ against the schemas, then world/ maps (map
 	$(CONTENT_CLI) validate
 	$(MAPCLI) validate --format text
 
+.PHONY: mapcompile
+mapcompile: ## Compile world/ + data/items into build/world.bin (server map)
+	cd server && go run ./cmd/mapcompile -root .. -out ../build/world.bin
+
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 	$(CONTENT_CLI) gen-ids
