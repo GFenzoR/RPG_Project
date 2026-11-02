@@ -26,6 +26,7 @@ const def = (id: string, more: Partial<ItemDef> = {}): ItemDef => ({
   speed: 100,
   stackable: false,
   slots: 0,
+  useWith: false,
   ...more,
 });
 

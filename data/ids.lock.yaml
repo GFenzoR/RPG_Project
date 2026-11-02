@@ -50,3 +50,7 @@ items:
   creature_remains: 47
   backpack: 48
   arc_rune: 49
+  iron_vein: 50
+  water_shoal: 51
+  rough_stone: 52
+  quartz_crystal: 53

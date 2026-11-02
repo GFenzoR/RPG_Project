@@ -17,6 +17,8 @@ export interface ItemDef {
   stackable: boolean;
   /** Slots of a container item (0 = not a container). */
   slots: number;
+  /** A tool: using it picks a tile to use it on (UseItemOn), e.g. a rod on water. */
+  useWith: boolean;
 }
 
 /** A spell of data/spells.yaml, for the hotkey bar (the server validates every cast). */

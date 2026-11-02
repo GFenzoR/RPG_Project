@@ -200,6 +200,12 @@ type World struct {
 	nsectors map[uint64][]*NPC
 	quests   *quest.Engine
 	coins    []*content.Item // currency items, highest worth first
+
+	// Gathering (T1.12): harvested tiles (charges left, refill event), the rate limit
+	// and the anti-AFK delay in ticks (0 = off).
+	resources      map[world.Pos]*resourceTile
+	gatherFor      game.Tick
+	gatherAFKAfter game.Tick
 }
 
 // New validates cfg and builds an empty World.
@@ -254,6 +260,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initNPCs(); err != nil {
+		return nil, err
+	}
+	if err := w.initGathering(); err != nil {
 		return nil, err
 	}
 	return w, nil

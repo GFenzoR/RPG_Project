@@ -596,3 +596,92 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
   await shot(page, "14-respawn");
   expect(errors).toEqual([]);
 });
+
+test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-mine-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Miner ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  // A backpack (48) and a pickaxe (38) in the right hand (data/ids.lock.yaml slots 3 and 5).
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `INSERT INTO inventory_items (character_id, slot, item_id)
+     SELECT id, s.slot, s.item FROM characters, (VALUES (3, 48), (5, 38)) AS s(slot, item)
+     WHERE name = '${name}'`,
+  ]);
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  errors.length = 0;
+
+  const toClient = async (x: number, y: number): Promise<{ x: number; y: number }> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    if (!p) throw new Error("no canvas");
+    return p;
+  };
+  // The iron veins of testisle are at (1068, 1054) and (1069, 1054), east of the temple.
+  const veins = [
+    { x: 1068, y: 1054 },
+    { x: 1069, y: 1054 },
+  ];
+  // Two hops: the view only shows 7 tiles on each side.
+  let p = await toClient(1062, 1055);
+  await page.mouse.click(p.x, p.y);
+  await arrived(page, 1062, 1055);
+  p = await toClient(1067, 1055);
+  await page.mouse.click(p.x, p.y);
+  await arrived(page, 1067, 1055);
+  p = await toClient(1068, 1055);
+  await page.mouse.click(p.x, p.y);
+  await arrived(page, 1068, 1055);
+
+  // Right click on the pickaxe picks "use with"; the next click on the map uses it there.
+  const pickaxe = page.getByTestId("slot-right_hand").locator("[data-item=pickaxe]");
+  const log = page.getByTestId("game-log");
+  for (let i = 0; i < 16; i++) {
+    await pickaxe.click({ button: "right" });
+    await expect(page.locator("body")).toHaveClass(/using-item/);
+    const v = veins[i % 2];
+    if (!v) throw new Error("no vein");
+    p = await toClient(v.x, v.y);
+    await page.mouse.click(p.x, p.y);
+    await expect(page.locator("body")).not.toHaveClass(/using-item/);
+    await page.waitForTimeout(350); // the answer arrives; its effect lasts 600 ms
+    if ((await log.textContent())?.includes("Conseguiste")) break;
+    await page.waitForTimeout(1300); // gathering.use_interval_ms
+  }
+  await expect(log).toContainText("Conseguiste");
+  await shot(page, "15-mining");
+  expect(errors).toEqual([]);
+});

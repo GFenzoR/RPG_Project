@@ -337,6 +337,10 @@ body.dragging-item,
 body.dragging-item * {
   cursor: grabbing !important;
 }
+/* A tool waiting for its tile (T1.12): the next click on the map uses it there. */
+body.using-item canvas {
+  cursor: crosshair !important;
+}
 
 /* Spell hotkeys F1–F12 (T1.9): a bar along the bottom of the viewport. */
 .hotbar {

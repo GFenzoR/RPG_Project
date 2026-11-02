@@ -138,6 +138,29 @@
   tradeable: true
   value: 10
 
+# Mining byproducts (T1.12).
+- id: rough_stone
+  kind: material
+  sprite: materials/rough_stone
+  name: item.rough_stone.name
+  description: item.rough_stone.desc
+  weight: 1200
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 1
+
+- id: quartz_crystal
+  kind: material
+  sprite: materials/quartz_crystal
+  name: item.quartz_crystal.name
+  description: item.quartz_crystal.desc
+  weight: 100
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 40
+
 - id: tarnished_locket
   kind: material
   sprite: materials/tarnished_locket

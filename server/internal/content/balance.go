@@ -17,6 +17,7 @@ type Balance struct {
 	Skills     Skills     `yaml:"skills"`
 	Combat     Combat     `yaml:"combat"`
 	Inventory  Inventory  `yaml:"inventory"`
+	Gathering  Gathering  `yaml:"gathering"`
 	Death      Death      `yaml:"death"`
 }
 
@@ -54,6 +55,19 @@ type Inventory struct {
 	UseCooldownMs     int    `yaml:"use_cooldown_ms"`
 	// Reach is the Chebyshev distance (same floor) for actions on ground items.
 	Reach int `yaml:"reach"`
+}
+
+// Gathering holds the fishing and mining rules shared by every spot (T1.12); the
+// numbers of each spot are its item's resource block.
+type Gathering struct {
+	// UseIntervalMs is the minimum time between two gathering attempts (rate limit).
+	UseIntervalMs int `yaml:"use_interval_ms"`
+	AFK           struct {
+		// AfterMs: gathering without leaving the tile for this long...
+		AfterMs int `yaml:"after_ms"`
+		// Factor: ...earns skill tries at this rate (0-1).
+		Factor float64 `yaml:"factor"`
+	} `yaml:"afk"`
 }
 
 // Combat holds the melee constants (docs/02-game-design.md, "Combate").
@@ -186,6 +200,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if i := b.Inventory; i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.Reach <= 0 {
 		return Balance{}, errors.New("inventory: max_open_containers and reach must be > 0, use_cooldown_ms >= 0")
+	}
+	if g := b.Gathering; g.UseIntervalMs < 0 || g.AFK.AfterMs < 0 || g.AFK.Factor < 0 || g.AFK.Factor > 1 {
+		return Balance{}, errors.New("gathering: use_interval_ms and afk.after_ms must be >= 0, afk.factor in 0..1")
 	}
 	return b, nil
 }

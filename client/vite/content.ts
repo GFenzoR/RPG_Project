@@ -59,6 +59,7 @@ export function loadClientContent(root: string): ClientContent {
           isObj(raw["container"]) && typeof raw["container"]["slots"] === "number"
             ? raw["container"]["slots"]
             : 0,
+        useWith: raw["kind"] === "tool",
       };
     }
   }

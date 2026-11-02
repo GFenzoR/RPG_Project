@@ -113,6 +113,8 @@ export class Game {
   private destroyed = false;
   /** A click that arrived while a predicted step was unconfirmed. */
   private clickTarget: Pos | undefined;
+  /** A tool waiting for the tile to use it on (T1.12): the next click on the map picks it. */
+  private usingItem: ItemRef | undefined;
   private readonly opts: GameOptions;
   private hotkeys: (string | undefined)[];
 
@@ -226,10 +228,36 @@ export class Game {
   // ---- items (T1.8): the server validates every one of these ---------------------------
 
   useItem(ref: ItemRef): void {
+    if (this.opts.content.items[ref.itemId]?.useWith) {
+      this.usingItem = ref;
+      document.body.classList.add("using-item");
+      return;
+    }
     this.conn.send({
       case: "useItem",
       value: { from: locationInit(ref.loc), itemId: ref.itemId, stackIndex: ref.stackIndex },
     });
+  }
+
+  /** Uses ref on a tile (a fishing rod on water, a pickaxe on a vein). */
+  useItemOn(ref: ItemRef, pos: Pos): void {
+    this.conn.send({
+      case: "useItemOn",
+      value: {
+        from: locationInit(ref.loc),
+        itemId: ref.itemId,
+        stackIndex: ref.stackIndex,
+        to: { target: { case: "pos", value: { ...pos } } },
+      },
+    });
+  }
+
+  /** Leaves "use with" mode; reports whether it was on. */
+  private cancelUse(): boolean {
+    if (!this.usingItem) return false;
+    this.usingItem = undefined;
+    document.body.classList.remove("using-item");
+    return true;
   }
 
   lookAt(ref: ItemRef): void {
@@ -331,6 +359,7 @@ export class Game {
 
   destroy(): void {
     this.destroyed = true;
+    this.cancelUse();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
@@ -348,10 +377,18 @@ export class Game {
       t: this.opts.t,
       frame: (now) => this.frame(now),
       clickTile: (x, y, z) => {
+        const using = this.usingItem;
+        if (using && this.cancelUse()) {
+          this.useItemOn(using, { x, y, z });
+          return;
+        }
         this.clickTarget = { x, y, z };
       },
-      clickCreature: (id) => this.attack(id),
+      clickCreature: (id) => {
+        if (!this.cancelUse()) this.attack(id);
+      },
       useTile: (x, y, z) => {
+        if (this.cancelUse()) return;
         const ref = topItem(this.world, x, y, z, false);
         if (ref) this.useItem(ref);
       },
@@ -447,6 +484,10 @@ export class Game {
       return;
     }
     if (typingInField(e)) return;
+    if (e.code === "Escape" && this.cancelUse()) {
+      e.preventDefault();
+      return;
+    }
     const d = this.world.dialog;
     if (d && !e.repeat) {
       // 1–9 pick the n-th option shown; Escape closes (docs/02-game-design.md).

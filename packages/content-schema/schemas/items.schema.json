@@ -133,6 +133,60 @@
             "magic_level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" }
           }
         },
+        "resource": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tool", "skill", "charges", "regen_ms", "chance", "drops"],
+          "description": "A gathering spot (T1.12): using a tool with tool.use = tool on the tile tries to harvest it. Each tile runs out after charges successful harvests and refills regen_ms after its last harvest.",
+          "properties": {
+            "tool": { "enum": ["fishing", "mining", "woodcutting"] },
+            "skill": {
+              "description": "Skill or craft that sets the success chance and rises with every attempt.",
+              "$ref": "common.schema.json#/$defs/skill"
+            },
+            "reach": {
+              "description": "Chebyshev distance (same floor, line of sight) to use the tool from. Default: inventory.reach.",
+              "$ref": "common.schema.json#/$defs/positiveInt"
+            },
+            "charges": { "$ref": "common.schema.json#/$defs/positiveInt" },
+            "regen_ms": { "type": "integer", "minimum": 1 },
+            "chance": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["base", "per_level", "max"],
+              "description": "Success = min(max, base + per_level x (skill level - skill start_level)).",
+              "properties": {
+                "base": { "$ref": "common.schema.json#/$defs/chance" },
+                "per_level": { "type": "number", "minimum": 0, "maximum": 1 },
+                "max": { "$ref": "common.schema.json#/$defs/chance" }
+              }
+            },
+            "drops": {
+              "type": "array",
+              "minItems": 1,
+              "description": "On success one drop is picked by weight among those whose min_level the skill reaches.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["item", "weight"],
+                "properties": {
+                  "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+                  "weight": { "$ref": "common.schema.json#/$defs/positiveInt" },
+                  "min_level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+                  "count": {
+                    "type": "array",
+                    "prefixItems": [
+                      { "$ref": "common.schema.json#/$defs/positiveInt" },
+                      { "$ref": "common.schema.json#/$defs/positiveInt" }
+                    ],
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                }
+              }
+            }
+          }
+        },
         "requires": {
           "type": "object",
           "additionalProperties": false,

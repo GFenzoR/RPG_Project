@@ -394,7 +394,8 @@ func (w *World) useRune(ctx *game.TickContext, p *Player, it *Item, target *pb.A
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }
 
-// useItemOn runs a UseItemOn: a rune is cast on the creature or tile.
+// useItemOn runs a UseItemOn: a rune is cast on the creature or tile, a tool p carries
+// gathers from a tile (T1.12).
 func (w *World) useItemOn(ctx *game.TickContext, p *Player, m *pb.UseItemOn) {
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
 	if it == nil {
@@ -409,9 +410,14 @@ func (w *World) useItemOn(ctx *game.TickContext, p *Player, m *pb.UseItemOn) {
 		p.emit(systemMsg(msgNotOwner))
 		return
 	}
-	if it.def.Rune == nil || m.GetTo() == nil {
+	switch {
+	case m.GetTo() == nil:
 		p.emit(systemMsg(msgCannotUse))
-		return
+	case it.def.Rune != nil:
+		w.useRune(ctx, p, it, m.GetTo())
+	case it.def.Tool != nil && it.carriedBy() == p:
+		w.gather(ctx, p, it, m.GetTo())
+	default:
+		p.emit(systemMsg(msgCannotUse))
 	}
-	w.useRune(ctx, p, it, m.GetTo())
 }

@@ -25,6 +25,7 @@ const content: ClientContent = {
       speed: 100,
       stackable: false,
       slots: 0,
+      useWith: false,
     },
     2: {
       id: "sand",
@@ -35,6 +36,7 @@ const content: ClientContent = {
       speed: 150,
       stackable: false,
       slots: 0,
+      useWith: false,
     },
     3: {
       id: "water",
@@ -45,6 +47,7 @@ const content: ClientContent = {
       speed: 100,
       stackable: false,
       slots: 0,
+      useWith: false,
     },
     4: {
       id: "crate",
@@ -55,6 +58,7 @@ const content: ClientContent = {
       speed: 100,
       stackable: false,
       slots: 0,
+      useWith: false,
     },
   },
   monsterSprites: {},

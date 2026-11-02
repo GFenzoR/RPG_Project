@@ -15,16 +15,21 @@ const (
 	Road  = 2
 	Mud   = 3
 	Floor = 4
-	Wall  = 10 // item on top of grass that blocks movement and sight
+	// FishWater is water with fish (blocks movement), for gathering tests (T1.12).
+	FishWater = 5
+	Wall      = 10 // item on top of grass that blocks movement and sight
+	// Vein is an ore vein on top of grass that blocks movement (T1.12).
+	Vein = 11
 )
 
 // Speeds is the terrain cost table of the drawings, indexed by item id.
-var Speeds = []uint16{0, 0, 50, 200, 0}
+var Speeds = []uint16{0, 0, 50, 200, 0, 0}
 
 // Map builds a one-island map ("test") whose top-left drawn tile is (ox, oy, z):
 //
 //	.  grass    =  road    m  mud    _  floor    #  wall (grass + Wall item)
 //	~  water (blocks movement only)    T  grass, and the island's temple
+//	f  water with fish (FishWater)     v  vein (grass + Vein item, blocks movement)
 //	   (space) no tile
 //
 // The island rect is the smallest sector-aligned rect holding the drawing. Without a T
@@ -78,6 +83,11 @@ func Map(t testing.TB, ox, oy int, z uint8, rows ...string) *world.Map {
 				stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Wall}})
 			case '~':
 				g, f = Floor, world.FlagBlocksMovement
+			case 'f':
+				g, f = FishWater, world.FlagBlocksMovement
+			case 'v':
+				g, f = Grass, world.FlagBlocksMovement
+				stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Vein}})
 			case ' ':
 				f = world.FlagBlocksMovement
 			default:

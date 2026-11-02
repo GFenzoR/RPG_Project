@@ -105,14 +105,23 @@ func (w *World) meleeSkill(p *Player) (id string, attack int) {
 // train adds one try of skill id to p. Training against a target that has not fought
 // back for skills.afk.after_ms earns tries at skills.afk.factor.
 func (w *World) train(p *Player, id string, afk bool) {
+	factor := 1.0
+	if afk {
+		factor = w.cfg.Balance.Skills.AFK.Factor
+	}
+	w.trainBy(p, id, factor)
+}
+
+// trainBy adds factor (0-1) of a try of skill id to p; fractions accumulate.
+func (w *World) trainBy(p *Player, id string, factor float64) {
 	i, ok := w.skillIdx[id]
 	if !ok {
 		return
 	}
 	s := &p.skills[i]
 	n := int64(1)
-	if afk {
-		s.carry += w.cfg.Balance.Skills.AFK.Factor
+	if factor < 1 {
+		s.carry += factor
 		n = int64(s.carry)
 		s.carry -= float64(n)
 		if n == 0 {

@@ -81,6 +81,24 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
 - Los oficios son **independientes de la vocación**: cualquiera puede ser herrero.
 - MVP: Pesca y Minería. Herrería y Cocina en el hito 3.
 
+Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data/`):
+- Pescar = usar la caña sobre agua con peces (`water_shoal`); minar = usar el pico sobre
+  una veta (`iron_vein`). El agua común no tiene peces. Cada lugar es un item con bloque
+  `resource` (`docs/06-content-data.md`): skill, alcance, cargas, regeneración, chance y
+  botín.
+- Cada intento sobre un recurso no agotado cuenta un intento de la skill (pesca u oficio de
+  minería), salga o no. La chance es `min(max, base + per_level × (nivel − nivel inicial))`
+  con el nivel de antes del intento. Si sale, se elige un botín por peso entre los que el
+  nivel alcanza (`min_level`), p. ej. piedra tosca y mineral de hierro desde el nivel 1 y
+  cristal de cuarzo desde el 5.
+- **Agotamiento:** cada casilla tiene `charges` cosechas. Solo las casillas cosechadas
+  guardan estado; cada cosecha reprograma un único evento del scheduler que la deja llena
+  `regen_ms` después de la última. Una casilla agotada no da nada ni entrena.
+- **Anti-bot:** como mucho un intento cada `gathering.use_interval_ms`; recolectar sin
+  moverse de la casilla durante `gathering.afk.after_ms` deja los intentos de skill en
+  `gathering.afk.factor` (igual que `skills.afk`). Dar un paso lo reinicia.
+- El estado de agotamiento vive en memoria: un reinicio del servidor deja todo lleno.
+
 ### Anti-bot y anti-AFK (desde el inicio)
 - Entrenar contra un objetivo que no responde da progreso reducido tras X minutos.
 - Recursos (vetas, árboles, peces) se agotan y regeneran.
@@ -155,7 +173,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   todo lo visible. Los items fijos del mapa (`world.bin`) se pueden mirar pero no mover.
 - **Usar:** un contenedor se abre o cierra; un consumible cura (`heal_hp`/`heal_mp`) o se
   come (`food_ms` aún no tiene efecto: no hay hambre) y gasta una unidad, con
-  `inventory.use_cooldown_ms` entre usos. Herramientas y runas llegan con sus tareas.
+  `inventory.use_cooldown_ms` entre usos. Las runas (T1.9) y las herramientas (T1.12) se
+  usan sobre una criatura o casilla con `UseItemOn`.
 - **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
   slot de mochila. El kit de cada vocación llega con los diálogos (T1.10).
 - **Límite conocido:** cada personaje guarda su inventario en su propio snapshot. Si A

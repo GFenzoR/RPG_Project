@@ -311,6 +311,24 @@ class Validator {
     if ("max_stack" in item && item["stackable"] !== true) {
       this.error(src, [...path, "max_stack"], "max_stack requires stackable: true");
     }
+    const res = item["resource"];
+    if (isObj(res)) {
+      const chance = res["chance"];
+      if (isObj(chance) && Number(chance["base"]) > Number(chance["max"])) {
+        this.error(src, [...path, "resource", "chance"], "base is greater than max");
+      }
+      for (const [i, drop] of asList(res["drops"]).entries()) {
+        if (!isObj(drop) || !Array.isArray(drop["count"])) continue;
+        const [lo, hi] = drop["count"] as number[];
+        if (lo !== undefined && hi !== undefined && lo > hi) {
+          this.error(
+            src,
+            [...path, "resource", "drops", i, "count"],
+            `count range [${lo}, ${hi}] is reversed`,
+          );
+        }
+      }
+    }
   }
 
   private checkMonster(src: SourceFile): void {
