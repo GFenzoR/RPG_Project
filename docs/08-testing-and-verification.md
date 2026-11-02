@@ -50,9 +50,29 @@ y describir en el PR qué vio.
 - `proto`: un mensaje de ejemplo serializado en Go se decodifica en TS y viceversa.
 
 ## CI (GitHub Actions)
-Workflow `ci.yml` en cada PR: lint, tests Go y TS, validate, build del cliente y editor,
-E2E con Playwright, y un benchmark corto del tick. Los artefactos (screenshots, reporte
-de bots) se suben al run.
+Workflow `ci.yml` en cada PR y en cada push a `main`. Los jobs corren en paralelo y una
+corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pnpm
+(`setup-node`) y de módulos/build de Go (`setup-go`).
+
+| Job | Qué corre | Artefactos |
+|---|---|---|
+| `go (server)`, `go (tools/bots)` | gofmt, `go vet`, golangci-lint, `go test -race ./...` | — |
+| `ts` | ESLint + Prettier, `pnpm typecheck`, Vitest | — |
+| `validate` | `make validate` (contenido, i18n, mapas, IDs append-only) y `make test-parity` | — |
+| `actionlint` | lint de `.github/workflows/` (actionlint fijado) | — |
+| `build` | `make build`: bundle de producción del editor y del cliente (el del cliente se activa solo cuando T1.5 agregue su script `build`) | — |
+| `e2e` | `make e2e` en Chromium (Playwright 1.63.0 del workspace) | `e2e-screenshots`, `playwright-report` (también si falla) |
+| `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |
+| `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
+
+El job `bench` **no falla por tiempos**: los runners compartidos son ruidosos. Por ahora la
+regla de "no empeorar más de 10 %" (ver 07) se comprueba a mano: descargar el artefacto
+`bench` del PR y el del último run de `main`, y comparar con
+`benchstat main.txt pr.txt`. Las asignaciones (`allocs/op`) sí son estables: cualquier
+subida en el hot path del tick se explica en el PR.
+
+Cuando T1.5 agregue el login del cliente, `make e2e` debe incluirlo y el job `e2e` subir
+también `client/e2e/screenshots/actual/`.
 
 ## Checklist del PR
 - [ ] `make lint test validate` pasa

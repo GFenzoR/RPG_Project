@@ -82,3 +82,117 @@ jobs:
           cache-dependency-path: server/go.mod
       - name: mapcompile parity with map-format
         run: make test-parity
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache: false
+      - name: actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -color
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # build-client is a no-op until T1.5 adds the client's "build" script (--if-present).
+      - name: editor and client production builds
+        run: make build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Uses the workspace's pinned @playwright/test (1.63.0), so browser and runner match.
+      - name: install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: playwright
+        run: make e2e E2E_ARGS="--reporter=list,html"
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+      - name: upload screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: editor/e2e/screenshots/actual/
+          if-no-files-found: warn
+      - name: upload playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            editor/playwright-report/
+            test-results/editor/
+          if-no-files-found: warn
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rpg_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.mod
+      - name: go integration tests (Postgres)
+        run: make test-integration
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/rpg_test?sslmode=disable
+
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.mod
+      # Shared runners are noisy: this never fails on timings. Regressions over 10 % are
+      # compared by hand with benchstat against main's artifact for now (docs/08).
+      - name: tick and world benchmarks
+        run: |
+          mkdir -p reports
+          make bench | tee reports/bench.txt
+          {
+            echo '### Benchmarks (server/internal/game, server/internal/world)'
+            echo '```'
+            grep -E '^(Benchmark|pkg:|cpu:)' reports/bench.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: upload benchmark results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench
+          path: reports/bench.txt
