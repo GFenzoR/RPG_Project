@@ -29,7 +29,7 @@ Objetivo: repo que compila, se testea y valida, con los contratos base definidos
 - [ ] **T0.4 map-format + mapcli básico.** Lectura/escritura canónica de chunks,
   islas y archivos auxiliares, validación (sección de 03), `mapcli info|fmt|validate|view`.
   Golden tests. Isla de prueba 64x64 en `world/islands/testisle/`. [T0.3]
-- [ ] **T0.5 Assets y spritepack.** 👤 Tú bajas 1–2 packs CC0/CC-BY de 32x32 (ver
+- [ ] **T0.5 Assets y spritepack.** (parcial, PR #N: falta integrar packs del usuario) 👤 Tú bajas 1–2 packs CC0/CC-BY de 32x32 (ver
   `11-claude-code-workflow.md`) y los subes a `assets/vendor/`. La sesión arma
   `tools/spritepack` (atlas + JSON), generador de placeholders para sprites faltantes,
   `assets/CREDITS.md`, y mapea sprites a los items semilla. [T0.3]
