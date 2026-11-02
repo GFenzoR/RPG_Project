@@ -3,10 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Shared PixiJS tile renderer. Built in T1.5.",
-  "exports": "./src/index.ts",
+  "description": "Shared PixiJS v8 tile renderer (camera, atlas, chunked map view) for the client and the editor.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./camera": "./src/camera.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "pixi.js": "8.22.0"
   }
 }
