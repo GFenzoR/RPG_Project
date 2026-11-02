@@ -82,13 +82,13 @@ func (c Chat) check() error {
 	if c.MaxLength <= 0 || c.MaxLength > MaxChatLength {
 		return fmt.Errorf("chat.max_length must be in 1..%d", MaxChatLength)
 	}
-	for name, r := range map[string]ChatRange{"whisper": c.Ranges.Whisper, "say": c.Ranges.Say, "yell": c.Ranges.Yell} {
+	for i, r := range [...]ChatRange{c.Ranges.Whisper, c.Ranges.Say, c.Ranges.Yell} {
 		if r.X <= 0 || r.Y <= 0 {
-			return fmt.Errorf("chat.ranges.%s: x and y must be > 0", name)
+			return fmt.Errorf("chat.ranges.%s: x and y must be > 0", [...]string{"whisper", "say", "yell"}[i])
 		}
 	}
-	if c.Flood.Burst <= 0 || c.Flood.RefillMs <= 0 || c.Flood.MuteMs < 0 || c.GlobalIntervalMs < 0 {
-		return errors.New("chat: flood.burst and flood.refill_ms must be > 0, flood.mute_ms and global_interval_ms >= 0")
+	if c.Flood.Burst <= 0 || c.Flood.RefillMs <= 0 || c.Flood.MuteMs <= 0 || c.GlobalIntervalMs < 0 {
+		return errors.New("chat: flood.burst, flood.refill_ms and flood.mute_ms must be > 0, global_interval_ms >= 0")
 	}
 	return nil
 }

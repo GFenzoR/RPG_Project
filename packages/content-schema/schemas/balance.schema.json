@@ -265,7 +265,7 @@
               "$ref": "common.schema.json#/$defs/positiveInt"
             },
             "mute_ms": {
-              "$ref": "common.schema.json#/$defs/durationMs"
+              "$ref": "common.schema.json#/$defs/positiveInt"
             }
           }
         },

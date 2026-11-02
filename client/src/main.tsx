@@ -1,7 +1,7 @@
 // Client entry point: picks the language, then mounts the screens (login → characters →
 // game). Content (items, movement constants, texts) is bundled from data/ and i18n/.
 import { render } from "preact";
-import { useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import content from "virtual:rpg-content";
 import { LANGUAGE_STORAGE_KEY, pickLanguage, translator } from "./i18n/i18n.ts";
@@ -38,8 +38,10 @@ function Root(): JSX.Element {
     ),
   );
   const t = useMemo(() => translator(content.i18n[lang] ?? {}, lang), [lang]);
-  document.documentElement.lang = lang;
-  document.title = t("client.title");
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.title = t("client.title");
+  }, [lang, t]);
   const picker = (
     <LanguagePicker
       t={t}

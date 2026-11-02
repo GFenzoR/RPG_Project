@@ -26,16 +26,15 @@ func (w *World) initChat() {
 	c := w.cfg.Balance.Chat
 	w.chatRefill = ticksFor(c.Flood.RefillMs)
 	w.chatBurst = w.chatRefill * game.Tick(max(c.Flood.Burst-1, 0))
-	if c.Flood.MuteMs > 0 {
-		w.chatMute = ticksFor(c.Flood.MuteMs)
-	}
+	w.chatMute = ticksFor(c.Flood.MuteMs) // at least one tick
 	if c.GlobalIntervalMs > 0 {
 		w.chatGlobal = ticksFor(c.GlobalIntervalMs)
 	}
 }
 
 // say runs a Say. On the say channel, text that matches a spell's words casts it
-// instead of being said (T1.9). Otherwise the text is cleaned, checked against the
+// instead of being said (T1.9): it skips the chat limits on purpose, since casting has
+// its own cooldowns and the gateway rate limit still applies. Otherwise the text is cleaned, checked against the
 // length and flood limits and delivered to whoever hears that channel.
 func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 	ch := m.GetChannel()
@@ -74,12 +73,8 @@ func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 	// than burst messages ahead of now is flooding.
 	tat := max(p.chatTAT, now)
 	if tat-now > w.chatBurst {
-		if w.chatMute > 0 {
-			p.mutedUntil = now + w.chatMute
-			p.emit(systemMsg(msgChatFlood, num("seconds", seconds(w.chatMute))))
-		} else {
-			p.emit(systemMsg(msgChatFlood, num("seconds", seconds(tat-now-w.chatBurst))))
-		}
+		p.mutedUntil = now + w.chatMute
+		p.emit(systemMsg(msgChatFlood, num("seconds", seconds(w.chatMute))))
 		return
 	}
 	p.chatTAT = tat + w.chatRefill
