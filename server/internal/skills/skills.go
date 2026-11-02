@@ -69,10 +69,12 @@ func (p Progress) Percent(b content.SkillBase, factor float64) int {
 }
 
 // LevelFor returns the level a character with xp total experience has, between 1 and
-// e.MaxLevel (no cap if MaxLevel is 0).
-func LevelFor(e content.Experience, xp int64) int {
-	level := 1
+// e.MaxLevel (no cap if MaxLevel is 0), searching up from level from (levels never go
+// down here: losing experience is T1.11).
+func LevelFor(e content.Experience, xp int64, from int) int {
+	level := max(from, 1)
 	for (e.MaxLevel <= 0 || level < e.MaxLevel) && level < 100_000 {
+		// Walk up while the next level's total is reached.
 		next := e.TotalFor(level + 1)
 		if next <= e.TotalFor(level) || xp < next {
 			break

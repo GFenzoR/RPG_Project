@@ -60,7 +60,6 @@ func (w *World) combatSystem(ctx *game.TickContext) {
 // ---- intents ---------------------------------------------------------------------
 
 func (w *World) setTarget(p *Player, id uint32) {
-	p.answeredAt = 0 // a new fight (or none): the anti-AFK clock restarts
 	if id == 0 {
 		p.target = nil
 		return
@@ -71,6 +70,11 @@ func (w *World) setTarget(p *Player, id uint32) {
 		p.target = nil
 		p.emit(systemMsg(msgCannotAttack))
 		return
+	}
+	if m != p.afkTarget {
+		// A different monster: the anti-AFK clock restarts. Re-targeting the same one
+		// (even after clearing the target) keeps it, so it cannot be reset by the client.
+		p.afkTarget, p.answeredAt = m, 0
 	}
 	p.target = m
 }
@@ -174,11 +178,11 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 			continue
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.attackTicks[i]
+		if t.afkTarget == m {
+			t.answeredAt = max(ctx.Tick, 1) // the player's target fights back: not AFK training
+		}
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue
-		}
-		if t.target == m {
-			t.answeredAt = ctx.Tick // the player's target fights back: not AFK training
 		}
 		physical := a.Element == "physical"
 		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense} // no armor until T1.8

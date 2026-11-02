@@ -46,8 +46,11 @@ func TestLevelFor(t *testing.T) {
 	e.Curve.A, e.Curve.B, e.Curve.C = 12, -24, 12 // xp(2)=24, xp(3)=144, xp(4)=432
 	e.MaxLevel = 3
 	for xp, want := range map[int64]int{0: 1, 23: 1, 24: 2, 143: 2, 144: 3, 100_000: 3} {
-		if got := LevelFor(e, xp); got != want {
+		if got := LevelFor(e, xp, 1); got != want {
 			t.Errorf("LevelFor(%d) = %d, want %d", xp, got, want)
 		}
+	}
+	if got := LevelFor(e, 200, 2); got != 3 {
+		t.Errorf("LevelFor from 2 = %d, want 3", got)
 	}
 }

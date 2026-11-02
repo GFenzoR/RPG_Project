@@ -60,7 +60,9 @@ func (w *World) loadSkills(p *Player, saved []SkillState) {
 			continue
 		}
 		p.skills[i].Level = min(s.Level, skills.MaxLevel)
-		p.skills[i].Tries = max(s.Tries, 0)
+		// Clamp in case balance.yaml made the level cheaper since the save.
+		need := skills.TriesFor(w.cfg.Balance.Skills.Base[s.ID], p.vocation.SkillFactor(s.ID), p.skills[i].Level)
+		p.skills[i].Tries = min(max(s.Tries, 0), max(need-1, 0))
 	}
 }
 
@@ -135,7 +137,7 @@ func (w *World) train(p *Player, id string, afk bool) {
 // has not fought back for skills.afk.after_ms.
 func (w *World) afk(ctx *game.TickContext, p *Player) bool {
 	if p.answeredAt == 0 {
-		p.answeredAt = ctx.Tick // the fight starts now
+		p.answeredAt = max(ctx.Tick, 1) // the fight starts now (0 means not started)
 	}
 	return w.afkAfter > 0 && ctx.Tick-p.answeredAt >= w.afkAfter
 }
@@ -182,7 +184,7 @@ func (w *World) gainExperience(p *Player, xp int64) {
 			Pos: posMsg(p.pos), Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_EXPERIENCE, Amount: uint64(xp),
 		}}})
 	})
-	if level := skills.LevelFor(w.cfg.Balance.Experience, p.experience); level > p.level {
+	if level := skills.LevelFor(w.cfg.Balance.Experience, p.experience, p.level); level > p.level {
 		w.setLevel(p, level)
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})

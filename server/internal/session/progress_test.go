@@ -92,7 +92,7 @@ func TestSkillRisesWithUse(t *testing.T) {
 }
 
 // Training against a target that never fights back earns a quarter of the tries after
-// skills.afk.after_ms (10 min).
+// skills.afk.after_ms (10 min), and the client cannot reset that by re-targeting it.
 func TestTrainingAgainstPassiveTargetSlowsDown(t *testing.T) {
 	h := monsterHarness(t, []*content.Monster{dummyDef()}, spawnAt("dummy", 20, 20, 0, 60))
 	cl, p := h.join("Idler", at(21, 20))
@@ -111,7 +111,14 @@ func TestTrainingAgainstPassiveTargetSlowsDown(t *testing.T) {
 	if before < 295 || before > 301 {
 		t.Fatalf("tries in the first 10 min = %d, want ~300", before)
 	}
-	h.sim.RunFor(4 * time.Minute) // four more minutes: 120 rounds at 0.25
+	// Four more minutes: 120 rounds at 0.25. Dropping and re-sending the same target
+	// every minute must not restart the anti-AFK clock.
+	id := onlyMonster(t, h).ID()
+	for range 4 {
+		h.input(cl, setTarget(0))
+		h.input(cl, setTarget(id))
+		h.sim.RunFor(time.Minute)
+	}
 	if got := tries() - before; got < 28 || got > 32 {
 		t.Errorf("tries in 4 AFK minutes = %d, want ~30", got)
 	}

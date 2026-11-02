@@ -54,8 +54,10 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
   de `attack_interval_ms` contadas desde el tick 0). La fórmula de bloqueo de "Combate" no
   usa la skill de escudo (sin cambios en T1.7).
 - Anti-AFK: si el objetivo no te ataca durante `skills.afk.after_ms` (cuenta desde que
-  empiezas a pegarle o desde su último ataque contra ti), los intentos valen
-  `skills.afk.factor` (se acumulan fracciones).
+  empiezas a pegarle o desde su último intento de ataque contra ti), los intentos valen
+  `skills.afk.factor` (se acumulan fracciones). Solo un objetivo distinto reinicia la
+  cuenta: volver a elegir el mismo no. Los monstruos cuyos únicos ataques son a distancia
+  o hechizos (hasta T1.9) cuentan como que no responden.
 - Nivel: el que corresponde a la XP total por la curva, hasta `experience.max_level`. Al
   subir, máximos de vida/maná, capacidad y velocidad pasan a los de la vocación en ese
   nivel, y la vida y el maná actuales suben lo mismo que subió el máximo.

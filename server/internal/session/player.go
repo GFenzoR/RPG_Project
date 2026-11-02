@@ -59,6 +59,7 @@ type Player struct {
 	skills      []skillSlot
 	weapon      *content.Item
 	shield      *content.Item
+	afkTarget   *Monster
 	answeredAt  game.Tick
 	shieldRound game.Tick
 	shieldTries int
