@@ -27,3 +27,67 @@
   tradeable: true
   weapon: { type: club, attack: 7, defense: 4, hands: 1 }
   value: 5
+
+# Isla del Puerto (levels 1-15). Melee attack grows ~+4 per tier: starter (1), tier 2 (5), tier 3 (8-10).
+- id: rusty_cutlass
+  kind: weapon
+  sprite: weapons/rusty_cutlass
+  name: item.rusty_cutlass.name
+  description: item.rusty_cutlass.desc
+  weight: 3000
+  tradeable: true
+  weapon: { type: sword, attack: 10, defense: 7, hands: 1 }
+  value: 25
+
+- id: boarding_saber
+  kind: weapon
+  sprite: weapons/boarding_saber
+  name: item.boarding_saber.name
+  description: item.boarding_saber.desc
+  weight: 3600
+  tradeable: true
+  weapon: { type: sword, attack: 18, defense: 12, hands: 1 }
+  requires: { level: 10 }
+  value: 400
+
+- id: bearded_axe
+  kind: weapon
+  sprite: weapons/bearded_axe
+  name: item.bearded_axe.name
+  description: item.bearded_axe.desc
+  weight: 5200
+  tradeable: true
+  weapon: { type: axe, attack: 19, defense: 8, hands: 1 }
+  requires: { level: 10 }
+  value: 420
+
+- id: belaying_pin
+  kind: weapon
+  sprite: weapons/belaying_pin
+  name: item.belaying_pin.name
+  description: item.belaying_pin.desc
+  weight: 2200
+  tradeable: true
+  weapon: { type: club, attack: 10, defense: 5, hands: 1 }
+  value: 20
+
+- id: spiked_cudgel
+  kind: weapon
+  sprite: weapons/spiked_cudgel
+  name: item.spiked_cudgel.name
+  weight: 4800
+  tradeable: true
+  weapon: { type: club, attack: 15, defense: 7, hands: 1 }
+  requires: { level: 6 }
+  value: 140
+
+- id: coral_wand
+  kind: weapon
+  sprite: weapons/coral_wand
+  name: item.coral_wand.name
+  description: item.coral_wand.desc
+  weight: 1500
+  tradeable: true
+  weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
+  requires: { level: 6, vocations: [arcanist] }
+  value: 300

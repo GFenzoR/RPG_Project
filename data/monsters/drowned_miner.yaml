@@ -1,0 +1,22 @@
+id: drowned_miner
+name: monster.drowned_miner.name
+sprite: creatures/drowned_miner
+health: 145
+experience: 150
+speed: 160
+armor: 8
+defense: 12
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 30, interval_ms: 2000 }
+  - { type: spell, element: death, min: 10, max: 25, interval_ms: 2000, chance: 0.15, range: 3 }
+resistances: { death: 50, ice: 20, holy: -30, fire: -10 }
+loot:
+  - { item: copper_coin, chance: 0.9, count: [5, 30] }
+  - { item: iron_ore, chance: 0.2 }
+  - { item: tarnished_locket, chance: 0.08 }
+  - { item: pickaxe, chance: 0.03 }
+tags: [undead, cave, puerto]
+notes: Flooded lower mine, levels 13-15. Hardest common monster of the island.

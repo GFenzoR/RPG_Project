@@ -29,3 +29,120 @@
   tradeable: true
   consumable: { food_ms: 60000 }
   value: 2
+
+# ---- Isla del Puerto: food and loot materials ----------------------------------------
+- id: ship_biscuit
+  kind: consumable
+  sprite: food/ship_biscuit
+  name: item.ship_biscuit.name
+  description: item.ship_biscuit.desc
+  weight: 200
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 120000 }
+  value: 3
+
+- id: boar_meat
+  kind: consumable
+  sprite: food/boar_meat
+  name: item.boar_meat.name
+  weight: 900
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 180000 }
+  value: 4
+
+- id: seaweed_poultice
+  kind: consumable
+  sprite: food/seaweed_poultice
+  name: item.seaweed_poultice.name
+  description: item.seaweed_poultice.desc
+  weight: 300
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { heal_hp: 40 }
+  value: 25
+
+- id: gull_feather
+  kind: material
+  sprite: materials/gull_feather
+  name: item.gull_feather.name
+  weight: 10
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 1
+
+- id: crab_claw
+  kind: material
+  sprite: materials/crab_claw
+  name: item.crab_claw.name
+  weight: 300
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 5
+
+- id: bat_wing
+  kind: material
+  sprite: materials/bat_wing
+  name: item.bat_wing.name
+  weight: 100
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 4
+
+- id: boar_tusk
+  kind: material
+  sprite: materials/boar_tusk
+  name: item.boar_tusk.name
+  weight: 400
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 12
+
+- id: spider_silk
+  kind: material
+  sprite: materials/spider_silk
+  name: item.spider_silk.name
+  description: item.spider_silk.desc
+  weight: 50
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 18
+
+- id: beetle_carapace
+  kind: material
+  sprite: materials/beetle_carapace
+  name: item.beetle_carapace.name
+  weight: 1200
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 30
+
+- id: iron_ore
+  kind: material
+  sprite: materials/iron_ore
+  name: item.iron_ore.name
+  description: item.iron_ore.desc
+  weight: 2000
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 10
+
+- id: tarnished_locket
+  kind: material
+  sprite: materials/tarnished_locket
+  name: item.tarnished_locket.name
+  description: item.tarnished_locket.desc
+  weight: 150
+  tradeable: true
+  value: 120
