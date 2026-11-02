@@ -1,7 +1,7 @@
 // One play session: the WebSocket, the world state, the keyboard and the canvas wired
 // together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
 // the server says; the one thing it predicts is the next own step.
-import { ChatChannel, Direction } from "@rpg/protocol";
+import { ChatChannel, CreatureKind, Direction } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
@@ -18,10 +18,12 @@ import { WorldState } from "./state/world.ts";
 import type {
   ContainerState,
   CreatureState,
+  DialogState,
   ItemView,
   LevelUpState,
   LogMessage,
   PlayerStatsState,
+  ShopState,
   SkillState,
 } from "./state/world.ts";
 
@@ -37,6 +39,9 @@ export interface GameUi {
   containers: ContainerState[];
   /** Spell ID of each hotkey F1..F12 (undefined = empty). */
   hotkeys: (string | undefined)[];
+  /** The open NPC dialog and its shop (T1.10). */
+  dialog: DialogState | undefined;
+  shop: ShopState | undefined;
 }
 
 /** Read-only hooks for the E2E tests (client/e2e). */
@@ -64,6 +69,10 @@ export interface ClientTestHooks {
   itemNumber(id: string): number | undefined;
   /** Projectiles and effects (IDs) drawn less than `ms` ago. */
   magic(ms: number): { projectiles: number; effects: number[] };
+  /** NPCs the client knows, as [id, contentId, x, y, z]. */
+  npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
+  dialog(): DialogState | undefined;
+  shop(): ShopState | undefined;
 }
 
 /** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */
@@ -131,8 +140,15 @@ export class Game {
     this.conn.logout();
   }
 
-  /** Attacks creature id, or stops attacking it if it already is the target (SetTarget). */
+  /**
+   * Attacks creature id, or stops attacking it if it already is the target (SetTarget).
+   * An NPC is talked to instead.
+   */
   attack(id: number): void {
+    if (this.world.creatures.get(id)?.kind === CreatureKind.NPC) {
+      this.talk(id);
+      return;
+    }
     const next = this.world.target === id ? undefined : id;
     this.world.target = next;
     this.conn.send({ case: "setTarget", value: { creatureId: next ?? 0 } });
@@ -141,6 +157,34 @@ export class Game {
 
   setFightMode(stance: FightStance, chase: boolean): void {
     this.conn.send({ case: "setFightMode", value: { stance, chase } });
+  }
+
+  // ---- NPCs (T1.10): the server checks distance, conditions and costs -----------------
+
+  /** Starts talking to an NPC (NpcTalk). */
+  talk(id: number): void {
+    this.conn.send({ case: "npcTalk", value: { creatureId: id } });
+  }
+
+  /** Picks an option of the open dialog; 0 closes it. */
+  chooseOption(optionId: number): void {
+    const d = this.world.dialog;
+    if (!d) return;
+    this.conn.send({ case: "dialogChoose", value: { dialogId: d.id, optionId } });
+  }
+
+  closeDialog(): void {
+    this.chooseOption(0);
+  }
+
+  shopBuy(itemId: number, count: number): void {
+    const s = this.world.shop;
+    if (s) this.conn.send({ case: "shopBuy", value: { dialogId: s.dialogId, itemId, count } });
+  }
+
+  shopSell(itemId: number, count: number): void {
+    const s = this.world.shop;
+    if (s) this.conn.send({ case: "shopSell", value: { dialogId: s.dialogId, itemId, count } });
   }
 
   // ---- magic (T1.9): the server checks vocation, level, mana, cooldowns and sight -------
@@ -277,6 +321,8 @@ export class Game {
       inventory: w.inventory,
       containers: w.containers,
       hotkeys: this.hotkeys,
+      dialog: w.dialog,
+      shop: w.shop,
     });
   }
 
@@ -352,6 +398,12 @@ export class Game {
           effects: world.effects.filter((e) => now - e.start < ms).map((e) => e.effectId),
         };
       },
+      npcs: () =>
+        [...world.creatures.values()]
+          .filter((c) => c.kind === CreatureKind.NPC)
+          .map((c) => ({ id: c.id, contentId: c.contentId, ...c.pos })),
+      dialog: () => world.dialog,
+      shop: () => world.shop,
       itemNumber: (id) => {
         const found = Object.entries(this.opts.content.items).find(([, d]) => d.id === id);
         return found ? Number(found[0]) : undefined;
@@ -392,6 +444,22 @@ export class Game {
       return;
     }
     if (typingInField(e)) return;
+    const d = this.world.dialog;
+    if (d && !e.repeat) {
+      // 1–9 pick the n-th option shown; Escape closes (docs/02-game-design.md).
+      const n = /^(?:Digit|Numpad)([1-9])$/.exec(e.code)?.[1];
+      if (n !== undefined) {
+        const opt = d.options[Number(n) - 1];
+        if (opt) this.chooseOption(opt.id);
+        e.preventDefault();
+        return;
+      }
+      if (e.code === "Escape") {
+        this.closeDialog();
+        e.preventDefault();
+        return;
+      }
+    }
     if (this.keys.down(e.code)) e.preventDefault();
   };
 

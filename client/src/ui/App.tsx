@@ -13,6 +13,7 @@ import { ApiError, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
 import { InventoryPanel } from "./Inventory.tsx";
 import { Hotbar, SayLine } from "./Hotbar.tsx";
+import { DialogWindow } from "./Dialog.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -319,6 +320,8 @@ function GameScreen(props: {
     inventory: new Map(),
     containers: [],
     hotkeys: [],
+    dialog: undefined,
+    shop: undefined,
   });
   const [levelNotice, setLevelNotice] = useState<number | undefined>(undefined);
   const [stance, setStance] = useState(FightStance.BALANCED);
@@ -391,6 +394,7 @@ function GameScreen(props: {
             </div>
           )}
           {entered && <Hotbar t={t} content={props.content} game={game.current} ui={ui} />}
+          {entered && <DialogWindow t={t} content={props.content} game={game.current} ui={ui} />}
         </div>
         <aside class="side">
           <section class="battle" data-testid="battle-list" aria-label={t("client.battle.title")}>

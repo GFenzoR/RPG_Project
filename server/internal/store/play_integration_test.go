@@ -112,6 +112,23 @@ func TestPlayTokensAndCharacterState(t *testing.T) {
 	if pc, _ = st.PlayCharacter(ctx, acc, c.ID, now); len(pc.Inventory) != 0 {
 		t.Fatalf("inventory after emptying: %+v", pc.Inventory)
 	}
+	// Storage values (quest_state) are replaced by every save too.
+	state.Storage = map[string]int64{"quest.ch1_shipwreck": 1, "quest.ch1_shipwreck.step": 2, "flag.x": -3}
+	for range 2 {
+		if err := st.SaveCharacterState(ctx, state); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if pc, _ = st.PlayCharacter(ctx, acc, c.ID, now); !reflect.DeepEqual(pc.Storage, state.Storage) {
+		t.Fatalf("storage after save: %v", pc.Storage)
+	}
+	state.Storage = map[string]int64{"quest.ch1_shipwreck": 2}
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	if pc, _ = st.PlayCharacter(ctx, acc, c.ID, now); !reflect.DeepEqual(pc.Storage, state.Storage) {
+		t.Fatalf("storage after replacing: %v", pc.Storage)
+	}
 	state.ID = 999999
 	if err := st.SaveCharacterState(ctx, state); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("save of a missing character: %v", err)
