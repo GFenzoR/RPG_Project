@@ -16,10 +16,11 @@
 // DEBUG_BALANCE=1 prints the per-monster table.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-const REPO = new URL("../../../", import.meta.url).pathname;
+const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 
 // ---- content -------------------------------------------------------------------------
 
@@ -276,13 +277,18 @@ describe("Isla del Puerto balance", () => {
   );
 
   it("gives more experience to monsters meant for higher levels", () => {
-    const byLevel = Object.entries(TARGET_LEVEL).sort((a, b) => a[1] - b[1]);
-    for (let i = 1; i < byLevel.length; i++) {
-      const [prevId, prevLvl] = byLevel[i - 1] ?? ["", 0];
-      const [id, lvl] = byLevel[i] ?? ["", 0];
-      const prev = monsters.get(prevId)?.experience ?? 0;
-      const cur = monsters.get(id)?.experience ?? 0;
-      if (lvl > prevLvl) expect(cur, `${id} vs ${prevId}`).toBeGreaterThan(prev);
+    // Every pair, not just neighbours: monsters sharing a target level must not hide
+    // an inversion against the levels around them.
+    const entries = Object.entries(TARGET_LEVEL);
+    for (const [lowId, lowLvl] of entries) {
+      for (const [highId, highLvl] of entries) {
+        if (highLvl <= lowLvl) continue;
+        const low = monsters.get(lowId)?.experience ?? 0;
+        const high = monsters.get(highId)?.experience ?? 0;
+        expect(high, `${highId} (level ${highLvl}) vs ${lowId} (level ${lowLvl})`).toBeGreaterThan(
+          low,
+        );
+      }
     }
   });
 
