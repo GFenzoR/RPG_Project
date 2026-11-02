@@ -32,7 +32,7 @@ const maxBodyBytes = 4 << 10
 
 // Config configures the API.
 type Config struct {
-	Auth   *auth.Service
+	Auth   Accounts
 	Clock  clock.Clock
 	Logger *slog.Logger
 	// Health reports whether dependencies (Postgres) are reachable. Optional.
@@ -47,6 +47,19 @@ type Config struct {
 	LoginPairRateLimit  RateLimit // failed logins per (email, IP); default DefaultLoginPairRateLimit
 	LoginEmailRateLimit RateLimit // failed logins per email; default DefaultLoginEmailRateLimit
 }
+
+// Accounts is the account service the API calls. *auth.Service implements it; tests
+// can use fakes to reach every error path.
+type Accounts interface {
+	Register(ctx context.Context, email, password string) (int64, error)
+	Login(ctx context.Context, email, password string) (auth.Token, error)
+	Authenticate(ctx context.Context, token string) (int64, error)
+	Logout(ctx context.Context, token string) error
+	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
+	CreateCharacter(ctx context.Context, accountID int64, name, vocation string) (store.Character, error)
+}
+
+var _ Accounts = (*auth.Service)(nil)
 
 type api struct {
 	cfg          Config
