@@ -18,5 +18,6 @@ loot:
   - { item: ship_biscuit, chance: 0.3, count: [1, 3] }
   - { item: rusty_cutlass, chance: 0.05 }
   - { item: sailcloth_cap, chance: 0.04 }
+  - { item: tarnished_locket, chance: 0.08 }
 tags: [human, shore, puerto]
 notes: Scavengers picking over the Chapter 1 wreck. Throws bottles (physical) at range.

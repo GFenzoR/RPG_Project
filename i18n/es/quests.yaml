@@ -1,0 +1,14 @@
+# Chapter 1: Náufrago.
+quest.ch1_shipwreck.name: "Capítulo 1: Náufrago"
+quest.ch1_shipwreck.step_clear_wolves: "Los sobrevivientes del naufragio están rodeados en el campo del norte. Mata 6 lobos."
+quest.ch1_shipwreck.step_mine_bats: "El contramaestre huyó a la mina vieja. Despeja su entrada matando 5 murciélagos lóbregos."
+quest.ch1_shipwreck.step_talk_foreman: "Pregúntale a Doran, el capataz de la mina, qué fue del contramaestre."
+quest.ch1_shipwreck.step_return_logbook: "Lleva la bitácora del contramaestre a Maren Holt, en el puerto."
+
+quest.foreman_ore.name: "Hierro de las vetas viejas"
+quest.foreman_ore.step_gather_ore: "Consigue 5 trozos de mineral de hierro en las galerías profundas de la mina."
+quest.foreman_ore.step_deliver_ore: "Entrega el mineral de hierro a Doran, el capataz."
+
+quest.diver_locket.name: "Lo que el mar se llevó"
+quest.diver_locket.step_find_locket: "Recupera un relicario ennegrecido de los saqueadores de la playa."
+quest.diver_locket.step_return_locket: "Lleva el relicario a Corvo, el buzo."

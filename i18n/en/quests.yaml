@@ -1,0 +1,14 @@
+# Chapter 1: Castaway.
+quest.ch1_shipwreck.name: "Chapter 1: Castaway"
+quest.ch1_shipwreck.step_clear_wolves: "The survivors of the wreck are surrounded in the north field. Kill 6 wolves."
+quest.ch1_shipwreck.step_mine_bats: "The bosun fled into the old mine. Clear its entrance by killing 5 gloom bats."
+quest.ch1_shipwreck.step_talk_foreman: "Ask Doran, the mine foreman, what became of the bosun."
+quest.ch1_shipwreck.step_return_logbook: "Take the bosun's logbook to Maren Holt at the harbor."
+
+quest.foreman_ore.name: "Iron from the Old Veins"
+quest.foreman_ore.step_gather_ore: "Get 5 chunks of iron ore in the mine's deep galleries."
+quest.foreman_ore.step_deliver_ore: "Deliver the iron ore to Doran, the foreman."
+
+quest.diver_locket.name: "What the Sea Took"
+quest.diver_locket.step_find_locket: "Recover a tarnished locket from the beach looters."
+quest.diver_locket.step_return_locket: "Take the locket to Corvo the diver."

@@ -146,3 +146,12 @@
   weight: 150
   tradeable: true
   value: 120
+
+- id: bosun_logbook
+  kind: material
+  sprite: quest/bosun_logbook
+  name: item.bosun_logbook.name
+  description: item.bosun_logbook.desc
+  weight: 400
+  tradeable: false
+  notes: Chapter 1 quest item (ch1_shipwreck). Given by puerto_foreman, taken by harbor_master. No value, so no NPC buys it.

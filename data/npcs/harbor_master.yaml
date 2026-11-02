@@ -1,28 +1,133 @@
 id: harbor_master
 name: npc.harbor_master.name
 sprite: npcs/sailor_old
+notes: >-
+  Opens and closes Chapter 1 (ch1_shipwreck) and runs the boat to the forest island
+  (Chapter 2). Not a merchant: tools and provisions live in puerto_provisioner.
+  Gifts depend on the vocation: guardians get a cutlass and an iron sword, arcanists (wand
+  only) get the same value in coins (25 and 120). A new vocation needs its own branch here.
 dialog:
   start: greet
   nodes:
     greet:
       text: npc.harbor_master.greet
       options:
+        - text: npc.harbor_master.opt_shipwreck
+          if: { quest_not_started: ch1_shipwreck }
+          goto: ch1_offer
+        - text: npc.harbor_master.opt_ch1_wolves
+          if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: clear_wolves } }
+          goto: ch1_wolves
+        - text: npc.harbor_master.opt_ch1_mine
+          if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: mine_bats } }
+          goto: ch1_mine
+        - text: npc.harbor_master.opt_ch1_mine
+          if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: talk_foreman } }
+          goto: ch1_foreman
+        - text: npc.harbor_master.opt_ch1_logbook
+          if:
+            - { quest_state: { quest: ch1_shipwreck, state: in_progress, step: return_logbook } }
+            - { has_item: { item: bosun_logbook } }
+            - { vocation_in: [guardian] }
+          action:
+            - { take_item: { item: bosun_logbook } }
+            - { give_item: iron_sword }
+          goto: ch1_logbook_read
+        - text: npc.harbor_master.opt_ch1_logbook
+          if:
+            - { quest_state: { quest: ch1_shipwreck, state: in_progress, step: return_logbook } }
+            - { has_item: { item: bosun_logbook } }
+            - { vocation_in: [arcanist] }
+          action:
+            - { take_item: { item: bosun_logbook } }
+            - { give_gold: 120 }
+          goto: ch1_logbook_read
         - text: npc.harbor_master.opt_island
           goto: island
-        - text: dialog.trade
-          action: { open_shop: harbor_shop }
+        - text: dialog.ask_travel
+          goto: travel
         - text: dialog.bye
           action: close
-    island:
-      text: npc.harbor_master.island
+    ch1_offer:
+      text: npc.harbor_master.ch1_offer
+      options:
+        - text: dialog.accept
+          if: { vocation_in: [guardian] }
+          action:
+            - { start_quest: ch1_shipwreck }
+            - { give_item: rusty_cutlass }
+            - { give_item: ship_biscuit }
+          goto: ch1_accepted
+        - text: dialog.accept
+          if: { vocation_in: [arcanist] }
+          action:
+            - { start_quest: ch1_shipwreck }
+            - { give_gold: 25 }
+            - { give_item: ship_biscuit }
+          goto: ch1_accepted_arcanist
+        - text: dialog.decline
+          goto: greet
+    ch1_accepted:
+      text: npc.harbor_master.ch1_accepted
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }
-shop:
-  id: harbor_shop
-  sells:
-    - { item: fishing_rod, price: 150 }
-    - { item: rope, price: 50 }
-  buys:
-    - { item: wolf_pelt, price: 15 }
-    - { item: raw_fish, price: 2 }
+    ch1_accepted_arcanist:
+      text: npc.harbor_master.ch1_accepted_arcanist
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch1_wolves:
+      text: npc.harbor_master.ch1_wolves
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch1_mine:
+      text: npc.harbor_master.ch1_mine
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch1_foreman:
+      text: npc.harbor_master.ch1_foreman
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch1_logbook_read:
+      text: npc.harbor_master.ch1_logbook_read
+      options:
+        - text: npc.harbor_master.opt_ch1_coffer
+          goto: ch1_coffer
+        - { text: dialog.bye, action: close }
+    ch1_coffer:
+      text: npc.harbor_master.ch1_coffer
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch1_after:
+      text: npc.harbor_master.ch1_after
+      options:
+        - { text: dialog.ask_travel, goto: travel }
+        - { text: dialog.back, goto: greet }
+    island:
+      text: npc.harbor_master.island
+      options:
+        - { text: npc.harbor_master.opt_town, goto: town }
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    town:
+      text: npc.harbor_master.town
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    travel:
+      text: npc.harbor_master.travel
+      options:
+        - text: npc.harbor_master.to_forest
+          if:
+            - { flag_equals: { key: forest_route_unlocked, value: 1 } }
+            - { level_at_least: 10 }
+          action: { travel: { island: bosque, price: 80 } }
+        - text: npc.harbor_master.opt_ch1_after
+          if: { quest_state: { quest: ch1_shipwreck, state: completed } }
+          goto: ch1_after
+        - { text: dialog.back, goto: greet }

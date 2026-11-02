@@ -1,0 +1,16 @@
+id: diver_locket
+name: quest.diver_locket.name
+min_level: 8
+notes: >-
+  Side quest from puerto_diver. Tarnished lockets drop from wreck looters on the shore
+  (about 8 %). The reward beats the NPC buy price (40) so returning it is worth it.
+steps:
+  - id: find_locket
+    description: quest.diver_locket.step_find_locket
+    complete_when: { has_item: { item: tarnished_locket, count: 1 } }
+  - id: return_locket
+    description: quest.diver_locket.step_return_locket
+    complete_when: { dialog_action: { npc: puerto_diver, node: locket_returned } }
+rewards:
+  - { xp: 900 }
+  - { gold: 200 }
