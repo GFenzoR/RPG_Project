@@ -46,7 +46,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [x] **T1.3 Base de datos y cuentas.** (PR #9) Migraciones goose (accounts, characters,
   inventory, skills, quest_state, sessions, economy_log, cosmetics), sqlc, API HTTP de
   registro/login con email y contraseña, lista y creación de personajes. [T1.1]
-- [x] **T1.4 Red y caminar.** (PR #TBD) Gateway WS, handshake, sesiones, AOI, Walk/WalkPath,
+- [x] **T1.4 Red y caminar.** (PR #23) Gateway WS, handshake, sesiones, AOI, Walk/WalkPath,
   FullMapView/MapSlice/CreatureMove, rate limits, logout y guardado. Bot mínimo que
   entra y camina (test de integración). [T0.2, T1.2, T1.3]
 
