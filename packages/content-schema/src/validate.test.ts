@@ -81,7 +81,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:35:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:46:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),
@@ -233,6 +233,36 @@ describe("validator diagnostics", () => {
     expect(
       messages(root).some((m) =>
         m.includes("5 different blessings are sold, but balance.yaml death.max_blessings is 4"),
+      ),
+    ).toBe(true);
+  });
+
+  it("requires a way to obtain the item of every has_item quest step", () => {
+    edit("data/monsters/wreck_looter.yaml", "  - { item: tarnished_locket, chance: 0.08 }\n", "");
+    edit("data/monsters/drowned_miner.yaml", "  - { item: tarnished_locket, chance: 0.08 }\n", "");
+    edit(
+      "data/npcs/puerto_provisioner.yaml",
+      "{ item: tarnished_locket, price: 40 }",
+      "{ item: rope, price: 1 }",
+    );
+    expect(
+      messages(root).some(
+        (m) =>
+          m.startsWith("error data/quests/diver_locket.yaml:") &&
+          m.includes('no way to obtain "tarnished_locket"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts lacks_item and checks its item reference", () => {
+    edit(
+      "data/npcs/puerto_foreman.yaml",
+      "lacks_item: { item: bosun_logbook }",
+      "lacks_item: { item: bosun_logbok }",
+    );
+    expect(
+      messages(root).some((m) =>
+        m.includes('unknown item "bosun_logbok" (did you mean "bosun_logbook"?)'),
       ),
     ).toBe(true);
   });

@@ -128,53 +128,59 @@ tags: [beast, puerto]
 ```
 
 ## NPC con diálogo de ventana
+Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
+`data/npcs/puerto_provisioner.yaml`). Los archivos reales son la referencia completa.
 ```yaml
-# data/npcs/harbor_master.yaml
-id: harbor_master
-name: npc.harbor_master.name
-sprite: npcs/sailor_old
+id: puerto_foreman
+name: npc.puerto_foreman.name
+sprite: npcs/miner_old
 dialog:
   start: greet
   nodes:
     greet:
-      text: npc.harbor_master.greet
+      text: npc.puerto_foreman.greet
       options:
-        - text: dialog.ask_travel
-          goto: travel
-        - text: npc.harbor_master.opt_work
-          goto: work
-          if: { quest_not_started: ch1_shipwreck }
-        - text: dialog.trade
-          action: { open_shop: harbor_shop }
+        - text: npc.puerto_foreman.opt_ch1_bosun
+          if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: talk_foreman } }
+          action: { give_item: bosun_logbook }
+          goto: ch1_logbook             # completa el paso talk_foreman (dialog_action)
+        - text: npc.puerto_foreman.opt_ch1_lost
+          if:                           # lista = todas deben cumplirse
+            - { quest_state: { quest: ch1_shipwreck, state: in_progress, step: return_logbook } }
+            - { lacks_item: { item: bosun_logbook } }
+          action: { give_item: bosun_logbook }
+          goto: ch1_logbook_again
+        - text: npc.puerto_foreman.opt_work
+          if: [{ quest_not_started: foreman_ore }, { level_at_least: 10 }]
+          goto: ore_offer
         - text: dialog.bye
           action: close
-    work:
-      text: npc.harbor_master.work_offer
+    ore_offer:
+      text: npc.puerto_foreman.ore_offer
       options:
         - text: dialog.accept
-          action:
-            - { start_quest: ch1_shipwreck }
-            - { give_item: rusty_key }
-          goto: work_accepted
+          action: { start_quest: foreman_ore }
+          goto: ore_accepted
         - text: dialog.decline
           goto: greet
-    work_accepted:
-      text: npc.harbor_master.work_accepted
-      options:
-        - { text: dialog.bye, action: close }
-    travel:
-      text: npc.harbor_master.travel
-      options:
-        - text: npc.harbor_master.to_forest
-          if: { level_at_least: 10 }
-          action: { travel: { island: bosque, price: 80 } }
-        - { text: dialog.back, goto: greet }
+    # ... ch1_logbook, ch1_logbook_again, ore_accepted ...
+# Tienda (data/npcs/puerto_provisioner.yaml): solo la abre su propio NPC con
+# action: { open_shop: provisions_shop }
 shop:
-  id: harbor_shop
-  sells: [{ item: fishing_rod, price: 150 }, { item: rope, price: 50 }]
-  buys:  [{ item: wolf_pelt, price: 15 }, { item: raw_fish, price: 2 }]
+  id: provisions_shop
+  sells: [{ item: rope, price: 50 }, { item: fishing_rod, price: 150 }]
+  buys:  [{ item: rope, price: 15 }, { item: wolf_pelt, price: 5 }]
+```
+Viaje en barco (de `data/npcs/harbor_master.yaml`):
+```yaml
+        - text: npc.harbor_master.to_forest
+          if:
+            - { flag_equals: { key: forest_route_unlocked, value: 1 } }
+            - { level_at_least: 10 }
+          action: { travel: { island: bosque, price: 80 } }
 ```
 Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
+`lacks_item` (tiene menos de `count`, por defecto 1: lo contrario de `has_item`),
 `quest_state`, `quest_not_started`, `flag_equals`, `skill_at_least`.
 Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `travel`, `heal`,
@@ -184,24 +190,28 @@ scripting libre en el MVP (más seguro y más fácil para la IA). Si algún día
 lógica compleja, se evaluará Lua embebido con sandbox.
 
 ## Quest
+Extracto de `data/quests/ch1_shipwreck.yaml`:
 ```yaml
-# data/quests/ch1_shipwreck.yaml
 id: ch1_shipwreck
 name: quest.ch1_shipwreck.name
 chapter: 1
 min_level: 1
 steps:
-  - id: find_crate
-    description: quest.ch1_shipwreck.step_find_crate
-    complete_when: { has_item: { item: salvaged_crate, count: 1 } }
-  - id: return
-    description: quest.ch1_shipwreck.step_return
-    complete_when: { dialog_action: { npc: harbor_master, node: crate_returned } }
+  - id: clear_wolves
+    description: quest.ch1_shipwreck.step_clear_wolves
+    complete_when: { kill: { monster: wolf, count: 6 } }
+  # ... mine_bats, talk_foreman ...
+  - id: return_logbook
+    description: quest.ch1_shipwreck.step_return_logbook
+    complete_when: { dialog_action: { npc: harbor_master, node: ch1_logbook_read } }
 rewards:
-  - { xp: 300 }
-  - { item: leather_backpack }
-  - { set_flag: { key: unlocked_forest_route, value: 1 } }
+  - { xp: 800 }
+  - { gold: 150 }
+  - { set_flag: { key: forest_route_unlocked, value: 1 } }
 ```
+Las recompensas de `rewards` son iguales para todos. Lo que depende de la vocación se da
+con `give_item`/`give_gold` en opciones de diálogo condicionadas con `vocation_in` (ver
+`harbor_master`: espada para el guardián, monedas para el arcanista).
 
 Semántica que asume el contenido (la implementa el motor de T1.10):
 - Los pasos se cumplen en orden; solo se evalúa el `complete_when` del paso actual. Al
@@ -211,6 +221,16 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
   opción se ejecutan antes de entrar al nodo). Las opciones que llevan a ese nodo deben
   estar condicionadas al paso correcto con `quest_state`.
 - `kill` cuenta las muertes desde que el paso pasó a ser el actual.
+- `has_item` y `flag_equals` se evalúan cuando el paso pasa a ser el actual y después de
+  cada cambio relevante (de inventario o del flag) en el mismo tick. `has_item` cuenta el
+  inventario completo, incluidos los contenedores anidados y los slots equipados.
+  `lacks_item` usa el mismo conteo.
+- Un paso cumplido no vuelve atrás aunque el jugador después pierda o venda el item. Por
+  eso las opciones de entrega repiten `has_item` en su `if` y quitan el item con
+  `take_item`.
+- `make validate` exige que todo item de un paso `has_item` se pueda conseguir (loot, tienda,
+  `give_item` o recompensa de quest). `puerto-balance.test.ts` comprueba además que la
+  fuente más fácil no esté más de 4 niveles por encima del `min_level` de la quest.
 
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1) y las quests secundarias
 `foreman_ore` y `diver_locket`.

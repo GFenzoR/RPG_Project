@@ -15,7 +15,9 @@ dialog:
           action: { give_item: bosun_logbook }
           goto: ch1_logbook
         - text: npc.puerto_foreman.opt_ch1_lost
-          if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: return_logbook } }
+          if:
+            - { quest_state: { quest: ch1_shipwreck, state: in_progress, step: return_logbook } }
+            - { lacks_item: { item: bosun_logbook } }
           action: { give_item: bosun_logbook }
           goto: ch1_logbook_again
         - text: npc.puerto_foreman.opt_work
