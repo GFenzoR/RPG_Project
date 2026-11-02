@@ -23,6 +23,15 @@ el juego tú mismo mientras Claude trabaja.
    ```
    `make setup` usa `scripts/local-setup.sh`, que crea la tarea T0.1.
 
+### Base de datos y servidor solo
+```
+make migrate-status    # estado de las migraciones en DATABASE_URL (por defecto la base rpg)
+make test-integration  # tests Go con Postgres real (base rpg_test)
+cd server && DATABASE_URL=postgres://postgres:postgres@localhost:5432/rpg go run ./cmd/gameserver
+```
+El servidor aplica las migraciones pendientes al arrancar y sirve la API HTTP en `:8080`
+(ver "API HTTP" en `05-network-protocol.md`).
+
 ## Diferencias con las sesiones cloud
 | | Cloud (hasta 4 nov) | Local (desde 5 nov) |
 |---|---|---|

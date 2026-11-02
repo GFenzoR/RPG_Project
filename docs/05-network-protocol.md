@@ -42,6 +42,99 @@
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
+## API HTTP (cuentas y personajes)
+Implementada en `server/internal/httpapi` (T1.3). JSON en ambos sentidos; los `POST` con
+cuerpo exigen `Content-Type: application/json` (también frena formularios cross-site),
+cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Control: no-store`.
+
+| Método y ruta | Auth | Cuerpo | Respuesta OK |
+|---|---|---|---|
+| `POST /api/auth/register` | — | `{email, password}` | `201 {account_id}` |
+| `POST /api/auth/login` | — | `{email, password, token_in_body?}` | `200 {expires_at, token?}` + cookie |
+| `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
+| `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
+| `POST /api/characters` | token | `{name, vocation}` | `201 {character: {id, name, vocation, level}}` |
+| `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde |
+
+- **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
+  se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
+  `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
+  `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login
+  para el cliente web. Si hay un `Authorization: Bearer` (el esquema no distingue
+  mayúsculas), manda ese token; cualquier otro esquema (p. ej. `Basic` de un staging con
+  contraseña) se ignora y se usa la cookie. El token solo
+  viene en el cuerpo del login si se pide `token_in_body: true` (Tauri, bots): el cliente
+  web no lo pide, así un XSS no puede leerlo de la respuesta.
+- **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
+  19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
+  ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin
+  distinguir mayúsculas y sin suplantar al staff: se rechaza si, en minúsculas y sin
+  espacios, contiene `admin`, `gamemaster`, `moderat`/`moderad`, `soporte`/`support`,
+  `staff`, `tutor`, `sistema`/`system` u `oficial`/`official`, o si alguna palabra es
+  `Gm`, `Cm`, `God`, `Mod` o `Dev` (como palabra completa: `Gmork` vale). La vocación debe
+  existir en `data/vocations.yaml`. Máximo 10 personajes por cuenta. El personaje nace en
+  nivel 1 con la vida y el maná iniciales de su vocación y sin posición: el servidor lo
+  ubica en el templo de su ciudad al primer login (T1.4).
+- **Rate limit** → `429 rate_limited` con `Retry-After`:
+  - Por IP del cliente (IPv6: por /64): register y login comparten 10 pedidos, luego 1
+    cada 6 s. Cuenta todo pedido, también los basura.
+  - Login fallido por par (email, IP): 5, luego 1 por minuto. Estricto, y un atacante
+    desde otras IPs no puede gastarlo por la víctima.
+  - Login fallido por email desde cualquier IP: 30, luego 1 cada 2 min (~30/h). Laxo:
+    solo frena la adivinación repartida en muchas IPs.
+  - Un login con email inválido o una contraseña que el registro nunca aceptaría (fuera
+    de 8–128 caracteres) responde `invalid_credentials` al instante, sin calcular hash y
+    sin gastar los límites de login: así no sirve para llenar las tablas.
+  - Los dos límites de login reservan una ficha **antes** de verificar la contraseña
+    (así N pedidos simultáneos no pasan con una sola ficha) y la devuelven si el
+    resultado no es `invalid_credentials`: solo los intentos **fallidos** cuentan y
+    entrar bien nunca gasta.
+  - **Trade-off:** quien conoce el email de alguien puede, sosteniendo ~30 fallos por
+    hora desde IPs distintas, agotar el límite por email; mientras siga agotado, la
+    víctima recibe `429` desde **cualquier** IP, también la de siempre. Lo aceptamos
+    frente a dejar sin tope la adivinación distribuida. Mejora pendiente: eximir del
+    límite por email a dispositivos o IPs donde la cuenta ya entró.
+  - Las tablas de límites tienen tamaño fijo (65 536 entradas; cada clave tiene dos
+    casillas posibles y una etiqueta, derivadas de un HMAC con secreto aleatorio por
+    proceso): la memoria está acotada, no se pueden elegir claves que caigan en las
+    casillas de otro, y un bucket solo cambia de dueño cuando está lleno, así que
+    rociar claves nuevas nunca resetea un límite gastado.
+  - Si las dos casillas de una clave están ocupadas por otros buckets en uso: el límite
+    por IP **deja pasar** el pedido sin contarlo, y los límites de login **comparten**
+    la casilla más llena (fallan cerrados). Los de login no se pueden mantener llenos:
+    solo los gastan cálculos reales de contraseña (máx. 4 a la vez), muy por debajo de
+    lo que la tabla recupera.
+  - El límite por IP es **best effort**: quien sostenga ~11 000 pedidos/s desde decenas
+    de miles de /64 (p. ej. un /48 IPv6) satura la tabla y, mientras dure, las IPs sin
+    casilla quedan sin ese límite. Preferimos eso a un `429` para todos. Lo que sigue
+    protegiendo: los límites de login por par y por email, y el tope de 4 cálculos de
+    contraseña, que también acota el ritmo de registros (spam de cuentas). Detrás de Caddy, `-trust-proxy` toma
+  la IP del último salto de `X-Forwarded-For` (el puerto del servidor no debe quedar
+  expuesto fuera de Caddy). Si los cálculos de contraseña (argon2id, máx. 4 a la vez)
+  están saturados más de 2 s → `503 busy`.
+- **Errores:** `{"error": {"code": "<código>"}}`. El cliente traduce el código con la
+  clave i18n `error.<código>`; el servidor nunca manda texto visible.
+
+| Código | HTTP | Cuándo |
+|---|---|---|
+| `bad_request` | 400 | JSON mal formado, campos desconocidos o cuerpo > 4 KiB |
+| `unsupported_media_type` | 415 | Falta `Content-Type: application/json` |
+| `invalid_email` / `invalid_password` | 400 | Registro con email o contraseña inválidos |
+| `email_taken` | 409 | Email ya registrado |
+| `invalid_credentials` | 401 | Email o contraseña incorrectos (no distingue cuál) |
+| `account_disabled` | 403 | Cuenta deshabilitada |
+| `unauthorized` | 401 | Token ausente, vencido o revocado |
+| `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
+| `name_taken` | 409 | Nombre en uso |
+| `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
+| `rate_limited` | 429 | Demasiados intentos de login/registro (por IP o por email) |
+| `busy` | 503 | Servidor saturado de logins; reintentar más tarde |
+| `not_found` | 404 | Ruta `/api/...` inexistente |
+| `internal` | 500 | Error del servidor (queda en el log) |
+
+`POST /api/play` (paso 3 del handshake, token `kind = 'play'` de 60 s) llega con T1.4.
+OAuth, verificación de email y reset de contraseña llegan con T2.1.
+
 ## Mensajes cliente → servidor (intenciones)
 | Mensaje | Campos |
 |---|---|
