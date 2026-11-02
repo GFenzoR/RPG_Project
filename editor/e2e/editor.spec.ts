@@ -67,6 +67,7 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
   await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
   await expect(page.getByTestId("island")).toHaveValue("testisle");
   await expect(page.getByTestId("island").locator("option")).toHaveText([
+    "Isla del Puerto (puerto)",
     "Isla de pruebas (testisle)",
   ]);
   await expect(page.getByTestId("floor")).toHaveText("Piso 7");
@@ -193,7 +194,7 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
   expect((await tile(page, 1049, 1063, 7))?.ground).toBe("sand");
 
   // English UI from i18n/en/editor.yaml.
-  await page.goto("/?lang=en");
+  await page.goto("/?lang=en&island=testisle");
   await expect(page.getByTestId("floor")).toHaveText("Floor 7");
   await expect(page.getByTestId("validation-summary")).toHaveText("No errors or warnings");
   await shot(page, "06-english");
@@ -204,7 +205,7 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
 test("asks before leaving with unsaved changes, and refuses to save over changes on disk", async ({
   page,
 }) => {
-  await page.goto("/?lang=es");
+  await page.goto("/?lang=es&island=testisle");
   await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
   await pick(page, "tierra", "dirt");
   await clickTile(page, 1046, 1059);

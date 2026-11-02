@@ -78,3 +78,12 @@ items:
   border_sand_water_inner_nw: 75
   border_sand_water_inner_se: 76
   border_sand_water_inner_sw: 77
+  oak_tree: 78
+  pine_tree: 79
+  bush: 80
+  boulder: 81
+  stairs_down: 82
+  stairs_up: 83
+  stone_wall: 84
+  wooden_wall: 85
+  rock_wall: 86

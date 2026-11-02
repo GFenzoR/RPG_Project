@@ -51,6 +51,8 @@ type options struct {
 	// authRateBurst overrides the per-IP register/login burst (0 = the default). Only
 	// for local test harnesses whose requests all come from one IP, such as the E2E suite.
 	authRateBurst int
+	// startTown is the island new characters start at (empty = the first in world.yaml).
+	startTown string
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -68,6 +70,7 @@ func main() {
 	flag.StringVar(&o.worldPath, "world", defaultWorldPath(), "compiled map from mapcompile; default $RPG_WORLD or ../build/world.bin (empty = run without a world)")
 	flag.StringVar(&o.wsOrigins, "ws-origins", os.Getenv("RPG_WS_ORIGINS"), "extra browser origins allowed on /ws, comma-separated (e.g. localhost:5173); default $RPG_WS_ORIGINS")
 	flag.StringVar(&o.minClientVersion, "min-client-version", gateway.DefaultMinClientVersion, "oldest client version accepted in Hello (same major required)")
+	flag.StringVar(&o.startTown, "start-town", os.Getenv("RPG_START_TOWN"), "island new characters start at; default $RPG_START_TOWN or the first island of world/world.yaml")
 	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
 	flag.Parse()
 
@@ -163,6 +166,7 @@ func run(logger *slog.Logger, o options) error {
 		OriginPatterns:   splitList(o.wsOrigins),
 		MinClientVersion: o.minClientVersion,
 		AuthRateLimit:    authRateLimit(o.authRateBurst),
+		StartTown:        o.startTown,
 	})
 	if err != nil {
 		return err

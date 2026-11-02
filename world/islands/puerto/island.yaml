@@ -1,0 +1,7 @@
+id: puerto
+name: island.puerto.name
+rect: { x: 3072, y: 6272, w: 192, h: 192 }
+floors: [7, 8]
+temple: { x: 3158, y: 6386, z: 7 }
+level_hint: [1, 15]
+notes: "Starting island (T1.16): town of Farol, harbour, wolf field, beach, forest and the mine on floor 8."

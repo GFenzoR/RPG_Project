@@ -1,0 +1,19 @@
+# Walls (T1.16). kind: wall blocks walking and line of sight by default (docs/03).
+- id: stone_wall
+  kind: wall
+  sprite: walls/stone_wall
+  name: item.stone_wall.name
+  pickupable: false
+
+- id: wooden_wall
+  kind: wall
+  sprite: walls/wooden_wall
+  name: item.wooden_wall.name
+  pickupable: false
+
+# Natural rock that bounds caves and mines.
+- id: rock_wall
+  kind: wall
+  sprite: walls/rock_wall
+  name: item.rock_wall.name
+  pickupable: false

@@ -402,17 +402,39 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
   // the projectile or its energy effect on screen.
   await page.locator("body").click({ position: { x: 1, y: 1 } }); // focus out of the say line
-  await expect
-    .poll(
-      async () => {
-        await page.keyboard.press("F1");
-        await page.waitForTimeout(60);
-        const m = await page.evaluate(() => window.__rpgClient?.magic(300));
-        return (m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13);
-      },
-      { timeout: 30_000, intervals: [250] },
-    )
-    .toBe(true);
+  try {
+    await expect
+      .poll(
+        async () => {
+          // The first wolf may be the one the combat test hurt: chasing it, our fists can
+          // kill it before it is in the bolt's range. Lost target: take the next wolf.
+          if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) {
+            const next = battle.getByRole("button", { name: /lobo/ }).first();
+            if (await next.isVisible()) {
+              await next.click();
+              await page.locator("body").click({ position: { x: 1, y: 1 } });
+            }
+          }
+          await page.keyboard.press("F1");
+          await page.waitForTimeout(60);
+          const m = await page.evaluate(() => window.__rpgClient?.magic(300));
+          return (m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13);
+        },
+        { timeout: 30_000, intervals: [250] },
+      )
+      .toBe(true);
+  } catch (e) {
+    // Say why no bolt flew: the server answers every refused cast with a game-log message
+    // (out of range, no sight, no mana, not ready...), so the log tells the cause.
+    const state = await page.evaluate(() => {
+      const c = window.__rpgClient;
+      return { self: c?.self(), target: c?.target(), battle: c?.battle(), stats: c?.stats() };
+    });
+    const log = (await page.getByTestId("game-log").textContent())?.slice(-600);
+    throw new Error(`no arc bolt within 30 s: ${JSON.stringify(state)}; game log: ${log}`, {
+      cause: e,
+    });
+  }
   await shot(page, "11-spell");
   // The cast spent mana and started the cooldown shade on F1.
   await expect(hotbar.locator('[data-hotkey="F1"] .cd')).toBeVisible();
@@ -450,6 +472,13 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
     ).status(),
   ).toBe(201);
   await apiCtx.dispose();
+  // Puerto's NPCs live on Isla del Puerto (T1.16): this character's residence is Farol, so
+  // it wakes up at that temple, next to the priestess and the provisioner.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto' WHERE name = '${name}'`,
+  ]);
 
   await page.goto("/?lang=es");
   const loginForm = page.getByTestId("login-form");
@@ -588,11 +617,22 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
     if (!p) throw new Error("no canvas");
     await page.mouse.click(p.x, p.y);
   };
-  await click(start.x, start.y - 5);
-  await arrived(page, start.x, start.y - 5);
-  await click(start.x, start.y - 9);
-
   const screen = page.getByTestId("death-screen");
+  await click(start.x, start.y - 5);
+  // A roaming wolf may bite first, on the way: then the character is already back at the
+  // temple and the second click is not needed.
+  await expect
+    .poll(
+      async () => {
+        if (await screen.isVisible()) return true;
+        const s = await self(page);
+        return s?.x === start.x && s.y === start.y - 5;
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(true);
+  if (!(await screen.isVisible())) await click(start.x, start.y - 9);
+
   await expect(screen).toBeVisible({ timeout: 60_000 });
   await expect(screen).toContainText("Has muerto");
   await page.waitForTimeout(300);

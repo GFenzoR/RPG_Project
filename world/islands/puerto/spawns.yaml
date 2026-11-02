@@ -1,0 +1,104 @@
+- id: puerto_gulls_harbour
+  center: { x: 3185, y: 6432, z: 7 }
+  radius: 3
+  monsters:
+    - { monster: thieving_gull, count: 3 }
+  respawn_seconds: 40
+
+- id: puerto_gulls_wreck
+  center: { x: 3134, y: 6316, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: thieving_gull, count: 2 }
+  respawn_seconds: 40
+
+- id: puerto_crabs_wreck
+  center: { x: 3108, y: 6340, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: tide_crab, count: 3 }
+  respawn_seconds: 45
+
+- id: puerto_crabs_east
+  center: { x: 3236, y: 6384, z: 7 }
+  radius: 3
+  monsters:
+    - { monster: tide_crab, count: 2 }
+  respawn_seconds: 45
+
+- id: puerto_looters_wreck
+  center: { x: 3124, y: 6336, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: wreck_looter, count: 3 }
+  respawn_seconds: 90
+
+- id: puerto_wolves_north
+  center: { x: 3212, y: 6372, z: 7 }
+  radius: 6
+  monsters:
+    - { monster: wolf, count: 4 }
+  respawn_seconds: 60
+
+- id: puerto_wolves_south
+  center: { x: 3220, y: 6394, z: 7 }
+  radius: 6
+  monsters:
+    - { monster: wolf, count: 3 }
+  respawn_seconds: 60
+
+- id: puerto_boars
+  center: { x: 3118, y: 6378, z: 7 }
+  radius: 6
+  monsters:
+    - { monster: bristleback_boar, count: 3 }
+  respawn_seconds: 75
+
+- id: puerto_spiders
+  center: { x: 3124, y: 6416, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: moss_spider, count: 3 }
+  respawn_seconds: 75
+
+- id: puerto_warehouse_rats
+  center: { x: 3185, y: 6424, z: 7 }
+  radius: 2
+  monsters:
+    - { monster: bilge_rat, count: 2 }
+  respawn_seconds: 40
+
+- id: puerto_mine_rats
+  center: { x: 3177, y: 6326, z: 8 }
+  radius: 3
+  monsters:
+    - { monster: bilge_rat, count: 3 }
+  respawn_seconds: 40
+
+- id: puerto_mine_bats_west
+  center: { x: 3140, y: 6316, z: 8 }
+  radius: 5
+  monsters:
+    - { monster: gloom_bat, count: 4 }
+  respawn_seconds: 60
+
+- id: puerto_mine_bats_south
+  center: { x: 3144, y: 6328, z: 8 }
+  radius: 5
+  monsters:
+    - { monster: gloom_bat, count: 3 }
+  respawn_seconds: 60
+
+- id: puerto_mine_beetles
+  center: { x: 3211, y: 6322, z: 8 }
+  radius: 7
+  monsters:
+    - { monster: ore_beetle, count: 4 }
+  respawn_seconds: 90
+
+- id: puerto_mine_drowned
+  center: { x: 3208, y: 6291, z: 8 }
+  radius: 5
+  monsters:
+    - { monster: drowned_miner, count: 3 }
+  respawn_seconds: 120

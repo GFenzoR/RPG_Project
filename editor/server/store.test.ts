@@ -284,7 +284,7 @@ describe("bootstrap", () => {
   it("sends the world, the palette and the editor texts", () => {
     const b = bootstrap(repo);
     expect(b.loadErrors).toEqual([]);
-    expect(b.world.islands.map((i) => i.meta.id)).toEqual(["testisle"]);
+    expect(b.world.islands.map((i) => i.meta.id)).toEqual(["puerto", "testisle"]);
     expect(b.items.find((i) => i.id === "grass")).toEqual({
       id: "grass",
       kind: "ground",
@@ -295,6 +295,6 @@ describe("bootstrap", () => {
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();
       expect(b.i18n[lang]?.["island.testisle.name"]).toBeTruthy();
     }
-    expect(Object.keys(b.base)).toHaveLength(6);
+    expect(Object.keys(b.base)).toHaveLength(6 + 43); // testisle + puerto chunks
   });
 });

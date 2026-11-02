@@ -121,3 +121,7 @@ client/
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda
 screenshots en `client/e2e/screenshots/`. Ábrelos con Read y revísalos antes de cerrar.
 Si cambia el render a propósito, actualiza las imágenes de referencia en el mismo PR.
+
+## Notas de T1.16
+- Los NPCs viven en Puerto; testisle sigue siendo la isla de inicio del E2E. El E2E de NPCs
+  pone `town = 'puerto'` con `psql` para despertar en el templo del Farol.

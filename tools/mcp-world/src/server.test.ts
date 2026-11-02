@@ -121,7 +121,7 @@ describe("protocol", () => {
     const info = JSON.parse((lines[1]?.result as CallResult).content[0]?.text ?? "") as {
       islands: unknown[];
     };
-    expect(info.islands).toHaveLength(1);
+    expect(info.islands).toHaveLength(2);
   }, 20000);
 });
 
@@ -144,13 +144,13 @@ describe("read tools", () => {
     expect(json("map_validate", { island: "testisle" })).toMatchObject({ errors: 0 });
     expect(json("map_find", { kind: "npc", id: "harbor_master" })).toMatchObject({
       total: 1,
-      results: [{ island: "testisle", npc: "harbor_master" }],
+      results: [{ island: "puerto", npc: "harbor_master" }],
     });
     expect(json("map_find", { kind: "item", id: "fishing_rod" })).toMatchObject({
       total: 1,
       results: [{ pos: { x: 1057, y: 1084, z: 7 }, layer: "stack" }],
     });
-    expect(json("map_find", { kind: "spawn", id: "wolf" }).total).toBe(1);
+    expect(json("map_find", { kind: "spawn", id: "wolf" }).total).toBe(3);
     expect(
       json("map_find", {
         kind: "item",

@@ -407,7 +407,7 @@ describe("entity ops", () => {
       ),
     ).toThrow(/already placed/);
     const moved = roundTrip(testisle(), [
-      { op: "remove_npc", npc: "harbor_master", pos: { x: 1056, y: 1082, z: 7 } },
+      { op: "remove_npc", npc: "harbor_master", pos: { x: 3201, y: 6433, z: 7 } },
       { op: "place_npc", npc: "harbor_master", pos: { x: 1050, y: 1050, z: 7 } },
     ]);
     expect(moved.islands.get("testisle")?.npcs.at(-1)).toEqual({

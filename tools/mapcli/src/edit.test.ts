@@ -154,10 +154,10 @@ describe("mapcli edit commands", () => {
       ).code,
     ).toBe(0);
     expect(read(root, "world/islands/testisle/zones.yaml")).toContain("floors: [7, 8]");
-    expect(mapcli("npc", "remove", "testisle", "--npc", "harbor_master", "--root", root).code).toBe(
+    expect(mapcli("npc", "remove", "puerto", "--npc", "harbor_master", "--root", root).code).toBe(
       0,
     );
-    expect(read(root, "world/islands/testisle/npcs.yaml")).not.toContain("harbor_master");
+    expect(read(root, "world/islands/puerto/npcs.yaml")).not.toContain("harbor_master");
     expect(
       mapcli(
         "npc",
