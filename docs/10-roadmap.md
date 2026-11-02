@@ -51,7 +51,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   entra y camina (test de integración). [T0.2, T1.2, T1.3]
 
 **Cliente base**
-- [x] **T1.5 Cliente: login y mundo.** (PR pendiente) Vite + Pixi + Preact, `packages/renderer`,
+- [x] **T1.5 Cliente: login y mundo.** (PR #24) Vite + Pixi + Preact, `packages/renderer`,
   pantalla de login/creación de personaje, render de mapa con orden de capas, caminar con
   teclado y click, predicción e interpolación. Playwright con screenshot. [T1.4, T0.5]
 
