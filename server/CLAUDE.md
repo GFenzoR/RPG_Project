@@ -31,6 +31,8 @@ server/
 ## Reglas del servidor
 - **Solo la goroutine del game loop muta el mundo.** Las goroutines de red envían
   `Command` por un canal con buffer y reciben `[]Event` ya serializables.
+- Un panic dentro de un comando, evento o sistema se recupera en `game.Loop`, se registra
+  con su stack y se descarta esa unidad; el tick sigue. No es licencia para usar `panic`.
 - Todo lo temporal usa `clock.Clock` y el número de tick, nunca `time.Now()`.
 - Aleatoriedad con un `*rand.Rand` sembrado e inyectado (deterministas en tests).
 - Sin asignaciones en el hot path del tick cuando sea razonable: reutiliza slices,
