@@ -284,7 +284,7 @@ describe("bootstrap", () => {
   it("sends the world, the palette and the editor texts", () => {
     const b = bootstrap(repo);
     expect(b.loadErrors).toEqual([]);
-    expect(b.world.islands.map((i) => i.meta.id)).toEqual(["testisle", "puerto"]);
+    expect(b.world.islands.map((i) => i.meta.id)).toEqual(["puerto", "testisle"]);
     expect(b.items.find((i) => i.id === "grass")).toEqual({
       id: "grass",
       kind: "ground",

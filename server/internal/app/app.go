@@ -55,6 +55,8 @@ type Config struct {
 	TrustProxy       bool
 	OriginPatterns   []string
 	MinClientVersion string
+	// StartTown is the island new characters start at (session.Config.StartTown).
+	StartTown string
 	// AuthRateLimit overrides httpapi.DefaultAuthRateLimit when non-zero (test harnesses).
 	AuthRateLimit httpapi.RateLimit
 	// AutosaveEvery overrides session.DefaultAutosaveEvery (tests).
@@ -123,6 +125,7 @@ func New(cfg Config) (*App, error) {
 		a.saver = saver
 		w, err := session.New(session.Config{
 			Map:           cfg.Map,
+			StartTown:     cfg.StartTown,
 			Balance:       cfg.Balance,
 			Vocations:     cfg.Vocations,
 			Monsters:      cfg.Monsters,

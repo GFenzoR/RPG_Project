@@ -180,6 +180,10 @@ boat_routes:
     price: 80
     requires: { level: 10 }
 ```
+**Isla inicial:** un personaje sin ciudad de residencia (`characters.town` vacío, como uno
+recién creado) despierta en el templo de la **primera isla de `world.yaml`** (hoy `puerto`,
+la isla inicial de `docs/02`). El servidor acepta `-start-town <isla>` (o `RPG_START_TOWN`)
+para cambiarla; el E2E usa `-start-town testisle` porque sus pruebas dependen de esa isla.
 
 ## Compilación
 `server/cmd/mapcompile` (`make mapcompile`) lee `world/` + `data/items/` +

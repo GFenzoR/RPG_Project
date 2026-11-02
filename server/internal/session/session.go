@@ -94,6 +94,9 @@ const (
 type Config struct {
 	// Map is the loaded world. Required.
 	Map *world.Map
+	// StartTown is the island whose temple a character without a residence town wakes up
+	// at. Empty means the first island of the map (the first one in world/world.yaml).
+	StartTown string
 	// Balance and Vocations come from data/. Balance.Movement is required.
 	Balance   content.Balance
 	Vocations content.Vocations
@@ -218,6 +221,9 @@ type World struct {
 func New(cfg Config) (*World, error) {
 	if cfg.Map == nil {
 		return nil, errors.New("session: Config.Map is required")
+	}
+	if cfg.StartTown != "" && cfg.Map.Island(cfg.StartTown) == nil {
+		return nil, fmt.Errorf("session: start town %q is not an island of the map", cfg.StartTown)
 	}
 	if cfg.Save == nil {
 		return nil, errors.New("session: Config.Save is required")

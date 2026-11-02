@@ -34,8 +34,8 @@ describe("mapcli", () => {
     expect(world.code).toBe(0);
     expect(JSON.parse(world.out)).toMatchObject({
       islands: [
-        { id: "testisle", chunks: 6 },
         { id: "puerto", chunks: 43 },
+        { id: "testisle", chunks: 6 },
       ],
       load_errors: [],
     });

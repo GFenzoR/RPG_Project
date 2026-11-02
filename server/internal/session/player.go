@@ -435,6 +435,9 @@ func (w *World) temple(town string) world.Pos {
 	if is := w.m.Island(town); is != nil {
 		return is.Temple
 	}
+	if is := w.m.Island(w.cfg.StartTown); is != nil {
+		return is.Temple
+	}
 	if islands := w.m.Islands(); len(islands) > 0 {
 		return islands[0].Temple
 	}
