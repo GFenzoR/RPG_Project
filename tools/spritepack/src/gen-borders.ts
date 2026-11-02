@@ -71,9 +71,8 @@ interface Rule {
   pieces: Record<string, string>;
 }
 
-function main(): void {
-  const { values } = parseArgs({ options: { root: { type: "string", default: "." } } });
-  const root = resolve(values.root);
+/** Border sprites for data/borders.yaml: sprite path → PNG bytes. */
+export function borderSprites(root: string): Map<string, Buffer> {
   const rules = parse(readFileSync(join(root, "data/borders.yaml"), "utf8")) as Rule[];
   const items = new Map<string, string>();
   for (const f of ["ground.yaml", "decoration.yaml"]) {
@@ -84,7 +83,7 @@ function main(): void {
     for (const i of list) items.set(i.id, i.sprite);
   }
   const { manifest } = parseManifest(readFileSync(join(root, "assets/sprites.yaml"), "utf8"));
-  const written: string[] = [];
+  const out = new Map<string, Buffer>();
   for (const rule of rules) {
     const groundSprite = items.get(rule.from);
     const entry = groundSprite ? manifest.sprites.get(groundSprite) : undefined;
@@ -93,13 +92,22 @@ function main(): void {
     for (const [piece, item] of Object.entries(rule.pieces)) {
       const sprite = items.get(item);
       if (!sprite) throw new Error(`border piece "${item}" is not in data/items`);
-      const file = join(root, "assets/sprites", `${sprite}.png`);
-      mkdirSync(join(file, ".."), { recursive: true });
-      writeFileSync(file, encodePng(borderSprite(piece as Piece, color)));
-      written.push(`assets/sprites/${sprite}.png`);
+      out.set(sprite, encodePng(borderSprite(piece as Piece, color)));
     }
   }
-  console.log(`wrote ${written.length} border sprites`);
+  return out;
+}
+
+function main(): void {
+  const { values } = parseArgs({ options: { root: { type: "string", default: "." } } });
+  const root = resolve(values.root);
+  const sprites = borderSprites(root);
+  for (const [sprite, png] of sprites) {
+    const file = join(root, "assets/sprites", `${sprite}.png`);
+    mkdirSync(join(file, ".."), { recursive: true });
+    writeFileSync(file, png);
+  }
+  console.log(`wrote ${sprites.size} border sprites`);
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/^.*[\\/]/, ""))) main();

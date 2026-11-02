@@ -47,3 +47,5 @@ export type {
   TouchedChunk,
 } from "./ops/index.ts";
 export { applyOps, MAP_OP_NAMES, OpError, prefabSize } from "./ops/index.ts";
+export { generate, RECIPES } from "./generate.ts";
+export type { GenerateOptions, Recipe } from "./generate.ts";

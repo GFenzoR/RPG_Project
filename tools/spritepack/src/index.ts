@@ -15,3 +15,14 @@ export { parseManifest } from "./manifest.ts";
 export type { Manifest, SpriteEntry } from "./manifest.ts";
 export { packSprites } from "./pack.ts";
 export { defaultColor, defaultLabel, renderPlaceholder, TILE } from "./placeholder.ts";
+export {
+  blit,
+  createImage,
+  decodePng,
+  encodePng,
+  fillRect,
+  parseHexColor,
+  scaleImage,
+} from "./image.ts";
+export type { Image, Rgba } from "./image.ts";
+export { drawText, GLYPH_H, GLYPH_W, textWidth } from "./font.ts";
