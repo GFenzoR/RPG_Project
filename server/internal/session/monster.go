@@ -48,6 +48,8 @@ const (
 	respawnRetry = game.Tick(5 * 1000 / 50)
 	// spawnTries is how many random tiles a respawn tries in the spawn's radius.
 	spawnTries = 16
+	// targetScanTicks: an idle aggressive monster looks for a target every 250 ms.
+	targetScanTicks = 5
 )
 
 // monsterKind is a monster definition prepared for the loop.
@@ -88,6 +90,8 @@ type Monster struct {
 	nextAttack []game.Tick
 	// damage is the damage each player dealt, to share the experience.
 	damage []damageShare
+	// thought is the last tick the monster thought (it may change sector mid-tick).
+	thought game.Tick
 }
 
 type damageShare struct {
@@ -353,9 +357,11 @@ func (w *World) spawnAll(ctx *game.TickContext) {
 
 // ---- AI ----------------------------------------------------------------------------
 
-// markActive collects the sectors with a player at most activeSectorRadius sectors away.
+// markActive collects the sectors with a player at most activeSectorRadius sectors away,
+// as a set and as a sorted list (deterministic iteration).
 func (w *World) markActive() {
 	clear(w.active)
+	w.activeKeys = w.activeKeys[:0]
 	for _, p := range w.players {
 		sx, sy := int(p.pos.X)/world.SectorSize, int(p.pos.Y)/world.SectorSize
 		for dy := -activeSectorRadius; dy <= activeSectorRadius; dy++ {
@@ -364,15 +370,14 @@ func (w *World) markActive() {
 				if x < 0 || y < 0 || x > 0xFFFF/world.SectorSize || y > 0xFFFF/world.SectorSize {
 					continue
 				}
-				w.active[uint64(p.pos.Z)<<32|uint64(x)<<16|uint64(y)] = struct{}{}
+				k := uint64(p.pos.Z)<<32 | uint64(x)<<16 | uint64(y)
+				if _, ok := w.active[k]; !ok {
+					w.active[k] = struct{}{}
+					w.activeKeys = append(w.activeKeys, k)
+				}
 			}
 		}
 	}
-}
-
-func (w *World) isActive(p world.Pos) bool {
-	_, ok := w.active[sectorKey(int(p.X), int(p.Y), p.Z)]
-	return ok
 }
 
 func chebyshev(a, b world.Pos) int {
@@ -414,7 +419,9 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 		m.target = nil
 	}
 	if m.target == nil {
-		if b.Aggressive {
+		// Looking around is the expensive part of idling: once every targetScanTicks,
+		// staggered by id so monsters spread the work over ticks.
+		if b.Aggressive && (uint64(ctx.Tick)+uint64(m.id))%targetScanTicks == 0 {
 			if t := w.findTarget(m); t != nil {
 				m.target, m.state = t, StateAlert
 				w.face(m, t.pos)
@@ -437,7 +444,7 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 				return
 			}
 		}
-		if d > 1 || !ready {
+		if d > 1 {
 			return
 		}
 		// Cornered next to its target: it fights back.

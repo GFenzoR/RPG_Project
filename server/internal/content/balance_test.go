@@ -96,6 +96,7 @@ func TestParseMonsterErrors(t *testing.T) {
 		"no health":  "id: x\nspeed: 100",
 		"bad attack": "id: x\nhealth: 5\nspeed: 100\nattacks: [{type: melee, min: 5, max: 1, interval_ms: 2000}]",
 		"bad loot":   "id: x\nhealth: 5\nspeed: 100\nloot: [{item: a, chance: 2}]",
+		"ranged":     "id: x\nhealth: 5\nspeed: 100\nbehavior: {target_distance: 3}",
 	} {
 		if _, err := ParseMonster([]byte(src)); err == nil {
 			t.Errorf("%s: expected error", name)

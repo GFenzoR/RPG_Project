@@ -134,6 +134,13 @@ type Spawn struct {
 	Monsters       []SpawnMonster
 }
 
+// Limits of the spawns of one island: a typo or a crafted world.bin must not make the
+// server create millions of monsters.
+const (
+	MaxSpawnMonsters  = 100   // monsters one spawn keeps
+	MaxIslandMonsters = 20000 // monsters all the spawns of an island keep
+)
+
 // SpawnMonster is how many monsters of one kind (data/monsters id) a spawn keeps.
 type SpawnMonster struct {
 	Monster string
@@ -253,6 +260,7 @@ func checkIsland(is *Island) error {
 	if !r.Contains(int(t.X), int(t.Y)) || !is.hasFloor(t.Z) {
 		return fmt.Errorf("island %q: temple %v is outside the island or on a floor it does not list", is.ID, t)
 	}
+	total := 0
 	for _, sp := range is.Spawns {
 		c := sp.Center
 		if !r.Contains(int(c.X), int(c.Y)) || !is.hasFloor(c.Z) {
@@ -261,10 +269,18 @@ func checkIsland(is *Island) error {
 		if sp.ID == "" || sp.RespawnSeconds == 0 || len(sp.Monsters) == 0 {
 			return fmt.Errorf("island %q: spawn %q needs an id, respawn_seconds > 0 and monsters", is.ID, sp.ID)
 		}
+		n := 0
 		for _, m := range sp.Monsters {
 			if m.Monster == "" || m.Count == 0 {
 				return fmt.Errorf("island %q: spawn %q: empty monster id or zero count", is.ID, sp.ID)
 			}
+			n += int(m.Count)
+		}
+		if n > MaxSpawnMonsters {
+			return fmt.Errorf("island %q: spawn %q keeps %d monsters, at most %d", is.ID, sp.ID, n, MaxSpawnMonsters)
+		}
+		if total += n; total > MaxIslandMonsters {
+			return fmt.Errorf("island %q: spawns keep more than %d monsters", is.ID, MaxIslandMonsters)
 		}
 	}
 	return nil

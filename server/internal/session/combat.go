@@ -1,6 +1,8 @@
 package session
 
 import (
+	"slices"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/combat"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -39,12 +41,20 @@ func (w *World) combatSystem(ctx *game.TickContext) {
 	if len(w.monsters) == 0 {
 		return
 	}
+	// Only the monsters of active sectors are visited: idle parts of the world cost
+	// nothing. A monster that steps into a later sector is not thought twice.
 	w.markActive()
-	for _, m := range w.monsters {
-		if w.isActive(m.pos) {
-			w.think(ctx, m)
+	slices.Sort(w.activeKeys)
+	for _, k := range w.activeKeys {
+		w.thinkBuf = append(w.thinkBuf[:0], w.msectors[k]...)
+		for _, m := range w.thinkBuf {
+			if m.thought != ctx.Tick {
+				m.thought = ctx.Tick
+				w.think(ctx, m)
+			}
 		}
 	}
+	clear(w.thinkBuf)
 }
 
 // ---- intents ---------------------------------------------------------------------

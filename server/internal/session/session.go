@@ -142,6 +142,8 @@ type World struct {
 	slots      []*spawnSlot
 	spawned    bool
 	active     map[uint64]struct{}
+	activeKeys []uint64
+	thinkBuf   []*Monster
 	ground     map[world.Pos][]uint16 // items dropped on tiles at runtime (remains)
 	corpses    map[world.Pos][]*Corpse
 	corpseItem uint16

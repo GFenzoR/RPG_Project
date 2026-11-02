@@ -109,6 +109,10 @@ func ParseMonster(raw []byte) (*Monster, error) {
 	if m.Behavior.TargetDistance <= 0 {
 		m.Behavior.TargetDistance = 1
 	}
+	if m.Behavior.TargetDistance > 1 {
+		// Keeping distance only makes sense with ranged attacks, which arrive with T1.9.
+		return nil, fmt.Errorf("monster %q: target_distance > 1 needs ranged attacks (T1.9)", m.ID)
+	}
 	for i := range m.Attacks {
 		a := &m.Attacks[i]
 		if a.Min < 0 || a.Max < a.Min || a.IntervalMs <= 0 {

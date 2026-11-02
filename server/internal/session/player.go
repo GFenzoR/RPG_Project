@@ -291,6 +291,11 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	i := sort.Search(len(w.players), func(i int) bool { return w.players[i].id >= p.id })
 	w.players = append(w.players[:i], w.players[i+1:]...)
 	ctx.Sched.Cancel(p.autosave)
+	for _, m := range w.monsters {
+		if m.target == p {
+			m.target = nil // do not keep the gone player alive from a sleeping monster
+		}
+	}
 
 	s := p.snapshot(true)
 	w.unsaved[p.charID] = s

@@ -712,3 +712,17 @@ func FuzzDecode(f *testing.F) {
 		}
 	})
 }
+
+func TestSpawnLimits(t *testing.T) {
+	m := asciiMap(t, 30, 30, 7, "....")
+	is := m.Islands()[0]
+	is.Spawns = []Spawn{{ID: "big", Center: pt(31, 30), RespawnSeconds: 60,
+		Monsters: []SpawnMonster{{Monster: "wolf", Count: MaxSpawnMonsters + 1}}}}
+	if err := checkIsland(is); err == nil || !strings.Contains(err.Error(), "at most") {
+		t.Fatalf("err = %v, want the per-spawn limit", err)
+	}
+	is.Spawns[0].Monsters[0].Count = MaxSpawnMonsters
+	if err := checkIsland(is); err != nil {
+		t.Fatal(err)
+	}
+}
