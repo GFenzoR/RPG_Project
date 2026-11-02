@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -222,7 +222,7 @@ describe("validateWorld", () => {
     const a = mini();
     const b = mini();
     b.meta.id = "mini_two";
-    b.meta.rect = { x: 16, y: 0, w: 32, h: 32 };
+    b.meta.rect = { x: 0, y: 0, w: 64, h: 32 };
     b.chunks = new Map();
     b.spawns = [];
     b.npcs = [];
@@ -241,7 +241,7 @@ describe("validateWorld", () => {
     const i = mini();
     i.meta.name = "island.nowhere.name";
     expect(messages(check(i))).toContainEqual(
-      expect.stringContaining('i18n key "island.nowhere.name" is missing in: en, es'),
+      expect.stringContaining('i18n key "island.nowhere.name" is missing in: es, en'),
     );
   });
 
@@ -288,5 +288,158 @@ describe("validateWorld", () => {
         message: 'island "other" is not loaded',
       },
     ]);
+  });
+});
+
+describe("review fixes", () => {
+  it("requires island rectangles aligned to chunks", () => {
+    const i = mini();
+    i.meta.rect = { x: 0, y: 0, w: 40, h: 32 };
+    expect(messages(check(i))).toContainEqual(
+      expect.stringMatching(
+        /world\.yaml:\d+ islands\[0\]\.rect: island rectangles must be aligned to chunks/,
+      ),
+    );
+  });
+
+  it("treats kind: wall as blocking unless blocks_movement is false", () => {
+    const root = mkdtempSync(join(tmpdir(), "map-format-content-"));
+    dirs.push(root);
+    mkdirSync(join(root, "data", "items"), { recursive: true });
+    writeFileSync(
+      join(root, "data", "items", "walls.yaml"),
+      [
+        "- { id: stone_wall, kind: wall }",
+        "- { id: arch, kind: wall, blocks_movement: false }",
+        "- { id: crate, kind: decoration, blocks_movement: true }",
+        "- { id: flower, kind: decoration }",
+      ].join("\n"),
+    );
+    const items = loadContent(root).items;
+    expect([...items.values()].map((it) => [it.id, it.blocksMovement])).toEqual([
+      ["stone_wall", true],
+      ["arch", false],
+      ["crate", true],
+      ["flower", false],
+    ]);
+  });
+
+  it("keeps world.yaml findings about the island when filtering by island", () => {
+    const i = mini();
+    const meta = worldOf(i);
+    must(meta.islands[0]).level_hint = [9, 2];
+    meta.boat_routes.push({
+      from_npc: "harbor_master",
+      to: { island: "mini", pos: { x: 0, y: 0, z: 7 } },
+      price: 5,
+    });
+    meta.boat_routes.push({
+      from_npc: "harbor_master",
+      to: { island: "elsewhere", pos: { x: 0, y: 0, z: 7 } },
+      price: 5,
+    });
+    const { root } = check(i, meta);
+    const m = validateWorld(root, { content, island: "mini" }).diagnostics.map(formatDiagnostic);
+    expect(m).toContainEqual(
+      expect.stringContaining("islands[0].level_hint: level_hint is [min, max]"),
+    );
+    expect(m).toContainEqual(expect.stringContaining("boat_routes[0].to.pos"));
+    expect(m.join("\n")).not.toContain('unknown island "elsewhere"');
+  });
+
+  it("ignores dotfiles and reports wrong entry types without throwing", () => {
+    const { root } = check(mini());
+    const isle = join(root, "world/islands/mini");
+    writeFileSync(join(root, "world/islands/.DS_Store"), "x");
+    writeFileSync(join(isle, ".DS_Store"), "x");
+    writeFileSync(join(isle, "chunks/.DS_Store"), "x");
+    writeFileSync(join(isle, "chunks/z07/.gitkeep"), "");
+    expect(messages(validateWorld(root, { content }))).toEqual([]);
+    mkdirSync(join(isle, "chunks/z07/c0009_0009.json"));
+    writeFileSync(join(isle, "chunks/z09"), "not a directory");
+    rmSync(join(isle, "zones.yaml"));
+    mkdirSync(join(isle, "zones.yaml"));
+    const m = messages(validateWorld(root, { content }));
+    expect(m).toContainEqual(expect.stringContaining("chunks/z07/c0009_0009.json expected a file"));
+    expect(m).toContainEqual(expect.stringContaining("chunks/z09 expected a directory"));
+    expect(m).toContainEqual(expect.stringContaining("mini/zones.yaml expected a file"));
+  });
+
+  it("reports chunks that is a file and YAML alias bombs as diagnostics", () => {
+    const { root } = check(mini());
+    const isle = join(root, "world/islands/mini");
+    rmSync(join(isle, "chunks"), { recursive: true });
+    writeFileSync(join(isle, "chunks"), "oops");
+    const bomb = ["a: &a [x, x, x, x, x, x, x, x, x]"];
+    for (let k = 0; k < 9; k++)
+      bomb.push(
+        `${String.fromCharCode(98 + k)}: &${String.fromCharCode(98 + k)} [*${String.fromCharCode(97 + k)}, *${String.fromCharCode(97 + k)}, *${String.fromCharCode(97 + k)}, *${String.fromCharCode(97 + k)}, *${String.fromCharCode(97 + k)}, *${String.fromCharCode(97 + k)}, *${String.fromCharCode(97 + k)}, *${String.fromCharCode(97 + k)}, *${String.fromCharCode(97 + k)}]`,
+      );
+    writeFileSync(join(isle, "texts.yaml"), `${bomb.join("\n")}\n`);
+    const m = messages(validateWorld(root, { content }));
+    expect(m).toContainEqual(expect.stringContaining("mini/chunks expected a directory"));
+    expect(m).toContainEqual(expect.stringMatching(/texts\.yaml.* invalid YAML: .*alias/i));
+  });
+
+  it("reports an island listed twice once and loads it once", () => {
+    const i = mini();
+    const meta = worldOf(i);
+    meta.islands.push({ ...must(meta.islands[0]) });
+    const m = messages(check(i, meta));
+    expect(m.filter((x) => x.includes('island "mini" is listed twice'))).toHaveLength(1);
+    expect(m.join("\n")).not.toContain("already defined");
+  });
+
+  it("points diagnostics at the real directory when island.yaml has another id", () => {
+    const i = mini();
+    const { root } = check(i);
+    const file = join(root, "world/islands/mini/island.yaml");
+    writeFileSync(file, readFileSync(file, "utf8").replace("id: mini", "id: renamed"));
+    const npcs = join(root, "world/islands/mini/npcs.yaml");
+    writeFileSync(npcs, readFileSync(npcs, "utf8").replace("npc: harbor_master", "npc: nobody"));
+    const m = messages(validateWorld(root, { content }));
+    expect(m).toContainEqual(
+      expect.stringContaining(
+        'island.yaml:1 id: id "renamed" must match the directory name "mini"',
+      ),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining('world/islands/mini/npcs.yaml:1 [0].npc: unknown NPC "nobody"'),
+    );
+    expect(m.join("\n")).not.toContain("world/islands/renamed");
+  });
+
+  it("clips huge zone rectangles to the island before scanning them", () => {
+    const i = mini();
+    i.zones.push({
+      id: "mini_huge",
+      type: "no_logout",
+      floors: [8],
+      rects: [{ x: 0, y: 0, w: 65536, h: 65536 }],
+    });
+    const cave = must(i.chunks.get(chunkKey(8, 0, 0)));
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) setGround(cave, x, y, null);
+    setGround(cave, 11, 11, "dirt");
+    i.portals = [];
+    const started = performance.now();
+    const m = messages(check(i));
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(m).toContainEqual(
+      expect.stringContaining('zone "mini_huge" has no tile reachable from the temple'),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining("rects[0]: rectangle leaves the island rectangle"),
+    );
+  });
+
+  it("only reads the configured languages and survives stray files in i18n/", () => {
+    const root = mkdtempSync(join(tmpdir(), "map-format-i18n-"));
+    dirs.push(root);
+    cpSync(join(repo, "i18n"), join(root, "i18n"), { recursive: true });
+    writeFileSync(join(root, "i18n", "README.md"), "notes");
+    mkdirSync(join(root, "i18n", "fr"));
+    const i18n = loadContent(root).i18n;
+    expect([...i18n.keys()]).toEqual(["es", "en"]);
+    expect(i18n.get("es")?.has("island.testisle.name")).toBe(true);
   });
 });

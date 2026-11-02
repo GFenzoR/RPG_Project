@@ -57,6 +57,9 @@ importers:
 
   packages/map-format:
     dependencies:
+      '@rpg/content-schema':
+        specifier: workspace:*
+        version: link:../content-schema
       ajv:
         specifier: 8.20.0
         version: 8.20.0
