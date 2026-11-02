@@ -55,7 +55,7 @@ test-go:
 
 .PHONY: test-ts
 test-ts:
-	pnpm -r run test
+	pnpm test
 
 .PHONY: lint
 lint: lint-go lint-ts validate ## golangci-lint + eslint/prettier/tsc + content validation
@@ -86,6 +86,11 @@ validate: ## Validate data/ and i18n/ against the schemas, then world/ maps (map
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 	$(CONTENT_CLI) gen-ids
+
+# spritepack runs TypeScript directly, like the content tooling.
+.PHONY: sprites
+sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeholders for missing art)
+	node --experimental-strip-types tools/spritepack/src/cli.ts build $(if $(STRICT),--strict)
 
 .PHONY: fmt
 fmt: ## Format Go and TS code

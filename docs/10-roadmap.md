@@ -29,7 +29,7 @@ Objetivo: repo que compila, se testea y valida, con los contratos base definidos
 - [x] **T0.4 map-format + mapcli básico.** (PR #8) Lectura/escritura canónica de chunks,
   islas y archivos auxiliares, validación (sección de 03), `mapcli info|fmt|validate|view`.
   Golden tests. Isla de prueba 64x64 en `world/islands/testisle/`. [T0.3]
-- [ ] **T0.5 Assets y spritepack.** 👤 Tú bajas 1–2 packs CC0/CC-BY de 32x32 (ver
+- [ ] **T0.5 Assets y spritepack.** (parcial, PR #5: falta integrar packs del usuario) 👤 Tú bajas 1–2 packs CC0/CC-BY de 32x32 (ver
   `11-claude-code-workflow.md`) y los subes a `assets/vendor/`. La sesión arma
   `tools/spritepack` (atlas + JSON), generador de placeholders para sprites faltantes,
   `assets/CREDITS.md`, y mapea sprites a los items semilla. [T0.3]
@@ -90,6 +90,9 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   reporte y ajustes de rendimiento. [T1.11]
 - [ ] **T1.18 Deploy alpha.** 👤 Necesita tu cuenta AWS y un dominio. docker-compose,
   Caddy, backups a S3, workflow de imágenes, guía paso a paso para el primer deploy. [T1.17]
+- [ ] **T1.19 Hosting de pruebas en casa.** Docker Compose del juego completo en tu PC
+  expuesto con Cloudflare Tunnel o Tailscale, targets `make home-*`, guía para
+  WSL2/macOS/Linux. Ver `13-hosting-de-pruebas.md`. [T1.5]
 
 ## Hito 2 — Cuentas completas, comunidad y escritorio
 - [ ] **T2.1 OAuth Google y Discord** 👤 (crear apps y claves), verificación de email,

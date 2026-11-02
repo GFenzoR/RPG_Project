@@ -1,3 +1,17 @@
-// Placeholder entry point created by T0.1 (monorepo skeleton).
-// The real implementation lands in the roadmap task named in package.json.
-export const packageName = "@rpg/spritepack";
+// Sprite atlas packer and placeholder generator (tools/CLAUDE.md, assets/README.md).
+export { buildAtlas, writeAtlas, DEFAULT_OUT_DIR, MANIFEST_FILE, SPRITES_DIR } from "./build.ts";
+export type {
+  AtlasIndex,
+  AtlasPageJson,
+  BuildOptions,
+  BuildResult,
+  Diagnostic,
+  Origin,
+} from "./build.ts";
+export { collectSpriteRefs } from "./content.ts";
+export type { SpriteRef } from "./content.ts";
+export { registeredPacks } from "./credits.ts";
+export { parseManifest } from "./manifest.ts";
+export type { Manifest, SpriteEntry } from "./manifest.ts";
+export { packSprites } from "./pack.ts";
+export { defaultColor, defaultLabel, renderPlaceholder, TILE } from "./placeholder.ts";

@@ -52,6 +52,7 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
 - Presupuestos de rendimiento → `docs/07-performance-budget.md`
 - Cómo verificar tu trabajo → `docs/08-testing-and-verification.md`
 - Deploy AWS → `docs/09-deployment-aws.md`
+- Hosting de pruebas en casa → `docs/13-hosting-de-pruebas.md`
 - Entorno local → `docs/12-local-development.md`
 - Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md`
 
