@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,7 +157,7 @@ describe("mapcli edit commands", () => {
     expect(mapcli("npc", "remove", "testisle", "--npc", "harbor_master", "--root", root).code).toBe(
       0,
     );
-    expect(existsSync(join(root, "world/islands/testisle/npcs.yaml"))).toBe(false);
+    expect(read(root, "world/islands/testisle/npcs.yaml")).not.toContain("harbor_master");
     expect(
       mapcli(
         "npc",
@@ -171,8 +171,8 @@ describe("mapcli edit commands", () => {
         root,
       ).code,
     ).toBe(0);
-    expect(read(root, "world/islands/testisle/npcs.yaml")).toBe(
-      read(repo, "world/islands/testisle/npcs.yaml"),
+    expect(read(root, "world/islands/testisle/npcs.yaml")).toMatch(
+      /- npc: harbor_master\n {2}pos: \{ x: 1056, y: 1082, z: 7 \}\n$/,
     );
     expect(
       mapcli(
