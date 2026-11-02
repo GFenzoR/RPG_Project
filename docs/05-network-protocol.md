@@ -270,7 +270,7 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `inventory.not_possible` y nada cambia. Otros rechazos: `inventory.too_far`,
   `cannot_move` (`pickupable: false`), `wrong_slot`, `level_required` (`level`),
   `vocation_cannot`, `hands_full`, `slot_occupied`, `container_full`, `too_heavy`,
-  `into_itself`, `cannot_use`, `not_ready`.
+  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`.
 - **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
   Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
   contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor

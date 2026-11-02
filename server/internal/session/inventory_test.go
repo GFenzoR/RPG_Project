@@ -122,17 +122,16 @@ func TestLootCorpse(t *testing.T) {
 		t.Errorf("PlayerStats = %v", st)
 	}
 
-	// The remains cannot be picked up, and walking away closes their window.
+	// The remains cannot be picked up, and they decay with their window open.
 	h.input(cl, moveItem(onTile(died), corpseID, 1, inContainer(pack, 0), 1))
-	h.input(cl, walkPath(E, E, E))
-	h.sim.RunTicks(80)
+	h.sim.RunTicks(60 * 20)
 	evs = cl.take()
 	if !hasKey(evs, "inventory.cannot_move") {
 		t.Errorf("moving the remains: %v", systemKeys(evs))
 	}
 	closes := find(evs, (*pb.ServerMessage).GetContainerClose)
-	if len(closes) != 1 || closes[0].GetContainerId() != remains {
-		t.Errorf("ContainerClose = %v", closes)
+	if len(closes) != 1 || closes[0].GetContainerId() != remains || len(h.w.CorpsesAt(died)) != 0 || corpse.Item.Viewers() != 0 {
+		t.Errorf("after decay: ContainerClose = %v, remains %d", closes, len(h.w.CorpsesAt(died)))
 	}
 }
 
@@ -332,5 +331,75 @@ func TestInventorySavedAndRestored(t *testing.T) {
 	_, p = h.joinChar(fresh)
 	if bp := p.Equipped(slotBackpack); bp == nil || len(bp.Items()) != 1 || bp.Items()[0].Def().ID != "test_bag" {
 		t.Fatalf("restored backpack %v", bp)
+	}
+}
+
+// Windows never outlive what they show: B's window on a bag closes when A carries the
+// bag away, logging out forgets the windows, and decaying remains close theirs.
+func TestContainerWindowsClose(t *testing.T) {
+	h := monsterHarness(t, []*content.Monster{wolfDef()}, spawnAt("wolf", 40, 40, 0, 600))
+	clA, _ := h.joinChar(withPack(8600, pos(10, 10)))
+	c := withPack(8601, pos(11, 10))
+	c.Name = "Other"
+	clB, _ := h.joinChar(c)
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(testItems()["test_bag"], 1, pos(10, 11)) }))
+	h.sim.Step()
+	bag := h.w.GroundAt(pos(10, 11))[0]
+	h.input(clB, useItem(onTile(pos(10, 11)), bagID, 1))
+	h.sim.Step()
+	if bag.Viewers() != 1 {
+		t.Fatalf("bag viewers %d", bag.Viewers())
+	}
+	clB.take()
+	h.input(clA, moveItem(onTile(pos(10, 11)), bagID, 1, inSlot(slotBackpack), 1))
+	h.sim.Step()
+	if closes := find(clB.take(), (*pb.ServerMessage).GetContainerClose); len(closes) != 1 || bag.Viewers() != 0 {
+		t.Fatalf("B's window after A took the bag: %v, viewers %d", closes, bag.Viewers())
+	}
+
+	// Logout with an open ground container.
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(testItems()["test_bag"], 1, pos(11, 11)) }))
+	h.sim.Step()
+	bag2 := h.w.GroundAt(pos(11, 11))[0]
+	h.input(clB, useItem(onTile(pos(11, 11)), bagID, 1))
+	h.sim.Step()
+	h.sim.Command(h.w.Leave(clB))
+	h.sim.Step()
+	if bag2.Viewers() != 0 {
+		t.Errorf("viewers after logout %d", bag2.Viewers())
+	}
+
+	// Walking out of reach closes the window.
+	h.input(clA, useItem(onTile(pos(11, 11)), bagID, 1))
+	h.sim.Step()
+	clA.take()
+	h.input(clA, walkPath(W, W))
+	h.sim.RunTicks(60)
+	if closes := find(clA.take(), (*pb.ServerMessage).GetContainerClose); len(closes) != 1 || bag2.Viewers() != 0 {
+		t.Errorf("after walking away: %v, viewers %d", closes, bag2.Viewers())
+	}
+}
+
+// A tile holds at most 20 different runtime items; equal stacks merge anywhere on it.
+func TestGroundTileLimit(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), func(c *session.Config) { c.Items = testItems() })
+	cl, _ := h.joinChar(withPack(8700, pos(10, 10), session.ItemState{ItemID: coinID, Count: 5}))
+	h.sim.Command(gameFunc(func() {
+		h.w.DropForTest(testItems()["copper_coin"], 1, pos(10, 11))
+		for range 19 {
+			h.w.DropForTest(testItems()["test_tunic"], 1, pos(10, 11))
+		}
+		h.w.DropForTest(testItems()["test_sword"], 1, pos(11, 10))
+	}))
+	pack := openPack(t, h, cl)
+	h.input(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(pos(10, 11)), 2))
+	h.input(cl, moveItem(onTile(pos(11, 10)), swordID, 1, onTile(pos(10, 11)), 1))
+	h.sim.Step()
+	g := h.w.GroundAt(pos(10, 11))
+	if len(g) != 20 || g[0].Count() != 3 {
+		t.Fatalf("tile holds %d items, coins %d, messages %v", len(g), g[0].Count(), systemKeys(cl.take()))
+	}
+	if evs := cl.take(); !hasKey(evs, "inventory.tile_full") {
+		t.Errorf("messages %v", systemKeys(evs))
 	}
 }

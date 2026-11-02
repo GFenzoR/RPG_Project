@@ -26,5 +26,8 @@ func (w *World) DropForTest(def *content.Item, count int, pos world.Pos) {
 	w.tileChanged(pos)
 }
 
+// Viewers returns how many players have container it open (tests only).
+func (it *Item) Viewers() int { return len(it.viewers) }
+
 // GroundAt returns the runtime items on pos, bottom first (tests only).
 func (w *World) GroundAt(pos world.Pos) []*Item { return w.ground[pos] }

@@ -123,9 +123,12 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   varita cuenta como puños hasta T1.9), el escudo de la izquierda la defensa y la suma
   de `armor` de todo el equipo la armadura del jugador contra golpes físicos.
 - **Contenedores:** una mochila (o los restos de un monstruo) tiene `container.slots`
-  lugares. Los contenedores se anidan; no se puede meter uno dentro de sí mismo. Soltar
-  un item sobre un slot de equipo con un contenedor, o sobre un lugar que tiene un
-  contenedor, lo mete adentro. Las pilas apilables se juntan hasta `max_stack`.
+  lugares. Los contenedores se anidan hasta 8 niveles; no se puede meter uno dentro de sí
+  mismo. Soltar un item sobre un slot de equipo con un contenedor, o sobre un lugar de una
+  ventana de contenedor que tiene otro contenedor, lo mete adentro (soltarlo sobre un
+  contenedor en el mapa lo deja en el tile). Las pilas apilables se juntan hasta
+  `max_stack`. Un tile admite hasta 20 items distintos soltados (las pilas iguales se
+  juntan).
 - **Capacidad:** cada vocación tiene capacidad (gramos) por nivel; el peso es el de los
   items equipados con su contenido (`weight × cantidad`). Solo lo que entra al
   inventario desde afuera consume capacidad. La UI muestra oz = gramos / 100.
@@ -137,6 +140,11 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   `inventory.use_cooldown_ms` entre usos. Herramientas y runas llegan con sus tareas.
 - **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
   slot de mochila. El kit de cada vocación llega con los diálogos (T1.10).
+- **Límite conocido:** cada personaje guarda su inventario en su propio snapshot. Si A
+  suelta un item, B lo levanta y se guarda, y el servidor cae antes del siguiente guardado
+  de A, el item vuelve en ambos. Los items del suelo no se guardan ni desaparecen solos
+  (salvo los restos). Guardado por item y decay de items soltados quedan para el trade y
+  la muerte (T1.11) o un hito posterior.
 - **Restos:** el botín de un monstruo queda dentro de sus restos (contenedor que no se
   puede levantar) y desaparece con ellos a los `combat.monster_corpse_ms`.
 

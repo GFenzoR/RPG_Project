@@ -32,6 +32,8 @@ const (
 	msgLevelRequired  = "inventory.level_required"
 	msgVocationCannot = "inventory.vocation_cannot"
 	msgIntoItself     = "inventory.into_itself"
+	msgTooDeep        = "inventory.too_deep"
+	msgTileFull       = "inventory.tile_full"
 	msgNotReady       = "inventory.not_ready"
 	msgAte            = "inventory.ate"
 	msgLookItem       = "look.item"
@@ -41,6 +43,14 @@ const (
 	msgLookContainer  = "look.container"
 	msgLookGround     = "look.ground"
 )
+
+// maxGroundItems bounds the runtime items of one tile (each TileUpdate carries the
+// whole stack). Equal stacks merge, so this only limits different items.
+const maxGroundItems = 20
+
+// maxDepth bounds container nesting (an item at depth 1 is directly in an equipment
+// slot or on the ground), so recursion over items and saved rows stays shallow.
+const maxDepth = 8
 
 // equipSlots is the number of entries of Player.equip: index = pb.EquipmentSlot value
 // (HEAD 1 … AMMO 10); index 0 is unused.
@@ -98,6 +108,24 @@ func (it *Item) root() *Item {
 		it = it.parent
 	}
 	return it
+}
+
+// depth is 1 for an item that is not inside a container, plus one per container above it.
+func depth(it *Item) int {
+	n := 1
+	for ; it.parent != nil; it = it.parent {
+		n++
+	}
+	return n
+}
+
+// height is 0 for an item with no content, plus one per level of nested content.
+func (it *Item) height() int {
+	h := 0
+	for _, c := range it.items {
+		h = max(h, 1+c.height())
+	}
+	return h
 }
 
 // contains reports whether c is it or lies (at any depth) inside it.
@@ -464,8 +492,11 @@ func (w *World) moveItem(p *Player, m *pb.MoveItem) {
 		if from.kind == locGround && from.pos == to.pos {
 			return // dropped where it already is
 		}
-		if g := w.ground[to.pos]; len(g) > 0 {
-			merge = mergeTarget(g[len(g)-1:], it, count)
+		g := w.ground[to.pos]
+		merge = mergeTarget(g, it, count)
+		if merge == nil && len(g) >= maxGroundItems {
+			p.emit(systemMsg(msgTileFull))
+			return
 		}
 	case locSlot:
 		if from.kind == locSlot && from.slot == to.slot {
@@ -488,6 +519,10 @@ func (w *World) moveItem(p *Player, m *pb.MoveItem) {
 		}
 		if it.contains(to.cont) {
 			p.emit(systemMsg(msgIntoItself))
+			return
+		}
+		if depth(to.cont)+1+it.height() > maxDepth {
+			p.emit(systemMsg(msgTooDeep))
 			return
 		}
 		if from.kind == locContainer && from.cont == to.cont {
@@ -554,7 +589,7 @@ func mergeTarget(list []*Item, it *Item, count int) *Item {
 		return nil
 	}
 	for _, c := range list {
-		if c != it && c.def == it.def && c.count+count <= it.def.StackLimit() {
+		if c != it && c.def.Numeric == it.def.Numeric && c.count+count <= it.def.StackLimit() {
 			return c
 		}
 	}
@@ -853,9 +888,13 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 		}
 	}
 	if def == nil {
-		it, _ := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
+		it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
 		if it == nil {
 			p.emit(systemMsg(msgNotPossible))
+			return
+		}
+		if from.kind == locContainer && !w.reaches(p, from.cont) {
+			p.emit(systemMsg(msgTooFar))
 			return
 		}
 		def, weight, count = it.def, it.weight(), it.count
