@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -60,6 +61,7 @@ func main() {
 	o.databaseURL = os.Getenv("DATABASE_URL")
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger) // also routes the standard log package through slog
 	if err := run(logger, o); err != nil {
 		logger.Error("gameserver stopped", "err", err)
 		os.Exit(1)
@@ -123,14 +125,8 @@ func run(logger *slog.Logger, o options) error {
 		return fmt.Errorf("game loop: %w", err)
 	}
 
-	srv := &http.Server{
-		Addr:              o.httpAddr,
-		Handler:           api,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
+	srv, cancelRequests := newHTTPServer(o.httpAddr, api, logger)
+	defer cancelRequests()
 	httpErr := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -161,11 +157,7 @@ func run(logger *slog.Logger, o options) error {
 	}
 	stopLoop()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Warn("http shutdown", "err", err)
-	}
+	shutdownHTTP(srv, cancelRequests, httpShutdownTimeout, logger)
 	if loopErr != nil {
 		if err := <-loopErr; err != nil && runErr == nil {
 			runErr = fmt.Errorf("game loop: %w", err)
@@ -173,6 +165,39 @@ func run(logger *slog.Logger, o options) error {
 	}
 	logger.Info("gameserver stopped", "ticks", uint64(loop.Tick()))
 	return runErr
+}
+
+const httpShutdownTimeout = 5 * time.Second
+
+// newHTTPServer builds the API server. Its errors go to slog, and every request context
+// derives from a base context that the returned cancel func ends.
+func newHTTPServer(addr string, h http.Handler, logger *slog.Logger) (*http.Server, context.CancelFunc) {
+	baseCtx, cancel := context.WithCancel(context.Background())
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		BaseContext:       func(net.Listener) context.Context { return baseCtx },
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}, cancel
+}
+
+// shutdownHTTP stops srv gracefully, waiting up to timeout for in-flight requests. If
+// they do not finish, it cancels their contexts and closes the connections, so the
+// deferred store.Close never waits on them forever.
+func shutdownHTTP(srv *http.Server, cancelRequests context.CancelFunc, timeout time.Duration, logger *slog.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Warn("http shutdown timed out, closing connections", "err", err)
+		cancelRequests()
+		if err := srv.Close(); err != nil {
+			logger.Warn("http close", "err", err)
+		}
+	}
 }
 
 // purgeSessions deletes expired session tokens periodically until ctx is done.

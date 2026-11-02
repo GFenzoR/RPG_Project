@@ -42,11 +42,24 @@ const (
 type Store struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
+	url  string
 }
 
-// Open connects to PostgreSQL and checks the connection.
+// DefaultStatementTimeout bounds every query of the pool, so a stuck query cannot hold
+// an HTTP request (or shutdown) forever. Migrations run on their own connection without it.
+const DefaultStatementTimeout = 10 * time.Second
+
+// Open connects to PostgreSQL and checks the connection. Pool queries time out after
+// DefaultStatementTimeout unless the URL sets its own statement_timeout.
 func Open(ctx context.Context, url string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, url)
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("parse postgres url: %w", err)
+	}
+	if _, ok := cfg.ConnConfig.RuntimeParams["statement_timeout"]; !ok {
+		cfg.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprint(DefaultStatementTimeout.Milliseconds())
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
@@ -54,7 +67,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
-	return &Store{pool: pool, q: db.New(pool)}, nil
+	return &Store{pool: pool, q: db.New(pool), url: url}, nil
 }
 
 // Close releases the pool.
@@ -65,22 +78,28 @@ func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 
 // Migrate applies every pending migration embedded in the binary.
 func (s *Store) Migrate(ctx context.Context) error {
-	return withGoose(s.pool, func(p *goose.Provider) error {
+	return s.withGoose(func(p *goose.Provider) error {
 		_, err := p.Up(ctx)
 		return err
 	})
 }
 
-// MigrateDownAll rolls back every migration. Only for tests and `make migrate-reset`.
+// MigrateDownAll rolls back every migration. Only for tests.
 func (s *Store) MigrateDownAll(ctx context.Context) error {
-	return withGoose(s.pool, func(p *goose.Provider) error {
+	return s.withGoose(func(p *goose.Provider) error {
 		_, err := p.DownTo(ctx, 0)
 		return err
 	})
 }
 
-func withGoose(pool *pgxpool.Pool, fn func(*goose.Provider) error) error {
-	sqlDB := stdlib.OpenDBFromPool(pool)
+// withGoose runs fn on a separate connection without the pool's statement timeout, so
+// long migrations (index builds) are not cut off.
+func (s *Store) withGoose(fn func(*goose.Provider) error) error {
+	cfg, err := pgx.ParseConfig(s.url)
+	if err != nil {
+		return fmt.Errorf("parse postgres url: %w", err)
+	}
+	sqlDB := stdlib.OpenDB(*cfg)
 	defer func() { _ = sqlDB.Close() }()
 	p, err := newProvider(sqlDB)
 	if err != nil {
@@ -129,3 +148,12 @@ func notFound(err error) error {
 }
 
 func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
+
+// StatementTimeout returns the statement_timeout in effect on pool connections.
+func (s *Store) StatementTimeout(ctx context.Context) (string, error) {
+	var v string
+	if err := s.pool.QueryRow(ctx, "SHOW statement_timeout").Scan(&v); err != nil {
+		return "", fmt.Errorf("show statement_timeout: %w", err)
+	}
+	return v, nil
+}
