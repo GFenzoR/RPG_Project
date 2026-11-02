@@ -85,7 +85,10 @@ export interface SaveConflictBody {
   conflicts: string[];
 }
 
-/** Header every API call sends; cross-site pages cannot set it without a CORS preflight. */
+/**
+ * Header every API call sends. Other origins can only set it after a CORS preflight, and
+ * the editor's dev server never approves one (CORS is off in vite.config.ts).
+ */
 export const API_HEADER = "x-rpg-editor";
 
 /** Repository path of a chunk file (docs/03-world-and-maps.md, "Estructura en disco"). */

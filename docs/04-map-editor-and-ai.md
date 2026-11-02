@@ -110,6 +110,13 @@ en http://localhost:5174 y edita `world/` del repo en el lugar.
   rutas `world/islands/<id>/chunks/zNN/cXXXX_YYYY.json` de islas listadas en `world.yaml`
   en disco, verifica que la ruta resuelta quede dentro de esa isla y que el chunk pase el
   esquema antes de escribir.
+  El servidor de desarrollo tiene CORS apagado (`cors: false`: ninguna otra página, ni
+  siquiera de otro puerto de localhost, consigue aprobar el preflight) y `/@fs/` solo
+  sirve `editor/`, `packages/` y `node_modules/`.
+- Guardado en dos fases: primero escribe cada chunk a un temporal junto al destino (si
+  falla, los borra y no cambió nada); después renombra. Si un renombre falla a mitad, la
+  respuesta (500) incluye lo que sí quedó en disco y el editor avanza esas bases, así el
+  siguiente guardado no choca con su propia escritura.
 - Validación en vivo: tras cada cambio (300 ms de espera) el servidor corre
   `validateLoaded(world, content)` de map-format sobre el mundo en memoria (las mismas
   reglas que `validateWorld`, menos las de archivos en disco), con las líneas YAML del disco.

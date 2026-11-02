@@ -49,6 +49,18 @@ export class ConflictError extends Error {
   }
 }
 
+/**
+ * The save failed after writing some files. `partial` is what reached the disk; the
+ * editor moves those files' bases forward so its next save does not conflict with itself.
+ */
+export class PartialSaveError extends Error {
+  readonly partial: SaveResult;
+  constructor(message: string, partial: SaveResult) {
+    super(message);
+    this.partial = partial;
+  }
+}
+
 export interface Backend {
   validate(world: World): Promise<ValidateResult>;
   /** Throws ConflictError on a 409. */
@@ -63,7 +75,11 @@ async function post<T>(url: string, data: unknown): Promise<T> {
   });
   if (res.status === 409)
     throw new ConflictError(((await res.json()) as SaveConflictBody).conflicts);
-  if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
+  if (!res.ok) {
+    const body = (await res.json()) as { error: string; partial?: SaveResult };
+    if (body.partial) throw new PartialSaveError(body.error, body.partial);
+    throw new Error(body.error);
+  }
   return (await res.json()) as T;
 }
 
@@ -350,6 +366,24 @@ export class EditorController {
     }
   }
 
+  /**
+   * Moves bases forward after a save. On a partial save only the files that were written
+   * or removed move; the others keep their old base, so a change made on disk meanwhile
+   * is still detected as a conflict.
+   */
+  private settle(r: SaveResult, saved: World, partial: boolean): void {
+    const editedSince = this.state.world !== saved;
+    const done = new Set([...r.written, ...r.removed]);
+    for (const [file, hash] of Object.entries(r.base)) {
+      if (partial && !done.has(file)) continue;
+      if (hash === null) this.base.delete(file);
+      else this.base.set(file, hash);
+      // Files edited again while saving stay pending, now against the new base.
+      if (editedSince) this.pending.set(file, hash);
+      else this.pending.delete(file);
+    }
+  }
+
   async save(): Promise<void> {
     this.strokeEnd();
     if (this.saving) return;
@@ -358,19 +392,13 @@ export class EditorController {
     const changes = this.changes();
     try {
       const r = await this.backend.save(world, changes);
-      const editedSince = this.state.world !== world;
-      for (const [file, hash] of Object.entries(r.base)) {
-        if (hash === null) this.base.delete(file);
-        else this.base.set(file, hash);
-        // Files edited again while saving stay pending, now against the new base.
-        if (editedSince) this.pending.set(file, hash);
-        else this.pending.delete(file);
-      }
+      this.settle(r, world, false);
       this.set({
-        dirty: editedSince || this.pending.size > 0,
+        dirty: this.state.world !== world || this.pending.size > 0,
         status: this.t("editor.saved", { written: r.written.length, removed: r.removed.length }),
       });
     } catch (e) {
+      if (e instanceof PartialSaveError) this.settle(e.partial, world, true);
       const status =
         e instanceof ConflictError
           ? this.t("editor.save_conflict", {
