@@ -1,0 +1,98 @@
+name: images
+
+# Builds the deploy images (deploy/Dockerfile.*) for linux/amd64 and linux/arm64 and
+# publishes them to ghcr.io on pushes to main and on vX.Y.Z tags. Pull requests that touch
+# what goes into an image only build them (no push), so a broken Dockerfile fails the PR.
+# docs/09-deployment-aws.md describes the tags and how the server consumes them.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    paths:
+      - deploy/**
+      - server/**
+      - world/**
+      - data/**
+      - i18n/**
+      - client/**
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/images.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  image:
+    name: image (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io with GITHUB_TOKEN
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: gameserver
+            dockerfile: deploy/Dockerfile.gameserver
+          - image: web
+            dockerfile: deploy/Dockerfile.web
+          - image: backup
+            dockerfile: deploy/Dockerfile.backup
+    env:
+      PUSH: ${{ github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: image name
+        id: name
+        # GHCR repository names must be lowercase.
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rpg-project-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: log in to ghcr.io
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.name.outputs.image }}
+          flavor: latest=false
+          tags: |
+            type=sha,format=short
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: build${{ env.PUSH == 'true' && ' and push' || '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

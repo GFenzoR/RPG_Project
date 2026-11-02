@@ -1,0 +1,82 @@
+# syntax=docker/dockerfile:1.7
+#
+# Game server image: static Go binary + world.bin + data/ + i18n/ on distroless (non-root).
+# Build from the repo root (the context needs server/, world/, data/, i18n/ and deploy/):
+#
+#   docker build -f deploy/Dockerfile.gameserver -t rpg-gameserver .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f deploy/Dockerfile.gameserver .
+#
+# Go cross-compiles on the build platform ($BUILDPLATFORM), so multi-arch builds do not run
+# the compiler under QEMU. Only the final COPY-only stage is per target platform.
+
+ARG GO_VERSION=1.24
+
+# ---- build: gameserver and the healthcheck probe, for the target platform -----------------
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+ARG COMMIT=unknown
+ENV CGO_ENABLED=0 GOFLAGS=-trimpath
+WORKDIR /src
+
+COPY server/go.mod server/go.sum server/
+WORKDIR /src/server
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+
+COPY server/ ./
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
+      -ldflags "-s -w \
+        -X github.com/GFenzoR/RPG_Project/server/internal/buildinfo.Version=${VERSION} \
+        -X github.com/GFenzoR/RPG_Project/server/internal/buildinfo.Commit=${COMMIT}" \
+      -o /out/gameserver ./cmd/gameserver
+
+COPY deploy/healthcheck/ /src/deploy/healthcheck/
+WORKDIR /src/deploy/healthcheck
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    go vet ./... && go test ./... \
+    && GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-s -w" -o /out/healthcheck .
+
+# ---- world: compile world/ + data/ into world.bin (runs natively on the build platform) ---
+# world.bin is architecture-independent, so it is built once, never under QEMU.
+# cmd/mapcompile arrives with T1.2; until it is merged the stage leaves the directory empty
+# (the server on main does not load a map yet). Once it exists, any compile error fails the
+# build.
+FROM --platform=$BUILDPLATFORM build AS world
+COPY world/ /src/world/
+COPY data/ /src/data/
+WORKDIR /src/server
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    mkdir -p /out/build \
+    && if [ -d cmd/mapcompile ]; then \
+         go run ./cmd/mapcompile -root .. -out /out/build/world.bin; \
+       else \
+         echo "mapcompile not found (pending T1.2): image ships without world.bin"; \
+       fi
+
+# ---- runtime ------------------------------------------------------------------------------
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG VERSION=dev
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="rpg-project-gameserver" \
+      org.opencontainers.image.description="RPG Project game server (game loop, HTTP API, WebSocket)" \
+      org.opencontainers.image.source="https://github.com/GFenzoR/RPG_Project" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
+
+WORKDIR /app
+COPY --from=build /out/gameserver /out/healthcheck /app/
+COPY --from=world /out/build/ /app/build/
+COPY data/ /app/data/
+COPY i18n/ /app/i18n/
+
+# The server reads $RPG_WORLD (T1.2) and -data; both point inside the image.
+ENV RPG_WORLD=/app/build/world.bin
+# 65532 = "nonroot" in distroless.
+USER 65532:65532
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["/app/healthcheck", "http://127.0.0.1:8080/healthz"]
+ENTRYPOINT ["/app/gameserver"]
+CMD ["-http=:8080", "-data=/app/data"]

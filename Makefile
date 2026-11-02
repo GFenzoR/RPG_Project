@@ -115,6 +115,39 @@ e2e: ## Playwright: boot everything, log in and take screenshots
 bots: ## Load test with N bots (make bots N=100)
 	cd tools/bots && go run ./cmd/bots -n $(or $(N),10)
 
+## ---- production stack in Docker (deploy/, docs/09) ------------------------
+
+# Same compose file as the server; deploy/.env is created for local use on first run.
+COMPOSE_PROD := docker compose -f deploy/docker-compose.yml --env-file deploy/.env
+GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+# Local-only settings: Caddy's local CA on https://localhost (no ACME, so the email is a
+# placeholder) and a random DB password.
+deploy/.env:
+	cp deploy/.env.example $@
+	sed -i.bak -e 's/^SITE_ADDRESS=.*/SITE_ADDRESS=localhost/' \
+		-e 's/^ACME_EMAIL=.*/ACME_EMAIL=local@example.com/' \
+		-e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$(openssl rand -hex 24)/" $@ && rm -f $@.bak
+	@echo "created $@ for local use (SITE_ADDRESS=localhost)"
+
+.PHONY: docker-build
+docker-build: deploy/.env ## Build the gameserver, web and backup images from this checkout
+	VERSION=dev COMMIT=$(GIT_COMMIT) $(COMPOSE_PROD) build
+
+.PHONY: docker-up
+docker-up: docker-build ## Run the full production stack locally (https://localhost)
+	$(COMPOSE_PROD) up -d --wait
+	$(COMPOSE_PROD) ps
+	@echo "up: https://localhost (Caddy local CA; the browser warns about the certificate)"
+
+.PHONY: docker-down
+docker-down: ## Stop the local production stack (volumes are kept)
+	$(COMPOSE_PROD) down
+
+.PHONY: docker-logs
+docker-logs: ## Follow the logs of the local production stack
+	$(COMPOSE_PROD) logs -f --tail=100
+
 ## ---- database ------------------------------------------------------------
 
 # Dev database; the server also applies pending migrations on start (-migrate).

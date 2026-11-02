@@ -1,0 +1,65 @@
+# Caddy front for the RPG Project (docs/09-deployment-aws.md).
+#
+#   /api/*, /ws, /healthz  → gameserver:8080 (HTTP API, WebSocket, health)
+#   /                       → static client build in /srv/client (SPA fallback to index.html)
+#
+# SITE_ADDRESS decides TLS:
+#   juego.example.com   real domain → automatic Let's Encrypt/ZeroSSL certificate (ports 80+443)
+#   localhost           Caddy's local CA (self-signed; for `make docker-up`)
+#   :80                 plain HTTP, no TLS (behind a tunnel that terminates TLS, docs/13)
+{
+	email {$ACME_EMAIL}
+	# Admin API only on localhost inside the container (the compose healthcheck uses it).
+	admin localhost:2019
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Gameserver: API, health and the game WebSocket. reverse_proxy upgrades WebSockets on
+	# its own; flush_interval -1 streams frames without buffering.
+	@backend path /api/* /ws /ws/* /healthz
+	handle @backend {
+		reverse_proxy gameserver:8080 {
+			flush_interval -1
+			# Long-lived WebSockets must survive a Caddy config reload.
+			stream_close_delay 5m
+		}
+	}
+
+	# Map editor (docs/04): published in a later phase. Today the editor saves chunks to
+	# world/ through a local development backend (Vite dev server on the contributor's
+	# machine), so a static build here could not save anything. It arrives with patch
+	# submission to review (milestone 4-5), which needs accounts and moderation:
+	#
+	# handle_path /editor/* {
+	# 	root * /srv/editor
+	# 	try_files {path} /index.html
+	# 	file_server
+	# }
+
+	# Game client (static Vite build). Hashed assets are immutable; index.html is not cached
+	# so a deploy is picked up on the next page load.
+	handle {
+		root * /srv/client
+		@hashed path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		@html path / /index.html
+		header @html Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
