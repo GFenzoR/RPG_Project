@@ -57,8 +57,10 @@ const (
 	failOpen collisionPolicy = iota
 	// failClosed makes the key share the fullest slot of its set. Used for the
 	// per-account login limits: only real password checks spend them, capped by the
-	// argon2 slots, so an attacker can drain only a small fraction f of the slots and a
-	// key is affected only if all limiterWays slots of its set are drained (about f^4).
+	// argon2 slots, so an attacker can drain only a small fraction f of the slots. A key
+	// is affected only if all limiterWays slots of its set are drained; drained buckets
+	// land in sets in Poisson-like counts, so that is P(Poisson(4f) >= 4) ~ (4f)^4/24,
+	// about 10*f^4 per table (0.08% of keys at f = 10%), versus ~2*f^2 with 2 ways.
 	failClosed
 )
 

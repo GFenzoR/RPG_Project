@@ -109,8 +109,11 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
   - **Residuo en los límites de login:** solo los gastan cálculos reales de contraseña
     (máx. 4 a la vez), así que un atacante solo puede mantener gastada una fracción *f*
     pequeña de las casillas. Una cuenta que nunca falló recibe `429` solo si las 4
-    casillas de su grupo están gastadas por otros: probabilidad ≈ *f*⁴ (con *f* = 10 %,
-    0,01 % de las cuentas, mientras dure el ataque). Con 2 casillas por clave era *f*².
+    casillas de su grupo están gastadas por otros. Como los buckets gastados caen en los
+    grupos con conteos tipo Poisson, eso pasa con probabilidad P(Poisson(4*f*) ≥ 4) ≈
+    (4*f*)⁴/24 ≈ 10·*f*⁴ por cada una de las dos tablas de login: ≈ 0,08 % de las cuentas
+    con *f* = 10 %, ≈ 0,3 % con *f* = 15 %, mientras dure el ataque. Con 2 casillas por
+    clave era ≈ 2·*f*² (≈ 1,8 % con *f* = 10 %).
   - El límite por IP es **best effort**: quien sostenga ~11 000 pedidos/s desde decenas
     de miles de /64 (p. ej. un /48 IPv6) satura la tabla y, mientras dure, las IPs sin
     casilla quedan sin ese límite. Preferimos eso a un `429` para todos. Lo que sigue

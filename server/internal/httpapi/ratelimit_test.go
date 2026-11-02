@@ -10,7 +10,8 @@ import (
 
 func newTestLimiter(t *testing.T, rl RateLimit, p collisionPolicy) (*limiter, *clock.Fake) {
 	t.Helper()
-	clk := clock.NewFake(time.Unix(0, 0))
+	// Not the Unix epoch, so an offset accidentally computed from UnixNano shows up.
+	clk := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	l, err := newLimiter(rl, p, clk)
 	if err != nil {
 		t.Fatal(err)
@@ -226,18 +227,19 @@ func TestGapFullBucketsAreReclaimed(t *testing.T) {
 func TestRefundToSharedSlot(t *testing.T) {
 	l, _ := newTestLimiter(t, RateLimit{Burst: 10, Every: time.Hour}, failClosed)
 	blockers := keysInSet(t, l, "victim", limiterWays)
-	for i, b := range blockers { // distinct counts: blocker i keeps 9-2i... tokens
-		for range 1 + 2*i {
+	for i, b := range blockers { // blocker i spends 7-2i: tokens 3, 5, 7, 9
+		for range 7 - 2*i {
 			allowOK(l, b)
 		}
 	}
 	set := l.locate("victim").set
-	ok, res := l.allow("victim") // shares the fullest: blocker 0 (9 -> 8)
-	if !ok || res.slot != set {
-		t.Fatalf("charged slot %d, want %d", res.slot, set)
+	last := set + limiterWays - 1
+	ok, res := l.allow("victim") // shares the fullest, which is the last slot (9 -> 8)
+	if !ok || res.slot != last {
+		t.Fatalf("charged slot %d, want the fullest %d (not simply the first)", res.slot, last)
 	}
-	for range 3 { // blocker 0 drops to 5: slot set+1 (7 tokens) is now the fullest
-		allowOK(l, blockers[0])
+	for range 3 { // last drops to 5: slot set+2 (7 tokens) is now the fullest
+		allowOK(l, blockers[limiterWays-1])
 	}
 	before := make([]float64, limiterWays)
 	for i := range before {
@@ -263,5 +265,17 @@ func TestRefundDroppedIfSlotChangedOwner(t *testing.T) {
 	l.refund(res)
 	if l.slots[res.slot].tokens != 0 {
 		t.Fatal("refund credited the new owner")
+	}
+}
+
+// TestFourWaysPerSet: three drained keys in a set still leave a slot for a new key. With
+// only 2 or 3 ways the new key would share a drained bucket and be denied.
+func TestFourWaysPerSet(t *testing.T) {
+	l, _ := newTestLimiter(t, RateLimit{Burst: 1, Every: time.Hour}, failClosed)
+	for _, k := range keysInSet(t, l, "victim", 3) {
+		allowOK(l, k) // drained
+	}
+	if !allowOK(l, "victim") {
+		t.Fatal("a fresh key must get the fourth slot of its set")
 	}
 }
