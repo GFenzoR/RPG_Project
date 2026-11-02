@@ -130,17 +130,71 @@ func TestCharacterLimitUnderConcurrency(t *testing.T) {
 	st := storetest.Open(t, "it_store_concurrency", true)
 	a, _ := st.CreateAccount(ctx, "ana@example.org", "h")
 	names := []string{"Aa", "Bb", "Cc", "Dd", "Ee", "Ff", "Gg", "Hh"}
+	errs := make(chan error, len(names))
 	var wg sync.WaitGroup
 	for _, n := range names {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = st.CreateCharacter(ctx, store.NewCharacter{AccountID: a, Name: n + "name", Vocation: "guardian", Health: 1}, 3)
+			_, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: a, Name: n + "name", Vocation: "guardian", Health: 1}, 3)
+			errs <- err
 		}()
 	}
 	wg.Wait()
+	close(errs)
+	var ok, limited int
+	for err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, store.ErrCharacterLimit):
+			limited++
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	if ok != 3 || limited != 5 {
+		t.Fatalf("created %d, limited %d; want 3 and 5", ok, limited)
+	}
 	list, err := st.ListCharacters(ctx, a)
 	if err != nil || len(list) != 3 {
 		t.Fatalf("got %d characters, want 3 (%v)", len(list), err)
+	}
+}
+
+// TestSameNameInParallel: two accounts race for one name; exactly one wins.
+func TestSameNameInParallel(t *testing.T) {
+	ctx := context.Background()
+	st := storetest.Open(t, "it_store_samename", true)
+	const racers = 6
+	errs := make(chan error, racers)
+	var wg sync.WaitGroup
+	for i := range racers {
+		acc, err := st.CreateAccount(ctx, string(rune('a'+i))+"@example.org", "h")
+		if err != nil {
+			t.Fatal(err)
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: acc, Name: "Mira", Vocation: "guardian", Health: 1}, 3)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	var ok, taken int
+	for err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, store.ErrNameTaken):
+			taken++
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	if ok != 1 || taken != racers-1 {
+		t.Fatalf("ok %d, taken %d", ok, taken)
 	}
 }

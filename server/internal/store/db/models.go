@@ -42,6 +42,7 @@ type Character struct {
 	Outfit       string
 	OutfitColors []int32
 	Skull        int16
+	SkullUntil   pgtype.Timestamptz
 	PvpFlags     int32
 	CreatedAt    pgtype.Timestamptz
 	LastLoginAt  pgtype.Timestamptz

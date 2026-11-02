@@ -67,6 +67,26 @@ func TestSchemaConstraints(t *testing.T) {
 		t.Fatalf("deleting a container must delete its contents, %d left", left)
 	}
 
+	// A container's contents must belong to the container's character.
+	other, _ := st.CreateAccount(ctx, "bob@example.org", "h")
+	otherCh, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: other, Name: "Bob", Vocation: "guardian", Health: 1}, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bag2 int64
+	if err := conn.QueryRow(ctx, "INSERT INTO inventory_items (character_id, slot, item_id) VALUES ($1, 3, 100) RETURNING id", ch.ID).Scan(&bag2); err != nil {
+		t.Fatal(err)
+	}
+	mustFail("item in another character's container", "INSERT INTO inventory_items (character_id, container_id, slot, item_id) VALUES ($1, $2, 0, 200)", otherCh.ID, bag2)
+
+	// A play token can only name a character of its own account.
+	mustFail("play token for another account's character",
+		"INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, expires_at) VALUES (sha256('x'), $1, 'play', $2, now(), now() + interval '1 minute')",
+		acc, otherCh.ID)
+	mustExec("INSERT INTO sessions (token_hash, account_id, kind, character_id, created_at, expires_at) VALUES (sha256('y'), $1, 'play', $2, now(), now() + interval '1 minute')",
+		acc, ch.ID)
+	mustFail("too many outfit colors", "UPDATE characters SET outfit_colors = '{1,2,3,4,5,6,7,8,9}' WHERE id = $1", ch.ID)
+
 	mustExec("INSERT INTO character_skills (character_id, skill, level, tries) VALUES ($1, 'sword', 12, 40)", ch.ID)
 	mustExec("INSERT INTO quest_state (character_id, key, value) VALUES ($1, 'chapter1.started', 1)", ch.ID)
 
@@ -74,6 +94,7 @@ func TestSchemaConstraints(t *testing.T) {
 	mustExec("INSERT INTO economy_log (at, kind, character_id, item_id, count, amount) VALUES (now(), 'npc_sell', $1, 200, 5, 50)", ch.ID)
 	mustFail("update economy_log", "UPDATE economy_log SET amount = 0")
 	mustFail("delete economy_log", "DELETE FROM economy_log")
+	mustFail("truncate economy_log", "TRUNCATE economy_log")
 
 	// Cosmetics belong to the account.
 	mustExec("INSERT INTO cosmetics (id, kind) VALUES ('outfit.sailor', 'outfit')")
@@ -82,7 +103,8 @@ func TestSchemaConstraints(t *testing.T) {
 
 	// Deleting the account cascades to characters and their state; the log survives.
 	mustExec("DELETE FROM accounts WHERE id = $1", acc)
-	for _, table := range []string{"characters", "character_skills", "quest_state", "account_cosmetics"} {
+	mustExec("DELETE FROM accounts WHERE id = $1", other)
+	for _, table := range []string{"characters", "character_skills", "quest_state", "account_cosmetics", "sessions", "inventory_items"} {
 		var n int
 		_ = conn.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n)
 		if n != 0 {

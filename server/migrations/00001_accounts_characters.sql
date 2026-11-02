@@ -33,14 +33,17 @@ CREATE TABLE characters (
     blessings     SMALLINT    NOT NULL DEFAULT 0 CHECK (blessings >= 0),
     -- Cosmetic look (content ids). Never gives a gameplay advantage.
     outfit        TEXT        NOT NULL DEFAULT '',
-    outfit_colors INTEGER[]   NOT NULL DEFAULT '{}',
+    outfit_colors INTEGER[]   NOT NULL DEFAULT '{}' CHECK (cardinality(outfit_colors) <= 8),
     -- Prepared for PvP (docs/00-vision.md); unused in the PvE MVP.
-    skull         SMALLINT    NOT NULL DEFAULT 0,
+    skull         SMALLINT    NOT NULL DEFAULT 0 CHECK (skull >= 0),
+    skull_until   TIMESTAMPTZ,
     pvp_flags     INTEGER     NOT NULL DEFAULT 0,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_login_at TIMESTAMPTZ,
     last_save_at  TIMESTAMPTZ,
-    CHECK ((pos_x IS NULL) = (pos_y IS NULL) AND (pos_y IS NULL) = (pos_z IS NULL))
+    CHECK ((pos_x IS NULL) = (pos_y IS NULL) AND (pos_y IS NULL) = (pos_z IS NULL)),
+    -- Target of composite foreign keys that tie rows to "this character of this account".
+    UNIQUE (id, account_id)
 );
 -- Names are unique ignoring case ("Ana" and "ANA" cannot coexist).
 CREATE UNIQUE INDEX characters_name_key ON characters (lower(name));

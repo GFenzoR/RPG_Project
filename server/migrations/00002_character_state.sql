@@ -5,14 +5,18 @@
 CREATE TABLE inventory_items (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     character_id BIGINT   NOT NULL REFERENCES characters (id) ON DELETE CASCADE,
-    container_id BIGINT REFERENCES inventory_items (id) ON DELETE CASCADE,
+    container_id BIGINT,
     -- Equipment slot (container_id NULL) or index inside the container.
     slot         SMALLINT NOT NULL CHECK (slot >= 0),
     -- Stable numeric id from data/ids.lock.yaml.
     item_id      INTEGER  NOT NULL CHECK (item_id > 0),
     count        INTEGER  NOT NULL DEFAULT 1 CHECK (count > 0),
     -- Per-instance attributes (charges, text, duration...). Empty for plain items.
-    attributes   JSONB    NOT NULL DEFAULT '{}'
+    attributes   JSONB    NOT NULL DEFAULT '{}',
+    UNIQUE (id, character_id),
+    -- A container's contents belong to the same character as the container.
+    FOREIGN KEY (container_id, character_id)
+        REFERENCES inventory_items (id, character_id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX inventory_items_equipment_slot_key
     ON inventory_items (character_id, slot) WHERE container_id IS NULL;

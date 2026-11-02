@@ -27,6 +27,9 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER economy_log_no_update_delete
     BEFORE UPDATE OR DELETE ON economy_log
     FOR EACH ROW EXECUTE FUNCTION economy_log_append_only();
+CREATE TRIGGER economy_log_no_truncate
+    BEFORE TRUNCATE ON economy_log
+    FOR EACH STATEMENT EXECUTE FUNCTION economy_log_append_only();
 
 -- Cosmetics catalog and ownership (docs/00-vision.md). Cosmetics belong to the account.
 -- No payment gateway yet: price_premium is only the future shop price.
@@ -45,6 +48,7 @@ CREATE TABLE account_cosmetics (
     acquired_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (account_id, cosmetic_id)
 );
+CREATE INDEX account_cosmetics_cosmetic_idx ON account_cosmetics (cosmetic_id);
 
 -- +goose Down
 DROP TABLE account_cosmetics;

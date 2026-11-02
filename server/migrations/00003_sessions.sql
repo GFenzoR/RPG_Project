@@ -7,11 +7,14 @@ CREATE TABLE sessions (
     -- 'account': HTTP API token from login. 'play': short-lived token for one character,
     -- exchanged in the WebSocket Hello (T1.4).
     kind         TEXT        NOT NULL CHECK (kind IN ('account', 'play')),
-    character_id BIGINT REFERENCES characters (id) ON DELETE CASCADE,
+    character_id BIGINT,
     created_at   TIMESTAMPTZ NOT NULL,
     expires_at   TIMESTAMPTZ NOT NULL,
     CHECK ((kind = 'play') = (character_id IS NOT NULL)),
-    CHECK (expires_at > created_at)
+    CHECK (expires_at > created_at),
+    -- A play token can only name a character of its own account.
+    FOREIGN KEY (character_id, account_id)
+        REFERENCES characters (id, account_id) ON DELETE CASCADE
 );
 CREATE INDEX sessions_account_idx ON sessions (account_id);
 CREATE INDEX sessions_expires_idx ON sessions (expires_at);
