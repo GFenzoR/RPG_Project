@@ -23,14 +23,23 @@ el juego tú mismo mientras Claude trabaja.
    ```
    `make setup` usa `scripts/local-setup.sh`, que crea la tarea T0.1.
 
-## Servidor de juego solo
+### Base de datos y servidor solo
+```
+make migrate-status    # estado de las migraciones en DATABASE_URL (por defecto la base rpg)
+make test-integration  # tests Go con Postgres real (base rpg_test)
+cd server && DATABASE_URL=postgres://postgres:postgres@localhost:5432/rpg go run ./cmd/gameserver
+```
+El servidor aplica las migraciones pendientes al arrancar y sirve la API HTTP en `:8080`
+(ver "API HTTP" en `05-network-protocol.md`).
+
+### Mapa del servidor
 El servidor carga el mapa compilado (`build/world.bin`), no el JSON de `world/`:
 ```
-make run-server   # make mapcompile + gameserver con RPG_WORLD=<repo>/build/world.bin
+make run-server   # make mapcompile + gameserver con RPG_WORLD=<repo>/build/world.bin y DATABASE_URL
 ```
-A mano: `make mapcompile` y luego `RPG_WORLD=$PWD/build/world.bin go run ./cmd/gameserver`
-desde `server/` (o `-world <ruta>`). Vuelve a compilar el mapa cada vez que cambie
-`world/` o `data/items/`. `make test-parity` compara la caminabilidad que calcula
+A mano: `make mapcompile` y luego el comando de arriba desde `server/` (por defecto lee
+`../build/world.bin`; otra ruta con `RPG_WORLD` o `-world <ruta>`, y `-world ""` arranca
+sin mundo). Vuelve a compilar el mapa cada vez que cambie `world/` o `data/items/`. `make test-parity` compara la caminabilidad que calcula
 `mapcompile` con la de `packages/map-format` (necesita `pnpm install`).
 
 ## Diferencias con las sesiones cloud

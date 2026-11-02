@@ -25,8 +25,12 @@ setup: ## Install tools and dependencies (scripts/local-setup.sh), then generate
 	$(MAKE) gen
 
 .PHONY: gen
-gen: gen-proto ## buf generate + sqlc generate (+ ids.lock.yaml)
-	$(call pending,T1.3 (sqlc) / T0.3 (ids.lock.yaml))
+gen: gen-proto gen-sqlc ## buf generate + sqlc generate
+
+# sqlc reads server/migrations (schema) and server/queries; output is committed.
+.PHONY: gen-sqlc
+gen-sqlc: ## sqlc generate: server/queries -> server/internal/store/db
+	cd server && sqlc generate
 
 # Protobuf plugins run locally, pinned by server/go.mod and packages/protocol/package.json.
 .PHONY: gen-proto
@@ -94,8 +98,8 @@ test-parity: ## mapcompile vs packages/map-format walkability on every tile
 	cd server && RPG_MAPFORMAT_PARITY=1 go test -count=1 -run TestWalkableParityWithMapFormat ./internal/world/compile/
 
 .PHONY: run-server
-run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD=build/world.bin)
-	cd server && RPG_WORLD=$(CURDIR)/build/world.bin go run ./cmd/gameserver
+run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL)
+	cd server && RPG_WORLD=$(CURDIR)/build/world.bin DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver
 
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
@@ -126,6 +130,32 @@ bots: ## Load test with N bots (make bots N=100)
 	cd tools/bots && go run ./cmd/bots -n $(or $(N),10)
 
 ## ---- database ------------------------------------------------------------
+
+# Dev database; the server also applies pending migrations on start (-migrate).
+DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/rpg
+TEST_DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/rpg_test
+GOOSE := goose -dir server/migrations postgres "$(DATABASE_URL)"
+
+.PHONY: migrate-up
+migrate-up: ## Apply pending migrations to DATABASE_URL
+	$(GOOSE) up
+
+.PHONY: migrate-down
+migrate-down: ## Roll back the last migration on DATABASE_URL
+	$(GOOSE) down
+
+.PHONY: migrate-status
+migrate-status: ## Show migration status of DATABASE_URL
+	$(GOOSE) status
+
+.PHONY: migrate-new
+migrate-new: ## Create a migration: make migrate-new NAME=add_houses
+	@test -n "$(NAME)" || { echo "usage: make migrate-new NAME=snake_case_name"; exit 1; }
+	goose -dir server/migrations -s create $(NAME) sql
+
+.PHONY: test-integration
+test-integration: ## Go integration tests against Postgres (TEST_DATABASE_URL)
+	cd server && TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -tags integration -count=1 ./...
 
 .PHONY: db-up
 db-up: ## Start dev Postgres (Docker locally, VM service in cloud sessions)
