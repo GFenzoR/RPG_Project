@@ -43,7 +43,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   scheduler min-heap, harness `sim` y primeros tests deterministas. [T0.1]
 - [ ] **T1.2 Mundo en el servidor.** `mapcompile` → `world.bin`, carga, sectores,
   flags de tile, pathfinding A*, línea de visión. Benchmarks. [T1.1, T0.4]
-- [ ] **T1.3 Base de datos y cuentas.** Migraciones goose (accounts, characters,
+- [x] **T1.3 Base de datos y cuentas.** (PR #9) Migraciones goose (accounts, characters,
   inventory, skills, quest_state, sessions, economy_log, cosmetics), sqlc, API HTTP de
   registro/login con email y contraseña, lista y creación de personajes. [T1.1]
 - [ ] **T1.4 Red y caminar.** Gateway WS, handshake, sesiones, AOI, Walk/WalkPath,
