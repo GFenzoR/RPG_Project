@@ -402,17 +402,39 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
   // the projectile or its energy effect on screen.
   await page.locator("body").click({ position: { x: 1, y: 1 } }); // focus out of the say line
-  await expect
-    .poll(
-      async () => {
-        await page.keyboard.press("F1");
-        await page.waitForTimeout(60);
-        const m = await page.evaluate(() => window.__rpgClient?.magic(300));
-        return (m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13);
-      },
-      { timeout: 30_000, intervals: [250] },
-    )
-    .toBe(true);
+  try {
+    await expect
+      .poll(
+        async () => {
+          // The first wolf may be the one the combat test hurt: chasing it, our fists can
+          // kill it before it is in the bolt's range. Lost target: take the next wolf.
+          if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) {
+            const next = battle.getByRole("button", { name: /lobo/ }).first();
+            if (await next.isVisible()) {
+              await next.click();
+              await page.locator("body").click({ position: { x: 1, y: 1 } });
+            }
+          }
+          await page.keyboard.press("F1");
+          await page.waitForTimeout(60);
+          const m = await page.evaluate(() => window.__rpgClient?.magic(300));
+          return (m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13);
+        },
+        { timeout: 30_000, intervals: [250] },
+      )
+      .toBe(true);
+  } catch (e) {
+    // Say why no bolt flew: the server answers every refused cast with a game-log message
+    // (out of range, no sight, no mana, not ready...), so the log tells the cause.
+    const state = await page.evaluate(() => {
+      const c = window.__rpgClient;
+      return { self: c?.self(), target: c?.target(), battle: c?.battle(), stats: c?.stats() };
+    });
+    const log = (await page.getByTestId("game-log").textContent())?.slice(-600);
+    throw new Error(`no arc bolt within 30 s: ${JSON.stringify(state)}; game log: ${log}`, {
+      cause: e,
+    });
+  }
   await shot(page, "11-spell");
   // The cast spent mana and started the cooldown shade on F1.
   await expect(hotbar.locator('[data-hotkey="F1"] .cd')).toBeVisible();
