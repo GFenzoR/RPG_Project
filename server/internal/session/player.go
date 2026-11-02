@@ -158,8 +158,8 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	if old := w.byChar[c.ID]; old != nil {
 		// Logged in again while online: continue from the in-memory state.
 		c = old.state(c)
-		seq = old.saveSeq
 		w.remove(ctx, old, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_IN_ELSEWHERE, false)
+		seq = old.saveSeq // after remove's final snapshot: later seqs must be greater
 		delete(w.unsaved, c.ID) // the new player carries the state; it saves it later
 	} else if s, ok := w.unsaved[c.ID]; ok {
 		// Left recently and the database may not have the final save yet.

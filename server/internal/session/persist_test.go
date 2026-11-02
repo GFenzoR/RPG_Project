@@ -146,6 +146,22 @@ func TestLoginElsewhereKicksTheOldConnection(t *testing.T) {
 	if len(ev) != 2 || ev[0] != "creature_disappear" || ev[1] != "creature_appear" {
 		t.Fatalf("observer got %v", ev)
 	}
+	// The new player's snapshots outrank the old connection's final one, so the late
+	// ack of that final save cannot drop the new player's unsaved logout snapshot.
+	oldFinal := h.saves[len(h.saves)-1]
+	h.sim.Command(h.w.Leave(nw))
+	h.sim.Step()
+	newFinal := h.saves[len(h.saves)-1]
+	if !oldFinal.Final || newFinal.Seq <= oldFinal.Seq {
+		t.Fatalf("old final seq %d, new final seq %d", oldFinal.Seq, newFinal.Seq)
+	}
+	h.sim.Command(h.w.Saved(oldFinal.CharacterID, oldFinal.Seq))
+	h.sim.Step()
+	nw, np = h.joinChar(session.Character{ID: c.ID, Name: "Ana", Vocation: "guardian", Level: 1, Health: 145, HasPos: true, Pos: pos(1, 1)})
+	if np.Pos() != pos(5, 6) {
+		t.Fatalf("relogin at %v: the unsaved snapshot was dropped by an old ack", np.Pos())
+	}
+	nw.take()
 	// The old connection's late input and Leave do not touch the new player.
 	h.input(old, walk(E))
 	h.sim.Command(h.w.Leave(old))
