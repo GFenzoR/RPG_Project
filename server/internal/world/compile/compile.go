@@ -165,10 +165,16 @@ func LoadContent(root string) (*Content, error) {
 		return nil, err
 	}
 	maxID := 0
+	owner := map[int]string{}
 	for id, n := range lock.Items {
 		if n <= 0 || n > 0xFFFF {
 			return nil, fmt.Errorf("%s: item %q has numeric ID %d, outside 1..65535", rel(root, lockFile), id, n)
 		}
+		if other, dup := owner[n]; dup {
+			a, b := min(id, other), max(id, other)
+			return nil, fmt.Errorf("%s: items %q and %q share numeric ID %d", rel(root, lockFile), a, b, n)
+		}
+		owner[n] = id
 		if it := c.Items[id]; it != nil {
 			it.num = uint16(n)
 		}

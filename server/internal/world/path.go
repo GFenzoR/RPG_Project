@@ -38,8 +38,8 @@ func (p Pos) Step(d Direction) (Pos, bool) {
 // (docs/02-game-design.md).
 const MaxPathLength = 100
 
-// DefaultMaxNodes bounds how many tiles one search may expand. A 100-step path over
-// mixed terrain expands about 3 600; an unreachable goal costs ~1.5 ms at this limit.
+// DefaultMaxNodes bounds how many tiles one search pass may expand. A 100-step path over
+// mixed terrain expands about 3 600; an unreachable goal costs 1.5–2 ms at this limit.
 const DefaultMaxNodes = 6000
 
 // pathWindow is the side of the square of tiles a search can visit, centred on the start.
@@ -66,7 +66,9 @@ type Pathfinder struct {
 	heapAt []int32  // index in open while the slot is queued
 	open   []int32  // min-heap of slots
 
-	expanded int // nodes expanded by the last search
+	expanded int  // nodes expanded by the last Find
+	bySteps  bool // the current pass minimises steps instead of cost
+	depthCut bool // the current pass dropped a tile at MaxPathLength steps
 }
 
 // Expanded returns how many tiles the last search expanded (for metrics and tuning).
@@ -152,8 +154,9 @@ func (pf *Pathfinder) pop() int32 {
 	return top
 }
 
-// heuristic is the octile distance at the cheapest terrain speed, in the cost units of
-// Pathfinder.cost. It never overestimates, so A* returns a cheapest path.
+// heuristic never overestimates the remaining cost, so A* returns a cheapest path.
+// By cost: the octile distance at the cheapest terrain speed, in Pathfinder.cost units.
+// By steps: the Chebyshev distance.
 func (pf *Pathfinder) heuristic(dx, dy int) int32 {
 	if dx < 0 {
 		dx = -dx
@@ -165,14 +168,18 @@ func (pf *Pathfinder) heuristic(dx, dy int) int32 {
 	if lo > hi {
 		lo, hi = hi, lo
 	}
+	if pf.bySteps {
+		return int32(hi)
+	}
 	return pf.m.minSpeed * int32(2*(hi-lo)+3*lo)
 }
 
-// Find returns the cheapest walking path from `from` to `to` as a list of directions,
-// appended to dst[:0]. The start tile does not need to be walkable (a creature stands on
-// it); the goal does. ok is false when the floors differ, the goal is not walkable, it is
-// farther than MaxPathLength, or no path within MaxPathLength steps was found before the
-// node limit. Creatures are not considered.
+// Find returns a walking path from `from` to `to` as a list of directions, appended to
+// dst[:0]: the cheapest one (terrain and diagonal cost) if it has at most MaxPathLength
+// steps, otherwise the one with fewest steps. The start tile does not need to be walkable
+// (a creature stands on it); the goal does. ok is false when the floors differ, the goal is
+// not walkable or farther than MaxPathLength, or no path of at most MaxPathLength steps was
+// found within the node limit. Creatures are not considered.
 func (pf *Pathfinder) Find(from, to Pos, dst []Direction) (path []Direction, ok bool) {
 	dst = dst[:0]
 	if from.Z != to.Z || !pf.m.Walkable(to) {
@@ -186,6 +193,25 @@ func (pf *Pathfinder) Find(from, to Pos, dst []Direction) (path []Direction, ok 
 	if gdx == 0 && gdy == 0 {
 		return dst, true
 	}
+	pf.bySteps = false
+	path, ok = pf.search(from, gdx, gdy, dst)
+	if ok || !pf.depthCut {
+		return path, ok
+	}
+	// The cheapest routes were too long. Searching by steps finds a path of at most
+	// MaxPathLength steps whenever one exists (cost and depth then agree).
+	spent := pf.expanded
+	pf.bySteps = true
+	path, ok = pf.search(from, gdx, gdy, dst)
+	pf.expanded += spent
+	return path, ok
+}
+
+// search runs one A* pass. depthCut records whether a tile was not expanded because it was
+// reached with MaxPathLength steps (cleared when the pass stops at the node limit, so Find
+// runs at most two passes, and the second only when the first exhausted its open set).
+func (pf *Pathfinder) search(from Pos, gdx, gdy int, dst []Direction) ([]Direction, bool) {
+	pf.depthCut = false
 	pf.gen++
 	if pf.gen == 0 { // wrapped: clear stamps so stale generations cannot match
 		clear(pf.seen)
@@ -215,10 +241,12 @@ func (pf *Pathfinder) Find(from, to Pos, dst []Direction) (path []Direction, ok 
 		pf.closed[cur] = pf.gen
 		pf.expanded++
 		if pf.expanded > pf.maxNodes {
+			pf.depthCut = false // out of budget: a second pass would only spend more
 			return dst, false
 		}
 		d := pf.depth[cur]
 		if d >= MaxPathLength {
+			pf.depthCut = true
 			continue
 		}
 		wx, wy := int(cur)%pathWindow, int(cur)/pathWindow
@@ -236,9 +264,14 @@ func (pf *Pathfinder) Find(from, to Pos, dst []Direction) (path []Direction, ok 
 			if !exists || flags&FlagBlocksMovement != 0 {
 				continue
 			}
-			step := 2 * pf.m.speed(ground)
-			if dir.Diagonal() {
+			var step int32
+			switch {
+			case pf.bySteps:
+				step = 1
+			case dir.Diagonal():
 				step = 3 * pf.m.speed(ground)
+			default:
+				step = 2 * pf.m.speed(ground)
 			}
 			ng := g + step
 			queued := pf.seen[slot] == pf.gen

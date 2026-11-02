@@ -35,7 +35,7 @@ type Rect struct {
 
 // Contains reports whether the tile (x, y) lies inside r.
 func (r Rect) Contains(x, y int) bool {
-	return x >= int(r.X) && y >= int(r.Y) && x < int(r.X+r.W) && y < int(r.Y+r.H)
+	return x >= int(r.X) && y >= int(r.Y) && x < int(r.X)+int(r.W) && y < int(r.Y)+int(r.H)
 }
 
 // Flags are per-tile properties precomputed at compile time.
@@ -95,13 +95,20 @@ type Island struct {
 	Floors []uint8
 	Temple Pos
 
-	cx0, cy0 int // first sector column/row
-	cw, ch   int // sectors per row/column
+	cx0, cy0 int                // first sector column/row
+	cw, ch   int                // sectors per row/column
+	layer    [MaxFloor + 1]int8 // floor → layer in sectors (ascending z), -1 if not listed
 	sectors  []*Sector
 }
 
+// sectorSlot returns the index in is.sectors of a sector inside the rect, or -1 when the
+// island does not list floor z.
 func (is *Island) sectorSlot(z, cx, cy int) int {
-	return (z*is.ch+(cy-is.cy0))*is.cw + (cx - is.cx0)
+	l := int(is.layer[z])
+	if l < 0 {
+		return -1
+	}
+	return (l*is.ch+(cy-is.cy0))*is.cw + (cx - is.cx0)
 }
 
 // Sectors returns the island's sectors that have tiles, ordered by z, cy, cx.
@@ -123,8 +130,9 @@ type Map struct {
 	minSpeed    int32
 }
 
-// NewMap builds a Map. Island rects must be aligned to SectorSize, must not overlap and
-// every sector must lie inside its island on one of its floors. groundSpeed is indexed by
+// NewMap builds a Map. Island IDs must be unique, rects aligned to SectorSize and disjoint,
+// floors in 0..MaxFloor, the temple inside the island, and every sector inside its island
+// on one of its floors. groundSpeed is indexed by
 // numeric item ID (0 = DefaultGroundSpeed).
 func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint16) (*Map, error) {
 	m := &Map{groundSpeed: groundSpeed, minSpeed: DefaultGroundSpeed}
@@ -134,14 +142,14 @@ func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint1
 		}
 	}
 	for i, is := range islands {
+		if err := checkIsland(is); err != nil {
+			return nil, err
+		}
 		r := is.Rect
-		if r.X%SectorSize != 0 || r.Y%SectorSize != 0 || r.W%SectorSize != 0 || r.H%SectorSize != 0 || r.W == 0 || r.H == 0 {
-			return nil, fmt.Errorf("island %q: rect %+v is not aligned to %d-tile sectors", is.ID, r, SectorSize)
-		}
-		if r.X+r.W > 65536 || r.Y+r.H > 65536 {
-			return nil, fmt.Errorf("island %q: rect %+v leaves the world", is.ID, r)
-		}
 		for _, other := range islands[:i] {
+			if other.ID == is.ID {
+				return nil, fmt.Errorf("island %q is listed twice", is.ID)
+			}
 			o := other.Rect
 			if r.X < o.X+o.W && o.X < r.X+r.W && r.Y < o.Y+o.H && o.Y < r.Y+r.H {
 				return nil, fmt.Errorf("island %q overlaps island %q", is.ID, other.ID)
@@ -149,7 +157,15 @@ func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint1
 		}
 		is.cx0, is.cy0 = int(r.X/SectorSize), int(r.Y/SectorSize)
 		is.cw, is.ch = int(r.W/SectorSize), int(r.H/SectorSize)
-		is.sectors = make([]*Sector, (MaxFloor+1)*is.cw*is.ch)
+		layers := 0
+		for z := range is.layer {
+			is.layer[z] = -1
+			if is.hasFloor(uint8(z)) {
+				is.layer[z] = int8(layers)
+				layers++
+			}
+		}
+		is.sectors = make([]*Sector, layers*is.cw*is.ch)
 		for _, s := range sectors[is.ID] {
 			if !is.hasFloor(s.Z) {
 				return nil, fmt.Errorf("island %q: sector %d,%d on floor %d, which the island does not list", is.ID, s.CX, s.CY, s.Z)
@@ -167,6 +183,31 @@ func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint1
 		m.islands = append(m.islands, is)
 	}
 	return m, nil
+}
+
+// checkIsland validates an island's metadata so that later arithmetic cannot overflow or
+// index out of range, whatever the input.
+func checkIsland(is *Island) error {
+	r := is.Rect
+	if r.X%SectorSize != 0 || r.Y%SectorSize != 0 || r.W%SectorSize != 0 || r.H%SectorSize != 0 || r.W == 0 || r.H == 0 {
+		return fmt.Errorf("island %q: rect %+v is not aligned to %d-tile sectors", is.ID, r, SectorSize)
+	}
+	if uint64(r.X)+uint64(r.W) > 65536 || uint64(r.Y)+uint64(r.H) > 65536 {
+		return fmt.Errorf("island %q: rect %+v leaves the world", is.ID, r)
+	}
+	if len(is.Floors) == 0 {
+		return fmt.Errorf("island %q: no floors", is.ID)
+	}
+	for _, f := range is.Floors {
+		if f > MaxFloor {
+			return fmt.Errorf("island %q: floor %d outside 0..%d", is.ID, f, MaxFloor)
+		}
+	}
+	t := is.Temple
+	if !r.Contains(int(t.X), int(t.Y)) || !is.hasFloor(t.Z) {
+		return fmt.Errorf("island %q: temple %v is outside the island or on a floor it does not list", is.ID, t)
+	}
+	return nil
 }
 
 func (is *Island) hasFloor(z uint8) bool {
@@ -204,11 +245,11 @@ func (m *Map) sectorAt(x, y, z int) (*Sector, int) {
 		if !is.Rect.Contains(x, y) {
 			continue
 		}
-		s := is.sectors[is.sectorSlot(z, x/SectorSize, y/SectorSize)]
-		if s == nil {
+		slot := is.sectorSlot(z, x/SectorSize, y/SectorSize)
+		if slot < 0 || is.sectors[slot] == nil {
 			return nil, 0
 		}
-		return s, (y%SectorSize)*SectorSize + x%SectorSize
+		return is.sectors[slot], (y%SectorSize)*SectorSize + x%SectorSize
 	}
 	return nil, 0
 }

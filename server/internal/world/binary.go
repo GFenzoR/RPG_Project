@@ -58,8 +58,34 @@ func (b *binWriter) u32(v uint32) {
 	b.bytes(b.buf[:4])
 }
 
-// Encode writes m in world.bin format.
+// checkEncodable reports what world.bin cannot represent, before anything is written.
+func checkEncodable(m *Map) error {
+	if len(m.islands) > 0xFFFF {
+		return fmt.Errorf("%d islands do not fit", len(m.islands))
+	}
+	for _, is := range m.islands {
+		if len(is.ID) > 0xFF || len(is.Floors) > MaxFloor+1 {
+			return fmt.Errorf("island %q: id or floor list too long", is.ID)
+		}
+		for _, s := range is.Sectors() {
+			if len(s.Stacks) > SectorTiles {
+				return fmt.Errorf("sector %d,%d,%d: %d stacks", s.CX, s.CY, s.Z, len(s.Stacks))
+			}
+			for _, st := range s.Stacks {
+				if len(st.Items) > maxStackItems {
+					return fmt.Errorf("sector %d,%d,%d: stack of %d items is too tall", s.CX, s.CY, s.Z, len(st.Items))
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// Encode writes m in world.bin format. Nothing is written if m cannot be encoded.
 func Encode(w io.Writer, m *Map) error {
+	if err := checkEncodable(m); err != nil {
+		return fmt.Errorf("encode world: %w", err)
+	}
 	h := crc32.NewIEEE()
 	bw := bufio.NewWriter(io.MultiWriter(w, h))
 	b := &binWriter{w: bw}
@@ -69,14 +95,8 @@ func Encode(w io.Writer, m *Map) error {
 	for _, s := range m.groundSpeed {
 		b.u16(s)
 	}
-	if len(m.islands) > 0xFFFF {
-		return fmt.Errorf("encode world: %d islands do not fit", len(m.islands))
-	}
 	b.u16(uint16(len(m.islands)))
 	for _, is := range m.islands {
-		if len(is.ID) > 0xFF || len(is.Floors) > MaxFloor+1 {
-			return fmt.Errorf("encode world: island %q: id or floor list too long", is.ID)
-		}
 		b.u8(uint8(len(is.ID)))
 		b.bytes([]byte(is.ID))
 		b.u32(is.Rect.X)
@@ -102,9 +122,6 @@ func Encode(w io.Writer, m *Map) error {
 			}
 			b.u16(uint16(len(s.Stacks)))
 			for _, st := range s.Stacks {
-				if len(st.Items) > maxStackItems {
-					return fmt.Errorf("encode world: sector %d,%d,%d: stack of %d items is too tall", s.CX, s.CY, s.Z, len(st.Items))
-				}
 				b.u16(st.Index)
 				b.u8(uint8(len(st.Items)))
 				for _, it := range st.Items {

@@ -5,7 +5,8 @@ package world
 // themselves never block (a creature can shoot at a target standing next to a wall).
 //
 // The line is a Bresenham line traced from the endpoint with the lower (y, x), so the
-// answer is symmetric: LineOfSight(a, b) == LineOfSight(b, a).
+// answer is symmetric: LineOfSight(a, b) == LineOfSight(b, a). It costs O(distance) and
+// does not check range: callers check the range of the spell or weapon first.
 func (m *Map) LineOfSight(a, b Pos) bool {
 	if a.Z != b.Z {
 		return false

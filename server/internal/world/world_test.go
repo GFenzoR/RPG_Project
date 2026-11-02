@@ -15,13 +15,14 @@ const (
 	tGrass = 1 // speed 150
 	tRoad  = 2 // speed 50
 	tFloor = 3 // no speed: DefaultGroundSpeed
+	tSlow  = 4 // speed 300
 )
 
-var testSpeeds = []uint16{0, 150, 50, 0}
+var testSpeeds = []uint16{0, 150, 50, 0, 300}
 
 // asciiMap builds a one-island map whose top-left tile is (ox, oy, z) from rows of:
 //
-//	.  grass        =  road        _  floor (default speed)
+//	.  grass        =  road        _  floor (default speed)    s  slow ground
 //	#  wall (blocks movement and sight)
 //	|  blocks sight only    ~  blocks movement only (water)
 //	   (space) no tile
@@ -67,6 +68,8 @@ func asciiMap(t testing.TB, ox, oy int, z uint8, rows ...string) *Map {
 				g = tRoad
 			case '_':
 				g = tFloor
+			case 's':
+				g = tSlow
 			case '#':
 				g, f = tGrass, FlagBlocksMovement|FlagBlocksSight
 			case '|':
@@ -170,26 +173,39 @@ func TestSectorStack(t *testing.T) {
 
 func TestNewMapErrors(t *testing.T) {
 	sec := func(cx, cy uint16, z uint8) *Sector { return &Sector{CX: cx, CY: cy, Z: z} }
-	cases := []struct {
+	type mapCase struct {
 		name    string
 		islands []*Island
 		sectors map[string][]*Sector
 		want    string
-	}{
-		{"unaligned", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 40, H: 32}, Floors: []uint8{7}}}, nil, "not aligned"},
-		{"empty", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 0, H: 32}, Floors: []uint8{7}}}, nil, "not aligned"},
-		{"leaves world", []*Island{{ID: "a", Rect: Rect{X: 65504, Y: 0, W: 64, H: 32}, Floors: []uint8{7}}}, nil, "leaves the world"},
+	}
+	cases := []mapCase{
+		{"unaligned", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 40, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}}}, nil, "not aligned"},
+		{"empty", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 0, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}}}, nil, "not aligned"},
+		{"leaves world", []*Island{{ID: "a", Rect: Rect{X: 65504, Y: 0, W: 64, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}}}, nil, "leaves the world"},
 		{"overlap", []*Island{
-			{ID: "a", Rect: Rect{X: 0, Y: 0, W: 64, H: 64}, Floors: []uint8{7}},
-			{ID: "b", Rect: Rect{X: 32, Y: 32, W: 64, H: 64}, Floors: []uint8{7}},
+			{ID: "a", Rect: Rect{X: 0, Y: 0, W: 64, H: 64}, Floors: []uint8{7}, Temple: Pos{Z: 7}},
+			{ID: "b", Rect: Rect{X: 32, Y: 32, W: 64, H: 64}, Floors: []uint8{7}, Temple: Pos{X: 32, Y: 32, Z: 7}},
 		}, nil, "overlaps"},
-		{"floor", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 32, H: 32}, Floors: []uint8{7}}},
+		{"floor", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}}},
 			map[string][]*Sector{"a": {sec(0, 0, 8)}}, "floor 8"},
-		{"outside", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 32, H: 32}, Floors: []uint8{7}}},
+		{"outside", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}}},
 			map[string][]*Sector{"a": {sec(1, 0, 7)}}, "outside"},
-		{"twice", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 32, H: 32}, Floors: []uint8{7}}},
+		{"twice", []*Island{{ID: "a", Rect: Rect{X: 0, Y: 0, W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}}},
 			map[string][]*Sector{"a": {sec(0, 0, 7), sec(0, 0, 7)}}, "twice"},
 	}
+	cases = append(cases,
+		mapCase{"rect wraps", []*Island{{ID: "a", Rect: Rect{X: 0xFFFFFFE0, Y: 0, W: 64, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}}}, nil, "leaves the world"},
+		mapCase{"huge rect", []*Island{{ID: "a", Rect: Rect{X: 64, Y: 64, W: 0xFFFFFFC0, H: 0xFFFFFFC0}, Floors: []uint8{7}, Temple: Pos{X: 64, Y: 64, Z: 7}}}, nil, "leaves the world"},
+		mapCase{"floor out of range", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{200}, Temple: Pos{Z: 200}}},
+			map[string][]*Sector{"a": {sec(0, 0, 200)}}, "floor 200"},
+		mapCase{"temple outside", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{X: 40, Z: 7}}}, nil, "temple"},
+		mapCase{"temple floor", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 8}}}, nil, "temple"},
+		mapCase{"duplicate id", []*Island{
+			{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}},
+			{ID: "a", Rect: Rect{X: 64, W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{X: 64, Z: 7}},
+		}, nil, "twice"},
+	)
 	for _, c := range cases {
 		if _, err := NewMap(c.islands, c.sectors, nil); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
@@ -362,6 +378,32 @@ func TestFindPathLimits(t *testing.T) {
 	}
 }
 
+// TestFindPathDepthVersusCost: the cheapest route to the middle of a slow row is a detour
+// through a fast row, which makes the cheapest route to the goal 104 steps long. Walking
+// straight along the slow row takes exactly MaxPathLength steps and must be found.
+func TestFindPathDepthVersusCost(t *testing.T) {
+	gap := []byte(strings.Repeat(" ", 101))
+	gap[0], gap[50], gap[100] = '_', '_', '_'
+	m := asciiMap(t, 0, 0, 7,
+		strings.Repeat("s", 101),
+		string(gap),
+		strings.Repeat("_", 101),
+	)
+	pf := NewPathfinder(m, 0)
+	path, ok := pf.Find(pt(0, 0), pt(100, 0), nil)
+	if !ok || len(path) > MaxPathLength {
+		t.Fatalf("ok=%v steps=%d, want a path of at most %d steps", ok, len(path), MaxPathLength)
+	}
+	if end := walk(t, m, pt(0, 0), path); end != pt(100, 0) {
+		t.Fatalf("path ends at %v", end)
+	}
+	// Shorter trips still take the cheap detour.
+	path, ok = pf.Find(pt(0, 0), pt(60, 0), nil)
+	if !ok || len(path) <= 60 {
+		t.Fatalf("ok=%v steps=%d, want the cheaper detour (> 60 steps)", ok, len(path))
+	}
+}
+
 // TestFindPathOptimal compares A* with a plain Dijkstra on random maps.
 func TestFindPathOptimal(t *testing.T) {
 	r := rand.New(rand.NewPCG(7, 7))
@@ -519,4 +561,29 @@ func TestPosStep(t *testing.T) {
 	if p, ok := (Pos{X: 5, Y: 5, Z: 3}).Step(SouthWest); !ok || p != (Pos{X: 4, Y: 6, Z: 3}) {
 		t.Errorf("SouthWest step = %v", p)
 	}
+}
+
+// FuzzDecode: no input may make Decode panic, and whatever it accepts must re-encode.
+func FuzzDecode(f *testing.F) {
+	m := asciiMap(f, 30, 30, 7, "..#", "| ~")
+	m.SectorAt(pt(30, 30)).Stacks = []TileStack{{Index: 5, Items: []uint16{4, 5}}}
+	var buf bytes.Buffer
+	if err := Encode(&buf, m); err != nil {
+		f.Fatal(err)
+	}
+	f.Add(buf.Bytes())
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Fuzzed bodies carry a valid checksum so the decoder looks past it.
+		if len(data) >= 4 {
+			data = reseal(data)
+		}
+		got, err := Decode(data)
+		if err != nil {
+			return
+		}
+		var out bytes.Buffer
+		if err := Encode(&out, got); err != nil {
+			t.Fatalf("decoded map does not re-encode: %v", err)
+		}
+	})
 }

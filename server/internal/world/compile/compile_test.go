@@ -52,6 +52,9 @@ type walkableDump struct {
 func TestWalkableParityWithMapFormat(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("node is required in CI: the parity rule with packages/map-format must run")
+		}
 		t.Skip("node not installed: cannot run packages/map-format")
 	}
 	for _, root := range []string{repoRoot(t), miniRoot} {
@@ -262,6 +265,7 @@ func TestCompileErrors(t *testing.T) {
 		{"chunk name mismatch", []string{chunk}, `"cx": 1`, `"cx": 3`, "file name says"},
 		{"palette index", []string{chunk}, `"stack": [5]`, `"stack": [60]`, "palette index 60 out of range"},
 		{"no numeric id", []string{"data/ids.lock.yaml"}, "  coin: 10\n", "", `"coin" has no numeric ID`},
+		{"duplicate numeric id", []string{"data/ids.lock.yaml"}, "coin: 10", "coin: 9", `share numeric ID 9`},
 		{"unknown zone", []string{"world/islands/mini/zones.yaml"}, "type: no_logout", "type: lava", `unknown type "lava"`},
 		{"unknown island dir", []string{worldYAML}, "id: mini", "id: nope", "nope/island.yaml"},
 	}
