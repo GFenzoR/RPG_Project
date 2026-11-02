@@ -6,7 +6,15 @@
 // moves the own creature at once; the server's CreatureMove confirms it (and gives the
 // real duration) and WalkRejected puts the creature back where the server says it is.
 import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
-import type { Creature, MapArea, ServerMessage, TextParam, FloatingTextKind } from "@rpg/protocol";
+import type {
+  Creature,
+  EquipmentSlot,
+  ItemStack,
+  MapArea,
+  ServerMessage,
+  TextParam,
+  FloatingTextKind,
+} from "@rpg/protocol";
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
 import type { ClientContent, ItemDef } from "../content-types.ts";
@@ -66,6 +74,9 @@ export interface PlayerStatsState {
   experience: number;
   /** Progress to the next level, 0-99. */
   levelPercent: number;
+  /** Free capacity and maximum, in grams. */
+  capacity: number;
+  maxCapacity: number;
 }
 
 /** One skill as PlayerSkills reports it (skill ids from data/balance.yaml). */
@@ -94,6 +105,8 @@ const LOG_SIZE = 5;
 interface ChunkTiles {
   /** Item IDs per tile (ground first), row-major; undefined = unknown. */
   tiles: (readonly number[] | undefined)[];
+  /** Stack sizes per tile, only for tiles with a stackable item (0 = not stackable). */
+  counts: (readonly number[] | undefined)[];
   /** What the renderer sees; rebuilt (new object) after a change. */
   data: ChunkData | undefined;
 }
@@ -105,6 +118,23 @@ const chunkKey = (z: number, cx: number, cy: number): string => `${z}/${cx}/${cy
 
 const posOf = (p: { x: number; y: number; z: number } | undefined): Pos =>
   p ? { x: p.x, y: p.y, z: p.z } : { x: 0, y: 0, z: 0 };
+
+/** One item as the client sees it: numeric ID and stack size (0 when it does not stack). */
+export interface ItemView {
+  itemId: number;
+  count: number;
+}
+
+/** An open container window (ContainerOpen): its session ID, item and content. */
+export interface ContainerState {
+  id: number;
+  itemId: number;
+  capacity: number;
+  items: ItemView[];
+  hasParent: boolean;
+}
+
+const itemView = (s: ItemStack): ItemView => ({ itemId: s.itemId, count: s.count });
 
 export class WorldState implements TileSource {
   selfId = 0;
@@ -119,6 +149,10 @@ export class WorldState implements TileSource {
   effects: EffectState[] = [];
   floatingTexts: FloatingTextState[] = [];
   log: LogMessage[] = [];
+  /** Equipped items by slot (Inventory). */
+  inventory = new Map<EquipmentSlot, ItemView>();
+  /** Open container windows, oldest first. */
+  containers: ContainerState[] = [];
   private readonly chunks = new Map<string, ChunkTiles>();
   private readonly content: ClientContent;
 
@@ -141,6 +175,15 @@ export class WorldState implements TileSource {
       chunkKey(z, Math.floor(x / CHUNK_TILES), Math.floor(y / CHUNK_TILES)),
     );
     return c?.tiles[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)];
+  }
+
+  /** Stack size of each item of a known tile (0 = not stackable), parallel to tile(). */
+  tileCounts(x: number, y: number, z: number): readonly number[] | undefined {
+    if (x < 0 || y < 0) return undefined;
+    const c = this.chunks.get(
+      chunkKey(z, Math.floor(x / CHUNK_TILES), Math.floor(y / CHUNK_TILES)),
+    );
+    return c?.counts[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)];
   }
 
   /** Walkable by what the client knows: known walkable ground and no blocking item. */
@@ -206,12 +249,7 @@ export class WorldState implements TileSource {
         break;
       case "tileUpdate": {
         const p = posOf(msg.value.pos);
-        this.setTile(
-          p.x,
-          p.y,
-          p.z,
-          msg.value.tile?.items.map((s) => s.itemId),
-        );
+        this.setTile(p.x, p.y, p.z, msg.value.tile?.items);
         break;
       }
       case "creatureAppear":
@@ -283,6 +321,8 @@ export class WorldState implements TileSource {
           level: v.level,
           experience: Number(v.experience),
           levelPercent: v.levelPercent,
+          capacity: v.capacity,
+          maxCapacity: v.maxCapacity,
         };
         break;
       }
@@ -302,8 +342,35 @@ export class WorldState implements TileSource {
         }
         break;
       }
+      case "inventory":
+        this.inventory = new Map(
+          msg.value.slots.flatMap((s) => (s.item ? [[s.slot, itemView(s.item)] as const] : [])),
+        );
+        break;
+      case "containerOpen": {
+        const v = msg.value;
+        const c: ContainerState = {
+          id: v.containerId,
+          itemId: v.itemId,
+          capacity: v.capacity,
+          items: v.items.map(itemView),
+          hasParent: v.hasParent,
+        };
+        this.containers = [...this.containers.filter((o) => o.id !== c.id), c];
+        break;
+      }
+      case "containerUpdate": {
+        const v = msg.value;
+        this.containers = this.containers.map((c) =>
+          c.id === v.containerId ? { ...c, items: v.items.map(itemView) } : c,
+        );
+        break;
+      }
+      case "containerClose":
+        this.containers = this.containers.filter((c) => c.id !== msg.value.containerId);
+        break;
       default:
-        break; // combat, items, chat… arrive with their roadmap tasks
+        break; // chat, dialogs… arrive with their roadmap tasks
     }
   }
 
@@ -313,18 +380,14 @@ export class WorldState implements TileSource {
         const idx = floor.tiles[i] ?? -1;
         const x = a.x + (i % a.width);
         const y = a.y + Math.floor(i / a.width);
-        this.setTile(
-          x,
-          y,
-          floor.z,
-          idx < 0 ? undefined : a.palette[idx]?.items.map((s) => s.itemId),
-        );
+        this.setTile(x, y, floor.z, idx < 0 ? undefined : a.palette[idx]?.items);
       }
     }
     for (const c of a.creatures) this.addCreature(c);
   }
 
-  private setTile(x: number, y: number, z: number, items: readonly number[] | undefined): void {
+  private setTile(x: number, y: number, z: number, stack: readonly ItemStack[] | undefined): void {
+    const items = stack?.map((s) => s.itemId);
     const cx = Math.floor(x / CHUNK_TILES);
     const cy = Math.floor(y / CHUNK_TILES);
     const key = chunkKey(z, cx, cy);
@@ -333,11 +396,14 @@ export class WorldState implements TileSource {
       if (!items) return;
       c = {
         tiles: new Array<readonly number[] | undefined>(CHUNK_TILES * CHUNK_TILES),
+        counts: new Array<readonly number[] | undefined>(CHUNK_TILES * CHUNK_TILES),
         data: undefined,
       };
       this.chunks.set(key, c);
     }
-    c.tiles[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)] = items;
+    const i = (y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES);
+    c.tiles[i] = items;
+    c.counts[i] = stack?.some((s) => s.count > 0) ? stack.map((s) => s.count) : undefined;
     c.data = undefined;
   }
 

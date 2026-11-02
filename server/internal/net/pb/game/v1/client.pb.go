@@ -153,6 +153,7 @@ type ClientMessage struct {
 	//	*ClientMessage_TradeCancel
 	//	*ClientMessage_Ping
 	//	*ClientMessage_Logout
+	//	*ClientMessage_CloseContainer
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -375,6 +376,15 @@ func (x *ClientMessage) GetLogout() *Logout {
 	return nil
 }
 
+func (x *ClientMessage) GetCloseContainer() *CloseContainer {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_CloseContainer); ok {
+			return x.CloseContainer
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -459,6 +469,10 @@ type ClientMessage_Logout struct {
 	Logout *Logout `protobuf:"bytes,20,opt,name=logout,proto3,oneof"`
 }
 
+type ClientMessage_CloseContainer struct {
+	CloseContainer *CloseContainer `protobuf:"bytes,21,opt,name=close_container,json=closeContainer,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -498,6 +512,8 @@ func (*ClientMessage_TradeCancel) isClientMessage_Message() {}
 func (*ClientMessage_Ping) isClientMessage_Message() {}
 
 func (*ClientMessage_Logout) isClientMessage_Message() {}
+
+func (*ClientMessage_CloseContainer) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -1584,11 +1600,57 @@ func (*Logout) Descriptor() ([]byte, []int) {
 	return file_game_v1_client_proto_rawDescGZIP(), []int{20}
 }
 
+// CloseContainer closes a container window (container_id from ContainerOpen). The
+// server stops sending its updates and answers with ContainerClose.
+type CloseContainer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ContainerId   uint32                 `protobuf:"varint,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CloseContainer) Reset() {
+	*x = CloseContainer{}
+	mi := &file_game_v1_client_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CloseContainer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloseContainer) ProtoMessage() {}
+
+func (x *CloseContainer) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloseContainer.ProtoReflect.Descriptor instead.
+func (*CloseContainer) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *CloseContainer) GetContainerId() uint32 {
+	if x != nil {
+		return x.ContainerId
+	}
+	return 0
+}
+
 var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xf8\a\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xbc\b\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
 	"\x04walk\x18\x02 \x01(\v2\r.game.v1.WalkH\x00R\x04walk\x120\n" +
@@ -1613,7 +1675,8 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\ftrade_accept\x18\x11 \x01(\v2\x14.game.v1.TradeAcceptH\x00R\vtradeAccept\x129\n" +
 	"\ftrade_cancel\x18\x12 \x01(\v2\x14.game.v1.TradeCancelH\x00R\vtradeCancel\x12#\n" +
 	"\x04ping\x18\x13 \x01(\v2\r.game.v1.PingH\x00R\x04ping\x12)\n" +
-	"\x06logout\x18\x14 \x01(\v2\x0f.game.v1.LogoutH\x00R\x06logoutB\t\n" +
+	"\x06logout\x18\x14 \x01(\v2\x0f.game.v1.LogoutH\x00R\x06logout\x12B\n" +
+	"\x0fclose_container\x18\x15 \x01(\v2\x17.game.v1.CloseContainerH\x00R\x0ecloseContainerB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -1685,7 +1748,9 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x04Ping\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x04R\n" +
 	"clientTime\"\b\n" +
-	"\x06Logout*~\n" +
+	"\x06Logout\"3\n" +
+	"\x0eCloseContainer\x12!\n" +
+	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId*~\n" +
 	"\vFightStance\x12\x1c\n" +
 	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
@@ -1711,34 +1776,35 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_game_v1_client_proto_goTypes = []any{
-	(FightStance)(0),      // 0: game.v1.FightStance
-	(ChatChannel)(0),      // 1: game.v1.ChatChannel
-	(*ClientMessage)(nil), // 2: game.v1.ClientMessage
-	(*Hello)(nil),         // 3: game.v1.Hello
-	(*Walk)(nil),          // 4: game.v1.Walk
-	(*WalkPath)(nil),      // 5: game.v1.WalkPath
-	(*StopWalk)(nil),      // 6: game.v1.StopWalk
-	(*Turn)(nil),          // 7: game.v1.Turn
-	(*SetTarget)(nil),     // 8: game.v1.SetTarget
-	(*SetFightMode)(nil),  // 9: game.v1.SetFightMode
-	(*CastSpell)(nil),     // 10: game.v1.CastSpell
-	(*UseItem)(nil),       // 11: game.v1.UseItem
-	(*UseItemOn)(nil),     // 12: game.v1.UseItemOn
-	(*MoveItem)(nil),      // 13: game.v1.MoveItem
-	(*LookAt)(nil),        // 14: game.v1.LookAt
-	(*Say)(nil),           // 15: game.v1.Say
-	(*DialogChoose)(nil),  // 16: game.v1.DialogChoose
-	(*TradeRequest)(nil),  // 17: game.v1.TradeRequest
-	(*TradeOffer)(nil),    // 18: game.v1.TradeOffer
-	(*TradeAccept)(nil),   // 19: game.v1.TradeAccept
-	(*TradeCancel)(nil),   // 20: game.v1.TradeCancel
-	(*Ping)(nil),          // 21: game.v1.Ping
-	(*Logout)(nil),        // 22: game.v1.Logout
-	(Direction)(0),        // 23: game.v1.Direction
-	(*ActionTarget)(nil),  // 24: game.v1.ActionTarget
-	(*ItemLocation)(nil),  // 25: game.v1.ItemLocation
+	(FightStance)(0),       // 0: game.v1.FightStance
+	(ChatChannel)(0),       // 1: game.v1.ChatChannel
+	(*ClientMessage)(nil),  // 2: game.v1.ClientMessage
+	(*Hello)(nil),          // 3: game.v1.Hello
+	(*Walk)(nil),           // 4: game.v1.Walk
+	(*WalkPath)(nil),       // 5: game.v1.WalkPath
+	(*StopWalk)(nil),       // 6: game.v1.StopWalk
+	(*Turn)(nil),           // 7: game.v1.Turn
+	(*SetTarget)(nil),      // 8: game.v1.SetTarget
+	(*SetFightMode)(nil),   // 9: game.v1.SetFightMode
+	(*CastSpell)(nil),      // 10: game.v1.CastSpell
+	(*UseItem)(nil),        // 11: game.v1.UseItem
+	(*UseItemOn)(nil),      // 12: game.v1.UseItemOn
+	(*MoveItem)(nil),       // 13: game.v1.MoveItem
+	(*LookAt)(nil),         // 14: game.v1.LookAt
+	(*Say)(nil),            // 15: game.v1.Say
+	(*DialogChoose)(nil),   // 16: game.v1.DialogChoose
+	(*TradeRequest)(nil),   // 17: game.v1.TradeRequest
+	(*TradeOffer)(nil),     // 18: game.v1.TradeOffer
+	(*TradeAccept)(nil),    // 19: game.v1.TradeAccept
+	(*TradeCancel)(nil),    // 20: game.v1.TradeCancel
+	(*Ping)(nil),           // 21: game.v1.Ping
+	(*Logout)(nil),         // 22: game.v1.Logout
+	(*CloseContainer)(nil), // 23: game.v1.CloseContainer
+	(Direction)(0),         // 24: game.v1.Direction
+	(*ActionTarget)(nil),   // 25: game.v1.ActionTarget
+	(*ItemLocation)(nil),   // 26: game.v1.ItemLocation
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	3,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -1761,25 +1827,26 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	20, // 17: game.v1.ClientMessage.trade_cancel:type_name -> game.v1.TradeCancel
 	21, // 18: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
 	22, // 19: game.v1.ClientMessage.logout:type_name -> game.v1.Logout
-	23, // 20: game.v1.Walk.dir:type_name -> game.v1.Direction
-	23, // 21: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	23, // 22: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 23: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	24, // 24: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	25, // 25: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	25, // 26: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	24, // 27: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	25, // 28: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	25, // 29: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	25, // 30: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 31: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	25, // 32: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	25, // 33: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	34, // [34:34] is the sub-list for method output_type
-	34, // [34:34] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	23, // 20: game.v1.ClientMessage.close_container:type_name -> game.v1.CloseContainer
+	24, // 21: game.v1.Walk.dir:type_name -> game.v1.Direction
+	24, // 22: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	24, // 23: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 24: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	25, // 25: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	26, // 26: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	26, // 27: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	25, // 28: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	26, // 29: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	26, // 30: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	26, // 31: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 32: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	26, // 33: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	26, // 34: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	35, // [35:35] is the sub-list for method output_type
+	35, // [35:35] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -1809,6 +1876,7 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_TradeCancel)(nil),
 		(*ClientMessage_Ping)(nil),
 		(*ClientMessage_Logout)(nil),
+		(*ClientMessage_CloseContainer)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[8].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),
@@ -1820,7 +1888,7 @@ func file_game_v1_client_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   21,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -44,6 +44,10 @@ type Character struct {
 	Mana       int
 	// Skills holds the saved skills; the ones missing start at their base level.
 	Skills []SkillState
+	// Inventory holds the equipped items with their content. InventoryLoaded marks an
+	// inventory taken from memory (a quick re-login), which may be empty on purpose.
+	Inventory       []ItemState
+	InventoryLoaded bool
 	// HasPos is false for a character that never played: it starts at the temple.
 	HasPos bool
 	Pos    world.Pos
@@ -63,6 +67,8 @@ type Snapshot struct {
 	Pos        world.Pos
 	// Skills is every skill of the character (World skill order).
 	Skills []SkillState
+	// Inventory is every equipped item with its content (a deep copy).
+	Inventory []ItemState
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -152,11 +158,19 @@ type World struct {
 	active     map[uint64]struct{}
 	activeKeys []uint64
 	thinkBuf   []*Monster
-	ground     map[world.Pos][]uint16 // items dropped on tiles at runtime (remains)
+	ground     map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
 	corpses    map[world.Pos][]*Corpse
-	corpseItem uint16
+	corpseItem *content.Item
 	corpseFor  game.Tick
 	attackFor  game.Tick
+
+	// Items (T1.8): definitions by numeric id, the container of new characters and the
+	// inventory rules of balance.yaml.
+	byNum          map[uint16]*content.Item
+	startContainer *content.Item
+	useFor         game.Tick
+	reach          int
+	maxOpen        int
 }
 
 // New validates cfg and builds an empty World.
@@ -203,6 +217,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	w.initProgress()
+	if err := w.initItems(); err != nil {
+		return nil, err
+	}
 	return w, nil
 }
 

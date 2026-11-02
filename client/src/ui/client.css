@@ -259,3 +259,81 @@ button.link {
   color: #f0d070;
   pointer-events: none;
 }
+
+/* Inventory (T1.8): 32 px sprites from the atlas, pixel-perfect like the canvas. */
+.inventory .equipment,
+.inventory .cells {
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  gap: 3px;
+  justify-content: center;
+}
+.inventory .cells {
+  grid-template-columns: repeat(5, 36px);
+  justify-content: start;
+}
+.inventory .slot {
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: 1px solid #3a4250;
+  background: #141820;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.inventory .slot.gap {
+  border: none;
+  background: none;
+}
+.inventory .item {
+  position: relative;
+  display: block;
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  cursor: grab;
+  touch-action: none;
+}
+.inventory .item.missing {
+  background: #5a4a3a;
+  color: var(--text);
+  font-size: 0.7rem;
+  line-height: 32px;
+  text-align: center;
+}
+.inventory .count {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 1px 2px;
+  color: #fff;
+  text-shadow:
+    0 0 2px #000,
+    0 0 2px #000;
+}
+.inventory .capacity {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.inventory .container {
+  margin-top: 0.5rem;
+}
+.inventory .container header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+.inventory .container header button {
+  padding: 0 0.4rem;
+  line-height: 1.2;
+}
+body.dragging-item,
+body.dragging-item * {
+  cursor: grabbing !important;
+}

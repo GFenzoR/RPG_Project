@@ -13,10 +13,21 @@ export interface AtlasIndex {
   sprites: Record<string, { page: number; origin: string }>;
 }
 
+/** A sprite's rectangle in its page image (pixels). */
+export interface AtlasIcon {
+  url: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export class Atlas {
   readonly tileSize: number;
   readonly index: AtlasIndex;
   private readonly textures = new Map<string, Texture>();
+  /** Image URL of the page each sprite is on (for DOM icons). */
+  private readonly pageImage = new Map<string, string>();
 
   private constructor(index: AtlasIndex) {
     this.index = index;
@@ -31,14 +42,18 @@ export class Atlas {
     for (const page of index.pages) {
       const url = new URL(page, baseUrl);
       const data = (await (await fetch(url)).json()) as SpritesheetData;
+      const imageUrl = new URL(data.meta.image ?? "", url).href;
       const image = await Assets.load<Texture>({
-        src: new URL(data.meta.image ?? "", url).href,
+        src: imageUrl,
         data: { scaleMode: "nearest" },
         parser: "loadTextures",
       });
       const sheet = new Spritesheet(image, data);
       await sheet.parse();
-      for (const [name, tex] of Object.entries(sheet.textures)) atlas.textures.set(name, tex);
+      for (const [name, tex] of Object.entries(sheet.textures)) {
+        atlas.textures.set(name, tex);
+        atlas.pageImage.set(name, imageUrl);
+      }
     }
     return atlas;
   }
@@ -46,6 +61,18 @@ export class Atlas {
   /** Texture of a sprite path, or undefined when the atlas does not have it. */
   texture(sprite: string): Texture | undefined {
     return this.textures.get(sprite);
+  }
+
+  /**
+   * Where a sprite is in its page image, for drawing it outside PixiJS (a DOM icon as a
+   * CSS background). Undefined when the atlas does not have it.
+   */
+  icon(sprite: string): AtlasIcon | undefined {
+    const tex = this.textures.get(sprite);
+    const url = this.pageImage.get(sprite);
+    if (!tex || !url) return undefined;
+    const f = tex.frame;
+    return { url, x: f.x, y: f.y, width: f.width, height: f.height };
   }
 
   has(sprite: string): boolean {

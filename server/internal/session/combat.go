@@ -185,7 +185,10 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 			continue
 		}
 		physical := a.Element == "physical"
-		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense} // no armor until T1.8
+		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense}
+		if physical {
+			pt.Armor = t.armor
+		}
 		if physical && t.shield != nil && t.shield.Shield != nil {
 			pt.ShieldDefense = t.shield.Shield.Defense
 			w.trainShield(ctx, t)
@@ -256,20 +259,31 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		}
 	}
 
-	// Remains with the loot, on the tile where it died.
-	corpse := &Corpse{Monster: def.ID}
+	// Remains with the loot, on the tile where it died. Loot beyond the remains'
+	// slots is lost (data/monsters keeps loot tables short).
+	corpse := &Corpse{Monster: def.ID, Item: newItem(w.corpseItem, 1)}
+	add := func(it *Item) {
+		if len(corpse.Item.items) < w.corpseItem.Slots() {
+			it.parent = corpse.Item
+			corpse.Item.items = append(corpse.Item.items, it)
+		}
+	}
 	for _, l := range m.kind.loot {
 		if ctx.Rand.Float64() >= l.chance {
 			continue
 		}
 		n := combat.Roll(ctx.Rand, l.lo, l.hi)
-		if !l.stackable {
+		if !l.def.Stackable {
 			for range n {
-				corpse.Loot = append(corpse.Loot, &pb.ItemStack{ItemId: uint32(l.id)})
+				add(newItem(l.def, 1))
 			}
 			continue
 		}
-		corpse.Loot = append(corpse.Loot, &pb.ItemStack{ItemId: uint32(l.id), Count: uint32(n)})
+		for n > 0 {
+			c := min(n, l.def.StackLimit())
+			add(newItem(l.def, c))
+			n -= c
+		}
 	}
 	pos := m.pos
 	w.removeMonster(m)
@@ -283,7 +297,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 }
 
 func (w *World) addCorpse(ctx *game.TickContext, pos world.Pos, c *Corpse) {
-	w.ground[pos] = append(w.ground[pos], w.corpseItem)
+	w.drop(c.Item, pos)
 	w.corpses[pos] = append(w.corpses[pos], c)
 	w.tileChanged(pos)
 	ctx.Sched.After(w.corpseFor, func(*game.TickContext) {
@@ -299,23 +313,14 @@ func (w *World) removeCorpse(pos world.Pos, c *Corpse) {
 			break
 		}
 	}
-	items := w.ground[pos]
-	for i := len(items) - 1; i >= 0; i-- {
-		if items[i] == w.corpseItem {
-			items = append(items[:i], items[i+1:]...)
-			break
-		}
-	}
 	if len(list) == 0 {
 		delete(w.corpses, pos)
 	} else {
 		w.corpses[pos] = list
 	}
-	if len(items) == 0 {
-		delete(w.ground, pos)
-	} else {
-		w.ground[pos] = items
-	}
+	// The remains decay with whatever is still inside them.
+	w.closeAll(c.Item)
+	w.detach(c.Item)
 	w.tileChanged(pos)
 }
 
@@ -329,8 +334,8 @@ func (w *World) tileChanged(pos world.Pos) {
 	for _, id := range w.m.Stack(pos) {
 		t.Items = append(t.Items, &pb.ItemStack{ItemId: uint32(id)})
 	}
-	for _, id := range w.ground[pos] {
-		t.Items = append(t.Items, &pb.ItemStack{ItemId: uint32(id)})
+	for _, it := range w.ground[pos] {
+		t.Items = append(t.Items, it.stack())
 	}
 	w.eachObserver(nil, pos, func(o *Player) {
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_TileUpdate{TileUpdate: &pb.TileUpdate{Pos: posMsg(pos), Tile: t}}})
@@ -350,10 +355,10 @@ func systemMsg(key string, params ...*pb.TextParam) *pb.ServerMessage {
 // "<monster> had nothing".
 func lootMsg(c *Corpse) *pb.ServerMessage {
 	params := []*pb.TextParam{{Name: "monster", Value: &pb.TextParam_ContentId{ContentId: c.Monster}}}
-	if len(c.Loot) == 0 {
+	if len(c.Item.items) == 0 {
 		return systemMsg(msgLootNone, params...)
 	}
-	for _, it := range c.Loot {
+	for _, it := range c.Loot() {
 		params = append(params, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: it}})
 	}
 	return systemMsg(msgLoot, params...)

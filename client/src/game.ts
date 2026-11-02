@@ -2,18 +2,22 @@
 // together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
 // the server says; the one thing it predicts is the next own step.
 import { Direction } from "@rpg/protocol";
-import type { DisconnectReason, FightStance } from "@rpg/protocol";
+import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
 import { MovementKeys, typingInField } from "./input/keyboard.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
+import { locationInit, topItem } from "./state/items.ts";
+import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { findPath } from "./state/path.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import type {
+  ContainerState,
   CreatureState,
+  ItemView,
   LevelUpState,
   LogMessage,
   PlayerStatsState,
@@ -28,6 +32,8 @@ export interface GameUi {
   skills: SkillState[];
   levelUp: LevelUpState | undefined;
   log: LogMessage[];
+  inventory: Map<EquipmentSlot, ItemView>;
+  containers: ContainerState[];
 }
 
 /** Read-only hooks for the E2E tests (client/e2e). */
@@ -45,7 +51,18 @@ export interface ClientTestHooks {
   skills(): SkillState[];
   /** Floating texts that appeared less than `ms` ago. */
   floatingTexts(ms: number): number;
+  /** Equipped items as [slot, item ID, count]. */
+  inventory(): { slot: number; itemId: number; count: number }[];
+  /** Open containers with their content. */
+  containers(): ContainerState[];
+  /** Item IDs of a known tile, ground first. */
+  tile(x: number, y: number, z: number): readonly number[] | undefined;
+  /** Numeric ID of a data/items content ID. */
+  itemNumber(id: string): number | undefined;
 }
+
+/** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */
+const DRAG_START_PX = 4;
 
 declare global {
   interface Window {
@@ -115,6 +132,94 @@ export class Game {
     this.conn.send({ case: "setFightMode", value: { stance, chase } });
   }
 
+  // ---- items (T1.8): the server validates every one of these ---------------------------
+
+  useItem(ref: ItemRef): void {
+    this.conn.send({
+      case: "useItem",
+      value: { from: locationInit(ref.loc), itemId: ref.itemId, stackIndex: ref.stackIndex },
+    });
+  }
+
+  lookAt(ref: ItemRef): void {
+    this.conn.send({
+      case: "lookAt",
+      value: { from: locationInit(ref.loc), itemId: ref.itemId, stackIndex: ref.stackIndex },
+    });
+  }
+
+  moveItem(ref: ItemRef, to: ItemLoc): void {
+    this.conn.send({
+      case: "moveItem",
+      value: {
+        from: locationInit(ref.loc),
+        itemId: ref.itemId,
+        stackIndex: ref.stackIndex,
+        to: locationInit(to),
+        count: Math.max(ref.count, 1),
+      },
+    });
+  }
+
+  closeContainer(id: number): void {
+    this.conn.send({ case: "closeContainer", value: { containerId: id } });
+  }
+
+  /**
+   * A press on a DOM item (inventory slot or container cell): it becomes a drag once the
+   * pointer travels a few pixels, and the item moves where it is released.
+   */
+  pressItem(ref: ItemRef, e: PointerEvent): void {
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const move = (ev: PointerEvent): void => {
+      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < DRAG_START_PX) return;
+      stop();
+      this.startDrag(ref);
+    };
+    const stop = (): void => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  }
+
+  /** Drags ref until the pointer is released over a drop target (canvas, slot, container). */
+  private startDrag(ref: ItemRef): void {
+    document.body.classList.add("dragging-item");
+    const up = (ev: PointerEvent): void => {
+      window.removeEventListener("pointerup", up);
+      document.body.classList.remove("dragging-item");
+      const to = this.dropTarget(ev.clientX, ev.clientY);
+      if (to) this.moveItem(ref, to);
+    };
+    window.addEventListener("pointerup", up);
+  }
+
+  /** Where a drop at page coordinates lands: a [data-drop] element or a map tile. */
+  private dropTarget(x: number, y: number): ItemLoc | undefined {
+    const el = document.elementFromPoint(x, y);
+    const drop = el?.closest<HTMLElement>("[data-drop]");
+    if (drop) {
+      const d = drop.dataset;
+      if (d["drop"] === "slot") return { kind: "slot", slot: Number(d["slot"]) as EquipmentSlot };
+      if (d["drop"] === "container")
+        return { kind: "container", id: Number(d["container"]), index: Number(d["index"] ?? 0) };
+      return undefined;
+    }
+    if (this.canvas && el === this.canvas.element) {
+      const pos = this.canvas.clientToTile(x, y);
+      if (pos) return { kind: "pos", pos };
+    }
+    return undefined;
+  }
+
+  /** Atlas rectangle of an item's sprite, for DOM icons (undefined until the canvas is up). */
+  itemIcon(itemId: number): ReturnType<GameCanvas["itemIcon"]> {
+    return this.canvas?.itemIcon(itemId);
+  }
+
   private publish(): void {
     const w = this.world;
     this.opts.update({
@@ -124,6 +229,8 @@ export class Game {
       skills: w.skills,
       levelUp: w.levelUp,
       log: [...w.log],
+      inventory: w.inventory,
+      containers: w.containers,
     });
   }
 
@@ -149,6 +256,18 @@ export class Game {
         this.clickTarget = { x, y, z };
       },
       clickCreature: (id) => this.attack(id),
+      useTile: (x, y, z) => {
+        const ref = topItem(this.world, x, y, z, false);
+        if (ref) this.useItem(ref);
+      },
+      lookTile: (x, y, z) => {
+        const ref = topItem(this.world, x, y, z, true);
+        if (ref) this.lookAt(ref);
+      },
+      dragTile: (x, y, z) => {
+        const ref = topItem(this.world, x, y, z, false);
+        if (ref) this.startDrag(ref);
+      },
     });
     if (this.destroyed) {
       canvas.destroy();
@@ -176,7 +295,16 @@ export class Game {
         const now = performance.now();
         return world.floatingTexts.filter((f) => now - f.start < ms).length;
       },
+      inventory: () =>
+        [...world.inventory].map(([slot, it]) => ({ slot, itemId: it.itemId, count: it.count })),
+      containers: () => world.containers,
+      tile: (x, y, z) => world.tile(x, y, z),
+      itemNumber: (id) => {
+        const found = Object.entries(this.opts.content.items).find(([, d]) => d.id === id);
+        return found ? Number(found[0]) : undefined;
+      },
     };
+    this.publish(); // icons are available now
     this.opts.entered();
   }
 

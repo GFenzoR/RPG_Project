@@ -32,6 +32,7 @@ message ClientMessage {
     TradeCancel trade_cancel = 18;
     Ping ping = 19;
     Logout logout = 20;
+    CloseContainer close_container = 21;
   }
 }
 
@@ -169,3 +170,9 @@ message Ping {
 }
 
 message Logout {}
+
+// CloseContainer closes a container window (container_id from ContainerOpen). The
+// server stops sending its updates and answers with ContainerClose.
+message CloseContainer {
+  uint32 container_id = 1;
+}

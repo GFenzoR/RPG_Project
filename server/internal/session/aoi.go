@@ -232,7 +232,7 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 	}
 	area := &pb.MapArea{X: uint32(x0), Y: uint32(y0), Width: uint32(wd), Height: uint32(ht)}
 	var floors [SeaLevel + 1]uint8
-	var stack []uint16
+	var stack []tileEntry
 	for _, z := range viewFloors(p.pos.Z, floors[:0]) {
 		tiles := make([]int32, wd*ht)
 		any := false
@@ -242,9 +242,14 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 				ground, _, ok := w.m.Tile(pos)
 				idx := int32(-1)
 				if ok {
-					stack = append(stack[:0], ground)
-					stack = append(stack, w.m.Stack(pos)...)
-					stack = append(stack, w.ground[pos]...)
+					stack = append(stack[:0], tileEntry{id: uint32(ground)})
+					for _, id := range w.m.Stack(pos) {
+						stack = append(stack, tileEntry{id: uint32(id)})
+					}
+					for _, it := range w.ground[pos] {
+						s := it.stack()
+						stack = append(stack, tileEntry{id: s.ItemId, count: s.Count})
+					}
 					idx = paletteIndex(area, stack)
 					any = true
 				}
@@ -272,14 +277,17 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 
 // paletteIndex returns the index of stack in area's palette, adding it if new. Areas
 // are small (a view has at most 221 tiles per floor), so a linear search is enough.
-func paletteIndex(area *pb.MapArea, stack []uint16) int32 {
+// tileEntry is one item of a tile stack while building an area (no allocation).
+type tileEntry struct{ id, count uint32 }
+
+func paletteIndex(area *pb.MapArea, stack []tileEntry) int32 {
 	for i, t := range area.Palette {
 		if len(t.Items) != len(stack) {
 			continue
 		}
 		same := true
 		for j, it := range t.Items {
-			if it.ItemId != uint32(stack[j]) {
+			if it.ItemId != stack[j].id || it.Count != stack[j].count {
 				same = false
 				break
 			}
@@ -289,8 +297,8 @@ func paletteIndex(area *pb.MapArea, stack []uint16) int32 {
 		}
 	}
 	t := &pb.Tile{Items: make([]*pb.ItemStack, len(stack))}
-	for j, id := range stack {
-		t.Items[j] = &pb.ItemStack{ItemId: uint32(id)}
+	for j, e := range stack {
+		t.Items[j] = &pb.ItemStack{ItemId: e.id, Count: e.count}
 	}
 	area.Palette = append(area.Palette, t)
 	return int32(len(area.Palette) - 1)

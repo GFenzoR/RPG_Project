@@ -18,6 +18,8 @@ type Querier interface {
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error)
 	CreateCharacter(ctx context.Context, arg CreateCharacterParams) (CreateCharacterRow, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
+	// A snapshot replaces the whole inventory in the same transaction as the character row.
+	DeleteCharacterInventory(ctx context.Context, characterID int64) error
 	DeleteExpiredSessions(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
@@ -25,8 +27,11 @@ type Querier interface {
 	GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error)
 	// Loads what the game server needs to put a character in the world.
 	GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error)
+	// Every item of a character; the server rebuilds the tree from container_id.
+	GetCharacterInventory(ctx context.Context, characterID int64) ([]GetCharacterInventoryRow, error)
 	// Skills without a row are at their base level (data/balance.yaml).
 	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
+	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)

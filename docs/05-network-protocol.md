@@ -54,7 +54,7 @@ Detalles (T1.4, `server/internal/net/gateway`):
   (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
   antes del token, así un cliente viejo no gasta su token.
 - **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
-  `Inventory` (vacío hasta T1.8) y `PlayerSkills` (todas las skills de
+  `Inventory` (equipo guardado, T1.8) y `PlayerSkills` (todas las skills de
   `balance.yaml → skills.base`, con el nivel guardado del personaje).
 - **Posición inicial:** la guardada; si el personaje nunca jugó (o su casilla dejó de
   ser caminable) el templo de su isla (`town`, o la primera isla del mundo). Si está
@@ -191,6 +191,7 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `TradeRequest` | `creature_id`, `item`, `item_id`, `stack_index` |
 | `TradeOffer` | `item`, `item_id`, `stack_index` |
 | `TradeAccept` / `TradeCancel` | — |
+| `CloseContainer` | `container_id` (T1.8) |
 | `Ping` | `client_time` |
 | `Logout` | — |
 
@@ -233,15 +234,15 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   hacia su objetivo cuando no está pegado a él y no tiene pasos en cola.
 - Ronda: con el objetivo a una casilla (también en diagonal) el jugador golpea cada
   `combat.attack_interval_ms` (2000 ms). Fórmulas en `server/internal/combat` (doc 02).
-  Hasta T1.8 golpea con los puños (`combat.fist_attack`, con su skill `fist`) y sin
-  armadura ni escudo.
+  Sin arma golpea con los puños (`combat.fist_attack`, con su skill `fist`); con arma,
+  con la de la mano derecha (T1.8).
 - Cada golpe (de jugador o de monstruo) manda a quien ve la casilla: `Effect`
   (`effect_id` 1 = golpe con daño, 2 = bloqueado o fallado) y, si hubo daño,
   `FloatingText{DAMAGE}` y `CreatureHealth`. El jugador golpeado recibe además
   `PlayerStats`. Los `effect_id` son constantes del protocolo hasta que exista
   `data/effects.yaml`.
 - Muerte de un monstruo: `CreatureDisappear`, `TileUpdate` con `creature_remains` encima
-  de la pila (dura `combat.monster_corpse_ms`; abrirlo llega con T1.8),
+  de la pila (dura `combat.monster_corpse_ms`; es un contenedor con el botín, T1.8),
   `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
   se reparte según el daño de los que siguen conectados) y, al que más daño hizo,
   `Message` de sistema `combat.loot` con un parámetro `monster` (`content_id`) y un
@@ -257,6 +258,44 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   cambió el %) solo cuando le faltaba vida o maná.
 - Hasta la muerte real (T1.11), un jugador con 0 de vida despierta en el templo con la vida
   llena, sin perder nada, y recibe `combat.defeated`.
+
+### Items e inventario (T1.8, `server/internal/session/inventory.go`)
+Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
+- **Pila de un tile:** suelo (índice 0), items fijos de `world.bin` y encima los items del
+  servidor (restos, items soltados) con su `count` si son apilables. `stack_index` de una
+  acción sobre `pos` es el índice en esa pila; solo los items del servidor se mueven o usan.
+  En `slot` vale 0; en `container` es el `index`.
+- **Validación:** si `item_id` no coincide con lo que hay en esa posición (vista vieja),
+  el índice no existe o el contenedor no está abierto → `Message` de sistema
+  `inventory.not_possible` y nada cambia. Otros rechazos: `inventory.too_far`,
+  `cannot_move` (`pickupable: false`), `wrong_slot`, `level_required` (`level`),
+  `vocation_cannot`, `hands_full`, `slot_occupied`, `container_full`, `too_heavy`,
+  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`.
+- **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
+  Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
+  contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor
+  no reordena (ignorado).
+- **Respuestas:** cada lugar que cambió manda su estado completo: `TileUpdate` a quien ve
+  el tile, `Inventory` (todos los slots ocupados) al dueño y `ContainerUpdate` a cada
+  jugador que tiene el contenedor abierto. Si cambió el peso cargado, `PlayerStats`
+  (`capacity` = capacidad libre en gramos, `max_capacity` = la total).
+- **Contenedores:** `UseItem` sobre un contenedor lo abre (`ContainerOpen` con un
+  `container_id` nuevo de la sesión, `capacity` = lugares, `has_parent` si está dentro de
+  otro contenedor) o lo cierra si ya estaba abierto (`ContainerClose`). Como máximo
+  `inventory.max_open_containers` (16) a la vez: abrir otro cierra el más viejo.
+  `CloseContainer` cierra una ventana. El servidor manda `ContainerClose` cuando el
+  jugador se aleja de un contenedor del suelo, cuando el contenedor se mueve fuera de su
+  alcance o cuando los restos desaparecen.
+- **Consumibles:** `UseItem` cura (`FloatingText{HEAL}` a quien ve, `CreatureHealth` si
+  cambió el %, `PlayerStats` al jugador) o, si solo es comida, `inventory.ate` con el
+  item. Gasta una unidad.
+- **`LookAt`:** `Message` de sistema `look.weapon` (`attack`, `defense`), `look.armor`
+  (`armor`), `look.shield` (`defense`), `look.container` (`slots`), `look.item` o
+  `look.ground`, con el parámetro `item` y, salvo el suelo, `weight` (gramos de la pila con
+  su contenido) y `level` si el item lo exige. El cliente agrega la descripción
+  `item.<id>.desc` si existe y muestra el peso en oz.
+- **Login:** `Inventory` lleva el equipo guardado; un personaje que nunca jugó recibe
+  `inventory.start_container` en el slot de mochila.
 
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
@@ -302,8 +341,8 @@ Reglas del área de interés (T1.4):
 - **Pisos:** en la superficie o arriba (z ≤ 7) se mandan los pisos 0–7; bajo tierra solo
   el piso actual. Un piso sin ninguna casilla en el área no se manda. Las criaturas se
   ven con la misma regla, así que "A ve a B" es simétrico.
-- Tile = suelo y luego la pila de items de `world.bin`, de abajo arriba. `count` es 0
-  (los conteos llegan con los items en el suelo, T1.8).
+- Tile = suelo y luego la pila de items de `world.bin`, de abajo arriba, y encima los
+  items del servidor (T1.8) con su `count` si son apilables (0 en los demás).
 - **Paso ortogonal:** un `MapSlice` con la columna (13 de alto) o la fila (17 de ancho) nueva. **Paso
   diagonal:** dos `MapSlice`, primero la columna completa (13) y después la fila sin la
   esquina (16).

@@ -54,3 +54,19 @@ SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(skills)::text[]),
        unnest(sqlc.arg(levels)::int[]), unnest(sqlc.arg(tries)::bigint[])
 ON CONFLICT (character_id, skill)
 DO UPDATE SET level = EXCLUDED.level, tries = EXCLUDED.tries;
+
+-- name: GetCharacterInventory :many
+-- Every item of a character; the server rebuilds the tree from container_id.
+SELECT id, container_id, slot, item_id, count
+FROM inventory_items
+WHERE character_id = sqlc.arg(character_id)
+ORDER BY container_id NULLS FIRST, slot;
+
+-- name: DeleteCharacterInventory :exec
+-- A snapshot replaces the whole inventory in the same transaction as the character row.
+DELETE FROM inventory_items WHERE character_id = sqlc.arg(character_id);
+
+-- name: InsertInventoryItem :one
+INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+VALUES (sqlc.arg(character_id), sqlc.narg(container_id), sqlc.arg(slot), sqlc.arg(item_id), sqlc.arg(count))
+RETURNING id;

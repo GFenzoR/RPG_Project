@@ -8,11 +8,12 @@ import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pi
 import type { Texture } from "pixi.js";
 import { CreatureKind, FloatingTextKind } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
-import type { Camera } from "@rpg/renderer";
+import type { AtlasIcon, Camera } from "@rpg/renderer";
 import { VIEW_TILES, followCamera, pixelScale } from "./viewport.ts";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { delta } from "../state/geometry.ts";
+import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
 import { EFFECT_HIT, EFFECT_MS, FLOATING_TEXT_MS } from "../state/world.ts";
 import type { CreatureState, EffectState, FloatingTextState, WorldState } from "../state/world.ts";
@@ -57,8 +58,14 @@ const textColor = (k: FloatingTextKind): number =>
 export interface GameCanvas {
   /** Page coordinates of the centre of tile (x, y) on the current floor (tests, tooling). */
   tileToClient(x: number, y: number): { x: number; y: number };
+  /** The tile of the own floor under page coordinates, or undefined outside the canvas. */
+  clientToTile(clientX: number, clientY: number): Pos | undefined;
+  /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
+  itemIcon(itemId: number): AtlasIcon | undefined;
   /** Current device pixels per sprite pixel. */
   readonly scale: number;
+  /** The <canvas> element (drop target for items dragged onto the map). */
+  readonly element: HTMLCanvasElement;
   destroy(): void;
 }
 
@@ -72,7 +79,16 @@ export interface GameCanvasOptions {
   clickTile(x: number, y: number, z: number): void;
   /** A creature was right-clicked (attack it). */
   clickCreature(id: number): void;
+  /** A tile without a creature was right-clicked (use its top item). */
+  useTile(x: number, y: number, z: number): void;
+  /** A tile was shift-clicked (look at its top item). */
+  lookTile(x: number, y: number, z: number): void;
+  /** The left button was pressed on a tile and dragged (move its top item). */
+  dragTile(x: number, y: number, z: number, e: PointerEvent): void;
 }
+
+/** Pointer travel (canvas pixels) that turns a press into a drag. */
+const DRAG_START_PX = 6;
 
 interface CreatureSprite {
   body: Container;
@@ -343,23 +359,63 @@ export async function createGameCanvas(
     };
   };
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  // Left: a click walks, shift+click looks, a drag moves the top item. Right: attack the
+  // creature on the tile, or use the tile's top item.
+  let press: { x: number; y: number; z: number; px: number; py: number } | undefined;
   canvas.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 && e.button !== 2) return;
     const self = world.self;
     if (!self) return;
     const p = toCanvas(e.clientX, e.clientY);
     const tile = screenToTile(cam, p.x, p.y, T);
+    const z = self.pos.z;
     if (e.button === 2) {
-      const c = world.creatureAt(tile.x, tile.y, self.pos.z);
+      const c = world.creatureAt(tile.x, tile.y, z);
       if (c && c.id !== world.selfId) opts.clickCreature(c.id);
+      else opts.useTile(tile.x, tile.y, z);
       return;
     }
-    opts.clickTile(tile.x, tile.y, self.pos.z);
+    if (e.shiftKey) {
+      opts.lookTile(tile.x, tile.y, z);
+      return;
+    }
+    press = { x: tile.x, y: tile.y, z, px: p.x, py: p.y };
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!press) return;
+    const p = toCanvas(e.clientX, e.clientY);
+    if (Math.hypot(p.x - press.px, p.y - press.py) < DRAG_START_PX) return;
+    const from = press;
+    press = undefined;
+    opts.dragTile(from.x, from.y, from.z, e);
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!press || e.button !== 0) return;
+    const from = press;
+    press = undefined;
+    opts.clickTile(from.x, from.y, from.z);
+  });
+  canvas.addEventListener("pointerleave", () => {
+    press = undefined;
   });
 
   return {
     get scale() {
       return scale;
+    },
+    element: canvas,
+    clientToTile(clientX, clientY) {
+      const self = world.self;
+      const r = canvas.getBoundingClientRect();
+      if (!self || clientX < r.left || clientY < r.top || clientX >= r.right || clientY >= r.bottom)
+        return undefined;
+      const p = toCanvas(clientX, clientY);
+      const tile = screenToTile(cam, p.x, p.y, T);
+      return { x: tile.x, y: tile.y, z: self.pos.z };
+    },
+    itemIcon(itemId) {
+      const sprite = content.items[itemId]?.sprite;
+      return sprite ? atlas.icon(sprite) : undefined;
     },
     tileToClient(x, y) {
       const s = tileToScreen(cam, x + 0.5, y + 0.5, T);

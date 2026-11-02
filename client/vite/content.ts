@@ -54,6 +54,11 @@ export function loadClientContent(root: string): ClientContent {
         walkable: ground?.["walkable"] === true,
         blocks: raw["blocks_movement"] === true,
         speed: typeof ground?.["speed"] === "number" ? ground["speed"] : 100,
+        stackable: raw["stackable"] === true,
+        slots:
+          isObj(raw["container"]) && typeof raw["container"]["slots"] === "number"
+            ? raw["container"]["slots"]
+            : 0,
       };
     }
   }

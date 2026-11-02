@@ -28,6 +28,7 @@ sprites:
   food/raw_fish: { placeholder: { label: RF, color: "#7fb0b8" } }
   tools/fishing_rod: { placeholder: { label: FR, color: "#6d7f4a" } }
   tools/rope: { placeholder: { label: RO, color: "#b49a64" } }
+  containers/backpack: { placeholder: { label: BK, color: "#8a5a32" } }
   weapons/iron_sword: { placeholder: { label: IS, color: "#7d8794" } }
   weapons/hatchet: { placeholder: { label: HA, color: "#6f7a86" } }
   weapons/driftwood_club: { placeholder: { label: DC, color: "#8a7458" } }

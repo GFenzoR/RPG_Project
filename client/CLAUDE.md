@@ -62,6 +62,18 @@ client/
   `SKILL_ORDER`, nombres `skill.<id>.name`) y un aviso de subida de nivel unos segundos.
 - Un parámetro `content_id` llamado `skill` se traduce como `skill.<id>.name`.
 
+## Notas de T1.8
+- `WorldState` guarda `inventory` (slot → item), `containers` (ventanas abiertas) y el
+  `count` de cada item de los tiles (`tileCounts`). `state/items.ts` arma las
+  `ItemLocation` del protocolo y el item de arriba de un tile.
+- Panel `ui/Inventory.tsx`: slots de equipo, capacidad (oz = gramos / 100) y una ventana
+  por contenedor abierto. Los iconos son el sprite del atlas como fondo CSS
+  (`Atlas.icon`).
+- Arrastrar y soltar con eventos de puntero propios (no HTML5 DnD, para cruzar canvas y
+  DOM): `Game.pressItem` / `startDrag` y `dropTarget` (un `[data-drop]` o un tile del
+  canvas). En el canvas: arrastrar el item de arriba, click derecho = usar (o atacar si
+  hay criatura), Mayús+click = mirar. En el DOM: click derecho = usar, Mayús+click = mirar.
+
 ## Verificación visual (obligatoria si tocas render o UI)
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda
 screenshots en `client/e2e/screenshots/`. Ábrelos con Read y revísalos antes de cerrar.

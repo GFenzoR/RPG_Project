@@ -49,6 +49,14 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 			ClientTime: m.Ping.GetClientTime(),
 			ServerTime: uint64(max(ctx.Now.UnixMilli(), 0)),
 		}}})
+	case *pb.ClientMessage_MoveItem:
+		w.moveItem(p, m.MoveItem)
+	case *pb.ClientMessage_UseItem:
+		w.useItem(ctx, p, m.UseItem)
+	case *pb.ClientMessage_LookAt:
+		w.lookAt(p, m.LookAt)
+	case *pb.ClientMessage_CloseContainer:
+		w.closeContainer(p, m.CloseContainer.GetContainerId())
 	case *pb.ClientMessage_Logout:
 		// No-logout zones and the combat lock arrive with death and PvP rules (T1.11).
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
@@ -202,6 +210,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 
 	// Other clients: those around either end of the step.
 	w.observeMove(p, nil, from, to, mv.From, mv.To, durMs)
+	w.checkContainers(p)
 
 	// The mover's own client: creatures out of view disappear, the new edge arrives.
 	kept := p.known[:0]
@@ -245,6 +254,7 @@ func (w *World) Teleport(p *Player, to world.Pos) {
 	w.unindex(p)
 	p.pos = to
 	w.index(p)
+	w.checkContainers(p)
 	w.sendFullView(p)
 	w.appearToObservers(p)
 }

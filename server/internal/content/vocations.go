@@ -23,6 +23,8 @@ type Vocation struct {
 	// SkillFactors is the per-level cost multiplier of each skill:
 	// tries(n) = base_tries × factor^(n − start_level). A missing skill uses factor 1.
 	SkillFactors map[string]float64 `yaml:"skill_factors"`
+	// Weapons are the weapon types (data/items weapon.type) the vocation can wield.
+	Weapons []string `yaml:"weapons"`
 }
 
 // Regen is what a vocation recovers every IntervalMs.

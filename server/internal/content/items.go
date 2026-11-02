@@ -8,31 +8,84 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// Item is the part of a data/items/*.yaml entry the server uses so far (T1.6: combat
-// numbers, value and the numeric id). Items, inventory and containers arrive in T1.8.
+// Item is the part of a data/items/*.yaml entry the server uses: combat numbers (T1.6),
+// and weight, stacking, equipment, containers and consumables (T1.8).
 type Item struct {
-	ID        string `yaml:"id"`
-	Kind      string `yaml:"kind"`
-	Stackable bool   `yaml:"stackable"`
-	Value     int    `yaml:"value"`
-	Weapon    *struct {
+	ID          string `yaml:"id"`
+	Kind        string `yaml:"kind"`
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	// Weight is in grams.
+	Weight    int  `yaml:"weight"`
+	Stackable bool `yaml:"stackable"`
+	MaxStack  int  `yaml:"max_stack"`
+	Tradeable bool `yaml:"tradeable"`
+	// Pickupable is false for items that never leave their tile (nil = true).
+	Pickupable *bool `yaml:"pickupable"`
+	Value      int   `yaml:"value"`
+	Weapon     *struct {
 		// Type is the skill the weapon trains and uses (sword, axe, club...).
 		Type    string `yaml:"type"`
 		Attack  int    `yaml:"attack"`
 		Defense int    `yaml:"defense"`
+		Hands   int    `yaml:"hands"`
 	} `yaml:"weapon"`
 	Armor *struct {
-		Armor int `yaml:"armor"`
+		Slot  string `yaml:"slot"`
+		Armor int    `yaml:"armor"`
 	} `yaml:"armor"`
 	Shield *struct {
 		Defense int `yaml:"defense"`
 	} `yaml:"shield"`
+	Container *struct {
+		Slots int `yaml:"slots"`
+	} `yaml:"container"`
+	Consumable *struct {
+		HealHP int `yaml:"heal_hp"`
+		HealMP int `yaml:"heal_mp"`
+		FoodMs int `yaml:"food_ms"`
+	} `yaml:"consumable"`
+	Requires struct {
+		Level     int      `yaml:"level"`
+		Vocations []string `yaml:"vocations"`
+	} `yaml:"requires"`
 	// Numeric is the stable numeric id from data/ids.lock.yaml.
 	Numeric uint16 `yaml:"-"`
 }
 
+// CanPickUp reports whether the item can be moved off its tile.
+func (it *Item) CanPickUp() bool { return it.Pickupable == nil || *it.Pickupable }
+
+// StackLimit is the largest stack of the item (1 if it does not stack).
+func (it *Item) StackLimit() int {
+	if !it.Stackable {
+		return 1
+	}
+	if it.MaxStack > 0 {
+		return it.MaxStack
+	}
+	return 100
+}
+
+// Slots is the capacity of a container item (0 if it is not one).
+func (it *Item) Slots() int {
+	if it.Container == nil {
+		return 0
+	}
+	return it.Container.Slots
+}
+
 // Items maps item id to its definition.
 type Items map[string]*Item
+
+// ByNumeric indexes items by their numeric id.
+func (is Items) ByNumeric() map[uint16]*Item {
+	out := make(map[uint16]*Item, len(is))
+	for _, it := range is {
+		out[it.Numeric] = it
+	}
+	return out
+}
 
 // LoadItems reads <dataDir>/items/*.yaml and the numeric ids of <dataDir>/ids.lock.yaml.
 // Every item must have a numeric id (make gen-ids).

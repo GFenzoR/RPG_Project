@@ -79,6 +79,16 @@ func (q *Queries) CreateCharacter(ctx context.Context, arg CreateCharacterParams
 	return i, err
 }
 
+const deleteCharacterInventory = `-- name: DeleteCharacterInventory :exec
+DELETE FROM inventory_items WHERE character_id = $1
+`
+
+// A snapshot replaces the whole inventory in the same transaction as the character row.
+func (q *Queries) DeleteCharacterInventory(ctx context.Context, characterID int64) error {
+	_, err := q.db.Exec(ctx, deleteCharacterInventory, characterID)
+	return err
+}
+
 const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT id, account_id, name, vocation, level, experience, health, mana,
        pos_x, pos_y, pos_z, town
@@ -127,6 +137,48 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 	return i, err
 }
 
+const getCharacterInventory = `-- name: GetCharacterInventory :many
+SELECT id, container_id, slot, item_id, count
+FROM inventory_items
+WHERE character_id = $1
+ORDER BY container_id NULLS FIRST, slot
+`
+
+type GetCharacterInventoryRow struct {
+	ID          int64
+	ContainerID pgtype.Int8
+	Slot        int16
+	ItemID      int32
+	Count       int32
+}
+
+// Every item of a character; the server rebuilds the tree from container_id.
+func (q *Queries) GetCharacterInventory(ctx context.Context, characterID int64) ([]GetCharacterInventoryRow, error) {
+	rows, err := q.db.Query(ctx, getCharacterInventory, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCharacterInventoryRow{}
+	for rows.Next() {
+		var i GetCharacterInventoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ContainerID,
+			&i.Slot,
+			&i.ItemID,
+			&i.Count,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCharacterSkills = `-- name: GetCharacterSkills :many
 SELECT skill, level, tries
 FROM character_skills
@@ -159,6 +211,33 @@ func (q *Queries) GetCharacterSkills(ctx context.Context, characterID int64) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertInventoryItem = `-- name: InsertInventoryItem :one
+INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id
+`
+
+type InsertInventoryItemParams struct {
+	CharacterID int64
+	ContainerID pgtype.Int8
+	Slot        int16
+	ItemID      int32
+	Count       int32
+}
+
+func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertInventoryItem,
+		arg.CharacterID,
+		arg.ContainerID,
+		arg.Slot,
+		arg.ItemID,
+		arg.Count,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const listCharactersByAccount = `-- name: ListCharactersByAccount :many
