@@ -53,6 +53,12 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.moveItem(p, m.MoveItem)
 	case *pb.ClientMessage_UseItem:
 		w.useItem(ctx, p, m.UseItem)
+	case *pb.ClientMessage_UseItemOn:
+		w.useItemOn(ctx, p, m.UseItemOn)
+	case *pb.ClientMessage_CastSpell:
+		w.castSpell(ctx, p, m.CastSpell)
+	case *pb.ClientMessage_Say:
+		w.say(ctx, p, m.Say)
 	case *pb.ClientMessage_LookAt:
 		w.lookAt(p, m.LookAt)
 	case *pb.ClientMessage_CloseContainer:

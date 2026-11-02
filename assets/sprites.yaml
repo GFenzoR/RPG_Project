@@ -40,6 +40,7 @@ sprites:
   weapons/belaying_pin: { placeholder: { label: BP, color: "#a07a50" } }
   weapons/spiked_cudgel: { placeholder: { label: SK, color: "#6e5a44" } }
   weapons/coral_wand: { placeholder: { label: CW, color: "#e4d8cc" } }
+  runes/arc_rune: { placeholder: { label: AR, color: "#6fb7e8" } }
   armor/sailcloth_cap: { placeholder: { label: SC, color: "#c9bfa6" } }
   armor/leather_jerkin: { placeholder: { label: LJ, color: "#8a5a32" } }
   armor/canvas_trousers: { placeholder: { label: CT, color: "#b2a684" } }

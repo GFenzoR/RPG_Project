@@ -42,6 +42,8 @@ type Config struct {
 	// Monsters and Items come from data/ (session.Config); nil runs a world without monsters.
 	Monsters content.Monsters
 	Items    content.Items
+	// Spells come from data/spells.yaml (session.Config); nil means no spells.
+	Spells content.Spells
 	// Map is the loaded world. Nil runs the HTTP API only (no /ws).
 	Map *world.Map
 
@@ -117,6 +119,7 @@ func New(cfg Config) (*App, error) {
 			Vocations:     cfg.Vocations,
 			Monsters:      cfg.Monsters,
 			Items:         cfg.Items,
+			Spells:        cfg.Spells,
 			Save:          saver.Submit,
 			AutosaveEvery: cfg.AutosaveEvery,
 			Logger:        cfg.Logger,

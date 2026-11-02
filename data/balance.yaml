@@ -44,6 +44,9 @@ combat:
   level_divisor: 4
   shield_block_divisor: 4
   monster_corpse_ms: 60000    # how long a monster's remains (and its loot) stay
+  # Wands (T1.9): a distance attack of the weapon's element and range that hits
+  # random(attack × wand_min_factor, attack) × (1 − resistance %). Armor does not stop it.
+  wand_min_factor: 0.5
   modes:
     offensive: { attack: 1.25, defense: 0.55 }
     balanced: { attack: 1.0, defense: 1.0 }

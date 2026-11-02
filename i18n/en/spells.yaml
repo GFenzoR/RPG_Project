@@ -1,0 +1,5 @@
+# Spell names (data/spells.yaml).
+spell.arc_bolt.name: "arc bolt"
+spell.ember_ring.name: "ember ring"
+spell.light_heal.name: "light heal"
+spell.conjure_arc_rune.name: "conjure arc rune"

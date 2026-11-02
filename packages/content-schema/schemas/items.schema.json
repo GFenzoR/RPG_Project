@@ -122,6 +122,17 @@
             }
           }
         },
+        "rune": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spell", "charges"],
+          "description": "A rune casts the effect of spell (no mana, no words) and loses a charge per use (T1.9).",
+          "properties": {
+            "spell": { "$ref": "common.schema.json#/$defs/spellRef" },
+            "charges": { "$ref": "common.schema.json#/$defs/positiveInt" },
+            "magic_level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" }
+          }
+        },
         "requires": {
           "type": "object",
           "additionalProperties": false,
@@ -164,6 +175,10 @@
         {
           "if": { "properties": { "kind": { "const": "currency" } } },
           "then": { "required": ["currency"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "rune" } } },
+          "then": { "required": ["rune"] }
         }
       ]
     }

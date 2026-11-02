@@ -73,6 +73,10 @@ type Player struct {
 	open          []openContainer
 	nextContainer uint32
 	nextUse       game.Tick
+
+	// Magic (T1.9): the first tick each spell, and each spell group, can be cast again.
+	spellReady map[string]game.Tick
+	groupReady map[string]game.Tick
 }
 
 // Health returns the player's current and maximum health.
