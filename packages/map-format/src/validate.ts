@@ -43,9 +43,12 @@ export function validateWorld(root: string, opts: ValidateWorldOptions = {}): Ma
     loaded.world.meta.islands.forEach((e, i) => e.id === id && entries.add(i));
     const routes = new Set<number>();
     loaded.world.meta.boat_routes.forEach((b, i) => b.to.island === id && routes.add(i));
+    // If world.yaml itself did not load, every world.yaml finding concerns every island.
+    const worldBroken = !loaded.files.some((f) => f.file === worldFile);
     const aboutIsland = (d: Diagnostic): boolean => {
       if (d.file.startsWith(prefix)) return true;
       if (d.file !== worldFile) return false;
+      if (worldBroken) return true;
       const [section, index] = d.path;
       if (typeof index !== "number") return false;
       return (
@@ -135,9 +138,9 @@ class WorldValidator {
           ["islands", i, "level_hint"],
           "level_hint is [min, max]; min is larger than max",
         );
-      for (let j = 0; j < i; j++) {
-        const other = entries[j];
-        if (other && rectsOverlap(e.rect, other.rect))
+      // Reported on both entries, so filtering by either island shows it.
+      for (const [j, other] of entries.entries()) {
+        if (j !== i && rectsOverlap(e.rect, other.rect))
           this.err(worldFile, ["islands", i, "rect"], `overlaps island "${other.id}"`);
       }
       const island = this.world.islands.get(e.id);

@@ -69,3 +69,24 @@ describe("docs/03-world-and-maps.md", () => {
     for (const block of blocks) expect(canonical("docs.yaml", block)).toBe(block);
   });
 });
+
+describe("docs/03-world-and-maps.md chunk example", () => {
+  const doc = readFileSync(new URL("../../../docs/03-world-and-maps.md", import.meta.url), "utf8");
+  const blocks = [...doc.matchAll(/```json\n([\s\S]*?)```/g)].map((m) => m[1] ?? "");
+
+  it("is what the canonical writer produces (with rows 3–31 elided)", () => {
+    expect(blocks).toHaveLength(1);
+    const shown = blocks[0] ?? "";
+    // The example elides identical rows with "    ..."; restore them to get a full chunk.
+    const lines = shown.split("\n");
+    const at = lines.indexOf("    ...");
+    expect(at).toBeGreaterThan(0);
+    const row = lines[at + 1] ?? "";
+    const full = [
+      ...lines.slice(0, at),
+      ...Array<string>(29).fill(`${row},`),
+      ...lines.slice(at + 1),
+    ].join("\n");
+    expect(canonical("docs.json", full)).toBe(full);
+  });
+});

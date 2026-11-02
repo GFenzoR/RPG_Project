@@ -1,4 +1,14 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -441,5 +451,142 @@ describe("review fixes", () => {
     const i18n = loadContent(root).i18n;
     expect([...i18n.keys()]).toEqual(["es", "en"]);
     expect(i18n.get("es")?.has("island.testisle.name")).toBe(true);
+  });
+});
+
+describe("review fixes, round 2", () => {
+  const two = (): Island => {
+    const b = mini();
+    b.meta.id = "mini_two";
+    b.meta.rect = { x: 0, y: 0, w: 64, h: 32 };
+    b.chunks = new Map();
+    b.spawns = [];
+    b.npcs = [];
+    b.portals = [];
+    b.zones = [
+      { id: "two_temple", type: "protection", floors: [7], rects: [{ x: 16, y: 16, w: 1, h: 1 }] },
+    ];
+    return b;
+  };
+  const only = (root: string, island: string): string[] =>
+    validateWorld(root, { content, island }).diagnostics.map(formatDiagnostic);
+
+  it("reports an overlap on both islands, whatever their order", () => {
+    for (const order of [0, 1]) {
+      const a = mini();
+      const b = two();
+      const { root } = check(a, order === 0 ? worldOf(a, b) : worldOf(b, a), [b]);
+      expect(only(root, "mini")).toContainEqual(
+        expect.stringContaining('overlaps island "mini_two"'),
+      );
+      expect(only(root, "mini_two")).toContainEqual(
+        expect.stringContaining('overlaps island "mini"'),
+      );
+    }
+  });
+
+  it("keeps world.yaml rect and duplicate-id findings when filtering by island", () => {
+    const i = mini();
+    const meta = worldOf(i);
+    must(meta.islands[0]).rect = { x: 65504, y: 0, w: 64, h: 32 };
+    meta.islands.push({ ...must(meta.islands[0]) });
+    const { root } = check(i, meta);
+    const m = only(root, "mini");
+    expect(m).toContainEqual(
+      expect.stringContaining("islands[0].rect: rectangle leaves the world"),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining('islands[1].id: island "mini" is listed twice'),
+    );
+  });
+
+  it("shows a schema error in world.yaml instead of 'not listed' when filtering", () => {
+    const { root } = check(mini());
+    const file = join(root, "world/world.yaml");
+    writeFileSync(
+      file,
+      readFileSync(file, "utf8").replace("level_hint: [1, 5]", 'level_hint: [1, "x"]'),
+    );
+    const m = only(root, "mini");
+    expect(m).toContainEqual(
+      expect.stringMatching(/world\.yaml:\d+ islands\[0\]\.level_hint\[1\]: must be integer/),
+    );
+    expect(m.join("\n")).not.toContain("is not listed");
+  });
+
+  it("follows symlinked islands, chunk directories and chunk files", () => {
+    const { root } = check(mini());
+    const isles = join(root, "world/islands");
+    const away = join(root, "elsewhere");
+    mkdirSync(away);
+    renameSync(join(isles, "mini"), join(away, "mini"));
+    symlinkSync(join(away, "mini"), join(isles, "mini"));
+    const z07 = join(away, "mini/chunks/z07");
+    renameSync(join(z07, "c0000_0000.json"), join(away, "c0000_0000.json"));
+    symlinkSync(join(away, "c0000_0000.json"), join(z07, "c0000_0000.json"));
+    renameSync(join(away, "mini/chunks/z08"), join(away, "z08"));
+    symlinkSync(join(away, "z08"), join(away, "mini/chunks/z08"));
+    expect(messages(validateWorld(root, { content }))).toEqual([]);
+  });
+
+  it("reports unreadable entries (ELOOP, dangling links) instead of treating them as missing", () => {
+    const { root } = check(mini());
+    const isle = join(root, "world/islands/mini");
+    rmSync(join(isle, "spawns.yaml"));
+    symlinkSync("spawns.yaml", join(isle, "spawns.yaml")); // ELOOP
+    symlinkSync("nowhere.yaml", join(isle, "texts.yaml")); // dangling
+    rmSync(join(isle, "chunks/z08/c0000_0000.json"));
+    symlinkSync("c0000_0000.json", join(isle, "chunks/z08/c0000_0000.json"));
+    symlinkSync("z09", join(isle, "chunks/z09"));
+    const m = messages(validateWorld(root, { content }));
+    expect(m).toContainEqual(expect.stringMatching(/mini\/spawns\.yaml cannot read: ELOOP/));
+    expect(m).toContainEqual(expect.stringMatching(/mini\/texts\.yaml cannot read: ENOENT/));
+    expect(m).toContainEqual(expect.stringMatching(/z08\/c0000_0000\.json cannot read: ELOOP/));
+    expect(m).toContainEqual(expect.stringMatching(/chunks\/z09 cannot read: ELOOP/));
+    expect(m.join("\n")).not.toContain("expected a");
+  });
+
+  it.skipIf(process.getuid?.() === 0)(
+    "reports unreadable directories and files (needs non-root)",
+    () => {
+      const { root } = check(mini());
+      const isle = join(root, "world/islands/mini");
+      chmodSync(join(isle, "spawns.yaml"), 0o000);
+      chmodSync(join(isle, "chunks/z08"), 0o000);
+      try {
+        const m = messages(validateWorld(root, { content }));
+        expect(m).toContainEqual(expect.stringMatching(/spawns\.yaml cannot read file: EACCES/));
+        expect(m).toContainEqual(
+          expect.stringMatching(/chunks\/z08\/ cannot read directory: EACCES/),
+        );
+      } finally {
+        chmodSync(join(isle, "chunks/z08"), 0o755);
+      }
+    },
+  );
+
+  it("reports world/islands and an island path that are files", () => {
+    const { root } = check(mini());
+    rmSync(join(root, "world/islands/mini"), { recursive: true });
+    writeFileSync(join(root, "world/islands/mini"), "not a directory");
+    expect(only(root, "mini")).toContainEqual("error world/islands/mini/ expected a directory");
+    rmSync(join(root, "world/islands"), { recursive: true });
+    writeFileSync(join(root, "world/islands"), "not a directory");
+    expect(messages(validateWorld(root, { content }))).toContainEqual(
+      "error world/islands/ expected a directory",
+    );
+  });
+
+  it("reports 'listed twice' once when the island fails to load", () => {
+    const i = mini();
+    const meta = worldOf(i);
+    meta.islands.push({ ...must(meta.islands[0]) });
+    const { root } = check(i, meta);
+    writeFileSync(join(root, "world/islands/mini/island.yaml"), "id: [\n");
+    const m = messages(validateWorld(root, { content }));
+    expect(m.filter((x) => x.includes("listed twice"))).toHaveLength(1);
+    expect(m.filter((x) => x.includes("island.yaml") && x.includes("invalid YAML"))).toHaveLength(
+      1,
+    );
   });
 });
