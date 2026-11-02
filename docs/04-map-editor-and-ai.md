@@ -15,12 +15,24 @@ el MCP solo la exponen. Así un humano y una IA producen exactamente el mismo re
 Cada operación es JSON, se aplica sobre un mundo en memoria y devuelve su **inversa**
 (para deshacer y para revisión).
 
+Implementación: `packages/map-format/src/ops/` (entrada `@rpg/map-format/ops`, sin
+dependencias de Node para que el editor la use en el navegador).
+`applyOps(world, ops, { itemKind? }) → { world, inverse, touched }`:
+- **Pura**: no muta el mundo de entrada; copia solo las islas y chunks que toca.
+- **Atómica**: si una op es inválida lanza `OpError` (con el índice de la op) y no aplica
+  ninguna. Inválido = celda fuera de toda isla o en un piso no listado, rect vacío,
+  `remove_item` de algo que no está, índice fuera de la pila; con `itemKind`, además item
+  desconocido, `paint_ground` con algo que no es `kind: ground` o `place_item` con un suelo.
+- **Reversible**: `inverse` es una **lista** de ops que, aplicada al resultado, devuelve
+  exactamente el mundo original (mismos bytes al guardar). La inversa de la inversa rehace.
+- Un chunk que queda sin suelo ni items se elimina (y su archivo desaparece al guardar).
+
 | op | Campos | Efecto |
 |---|---|---|
-| `paint_ground` | `floor`, `rect` o `cells`, `item` | Pone suelo |
-| `erase` | `floor`, `rect`, `layer` (`ground`/`items`/`all`) | Borra |
-| `place_item` | `pos`, `item`, `index?` | Agrega a la pila |
-| `remove_item` | `pos`, `item` | Quita de la pila |
+| `paint_ground` | `floor`, `rect` y/o `cells`, `item` | Pone suelo |
+| `erase` | `floor`, `rect` y/o `cells`, `layer` (`ground`/`items`/`all`) | Borra |
+| `place_item` | `pos`, `item`, `index?` | Agrega a la pila (`index` 0 = abajo; sin `index`, arriba) |
+| `remove_item` | `pos`, `item`, `index?` | Quita de la pila (el de `index`, o el de más arriba) |
 | `fill` | `pos`, `item` | Relleno por inundación del suelo contiguo igual |
 | `autoborder` | `floor`, `rect` | Recalcula bordes con `data/borders.yaml` |
 | `scatter` | `floor`, `rect`, `items[]`, `density`, `seed`, `on_ground[]` | Decoración aleatoria reproducible |
@@ -78,6 +90,21 @@ Se registra en `.mcp.json` en la raíz para que Claude Code lo cargue.
 **Hito 1 (rebanada vertical):** abrir una isla, navegar, zoom, cambiar de piso, pincel de
 suelo, colocar/quitar item, borrador, deshacer/rehacer, guardar chunks, validación en
 vivo, paleta con búsqueda.
+
+Implementación (T1.14): `editor/` (Vite + Preact + PixiJS, renderer de
+`packages/renderer`). Las ops corren en el navegador; un servidor local de desarrollo
+(plugin de Vite, `editor/server/`) solo lee `world/` y `data/`, guarda y valida con
+`map-format`, porque los archivos y el validador viven en disco. `make editor` lo levanta
+en http://localhost:5174 y edita `world/` del repo en el lugar.
+- Guardar escribe los mismos bytes que `mapcli fmt` (test en `editor/server/store.test.ts`
+  y en el E2E) y solo toca archivos que cambian; se bloquea si algún archivo de `world/` no
+  carga, para no pisar ni borrar algo que el editor no pudo leer.
+- Validación en vivo: tras cada cambio (300 ms de espera) el servidor escribe el mundo en
+  memoria a un directorio temporal y corre `validateWorld`; el panel muestra exactamente lo
+  que diría `mapcli validate` después de guardar.
+- Atajos implementados: `B` pincel, `I` item, `E` borrador, `PgUp/PgDn` piso, rueda = zoom,
+  espacio + arrastrar o botón central = mover, `Ctrl+Z` / `Ctrl+Y` (o `Ctrl+Shift+Z`),
+  `Ctrl+S`. Clic derecho o Mayús+clic con la herramienta Item quita el item de arriba.
 
 **Hito 2:** relleno, rectángulo, selección + copiar/pegar, autoborder automático al
 pintar, spawns, NPCs, zonas y portales con su panel, exportar/importar patch, vista de

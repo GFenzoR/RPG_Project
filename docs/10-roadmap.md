@@ -77,7 +77,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   global, mensajes del sistema por clave i18n, selector de idioma es/en. [T1.5]
 
 **Editor e IA**
-- [ ] **T1.14 Map editor v1.** Funciones del hito 1 en `04-map-editor-and-ai.md`, con
+- [x] **T1.14 Map editor v1.** (PR #PRNUM) Funciones del hito 1 en `04-map-editor-and-ai.md`, con
   ops de map-format, deshacer/rehacer, validación en vivo, E2E. [T0.4, T0.5]
 - [ ] **T1.15 mapcli completo + mcp-world.** Todas las ops, `render` a PNG, `generate`
   procedural básico, servidor MCP registrado en `.mcp.json`. [T1.14]

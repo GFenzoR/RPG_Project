@@ -19,13 +19,25 @@ editor/
   src/io/          abrir/guardar chunks, exportar "map patch" para enviar a revisión
   src/review/      vista de diff entre el mundo oficial y un patch (antes/después)
   src/ui/          Preact: paneles, propiedades, validación en vivo
-  e2e/             Playwright: abre el editor, pinta, guarda, compara screenshot
+  src/state/       EditorController: estado y acciones, sin Preact ni Pixi
+  server/          backend local (plugin de Vite, Node): bootstrap, guardar, validar, atlas
+  e2e/             Playwright: abre el editor, pinta, guarda, revisa screenshots
 ```
+Aún no existen (hito 2): `src/review/`, herramientas relleno/rectángulo/selección/spawn/zona.
+
+## Correr
+- `make editor` (o `pnpm --filter @rpg/editor dev`): http://localhost:5174, edita `world/`
+  del repo. `EDITOR_ROOT=/otra/copia` apunta a otra raíz.
+- `make e2e`: Playwright sobre una copia temporal del repo; screenshots en
+  `e2e/screenshots/actual/` (revisarlos con Read). `window.__rpgEditor` expone ganchos de
+  solo lectura para los tests (tile, coordenadas de pantalla de una casilla, estado).
 
 ## Reglas
-- El editor funciona 100% en el navegador, sin login para editar localmente.
-  Enviar un patch a revisión sí requiere cuenta (hito posterior).
+- La edición ocurre 100% en el navegador (las ops de map-format corren ahí), sin login
+  para editar localmente. El backend local solo lee/escribe archivos y corre el validador
+  (viven en Node). Enviar un patch a revisión sí requiere cuenta (hito posterior).
+- Ningún texto visible hardcodeado: claves `editor.*` en `i18n/{es,en}/editor.yaml`.
 - La validación (`map-format/validate`) corre en vivo y muestra errores en el panel:
   tiles sin suelo, spawns en tiles bloqueados, portales a destinos inexistentes, etc.
 - Formato de salida idéntico al que produce `mapcli`: si guardas el mismo mapa desde los
-  dos, el diff debe ser vacío (hay un test para eso).
+  dos, el diff debe ser vacío (`server/store.test.ts` y el E2E corren `mapcli fmt --check`).
