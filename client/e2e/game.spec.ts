@@ -32,13 +32,21 @@ interface Self {
 const self = (page: Page): Promise<Self | undefined> =>
   page.evaluate(() => window.__rpgClient?.self());
 
-/** Waits until the own creature stands still and confirmed on (x, y). */
+/**
+ * Waits until the own creature stands still and confirmed on (x, y). A hop of 5-6 tiles
+ * takes ~4-5 s at level 1 (base_step_ms and the vocation's start speed), which is right at
+ * expect.poll's default 5 s on a slow CI runner, so allow a generous timeout: it still
+ * fails if the creature never gets there.
+ */
 async function arrived(page: Page, x: number, y: number): Promise<void> {
   await expect
-    .poll(async () => {
-      const s = await self(page);
-      return s && !s.pending && !s.walking ? `${s.x},${s.y}` : "moving";
-    })
+    .poll(
+      async () => {
+        const s = await self(page);
+        return s && !s.pending && !s.walking ? `${s.x},${s.y}` : "moving";
+      },
+      { timeout: 20_000 },
+    )
     .toBe(`${x},${y}`);
 }
 
