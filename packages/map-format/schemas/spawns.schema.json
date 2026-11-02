@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/map-schemas/spawns.schema.json",
+  "title": "Monster spawns (world/islands/<id>/spawns.yaml)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "center", "radius", "monsters", "respawn_seconds"],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "center": { "$ref": "common.schema.json#/$defs/position" },
+      "radius": { "type": "integer", "minimum": 0, "maximum": 32 },
+      "monsters": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["monster", "count"],
+          "properties": {
+            "monster": { "$ref": "common.schema.json#/$defs/id" },
+            "count": { "type": "integer", "minimum": 1 }
+          }
+        }
+      },
+      "respawn_seconds": { "type": "integer", "minimum": 1 },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

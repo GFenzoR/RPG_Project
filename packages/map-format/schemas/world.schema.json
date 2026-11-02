@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/map-schemas/world.schema.json",
+  "title": "World index (world/world.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "islands", "boat_routes"],
+  "properties": {
+    "format": { "const": 1 },
+    "islands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rect", "level_hint"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "rect": { "$ref": "common.schema.json#/$defs/rect" },
+          "level_hint": { "$ref": "common.schema.json#/$defs/levelHint" }
+        }
+      }
+    },
+    "boat_routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from_npc", "to", "price"],
+        "properties": {
+          "from_npc": { "$ref": "common.schema.json#/$defs/id" },
+          "to": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["island", "pos"],
+            "properties": {
+              "island": { "$ref": "common.schema.json#/$defs/id" },
+              "pos": { "$ref": "common.schema.json#/$defs/position" }
+            }
+          },
+          "price": { "type": "integer", "minimum": 0 },
+          "requires": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": { "level": { "type": "integer", "minimum": 1 } }
+          }
+        }
+      }
+    }
+  }
+}

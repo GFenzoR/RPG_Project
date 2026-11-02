@@ -26,7 +26,7 @@ Objetivo: repo que compila, se testea y valida, con los contratos base definidos
   monsters, npcs, quests, spells, recipes, borders, i18n. Validador (`make validate`)
   con mensajes claros. Datos semilla: suelos básicos, 10 items, 3 monstruos, 1 NPC,
   `ids.lock.yaml`, i18n es/en. [T0.1]
-- [ ] **T0.4 map-format + mapcli básico.** Lectura/escritura canónica de chunks,
+- [x] **T0.4 map-format + mapcli básico.** (PR #8) Lectura/escritura canónica de chunks,
   islas y archivos auxiliares, validación (sección de 03), `mapcli info|fmt|validate|view`.
   Golden tests. Isla de prueba 64x64 en `world/islands/testisle/`. [T0.3]
 - [ ] **T0.5 Assets y spritepack.** (parcial, PR #5: falta integrar packs del usuario) 👤 Tú bajas 1–2 packs CC0/CC-BY de 32x32 (ver

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/map-schemas/common.schema.json",
+  "title": "Shared definitions for world/ files",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 64 },
+    "i18nKey": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$" },
+    "notes": { "description": "Internal comment, never shown to players.", "type": "string" },
+    "coord": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "floor": { "type": "integer", "minimum": 0, "maximum": 15 },
+    "floors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/floor" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "$ref": "#/$defs/coord" },
+        "y": { "$ref": "#/$defs/coord" },
+        "z": { "$ref": "#/$defs/floor" }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": { "$ref": "#/$defs/coord" },
+        "y": { "$ref": "#/$defs/coord" },
+        "w": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "h": { "type": "integer", "minimum": 1, "maximum": 65536 }
+      }
+    },
+    "levelHint": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "integer", "minimum": 1 }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

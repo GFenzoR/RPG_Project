@@ -1,0 +1,7 @@
+id: testisle
+name: island.testisle.name
+rect: { x: 1024, y: 1024, w: 64, h: 64 }
+floors: [7, 8]
+temple: { x: 1056, y: 1056, z: 7 }
+level_hint: [1, 8]
+notes: "Test island for tools and tests (T0.4). Not part of the official world layout."

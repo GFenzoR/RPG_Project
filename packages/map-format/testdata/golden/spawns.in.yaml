@@ -1,0 +1,13 @@
+- respawn_seconds: 60
+  monsters: [{ monster: wolf, count: 3 }, {count: 1, monster: bilge_rat}]
+  radius: 5
+  center: {x: 3215, y: 6410, z: 7}
+  id: puerto_wolves_north
+  notes: Wolves near the north gate; keep them out of town.
+- id: puerto_rats
+  center: {x: 3220, y: 6440, z: 8}
+  radius: 2
+  monsters:
+  - monster: bilge_rat
+    count: 2
+  respawn_seconds: 30

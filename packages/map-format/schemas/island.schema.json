@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/map-schemas/island.schema.json",
+  "title": "Island metadata (world/islands/<id>/island.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "rect", "floors", "temple", "level_hint"],
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/id" },
+    "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
+    "rect": { "$ref": "common.schema.json#/$defs/rect" },
+    "floors": { "$ref": "common.schema.json#/$defs/floors" },
+    "temple": { "$ref": "common.schema.json#/$defs/position" },
+    "level_hint": { "$ref": "common.schema.json#/$defs/levelHint" },
+    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+  }
+}
