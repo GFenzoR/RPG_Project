@@ -35,8 +35,14 @@
         "max_stack": { "$ref": "common.schema.json#/$defs/positiveInt" },
         "tradeable": { "type": "boolean" },
         "pickupable": { "type": "boolean" },
-        "blocks_movement": { "type": "boolean" },
-        "blocks_sight": { "type": "boolean" },
+        "blocks_movement": {
+          "type": "boolean",
+          "description": "Blocks walking. Defaults to true for kind: wall, false otherwise (docs/03)."
+        },
+        "blocks_sight": {
+          "type": "boolean",
+          "description": "Blocks line of sight and projectiles. Defaults to true for kind: wall, false otherwise (docs/03)."
+        },
         "value": {
           "description": "Base price NPCs use as reference.",
           "$ref": "common.schema.json#/$defs/nonNegativeInt"
