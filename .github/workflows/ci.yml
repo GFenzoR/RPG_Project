@@ -104,15 +104,33 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # build-client is a no-op until T1.5 adds the client's "build" script (--if-present).
       - name: editor and client production builds
         run: make build
 
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The client E2E runs the game server, which needs Postgres (it applies migrations).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rpg
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.mod
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -122,16 +140,26 @@ jobs:
       # Uses the workspace's pinned @playwright/test (1.63.0), so browser and runner match.
       - name: install Chromium
         run: pnpm exec playwright install --with-deps chromium
-      - name: playwright
-        run: make e2e E2E_ARGS="--reporter=list,html"
+      # Calls the e2e scripts directly: `make e2e` would also run db-up, and here Postgres
+      # is the job's service container.
+      - name: playwright (editor)
+        run: pnpm --filter @rpg/editor e2e --reporter=list,html
         env:
           PLAYWRIGHT_HTML_OPEN: never
+      - name: playwright (client)
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @rpg/client e2e --reporter=list,html
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/rpg
       - name: upload screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: e2e-screenshots
-          path: editor/e2e/screenshots/actual/
+          path: |
+            editor/e2e/screenshots/actual/
+            client/e2e/screenshots/actual/
           if-no-files-found: warn
       - name: upload playwright report
         if: ${{ !cancelled() }}
@@ -140,7 +168,8 @@ jobs:
           name: playwright-report
           path: |
             editor/playwright-report/
-            test-results/editor/
+            client/playwright-report/
+            test-results/
           if-no-files-found: warn
 
   integration:

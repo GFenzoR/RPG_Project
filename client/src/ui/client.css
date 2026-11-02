@@ -1,0 +1,144 @@
+:root {
+  color-scheme: dark;
+  --bg: #12151b;
+  --panel: #1d222b;
+  --text: #e6e2d8;
+  --muted: #9aa0a8;
+  --accent: #d9b44a;
+  --error: #ff7a6b;
+  font-family: system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+.panel {
+  max-width: 22rem;
+  margin: 10vh auto 0;
+  padding: 1.5rem;
+  background: var(--panel);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.panel.wide {
+  max-width: 30rem;
+}
+.panel h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+.panel h2 {
+  margin: 0.5rem 0 0;
+  font-size: 1.05rem;
+}
+.panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+small {
+  color: var(--muted);
+}
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid #3a414d;
+  background: #11141a;
+  color: var(--text);
+}
+button {
+  background: var(--accent);
+  color: #1a1a1a;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+button.link {
+  background: none;
+  color: var(--muted);
+  font-weight: normal;
+  text-decoration: underline;
+}
+.error {
+  color: var(--error);
+  margin: 0;
+}
+.notice {
+  color: var(--accent);
+  margin: 0;
+}
+.characters {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.characters li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.characters .name {
+  font-weight: 600;
+}
+.characters .meta {
+  color: var(--muted);
+  flex: 1;
+}
+.game {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.hud {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--panel);
+}
+.hud .name {
+  font-weight: 600;
+}
+.hud .hint {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+}
+.viewport canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+.connecting {
+  color: var(--muted);
+}

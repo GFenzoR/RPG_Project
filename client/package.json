@@ -1,12 +1,24 @@
 {
   "name": "@rpg/client",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Game client (Vite + PixiJS + Preact). Built in T1.5.",
-  "exports": "./src/index.ts",
+  "description": "Game client (Vite + PixiJS + Preact): login, character selection and the world view (T1.5).",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build --outDir ../build/client --emptyOutDir",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@rpg/protocol": "workspace:*",
+    "@rpg/renderer": "workspace:*",
+    "pixi.js": "8.22.0",
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "@rpg/spritepack": "workspace:*",
+    "yaml": "2.9.1"
   }
 }

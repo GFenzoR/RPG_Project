@@ -1,7 +1,8 @@
 import { Texture } from "pixi.js";
 import type { Container } from "pixi.js";
 import { describe, expect, it } from "vitest";
-import { MapView, itemZIndex } from "./map-view.ts";
+import { Container as PixiContainer } from "pixi.js";
+import { MapView, entityZIndex, itemZIndex } from "./map-view.ts";
 import type { ChunkData, TileSource } from "./map-view.ts";
 
 const T = 32;
@@ -69,5 +70,33 @@ describe("MapView", () => {
     expect(itemZIndex(3, 3, 0)).toBeLessThan(itemZIndex(3, 3, 1));
     expect(itemZIndex(3, 3, 999)).toBeLessThan(itemZIndex(4, 3, 0));
     expect(Number.isSafeInteger(itemZIndex(65535, 65535, 255))).toBe(true);
+  });
+
+  it("draws entities over their own tile's items and under the next tiles' items", () => {
+    const chunks = new Map<string, ChunkData>([
+      [
+        "7/0/0",
+        {
+          ground: ground(),
+          items: [
+            { x: 2, y: 2, stack: ["a", "b"] },
+            { x: 3, y: 2, stack: ["c"] },
+          ],
+        },
+      ],
+    ]);
+    const v = view(chunks);
+    const cam = { x: 0, y: 0, zoom: 1 };
+    const size = { width: 20 * T, height: 20 * T };
+    const hero = new PixiContainer({ label: "hero" });
+    v.placeEntity(hero, 2, 2);
+    v.render(cam, size);
+    expect(itemLayer(v).children.indexOf(hero)).toBe(2);
+    v.placeEntity(hero, 3, 2);
+    v.render(cam, size);
+    expect(itemLayer(v).children.indexOf(hero)).toBe(3);
+    v.removeEntity(hero);
+    expect(itemLayer(v).children.includes(hero)).toBe(false);
+    expect(entityZIndex(65535, 65535)).toBeGreaterThan(itemZIndex(65535, 65535, 255));
   });
 });

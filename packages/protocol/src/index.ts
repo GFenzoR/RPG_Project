@@ -10,6 +10,7 @@ export * from "./gen/game/v1/common_pb.ts";
 export * from "./gen/game/v1/client_pb.ts";
 export * from "./gen/game/v1/server_pb.ts";
 export { create } from "@bufbuild/protobuf";
+export type { MessageInitShape } from "@bufbuild/protobuf";
 
 /** Encodes a ClientMessage into one WebSocket binary frame. */
 export function encodeClientMessage(message: ClientMessage): Uint8Array {

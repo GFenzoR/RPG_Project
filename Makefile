@@ -111,7 +111,7 @@ sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeh
 	node --experimental-strip-types tools/spritepack/src/cli.ts build $(if $(STRICT),--strict)
 
 # The editor has no "build" script (it runs on Vite's dev server with its file API), so the
-# production bundle is built directly; the client builds once T1.5 adds its "build" script.
+# production bundle is built directly; the client's "build" writes build/client (+ atlas/).
 .PHONY: build
 build: build-editor build-client ## Production builds of the web apps into build/
 
@@ -121,7 +121,7 @@ build-editor:
 
 .PHONY: build-client
 build-client:
-	pnpm --filter @rpg/client run --if-present build
+	pnpm --filter @rpg/client run build
 
 # Short tick and world benchmarks. Output is benchstat-compatible (-count); CI keeps it as
 # an artifact and does not fail on timings.
@@ -138,21 +138,28 @@ fmt: ## Format Go and TS code
 ## ---- running -------------------------------------------------------------
 
 .PHONY: dev
-dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + map editor in dev mode
-	@echo "[dev] game server on http://localhost:8080 (ws /ws), map editor on http://localhost:5174; client arrives in T1.5"
+dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:5173) + map editor (:5174)
+	@echo "[dev] game client on http://localhost:5173, game server on :8080 (ws /ws), map editor on http://localhost:5174"
 	@trap 'kill 0' EXIT; \
 	(cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
 		go run ./cmd/gameserver -ws-origins "localhost:5173,localhost:4173") & \
+	$(MAKE) client & \
 	$(MAKE) editor
+
+.PHONY: client
+client: ## Game client dev server on http://localhost:5173 (proxies /api and /ws to RPG_SERVER, default :8080)
+	pnpm --filter @rpg/client dev
 
 .PHONY: editor
 editor: ## Map editor dev server on http://localhost:5174 (edits world/ in place)
 	pnpm --filter @rpg/editor dev
 
 # E2E_ARGS goes to `playwright test` (CI adds the HTML report: --reporter=list,html).
+# The client E2E starts the game server on the compiled test map against DATABASE_URL.
 .PHONY: e2e
-e2e: ## Playwright: editor E2E now (client login arrives in T1.5); screenshots in */e2e/screenshots/actual
+e2e: db-up ## Playwright: editor + client (login, enter, walk); screenshots in */e2e/screenshots/actual
 	pnpm --filter @rpg/editor e2e $(E2E_ARGS)
+	DATABASE_URL="$(DATABASE_URL)" pnpm --filter @rpg/client e2e $(E2E_ARGS)
 
 .PHONY: bots
 bots: ## Bots that enter and walk against a running server (make bots N=100 DURATION=60s URL=... PREFIX=load)
