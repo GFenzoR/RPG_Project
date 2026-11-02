@@ -180,12 +180,14 @@ func pickDrop(ctx *game.TickContext, res *content.Resource, level int) *content.
 	return nil
 }
 
-// gatherAFK reports whether p's gathering earns reduced tries: it has not left its tile
-// for gathering.afk.after_ms of attempts.
+// gatherAFK reports whether p's gathering earns reduced tries: it has kept gathering
+// from the same tile for gathering.afk.after_ms. A step, or a pause longer than two
+// use intervals, starts the count again.
 func (w *World) gatherAFK(ctx *game.TickContext, p *Player) bool {
-	if p.gatherSince == 0 || p.gatherPos != p.pos {
+	if p.gatherSince == 0 || p.gatherPos != p.pos || ctx.Tick-p.gatherLast > 2*w.gatherFor {
 		p.gatherPos, p.gatherSince = p.pos, max(ctx.Tick, 1)
 	}
+	p.gatherLast = ctx.Tick
 	return w.gatherAFKAfter > 0 && ctx.Tick-p.gatherSince >= w.gatherAFKAfter
 }
 

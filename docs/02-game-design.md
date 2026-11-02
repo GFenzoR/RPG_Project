@@ -96,7 +96,8 @@ Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data
   `regen_ms` después de la última. Una casilla agotada no da nada ni entrena.
 - **Anti-bot:** como mucho un intento cada `gathering.use_interval_ms`; recolectar sin
   moverse de la casilla durante `gathering.afk.after_ms` deja los intentos de skill en
-  `gathering.afk.factor` (igual que `skills.afk`). Dar un paso lo reinicia.
+  `gathering.afk.factor` (igual que `skills.afk`). Dar un paso o pausar más
+  de dos intervalos lo reinicia.
 - El estado de agotamiento vive en memoria: un reinicio del servidor deja todo lleno.
 
 ### Anti-bot y anti-AFK (desde el inicio)

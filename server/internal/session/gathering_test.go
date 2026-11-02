@@ -207,7 +207,7 @@ func TestVeinDepletesAndRegenerates(t *testing.T) {
 }
 
 // Gathering for gathering.afk.after_ms without leaving the tile earns a quarter of the
-// tries; a step resets it.
+// tries; a step or a pause resets it.
 func TestGatheringAFK(t *testing.T) {
 	h := gatherHarness(t, worldtest.Map(t, 0, 0, 7,
 		"T...",
@@ -227,5 +227,17 @@ func TestGatheringAFK(t *testing.T) {
 	h.try(cl, rodID, pos(2, 1))
 	if s := h.w.Skill(p, "fishing"); s.Tries != 4 {
 		t.Fatalf("after a step: fishing = %+v, want a full try (4)", s)
+	}
+	for i := range 3 { // 30 ticks after the step: full; 60 and 90: a quarter each
+		h.sim.RunTicks(gatherGap - 1)
+		h.try(cl, rodID, pos(i%4, 1))
+	}
+	if s := h.w.Skill(p, "fishing"); s.Tries != 5 {
+		t.Fatalf("fishing = %+v, want 5 tries (+0.5 pending)", s)
+	}
+	h.sim.RunTicks(10 * gatherGap) // a pause: the count starts again
+	h.try(cl, rodID, pos(3, 1))
+	if s := h.w.Skill(p, "fishing"); s.Tries != 6 {
+		t.Fatalf("after a pause: fishing = %+v, want a full try (6)", s)
 	}
 }

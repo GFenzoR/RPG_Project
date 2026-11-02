@@ -87,11 +87,13 @@ type Player struct {
 	nextDialog uint32
 	questDirty bool
 
-	// Gathering (T1.12): the first tick p can gather again, and the tile p has been
-	// gathering from since gatherSince (anti-AFK, 0 = not gathering yet).
+	// Gathering (T1.12): the first tick p can gather again, the tile p has been
+	// gathering from since gatherSince (anti-AFK, 0 = not gathering yet) and its last
+	// counted attempt.
 	nextGather  game.Tick
 	gatherPos   world.Pos
 	gatherSince game.Tick
+	gatherLast  game.Tick
 }
 
 // Health returns the player's current and maximum health.
