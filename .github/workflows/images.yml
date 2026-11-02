@@ -173,15 +173,13 @@ jobs:
           cache-dependency-path: tools/bots/go.sum
       - name: make home-up
         run: make home-up
-      - name: bots play on http://localhost:8080
-        working-directory: tools/bots
-        run: go run ./cmd/bots -n 3 -duration 5s -url http://localhost:8080 -prefix local
       - name: smoke on http://localhost:8080
         run: deploy/smoke.sh http://localhost:8080
       - name: client IP behind the tunnel network (CF-Connecting-IP)
         run: deploy/check-tunnel-ip.sh rpg-home_tunnel
       - name: make home-tunnel (Cloudflare Quick Tunnel)
         run: HOME_TUNNEL_URL_FILE="$RUNNER_TEMP/tunnel-url" make home-tunnel
+      # Bot character names are global per index, so the bots run once, through the tunnel.
       - name: bots play through the tunnel (wss://)
         working-directory: tools/bots
         run: go run ./cmd/bots -n 3 -duration 5s -url "$(cat "$RUNNER_TEMP/tunnel-url")" -prefix tunnel
