@@ -24,7 +24,6 @@ const (
 	msgCannotAttack = "combat.cannot_attack"
 	msgLoot         = "combat.loot"
 	msgLootNone     = "combat.loot_none"
-	msgDefeated     = "combat.defeated"
 )
 
 // combatSystem runs every tick after walking: players attack their targets, monsters in
@@ -225,28 +224,8 @@ func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element 
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}
 	if p.health <= 0 {
-		w.defeat(ctx, p)
+		w.die(ctx, p)
 	}
-}
-
-// defeat is a stand-in for death until T1.11 (penalties, corpse, blessings): the player
-// wakes up at its temple with full health and loses nothing.
-func (w *World) defeat(ctx *game.TickContext, p *Player) {
-	p.health = p.maxHealth
-	p.target = nil
-	for _, m := range w.monsters {
-		if m.target == p {
-			m.target = nil
-		}
-	}
-	to, ok := w.freeNear(w.temple(""), 3)
-	if !ok {
-		to = w.temple("")
-	}
-	w.Teleport(p, to)
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
-	p.emit(systemMsg(msgDefeated))
-	_ = ctx
 }
 
 // ---- death, loot and experience ----------------------------------------------------
@@ -304,7 +283,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	}
 	pos := m.pos
 	w.removeMonster(m)
-	w.addCorpse(ctx, pos, corpse)
+	w.addCorpse(ctx, pos, corpse, w.corpseFor)
 	if owner != nil {
 		owner.emit(lootMsg(corpse))
 	}
@@ -313,11 +292,11 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	}
 }
 
-func (w *World) addCorpse(ctx *game.TickContext, pos world.Pos, c *Corpse) {
+func (w *World) addCorpse(ctx *game.TickContext, pos world.Pos, c *Corpse, lasts game.Tick) {
 	w.drop(c.Item, pos)
 	w.corpses[pos] = append(w.corpses[pos], c)
 	w.tileChanged(pos)
-	ctx.Sched.After(w.corpseFor, func(*game.TickContext) {
+	ctx.Sched.After(lasts, func(*game.TickContext) {
 		w.removeCorpse(pos, c)
 	})
 }

@@ -508,3 +508,25 @@ body.dragging-item * {
 .shop .money {
   color: #ffd27a;
 }
+
+/* Death screen (T1.11): over the map until the player closes it. */
+.death {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  min-width: 16rem;
+  padding: 1rem 1.5rem;
+  text-align: center;
+  background: rgba(20, 0, 0, 0.88);
+  border: 2px solid #a03030;
+  color: #f0d0d0;
+}
+.death h2 {
+  margin: 0 0 0.5rem;
+  color: #ff6060;
+}
+.death p {
+  margin: 0.25rem 0;
+}

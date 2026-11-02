@@ -6,7 +6,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const serverPort = Number(process.env["CLIENT_E2E_SERVER_PORT"] ?? 18080);
 const clientPort = Number(process.env["CLIENT_E2E_PORT"] ?? 5176);
-const databaseUrl =
+export const databaseUrl =
   process.env["DATABASE_URL"] ?? "postgres://postgres:postgres@localhost:5432/rpg";
 export const serverURL = `http://localhost:${serverPort}`;
 

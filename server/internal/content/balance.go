@@ -17,6 +17,33 @@ type Balance struct {
 	Skills     Skills     `yaml:"skills"`
 	Combat     Combat     `yaml:"combat"`
 	Inventory  Inventory  `yaml:"inventory"`
+	Death      Death      `yaml:"death"`
+}
+
+// Death holds the death rules (docs/02-game-design.md, "Muerte", T1.11).
+type Death struct {
+	XPLossPct             float64 `yaml:"xp_loss_pct"`
+	SkillLossPct          float64 `yaml:"skill_loss_pct"`
+	EquipmentDropPct      float64 `yaml:"equipment_drop_pct"`
+	BackpackDropPct       float64 `yaml:"backpack_drop_pct"`
+	MaxBlessings          int     `yaml:"max_blessings"`
+	XPLossPctAllBlessings float64 `yaml:"xp_loss_pct_all_blessings"`
+	// NoviceMaxLevel: up to this level a death costs the minimum and drops nothing.
+	NoviceMaxLevel    int `yaml:"novice_max_level"`
+	CorpseMs          int `yaml:"corpse_ms"`
+	CorpseOwnerOnlyMs int `yaml:"corpse_owner_only_ms"`
+}
+
+func (d Death) check() error {
+	pct := func(v float64) bool { return v >= 0 && v <= 100 }
+	if !pct(d.XPLossPct) || !pct(d.SkillLossPct) || !pct(d.EquipmentDropPct) || !pct(d.BackpackDropPct) ||
+		!pct(d.XPLossPctAllBlessings) || d.XPLossPctAllBlessings > d.XPLossPct {
+		return errors.New("death: percentages must be in 0..100 and xp_loss_pct_all_blessings <= xp_loss_pct")
+	}
+	if d.MaxBlessings < 0 || d.NoviceMaxLevel < 0 || d.CorpseMs <= 0 || d.CorpseOwnerOnlyMs < 0 || d.CorpseOwnerOnlyMs > d.CorpseMs {
+		return errors.New("death: max_blessings and novice_max_level must be >= 0, corpse_ms > 0, corpse_owner_only_ms in 0..corpse_ms")
+	}
+	return nil
 }
 
 // Inventory holds the item and container rules (T1.8).
@@ -152,6 +179,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, err
 	}
 	if err := b.Skills.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Death.check(); err != nil {
 		return Balance{}, err
 	}
 	if i := b.Inventory; i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.Reach <= 0 {

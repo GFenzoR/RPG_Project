@@ -1,11 +1,12 @@
 // Logs in through the UI with an account and character created by the API, enters the
 // test island, walks 5 steps (keyboard and click) and saves screenshots for review.
 // Any console error or uncaught exception fails the test.
+import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { serverURL } from "../playwright.config.ts";
+import { databaseUrl, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -513,5 +514,85 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
 
   await page.getByRole("button", { name: "Salir del juego" }).click();
   await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+  expect(errors).toEqual([]);
+});
+
+test("die to a wolf: death screen and wake up at the temple", async ({ page, playwright }) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-death-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Doomed ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  // One hit point left, so the first wolf bite is deadly (the name is letters and a space).
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET health = 1 WHERE name = '${name}'`,
+  ]);
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  errors.length = 0;
+  await expect(page.getByTestId("health")).toContainText("Vida 1/");
+
+  // Walk north to the wolves (as in the fight test) and wait for them.
+  const start = await self(page);
+  if (!start) throw new Error("no own creature");
+  const click = async (x: number, y: number): Promise<void> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    if (!p) throw new Error("no canvas");
+    await page.mouse.click(p.x, p.y);
+  };
+  await click(start.x, start.y - 5);
+  await arrived(page, start.x, start.y - 5);
+  await click(start.x, start.y - 9);
+
+  const screen = page.getByTestId("death-screen");
+  await expect(screen).toBeVisible({ timeout: 60_000 });
+  await expect(screen).toContainText("Has muerto");
+  await page.waitForTimeout(300);
+  await shot(page, "13-death");
+
+  // Awake at the temple (where a new character starts) with full health.
+  await expect
+    .poll(async () => {
+      const s = await self(page);
+      return s ? Math.max(Math.abs(s.x - start.x), Math.abs(s.y - start.y)) <= 3 : false;
+    })
+    .toBe(true);
+  await expect(page.getByTestId("health")).not.toContainText("Vida 1/");
+  await screen.getByRole("button", { name: "Aceptar" }).click();
+  await expect(screen).toBeHidden();
+  await page.waitForTimeout(300);
+  await shot(page, "14-respawn");
   expect(errors).toEqual([]);
 });

@@ -316,6 +316,7 @@ function GameScreen(props: {
     stats: undefined,
     skills: [],
     levelUp: undefined,
+    death: undefined,
     log: [],
     inventory: new Map(),
     containers: [],
@@ -324,6 +325,9 @@ function GameScreen(props: {
     shop: undefined,
   });
   const [levelNotice, setLevelNotice] = useState<number | undefined>(undefined);
+  // The death screen stays until the player closes it.
+  const [deathSeen, setDeathSeen] = useState<number | undefined>(undefined);
+  const death = ui.death && ui.death.at !== deathSeen ? ui.death : undefined;
   const [stance, setStance] = useState(FightStance.BALANCED);
   const [chase, setChase] = useState(false);
 
@@ -391,6 +395,26 @@ function GameScreen(props: {
             <div class="level-up" role="status" data-testid="level-up">
               <strong>{t("client.level_up.title")}</strong>
               <span>{t("client.characters.level", { level: levelNotice })}</span>
+            </div>
+          )}
+          {death && (
+            <div
+              class="death"
+              role="alertdialog"
+              aria-labelledby="death-title"
+              data-testid="death-screen"
+            >
+              <h2 id="death-title">{t("client.death.title")}</h2>
+              <p>{t("client.death.experience", { experience: death.experience })}</p>
+              <p>
+                {death.blessings > 0
+                  ? t("client.death.blessings", { blessings: death.blessings })
+                  : t("client.death.no_blessings")}
+              </p>
+              <p>{t("client.death.temple")}</p>
+              <button type="button" onClick={() => setDeathSeen(death.at)}>
+                {t("client.death.ok")}
+              </button>
             </div>
           )}
           {entered && <Hotbar t={t} content={props.content} game={game.current} ui={ui} />}

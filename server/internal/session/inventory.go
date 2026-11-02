@@ -452,7 +452,7 @@ func posFromMsg(m *pb.Position) (world.Pos, bool) {
 
 // moveItem validates and runs a MoveItem intent. The server checks reach, the slot,
 // the level and vocation for equipment, stacking, container room and capacity.
-func (w *World) moveItem(p *Player, m *pb.MoveItem) {
+func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
 	if it == nil {
 		p.emit(systemMsg(msgNotPossible))
@@ -460,6 +460,10 @@ func (w *World) moveItem(p *Player, m *pb.MoveItem) {
 	}
 	if from.kind == locGround && !w.near(p, from.pos) || from.kind == locContainer && !w.reaches(p, from.cont) {
 		p.emit(systemMsg(msgTooFar))
+		return
+	}
+	if from.kind == locContainer && w.reserved(ctx.Tick, p, it) {
+		p.emit(systemMsg(msgNotOwner))
 		return
 	}
 	if !it.def.CanPickUp() {
@@ -801,6 +805,10 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 	}
 	if from.kind == locGround && !w.near(p, from.pos) || from.kind == locContainer && !w.reaches(p, from.cont) {
 		p.emit(systemMsg(msgTooFar))
+		return
+	}
+	if from.kind == locContainer && it.def.Container == nil && w.reserved(ctx.Tick, p, it) {
+		p.emit(systemMsg(msgNotOwner))
 		return
 	}
 	switch {

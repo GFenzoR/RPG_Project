@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -43,3 +44,12 @@ func (w *World) GiveForTest(p *Player, id string, n int) { w.giveItem(p, w.cfg.I
 
 // RestoreForTest refills p's health (tests only, loop goroutine).
 func (w *World) RestoreForTest(p *Player) { p.health = p.maxHealth }
+
+// DieForTest kills p now (as if a monster had taken its last hit point).
+func (w *World) DieForTest(ctx *game.TickContext, p *Player) { w.die(ctx, p) }
+
+// MaxMana returns p's maximum mana.
+func (p *Player) MaxMana() int { return p.maxMana }
+
+// Map returns the world's map.
+func (w *World) Map() *world.Map { return w.m }

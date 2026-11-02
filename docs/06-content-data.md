@@ -209,8 +209,8 @@ Semántica del motor (T1.10):
   arranca si no se cumple).
 - `give_item` da una unidad a la mochila; si no cabe (lugar o capacidad) cae al suelo
   bajo el jugador. `give_gold`/`take_gold` usan el dinero (`currency.worth`).
-- `bless` guarda la bendición en `quest_state` (`bless.<id>` = 1) y cobra el precio; su
-  efecto al morir es de T1.11. `heal` cura toda la vida. `travel` cobra y lleva al
+- `bless` guarda la bendición en `quest_state` (`bless.<id>` = 1) y cobra el precio; al
+  morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida. `travel` cobra y lleva al
   jugador junto al templo de la isla destino; si esa isla aún no existe en el mapa (hoy
   `bosque`), la opción se rechaza con `dialog.cannot_travel`.
 - `skill_at_least` usa el nivel de skill actual; `level_at_least`, el nivel del jugador.

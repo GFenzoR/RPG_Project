@@ -94,6 +94,12 @@ client/
   `npcs.yaml` completos y los nombres de `quests.yaml`; un `content_id` llamado `quest`
   se traduce como `quest.<id>.name`.
 
+## Notas de T1.11
+- `WorldState.death` (del mensaje `death.died`, con `experience` y `blessings`) abre la
+  pantalla de muerte (`.death` en `ui/App.tsx`) hasta que el jugador la cierra.
+- El E2E de muerte deja al personaje con 1 de vida con `psql` (`DATABASE_URL`) antes de
+  entrar y lo lleva a los lobos.
+
 ## Verificación visual (obligatoria si tocas render o UI)
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda
 screenshots en `client/e2e/screenshots/`. Ábrelos con Read y revísalos antes de cerrar.
