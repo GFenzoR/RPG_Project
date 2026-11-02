@@ -1,8 +1,9 @@
 // Command gameserver runs the game loop and the HTTP API (accounts and characters).
 //
-// The world, the WebSocket gateway and the play handshake arrive in T1.2 and T1.4.
+// It loads the compiled map (world.bin, built by cmd/mapcompile) at startup. The WebSocket
+// gateway and the play handshake arrive in T1.4.
 //
-// Configuration: DATABASE_URL (required) plus the flags below.
+// Configuration: DATABASE_URL (required), RPG_WORLD (default of -world) plus the flags below.
 package main
 
 import (
@@ -18,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
 type options struct {
@@ -38,6 +41,7 @@ type options struct {
 	migrate      bool
 	cookieSecure bool
 	trustProxy   bool
+	worldPath    string
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -52,6 +56,7 @@ func main() {
 	flag.BoolVar(&o.migrate, "migrate", true, "apply pending database migrations on start")
 	flag.BoolVar(&o.cookieSecure, "cookie-secure", true, "set the Secure flag on the session cookie")
 	flag.BoolVar(&o.trustProxy, "trust-proxy", false, "take the client IP from X-Forwarded-For (behind Caddy)")
+	flag.StringVar(&o.worldPath, "world", defaultWorldPath(), "compiled map from mapcompile; default $RPG_WORLD or ../build/world.bin (empty = run without a world)")
 	flag.Parse()
 
 	if *showVersion {
@@ -87,6 +92,10 @@ func run(logger *slog.Logger, o options) error {
 	vocations, err := content.LoadVocations(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
+	}
+	// The map is handed to the game loop's systems with T1.4 (walking).
+	if _, err := loadWorld(logger, o.worldPath); err != nil {
+		return err
 	}
 
 	st, err := store.Open(ctx, o.databaseURL)
@@ -165,6 +174,38 @@ func run(logger *slog.Logger, o options) error {
 	}
 	logger.Info("gameserver stopped", "ticks", uint64(loop.Tick()))
 	return runErr
+}
+
+// defaultWorldPath is $RPG_WORLD, or ../build/world.bin: like -data, relative to server/,
+// where `go run ./cmd/gameserver` runs and `make mapcompile` writes <repo>/build/world.bin.
+func defaultWorldPath() string {
+	if p := os.Getenv("RPG_WORLD"); p != "" {
+		return p
+	}
+	return filepath.Join("..", "build", "world.bin")
+}
+
+// loadWorld loads world.bin; an empty path runs without a world (nil map). A missing or
+// invalid file is an error that names the absolute path tried.
+func loadWorld(logger *slog.Logger, path string) (*world.Map, error) {
+	if path == "" {
+		logger.Warn("running without a world (-world is empty)")
+		return nil, nil
+	}
+	m, err := world.Load(path)
+	if err != nil {
+		abs, absErr := filepath.Abs(path)
+		if absErr != nil {
+			abs = path
+		}
+		return nil, fmt.Errorf("%w (looked for %s; build it with `make mapcompile`, or use `make run-server`)", err, abs)
+	}
+	sectors := 0
+	for _, is := range m.Islands() {
+		sectors += len(is.Sectors())
+	}
+	logger.Info("world loaded", "path", path, "islands", len(m.Islands()), "sectors", sectors)
+	return m, nil
 }
 
 const httpShutdownTimeout = 5 * time.Second

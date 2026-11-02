@@ -74,3 +74,11 @@ jobs:
         run: make validate
         env:
           CONTENT_BASE_REF: origin/${{ github.base_ref || 'main' }}
+      # mapcompile (Go) must agree with packages/map-format on walkability; this job has
+      # the pnpm workspace installed, which the go jobs do not.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.mod
+      - name: mapcompile parity with map-format
+        run: make test-parity
