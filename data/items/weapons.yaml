@@ -3,9 +3,9 @@
   sprite: weapons/iron_sword
   name: item.iron_sword.name
   description: item.iron_sword.desc
-  weight: 3500
+  weight: 3300
   tradeable: true
-  weapon: { type: sword, attack: 14, defense: 10, hands: 1 }
+  weapon: { type: sword, attack: 13, defense: 9, hands: 1 }
   requires: { level: 5 }
   value: 120
 
@@ -13,9 +13,9 @@
   kind: weapon
   sprite: weapons/hatchet
   name: item.hatchet.name
-  weight: 4000
+  weight: 3700
   tradeable: true
-  weapon: { type: axe, attack: 12, defense: 6, hands: 1 }
+  weapon: { type: axe, attack: 11, defense: 5, hands: 1 }
   value: 60
 
 - id: driftwood_club
@@ -23,9 +23,9 @@
   sprite: weapons/driftwood_club
   name: item.driftwood_club.name
   description: item.driftwood_club.desc
-  weight: 2500
+  weight: 2300
   tradeable: true
-  weapon: { type: club, attack: 7, defense: 4, hands: 1 }
+  weapon: { type: club, attack: 6, defense: 4, hands: 1 }
   value: 5
 
 # Isla del Puerto (levels 1-15). Melee attack grows ~+4 per tier: starter (1), tier 2 (5), tier 3 (8-10).
@@ -44,9 +44,9 @@
   sprite: weapons/boarding_saber
   name: item.boarding_saber.name
   description: item.boarding_saber.desc
-  weight: 3600
+  weight: 3400
   tradeable: true
-  weapon: { type: sword, attack: 18, defense: 12, hands: 1 }
+  weapon: { type: sword, attack: 19, defense: 11, hands: 1 }
   requires: { level: 10 }
   value: 400
 

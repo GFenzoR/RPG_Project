@@ -1,34 +1,35 @@
 # MVP vocations (docs/02-game-design.md). ranger and druid arrive in milestone 3.
+# Our own numbers (CLAUDE.md legal rule): never copy another game's constants.
 - id: guardian
   name: vocation.guardian.name
   description: vocation.guardian.desc
-  start: { health: 150, mana: 30, capacity: 400000, speed: 220 }
-  per_level: { health: 15, mana: 5, capacity: 25000, speed: 2 }
-  regen: { health: 2, mana: 1, interval_ms: 6000 }
+  start: { health: 145, mana: 20, capacity: 420000, speed: 205 }
+  per_level: { health: 14, mana: 4, capacity: 23000, speed: 3 }
+  regen: { health: 3, mana: 1, interval_ms: 7000 }
   skill_factors:
-    fist: 1.1
-    sword: 1.1
-    axe: 1.1
-    club: 1.1
-    distance: 1.4
-    shield: 1.1
-    magic: 3.0
-    fishing: 1.1
+    fist: 1.13
+    sword: 1.11
+    axe: 1.11
+    club: 1.11
+    distance: 1.45
+    shield: 1.11
+    magic: 2.7
+    fishing: 1.11
   weapons: [sword, axe, club]
 
 - id: arcanist
   name: vocation.arcanist.name
   description: vocation.arcanist.desc
-  start: { health: 150, mana: 60, capacity: 400000, speed: 220 }
-  per_level: { health: 5, mana: 30, capacity: 10000, speed: 2 }
-  regen: { health: 1, mana: 2, interval_ms: 3000 }
+  start: { health: 140, mana: 75, capacity: 380000, speed: 205 }
+  per_level: { health: 6, mana: 28, capacity: 11000, speed: 3 }
+  regen: { health: 1, mana: 3, interval_ms: 4000 }
   skill_factors:
-    fist: 1.5
-    sword: 2.0
-    axe: 2.0
-    club: 2.0
-    distance: 2.0
-    shield: 1.5
-    magic: 1.1
-    fishing: 1.1
+    fist: 1.45
+    sword: 1.85
+    axe: 1.85
+    club: 1.85
+    distance: 1.9
+    shield: 1.55
+    magic: 1.11
+    fishing: 1.11
   weapons: [wand]

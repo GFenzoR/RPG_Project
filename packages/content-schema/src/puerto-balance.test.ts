@@ -233,7 +233,7 @@ const TARGET_LEVEL: Record<string, number> = {
 };
 
 /**
- * Level 1-2 pests: a fresh guardian has 150 health, so they are meant to be nearly
+ * Level 1-2 pests: a fresh guardian has ~145 health, so they are meant to be nearly
  * harmless (2-40 % instead of the 10-40 % band of a common monster).
  */
 const PESTS = new Set(["bilge_rat", "thieving_gull"]);
