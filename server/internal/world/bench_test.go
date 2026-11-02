@@ -8,7 +8,7 @@ import (
 
 // benchIsland builds a 512x512 island with 3 floors (the size of an official island,
 // docs/01-architecture.md) where 1 tile in `blockEvery` blocks movement and sight.
-func benchIsland(b *testing.B, blockEvery int) *Map {
+func benchIsland(b testing.TB, blockEvery int) *Map {
 	b.Helper()
 	r := rand.New(rand.NewPCG(42, 42))
 	const side = 512

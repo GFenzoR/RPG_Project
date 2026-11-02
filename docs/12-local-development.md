@@ -23,6 +23,16 @@ el juego tú mismo mientras Claude trabaja.
    ```
    `make setup` usa `scripts/local-setup.sh`, que crea la tarea T0.1.
 
+## Servidor de juego solo
+El servidor carga el mapa compilado (`build/world.bin`), no el JSON de `world/`:
+```
+make run-server   # make mapcompile + gameserver con RPG_WORLD=<repo>/build/world.bin
+```
+A mano: `make mapcompile` y luego `RPG_WORLD=$PWD/build/world.bin go run ./cmd/gameserver`
+desde `server/` (o `-world <ruta>`). Vuelve a compilar el mapa cada vez que cambie
+`world/` o `data/items/`. `make test-parity` compara la caminabilidad que calcula
+`mapcompile` con la de `packages/map-format` (necesita `pnpm install`).
+
 ## Diferencias con las sesiones cloud
 | | Cloud (hasta 4 nov) | Local (desde 5 nov) |
 |---|---|---|

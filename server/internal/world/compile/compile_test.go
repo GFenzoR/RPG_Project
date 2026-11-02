@@ -47,15 +47,22 @@ type walkableDump struct {
 	Rows   []string `json:"rows"`
 }
 
+// parityEnv enables TestWalkableParityWithMapFormat. It needs node and the pnpm workspace
+// installed, which plain `go test` does not: run it with `make test-parity`.
+const parityEnv = "RPG_MAPFORMAT_PARITY"
+
 // TestWalkableParityWithMapFormat checks that mapcompile and packages/map-format (the
 // validator used by mapcli, the editor and `make validate`) agree on every tile.
 func TestWalkableParityWithMapFormat(t *testing.T) {
+	if os.Getenv(parityEnv) != "1" {
+		t.Skipf("set %s=1 to compare with packages/map-format (make test-parity)", parityEnv)
+	}
 	node, err := exec.LookPath("node")
 	if err != nil {
-		if os.Getenv("CI") != "" {
-			t.Fatal("node is required in CI: the parity rule with packages/map-format must run")
-		}
-		t.Skip("node not installed: cannot run packages/map-format")
+		t.Fatalf("%s=1 but node is not installed: %v", parityEnv, err)
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot(t), "packages", "map-format", "node_modules")); err != nil {
+		t.Fatalf("%s=1 but the pnpm workspace is not installed (run pnpm install): %v", parityEnv, err)
 	}
 	for _, root := range []string{repoRoot(t), miniRoot} {
 		t.Run(filepath.Base(root), func(t *testing.T) {

@@ -131,16 +131,11 @@ type Map struct {
 }
 
 // NewMap builds a Map. Island IDs must be unique, rects aligned to SectorSize and disjoint,
-// floors in 0..MaxFloor, the temple inside the island, and every sector inside its island
+// floors strictly ascending in 0..MaxFloor, the temple inside the island, and every sector inside its island
 // on one of its floors. groundSpeed is indexed by
 // numeric item ID (0 = DefaultGroundSpeed).
 func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint16) (*Map, error) {
-	m := &Map{groundSpeed: groundSpeed, minSpeed: DefaultGroundSpeed}
-	for _, s := range groundSpeed {
-		if s != 0 && int32(s) < m.minSpeed {
-			m.minSpeed = int32(s)
-		}
-	}
+	m := &Map{groundSpeed: groundSpeed}
 	for i, is := range islands {
 		if err := checkIsland(is); err != nil {
 			return nil, err
@@ -182,7 +177,35 @@ func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint1
 		}
 		m.islands = append(m.islands, is)
 	}
+	m.minSpeed = m.slowestCost()
 	return m, nil
+}
+
+// slowestCost is the lowest terrain cost among the walkable tiles of the map (the A*
+// heuristic must not exceed it), or DefaultGroundSpeed for a map without walkable tiles.
+func (m *Map) slowestCost() int32 {
+	var seen [1 << 16]bool
+	best := int32(0)
+	for _, is := range m.islands {
+		for _, s := range is.sectors {
+			if s == nil {
+				continue
+			}
+			for i, g := range s.Ground {
+				if g == 0 || seen[g] || s.Flags[i]&FlagBlocksMovement != 0 {
+					continue
+				}
+				seen[g] = true
+				if c := m.speed(g); best == 0 || c < best {
+					best = c
+				}
+			}
+		}
+	}
+	if best == 0 {
+		return DefaultGroundSpeed
+	}
+	return best
 }
 
 // checkIsland validates an island's metadata so that later arithmetic cannot overflow or
@@ -198,9 +221,14 @@ func checkIsland(is *Island) error {
 	if len(is.Floors) == 0 {
 		return fmt.Errorf("island %q: no floors", is.ID)
 	}
-	for _, f := range is.Floors {
+	// Strictly ascending in 0..MaxFloor, like island.yaml (packages/map-format): this also
+	// rules out duplicates and lists longer than MaxFloor+1.
+	for i, f := range is.Floors {
 		if f > MaxFloor {
 			return fmt.Errorf("island %q: floor %d outside 0..%d", is.ID, f, MaxFloor)
+		}
+		if i > 0 && f <= is.Floors[i-1] {
+			return fmt.Errorf("island %q: floors %v must be strictly ascending", is.ID, is.Floors)
 		}
 	}
 	t := is.Temple

@@ -1,6 +1,7 @@
 package world
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"hash/crc32"
@@ -201,6 +202,8 @@ func TestNewMapErrors(t *testing.T) {
 			map[string][]*Sector{"a": {sec(0, 0, 200)}}, "floor 200"},
 		mapCase{"temple outside", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{X: 40, Z: 7}}}, nil, "temple"},
 		mapCase{"temple floor", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 8}}}, nil, "temple"},
+		mapCase{"duplicate floors", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7, 7}, Temple: Pos{Z: 7}}}, nil, "strictly ascending"},
+		mapCase{"descending floors", []*Island{{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{8, 7}, Temple: Pos{Z: 7}}}, nil, "strictly ascending"},
 		mapCase{"duplicate id", []*Island{
 			{ID: "a", Rect: Rect{W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{Z: 7}},
 			{ID: "a", Rect: Rect{X: 64, W: 32, H: 32}, Floors: []uint8{7}, Temple: Pos{X: 64, Z: 7}},
@@ -265,6 +268,39 @@ func TestDecodeRejectsBadInput(t *testing.T) {
 		if _, err := Decode(c.data); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
 		}
+	}
+}
+
+// seventeenFloors is a world.bin whose only island lists 17 floors (0..15 and 15 again):
+// Decode must reject it, since Encode could not write it back.
+func seventeenFloors() []byte {
+	var buf bytes.Buffer
+	bw := bufio.NewWriter(&buf)
+	w := &binWriter{w: bw}
+	w.bytes(binaryMagic[:])
+	w.u16(BinaryVersion)
+	w.u32(0) // no speeds
+	w.u16(1)
+	w.u8(1)
+	w.bytes([]byte("a"))
+	for _, v := range []uint32{0, 0, 32, 32} {
+		w.u32(v)
+	}
+	w.u8(17)
+	for f := range 17 {
+		w.u8(uint8(min(f, MaxFloor)))
+	}
+	w.u16(0)
+	w.u16(0)
+	w.u8(7)
+	w.u32(0) // no sectors
+	_ = bw.Flush()
+	return binary.LittleEndian.AppendUint32(buf.Bytes(), crc32.ChecksumIEEE(buf.Bytes()))
+}
+
+func TestDecodeRejectsSeventeenFloors(t *testing.T) {
+	if _, err := Decode(seventeenFloors()); err == nil || !strings.Contains(err.Error(), "strictly ascending") {
+		t.Fatalf("err = %v, want floors rejected", err)
 	}
 }
 
@@ -401,6 +437,91 @@ func TestFindPathDepthVersusCost(t *testing.T) {
 	path, ok = pf.Find(pt(0, 0), pt(60, 0), nil)
 	if !ok || len(path) <= 60 {
 		t.Fatalf("ok=%v steps=%d, want the cheaper detour (> 60 steps)", ok, len(path))
+	}
+}
+
+// TestFindPathOpenGrassOctants: 100-step paths across open grass in every octant. One
+// faster tile elsewhere weakens the cost heuristic so the cost pass runs out of nodes; the
+// pass by steps must still find the path.
+func TestFindPathOpenGrassOctants(t *testing.T) {
+	rows := make([]string, 2*MaxPathLength+1)
+	for y := range rows {
+		rows[y] = strings.Repeat(".", 2*MaxPathLength+1)
+	}
+	rows[0] = "_" + rows[0][1:] // one tile at speed 100 next to grass at 150
+	m := asciiMap(t, 0, 0, 7, rows...)
+	pf := NewPathfinder(m, 0)
+	c := pt(MaxPathLength, MaxPathLength)
+	for _, d := range [][2]int{{100, 40}, {40, 100}, {-40, 100}, {-100, 40}, {-100, -40}, {-40, -100}, {40, -100}, {100, -40}, {100, 100}, {-100, -100}} {
+		to := pt(int(c.X)+d[0], int(c.Y)+d[1])
+		path, ok := pf.Find(c, to, nil)
+		if !ok || len(path) > MaxPathLength {
+			t.Errorf("%v→%v: ok=%v steps=%d expanded=%d", c, to, ok, len(path), pf.Expanded())
+			continue
+		}
+		if end := walk(t, m, c, path); end != to {
+			t.Errorf("%v→%v: path ends at %v", c, to, end)
+		}
+	}
+}
+
+// TestFindPathMatchesBFS: on the benchmark island, Find succeeds exactly for the goals a
+// breadth-first search reaches in at most MaxPathLength steps.
+func TestFindPathMatchesBFS(t *testing.T) {
+	m := benchIsland(t, 6)
+	from := bp(256, 256)
+	steps := map[Pos]int{from: 0}
+	queue := []Pos{from}
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+		if steps[p] == MaxPathLength {
+			continue
+		}
+		for d := range Direction(8) {
+			n, _ := p.Step(d)
+			if _, seen := steps[n]; seen || !m.Walkable(n) {
+				continue
+			}
+			steps[n] = steps[p] + 1
+			queue = append(queue, n)
+		}
+	}
+	r := rand.New(rand.NewPCG(9, 9))
+	pf := NewPathfinder(m, 0)
+	buf := make([]Direction, 0, MaxPathLength)
+	reachable := 0
+	for range 300 {
+		to := bp(256+r.IntN(2*MaxPathLength+1)-MaxPathLength, 256+r.IntN(2*MaxPathLength+1)-MaxPathLength)
+		_, want := steps[to]
+		if want {
+			reachable++
+		}
+		var ok bool
+		buf, ok = pf.Find(from, to, buf)
+		if ok != want {
+			t.Errorf("%v→%v: Find ok=%v, BFS reachable within %d steps=%v (expanded %d)", from, to, ok, MaxPathLength, want, pf.Expanded())
+		}
+		if ok && len(buf) > MaxPathLength {
+			t.Errorf("%v→%v: %d steps", from, to, len(buf))
+		}
+	}
+	if reachable < 100 {
+		t.Fatalf("only %d of 300 goals reachable: the sample says little", reachable)
+	}
+}
+
+func TestExpandedResetsOnRejectedFind(t *testing.T) {
+	m := asciiMap(t, 0, 0, 7, "....#", "....#")
+	pf := NewPathfinder(m, 0)
+	if _, ok := pf.Find(pt(0, 0), pt(3, 1), nil); !ok || pf.Expanded() == 0 {
+		t.Fatalf("setup: ok=%v expanded=%d", ok, pf.Expanded())
+	}
+	for _, to := range []Pos{pt(4, 0), {X: 1, Y: 0, Z: 8}, pt(0, 0)} {
+		pf.Find(pt(0, 0), to, nil)
+		if pf.Expanded() != 0 {
+			t.Errorf("Find(→%v) left Expanded()=%d, want 0", to, pf.Expanded())
+		}
 	}
 }
 
@@ -572,6 +693,7 @@ func FuzzDecode(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(buf.Bytes())
+	f.Add(seventeenFloors())
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Fuzzed bodies carry a valid checksum so the decoder looks past it.
 		if len(data) >= 4 {

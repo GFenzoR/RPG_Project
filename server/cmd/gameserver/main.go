@@ -14,6 +14,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/buildinfo"
@@ -25,7 +26,7 @@ import (
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
 	seed := flag.Uint64("seed", 0, "random seed for the game loop (0 = random)")
-	worldPath := flag.String("world", "build/world.bin", "compiled map from mapcompile (empty = run without a world)")
+	worldPath := flag.String("world", defaultWorldPath(), "compiled map from mapcompile; default $RPG_WORLD or build/world.bin (empty = run without a world)")
 	flag.Parse()
 
 	if *showVersion {
@@ -40,6 +41,14 @@ func main() {
 	}
 }
 
+// defaultWorldPath is $RPG_WORLD, or build/world.bin relative to the working directory.
+func defaultWorldPath() string {
+	if p := os.Getenv("RPG_WORLD"); p != "" {
+		return p
+	}
+	return filepath.Join("build", "world.bin")
+}
+
 func run(logger *slog.Logger, seed uint64, worldPath string) error {
 	if seed == 0 {
 		var b [8]byte
@@ -52,7 +61,11 @@ func run(logger *slog.Logger, seed uint64, worldPath string) error {
 	if worldPath != "" {
 		m, err := world.Load(worldPath)
 		if err != nil {
-			return fmt.Errorf("%w (build it with `make mapcompile`)", err)
+			abs, absErr := filepath.Abs(worldPath)
+			if absErr != nil {
+				abs = worldPath
+			}
+			return fmt.Errorf("%w (looked for %s; build it with `make mapcompile`, or use `make run-server`)", err, abs)
 		}
 		sectors := 0
 		for _, is := range m.Islands() {
