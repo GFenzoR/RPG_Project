@@ -16,12 +16,17 @@ const (
 	maxNameWords   = 3
 )
 
-// reservedNameWords cannot appear as a word in a character name, so players cannot pose
-// as staff. Compared case-insensitively.
-var reservedNameWords = map[string]bool{
-	"admin": true, "gm": true, "cm": true, "god": true, "tutor": true,
-	"support": true, "staff": true, "moderator": true, "mod": true,
-}
+// Character names must not pose as staff or the game itself. reservedNameParts are
+// matched as substrings of the lowercased name with spaces removed ("Game Master Bob",
+// "Admin Bob", "Soporte"); reservedNameWords are too short for that and are matched only
+// as whole words ("Gm Bob", but not "Gmork").
+var (
+	reservedNameParts = []string{
+		"admin", "gamemaster", "moderat", "moderad", "soporte", "support",
+		"staff", "tutor", "sistema", "system", "official", "oficial",
+	}
+	reservedNameWords = map[string]bool{"gm": true, "cm": true, "god": true, "mod": true, "dev": true}
+)
 
 // NormalizeEmail trims and lowercases an email and reports whether it is a plain valid
 // address ("user@example.org", without display name or angle brackets).
@@ -66,6 +71,12 @@ func ValidCharacterName(name string) bool {
 	words := strings.Split(name, " ")
 	if len(words) > maxNameWords {
 		return false
+	}
+	joined := strings.ToLower(strings.Join(words, ""))
+	for _, part := range reservedNameParts {
+		if strings.Contains(joined, part) {
+			return false
+		}
 	}
 	for _, w := range words {
 		if len(w) < 2 || reservedNameWords[strings.ToLower(w)] {

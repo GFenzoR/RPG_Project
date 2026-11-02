@@ -63,8 +63,23 @@ func TestValidCharacterName(t *testing.T) {
 		"Mira1":                 false,
 		"Ñandú":                 false, // ASCII only
 		"Mira O":                false, // one-letter word
-		"Gm Mira":               false, // reserved
+		"Gm Mira":               false, // reserved whole word
 		"Mira Admin":            false,
+		"Admin Bob":             false,
+		"Gamemaster Bob":        false, // reserved substrings
+		"Game Master Bob":       false, // spaces do not hide them
+		"Soporte":               false,
+		"Support Team":          false,
+		"Staff":                 false,
+		"Moderador":             false,
+		"Moderator Ann":         false,
+		"Sistema":               false,
+		"The System":            false,
+		"Tutor Ana":             false,
+		"Cm Lia":                false,
+		"Gmork":                 true, // "gm" only as a whole word
+		"Godric":                true, // "god" only as a whole word
+		"Modesto":               true,
 		"Abcdefghijklmnopqrstu": false, // 21 chars
 		"Abcdefghijklmnopqrst":  true,  // 20 chars
 	}
