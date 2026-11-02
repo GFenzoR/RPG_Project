@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
+	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
 
 type harness struct {
@@ -25,9 +27,14 @@ type harness struct {
 
 func newHarness(t *testing.T, mutate func(*httpapi.Config)) *harness {
 	t.Helper()
+	return newHarnessRepo(t, authtest.NewRepo(), mutate)
+}
+
+func newHarnessRepo(t *testing.T, repo auth.Repo, mutate func(*httpapi.Config)) *harness {
+	t.Helper()
 	clk := clock.NewFake(time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
 	svc, err := auth.New(auth.Config{
-		Repo:  authtest.NewRepo(),
+		Repo:  repo,
 		Clock: clk,
 		Vocations: content.Vocations{
 			"guardian": {ID: "guardian", Start: content.VocationStats{Health: 150, Mana: 30}},
@@ -50,6 +57,7 @@ func newHarness(t *testing.T, mutate func(*httpapi.Config)) *harness {
 
 type req struct {
 	method, path, body, token, cookie, contentType, remote, xff string
+	authorization                                               string // raw header, overrides token
 }
 
 func (h *harness) do(r req) *httptest.ResponseRecorder {
@@ -64,6 +72,9 @@ func (h *harness) do(r req) *httptest.ResponseRecorder {
 	}
 	if r.token != "" {
 		hr.Header.Set("Authorization", "Bearer "+r.token)
+	}
+	if r.authorization != "" {
+		hr.Header.Set("Authorization", r.authorization)
 	}
 	if r.cookie != "" {
 		hr.AddCookie(&http.Cookie{Name: httpapi.SessionCookie, Value: r.cookie})
@@ -189,7 +200,8 @@ func TestErrors(t *testing.T) {
 		{"too large", req{method: "POST", path: "/api/auth/login", body: `{"email":"` + strings.Repeat("a", 5000) + `"}`}, 400, "bad_request"},
 		{"no token", req{method: "GET", path: "/api/characters"}, 401, "unauthorized"},
 		{"bad token", req{method: "GET", path: "/api/characters", token: "nope"}, 401, "unauthorized"},
-		{"not bearer", req{method: "GET", path: "/api/characters", token: ""}, 401, "unauthorized"},
+		{"basic, no cookie", req{method: "GET", path: "/api/characters", authorization: "Basic dXNlcjpwYXNz"}, 401, "unauthorized"},
+		{"empty bearer", req{method: "GET", path: "/api/characters", authorization: "Bearer "}, 401, "unauthorized"},
 		{"invalid name", req{method: "POST", path: "/api/characters", token: token, body: `{"name":"x","vocation":"guardian"}`}, 400, "invalid_name"},
 		{"invalid vocation", req{method: "POST", path: "/api/characters", token: token, body: `{"name":"Mira","vocation":"pirate"}`}, 400, "invalid_vocation"},
 		{"unknown api path", req{method: "GET", path: "/api/nope"}, 404, "not_found"},
@@ -199,6 +211,11 @@ func TestErrors(t *testing.T) {
 	}
 
 	expect(t, h.do(req{method: "POST", path: "/api/characters", token: token, body: `{"name":"Mira","vocation":"guardian"}`}), 201, "")
+
+	// The Bearer scheme is case-insensitive; other schemes fall back to the cookie.
+	expect(t, h.do(req{method: "GET", path: "/api/characters", authorization: "bearer " + token}), 200, "")
+	expect(t, h.do(req{method: "GET", path: "/api/characters", authorization: "Basic dXNlcjpwYXNz", cookie: token}), 200, "")
+	expect(t, h.do(req{method: "GET", path: "/api/characters", authorization: "Bearer nope", cookie: token}), 401, "unauthorized")
 	expect(t, h.do(req{method: "POST", path: "/api/characters", token: token, body: `{"name":"MIRA","vocation":"guardian"}`}), 400, "invalid_name")
 	expect(t, h.do(req{method: "POST", path: "/api/characters", token: token, body: `{"name":"Mira","vocation":"guardian"}`}), 409, "name_taken")
 }
@@ -235,20 +252,37 @@ func TestAuthRateLimitPerIP(t *testing.T) {
 	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "1.2.3.4:1", xff: "9.9.9.9"}), 429, "rate_limited")
 }
 
-func TestLoginRateLimitPerEmail(t *testing.T) {
+func TestLoginLimitPerEmailAndIPPair(t *testing.T) {
 	h := newHarness(t, func(c *httpapi.Config) {
-		c.LoginEmailRateLimit = httpapi.RateLimit{Burst: 2, Every: time.Minute}
+		c.LoginPairRateLimit = httpapi.RateLimit{Burst: 2, Every: time.Minute}
+		c.LoginEmailRateLimit = httpapi.RateLimit{Burst: 5, Every: time.Hour}
 	})
+	expect(t, h.do(req{method: "POST", path: "/api/auth/register", body: `{"email":"ana@example.org","password":"secreto123"}`}), 201, "")
 	bad := `{"email":"Ana@example.org","password":"wrongpass"}`
+	good := `{"email":"ana@example.org","password":"secreto123"}`
+
+	// Successful logins never consume the login budgets.
+	for range 5 {
+		expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: good, remote: "1.1.1.1:1"}), 200, "")
+	}
+	// Two failures from one IP lock that (email, IP) pair, even for the right password...
 	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "1.1.1.1:1"}), 401, "")
-	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "2.2.2.2:1"}), 401, "")
-	// Third attempt on the same (normalized) email from yet another IP is limited.
-	w := h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"ana@example.org","password":"x"}`, remote: "3.3.3.3:1"})
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "1.1.1.1:2"}), 401, "")
+	w := h.do(req{method: "POST", path: "/api/auth/login", body: good, remote: "1.1.1.1:3"})
 	expect(t, w, 429, "rate_limited")
 	if w.Header().Get("Retry-After") != "60" {
 		t.Fatalf("Retry-After = %q, want 60", w.Header().Get("Retry-After"))
 	}
-	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"bob@example.org","password":"x"}`, remote: "3.3.3.3:1"}), 401, "")
+	// ...but the owner on another IP is not affected.
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: good, remote: "2.2.2.2:1"}), 200, "")
+	// Other emails from the locked IP still work.
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"bob@example.org","password":"x"}`, remote: "1.1.1.1:1"}), 401, "invalid_credentials")
+
+	// Distributed guessing: the loose per-email budget (5 here) caps failures across IPs.
+	for i := range 3 {
+		expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "3.3.3." + strconv.Itoa(i) + ":1"}), 401, "")
+	}
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "4.4.4.4:1"}), 429, "rate_limited")
 }
 
 func TestRateLimitIPv6SharesSlash64(t *testing.T) {
@@ -282,4 +316,22 @@ func TestHealthz(t *testing.T) {
 	expect(t, h.do(req{method: "GET", path: "/healthz"}), 200, "")
 	down = errors.New("db down")
 	expect(t, h.do(req{method: "GET", path: "/healthz"}), 503, "unavailable")
+}
+
+// panicRepo panics when listing characters, to exercise the recover middleware.
+type panicRepo struct{ *authtest.Repo }
+
+func (p panicRepo) ListCharacters(context.Context, int64) ([]store.Character, error) {
+	var none []store.Character
+	_ = none[p.SessionCount()+1] // index out of range: a real runtime panic
+	return nil, nil
+}
+
+func TestPanicBecomesInternalError(t *testing.T) {
+	h := newHarnessRepo(t, panicRepo{authtest.NewRepo()}, nil)
+	expect(t, h.do(req{method: "POST", path: "/api/auth/register", body: `{"email":"ana@example.org","password":"secreto123"}`}), 201, "")
+	token := h.login("ana@example.org", "secreto123")
+	expect(t, h.do(req{method: "GET", path: "/api/characters", token: token}), 500, "internal")
+	// The server keeps serving after the panic.
+	expect(t, h.do(req{method: "GET", path: "/healthz"}), 200, "")
 }

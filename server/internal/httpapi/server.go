@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -43,14 +44,23 @@ type Config struct {
 	// instead of the TCP peer. Only enable it behind a trusted reverse proxy.
 	TrustProxy          bool
 	AuthRateLimit       RateLimit // per IP; default DefaultAuthRateLimit
-	LoginEmailRateLimit RateLimit // per email; default DefaultLoginEmailRateLimit
+	LoginPairRateLimit  RateLimit // failed logins per (email, IP); default DefaultLoginPairRateLimit
+	LoginEmailRateLimit RateLimit // failed logins per email; default DefaultLoginEmailRateLimit
 }
 
 type api struct {
 	cfg          Config
 	log          *slog.Logger
 	limiter      *limiter
+	pairLimiter  *limiter
 	emailLimiter *limiter
+}
+
+func orDefault(rl, def RateLimit) RateLimit {
+	if rl.Burst <= 0 || rl.Every <= 0 {
+		return def
+	}
+	return rl
 }
 
 // New returns the API handler.
@@ -61,17 +71,23 @@ func New(cfg Config) (http.Handler, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
-	if cfg.AuthRateLimit.Burst <= 0 || cfg.AuthRateLimit.Every <= 0 {
-		cfg.AuthRateLimit = DefaultAuthRateLimit
-	}
-	if cfg.LoginEmailRateLimit.Burst <= 0 || cfg.LoginEmailRateLimit.Every <= 0 {
-		cfg.LoginEmailRateLimit = DefaultLoginEmailRateLimit
-	}
-	a := &api{
-		cfg:          cfg,
-		log:          cfg.Logger,
-		limiter:      newLimiter(cfg.AuthRateLimit, cfg.Clock),
-		emailLimiter: newLimiter(cfg.LoginEmailRateLimit, cfg.Clock),
+	cfg.AuthRateLimit = orDefault(cfg.AuthRateLimit, DefaultAuthRateLimit)
+	cfg.LoginPairRateLimit = orDefault(cfg.LoginPairRateLimit, DefaultLoginPairRateLimit)
+	cfg.LoginEmailRateLimit = orDefault(cfg.LoginEmailRateLimit, DefaultLoginEmailRateLimit)
+	a := &api{cfg: cfg, log: cfg.Logger}
+	for _, l := range []struct {
+		dst **limiter
+		rl  RateLimit
+	}{
+		{&a.limiter, cfg.AuthRateLimit},
+		{&a.pairLimiter, cfg.LoginPairRateLimit},
+		{&a.emailLimiter, cfg.LoginEmailRateLimit},
+	} {
+		lim, err := newLimiter(l.rl, cfg.Clock)
+		if err != nil {
+			return nil, err
+		}
+		*l.dst = lim
 	}
 
 	mux := http.NewServeMux()
@@ -84,7 +100,7 @@ func New(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
-	return mux, nil
+	return a.recoverer(mux), nil
 }
 
 // ---- handlers ----------------------------------------------------------------
@@ -126,12 +142,28 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	if email, ok := auth.NormalizeEmail(in.Email); ok && !a.emailLimiter.allow(email) {
-		a.tooMany(w, a.cfg.LoginEmailRateLimit)
-		return
+	// Failed logins are limited per (email, client) pair (strict) and per email (loose).
+	// Only failures consume, so a correct password is never slowed by its own successes,
+	// and an attacker elsewhere can only lock the victim out by sustaining the loose
+	// per-email budget (trade-off documented in docs/05).
+	email, emailOK := auth.NormalizeEmail(in.Email)
+	pairKey := email + "|" + a.clientKey(r)
+	if emailOK {
+		if !a.pairLimiter.ready(pairKey) {
+			a.tooMany(w, a.cfg.LoginPairRateLimit)
+			return
+		}
+		if !a.emailLimiter.ready(email) {
+			a.tooMany(w, a.cfg.LoginEmailRateLimit)
+			return
+		}
 	}
 	tok, err := a.cfg.Auth.Login(r.Context(), in.Email, in.Password)
 	if err != nil {
+		if emailOK && errors.Is(err, auth.ErrInvalidCredentials) {
+			a.pairLimiter.take(pairKey)
+			a.emailLimiter.take(email)
+		}
 		a.fail(w, r, err)
 		return
 	}
@@ -236,19 +268,36 @@ func (a *api) authed(next func(http.ResponseWriter, *http.Request, int64)) http.
 	}
 }
 
-// requestToken reads "Authorization: Bearer <token>" (desktop client, tools) or, if
-// absent, the session cookie (web client).
+// requestToken reads "Authorization: Bearer <token>" (desktop client, tools; the scheme
+// is case-insensitive) or, if there is no Bearer credential, the session cookie (web
+// client). Other schemes, such as Basic from a password-protected staging site, are
+// ignored instead of hiding the cookie.
 func requestToken(r *http.Request) string {
-	if h := r.Header.Get("Authorization"); h != "" {
-		if tok, ok := strings.CutPrefix(h, "Bearer "); ok {
-			return strings.TrimSpace(tok)
-		}
-		return ""
+	if scheme, tok, ok := strings.Cut(r.Header.Get("Authorization"), " "); ok && strings.EqualFold(scheme, "Bearer") {
+		return strings.TrimSpace(tok)
 	}
 	if c, err := r.Cookie(SessionCookie); err == nil {
 		return c.Value
 	}
 	return ""
+}
+
+// recoverer turns a handler panic into a logged 500 with the standard error body.
+func (a *api) recoverer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			v := recover()
+			if v == nil {
+				return
+			}
+			if err, ok := v.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+				return // deliberate abort of the response: nothing to log or write
+			}
+			a.log.Error("http api: panic", "method", r.Method, "path", r.URL.Path, "panic", v, "stack", string(debug.Stack()))
+			writeError(w, http.StatusInternalServerError, "internal")
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 // clientKey is the rate-limit key of the client: its IPv4 address or its IPv6 /64

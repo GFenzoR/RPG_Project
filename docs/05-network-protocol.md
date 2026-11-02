@@ -60,19 +60,36 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
   se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
   `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
   `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login
-  para el cliente web. Si hay header `Authorization`, la cookie se ignora. El token solo
+  para el cliente web. Si hay un `Authorization: Bearer` (el esquema no distingue
+  mayúsculas), manda ese token; cualquier otro esquema (p. ej. `Basic` de un staging con
+  contraseña) se ignora y se usa la cookie. El token solo
   viene en el cuerpo del login si se pide `token_in_body: true` (Tauri, bots): el cliente
   web no lo pide, así un XSS no puede leerlo de la respuesta.
 - **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
   19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
   ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin
-  distinguir mayúsculas, sin palabras reservadas (`Gm`, `Admin`, `God`…). La vocación debe
+  distinguir mayúsculas y sin suplantar al staff: se rechaza si, en minúsculas y sin
+  espacios, contiene `admin`, `gamemaster`, `moderat`/`moderad`, `soporte`/`support`,
+  `staff`, `tutor`, `sistema`/`system` u `oficial`/`official`, o si alguna palabra es
+  `Gm`, `Cm`, `God`, `Mod` o `Dev` (como palabra completa: `Gmork` vale). La vocación debe
   existir en `data/vocations.yaml`. Máximo 10 personajes por cuenta. El personaje nace en
   nivel 1 con la vida y el maná iniciales de su vocación y sin posición: el servidor lo
   ubica en el templo de su ciudad al primer login (T1.4).
-- **Rate limit:** register y login comparten un bucket por IP (IPv6: por /64; 10
-  intentos, luego 1 cada 6 s) y el login tiene además un bucket por email (10, luego 1
-  cada 30 s) → `429 rate_limited` con `Retry-After`. Detrás de Caddy, `-trust-proxy` toma
+- **Rate limit** → `429 rate_limited` con `Retry-After`:
+  - Por IP del cliente (IPv6: por /64): register y login comparten 10 pedidos, luego 1
+    cada 6 s. Cuenta todo pedido, también los basura.
+  - Login fallido por par (email, IP): 5, luego 1 por minuto. Estricto, y un atacante
+    desde otras IPs no puede gastarlo por la víctima.
+  - Login fallido por email desde cualquier IP: 30, luego 1 cada 2 min (~30/h). Laxo:
+    solo frena la adivinación repartida en muchas IPs.
+  - Solo los intentos **fallidos** (`invalid_credentials`) gastan los dos límites de
+    login; entrar bien nunca gasta. **Trade-off:** quien conoce el email de alguien
+    puede, sosteniendo ~30 fallos por hora desde IPs distintas, impedir que la víctima
+    entre desde una IP nueva; desde la IP donde ya entró solo la frena su propio par.
+    Lo aceptamos frente a dejar sin tope la adivinación distribuida.
+  - Las tablas de límites tienen tamaño fijo (65 536 entradas, índice HMAC con secreto
+    aleatorio por proceso): la memoria está acotada, nunca se resetean ni se desalojan
+    buckets, y no se pueden elegir claves que caigan en el bucket de otro. Detrás de Caddy, `-trust-proxy` toma
   la IP del último salto de `X-Forwarded-For` (el puerto del servidor no debe quedar
   expuesto fuera de Caddy). Si los cálculos de contraseña (argon2id, máx. 4 a la vez)
   están saturados más de 2 s → `503 busy`.
