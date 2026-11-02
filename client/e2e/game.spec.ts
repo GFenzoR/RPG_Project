@@ -266,7 +266,9 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   const wolf = battle.getByRole("button", { name: /lobo/ }).first();
   await expect(wolf).toBeVisible({ timeout: 30_000 });
   await wolf.click();
-  await expect(wolf).toHaveAttribute("aria-pressed", "true");
+  // The battle list is sorted by distance and wolves move, so `wolf` (first()) can point
+  // at another wolf by now: check that exactly one entry is the target instead.
+  await expect(battle.locator('button[aria-pressed="true"]')).toHaveCount(1);
   const target = await page.evaluate(() => window.__rpgClient?.target());
   expect(target).toBeDefined();
 
@@ -381,7 +383,9 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   const wolf = battle.getByRole("button", { name: /lobo/ }).first();
   await expect(wolf).toBeVisible({ timeout: 30_000 });
   await wolf.click();
-  await expect(wolf).toHaveAttribute("aria-pressed", "true");
+  // The battle list is sorted by distance and wolves move, so `wolf` (first()) can point
+  // at another wolf by now: check that exactly one entry is the target instead.
+  await expect(battle.locator('button[aria-pressed="true"]')).toHaveCount(1);
 
   // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
   // the projectile or its energy effect on screen.
