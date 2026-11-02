@@ -43,11 +43,13 @@ ok "/ws upgrade (101)"
 # Spoofing: every failed login carries a different forged client IP. If the server keyed on
 # them, no request would ever be limited; keyed on the real hop, the burst (10) runs out.
 limited=0
+codes=()
 for i in $(seq 1 15); do
 	code=$(curl "${curl_opts[@]}" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
 		-H "X-Forwarded-For: 203.0.113.$i" -H "X-Real-IP: 203.0.113.$i" -H "CF-Connecting-IP: 198.51.100.$i" \
 		-d '{"email":"nobody@example.org","password":"wrong-password"}' "$base/api/auth/login")
+	codes+=("$code")
 	if [[ $code == 429 ]]; then limited=1; break; fi
 done
-[[ $limited == 1 ]] || fail "15 logins with forged client IPs were never rate limited"
-ok "forged X-Forwarded-For / CF-Connecting-IP do not bypass the per-IP limit"
+[[ $limited == 1 ]] || fail "15 logins with forged client IPs were never rate limited (codes: ${codes[*]})"
+ok "forged X-Forwarded-For / CF-Connecting-IP do not bypass the per-IP limit (codes: ${codes[*]})"
