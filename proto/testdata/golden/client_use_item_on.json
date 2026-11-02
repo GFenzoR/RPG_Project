@@ -1,0 +1,18 @@
+{
+  "useItemOn": {
+    "from": {
+      "container": {
+        "containerId": 2,
+        "index": 5
+      }
+    },
+    "itemId": 3051,
+    "to": {
+      "pos": {
+        "x": 32001,
+        "y": 31002,
+        "z": 7
+      }
+    }
+  }
+}

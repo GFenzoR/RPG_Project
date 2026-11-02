@@ -19,7 +19,7 @@ Objetivo: repo que compila, se testea y valida, con los contratos base definidos
   Debe funcionar igual en la sesión cloud y en local (WSL2/macOS/Linux): agrega
   `scripts/local-setup.sh` (lo llama `make setup`), `deploy/docker-compose.dev.yml` con
   Postgres y los targets `make db-up` / `make db-down`. Ver `12-local-development.md`.
-- [ ] **T0.2 Protocolo v1.** `proto/game/v1/*.proto` con los mensajes de
+- [x] **T0.2 Protocolo v1.** (PR #3) `proto/game/v1/*.proto` con los mensajes de
   `05-network-protocol.md`, `buf.yaml`/`buf.gen.yaml`, generación Go y TS, test de
   ida y vuelta Go↔TS con golden files. [T0.1]
 - [x] **T0.3 Esquemas de contenido.** (PR #4) JSON Schemas para balance, vocations, items,
@@ -39,7 +39,7 @@ Objetivo: entrar desde el navegador, caminar por una isla chica, matar monstruos
 skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor básico.
 
 **Servidor base**
-- [ ] **T1.1 Núcleo del servidor.** `clock`, game loop de 50 ms, cola de comandos,
+- [x] **T1.1 Núcleo del servidor.** (#2) `clock`, game loop de 50 ms, cola de comandos,
   scheduler min-heap, harness `sim` y primeros tests deterministas. [T0.1]
 - [ ] **T1.2 Mundo en el servidor.** `mapcompile` → `world.bin`, carga, sectores,
   flags de tile, pathfinding A*, línea de visión. Benchmarks. [T1.1, T0.4]

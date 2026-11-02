@@ -1,0 +1,5 @@
+{
+  "walkPath": {
+    "steps": ["DIRECTION_NORTH", "DIRECTION_NORTH", "DIRECTION_EAST", "DIRECTION_SOUTH_EAST"]
+  }
+}
