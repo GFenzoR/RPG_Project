@@ -68,7 +68,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [x] **T1.10 NPCs, diálogos, tiendas y quest.** (PR #31) Motor de diálogos YAML, ventana de
   diálogo, tienda compra/venta, motor de quests con pasos y flags, Capítulo 1 jugable.
   [T1.8]
-- [x] **T1.11 Muerte y reaparición.** Reglas de muerte de balance.yaml, protección de
+- [x] **T1.11 Muerte y reaparición.** (PR #32) Reglas de muerte de balance.yaml, protección de
   novato, bendiciones compradas a NPC, cuerpo del jugador, templo. Autoguardado
   escalonado. [T1.7, T1.10]
 - [ ] **T1.12 Pesca y minería.** Skill de pesca, oficio de minería, recursos que se
