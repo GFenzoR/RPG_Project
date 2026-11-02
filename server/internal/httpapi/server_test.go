@@ -104,7 +104,7 @@ func expect(t *testing.T, w *httptest.ResponseRecorder, status int, code string)
 
 func (h *harness) login(email, pw string) string {
 	h.t.Helper()
-	w := h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"` + email + `","password":"` + pw + `"}`})
+	w := h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"` + email + `","password":"` + pw + `","token_in_body":true}`})
 	expect(h.t, w, http.StatusOK, "")
 	var b struct {
 		Token     string    `json:"token"`
@@ -137,6 +137,9 @@ func TestFullFlow(t *testing.T) {
 	}
 	if w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("token response must not be cached")
+	}
+	if strings.Contains(w.Body.String(), "token") {
+		t.Fatalf("web login must not expose the token in the body: %s", w.Body.String())
 	}
 	token := cookies[0].Value
 
@@ -230,6 +233,32 @@ func TestAuthRateLimitPerIP(t *testing.T) {
 	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "1.2.3.4:1"}), 429, "rate_limited")
 	// X-Forwarded-For is ignored unless TrustProxy is on.
 	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "1.2.3.4:1", xff: "9.9.9.9"}), 429, "rate_limited")
+}
+
+func TestLoginRateLimitPerEmail(t *testing.T) {
+	h := newHarness(t, func(c *httpapi.Config) {
+		c.LoginEmailRateLimit = httpapi.RateLimit{Burst: 2, Every: time.Minute}
+	})
+	bad := `{"email":"Ana@example.org","password":"wrongpass"}`
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "1.1.1.1:1"}), 401, "")
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "2.2.2.2:1"}), 401, "")
+	// Third attempt on the same (normalized) email from yet another IP is limited.
+	w := h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"ana@example.org","password":"x"}`, remote: "3.3.3.3:1"})
+	expect(t, w, 429, "rate_limited")
+	if w.Header().Get("Retry-After") != "60" {
+		t.Fatalf("Retry-After = %q, want 60", w.Header().Get("Retry-After"))
+	}
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"bob@example.org","password":"x"}`, remote: "3.3.3.3:1"}), 401, "")
+}
+
+func TestRateLimitIPv6SharesSlash64(t *testing.T) {
+	h := newHarness(t, func(c *httpapi.Config) {
+		c.AuthRateLimit = httpapi.RateLimit{Burst: 1, Every: time.Hour}
+	})
+	bad := `{"email":"ana@example.org","password":"wrongpass"}`
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "[2001:db8:1:2::1]:1"}), 401, "")
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "[2001:db8:1:2:ffff::9]:1"}), 429, "rate_limited")
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "[2001:db8:1:3::1]:1"}), 401, "")
 }
 
 func TestRateLimitTrustProxyUsesLastHop(t *testing.T) {

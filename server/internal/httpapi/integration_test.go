@@ -65,7 +65,7 @@ func TestAPIWithPostgres(t *testing.T) {
 	call("POST", "/api/auth/login", "", `{"email":"ana@example.org","password":"wrong-pass"}`, 401)
 
 	var login struct{ Token string }
-	_ = json.Unmarshal(call("POST", "/api/auth/login", "", creds, 200), &login)
+	_ = json.Unmarshal(call("POST", "/api/auth/login", "", `{"email":"ana@example.org","password":"secreto123","token_in_body":true}`, 200), &login)
 
 	call("POST", "/api/characters", login.Token, `{"name":"Mira","vocation":"arcanist"}`, 201)
 	call("POST", "/api/characters", login.Token, `{"name":"Mira","vocation":"guardian"}`, 409)

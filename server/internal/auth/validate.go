@@ -30,6 +30,12 @@ func NormalizeEmail(raw string) (string, bool) {
 	if email == "" || len(email) > MaxEmailLen {
 		return "", false
 	}
+	// ASCII only: avoids look-alike (homoglyph) and Unicode-normalization duplicates.
+	for i := 0; i < len(email); i++ {
+		if email[i] < 0x21 || email[i] > 0x7e {
+			return "", false
+		}
+	}
 	addr, err := mail.ParseAddress(email)
 	if err != nil || addr.Name != "" || addr.Address != email {
 		return "", false

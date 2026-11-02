@@ -1,8 +1,15 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/auth/authtest"
+	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 )
 
 // cheapHash keeps unit tests fast; production uses DefaultHashParams.
@@ -61,5 +68,29 @@ func TestToken(t *testing.T) {
 	}
 	if string(ha) != string(hashToken(a)) || len(ha) != 32 {
 		t.Fatal("hash mismatch")
+	}
+}
+
+func TestHashSlotWaitTimesOut(t *testing.T) {
+	clk := clock.NewFake(time.Unix(0, 0))
+	svc, err := New(Config{
+		Repo: authtest.NewRepo(), Clock: clk, Hash: cheapHash,
+		Vocations:           content.Vocations{"a": {ID: "a", Start: content.VocationStats{Health: 1}}},
+		MaxConcurrentHashes: 1, HashWait: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.hashSlots <- struct{}{} // the only slot is taken
+	done := make(chan error, 1)
+	go func() { _, err := svc.Register(context.Background(), "ana@example.org", "secreto123"); done <- err }()
+	clk.BlockUntil(1)
+	clk.Advance(time.Second)
+	if err := <-done; !errors.Is(err, ErrBusy) {
+		t.Fatalf("Register = %v, want ErrBusy", err)
+	}
+	<-svc.hashSlots
+	if _, err := svc.Register(context.Background(), "ana@example.org", "secreto123"); err != nil {
+		t.Fatalf("with a free slot: %v", err)
 	}
 }

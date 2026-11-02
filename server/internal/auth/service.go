@@ -27,6 +27,8 @@ var (
 	ErrNameTaken          = errors.New("auth: character name taken")
 	ErrInvalidVocation    = errors.New("auth: invalid vocation")
 	ErrCharacterLimit     = errors.New("auth: character limit reached")
+	// ErrBusy means every password-hashing slot stayed taken for HashWait.
+	ErrBusy = errors.New("auth: too many concurrent password checks")
 )
 
 // Repo is the persistence the service needs. *store.Store implements it; unit tests use
@@ -55,6 +57,8 @@ type Config struct {
 	Hash              HashParams    // default DefaultHashParams
 	// Concurrent argon2 computations allowed; bounds memory under a login burst.
 	MaxConcurrentHashes int // default 4
+	// How long a request waits for a hashing slot before failing with ErrBusy.
+	HashWait time.Duration // default 2 s
 }
 
 // Defaults for Config.
@@ -62,6 +66,7 @@ const (
 	DefaultAccountTokenTTL     = 30 * 24 * time.Hour
 	DefaultMaxCharacters       = 10
 	DefaultMaxConcurrentHashes = 4
+	DefaultHashWait            = 2 * time.Second
 )
 
 // Service is safe for concurrent use.
@@ -73,6 +78,7 @@ type Service struct {
 	maxChars  int
 	hash      HashParams
 	hashSlots chan struct{}
+	hashWait  time.Duration
 	// dummyHash is verified when the email does not exist, so a login takes the same
 	// time whether or not the account exists.
 	dummyHash string
@@ -95,7 +101,9 @@ func New(cfg Config) (*Service, error) {
 		hash:     cfg.Hash,
 	}
 	if len(cfg.PlayableVocations) == 0 {
-		s.playable = cfg.Vocations
+		for id, v := range cfg.Vocations {
+			s.playable[id] = v
+		}
 	}
 	for _, id := range cfg.PlayableVocations {
 		v, ok := cfg.Vocations[id]
@@ -118,6 +126,10 @@ func New(cfg Config) (*Service, error) {
 		slots = DefaultMaxConcurrentHashes
 	}
 	s.hashSlots = make(chan struct{}, slots)
+	s.hashWait = cfg.HashWait
+	if s.hashWait <= 0 {
+		s.hashWait = DefaultHashWait
+	}
 	dummy, err := hashPassword("dummy password for timing", s.hash)
 	if err != nil {
 		return nil, err
@@ -126,12 +138,19 @@ func New(cfg Config) (*Service, error) {
 	return s, nil
 }
 
-// withHashSlot runs fn while holding one of the bounded argon2 slots.
+// withHashSlot runs fn while holding one of the bounded argon2 slots, waiting at most
+// hashWait for one so a flood of logins cannot pile up goroutines indefinitely.
 func (s *Service) withHashSlot(ctx context.Context, fn func() error) error {
 	select {
 	case s.hashSlots <- struct{}{}:
-	case <-ctx.Done():
-		return fmt.Errorf("auth: waiting for hash slot: %w", ctx.Err())
+	default:
+		select {
+		case s.hashSlots <- struct{}{}:
+		case <-s.clock.After(s.hashWait):
+			return ErrBusy
+		case <-ctx.Done():
+			return fmt.Errorf("auth: waiting for hash slot: %w", ctx.Err())
+		}
 	}
 	defer func() { <-s.hashSlots }()
 	return fn()
@@ -152,6 +171,9 @@ func (s *Service) Register(ctx context.Context, email, password string) (int64, 
 		hash, err = hashPassword(password, s.hash)
 		return err
 	})
+	if errors.Is(err, ErrBusy) {
+		return 0, ErrBusy
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -192,6 +214,9 @@ func (s *Service) Login(ctx context.Context, email, password string) (Token, err
 		match, err = verifyPassword(password, encoded)
 		return err
 	})
+	if errors.Is(err, ErrBusy) {
+		return Token{}, ErrBusy
+	}
 	if err != nil {
 		return Token{}, fmt.Errorf("login: %w", err)
 	}
@@ -203,6 +228,9 @@ func (s *Service) Login(ctx context.Context, email, password string) (Token, err
 	}
 
 	now := s.clock.Now()
+	if err := s.repo.TouchLogin(ctx, acc.ID, now); err != nil {
+		return Token{}, fmt.Errorf("login: %w", err)
+	}
 	token, hash, err := newToken()
 	if err != nil {
 		return Token{}, err
@@ -215,9 +243,6 @@ func (s *Service) Login(ctx context.Context, email, password string) (Token, err
 		ExpiresAt: now.Add(s.tokenTTL),
 	}
 	if err := s.repo.CreateSession(ctx, sess); err != nil {
-		return Token{}, fmt.Errorf("login: %w", err)
-	}
-	if err := s.repo.TouchLogin(ctx, acc.ID, now); err != nil {
 		return Token{}, fmt.Errorf("login: %w", err)
 	}
 	return Token{Token: token, AccountID: acc.ID, ExpiresAt: sess.ExpiresAt}, nil

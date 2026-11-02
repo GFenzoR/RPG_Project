@@ -50,7 +50,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | Método y ruta | Auth | Cuerpo | Respuesta OK |
 |---|---|---|---|
 | `POST /api/auth/register` | — | `{email, password}` | `201 {account_id}` |
-| `POST /api/auth/login` | — | `{email, password}` | `200 {token, expires_at}` + cookie |
+| `POST /api/auth/login` | — | `{email, password, token_in_body?}` | `200 {expires_at, token?}` + cookie |
 | `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation}` | `201 {character: {id, name, vocation, level}}` |
@@ -60,17 +60,22 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
   se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
   `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
   `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login
-  para el cliente web. Si hay header `Authorization`, la cookie se ignora.
-- **Reglas:** email normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
+  para el cliente web. Si hay header `Authorization`, la cookie se ignora. El token solo
+  viene en el cuerpo del login si se pide `token_in_body: true` (Tauri, bots): el cliente
+  web no lo pide, así un XSS no puede leerlo de la respuesta.
+- **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
   19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
   ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin
   distinguir mayúsculas, sin palabras reservadas (`Gm`, `Admin`, `God`…). La vocación debe
   existir en `data/vocations.yaml`. Máximo 10 personajes por cuenta. El personaje nace en
   nivel 1 con la vida y el maná iniciales de su vocación y sin posición: el servidor lo
   ubica en el templo de su ciudad al primer login (T1.4).
-- **Rate limit:** register y login comparten un bucket por IP (10 intentos, luego 1 cada
-  6 s) → `429 rate_limited` con `Retry-After`. Detrás de Caddy, `-trust-proxy` toma la IP
-  del último salto de `X-Forwarded-For`.
+- **Rate limit:** register y login comparten un bucket por IP (IPv6: por /64; 10
+  intentos, luego 1 cada 6 s) y el login tiene además un bucket por email (10, luego 1
+  cada 30 s) → `429 rate_limited` con `Retry-After`. Detrás de Caddy, `-trust-proxy` toma
+  la IP del último salto de `X-Forwarded-For` (el puerto del servidor no debe quedar
+  expuesto fuera de Caddy). Si los cálculos de contraseña (argon2id, máx. 4 a la vez)
+  están saturados más de 2 s → `503 busy`.
 - **Errores:** `{"error": {"code": "<código>"}}`. El cliente traduce el código con la
   clave i18n `error.<código>`; el servidor nunca manda texto visible.
 
@@ -86,7 +91,8 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
-| `rate_limited` | 429 | Demasiados intentos de login/registro desde la IP |
+| `rate_limited` | 429 | Demasiados intentos de login/registro (por IP o por email) |
+| `busy` | 503 | Servidor saturado de logins; reintentar más tarde |
 | `not_found` | 404 | Ruta `/api/...` inexistente |
 | `internal` | 500 | Error del servidor (queda en el log) |
 

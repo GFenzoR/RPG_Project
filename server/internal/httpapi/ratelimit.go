@@ -16,7 +16,13 @@ type RateLimit struct {
 // DefaultAuthRateLimit allows 10 register/login attempts per IP, then one every 6 s.
 var DefaultAuthRateLimit = RateLimit{Burst: 10, Every: 6 * time.Second}
 
-// maxLimiterKeys bounds memory: when exceeded, full (idle) buckets are dropped.
+// DefaultLoginEmailRateLimit allows 10 login attempts per email, then one every 30 s,
+// whatever the IP: it slows credential stuffing spread over many addresses.
+var DefaultLoginEmailRateLimit = RateLimit{Burst: 10, Every: 30 * time.Second}
+
+// maxLimiterKeys bounds memory. At the cap, idle (full) buckets are dropped; if that
+// frees less than a tenth of the map (many distinct keys mid-attack), the map is reset.
+// A reset only forgives recent attempts, it never blocks anyone.
 const maxLimiterKeys = 10000
 
 type bucket struct {
@@ -47,6 +53,9 @@ func (l *limiter) allow(key string) bool {
 	if !ok {
 		if len(l.buckets) >= maxLimiterKeys {
 			l.pruneLocked(now)
+			if len(l.buckets) > maxLimiterKeys*9/10 {
+				clear(l.buckets)
+			}
 		}
 		b = &bucket{tokens: float64(l.cfg.Burst), last: now}
 		l.buckets[key] = b

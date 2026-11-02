@@ -22,6 +22,8 @@ func TestNormalizeEmail(t *testing.T) {
 		"", "ana", "ana@", "@example.org", "ana@localhost", "Ana <ana@example.org>",
 		"<ana@example.org>", "ana@example.org, bob@example.org",
 		strings.Repeat("a", 250) + "@example.org",
+		"a@\u0435xample.org", // Cyrillic "е"
+		"josé@example.org",
 	} {
 		if got, valid := NormalizeEmail(in); valid {
 			t.Errorf("NormalizeEmail(%q) = %q, want invalid", in, got)

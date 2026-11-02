@@ -14,6 +14,8 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/netip"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,14 +41,16 @@ type Config struct {
 	CookieSecure bool
 	// TrustProxy takes the client IP from the last X-Forwarded-For entry (set by Caddy)
 	// instead of the TCP peer. Only enable it behind a trusted reverse proxy.
-	TrustProxy    bool
-	AuthRateLimit RateLimit // default DefaultAuthRateLimit
+	TrustProxy          bool
+	AuthRateLimit       RateLimit // per IP; default DefaultAuthRateLimit
+	LoginEmailRateLimit RateLimit // per email; default DefaultLoginEmailRateLimit
 }
 
 type api struct {
-	cfg     Config
-	log     *slog.Logger
-	limiter *limiter
+	cfg          Config
+	log          *slog.Logger
+	limiter      *limiter
+	emailLimiter *limiter
 }
 
 // New returns the API handler.
@@ -60,7 +64,15 @@ func New(cfg Config) (http.Handler, error) {
 	if cfg.AuthRateLimit.Burst <= 0 || cfg.AuthRateLimit.Every <= 0 {
 		cfg.AuthRateLimit = DefaultAuthRateLimit
 	}
-	a := &api{cfg: cfg, log: cfg.Logger, limiter: newLimiter(cfg.AuthRateLimit, cfg.Clock)}
+	if cfg.LoginEmailRateLimit.Burst <= 0 || cfg.LoginEmailRateLimit.Every <= 0 {
+		cfg.LoginEmailRateLimit = DefaultLoginEmailRateLimit
+	}
+	a := &api{
+		cfg:          cfg,
+		log:          cfg.Logger,
+		limiter:      newLimiter(cfg.AuthRateLimit, cfg.Clock),
+		emailLimiter: newLimiter(cfg.LoginEmailRateLimit, cfg.Clock),
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.healthz)
@@ -95,14 +107,27 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]int64{"account_id": id})
 }
 
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	// TokenInBody asks for the token in the JSON body (desktop client, bots, tools).
+	// Web clients leave it false and only get the HttpOnly cookie, so script injected
+	// in the page cannot read the token from the login response.
+	TokenInBody bool `json:"token_in_body"`
+}
+
 type loginResponse struct {
-	Token     string    `json:"token"`
+	Token     string    `json:"token,omitempty"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
 func (a *api) login(w http.ResponseWriter, r *http.Request) {
-	var in credentials
+	var in loginRequest
 	if !a.decode(w, r, &in) {
+		return
+	}
+	if email, ok := auth.NormalizeEmail(in.Email); ok && !a.emailLimiter.allow(email) {
+		a.tooMany(w, a.cfg.LoginEmailRateLimit)
 		return
 	}
 	tok, err := a.cfg.Auth.Login(r.Context(), in.Email, in.Password)
@@ -111,7 +136,11 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, a.cookie(tok.Token, tok.ExpiresAt))
-	writeJSON(w, http.StatusOK, loginResponse{Token: tok.Token, ExpiresAt: tok.ExpiresAt.UTC()})
+	resp := loginResponse{ExpiresAt: tok.ExpiresAt.UTC()}
+	if in.TokenInBody {
+		resp.Token = tok.Token
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (a *api) logout(w http.ResponseWriter, r *http.Request) {
@@ -182,13 +211,18 @@ func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) rateLimited(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !a.limiter.allow(a.clientIP(r)) {
-			w.Header().Set("Retry-After", "6")
-			writeError(w, http.StatusTooManyRequests, "rate_limited")
+		if !a.limiter.allow(a.clientKey(r)) {
+			a.tooMany(w, a.cfg.AuthRateLimit)
 			return
 		}
 		next(w, r)
 	}
+}
+
+func (a *api) tooMany(w http.ResponseWriter, rl RateLimit) {
+	secs := int(rl.Every.Seconds() + 0.999)
+	w.Header().Set("Retry-After", strconv.Itoa(max(secs, 1)))
+	writeError(w, http.StatusTooManyRequests, "rate_limited")
 }
 
 func (a *api) authed(next func(http.ResponseWriter, *http.Request, int64)) http.HandlerFunc {
@@ -217,18 +251,34 @@ func requestToken(r *http.Request) string {
 	return ""
 }
 
-func (a *api) clientIP(r *http.Request) string {
+// clientKey is the rate-limit key of the client: its IPv4 address or its IPv6 /64
+// (one subscriber usually owns a whole /64, so per-address keys would be free to rotate).
+func (a *api) clientKey(r *http.Request) string {
+	host := ""
 	if a.cfg.TrustProxy {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 			parts := strings.Split(xff, ",")
-			return strings.TrimSpace(parts[len(parts)-1])
+			host = strings.TrimSpace(parts[len(parts)-1])
 		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+	if host == "" {
+		h, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			h = r.RemoteAddr
+		}
+		host = h
 	}
-	return host
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	addr = addr.Unmap()
+	if addr.Is6() {
+		if p, err := addr.Prefix(64); err == nil {
+			return p.String()
+		}
+	}
+	return addr.String()
 }
 
 func (a *api) cookie(value string, expires time.Time) *http.Cookie {
@@ -282,6 +332,7 @@ var errorStatus = []struct {
 	{auth.ErrNameTaken, http.StatusConflict, "name_taken"},
 	{auth.ErrInvalidVocation, http.StatusBadRequest, "invalid_vocation"},
 	{auth.ErrCharacterLimit, http.StatusConflict, "character_limit"},
+	{auth.ErrBusy, http.StatusServiceUnavailable, "busy"},
 }
 
 func (a *api) fail(w http.ResponseWriter, r *http.Request, err error) {

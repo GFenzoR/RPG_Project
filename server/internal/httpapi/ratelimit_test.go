@@ -25,3 +25,15 @@ func TestLimiterPrunesIdleBuckets(t *testing.T) {
 		t.Fatalf("expected idle buckets pruned, have %d", len(l.buckets))
 	}
 }
+
+func TestLimiterResetsWhenFullOfActiveBuckets(t *testing.T) {
+	clk := clock.NewFake(time.Unix(0, 0))
+	l := newLimiter(RateLimit{Burst: 2, Every: time.Hour}, clk)
+	for i := range maxLimiterKeys {
+		l.allow(strconv.Itoa(i)) // every bucket half used: nothing to prune
+	}
+	l.allow("new")
+	if len(l.buckets) != 1 {
+		t.Fatalf("map should be reset, has %d keys", len(l.buckets))
+	}
+}
