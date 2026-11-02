@@ -74,7 +74,7 @@ siguiente apenas mergees los PRs de la anterior.
 | 4 | T1.2 · T1.14 | 1 nov |
 | 5 | T1.4 · T1.15 | 2 nov |
 | 6 | T1.5 | 2 nov |
-| 7 | T1.6 · T1.13 | 3 nov |
+| 7 | T1.6 · T1.13 · T1.19 | 3 nov |
 | 8 | T1.7 · T1.8 | 3 nov |
 | 9 | T1.9 · T1.10 · T1.12 | 4 nov |
 | 10 | T1.11 · T1.16 | 4 nov |
