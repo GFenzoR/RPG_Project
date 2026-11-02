@@ -139,6 +139,8 @@ jugador ─▶ Cloudflare (pone CF-Connecting-IP) ─▶ cloudflared ─red tunn
   `CF-Connecting-IP`, que el borde de Cloudflare siempre sobrescribe.
 - Lo que llega por el puerto publicado (localhost, LAN, Tailscale) no es de confianza: un
   `CF-Connecting-IP` o `X-Forwarded-For` falsificado se ignora y vale la IP TCP.
+- Un jugador que intente mandar su propio `CF-Connecting-IP` a la URL pública recibe 403 del
+  borde de Cloudflare (verificado en CI); un `X-Forwarded-For` falso pasa, pero se ignora.
 - Caddy manda al gameserver un único `X-Forwarded-For` con esa IP (`caddy-routes.caddy`,
   igual que en producción, `09-deployment-aws.md`).
 
