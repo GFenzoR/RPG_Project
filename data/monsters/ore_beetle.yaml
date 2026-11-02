@@ -1,0 +1,20 @@
+id: ore_beetle
+name: monster.ore_beetle.name
+sprite: creatures/ore_beetle
+health: 100
+experience: 110
+speed: 140
+armor: 10
+defense: 10
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 26, interval_ms: 2000 }
+resistances: { physical: 10, earth: 30, fire: -15, energy: -10 }
+loot:
+  - { item: iron_ore, chance: 0.35 }
+  - { item: beetle_carapace, chance: 0.2 }
+  - { item: copper_coin, chance: 0.7, count: [5, 20] }
+tags: [insect, cave, puerto]
+notes: Mine, levels 11-14. High armor rewards high-attack weapons and wands.

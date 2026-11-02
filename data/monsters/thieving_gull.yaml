@@ -1,0 +1,20 @@
+id: thieving_gull
+name: monster.thieving_gull.name
+sprite: creatures/thieving_gull
+health: 18
+experience: 8
+speed: 210
+armor: 0
+defense: 3
+behavior:
+  aggressive: false
+  flee_at_health_pct: 40
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 7, interval_ms: 2000 }
+resistances: { earth: -10, energy: -10 }
+loot:
+  - { item: gull_feather, chance: 0.6, count: [1, 3] }
+  - { item: copper_coin, chance: 0.3, count: [1, 2] }
+tags: [bird, shore, puerto]
+notes: Beach pest for levels 1-3. Steals nothing yet; theft is flavour for a later hito.

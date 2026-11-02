@@ -1,0 +1,20 @@
+id: moss_spider
+name: monster.moss_spider.name
+sprite: creatures/moss_spider
+health: 75
+experience: 70
+speed: 170
+armor: 3
+defense: 8
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 14, interval_ms: 2000 }
+  - { type: distance, element: earth, min: 4, max: 12, interval_ms: 2000, chance: 0.25, range: 3 }
+resistances: { earth: 50, fire: -20, ice: -10 }
+loot:
+  - { item: spider_silk, chance: 0.25, count: [1, 2] }
+  - { item: copper_coin, chance: 0.6, count: [2, 12] }
+tags: [vermin, forest, puerto]
+notes: Spits sap (earth) at range; poison conditions arrive in hito 3.

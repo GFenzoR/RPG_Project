@@ -96,7 +96,7 @@ id: wolf
 name: monster.wolf.name
 sprite: creatures/wolf
 health: 25
-experience: 18
+experience: 28
 speed: 190
 armor: 2
 defense: 5
@@ -107,7 +107,7 @@ behavior:
 attacks:
   - type: melee
     min: 0
-    max: 12
+    max: 16
     interval_ms: 2000
 resistances: { physical: 0, fire: -10, ice: 10 }
 loot:

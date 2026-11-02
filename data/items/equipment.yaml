@@ -15,3 +15,63 @@
   tradeable: true
   shield: { defense: 12 }
   value: 25
+
+# Isla del Puerto starter kit. A full early set (cap + tunic/jerkin + trousers + boots)
+# gives armor 5-7; shields 9-16.
+- id: sailcloth_cap
+  kind: armor
+  sprite: armor/sailcloth_cap
+  name: item.sailcloth_cap.name
+  weight: 800
+  tradeable: true
+  armor: { slot: head, armor: 1 }
+  value: 10
+
+- id: leather_jerkin
+  kind: armor
+  sprite: armor/leather_jerkin
+  name: item.leather_jerkin.name
+  description: item.leather_jerkin.desc
+  weight: 8000
+  tradeable: true
+  armor: { slot: body, armor: 4 }
+  requires: { level: 6 }
+  value: 150
+
+- id: canvas_trousers
+  kind: armor
+  sprite: armor/canvas_trousers
+  name: item.canvas_trousers.name
+  weight: 1800
+  tradeable: true
+  armor: { slot: legs, armor: 1 }
+  value: 15
+
+- id: tarred_boots
+  kind: armor
+  sprite: armor/tarred_boots
+  name: item.tarred_boots.name
+  weight: 1200
+  tradeable: true
+  armor: { slot: feet, armor: 1 }
+  value: 15
+
+- id: barrel_lid_shield
+  kind: shield
+  sprite: shields/barrel_lid_shield
+  name: item.barrel_lid_shield.name
+  description: item.barrel_lid_shield.desc
+  weight: 3500
+  tradeable: true
+  shield: { defense: 9 }
+  value: 10
+
+- id: riveted_round_shield
+  kind: shield
+  sprite: shields/riveted_round_shield
+  name: item.riveted_round_shield.name
+  weight: 6000
+  tradeable: true
+  shield: { defense: 16 }
+  requires: { level: 8 }
+  value: 220
