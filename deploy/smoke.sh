@@ -36,7 +36,7 @@ ok "register + login"
 # timeout, so only the status code matters.
 code=$(curl -sS --http1.1 --max-time 3 -o /dev/null -w '%{http_code}' \
 	-H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
-	-H 'Sec-WebSocket-Key: c21va2UtdGVzdC1rZXktMTI=' "$base/ws" || true)
+	-H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' "$base/ws" || true)
 [[ $code == 101 ]] || fail "/ws upgrade answered $code"
 ok "/ws upgrade (101)"
 
