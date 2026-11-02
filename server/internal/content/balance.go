@@ -16,6 +16,17 @@ type Balance struct {
 	Experience Experience `yaml:"experience"`
 	Skills     Skills     `yaml:"skills"`
 	Combat     Combat     `yaml:"combat"`
+	Inventory  Inventory  `yaml:"inventory"`
+}
+
+// Inventory holds the item and container rules (T1.8).
+type Inventory struct {
+	// StartContainer is the container item a character that never played starts with.
+	StartContainer    string `yaml:"start_container"`
+	MaxOpenContainers int    `yaml:"max_open_containers"`
+	UseCooldownMs     int    `yaml:"use_cooldown_ms"`
+	// Reach is the Chebyshev distance (same floor) for actions on ground items.
+	Reach int `yaml:"reach"`
 }
 
 // Combat holds the melee constants (docs/02-game-design.md, "Combate").
@@ -141,6 +152,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if err := b.Skills.check(); err != nil {
 		return Balance{}, err
+	}
+	if i := b.Inventory; i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.Reach <= 0 {
+		return Balance{}, errors.New("inventory: max_open_containers and reach must be > 0, use_cooldown_ms >= 0")
 	}
 	return b, nil
 }

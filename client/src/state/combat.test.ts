@@ -20,7 +20,16 @@ type Msg = ServerMessage["message"];
 
 const content: ClientContent = {
   items: {
-    8: { id: "copper_coin", sprite: "", ground: false, walkable: false, blocks: false, speed: 100 },
+    8: {
+      id: "copper_coin",
+      sprite: "",
+      ground: false,
+      walkable: false,
+      blocks: false,
+      speed: 100,
+      stackable: false,
+      slots: 0,
+    },
   },
   monsterSprites: {},
   vocations: [],

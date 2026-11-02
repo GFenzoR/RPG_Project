@@ -94,6 +94,14 @@ items:
   requires: { level: 5 }
   value: 120              # precio base que usan los NPCs como referencia
 ```
+- **Contenedores** (`kind: container`, T1.8): `container.slots` es cuántos items caben.
+  `creature_remains` (los restos de un monstruo) es un contenedor con `pickupable: false`.
+  `pickupable: false` vale para cualquier item que no deba moverse de su tile.
+- **Equipo:** `weapon`, `shield` y `armor` (con `armor.slot`) definen el slot; `requires`
+  (`level`, `vocations`) y `vocations.yaml → weapons` limitan quién lo equipa.
+- **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.
+- **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
+  un personaje nuevo), `max_open_containers`, `use_cooldown_ms` y `reach`.
 - **Paso bloqueado** (regla del contrato, la aplican el validador de mapas y
   `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro

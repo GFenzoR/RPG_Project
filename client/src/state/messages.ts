@@ -4,6 +4,7 @@ import { CreatureKind } from "@rpg/protocol";
 import type { TextParam } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
+import { formatOz } from "./items.ts";
 import type { CreatureState, LogMessage } from "./world.ts";
 
 /** The translated name of a creature: players by name, monsters and NPCs by content id. */
@@ -36,7 +37,9 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
         params[p.name] = p.value.value;
         break;
       case "number":
-        params[p.name] = Number(p.value.value);
+        // Weights travel in grams and show in oz.
+        params[p.name] =
+          p.name === "weight" ? formatOz(Number(p.value.value)) : Number(p.value.value);
         break;
       case "contentId":
         params[p.name] =
@@ -54,5 +57,16 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
     }
   }
   if (items.length > 0) params["items"] = items.join(", ");
-  return t(m.key, params);
+  const text = t(m.key, params);
+  // Looking at an item adds its description, when it has one.
+  const looked = m.key.startsWith("look.")
+    ? m.params.find((p) => p.value.case === "item")
+    : undefined;
+  if (looked?.value.case === "item") {
+    const def = content.items[looked.value.value.itemId];
+    const key = def ? `item.${def.id}.desc` : "";
+    const desc = key ? t(key) : key;
+    if (desc && desc !== key) return `${text} ${desc}`;
+  }
+  return text;
 }

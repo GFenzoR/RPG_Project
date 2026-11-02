@@ -61,10 +61,9 @@ type monsterKind struct {
 }
 
 type lootItem struct {
-	id        uint16
-	stackable bool
-	chance    float64
-	lo, hi    int
+	def    *content.Item
+	chance float64
+	lo, hi int
 }
 
 // spawnSlot is one monster a spawn keeps alive.
@@ -122,11 +121,14 @@ func (m *Monster) TargetID() uint32 {
 	return m.target.id
 }
 
-// Corpse is what a dead monster leaves: its loot (taken from it in T1.8).
+// Corpse is what a dead monster leaves: a container item (CorpseItem) with its loot.
 type Corpse struct {
 	Monster string
-	Loot    []*pb.ItemStack
+	Item    *Item
 }
+
+// Loot returns what is left inside the remains.
+func (c *Corpse) Loot() []*pb.ItemStack { return c.Item.stacks() }
 
 // Monsters returns the monsters in the world ordered by creature id. Loop goroutine only.
 func (w *World) Monsters() []*Monster { return w.monsters }
@@ -156,16 +158,16 @@ func (w *World) initCombat() error {
 	w.msectors = map[uint64][]*Monster{}
 	w.kinds = map[string]*monsterKind{}
 	w.active = map[uint64]struct{}{}
-	w.ground = map[world.Pos][]uint16{}
+	w.ground = map[world.Pos][]*Item{}
 	w.corpses = map[world.Pos][]*Corpse{}
 	if w.cfg.Monsters == nil {
 		return nil
 	}
 	corpse := w.cfg.Items[CorpseItem]
-	if corpse == nil {
-		return errors.New("session: item " + CorpseItem + " is required with monsters")
+	if corpse == nil || corpse.Container == nil {
+		return errors.New("session: container item " + CorpseItem + " is required with monsters")
 	}
-	w.corpseItem = corpse.Numeric
+	w.corpseItem = corpse
 	for _, id := range w.cfg.Monsters.IDs() {
 		def := w.cfg.Monsters[id]
 		k := &monsterKind{def: def, target: combat.MonsterTarget{
@@ -180,7 +182,7 @@ func (w *World) initCombat() error {
 				return fmt.Errorf("session: monster %q drops unknown item %q", id, l.Item)
 			}
 			lo, hi := l.CountRange()
-			k.loot = append(k.loot, lootItem{id: it.Numeric, stackable: it.Stackable, chance: l.Chance, lo: lo, hi: hi})
+			k.loot = append(k.loot, lootItem{def: it, chance: l.Chance, lo: lo, hi: hi})
 		}
 		w.kinds[id] = k
 	}

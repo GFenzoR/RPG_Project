@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -88,6 +89,28 @@ func TestPlayTokensAndCharacterState(t *testing.T) {
 	pc, _ = st.PlayCharacter(ctx, acc, c.ID, now)
 	if len(pc.Skills) != 2 || pc.Skills[0] != (store.Skill{ID: "fist", Level: 12}) || pc.Skills[1] != (store.Skill{ID: "shield", Level: 10, Tries: 9}) {
 		t.Fatalf("skills after save: %+v", pc.Skills)
+	}
+	// The inventory tree is replaced by every save, nested containers included.
+	bag := store.InventoryItem{ItemID: 7, Count: 1, Slot: 1, Items: []store.InventoryItem{{ItemID: 8, Count: 30, Slot: 0}}}
+	state.Inventory = []store.InventoryItem{
+		{ItemID: 5, Count: 1, Slot: 3, Items: []store.InventoryItem{{ItemID: 8, Count: 12, Slot: 0}, bag}},
+		{ItemID: 6, Count: 1, Slot: 5},
+	}
+	for range 2 {
+		if err := st.SaveCharacterState(ctx, state); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pc, _ = st.PlayCharacter(ctx, acc, c.ID, now)
+	if !reflect.DeepEqual(pc.Inventory, state.Inventory) {
+		t.Fatalf("inventory after save:\n got %+v\nwant %+v", pc.Inventory, state.Inventory)
+	}
+	state.Inventory = nil
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	if pc, _ = st.PlayCharacter(ctx, acc, c.ID, now); len(pc.Inventory) != 0 {
+		t.Fatalf("inventory after emptying: %+v", pc.Inventory)
 	}
 	state.ID = 999999
 	if err := st.SaveCharacterState(ctx, state); !errors.Is(err, store.ErrNotFound) {

@@ -218,6 +218,7 @@ func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
 		Y:          int(s.Pos.Y),
 		Z:          int(s.Pos.Z),
 		Skills:     storeSkills(s.Skills),
+		Inventory:  storeItems(s.Inventory),
 		SavedAt:    a.cfg.Clock.Now(),
 	})
 	switch {
@@ -233,6 +234,14 @@ func storeSkills(in []session.SkillState) []store.Skill {
 	out := make([]store.Skill, len(in))
 	for i, s := range in {
 		out[i] = store.Skill{ID: s.ID, Level: s.Level, Tries: s.Tries}
+	}
+	return out
+}
+
+func storeItems(in []session.ItemState) []store.InventoryItem {
+	var out []store.InventoryItem
+	for _, it := range in {
+		out = append(out, store.InventoryItem{ItemID: int(it.ItemID), Count: it.Count, Slot: it.Slot, Items: storeItems(it.Items)})
 	}
 	return out
 }

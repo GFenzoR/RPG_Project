@@ -32,7 +32,12 @@ func TestBotEntersAndWalks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	items, err := content.LoadItems(data)
+	if err != nil {
+		t.Fatal(err)
+	}
 	a, err := app.New(app.Config{
+		Items:     items,
 		Store:     st,
 		Clock:     clock.Real{},
 		Seed:      1,
@@ -95,6 +100,10 @@ func TestBotEntersAndWalks(t *testing.T) {
 			t.Fatal(err)
 		}
 		if c.HasPos && c.X == 10 && c.Y == 3 && c.Z == 7 {
+			// A character that never played got the starting backpack, saved with it.
+			if len(c.Inventory) != 1 || c.Inventory[0].Slot != 3 || c.Inventory[0].ItemID != int(items[balance.Inventory.StartContainer].Numeric) {
+				t.Fatalf("saved inventory %+v", c.Inventory)
+			}
 			break
 		}
 		if wall.Now().After(deadline) {

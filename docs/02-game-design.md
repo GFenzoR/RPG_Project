@@ -64,7 +64,8 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
 - Regeneración: cada `regen.interval_ms` (evento del scheduler por jugador) recupera
   `regen.health` y `regen.mana` sin pasar del máximo. No depende de comida todavía.
 - Persistencia: el snapshot de guardado lleva todas las skills y se escriben en
-  `character_skills` en la misma transacción que el personaje.
+  `character_skills` en la misma transacción que el personaje. El inventario (T1.8) va en
+  el mismo snapshot y reemplaza las filas de `inventory_items` en esa transacción.
 
 ### Oficios
 | Oficio | Acción | Produce |
@@ -105,6 +106,39 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
 - Runas: items de uso con carga; las crea el mago gastando maná.
 - Condiciones: veneno, fuego, eléctrico, paralyze, haste, invisibilidad (hito 3).
 - Zonas de protección: no se puede atacar ni ser atacado.
+
+## Items, equipo e inventario
+Implementado en T1.8 (`server/internal/session/inventory.go`):
+- **Instancias:** cada item es una instancia que vive en un solo lugar: en el suelo (sobre
+  los items fijos del mapa), en un slot de equipo o dentro de un contenedor. Mover un
+  item mueve la instancia (o parte de la pila); nunca se copia, así que un movimiento no
+  puede duplicar items. Es la base transaccional del trade y del mercado futuros.
+- **Slots de equipo:** cabeza, cuello, mochila, torso, mano derecha, mano izquierda,
+  piernas, pies, anillo y munición. Cada `kind` va en un solo slot: `weapon` en la mano
+  derecha, `shield` en la izquierda, `armor` en el de su `armor.slot` (`body` = torso),
+  `container` en el de mochila. Un arma de dos manos (`hands: 2`) exige la izquierda
+  libre. `requires.level`, `requires.vocations` y los `weapons` de la vocación
+  (`data/vocations.yaml`) se validan al equipar. Munición: sin items todavía.
+- **Combate:** el arma de la mano derecha da el ataque y la skill (`weapon.type`; una
+  varita cuenta como puños hasta T1.9), el escudo de la izquierda la defensa y la suma
+  de `armor` de todo el equipo la armadura del jugador contra golpes físicos.
+- **Contenedores:** una mochila (o los restos de un monstruo) tiene `container.slots`
+  lugares. Los contenedores se anidan; no se puede meter uno dentro de sí mismo. Soltar
+  un item sobre un slot de equipo con un contenedor, o sobre un lugar que tiene un
+  contenedor, lo mete adentro. Las pilas apilables se juntan hasta `max_stack`.
+- **Capacidad:** cada vocación tiene capacidad (gramos) por nivel; el peso es el de los
+  items equipados con su contenido (`weight × cantidad`). Solo lo que entra al
+  inventario desde afuera consume capacidad. La UI muestra oz = gramos / 100.
+- **Alcance:** tomar, soltar, abrir o usar en el suelo exige el mismo piso y distancia
+  ≤ `inventory.reach` (1); un contenedor del suelo se cierra al alejarse. Mirar alcanza
+  todo lo visible. Los items fijos del mapa (`world.bin`) se pueden mirar pero no mover.
+- **Usar:** un contenedor se abre o cierra; un consumible cura (`heal_hp`/`heal_mp`) o se
+  come (`food_ms` aún no tiene efecto: no hay hambre) y gasta una unidad, con
+  `inventory.use_cooldown_ms` entre usos. Herramientas y runas llegan con sus tareas.
+- **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
+  slot de mochila. El kit de cada vocación llega con los diálogos (T1.10).
+- **Restos:** el botín de un monstruo queda dentro de sus restos (contenedor que no se
+  puede levantar) y desaparece con ellos a los `combat.monster_corpse_ms`.
 
 ## Monstruos
 - Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos con

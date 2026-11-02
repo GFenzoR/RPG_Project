@@ -23,6 +23,8 @@ const content: ClientContent = {
       walkable: true,
       blocks: false,
       speed: 100,
+      stackable: false,
+      slots: 0,
     },
     2: {
       id: "sand",
@@ -31,6 +33,8 @@ const content: ClientContent = {
       walkable: true,
       blocks: false,
       speed: 150,
+      stackable: false,
+      slots: 0,
     },
     3: {
       id: "water",
@@ -39,6 +43,8 @@ const content: ClientContent = {
       walkable: false,
       blocks: false,
       speed: 100,
+      stackable: false,
+      slots: 0,
     },
     4: {
       id: "crate",
@@ -47,6 +53,8 @@ const content: ClientContent = {
       walkable: false,
       blocks: true,
       speed: 100,
+      stackable: false,
+      slots: 0,
     },
   },
   monsterSprites: {},

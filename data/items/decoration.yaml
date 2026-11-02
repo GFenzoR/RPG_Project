@@ -16,11 +16,12 @@
   blocks_sight: true
 
 # Remains of a slain monster (T1.6). The server places it where the monster died, with
-# the loot inside, and removes it after combat.monster_corpse_ms (balance.yaml). Opening
-# it and taking the loot arrive with containers (T1.8).
+# the loot inside, and removes it after combat.monster_corpse_ms (balance.yaml). It is a
+# container (T1.8): open it to take the loot; it cannot be picked up.
 - id: creature_remains
-  kind: decoration
+  kind: container
   sprite: decor/creature_remains
   name: item.creature_remains.name
   pickupable: false
   blocks_movement: false
+  container: { slots: 10 }

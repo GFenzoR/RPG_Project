@@ -28,6 +28,17 @@ type PlayCharacter struct {
 	Town   string
 	// Skills are the saved skills; a skill without a row is at its base level.
 	Skills []Skill
+	// Inventory is the equipped items with their content (inventory_items as a tree).
+	Inventory []InventoryItem
+}
+
+// InventoryItem is one row of inventory_items with the rows inside it: Slot is the
+// equipment slot of a top-level item and the index inside its container otherwise.
+type InventoryItem struct {
+	ItemID int
+	Count  int
+	Slot   int
+	Items  []InventoryItem
 }
 
 // Skill is one row of character_skills.
@@ -46,8 +57,11 @@ type CharacterState struct {
 	Mana       int
 	X, Y, Z    int
 	// Skills are upserted with the character row, in the same transaction.
-	Skills  []Skill
-	SavedAt time.Time
+	Skills []Skill
+	// Inventory replaces every inventory_items row of the character, in the same
+	// transaction: an item is never saved twice nor lost between two snapshots.
+	Inventory []InventoryItem
+	SavedAt   time.Time
 }
 
 // CharacterBelongsTo reports whether characterID is a character of accountID.
@@ -94,7 +108,12 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	for i, r := range rows {
 		skills[i] = Skill{ID: r.Skill, Level: int(r.Level), Tries: r.Tries}
 	}
+	inv, err := s.q.GetCharacterInventory(ctx, id)
+	if err != nil {
+		return PlayCharacter{}, fmt.Errorf("character inventory: %w", err)
+	}
 	return PlayCharacter{
+		Inventory:  inventoryTree(inv),
 		Skills:     skills,
 		ID:         row.ID,
 		AccountID:  row.AccountID,
@@ -136,6 +155,12 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 	if n == 0 {
 		return fmt.Errorf("save character %d: %w", c.ID, ErrNotFound)
 	}
+	if err := q.DeleteCharacterInventory(ctx, c.ID); err != nil {
+		return fmt.Errorf("clear inventory of character %d: %w", c.ID, err)
+	}
+	if err := insertItems(ctx, q, c.ID, pgtype.Int8{}, c.Inventory); err != nil {
+		return fmt.Errorf("save inventory of character %d: %w", c.ID, err)
+	}
 	if len(c.Skills) == 0 {
 		return nil
 	}
@@ -148,4 +173,45 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 		return fmt.Errorf("save skills of character %d: %w", c.ID, err)
 	}
 	return nil
+}
+
+// insertItems inserts items (and, depth first, their content) inside container.
+func insertItems(ctx context.Context, q *db.Queries, charID int64, container pgtype.Int8, items []InventoryItem) error {
+	for _, it := range items {
+		id, err := q.InsertInventoryItem(ctx, db.InsertInventoryItemParams{CharacterID: charID, ContainerID: container,
+			Slot: int16(it.Slot), ItemID: int32(it.ItemID), Count: int32(it.Count)})
+		if err != nil {
+			return err
+		}
+		if err := insertItems(ctx, q, charID, pgtype.Int8{Int64: id, Valid: true}, it.Items); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// inventoryTree rebuilds the item tree from inventory_items rows (top level first,
+// then by slot). Rows whose container is missing are dropped.
+func inventoryTree(rows []db.GetCharacterInventoryRow) []InventoryItem {
+	children := map[int64][]db.GetCharacterInventoryRow{}
+	var top []db.GetCharacterInventoryRow
+	for _, r := range rows {
+		if r.ContainerID.Valid {
+			children[r.ContainerID.Int64] = append(children[r.ContainerID.Int64], r)
+		} else {
+			top = append(top, r)
+		}
+	}
+	var build func(rs []db.GetCharacterInventoryRow, depth int) []InventoryItem
+	build = func(rs []db.GetCharacterInventoryRow, depth int) []InventoryItem {
+		if depth > 64 || len(rs) == 0 {
+			return nil
+		}
+		out := make([]InventoryItem, len(rs))
+		for i, r := range rs {
+			out[i] = InventoryItem{ItemID: int(r.ItemID), Count: int(r.Count), Slot: int(r.Slot), Items: build(children[r.ID], depth+1)}
+		}
+		return out
+	}
+	return build(top, 0)
 }

@@ -150,6 +150,55 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   expect({ x: x - start.x, y: y - start.y }).toEqual({ x: 4, y: 1 });
   await shot(page, "06-walked-click");
 
+  // Inventory (T1.8): a new character starts with an equipped backpack. Right click opens
+  // it, shift+click looks at it, and it can be dragged onto the map and back.
+  const inventory = page.getByTestId("inventory");
+  const backpackSlot = inventory.getByTestId("slot-backpack");
+  await expect(backpackSlot.locator("[data-item=backpack]")).toBeVisible();
+  await backpackSlot.locator("[data-item]").click({ button: "right" });
+  const backpackWindow = inventory.locator('[data-container-item="backpack"]');
+  await expect(backpackWindow).toBeVisible();
+  await expect(backpackWindow.locator(".slot")).toHaveCount(20);
+  await backpackSlot.locator("[data-item]").click({ modifiers: ["Shift"] });
+  await expect(page.getByTestId("game-log")).toContainText("Ves mochila (20 lugares)");
+  await expect(inventory.getByTestId("capacity")).toContainText("Capacidad libre");
+  await inventory.screenshot({ path: join(shots, "09-inventory.png") });
+
+  const drag = async (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+  ): Promise<void> => {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 8 });
+    await page.mouse.up();
+  };
+  const backpackId = await page.evaluate(() => window.__rpgClient?.itemNumber("backpack"));
+  const ownTile = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+    a: x,
+    b: y,
+  });
+  const slotBox = await backpackSlot.boundingBox();
+  if (!ownTile || !slotBox || backpackId === undefined) throw new Error("no drag points");
+  const slotCenter = { x: slotBox.x + slotBox.width / 2, y: slotBox.y + slotBox.height / 2 };
+  // Slot → own tile on the map: the slot empties and the tile shows the backpack on top.
+  await drag(slotCenter, ownTile);
+  await expect(backpackSlot.locator("[data-item]")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(({ a, b, c }) => window.__rpgClient?.tile(a, b, c)?.at(-1), {
+        a: x,
+        b: y,
+        c: z,
+      }),
+    )
+    .toBe(backpackId);
+  await expect(backpackWindow).toBeVisible(); // still within reach: the window stays open
+  await shot(page, "10-backpack-on-map");
+  // Map → slot: equipped again.
+  await drag(ownTile, slotCenter);
+  await expect(backpackSlot.locator("[data-item=backpack]")).toBeVisible();
+
   // Leave the game: back to the character list with the server's reason.
   await page.getByRole("button", { name: "Salir del juego" }).click();
   await expect(page.getByRole("status")).toHaveText("Saliste del juego.");

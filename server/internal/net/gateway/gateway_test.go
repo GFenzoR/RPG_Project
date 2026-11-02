@@ -66,9 +66,14 @@ func newStack(t *testing.T, mutate func(*Config)) *stack {
 	if err != nil {
 		t.Fatal(err)
 	}
+	items, err := content.LoadItems(filepath.Join("..", "..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	w, err := session.New(session.Config{
 		Map:     worldtest.Open(t, 0, 0, 32, 32),
 		Balance: bal,
+		Items:   items,
 		Vocations: content.Vocations{"guardian": {ID: "guardian",
 			Start: content.VocationStats{Health: 145, Mana: 20, Capacity: 1000, Speed: 1000}}},
 		Save: func(snap session.Snapshot) bool {

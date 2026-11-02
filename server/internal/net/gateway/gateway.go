@@ -329,11 +329,24 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 	for _, s := range pc.Skills {
 		c.Skills = append(c.Skills, session.SkillState{ID: s.ID, Level: s.Level, Tries: s.Tries})
 	}
+	c.Inventory = itemStates(pc.Inventory)
 	if pc.HasPos && pc.X >= 0 && pc.X <= 0xFFFF && pc.Y >= 0 && pc.Y <= 0xFFFF && pc.Z >= 0 && pc.Z <= world.MaxFloor {
 		c.HasPos = true
 		c.Pos = world.Pos{X: uint16(pc.X), Y: uint16(pc.Y), Z: uint8(pc.Z)}
 	}
 	return c
+}
+
+// itemStates converts saved inventory rows; ids outside uint16 cannot be items.
+func itemStates(in []store.InventoryItem) []session.ItemState {
+	var out []session.ItemState
+	for _, it := range in {
+		if it.ItemID <= 0 || it.ItemID > 0xFFFF {
+			continue
+		}
+		out = append(out, session.ItemState{ItemID: uint16(it.ItemID), Count: it.Count, Slot: it.Slot, Items: itemStates(it.Items)})
+	}
+	return out
 }
 
 // reader decodes client frames and enqueues them until the connection fails, the client

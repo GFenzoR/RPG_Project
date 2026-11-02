@@ -61,7 +61,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   Cliente: barras de vida, efectos, texto flotante, lista de batalla. [T1.4, T1.5]
 - [x] **T1.7 Skills por uso y niveles.** Progreso de skills de armas, escudo y puños,
   experiencia y niveles, stats por vocación, regeneración. Panel de skills. Escenarios sim. [T1.6]
-- [ ] **T1.8 Items, inventario y contenedores.** Slots de equipo, mochila, mover items
+- [x] **T1.8 Items, inventario y contenedores.** Slots de equipo, mochila, mover items
   (suelo↔inventario↔contenedor), capacidad, usar items, mirar. UI de inventario. [T1.6]
 - [ ] **T1.9 Magia (Arcanista).** Maná, nivel mágico, 4 hechizos (ataque, área, curación,
   utilidad), palabras propias, cooldowns, hotkeys F1–F12, runas básicas. [T1.7, T1.8]

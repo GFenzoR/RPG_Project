@@ -1,6 +1,9 @@
 package session
 
-import "github.com/GFenzoR/RPG_Project/server/internal/content"
+import (
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
+)
 
 // SetHealth sets a monster's health (tests only).
 func (m *Monster) SetHealth(h int) { m.health = h }
@@ -16,3 +19,12 @@ func (w *World) Mana(p *Player) int { return p.mana }
 
 // MonsterHealth returns m's health (tests only).
 func (w *World) MonsterHealth(m *Monster) int { return m.health }
+
+// DropForTest puts count units of def on the ground at pos (tests only, loop goroutine).
+func (w *World) DropForTest(def *content.Item, count int, pos world.Pos) {
+	w.drop(newItem(def, count), pos)
+	w.tileChanged(pos)
+}
+
+// GroundAt returns the runtime items on pos, bottom first (tests only).
+func (w *World) GroundAt(pos world.Pos) []*Item { return w.ground[pos] }

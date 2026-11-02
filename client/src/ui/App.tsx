@@ -11,6 +11,7 @@ import { creatureName, formatMessage } from "../state/messages.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
+import { InventoryPanel } from "./Inventory.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -314,6 +315,8 @@ function GameScreen(props: {
     skills: [],
     levelUp: undefined,
     log: [],
+    inventory: new Map(),
+    containers: [],
   });
   const [levelNotice, setLevelNotice] = useState<number | undefined>(undefined);
   const [stance, setStance] = useState(FightStance.BALANCED);
@@ -440,6 +443,7 @@ function GameScreen(props: {
               {t("client.fight.chase")}
             </label>
           </section>
+          <InventoryPanel t={t} content={props.content} game={game.current} ui={ui} />
           <SkillsPanel t={t} skills={ui.skills} />
           <ul class="log" data-testid="game-log" aria-live="polite">
             {ui.log.map((m, i) => (

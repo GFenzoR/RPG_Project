@@ -3,6 +3,8 @@ package session_test
 import (
 	"testing"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
@@ -16,11 +18,47 @@ const (
 	coinID   = 8
 )
 
+// testItemDefs are the items of the inventory tests, by numeric id.
+var testItemDefs = map[uint16]string{
+	corpseID: "{id: creature_remains, kind: container, pickupable: false, container: {slots: 10}}",
+	coinID:   "{id: copper_coin, kind: currency, weight: 10, stackable: true, max_stack: 100}",
+	swordID:  "{id: test_sword, kind: weapon, weight: 3300, weapon: {type: sword, attack: 13, defense: 9, hands: 1}}",
+	axeID:    "{id: test_greataxe, kind: weapon, weight: 9000, weapon: {type: axe, attack: 20, hands: 2}}",
+	shieldID: "{id: test_shield, kind: shield, weight: 5000, shield: {defense: 12}}",
+	tunicID:  "{id: test_tunic, kind: armor, weight: 6000, armor: {slot: body, armor: 4}}",
+	crownID:  "{id: test_crown, kind: armor, weight: 800, armor: {slot: head, armor: 2}, requires: {level: 20}}",
+	wandID:   "{id: test_wand, kind: weapon, weight: 1500, weapon: {type: wand, attack: 13}, requires: {vocations: [arcanist]}}",
+	packID:   "{id: backpack, kind: container, weight: 1800, container: {slots: 4}}",
+	bagID:    "{id: test_bag, kind: container, weight: 500, container: {slots: 2}}",
+	salveID:  "{id: test_salve, kind: consumable, weight: 300, stackable: true, max_stack: 100, consumable: {heal_hp: 40}}",
+	anvilID:  "{id: test_anvil, kind: material, weight: 500000}",
+	grassID:  "{id: grass, kind: ground}",
+}
+
+const (
+	swordID  = 60
+	axeID    = 61
+	shieldID = 62
+	tunicID  = 63
+	crownID  = 64
+	wandID   = 65
+	packID   = 66
+	bagID    = 67
+	salveID  = 68
+	anvilID  = 69
+	grassID  = worldtest.Grass
+)
+
+// testItems decodes testItemDefs (fixed, valid YAML: a decode error leaves a zero item).
 func testItems() content.Items {
-	return content.Items{
-		session.CorpseItem: {ID: session.CorpseItem, Numeric: corpseID},
-		"copper_coin":      {ID: "copper_coin", Numeric: coinID, Stackable: true},
+	out := content.Items{}
+	for n, src := range testItemDefs {
+		var it content.Item
+		_ = yaml.Unmarshal([]byte(src), &it)
+		it.Numeric = n
+		out[it.ID] = &it
 	}
+	return out
 }
 
 func wolfDef() *content.Monster {
@@ -120,8 +158,8 @@ func TestWolfDiesAndGivesExperience(t *testing.T) {
 			t.Errorf("TileUpdate top item = %d, want remains %d", last, corpseID)
 		}
 	}
-	if len(corpses) != 1 || len(corpses[0].Loot) != 1 || corpses[0].Loot[0].GetItemId() != coinID ||
-		corpses[0].Loot[0].GetCount() < 1 || corpses[0].Loot[0].GetCount() > 8 {
+	if len(corpses) != 1 || len(corpses[0].Loot()) != 1 || corpses[0].Loot()[0].GetItemId() != coinID ||
+		corpses[0].Loot()[0].GetCount() < 1 || corpses[0].Loot()[0].GetCount() > 8 {
 		t.Fatalf("remains at %v: %+v", died, corpses)
 	}
 	var loot, xp, dmg, health, effects int

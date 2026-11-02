@@ -13,6 +13,10 @@ export interface ItemDef {
   blocks: boolean;
   /** Ground terrain cost in percent (100 = normal). */
   speed: number;
+  /** Several units share one stack (MoveItem sends a count). */
+  stackable: boolean;
+  /** Slots of a container item (0 = not a container). */
+  slots: number;
 }
 
 export interface ClientContent {

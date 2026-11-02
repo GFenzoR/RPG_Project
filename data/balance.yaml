@@ -49,6 +49,12 @@ combat:
     balanced: { attack: 1.0, defense: 1.0 }
     defensive: { attack: 0.65, defense: 1.5 }
 
+inventory:
+  start_container: backpack   # equipped in the backpack slot of a character that never played
+  max_open_containers: 16     # container windows a player can have open at once
+  use_cooldown_ms: 1000       # between two uses of a consumable
+  reach: 1                    # tiles (Chebyshev, same floor) to take, drop, open or use on the ground
+
 death:
   xp_loss_pct: 10
   skill_loss_pct: 10

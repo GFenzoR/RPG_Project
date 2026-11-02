@@ -64,6 +64,15 @@ type Player struct {
 	shieldRound game.Tick
 	shieldTries int
 	regen       game.EventID
+
+	// Items (T1.8): equipment by pb.EquipmentSlot, the armor it adds up to, the open
+	// container windows (oldest first), the last window id and the first tick a
+	// consumable can be used again.
+	equip         [equipSlots]*Item
+	armor         int
+	open          []openContainer
+	nextContainer uint32
+	nextUse       game.Tick
 }
 
 // Health returns the player's current and maximum health.
@@ -145,6 +154,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		Mana:        p.mana,
 		Pos:         p.pos,
 		Skills:      p.skillStates(w.skillIDs),
+		Inventory:   p.inventoryStates(),
 		Final:       final,
 	}
 }
@@ -223,6 +233,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Level, c.Experience, c.Health, c.Mana = s.Level, s.Experience, s.Health, s.Mana
 		c.Pos, c.HasPos = s.Pos, true
 		c.Skills = s.Skills
+		c.Inventory, c.InventoryLoaded = s.Inventory, true
 		seq = s.Seq
 	}
 
@@ -252,6 +263,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.mana = min(max(c.Mana, 0), p.maxMana)
 	p.pos = w.placement(c)
 	w.loadSkills(p, c.Skills)
+	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
 	w.byClient[client] = p
@@ -265,7 +277,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	}}})
 	w.sendFullView(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Inventory{Inventory: &pb.Inventory{}}})
+	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.appearToObservers(p)
 
@@ -279,6 +291,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 func (w *World) state(p *Player, c Character) Character {
 	c.Level, c.Experience, c.Health, c.Mana = p.level, p.experience, p.health, p.mana
 	c.Skills = p.skillStates(w.skillIDs)
+	c.Inventory, c.InventoryLoaded = p.inventoryStates(), true
 	c.Pos, c.HasPos = p.pos, true
 	return c
 }
@@ -309,6 +322,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.players = append(w.players[:i], w.players[i+1:]...)
 	ctx.Sched.Cancel(p.autosave)
 	ctx.Sched.Cancel(p.regen)
+	w.forgetContainers(p)
 	for _, m := range w.monsters {
 		if m.target == p {
 			m.target = nil // do not keep the gone player alive from a sleeping monster
@@ -435,7 +449,7 @@ func (w *World) stats(p *Player) *pb.PlayerStats {
 		Level:        uint32(p.level),
 		Experience:   uint64(max(p.experience, 0)),
 		LevelPercent: uint32(w.cfg.Balance.Experience.LevelPercent(p.level, p.experience)),
-		Capacity:     uint32(max(p.capacity, 0)), // items arrive in T1.8: all capacity is free
+		Capacity:     uint32(max(p.capacity-p.carried(), 0)), // free capacity, grams
 		MaxCapacity:  uint32(max(p.capacity, 0)),
 		Speed:        uint32(p.speed),
 	}
