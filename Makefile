@@ -118,8 +118,11 @@ fmt: ## Format Go and TS code
 ## ---- running -------------------------------------------------------------
 
 .PHONY: dev
-dev: db-up ## Postgres + server + client + editor in dev mode
-	@echo "[dev] server (T1.4) and client (T1.5) pending; starting the map editor on http://localhost:5174"
+dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + map editor in dev mode
+	@echo "[dev] game server on http://localhost:8080 (ws /ws), map editor on http://localhost:5174; client arrives in T1.5"
+	@trap 'kill 0' EXIT; \
+	(cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
+		go run ./cmd/gameserver -ws-origins "localhost:5173,localhost:4173") & \
 	$(MAKE) editor
 
 .PHONY: editor
@@ -131,8 +134,12 @@ e2e: ## Playwright: editor E2E now (client login arrives in T1.5); screenshots i
 	pnpm --filter @rpg/editor e2e
 
 .PHONY: bots
-bots: ## Load test with N bots (make bots N=100)
-	cd tools/bots && go run ./cmd/bots -n $(or $(N),10)
+bots: ## Bots that enter and walk against a running server (make bots N=100 DURATION=60s URL=... PREFIX=load)
+	cd tools/bots && go run ./cmd/bots -n $(or $(N),10) -duration $(or $(DURATION),30s) -url $(or $(URL),http://localhost:8080) -prefix $(or $(PREFIX),load)
+
+.PHONY: bench-tick
+bench-tick: ## Tick benchmarks: empty loop and N players walking (internal/game, internal/session)
+	cd server && go test -run '^$$' -bench . -benchmem ./internal/game/ ./internal/session/
 
 ## ---- database ------------------------------------------------------------
 

@@ -274,7 +274,7 @@ func TestSaverRetriesAndAcks(t *testing.T) {
 	go func() {
 		for range 200 {
 			clk.Advance(time.Second)
-			time.Sleep(time.Millisecond)
+			<-wall.After(time.Millisecond)
 		}
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -305,3 +305,5 @@ func TestSaverStopDeadlineAbandonsRetries(t *testing.T) {
 		t.Fatalf("Stop = %v", err)
 	}
 }
+
+var wall clock.Clock = clock.Real{}

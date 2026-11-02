@@ -68,7 +68,12 @@ func newStack(t *testing.T, mutate func(*Config)) *stack {
 		Balance: bal,
 		Vocations: content.Vocations{"guardian": {ID: "guardian",
 			Start: content.VocationStats{Health: 145, Mana: 20, Capacity: 1000, Speed: 1000}}},
-		Save: func(snap session.Snapshot) bool { s.mu.Lock(); s.saves = append(s.saves, snap); s.mu.Unlock(); return true },
+		Save: func(snap session.Snapshot) bool {
+			s.mu.Lock()
+			s.saves = append(s.saves, snap)
+			s.mu.Unlock()
+			return true
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +123,7 @@ func (s *stack) dial() *client {
 	s.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	ws, _, err := websocket.Dial(ctx, s.url, nil)
+	ws, _, err := websocket.Dial(ctx, s.url, nil) //nolint:bodyclose // websocket.Dial closes the response body itself
 	if err != nil {
 		s.t.Fatal(err)
 	}
@@ -239,12 +244,12 @@ func TestHandshakeAndWalk(t *testing.T) {
 
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := wall.Now().Add(5 * time.Second)
 	for !cond() {
-		if time.Now().After(deadline) {
+		if wall.Now().After(deadline) {
 			t.Fatal("condition not met in 5 s")
 		}
-		time.Sleep(5 * time.Millisecond)
+		<-wall.After(5 * time.Millisecond)
 	}
 }
 
@@ -428,3 +433,4 @@ func TestVersions(t *testing.T) {
 }
 
 var _ = errors.New
+var wall clock.Clock = clock.Real{}
