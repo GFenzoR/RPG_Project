@@ -55,7 +55,7 @@ test-go:
 
 .PHONY: test-ts
 test-ts:
-	pnpm -r run test
+	pnpm test
 
 .PHONY: lint
 lint: lint-go lint-ts validate ## golangci-lint + eslint/prettier/tsc + content validation
