@@ -10,7 +10,7 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "pnpm -r --parallel run typecheck",
-    "test": "pnpm -r run test"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

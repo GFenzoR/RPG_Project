@@ -1,0 +1,16 @@
+# Harbour decoration (Isla del Puerto). Fixed in place: not pickupable.
+- id: mooring_post
+  kind: decoration
+  sprite: decor/mooring_post
+  name: item.mooring_post.name
+  pickupable: false
+  blocks_movement: true
+
+- id: cargo_crate
+  kind: decoration
+  sprite: decor/cargo_crate
+  name: item.cargo_crate.name
+  description: item.cargo_crate.desc
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true

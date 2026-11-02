@@ -1,0 +1,6 @@
+format: 1
+islands:
+  - id: testisle
+    rect: { x: 1024, y: 1024, w: 64, h: 64 }
+    level_hint: [1, 8]
+boat_routes: []

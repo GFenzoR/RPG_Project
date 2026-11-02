@@ -1,0 +1,77 @@
+# Sprite manifest: where the pixels of each sprite path used in data/ come from.
+# How to integrate a vendor pack: assets/README.md. Built by `make sprites` (tools/spritepack).
+#
+# Keys are the `sprite:` values of data/ (paths without extension). Each entry has exactly one of:
+#   placeholder: { label: IS, color: "#rrggbb", size: [32, 32] }   all fields optional
+#   source: vendor/<pack>/<file>.png   + optional  tile: [col, row]  (32 px grid)
+#                                      or          rect: [x, y, w, h] (pixels, multiples of 32)
+# A file at assets/sprites/<path>.png (original art) wins over nothing: it must NOT also be
+# listed here. Sprites used in data/ with no entry get an automatic placeholder (warning).
+#
+# Everything below is a placeholder until the user's packs land in assets/vendor/ (T0.5).
+sprites:
+  # Ground: plain colour, no label, so map renders stay readable.
+  ground/grass: { placeholder: { label: "", color: "#4f8a3c" } }
+  ground/sand: { placeholder: { label: "", color: "#d8c27a" } }
+  ground/dirt: { placeholder: { label: "", color: "#7a5a3a" } }
+  ground/stone_floor: { placeholder: { label: "", color: "#8a8a86" } }
+  ground/water_shallow: { placeholder: { label: "", color: "#3f7fb5" } }
+  ground/wet_sand: { placeholder: { label: "", color: "#a8935a" } }
+  ground/dock_planks: { placeholder: { label: "", color: "#7b5b3c" } }
+  ground/wooden_floor: { placeholder: { label: "", color: "#9c7650" } }
+
+  # Items
+  armor/patched_tunic: { placeholder: { label: PT, color: "#8c6d4f" } }
+  shields/plank_shield: { placeholder: { label: PS, color: "#9a7444" } }
+  currency/copper_coin: { placeholder: { label: CC, color: "#c07a3a" } }
+  materials/wolf_pelt: { placeholder: { label: WP, color: "#8e8478" } }
+  food/raw_fish: { placeholder: { label: RF, color: "#7fb0b8" } }
+  tools/fishing_rod: { placeholder: { label: FR, color: "#6d7f4a" } }
+  tools/rope: { placeholder: { label: RO, color: "#b49a64" } }
+  weapons/iron_sword: { placeholder: { label: IS, color: "#7d8794" } }
+  weapons/hatchet: { placeholder: { label: HA, color: "#6f7a86" } }
+  weapons/driftwood_club: { placeholder: { label: DC, color: "#8a7458" } }
+
+  # Items: Isla del Puerto
+  weapons/rusty_cutlass: { placeholder: { label: RC, color: "#8a6a52" } }
+  weapons/boarding_saber: { placeholder: { label: BS, color: "#9aa3ad" } }
+  weapons/bearded_axe: { placeholder: { label: BA, color: "#707b88" } }
+  weapons/belaying_pin: { placeholder: { label: BP, color: "#a07a50" } }
+  weapons/spiked_cudgel: { placeholder: { label: SK, color: "#6e5a44" } }
+  weapons/coral_wand: { placeholder: { label: CW, color: "#e4d8cc" } }
+  armor/sailcloth_cap: { placeholder: { label: SC, color: "#c9bfa6" } }
+  armor/leather_jerkin: { placeholder: { label: LJ, color: "#8a5a32" } }
+  armor/canvas_trousers: { placeholder: { label: CT, color: "#b2a684" } }
+  armor/tarred_boots: { placeholder: { label: TB, color: "#3a3430" } }
+  shields/barrel_lid_shield: { placeholder: { label: BL, color: "#8e6a40" } }
+  shields/riveted_round_shield: { placeholder: { label: RR, color: "#7e8690" } }
+  tools/pickaxe: { placeholder: { label: PA, color: "#6a6e74" } }
+  tools/shovel: { placeholder: { label: SH, color: "#7a7060" } }
+  food/ship_biscuit: { placeholder: { label: SB, color: "#d2b67c" } }
+  food/boar_meat: { placeholder: { label: BM, color: "#a8483c" } }
+  food/seaweed_poultice: { placeholder: { label: SP, color: "#4c7a48" } }
+  materials/gull_feather: { placeholder: { label: GF, color: "#e8e8e2" } }
+  materials/crab_claw: { placeholder: { label: CL, color: "#c4553c" } }
+  materials/bat_wing: { placeholder: { label: BW, color: "#3c3442" } }
+  materials/boar_tusk: { placeholder: { label: BT, color: "#e6dcc0" } }
+  materials/spider_silk: { placeholder: { label: SS, color: "#b8c8a8" } }
+  materials/beetle_carapace: { placeholder: { label: BC, color: "#3e5248" } }
+  materials/iron_ore: { placeholder: { label: IO, color: "#8a4e3a" } }
+  materials/tarnished_locket: { placeholder: { label: TL, color: "#7c7448" } }
+  decor/mooring_post: { placeholder: { label: MP, color: "#5a4632" } }
+  decor/cargo_crate: { placeholder: { label: CR, color: "#9a7a4e" } }
+
+  # Creatures
+  creatures/bilge_rat: { placeholder: { label: BR, color: "#5e534c" } }
+  creatures/tide_crab: { placeholder: { label: TC, color: "#c4553c" } }
+  creatures/wolf: { placeholder: { label: WO, color: "#5c5f66" } }
+  creatures/thieving_gull: { placeholder: { label: TG, color: "#d8d8d0" } }
+  creatures/gloom_bat: { placeholder: { label: GB, color: "#3a3046" } }
+  creatures/bristleback_boar: { placeholder: { label: BB, color: "#6a4e3a" } }
+  creatures/moss_spider: { placeholder: { label: MS, color: "#4e6a3a" } }
+  creatures/wreck_looter: { placeholder: { label: WL, color: "#8a6a4a" } }
+  creatures/ore_beetle: { placeholder: { label: OB, color: "#5a3e34" } }
+  creatures/drowned_miner: { placeholder: { label: DM, color: "#4a6a6e" } }
+
+  # NPCs
+  npcs/sailor_old: { placeholder: { label: SO, color: "#2f5d8a" } }

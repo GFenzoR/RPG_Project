@@ -4,7 +4,9 @@
 CLI para que humanos e IA editen mapas sin abrir el editor. Toda salida es JSON por stdout
 para que sea fácil de encadenar. Comandos mínimos:
 ```
-mapcli info <isla>                         resumen: tamaño, pisos, spawns, NPCs, zonas
+mapcli info [isla]                         resumen: tamaño, pisos, spawns, NPCs, zonas
+mapcli fmt [isla] [--check]                reescribe chunks y YAML en formato canónico
+mapcli view <isla> --floor 7 --area x,y,w,h [--format text]   vista ASCII (máx. 64x64)
 mapcli render <isla> --floor 7 --area x,y,w,h --out shot.png   imagen para revisar con Read
 mapcli paint <isla> --floor 7 --rect x,y,w,h --ground grass
 mapcli place <isla> --pos x,y,z --item oak_tree
@@ -12,10 +14,12 @@ mapcli spawn add <isla> --pos x,y,z --monster wolf --count 3 --radius 4 --respaw
 mapcli zone add <isla> --rect x,y,w,h --floor 7 --type protection
 mapcli npc place <isla> --pos x,y,z --npc harbor_master
 mapcli generate <isla> --recipe island --seed 42 --size 128   generación procedural base
-mapcli validate [isla]                     mismo validador que el editor y la CI
+mapcli validate [isla] [--format text]     mismo validador que el editor y la CI
 mapcli patch create|apply|diff             trabajar con map patches
 mapcli ops apply ops.json                  aplica una lista de operaciones en lote
 ```
+Hoy existen `info`, `fmt`, `validate` y `view` (T0.4); el resto llega en T1.15.
+Se ejecuta con `node tools/mapcli/src/cli.ts <comando>` desde la raíz (`--root` para otra).
 `mapcli render` es clave para la IA: después de editar, renderiza el área y revisa la
 imagen con la herramienta Read.
 
@@ -31,3 +35,6 @@ pruebas de carga (`make bots N=200`) y deben reportar latencia p50/p95/p99 y des
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera
 placeholders (cuadros de color con la sigla del item) cuando falta un sprite.
+Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
+`assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
+terceros: `assets/README.md`.

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/map-schemas/zones.schema.json",
+  "title": "Zones (world/islands/<id>/zones.yaml)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "type", "floors", "rects"],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "type": { "enum": ["protection", "no_logout", "pvp", "no_pvp", "community_plot"] },
+      "floors": { "$ref": "common.schema.json#/$defs/floors" },
+      "rects": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "$ref": "common.schema.json#/$defs/rect" }
+      },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

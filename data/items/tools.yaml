@@ -16,3 +16,23 @@
   tradeable: true
   tool: { use: rope }
   value: 50
+
+- id: pickaxe
+  kind: tool
+  sprite: tools/pickaxe
+  name: item.pickaxe.name
+  description: item.pickaxe.desc
+  weight: 4500
+  tradeable: true
+  tool: { use: mining }
+  value: 120
+
+- id: shovel
+  kind: tool
+  sprite: tools/shovel
+  name: item.shovel.name
+  description: item.shovel.desc
+  weight: 3000
+  tradeable: true
+  tool: { use: shovel }
+  value: 40

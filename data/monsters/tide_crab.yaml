@@ -2,17 +2,18 @@ id: tide_crab
 name: monster.tide_crab.name
 sprite: creatures/tide_crab
 health: 40
-experience: 22
+experience: 34
 speed: 150
-armor: 6
+armor: 5
 defense: 8
 behavior:
   aggressive: false
   target_distance: 1
 attacks:
-  - { type: melee, min: 0, max: 8, interval_ms: 2000 }
+  - { type: melee, min: 0, max: 18, interval_ms: 2000 }
 resistances: { physical: 10, energy: -15, ice: 10 }
 loot:
   - { item: raw_fish, chance: 0.3, count: [1, 2] }
-  - { item: copper_coin, chance: 0.5, count: [1, 5] }
+  - { item: crab_claw, chance: 0.2 }
+  - { item: copper_coin, chance: 0.5, count: [1, 8] }
 tags: [shore, puerto]

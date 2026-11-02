@@ -1,0 +1,20 @@
+id: bristleback_boar
+name: monster.bristleback_boar.name
+sprite: creatures/bristleback_boar
+health: 64
+experience: 55
+speed: 180
+armor: 4
+defense: 6
+behavior:
+  aggressive: true
+  flee_at_health_pct: 15
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 18, interval_ms: 2000 }
+resistances: { physical: 5, fire: -10 }
+loot:
+  - { item: boar_meat, chance: 0.5, count: [1, 2] }
+  - { item: boar_tusk, chance: 0.15 }
+  - { item: copper_coin, chance: 0.6, count: [2, 10] }
+tags: [beast, forest, puerto]

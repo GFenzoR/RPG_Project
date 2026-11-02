@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/map-schemas/texts.schema.json",
+  "title": "Signs and books placed on the map (world/islands/<id>/texts.yaml)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "pos", "kind", "text"],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "pos": { "$ref": "common.schema.json#/$defs/position" },
+      "kind": { "enum": ["sign", "book"] },
+      "text": { "$ref": "common.schema.json#/$defs/i18nKey" },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

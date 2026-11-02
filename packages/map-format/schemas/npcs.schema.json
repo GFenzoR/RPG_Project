@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/map-schemas/npcs.schema.json",
+  "title": "Placed NPCs (world/islands/<id>/npcs.yaml); each references data/npcs/<npc>.yaml",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["npc", "pos"],
+    "properties": {
+      "npc": { "$ref": "common.schema.json#/$defs/id" },
+      "pos": { "$ref": "common.schema.json#/$defs/position" },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

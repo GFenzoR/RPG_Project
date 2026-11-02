@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/map-schemas/portals.schema.json",
+  "title": "Portals: stairs, ladders, holes, teleports (world/islands/<id>/portals.yaml)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "from", "to", "kind"],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "from": { "$ref": "common.schema.json#/$defs/position" },
+      "to": { "$ref": "common.schema.json#/$defs/position" },
+      "kind": { "enum": ["stairs", "ladder", "hole", "rope_spot", "teleport", "boat"] },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

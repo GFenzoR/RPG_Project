@@ -59,7 +59,7 @@ test-go:
 
 .PHONY: test-ts
 test-ts:
-	pnpm -r run test
+	pnpm test
 
 .PHONY: lint
 lint: lint-go lint-ts validate ## golangci-lint + eslint/prettier/tsc + content validation
@@ -80,13 +80,21 @@ lint-ts:
 # Content tooling runs TypeScript directly (Node strips types; the flag is needed < 22.18).
 CONTENT_CLI := node --experimental-strip-types packages/content-schema/src/cli.ts
 
+MAPCLI := node --experimental-strip-types tools/mapcli/src/cli.ts
+
 .PHONY: validate
-validate: ## Validate data/ YAML and i18n/ against the schemas (maps: T0.4)
+validate: ## Validate data/ and i18n/ against the schemas, then world/ maps (mapcli validate)
 	$(CONTENT_CLI) validate
+	$(MAPCLI) validate --format text
 
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 	$(CONTENT_CLI) gen-ids
+
+# spritepack runs TypeScript directly, like the content tooling.
+.PHONY: sprites
+sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeholders for missing art)
+	node --experimental-strip-types tools/spritepack/src/cli.ts build $(if $(STRICT),--strict)
 
 .PHONY: fmt
 fmt: ## Format Go and TS code

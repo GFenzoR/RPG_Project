@@ -1,0 +1,4 @@
+- id: testisle_temple_sign
+  kind: sign
+  pos: { x: 1056, y: 1060, z: 7 }
+  text: text.testisle.temple_sign
