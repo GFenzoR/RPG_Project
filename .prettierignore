@@ -9,6 +9,7 @@ dist/
 build/
 packages/protocol/src/gen/
 world/
+packages/map-format/testdata/
 data/
 i18n/
 assets/

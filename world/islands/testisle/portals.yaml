@@ -1,0 +1,9 @@
+- id: testisle_cave_down
+  kind: stairs
+  from: { x: 1068, y: 1056, z: 7 }
+  to: { x: 1069, y: 1056, z: 8 }
+
+- id: testisle_cave_up
+  kind: stairs
+  from: { x: 1068, y: 1056, z: 8 }
+  to: { x: 1067, y: 1056, z: 7 }
