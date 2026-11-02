@@ -59,7 +59,7 @@ func (w *World) walkPath(p *Player, steps []pb.Direction) {
 		return
 	}
 	if len(steps) > w.mv.MaxPathTiles {
-		w.reject(p, 0)
+		w.reject(p, pb.Direction_DIRECTION_UNSPECIFIED)
 		return
 	}
 	dest := p.pos
@@ -67,13 +67,13 @@ func (w *World) walkPath(p *Player, steps []pb.Direction) {
 		d, ok := dirFromMsg(s)
 		if !ok {
 			p.stopWalk()
-			w.reject(p, 0)
+			w.reject(p, pb.Direction_DIRECTION_UNSPECIFIED)
 			return
 		}
 		next, ok := dest.Step(d)
 		if !ok {
 			p.stopWalk()
-			w.reject(p, d)
+			w.reject(p, dirMsg(d))
 			return
 		}
 		dest = next
@@ -82,11 +82,12 @@ func (w *World) walkPath(p *Player, steps []pb.Direction) {
 	p.dest, p.hasDest = dest, true
 }
 
-// reject tells the client its predicted walk failed and where the player really is.
-func (w *World) reject(p *Player, d world.Direction) {
+// reject tells the client its predicted walk failed and where the player really is. d
+// is the refused step, or UNSPECIFIED when the whole request was invalid.
+func (w *World) reject(p *Player, d pb.Direction) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_WalkRejected{WalkRejected: &pb.WalkRejected{
 		Pos: posMsg(p.pos),
-		Dir: dirMsg(d),
+		Dir: d,
 	}}})
 }
 
@@ -140,7 +141,7 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	to, ok := p.pos.Step(d)
 	if !ok || !w.m.Walkable(to) {
 		p.stopWalk()
-		w.reject(p, d)
+		w.reject(p, dirMsg(d))
 		return
 	}
 	if w.creatureAt(to) != nil {
@@ -149,7 +150,7 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		}
 		if !p.hasDest || !w.reroute(p) {
 			p.stopWalk()
-			w.reject(p, d)
+			w.reject(p, dirMsg(d))
 			return
 		}
 		d = p.queue[p.qhead]
@@ -247,8 +248,9 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	}
 }
 
-// Teleport moves p anywhere (another floor included): observers of the old place see it
-// disappear, those of the new place see it appear, and p gets a FullMapView.
+// Teleport moves p anywhere (another floor included). Loop goroutine only. It does not
+// check the destination: callers (stairs, spells, GM commands) must pass a walkable,
+// free tile.
 func (w *World) Teleport(p *Player, to world.Pos) {
 	if w.byClient[p.client] != p {
 		return

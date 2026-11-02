@@ -170,3 +170,10 @@ func (s *Store) StatementTimeout(ctx context.Context) (string, error) {
 	}
 	return v, nil
 }
+
+// Permanent reports whether err is a database error that retrying the same statement
+// cannot fix: invalid data (SQLSTATE class 22) or a violated constraint (class 23).
+func Permanent(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && len(pgErr.Code) == 5 && (pgErr.Code[:2] == "22" || pgErr.Code[:2] == "23")
+}

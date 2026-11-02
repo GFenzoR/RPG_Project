@@ -178,7 +178,7 @@ func TestWalkPathLimitsAndStop(t *testing.T) {
 	h.input(cl, walkPath(long...))
 	h.sim.RunTicks(20)
 	evs := cl.take()
-	if len(moves(evs)) != 0 || len(find(evs, (*pb.ServerMessage).GetWalkRejected)) != 1 {
+	if rej := find(evs, (*pb.ServerMessage).GetWalkRejected); len(moves(evs)) != 0 || len(rej) != 1 || rej[0].GetDir() != pb.Direction_DIRECTION_UNSPECIFIED {
 		t.Fatalf("101-step path: %v", kinds(evs))
 	}
 	h.input(cl, walkPath(E, E, pb.Direction(99)))

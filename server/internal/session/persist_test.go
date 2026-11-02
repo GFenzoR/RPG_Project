@@ -3,6 +3,7 @@ package session_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -323,3 +324,78 @@ func TestSaverStopDeadlineAbandonsRetries(t *testing.T) {
 }
 
 var wall clock.Clock = clock.Real{}
+
+// TestAckDuringLoginKeepsUnsaved is the race of a quick re-login: the gateway reads the
+// row before the final save commits, and the save's ack reaches the loop before the
+// Join. LoginStarted (enqueued before the read) keeps the snapshot for that Join.
+func TestAckDuringLoginKeepsUnsaved(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32))
+	a, p := h.join("Ana", at(5, 5))
+	h.input(a, walk(E))
+	h.sim.RunTicks(10)
+	h.input(a, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
+	h.sim.Step()
+	final := h.saves[len(h.saves)-1]
+	stale := session.Character{ID: p.CharacterID(), Name: "Ana", Vocation: "guardian", Level: 1, Health: 145, HasPos: true, Pos: pos(5, 5)}
+
+	h.sim.Command(h.w.LoginStarted(stale.ID))              // gateway, before reading the row
+	h.sim.Command(h.w.Saved(final.CharacterID, final.Seq)) // the save commits and acks
+	h.sim.Step()
+	_, again := h.joinChar(stale) // Join with the row read before the commit
+	if again.Pos() != pos(6, 5) {
+		t.Fatalf("relogin at %v, want the snapshot's 6,5", again.Pos())
+	}
+
+	// An aborted login releases the hold: the next ack forgets the snapshot.
+	h.sim.Command(h.w.Leave(lookup(h, again)))
+	h.sim.Step()
+	final = h.saves[len(h.saves)-1]
+	h.sim.Command(h.w.LoginStarted(stale.ID))
+	h.sim.Command(h.w.LoginAborted(stale.ID))
+	h.sim.Command(h.w.Saved(final.CharacterID, final.Seq))
+	h.sim.Step()
+	_, third := h.joinChar(stale)
+	if third.Pos() != pos(5, 5) {
+		t.Fatalf("after abort and ack at %v, want the database's 5,5", third.Pos())
+	}
+}
+
+func lookup(h *harness, p *session.Player) session.Client {
+	for _, c := range h.w.Clients() {
+		if h.w.ClientPlayer(c) == p {
+			return c
+		}
+	}
+	return nil
+}
+
+func TestSaverDropsPermanentErrors(t *testing.T) {
+	var mu sync.Mutex
+	var written []int64
+	s, _ := session.NewSaver(session.SaverConfig{
+		Clock: clock.NewFake(time.Time{}), // never advances: a retry would hang Stop
+		Write: func(_ context.Context, snap session.Snapshot) error {
+			if snap.CharacterID == 1 {
+				return fmt.Errorf("%w: check violation", session.ErrPermanent)
+			}
+			mu.Lock()
+			written = append(written, snap.CharacterID)
+			mu.Unlock()
+			return nil
+		},
+	})
+	s.Start()
+	s.Submit(session.Snapshot{CharacterID: 1})
+	s.Submit(session.Snapshot{CharacterID: 2})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Stop(ctx); err != nil { // idempotent
+		t.Fatal(err)
+	}
+	if len(written) != 1 || written[0] != 2 {
+		t.Fatalf("written %v", written)
+	}
+}

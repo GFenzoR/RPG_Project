@@ -14,6 +14,11 @@ import (
 // snapshot is dropped instead of retried.
 var ErrGone = errors.New("session: character no longer exists")
 
+// ErrPermanent wraps a SaverConfig.Write error that retrying cannot fix (the database
+// rejected the values): the snapshot is dropped and logged so it does not block the
+// queue.
+var ErrPermanent = errors.New("session: snapshot rejected")
+
 // SaverConfig configures a Saver.
 type SaverConfig struct {
 	// Write stores one snapshot. Required.
@@ -32,12 +37,13 @@ type SaverConfig struct {
 // order, outside the loop. A failed write is retried with backoff, so a database outage
 // delays saves instead of losing them.
 type Saver struct {
-	cfg  SaverConfig
-	mu   sync.Mutex
-	ch   chan Snapshot
-	shut bool
-	done chan struct{}
-	stop chan struct{} // closed when Stop's deadline passes: abandon retries
+	cfg      SaverConfig
+	mu       sync.Mutex
+	ch       chan Snapshot
+	shut     bool
+	done     chan struct{}
+	stop     chan struct{} // closed when Stop's deadline passes: abandon retries
+	stopOnce sync.Once
 }
 
 // NewSaver builds a Saver; call Start to run it.
@@ -90,7 +96,7 @@ func (s *Saver) Stop(ctx context.Context) error {
 	case <-s.done:
 		return nil
 	case <-ctx.Done():
-		close(s.stop)
+		s.stopOnce.Do(func() { close(s.stop) })
 		<-s.done
 		return ctx.Err()
 	}
@@ -117,6 +123,10 @@ func (s *Saver) write(snap Snapshot) {
 			s.cfg.Logger.Warn("session: save dropped, character gone", "character", snap.CharacterID)
 			s.saved(snap)
 			return
+		case errors.Is(err, ErrPermanent):
+			s.cfg.Logger.Error("session: save dropped, rejected by the database", "character", snap.CharacterID,
+				"final", snap.Final, "err", err)
+			return // not acked: the World keeps a final snapshot for the next login
 		}
 		s.cfg.Logger.Error("session: save failed, retrying", "character", snap.CharacterID,
 			"attempt", attempt, "retry_in", backoff.String(), "err", err)

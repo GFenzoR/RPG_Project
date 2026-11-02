@@ -174,21 +174,30 @@ func (a *App) Run(ctx context.Context) error {
 	if a.World == nil {
 		return runErr
 	}
-	// The loop has stopped: this goroutine now owns the world.
-	sctx, cancel := context.WithTimeout(context.Background(), a.cfg.ShutdownTimeout)
-	defer cancel()
+	// The loop has stopped: this goroutine now owns the world. Each stage gets its own
+	// deadline so a slow database cannot eat the others' time.
 	online := a.World.Online()
-	for _, s := range a.World.SaveAll() { // the saver's queue was full: write them here
-		if err := a.writeSnapshot(sctx, s); err != nil {
-			a.log.Error("final save failed", "character", s.CharacterID, "err", err)
+	pending := a.World.SaveAll()
+	stage := func(name string, fn func(context.Context) error) {
+		sctx, cancel := context.WithTimeout(context.Background(), a.cfg.ShutdownTimeout)
+		defer cancel()
+		if err := fn(sctx); err != nil {
+			a.log.Error("shutdown: "+name, "err", err)
 		}
 	}
-	if err := a.Gateway.Shutdown(sctx); err != nil {
-		a.log.Warn("closing connections", "err", err)
-	}
-	if err := a.saver.Stop(sctx); err != nil {
-		a.log.Error("persistence did not drain", "err", err)
-	}
+	stage("closing connections", a.Gateway.Shutdown)
+	// Drain the saver first: its queue holds older snapshots of the same characters, and
+	// writing the pending (newer) ones concurrently could let an old one land last.
+	stage("persistence did not drain", a.saver.Stop)
+	stage("final saves", func(ctx context.Context) error {
+		var errs []error
+		for _, s := range pending { // the saver's queue was full when SaveAll ran
+			if err := a.writeSnapshot(ctx, s); err != nil {
+				errs = append(errs, fmt.Errorf("character %d: %w", s.CharacterID, err))
+			}
+		}
+		return errors.Join(errs...)
+	})
 	a.log.Info("players saved at shutdown", "online", online, "ticks", uint64(a.Loop.Tick()))
 	return runErr
 }
@@ -205,8 +214,11 @@ func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
 		Z:          int(s.Pos.Z),
 		SavedAt:    a.cfg.Clock.Now(),
 	})
-	if errors.Is(err, store.ErrNotFound) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		return session.ErrGone
+	case store.Permanent(err):
+		return fmt.Errorf("%w: %w", session.ErrPermanent, err)
 	}
 	return err
 }

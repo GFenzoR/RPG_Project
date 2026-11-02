@@ -113,6 +113,10 @@ type World struct {
 	// unsaved holds the final snapshot of characters that left until the database
 	// acknowledges it: a quick re-login must not load an older row.
 	unsaved map[int64]Snapshot
+	// loading counts logins whose database read is in flight (LoginStarted, not yet
+	// Join or LoginAborted). While a character has one, Saved keeps its unsaved
+	// snapshot: the read may have seen the row from before that save.
+	loading map[int64]int
 	// retry holds snapshots that Config.Save could not queue yet.
 	retry []Snapshot
 	// slow collects players whose Send failed during flush.
@@ -163,6 +167,7 @@ func New(cfg Config) (*World, error) {
 		byChar:   map[int64]*Player{},
 		sectors:  map[uint64][]*Player{},
 		unsaved:  map[int64]Snapshot{},
+		loading:  map[int64]int{},
 		pf:       world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
 	}
 	for _, id := range cfg.Balance.SkillIDs() {

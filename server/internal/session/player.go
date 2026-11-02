@@ -135,16 +135,39 @@ func (w *World) Leave(client Client) game.Command {
 }
 
 // Saved returns the command the persistence goroutine enqueues after writing a
-// snapshot: the final snapshot of a character is forgotten once it is in the database.
+// snapshot: the final snapshot of a character is forgotten once it is in the database,
+// unless a login of that character is reading the database right now.
 func (w *World) Saved(characterID int64, seq uint64) game.Command {
 	return game.CommandFunc(func(*game.TickContext) {
-		if s, ok := w.unsaved[characterID]; ok && s.Seq == seq {
+		if s, ok := w.unsaved[characterID]; ok && s.Seq == seq && w.loading[characterID] == 0 {
 			delete(w.unsaved, characterID)
 		}
 	})
 }
 
+// LoginStarted returns the command the gateway enqueues before it reads a character
+// from the database. It must be followed by Join or LoginAborted for the same
+// character. Because the queue is FIFO, an ack of a save that the read may have missed
+// runs after it and keeps the unsaved snapshot for the Join.
+func (w *World) LoginStarted(characterID int64) game.Command {
+	return game.CommandFunc(func(*game.TickContext) { w.loading[characterID]++ })
+}
+
+// LoginAborted returns the command that ends a LoginStarted whose Join never comes.
+func (w *World) LoginAborted(characterID int64) game.Command {
+	return game.CommandFunc(func(*game.TickContext) { w.loginDone(characterID) })
+}
+
+func (w *World) loginDone(characterID int64) {
+	if w.loading[characterID] <= 1 {
+		delete(w.loading, characterID)
+	} else {
+		w.loading[characterID]--
+	}
+}
+
 func (w *World) join(ctx *game.TickContext, c Character, client Client) {
+	w.loginDone(c.ID)
 	if old := w.byClient[client]; old != nil {
 		return // one character per connection
 	}
@@ -159,7 +182,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		// Logged in again while online: continue from the in-memory state.
 		c = old.state(c)
 		w.remove(ctx, old, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_IN_ELSEWHERE, false)
-		seq = old.saveSeq // after remove's final snapshot: later seqs must be greater
+		seq = old.saveSeq       // after remove's final snapshot: later seqs must be greater
 		delete(w.unsaved, c.ID) // the new player carries the state; it saves it later
 	} else if s, ok := w.unsaved[c.ID]; ok {
 		// Left recently and the database may not have the final save yet.
@@ -287,6 +310,9 @@ func (w *World) SaveAll() []Snapshot {
 	}
 	return pending
 }
+
+// ClientPlayer returns client's player, or nil. Loop goroutine only.
+func (w *World) ClientPlayer(c Client) *Player { return w.byClient[c] }
 
 // Clients returns the connection of every online player (for shutdown).
 func (w *World) Clients() []Client {

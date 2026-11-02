@@ -38,6 +38,8 @@ const (
 	// DefaultOutQueue bounds the batches waiting for a connection: 128 ticks ≈ 6.4 s.
 	DefaultOutQueue     = 128
 	DefaultWriteTimeout = 10 * time.Second
+	// dbTimeout bounds each database call of the handshake.
+	dbTimeout = 5 * time.Second
 )
 
 // Accounts redeems play tokens. *auth.Service implements it.
@@ -246,6 +248,7 @@ func (c *conn) run(ctx context.Context) {
 	}
 	if err := g.cfg.Loop.Enqueue(g.cfg.World.Join(char, c)); err != nil {
 		g.log.Warn("gateway: loop queue full, login refused", "character", char.ID)
+		c.abortLogin(char.ID)
 		_ = writeDisconnect(ctx, c.ws, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, g.cfg.WriteTimeout)
 		_ = c.ws.Close(websocket.StatusTryAgainLater, "")
 		return
@@ -281,7 +284,9 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 	if v, ok := parseVersion(hello.GetClientVersion()); !ok || !v.compatible(g.minVer) {
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_OUTDATED_CLIENT)
 	}
-	accountID, charID, err := g.cfg.Accounts.RedeemPlayToken(ctx, hello.GetSessionToken())
+	rctx, rcancel := context.WithTimeout(ctx, dbTimeout)
+	accountID, charID, err := g.cfg.Accounts.RedeemPlayToken(rctx, hello.GetSessionToken())
+	rcancel()
 	if errors.Is(err, auth.ErrUnauthorized) {
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION)
 	}
@@ -289,10 +294,22 @@ func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 		g.log.Error("gateway: redeem play token", "err", err)
 		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 	}
-	pc, err := g.cfg.Characters.PlayCharacter(ctx, accountID, charID, g.cfg.Clock.Now())
+	// Tell the loop a read is in flight before reading, so the ack of a save this read
+	// may miss cannot drop the snapshot the Join will need (see session.LoginStarted).
+	if err := g.cfg.Loop.Enqueue(g.cfg.World.LoginStarted(charID)); err != nil {
+		g.log.Warn("gateway: loop queue full, login refused", "character", charID)
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
+	}
+	pctx, pcancel := context.WithTimeout(ctx, dbTimeout)
+	pc, err := g.cfg.Characters.PlayCharacter(pctx, accountID, charID, g.cfg.Clock.Now())
+	pcancel()
 	if err != nil {
+		c.abortLogin(charID)
+		if errors.Is(err, store.ErrNotFound) {
+			return refuse(pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION)
+		}
 		g.log.Error("gateway: load character", "character", charID, "err", err)
-		return refuse(pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION)
+		return refuse(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 	}
 	return toCharacter(pc), true
 }
@@ -350,11 +367,16 @@ func (c *conn) reader(ctx context.Context, charID int64) {
 	}
 }
 
+// abortLogin ends a LoginStarted whose Join will not be enqueued.
+func (c *conn) abortLogin(charID int64) { c.mustEnqueue(c.g.cfg.World.LoginAborted(charID)) }
+
 // leave tells the loop the connection is gone. It must not be lost (the player would
 // stay in the world), so a full queue is retried until it has room or the server stops.
-func (c *conn) leave() {
+func (c *conn) leave() { c.mustEnqueue(c.g.cfg.World.Leave(c)) }
+
+// mustEnqueue retries cmd until the queue has room or the server stops.
+func (c *conn) mustEnqueue(cmd game.Command) {
 	g := c.g
-	cmd := g.cfg.World.Leave(c)
 	for {
 		if g.cfg.Loop.Enqueue(cmd) == nil {
 			return

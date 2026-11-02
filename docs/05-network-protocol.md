@@ -47,7 +47,8 @@ Detalles (T1.4, `server/internal/net/gateway`):
   (tabla `sessions`, `kind = 'play'`). Reconectar exige otro `POST /api/play`.
 - **Hello:** debe ser el primer frame y llegar en 10 s; si no, el servidor cierra.
   Primer frame que no es `Hello`, token inválido, vencido o ya usado, o personaje que
-  ya no existe → `Disconnect{INVALID_SESSION}` y cierre.
+  ya no existe → `Disconnect{INVALID_SESSION}` y cierre. Un error de la base durante
+  el handshake → `Disconnect{UNSPECIFIED}` (el token ya se gastó: pedir otro).
 - **Versión:** `client_version` es `MAJOR.MINOR.PATCH` (se ignora un sufijo `-dev` o
   `+build`). Se acepta si tiene la misma versión mayor que la mínima del servidor
   (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
@@ -206,7 +207,8 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   personaje está a mitad de un paso, sale al terminarlo. Mandar `Walk` cada tick no
   acelera nada.
 - `WalkPath` reemplaza la cola. Vacío = `StopWalk`. Más de `max_path_tiles` pasos
-  (`balance.yaml`, 100) o una dirección inválida → `WalkRejected` y nada se encola.
+  (`balance.yaml`, 100) o una dirección inválida → `WalkRejected` con `dir` =
+  `UNSPECIFIED` y nada se encola. En los demás rechazos `dir` es el paso rechazado.
 - Cada paso se valida al ejecutarse: casilla sin suelo, que bloquea o fuera del mundo →
   `WalkRejected{pos, dir}` y se vacía la cola. Si la bloquea **una criatura** durante un
   `WalkPath`, el servidor recalcula con A* hasta el final del camino esquivando
