@@ -4,7 +4,8 @@
 //
 //   GET  /api/bootstrap      world + palette items + texts + base hashes of the chunk files
 //   POST /api/validate       body: WireWorld → ValidateResult (the shared validator, in memory)
-//   POST /api/save           body: SaveRequest → SaveResult, 409 SaveConflictBody, 400 if invalid
+//   POST /api/save           body: SaveRequest → SaveResult, 409 SaveConflictBody, 400 if
+//                            invalid, 500 { error, partial?: SaveResult } if it failed
 //   GET  /atlas/<file>       sprite atlas built from assets/ with tools/spritepack
 // Every /api call must pass refuseRequest (same-origin only, see guard.ts).
 //
@@ -21,7 +22,14 @@ import type { Plugin } from "vite";
 import { fromWire } from "../src/io/wire.ts";
 import type { SaveRequest, WireWorld } from "../src/io/wire.ts";
 import { refuseRequest } from "./guard.ts";
-import { BadRequest, SaveConflict, bootstrap, saveChanges, validateInMemory } from "./store.ts";
+import {
+  BadRequest,
+  PartialSave,
+  SaveConflict,
+  bootstrap,
+  saveChanges,
+  validateInMemory,
+} from "./store.ts";
 
 export function editorRoot(): string {
   return resolve(process.env["EDITOR_ROOT"] ?? fileURLToPath(new URL("../..", import.meta.url)));
@@ -117,6 +125,11 @@ export function editorApi(): Plugin {
         handle().catch((e: unknown) => {
           if (e instanceof SaveConflict) {
             send(res, 409, { error: e.message, conflicts: e.conflicts });
+            return;
+          }
+          if (e instanceof PartialSave) {
+            console.error("[editor]", e);
+            send(res, 500, { error: e.message, partial: e.result });
             return;
           }
           if (e instanceof BadRequest) {
