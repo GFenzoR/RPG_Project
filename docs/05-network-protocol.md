@@ -42,6 +42,57 @@
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
+## API HTTP (cuentas y personajes)
+Implementada en `server/internal/httpapi` (T1.3). JSON en ambos sentidos; los `POST` con
+cuerpo exigen `Content-Type: application/json` (también frena formularios cross-site),
+cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Control: no-store`.
+
+| Método y ruta | Auth | Cuerpo | Respuesta OK |
+|---|---|---|---|
+| `POST /api/auth/register` | — | `{email, password}` | `201 {account_id}` |
+| `POST /api/auth/login` | — | `{email, password}` | `200 {token, expires_at}` + cookie |
+| `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
+| `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
+| `POST /api/characters` | token | `{name, vocation}` | `201 {character: {id, name, vocation, level}}` |
+| `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde |
+
+- **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
+  se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
+  `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
+  `rpg_session` (`HttpOnly`, `SameSite=Strict`, `Secure`, `Path=/api`) que pone el login
+  para el cliente web. Si hay header `Authorization`, la cookie se ignora.
+- **Reglas:** email normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
+  19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
+  ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin
+  distinguir mayúsculas, sin palabras reservadas (`Gm`, `Admin`, `God`…). La vocación debe
+  existir en `data/vocations.yaml`. Máximo 10 personajes por cuenta. El personaje nace en
+  nivel 1 con la vida y el maná iniciales de su vocación y sin posición: el servidor lo
+  ubica en el templo de su ciudad al primer login (T1.4).
+- **Rate limit:** register y login comparten un bucket por IP (10 intentos, luego 1 cada
+  6 s) → `429 rate_limited` con `Retry-After`. Detrás de Caddy, `-trust-proxy` toma la IP
+  del último salto de `X-Forwarded-For`.
+- **Errores:** `{"error": {"code": "<código>"}}`. El cliente traduce el código con la
+  clave i18n `error.<código>`; el servidor nunca manda texto visible.
+
+| Código | HTTP | Cuándo |
+|---|---|---|
+| `bad_request` | 400 | JSON mal formado, campos desconocidos o cuerpo > 4 KiB |
+| `unsupported_media_type` | 415 | Falta `Content-Type: application/json` |
+| `invalid_email` / `invalid_password` | 400 | Registro con email o contraseña inválidos |
+| `email_taken` | 409 | Email ya registrado |
+| `invalid_credentials` | 401 | Email o contraseña incorrectos (no distingue cuál) |
+| `account_disabled` | 403 | Cuenta deshabilitada |
+| `unauthorized` | 401 | Token ausente, vencido o revocado |
+| `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
+| `name_taken` | 409 | Nombre en uso |
+| `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
+| `rate_limited` | 429 | Demasiados intentos de login/registro desde la IP |
+| `not_found` | 404 | Ruta `/api/...` inexistente |
+| `internal` | 500 | Error del servidor (queda en el log) |
+
+`POST /api/play` (paso 3 del handshake, token `kind = 'play'` de 60 s) llega con T1.4.
+OAuth, verificación de email y reset de contraseña llegan con T2.1.
+
 ## Mensajes cliente → servidor (intenciones)
 | Mensaje | Campos |
 |---|---|

@@ -46,7 +46,18 @@ server/
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).
-- Tests de integración con Postgres llevan build tag `integration`.
+- Tests de integración con Postgres llevan build tag `integration` (`make test-integration`,
+  usa `TEST_DATABASE_URL`, por defecto la base `rpg_test`). Cada paquete abre su propio
+  schema con `internal/store/storetest`, así corren en paralelo sin pisarse.
+
+## Base de datos
+- Migraciones goose en `migrations/` (embebidas en el binario; el servidor aplica las
+  pendientes al arrancar). Nueva migración: `make migrate-new NAME=...`. Nunca edites una
+  migración ya mergeada: crea otra.
+- Queries en `queries/*.sql` → `make gen-sqlc` → `internal/store/db` (generado, se
+  commitea). `internal/store` envuelve las queries y traduce errores de Postgres a
+  errores propios (`store.ErrNameTaken`...); los servicios dependen de interfaces para
+  poder testearse sin Postgres (ver `internal/auth/authtest`).
 - Para lógica de juego, prefiere tests de simulación con `internal/sim`: crea un mundo
   pequeño, inyecta comandos, avanza N ticks y verifica el estado.
 - Benchmarks del tick en `internal/game/bench_test.go`; no deben empeorar más de 10%.
