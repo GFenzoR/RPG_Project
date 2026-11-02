@@ -70,3 +70,18 @@ DELETE FROM inventory_items WHERE character_id = sqlc.arg(character_id);
 INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
 VALUES (sqlc.arg(character_id), sqlc.narg(container_id), sqlc.arg(slot), sqlc.arg(item_id), sqlc.arg(count))
 RETURNING id;
+
+-- name: GetCharacterQuestState :many
+-- Quest progress and flags ("storage values"); a missing key is 0.
+SELECT key, value
+FROM quest_state
+WHERE character_id = sqlc.arg(character_id)
+ORDER BY key;
+
+-- name: DeleteCharacterQuestState :exec
+-- A snapshot replaces every storage value in the same transaction as the character row.
+DELETE FROM quest_state WHERE character_id = sqlc.arg(character_id);
+
+-- name: SaveCharacterQuestState :exec
+INSERT INTO quest_state (character_id, key, value)
+SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(keys)::text[]), unnest(sqlc.arg(vals)::bigint[]);

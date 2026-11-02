@@ -273,6 +273,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		if xp := def.Experience * int64(s.amount) / int64(total); xp > 0 {
 			w.gainExperience(p, xp)
 		}
+		w.questKill(p, def.ID)
 	}
 
 	// Remains with the loot, on the tile where it died. Loot beyond the remains'

@@ -154,6 +154,9 @@ type ClientMessage struct {
 	//	*ClientMessage_Ping
 	//	*ClientMessage_Logout
 	//	*ClientMessage_CloseContainer
+	//	*ClientMessage_NpcTalk
+	//	*ClientMessage_ShopBuy
+	//	*ClientMessage_ShopSell
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -385,6 +388,33 @@ func (x *ClientMessage) GetCloseContainer() *CloseContainer {
 	return nil
 }
 
+func (x *ClientMessage) GetNpcTalk() *NpcTalk {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_NpcTalk); ok {
+			return x.NpcTalk
+		}
+	}
+	return nil
+}
+
+func (x *ClientMessage) GetShopBuy() *ShopBuy {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_ShopBuy); ok {
+			return x.ShopBuy
+		}
+	}
+	return nil
+}
+
+func (x *ClientMessage) GetShopSell() *ShopSell {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_ShopSell); ok {
+			return x.ShopSell
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -473,6 +503,18 @@ type ClientMessage_CloseContainer struct {
 	CloseContainer *CloseContainer `protobuf:"bytes,21,opt,name=close_container,json=closeContainer,proto3,oneof"`
 }
 
+type ClientMessage_NpcTalk struct {
+	NpcTalk *NpcTalk `protobuf:"bytes,22,opt,name=npc_talk,json=npcTalk,proto3,oneof"`
+}
+
+type ClientMessage_ShopBuy struct {
+	ShopBuy *ShopBuy `protobuf:"bytes,23,opt,name=shop_buy,json=shopBuy,proto3,oneof"`
+}
+
+type ClientMessage_ShopSell struct {
+	ShopSell *ShopSell `protobuf:"bytes,24,opt,name=shop_sell,json=shopSell,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -514,6 +556,12 @@ func (*ClientMessage_Ping) isClientMessage_Message() {}
 func (*ClientMessage_Logout) isClientMessage_Message() {}
 
 func (*ClientMessage_CloseContainer) isClientMessage_Message() {}
+
+func (*ClientMessage_NpcTalk) isClientMessage_Message() {}
+
+func (*ClientMessage_ShopBuy) isClientMessage_Message() {}
+
+func (*ClientMessage_ShopSell) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -1262,7 +1310,7 @@ func (x *Say) GetText() string {
 }
 
 // DialogChoose picks an option of an open NPC dialog. dialog_id is the session-local
-// id from DialogOpen; option_id is one of its DialogOption ids.
+// id from DialogOpen; option_id is one of its DialogOption ids, or 0 to close the dialog.
 type DialogChoose struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DialogId      uint32                 `protobuf:"varint,1,opt,name=dialog_id,json=dialogId,proto3" json:"dialog_id,omitempty"`
@@ -1646,11 +1694,179 @@ func (x *CloseContainer) GetContainerId() uint32 {
 	return 0
 }
 
+// NpcTalk starts talking to an NPC the client knows (creature id). The server answers
+// with DialogOpen if the NPC is close enough.
+type NpcTalk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CreatureId    uint32                 `protobuf:"varint,1,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NpcTalk) Reset() {
+	*x = NpcTalk{}
+	mi := &file_game_v1_client_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NpcTalk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NpcTalk) ProtoMessage() {}
+
+func (x *NpcTalk) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NpcTalk.ProtoReflect.Descriptor instead.
+func (*NpcTalk) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *NpcTalk) GetCreatureId() uint32 {
+	if x != nil {
+		return x.CreatureId
+	}
+	return 0
+}
+
+// ShopBuy buys count units of an item from the shop opened in dialog dialog_id.
+type ShopBuy struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DialogId      uint32                 `protobuf:"varint,1,opt,name=dialog_id,json=dialogId,proto3" json:"dialog_id,omitempty"`
+	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Count         uint32                 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShopBuy) Reset() {
+	*x = ShopBuy{}
+	mi := &file_game_v1_client_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShopBuy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShopBuy) ProtoMessage() {}
+
+func (x *ShopBuy) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShopBuy.ProtoReflect.Descriptor instead.
+func (*ShopBuy) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ShopBuy) GetDialogId() uint32 {
+	if x != nil {
+		return x.DialogId
+	}
+	return 0
+}
+
+func (x *ShopBuy) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *ShopBuy) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// ShopSell sells count units of an item to the shop opened in dialog dialog_id.
+type ShopSell struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DialogId      uint32                 `protobuf:"varint,1,opt,name=dialog_id,json=dialogId,proto3" json:"dialog_id,omitempty"`
+	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Count         uint32                 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShopSell) Reset() {
+	*x = ShopSell{}
+	mi := &file_game_v1_client_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShopSell) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShopSell) ProtoMessage() {}
+
+func (x *ShopSell) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShopSell.ProtoReflect.Descriptor instead.
+func (*ShopSell) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ShopSell) GetDialogId() uint32 {
+	if x != nil {
+		return x.DialogId
+	}
+	return 0
+}
+
+func (x *ShopSell) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *ShopSell) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
 var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xbc\b\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xcc\t\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
 	"\x04walk\x18\x02 \x01(\v2\r.game.v1.WalkH\x00R\x04walk\x120\n" +
@@ -1676,7 +1892,10 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\ftrade_cancel\x18\x12 \x01(\v2\x14.game.v1.TradeCancelH\x00R\vtradeCancel\x12#\n" +
 	"\x04ping\x18\x13 \x01(\v2\r.game.v1.PingH\x00R\x04ping\x12)\n" +
 	"\x06logout\x18\x14 \x01(\v2\x0f.game.v1.LogoutH\x00R\x06logout\x12B\n" +
-	"\x0fclose_container\x18\x15 \x01(\v2\x17.game.v1.CloseContainerH\x00R\x0ecloseContainerB\t\n" +
+	"\x0fclose_container\x18\x15 \x01(\v2\x17.game.v1.CloseContainerH\x00R\x0ecloseContainer\x12-\n" +
+	"\bnpc_talk\x18\x16 \x01(\v2\x10.game.v1.NpcTalkH\x00R\anpcTalk\x12-\n" +
+	"\bshop_buy\x18\x17 \x01(\v2\x10.game.v1.ShopBuyH\x00R\ashopBuy\x120\n" +
+	"\tshop_sell\x18\x18 \x01(\v2\x11.game.v1.ShopSellH\x00R\bshopSellB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -1750,7 +1969,18 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"clientTime\"\b\n" +
 	"\x06Logout\"3\n" +
 	"\x0eCloseContainer\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId*~\n" +
+	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId\"*\n" +
+	"\aNpcTalk\x12\x1f\n" +
+	"\vcreature_id\x18\x01 \x01(\rR\n" +
+	"creatureId\"U\n" +
+	"\aShopBuy\x12\x1b\n" +
+	"\tdialog_id\x18\x01 \x01(\rR\bdialogId\x12\x17\n" +
+	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\rR\x05count\"V\n" +
+	"\bShopSell\x12\x1b\n" +
+	"\tdialog_id\x18\x01 \x01(\rR\bdialogId\x12\x17\n" +
+	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\rR\x05count*~\n" +
 	"\vFightStance\x12\x1c\n" +
 	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
@@ -1776,7 +2006,7 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_game_v1_client_proto_goTypes = []any{
 	(FightStance)(0),       // 0: game.v1.FightStance
 	(ChatChannel)(0),       // 1: game.v1.ChatChannel
@@ -1802,9 +2032,12 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*Ping)(nil),           // 21: game.v1.Ping
 	(*Logout)(nil),         // 22: game.v1.Logout
 	(*CloseContainer)(nil), // 23: game.v1.CloseContainer
-	(Direction)(0),         // 24: game.v1.Direction
-	(*ActionTarget)(nil),   // 25: game.v1.ActionTarget
-	(*ItemLocation)(nil),   // 26: game.v1.ItemLocation
+	(*NpcTalk)(nil),        // 24: game.v1.NpcTalk
+	(*ShopBuy)(nil),        // 25: game.v1.ShopBuy
+	(*ShopSell)(nil),       // 26: game.v1.ShopSell
+	(Direction)(0),         // 27: game.v1.Direction
+	(*ActionTarget)(nil),   // 28: game.v1.ActionTarget
+	(*ItemLocation)(nil),   // 29: game.v1.ItemLocation
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	3,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -1828,25 +2061,28 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	21, // 18: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
 	22, // 19: game.v1.ClientMessage.logout:type_name -> game.v1.Logout
 	23, // 20: game.v1.ClientMessage.close_container:type_name -> game.v1.CloseContainer
-	24, // 21: game.v1.Walk.dir:type_name -> game.v1.Direction
-	24, // 22: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	24, // 23: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 24: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	25, // 25: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	26, // 26: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	26, // 27: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	25, // 28: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	26, // 29: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	26, // 30: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	26, // 31: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 32: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	26, // 33: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	26, // 34: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	35, // [35:35] is the sub-list for method output_type
-	35, // [35:35] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	24, // 21: game.v1.ClientMessage.npc_talk:type_name -> game.v1.NpcTalk
+	25, // 22: game.v1.ClientMessage.shop_buy:type_name -> game.v1.ShopBuy
+	26, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
+	27, // 24: game.v1.Walk.dir:type_name -> game.v1.Direction
+	27, // 25: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	27, // 26: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 27: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	28, // 28: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	29, // 29: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	29, // 30: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	28, // 31: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	29, // 32: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	29, // 33: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	29, // 34: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 35: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	29, // 36: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	29, // 37: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	38, // [38:38] is the sub-list for method output_type
+	38, // [38:38] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -1877,6 +2113,9 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_Ping)(nil),
 		(*ClientMessage_Logout)(nil),
 		(*ClientMessage_CloseContainer)(nil),
+		(*ClientMessage_NpcTalk)(nil),
+		(*ClientMessage_ShopBuy)(nil),
+		(*ClientMessage_ShopSell)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[8].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),
@@ -1888,7 +2127,7 @@ func file_game_v1_client_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   22,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

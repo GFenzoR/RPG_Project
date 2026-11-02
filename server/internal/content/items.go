@@ -54,6 +54,10 @@ type Item struct {
 		Charges    int    `yaml:"charges"`
 		MagicLevel int    `yaml:"magic_level"`
 	} `yaml:"rune"`
+	// Currency marks money: Worth is the value of one unit in the smallest coin.
+	Currency *struct {
+		Worth int64 `yaml:"worth"`
+	} `yaml:"currency"`
 	Requires struct {
 		Level     int      `yaml:"level"`
 		Vocations []string `yaml:"vocations"`

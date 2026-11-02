@@ -57,9 +57,12 @@
           {
             "itemId": 610,
             "buyPrice": "2",
-            "sellPrice": "1"
+            "sellPrice": "1",
+            "owned": 3
           }
-        ]
+        ],
+        "dialogId": 7,
+        "money": "125"
       }
     },
     {

@@ -325,6 +325,7 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 		Health:     pc.Health,
 		Mana:       pc.Mana,
 		Town:       pc.Town,
+		Storage:    pc.Storage,
 	}
 	for _, s := range pc.Skills {
 		c.Skills = append(c.Skills, session.SkillState{ID: s.ID, Level: s.Level, Tries: s.Tries})

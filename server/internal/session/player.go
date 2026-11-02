@@ -6,6 +6,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -77,6 +78,13 @@ type Player struct {
 	// Magic (T1.9): the first tick each spell, and each spell group, can be cast again.
 	spellReady map[string]game.Tick
 	groupReady map[string]game.Tick
+
+	// NPCs and quests (T1.10): storage values (quest_state), the open dialog, the last
+	// dialog id and whether the inventory changed this tick (has_item steps).
+	storage    *quest.Log
+	dialog     *openDialog
+	nextDialog uint32
+	questDirty bool
 }
 
 // Health returns the player's current and maximum health.
@@ -159,6 +167,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		Pos:         p.pos,
 		Skills:      p.skillStates(w.skillIDs),
 		Inventory:   p.inventoryStates(),
+		Storage:     p.storage.Values(),
 		Final:       final,
 	}
 }
@@ -238,6 +247,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Pos, c.HasPos = s.Pos, true
 		c.Skills = s.Skills
 		c.Inventory, c.InventoryLoaded = s.Inventory, true
+		c.Storage = s.Storage
 		seq = s.Seq
 	}
 
@@ -268,6 +278,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.pos = w.placement(c)
 	w.loadSkills(p, c.Skills)
 	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
+	p.storage = quest.NewLog(c.Storage)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
 	w.byClient[client] = p
@@ -296,6 +307,7 @@ func (w *World) state(p *Player, c Character) Character {
 	c.Level, c.Experience, c.Health, c.Mana = p.level, p.experience, p.health, p.mana
 	c.Skills = p.skillStates(w.skillIDs)
 	c.Inventory, c.InventoryLoaded = p.inventoryStates(), true
+	c.Storage = p.storage.Values()
 	c.Pos, c.HasPos = p.pos, true
 	return c
 }

@@ -33,6 +33,9 @@ message ClientMessage {
     Ping ping = 19;
     Logout logout = 20;
     CloseContainer close_container = 21;
+    NpcTalk npc_talk = 22;
+    ShopBuy shop_buy = 23;
+    ShopSell shop_sell = 24;
   }
 }
 
@@ -137,7 +140,7 @@ message Say {
 }
 
 // DialogChoose picks an option of an open NPC dialog. dialog_id is the session-local
-// id from DialogOpen; option_id is one of its DialogOption ids.
+// id from DialogOpen; option_id is one of its DialogOption ids, or 0 to close the dialog.
 message DialogChoose {
   uint32 dialog_id = 1;
   uint32 option_id = 2;
@@ -175,4 +178,24 @@ message Logout {}
 // server stops sending its updates and answers with ContainerClose.
 message CloseContainer {
   uint32 container_id = 1;
+}
+
+// NpcTalk starts talking to an NPC the client knows (creature id). The server answers
+// with DialogOpen if the NPC is close enough.
+message NpcTalk {
+  uint32 creature_id = 1;
+}
+
+// ShopBuy buys count units of an item from the shop opened in dialog dialog_id.
+message ShopBuy {
+  uint32 dialog_id = 1;
+  uint32 item_id = 2;
+  uint32 count = 3;
+}
+
+// ShopSell sells count units of an item to the shop opened in dialog dialog_id.
+message ShopSell {
+  uint32 dialog_id = 1;
+  uint32 item_id = 2;
+  uint32 count = 3;
 }

@@ -113,7 +113,7 @@ func (w *World) creatureAt(p world.Pos) *Player {
 
 // occupied reports whether a player or a monster stands on p.
 func (w *World) occupied(p world.Pos) bool {
-	return w.creatureAt(p) != nil || w.monsterAt(p) != nil
+	return w.creatureAt(p) != nil || w.monsterAt(p) != nil || w.npcAt[p] != nil
 }
 
 // creaturePos returns where the creature with id (player or monster) stands.
@@ -123,6 +123,9 @@ func (w *World) creaturePos(id uint32) (world.Pos, bool) {
 	}
 	if m := w.monByID[id]; m != nil {
 		return m.pos, true
+	}
+	if n := w.npcByID[id]; n != nil {
+		return n.pos, true
 	}
 	return world.Pos{}, false
 }
@@ -270,6 +273,12 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 		if !p.Knows(m.id) {
 			p.remember(m.id)
 			area.Creatures = append(area.Creatures, w.monsterMsg(m))
+		}
+	})
+	w.eachNPCInRect(x0, y0, x0+wd-1, y0+ht-1, p.pos.Z, func(n *NPC) {
+		if !p.Knows(n.id) {
+			p.remember(n.id)
+			area.Creatures = append(area.Creatures, w.npcMsg(n))
 		}
 	})
 	return area

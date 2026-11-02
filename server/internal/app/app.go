@@ -44,6 +44,10 @@ type Config struct {
 	Items    content.Items
 	// Spells come from data/spells.yaml (session.Config); nil means no spells.
 	Spells content.Spells
+	// NPCs and Quests come from data/npcs and data/quests (session.Config); nil means
+	// no NPCs.
+	NPCs   content.NPCs
+	Quests content.Quests
 	// Map is the loaded world. Nil runs the HTTP API only (no /ws).
 	Map *world.Map
 
@@ -120,6 +124,8 @@ func New(cfg Config) (*App, error) {
 			Monsters:      cfg.Monsters,
 			Items:         cfg.Items,
 			Spells:        cfg.Spells,
+			NPCs:          cfg.NPCs,
+			Quests:        cfg.Quests,
 			Save:          saver.Submit,
 			AutosaveEvery: cfg.AutosaveEvery,
 			Logger:        cfg.Logger,
@@ -222,6 +228,7 @@ func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
 		Z:          int(s.Pos.Z),
 		Skills:     storeSkills(s.Skills),
 		Inventory:  storeItems(s.Inventory),
+		Storage:    s.Storage,
 		SavedAt:    a.cfg.Clock.Now(),
 	})
 	switch {

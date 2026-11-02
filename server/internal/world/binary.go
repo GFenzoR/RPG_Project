@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-// world.bin, format version 2. Little endian throughout:
+// world.bin, format version 3. Little endian throughout:
 //
 //	magic        "RPGWORLD"
 //	version      u16
@@ -23,6 +23,7 @@ import (
 //	  spawns     u16 count, then per spawn:
 //	    id u8 length + bytes, center u16 x, u16 y, u8 z, radius u8, respawn u32 seconds,
 //	    monsters u8 count, then per monster: id u8 length + bytes, count u16
+//	  npcs       u16 count, then per NPC: id u8 length + bytes, u16 x, u16 y, u8 z
 //	  sectors    u32 count, then per sector (ordered by z, cy, cx):
 //	    z u8, cx u16, cy u16
 //	    ground   1024 × u16
@@ -33,7 +34,7 @@ import (
 // Encoding the same Map always produces the same bytes.
 
 // BinaryVersion is the world.bin format version this package reads and writes.
-const BinaryVersion = 2
+const BinaryVersion = 3
 
 var binaryMagic = [8]byte{'R', 'P', 'G', 'W', 'O', 'R', 'L', 'D'}
 
@@ -81,6 +82,14 @@ func checkEncodable(m *Map) error {
 				if len(m.Monster) > 0xFF {
 					return fmt.Errorf("island %q: spawn %q: monster id too long", is.ID, sp.ID)
 				}
+			}
+		}
+		if len(is.NPCs) > 0xFFFF {
+			return fmt.Errorf("island %q: %d NPCs do not fit", is.ID, len(is.NPCs))
+		}
+		for _, n := range is.NPCs {
+			if len(n.NPC) > 0xFF {
+				return fmt.Errorf("island %q: NPC id %q too long", is.ID, n.NPC)
 			}
 		}
 		for _, s := range is.Sectors() {
@@ -139,6 +148,14 @@ func Encode(w io.Writer, m *Map) error {
 				b.bytes([]byte(m.Monster))
 				b.u16(m.Count)
 			}
+		}
+		b.u16(uint16(len(is.NPCs)))
+		for _, n := range is.NPCs {
+			b.u8(uint8(len(n.NPC)))
+			b.bytes([]byte(n.NPC))
+			b.u16(n.Pos.X)
+			b.u16(n.Pos.Y)
+			b.u8(n.Pos.Z)
 		}
 		sectors := is.Sectors()
 		b.u32(uint32(len(sectors)))
@@ -262,6 +279,15 @@ func Decode(data []byte) (*Map, error) {
 				sp.Monsters = append(sp.Monsters, SpawnMonster{Monster: string(b.take(int(b.u8()))), Count: b.u16()})
 			}
 			is.Spawns = append(is.Spawns, sp)
+		}
+		npcs := int(b.u16())
+		for range npcs {
+			if b.err != nil {
+				break
+			}
+			n := NPCPlacement{NPC: string(b.take(int(b.u8())))}
+			n.Pos = Pos{X: b.u16(), Y: b.u16(), Z: b.u8()}
+			is.NPCs = append(is.NPCs, n)
 		}
 		count := int(b.u32())
 		const minSectorBytes = 5 + SectorTiles*3 + 2

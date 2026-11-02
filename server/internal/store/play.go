@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -30,6 +32,8 @@ type PlayCharacter struct {
 	Skills []Skill
 	// Inventory is the equipped items with their content (inventory_items as a tree).
 	Inventory []InventoryItem
+	// Storage is the quest progress and flags (quest_state: key → value).
+	Storage map[string]int64
 }
 
 // InventoryItem is one row of inventory_items with the rows inside it: Slot is the
@@ -61,7 +65,9 @@ type CharacterState struct {
 	// Inventory replaces every inventory_items row of the character, in the same
 	// transaction: an item is never saved twice nor lost between two snapshots.
 	Inventory []InventoryItem
-	SavedAt   time.Time
+	// Storage replaces every quest_state row of the character, in the same transaction.
+	Storage map[string]int64
+	SavedAt time.Time
 }
 
 // CharacterBelongsTo reports whether characterID is a character of accountID.
@@ -112,7 +118,16 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	if err != nil {
 		return PlayCharacter{}, fmt.Errorf("character inventory: %w", err)
 	}
+	qs, err := s.q.GetCharacterQuestState(ctx, id)
+	if err != nil {
+		return PlayCharacter{}, fmt.Errorf("character quest state: %w", err)
+	}
+	storage := make(map[string]int64, len(qs))
+	for _, r := range qs {
+		storage[r.Key] = r.Value
+	}
 	return PlayCharacter{
+		Storage:    storage,
 		Inventory:  inventoryTree(inv),
 		Skills:     skills,
 		ID:         row.ID,
@@ -160,6 +175,19 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 	}
 	if err := insertItems(ctx, q, c.ID, pgtype.Int8{}, c.Inventory); err != nil {
 		return fmt.Errorf("save inventory of character %d: %w", c.ID, err)
+	}
+	if err := q.DeleteCharacterQuestState(ctx, c.ID); err != nil {
+		return fmt.Errorf("clear quest state of character %d: %w", c.ID, err)
+	}
+	if len(c.Storage) > 0 {
+		qp := db.SaveCharacterQuestStateParams{CharacterID: c.ID}
+		for _, k := range slices.Sorted(maps.Keys(c.Storage)) {
+			qp.Keys = append(qp.Keys, k)
+			qp.Vals = append(qp.Vals, c.Storage[k])
+		}
+		if err := q.SaveCharacterQuestState(ctx, qp); err != nil {
+			return fmt.Errorf("save quest state of character %d: %w", c.ID, err)
+		}
 	}
 	if len(c.Skills) == 0 {
 		return nil

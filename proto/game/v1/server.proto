@@ -320,11 +320,18 @@ message ShopOffer {
   uint32 item_id = 1;
   uint64 buy_price = 2;
   uint64 sell_price = 3;
+  // How many units of the item the player carries (equipment and every container).
+  uint32 owned = 4;
 }
 
+// ShopOpen opens (or refreshes, after each purchase or sale) the shop of the NPC of
+// dialog dialog_id. The shop closes with that dialog's DialogClose.
 message ShopOpen {
   uint32 npc_creature_id = 1;
   repeated ShopOffer offers = 2;
+  uint32 dialog_id = 3;
+  // Money the player carries, in the smallest coin.
+  uint64 money = 4;
 }
 
 enum TradeState {

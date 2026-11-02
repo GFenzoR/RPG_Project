@@ -61,6 +61,14 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.say(ctx, p, m.Say)
 	case *pb.ClientMessage_LookAt:
 		w.lookAt(p, m.LookAt)
+	case *pb.ClientMessage_NpcTalk:
+		w.npcTalk(p, m.NpcTalk.GetCreatureId())
+	case *pb.ClientMessage_DialogChoose:
+		w.dialogChoose(p, m.DialogChoose.GetDialogId(), m.DialogChoose.GetOptionId())
+	case *pb.ClientMessage_ShopBuy:
+		w.shopBuy(p, m.ShopBuy.GetDialogId(), m.ShopBuy.GetItemId(), m.ShopBuy.GetCount())
+	case *pb.ClientMessage_ShopSell:
+		w.shopSell(p, m.ShopSell.GetDialogId(), m.ShopSell.GetItemId(), m.ShopSell.GetCount())
 	case *pb.ClientMessage_CloseContainer:
 		w.closeContainer(p, m.CloseContainer.GetContainerId())
 	case *pb.ClientMessage_Logout:
@@ -217,6 +225,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	// Other clients: those around either end of the step.
 	w.observeMove(p, nil, from, to, mv.From, mv.To, durMs)
 	w.checkContainers(p)
+	w.checkDialog(p)
 
 	// The mover's own client: creatures out of view disappear, the new edge arrives.
 	kept := p.known[:0]
@@ -261,6 +270,7 @@ func (w *World) Teleport(p *Player, to world.Pos) {
 	p.pos = to
 	w.index(p)
 	w.checkContainers(p)
+	w.checkDialog(p)
 	w.sendFullView(p)
 	w.appearToObservers(p)
 }
@@ -290,6 +300,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.retrySaves()
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
+		w.questRecheck(p)
 		if !w.flushPlayer(ctx.Tick, p) {
 			w.slow = append(w.slow, p)
 		}
