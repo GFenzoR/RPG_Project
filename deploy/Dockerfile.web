@@ -5,9 +5,8 @@
 #
 #   docker build -f deploy/Dockerfile.web -t rpg-web .
 #
-# The client gets its Vite build in T1.5. Until client/package.json has a "build" script the
-# image serves deploy/web/placeholder/ instead, so the stack can already be deployed and
-# tested end to end (TLS, /api, /ws).
+# The client is built with its own `build` script (Vite, T1.5), which writes build/client/
+# (sprite atlas included). Any build error fails the image.
 
 ARG NODE_VERSION=22
 ARG CADDY_VERSION=2.11
@@ -18,16 +17,13 @@ WORKDIR /src
 # corepack installs the pnpm version pinned in package.json ("packageManager").
 RUN corepack enable
 COPY . .
+# Full workspace install: the client build needs its workspace dev dependencies
+# (@rpg/spritepack builds the atlas from assets/), exactly like `make build` in CI.
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    mkdir -p /out/client \
-    && if node -e "process.exit(require('./client/package.json').scripts?.build ? 0 : 1)"; then \
-         pnpm install --frozen-lockfile --filter "@rpg/client..." \
-         && pnpm --filter @rpg/client run build \
-         && cp -R client/dist/. /out/client/; \
-       else \
-         echo "client has no build script yet (pending T1.5): serving the placeholder page" \
-         && cp -R deploy/web/placeholder/. /out/client/; \
-       fi
+    pnpm install --frozen-lockfile \
+    && pnpm --filter @rpg/client run build \
+    && test -f build/client/index.html \
+    && mkdir -p /out && cp -R build/client /out/client
 
 # ---- runtime ------------------------------------------------------------------------------
 FROM caddy:${CADDY_VERSION}-alpine
@@ -38,7 +34,7 @@ LABEL org.opencontainers.image.title="rpg-project-web" \
       org.opencontainers.image.source="https://github.com/GFenzoR/RPG_Project" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${COMMIT}"
-COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY deploy/Caddyfile deploy/caddy-routes.caddy /etc/caddy/
 COPY --from=client /out/client/ /srv/client/
 # Fails the build on a Caddyfile syntax error. Placeholder values: the real ones come from
 # the environment at runtime.

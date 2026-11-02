@@ -39,21 +39,16 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     && GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags "-s -w" -o /out/healthcheck .
 
 # ---- world: compile world/ + data/ into world.bin (runs natively on the build platform) ---
-# world.bin is architecture-independent, so it is built once, never under QEMU.
-# cmd/mapcompile arrives with T1.2; until it is merged the stage leaves the directory empty
-# (the server on main does not load a map yet). Once it exists, any compile error fails the
-# build.
+# world.bin is architecture-independent, so it is built once, never under QEMU. A map or
+# content error fails the build: an image never ships without a valid world.
 FROM --platform=$BUILDPLATFORM build AS world
 COPY world/ /src/world/
 COPY data/ /src/data/
 WORKDIR /src/server
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     mkdir -p /out/build \
-    && if [ -d cmd/mapcompile ]; then \
-         go run ./cmd/mapcompile -root .. -out /out/build/world.bin; \
-       else \
-         echo "mapcompile not found (pending T1.2): image ships without world.bin"; \
-       fi
+    && go run ./cmd/mapcompile -root .. -out /out/build/world.bin \
+    && test -s /out/build/world.bin
 
 # ---- runtime ------------------------------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot
@@ -71,7 +66,7 @@ COPY --from=world /out/build/ /app/build/
 COPY data/ /app/data/
 COPY i18n/ /app/i18n/
 
-# The server reads $RPG_WORLD (T1.2) and -data; both point inside the image.
+# The server reads $RPG_WORLD (or -world) and -data; both point inside the image.
 ENV RPG_WORLD=/app/build/world.bin
 # 65532 = "nonroot" in distroless.
 USER 65532:65532
@@ -79,4 +74,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
   CMD ["/app/healthcheck", "http://127.0.0.1:8080/healthz"]
 ENTRYPOINT ["/app/gameserver"]
-CMD ["-http=:8080", "-data=/app/data"]
+CMD ["-http=:8080", "-data=/app/data", "-world=/app/build/world.bin"]

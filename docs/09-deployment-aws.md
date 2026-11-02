@@ -8,12 +8,13 @@ deploy/
   Dockerfile.gameserver     Go → distroless, con world.bin, data/ e i18n/
   Dockerfile.web            Caddy + build estático del cliente
   Dockerfile.backup         pg_dump 16 + AWS CLI
-  Caddyfile                 TLS automático, /api, /ws y /healthz → gameserver, / → cliente
+  Caddyfile                 sitio con TLS automático; importa caddy-routes.caddy
+  caddy-routes.caddy        /api, /ws y /healthz → gameserver, / → cliente (compartido con docs/13)
   .env.example              variables necesarias (sin valores reales)
   backup.sh                 pg_dump comprimido con retención; copia a S3 opcional
   deploy.sh                 pull + backup + reinicio (migraciones al arrancar)
   healthcheck/              sonda HTTP mínima para el HEALTHCHECK de la imagen distroless
-  web/placeholder/          página provisoria mientras el cliente no tiene build (T1.5)
+  smoke.sh                  prueba del stack levantado: login, /api/play, /ws, IP del cliente
 ```
 ```
 Internet ─:80/:443─▶ caddy ──red edge──▶ gameserver:8080 ──red internal──▶ postgres:5432
@@ -49,10 +50,11 @@ Las publica `.github/workflows/images.yml` en GitHub Container Registry, para
 
 - Go compila en la plataforma del runner (`$BUILDPLATFORM`) y cruza a la de destino: QEMU
   solo se usa para el `apk add` de la imagen de backup.
-- `world.bin` se genera dentro del build con `cmd/mapcompile` (T1.2) desde `world/` +
-  `data/`; si el comando aún no existe en la rama, la imagen sale sin mapa.
-- El cliente se compila con `pnpm --filter @rpg/client build` cuando `client/package.json`
-  tenga script `build` (T1.5); mientras tanto se sirve `deploy/web/placeholder/`.
+- `world.bin` se genera dentro del build con `cmd/mapcompile` desde `world/` + `data/`.
+  Un mapa o contenido que no compila **rompe el build**: nunca sale una imagen sin mundo.
+  El servidor lo carga con `-world=/app/build/world.bin` (también `$RPG_WORLD`).
+- El cliente se compila con su script `build` (`pnpm --filter @rpg/client build`, que
+  escribe `build/client/` con el atlas de sprites) y Caddy lo sirve desde `/srv/client`.
 - En los PR que tocan algo que entra en una imagen, el workflow solo **construye** (sin
   push), así un Dockerfile roto falla en el PR.
 
@@ -138,11 +140,25 @@ servicio one-shot de migraciones. Antes de reiniciar, `deploy.sh` hace un backup
   Probado localmente: dump → `pg_restore` en una base nueva → datos presentes.
   Haz una prueba de restauración al mes.
 
+### IP del cliente y rate limits
+Los límites por IP de login/registro (T1.3) usan la IP que ve el gameserver. La cadena es:
+
+1. Caddy recibe la conexión. `{client_ip}` es el par TCP, salvo que ese par esté en
+   `trusted_proxies`. En producción **no hay proxies de confianza** (Caddy es el borde).
+2. `caddy-routes.caddy` hace `header_up X-Forwarded-For {client_ip}`: el gameserver recibe
+   **un solo** valor. Un `X-Forwarded-For` o `CF-Connecting-IP` falsificado por el cliente
+   se descarta, no se concatena.
+3. El gameserver corre con `-trust-proxy` y toma la última entrada de `X-Forwarded-For`.
+   Es seguro solo porque el puerto 8080 no se publica: todo pasa por Caddy.
+
+`deploy/smoke.sh` lo comprueba contra el stack levantado (job `stack` de
+`.github/workflows/images.yml`): diez logins fallidos con `X-Forwarded-For` distinto cada
+uno agotan igual el cupo de la IP real (el undécimo responde 429).
+
 ### Reutilización para hosting en casa (T1.19)
-`docs/13` reutiliza este compose con un override: `SITE_ADDRESS=:80` deja a Caddy en HTTP
-plano (el túnel pone el TLS) y `COOKIE_SECURE` sigue en `true` porque el jugador ve HTTPS.
-Para que el gameserver vea la IP real del jugador detrás del túnel habrá que configurar
-`trusted_proxies` en Caddy para la red del túnel.
+`docs/13` reutiliza este compose con un override: Caddy en HTTP plano (el túnel pone el
+TLS) y `COOKIE_SECURE` sigue en `true` porque el jugador ve HTTPS. Detrás del túnel,
+`Caddyfile.home` confía solo en la red del túnel y toma la IP real de `CF-Connecting-IP`.
 
 ## Seguridad operativa
 - Solo puertos 80 y 443 abiertos. SSH restringido a tu IP o con SSM Session Manager.

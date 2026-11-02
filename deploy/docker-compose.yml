@@ -55,6 +55,10 @@ services:
     command:
       - -http=:8080
       - -data=/app/data
+      - -world=/app/build/world.bin
+      # Client IP for the per-IP rate limits = last X-Forwarded-For entry, which Caddy always
+      # overwrites with its {client_ip} (deploy/caddy-routes.caddy). Safe only because 8080
+      # is never published: every request arrives through Caddy.
       - -trust-proxy=true
       - -cookie-secure=${COOKIE_SECURE:-true}
     # Only Caddy talks to it; 8080 is not published on the host.
