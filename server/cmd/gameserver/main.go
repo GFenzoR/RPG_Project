@@ -30,6 +30,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
+	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -47,6 +48,9 @@ type options struct {
 	// wsOrigins lists extra browser origins allowed on /ws (comma-separated).
 	wsOrigins        string
 	minClientVersion string
+	// authRateBurst overrides the per-IP register/login burst (0 = the default). Only
+	// for local test harnesses whose requests all come from one IP, such as the E2E suite.
+	authRateBurst int
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -64,6 +68,7 @@ func main() {
 	flag.StringVar(&o.worldPath, "world", defaultWorldPath(), "compiled map from mapcompile; default $RPG_WORLD or ../build/world.bin (empty = run without a world)")
 	flag.StringVar(&o.wsOrigins, "ws-origins", os.Getenv("RPG_WS_ORIGINS"), "extra browser origins allowed on /ws, comma-separated (e.g. localhost:5173); default $RPG_WS_ORIGINS")
 	flag.StringVar(&o.minClientVersion, "min-client-version", gateway.DefaultMinClientVersion, "oldest client version accepted in Hello (same major required)")
+	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
 	flag.Parse()
 
 	if *showVersion {
@@ -157,6 +162,7 @@ func run(logger *slog.Logger, o options) error {
 		TrustProxy:       o.trustProxy,
 		OriginPatterns:   splitList(o.wsOrigins),
 		MinClientVersion: o.minClientVersion,
+		AuthRateLimit:    authRateLimit(o.authRateBurst),
 	})
 	if err != nil {
 		return err
@@ -295,4 +301,14 @@ func purgeSessions(ctx context.Context, logger *slog.Logger, clk clock.Clock, sv
 			logger.Info("purged expired sessions", "count", n)
 		}
 	}
+}
+
+// authRateLimit returns the per-IP auth limit for a -auth-rate-burst value: the zero
+// RateLimit (httpapi's default) when burst <= 0, otherwise the default refill with a
+// larger burst.
+func authRateLimit(burst int) httpapi.RateLimit {
+	if burst <= 0 {
+		return httpapi.RateLimit{}
+	}
+	return httpapi.RateLimit{Burst: burst, Every: httpapi.DefaultAuthRateLimit.Every}
 }

@@ -28,7 +28,9 @@ export default defineConfig({
       // mapcompile first, so `pnpm --filter @rpg/client e2e` works on its own too.
       command:
         "go run ./cmd/mapcompile -root .. -out ../build/world.bin && " +
-        `go run ./cmd/gameserver -http :${serverPort} -world ../build/world.bin -seed 1`,
+        // Every test registers and logs in from 127.0.0.1: raise the per-IP auth burst so the
+        // suite does not depend on how fast it runs (production keeps the default).
+        `go run ./cmd/gameserver -http :${serverPort} -world ../build/world.bin -seed 1 -auth-rate-burst 1000`,
       cwd: `${import.meta.dirname}/../server`,
       url: `${serverURL}/healthz`,
       reuseExistingServer: false,
