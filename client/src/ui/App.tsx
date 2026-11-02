@@ -3,9 +3,11 @@
 // drive from Playwright. Every visible text goes through t().
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { DisconnectReason } from "@rpg/protocol";
+import { CreatureKind, DisconnectReason, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import { Game } from "../game.ts";
+import type { GameUi } from "../game.ts";
+import { creatureName, formatMessage } from "../state/messages.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
@@ -305,6 +307,14 @@ function GameScreen(props: {
   const host = useRef<HTMLDivElement>(null);
   const game = useRef<Game | undefined>(undefined);
   const [entered, setEntered] = useState(false);
+  const [ui, setUi] = useState<GameUi>({
+    battle: [],
+    target: undefined,
+    stats: undefined,
+    log: [],
+  });
+  const [stance, setStance] = useState(FightStance.BALANCED);
+  const [chase, setChase] = useState(false);
 
   useEffect(() => {
     if (!host.current) return undefined;
@@ -316,6 +326,7 @@ function GameScreen(props: {
       sessionToken: props.sessionToken,
       entered: () => setEntered(true),
       ended: (reason) => props.onEnd(reason),
+      update: setUi,
     });
     game.current = g;
     return () => g.destroy();
@@ -326,13 +337,87 @@ function GameScreen(props: {
     <div class="game" data-testid="game">
       <header class="hud">
         <span class="name">{props.character.name}</span>
+        {ui.stats && (
+          <span class="stat" data-testid="health">
+            {t("client.game.health", { health: ui.stats.health, max: ui.stats.maxHealth })}
+          </span>
+        )}
+        {ui.stats && (
+          <span class="stat" data-testid="experience">
+            {t("client.game.experience", { experience: ui.stats.experience })}
+          </span>
+        )}
         <span class="hint">{t("client.game.controls")}</span>
         <button type="button" onClick={() => game.current?.logout()}>
           {t("client.game.logout")}
         </button>
       </header>
-      <div class="viewport" ref={host}>
-        {!entered && <p class="connecting">{t("client.game.connecting")}</p>}
+      <div class="game-body">
+        <div class="viewport" ref={host}>
+          {!entered && <p class="connecting">{t("client.game.connecting")}</p>}
+        </div>
+        <aside class="side">
+          <section class="battle" data-testid="battle-list" aria-label={t("client.battle.title")}>
+            <h2>{t("client.battle.title")}</h2>
+            {ui.battle.length === 0 ? (
+              <p class="empty">{t("client.battle.empty")}</p>
+            ) : (
+              <ul>
+                {ui.battle.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      class={ui.target === c.id ? "target" : ""}
+                      aria-pressed={ui.target === c.id}
+                      disabled={c.kind !== CreatureKind.MONSTER}
+                      title={t("client.battle.attack_hint")}
+                      onClick={() => game.current?.attack(c.id)}
+                    >
+                      <span class="cname">{creatureName(c, t)}</span>
+                      <span class="hp" aria-label={t("client.battle.health", { health: c.health })}>
+                        <span style={{ width: `${c.health}%` }} />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section class="fight">
+            <label>
+              {t("client.fight.stance")}
+              <select
+                value={stance}
+                onChange={(e) => {
+                  const s = Number(e.currentTarget.value) as FightStance;
+                  setStance(s);
+                  game.current?.setFightMode(s, chase);
+                }}
+              >
+                <option value={FightStance.OFFENSIVE}>{t("client.fight.offensive")}</option>
+                <option value={FightStance.BALANCED}>{t("client.fight.balanced")}</option>
+                <option value={FightStance.DEFENSIVE}>{t("client.fight.defensive")}</option>
+              </select>
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={chase}
+                onChange={(e) => {
+                  const c = e.currentTarget.checked;
+                  setChase(c);
+                  game.current?.setFightMode(stance, c);
+                }}
+              />
+              {t("client.fight.chase")}
+            </label>
+          </section>
+          <ul class="log" data-testid="game-log" aria-live="polite">
+            {ui.log.map((m, i) => (
+              <li key={`${m.at}-${i}`}>{formatMessage(m, props.content, t)}</li>
+            ))}
+          </ul>
+        </aside>
       </div>
     </div>
   );

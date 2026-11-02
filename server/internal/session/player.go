@@ -45,6 +45,27 @@ type Player struct {
 
 	autosave game.EventID
 	saveSeq  uint64
+
+	// Combat (T1.6): the monster being attacked, the stance and chase mode from
+	// SetFightMode, and the first tick of the next attack round.
+	target     *Monster
+	stance     pb.FightStance
+	chase      bool
+	nextAttack game.Tick
+}
+
+// Health returns the player's current and maximum health.
+func (p *Player) Health() (cur, maxHealth int) { return p.health, p.maxHealth }
+
+// Experience returns the player's total experience.
+func (p *Player) Experience() int64 { return p.experience }
+
+// Target returns the creature id the player attacks, or 0.
+func (p *Player) Target() uint32 {
+	if p.target == nil {
+		return 0
+	}
+	return p.target.id
 }
 
 // ID returns the player's creature id.
@@ -208,6 +229,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		speed:      max(stats.Speed, 1),
 		dir:        world.South,
 		saveSeq:    seq,
+		stance:     pb.FightStance_FIGHT_STANCE_BALANCED,
 	}
 	p.health = min(max(c.Health, 0), p.maxHealth)
 	if p.health == 0 {
@@ -363,7 +385,7 @@ func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: p.Z}
-				if w.m.Walkable(q) && w.creatureAt(q) == nil {
+				if w.m.Walkable(q) && !w.occupied(q) {
 					return q, true
 				}
 			}

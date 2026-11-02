@@ -311,6 +311,11 @@ func compileIsland(root, id string, worldRect rect, content *Content) (*world.Is
 	if err := applyZones(root, dir, sectors); err != nil {
 		return nil, nil, err
 	}
+	spawns, err := readSpawns(root, dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	is.Spawns = spawns
 	return is, sectors, nil
 }
 
@@ -447,6 +452,59 @@ func applyZones(root, dir string, sectors []*world.Sector) error {
 		}
 	}
 	return nil
+}
+
+type spawnFile struct {
+	ID       string `yaml:"id"`
+	Center   pos    `yaml:"center"`
+	Radius   int    `yaml:"radius"`
+	Monsters []struct {
+		Monster string `yaml:"monster"`
+		Count   int    `yaml:"count"`
+	} `yaml:"monsters"`
+	RespawnSeconds int `yaml:"respawn_seconds"`
+}
+
+// readSpawns reads spawns.yaml (optional). Each monster must have its
+// data/monsters/<id>.yaml; the rest (center inside the island, on a listed floor) is
+// checked by world.NewMap.
+func readSpawns(root, dir string) ([]world.Spawn, error) {
+	path := filepath.Join(dir, "spawns.yaml")
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	var list []spawnFile
+	if err := readYAML(path, &list); err != nil {
+		return nil, err
+	}
+	where := rel(root, path)
+	out := make([]world.Spawn, 0, len(list))
+	for i, sf := range list {
+		c := sf.Center
+		if c.X < 0 || c.Y < 0 || c.X > 0xFFFF || c.Y > 0xFFFF || c.Z < 0 || c.Z > world.MaxFloor {
+			return nil, fmt.Errorf("%s: spawns[%d] (%s): center %+v outside the world", where, i, sf.ID, c)
+		}
+		if sf.Radius < 0 || sf.Radius > 255 || sf.RespawnSeconds <= 0 {
+			return nil, fmt.Errorf("%s: spawns[%d] (%s): radius must be 0..255 and respawn_seconds > 0", where, i, sf.ID)
+		}
+		sp := world.Spawn{
+			ID:             sf.ID,
+			Center:         world.Pos{X: uint16(c.X), Y: uint16(c.Y), Z: uint8(c.Z)},
+			Radius:         uint8(sf.Radius),
+			RespawnSeconds: uint32(sf.RespawnSeconds),
+		}
+		for _, m := range sf.Monsters {
+			if m.Count <= 0 || m.Count > 0xFFFF {
+				return nil, fmt.Errorf("%s: spawns[%d] (%s): %s count must be 1..65535", where, i, sf.ID, m.Monster)
+			}
+			if _, err := os.Stat(filepath.Join(root, "data", "monsters", m.Monster+".yaml")); err != nil {
+				return nil, fmt.Errorf("%s: spawns[%d] (%s): unknown monster %q", where, i, sf.ID, m.Monster)
+			}
+			sp.Monsters = append(sp.Monsters, world.SpawnMonster{Monster: m.Monster, Count: uint16(m.Count)})
+		}
+		out = append(out, sp)
+	}
+	return out, nil
 }
 
 func readYAML(path string, out any) error {

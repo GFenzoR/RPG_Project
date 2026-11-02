@@ -82,6 +82,11 @@ type Config struct {
 	// Balance and Vocations come from data/. Balance.Movement is required.
 	Balance   content.Balance
 	Vocations content.Vocations
+	// Monsters and Items come from data/. With Monsters set, the World keeps the map's
+	// spawns (world.Island.Spawns) populated; Items must then hold every loot item and
+	// CorpseItem. Without Monsters the world has no monsters (tests, tools).
+	Monsters content.Monsters
+	Items    content.Items
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
 	Save func(Snapshot) bool
@@ -128,6 +133,21 @@ type World struct {
 	pathBuf    []world.Direction
 
 	skills []*pb.SkillProgress
+
+	// Monsters (T1.6), owned by the loop like everything else.
+	monsters   []*Monster // ordered by creature id: deterministic iteration
+	monByID    map[uint32]*Monster
+	msectors   map[uint64][]*Monster
+	kinds      map[string]*monsterKind
+	slots      []*spawnSlot
+	spawned    bool
+	active     map[uint64]struct{}
+	ground     map[world.Pos][]uint16 // items dropped on tiles at runtime (remains)
+	corpses    map[world.Pos][]*Corpse
+	corpseItem uint16
+	corpseFor  game.Tick
+	attackFor  game.Tick
+	fistSkill  int
 }
 
 // New validates cfg and builds an empty World.
@@ -170,6 +190,9 @@ func New(cfg Config) (*World, error) {
 		loading:  map[int64]int{},
 		pf:       world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
 	}
+	if err := w.initCombat(); err != nil {
+		return nil, err
+	}
 	for _, id := range cfg.Balance.SkillIDs() {
 		w.skills = append(w.skills, &pb.SkillProgress{SkillId: id, Level: uint32(max(cfg.Balance.Skills.Base[id].StartLevel, 0))})
 	}
@@ -185,8 +208,9 @@ func (w *World) Players() []*Player { return w.players }
 // PlayerByCharacter returns the online player of a character, or nil.
 func (w *World) PlayerByCharacter(id int64) *Player { return w.byChar[id] }
 
-// Systems returns the per-tick systems of the World, in order: walking, then the flush
-// that sends each player its batch. Later systems (AI, combat) go between the two.
-func (w *World) Systems() (movement, flush game.System) {
-	return game.SystemFunc(w.moveSystem), game.SystemFunc(w.flushSystem)
+// Systems returns the per-tick systems of the World, in order: walking, combat (player
+// attacks, monster AI in active sectors, spawns) and the flush that sends each player
+// its batch.
+func (w *World) Systems() (movement, combat, flush game.System) {
+	return game.SystemFunc(w.moveSystem), game.SystemFunc(w.combatSystem), game.SystemFunc(w.flushSystem)
 }

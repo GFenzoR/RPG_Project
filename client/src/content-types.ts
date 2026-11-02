@@ -18,6 +18,8 @@ export interface ItemDef {
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
+  /** Atlas sprite path of each monster (data/monsters id → "creatures/wolf"). */
+  monsterSprites: Record<string, string>;
   /** Vocation IDs a new character can pick (data/vocations.yaml, in file order). */
   vocations: string[];
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };

@@ -46,6 +46,9 @@ func testBalance() content.Balance {
 	b.Movement = content.Movement{BaseStepMs: 1000, DiagonalCost: 1.5, MaxPathTiles: 100}
 	b.Experience.Curve.A, b.Experience.Curve.B, b.Experience.Curve.C = 12, -24, 12
 	b.Skills.Base = map[string]content.SkillBase{"sword": {StartLevel: 10}, "fist": {StartLevel: 10}}
+	b.Combat = content.Combat{AttackIntervalMs: 2000, FistAttack: 7, SkillAttackDivisor: 10, LevelDivisor: 4,
+		ShieldBlockDivisor: 4, MonsterCorpseMs: 60000, Modes: map[string]content.CombatMode{
+			"offensive": {Attack: 1.25, Defense: 0.55}, "balanced": {Attack: 1, Defense: 1}, "defensive": {Attack: 0.65, Defense: 1.5}}}
 	return b
 }
 
@@ -88,8 +91,8 @@ func newHarness(t *testing.T, m *world.Map, opts ...option) *harness {
 		t.Fatal(err)
 	}
 	h.w = w
-	mv, flush := w.Systems()
-	h.sim = sim.New(t, sim.WithSeed(7), sim.WithSystems(mv, flush))
+	mv, fight, flush := w.Systems()
+	h.sim = sim.New(t, sim.WithSeed(7), sim.WithSystems(mv, fight, flush))
 	return h
 }
 

@@ -20,7 +20,7 @@ const RESOLVED_ID = "\0" + VIRTUAL_ID;
 const LANGUAGES = ["es", "en"];
 /** i18n catalogs the client uses (all keys), and those it only takes names from. */
 const CATALOGS = ["client.yaml", "vocations.yaml"];
-const NAME_CATALOGS = ["monsters.yaml", "npcs.yaml"];
+const NAME_CATALOGS = ["monsters.yaml", "npcs.yaml", "items.yaml"];
 const ATLAS_FILE = /^atlas(-\d+)?\.(png|json)$/;
 
 export const repoRoot = (): string =>
@@ -77,12 +77,22 @@ export function loadClientContent(root: string): ClientContent {
     }
     i18n[lang] = texts;
   }
+  const monsters: Record<string, string> = {};
+  const mdir = join(root, "data", "monsters");
+  for (const file of readdirSync(mdir)
+    .filter((f) => f.endsWith(".yaml"))
+    .sort()) {
+    const m = readYaml(join(mdir, file));
+    if (isObj(m) && typeof m["id"] === "string" && typeof m["sprite"] === "string")
+      monsters[m["id"]] = m["sprite"];
+  }
   const vocs = readYaml(join(root, "data", "vocations.yaml"));
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
     : [];
   return {
     items,
+    monsterSprites: monsters,
     vocations,
     movement: {
       baseStepMs: num(mv["base_step_ms"], 1000),

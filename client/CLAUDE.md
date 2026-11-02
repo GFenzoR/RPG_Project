@@ -44,6 +44,18 @@ client/
   una marca hacia donde miran. Solo se dibuja el piso del jugador.
 - Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).
 
+## Notas de T1.6
+- Combate: `WorldState` guarda vida (%) por criatura, objetivo, efectos, textos flotantes
+  y un log corto de mensajes de sistema; `Game` publica un `GameUi` tras cada batch y
+  la UI (Preact) dibuja vida/experiencia, lista de batalla, modo de combate y log.
+- Click derecho sobre una criatura o click en la lista de batalla = `SetTarget` (otra vez
+  la misma = dejar de atacar). Los monstruos usan su sprite del atlas
+  (`monsterSprites`, de `data/monsters`).
+- Efectos y números flotantes son formas Pixi procedurales hasta tener sprites de efectos.
+  Capas: mapa+criaturas → efectos → nombres y barras → números.
+- Los mensajes (`state/messages.ts`) se traducen con su clave y parámetros; los `item`
+  repetidos forman `{items}`.
+
 ## Verificación visual (obligatoria si tocas render o UI)
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda
 screenshots en `client/e2e/screenshots/`. Ábrelos con Read y revísalos antes de cerrar.

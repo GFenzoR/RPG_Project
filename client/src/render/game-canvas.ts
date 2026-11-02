@@ -1,18 +1,21 @@
 // The game view: a PixiJS canvas over @rpg/renderer's MapView. It shows 15x11 tiles
 // centred on the own creature, scaled by a whole number of device pixels per sprite
 // pixel (pixel-perfect: no smoothing, no fractional scale), and draws the creatures
-// interleaved with the item stacks (ground → items → creatures, row by row; effects and
-// floating texts arrive with T1.6). Input goes back to the caller as tile clicks.
-import { Application, Container, Graphics, Text, TextureStyle } from "pixi.js";
+// interleaved with the item stacks (ground → items → creatures, row by row), then effects
+// and floating texts on top, then names and health bars. Input goes back to the caller as
+// tile clicks (left: walk) and creature clicks (right: attack).
+import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind } from "@rpg/protocol";
+import { CreatureKind, FloatingTextKind } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
 import type { Camera } from "@rpg/renderer";
 import { VIEW_TILES, followCamera, pixelScale } from "./viewport.ts";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { delta } from "../state/geometry.ts";
-import type { CreatureState, WorldState } from "../state/world.ts";
+import { creatureName } from "../state/messages.ts";
+import { EFFECT_HIT, EFFECT_MS, FLOATING_TEXT_MS } from "../state/world.ts";
+import type { CreatureState, EffectState, FloatingTextState, WorldState } from "../state/world.ts";
 
 const COLORS = {
   background: 0x000000,
@@ -22,7 +25,34 @@ const COLORS = {
   npc: 0x7d4fb0,
   marker: 0xffffff,
   outline: 0x101010,
+  target: 0xff2020,
+  barBack: 0x101010,
+  barHigh: 0x30c030,
+  barMid: 0xe0c020,
+  barLow: 0xd03020,
+  hit: 0xc01818,
+  block: 0x9ab4d8,
+  damage: 0xff4040,
+  heal: 0x60e060,
+  mana: 0x6090ff,
+  experience: 0xffffff,
 };
+
+/** Health bar size in sprite pixels. */
+const BAR_W = 26;
+const BAR_H = 4;
+
+const barColor = (pct: number): number =>
+  pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
+
+const textColor = (k: FloatingTextKind): number =>
+  k === FloatingTextKind.HEAL
+    ? COLORS.heal
+    : k === FloatingTextKind.MANA
+      ? COLORS.mana
+      : k === FloatingTextKind.EXPERIENCE
+        ? COLORS.experience
+        : COLORS.damage;
 
 export interface GameCanvas {
   /** Page coordinates of the centre of tile (x, y) on the current floor (tests, tooling). */
@@ -40,13 +70,19 @@ export interface GameCanvasOptions {
   frame(now: number): void;
   /** A tile of the own floor was clicked. */
   clickTile(x: number, y: number, z: number): void;
+  /** A creature was right-clicked (attack it). */
+  clickCreature(id: number): void;
 }
 
 interface CreatureSprite {
   body: Container;
   shape: Graphics;
+  frame: Graphics;
   label: Text;
+  bar: Graphics;
   drawnDir: number;
+  drawnHealth: number;
+  drawnTarget: boolean;
 }
 
 export async function createGameCanvas(
@@ -84,8 +120,10 @@ export async function createGameCanvas(
     return tex;
   };
   const view = new MapView({ source: world, texture, tileSize: T, floor: world.self?.pos.z ?? 7 });
+  const effectLayer = new Container({ label: "effects" });
+  const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
-  app.stage.addChild(view.root, labels);
+  app.stage.addChild(view.root, effectLayer, labels, textLayer);
 
   let scale = 1;
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
@@ -112,17 +150,19 @@ export async function createGameCanvas(
         : c.kind === CreatureKind.NPC
           ? COLORS.npc
           : COLORS.player;
-  const nameOf = (c: CreatureState): string =>
-    c.kind === CreatureKind.MONSTER
-      ? t(`monster.${c.contentId}.name`)
-      : c.kind === CreatureKind.NPC
-        ? t(`npc.${c.contentId}.name`)
-        : c.name;
+  const nameOf = (c: CreatureState): string => creatureName(c, t);
+  const monsterTexture = (c: CreatureState): Texture | undefined => {
+    if (c.kind !== CreatureKind.MONSTER) return undefined;
+    const path = content.monsterSprites[c.contentId];
+    return path ? atlas.texture(path) : undefined;
+  };
 
-  // Placeholder body until outfits and creature sprites land: a coloured block with a mark
-  // on the side it faces.
+  // Placeholder body until outfits land: a coloured block with a mark on the side it
+  // faces (monsters use their atlas sprite when there is one).
   const drawShape = (s: CreatureSprite, c: CreatureState): void => {
     const [dx, dy] = delta(c.dir);
+    s.drawnDir = c.dir;
+    if (s.body.children.some((ch) => ch instanceof Sprite)) return;
     s.shape
       .clear()
       .rect(8, 5, 16, 24)
@@ -130,15 +170,38 @@ export async function createGameCanvas(
       .stroke({ width: 1, color: COLORS.outline, alignment: 1 })
       .rect(14 + dx * 7, 15 + dy * 9, 4, 4)
       .fill(COLORS.marker);
-    s.drawnDir = c.dir;
+  };
+
+  const drawBar = (s: CreatureSprite, pct: number): void => {
+    const w = Math.max(0, Math.min(100, pct));
+    s.bar
+      .clear()
+      .rect(-BAR_W / 2 - 1, 0, BAR_W + 2, BAR_H)
+      .fill(COLORS.barBack)
+      .rect(-BAR_W / 2, 1, Math.round((BAR_W * w) / 100), BAR_H - 2)
+      .fill(barColor(w));
+    s.drawnHealth = pct;
+  };
+
+  const drawFrame = (s: CreatureSprite, on: boolean): void => {
+    s.frame.clear();
+    if (on)
+      s.frame.rect(1, 1, T - 2, T - 2).stroke({ width: 2, color: COLORS.target, alignment: 1 });
+    s.drawnTarget = on;
   };
 
   const spriteOf = (c: CreatureState): CreatureSprite => {
     let s = sprites.get(c.id);
     if (!s) {
       const shape = new Graphics();
+      const frame = new Graphics();
       const body = new Container({ label: `creature ${c.id}` });
       body.addChild(shape);
+      const tex = monsterTexture(c);
+      if (tex) body.addChild(new Sprite(tex));
+      body.addChild(frame); // the target frame goes over the body
+      const bar = new Graphics();
+      labels.addChild(bar);
       const label = new Text({
         text: nameOf(c),
         style: {
@@ -152,10 +215,13 @@ export async function createGameCanvas(
         roundPixels: true,
       });
       labels.addChild(label);
-      s = { body, shape, label, drawnDir: -1 };
+      s = { body, shape, frame, label, bar, drawnDir: -1, drawnHealth: -1, drawnTarget: false };
       sprites.set(c.id, s);
     }
     if (s.drawnDir !== c.dir) drawShape(s, c);
+    if (s.drawnHealth !== c.health) drawBar(s, c.health);
+    const targeted = world.target === c.id;
+    if (s.drawnTarget !== targeted) drawFrame(s, targeted);
     return s;
   };
 
@@ -165,7 +231,70 @@ export async function createGameCanvas(
     view.removeEntity(s.body);
     s.body.destroy({ children: true });
     s.label.destroy();
+    s.bar.destroy();
     sprites.delete(id);
+  };
+
+  // Effects and floating texts: drawn while the world state keeps them (it expires them).
+  const effectGfx = new Map<EffectState, Graphics>();
+  const textObjs = new Map<FloatingTextState, Text>();
+  const drawEffects = (now: number, floor: number): void => {
+    const live = new Set(world.effects);
+    for (const [e, g] of effectGfx)
+      if (!live.has(e)) {
+        g.destroy();
+        effectGfx.delete(e);
+      }
+    for (const e of world.effects) {
+      if (e.pos.z !== floor) continue;
+      let g = effectGfx.get(e);
+      if (!g) {
+        g = new Graphics();
+        if (e.effectId === EFFECT_HIT)
+          g.circle(16, 16, 7)
+            .fill(COLORS.hit)
+            .circle(9, 11, 3)
+            .fill(COLORS.hit)
+            .circle(23, 21, 3)
+            .fill(COLORS.hit);
+        else g.circle(16, 16, 9).stroke({ width: 3, color: COLORS.block });
+        effectLayer.addChild(g);
+        effectGfx.set(e, g);
+      }
+      const p = tileToScreen(cam, e.pos.x, e.pos.y, T);
+      g.position.set(Math.round(p.x), Math.round(p.y));
+      g.scale.set(scale);
+      g.alpha = 1 - Math.min(1, (now - e.start) / EFFECT_MS) * 0.6;
+    }
+    const liveTexts = new Set(world.floatingTexts);
+    for (const [f, o] of textObjs)
+      if (!liveTexts.has(f)) {
+        o.destroy();
+        textObjs.delete(f);
+      }
+    for (const f of world.floatingTexts) {
+      if (f.pos.z !== floor) continue;
+      let o = textObjs.get(f);
+      if (!o) {
+        o = new Text({
+          text: String(f.amount),
+          style: {
+            fontFamily: "sans-serif",
+            fontSize: 13,
+            fontWeight: "bold",
+            fill: textColor(f.kind),
+            stroke: { color: 0x000000, width: 3 },
+          },
+          anchor: { x: 0.5, y: 1 },
+          roundPixels: true,
+        });
+        textLayer.addChild(o);
+        textObjs.set(f, o);
+      }
+      const k = Math.min(1, (now - f.start) / FLOATING_TEXT_MS);
+      const p = tileToScreen(cam, f.pos.x + 0.5, f.pos.y + 0.6 - k * 0.9, T);
+      o.position.set(Math.round(p.x), Math.round(p.y));
+    }
   };
 
   const draw = (now: number): void => {
@@ -190,9 +319,14 @@ export async function createGameCanvas(
         w && (w.from.y > w.to.y || (w.from.y === w.to.y && w.from.x > w.to.x)) ? w.from : c.pos;
       view.placeEntity(s.body, later.x, later.y);
       const head = tileToScreen(cam, p.x + 0.5, p.y, T);
-      s.label.position.set(Math.round(head.x), Math.round(head.y));
+      const barTop = Math.round(head.y) - BAR_H * scale;
+      s.bar.position.set(Math.round(head.x), barTop);
+      s.bar.scale.set(scale);
+      s.label.position.set(Math.round(head.x), barTop - 1);
     }
     for (const id of [...sprites.keys()]) if (!seen.has(id)) dropSprite(id);
+    world.expire(now);
+    drawEffects(now, self.pos.z);
   };
 
   app.ticker.add(() => {
@@ -208,12 +342,18 @@ export async function createGameCanvas(
       y: ((clientY - r.top) * canvas.height) / r.height,
     };
   };
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 && e.button !== 2) return;
     const self = world.self;
     if (!self) return;
     const p = toCanvas(e.clientX, e.clientY);
     const tile = screenToTile(cam, p.x, p.y, T);
+    if (e.button === 2) {
+      const c = world.creatureAt(tile.x, tile.y, self.pos.z);
+      if (c && c.id !== world.selfId) opts.clickCreature(c.id);
+      return;
+    }
     opts.clickTile(tile.x, tile.y, self.pos.z);
   });
 
@@ -233,6 +373,8 @@ export async function createGameCanvas(
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);
+      for (const g of effectGfx.values()) g.destroy();
+      for (const o of textObjs.values()) o.destroy();
       view.destroy();
       app.destroy(true, { children: true });
     },

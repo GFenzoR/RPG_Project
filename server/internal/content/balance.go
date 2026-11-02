@@ -17,7 +17,28 @@ type Balance struct {
 	Skills     struct {
 		Base map[string]SkillBase `yaml:"base"`
 	} `yaml:"skills"`
+	Combat Combat `yaml:"combat"`
 }
+
+// Combat holds the melee constants (docs/02-game-design.md, "Combate").
+type Combat struct {
+	AttackIntervalMs   int                   `yaml:"attack_interval_ms"`
+	FistAttack         int                   `yaml:"fist_attack"`
+	SkillAttackDivisor int                   `yaml:"skill_attack_divisor"`
+	LevelDivisor       int                   `yaml:"level_divisor"`
+	ShieldBlockDivisor int                   `yaml:"shield_block_divisor"`
+	MonsterCorpseMs    int                   `yaml:"monster_corpse_ms"`
+	Modes              map[string]CombatMode `yaml:"modes"`
+}
+
+// CombatMode scales attack and shield defense for a fight stance.
+type CombatMode struct {
+	Attack  float64 `yaml:"attack"`
+	Defense float64 `yaml:"defense"`
+}
+
+// Stances are the fight stances of balance.yaml, in protocol order (FightStance 1..3).
+var Stances = [...]string{"offensive", "balanced", "defensive"}
 
 // Movement holds the walking constants (docs/02-game-design.md, "Movimiento").
 type Movement struct {
@@ -102,5 +123,22 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 100 {
 		return Balance{}, errors.New("movement.max_path_tiles must be in 1..100 (world.MaxPathLength)")
 	}
+	if err := b.Combat.check(); err != nil {
+		return Balance{}, err
+	}
 	return b, nil
+}
+
+func (c Combat) check() error {
+	if c.AttackIntervalMs <= 0 || c.FistAttack <= 0 || c.SkillAttackDivisor <= 0 ||
+		c.LevelDivisor <= 0 || c.ShieldBlockDivisor <= 0 || c.MonsterCorpseMs <= 0 {
+		return errors.New("combat: attack_interval_ms, fist_attack, divisors and monster_corpse_ms must be > 0")
+	}
+	for _, s := range Stances {
+		m, ok := c.Modes[s]
+		if !ok || m.Attack < 0 || m.Defense < 0 {
+			return fmt.Errorf("combat.modes.%s missing or negative", s)
+		}
+	}
+	return nil
 }

@@ -221,6 +221,35 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   manda `CreatureTurn` a quien lo ve (nada si ya miraba hacia ahí).
 - `Ping` → `Pong` en el batch de ese tick.
 
+### Combate cuerpo a cuerpo (T1.6, `server/internal/session/combat.go`)
+- `SetTarget{creature_id}` elige un monstruo que el cliente conoce, en su mismo piso, con
+  ninguno de los dos en zona de protección. Si no vale (también jugadores y NPCs, hasta
+  PvP), el servidor lo descarta y manda `Message` de sistema `combat.cannot_attack`; el
+  cliente suelta el objetivo al recibirlo. `0` deja de atacar. El objetivo se pierde
+  solo cuando sale de la vista o muere: el cliente lo suelta con su `CreatureDisappear`.
+- `SetFightMode{stance, chase}`: `stance` ofensivo/equilibrado/defensivo multiplica el
+  golpe máximo y la defensa del escudo (`combat.modes` de `balance.yaml`); `UNSPECIFIED`
+  se ignora. Por defecto equilibrado y sin perseguir. Con `chase` el jugador da un paso
+  hacia su objetivo cuando no está pegado a él y no tiene pasos en cola.
+- Ronda: con el objetivo a una casilla (también en diagonal) el jugador golpea cada
+  `combat.attack_interval_ms` (2000 ms). Fórmulas en `server/internal/combat` (doc 02).
+  Hasta T1.7/T1.8 golpea con los puños (`combat.fist_attack`, skill `fist` inicial) y sin
+  armadura ni escudo.
+- Cada golpe (de jugador o de monstruo) manda a quien ve la casilla: `Effect`
+  (`effect_id` 1 = golpe con daño, 2 = bloqueado o fallado) y, si hubo daño,
+  `FloatingText{DAMAGE}` y `CreatureHealth`. El jugador golpeado recibe además
+  `PlayerStats`. Los `effect_id` son constantes del protocolo hasta que exista
+  `data/effects.yaml`.
+- Muerte de un monstruo: `CreatureDisappear`, `TileUpdate` con `creature_remains` encima
+  de la pila (dura `combat.monster_corpse_ms`; abrirlo llega con T1.8),
+  `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
+  se reparte según el daño de los que siguen conectados) y, al que más daño hizo,
+  `Message` de sistema `combat.loot` con un parámetro `monster` (`content_id`) y un
+  parámetro `item` por pila del botín (el cliente los junta en `{items}`), o
+  `combat.loot_none` si no hubo botín.
+- Hasta la muerte real (T1.11), un jugador con 0 de vida despierta en el templo con la vida
+  llena, sin perder nada, y recibe `combat.defeated`.
+
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
 |---|---|

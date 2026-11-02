@@ -223,6 +223,8 @@ func TestBinaryRoundTrip(t *testing.T) {
 	)
 	s := m.SectorAt(pt(30, 30))
 	s.Stacks = []TileStack{{Index: 5, Items: []uint16{4, 5}}, {Index: 900, Items: []uint16{6}}}
+	m.Islands()[0].Spawns = []Spawn{{ID: "wolves", Center: pt(31, 30), Radius: 2, RespawnSeconds: 60,
+		Monsters: []SpawnMonster{{Monster: "wolf", Count: 3}, {Monster: "bilge_rat", Count: 1}}}}
 	var buf bytes.Buffer
 	if err := Encode(&buf, m); err != nil {
 		t.Fatal(err)
@@ -293,6 +295,7 @@ func seventeenFloors() []byte {
 	w.u16(0)
 	w.u16(0)
 	w.u8(7)
+	w.u16(0) // no spawns
 	w.u32(0) // no sectors
 	_ = bw.Flush()
 	return binary.LittleEndian.AppendUint32(buf.Bytes(), crc32.ChecksumIEEE(buf.Bytes()))

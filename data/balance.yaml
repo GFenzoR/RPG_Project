@@ -34,6 +34,16 @@ skills:
 
 combat:
   attack_interval_ms: 2000
+  # Melee (docs/02-game-design.md, "Combate"):
+  #   max_hit = skill * attack / skill_attack_divisor + level / level_divisor, × mode attack
+  #   hit = random(0, max_hit) × (1 - physical resistance)
+  #   target armor removes random(armor/2, armor); a monster's defense random(0, defense/2);
+  #   a player's shield random(0, shield_defense × mode defense / shield_block_divisor).
+  fist_attack: 7              # attack value of bare hands (no weapon equipped)
+  skill_attack_divisor: 10
+  level_divisor: 4
+  shield_block_divisor: 4
+  monster_corpse_ms: 60000    # how long a monster's remains (and its loot) stay
   modes:
     offensive: { attack: 1.25, defense: 0.55 }
     balanced: { attack: 1.0, defense: 1.0 }
