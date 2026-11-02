@@ -257,6 +257,22 @@ Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1) y las quests sec
   effect: { heal: { base: 18, per_level: 0.25, per_magic_level: 1.4 } }
   visual: heal_sparkle
 ```
+Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
+- `effect` tiene exactamente uno de: `damage` (`element`, `base`, `per_level`,
+  `per_magic_level`, `spread`; con `range` golpea a un objetivo a esa distancia, con
+  `radius` a todo monstruo en un círculo alrededor del que lanza; uno de los dos), `heal`
+  (mismos factores) o `conjure: { item }` (crea ese item, una runa con todas sus cargas, en
+  la mochila). `haste` y `light` están en el esquema para hitos futuros y el servidor los
+  rechaza todavía.
+- `group` es `attack`, `healing` o `support`; `cooldown_ms` bloquea el hechizo y
+  `group_cooldown_ms` a todo su grupo. `magic_level` es el nivel mágico mínimo.
+- Las palabras deben ser únicas (el validador lo revisa) y propias. Los nombres van en
+  `i18n/*/spells.yaml` (`spell.<id>.name`). `visual` todavía no se usa: el efecto sale del
+  elemento.
+- **Runas** (`kind: rune`): `rune: { spell, charges, magic_level }`. Lanzan el efecto de
+  `spell` sin maná ni palabras, exigen `magic_level` y gastan una carga por uso.
+- **Varitas**: `weapon: { type: wand, attack, range, element }`; golpean
+  `aleatorio(attack × combat.wand_min_factor, attack)` del elemento (`balance.yaml`).
 
 ## Receta de oficio
 ```yaml

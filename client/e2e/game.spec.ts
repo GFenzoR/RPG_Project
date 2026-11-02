@@ -313,3 +313,95 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
   expect(errors).toEqual([]);
 });
+
+test("an arcanist casts a spell with F1 and by its words", async ({ page, playwright }) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-magic-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Mage ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "arcanist" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  errors.length = 0; // the 401 of opening the page without a session cookie
+
+  // The bar starts with the arcanist's spells by level: F1 is the arc bolt.
+  const hotbar = page.getByTestId("hotbar");
+  await expect(hotbar.locator('[data-hotkey="F1"] [data-spell="arc_bolt"]')).toBeVisible();
+  await expect(hotbar.locator('[data-hotkey="F1"]')).toContainText("rayo de arco");
+
+  // Words that are no spell do nothing; a spell without a target is refused by the server.
+  const sayInput = page.getByTestId("say").getByRole("textbox");
+  await sayInput.fill("fulgur iacio");
+  await sayInput.press("Enter");
+  await expect(page.getByTestId("game-log")).toContainText("Necesitas un objetivo.");
+
+  // Walk towards the wolves of testisle and target the first one that shows up.
+  const start = await self(page);
+  if (!start) throw new Error("no own creature");
+  const click = async (x: number, y: number): Promise<void> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    if (!p) throw new Error("no canvas");
+    await page.mouse.click(p.x, p.y);
+  };
+  await click(start.x, start.y - 5);
+  await arrived(page, start.x, start.y - 5);
+  await click(start.x, start.y - 9);
+  const battle = page.getByTestId("battle-list");
+  const wolf = battle.getByRole("button", { name: /lobo/ }).first();
+  await expect(wolf).toBeVisible({ timeout: 30_000 });
+  await wolf.click();
+  await expect(wolf).toHaveAttribute("aria-pressed", "true");
+
+  // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
+  // the projectile or its energy effect on screen.
+  await page.locator("body").click({ position: { x: 1, y: 1 } }); // focus out of the say line
+  await expect
+    .poll(
+      async () => {
+        await page.keyboard.press("F1");
+        await page.waitForTimeout(60);
+        const m = await page.evaluate(() => window.__rpgClient?.magic(300));
+        return (m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13);
+      },
+      { timeout: 30_000, intervals: [250] },
+    )
+    .toBe(true);
+  await shot(page, "11-spell");
+  // The cast spent mana and started the cooldown shade on F1.
+  await expect(hotbar.locator('[data-hotkey="F1"] .cd')).toBeVisible();
+  await hotbar.screenshot({ path: join(shots, "12-hotbar.png") });
+
+  await page.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+  expect(errors).toEqual([]);
+});

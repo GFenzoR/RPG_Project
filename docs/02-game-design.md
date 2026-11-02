@@ -104,6 +104,24 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
   individual y por grupo (ataque / curación / soporte). Las palabras mágicas son
   inventadas por nosotros: nunca uses las de Tibia.
 - Runas: items de uso con carga; las crea el mago gastando maná.
+- **Magia (T1.9, `server/internal/session/magic.go`):** un hechizo exige vocación, nivel,
+  nivel mágico, que no estén corriendo ni su cooldown ni el de su grupo, y maná. Si además
+  encuentra objetivo, rango, línea de visión (los muros la cortan) y no hay zona de
+  protección, se aplica; recién ahí se gasta el maná, que suma lo mismo en intentos de
+  nivel mágico (`skills.base.magic`), y empiezan ambos cooldowns. Un hechizo fallido no
+  cuesta nada.
+  - Daño y curación: `base + nivel × per_level + nivel_mágico × per_magic_level`, con un
+    valor uniforme en ±`spread`; al monstruo se le aplica `× (1 − resistencia del
+    elemento %)` (100 % o más = inmune, negativa = debilidad). Armadura y defensa no frenan
+    la magia.
+  - Área (`radius`): cada monstruo del círculo (`dx² + dy² ≤ r² + r`) con línea de visión
+    desde el que lanza tira su propio daño; lo que queda detrás de un muro no se toca.
+  - Varitas: arma a distancia del Arcanista; no entrenan skill ni gastan maná.
+  - Runas: las conjura un hechizo de soporte; cualquiera con su nivel mágico las usa sobre
+    una criatura o tile; comparten el cooldown de grupo de su hechizo, no el propio.
+  - Monstruos: sus ataques `distance` y `spell` pegan a su objetivo dentro de `range` y con
+    línea de visión, también mientras se acercan (el `radius` de sus hechizos llega más
+    adelante).
 - Condiciones: veneno, fuego, eléctrico, paralyze, haste, invisibilidad (hito 3).
 - Zonas de protección: no se puede atacar ni ser atacado.
 
@@ -120,7 +138,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   libre. `requires.level`, `requires.vocations` y los `weapons` de la vocación
   (`data/vocations.yaml`) se validan al equipar. Munición: sin items todavía.
 - **Combate:** el arma de la mano derecha da el ataque y la skill (`weapon.type`; una
-  varita cuenta como puños hasta T1.9), el escudo de la izquierda la defensa y la suma
+  varita dispara a distancia desde T1.9), el escudo de la izquierda la defensa y la suma
   de `armor` de todo el equipo la armadura del jugador contra golpes físicos.
 - **Contenedores:** una mochila (o los restos de un monstruo) tiene `container.slots`
   lugares. Los contenedores se anidan hasta 8 niveles; no se puede meter uno dentro de sí

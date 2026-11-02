@@ -74,6 +74,16 @@ client/
   canvas). En el canvas: arrastrar el item de arriba, click derecho = usar (o atacar si
   hay criatura), Mayús+click = mirar. En el DOM: click derecho = usar, Mayús+click = mirar.
 
+## Notas de T1.9
+- `content.spells` (de `data/spells.yaml`) alimenta la barra de hotkeys `ui/Hotbar.tsx`:
+  F1–F12 lanzan el hechizo del slot (`CastSpell` por id), el lápiz deja elegir uno por
+  slot y se guarda por vocación en `localStorage` (`state/hotkeys.ts`). La sombra de cada
+  slot es lo que falta del cooldown propio o de grupo (`SpellCooldown`).
+- La línea "Decir" manda `Say` en el canal local: si son palabras mágicas, el servidor
+  lanza el hechizo (el chat completo es T1.13).
+- `WorldState.projectiles` guarda los `Projectile` 250 ms; efectos y proyectiles mágicos
+  son formas Pixi coloreadas por elemento (`ELEMENTS`).
+
 ## Verificación visual (obligatoria si tocas render o UI)
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda
 screenshots en `client/e2e/screenshots/`. Ábrelos con Read y revísalos antes de cerrar.

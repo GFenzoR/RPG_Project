@@ -13,14 +13,14 @@ import { fileURLToPath } from "node:url";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
-import type { ClientContent, ItemDef } from "../src/content-types.ts";
+import type { ClientContent, ItemDef, SpellDef } from "../src/content-types.ts";
 
 const VIRTUAL_ID = "virtual:rpg-content";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
 const LANGUAGES = ["es", "en"];
 /** i18n catalogs the client uses (all keys), and those it only takes names from. */
 const CATALOGS = ["client.yaml", "vocations.yaml"];
-const NAME_CATALOGS = ["monsters.yaml", "npcs.yaml", "items.yaml"];
+const NAME_CATALOGS = ["monsters.yaml", "npcs.yaml", "items.yaml", "spells.yaml"];
 const ATLAS_FILE = /^atlas(-\d+)?\.(png|json)$/;
 
 export const repoRoot = (): string =>
@@ -95,10 +95,36 @@ export function loadClientContent(root: string): ClientContent {
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
     : [];
+  let rawSpells: unknown;
+  try {
+    rawSpells = readYaml(join(root, "data", "spells.yaml"));
+  } catch {
+    rawSpells = []; // no spells yet
+  }
+  const spells: SpellDef[] = Array.isArray(rawSpells)
+    ? rawSpells.flatMap((s) =>
+        isObj(s) && typeof s["id"] === "string"
+          ? [
+              {
+                id: s["id"],
+                words: typeof s["words"] === "string" ? s["words"] : "",
+                group: typeof s["group"] === "string" ? s["group"] : "",
+                level: num(s["level"], 1),
+                magicLevel: num(s["magic_level"], 0),
+                mana: num(s["mana"], 0),
+                vocations: Array.isArray(s["vocations"])
+                  ? s["vocations"].filter((v): v is string => typeof v === "string")
+                  : [],
+              },
+            ]
+          : [],
+      )
+    : [];
   return {
     items,
     monsterSprites: monsters,
     vocations,
+    spells,
     movement: {
       baseStepMs: num(mv["base_step_ms"], 1000),
       diagonalCost: num(mv["diagonal_cost"], 1.5),

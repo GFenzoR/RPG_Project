@@ -19,6 +19,18 @@ export interface ItemDef {
   slots: number;
 }
 
+/** A spell of data/spells.yaml, for the hotkey bar (the server validates every cast). */
+export interface SpellDef {
+  id: string;
+  words: string;
+  /** attack | healing | support: casting blocks the group for its group cooldown. */
+  group: string;
+  level: number;
+  magicLevel: number;
+  mana: number;
+  vocations: string[];
+}
+
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
@@ -26,6 +38,8 @@ export interface ClientContent {
   monsterSprites: Record<string, string>;
   /** Vocation IDs a new character can pick (data/vocations.yaml, in file order). */
   vocations: string[];
+  /** data/spells.yaml in file order. */
+  spells: SpellDef[];
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
   /** Language → key → text. */
   i18n: Record<string, Record<string, string>>;

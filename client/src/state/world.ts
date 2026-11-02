@@ -18,6 +18,7 @@ import type {
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
 import type { ClientContent, ItemDef } from "../content-types.ts";
+import type { Cooldown } from "./hotkeys.ts";
 import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import type { Pos } from "./geometry.ts";
 
@@ -47,6 +48,14 @@ export interface CreatureState {
 export interface EffectState {
   pos: Pos;
   effectId: number;
+  start: number;
+}
+
+/** A projectile flying between two tiles (Projectile.projectile_id, T1.9). */
+export interface ProjectileState {
+  from: Pos;
+  to: Pos;
+  projectileId: number;
   start: number;
 }
 
@@ -96,6 +105,16 @@ export interface LevelUpState {
 /** Effect ids (server/internal/session/combat.go). */
 export const EFFECT_HIT = 1;
 export const EFFECT_BLOCK = 2;
+/** Magic effects (server/internal/session/magic.go): heal, conjure, and the element of
+ * an elemental hit or area tile as EFFECT_ELEMENT + index of ELEMENTS. */
+export const EFFECT_HEAL = 3;
+export const EFFECT_CONJURE = 4;
+export const EFFECT_ELEMENT = 10;
+/** Projectile ids are PROJECTILE_ELEMENT + index of ELEMENTS. */
+export const PROJECTILE_ELEMENT = 1;
+export const ELEMENTS = ["physical", "fire", "ice", "energy", "earth", "holy", "death"] as const;
+/** Flight time of a projectile, ms. */
+export const PROJECTILE_MS = 250;
 /** How long effects and floating texts live, ms. */
 export const EFFECT_MS = 600;
 export const FLOATING_TEXT_MS = 1000;
@@ -148,6 +167,10 @@ export class WorldState implements TileSource {
   levelUp: LevelUpState | undefined;
   effects: EffectState[] = [];
   floatingTexts: FloatingTextState[] = [];
+  projectiles: ProjectileState[] = [];
+  /** Running cooldowns (SpellCooldown) by spell ID and by spell group. */
+  readonly spellCooldowns = new Map<string, Cooldown>();
+  readonly groupCooldowns = new Map<string, Cooldown>();
   log: LogMessage[] = [];
   /** Equipped items by slot (Inventory). */
   inventory = new Map<EquipmentSlot, ItemView>();
@@ -267,6 +290,25 @@ export class WorldState implements TileSource {
       case "effect":
         this.effects.push({ pos: posOf(msg.value.pos), effectId: msg.value.effectId, start: now });
         break;
+      case "projectile":
+        this.projectiles.push({
+          from: posOf(msg.value.from),
+          to: posOf(msg.value.to),
+          projectileId: msg.value.projectileId,
+          start: now,
+        });
+        break;
+      case "spellCooldown": {
+        const v = msg.value;
+        if (v.cooldownMs > 0)
+          this.spellCooldowns.set(v.spellId, { until: now + v.cooldownMs, total: v.cooldownMs });
+        if (v.groupCooldownMs > 0)
+          this.groupCooldowns.set(v.group, {
+            until: now + v.groupCooldownMs,
+            total: v.groupCooldownMs,
+          });
+        break;
+      }
       case "floatingText":
         this.floatingTexts.push({
           pos: posOf(msg.value.pos),
@@ -458,6 +500,8 @@ export class WorldState implements TileSource {
       this.effects = this.effects.filter((e) => now - e.start < EFFECT_MS);
     if (this.floatingTexts.length > 0)
       this.floatingTexts = this.floatingTexts.filter((f) => now - f.start < FLOATING_TEXT_MS);
+    if (this.projectiles.length > 0)
+      this.projectiles = this.projectiles.filter((p) => now - p.start < PROJECTILE_MS);
   }
 
   /** The creatures of the battle list: everyone in view on the own floor but oneself, closest first. */
