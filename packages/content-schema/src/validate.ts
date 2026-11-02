@@ -1,6 +1,6 @@
 // Validates data/ and i18n/ against the JSON Schemas plus the rules a schema cannot
 // express: unique IDs, cross references, dialog graphs, translations and ids.lock.yaml.
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { checkIdsLock } from "./ids.ts";
 import { SchemaSet } from "./schemas.ts";
@@ -9,6 +9,35 @@ import { loadYaml, parseYaml, suggest } from "./source.ts";
 import type { Diagnostic, PathSegment, SourceFile } from "./source.ts";
 
 export const LANGUAGES = ["es", "en"] as const;
+
+/** Source trees whose literal i18n keys must exist (checkCodeKeys). */
+const CODE_DIRS = [
+  { dir: "server/internal", ext: [".go"] },
+  { dir: "client/src", ext: [".ts", ".tsx"] },
+  { dir: "editor/src", ext: [".ts", ".tsx"] },
+];
+
+/** A literal that is a file name ("island.yaml"), not an i18n key. */
+const FILE_NAME = /\.(ya?ml|json|go|tsx?|css|png|bin|sql)$/;
+
+/** Source files under dir (recursively) with one of ext, skipping tests and generated code. */
+function codeFiles(dir: string, ext: readonly string[]): string[] {
+  if (!existsSync(dir)) return [];
+  const out: string[] = [];
+  for (const entry of readdirSync(dir).sort()) {
+    const abs = join(dir, entry);
+    if (statSync(abs).isDirectory()) {
+      if (entry !== "pb" && entry !== "node_modules" && entry !== "testdata")
+        out.push(...codeFiles(abs, ext));
+    } else if (
+      ext.some((e) => entry.endsWith(e)) &&
+      !/(_test\.go|\.test\.tsx?|\.pb\.go|\.d\.ts)$/.test(entry)
+    ) {
+      out.push(abs);
+    }
+  }
+  return out;
+}
 
 const SKILLS = {
   combat: ["fist", "sword", "axe", "club", "distance", "shield", "magic", "fishing"],
@@ -729,11 +758,46 @@ class Validator {
         this.error(k.src, k.path, `i18n key "${k.value}" is missing in: ${missing.join(", ")}`);
       }
     }
+    this.checkCodeKeys(catalogs);
     // Shared UI keys (dialog.*, ui.*) are used by code, not data; only data-owned prefixes are checked.
     const dataPrefixes = ["item.", "monster.", "npc.", "quest.", "spell.", "vocation."];
     for (const [key, entry] of reference) {
       if (!used.has(key) && dataPrefixes.some((p) => key.startsWith(p))) {
         this.warn(entry.src, [key], `i18n key "${key}" is not used by any file in data/`);
+      }
+    }
+  }
+
+  /**
+   * Every i18n key the code uses as a literal exists in every language: string
+   * literals of the server's Go (the msg* constants it sends as Message.localized) and
+   * of the client and editor TypeScript (t("...") and key tables). A literal counts as
+   * a key when it looks like one (dotted, lower case) and its first segment is a
+   * namespace of the catalogs (client., chat., combat.), so paths and ids are skipped.
+   * Keys built at run time (`skill.${id}.name`) are not checked here.
+   */
+  private checkCodeKeys(catalogs: Map<string, Map<string, unknown>>): void {
+    const namespaces = new Set<string>();
+    for (const cat of catalogs.values())
+      for (const key of cat.keys()) namespaces.add(key.split(".")[0] ?? "");
+    const literal = /["'`]([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)["'`]/g;
+    for (const { dir, ext } of CODE_DIRS) {
+      for (const file of codeFiles(join(this.root, dir), ext)) {
+        const rel = file.slice(this.root.length + 1);
+        const lines = readFileSync(file, "utf8").split("\n");
+        lines.forEach((line, i) => {
+          for (const m of line.matchAll(literal)) {
+            const key = m[1] ?? "";
+            if (!namespaces.has(key.split(".")[0] ?? "") || FILE_NAME.test(key)) continue;
+            const missing = LANGUAGES.filter((lang) => !catalogs.get(lang)?.has(key));
+            if (missing.length > 0)
+              this.error(
+                `${rel}:${i + 1}`,
+                [],
+                `i18n key "${key}" is missing in: ${missing.join(", ")}`,
+              );
+          }
+        });
       }
     }
   }

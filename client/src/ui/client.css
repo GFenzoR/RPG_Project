@@ -407,16 +407,6 @@ body.using-item canvas {
   border: 1px solid #555;
   border-radius: 3px;
 }
-.say label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.8rem;
-}
-.say input {
-  width: 100%;
-  box-sizing: border-box;
-}
 
 /* ---- NPC dialog and shop (T1.10) ------------------------------------------------- */
 .npc-windows {
@@ -533,4 +523,68 @@ body.using-item canvas {
 }
 .death p {
   margin: 0.25rem 0;
+}
+
+/* ---- chat and language (T1.13) ---------------------------------------------------- */
+.chat {
+  /* stays in view at the bottom of the side panel while it scrolls */
+  position: sticky;
+  bottom: -0.5rem;
+  padding-bottom: 0.5rem;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.chat-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem;
+  height: 8.5rem;
+  overflow-y: auto;
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+.chat-lines .say {
+  color: #f2d94e;
+}
+.chat-lines .yell {
+  color: #ffb347;
+  font-weight: bold;
+}
+.chat-lines .whisper {
+  color: #c9b98a;
+  font-style: italic;
+}
+.chat-lines .global {
+  color: #8fd0ff;
+}
+.chat-lines .npc {
+  color: #9fe3a0;
+}
+.say {
+  display: flex;
+  gap: 0.3rem;
+}
+.say select {
+  flex: none;
+}
+.say input {
+  flex: 1;
+  min-width: 0;
+}
+.corner {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.75rem;
+  z-index: 20;
+}
+.language {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--muted);
 }

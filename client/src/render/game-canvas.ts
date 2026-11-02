@@ -288,6 +288,9 @@ export async function createGameCanvas(
       s = { body, shape, frame, label, bar, drawnDir: -1, drawnHealth: -1, drawnTarget: false };
       sprites.set(c.id, s);
     }
+    // The language can change during the game (T1.13).
+    const name = nameOf(c);
+    if (s.label.text !== name) s.label.text = name;
     if (s.drawnDir !== c.dir) drawShape(s, c);
     if (s.drawnHealth !== c.health) drawBar(s, c.health);
     const targeted = world.target === c.id;

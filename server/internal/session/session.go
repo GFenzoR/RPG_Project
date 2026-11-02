@@ -206,6 +206,12 @@ type World struct {
 	resources      map[world.Pos]*resourceTile
 	gatherFor      game.Tick
 	gatherAFKAfter game.Tick
+
+	// Chat (T1.13): balance.yaml chat converted to ticks.
+	chatRefill game.Tick
+	chatBurst  game.Tick // tolerance: refill × (burst − 1)
+	chatMute   game.Tick
+	chatGlobal game.Tick
 }
 
 // New validates cfg and builds an empty World.
@@ -262,6 +268,7 @@ func New(cfg Config) (*World, error) {
 	if err := w.initNPCs(); err != nil {
 		return nil, err
 	}
+	w.initChat()
 	if err := w.initGathering(); err != nil {
 		return nil, err
 	}

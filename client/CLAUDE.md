@@ -80,7 +80,7 @@ client/
   slot y se guarda por vocación en `localStorage` (`state/hotkeys.ts`). La sombra de cada
   slot es lo que falta del cooldown propio o de grupo (`SpellCooldown`).
 - La línea "Decir" manda `Say` en el canal local: si son palabras mágicas, el servidor
-  lanza el hechizo (el chat completo es T1.13).
+  lanza el hechizo (el chat completo está en T1.13).
 - `WorldState.projectiles` guarda los `Projectile` 250 ms; efectos y proyectiles mágicos
   son formas Pixi coloreadas por elemento (`ELEMENTS`).
 
@@ -106,6 +106,16 @@ client/
   click en el mapa manda `UseItemOn` a esa casilla. Escape, click derecho o click sobre una
   criatura lo cancelan.
 - Efectos 5 (cosecha) y 6 (intento fallido) son formas Pixi en `drawEffect`.
+
+## Notas de T1.13
+- `WorldState.chat` (últimas `CHAT_SIZE` líneas de `Message` no de sistema) aparte del log de
+  sistema; `ui/Chat.tsx` las dibuja (`formatChat`, claves `client.chat.line.<modo>`) con el
+  selector de canal y la línea para escribir. Todo es texto DOM: nunca `innerHTML`.
+- Idioma: `pickLanguage` = `?lang=` → `localStorage` `rpg.lang` → navegador → es. `main.tsx`
+  guarda el idioma en estado y `ui/LanguagePicker.tsx` lo cambia en vivo (esquina fuera del
+  juego, header dentro); el `Game` recibe `t` por un ref y el canvas renombra etiquetas.
+- `translator(texts, lang)` soporta plurales ICU; `make validate` revisa las claves literales
+  del código (cliente, editor y servidor).
 
 ## Verificación visual (obligatoria si tocas render o UI)
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda

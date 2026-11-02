@@ -12,7 +12,8 @@ import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
 import { InventoryPanel } from "./Inventory.tsx";
-import { Hotbar, SayLine } from "./Hotbar.tsx";
+import { Hotbar } from "./Hotbar.tsx";
+import { ChatPanel } from "./Chat.tsx";
 import { DialogWindow } from "./Dialog.tsx";
 
 type Screen =
@@ -26,6 +27,8 @@ export interface AppProps {
   content: ClientContent;
   t: Translate;
   locale: string;
+  /** The language selector: fixed in a corner, or in the game's header. */
+  languagePicker?: JSX.Element;
 }
 
 /** Translated text of an API error code (error.<code>), or a generic message. */
@@ -42,7 +45,11 @@ function disconnectKey(reason: DisconnectReason | undefined): string {
   return `client.disconnect.${name.toLowerCase()}`;
 }
 
-export function App({ content, t, locale }: AppProps): JSX.Element {
+export function App(props: AppProps): JSX.Element {
+  return <Screens {...props} />;
+}
+
+function Screens({ content, t, locale, languagePicker }: AppProps): JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
   const [notice, setNotice] = useState<string | undefined>(undefined);
 
@@ -57,47 +64,60 @@ export function App({ content, t, locale }: AppProps): JSX.Element {
   const toCharacters = (): void => setScreen({ name: "characters" });
   const toLogin = (): void => setScreen({ name: "login" });
 
-  switch (screen.name) {
-    case "loading":
-      return <p class="panel">{t("client.loading")}</p>;
-    case "login":
-      return (
-        <AuthForm
-          t={t}
-          mode="login"
-          onDone={toCharacters}
-          onSwitch={() => setScreen({ name: "register" })}
-        />
-      );
-    case "register":
-      return <AuthForm t={t} mode="register" onDone={toCharacters} onSwitch={toLogin} />;
-    case "characters":
-      return (
-        <Characters
-          t={t}
-          content={content}
-          notice={notice}
-          onPlay={(character, sessionToken) => {
-            setNotice(undefined);
-            setScreen({ name: "game", character, sessionToken });
-          }}
-          onLoggedOut={toLogin}
-        />
-      );
-    case "game":
-      return (
-        <GameScreen
-          t={t}
-          content={content}
-          locale={locale}
-          character={screen.character}
-          sessionToken={screen.sessionToken}
-          onEnd={(reason) => {
-            setNotice(t(disconnectKey(reason)));
-            toCharacters();
-          }}
-        />
-      );
+  const view = current();
+  // Outside the game the selector sits in a corner; the game puts it in its header.
+  if (screen.name === "game" || !languagePicker) return view;
+  return (
+    <>
+      <div class="corner">{languagePicker}</div>
+      {view}
+    </>
+  );
+
+  function current(): JSX.Element {
+    switch (screen.name) {
+      case "loading":
+        return <p class="panel">{t("client.loading")}</p>;
+      case "login":
+        return (
+          <AuthForm
+            t={t}
+            mode="login"
+            onDone={toCharacters}
+            onSwitch={() => setScreen({ name: "register" })}
+          />
+        );
+      case "register":
+        return <AuthForm t={t} mode="register" onDone={toCharacters} onSwitch={toLogin} />;
+      case "characters":
+        return (
+          <Characters
+            t={t}
+            content={content}
+            notice={notice}
+            onPlay={(character, sessionToken) => {
+              setNotice(undefined);
+              setScreen({ name: "game", character, sessionToken });
+            }}
+            onLoggedOut={toLogin}
+          />
+        );
+      case "game":
+        return (
+          <GameScreen
+            t={t}
+            content={content}
+            locale={locale}
+            languagePicker={languagePicker}
+            character={screen.character}
+            sessionToken={screen.sessionToken}
+            onEnd={(reason) => {
+              setNotice(t(disconnectKey(reason)));
+              toCharacters();
+            }}
+          />
+        );
+    }
   }
 }
 
@@ -302,6 +322,7 @@ function GameScreen(props: {
   t: Translate;
   content: ClientContent;
   locale: string;
+  languagePicker: JSX.Element | undefined;
   character: Character;
   sessionToken: string;
   onEnd(reason: DisconnectReason | undefined): void;
@@ -309,6 +330,9 @@ function GameScreen(props: {
   const { t } = props;
   const host = useRef<HTMLDivElement>(null);
   const game = useRef<Game | undefined>(undefined);
+  // The Game lives as long as the session; a language change reaches it through here.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [entered, setEntered] = useState(false);
   const [ui, setUi] = useState<GameUi>({
     battle: [],
@@ -318,6 +342,7 @@ function GameScreen(props: {
     levelUp: undefined,
     death: undefined,
     log: [],
+    chat: [],
     inventory: new Map(),
     containers: [],
     hotkeys: [],
@@ -336,7 +361,7 @@ function GameScreen(props: {
     const g = new Game({
       host: host.current,
       content: props.content,
-      t,
+      t: (key, params) => tRef.current(key, params),
       locale: props.locale,
       sessionToken: props.sessionToken,
       vocation: props.character.vocation,
@@ -384,6 +409,7 @@ function GameScreen(props: {
           </span>
         )}
         <span class="hint">{t("client.game.controls")}</span>
+        {props.languagePicker}
         <button type="button" onClick={() => game.current?.logout()}>
           {t("client.game.logout")}
         </button>
@@ -478,12 +504,12 @@ function GameScreen(props: {
           </section>
           <InventoryPanel t={t} content={props.content} game={game.current} ui={ui} />
           <SkillsPanel t={t} skills={ui.skills} />
-          <SayLine t={t} game={game.current} />
           <ul class="log" data-testid="game-log" aria-live="polite">
             {ui.log.map((m, i) => (
               <li key={`${m.at}-${i}`}>{formatMessage(m, props.content, t)}</li>
             ))}
           </ul>
+          <ChatPanel t={t} content={props.content} game={game.current} ui={ui} />
         </aside>
       </div>
     </div>

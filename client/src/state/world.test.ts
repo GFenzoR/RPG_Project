@@ -65,6 +65,7 @@ const content: ClientContent = {
   vocations: ["guardian"],
   spells: [],
   movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  chat: { maxLength: 255 },
   i18n: {},
 };
 

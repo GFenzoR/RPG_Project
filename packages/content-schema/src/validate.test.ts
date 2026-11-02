@@ -62,6 +62,25 @@ describe("validator diagnostics", () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+  it("checks the i18n keys the server and client code use", () => {
+    mkdirSync(file("server/internal/session"), { recursive: true });
+    mkdirSync(file("client/src/ui"), { recursive: true });
+    writeFileSync(
+      file("server/internal/session/x.go"),
+      'package session\n\nconst (\n\tmsgOk = "chat.flood"\n\tmsgBad = "chat.nope"\n\tpath = "island.yaml"\n)\n',
+    );
+    writeFileSync(file("server/internal/session/x_test.go"), 'const k = "chat.ignored_in_tests"\n');
+    writeFileSync(
+      file("client/src/ui/X.tsx"),
+      'const a = t("client.title");\nconst b = { key: "client.chat.missing" };\nconst c = t(`skill.${id}.name`);\nimport "./x.css";\n',
+    );
+    const out = messages(root).filter((m) => m.startsWith("error"));
+    expect(out).toEqual([
+      'error server/internal/session/x.go:5 i18n key "chat.nope" is missing in: es, en',
+      'error client/src/ui/X.tsx:2 i18n key "client.chat.missing" is missing in: es, en',
+    ]);
+  });
+
   it("points at file:line:col and suggests the closest id for unknown references", () => {
     edit("data/monsters/wolf.yaml", "item: wolf_pelt,", "item: wolf_pelts,");
     expect(messages(root)).toContain(

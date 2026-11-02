@@ -122,17 +122,6 @@ func (w *World) castSpell(ctx *game.TickContext, p *Player, m *pb.CastSpell) {
 	}
 }
 
-// say runs a Say: text on the say channel that matches a spell's words casts it. The
-// chat itself (showing the text to others) arrives with T1.13.
-func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
-	if m.GetChannel() != pb.ChatChannel_CHAT_CHANNEL_SAY {
-		return
-	}
-	if s := w.spellWords[content.NormalizeWords(m.GetText())]; s != nil {
-		w.cast(ctx, p, s, nil)
-	}
-}
-
 // cast checks vocation, level, magic level, cooldowns and mana, applies s and then
 // spends the mana (which trains the magic level) and starts both cooldowns. A cast that
 // fails (no target, out of range, no line of sight...) costs nothing.

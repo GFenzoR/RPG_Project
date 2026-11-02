@@ -22,6 +22,7 @@ import type {
   ItemView,
   DeathState,
   LevelUpState,
+  ChatLine,
   LogMessage,
   PlayerStatsState,
   ShopState,
@@ -37,6 +38,7 @@ export interface GameUi {
   levelUp: LevelUpState | undefined;
   death: DeathState | undefined;
   log: LogMessage[];
+  chat: ChatLine[];
   inventory: Map<EquipmentSlot, ItemView>;
   containers: ContainerState[];
   /** Spell ID of each hotkey F1..F12 (undefined = empty). */
@@ -198,11 +200,14 @@ export class Game {
     this.conn.send({ case: "castSpell", value: { spell: { case: "spellId", value: spellId } } });
   }
 
-  /** Says text on the local channel: the server casts it if it is a spell's words. */
-  say(text: string): void {
-    const trimmed = text.trim().slice(0, 255);
-    if (trimmed)
-      this.conn.send({ case: "say", value: { channel: ChatChannel.SAY, text: trimmed } });
+  /**
+   * Says text on a channel (say, yell, whisper or global). On the say channel the
+   * server casts it instead if it is a spell's words. The server enforces the length
+   * and the anti-flood limits; the client only trims and caps to save a round trip.
+   */
+  say(text: string, channel: ChatChannel = ChatChannel.SAY): void {
+    const trimmed = [...text.trim()].slice(0, this.opts.content.chat.maxLength).join("");
+    if (trimmed) this.conn.send({ case: "say", value: { channel, text: trimmed } });
   }
 
   /** Assigns a spell (or nothing) to hotkey slot 0..11 and remembers it. */
@@ -349,6 +354,7 @@ export class Game {
       levelUp: w.levelUp,
       death: w.death,
       log: [...w.log],
+      chat: [...w.chat],
       inventory: w.inventory,
       containers: w.containers,
       hotkeys: this.hotkeys,

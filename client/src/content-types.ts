@@ -43,6 +43,8 @@ export interface ClientContent {
   /** data/spells.yaml in file order. */
   spells: SpellDef[];
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
+  /** balance.yaml chat (T1.13): the server enforces it, the input only caps to it. */
+  chat: { maxLength: number };
   /** Language → key → text. */
   i18n: Record<string, Record<string, string>>;
 }

@@ -308,8 +308,8 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
 Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
 - **`CastSpell`**: `spell_id` (hotkey) o `words`; `target` opcional (criatura o tile; sin él,
   el objetivo actual). Un `Say` en el canal `SAY` cuyo texto, en minúsculas y con los
-  espacios colapsados, coincide con las palabras de un hechizo lo lanza igual (el chat en sí
-  llega con T1.13; los demás textos se ignoran por ahora). Ids o palabras desconocidas se
+  espacios colapsados, coincide con las palabras de un hechizo lo lanza igual (y no se muestra como chat;
+  los demás textos son chat, ver "Chat"). Ids o palabras desconocidas se
   ignoran.
 - **Rechazos** (`Message` de sistema, no se gasta nada ni empieza ningún cooldown):
   `magic.vocation`, `magic.level_required` (`level`), `magic.magic_level_required`
@@ -353,6 +353,20 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   para todos los que la ven.
 - El cliente entra en modo "usar con" al usar una herramienta (click derecho) y el
   siguiente click en el mapa manda el `UseItemOn`; Escape o click derecho lo cancelan.
+
+### Chat (T1.13, `server/internal/session/chat.go`)
+Reglas y números en `02-game-design.md` ("Chat") y `balance.yaml` `chat`.
+- **`Say`** `channel` `SAY`/`YELL`/`WHISPER` → `Message{kind: SAY|YELL|WHISPER,
+  speaker_id, speaker_name, pos, text}` a todo jugador dentro del rectángulo del modo en el
+  mismo piso (incluido quien habla). `GLOBAL` → `Message{kind: GLOBAL, speaker_id,
+  speaker_name, text}` sin `pos` a todos los conectados. `UNSPECIFIED` se ignora.
+- El servidor limpia el texto (controles y caracteres de formato → espacio, espacios
+  colapsados) y lo reenvía **tal cual**: no escapa HTML. El cliente lo dibuja siempre como
+  texto (nodos DOM de Preact o `Text` de Pixi), nunca como HTML ni como plantilla i18n.
+- Rechazos (`Message` de sistema): `chat.too_long` (`max`), `chat.flood` (`seconds`),
+  `chat.muted` (`seconds`), `chat.global_wait` (`seconds`).
+- El rate limit por conexión del gateway (comandos/s, desconexión) sigue aplicando a
+  todo, chat incluido; el anti-flood es una capa más fina dentro del juego.
 
 ### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
 - `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso

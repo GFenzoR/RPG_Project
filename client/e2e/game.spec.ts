@@ -701,3 +701,83 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
   await shot(page, "15-mining");
   expect(errors).toEqual([]);
 });
+
+test("chat on the local and global channels, then switch the language", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-chat-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Talker ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  errors.length = 0; // the 401 of opening the page without a session cookie
+
+  // Markup typed by a player shows as text: no element is created from it.
+  const chat = page.getByTestId("chat-log");
+  const sayInput = page.getByTestId("say").getByRole("textbox");
+  await sayInput.fill("<b>hola</b> {name}");
+  await sayInput.press("Enter");
+  await expect(chat).toContainText(`${name} dice: <b>hola</b> {name}`);
+  await expect(chat.locator("b")).toHaveCount(0);
+
+  await page.getByTestId("chat-channel").selectOption({ label: "Gritar" });
+  await sayInput.fill("hay alguien");
+  await sayInput.press("Enter");
+  await expect(chat).toContainText(`${name} grita: hay alguien`);
+
+  await page.getByTestId("chat-channel").selectOption({ label: "Global" });
+  await sayInput.fill("hola a todos");
+  await sayInput.press("Enter");
+  await expect(chat).toContainText(`[Global] ${name}: hola a todos`);
+  // The global channel waits between two messages (balance.yaml chat.global_interval_ms).
+  await sayInput.fill("otra vez");
+  await sayInput.press("Enter");
+  await expect(page.getByTestId("game-log")).toContainText(
+    "para volver a escribir en el canal global.",
+  );
+  await page.locator(".side").screenshot({ path: join(shots, "16-chat.png") });
+
+  // Switching the language translates every screen at once, the running game included.
+  await page.getByTestId("language").selectOption("en");
+  await expect(chat).toContainText(`${name} says: <b>hola</b> {name}`);
+  await expect(chat).toContainText(`[Global] ${name}: hola a todos`);
+  await expect(page.getByRole("button", { name: "Leave game" })).toBeVisible();
+  await expect(page.getByTestId("chat-channel")).toContainText("Yell");
+  await shot(page, "17-language-en");
+
+  // The choice is remembered: without ?lang= the next visit opens in English.
+  await page.goto("/");
+  await expect(page.getByTestId("characters").getByRole("button", { name: "Play" })).toBeVisible();
+  await expect(page.getByTestId("language")).toHaveValue("en");
+  expect(errors).toEqual([]);
+});

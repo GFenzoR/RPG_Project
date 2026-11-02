@@ -54,6 +54,12 @@ func testBalance() content.Balance {
 	b.Combat = content.Combat{AttackIntervalMs: 2000, FistAttack: 7, SkillAttackDivisor: 10, LevelDivisor: 4,
 		ShieldBlockDivisor: 4, MonsterCorpseMs: 60000, Modes: map[string]content.CombatMode{
 			"offensive": {Attack: 1.25, Defense: 0.55}, "balanced": {Attack: 1, Defense: 1}, "defensive": {Attack: 0.65, Defense: 1.5}}}
+	b.Chat.MaxLength = 255
+	b.Chat.Ranges.Whisper = content.ChatRange{X: 1, Y: 1}
+	b.Chat.Ranges.Say = content.ChatRange{X: 7, Y: 5}
+	b.Chat.Ranges.Yell = content.ChatRange{X: 18, Y: 14}
+	b.Chat.Flood.Burst, b.Chat.Flood.RefillMs, b.Chat.Flood.MuteMs = 5, 2000, 10000
+	b.Chat.GlobalIntervalMs = 10000
 	return b
 }
 

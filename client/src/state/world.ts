@@ -74,6 +74,21 @@ export interface LogMessage {
   at: number;
 }
 
+/**
+ * A chat line (T1.13). Player text travels as is in `text` and is only ever rendered as
+ * DOM text; what the server or an NPC says is an i18n key in `localized`.
+ */
+export interface ChatLine {
+  kind: MessageKind;
+  /** A speaking player's name; empty for NPCs and monsters. */
+  speakerName: string;
+  /** Monster or NPC content id when they speak. */
+  speakerContentId: string;
+  text: string | undefined;
+  localized: { key: string; params: TextParam[] } | undefined;
+  at: number;
+}
+
 export interface PlayerStatsState {
   health: number;
   maxHealth: number;
@@ -132,6 +147,8 @@ export const EFFECT_MS = 600;
 export const FLOATING_TEXT_MS = 1000;
 /** Status log length. */
 const LOG_SIZE = 5;
+/** Chat lines kept on screen. */
+export const CHAT_SIZE = 50;
 
 interface ChunkTiles {
   /** Item IDs per tile (ground first), row-major; undefined = unknown. */
@@ -211,6 +228,7 @@ export class WorldState implements TileSource {
   readonly spellCooldowns = new Map<string, Cooldown>();
   readonly groupCooldowns = new Map<string, Cooldown>();
   log: LogMessage[] = [];
+  chat: ChatLine[] = [];
   dialog: DialogState | undefined;
   shop: ShopState | undefined;
   /** Equipped items by slot (Inventory). */
@@ -391,7 +409,23 @@ export class WorldState implements TileSource {
       }
       case "chatMessage": {
         const m = msg.value;
-        if (m.kind !== MessageKind.SYSTEM || m.body.case !== "localized") break;
+        if (m.kind !== MessageKind.SYSTEM) {
+          if (m.body.case === undefined) break;
+          this.chat.push({
+            kind: m.kind,
+            speakerName: m.speakerName,
+            speakerContentId: m.speakerContentId,
+            text: m.body.case === "text" ? m.body.value : undefined,
+            localized:
+              m.body.case === "localized"
+                ? { key: m.body.value.key, params: m.body.value.params }
+                : undefined,
+            at: now,
+          });
+          if (this.chat.length > CHAT_SIZE) this.chat.shift();
+          break;
+        }
+        if (m.body.case !== "localized") break;
         const key = m.body.value.key;
         // The server refused the target: drop it like the server did.
         if (key === "combat.cannot_attack") this.target = undefined;

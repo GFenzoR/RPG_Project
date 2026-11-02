@@ -1,11 +1,11 @@
 // Turns server messages (an i18n key plus typed parameters, docs/05 "LocalizedText")
 // into text in the player's language. The server never sends assembled text.
-import { CreatureKind } from "@rpg/protocol";
+import { CreatureKind, MessageKind } from "@rpg/protocol";
 import type { TextParam } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { formatOz } from "./items.ts";
-import type { CreatureState, LogMessage } from "./world.ts";
+import type { ChatLine, CreatureState, LogMessage } from "./world.ts";
 
 /** The translated name of a creature: players by name, monsters and NPCs by content id. */
 export function creatureName(c: CreatureState, t: Translate): string {
@@ -71,4 +71,37 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
     if (desc && desc !== key) return `${text} ${desc}`;
   }
   return text;
+}
+
+/** i18n key of a chat line by kind: "{name} says: {text}" and the like. */
+const CHAT_KEYS: Partial<Record<MessageKind, string>> = {
+  [MessageKind.SAY]: "client.chat.line.say",
+  [MessageKind.YELL]: "client.chat.line.yell",
+  [MessageKind.WHISPER]: "client.chat.line.whisper",
+  [MessageKind.GLOBAL]: "client.chat.line.global",
+  [MessageKind.NPC]: "client.chat.line.npc",
+};
+
+/**
+ * Formats a chat line. The player's text is a parameter value, so it is inserted as is
+ * (never parsed as a template) and the UI renders the result as text, never as HTML.
+ */
+export function formatChat(line: ChatLine, content: ClientContent, t: Translate): string {
+  const name = line.speakerName
+    ? line.speakerName
+    : line.speakerContentId
+      ? t(
+          line.kind === MessageKind.NPC
+            ? `npc.${line.speakerContentId}.name`
+            : `monster.${line.speakerContentId}.name`,
+        )
+      : "";
+  const text = line.localized
+    ? formatMessage(
+        { key: line.localized.key, params: line.localized.params, at: line.at },
+        content,
+        t,
+      )
+    : (line.text ?? "");
+  return t(CHAT_KEYS[line.kind] ?? "client.chat.line.say", { name, text });
 }
