@@ -3,8 +3,9 @@
 // either: no input handling, no game entities, no editing.
 //
 // Draw order (Tibia-like): the ground of every visible tile first, then the item stacks
-// tile by tile in row-major order, bottom to top. Items bigger than a tile are anchored at
-// the bottom-right corner of their tile and extend up and to the left.
+// tile by tile in global row-major order (across chunk borders), bottom to top. Items
+// bigger than a tile are anchored at the bottom-right corner of their tile and extend up
+// and to the left, over the tiles before them.
 import { Container, Sprite } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CHUNK_TILES, tilePixels, visibleChunks } from "./camera.ts";
@@ -42,7 +43,19 @@ export interface MapViewOptions {
 interface CachedChunk {
   data: ChunkData;
   ground: Container;
-  items: Container;
+  items: Sprite[];
+}
+
+/** Items can be stacked this high on one tile before the draw order is ambiguous. */
+export const MAX_STACK_ORDER = 256;
+
+/**
+ * Draw order of an item: global row-major by tile (y, then x), then by height in the stack.
+ * The item layer sorts every item of every visible chunk by it, so a tall sprite near a
+ * chunk border is still drawn over the tiles above it and under the tiles below it.
+ */
+export function itemZIndex(x: number, y: number, stackIndex: number): number {
+  return (y * 65536 + x) * MAX_STACK_ORDER + Math.min(stackIndex, MAX_STACK_ORDER - 1);
 }
 
 export class MapView {
@@ -57,7 +70,11 @@ export class MapView {
 
   private readonly world = new Container({ label: "world" });
   private readonly groundLayer = new Container({ label: "ground", isRenderGroup: true });
-  private readonly itemLayer = new Container({ label: "items", isRenderGroup: true });
+  private readonly itemLayer = new Container({
+    label: "items",
+    isRenderGroup: true,
+    sortableChildren: false,
+  });
   private readonly cache = new Map<string, CachedChunk>();
   private source: TileSource;
   private readonly texture: TextureLookup;
@@ -146,17 +163,19 @@ export class MapView {
         );
       }
     }
-    const items = new Container({ label: `items ${key}`, x: ox, y: oy, zIndex: cy * 65536 + cx });
-    const sorted = [...data.items].sort((a, b) => a.y - b.y || a.x - b.x);
-    for (const s of sorted) {
-      for (const id of s.stack) {
+    const items: Sprite[] = [];
+    const gx = cx * CHUNK_TILES;
+    const gy = cy * CHUNK_TILES;
+    for (const s of data.items) {
+      for (const [i, id] of s.stack.entries()) {
         const sprite = new Sprite({ texture: this.texture(id), anchor: 1 });
-        sprite.position.set((s.x + 1) * T, (s.y + 1) * T);
-        items.addChild(sprite);
+        sprite.position.set(ox + (s.x + 1) * T, oy + (s.y + 1) * T);
+        sprite.zIndex = itemZIndex(gx + s.x, gy + s.y, i);
+        items.push(sprite);
       }
     }
     this.groundLayer.addChild(ground);
-    this.itemLayer.addChild(items);
+    if (items.length > 0) this.itemLayer.addChild(...items);
     this.cache.set(key, { data, ground, items });
   }
 
@@ -164,7 +183,7 @@ export class MapView {
     const c = this.cache.get(key);
     if (!c) return;
     c.ground.destroy({ children: true });
-    c.items.destroy({ children: true });
+    for (const sprite of c.items) sprite.destroy();
     this.cache.delete(key);
   }
 
