@@ -42,6 +42,30 @@
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
+Detalles (T1.4, `server/internal/net/gateway`):
+- **`session_token`** es de un solo uso: el servidor lo borra al canjearlo en el `Hello`
+  (tabla `sessions`, `kind = 'play'`). Reconectar exige otro `POST /api/play`.
+- **Hello:** debe ser el primer frame y llegar en 10 s; si no, el servidor cierra.
+  Primer frame que no es `Hello`, token inválido, vencido o ya usado, o personaje que
+  ya no existe → `Disconnect{INVALID_SESSION}` y cierre. Un error de la base durante
+  el handshake → `Disconnect{UNSPECIFIED}` (el token ya se gastó: pedir otro).
+- **Versión:** `client_version` es `MAJOR.MINOR.PATCH` (se ignora un sufijo `-dev` o
+  `+build`). Se acepta si tiene la misma versión mayor que la mínima del servidor
+  (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
+  antes del token, así un cliente viejo no gasta su token.
+- **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
+  `Inventory` (vacío hasta T1.8) y `PlayerSkills` (nivel inicial de
+  `balance.yaml → skills.base` hasta T1.7).
+- **Posición inicial:** la guardada; si el personaje nunca jugó (o su casilla dejó de
+  ser caminable) el templo de su isla (`town`, o la primera isla del mundo). Si está
+  ocupada, la casilla libre más cercana (hasta 3 de distancia).
+- **Entrar dos veces:** si el personaje ya está en el mundo, la conexión vieja recibe
+  `Disconnect{LOGGED_IN_ELSEWHERE}` y la nueva sigue con el estado en memoria.
+- **Logout:** `Disconnect{LOGGED_OUT}` y cierre; se guarda el personaje. Cerrar el
+  socket sin `Logout` también saca al personaje y lo guarda (las zonas sin logout y el
+  bloqueo por combate llegan con T1.6/T1.11).
+- **Apagado:** el servidor guarda a todos y manda `Disconnect{SERVER_SHUTDOWN}`.
+
 ## API HTTP (cuentas y personajes)
 Implementada en `server/internal/httpapi` (T1.3). JSON en ambos sentidos; los `POST` con
 cuerpo exigen `Content-Type: application/json` (también frena formularios cross-site),
@@ -54,6 +78,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation}` | `201 {character: {id, name, vocation, level}}` |
+| `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
 | `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde |
 
 - **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
@@ -139,12 +164,12 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
+| `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |
 | `rate_limited` | 429 | Demasiados intentos de login/registro (por IP o por email) |
 | `busy` | 503 | Servidor saturado de logins; reintentar más tarde |
 | `not_found` | 404 | Ruta `/api/...` inexistente |
 | `internal` | 500 | Error del servidor (queda en el log) |
 
-`POST /api/play` (paso 3 del handshake, token `kind = 'play'` de 60 s) llega con T1.4.
 OAuth, verificación de email y reset de contraseña llegan con T2.1.
 
 ## Mensajes cliente → servidor (intenciones)
@@ -171,6 +196,30 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 
 `item_id` y `stack_index` en las acciones sobre items permiten al servidor rechazar
 una acción hecha sobre una vista desactualizada del tile o contenedor.
+
+### Caminar (T1.4, `server/internal/session`)
+- El servidor marca el ritmo: un paso empieza cuando terminó el anterior. Duración =
+  `base_step_ms × terreno% / velocidad` (× `diagonal_cost` en diagonal), con terreno el
+  `ground.speed` de la casilla **de destino** (100 por defecto), redondeada hacia arriba
+  a ticks de 50 ms. `CreatureMove.duration_ms` es esa duración ya redondeada. La
+  posición cambia al **empezar** el paso.
+- `Walk` reemplaza lo que hubiera en cola (también un `WalkPath`) por un paso; si el
+  personaje está a mitad de un paso, sale al terminarlo. Mandar `Walk` cada tick no
+  acelera nada.
+- `WalkPath` reemplaza la cola. Vacío = `StopWalk`. Más de `max_path_tiles` pasos
+  (`balance.yaml`, 100) o una dirección inválida → `WalkRejected` con `dir` =
+  `UNSPECIFIED` y nada se encola. En los demás rechazos `dir` es el paso rechazado.
+- Cada paso se valida al ejecutarse: casilla sin suelo, que bloquea o fuera del mundo →
+  `WalkRejected{pos, dir}` y se vacía la cola. Si la bloquea **una criatura** durante un
+  `WalkPath`, el servidor recalcula con A* hasta el final del camino esquivando
+  criaturas; si no hay camino (o el destino está ocupado) → `WalkRejected`. Un `Walk`
+  de teclado bloqueado por una criatura se rechaza sin recalcular.
+- **Cuota de pathfinding por tick:** los recálculos comparten 12 000 nodos expandidos
+  por tick y cada búsqueda expande como máximo 2 × 1 500; una búsqueda solo arranca si
+  cabe el peor caso. Sin cuota, el jugador espera al tick siguiente (no se rechaza).
+- `StopWalk` vacía la cola (el paso en curso termina). `Turn` cambia la dirección y
+  manda `CreatureTurn` a quien lo ve (nada si ya miraba hacia ahí).
+- `Ping` → `Pong` en el batch de ese tick.
 
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
@@ -209,6 +258,25 @@ Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}
 - `creatures`: criaturas paradas dentro del área.
 `MapSlice` usa el mismo formato con la fila o columna nueva (`width` o `height` = 1).
 
+Reglas del área de interés (T1.4):
+- El área es de 17x13 casillas centrada en el jugador: las 15x11 visibles más 1 de
+  margen por lado. `MapArea.x/y` es la esquina superior izquierda; cerca del borde del
+  mundo (coordenada 0) el área se recorta y `width`/`height` lo dicen.
+- **Pisos:** en la superficie o arriba (z ≤ 7) se mandan los pisos 0–7; bajo tierra solo
+  el piso actual. Un piso sin ninguna casilla en el área no se manda. Las criaturas se
+  ven con la misma regla, así que "A ve a B" es simétrico.
+- Tile = suelo y luego la pila de items de `world.bin`, de abajo arriba. `count` es 0
+  (los conteos llegan con los items en el suelo, T1.8).
+- **Paso ortogonal:** un `MapSlice` con la columna (13 de alto) o la fila (17 de ancho) nueva. **Paso
+  diagonal:** dos `MapSlice`, primero la columna completa (13) y después la fila sin la
+  esquina (16).
+- `MapArea.creatures` de un `MapSlice` trae las criaturas que entran a la vista por ese
+  movimiento propio; las que salen llegan como `CreatureDisappear`. Cuando otra
+  criatura se mueve: si el cliente la conocía y la sigue viendo → `CreatureMove`; si
+  deja de verla → `CreatureDisappear`; si entra a la vista → `CreatureAppear`.
+- `FullMapView` (al entrar o teletransportarse) reemplaza todo lo que el cliente
+  conocía: antes van `CreatureDisappear` de lo que ya no está.
+
 ### Identificadores de sesión
 `dialog_id` y `container_id` son locales a la sesión y los asigna el servidor; las
 skills y oficios se mandan por `skill_id` de `data/` para no cambiar el protocolo al
@@ -235,12 +303,19 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 ```
 
 ## Límites
-- Tamaño máximo de mensaje entrante: 4 KB. Saliente: sin límite fijo, pero
-  `FullMapView` se comprime con la paleta y suele quedar < 20 KB.
-- Rate limit: 30 comandos/s por conexión (ráfaga 60). Excederlo de forma sostenida
-  desconecta.
-- Cola de salida por sesión acotada: si un cliente lento la llena, se desconecta en
-  vez de consumir memoria del servidor.
+- Tamaño máximo de mensaje entrante: 4 KB (más grande → cierre WebSocket 1009). Saliente:
+  sin límite fijo, pero `FullMapView` se comprime con la paleta y suele quedar < 20 KB.
+- Frames de texto o protobuf inválido después del `Hello` → `Disconnect{KICKED}`.
+- Rate limit: 30 comandos/s por conexión (ráfaga 60). Un mensaje sin ficha se descarta
+  y suma deuda; la deuda se paga con la misma recarga. Con más de 30 de deuda →
+  `Disconnect{RATE_LIMITED}`. Así solo desconecta el exceso **sostenido**: a 40/s, tras
+  ~9 s; a 30/s, nunca.
+- Cola de salida por sesión acotada (128 batches ≈ 6,4 s de ticks): si un cliente lento
+  la llena, el servidor lo saca del mundo, lo guarda y cierra con
+  `Disconnect{SLOW_CLIENT}` (sin mandarle los batches pendientes) en vez de consumir
+  memoria.
+- Orígenes del navegador: por defecto solo el mismo host; otros (servidor de Vite,
+  Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas).
 
 ## Presupuesto de ancho de banda
 Objetivo: < 4 KB/s promedio por jugador en zona concurrida. Con 100 jugadores ≈ 400 KB/s
