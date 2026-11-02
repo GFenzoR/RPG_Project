@@ -34,8 +34,9 @@ LABEL org.opencontainers.image.title="rpg-project-web" \
       org.opencontainers.image.source="https://github.com/GFenzoR/RPG_Project" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${COMMIT}"
-COPY deploy/Caddyfile deploy/caddy-routes.caddy /etc/caddy/
+COPY deploy/Caddyfile deploy/Caddyfile.home deploy/caddy-routes.caddy /etc/caddy/
 COPY --from=client /out/client/ /srv/client/
 # Fails the build on a Caddyfile syntax error. Placeholder values: the real ones come from
 # the environment at runtime.
-RUN SITE_ADDRESS=localhost ACME_EMAIL=ops@example.com caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+RUN SITE_ADDRESS=localhost ACME_EMAIL=ops@example.com caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
+    && TUNNEL_SUBNET=172.31.250.0/24 caddy validate --config /etc/caddy/Caddyfile.home --adapter caddyfile

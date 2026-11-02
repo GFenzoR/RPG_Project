@@ -42,12 +42,32 @@ ok "/ws upgrade (101)"
 
 # Spoofing: every failed login carries a different forged client IP. If the server keyed on
 # them, no request would ever be limited; keyed on the real hop, the burst (10) runs out.
-limited=0
-for i in $(seq 1 15); do
-	code=$(curl "${curl_opts[@]}" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
-		-H "X-Forwarded-For: 203.0.113.$i" -H "X-Real-IP: 203.0.113.$i" -H "CF-Connecting-IP: 198.51.100.$i" \
-		-d '{"email":"nobody@example.org","password":"wrong-password"}' "$base/api/auth/login")
-	if [[ $code == 429 ]]; then limited=1; break; fi
-done
-[[ $limited == 1 ]] || fail "15 logins with forged client IPs were never rate limited"
-ok "forged X-Forwarded-For / CF-Connecting-IP do not bypass the per-IP limit"
+# forged_logins <header...>: prints the status codes, stopping at the first 429.
+forged_logins() {
+	local i code out=()
+	for i in $(seq 1 15); do
+		local hdrs=()
+		for h in "$@"; do hdrs+=(-H "$h: 203.0.113.$i"); done
+		code=$(curl "${curl_opts[@]}" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+			"${hdrs[@]}" -d '{"email":"nobody@example.org","password":"wrong-password"}' "$base/api/auth/login")
+		out+=("$code")
+		[[ $code == 429 ]] && break
+	done
+	echo "${out[*]}"
+}
+
+# 1. Forged CF-Connecting-IP: limited by the real IP (direct to Caddy), or refused at the
+#    edge (Cloudflare answers 403 to requests that already carry the header).
+codes=$(forged_logins CF-Connecting-IP X-Forwarded-For)
+refused=1
+for c in $codes; do [[ $c == 403 ]] || refused=0; done
+if [[ " $codes " == *" 429 "* || $refused == 1 ]]; then
+	ok "forged CF-Connecting-IP limited or refused (codes: $codes)"
+else
+	fail "forged CF-Connecting-IP was never rate limited (codes: $codes)"
+fi
+
+# 2. Forged X-Forwarded-For / X-Real-IP only: must hit the per-IP limit everywhere.
+codes=$(forged_logins X-Forwarded-For X-Real-IP)
+[[ " $codes " == *" 429 "* ]] || fail "forged X-Forwarded-For was never rate limited (codes: $codes)"
+ok "forged X-Forwarded-For does not bypass the per-IP limit (codes: $codes)"
