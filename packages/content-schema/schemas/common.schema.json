@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/common.schema.json",
+  "title": "Shared definitions for content schemas",
+  "$defs": {
+    "id": {
+      "description": "Stable snake_case English identifier.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 64
+    },
+    "i18nKey": {
+      "description": "Translation key; must exist in every language under i18n/.",
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$",
+      "x-i18n": true
+    },
+    "sprite": {
+      "description": "Sprite path inside assets/sprites, without extension.",
+      "type": "string",
+      "pattern": "^[a-z0-9_]+(/[a-z0-9_]+)*$"
+    },
+    "notes": { "description": "Internal comment, never shown to players.", "type": "string" },
+    "itemRef": { "$ref": "#/$defs/id", "x-ref": "item" },
+    "monsterRef": { "$ref": "#/$defs/id", "x-ref": "monster" },
+    "npcRef": { "$ref": "#/$defs/id", "x-ref": "npc" },
+    "questRef": { "$ref": "#/$defs/id", "x-ref": "quest" },
+    "vocationRef": { "$ref": "#/$defs/id", "x-ref": "vocation" },
+    "spellRef": { "$ref": "#/$defs/id", "x-ref": "spell" },
+    "shopRef": { "$ref": "#/$defs/id", "x-ref": "shop" },
+    "islandId": { "$ref": "#/$defs/id" },
+    "chance": { "type": "number", "minimum": 0, "maximum": 1 },
+    "percent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "positiveInt": { "type": "integer", "minimum": 1 },
+    "nonNegativeInt": { "type": "integer", "minimum": 0 },
+    "durationMs": { "type": "integer", "minimum": 0 },
+    "element": {
+      "enum": ["physical", "fire", "ice", "energy", "earth", "holy", "death"]
+    },
+    "combatSkill": {
+      "enum": ["fist", "sword", "axe", "club", "distance", "shield", "magic", "fishing"]
+    },
+    "craft": {
+      "enum": ["mining", "woodcutting", "smithing", "cooking", "alchemy"]
+    },
+    "skill": {
+      "anyOf": [{ "$ref": "#/$defs/combatSkill" }, { "$ref": "#/$defs/craft" }]
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "y": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "z": { "type": "integer", "minimum": 0, "maximum": 15 }
+      }
+    },
+    "itemCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item"],
+      "properties": {
+        "item": { "$ref": "#/$defs/itemRef" },
+        "count": { "$ref": "#/$defs/positiveInt" }
+      }
+    },
+    "condition": {
+      "description": "Dialog/quest condition. Exactly one key per object; use a list for AND.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "level_at_least": { "$ref": "#/$defs/positiveInt" },
+        "vocation_in": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/vocationRef" }
+        },
+        "has_item": { "$ref": "#/$defs/itemCount" },
+        "quest_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["quest", "state"],
+          "properties": {
+            "quest": { "$ref": "#/$defs/questRef" },
+            "state": { "enum": ["not_started", "in_progress", "completed"] },
+            "step": { "$ref": "#/$defs/id" }
+          }
+        },
+        "quest_not_started": { "$ref": "#/$defs/questRef" },
+        "flag_equals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "value"],
+          "properties": {
+            "key": { "$ref": "#/$defs/id" },
+            "value": { "type": "integer" }
+          }
+        },
+        "skill_at_least": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["skill", "level"],
+          "properties": {
+            "skill": { "$ref": "#/$defs/skill" },
+            "level": { "$ref": "#/$defs/nonNegativeInt" }
+          }
+        }
+      }
+    },
+    "conditions": {
+      "description": "One condition or a list of conditions (all must hold).",
+      "anyOf": [
+        { "$ref": "#/$defs/condition" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } }
+      ]
+    },
+    "action": {
+      "description": "Dialog action. 'close' as a bare string, or an object with exactly one key.",
+      "anyOf": [
+        { "const": "close" },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "give_item": { "$ref": "#/$defs/itemRef" },
+            "take_item": { "$ref": "#/$defs/itemCount" },
+            "give_xp": { "$ref": "#/$defs/positiveInt" },
+            "give_gold": { "$ref": "#/$defs/positiveInt" },
+            "take_gold": { "$ref": "#/$defs/positiveInt" },
+            "start_quest": { "$ref": "#/$defs/questRef" },
+            "set_quest_step": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["quest", "step"],
+              "properties": {
+                "quest": { "$ref": "#/$defs/questRef" },
+                "step": { "$ref": "#/$defs/id" }
+              }
+            },
+            "set_flag": { "$ref": "#/$defs/flag" },
+            "open_shop": { "$ref": "#/$defs/shopRef" },
+            "travel": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["island", "price"],
+              "properties": {
+                "island": { "$ref": "#/$defs/islandId" },
+                "price": { "$ref": "#/$defs/nonNegativeInt" }
+              }
+            },
+            "heal": { "const": true },
+            "teleport": { "$ref": "#/$defs/position" },
+            "bless": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["blessing", "price"],
+              "properties": {
+                "blessing": { "$ref": "#/$defs/id" },
+                "price": { "$ref": "#/$defs/nonNegativeInt" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "actions": {
+      "anyOf": [
+        { "$ref": "#/$defs/action" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/action" } }
+      ]
+    },
+    "flag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": { "$ref": "#/$defs/id" },
+        "value": { "type": "integer" }
+      }
+    }
+  }
+}

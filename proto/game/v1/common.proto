@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package game.v1;
+
+option go_package = "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1";
+
+// Shared types used by both directions of the protocol.
+// Rules: never reuse a field number; incompatible changes go to game.v2.
+
+// Position is a tile in the global world space: x, y in [0, 65535], z (floor) in
+// [0, 15], floor 7 = sea level, lower numbers are higher up.
+message Position {
+  uint32 x = 1;
+  uint32 y = 2;
+  uint32 z = 3;
+}
+
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_NORTH = 1;
+  DIRECTION_NORTH_EAST = 2;
+  DIRECTION_EAST = 3;
+  DIRECTION_SOUTH_EAST = 4;
+  DIRECTION_SOUTH = 5;
+  DIRECTION_SOUTH_WEST = 6;
+  DIRECTION_WEST = 7;
+  DIRECTION_NORTH_WEST = 8;
+}
+
+enum EquipmentSlot {
+  EQUIPMENT_SLOT_UNSPECIFIED = 0;
+  EQUIPMENT_SLOT_HEAD = 1;
+  EQUIPMENT_SLOT_NECK = 2;
+  EQUIPMENT_SLOT_BACKPACK = 3;
+  EQUIPMENT_SLOT_ARMOR = 4;
+  EQUIPMENT_SLOT_RIGHT_HAND = 5;
+  EQUIPMENT_SLOT_LEFT_HAND = 6;
+  EQUIPMENT_SLOT_LEGS = 7;
+  EQUIPMENT_SLOT_FEET = 8;
+  EQUIPMENT_SLOT_RING = 9;
+  EQUIPMENT_SLOT_AMMO = 10;
+}
+
+// ContainerSlot addresses an item inside an open container. container_id is the
+// session-local id the server assigned in ContainerOpen.
+message ContainerSlot {
+  uint32 container_id = 1;
+  uint32 index = 2;
+}
+
+// ItemLocation says where an item is: on a map tile, in an equipment slot or inside
+// an open container.
+message ItemLocation {
+  oneof location {
+    Position pos = 1;
+    EquipmentSlot slot = 2;
+    ContainerSlot container = 3;
+  }
+}
+
+// ActionTarget is what an action points at: a tile or a creature.
+message ActionTarget {
+  oneof target {
+    Position pos = 1;
+    uint32 creature_id = 2;
+  }
+}
+
+// ItemStack is one item instance as the client sees it. item_id is the stable id from
+// data/ids.lock.yaml; count is the stack size (or charges) and is 0 when not stackable.
+message ItemStack {
+  uint32 item_id = 1;
+  uint32 count = 2;
+}
+
+// LocalizedText is player-visible text sent as an i18n key plus parameters
+// (never as final text). The client translates it with its own locale.
+message LocalizedText {
+  string key = 1;
+  repeated TextParam params = 2;
+}
+
+// TextParam is one named parameter of a LocalizedText. A list (not a map) keeps the
+// binary encoding deterministic across Go and TypeScript. The value is typed so the
+// client can format numbers and plurals and translate names itself: the server never
+// puts translated or assembled text in a parameter.
+message TextParam {
+  string name = 1;
+  oneof value {
+    // Text that is not translated: player names, typed text.
+    string text = 2;
+    int64 number = 3;
+    // Monster, NPC, spell or skill id from data/; the client shows its translated name.
+    string content_id = 4;
+    // An item and amount; the client shows its translated name, pluralized.
+    ItemStack item = 5;
+  }
+}

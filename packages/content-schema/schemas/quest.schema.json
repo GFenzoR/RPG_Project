@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/quest.schema.json",
+  "title": "Quest (data/quests/<id>.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "steps"],
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/id" },
+    "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
+    "chapter": { "$ref": "common.schema.json#/$defs/positiveInt" },
+    "min_level": { "$ref": "common.schema.json#/$defs/positiveInt" },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description", "complete_when"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "description": { "$ref": "common.schema.json#/$defs/i18nKey" },
+          "complete_when": { "$ref": "#/$defs/completion" }
+        }
+      }
+    },
+    "rewards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 1,
+        "additionalProperties": false,
+        "properties": {
+          "xp": { "$ref": "common.schema.json#/$defs/positiveInt" },
+          "gold": { "$ref": "common.schema.json#/$defs/positiveInt" },
+          "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "set_flag": { "$ref": "common.schema.json#/$defs/flag" }
+        }
+      }
+    },
+    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+  },
+  "$defs": {
+    "completion": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "has_item": { "$ref": "common.schema.json#/$defs/itemCount" },
+        "dialog_action": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["npc", "node"],
+          "properties": {
+            "npc": { "$ref": "common.schema.json#/$defs/npcRef" },
+            "node": { "$ref": "common.schema.json#/$defs/id" }
+          }
+        },
+        "kill": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["monster", "count"],
+          "properties": {
+            "monster": { "$ref": "common.schema.json#/$defs/monsterRef" },
+            "count": { "$ref": "common.schema.json#/$defs/positiveInt" }
+          }
+        },
+        "flag_equals": { "$ref": "common.schema.json#/$defs/flag" }
+      }
+    }
+  }
+}

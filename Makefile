@@ -25,8 +25,24 @@ setup: ## Install tools and dependencies (scripts/local-setup.sh), then generate
 	$(MAKE) gen
 
 .PHONY: gen
-gen: ## buf generate + sqlc generate (+ ids.lock.yaml)
-	$(call pending,T0.2 (buf) / T1.3 (sqlc) / T0.3 (ids.lock.yaml))
+gen: gen-proto ## buf generate + sqlc generate (+ ids.lock.yaml)
+	$(call pending,T1.3 (sqlc) / T0.3 (ids.lock.yaml))
+
+# Protobuf plugins run locally, pinned by server/go.mod and packages/protocol/package.json.
+.PHONY: gen-proto
+gen-proto: ## buf generate: Go (server/internal/net/pb) and TS (packages/protocol/src/gen)
+	cd server && go build -o bin/protoc-gen-go google.golang.org/protobuf/cmd/protoc-gen-go
+	test -x packages/protocol/node_modules/.bin/protoc-gen-es || pnpm install --frozen-lockfile
+	buf generate --template proto/buf.gen.yaml
+
+.PHONY: proto-lint
+proto-lint: ## buf lint + buf format check on proto/
+	buf lint proto
+	buf format --diff --exit-code proto
+
+.PHONY: proto-breaking
+proto-breaking: ## buf breaking: proto/ must stay wire- and JSON-compatible with main
+	buf breaking proto --against '.git#branch=main,subdir=proto'
 
 ## ---- quality gates ---------------------------------------------------------
 
@@ -57,9 +73,21 @@ lint-ts:
 	pnpm lint
 	pnpm typecheck
 
+# Content tooling runs TypeScript directly (Node strips types; the flag is needed < 22.18).
+CONTENT_CLI := node --experimental-strip-types packages/content-schema/src/cli.ts
+
 .PHONY: validate
-validate: ## Validate data/ YAML and world/ maps against the schemas
-	$(call pending,T0.3 (content) / T0.4 (maps))
+validate: ## Validate data/ YAML and i18n/ against the schemas (maps: T0.4)
+	$(CONTENT_CLI) validate
+
+.PHONY: gen-ids
+gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
+	$(CONTENT_CLI) gen-ids
+
+# spritepack runs TypeScript directly, like the content tooling.
+.PHONY: sprites
+sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeholders for missing art)
+	node --experimental-strip-types tools/spritepack/src/cli.ts build $(if $(STRICT),--strict)
 
 .PHONY: fmt
 fmt: ## Format Go and TS code

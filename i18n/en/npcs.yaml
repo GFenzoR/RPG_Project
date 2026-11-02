@@ -1,0 +1,4 @@
+npc.harbor_master.name: "Harbor master"
+npc.harbor_master.greet: "Welcome to the harbor, {name}. What do you need?"
+npc.harbor_master.opt_island: "What is this place?"
+npc.harbor_master.island: "A small island with a big harbor. Ships come and go, but nobody sails today."

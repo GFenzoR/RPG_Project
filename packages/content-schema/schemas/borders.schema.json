@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/borders.schema.json",
+  "title": "Autoborder rules (data/borders.yaml)",
+  "description": "When ground 'from' touches ground 'to', the border pieces are stacked on the 'to' tiles. Higher priority rules are drawn on top.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "from", "to", "pieces"],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "from": { "$ref": "common.schema.json#/$defs/itemRef" },
+      "to": { "$ref": "common.schema.json#/$defs/itemRef" },
+      "priority": { "type": "integer" },
+      "pieces": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["n", "s", "e", "w", "ne", "nw", "se", "sw"],
+        "properties": {
+          "n": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "s": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "e": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "w": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "ne": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "nw": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "se": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "sw": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "inner_ne": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "inner_nw": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "inner_se": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "inner_sw": { "$ref": "common.schema.json#/$defs/itemRef" }
+        }
+      },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

@@ -3,10 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "JSON Schemas for data/ and generated types. Built in T0.3.",
-  "exports": "./src/index.ts",
+  "description": "JSON Schemas and validator for data/ and i18n/ (make validate, make gen-ids).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schemas/*": "./schemas/*"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "yaml": "2.9.1"
   }
 }

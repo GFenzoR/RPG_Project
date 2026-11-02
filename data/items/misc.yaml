@@ -1,0 +1,31 @@
+- id: copper_coin
+  kind: currency
+  sprite: currency/copper_coin
+  name: item.copper_coin.name
+  weight: 10
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  currency: { worth: 1 }
+  value: 1
+
+- id: wolf_pelt
+  kind: material
+  sprite: materials/wolf_pelt
+  name: item.wolf_pelt.name
+  weight: 900
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 15
+
+- id: raw_fish
+  kind: consumable
+  sprite: food/raw_fish
+  name: item.raw_fish.name
+  weight: 500
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 60000 }
+  value: 2

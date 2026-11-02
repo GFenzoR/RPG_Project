@@ -19,17 +19,17 @@ Objetivo: repo que compila, se testea y valida, con los contratos base definidos
   Debe funcionar igual en la sesión cloud y en local (WSL2/macOS/Linux): agrega
   `scripts/local-setup.sh` (lo llama `make setup`), `deploy/docker-compose.dev.yml` con
   Postgres y los targets `make db-up` / `make db-down`. Ver `12-local-development.md`.
-- [ ] **T0.2 Protocolo v1.** `proto/game/v1/*.proto` con los mensajes de
+- [x] **T0.2 Protocolo v1.** (PR #3) `proto/game/v1/*.proto` con los mensajes de
   `05-network-protocol.md`, `buf.yaml`/`buf.gen.yaml`, generación Go y TS, test de
   ida y vuelta Go↔TS con golden files. [T0.1]
-- [ ] **T0.3 Esquemas de contenido.** JSON Schemas para balance, vocations, items,
+- [x] **T0.3 Esquemas de contenido.** (PR #4) JSON Schemas para balance, vocations, items,
   monsters, npcs, quests, spells, recipes, borders, i18n. Validador (`make validate`)
   con mensajes claros. Datos semilla: suelos básicos, 10 items, 3 monstruos, 1 NPC,
   `ids.lock.yaml`, i18n es/en. [T0.1]
 - [ ] **T0.4 map-format + mapcli básico.** Lectura/escritura canónica de chunks,
   islas y archivos auxiliares, validación (sección de 03), `mapcli info|fmt|validate|view`.
   Golden tests. Isla de prueba 64x64 en `world/islands/testisle/`. [T0.3]
-- [ ] **T0.5 Assets y spritepack.** 👤 Tú bajas 1–2 packs CC0/CC-BY de 32x32 (ver
+- [ ] **T0.5 Assets y spritepack.** (parcial, PR #5: falta integrar packs del usuario) 👤 Tú bajas 1–2 packs CC0/CC-BY de 32x32 (ver
   `11-claude-code-workflow.md`) y los subes a `assets/vendor/`. La sesión arma
   `tools/spritepack` (atlas + JSON), generador de placeholders para sprites faltantes,
   `assets/CREDITS.md`, y mapea sprites a los items semilla. [T0.3]
@@ -39,7 +39,7 @@ Objetivo: entrar desde el navegador, caminar por una isla chica, matar monstruos
 skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor básico.
 
 **Servidor base**
-- [ ] **T1.1 Núcleo del servidor.** `clock`, game loop de 50 ms, cola de comandos,
+- [x] **T1.1 Núcleo del servidor.** (#2) `clock`, game loop de 50 ms, cola de comandos,
   scheduler min-heap, harness `sim` y primeros tests deterministas. [T0.1]
 - [ ] **T1.2 Mundo en el servidor.** `mapcompile` → `world.bin`, carga, sectores,
   flags de tile, pathfinding A*, línea de visión. Benchmarks. [T1.1, T0.4]

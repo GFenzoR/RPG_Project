@@ -1,0 +1,29 @@
+- id: iron_sword
+  kind: weapon
+  sprite: weapons/iron_sword
+  name: item.iron_sword.name
+  description: item.iron_sword.desc
+  weight: 3500
+  tradeable: true
+  weapon: { type: sword, attack: 14, defense: 10, hands: 1 }
+  requires: { level: 5 }
+  value: 120
+
+- id: hatchet
+  kind: weapon
+  sprite: weapons/hatchet
+  name: item.hatchet.name
+  weight: 4000
+  tradeable: true
+  weapon: { type: axe, attack: 12, defense: 6, hands: 1 }
+  value: 60
+
+- id: driftwood_club
+  kind: weapon
+  sprite: weapons/driftwood_club
+  name: item.driftwood_club.name
+  description: item.driftwood_club.desc
+  weight: 2500
+  tradeable: true
+  weapon: { type: club, attack: 7, defense: 4, hands: 1 }
+  value: 5

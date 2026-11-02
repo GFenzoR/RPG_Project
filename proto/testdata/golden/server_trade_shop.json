@@ -1,0 +1,95 @@
+{
+  "tick": "18446744073709551615",
+  "events": [
+    {
+      "mapSlice": {
+        "area": {
+          "x": 995,
+          "y": 994,
+          "width": 1,
+          "height": 2,
+          "palette": [
+            {
+              "items": [
+                {
+                  "itemId": 100
+                }
+              ]
+            }
+          ],
+          "floors": [
+            {
+              "z": 7,
+              "tiles": [0, -1]
+            },
+            {
+              "z": 6,
+              "tiles": [-1, -1]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "containerOpen": {
+        "containerId": 1,
+        "itemId": 500,
+        "capacity": 20,
+        "items": [
+          {
+            "itemId": 3031,
+            "count": 100
+          },
+          {
+            "itemId": 700
+          }
+        ]
+      }
+    },
+    {
+      "shopOpen": {
+        "npcCreatureId": 50002,
+        "offers": [
+          {
+            "itemId": 120,
+            "buyPrice": "40"
+          },
+          {
+            "itemId": 610,
+            "buyPrice": "2",
+            "sellPrice": "1"
+          }
+        ]
+      }
+    },
+    {
+      "tradeUpdate": {
+        "state": "TRADE_STATE_NEGOTIATING",
+        "partnerCreatureId": 2147483649,
+        "partnerName": "Bren",
+        "ownOffer": [
+          {
+            "itemId": 120
+          }
+        ],
+        "partnerOffer": [
+          {
+            "itemId": 3031,
+            "count": 50
+          }
+        ],
+        "partnerAccepted": true
+      }
+    },
+    {
+      "chatMessage": {
+        "kind": "MESSAGE_KIND_NPC",
+        "speakerId": 50002,
+        "speakerContentId": "ferry_keeper",
+        "localized": {
+          "key": "npc.ferry_keeper.farewell"
+        }
+      }
+    }
+  ]
+}

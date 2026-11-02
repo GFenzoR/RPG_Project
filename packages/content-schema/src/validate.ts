@@ -1,0 +1,616 @@
+// Validates data/ and i18n/ against the JSON Schemas plus the rules a schema cannot
+// express: unique IDs, cross references, dialog graphs, translations and ids.lock.yaml.
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { checkIdsLock } from "./ids.ts";
+import { SchemaSet } from "./schemas.ts";
+import type { RefKind, SchemaName, Usage } from "./schemas.ts";
+import { loadYaml, parseYaml, suggest } from "./source.ts";
+import type { Diagnostic, PathSegment, SourceFile } from "./source.ts";
+
+export const LANGUAGES = ["es", "en"] as const;
+
+const SKILLS = {
+  combat: ["fist", "sword", "axe", "club", "distance", "shield", "magic", "fishing"],
+  craft: ["mining", "woodcutting", "smithing", "cooking", "alchemy"],
+};
+
+/** Item sub-objects that only make sense for one kind. */
+const KIND_BLOCKS = [
+  "ground",
+  "weapon",
+  "armor",
+  "shield",
+  "container",
+  "tool",
+  "consumable",
+  "currency",
+];
+
+export interface ValidateOptions {
+  /** Contents of ids.lock.yaml at the base revision; numbers there must not change. */
+  baseIdsLock?: string;
+}
+
+export interface ValidationReport {
+  diagnostics: Diagnostic[];
+  errors: number;
+  warnings: number;
+}
+
+interface Owned {
+  src: SourceFile;
+  path: PathSegment[];
+}
+
+interface ContentIndex {
+  ids: Record<RefKind, Map<string, Owned>>;
+  refs: (Usage & { kind: RefKind; src: SourceFile })[];
+  i18nKeys: (Usage & { src: SourceFile })[];
+}
+
+type Obj = Record<string, unknown>;
+
+const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const idOf = (v: unknown): string | undefined =>
+  isObj(v) && typeof v["id"] === "string" ? v["id"] : undefined;
+
+export function validateContent(root: string, opts: ValidateOptions = {}): ValidationReport {
+  const v = new Validator(root);
+  v.run(opts);
+  const errors = v.diags.filter((d) => d.severity === "error").length;
+  return { diagnostics: v.diags, errors, warnings: v.diags.length - errors };
+}
+
+class Validator {
+  readonly diags: Diagnostic[] = [];
+  private readonly schemas = new SchemaSet();
+  private readonly index: ContentIndex = {
+    ids: {
+      item: new Map(),
+      monster: new Map(),
+      npc: new Map(),
+      quest: new Map(),
+      vocation: new Map(),
+      spell: new Map(),
+      shop: new Map(),
+    },
+    refs: [],
+    i18nKeys: [],
+  };
+  private readonly npcs: SourceFile[] = [];
+  private readonly quests: SourceFile[] = [];
+
+  private readonly root: string;
+
+  constructor(root: string) {
+    this.root = root;
+  }
+
+  run(opts: ValidateOptions): void {
+    const dataDir = join(this.root, "data");
+    if (!existsSync(dataDir)) {
+      this.error("data", [], "directory not found");
+      return;
+    }
+    this.loadData(dataDir);
+    this.checkRefs();
+    this.checkDialogs();
+    this.checkQuestSteps();
+    this.checkI18n();
+    const lockFile = join(dataDir, "ids.lock.yaml");
+    const lock = existsSync(lockFile)
+      ? this.load(lockFile, "data/ids.lock.yaml", "ids-lock")
+      : undefined;
+    if (!lock && this.index.ids.item.size > 0 && !existsSync(lockFile)) {
+      this.error("data/ids.lock.yaml", [], "missing; run `make gen-ids`");
+    }
+    if (lock) {
+      const base =
+        opts.baseIdsLock === undefined ? undefined : this.parseBaseLock(opts.baseIdsLock);
+      for (const d of checkIdsLock(lock, [...this.index.ids.item.keys()], base)) this.diags.push(d);
+    }
+  }
+
+  // ---- loading -------------------------------------------------------------
+
+  private loadData(dataDir: string): void {
+    const known = new Set(["ids.lock.yaml"]);
+    const single = (
+      file: string,
+      schema: SchemaName,
+      required: boolean,
+    ): SourceFile | undefined => {
+      known.add(file);
+      const abs = join(dataDir, file);
+      if (!existsSync(abs)) {
+        if (required) this.error(`data/${file}`, [], "required file is missing");
+        return undefined;
+      }
+      return this.load(abs, `data/${file}`, schema);
+    };
+
+    const balance = single("balance.yaml", "balance", true);
+    if (balance) this.checkBalance(balance);
+
+    const vocations = single("vocations.yaml", "vocations", true);
+    if (vocations) {
+      for (const [i, voc] of asList(vocations.data).entries()) {
+        this.register("vocation", voc, vocations, [i]);
+        this.checkVocation(voc, vocations, [i]);
+      }
+    }
+
+    for (const src of this.loadDir(dataDir, "items", "items", known)) {
+      for (const [i, item] of asList(src.data).entries()) {
+        this.register("item", item, src, [i]);
+        this.checkItem(item, src, [i]);
+      }
+    }
+
+    for (const [dir, schema, kind] of [
+      ["monsters", "monster", "monster"],
+      ["npcs", "npc", "npc"],
+      ["quests", "quest", "quest"],
+    ] as const) {
+      for (const src of this.loadDir(dataDir, dir, schema, known)) {
+        const id = idOf(src.data);
+        const expected = src.file.replace(/^.*\//, "").replace(/\.yaml$/, "");
+        if (id !== undefined && id !== expected) {
+          this.error(src, ["id"], `id "${id}" must match the file name "${expected}.yaml"`);
+        }
+        this.register(kind, src.data, src, []);
+        if (kind === "monster") this.checkMonster(src);
+        if (kind === "npc") {
+          this.npcs.push(src);
+          const shop = isObj(src.data) ? src.data["shop"] : undefined;
+          this.register("shop", shop, src, ["shop"]);
+        }
+        if (kind === "quest") this.quests.push(src);
+      }
+    }
+
+    const spells = single("spells.yaml", "spells", false);
+    if (spells) {
+      const words = new Map<string, number>();
+      for (const [i, spell] of asList(spells.data).entries()) {
+        this.register("spell", spell, spells, [i]);
+        const w = isObj(spell) ? spell["words"] : undefined;
+        if (typeof w !== "string") continue;
+        const first = words.get(w);
+        if (first !== undefined)
+          this.error(spells, [i, "words"], `words "${w}" already used by spells[${first}]`);
+        else words.set(w, i);
+      }
+    }
+
+    for (const [file, schema] of [
+      ["recipes.yaml", "recipes"],
+      ["borders.yaml", "borders"],
+    ] as const) {
+      const src = single(file, schema, false);
+      if (!src) continue;
+      this.checkUniqueIds(src);
+      if (schema === "borders") this.checkBorders(src);
+    }
+
+    for (const entry of readdirSync(dataDir).sort()) {
+      if (!known.has(entry)) {
+        this.error(
+          `data/${entry}`,
+          [],
+          "unexpected file: there is no schema for it (see docs/06-content-data.md)",
+        );
+      }
+    }
+  }
+
+  private loadDir(
+    dataDir: string,
+    dir: string,
+    schema: SchemaName,
+    known: Set<string>,
+  ): SourceFile[] {
+    known.add(dir);
+    const abs = join(dataDir, dir);
+    if (!existsSync(abs)) return [];
+    const out: SourceFile[] = [];
+    for (const entry of readdirSync(abs).sort()) {
+      const rel = `data/${dir}/${entry}`;
+      if (!entry.endsWith(".yaml") || statSync(join(abs, entry)).isDirectory()) {
+        this.error(rel, [], "expected only .yaml files here");
+        continue;
+      }
+      const src = this.load(join(abs, entry), rel, schema);
+      if (src) out.push(src);
+    }
+    return out;
+  }
+
+  private load(abs: string, rel: string, schema: SchemaName): SourceFile | undefined {
+    const src = loadYaml(abs, rel, this.diags);
+    if (!src) return undefined;
+    this.applySchema(src, schema);
+    return src;
+  }
+
+  private applySchema(src: SourceFile, schema: SchemaName): void {
+    const res = this.schemas.validate(schema, src.data);
+    for (const e of res.errors) this.error(src, e.path, e.message);
+    for (const r of res.refs) this.index.refs.push({ ...r, src });
+    for (const k of res.i18nKeys) this.index.i18nKeys.push({ ...k, src });
+  }
+
+  private register(kind: RefKind, value: unknown, src: SourceFile, path: PathSegment[]): void {
+    const id = idOf(value);
+    if (id === undefined) return;
+    const prev = this.index.ids[kind].get(id);
+    if (prev) {
+      const loc = prev.src.locate([...prev.path, "id"]);
+      this.error(
+        src,
+        [...path, "id"],
+        `duplicate ${kind} id "${id}" (first defined in ${prev.src.file}${loc ? `:${loc.line}` : ""})`,
+      );
+      return;
+    }
+    this.index.ids[kind].set(id, { src, path });
+  }
+
+  private checkUniqueIds(src: SourceFile): void {
+    const seen = new Set<string>();
+    for (const [i, entry] of asList(src.data).entries()) {
+      const id = idOf(entry);
+      if (id === undefined) continue;
+      if (seen.has(id)) this.error(src, [i, "id"], `duplicate id "${id}"`);
+      seen.add(id);
+    }
+  }
+
+  // ---- per-type rules --------------------------------------------------------
+
+  private checkBalance(src: SourceFile): void {
+    const skills =
+      isObj(src.data) && isObj(src.data["skills"]) ? src.data["skills"]["base"] : undefined;
+    if (!isObj(skills)) return;
+    for (const s of [...SKILLS.combat, ...SKILLS.craft]) {
+      if (!(s in skills)) this.error(src, ["skills", "base"], `missing skill "${s}"`);
+    }
+  }
+
+  private checkVocation(voc: unknown, src: SourceFile, path: PathSegment[]): void {
+    const factors = isObj(voc) ? voc["skill_factors"] : undefined;
+    if (!isObj(factors)) return;
+    for (const s of SKILLS.combat) {
+      if (!(s in factors)) this.error(src, [...path, "skill_factors"], `missing skill "${s}"`);
+    }
+  }
+
+  private checkItem(item: unknown, src: SourceFile, path: PathSegment[]): void {
+    if (!isObj(item)) return;
+    for (const block of KIND_BLOCKS) {
+      if (block in item && item["kind"] !== block) {
+        this.error(
+          src,
+          [...path, block],
+          `"${block}" is only allowed on items with kind: ${block}`,
+        );
+      }
+    }
+    if ("max_stack" in item && item["stackable"] !== true) {
+      this.error(src, [...path, "max_stack"], "max_stack requires stackable: true");
+    }
+  }
+
+  private checkMonster(src: SourceFile): void {
+    const m = src.data;
+    if (!isObj(m)) return;
+    for (const [i, atk] of asList(m["attacks"]).entries()) {
+      if (
+        isObj(atk) &&
+        typeof atk["min"] === "number" &&
+        typeof atk["max"] === "number" &&
+        atk["min"] > atk["max"]
+      ) {
+        this.error(
+          src,
+          ["attacks", i, "min"],
+          `min (${atk["min"]}) is greater than max (${atk["max"]})`,
+        );
+      }
+    }
+    for (const [i, drop] of asList(m["loot"]).entries()) {
+      if (!isObj(drop) || !Array.isArray(drop["count"])) continue;
+      const [lo, hi] = drop["count"] as number[];
+      if (lo !== undefined && hi !== undefined && lo > hi) {
+        this.error(src, ["loot", i, "count"], `count range [${lo}, ${hi}] is reversed`);
+      }
+      const item = this.index.ids.item.get(String(drop["item"]));
+      const def = item ? this.itemDef(item) : undefined;
+      if (def && def["stackable"] !== true && hi !== undefined && hi > 1) {
+        this.error(
+          src,
+          ["loot", i, "count"],
+          `item "${String(drop["item"])}" is not stackable, so count must be at most 1`,
+        );
+      }
+    }
+  }
+
+  private checkBorders(src: SourceFile): void {
+    for (const [i, rule] of asList(src.data).entries()) {
+      if (!isObj(rule)) continue;
+      for (const side of ["from", "to"]) {
+        const owned = this.index.ids.item.get(String(rule[side]));
+        const def = owned ? this.itemDef(owned) : undefined;
+        if (def && def["kind"] !== "ground") {
+          this.error(src, [i, side], `"${String(rule[side])}" must be a ground item`);
+        }
+      }
+    }
+  }
+
+  private itemDef(owned: Owned): Obj | undefined {
+    const list = owned.src.data;
+    const at = owned.path[0];
+    const v = Array.isArray(list) && typeof at === "number" ? (list[at] as unknown) : undefined;
+    return isObj(v) ? v : undefined;
+  }
+
+  // ---- cross-file rules ------------------------------------------------------
+
+  private checkRefs(): void {
+    for (const ref of this.index.refs) {
+      const known = this.index.ids[ref.kind];
+      if (known.has(ref.value)) continue;
+      const hint = suggest(ref.value, known.keys());
+      this.error(
+        ref.src,
+        ref.path,
+        `unknown ${ref.kind} "${ref.value}"${hint ? ` (did you mean "${hint}"?)` : ""}`,
+      );
+    }
+  }
+
+  private checkDialogs(): void {
+    for (const src of this.npcs) {
+      const dialog = isObj(src.data) ? src.data["dialog"] : undefined;
+      if (!isObj(dialog) || !isObj(dialog["nodes"])) continue;
+      const nodes = dialog["nodes"];
+      const names = Object.keys(nodes);
+      const reached = new Set<string>();
+      const target = (name: unknown, path: PathSegment[]): void => {
+        if (typeof name !== "string") return;
+        if (name in nodes) {
+          reached.add(name);
+          return;
+        }
+        const hint = suggest(name, names);
+        this.error(
+          src,
+          path,
+          `unknown dialog node "${name}"${hint ? ` (did you mean "${hint}"?)` : ""}`,
+        );
+      };
+      target(dialog["start"], ["dialog", "start"]);
+      for (const [name, node] of Object.entries(nodes)) {
+        if (!isObj(node)) continue;
+        for (const [i, opt] of asList(node["options"]).entries()) {
+          if (isObj(opt)) target(opt["goto"], ["dialog", "nodes", name, "options", i, "goto"]);
+        }
+      }
+      for (const name of names) {
+        if (!reached.has(name))
+          this.warn(src, ["dialog", "nodes", name], `dialog node "${name}" is never reached`);
+      }
+    }
+  }
+
+  /** Quest step and dialog node references inside actions, conditions and completions. */
+  private checkQuestSteps(): void {
+    const stepsOf = (questId: string): string[] | undefined => {
+      const owned = this.index.ids.quest.get(questId);
+      if (!owned || !isObj(owned.src.data)) return undefined;
+      return asList(owned.src.data["steps"])
+        .map(idOf)
+        .filter((s) => s !== undefined);
+    };
+    for (const src of this.quests) {
+      const seen = new Set<string>();
+      for (const [i, step] of asList(isObj(src.data) ? src.data["steps"] : undefined).entries()) {
+        const id = idOf(step);
+        if (id === undefined) continue;
+        if (seen.has(id)) this.error(src, ["steps", i, "id"], `duplicate step id "${id}"`);
+        seen.add(id);
+      }
+    }
+    const visit = (src: SourceFile, value: unknown, path: PathSegment[]): void => {
+      if (Array.isArray(value)) {
+        value.forEach((v, i) => visit(src, v, [...path, i]));
+        return;
+      }
+      if (!isObj(value)) return;
+      for (const [key, inner] of Object.entries(value)) {
+        const here = [...path, key];
+        const isStepRef = key === "set_quest_step" || key === "quest_state";
+        if (
+          isStepRef &&
+          isObj(inner) &&
+          typeof inner["quest"] === "string" &&
+          typeof inner["step"] === "string"
+        ) {
+          const steps = stepsOf(inner["quest"]);
+          if (steps && !steps.includes(inner["step"])) {
+            this.error(
+              src,
+              [...here, "step"],
+              `quest "${inner["quest"]}" has no step "${inner["step"]}"`,
+            );
+          }
+        }
+        if (key === "dialog_action" && isObj(inner) && typeof inner["npc"] === "string") {
+          const npc = this.index.ids.npc.get(inner["npc"]);
+          const dialog = npc && isObj(npc.src.data) ? npc.src.data["dialog"] : undefined;
+          const nodes = isObj(dialog) && isObj(dialog["nodes"]) ? dialog["nodes"] : undefined;
+          if (nodes && typeof inner["node"] === "string" && !(inner["node"] in nodes)) {
+            this.error(
+              src,
+              [...here, "node"],
+              `npc "${inner["npc"]}" has no dialog node "${inner["node"]}"`,
+            );
+          }
+        }
+        visit(src, inner, here);
+      }
+    };
+    for (const src of [...this.npcs, ...this.quests]) visit(src, src.data, []);
+  }
+
+  private checkI18n(): void {
+    const i18nDir = join(this.root, "i18n");
+    const catalogs = new Map<string, Map<string, { src: SourceFile; text: string }>>();
+    for (const lang of LANGUAGES) {
+      const dir = join(i18nDir, lang);
+      const keys = new Map<string, { src: SourceFile; text: string }>();
+      catalogs.set(lang, keys);
+      if (!existsSync(dir)) {
+        this.error(`i18n/${lang}`, [], "language directory is missing");
+        continue;
+      }
+      for (const entry of readdirSync(dir).sort()) {
+        const rel = `i18n/${lang}/${entry}`;
+        if (!entry.endsWith(".yaml")) {
+          this.error(rel, [], "expected only .yaml files here");
+          continue;
+        }
+        const src = this.load(join(dir, entry), rel, "i18n");
+        if (!src || !isObj(src.data)) continue;
+        for (const [key, text] of Object.entries(src.data)) {
+          if (typeof text !== "string") continue;
+          const prev = keys.get(key);
+          if (prev) this.error(src, [key], `key also defined in ${prev.src.file}`);
+          else keys.set(key, { src, text });
+        }
+      }
+    }
+    if (existsSync(i18nDir)) {
+      for (const entry of readdirSync(i18nDir)) {
+        if (!(LANGUAGES as readonly string[]).includes(entry)) {
+          this.warn(
+            `i18n/${entry}`,
+            [],
+            `not a configured language (${LANGUAGES.join(", ")}); it is not checked`,
+          );
+        }
+      }
+    }
+
+    // Same keys and same {placeholders} in every language, and in the same file.
+    const [first, ...others] = LANGUAGES;
+    const reference = catalogs.get(first) ?? new Map();
+    for (const lang of others) {
+      const cat = catalogs.get(lang) ?? new Map();
+      for (const [key, ref] of reference) {
+        const other = cat.get(key);
+        if (!other) {
+          this.error(
+            ref.src,
+            [key],
+            `missing in ${lang} (expected in i18n/${lang}/${fileName(ref.src)})`,
+          );
+          continue;
+        }
+        if (fileName(other.src) !== fileName(ref.src)) {
+          this.error(
+            other.src,
+            [key],
+            `must live in i18n/${lang}/${fileName(ref.src)} like in ${first}`,
+          );
+        }
+        const a = placeholders(ref.text);
+        const b = placeholders(other.text);
+        if (a !== b) {
+          this.error(other.src, [key], `placeholders {${b}} differ from ${first} {${a}}`);
+        }
+      }
+      for (const [key, other] of cat) {
+        if (!reference.has(key))
+          this.error(
+            other.src,
+            [key],
+            `missing in ${first} (expected in i18n/${first}/${fileName(other.src)})`,
+          );
+      }
+    }
+
+    // Every key referenced from data/ exists in every language.
+    const used = new Set<string>();
+    for (const k of this.index.i18nKeys) {
+      used.add(k.value);
+      const missing = LANGUAGES.filter((lang) => !catalogs.get(lang)?.has(k.value));
+      if (missing.length > 0) {
+        this.error(k.src, k.path, `i18n key "${k.value}" is missing in: ${missing.join(", ")}`);
+      }
+    }
+    // Shared UI keys (dialog.*, ui.*) are used by code, not data; only data-owned prefixes are checked.
+    const dataPrefixes = ["item.", "monster.", "npc.", "quest.", "spell.", "vocation."];
+    for (const [key, entry] of reference) {
+      if (!used.has(key) && dataPrefixes.some((p) => key.startsWith(p))) {
+        this.warn(entry.src, [key], `i18n key "${key}" is not used by any file in data/`);
+      }
+    }
+  }
+
+  private parseBaseLock(text: string): SourceFile | undefined {
+    const diags: Diagnostic[] = [];
+    const src = parseYaml(text, "data/ids.lock.yaml@base", diags);
+    if (diags.length > 0)
+      this.warn(
+        "data/ids.lock.yaml",
+        [],
+        "could not parse the base revision; skipping the append-only check",
+      );
+    return src;
+  }
+
+  // ---- reporting --------------------------------------------------------------
+
+  private error(src: SourceFile | string, path: PathSegment[], message: string): void {
+    this.report("error", src, path, message);
+  }
+
+  private warn(src: SourceFile | string, path: PathSegment[], message: string): void {
+    this.report("warning", src, path, message);
+  }
+
+  private report(
+    severity: Diagnostic["severity"],
+    src: SourceFile | string,
+    path: PathSegment[],
+    message: string,
+  ): void {
+    if (typeof src === "string") {
+      this.diags.push({ severity, file: src, path, message });
+      return;
+    }
+    const pos = src.locate(path);
+    this.diags.push({
+      severity,
+      file: src.file,
+      path,
+      message,
+      ...(pos ? { line: pos.line, col: pos.col } : {}),
+    });
+  }
+}
+
+function fileName(src: SourceFile): string {
+  return src.file.replace(/^.*\//, "");
+}
+
+function placeholders(text: string): string {
+  return [...new Set([...text.matchAll(/\{([a-z_][a-z0-9_]*)/gi)].map((m) => m[1]))]
+    .sort()
+    .join(", ");
+}

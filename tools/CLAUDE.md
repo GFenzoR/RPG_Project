@@ -31,3 +31,6 @@ pruebas de carga (`make bots N=200`) y deben reportar latencia p50/p95/p99 y des
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera
 placeholders (cuadros de color con la sigla del item) cuando falta un sprite.
+Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
+`assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
+terceros: `assets/README.md`.

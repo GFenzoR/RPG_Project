@@ -58,7 +58,8 @@ sean limpios y revisables.
 - Cada item tiene un ID de texto (`oak_tree`) para humanos e IA, y un ID numérico
   estable para la red y `world.bin`.
 - `data/ids.lock.yaml` asigna los numéricos. **Nunca se reutiliza ni se cambia un
-  número.** Lo actualiza `make gen`; la CI falla si un ID cambió.
+  número.** Lo actualiza `make gen-ids`; `make validate` falla si un ID cambió
+  (detalle en `06-content-data.md`).
 
 ## Archivos auxiliares
 ```yaml
