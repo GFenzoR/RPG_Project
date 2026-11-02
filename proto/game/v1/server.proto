@@ -1,0 +1,369 @@
+syntax = "proto3";
+
+package game.v1;
+
+import "game/v1/common.proto";
+
+option go_package = "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1";
+
+// Server → client messages (events).
+
+// ServerBatch is the only thing a server WebSocket frame carries: every event of one
+// session in one tick, in order. At most one frame per tick per player; no events, no frame.
+message ServerBatch {
+  uint64 tick = 1;
+  repeated ServerMessage events = 2;
+}
+
+message ServerMessage {
+  oneof message {
+    Welcome welcome = 1;
+    FullMapView full_map_view = 2;
+    MapSlice map_slice = 3;
+    TileUpdate tile_update = 4;
+    CreatureAppear creature_appear = 5;
+    CreatureDisappear creature_disappear = 6;
+    CreatureMove creature_move = 7;
+    CreatureTurn creature_turn = 8;
+    CreatureHealth creature_health = 9;
+    CreatureOutfit creature_outfit = 10;
+    CreatureSpeed creature_speed = 11;
+    Effect effect = 12;
+    Projectile projectile = 13;
+    FloatingText floating_text = 14;
+    PlayerStats player_stats = 15;
+    PlayerSkills player_skills = 16;
+    Inventory inventory = 17;
+    ContainerOpen container_open = 18;
+    ContainerUpdate container_update = 19;
+    ContainerClose container_close = 20;
+    Message chat_message = 21;
+    DialogOpen dialog_open = 22;
+    DialogClose dialog_close = 23;
+    ShopOpen shop_open = 24;
+    TradeUpdate trade_update = 25;
+    WalkRejected walk_rejected = 26;
+    Pong pong = 27;
+    Disconnect disconnect = 28;
+  }
+}
+
+// Welcome answers a valid Hello. It is followed in the same batch by FullMapView,
+// PlayerStats, Inventory and PlayerSkills.
+message Welcome {
+  // Creature id of the player's own character in this session (the id used by
+  // CreatureMove, SetTarget and the rest). It is not the database character id.
+  uint32 creature_id = 1;
+  // Server clock in Unix milliseconds.
+  uint64 server_time = 2;
+  uint32 tick_ms = 3;
+}
+
+// ---- map --------------------------------------------------------------------
+
+// Tile is the item stack of one map tile, bottom (ground) first.
+message Tile {
+  repeated ItemStack items = 1;
+}
+
+// MapFloor holds one floor of a MapArea as width*height indices into the area palette,
+// row by row (y, then x). -1 means no tile.
+message MapFloor {
+  uint32 z = 1;
+  repeated sint32 tiles = 2;
+}
+
+// MapArea is a rectangle of the map, palette-compressed: identical tiles are sent once.
+message MapArea {
+  uint32 x = 1;
+  uint32 y = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  repeated Tile palette = 5;
+  repeated MapFloor floors = 6;
+  // Creatures standing inside the area.
+  repeated Creature creatures = 7;
+}
+
+// FullMapView is the whole visible area, sent on login and after a teleport.
+message FullMapView {
+  MapArea area = 1;
+}
+
+// MapSlice is the new row or column (on every visible floor) after a step.
+message MapSlice {
+  MapArea area = 1;
+}
+
+message TileUpdate {
+  Position pos = 1;
+  Tile tile = 2;
+}
+
+// ---- creatures --------------------------------------------------------------
+
+enum CreatureKind {
+  CREATURE_KIND_UNSPECIFIED = 0;
+  CREATURE_KIND_PLAYER = 1;
+  CREATURE_KIND_MONSTER = 2;
+  CREATURE_KIND_NPC = 3;
+}
+
+message Outfit {
+  uint32 look_id = 1;
+  uint32 head_color = 2;
+  uint32 body_color = 3;
+  uint32 legs_color = 4;
+  uint32 feet_color = 5;
+}
+
+message Creature {
+  uint32 id = 1;
+  CreatureKind kind = 2;
+  // Player name as typed by its owner. Empty for monsters and NPCs.
+  string name = 3;
+  // Monster or NPC id from data/ (the client resolves its translated name). Empty for players.
+  string content_id = 4;
+  Position pos = 5;
+  Direction dir = 6;
+  uint32 health_percent = 7;
+  Outfit outfit = 8;
+  uint32 speed = 9;
+}
+
+message CreatureAppear {
+  Creature creature = 1;
+}
+
+message CreatureDisappear {
+  uint32 id = 1;
+}
+
+message CreatureMove {
+  uint32 id = 1;
+  Position from = 2;
+  Position to = 3;
+  uint32 duration_ms = 4;
+}
+
+message CreatureTurn {
+  uint32 id = 1;
+  Direction dir = 2;
+}
+
+message CreatureHealth {
+  uint32 id = 1;
+  uint32 health_percent = 2;
+}
+
+message CreatureOutfit {
+  uint32 id = 1;
+  Outfit outfit = 2;
+}
+
+message CreatureSpeed {
+  uint32 id = 1;
+  uint32 speed = 2;
+}
+
+// ---- effects ----------------------------------------------------------------
+
+message Effect {
+  Position pos = 1;
+  uint32 effect_id = 2;
+}
+
+message Projectile {
+  Position from = 1;
+  Position to = 2;
+  uint32 projectile_id = 3;
+}
+
+enum FloatingTextKind {
+  FLOATING_TEXT_KIND_UNSPECIFIED = 0;
+  FLOATING_TEXT_KIND_DAMAGE = 1;
+  FLOATING_TEXT_KIND_HEAL = 2;
+  FLOATING_TEXT_KIND_MANA = 3;
+  FLOATING_TEXT_KIND_EXPERIENCE = 4;
+}
+
+message FloatingText {
+  Position pos = 1;
+  FloatingTextKind kind = 2;
+  uint64 amount = 3;
+}
+
+// ---- player -----------------------------------------------------------------
+
+message PlayerStats {
+  uint32 health = 1;
+  uint32 max_health = 2;
+  uint32 mana = 3;
+  uint32 max_mana = 4;
+  uint32 level = 5;
+  uint64 experience = 6;
+  // Progress to the next level, 0-99.
+  uint32 level_percent = 7;
+  // Free and total carrying capacity, in the same unit as item weights in data/.
+  uint32 capacity = 8;
+  uint32 max_capacity = 9;
+  uint32 speed = 10;
+  uint32 soul = 11;
+}
+
+// SkillProgress is one skill or craft. skill_id is the id from data/ (e.g. "sword",
+// "fishing", "mining"), so new skills need no protocol change.
+message SkillProgress {
+  string skill_id = 1;
+  uint32 level = 2;
+  // Progress to the next level, 0-99.
+  uint32 percent = 3;
+}
+
+message PlayerSkills {
+  repeated SkillProgress skills = 1;
+}
+
+message EquippedItem {
+  EquipmentSlot slot = 1;
+  ItemStack item = 2;
+}
+
+// Inventory lists the occupied equipment slots; slots not listed are empty.
+message Inventory {
+  repeated EquippedItem slots = 1;
+}
+
+// ContainerOpen opens a container window. container_id is session-local and is what
+// ContainerSlot and the other container messages refer to.
+message ContainerOpen {
+  uint32 container_id = 1;
+  uint32 item_id = 2;
+  uint32 capacity = 3;
+  repeated ItemStack items = 4;
+  bool has_parent = 5;
+}
+
+// ContainerUpdate replaces the contents of an open container.
+message ContainerUpdate {
+  uint32 container_id = 1;
+  repeated ItemStack items = 2;
+}
+
+message ContainerClose {
+  uint32 container_id = 1;
+}
+
+// ---- chat and NPCs ----------------------------------------------------------
+
+enum MessageKind {
+  MESSAGE_KIND_UNSPECIFIED = 0;
+  MESSAGE_KIND_SAY = 1;
+  MESSAGE_KIND_YELL = 2;
+  MESSAGE_KIND_WHISPER = 3;
+  MESSAGE_KIND_GLOBAL = 4;
+  MESSAGE_KIND_NPC = 5;
+  // System messages: status line, warnings, loot, look results.
+  MESSAGE_KIND_SYSTEM = 6;
+}
+
+// Message is chat or a system message. Player-typed chat travels as plain text;
+// anything the server writes travels as a LocalizedText.
+message Message {
+  MessageKind kind = 1;
+  // Speaking creature, 0 for system messages.
+  uint32 speaker_id = 2;
+  // Name of a speaking player. Empty for NPCs and monsters, which use speaker_content_id.
+  string speaker_name = 3;
+  // Monster or NPC id from data/ (the client shows its translated name).
+  string speaker_content_id = 4;
+  // Where it was said, for speech bubbles. Unset for global and system messages.
+  Position pos = 5;
+  oneof body {
+    string text = 6;
+    LocalizedText localized = 7;
+  }
+}
+
+message DialogOption {
+  uint32 option_id = 1;
+  LocalizedText text = 2;
+}
+
+// DialogOpen shows (or advances) an NPC dialog. dialog_id is session-local.
+message DialogOpen {
+  uint32 dialog_id = 1;
+  uint32 npc_creature_id = 2;
+  LocalizedText text = 3;
+  repeated DialogOption options = 4;
+}
+
+message DialogClose {
+  uint32 dialog_id = 1;
+}
+
+// ShopOffer is one line of an NPC shop. A price of 0 means the NPC does not buy
+// (sell_price) or sell (buy_price) that item.
+message ShopOffer {
+  uint32 item_id = 1;
+  uint64 buy_price = 2;
+  uint64 sell_price = 3;
+}
+
+message ShopOpen {
+  uint32 npc_creature_id = 1;
+  repeated ShopOffer offers = 2;
+}
+
+enum TradeState {
+  TRADE_STATE_UNSPECIFIED = 0;
+  // Waiting for the other player to offer an item.
+  TRADE_STATE_REQUESTED = 1;
+  TRADE_STATE_NEGOTIATING = 2;
+  TRADE_STATE_COMPLETED = 3;
+  TRADE_STATE_CANCELLED = 4;
+}
+
+message TradeUpdate {
+  TradeState state = 1;
+  uint32 partner_creature_id = 2;
+  string partner_name = 3;
+  // Offered items, flattened (a container is sent with its contents after it).
+  repeated ItemStack own_offer = 4;
+  repeated ItemStack partner_offer = 5;
+  bool own_accepted = 6;
+  bool partner_accepted = 7;
+}
+
+// ---- movement and connection ------------------------------------------------
+
+// WalkRejected tells the client its predicted step failed; it snaps back to pos.
+message WalkRejected {
+  Position pos = 1;
+  Direction dir = 2;
+}
+
+message Pong {
+  uint64 client_time = 1;
+  // Server clock in Unix milliseconds.
+  uint64 server_time = 2;
+}
+
+enum DisconnectReason {
+  DISCONNECT_REASON_UNSPECIFIED = 0;
+  DISCONNECT_REASON_OUTDATED_CLIENT = 1;
+  DISCONNECT_REASON_INVALID_SESSION = 2;
+  DISCONNECT_REASON_LOGGED_OUT = 3;
+  DISCONNECT_REASON_LOGGED_IN_ELSEWHERE = 4;
+  DISCONNECT_REASON_RATE_LIMITED = 5;
+  // The client did not read fast enough and its outgoing queue filled up.
+  DISCONNECT_REASON_SLOW_CLIENT = 6;
+  DISCONNECT_REASON_SERVER_SHUTDOWN = 7;
+  DISCONNECT_REASON_KICKED = 8;
+}
+
+message Disconnect {
+  DisconnectReason reason = 1;
+  // Optional extra explanation for the player.
+  LocalizedText message = 2;
+}

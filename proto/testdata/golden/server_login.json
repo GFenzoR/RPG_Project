@@ -1,0 +1,135 @@
+{
+  "tick": "1200",
+  "events": [
+    {
+      "welcome": {
+        "creatureId": 7,
+        "serverTime": "1793400000500",
+        "tickMs": 50
+      }
+    },
+    {
+      "fullMapView": {
+        "area": {
+          "x": 992,
+          "y": 994,
+          "width": 3,
+          "height": 2,
+          "palette": [
+            {
+              "items": [
+                {
+                  "itemId": 100
+                }
+              ]
+            },
+            {
+              "items": [
+                {
+                  "itemId": 100
+                },
+                {
+                  "itemId": 230,
+                  "count": 12
+                }
+              ]
+            }
+          ],
+          "floors": [
+            {
+              "z": 7,
+              "tiles": [0, 0, 1, -1, 0, 0]
+            }
+          ],
+          "creatures": [
+            {
+              "id": 7,
+              "kind": "CREATURE_KIND_PLAYER",
+              "name": "Aldara",
+              "pos": {
+                "x": 993,
+                "y": 995,
+                "z": 7
+              },
+              "dir": "DIRECTION_SOUTH",
+              "healthPercent": 100,
+              "outfit": {
+                "lookId": 12,
+                "headColor": 3,
+                "bodyColor": 44,
+                "legsColor": 21,
+                "feetColor": 2
+              },
+              "speed": 220
+            },
+            {
+              "id": 40001,
+              "kind": "CREATURE_KIND_MONSTER",
+              "contentId": "mossback_toad",
+              "pos": {
+                "x": 994,
+                "y": 994,
+                "z": 7
+              },
+              "dir": "DIRECTION_WEST",
+              "healthPercent": 85,
+              "outfit": {
+                "lookId": 301
+              },
+              "speed": 150
+            }
+          ]
+        }
+      }
+    },
+    {
+      "playerStats": {
+        "health": 150,
+        "maxHealth": 185,
+        "mana": 35,
+        "maxMana": 35,
+        "level": 3,
+        "experience": "650",
+        "levelPercent": 42,
+        "capacity": 39000,
+        "maxCapacity": 43000,
+        "speed": 220,
+        "soul": 100
+      }
+    },
+    {
+      "playerSkills": {
+        "skills": [
+          {
+            "skillId": "sword",
+            "level": 14,
+            "percent": 7
+          },
+          {
+            "skillId": "fishing",
+            "level": 10
+          }
+        ]
+      }
+    },
+    {
+      "inventory": {
+        "slots": [
+          {
+            "slot": "EQUIPMENT_SLOT_BACKPACK",
+            "item": {
+              "itemId": 500
+            }
+          },
+          {
+            "slot": "EQUIPMENT_SLOT_AMMO",
+            "item": {
+              "itemId": 610,
+              "count": 87
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

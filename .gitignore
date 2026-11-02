@@ -12,9 +12,8 @@ tools/bots/bin/
 *.test
 *.prof
 
-# Generados (se regeneran con make gen)
-server/internal/net/pb/
-packages/protocol/src/gen/
+# Generados (se regeneran con make gen). El código de proto/ sí se commitea
+# (server/internal/net/pb, packages/protocol/src/gen) para compilar sin buf.
 assets/atlas/
 
 # Resultados de pruebas

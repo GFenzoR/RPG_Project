@@ -1,0 +1,8 @@
+{
+  "castSpell": {
+    "words": "ignis minor",
+    "target": {
+      "creatureId": 40001
+    }
+  }
+}
