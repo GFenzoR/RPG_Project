@@ -324,6 +324,11 @@ func compileIsland(root, id string, worldRect rect, content *Content) (*world.Is
 		return nil, nil, err
 	}
 	is.Spawns = spawns
+	npcs, err := readNPCs(root, dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	is.NPCs = npcs
 	return is, sectors, nil
 }
 
@@ -511,6 +516,37 @@ func readSpawns(root, dir string) ([]world.Spawn, error) {
 			sp.Monsters = append(sp.Monsters, world.SpawnMonster{Monster: m.Monster, Count: uint16(m.Count)})
 		}
 		out = append(out, sp)
+	}
+	return out, nil
+}
+
+type npcFile struct {
+	NPC string `yaml:"npc"`
+	Pos pos    `yaml:"pos"`
+}
+
+// readNPCs reads npcs.yaml (optional). Each NPC must have its data/npcs/<id>.yaml; the
+// rest (inside the island, placed once) is checked by world.NewMap.
+func readNPCs(root, dir string) ([]world.NPCPlacement, error) {
+	path := filepath.Join(dir, "npcs.yaml")
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	var list []npcFile
+	if err := readYAML(path, &list); err != nil {
+		return nil, err
+	}
+	where := rel(root, path)
+	out := make([]world.NPCPlacement, 0, len(list))
+	for i, nf := range list {
+		c := nf.Pos
+		if c.X < 0 || c.Y < 0 || c.X > 0xFFFF || c.Y > 0xFFFF || c.Z < 0 || c.Z > world.MaxFloor {
+			return nil, fmt.Errorf("%s: npcs[%d] (%s): pos %+v outside the world", where, i, nf.NPC, c)
+		}
+		if _, err := os.Stat(filepath.Join(root, "data", "npcs", nf.NPC+".yaml")); nf.NPC == "" || err != nil {
+			return nil, fmt.Errorf("%s: npcs[%d]: unknown NPC %q", where, i, nf.NPC)
+		}
+		out = append(out, world.NPCPlacement{NPC: nf.NPC, Pos: world.Pos{X: uint16(c.X), Y: uint16(c.Y), Z: uint8(c.Z)}})
 	}
 	return out, nil
 }

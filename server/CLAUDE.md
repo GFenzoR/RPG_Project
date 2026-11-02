@@ -15,8 +15,9 @@ server/
   internal/skills/     progreso de skills por uso, niveles, experiencia
   internal/ai/         (aún no existe: la IA de monstruos vive en session/monster.go porque
                        depende del índice de sectores y del AOI; separarla cuando crezca)
-  internal/dialog/     motor de diálogos de NPC dirigido por YAML
+  internal/dialog/     motor de diálogos de NPC dirigido por YAML (puro: condiciones, costos)
   internal/quest/      estado de quests, flags (storage values) por personaje
+                       (los NPCs en el mundo, tiendas y dinero viven en session/npc.go)
   internal/content/    carga y validación de data/*.yaml
   internal/net/        WebSocket, framing, (de)serialización protobuf, rate limits
   internal/session/    sesión de jugador: AOI, caminar, envío de deltas, ping, guardado

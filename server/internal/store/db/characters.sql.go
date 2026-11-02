@@ -89,6 +89,16 @@ func (q *Queries) DeleteCharacterInventory(ctx context.Context, characterID int6
 	return err
 }
 
+const deleteCharacterQuestState = `-- name: DeleteCharacterQuestState :exec
+DELETE FROM quest_state WHERE character_id = $1
+`
+
+// A snapshot replaces every storage value in the same transaction as the character row.
+func (q *Queries) DeleteCharacterQuestState(ctx context.Context, characterID int64) error {
+	_, err := q.db.Exec(ctx, deleteCharacterQuestState, characterID)
+	return err
+}
+
 const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT id, account_id, name, vocation, level, experience, health, mana,
        pos_x, pos_y, pos_z, town
@@ -169,6 +179,39 @@ func (q *Queries) GetCharacterInventory(ctx context.Context, characterID int64) 
 			&i.ItemID,
 			&i.Count,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCharacterQuestState = `-- name: GetCharacterQuestState :many
+SELECT key, value
+FROM quest_state
+WHERE character_id = $1
+ORDER BY key
+`
+
+type GetCharacterQuestStateRow struct {
+	Key   string
+	Value int64
+}
+
+// Quest progress and flags ("storage values"); a missing key is 0.
+func (q *Queries) GetCharacterQuestState(ctx context.Context, characterID int64) ([]GetCharacterQuestStateRow, error) {
+	rows, err := q.db.Query(ctx, getCharacterQuestState, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCharacterQuestStateRow{}
+	for rows.Next() {
+		var i GetCharacterQuestStateRow
+		if err := rows.Scan(&i.Key, &i.Value); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -277,6 +320,22 @@ func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveCharacterQuestState = `-- name: SaveCharacterQuestState :exec
+INSERT INTO quest_state (character_id, key, value)
+SELECT $1::bigint, unnest($2::text[]), unnest($3::bigint[])
+`
+
+type SaveCharacterQuestStateParams struct {
+	CharacterID int64
+	Keys        []string
+	Vals        []int64
+}
+
+func (q *Queries) SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error {
+	_, err := q.db.Exec(ctx, saveCharacterQuestState, arg.CharacterID, arg.Keys, arg.Vals)
+	return err
 }
 
 const saveCharacterSkills = `-- name: SaveCharacterSkills :exec

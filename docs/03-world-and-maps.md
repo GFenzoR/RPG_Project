@@ -190,13 +190,13 @@ no de render: el cliente sigue mostrando toda la ventana de 15x11 del piso actua
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
 
-### Formato de `world.bin` (versión 2)
+### Formato de `world.bin` (versión 3)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
 mismas fuentes producen siempre los mismos bytes.
 
 ```text
 magic        8 bytes "RPGWORLD"
-version      u16 = 2
+version      u16 = 3
 speedCount   u32, luego speedCount × u16
              costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
 islandCount  u16, luego por isla (en el orden de world.yaml):
@@ -208,6 +208,8 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
     id u8 largo + bytes, center u16 x, u16 y, u8 z, radius u8,
     respawn u32 segundos, monsters u8 cantidad, luego por monstruo:
     id u8 largo + bytes (data/monsters), count u16
+  npcs       u16 cantidad, luego por NPC (en el orden de npcs.yaml):
+    id u8 largo + bytes (data/npcs), x u16, y u16, z u8
   sectors    u32 cantidad, luego por sector, ordenados por z, cy, cx:
     z u8, cx u16, cy u16
     ground   1024 × u16   ID numérico del suelo, fila por fila; 0 = sin tile
@@ -218,7 +220,11 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
 crc32        u32 (IEEE) de todos los bytes anteriores
 ```
 
-- Historial: la versión 2 (T1.6) agregó `spawns` por isla. `mapcompile` comprueba que
+- Historial: la versión 3 (T1.10) agregó `npcs` por isla: `mapcompile` comprueba que cada
+  NPC tenga su `data/npcs/<id>.yaml` y `Decode`/`NewMap` rechazan un NPC fuera de su isla,
+  en un piso que no lista o colocado dos veces en el mundo. El servidor los pone en su
+  casilla al arrancar (no caminan) y bloquean el paso como cualquier criatura.
+- La versión 2 (T1.6) agregó `spawns` por isla. `mapcompile` comprueba que
   cada monstruo tenga su `data/monsters/<id>.yaml`; `Decode` rechaza spawns con el centro
   fuera de la isla o en un piso que no lista, sin id, sin monstruos o con
   `respawn_seconds` 0.

@@ -31,3 +31,15 @@ func (it *Item) Viewers() int { return len(it.viewers) }
 
 // GroundAt returns the runtime items on pos, bottom first (tests only).
 func (w *World) GroundAt(pos world.Pos) []*Item { return w.ground[pos] }
+
+// CountItem returns how many units of item id p carries, equipment included (tests).
+func (w *World) CountItem(p *Player, id string) int { return w.countItem(p, w.cfg.Items[id], true) }
+
+// Money returns the money p carries (tests only).
+func (w *World) Money(p *Player) int64 { return w.money(p) }
+
+// GiveForTest puts n units of item id in p's backpack (tests only, loop goroutine).
+func (w *World) GiveForTest(p *Player, id string, n int) { w.giveItem(p, w.cfg.Items[id], n) }
+
+// RestoreForTest refills p's health (tests only, loop goroutine).
+func (w *World) RestoreForTest(p *Player) { p.health = p.maxHealth }

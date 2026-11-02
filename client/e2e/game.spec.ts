@@ -405,3 +405,113 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
   expect(errors).toEqual([]);
 });
+
+test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwright }) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-npc-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Talker ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  errors.length = 0; // the 401 of opening the page without a session cookie
+
+  const npc = async (id: string): Promise<{ id: number; x: number; y: number }> => {
+    let found: { id: number; x: number; y: number } | undefined;
+    await expect
+      .poll(async () => {
+        const list = await page.evaluate(() => window.__rpgClient?.npcs() ?? []);
+        found = list.find((n) => n.contentId === id);
+        return found !== undefined;
+      })
+      .toBe(true);
+    if (!found) throw new Error(`no NPC ${id}`);
+    return found;
+  };
+  const tileClient = async (x: number, y: number): Promise<{ x: number; y: number }> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    if (!p) throw new Error("no canvas");
+    return p;
+  };
+
+  // The priestess stands next to the temple: right click opens her dialog.
+  const priest = await npc("puerto_priest");
+  let p = await tileClient(priest.x, priest.y);
+  await page.mouse.click(p.x, p.y, { button: "right" });
+  const dialog = page.getByTestId("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading")).toHaveText("Hermana Liora");
+  await expect(dialog.locator("[data-option]").first()).toContainText("1");
+  // Key 1 picks the first option (the blessings); the server sends the next node.
+  await page.keyboard.press("Digit1");
+  await expect(dialog.locator("[data-option]")).toHaveCount(6);
+  await shot(page, "13-dialog");
+  await dialog.screenshot({ path: join(shots, "13-dialog-window.png") });
+  // Blessings cost 200 coins: the server refuses a new character.
+  await page.keyboard.press("Digit1");
+  await expect(page.getByTestId("game-log")).toContainText("No tienes suficiente dinero.");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  // Walk to the provisioner and open the shop.
+  const prov = await npc("puerto_provisioner");
+  p = await tileClient(prov.x - 2, prov.y - 1);
+  await page.mouse.click(p.x, p.y);
+  await arrived(page, prov.x - 2, prov.y - 1);
+  p = await tileClient(prov.x, prov.y);
+  await page.mouse.click(p.x, p.y, { button: "right" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /Quiero comerciar/ }).click();
+  const shop = page.getByTestId("shop");
+  await expect(shop).toBeVisible();
+  await expect(page.getByTestId("shop-money")).toHaveText("Dinero: 0");
+  await expect(shop.locator('[data-item="rope"]')).toContainText("50");
+  await page.waitForTimeout(300); // let the icons load before the screenshot
+  await shot(page, "14-shop");
+  await shop.getByRole("tab", { name: "Vender" }).click();
+  await expect(shop.locator('[data-item="wolf_pelt"]')).toContainText("Tienes 0");
+
+  // Walking away (keyboard: the windows cover part of the map) closes both windows.
+  await page.locator("body").click({ position: { x: 1, y: 1 } });
+  for (let i = 0; i < 3; i++) {
+    const before = await self(page);
+    await page.keyboard.press("ArrowLeft");
+    if (before) await arrived(page, before.x - 1, before.y);
+  }
+  await expect(dialog).toBeHidden();
+  await expect(shop).toBeHidden();
+
+  await page.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+  expect(errors).toEqual([]);
+});

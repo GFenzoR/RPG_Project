@@ -217,3 +217,61 @@ describe("WorldState", () => {
     expect(w.stepDuration({ x: 100, y: 201, z: 7 }, 220, false)).toBe(500); // 455 → 500
   });
 });
+
+describe("NPC dialogs and shops (T1.10)", () => {
+  const ev = (m: ServerMessage["message"]): ServerMessage["message"] => m;
+  it("opens, refreshes and closes the dialog and its shop together", () => {
+    const w = new WorldState(content);
+    w.apply(
+      ev({
+        case: "creatureAppear",
+        value: {
+          creature: create(CreatureSchema, {
+            id: 9,
+            kind: CreatureKind.NPC,
+            contentId: "puerto_provisioner",
+            pos: { x: 5, y: 5, z: 7 },
+          }),
+        } as never,
+      }),
+      0,
+    );
+    w.apply(
+      ev({
+        case: "dialogOpen",
+        value: {
+          dialogId: 3,
+          npcCreatureId: 9,
+          text: { key: "npc.puerto_provisioner.greet", params: [] },
+          options: [{ optionId: 1, text: { key: "dialog.trade", params: [] } }],
+        } as never,
+      }),
+      0,
+    );
+    expect(w.dialog?.npcContentId).toBe("puerto_provisioner");
+    expect(w.dialog?.options).toEqual([{ id: 1, text: "dialog.trade" }]);
+    w.apply(
+      ev({
+        case: "shopOpen",
+        value: {
+          npcCreatureId: 9,
+          dialogId: 3,
+          money: 130n,
+          offers: [{ itemId: 4, buyPrice: 50n, sellPrice: 15n, owned: 2 }],
+        } as never,
+      }),
+      0,
+    );
+    expect(w.shop).toEqual({
+      dialogId: 3,
+      npcId: 9,
+      money: 130,
+      lines: [{ itemId: 4, buyPrice: 50, sellPrice: 15, owned: 2 }],
+    });
+    w.apply(ev({ case: "dialogClose", value: { dialogId: 2 } as never }), 0);
+    expect(w.dialog).toBeDefined(); // another (old) dialog
+    w.apply(ev({ case: "dialogClose", value: { dialogId: 3 } as never }), 0);
+    expect(w.dialog).toBeUndefined();
+    expect(w.shop).toBeUndefined();
+  });
+});

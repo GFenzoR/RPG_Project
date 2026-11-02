@@ -675,6 +675,7 @@ func (w *World) changedPlace(p *Player, pl place) {
 }
 
 func (w *World) sendInventory(p *Player) {
+	p.questDirty = true
 	inv := &pb.Inventory{}
 	for slot, it := range p.equip {
 		if it != nil {
@@ -686,6 +687,9 @@ func (w *World) sendInventory(p *Player) {
 
 // containerChanged sends the content of c to everyone who has it open.
 func (w *World) containerChanged(c *Item) {
+	if o := c.carriedBy(); o != nil {
+		o.questDirty = true
+	}
 	for _, v := range c.viewers {
 		v.p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_ContainerUpdate{ContainerUpdate: &pb.ContainerUpdate{
 			ContainerId: v.id, Items: c.stacks(),

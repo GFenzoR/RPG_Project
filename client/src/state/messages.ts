@@ -47,7 +47,9 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
             ? t(`npc.${p.value.value}.name`)
             : p.name === "skill"
               ? t(`skill.${p.value.value}.name`)
-              : t(`monster.${p.value.value}.name`);
+              : p.name === "quest"
+                ? t(`quest.${p.value.value}.name`)
+                : t(`monster.${p.value.value}.name`);
         break;
       case "item":
         items.push(itemText(p, content, t));

@@ -225,6 +225,7 @@ func TestBinaryRoundTrip(t *testing.T) {
 	s.Stacks = []TileStack{{Index: 5, Items: []uint16{4, 5}}, {Index: 900, Items: []uint16{6}}}
 	m.Islands()[0].Spawns = []Spawn{{ID: "wolves", Center: pt(31, 30), Radius: 2, RespawnSeconds: 60,
 		Monsters: []SpawnMonster{{Monster: "wolf", Count: 3}, {Monster: "bilge_rat", Count: 1}}}}
+	m.Islands()[0].NPCs = []NPCPlacement{{NPC: "harbor_master", Pos: pt(32, 30)}}
 	var buf bytes.Buffer
 	if err := Encode(&buf, m); err != nil {
 		t.Fatal(err)
@@ -296,6 +297,7 @@ func seventeenFloors() []byte {
 	w.u16(0)
 	w.u8(7)
 	w.u16(0) // no spawns
+	w.u16(0) // no NPCs
 	w.u32(0) // no sectors
 	_ = bw.Flush()
 	return binary.LittleEndian.AppendUint32(buf.Bytes(), crc32.ChecksumIEEE(buf.Bytes()))
@@ -724,5 +726,22 @@ func TestSpawnLimits(t *testing.T) {
 	is.Spawns[0].Monsters[0].Count = MaxSpawnMonsters
 	if err := checkIsland(is); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNPCPlacementChecks(t *testing.T) {
+	m := asciiMap(t, 30, 30, 7, "...")
+	is := m.Islands()[0]
+	is.NPCs = []NPCPlacement{{NPC: "a", Pos: pt(31, 30)}, {NPC: "a", Pos: pt(32, 30)}}
+	if _, err := NewMap([]*Island{is}, map[string][]*Sector{is.ID: is.Sectors()}, nil); err == nil || !strings.Contains(err.Error(), "placed twice") {
+		t.Fatalf("err = %v, want a duplicate NPC rejected", err)
+	}
+	is.NPCs = []NPCPlacement{{NPC: "a", Pos: pt(31, 30)}, {NPC: "b", Pos: pt(31, 30)}}
+	if _, err := NewMap([]*Island{is}, map[string][]*Sector{is.ID: is.Sectors()}, nil); err == nil || !strings.Contains(err.Error(), "shares tile") {
+		t.Fatalf("err = %v, want two NPCs on one tile rejected", err)
+	}
+	is.NPCs = []NPCPlacement{{NPC: "a", Pos: Pos{X: 31, Y: 30, Z: 3}}}
+	if _, err := NewMap([]*Island{is}, map[string][]*Sector{is.ID: is.Sectors()}, nil); err == nil || !strings.Contains(err.Error(), "inside the island") {
+		t.Fatalf("err = %v, want an NPC on an unlisted floor rejected", err)
 	}
 }

@@ -155,6 +155,32 @@ export interface ContainerState {
 
 const itemView = (s: ItemStack): ItemView => ({ itemId: s.itemId, count: s.count });
 
+/** An open NPC dialog (DialogOpen): the NPC's text and the options the player sees. */
+export interface DialogState {
+  id: number;
+  npcId: number;
+  /** data/npcs id of the NPC (its name is npc.<id>.name), when the client knows it. */
+  npcContentId: string;
+  text: string;
+  options: { id: number; text: string }[];
+}
+
+/** One line of an open shop (ShopOpen): prices 0 mean the NPC does not trade it that way. */
+export interface ShopLine {
+  itemId: number;
+  buyPrice: number;
+  sellPrice: number;
+  owned: number;
+}
+
+/** The open shop of the dialog's NPC (closes with the dialog). */
+export interface ShopState {
+  dialogId: number;
+  npcId: number;
+  money: number;
+  lines: ShopLine[];
+}
+
 export class WorldState implements TileSource {
   selfId = 0;
   readonly creatures = new Map<number, CreatureState>();
@@ -172,6 +198,8 @@ export class WorldState implements TileSource {
   readonly spellCooldowns = new Map<string, Cooldown>();
   readonly groupCooldowns = new Map<string, Cooldown>();
   log: LogMessage[] = [];
+  dialog: DialogState | undefined;
+  shop: ShopState | undefined;
   /** Equipped items by slot (Inventory). */
   inventory = new Map<EquipmentSlot, ItemView>();
   /** Open container windows, oldest first. */
@@ -317,6 +345,37 @@ export class WorldState implements TileSource {
           start: now,
         });
         break;
+      case "dialogOpen": {
+        const v = msg.value;
+        if (this.shop && this.shop.dialogId !== v.dialogId) this.shop = undefined;
+        this.dialog = {
+          id: v.dialogId,
+          npcId: v.npcCreatureId,
+          npcContentId: this.creatures.get(v.npcCreatureId)?.contentId ?? "",
+          text: v.text?.key ?? "",
+          options: v.options.map((o) => ({ id: o.optionId, text: o.text?.key ?? "" })),
+        };
+        break;
+      }
+      case "dialogClose":
+        if (this.dialog?.id === msg.value.dialogId) this.dialog = undefined;
+        if (this.shop?.dialogId === msg.value.dialogId) this.shop = undefined;
+        break;
+      case "shopOpen": {
+        const v = msg.value;
+        this.shop = {
+          dialogId: v.dialogId,
+          npcId: v.npcCreatureId,
+          money: Number(v.money),
+          lines: v.offers.map((o) => ({
+            itemId: o.itemId,
+            buyPrice: Number(o.buyPrice),
+            sellPrice: Number(o.sellPrice),
+            owned: o.owned,
+          })),
+        };
+        break;
+      }
       case "chatMessage": {
         const m = msg.value;
         if (m.kind !== MessageKind.SYSTEM || m.body.case !== "localized") break;
@@ -510,9 +569,12 @@ export class WorldState implements TileSource {
     if (!s) return [];
     const d = (c: CreatureState): number =>
       Math.max(Math.abs(c.pos.x - s.pos.x), Math.abs(c.pos.y - s.pos.y));
-    return [...this.creatures.values()]
-      .filter((c) => c.id !== this.selfId && c.pos.z === s.pos.z)
-      .sort((a, b) => d(a) - d(b) || a.id - b.id);
+    return (
+      [...this.creatures.values()]
+        // NPCs are talked to, not fought: they stay out of the battle list.
+        .filter((c) => c.id !== this.selfId && c.pos.z === s.pos.z && c.kind !== CreatureKind.NPC)
+        .sort((a, b) => d(a) - d(b) || a.id - b.id)
+    );
   }
 
   /** The creature standing on a tile, if the client knows one. */

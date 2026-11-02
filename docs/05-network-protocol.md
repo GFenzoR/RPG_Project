@@ -187,7 +187,9 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `MoveItem` | `from`, `item_id`, `stack_index`, `to`, `count` |
 | `LookAt` | `from` (pos, slot o contenedor), `item_id`, `stack_index` |
 | `Say` | `channel` (decir, gritar, susurrar, global), `text` (máx. 255) |
-| `DialogChoose` | `dialog_id`, `option_id` |
+| `NpcTalk` | `creature_id` del NPC (T1.10) |
+| `DialogChoose` | `dialog_id`, `option_id` (0 = cerrar) |
+| `ShopBuy` / `ShopSell` | `dialog_id`, `item_id`, `count` (1..100) (T1.10) |
 | `TradeRequest` | `creature_id`, `item`, `item_id`, `stack_index` |
 | `TradeOffer` | `item`, `item_id`, `stack_index` |
 | `TradeAccept` / `TradeCancel` | — |
@@ -331,6 +333,42 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
 - **Varitas**: con una varita en la mano derecha el ataque automático es un `Projectile` del
   elemento de la varita cada ronda, a `weapon.range` casillas y con línea de visión; con
   `chase` el jugador se acerca hasta tenerlo a tiro.
+
+### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
+- `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso
+  y a ≤ `TalkRange` (3) casillas (Chebyshev). Fuera de rango → `Message` de sistema
+  `dialog.too_far`; un NPC desconocido → `inventory.not_possible`. Un diálogo nuevo cierra
+  el anterior. El servidor responde `DialogOpen` con el nodo inicial.
+- `DialogOpen` lleva solo las opciones cuyo `if` se cumple ahora; `option_id` es la
+  posición de la opción en el nodo (1..9), así que no cambia mientras el nodo está
+  abierto. El cliente las elige con click o con las teclas 1–9 (la n-ésima mostrada).
+- `DialogChoose`: un `dialog_id` viejo se ignora; `option_id` 0 cierra. El servidor vuelve
+  a evaluar el `if` (una ventana vieja no sirve para elegir una opción oculta: reenvía el
+  nodo) y revisa los costos antes de ejecutar nada (`docs/06-content-data.md`). Si algo
+  falla manda el `Message` de rechazo (`dialog.no_money`, `dialog.no_item`...) y reenvía el
+  nodo. Si no, ejecuta las acciones, entra al nodo de `goto` (o se queda en el mismo si no
+  hay) y manda el `DialogOpen` nuevo; `close`, `travel` y `teleport` cierran con
+  `DialogClose`.
+- Alejarse a más de `TalkRange`, cambiar de piso o teletransportarse cierra el diálogo
+  (`DialogClose`).
+- **Tienda:** la acción `open_shop` manda `ShopOpen{dialog_id, npc_creature_id, money,
+  offers}` y el diálogo sigue abierto; la tienda se cierra con el `DialogClose` de ese
+  diálogo. Cada `ShopOffer` trae `buy_price` (lo que paga el jugador; 0 = no lo vende),
+  `sell_price` (lo que recibe; 0 = no lo compra) y `owned` (unidades en sus contenedores).
+- `ShopBuy` es todo o nada: dinero suficiente, capacidad y lugar en la mochila (se
+  apila con lo que ya hay, y queda un lugar libre por cada moneda menor para el vuelto)
+  o `shop.no_money` / `shop.no_room`. `ShopSell` toma de los
+  contenedores, nunca lo equipado (`shop.not_enough`). Tras cada compra o venta: `Message`
+  `shop.bought`/`shop.sold`, `PlayerStats` y un `ShopOpen` actualizado.
+- **Dinero:** la suma de `worth × count` de los items `currency` que lleva (equipo y
+  contenedores anidados). Pagar saca primero las monedas de menor valor y devuelve el
+  vuelto; cobrar entrega la menor cantidad de monedas. Lo que no cabe en la mochila
+  (`give_item`, recompensas, vuelto) cae al suelo bajo el jugador con
+  `dialog.item_on_floor`.
+- Las quests avisan con `Message` de sistema: `dialog.quest_started`,
+  `dialog.quest_updated`, `dialog.quest_kills` (`{monster} {count}/{total}`) y
+  `dialog.quest_completed`, con el parámetro `content_id` `quest` (el cliente muestra
+  `quest.<id>.name`).
 
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |

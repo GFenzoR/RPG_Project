@@ -2877,10 +2877,12 @@ func (x *DialogClose) GetDialogId() uint32 {
 // ShopOffer is one line of an NPC shop. A price of 0 means the NPC does not buy
 // (sell_price) or sell (buy_price) that item.
 type ShopOffer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	BuyPrice      uint64                 `protobuf:"varint,2,opt,name=buy_price,json=buyPrice,proto3" json:"buy_price,omitempty"`
-	SellPrice     uint64                 `protobuf:"varint,3,opt,name=sell_price,json=sellPrice,proto3" json:"sell_price,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ItemId    uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	BuyPrice  uint64                 `protobuf:"varint,2,opt,name=buy_price,json=buyPrice,proto3" json:"buy_price,omitempty"`
+	SellPrice uint64                 `protobuf:"varint,3,opt,name=sell_price,json=sellPrice,proto3" json:"sell_price,omitempty"`
+	// How many units of the item the player carries (equipment and every container).
+	Owned         uint32 `protobuf:"varint,4,opt,name=owned,proto3" json:"owned,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2936,10 +2938,22 @@ func (x *ShopOffer) GetSellPrice() uint64 {
 	return 0
 }
 
+func (x *ShopOffer) GetOwned() uint32 {
+	if x != nil {
+		return x.Owned
+	}
+	return 0
+}
+
+// ShopOpen opens (or refreshes, after each purchase or sale) the shop of the NPC of
+// dialog dialog_id. The shop closes with that dialog's DialogClose.
 type ShopOpen struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NpcCreatureId uint32                 `protobuf:"varint,1,opt,name=npc_creature_id,json=npcCreatureId,proto3" json:"npc_creature_id,omitempty"`
 	Offers        []*ShopOffer           `protobuf:"bytes,2,rep,name=offers,proto3" json:"offers,omitempty"`
+	DialogId      uint32                 `protobuf:"varint,3,opt,name=dialog_id,json=dialogId,proto3" json:"dialog_id,omitempty"`
+	// Money the player carries, in the smallest coin.
+	Money         uint64 `protobuf:"varint,4,opt,name=money,proto3" json:"money,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2986,6 +3000,20 @@ func (x *ShopOpen) GetOffers() []*ShopOffer {
 		return x.Offers
 	}
 	return nil
+}
+
+func (x *ShopOpen) GetDialogId() uint32 {
+	if x != nil {
+		return x.DialogId
+	}
+	return 0
+}
+
+func (x *ShopOpen) GetMoney() uint64 {
+	if x != nil {
+		return x.Money
+	}
+	return 0
 }
 
 type TradeUpdate struct {
@@ -3433,15 +3461,18 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x04text\x18\x03 \x01(\v2\x16.game.v1.LocalizedTextR\x04text\x12/\n" +
 	"\aoptions\x18\x04 \x03(\v2\x15.game.v1.DialogOptionR\aoptions\"*\n" +
 	"\vDialogClose\x12\x1b\n" +
-	"\tdialog_id\x18\x01 \x01(\rR\bdialogId\"`\n" +
+	"\tdialog_id\x18\x01 \x01(\rR\bdialogId\"v\n" +
 	"\tShopOffer\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1b\n" +
 	"\tbuy_price\x18\x02 \x01(\x04R\bbuyPrice\x12\x1d\n" +
 	"\n" +
-	"sell_price\x18\x03 \x01(\x04R\tsellPrice\"^\n" +
+	"sell_price\x18\x03 \x01(\x04R\tsellPrice\x12\x14\n" +
+	"\x05owned\x18\x04 \x01(\rR\x05owned\"\x91\x01\n" +
 	"\bShopOpen\x12&\n" +
 	"\x0fnpc_creature_id\x18\x01 \x01(\rR\rnpcCreatureId\x12*\n" +
-	"\x06offers\x18\x02 \x03(\v2\x12.game.v1.ShopOfferR\x06offers\"\xc3\x02\n" +
+	"\x06offers\x18\x02 \x03(\v2\x12.game.v1.ShopOfferR\x06offers\x12\x1b\n" +
+	"\tdialog_id\x18\x03 \x01(\rR\bdialogId\x12\x14\n" +
+	"\x05money\x18\x04 \x01(\x04R\x05money\"\xc3\x02\n" +
 	"\vTradeUpdate\x12)\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x13.game.v1.TradeStateR\x05state\x12.\n" +
 	"\x13partner_creature_id\x18\x02 \x01(\rR\x11partnerCreatureId\x12!\n" +

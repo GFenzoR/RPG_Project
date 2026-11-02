@@ -96,6 +96,9 @@ type Island struct {
 	Temple Pos
 	// Spawns are the island's monster spawns (world/islands/<id>/spawns.yaml).
 	Spawns []Spawn
+	// NPCs are the NPCs placed on the island (world/islands/<id>/npcs.yaml), in file
+	// order. Each data/npcs id appears once in the whole world.
+	NPCs []NPCPlacement
 
 	cx0, cy0 int                // first sector column/row
 	cw, ch   int                // sectors per row/column
@@ -141,6 +144,12 @@ const (
 	MaxIslandMonsters = 20000 // monsters all the spawns of an island keep
 )
 
+// NPCPlacement is an NPC (data/npcs id) standing on a tile.
+type NPCPlacement struct {
+	NPC string
+	Pos Pos
+}
+
 // SpawnMonster is how many monsters of one kind (data/monsters id) a spawn keeps.
 type SpawnMonster struct {
 	Monster string
@@ -161,9 +170,21 @@ type Map struct {
 // numeric item ID (0 = DefaultGroundSpeed).
 func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint16) (*Map, error) {
 	m := &Map{groundSpeed: groundSpeed}
+	npcs := map[string]bool{}
+	npcTiles := map[Pos]bool{}
 	for i, is := range islands {
 		if err := checkIsland(is); err != nil {
 			return nil, err
+		}
+		for _, n := range is.NPCs {
+			if npcs[n.NPC] {
+				return nil, fmt.Errorf("island %q: NPC %q is placed twice", is.ID, n.NPC)
+			}
+			npcs[n.NPC] = true
+			if npcTiles[n.Pos] {
+				return nil, fmt.Errorf("island %q: NPC %q shares tile %v with another NPC", is.ID, n.NPC, n.Pos)
+			}
+			npcTiles[n.Pos] = true
 		}
 		r := is.Rect
 		for _, other := range islands[:i] {
@@ -281,6 +302,11 @@ func checkIsland(is *Island) error {
 		}
 		if total += n; total > MaxIslandMonsters {
 			return fmt.Errorf("island %q: spawns keep more than %d monsters", is.ID, MaxIslandMonsters)
+		}
+	}
+	for _, n := range is.NPCs {
+		if n.NPC == "" || !r.Contains(int(n.Pos.X), int(n.Pos.Y)) || !is.hasFloor(n.Pos.Z) {
+			return fmt.Errorf("island %q: NPC %q at %v needs an id and a tile inside the island", is.ID, n.NPC, n.Pos)
 		}
 	}
 	return nil

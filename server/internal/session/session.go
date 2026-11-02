@@ -16,6 +16,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -52,6 +53,8 @@ type Character struct {
 	HasPos bool
 	Pos    world.Pos
 	Town   string
+	// Storage is the quest progress and flags (quest_state rows: key → value).
+	Storage map[string]int64
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -69,6 +72,8 @@ type Snapshot struct {
 	Skills []SkillState
 	// Inventory is every equipped item with its content (a deep copy).
 	Inventory []ItemState
+	// Storage is every non-zero quest_state value (a copy).
+	Storage map[string]int64
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -100,6 +105,11 @@ type Config struct {
 	// Spells come from data/spells.yaml (T1.9). Every rune item must name one of them
 	// and every conjured item must exist in Items.
 	Spells content.Spells
+	// NPCs and Quests come from data/ (T1.10). With NPCs set, the World places the
+	// map's NPCs (world.Island.NPCs); every placed NPC must exist and every shop item
+	// must be in Items. Without NPCs the world has none (tests, tools).
+	NPCs   content.NPCs
+	Quests content.Quests
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
 	Save func(Snapshot) bool
@@ -178,6 +188,14 @@ type World struct {
 	// Magic (T1.9): spells by normalized words, and the index of the magic skill.
 	spellWords map[string]*content.Spell
 	magicIdx   int
+
+	// NPCs and quests (T1.10): NPCs never move, so they are indexed once.
+	npcs     []*NPC
+	npcByID  map[uint32]*NPC
+	npcAt    map[world.Pos]*NPC
+	nsectors map[uint64][]*NPC
+	quests   *quest.Engine
+	coins    []*content.Item // currency items, highest worth first
 }
 
 // New validates cfg and builds an empty World.
@@ -228,6 +246,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initMagic(); err != nil {
+		return nil, err
+	}
+	if err := w.initNPCs(); err != nil {
 		return nil, err
 	}
 	return w, nil

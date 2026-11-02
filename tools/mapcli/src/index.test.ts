@@ -48,7 +48,14 @@ describe("mapcli", () => {
         { z: 7, chunks: 4, tiles: 4096 },
         { z: 8, chunks: 2 },
       ],
-      npcs: [{ npc: "harbor_master" }],
+      npcs: [
+        { npc: "harbor_master" },
+        { npc: "puerto_priest" },
+        { npc: "puerto_provisioner" },
+        { npc: "puerto_armorer" },
+        { npc: "puerto_foreman" },
+        { npc: "puerto_diver" },
+      ],
     });
   });
 
@@ -105,16 +112,18 @@ describe("mapcli", () => {
     expect(r.code).toBe(0);
     expect(r.out).toBe(
       [
-        "legend: . grass  : dirt  @ temple  _ stone_floor",
+        "legend: . grass  : dirt  @ temple  N npc  _ stone_floor",
         "y\\x  1053",
         "1053 _______..",
-        "1054 _______..",
+        "1054 _____N_..",
         "1055 _______..",
         "1056 ___@___::",
         "1057 _______..",
-        "1058 _______..",
+        "1058 _______.N",
         "1059 _______..",
+        "N 1058,1054: npc puerto_priest",
         "@ 1056,1056: temple",
+        "N 1061,1058: npc puerto_provisioner",
         "",
       ].join("\n"),
     );
