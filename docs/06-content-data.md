@@ -22,6 +22,47 @@ i18n/
   es/*.yaml  en/*.yaml  mismas claves en ambos (la CI lo verifica)
 ```
 
+## Esquemas y validador
+- Esquemas (JSON Schema 2020-12) en `packages/content-schema/schemas/`: `balance`,
+  `vocations`, `items`, `monster`, `npc`, `quest`, `spells`, `recipes`, `borders`, `i18n`,
+  `ids-lock`, más `common` con las definiciones compartidas (IDs, claves i18n, condiciones,
+  acciones, elementos, skills). Son la fuente de verdad del formato; este doc da ejemplos.
+- Dos keywords propios: `x-ref: <tipo>` marca un ID que debe existir (`item`, `monster`,
+  `npc`, `quest`, `vocation`, `spell`, `shop`) y `x-i18n: true` marca una clave que debe
+  existir en todos los idiomas. El validador los recolecta y los resuelve al final.
+- `make validate` (→ `node packages/content-schema/src/cli.ts validate`) revisa además lo
+  que un esquema no puede expresar:
+  - IDs únicos por tipo (items entre todos los archivos de `items/`, tiendas entre NPCs).
+  - En `monsters/`, `npcs/` y `quests/` el `id` es igual al nombre del archivo.
+  - Referencias cruzadas, nodos de diálogo (`start`, `goto`; aviso si un nodo no se
+    alcanza), pasos de quest en `set_quest_step`/`quest_state`, nodos en `dialog_action`.
+  - Un bloque por tipo de item (`weapon:` solo con `kind: weapon`, etc.), `max_stack`
+    solo con `stackable: true`, `count` de loot > 1 solo para items apilables,
+    `min <= max` en ataques, bordes solo entre items `ground`.
+  - `balance.yaml` define todas las skills y cada vocación todos sus factores.
+  - i18n: mismas claves y en el mismo archivo para `es` y `en`, mismos `{parámetros}`,
+    toda clave usada en `data/` existe; aviso si una clave `item.*`, `monster.*`, ... no se usa.
+  - Archivos en `data/` sin esquema (p. ej. `effects.yaml`, `cosmetics.yaml`) fallan hasta
+    que su tarea agregue el esquema.
+  - `ids.lock.yaml` (ver abajo).
+- Formato de mensajes: `error data/monsters/wolf.yaml:17:7 loot[0].item: unknown item
+  "wolf_pelts" (did you mean "wolf_pelt"?)`. Los avisos (`warning`) no hacen fallar.
+- Formas compactas: una condición `if` es un objeto con una sola clave, o una lista de
+  ellas (todas deben cumplirse). Una acción es `close` o un objeto con una sola clave, o
+  una lista de acciones. Toda opción de diálogo tiene `goto`, `action` o ambos.
+
+## IDs numéricos (`ids.lock.yaml`)
+```yaml
+items:
+  grass: 3
+  iron_sword: 13
+```
+- `make gen-ids` asigna `max + 1` a cada item nuevo y reescribe el archivo ordenado por
+  número. Commitea el resultado junto con el item.
+- Solo se agrega: si borras un item su número queda en el lock (aviso "retired id") y
+  nunca se reutiliza. `make validate` compara con la rama base (`origin/main`, o la ref
+  de `CONTENT_BASE_REF`) y falla si un número cambió o desapareció.
+
 ## Convenciones
 - IDs en `snake_case` en inglés (`wolf`, `harbor_master`, `iron_sword`).
 - Ningún texto visible en `data/`: solo claves i18n (`name: item.iron_sword.name`).
@@ -177,6 +218,17 @@ rewards:
   base_success: 0.6
   success_per_level: 0.02
   xp: 12
+```
+
+## Bordes (autoborder)
+```yaml
+# data/borders.yaml: cuando "from" toca a "to", las piezas se apilan sobre las casillas "to"
+- id: grass_sand
+  from: grass
+  to: sand
+  priority: 10             # mayor prioridad se dibuja encima
+  pieces: { n: border_grass_sand_n, s: ..., e: ..., w: ..., ne: ..., nw: ..., se: ..., sw: ... }
+  # opcionales: inner_ne, inner_nw, inner_se, inner_sw (esquinas cóncavas)
 ```
 
 ## i18n

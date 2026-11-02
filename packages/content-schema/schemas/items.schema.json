@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/items.schema.json",
+  "title": "Item list (data/items/*.yaml)",
+  "type": "array",
+  "items": { "$ref": "#/$defs/item" },
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "sprite", "name"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/id" },
+        "kind": {
+          "enum": [
+            "ground",
+            "wall",
+            "decoration",
+            "container",
+            "weapon",
+            "armor",
+            "shield",
+            "tool",
+            "consumable",
+            "currency",
+            "material",
+            "rune"
+          ]
+        },
+        "sprite": { "$ref": "common.schema.json#/$defs/sprite" },
+        "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
+        "description": { "$ref": "common.schema.json#/$defs/i18nKey" },
+        "weight": { "description": "Grams.", "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+        "stackable": { "type": "boolean" },
+        "max_stack": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "tradeable": { "type": "boolean" },
+        "pickupable": { "type": "boolean" },
+        "blocks_movement": { "type": "boolean" },
+        "blocks_sight": { "type": "boolean" },
+        "value": {
+          "description": "Base price NPCs use as reference.",
+          "$ref": "common.schema.json#/$defs/nonNegativeInt"
+        },
+        "ground": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["walkable"],
+          "properties": {
+            "walkable": { "type": "boolean" },
+            "speed": {
+              "description": "Terrain cost multiplier in percent (100 = normal).",
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "weapon": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "attack"],
+          "properties": {
+            "type": { "enum": ["sword", "axe", "club", "distance", "wand"] },
+            "attack": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+            "defense": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+            "hands": { "enum": [1, 2] },
+            "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
+            "element": { "$ref": "common.schema.json#/$defs/element" }
+          }
+        },
+        "armor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["slot", "armor"],
+          "properties": {
+            "slot": { "enum": ["head", "body", "legs", "feet", "neck", "ring"] },
+            "armor": { "$ref": "common.schema.json#/$defs/nonNegativeInt" }
+          }
+        },
+        "shield": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["defense"],
+          "properties": { "defense": { "$ref": "common.schema.json#/$defs/nonNegativeInt" } }
+        },
+        "container": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["slots"],
+          "properties": { "slots": { "$ref": "common.schema.json#/$defs/positiveInt" } }
+        },
+        "tool": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["use"],
+          "properties": {
+            "use": { "enum": ["fishing", "mining", "woodcutting", "rope", "shovel"] }
+          }
+        },
+        "consumable": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "heal_hp": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+            "heal_mp": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+            "food_ms": { "$ref": "common.schema.json#/$defs/durationMs" }
+          }
+        },
+        "currency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["worth"],
+          "properties": {
+            "worth": {
+              "description": "Value in the smallest coin.",
+              "$ref": "common.schema.json#/$defs/positiveInt"
+            }
+          }
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "level": { "$ref": "common.schema.json#/$defs/positiveInt" },
+            "vocations": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "common.schema.json#/$defs/vocationRef" }
+            }
+          }
+        },
+        "notes": { "$ref": "common.schema.json#/$defs/notes" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "ground" } } },
+          "then": { "required": ["ground"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "weapon" } } },
+          "then": { "required": ["weapon"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "armor" } } },
+          "then": { "required": ["armor"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "shield" } } },
+          "then": { "required": ["shield"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "container" } } },
+          "then": { "required": ["container"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "tool" } } },
+          "then": { "required": ["tool"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "currency" } } },
+          "then": { "required": ["currency"] }
+        }
+      ]
+    }
+  }
+}

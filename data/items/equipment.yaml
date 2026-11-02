@@ -1,0 +1,17 @@
+- id: patched_tunic
+  kind: armor
+  sprite: armor/patched_tunic
+  name: item.patched_tunic.name
+  weight: 6000
+  tradeable: true
+  armor: { slot: body, armor: 2 }
+  value: 20
+
+- id: plank_shield
+  kind: shield
+  sprite: shields/plank_shield
+  name: item.plank_shield.name
+  weight: 5000
+  tradeable: true
+  shield: { defense: 12 }
+  value: 25

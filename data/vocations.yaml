@@ -1,0 +1,34 @@
+# MVP vocations (docs/02-game-design.md). ranger and druid arrive in milestone 3.
+- id: guardian
+  name: vocation.guardian.name
+  description: vocation.guardian.desc
+  start: { health: 150, mana: 30, capacity: 400000, speed: 220 }
+  per_level: { health: 15, mana: 5, capacity: 25000, speed: 2 }
+  regen: { health: 2, mana: 1, interval_ms: 6000 }
+  skill_factors:
+    fist: 1.1
+    sword: 1.1
+    axe: 1.1
+    club: 1.1
+    distance: 1.4
+    shield: 1.1
+    magic: 3.0
+    fishing: 1.1
+  weapons: [sword, axe, club]
+
+- id: arcanist
+  name: vocation.arcanist.name
+  description: vocation.arcanist.desc
+  start: { health: 150, mana: 60, capacity: 400000, speed: 220 }
+  per_level: { health: 5, mana: 30, capacity: 10000, speed: 2 }
+  regen: { health: 1, mana: 2, interval_ms: 3000 }
+  skill_factors:
+    fist: 1.5
+    sword: 2.0
+    axe: 2.0
+    club: 2.0
+    distance: 2.0
+    shield: 1.5
+    magic: 1.1
+    fishing: 1.1
+  weapons: [wand]

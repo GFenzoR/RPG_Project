@@ -1,3 +1,9 @@
-// Placeholder entry point created by T0.1 (monorepo skeleton).
-// The real implementation lands in the roadmap task named in package.json.
-export const packageName = "@rpg/content-schema";
+// Content schemas and validator for data/ and i18n/ (docs/06-content-data.md).
+export { LANGUAGES, validateContent } from "./validate.ts";
+export type { ValidateOptions, ValidationReport } from "./validate.ts";
+export { checkIdsLock, generateIdsLock, renderIdsLock } from "./ids.ts";
+export type { IdsLock } from "./ids.ts";
+export { SCHEMA_DIR, SchemaSet } from "./schemas.ts";
+export type { RefKind, SchemaName } from "./schemas.ts";
+export { formatDiagnostic } from "./source.ts";
+export type { Diagnostic, PathSegment } from "./source.ts";

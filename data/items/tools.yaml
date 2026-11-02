@@ -1,0 +1,18 @@
+- id: fishing_rod
+  kind: tool
+  sprite: tools/fishing_rod
+  name: item.fishing_rod.name
+  description: item.fishing_rod.desc
+  weight: 800
+  tradeable: true
+  tool: { use: fishing }
+  value: 150
+
+- id: rope
+  kind: tool
+  sprite: tools/rope
+  name: item.rope.name
+  weight: 1800
+  tradeable: true
+  tool: { use: rope }
+  value: 50

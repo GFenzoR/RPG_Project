@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/monster.schema.json",
+  "title": "Monster (data/monsters/<id>.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "sprite", "health", "experience", "speed", "attacks"],
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/id" },
+    "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
+    "sprite": { "$ref": "common.schema.json#/$defs/sprite" },
+    "health": { "$ref": "common.schema.json#/$defs/positiveInt" },
+    "experience": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+    "speed": { "$ref": "common.schema.json#/$defs/positiveInt" },
+    "armor": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+    "defense": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aggressive": { "type": "boolean" },
+        "flee_at_health_pct": { "$ref": "common.schema.json#/$defs/percent" },
+        "target_distance": { "$ref": "common.schema.json#/$defs/positiveInt" }
+      }
+    },
+    "attacks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "min", "max", "interval_ms"],
+        "properties": {
+          "type": { "enum": ["melee", "distance", "spell"] },
+          "element": { "$ref": "common.schema.json#/$defs/element" },
+          "min": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "max": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "interval_ms": { "type": "integer", "minimum": 50 },
+          "chance": { "$ref": "common.schema.json#/$defs/chance" },
+          "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
+          "radius": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "visual": { "$ref": "common.schema.json#/$defs/id" }
+        }
+      }
+    },
+    "resistances": {
+      "description": "Percent damage reduction per element (negative = weakness).",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/element" },
+      "additionalProperties": { "type": "integer", "minimum": -100, "maximum": 100 }
+    },
+    "loot": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "chance"],
+        "properties": {
+          "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+          "chance": { "$ref": "common.schema.json#/$defs/chance" },
+          "count": {
+            "type": "array",
+            "prefixItems": [
+              { "$ref": "common.schema.json#/$defs/positiveInt" },
+              { "$ref": "common.schema.json#/$defs/positiveInt" }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/id" },
+      "uniqueItems": true
+    },
+    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+  }
+}

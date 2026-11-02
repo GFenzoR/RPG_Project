@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/balance.schema.json",
+  "title": "Balance constants (data/balance.yaml)",
+  "description": "Every game-rule number lives here; code never hardcodes balance constants.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["movement", "experience", "skills", "combat", "death", "economy"],
+  "properties": {
+    "movement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_step_ms", "diagonal_cost", "max_path_tiles"],
+      "properties": {
+        "base_step_ms": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "diagonal_cost": { "type": "number", "minimum": 1 },
+        "max_path_tiles": { "$ref": "common.schema.json#/$defs/positiveInt" }
+      }
+    },
+    "experience": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["curve", "max_level"],
+      "properties": {
+        "curve": {
+          "description": "Total XP for level n: a*n^3 + b*n^2 + c*n + d.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["a", "b", "c"],
+          "properties": {
+            "a": { "type": "number", "exclusiveMinimum": 0 },
+            "b": { "type": "number" },
+            "c": { "type": "number" },
+            "d": { "type": "number" }
+          }
+        },
+        "max_level": { "$ref": "common.schema.json#/$defs/positiveInt" }
+      }
+    },
+    "skills": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "shield_max_tries_per_round", "afk"],
+      "properties": {
+        "base": {
+          "description": "Per skill: starting level and tries for the first level-up (tries(n) = base_tries * vocation_factor^(n - start_level)).",
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/skill" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["start_level", "base_tries"],
+            "properties": {
+              "start_level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+              "base_tries": { "$ref": "common.schema.json#/$defs/positiveInt" }
+            }
+          }
+        },
+        "shield_max_tries_per_round": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "afk": {
+          "description": "Training against a target that does not fight back gives reduced progress after a while.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["after_ms", "factor"],
+          "properties": {
+            "after_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
+            "factor": { "$ref": "common.schema.json#/$defs/chance" }
+          }
+        }
+      }
+    },
+    "combat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attack_interval_ms", "modes"],
+      "properties": {
+        "attack_interval_ms": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "modes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["offensive", "balanced", "defensive"],
+          "properties": {
+            "offensive": { "$ref": "#/$defs/mode" },
+            "balanced": { "$ref": "#/$defs/mode" },
+            "defensive": { "$ref": "#/$defs/mode" }
+          }
+        }
+      }
+    },
+    "death": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "xp_loss_pct",
+        "skill_loss_pct",
+        "equipment_drop_pct",
+        "backpack_drop_pct",
+        "max_blessings",
+        "xp_loss_pct_all_blessings",
+        "novice_max_level",
+        "corpse_ms",
+        "corpse_owner_only_ms"
+      ],
+      "properties": {
+        "xp_loss_pct": { "$ref": "common.schema.json#/$defs/percent" },
+        "skill_loss_pct": { "$ref": "common.schema.json#/$defs/percent" },
+        "equipment_drop_pct": { "$ref": "common.schema.json#/$defs/percent" },
+        "backpack_drop_pct": { "$ref": "common.schema.json#/$defs/percent" },
+        "max_blessings": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+        "xp_loss_pct_all_blessings": { "$ref": "common.schema.json#/$defs/percent" },
+        "novice_max_level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+        "corpse_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
+        "corpse_owner_only_ms": { "$ref": "common.schema.json#/$defs/durationMs" }
+      }
+    },
+    "economy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coin_ratio"],
+      "properties": {
+        "coin_ratio": {
+          "description": "Copper per silver and silver per gold.",
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        }
+      }
+    },
+    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+  },
+  "$defs": {
+    "mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attack", "defense"],
+      "properties": {
+        "attack": { "type": "number", "minimum": 0 },
+        "defense": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

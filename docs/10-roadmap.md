@@ -22,7 +22,7 @@ Objetivo: repo que compila, se testea y valida, con los contratos base definidos
 - [x] **T0.2 Protocolo v1.** (PR #3) `proto/game/v1/*.proto` con los mensajes de
   `05-network-protocol.md`, `buf.yaml`/`buf.gen.yaml`, generación Go y TS, test de
   ida y vuelta Go↔TS con golden files. [T0.1]
-- [ ] **T0.3 Esquemas de contenido.** JSON Schemas para balance, vocations, items,
+- [x] **T0.3 Esquemas de contenido.** (PR #4) JSON Schemas para balance, vocations, items,
   monsters, npcs, quests, spells, recipes, borders, i18n. Validador (`make validate`)
   con mensajes claros. Datos semilla: suelos básicos, 10 items, 3 monstruos, 1 NPC,
   `ids.lock.yaml`, i18n es/en. [T0.1]

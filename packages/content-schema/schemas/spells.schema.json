@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/spells.schema.json",
+  "title": "Spell list (data/spells.yaml)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "name",
+      "words",
+      "vocations",
+      "level",
+      "mana",
+      "group",
+      "cooldown_ms",
+      "effect"
+    ],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
+      "words": {
+        "description": "Invented magic words (never Tibia's). Lowercase latin letters and spaces.",
+        "type": "string",
+        "pattern": "^[a-z]+( [a-z]+)*$"
+      },
+      "vocations": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "$ref": "common.schema.json#/$defs/vocationRef" }
+      },
+      "level": { "$ref": "common.schema.json#/$defs/positiveInt" },
+      "magic_level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+      "mana": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+      "group": { "enum": ["attack", "healing", "support"] },
+      "cooldown_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
+      "group_cooldown_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
+      "rune": {
+        "description": "Rune item this spell creates.",
+        "$ref": "common.schema.json#/$defs/itemRef"
+      },
+      "effect": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 1,
+        "additionalProperties": false,
+        "properties": {
+          "heal": { "type": "object", "$ref": "#/$defs/scaling", "unevaluatedProperties": false },
+          "damage": {
+            "type": "object",
+            "allOf": [{ "$ref": "#/$defs/scaling" }],
+            "required": ["element"],
+            "properties": {
+              "element": { "$ref": "common.schema.json#/$defs/element" },
+              "radius": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+              "range": { "$ref": "common.schema.json#/$defs/positiveInt" }
+            },
+            "unevaluatedProperties": false
+          },
+          "haste": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["speed", "duration_ms"],
+            "properties": {
+              "speed": { "type": "integer" },
+              "duration_ms": { "$ref": "common.schema.json#/$defs/durationMs" }
+            }
+          },
+          "light": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["radius", "duration_ms"],
+            "properties": {
+              "radius": { "$ref": "common.schema.json#/$defs/positiveInt" },
+              "duration_ms": { "$ref": "common.schema.json#/$defs/durationMs" }
+            }
+          }
+        }
+      },
+      "visual": { "$ref": "common.schema.json#/$defs/id" },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  },
+  "$defs": {
+    "scaling": {
+      "type": "object",
+      "required": ["base"],
+      "properties": {
+        "base": { "type": "number", "minimum": 0 },
+        "per_level": { "type": "number", "minimum": 0 },
+        "per_magic_level": { "type": "number", "minimum": 0 },
+        "spread": {
+          "description": "Random range as a fraction (0.2 = ±20%).",
+          "$ref": "common.schema.json#/$defs/chance"
+        }
+      }
+    }
+  }
+}
