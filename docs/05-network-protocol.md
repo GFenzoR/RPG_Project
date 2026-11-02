@@ -82,14 +82,25 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
     desde otras IPs no puede gastarlo por la víctima.
   - Login fallido por email desde cualquier IP: 30, luego 1 cada 2 min (~30/h). Laxo:
     solo frena la adivinación repartida en muchas IPs.
-  - Solo los intentos **fallidos** (`invalid_credentials`) gastan los dos límites de
-    login; entrar bien nunca gasta. **Trade-off:** quien conoce el email de alguien
-    puede, sosteniendo ~30 fallos por hora desde IPs distintas, impedir que la víctima
-    entre desde una IP nueva; desde la IP donde ya entró solo la frena su propio par.
-    Lo aceptamos frente a dejar sin tope la adivinación distribuida.
-  - Las tablas de límites tienen tamaño fijo (65 536 entradas, índice HMAC con secreto
-    aleatorio por proceso): la memoria está acotada, nunca se resetean ni se desalojan
-    buckets, y no se pueden elegir claves que caigan en el bucket de otro. Detrás de Caddy, `-trust-proxy` toma
+  - Los dos límites de login reservan una ficha **antes** de verificar la contraseña
+    (así N pedidos simultáneos no pasan con una sola ficha) y la devuelven si el
+    resultado no es `invalid_credentials`: solo los intentos **fallidos** cuentan y
+    entrar bien nunca gasta.
+  - **Trade-off:** quien conoce el email de alguien puede, sosteniendo ~30 fallos por
+    hora desde IPs distintas, agotar el límite por email; mientras siga agotado, la
+    víctima recibe `429` desde **cualquier** IP, también la de siempre. Lo aceptamos
+    frente a dejar sin tope la adivinación distribuida. Mejora pendiente: eximir del
+    límite por email a dispositivos o IPs donde la cuenta ya entró.
+  - Las tablas de límites tienen tamaño fijo (65 536 entradas; cada clave tiene dos
+    casillas posibles y una etiqueta, derivadas de un HMAC con secreto aleatorio por
+    proceso): la memoria está acotada, no se pueden elegir claves que caigan en las
+    casillas de otro, y un bucket solo cambia de dueño cuando está lleno, así que
+    rociar claves nuevas nunca resetea un límite gastado.
+  - Si las dos casillas de una clave están ocupadas por otros buckets en uso: el límite
+    por IP **deja pasar** el pedido sin contarlo (llenar la tabla con basura desde
+    muchas /64 no puede convertirse en un `429` para todos; los límites por cuenta y el
+    tope de cálculos de contraseña siguen protegiendo), y los límites de login
+    **comparten** la casilla más llena (fallan cerrados). Detrás de Caddy, `-trust-proxy` toma
   la IP del último salto de `X-Forwarded-For` (el puerto del servidor no debe quedar
   expuesto fuera de Caddy). Si los cálculos de contraseña (argon2id, máx. 4 a la vez)
   están saturados más de 2 s → `503 busy`.

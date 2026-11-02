@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -334,4 +336,65 @@ func TestPanicBecomesInternalError(t *testing.T) {
 	expect(t, h.do(req{method: "GET", path: "/api/characters", token: token}), 500, "internal")
 	// The server keeps serving after the panic.
 	expect(t, h.do(req{method: "GET", path: "/healthz"}), 200, "")
+}
+
+// countingRepo counts password checks (each login that reaches the service looks up
+// the account first).
+type countingRepo struct {
+	*authtest.Repo
+	lookups atomic.Int64
+}
+
+func (c *countingRepo) AccountByEmail(ctx context.Context, email string) (store.Account, error) {
+	c.lookups.Add(1)
+	return c.Repo.AccountByEmail(ctx, email)
+}
+
+// TestConcurrentFailedLoginsCannotShareOneToken: tokens are reserved before the
+// password check, so a burst of parallel attempts gets exactly Burst checks.
+func TestConcurrentFailedLoginsCannotShareOneToken(t *testing.T) {
+	repo := &countingRepo{Repo: authtest.NewRepo()}
+	h := newHarnessRepo(t, repo, func(c *httpapi.Config) {
+		c.LoginEmailRateLimit = httpapi.RateLimit{Burst: 1, Every: time.Hour}
+	})
+	bad := `{"email":"ana@example.org","password":"wrongpass"}`
+	var wg sync.WaitGroup
+	var limited atomic.Int64
+	for i := range 40 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "10.0." + strconv.Itoa(i) + ".1:1"})
+			if w.Code == http.StatusTooManyRequests {
+				limited.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := repo.lookups.Load(); got != 1 {
+		t.Fatalf("%d password checks for a budget of 1", got)
+	}
+	if limited.Load() != 39 {
+		t.Fatalf("%d limited, want 39", limited.Load())
+	}
+}
+
+// TestExhaustedEmailBudgetBlocksEveryIP documents the trade-off in docs/05: once the
+// per-email budget is spent, the owner is limited from any IP, including a usual one,
+// until it refills. Successful logins and other errors refund their reservation.
+func TestExhaustedEmailBudgetBlocksEveryIP(t *testing.T) {
+	h := newHarness(t, func(c *httpapi.Config) {
+		c.LoginEmailRateLimit = httpapi.RateLimit{Burst: 2, Every: time.Minute}
+	})
+	expect(t, h.do(req{method: "POST", path: "/api/auth/register", body: `{"email":"ana@example.org","password":"secreto123"}`}), 201, "")
+	good := `{"email":"ana@example.org","password":"secreto123"}`
+	bad := `{"email":"ana@example.org","password":"wrongpass"}`
+	for range 5 { // successes refund: the budget stays full
+		expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: good, remote: "1.1.1.1:1"}), 200, "")
+	}
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "6.6.6.1:1"}), 401, "")
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: bad, remote: "6.6.6.2:1"}), 401, "")
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: good, remote: "1.1.1.1:1"}), 429, "rate_limited")
+	h.clock.Advance(time.Minute)
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: good, remote: "1.1.1.1:1"}), 200, "")
 }

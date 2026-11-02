@@ -76,14 +76,15 @@ func New(cfg Config) (http.Handler, error) {
 	cfg.LoginEmailRateLimit = orDefault(cfg.LoginEmailRateLimit, DefaultLoginEmailRateLimit)
 	a := &api{cfg: cfg, log: cfg.Logger}
 	for _, l := range []struct {
-		dst **limiter
-		rl  RateLimit
+		dst    **limiter
+		rl     RateLimit
+		policy collisionPolicy
 	}{
-		{&a.limiter, cfg.AuthRateLimit},
-		{&a.pairLimiter, cfg.LoginPairRateLimit},
-		{&a.emailLimiter, cfg.LoginEmailRateLimit},
+		{&a.limiter, cfg.AuthRateLimit, failOpen},
+		{&a.pairLimiter, cfg.LoginPairRateLimit, failClosed},
+		{&a.emailLimiter, cfg.LoginEmailRateLimit, failClosed},
 	} {
-		lim, err := newLimiter(l.rl, cfg.Clock)
+		lim, err := newLimiter(l.rl, l.policy, cfg.Clock)
 		if err != nil {
 			return nil, err
 		}
@@ -143,27 +144,28 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Failed logins are limited per (email, client) pair (strict) and per email (loose).
-	// Only failures consume, so a correct password is never slowed by its own successes,
-	// and an attacker elsewhere can only lock the victim out by sustaining the loose
-	// per-email budget (trade-off documented in docs/05).
+	// A token of each is reserved before the password check, so concurrent requests
+	// cannot all slip through on one token, and refunded unless the password was wrong:
+	// only failures count (trade-off documented in docs/05).
 	email, emailOK := auth.NormalizeEmail(in.Email)
-	pairKey := email + "|" + a.clientKey(r)
+	pairKey := email + "\x00" + a.clientKey(r) // NUL cannot appear in either part
 	if emailOK {
-		if !a.pairLimiter.ready(pairKey) {
+		if !a.pairLimiter.allow(pairKey) {
 			a.tooMany(w, a.cfg.LoginPairRateLimit)
 			return
 		}
-		if !a.emailLimiter.ready(email) {
+		if !a.emailLimiter.allow(email) {
+			a.pairLimiter.refund(pairKey)
 			a.tooMany(w, a.cfg.LoginEmailRateLimit)
 			return
 		}
 	}
 	tok, err := a.cfg.Auth.Login(r.Context(), in.Email, in.Password)
+	if emailOK && !errors.Is(err, auth.ErrInvalidCredentials) {
+		a.pairLimiter.refund(pairKey)
+		a.emailLimiter.refund(email)
+	}
 	if err != nil {
-		if emailOK && errors.Is(err, auth.ErrInvalidCredentials) {
-			a.pairLimiter.take(pairKey)
-			a.emailLimiter.take(email)
-		}
 		a.fail(w, r, err)
 		return
 	}
@@ -282,21 +284,53 @@ func requestToken(r *http.Request) string {
 	return ""
 }
 
-// recoverer turns a handler panic into a logged 500 with the standard error body.
+// trackingWriter records whether the response has started.
+type trackingWriter struct {
+	http.ResponseWriter
+	started bool
+}
+
+func (t *trackingWriter) WriteHeader(code int) { t.started = true; t.ResponseWriter.WriteHeader(code) }
+func (t *trackingWriter) Write(b []byte) (int, error) {
+	t.started = true
+	return t.ResponseWriter.Write(b)
+}
+
+// Flush keeps streaming working through the wrapper.
+func (t *trackingWriter) Flush() {
+	if f, ok := t.ResponseWriter.(http.Flusher); ok {
+		t.started = true
+		f.Flush()
+	}
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer.
+func (t *trackingWriter) Unwrap() http.ResponseWriter { return t.ResponseWriter }
+
+// recoverer turns a handler panic into a logged 500 with the standard error body. If the
+// response had already started, a 500 can no longer be sent: it aborts the response
+// (net/http closes the connection) so a half-written body never looks complete.
 func (a *api) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tw := &trackingWriter{ResponseWriter: w}
 		defer func() {
 			v := recover()
 			if v == nil {
 				return
 			}
+			abort := false
 			if err, ok := v.(error); ok && errors.Is(err, http.ErrAbortHandler) {
-				return // deliberate abort of the response: nothing to log or write
+				abort = true // deliberate abort: not an error, just propagate it
+			} else {
+				a.log.Error("http api: panic", "method", r.Method, "path", r.URL.Path, "panic", v, "stack", string(debug.Stack()))
+				abort = tw.started
 			}
-			a.log.Error("http api: panic", "method", r.Method, "path", r.URL.Path, "panic", v, "stack", string(debug.Stack()))
+			if abort {
+				panic(http.ErrAbortHandler) //nolint:forbidigo // net/http's documented way to abort a response
+			}
 			writeError(w, http.StatusInternalServerError, "internal")
 		}()
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(tw, r)
 	})
 }
 
