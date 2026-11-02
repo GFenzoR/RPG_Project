@@ -3,6 +3,7 @@ module github.com/GFenzoR/RPG_Project/server
 go 1.24.0
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/pressly/goose/v3 v3.26.0
 	go.yaml.in/yaml/v3 v3.0.4
