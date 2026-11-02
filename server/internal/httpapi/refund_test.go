@@ -27,6 +27,9 @@ func (*fakeAccounts) Logout(context.Context, string) error { return nil }
 func (*fakeAccounts) Characters(context.Context, int64) ([]store.Character, error) {
 	return nil, nil
 }
+func (*fakeAccounts) IssuePlayToken(context.Context, int64, int64) (auth.Token, error) {
+	return auth.Token{}, nil
+}
 func (*fakeAccounts) CreateCharacter(context.Context, int64, string, string) (store.Character, error) {
 	return store.Character{}, nil
 }

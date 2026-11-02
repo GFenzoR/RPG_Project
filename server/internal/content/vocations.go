@@ -16,8 +16,20 @@ import (
 
 // Vocation is the part of a data/vocations.yaml entry the server needs so far.
 type Vocation struct {
-	ID    string        `yaml:"id"`
-	Start VocationStats `yaml:"start"`
+	ID       string        `yaml:"id"`
+	Start    VocationStats `yaml:"start"`
+	PerLevel VocationStats `yaml:"per_level"`
+}
+
+// AtLevel returns the vocation's stats at level (1 = Start).
+func (v Vocation) AtLevel(level int) VocationStats {
+	n := max(level, 1) - 1
+	return VocationStats{
+		Health:   v.Start.Health + n*v.PerLevel.Health,
+		Mana:     v.Start.Mana + n*v.PerLevel.Mana,
+		Capacity: v.Start.Capacity + n*v.PerLevel.Capacity,
+		Speed:    v.Start.Speed + n*v.PerLevel.Speed,
+	}
 }
 
 // VocationStats are a vocation's stats at level 1.
@@ -64,6 +76,9 @@ func ParseVocations(raw []byte) (Vocations, error) {
 		}
 		if v.Start.Health <= 0 || v.Start.Mana < 0 {
 			return nil, fmt.Errorf("vocation %q: start health must be > 0 and mana >= 0", v.ID)
+		}
+		if v.Start.Speed <= 0 || v.PerLevel.Speed < 0 {
+			return nil, fmt.Errorf("vocation %q: start speed must be > 0 and per_level speed >= 0", v.ID)
 		}
 		vs[v.ID] = v
 	}

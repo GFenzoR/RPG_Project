@@ -27,6 +27,7 @@ var (
 	ErrNameTaken          = errors.New("auth: character name taken")
 	ErrInvalidVocation    = errors.New("auth: invalid vocation")
 	ErrCharacterLimit     = errors.New("auth: character limit reached")
+	ErrUnknownCharacter   = errors.New("auth: character does not exist or is not the account's")
 	// ErrBusy means every password-hashing slot stayed taken for HashWait.
 	ErrBusy = errors.New("auth: too many concurrent password checks")
 )
@@ -43,6 +44,8 @@ type Repo interface {
 	DeleteExpiredSessions(ctx context.Context, now time.Time) (int64, error)
 	ListCharacters(ctx context.Context, accountID int64) ([]store.Character, error)
 	CreateCharacter(ctx context.Context, c store.NewCharacter, maxPerAccount int) (store.Character, error)
+	CharacterBelongsTo(ctx context.Context, accountID, characterID int64) (bool, error)
+	ConsumeSession(ctx context.Context, tokenHash []byte, kind store.SessionKind, now time.Time) (store.Session, error)
 }
 
 // Config configures a Service. Zero durations and limits take the defaults below.
@@ -67,6 +70,9 @@ const (
 	DefaultMaxCharacters       = 10
 	DefaultMaxConcurrentHashes = 4
 	DefaultHashWait            = 2 * time.Second
+	// PlayTokenTTL is how long a play token from POST /api/play stays valid
+	// (docs/05-network-protocol.md, "Handshake").
+	PlayTokenTTL = 60 * time.Second
 )
 
 // Service is safe for concurrent use.
@@ -321,4 +327,52 @@ func (s *Service) CreateCharacter(ctx context.Context, accountID int64, name, vo
 		return store.Character{}, fmt.Errorf("create character: %w", err)
 	}
 	return c, nil
+}
+
+// IssuePlayToken creates a single-use play token (PlayTokenTTL) for one of the account's
+// characters, to be sent in the WebSocket Hello.
+func (s *Service) IssuePlayToken(ctx context.Context, accountID, characterID int64) (Token, error) {
+	if characterID <= 0 {
+		return Token{}, ErrUnknownCharacter
+	}
+	ok, err := s.repo.CharacterBelongsTo(ctx, accountID, characterID)
+	if err != nil {
+		return Token{}, fmt.Errorf("play token: %w", err)
+	}
+	if !ok {
+		return Token{}, ErrUnknownCharacter
+	}
+	token, hash, err := newToken()
+	if err != nil {
+		return Token{}, err
+	}
+	now := s.clock.Now()
+	sess := store.Session{
+		TokenHash:   hash,
+		AccountID:   accountID,
+		Kind:        store.SessionPlay,
+		CharacterID: characterID,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(PlayTokenTTL),
+	}
+	if err := s.repo.CreateSession(ctx, sess); err != nil {
+		return Token{}, fmt.Errorf("play token: %w", err)
+	}
+	return Token{Token: token, AccountID: accountID, ExpiresAt: sess.ExpiresAt}, nil
+}
+
+// RedeemPlayToken consumes a play token and returns its account and character. A token
+// works once: a second use, an expired token or a disabled account give ErrUnauthorized.
+func (s *Service) RedeemPlayToken(ctx context.Context, token string) (accountID, characterID int64, err error) {
+	if token == "" || len(token) > 128 {
+		return 0, 0, ErrUnauthorized
+	}
+	sess, err := s.repo.ConsumeSession(ctx, hashToken(token), store.SessionPlay, s.clock.Now())
+	if errors.Is(err, store.ErrNotFound) {
+		return 0, 0, ErrUnauthorized
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("redeem play token: %w", err)
+	}
+	return sess.AccountID, sess.CharacterID, nil
 }
