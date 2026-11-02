@@ -21,6 +21,8 @@ on:
       - package.json
       - pnpm-lock.yaml
       - .github/workflows/images.yml
+      - Makefile
+      - tools/bots/**
   workflow_dispatch:
 
 permissions:
@@ -115,6 +117,8 @@ jobs:
         run: |
           printf 'POSTGRES_PASSWORD=x\nSITE_ADDRESS=example.com\nACME_EMAIL=ops@example.com\n' > "$RUNNER_TEMP/ci.env"
           docker compose -f deploy/docker-compose.yml --env-file "$RUNNER_TEMP/ci.env" config -q
+          docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml \
+            --env-file deploy/.env.home.example --profile quick-tunnel --profile tunnel config -q
 
   # Builds the images for the runner's platform, runs the whole stack and plays through
   # Caddy: health, client page, login, /ws with real bots, and the client-IP chain.
@@ -155,3 +159,39 @@ jobs:
       - name: stop
         if: ${{ always() }}
         run: $COMPOSE down -v
+
+  # Home hosting (docs/13): `make home-up`, the client-IP chain behind the tunnel network,
+  # and a real Cloudflare Quick Tunnel with bots over wss:// and the smoke test through it.
+  home-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/bots/go.mod
+          cache-dependency-path: tools/bots/go.sum
+      - name: make home-up
+        run: make home-up
+      - name: bots play on http://localhost:8080
+        working-directory: tools/bots
+        run: go run ./cmd/bots -n 3 -duration 5s -url http://localhost:8080 -prefix local
+      - name: smoke on http://localhost:8080
+        run: deploy/smoke.sh http://localhost:8080
+      - name: client IP behind the tunnel network (CF-Connecting-IP)
+        run: deploy/check-tunnel-ip.sh rpg-home_tunnel
+      - name: make home-tunnel (Cloudflare Quick Tunnel)
+        run: HOME_TUNNEL_URL_FILE="$RUNNER_TEMP/tunnel-url" make home-tunnel
+      - name: bots play through the tunnel (wss://)
+        working-directory: tools/bots
+        run: go run ./cmd/bots -n 3 -duration 5s -url "$(cat "$RUNNER_TEMP/tunnel-url")" -prefix tunnel
+      - name: smoke through the tunnel
+        run: deploy/smoke.sh "$(cat "$RUNNER_TEMP/tunnel-url")"
+      - name: make home-backup
+        run: make home-backup && find deploy/backups -name 'home-*.dump' -size +0 | grep -q .
+      - name: logs
+        if: ${{ !cancelled() }}
+        run: docker compose -p rpg-home logs --no-color --tail=300
+      - name: stop
+        if: ${{ always() }}
+        run: make home-down

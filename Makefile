@@ -202,6 +202,47 @@ docker-down: ## Stop the local production stack (volumes are kept)
 docker-logs: ## Follow the logs of the local production stack
 	$(COMPOSE_PROD) logs -f --tail=100
 
+## ---- home hosting (docs/13-hosting-de-pruebas.md) --------------------------
+
+COMPOSE_HOME := docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml --env-file deploy/.env.home
+HOME_PROFILES := --profile quick-tunnel --profile tunnel
+
+deploy/.env.home:
+	cp deploy/.env.home.example $@
+	sed -i.bak -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$$(openssl rand -hex 24)/" $@ && rm -f $@.bak
+	@echo "created $@ (random database password)"
+
+.PHONY: home-up
+home-up: deploy/.env.home ## Build and start the game on this PC (http://localhost:8080)
+	VERSION=dev COMMIT=$(GIT_COMMIT) $(COMPOSE_HOME) up -d --build --wait
+	$(COMPOSE_HOME) ps
+	@echo "up: http://localhost:$$(grep -E '^HOME_HTTP_PORT=' deploy/.env.home | cut -d= -f2 || echo 8080)  —  share it with: make home-tunnel"
+
+.PHONY: home-tunnel
+home-tunnel: deploy/.env.home ## Cloudflare Quick Tunnel: prints a public https://….trycloudflare.com URL
+	COMPOSE="$(COMPOSE_HOME)" bash deploy/home-tunnel.sh
+
+.PHONY: home-tunnel-domain
+home-tunnel-domain: deploy/.env.home ## Named Cloudflare Tunnel with your domain (CLOUDFLARE_TUNNEL_TOKEN)
+	@grep -qE '^CLOUDFLARE_TUNNEL_TOKEN=.+' deploy/.env.home || { echo "set CLOUDFLARE_TUNNEL_TOKEN in deploy/.env.home (docs/13)"; exit 1; }
+	$(COMPOSE_HOME) --profile tunnel up -d cloudflared
+
+.PHONY: home-down
+home-down: ## Stop the home stack and its tunnels (the database volume is kept)
+	$(COMPOSE_HOME) $(HOME_PROFILES) down
+
+.PHONY: home-logs
+home-logs: ## Follow the logs of the home stack
+	$(COMPOSE_HOME) $(HOME_PROFILES) logs -f --tail=100
+
+.PHONY: home-backup
+home-backup: ## pg_dump of the home database into deploy/backups/
+	@mkdir -p deploy/backups
+	f=deploy/backups/home-$$(date +%Y%m%d-%H%M%S).dump; \
+	$(COMPOSE_HOME) exec -T postgres sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > $$f.part \
+		&& mv $$f.part $$f && echo "wrote $$f (restore: docs/13-hosting-de-pruebas.md)"
+	@ls -lh deploy/backups | tail -n 3
+
 ## ---- database ------------------------------------------------------------
 
 # Dev database; the server also applies pending migrations on start (-migrate).
