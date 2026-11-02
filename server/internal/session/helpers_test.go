@@ -49,6 +49,8 @@ func testBalance() content.Balance {
 		"shield": {StartLevel: 10, BaseTries: 85}}
 	b.Skills.ShieldMaxTriesPerRound = 2
 	b.Skills.AFK.AfterMs, b.Skills.AFK.Factor = 600000, 0.25
+	b.Death = content.Death{XPLossPct: 10, SkillLossPct: 10, EquipmentDropPct: 10, BackpackDropPct: 100, MaxBlessings: 5,
+		XPLossPctAllBlessings: 3, NoviceMaxLevel: 8, CorpseMs: 600000, CorpseOwnerOnlyMs: 120000}
 	b.Combat = content.Combat{AttackIntervalMs: 2000, FistAttack: 7, SkillAttackDivisor: 10, LevelDivisor: 4,
 		ShieldBlockDivisor: 4, MonsterCorpseMs: 60000, Modes: map[string]content.CombatMode{
 			"offensive": {Attack: 1.25, Defense: 0.55}, "balanced": {Attack: 1, Defense: 1}, "defensive": {Attack: 0.65, Defense: 1.5}}}

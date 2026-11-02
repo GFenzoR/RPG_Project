@@ -405,6 +405,10 @@ func (w *World) useItemOn(ctx *game.TickContext, p *Player, m *pb.UseItemOn) {
 		p.emit(systemMsg(msgTooFar))
 		return
 	}
+	if from.kind == locContainer && w.reserved(ctx.Tick, p, it) {
+		p.emit(systemMsg(msgNotOwner))
+		return
+	}
 	if it.def.Rune == nil || m.GetTo() == nil {
 		p.emit(systemMsg(msgCannotUse))
 		return

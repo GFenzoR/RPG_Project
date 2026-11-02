@@ -258,8 +258,13 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `CreatureSpeed` (si cambió) y `CreatureHealth` (si cambió el %).
 - La regeneración manda `PlayerStats` al jugador (y `CreatureHealth` a quien lo ve si
   cambió el %) solo cuando le faltaba vida o maná.
-- Hasta la muerte real (T1.11), un jugador con 0 de vida despierta en el templo con la vida
-  llena, sin perder nada, y recibe `combat.defeated`.
+- Muerte de un jugador (T1.11, reglas en `02-game-design.md`): `TileUpdate` con el cuerpo
+  (`creature_remains`) donde murió, el jugador reaparece en su templo (como un teleport:
+  `FullMapView`, `CreatureDisappear`/`CreatureAppear` a los observadores) y recibe
+  `Inventory`, `PlayerStats`, `PlayerSkills` y el `Message` de sistema `death.died` con
+  `experience` (perdida) y `blessings` (las que tenía y se consumieron), ambos `number`.
+  El cliente muestra la pantalla de muerte con ese mensaje. Sacar o usar algo del cuerpo
+  ajeno dentro de `corpse_owner_only_ms` responde `death.corpse_not_owner`.
 
 ### Items e inventario (T1.8, `server/internal/session/inventory.go`)
 Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").

@@ -20,6 +20,7 @@ import type {
   CreatureState,
   DialogState,
   ItemView,
+  DeathState,
   LevelUpState,
   LogMessage,
   PlayerStatsState,
@@ -34,6 +35,7 @@ export interface GameUi {
   stats: PlayerStatsState | undefined;
   skills: SkillState[];
   levelUp: LevelUpState | undefined;
+  death: DeathState | undefined;
   log: LogMessage[];
   inventory: Map<EquipmentSlot, ItemView>;
   containers: ContainerState[];
@@ -317,6 +319,7 @@ export class Game {
       stats: w.stats,
       skills: w.skills,
       levelUp: w.levelUp,
+      death: w.death,
       log: [...w.log],
       inventory: w.inventory,
       containers: w.containers,

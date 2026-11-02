@@ -177,6 +177,10 @@ type World struct {
 	corpseFor  game.Tick
 	attackFor  game.Tick
 
+	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner.
+	playerCorpseFor game.Tick
+	corpseOwnerFor  game.Tick
+
 	// Items (T1.8): definitions by numeric id, the container of new characters and the
 	// inventory rules of balance.yaml.
 	byNum          map[uint16]*content.Item
@@ -242,6 +246,7 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	w.initProgress()
+	w.initDeath()
 	if err := w.initItems(); err != nil {
 		return nil, err
 	}

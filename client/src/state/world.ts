@@ -96,6 +96,15 @@ export interface SkillState {
   percent: number;
 }
 
+/** The last death (death.died), for the death screen. */
+export interface DeathState {
+  /** Experience lost. */
+  experience: number;
+  /** Blessings that softened the death (and were consumed). */
+  blessings: number;
+  at: number;
+}
+
 /** The last level-up (progress.level_up), for the on-screen notice. */
 export interface LevelUpState {
   level: number;
@@ -191,6 +200,7 @@ export class WorldState implements TileSource {
   stats: PlayerStatsState | undefined;
   skills: SkillState[] = [];
   levelUp: LevelUpState | undefined;
+  death: DeathState | undefined;
   effects: EffectState[] = [];
   floatingTexts: FloatingTextState[] = [];
   projectiles: ProjectileState[] = [];
@@ -385,6 +395,15 @@ export class WorldState implements TileSource {
         if (key === "progress.level_up") {
           const p = m.body.value.params.find((x) => x.name === "level");
           if (p?.value.case === "number") this.levelUp = { level: Number(p.value.value), at: now };
+        }
+        if (key === "death.died") {
+          const params = m.body.value.params;
+          const num = (name: string): number => {
+            const p = params.find((x) => x.name === name);
+            return p?.value.case === "number" ? Number(p.value.value) : 0;
+          };
+          this.death = { experience: num("experience"), blessings: num("blessings"), at: now };
+          this.target = undefined;
         }
         this.log.push({ key, params: m.body.value.params, at: now });
         if (this.log.length > LOG_SIZE) this.log.shift();

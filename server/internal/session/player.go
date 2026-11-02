@@ -16,6 +16,7 @@ type Player struct {
 	charID    int64
 	accountID int64
 	name      string
+	town      string // residence: the island whose temple it wakes up at (T1.11)
 	vocation  content.Vocation
 	client    Client
 
@@ -258,6 +259,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		charID:     c.ID,
 		accountID:  c.AccountID,
 		name:       c.Name,
+		town:       c.Town,
 		vocation:   voc,
 		client:     client,
 		level:      max(c.Level, 1),
@@ -272,7 +274,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	}
 	p.health = min(max(c.Health, 0), p.maxHealth)
 	if p.health == 0 {
-		p.health = p.maxHealth // death arrives in T1.11; never spawn a dead character
+		p.health = p.maxHealth // never spawn a dead character (death respawns with full health)
 	}
 	p.mana = min(max(c.Mana, 0), p.maxMana)
 	p.pos = w.placement(c)

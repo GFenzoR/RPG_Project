@@ -123,10 +123,14 @@ func (m *Monster) TargetID() uint32 {
 	return m.target.id
 }
 
-// Corpse is what a dead monster leaves: a container item (CorpseItem) with its loot.
+// Corpse is what a dead monster or player leaves: a container item (CorpseItem) with
+// its loot. A player's corpse (Owner != 0) lets only its owner take things out until
+// OwnerUntil.
 type Corpse struct {
-	Monster string
-	Item    *Item
+	Monster    string
+	Item       *Item
+	Owner      int64 // character id of the dead player, 0 for a monster
+	OwnerUntil game.Tick
 }
 
 // Loot returns what is left inside the remains.

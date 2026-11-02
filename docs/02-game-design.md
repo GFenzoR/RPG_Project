@@ -191,13 +191,27 @@ Valores iniciales (balance.yaml):
   cada una reduce la pérdida; con las 5 no pierdes items y la pérdida de XP baja a ~3 %.
   En la Isla del Puerto las vende la hermana Liora (templo del Farol) a 200 monedas cada
   una, precio fijo; las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
-  y `deep_light`. Se pierden al morir. Un precio que escale con el nivel queda para T1.11.
-  Desde T1.10 se pueden comprar (quedan en `quest_state` como `bless.<id>`; no se vende
-  dos veces la misma); el efecto al morir y perderlas llegan con T1.11.
-- Reapareces en el templo de tu ciudad de residencia.
-- Niveles 1–8: protección de novato (pérdida mínima, sin drop).
-- El cuerpo queda en el suelo X minutos con el loot (solo el dueño puede tomarlo
-  los primeros minutos; regla pensada para cuando haya PvP).
+  y `deep_light`. Se pierden al morir. Un precio que escale con el nivel queda pendiente
+  (hito posterior). Se guardan en `quest_state` como `bless.<id>` (no se vende dos veces
+  la misma); la columna `characters.blessings` de T1.3 no se usa.
+- **Reglas exactas (T1.11, `server/internal/skills/death.go`):** con `b` bendiciones
+  (tope `max_blessings`) y `f = b / max_blessings`:
+  - XP perdida: `xp_loss_pct − (xp_loss_pct − xp_loss_pct_all_blessings) × f` % de la
+    experiencia total (0 → 10 %, 3 → 5,8 %, 5 → 3 %). Puede bajar de nivel (nunca del 1);
+    los máximos de vida, maná, capacidad y velocidad siguen al nuevo nivel.
+  - Skills: `skill_loss_pct` escalado igual que la XP, sobre los intentos ganados por
+    encima del nivel base de cada skill (puede bajar niveles de skill, nunca del base).
+  - Equipo: cada pieza (salvo el slot de mochila) cae al cuerpo con
+    `equipment_drop_pct × (1 − f)` %; la mochila (con su contenido) con
+    `backpack_drop_pct × (1 − f)` %. Se tira en orden de slot con el `rand` sembrado.
+  - Todas las bendiciones `bless.*` se borran al morir (también las de un novato).
+- Reapareces en el templo de tu ciudad de residencia (`characters.town`, o la primera isla)
+  con vida y maná completos. La muerte se guarda al instante (no espera al autoguardado).
+- Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
+  bendiciones (pérdida mínima de XP y skills, sin drop).
+- El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;
+  durante `corpse_owner_only_ms` solo el dueño puede sacar o usar lo que contiene (otros
+  pueden abrirlo y mirar). Regla pensada para cuando haya PvP.
 
 ## Economía
 - Monedas de oro, plata, cobre (100:1).

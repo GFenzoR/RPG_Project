@@ -50,7 +50,7 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 			ServerTime: uint64(max(ctx.Now.UnixMilli(), 0)),
 		}}})
 	case *pb.ClientMessage_MoveItem:
-		w.moveItem(p, m.MoveItem)
+		w.moveItem(ctx, p, m.MoveItem)
 	case *pb.ClientMessage_UseItem:
 		w.useItem(ctx, p, m.UseItem)
 	case *pb.ClientMessage_UseItemOn:
