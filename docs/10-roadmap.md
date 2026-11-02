@@ -89,7 +89,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [ ] **T1.17 Prueba de carga.** `tools/bots` completo, escenario de 100 y 300 bots,
   reporte y ajustes de rendimiento. [T1.11]
 - [ ] **T1.18 Deploy alpha.** 👤 Necesita tu cuenta AWS y un dominio. docker-compose,
-  Caddy, backups a S3, workflow de imágenes, guía paso a paso para el primer deploy. [T1.17]
+  Caddy, backups a S3, workflow de imágenes, guía paso a paso para el primer deploy. [T1.17] (parcial, PR #19: archivos listos, falta cuenta AWS y dominio)
 - [ ] **T1.19 Hosting de pruebas en casa.** Docker Compose del juego completo en tu PC
   expuesto con Cloudflare Tunnel o Tailscale, targets `make home-*`, guía para
   WSL2/macOS/Linux. Ver `13-hosting-de-pruebas.md`. [T1.5]
