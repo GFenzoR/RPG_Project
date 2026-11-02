@@ -26,9 +26,11 @@ world/
 ```
 
 ## Formato de chunk (versión 1)
-JSON canónico: claves ordenadas, **una fila por línea**, indentación de 2 espacios.
+JSON canónico: claves en orden fijo (`format`, `chunk`, `palette`, `ground`, `items`),
+**una fila por línea**, indentación de 2 espacios, salto de línea final.
 `mapcli fmt` y el editor siempre escriben exactamente este formato para que los diffs
-sean limpios y revisables.
+sean limpios y revisables (implementación única: `packages/map-format/src/chunk.ts`;
+ejemplos en `packages/map-format/testdata/golden/`).
 
 ```json
 {
@@ -46,10 +48,16 @@ sean limpios y revisables.
 }
 ```
 - `palette`: IDs de texto de items (`data/items/*.yaml`). El suelo también es un item
-  con `kind: ground`.
+  con `kind: ground`. Orden canónico: **orden de primera aparición** (recorriendo
+  `ground` fila por fila y luego las pilas de `items`), sin entradas sin usar. Así las
+  mismas casillas producen siempre los mismos bytes, las guarde quien las guarde.
 - `ground`: matriz 32x32 de índices a `palette`. `-1` = sin tile (vacío, no caminable).
+  Solo items `kind: ground`.
 - `items`: lista dispersa con coordenadas locales (0–31) y pila de abajo hacia arriba
-  (bordes, decoración, objetos). Ordenada por `y`, luego `x`.
+  (bordes, decoración, objetos). Ordenada por `y`, luego `x`; una entrada por casilla,
+  sin pilas vacías, sin items `kind: ground`.
+- Nombre de archivo: `chunks/zNN/cXXXX_YYYY.json` (piso con 2 dígitos, `cx`/`cy` con 4);
+  debe coincidir con el campo `chunk`.
 - Los **bordes** (transición pasto→arena, etc.) se guardan explícitos en la pila. El
   editor y `mapcli` los generan con reglas de `data/borders.yaml` (autoborder), así el
   servidor no calcula nada en runtime.
@@ -62,7 +70,31 @@ sean limpios y revisables.
   (detalle en `06-content-data.md`).
 
 ## Archivos auxiliares
+Todos opcionales salvo `island.yaml`; una lista vacía equivale a no tener el archivo.
+Esquemas en `packages/map-format/schemas/`. Formato canónico (lo escriben `mapcli fmt`,
+el editor y el MCP): claves en orden fijo, mapas y listas de escalares en estilo flow
+(`{ x: 1, y: 2, z: 7 }`), una línea en blanco entre entradas de primer nivel.
+**Los comentarios no se conservan**: usa el campo `notes`.
+
 ```yaml
+# island.yaml
+id: puerto                  # = nombre del directorio
+name: island.puerto.name    # clave i18n (i18n/*/world.yaml)
+rect: { x: 3072, y: 6272, w: 512, h: 512 }   # igual que en world.yaml
+floors: [6, 7, 8]           # ascendente; solo estos pisos pueden tener chunks
+temple: { x: 3230, y: 6400, z: 7 }
+level_hint: [1, 15]         # igual que en world.yaml
+
+# npcs.yaml (un NPC de data/npcs/ se coloca una sola vez en todo el mundo)
+- npc: harbor_master
+  pos: { x: 3230, y: 6420, z: 7 }
+
+# texts.yaml
+- id: puerto_temple_sign
+  kind: sign                # sign | book
+  pos: { x: 3230, y: 6402, z: 7 }
+  text: text.puerto.temple_sign   # clave i18n
+
 # spawns.yaml
 - id: puerto_wolves_north
   center: { x: 3215, y: 6410, z: 7 }
@@ -104,15 +136,28 @@ boat_routes:
 solo carga `world.bin`. El editor y `mapcli` trabajan siempre con el JSON.
 
 ## Validación (misma lógica en editor, mapcli y CI)
-- Todo item referenciado existe en `data/`.
-- Cada tile caminable tiene suelo; spawns y NPCs están sobre tiles caminables.
-- Portales llevan a tiles caminables existentes; escaleras tienen pareja.
-- Zonas de protección cubren templos y depósitos.
-- Islas no se superponen; chunks fuera del rectángulo de su isla = error.
+Implementada una sola vez en `packages/map-format` (`validateWorld`); `mapcli validate`
+y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición del mundo.
+- Archivos en formato canónico (si no: `mapcli fmt`) y conformes a su esquema.
+- Todo item, monstruo y NPC referenciado existe en `data/`; claves i18n existen en
+  todos los idiomas.
+- Cada tile con items tiene suelo; templo, spawns y NPCs están sobre tiles caminables
+  (suelo `walkable` y ningún item de la pila con `blocks_movement`).
+- Portales salen de un tile caminable de la isla y llegan a uno caminable de cualquier
+  isla. `stairs`/`ladder` cambian de piso y tienen pareja: otro portal
+  `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del
+  origen. `hole` baja, `rope_spot` sube.
+- Zonas de protección cubren el templo. (Depósitos: cuando exista el item, hito 1.)
+- Islas no se superponen ni salen del mundo; chunks o tiles fuera del rectángulo de
+  su isla, o en un piso no listado = error.
 - Conectividad: desde el templo se puede llegar caminando a todo spawn y NPC de la
-  isla (BFS por pisos y portales). Islas y zonas inalcanzables = error.
-- **Balance de spawns**: densidad y nivel de monstruos dentro del rango `level_hint`
-  de la isla (advertencia, no error).
+  isla (BFS en 8 direcciones por tiles caminables y portales). Zonas sin ningún tile
+  alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir).
+- **Balance de spawns**: advertencia si hay más de 0,25 monstruos por tile caminable en
+  el cuadrado del radio. (Nivel de monstruos vs. `level_hint`: pendiente, los monstruos
+  aún no tienen nivel en `data/`.)
+- Pendiente: alcanzabilidad entre islas por rutas de barco (falta decidir la isla de
+  inicio).
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:
