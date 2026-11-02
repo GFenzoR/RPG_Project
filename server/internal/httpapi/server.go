@@ -32,7 +32,7 @@ const maxBodyBytes = 4 << 10
 
 // Config configures the API.
 type Config struct {
-	Auth   *auth.Service
+	Auth   Accounts
 	Clock  clock.Clock
 	Logger *slog.Logger
 	// Health reports whether dependencies (Postgres) are reachable. Optional.
@@ -47,6 +47,19 @@ type Config struct {
 	LoginPairRateLimit  RateLimit // failed logins per (email, IP); default DefaultLoginPairRateLimit
 	LoginEmailRateLimit RateLimit // failed logins per email; default DefaultLoginEmailRateLimit
 }
+
+// Accounts is the account service the API calls. *auth.Service implements it; tests
+// can use fakes to reach every error path.
+type Accounts interface {
+	Register(ctx context.Context, email, password string) (int64, error)
+	Login(ctx context.Context, email, password string) (auth.Token, error)
+	Authenticate(ctx context.Context, token string) (int64, error)
+	Logout(ctx context.Context, token string) error
+	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
+	CreateCharacter(ctx context.Context, accountID int64, name, vocation string) (store.Character, error)
+}
+
+var _ Accounts = (*auth.Service)(nil)
 
 type api struct {
 	cfg          Config
@@ -65,6 +78,15 @@ func orDefault(rl, def RateLimit) RateLimit {
 
 // New returns the API handler.
 func New(cfg Config) (http.Handler, error) {
+	a, err := newAPI(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return a.recoverer(a.routes()), nil
+}
+
+// newAPI validates cfg, applies defaults and builds the limiters.
+func newAPI(cfg Config) (*api, error) {
 	if cfg.Auth == nil || cfg.Clock == nil {
 		return nil, errors.New("httpapi: Auth and Clock are required")
 	}
@@ -91,6 +113,10 @@ func New(cfg Config) (http.Handler, error) {
 		*l.dst = lim
 	}
 
+	return a, nil
+}
+
+func (a *api) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.healthz)
 	mux.HandleFunc("POST /api/auth/register", a.rateLimited(a.register))
@@ -101,7 +127,7 @@ func New(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
-	return a.recoverer(mux), nil
+	return mux
 }
 
 // ---- handlers ----------------------------------------------------------------

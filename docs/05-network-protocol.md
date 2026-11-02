@@ -94,24 +94,36 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
     víctima recibe `429` desde **cualquier** IP, también la de siempre. Lo aceptamos
     frente a dejar sin tope la adivinación distribuida. Mejora pendiente: eximir del
     límite por email a dispositivos o IPs donde la cuenta ya entró.
-  - Las tablas de límites tienen tamaño fijo (65 536 entradas; cada clave tiene dos
-    casillas posibles y una etiqueta, derivadas de un HMAC con secreto aleatorio por
-    proceso): la memoria está acotada, no se pueden elegir claves que caigan en las
-    casillas de otro, y un bucket solo cambia de dueño cuando está lleno, así que
-    rociar claves nuevas nunca resetea un límite gastado.
-  - Si las dos casillas de una clave están ocupadas por otros buckets en uso: el límite
-    por IP **deja pasar** el pedido sin contarlo, y los límites de login **comparten**
-    la casilla más llena (fallan cerrados). Los de login no se pueden mantener llenos:
-    solo los gastan cálculos reales de contraseña (máx. 4 a la vez), muy por debajo de
-    lo que la tabla recupera.
+  - Las tablas de límites tienen tamaño fijo (65 536 casillas en 16 384 grupos de 4;
+    cada clave cae en un grupo y lleva una etiqueta, ambos derivados de un HMAC con
+    secreto aleatorio por proceso): la memoria está acotada y no se pueden elegir claves
+    que caigan en el grupo de otro. Una clave cuya etiqueta está en su grupo usa siempre
+    esa casilla, y una casilla solo cambia de dueño cuando está vacía o llena: rociar
+    claves nuevas nunca resetea un límite gastado.
+  - El tiempo se mide desde el arranque del limitador (monotónico con el reloj real), y
+    si el reloj retrocede los buckets siguen recargando desde ahí: un salto del reloj
+    de pared ni congela los límites ni los rellena todos de golpe.
+  - Si las 4 casillas del grupo de una clave están ocupadas por otros buckets en uso: el
+    límite por IP **deja pasar** el pedido sin contarlo, y los límites de login
+    **comparten** la casilla más llena (fallan cerrados).
+  - **Residuo en los límites de login:** solo los gastan cálculos reales de contraseña
+    (máx. 4 a la vez), así que un atacante solo puede mantener gastada una fracción *f*
+    pequeña de las casillas. Una cuenta que nunca falló recibe `429` solo si las 4
+    casillas de su grupo están gastadas por otros. Como los buckets gastados caen en los
+    grupos con conteos tipo Poisson, eso pasa con probabilidad P(Poisson(4*f*) ≥ 4) ≈
+    (4*f*)⁴/24 ≈ 10·*f*⁴ por cada una de las dos tablas de login: ≈ 0,08 % de las cuentas
+    con *f* = 10 %, ≈ 0,3 % con *f* = 15 %, mientras dure el ataque. Con 2 casillas por
+    clave era ≈ 2·*f*² (≈ 1,8 % con *f* = 10 %).
   - El límite por IP es **best effort**: quien sostenga ~11 000 pedidos/s desde decenas
     de miles de /64 (p. ej. un /48 IPv6) satura la tabla y, mientras dure, las IPs sin
     casilla quedan sin ese límite. Preferimos eso a un `429` para todos. Lo que sigue
     protegiendo: los límites de login por par y por email, y el tope de 4 cálculos de
-    contraseña, que también acota el ritmo de registros (spam de cuentas). Detrás de Caddy, `-trust-proxy` toma
-  la IP del último salto de `X-Forwarded-For` (el puerto del servidor no debe quedar
-  expuesto fuera de Caddy). Si los cálculos de contraseña (argon2id, máx. 4 a la vez)
-  están saturados más de 2 s → `503 busy`.
+    contraseña, que también acota el ritmo de registros (spam de cuentas). Cuando la
+    tabla vuelve a llenarse de fichas, las claves nuevas recuperan casilla.
+- **Detrás de Caddy**, `-trust-proxy` toma la IP del último salto de `X-Forwarded-For`
+  (el puerto del servidor no debe quedar expuesto fuera de Caddy).
+- **Cálculos de contraseña** (argon2id, máx. 4 a la vez): si están saturados más de 2 s
+  → `503 busy`.
 - **Errores:** `{"error": {"code": "<código>"}}`. El cliente traduce el código con la
   clave i18n `error.<código>`; el servidor nunca manda texto visible.
 

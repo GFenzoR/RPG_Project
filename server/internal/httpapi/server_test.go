@@ -277,8 +277,10 @@ func TestLoginLimitPerEmailAndIPPair(t *testing.T) {
 	}
 	// ...but the owner on another IP is not affected.
 	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: good, remote: "2.2.2.2:1"}), 200, "")
-	// Other emails from the locked IP still work.
-	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"bob@example.org","password":"x"}`, remote: "1.1.1.1:1"}), 401, "invalid_credentials")
+	// Other accounts from the locked IP still log in.
+	expect(t, h.do(req{method: "POST", path: "/api/auth/register", body: `{"email":"bob@example.org","password":"secreto456"}`, remote: "9.9.9.9:1"}), 201, "")
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"bob@example.org","password":"secreto456"}`, remote: "1.1.1.1:1"}), 200, "")
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"ana@example.org","password":"secreto123"}`, remote: "1.1.1.1:1"}), 429, "rate_limited")
 
 	// Distributed guessing: the loose per-email budget (5 here) caps failures across IPs.
 	for i := range 3 {
