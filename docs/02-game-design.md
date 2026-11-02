@@ -192,6 +192,8 @@ Valores iniciales (balance.yaml):
   En la Isla del Puerto las vende la hermana Liora (templo del Farol) a 200 monedas cada
   una, precio fijo; las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
   y `deep_light`. Se pierden al morir. Un precio que escale con el nivel queda para T1.11.
+  Desde T1.10 se pueden comprar (quedan en `quest_state` como `bless.<id>`; no se vende
+  dos veces la misma); el efecto al morir y perderlas llegan con T1.11.
 - Reapareces en el templo de tu ciudad de residencia.
 - Niveles 1–8: protección de novato (pérdida mínima, sin drop).
 - El cuerpo queda en el suelo X minutos con el loot (solo el dueño puede tomarlo
@@ -236,6 +238,8 @@ Además: quests secundarias, libros con lore, secretos en el mapa.
 
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).
+  Se habla con click derecho sobre el NPC, a 3 casillas como máximo; alejarse cierra el
+  diálogo y su tienda. Los NPCs no aparecen en la lista de batalla.
 - Árbol definido en YAML con condiciones (nivel, vocación, flag de quest, item en
   inventario) y acciones (dar/quitar item, set flag, abrir tienda, viajar, curar).
 - Ver `06-content-data.md`.

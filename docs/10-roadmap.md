@@ -65,7 +65,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   (suelo↔inventario↔contenedor), capacidad, usar items, mirar. UI de inventario. [T1.6]
 - [x] **T1.9 Magia (Arcanista).** (PR #30) Maná, nivel mágico, 4 hechizos (ataque, área, curación,
   utilidad), palabras propias, cooldowns, hotkeys F1–F12, runas básicas. [T1.7, T1.8]
-- [ ] **T1.10 NPCs, diálogos, tiendas y quest.** Motor de diálogos YAML, ventana de
+- [x] **T1.10 NPCs, diálogos, tiendas y quest.** (PR #PRNUM) Motor de diálogos YAML, ventana de
   diálogo, tienda compra/venta, motor de quests con pasos y flags, Capítulo 1 jugable.
   [T1.8]
 - [ ] **T1.11 Muerte y reaparición.** Reglas de muerte de balance.yaml, protección de

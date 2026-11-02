@@ -193,6 +193,27 @@ Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
 Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `travel`, `heal`,
 `teleport`, `bless`.
+Semántica del motor (T1.10):
+- Una opción se muestra si se cumplen todas sus condiciones; al elegirla el servidor las
+  vuelve a evaluar. Después revisa los costos de todas sus acciones juntas (`take_gold`,
+  precio de `bless` y `travel`, `take_item`, bendición ya comprada, destino de `travel` o
+  `teleport` inexistente): si alguno falla no ejecuta ninguna acción. Si pasan, ejecuta
+  las acciones en orden y luego sigue el `goto`. Una opción sin `goto` deja el diálogo en
+  el mismo nodo (por ejemplo `open_shop`); `close`, `travel` y `teleport` lo cierran.
+- `has_item`/`lacks_item` cuentan todo el inventario (equipo y contenedores anidados).
+- `give_item` da una unidad a la mochila; si no cabe (lugar o capacidad) cae al suelo
+  bajo el jugador. `give_gold`/`take_gold` usan el dinero (`currency.worth`).
+- `bless` guarda la bendición en `quest_state` (`bless.<id>` = 1) y cobra el precio; su
+  efecto al morir es de T1.11. `heal` cura toda la vida. `travel` cobra y lleva al
+  jugador junto al templo de la isla destino; si esa isla aún no existe en el mapa (hoy
+  `bosque`), la opción se rechaza con `dialog.cannot_travel`.
+- `skill_at_least` usa el nivel de skill actual; `level_at_least`, el nivel del jugador.
+
+Estado por personaje en `quest_state` (clave → valor; una clave ausente vale 0):
+`quest.<id>` (1 en curso, 2 completada), `quest.<id>.step` (índice del paso actual),
+`quest.<id>.kills` (muertes del paso actual), `flag.<key>` (los `set_flag` y
+`flag_equals`) y `bless.<id>`. Se guarda con el personaje, en la misma transacción.
+
 El motor de diálogos (`server/internal/dialog`) solo interpreta este YAML: no hay
 scripting libre en el MVP (más seguro y más fácil para la IA). Si algún día hace falta
 lógica compleja, se evaluará Lua embebido con sandbox.
@@ -228,7 +249,8 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
 - `dialog_action` se cumple cuando el jugador llega a ese nodo del NPC (las acciones de la
   opción se ejecutan antes de entrar al nodo). Las opciones que llevan a ese nodo deben
   estar condicionadas al paso correcto con `quest_state`.
-- `kill` cuenta las muertes desde que el paso pasó a ser el actual.
+- `kill` cuenta las muertes desde que el paso pasó a ser el actual. Cuenta para cada
+  jugador que hizo daño al monstruo (los mismos que reparten la experiencia).
 - `has_item` y `flag_equals` se evalúan cuando el paso pasa a ser el actual y después de
   cada cambio relevante (de inventario o del flag) en el mismo tick. `has_item` cuenta el
   inventario completo, incluidos los contenedores anidados y los slots equipados.

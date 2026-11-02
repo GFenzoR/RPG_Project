@@ -84,6 +84,16 @@ client/
 - `WorldState.projectiles` guarda los `Projectile` 250 ms; efectos y proyectiles mágicos
   son formas Pixi coloreadas por elemento (`ELEMENTS`).
 
+## Notas de T1.10
+- `WorldState.dialog` / `shop` (de `DialogOpen`, `DialogClose`, `ShopOpen`): la tienda se
+  cierra con el `DialogClose` de su diálogo. `ui/Dialog.tsx` dibuja ambas ventanas sobre
+  el mapa (arriba a la izquierda).
+- Click derecho sobre un NPC (o `Game.attack` con un NPC) = `NpcTalk`. Con un diálogo
+  abierto, 1–9 eligen la n-ésima opción mostrada y Escape manda `DialogChoose` 0.
+- Los NPCs no van en la lista de batalla. El plugin de Vite incluye `dialog.yaml` y
+  `npcs.yaml` completos y los nombres de `quests.yaml`; un `content_id` llamado `quest`
+  se traduce como `quest.<id>.name`.
+
 ## Verificación visual (obligatoria si tocas render o UI)
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda
 screenshots en `client/e2e/screenshots/`. Ábrelos con Read y revísalos antes de cerrar.
