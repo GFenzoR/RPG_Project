@@ -20,7 +20,8 @@ editor/
   src/review/      vista de diff entre el mundo oficial y un patch (antes/después)
   src/ui/          Preact: paneles, propiedades, validación en vivo
   src/state/       EditorController: estado y acciones, sin Preact ni Pixi
-  server/          backend local (plugin de Vite, Node): bootstrap, guardar, validar, atlas
+  server/          backend local (plugin de Vite, Node): bootstrap, guardar, validar, atlas;
+                   solo acepta llamadas del mismo origen (guard.ts) y guarda contra la base
   e2e/             Playwright: abre el editor, pinta, guarda, revisa screenshots
 ```
 Aún no existen (hito 2): `src/review/`, herramientas relleno/rectángulo/selección/spawn/zona.

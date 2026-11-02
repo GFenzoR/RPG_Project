@@ -202,9 +202,18 @@ export async function createMapCanvas(
     { passive: false },
   );
 
+  // Shortcuts are off only while typing text. A focused checkbox, select or button would
+  // otherwise take Space or the arrow keys, so those give the focus back to the page.
+  const TEXT_INPUTS = new Set(["text", "search", "number", "email", "url", "password", "tel"]);
   const typing = (e: KeyboardEvent): boolean => {
-    const el = e.target as HTMLElement | null;
-    return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
+    const el = e.target;
+    if (!(el instanceof HTMLElement)) return false;
+    if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+    return el instanceof HTMLInputElement && TEXT_INPUTS.has(el.type);
+  };
+  const release = (e: KeyboardEvent): void => {
+    const el = e.target;
+    if (el instanceof HTMLElement && el !== document.body && !typing(e)) el.blur();
   };
   const onKeyDown = (e: KeyboardEvent): void => {
     const mod = e.ctrlKey || e.metaKey;
@@ -214,6 +223,12 @@ export async function createMapCanvas(
       return;
     }
     if (typing(e)) return;
+    const k = e.key.toLowerCase();
+    const handled = mod
+      ? k === "z" || k === "y"
+      : [" ", "pageup", "pagedown", "b", "e", "i"].includes(k);
+    if (!handled) return; // Tab, arrows in a select, etc. keep their normal behaviour
+    release(e);
     if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
       if (e.shiftKey) ctl.redo();

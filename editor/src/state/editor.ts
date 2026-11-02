@@ -1,18 +1,27 @@
 // Editor state and actions, independent of Preact and PixiJS. The UI renders `state` and
 // calls the actions; the canvas reads the world and the camera from here.
 import { OpError, applyOps } from "@rpg/map-format/ops";
-import type { EraseLayer, MapOp, World } from "@rpg/map-format/ops";
+import type { EraseLayer, MapOp, TouchedChunk, World } from "@rpg/map-format/ops";
 import { centerOn, pan, zoomAt } from "@rpg/renderer/camera";
 import type { Camera, ViewSize } from "@rpg/renderer/camera";
 import { History, Stroke } from "../history/history.ts";
 import type { Translate } from "../i18n.ts";
-import { toWire } from "../io/wire.ts";
-import type { PaletteItem, SaveResult, ValidateResult, WireDiagnostic } from "../io/wire.ts";
+import { API_HEADER, chunkFile, toWire } from "../io/wire.ts";
+import type {
+  FileChange,
+  PaletteItem,
+  SaveConflictBody,
+  SaveResult,
+  ValidateResult,
+  WireDiagnostic,
+} from "../io/wire.ts";
 import { historyLabel, line, toolOps } from "../tools/tools.ts";
 import type { BrushSize, ToolName, ToolSettings } from "../tools/tools.ts";
 
 export interface EditorState {
   world: World;
+  /** Island the camera was last sent to (selector, ?island=). */
+  island: string;
   floor: number;
   camera: Camera;
   tool: ToolName;
@@ -31,39 +40,58 @@ export interface EditorState {
   status: string;
 }
 
+/** The save was refused because these files changed on disk since they were loaded. */
+export class ConflictError extends Error {
+  readonly conflicts: string[];
+  constructor(conflicts: string[]) {
+    super(conflicts.join(", "));
+    this.conflicts = conflicts;
+  }
+}
+
 export interface Backend {
   validate(world: World): Promise<ValidateResult>;
-  save(world: World): Promise<SaveResult>;
+  /** Throws ConflictError on a 409. */
+  save(world: World, changes: FileChange[]): Promise<SaveResult>;
+}
+
+async function post<T>(url: string, data: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", [API_HEADER]: "1" },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 409)
+    throw new ConflictError(((await res.json()) as SaveConflictBody).conflicts);
+  if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
+  return (await res.json()) as T;
 }
 
 export const httpBackend: Backend = {
-  async validate(world) {
-    const res = await fetch("/api/validate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(toWire(world)),
-    });
-    if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
-    return (await res.json()) as ValidateResult;
-  },
-  async save(world) {
-    const res = await fetch("/api/save", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(toWire(world)),
-    });
-    if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
-    return (await res.json()) as SaveResult;
-  },
+  validate: (world) => post<ValidateResult>("/api/validate", toWire(world)),
+  save: (world, changes) => post<SaveResult>("/api/save", { world: toWire(world), changes }),
 };
 
 export const VALIDATE_DELAY_MS = 300;
+
+export interface EditorOptions {
+  world: World;
+  items: PaletteItem[];
+  t: Translate;
+  loadErrors: WireDiagnostic[];
+  /** Hash of each chunk file as loaded (Bootstrap.base). */
+  base: Record<string, string>;
+  /** Island to open (?island=); the first one in world.yaml otherwise. */
+  island?: string | null;
+  backend?: Backend;
+}
 
 export class EditorController {
   state: EditorState;
   readonly items: Map<string, PaletteItem>;
   readonly t: Translate;
   view: ViewSize = { width: 800, height: 600 };
+  private centered = false;
   private readonly history: History;
   private readonly backend: Backend;
   private readonly listeners = new Set<() => void>();
@@ -73,24 +101,26 @@ export class EditorController {
   private validateTimer: ReturnType<typeof setTimeout> | undefined;
   private validateSeq = 0;
   private saving = false;
+  /** Hash of each chunk file as it is on disk, as far as the editor knows. */
+  private readonly base: Map<string, string>;
+  /** Chunk files changed since the last save → their base hash (null: no file). */
+  private readonly pending = new Map<string, string | null>();
 
-  constructor(opts: {
-    world: World;
-    items: PaletteItem[];
-    t: Translate;
-    loadErrors: WireDiagnostic[];
-    backend?: Backend;
-  }) {
+  constructor(opts: EditorOptions) {
     this.items = new Map(opts.items.map((i) => [i.id, i]));
     this.t = opts.t;
     this.backend = opts.backend ?? httpBackend;
+    this.base = new Map(Object.entries(opts.base));
     this.history = new History({ itemKind: (id) => this.items.get(id)?.kind });
-    const first = opts.world.islands.values().next().value;
-    const temple = first?.meta.temple ?? { x: 0, y: 0, z: 7 };
+    const island =
+      (opts.island && opts.world.islands.get(opts.island)) ||
+      opts.world.islands.values().next().value;
+    const temple = island?.meta.temple ?? { x: 0, y: 0, z: 7 };
     const grounds = opts.items.filter((i) => i.kind === "ground");
     const others = opts.items.filter((i) => i.kind !== "ground");
     this.state = {
       world: opts.world,
+      island: island?.meta.id ?? "",
       floor: temple.z,
       camera: { x: temple.x, y: temple.y, zoom: 1 },
       tool: "brush",
@@ -122,15 +152,26 @@ export class EditorController {
 
   // ---- view --------------------------------------------------------------------------
 
+  /** Called with the canvas size; the first call centres the initial island's temple. */
   setView(view: ViewSize, tileSize: number): void {
-    const first = this.view.width === 800 && this.view.height === 600;
     this.view = view;
-    if (first)
-      this.centerTile(this.state.camera.x, this.state.camera.y, this.state.floor, tileSize);
+    if (this.centered) return;
+    this.centered = true;
+    // Until now the camera's x/y hold the tile to centre (the temple), not the corner.
+    this.centerTile(this.state.camera.x, this.state.camera.y, this.state.floor, tileSize);
   }
 
   centerTile(x: number, y: number, z: number, tileSize: number): void {
     this.set({ floor: z, camera: centerOn(this.state.camera, x, y, this.view, tileSize) });
+  }
+
+  /** Moves the camera to an island's temple. */
+  selectIsland(id: string, tileSize: number): void {
+    const island = this.state.world.islands.get(id);
+    if (!island) return;
+    const t = island.meta.temple;
+    this.set({ island: id });
+    this.centerTile(t.x, t.y, t.z, tileSize);
   }
 
   zoom(factor: number, sx: number, sy: number, tileSize: number): void {
@@ -192,18 +233,20 @@ export class EditorController {
     };
   }
 
-  /** Applies ops for the current stroke; returns false (and reports) if they were rejected. */
-  private applyToStroke(ops: MapOp[]): boolean {
-    if (!this.stroke || ops.length === 0) return true;
+  private reject(e: unknown): void {
+    if (!(e instanceof OpError)) throw e;
+    this.set({ status: this.t("editor.op_rejected", { error: e.message }) });
+  }
+
+  /** Applies ops for the current stroke; reports rejected ops in the status bar. */
+  private applyToStroke(ops: MapOp[]): void {
+    if (!this.stroke || ops.length === 0) return;
     try {
       const r = applyOps(this.state.world, ops, { itemKind: (id) => this.items.get(id)?.kind });
       this.stroke.stroke.add(ops, r.inverse);
-      if (r.inverse.length > 0) this.changed(r.world);
-      return true;
+      if (r.inverse.length > 0) this.changed(r.world, r.touched);
     } catch (e) {
-      if (!(e instanceof OpError)) throw e;
-      this.set({ status: this.t("editor.op_rejected", { error: e.message }) });
-      return false;
+      this.reject(e);
     }
   }
 
@@ -241,18 +284,26 @@ export class EditorController {
 
   undo(): void {
     this.strokeEnd();
-    const step = this.history.undo(this.state.world);
-    if (!step) return;
-    this.changed(step.world);
-    this.syncHistory(this.t("editor.undone", { action: this.t(step.entry.label) }));
+    try {
+      const step = this.history.undo(this.state.world);
+      if (!step) return;
+      this.changed(step.world, step.touched);
+      this.syncHistory(this.t("editor.undone", { action: this.t(step.entry.label) }));
+    } catch (e) {
+      this.reject(e);
+    }
   }
 
   redo(): void {
     this.strokeEnd();
-    const step = this.history.redo(this.state.world);
-    if (!step) return;
-    this.changed(step.world);
-    this.syncHistory(this.t("editor.redone", { action: this.t(step.entry.label) }));
+    try {
+      const step = this.history.redo(this.state.world);
+      if (!step) return;
+      this.changed(step.world, step.touched);
+      this.syncHistory(this.t("editor.redone", { action: this.t(step.entry.label) }));
+    } catch (e) {
+      this.reject(e);
+    }
   }
 
   private syncHistory(status?: string): void {
@@ -263,9 +314,20 @@ export class EditorController {
     });
   }
 
-  private changed(world: World): void {
+  private changed(world: World, touched: TouchedChunk[]): void {
+    for (const t of touched) {
+      const file = chunkFile(t.island, t.z, t.cx, t.cy);
+      if (!this.pending.has(file)) this.pending.set(file, this.base.get(file) ?? null);
+    }
     this.set({ world, dirty: true });
     this.scheduleValidation();
+  }
+
+  /** Chunk files changed since the last save, with the base they are saved against. */
+  changes(): FileChange[] {
+    return [...this.pending]
+      .map(([file, base]) => ({ file, base }))
+      .sort((a, b) => (a.file < b.file ? -1 : 1));
   }
 
   // ---- validation and saving -----------------------------------------------------------
@@ -293,16 +355,30 @@ export class EditorController {
     if (this.saving) return;
     this.saving = true;
     const world = this.state.world;
+    const changes = this.changes();
     try {
-      const r = await this.backend.save(world);
+      const r = await this.backend.save(world, changes);
+      const editedSince = this.state.world !== world;
+      for (const [file, hash] of Object.entries(r.base)) {
+        if (hash === null) this.base.delete(file);
+        else this.base.set(file, hash);
+        // Files edited again while saving stay pending, now against the new base.
+        if (editedSince) this.pending.set(file, hash);
+        else this.pending.delete(file);
+      }
       this.set({
-        dirty: this.state.world !== world,
+        dirty: editedSince || this.pending.size > 0,
         status: this.t("editor.saved", { written: r.written.length, removed: r.removed.length }),
       });
     } catch (e) {
-      this.set({
-        status: this.t("editor.save_failed", { error: e instanceof Error ? e.message : String(e) }),
-      });
+      const status =
+        e instanceof ConflictError
+          ? this.t("editor.save_conflict", {
+              count: e.conflicts.length,
+              files: e.conflicts.map((f) => f.replace(/^world\/islands\//, "")).join(", "),
+            })
+          : this.t("editor.save_failed", { error: e instanceof Error ? e.message : String(e) });
+      this.set({ status });
     } finally {
       this.saving = false;
     }

@@ -26,6 +26,8 @@ dependencias de Node para que el editor la use en el navegador).
 - **Reversible**: `inverse` es una **lista** de ops que, aplicada al resultado, devuelve
   exactamente el mundo original (mismos bytes al guardar). La inversa de la inversa rehace.
 - Un chunk que queda sin suelo ni items se elimina (y su archivo desaparece al guardar).
+- `touched` lista cada chunk modificado con su isla (`{ island, z, cx, cy }`): los chunks
+  son por isla, así que dos islas que compartieran un chunk nunca se mezclan.
 
 | op | Campos | Efecto |
 |---|---|---|
@@ -97,14 +99,30 @@ Implementación (T1.14): `editor/` (Vite + Preact + PixiJS, renderer de
 `map-format`, porque los archivos y el validador viven en disco. `make editor` lo levanta
 en http://localhost:5174 y edita `world/` del repo en el lugar.
 - Guardar escribe los mismos bytes que `mapcli fmt` (test en `editor/server/store.test.ts`
-  y en el E2E) y solo toca archivos que cambian; se bloquea si algún archivo de `world/` no
-  carga, para no pisar ni borrar algo que el editor no pudo leer.
-- Validación en vivo: tras cada cambio (300 ms de espera) el servidor escribe el mundo en
-  memoria a un directorio temporal y corre `validateWorld`; el panel muestra exactamente lo
-  que diría `mapcli validate` después de guardar.
+  y en el E2E), y **solo los chunks que el editor tocó** (`applyOps` devuelve `touched`).
+  Cada archivo viaja con el hash que tenía al abrirse (`base`, enviado en el bootstrap); si
+  en disco ya no coincide (git pull, `mapcli`, otra pestaña) o el archivo no cargó, no se
+  guarda nada y la UI muestra el conflicto (409). Los archivos que el editor no tocó nunca
+  se escriben ni se borran. `island.yaml` y los auxiliares no se editan en el hito 1.
+- Seguridad del backend local: toda llamada a `/api` exige la cabecera `x-rpg-editor`
+  (una web de otro sitio no puede mandarla sin un preflight CORS que el servidor nunca
+  aprueba), `Origin`/`Sec-Fetch-Site` del mismo origen y cuerpo JSON. Guardar solo acepta
+  rutas `world/islands/<id>/chunks/zNN/cXXXX_YYYY.json` de islas listadas en `world.yaml`
+  en disco, verifica que la ruta resuelta quede dentro de esa isla y que el chunk pase el
+  esquema antes de escribir.
+- Validación en vivo: tras cada cambio (300 ms de espera) el servidor corre
+  `validateLoaded(world, content)` de map-format sobre el mundo en memoria (las mismas
+  reglas que `validateWorld`, menos las de archivos en disco), con las líneas YAML del disco.
+- Pendiente para un hito posterior: el editor público y estático para la comunidad
+  (`docs/00-vision.md`) no tendrá este backend. Tendrá que validar en el navegador
+  (map-format sin Node: esquemas empaquetados, contenido enviado como datos) y guardar
+  como map patch descargable o por la API del servidor, no escribiendo `world/`.
+- Isla: selector en la barra y `?island=<id>` en la URL (centra en su templo). Al salir
+  con cambios sin guardar, el navegador pide confirmación.
 - Atajos implementados: `B` pincel, `I` item, `E` borrador, `PgUp/PgDn` piso, rueda = zoom,
   espacio + arrastrar o botón central = mover, `Ctrl+Z` / `Ctrl+Y` (o `Ctrl+Shift+Z`),
   `Ctrl+S`. Clic derecho o Mayús+clic con la herramienta Item quita el item de arriba.
+  Los atajos se ignoran solo mientras se escribe texto (no con un checkbox o select en foco).
 
 **Hito 2:** relleno, rectángulo, selección + copiar/pegar, autoborder automático al
 pintar, spawns, NPCs, zonas y portales con su panel, exportar/importar patch, vista de

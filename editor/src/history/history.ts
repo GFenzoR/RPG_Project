@@ -2,7 +2,7 @@
 // inverse (returned by applyOps), so undo and redo are just applyOps again: the editor
 // never snapshots the world.
 import { applyOps } from "@rpg/map-format/ops";
-import type { MapOp, OpOptions, World } from "@rpg/map-format/ops";
+import type { MapOp, OpOptions, TouchedChunk, World } from "@rpg/map-format/ops";
 
 export interface HistoryEntry {
   /** What the user did, for the UI (an i18n key). */
@@ -15,7 +15,7 @@ export interface HistoryEntry {
 
 export interface Step {
   world: World;
-  touched: string[];
+  touched: TouchedChunk[];
   entry: HistoryEntry;
 }
 
@@ -59,18 +59,25 @@ export class History {
     return { world: r.world, touched: r.touched, entry };
   }
 
+  /**
+   * Undoes the last entry. Inverses and redos are applied without the item checks: they
+   * restore what was there, even items the content no longer knows. If applying fails
+   * (OpError), the entry stays where it was and the error propagates.
+   */
   undo(world: World): Step | undefined {
-    const entry = this.done.pop();
+    const entry = this.done.at(-1);
     if (!entry) return undefined;
-    const r = applyOps(world, entry.inverse, this.opts);
+    const r = applyOps(world, entry.inverse);
+    this.done.pop();
     this.undone.push(entry);
     return { world: r.world, touched: r.touched, entry };
   }
 
   redo(world: World): Step | undefined {
-    const entry = this.undone.pop();
+    const entry = this.undone.at(-1);
     if (!entry) return undefined;
-    const r = applyOps(world, entry.forward, this.opts);
+    const r = applyOps(world, entry.forward);
+    this.undone.pop();
     this.done.push(entry);
     return { world: r.world, touched: r.touched, entry };
   }

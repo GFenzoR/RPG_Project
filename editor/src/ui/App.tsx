@@ -62,6 +62,27 @@ export function App({
     <div class="editor">
       <header class="toolbar">
         <h1>{t("editor.title")}</h1>
+        <label class="group">
+          {t("editor.island")}
+          <select
+            data-testid="island"
+            value={s.island}
+            disabled={!canvas}
+            onChange={(e) => {
+              const id = e.currentTarget.value;
+              if (canvas) ctl.selectIsland(id, canvas.atlas.tileSize);
+              const url = new URL(location.href);
+              url.searchParams.set("island", id);
+              history.replaceState(null, "", url);
+            }}
+          >
+            {[...s.world.islands.values()].map((i) => (
+              <option key={i.meta.id} value={i.meta.id}>
+                {`${t(i.meta.name)} (${i.meta.id})`}
+              </option>
+            ))}
+          </select>
+        </label>
         <div class="group">
           {TOOLS.map((tool) => (
             <button
@@ -119,7 +140,12 @@ export function App({
         </div>
         <span class="group">{t("editor.zoom", { percent: Math.round(s.camera.zoom * 100) })}</span>
         <label class="group">
-          <input type="checkbox" checked={s.grid} onChange={() => ctl.toggleGrid()} />
+          <input
+            type="checkbox"
+            data-testid="grid"
+            checked={s.grid}
+            onChange={() => ctl.toggleGrid()}
+          />
           {t("editor.grid")}
         </label>
         <div class="group">

@@ -2,7 +2,7 @@
 // validation and floors, saves, and verifies the saved files are canonical (`mapcli fmt
 // --check` finds nothing to change). Screenshots: e2e/screenshots/actual/.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -62,9 +62,13 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
-  await page.goto("/?lang=es");
+  await page.goto("/?lang=es&island=testisle");
   await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
   await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
+  await expect(page.getByTestId("island")).toHaveValue("testisle");
+  await expect(page.getByTestId("island").locator("option")).toHaveText([
+    "Isla de pruebas (testisle)",
+  ]);
   await expect(page.getByTestId("floor")).toHaveText("Piso 7");
   await shot(page, "01-open");
 
@@ -122,6 +126,15 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
   await page.keyboard.press("Control+z");
   await settled(page);
   await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
+
+  // Shortcuts still work with a select or checkbox focused, and Space does not toggle it.
+  await page.getByTestId("brush-size").focus();
+  await page.keyboard.press("b");
+  await expect(page.getByTestId("tool-brush")).toHaveClass(/active/);
+  const grid = page.getByTestId("grid");
+  await grid.focus();
+  await page.keyboard.press(" ");
+  await expect(grid).toBeChecked();
 
   // Eraser (all layers) on the second item tile.
   await page.keyboard.press("e");
@@ -186,4 +199,52 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
   await shot(page, "06-english");
 
   expect(errors).toEqual([]);
+});
+
+test("asks before leaving with unsaved changes, and refuses to save over changes on disk", async ({
+  page,
+}) => {
+  await page.goto("/?lang=es");
+  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await pick(page, "tierra", "dirt");
+  await clickTile(page, 1046, 1059);
+  expect((await tile(page, 1046, 1059, 7))?.ground).toBe("dirt");
+  await expect(page.getByTestId("dirty")).toHaveText("Cambios sin guardar");
+
+  // Someone changes the same chunk on disk (git pull, mapcli...) after the editor loaded it.
+  const file = join(root, "world/islands/testisle/chunks/z07/c0032_0033.json");
+  const external = readFileSync(file, "utf8").replace('"sand"', '"grass"');
+  writeFileSync(file, external);
+  await page.keyboard.press("Control+s");
+  await expect(page.getByTestId("status")).toContainText("No se guardó nada: 1 archivo(s)");
+  await expect(page.getByTestId("status")).toContainText("testisle/chunks/z07/c0032_0033.json");
+  await expect(page.getByTestId("dirty")).toHaveText("Cambios sin guardar");
+  expect(readFileSync(file, "utf8")).toBe(external);
+  await shot(page, "07-save-conflict");
+
+  // Leaving the page with unsaved changes triggers the browser's confirmation.
+  const dialog = page.waitForEvent("dialog");
+  await page.close({ runBeforeUnload: true });
+  const d = await dialog;
+  expect(d.type()).toBe("beforeunload");
+  await d.accept();
+});
+
+test("the API refuses requests that do not come from the editor page", async ({ request }) => {
+  const save = { world: { meta: {}, islands: [] }, changes: [] };
+  const plain = await request.post("/api/save", { data: save });
+  expect(plain.status()).toBe(403);
+  const foreign = await request.post("/api/save", {
+    data: save,
+    headers: { "x-rpg-editor": "1", origin: "https://evil.example" },
+  });
+  expect(foreign.status()).toBe(403);
+  const traversal = await request.post("/api/save", {
+    data: {
+      world: { meta: { format: 1, islands: [], boat_routes: [] }, islands: [] },
+      changes: [{ file: "world/islands/testisle/../../../evil.json", base: null }],
+    },
+    headers: { "x-rpg-editor": "1" },
+  });
+  expect(traversal.status()).toBe(400);
 });

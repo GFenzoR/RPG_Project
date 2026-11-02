@@ -2,7 +2,7 @@
 import { render } from "preact";
 import { App } from "./ui/App.tsx";
 import { pickLanguage, translator } from "./i18n.ts";
-import { fromWire } from "./io/wire.ts";
+import { API_HEADER, fromWire } from "./io/wire.ts";
 import type { Bootstrap } from "./io/wire.ts";
 import { EditorController } from "./state/editor.ts";
 import { tileAt } from "./tools/tools.ts";
@@ -15,7 +15,13 @@ export interface EditorTestHooks {
   tile(x: number, y: number, z: number): { ground: string | null; stack: string[] } | undefined;
   tileToClient(x: number, y: number): { x: number; y: number };
   centerOn(x: number, y: number, z: number): void;
-  state(): { floor: number; zoom: number; dirty: boolean; validating: boolean };
+  state(): {
+    island: string;
+    floor: number;
+    zoom: number;
+    dirty: boolean;
+    validating: boolean;
+  };
 }
 
 declare global {
@@ -27,7 +33,7 @@ declare global {
 async function start(): Promise<void> {
   const root = document.getElementById("app");
   if (!root) return;
-  const res = await fetch("/api/bootstrap");
+  const res = await fetch("/api/bootstrap", { headers: { [API_HEADER]: "1" } });
   const boot = (await res.json()) as Bootstrap;
   const lang = pickLanguage(
     Object.keys(boot.i18n),
@@ -42,6 +48,14 @@ async function start(): Promise<void> {
     items: boot.items,
     t,
     loadErrors: boot.loadErrors,
+    base: boot.base,
+    island: new URLSearchParams(location.search).get("island"),
+  });
+  // Unsaved changes: the browser asks before closing or reloading the page.
+  window.addEventListener("beforeunload", (e) => {
+    if (!ctl.state.dirty) return;
+    e.preventDefault();
+    e.returnValue = "";
   });
   const onCanvas = (c: MapCanvas): void => {
     window.__rpgEditor = {
@@ -50,6 +64,7 @@ async function start(): Promise<void> {
       tileToClient: (x, y) => c.tileToClient(x, y),
       centerOn: (x, y, z) => ctl.centerTile(x, y, z, c.atlas.tileSize),
       state: () => ({
+        island: ctl.state.island,
         floor: ctl.state.floor,
         zoom: ctl.state.camera.zoom,
         dirty: ctl.state.dirty,
