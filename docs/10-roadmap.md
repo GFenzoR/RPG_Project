@@ -71,7 +71,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [x] **T1.11 Muerte y reaparición.** (PR #32) Reglas de muerte de balance.yaml, protección de
   novato, bendiciones compradas a NPC, cuerpo del jugador, templo. Autoguardado
   escalonado. [T1.7, T1.10]
-- [x] **T1.12 Pesca y minería.** Skill de pesca, oficio de minería, recursos que se
+- [x] **T1.12 Pesca y minería.** (PR #33) Skill de pesca, oficio de minería, recursos que se
   agotan y regeneran, herramientas. [T1.8]
 - [ ] **T1.13 Chat e i18n del cliente.** Canal local (decir, gritar, susurrar), canal
   global, mensajes del sistema por clave i18n, selector de idioma es/en. [T1.5]
