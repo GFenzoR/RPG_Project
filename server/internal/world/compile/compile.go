@@ -166,7 +166,13 @@ func LoadContent(root string) (*Content, error) {
 	}
 	maxID := 0
 	owner := map[int]string{}
-	for id, n := range lock.Items {
+	lockIDs := make([]string, 0, len(lock.Items))
+	for id := range lock.Items {
+		lockIDs = append(lockIDs, id)
+	}
+	sort.Strings(lockIDs) // reproducible error messages
+	for _, id := range lockIDs {
+		n := lock.Items[id]
 		if n <= 0 || n > 0xFFFF {
 			return nil, fmt.Errorf("%s: item %q has numeric ID %d, outside 1..65535", rel(root, lockFile), id, n)
 		}

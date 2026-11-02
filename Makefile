@@ -99,7 +99,7 @@ test-parity: ## mapcompile vs packages/map-format walkability on every tile
 
 .PHONY: run-server
 run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL)
-	cd server && RPG_WORLD=$(CURDIR)/build/world.bin DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver
+	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver
 
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
