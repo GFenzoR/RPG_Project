@@ -16,6 +16,7 @@ sprites:
   ground/dirt: { placeholder: { label: "", color: "#7a5a3a" } }
   ground/stone_floor: { placeholder: { label: "", color: "#8a8a86" } }
   ground/water_shallow: { placeholder: { label: "", color: "#3f7fb5" } }
+  ground/water_shoal: { placeholder: { label: "", color: "#3a8fb0" } }
   ground/wet_sand: { placeholder: { label: "", color: "#a8935a" } }
   ground/dock_planks: { placeholder: { label: "", color: "#7b5b3c" } }
   ground/wooden_floor: { placeholder: { label: "", color: "#9c7650" } }
@@ -59,6 +60,9 @@ sprites:
   materials/spider_silk: { placeholder: { label: SS, color: "#b8c8a8" } }
   materials/beetle_carapace: { placeholder: { label: BC, color: "#3e5248" } }
   materials/iron_ore: { placeholder: { label: IO, color: "#8a4e3a" } }
+  materials/rough_stone: { placeholder: { label: RS, color: "#7d7a72" } }
+  materials/quartz_crystal: { placeholder: { label: QC, color: "#cfe3ea" } }
+  decor/iron_vein: { placeholder: { label: IV, color: "#6b4a3c" } }
   materials/tarnished_locket: { placeholder: { label: TL, color: "#7c7448" } }
   quest/bosun_logbook: { placeholder: { label: BL, color: "#6e5a3a" } }
   decor/mooring_post: { placeholder: { label: MP, color: "#5a4632" } }

@@ -100,6 +100,13 @@ client/
 - El E2E de muerte deja al personaje con 1 de vida con `psql` (`DATABASE_URL`) antes de
   entrar y lo lleva a los lobos.
 
+## Notas de T1.12
+- `ItemDef.useWith` (items `kind: tool`): usarlo (click derecho) no manda `UseItem` sino que
+  deja `Game.usingItem` y la clase `using-item` en `body` (cursor en cruz); el siguiente
+  click en el mapa manda `UseItemOn` a esa casilla. Escape, click derecho o click sobre una
+  criatura lo cancelan.
+- Efectos 5 (cosecha) y 6 (intento fallido) son formas Pixi en `drawEffect`.
+
 ## Verificación visual (obligatoria si tocas render o UI)
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda
 screenshots en `client/e2e/screenshots/`. Ábrelos con Read y revísalos antes de cerrar.

@@ -5,7 +5,16 @@
   "description": "Every game-rule number lives here; code never hardcodes balance constants.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["movement", "experience", "skills", "combat", "inventory", "death", "economy"],
+  "required": [
+    "movement",
+    "experience",
+    "skills",
+    "combat",
+    "inventory",
+    "gathering",
+    "death",
+    "economy"
+  ],
   "properties": {
     "movement": {
       "type": "object",
@@ -102,6 +111,29 @@
             "offensive": { "$ref": "#/$defs/mode" },
             "balanced": { "$ref": "#/$defs/mode" },
             "defensive": { "$ref": "#/$defs/mode" }
+          }
+        }
+      }
+    },
+    "gathering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["use_interval_ms", "afk"],
+      "description": "Fishing and mining (T1.12).",
+      "properties": {
+        "use_interval_ms": {
+          "description": "Minimum time between two gathering attempts of a player (rate limit).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "afk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["after_ms", "factor"],
+          "description": "Gathering without leaving the tile for after_ms earns skill tries at factor.",
+          "properties": {
+            "after_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
+            "factor": { "type": "number", "minimum": 0, "maximum": 1 }
           }
         }
       }

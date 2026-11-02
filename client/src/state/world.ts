@@ -119,6 +119,9 @@ export const EFFECT_BLOCK = 2;
 export const EFFECT_HEAL = 3;
 export const EFFECT_CONJURE = 4;
 export const EFFECT_ELEMENT = 10;
+/** Gathering (server/internal/session/gathering.go): a harvest, or an attempt that got nothing. */
+export const EFFECT_GATHER = 5;
+export const EFFECT_GATHER_MISS = 6;
 /** Projectile ids are PROJECTILE_ELEMENT + index of ELEMENTS. */
 export const PROJECTILE_ELEMENT = 1;
 export const ELEMENTS = ["physical", "fire", "ice", "energy", "earth", "holy", "death"] as const;

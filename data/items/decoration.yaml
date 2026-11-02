@@ -15,6 +15,25 @@
   blocks_movement: true
   blocks_sight: true
 
+# Ore vein (T1.12): use a pickaxe on it. Our own numbers.
+- id: iron_vein
+  kind: decoration
+  sprite: decor/iron_vein
+  name: item.iron_vein.name
+  description: item.iron_vein.desc
+  pickupable: false
+  blocks_movement: true
+  resource:
+    tool: mining
+    skill: mining
+    charges: 4              # successful swings before the vein is spent
+    regen_ms: 300000        # grows back 5 min after its last swing
+    chance: { base: 0.3, per_level: 0.02, max: 0.85 }
+    drops:
+      - { item: rough_stone, weight: 6, count: [1, 3] }
+      - { item: iron_ore, weight: 4 }
+      - { item: quartz_crystal, weight: 1, min_level: 5 }
+
 # Remains of a slain monster (T1.6). The server places it where the monster died, with
 # the loot inside, and removes it after combat.monster_corpse_ms (balance.yaml). It is a
 # container (T1.8): open it to take the loot; it cannot be picked up.

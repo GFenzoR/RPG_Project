@@ -54,6 +54,12 @@ type Item struct {
 		Charges    int    `yaml:"charges"`
 		MagicLevel int    `yaml:"magic_level"`
 	} `yaml:"rune"`
+	// Tool is what a tool is used for (fishing, mining...); Resource marks a gathering
+	// spot those tools harvest (T1.12).
+	Tool *struct {
+		Use string `yaml:"use"`
+	} `yaml:"tool"`
+	Resource *Resource `yaml:"resource"`
 	// Currency marks money: Worth is the value of one unit in the smallest coin.
 	Currency *struct {
 		Worth int64 `yaml:"worth"`

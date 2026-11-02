@@ -18,6 +18,8 @@ import { creatureName } from "../state/messages.ts";
 import {
   EFFECT_CONJURE,
   EFFECT_ELEMENT,
+  EFFECT_GATHER,
+  EFFECT_GATHER_MISS,
   EFFECT_HEAL,
   EFFECT_HIT,
   EFFECT_MS,
@@ -85,6 +87,13 @@ function drawEffect(g: Graphics, id: number): void {
       .circle(16, 24, 2)
       .fill(COLORS.heal);
   else if (id === EFFECT_CONJURE) g.star(16, 16, 5, 11, 5).fill({ color: 0xb08cff, alpha: 0.85 });
+  else if (id === EFFECT_GATHER)
+    g.circle(16, 16, 11).stroke({ width: 2, color: 0xfff2a0 }).star(16, 16, 4, 7, 3).fill(0xfff2a0);
+  else if (id === EFFECT_GATHER_MISS)
+    g.circle(16, 16, 6)
+      .stroke({ width: 2, color: 0xe8eef2, alpha: 0.8 })
+      .circle(16, 16, 11)
+      .stroke({ width: 1, color: 0xe8eef2, alpha: 0.5 });
   else if (id >= EFFECT_ELEMENT && id < EFFECT_ELEMENT + ELEMENTS.length) {
     const c = elementColor(id - EFFECT_ELEMENT);
     g.rect(2, 2, 28, 28).fill({ color: c, alpha: 0.35 }).star(16, 16, 6, 12, 6).fill(c);

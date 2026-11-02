@@ -58,6 +58,12 @@ inventory:
   use_cooldown_ms: 1000       # between two uses of a consumable
   reach: 1                    # tiles (Chebyshev, same floor) to take, drop, open or use on the ground
 
+gathering:                  # fishing and mining (T1.12); spot numbers live in data/items
+  use_interval_ms: 1500     # rate limit: one gathering attempt per player at most this often
+  afk:
+    after_ms: 900000        # gathering 15 min without leaving the tile...
+    factor: 0.25            # ...earns skill tries at this rate (like skills.afk)
+
 death:
   xp_loss_pct: 10
   skill_loss_pct: 10

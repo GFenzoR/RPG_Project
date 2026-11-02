@@ -339,6 +339,21 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   elemento de la varita cada ronda, a `weapon.range` casillas y con línea de visión; con
   `chase` el jugador se acerca hasta tenerlo a tiro.
 
+### Pesca y minería (T1.12, `server/internal/session/gathering.go`)
+- `UseItemOn{from, item_id, stack_index, to: pos}` con una herramienta que el jugador lleva
+  (equipada o en un contenedor suyo) sobre una casilla cuyo item de arriba con `resource`
+  (pila de arriba hacia abajo, luego el suelo) tiene `resource.tool == tool.use`.
+- Respuestas por `Message` de sistema: `gather.nothing` (no hay recurso para esa
+  herramienta), `inventory.too_far` (otro piso o más lejos que `resource.reach`),
+  `magic.no_sight`, `gather.not_ready` (antes de `gathering.use_interval_ms`),
+  `gather.depleted` (casilla agotada: no entrena), `gather.failed` y
+  `gather.got{item}`. Lo obtenido va a la mochila como una compra (lo que no entra cae al
+  suelo con `inventory.item_on_floor`).
+- **Efectos**: 5 = cosecha lograda, 6 = intento sin resultado, en la casilla del recurso,
+  para todos los que la ven.
+- El cliente entra en modo "usar con" al usar una herramienta (click derecho) y el
+  siguiente click en el mapa manda el `UseItemOn`; Escape o click derecho lo cancelan.
+
 ### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
 - `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso
   y a ≤ `TalkRange` (3) casillas (Chebyshev). Fuera de rango → `Message` de sistema

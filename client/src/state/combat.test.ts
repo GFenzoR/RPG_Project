@@ -29,6 +29,7 @@ const content: ClientContent = {
       speed: 100,
       stackable: false,
       slots: 0,
+      useWith: false,
     },
   },
   monsterSprites: {},

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/compile"
 )
@@ -128,5 +129,18 @@ func TestLoadWorld(t *testing.T) {
 	got, err := loadWorld(logger, path)
 	if err != nil || got.Island("mini") == nil {
 		t.Fatalf("loadWorld = %v, %v", got, err)
+	}
+}
+
+func TestAuthRateLimit(t *testing.T) {
+	if got := authRateLimit(0); got != (httpapi.RateLimit{}) {
+		t.Errorf("authRateLimit(0) = %+v, want the zero value (httpapi default)", got)
+	}
+	if got := authRateLimit(-3); got != (httpapi.RateLimit{}) {
+		t.Errorf("authRateLimit(-3) = %+v, want the zero value", got)
+	}
+	want := httpapi.RateLimit{Burst: 1000, Every: httpapi.DefaultAuthRateLimit.Every}
+	if got := authRateLimit(1000); got != want {
+		t.Errorf("authRateLimit(1000) = %+v, want %+v", got, want)
 	}
 }

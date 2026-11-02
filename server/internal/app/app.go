@@ -55,6 +55,8 @@ type Config struct {
 	TrustProxy       bool
 	OriginPatterns   []string
 	MinClientVersion string
+	// AuthRateLimit overrides httpapi.DefaultAuthRateLimit when non-zero (test harnesses).
+	AuthRateLimit httpapi.RateLimit
 	// AutosaveEvery overrides session.DefaultAutosaveEvery (tests).
 	AutosaveEvery game.Tick
 	// ShutdownTimeout bounds the final saves and the closing of connections (default 10 s).
@@ -97,6 +99,8 @@ func New(cfg Config) (*App, error) {
 		Health:       cfg.Store.Ping,
 		CookieSecure: cfg.CookieSecure,
 		TrustProxy:   cfg.TrustProxy,
+		// The zero value keeps httpapi.DefaultAuthRateLimit.
+		AuthRateLimit: cfg.AuthRateLimit,
 	})
 	if err != nil {
 		return nil, err

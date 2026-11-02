@@ -102,6 +102,22 @@ items:
 - **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms` y `reach`.
+- **Recursos** (T1.12): cualquier item del mapa (suelo o pila) puede ser un lugar de
+  recolección con un bloque `resource`:
+  ```yaml
+  resource:
+    tool: mining            # tool.use de la herramienta que lo cosecha
+    skill: mining           # skill u oficio que da la chance y sube con cada intento
+    reach: 1                # opcional (por defecto inventory.reach), con línea de visión
+    charges: 4              # cosechas por casilla antes de agotarse
+    regen_ms: 300000        # se llena este tiempo después de la última cosecha
+    chance: { base: 0.3, per_level: 0.02, max: 0.85 }
+    drops:                  # uno por cosecha, por peso, entre los que el nivel alcanza
+      - { item: rough_stone, weight: 6, count: [1, 3] }
+      - { item: quartz_crystal, weight: 1, min_level: 5 }
+  ```
+  `balance.yaml → gathering`: `use_interval_ms` (rate limit por jugador) y
+  `afk: { after_ms, factor }` (anti-AFK, ver `02-game-design.md`).
 - **Paso bloqueado** (regla del contrato, la aplican el validador de mapas y
   `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
