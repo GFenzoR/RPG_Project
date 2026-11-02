@@ -157,9 +157,77 @@ boat_routes:
 ```
 
 ## Compilación
-`server/cmd/mapcompile` lee `world/` + `data/`, valida, resuelve IDs y escribe
+`server/cmd/mapcompile` (`make mapcompile`) lee `world/` + `data/items/` +
+`data/ids.lock.yaml`, valida lo necesario para compilar, resuelve IDs y escribe
 `build/world.bin` (binario compacto: tiles por sector, flags precomputados). El servidor
-solo carga `world.bin`. El editor y `mapcli` trabajan siempre con el JSON.
+solo carga `world.bin` (`-world`, por defecto `$RPG_WORLD` o `../build/world.bin` desde
+`server/`). El editor y `mapcli` trabajan siempre con el JSON.
+
+La validación completa del mapa (conectividad, spawns, i18n...) sigue siendo la de
+`packages/map-format` (`make validate`). `mapcompile` solo rechaza lo que no puede
+compilar: rect no alineado o distinto del de `world.yaml`, chunk fuera de la isla o en un
+piso no listado, nombre de archivo incoherente, item desconocido o sin ID numérico, IDs
+numéricos repetidos en `ids.lock.yaml`, tipo de zona desconocido.
+
+### Flags de tile
+Se calculan al compilar, uno por casilla (implementación: `server/internal/world/compile`):
+
+| Flag | Se activa si… |
+|---|---|
+| `blocks_movement` | No hay suelo (`-1`), el suelo no tiene `ground.walkable: true`, o algún item de la pila tiene `blocks_movement: true`, o es `kind: wall` y **no** declara `blocks_movement: false`. |
+| `blocks_sight` | Algún item **de la pila** tiene `blocks_sight: true`. El suelo nunca bloquea la vista. Lo usan la línea de visión y los proyectiles. |
+| `protection`, `no_logout`, `pvp`, `no_pvp` | La casilla tiene suelo y cae en un rect de una zona de ese tipo de `zones.yaml`, en uno de sus `floors`. |
+
+`community_plot` no marca ningún flag: solo le importa al editor y a los patches.
+La regla de `blocks_movement` es la misma que `isWalkable` de `packages/map-format`:
+`make test-parity` (parte de `make test` y de la CI) compara casilla por casilla el
+veredicto de `mapcompile` con el de `packages/map-format`.
+
+**Decisión pendiente (usuario): muros y línea de visión.** Hoy `kind: wall` implica
+bloquear el paso pero **no** la vista: un muro sin `blocks_sight: true` deja pasar
+proyectiles y hechizos. Opciones:
+1. `kind: wall` bloquea también la vista salvo `blocks_sight: false` (simétrico con el paso).
+2. Mantener la regla actual y que la validación de contenido exija `blocks_sight` explícito
+   en todo item `kind: wall`.
+
+Cualquiera de las dos cambia `mapcompile` y `packages/map-format` a la vez. Hasta que se
+decida, todo muro nuevo debería declarar `blocks_sight: true`.
+
+### Formato de `world.bin` (versión 1)
+Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
+mismas fuentes producen siempre los mismos bytes.
+
+```text
+magic        8 bytes "RPGWORLD"
+version      u16 = 1
+speedCount   u32, luego speedCount × u16
+             costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
+islandCount  u16, luego por isla (en el orden de world.yaml):
+  id         u8 largo + bytes UTF-8
+  rect       4 × u32: x, y, w, h (alineados a 32)
+  floors     u8 cantidad + bytes (ascendentes, sin repetir, 0..15)
+  temple     u16 x, u16 y, u8 z
+  sectors    u32 cantidad, luego por sector, ordenados por z, cy, cx:
+    z u8, cx u16, cy u16
+    ground   1024 × u16   ID numérico del suelo, fila por fila; 0 = sin tile
+    flags    1024 × u8    bit 0 blocks_movement, 1 blocks_sight, 2 protection,
+                          3 no_logout, 4 pvp, 5 no_pvp
+    stacks   u16 cantidad, luego por pila (índice ascendente):
+             u16 índice (y*32+x), u8 n, n × u16 IDs de abajo hacia arriba
+crc32        u32 (IEEE) de todos los bytes anteriores
+```
+
+- Un sector es un chunk de `world/` ya resuelto: solo existen los sectores con archivo.
+- `Decode` rechaza archivos con checksum, magic o versión incorrectos, datos truncados o
+  sobrantes, y metadatos inválidos (rect fuera del mundo o desalineado, pisos fuera de
+  rango o desordenados, templo fuera de la isla, sectores fuera de su isla, islas
+  superpuestas o repetidas). Nunca entra en panic.
+- **Versionado.** `world.bin` es un artefacto de build: no se commitea ni se migra; se
+  regenera con `make mapcompile` en cada versión. Cualquier cambio de layout (campos
+  nuevos como spawns, NPCs, portales o textos; flags nuevos; tamaños) sube `version` en
+  uno y actualiza esta sección en el mismo PR. El servidor solo lee su propia versión y
+  falla al arrancar con un mensaje claro si no coincide. Asignar un bit libre de `flags`
+  a un flag nuevo también sube la versión, porque cambia el significado de los datos.
 
 ## Validación (misma lógica en editor, mapcli y CI)
 Implementada una sola vez en `packages/map-format` (`validateWorld`); `mapcli validate`
