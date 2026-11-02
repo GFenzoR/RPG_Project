@@ -147,24 +147,36 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	// A token of each is reserved before the password check, so concurrent requests
 	// cannot all slip through on one token, and refunded unless the password was wrong:
 	// only failures count (trade-off documented in docs/05).
+	//
+	// A malformed email or a password that registration could never have accepted cannot
+	// match any account: answer at once, without a password check and without spending
+	// login budget, so such cheap requests cannot be used to fill the limiter tables.
 	email, emailOK := auth.NormalizeEmail(in.Email)
+	if !emailOK || !auth.ValidPassword(in.Password) {
+		a.fail(w, r, auth.ErrInvalidCredentials)
+		return
+	}
 	pairKey := email + "\x00" + a.clientKey(r) // NUL cannot appear in either part
-	if emailOK {
-		if !a.pairLimiter.allow(pairKey) {
-			a.tooMany(w, a.cfg.LoginPairRateLimit)
-			return
-		}
-		if !a.emailLimiter.allow(email) {
-			a.pairLimiter.refund(pairKey)
-			a.tooMany(w, a.cfg.LoginEmailRateLimit)
-			return
-		}
+	ok, pairRes := a.pairLimiter.allow(pairKey)
+	if !ok {
+		a.tooMany(w, a.cfg.LoginPairRateLimit)
+		return
 	}
+	ok, emailRes := a.emailLimiter.allow(email)
+	if !ok {
+		a.pairLimiter.refund(pairRes)
+		a.tooMany(w, a.cfg.LoginEmailRateLimit)
+		return
+	}
+	spent := false
+	defer func() { // also runs if Login panics
+		if !spent {
+			a.pairLimiter.refund(pairRes)
+			a.emailLimiter.refund(emailRes)
+		}
+	}()
 	tok, err := a.cfg.Auth.Login(r.Context(), in.Email, in.Password)
-	if emailOK && !errors.Is(err, auth.ErrInvalidCredentials) {
-		a.pairLimiter.refund(pairKey)
-		a.emailLimiter.refund(email)
-	}
+	spent = errors.Is(err, auth.ErrInvalidCredentials)
 	if err != nil {
 		a.fail(w, r, err)
 		return
@@ -245,7 +257,7 @@ func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) rateLimited(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !a.limiter.allow(a.clientKey(r)) {
+		if ok, _ := a.limiter.allow(a.clientKey(r)); !ok {
 			a.tooMany(w, a.cfg.AuthRateLimit)
 			return
 		}

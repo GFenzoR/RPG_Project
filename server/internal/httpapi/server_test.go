@@ -398,3 +398,25 @@ func TestExhaustedEmailBudgetBlocksEveryIP(t *testing.T) {
 	h.clock.Advance(time.Minute)
 	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: good, remote: "1.1.1.1:1"}), 200, "")
 }
+
+// TestImpossiblePasswordsSpendNoBudget: passwords registration could never accept (too
+// short or too long) are rejected without a password check and without spending login
+// budget, so they cannot be used to fill the limiter tables.
+func TestImpossiblePasswordsSpendNoBudget(t *testing.T) {
+	repo := &countingRepo{Repo: authtest.NewRepo()}
+	h := newHarnessRepo(t, repo, func(c *httpapi.Config) {
+		c.AuthRateLimit = httpapi.RateLimit{Burst: 1000, Every: time.Millisecond}
+		c.LoginEmailRateLimit = httpapi.RateLimit{Burst: 1, Every: time.Hour}
+	})
+	long := strings.Repeat("x", 600)
+	for range 20 {
+		expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"ana@example.org","password":"` + long + `"}`}), 401, "invalid_credentials")
+		expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"ana@example.org","password":"short"}`}), 401, "invalid_credentials")
+	}
+	if repo.lookups.Load() != 0 {
+		t.Fatalf("%d password checks for impossible passwords", repo.lookups.Load())
+	}
+	// The single per-email token is still there for a real attempt.
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"ana@example.org","password":"plausible1"}`}), 401, "invalid_credentials")
+	expect(t, h.do(req{method: "POST", path: "/api/auth/login", body: `{"email":"ana@example.org","password":"plausible2"}`}), 429, "rate_limited")
+}

@@ -38,7 +38,8 @@ func TestRecoverBeforeWriteSends500(t *testing.T) {
 // TestRecoverAfterWriteAborts: a panic mid-response must not look like a complete body.
 func TestRecoverAfterWriteAborts(t *testing.T) {
 	_, body, err := serveRecovered(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Length", "100")
+		// No Content-Length: the body is chunked, so only an abort (not a short body)
+		// tells the client the response is incomplete.
 		_, _ = w.Write([]byte("partial"))
 		w.(http.Flusher).Flush()
 		var none []int

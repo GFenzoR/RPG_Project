@@ -51,7 +51,9 @@ const (
 	// a denial of service for everyone else.
 	failOpen collisionPolicy = iota
 	// failClosed makes the key share the fuller of its two slots. Used for the per-account
-	// login limits, which are only spent by password checks and so cannot be flooded.
+	// login limits: only real password checks spend them (impossible passwords are
+	// rejected before), and those are capped by the argon2 slots far below the table's
+	// refill rate, so the table cannot be kept full of drained buckets.
 	failClosed
 )
 
@@ -110,56 +112,68 @@ func (l *limiter) refill(b *bucket, now int64) {
 	}
 }
 
-// bucketFor returns key's bucket, claiming a free slot if needed, or nil if the key is
+// untracked is the slot index of a key let through without a bucket (failOpen).
+const untracked = -1
+
+// slotFor returns the index of key's bucket, claiming a free slot if needed, or
 // untracked (failOpen collision). Caller holds mu.
-func (l *limiter) bucketFor(ref slotRef) *bucket {
+func (l *limiter) slotFor(ref slotRef) int {
 	now := l.clock.Now().UnixNano()
 	b1, b2 := &l.slots[ref.i1], &l.slots[ref.i2]
 	l.refill(b1, now)
 	l.refill(b2, now)
-	for _, b := range []*bucket{b1, b2} {
+	idx := [2]int{ref.i1, ref.i2}
+	for k, b := range []*bucket{b1, b2} {
 		if b.tag == ref.tag {
-			return b
+			return idx[k]
 		}
 	}
 	full := float64(l.cfg.Burst)
-	for _, b := range []*bucket{b1, b2} {
+	for k, b := range []*bucket{b1, b2} {
 		if b.tag == 0 || b.tokens >= full {
 			*b = bucket{tag: ref.tag, tokens: full, last: now}
-			return b
+			return idx[k]
 		}
 	}
 	if l.policy == failOpen {
-		return nil
+		return untracked
 	}
 	if b2.tokens > b1.tokens {
-		return b2
+		return ref.i2
 	}
-	return b1
+	return ref.i1
 }
 
-// allow consumes one token for key and reports whether the request may proceed.
-func (l *limiter) allow(key string) bool {
+// reservation is a token taken by allow; pass it to refund to give it back.
+type reservation struct {
+	slot int // untracked if nothing was taken
+}
+
+// allow consumes one token for key and reports whether the request may proceed. The
+// reservation identifies the exact slot charged, for refund.
+func (l *limiter) allow(key string) (bool, reservation) {
 	ref := l.locate(key)
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	b := l.bucketFor(ref)
-	if b == nil {
-		return true
+	i := l.slotFor(ref)
+	if i == untracked {
+		return true, reservation{slot: untracked}
 	}
+	b := &l.slots[i]
 	if b.tokens < 1 {
-		return false
+		return false, reservation{slot: untracked}
 	}
 	b.tokens--
-	return true
+	return true, reservation{slot: i}
 }
 
-// refund gives back a token taken by allow (never above Burst).
-func (l *limiter) refund(key string) {
-	ref := l.locate(key)
+// refund gives back the token of r to the slot it was taken from (never above Burst).
+func (l *limiter) refund(r reservation) {
+	if r.slot == untracked {
+		return
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if b := l.bucketFor(ref); b != nil {
-		b.tokens = min(float64(l.cfg.Burst), b.tokens+1)
-	}
+	b := &l.slots[r.slot]
+	b.tokens = min(float64(l.cfg.Burst), b.tokens+1)
 }

@@ -21,22 +21,31 @@ func newTestLimiter(t *testing.T, rl RateLimit, p collisionPolicy) (*limiter, *c
 func TestLimiterBurstRefillAndRefund(t *testing.T) {
 	l, clk := newTestLimiter(t, RateLimit{Burst: 2, Every: time.Second}, failClosed)
 	for i, want := range []bool{true, true, false} {
-		if got := l.allow("a"); got != want {
+		if got := allowOK(l, "a"); got != want {
 			t.Fatalf("request %d: allow = %v, want %v", i, got, want)
 		}
 	}
-	l.refund("a")
-	if got := []bool{l.allow("a"), l.allow("a")}; !got[0] || got[1] {
+	_, res := l.allow("a")
+	l.refund(res) // nothing was taken: no-op
+	if allowOK(l, "a") {
+		t.Fatal("refund of a failed allow must not add tokens")
+	}
+	clk.Advance(time.Second)
+	_, res = l.allow("a")
+	l.refund(res)
+	if got := []bool{allowOK(l, "a"), allowOK(l, "a")}; !got[0] || got[1] {
 		t.Fatal("refund gives back exactly one token")
 	}
 	clk.Advance(time.Second)
-	if got := []bool{l.allow("a"), l.allow("a")}; !got[0] || got[1] {
+	if got := []bool{allowOK(l, "a"), allowOK(l, "a")}; !got[0] || got[1] {
 		t.Fatal("one token per Every")
 	}
 	for range 5 {
-		l.refund("b") // never above Burst
+		_, res := l.allow("b")
+		l.refund(res)
+		l.refund(res) // double refund: still never above Burst
 	}
-	if got := []bool{l.allow("b"), l.allow("b"), l.allow("b")}; !got[0] || !got[1] || got[2] {
+	if got := []bool{allowOK(l, "b"), allowOK(l, "b"), allowOK(l, "b")}; !got[0] || !got[1] || got[2] {
 		t.Fatal("refund must cap at Burst")
 	}
 }
@@ -47,12 +56,12 @@ func TestDrainedBucketSurvivesKeySpray(t *testing.T) {
 	for _, p := range []collisionPolicy{failOpen, failClosed} {
 		l, _ := newTestLimiter(t, RateLimit{Burst: 3, Every: time.Hour}, p)
 		for range 3 {
-			l.allow("victim@example.org")
+			allowOK(l, "victim@example.org")
 		}
 		for i := range 4 * limiterSlots {
-			l.allow("junk" + strconv.Itoa(i))
+			allowOK(l, "junk"+strconv.Itoa(i))
 		}
-		if l.allow("victim@example.org") {
+		if allowOK(l, "victim@example.org") {
 			t.Fatalf("policy %d: drained bucket was restored by spraying keys", p)
 		}
 		if len(l.slots) != limiterSlots {
@@ -66,11 +75,11 @@ func TestDrainedBucketSurvivesKeySpray(t *testing.T) {
 func TestFailOpenTableCannotBeSaturated(t *testing.T) {
 	l, _ := newTestLimiter(t, RateLimit{Burst: 1, Every: time.Hour}, failOpen)
 	for i := range 4 * limiterSlots {
-		l.allow("attacker" + strconv.Itoa(i)) // claims and drains slots
+		allowOK(l, "attacker"+strconv.Itoa(i)) // claims and drains slots
 	}
 	allowed := 0
 	for i := range 1000 {
-		if l.allow("user" + strconv.Itoa(i)) {
+		if allowOK(l, "user"+strconv.Itoa(i)) {
 			allowed++
 		}
 	}
@@ -83,11 +92,11 @@ func TestFailOpenTableCannotBeSaturated(t *testing.T) {
 func TestFailClosedSharesBucket(t *testing.T) {
 	l, _ := newTestLimiter(t, RateLimit{Burst: 1, Every: time.Hour}, failClosed)
 	for i := range 4 * limiterSlots {
-		l.allow("attacker" + strconv.Itoa(i))
+		allowOK(l, "attacker"+strconv.Itoa(i))
 	}
 	denied := 0
 	for i := range 1000 {
-		if !l.allow("user" + strconv.Itoa(i)) {
+		if !allowOK(l, "user"+strconv.Itoa(i)) {
 			denied++
 		}
 	}
@@ -101,5 +110,22 @@ func TestLimiterSecretsDiffer(t *testing.T) {
 	b, _ := newTestLimiter(t, DefaultAuthRateLimit, failOpen)
 	if a.secret == b.secret {
 		t.Fatal("each limiter needs its own random secret")
+	}
+}
+
+func allowOK(l *limiter, key string) bool {
+	ok, _ := l.allow(key)
+	return ok
+}
+
+// TestRefundReturnsToChargedSlot: with fail-closed sharing, refund goes back to the slot
+// that was charged, not to whichever is fuller now.
+func TestRefundReturnsToChargedSlot(t *testing.T) {
+	l, _ := newTestLimiter(t, RateLimit{Burst: 2, Every: time.Hour}, failClosed)
+	_, res := l.allow("k")
+	before := l.slots[res.slot].tokens
+	l.refund(res)
+	if l.slots[res.slot].tokens != before+1 {
+		t.Fatalf("refund went elsewhere: %v -> %v", before, l.slots[res.slot].tokens)
 	}
 }

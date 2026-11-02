@@ -197,7 +197,10 @@ type Token struct {
 // Login checks the credentials and issues an account token.
 func (s *Service) Login(ctx context.Context, email, password string) (Token, error) {
 	email, ok := NormalizeEmail(email)
-	if !ok || len(password) > 4*MaxPasswordLen {
+	// Register only accepts ValidPassword passwords, so any other cannot match: reject it
+	// without hashing. (If the password rules ever get stricter, keep accepting the old
+	// ones here so existing accounts can still log in.)
+	if !ok || !ValidPassword(password) {
 		return Token{}, ErrInvalidCredentials
 	}
 	acc, err := s.repo.AccountByEmail(ctx, email)

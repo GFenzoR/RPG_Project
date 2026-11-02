@@ -82,6 +82,9 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
     desde otras IPs no puede gastarlo por la víctima.
   - Login fallido por email desde cualquier IP: 30, luego 1 cada 2 min (~30/h). Laxo:
     solo frena la adivinación repartida en muchas IPs.
+  - Un login con email inválido o una contraseña que el registro nunca aceptaría (fuera
+    de 8–128 caracteres) responde `invalid_credentials` al instante, sin calcular hash y
+    sin gastar los límites de login: así no sirve para llenar las tablas.
   - Los dos límites de login reservan una ficha **antes** de verificar la contraseña
     (así N pedidos simultáneos no pasan con una sola ficha) y la devuelven si el
     resultado no es `invalid_credentials`: solo los intentos **fallidos** cuentan y
@@ -97,10 +100,15 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
     casillas de otro, y un bucket solo cambia de dueño cuando está lleno, así que
     rociar claves nuevas nunca resetea un límite gastado.
   - Si las dos casillas de una clave están ocupadas por otros buckets en uso: el límite
-    por IP **deja pasar** el pedido sin contarlo (llenar la tabla con basura desde
-    muchas /64 no puede convertirse en un `429` para todos; los límites por cuenta y el
-    tope de cálculos de contraseña siguen protegiendo), y los límites de login
-    **comparten** la casilla más llena (fallan cerrados). Detrás de Caddy, `-trust-proxy` toma
+    por IP **deja pasar** el pedido sin contarlo, y los límites de login **comparten**
+    la casilla más llena (fallan cerrados). Los de login no se pueden mantener llenos:
+    solo los gastan cálculos reales de contraseña (máx. 4 a la vez), muy por debajo de
+    lo que la tabla recupera.
+  - El límite por IP es **best effort**: quien sostenga ~11 000 pedidos/s desde decenas
+    de miles de /64 (p. ej. un /48 IPv6) satura la tabla y, mientras dure, las IPs sin
+    casilla quedan sin ese límite. Preferimos eso a un `429` para todos. Lo que sigue
+    protegiendo: los límites de login por par y por email, y el tope de 4 cálculos de
+    contraseña, que también acota el ritmo de registros (spam de cuentas). Detrás de Caddy, `-trust-proxy` toma
   la IP del último salto de `X-Forwarded-For` (el puerto del servidor no debe quedar
   expuesto fuera de Caddy). Si los cálculos de contraseña (argon2id, máx. 4 a la vez)
   están saturados más de 2 s → `503 busy`.
