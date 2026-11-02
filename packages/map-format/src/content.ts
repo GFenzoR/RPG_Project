@@ -1,7 +1,8 @@
 // The slice of data/ and i18n/ the map needs: which IDs exist and how items behave on a
 // tile. Content correctness itself is @rpg/content-schema's job (make validate runs both).
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { LANGUAGES } from "@rpg/content-schema";
 import { parse } from "yaml";
 
 export interface ItemInfo {
@@ -16,17 +17,24 @@ export interface ContentIndex {
   items: Map<string, ItemInfo>;
   monsters: Set<string>;
   npcs: Set<string>;
-  /** Language → keys defined in i18n/<lang>/*.yaml. */
+  /** Configured language (LANGUAGES of @rpg/content-schema) → keys in i18n/<lang>/*.yaml. */
   i18n: Map<string, Set<string>>;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
+/** .yaml files directly in dir; none when dir is missing or not a directory. */
 function yamlFiles(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".yaml"))
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return []; // missing or not a directory: the content validator reports it
+  }
+  return entries
+    .filter((e) => e.isFile() && e.name.endsWith(".yaml") && !e.name.startsWith("."))
+    .map((e) => e.name)
     .sort()
     .map((f) => join(dir, f));
 }
@@ -65,16 +73,13 @@ export function loadContent(root: string): ContentIndex {
       ),
     );
   const i18n = new Map<string, Set<string>>();
-  const i18nDir = join(root, "i18n");
-  if (existsSync(i18nDir)) {
-    for (const lang of readdirSync(i18nDir).sort()) {
-      const keys = new Set<string>();
-      for (const file of yamlFiles(join(i18nDir, lang))) {
-        const cat = readYaml(file);
-        if (isObj(cat)) for (const k of Object.keys(cat)) keys.add(k);
-      }
-      i18n.set(lang, keys);
+  for (const lang of LANGUAGES) {
+    const keys = new Set<string>();
+    for (const file of yamlFiles(join(root, "i18n", lang))) {
+      const cat = readYaml(file);
+      if (isObj(cat)) for (const k of Object.keys(cat)) keys.add(k);
     }
+    i18n.set(lang, keys);
   }
   return { items, monsters: idsIn("monsters"), npcs: idsIn("npcs"), i18n };
 }

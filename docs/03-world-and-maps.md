@@ -30,20 +30,23 @@ JSON canónico: claves en orden fijo (`format`, `chunk`, `palette`, `ground`, `i
 **una fila por línea**, indentación de 2 espacios, salto de línea final.
 `mapcli fmt` y el editor siempre escriben exactamente este formato para que los diffs
 sean limpios y revisables (implementación única: `packages/map-format/src/chunk.ts`;
-ejemplos en `packages/map-format/testdata/golden/`).
+ejemplos en `packages/map-format/testdata/golden/`). En el ejemplo, `...` reemplaza las
+filas 3–31 (un chunk real siempre tiene las 32).
 
 ```json
 {
   "format": 1,
   "chunk": { "cx": 100, "cy": 200, "z": 7 },
-  "palette": ["grass", "sand", "water_shallow", "oak_tree", "border_grass_sand_n"],
+  "palette": ["grass", "sand", "water_shallow", "border_grass_sand_n", "oak_tree"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2],
-    "... 32 filas en total, índices a palette, -1 = vacío ..."
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2],
+    ...
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2]
   ],
   "items": [
-    { "x": 4, "y": 9, "stack": [3] },
-    { "x": 16, "y": 0, "stack": [4] }
+    { "x": 16, "y": 0, "stack": [3] },
+    { "x": 4, "y": 9, "stack": [4] }
   ]
 }
 ```
@@ -76,44 +79,65 @@ el editor y el MCP): claves en orden fijo, mapas y listas de escalares en estilo
 (`{ x: 1, y: 2, z: 7 }`), una línea en blanco entre entradas de primer nivel.
 **Los comentarios no se conservan**: usa el campo `notes`.
 
+`island.yaml`:
 ```yaml
-# island.yaml
-id: puerto                  # = nombre del directorio
-name: island.puerto.name    # clave i18n (i18n/*/world.yaml)
-rect: { x: 3072, y: 6272, w: 512, h: 512 }   # igual que en world.yaml
-floors: [6, 7, 8]           # ascendente; solo estos pisos pueden tener chunks
+id: puerto
+name: island.puerto.name
+rect: { x: 3072, y: 6272, w: 512, h: 512 }
+floors: [6, 7, 8]
 temple: { x: 3230, y: 6400, z: 7 }
-level_hint: [1, 15]         # igual que en world.yaml
+level_hint: [1, 15]
+```
+- `id` = nombre del directorio; `name` es una clave i18n (`i18n/*/world.yaml`).
+- `rect` y `level_hint` iguales a los de `world.yaml`. `rect` alineado a chunks: `x`, `y`,
+  `w` y `h` múltiplos de 32 (así un chunk pertenece a una sola isla).
+- `floors` en orden ascendente; solo esos pisos pueden tener chunks.
 
-# npcs.yaml (un NPC de data/npcs/ se coloca una sola vez en todo el mundo)
+`npcs.yaml` (cada NPC de `data/npcs/` se coloca una sola vez en todo el mundo):
+```yaml
 - npc: harbor_master
   pos: { x: 3230, y: 6420, z: 7 }
+```
 
-# texts.yaml
+`texts.yaml` (`kind`: `sign` | `book`; `text` es una clave i18n):
+```yaml
 - id: puerto_temple_sign
-  kind: sign                # sign | book
+  kind: sign
   pos: { x: 3230, y: 6402, z: 7 }
-  text: text.puerto.temple_sign   # clave i18n
+  text: text.puerto.temple_sign
+```
 
-# spawns.yaml
+`spawns.yaml`:
+```yaml
 - id: puerto_wolves_north
   center: { x: 3215, y: 6410, z: 7 }
   radius: 5
   monsters:
     - { monster: wolf, count: 3 }
   respawn_seconds: 60
+```
 
-# zones.yaml
+`zones.yaml` (`type`: `protection` | `no_logout` | `pvp` | `no_pvp` | `community_plot`):
+```yaml
 - id: puerto_town
-  type: protection          # protection | no_logout | pvp | no_pvp | community_plot
+  type: protection
   floors: [6, 7, 8]
-  rects: [{ x: 3200, y: 6380, w: 60, h: 45 }]
+  rects:
+    - { x: 3200, y: 6380, w: 60, h: 45 }
+```
 
-# portals.yaml
+`portals.yaml` (`kind`: `stairs` | `ladder` | `hole` | `rope_spot` | `teleport` | `boat`;
+una escalera necesita su pareja de vuelta, ver "Validación"):
+```yaml
 - id: mine_entrance
+  kind: stairs
   from: { x: 3290, y: 6402, z: 7 }
-  to:   { x: 3290, y: 6402, z: 8 }
-  kind: stairs              # stairs | ladder | hole | rope_spot | teleport | boat
+  to: { x: 3291, y: 6402, z: 8 }
+
+- id: mine_exit
+  kind: stairs
+  from: { x: 3290, y: 6402, z: 8 }
+  to: { x: 3289, y: 6402, z: 7 }
 ```
 
 ## world.yaml
@@ -125,7 +149,9 @@ islands:
     level_hint: [1, 15]
 boat_routes:
   - from_npc: puerto_captain
-    to: { island: bosque, pos: { x: 4120, y: 6050, z: 7 } }
+    to:
+      island: bosque
+      pos: { x: 4120, y: 6050, z: 7 }
     price: 80
     requires: { level: 10 }
 ```
@@ -141,14 +167,17 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Archivos en formato canónico (si no: `mapcli fmt`) y conformes a su esquema.
 - Todo item, monstruo y NPC referenciado existe en `data/`; claves i18n existen en
   todos los idiomas.
-- Cada tile con items tiene suelo; templo, spawns y NPCs están sobre tiles caminables
-  (suelo `walkable` y ningún item de la pila con `blocks_movement`).
+- Cada tile con items tiene suelo; templo, spawns y NPCs están sobre tiles caminables:
+  suelo `walkable` y ningún item de la pila que bloquee el paso. Bloquea el paso un item
+  con `blocks_movement: true`, y **todo item `kind: wall` salvo que declare
+  `blocks_movement: false`** (regla del contrato: `mapcompile` la aplica igual).
 - Portales salen de un tile caminable de la isla y llegan a uno caminable de cualquier
   isla. `stairs`/`ladder` cambian de piso y tienen pareja: otro portal
   `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del
   origen. `hole` baja, `rope_spot` sube.
 - Zonas de protección cubren el templo. (Depósitos: cuando exista el item, hito 1.)
-- Islas no se superponen ni salen del mundo; chunks o tiles fuera del rectángulo de
+- Rectángulos de isla alineados a chunks (múltiplos de 32). Islas no se superponen ni
+  salen del mundo; chunks o tiles fuera del rectángulo de
   su isla, o en un piso no listado = error.
 - Conectividad: desde el templo se puede llegar caminando a todo spawn y NPC de la
   isla (BFS en 8 direcciones por tiles caminables y portales). Zonas sin ningún tile

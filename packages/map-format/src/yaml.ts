@@ -152,8 +152,20 @@ export function parseYamlText(
     }
     return undefined;
   }
+  let data: unknown;
+  try {
+    // toJS() throws on alias bombs ("Excessive alias count") and similar; report, never throw.
+    data = doc.toJS({ maxAliasCount: 100 }) as unknown;
+  } catch (err) {
+    new Reporter(diags).error(
+      file,
+      [],
+      `invalid YAML: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
   return {
-    data: doc.toJS() as unknown,
+    data,
     lineOf(path) {
       for (let n = path.length; n >= 0; n--) {
         const node: unknown = n === 0 ? doc.contents : doc.getIn(path.slice(0, n), true);

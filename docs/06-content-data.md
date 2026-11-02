@@ -88,6 +88,11 @@ items:
   requires: { level: 5 }
   value: 120              # precio base que usan los NPCs como referencia
 ```
+- **Paso bloqueado** (regla del contrato, la aplican el validador de mapas y
+  `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
+  `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
+  atravesable (arco, cortina) declara `blocks_movement: false`. El suelo decide con
+  `ground.walkable`.
 
 ## Monstruo
 ```yaml
