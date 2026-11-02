@@ -59,7 +59,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [x] **T1.6 Monstruos y combate cuerpo a cuerpo.** Spawns, IA por estados, objetivo,
   ataque cada 2 s, daño/armadura/defensa, muerte de monstruo, cadáver con loot, XP.
   Cliente: barras de vida, efectos, texto flotante, lista de batalla. [T1.4, T1.5]
-- [ ] **T1.7 Skills por uso y niveles.** Progreso de skills de armas, escudo y puños,
+- [x] **T1.7 Skills por uso y niveles.** Progreso de skills de armas, escudo y puños,
   experiencia y niveles, stats por vocación, regeneración. Panel de skills. Escenarios sim. [T1.6]
 - [ ] **T1.8 Items, inventario y contenedores.** Slots de equipo, mochila, mover items
   (suelo↔inventario↔contenedor), capacidad, usar items, mirar. UI de inventario. [T1.6]

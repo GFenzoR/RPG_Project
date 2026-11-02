@@ -72,6 +72,23 @@ func TestPlayTokensAndCharacterState(t *testing.T) {
 	if !pc.HasPos || pc.X != 1056 || pc.Y != 1057 || pc.Z != 7 || pc.Level != 2 || pc.Experience != 30 || pc.Health != 100 || pc.Mana != 5 {
 		t.Fatalf("after save %+v", pc)
 	}
+	if len(pc.Skills) != 0 {
+		t.Fatalf("skills before any skill save: %+v", pc.Skills)
+	}
+
+	// Skills are upserted with the state: inserted the first time, updated after.
+	state.Skills = []store.Skill{{ID: "fist", Level: 11, Tries: 7}, {ID: "shield", Level: 10, Tries: 3}}
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	state.Skills = []store.Skill{{ID: "fist", Level: 12, Tries: 0}, {ID: "shield", Level: 10, Tries: 9}}
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	pc, _ = st.PlayCharacter(ctx, acc, c.ID, now)
+	if len(pc.Skills) != 2 || pc.Skills[0] != (store.Skill{ID: "fist", Level: 12}) || pc.Skills[1] != (store.Skill{ID: "shield", Level: 10, Tries: 9}) {
+		t.Fatalf("skills after save: %+v", pc.Skills)
+	}
 	state.ID = 999999
 	if err := st.SaveCharacterState(ctx, state); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("save of a missing character: %v", err)

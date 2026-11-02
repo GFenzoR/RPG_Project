@@ -60,6 +60,7 @@ func (w *World) combatSystem(ctx *game.TickContext) {
 // ---- intents ---------------------------------------------------------------------
 
 func (w *World) setTarget(p *Player, id uint32) {
+	p.answeredAt = 0 // a new fight (or none): the anti-AFK clock restarts
 	if id == 0 {
 		p.target = nil
 		return
@@ -110,9 +111,10 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 		return
 	}
 	p.nextAttack = ctx.Tick + w.attackFor
-	c := w.cfg.Balance.Combat
-	// Fists until weapons (T1.8) and skill progress (T1.7) exist.
-	maxHit := combat.MaxHit(c, w.fistSkill, c.FistAttack, p.level, w.mode(p).Attack)
+	// Every swing trains the weapon's skill, hit or miss (fists without a weapon).
+	skill, attack := w.meleeSkill(p)
+	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.skillLevel(p, skill), 1), attack, p.level, w.mode(p).Attack)
+	w.train(p, skill, w.afk(ctx, p))
 	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target))
 }
 
@@ -175,8 +177,16 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue
 		}
-		dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, a.Min, a.Max, a.Element == "physical",
-			combat.PlayerTarget{ModeDefense: w.mode(t).Defense}) // no armor or shield until T1.8
+		if t.target == m {
+			t.answeredAt = ctx.Tick // the player's target fights back: not AFK training
+		}
+		physical := a.Element == "physical"
+		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense} // no armor until T1.8
+		if physical && t.shield != nil && t.shield.Shield != nil {
+			pt.ShieldDefense = t.shield.Shield.Defense
+			w.trainShield(ctx, t)
+		}
+		dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, a.Min, a.Max, physical, pt)
 		w.damagePlayer(ctx, t, dmg)
 		if m.target != t { // t was defeated and left
 			return
@@ -266,17 +276,6 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	if m.slot != nil {
 		w.scheduleRespawn(ctx, m.slot, game.Tick(m.slot.spawn.RespawnSeconds)*game.Tick(1000/game.TickDuration.Milliseconds()))
 	}
-}
-
-// gainExperience adds xp to p. Levels and their stats arrive with T1.7.
-func (w *World) gainExperience(p *Player, xp int64) {
-	p.experience += xp
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
-	w.eachObserver(nil, p.pos, func(o *Player) {
-		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
-			Pos: posMsg(p.pos), Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_EXPERIENCE, Amount: uint64(xp),
-		}}})
-	})
 }
 
 func (w *World) addCorpse(ctx *game.TickContext, pos world.Pos, c *Corpse) {

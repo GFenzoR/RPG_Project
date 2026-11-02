@@ -25,9 +25,13 @@ type Querier interface {
 	GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error)
 	// Loads what the game server needs to put a character in the world.
 	GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error)
+	// Skills without a row are at their base level (data/balance.yaml).
+	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
+	// Upserts every skill of a snapshot in one statement (parallel arrays).
+	SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error
 	// Written by the persistence goroutine from an immutable snapshot of the game loop.
 	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error

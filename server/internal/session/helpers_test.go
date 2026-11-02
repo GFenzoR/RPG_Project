@@ -45,7 +45,10 @@ func testBalance() content.Balance {
 	var b content.Balance
 	b.Movement = content.Movement{BaseStepMs: 1000, DiagonalCost: 1.5, MaxPathTiles: 100}
 	b.Experience.Curve.A, b.Experience.Curve.B, b.Experience.Curve.C = 12, -24, 12
-	b.Skills.Base = map[string]content.SkillBase{"sword": {StartLevel: 10}, "fist": {StartLevel: 10}}
+	b.Skills.Base = map[string]content.SkillBase{"sword": {StartLevel: 10, BaseTries: 45}, "fist": {StartLevel: 10, BaseTries: 45},
+		"shield": {StartLevel: 10, BaseTries: 85}}
+	b.Skills.ShieldMaxTriesPerRound = 2
+	b.Skills.AFK.AfterMs, b.Skills.AFK.Factor = 600000, 0.25
 	b.Combat = content.Combat{AttackIntervalMs: 2000, FistAttack: 7, SkillAttackDivisor: 10, LevelDivisor: 4,
 		ShieldBlockDivisor: 4, MonsterCorpseMs: 60000, Modes: map[string]content.CombatMode{
 			"offensive": {Attack: 1.25, Defense: 0.55}, "balanced": {Attack: 1, Defense: 1}, "defensive": {Attack: 0.65, Defense: 1.5}}}
@@ -54,8 +57,10 @@ func testBalance() content.Balance {
 
 var testVocations = content.Vocations{
 	"guardian": {ID: "guardian",
-		Start:    content.VocationStats{Health: 145, Mana: 20, Capacity: 420000, Speed: 200},
-		PerLevel: content.VocationStats{Health: 14, Mana: 4, Capacity: 23000, Speed: 2}},
+		Start:        content.VocationStats{Health: 145, Mana: 20, Capacity: 420000, Speed: 200},
+		PerLevel:     content.VocationStats{Health: 14, Mana: 4, Capacity: 23000, Speed: 2},
+		Regen:        content.Regen{Health: 3, Mana: 1, IntervalMs: 7000},
+		SkillFactors: map[string]float64{"fist": 1.13, "sword": 1.11, "shield": 1.11}},
 }
 
 type harness struct {

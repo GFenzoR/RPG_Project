@@ -311,8 +311,11 @@ function GameScreen(props: {
     battle: [],
     target: undefined,
     stats: undefined,
+    skills: [],
+    levelUp: undefined,
     log: [],
   });
+  const [levelNotice, setLevelNotice] = useState<number | undefined>(undefined);
   const [stance, setStance] = useState(FightStance.BALANCED);
   const [chase, setChase] = useState(false);
 
@@ -333,6 +336,15 @@ function GameScreen(props: {
     // One Game per session token.
   }, [props.sessionToken]);
 
+  // The level-up notice stays on screen for a few seconds.
+  const levelUpAt = ui.levelUp?.at;
+  useEffect(() => {
+    if (!ui.levelUp) return undefined;
+    setLevelNotice(ui.levelUp.level);
+    const timer = setTimeout(() => setLevelNotice(undefined), LEVEL_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [levelUpAt]);
+
   return (
     <div class="game" data-testid="game">
       <header class="hud">
@@ -340,6 +352,16 @@ function GameScreen(props: {
         {ui.stats && (
           <span class="stat" data-testid="health">
             {t("client.game.health", { health: ui.stats.health, max: ui.stats.maxHealth })}
+          </span>
+        )}
+        {ui.stats && (
+          <span class="stat" data-testid="mana">
+            {t("client.game.mana", { mana: ui.stats.mana, max: ui.stats.maxMana })}
+          </span>
+        )}
+        {ui.stats && (
+          <span class="stat" data-testid="level">
+            {t("client.game.level", { level: ui.stats.level, percent: ui.stats.levelPercent })}
           </span>
         )}
         {ui.stats && (
@@ -355,6 +377,12 @@ function GameScreen(props: {
       <div class="game-body">
         <div class="viewport" ref={host}>
           {!entered && <p class="connecting">{t("client.game.connecting")}</p>}
+          {levelNotice !== undefined && (
+            <div class="level-up" role="status" data-testid="level-up">
+              <strong>{t("client.level_up.title")}</strong>
+              <span>{t("client.characters.level", { level: levelNotice })}</span>
+            </div>
+          )}
         </div>
         <aside class="side">
           <section class="battle" data-testid="battle-list" aria-label={t("client.battle.title")}>
@@ -412,6 +440,7 @@ function GameScreen(props: {
               {t("client.fight.chase")}
             </label>
           </section>
+          <SkillsPanel t={t} skills={ui.skills} />
           <ul class="log" data-testid="game-log" aria-live="polite">
             {ui.log.map((m, i) => (
               <li key={`${m.at}-${i}`}>{formatMessage(m, props.content, t)}</li>
@@ -420,5 +449,59 @@ function GameScreen(props: {
         </aside>
       </div>
     </div>
+  );
+}
+
+/** How long the level-up notice stays on screen, ms. */
+const LEVEL_NOTICE_MS = 4000;
+
+/** Display order of the skills panel: combat first, then crafts; unknown ids go last. */
+const SKILL_ORDER = [
+  "fist",
+  "club",
+  "sword",
+  "axe",
+  "distance",
+  "shield",
+  "magic",
+  "fishing",
+  "mining",
+  "woodcutting",
+  "smithing",
+  "cooking",
+  "alchemy",
+];
+
+const skillRank = (id: string): number => {
+  const i = SKILL_ORDER.indexOf(id);
+  return i < 0 ? SKILL_ORDER.length : i;
+};
+
+/** Skills panel: level and progress bar of every skill the server reports. */
+function SkillsPanel(props: { t: Translate; skills: GameUi["skills"] }): JSX.Element {
+  const { t } = props;
+  const skills = [...props.skills].sort((a, b) => skillRank(a.id) - skillRank(b.id));
+  return (
+    <section class="skills" data-testid="skills-panel" aria-label={t("client.skills.title")}>
+      <h2>{t("client.skills.title")}</h2>
+      <ul>
+        {skills.map((s) => (
+          <li key={s.id} data-skill={s.id}>
+            <span class="sname">{t(`skill.${s.id}.name`)}</span>
+            <span class="slevel">{s.level}</span>
+            <span
+              class="sbar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={s.percent}
+              title={t("client.skills.progress", { percent: s.percent })}
+            >
+              <span style={{ width: `${s.percent}%` }} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

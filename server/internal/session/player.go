@@ -52,6 +52,17 @@ type Player struct {
 	stance     pb.FightStance
 	chase      bool
 	nextAttack game.Tick
+
+	// Progress (T1.7): skills aligned with World.skillIDs, the equipment that trains
+	// them (set by T1.8), the last tick the target fought back (anti-AFK, 0 = not
+	// fighting yet), the shield tries of the current attack round, and regeneration.
+	skills      []skillSlot
+	weapon      *content.Item
+	shield      *content.Item
+	answeredAt  game.Tick
+	shieldRound game.Tick
+	shieldTries int
+	regen       game.EventID
 }
 
 // Health returns the player's current and maximum health.
@@ -122,7 +133,7 @@ func (p *Player) stopWalk() {
 	p.hasDest = false
 }
 
-func (p *Player) snapshot(final bool) Snapshot {
+func (w *World) snapshot(p *Player, final bool) Snapshot {
 	p.saveSeq++
 	return Snapshot{
 		CharacterID: p.charID,
@@ -132,6 +143,7 @@ func (p *Player) snapshot(final bool) Snapshot {
 		Health:      p.health,
 		Mana:        p.mana,
 		Pos:         p.pos,
+		Skills:      p.skillStates(w.skillIDs),
 		Final:       final,
 	}
 }
@@ -201,7 +213,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	var seq uint64
 	if old := w.byChar[c.ID]; old != nil {
 		// Logged in again while online: continue from the in-memory state.
-		c = old.state(c)
+		c = w.state(old, c)
 		w.remove(ctx, old, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_IN_ELSEWHERE, false)
 		seq = old.saveSeq       // after remove's final snapshot: later seqs must be greater
 		delete(w.unsaved, c.ID) // the new player carries the state; it saves it later
@@ -209,6 +221,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		// Left recently and the database may not have the final save yet.
 		c.Level, c.Experience, c.Health, c.Mana = s.Level, s.Experience, s.Health, s.Mana
 		c.Pos, c.HasPos = s.Pos, true
+		c.Skills = s.Skills
 		seq = s.Seq
 	}
 
@@ -237,6 +250,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	}
 	p.mana = min(max(c.Mana, 0), p.maxMana)
 	p.pos = w.placement(c)
+	w.loadSkills(p, c.Skills)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
 	w.byClient[client] = p
@@ -251,17 +265,19 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sendFullView(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Inventory{Inventory: &pb.Inventory{}}})
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList()}}})
+	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.appearToObservers(p)
 
 	// Staggered autosave: first at a random point of the first interval.
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
 	w.scheduleAutosave(ctx, p, first)
+	w.scheduleRegen(ctx, p)
 }
 
 // state returns c with the in-memory state of the online player p.
-func (p *Player) state(c Character) Character {
+func (w *World) state(p *Player, c Character) Character {
 	c.Level, c.Experience, c.Health, c.Mana = p.level, p.experience, p.health, p.mana
+	c.Skills = p.skillStates(w.skillIDs)
 	c.Pos, c.HasPos = p.pos, true
 	return c
 }
@@ -271,7 +287,7 @@ func (w *World) scheduleAutosave(ctx *game.TickContext, p *Player, delay game.Ti
 		if w.byChar[p.charID] != p {
 			return
 		}
-		w.save(p.snapshot(false))
+		w.save(w.snapshot(p, false))
 		w.scheduleAutosave(ctx, p, w.cfg.AutosaveEvery)
 	})
 }
@@ -291,13 +307,14 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	i := sort.Search(len(w.players), func(i int) bool { return w.players[i].id >= p.id })
 	w.players = append(w.players[:i], w.players[i+1:]...)
 	ctx.Sched.Cancel(p.autosave)
+	ctx.Sched.Cancel(p.regen)
 	for _, m := range w.monsters {
 		if m.target == p {
 			m.target = nil // do not keep the gone player alive from a sleeping monster
 		}
 	}
 
-	s := p.snapshot(true)
+	s := w.snapshot(p, true)
 	w.unsaved[p.charID] = s
 	w.save(s)
 	if slow {
@@ -330,7 +347,7 @@ func (w *World) SaveAll() []Snapshot {
 	pending := append([]Snapshot(nil), w.retry...)
 	w.retry = w.retry[:0]
 	for _, p := range w.players {
-		s := p.snapshot(true)
+		s := w.snapshot(p, true)
 		if len(pending) > 0 || !w.cfg.Save(s) {
 			pending = append(pending, s)
 		}
@@ -421,15 +438,6 @@ func (w *World) stats(p *Player) *pb.PlayerStats {
 		MaxCapacity:  uint32(max(p.capacity, 0)),
 		Speed:        uint32(p.speed),
 	}
-}
-
-// skillList returns fresh copies of the base skills (T1.7 brings real progress).
-func (w *World) skillList() []*pb.SkillProgress {
-	out := make([]*pb.SkillProgress, len(w.skills))
-	for i, s := range w.skills {
-		out[i] = &pb.SkillProgress{SkillId: s.SkillId, Level: s.Level}
-	}
-	return out
 }
 
 func (w *World) creatureMsg(p *Player) *pb.Creature {

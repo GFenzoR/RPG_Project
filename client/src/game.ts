@@ -12,13 +12,21 @@ import type { GameCanvas } from "./render/game-canvas.ts";
 import { findPath } from "./state/path.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
-import type { CreatureState, LogMessage, PlayerStatsState } from "./state/world.ts";
+import type {
+  CreatureState,
+  LevelUpState,
+  LogMessage,
+  PlayerStatsState,
+  SkillState,
+} from "./state/world.ts";
 
 /** What the DOM UI shows next to the canvas, refreshed after every server batch. */
 export interface GameUi {
   battle: CreatureState[];
   target: number | undefined;
   stats: PlayerStatsState | undefined;
+  skills: SkillState[];
+  levelUp: LevelUpState | undefined;
   log: LogMessage[];
 }
 
@@ -34,6 +42,7 @@ export interface ClientTestHooks {
   battle(): { id: number; contentId: string; health: number }[];
   target(): number | undefined;
   stats(): PlayerStatsState | undefined;
+  skills(): SkillState[];
   /** Floating texts that appeared less than `ms` ago. */
   floatingTexts(ms: number): number;
 }
@@ -108,7 +117,14 @@ export class Game {
 
   private publish(): void {
     const w = this.world;
-    this.opts.update({ battle: w.battleList(), target: w.target, stats: w.stats, log: [...w.log] });
+    this.opts.update({
+      battle: w.battleList(),
+      target: w.target,
+      stats: w.stats,
+      skills: w.skills,
+      levelUp: w.levelUp,
+      log: [...w.log],
+    });
   }
 
   destroy(): void {
@@ -155,6 +171,7 @@ export class Game {
         world.battleList().map((c) => ({ id: c.id, contentId: c.contentId, health: c.health })),
       target: () => world.target,
       stats: () => world.stats,
+      skills: () => world.skills,
       floatingTexts: (ms) => {
         const now = performance.now();
         return world.floatingTexts.filter((f) => now - f.start < ms).length;

@@ -56,6 +56,12 @@ client/
 - Los mensajes (`state/messages.ts`) se traducen con su clave y parámetros; los `item`
   repetidos forman `{items}`.
 
+## Notas de T1.7
+- `WorldState` guarda `skills` (de `PlayerSkills`), maná y % de nivel de `PlayerStats` y el
+  último `progress.level_up` (`levelUp`); la UI muestra el panel de skills (orden fijo en
+  `SKILL_ORDER`, nombres `skill.<id>.name`) y un aviso de subida de nivel unos segundos.
+- Un parámetro `content_id` llamado `skill` se traduce como `skill.<id>.name`.
+
 ## Verificación visual (obligatoria si tocas render o UI)
 `make e2e` levanta servidor + cliente, crea un personaje de prueba, camina y guarda
 screenshots en `client/e2e/screenshots/`. Ábrelos con Read y revísalos antes de cerrar.

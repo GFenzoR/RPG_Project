@@ -14,10 +14,8 @@ import (
 type Balance struct {
 	Movement   Movement   `yaml:"movement"`
 	Experience Experience `yaml:"experience"`
-	Skills     struct {
-		Base map[string]SkillBase `yaml:"base"`
-	} `yaml:"skills"`
-	Combat Combat `yaml:"combat"`
+	Skills     Skills     `yaml:"skills"`
+	Combat     Combat     `yaml:"combat"`
 }
 
 // Combat holds the melee constants (docs/02-game-design.md, "Combate").
@@ -77,6 +75,21 @@ func (e Experience) LevelPercent(level int, xp int64) int {
 	return min(max(p, 0), 99)
 }
 
+// Skills holds the use-based skill constants (docs/02-game-design.md, "Skills que
+// suben con el uso").
+type Skills struct {
+	Base map[string]SkillBase `yaml:"base"`
+	// ShieldMaxTriesPerRound caps the shield tries a player earns per attack round
+	// (combat.attack_interval_ms), however many attackers it has.
+	ShieldMaxTriesPerRound int `yaml:"shield_max_tries_per_round"`
+	AFK                    struct {
+		// AfterMs: training against a target that has not fought back for this long...
+		AfterMs int `yaml:"after_ms"`
+		// Factor: ...earns tries at this rate (0-1).
+		Factor float64 `yaml:"factor"`
+	} `yaml:"afk"`
+}
+
 // SkillBase is the starting level of a skill or craft.
 type SkillBase struct {
 	StartLevel int `yaml:"start_level"`
@@ -126,7 +139,22 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if err := b.Combat.check(); err != nil {
 		return Balance{}, err
 	}
+	if err := b.Skills.check(); err != nil {
+		return Balance{}, err
+	}
 	return b, nil
+}
+
+func (s Skills) check() error {
+	for id, b := range s.Base {
+		if b.StartLevel < 0 || b.BaseTries < 0 {
+			return fmt.Errorf("skills.base.%s: start_level and base_tries must be >= 0", id)
+		}
+	}
+	if s.ShieldMaxTriesPerRound < 0 || s.AFK.AfterMs < 0 || s.AFK.Factor < 0 || s.AFK.Factor > 1 {
+		return errors.New("skills: shield_max_tries_per_round and afk.after_ms must be >= 0, afk.factor in 0..1")
+	}
+	return nil
 }
 
 func (c Combat) check() error {

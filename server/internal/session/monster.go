@@ -152,7 +152,6 @@ func (w *World) initCombat() error {
 	}
 	w.attackFor = ticksFor(c.AttackIntervalMs)
 	w.corpseFor = ticksFor(c.MonsterCorpseMs)
-	w.fistSkill = max(w.cfg.Balance.Skills.Base["fist"].StartLevel, 1)
 	w.monByID = map[uint32]*Monster{}
 	w.msectors = map[uint64][]*Monster{}
 	w.kinds = map[string]*monsterKind{}

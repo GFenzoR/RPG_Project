@@ -19,6 +19,25 @@ type Vocation struct {
 	ID       string        `yaml:"id"`
 	Start    VocationStats `yaml:"start"`
 	PerLevel VocationStats `yaml:"per_level"`
+	Regen    Regen         `yaml:"regen"`
+	// SkillFactors is the per-level cost multiplier of each skill:
+	// tries(n) = base_tries × factor^(n − start_level). A missing skill uses factor 1.
+	SkillFactors map[string]float64 `yaml:"skill_factors"`
+}
+
+// Regen is what a vocation recovers every IntervalMs.
+type Regen struct {
+	Health     int `yaml:"health"`
+	Mana       int `yaml:"mana"`
+	IntervalMs int `yaml:"interval_ms"`
+}
+
+// SkillFactor returns the vocation's factor for skill id (1 if it has none).
+func (v Vocation) SkillFactor(id string) float64 {
+	if f, ok := v.SkillFactors[id]; ok {
+		return f
+	}
+	return 1
 }
 
 // AtLevel returns the vocation's stats at level (1 = Start).
@@ -79,6 +98,14 @@ func ParseVocations(raw []byte) (Vocations, error) {
 		}
 		if v.Start.Speed <= 0 || v.PerLevel.Speed < 0 {
 			return nil, fmt.Errorf("vocation %q: start speed must be > 0 and per_level speed >= 0", v.ID)
+		}
+		if v.Regen.Health < 0 || v.Regen.Mana < 0 || v.Regen.IntervalMs < 0 {
+			return nil, fmt.Errorf("vocation %q: regen values must be >= 0", v.ID)
+		}
+		for id, f := range v.SkillFactors {
+			if f < 1 || f > 10 {
+				return nil, fmt.Errorf("vocation %q: skill_factors.%s must be in 1..10", v.ID, id)
+			}
 		}
 		vs[v.ID] = v
 	}
