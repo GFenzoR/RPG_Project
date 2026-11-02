@@ -1,0 +1,21 @@
+# Caddy front for home hosting (docs/13-hosting-de-pruebas.md). Same routes as production
+# (caddy-routes.caddy) in plain HTTP: the tunnel (Cloudflare or Tailscale) terminates TLS.
+#
+# Client IP: only peers in the tunnel network (TUNNEL_SUBNET, where cloudflared runs) are
+# trusted, and from them the real player IP is read from CF-Connecting-IP, which
+# Cloudflare's edge always overwrites. Requests that reach the published port directly
+# (localhost, LAN, `tailscale serve`) are not trusted: their forged headers are ignored and
+# {client_ip} is the TCP peer. caddy-routes.caddy forwards {client_ip} as the only
+# X-Forwarded-For value.
+{
+	admin localhost:2019
+	auto_https off
+	servers {
+		trusted_proxies static {$TUNNEL_SUBNET}
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+:80 {
+	import caddy-routes.caddy
+}

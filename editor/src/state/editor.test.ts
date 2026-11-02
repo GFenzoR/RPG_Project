@@ -3,7 +3,7 @@ import type { Chunk, Island, World } from "@rpg/map-format/ops";
 import { describe, expect, it } from "vitest";
 import { screenToTile } from "@rpg/renderer/camera";
 import type { FileChange, PaletteItem, SaveResult, ValidateResult } from "../io/wire.ts";
-import { ConflictError, EditorController } from "./editor.ts";
+import { ConflictError, EditorController, PartialSaveError } from "./editor.ts";
 import type { Backend } from "./editor.ts";
 
 const T = 32;
@@ -129,6 +129,35 @@ describe("EditorController", () => {
     );
     expect(e.state.dirty).toBe(true);
     expect(e.changes()).toHaveLength(1);
+  });
+
+  it("after a half-way save, the next save only retries what did not reach the disk", async () => {
+    const backend = new FakeBackend();
+    const e = editor({ backend });
+    e.strokeStart(1, 1, false); // island a, existing chunk
+    e.strokeEnd();
+    e.strokeStart(70, 1, false); // island b, new chunk
+    e.strokeEnd();
+    const A = "world/islands/a/chunks/z07/c0000_0000.json";
+    const B = "world/islands/b/chunks/z07/c0002_0000.json";
+    backend.save = async () => {
+      throw new PartialSaveError("save stopped half-way: EIO", {
+        written: [A],
+        removed: [],
+        base: { [A]: "b".repeat(64), [B]: null },
+      });
+    };
+    await e.save();
+    expect(e.state.status).toMatch(/^editor.save_failed/);
+    expect(e.state.dirty).toBe(true);
+    // A moved to its new base and is no longer pending; B keeps its old base (none).
+    expect(e.changes()).toEqual([{ file: B, base: null }]);
+    e.strokeStart(2, 2, false); // editing A again saves against the base written above
+    e.strokeEnd();
+    expect(e.changes()).toEqual([
+      { file: A, base: "b".repeat(64) },
+      { file: B, base: null },
+    ]);
   });
 
   it("shows an undo that cannot be applied in the status bar instead of throwing", () => {

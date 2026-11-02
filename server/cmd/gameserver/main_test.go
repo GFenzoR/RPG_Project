@@ -2,14 +2,20 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
+	"github.com/GFenzoR/RPG_Project/server/internal/world/compile"
 )
 
 // TestShutdownCancelsStuckRequests: a request that ignores graceful shutdown has its
@@ -78,5 +84,63 @@ func TestHTTPServerErrorsGoToSlog(t *testing.T) {
 	case <-base.Done():
 	default:
 		t.Fatal("cancel must end the context every request derives from")
+	}
+}
+
+func TestDefaultWorldPath(t *testing.T) {
+	t.Setenv("RPG_WORLD", "/srv/rpg/world.bin")
+	if got := defaultWorldPath(); got != "/srv/rpg/world.bin" {
+		t.Errorf("with RPG_WORLD: %q", got)
+	}
+	t.Setenv("RPG_WORLD", "")
+	if got := defaultWorldPath(); got != filepath.Join("..", "build", "world.bin") {
+		t.Errorf("without RPG_WORLD: %q", got)
+	}
+}
+
+// A missing world.bin names the absolute path that was tried, so running from the wrong
+// directory is obvious.
+func TestLoadWorldReportsAbsolutePath(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	_, err := loadWorld(logger, filepath.Join("no", "such", "world.bin"))
+	want, _ := filepath.Abs(filepath.Join("no", "such", "world.bin"))
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v, want it to mention %s", err, want)
+	}
+}
+
+func TestLoadWorld(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if m, err := loadWorld(logger, ""); m != nil || err != nil {
+		t.Fatalf("empty path: %v, %v", m, err)
+	}
+	m, err := compile.Compile(filepath.Join("..", "..", "internal", "world", "compile", "testdata", "miniworld"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "world.bin")
+	var buf bytes.Buffer
+	if err := world.Encode(&buf, m); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadWorld(logger, path)
+	if err != nil || got.Island("mini") == nil {
+		t.Fatalf("loadWorld = %v, %v", got, err)
+	}
+}
+
+func TestAuthRateLimit(t *testing.T) {
+	if got := authRateLimit(0); got != (httpapi.RateLimit{}) {
+		t.Errorf("authRateLimit(0) = %+v, want the zero value (httpapi default)", got)
+	}
+	if got := authRateLimit(-3); got != (httpapi.RateLimit{}) {
+		t.Errorf("authRateLimit(-3) = %+v, want the zero value", got)
+	}
+	want := httpapi.RateLimit{Burst: 1000, Every: httpapi.DefaultAuthRateLimit.Every}
+	if got := authRateLimit(1000); got != want {
+		t.Errorf("authRateLimit(1000) = %+v, want %+v", got, want)
 	}
 }

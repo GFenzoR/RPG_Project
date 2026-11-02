@@ -34,10 +34,50 @@ skills:
 
 combat:
   attack_interval_ms: 2000
+  # Melee (docs/02-game-design.md, "Combate"):
+  #   max_hit = skill * attack / skill_attack_divisor + level / level_divisor, × mode attack
+  #   hit = random(0, max_hit) × (1 - physical resistance)
+  #   target armor removes random(armor/2, armor); a monster's defense random(0, defense/2);
+  #   a player's shield random(0, shield_defense × mode defense / shield_block_divisor).
+  fist_attack: 7              # attack value of bare hands (no weapon equipped)
+  skill_attack_divisor: 10
+  level_divisor: 4
+  shield_block_divisor: 4
+  monster_corpse_ms: 60000    # how long a monster's remains (and its loot) stay
+  # Wands (T1.9): a distance attack of the weapon's element and range that hits
+  # random(attack × wand_min_factor, attack) × (1 − resistance %). Armor does not stop it.
+  wand_min_factor: 0.5
   modes:
     offensive: { attack: 1.25, defense: 0.55 }
     balanced: { attack: 1.0, defense: 1.0 }
     defensive: { attack: 0.65, defense: 1.5 }
+
+inventory:
+  start_container: backpack   # equipped in the backpack slot of a character that never played
+  max_open_containers: 16     # container windows a player can have open at once
+  use_cooldown_ms: 1000       # between two uses of a consumable
+  reach: 1                    # tiles (Chebyshev, same floor) to take, drop, open or use on the ground
+
+gathering:                  # fishing and mining (T1.12); spot numbers live in data/items
+  use_interval_ms: 1500     # rate limit: one gathering attempt per player at most this often
+  afk:
+    after_ms: 900000        # gathering 15 min without leaving the tile...
+    factor: 0.25            # ...earns skill tries at this rate (like skills.afk)
+
+chat:                       # T1.13 (docs/02-game-design.md, "Chat")
+  max_length: 255           # characters per message (the protocol maximum)
+  # Who hears each local mode: players within this many tiles (x and y), same floor.
+  ranges:
+    whisper: { x: 1, y: 1 }
+    say: { x: 7, y: 5 }     # the visible screen
+    yell: { x: 18, y: 14 }
+  # Anti-flood, all channels together: a bucket of `burst` messages that refills one
+  # every `refill_ms`; sending with it empty mutes the player for `mute_ms`.
+  flood:
+    burst: 5
+    refill_ms: 2000
+    mute_ms: 10000
+  global_interval_ms: 10000 # between two global-channel messages of the same player
 
 death:
   xp_loss_pct: 10

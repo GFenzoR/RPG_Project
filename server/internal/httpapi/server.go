@@ -57,6 +57,7 @@ type Accounts interface {
 	Logout(ctx context.Context, token string) error
 	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
 	CreateCharacter(ctx context.Context, accountID int64, name, vocation string) (store.Character, error)
+	IssuePlayToken(ctx context.Context, accountID, characterID int64) (auth.Token, error)
 }
 
 var _ Accounts = (*auth.Service)(nil)
@@ -124,6 +125,7 @@ func (a *api) routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/auth/logout", a.logout)
 	mux.HandleFunc("GET /api/characters", a.authed(a.listCharacters))
 	mux.HandleFunc("POST /api/characters", a.authed(a.createCharacter))
+	mux.HandleFunc("POST /api/play", a.authed(a.play))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
@@ -266,6 +268,29 @@ func (a *api) createCharacter(w http.ResponseWriter, r *http.Request, accountID 
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]characterJSON{"character": toJSON(c)})
+}
+
+type playRequest struct {
+	CharacterID int64 `json:"character_id"`
+}
+
+type playResponse struct {
+	SessionToken string    `json:"session_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+// play issues the single-use play token (60 s) the client sends in the WebSocket Hello.
+func (a *api) play(w http.ResponseWriter, r *http.Request, accountID int64) {
+	var in playRequest
+	if !a.decode(w, r, &in) {
+		return
+	}
+	tok, err := a.cfg.Auth.IssuePlayToken(r.Context(), accountID, in.CharacterID)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, playResponse{SessionToken: tok.Token, ExpiresAt: tok.ExpiresAt.UTC()})
 }
 
 func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
@@ -453,6 +478,7 @@ var errorStatus = []struct {
 	{auth.ErrNameTaken, http.StatusConflict, "name_taken"},
 	{auth.ErrInvalidVocation, http.StatusBadRequest, "invalid_vocation"},
 	{auth.ErrCharacterLimit, http.StatusConflict, "character_limit"},
+	{auth.ErrUnknownCharacter, http.StatusNotFound, "character_not_found"},
 	{auth.ErrBusy, http.StatusServiceUnavailable, "busy"},
 }
 

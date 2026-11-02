@@ -36,10 +36,6 @@
       "group": { "enum": ["attack", "healing", "support"] },
       "cooldown_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
       "group_cooldown_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
-      "rune": {
-        "description": "Rune item this spell creates.",
-        "$ref": "common.schema.json#/$defs/itemRef"
-      },
       "effect": {
         "type": "object",
         "minProperties": 1,
@@ -57,6 +53,13 @@
               "range": { "$ref": "common.schema.json#/$defs/positiveInt" }
             },
             "unevaluatedProperties": false
+          },
+          "conjure": {
+            "description": "Creates one item (a rune, with its charges) in the caster's backpack.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item"],
+            "properties": { "item": { "$ref": "common.schema.json#/$defs/itemRef" } }
           },
           "haste": {
             "type": "object",

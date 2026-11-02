@@ -7,7 +7,27 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const characterBelongsToAccount = `-- name: CharacterBelongsToAccount :one
+SELECT EXISTS (
+    SELECT 1 FROM characters WHERE id = $1 AND account_id = $2
+)
+`
+
+type CharacterBelongsToAccountParams struct {
+	ID        int64
+	AccountID int64
+}
+
+func (q *Queries) CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error) {
+	row := q.db.QueryRow(ctx, characterBelongsToAccount, arg.ID, arg.AccountID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
 
 const countCharactersByAccount = `-- name: CountCharactersByAccount :one
 SELECT count(*) FROM characters WHERE account_id = $1
@@ -59,6 +79,210 @@ func (q *Queries) CreateCharacter(ctx context.Context, arg CreateCharacterParams
 	return i, err
 }
 
+const deleteCharacterInventory = `-- name: DeleteCharacterInventory :exec
+DELETE FROM inventory_items WHERE character_id = $1
+`
+
+// A snapshot replaces the whole inventory in the same transaction as the character row.
+func (q *Queries) DeleteCharacterInventory(ctx context.Context, characterID int64) error {
+	_, err := q.db.Exec(ctx, deleteCharacterInventory, characterID)
+	return err
+}
+
+const deleteCharacterQuestState = `-- name: DeleteCharacterQuestState :exec
+DELETE FROM quest_state WHERE character_id = $1
+`
+
+// A snapshot replaces every storage value in the same transaction as the character row.
+func (q *Queries) DeleteCharacterQuestState(ctx context.Context, characterID int64) error {
+	_, err := q.db.Exec(ctx, deleteCharacterQuestState, characterID)
+	return err
+}
+
+const getCharacterForPlay = `-- name: GetCharacterForPlay :one
+SELECT id, account_id, name, vocation, level, experience, health, mana,
+       pos_x, pos_y, pos_z, town
+FROM characters
+WHERE id = $1 AND account_id = $2
+`
+
+type GetCharacterForPlayParams struct {
+	ID        int64
+	AccountID int64
+}
+
+type GetCharacterForPlayRow struct {
+	ID         int64
+	AccountID  int64
+	Name       string
+	Vocation   string
+	Level      int32
+	Experience int64
+	Health     int32
+	Mana       int32
+	PosX       pgtype.Int4
+	PosY       pgtype.Int4
+	PosZ       pgtype.Int2
+	Town       string
+}
+
+// Loads what the game server needs to put a character in the world.
+func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error) {
+	row := q.db.QueryRow(ctx, getCharacterForPlay, arg.ID, arg.AccountID)
+	var i GetCharacterForPlayRow
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Name,
+		&i.Vocation,
+		&i.Level,
+		&i.Experience,
+		&i.Health,
+		&i.Mana,
+		&i.PosX,
+		&i.PosY,
+		&i.PosZ,
+		&i.Town,
+	)
+	return i, err
+}
+
+const getCharacterInventory = `-- name: GetCharacterInventory :many
+SELECT id, container_id, slot, item_id, count
+FROM inventory_items
+WHERE character_id = $1
+ORDER BY container_id NULLS FIRST, slot
+`
+
+type GetCharacterInventoryRow struct {
+	ID          int64
+	ContainerID pgtype.Int8
+	Slot        int16
+	ItemID      int32
+	Count       int32
+}
+
+// Every item of a character; the server rebuilds the tree from container_id.
+func (q *Queries) GetCharacterInventory(ctx context.Context, characterID int64) ([]GetCharacterInventoryRow, error) {
+	rows, err := q.db.Query(ctx, getCharacterInventory, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCharacterInventoryRow{}
+	for rows.Next() {
+		var i GetCharacterInventoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ContainerID,
+			&i.Slot,
+			&i.ItemID,
+			&i.Count,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCharacterQuestState = `-- name: GetCharacterQuestState :many
+SELECT key, value
+FROM quest_state
+WHERE character_id = $1
+ORDER BY key
+`
+
+type GetCharacterQuestStateRow struct {
+	Key   string
+	Value int64
+}
+
+// Quest progress and flags ("storage values"); a missing key is 0.
+func (q *Queries) GetCharacterQuestState(ctx context.Context, characterID int64) ([]GetCharacterQuestStateRow, error) {
+	rows, err := q.db.Query(ctx, getCharacterQuestState, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCharacterQuestStateRow{}
+	for rows.Next() {
+		var i GetCharacterQuestStateRow
+		if err := rows.Scan(&i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCharacterSkills = `-- name: GetCharacterSkills :many
+SELECT skill, level, tries
+FROM character_skills
+WHERE character_id = $1
+ORDER BY skill
+`
+
+type GetCharacterSkillsRow struct {
+	Skill string
+	Level int32
+	Tries int64
+}
+
+// Skills without a row are at their base level (data/balance.yaml).
+func (q *Queries) GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error) {
+	rows, err := q.db.Query(ctx, getCharacterSkills, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCharacterSkillsRow{}
+	for rows.Next() {
+		var i GetCharacterSkillsRow
+		if err := rows.Scan(&i.Skill, &i.Level, &i.Tries); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertInventoryItem = `-- name: InsertInventoryItem :one
+INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id
+`
+
+type InsertInventoryItemParams struct {
+	CharacterID int64
+	ContainerID pgtype.Int8
+	Slot        int16
+	ItemID      int32
+	Count       int32
+}
+
+func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertInventoryItem,
+		arg.CharacterID,
+		arg.ContainerID,
+		arg.Slot,
+		arg.ItemID,
+		arg.Count,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listCharactersByAccount = `-- name: ListCharactersByAccount :many
 SELECT id, name, vocation, level
 FROM characters
@@ -96,4 +320,104 @@ func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveCharacterQuestState = `-- name: SaveCharacterQuestState :exec
+INSERT INTO quest_state (character_id, key, value)
+SELECT $1::bigint, unnest($2::text[]), unnest($3::bigint[])
+`
+
+type SaveCharacterQuestStateParams struct {
+	CharacterID int64
+	Keys        []string
+	Vals        []int64
+}
+
+func (q *Queries) SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error {
+	_, err := q.db.Exec(ctx, saveCharacterQuestState, arg.CharacterID, arg.Keys, arg.Vals)
+	return err
+}
+
+const saveCharacterSkills = `-- name: SaveCharacterSkills :exec
+INSERT INTO character_skills (character_id, skill, level, tries)
+SELECT $1::bigint, unnest($2::text[]),
+       unnest($3::int[]), unnest($4::bigint[])
+ON CONFLICT (character_id, skill)
+DO UPDATE SET level = EXCLUDED.level, tries = EXCLUDED.tries
+`
+
+type SaveCharacterSkillsParams struct {
+	CharacterID int64
+	Skills      []string
+	Levels      []int32
+	Tries       []int64
+}
+
+// Upserts every skill of a snapshot in one statement (parallel arrays).
+func (q *Queries) SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error {
+	_, err := q.db.Exec(ctx, saveCharacterSkills,
+		arg.CharacterID,
+		arg.Skills,
+		arg.Levels,
+		arg.Tries,
+	)
+	return err
+}
+
+const saveCharacterState = `-- name: SaveCharacterState :execrows
+UPDATE characters
+SET level        = $1,
+    experience   = $2,
+    health       = $3,
+    mana         = $4,
+    pos_x        = $5,
+    pos_y        = $6,
+    pos_z        = $7,
+    last_save_at = $8
+WHERE id = $9
+`
+
+type SaveCharacterStateParams struct {
+	Level      int32
+	Experience int64
+	Health     int32
+	Mana       int32
+	PosX       pgtype.Int4
+	PosY       pgtype.Int4
+	PosZ       pgtype.Int2
+	SavedAt    pgtype.Timestamptz
+	ID         int64
+}
+
+// Written by the persistence goroutine from an immutable snapshot of the game loop.
+func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, saveCharacterState,
+		arg.Level,
+		arg.Experience,
+		arg.Health,
+		arg.Mana,
+		arg.PosX,
+		arg.PosY,
+		arg.PosZ,
+		arg.SavedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const touchCharacterLogin = `-- name: TouchCharacterLogin :exec
+UPDATE characters SET last_login_at = $1 WHERE id = $2
+`
+
+type TouchCharacterLoginParams struct {
+	At pgtype.Timestamptz
+	ID int64
+}
+
+func (q *Queries) TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error {
+	_, err := q.db.Exec(ctx, touchCharacterLogin, arg.At, arg.ID)
+	return err
 }

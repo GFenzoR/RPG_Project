@@ -7,7 +7,15 @@
 // save is refused with a conflict instead of overwriting it. Files the editor did not
 // change are never written or removed.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import {
   chunkKey,
@@ -37,6 +45,32 @@ export class SaveConflict extends Error {
     this.conflicts = conflicts;
   }
 }
+
+/**
+ * A save that failed after some files were already on disk (a rename failed). `result`
+ * says what was written and the files' hashes now, so the client can move its bases
+ * forward instead of conflicting with its own writes on the next save.
+ */
+export class PartialSave extends Error {
+  readonly result: SaveResult;
+  constructor(cause: unknown, result: SaveResult) {
+    super(`save stopped half-way: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.result = result;
+  }
+}
+
+/** File operations saveChanges uses; tests inject failures through them. */
+export interface SaveIo {
+  writeFile(abs: string, text: string): void;
+  rename(from: string, to: string): void;
+  remove(abs: string): void;
+}
+
+export const nodeIo: SaveIo = {
+  writeFile: (abs, text) => writeFileSync(abs, text),
+  rename: (from, to) => renameSync(from, to),
+  remove: (abs) => rmSync(abs, { force: true }),
+};
 
 /** A request the editor UI would never send (bad path, unknown island, malformed chunk). */
 export class BadRequest extends Error {}
@@ -106,41 +140,91 @@ function plan(root: string, world: World, islands: Set<string>, change: FileChan
  * islands listed in world.yaml on disk, chunk contents, conflicts with disk); only then is
  * anything written, so a refused save changes nothing.
  */
-export function saveChanges(root: string, world: World, changes: FileChange[]): SaveResult {
+export function saveChanges(
+  root: string,
+  world: World,
+  changes: FileChange[],
+  io: SaveIo = nodeIo,
+): SaveResult {
   if (!Array.isArray(changes)) throw new BadRequest("changes must be a list");
-  const islands = new Set(loadWorld(root).world.meta.islands.map((i) => i.id).filter((id) => ID.test(id)));
+  const islands = new Set(
+    loadWorld(root)
+      .world.meta.islands.map((i) => i.id)
+      .filter((id) => ID.test(id)),
+  );
   const seen = new Set<string>();
   const planned: PlannedWrite[] = [];
   const conflicts: string[] = [];
-  for (const change of changes) {
-    if (seen.has(change.file)) throw new BadRequest(`${change.file} is listed twice`);
-    seen.add(change.file);
-    const p = plan(root, world, islands, change);
+  for (const change of changes as unknown[]) {
+    if (!isObj(change) || typeof change["file"] !== "string")
+      throw new BadRequest("each change needs a file path");
+    const c = change as unknown as FileChange;
+    if (seen.has(c.file)) throw new BadRequest(`${c.file} is listed twice`);
+    seen.add(c.file);
+    const p = plan(root, world, islands, c);
     const disk = readIfExists(p.abs);
     if (disk === p.text) continue; // already as wanted (e.g. someone saved the same edit)
     const now = disk === null ? null : hashText(disk);
-    if (now !== change.base) conflicts.push(p.file);
+    if (now !== c.base) conflicts.push(p.file);
     planned.push(p);
   }
   if (conflicts.length > 0) throw new SaveConflict(conflicts);
+
+  // 1. Stage every new text next to its target. If any write fails, remove what was
+  //    staged and stop: nothing in world/ has changed.
+  const staged: { p: PlannedWrite; tmp: string }[] = [];
+  try {
+    for (const p of planned) {
+      if (p.text === null) continue;
+      mkdirSync(dirname(p.abs), { recursive: true });
+      const tmp = `${p.abs}.${process.pid}.${staged.length}.saving`;
+      staged.push({ p, tmp });
+      io.writeFile(tmp, p.text);
+    }
+  } catch (e) {
+    for (const s of staged) {
+      try {
+        io.remove(s.tmp);
+      } catch {
+        // best effort: a leftover *.saving file is reported by mapcli validate
+      }
+    }
+    throw e;
+  }
+
+  // 2. Commit: renames (atomic per file) and removals. A failure here is rare; report
+  //    what is on disk so the client stays in sync.
   const written: string[] = [];
   const removed: string[] = [];
-  for (const p of planned) {
-    if (p.text === null) {
-      rmSync(p.abs, { force: true });
-      removed.push(p.file);
-    } else {
-      mkdirSync(dirname(p.abs), { recursive: true });
-      writeFileSync(p.abs, p.text);
-      written.push(p.file);
+  const result = (): SaveResult => {
+    const base: Record<string, string | null> = {};
+    for (const file of seen) {
+      const text = readIfExists(join(root, file));
+      base[file] = text === null ? null : hashText(text);
     }
+    return { written: [...written].sort(), removed: [...removed].sort(), base };
+  };
+  try {
+    for (const s of staged) {
+      io.rename(s.tmp, s.p.abs);
+      written.push(s.p.file);
+    }
+    for (const p of planned) {
+      if (p.text !== null) continue;
+      io.remove(p.abs);
+      removed.push(p.file);
+    }
+  } catch (e) {
+    for (const s of staged)
+      if (!written.includes(s.p.file))
+        try {
+          io.remove(s.tmp);
+        } catch {
+          // best effort, as above
+        }
+    throw new PartialSave(e, result());
   }
-  const base: Record<string, string | null> = {};
-  for (const file of seen) {
-    const text = readIfExists(join(root, file));
-    base[file] = text === null ? null : hashText(text);
-  }
-  return { written: written.sort(), removed: removed.sort(), base };
+  return result();
 }
 
 /** The shared validator on the in-memory world, with YAML lines from the files on disk. */

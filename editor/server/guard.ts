@@ -1,7 +1,8 @@
 // Only the editor page itself may call the local API. A page from another site open in
 // the same browser could otherwise POST to localhost and write or delete map files.
-//   - every call must carry the API_HEADER custom header: a cross-site page can only send
-//     it after a CORS preflight, which this server never approves;
+//   - every call must carry the API_HEADER custom header: another origin can only send it
+//     after a CORS preflight, and the dev server has CORS off (vite.config.ts `cors: false`),
+//     so no preflight is ever approved;
 //   - when the browser says where the request comes from (Origin, Sec-Fetch-Site), it must
 //     be this same origin;
 //   - POST bodies must be application/json.

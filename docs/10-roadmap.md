@@ -41,39 +41,39 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 **Servidor base**
 - [x] **T1.1 Núcleo del servidor.** (#2) `clock`, game loop de 50 ms, cola de comandos,
   scheduler min-heap, harness `sim` y primeros tests deterministas. [T0.1]
-- [ ] **T1.2 Mundo en el servidor.** `mapcompile` → `world.bin`, carga, sectores,
+- [x] **T1.2 Mundo en el servidor.** (#15) `mapcompile` → `world.bin`, carga, sectores,
   flags de tile, pathfinding A*, línea de visión. Benchmarks. [T1.1, T0.4]
 - [x] **T1.3 Base de datos y cuentas.** (PR #9) Migraciones goose (accounts, characters,
   inventory, skills, quest_state, sessions, economy_log, cosmetics), sqlc, API HTTP de
   registro/login con email y contraseña, lista y creación de personajes. [T1.1]
-- [ ] **T1.4 Red y caminar.** Gateway WS, handshake, sesiones, AOI, Walk/WalkPath,
+- [x] **T1.4 Red y caminar.** (PR #23) Gateway WS, handshake, sesiones, AOI, Walk/WalkPath,
   FullMapView/MapSlice/CreatureMove, rate limits, logout y guardado. Bot mínimo que
   entra y camina (test de integración). [T0.2, T1.2, T1.3]
 
 **Cliente base**
-- [ ] **T1.5 Cliente: login y mundo.** Vite + Pixi + Preact, `packages/renderer`,
+- [x] **T1.5 Cliente: login y mundo.** (PR #24) Vite + Pixi + Preact, `packages/renderer`,
   pantalla de login/creación de personaje, render de mapa con orden de capas, caminar con
   teclado y click, predicción e interpolación. Playwright con screenshot. [T1.4, T0.5]
 
 **Jugabilidad**
-- [ ] **T1.6 Monstruos y combate cuerpo a cuerpo.** Spawns, IA por estados, objetivo,
+- [x] **T1.6 Monstruos y combate cuerpo a cuerpo.** Spawns, IA por estados, objetivo,
   ataque cada 2 s, daño/armadura/defensa, muerte de monstruo, cadáver con loot, XP.
   Cliente: barras de vida, efectos, texto flotante, lista de batalla. [T1.4, T1.5]
-- [ ] **T1.7 Skills por uso y niveles.** Progreso de skills de armas, escudo y puños,
+- [x] **T1.7 Skills por uso y niveles.** Progreso de skills de armas, escudo y puños,
   experiencia y niveles, stats por vocación, regeneración. Panel de skills. Escenarios sim. [T1.6]
-- [ ] **T1.8 Items, inventario y contenedores.** Slots de equipo, mochila, mover items
+- [x] **T1.8 Items, inventario y contenedores.** Slots de equipo, mochila, mover items
   (suelo↔inventario↔contenedor), capacidad, usar items, mirar. UI de inventario. [T1.6]
-- [ ] **T1.9 Magia (Arcanista).** Maná, nivel mágico, 4 hechizos (ataque, área, curación,
+- [x] **T1.9 Magia (Arcanista).** (PR #30) Maná, nivel mágico, 4 hechizos (ataque, área, curación,
   utilidad), palabras propias, cooldowns, hotkeys F1–F12, runas básicas. [T1.7, T1.8]
-- [ ] **T1.10 NPCs, diálogos, tiendas y quest.** Motor de diálogos YAML, ventana de
+- [x] **T1.10 NPCs, diálogos, tiendas y quest.** (PR #31) Motor de diálogos YAML, ventana de
   diálogo, tienda compra/venta, motor de quests con pasos y flags, Capítulo 1 jugable.
   [T1.8]
-- [ ] **T1.11 Muerte y reaparición.** Reglas de muerte de balance.yaml, protección de
+- [x] **T1.11 Muerte y reaparición.** (PR #32) Reglas de muerte de balance.yaml, protección de
   novato, bendiciones compradas a NPC, cuerpo del jugador, templo. Autoguardado
   escalonado. [T1.7, T1.10]
-- [ ] **T1.12 Pesca y minería.** Skill de pesca, oficio de minería, recursos que se
+- [x] **T1.12 Pesca y minería.** (PR #33) Skill de pesca, oficio de minería, recursos que se
   agotan y regeneran, herramientas. [T1.8]
-- [ ] **T1.13 Chat e i18n del cliente.** Canal local (decir, gritar, susurrar), canal
+- [x] **T1.13 Chat e i18n del cliente.** Canal local (decir, gritar, susurrar), canal
   global, mensajes del sistema por clave i18n, selector de idioma es/en. [T1.5]
 
 **Editor e IA**
@@ -89,8 +89,8 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [ ] **T1.17 Prueba de carga.** `tools/bots` completo, escenario de 100 y 300 bots,
   reporte y ajustes de rendimiento. [T1.11]
 - [ ] **T1.18 Deploy alpha.** 👤 Necesita tu cuenta AWS y un dominio. docker-compose,
-  Caddy, backups a S3, workflow de imágenes, guía paso a paso para el primer deploy. [T1.17]
-- [ ] **T1.19 Hosting de pruebas en casa.** Docker Compose del juego completo en tu PC
+  Caddy, backups a S3, workflow de imágenes, guía paso a paso para el primer deploy. [T1.17] (parcial, PR #19: archivos listos, falta cuenta AWS y dominio)
+- [x] **T1.19 Hosting de pruebas en casa.** Docker Compose del juego completo en tu PC
   expuesto con Cloudflare Tunnel o Tailscale, targets `make home-*`, guía para
   WSL2/macOS/Linux. Ver `13-hosting-de-pruebas.md`. [T1.5]
 

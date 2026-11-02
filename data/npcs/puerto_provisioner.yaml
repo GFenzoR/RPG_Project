@@ -1,0 +1,56 @@
+id: puerto_provisioner
+name: npc.puerto_provisioner.name
+sprite: npcs/merchant
+notes: >-
+  Tools, food and poultices; buys hunting materials from the island's monsters at about a
+  third of their value.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.puerto_provisioner.greet
+      options:
+        - text: dialog.trade
+          action: { open_shop: provisions_shop }
+        - text: npc.puerto_provisioner.opt_tools
+          goto: tools
+        - text: npc.puerto_provisioner.opt_gossip
+          goto: gossip
+        - text: dialog.bye
+          action: close
+    tools:
+      text: npc.puerto_provisioner.tools
+      options:
+        - text: dialog.trade
+          action: { open_shop: provisions_shop }
+        - { text: dialog.back, goto: greet }
+    gossip:
+      text: npc.puerto_provisioner.gossip
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+shop:
+  id: provisions_shop
+  sells:
+    - { item: rope, price: 50 }
+    - { item: shovel, price: 40 }
+    - { item: pickaxe, price: 120 }
+    - { item: fishing_rod, price: 150 }
+    - { item: ship_biscuit, price: 3 }
+    - { item: seaweed_poultice, price: 25 }
+  buys:
+    - { item: rope, price: 15 }
+    - { item: shovel, price: 12 }
+    - { item: pickaxe, price: 40 }
+    - { item: fishing_rod, price: 50 }
+    - { item: raw_fish, price: 1 }
+    - { item: boar_meat, price: 1 }
+    - { item: gull_feather, price: 1 }
+    - { item: bat_wing, price: 1 }
+    - { item: crab_claw, price: 2 }
+    - { item: iron_ore, price: 3 }
+    - { item: wolf_pelt, price: 5 }
+    - { item: boar_tusk, price: 4 }
+    - { item: spider_silk, price: 6 }
+    - { item: beetle_carapace, price: 10 }
+    - { item: tarnished_locket, price: 40 }

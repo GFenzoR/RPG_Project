@@ -11,7 +11,17 @@ import { afterEach, describe, expect, it } from "vitest";
 import { History } from "../src/history/history.ts";
 import { chunkFile, fromWire } from "../src/io/wire.ts";
 import type { FileChange } from "../src/io/wire.ts";
-import { BadRequest, SaveConflict, bootstrap, hashText, saveChanges, validateInMemory } from "./store.ts";
+import {
+  BadRequest,
+  PartialSave,
+  SaveConflict,
+  bootstrap,
+  hashText,
+  nodeIo,
+  saveChanges,
+  validateInMemory,
+} from "./store.ts";
+import type { SaveIo } from "./store.ts";
 
 const repo = fileURLToPath(new URL("../../", import.meta.url));
 const content = loadContent(repo);
@@ -172,6 +182,9 @@ describe("saveChanges", () => {
     ["a floor out of range", [{ file: "world/islands/testisle/chunks/z99/c0032_0032.json", base: null }], /out of range/],
     ["a bad base hash", [{ file: Z7, base: "../x" }], /invalid base hash/],
     ["a file listed twice", [{ file: Z7, base: null }, { file: Z7, base: null }], /listed twice/],
+    ["a null change", [null as unknown as FileChange], /each change needs a file path/],
+    ["a change without a file", [{ base: null } as unknown as FileChange], /each change needs a file path/],
+    ["a numeric file", [{ file: 5, base: null } as unknown as FileChange], /each change needs a file path/],
   ])("rejects %s and touches nothing", (_name, changes, msg) => {
     const root = scratch();
     const before = tree(root);
@@ -191,6 +204,58 @@ describe("saveChanges", () => {
     chunk.ground[0] = "sand";
     chunk.cx = 99;
     expect(() => saveChanges(root, world, changes)).toThrow(/chunk says cx=99/);
+  });
+});
+
+describe("saveChanges when the disk fails", () => {
+  /** Node io that throws on the nth call of one operation. */
+  function failing(op: keyof SaveIo, nth: number): SaveIo {
+    let calls = 0;
+    const wrap =
+      <A extends string[]>(name: keyof SaveIo, fn: (...a: A) => void) =>
+      (...a: A): void => {
+        if (name === op && ++calls === nth) throw new Error(`EIO: ${op} failed`);
+        fn(...a);
+      };
+    return {
+      writeFile: wrap("writeFile", nodeIo.writeFile),
+      rename: wrap("rename", nodeIo.rename),
+      remove: wrap("remove", nodeIo.remove),
+    };
+  }
+
+  it("writes nothing if staging the second file fails, and leaves no temp files", () => {
+    const root = scratch();
+    const before = tree(join(root, "world"));
+    const { world, changes } = edit(root);
+    expect(() => saveChanges(root, world, changes, failing("writeFile", 2))).toThrow(/EIO/);
+    expect(tree(join(root, "world"))).toEqual(before);
+  });
+
+  it("reports what reached the disk if a rename fails half-way", () => {
+    const root = scratch();
+    const { world, changes } = edit(root);
+    let err: unknown;
+    try {
+      saveChanges(root, world, changes, failing("rename", 2));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(PartialSave);
+    const r = (err as PartialSave).result;
+    expect(r.written).toEqual([Z7]);
+    expect(r.removed).toEqual([]);
+    expect(r.base[Z7]).toBe(hashText(readFileSync(join(root, Z7), "utf8")));
+    // No temp file is left behind, so world/ still loads cleanly.
+    expect([...tree(join(root, "world")).keys()].filter((f) => f.endsWith(".saving"))).toEqual([]);
+    expect(loadWorld(root).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // Saving again with the reported bases finishes the job without a conflict.
+    const retry = changes.map((c) => ({
+      file: c.file,
+      base: r.written.includes(c.file) ? (r.base[c.file] ?? null) : c.base,
+    }));
+    expect(saveChanges(root, world, retry).written).toEqual([NEW_Z8]);
+    expect(fmtCheck(root)).toEqual({ code: 0, changed: [] });
   });
 });
 

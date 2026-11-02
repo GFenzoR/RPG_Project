@@ -16,6 +16,7 @@ sprites:
   ground/dirt: { placeholder: { label: "", color: "#7a5a3a" } }
   ground/stone_floor: { placeholder: { label: "", color: "#8a8a86" } }
   ground/water_shallow: { placeholder: { label: "", color: "#3f7fb5" } }
+  ground/water_shoal: { placeholder: { label: "", color: "#3a8fb0" } }
   ground/wet_sand: { placeholder: { label: "", color: "#a8935a" } }
   ground/dock_planks: { placeholder: { label: "", color: "#7b5b3c" } }
   ground/wooden_floor: { placeholder: { label: "", color: "#9c7650" } }
@@ -28,6 +29,7 @@ sprites:
   food/raw_fish: { placeholder: { label: RF, color: "#7fb0b8" } }
   tools/fishing_rod: { placeholder: { label: FR, color: "#6d7f4a" } }
   tools/rope: { placeholder: { label: RO, color: "#b49a64" } }
+  containers/backpack: { placeholder: { label: BK, color: "#8a5a32" } }
   weapons/iron_sword: { placeholder: { label: IS, color: "#7d8794" } }
   weapons/hatchet: { placeholder: { label: HA, color: "#6f7a86" } }
   weapons/driftwood_club: { placeholder: { label: DC, color: "#8a7458" } }
@@ -39,6 +41,7 @@ sprites:
   weapons/belaying_pin: { placeholder: { label: BP, color: "#a07a50" } }
   weapons/spiked_cudgel: { placeholder: { label: SK, color: "#6e5a44" } }
   weapons/coral_wand: { placeholder: { label: CW, color: "#e4d8cc" } }
+  runes/arc_rune: { placeholder: { label: AR, color: "#6fb7e8" } }
   armor/sailcloth_cap: { placeholder: { label: SC, color: "#c9bfa6" } }
   armor/leather_jerkin: { placeholder: { label: LJ, color: "#8a5a32" } }
   armor/canvas_trousers: { placeholder: { label: CT, color: "#b2a684" } }
@@ -57,11 +60,16 @@ sprites:
   materials/spider_silk: { placeholder: { label: SS, color: "#b8c8a8" } }
   materials/beetle_carapace: { placeholder: { label: BC, color: "#3e5248" } }
   materials/iron_ore: { placeholder: { label: IO, color: "#8a4e3a" } }
+  materials/rough_stone: { placeholder: { label: RS, color: "#7d7a72" } }
+  materials/quartz_crystal: { placeholder: { label: QC, color: "#cfe3ea" } }
+  decor/iron_vein: { placeholder: { label: IV, color: "#6b4a3c" } }
   materials/tarnished_locket: { placeholder: { label: TL, color: "#7c7448" } }
+  quest/bosun_logbook: { placeholder: { label: BL, color: "#6e5a3a" } }
   decor/mooring_post: { placeholder: { label: MP, color: "#5a4632" } }
   decor/cargo_crate: { placeholder: { label: CR, color: "#9a7a4e" } }
 
   # Creatures
+  decor/creature_remains: { placeholder: { label: "", color: "#6b2a24", size: [32, 32] } }
   creatures/bilge_rat: { placeholder: { label: BR, color: "#5e534c" } }
   creatures/tide_crab: { placeholder: { label: TC, color: "#c4553c" } }
   creatures/wolf: { placeholder: { label: WO, color: "#5c5f66" } }
@@ -75,3 +83,8 @@ sprites:
 
   # NPCs
   npcs/sailor_old: { placeholder: { label: SO, color: "#2f5d8a" } }
+  npcs/armorer: { placeholder: { label: AR, color: "#7a3e2a" } }
+  npcs/merchant: { placeholder: { label: ME, color: "#8a7a2a" } }
+  npcs/priestess: { placeholder: { label: PR, color: "#d8c890" } }
+  npcs/miner_old: { placeholder: { label: MO, color: "#5a4a3a" } }
+  npcs/diver_old: { placeholder: { label: DV, color: "#2a6a6e" } }

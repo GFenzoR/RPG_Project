@@ -29,6 +29,23 @@
   name: item.water_shallow.name
   ground: { walkable: false }
 
+# Shallow water with a shoal of fish (T1.12): use a fishing rod on it. Our own numbers.
+- id: water_shoal
+  kind: ground
+  sprite: ground/water_shoal
+  name: item.water_shoal.name
+  description: item.water_shoal.desc
+  ground: { walkable: false }
+  resource:
+    tool: fishing
+    skill: fishing
+    reach: 3
+    charges: 5              # fish caught before the tile runs out
+    regen_ms: 240000        # refills 4 min after its last catch
+    chance: { base: 0.2, per_level: 0.015, max: 0.7 }
+    drops:
+      - { item: raw_fish, weight: 1 }
+
 # Harbour grounds (Isla del Puerto).
 - id: wet_sand
   kind: ground

@@ -1,2 +1,17 @@
 - npc: harbor_master
   pos: { x: 1056, y: 1082, z: 7 }
+
+- npc: puerto_priest
+  pos: { x: 1058, y: 1054, z: 7 }
+
+- npc: puerto_provisioner
+  pos: { x: 1061, y: 1058, z: 7 }
+
+- npc: puerto_armorer
+  pos: { x: 1051, y: 1058, z: 7 }
+
+- npc: puerto_foreman
+  pos: { x: 1066, y: 1058, z: 7 }
+
+- npc: puerto_diver
+  pos: { x: 1038, y: 1062, z: 7 }

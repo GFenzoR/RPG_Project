@@ -62,6 +62,23 @@ item.iron_ore.name: "iron ore"
 item.iron_ore.desc: "Heavy, reddish stone. A smith would know what to do with it."
 item.tarnished_locket.name: "tarnished locket"
 item.tarnished_locket.desc: "Inside is a portrait the water wiped away long ago."
+item.bosun_logbook.name: "bosun's logbook"
+item.bosun_logbook.desc: "A notebook swollen with salt water. The last pages were written in a hurry."
+item.creature_remains.name: "creature remains"
+
+# Containers (T1.8)
+item.backpack.name: "backpack"
+item.backpack.desc: "A canvas backpack with leather straps."
+item.arc_rune.name: "arc rune"
+item.arc_rune.desc: "A carved stone holding a bolt of lightning. Each use spends a charge."
+item.water_shoal.name: "shoal water"
+item.water_shoal.desc: "Fish dart about under the surface."
+item.iron_vein.name: "iron vein"
+item.iron_vein.desc: "Rock streaked with reddish veins. A pickaxe would make it talk."
+item.rough_stone.name: "rough stone"
+item.rough_stone.desc: "A lump of rock, almost worthless."
+item.quartz_crystal.name: "quartz crystal"
+item.quartz_crystal.desc: "A clear crystal that glows against the light."
 
 # Autoborder pieces
 item.border_grass_sand.name: "grass edge"

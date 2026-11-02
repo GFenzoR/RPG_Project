@@ -11,19 +11,41 @@ import (
 )
 
 type Querier interface {
+	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
+	// Deletes a token and returns it if it was active: play tokens are single-use.
+	ConsumeSession(ctx context.Context, arg ConsumeSessionParams) (ConsumeSessionRow, error)
 	CountCharactersByAccount(ctx context.Context, accountID int64) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error)
 	CreateCharacter(ctx context.Context, arg CreateCharacterParams) (CreateCharacterRow, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
+	// A snapshot replaces the whole inventory in the same transaction as the character row.
+	DeleteCharacterInventory(ctx context.Context, characterID int64) error
+	// A snapshot replaces every storage value in the same transaction as the character row.
+	DeleteCharacterQuestState(ctx context.Context, characterID int64) error
 	DeleteExpiredSessions(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	// The caller passes "now" (injected clock) so expiry is testable.
 	GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error)
+	// Loads what the game server needs to put a character in the world.
+	GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error)
+	// Every item of a character; the server rebuilds the tree from container_id.
+	GetCharacterInventory(ctx context.Context, characterID int64) ([]GetCharacterInventoryRow, error)
+	// Quest progress and flags ("storage values"); a missing key is 0.
+	GetCharacterQuestState(ctx context.Context, characterID int64) ([]GetCharacterQuestStateRow, error)
+	// Skills without a row are at their base level (data/balance.yaml).
+	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
+	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
+	SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error
+	// Upserts every skill of a snapshot in one statement (parallel arrays).
+	SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error
+	// Written by the persistence goroutine from an immutable snapshot of the game loop.
+	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
+	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
 }
 
 var _ Querier = (*Queries)(nil)

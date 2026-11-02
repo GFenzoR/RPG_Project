@@ -36,3 +36,15 @@
   tradeable: true
   tool: { use: shovel }
   value: 40
+
+# Carried containers (T1.8). Every character that never played starts with one equipped
+# (balance.yaml inventory.start_container).
+- id: backpack
+  kind: container
+  sprite: containers/backpack
+  name: item.backpack.name
+  description: item.backpack.desc
+  weight: 1800
+  tradeable: true
+  container: { slots: 20 }
+  value: 10

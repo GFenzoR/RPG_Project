@@ -1,0 +1,74 @@
+# RPG Project — home hosting override (docs/13-hosting-de-pruebas.md). Applied on top of
+# docker-compose.yml:
+#
+#   make home-up       # = docker compose -f deploy/docker-compose.yml \
+#                      #     -f deploy/docker-compose.home.yml --env-file deploy/.env.home up -d --wait
+#   make home-tunnel   # public https://….trycloudflare.com URL (Cloudflare Quick Tunnel)
+#
+# Differences with production: no S3 backup service (`make home-backup` dumps locally),
+# Caddy in plain HTTP on 127.0.0.1:8080 (the tunnel terminates TLS) and cloudflared on a
+# dedicated network that Caddy trusts for CF-Connecting-IP. Needs Docker Compose >= 2.24
+# (`!override`).
+name: rpg-home
+
+services:
+  caddy:
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile.home", "--adapter", "caddyfile"]
+    environment:
+      TUNNEL_SUBNET: ${TUNNEL_SUBNET:-172.31.250.0/24}
+    # Only on this machine by default: the tunnel reaches Caddy through the `tunnel` network.
+    # HOME_BIND=0.0.0.0 publishes it to the LAN (or set the Tailscale IP of this machine).
+    ports: !override
+      - "${HOME_BIND:-127.0.0.1}:${HOME_HTTP_PORT:-8080}:80"
+    networks: [edge, tunnel]
+
+  # S3 backups are a production concern; at home `make home-backup` writes a local dump.
+  backup:
+    profiles: [s3-backup]
+
+  # Cloudflare Quick Tunnel: random https://….trycloudflare.com URL, no account. Started by
+  # `make home-tunnel`; the URL is printed from its logs and changes on every start.
+  cloudflared-quick:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2025.2.0}
+    profiles: [quick-tunnel]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://caddy:80"]
+    restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_healthy
+    networks: [tunnel]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Named Cloudflare Tunnel with your own domain (fixed URL). The tunnel and its public
+  # hostname → http://caddy:80 are created in the Cloudflare dashboard; paste its token in
+  # deploy/.env.home (CLOUDFLARE_TUNNEL_TOKEN) and run `make home-tunnel-domain`.
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2025.2.0}
+    profiles: [tunnel]
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_healthy
+    networks: [tunnel]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+networks:
+  # cloudflared ↔ Caddy. Fixed subnet: Caddyfile.home trusts exactly this range. Change
+  # TUNNEL_SUBNET in deploy/.env.home if it collides with a network of yours.
+  tunnel:
+    ipam:
+      config:
+        - subnet: ${TUNNEL_SUBNET:-172.31.250.0/24}

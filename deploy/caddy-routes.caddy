@@ -1,0 +1,54 @@
+# Routes shared by deploy/Caddyfile (production, TLS) and deploy/Caddyfile.home (behind a
+# tunnel, plain HTTP). Imported inside a site block.
+#
+#   /api/*, /ws, /healthz  → gameserver:8080 (HTTP API, WebSocket, health)
+#   /                       → static client build in /srv/client (SPA fallback to index.html)
+
+encode zstd gzip
+
+# Gameserver: API, health and the game WebSocket. reverse_proxy upgrades WebSockets on its
+# own; flush_interval -1 streams frames without buffering.
+@backend path /api/* /ws /ws/* /healthz
+handle @backend {
+	reverse_proxy gameserver:8080 {
+		flush_interval -1
+		# Long-lived WebSockets must survive a Caddy config reload.
+		stream_close_delay 5m
+		# The gameserver (-trust-proxy) keys its per-IP rate limits on the LAST
+		# X-Forwarded-For entry. Send exactly one: Caddy's {client_ip}, which is the TCP peer
+		# unless that peer is in `trusted_proxies` (only the tunnel network in
+		# Caddyfile.home; nothing in production). A client-supplied X-Forwarded-For or
+		# CF-Connecting-IP is therefore discarded, never appended.
+		header_up X-Forwarded-For {client_ip}
+		header_up -CF-Connecting-IP
+	}
+}
+
+# Map editor (docs/04): published in a later phase. Today the editor saves chunks to world/
+# through a local development backend (Vite dev server on the contributor's machine), so a
+# static build here could not save anything. It arrives with patch submission to review
+# (milestone 4-5), which needs accounts and moderation.
+
+# Game client (static Vite build). Hashed assets are immutable; index.html is not cached so
+# a deploy is picked up on the next page load.
+handle {
+	root * /srv/client
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@html path / /index.html
+	header @html Cache-Control "no-cache"
+	try_files {path} /index.html
+	file_server
+}
+
+header {
+	X-Content-Type-Options "nosniff"
+	Referrer-Policy "strict-origin-when-cross-origin"
+	X-Frame-Options "DENY"
+	-Server
+}
+
+log {
+	output stdout
+	format json
+}

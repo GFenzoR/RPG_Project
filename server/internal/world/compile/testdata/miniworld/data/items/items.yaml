@@ -1,0 +1,60 @@
+# Test fixture for mapcompile: one item per rule that sets tile flags.
+- id: grass
+  kind: ground
+  sprite: ground/grass
+  name: item.grass.name
+  ground: { walkable: true, speed: 150 }
+
+- id: road
+  kind: ground
+  sprite: ground/road
+  name: item.road.name
+  ground: { walkable: true, speed: 50 }
+
+- id: plain_floor
+  kind: ground
+  sprite: ground/plain_floor
+  name: item.plain_floor.name
+  ground: { walkable: true }
+
+- id: water
+  kind: ground
+  sprite: ground/water
+  name: item.water.name
+  ground: { walkable: false }
+
+- id: stone_wall
+  kind: wall
+  sprite: wall/stone_wall
+  name: item.stone_wall.name
+
+- id: open_gate
+  kind: wall
+  sprite: wall/open_gate
+  name: item.open_gate.name
+  blocks_movement: false
+  blocks_sight: false
+
+- id: crate
+  kind: decoration
+  sprite: decoration/crate
+  name: item.crate.name
+  blocks_movement: true
+  blocks_sight: true
+
+- id: banner
+  kind: decoration
+  sprite: decoration/banner
+  name: item.banner.name
+  blocks_sight: true
+
+- id: flower
+  kind: decoration
+  sprite: decoration/flower
+  name: item.flower.name
+
+- id: coin
+  kind: currency
+  sprite: misc/coin
+  name: item.coin.name
+  currency: { worth: 1 }

@@ -58,6 +58,15 @@ export function itemZIndex(x: number, y: number, stackIndex: number): number {
   return (y * 65536 + x) * MAX_STACK_ORDER + Math.min(stackIndex, MAX_STACK_ORDER - 1);
 }
 
+/**
+ * Draw order of an entity (creature) standing on tile (x, y): over every item of its own
+ * tile and of the tiles before it, under the items of the tiles after it. Effects and
+ * floating texts go in `overlay`, above everything.
+ */
+export function entityZIndex(x: number, y: number): number {
+  return itemZIndex(x, y, MAX_STACK_ORDER - 1) + 0.5;
+}
+
 export class MapView {
   /** Add this to the stage. */
   readonly root = new Container({ label: "map-view" });
@@ -76,6 +85,8 @@ export class MapView {
     sortableChildren: false,
   });
   private readonly cache = new Map<string, CachedChunk>();
+  private readonly entities = new Set<Container>();
+  private entitiesMoved = false;
   private source: TileSource;
   private readonly texture: TextureLookup;
   private floorZ: number;
@@ -136,7 +147,32 @@ export class MapView {
       }
     }
     for (const key of [...this.cache.keys()]) if (!wanted.has(key)) this.drop(key);
-    if (added) this.itemLayer.sortChildren();
+    if (added || this.entitiesMoved) this.itemLayer.sortChildren();
+    this.entitiesMoved = false;
+  }
+
+  /**
+   * Adds or moves an entity (a creature) on tile (x, y). It is drawn in the item layer,
+   * interleaved with the item stacks by tile (see entityZIndex); its position is the
+   * caller's, in world units (one unit = one sprite pixel).
+   */
+  placeEntity(obj: Container, x: number, y: number): void {
+    const z = entityZIndex(x, y);
+    if (!this.entities.has(obj)) {
+      this.entities.add(obj);
+      this.itemLayer.addChild(obj);
+      this.entitiesMoved = true;
+    }
+    if (obj.zIndex !== z) {
+      obj.zIndex = z;
+      this.entitiesMoved = true;
+    }
+  }
+
+  /** Removes an entity added with placeEntity (the caller destroys it). */
+  removeEntity(obj: Container): void {
+    if (!this.entities.delete(obj)) return;
+    this.itemLayer.removeChild(obj);
   }
 
   /** Number of chunks currently built (for tests and the debug overlay). */
@@ -146,6 +182,8 @@ export class MapView {
 
   destroy(): void {
     this.clear();
+    for (const e of this.entities) this.itemLayer.removeChild(e);
+    this.entities.clear();
     this.root.destroy({ children: true });
   }
 

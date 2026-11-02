@@ -1,0 +1,11 @@
+# Runes (T1.9): an Arcanist conjures them with mana; anyone with the magic level uses
+# them on a creature or tile. Each use casts the rune's spell and spends one charge.
+- id: arc_rune
+  kind: rune
+  sprite: runes/arc_rune
+  name: item.arc_rune.name
+  description: item.arc_rune.desc
+  weight: 120
+  tradeable: true
+  rune: { spell: arc_bolt, charges: 4, magic_level: 1 }
+  value: 30

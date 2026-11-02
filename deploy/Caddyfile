@@ -1,0 +1,19 @@
+# Caddy front for the RPG Project in production (docs/09-deployment-aws.md). The routes live
+# in caddy-routes.caddy, shared with Caddyfile.home (docs/13-hosting-de-pruebas.md).
+#
+# SITE_ADDRESS decides TLS:
+#   juego.example.com   real domain → automatic Let's Encrypt/ZeroSSL certificate (ports 80+443)
+#   localhost           Caddy's local CA (self-signed; for `make docker-up`)
+#
+# Client IP: Caddy is the edge, so no proxy is trusted. {client_ip} is the TCP peer and any
+# X-Forwarded-For sent by the client is replaced (see caddy-routes.caddy).
+{
+	email {$ACME_EMAIL}
+	# Admin API only on localhost inside the container (the compose healthcheck uses it).
+	admin localhost:2019
+}
+
+{$SITE_ADDRESS} {
+	import caddy-routes.caddy
+	header Strict-Transport-Security "max-age=31536000"
+}

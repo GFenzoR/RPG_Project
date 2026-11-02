@@ -24,7 +24,8 @@ export default defineConfig({
   outputDir: "../test-results/editor",
   fullyParallel: false,
   workers: 1,
-  timeout: 60_000,
+  // The full edit/validate/save test takes ~20 s locally but over 60 s on CI runners.
+  timeout: 180_000,
   reporter: [["list"]],
   use: {
     ...devices["Desktop Chrome"],
