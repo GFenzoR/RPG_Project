@@ -1,0 +1,13 @@
+# sqlc generate (run from the repo root with `make gen-sqlc`).
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: queries
+    gen:
+      go:
+        package: db
+        out: internal/store/db
+        sql_package: pgx/v5
+        emit_interface: true
+        emit_empty_slices: true

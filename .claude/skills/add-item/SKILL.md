@@ -9,7 +9,9 @@ description: Agrega un item nuevo (arma, armadura, material, consumible, suelo o
    armor, shields, tools, consumables, materials, containers, currency, runes).
 2. ID de texto en `snake_case` inglés, único. Revisa con `grep` que no exista.
 3. Completa los campos del esquema (`docs/06-content-data.md`). Para armas y armaduras,
-   compara stats con items del mismo nivel para no romper el balance.
+   compara stats con items del mismo nivel para no romper el balance. Los números son
+   propios: nunca copies peso, ataque, defensa ni armadura de un item de Tibia, aunque
+   le cambies el nombre (regla legal de CLAUDE.md).
 4. Textos en `i18n/es/items.yaml` e `i18n/en/items.yaml` (nombre y descripción).
 5. Corre `make gen` para asignar el ID numérico en `data/ids.lock.yaml`.
    Nunca edites ni reutilices números existentes a mano.

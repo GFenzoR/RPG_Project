@@ -4,6 +4,8 @@ import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
+  MAX_COORD,
+  MAX_FLOOR,
   MAX_VIEW_SIZE,
   formatDiagnostic,
   islandInfo,
@@ -13,7 +15,7 @@ import {
   viewArea,
   worldInfo,
 } from "@rpg/map-format";
-import type { Rect } from "@rpg/map-format";
+import type { Diagnostic, Rect } from "@rpg/map-format";
 
 export const USAGE = `usage: mapcli <command> [options]   (global: --root DIR, default ".")
   info [island]                                 world or island summary
@@ -35,27 +37,38 @@ class UsageError extends Error {}
 
 const json = (v: unknown): string => `${JSON.stringify(v, null, 2)}\n`;
 
+const DECIMAL = /^(0|[1-9][0-9]*)$/;
+
 function parseArea(s: string | undefined): Rect {
-  const parts = (s ?? "").split(",").map((p) => Number(p.trim()));
-  const [x, y, w, h] = parts;
+  const parts = (s ?? "").split(",");
+  const [x, y, w, h] = parts.map((p) => (DECIMAL.test(p) ? Number(p) : NaN));
   if (
     parts.length !== 4 ||
-    parts.some((n) => !Number.isInteger(n)) ||
     x === undefined ||
     y === undefined ||
     w === undefined ||
     h === undefined ||
-    w < 1 ||
-    h < 1
+    [x, y, w, h].some((n) => !Number.isSafeInteger(n))
   )
-    throw new UsageError("--area must be x,y,w,h with integers and w,h >= 1");
+    throw new UsageError("--area must be x,y,w,h with non-negative decimal integers");
+  if (
+    x > MAX_COORD ||
+    y > MAX_COORD ||
+    w < 1 ||
+    h < 1 ||
+    x + w > MAX_COORD + 1 ||
+    y + h > MAX_COORD + 1
+  )
+    throw new UsageError(
+      `--area must stay inside the world: x,y in 0..${MAX_COORD}, w,h >= 1, x+w and y+h <= ${MAX_COORD + 1}`,
+    );
   return { x, y, w, h };
 }
 
 function parseFloor(s: string | undefined): number {
-  const z = Number(s);
-  if (s === undefined || !Number.isInteger(z) || z < 0 || z > 15)
-    throw new UsageError("--floor must be an integer 0..15");
+  const z = s !== undefined && DECIMAL.test(s) ? Number(s) : NaN;
+  if (!(z >= 0 && z <= MAX_FLOOR))
+    throw new UsageError(`--floor must be an integer 0..${MAX_FLOOR}`);
   return z;
 }
 
@@ -97,19 +110,12 @@ function dispatch(argv: string[], io: Io): number {
   switch (command) {
     case "info": {
       const { world, diagnostics } = loadWorld(root);
-      if (island === undefined) {
-        io.out(
-          json({
-            ...worldInfo(world),
-            load_errors: diagnostics.filter((d) => d.severity === "error").length,
-          }),
-        );
-        return 0;
-      }
-      const found = world.islands.get(island);
-      if (!found) return missingIsland(io, island, diagnostics.map(formatDiagnostic));
-      io.out(json(islandInfo(found)));
-      return 0;
+      const loadErrors = errorsAbout(diagnostics, island);
+      const found = island === undefined ? undefined : world.islands.get(island);
+      if (island !== undefined && !found) return missingIsland(io, island, loadErrors);
+      const info = found ? islandInfo(found) : worldInfo(world);
+      io.out(json({ ...info, load_errors: loadErrors }));
+      return loadErrors.length > 0 ? 1 : 0;
     }
     case "fmt": {
       const { world, files, diagnostics } = loadWorld(root);
@@ -140,17 +146,33 @@ function dispatch(argv: string[], io: Io): number {
       const floor = parseFloor(values.floor);
       const area = parseArea(values.area);
       const { world, diagnostics } = loadWorld(root);
+      const loadErrors = errorsAbout(diagnostics, island);
       const found = world.islands.get(island);
-      if (!found) return missingIsland(io, island, diagnostics.map(formatDiagnostic));
+      if (!found) return missingIsland(io, island, loadErrors);
       const view = viewArea(found, floor, area);
-      io.out(values.format === "text" ? renderAsciiView(view) : json(view));
-      return 0;
+      if (values.format === "text") {
+        io.out(renderAsciiView(view));
+        for (const e of loadErrors) io.err(`${e}\n`);
+      } else {
+        io.out(json({ ...view, load_errors: loadErrors }));
+      }
+      return loadErrors.length > 0 ? 1 : 0;
     }
     case undefined:
       throw new UsageError("missing command");
     default:
       throw new UsageError(`unknown command "${command}"`);
   }
+}
+
+/** Load errors (formatted) for the whole world, or for one island's files and world.yaml. */
+function errorsAbout(diagnostics: Diagnostic[], island: string | undefined): string[] {
+  const prefix = island === undefined ? "" : `world/islands/${island}/`;
+  return diagnostics
+    .filter(
+      (d) => d.severity === "error" && (d.file.startsWith(prefix) || d.file === "world/world.yaml"),
+    )
+    .map(formatDiagnostic);
 }
 
 function missingIsland(io: Io, island: string, errors: string[]): number {
