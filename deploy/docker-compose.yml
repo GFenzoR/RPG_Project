@@ -1,0 +1,154 @@
+# RPG Project — production stack (docs/09-deployment-aws.md). Also the base for the home
+# hosting override in T1.19 (docs/13-hosting-de-pruebas.md).
+#
+#   cp deploy/.env.example deploy/.env   # fill it in
+#   docker compose -f deploy/docker-compose.yml up -d --wait
+#
+# Locally: `make docker-build` and `make docker-up` build the images from this checkout.
+name: rpg
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+x-build-args: &build-args
+  VERSION: ${VERSION:-dev}
+  COMMIT: ${COMMIT:-unknown}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rpg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-rpg}
+    # No ports: only gameserver and backup reach it, through the internal network.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks: [internal]
+    shm_size: 128m
+    logging: *logging
+
+  gameserver:
+    image: ${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-gameserver:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.gameserver
+      args: *build-args
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-rpg}?sslmode=disable
+    # Pending migrations (embedded in the binary) are applied on start (-migrate, default
+    # true); the healthcheck only passes once the HTTP API is up, after migrating.
+    command:
+      - -http=:8080
+      - -data=/app/data
+      - -world=/app/build/world.bin
+      # Client IP for the per-IP rate limits = last X-Forwarded-For entry, which Caddy always
+      # overwrites with its {client_ip} (deploy/caddy-routes.caddy). Safe only because 8080
+      # is never published: every request arrives through Caddy.
+      - -trust-proxy=true
+      - -cookie-secure=${COOKIE_SECURE:-true}
+    # Only Caddy talks to it; 8080 is not published on the host.
+    expose: ["8080"]
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # SIGTERM → the server stops the loop and drains HTTP; give it time to save players.
+    stop_grace_period: 30s
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal, edge]
+    logging: *logging
+
+  caddy:
+    image: ${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-web:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args: *build-args
+    restart: unless-stopped
+    depends_on:
+      gameserver:
+        condition: service_healthy
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in deploy/.env}
+      # Required: Caddy exits on start when the `email` global option is empty.
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp" # HTTP/3
+    volumes:
+      - caddy_data:/data # certificates and the local CA: keep across restarts
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    networks: [edge]
+    logging: *logging
+
+  backup:
+    image: ${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-backup:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backup
+      args: *build-args
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-rpg}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      PGDATABASE: ${POSTGRES_DB:-rpg}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_S3_URI: ${BACKUP_S3_URI:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      HOME: /tmp # the AWS CLI writes its cache under $HOME; the root fs is read-only
+    volumes:
+      - backups:/backups
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # internal for Postgres, edge for the optional S3 upload.
+    networks: [internal, edge]
+    logging: *logging
+
+networks:
+  # No route outside the host: Postgres lives only here.
+  internal:
+    internal: true
+  edge: {}
+
+volumes:
+  pgdata:
+  backups: # list with: docker compose exec backup ls -lh /backups
+  caddy_data:
+  caddy_config:

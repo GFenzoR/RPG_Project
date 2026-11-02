@@ -42,6 +42,30 @@
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
+Detalles (T1.4, `server/internal/net/gateway`):
+- **`session_token`** es de un solo uso: el servidor lo borra al canjearlo en el `Hello`
+  (tabla `sessions`, `kind = 'play'`). Reconectar exige otro `POST /api/play`.
+- **Hello:** debe ser el primer frame y llegar en 10 s; si no, el servidor cierra.
+  Primer frame que no es `Hello`, token inválido, vencido o ya usado, o personaje que
+  ya no existe → `Disconnect{INVALID_SESSION}` y cierre. Un error de la base durante
+  el handshake → `Disconnect{UNSPECIFIED}` (el token ya se gastó: pedir otro).
+- **Versión:** `client_version` es `MAJOR.MINOR.PATCH` (se ignora un sufijo `-dev` o
+  `+build`). Se acepta si tiene la misma versión mayor que la mínima del servidor
+  (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
+  antes del token, así un cliente viejo no gasta su token.
+- **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
+  `Inventory` (equipo guardado, T1.8) y `PlayerSkills` (todas las skills de
+  `balance.yaml → skills.base`, con el nivel guardado del personaje).
+- **Posición inicial:** la guardada; si el personaje nunca jugó (o su casilla dejó de
+  ser caminable) el templo de su isla (`town`, o la primera isla del mundo). Si está
+  ocupada, la casilla libre más cercana (hasta 3 de distancia).
+- **Entrar dos veces:** si el personaje ya está en el mundo, la conexión vieja recibe
+  `Disconnect{LOGGED_IN_ELSEWHERE}` y la nueva sigue con el estado en memoria.
+- **Logout:** `Disconnect{LOGGED_OUT}` y cierre; se guarda el personaje. Cerrar el
+  socket sin `Logout` también saca al personaje y lo guarda (las zonas sin logout y el
+  bloqueo por combate llegan con T1.6/T1.11).
+- **Apagado:** el servidor guarda a todos y manda `Disconnect{SERVER_SHUTDOWN}`.
+
 ## API HTTP (cuentas y personajes)
 Implementada en `server/internal/httpapi` (T1.3). JSON en ambos sentidos; los `POST` con
 cuerpo exigen `Content-Type: application/json` (también frena formularios cross-site),
@@ -54,6 +78,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/logout` | token | — | `204`, revoca el token y borra la cookie |
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
 | `POST /api/characters` | token | `{name, vocation}` | `201 {character: {id, name, vocation, level}}` |
+| `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
 | `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde |
 
 - **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
@@ -94,24 +119,36 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
     víctima recibe `429` desde **cualquier** IP, también la de siempre. Lo aceptamos
     frente a dejar sin tope la adivinación distribuida. Mejora pendiente: eximir del
     límite por email a dispositivos o IPs donde la cuenta ya entró.
-  - Las tablas de límites tienen tamaño fijo (65 536 entradas; cada clave tiene dos
-    casillas posibles y una etiqueta, derivadas de un HMAC con secreto aleatorio por
-    proceso): la memoria está acotada, no se pueden elegir claves que caigan en las
-    casillas de otro, y un bucket solo cambia de dueño cuando está lleno, así que
-    rociar claves nuevas nunca resetea un límite gastado.
-  - Si las dos casillas de una clave están ocupadas por otros buckets en uso: el límite
-    por IP **deja pasar** el pedido sin contarlo, y los límites de login **comparten**
-    la casilla más llena (fallan cerrados). Los de login no se pueden mantener llenos:
-    solo los gastan cálculos reales de contraseña (máx. 4 a la vez), muy por debajo de
-    lo que la tabla recupera.
+  - Las tablas de límites tienen tamaño fijo (65 536 casillas en 16 384 grupos de 4;
+    cada clave cae en un grupo y lleva una etiqueta, ambos derivados de un HMAC con
+    secreto aleatorio por proceso): la memoria está acotada y no se pueden elegir claves
+    que caigan en el grupo de otro. Una clave cuya etiqueta está en su grupo usa siempre
+    esa casilla, y una casilla solo cambia de dueño cuando está vacía o llena: rociar
+    claves nuevas nunca resetea un límite gastado.
+  - El tiempo se mide desde el arranque del limitador (monotónico con el reloj real), y
+    si el reloj retrocede los buckets siguen recargando desde ahí: un salto del reloj
+    de pared ni congela los límites ni los rellena todos de golpe.
+  - Si las 4 casillas del grupo de una clave están ocupadas por otros buckets en uso: el
+    límite por IP **deja pasar** el pedido sin contarlo, y los límites de login
+    **comparten** la casilla más llena (fallan cerrados).
+  - **Residuo en los límites de login:** solo los gastan cálculos reales de contraseña
+    (máx. 4 a la vez), así que un atacante solo puede mantener gastada una fracción *f*
+    pequeña de las casillas. Una cuenta que nunca falló recibe `429` solo si las 4
+    casillas de su grupo están gastadas por otros. Como los buckets gastados caen en los
+    grupos con conteos tipo Poisson, eso pasa con probabilidad P(Poisson(4*f*) ≥ 4) ≈
+    (4*f*)⁴/24 ≈ 10·*f*⁴ por cada una de las dos tablas de login: ≈ 0,08 % de las cuentas
+    con *f* = 10 %, ≈ 0,3 % con *f* = 15 %, mientras dure el ataque. Con 2 casillas por
+    clave era ≈ 2·*f*² (≈ 1,8 % con *f* = 10 %).
   - El límite por IP es **best effort**: quien sostenga ~11 000 pedidos/s desde decenas
     de miles de /64 (p. ej. un /48 IPv6) satura la tabla y, mientras dure, las IPs sin
     casilla quedan sin ese límite. Preferimos eso a un `429` para todos. Lo que sigue
     protegiendo: los límites de login por par y por email, y el tope de 4 cálculos de
-    contraseña, que también acota el ritmo de registros (spam de cuentas). Detrás de Caddy, `-trust-proxy` toma
-  la IP del último salto de `X-Forwarded-For` (el puerto del servidor no debe quedar
-  expuesto fuera de Caddy). Si los cálculos de contraseña (argon2id, máx. 4 a la vez)
-  están saturados más de 2 s → `503 busy`.
+    contraseña, que también acota el ritmo de registros (spam de cuentas). Cuando la
+    tabla vuelve a llenarse de fichas, las claves nuevas recuperan casilla.
+- **Detrás de Caddy**, `-trust-proxy` toma la IP del último salto de `X-Forwarded-For`
+  (el puerto del servidor no debe quedar expuesto fuera de Caddy).
+- **Cálculos de contraseña** (argon2id, máx. 4 a la vez): si están saturados más de 2 s
+  → `503 busy`.
 - **Errores:** `{"error": {"code": "<código>"}}`. El cliente traduce el código con la
   clave i18n `error.<código>`; el servidor nunca manda texto visible.
 
@@ -127,12 +164,12 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
+| `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |
 | `rate_limited` | 429 | Demasiados intentos de login/registro (por IP o por email) |
 | `busy` | 503 | Servidor saturado de logins; reintentar más tarde |
 | `not_found` | 404 | Ruta `/api/...` inexistente |
 | `internal` | 500 | Error del servidor (queda en el log) |
 
-`POST /api/play` (paso 3 del handshake, token `kind = 'play'` de 60 s) llega con T1.4.
 OAuth, verificación de email y reset de contraseña llegan con T2.1.
 
 ## Mensajes cliente → servidor (intenciones)
@@ -154,11 +191,111 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `TradeRequest` | `creature_id`, `item`, `item_id`, `stack_index` |
 | `TradeOffer` | `item`, `item_id`, `stack_index` |
 | `TradeAccept` / `TradeCancel` | — |
+| `CloseContainer` | `container_id` (T1.8) |
 | `Ping` | `client_time` |
 | `Logout` | — |
 
 `item_id` y `stack_index` en las acciones sobre items permiten al servidor rechazar
 una acción hecha sobre una vista desactualizada del tile o contenedor.
+
+### Caminar (T1.4, `server/internal/session`)
+- El servidor marca el ritmo: un paso empieza cuando terminó el anterior. Duración =
+  `base_step_ms × terreno% / velocidad` (× `diagonal_cost` en diagonal), con terreno el
+  `ground.speed` de la casilla **de destino** (100 por defecto), redondeada hacia arriba
+  a ticks de 50 ms. `CreatureMove.duration_ms` es esa duración ya redondeada. La
+  posición cambia al **empezar** el paso.
+- `Walk` reemplaza lo que hubiera en cola (también un `WalkPath`) por un paso; si el
+  personaje está a mitad de un paso, sale al terminarlo. Mandar `Walk` cada tick no
+  acelera nada.
+- `WalkPath` reemplaza la cola. Vacío = `StopWalk`. Más de `max_path_tiles` pasos
+  (`balance.yaml`, 100) o una dirección inválida → `WalkRejected` con `dir` =
+  `UNSPECIFIED` y nada se encola. En los demás rechazos `dir` es el paso rechazado.
+- Cada paso se valida al ejecutarse: casilla sin suelo, que bloquea o fuera del mundo →
+  `WalkRejected{pos, dir}` y se vacía la cola. Si la bloquea **una criatura** durante un
+  `WalkPath`, el servidor recalcula con A* hasta el final del camino esquivando
+  criaturas; si no hay camino (o el destino está ocupado) → `WalkRejected`. Un `Walk`
+  de teclado bloqueado por una criatura se rechaza sin recalcular.
+- **Cuota de pathfinding por tick:** los recálculos comparten 12 000 nodos expandidos
+  por tick y cada búsqueda expande como máximo 2 × 1 500; una búsqueda solo arranca si
+  cabe el peor caso. Sin cuota, el jugador espera al tick siguiente (no se rechaza).
+- `StopWalk` vacía la cola (el paso en curso termina). `Turn` cambia la dirección y
+  manda `CreatureTurn` a quien lo ve (nada si ya miraba hacia ahí).
+- `Ping` → `Pong` en el batch de ese tick.
+
+### Combate cuerpo a cuerpo (T1.6, `server/internal/session/combat.go`)
+- `SetTarget{creature_id}` elige un monstruo que el cliente conoce, en su mismo piso, con
+  ninguno de los dos en zona de protección. Si no vale (también jugadores y NPCs, hasta
+  PvP), el servidor lo descarta y manda `Message` de sistema `combat.cannot_attack`; el
+  cliente suelta el objetivo al recibirlo. `0` deja de atacar. El objetivo se pierde
+  solo cuando sale de la vista o muere: el cliente lo suelta con su `CreatureDisappear`.
+- `SetFightMode{stance, chase}`: `stance` ofensivo/equilibrado/defensivo multiplica el
+  golpe máximo y la defensa del escudo (`combat.modes` de `balance.yaml`); `UNSPECIFIED`
+  se ignora. Por defecto equilibrado y sin perseguir. Con `chase` el jugador da un paso
+  hacia su objetivo cuando no está pegado a él y no tiene pasos en cola.
+- Ronda: con el objetivo a una casilla (también en diagonal) el jugador golpea cada
+  `combat.attack_interval_ms` (2000 ms). Fórmulas en `server/internal/combat` (doc 02).
+  Sin arma golpea con los puños (`combat.fist_attack`, con su skill `fist`); con arma,
+  con la de la mano derecha (T1.8).
+- Cada golpe (de jugador o de monstruo) manda a quien ve la casilla: `Effect`
+  (`effect_id` 1 = golpe con daño, 2 = bloqueado o fallado) y, si hubo daño,
+  `FloatingText{DAMAGE}` y `CreatureHealth`. El jugador golpeado recibe además
+  `PlayerStats`. Los `effect_id` son constantes del protocolo hasta que exista
+  `data/effects.yaml`.
+- Muerte de un monstruo: `CreatureDisappear`, `TileUpdate` con `creature_remains` encima
+  de la pila (dura `combat.monster_corpse_ms`; es un contenedor con el botín, T1.8),
+  `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
+  se reparte según el daño de los que siguen conectados) y, al que más daño hizo,
+  `Message` de sistema `combat.loot` con un parámetro `monster` (`content_id`) y un
+  parámetro `item` por pila del botín (el cliente los junta en `{items}`), o
+  `combat.loot_none` si no hubo botín.
+- Progreso (T1.7): cuando cambia el nivel o el % de una skill el jugador recibe
+  `PlayerSkills` completo; si subió de nivel, además el `Message` de sistema
+  `progress.skill_up` con `skill` (`content_id`, el cliente muestra `skill.<id>.name`) y
+  `level` (`number`). Al subir de nivel por experiencia recibe `progress.level_up` con
+  `from` y `level`, `PlayerStats` con los nuevos máximos, y quien lo ve recibe
+  `CreatureSpeed` (si cambió) y `CreatureHealth` (si cambió el %).
+- La regeneración manda `PlayerStats` al jugador (y `CreatureHealth` a quien lo ve si
+  cambió el %) solo cuando le faltaba vida o maná.
+- Hasta la muerte real (T1.11), un jugador con 0 de vida despierta en el templo con la vida
+  llena, sin perder nada, y recibe `combat.defeated`.
+
+### Items e inventario (T1.8, `server/internal/session/inventory.go`)
+Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
+- **Pila de un tile:** suelo (índice 0), items fijos de `world.bin` y encima los items del
+  servidor (restos, items soltados) con su `count` si son apilables. `stack_index` de una
+  acción sobre `pos` es el índice en esa pila; solo los items del servidor se mueven o usan.
+  En `slot` vale 0; en `container` es el `index`.
+- **Validación:** si `item_id` no coincide con lo que hay en esa posición (vista vieja),
+  el índice no existe o el contenedor no está abierto → `Message` de sistema
+  `inventory.not_possible` y nada cambia. Otros rechazos: `inventory.too_far`,
+  `cannot_move` (`pickupable: false`), `wrong_slot`, `level_required` (`level`),
+  `vocation_cannot`, `hands_full`, `slot_occupied`, `container_full`, `too_heavy`,
+  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`.
+- **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
+  Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
+  contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor
+  no reordena (ignorado).
+- **Respuestas:** cada lugar que cambió manda su estado completo: `TileUpdate` a quien ve
+  el tile, `Inventory` (todos los slots ocupados) al dueño y `ContainerUpdate` a cada
+  jugador que tiene el contenedor abierto. Si cambió el peso cargado, `PlayerStats`
+  (`capacity` = capacidad libre en gramos, `max_capacity` = la total).
+- **Contenedores:** `UseItem` sobre un contenedor lo abre (`ContainerOpen` con un
+  `container_id` nuevo de la sesión, `capacity` = lugares, `has_parent` si está dentro de
+  otro contenedor) o lo cierra si ya estaba abierto (`ContainerClose`). Como máximo
+  `inventory.max_open_containers` (16) a la vez: abrir otro cierra el más viejo.
+  `CloseContainer` cierra una ventana. El servidor manda `ContainerClose` cuando el
+  jugador se aleja de un contenedor del suelo, cuando el contenedor se mueve fuera de su
+  alcance o cuando los restos desaparecen.
+- **Consumibles:** `UseItem` cura (`FloatingText{HEAL}` a quien ve, `CreatureHealth` si
+  cambió el %, `PlayerStats` al jugador) o, si solo es comida, `inventory.ate` con el
+  item. Gasta una unidad.
+- **`LookAt`:** `Message` de sistema `look.weapon` (`attack`, `defense`), `look.armor`
+  (`armor`), `look.shield` (`defense`), `look.container` (`slots`), `look.item` o
+  `look.ground`, con el parámetro `item` y, salvo el suelo, `weight` (gramos de la pila con
+  su contenido) y `level` si el item lo exige. El cliente agrega la descripción
+  `item.<id>.desc` si existe y muestra el peso en oz.
+- **Login:** `Inventory` lleva el equipo guardado; un personaje que nunca jugó recibe
+  `inventory.start_container` en el slot de mochila.
 
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
@@ -197,6 +334,25 @@ Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}
 - `creatures`: criaturas paradas dentro del área.
 `MapSlice` usa el mismo formato con la fila o columna nueva (`width` o `height` = 1).
 
+Reglas del área de interés (T1.4):
+- El área es de 17x13 casillas centrada en el jugador: las 15x11 visibles más 1 de
+  margen por lado. `MapArea.x/y` es la esquina superior izquierda; cerca del borde del
+  mundo (coordenada 0) el área se recorta y `width`/`height` lo dicen.
+- **Pisos:** en la superficie o arriba (z ≤ 7) se mandan los pisos 0–7; bajo tierra solo
+  el piso actual. Un piso sin ninguna casilla en el área no se manda. Las criaturas se
+  ven con la misma regla, así que "A ve a B" es simétrico.
+- Tile = suelo y luego la pila de items de `world.bin`, de abajo arriba, y encima los
+  items del servidor (T1.8) con su `count` si son apilables (0 en los demás).
+- **Paso ortogonal:** un `MapSlice` con la columna (13 de alto) o la fila (17 de ancho) nueva. **Paso
+  diagonal:** dos `MapSlice`, primero la columna completa (13) y después la fila sin la
+  esquina (16).
+- `MapArea.creatures` de un `MapSlice` trae las criaturas que entran a la vista por ese
+  movimiento propio; las que salen llegan como `CreatureDisappear`. Cuando otra
+  criatura se mueve: si el cliente la conocía y la sigue viendo → `CreatureMove`; si
+  deja de verla → `CreatureDisappear`; si entra a la vista → `CreatureAppear`.
+- `FullMapView` (al entrar o teletransportarse) reemplaza todo lo que el cliente
+  conocía: antes van `CreatureDisappear` de lo que ya no está.
+
 ### Identificadores de sesión
 `dialog_id` y `container_id` son locales a la sesión y los asigna el servidor; las
 skills y oficios se mandan por `skill_id` de `data/` para no cambiar el protocolo al
@@ -223,12 +379,19 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 ```
 
 ## Límites
-- Tamaño máximo de mensaje entrante: 4 KB. Saliente: sin límite fijo, pero
-  `FullMapView` se comprime con la paleta y suele quedar < 20 KB.
-- Rate limit: 30 comandos/s por conexión (ráfaga 60). Excederlo de forma sostenida
-  desconecta.
-- Cola de salida por sesión acotada: si un cliente lento la llena, se desconecta en
-  vez de consumir memoria del servidor.
+- Tamaño máximo de mensaje entrante: 4 KB (más grande → cierre WebSocket 1009). Saliente:
+  sin límite fijo, pero `FullMapView` se comprime con la paleta y suele quedar < 20 KB.
+- Frames de texto o protobuf inválido después del `Hello` → `Disconnect{KICKED}`.
+- Rate limit: 30 comandos/s por conexión (ráfaga 60). Un mensaje sin ficha se descarta
+  y suma deuda; la deuda se paga con la misma recarga. Con más de 30 de deuda →
+  `Disconnect{RATE_LIMITED}`. Así solo desconecta el exceso **sostenido**: a 40/s, tras
+  ~9 s; a 30/s, nunca.
+- Cola de salida por sesión acotada (128 batches ≈ 6,4 s de ticks): si un cliente lento
+  la llena, el servidor lo saca del mundo, lo guarda y cierra con
+  `Disconnect{SLOW_CLIENT}` (sin mandarle los batches pendientes) en vez de consumir
+  memoria.
+- Orígenes del navegador: por defecto solo el mismo host; otros (servidor de Vite,
+  Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas).
 
 ## Presupuesto de ancho de banda
 Objetivo: < 4 KB/s promedio por jugador en zona concurrida. Con 100 jugadores ≈ 400 KB/s

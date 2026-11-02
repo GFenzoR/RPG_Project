@@ -1,3 +1,8 @@
-// Placeholder entry point created by T0.1 (monorepo skeleton).
-// The real implementation lands in the roadmap task named in package.json.
-export const packageName = "@rpg/renderer";
+// @rpg/renderer: PixiJS v8 tile renderer shared by the game client (T1.5) and the map
+// editor (T1.14). Generic on purpose: it draws tiles from a TileSource with textures from
+// the spritepack atlas; input, entities and editing live in the apps.
+export * from "./camera.ts";
+export { Atlas, MISSING_TEXTURE } from "./atlas.ts";
+export type { AtlasIcon, AtlasIndex } from "./atlas.ts";
+export { MAX_STACK_ORDER, MapView, entityZIndex, itemZIndex } from "./map-view.ts";
+export type { ChunkData, MapViewOptions, TextureLookup, TileSource } from "./map-view.ts";

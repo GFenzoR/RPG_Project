@@ -1,0 +1,233 @@
+:root {
+  --bg: #15191f;
+  --panel: #1d232b;
+  --border: #2e3640;
+  --text: #dfe6ee;
+  --muted: #8b97a5;
+  --accent: #e0b84a;
+  --error: #ff6b6b;
+  --warning: #f0c060;
+  --ok: #6fcf7f;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+button,
+select,
+input {
+  font: inherit;
+  color: var(--text);
+  background: #262e38;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+}
+button.active,
+button.selected {
+  border-color: var(--accent);
+  background: #3a3420;
+}
+button.primary {
+  background: #4a3c12;
+  border-color: var(--accent);
+}
+.editor {
+  display: grid;
+  grid-template-columns: 240px 1fr 300px;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas: "top top top" "left map right" "status status status";
+  height: 100%;
+}
+.toolbar {
+  grid-area: top;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.toolbar h1 {
+  font-size: 15px;
+  margin: 0 8px 0 0;
+  color: var(--accent);
+}
+.toolbar .group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dirty {
+  color: var(--warning);
+}
+.clean {
+  color: var(--muted);
+}
+.left,
+.right {
+  overflow: auto;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.left {
+  grid-area: left;
+  border-right: 1px solid var(--border);
+}
+.right {
+  grid-area: right;
+  border-left: 1px solid var(--border);
+}
+.map {
+  grid-area: map;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+.map canvas {
+  display: block;
+}
+.overlay-msg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.overlay-msg.error {
+  color: var(--error);
+}
+.panel {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.panel h2 {
+  font-size: 13px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.panel h3 {
+  font-size: 12px;
+  margin: 6px 0;
+  color: var(--error);
+}
+.selection {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.palette {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.palette input {
+  width: 100%;
+  margin-bottom: 6px;
+}
+.categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+.categories button {
+  padding: 1px 6px;
+  font-size: 11px;
+}
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  flex: 1;
+}
+.items button {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  grid-template-rows: auto auto;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 2px;
+  align-items: center;
+  column-gap: 6px;
+}
+.items .swatch {
+  grid-row: span 2;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  display: inline-block;
+}
+.items .swatch.missing {
+  width: 32px;
+  height: 32px;
+  background: #fff;
+}
+.items .id {
+  color: var(--muted);
+  font-size: 11px;
+}
+.items .empty {
+  color: var(--muted);
+}
+.tile-info ul,
+.diags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.diags li {
+  margin-bottom: 3px;
+}
+.diags button {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  font-size: 12px;
+}
+.diags .error button,
+.diags li.error {
+  border-left: 3px solid var(--error);
+}
+.diags .warning button {
+  border-left: 3px solid var(--warning);
+}
+.validation .good {
+  color: var(--ok);
+}
+.validation .bad {
+  color: var(--error);
+}
+.status {
+  grid-area: status;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}

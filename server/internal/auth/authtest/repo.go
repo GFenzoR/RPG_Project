@@ -143,3 +143,27 @@ func (r *Repo) CreateCharacter(_ context.Context, c store.NewCharacter, maxPerAc
 	r.characters[c.AccountID] = append(r.characters[c.AccountID], ch)
 	return ch, nil
 }
+
+// CharacterBelongsTo implements auth.Repo.
+func (r *Repo) CharacterBelongsTo(_ context.Context, accountID, characterID int64) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, c := range r.characters[accountID] {
+		if c.ID == characterID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ConsumeSession implements auth.Repo.
+func (r *Repo) ConsumeSession(_ context.Context, hash []byte, kind store.SessionKind, now time.Time) (store.Session, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	s, ok := r.sessions[string(hash)]
+	if !ok || s.Kind != kind || !s.ExpiresAt.After(now) || r.accounts[s.AccountID].Disabled {
+		return store.Session{}, store.ErrNotFound
+	}
+	delete(r.sessions, string(hash))
+	return s, nil
+}

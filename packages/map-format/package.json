@@ -6,6 +6,7 @@
   "description": "Canonical read/write of world/ (chunks, islands, auxiliary files), validation and ASCII view.",
   "exports": {
     ".": "./src/index.ts",
+    "./ops": "./src/ops/index.ts",
     "./schemas/*": "./schemas/*"
   },
   "scripts": {

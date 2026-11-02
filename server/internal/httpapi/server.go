@@ -32,7 +32,7 @@ const maxBodyBytes = 4 << 10
 
 // Config configures the API.
 type Config struct {
-	Auth   *auth.Service
+	Auth   Accounts
 	Clock  clock.Clock
 	Logger *slog.Logger
 	// Health reports whether dependencies (Postgres) are reachable. Optional.
@@ -47,6 +47,20 @@ type Config struct {
 	LoginPairRateLimit  RateLimit // failed logins per (email, IP); default DefaultLoginPairRateLimit
 	LoginEmailRateLimit RateLimit // failed logins per email; default DefaultLoginEmailRateLimit
 }
+
+// Accounts is the account service the API calls. *auth.Service implements it; tests
+// can use fakes to reach every error path.
+type Accounts interface {
+	Register(ctx context.Context, email, password string) (int64, error)
+	Login(ctx context.Context, email, password string) (auth.Token, error)
+	Authenticate(ctx context.Context, token string) (int64, error)
+	Logout(ctx context.Context, token string) error
+	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
+	CreateCharacter(ctx context.Context, accountID int64, name, vocation string) (store.Character, error)
+	IssuePlayToken(ctx context.Context, accountID, characterID int64) (auth.Token, error)
+}
+
+var _ Accounts = (*auth.Service)(nil)
 
 type api struct {
 	cfg          Config
@@ -65,6 +79,15 @@ func orDefault(rl, def RateLimit) RateLimit {
 
 // New returns the API handler.
 func New(cfg Config) (http.Handler, error) {
+	a, err := newAPI(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return a.recoverer(a.routes()), nil
+}
+
+// newAPI validates cfg, applies defaults and builds the limiters.
+func newAPI(cfg Config) (*api, error) {
 	if cfg.Auth == nil || cfg.Clock == nil {
 		return nil, errors.New("httpapi: Auth and Clock are required")
 	}
@@ -91,6 +114,10 @@ func New(cfg Config) (http.Handler, error) {
 		*l.dst = lim
 	}
 
+	return a, nil
+}
+
+func (a *api) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.healthz)
 	mux.HandleFunc("POST /api/auth/register", a.rateLimited(a.register))
@@ -98,10 +125,11 @@ func New(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("POST /api/auth/logout", a.logout)
 	mux.HandleFunc("GET /api/characters", a.authed(a.listCharacters))
 	mux.HandleFunc("POST /api/characters", a.authed(a.createCharacter))
+	mux.HandleFunc("POST /api/play", a.authed(a.play))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
-	return a.recoverer(mux), nil
+	return mux
 }
 
 // ---- handlers ----------------------------------------------------------------
@@ -240,6 +268,29 @@ func (a *api) createCharacter(w http.ResponseWriter, r *http.Request, accountID 
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]characterJSON{"character": toJSON(c)})
+}
+
+type playRequest struct {
+	CharacterID int64 `json:"character_id"`
+}
+
+type playResponse struct {
+	SessionToken string    `json:"session_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+// play issues the single-use play token (60 s) the client sends in the WebSocket Hello.
+func (a *api) play(w http.ResponseWriter, r *http.Request, accountID int64) {
+	var in playRequest
+	if !a.decode(w, r, &in) {
+		return
+	}
+	tok, err := a.cfg.Auth.IssuePlayToken(r.Context(), accountID, in.CharacterID)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, playResponse{SessionToken: tok.Token, ExpiresAt: tok.ExpiresAt.UTC()})
 }
 
 func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
@@ -427,6 +478,7 @@ var errorStatus = []struct {
 	{auth.ErrNameTaken, http.StatusConflict, "name_taken"},
 	{auth.ErrInvalidVocation, http.StatusBadRequest, "invalid_vocation"},
 	{auth.ErrCharacterLimit, http.StatusConflict, "character_limit"},
+	{auth.ErrUnknownCharacter, http.StatusNotFound, "character_not_found"},
 	{auth.ErrBusy, http.StatusServiceUnavailable, "busy"},
 }
 

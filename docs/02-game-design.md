@@ -43,6 +43,30 @@ exponencialmente más (`tries(n) = base × factor_vocación^(n − 10)`).
 | Nivel mágico | Gastas maná (por maná gastado, no por hechizo) |
 | Pesca | Pescas en agua con peces |
 
+Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progress.go`):
+- `tries(n)` es lo que cuesta pasar del nivel `n` al `n+1`; el progreso vuelve a cero al
+  subir y el sobrante pasa al nivel siguiente. Una vocación sin factor para una skill usa 1.
+- Armas y puños: cada ronda de ataque (`combat.attack_interval_ms`) cuenta un intento de
+  la skill del arma (`weapon.type` en `data/items`), acierte o no; sin arma, `fist`. El
+  daño usa ese nivel de skill en la fórmula de "Combate".
+- Escudo: cada ataque físico cuerpo a cuerpo recibido con escudo equipado cuenta un
+  intento, hasta `skills.shield_max_tries_per_round` por ronda de ataque (ventanas fijas
+  de `attack_interval_ms` contadas desde el tick 0). La fórmula de bloqueo de "Combate" no
+  usa la skill de escudo (sin cambios en T1.7).
+- Anti-AFK: si el objetivo no te ataca durante `skills.afk.after_ms` (cuenta desde que
+  empiezas a pegarle o desde su último intento de ataque contra ti), los intentos valen
+  `skills.afk.factor` (se acumulan fracciones). Solo un objetivo distinto reinicia la
+  cuenta: volver a elegir el mismo no. Los monstruos cuyos únicos ataques son a distancia
+  o hechizos (hasta T1.9) cuentan como que no responden.
+- Nivel: el que corresponde a la XP total por la curva, hasta `experience.max_level`. Al
+  subir, máximos de vida/maná, capacidad y velocidad pasan a los de la vocación en ese
+  nivel, y la vida y el maná actuales suben lo mismo que subió el máximo.
+- Regeneración: cada `regen.interval_ms` (evento del scheduler por jugador) recupera
+  `regen.health` y `regen.mana` sin pasar del máximo. No depende de comida todavía.
+- Persistencia: el snapshot de guardado lleva todas las skills y se escriben en
+  `character_skills` en la misma transacción que el personaje. El inventario (T1.8) va en
+  el mismo snapshot y reemplaza las filas de `inventory_items` en esa transacción.
+
 ### Oficios
 | Oficio | Acción | Produce |
 |---|---|---|
@@ -67,6 +91,12 @@ exponencialmente más (`tries(n) = base × factor_vocación^(n − 10)`).
   en rango. Modos: ofensivo / equilibrado / defensivo, y perseguir / quedarse quieto.
 - Daño físico: `skill_arma × ataque_arma × factor_modo × aleatorio` contra
   `armadura` (reducción plana aleatoria) y `defensa` (escudo, bloquea por golpe).
+  Fórmula exacta (T1.6, `server/internal/combat`, constantes en `balance.yaml`):
+  `golpe_máx = (skill × ataque / skill_attack_divisor + nivel / level_divisor) × modo`,
+  `golpe = aleatorio(0, golpe_máx) × (1 − resistencia física %)`; a un monstruo le restan
+  `aleatorio(armadura/2, armadura)` y `aleatorio(0, defensa/2)`; a un jugador
+  `aleatorio(armadura/2, armadura)` y `aleatorio(0, escudo × modo_defensa /
+  shield_block_divisor)` (solo ataques físicos).
 - Daño mágico: `nivel_mágico × base_hechizo + nivel × factor` con rango aleatorio.
 - Elementos: físico, fuego, hielo, energía, tierra, sagrado, muerte. Monstruos tienen
   resistencias porcentuales en su YAML.
@@ -77,12 +107,61 @@ exponencialmente más (`tries(n) = base × factor_vocación^(n − 10)`).
 - Condiciones: veneno, fuego, eléctrico, paralyze, haste, invisibilidad (hito 3).
 - Zonas de protección: no se puede atacar ni ser atacado.
 
+## Items, equipo e inventario
+Implementado en T1.8 (`server/internal/session/inventory.go`):
+- **Instancias:** cada item es una instancia que vive en un solo lugar: en el suelo (sobre
+  los items fijos del mapa), en un slot de equipo o dentro de un contenedor. Mover un
+  item mueve la instancia (o parte de la pila); nunca se copia, así que un movimiento no
+  puede duplicar items. Es la base transaccional del trade y del mercado futuros.
+- **Slots de equipo:** cabeza, cuello, mochila, torso, mano derecha, mano izquierda,
+  piernas, pies, anillo y munición. Cada `kind` va en un solo slot: `weapon` en la mano
+  derecha, `shield` en la izquierda, `armor` en el de su `armor.slot` (`body` = torso),
+  `container` en el de mochila. Un arma de dos manos (`hands: 2`) exige la izquierda
+  libre. `requires.level`, `requires.vocations` y los `weapons` de la vocación
+  (`data/vocations.yaml`) se validan al equipar. Munición: sin items todavía.
+- **Combate:** el arma de la mano derecha da el ataque y la skill (`weapon.type`; una
+  varita cuenta como puños hasta T1.9), el escudo de la izquierda la defensa y la suma
+  de `armor` de todo el equipo la armadura del jugador contra golpes físicos.
+- **Contenedores:** una mochila (o los restos de un monstruo) tiene `container.slots`
+  lugares. Los contenedores se anidan hasta 8 niveles; no se puede meter uno dentro de sí
+  mismo. Soltar un item sobre un slot de equipo con un contenedor, o sobre un lugar de una
+  ventana de contenedor que tiene otro contenedor, lo mete adentro (soltarlo sobre un
+  contenedor en el mapa lo deja en el tile). Las pilas apilables se juntan hasta
+  `max_stack`. Un tile admite hasta 20 items distintos soltados (las pilas iguales se
+  juntan).
+- **Capacidad:** cada vocación tiene capacidad (gramos) por nivel; el peso es el de los
+  items equipados con su contenido (`weight × cantidad`). Solo lo que entra al
+  inventario desde afuera consume capacidad. La UI muestra oz = gramos / 100.
+- **Alcance:** tomar, soltar, abrir o usar en el suelo exige el mismo piso y distancia
+  ≤ `inventory.reach` (1); un contenedor del suelo se cierra al alejarse. Mirar alcanza
+  todo lo visible. Los items fijos del mapa (`world.bin`) se pueden mirar pero no mover.
+- **Usar:** un contenedor se abre o cierra; un consumible cura (`heal_hp`/`heal_mp`) o se
+  come (`food_ms` aún no tiene efecto: no hay hambre) y gasta una unidad, con
+  `inventory.use_cooldown_ms` entre usos. Herramientas y runas llegan con sus tareas.
+- **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
+  slot de mochila. El kit de cada vocación llega con los diálogos (T1.10).
+- **Límite conocido:** cada personaje guarda su inventario en su propio snapshot. Si A
+  suelta un item, B lo levanta y se guarda, y el servidor cae antes del siguiente guardado
+  de A, el item vuelve en ambos. Los items del suelo no se guardan ni desaparecen solos
+  (salvo los restos). Guardado por item y decay de items soltados quedan para el trade y
+  la muerte (T1.11) o un hito posterior.
+- **Restos:** el botín de un monstruo queda dentro de sus restos (contenedor que no se
+  puede levantar) y desaparece con ellos a los `combat.monster_corpse_ms`.
+
 ## Monstruos
 - Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos con
   área), resistencias, loot con probabilidades, experiencia, comportamiento.
 - IA simple por estados: `idle → alerta → perseguir → atacar → huir (con poca vida)`.
+  Implementada en T1.6 (`server/internal/session/monster.go`): en idle deambula dentro del
+  radio de su spawn; los agresivos eligen al jugador visible más cercano con línea de
+  visión (alerta: se gira hacia él), lo persiguen (paso que más acerca; si no hay, A* con
+  la cuota de pathfinding del tick) y atacan pegados con los temporizadores de cada
+  ataque. Con `flee_at_health_pct` se alejan; acorralados, pelean. Los pasivos solo
+  responden si los golpean. No entran en zonas de protección ni atacan dentro de ellas.
+  Solo piensan en sectores activos. En T1.6 solo hay ataques `melee`; `distance` y
+  `spell` llegan con la magia (T1.9).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
-  jugador está mirando el punto (evita aparecer en la cara).
+  jugador está mirando el punto (evita aparecer en la cara): se reintenta cada 5 s.
 
 ## Muerte
 Valores iniciales (balance.yaml):
@@ -92,6 +171,9 @@ Valores iniciales (balance.yaml):
   **100 %** salvo con bendiciones.
 - **Bendiciones** (hasta 5, se compran con oro del juego a NPCs en templos):
   cada una reduce la pérdida; con las 5 no pierdes items y la pérdida de XP baja a ~3 %.
+  En la Isla del Puerto las vende la hermana Liora (templo del Farol) a 200 monedas cada
+  una, precio fijo; las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
+  y `deep_light`. Se pierden al morir. Un precio que escale con el nivel queda para T1.11.
 - Reapareces en el templo de tu ciudad de residencia.
 - Niveles 1–8: protección de novato (pérdida mínima, sin drop).
 - El cuerpo queda en el suelo X minutos con el loot (solo el dueño puede tomarlo

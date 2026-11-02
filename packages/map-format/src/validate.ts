@@ -69,6 +69,29 @@ export function validateWorld(root: string, opts: ValidateWorldOptions = {}): Ma
   return summarize(diags);
 }
 
+export interface ValidateLoadedOptions {
+  /** Line lookup per YAML file (LoadResult.lines), to point findings at file:line. */
+  lines?: LoadResult["lines"];
+}
+
+/**
+ * Validates a world that is already in memory (the editor's), without reading world/.
+ * Same rules as validateWorld except the on-disk ones (file layout, canonical form):
+ * whatever is written from memory is canonical by construction.
+ */
+export function validateLoaded(
+  world: World,
+  content: ContentIndex,
+  opts: ValidateLoadedOptions = {},
+): MapReport {
+  const v = new WorldValidator(
+    { world, lines: opts.lines ?? new Map(), files: [], diagnostics: [] },
+    content,
+  );
+  v.run();
+  return summarize(v.diags);
+}
+
 export function summarize(diagnostics: Diagnostic[]): MapReport {
   const errors = diagnostics.filter((d) => d.severity === "error").length;
   return { diagnostics, errors, warnings: diagnostics.length - errors };

@@ -1,0 +1,339 @@
+:root {
+  color-scheme: dark;
+  --bg: #12151b;
+  --panel: #1d222b;
+  --text: #e6e2d8;
+  --muted: #9aa0a8;
+  --accent: #d9b44a;
+  --error: #ff7a6b;
+  font-family: system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+.panel {
+  max-width: 22rem;
+  margin: 10vh auto 0;
+  padding: 1.5rem;
+  background: var(--panel);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.panel.wide {
+  max-width: 30rem;
+}
+.panel h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+.panel h2 {
+  margin: 0.5rem 0 0;
+  font-size: 1.05rem;
+}
+.panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+small {
+  color: var(--muted);
+}
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid #3a414d;
+  background: #11141a;
+  color: var(--text);
+}
+button {
+  background: var(--accent);
+  color: #1a1a1a;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+button.link {
+  background: none;
+  color: var(--muted);
+  font-weight: normal;
+  text-decoration: underline;
+}
+.error {
+  color: var(--error);
+  margin: 0;
+}
+.notice {
+  color: var(--accent);
+  margin: 0;
+}
+.characters {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.characters li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.characters .name {
+  font-weight: 600;
+}
+.characters .meta {
+  color: var(--muted);
+  flex: 1;
+}
+.game {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.hud {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--panel);
+}
+.hud .name {
+  font-weight: 600;
+}
+.hud .hint {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.hud .stat {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+.game-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.side {
+  width: 14rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background: var(--panel);
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+.side h2 {
+  font-size: 0.9rem;
+  margin: 0 0 0.4rem;
+}
+.battle ul,
+.log {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.battle button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  text-align: left;
+  padding: 0.25rem 0.4rem;
+  border: 2px solid transparent;
+}
+.battle button.target {
+  border-color: #ff2020;
+}
+.battle .hp {
+  display: block;
+  height: 4px;
+  background: #101010;
+}
+.battle .hp span {
+  display: block;
+  height: 100%;
+  background: #30c030;
+}
+.battle .empty {
+  color: var(--muted);
+  margin: 0;
+}
+.fight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.fight .check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+.log {
+  margin-top: auto;
+  color: var(--muted);
+}
+.viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+}
+.viewport canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+.connecting {
+  color: var(--muted);
+}
+.skills ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.1rem 0.5rem;
+}
+.skills li {
+  display: contents;
+}
+.skills .slevel {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.skills .sbar {
+  grid-column: 1 / -1;
+  display: block;
+  height: 3px;
+  margin-bottom: 0.2rem;
+  background: #101010;
+}
+.skills .sbar span {
+  display: block;
+  height: 100%;
+  background: #d0a030;
+}
+.viewport {
+  position: relative;
+}
+.level-up {
+  position: absolute;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem 1.25rem;
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid #d0a030;
+  color: #f0d070;
+  pointer-events: none;
+}
+
+/* Inventory (T1.8): 32 px sprites from the atlas, pixel-perfect like the canvas. */
+.inventory .equipment,
+.inventory .cells {
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  gap: 3px;
+  justify-content: center;
+}
+.inventory .cells {
+  grid-template-columns: repeat(5, 36px);
+  justify-content: start;
+}
+.inventory .slot {
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: 1px solid #3a4250;
+  background: #141820;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.inventory .slot.gap {
+  border: none;
+  background: none;
+}
+.inventory .item {
+  position: relative;
+  display: block;
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  cursor: grab;
+  touch-action: none;
+}
+.inventory .item.missing {
+  background: #5a4a3a;
+  color: var(--text);
+  font-size: 0.7rem;
+  line-height: 32px;
+  text-align: center;
+}
+.inventory .count {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 1px 2px;
+  color: #fff;
+  text-shadow:
+    0 0 2px #000,
+    0 0 2px #000;
+}
+.inventory .capacity {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.inventory .container {
+  margin-top: 0.5rem;
+}
+.inventory .container header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+.inventory .container header button {
+  padding: 0 0.4rem;
+  line-height: 1.2;
+}
+body.dragging-item,
+body.dragging-item * {
+  cursor: grabbing !important;
+}

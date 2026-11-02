@@ -62,3 +62,10 @@ item.iron_ore.name: "iron ore"
 item.iron_ore.desc: "Heavy, reddish stone. A smith would know what to do with it."
 item.tarnished_locket.name: "tarnished locket"
 item.tarnished_locket.desc: "Inside is a portrait the water wiped away long ago."
+item.bosun_logbook.name: "bosun's logbook"
+item.bosun_logbook.desc: "A notebook swollen with salt water. The last pages were written in a hurry."
+item.creature_remains.name: "creature remains"
+
+# Containers (T1.8)
+item.backpack.name: "backpack"
+item.backpack.desc: "A canvas backpack with leather straps."

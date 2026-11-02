@@ -5,7 +5,7 @@
   "description": "Every game-rule number lives here; code never hardcodes balance constants.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["movement", "experience", "skills", "combat", "death", "economy"],
+  "required": ["movement", "experience", "skills", "combat", "inventory", "death", "economy"],
   "properties": {
     "movement": {
       "type": "object",
@@ -72,9 +72,22 @@
     "combat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["attack_interval_ms", "modes"],
+      "required": [
+        "attack_interval_ms",
+        "fist_attack",
+        "skill_attack_divisor",
+        "level_divisor",
+        "shield_block_divisor",
+        "monster_corpse_ms",
+        "modes"
+      ],
       "properties": {
         "attack_interval_ms": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "fist_attack": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "skill_attack_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "level_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "shield_block_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "monster_corpse_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
         "modes": {
           "type": "object",
           "additionalProperties": false,
@@ -84,6 +97,23 @@
             "balanced": { "$ref": "#/$defs/mode" },
             "defensive": { "$ref": "#/$defs/mode" }
           }
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_container", "max_open_containers", "use_cooldown_ms", "reach"],
+      "properties": {
+        "start_container": {
+          "description": "Container item equipped in the backpack slot of a character that never played.",
+          "$ref": "common.schema.json#/$defs/itemRef"
+        },
+        "max_open_containers": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "use_cooldown_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
+        "reach": {
+          "description": "Chebyshev distance (same floor) for actions on ground items.",
+          "$ref": "common.schema.json#/$defs/positiveInt"
         }
       }
     },

@@ -1,8 +1,10 @@
-// Command gameserver runs the game loop and the HTTP API (accounts and characters).
+// Command gameserver runs the game loop, the HTTP API (accounts, characters, play tokens)
+// and the WebSocket gateway at /ws.
 //
-// The world, the WebSocket gateway and the play handshake arrive in T1.2 and T1.4.
+// It loads the compiled map (world.bin, built by cmd/mapcompile) at startup; without a
+// world (-world "") only the HTTP API runs.
 //
-// Configuration: DATABASE_URL (required) plus the flags below.
+// Configuration: DATABASE_URL (required), RPG_WORLD (default of -world) plus the flags below.
 package main
 
 import (
@@ -13,21 +15,24 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/app"
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/buildinfo"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
-	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
+	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
 type options struct {
@@ -38,6 +43,10 @@ type options struct {
 	migrate      bool
 	cookieSecure bool
 	trustProxy   bool
+	worldPath    string
+	// wsOrigins lists extra browser origins allowed on /ws (comma-separated).
+	wsOrigins        string
+	minClientVersion string
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -52,6 +61,9 @@ func main() {
 	flag.BoolVar(&o.migrate, "migrate", true, "apply pending database migrations on start")
 	flag.BoolVar(&o.cookieSecure, "cookie-secure", true, "set the Secure flag on the session cookie")
 	flag.BoolVar(&o.trustProxy, "trust-proxy", false, "take the client IP from X-Forwarded-For (behind Caddy)")
+	flag.StringVar(&o.worldPath, "world", defaultWorldPath(), "compiled map from mapcompile; default $RPG_WORLD or ../build/world.bin (empty = run without a world)")
+	flag.StringVar(&o.wsOrigins, "ws-origins", os.Getenv("RPG_WS_ORIGINS"), "extra browser origins allowed on /ws, comma-separated (e.g. localhost:5173); default $RPG_WS_ORIGINS")
+	flag.StringVar(&o.minClientVersion, "min-client-version", gateway.DefaultMinClientVersion, "oldest client version accepted in Hello (same major required)")
 	flag.Parse()
 
 	if *showVersion {
@@ -88,6 +100,22 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	balance, err := content.LoadBalance(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
+	monsters, err := content.LoadMonsters(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
+	items, err := content.LoadItems(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
+	m, err := loadWorld(logger, o.worldPath)
+	if err != nil {
+		return err
+	}
 
 	st, err := store.Open(ctx, o.databaseURL)
 	if err != nil {
@@ -100,32 +128,26 @@ func run(logger *slog.Logger, o options) error {
 		}
 	}
 
-	authSvc, err := auth.New(auth.Config{Repo: st, Clock: clk, Vocations: vocations})
-	if err != nil {
-		return err
-	}
-	api, err := httpapi.New(httpapi.Config{
-		Auth:         authSvc,
-		Clock:        clk,
-		Logger:       logger,
-		Health:       st.Ping,
-		CookieSecure: o.cookieSecure,
-		TrustProxy:   o.trustProxy,
+	a, err := app.New(app.Config{
+		Store:            st,
+		Clock:            clk,
+		Logger:           logger,
+		Seed:             o.seed,
+		Vocations:        vocations,
+		Balance:          balance,
+		Monsters:         monsters,
+		Items:            items,
+		Map:              m,
+		CookieSecure:     o.cookieSecure,
+		TrustProxy:       o.trustProxy,
+		OriginPatterns:   splitList(o.wsOrigins),
+		MinClientVersion: o.minClientVersion,
 	})
 	if err != nil {
 		return err
 	}
 
-	loop, err := game.New(game.Config{
-		Clock:  clk,
-		Rand:   rand.New(rand.NewPCG(o.seed, o.seed)),
-		Logger: logger,
-	})
-	if err != nil {
-		return fmt.Errorf("game loop: %w", err)
-	}
-
-	srv, cancelRequests := newHTTPServer(o.httpAddr, api, logger)
+	srv, cancelRequests := newHTTPServer(o.httpAddr, a.Handler(), logger)
 	defer cancelRequests()
 	httpErr := make(chan error, 1)
 	go func() {
@@ -134,37 +156,78 @@ func run(logger *slog.Logger, o options) error {
 		}
 		close(httpErr)
 	}()
-	go purgeSessions(ctx, logger, clk, authSvc)
+	go purgeSessions(ctx, logger, clk, a.Auth)
 
 	logger.Info("gameserver started",
 		"version", buildinfo.Version, "commit", buildinfo.Commit, "http", o.httpAddr,
-		"tick_ms", game.TickDuration.Milliseconds(), "seed", o.seed)
+		"ws", m != nil, "tick_ms", game.TickDuration.Milliseconds(), "seed", o.seed)
 
 	loopCtx, stopLoop := context.WithCancel(ctx)
 	defer stopLoop()
 	loopErr := make(chan error, 1)
-	go func() { loopErr <- loop.Run(loopCtx) }()
+	go func() { loopErr <- a.Run(loopCtx) }()
 
 	var runErr error
 	select {
 	case err := <-loopErr:
-		if err != nil {
-			runErr = fmt.Errorf("game loop: %w", err)
-		}
+		runErr = err
 		loopErr = nil
 	case err := <-httpErr:
 		runErr = err
 	}
 	stopLoop()
-
-	shutdownHTTP(srv, cancelRequests, httpShutdownTimeout, logger)
 	if loopErr != nil {
+		// Run saves every online player and closes the WebSockets before returning.
 		if err := <-loopErr; err != nil && runErr == nil {
-			runErr = fmt.Errorf("game loop: %w", err)
+			runErr = err
 		}
 	}
-	logger.Info("gameserver stopped", "ticks", uint64(loop.Tick()))
+	shutdownHTTP(srv, cancelRequests, httpShutdownTimeout, logger)
+	logger.Info("gameserver stopped", "ticks", uint64(a.Loop.Tick()))
 	return runErr
+}
+
+// splitList splits a comma-separated flag value, dropping empty entries.
+func splitList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// defaultWorldPath is $RPG_WORLD, or ../build/world.bin: like -data, relative to server/,
+// where `go run ./cmd/gameserver` runs and `make mapcompile` writes <repo>/build/world.bin.
+func defaultWorldPath() string {
+	if p := os.Getenv("RPG_WORLD"); p != "" {
+		return p
+	}
+	return filepath.Join("..", "build", "world.bin")
+}
+
+// loadWorld loads world.bin; an empty path runs without a world (nil map). A missing or
+// invalid file is an error that names the absolute path tried.
+func loadWorld(logger *slog.Logger, path string) (*world.Map, error) {
+	if path == "" {
+		logger.Warn("running without a world (-world is empty)")
+		return nil, nil
+	}
+	m, err := world.Load(path)
+	if err != nil {
+		abs, absErr := filepath.Abs(path)
+		if absErr != nil {
+			abs = path
+		}
+		return nil, fmt.Errorf("%w (looked for %s; build it with `make mapcompile`, or use `make run-server`)", err, abs)
+	}
+	sectors := 0
+	for _, is := range m.Islands() {
+		sectors += len(is.Sectors())
+	}
+	logger.Info("world loaded", "path", path, "islands", len(m.Islands()), "sectors", sectors)
+	return m, nil
 }
 
 const httpShutdownTimeout = 5 * time.Second

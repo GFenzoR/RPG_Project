@@ -1,3 +1,6 @@
 dialog.trade: "Quiero comerciar."
 dialog.bye: "Adiós."
 dialog.back: "Volver."
+dialog.ask_travel: "Quiero viajar."
+dialog.accept: "Acepto."
+dialog.decline: "Ahora no."

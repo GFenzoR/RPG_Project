@@ -13,12 +13,17 @@ server/
   internal/entity/     jugadores, monstruos, NPCs; IDs estables (uint32)
   internal/combat/     daño, fórmulas, condiciones (veneno, fuego, paralyze)
   internal/skills/     progreso de skills por uso, niveles, experiencia
-  internal/ai/         comportamiento de monstruos (máquina de estados simple)
+  internal/ai/         (aún no existe: la IA de monstruos vive en session/monster.go porque
+                       depende del índice de sectores y del AOI; separarla cuando crezca)
   internal/dialog/     motor de diálogos de NPC dirigido por YAML
   internal/quest/      estado de quests, flags (storage values) por personaje
   internal/content/    carga y validación de data/*.yaml
   internal/net/        WebSocket, framing, (de)serialización protobuf, rate limits
-  internal/session/    sesión de jugador: AOI, envío de deltas, ping
+  internal/session/    sesión de jugador: AOI, caminar, envío de deltas, ping, guardado
+  internal/net/gateway/ WebSocket /ws: Hello, lector/escritor por conexión, rate limit
+  internal/app/        ensambla loop + session + persistencia + gateway + API (main y tests)
+  pkg/bot/             cliente sin UI para tests de integración y tools/bots (fuera de
+                       internal/ para que otro módulo lo importe)
   internal/store/      PostgreSQL: repositorios generados con sqlc, migraciones goose
   internal/auth/       cuentas, contraseñas (argon2id), OAuth Google/Discord, tokens
   internal/httpapi/    API HTTP: login, lista de personajes, health, métricas
@@ -51,7 +56,9 @@ server/
   schema con `internal/store/storetest`, así corren en paralelo sin pisarse.
 - Para lógica de juego, prefiere tests de simulación con `internal/sim`: crea un mundo
   pequeño, inyecta comandos, avanza N ticks y verifica el estado.
-- Benchmarks del tick en `internal/game/bench_test.go`; no deben empeorar más de 10%.
+- Benchmarks del tick en `internal/game/bench_test.go` y con N jugadores caminando en
+  `internal/session/bench_test.go` (`make bench-tick`); no deben empeorar más de 10%.
+- Mapas de prueba chicos con `internal/world/worldtest` (dibujos ASCII).
 
 ## Base de datos
 - Migraciones goose en `migrations/` (embebidas en el binario; el servidor aplica las
