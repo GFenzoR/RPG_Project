@@ -101,11 +101,16 @@ fmt: ## Format Go and TS code
 
 .PHONY: dev
 dev: db-up ## Postgres + server + client + editor in dev mode
-	$(call pending,T1.4 (server) / T1.5 (client) / T1.14 (editor))
+	@echo "[dev] server (T1.4) and client (T1.5) pending; starting the map editor on http://localhost:5174"
+	$(MAKE) editor
+
+.PHONY: editor
+editor: ## Map editor dev server on http://localhost:5174 (edits world/ in place)
+	pnpm --filter @rpg/editor dev
 
 .PHONY: e2e
-e2e: ## Playwright: boot everything, log in and take screenshots
-	$(call pending,T1.5)
+e2e: ## Playwright: editor E2E now (client login arrives in T1.5); screenshots in */e2e/screenshots/actual
+	pnpm --filter @rpg/editor e2e
 
 .PHONY: bots
 bots: ## Load test with N bots (make bots N=100)
