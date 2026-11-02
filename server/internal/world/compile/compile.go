@@ -10,7 +10,8 @@
 //   - FlagBlocksMovement: no ground, ground without `ground.walkable: true`, or an item on
 //     the stack with `blocks_movement: true`, or with `kind: wall` unless it says
 //     `blocks_movement: false` (same rule as packages/map-format).
-//   - FlagBlocksSight: an item on the stack with `blocks_sight: true`.
+//   - FlagBlocksSight: an item on the stack with `blocks_sight: true`, or with `kind: wall`
+//     unless it says `blocks_sight: false` (walls block sight like they block movement).
 //   - Zone flags from zones.yaml: protection, no_logout, pvp, no_pvp. community_plot only
 //     matters to the editor and sets no flag.
 package compile
@@ -36,7 +37,7 @@ type Item struct {
 	ID             string     `yaml:"id"`
 	Kind           string     `yaml:"kind"`
 	BlocksMovement *bool      `yaml:"blocks_movement"`
-	BlocksSight    bool       `yaml:"blocks_sight"`
+	BlocksSight    *bool      `yaml:"blocks_sight"`
 	Ground         *groundDef `yaml:"ground"`
 
 	num uint16
@@ -50,6 +51,13 @@ type groundDef struct {
 func (it *Item) blocksMovement() bool {
 	if it.BlocksMovement != nil {
 		return *it.BlocksMovement
+	}
+	return it.Kind == "wall"
+}
+
+func (it *Item) blocksSight() bool {
+	if it.BlocksSight != nil {
+		return *it.BlocksSight
 	}
 	return it.Kind == "wall"
 }
@@ -405,7 +413,7 @@ func compileChunk(path, where string, z, cx, cy int, island rect, content *Conte
 			if it.blocksMovement() {
 				s.Flags[i] |= world.FlagBlocksMovement
 			}
-			if it.BlocksSight {
+			if it.blocksSight() {
 				s.Flags[i] |= world.FlagBlocksSight
 			}
 		}

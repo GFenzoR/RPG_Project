@@ -175,7 +175,7 @@ Se calculan al compilar, uno por casilla (implementación: `server/internal/worl
 | Flag | Se activa si… |
 |---|---|
 | `blocks_movement` | No hay suelo (`-1`), el suelo no tiene `ground.walkable: true`, o algún item de la pila tiene `blocks_movement: true`, o es `kind: wall` y **no** declara `blocks_movement: false`. |
-| `blocks_sight` | Algún item **de la pila** tiene `blocks_sight: true`. El suelo nunca bloquea la vista. Lo usan la línea de visión y los proyectiles. |
+| `blocks_sight` | Algún item **de la pila** tiene `blocks_sight: true`, o es `kind: wall` y **no** declara `blocks_sight: false`. El suelo nunca bloquea la vista. Lo usan la línea de visión y los proyectiles. |
 | `protection`, `no_logout`, `pvp`, `no_pvp` | La casilla tiene suelo y cae en un rect de una zona de ese tipo de `zones.yaml`, en uno de sus `floors`. |
 
 `community_plot` no marca ningún flag: solo le importa al editor y a los patches.
@@ -183,15 +183,12 @@ La regla de `blocks_movement` es la misma que `isWalkable` de `packages/map-form
 `make test-parity` (parte de `make test` y de la CI) compara casilla por casilla el
 veredicto de `mapcompile` con el de `packages/map-format`.
 
-**Decisión pendiente (usuario): muros y línea de visión.** Hoy `kind: wall` implica
-bloquear el paso pero **no** la vista: un muro sin `blocks_sight: true` deja pasar
-proyectiles y hechizos. Opciones:
-1. `kind: wall` bloquea también la vista salvo `blocks_sight: false` (simétrico con el paso).
-2. Mantener la regla actual y que la validación de contenido exija `blocks_sight` explícito
-   en todo item `kind: wall`.
-
-Cualquiera de las dos cambia `mapcompile` y `packages/map-format` a la vez. Hasta que se
-decida, todo muro nuevo debería declarar `blocks_sight: true`.
+**Muros y línea de visión (decidido).** `kind: wall` bloquea la vista igual que el paso:
+proyectiles, ataques a distancia y hechizos no atraviesan muros. Un muro que deba dejar
+ver (una reja abierta, una ventana) declara `blocks_sight: false`. Es una regla de juego,
+no de render: el cliente sigue mostrando toda la ventana de 15x11 del piso actual.
+`packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
+en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
 
 ### Formato de `world.bin` (versión 2)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las

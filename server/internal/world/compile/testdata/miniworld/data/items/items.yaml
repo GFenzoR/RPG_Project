@@ -33,6 +33,7 @@
   sprite: wall/open_gate
   name: item.open_gate.name
   blocks_movement: false
+  blocks_sight: false
 
 - id: crate
   kind: decoration
