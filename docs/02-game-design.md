@@ -278,6 +278,24 @@ Además: quests secundarias, libros con lore, secretos en el mapa.
   inventario) y acciones (dar/quitar item, set flag, abrir tienda, viajar, curar).
 - Ver `06-content-data.md`.
 
+## Chat (T1.13)
+Números en `data/balance.yaml` (`chat`), nunca en código.
+- **Canal local**, mismo piso, alcance en casillas por eje (x, y) desde quien habla:
+  susurrar 1×1, decir 7×5 (la pantalla visible), gritar 18×14. Fuera de ese rectángulo
+  no se oye nada. Quien habla siempre recibe su propia línea.
+- **Canal global**: lo oyen todos los jugadores conectados; además del anti-flood, cada
+  jugador espera `global_interval_ms` (10 s) entre dos mensajes globales
+  (`chat.global_wait`).
+- **Largo**: hasta `max_length` (255) caracteres tras limpiar el texto (controles y
+  caracteres invisibles de formato → espacio, espacios colapsados, sin bordes). Más largo →
+  `chat.too_long`; vacío → se ignora.
+- **Anti-flood** (todos los canales juntos): una cubeta de `flood.burst` (5) mensajes que
+  recupera uno cada `flood.refill_ms` (2 s). Hablar con la cubeta vacía silencia
+  `flood.mute_ms` (10 s, `chat.flood`); en silencio todo mensaje se rechaza (`chat.muted`).
+- Las palabras de un hechizo dichas en el canal decir lo lanzan (T1.9) y no se muestran
+  como chat ni cuentan para el anti-flood (el hechizo ya tiene sus cooldowns).
+- Fuera de este hito: canales de grupo y gremio, privados persistentes, moderación (T2.6).
+
 ## Cosméticos (monetización futura)
 - Outfits, colores de outfit, monturas (solo visual y velocidad igual para todos),
   efectos de nombre. Se compran con una moneda premium (cuando exista la tienda) y

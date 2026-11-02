@@ -76,6 +76,12 @@ type Player struct {
 	nextContainer uint32
 	nextUse       game.Tick
 
+	// Chat (T1.13): the anti-flood theoretical arrival tick (GCRA), the tick a flood
+	// mute ends and the first tick p may speak on the global channel again.
+	chatTAT     game.Tick
+	mutedUntil  game.Tick
+	globalReady game.Tick
+
 	// Magic (T1.9): the first tick each spell, and each spell group, can be cast again.
 	spellReady map[string]game.Tick
 	groupReady map[string]game.Tick

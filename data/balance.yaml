@@ -64,6 +64,21 @@ gathering:                  # fishing and mining (T1.12); spot numbers live in d
     after_ms: 900000        # gathering 15 min without leaving the tile...
     factor: 0.25            # ...earns skill tries at this rate (like skills.afk)
 
+chat:                       # T1.13 (docs/02-game-design.md, "Chat")
+  max_length: 255           # characters per message (the protocol maximum)
+  # Who hears each local mode: players within this many tiles (x and y), same floor.
+  ranges:
+    whisper: { x: 1, y: 1 }
+    say: { x: 7, y: 5 }     # the visible screen
+    yell: { x: 18, y: 14 }
+  # Anti-flood, all channels together: a bucket of `burst` messages that refills one
+  # every `refill_ms`; sending with it empty mutes the player for `mute_ms`.
+  flood:
+    burst: 5
+    refill_ms: 2000
+    mute_ms: 10000
+  global_interval_ms: 10000 # between two global-channel messages of the same player
+
 death:
   xp_loss_pct: 10
   skill_loss_pct: 10

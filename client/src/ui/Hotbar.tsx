@@ -79,30 +79,3 @@ export function Hotbar(props: {
     </section>
   );
 }
-
-/** The "say" line: spoken words cast spells (the chat itself arrives with T1.13). */
-export function SayLine(props: { t: Translate; game: Game | undefined }): JSX.Element {
-  const [text, setText] = useState("");
-  return (
-    <form
-      class="say"
-      data-testid="say"
-      onSubmit={(e) => {
-        e.preventDefault();
-        props.game?.say(text);
-        setText("");
-      }}
-    >
-      <label>
-        {props.t("client.say.label")}
-        <input
-          type="text"
-          maxLength={255}
-          value={text}
-          placeholder={props.t("client.say.placeholder")}
-          onInput={(e) => setText(e.currentTarget.value)}
-        />
-      </label>
-    </form>
-  );
-}

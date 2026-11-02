@@ -18,6 +18,7 @@ type Balance struct {
 	Combat     Combat     `yaml:"combat"`
 	Inventory  Inventory  `yaml:"inventory"`
 	Gathering  Gathering  `yaml:"gathering"`
+	Chat       Chat       `yaml:"chat"`
 	Death      Death      `yaml:"death"`
 }
 
@@ -43,6 +44,51 @@ func (d Death) check() error {
 	}
 	if d.MaxBlessings < 0 || d.NoviceMaxLevel < 0 || d.CorpseMs <= 0 || d.CorpseOwnerOnlyMs < 0 || d.CorpseOwnerOnlyMs > d.CorpseMs {
 		return errors.New("death: max_blessings and novice_max_level must be >= 0, corpse_ms > 0, corpse_owner_only_ms in 0..corpse_ms")
+	}
+	return nil
+}
+
+// MaxChatLength is the protocol limit of a Say text (docs/05-network-protocol.md).
+const MaxChatLength = 255
+
+// Chat holds the chat rules (T1.13): message length, who hears each local mode and
+// the anti-flood limits.
+type Chat struct {
+	// MaxLength is the most characters (runes) a message may have.
+	MaxLength int `yaml:"max_length"`
+	Ranges    struct {
+		Whisper ChatRange `yaml:"whisper"`
+		Say     ChatRange `yaml:"say"`
+		Yell    ChatRange `yaml:"yell"`
+	} `yaml:"ranges"`
+	// Flood is a bucket of Burst messages refilled one every RefillMs; sending with it
+	// empty mutes the player for MuteMs.
+	Flood struct {
+		Burst    int `yaml:"burst"`
+		RefillMs int `yaml:"refill_ms"`
+		MuteMs   int `yaml:"mute_ms"`
+	} `yaml:"flood"`
+	// GlobalIntervalMs is the minimum time between two global messages of a player.
+	GlobalIntervalMs int `yaml:"global_interval_ms"`
+}
+
+// ChatRange is how far (tiles on each axis, same floor) a local message reaches.
+type ChatRange struct {
+	X int `yaml:"x"`
+	Y int `yaml:"y"`
+}
+
+func (c Chat) check() error {
+	if c.MaxLength <= 0 || c.MaxLength > MaxChatLength {
+		return fmt.Errorf("chat.max_length must be in 1..%d", MaxChatLength)
+	}
+	for i, r := range [...]ChatRange{c.Ranges.Whisper, c.Ranges.Say, c.Ranges.Yell} {
+		if r.X <= 0 || r.Y <= 0 {
+			return fmt.Errorf("chat.ranges.%s: x and y must be > 0", [...]string{"whisper", "say", "yell"}[i])
+		}
+	}
+	if c.Flood.Burst <= 0 || c.Flood.RefillMs <= 0 || c.Flood.MuteMs <= 0 || c.GlobalIntervalMs < 0 {
+		return errors.New("chat: flood.burst, flood.refill_ms and flood.mute_ms must be > 0, global_interval_ms >= 0")
 	}
 	return nil
 }
@@ -200,6 +246,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if i := b.Inventory; i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.Reach <= 0 {
 		return Balance{}, errors.New("inventory: max_open_containers and reach must be > 0, use_cooldown_ms >= 0")
+	}
+	if err := b.Chat.check(); err != nil {
+		return Balance{}, err
 	}
 	if g := b.Gathering; g.UseIntervalMs < 0 || g.AFK.AfterMs < 0 || g.AFK.Factor < 0 || g.AFK.Factor > 1 {
 		return Balance{}, errors.New("gathering: use_interval_ms and afk.after_ms must be >= 0, afk.factor in 0..1")

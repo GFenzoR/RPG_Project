@@ -19,6 +19,12 @@ func TestLoadBalanceRepoData(t *testing.T) {
 	if b.Experience.TotalFor(1) != 0 || b.Experience.TotalFor(2) <= 0 {
 		t.Errorf("curve: xp(1)=%d xp(2)=%d", b.Experience.TotalFor(1), b.Experience.TotalFor(2))
 	}
+	if c := b.Chat; c.MaxLength != MaxChatLength || c.Ranges.Say.X <= c.Ranges.Whisper.X || c.Ranges.Yell.X <= c.Ranges.Say.X {
+		t.Errorf("chat = %+v", c)
+	}
+	if err := (Chat{MaxLength: 300}).check(); err == nil {
+		t.Error("chat.max_length 300 accepted")
+	}
 	vs, err := LoadVocations(filepath.Join("..", "..", "..", "data"))
 	if err != nil {
 		t.Fatal(err)

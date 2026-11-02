@@ -66,6 +66,7 @@ export function loadClientContent(root: string): ClientContent {
   const balance = readYaml(join(root, "data", "balance.yaml"));
   const mv = isObj(balance) && isObj(balance["movement"]) ? balance["movement"] : {};
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
+  const chat = isObj(balance) && isObj(balance["chat"]) ? balance["chat"] : {};
   const i18n: Record<string, Record<string, string>> = {};
   for (const lang of LANGUAGES) {
     const texts: Record<string, string> = {};
@@ -131,6 +132,7 @@ export function loadClientContent(root: string): ClientContent {
       diagonalCost: num(mv["diagonal_cost"], 1.5),
       maxPathTiles: num(mv["max_path_tiles"], 100),
     },
+    chat: { maxLength: num(chat["max_length"], 255) },
     i18n,
   };
 }

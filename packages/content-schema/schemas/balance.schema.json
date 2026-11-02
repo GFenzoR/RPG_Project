@@ -12,6 +12,7 @@
     "combat",
     "inventory",
     "gathering",
+    "chat",
     "death",
     "economy"
   ],
@@ -21,9 +22,16 @@
       "additionalProperties": false,
       "required": ["base_step_ms", "diagonal_cost", "max_path_tiles"],
       "properties": {
-        "base_step_ms": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "diagonal_cost": { "type": "number", "minimum": 1 },
-        "max_path_tiles": { "$ref": "common.schema.json#/$defs/positiveInt" }
+        "base_step_ms": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "diagonal_cost": {
+          "type": "number",
+          "minimum": 1
+        },
+        "max_path_tiles": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        }
       }
     },
     "experience": {
@@ -37,13 +45,24 @@
           "additionalProperties": false,
           "required": ["a", "b", "c"],
           "properties": {
-            "a": { "type": "number", "exclusiveMinimum": 0 },
-            "b": { "type": "number" },
-            "c": { "type": "number" },
-            "d": { "type": "number" }
+            "a": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "b": {
+              "type": "number"
+            },
+            "c": {
+              "type": "number"
+            },
+            "d": {
+              "type": "number"
+            }
           }
         },
-        "max_level": { "$ref": "common.schema.json#/$defs/positiveInt" }
+        "max_level": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        }
       }
     },
     "skills": {
@@ -54,26 +73,38 @@
         "base": {
           "description": "Per skill: starting level and tries for the first level-up (tries(n) = base_tries * vocation_factor^(n - start_level)).",
           "type": "object",
-          "propertyNames": { "$ref": "common.schema.json#/$defs/skill" },
+          "propertyNames": {
+            "$ref": "common.schema.json#/$defs/skill"
+          },
           "additionalProperties": {
             "type": "object",
             "additionalProperties": false,
             "required": ["start_level", "base_tries"],
             "properties": {
-              "start_level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-              "base_tries": { "$ref": "common.schema.json#/$defs/positiveInt" }
+              "start_level": {
+                "$ref": "common.schema.json#/$defs/nonNegativeInt"
+              },
+              "base_tries": {
+                "$ref": "common.schema.json#/$defs/positiveInt"
+              }
             }
           }
         },
-        "shield_max_tries_per_round": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "shield_max_tries_per_round": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
         "afk": {
           "description": "Training against a target that does not fight back gives reduced progress after a while.",
           "type": "object",
           "additionalProperties": false,
           "required": ["after_ms", "factor"],
           "properties": {
-            "after_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
-            "factor": { "$ref": "common.schema.json#/$defs/chance" }
+            "after_ms": {
+              "$ref": "common.schema.json#/$defs/durationMs"
+            },
+            "factor": {
+              "$ref": "common.schema.json#/$defs/chance"
+            }
           }
         }
       }
@@ -91,12 +122,24 @@
         "modes"
       ],
       "properties": {
-        "attack_interval_ms": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "fist_attack": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "skill_attack_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "level_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "shield_block_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "monster_corpse_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
+        "attack_interval_ms": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "fist_attack": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "skill_attack_divisor": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "level_divisor": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "shield_block_divisor": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "monster_corpse_ms": {
+          "$ref": "common.schema.json#/$defs/durationMs"
+        },
         "wand_min_factor": {
           "description": "A wand hits random(attack × wand_min_factor, attack) of its element (T1.9).",
           "type": "number",
@@ -108,9 +151,15 @@
           "additionalProperties": false,
           "required": ["offensive", "balanced", "defensive"],
           "properties": {
-            "offensive": { "$ref": "#/$defs/mode" },
-            "balanced": { "$ref": "#/$defs/mode" },
-            "defensive": { "$ref": "#/$defs/mode" }
+            "offensive": {
+              "$ref": "#/$defs/mode"
+            },
+            "balanced": {
+              "$ref": "#/$defs/mode"
+            },
+            "defensive": {
+              "$ref": "#/$defs/mode"
+            }
           }
         }
       }
@@ -132,9 +181,97 @@
           "required": ["after_ms", "factor"],
           "description": "Gathering without leaving the tile for after_ms earns skill tries at factor.",
           "properties": {
-            "after_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
-            "factor": { "type": "number", "minimum": 0, "maximum": 1 }
+            "after_ms": {
+              "$ref": "common.schema.json#/$defs/durationMs"
+            },
+            "factor": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
           }
+        }
+      }
+    },
+    "chat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_length", "ranges", "flood", "global_interval_ms"],
+      "description": "Chat channels, ranges and anti-flood (T1.13).",
+      "properties": {
+        "max_length": {
+          "description": "Characters per message (at most the protocol's 255).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255
+        },
+        "ranges": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["whisper", "say", "yell"],
+          "description": "Tiles (x and y, same floor) within which players hear each local mode.",
+          "properties": {
+            "whisper": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y"],
+              "properties": {
+                "x": {
+                  "$ref": "common.schema.json#/$defs/positiveInt"
+                },
+                "y": {
+                  "$ref": "common.schema.json#/$defs/positiveInt"
+                }
+              }
+            },
+            "say": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y"],
+              "properties": {
+                "x": {
+                  "$ref": "common.schema.json#/$defs/positiveInt"
+                },
+                "y": {
+                  "$ref": "common.schema.json#/$defs/positiveInt"
+                }
+              }
+            },
+            "yell": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y"],
+              "properties": {
+                "x": {
+                  "$ref": "common.schema.json#/$defs/positiveInt"
+                },
+                "y": {
+                  "$ref": "common.schema.json#/$defs/positiveInt"
+                }
+              }
+            }
+          }
+        },
+        "flood": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["burst", "refill_ms", "mute_ms"],
+          "description": "A bucket of burst messages refilled one every refill_ms; sending with it empty mutes for mute_ms.",
+          "properties": {
+            "burst": {
+              "$ref": "common.schema.json#/$defs/positiveInt"
+            },
+            "refill_ms": {
+              "$ref": "common.schema.json#/$defs/positiveInt"
+            },
+            "mute_ms": {
+              "$ref": "common.schema.json#/$defs/positiveInt"
+            }
+          }
+        },
+        "global_interval_ms": {
+          "description": "Minimum time between two global-channel messages of a player.",
+          "$ref": "common.schema.json#/$defs/durationMs"
         }
       }
     },
@@ -147,8 +284,12 @@
           "description": "Container item equipped in the backpack slot of a character that never played.",
           "$ref": "common.schema.json#/$defs/itemRef"
         },
-        "max_open_containers": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "use_cooldown_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
+        "max_open_containers": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "use_cooldown_ms": {
+          "$ref": "common.schema.json#/$defs/durationMs"
+        },
         "reach": {
           "description": "Chebyshev distance (same floor) for actions on ground items.",
           "$ref": "common.schema.json#/$defs/positiveInt"
@@ -170,15 +311,33 @@
         "corpse_owner_only_ms"
       ],
       "properties": {
-        "xp_loss_pct": { "$ref": "common.schema.json#/$defs/percent" },
-        "skill_loss_pct": { "$ref": "common.schema.json#/$defs/percent" },
-        "equipment_drop_pct": { "$ref": "common.schema.json#/$defs/percent" },
-        "backpack_drop_pct": { "$ref": "common.schema.json#/$defs/percent" },
-        "max_blessings": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-        "xp_loss_pct_all_blessings": { "$ref": "common.schema.json#/$defs/percent" },
-        "novice_max_level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-        "corpse_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
-        "corpse_owner_only_ms": { "$ref": "common.schema.json#/$defs/durationMs" }
+        "xp_loss_pct": {
+          "$ref": "common.schema.json#/$defs/percent"
+        },
+        "skill_loss_pct": {
+          "$ref": "common.schema.json#/$defs/percent"
+        },
+        "equipment_drop_pct": {
+          "$ref": "common.schema.json#/$defs/percent"
+        },
+        "backpack_drop_pct": {
+          "$ref": "common.schema.json#/$defs/percent"
+        },
+        "max_blessings": {
+          "$ref": "common.schema.json#/$defs/nonNegativeInt"
+        },
+        "xp_loss_pct_all_blessings": {
+          "$ref": "common.schema.json#/$defs/percent"
+        },
+        "novice_max_level": {
+          "$ref": "common.schema.json#/$defs/nonNegativeInt"
+        },
+        "corpse_ms": {
+          "$ref": "common.schema.json#/$defs/durationMs"
+        },
+        "corpse_owner_only_ms": {
+          "$ref": "common.schema.json#/$defs/durationMs"
+        }
       }
     },
     "economy": {
@@ -192,7 +351,9 @@
         }
       }
     },
-    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    "notes": {
+      "$ref": "common.schema.json#/$defs/notes"
+    }
   },
   "$defs": {
     "mode": {
@@ -200,8 +361,14 @@
       "additionalProperties": false,
       "required": ["attack", "defense"],
       "properties": {
-        "attack": { "type": "number", "minimum": 0 },
-        "defense": { "type": "number", "minimum": 0 }
+        "attack": {
+          "type": "number",
+          "minimum": 0
+        },
+        "defense": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     }
   }

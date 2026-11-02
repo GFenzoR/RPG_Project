@@ -48,6 +48,10 @@ i18n/
   - `balance.yaml` define todas las skills y cada vocación todos sus factores.
   - i18n: mismas claves y en el mismo archivo para `es` y `en`, mismos `{parámetros}`,
     toda clave usada en `data/` existe; aviso si una clave `item.*`, `monster.*`, ... no se usa.
+  - i18n en código (T1.13): todo literal con forma de clave (`"chat.flood"`, `t("client.title")`)
+    en `server/internal/**/*.go`, `client/src` y `editor/src` (sin tests ni código generado)
+    cuyo primer segmento sea un espacio de nombres de los catálogos debe existir en todos los
+    idiomas. Las claves armadas en tiempo de ejecución (`skill.${id}.name`) no se revisan.
   - Archivos en `data/` sin esquema (p. ej. `effects.yaml`, `cosmetics.yaml`) fallan hasta
     que su tarea agregue el esquema.
   - `ids.lock.yaml` (ver abajo).
@@ -354,5 +358,9 @@ item.iron_sword.name: "iron sword"
 item.iron_sword.desc: "A simple but reliable sword."
 ```
 - Parámetros con llaves: `"Ganaste {xp} puntos de experiencia."`.
-- Plurales con formato ICU cuando haga falta.
+- Plurales con formato ICU cuando haga falta:
+  `"{seconds, plural, one {# segundo} other {# segundos}}"` (`=N` exacto tiene prioridad;
+  categorías de `Intl.PluralRules` del idioma). Lo implementa `translator` del cliente.
+- Los valores de los parámetros se insertan tal cual y nunca se vuelven a interpretar: el
+  texto de un jugador no puede inyectar `{...}` ni HTML.
 - La CI falla si una clave usada no existe en algún idioma.
