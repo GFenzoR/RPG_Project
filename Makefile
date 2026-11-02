@@ -110,6 +110,26 @@ gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeholders for missing art)
 	node --experimental-strip-types tools/spritepack/src/cli.ts build $(if $(STRICT),--strict)
 
+# The editor has no "build" script (it runs on Vite's dev server with its file API), so the
+# production bundle is built directly; the client builds once T1.5 adds its "build" script.
+.PHONY: build
+build: build-editor build-client ## Production builds of the web apps into build/
+
+.PHONY: build-editor
+build-editor:
+	cd editor && pnpm exec vite build --outDir ../build/editor --emptyOutDir
+
+.PHONY: build-client
+build-client:
+	pnpm --filter @rpg/client run --if-present build
+
+# Short tick and world benchmarks. Output is benchstat-compatible (-count); CI keeps it as
+# an artifact and does not fail on timings.
+BENCH_PKGS := ./internal/game ./internal/world
+.PHONY: bench
+bench: ## Short tick/world benchmarks with -benchmem (server/internal/game, world)
+	cd server && go test -run '^$$' -bench . -benchmem -benchtime=$(or $(BENCHTIME),1s) -count=$(or $(COUNT),3) $(BENCH_PKGS)
+
 .PHONY: fmt
 fmt: ## Format Go and TS code
 	@for m in $(GO_MODULES); do (cd $$m && gofmt -w .); done
@@ -126,9 +146,10 @@ dev: db-up ## Postgres + server + client + editor in dev mode
 editor: ## Map editor dev server on http://localhost:5174 (edits world/ in place)
 	pnpm --filter @rpg/editor dev
 
+# E2E_ARGS goes to `playwright test` (CI adds the HTML report: --reporter=list,html).
 .PHONY: e2e
 e2e: ## Playwright: editor E2E now (client login arrives in T1.5); screenshots in */e2e/screenshots/actual
-	pnpm --filter @rpg/editor e2e
+	pnpm --filter @rpg/editor e2e $(E2E_ARGS)
 
 .PHONY: bots
 bots: ## Load test with N bots (make bots N=100)
