@@ -1,6 +1,7 @@
 package content
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -50,5 +51,19 @@ func TestSpellCheck(t *testing.T) {
 		if err := s.check(); err == nil {
 			t.Errorf("spell %s accepted", s.ID)
 		}
+	}
+}
+
+func TestLoadSpellsRejectsDuplicateWords(t *testing.T) {
+	dir := t.TempDir()
+	src := `
+- { id: a, words: "vita lumen", group: healing, effect: { heal: { base: 1 } } }
+- { id: b, words: "Vita  Lumen", group: healing, effect: { heal: { base: 1 } } }
+`
+	if err := os.WriteFile(filepath.Join(dir, "spells.yaml"), []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSpells(dir); err == nil {
+		t.Fatal("duplicate words accepted")
 	}
 }

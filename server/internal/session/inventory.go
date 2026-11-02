@@ -910,7 +910,7 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 		def, weight, count = it.def, it.weight(), it.count
 	}
 	stack := &pb.ItemStack{ItemId: uint32(def.Numeric)}
-	if def.Stackable {
+	if def.Stackable || def.Rune != nil {
 		stack.Count = uint32(count)
 	}
 	num := func(name string, v int) *pb.TextParam {

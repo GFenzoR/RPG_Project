@@ -117,10 +117,16 @@ func LoadSpells(dataDir string) (Spells, error) {
 		return nil, fmt.Errorf("decode spells: %w", err)
 	}
 	out := Spells{}
+	words := map[string]string{}
 	for _, s := range list {
 		if s.ID == "" || out[s.ID] != nil {
 			return nil, fmt.Errorf("spells: missing or duplicate id %q", s.ID)
 		}
+		w := NormalizeWords(s.Words)
+		if w == "" || words[w] != "" {
+			return nil, fmt.Errorf("spells: %s: empty words or words already used by %q", s.ID, words[w])
+		}
+		words[w] = s.ID
 		if err := s.check(); err != nil {
 			return nil, fmt.Errorf("spells: %s: %w", s.ID, err)
 		}

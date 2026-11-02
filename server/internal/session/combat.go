@@ -291,7 +291,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		n := combat.Roll(ctx.Rand, l.lo, l.hi)
 		if !l.def.Stackable {
 			for range n {
-				add(newItem(l.def, 1))
+				add(newItem(l.def, l.def.StackLimit())) // a rune drops with all its charges
 			}
 			continue
 		}

@@ -82,8 +82,14 @@ func (w *World) initMagic() error {
 		}
 	}
 	for _, it := range w.cfg.Items {
-		if it.Rune != nil && w.cfg.Spells[it.Rune.Spell] == nil {
-			return fmt.Errorf("session: rune %q casts unknown spell %q", it.ID, it.Rune.Spell)
+		if it.Rune == nil {
+			continue
+		}
+		// A rune aims at a creature: only single-target damage spells fit (no free
+		// conjuring, no area centred on the user instead of the target).
+		s := w.cfg.Spells[it.Rune.Spell]
+		if s == nil || s.Effect.Damage == nil || s.Effect.Damage.Range == 0 {
+			return fmt.Errorf("session: rune %q must cast a known single-target damage spell, not %q", it.ID, it.Rune.Spell)
 		}
 	}
 	return nil
@@ -261,9 +267,8 @@ func (w *World) areaSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 			if (dx != 0 || dy != 0) && !w.m.LineOfSight(p.pos, to) {
 				continue
 			}
-			w.eachObserver(nil, to, func(o *Player) {
-				o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(to), EffectId: effect}}})
-			})
+			msg := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(to), EffectId: effect}}}
+			w.eachObserver(nil, to, func(o *Player) { o.emit(msg) })
 		}
 	}
 	// Collect first: a monster that dies leaves the sector being walked.
@@ -341,16 +346,17 @@ func (w *World) projectile(from, to world.Pos, element string) {
 // to weapon.range tiles in line of sight. Chasing stops once the target is in range.
 func (w *World) wandFight(ctx *game.TickContext, p *Player, m *Monster) {
 	wp := p.weapon.Weapon
-	if chebyshev(p.pos, m.pos) > max(wp.Range, 1) || !w.m.LineOfSight(p.pos, m.pos) {
+	inRange := chebyshev(p.pos, m.pos) <= max(wp.Range, 1)
+	if inRange && ctx.Tick < p.nextAttack {
+		return
+	}
+	if !inRange || !w.m.LineOfSight(p.pos, m.pos) {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
 			if d, ok := w.chaseStep(p.pos, m.pos, false); ok {
 				p.stopWalk()
 				p.queue = append(p.queue, d)
 			}
 		}
-		return
-	}
-	if ctx.Tick < p.nextAttack {
 		return
 	}
 	p.nextAttack = ctx.Tick + w.attackFor

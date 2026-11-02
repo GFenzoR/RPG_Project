@@ -270,7 +270,9 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   `i18n/*/spells.yaml` (`spell.<id>.name`). `visual` todavía no se usa: el efecto sale del
   elemento.
 - **Runas** (`kind: rune`): `rune: { spell, charges, magic_level }`. Lanzan el efecto de
-  `spell` sin maná ni palabras, exigen `magic_level` y gastan una carga por uso.
+  `spell` sin maná ni palabras, exigen `magic_level` y gastan una carga por uso. El
+  servidor solo acepta runas de hechizos de daño a un objetivo (`damage.range`). Una runa
+  conjurada o de botín trae todas sus cargas.
 - **Varitas**: `weapon: { type: wand, attack, range, element }`; golpean
   `aleatorio(attack × combat.wand_min_factor, attack)` del elemento (`balance.yaml`).
 
