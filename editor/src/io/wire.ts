@@ -56,12 +56,42 @@ export interface Bootstrap {
   i18n: Record<string, Record<string, string>>;
   /** Problems found while loading world/ (files that did not parse are not editable). */
   loadErrors: WireDiagnostic[];
+  /** Hash of each chunk file as loaded (see hashText); the base saves are checked against. */
+  base: Record<string, string>;
+}
+
+/** One chunk file the editor changed, with the hash it had when loaded (null: no file). */
+export interface FileChange {
+  file: string;
+  base: string | null;
+}
+
+export interface SaveRequest {
+  world: WireWorld;
+  changes: FileChange[];
 }
 
 export interface SaveResult {
   /** Files written or removed, relative to the repository root. */
   written: string[];
   removed: string[];
+  /** New base hash of every file in the request (null: the file does not exist now). */
+  base: Record<string, string | null>;
+}
+
+/** 409 body: files that changed on disk since the editor loaded them; nothing was saved. */
+export interface SaveConflictBody {
+  error: string;
+  conflicts: string[];
+}
+
+/** Header every API call sends; cross-site pages cannot set it without a CORS preflight. */
+export const API_HEADER = "x-rpg-editor";
+
+/** Repository path of a chunk file (docs/03-world-and-maps.md, "Estructura en disco"). */
+export function chunkFile(island: string, z: number, cx: number, cy: number): string {
+  const p = (n: number, w: number): string => String(n).padStart(w, "0");
+  return `world/islands/${island}/chunks/z${p(z, 2)}/c${p(cx, 4)}_${p(cy, 4)}.json`;
 }
 
 export interface ValidateResult {

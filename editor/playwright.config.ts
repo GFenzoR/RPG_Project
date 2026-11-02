@@ -35,7 +35,7 @@ export default defineConfig({
   webServer: {
     command: `pnpm exec vite --port ${port} --strictPort`,
     cwd: import.meta.dirname,
-    url: `http://localhost:${port}/api/bootstrap`,
+    url: `http://localhost:${port}/`,
     reuseExistingServer: false,
     timeout: 60_000,
     env: { EDITOR_ROOT: process.env["EDITOR_E2E_ROOT"] ?? "" },

@@ -2,14 +2,15 @@
 // client-side); this only reads and writes files and runs the shared validator, because
 // world/, data/ and the validator live on disk and in Node.
 //
-//   GET  /api/bootstrap      world + palette items + texts
-//   POST /api/validate       body: WireWorld → ValidateResult (what `mapcli validate` would say)
-//   POST /api/save           body: WireWorld → SaveResult (canonical files, as `mapcli fmt`)
+//   GET  /api/bootstrap      world + palette items + texts + base hashes of the chunk files
+//   POST /api/validate       body: WireWorld → ValidateResult (the shared validator, in memory)
+//   POST /api/save           body: SaveRequest → SaveResult, 409 SaveConflictBody, 400 if invalid
 //   GET  /atlas/<file>       sprite atlas built from assets/ with tools/spritepack
+// Every /api call must pass refuseRequest (same-origin only, see guard.ts).
 //
 // The repository root defaults to the parent of editor/; EDITOR_ROOT overrides it (E2E
 // tests point it at a scratch copy so they never touch the real world/).
-import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -18,17 +19,41 @@ import { loadContent } from "@rpg/map-format";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import type { Plugin } from "vite";
 import { fromWire } from "../src/io/wire.ts";
-import type { WireWorld } from "../src/io/wire.ts";
-import { SaveRefused, bootstrap, saveWorld, validateInMemory } from "./store.ts";
+import type { SaveRequest, WireWorld } from "../src/io/wire.ts";
+import { refuseRequest } from "./guard.ts";
+import { BadRequest, SaveConflict, bootstrap, saveChanges, validateInMemory } from "./store.ts";
 
 export function editorRoot(): string {
   return resolve(process.env["EDITOR_ROOT"] ?? fileURLToPath(new URL("../..", import.meta.url)));
 }
 
+/** Largest request body accepted (a 512x512 island with 3 floors is ~5 MB of JSON). */
+const MAX_BODY = 64 * 1024 * 1024;
+
 async function body(req: IncomingMessage): Promise<unknown> {
   const parts: Buffer[] = [];
-  for await (const chunk of req) parts.push(chunk as Buffer);
-  return JSON.parse(Buffer.concat(parts).toString("utf8")) as unknown;
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > MAX_BODY) throw new BadRequest("request body too large");
+    parts.push(chunk as Buffer);
+  }
+  try {
+    return JSON.parse(Buffer.concat(parts).toString("utf8")) as unknown;
+  } catch {
+    throw new BadRequest("body is not JSON");
+  }
+}
+
+function worldOf(data: unknown): ReturnType<typeof fromWire> {
+  const w = data as Partial<WireWorld> | null;
+  if (!w || typeof w !== "object" || !Array.isArray(w.islands) || typeof w.meta !== "object")
+    throw new BadRequest("expected a world");
+  try {
+    return fromWire(w as WireWorld);
+  } catch {
+    throw new BadRequest("malformed world");
+  }
 }
 
 function send(res: ServerResponse, status: number, data: unknown): void {
@@ -57,19 +82,23 @@ export function editorApi(): Plugin {
       server.middlewares.use((req, res, next) => {
         const url = new URL(req.url ?? "/", "http://editor");
         const handle = async (): Promise<void> => {
+          if (url.pathname.startsWith("/api/")) {
+            const refused = refuseRequest(req.method ?? "GET", req.headers);
+            if (refused) {
+              console.warn(`[editor] refused ${req.method} ${url.pathname}: ${refused}`);
+              send(res, 403, { error: refused });
+              return;
+            }
+          }
           if (req.method === "GET" && url.pathname === "/api/bootstrap") {
             send(res, 200, bootstrap(root));
           } else if (req.method === "POST" && url.pathname === "/api/validate") {
-            const world = fromWire((await body(req)) as WireWorld);
-            send(res, 200, validateInMemory(world, loadContent(root)));
+            const world = worldOf(await body(req));
+            send(res, 200, validateInMemory(root, world, loadContent(root)));
           } else if (req.method === "POST" && url.pathname === "/api/save") {
-            const world = fromWire((await body(req)) as WireWorld);
-            try {
-              send(res, 200, saveWorld(root, world));
-            } catch (e) {
-              if (!(e instanceof SaveRefused)) throw e;
-              send(res, 409, { error: e.message });
-            }
+            const data = (await body(req)) as Partial<SaveRequest> | null;
+            const world = worldOf(data?.world);
+            send(res, 200, saveChanges(root, world, data?.changes as SaveRequest["changes"]));
           } else if (req.method === "GET" && url.pathname.startsWith("/atlas/")) {
             atlasDir ??= buildAtlasDir(root);
             const name = url.pathname.slice("/atlas/".length);
@@ -86,6 +115,15 @@ export function editorApi(): Plugin {
           }
         };
         handle().catch((e: unknown) => {
+          if (e instanceof SaveConflict) {
+            send(res, 409, { error: e.message, conflicts: e.conflicts });
+            return;
+          }
+          if (e instanceof BadRequest) {
+            console.warn(`[editor] bad request ${req.method} ${url.pathname}: ${e.message}`);
+            send(res, 400, { error: e.message });
+            return;
+          }
           console.error("[editor]", e);
           send(res, 500, { error: e instanceof Error ? e.message : String(e) });
         });
