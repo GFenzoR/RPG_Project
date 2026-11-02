@@ -41,7 +41,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 **Servidor base**
 - [x] **T1.1 Núcleo del servidor.** (#2) `clock`, game loop de 50 ms, cola de comandos,
   scheduler min-heap, harness `sim` y primeros tests deterministas. [T0.1]
-- [ ] **T1.2 Mundo en el servidor.** `mapcompile` → `world.bin`, carga, sectores,
+- [x] **T1.2 Mundo en el servidor.** (#15) `mapcompile` → `world.bin`, carga, sectores,
   flags de tile, pathfinding A*, línea de visión. Benchmarks. [T1.1, T0.4]
 - [ ] **T1.3 Base de datos y cuentas.** Migraciones goose (accounts, characters,
   inventory, skills, quest_state, sessions, economy_log, cosmetics), sqlc, API HTTP de
