@@ -1,0 +1,11 @@
+- id: testisle_temple
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 1053, y: 1053, w: 7, h: 7 }
+
+- id: testisle_dock
+  type: no_logout
+  floors: [7]
+  rects:
+    - { x: 1055, y: 1079, w: 3, h: 6 }

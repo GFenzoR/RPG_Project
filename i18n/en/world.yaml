@@ -1,0 +1,3 @@
+# Map texts: island names, signs and books placed in world/.
+island.testisle.name: "Test island"
+text.testisle.temple_sign: "Temple of the test island. Nobody can hurt you here."

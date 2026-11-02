@@ -1,0 +1,20 @@
+- id: testisle_wolves
+  center: { x: 1056, y: 1041, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: wolf, count: 3 }
+  respawn_seconds: 60
+
+- id: testisle_crabs
+  center: { x: 1034, y: 1060, z: 7 }
+  radius: 2
+  monsters:
+    - { monster: tide_crab, count: 2 }
+  respawn_seconds: 45
+
+- id: testisle_cave_rats
+  center: { x: 1072, y: 1056, z: 8 }
+  radius: 3
+  monsters:
+    - { monster: bilge_rat, count: 3 }
+  respawn_seconds: 40
