@@ -1,4 +1,6 @@
 # Balance constants (docs/02-game-design.md). Initial values: tune here, never in code.
+# Our own numbers: they aim for a familiar feel but must never be copied from Tibia
+# (CLAUDE.md legal rule).
 movement:
   base_step_ms: 1000        # step = base_step_ms * terrain% / speed (see 02-game-design)
   diagonal_cost: 1.5
@@ -12,14 +14,14 @@ experience:
 
 skills:
   base:
-    fist: { start_level: 10, base_tries: 50 }
-    sword: { start_level: 10, base_tries: 50 }
-    axe: { start_level: 10, base_tries: 50 }
-    club: { start_level: 10, base_tries: 50 }
-    distance: { start_level: 10, base_tries: 30 }
-    shield: { start_level: 10, base_tries: 100 }
-    magic: { start_level: 0, base_tries: 1600 }   # tries = mana spent
-    fishing: { start_level: 10, base_tries: 20 }
+    fist: { start_level: 10, base_tries: 45 }
+    sword: { start_level: 10, base_tries: 45 }
+    axe: { start_level: 10, base_tries: 45 }
+    club: { start_level: 10, base_tries: 45 }
+    distance: { start_level: 10, base_tries: 32 }
+    shield: { start_level: 10, base_tries: 85 }
+    magic: { start_level: 0, base_tries: 1450 }   # tries = mana spent
+    fishing: { start_level: 10, base_tries: 22 }
     mining: { start_level: 1, base_tries: 20 }
     woodcutting: { start_level: 1, base_tries: 20 }
     smithing: { start_level: 1, base_tries: 20 }
@@ -33,9 +35,9 @@ skills:
 combat:
   attack_interval_ms: 2000
   modes:
-    offensive: { attack: 1.2, defense: 0.6 }
+    offensive: { attack: 1.25, defense: 0.55 }
     balanced: { attack: 1.0, defense: 1.0 }
-    defensive: { attack: 0.6, defense: 1.6 }
+    defensive: { attack: 0.65, defense: 1.5 }
 
 death:
   xp_loss_pct: 10

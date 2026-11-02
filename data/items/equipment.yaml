@@ -42,7 +42,7 @@
   kind: armor
   sprite: armor/canvas_trousers
   name: item.canvas_trousers.name
-  weight: 1800
+  weight: 1600
   tradeable: true
   armor: { slot: legs, armor: 1 }
   value: 15
@@ -70,8 +70,8 @@
   kind: shield
   sprite: shields/riveted_round_shield
   name: item.riveted_round_shield.name
-  weight: 6000
+  weight: 6400
   tradeable: true
-  shield: { defense: 16 }
+  shield: { defense: 15 }
   requires: { level: 8 }
   value: 220
