@@ -55,7 +55,14 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
 
-  packages/map-format: {}
+  packages/map-format:
+    dependencies:
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
 
   packages/protocol:
     dependencies:
@@ -69,7 +76,11 @@ importers:
 
   packages/renderer: {}
 
-  tools/mapcli: {}
+  tools/mapcli:
+    dependencies:
+      '@rpg/map-format':
+        specifier: workspace:*
+        version: link:../../packages/map-format
 
   tools/mcp-world: {}
 
