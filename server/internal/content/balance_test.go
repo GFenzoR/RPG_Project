@@ -56,3 +56,50 @@ func TestParseBalanceErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadMonstersAndItemsRepoData(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "data")
+	ms, err := LoadMonsters(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := LoadItems(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := ms["wolf"]
+	if w == nil || w.Health <= 0 || len(w.Attacks) == 0 || w.Attacks[0].Chance != 1 || w.Attacks[0].Element != "physical" {
+		t.Fatalf("wolf = %+v", w)
+	}
+	for _, m := range ms {
+		for _, l := range m.Loot {
+			if items[l.Item] == nil {
+				t.Errorf("%s drops unknown item %q", m.ID, l.Item)
+			}
+		}
+	}
+	if items["copper_coin"] == nil || items["copper_coin"].Numeric == 0 {
+		t.Errorf("copper_coin = %+v", items["copper_coin"])
+	}
+	b, err := LoadBalance(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Combat.AttackIntervalMs != 2000 || b.Combat.Modes["balanced"].Attack != 1 {
+		t.Errorf("combat = %+v", b.Combat)
+	}
+}
+
+func TestParseMonsterErrors(t *testing.T) {
+	for name, src := range map[string]string{
+		"no id":      "health: 5\nspeed: 100",
+		"no health":  "id: x\nspeed: 100",
+		"bad attack": "id: x\nhealth: 5\nspeed: 100\nattacks: [{type: melee, min: 5, max: 1, interval_ms: 2000}]",
+		"bad loot":   "id: x\nhealth: 5\nspeed: 100\nloot: [{item: a, chance: 2}]",
+		"ranged":     "id: x\nhealth: 5\nspeed: 100\nbehavior: {target_distance: 3}",
+	} {
+		if _, err := ParseMonster([]byte(src)); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
+	}
+}

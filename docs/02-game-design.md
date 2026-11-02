@@ -67,6 +67,12 @@ exponencialmente más (`tries(n) = base × factor_vocación^(n − 10)`).
   en rango. Modos: ofensivo / equilibrado / defensivo, y perseguir / quedarse quieto.
 - Daño físico: `skill_arma × ataque_arma × factor_modo × aleatorio` contra
   `armadura` (reducción plana aleatoria) y `defensa` (escudo, bloquea por golpe).
+  Fórmula exacta (T1.6, `server/internal/combat`, constantes en `balance.yaml`):
+  `golpe_máx = (skill × ataque / skill_attack_divisor + nivel / level_divisor) × modo`,
+  `golpe = aleatorio(0, golpe_máx) × (1 − resistencia física %)`; a un monstruo le restan
+  `aleatorio(armadura/2, armadura)` y `aleatorio(0, defensa/2)`; a un jugador
+  `aleatorio(armadura/2, armadura)` y `aleatorio(0, escudo × modo_defensa /
+  shield_block_divisor)` (solo ataques físicos).
 - Daño mágico: `nivel_mágico × base_hechizo + nivel × factor` con rango aleatorio.
 - Elementos: físico, fuego, hielo, energía, tierra, sagrado, muerte. Monstruos tienen
   resistencias porcentuales en su YAML.
@@ -81,8 +87,16 @@ exponencialmente más (`tries(n) = base × factor_vocación^(n − 10)`).
 - Definidos en `data/monsters/*.yaml`: stats, ataques (melee, a distancia, hechizos con
   área), resistencias, loot con probabilidades, experiencia, comportamiento.
 - IA simple por estados: `idle → alerta → perseguir → atacar → huir (con poca vida)`.
+  Implementada en T1.6 (`server/internal/session/monster.go`): en idle deambula dentro del
+  radio de su spawn; los agresivos eligen al jugador visible más cercano con línea de
+  visión (alerta: se gira hacia él), lo persiguen (paso que más acerca; si no hay, A* con
+  la cuota de pathfinding del tick) y atacan pegados con los temporizadores de cada
+  ataque. Con `flee_at_health_pct` se alejan; acorralados, pelean. Los pasivos solo
+  responden si los golpean. No entran en zonas de protección ni atacan dentro de ellas.
+  Solo piensan en sectores activos. En T1.6 solo hay ataques `melee`; `distance` y
+  `spell` llegan con la magia (T1.9).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
-  jugador está mirando el punto (evita aparecer en la cara).
+  jugador está mirando el punto (evita aparecer en la cara): se reintenta cada 5 s.
 
 ## Muerte
 Valores iniciales (balance.yaml):

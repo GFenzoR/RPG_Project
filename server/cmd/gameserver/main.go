@@ -104,6 +104,14 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	monsters, err := content.LoadMonsters(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
+	items, err := content.LoadItems(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	m, err := loadWorld(logger, o.worldPath)
 	if err != nil {
 		return err
@@ -127,6 +135,8 @@ func run(logger *slog.Logger, o options) error {
 		Seed:             o.seed,
 		Vocations:        vocations,
 		Balance:          balance,
+		Monsters:         monsters,
+		Items:            items,
 		Map:              m,
 		CookieSecure:     o.cookieSecure,
 		TrustProxy:       o.trustProxy,

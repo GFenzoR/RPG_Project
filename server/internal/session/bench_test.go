@@ -2,14 +2,17 @@ package session_test
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"testing"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
@@ -35,9 +38,9 @@ func BenchmarkTickPlayersWalking(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			mv, flush := w.Systems()
+			mv, fight, flush := w.Systems()
 			r := rand.New(rand.NewPCG(1, 2))
-			loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: r, Systems: []game.System{mv, flush}})
+			loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: r, Systems: []game.System{mv, fight, flush}})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -69,6 +72,73 @@ func BenchmarkTickPlayersWalking(b *testing.B) {
 				events += c.events
 			}
 			b.ReportMetric(float64(events)/float64(b.N)/float64(n), "events/player/tick")
+		})
+	}
+}
+
+// BenchmarkTickMonsters measures one tick with 100 players walking in a 256x256 area
+// among N aggressive monsters (spawns of 4 every 16 tiles): AI in active sectors,
+// chasing, melee and the AOI events of all of it. Budget as above: p99 < 10 ms at
+// 100 players (docs/07-performance-budget.md).
+func BenchmarkTickMonsters(b *testing.B) {
+	for _, n := range []int{256, 1024} {
+		b.Run(fmt.Sprintf("players=100/monsters=%d", n), func(b *testing.B) {
+			m := worldtest.Open(b, 0, 0, 256, 256)
+			step := 256 / int(math.Sqrt(float64(n/4)))
+			var spawns []world.Spawn
+			for y := step / 2; y < 256; y += step {
+				for x := step / 2; x < 256; x += step {
+					spawns = append(spawns, world.Spawn{ID: "s", Center: pos(x, y), Radius: 3, RespawnSeconds: 30,
+						Monsters: []world.SpawnMonster{{Monster: "wolf", Count: 4}}})
+				}
+			}
+			m.Islands()[0].Spawns = spawns
+			w, err := session.New(session.Config{
+				Map:       m,
+				Balance:   testBalance(),
+				Vocations: testVocations,
+				Monsters:  content.Monsters{"wolf": wolfDef()},
+				Items:     testItems(),
+				Save:      func(session.Snapshot) bool { return true },
+			})
+			if err != nil {
+				b.Fatal(err)
+			}
+			mv, fight, flush := w.Systems()
+			r := rand.New(rand.NewPCG(1, 2))
+			loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: r, Systems: []game.System{mv, fight, flush}})
+			if err != nil {
+				b.Fatal(err)
+			}
+			const players = 100
+			clients := make([]*discardClient, players)
+			for i := range clients {
+				clients[i] = &discardClient{}
+				c := session.Character{ID: int64(i + 1), Name: "P", Vocation: "guardian", Level: 1, Health: 145,
+					HasPos: true, Pos: pos(r.IntN(256), r.IntN(256))}
+				_ = loop.Enqueue(w.Join(c, clients[i]))
+			}
+			loop.Step()
+			byID := map[uint32]*discardClient{}
+			for i, p := range w.Players() {
+				byID[p.ID()] = clients[i]
+			}
+			steps := make([]pb.Direction, 10)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				for _, p := range w.Players() {
+					if !p.Walking() && r.IntN(4) == 0 {
+						for i := range steps {
+							steps[i] = pb.Direction(1 + r.IntN(8))
+						}
+						_ = loop.Enqueue(w.Input(byID[p.ID()], walkPath(steps...)))
+					}
+				}
+				loop.Step()
+			}
+			b.StopTimer()
+			b.ReportMetric(float64(len(w.Monsters())), "monsters")
 		})
 	}
 }

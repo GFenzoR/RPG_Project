@@ -13,7 +13,8 @@ server/
   internal/entity/     jugadores, monstruos, NPCs; IDs estables (uint32)
   internal/combat/     daño, fórmulas, condiciones (veneno, fuego, paralyze)
   internal/skills/     progreso de skills por uso, niveles, experiencia
-  internal/ai/         comportamiento de monstruos (máquina de estados simple)
+  internal/ai/         (aún no existe: la IA de monstruos vive en session/monster.go porque
+                       depende del índice de sectores y del AOI; separarla cuando crezca)
   internal/dialog/     motor de diálogos de NPC dirigido por YAML
   internal/quest/      estado de quests, flags (storage values) por personaje
   internal/content/    carga y validación de data/*.yaml

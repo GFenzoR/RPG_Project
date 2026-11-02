@@ -2,7 +2,7 @@
 // together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
 // the server says; the one thing it predicts is the next own step.
 import { Direction } from "@rpg/protocol";
-import type { DisconnectReason } from "@rpg/protocol";
+import type { DisconnectReason, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
 import { MovementKeys, typingInField } from "./input/keyboard.ts";
@@ -12,6 +12,15 @@ import type { GameCanvas } from "./render/game-canvas.ts";
 import { findPath } from "./state/path.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
+import type { CreatureState, LogMessage, PlayerStatsState } from "./state/world.ts";
+
+/** What the DOM UI shows next to the canvas, refreshed after every server batch. */
+export interface GameUi {
+  battle: CreatureState[];
+  target: number | undefined;
+  stats: PlayerStatsState | undefined;
+  log: LogMessage[];
+}
 
 /** Read-only hooks for the E2E tests (client/e2e). */
 export interface ClientTestHooks {
@@ -21,6 +30,12 @@ export interface ClientTestHooks {
   walkable(x: number, y: number, z: number): boolean;
   tileToClient(x: number, y: number): { x: number; y: number };
   scale(): number;
+  /** The battle list as [id, contentId, health %]. */
+  battle(): { id: number; contentId: string; health: number }[];
+  target(): number | undefined;
+  stats(): PlayerStatsState | undefined;
+  /** Floating texts that appeared less than `ms` ago. */
+  floatingTexts(ms: number): number;
 }
 
 declare global {
@@ -39,6 +54,8 @@ export interface GameOptions {
   entered(): void;
   /** The session ended (Disconnect or lost connection). */
   ended(reason: DisconnectReason | undefined): void;
+  /** New state for the DOM UI (battle list, health, log). */
+  update(ui: GameUi): void;
 }
 
 export class Game {
@@ -63,6 +80,7 @@ export class Game {
         const now = performance.now();
         for (const e of batch.events) this.world.apply(e.message, now);
         if (this.world.self && !this.canvas && !this.starting) void this.startCanvas();
+        this.publish();
       },
       closed: (reason) => {
         if (this.destroyed) return;
@@ -74,6 +92,23 @@ export class Game {
 
   logout(): void {
     this.conn.logout();
+  }
+
+  /** Attacks creature id, or stops attacking it if it already is the target (SetTarget). */
+  attack(id: number): void {
+    const next = this.world.target === id ? undefined : id;
+    this.world.target = next;
+    this.conn.send({ case: "setTarget", value: { creatureId: next ?? 0 } });
+    this.publish();
+  }
+
+  setFightMode(stance: FightStance, chase: boolean): void {
+    this.conn.send({ case: "setFightMode", value: { stance, chase } });
+  }
+
+  private publish(): void {
+    const w = this.world;
+    this.opts.update({ battle: w.battleList(), target: w.target, stats: w.stats, log: [...w.log] });
   }
 
   destroy(): void {
@@ -97,6 +132,7 @@ export class Game {
       clickTile: (x, y, z) => {
         this.clickTarget = { x, y, z };
       },
+      clickCreature: (id) => this.attack(id),
     });
     if (this.destroyed) {
       canvas.destroy();
@@ -115,6 +151,14 @@ export class Game {
       walkable: (x, y, z) => world.free(x, y, z),
       tileToClient: (x, y) => canvas.tileToClient(x, y),
       scale: () => canvas.scale,
+      battle: () =>
+        world.battleList().map((c) => ({ id: c.id, contentId: c.contentId, health: c.health })),
+      target: () => world.target,
+      stats: () => world.stats,
+      floatingTexts: (ms) => {
+        const now = performance.now();
+        return world.floatingTexts.filter((f) => now - f.start < ms).length;
+      },
     };
     this.opts.entered();
   }

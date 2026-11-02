@@ -229,7 +229,7 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
   eso las opciones de entrega repiten `has_item` en su `if` y quitan el item con
   `take_item`.
 - `make validate` exige que todo item de un paso `has_item` se pueda conseguir (loot, tienda,
-  `give_item` o recompensa de quest). `puerto-balance.test.ts` comprueba además que la
+  `give_item` o recompensa de quest). `server/internal/sim/balance_test.go` comprueba además que la
   fuente más fácil no esté más de 4 niveles por encima del `min_level` de la quest.
 
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1) y las quests secundarias

@@ -126,6 +126,79 @@ button.link {
   color: var(--muted);
   font-size: 0.85rem;
 }
+.hud .stat {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+.game-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.side {
+  width: 14rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background: var(--panel);
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+.side h2 {
+  font-size: 0.9rem;
+  margin: 0 0 0.4rem;
+}
+.battle ul,
+.log {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.battle button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  text-align: left;
+  padding: 0.25rem 0.4rem;
+  border: 2px solid transparent;
+}
+.battle button.target {
+  border-color: #ff2020;
+}
+.battle .hp {
+  display: block;
+  height: 4px;
+  background: #101010;
+}
+.battle .hp span {
+  display: block;
+  height: 100%;
+  background: #30c030;
+}
+.battle .empty {
+  color: var(--muted);
+  margin: 0;
+}
+.fight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.fight .check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+.log {
+  margin-top: auto;
+  color: var(--muted);
+}
 .viewport {
   flex: 1;
   min-height: 0;

@@ -196,6 +196,10 @@ func TestCompileTestisle(t *testing.T) {
 	if m.Flags(is.Temple)&world.FlagProtection == 0 {
 		t.Errorf("temple %v is not in a protection zone", is.Temple)
 	}
+	if len(is.Spawns) != 3 || is.Spawns[0].ID != "testisle_wolves" || is.Spawns[0].Monsters[0] != (world.SpawnMonster{Monster: "wolf", Count: 3}) ||
+		is.Spawns[0].RespawnSeconds != 60 || is.Spawns[0].Radius != 4 {
+		t.Errorf("spawns = %+v", is.Spawns)
+	}
 	// The cave stairs lead down to 1069,1056,8: there must be a walking path from the
 	// temple to the top of the stairs.
 	pf := world.NewPathfinder(m, 0)

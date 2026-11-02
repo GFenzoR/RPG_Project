@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-// world.bin, format version 1. Little endian throughout:
+// world.bin, format version 2. Little endian throughout:
 //
 //	magic        "RPGWORLD"
 //	version      u16
@@ -20,6 +20,9 @@ import (
 //	  rect       4 × u32 (x, y, w, h)
 //	  floors     u8 count + bytes
 //	  temple     u16 x, u16 y, u8 z
+//	  spawns     u16 count, then per spawn:
+//	    id u8 length + bytes, center u16 x, u16 y, u8 z, radius u8, respawn u32 seconds,
+//	    monsters u8 count, then per monster: id u8 length + bytes, count u16
 //	  sectors    u32 count, then per sector (ordered by z, cy, cx):
 //	    z u8, cx u16, cy u16
 //	    ground   1024 × u16
@@ -30,7 +33,7 @@ import (
 // Encoding the same Map always produces the same bytes.
 
 // BinaryVersion is the world.bin format version this package reads and writes.
-const BinaryVersion = 1
+const BinaryVersion = 2
 
 var binaryMagic = [8]byte{'R', 'P', 'G', 'W', 'O', 'R', 'L', 'D'}
 
@@ -66,6 +69,19 @@ func checkEncodable(m *Map) error {
 	for _, is := range m.islands {
 		if len(is.ID) > 0xFF || len(is.Floors) > MaxFloor+1 {
 			return fmt.Errorf("island %q: id or floor list too long", is.ID)
+		}
+		if len(is.Spawns) > 0xFFFF {
+			return fmt.Errorf("island %q: %d spawns do not fit", is.ID, len(is.Spawns))
+		}
+		for _, sp := range is.Spawns {
+			if len(sp.ID) > 0xFF || len(sp.Monsters) > 0xFF {
+				return fmt.Errorf("island %q: spawn %q: id or monster list too long", is.ID, sp.ID)
+			}
+			for _, m := range sp.Monsters {
+				if len(m.Monster) > 0xFF {
+					return fmt.Errorf("island %q: spawn %q: monster id too long", is.ID, sp.ID)
+				}
+			}
 		}
 		for _, s := range is.Sectors() {
 			if len(s.Stacks) > SectorTiles {
@@ -108,6 +124,22 @@ func Encode(w io.Writer, m *Map) error {
 		b.u16(is.Temple.X)
 		b.u16(is.Temple.Y)
 		b.u8(is.Temple.Z)
+		b.u16(uint16(len(is.Spawns)))
+		for _, sp := range is.Spawns {
+			b.u8(uint8(len(sp.ID)))
+			b.bytes([]byte(sp.ID))
+			b.u16(sp.Center.X)
+			b.u16(sp.Center.Y)
+			b.u8(sp.Center.Z)
+			b.u8(sp.Radius)
+			b.u32(sp.RespawnSeconds)
+			b.u8(uint8(len(sp.Monsters)))
+			for _, m := range sp.Monsters {
+				b.u8(uint8(len(m.Monster)))
+				b.bytes([]byte(m.Monster))
+				b.u16(m.Count)
+			}
+		}
 		sectors := is.Sectors()
 		b.u32(uint32(len(sectors)))
 		for _, s := range sectors {
@@ -216,6 +248,21 @@ func Decode(data []byte) (*Map, error) {
 		is.Rect = Rect{X: b.u32(), Y: b.u32(), W: b.u32(), H: b.u32()}
 		is.Floors = append([]uint8(nil), b.take(int(b.u8()))...)
 		is.Temple = Pos{X: b.u16(), Y: b.u16(), Z: b.u8()}
+		spawns := int(b.u16())
+		for range spawns {
+			if b.err != nil {
+				break
+			}
+			sp := Spawn{ID: string(b.take(int(b.u8())))}
+			sp.Center = Pos{X: b.u16(), Y: b.u16(), Z: b.u8()}
+			sp.Radius = b.u8()
+			sp.RespawnSeconds = b.u32()
+			n := int(b.u8())
+			for range n {
+				sp.Monsters = append(sp.Monsters, SpawnMonster{Monster: string(b.take(int(b.u8()))), Count: b.u16()})
+			}
+			is.Spawns = append(is.Spawns, sp)
+		}
 		count := int(b.u32())
 		const minSectorBytes = 5 + SectorTiles*3 + 2
 		if b.err == nil && count > (len(body)-b.off)/minSectorBytes {

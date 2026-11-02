@@ -49,6 +49,7 @@ const content: ClientContent = {
       speed: 100,
     },
   },
+  monsterSprites: {},
   vocations: ["guardian"],
   movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
   i18n: {},

@@ -39,6 +39,9 @@ type Config struct {
 	Seed      uint64
 	Vocations content.Vocations
 	Balance   content.Balance
+	// Monsters and Items come from data/ (session.Config); nil runs a world without monsters.
+	Monsters content.Monsters
+	Items    content.Items
 	// Map is the loaded world. Nil runs the HTTP API only (no /ws).
 	Map *world.Map
 
@@ -112,6 +115,8 @@ func New(cfg Config) (*App, error) {
 			Map:           cfg.Map,
 			Balance:       cfg.Balance,
 			Vocations:     cfg.Vocations,
+			Monsters:      cfg.Monsters,
+			Items:         cfg.Items,
 			Save:          saver.Submit,
 			AutosaveEvery: cfg.AutosaveEvery,
 			Logger:        cfg.Logger,
@@ -120,8 +125,8 @@ func New(cfg Config) (*App, error) {
 			return nil, err
 		}
 		a.World = w
-		mv, flush := w.Systems()
-		systems = append(systems, mv, flush)
+		mv, fight, flush := w.Systems()
+		systems = append(systems, mv, fight, flush)
 	}
 
 	loop, err := game.New(game.Config{

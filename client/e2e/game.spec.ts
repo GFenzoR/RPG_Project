@@ -156,3 +156,93 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
 
   expect(errors).toEqual([]);
 });
+
+test("walk out of town, fight a wolf from the battle list", async ({ page, playwright }) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-fight-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Fighter ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  // Opening the page without a session cookie answers 401 (logged by the browser): expected.
+  errors.length = 0;
+  const battle = page.getByTestId("battle-list");
+  await expect(battle.getByText("No hay criaturas a la vista.")).toBeVisible();
+
+  // The wolves of testisle roam 11-19 tiles north of the temple: walk towards them.
+  const start = await self(page);
+  if (!start) throw new Error("no own creature");
+  const click = async (x: number, y: number): Promise<void> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    if (!p) throw new Error("no canvas");
+    await page.mouse.click(p.x, p.y);
+  };
+  await click(start.x, start.y - 5);
+  await arrived(page, start.x, start.y - 5);
+  await click(start.x, start.y - 9);
+
+  // A wolf shows up in the battle list (and comes for us): attack it from there.
+  const wolf = battle.getByRole("button", { name: /lobo/ }).first();
+  await expect(wolf).toBeVisible({ timeout: 30_000 });
+  await wolf.click();
+  await expect(wolf).toHaveAttribute("aria-pressed", "true");
+  const target = await page.evaluate(() => window.__rpgClient?.target());
+  expect(target).toBeDefined();
+
+  // Blows are exchanged: the wolf's health bar or ours goes down.
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const c = window.__rpgClient;
+          const s = c?.stats();
+          const t = c?.battle().find((b) => b.id === c.target());
+          return (s !== undefined && s.health < s.maxHealth) || (t !== undefined && t.health < 100);
+        }),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  // Screenshot while a damage number is on screen (the effect shows with it).
+  await expect
+    .poll(() => page.evaluate(() => window.__rpgClient?.floatingTexts(200) ?? 0), {
+      timeout: 15_000,
+      intervals: [50],
+    })
+    .toBeGreaterThan(0);
+  await shot(page, "07-combat");
+
+  await page.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+  expect(errors).toEqual([]);
+});

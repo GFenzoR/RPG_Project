@@ -101,7 +101,7 @@ func (w *World) eachObserver(c *Player, p world.Pos, fn func(*Player)) {
 	})
 }
 
-// creatureAt returns a creature standing on p, or nil.
+// creatureAt returns a player standing on p, or nil.
 func (w *World) creatureAt(p world.Pos) *Player {
 	for _, c := range w.sectors[sectorKey(int(p.X), int(p.Y), p.Z)] {
 		if c.pos == p {
@@ -109,6 +109,61 @@ func (w *World) creatureAt(p world.Pos) *Player {
 		}
 	}
 	return nil
+}
+
+// occupied reports whether a player or a monster stands on p.
+func (w *World) occupied(p world.Pos) bool {
+	return w.creatureAt(p) != nil || w.monsterAt(p) != nil
+}
+
+// creaturePos returns where the creature with id (player or monster) stands.
+func (w *World) creaturePos(id uint32) (world.Pos, bool) {
+	if p := w.playerByID(id); p != nil {
+		return p.pos, true
+	}
+	if m := w.monByID[id]; m != nil {
+		return m.pos, true
+	}
+	return world.Pos{}, false
+}
+
+// observeMove tells every client around either end of a step of a creature (the player
+// pl or the monster mo) what it needs: CreatureMove if it keeps seeing it,
+// CreatureDisappear if it stops, CreatureAppear if it starts. The mover's own client is
+// the caller's job. fromMsg and toMsg are shared by every CreatureMove.
+func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg, toMsg *pb.Position, durMs uint32) {
+	var id uint32
+	if pl != nil {
+		id = pl.id
+	} else {
+		id = mo.id
+	}
+	x0, x1 := int(min(from.X, to.X))-ViewHalfW, int(max(from.X, to.X))+ViewHalfW
+	y0, y1 := int(min(from.Y, to.Y))-ViewHalfH, int(max(from.Y, to.Y))+ViewHalfH
+	w.eachInRect(x0, y0, x1, y1, to.Z, func(o *Player) {
+		if o == pl {
+			return
+		}
+		sees := Sees(o.pos, to)
+		switch knows := o.Knows(id); {
+		case knows && sees:
+			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureMove{CreatureMove: &pb.CreatureMove{
+				Id: id, From: fromMsg, To: toMsg, DurationMs: durMs,
+			}}})
+		case knows:
+			o.forget(id)
+			o.emit(disappearMsg(id))
+		case sees:
+			o.remember(id)
+			c := (*pb.Creature)(nil)
+			if pl != nil {
+				c = w.creatureMsg(pl)
+			} else {
+				c = w.monsterMsg(mo)
+			}
+			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: c}}})
+		}
+	})
 }
 
 // ---- appear and disappear ---------------------------------------------------------
@@ -189,6 +244,7 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 				if ok {
 					stack = append(stack[:0], ground)
 					stack = append(stack, w.m.Stack(pos)...)
+					stack = append(stack, w.ground[pos]...)
 					idx = paletteIndex(area, stack)
 					any = true
 				}
@@ -203,6 +259,12 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 		if c == p || !p.Knows(c.id) {
 			p.remember(c.id)
 			area.Creatures = append(area.Creatures, w.creatureMsg(c))
+		}
+	})
+	w.eachMonsterInRect(x0, y0, x0+wd-1, y0+ht-1, p.pos.Z, func(m *Monster) {
+		if !p.Knows(m.id) {
+			p.remember(m.id)
+			area.Creatures = append(area.Creatures, w.monsterMsg(m))
 		}
 	})
 	return area

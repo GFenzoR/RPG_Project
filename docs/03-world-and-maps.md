@@ -193,13 +193,13 @@ proyectiles y hechizos. Opciones:
 Cualquiera de las dos cambia `mapcompile` y `packages/map-format` a la vez. Hasta que se
 decida, todo muro nuevo debería declarar `blocks_sight: true`.
 
-### Formato de `world.bin` (versión 1)
+### Formato de `world.bin` (versión 2)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
 mismas fuentes producen siempre los mismos bytes.
 
 ```text
 magic        8 bytes "RPGWORLD"
-version      u16 = 1
+version      u16 = 2
 speedCount   u32, luego speedCount × u16
              costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
 islandCount  u16, luego por isla (en el orden de world.yaml):
@@ -207,6 +207,10 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
   rect       4 × u32: x, y, w, h (alineados a 32)
   floors     u8 cantidad + bytes (ascendentes, sin repetir, 0..15)
   temple     u16 x, u16 y, u8 z
+  spawns     u16 cantidad, luego por spawn (en el orden de spawns.yaml):
+    id u8 largo + bytes, center u16 x, u16 y, u8 z, radius u8,
+    respawn u32 segundos, monsters u8 cantidad, luego por monstruo:
+    id u8 largo + bytes (data/monsters), count u16
   sectors    u32 cantidad, luego por sector, ordenados por z, cy, cx:
     z u8, cx u16, cy u16
     ground   1024 × u16   ID numérico del suelo, fila por fila; 0 = sin tile
@@ -217,6 +221,10 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
 crc32        u32 (IEEE) de todos los bytes anteriores
 ```
 
+- Historial: la versión 2 (T1.6) agregó `spawns` por isla. `mapcompile` comprueba que
+  cada monstruo tenga su `data/monsters/<id>.yaml`; `Decode` rechaza spawns con el centro
+  fuera de la isla o en un piso que no lista, sin id, sin monstruos o con
+  `respawn_seconds` 0.
 - Un sector es un chunk de `world/` ya resuelto: solo existen los sectores con archivo.
 - `Decode` rechaza archivos con checksum, magic o versión incorrectos, datos truncados o
   sobrantes, y metadatos inválidos (rect fuera del mundo o desalineado, pisos fuera de

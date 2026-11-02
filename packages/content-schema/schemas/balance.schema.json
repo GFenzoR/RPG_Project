@@ -72,9 +72,22 @@
     "combat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["attack_interval_ms", "modes"],
+      "required": [
+        "attack_interval_ms",
+        "fist_attack",
+        "skill_attack_divisor",
+        "level_divisor",
+        "shield_block_divisor",
+        "monster_corpse_ms",
+        "modes"
+      ],
       "properties": {
         "attack_interval_ms": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "fist_attack": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "skill_attack_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "level_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "shield_block_divisor": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "monster_corpse_ms": { "$ref": "common.schema.json#/$defs/durationMs" },
         "modes": {
           "type": "object",
           "additionalProperties": false,

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/rand/v2"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -61,8 +62,10 @@ type stack struct {
 func newStack(t *testing.T, mutate func(*Config)) *stack {
 	t.Helper()
 	s := &stack{t: t, accounts: &fakeAccounts{tokens: map[string][2]int64{}}, gwClock: clock.NewFake(time.Time{})}
-	var bal content.Balance
-	bal.Movement = content.Movement{BaseStepMs: 1000, DiagonalCost: 1.5, MaxPathTiles: 100}
+	bal, err := content.LoadBalance(filepath.Join("..", "..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	w, err := session.New(session.Config{
 		Map:     worldtest.Open(t, 0, 0, 32, 32),
 		Balance: bal,
@@ -78,8 +81,8 @@ func newStack(t *testing.T, mutate func(*Config)) *stack {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mv, flush := w.Systems()
-	loop, err := game.New(game.Config{Clock: clock.Real{}, Rand: rand.New(rand.NewPCG(1, 1)), Systems: []game.System{mv, flush}})
+	mv, fight, flush := w.Systems()
+	loop, err := game.New(game.Config{Clock: clock.Real{}, Rand: rand.New(rand.NewPCG(1, 1)), Systems: []game.System{mv, fight, flush}})
 	if err != nil {
 		t.Fatal(err)
 	}

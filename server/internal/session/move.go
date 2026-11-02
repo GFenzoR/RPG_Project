@@ -40,13 +40,17 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 			return
 		}
 		w.turn(p, d)
+	case *pb.ClientMessage_SetTarget:
+		w.setTarget(p, m.SetTarget.GetCreatureId())
+	case *pb.ClientMessage_SetFightMode:
+		w.setFightMode(p, m.SetFightMode.GetStance(), m.SetFightMode.GetChase())
 	case *pb.ClientMessage_Ping:
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Pong{Pong: &pb.Pong{
 			ClientTime: m.Ping.GetClientTime(),
 			ServerTime: uint64(max(ctx.Now.UnixMilli(), 0)),
 		}}})
 	case *pb.ClientMessage_Logout:
-		// No-logout zones and the combat lock arrive with combat (T1.6/T1.11).
+		// No-logout zones and the combat lock arrive with death and PvP rules (T1.11).
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
 	default:
 		// Hello after the handshake, and messages of later milestones: ignored.
@@ -144,7 +148,7 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		w.reject(p, dirMsg(d))
 		return
 	}
-	if w.creatureAt(to) != nil {
+	if w.occupied(to) {
 		if p.hasDest && w.pathBudget < w.searchCost() {
 			return // out of pathfinding quota this tick: try again on the next one
 		}
@@ -173,7 +177,7 @@ func (w *World) searchCost() int { return 2 * w.cfg.RerouteMaxNodes }
 // reroute replaces p's remaining path with one to p.dest around creatures and charges
 // the search to the tick's pathfinding quota. It reports whether p has a new path.
 func (w *World) reroute(p *Player) bool {
-	path, ok := w.pf.FindAvoiding(p.pos, p.dest, w.pathBuf, func(q world.Pos) bool { return w.creatureAt(q) != nil })
+	path, ok := w.pf.FindAvoiding(p.pos, p.dest, w.pathBuf, w.occupied)
 	w.pathBudget -= w.pf.Expanded()
 	w.pathBuf = path[:0]
 	if !ok || len(path) == 0 {
@@ -197,32 +201,13 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureMove{CreatureMove: mv}})
 
 	// Other clients: those around either end of the step.
-	x0, x1 := int(min(from.X, to.X))-ViewHalfW, int(max(from.X, to.X))+ViewHalfW
-	y0, y1 := int(min(from.Y, to.Y))-ViewHalfH, int(max(from.Y, to.Y))+ViewHalfH
-	w.eachInRect(x0, y0, x1, y1, to.Z, func(o *Player) {
-		if o == p {
-			return
-		}
-		sees := Sees(o.pos, to)
-		switch knows := o.Knows(p.id); {
-		case knows && sees:
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureMove{CreatureMove: &pb.CreatureMove{
-				Id: p.id, From: mv.From, To: mv.To, DurationMs: durMs,
-			}}})
-		case knows:
-			o.forget(p.id)
-			o.emit(disappearMsg(p.id))
-		case sees:
-			o.remember(p.id)
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.creatureMsg(p)}}})
-		}
-	})
+	w.observeMove(p, nil, from, to, mv.From, mv.To, durMs)
 
 	// The mover's own client: creatures out of view disappear, the new edge arrives.
 	kept := p.known[:0]
 	for _, id := range p.known {
-		if c := w.playerByID(id); c == nil || c == p || Sees(to, c.pos) {
-			if c != nil {
+		if c, ok := w.creaturePos(id); !ok || id == p.id || Sees(to, c) {
+			if ok {
 				kept = append(kept, id)
 			}
 			continue

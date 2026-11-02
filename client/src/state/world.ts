@@ -5,8 +5,8 @@
 // Own movement is predicted one step ahead (client/CLAUDE.md): a step the player asks for
 // moves the own creature at once; the server's CreatureMove confirms it (and gives the
 // real duration) and WalkRejected puts the creature back where the server says it is.
-import { CreatureKind, Direction } from "@rpg/protocol";
-import type { Creature, MapArea, ServerMessage } from "@rpg/protocol";
+import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
+import type { Creature, MapArea, ServerMessage, TextParam, FloatingTextKind } from "@rpg/protocol";
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
 import type { ClientContent, ItemDef } from "../content-types.ts";
@@ -30,8 +30,48 @@ export interface CreatureState {
   pos: Pos;
   dir: Direction;
   speed: number;
+  /** Health bar, 0-100. */
+  health: number;
   walk: Walk | undefined;
 }
+
+/** A visual effect on a tile (Effect.effect_id, docs/05 "Combate"). */
+export interface EffectState {
+  pos: Pos;
+  effectId: number;
+  start: number;
+}
+
+/** A number rising from a tile: damage, healing, experience. */
+export interface FloatingTextState {
+  pos: Pos;
+  kind: FloatingTextKind;
+  amount: number;
+  start: number;
+}
+
+/** A server message for the status log: an i18n key plus its parameters. */
+export interface LogMessage {
+  key: string;
+  params: TextParam[];
+  at: number;
+}
+
+export interface PlayerStatsState {
+  health: number;
+  maxHealth: number;
+  level: number;
+  experience: number;
+}
+
+/** Effect ids (server/internal/session/combat.go). */
+export const EFFECT_HIT = 1;
+export const EFFECT_BLOCK = 2;
+/** How long effects and floating texts live, ms. */
+export const EFFECT_MS = 600;
+export const FLOATING_TEXT_MS = 1000;
+/** Status log length. */
+const LOG_SIZE = 5;
 
 interface ChunkTiles {
   /** Item IDs per tile (ground first), row-major; undefined = unknown. */
@@ -53,6 +93,12 @@ export class WorldState implements TileSource {
   readonly creatures = new Map<number, CreatureState>();
   /** The predicted own step the server has not confirmed yet. */
   pending: { from: Pos; to: Pos } | undefined;
+  /** The creature the player attacks (SetTarget), if any. */
+  target: number | undefined;
+  stats: PlayerStatsState | undefined;
+  effects: EffectState[] = [];
+  floatingTexts: FloatingTextState[] = [];
+  log: LogMessage[] = [];
   private readonly chunks = new Map<string, ChunkTiles>();
   private readonly content: ClientContent;
 
@@ -131,6 +177,7 @@ export class WorldState implements TileSource {
         this.chunks.clear();
         this.creatures.clear();
         this.pending = undefined;
+        this.target = undefined;
         if (msg.value.area) this.applyArea(msg.value.area);
         break;
       case "mapSlice":
@@ -152,7 +199,34 @@ export class WorldState implements TileSource {
         break;
       case "creatureDisappear":
         this.creatures.delete(msg.value.id);
+        if (this.target === msg.value.id) this.target = undefined;
         break;
+      case "creatureHealth": {
+        const c = this.creatures.get(msg.value.id);
+        if (c) c.health = msg.value.healthPercent;
+        break;
+      }
+      case "effect":
+        this.effects.push({ pos: posOf(msg.value.pos), effectId: msg.value.effectId, start: now });
+        break;
+      case "floatingText":
+        this.floatingTexts.push({
+          pos: posOf(msg.value.pos),
+          kind: msg.value.kind,
+          amount: Number(msg.value.amount),
+          start: now,
+        });
+        break;
+      case "chatMessage": {
+        const m = msg.value;
+        if (m.kind !== MessageKind.SYSTEM || m.body.case !== "localized") break;
+        const key = m.body.value.key;
+        // The server refused the target: drop it like the server did.
+        if (key === "combat.cannot_attack") this.target = undefined;
+        this.log.push({ key, params: m.body.value.params, at: now });
+        if (this.log.length > LOG_SIZE) this.log.shift();
+        break;
+      }
       case "creatureMove":
         this.move(
           msg.value.id,
@@ -173,8 +247,16 @@ export class WorldState implements TileSource {
         break;
       }
       case "playerStats": {
+        const v = msg.value;
         const s = this.self;
-        if (s && msg.value.speed > 0) s.speed = msg.value.speed;
+        if (s && v.speed > 0) s.speed = v.speed;
+        if (s && v.maxHealth > 0) s.health = Math.round((v.health * 100) / v.maxHealth);
+        this.stats = {
+          health: v.health,
+          maxHealth: v.maxHealth,
+          level: v.level,
+          experience: Number(v.experience),
+        };
         break;
       }
       case "walkRejected": {
@@ -248,6 +330,7 @@ export class WorldState implements TileSource {
       pos: posOf(c.pos),
       dir: c.dir === Direction.UNSPECIFIED ? Direction.SOUTH : c.dir,
       speed: c.speed || prev?.speed || 0,
+      health: c.healthPercent,
       walk: undefined,
     });
   }
@@ -267,6 +350,32 @@ export class WorldState implements TileSource {
     if (id === this.selfId) this.pending = undefined;
     c.pos = to;
     c.walk = { from, to, start: now, duration };
+  }
+
+  /** Forgets effects and floating texts that finished. */
+  expire(now: number): void {
+    if (this.effects.length > 0)
+      this.effects = this.effects.filter((e) => now - e.start < EFFECT_MS);
+    if (this.floatingTexts.length > 0)
+      this.floatingTexts = this.floatingTexts.filter((f) => now - f.start < FLOATING_TEXT_MS);
+  }
+
+  /** The creatures of the battle list: everyone in view on the own floor but oneself, closest first. */
+  battleList(): CreatureState[] {
+    const s = this.self;
+    if (!s) return [];
+    const d = (c: CreatureState): number =>
+      Math.max(Math.abs(c.pos.x - s.pos.x), Math.abs(c.pos.y - s.pos.y));
+    return [...this.creatures.values()]
+      .filter((c) => c.id !== this.selfId && c.pos.z === s.pos.z)
+      .sort((a, b) => d(a) - d(b) || a.id - b.id);
+  }
+
+  /** The creature standing on a tile, if the client knows one. */
+  creatureAt(x: number, y: number, z: number): CreatureState | undefined {
+    for (const c of this.creatures.values())
+      if (c.pos.x === x && c.pos.y === y && c.pos.z === z) return c;
+    return undefined;
   }
 
   // ---- own movement -------------------------------------------------------------------

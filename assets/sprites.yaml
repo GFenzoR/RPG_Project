@@ -63,6 +63,7 @@ sprites:
   decor/cargo_crate: { placeholder: { label: CR, color: "#9a7a4e" } }
 
   # Creatures
+  decor/creature_remains: { placeholder: { label: "", color: "#6b2a24", size: [32, 32] } }
   creatures/bilge_rat: { placeholder: { label: BR, color: "#5e534c" } }
   creatures/tide_crab: { placeholder: { label: TC, color: "#c4553c" } }
   creatures/wolf: { placeholder: { label: WO, color: "#5c5f66" } }
