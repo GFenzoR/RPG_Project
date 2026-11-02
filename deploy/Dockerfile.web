@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.7
+#
+# Web image: Caddy (TLS, reverse proxy to the gameserver) + the static build of the client.
+# Build from the repo root:
+#
+#   docker build -f deploy/Dockerfile.web -t rpg-web .
+#
+# The client is built with its own `build` script (Vite, T1.5), which writes build/client/
+# (sprite atlas included). Any build error fails the image.
+
+ARG NODE_VERSION=22
+ARG CADDY_VERSION=2.11
+
+# ---- client: pnpm workspace build (architecture-independent, runs on the build platform) --
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine AS client
+WORKDIR /src
+# corepack installs the pnpm version pinned in package.json ("packageManager").
+RUN corepack enable
+COPY . .
+# Full workspace install: the client build needs its workspace dev dependencies
+# (@rpg/spritepack builds the atlas from assets/), exactly like `make build` in CI.
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile \
+    && pnpm --filter @rpg/client run build \
+    && test -f build/client/index.html \
+    && mkdir -p /out && cp -R build/client /out/client
+
+# ---- runtime ------------------------------------------------------------------------------
+FROM caddy:${CADDY_VERSION}-alpine
+ARG VERSION=dev
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="rpg-project-web" \
+      org.opencontainers.image.description="RPG Project web front: Caddy + static client build" \
+      org.opencontainers.image.source="https://github.com/GFenzoR/RPG_Project" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
+COPY deploy/Caddyfile deploy/caddy-routes.caddy /etc/caddy/
+COPY --from=client /out/client/ /srv/client/
+# Fails the build on a Caddyfile syntax error. Placeholder values: the real ones come from
+# the environment at runtime.
+RUN SITE_ADDRESS=localhost ACME_EMAIL=ops@example.com caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

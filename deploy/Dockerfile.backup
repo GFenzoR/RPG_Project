@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+#
+# Backup image: pg_dump 16 (same major as the database) + AWS CLI for the optional S3 copy.
+#
+#   docker build -f deploy/Dockerfile.backup -t rpg-backup .
+#
+# Runs deploy/backup.sh --loop by default (one dump per BACKUP_INTERVAL_SECONDS).
+
+ARG POSTGRES_VERSION=16
+FROM postgres:${POSTGRES_VERSION}-alpine
+ARG VERSION=dev
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="rpg-project-backup" \
+      org.opencontainers.image.description="RPG Project database backups: pg_dump with retention, optional S3 copy" \
+      org.opencontainers.image.source="https://github.com/GFenzoR/RPG_Project" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
+# Unpinned on purpose: Alpine drops old package versions from its index, which would
+# break rebuilds; the base image tag already pins the Alpine release.
+# hadolint ignore=DL3018
+RUN apk add --no-cache bash aws-cli
+COPY --chmod=0755 deploy/backup.sh /usr/local/bin/backup.sh
+# Dumps are written by the unprivileged postgres user (uid 70 in the alpine image).
+RUN mkdir -p /backups && chown postgres:postgres /backups
+USER 70:70
+VOLUME ["/backups"]
+HEALTHCHECK --interval=5m --timeout=10s --start-period=10m \
+  CMD ["backup.sh", "--check"]
+ENTRYPOINT ["backup.sh"]
+CMD ["--loop"]

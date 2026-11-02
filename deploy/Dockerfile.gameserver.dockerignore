@@ -1,0 +1,9 @@
+# Build context is the repo root; only what Dockerfile.gameserver copies is needed.
+*
+!server/
+!world/
+!data/
+!i18n/
+!deploy/healthcheck/
+server/bin/
+**/*.test

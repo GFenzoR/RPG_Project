@@ -1,0 +1,14 @@
+# Build context is the repo root. The pnpm workspace needs every package manifest, so the
+# whole tree is sent except heavy or local-only directories.
+.git/
+**/node_modules/
+**/dist/
+build/
+server/
+tools/bots/
+apps/desktop/src-tauri/target/
+assets/atlas/
+client/e2e/screenshots/
+editor/e2e/screenshots/
+deploy/.env
+deploy/backups/
