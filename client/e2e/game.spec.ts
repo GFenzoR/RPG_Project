@@ -379,6 +379,10 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   await click(start.x, start.y - 5);
   await arrived(page, start.x, start.y - 5);
   await click(start.x, start.y - 9);
+  // Chase the target: the nearest wolf may be one hurt by an earlier test (the server and
+  // its world are shared by the suite), and a hurt wolf flees and never comes within the
+  // bolt's range on its own. The player is faster than a wolf, so chasing closes in.
+  await page.getByLabel("Perseguir al objetivo").check();
   const battle = page.getByTestId("battle-list");
   const wolf = battle.getByRole("button", { name: /lobo/ }).first();
   await expect(wolf).toBeVisible({ timeout: 30_000 });
