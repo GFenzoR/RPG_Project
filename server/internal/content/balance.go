@@ -12,8 +12,9 @@ import (
 
 // Balance is the part of data/balance.yaml the server uses so far.
 type Balance struct {
-	Movement Movement `yaml:"movement"`
-	Skills   struct {
+	Movement   Movement   `yaml:"movement"`
+	Experience Experience `yaml:"experience"`
+	Skills     struct {
 		Base map[string]SkillBase `yaml:"base"`
 	} `yaml:"skills"`
 }
@@ -25,6 +26,34 @@ type Movement struct {
 	BaseStepMs   int     `yaml:"base_step_ms"`
 	DiagonalCost float64 `yaml:"diagonal_cost"`
 	MaxPathTiles int     `yaml:"max_path_tiles"`
+}
+
+// Experience is the level curve: total XP for level n is a*n^3 + b*n^2 + c*n + d.
+type Experience struct {
+	Curve struct {
+		A, B, C, D float64
+	} `yaml:"curve"`
+	MaxLevel int `yaml:"max_level"`
+}
+
+// TotalFor returns the total experience needed to reach level n (0 for n <= 1).
+func (e Experience) TotalFor(n int) int64 {
+	if n <= 1 {
+		return 0
+	}
+	f := float64(n)
+	c := e.Curve
+	return int64(c.A*f*f*f + c.B*f*f + c.C*f + c.D)
+}
+
+// LevelPercent returns the progress (0-99) from level to level+1 with xp total experience.
+func (e Experience) LevelPercent(level int, xp int64) int {
+	lo, hi := e.TotalFor(level), e.TotalFor(level+1)
+	if hi <= lo || xp <= lo {
+		return 0
+	}
+	p := int((xp - lo) * 100 / (hi - lo))
+	return min(max(p, 0), 99)
 }
 
 // SkillBase is the starting level of a skill or craft.
@@ -70,8 +99,8 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if m.DiagonalCost < 1 || m.DiagonalCost > 10 {
 		return Balance{}, errors.New("movement.diagonal_cost must be in 1..10")
 	}
-	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 255 {
-		return Balance{}, errors.New("movement.max_path_tiles must be in 1..255")
+	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 100 {
+		return Balance{}, errors.New("movement.max_path_tiles must be in 1..100 (world.MaxPathLength)")
 	}
 	return b, nil
 }

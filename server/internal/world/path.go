@@ -67,6 +67,9 @@ type Pathfinder struct {
 	heapAt []int32  // index in open while the slot is queued
 	open   []int32  // min-heap of slots
 
+	// avoid, while a FindAvoiding runs, marks extra tiles as blocked (creatures).
+	avoid func(Pos) bool
+
 	expanded int  // nodes expanded by the last Find
 	bySteps  bool // the current pass minimises steps instead of cost
 	// incomplete: the current pass stopped at the node limit or dropped a tile at
@@ -212,6 +215,15 @@ func (pf *Pathfinder) Find(from, to Pos, dst []Direction) (path []Direction, ok 
 	return path, ok
 }
 
+// FindAvoiding is Find, but also treats every tile for which avoid returns true as
+// blocked (for example tiles occupied by creatures). avoid is called at most once per
+// tile reached and must not call back into the pathfinder.
+func (pf *Pathfinder) FindAvoiding(from, to Pos, dst []Direction, avoid func(Pos) bool) (path []Direction, ok bool) {
+	pf.avoid = avoid
+	defer func() { pf.avoid = nil }()
+	return pf.Find(from, to, dst)
+}
+
 // search runs one A* pass of at most maxNodes expansions and sets pf.incomplete.
 func (pf *Pathfinder) search(from Pos, gdx, gdy int, dst []Direction) ([]Direction, bool) {
 	pf.incomplete = false
@@ -265,6 +277,11 @@ func (pf *Pathfinder) search(from Pos, gdx, gdy int, dst []Direction) ([]Directi
 			}
 			ground, flags, exists := pf.m.tile(ox+nx, oy+ny, z)
 			if !exists || flags&FlagBlocksMovement != 0 {
+				continue
+			}
+			if pf.avoid != nil && pf.seen[slot] != pf.gen &&
+				pf.avoid(Pos{X: uint16(ox + nx), Y: uint16(oy + ny), Z: uint8(z)}) {
+				pf.seen[slot], pf.closed[slot] = pf.gen, pf.gen // never queue it this pass
 				continue
 			}
 			var step int32
