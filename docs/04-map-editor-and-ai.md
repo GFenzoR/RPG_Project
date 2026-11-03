@@ -207,6 +207,65 @@ Al escribir, `mapcli` también comprueba que el directorio existente más profun
 maliciosas están en `packages/map-format/src/patch/merge.test.ts`,
 `tools/mapcli/src/edit.test.ts` (incluido el symlink) y `editor/server/store.test.ts`.
 
+### PR de mapas en CI (T2.4)
+Todo PR que toca `world/` dispara dos workflows:
+
+1. **`map-pr.yml`** (`pull_request`, `contents: read`, sin secretos): corre
+   `mapcli pr-check --base <sha base> --head <sha head> --author <login> --pr <n> --out map-pr`
+   y sube dos artefactos: `map-pr-report` (`report.json`) y `map-pr-renders` (PNG). Falla si
+   el reporte falla. También escribe el Markdown en el resumen de la ejecución.
+2. **`map-pr-comment.yml`** (`workflow_run` de `map-pr`, `pull-requests: write`,
+   `actions: read`): descarga solo `map-pr-report` y publica **un** comentario por PR
+   (marcado con `<!-- rpg-map-pr-check -->`) que edita en cada push.
+
+`mapcli pr-check` (`tools/mapcli/src/prcheck.ts`):
+- Arma el PR como map patch desde `merge-base(base, head)` hasta `head` y lo mezcla sobre
+  la base actual en un worktree temporal, igual que `patch apply`. Todo se mide contra ese
+  resultado: el resumen por archivo es el de `patch diff` (estado, casillas, bbox,
+  entradas, `base_matches`, `conflict`), así lo que entró a la base después de abrir el PR
+  no aparece como revertido.
+- **Parcelas** (`checkPlots` en `packages/map-format/src/patch/plots.ts`, reglas en
+  `03-world-and-maps.md`): casillas y entradas fuera de toda parcela `community_plot` de la
+  base. Falla si hay alguna y el autor no está en `.github/MAINTAINERS` de la base.
+- **Validación**: errores del validador en el mapa mezclado que la base no tenía.
+- **Conflictos** con la base actual: falla (hay que hacer rebase).
+- **Render**: `changeBoxes` toma el bbox de las casillas cambiadas por chunk y la posición
+  de cada entrada cambiada (spawn con su radio, ambos extremos del portal, rects de zona);
+  `renderAreas` les suma 4 casillas de margen, fusiona las que se tocan en el mismo piso,
+  parte las de más de 64x64 y se queda con 6 como máximo (el resto se cuenta). Cada área
+  se renderiza antes (base) y después (merge) con `renderArea`, a 32/16/8/4 px por
+  casilla para no pasar de 1024 px de lado; un PNG de más de 2 MB no se sube.
+- Exit code 1 si falla. `report.json` lleva `ok`, `failures` (`plots`, `conflicts`,
+  `validation`), `files`, `conflicts`, `plots`, `validation`, `other_files` (cambios fuera
+  de `world/`, solo listados), `areas` y `omitted_areas`.
+
+**Seguridad (los PR vienen de forks).**
+- Nunca corre código del PR con un token de escritura. `map-pr.yml` es `pull_request`
+  (el token de un fork es de solo lectura y no hay secretos) con `persist-credentials: false`;
+  no se usa `pull_request_target`.
+- `map-pr-comment.yml` corre desde la rama por defecto, hace checkout solo de
+  `tools/mapcli/src/prcomment.ts` de esa rama (autocontenido: solo módulos de Node, sin
+  `pnpm install`) y no ejecuta nada del PR.
+- El artefacto es dato no confiable: `prcomment.ts` rechaza un `report.json` de más de
+  1 MB, reconstruye cada campo con su tipo y valida cada string contra un patrón estricto
+  (rutas de `world/`, IDs, logins, SHAs, nombres `before|after-N.png`). El texto libre
+  (mensajes del validador) va sin backticks ni saltos de línea dentro de un bloque de
+  código. El PR se busca por `head_sha` y repo de origen del `workflow_run`, y el número,
+  el commit y el autor del reporte tienen que coincidir con los de ese PR; si no, el
+  comentario dice que el reporte no es utilizable.
+- Las actions están fijadas por versión exacta.
+- **Imágenes:** quedan en el artefacto `map-pr-renders` y el comentario enlaza a él (hace
+  falta sesión de GitHub para descargarlo). No se suben a servicios externos ni a una rama
+  del repo: eso pediría `contents: write` en el workflow con token.
+- Límite conocido: un PR puede editar `map-pr.yml` o `mapcli` para que su propio check
+  pase (en `pull_request` el workflow sale del PR). El daño posible es solo ese check
+  (token de lectura); el comentario lista los archivos fuera de `world/` para que la
+  revisión lo note.
+
+Prueba local, sin GitHub: `make map-pr BASE=main HEAD=<rama>` (reporte y PNG en
+`build/map-pr/`, imprime el comentario con `prcomment.ts --dry-run`). Tests:
+`packages/map-format/src/patch/plots.test.ts` y `tools/mapcli/src/prcheck.test.ts`.
+
 ## Flujo recomendado para que una IA construya una zona
 1. `map_info` y `content_search` para saber qué hay disponible.
 2. Generar base: `mapcli generate` (forma de isla, costas, ríos con semilla) o pintar
@@ -216,7 +275,8 @@ maliciosas están en `packages/map-format/src/patch/merge.test.ts`,
 5. Spawns, NPCs, zonas, portales.
 6. `map_validate` hasta que no haya errores.
 7. `map_render` de cada área tocada y revisar las imágenes.
-8. `map_patch_create` y abrir PR.
+8. `map_patch_create` y abrir PR. Fuera de una parcela `community_plot` hace falta un
+   maintainer (ver "PR de mapas en CI").
 
 ## Editor web — funciones por hito
 **Hito 1 (rebanada vertical):** abrir una isla, navegar, zoom, cambiar de piso, pincel de

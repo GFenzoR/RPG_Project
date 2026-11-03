@@ -1,0 +1,58 @@
+name: map-pr-comment
+
+# Posts (or updates) the single map review comment of a pull request with the result of the
+# map-pr workflow (docs/04-map-editor-and-ai.md "PR de mapas en CI").
+#
+# Security: this is the only part with a write token, so it never checks out or runs code
+# from the pull request. It runs from the default branch, checks out only
+# tools/mapcli/src/prcomment.ts (default branch, self-contained, no install), downloads the
+# small report artifact of the triggering run and treats it as untrusted: prcomment.ts caps
+# its size, checks every field and string, and requires its PR number, head commit and
+# author to match the pull request GitHub reports for that run.
+
+on:
+  workflow_run:
+    workflows: [map-pr]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: map-pr-comment-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  comment:
+    if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read # list and download the run's artifacts
+      pull-requests: write # the comment
+    steps:
+      - uses: actions/checkout@v4.2.2 # default branch: trusted code only
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/mapcli/src/prcomment.ts
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+      - name: download report (data only)
+        continue-on-error: true # a run that failed early has none; the comment says so
+        uses: actions/download-artifact@v4.3.0
+        with:
+          name: map-pr-report
+          path: ${{ runner.temp }}/map-pr-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          PR_HINT: ${{ github.event.workflow_run.pull_requests[0].number }}
+          REPORT: ${{ runner.temp }}/map-pr-report/report.json
+        run: node --experimental-strip-types tools/mapcli/src/prcomment.ts

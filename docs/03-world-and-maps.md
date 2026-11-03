@@ -316,6 +316,24 @@ Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable
 1. **Parcelas de comunidad.** Las zonas `community_plot` marcan áreas del mundo abiertas
    a contribuciones (bordes de islas, cuevas sin hacer, islotes nuevos). Un patch que
    toca chunks fuera de una parcela abierta solo puede venir de un maintainer.
+   Reglas concretas (T2.4, las aplica la CI con `mapcli pr-check`):
+   - **Abierta** = toda zona `community_plot` de la rama base. Cerrar una parcela es
+     quitarla o cambiarle el tipo. Las parcelas se leen siempre de la base, nunca del PR.
+   - Cuenta cada **casilla** cambiada de un chunk (no el chunk entero): tiene que caer en
+     el rect de una parcela, en uno de sus `floors`.
+   - Las entradas de los YAML cuentan por su **posición**, antes y después del cambio:
+     spawns por su centro, NPCs y textos por su casilla, portales por sus dos extremos
+     (`from` y `to`) y zonas por todas las casillas de sus rects en cada piso.
+   - Crear, mover o quitar una zona `community_plot`, y cambiar `world.yaml`,
+     `island.yaml` o prefabs, es siempre de maintainer.
+   - `world/CONTRIBUTORS.md` lo puede tocar cualquiera.
+   - **Maintainer** = login de GitHub listado en `.github/MAINTAINERS` (uno por línea),
+     leído de la rama base, así que un PR no puede agregarse a sí mismo. Se eligió un
+     archivo propio en vez de `CODEOWNERS` porque CODEOWNERS admite equipos
+     (`@org/equipo`) que la CI no puede resolver sin un token con permisos de lectura de
+     la organización.
+   Primera parcela: `puerto_north_shore_plot`, la playa norte de Puerto
+   (3200,6296 16x12, piso 7).
 2. **Map patch.** El editor (o `mapcli patch create`) exporta un `.rpgpatch.json`
    (formato 2) con el hash y el texto de la versión base de cada archivo tocado, más su
    contenido nuevo: chunks y spawns/zonas/NPCs/portales. `mapcli patch apply` y el
@@ -324,8 +342,10 @@ Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable
    aplica nada y se listan las casillas o entradas. Detalle y reglas de seguridad en
    `04-map-editor-and-ai.md`, "Map patches".
 3. **Revisión.** Hito 2: el patch se envía como pull request de GitHub (a mano o por la
-   herramienta). La CI valida y publica imágenes antes/después del área. Hito 5: portal
-   web con cola de moderación que crea el PR automáticamente al aprobar.
+   herramienta). La CI valida y publica imágenes antes/después del área (T2.4: un
+   comentario en el PR que se actualiza en cada push, ver `04-map-editor-and-ai.md`,
+   "PR de mapas en CI"). Hito 5: portal web con cola
+   de moderación que crea el PR automáticamente al aprobar.
 4. **Contenido nuevo** (monstruos, items) no entra por patch de mapa: va en un PR de
    `data/` revisado por maintainers, porque afecta el balance.
 5. **Créditos.** Cada patch fusionado agrega al autor en `world/CONTRIBUTORS.md`.

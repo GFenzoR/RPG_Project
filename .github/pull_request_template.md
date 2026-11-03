@@ -9,6 +9,7 @@ T_._ — <!-- título de docs/10-roadmap.md -->
 - [ ] Tests nuevos / escenarios sim:
 - [ ] Screenshots revisados (si hubo cambios visuales):
 - [ ] Prueba de carga (si toca el servidor en caliente):
+- [ ] Mapa (si toca `world/`): comentario del check `map-pr` revisado; fuera de parcelas `community_plot` solo maintainers
 
 ## Decisiones tomadas
 <!-- Cualquier decisión que no estaba en los docs, con su razón -->

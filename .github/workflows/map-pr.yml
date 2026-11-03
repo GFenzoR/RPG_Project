@@ -1,0 +1,68 @@
+name: map-pr
+
+# Map pull requests (T2.4, docs/04-map-editor-and-ai.md "PR de mapas en CI"): community
+# plot check, `patch diff` summary, validation of the merged map and before/after renders.
+#
+# Security: pull requests come from community forks, so this workflow runs the PR's code
+# with a read-only token and no secrets, and only uploads artifacts. The comment is posted
+# by map-pr-comment.yml (workflow_run), which never checks out or runs anything of the PR
+# and treats these artifacts as untrusted data. Do not add write permissions here and do
+# not switch to pull_request_target.
+
+on:
+  pull_request:
+    paths:
+      - world/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: map-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0 # merge-base of the PR's base and head
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4.1.0
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: plots, diff, validation and renders
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          node --experimental-strip-types tools/mapcli/src/cli.ts pr-check \
+            --base "$BASE_SHA" --head "$HEAD_SHA" --author "$AUTHOR" --pr "$PR" \
+            --out map-pr
+      - name: step summary
+        if: ${{ !cancelled() && hashFiles('map-pr/report.json') != '' }}
+        run: node --experimental-strip-types tools/mapcli/src/prcomment.ts --dry-run map-pr/report.json >> "$GITHUB_STEP_SUMMARY"
+      # Two artifacts so the comment workflow downloads only the small JSON report.
+      - name: upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: map-pr-report
+          path: map-pr/report.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: upload renders
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: map-pr-renders
+          path: map-pr/*.png
+          if-no-files-found: ignore
+          retention-days: 14
