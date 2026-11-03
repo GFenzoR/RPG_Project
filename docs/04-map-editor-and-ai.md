@@ -203,13 +203,14 @@ Implementación (T2.2, editor v2). Las herramientas solo arman ops de map-format
   con `rect` (recortado a cada isla del piso); con clic derecho o Mayús borra con `erase`
   en la capa del borrador. Una entrada de historial por arrastre.
 - **Selección** (`V`): arrastrar marca un rectángulo del piso actual. `Ctrl+C` copia suelo
-  y pila de items de cada casilla; `Ctrl+X` copia y borra; `Supr` borra (capa del
+  y pila de items de cada casilla; `Ctrl+X` copia y borra todas las capas; `Supr` borra (capa del
   borrador); `Esc` cancela. `Ctrl+V` (o el botón Pegar) entra en modo pegar: la vista
   previa sigue al mouse y el clic pega con la esquina superior izquierda en esa casilla,
   **en el piso actual** (así se copia entre pisos e islas). Pegar = `paint_ground` por
   suelo + `erase` de items + `place_item` en orden: cada casilla copiada reemplaza el
   suelo (si tenía) y la pila completa del destino; las casillas vacías no se pegan y lo
-  que cae fuera de las islas se descarta.
+  que cae fuera de las islas se descarta. Con autoborde activo, pegar recalcula también
+  los bordes de toda el área pegada (la pila copiada puede traer bordes del origen).
 - **Autoborder automático** (casilla "Autoborde" en la barra, activa por defecto): tras
   cada cambio de suelo (pincel, relleno, rectángulo, borrador, pegar) el editor agrega
   una op `autoborder` sobre el rectángulo de las casillas cuyo suelo cambió (las lista
@@ -221,8 +222,10 @@ Implementación (T2.2, editor v2). Las herramientas solo arman ops de map-format
   Crear = `add_spawn`/`place_npc`/`add_zone`/`add_portal`; editar = `remove_*` + `add_*`
   en una sola entrada de historial, con el mismo `index` si sigue en la misma isla (el
   archivo no cambia de orden); borrar = `remove_*`. Las ops validan IDs, monstruos y
-  NPCs conocidos (bootstrap manda los IDs de `data/monsters` y `data/npcs`); si rechazan,
-  el error sale en la barra de estado y no cambia nada. El botón ⌖ toma la próxima
+  NPCs conocidos (bootstrap manda los IDs de `data/monsters` y `data/npcs`); antes, el editor revisa los
+  errores típicos del formulario (ID snake_case y único, campos requeridos, posiciones y
+  rects dentro de una isla con ese piso) con mensajes i18n (`editor.entity.err.*`); si aun
+  así la op rechaza, su error sale en la barra de estado y no cambia nada. El botón ⌖ toma la próxima
   casilla clicada en el mapa; "Usar la selección" pone el rect de la zona. El canvas
   dibuja zonas, spawns (radio), NPCs y portales del piso con los colores de `mapcli
   render`. `texts.yaml` todavía no se edita.
