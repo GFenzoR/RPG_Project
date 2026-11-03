@@ -163,7 +163,8 @@ e2e: db-up ## Playwright: editor + client (login, enter, walk); screenshots in *
 
 .PHONY: bots
 # Load test (tools/bots, docs/07-performance-budget.md). Without URL it builds the map and
-# starts its own server on loopback (tools/bots/loadtest.sh); with URL it plays against a
+# starts its own server on loopback (tools/bots/loadtest.sh; LOAD_DATABASE_URL, default the
+# dev database); with URL it plays against a
 # running server (its /metrics is internal, so only client-side numbers unless METRICS=...).
 SCENARIO ?= base
 bots: ## Load test: make bots N=100 [SCENARIO=base|stress] [DURATION=10m] [URL=... PREFIX=load METRICS=...]

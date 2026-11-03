@@ -35,8 +35,10 @@ stop_server() {
 }
 trap stop_server EXIT
 
+up=
 for _ in $(seq 1 60); do
   if curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1; then
+    up=1
     break
   fi
   if ! kill -0 "$server" 2>/dev/null; then
@@ -46,8 +48,12 @@ for _ in $(seq 1 60); do
   fi
   sleep 0.5
 done
+if [[ -z "$up" ]]; then
+  echo "loadtest: the server did not answer /healthz in 30 s; see $log" >&2
+  exit 1
+fi
 echo "loadtest: server up on :$port (log: $log)"
 
 cd "$root/tools/bots"
 go run ./cmd/bots -url "http://127.0.0.1:$port" -metrics "http://$maddr/metrics" \
-  -world "$root/build/world.bin" "$@"
+  -world "$root/build/world.bin" -require-metrics "$@"

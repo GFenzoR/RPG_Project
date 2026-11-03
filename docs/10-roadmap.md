@@ -88,8 +88,8 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   Pendiente: ruta de barco a Bosque (T3.6, `world.yaml` exige que la isla exista).
 
 **Operación**
-- [ ] **T1.17 Prueba de carga.** `tools/bots` completo, escenario de 100 y 300 bots,
-  reporte y ajustes de rendimiento. [T1.11]
+- [x] **T1.17 Prueba de carga.** `tools/bots` completo, escenario de 100 y 300 bots,
+  reporte y ajustes de rendimiento. [T1.11] (resultados en `07-performance-budget.md`)
 - [ ] **T1.18 Deploy alpha.** 👤 Necesita tu cuenta AWS y un dominio. docker-compose,
   Caddy, backups a S3, workflow de imágenes, guía paso a paso para el primer deploy. [T1.17] (parcial, PR #19: archivos listos, falta cuenta AWS y dominio)
 - [x] **T1.19 Hosting de pruebas en casa.** Docker Compose del juego completo en tu PC

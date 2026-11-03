@@ -4,7 +4,7 @@
 // limit. It reports tick, RAM, CPU, latency, bandwidth and disconnects, compared with
 // docs/07-performance-budget.md.
 //
-//	make bots N=100                    # starts its own server on a fresh database
+//	make bots N=100                    # starts its own server (tools/bots/loadtest.sh)
 //	make bots N=300 SCENARIO=stress
 //	make bots N=20 URL=http://host:8080 # against a running server
 //
@@ -44,6 +44,9 @@ type config struct {
 	metricsURL string
 	reportPath string
 	minGap     time.Duration
+	// requireMetrics fails the run when /metrics cannot be read (loadtest.sh started
+	// the server itself, so the server numbers must be there).
+	requireMetrics bool
 }
 
 func main() {
@@ -58,6 +61,7 @@ func main() {
 	flag.StringVar(&c.worldPath, "world", "../../build/world.bin", "compiled map for path planning (missing: bots walk at random)")
 	flag.StringVar(&c.metricsURL, "metrics", "http://127.0.0.1:9100/metrics", "server's internal /metrics (empty: client-side numbers only)")
 	flag.StringVar(&c.reportPath, "report", "", "write the JSON report here")
+	flag.BoolVar(&c.requireMetrics, "require-metrics", false, "fail if the server's /metrics cannot be read")
 	flag.DurationVar(&c.minGap, "min-gap", 250*time.Millisecond, "bot rate limit: minimum time between two commands of a bot")
 	flag.Parse()
 
@@ -169,7 +173,9 @@ func run(ctx context.Context, c config) *Report {
 			token, err := bot.New(c.url).Login(lctx, email, password)
 			if err != nil {
 				for i := first; i < last; i++ {
-					f.fail(i, err, false)
+					if play.Err() == nil { // not a failure when the run was interrupted
+						f.fail(i, err, false)
+					}
 					f.entered.Done()
 				}
 				return
@@ -221,7 +227,12 @@ func run(ctx context.Context, c config) *Report {
 	if len(samples) >= 2 {
 		rep.Server = serverReport(samples[0], samples[len(samples)-1], samples)
 	} else if c.metricsURL != "" {
-		fmt.Fprintf(os.Stderr, "bots: could not read %s: no server numbers in the report\n", c.metricsURL)
+		msg := fmt.Sprintf("could not read %s: no server numbers in the report", c.metricsURL)
+		fmt.Fprintln(os.Stderr, "bots:", msg)
+		if c.requireMetrics {
+			rep.Errors = append(rep.Errors, msg)
+			rep.OtherErrors++
+		}
 	}
 	rep.checks()
 	return rep

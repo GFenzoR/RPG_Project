@@ -37,3 +37,46 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 - Escenario estrés: 300 bots concentrados en la ciudad.
 - El reporte (JSON + resumen en el PR) incluye tick p50/p95/p99, RAM, CPU, latencias y
   desconexiones. Si un PR empeora el tick p99 más de 10 %, debe justificarlo.
+
+Cómo correrlo: `make bots N=100` (base, 10 min) y `make bots N=300 SCENARIO=stress`
+(5 min); detalle en `12-local-development.md`. Qué mide y de dónde sale cada número:
+- **Tick, RAM, CPU, bytes por jugador**: del `/metrics` interno del servidor durante la
+  ventana estable (todos los bots dentro). El tick es un histograma: los percentiles se
+  interpolan dentro del bucket, como `histogram_quantile`. RAM = RSS del proceso; CPU =
+  segundos de CPU del proceso por segundo de reloj.
+- **Latencia de comando**: ida y vuelta de un `Ping` de cada bot cada 2 s. El servidor lo
+  ejecuta en el siguiente tick y responde en el batch de ese tick, así que incluye la
+  espera al tick (0–50 ms, ~25 ms de media) y la red local. Es el piso de la latencia
+  de cualquier comando.
+- **Comportamiento de los bots**: rutas A* sobre `world.bin` hacia su zona (base: 9 zonas
+  de la Isla del Puerto en round robin; stress: todos a 8 casillas o menos del templo y
+  la plaza), y luego vagar 45 %, pelear 25 % (solo base; la ciudad es zona de
+  protección), hablar con un NPC 12 %, chat 10 % y nada el resto, con 1–4 s de pausa
+  entre acciones y como mucho un comando cada 250 ms (`-min-gap`).
+
+### Resultados (T1.17, 2026-11-03)
+Sesión cloud de 4 vCPU y 16 GB, con **servidor y bots en la misma máquina** (los bots
+le quitan CPU al servidor: los números del servidor son conservadores). Postgres 16
+local. Mundo: Isla del Puerto + isla de pruebas.
+
+| Métrica | Presupuesto | Base: 100 bots, 10 min | Stress: 300 bots, 5 min |
+|---|---|---|---|
+| Tick p50 / p95 / p99 (ms) | p99 < 10 (100 jug.) | 0,28 / 0,90 / **1,69** | 0,79 / 2,41 / **3,76** |
+| Ticks lentos (> 50 ms) | — | 0 de 11 998 | 1 de 5 997 (132 ms) |
+| RSS máx. (MB) | < 600 | 86 | 99 |
+| CPU del servidor (núcleos) | — | 0,05 | 0,14 |
+| Salida por jugador (B/s) | < 4096 | 286 | 839 |
+| Latencia de comando p50 / p95 / p99 (ms) | p95 < 60 | 26,3 / **49,0** / 50,7 | 27,9 / **49,8** / 52,9 |
+| Desconexiones / fallos al entrar | 0 | 0 / 0 | 0 / 0 |
+| Acciones | — | 7811 caminatas, 190 ataques, 2174 chats, 86 diálogos | 17 609 caminatas, 4550 chats, 6221 diálogos |
+
+Todo dentro del presupuesto, con mucha holgura en tick, RAM y red. La latencia de comando
+está dominada por la espera al siguiente tick, no por el servidor. Pendientes:
+- El único tick lento (132 ms con 24 comandos, en stress) no se reprodujo en base. Lo más
+  probable es la contención de CPU con los 300 bots en la misma máquina. Falta repetirlo
+  con los bots en otra máquina y `pprof` para descartar otra causa.
+- En stress, la mayoría de los pasos se rechazan (16 044 rechazados contra 10 251
+  aceptados): 300 personajes en ~300 casillas libres. Es lo esperado en una ciudad
+  llena. La red y el tick lo aguantan.
+- RAM medida con el mundo del hito 1. El presupuesto de 600 MB es para el mundo del
+  hito 3: hay que repetir la prueba cuando crezca.

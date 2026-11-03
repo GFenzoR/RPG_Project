@@ -152,7 +152,7 @@ type ServerReport struct {
 // ClientReport is what the bots measured themselves.
 type ClientReport struct {
 	// LatencyMS is the Ping round trip: received by the server, run on the next tick and
-	// sent in that tick's batch, over loopback (docs/07 "latencia de comando").
+	// sent in that tick's batch, over loopback (the command latency of docs/07).
 	LatencyMS      Percentiles `json:"latency_ms"`
 	LatencySamples int         `json:"latency_samples"`
 	BytesPerPlayer float64     `json:"bytes_per_player_s"`
@@ -202,7 +202,7 @@ func serverReport(first, last sample, all []sample) *ServerReport {
 		Overruns: last.series["tick_overruns_total"] - first.series["tick_overruns_total"],
 		RSSMBEnd: round(last.series["process_resident_memory_bytes"] / (1 << 20)),
 	}
-	for i := len(tick) - 1; i >= 0; i-- {
+	for i := len(tick) - 1; i >= 0 && r.Ticks > 0; i-- {
 		if i == 0 || tick[i].count > tick[i-1].count {
 			r.TickMS.Max = tick[i].le
 			if math.IsInf(r.TickMS.Max, 1) && i > 0 {
