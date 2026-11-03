@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { formatYaml, parseYamlText } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
 import { afterEach, describe, expect, it } from "vitest";
 import { run } from "./index.ts";
@@ -357,6 +358,42 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     expect(r.bad_mode_files).toEqual([SP]);
   });
 
+  it("judges map files on bytes: invalid UTF-8 fails, accents pass (F1)", () => {
+    const { root, git } = sandbox();
+    const SP = "world/islands/puerto/spawns.yaml";
+    const spawns = parseYamlText(readFileSync(join(root, SP), "utf8"), SP, [])?.data as unknown[];
+    const entry = {
+      id: "plaza_crabs",
+      center: { x: 3205, y: 6300, z: 7 },
+      radius: 1,
+      monsters: [{ monster: "wolf", count: 1 }],
+      respawn_seconds: 60,
+      notes: "Playa del ñandú, junto al árbol",
+    };
+    git("checkout", "-qb", "ok");
+    writeFileSync(join(root, SP), formatYaml([...spawns, entry]));
+    git("commit", "-qam", "accents");
+    const good = prCheck({ root, base: "main", head: "ok", out: tmp("pr-out-"), author: "x" });
+    expect(good.failures).toEqual([]);
+    expect(good.noncanonical_files).toEqual([]);
+    // Same text with one byte of "ñ" replaced by 0xFF: lossy decoding would turn it into
+    // U+FFFD and still look canonical.
+    git("checkout", "-qb", "bad", "main");
+    const bytes = Buffer.from(formatYaml([...spawns, entry]), "utf8");
+    bytes[bytes.indexOf(Buffer.from("ñ", "utf8"))] = 0xff;
+    writeFileSync(join(root, SP), bytes);
+    git("commit", "-qam", "0xff");
+    const bad = prCheck({ root, base: "main", head: "bad", out: tmp("pr-out-"), author: "boss" });
+    expect(bad.failures).toEqual(["invalid"]);
+    expect(bad.invalid_files).toEqual([SP]);
+    // A raw DEL in a canonical-looking file.
+    git("checkout", "-qb", "del", "main");
+    writeFileSync(join(root, SP), formatYaml([...spawns, { ...entry, notes: "a\u007fb" }]));
+    git("commit", "-qam", "del");
+    const del = prCheck({ root, base: "main", head: "del", out: tmp("pr-out-"), author: "boss" });
+    expect(del.invalid_files).toEqual([SP]);
+  });
+
   it("rejects refs that look like options", () => {
     const { root } = sandbox();
     expect(() => prCheck({ root, base: "--output=x", head: "main", out: tmp("o-") })).toThrow(
@@ -584,5 +621,70 @@ describe("map-pr-pending workflow (R5)", () => {
     expect(yml).toMatch(/\^\[0-9\]\+\$/);
     expect(yml).toMatch(/\^\[0-9a-f\]\{40\}\$/);
     expect(yml).toContain("<!-- rpg-map-pr-check -->");
+  });
+
+  /** Runs the step's script with a fake `gh` (F2): returns its exit code and the PATCH body. */
+  function runPending(fake: { list: string; listFails?: boolean; patchFails?: boolean }) {
+    const dir = tmp("pending-");
+    const script = (yml.split("run: |\n")[1] ?? "")
+      .split("\n")
+      .map((l) => l.replace(/^ {10}/, ""))
+      .join("\n");
+    writeFileSync(join(dir, "step.sh"), script);
+    writeFileSync(join(dir, "list.json"), fake.list);
+    writeFileSync(
+      join(dir, "gh"),
+      `#!/usr/bin/env bash
+if [ "$1 $2" = "api -X" ]; then
+  ${fake.patchFails ? "exit 1" : `printf '%s' "$@" > "${dir}/patched"; exit 0`}
+fi
+${fake.listFails ? 'echo "HTTP 403: rate limit" >&2; exit 1' : `cat "${dir}/list.json"`}
+`,
+      { mode: 0o755 },
+    );
+    let code = 0;
+    try {
+      execFileSync("bash", [join(dir, "step.sh")], {
+        env: {
+          PATH: `${dir}:${process.env.PATH ?? ""}`,
+          RUNNER_TEMP: dir,
+          GH_TOKEN: "x",
+          REPO: "o/r",
+          PR: "7",
+          SHA: "a".repeat(40),
+        },
+        stdio: "pipe",
+      });
+    } catch (e) {
+      code = (e as { status?: number }).status ?? 1;
+    }
+    const patched = existsSync(join(dir, "patched"))
+      ? readFileSync(join(dir, "patched"), "utf8")
+      : null;
+    return { code, patched };
+  }
+
+  const bot = (id: number, body: string) => ({ id, user: { login: "github-actions[bot]" }, body });
+
+  it("marks the bot's marked comment pending, across pages (F2)", () => {
+    // `gh api --paginate` prints one JSON array per page.
+    const list = `${JSON.stringify([bot(1, "hello"), { id: 2, user: { login: "u" }, body: MARKER }])}\n${JSON.stringify([bot(3, `${MARKER}\nold ✅`)])}`;
+    const r = runPending({ list });
+    expect(r.code).toBe(0);
+    expect(r.patched).toContain("repos/o/r/issues/comments/3");
+    expect(r.patched).toContain("Pendiente:** revisando el commit `aaaaaaaaaaaa`");
+  });
+
+  it("exits 0 without a comment, and fails when the API fails (F2)", () => {
+    expect(runPending({ list: JSON.stringify([bot(1, "hi")]) })).toEqual({
+      code: 0,
+      patched: null,
+    });
+    expect(runPending({ list: "[]", listFails: true }).code).not.toBe(0);
+    expect(runPending({ list: JSON.stringify([bot(3, MARKER)]), patchFails: true }).code).not.toBe(
+      0,
+    );
+    expect(yml).not.toMatch(/\|\s*head\b/);
+    expect(yml).toContain("set -euo pipefail");
   });
 });

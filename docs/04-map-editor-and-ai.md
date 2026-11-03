@@ -231,7 +231,10 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
    el comentario, lo cambia a "⏳ Pendiente: revisando el commit `<sha>`". No hace
    checkout, no ejecuta ni lee nada del PR, y solo usa el número y el sha del evento,
    validados con regex. Así, un push que no produce una corrida de `map-pr` (por ejemplo,
-   porque el PR renombró o borró `map-pr.yml`) deja "pendiente", nunca un ✅ viejo.
+   porque el PR renombró o borró `map-pr.yml`) deja "pendiente", nunca un ✅ viejo. Corre
+   con `set -euo pipefail` y sin pipes a `head`: si falla el listado o el PATCH (por rate
+   limit o un 5xx), el job queda en rojo en vez de "pasar" sin marcar nada. El test
+   ejecuta el script del YAML con un `gh` falso.
 
 `mapcli pr-check` (`tools/mapcli/src/prcheck.ts`):
 - Arma el PR como map patch desde `merge-base(base, head)` hasta `head` y lo mezcla sobre
@@ -248,12 +251,20 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
 - **Archivos inválidos:** fallan con `invalid`, también para maintainers, y quedan fuera
   del merge:
   - un archivo de mapa del PR que no pasa su esquema;
-  - uno cuyo texto no es **byte a byte** su forma canónica (`mapcli fmt`). Por ejemplo,
+  - uno que no es UTF-8 válido: se lee como bytes y se decodifica en modo estricto, porque
+    una decodificación con pérdida convertiría un `0xFF` en U+FFFD y parecería canónico;
+  - uno cuyos **bytes** no son exactamente su forma canónica (`mapcli fmt`). Por ejemplo,
     `x: 03207` es 3207 para el parser TS y 1671 (octal) para el `yaml.v3` del servidor;
   - una ruta de `world/` cuyo modo no es `100644` en el head o en el merge (symlink,
     ejecutable, submódulo), aunque el blob no cambie.
-- La comparación con `git merge-tree` usa el blob crudo de git contra el texto escrito
-  por el merge por casilla, sin canonicalizar.
+- La comparación con `git merge-tree` compara bytes: el blob crudo de git contra el
+  archivo que escribió el merge por casilla, sin canonicalizar.
+- **Caracteres prohibidos (decisión).** `parsePatchFile`, y con él `canonicalPatchText`,
+  rechaza en cualquier archivo de mapa los controles C0 (salvo tab, LF y CR), DEL, los
+  controles C1 y U+FFFE/U+FFFF, tanto crudos como escritos como escape YAML (`"\x7f"`).
+  Se rechazan en vez de escaparlos al escribir porque el texto libre (`notes`) nunca los
+  necesita, y porque así el parser TS y el `yaml.v3` de Go leen siempre lo mismo (Go los
+  rechaza crudos). Acentos, ñ y el resto de Unicode pasan.
 - **Parcelas** (`checkPlots` en `packages/map-format/src/patch/plots.ts`, reglas en
   `03-world-and-maps.md`): casillas y entradas fuera de toda parcela `community_plot` de la
   base. Falla si hay alguna y el autor no es maintainer (`.github/MAINTAINERS` de la base u

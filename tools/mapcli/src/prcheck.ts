@@ -171,6 +171,33 @@ function atRef(root: string, ref: string, path: string): string | null {
   }
 }
 
+/** Raw bytes of `path` at `ref` (null: missing). Map files are judged on bytes (F1). */
+function bytesAt(root: string, ref: string, path: string): Buffer | null {
+  try {
+    return execFileSync("git", ["cat-file", "blob", `${ref}:${path}`], {
+      cwd: root,
+      maxBuffer: 256 << 20,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    return null;
+  }
+}
+
+const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
+
+/** Text of the bytes, or undefined when they are not valid UTF-8 (lossy decoding hides it). */
+export function decodeStrict(b: Buffer): string | undefined {
+  try {
+    return strictUtf8.decode(b);
+  } catch {
+    return undefined;
+  }
+}
+
+const sameBytes = (a: Buffer | null, b: Buffer | null): boolean =>
+  a === null || b === null ? a === b : a.equals(b);
+
 /** GitHub logins of the maintainers: one per line, `#` comments, case-insensitive. */
 export function parseMaintainers(text: string | null): string[] {
   if (text === null) return [];
@@ -289,8 +316,14 @@ export function prCheck(opts: PrCheckOptions): PrReport {
   const noncanonical: string[] = [];
   for (const path of worldFiles.filter(isPatchable)) {
     const b = atRef(root, mergeBase, path);
-    const c = atRef(root, head, path);
-    if (b === c) continue;
+    const raw = bytesAt(root, head, path);
+    if (sameBytes(bytesAt(root, mergeBase, path), raw)) continue;
+    // Not UTF-8 (a 0xFF byte): the Go server's yaml.v3 refuses it (F1).
+    const c = raw === null ? null : decodeStrict(raw);
+    if (c === undefined) {
+      invalid.push(path);
+      continue;
+    }
     let canonical: string | null;
     try {
       canonical = canonicalPatchText(path, c);
@@ -298,9 +331,9 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       invalid.push(path);
       continue;
     }
-    // Byte for byte (R2): `x: 03207` is 3207 here but 1671 (octal) for the Go server's
+    // Byte for byte (R2, F1): `x: 03207` is 3207 here but 1671 (octal) for the Go server's
     // yaml.v3. Only the canonical text means the same to every reader.
-    if (canonical !== c) {
+    if (!sameBytes(canonical === null ? null : Buffer.from(canonical, "utf8"), raw)) {
       noncanonical.push(path);
       continue;
     }
@@ -338,7 +371,8 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       for (const f of files) {
         if (conflicted.has(f.path)) continue;
         // The raw blob, not canonicalized: what git writes is what the server reads.
-        if (atRef(root, tree, f.path) !== readOrNull(after, f.path)) mismatch.push(f.path);
+        const ours = existsSync(join(after, f.path)) ? readFileSync(join(after, f.path)) : null;
+        if (!sameBytes(bytesAt(root, tree, f.path), ours)) mismatch.push(f.path);
       }
 
     // Files changed under world/ that a patch cannot carry still count for the plot check.
