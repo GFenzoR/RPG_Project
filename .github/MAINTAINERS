@@ -1,0 +1,5 @@
+# Map maintainers (docs/03-world-and-maps.md, "Contribuciones de la comunidad").
+# One GitHub login per line. A pull request whose author is listed here may change the map
+# outside the community_plot zones; everyone else only inside them. The map PR check reads
+# this file from the PR's base branch, so a pull request cannot add its own author.
+gfenzor
