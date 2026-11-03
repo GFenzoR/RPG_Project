@@ -325,7 +325,12 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   expect(errors).toEqual([]);
 });
 
+/** Centre of testisle_wolves (world/islands/testisle/spawns.yaml). */
+const WOLF_SPAWN = { x: 1056, y: 1041 };
+
 test("an arcanist casts a spell with F1 and by its words", async ({ page, playwright }) => {
+  // Finding a wolf can take one respawn (60 s) when earlier tests killed them all.
+  test.setTimeout(150_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -387,53 +392,87 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   await click(start.x, start.y - 5);
   await arrived(page, start.x, start.y - 5);
   await click(start.x, start.y - 9);
-  // Chase the target: the nearest wolf may be one hurt by an earlier test (the server and
-  // its world are shared by the suite), and a hurt wolf flees and never comes within the
-  // bolt's range on its own. The player is faster than a wolf, so chasing closes in.
+  // Chase the target: a hurt wolf flees and never comes within the bolt's range on its own.
+  // The player is faster than a wolf, so chasing closes in.
   await page.getByLabel("Perseguir al objetivo").check();
   const battle = page.getByTestId("battle-list");
-  const wolf = battle.getByRole("button", { name: /lobo/ }).first();
-  await expect(wolf).toBeVisible({ timeout: 30_000 });
-  await wolf.click();
-  // The battle list is sorted by distance and wolves move, so `wolf` (first()) can point
-  // at another wolf by now: check that exactly one entry is the target instead.
-  await expect(battle.locator('button[aria-pressed="true"]')).toHaveCount(1);
 
-  // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
-  // the projectile or its energy effect on screen.
-  await page.locator("body").click({ position: { x: 1, y: 1 } }); // focus out of the say line
-  try {
+  // The server and its world are shared by the suite (and by --repeat-each): earlier tests
+  // hurt or kill testisle's 3 wolves, so the nearest one may be hurt, die to our fists
+  // before it is in the bolt's range, or none may be in view at all. Then every F1 is
+  // refused with "you need a target" (the CI failure: target lost, empty battle list).
+  // targetWolf attacks the healthiest wolf in view and, with none in view, walks towards
+  // their spawn; a killed wolf respawns after respawn_seconds (60), so allow for one.
+  const targetWolf = async (): Promise<void> => {
     await expect
       .poll(
         async () => {
-          // The first wolf may be the one the combat test hurt: chasing it, our fists can
-          // kill it before it is in the bolt's range. Lost target: take the next wolf.
-          if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) {
-            const next = battle.getByRole("button", { name: /lobo/ }).first();
-            if (await next.isVisible()) {
-              await next.click();
-              await page.locator("body").click({ position: { x: 1, y: 1 } });
-            }
+          const c = await page.evaluate(() => {
+            const r = window.__rpgClient;
+            return {
+              target: r?.target(),
+              self: r?.self(),
+              wolves: (r?.battle() ?? []).filter((b) => b.contentId === "wolf"),
+            };
+          });
+          if (c.target !== undefined) return true;
+          const best = c.wolves.sort((a, b) => b.health - a.health)[0];
+          if (best) {
+            // It may leave the list (dies, walks out of view) right now: try again then.
+            await battle
+              .locator(`button[data-creature="${best.id}"]`)
+              .click({ timeout: 1_000 })
+              .catch(() => undefined);
+          } else if (c.self && !c.self.pending && !c.self.walking) {
+            const dx = Math.max(-6, Math.min(6, WOLF_SPAWN.x - c.self.x));
+            const dy = Math.max(-4, Math.min(4, WOLF_SPAWN.y - c.self.y));
+            if (dx !== 0 || dy !== 0) await click(c.self.x + dx, c.self.y + dy);
           }
-          await page.keyboard.press("F1");
-          await page.waitForTimeout(60);
-          const m = await page.evaluate(() => window.__rpgClient?.magic(300));
-          return (m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13);
+          return false;
         },
-        { timeout: 30_000, intervals: [250] },
+        { timeout: 75_000, intervals: [250] },
       )
       .toBe(true);
-  } catch (e) {
-    // Say why no bolt flew: the server answers every refused cast with a game-log message
-    // (out of range, no sight, no mana, not ready...), so the log tells the cause.
-    const state = await page.evaluate(() => {
-      const c = window.__rpgClient;
-      return { self: c?.self(), target: c?.target(), battle: c?.battle(), stats: c?.stats() };
-    });
-    const log = (await page.getByTestId("game-log").textContent())?.slice(-600);
-    throw new Error(`no arc bolt within 30 s: ${JSON.stringify(state)}; game log: ${log}`, {
-      cause: e,
-    });
+    await page.locator("body").click({ position: { x: 1, y: 1 } }); // keys go to the game
+  };
+
+  // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
+  // the projectile or its energy effect on screen. If the target is lost first (killed by
+  // our fists, out of view), take another wolf and go on.
+  for (let round = 1; ; round++) {
+    await targetWolf();
+    let outcome = "casting";
+    try {
+      await expect
+        .poll(
+          async () => {
+            if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) {
+              outcome = "lost";
+              return outcome;
+            }
+            await page.keyboard.press("F1");
+            await page.waitForTimeout(60);
+            const m = await page.evaluate(() => window.__rpgClient?.magic(300));
+            if ((m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13)) outcome = "bolt";
+            return outcome;
+          },
+          { timeout: 30_000, intervals: [250] },
+        )
+        .not.toBe("casting");
+    } catch (e) {
+      // Say why no bolt flew: the server answers every refused cast with a game-log message
+      // (out of range, no sight, no mana, not ready...), so the log tells the cause.
+      const state = await page.evaluate(() => {
+        const c = window.__rpgClient;
+        return { self: c?.self(), target: c?.target(), battle: c?.battle(), stats: c?.stats() };
+      });
+      const log = (await page.getByTestId("game-log").textContent())?.slice(-600);
+      throw new Error(`no arc bolt within 30 s: ${JSON.stringify(state)}; game log: ${log}`, {
+        cause: e,
+      });
+    }
+    if (outcome === "bolt") break;
+    if (round === 3) throw new Error("lost the target 3 times before the arc bolt flew");
   }
   await shot(page, "11-spell");
   // The cast spent mana and started the cooldown shade on F1.

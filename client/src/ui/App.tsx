@@ -458,6 +458,7 @@ function GameScreen(props: {
                     <button
                       type="button"
                       class={ui.target === c.id ? "target" : ""}
+                      data-creature={c.id}
                       aria-pressed={ui.target === c.id}
                       disabled={c.kind !== CreatureKind.MONSTER}
                       title={t("client.battle.attack_hint")}
