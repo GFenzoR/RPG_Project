@@ -171,7 +171,9 @@ también genera formato 2.
 - **Siempre se escribe la forma canónica** (`canonicalPatchText`), también en el
   fast-forward y al crear un archivo. Es el mismo texto que `mapcli fmt`: un patch hecho a
   mano se acepta, pero nunca se escriben sus bytes tal cual (un `01056` u `0x4` en YAML se
-  lee distinto en Go y en TS). Un chunk vacío o una lista vacía borran el archivo.
+  lee distinto en Go y en TS). Un chunk vacío o una lista vacía borran el archivo. Las
+  comparaciones (base, actual, patch) también se hacen sobre texto canónico, así aplicar
+  dos veces el mismo patch es un no-op aunque no esté en forma canónica.
 
 `mapcli patch`:
 - `create [isla] [--against REF] [--out FILE]`: los archivos de mapa que difieren del ref,
@@ -186,6 +188,9 @@ también genera formato 2.
   patch, así las ediciones locales hechas en otras casillas o entradas no aparecen como
   revertidas. Da casillas cambiadas y bbox por chunk; entradas agregadas, quitadas y
   cambiadas por YAML; `base_matches` y, si la base no coincide, cuántos conflictos hay.
+  Si el archivo entero es conflicto (no hay base, o un `island.yaml`/`world.yaml`/prefab
+  cambió en los dos lados), `status` es `"conflict"` y el resumen muestra lo que cambia
+  el contenido del patch.
   Sale con código 1 solo si hay conflictos.
 
 **Seguridad:** un patch es entrada no confiable. `parsePatch` rechaza:

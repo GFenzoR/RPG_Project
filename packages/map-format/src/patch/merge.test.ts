@@ -3,7 +3,7 @@ import { applyOps } from "../ops/apply.ts";
 import { formatChunk } from "../chunk.ts";
 import { formatYaml } from "../yaml.ts";
 import { chunkKey, emptyChunk } from "../types.ts";
-import type { Chunk, Island, Spawn, World } from "../types.ts";
+import type { Chunk, Island, Portal, Spawn, World, Zone } from "../types.ts";
 import { chunkSyncOps, diffWorlds, listSyncOps, mergeChunk, mergeList } from "./merge.ts";
 import { PatchError, mergePatchFile, parsePatch, patchHash, patchPath } from "./patch.ts";
 
@@ -124,7 +124,9 @@ describe("mergePatchFile", () => {
   it("conflicts whole files it cannot merge, or when the base is unknown", () => {
     expect(mergePatchFile(SP, undefined, "a: 1\n", "a: 2\n").conflicts[0]?.kind).toBe("file");
     const isl = "world/islands/isla/island.yaml";
-    expect(mergePatchFile(isl, "x\n", "y\n", "z\n").conflicts).toEqual([
+    const meta = (hint: string) =>
+      `id: isla\nname: island.isla.name\nrect: { x: 0, y: 0, w: 32, h: 32 }\nfloors: [7]\ntemple: { x: 1, y: 1, z: 7 }\nlevel_hint: ${hint}\n`;
+    expect(mergePatchFile(isl, meta("[1, 2]"), meta("[1, 3]"), meta("[1, 4]")).conflicts).toEqual([
       { kind: "file", reason: "the file changed on both sides" },
     ]);
   });
@@ -236,6 +238,35 @@ describe("diffWorlds and sync ops", () => {
       { island: "isla", list: "spawns", added: ["c"], removed: ["b"], changed: ["a"] },
     ]);
     expect(diffWorlds(after, after)).toEqual({ chunks: [], lists: [] });
+  });
+
+  it("refuses list entries outside the island: zones (every rect and floor), NPCs, portals", () => {
+    const isl = island([], []);
+    const zone = (rects: Zone["rects"], floors = [7]): Zone => ({
+      id: "z",
+      type: "protection",
+      floors,
+      rects,
+    });
+    expect(listSyncOps(isl, "zones", [], [zone([{ x: 0, y: 0, w: 4, h: 4 }])])).toHaveLength(1);
+    for (const z of [
+      zone([
+        { x: 0, y: 0, w: 4, h: 4 },
+        { x: 60, y: 60, w: 10, h: 2 },
+      ]), // 2nd rect leaves
+      zone([{ x: 0, y: 0, w: 4, h: 4 }], [7, 8]), // floor 8 is not the island's
+    ])
+      expect(() => listSyncOps(isl, "zones", [], [z])).toThrow(/outside island/);
+    expect(() =>
+      listSyncOps(isl, "npcs", [], [{ npc: "bob", pos: { x: 100, y: 1, z: 7 } }]),
+    ).toThrow(/outside island/);
+    const portal: Portal = {
+      id: "p",
+      kind: "stairs",
+      from: { x: 1, y: 1, z: 6 },
+      to: { x: 1, y: 1, z: 7 },
+    };
+    expect(() => listSyncOps(isl, "portals", [], [portal])).toThrow(/outside island/);
   });
 
   it("refuses tiles outside the island", () => {

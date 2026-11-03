@@ -711,6 +711,13 @@ describe("map patches", () => {
     e.strokeStart(1, 1, false);
     e.strokeMove(4, 4);
     e.strokeEnd();
+    // Something to redo: paint, undo it (in "after"), then look at "before".
+    e.setTool("brush");
+    e.strokeStart(6, 6, false);
+    e.strokeEnd();
+    e.undo();
+    expect(e.state.canRedo).toBe(true);
+    e.setTool("select");
     e.setReviewSide("before");
     const w = e.state.world;
     e.deleteSelection();
@@ -728,8 +735,30 @@ describe("map patches", () => {
     expect(e.state.world).toBe(w);
     expect(e.state.status).toBe("editor.review.before_readonly");
     e.setReviewSide("after");
-    e.undo();
+    e.redo();
     expect(e.state.world).not.toBe(w);
+  });
+
+  it("an import started from the before view switches to after and applies", async () => {
+    const { e, backend } = patched();
+    const base = grassChunk();
+    backend.parsed = {
+      base_ref: "editor",
+      files: [
+        {
+          path: CH,
+          island: "a",
+          target: { kind: "chunk", z: 7, cx: 0, cy: 0 },
+          baseKnown: true,
+          base,
+          content: withTile(base, 2, 2, "sand"),
+        },
+      ],
+    };
+    e.setReviewSide("before");
+    expect(await e.importPatch("{}")).toBe(true);
+    expect(e.state.reviewSide).toBe("after");
+    expect(tileAt(e.state.world, 2, 2, 7)?.ground).toBe("sand");
   });
 
   it("reports refused patches and keeps the before view read-only", async () => {

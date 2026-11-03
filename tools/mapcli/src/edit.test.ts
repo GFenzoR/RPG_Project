@@ -578,6 +578,57 @@ describe("mapcli patch", () => {
     expect(mapcli("fmt", "--check", "--root", root).code).toBe(0);
   });
 
+  it("applying a non-canonical whole-file patch twice is a clean no-op the second time", () => {
+    const root = sandbox();
+    const hash = (t: string) => `sha256:${createHash("sha256").update(t).digest("hex")}`;
+    const ISL = "world/islands/testisle/island.yaml";
+    const WLD = "world/world.yaml";
+    const PRF = "world/prefabs/small_dock.yaml";
+    const edits: [string, string, string][] = [
+      [ISL, "level_hint: [1, 8]", "level_hint: [01, 011] # c"],
+      [WLD, "level_hint: [1, 8]", "level_hint: [01, 0x10]"],
+      [PRF, `  - "P===P"`, `  - 'P=C=P'`],
+    ];
+    const files = edits.map(([path, from, to]) => {
+      const text = read(root, path);
+      expect(text).toContain(from);
+      return { path, base: hash(text), base_text: text, content: text.replace(from, to) };
+    });
+    const pf = join(root, "odd.json");
+    writeFileSync(
+      pf,
+      JSON.stringify({ format: 2, kind: "rpg-map-patch", base_ref: "HEAD", files }),
+    );
+    expect(mapcli("patch", "apply", pf, "--root", root).code).toBe(0);
+    expect(read(root, ISL)).toContain("level_hint: [1, 11]");
+    const again = mapcli("patch", "apply", pf, "--root", root);
+    expect(again.code).toBe(0);
+    expect(again.json()).toMatchObject({ ok: true, written: [], conflicts: [] });
+    expect(mapcli("patch", "diff", pf, "--root", root).code).toBe(0);
+  });
+
+  it("diff shows what the patch would change when the whole file conflicts", () => {
+    const root = sandbox();
+    const Z = "world/islands/testisle/chunks/z07/c0033_0032.json";
+    const text = read(root, Z);
+    const raw = JSON.parse(text) as { palette: string[]; ground: number[][] };
+    if (!raw.palette.includes("sand")) raw.palette.push("sand");
+    (raw.ground[8] as number[])[2] = raw.palette.indexOf("sand"); // 1058,1040,7
+    const p1 = {
+      format: 1,
+      kind: "rpg-map-patch",
+      base_ref: "deadbeef",
+      files: [{ path: Z, base: `sha256:${"0".repeat(64)}`, content: JSON.stringify(raw) }],
+    };
+    const pf = join(root, "p1.json");
+    writeFileSync(pf, JSON.stringify(p1));
+    const diff = mapcli("patch", "diff", pf, "--root", root);
+    expect([diff.code, diff.err]).toEqual([1, ""]);
+    expect(diff.json().files).toEqual([
+      expect.objectContaining({ path: Z, status: "conflict", conflicts: 1, tiles_changed: 1 }),
+    ]);
+  });
+
   it("never writes through a symlink that leaves world/", () => {
     const root = sandbox();
     const outside = mkdtempSync(join(tmpdir(), "mapcli-outside-"));

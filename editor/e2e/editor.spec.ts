@@ -3,7 +3,8 @@
 // --check` finds nothing to change). Screenshots: e2e/screenshots/actual/.
 import { execFileSync } from "node:child_process";
 import { cpSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve, sep } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
@@ -449,6 +450,9 @@ test("hito 2: map patches — export, diff view, import with and without conflic
 }) => {
   // Start from the repository's world/: earlier tests leave edits (and a broken chunk) in
   // the scratch copy, which would show up in this test's screenshots.
+  // Only ever a scratch copy under the system temp dir (playwright.config.ts makes it).
+  if (!root || !resolve(root).startsWith(resolve(tmpdir()) + sep))
+    throw new Error(`EDITOR_E2E_ROOT ${JSON.stringify(root)} is not under ${tmpdir()}`);
   rmSync(join(root, "world"), { recursive: true, force: true });
   cpSync(join(repo, "world"), join(root, "world"), { recursive: true });
   const errors: string[] = [];

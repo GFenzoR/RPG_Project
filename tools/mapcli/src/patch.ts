@@ -188,7 +188,8 @@ export function writePlanned(
 
 export interface FileDiff extends FileSummary {
   path: string;
-  status: "added" | "removed" | "modified" | "unchanged";
+  /** "conflict": the whole file conflicts (no base, or a file merged whole changed on both sides). */
+  status: "added" | "removed" | "modified" | "unchanged" | "conflict";
   /** Whether the current file is the patch's base (false: applying needs a merge). */
   base_matches: boolean;
   /** Tiles/entries that would conflict when merging (only when base_matches is false). */
@@ -207,9 +208,12 @@ export function diffPatch(root: string, patch: MapPatch): FileDiff[] {
       cur === f.content ||
       (f.base === null ? cur === null : cur !== null && patchHash(cur) === f.base);
     const m = mergePatchFile(f.path, baseOf(root, patch, f), cur, f.content);
-    const after = m.text;
-    const status: FileDiff["status"] =
-      cur === after
+    // A whole-file conflict merges nothing: show what the patch itself would change.
+    const whole = m.conflicts.some((c) => c.kind === "file");
+    const after = whole ? f.content : m.text;
+    const status: FileDiff["status"] = whole
+      ? "conflict"
+      : cur === after
         ? "unchanged"
         : cur === null
           ? "added"

@@ -224,16 +224,27 @@ export function mergePatchFile(
     text: ours,
     conflicts: [{ kind: "file", reason }],
   });
-  if (ours === theirs) return { text: ours, conflicts: [] };
-  if (base !== undefined && theirs === base) return { text: ours, conflicts: [] };
-  if (base !== undefined && ours === base) {
-    // Fast-forward (or creation): the patch's text, in canonical form.
+  // Compare canonical texts: a hand-written patch is written in canonical form, so applying
+  // it again must see the file as already patched, not as changed on both sides.
+  const canon = (t: string | null): string | null => {
     try {
-      return { text: canonicalPatchText(path, theirs), conflicts: [] };
-    } catch (e) {
-      return conflict(e instanceof Error ? e.message : String(e));
+      return canonicalPatchText(path, t);
+    } catch {
+      return t; // not parseable: compared as is (and merged as a conflict below)
     }
+  };
+  let ct: string | null;
+  try {
+    ct = canonicalPatchText(path, theirs);
+  } catch (e) {
+    return conflict(e instanceof Error ? e.message : String(e));
   }
+  const co = canon(ours);
+  const cb = base === undefined ? undefined : canon(base);
+  if (co === ct) return { text: ours, conflicts: [] };
+  if (cb !== undefined && ct === cb) return { text: ours, conflicts: [] };
+  // Fast-forward (or creation): the patch's text, in canonical form.
+  if (cb !== undefined && co === cb) return { text: ct, conflicts: [] };
   if (base === undefined) return conflict("the base is not available to merge");
   const p = patchPath(path);
   if (!p || (p.kind !== "chunk" && p.kind !== "list"))
