@@ -322,14 +322,17 @@ Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable
    - Cuenta cada **casilla** cambiada de un chunk (no el chunk entero): tiene que caer en
      el rect de una parcela, en uno de sus `floors`.
    - Las entradas de los YAML cuentan por su **posición**, antes y después del cambio:
-     spawns por su centro, NPCs y textos por su casilla, portales por sus dos extremos
+     spawns por todo el cuadrado centro±radio (donde andan sus monstruos), NPCs y textos
+     por su casilla, portales por sus dos extremos
      (`from` y `to`) y zonas por todas las casillas de sus rects en cada piso.
    - Crear, mover o quitar una zona `community_plot`, y cambiar `world.yaml`,
      `island.yaml` o prefabs, es siempre de maintainer.
    - `world/CONTRIBUTORS.md` lo puede tocar cualquiera.
    - **Maintainer** = login de GitHub listado en `.github/MAINTAINERS` (uno por línea),
      leído de la rama base, así que un PR no puede agregarse a sí mismo, más el dueño del
-     repo (`author_association: OWNER` del evento de GitHub). Se eligió un
+     repo (`author_association: OWNER` del evento de GitHub), y solo si nadie más puede
+     empujar a la rama del PR: es una rama del repo base o el autor es dueño del fork.
+     Se eligió un
      archivo propio en vez de `CODEOWNERS` porque CODEOWNERS admite equipos
      (`@org/equipo`) que la CI no puede resolver sin un token con permisos de lectura de
      la organización.

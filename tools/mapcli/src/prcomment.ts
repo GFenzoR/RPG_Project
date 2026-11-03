@@ -30,10 +30,23 @@ const ID = /^[a-z][a-z0-9_]{0,63}$/;
 const WORLD_PATH = /^world\/(?:[a-z0-9_-]+\/)*[A-Za-z0-9_.-]{1,100}$/;
 const ANY_PATH = /^[A-Za-z0-9_./ +@-]{1,300}$/;
 const TILE = /^\d{1,5},\d{1,5},\d{1,2}$/;
-const TEXT = /^[^`\r\n<>]{0,300}$/;
 const PNG = /^(?:before|after)-\d{1,2}\.png$/;
 const STATUSES = ["added", "removed", "modified", "unchanged", "conflict"] as const;
-const FAILURES = ["plots", "conflicts", "validation"] as const;
+export const FAILURES = [
+  "plots",
+  "conflicts",
+  "validation",
+  "invalid",
+  "rebase",
+  "merge_mismatch",
+] as const;
+export const CONFLICT_CODES = [
+  "tiles",
+  "entries",
+  "changed_both_sides",
+  "no_base",
+  "invalid_file",
+] as const;
 
 type Obj = Record<string, unknown>;
 
@@ -92,12 +105,16 @@ export interface CheckedReport {
   base: string;
   head: string;
   ok: boolean;
-  failures: string[];
+  failures: (typeof FAILURES)[number][];
+  map_changes: boolean;
   files: CheckedFile[];
-  conflicts: { path: string; reason: string; at: string[] }[];
-  plots: { count: number; violations: CheckedViolation[] };
-  validation: { errors: number; new_errors: string[] };
+  conflicts: { path: string; code: (typeof CONFLICT_CODES)[number]; at: string[] }[];
+  invalid_files: string[];
+  merge_mismatch: string[];
+  plots: { count: number; violations: CheckedViolation[]; violations_total: number };
+  validation: { errors: number; new_errors: string[]; new_errors_total: number };
   other_files: string[];
+  other_files_total: number;
   areas: {
     island: string;
     x: number;
@@ -118,7 +135,7 @@ const ids = (v: unknown, what: string): string[] =>
 /** Rebuilds the report field by field; throws ReportError on anything unexpected. */
 export function checkReport(raw: unknown): CheckedReport {
   const r = obj(raw, "report");
-  if (r.format !== 1) throw new ReportError("report: unknown format");
+  if (r.format !== 2) throw new ReportError("report: unknown format");
   const files = arr(r.files, "files", 4096).map((x, i): CheckedFile => {
     const f = obj(x, `files[${i}]`);
     const out: CheckedFile = {
@@ -182,27 +199,40 @@ export function checkReport(raw: unknown): CheckedReport {
     head: str(r.head, "head", SHA),
     ok: bool(r.ok, "ok"),
     failures: arr(r.failures, "failures", 10).map((f) => oneOf(f, "failures", FAILURES)),
+    map_changes: bool(r.map_changes, "map_changes"),
     files,
     conflicts: arr(r.conflicts, "conflicts", 4096).map((x, i) => {
       const c = obj(x, `conflicts[${i}]`);
       return {
         path: str(c.path, "conflicts.path", WORLD_PATH),
-        reason: str(c.reason, "conflicts.reason", TEXT),
+        code: oneOf(c.code, "conflicts.code", CONFLICT_CODES),
         at:
           c.at === undefined
             ? []
             : arr(c.at, "at", 100).map((t) => str(t, "at", /^[a-z0-9_,]{1,64}$/)),
       };
     }),
-    plots: { count: int(plots.count, "plots.count"), violations },
+    invalid_files: arr(r.invalid_files, "invalid_files", 100).map((p) =>
+      str(p, "invalid_files", WORLD_PATH),
+    ),
+    merge_mismatch: arr(r.merge_mismatch, "merge_mismatch", 100).map((p) =>
+      str(p, "merge_mismatch", WORLD_PATH),
+    ),
+    plots: {
+      count: int(plots.count, "plots.count"),
+      violations,
+      violations_total: int(plots.violations_total, "plots.violations_total"),
+    },
     validation: {
       errors: int(validation.errors, "validation.errors"),
       new_errors: arr(validation.new_errors, "new_errors", 100).map((e) => {
         if (typeof e !== "string") throw new ReportError("new_errors: not a string");
         return e;
       }),
+      new_errors_total: int(validation.new_errors_total, "validation.new_errors_total"),
     },
     other_files: arr(r.other_files, "other_files", 100).map((p) => str(p, "other_files", ANY_PATH)),
+    other_files_total: int(r.other_files_total, "other_files_total"),
     areas: arr(r.areas, "areas", 20).map((x, i) => {
       const a = obj(x, `areas[${i}]`);
       const out: CheckedReport["areas"][number] = {
@@ -224,6 +254,76 @@ export function checkReport(raw: unknown): CheckedReport {
   };
 }
 
+// ---- trusted facts -----------------------------------------------------------------------
+
+/** Paths that change what the check runs or how: listed first, and the verdict is void. */
+export const SENSITIVE = [
+  ".github/",
+  "tools/",
+  "packages/",
+  "server/",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+] as const;
+const isSensitive = (p: string): boolean => SENSITIVE.some((s) => p === s || p.startsWith(s));
+/** What a map PR may change without making the check's own verdict suspect. */
+const isHarmless = (p: string): boolean => p.startsWith("world/") || p.startsWith("docs/");
+
+/** Facts the comment takes from GitHub and the default branch, never from the report. */
+export interface Trusted {
+  /** Files of the PR outside world/, sensitive ones first (from the API). */
+  otherFiles: string[];
+  /** All changed files the API listed (it lists 3000 at most). */
+  filesTotal: number;
+  /** Whether the author may change the map outside the plots. */
+  maintainer: boolean;
+  /** The PR changes code or configuration of the check (anything outside world/ and docs/). */
+  checkChanged: boolean;
+}
+
+export function trustedFacts(files: readonly string[], maintainer: boolean): Trusted {
+  const other = files.filter((p) => !p.startsWith("world/"));
+  other.sort((a, b) => Number(isSensitive(b)) - Number(isSensitive(a)) || (a < b ? -1 : 1));
+  return {
+    otherFiles: other,
+    filesTotal: files.length,
+    maintainer,
+    checkChanged: files.some((p) => !isHarmless(p)),
+  };
+}
+
+/** GitHub logins of the maintainers: one per line, `#` comments, case-insensitive. */
+export function parseMaintainers(text: string): string[] {
+  return text
+    .split("\n")
+    .map((l) => (l.split("#")[0] ?? "").trim().replace(/^@/, "").toLowerCase())
+    .filter((l) => /^[a-z0-9](?:[a-z0-9-]{0,38})$/.test(l));
+}
+
+export interface PullFacts {
+  author: string;
+  association: string;
+  /** "owner/name" of the head repo (null: deleted fork). */
+  headRepo: string | null;
+  /** "owner/name" of the base repo. */
+  repo: string;
+}
+
+/**
+ * Maintainer: listed in .github/MAINTAINERS of the default branch, or the repo owner; and
+ * only if nobody else can push to the PR's branch: it is a branch of the base repo, or
+ * the author owns the fork it comes from.
+ */
+export function isMaintainer(p: PullFacts, maintainers: readonly string[]): boolean {
+  const author = p.author.toLowerCase();
+  const ownsHead =
+    p.headRepo !== null &&
+    (p.headRepo === p.repo || p.headRepo.split("/")[0]?.toLowerCase() === author);
+  return ownsHead && (p.association === "OWNER" || maintainers.includes(author));
+}
+
 // ---- Markdown ------------------------------------------------------------------------------
 
 /** Inline code: the only way untrusted-but-checked strings reach the comment. */
@@ -233,7 +333,7 @@ const code = (s: string): string => `\`${s.replace(/[`\r\n]/g, "")}\``;
 const plain = (s: string): string =>
   s
     .replace(/[`\r\n]/g, " ")
-    .replace(/[^\x20-\x7e\u00a1-\u024f]/g, "?")
+    .replace(/[^\x20-\x7e¡-ɏ]/g, "?")
     .slice(0, 300);
 
 const VIOLATION_TEXT: Record<string, string> = {
@@ -248,14 +348,33 @@ const CHANGE_TEXT: Record<string, string> = {
   removed: "quitada",
   changed: "cambiada",
 };
-const FAILURE_TEXT: Record<string, string> = {
+const FAILURE_TEXT: Record<(typeof FAILURES)[number], string> = {
   plots: "toca el mapa fuera de las parcelas `community_plot` y el autor no es maintainer",
   conflicts: "choca con cambios posteriores de la rama base (rebase y vuelve a empujar)",
   validation: "el mapa fusionado tiene errores nuevos del validador",
+  invalid: "un archivo de mapa del PR no pasa su esquema",
+  rebase: "git no puede fusionar la rama con la base (rebase y vuelve a empujar)",
+  merge_mismatch:
+    "git fusionaría el texto de un archivo distinto de como se revisó (paletas de chunk): rebase y vuelve a empujar",
 };
+const CONFLICT_TEXT: Record<(typeof CONFLICT_CODES)[number], string> = {
+  tiles: "casillas cambiadas en los dos lados",
+  entries: "entradas cambiadas en los dos lados",
+  changed_both_sides: "el archivo cambió en los dos lados",
+  no_base: "no hay base para mezclar",
+  invalid_file: "archivo inválido",
+};
+export const REPORT_ERRORS = {
+  no_report: "el job no dejó reporte",
+  too_large: "el reporte es demasiado grande",
+  invalid_report: "el reporte no tiene el formato esperado",
+  other_pr: "el reporte es de otro pull request",
+  other_commit: "el reporte es de otro commit",
+  other_author: "el reporte nombra a otro autor",
+} as const;
+export type ReportErrorCode = keyof typeof REPORT_ERRORS;
 
 export interface CommentContext {
-  repo: string;
   runUrl: string;
   /** Link to the renders artifact (zip), when the run uploaded one. */
   artifactUrl?: string;
@@ -281,17 +400,29 @@ function fileDetail(f: CheckedFile): string {
   return parts.join("; ") || "—";
 }
 
+const more = (n: number, shown: number): string[] =>
+  n > shown ? ["", `… y ${n - shown} más (ver Files changed).`] : [];
+
+/** Failures as the trusted side sees them: "plots" depends on its own maintainer answer. */
+export function verdict(r: CheckedReport, t: Trusted): (typeof FAILURES)[number][] {
+  const out: (typeof FAILURES)[number][] = r.failures.filter((f) => f !== "plots");
+  if (r.plots.violations_total > 0 && !t.maintainer) out.unshift("plots");
+  return out;
+}
+
 /** The comment body; `report` null means the run left no usable report (`error` says why). */
 export function buildComment(
   report: CheckedReport | null,
   ctx: CommentContext,
-  error?: string,
+  t: Trusted,
+  error?: ReportErrorCode,
 ): string {
   const out: string[] = [MARKER, "## Revisión de mapa (CI)", ""];
+  const conclusion = ctx.conclusion.replace(/[^a-z_]/g, "");
   if (report === null) {
     out.push(
-      `⚠️ El job \`map-pr\` terminó con \`${ctx.conclusion.replace(/[^a-z_]/g, "")}\` y no dejó un reporte utilizable` +
-        (error ? ` (${plain(error)})` : "") +
+      `⚠️ El job \`map-pr\` terminó con \`${conclusion}\` y no dejó un reporte utilizable` +
+        (error ? ` (${REPORT_ERRORS[error]})` : "") +
         ".",
       "",
       `[Ver la ejecución](${ctx.runUrl})`,
@@ -299,24 +430,30 @@ export function buildComment(
     return out.join("\n");
   }
   const r = report;
+  const failures = verdict(r, t);
+  if (t.checkChanged)
+    out.push(
+      "⚠️ **El veredicto no es confiable: este PR cambia el código o la configuración del check.** Un maintainer tiene que revisar esos archivos a mano.",
+    );
+  else if (failures.length === 0)
+    out.push("✅ **Pasa.** Todos los cambios de mapa se pueden fusionar.");
+  if (failures.length > 0)
+    out.push(`❌ **No pasa:** ${failures.map((f) => FAILURE_TEXT[f]).join("; ")}.`);
   out.push(
-    r.ok
-      ? "✅ **Pasa.** Todos los cambios de mapa se pueden fusionar."
-      : `❌ **No pasa:** ${r.failures.map((f) => FAILURE_TEXT[f] ?? f).join("; ")}.`,
     "",
-    `Commit ${code(r.head.slice(0, 12))} contra la base ${code(r.base.slice(0, 12))} · autor ${code(r.author)}${r.maintainer ? " (maintainer)" : ""}`,
+    `Vale para el commit ${code(r.head.slice(0, 12))} contra la base ${code(r.base.slice(0, 12))} · autor ${code(r.author)}${t.maintainer ? " (maintainer)" : ""}`,
     "",
     "### Parcelas de comunidad",
   );
   const v = r.plots.violations;
-  if (v.length === 0)
+  if (r.plots.violations_total === 0)
     out.push(
-      `Todo lo que cambia cae dentro de las ${r.plots.count} parcelas \`community_plot\` abiertas.`,
+      `Todo lo que cambia cae dentro de las parcelas \`community_plot\` abiertas (${r.plots.count}).`,
     );
   else {
     out.push(
-      r.maintainer
-        ? `Fuera de parcelas (permitido porque el autor es maintainer, ver \`.github/MAINTAINERS\`):`
+      t.maintainer
+        ? "Fuera de parcelas (permitido porque el autor es maintainer, ver `.github/MAINTAINERS`):"
         : "Fuera de parcelas (solo un maintainer puede tocar esto, ver `.github/MAINTAINERS`):",
       "",
       "| Archivo | Qué | Por qué |",
@@ -333,7 +470,7 @@ export function buildComment(
         );
       else out.push(`| ${code(x.path)} | archivo | ${VIOLATION_TEXT[x.reason] ?? ""} |`);
     }
-    if (v.length > MAX_ROWS) out.push("", `… y ${v.length - MAX_ROWS} más.`);
+    out.push(...more(r.plots.violations_total, Math.min(v.length, MAX_ROWS)));
   }
 
   out.push("", "### Cambios (resumen de `mapcli patch diff` contra el merge)");
@@ -343,29 +480,42 @@ export function buildComment(
     out.push("", "| Archivo | Estado | Detalle |", "|---|---|---|");
     for (const f of changed.slice(0, MAX_ROWS))
       out.push(`| ${code(f.path)} | ${f.status} | ${fileDetail(f)} |`);
-    if (changed.length > MAX_ROWS) out.push("", `… y ${changed.length - MAX_ROWS} archivos más.`);
+    out.push(...more(changed.length, MAX_ROWS));
   }
+  const pathList = (title: string, paths: string[]): void => {
+    if (paths.length === 0) return;
+    out.push("", title, "", ...paths.slice(0, MAX_ROWS).map((p) => `- ${code(p)}`));
+  };
+  pathList("**Archivos de mapa que no pasan su esquema:**", r.invalid_files);
+  pathList(
+    "**Archivos que git fusionaría distinto de lo revisado** (rebase sobre la base):",
+    r.merge_mismatch,
+  );
   if (r.conflicts.length > 0) {
     out.push("", "**Conflictos con la base actual:**", "");
     for (const c of r.conflicts.slice(0, MAX_ROWS))
       out.push(
-        `- ${code(c.path)}: ${plain(c.reason)}${c.at.length > 0 ? ` (${c.at.slice(0, 10).map(code).join(", ")})` : ""}`,
+        `- ${code(c.path)}: ${CONFLICT_TEXT[c.code]}${c.at.length > 0 ? ` (${c.at.slice(0, 10).map(code).join(", ")})` : ""}`,
       );
   }
 
   out.push("", "### Validación");
-  if (r.validation.new_errors.length === 0)
+  if (r.validation.new_errors_total === 0)
     out.push(
       `Sin errores nuevos (el mapa fusionado tiene ${r.validation.errors} errores en total).`,
     );
-  else
+  else {
+    const shown = r.validation.new_errors.slice(0, 20);
     out.push(
-      `${r.validation.new_errors.length} errores nuevos:`,
+      `${r.validation.new_errors_total} errores nuevos:`,
       "",
       "```text",
-      ...r.validation.new_errors.slice(0, 20).map(plain),
+      ...shown.map(plain),
       "```",
     );
+    if (r.validation.new_errors_total > shown.length)
+      out.push("", `… y ${r.validation.new_errors_total - shown.length} más.`);
+  }
 
   out.push("", "### Antes / después");
   if (r.areas.length === 0) out.push("No hay áreas para renderizar.");
@@ -387,18 +537,32 @@ export function buildComment(
     if (r.omitted_areas > 0)
       out.push("", `${r.omitted_areas} áreas más sin renderizar (límite por PR).`);
   }
-  if (r.other_files.length > 0)
+  if (t.otherFiles.length > 0) {
     out.push(
       "",
       "### Fuera de `world/`",
       "Este PR también cambia archivos que no son de mapa; revísalos aparte:",
       "",
-      ...r.other_files.slice(0, 20).map((p) => `- ${code(p)}`),
+      ...t.otherFiles.slice(0, MAX_ROWS).map((p) => `- ${code(p)}${isSensitive(p) ? " ⚠️" : ""}`),
+      ...more(t.otherFiles.length, MAX_ROWS),
     );
+  }
   out.push("", `<sub>[Ejecución del check](${ctx.runUrl}) · se actualiza en cada push.</sub>`);
   let body = out.join("\n");
   if (body.length > MAX_BODY) body = `${body.slice(0, MAX_BODY)}\n\n… (recortado)`;
   return body;
+}
+
+/** Body for a PR whose current commit no longer changes world/ (the old verdict is void). */
+export function noMapComment(headSha: string, runUrl: string): string {
+  return [
+    MARKER,
+    "## Revisión de mapa (CI)",
+    "",
+    `El commit ${code(headSha.slice(0, 12))} ya no cambia nada en \`world/\`: la revisión de mapa anterior no aplica.`,
+    "",
+    `<sub>[Ejecución del check](${runUrl}) · se actualiza en cada push.</sub>`,
+  ].join("\n");
 }
 
 // ---- GitHub ---------------------------------------------------------------------------------
@@ -411,6 +575,7 @@ interface Env {
   headRepo: string;
   conclusion: string;
   report: string;
+  maintainers: string;
   prHint: string;
   api: string;
   server: string;
@@ -433,6 +598,7 @@ async function gh(env: Env, method: string, path: string, body?: unknown): Promi
 
 interface Pull {
   number: number;
+  author_association: string;
   user: { login: string };
   head: { sha: string; repo: { full_name: string } | null };
 }
@@ -458,7 +624,22 @@ async function findPull(env: Env): Promise<Pull | undefined> {
   return undefined;
 }
 
-async function upsert(env: Env, pr: number, body: string): Promise<string> {
+/** Changed files of the PR, from the API (at most 3000, GitHub's own limit). */
+async function pullFiles(env: Env, pr: number): Promise<string[]> {
+  const out: string[] = [];
+  for (let page = 1; page <= 30; page++) {
+    const list = (await gh(
+      env,
+      "GET",
+      `/repos/${env.repo}/pulls/${pr}/files?per_page=100&page=${page}`,
+    )) as { filename: string }[];
+    out.push(...list.map((f) => f.filename));
+    if (list.length < 100) break;
+  }
+  return out;
+}
+
+async function findComment(env: Env, pr: number): Promise<number | undefined> {
   for (let page = 1; page <= 30; page++) {
     const list = (await gh(
       env,
@@ -468,53 +649,67 @@ async function upsert(env: Env, pr: number, body: string): Promise<string> {
     const mine = list.find(
       (c) => c.user?.login === "github-actions[bot]" && c.body?.startsWith(MARKER) === true,
     );
-    if (mine) {
-      await gh(env, "PATCH", `/repos/${env.repo}/issues/comments/${mine.id}`, { body });
-      return `updated comment ${mine.id}`;
-    }
+    if (mine) return mine.id;
     if (list.length < 100) break;
   }
-  await gh(env, "POST", `/repos/${env.repo}/issues/${pr}/comments`, { body });
-  return "created comment";
+  return undefined;
 }
 
-/** Reads and checks the report file (missing or invalid: null plus the reason). */
-export function readReport(path: string): { report: CheckedReport | null; error?: string } {
+/** Reads and checks the report file (missing or invalid: null plus the reason code). */
+export function readReport(path: string): {
+  report: CheckedReport | null;
+  error?: ReportErrorCode;
+} {
   try {
-    if (statSync(path).size > MAX_REPORT_BYTES) return { report: null, error: "report too large" };
+    if (statSync(path).size > MAX_REPORT_BYTES) return { report: null, error: "too_large" };
     return { report: checkReport(JSON.parse(readFileSync(path, "utf8"))) };
   } catch (e) {
     if (e instanceof ReportError || e instanceof SyntaxError)
-      return { report: null, error: `invalid report: ${e.message}` };
-    return { report: null, error: "no report" };
+      return { report: null, error: "invalid_report" };
+    return { report: null, error: "no_report" };
   }
 }
 
+/** The report must be about this PR, this commit and this author (it is the PR's output). */
+export function matchReport(
+  r: CheckedReport,
+  pr: number,
+  headSha: string,
+  author: string,
+): ReportErrorCode | undefined {
+  if (r.pr !== pr) return "other_pr";
+  if (r.head !== headSha) return "other_commit";
+  if (r.author.toLowerCase() !== author.toLowerCase()) return "other_author";
+  return undefined;
+}
+
 async function main(argv: string[]): Promise<number> {
+  const ev = process.env;
   if (argv[0] === "--dry-run") {
-    // Local runs and the check job's step summary: no network, links to this run if any.
+    // Local runs and the check job's step summary: no network. The trusted facts come from
+    // the report itself here, so this output is only a preview.
     const { report, error } = readReport(argv[1] ?? "report.json");
-    const ev = process.env;
     const runUrl =
       ev.GITHUB_REPOSITORY && ev.GITHUB_RUN_ID
         ? `${ev.GITHUB_SERVER_URL ?? "https://github.com"}/${ev.GITHUB_REPOSITORY}/actions/runs/${ev.GITHUB_RUN_ID}`
         : "https://github.com/OWNER/REPO/actions/runs/RUN_ID";
+    const t = trustedFacts(report?.other_files ?? [], report?.maintainer ?? false);
     const conclusion = report?.ok ? "success" : "failure";
-    process.stdout.write(`${buildComment(report, { repo: "", runUrl, conclusion }, error)}\n`);
+    process.stdout.write(`${buildComment(report, { runUrl, conclusion }, t, error)}\n`);
     return report ? 0 : 1;
   }
-  const e = process.env;
   const env: Env = {
-    token: e.GITHUB_TOKEN ?? "",
-    repo: e.GITHUB_REPOSITORY ?? "",
-    runId: e.RUN_ID ?? "",
-    headSha: e.HEAD_SHA ?? "",
-    headRepo: e.HEAD_REPO ?? "",
-    conclusion: e.CONCLUSION ?? "unknown",
-    report: e.REPORT ?? "report/report.json",
-    prHint: e.PR_HINT ?? "",
-    api: e.GITHUB_API_URL ?? "https://api.github.com",
-    server: e.GITHUB_SERVER_URL ?? "https://github.com",
+    token: ev.GITHUB_TOKEN ?? "",
+    repo: ev.GITHUB_REPOSITORY ?? "",
+    runId: ev.RUN_ID ?? "",
+    headSha: ev.HEAD_SHA ?? "",
+    headRepo: ev.HEAD_REPO ?? "",
+    conclusion: ev.CONCLUSION ?? "unknown",
+    report: ev.REPORT ?? "report/report.json",
+    maintainers: ev.MAINTAINERS ?? ".github/MAINTAINERS",
+    prHint: ev.PR_HINT ?? "",
+    api: ev.GITHUB_API_URL ?? "https://api.github.com",
+    server: ev.GITHUB_SERVER_URL ?? "https://github.com",
   };
   if (!/^[\w.-]+\/[\w.-]+$/.test(env.repo) || !/^\d+$/.test(env.runId) || !SHA.test(env.headSha))
     throw new Error("GITHUB_REPOSITORY, RUN_ID and HEAD_SHA are required");
@@ -523,25 +718,55 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(`no open pull request has head ${env.headSha}; nothing to comment\n`);
     return 0;
   }
-  let { report, error } = readReport(env.report);
-  // The artifact is the PR's own output: it must be about this PR, this commit, this author.
-  if (report) {
-    if (report.pr !== pull.number) error = "report is about another pull request";
-    else if (report.head !== env.headSha) error = "report is about another commit";
-    else if (report.author.toLowerCase() !== pull.user.login.toLowerCase())
-      error = "report names another author";
-    if (error) report = null;
-  }
   const runUrl = `${env.server}/${env.repo}/actions/runs/${env.runId}`;
-  const ctx: CommentContext = { repo: env.repo, runUrl, conclusion: env.conclusion };
-  const arts = (await gh(env, "GET", `/repos/${env.repo}/actions/runs/${env.runId}/artifacts`)) as {
-    artifacts: { id: number; name: string }[];
-  };
-  const art = arts.artifacts.find((a) => a.name === RENDERS_ARTIFACT);
-  if (art) ctx.artifactUrl = `${runUrl}/artifacts/${art.id}`;
-  process.stdout.write(
-    `PR #${pull.number}: ${await upsert(env, pull.number, buildComment(report, ctx, error))}\n`,
-  );
+  const files = await pullFiles(env, pull.number);
+  const existing = await findComment(env, pull.number);
+  let { report, error } = readReport(env.report);
+  const touchesWorld = files.some((p) => p.startsWith("world/")) || report?.map_changes === true;
+  let body: string;
+  if (!touchesWorld) {
+    if (existing === undefined) {
+      process.stdout.write(`PR #${pull.number} does not change world/; no comment\n`);
+      return 0;
+    }
+    body = noMapComment(env.headSha, runUrl);
+  } else {
+    if (report) {
+      error = matchReport(report, pull.number, env.headSha, pull.user.login);
+      if (error) report = null;
+    }
+    let maintainersText = "";
+    try {
+      maintainersText = readFileSync(env.maintainers, "utf8");
+    } catch {
+      // No file on the default branch: only the owner is a maintainer.
+    }
+    const maintainer = isMaintainer(
+      {
+        author: pull.user.login,
+        association: pull.author_association,
+        headRepo: pull.head.repo?.full_name ?? null,
+        repo: env.repo,
+      },
+      parseMaintainers(maintainersText),
+    );
+    const ctx: CommentContext = { runUrl, conclusion: env.conclusion };
+    const arts = (await gh(
+      env,
+      "GET",
+      `/repos/${env.repo}/actions/runs/${env.runId}/artifacts`,
+    )) as { artifacts: { id: number; name: string }[] };
+    const art = arts.artifacts.find((a) => a.name === RENDERS_ARTIFACT);
+    if (art) ctx.artifactUrl = `${runUrl}/artifacts/${art.id}`;
+    body = buildComment(report, ctx, trustedFacts(files, maintainer), error);
+  }
+  if (existing !== undefined) {
+    await gh(env, "PATCH", `/repos/${env.repo}/issues/comments/${existing}`, { body });
+    process.stdout.write(`PR #${pull.number}: updated comment ${existing}\n`);
+  } else {
+    await gh(env, "POST", `/repos/${env.repo}/issues/${pull.number}/comments`, { body });
+    process.stdout.write(`PR #${pull.number}: created comment\n`);
+  }
   return 0;
 }
 

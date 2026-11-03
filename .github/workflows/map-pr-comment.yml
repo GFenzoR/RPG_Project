@@ -5,10 +5,13 @@ name: map-pr-comment
 #
 # Security: this is the only part with a write token, so it never checks out or runs code
 # from the pull request. It runs from the default branch, checks out only
-# tools/mapcli/src/prcomment.ts (default branch, self-contained, no install), downloads the
-# small report artifact of the triggering run and treats it as untrusted: prcomment.ts caps
-# its size, checks every field and string, and requires its PR number, head commit and
-# author to match the pull request GitHub reports for that run.
+# tools/mapcli/src/prcomment.ts and .github/MAINTAINERS (default branch; the script is
+# self-contained, no install), downloads the small report artifact of the triggering run and
+# treats it as untrusted: prcomment.ts caps its size, checks every field and string, maps
+# every reason to fixed text, and requires its PR number, head commit and author to match
+# the pull request GitHub reports for that run. The changed files and whether the author
+# is a maintainer come from the GitHub API and the default branch, never from the report;
+# a PR that changes anything outside world/ and docs/ never gets a pass.
 
 on:
   workflow_run:
@@ -28,12 +31,15 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: read # list and download the run's artifacts
+      contents: read # checkout of the default branch
       pull-requests: write # the comment
     steps:
       - uses: actions/checkout@v4.2.2 # default branch: trusted code only
         with:
           persist-credentials: false
-          sparse-checkout: tools/mapcli/src/prcomment.ts
+          sparse-checkout: |
+            tools/mapcli/src/prcomment.ts
+            .github/MAINTAINERS
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@v4.4.0
         with:
@@ -55,4 +61,5 @@ jobs:
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           PR_HINT: ${{ github.event.workflow_run.pull_requests[0].number }}
           REPORT: ${{ runner.temp }}/map-pr-report/report.json
+          MAINTAINERS: .github/MAINTAINERS
         run: node --experimental-strip-types tools/mapcli/src/prcomment.ts

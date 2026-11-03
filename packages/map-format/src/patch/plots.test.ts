@@ -162,6 +162,25 @@ describe("checkPlots", () => {
   });
 });
 
+describe("checkPlots: spawn radius", () => {
+  it("counts the whole square centre ± radius of a spawn, not only its centre", () => {
+    const wide = { ...spawn("wide", 45, 45), radius: 6 }; // 39..51: sticks out of 40..49
+    const fits = { ...spawn("fits", 45, 45), radius: 4 }; // 41..49
+    const v = checkPlots(PLOTS, [
+      { path: "world/islands/isle/spawns.yaml", before: null, after: yaml([wide, fits]) },
+    ]);
+    expect(v).toEqual([
+      {
+        kind: "entry",
+        path: "world/islands/isle/spawns.yaml",
+        entry: "wide",
+        change: "added",
+        reason: "outside_plot",
+      },
+    ]);
+  });
+});
+
 describe("changeBoxes", () => {
   it("boxes changed tiles per chunk and changed entries (before and after)", () => {
     const boxes = changeBoxes([

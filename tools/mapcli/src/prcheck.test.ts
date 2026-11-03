@@ -15,7 +15,16 @@ import { decodePng } from "@rpg/spritepack";
 import { afterEach, describe, expect, it } from "vitest";
 import { run } from "./index.ts";
 import { parseMaintainers, prCheck, tileFor } from "./prcheck.ts";
-import { MARKER, buildComment, checkReport, readReport } from "./prcomment.ts";
+import {
+  MARKER,
+  buildComment,
+  checkReport,
+  isMaintainer,
+  matchReport,
+  noMapComment,
+  readReport,
+  trustedFacts,
+} from "./prcomment.ts";
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const dirs: string[] = [];
@@ -83,7 +92,7 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     const r = prCheck({ root, base: "main", head: "pr", out, author: "someone", pr: 3 });
     expect(r.failures).toEqual([]);
     expect(r.ok).toBe(true);
-    expect(r.plots).toEqual({ count: 1, violations: [] });
+    expect(r.plots).toEqual({ count: 1, violations: [], violations_total: 0 });
     expect(r.files).toMatchObject([
       {
         path: "world/islands/puerto/chunks/z07/c0100_0197.json",
@@ -179,8 +188,8 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     edit("place", "puerto", "--pos", "3204,6299,7", "--item", "bush");
     git("commit", "-qam", "main conflicts");
     const bad = prCheck({ root, base: "main", head: "pr", out, author: "boss" });
-    expect(bad.failures).toEqual(["conflicts"]);
-    expect(bad.conflicts).toMatchObject([{ path: PLOT_CHUNK, at: ["3204,6299,7"] }]);
+    expect(bad.failures).toContain("conflicts");
+    expect(bad.conflicts).toMatchObject([{ path: PLOT_CHUNK, code: "tiles", at: ["3204,6299,7"] }]);
   });
 
   it("flags plot definitions and new validator errors", () => {
@@ -220,6 +229,101 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     expect(r.failures).toEqual(["plots", "validation"]);
   });
 
+  it("fails when git would merge the text differently from the tile merge (B3)", () => {
+    const { root, git, edit } = sandbox();
+    const CHUNK = "world/islands/puerto/chunks/z07/c0100_0197.json";
+    type Raw = { palette: string[]; items: { x: number; y: number; stack: number[] }[] };
+    git("checkout", "-qb", "pr");
+    // The palette is in first-use order: a bush near the top moves `bush` up the palette and
+    // renumbers the items after it.
+    edit("place", "puerto", "--pos", "3202,6305,7", "--item", "bush");
+    git("commit", "-qam", "pr");
+    git("checkout", "-q", "main");
+    // main adds an item on a line the PR did not touch, with main's numbering.
+    edit("place", "puerto", "--pos", "3221,6333,7", "--item", "border_sand_water_w");
+    git("commit", "-qam", "main");
+    // git merges the text cleanly, but the new index now names another item.
+    const tree = git("merge-tree", "--write-tree", "--no-messages", "main", "pr").trim();
+    const merged = JSON.parse(git("show", `${tree}:${CHUNK}`)) as Raw;
+    const tile = merged.items.find((i) => i.x === 21 && i.y === 29);
+    expect(tile?.stack.map((i) => merged.palette[i])).not.toContain("border_sand_water_w");
+    const r = prCheck({ root, base: "main", head: "pr", out: tmp("pr-out-"), author: "boss" });
+    expect(r.conflicts).toEqual([]);
+    expect(r.failures).toEqual(["merge_mismatch"]);
+    expect(r.merge_mismatch).toEqual([CHUNK]);
+    expect(r.ok).toBe(false);
+  });
+
+  it("does not report an invalid map file of the PR as a base conflict (S4)", () => {
+    const { root, git } = sandbox();
+    git("checkout", "-qb", "pr");
+    const c = JSON.parse(readFileSync(join(root, PLOT_CHUNK), "utf8")) as {
+      items: { x: number }[];
+    };
+    c.items.push({ ...(c.items[0] as { x: number }), x: 40 });
+    writeFileSync(join(root, PLOT_CHUNK), JSON.stringify(c));
+    git("commit", "-qam", "bad");
+    const out = tmp("pr-out-");
+    const r = prCheck({ root, base: "main", head: "pr", out, author: "boss", pr: 1 });
+    expect(r.failures).toContain("invalid");
+    expect(r.failures).not.toContain("conflicts");
+    expect(r.invalid_files).toEqual([PLOT_CHUNK]);
+    expect(r.maintainer).toBe(true); // fails for maintainers too
+    expect(readReport(join(out, "report.json")).report?.invalid_files).toEqual([PLOT_CHUNK]);
+  });
+
+  it("only trusts a maintainer when nobody else can push the head (S3)", () => {
+    const { root, git, edit } = sandbox();
+    git("checkout", "-qb", "pr");
+    edit("paint", "puerto", "--floor", "7", "--rect", "3170,6330,2,2", "--ground", "sand");
+    git("commit", "-qam", "outside");
+    const out = tmp("pr-out-");
+    const fork = { root, base: "main", head: "pr", out, repo: "boss/game" };
+    expect(prCheck({ ...fork, author: "boss", headRepo: "contributor/game" }).failures).toEqual([
+      "plots",
+    ]);
+    expect(prCheck({ ...fork, author: "boss", headRepo: "boss/game" }).ok).toBe(true);
+    expect(prCheck({ ...fork, author: "Boss", headRepo: "Boss/game-fork" }).ok).toBe(true);
+  });
+
+  it("exits early when the branch does not change world/ (S2)", () => {
+    const { root, git } = sandbox();
+    git("checkout", "-qb", "pr");
+    writeFileSync(join(root, "README.md"), "x\n");
+    git("add", "-A");
+    git("commit", "-qm", "docs");
+    const r = prCheck({ root, base: "main", head: "pr", out: tmp("pr-out-"), author: "x" });
+    expect(r).toMatchObject({
+      ok: true,
+      map_changes: false,
+      files: [],
+      other_files: ["README.md"],
+    });
+  });
+
+  it("counts the spawn's whole radius against the plot (B4)", () => {
+    const { root, git, edit } = sandbox();
+    git("checkout", "-qb", "pr");
+    edit(
+      "spawn",
+      "add",
+      "puerto",
+      "--id",
+      "huge",
+      "--pos",
+      "3207,6302,7",
+      "--monster",
+      "wolf",
+      "--radius",
+      "32",
+      "--count",
+      "3",
+    );
+    git("commit", "-qam", "pr");
+    const r = prCheck({ root, base: "main", head: "pr", out: tmp("pr-out-"), author: "x" });
+    expect(r.plots.violations).toMatchObject([{ entry: "huge", reason: "outside_plot" }]);
+  });
+
   it("rejects refs that look like options", () => {
     const { root } = sandbox();
     expect(() => prCheck({ root, base: "--output=x", head: "main", out: tmp("o-") })).toThrow(
@@ -231,19 +335,23 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
 
 describe("pr comment", () => {
   const good = {
-    format: 1,
+    format: 2,
     pr: 5,
     author: "someone",
-    maintainer: false,
+    maintainer: true, // what the report claims; the comment does not believe it
     base: "a".repeat(40),
     head: "b".repeat(40),
     merge_base: "a".repeat(40),
-    ok: false,
-    failures: ["plots"],
+    ok: true,
+    failures: [],
+    map_changes: true,
     files: [{ path: PLOT_CHUNK, status: "modified", base_matches: true, tiles_changed: 2 }],
     conflicts: [],
+    invalid_files: [],
+    merge_mismatch: [],
     plots: {
       count: 1,
+      violations_total: 1,
       violations: [
         {
           kind: "entry",
@@ -254,8 +362,9 @@ describe("pr comment", () => {
         },
       ],
     },
-    validation: { errors: 0, new_errors: [] },
+    validation: { errors: 0, new_errors: [], new_errors_total: 0 },
     other_files: [],
+    other_files_total: 0,
     areas: [
       {
         x: 1,
@@ -271,20 +380,78 @@ describe("pr comment", () => {
     ],
     omitted_areas: 0,
   };
-  const ctx = {
-    repo: "o/r",
-    runUrl: "https://github.com/o/r/actions/runs/1",
-    conclusion: "failure",
-  };
+  const ctx = { runUrl: "https://github.com/o/r/actions/runs/1", conclusion: "success" };
+  const mapOnly = trustedFacts([PLOT_CHUNK, "world/islands/puerto/spawns.yaml"], false);
 
-  it("builds one marked comment with plots, changes and images", () => {
-    const body = buildComment(checkReport(good), ctx);
+  it("builds one marked comment; plots are judged with the trusted maintainer answer (B1)", () => {
+    const body = buildComment(checkReport(good), ctx, mapOnly);
     expect(body.startsWith(MARKER)).toBe(true);
+    // The report says ok and maintainer: the trusted side says the author is not one.
+    expect(body).not.toContain("✅");
+    expect(body).not.toContain("(maintainer)");
     expect(body).toContain("❌ **No pasa:**");
     expect(body).toContain(
       "| `world/islands/puerto/spawns.yaml` | entrada `w` agregada | fuera de toda parcela |",
     );
     expect(body).toContain("`before-1.png` `after-1.png`");
+    expect(body).toContain("Vale para el commit `bbbbbbbbbbbb`");
+    const asMaintainer = trustedFacts([PLOT_CHUNK], true);
+    expect(buildComment(checkReport(good), ctx, asMaintainer)).toContain("✅ **Pasa.**");
+  });
+
+  it("never shows a pass when the PR changes the check's code or config (B1)", () => {
+    const files = [PLOT_CHUNK, "packages/map-format/src/patch/plots.ts", "docs/03.md"];
+    const t = trustedFacts(files, true);
+    expect(t.checkChanged).toBe(true);
+    const body = buildComment(checkReport({ ...good, other_files: [] }), ctx, t);
+    expect(body).not.toContain("✅");
+    expect(body).toContain("El veredicto no es confiable");
+    // The list of files comes from the API, not from the report (which said none).
+    expect(body).toContain("- `packages/map-format/src/patch/plots.ts` ⚠️");
+    expect(trustedFacts([PLOT_CHUNK, "docs/03.md"], true).checkChanged).toBe(false);
+    for (const f of ["package.json", ".npmrc", ".github/MAINTAINERS", "pnpm-lock.yaml", "x.ts"])
+      expect(trustedFacts([PLOT_CHUNK, f], true).checkChanged).toBe(true);
+  });
+
+  it("lists sensitive files first and says how many more there are (S1)", () => {
+    const docs = Array.from({ length: 45 }, (_, i) => `docs/n${String(i).padStart(2, "0")}.md`);
+    const t = trustedFacts([...docs, "server/evil.go", PLOT_CHUNK], true);
+    expect(t.otherFiles[0]).toBe("server/evil.go");
+    const body = buildComment(checkReport(good), ctx, t);
+    expect(body).toContain("- `server/evil.go` ⚠️");
+    expect(body).toContain("… y 6 más (ver Files changed).");
+    const many = checkReport({
+      ...good,
+      plots: { ...good.plots, violations_total: 75 },
+      validation: { errors: 99, new_errors: ["e"], new_errors_total: 99 },
+    });
+    const b2 = buildComment(many, ctx, mapOnly);
+    expect(b2).toContain("… y 74 más (ver Files changed).");
+    expect(b2).toContain("99 errores nuevos:");
+    expect(b2).toContain("… y 98 más.");
+  });
+
+  it("renders conflicts and errors from fixed codes only (B2)", () => {
+    const evil = "**x** [l](https://e) ![i](https://e) @u #1 <img>";
+    expect(() => checkReport({ ...good, conflicts: [{ path: PLOT_CHUNK, code: evil }] })).toThrow();
+    expect(() =>
+      checkReport({ ...good, conflicts: [{ path: PLOT_CHUNK, reason: evil, code: "tiles" }] }),
+    ).not.toThrow(); // extra fields are dropped, never rendered
+    const r = checkReport({
+      ...good,
+      failures: ["conflicts"],
+      conflicts: [{ path: PLOT_CHUNK, reason: evil, code: "invalid_file" }],
+      validation: { errors: 1, new_errors: [evil], new_errors_total: 1 },
+    });
+    const body = buildComment(r, ctx, mapOnly);
+    expect(body).toContain("- `world/islands/puerto/chunks/z07/c0100_0196.json`: archivo inválido");
+    // The free-text validator line only appears inside the fenced block.
+    const outside = body.replace(/```text[\s\S]*?```/g, "");
+    for (const bit of ["**x**", "](https://e)", "@u", "#1", "<img>"])
+      expect(outside).not.toContain(bit);
+    expect(body.split("```").length).toBe(3);
+    const err = buildComment(null, ctx, mapOnly, "invalid_report");
+    expect(err).toContain("el reporte no tiene el formato esperado");
   });
 
   it("rejects anything unexpected in the untrusted report", () => {
@@ -294,23 +461,34 @@ describe("pr comment", () => {
     expect(bad({ files: [{ ...good.files[0], path: "data/items.yaml" }] })).toThrow();
     expect(bad({ areas: [{ ...good.areas[0], after: "../../evil.png" }] })).toThrow();
     expect(bad({ failures: ["<img src=x>"] })).toThrow();
+    expect(bad({ invalid_files: ["world/x **y**"] })).toThrow();
     expect(bad({ pr: "5" })).toThrow();
-    expect(bad({ format: 2 })).toThrow();
-    // Free text is neutralised, not rejected: no backticks or line breaks survive.
-    const body = buildComment(
-      checkReport({ ...good, validation: { errors: 1, new_errors: ["a```\n@everyone [x](y)"] } }),
-      ctx,
-    );
-    expect(body).toContain("a    @everyone [x](y)");
-    expect(body.split("```").length).toBe(3);
+    expect(bad({ format: 1 })).toThrow();
   });
 
-  it("explains a missing or invalid report instead of failing silently", () => {
-    const body = buildComment(null, ctx, "invalid report: author: unexpected value");
-    expect(body).toContain("no dejó un reporte utilizable");
+  it("checks the report against the PR and the maintainer rule against the head repo", () => {
+    const r = checkReport(good);
+    expect(matchReport(r, 5, "b".repeat(40), "SomeOne")).toBeUndefined();
+    expect(matchReport(r, 6, "b".repeat(40), "someone")).toBe("other_pr");
+    expect(matchReport(r, 5, "c".repeat(40), "someone")).toBe("other_commit");
+    expect(matchReport(r, 5, "b".repeat(40), "other")).toBe("other_author");
+    const pull = { author: "boss", association: "NONE", repo: "o/game" };
+    expect(isMaintainer({ ...pull, headRepo: "o/game" }, ["boss"])).toBe(true);
+    expect(isMaintainer({ ...pull, headRepo: "contributor/game" }, ["boss"])).toBe(false);
+    expect(isMaintainer({ ...pull, headRepo: "Boss/fork" }, ["boss"])).toBe(true);
+    expect(isMaintainer({ ...pull, headRepo: null }, ["boss"])).toBe(false);
+    expect(isMaintainer({ ...pull, association: "OWNER", headRepo: "o/game" }, [])).toBe(true);
+    expect(isMaintainer({ ...pull, association: "MEMBER", headRepo: "o/game" }, [])).toBe(false);
+  });
+
+  it("explains a missing report and a PR that no longer touches world/", () => {
+    expect(buildComment(null, ctx, mapOnly, "no_report")).toContain(
+      "no dejó un reporte utilizable",
+    );
     expect(readReport(join(tmpdir(), "does-not-exist.json"))).toEqual({
       report: null,
-      error: "no report",
+      error: "no_report",
     });
+    expect(noMapComment("c".repeat(40), ctx.runUrl)).toContain("ya no cambia nada en `world/`");
   });
 });

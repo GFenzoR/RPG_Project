@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  canonicalPatchText,
   changeBoxes,
   checkPlots,
   communityPlots,
@@ -40,10 +41,10 @@ import type {
   World,
 } from "@rpg/map-format";
 import { diffPatch, planPatch, writePlanned } from "./patch.ts";
-import type { Conflict, FileDiff } from "./patch.ts";
+import type { FileDiff } from "./patch.ts";
 import { loadFrames, renderArea } from "./render.ts";
 
-export const REPORT_FORMAT = 1;
+export const REPORT_FORMAT = 2 as const;
 export const MAINTAINERS_FILE = ".github/MAINTAINERS";
 /** Render limits: areas per PR, tiles per side, margin around the changes, bytes per PNG. */
 export const MAX_AREAS = 6;
@@ -62,6 +63,36 @@ export interface PrArea extends FloorRect {
   tile: number;
 }
 
+/**
+ * Why a file conflicts, as a fixed code: the comment never repeats parser text (a map file
+ * of the PR could put Markdown in it). tiles/entries: changed on both sides (see `at`).
+ */
+export type ConflictCode = "tiles" | "entries" | "changed_both_sides" | "no_base" | "invalid_file";
+
+export interface PrConflict {
+  path: string;
+  code: ConflictCode;
+  /** Tiles "x,y,z" or entry IDs (first 100). */
+  at?: string[];
+}
+
+/**
+ * Failure codes. plots: outside the community plots and not a maintainer; conflicts: the
+ * tile/entry merge conflicts with the current base; validation: new validator errors;
+ * invalid: a map file of the PR does not pass its schema (fails for maintainers too);
+ * rebase: git itself cannot merge the branch; merge_mismatch: git would merge the text
+ * into something else than the tile merge measured here (chunk palettes), so rebase.
+ */
+export const FAILURE_CODES = [
+  "plots",
+  "conflicts",
+  "validation",
+  "invalid",
+  "rebase",
+  "merge_mismatch",
+] as const;
+export type FailureCode = (typeof FAILURE_CODES)[number];
+
 export interface PrReport {
   format: typeof REPORT_FORMAT;
   pr: number | null;
@@ -72,14 +103,21 @@ export interface PrReport {
   merge_base: string;
   /** Whether the check passes (what the job's exit code says). */
   ok: boolean;
-  /** Why it fails, as stable codes: plots, conflicts, validation, invalid_patch. */
-  failures: string[];
+  /** Why it fails (FAILURE_CODES). */
+  failures: FailureCode[];
+  /** Whether the branch changes anything under world/ (false: nothing else is computed). */
+  map_changes: boolean;
   files: FileDiff[];
-  conflicts: Conflict[];
-  plots: { count: number; violations: PlotViolation[] };
-  validation: { errors: number; new_errors: string[] };
+  conflicts: PrConflict[];
+  /** Map files of the PR that do not pass their schema (failure "invalid"). */
+  invalid_files: string[];
+  /** World files git would merge differently from the tile merge (failure "merge_mismatch"). */
+  merge_mismatch: string[];
+  plots: { count: number; violations: PlotViolation[]; violations_total: number };
+  validation: { errors: number; new_errors: string[]; new_errors_total: number };
   /** Changed files outside world/ (listed for the reviewer; not judged here). */
   other_files: string[];
+  other_files_total: number;
   areas: PrArea[];
   omitted_areas: number;
 }
@@ -93,6 +131,11 @@ export interface PrCheckOptions {
   /** GitHub's author_association of the PR author (from the event, not the PR): OWNER is
    *  always a maintainer, so the repo owner is one even before .github/MAINTAINERS exists. */
   association?: string;
+  /** "owner/name" of the repo the PR comes from and of the base repo. When both are given
+   *  and differ, the author is a maintainer only if they own the head repo: otherwise
+   *  someone else can push to the branch (S3). */
+  headRepo?: string;
+  repo?: string;
   pr?: number;
 }
 
@@ -146,6 +189,25 @@ function islandAt(world: World, a: FloorRect): string {
   return "";
 }
 
+function conflictCode(c: { reason: string; at?: string[] }): ConflictCode {
+  if (c.at !== undefined) return c.reason.startsWith("tiles") ? "tiles" : "entries";
+  if (c.reason === "the file changed on both sides") return "changed_both_sides";
+  if (c.reason === "the base is not available to merge") return "no_base";
+  return "invalid_file";
+}
+
+/** Tree of the merge git would make (null: git reports a textual conflict). */
+function gitMergeTree(root: string, base: string, head: string): string | null {
+  try {
+    const tree = git(root, ["merge-tree", "--write-tree", "--no-messages", base, head])
+      .split("\n")[0]
+      ?.trim();
+    return tree !== undefined && /^[0-9a-f]{40,64}$/.test(tree) ? tree : null;
+  } catch {
+    return null; // exit code 1: conflicts
+  }
+}
+
 export function tileFor(a: FloorRect): number {
   const side = Math.max(a.w, a.h);
   return [32, 16, 8, 4].find((t) => side * t <= MAX_IMAGE_SIDE) ?? 4;
@@ -162,12 +224,60 @@ export function prCheck(opts: PrCheckOptions): PrReport {
   const worldFiles = changed.filter((p) => p.startsWith("world/"));
   const other = changed.filter((p) => !p.startsWith("world/"));
 
-  // The PR as a map patch (merge-base → head) of the files a patch may carry.
+  const author = opts.author?.toLowerCase() ?? null;
+  const maintainers = parseMaintainers(atRef(root, base, MAINTAINERS_FILE));
+  const sameRepo =
+    opts.headRepo === undefined || opts.repo === undefined || opts.headRepo === opts.repo;
+  const ownsHead =
+    sameRepo || (author !== null && opts.headRepo?.split("/")[0]?.toLowerCase() === author);
+  const maintainer =
+    author !== null && ownsHead && (maintainers.includes(author) || opts.association === "OWNER");
+  const empty = {
+    format: REPORT_FORMAT,
+    pr: opts.pr ?? null,
+    author: opts.author ?? null,
+    maintainer,
+    base,
+    head,
+    merge_base: mergeBase,
+    other_files: other.slice(0, MAX_LISTED),
+    other_files_total: other.length,
+  };
+  mkdirSync(opts.out, { recursive: true });
+  if (worldFiles.length === 0) {
+    // Nothing of the map changes: cheap exit, no worktrees, no renders.
+    const report: PrReport = {
+      ...empty,
+      ok: true,
+      failures: [],
+      map_changes: false,
+      files: [],
+      conflicts: [],
+      invalid_files: [],
+      merge_mismatch: [],
+      plots: { count: 0, violations: [], violations_total: 0 },
+      validation: { errors: 0, new_errors: [], new_errors_total: 0 },
+      areas: [],
+      omitted_areas: 0,
+    };
+    writeFileSync(join(opts.out, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
+    return report;
+  }
+
+  // The PR as a map patch (merge-base → head) of the files a patch may carry. A file that
+  // does not pass its schema is left out of the merge and fails the check by itself (S4).
   const files: PatchFile[] = [];
+  const invalid: string[] = [];
   for (const path of worldFiles.filter(isPatchable)) {
     const b = atRef(root, mergeBase, path);
     const c = atRef(root, head, path);
     if (b === c) continue;
+    try {
+      canonicalPatchText(path, c);
+    } catch {
+      invalid.push(path);
+      continue;
+    }
     files.push(
       b === null
         ? { path, base: null, content: c }
@@ -185,6 +295,24 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     const diff = diffPatch(before, patch);
     const plan = planPatch(after, patch);
     writePlanned(after, plan.files);
+
+    // GitHub merges text, not tiles: the merge it would make must be the one measured here
+    // (B3). A chunk's palette can change on one side and a tile row on the other, and git
+    // then merges them cleanly into different items.
+    const tree = gitMergeTree(root, base, head);
+    const conflicted = new Set(plan.conflicts.map((c) => c.path));
+    const mismatch: string[] = [];
+    if (tree !== null)
+      for (const f of files) {
+        if (conflicted.has(f.path)) continue;
+        let gitText: string | null;
+        try {
+          gitText = canonicalPatchText(f.path, atRef(root, tree, f.path));
+        } catch {
+          gitText = "\0unparsable";
+        }
+        if (gitText !== readOrNull(after, f.path)) mismatch.push(f.path);
+      }
 
     // Files changed under world/ that a patch cannot carry still count for the plot check.
     const changes: FileChange[] = [
@@ -212,13 +340,7 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     const nowErrors = errorsOf(after);
     const newErrors = nowErrors.filter((e) => !old.has(e));
 
-    const maintainers = parseMaintainers(atRef(root, base, MAINTAINERS_FILE));
-    const author = opts.author?.toLowerCase() ?? null;
-    const maintainer =
-      author !== null && (maintainers.includes(author) || opts.association === "OWNER");
-
     // Renders.
-    mkdirSync(opts.out, { recursive: true });
     const { areas, omitted } = renderAreas(changeBoxes(changes), {
       margin: AREA_MARGIN,
       maxSide: MAX_AREA_SIDE,
@@ -252,25 +374,36 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       return area;
     });
 
-    const failures: string[] = [];
+    const failures: FailureCode[] = [];
     if (violations.length > 0 && !maintainer) failures.push("plots");
+    if (invalid.length > 0) failures.push("invalid");
     if (plan.conflicts.length > 0) failures.push("conflicts");
+    if (tree === null) failures.push("rebase");
+    if (mismatch.length > 0) failures.push("merge_mismatch");
     if (newErrors.length > 0) failures.push("validation");
     const report: PrReport = {
-      format: REPORT_FORMAT,
-      pr: opts.pr ?? null,
-      author: opts.author ?? null,
-      maintainer,
-      base,
-      head,
-      merge_base: mergeBase,
+      ...empty,
       ok: failures.length === 0,
       failures,
+      map_changes: true,
       files: diff,
-      conflicts: plan.conflicts,
-      plots: { count: plots.length, violations: violations.slice(0, MAX_LISTED) },
-      validation: { errors: nowErrors.length, new_errors: newErrors.slice(0, MAX_LISTED) },
-      other_files: other.slice(0, MAX_LISTED),
+      conflicts: plan.conflicts.map((c) => ({
+        path: c.path,
+        code: conflictCode(c),
+        ...(c.at === undefined ? {} : { at: c.at }),
+      })),
+      invalid_files: invalid.slice(0, MAX_LISTED),
+      merge_mismatch: mismatch.slice(0, MAX_LISTED),
+      plots: {
+        count: plots.length,
+        violations: violations.slice(0, MAX_LISTED),
+        violations_total: violations.length,
+      },
+      validation: {
+        errors: nowErrors.length,
+        new_errors: newErrors.slice(0, MAX_LISTED),
+        new_errors_total: newErrors.length,
+      },
       areas: prAreas,
       omitted_areas: omitted,
     };

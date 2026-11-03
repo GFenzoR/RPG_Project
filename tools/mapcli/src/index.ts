@@ -57,7 +57,8 @@ export const USAGE = `usage: mapcli <command> [options]   (global: --root DIR, d
                                                 current files; all or nothing unless --partial
                                                 (writes the rest, keeps the current conflicts)
  pull requests (CI, docs/04 "PR de mapas en CI"):
-  pr-check --base REF --head REF --out DIR [--author LOGIN] [--association A] [--pr N]
+  pr-check --base REF --head REF --out DIR [--author LOGIN] [--association A]
+                [--head-repo O/R --repo O/R] [--pr N]
                                                 plots, patch diff, validation and before/after
                                                 PNGs of a branch; writes DIR/report.json`;
 
@@ -200,6 +201,8 @@ function dispatch(argv: string[], io: Io): number {
       head: { type: "string" },
       author: { type: "string" },
       association: { type: "string" },
+      "head-repo": { type: "string" },
+      repo: { type: "string" },
       pr: { type: "string" },
     },
   });
@@ -475,6 +478,8 @@ function dispatch(argv: string[], io: Io): number {
         out: resolve(need(values.out, "--out DIR")),
         ...(values.author === undefined ? {} : { author: values.author }),
         ...(values.association === undefined ? {} : { association: values.association }),
+        ...(values["head-repo"] === undefined ? {} : { headRepo: values["head-repo"] }),
+        ...(values.repo === undefined ? {} : { repo: values.repo }),
         ...(values.pr === undefined ? {} : { pr: parseCount(values.pr, "--pr", 0, 1) }),
       });
       io.out(

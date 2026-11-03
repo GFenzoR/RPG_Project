@@ -65,8 +65,8 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 | `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |
 | `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
 
-Además, dos workflows para los PR que tocan `world/` (T2.4, detalle en `04`, "PR de mapas en
-CI"): `map-pr.yml` (`pull_request`, solo lectura) corre `mapcli pr-check` y sube los
+Además, dos workflows para los PR de mapas (T2.4, detalle en `04`, "PR de mapas en
+CI"): `map-pr.yml` (`pull_request`, solo lectura, con el código de la rama base) corre `mapcli pr-check` y sube los
 artefactos `map-pr-report` y `map-pr-renders`; `map-pr-comment.yml` (`workflow_run`) publica
 o actualiza un único comentario en el PR. Para probarlo en local sin GitHub:
 `make map-pr BASE=main HEAD=<rama>` deja el reporte y los PNG en `build/map-pr/` e imprime

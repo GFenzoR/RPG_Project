@@ -3,7 +3,8 @@
 // maintainer. Given the files a pull request changes (before and after text), this lists
 // what falls outside every plot, and the areas worth rendering before/after for review.
 //
-// Positions: changed chunk tiles count one by one; spawns by their centre, NPCs and texts
+// Positions: changed chunk tiles count one by one; spawns by the whole square centre ±
+// radius (where their monsters roam), NPCs and texts
 // by their tile, portals by both ends, zones by every tile of their rects on each floor.
 // Changing a `community_plot` zone itself (adding, moving, removing a plot) is always
 // maintainer-only, wherever it is. Pure apart from parsePatchFile (schemas).
@@ -81,7 +82,12 @@ function parse(path: string, text: string | null): { ok: boolean; value: unknown
 
 /** Tiles an entry stands on, for the plot check (zones: every tile of every rect). */
 function entryTiles(e: ListEntry): (Position | { rect: Rect; floors: number[] })[] {
-  if ("center" in e) return [e.center];
+  if ("center" in e) {
+    // A spawn's monsters roam the whole square centre ± radius on its floor.
+    const { x, y, z } = e.center;
+    const r = e.radius;
+    return [{ rect: { x: x - r, y: y - r, w: 2 * r + 1, h: 2 * r + 1 }, floors: [z] }];
+  }
   if ("from" in e) return [e.from, e.to];
   if ("pos" in e) return [e.pos];
   return e.rects.map((rect) => ({ rect, floors: e.floors }));

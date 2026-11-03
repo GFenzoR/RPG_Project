@@ -3,16 +3,21 @@ name: map-pr
 # Map pull requests (T2.4, docs/04-map-editor-and-ai.md "PR de mapas en CI"): community
 # plot check, `patch diff` summary, validation of the merged map and before/after renders.
 #
-# Security: pull requests come from community forks, so this workflow runs the PR's code
-# with a read-only token and no secrets, and only uploads artifacts. The comment is posted
-# by map-pr-comment.yml (workflow_run), which never checks out or runs anything of the PR
-# and treats these artifacts as untrusted data. Do not add write permissions here and do
-# not switch to pull_request_target.
+# Security: pull requests come from community forks.
+# - The check's code is the BASE branch's (checkout of base.ref, its pnpm install): the PR
+#   is only fetched as git data and read with `git show`, never checked out or run.
+# - Read-only token, no secrets; artifacts only. The comment is posted by
+#   map-pr-comment.yml (workflow_run), which recomputes the key facts from the GitHub API.
+# - In a pull_request run this YAML itself comes from the PR: a PR that edits it can only
+#   fake its own check, and the comment then says the verdict is not trustworthy.
+# Do not add write permissions here and do not switch to pull_request_target.
+#
+# No `paths` filter on purpose: GitHub evaluates it on the first 300 files only, and a push
+# that stops touching world/ must still replace the previous verdict.
 
 on:
   pull_request:
-    paths:
-      - world/**
+    types: [opened, synchronize, reopened, edited] # edited: the base branch may change
 
 permissions:
   contents: read
@@ -26,33 +31,65 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # The base branch as it is now (not the event's frozen base.sha): closing a plot or
+      # removing a maintainer on main changes the verdict of open PRs on their next run.
       - uses: actions/checkout@v4.2.2
         with:
-          fetch-depth: 0 # merge-base of the PR's base and head
-          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0 # merge-base of base and head
+      - name: fetch the PR head as data
+        id: refs
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --quiet origin "refs/pull/${PR}/head"
+          if [ "$(git rev-parse FETCH_HEAD)" != "$HEAD_SHA" ]; then
+            echo "::error::the PR head moved while this run started; the newer run checks it"
+            exit 1
+          fi
+          base="$(git rev-parse HEAD)"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          if [ ! -f tools/mapcli/src/prcheck.ts ]; then
+            # Only until T2.4 is on the base branch (the base is trusted; a PR cannot remove it).
+            echo "map=false" >> "$GITHUB_OUTPUT"
+            echo "The base branch has no map PR check yet: skipped." >> "$GITHUB_STEP_SUMMARY"
+          elif git diff --quiet "$(git merge-base "$base" "$HEAD_SHA")" "$HEAD_SHA" -- world/; then
+            echo "map=false" >> "$GITHUB_OUTPUT"
+            echo "No changes under world/: nothing to check." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "map=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: pnpm/action-setup@v4.1.0
+        if: steps.refs.outputs.map == 'true'
       - uses: actions/setup-node@v4.4.0
+        if: steps.refs.outputs.map == 'true'
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile # the base branch's lockfile and scripts
+        if: steps.refs.outputs.map == 'true'
       - name: plots, diff, validation and renders
+        if: steps.refs.outputs.map == 'true'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ steps.refs.outputs.base }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
           ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           node --experimental-strip-types tools/mapcli/src/cli.ts pr-check \
-            --base "$BASE_SHA" --head "$HEAD_SHA" --author "$AUTHOR" --association "$ASSOCIATION" --pr "$PR" \
-            --out map-pr
-      - name: step summary
+            --base "$BASE_SHA" --head "$HEAD_SHA" --author "$AUTHOR" \
+            --association "$ASSOCIATION" --head-repo "$HEAD_REPO" --repo "$REPO" \
+            --pr "$PR" --out map-pr
+      - name: step summary (preview; the PR comment recomputes the key facts)
         if: ${{ !cancelled() && hashFiles('map-pr/report.json') != '' }}
         run: node --experimental-strip-types tools/mapcli/src/prcomment.ts --dry-run map-pr/report.json >> "$GITHUB_STEP_SUMMARY"
       # Two artifacts so the comment workflow downloads only the small JSON report.
       - name: upload report
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.refs.outputs.map == 'true' }}
         uses: actions/upload-artifact@v4.6.2
         with:
           name: map-pr-report
@@ -60,7 +97,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
       - name: upload renders
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.refs.outputs.map == 'true' }}
         uses: actions/upload-artifact@v4.6.2
         with:
           name: map-pr-renders
