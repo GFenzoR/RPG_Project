@@ -294,6 +294,40 @@ test("hito 2: rectangle, autoborder, fill, copy/paste across floors and entity p
   await expect(page.getByTestId("field-radius")).toHaveValue("2");
   await page.keyboard.press("Control+y");
   await expect(page.getByTestId("field-radius")).toHaveValue("3");
+  // Unapplied form edits survive map edits (#6) and switching islands (A), and a pick
+  // asked for before switching lands in the open form.
+  await page.getByTestId("field-notes").fill("sin aplicar");
+  await clickTile(page, 1040, 1060); // with the select tool: takes the focus off the input
+  await page.keyboard.press("b");
+  await clickTile(page, 1040, 1060); // paints dirt: a map edit
+  expect((await tile(page, 1040, 1060, 7))?.ground).toBe("dirt");
+  await expect(page.getByTestId("field-notes")).toHaveValue("sin aplicar");
+  await page.getByTestId("pick-center").click();
+  await page.getByTestId("island").selectOption("puerto");
+  await expect(page.getByTestId("field-notes")).toHaveValue("sin aplicar");
+  await clickTile(page, 3158, 6388);
+  await expect(page.getByTestId("field-center-x")).toHaveValue("3158");
+  await expect(page.getByTestId("field-center-y")).toHaveValue("6388");
+  await page.getByTestId("island").selectOption("testisle");
+  await expect(page.getByTestId("field-notes")).toHaveValue("sin aplicar");
+  await expect(page.getByTestId("entity-testisle_spawn_1")).toHaveClass(/active/);
+
+  // #7: with page text selected, Ctrl+C is left to the browser (not prevented).
+  await page.evaluate(() => {
+    const w = window as unknown as { __copyPrevented?: boolean };
+    window.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === "c") w.__copyPrevented = e.defaultPrevented;
+    });
+    const el = document.querySelector('[data-testid="validation-summary"]');
+    const range = document.createRange();
+    if (el) range.selectNodeContents(el);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+  });
+  await page.keyboard.press("Control+c");
+  expect(
+    await page.evaluate(() => (window as unknown as { __copyPrevented?: boolean }).__copyPrevented),
+  ).toBe(false);
   // A bad ID is reported in Spanish (checked before the op runs) and changes nothing.
   await page.getByTestId("field-id").fill("Bad ID");
   await page.getByTestId("entity-apply").click();

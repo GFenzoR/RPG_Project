@@ -380,11 +380,14 @@ describe("saveChanges of auxiliary lists (spawns, npcs, zones, portals)", () => 
       id: "testisle_evil",
       center: { x: 1, y: 1, z: 7 },
       "radius: 4\n# ARBITRARY\n  notes": "x",
-      radius: 1,
       monsters: [{ monster: "wolf", count: 1 }],
       respawn_seconds: 1,
     });
-    expect(() => saveChanges(root, world, changes)).toThrow(/unknown field/);
+    // Read back, that text is a valid spawn (radius: 4, notes: x) plus a comment line: only
+    // checking the request's own data catches it.
+    // (the canonical-text check would catch it too; this asserts the schema one runs first).
+    expect(() => saveChanges(root, world, changes)).toThrow(/spawns\.yaml: 3 .*(unknown field|required)/);
+    expect(tree(root)).toEqual(before);
     spawns.pop();
     (world.islands.get("testisle") as unknown as Record<string, unknown>)["zones"] = "nope";
     expect(() => saveChanges(root, world, changes)).toThrow(/expected a list/);

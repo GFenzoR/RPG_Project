@@ -45,6 +45,13 @@ const items: PaletteItem[] = [
   { id: "grass", kind: "ground", sprite: "ground/grass", name: "item.grass.name" },
   { id: "crate", kind: "decoration", sprite: "decor/crate", name: "item.crate.name" },
   { id: "sand", kind: "ground", sprite: "ground/sand", name: "item.sand.name" },
+  // Border pieces are real items (data/items), so pasted stacks that carry them are valid.
+  ...["n", "s", "e", "w", "ne", "nw", "se", "sw"].map((n) => ({
+    id: `b_${n}`,
+    kind: "decoration",
+    sprite: `border/${n}`,
+    name: `item.b_${n}.name`,
+  })),
 ];
 
 const piece = (n: string): string => `b_${n}`;
@@ -495,5 +502,14 @@ describe("EditorController, review fixes", () => {
       "editor.entity.err.required",
     );
     expect(entityProblem(w, "spawns", { ...spawn, id: "a_ok" }, undefined)).toBeUndefined();
+    expect(
+      e.addEntity("zones", {
+        id: "a_z",
+        type: "pvp",
+        floors: [7, 7],
+        rects: [{ x: 1, y: 1, w: 2, h: 2 }],
+      }),
+    ).toBe(false);
+    expect(e.state.status).toMatch(/^editor.entity.err.zone_floors_repeat/);
   });
 });

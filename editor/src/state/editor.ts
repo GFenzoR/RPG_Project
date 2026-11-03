@@ -863,6 +863,8 @@ export function entityProblem(
   if ("rects" in e) {
     const r0 = e.rects[0];
     if (!r0 || e.floors.length === 0) return { key: "editor.entity.err.zone" };
+    if (new Set(e.floors).size !== e.floors.length)
+      return { key: "editor.entity.err.zone_floors_repeat" };
     for (const r of e.rects) {
       if (!isInt(r.w, 1) || !isInt(r.h, 1)) return { key: "editor.entity.err.zone" };
       for (const z of e.floors) {

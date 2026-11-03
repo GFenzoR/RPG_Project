@@ -126,7 +126,14 @@ export function EntityPanel({
   const t = ctl.t;
   const file = s.entityTab;
   const list = ctl.entities(file);
-  const selected = list.find((e) => entityKey(e) === s.entitySel);
+  // Looked up in every island (keys are unique in the world): switching islands to look
+  // at something, or to pick a portal's destination, keeps the open entry and its draft.
+  const selected =
+    s.entitySel === undefined
+      ? undefined
+      : [...s.world.islands.values()]
+          .flatMap((isl) => isl[file] as Entity[])
+          .find((e) => entityKey(e) === s.entitySel);
   /** Key being edited (undefined: a new entry) and its draft. */
   const [draft, setDraft] = useState<{ key: string | undefined; e: Entity } | undefined>();
   const [floorsText, setFloorsText] = useState("");
