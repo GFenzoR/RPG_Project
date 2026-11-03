@@ -49,6 +49,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # Browser origins allowed on /ws besides the site itself: the desktop app's webview
+      # (tauri://localhost on macOS/Linux, http://tauri.localhost on Windows). Set it to an
+      # empty value in deploy/.env to allow only the site. /ws authenticates with the
+      # one-use token of Hello, never a cookie, so another origin cannot ride a session.
+      RPG_WS_ORIGINS: ${RPG_WS_ORIGINS-tauri://localhost,http://tauri.localhost}
       DATABASE_URL: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-rpg}?sslmode=disable
     # Pending migrations (embedded in the binary) are applied on start (-migrate, default
     # true); the healthcheck only passes once the HTTP API is up, after migrating.

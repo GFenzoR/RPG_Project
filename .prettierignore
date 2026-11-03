@@ -17,3 +17,6 @@ server/
 tools/bots/
 playwright-report/
 test-results/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/e2e/screenshots/

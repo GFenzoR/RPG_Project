@@ -107,6 +107,36 @@ jobs:
       - name: editor and client production builds
         run: make build
 
+  # Desktop app (apps/desktop, Tauri 2) on Linux: Rust checks and tests, then a debug
+  # build with the .deb bundle. Windows and macOS build in release-desktop.yml.
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: system libraries (webkit2gtk and friends)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev libxdo-dev libssl-dev
+      - name: rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # tauri::generate_context! embeds build/client, so the web build comes first.
+      - name: rustfmt, clippy and tests
+        run: make desktop-test
+      - name: build (debug, .deb)
+        run: pnpm --filter @rpg/desktop tauri build --debug --bundles deb
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20

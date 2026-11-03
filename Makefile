@@ -186,6 +186,32 @@ endif
 bench-tick: ## Tick benchmarks: empty loop and N players walking (internal/game, internal/session)
 	cd server && go test -run '^$$' -bench . -benchmem ./internal/game/ ./internal/session/
 
+## ---- desktop app (apps/desktop, Tauri 2; docs/12 "Cliente de escritorio") ----------
+
+DESKTOP_DIR := apps/desktop/src-tauri
+
+# The webview loads the client's Vite dev server (:5173, started by Tauri); the app talks to
+# RPG_SERVER_URL (default http://localhost:8080, run `make run-server` or `make dev`).
+.PHONY: desktop-dev
+desktop-dev: ## Desktop app in dev mode against RPG_SERVER_URL (default http://localhost:8080)
+	pnpm --filter @rpg/desktop tauri dev
+
+.PHONY: desktop-build
+desktop-build: ## Desktop installers for this OS into apps/desktop/src-tauri/target/release/bundle/
+	pnpm --filter @rpg/desktop tauri build
+
+.PHONY: desktop-build-debug
+desktop-build-debug: ## Debug desktop binary (no installers), used by desktop-smoke
+	pnpm --filter @rpg/desktop tauri build --debug --no-bundle
+
+.PHONY: desktop-test
+desktop-test: build-client ## rustfmt + clippy + cargo test of the desktop app
+	cd $(DESKTOP_DIR) && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+
+.PHONY: desktop-smoke
+desktop-smoke: db-up desktop-build-debug ## Linux: real app under Xvfb + tauri-driver: login, enter the world, screenshots
+	DATABASE_URL="$(DATABASE_URL)" apps/desktop/e2e/smoke.sh
+
 ## ---- production stack in Docker (deploy/, docs/09) ------------------------
 
 # Same compose file as the server; deploy/.env is created for local use on first run.

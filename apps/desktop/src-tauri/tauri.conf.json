@@ -1,0 +1,66 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "RPG Project",
+  "version": "../../../client/package.json",
+  "identifier": "dev.rpgproject.client",
+  "build": {
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../../../build/client",
+    "beforeDevCommand": {
+      "script": "pnpm --filter @rpg/client dev",
+      "cwd": "../..",
+      "wait": false
+    },
+    "beforeBuildCommand": { "script": "pnpm --filter @rpg/client run build", "cwd": "../.." }
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "RPG Project",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self'",
+        "img-src": "'self' data: blob:",
+        "font-src": "'self'",
+        "connect-src": "'self' ipc: http://ipc.localhost",
+        "worker-src": "'self' blob:",
+        "media-src": "'self'",
+        "object-src": "'none'",
+        "frame-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      },
+      "capabilities": ["default"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "RolePlayingGame",
+    "shortDescription": "RPG Project",
+    "longDescription": "RPG Project: a 2D top-down online RPG.",
+    "copyright": "RPG Project contributors",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": { "depends": [] }
+    },
+    "macOS": { "minimumSystemVersion": "10.15" }
+  }
+}

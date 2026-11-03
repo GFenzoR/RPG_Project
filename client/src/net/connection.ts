@@ -1,14 +1,14 @@
-// Game WebSocket (docs/05, "Handshake"): opens /ws on the page's host, sends Hello with the
+// Game WebSocket (docs/05, "Handshake"): opens /ws on the page's host (the configured
+// server in the desktop app), sends Hello with the
 // one-use session token and hands every ServerBatch to the caller. One ClientMessage per
 // binary frame out, one ServerBatch per frame in.
 import { ClientMessageSchema, create, decodeServerBatch, encodeClientMessage } from "@rpg/protocol";
 import type { DisconnectReason, MessageInitShape, ServerBatch } from "@rpg/protocol";
+import { CLIENT_VERSION } from "../version.ts";
+import { gameSocketUrl } from "./desktop.ts";
 
 /** One intent, e.g. `{ case: "walk", value: { dir } }`. */
 export type Intent = NonNullable<MessageInitShape<typeof ClientMessageSchema>["message"]>;
-
-/** Sent in Hello; the server accepts the same major version, not older than its minimum. */
-export const CLIENT_VERSION = "0.1.0";
 
 export interface ConnectionHandlers {
   batch(batch: ServerBatch): void;
@@ -22,8 +22,7 @@ export class Connection {
   private closedOnce = false;
 
   constructor(sessionToken: string, locale: string, handlers: ConnectionHandlers) {
-    const scheme = location.protocol === "https:" ? "wss" : "ws";
-    this.ws = new WebSocket(`${scheme}://${location.host}/ws`);
+    this.ws = new WebSocket(gameSocketUrl(location));
     this.ws.binaryType = "arraybuffer";
     this.ws.onopen = () => {
       this.send({ case: "hello", value: { sessionToken, clientVersion: CLIENT_VERSION, locale } });

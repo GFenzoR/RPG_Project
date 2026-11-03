@@ -125,3 +125,12 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 ## Notas de T1.16
 - Los NPCs viven en Puerto; testisle sigue siendo la isla de inicio del E2E. El E2E de NPCs
   pone `town = 'puerto'` con `psql` para despertar en el templo del Farol.
+
+## Notas de T2.5
+- El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
+  Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no
+  lo ve) y el WS va a `server_info.ws_url`. En el navegador no cambia nada.
+- La versión del `Hello` sale de `client/package.json` (`src/version.ts`): es la versión de
+  la app de escritorio también. Súbela ahí y en ningún otro lado.
+- La CSP de la app no tiene `'unsafe-eval'` ni estilos inline en HTML: por eso `main.tsx`
+  importa `pixi.js/unsafe-eval`. No uses `eval`/`new Function` ni `<style>` inline.
