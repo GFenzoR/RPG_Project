@@ -747,6 +747,17 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
      SELECT id, s.slot, s.item FROM characters, (VALUES (3, 48), (5, 38)) AS s(slot, item)
      WHERE name = '${name}'`,
   ]);
+  // Mining 38: the iron vein's chance is at its max (0.3 + 0.02 per level over 10, up to
+  // 0.85, data/items/decoration.yaml). At 0.3 a run of bad swings (each 1.5 s apart, ~3 s
+  // on a loaded single core) could take longer than the test, and a wolf wandering in
+  // from earlier tests gets that much longer to kill a level-1 miner.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `INSERT INTO character_skills (character_id, skill, level)
+     SELECT id, 'mining', 38 FROM characters WHERE name = '${name}'
+     ON CONFLICT (character_id, skill) DO UPDATE SET level = 38, tries = 0`,
+  ]);
 
   await page.goto("/?lang=es");
   const loginForm = page.getByTestId("login-form");
@@ -771,26 +782,33 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
     { x: 1069, y: 1054 },
   ];
   // The server and its world are shared by the suite (and by --repeat-each): a wolf hurt by
-  // an earlier test flees into town and can stand on a hop's tile. The client finds no
-  // path to a tile with a creature on it and sends nothing, so the click would be lost
-  // (the CI failure: still on the spawn after 20 s). Wait for the tile to be free first.
+  // an earlier test flees into town and hovers around, stepping on and off a hop's tile.
+  // The client finds no path to a tile with a creature on it and sends nothing (the CI
+  // failure: still on the spawn after 20 s), and the server stops a walk whose end gets
+  // taken. So, like a player would, click again while standing still short of the tile,
+  // whenever it is free.
   const me = await self(page);
   if (!me) throw new Error("no own creature");
   const walkTo = async (x: number, y: number): Promise<void> => {
     await expect
       .poll(
-        () =>
-          page.evaluate(({ a, b, c }) => window.__rpgClient?.walkable(a, b, c) ?? false, {
-            a: x,
-            b: y,
-            c: me.z,
-          }),
-        { timeout: 30_000 },
+        async () => {
+          const s = await self(page);
+          if (!s || s.pending || s.walking) return "moving";
+          if (s.x === x && s.y === y) return "there";
+          const free = await page.evaluate(
+            ({ a, b, c }) => window.__rpgClient?.walkable(a, b, c) ?? false,
+            { a: x, b: y, c: me.z },
+          );
+          if (free) {
+            const p = await toClient(x, y);
+            await page.mouse.click(p.x, p.y);
+          }
+          return `${s.x},${s.y}`;
+        },
+        { timeout: 30_000, intervals: [1_000] },
       )
-      .toBe(true);
-    const p = await toClient(x, y);
-    await page.mouse.click(p.x, p.y);
-    await arrived(page, x, y);
+      .toBe("there");
   };
   // Two hops: the view only shows 7 tiles on each side.
   await walkTo(1062, 1055);
@@ -823,7 +841,8 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
     if (vein === 0 && text.includes("agotado")) vein = 1;
     await page.waitForTimeout(1300); // gathering.use_interval_ms
   }
-  await expect(log).toContainText("Conseguiste");
+  // The item's name, not the raw {item} placeholder.
+  await expect(log).toContainText(/Conseguiste [^{}]+\./);
   await shot(page, "15-mining");
   expect(errors).toEqual([]);
 });
