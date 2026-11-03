@@ -325,12 +325,19 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   expect(errors).toEqual([]);
 });
 
-/** Centre of testisle_wolves (world/islands/testisle/spawns.yaml). */
-const WOLF_SPAWN = { x: 1056, y: 1041 };
+/**
+ * Where to wait for a wolf when none is in view: 7 tiles south of the centre of
+ * testisle_wolves ((1056, 1041), radius 4, world/islands/testisle/spawns.yaml). The server
+ * never respawns a monster on a tile a player sees (ViewHalfH is 6), so standing on the
+ * spawn would keep it empty; from here most of it is out of view, and a respawned wolf
+ * that wanders a step or two comes into view and, aggressive, comes for us.
+ */
+const WOLF_WAIT = { x: 1056, y: 1048 };
 
 test("an arcanist casts a spell with F1 and by its words", async ({ page, playwright }) => {
-  // Finding a wolf can take one respawn (60 s) when earlier tests killed them all.
-  test.setTimeout(150_000);
+  // Finding a wolf can take one respawn (respawn_seconds 60) when earlier tests (or
+  // --repeat-each) killed them all.
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -401,8 +408,8 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // hurt or kill testisle's 3 wolves, so the nearest one may be hurt, die to our fists
   // before it is in the bolt's range, or none may be in view at all. Then every F1 is
   // refused with "you need a target" (the CI failure: target lost, empty battle list).
-  // targetWolf attacks the healthiest wolf in view and, with none in view, walks towards
-  // their spawn; a killed wolf respawns after respawn_seconds (60), so allow for one.
+  // targetWolf attacks the healthiest wolf in view and, with none in view, waits for one
+  // at WOLF_WAIT; a killed wolf respawns after respawn_seconds (60), so allow for one.
   const targetWolf = async (): Promise<void> => {
     await expect
       .poll(
@@ -424,21 +431,36 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
               .click({ timeout: 1_000 })
               .catch(() => undefined);
           } else if (c.self && !c.self.pending && !c.self.walking) {
-            const dx = Math.max(-6, Math.min(6, WOLF_SPAWN.x - c.self.x));
-            const dy = Math.max(-4, Math.min(4, WOLF_SPAWN.y - c.self.y));
+            const dx = Math.max(-6, Math.min(6, WOLF_WAIT.x - c.self.x));
+            const dy = Math.max(-4, Math.min(4, WOLF_WAIT.y - c.self.y));
             if (dx !== 0 || dy !== 0) await click(c.self.x + dx, c.self.y + dy);
           }
           return false;
         },
-        { timeout: 75_000, intervals: [250] },
+        { timeout: 90_000, intervals: [250] },
       )
       .toBe(true);
     await page.locator("body").click({ position: { x: 1, y: 1 } }); // keys go to the game
   };
 
   // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
-  // the projectile or its energy effect on screen. If the target is lost first (killed by
-  // our fists, out of view), take another wolf and go on.
+  // the projectile or its energy effect on screen. They live 250 ms and a bolt can kill the
+  // wolf, so watch for them in the page rather than only right after each F1 (on a busy
+  // CPU the bolt's messages can come after the next poll has seen the target gone). If the
+  // target is lost with no bolt (killed by our fists, out of view), take another wolf.
+  await page.evaluate(() => {
+    const w = window as unknown as { e2eBolt?: boolean };
+    w.e2eBolt = false;
+    const watch = setInterval(() => {
+      const m = window.__rpgClient?.magic(300);
+      if ((m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13)) {
+        w.e2eBolt = true;
+        clearInterval(watch);
+      }
+    }, 20);
+  });
+  const boltSeen = (): Promise<boolean> =>
+    page.evaluate(() => (window as unknown as { e2eBolt?: boolean }).e2eBolt === true);
   for (let round = 1; ; round++) {
     await targetWolf();
     let outcome = "casting";
@@ -446,14 +468,12 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
       await expect
         .poll(
           async () => {
-            if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) {
-              outcome = "lost";
-              return outcome;
-            }
-            await page.keyboard.press("F1");
-            await page.waitForTimeout(60);
-            const m = await page.evaluate(() => window.__rpgClient?.magic(300));
-            if ((m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13)) outcome = "bolt";
+            if (await boltSeen()) outcome = "bolt";
+            else if ((await page.evaluate(() => window.__rpgClient?.target())) === undefined) {
+              // Give a bolt that killed the target time to show before calling it lost.
+              await page.waitForTimeout(500);
+              outcome = (await boltSeen()) ? "bolt" : "lost";
+            } else await page.keyboard.press("F1");
             return outcome;
           },
           { timeout: 30_000, intervals: [250] },
