@@ -781,39 +781,54 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
     { x: 1068, y: 1054 },
     { x: 1069, y: 1054 },
   ];
-  // The server and its world are shared by the suite (and by --repeat-each): a wolf hurt by
-  // an earlier test flees into town and hovers around, stepping on and off a hop's tile.
-  // The client finds no path to a tile with a creature on it and sends nothing (the CI
-  // failure: still on the spawn after 20 s), and the server stops a walk whose end gets
-  // taken. So, like a player would, click again while standing still short of the tile,
-  // whenever it is free.
+  // Walk next to the veins by clicking on the map. The view shows 7 tiles on each side, so
+  // it takes hops. The server and its world are shared by the suite (and by
+  // --repeat-each): a wolf hurt by an earlier test flees into town and hovers around, on
+  // and off the tiles on our way. The client finds no path to a tile with a creature on
+  // it and sends nothing (the CI failure: still on the spawn after 20 s), and the server
+  // walks around a creature or stops short. So, like a player would, whenever standing
+  // still short of the goal, click again on a free tile towards it (or on the goal).
   const me = await self(page);
   if (!me) throw new Error("no own creature");
-  const walkTo = async (x: number, y: number): Promise<void> => {
-    await expect
-      .poll(
-        async () => {
-          const s = await self(page);
-          if (!s || s.pending || s.walking) return "moving";
-          if (s.x === x && s.y === y) return "there";
-          const free = await page.evaluate(
-            ({ a, b, c }) => window.__rpgClient?.walkable(a, b, c) ?? false,
-            { a: x, b: y, c: me.z },
-          );
-          if (free) {
-            const p = await toClient(x, y);
+  const goal = { x: 1068, y: 1055 };
+  const free = (x: number, y: number): Promise<boolean> =>
+    page.evaluate(({ a, b, c }) => window.__rpgClient?.walkable(a, b, c) ?? false, {
+      a: x,
+      b: y,
+      c: me.z,
+    });
+  await expect
+    .poll(
+      async () => {
+        const s = await self(page);
+        if (!s || s.pending || s.walking) return "moving";
+        if (s.x === goal.x && s.y === goal.y) return "there";
+        const hx = s.x + Math.max(-6, Math.min(6, goal.x - s.x));
+        const hy = s.y + Math.max(-4, Math.min(4, goal.y - s.y));
+        const near = hx === goal.x && hy === goal.y;
+        const tries = near
+          ? [[0, 0]]
+          : [
+              [0, 0],
+              [-1, 0],
+              [0, -1],
+              [0, 1],
+              [-1, -1],
+              [-1, 1],
+              [-2, 0],
+            ];
+        for (const [dx = 0, dy = 0] of tries) {
+          if (await free(hx + dx, hy + dy)) {
+            const p = await toClient(hx + dx, hy + dy);
             await page.mouse.click(p.x, p.y);
+            break;
           }
-          return `${s.x},${s.y}`;
-        },
-        { timeout: 30_000, intervals: [1_000] },
-      )
-      .toBe("there");
-  };
-  // Two hops: the view only shows 7 tiles on each side.
-  await walkTo(1062, 1055);
-  await walkTo(1067, 1055);
-  await walkTo(1068, 1055);
+        }
+        return `${s.x},${s.y}`;
+      },
+      { timeout: 40_000, intervals: [1_000] },
+    )
+    .toBe("there");
   let p: { x: number; y: number };
 
   // Right click on the pickaxe picks "use with"; the next click on the map uses it there.
