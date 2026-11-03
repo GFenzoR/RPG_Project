@@ -103,7 +103,7 @@ Leer JSON de chunks es caro y poco legible. Hay dos vistas pensadas para IA:
 | `map_validate` | Valida isla o mundo; devuelve errores con posición |
 | `map_find` | Busca items, spawns, NPCs o zonas por tipo/área |
 | `content_search` | Busca en `data/` (items, monstruos, NPCs) por texto o etiqueta |
-| `map_patch_create` | Genera un `.rpgpatch.json` con los cambios actuales |
+| `map_patch_create` | Genera un `.rpgpatch.json` (formato 2) con los cambios actuales |
 
 Límites de seguridad del MCP: solo escribe dentro de `world/` del repo, nunca hace push
 ni modifica `data/`, y cada llamada a `map_apply_ops` tiene un máximo de operaciones.
@@ -128,14 +128,73 @@ pvp, verde no_pvp, violeta community_plot), spawns (anillo rojo del radio), NPCs
 amarillo), portales (cuadro magenta; triángulo abajo = baja, arriba = sube), carteles
 (cuadrito blanco) y templo (cruz blanca). Máximo 256x256 casillas; 4/8/16/32 px por casilla.
 
-Map patch mínimo (`mapcli patch`, formato 1):
-`{ format: 1, kind: "rpg-map-patch", base_ref, files: [{ path, base, content }] }`, con
-`base` = `sha256:<hex>` de la versión base (o `null` si el patch crea el archivo) y
-`content` = texto nuevo (o `null` si lo borra). Solo admite rutas de mapas de `world/`
-(`world.yaml`, archivos de islas, chunks, prefabs). `create` toma los cambios del árbol de
-trabajo contra un ref de git; `apply` escribe todo o nada y solo si cada base coincide (si
-no, lista los conflictos); `diff` resume casillas cambiadas por chunk y entradas
-agregadas/quitadas/cambiadas por YAML. Pendiente: merge a nivel de casilla.
+### Map patches
+Formato (`.rpgpatch.json`, formato 2 desde T2.3):
+`{ format: 2, kind: "rpg-map-patch", base_ref, files: [{ path, base, base_text?, content }] }`.
+`base` = `sha256:<hex>` de la versión base (o `null` si el patch crea el archivo),
+`base_text` = el texto de esa base (obligatorio en formato 2 cuando `base` no es `null`),
+`content` = texto nuevo (o `null` si lo borra). `base_ref` es el ref de git contra el que se
+hizo (`mapcli`, MCP) o `"editor"`. El formato 1 (T1.15, sin `base_text`) se sigue leyendo.
+
+**Decisión: la base viaja en el patch.** Para mezclar hace falta la base completa, no solo
+el hash. Se eligió incluirla (formato 2) en vez de sacarla con `git show base_ref:path`
+porque el patch tiene que poder aplicarse donde ese ref no existe: otro clon, una rama
+rebasada, el editor sin git o, más adelante, el editor público sin backend. Cuesta el
+doble de tamaño, aceptable con chunks de 32x32. Con formato 1 la base se busca en el disco
+(si el hash coincide) y luego en `git show base_ref:path`. Si no aparece, solo se aplican
+los archivos sin cambios locales y el resto es conflicto.
+
+La lógica vive en un solo lugar, `packages/map-format`:
+- `src/patch/merge.ts` (sin Node, también lo usa el editor): `mergeChunk`, `mergeList`,
+  `diffWorlds`, `chunkChanges`/`listChanges` y las ops que llevan el mundo al resultado
+  (`chunkSyncOps`, `listSyncOps`).
+- `src/patch/patch.ts` (Node): `parsePatch`, `parsePatchFile`, `mergePatchFile`,
+  `summarizeFileChange` y `patchPath`.
+`tools/mapcli/src/patch.ts` solo agrega lo que necesita git y disco (`createPatch`,
+`planPatch`, `writePlanned`). El MCP (`map_patch_create`) usa `createPatch`, así que
+también genera formato 2.
+
+**Merge de tres vías** (base del patch, versión actual, contenido del patch):
+- Primero se comparan textos: si un solo lado cambió, se toma ese lado.
+- **Chunks**, por casilla (suelo + pila completa): una casilla que cambió de un solo lado
+  se toma de ese lado; si cambió en los dos lados a valores distintos, es conflicto. Un
+  chunk que no existe cuenta como vacío, así que crear y borrar archivos se mezcla igual.
+  Si el resultado queda vacío, el archivo se borra.
+- **YAML auxiliares** (`spawns`, `npcs`, `zones`, `portals`, `texts`): se mezclan por
+  entrada con `id` como clave (`npc` en `npcs.yaml`). Si una entrada se borró en un lado y
+  se cambió en el otro, es conflicto. Orden del resultado: la lista actual, con sus
+  entradas reemplazadas o quitadas, y después las que agrega el patch. Si un lado no
+  cambió, el otro se toma tal cual, orden incluido. Las listas con claves repetidas o sin
+  clave son conflicto del archivo entero.
+- `world.yaml`, `island.yaml` y prefabs: si cambiaron en los dos lados, es conflicto del
+  archivo entero.
+
+`mapcli patch`:
+- `create [isla] [--against REF] [--out FILE]`: los archivos de mapa que difieren del ref,
+  en formato 2.
+- `apply <file> [--dry-run] [--partial]`: hace el merge de cada archivo contra el disco.
+  Es todo o nada: si hay conflictos no escribe nada, sale con código 1 y los lista como
+  `{ path, reason, at: ["x,y,z" | id] }` (las primeras 100 casillas o entradas). Con
+  `--partial` escribe todo lo demás y en las casillas o entradas en conflicto conserva la
+  versión actual. La salida dice qué archivos se mezclaron (`merged`) y el resultado del
+  validador.
+- `diff <file>`: casillas cambiadas y bbox por chunk; entradas agregadas, quitadas y
+  cambiadas por YAML; `base_matches` y, si la base no coincide, cuántos conflictos daría.
+  Sale con código 1 solo si hay conflictos.
+
+**Seguridad:** un patch es entrada no confiable. `parsePatch` rechaza:
+- patches de más de 32 MB o con más de 4096 archivos;
+- un `base_ref` que no parezca un ref (por ejemplo, uno que empiece con `-`);
+- rutas fuera de `world.yaml`, `world/islands/<id>/{island,spawns,npcs,zones,portals,texts}.yaml`,
+  `world/islands/<id>/chunks/zNN/cXXXX_YYYY.json` (piso ≤ 15) y `world/prefabs/<id>.yaml`:
+  la regex no deja pasar `..`, rutas absolutas, `\`, NUL ni mayúsculas;
+- rutas repetidas o un `base_text` cuyo hash no coincide con `base`;
+- contenido o base que no pase su esquema, o un chunk cuyas coordenadas no coinciden con
+  su ruta.
+Al escribir, `mapcli` también comprueba que el directorio existente más profundo resuelva
+(realpath) dentro de `world/` y que el destino no sea un symlink. Los tests de rutas
+maliciosas están en `packages/map-format/src/patch/merge.test.ts`,
+`tools/mapcli/src/edit.test.ts` (incluido el symlink) y `editor/server/store.test.ts`.
 
 ## Flujo recomendado para que una IA construya una zona
 1. `map_info` y `content_search` para saber qué hay disponible.
@@ -238,6 +297,36 @@ Implementación (T2.2, editor v2). Las herramientas solo arman ops de map-format
   texto pase el esquema del archivo antes de escribir y borra el archivo si la lista quedó
   vacía (como `saveApplied`). Tests en `editor/server/store.test.ts`.
 - Atajos nuevos: `G`, `R`, `V`, `Ctrl+C/X/V`, `Supr`, `Esc`.
+
+Implementación (T2.3, map patches en el editor). Botón "Revisar cambios" en la barra →
+panel de revisión (`editor/src/review/`):
+- **Línea base** = el mundo tal como se cargó del disco al abrir el editor (no avanza al
+  guardar). Contra ella se calculan el diff y el patch exportado.
+- **Exportar patch**: el navegador calcula con `diffWorlds` los chunks y listas que
+  cambiaron y los manda con los dos mundos a `POST /api/patch/export`. El backend arma el
+  texto canónico de cada versión con las mismas comprobaciones que guardar y devuelve un
+  formato 2 con `base_ref: "editor"`. Se descarga como `<isla>.rpgpatch.json` y no se
+  escribe nada en `world/`.
+- **Importar patch**: el archivo (máx. 32 MB) va a `POST /api/patch/parse`, que corre
+  `parsePatch` y además rechaza lo que el editor no edita (`world.yaml`, `island.yaml`,
+  `texts.yaml`, prefabs e islas que no están en `world.yaml`): eso se aplica con
+  `mapcli`. El navegador hace el merge contra el mundo en memoria con las mismas
+  funciones (`mergeChunk`/`mergeList`) y lo convierte en ops (`chunkSyncOps`/
+  `listSyncOps`). Se aplica como una sola entrada de historial (un `Ctrl+Z` la deshace),
+  sin autoborde automático, porque el patch trae sus propios bordes. Los archivos quedan
+  pendientes de guardar como cualquier edición. Si hay conflictos no se aplica nada: el
+  panel los lista (casilla, entrada o archivo; clic = ir) y el canvas marca en rojo las
+  casillas en conflicto. Un patch con formato 1 usa como base el archivo en disco si su
+  hash coincide.
+- **Vista de diff**: lista de chunks cambiados (casillas por chunk) y de entradas
+  agregadas, quitadas o cambiadas por lista. Clic = centrar en el cambio (piso incluido).
+  El canvas marca las casillas cambiadas del piso en magenta. "Antes/Después" alterna el
+  canvas entre la línea base y el mundo actual. En "Antes" el mapa es solo de lectura.
+- Tests: `editor/src/state/editor.test.ts` (exportar, importar con merge y deshacer,
+  conflicto, patch rechazado, vista "Antes"), `editor/server/store.test.ts` (round-trip
+  con `mapcli patch apply`, rutas maliciosas, formato 1) y el E2E "map patches", que
+  exporta, alterna antes/después, importa con y sin conflicto e intenta un patch
+  malicioso.
 
 **Hito 4–5:** prefabs, generación procedural desde el editor, envío de patch a revisión
 con cuenta, cola de moderación, comentarios por casilla.

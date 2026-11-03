@@ -39,3 +39,5 @@ export type {
   ScatterOp,
   StampOp,
 } from "./types.ts";
+// Patch merge and diff on the model (browser-safe; the text side is in the "." entry).
+export * from "../patch/merge.ts";

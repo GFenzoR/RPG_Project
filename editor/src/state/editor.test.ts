@@ -2,7 +2,14 @@ import { CHUNK_SIZE } from "@rpg/map-format/ops";
 import type { Chunk, Island, World } from "@rpg/map-format/ops";
 import { describe, expect, it } from "vitest";
 import { screenToTile } from "@rpg/renderer/camera";
-import type { FileChange, PaletteItem, SaveResult, ValidateResult } from "../io/wire.ts";
+import type {
+  FileChange,
+  PaletteItem,
+  ParsedPatch,
+  PatchExportRequest,
+  SaveResult,
+  ValidateResult,
+} from "../io/wire.ts";
 import type { BorderRule } from "@rpg/map-format/ops";
 import { tileAt } from "../tools/tools.ts";
 import { ConflictError, EditorController, PartialSaveError, entityProblem } from "./editor.ts";
@@ -87,6 +94,16 @@ class FakeBackend implements Backend {
       removed: [],
       base: Object.fromEntries(changes.map((c) => [c.file, "f".repeat(64)])),
     };
+  }
+  exported: PatchExportRequest[] = [];
+  async exportPatch(req: PatchExportRequest): Promise<unknown> {
+    this.exported.push(req);
+    return { format: 2, files: req.files };
+  }
+  parsed: ParsedPatch | Error = { base_ref: "editor", files: [] };
+  async parsePatch(): Promise<ParsedPatch> {
+    if (this.parsed instanceof Error) throw this.parsed;
+    return this.parsed;
   }
 }
 
@@ -511,5 +528,158 @@ describe("EditorController, review fixes", () => {
       }),
     ).toBe(false);
     expect(e.state.status).toMatch(/^editor.entity.err.zone_floors_repeat/);
+  });
+});
+
+describe("map patches", () => {
+  const CH = "world/islands/a/chunks/z07/c0000_0000.json";
+  const grassChunk = (): Chunk => ({
+    cx: 0,
+    cy: 0,
+    z: 7,
+    ground: new Array<string | null>(CHUNK_SIZE * CHUNK_SIZE).fill("grass"),
+    items: [],
+  });
+  const withTile = (c: Chunk, x: number, y: number, g: string, stack: string[] = []): Chunk => {
+    const out = { ...c, ground: [...c.ground], items: c.items.map((s) => ({ ...s })) };
+    out.ground[y * CHUNK_SIZE + x] = g;
+    if (stack.length > 0) out.items.push({ x, y, stack });
+    return out;
+  };
+  function patched(): { e: EditorController; backend: FakeBackend } {
+    const backend = new FakeBackend();
+    const w = world();
+    (w.islands.get("a") as Island).chunks.set("7/0/0", grassChunk());
+    const e = new EditorController({
+      world: w,
+      items,
+      t,
+      loadErrors: [],
+      base: {},
+      monsters: ["wolf"],
+      borders,
+      backend,
+    });
+    return { e, backend };
+  }
+
+  it("exports the files changed since loading, with both worlds", async () => {
+    const { e, backend } = patched();
+    expect(await e.exportPatch()).toBeUndefined();
+    expect(e.state.status).toBe("editor.patch.empty");
+    e.setTool("brush");
+    e.pick("sand");
+    e.strokeStart(3, 3, false);
+    e.strokeEnd();
+    e.addEntity("spawns", {
+      id: "den",
+      center: { x: 4, y: 4, z: 7 },
+      radius: 1,
+      monsters: [{ monster: "wolf", count: 1 }],
+      respawn_seconds: 30,
+    });
+    const text = await e.exportPatch();
+    expect(JSON.parse(text ?? "")).toEqual({
+      format: 2,
+      files: [CH, "world/islands/a/spawns.yaml"],
+    });
+    expect(backend.exported[0]?.before.islands[0]?.chunks[0]?.ground[3 * 32 + 3]).toBe("grass");
+    expect(e.diff().chunks[0]?.tiles.length).toBeGreaterThan(0);
+    expect(e.diff().lists).toEqual([
+      { island: "a", list: "spawns", added: ["den"], removed: [], changed: [] },
+    ]);
+  });
+
+  it("imports a patch as one undoable step, merging with local edits", async () => {
+    const { e, backend } = patched();
+    // Local edit on another tile (autoborder off so only that tile changes).
+    e.toggleAutoborder();
+    e.pick("sand");
+    e.strokeStart(10, 10, false);
+    e.strokeEnd();
+    const base = grassChunk();
+    backend.parsed = {
+      base_ref: "editor",
+      files: [
+        {
+          path: CH,
+          island: "a",
+          target: { kind: "chunk", z: 7, cx: 0, cy: 0 },
+          baseKnown: true,
+          base,
+          content: withTile(base, 2, 2, "sand", ["crate"]),
+        },
+        {
+          path: "world/islands/a/spawns.yaml",
+          island: "a",
+          target: { kind: "list", list: "spawns" },
+          baseKnown: true,
+          base: null,
+          content: [
+            {
+              id: "den",
+              center: { x: 4, y: 4, z: 7 },
+              radius: 1,
+              monsters: [{ monster: "wolf", count: 1 }],
+              respawn_seconds: 30,
+            },
+          ],
+        },
+      ],
+    };
+    expect(await e.importPatch("{}")).toBe(true);
+    expect(tileAt(e.state.world, 2, 2, 7)).toEqual({ ground: "sand", stack: ["crate"] });
+    expect(tileAt(e.state.world, 10, 10, 7)?.ground).toBe("sand");
+    // The patch's own tiles are not autobordered (the toggle is back on).
+    e.toggleAutoborder();
+    expect(tileAt(e.state.world, 1, 2, 7)).toEqual({ ground: "grass", stack: [] });
+    expect(e.entities("spawns").map((s) => ("id" in s ? s.id : ""))).toEqual(["den"]);
+    expect(e.state.review).toBe(true);
+    expect(e.changes().map((c) => c.file)).toEqual([CH, "world/islands/a/spawns.yaml"]);
+    e.undo();
+    expect(tileAt(e.state.world, 2, 2, 7)).toEqual({ ground: "grass", stack: [] });
+    expect(tileAt(e.state.world, 10, 10, 7)?.ground).toBe("sand");
+    expect(e.entities("spawns")).toEqual([]);
+  });
+
+  it("applies nothing and lists the conflicts when a tile changed on both sides", async () => {
+    const { e, backend } = patched();
+    e.toggleAutoborder();
+    e.pick("sand");
+    e.strokeStart(2, 2, false);
+    e.strokeEnd();
+    const before = e.state.world;
+    const base = grassChunk();
+    backend.parsed = {
+      base_ref: "editor",
+      files: [
+        {
+          path: CH,
+          island: "a",
+          target: { kind: "chunk", z: 7, cx: 0, cy: 0 },
+          baseKnown: true,
+          base,
+          content: withTile(withTile(base, 2, 2, "grass", ["crate"]), 5, 5, "sand"),
+        },
+      ],
+    };
+    expect(await e.importPatch("{}")).toBe(false);
+    expect(e.state.world).toBe(before);
+    expect(e.state.patchConflicts).toEqual([{ kind: "tile", x: 2, y: 2, z: 7, path: CH }]);
+    expect(e.state.status).toBe('editor.patch.conflicts {"count":1}');
+  });
+
+  it("reports refused patches and keeps the before view read-only", async () => {
+    const { e, backend } = patched();
+    backend.parsed = new Error('patch touches "data/x.yaml", outside the map files of world/');
+    expect(await e.importPatch("{}")).toBe(false);
+    expect(e.state.status).toMatch(/^editor.patch.invalid/);
+    e.setReviewSide("before");
+    const w = e.state.world;
+    e.strokeStart(1, 1, false);
+    e.strokeEnd();
+    expect(e.state.world).toBe(w);
+    expect(e.state.status).toBe("editor.review.before_readonly");
+    expect(e.viewWorld()).toBe(e.baseline);
   });
 });

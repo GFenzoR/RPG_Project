@@ -1,6 +1,13 @@
 // Editor state and actions, independent of Preact and PixiJS. The UI renders `state` and
 // calls the actions; the canvas reads the world and the camera from here.
-import { OpError, applyOps, rectContains } from "@rpg/map-format/ops";
+import {
+  OpError,
+  applyOps,
+  diffWorlds,
+  entryAddOp,
+  entryRemoveOp,
+  rectContains,
+} from "@rpg/map-format/ops";
 import type {
   BorderRule,
   EntityList,
@@ -16,6 +23,7 @@ import type {
   TouchedAux,
   TouchedChunk,
   World,
+  WorldDiff,
   Zone,
 } from "@rpg/map-format/ops";
 import { centerOn, pan, zoomAt } from "@rpg/renderer/camera";
@@ -23,9 +31,14 @@ import type { Camera, ViewSize } from "@rpg/renderer/camera";
 import { History, Stroke } from "../history/history.ts";
 import type { Translate } from "../i18n.ts";
 import { API_HEADER, auxFile, chunkFile, toWire } from "../io/wire.ts";
+import { planImport } from "../review/patch.ts";
+import type { ImportConflict } from "../review/patch.ts";
+import { MAX_PATCH_SIZE } from "../io/wire.ts";
 import type {
   FileChange,
   PaletteItem,
+  ParsedPatch,
+  PatchExportRequest,
   SaveConflictBody,
   SaveResult,
   ValidateResult,
@@ -95,6 +108,12 @@ export interface EditorState {
   validation: ValidateResult | undefined;
   loadErrors: WireDiagnostic[];
   status: string;
+  /** Review panel (map patches, diff against what was loaded) is open. */
+  review: boolean;
+  /** Which world the canvas shows while reviewing: as loaded ("before") or now ("after"). */
+  reviewSide: "before" | "after";
+  /** Conflicts of the last patch import (nothing was applied). */
+  patchConflicts: ImportConflict[];
 }
 
 /** The save was refused because these files changed on disk since they were loaded. */
@@ -122,6 +141,10 @@ export interface Backend {
   validate(world: World): Promise<ValidateResult>;
   /** Throws ConflictError on a 409. */
   save(world: World, changes: FileChange[]): Promise<SaveResult>;
+  /** Builds a .rpgpatch.json (an object, ready to serialise) of the files that differ. */
+  exportPatch(req: PatchExportRequest): Promise<unknown>;
+  /** Checks and parses a .rpgpatch.json; throws with the server's reason if it is refused. */
+  parsePatch(text: string): Promise<ParsedPatch>;
 }
 
 async function post<T>(url: string, data: unknown): Promise<T> {
@@ -143,6 +166,8 @@ async function post<T>(url: string, data: unknown): Promise<T> {
 export const httpBackend: Backend = {
   validate: (world) => post<ValidateResult>("/api/validate", toWire(world)),
   save: (world, changes) => post<SaveResult>("/api/save", { world: toWire(world), changes }),
+  exportPatch: (req) => post<unknown>("/api/patch/export", req),
+  parsePatch: (text) => post<ParsedPatch>("/api/patch/parse", { text }),
 };
 
 export const VALIDATE_DELAY_MS = 300;
@@ -191,12 +216,16 @@ export class EditorController {
   private readonly base: Map<string, string>;
   /** Files changed since the last save → their base hash (null: no file). */
   private readonly pending = new Map<string, string | null>();
+  /** The world as loaded from disk: the base of exported patches and of the diff view. */
+  readonly baseline: World;
+  private diffCache: { world: World; diff: WorldDiff } | undefined;
 
   constructor(opts: EditorOptions) {
     this.items = new Map(opts.items.map((i) => [i.id, i]));
     this.t = opts.t;
     this.backend = opts.backend ?? httpBackend;
     this.base = new Map(Object.entries(opts.base));
+    this.baseline = opts.world;
     this.borders = opts.borders ?? [];
     this.monsters = opts.monsters ?? [];
     this.npcs = opts.npcs ?? [];
@@ -235,6 +264,9 @@ export class EditorController {
       validation: undefined,
       loadErrors: opts.loadErrors,
       status: "",
+      review: false,
+      reviewSide: "after",
+      patchConflicts: [],
     };
   }
 
@@ -370,7 +402,10 @@ export class EditorController {
    * changed (when enabled). Returns the edit or undefined if nothing changed; throws
    * OpError (and changes nothing) if an op is invalid.
    */
-  private edit(ops: MapOp[]): { forward: MapOp[]; inverse: MapOp[] } | undefined {
+  private edit(
+    ops: MapOp[],
+    autoborder = true,
+  ): { forward: MapOp[]; inverse: MapOp[] } | undefined {
     if (ops.length === 0) return undefined;
     const opts = this.opOptions();
     const r = applyOps(this.state.world, ops, opts);
@@ -380,7 +415,7 @@ export class EditorController {
     let inverse = r.inverse;
     const touched = [...r.touched];
     const touchedAux = [...r.touchedAux];
-    if (this.state.autoborder && this.borders.length > 0) {
+    if (autoborder && this.state.autoborder && this.borders.length > 0) {
       const ab = autoborderAfter(world, r.inverse);
       if (ab.length > 0) {
         const b = applyOps(world, ab, opts);
@@ -406,10 +441,10 @@ export class EditorController {
   }
 
   /** One-shot edit (rectangle, paste, panels) recorded as one history entry. */
-  private commit(label: string, ops: MapOp[]): boolean {
+  private commit(label: string, ops: MapOp[], autoborder = true): boolean {
     this.strokeEnd();
     try {
-      const e = this.edit(ops);
+      const e = this.edit(ops, autoborder);
       if (!e) return false;
       this.history.record({ label, ...e });
       this.syncHistory();
@@ -437,6 +472,10 @@ export class EditorController {
 
   strokeStart(x: number, y: number, secondary: boolean): void {
     this.strokeEnd();
+    if (this.state.review && this.state.reviewSide === "before") {
+      this.set({ status: this.t("editor.review.before_readonly") });
+      return;
+    }
     if (this.pickCallback) {
       const cb = this.pickCallback;
       this.pickCallback = undefined;
@@ -637,6 +676,120 @@ export class EditorController {
     return ok;
   }
 
+  // ---- review: map patches and diff -------------------------------------------------------
+
+  /** World the canvas draws: the loaded one while reviewing "before", else the current one. */
+  viewWorld(): World {
+    return this.state.review && this.state.reviewSide === "before"
+      ? this.baseline
+      : this.state.world;
+  }
+
+  /** What changed since the world was loaded (chunks with their tiles, list entries). */
+  diff(): WorldDiff {
+    const world = this.state.world;
+    if (this.diffCache?.world !== world)
+      this.diffCache = { world, diff: diffWorlds(this.baseline, world) };
+    return this.diffCache.diff;
+  }
+
+  toggleReview(): void {
+    this.set({ review: !this.state.review, reviewSide: "after" });
+  }
+
+  setReviewSide(reviewSide: "before" | "after"): void {
+    this.set({ review: true, reviewSide });
+  }
+
+  /** Paths of the chunk and auxiliary files that differ from what was loaded. */
+  changedFiles(): string[] {
+    const d = this.diff();
+    return [
+      ...d.chunks.map((c) => chunkFile(c.island, c.z, c.cx, c.cy)),
+      ...d.lists
+        .filter((l) => l.list !== "texts")
+        .map((l) => auxFile(l.island, l.list as EntityList)),
+    ].sort();
+  }
+
+  /**
+   * The changes against what was loaded from disk as a .rpgpatch.json text (format 2),
+   * or undefined (and a status message) when there is nothing to export or it failed.
+   * Writes nothing to world/.
+   */
+  async exportPatch(): Promise<string | undefined> {
+    this.strokeEnd();
+    const files = this.changedFiles();
+    if (files.length === 0) {
+      this.set({ status: this.t("editor.patch.empty") });
+      return undefined;
+    }
+    try {
+      const patch = await this.backend.exportPatch({
+        before: toWire(this.baseline),
+        after: toWire(this.state.world),
+        files,
+      });
+      this.set({ status: this.t("editor.patch.exported", { files: files.length }) });
+      return `${JSON.stringify(patch, null, 2)}\n`;
+    } catch (e) {
+      this.set({
+        status: this.t("editor.patch.export_failed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * Imports a .rpgpatch.json: merges it into the current world tile by tile and entry by
+   * entry (the same merge as mapcli patch apply) and applies it as one history entry.
+   * With conflicts nothing is applied and they are listed in the review panel.
+   */
+  async importPatch(text: string): Promise<boolean> {
+    this.strokeEnd();
+    if (text.length > MAX_PATCH_SIZE) {
+      this.set({ status: this.t("editor.patch.too_big", { mb: MAX_PATCH_SIZE >> 20 }) });
+      return false;
+    }
+    let parsed: ParsedPatch;
+    try {
+      parsed = await this.backend.parsePatch(text);
+    } catch (e) {
+      this.set({
+        patchConflicts: [],
+        status: this.t("editor.patch.invalid", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      });
+      return false;
+    }
+    const plan = planImport(this.state.world, parsed);
+    if (plan.conflicts.length > 0) {
+      this.set({
+        review: true,
+        reviewSide: "after",
+        patchConflicts: plan.conflicts,
+        status: this.t("editor.patch.conflicts", { count: plan.conflicts.length }),
+      });
+      return false;
+    }
+    this.set({ patchConflicts: [] });
+    if (plan.ops.length === 0) {
+      this.set({ status: this.t("editor.patch.nothing") });
+      return true;
+    }
+    // The patch carries its own borders: no automatic autoborder on top.
+    if (!this.commit("editor.history.patch_import", plan.ops, false)) return false;
+    this.set({
+      review: true,
+      reviewSide: "after",
+      status: this.t("editor.patch.imported", { files: plan.files.length }),
+    });
+    return true;
+  }
+
   undo(): void {
     this.strokeEnd();
     try {
@@ -756,57 +909,10 @@ export class EditorController {
 
 // ---- entity ops -------------------------------------------------------------------------
 
-/** The add op for an entry of `file` (fields copied, so the op never aliases UI state). */
-export function addOp(file: EntityList, e: Entity, index: number | undefined): MapOp {
-  const at = index === undefined ? {} : { index };
-  const notes = e.notes ? { notes: e.notes } : {};
-  if (file === "spawns") {
-    const s = e as Spawn;
-    return {
-      op: "add_spawn",
-      id: s.id,
-      center: { ...s.center },
-      radius: s.radius,
-      monsters: s.monsters.map((m) => ({ ...m })),
-      respawn_seconds: s.respawn_seconds,
-      ...notes,
-      ...at,
-    };
-  }
-  if (file === "zones") {
-    const z = e as Zone;
-    return {
-      op: "add_zone",
-      id: z.id,
-      type: z.type,
-      floors: [...z.floors],
-      rects: z.rects.map((r) => ({ ...r })),
-      ...notes,
-      ...at,
-    };
-  }
-  if (file === "portals") {
-    const p = e as Portal;
-    return {
-      op: "add_portal",
-      id: p.id,
-      kind: p.kind,
-      from: { ...p.from },
-      to: { ...p.to },
-      ...notes,
-      ...at,
-    };
-  }
-  const n = e as NpcPlacement;
-  return { op: "place_npc", npc: n.npc, pos: { ...n.pos }, ...notes, ...at };
-}
+/** The add op for an entry of `file` (shared with the patch import, map-format). */
+export const addOp: (file: EntityList, e: Entity, index: number | undefined) => MapOp = entryAddOp;
 
-export function removeOp(file: EntityList, key: string): MapOp {
-  if (file === "spawns") return { op: "remove_spawn", id: key };
-  if (file === "zones") return { op: "remove_zone", id: key };
-  if (file === "portals") return { op: "remove_portal", id: key };
-  return { op: "remove_npc", npc: key };
-}
+export const removeOp: (file: EntityList, key: string) => MapOp = entryRemoveOp;
 
 // ---- entity checks for the forms --------------------------------------------------------
 

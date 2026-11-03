@@ -22,7 +22,7 @@ import {
 import type { Diagnostic, MapOp, Position, Rect, Recipe, ZoneType } from "@rpg/map-format";
 import { applyEdit, editContext, parseOps } from "./edit.ts";
 import type { EditOutcome } from "./edit.ts";
-import { conflicts, createPatch, diffPatch, parsePatch, writePatch } from "./patch.ts";
+import { createPatch, diffPatch, parsePatch, planPatch, writePlanned } from "./patch.ts";
 import { MAX_RENDER_SIZE, TILE_SIZES, loadFrames, renderArea } from "./render.ts";
 
 export const USAGE = `usage: mapcli <command> [options]   (global: --root DIR, default ".")
@@ -52,7 +52,9 @@ export const USAGE = `usage: mapcli <command> [options]   (global: --root DIR, d
  patches (.rpgpatch.json):
   patch create [island] [--against REF] [--out FILE]   world/ changes vs a git ref (default HEAD)
   patch diff <file>                             what applying it would change
-  patch apply <file> [--dry-run]                apply when every base matches, else list conflicts`;
+  patch apply <file> [--dry-run] [--partial]     merge tile by tile / entry by entry with the
+                                                current files; all or nothing unless --partial
+                                                (writes the rest, keeps the current conflicts)`;
 
 export interface Io {
   out(text: string): void;
@@ -188,6 +190,7 @@ function dispatch(argv: string[], io: Io): number {
       "no-grid": { type: "boolean", default: false },
       against: { type: "string", default: "HEAD" },
       "dry-run": { type: "boolean", default: false },
+      partial: { type: "boolean", default: false },
     },
   });
   const [command, ...args] = positionals;
@@ -475,30 +478,33 @@ function dispatch(argv: string[], io: Io): number {
       if (sub === "diff") {
         const files = diffPatch(root, patch);
         io.out(json({ base_ref: patch.base_ref, files }));
-        return files.every((f) => f.base_matches) ? 0 : 1;
+        return files.every((f) => !f.conflicts) ? 0 : 1;
       }
       if (sub === "apply") {
-        const found = conflicts(root, patch);
-        if (found.length > 0) {
+        const plan = planPatch(root, patch);
+        const files = plan.files.map((f) => ({ path: f.path, merged: f.merged }));
+        if (plan.conflicts.length > 0 && !values.partial) {
           io.out(
             json({
               ok: false,
-              error: "the patch does not apply cleanly; nothing was written",
-              conflicts: found,
+              error: "the patch conflicts with the current files; nothing was written",
+              conflicts: plan.conflicts,
             }),
           );
           return 1;
         }
         if (dryRun) {
-          io.out(json({ ok: true, dry_run: true, files: patch.files.map((f) => f.path) }));
+          io.out(json({ ok: true, dry_run: true, files, conflicts: plan.conflicts }));
           return 0;
         }
-        const done = writePatch(root, patch);
+        const done = writePlanned(root, plan.files);
         const v = validateWorld(root);
         io.out(
           json({
             ok: true,
             ...done,
+            merged: files.filter((f) => f.merged).map((f) => f.path),
+            conflicts: plan.conflicts,
             validation: {
               errors: v.errors,
               warnings: v.warnings,
