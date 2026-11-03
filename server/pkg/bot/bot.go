@@ -489,13 +489,15 @@ func (b *Bot) Ping(ctx context.Context) error {
 	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: seq}}})
 }
 
-// Attack targets a creature (0 clears the target) and, if chase, follows it.
-func (b *Bot) Attack(ctx context.Context, id uint32, chase bool) error {
-	if err := b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_SetFightMode{SetFightMode: &pb.SetFightMode{
+// SetFightMode sets a balanced stance and whether the player chases its target.
+func (b *Bot) SetFightMode(ctx context.Context, chase bool) error {
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_SetFightMode{SetFightMode: &pb.SetFightMode{
 		Stance: pb.FightStance_FIGHT_STANCE_BALANCED, Chase: chase,
-	}}}); err != nil {
-		return err
-	}
+	}}})
+}
+
+// SetTarget selects the creature to attack (0 clears the target).
+func (b *Bot) SetTarget(ctx context.Context, id uint32) error {
 	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_SetTarget{SetTarget: &pb.SetTarget{CreatureId: id}}})
 }
 

@@ -164,17 +164,17 @@ e2e: db-up ## Playwright: editor + client (login, enter, walk); screenshots in *
 .PHONY: bots
 # Load test (tools/bots, docs/07-performance-budget.md). Without URL it builds the map and
 # starts its own server on loopback (tools/bots/loadtest.sh; LOAD_DATABASE_URL, default the
-# dev database); with URL it plays against a
-# running server (its /metrics is internal, so only client-side numbers unless METRICS=...).
+# dev database); with URL it plays against a running server, reading its internal
+# /metrics at 127.0.0.1:9100 only when URL is on this machine (METRICS=... for another).
 SCENARIO ?= base
 bots: ## Load test: make bots N=100 [SCENARIO=base|stress] [DURATION=10m] [URL=... PREFIX=load METRICS=...]
 ifeq ($(URL),)
 	$(MAKE) mapcompile
 	tools/bots/loadtest.sh -n $(or $(N),10) -scenario $(SCENARIO) -duration $(or $(DURATION),$(if $(filter stress,$(SCENARIO)),5m,10m)) \
-		-prefix $(or $(PREFIX),load) -report $(or $(REPORT),$(CURDIR)/build/loadtest-$(SCENARIO)-$(or $(N),10).json)
+		-prefix $(or $(PREFIX),load) -report "$(if $(REPORT),$(abspath $(REPORT)),$(CURDIR)/build/loadtest-$(SCENARIO)-$(or $(N),10).json)"
 else
 	cd tools/bots && go run ./cmd/bots -n $(or $(N),10) -scenario $(SCENARIO) -duration $(or $(DURATION),60s) \
-		-url $(URL) -prefix $(or $(PREFIX),load) -metrics "$(METRICS)" $(if $(REPORT),-report $(REPORT))
+		-url $(URL) -prefix $(or $(PREFIX),load) $(if $(METRICS),-metrics "$(METRICS)") $(if $(REPORT),-report "$(abspath $(REPORT))")
 endif
 
 .PHONY: bench-tick

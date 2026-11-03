@@ -56,6 +56,11 @@ con `/metrics` en `127.0.0.1:9190` y `-auth-rate-burst 1000` (todos los bots sal
 IP), corre los bots y lo apaga. Deja el reporte en `build/loadtest-<escenario>-<N>.json` y
 el log del servidor en `build/loadtest-server.log`. Los bots reusan cuentas y personajes
 del mismo `PREFIX` (por defecto `load`), así que se puede repetir sin limpiar la base.
+`PREFIX` son 2–12 letras minúsculas y pasa a ser la segunda palabra del nombre
+(`Botaa Load`). Se rechazan los prefijos que darían un nombre reservado para staff (`dev`;
+`mine`, porque genera `Botad Mine`, que contiene "admin"). El script falla si algo ya
+responde en sus puertos (`LOAD_PORT`, `LOAD_METRICS_PORT`). Con `URL` en esta máquina, los
+bots leen `/metrics` de `127.0.0.1:9100`; para otro servidor, pasa `METRICS=...`.
 Detalle y resultados en `07-performance-budget.md`.
 
 ## Diferencias con las sesiones cloud

@@ -50,9 +50,16 @@ Cómo correrlo: `make bots N=100` (base, 10 min) y `make bots N=300 SCENARIO=str
   de cualquier comando.
 - **Comportamiento de los bots**: rutas A* sobre `world.bin` hacia su zona (base: 9 zonas
   de la Isla del Puerto en round robin; stress: todos a 8 casillas o menos del templo y
-  la plaza), y luego vagar 45 %, pelear 25 % (solo base; la ciudad es zona de
-  protección), hablar con un NPC 12 %, chat 10 % y nada el resto, con 1–4 s de pausa
-  entre acciones y como mucho un comando cada 250 ms (`-min-gap`).
+  la plaza). Después reparten su tiempo así:
+  - base: vagar 45 %, pelear 25 %, hablar con un NPC 12 %, chat 10 %, nada 8 %;
+  - stress (la ciudad es zona de protección, no se pelea): vagar 45 %, hablar con un
+    NPC 37 %, chat 10 %, nada 8 %.
+
+  Entre acciones hay 1–4 s de pausa, y cada comando, cada frame, pasa por el rate limit
+  del bot: como mucho uno cada 250 ms (`-min-gap`).
+- **Ventanas**: tick, RAM, CPU, bytes, latencia y lo recibido (pasos, mensajes) cubren
+  la ventana estable. Las acciones de los bots (`actions_since_entry`) cuentan desde que
+  cada bot entra: rampa más ventana.
 
 ### Resultados (T1.17, 2026-11-03)
 Sesión cloud de 4 vCPU y 16 GB, con **servidor y bots en la misma máquina** (los bots
@@ -68,15 +75,17 @@ local. Mundo: Isla del Puerto + isla de pruebas.
 | Salida por jugador (B/s) | < 4096 | 286 | 839 |
 | Latencia de comando p50 / p95 / p99 (ms) | p95 < 60 | 26,3 / **49,0** / 50,7 | 27,9 / **49,8** / 52,9 |
 | Desconexiones / fallos al entrar | 0 | 0 / 0 | 0 / 0 |
-| Acciones | — | 7811 caminatas, 190 ataques, 2174 chats, 86 diálogos | 17 609 caminatas, 4550 chats, 6221 diálogos |
+| Acciones desde la entrada (rampa + ventana) | — | 7811 caminatas, 190 ataques, 2174 chats, 62 diálogos abiertos | 17 609 caminatas, 4550 chats, 4534 diálogos abiertos |
 
 Todo dentro del presupuesto, con mucha holgura en tick, RAM y red. La latencia de comando
 está dominada por la espera al siguiente tick, no por el servidor. Pendientes:
 - El único tick lento (132 ms con 24 comandos, en stress) no se reprodujo en base. Lo más
   probable es la contención de CPU con los 300 bots en la misma máquina. Falta repetirlo
   con los bots en otra máquina y `pprof` para descartar otra causa.
-- En stress, la mayoría de los pasos se rechazan (16 044 rechazados contra 10 251
-  aceptados): 300 personajes en ~300 casillas libres. Es lo esperado en una ciudad
-  llena. La red y el tick lo aguantan.
+- En stress, ~91 % de las caminatas (`WalkPath`) se cortaron con `WalkRejected`: 16 044
+  cortes en 17 609 caminatas, con 10 251 pasos confirmados, contados desde la conexión.
+  Son 300 personajes en ~300 casillas libres. Es lo esperado en una ciudad llena, y la
+  red y el tick lo aguantan. En los reportes nuevos este contador se llama
+  `walks_rejected` y cubre solo la ventana estable.
 - RAM medida con el mundo del hito 1. El presupuesto de 600 MB es para el mundo del
   hito 3: hay que repetir la prueba cuando crezca.

@@ -20,8 +20,12 @@ import (
 	"flag"
 	"fmt"
 	"math/rand/v2"
+	"net"
+	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -59,13 +63,29 @@ func main() {
 	flag.StringVar(&c.prefix, "prefix", "load", "account prefix: bots reuse accounts with the same prefix")
 	flag.Uint64Var(&c.seed, "seed", 1, "random seed of the bots' behaviour")
 	flag.StringVar(&c.worldPath, "world", "../../build/world.bin", "compiled map for path planning (missing: bots walk at random)")
-	flag.StringVar(&c.metricsURL, "metrics", "http://127.0.0.1:9100/metrics", "server's internal /metrics (empty: client-side numbers only)")
+	flag.StringVar(&c.metricsURL, "metrics", "", "server's internal /metrics (default "+localMetricsURL+" when -url is on this machine; empty elsewhere: client-side numbers only)")
 	flag.StringVar(&c.reportPath, "report", "", "write the JSON report here")
 	flag.BoolVar(&c.requireMetrics, "require-metrics", false, "fail if the server's /metrics cannot be read")
 	flag.DurationVar(&c.minGap, "min-gap", 250*time.Millisecond, "bot rate limit: minimum time between two commands of a bot")
 	flag.Parse()
 
 	if err := validateCount(c.n); err != nil {
+		fmt.Fprintln(os.Stderr, "bots:", err)
+		os.Exit(2)
+	}
+	metricsSet := false
+	flag.Visit(func(fl *flag.Flag) { metricsSet = metricsSet || fl.Name == "metrics" })
+	if !metricsSet && isLoopback(c.url) {
+		c.metricsURL = localMetricsURL
+	}
+	if c.reportPath != "" {
+		// Fail now, not after a 10-minute run.
+		if st, err := os.Stat(filepath.Dir(c.reportPath)); err != nil || !st.IsDir() {
+			fmt.Fprintf(os.Stderr, "bots: the directory of -report %s does not exist\n", c.reportPath)
+			os.Exit(2)
+		}
+	}
+	if err := checkPrefix(c.prefix, c.n); err != nil {
 		fmt.Fprintln(os.Stderr, "bots:", err)
 		os.Exit(2)
 	}
@@ -83,7 +103,11 @@ func main() {
 	stop()
 	rep.summary(os.Stdout)
 	if c.reportPath != "" {
-		raw, _ := json.MarshalIndent(rep, "", "  ")
+		raw, err := json.MarshalIndent(rep, "", "  ")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "bots: report:", err)
+			os.Exit(1)
+		}
 		if err := os.WriteFile(c.reportPath, append(raw, '\n'), 0o644); err != nil {
 			fmt.Fprintln(os.Stderr, "bots:", err)
 			os.Exit(1)
@@ -93,6 +117,24 @@ func main() {
 	if rep.FailedToEnter > 0 || rep.Disconnects > 0 || rep.OtherErrors > 0 {
 		os.Exit(1)
 	}
+}
+
+// localMetricsURL is the default -metrics-addr of a gameserver on this machine.
+const localMetricsURL = "http://127.0.0.1:9100/metrics"
+
+// isLoopback reports whether the server URL is on this machine, where the default
+// metrics address belongs to it (and not to some other local server than the one tested).
+func isLoopback(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func defaultRamp(n int) time.Duration {
@@ -140,7 +182,7 @@ func (f *fleet) fail(i int, err error, entered bool) {
 }
 
 func run(ctx context.Context, c config) *Report {
-	rep := &Report{Scenario: c.scenario.name, Bots: c.n, StartedAt: time.Now().UTC(), RampSeconds: c.ramp.Seconds()}
+	rep := &Report{Scenario: c.scenario.name, Bots: c.n, StartedAt: time.Now().UTC(), RampSeconds: c.ramp.Seconds(), MetricsURL: c.metricsURL}
 	var nav *bot.Nav
 	if _, err := os.Stat(c.worldPath); err == nil {
 		if nav, err = bot.LoadNav(c.worldPath); err != nil {
@@ -196,10 +238,11 @@ func run(ctx context.Context, c config) *Report {
 	waitGroup(ctx, &f.entered)
 	rep.Entered = len(f.snapshot())
 	steadyStart := time.Now()
-	baseBytes := map[*bot.Bot]int{}
+	// What the bots received counts from here, like the latency and the server numbers.
+	base := map[*bot.Bot]bot.Stats{}
 	for _, b := range f.snapshot() {
 		b.TakeLatencies()
-		baseBytes[b] = b.Stats().Bytes
+		base[b] = b.Stats()
 	}
 	samples := sampleMetrics(play, c.metricsURL, c.duration)
 
@@ -207,12 +250,12 @@ func run(ctx context.Context, c config) *Report {
 	var bytes int
 	for _, b := range f.snapshot() {
 		lat = append(lat, b.TakeLatencies()...)
-		s := b.Stats()
-		bytes += s.Bytes - baseBytes[b]
-		rep.Client.Steps += s.Moves
-		rep.Client.StepsRejected += s.Rejected
-		rep.Client.DialogsOpened += s.Dialogs
-		rep.Client.ChatReceived += s.Chat
+		s, b0 := b.Stats(), base[b]
+		bytes += s.Bytes - b0.Bytes
+		rep.Client.Steps += s.Moves - b0.Moves
+		rep.Client.WalksRejected += s.Rejected - b0.Rejected
+		rep.Client.DialogMessages += s.Dialogs - b0.Dialogs
+		rep.Client.ChatReceived += s.Chat - b0.Chat
 	}
 	rep.SteadySeconds = time.Since(steadyStart).Seconds()
 	stopPlay()
@@ -221,7 +264,9 @@ func run(ctx context.Context, c config) *Report {
 	rep.Client.LatencyMS = latencyPercentiles(lat)
 	rep.Client.LatencySamples = len(lat)
 	if rep.Entered > 0 && rep.SteadySeconds > 0 {
-		rep.Client.BytesPerPlayer = round(float64(bytes) / rep.SteadySeconds / float64(rep.Entered))
+		rep.Client.BytesPerPlayer = num(round(float64(bytes) / rep.SteadySeconds / float64(rep.Entered)))
+	} else {
+		rep.Client.BytesPerPlayer = nan
 	}
 	rep.Client.Actions = f.acts
 	if len(samples) >= 2 {
@@ -328,15 +373,21 @@ func waitGroup(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-// account returns the credentials of account g (bots g*10 .. g*10+9).
+// account returns the credentials of account g (bots g*10 .. g*10+9). The domain is
+// new in T1.17, so accounts that the T1.4 bot filled with its own characters
+// ("load-0@bots.local") are never reused and do not hit the character limit.
 func account(prefix string, g int) (email, password string) {
-	return fmt.Sprintf("%s-%d@bots.local", prefix, g), "bot-password"
+	return fmt.Sprintf("%s-%d@load.bots.local", prefix, g), "bot-password"
 }
 
+// validPrefix is what -prefix accepts: the second word of every name and the start of
+// every email. Letters only, so prefixes cannot fold into the same names ("load100" and
+// "load300" would both be "Load").
+var validPrefix = regexp.MustCompile(`^[a-z]{2,12}$`)
+
 // name returns bot i's character name: "Bot" plus i in base 26 ("Botaa", "Botab", ...
-// "Botba"), then the account prefix as a second word ("Botaa Load"), so runs with
-// different prefixes do not collide on the global names. A word of "Bot" plus letters
-// cannot be one of the staff words the server refuses (Gm, Dev, Mod...).
+// "Botba"), then the prefix as a second word ("Botaa Load"), so runs with different
+// prefixes do not collide on the global names. The prefix must be valid (checkPrefix).
 func name(prefix string, i int) string {
 	s := []byte{byte('a' + i%26)}
 	i /= 26
@@ -347,18 +398,50 @@ func name(prefix string, i int) string {
 			break
 		}
 	}
-	n := "Bot" + string(s)
-	var word []byte
-	for _, c := range []byte(strings.ToLower(prefix)) {
-		if c >= 'a' && c <= 'z' && len(word) < 12 {
-			word = append(word, c)
+	return "Bot" + string(s) + " " + strings.ToUpper(prefix[:1]) + prefix[1:]
+}
+
+// The server's reserved name rules (server/internal/auth/validate.go, which tools/bots
+// cannot import): parts are matched in the lowercased name without spaces, words as
+// whole words. Keep them in sync.
+var (
+	reservedNameParts = []string{
+		"admin", "gamemaster", "moderat", "moderad", "soporte", "support",
+		"staff", "tutor", "sistema", "system", "official", "oficial",
+	}
+	reservedNameWords = map[string]bool{"gm": true, "cm": true, "god": true, "mod": true, "dev": true}
+)
+
+// reservedName reports whether the server would refuse name as posing as staff.
+func reservedName(name string) bool {
+	words := strings.Split(strings.ToLower(name), " ")
+	joined := strings.Join(words, "")
+	for _, part := range reservedNameParts {
+		if strings.Contains(joined, part) {
+			return true
 		}
 	}
-	if len(word) >= 2 {
-		word[0] -= 'a' - 'A'
-		n += " " + string(word)
+	for _, w := range words {
+		if reservedNameWords[w] {
+			return true
+		}
 	}
-	return n
+	return false
+}
+
+// checkPrefix rejects a prefix that is not 2-12 lowercase letters or that gives one of
+// the first n bots a name the server refuses ("dev"; "mine" gives "Botad Mine", which
+// contains "admin").
+func checkPrefix(prefix string, n int) error {
+	if !validPrefix.MatchString(prefix) {
+		return fmt.Errorf("prefix must be 2-12 lowercase letters (a-z), got %q", prefix)
+	}
+	for i := range n {
+		if nm := name(prefix, i); reservedName(nm) {
+			return fmt.Errorf("prefix %q gives bot %d the name %q, which the server reserves for staff", prefix, i, nm)
+		}
+	}
+	return nil
 }
 
 // validateCount checks that the requested number of bots is usable.

@@ -54,6 +54,9 @@ type options struct {
 	authRateBurst int
 	// metricsAddr serves /metrics on its own internal listener ("" disables it).
 	metricsAddr string
+	// metricsExplicit: -metrics-addr or $RPG_METRICS_ADDR was set, so a failed bind is
+	// fatal (with the default address it is only a warning).
+	metricsExplicit bool
 	// startTown is the island new characters start at (empty = the first in world.yaml).
 	startTown string
 }
@@ -77,6 +80,12 @@ func main() {
 	flag.StringVar(&o.metricsAddr, "metrics-addr", envOr("RPG_METRICS_ADDR", defaultMetricsAddr), "internal listener for Prometheus /metrics, never public (empty = off); default $RPG_METRICS_ADDR or "+defaultMetricsAddr)
 	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
 	flag.Parse()
+	_, o.metricsExplicit = os.LookupEnv("RPG_METRICS_ADDR")
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "metrics-addr" {
+			o.metricsExplicit = true
+		}
+	})
 
 	if *showVersion {
 		fmt.Println(buildinfo.String())
@@ -192,8 +201,15 @@ func run(logger *slog.Logger, o options) error {
 	}()
 	go purgeSessions(ctx, logger, clk, a.Auth)
 	if mets != nil {
-		msrv := serveMetrics(o.metricsAddr, mets, logger)
-		defer func() { _ = msrv.Close() }()
+		msrv, err := serveMetrics(o.metricsAddr, mets, logger)
+		switch {
+		case err == nil:
+			defer func() { _ = msrv.Close() }()
+		case o.metricsExplicit:
+			return err
+		default:
+			logger.Warn("metrics disabled", "err", err)
+		}
 	}
 
 	logger.Info("gameserver started",
@@ -236,19 +252,24 @@ func envOr(key, def string) string {
 }
 
 // serveMetrics serves /metrics on its own listener, apart from the public API, so a
-// reverse proxy in front of the API can never expose it. A failure is logged, not fatal.
-func serveMetrics(addr string, m *metrics.Metrics, logger *slog.Logger) *http.Server {
+// reverse proxy in front of the API can never expose it. It binds before returning, so a
+// busy address is an error here and "metrics listening" names the address really bound.
+func serveMetrics(addr string, m *metrics.Metrics, logger *slog.Logger) (*http.Server, error) {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("metrics listener: %w", err)
+	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", m.Handler())
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second,
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second,
 		ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError)}
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Warn("metrics listener stopped", "addr", addr, "err", err)
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Warn("metrics listener stopped", "addr", ln.Addr().String(), "err", err)
 		}
 	}()
-	logger.Info("metrics listening", "addr", addr)
-	return srv
+	logger.Info("metrics listening", "addr", ln.Addr().String())
+	return srv, nil
 }
 
 // splitList splits a comma-separated flag value, dropping empty entries.

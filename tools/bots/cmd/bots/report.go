@@ -129,46 +129,79 @@ func round(v float64) float64 {
 	return math.Round(v*100) / 100
 }
 
+// num is a measured value: NaN means "not measured" (the series was missing or had no
+// data). It is written as null in the JSON and as "n/a" in the summary.
+type num float64
+
+func (n num) measured() bool { return !math.IsNaN(float64(n)) && !math.IsInf(float64(n), 0) }
+
+// MarshalJSON writes NaN and ±Inf, which JSON cannot hold, as null.
+func (n num) MarshalJSON() ([]byte, error) {
+	if !n.measured() {
+		return []byte("null"), nil
+	}
+	return []byte(strconv.FormatFloat(float64(n), 'f', -1, 64)), nil
+}
+
+// format prints n with prec decimals, or "n/a".
+func (n num) format(prec int) string {
+	if !n.measured() {
+		return "n/a"
+	}
+	return strconv.FormatFloat(float64(n), 'f', prec, 64)
+}
+
+var nan = num(math.NaN())
+
 // Percentiles in milliseconds.
 type Percentiles struct {
-	P50 float64 `json:"p50"`
-	P95 float64 `json:"p95"`
-	P99 float64 `json:"p99"`
-	Max float64 `json:"max"`
+	P50 num `json:"p50"`
+	P95 num `json:"p95"`
+	P99 num `json:"p99"`
+	Max num `json:"max"`
 }
 
 // ServerReport comes from /metrics over the steady window (every bot in the world).
 type ServerReport struct {
-	TickMS         Percentiles `json:"tick_ms"` // Max is the upper bound of the highest non-empty bucket
-	Ticks          float64     `json:"ticks"`
-	Overruns       float64     `json:"tick_overruns"`
-	RSSMBMax       float64     `json:"rss_mb_max"`
-	RSSMBEnd       float64     `json:"rss_mb_end"`
-	CPUCores       float64     `json:"cpu_cores_avg"` // CPU seconds per second of the server process
-	BytesPerPlayer float64     `json:"bytes_per_player_s"`
-	ConnectionsMax float64     `json:"connections_max"`
+	// TickMS.Max is the upper bound of the highest non-empty bucket; with
+	// TickMaxOverflow the slowest tick was above it (in the +Inf bucket).
+	TickMS          Percentiles `json:"tick_ms"`
+	TickMaxOverflow bool        `json:"tick_max_overflow,omitempty"`
+	Ticks           num         `json:"ticks"`
+	Overruns        num         `json:"tick_overruns"`
+	RSSMBMax        num         `json:"rss_mb_max"`
+	RSSMBEnd        num         `json:"rss_mb_end"`
+	CPUCores        num         `json:"cpu_cores_avg"` // CPU seconds per second of the server process
+	BytesPerPlayer  num         `json:"bytes_per_player_s"`
+	ConnectionsMax  num         `json:"connections_max"`
 }
 
-// ClientReport is what the bots measured themselves.
+// ClientReport is what the bots measured themselves. Latency, bytes and the received
+// counters cover the steady window; Actions covers each bot since it entered (ramp and
+// window).
 type ClientReport struct {
 	// LatencyMS is the Ping round trip: received by the server, run on the next tick and
 	// sent in that tick's batch, over loopback (the command latency of docs/07).
 	LatencyMS      Percentiles `json:"latency_ms"`
 	LatencySamples int         `json:"latency_samples"`
-	BytesPerPlayer float64     `json:"bytes_per_player_s"`
-	Actions        actions     `json:"actions"`
+	BytesPerPlayer num         `json:"bytes_per_player_s"`
+	Actions        actions     `json:"actions_since_entry"`
 	Steps          int         `json:"steps"`
-	StepsRejected  int         `json:"steps_rejected"`
-	DialogsOpened  int         `json:"dialogs_opened"`
-	ChatReceived   int         `json:"chat_received"`
+	// WalksRejected counts WalkRejected messages: one per walk the server cut short
+	// (a blocked tile), not one per step.
+	WalksRejected int `json:"walks_rejected"`
+	// DialogMessages counts DialogOpen messages: one when a dialog opens and one more
+	// per option chosen (the next node).
+	DialogMessages int `json:"dialog_open_messages"`
+	ChatReceived   int `json:"chat_received"`
 }
 
 // Check is one budget line of docs/07-performance-budget.md.
 type Check struct {
-	Metric string  `json:"metric"`
-	Budget string  `json:"budget"`
-	Value  float64 `json:"value"`
-	OK     bool    `json:"ok"`
+	Metric string `json:"metric"`
+	Budget string `json:"budget"`
+	Value  num    `json:"value"`
+	OK     bool   `json:"ok"`
 }
 
 // Report is the JSON written by -report.
@@ -184,44 +217,79 @@ type Report struct {
 	StartedAt        time.Time      `json:"started_at"`
 	RampSeconds      float64        `json:"ramp_s"`
 	SteadySeconds    float64        `json:"steady_s"`
+	MetricsURL       string         `json:"metrics_url,omitempty"`
 	Server           *ServerReport  `json:"server,omitempty"`
 	Client           ClientReport   `json:"client"`
 	Checks           []Check        `json:"checks"`
 }
 
-// serverReport derives the server numbers from the scrapes of the steady window.
+// get returns a series of s, NaN if it is missing.
+func get(s sample, name string) float64 {
+	if v, ok := s.series[name]; ok {
+		return v
+	}
+	return math.NaN()
+}
+
+// serverReport derives the server numbers from the scrapes of the steady window. A
+// series missing from the scrapes leaves its numbers unmeasured (NaN), never 0.
 func serverReport(first, last sample, all []sample) *ServerReport {
 	tick := buckets("tick_duration_ms", last.series, first.series)
+	const mb = 1 << 20
 	r := &ServerReport{
 		TickMS: Percentiles{
-			P50: round(histQuantile(0.50, tick)),
-			P95: round(histQuantile(0.95, tick)),
-			P99: round(histQuantile(0.99, tick)),
+			P50: num(round(histQuantile(0.50, tick))),
+			P95: num(round(histQuantile(0.95, tick))),
+			P99: num(round(histQuantile(0.99, tick))),
+			Max: nan,
 		},
-		Ticks:    last.series["tick_duration_ms_count"] - first.series["tick_duration_ms_count"],
-		Overruns: last.series["tick_overruns_total"] - first.series["tick_overruns_total"],
-		RSSMBEnd: round(last.series["process_resident_memory_bytes"] / (1 << 20)),
+		Ticks:    num(get(last, "tick_duration_ms_count") - get(first, "tick_duration_ms_count")),
+		Overruns: num(get(last, "tick_overruns_total") - get(first, "tick_overruns_total")),
+		RSSMBEnd: num(round(get(last, "process_resident_memory_bytes") / mb)),
+		RSSMBMax: nan, ConnectionsMax: nan, CPUCores: nan, BytesPerPlayer: nan,
 	}
 	for i := len(tick) - 1; i >= 0 && r.Ticks > 0; i-- {
 		if i == 0 || tick[i].count > tick[i-1].count {
-			r.TickMS.Max = tick[i].le
-			if math.IsInf(r.TickMS.Max, 1) && i > 0 {
-				r.TickMS.Max = tick[i-1].le // only "above the last bound" is known
+			r.TickMS.Max = num(tick[i].le)
+			if math.IsInf(tick[i].le, 1) {
+				r.TickMaxOverflow = true
+				r.TickMS.Max = nan
+				if i > 0 {
+					r.TickMS.Max = num(tick[i-1].le) // only "above the last bound" is known
+				}
 			}
 			break
 		}
 	}
 	wall := last.at.Sub(first.at).Seconds()
-	var connSum float64
+	var connSum, rssMax, connMax float64
+	rssN, conns := 0, 0
 	for _, s := range all {
-		r.RSSMBMax = max(r.RSSMBMax, round(s.series["process_resident_memory_bytes"]/(1<<20)))
-		r.ConnectionsMax = max(r.ConnectionsMax, s.series["ws_connections"])
-		connSum += s.series["ws_connections"]
+		if v := get(s, "process_resident_memory_bytes"); !math.IsNaN(v) && v > 0 {
+			rssMax = max(rssMax, v)
+			rssN++
+		}
+		if v := get(s, "ws_connections"); !math.IsNaN(v) {
+			connMax = max(connMax, v)
+			connSum += v
+			conns++
+		}
+	}
+	if rssN > 0 {
+		r.RSSMBMax = num(round(rssMax / mb))
+	}
+	if conns > 0 {
+		r.ConnectionsMax = num(connMax)
+	}
+	if r.RSSMBEnd <= 0 {
+		r.RSSMBEnd = nan
 	}
 	if wall > 0 {
-		r.CPUCores = round((last.series["process_cpu_seconds_total"] - first.series["process_cpu_seconds_total"]) / wall)
-		if avgConns := connSum / float64(len(all)); avgConns > 0 {
-			r.BytesPerPlayer = round((last.series["ws_sent_bytes_total"] - first.series["ws_sent_bytes_total"]) / wall / avgConns)
+		r.CPUCores = num(round((get(last, "process_cpu_seconds_total") - get(first, "process_cpu_seconds_total")) / wall))
+		if conns > 0 {
+			if avg := connSum / float64(conns); avg > 0 {
+				r.BytesPerPlayer = num(round((get(last, "ws_sent_bytes_total") - get(first, "ws_sent_bytes_total")) / wall / avg))
+			}
 		}
 	}
 	return r
@@ -229,19 +297,19 @@ func serverReport(first, last sample, all []sample) *ServerReport {
 
 func latencyPercentiles(lat []time.Duration) Percentiles {
 	slices.Sort(lat)
-	p := Percentiles{P50: quantile(0.50, lat), P95: quantile(0.95, lat), P99: quantile(0.99, lat)}
+	p := Percentiles{P50: num(quantile(0.50, lat)), P95: num(quantile(0.95, lat)), P99: num(quantile(0.99, lat)), Max: nan}
 	if len(lat) > 0 {
-		p.Max = ms(lat[len(lat)-1])
+		p.Max = num(ms(lat[len(lat)-1]))
 	}
 	return p
 }
 
 // checks compares the report with docs/07-performance-budget.md. The tick and RAM
 // budgets are stated for 100 players; they are checked in every scenario so a stress
-// run shows the headroom left.
+// run shows the headroom left. An unmeasured value fails its check.
 func (r *Report) checks() {
-	add := func(metric, budget string, v float64, ok bool) {
-		r.Checks = append(r.Checks, Check{metric, budget, v, ok && !math.IsNaN(v)})
+	add := func(metric, budget string, v num, ok bool) {
+		r.Checks = append(r.Checks, Check{metric, budget, v, ok && v.measured()})
 	}
 	if s := r.Server; s != nil {
 		add("tick p99 (ms)", "< 10", s.TickMS.P99, s.TickMS.P99 < 10)
@@ -251,30 +319,39 @@ func (r *Report) checks() {
 		add("client input per player (B/s)", "< 4096", r.Client.BytesPerPlayer, r.Client.BytesPerPlayer < 4096)
 	}
 	add("command latency p95 (ms)", "< 60", r.Client.LatencyMS.P95, r.Client.LatencyMS.P95 < 60)
-	add("disconnects", "0", float64(r.Disconnects+r.FailedToEnter), r.Disconnects+r.FailedToEnter == 0)
+	add("disconnects", "0", num(r.Disconnects+r.FailedToEnter), r.Disconnects+r.FailedToEnter == 0)
 }
 
 // summary is the human-readable report (Markdown, to paste in a PR).
 func (r *Report) summary(w io.Writer) {
 	fmt.Fprintf(w, "## Load test: %s, %d bots\n\n", r.Scenario, r.Bots)
-	fmt.Fprintf(w, "Entered %d/%d, disconnects %d, other errors %d; ramp %.0f s, steady window %.0f s.\n\n",
+	fmt.Fprintf(w, "Entered %d/%d, disconnects %d, other errors %d; ramp %.0f s, steady window %.0f s.\n",
 		r.Entered, r.Bots, r.Disconnects, r.OtherErrors, r.RampSeconds, r.SteadySeconds)
+	if r.MetricsURL != "" {
+		fmt.Fprintf(w, "Server metrics: %s.\n", r.MetricsURL)
+	}
+	fmt.Fprintln(w)
 	fmt.Fprintln(w, "| Metric | Value |")
 	fmt.Fprintln(w, "|---|---|")
 	if s := r.Server; s != nil {
-		fmt.Fprintf(w, "| tick p50 / p95 / p99 (ms) | %.2f / %.2f / %.2f (max ≤ %.2f, %0.f ticks, %0.f overruns) |\n",
-			s.TickMS.P50, s.TickMS.P95, s.TickMS.P99, s.TickMS.Max, s.Ticks, s.Overruns)
-		fmt.Fprintf(w, "| RSS max / end (MB) | %.1f / %.1f |\n", s.RSSMBMax, s.RSSMBEnd)
-		fmt.Fprintf(w, "| server CPU (cores) | %.2f |\n", s.CPUCores)
-		fmt.Fprintf(w, "| server output per player (B/s) | %.0f |\n", s.BytesPerPlayer)
+		bound := "≤"
+		if s.TickMaxOverflow {
+			bound = ">"
+		}
+		fmt.Fprintf(w, "| tick p50 / p95 / p99 (ms) | %s / %s / %s (max %s %s, %s ticks, %s overruns) |\n",
+			s.TickMS.P50.format(2), s.TickMS.P95.format(2), s.TickMS.P99.format(2), bound, s.TickMS.Max.format(2),
+			s.Ticks.format(0), s.Overruns.format(0))
+		fmt.Fprintf(w, "| RSS max / end (MB) | %s / %s |\n", s.RSSMBMax.format(1), s.RSSMBEnd.format(1))
+		fmt.Fprintf(w, "| server CPU (cores) | %s |\n", s.CPUCores.format(2))
+		fmt.Fprintf(w, "| server output per player (B/s) | %s |\n", s.BytesPerPlayer.format(0))
 	}
 	c := r.Client
-	fmt.Fprintf(w, "| command latency p50 / p95 / p99 / max (ms) | %.2f / %.2f / %.2f / %.2f (%d pings) |\n",
-		c.LatencyMS.P50, c.LatencyMS.P95, c.LatencyMS.P99, c.LatencyMS.Max, c.LatencySamples)
-	fmt.Fprintf(w, "| client input per player (B/s) | %.0f |\n", c.BytesPerPlayer)
-	fmt.Fprintf(w, "| actions | %d walks, %d attacks, %d says, %d NPC talks (%d dialogs) |\n",
-		c.Actions.Walks, c.Actions.Attacks, c.Actions.Says, c.Actions.Talks, c.DialogsOpened)
-	fmt.Fprintf(w, "| steps / rejected | %d / %d |\n\n", c.Steps, c.StepsRejected)
+	fmt.Fprintf(w, "| command latency p50 / p95 / p99 / max (ms) | %s / %s / %s / %s (%d pings) |\n",
+		c.LatencyMS.P50.format(2), c.LatencyMS.P95.format(2), c.LatencyMS.P99.format(2), c.LatencyMS.Max.format(2), c.LatencySamples)
+	fmt.Fprintf(w, "| client input per player (B/s) | %s |\n", c.BytesPerPlayer.format(0))
+	fmt.Fprintf(w, "| steps / walks cut short | %d / %d |\n", c.Steps, c.WalksRejected)
+	fmt.Fprintf(w, "| actions since entry (ramp + window) | %d walks, %d attacks, %d says, %d NPC talks (%d dialogs) |\n\n",
+		c.Actions.Walks, c.Actions.Attacks, c.Actions.Says, c.Actions.Talks, c.Actions.Dialogs)
 	fmt.Fprintln(w, "| Budget (docs/07) | Limit | Measured | OK |")
 	fmt.Fprintln(w, "|---|---|---|---|")
 	for _, ch := range r.Checks {
@@ -282,7 +359,7 @@ func (r *Report) summary(w io.Writer) {
 		if !ch.OK {
 			ok = "**NO**"
 		}
-		fmt.Fprintf(w, "| %s | %s | %.2f | %s |\n", ch.Metric, ch.Budget, ch.Value, ok)
+		fmt.Fprintf(w, "| %s | %s | %s | %s |\n", ch.Metric, ch.Budget, ch.Value.format(2), ok)
 	}
 	for _, e := range r.Errors {
 		fmt.Fprintln(w, "- error:", e)

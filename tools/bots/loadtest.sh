@@ -18,13 +18,23 @@ db="${LOAD_DATABASE_URL:-${DATABASE_URL:-postgres://postgres:postgres@localhost:
 port="${LOAD_PORT:-8090}"
 maddr="127.0.0.1:${LOAD_METRICS_PORT:-9190}"
 bin="$root/build/gameserver-load"
+bots="$root/build/bots-load"
 log="$root/build/loadtest-server.log"
 
 if [[ ! -f "$root/build/world.bin" ]]; then
   echo "loadtest: $root/build/world.bin is missing (make mapcompile)" >&2
   exit 2
 fi
+for u in "http://127.0.0.1:$port/healthz" "http://$maddr/metrics"; do
+  # curl without -f exits 0 on any HTTP answer and non-zero when nothing listens.
+  if curl -s -o /dev/null --max-time 2 "$u"; then
+    echo "loadtest: something already answers on $u (another load test or server?);" \
+      "stop it or set LOAD_PORT / LOAD_METRICS_PORT" >&2
+    exit 1
+  fi
+done
 (cd "$root/server" && go build -o "$bin" ./cmd/gameserver)
+(cd "$root/tools/bots" && go build -o "$bots" ./cmd/bots)
 
 DATABASE_URL="$db" "$bin" -world "$root/build/world.bin" -data "$root/data" \
   -http "127.0.0.1:$port" -metrics-addr "$maddr" -auth-rate-burst 1000 >"$log" 2>&1 &
@@ -52,8 +62,15 @@ if [[ -z "$up" ]]; then
   echo "loadtest: the server did not answer /healthz in 30 s; see $log" >&2
   exit 1
 fi
+# The answer must come from our server, not one that held the port (checked above, but
+# a server can start in between).
+if ! kill -0 "$server" 2>/dev/null; then
+  echo "loadtest: the server exited after starting; see $log" >&2
+  tail -n 20 "$log" >&2
+  exit 1
+fi
 echo "loadtest: server up on :$port (log: $log)"
 
-cd "$root/tools/bots"
-go run ./cmd/bots -url "http://127.0.0.1:$port" -metrics "http://$maddr/metrics" \
+# Run from the caller's directory, so a relative -report lands where the caller expects.
+"$bots" -url "http://127.0.0.1:$port" -metrics "http://$maddr/metrics" \
   -world "$root/build/world.bin" -require-metrics "$@"

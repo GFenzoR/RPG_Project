@@ -133,6 +133,8 @@ func (p *player) loop(ctx context.Context) error {
 		return err
 	}
 	for {
+		// Mix: base wanders 45 %, fights 25 %, talks to an NPC 12 %, chats 10 %, rests
+		// 8 %. Without fights (stress, a protection zone) [45, 70) falls into talk: 37 %.
 		var err error
 		switch x := p.r.IntN(100); {
 		case x < 45:
@@ -163,8 +165,9 @@ func (p *player) walkTo(ctx context.Context, target bot.Pos, path []bot.Directio
 	if err := p.send(ctx, func(c context.Context) error { return p.b.WalkPath(c, path) }); err != nil {
 		return err
 	}
-	// A level 1 character takes well under 600 ms per step on any ground of the island.
-	deadline := time.Now().Add(time.Duration(len(path))*600*time.Millisecond + 2*time.Second)
+	// A level 1 character takes 500-1250 ms per step on the island's grounds (diagonal
+	// steps on wet sand are the slowest): allow 1300 ms per step.
+	deadline := time.Now().Add(time.Duration(len(path))*1300*time.Millisecond + 2*time.Second)
 	rejected := p.b.Stats().Rejected
 	for time.Now().Before(deadline) {
 		if p.b.Pos() == target || p.b.Stats().Rejected != rejected {
@@ -243,7 +246,10 @@ func (p *player) fight(ctx context.Context) error {
 		return p.wander(ctx)
 	}
 	p.acts.Attacks++
-	if err := p.send(ctx, func(c context.Context) error { return p.b.Attack(c, target.ID, true) }); err != nil {
+	if err := p.send(ctx, func(c context.Context) error { return p.b.SetFightMode(c, true) }); err != nil {
+		return err
+	}
+	if err := p.send(ctx, func(c context.Context) error { return p.b.SetTarget(c, target.ID) }); err != nil {
 		return err
 	}
 	end := time.Now().Add(fightFor)
@@ -252,7 +258,10 @@ func (p *player) fight(ctx context.Context) error {
 			return err
 		}
 	}
-	return p.send(ctx, func(c context.Context) error { return p.b.Attack(c, 0, false) })
+	if err := p.send(ctx, func(c context.Context) error { return p.b.SetTarget(c, 0) }); err != nil {
+		return err
+	}
+	return p.send(ctx, func(c context.Context) error { return p.b.SetFightMode(c, false) })
 }
 
 // talk walks next to an NPC in sight, opens its dialog, maybe picks an option and

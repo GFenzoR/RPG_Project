@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"strings"
 	"testing"
@@ -58,7 +59,10 @@ func TestParseMetricsAndHistogramQuantiles(t *testing.T) {
 
 func TestServerReportAndChecks(t *testing.T) {
 	s, _ := parseMetrics(strings.NewReader(exposition))
-	first := sample{at: time.Unix(0, 0), series: map[string]float64{"process_cpu_seconds_total": 2.5, "ws_connections": 10}}
+	first := sample{at: time.Unix(0, 0), series: map[string]float64{
+		"process_cpu_seconds_total": 2.5, "ws_connections": 10, "tick_duration_ms_count": 0,
+		"tick_overruns_total": 0, "ws_sent_bytes_total": 0, "process_resident_memory_bytes": 1 << 20,
+	}}
 	last := sample{at: time.Unix(10, 0), series: s}
 	r := serverReport(first, last, []sample{first, last})
 	if r.CPUCores != 1 || r.BytesPerPlayer != 50 || r.RSSMBMax != 100 || r.Ticks != 100 || r.TickMS.Max != 10 {
@@ -140,5 +144,67 @@ func TestScenarios(t *testing.T) {
 	}
 	if _, err := scenarioByName("nope"); err == nil {
 		t.Fatal("unknown scenario accepted")
+	}
+}
+
+func TestMissingSeriesAreNotMeasured(t *testing.T) {
+	// Only the tick histogram: no process collector (e.g. a build without it) and no
+	// ws_connections. RSS and bytes per player must be "not measured" and fail, not 0.
+	series := map[string]float64{`tick_duration_ms_bucket{le="1"}`: 10, `tick_duration_ms_bucket{le="+Inf"}`: 10, "tick_duration_ms_count": 10}
+	first := sample{at: time.Unix(0, 0), series: map[string]float64{"tick_duration_ms_count": 0}}
+	last := sample{at: time.Unix(10, 0), series: series}
+	r := serverReport(first, last, []sample{first, last})
+	if r.RSSMBMax.measured() || r.RSSMBEnd.measured() || r.BytesPerPlayer.measured() || r.CPUCores.measured() {
+		t.Fatalf("unmeasured series read as numbers: %+v", r)
+	}
+	rep := &Report{Server: r, Client: ClientReport{LatencyMS: latencyPercentiles(nil), BytesPerPlayer: nan}}
+	rep.checks()
+	for _, c := range rep.Checks {
+		if c.Metric == "tick p99 (ms)" || c.Metric == "disconnects" {
+			continue
+		}
+		if c.OK {
+			t.Errorf("check %q passed without a measurement", c.Metric)
+		}
+	}
+	var sb strings.Builder
+	rep.summary(&sb)
+	if !strings.Contains(sb.String(), "| RSS max (MB) | < 600 | n/a | **NO** |") {
+		t.Fatalf("summary:\n%s", sb.String())
+	}
+}
+
+func TestReportJSONWritesNaNAsNull(t *testing.T) {
+	// No bot entered: every latency percentile is NaN, which encoding/json refuses.
+	rep := &Report{Bots: 3, FailedToEnter: 3, Client: ClientReport{LatencyMS: latencyPercentiles(nil), BytesPerPlayer: nan}}
+	rep.checks()
+	raw, err := json.Marshal(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"latency_ms":{"p50":null,"p95":null,"p99":null,"max":null}`) {
+		t.Fatalf("json %s", raw)
+	}
+	if !strings.Contains(string(raw), `"value":3`) {
+		t.Fatalf("measured values must stay numbers: %s", raw)
+	}
+}
+
+func TestTickMaxOverflow(t *testing.T) {
+	// A 400 ms stall is above the last finite bound (250): the summary says "max > 250".
+	first := sample{at: time.Unix(0, 0), series: map[string]float64{"tick_duration_ms_count": 0}}
+	last := sample{at: time.Unix(10, 0), series: map[string]float64{
+		`tick_duration_ms_bucket{le="1"}`: 99, `tick_duration_ms_bucket{le="250"}`: 99,
+		`tick_duration_ms_bucket{le="+Inf"}`: 100, "tick_duration_ms_count": 100,
+	}}
+	r := serverReport(first, last, []sample{first, last})
+	if !r.TickMaxOverflow || r.TickMS.Max != 250 {
+		t.Fatalf("max %v overflow %v", r.TickMS.Max, r.TickMaxOverflow)
+	}
+	rep := &Report{Server: r}
+	var sb strings.Builder
+	rep.summary(&sb)
+	if !strings.Contains(sb.String(), "max > 250.00") {
+		t.Fatalf("summary:\n%s", sb.String())
 	}
 }
