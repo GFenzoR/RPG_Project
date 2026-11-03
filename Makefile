@@ -102,9 +102,14 @@ mapcompile: ## Compile world/ + data/items into build/world.bin (server map)
 test-parity: ## mapcompile vs packages/map-format walkability on every tile
 	cd server && RPG_MAPFORMAT_PARITY=1 go test -count=1 -run TestWalkableParityWithMapFormat ./internal/world/compile/
 
+# Browser origins allowed on /ws in development: the client's Vite dev and preview servers
+# (also the webview of `make desktop-dev`). RPG_WS_ORIGINS replaces them.
+DEV_WS_ORIGINS ?= localhost:5173,localhost:4173
+
 .PHONY: run-server
-run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL)
-	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver
+run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL, RPG_WS_ORIGINS)
+	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver \
+		-ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}"
 
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
@@ -147,7 +152,7 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 	@echo "[dev] game client on http://localhost:5173, game server on :8080 (ws /ws), map editor on http://localhost:5174"
 	@trap 'kill 0' EXIT; \
 	(cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
-		go run ./cmd/gameserver -ws-origins "localhost:5173,localhost:4173") & \
+		go run ./cmd/gameserver -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}") & \
 	$(MAKE) client & \
 	$(MAKE) editor
 

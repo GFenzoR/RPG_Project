@@ -89,7 +89,8 @@ make desktop-test         # cargo fmt --check + clippy + cargo test (config de U
 make desktop-smoke        # Linux: la app real bajo Xvfb con tauri-driver: login, entrar, screenshots
 ```
 `make desktop-dev` necesita el servidor en marcha (`make run-server` o `make dev`); en dev el
-origen del webview es `http://localhost:5173`, que `make dev` ya permite en `-ws-origins`.
+origen del webview es `http://localhost:5173`, que ambos permiten en `-ws-origins`
+(`DEV_WS_ORIGINS` del Makefile; `RPG_WS_ORIGINS` lo reemplaza).
 `make desktop-smoke` necesita además `webkit2gtk-driver` (apt), `tauri-driver`
 (`cargo install tauri-driver --locked`) y `Xvfb`; deja los screenshots en
 `apps/desktop/e2e/screenshots/`.
@@ -109,8 +110,14 @@ De mayor a menor prioridad (`src-tauri/src/config.rs`):
    en release.
 
 Solo se acepta el origen (`https://host[:puerto]`, sin ruta); `http://` solo para
-localhost o una red privada (192.168.x.x, 10.x.x.x…). Un override inválido se ignora con
-un aviso en la consola, no se "corrige". La app imprime al arrancar qué servidor usa.
+localhost o una red privada (192.168.x.x, 10.x.x.x…). El host debe ser un **nombre o una
+IPv4**: una IPv6 literal (`[::1]`) se rechaza porque la CSP no puede nombrarla y el
+WebSocket quedaría bloqueado (usa `localhost`). Un override inválido se ignora con un
+aviso en la consola, no se "corrige". La app imprime al arrancar qué servidor usa.
+
+Si la app no puede arrancar (p. ej. un default compilado inválido), escribe el error en
+`startup-error.log`, en la misma carpeta que `config.json`: en Windows el build de release
+no tiene consola donde verlo.
 
 ### Qué hace distinto el cliente en la app
 - La API HTTP va por el comando `api` de Rust (`client/src/net/desktop.ts`), que agrega

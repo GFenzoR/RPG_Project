@@ -19,14 +19,28 @@ pids=()
 cleanup() { for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done; }
 trap cleanup EXIT
 
+# Our own server must answer, not a leftover one: refuse to start if the port is taken
+# (curl without -f exits 0 on any HTTP answer, non-zero when nothing listens).
+if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$PORT/healthz"; then
+	echo "something already answers on :$PORT; stop it or set SMOKE_PORT"
+	exit 1
+fi
+
 (cd server && go run ./cmd/mapcompile -root .. -out ../build/world.bin)
+# A real binary, not `go run`: `go run` does not forward SIGTERM, so cleanup would leave
+# the server running. Started from server/ so its default paths (../data) hold.
+(cd server && go build -o "../$LOG/gameserver" ./cmd/gameserver)
 # The desktop app's WebSocket origin: tauri://localhost on Linux and macOS.
-(cd server && exec go run ./cmd/gameserver -http "127.0.0.1:$PORT" -world ../build/world.bin -seed 1 \
-	-auth-rate-burst 1000 -start-town testisle -ws-origins "tauri://localhost,http://tauri.localhost") \
-	>"$LOG/server.log" 2>&1 &
-pids+=($!)
-for _ in $(seq 120); do curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && break; sleep 1; done
-curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null || { cat "$LOG/server.log"; exit 1; }
+(cd server && exec "../$LOG/gameserver" -http "127.0.0.1:$PORT" -metrics-addr "" \
+	-world ../build/world.bin -seed 1 -auth-rate-burst 1000 -start-town testisle \
+	-ws-origins "tauri://localhost,http://tauri.localhost") >"$LOG/server.log" 2>&1 &
+server_pid=$!
+pids+=("$server_pid")
+for _ in $(seq 60); do curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && break; sleep 1; done
+if ! curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null || ! kill -0 "$server_pid" 2>/dev/null; then
+	cat "$LOG/server.log"
+	exit 1
+fi
 
 Xvfb :99 -screen 0 1280x800x24 >"$LOG/xvfb.log" 2>&1 &
 pids+=($!)

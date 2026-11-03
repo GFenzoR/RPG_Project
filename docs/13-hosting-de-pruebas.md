@@ -104,7 +104,8 @@ paso 4.
 **Cliente de escritorio:** quien use la app de Tauri pone ese link en `config.json`
 (`{"server_url": "https://palabras-al-azar.trycloudflare.com"}`, ruta según el SO en
 `12-local-development.md`, "Cliente de escritorio") o lanza la app con
-`RPG_SERVER_URL=...`. El compose ya permite los orígenes de la app en `/ws`.
+`RPG_SERVER_URL=...`. El compose ya permite los orígenes de la app en `/ws`. Usa un
+nombre de host o una IPv4 (en LAN, `http://192.168.x.x:8080`): la app rechaza IPv6.
 
 ### 4. Cloudflare Tunnel con dominio propio (URL fija)
 1. Compra o mueve un dominio a Cloudflare (plan gratis) y entra al panel *Zero Trust*.

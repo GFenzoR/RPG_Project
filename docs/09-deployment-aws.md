@@ -170,9 +170,14 @@ git tag desktop-v0.2.0 && git push origin desktop-v0.2.0
 ```
 - Requiere la variable del repo `DESKTOP_SERVER_URL` (Settings → Secrets and variables →
   Actions → Variables) con el origen `https://` de producción: queda compilada como
-  servidor por defecto. El job `check` falla si falta o si el tag no coincide con la versión.
+  servidor por defecto. El job `check` falla si falta, si el tag no coincide con la
+  versión o si la URL no pasa la validación de la propia app (corre el test
+  `compiled_default_is_valid` con `RPG_DESKTOP_SERVER_URL`): ruta, query, credenciales o
+  IPv6 darían instaladores que se cierran al abrir.
 - Matriz: `windows-latest` (`.msi` y `.exe` NSIS), `macos-latest` (`.dmg`/`.app`
-  universal, arm64 + x64) y `ubuntu-latest` (`.deb`, `.rpm`, `.AppImage`). Los sube
+  universal, arm64 + x64) y `ubuntu-22.04` (`.deb`, `.rpm`, `.AppImage`). Linux se
+  compila en el runner más viejo a propósito: los paquetes enlazan glibc/GTK/WebKitGTK del
+  host, y compilados en 24.04 (glibc 2.39) fallan en Ubuntu 22.04 y Debian 12. Los sube
   `tauri-action` a un **Release en borrador**: lo revisas y lo publicas a mano. Solo este
   workflow tiene `contents: write`.
 - El servidor acepta los orígenes del webview por `RPG_WS_ORIGINS` (default del compose).

@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: tag matches client/package.json and the server URL is set
+      - name: tag matches client/package.json and the server URL is https
         env:
           TAG: ${{ github.ref_name }}
           SERVER_URL: ${{ vars.DESKTOP_SERVER_URL }}
@@ -40,6 +40,32 @@ jobs:
             https://*) echo "server: $SERVER_URL" ;;
             *) echo "::error::set the repository variable DESKTOP_SERVER_URL to the production https:// origin"; exit 1 ;;
           esac
+      # Validates DESKTOP_SERVER_URL with the app's own parser (config.rs): a path, query,
+      # credentials or an IPv6 literal would build installers that exit on start.
+      - name: system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev libxdo-dev libssl-dev
+      - name: rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+          key: release-check
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: DESKTOP_SERVER_URL passes the app's validation
+        env:
+          RPG_DESKTOP_SERVER_URL: ${{ vars.DESKTOP_SERVER_URL }}
+        run: |
+          make build-client
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib compiled_default_is_valid
 
   build:
     needs: check
@@ -50,8 +76,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The oldest supported runner: .deb/.rpm/.AppImage link against the host's glibc,
+          # GTK and WebKitGTK, so building on 24.04 (glibc 2.39) breaks Ubuntu 22.04 and
+          # Debian 12 ("GLIBC_2.38 not found").
           - name: linux
-            os: ubuntu-latest
+            os: ubuntu-22.04
             args: ""
           - name: windows
             os: windows-latest

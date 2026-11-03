@@ -47,6 +47,19 @@ fn allow_server_in_csp(csp: Option<Csp>, server: &config::Server) -> Csp {
     Csp::DirectiveMap(map)
 }
 
+/// Stops the app before it has a window. Windows release builds have no console, so the
+/// error also goes to `<config dir>/<identifier>/startup-error.log` (docs/12).
+fn fatal(identifier: &str, msg: &str) -> ! {
+    eprintln!("[desktop] {msg}");
+    if let Some(path) = config::startup_log_path(identifier) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(&path, format!("{msg}\n"));
+    }
+    std::process::exit(1);
+}
+
 pub fn run() {
     let mut context = tauri::generate_context!();
     let identifier = context.config().identifier.clone();
@@ -61,10 +74,7 @@ pub fn run() {
     let (server, source, warnings) =
         match config::resolve(env.as_deref(), file.as_deref(), config::compiled_default()) {
             Ok(r) => r,
-            Err(e) => {
-                eprintln!("[desktop] {e}");
-                std::process::exit(1);
-            }
+            Err(e) => fatal(&identifier, &e),
         };
     for w in warnings {
         eprintln!("[desktop] {w}");
@@ -76,10 +86,7 @@ pub fn run() {
 
     let state = match api::Api::new(server) {
         Ok(state) => state,
-        Err(e) => {
-            eprintln!("[desktop] {e}");
-            std::process::exit(1);
-        }
+        Err(e) => fatal(&identifier, &e),
     };
 
     if let Err(e) = tauri::Builder::default()
@@ -87,8 +94,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![server_info, api])
         .run(context)
     {
-        eprintln!("[desktop] {e}");
-        std::process::exit(1);
+        fatal(&identifier, &e.to_string());
     }
 }
 

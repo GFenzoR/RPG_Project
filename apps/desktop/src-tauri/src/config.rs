@@ -11,7 +11,6 @@
 //! An override that is not a valid server URL is reported and skipped, so a typo never
 //! points the app at an unexpected host.
 
-use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 
 use url::{Host, Url};
@@ -35,6 +34,12 @@ impl Server {
     pub fn parse(raw: &str) -> Result<Self, String> {
         let url = Url::parse(raw.trim()).map_err(|e| format!("{raw:?} is not a URL: {e}"))?;
         let host = url.host().ok_or_else(|| format!("{raw:?} has no host"))?;
+        // A CSP host-source cannot name an IPv6 literal, so the WebSocket would be blocked.
+        if matches!(host, Host::Ipv6(_)) {
+            return Err(format!(
+                "{raw:?}: IPv6 addresses are not supported; use a hostname (e.g. localhost) or an IPv4 address"
+            ));
+        }
         match url.scheme() {
             "https" => {}
             "http" if is_local(&host) => {}
@@ -85,11 +90,7 @@ fn is_local(host: &Host<&str>) -> bool {
     match host {
         Host::Domain(d) => *d == "localhost" || d.ends_with(".localhost"),
         Host::Ipv4(ip) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
-        Host::Ipv6(ip) => {
-            let ip = IpAddr::V6(*ip);
-            ip.is_loopback()
-                || matches!(ip, IpAddr::V6(v6) if (v6.segments()[0] & 0xfe00) == 0xfc00)
-        }
+        Host::Ipv6(_) => false, // rejected earlier by Server::parse
     }
 }
 
@@ -151,6 +152,11 @@ pub fn config_path(identifier: &str) -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join(identifier).join(CONFIG_FILE))
 }
 
+/// Where a fatal start-up error is written (next to `config.json`).
+pub fn startup_log_path(identifier: &str) -> Option<PathBuf> {
+    dirs::config_dir().map(|d| d.join(identifier).join("startup-error.log"))
+}
+
 /// Reads the override file, if any. A missing file is not an error.
 pub fn read_file_override(path: &Path) -> Result<Option<String>, String> {
     match std::fs::read_to_string(path) {
@@ -182,7 +188,6 @@ mod tests {
             "http://127.0.0.1:8080",
             "http://192.168.1.20:8080",
             "http://10.0.0.5",
-            "http://[::1]:8080",
         ] {
             let s = Server::parse(ok).unwrap_or_else(|e| panic!("{ok}: {e}"));
             assert!(s.ws_url().starts_with("ws://"), "{ok}");
@@ -191,7 +196,12 @@ mod tests {
             Server::parse("http://localhost:8080").unwrap().ws_url(),
             "ws://localhost:8080/ws"
         );
-        for bad in ["http://juego.example.com", "http://8.8.8.8"] {
+        for bad in [
+            "http://juego.example.com",
+            "http://8.8.8.8",
+            "http://[::1]:8080",
+            "https://[2001:db8::1]",
+        ] {
             assert!(Server::parse(bad).is_err(), "{bad}");
         }
     }
@@ -275,6 +285,8 @@ mod tests {
     }
 
     #[test]
+    /// Also run by release-desktop.yml with RPG_DESKTOP_SERVER_URL set, to reject a bad
+    /// DESKTOP_SERVER_URL before building installers.
     fn compiled_default_is_valid() {
         Server::parse(compiled_default()).unwrap();
         Server::parse(PRODUCTION_PLACEHOLDER).unwrap();
