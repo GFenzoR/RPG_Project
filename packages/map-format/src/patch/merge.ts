@@ -396,11 +396,13 @@ export function chunkSyncOps(
 }
 
 /**
- * Ops that turn list `current` into `target`: removes the entries that changed or left,
- * then adds the new and changed ones at their index. If the entries both keep end up in a
+ * Ops that turn list `current` of `island` into `target`: removes the entries that changed
+ * or left, then adds the new and changed ones at their index. Throws SyncError if a new or
+ * changed entry is not inside the island (rect and floors; every rect of a zone). If the entries both keep end up in a
  * different order, every entry is removed and added again.
  */
 export function listSyncOps(
+  island: Island,
   list: OpList,
   current: readonly ListEntry[],
   target: readonly ListEntry[],
@@ -414,12 +416,32 @@ export function listSyncOps(
       .filter((k) => kept.has(k))
       .join("\n");
   if (order(current) !== order(target)) kept = new Set();
+  // The entity ops pick the island by position: an entry placed in another island would
+  // land in that island's file. Refuse it, as chunkSyncOps refuses foreign tiles.
+  for (const e of target) if (!kept.has(listKey(e))) checkInIsland(island, list, e);
   const ops: MapOp[] = [];
   for (const e of current) if (!kept.has(listKey(e))) ops.push(entryRemoveOp(list, listKey(e)));
   target.forEach((e, index) => {
     if (!kept.has(listKey(e))) ops.push(entryAddOp(list, e, index));
   });
   return ops;
+}
+
+function checkInIsland(island: Island, list: OpList, e: ListEntry): void {
+  const m = island.meta;
+  const inside = (x: number, y: number, z: number): boolean =>
+    rectContains(m.rect, x, y) && m.floors.includes(z);
+  let ok: boolean;
+  if (list === "zones") {
+    const z = e as Zone;
+    ok = z.floors.every((f) =>
+      z.rects.every((r) => inside(r.x, r.y, f) && inside(r.x + r.w - 1, r.y + r.h - 1, f)),
+    );
+  } else {
+    const p = listEntryPos(e);
+    ok = inside(p.x, p.y, p.z);
+  }
+  if (!ok) throw new SyncError(`${list} entry "${listKey(e)}" is outside island "${m.id}"`);
 }
 
 /** Chunk of `island` at (z, cx, cy), if any. */

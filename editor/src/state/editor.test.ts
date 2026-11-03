@@ -669,6 +669,69 @@ describe("map patches", () => {
     expect(e.state.status).toBe('editor.patch.conflicts {"count":1}');
   });
 
+  it("refuses list entries placed in another island than their file's", async () => {
+    const { e, backend } = patched();
+    const before = e.state.world;
+    const path = "world/islands/a/spawns.yaml";
+    backend.parsed = {
+      base_ref: "editor",
+      files: [
+        {
+          path,
+          island: "a",
+          target: { kind: "list", list: "spawns" },
+          baseKnown: true,
+          base: null,
+          content: [
+            {
+              id: "sneaky",
+              center: { x: 70, y: 4, z: 7 }, // inside island b
+              radius: 1,
+              monsters: [{ monster: "wolf", count: 1 }],
+              respawn_seconds: 30,
+            },
+          ],
+        },
+      ],
+    };
+    expect(await e.importPatch("{}")).toBe(false);
+    expect(e.state.world).toBe(before);
+    expect(e.state.patchConflicts).toEqual([
+      { path, kind: "file", reason: 'spawns entry "sneaky" is outside island "a"' },
+    ]);
+  });
+
+  it("the before view refuses every edit path: delete, cut, paste, undo, redo, panels", () => {
+    const { e } = patched();
+    e.toggleAutoborder();
+    e.pick("sand");
+    e.strokeStart(3, 3, false);
+    e.strokeEnd();
+    e.setTool("select");
+    e.strokeStart(1, 1, false);
+    e.strokeMove(4, 4);
+    e.strokeEnd();
+    e.setReviewSide("before");
+    const w = e.state.world;
+    e.deleteSelection();
+    e.cut();
+    e.pasteAt(10, 10);
+    e.undo();
+    e.redo();
+    e.addEntity("spawns", {
+      id: "den",
+      center: { x: 4, y: 4, z: 7 },
+      radius: 1,
+      monsters: [{ monster: "wolf", count: 1 }],
+      respawn_seconds: 30,
+    });
+    expect(e.state.world).toBe(w);
+    expect(e.state.status).toBe("editor.review.before_readonly");
+    e.setReviewSide("after");
+    e.undo();
+    expect(e.state.world).not.toBe(w);
+  });
+
   it("reports refused patches and keeps the before view read-only", async () => {
     const { e, backend } = patched();
     backend.parsed = new Error('patch touches "data/x.yaml", outside the map files of world/');

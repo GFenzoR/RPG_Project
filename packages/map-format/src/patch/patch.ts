@@ -16,6 +16,8 @@ import type { MapSchemaName } from "../schemas.ts";
 import { CHUNK_SIZE, MAX_FLOOR } from "../types.ts";
 import type { Chunk, Rect } from "../types.ts";
 import { formatYaml, parseYamlText } from "../yaml.ts";
+import { formatPrefab } from "../prefabs.ts";
+import type { Prefab } from "../ops/prefab.ts";
 import { MERGE_LISTS, chunkChanges, listChanges, mergeChunk, mergeList } from "./merge.ts";
 import type { ListChanges, ListEntry, MergeConflict, MergeList } from "./merge.ts";
 
@@ -178,6 +180,29 @@ function formatMerged(p: PatchPath, data: Chunk | ListEntry[] | undefined): stri
   return list.length === 0 ? null : formatYaml(list);
 }
 
+/**
+ * Canonical text of a patch file (what `mapcli fmt` writes), or null when it should not
+ * exist: an empty chunk or an empty list. Patches may be written by hand: their texts are
+ * never written as they come (a YAML `01056` or `0x4` reads differently in other parsers).
+ * Throws PatchError if the text does not parse.
+ */
+export function canonicalPatchText(path: string, text: string | null): string | null {
+  if (text === null) return null;
+  const p = patchPath(path);
+  if (!p) throw new PatchError(`${JSON.stringify(path)} is not a map file of world/`);
+  const data = parsePatchFile(path, text);
+  if (p.kind === "chunk") {
+    const c = data as Chunk;
+    return formatMerged(p, isEmptyChunk(c) ? undefined : c);
+  }
+  if (p.kind === "list") return formatMerged(p, data as ListEntry[]);
+  if (p.kind === "prefab") return formatPrefab(data as Prefab);
+  return formatYaml(data);
+}
+
+const isEmptyChunk = (c: Chunk): boolean =>
+  c.items.length === 0 && c.ground.every((g) => g === null);
+
 export interface FileMerge {
   /** Merged text (null: no file). Conflicting tiles/entries keep the current version. */
   text: string | null;
@@ -195,13 +220,20 @@ export function mergePatchFile(
   ours: string | null,
   theirs: string | null,
 ): FileMerge {
-  if (ours === theirs) return { text: ours, conflicts: [] };
-  if (base !== undefined && ours === base) return { text: theirs, conflicts: [] };
-  if (base !== undefined && theirs === base) return { text: ours, conflicts: [] };
   const conflict = (reason: string): FileMerge => ({
     text: ours,
     conflicts: [{ kind: "file", reason }],
   });
+  if (ours === theirs) return { text: ours, conflicts: [] };
+  if (base !== undefined && theirs === base) return { text: ours, conflicts: [] };
+  if (base !== undefined && ours === base) {
+    // Fast-forward (or creation): the patch's text, in canonical form.
+    try {
+      return { text: canonicalPatchText(path, theirs), conflicts: [] };
+    } catch (e) {
+      return conflict(e instanceof Error ? e.message : String(e));
+    }
+  }
   if (base === undefined) return conflict("the base is not available to merge");
   const p = patchPath(path);
   if (!p || (p.kind !== "chunk" && p.kind !== "list"))

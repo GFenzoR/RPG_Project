@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   cpSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -11,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { emptyChunk, formatChunk, parseChunk } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
 import { afterEach, describe, expect, it } from "vitest";
 import { run } from "./index.ts";
@@ -474,6 +477,105 @@ describe("mapcli patch", () => {
       );
       expect([path, mapcli("patch", "apply", evil, "--root", root).code]).toEqual([path, 2]);
     }
+  });
+
+  it("diff shows what the merge would write, not local edits as reverted", () => {
+    const src = sandbox();
+    const paint = (root: string, rect: string, ground: string) =>
+      mapcli(
+        "paint",
+        "testisle",
+        "--floor",
+        "7",
+        "--rect",
+        rect,
+        "--ground",
+        ground,
+        "--root",
+        root,
+      );
+    const spawn = (root: string, id: string) =>
+      mapcli(
+        "spawn",
+        "add",
+        "testisle",
+        "--pos",
+        "1050,1045,7",
+        "--monster",
+        "wolf",
+        "--id",
+        id,
+        "--root",
+        root,
+      );
+    paint(src, "1045,1045,2,1", "sand");
+    spawn(src, "patch_spawn");
+    const pf = join(src, "p1.rpgpatch.json");
+    mapcli("patch", "create", "--out", pf, "--root", src);
+
+    const dst = sandbox();
+    paint(dst, "1052,1052,3,1", "dirt"); // same chunk, other tiles
+    spawn(dst, "local_spawn");
+    const diff = mapcli("patch", "diff", pf, "--root", dst);
+    expect(diff.code).toBe(0);
+    expect(diff.json().files).toEqual([
+      expect.objectContaining({
+        path: Z7,
+        status: "modified",
+        base_matches: false,
+        conflicts: 0,
+        tiles_changed: 2,
+      }),
+      expect.objectContaining({
+        path: "world/islands/testisle/spawns.yaml",
+        base_matches: false,
+        conflicts: 0,
+        added: ["patch_spawn"],
+        removed: [],
+        changed: [],
+      }),
+    ]);
+  });
+
+  it("writes patch contents in canonical form, never as they come", () => {
+    const root = sandbox();
+    const SP = "world/islands/testisle/spawns.yaml";
+    const Z8 = "world/islands/testisle/chunks/z07/c0032_0033.json";
+    const chunkText = read(root, Z7);
+    const spawns = read(root, SP);
+    const hash = (t: string) => `sha256:${createHash("sha256").update(t).digest("hex")}`;
+    // Minified, with an unused palette entry and one changed tile.
+    const raw = JSON.parse(chunkText) as { palette: string[]; ground: number[][] };
+    raw.palette.push("dirt", "wet_sand"); // wet_sand is never used
+    (raw.ground[0] as number[])[0] = raw.palette.length - 2;
+    const minified = JSON.stringify(raw);
+    // Octal-looking and hex numbers that YAML parsers read differently.
+    const odd = spawns
+      .replace("center: { x: 1056, y: 1041, z: 7 }", "center: { x: 01056, y: 01041, z: 7 }  # x")
+      .replace("radius: 4", "radius: 0x4");
+    expect(odd).not.toBe(spawns);
+    const z8 = read(root, Z8);
+    const evil = join(root, "odd.json");
+    writeFileSync(
+      evil,
+      JSON.stringify({
+        format: 2,
+        kind: "rpg-map-patch",
+        base_ref: "HEAD",
+        files: [
+          { path: Z7, base: hash(chunkText), base_text: chunkText, content: minified },
+          { path: Z8, base: hash(z8), base_text: z8, content: formatChunk(emptyChunk(32, 33, 7)) },
+          { path: SP, base: hash(spawns), base_text: spawns, content: odd },
+        ],
+      }),
+    );
+    expect(mapcli("patch", "apply", evil, "--root", root).code).toBe(0);
+    expect(read(root, Z7)).toBe(formatChunk(parseChunk(minified, Z7) ?? emptyChunk(0, 0, 0)));
+    expect(read(root, Z7)).not.toContain("wet_sand");
+    expect(existsSync(join(root, Z8))).toBe(false); // an empty chunk is removed
+    expect(read(root, SP)).toContain("center: { x: 1056, y: 1041, z: 7 }");
+    expect(read(root, SP)).toMatch(/radius: 4\n/);
+    expect(mapcli("fmt", "--check", "--root", root).code).toBe(0);
   });
 
   it("never writes through a symlink that leaves world/", () => {

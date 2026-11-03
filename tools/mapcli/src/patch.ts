@@ -195,24 +195,29 @@ export interface FileDiff extends FileSummary {
   conflicts?: number;
 }
 
-/** What applying the patch would change in the current files. */
+/**
+ * What applying the patch would change in the current files: the current version against
+ * what the merge would write (not against the patch's content, which would show local
+ * edits made elsewhere in the file as reverted).
+ */
 export function diffPatch(root: string, patch: MapPatch): FileDiff[] {
   return patch.files.map((f) => {
     const cur = readOrNull(root, f.path);
     const base_matches =
       cur === f.content ||
       (f.base === null ? cur === null : cur !== null && patchHash(cur) === f.base);
+    const m = mergePatchFile(f.path, baseOf(root, patch, f), cur, f.content);
+    const after = m.text;
     const status: FileDiff["status"] =
-      cur === f.content
+      cur === after
         ? "unchanged"
         : cur === null
           ? "added"
-          : f.content === null
+          : after === null
             ? "removed"
             : "modified";
     const d: FileDiff = { path: f.path, status, base_matches };
-    if (!base_matches)
-      d.conflicts = mergePatchFile(f.path, baseOf(root, patch, f), cur, f.content).conflicts.length;
-    return { ...d, ...summarizeFileChange(f.path, cur, f.content) };
+    if (!base_matches) d.conflicts = m.conflicts.length;
+    return { ...d, ...summarizeFileChange(f.path, cur, after) };
   });
 }

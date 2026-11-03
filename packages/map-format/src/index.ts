@@ -55,6 +55,7 @@ export {
   PATCH_FORMAT,
   PATCH_KIND,
   PatchError,
+  canonicalPatchText,
   describeConflict,
   isPatchable,
   mergePatchFile,

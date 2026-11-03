@@ -71,7 +71,14 @@ export function planImport(world: World, patch: ParsedPatch): ImportPlan {
     }
     const m = mergeList((f.base ?? []) as ListEntry[], ours, theirs);
     for (const c of m.conflicts) conflicts.push({ ...c, path: f.path });
-    const ops = listSyncOps(list, ours, m.result);
+    let ops: MapOp[];
+    try {
+      ops = listSyncOps(island, list, ours, m.result);
+    } catch (e) {
+      if (!(e instanceof SyncError)) throw e;
+      fileConflict(f.path, e.message);
+      continue;
+    }
     if (ops.length > 0) files.push(f.path);
     for (const op of ops) (op.op.startsWith("remove_") ? removes : rest).push(op);
   }

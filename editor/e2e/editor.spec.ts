@@ -2,7 +2,7 @@
 // validation and floors, saves, and verifies the saved files are canonical (`mapcli fmt
 // --check` finds nothing to change). Screenshots: e2e/screenshots/actual/.
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { cpSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -447,10 +447,15 @@ test("the API refuses requests that do not come from the editor page", async ({ 
 test("hito 2: map patches — export, diff view, import with and without conflicts", async ({
   page,
 }) => {
+  // Start from the repository's world/: earlier tests leave edits (and a broken chunk) in
+  // the scratch copy, which would show up in this test's screenshots.
+  rmSync(join(root, "world"), { recursive: true, force: true });
+  cpSync(join(repo, "world"), join(root, "world"), { recursive: true });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/?lang=es&island=testisle");
   await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
   const CHUNK = "world/islands/testisle/chunks/z07/c0033_0032.json";
   const onDisk = readFileSync(join(root, CHUNK), "utf8");
   const A: [number, number] = [1058, 1040];

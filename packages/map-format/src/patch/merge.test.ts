@@ -214,7 +214,7 @@ describe("diffWorlds and sync ops", () => {
     const cur = before.islands.get("isla") as Island;
     const ops = [
       ...chunkSyncOps(cur, cur.chunks.get("7/0/0"), target.chunks.get("7/0/0"), AT),
-      ...listSyncOps("spawns", cur.spawns, target.spawns),
+      ...listSyncOps(cur, "spawns", cur.spawns, target.spawns),
     ];
     const after = applyOps(before, ops).world;
     const got = after.islands.get("isla") as Island;

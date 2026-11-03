@@ -443,6 +443,7 @@ export class EditorController {
   /** One-shot edit (rectangle, paste, panels) recorded as one history entry. */
   private commit(label: string, ops: MapOp[], autoborder = true): boolean {
     this.strokeEnd();
+    if (this.readOnly()) return false;
     try {
       const e = this.edit(ops, autoborder);
       if (!e) return false;
@@ -472,10 +473,7 @@ export class EditorController {
 
   strokeStart(x: number, y: number, secondary: boolean): void {
     this.strokeEnd();
-    if (this.state.review && this.state.reviewSide === "before") {
-      this.set({ status: this.t("editor.review.before_readonly") });
-      return;
-    }
+    if (this.readOnly()) return;
     if (this.pickCallback) {
       const cb = this.pickCallback;
       this.pickCallback = undefined;
@@ -678,6 +676,16 @@ export class EditorController {
 
   // ---- review: map patches and diff -------------------------------------------------------
 
+  /**
+   * While the canvas shows the world as loaded ("before"), nothing may edit the current
+   * world it hides (tools, Delete, cut, paste, panels, undo/redo): reports it and says true.
+   */
+  private readOnly(): boolean {
+    if (!this.state.review || this.state.reviewSide !== "before") return false;
+    this.set({ status: this.t("editor.review.before_readonly") });
+    return true;
+  }
+
   /** World the canvas draws: the loaded one while reviewing "before", else the current one. */
   viewWorld(): World {
     return this.state.review && this.state.reviewSide === "before"
@@ -780,6 +788,8 @@ export class EditorController {
       this.set({ status: this.t("editor.patch.nothing") });
       return true;
     }
+    // An import started from "before" shows its result: switch first, so it is not read-only.
+    this.set({ reviewSide: "after" });
     // The patch carries its own borders: no automatic autoborder on top.
     if (!this.commit("editor.history.patch_import", plan.ops, false)) return false;
     this.set({
@@ -792,6 +802,7 @@ export class EditorController {
 
   undo(): void {
     this.strokeEnd();
+    if (this.readOnly()) return;
     try {
       const step = this.history.undo(this.state.world);
       if (!step) return;
@@ -804,6 +815,7 @@ export class EditorController {
 
   redo(): void {
     this.strokeEnd();
+    if (this.readOnly()) return;
     try {
       const step = this.history.redo(this.state.world);
       if (!step) return;
