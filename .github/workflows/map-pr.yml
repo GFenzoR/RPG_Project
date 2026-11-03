@@ -41,10 +41,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
+          ASSOCIATION: ${{ github.event.pull_request.author_association }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           node --experimental-strip-types tools/mapcli/src/cli.ts pr-check \
-            --base "$BASE_SHA" --head "$HEAD_SHA" --author "$AUTHOR" --pr "$PR" \
+            --base "$BASE_SHA" --head "$HEAD_SHA" --author "$AUTHOR" --association "$ASSOCIATION" --pr "$PR" \
             --out map-pr
       - name: step summary
         if: ${{ !cancelled() && hashFiles('map-pr/report.json') != '' }}

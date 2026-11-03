@@ -13,7 +13,8 @@
 //   - the community plot check against the plots of base (never of the PR);
 //   - new validator errors of the merged map;
 //   - before/after PNGs of every changed area (cropped, margin, size and count capped).
-// The maintainer list is read from base (`.github/MAINTAINERS`), so a PR cannot add itself.
+// The maintainer list is read from base (`.github/MAINTAINERS`), so a PR cannot add itself;
+// the repository owner (author_association OWNER, given by GitHub) always counts as one.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -89,6 +90,9 @@ export interface PrCheckOptions {
   head: string;
   out: string;
   author?: string;
+  /** GitHub's author_association of the PR author (from the event, not the PR): OWNER is
+   *  always a maintainer, so the repo owner is one even before .github/MAINTAINERS exists. */
+  association?: string;
   pr?: number;
 }
 
@@ -210,7 +214,8 @@ export function prCheck(opts: PrCheckOptions): PrReport {
 
     const maintainers = parseMaintainers(atRef(root, base, MAINTAINERS_FILE));
     const author = opts.author?.toLowerCase() ?? null;
-    const maintainer = author !== null && maintainers.includes(author);
+    const maintainer =
+      author !== null && (maintainers.includes(author) || opts.association === "OWNER");
 
     // Renders.
     mkdirSync(opts.out, { recursive: true });

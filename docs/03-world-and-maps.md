@@ -328,7 +328,8 @@ Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable
      `island.yaml` o prefabs, es siempre de maintainer.
    - `world/CONTRIBUTORS.md` lo puede tocar cualquiera.
    - **Maintainer** = login de GitHub listado en `.github/MAINTAINERS` (uno por línea),
-     leído de la rama base, así que un PR no puede agregarse a sí mismo. Se eligió un
+     leído de la rama base, así que un PR no puede agregarse a sí mismo, más el dueño del
+     repo (`author_association: OWNER` del evento de GitHub). Se eligió un
      archivo propio en vez de `CODEOWNERS` porque CODEOWNERS admite equipos
      (`@org/equipo`) que la CI no puede resolver sin un token con permisos de lectura de
      la organización.

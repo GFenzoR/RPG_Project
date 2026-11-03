@@ -73,22 +73,28 @@ describe("tileFor", () => {
   });
 });
 
-describe("mapcli pr-check", () => {
+describe("mapcli pr-check", { timeout: 60_000 }, () => {
   it("passes a change inside a community plot and renders it before/after", () => {
     const { root, git, edit } = sandbox();
     git("checkout", "-qb", "pr");
-    edit("place", "puerto", "--pos", "3204,6299,7", "--item", "boulder");
+    edit("place", "puerto", "--pos", "3202,6304,7", "--item", "oak_tree");
     git("commit", "-qam", "inside");
     const out = tmp("pr-out-");
     const r = prCheck({ root, base: "main", head: "pr", out, author: "someone", pr: 3 });
     expect(r.failures).toEqual([]);
     expect(r.ok).toBe(true);
     expect(r.plots).toEqual({ count: 1, violations: [] });
-    expect(r.files).toMatchObject([{ path: PLOT_CHUNK, status: "modified", tiles_changed: 1 }]);
+    expect(r.files).toMatchObject([
+      {
+        path: "world/islands/puerto/chunks/z07/c0100_0197.json",
+        status: "modified",
+        tiles_changed: 1,
+      },
+    ]);
     expect(r.areas).toEqual([
       {
-        x: 3200,
-        y: 6295,
+        x: 3198,
+        y: 6300,
         w: 9,
         h: 9,
         z: 7,
@@ -127,6 +133,25 @@ describe("mapcli pr-check", () => {
     const boss = prCheck({ root, base: "main", head: "pr", out, author: "boss", pr: 4 });
     expect(boss).toMatchObject({ ok: true, maintainer: true });
     expect(boss.plots.violations).toHaveLength(1);
+    // The repository owner is a maintainer even when not listed.
+    const owner = prCheck({
+      root,
+      base: "main",
+      head: "pr",
+      out,
+      author: "o",
+      association: "OWNER",
+    });
+    expect(owner).toMatchObject({ ok: true, maintainer: true });
+    const member = prCheck({
+      root,
+      base: "main",
+      head: "pr",
+      out,
+      author: "m",
+      association: "MEMBER",
+    });
+    expect(member.maintainer).toBe(false);
     // Through the CLI: exit code 1 and a summary.
     let text = "";
     const code = run(

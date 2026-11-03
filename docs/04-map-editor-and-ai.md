@@ -211,7 +211,7 @@ maliciosas están en `packages/map-format/src/patch/merge.test.ts`,
 Todo PR que toca `world/` dispara dos workflows:
 
 1. **`map-pr.yml`** (`pull_request`, `contents: read`, sin secretos): corre
-   `mapcli pr-check --base <sha base> --head <sha head> --author <login> --pr <n> --out map-pr`
+   `mapcli pr-check --base <sha base> --head <sha head> --author <login> --association <rel> --pr <n> --out map-pr`
    y sube dos artefactos: `map-pr-report` (`report.json`) y `map-pr-renders` (PNG). Falla si
    el reporte falla. También escribe el Markdown en el resumen de la ejecución.
 2. **`map-pr-comment.yml`** (`workflow_run` de `map-pr`, `pull-requests: write`,
@@ -226,7 +226,8 @@ Todo PR que toca `world/` dispara dos workflows:
   no aparece como revertido.
 - **Parcelas** (`checkPlots` en `packages/map-format/src/patch/plots.ts`, reglas en
   `03-world-and-maps.md`): casillas y entradas fuera de toda parcela `community_plot` de la
-  base. Falla si hay alguna y el autor no está en `.github/MAINTAINERS` de la base.
+  base. Falla si hay alguna y el autor no está en `.github/MAINTAINERS` de la base ni es
+  el dueño del repo (`--association OWNER`, de `author_association` del evento).
 - **Validación**: errores del validador en el mapa mezclado que la base no tenía.
 - **Conflictos** con la base actual: falla (hay que hacer rebase).
 - **Render**: `changeBoxes` toma el bbox de las casillas cambiadas por chunk y la posición
