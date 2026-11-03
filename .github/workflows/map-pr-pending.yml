@@ -1,0 +1,56 @@
+name: map-pr-pending
+
+# Marks the map review comment as pending as soon as a PR changes (R5,
+# docs/04-map-editor-and-ai.md "PR de mapas en CI"), so a push that never produces a
+# map-pr run (the PR renamed or deleted map-pr.yml) leaves "pending", never an old pass.
+#
+# Security: pull_request_target runs this file from the BASE branch, so a PR cannot remove
+# or change it. That is also why it must stay this small: no checkout, nothing of the PR is
+# run or read, and the only data used is the PR number and head sha, validated by regex.
+# Its token can only write PR comments. When map-pr finishes, map-pr-comment replaces the
+# text with the verdict (and ignores runs for a head that is no longer the PR's).
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  group: map-pr-pending-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pending:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: mark the map review comment as pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        # Any API failure (rate limit, 5xx) must fail the job: a green job that marked
+        # nothing would leave an old pass in place (F2). No pipes into `head`.
+        run: |
+          set -euo pipefail
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "bad PR number"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad head sha"; exit 1; }
+          marker='<!-- rpg-map-pr-check -->'
+          comments="$RUNNER_TEMP/comments.json"
+          gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" > "$comments"
+          id="$(jq -s -r --arg m "$marker" \
+            'add // [] | map(select(.user.login == "github-actions[bot]" and ((.body // "") | startswith($m)))) | .[0].id // empty' \
+            "$comments")"
+          if [ -z "$id" ]; then
+            echo "no map review comment yet: nothing to mark"
+            exit 0
+          fi
+          [[ "$id" =~ ^[0-9]+$ ]] || { echo "unexpected comment id"; exit 1; }
+          # The backticks are Markdown, not command substitution:
+          # shellcheck disable=SC2016
+          body="$(printf '%s\n## Revisión de mapa (CI)\n\n⏳ **Pendiente:** revisando el commit `%s`. El veredicto anterior ya no vale; si esto no cambia, el check `map-pr` no corrió para este commit.\n' "$marker" "${SHA:0:12}")"
+          gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" > /dev/null
+          echo "marked comment $id as pending for ${SHA:0:12}"

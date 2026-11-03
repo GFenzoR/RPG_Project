@@ -87,6 +87,11 @@ validate: ## Validate data/ and i18n/ against the schemas, then world/ maps (map
 	$(CONTENT_CLI) validate
 	$(MAPCLI) validate --format text
 
+.PHONY: map-pr
+map-pr: ## Map PR check of HEAD=<ref> against BASE=<ref> (default main) into build/map-pr, plus the comment
+	$(MAPCLI) pr-check --base $(or $(BASE),main) --head $(or $(HEAD),HEAD) --author $(or $(AUTHOR),local) --association $(or $(ASSOCIATION),NONE) --pr 1 --out build/map-pr; \
+	  code=$$?; node --experimental-strip-types tools/mapcli/src/prcomment.ts --dry-run build/map-pr/report.json; exit $$code
+
 .PHONY: mapcompile
 mapcompile: ## Compile world/ + data/items into build/world.bin (server map)
 	cd server && go run ./cmd/mapcompile -root .. -out ../build/world.bin

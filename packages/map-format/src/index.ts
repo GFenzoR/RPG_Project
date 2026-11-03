@@ -67,3 +67,18 @@ export {
 } from "./patch/patch.ts";
 export type { FileMerge, FileSummary, MapPatch, PatchFile, PatchPath } from "./patch/patch.ts";
 export * from "./patch/merge.ts";
+export {
+  PLOT_FREE_FILES,
+  changeBoxes,
+  checkPlots,
+  communityPlots,
+  inPlot,
+  renderAreas,
+} from "./patch/plots.ts";
+export type {
+  FileChange,
+  FloorRect,
+  Plot,
+  PlotViolation,
+  RenderAreaOptions,
+} from "./patch/plots.ts";

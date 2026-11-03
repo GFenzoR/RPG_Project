@@ -207,6 +207,151 @@ Al escribir, `mapcli` también comprueba que el directorio existente más profun
 maliciosas están en `packages/map-format/src/patch/merge.test.ts`,
 `tools/mapcli/src/edit.test.ts` (incluido el symlink) y `editor/server/store.test.ts`.
 
+### PR de mapas en CI (T2.4)
+Todo PR dispara tres workflows (sin filtro `paths`: GitHub solo mira los primeros 300
+archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto anterior):
+
+1. **`map-pr.yml`** (`pull_request` con `opened`, `synchronize`, `reopened` y `edited`,
+   `contents: read`, sin secretos). Hace checkout de la **rama base tal como está ahora**
+   (`base.ref`, no el `base.sha` congelado del evento) y trae el head del PR solo como dato
+   (`git fetch refs/pull/N/head`). Si el PR no cambia `world/`, termina ahí, antes de
+   `pnpm install`. Si lo cambia, instala las dependencias **de la base** y corre
+   `mapcli pr-check --base <sha base> --head <sha head> --author <login> --association <rel> --head-repo <o/r> --repo <o/r> --pr <n> --out map-pr`.
+   Sube dos artefactos, `map-pr-report` (`report.json`) y `map-pr-renders` (PNG), y falla
+   si el reporte falla. También deja una vista previa del comentario en el resumen.
+2. **`map-pr-comment.yml`** (`workflow_run` de `map-pr`, `pull-requests: write`,
+   `actions: read`, `contents: read`). Publica **un** comentario por PR, marcado con
+   `<!-- rpg-map-pr-check -->`, y lo edita en cada push. Lo crea solo si el PR cambia
+   `world/` y lo actualiza siempre que ya exista. Si el último commit ya no toca `world/`,
+   lo reemplaza por un aviso de que la revisión anterior no aplica. El comentario vale
+   para el commit que nombra. Si el PR ya avanzó a otro commit, no hace nada: un reporte
+   viejo nunca pisa uno nuevo ni el aviso de "pendiente".
+3. **`map-pr-pending.yml`** (`pull_request_target`, solo `pull-requests: write`). Sale de
+   la base, así que el PR no lo puede quitar. En cada push (y en `edited`), si ya existe
+   el comentario, lo cambia a "⏳ Pendiente: revisando el commit `<sha>`". No hace
+   checkout, no ejecuta ni lee nada del PR, y solo usa el número y el sha del evento,
+   validados con regex. Así, un push que no produce una corrida de `map-pr` (por ejemplo,
+   porque el PR renombró o borró `map-pr.yml`) deja "pendiente", nunca un ✅ viejo. Corre
+   con `set -euo pipefail` y sin pipes a `head`: si falla el listado o el PATCH (por rate
+   limit o un 5xx), el job queda en rojo en vez de "pasar" sin marcar nada. El test
+   ejecuta el script del YAML con un `gh` falso.
+
+`mapcli pr-check` (`tools/mapcli/src/prcheck.ts`):
+- Arma el PR como map patch desde `merge-base(base, head)` hasta `head` y lo mezcla sobre
+  la base actual en un worktree temporal, igual que `patch apply`. El resumen por archivo
+  es el de `patch diff` (estado, casillas, bbox, entradas, `base_matches`, `conflict`), así
+  lo que entró a la base después de abrir el PR no aparece como revertido.
+- **Mismo merge que GitHub:** GitHub mezcla texto, no casillas. `git merge-tree
+  --write-tree` calcula el árbol que haría git:
+  - si git ve un conflicto textual, falla con `rebase`;
+  - si para algún archivo tocado el texto de git (canónico) no es exactamente el que midió
+    el merge por casilla, falla con `merge_mismatch`. Pasa con las paletas de los chunks,
+    que van en orden de primer uso: un lado renumera y el otro agrega una fila con la
+    numeración vieja.
+- **Archivos inválidos:** fallan con `invalid`, también para maintainers, y quedan fuera
+  del merge:
+  - un archivo de mapa del PR que no pasa su esquema;
+  - uno que no es UTF-8 válido: se lee como bytes y se decodifica en modo estricto, porque
+    una decodificación con pérdida convertiría un `0xFF` en U+FFFD y parecería canónico;
+  - uno cuyos **bytes** no son exactamente su forma canónica (`mapcli fmt`). Por ejemplo,
+    `x: 03207` es 3207 para el parser TS y 1671 (octal) para el `yaml.v3` del servidor;
+  - una ruta de `world/` cuyo modo no es `100644` en el head o en el merge (symlink,
+    ejecutable, submódulo), aunque el blob no cambie.
+- La comparación con `git merge-tree` compara bytes: el blob crudo de git contra el
+  archivo que escribió el merge por casilla, sin canonicalizar.
+- **Caracteres prohibidos (decisión).** `parsePatchFile`, y con él `canonicalPatchText`,
+  rechaza en cualquier archivo de mapa los controles C0 (salvo tab, LF y CR), DEL, los
+  controles C1 y U+FFFE/U+FFFF, tanto crudos como escritos como escape YAML (`"\x7f"`).
+  Se rechazan en vez de escaparlos al escribir porque el texto libre (`notes`) nunca los
+  necesita, y porque así el parser TS y el `yaml.v3` de Go leen siempre lo mismo (Go los
+  rechaza crudos). Acentos, ñ y el resto de Unicode pasan.
+- **Parcelas** (`checkPlots` en `packages/map-format/src/patch/plots.ts`, reglas en
+  `03-world-and-maps.md`): casillas y entradas fuera de toda parcela `community_plot` de la
+  base. Falla si hay alguna y el autor no es maintainer (`.github/MAINTAINERS` de la base u
+  OWNER, y dueño del repo del head).
+- **Validación**: errores del validador en el mapa mezclado que la base no tenía.
+- **Conflictos** con la base actual: falla (hay que hacer rebase). Cada conflicto lleva un
+  código fijo (`tiles`, `entries`, `changed_both_sides`, `no_base`, `invalid_file`), nunca
+  el texto del parser.
+- **Render**:
+  - `changeBoxes` toma el bbox de las casillas cambiadas por chunk y la posición de cada
+    entrada cambiada (spawn con su radio, ambos extremos del portal, rects de zona);
+  - `renderAreas` les suma 4 casillas de margen, fusiona las que se tocan en el mismo piso,
+    parte las de más de 64x64 y se queda con 6 como máximo (el resto se cuenta);
+  - cada área se renderiza antes (base) y después (merge) con `renderArea`, a 32/16/8/4 px
+    por casilla para no pasar de 1024 px de lado;
+  - un PNG de más de 2 MB no se sube.
+- Exit code 1 si falla. `report.json` (formato 2) lleva:
+  - `ok`, `failures` (`plots`, `invalid`, `conflicts`, `rebase`, `merge_mismatch`,
+    `validation`) y `map_changes`;
+  - `files`, `conflicts`, `invalid_files` y `merge_mismatch`;
+  - `plots` y `validation`, con sus totales;
+  - `other_files` (con su total), `areas` y `omitted_areas`.
+
+**Seguridad (los PR vienen de forks).** Modelo de confianza en dos capas:
+1. **El check corre código de la base, no del PR.** `map-pr.yml` hace checkout de la rama
+   base y corre su `pnpm install` y su `mapcli`. Del PR solo lee el mapa con `git show` y
+   `git merge-tree`: un `postinstall`, un cambio a `plots.ts` o a `prcheck.ts` del PR no se
+   ejecutan. El token es de solo lectura, no hay secretos y no se usa `pull_request_target`.
+2. **El comentario no cree en el reporte para lo importante.** `map-pr-comment.yml` corre
+   desde la rama por defecto y solo hace checkout de `tools/mapcli/src/prcomment.ts`
+   (autocontenido, sin `pnpm install`) y de `.github/MAINTAINERS`. No ejecuta nada del PR y:
+   - toma la lista de archivos de `GET /pulls/{n}/files` (hasta 3000; un rename cuenta
+     también por su origen, así que mover `.github/workflows/ci.yml` a `docs/` es tocar
+     `.github/`) y arma con ella
+     "Fuera de `world/`", con los archivos sensibles (`.github/`, `tools/`, `packages/`,
+     `server/`, `package.json`, lockfile, `.npmrc`) primero;
+   - decide si el autor es maintainer con los datos del PR en la API
+     (`author_association`, `head.repo`) y el `MAINTAINERS` de la rama por defecto, y con
+     eso decide la falla `plots`; el `maintainer` del reporte se ignora;
+   - si la API lista menos archivos que el `changed_files` del PR, o llega al tope de
+     3000, el veredicto no es confiable: los archivos que no se ven podrían ser cualquier
+     cosa. El "… y N más" usa el total del PR;
+   - si el PR cambia cualquier archivo fuera de `world/` y `docs/`, **nunca muestra ✅**:
+     dice "El veredicto no es confiable: este PR cambia el código o la configuración del
+     check";
+   - trata `report.json` como dato no confiable. Lo rechaza si pasa de 1 MB, reconstruye
+     cada campo con su tipo y valida cada string contra un patrón estricto (rutas de
+     `world/`, IDs, logins, SHAs, nombres `before|after-N.png`, códigos con `oneOf`);
+   - los motivos y errores salen de tablas fijas en español: ningún texto del parser llega
+     al comentario. Lo único libre son los mensajes del validador, sin backticks ni saltos,
+     dentro de un bloque de código;
+   - busca el PR por `head_sha` y repo de origen del `workflow_run`, y exige que el número,
+     el commit y el autor del reporte coincidan.
+- Los topes nunca son silenciosos: el reporte guarda los totales y el comentario dice
+  "… y N más".
+- Las actions están fijadas por versión exacta.
+- **Imágenes:** quedan en el artefacto `map-pr-renders` y el comentario enlaza a él (hace
+  falta sesión de GitHub para descargarlo). No se suben a servicios externos ni a una rama
+  del repo, porque eso pediría `contents: write` en el workflow con token.
+- **Límite conocido:** en `pull_request`, el YAML de `map-pr.yml` sale del PR. Un PR que lo
+  edite, lo renombre (`name: map-pr2`) o lo borre puede falsear el check `map-pr / check`;
+  además, un job `check` de otro workflow del PR podría ocupar el lugar del requerido. Lo
+  que lo contiene:
+  - el comentario marca como no confiable a todo PR que toque `.github/` (también por
+    rename);
+  - `map-pr-pending.yml`, que sale de la base, deja el comentario en "pendiente" en cada
+    push;
+  - la configuración de abajo.
+  El token del check es de lectura, así que el daño no pasa del veredicto.
+- **Configuración que hace el dueño del repo** (👤, no la puede hacer la CI):
+  - marcar `map-pr / check` como check requerido en la protección de `main`, con "Require
+    branches to be up to date before merging" (o una merge queue con `merge_group:`), para
+    que un cambio en `main` (cerrar una parcela, quitar un maintainer) obligue a recorrer
+    el check;
+  - en la regla del check requerido, fijar la fuente esperada a **GitHub Actions** (la app),
+    para que no lo satisfaga un status de otra integración;
+  - un `CODEOWNERS` para `.github/`, `tools/` y `packages/`, con "Require review from Code
+    Owners", para que ningún PR que toque los workflows entre sin un maintainer. Es lo que
+    cierra el caso del workflow renombrado o de un job `check` falso.
+- Arranque: mientras la base no tenga `tools/mapcli/src/prcheck.ts`, el check se salta y
+  lo dice en el resumen. La base es de confianza: un PR no puede quitárselo.
+
+Prueba local, sin GitHub: `make map-pr BASE=main HEAD=<rama>` (reporte y PNG en
+`build/map-pr/`, imprime el comentario con `prcomment.ts --dry-run`, que toma los datos de
+confianza del propio reporte y por eso es solo una vista previa). Tests:
+`packages/map-format/src/patch/plots.test.ts` y `tools/mapcli/src/prcheck.test.ts`.
+
 ## Flujo recomendado para que una IA construya una zona
 1. `map_info` y `content_search` para saber qué hay disponible.
 2. Generar base: `mapcli generate` (forma de isla, costas, ríos con semilla) o pintar
@@ -216,7 +361,8 @@ maliciosas están en `packages/map-format/src/patch/merge.test.ts`,
 5. Spawns, NPCs, zonas, portales.
 6. `map_validate` hasta que no haya errores.
 7. `map_render` de cada área tocada y revisar las imágenes.
-8. `map_patch_create` y abrir PR.
+8. `map_patch_create` y abrir PR. Fuera de una parcela `community_plot` hace falta un
+   maintainer (ver "PR de mapas en CI").
 
 ## Editor web — funciones por hito
 **Hito 1 (rebanada vertical):** abrir una isla, navegar, zoom, cambiar de piso, pincel de

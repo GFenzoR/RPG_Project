@@ -22,3 +22,10 @@
   floors: [7]
   rects:
     - { x: 3199, y: 6429, w: 5, h: 6 }
+
+- id: puerto_north_shore_plot
+  type: community_plot
+  floors: [7]
+  rects:
+    - { x: 3200, y: 6296, w: 16, h: 12 }
+  notes: "North shore beach east of the forest, open to community map patches (T2.4)."

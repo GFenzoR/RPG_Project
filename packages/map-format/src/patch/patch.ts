@@ -107,6 +107,32 @@ function schemaOf(p: PatchPath): MapSchemaName {
 export function parsePatchFile(path: string, text: string): unknown {
   const p = patchPath(path);
   if (!p) throw new PatchError(`${JSON.stringify(path)} is not a map file of world/`);
+  if (FORBIDDEN_CHARS.test(text))
+    throw new PatchError(`${path}: control or non-character code point in the text`);
+  const data = parseByKind(p, path, text);
+  if (hasForbiddenString(data))
+    throw new PatchError(`${path}: control or non-character code point in a value`);
+  return data;
+}
+
+/**
+ * Characters the Go server's yaml.v3 rejects (or that no map file needs): C0 controls
+ * except tab, LF and CR; DEL; C1 controls; U+FFFE and U+FFFF. Rejected in map files, raw
+ * or written as YAML escapes ("\x7f"), instead of escaping them on write: free text
+ * (`notes`) never needs them, and rejecting keeps TS and Go reading the same thing.
+ */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
+export const FORBIDDEN_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\ufffe\uffff]/;
+
+function hasForbiddenString(v: unknown): boolean {
+  if (typeof v === "string") return FORBIDDEN_CHARS.test(v);
+  if (Array.isArray(v)) return v.some(hasForbiddenString);
+  if (v !== null && typeof v === "object")
+    return Object.entries(v).some(([k, x]) => FORBIDDEN_CHARS.test(k) || hasForbiddenString(x));
+  return false;
+}
+
+function parseByKind(p: PatchPath, path: string, text: string): unknown {
   if (p.kind === "chunk") {
     const diags: Diagnostic[] = [];
     const c = parseChunk(text, path, diags);

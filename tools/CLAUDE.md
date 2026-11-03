@@ -17,6 +17,7 @@ mapcli generate <isla> --recipe island --seed 42 --size 128   generación proced
 mapcli validate [isla] [--format text]     mismo validador que el editor y la CI
 mapcli patch create|apply|diff             trabajar con map patches
 mapcli ops apply ops.json                  aplica una lista de operaciones en lote
+mapcli pr-check --base REF --head REF --out DIR   check de PR de mapas (T2.4, docs/04)
 ```
 Todos existen desde T1.15 (además `erase`, `fill`, `remove`, `autoborder`, `stamp`); la
 lista exacta de opciones está en `mapcli` sin argumentos. Los comandos de edición aceptan

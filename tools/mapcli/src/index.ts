@@ -24,6 +24,7 @@ import { applyEdit, editContext, parseOps } from "./edit.ts";
 import type { EditOutcome } from "./edit.ts";
 import { createPatch, diffPatch, parsePatch, planPatch, writePlanned } from "./patch.ts";
 import { MAX_RENDER_SIZE, TILE_SIZES, loadFrames, renderArea } from "./render.ts";
+import { prCheck } from "./prcheck.ts";
 
 export const USAGE = `usage: mapcli <command> [options]   (global: --root DIR, default ".")
  read:
@@ -54,7 +55,12 @@ export const USAGE = `usage: mapcli <command> [options]   (global: --root DIR, d
   patch diff <file>                             what applying it would change
   patch apply <file> [--dry-run] [--partial]     merge tile by tile / entry by entry with the
                                                 current files; all or nothing unless --partial
-                                                (writes the rest, keeps the current conflicts)`;
+                                                (writes the rest, keeps the current conflicts)
+ pull requests (CI, docs/04 "PR de mapas en CI"):
+  pr-check --base REF --head REF --out DIR [--author LOGIN] [--association A]
+                [--head-repo O/R --repo O/R] [--pr N]
+                                                plots, patch diff, validation and before/after
+                                                PNGs of a branch; writes DIR/report.json`;
 
 export interface Io {
   out(text: string): void;
@@ -191,6 +197,13 @@ function dispatch(argv: string[], io: Io): number {
       against: { type: "string", default: "HEAD" },
       "dry-run": { type: "boolean", default: false },
       partial: { type: "boolean", default: false },
+      base: { type: "string" },
+      head: { type: "string" },
+      author: { type: "string" },
+      association: { type: "string" },
+      "head-repo": { type: "string" },
+      repo: { type: "string" },
+      pr: { type: "string" },
     },
   });
   const [command, ...args] = positionals;
@@ -455,6 +468,31 @@ function dispatch(argv: string[], io: Io): number {
       // --force: clear the floor's items first, so old decoration does not float on water.
       if (hasTiles) ops.unshift({ op: "erase", floor, rect: { ...area }, layer: "items" });
       return edit(ops, [id]);
+    }
+    case "pr-check": {
+      if (island !== undefined) throw new UsageError(`unexpected argument "${island}"`);
+      const r = prCheck({
+        root,
+        base: need(values.base, "--base REF"),
+        head: need(values.head, "--head REF"),
+        out: resolve(need(values.out, "--out DIR")),
+        ...(values.author === undefined ? {} : { author: values.author }),
+        ...(values.association === undefined ? {} : { association: values.association }),
+        ...(values["head-repo"] === undefined ? {} : { headRepo: values["head-repo"] }),
+        ...(values.repo === undefined ? {} : { repo: values.repo }),
+        ...(values.pr === undefined ? {} : { pr: parseCount(values.pr, "--pr", 0, 1) }),
+      });
+      io.out(
+        json({
+          ok: r.ok,
+          failures: r.failures,
+          files: r.files.length,
+          plot_violations: r.plots.violations.length,
+          areas: r.areas.length,
+          out: values.out,
+        }),
+      );
+      return r.ok ? 0 : 1;
     }
     case "patch": {
       if (sub === "create") {
