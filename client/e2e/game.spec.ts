@@ -770,30 +770,57 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
     { x: 1068, y: 1054 },
     { x: 1069, y: 1054 },
   ];
+  // The server and its world are shared by the suite (and by --repeat-each): a wolf hurt by
+  // an earlier test flees into town and can stand on a hop's tile. The client finds no
+  // path to a tile with a creature on it and sends nothing, so the click would be lost
+  // (the CI failure: still on the spawn after 20 s). Wait for the tile to be free first.
+  const me = await self(page);
+  if (!me) throw new Error("no own creature");
+  const walkTo = async (x: number, y: number): Promise<void> => {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(({ a, b, c }) => window.__rpgClient?.walkable(a, b, c) ?? false, {
+            a: x,
+            b: y,
+            c: me.z,
+          }),
+        { timeout: 30_000 },
+      )
+      .toBe(true);
+    const p = await toClient(x, y);
+    await page.mouse.click(p.x, p.y);
+    await arrived(page, x, y);
+  };
   // Two hops: the view only shows 7 tiles on each side.
-  let p = await toClient(1062, 1055);
-  await page.mouse.click(p.x, p.y);
-  await arrived(page, 1062, 1055);
-  p = await toClient(1067, 1055);
-  await page.mouse.click(p.x, p.y);
-  await arrived(page, 1067, 1055);
-  p = await toClient(1068, 1055);
-  await page.mouse.click(p.x, p.y);
-  await arrived(page, 1068, 1055);
+  await walkTo(1062, 1055);
+  await walkTo(1067, 1055);
+  await walkTo(1068, 1055);
+  let p: { x: number; y: number };
 
   // Right click on the pickaxe picks "use with"; the next click on the map uses it there.
+  // A vein is spent after 4 good swings and grows back 5 minutes after its last one
+  // (data/items/decoration.yaml). The world is shared by the suite and by --repeat-each,
+  // so earlier miners may have spent the first vein: swinging at it again only answers
+  // "agotado" and leaves us standing among the wolves for nothing (the failure under
+  // load: half the swings wasted, then killed by a wolf before a good one). Mine the first
+  // vein until it says it is spent, then the second one. The log keeps its last lines, so
+  // an old "agotado" stays visible: switch once and never back.
   const pickaxe = page.getByTestId("slot-right_hand").locator("[data-item=pickaxe]");
   const log = page.getByTestId("game-log");
+  let vein = 0;
   for (let i = 0; i < 16; i++) {
     await pickaxe.click({ button: "right" });
     await expect(page.locator("body")).toHaveClass(/using-item/);
-    const v = veins[i % 2];
+    const v = veins[vein];
     if (!v) throw new Error("no vein");
     p = await toClient(v.x, v.y);
     await page.mouse.click(p.x, p.y);
     await expect(page.locator("body")).not.toHaveClass(/using-item/);
     await page.waitForTimeout(350); // the answer arrives; its effect lasts 600 ms
-    if ((await log.textContent())?.includes("Conseguiste")) break;
+    const text = (await log.textContent()) ?? "";
+    if (text.includes("Conseguiste")) break;
+    if (vein === 0 && text.includes("agotado")) vein = 1;
     await page.waitForTimeout(1300); // gathering.use_interval_ms
   }
   await expect(log).toContainText("Conseguiste");
