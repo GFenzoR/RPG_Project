@@ -31,6 +31,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
+	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -51,6 +52,8 @@ type options struct {
 	// authRateBurst overrides the per-IP register/login burst (0 = the default). Only
 	// for local test harnesses whose requests all come from one IP, such as the E2E suite.
 	authRateBurst int
+	// metricsAddr serves /metrics on its own internal listener ("" disables it).
+	metricsAddr string
 	// startTown is the island new characters start at (empty = the first in world.yaml).
 	startTown string
 }
@@ -71,6 +74,7 @@ func main() {
 	flag.StringVar(&o.wsOrigins, "ws-origins", os.Getenv("RPG_WS_ORIGINS"), "extra browser origins allowed on /ws, comma-separated (e.g. localhost:5173); default $RPG_WS_ORIGINS")
 	flag.StringVar(&o.minClientVersion, "min-client-version", gateway.DefaultMinClientVersion, "oldest client version accepted in Hello (same major required)")
 	flag.StringVar(&o.startTown, "start-town", os.Getenv("RPG_START_TOWN"), "island new characters start at; default $RPG_START_TOWN or the first island of world/world.yaml")
+	flag.StringVar(&o.metricsAddr, "metrics-addr", envOr("RPG_METRICS_ADDR", defaultMetricsAddr), "internal listener for Prometheus /metrics, never public (empty = off); default $RPG_METRICS_ADDR or "+defaultMetricsAddr)
 	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
 	flag.Parse()
 
@@ -148,7 +152,12 @@ func run(logger *slog.Logger, o options) error {
 		}
 	}
 
+	var mets *metrics.Metrics
+	if o.metricsAddr != "" {
+		mets = metrics.New()
+	}
 	a, err := app.New(app.Config{
+		Metrics:          mets,
 		Store:            st,
 		Clock:            clk,
 		Logger:           logger,
@@ -182,6 +191,10 @@ func run(logger *slog.Logger, o options) error {
 		close(httpErr)
 	}()
 	go purgeSessions(ctx, logger, clk, a.Auth)
+	if mets != nil {
+		msrv := serveMetrics(o.metricsAddr, mets, logger)
+		defer func() { _ = msrv.Close() }()
+	}
 
 	logger.Info("gameserver started",
 		"version", buildinfo.Version, "commit", buildinfo.Commit, "http", o.httpAddr,
@@ -210,6 +223,32 @@ func run(logger *slog.Logger, o options) error {
 	shutdownHTTP(srv, cancelRequests, httpShutdownTimeout, logger)
 	logger.Info("gameserver stopped", "ticks", uint64(a.Loop.Tick()))
 	return runErr
+}
+
+// defaultMetricsAddr is loopback only: /metrics is internal (docs/01-architecture.md).
+const defaultMetricsAddr = "127.0.0.1:9100"
+
+func envOr(key, def string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return def
+}
+
+// serveMetrics serves /metrics on its own listener, apart from the public API, so a
+// reverse proxy in front of the API can never expose it. A failure is logged, not fatal.
+func serveMetrics(addr string, m *metrics.Metrics, logger *slog.Logger) *http.Server {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", m.Handler())
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second,
+		ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError)}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Warn("metrics listener stopped", "addr", addr, "err", err)
+		}
+	}()
+	logger.Info("metrics listening", "addr", addr)
+	return srv
 }
 
 // splitList splits a comma-separated flag value, dropping empty entries.

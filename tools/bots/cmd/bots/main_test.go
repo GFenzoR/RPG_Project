@@ -23,16 +23,18 @@ func TestValidateCount(t *testing.T) {
 }
 
 func TestNamesAreUniqueAndValid(t *testing.T) {
-	valid := regexp.MustCompile(`^Bot[a-z]{2,3}$`)
-	seen := map[string]bool{}
-	for i := range maxBots {
-		n := name(i)
-		if seen[n] || !valid.MatchString(n) {
-			t.Fatalf("name(%d) = %q", i, n)
+	valid := regexp.MustCompile(`^Bot[a-z]{2,3}( [A-Z][a-z]{1,11})?$`)
+	for _, prefix := range []string{"load", "ci", "tunnel", "chk", "a-very-long-prefix-1", "1"} {
+		seen := map[string]bool{}
+		for i := range maxBots {
+			n := name(prefix, i)
+			if seen[n] || !valid.MatchString(n) || len(n) > 20 {
+				t.Fatalf("name(%q, %d) = %q", prefix, i, n)
+			}
+			seen[n] = true
 		}
-		seen[n] = true
 	}
-	if name(0) != "Botaa" || name(27) != "Botbb" {
-		t.Fatalf("name(0) = %q, name(27) = %q", name(0), name(27))
+	if name("load", 0) != "Botaa Load" || name("ci", 27) != "Botbb Ci" || name("", 1) != "Botab" {
+		t.Fatalf("name: %q %q %q", name("load", 0), name("ci", 27), name("", 1))
 	}
 }

@@ -43,6 +43,21 @@ sin mundo). Vuelve a compilar el mapa cada vez que cambie `world/` o `data/items
 `make test-parity` compara la caminabilidad que calcula `mapcompile` con la de
 `packages/map-format` (necesita `pnpm install`; forma parte de `make test`).
 
+### Prueba de carga
+```
+make bots N=100                     # escenario base, 10 min, con su propio servidor
+make bots N=300 SCENARIO=stress     # 300 bots en la ciudad, 5 min
+make bots N=20 DURATION=60s         # corrida corta
+make bots N=10 URL=http://localhost:8080   # contra un servidor ya levantado
+```
+Sin `URL`, `tools/bots/loadtest.sh` compila el mapa y el servidor, lo levanta en
+`127.0.0.1:8090` contra `LOAD_DATABASE_URL` (por defecto `DATABASE_URL` o la base `rpg`),
+con `/metrics` en `127.0.0.1:9190` y `-auth-rate-burst 1000` (todos los bots salen de una
+IP), corre los bots y lo apaga. Deja el reporte en `build/loadtest-<escenario>-<N>.json` y
+el log del servidor en `build/loadtest-server.log`. Los bots reusan cuentas y personajes
+del mismo `PREFIX` (por defecto `load`), así que se puede repetir sin limpiar la base.
+Detalle y resultados en `07-performance-budget.md`.
+
 ## Diferencias con las sesiones cloud
 | | Cloud (hasta 4 nov) | Local (desde 5 nov) |
 |---|---|---|

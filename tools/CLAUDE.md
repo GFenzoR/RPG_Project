@@ -35,8 +35,15 @@ lo use directamente; a mano: `node --experimental-strip-types tools/mcp-world/sr
 [--root DIR]`. Límites y detalle en `docs/04-map-editor-and-ai.md`.
 
 ## bots (Go)
-`tools/bots`: clientes headless que hacen login, caminan, atacan y chatean. Se usan para
-pruebas de carga (`make bots N=200`) y deben reportar latencia p50/p95/p99 y desconexiones.
+`tools/bots` (T1.17): prueba de carga con clientes headless (`server/pkg/bot`) que se
+registran, crean personaje y juegan en la Isla del Puerto: caminan con rutas A* sobre
+`build/world.bin` (`bot.Nav`), atacan monstruos, hablan por chat y abren diálogos con NPCs,
+con su propio rate limit (`-min-gap`). Escenarios en `cmd/bots/scenario.go`: `base`
+(repartidos por la isla) y `stress` (todos en la ciudad). Reporte JSON (`-report`) y
+resumen Markdown con tick, RAM, CPU (de `/metrics` del servidor), latencia de comando
+(Ping→Pong), bytes por jugador y desconexiones, comparados con `docs/07`. `make bots N=100`
+levanta su propio servidor (`loadtest.sh`); con `URL=` juega contra uno existente. Sale
+con código 1 si algún bot no entra o se desconecta.
 
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera

@@ -77,6 +77,15 @@ type Config struct {
 	HelloWait      time.Duration // default DefaultHelloWait
 	OutQueue       int           // default DefaultOutQueue
 	WriteTimeout   time.Duration // default DefaultWriteTimeout
+	// Metrics, if set, counts the connections and the bytes sent (internal/metrics).
+	Metrics Observer
+}
+
+// Observer receives network metrics. Its methods are called from connection goroutines.
+type Observer interface {
+	Sent(bytes int)
+	ConnOpened()
+	ConnClosed()
 }
 
 // Gateway serves /ws.
@@ -167,6 +176,9 @@ func (g *Gateway) track(c *conn) bool {
 	}
 	g.conns[c] = struct{}{}
 	g.wg.Add(1)
+	if g.cfg.Metrics != nil {
+		g.cfg.Metrics.ConnOpened()
+	}
 	return true
 }
 
@@ -174,6 +186,9 @@ func (g *Gateway) untrack(c *conn) {
 	g.mu.Lock()
 	delete(g.conns, c)
 	g.mu.Unlock()
+	if g.cfg.Metrics != nil {
+		g.cfg.Metrics.ConnClosed()
+	}
 	g.wg.Done()
 }
 
@@ -461,7 +476,13 @@ func (c *conn) write(ctx context.Context, b *pb.ServerBatch) error {
 	*bp = raw
 	wctx, cancel := context.WithTimeout(ctx, c.g.cfg.WriteTimeout)
 	defer cancel()
-	return c.ws.Write(wctx, websocket.MessageBinary, raw)
+	if err := c.ws.Write(wctx, websocket.MessageBinary, raw); err != nil {
+		return err
+	}
+	if m := c.g.cfg.Metrics; m != nil {
+		m.Sent(len(raw))
+	}
+	return nil
 }
 
 func writeDisconnect(ctx context.Context, ws *websocket.Conn, reason pb.DisconnectReason, timeout time.Duration) error {

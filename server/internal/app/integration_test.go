@@ -12,6 +12,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/app"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/store/storetest"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 	"github.com/GFenzoR/RPG_Project/server/pkg/bot"
@@ -36,7 +37,9 @@ func TestBotEntersAndWalks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mets := metrics.New()
 	a, err := app.New(app.Config{
+		Metrics:   mets,
 		Items:     items,
 		Store:     st,
 		Clock:     clock.Real{},
@@ -86,6 +89,29 @@ func TestBotEntersAndWalks(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitStat(ctx, t, b1, func(s bot.Stats) bool { return s.Appear >= 1 })
+
+	// What tools/bots does: see the other player, measure a Ping, chat, and the server's
+	// metrics count the connections, the ticks and the bytes sent.
+	if ps := b1.Creatures(bot.KindPlayer); len(ps) != 1 || ps[0].ID != b2.CreatureID() || !b1.Sees(b2.CreatureID()) {
+		t.Fatalf("b1 sees players %+v, want b2 (%d)", ps, b2.CreatureID())
+	}
+	if err := b1.Ping(ctx); err != nil {
+		t.Fatal(err)
+	}
+	waitStat(ctx, t, b1, func(s bot.Stats) bool { return s.Pongs >= 1 })
+	if lat := b1.TakeLatencies(); len(lat) != 1 || lat[0] <= 0 || lat[0] > 5*time.Second {
+		t.Fatalf("latencies %v", lat)
+	}
+	if err := b2.Say(ctx, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	waitStat(ctx, t, b1, func(s bot.Stats) bool { return s.Chat >= 1 })
+	if got := gauge(t, mets, "ws_connections"); got != 2 {
+		t.Fatalf("ws_connections = %v, want 2", got)
+	}
+	if got := gauge(t, mets, "ws_sent_bytes_total"); got <= 0 {
+		t.Fatalf("ws_sent_bytes_total = %v", got)
+	}
 
 	if err := b1.Logout(ctx); err != nil {
 		t.Fatal(err)
@@ -162,3 +188,24 @@ func waitStat(ctx context.Context, t *testing.T, b *bot.Bot, cond func(bot.Stats
 }
 
 var wall clock.Clock = clock.Real{}
+
+// gauge returns the value of a gauge or counter without labels.
+func gauge(t *testing.T, m *metrics.Metrics, name string) float64 {
+	t.Helper()
+	fams, err := m.Registry().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fams {
+		if f.GetName() != name {
+			continue
+		}
+		mt := f.GetMetric()[0]
+		if mt.GetGauge() != nil {
+			return mt.GetGauge().GetValue()
+		}
+		return mt.GetCounter().GetValue()
+	}
+	t.Fatalf("no metric %s", name)
+	return 0
+}

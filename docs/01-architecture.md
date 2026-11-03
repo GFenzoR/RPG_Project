@@ -94,9 +94,13 @@ assets/sprites ──spritepack──▶ atlas.png + atlas.json (cliente y edito
 - `packages/renderer`: dibujo de tiles e items con Pixi, compartido por cliente y editor.
 
 ## Observabilidad mínima
-- `/healthz` y `/metrics` (Prometheus) internos.
-- Logs JSON con `slog`. Métricas clave: jugadores online, duración del tick (p50/p99),
-  comandos/segundo, bytes enviados/segundo, errores de persistencia.
+- `/healthz` en la API pública. `/metrics` (Prometheus, `internal/metrics`) va en un
+  listener aparte, `-metrics-addr` (por defecto `127.0.0.1:9100`, vacío lo apaga), para
+  que el proxy de la API nunca lo exponga.
+- Logs JSON con `slog`. Métricas que hay (T1.17): `tick_duration_ms` (histograma),
+  `tick_overruns_total`, `tick_commands_total`, `command_queue_pending`, `ws_connections`,
+  `ws_sent_bytes_total`, `ws_sent_batches_total`, más las estándar `process_*` (CPU, RSS) y
+  `go_*`. Pendientes: errores de persistencia.
 
 ## Seguridad básica
 - Rate limit por IP en login y por conexión en comandos.
