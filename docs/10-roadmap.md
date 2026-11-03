@@ -119,7 +119,33 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [ ] **T3.7 Sonido y música** (assets libres) con volumen por canal.
 
 ## Hito 4 — Alpha pública
-- [ ] **T4.1 Anti-bot y anti-AFK** (detección de patrones, límites, reportes).
+- [ ] **T4.1 Anti-bot y anti-AFK.** Todo del lado del servidor; no hay anticheat en el
+  cliente (`01-architecture.md`, "Trampas y anti-bot"). [T2.6]
+  - **Señales por personaje.** Se calculan fuera del tick, o a costo constante dentro de
+    él (`07-performance-budget.md`):
+    - regularidad de los tiempos entre acciones (varianza demasiado baja);
+    - reacciones inhumanas y constantes, como curarse siempre a los pocos ms de recibir
+      daño;
+    - rutas idénticas que se repiten;
+    - sesiones muy largas sin pausas;
+    - experiencia y oro por hora muy por encima de la mediana de su nivel.
+  - **Puntaje de sospecha** con pesos y umbrales en `balance.yaml`. Las respuestas son
+    graduales: registrar, avisar a los GM, pedir un chequeo de presencia dentro del juego
+    (por ejemplo, un NPC que hace una pregunta) y suspender temporalmente. El ban lo decide
+    siempre un GM (T2.6). Todo queda en el log de auditoría.
+  - **Reportes de jugadores**, con un botón y un comando. Cada reporte adjunta contexto
+    automático (posición y últimos eventos) y entra en una cola para los GM. Tienen rate
+    limit para que no se usen como acoso.
+  - **Log de economía.** Registra la creación y destrucción de oro e items por fuente:
+    loot, NPC, trade y recolección. Alerta cuando no cuadra (posible duplicación) y cuando
+    un personaje se aleja mucho de lo normal.
+  - **Auditoría de información.** Tests que verifican que el servidor no manda lo que el
+    jugador no puede ver: criaturas invisibles, pisos ocultos, cosas fuera de la ventana
+    y vida exacta de otros.
+  - **Simulación determinista con `tools/bots`.** Un bot con ritmo "humano" (pausas y
+    variación) y otro "mecánico". El detector tiene que marcar al segundo y no al primero.
+  - **Anti-AFK.** Revisar los límites que ya existen en el entrenamiento y la recolección
+    (`02-game-design.md`) y agregar la desconexión por inactividad.
 - [ ] **T4.2 Tutorial** guiado en la isla inicial.
 - [ ] **T4.3 Landing page**, ranking (highscores), noticias.
 - [ ] **T4.4 Observabilidad**: dashboard de métricas y alertas básicas.

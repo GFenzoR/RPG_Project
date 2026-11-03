@@ -25,6 +25,7 @@ Nombre provisional: **RPG Project**.
 |---|---|
 | Vista y gráficos | Cenital, 2D, tiles de 32x32, estilo pixel art tipo Tibia |
 | Plataforma | PC primero (navegador + instalable con Tauri). Móvil secundario, más adelante |
+| Trampas | Sin anticheat en el cliente, que siempre se considera manipulable. Todo se valida en el servidor y los bots se detectan ahí (`01-architecture.md`, "Trampas y anti-bot") |
 | Cliente | TypeScript + PixiJS v8, UI DOM con Preact |
 | Servidor | Go, servidor autoritativo, tick fijo de 50 ms |
 | Base de datos | PostgreSQL 16 |

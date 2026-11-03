@@ -104,6 +104,9 @@ Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data
 - Entrenar contra un objetivo que no responde da progreso reducido tras X minutos.
 - Recursos (vetas, árboles, peces) se agotan y regeneran.
 - Rate limit de acciones y detección de patrones en el hito de lanzamiento.
+- No hay anticheat en el cliente: todo se valida en el servidor y los bots se detectan
+  por comportamiento. Las señales, los reportes y el log de economía están en T4.1, y el
+  por qué en `01-architecture.md`, "Trampas y anti-bot".
 
 ## Combate
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está

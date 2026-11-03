@@ -108,3 +108,70 @@ assets/sprites ──spritepack──▶ atlas.png + atlas.json (cliente y edito
 - Validación de forma de cada mensaje (tamaño máximo, rangos).
 - Nada del cliente se usa sin validar contra el estado del servidor.
 - Secretos por variables de entorno, nunca en el repo.
+
+## Trampas y anti-bot
+Decisión del 2026-11-03: el juego se sigue jugando en el navegador y en el escritorio
+(Tauri). No hay anticheat en el cliente. Las trampas se combaten en el servidor.
+
+### El cliente no es de confianza
+- Cualquier cliente puede estar modificado: el del navegador, el de Tauri o uno escrito
+  a mano. `tools/bots` ya es un cliente sin interfaz que habla el protocolo (Protobuf
+  sobre WebSocket).
+- Por eso el servidor decide todo lo que importa:
+  - el movimiento: velocidad según el suelo y colisiones;
+  - el combate: rango, línea de visión, cooldowns y daño;
+  - la magia: maná y cooldowns;
+  - el inventario, el botín, el comercio y la recolección.
+- Con cualquier cliente ya es imposible:
+  - correr más rápido o teletransportarse;
+  - hacer más daño o curarse más;
+  - duplicar items u oro;
+  - atacar a través de un muro o fuera de rango.
+
+### Por qué no hay anticheat en el cliente
+- **Hacerlo instalable no protege.** El webview, la memoria del proceso y el tráfico
+  siguen siendo manipulables. Un bot que habla el protocolo directamente ni siquiera usa
+  nuestro cliente.
+- **Un anticheat a nivel de sistema no compensa.** Los del tipo BattlEye o EasyAntiCheat
+  cuestan dinero, son invasivos y tienen mal soporte en Linux y macOS. Tampoco ven a un
+  bot de protocolo. Otros juegos del género tienen cliente de escritorio con anticheat y
+  siguen llenos de bots.
+- **El navegador es la puerta de entrada.** Abrir un link y jugar es lo que más jugadores
+  trae a un juego chico.
+- **Si alguna vez hace falta más fricción:** el `Hello` ya lleva la versión del cliente, y
+  se le podría sumar el tipo de cliente para exigir el de escritorio en modos competitivos
+  (PvP). Sería fricción, no protección, y no está planificado.
+
+### Lo que un tramposo sí puede hacer, y la respuesta
+1. **Bots y macros**: cazar solo, curarse solo o recolectar 24/7. Respuesta:
+   - límites de ritmo;
+   - diseño de juego que le quite valor al bot;
+   - detección por comportamiento en el servidor (T4.1).
+2. **Ver de más.** Todo lo que el servidor manda se puede leer, así que el servidor solo
+   manda lo que las reglas dejan ver:
+   - **La ventana completa.** Se ve la ventana de 15x11 del piso visible. Lo que está
+     detrás de un muro dentro de esa ventana se ve por diseño: la línea de visión es una
+     regla de juego, no de dibujo (`03-world-and-maps.md`).
+   - **De otras criaturas viaja solo lo público:** nombre, outfit, dirección, velocidad y
+     `health_percent`. Nunca su vida exacta, maná, skills ni inventario.
+   - **Bajo tierra** solo se manda el piso actual (ver "Área de interés").
+   - **Lo oculto se filtra en el servidor.** Esto incluye la invisibilidad (T3.2), las
+     trampas y los secretos del mapa. A quien no puede ver algo, ese algo no se le manda.
+     No alcanza con que el cliente no lo dibuje.
+   - **No viaja** lo que está fuera de la ventana: jugadores, botín ni restos.
+3. **Abuso de la API HTTP** (registro masivo, fuerza bruta). Respuesta: los rate limits
+   por IP, por cuenta y por email+IP de T1.3.
+
+### Defensas que ya existen
+- Rate limit por conexión: 30 mensajes por segundo con ráfaga de 60
+  (`internal/net/gateway`). Lo que sobra se descarta. Si el exceso se sostiene, la
+  conexión se cierra con `RATE_LIMITED`.
+- Validación de forma y de rangos de cada mensaje, y versión mínima de cliente en el
+  `Hello`.
+- Anti-flood de chat, entrenamiento que rinde menos contra un objetivo que no responde,
+  recolección con un intervalo mínimo y recursos que se agotan (`02-game-design.md`).
+
+### Lo que falta
+La detección de bots, los reportes, el log de economía y la auditoría de lo que se envía
+quedan en T4.1. Las sanciones y la moderación (kick, ban, log de auditoría) quedan en
+T2.6. Ver `10-roadmap.md`.
