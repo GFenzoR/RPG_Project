@@ -27,7 +27,8 @@ server/
                        internal/ para que otro módulo lo importe)
   internal/store/      PostgreSQL: repositorios generados con sqlc, migraciones goose
   internal/auth/       cuentas, contraseñas (argon2id), OAuth Google/Discord, tokens
-  internal/httpapi/    API HTTP: login, lista de personajes, health, métricas
+  internal/httpapi/    API HTTP: login, lista de personajes, health
+  internal/metrics/    métricas Prometheus (tick, red, proceso); /metrics en -metrics-addr
   internal/clock/      reloj inyectable (real y falso para tests)
   internal/sim/        harness de simulación determinista para tests
   migrations/          SQL de goose

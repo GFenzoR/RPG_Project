@@ -162,8 +162,20 @@ e2e: db-up ## Playwright: editor + client (login, enter, walk); screenshots in *
 	DATABASE_URL="$(DATABASE_URL)" pnpm --filter @rpg/client e2e $(E2E_ARGS)
 
 .PHONY: bots
-bots: ## Bots that enter and walk against a running server (make bots N=100 DURATION=60s URL=... PREFIX=load)
-	cd tools/bots && go run ./cmd/bots -n $(or $(N),10) -duration $(or $(DURATION),30s) -url $(or $(URL),http://localhost:8080) -prefix $(or $(PREFIX),load)
+# Load test (tools/bots, docs/07-performance-budget.md). Without URL it builds the map and
+# starts its own server on loopback (tools/bots/loadtest.sh; LOAD_DATABASE_URL, default the
+# dev database); with URL it plays against a running server, reading its internal
+# /metrics at 127.0.0.1:9100 only when URL is on this machine (METRICS=... for another).
+SCENARIO ?= base
+bots: ## Load test: make bots N=100 [SCENARIO=base|stress] [DURATION=10m] [URL=... PREFIX=load METRICS=...]
+ifeq ($(URL),)
+	$(MAKE) mapcompile
+	tools/bots/loadtest.sh -n $(or $(N),10) -scenario $(SCENARIO) -duration $(or $(DURATION),$(if $(filter stress,$(SCENARIO)),5m,10m)) \
+		-prefix $(or $(PREFIX),load) -report "$(if $(REPORT),$(abspath $(REPORT)),$(CURDIR)/build/loadtest-$(SCENARIO)-$(or $(N),10).json)"
+else
+	cd tools/bots && go run ./cmd/bots -n $(or $(N),10) -scenario $(SCENARIO) -duration $(or $(DURATION),60s) \
+		-url $(URL) -prefix $(or $(PREFIX),load) $(if $(METRICS),-metrics "$(METRICS)") $(if $(REPORT),-report "$(abspath $(REPORT))")
+endif
 
 .PHONY: bench-tick
 bench-tick: ## Tick benchmarks: empty loop and N players walking (internal/game, internal/session)

@@ -77,6 +77,15 @@ type Config struct {
 	HelloWait      time.Duration // default DefaultHelloWait
 	OutQueue       int           // default DefaultOutQueue
 	WriteTimeout   time.Duration // default DefaultWriteTimeout
+	// Metrics, if set, counts the connections and the bytes sent (internal/metrics).
+	Metrics Observer
+}
+
+// Observer receives network metrics. Its methods are called from connection goroutines.
+type Observer interface {
+	Sent(bytes int)
+	ConnOpened()
+	ConnClosed()
 }
 
 // Gateway serves /ws.
@@ -167,6 +176,9 @@ func (g *Gateway) track(c *conn) bool {
 	}
 	g.conns[c] = struct{}{}
 	g.wg.Add(1)
+	if g.cfg.Metrics != nil {
+		g.cfg.Metrics.ConnOpened()
+	}
 	return true
 }
 
@@ -174,6 +186,9 @@ func (g *Gateway) untrack(c *conn) {
 	g.mu.Lock()
 	delete(g.conns, c)
 	g.mu.Unlock()
+	if g.cfg.Metrics != nil {
+		g.cfg.Metrics.ConnClosed()
+	}
 	g.wg.Done()
 }
 
@@ -197,7 +212,8 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		done:    make(chan struct{}),
 	}
 	if !g.track(c) {
-		_ = writeDisconnect(r.Context(), ws, pb.DisconnectReason_DISCONNECT_REASON_SERVER_SHUTDOWN, g.cfg.WriteTimeout)
+		// Not counted in the metrics on purpose: this connection was never tracked.
+		_, _ = writeDisconnect(r.Context(), ws, pb.DisconnectReason_DISCONNECT_REASON_SERVER_SHUTDOWN, g.cfg.WriteTimeout)
 		_ = ws.Close(websocket.StatusGoingAway, "")
 		return
 	}
@@ -249,7 +265,7 @@ func (c *conn) run(ctx context.Context) {
 	if err := g.cfg.Loop.Enqueue(g.cfg.World.Join(char, c)); err != nil {
 		g.log.Warn("gateway: loop queue full, login refused", "character", char.ID)
 		c.abortLogin(char.ID)
-		_ = writeDisconnect(ctx, c.ws, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, g.cfg.WriteTimeout)
+		_ = g.writeDisconnect(ctx, c.ws, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 		_ = c.ws.Close(websocket.StatusTryAgainLater, "")
 		return
 	}
@@ -265,7 +281,7 @@ func (c *conn) run(ctx context.Context) {
 func (c *conn) handshake(ctx context.Context) (session.Character, bool) {
 	g := c.g
 	refuse := func(reason pb.DisconnectReason) (session.Character, bool) {
-		_ = writeDisconnect(ctx, c.ws, reason, g.cfg.WriteTimeout)
+		_ = g.writeDisconnect(ctx, c.ws, reason)
 		_ = c.ws.Close(websocket.StatusPolicyViolation, "")
 		return session.Character{}, false
 	}
@@ -430,7 +446,7 @@ func (c *conn) writer() {
 				c.drain(ctx)
 			}
 			if reason != pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED {
-				_ = writeDisconnect(ctx, c.ws, reason, g.cfg.WriteTimeout)
+				_ = g.writeDisconnect(ctx, c.ws, reason)
 			}
 			_ = c.ws.Close(closeStatus(reason), "")
 			return
@@ -461,18 +477,37 @@ func (c *conn) write(ctx context.Context, b *pb.ServerBatch) error {
 	*bp = raw
 	wctx, cancel := context.WithTimeout(ctx, c.g.cfg.WriteTimeout)
 	defer cancel()
-	return c.ws.Write(wctx, websocket.MessageBinary, raw)
+	if err := c.ws.Write(wctx, websocket.MessageBinary, raw); err != nil {
+		return err
+	}
+	if m := c.g.cfg.Metrics; m != nil {
+		m.Sent(len(raw))
+	}
+	return nil
 }
 
-func writeDisconnect(ctx context.Context, ws *websocket.Conn, reason pb.DisconnectReason, timeout time.Duration) error {
+// writeDisconnect sends a Disconnect on a tracked connection and counts it in the metrics.
+func (g *Gateway) writeDisconnect(ctx context.Context, ws *websocket.Conn, reason pb.DisconnectReason) error {
+	n, err := writeDisconnect(ctx, ws, reason, g.cfg.WriteTimeout)
+	if err == nil && g.cfg.Metrics != nil {
+		g.cfg.Metrics.Sent(n)
+	}
+	return err
+}
+
+// writeDisconnect sends a Disconnect and returns its size.
+func writeDisconnect(ctx context.Context, ws *websocket.Conn, reason pb.DisconnectReason, timeout time.Duration) (int, error) {
 	b := &pb.ServerBatch{Events: []*pb.ServerMessage{{Message: &pb.ServerMessage_Disconnect{Disconnect: &pb.Disconnect{Reason: reason}}}}}
 	raw, err := proto.Marshal(b)
 	if err != nil {
-		return fmt.Errorf("marshal disconnect: %w", err)
+		return 0, fmt.Errorf("marshal disconnect: %w", err)
 	}
 	wctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	return ws.Write(wctx, websocket.MessageBinary, raw)
+	if err := ws.Write(wctx, websocket.MessageBinary, raw); err != nil {
+		return 0, err
+	}
+	return len(raw), nil
 }
 
 func closeStatus(r pb.DisconnectReason) websocket.StatusCode {

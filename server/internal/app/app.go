@@ -17,6 +17,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
+	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
@@ -61,6 +62,8 @@ type Config struct {
 	AuthRateLimit httpapi.RateLimit
 	// AutosaveEvery overrides session.DefaultAutosaveEvery (tests).
 	AutosaveEvery game.Tick
+	// Metrics, if set, records the tick and network metrics (internal/metrics).
+	Metrics *metrics.Metrics
 	// ShutdownTimeout bounds the final saves and the closing of connections (default 10 s).
 	ShutdownTimeout time.Duration
 }
@@ -150,6 +153,7 @@ func New(cfg Config) (*App, error) {
 		Rand:    rand.New(rand.NewPCG(cfg.Seed, cfg.Seed)),
 		Systems: systems,
 		Logger:  cfg.Logger,
+		OnTick:  onTick(cfg.Metrics),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("game loop: %w", err)
@@ -166,6 +170,7 @@ func New(cfg Config) (*App, error) {
 			Logger:           cfg.Logger,
 			MinClientVersion: cfg.MinClientVersion,
 			OriginPatterns:   cfg.OriginPatterns,
+			Metrics:          gatewayMetrics(cfg.Metrics),
 		})
 		if err != nil {
 			return nil, err
@@ -176,6 +181,22 @@ func New(cfg Config) (*App, error) {
 		cfg.Logger.Warn("no world loaded: /ws is disabled")
 	}
 	return a, nil
+}
+
+// onTick is the loop's OnTick hook for m (nil without metrics).
+func onTick(m *metrics.Metrics) func(game.TickStats) {
+	if m == nil {
+		return nil
+	}
+	return m.ObserveTick
+}
+
+// gatewayMetrics avoids handing the gateway a non-nil interface holding a nil pointer.
+func gatewayMetrics(m *metrics.Metrics) gateway.Observer {
+	if m == nil {
+		return nil
+	}
+	return m
 }
 
 // Handler serves the HTTP API and /ws.

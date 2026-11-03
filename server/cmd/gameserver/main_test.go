@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
+	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/compile"
 )
@@ -142,5 +144,39 @@ func TestAuthRateLimit(t *testing.T) {
 	want := httpapi.RateLimit{Burst: 1000, Every: httpapi.DefaultAuthRateLimit.Every}
 	if got := authRateLimit(1000); got != want {
 		t.Errorf("authRateLimit(1000) = %+v, want %+v", got, want)
+	}
+}
+
+// TestServeMetricsBindsBeforeReturning: the listener is bound when serveMetrics returns
+// (the log names the real address), and a busy address is an error, not a later warning.
+func TestServeMetricsBindsBeforeReturning(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	srv, err := serveMetrics("127.0.0.1:0", metrics.New(), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	var line struct{ Addr string }
+	for _, l := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+		if strings.Contains(l, "metrics listening") {
+			_ = json.Unmarshal([]byte(l), &line)
+		}
+	}
+	if line.Addr == "" || strings.HasSuffix(line.Addr, ":0") {
+		t.Fatalf("log %q does not name the bound address", logs.String())
+	}
+	resp, err := http.Get("http://" + line.Addr + "/metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), "tick_duration_ms") {
+		t.Fatalf("metrics body lacks tick_duration_ms")
+	}
+
+	if _, err := serveMetrics(line.Addr, metrics.New(), logger); err == nil {
+		t.Fatal("binding a busy address succeeded")
 	}
 }

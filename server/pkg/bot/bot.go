@@ -63,6 +63,35 @@ type Stats struct {
 	Appear    int
 	Disappear int
 	Slices    int
+	Chat      int // chat messages received
+	Dialogs   int // DialogOpen received
+	Pongs     int
+}
+
+// CreatureKind tells players, monsters and NPCs apart.
+type CreatureKind int
+
+// Creature kinds.
+const (
+	KindUnknown CreatureKind = iota
+	KindPlayer
+	KindMonster
+	KindNPC
+)
+
+// Creature is a creature the bot knows (it is in the bot's view).
+type Creature struct {
+	ID        uint32
+	Kind      CreatureKind
+	ContentID string
+	Pos       Pos
+}
+
+// Dialog is the NPC dialog the bot has open.
+type Dialog struct {
+	ID      uint32
+	NPC     uint32
+	Options []uint32
 }
 
 // Bot is one connected player. Its methods are safe for concurrent use.
@@ -80,16 +109,23 @@ type Bot struct {
 	changed    chan struct{} // closed and replaced on every received batch
 	done       chan struct{} // closed when the reader stops
 	readErr    error
+	creatures  map[uint32]*Creature
+	dialog     *Dialog
+	pingSeq    uint64
+	pings      map[uint64]time.Time
+	latencies  []time.Duration
 }
 
 // New returns a bot for the server at baseURL (e.g. "http://localhost:8080").
 func New(baseURL string) *Bot {
 	return &Bot{
-		base:    strings.TrimSuffix(baseURL, "/"),
-		http:    &http.Client{Timeout: 10 * time.Second},
-		clock:   clock.Real{},
-		changed: make(chan struct{}),
-		done:    make(chan struct{}),
+		base:      strings.TrimSuffix(baseURL, "/"),
+		http:      &http.Client{Timeout: 10 * time.Second},
+		clock:     clock.Real{},
+		changed:   make(chan struct{}),
+		done:      make(chan struct{}),
+		creatures: map[uint32]*Creature{},
+		pings:     map[uint64]time.Time{},
 	}
 }
 
@@ -295,12 +331,17 @@ func (b *Bot) apply(e *pb.ServerMessage) {
 	case *pb.ServerMessage_Welcome:
 		b.creatureID = m.Welcome.GetCreatureId()
 	case *pb.ServerMessage_FullMapView:
+		clear(b.creatures)
 		for _, c := range m.FullMapView.GetArea().GetCreatures() {
+			b.see(c)
 			if c.GetId() == b.creatureID {
 				b.pos = toPos(c.GetPos())
 			}
 		}
 	case *pb.ServerMessage_CreatureMove:
+		if c := b.creatures[m.CreatureMove.GetId()]; c != nil {
+			c.Pos = toPos(m.CreatureMove.GetTo())
+		}
 		if m.CreatureMove.GetId() == b.creatureID {
 			b.pos = toPos(m.CreatureMove.GetTo())
 			b.stats.Moves++
@@ -309,13 +350,43 @@ func (b *Bot) apply(e *pb.ServerMessage) {
 		b.pos = toPos(m.WalkRejected.GetPos())
 		b.stats.Rejected++
 	case *pb.ServerMessage_CreatureAppear:
+		b.see(m.CreatureAppear.GetCreature())
 		b.stats.Appear++
 	case *pb.ServerMessage_CreatureDisappear:
+		delete(b.creatures, m.CreatureDisappear.GetId())
 		b.stats.Disappear++
+	case *pb.ServerMessage_ChatMessage:
+		b.stats.Chat++
+	case *pb.ServerMessage_DialogOpen:
+		d := &Dialog{ID: m.DialogOpen.GetDialogId(), NPC: m.DialogOpen.GetNpcCreatureId()}
+		for _, o := range m.DialogOpen.GetOptions() {
+			d.Options = append(d.Options, o.GetOptionId())
+		}
+		b.dialog = d
+		b.stats.Dialogs++
+	case *pb.ServerMessage_DialogClose:
+		if b.dialog != nil && b.dialog.ID == m.DialogClose.GetDialogId() {
+			b.dialog = nil
+		}
+	case *pb.ServerMessage_Pong:
+		if sent, ok := b.pings[m.Pong.GetClientTime()]; ok {
+			delete(b.pings, m.Pong.GetClientTime())
+			b.latencies = append(b.latencies, b.clock.Now().Sub(sent))
+			b.stats.Pongs++
+		}
 	case *pb.ServerMessage_MapSlice:
 		b.stats.Slices++
 	case *pb.ServerMessage_Disconnect:
 		b.disconnect = strings.TrimPrefix(m.Disconnect.GetReason().String(), "DISCONNECT_REASON_")
+	}
+}
+
+func (b *Bot) see(c *pb.Creature) {
+	if c == nil {
+		return
+	}
+	b.creatures[c.GetId()] = &Creature{
+		ID: c.GetId(), Kind: CreatureKind(c.GetKind()), ContentID: c.GetContentId(), Pos: toPos(c.GetPos()),
 	}
 }
 
@@ -356,6 +427,94 @@ func (b *Bot) Stats() Stats { b.mu.Lock(); defer b.mu.Unlock(); return b.stats }
 
 // Disconnected returns the Disconnect reason the server sent ("" if none), e.g. "LOGGED_OUT".
 func (b *Bot) Disconnected() string { b.mu.Lock(); defer b.mu.Unlock(); return b.disconnect }
+
+// Creatures returns the creatures the bot sees (itself excluded) of the given kind.
+func (b *Bot) Creatures(kind CreatureKind) []Creature {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []Creature
+	for _, c := range b.creatures {
+		if c.Kind == kind && c.ID != b.creatureID {
+			out = append(out, *c)
+		}
+	}
+	return out
+}
+
+// Sees reports whether the creature id is in the bot's view.
+func (b *Bot) Sees(id uint32) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	_, ok := b.creatures[id]
+	return ok
+}
+
+// Dialog returns the open NPC dialog, or nil.
+func (b *Bot) Dialog() *Dialog {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.dialog == nil {
+		return nil
+	}
+	d := *b.dialog
+	d.Options = append([]uint32(nil), d.Options...)
+	return &d
+}
+
+// TakeLatencies returns the Ping round trips measured since the last call and forgets
+// them. A round trip is the command latency of the server (received, run on the next
+// tick, sent in that tick's batch) plus the network.
+func (b *Bot) TakeLatencies() []time.Duration {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := b.latencies
+	b.latencies = nil
+	return out
+}
+
+// Ping sends a Ping; its Pong adds a latency sample (TakeLatencies).
+func (b *Bot) Ping(ctx context.Context) error {
+	b.mu.Lock()
+	b.pingSeq++
+	seq := b.pingSeq
+	b.pings[seq] = b.clock.Now()
+	if len(b.pings) > 64 { // lost pongs (the connection is going away): forget the oldest
+		for k := range b.pings {
+			if k < seq-32 {
+				delete(b.pings, k)
+			}
+		}
+	}
+	b.mu.Unlock()
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: seq}}})
+}
+
+// SetFightMode sets a balanced stance and whether the player chases its target.
+func (b *Bot) SetFightMode(ctx context.Context, chase bool) error {
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_SetFightMode{SetFightMode: &pb.SetFightMode{
+		Stance: pb.FightStance_FIGHT_STANCE_BALANCED, Chase: chase,
+	}}})
+}
+
+// SetTarget selects the creature to attack (0 clears the target).
+func (b *Bot) SetTarget(ctx context.Context, id uint32) error {
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_SetTarget{SetTarget: &pb.SetTarget{CreatureId: id}}})
+}
+
+// Say speaks on the local (say) channel.
+func (b *Bot) Say(ctx context.Context, text string) error {
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Say{Say: &pb.Say{Channel: pb.ChatChannel_CHAT_CHANNEL_SAY, Text: text}}})
+}
+
+// TalkTo asks an NPC for its dialog (DialogOpen arrives if it is close enough).
+func (b *Bot) TalkTo(ctx context.Context, npc uint32) error {
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_NpcTalk{NpcTalk: &pb.NpcTalk{CreatureId: npc}}})
+}
+
+// Choose picks an option of the open dialog (0 closes it).
+func (b *Bot) Choose(ctx context.Context, dialogID, option uint32) error {
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_DialogChoose{DialogChoose: &pb.DialogChoose{DialogId: dialogID, OptionId: option}}})
+}
 
 // Walk asks for one step.
 func (b *Bot) Walk(ctx context.Context, d Direction) error {
