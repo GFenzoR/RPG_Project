@@ -43,6 +43,8 @@ jobs:
             echo "no map review comment yet: nothing to mark"
             exit 0
           fi
+          # The backticks are Markdown, not command substitution:
+          # shellcheck disable=SC2016
           body="$(printf '%s\n## Revisión de mapa (CI)\n\n⏳ **Pendiente:** revisando el commit `%s`. El veredicto anterior ya no vale; si esto no cambia, el check `map-pr` no corrió para este commit.\n' "$marker" "${SHA:0:12}")"
           gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" > /dev/null
           echo "marked comment $id as pending for ${SHA:0:12}"
