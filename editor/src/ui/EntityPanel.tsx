@@ -139,11 +139,13 @@ export function EntityPanel({
       setRectsText(formatRects(e.rects));
     }
   };
-  // Selecting an entry (list or undo) opens it; the draft follows the selection.
+  // Selecting an entry (list, apply or undo) opens it; the draft follows the selected
+  // entry itself, not the whole world: map edits keep the list (and entry) references,
+  // so painting never discards what is typed in the form.
   useEffect(() => {
     if (selected) open(entityKey(selected), selected);
     else setDraft((d) => (d && d.key === undefined ? d : undefined));
-  }, [s.entitySel, file, s.world]);
+  }, [s.entitySel, file, selected]);
 
   const set = (patch: Partial<Spawn & Zone & Portal & NpcPlacement>): void =>
     setDraft((d) => d && { ...d, e: { ...d.e, ...patch } as Entity });

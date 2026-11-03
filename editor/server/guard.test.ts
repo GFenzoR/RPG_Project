@@ -16,10 +16,18 @@ describe("refuseRequest", () => {
   });
 
   it.each<[string, Record<string, string>, RegExp]>([
-    ["no API header (simple cross-site form/fetch)", { ...ok, "x-rpg-editor": "" }, /missing x-rpg-editor/],
+    [
+      "no API header (simple cross-site form/fetch)",
+      { ...ok, "x-rpg-editor": "" },
+      /missing x-rpg-editor/,
+    ],
     ["another site", { ...ok, "sec-fetch-site": "cross-site" }, /cross-site/],
     ["a sibling localhost port", { ...ok, "sec-fetch-site": "same-site" }, /cross-site/],
-    ["a foreign Origin", { ...ok, origin: "https://evil.example" }, /cross-origin request from https:\/\/evil.example/],
+    [
+      "a foreign Origin",
+      { ...ok, origin: "https://evil.example" },
+      /cross-origin request from https:\/\/evil.example/,
+    ],
     ["a text/plain body", { ...ok, "content-type": "text/plain" }, /application\/json/],
   ])("refuses %s", (_name, headers, msg) => {
     expect(refuseRequest("POST", headers)).toMatch(msg);

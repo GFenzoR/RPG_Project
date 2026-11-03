@@ -285,6 +285,7 @@ export async function createMapCanvas(
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("pointerdown", (e) => {
     canvas.setPointerCapture(e.pointerId);
+    window.getSelection()?.removeAllRanges(); // map shortcuts (Ctrl+C) apply again
     if (e.button === 1 || (e.button === 0 && spaceHeld)) {
       panning = { x: e.clientX, y: e.clientY };
       return;
@@ -350,6 +351,11 @@ export async function createMapCanvas(
     if (!handled) return; // Tab, arrows in a select, etc. keep their normal behaviour
     release(e);
     if (mod && (k === "c" || k === "x" || k === "v")) {
+      // Leave the shortcut to the browser when there is nothing of the map to act on, or
+      // when text of the page is selected (copying a diagnostic or the status bar).
+      const textSelected = !(window.getSelection()?.isCollapsed ?? true);
+      if (k !== "v" && (textSelected || !ctl.state.selection)) return;
+      if (k === "v" && !ctl.state.clipboard) return;
       e.preventDefault();
       if (k === "c") ctl.copy();
       else if (k === "x") ctl.cut();

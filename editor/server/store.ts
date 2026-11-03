@@ -86,9 +86,7 @@ export const hashText = (text: string): string =>
 const ID = /^[a-z][a-z0-9_]*$/;
 const CHUNK_PATH = /^world\/islands\/([a-z][a-z0-9_]*)\/chunks\/z(\d{2})\/c(\d{4})_(\d{4})\.json$/;
 /** Auxiliary lists the editor may write (EDITABLE_AUX); texts.yaml and island.yaml are not. */
-const AUX_PATH = new RegExp(
-  `^world/islands/([a-z][a-z0-9_]*)/(${EDITABLE_AUX.join("|")})\\.yaml$`,
-);
+const AUX_PATH = new RegExp(`^world/islands/([a-z][a-z0-9_]*)/(${EDITABLE_AUX.join("|")})\\.yaml$`);
 
 function readIfExists(abs: string): string | null {
   return existsSync(abs) ? readFileSync(abs, "utf8") : null;
@@ -112,7 +110,10 @@ interface PlannedWrite {
 /** Checks one change and works out what to write; throws BadRequest if it is not legit. */
 function plan(root: string, world: World, islands: Set<string>, change: FileChange): PlannedWrite {
   if (typeof change?.file !== "string") throw new BadRequest("change without a file");
-  if (change.base !== null && (typeof change.base !== "string" || !/^[0-9a-f]{64}$/.test(change.base)))
+  if (
+    change.base !== null &&
+    (typeof change.base !== "string" || !/^[0-9a-f]{64}$/.test(change.base))
+  )
     throw new BadRequest(`${change.file}: invalid base hash`);
   const aux = AUX_PATH.exec(change.file);
   if (aux) return planAux(root, world, islands, change.file, aux[1] ?? "", aux[2] as EntityList);
@@ -131,7 +132,11 @@ function plan(root: string, world: World, islands: Set<string>, change: FileChan
   if (!chunk) return { file: change.file, abs, text: null };
   if (chunk.cx !== cx || chunk.cy !== cy || chunk.z !== z)
     throw new BadRequest(`${change.file}: chunk says cx=${chunk.cx} cy=${chunk.cy} z=${chunk.z}`);
-  if (!Array.isArray(chunk.ground) || chunk.ground.length !== 32 * 32 || !Array.isArray(chunk.items))
+  if (
+    !Array.isArray(chunk.ground) ||
+    chunk.ground.length !== 32 * 32 ||
+    !Array.isArray(chunk.items)
+  )
     throw new BadRequest(`${change.file}: malformed chunk`);
   let text: string;
   try {
@@ -166,6 +171,13 @@ function planAux(
   const entries: unknown = island[list];
   if (!Array.isArray(entries)) throw new BadRequest(`${file}: expected a list`);
   if (entries.length === 0) return { file, abs, text: null };
+  // The request's own data must pass the schema (every auxiliary schema forbids unknown
+  // keys), so nothing odd (a key with a newline...) can reach the formatter.
+  const sent = checkSchema(list, entries);
+  if (sent.length > 0)
+    throw new BadRequest(
+      `${file}: ${sent.map((e) => `${e.path.join(".") || "/"} ${e.message}`).join("; ")}`,
+    );
   let text: string;
   try {
     text = formatYaml(entries);
@@ -180,6 +192,8 @@ function planAux(
     throw new BadRequest(
       `${file}: ${errors.map((e) => `${e.path.join(".") || "/"} ${e.message}`).join("; ")}`,
     );
+  // Canonical: what is written reads back to the same text (what mapcli fmt checks).
+  if (formatYaml(parsed.data) !== text) throw new BadRequest(`${file}: not canonical once written`);
   return { file, abs, text };
 }
 
@@ -276,10 +290,13 @@ export function saveChanges(
 }
 
 /** The shared validator on the in-memory world, with YAML lines from the files on disk. */
-export function validateInMemory(root: string, world: World, content: ContentIndex): ValidateResult {
+export function validateInMemory(
+  root: string,
+  world: World,
+  content: ContentIndex,
+): ValidateResult {
   return validateLoaded(world, content, { lines: loadWorld(root).lines });
 }
-
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);

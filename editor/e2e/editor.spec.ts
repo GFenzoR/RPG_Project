@@ -294,10 +294,12 @@ test("hito 2: rectangle, autoborder, fill, copy/paste across floors and entity p
   await expect(page.getByTestId("field-radius")).toHaveValue("2");
   await page.keyboard.press("Control+y");
   await expect(page.getByTestId("field-radius")).toHaveValue("3");
-  // A rejected entry (bad ID) reports the op's error and changes nothing.
+  // A bad ID is reported in Spanish (checked before the op runs) and changes nothing.
   await page.getByTestId("field-id").fill("Bad ID");
   await page.getByTestId("entity-apply").click();
-  await expect(page.getByTestId("status")).toContainText("Operación rechazada");
+  await expect(page.getByTestId("status")).toHaveText(
+    "ID inválido «Bad ID»: usa minúsculas, números y _ (empieza con letra)",
+  );
   await page.getByTestId("entity-cancel").click();
 
   // Zone panel: a new zone takes its rect from the selection.

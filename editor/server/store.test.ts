@@ -1,4 +1,13 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,7 +43,9 @@ afterEach(() => {
 function scratch(withRepo = true): string {
   const d = mkdtempSync(join(tmpdir(), "rpg-editor-test-"));
   dirs.push(d);
-  if (withRepo) for (const sub of ["world", "data", "i18n"]) cpSync(join(repo, sub), join(d, sub), { recursive: true });
+  if (withRepo)
+    for (const sub of ["world", "data", "i18n"])
+      cpSync(join(repo, sub), join(d, sub), { recursive: true });
   return d;
 }
 
@@ -143,7 +154,10 @@ describe("saveChanges", () => {
     const root = scratch();
     const { world, changes } = edit(root);
     const before = tree(join(root, "world"));
-    writeFileSync(join(root, Z7), readFileSync(join(root, Z7), "utf8").replace('"grass"', '"dirt"'));
+    writeFileSync(
+      join(root, Z7),
+      readFileSync(join(root, Z7), "utf8").replace('"grass"', '"dirt"'),
+    );
     const after = tree(join(root, "world"));
     expect(() => saveChanges(root, world, changes)).toThrow(SaveConflict);
     try {
@@ -169,22 +183,59 @@ describe("saveChanges", () => {
     const { world, changes } = edit(root, [
       { op: "paint_ground", floor: 8, cells: [{ x: 1060, y: 1060 }], item: "dirt" },
     ]);
-    expect(changes).toEqual([{ file: "world/islands/testisle/chunks/z08/c0033_0033.json", base: null }]);
+    expect(changes).toEqual([
+      { file: "world/islands/testisle/chunks/z08/c0033_0033.json", base: null },
+    ]);
     expect(() => saveChanges(root, world, changes)).toThrow(SaveConflict);
     expect(readFileSync(broken, "utf8")).toBe("{ not json");
   });
 
   it.each<[string, FileChange[], RegExp]>([
-    ["path traversal", [{ file: "world/islands/testisle/chunks/z07/../../../../../evil.json", base: null }], /not a chunk or auxiliary file path/],
-    ["an absolute path", [{ file: "/tmp/evil.json", base: null }], /not a chunk or auxiliary file path/],
-    ["a dotted island id", [{ file: "world/islands/../chunks/z07/c0032_0032.json", base: null }], /not a chunk or auxiliary file path/],
-    ["an island not in world.yaml", [{ file: "world/islands/other/chunks/z07/c0032_0032.json", base: null }], /not in world\/world.yaml/],
-    ["a floor out of range", [{ file: "world/islands/testisle/chunks/z99/c0032_0032.json", base: null }], /out of range/],
+    [
+      "path traversal",
+      [{ file: "world/islands/testisle/chunks/z07/../../../../../evil.json", base: null }],
+      /not a chunk or auxiliary file path/,
+    ],
+    [
+      "an absolute path",
+      [{ file: "/tmp/evil.json", base: null }],
+      /not a chunk or auxiliary file path/,
+    ],
+    [
+      "a dotted island id",
+      [{ file: "world/islands/../chunks/z07/c0032_0032.json", base: null }],
+      /not a chunk or auxiliary file path/,
+    ],
+    [
+      "an island not in world.yaml",
+      [{ file: "world/islands/other/chunks/z07/c0032_0032.json", base: null }],
+      /not in world\/world.yaml/,
+    ],
+    [
+      "a floor out of range",
+      [{ file: "world/islands/testisle/chunks/z99/c0032_0032.json", base: null }],
+      /out of range/,
+    ],
     ["a bad base hash", [{ file: Z7, base: "../x" }], /invalid base hash/],
-    ["a file listed twice", [{ file: Z7, base: null }, { file: Z7, base: null }], /listed twice/],
+    [
+      "a file listed twice",
+      [
+        { file: Z7, base: null },
+        { file: Z7, base: null },
+      ],
+      /listed twice/,
+    ],
     ["a null change", [null as unknown as FileChange], /each change needs a file path/],
-    ["a change without a file", [{ base: null } as unknown as FileChange], /each change needs a file path/],
-    ["a numeric file", [{ file: 5, base: null } as unknown as FileChange], /each change needs a file path/],
+    [
+      "a change without a file",
+      [{ base: null } as unknown as FileChange],
+      /each change needs a file path/,
+    ],
+    [
+      "a numeric file",
+      [{ file: 5, base: null } as unknown as FileChange],
+      /each change needs a file path/,
+    ],
   ])("rejects %s and touches nothing", (_name, changes, msg) => {
     const root = scratch();
     const before = tree(root);
@@ -258,9 +309,17 @@ describe("saveChanges of auxiliary lists (spawns, npcs, zones, portals)", () => 
     const history = new History({ itemKind });
     const step = history.apply(fromWire(boot.world), "edit", AUX_EDITS);
     const files = step.touchedAux.map((a) => auxFile(a.island, a.file));
-    const saved = saveChanges(root, step.world, files.map((file) => ({ file, base: boot.base[file] ?? null })));
+    const saved = saveChanges(
+      root,
+      step.world,
+      files.map((file) => ({ file, base: boot.base[file] ?? null })),
+    );
     const undone = history.undo(step.world)?.world ?? step.world;
-    saveChanges(root, undone, files.map((file) => ({ file, base: saved.base[file] ?? null })));
+    saveChanges(
+      root,
+      undone,
+      files.map((file) => ({ file, base: saved.base[file] ?? null })),
+    );
     expect(tree(join(root, "world"))).toEqual(original);
   });
 
@@ -275,11 +334,23 @@ describe("saveChanges of auxiliary lists (spawns, npcs, zones, portals)", () => 
   });
 
   it.each<[string, string, RegExp]>([
-    ["texts.yaml (not editable yet)", "world/islands/testisle/texts.yaml", /not a chunk or auxiliary file path/],
+    [
+      "texts.yaml (not editable yet)",
+      "world/islands/testisle/texts.yaml",
+      /not a chunk or auxiliary file path/,
+    ],
     ["island.yaml", "world/islands/testisle/island.yaml", /not a chunk or auxiliary file path/],
     ["world.yaml", "world/world.yaml", /not a chunk or auxiliary file path/],
-    ["a traversal", "world/islands/testisle/../puerto/spawns.yaml", /not a chunk or auxiliary file path/],
-    ["another extension", "world/islands/testisle/spawns.yml", /not a chunk or auxiliary file path/],
+    [
+      "a traversal",
+      "world/islands/testisle/../puerto/spawns.yaml",
+      /not a chunk or auxiliary file path/,
+    ],
+    [
+      "another extension",
+      "world/islands/testisle/spawns.yml",
+      /not a chunk or auxiliary file path/,
+    ],
     ["an island not in world.yaml", "world/islands/other/spawns.yaml", /not in world\/world.yaml/],
   ])("rejects %s", (_name, file, msg) => {
     const root = scratch();
@@ -294,8 +365,26 @@ describe("saveChanges of auxiliary lists (spawns, npcs, zones, portals)", () => 
     const before = tree(root);
     const { world, changes } = edit(root, AUX_EDITS);
     const spawns = world.islands.get("testisle")?.spawns as unknown as Record<string, unknown>[];
-    spawns.push({ id: "../evil", center: { x: 1, y: 1, z: 7 }, radius: 1, monsters: [], respawn_seconds: 1 });
+    spawns.push({
+      id: "../evil",
+      center: { x: 1, y: 1, z: 7 },
+      radius: 1,
+      monsters: [],
+      respawn_seconds: 1,
+    });
     expect(() => saveChanges(root, world, changes)).toThrow(BadRequest);
+    spawns.pop();
+    // A key with a newline would write a comment line of its choosing: the request's own
+    // data must pass the schema, not only the text read back.
+    spawns.push({
+      id: "testisle_evil",
+      center: { x: 1, y: 1, z: 7 },
+      "radius: 4\n# ARBITRARY\n  notes": "x",
+      radius: 1,
+      monsters: [{ monster: "wolf", count: 1 }],
+      respawn_seconds: 1,
+    });
+    expect(() => saveChanges(root, world, changes)).toThrow(/unknown field/);
     spawns.pop();
     (world.islands.get("testisle") as unknown as Record<string, unknown>)["zones"] = "nope";
     expect(() => saveChanges(root, world, changes)).toThrow(/expected a list/);
@@ -393,12 +482,14 @@ describe("bootstrap", () => {
     }
     // testisle + puerto chunks, and their spawns/npcs/zones/portals.yaml (not texts.yaml).
     expect(Object.keys(b.base).filter((f) => f.endsWith(".json"))).toHaveLength(6 + 43);
-    expect(Object.keys(b.base).filter((f) => f.endsWith(".yaml")).sort()).toEqual(
-      [
-        ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/puerto/${f}.yaml`),
-        ...["portals", "spawns", "zones"].map((f) => `world/islands/testisle/${f}.yaml`),
-      ],
-    );
+    expect(
+      Object.keys(b.base)
+        .filter((f) => f.endsWith(".yaml"))
+        .sort(),
+    ).toEqual([
+      ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/puerto/${f}.yaml`),
+      ...["portals", "spawns", "zones"].map((f) => `world/islands/testisle/${f}.yaml`),
+    ]);
     expect(b.borders.map((r) => r.id)).toContain("grass_sand");
     expect(b.monsters).toContain("wolf");
   });

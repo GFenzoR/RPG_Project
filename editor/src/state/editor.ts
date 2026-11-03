@@ -33,6 +33,7 @@ import type {
 } from "../io/wire.ts";
 import {
   autoborderAfter,
+  clipToIslands,
   copyRect,
   historyLabel,
   line,
@@ -314,8 +315,11 @@ export class EditorController {
   pick(id: string): void {
     const kind = this.items.get(id)?.kind;
     if (kind === undefined) return;
-    if (kind === "ground") this.set({ ground: id, tool: "brush" });
-    else this.set({ item: id, tool: "item" });
+    if (kind === "ground") {
+      // Fill and rectangle paint grounds too: picking one keeps them.
+      const keep = this.state.tool === "fill" || this.state.tool === "rect";
+      this.set({ ground: id, tool: keep ? this.state.tool : "brush" });
+    } else this.set({ item: id, tool: "item" });
   }
 
   setBrushSize(brushSize: BrushSize): void {
@@ -456,7 +460,9 @@ export class EditorController {
     const st = this.stroke;
     if (!st || (st.last.x === x && st.last.y === y)) return;
     if (this.dragging) this.set({ drag: rectOf(st.start, { x, y }) });
-    else for (const c of line(st.last, { x, y }).slice(1)) this.useAt(c.x, c.y);
+    else if (this.state.tool === "fill") {
+      // Fill is one click: moving while pressed must not flood the regions crossed.
+    } else for (const c of line(st.last, { x, y }).slice(1)) this.useAt(c.x, c.y);
     st.last = { x, y };
   }
 
@@ -502,16 +508,17 @@ export class EditorController {
     return true;
   }
 
-  /** Erases the selected tiles (the eraser's layer). */
-  deleteSelection(): void {
+  /** Erases the selected tiles (the eraser's layer by default). */
+  deleteSelection(layer: EraseLayer = this.state.eraseLayer): void {
     const sel = this.state.selection;
     if (!sel) return;
-    const s = { ...this.settings(), floor: this.state.selectionFloor };
+    const s = { ...this.settings(), floor: this.state.selectionFloor, eraseLayer: layer };
     this.commit("editor.history.erase", rectOps(this.state.world, s, sel, true));
   }
 
   cut(): void {
-    if (this.copy()) this.deleteSelection();
+    // Copy takes ground and items, so cut removes both whatever the eraser's layer is.
+    if (this.copy()) this.deleteSelection("all");
   }
 
   /** Enters paste mode (the next click pastes); false when the clipboard is empty. */
@@ -526,17 +533,26 @@ export class EditorController {
     const clip = this.state.clipboard;
     if (!clip) return;
     const z = this.state.floor;
-    if (this.commit("editor.history.paste", pasteOps(this.state.world, clip, x, y, z)))
+    const ops = pasteOps(this.state.world, clip, x, y, z);
+    // Pasted stacks may carry border pieces of the source: recompute the pasted area even
+    // where the ground did not change (edit() only covers cells whose ground changed).
+    if (ops.length > 0 && this.state.autoborder && this.borders.length > 0)
+      for (const rect of clipToIslands(this.state.world, { x, y, w: clip.w, h: clip.h }, z))
+        ops.push({ op: "autoborder", floor: z, rect });
+    if (this.commit("editor.history.paste", ops))
       this.set({ selection: { x, y, w: clip.w, h: clip.h }, selectionFloor: z });
   }
 
   // ---- entity panels -------------------------------------------------------------------
 
+  /** A pick asked for by one form never lands in another: switching cancels it. */
   setEntityTab(entityTab: EntityList): void {
+    this.cancelPick();
     this.set({ entityTab, entitySel: undefined });
   }
 
   selectEntity(key: string | undefined): void {
+    this.cancelPick();
     this.set({ entitySel: key });
   }
 
@@ -572,8 +588,23 @@ export class EditorController {
     return undefined;
   }
 
-  /** Creates an entity; returns false (and reports why) if the op rejects it. */
+  /**
+   * Checks the mistakes a person makes in the forms, so the status bar says what is wrong
+   * in their language; the op still validates everything (its raw message only shows up
+   * for what slips through). Reports and returns false on a problem.
+   */
+  private checkEntity(file: EntityList, entry: Entity, oldKey: string | undefined): boolean {
+    const p = entityProblem(this.state.world, file, entry, oldKey);
+    if (!p) return true;
+    const params = { ...p.params };
+    if (typeof params["what"] === "string") params["what"] = this.t(params["what"]);
+    this.set({ status: this.t(p.key, params) });
+    return false;
+  }
+
+  /** Creates an entity; returns false (and reports why) if it is rejected. */
   addEntity(file: EntityList, entry: Entity): boolean {
+    if (!this.checkEntity(file, entry, undefined)) return false;
     const ok = this.commit("editor.history.entity_add", [addOp(file, entry, undefined)]);
     if (ok)
       this.set({
@@ -590,6 +621,7 @@ export class EditorController {
   updateEntity(file: EntityList, key: string, entry: Entity): boolean {
     const at = this.findEntity(file, key);
     if (!at) return this.addEntity(file, entry);
+    if (!this.checkEntity(file, entry, key)) return false;
     const index = this.islandOf(entityPos(entry)) === at.island ? at.index : undefined;
     const ok = this.commit("editor.history.entity_edit", [
       removeOp(file, key),
@@ -774,4 +806,81 @@ export function removeOp(file: EntityList, key: string): MapOp {
   if (file === "zones") return { op: "remove_zone", id: key };
   if (file === "portals") return { op: "remove_portal", id: key };
   return { op: "remove_npc", npc: key };
+}
+
+// ---- entity checks for the forms --------------------------------------------------------
+
+export interface EntityProblem {
+  /** i18n key (editor.entity.err.*). */
+  key: string;
+  /** `what` is itself an i18n key (the field), translated by the caller. */
+  params?: Record<string, string | number>;
+}
+
+const ENTITY_ID = /^[a-z][a-z0-9_]*$/;
+
+/** Island whose rect holds (x, y) and lists floor z. */
+function islandHolding(world: World, p: Position): string | undefined {
+  for (const [id, isl] of world.islands)
+    if (rectContains(isl.meta.rect, p.x, p.y))
+      return isl.meta.floors.includes(p.z) ? id : undefined;
+  return undefined;
+}
+
+const isInt = (n: unknown, min: number, max = Number.MAX_SAFE_INTEGER): boolean =>
+  typeof n === "number" && Number.isInteger(n) && n >= min && n <= max;
+
+/**
+ * The first problem a person can cause in an entity form (bad or repeated ID, missing
+ * field, position outside the islands), or undefined. `oldKey` is the entry being edited.
+ */
+export function entityProblem(
+  world: World,
+  file: EntityList,
+  e: Entity,
+  oldKey: string | undefined,
+): EntityProblem | undefined {
+  const key = entityKey(e);
+  if ("npc" in e) {
+    if (!key) return { key: "editor.entity.err.required", params: { what: "editor.entity.npc" } };
+  } else if (!ENTITY_ID.test(key) || key.length > 64)
+    return { key: "editor.entity.err.id", params: { id: key } };
+  if (key !== oldKey)
+    for (const isl of world.islands.values())
+      if ((isl[file] as Entity[]).some((x) => entityKey(x) === key))
+        return { key: "editor.entity.err.duplicate", params: { id: key } };
+  const inside = (p: Position, what: string): EntityProblem | undefined =>
+    [p.x, p.y, p.z].every((n) => isInt(n, 0, 65535)) && islandHolding(world, p) !== undefined
+      ? undefined
+      : { key: "editor.entity.err.outside", params: { what } };
+  if ("center" in e) {
+    if (!isInt(e.radius, 0, 32)) return { key: "editor.entity.err.radius" };
+    if (!isInt(e.respawn_seconds, 1)) return { key: "editor.entity.err.respawn" };
+    if (e.monsters.length === 0 || e.monsters.some((m) => !m.monster || !isInt(m.count, 1)))
+      return { key: "editor.entity.err.monsters" };
+    return inside(e.center, "editor.entity.center");
+  }
+  if ("rects" in e) {
+    const r0 = e.rects[0];
+    if (!r0 || e.floors.length === 0) return { key: "editor.entity.err.zone" };
+    for (const r of e.rects) {
+      if (!isInt(r.w, 1) || !isInt(r.h, 1)) return { key: "editor.entity.err.zone" };
+      for (const z of e.floors) {
+        const a = inside({ x: r.x, y: r.y, z }, "editor.entity.rects");
+        const b = inside({ x: r.x + r.w - 1, y: r.y + r.h - 1, z }, "editor.entity.rects");
+        if (a || b) return a ?? b;
+        // Both corners in the island of the first rect: the zone belongs to one island.
+        const home = islandHolding(world, { x: r0.x, y: r0.y, z });
+        const corners = [
+          { x: r.x, y: r.y, z },
+          { x: r.x + r.w - 1, y: r.y + r.h - 1, z },
+        ];
+        if (corners.some((c) => islandHolding(world, c) !== home))
+          return { key: "editor.entity.err.outside", params: { what: "editor.entity.rects" } };
+      }
+    }
+    return undefined;
+  }
+  if ("from" in e) return inside(e.from, "editor.entity.from") ?? inside(e.to, "editor.entity.to");
+  return inside(e.pos, "editor.entity.pos");
 }

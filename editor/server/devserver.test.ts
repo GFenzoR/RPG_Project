@@ -42,7 +42,9 @@ describe("editor dev server", () => {
   });
 
   it("does not let another origin read files through /@fs/", async () => {
-    const res = await fetch(`${base}/@fs${repo}editor/package.json`, { headers: { origin: foreign } });
+    const res = await fetch(`${base}/@fs${repo}editor/package.json`, {
+      headers: { origin: foreign },
+    });
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });
 

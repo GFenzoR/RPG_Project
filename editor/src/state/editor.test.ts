@@ -5,7 +5,7 @@ import { screenToTile } from "@rpg/renderer/camera";
 import type { FileChange, PaletteItem, SaveResult, ValidateResult } from "../io/wire.ts";
 import type { BorderRule } from "@rpg/map-format/ops";
 import { tileAt } from "../tools/tools.ts";
-import { ConflictError, EditorController, PartialSaveError } from "./editor.ts";
+import { ConflictError, EditorController, PartialSaveError, entityProblem } from "./editor.ts";
 import type { Backend } from "./editor.ts";
 
 const T = 32;
@@ -230,6 +230,7 @@ describe("EditorController, hito 2", () => {
     expect(ground(e, 0, 0)).toBe("grass");
     expect(ground(e, 31, 31)).toBe("grass");
     e.pick("sand");
+    e.setTool("brush");
     e.setBrushSize(1);
     e.strokeStart(10, 10, false);
     e.strokeEnd();
@@ -341,5 +342,158 @@ describe("EditorController, hito 2", () => {
     expect(got).toEqual({ x: 4, y: 5, z: 7 });
     expect(e.state.picking).toBe(false);
     expect(e.state.canUndo).toBe(false);
+  });
+});
+
+describe("EditorController, review fixes", () => {
+  const spawn = {
+    id: "a_wolves",
+    center: { x: 5, y: 5, z: 7 },
+    radius: 2,
+    monsters: [{ monster: "wolf", count: 2 }],
+    respawn_seconds: 60,
+  };
+
+  it("a pending pick is cancelled by switching tab or entity; the click uses the tool", () => {
+    for (const change of [
+      (e: EditorController) => e.setEntityTab("zones"),
+      (e: EditorController) => e.selectEntity("a_wolves"),
+    ]) {
+      const e = editor();
+      let fired = false;
+      e.requestPick(() => (fired = true));
+      change(e);
+      expect(e.state.picking).toBe(false);
+      e.strokeStart(3, 3, false);
+      e.strokeEnd();
+      expect(fired).toBe(false);
+      expect(tileAt(e.state.world, 3, 3, 7)?.ground).toBe("grass");
+    }
+  });
+
+  it("pasting recomputes borders over the pasted area, where the ground did not change", () => {
+    const e = editor({ borders });
+    e.setTool("fill");
+    e.pick("grass");
+    e.strokeStart(0, 0, false);
+    e.strokeEnd();
+    e.setTool("brush");
+    e.setBrushSize(1);
+    e.pick("sand");
+    e.strokeStart(10, 10, false); // sand in grass: 4 border pieces
+    e.strokeEnd();
+    e.setTool("rect");
+    e.strokeStart(20, 20, false); // a sand beach
+    e.strokeMove(26, 26);
+    e.strokeEnd();
+    e.setTool("select");
+    e.strokeStart(10, 10, false);
+    e.strokeEnd();
+    e.copy();
+    e.startPaste();
+    e.strokeStart(23, 23, false); // middle of the beach: no borders there
+    expect(tileAt(e.state.world, 23, 23, 7)).toEqual({ ground: "sand", stack: [] });
+    // Plain sand pasted on the bordered tile keeps the borders its neighbours call for.
+    e.setTool("select");
+    e.strokeStart(24, 24, false);
+    e.strokeEnd();
+    e.copy();
+    e.startPaste();
+    e.strokeStart(10, 10, false);
+    expect(tileAt(e.state.world, 10, 10, 7)?.stack).toEqual(["b_n", "b_e", "b_s", "b_w"]);
+  });
+
+  it("fill is one click: moving while pressed does not flood other regions", () => {
+    const e = editor();
+    e.setTool("rect");
+    e.strokeStart(0, 0, false); // grass on the left half; the right half stays empty
+    e.strokeMove(9, 31);
+    e.strokeEnd();
+    e.pick("sand");
+    expect(e.state.tool).toBe("rect");
+    e.setTool("fill");
+    e.strokeStart(2, 2, false);
+    e.strokeMove(12, 2);
+    e.strokeEnd();
+    expect(tileAt(e.state.world, 0, 0, 7)?.ground).toBe("sand");
+    expect(tileAt(e.state.world, 12, 2, 7)?.ground ?? null).toBeNull();
+  });
+
+  it("picking a ground keeps fill and rectangle, and switches the others to the brush", () => {
+    const e = editor();
+    for (const tool of ["fill", "rect"] as const) {
+      e.setTool(tool);
+      e.pick("sand");
+      expect(e.state.tool).toBe(tool);
+    }
+    e.setTool("eraser");
+    e.pick("grass");
+    expect(e.state.tool).toBe("brush");
+  });
+
+  it("cut removes ground and items whatever the eraser's layer, so paste moves them", () => {
+    const e = editor();
+    e.strokeStart(1, 1, false);
+    e.strokeEnd();
+    e.pick("crate");
+    e.strokeStart(1, 1, false);
+    e.strokeEnd();
+    e.setEraseLayer("items");
+    e.setTool("select");
+    e.strokeStart(1, 1, false);
+    e.strokeEnd();
+    e.cut();
+    expect(tileAt(e.state.world, 1, 1, 7)).toBeUndefined();
+    e.startPaste();
+    e.strokeStart(70, 1, false);
+    expect(tileAt(e.state.world, 70, 1, 7)).toEqual({ ground: "grass", stack: ["crate"] });
+  });
+
+  it("the forms' mistakes are reported with translated messages before any op runs", () => {
+    const e = editor();
+    expect(e.addEntity("spawns", { ...spawn, id: "Bad ID" })).toBe(false);
+    expect(e.state.status).toBe('editor.entity.err.id {"id":"Bad ID"}');
+    expect(e.addEntity("spawns", spawn)).toBe(true);
+    expect(e.addEntity("spawns", spawn)).toBe(false);
+    expect(e.state.status).toBe('editor.entity.err.duplicate {"id":"a_wolves"}');
+    // Editing keeps its own ID; moving off the islands or to an unlisted floor is refused.
+    expect(e.updateEntity("spawns", "a_wolves", { ...spawn, radius: 3 })).toBe(true);
+    expect(e.updateEntity("spawns", "a_wolves", { ...spawn, center: { x: 40, y: 5, z: 7 } })).toBe(
+      false,
+    );
+    expect(e.state.status).toBe('editor.entity.err.outside {"what":"editor.entity.center"}');
+    expect(e.updateEntity("spawns", "a_wolves", { ...spawn, center: { x: 5, y: 5, z: 8 } })).toBe(
+      false,
+    );
+    expect(e.addEntity("spawns", { ...spawn, id: "a_x", monsters: [] })).toBe(false);
+    expect(e.state.status).toMatch(/^editor.entity.err.monsters/);
+    const w = e.state.world;
+    expect(entityProblem(w, "spawns", { ...spawn, id: "a_y", radius: 40 }, undefined)?.key).toBe(
+      "editor.entity.err.radius",
+    );
+    expect(
+      entityProblem(w, "zones", { id: "a_z", type: "pvp", floors: [7], rects: [] }, undefined)?.key,
+    ).toBe("editor.entity.err.zone");
+    // A zone spanning two islands, a portal to nowhere, an NPC without ID.
+    const across = {
+      id: "a_z",
+      type: "pvp" as const,
+      floors: [7],
+      rects: [{ x: 30, y: 0, w: 40, h: 2 }],
+    };
+    expect(entityProblem(w, "zones", across, undefined)?.key).toBe("editor.entity.err.outside");
+    const portal = {
+      id: "a_p",
+      kind: "hole" as const,
+      from: { x: 1, y: 1, z: 7 },
+      to: { x: 40, y: 1, z: 7 },
+    };
+    expect(entityProblem(w, "portals", portal, undefined)?.params).toEqual({
+      what: "editor.entity.to",
+    });
+    expect(entityProblem(w, "npcs", { npc: "", pos: { x: 1, y: 1, z: 7 } }, undefined)?.key).toBe(
+      "editor.entity.err.required",
+    );
+    expect(entityProblem(w, "spawns", { ...spawn, id: "a_ok" }, undefined)).toBeUndefined();
   });
 });
