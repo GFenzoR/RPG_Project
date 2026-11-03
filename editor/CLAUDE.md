@@ -24,7 +24,8 @@ editor/
                    solo acepta llamadas del mismo origen (guard.ts) y guarda contra la base
   e2e/             Playwright: abre el editor, pinta, guarda, revisa screenshots
 ```
-Aún no existen (hito 2): `src/review/`, herramientas relleno/rectángulo/selección/spawn/zona.
+Aún no existe (T2.3): `src/review/` (patches y vista de diff). Relleno, rectángulo,
+selección/copiar/pegar, autoborder automático y paneles de entidades: T2.2 (`src/ui/EntityPanel.tsx`).
 
 ## Correr
 - `make editor` (o `pnpm --filter @rpg/editor dev`): http://localhost:5174, edita `world/`

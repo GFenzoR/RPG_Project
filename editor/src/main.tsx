@@ -49,6 +49,9 @@ async function start(): Promise<void> {
     t,
     loadErrors: boot.loadErrors,
     base: boot.base,
+    borders: boot.borders,
+    monsters: boot.monsters,
+    npcs: boot.npcs,
     island: new URLSearchParams(location.search).get("island"),
   });
   // Unsaved changes: the browser asks before closing or reloading the page.

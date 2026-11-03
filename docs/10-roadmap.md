@@ -99,7 +99,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 ## Hito 2 — Cuentas completas, comunidad y escritorio
 - [ ] **T2.1 OAuth Google y Discord** 👤 (crear apps y claves), verificación de email,
   reset de contraseña, vincular cuentas.
-- [ ] **T2.2 Editor v2.** Relleno, rectángulo, selección/copiar/pegar, autoborder,
+- [x] **T2.2 Editor v2.** Relleno, rectángulo, selección/copiar/pegar, autoborder,
   paneles de spawns/NPCs/zonas/portales.
 - [ ] **T2.3 Map patches.** Exportar/importar/aplicar, merge por casilla, vista de diff.
 - [ ] **T2.4 PR de mapas en CI.** Validación de parcelas y render antes/después

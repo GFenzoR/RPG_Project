@@ -163,7 +163,8 @@ en http://localhost:5174 y edita `world/` del repo en el lugar.
   Cada archivo viaja con el hash que tenía al abrirse (`base`, enviado en el bootstrap); si
   en disco ya no coincide (git pull, `mapcli`, otra pestaña) o el archivo no cargó, no se
   guarda nada y la UI muestra el conflicto (409). Los archivos que el editor no tocó nunca
-  se escriben ni se borran. `island.yaml` y los auxiliares no se editan en el hito 1.
+  se escriben ni se borran. `island.yaml` y los auxiliares no se editan en el hito 1 (los
+  auxiliares sí desde T2.2, ver abajo).
 - Seguridad del backend local: toda llamada a `/api` exige la cabecera `x-rpg-editor`
   (una web de otro sitio no puede mandarla sin un preflight CORS que el servidor nunca
   aprueba), `Origin`/`Sec-Fetch-Site` del mismo origen y cuerpo JSON. Guardar solo acepta
@@ -194,6 +195,49 @@ en http://localhost:5174 y edita `world/` del repo en el lugar.
 **Hito 2:** relleno, rectángulo, selección + copiar/pegar, autoborder automático al
 pintar, spawns, NPCs, zonas y portales con su panel, exportar/importar patch, vista de
 diff antes/después.
+
+Implementación (T2.2, editor v2). Las herramientas solo arman ops de map-format
+(`editor/src/tools/tools.ts`); aplicar, deshacer, validar y guardar es igual para todas:
+- **Relleno** (`G`): un clic genera la op `fill` con el suelo elegido.
+- **Rectángulo** (`R`): arrastrar muestra el rectángulo y al soltar aplica `paint_ground`
+  con `rect` (recortado a cada isla del piso); con clic derecho o Mayús borra con `erase`
+  en la capa del borrador. Una entrada de historial por arrastre.
+- **Selección** (`V`): arrastrar marca un rectángulo del piso actual. `Ctrl+C` copia suelo
+  y pila de items de cada casilla; `Ctrl+X` copia y borra todas las capas; `Supr` borra (capa del
+  borrador); `Esc` cancela. `Ctrl+V` (o el botón Pegar) entra en modo pegar: la vista
+  previa sigue al mouse y el clic pega con la esquina superior izquierda en esa casilla,
+  **en el piso actual** (así se copia entre pisos e islas). Pegar = `paint_ground` por
+  suelo + `erase` de items + `place_item` en orden: cada casilla copiada reemplaza el
+  suelo (si tenía) y la pila completa del destino; las casillas vacías no se pegan y lo
+  que cae fuera de las islas se descarta. Con autoborde activo, pegar recalcula también
+  los bordes de toda el área pegada (la pila copiada puede traer bordes del origen).
+- **Autoborder automático** (casilla "Autoborde" en la barra, activa por defecto): tras
+  cada cambio de suelo (pincel, relleno, rectángulo, borrador, pegar) el editor agrega
+  una op `autoborder` sobre el rectángulo de las casillas cuyo suelo cambió (las lista
+  la inversa) más un borde de 1, recortado a las islas, con las reglas de
+  `data/borders.yaml` que manda el bootstrap. Va en la misma entrada de historial;
+  deshacer usa la inversa primitiva y rehacer vuelve a correr la op con las reglas.
+- **Paneles de entidades** (derecha): pestañas spawns / NPCs / zonas / portales de la
+  isla actual, lista (clic = seleccionar y centrar), Nuevo, Borrar y un formulario.
+  Crear = `add_spawn`/`place_npc`/`add_zone`/`add_portal`; editar = `remove_*` + `add_*`
+  en una sola entrada de historial, con el mismo `index` si sigue en la misma isla (el
+  archivo no cambia de orden); borrar = `remove_*`. Las ops validan IDs, monstruos y
+  NPCs conocidos (bootstrap manda los IDs de `data/monsters` y `data/npcs`); antes, el editor revisa los
+  errores típicos del formulario (ID snake_case y único, campos requeridos, posiciones y
+  rects dentro de una isla con ese piso) con mensajes i18n (`editor.entity.err.*`); si aun
+  así la op rechaza, su error sale en la barra de estado y no cambia nada. El botón ⌖ toma la próxima
+  casilla clicada en el mapa; "Usar la selección" pone el rect de la zona. El canvas
+  dibuja zonas, spawns (radio), NPCs y portales del piso con los colores de `mapcli
+  render`. `texts.yaml` todavía no se edita.
+- Guardar: los YAML auxiliares tocados (`touchedAux`) viajan con su hash base igual que los
+  chunks (el bootstrap envía la base de `spawns/npcs/zones/portals.yaml`), así que un
+  cambio en disco da conflicto 409. El backend acepta solo
+  `world/islands/<id>/(spawns|npcs|zones|portals).yaml` de islas de `world.yaml` (nunca
+  `island.yaml`, `texts.yaml` ni `world.yaml`), comprueba que la ruta quede dentro de la
+  isla, escribe `formatYaml(lista)` (los mismos bytes que `mapcli fmt`), comprueba que ese
+  texto pase el esquema del archivo antes de escribir y borra el archivo si la lista quedó
+  vacía (como `saveApplied`). Tests en `editor/server/store.test.ts`.
+- Atajos nuevos: `G`, `R`, `V`, `Ctrl+C/X/V`, `Supr`, `Esc`.
 
 **Hito 4–5:** prefabs, generación procedural desde el editor, envío de patch a revisión
 con cuenta, cola de moderación, comentarios por casilla.

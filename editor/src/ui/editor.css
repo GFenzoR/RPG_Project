@@ -231,3 +231,56 @@ button.primary {
   border-top: 1px solid var(--border);
   color: var(--muted);
 }
+
+/* Entity panels (spawns, NPCs, zones, portals) */
+.entities .tabs,
+.entities .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.entity-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  max-height: 120px;
+  overflow: auto;
+}
+.entity-list button {
+  width: 100%;
+  text-align: left;
+  font-family: monospace;
+}
+.entity-list .empty {
+  color: var(--muted);
+}
+.entity-form .field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.entity-form .field > span {
+  width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.entity-form input[type="text"],
+.entity-form textarea,
+.entity-form select {
+  flex: 1;
+  min-width: 0;
+}
+.entity-form .pos input {
+  width: 58px;
+}
+.entity-form .monster {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+.entity-form .monster input {
+  width: 50px;
+}

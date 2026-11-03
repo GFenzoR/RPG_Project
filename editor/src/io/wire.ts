@@ -2,7 +2,9 @@
 // versions of the map-format model (Maps become arrays), plus the content the UI needs.
 import { chunkKey } from "@rpg/map-format/ops";
 import type {
+  BorderRule,
   Chunk,
+  EntityList,
   Island,
   IslandMeta,
   MapText,
@@ -56,11 +58,19 @@ export interface Bootstrap {
   i18n: Record<string, Record<string, string>>;
   /** Problems found while loading world/ (files that did not parse are not editable). */
   loadErrors: WireDiagnostic[];
-  /** Hash of each chunk file as loaded (see hashText); the base saves are checked against. */
+  /**
+   * Hash of each chunk file and auxiliary list (spawns/npcs/zones/portals.yaml) as loaded
+   * (see hashText); the base saves are checked against.
+   */
   base: Record<string, string>;
+  /** Rules of data/borders.yaml, for the automatic autoborder. */
+  borders: BorderRule[];
+  /** Monster and NPC IDs of data/monsters and data/npcs, for the entity panels. */
+  monsters: string[];
+  npcs: string[];
 }
 
-/** One chunk file the editor changed, with the hash it had when loaded (null: no file). */
+/** One chunk or auxiliary file the editor changed, with the hash it had when loaded (null: no file). */
 export interface FileChange {
   file: string;
   base: string | null;
@@ -95,6 +105,14 @@ export const API_HEADER = "x-rpg-editor";
 export function chunkFile(island: string, z: number, cx: number, cy: number): string {
   const p = (n: number, w: number): string => String(n).padStart(w, "0");
   return `world/islands/${island}/chunks/z${p(z, 2)}/c${p(cx, 4)}_${p(cy, 4)}.json`;
+}
+
+/** Auxiliary lists the editor's panels edit (texts.yaml is not edited yet). */
+export const EDITABLE_AUX: readonly EntityList[] = ["spawns", "npcs", "zones", "portals"];
+
+/** Repository path of an island's auxiliary list. */
+export function auxFile(island: string, file: EntityList): string {
+  return `world/islands/${island}/${file}.yaml`;
 }
 
 export interface ValidateResult {
