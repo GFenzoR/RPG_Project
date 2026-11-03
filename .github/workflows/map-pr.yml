@@ -8,8 +8,13 @@ name: map-pr
 #   is only fetched as git data and read with `git show`, never checked out or run.
 # - Read-only token, no secrets; artifacts only. The comment is posted by
 #   map-pr-comment.yml (workflow_run), which recomputes the key facts from the GitHub API.
-# - In a pull_request run this YAML itself comes from the PR: a PR that edits it can only
-#   fake its own check, and the comment then says the verdict is not trustworthy.
+# - In a pull_request run this YAML itself comes from the PR. A PR that edits, renames or
+#   deletes it can fake this check (and a job named `check` in another workflow could
+#   stand in for it). The comment says the verdict is not trustworthy for any PR that
+#   touches .github/, and map-pr-pending.yml (pull_request_target, from the base) marks
+#   the comment as pending on every push, so a push without a map-pr run never keeps an
+#   old pass. The required check must be pinned to GitHub Actions as its source, and
+#   .github/ needs CODEOWNERS review (docs/04).
 # Do not add write permissions here and do not switch to pull_request_target.
 #
 # No `paths` filter on purpose: GitHub evaluates it on the first 300 files only, and a push

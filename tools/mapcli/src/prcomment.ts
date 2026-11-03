@@ -110,6 +110,8 @@ export interface CheckedReport {
   files: CheckedFile[];
   conflicts: { path: string; code: (typeof CONFLICT_CODES)[number]; at: string[] }[];
   invalid_files: string[];
+  noncanonical_files: string[];
+  bad_mode_files: string[];
   merge_mismatch: string[];
   plots: { count: number; violations: CheckedViolation[]; violations_total: number };
   validation: { errors: number; new_errors: string[]; new_errors_total: number };
@@ -215,6 +217,12 @@ export function checkReport(raw: unknown): CheckedReport {
     invalid_files: arr(r.invalid_files, "invalid_files", 100).map((p) =>
       str(p, "invalid_files", WORLD_PATH),
     ),
+    noncanonical_files: arr(r.noncanonical_files, "noncanonical_files", 100).map((p) =>
+      str(p, "noncanonical_files", WORLD_PATH),
+    ),
+    bad_mode_files: arr(r.bad_mode_files, "bad_mode_files", 100).map((p) =>
+      str(p, "bad_mode_files", WORLD_PATH),
+    ),
     merge_mismatch: arr(r.merge_mismatch, "merge_mismatch", 100).map((p) =>
       str(p, "merge_mismatch", WORLD_PATH),
     ),
@@ -275,23 +283,56 @@ const isHarmless = (p: string): boolean => p.startsWith("world/") || p.startsWit
 export interface Trusted {
   /** Files of the PR outside world/, sensitive ones first (from the API). */
   otherFiles: string[];
-  /** All changed files the API listed (it lists 3000 at most). */
+  /** Changed files of the PR (the PR's count when the API list is shorter). */
   filesTotal: number;
+  /** The API did not list every file (3000 at most). */
+  truncated: boolean;
+  /** Files the API did not list (counted in the "… y N más" of the file list). */
+  unlisted: number;
   /** Whether the author may change the map outside the plots. */
   maintainer: boolean;
   /** The PR changes code or configuration of the check (anything outside world/ and docs/). */
   checkChanged: boolean;
 }
 
-export function trustedFacts(files: readonly string[], maintainer: boolean): Trusted {
-  const other = files.filter((p) => !p.startsWith("world/"));
+/** The API lists at most this many files of a PR. */
+export const MAX_API_FILES = 3000;
+
+/**
+ * `files` are every path the PR touches, renames counted by both ends (see filePaths).
+ * `changedFiles` is the PR's own count (`changed_files`): when the list is shorter, or at
+ * the API's cap, unseen files could be anything, so the verdict is not trustworthy (R4).
+ */
+export function trustedFacts(
+  files: readonly string[],
+  maintainer: boolean,
+  changedFiles = files.length,
+): Trusted {
+  const other = [...new Set(files.filter((p) => !p.startsWith("world/")))];
   other.sort((a, b) => Number(isSensitive(b)) - Number(isSensitive(a)) || (a < b ? -1 : 1));
+  const truncated = files.length >= MAX_API_FILES || changedFiles > files.length;
   return {
     otherFiles: other,
-    filesTotal: files.length,
+    filesTotal: Math.max(files.length, changedFiles),
+    truncated,
+    unlisted: Math.max(0, changedFiles - files.length),
     maintainer,
-    checkChanged: files.some((p) => !isHarmless(p)),
+    checkChanged: truncated || files.some((p) => !isHarmless(p)),
   };
+}
+
+/**
+ * Paths of the API's file list: a rename counts by its source too (R1), so moving
+ * `.github/workflows/ci.yml` to `docs/` is a change to `.github/`.
+ */
+export function filePaths(
+  list: readonly { filename: string; previous_filename?: string }[],
+): string[] {
+  return list.flatMap((f) =>
+    f.previous_filename !== undefined && f.previous_filename !== f.filename
+      ? [f.filename, f.previous_filename]
+      : [f.filename],
+  );
 }
 
 /** GitHub logins of the maintainers: one per line, `#` comments, case-insensitive. */
@@ -352,7 +393,8 @@ const FAILURE_TEXT: Record<(typeof FAILURES)[number], string> = {
   plots: "toca el mapa fuera de las parcelas `community_plot` y el autor no es maintainer",
   conflicts: "choca con cambios posteriores de la rama base (rebase y vuelve a empujar)",
   validation: "el mapa fusionado tiene errores nuevos del validador",
-  invalid: "un archivo de mapa del PR no pasa su esquema",
+  invalid:
+    "un archivo de mapa del PR no pasa su esquema, no está en formato canónico (corre `mapcli fmt`) o no es un archivo normal",
   rebase: "git no puede fusionar la rama con la base (rebase y vuelve a empujar)",
   merge_mismatch:
     "git fusionaría el texto de un archivo distinto de como se revisó (paletas de chunk): rebase y vuelve a empujar",
@@ -431,7 +473,11 @@ export function buildComment(
   }
   const r = report;
   const failures = verdict(r, t);
-  if (t.checkChanged)
+  if (t.truncated)
+    out.push(
+      `⚠️ **El veredicto no es confiable: la API de GitHub lista solo una parte de los ${t.filesTotal} archivos del PR.** Un maintainer tiene que revisarlo a mano.`,
+    );
+  else if (t.checkChanged)
     out.push(
       "⚠️ **El veredicto no es confiable: este PR cambia el código o la configuración del check.** Un maintainer tiene que revisar esos archivos a mano.",
     );
@@ -488,6 +534,14 @@ export function buildComment(
   };
   pathList("**Archivos de mapa que no pasan su esquema:**", r.invalid_files);
   pathList(
+    "**Archivos de mapa que no están en formato canónico** (corre `mapcli fmt` y vuelve a empujar):",
+    r.noncanonical_files,
+  );
+  pathList(
+    "**Rutas de `world/` que no son archivos normales** (symlink, ejecutable o submódulo):",
+    r.bad_mode_files,
+  );
+  pathList(
     "**Archivos que git fusionaría distinto de lo revisado** (rebase sobre la base):",
     r.merge_mismatch,
   );
@@ -537,14 +591,14 @@ export function buildComment(
     if (r.omitted_areas > 0)
       out.push("", `${r.omitted_areas} áreas más sin renderizar (límite por PR).`);
   }
-  if (t.otherFiles.length > 0) {
+  if (t.otherFiles.length > 0 || t.unlisted > 0) {
     out.push(
       "",
       "### Fuera de `world/`",
       "Este PR también cambia archivos que no son de mapa; revísalos aparte:",
       "",
       ...t.otherFiles.slice(0, MAX_ROWS).map((p) => `- ${code(p)}${isSensitive(p) ? " ⚠️" : ""}`),
-      ...more(t.otherFiles.length, MAX_ROWS),
+      ...more(t.otherFiles.length + t.unlisted, Math.min(t.otherFiles.length, MAX_ROWS)),
     );
   }
   out.push("", `<sub>[Ejecución del check](${ctx.runUrl}) · se actualiza en cada push.</sub>`);
@@ -626,17 +680,17 @@ async function findPull(env: Env): Promise<Pull | undefined> {
 
 /** Changed files of the PR, from the API (at most 3000, GitHub's own limit). */
 async function pullFiles(env: Env, pr: number): Promise<string[]> {
-  const out: string[] = [];
-  for (let page = 1; page <= 30; page++) {
+  const out: { filename: string; previous_filename?: string }[] = [];
+  for (let page = 1; page <= MAX_API_FILES / 100; page++) {
     const list = (await gh(
       env,
       "GET",
       `/repos/${env.repo}/pulls/${pr}/files?per_page=100&page=${page}`,
-    )) as { filename: string }[];
-    out.push(...list.map((f) => f.filename));
+    )) as { filename: string; previous_filename?: string }[];
+    out.push(...list);
     if (list.length < 100) break;
   }
-  return out;
+  return filePaths(out);
 }
 
 async function findComment(env: Env, pr: number): Promise<number | undefined> {
@@ -720,6 +774,16 @@ async function main(argv: string[]): Promise<number> {
   }
   const runUrl = `${env.server}/${env.repo}/actions/runs/${env.runId}`;
   const files = await pullFiles(env, pull.number);
+  // The single-PR endpoint has the PR's own file count (the list endpoint does not).
+  const full = (await gh(env, "GET", `/repos/${env.repo}/pulls/${pull.number}`)) as {
+    changed_files?: number;
+    head: { sha: string };
+  };
+  if (full.head.sha !== env.headSha) {
+    // A newer push: its own run will comment; an old report must not replace "pending".
+    process.stdout.write(`PR #${pull.number} moved on to ${full.head.sha}; nothing to do\n`);
+    return 0;
+  }
   const existing = await findComment(env, pull.number);
   let { report, error } = readReport(env.report);
   const touchesWorld = files.some((p) => p.startsWith("world/")) || report?.map_changes === true;
@@ -758,7 +822,12 @@ async function main(argv: string[]): Promise<number> {
     )) as { artifacts: { id: number; name: string }[] };
     const art = arts.artifacts.find((a) => a.name === RENDERS_ARTIFACT);
     if (art) ctx.artifactUrl = `${runUrl}/artifacts/${art.id}`;
-    body = buildComment(report, ctx, trustedFacts(files, maintainer), error);
+    body = buildComment(
+      report,
+      ctx,
+      trustedFacts(files, maintainer, full.changed_files ?? files.length),
+      error,
+    );
   }
   if (existing !== undefined) {
     await gh(env, "PATCH", `/repos/${env.repo}/issues/comments/${existing}`, { body });

@@ -111,6 +111,11 @@ export interface PrReport {
   conflicts: PrConflict[];
   /** Map files of the PR that do not pass their schema (failure "invalid"). */
   invalid_files: string[];
+  /** Map files of the PR whose text is not their canonical form (failure "invalid"). */
+  noncanonical_files: string[];
+  /** world/ paths that are not plain files (mode ≠ 100644) in the head or the merge
+   *  (failure "invalid"): a symlink or an executable bit can hide a change of content. */
+  bad_mode_files: string[];
   /** World files git would merge differently from the tile merge (failure "merge_mismatch"). */
   merge_mismatch: string[];
   plots: { count: number; violations: PlotViolation[]; violations_total: number };
@@ -196,6 +201,17 @@ function conflictCode(c: { reason: string; at?: string[] }): ConflictCode {
   return "invalid_file";
 }
 
+/** world/ paths of a tree-ish whose mode is not a plain file (100644), from git ls-tree. */
+function nonPlainFiles(root: string, treeish: string): string[] {
+  return git(root, ["ls-tree", "-r", "-z", "--full-tree", treeish, "--", "world/"])
+    .split("\0")
+    .filter((l) => l !== "")
+    .flatMap((l) => {
+      const [meta, path] = l.split("\t");
+      return meta !== undefined && path !== undefined && !meta.startsWith("100644 ") ? [path] : [];
+    });
+}
+
 /** Tree of the merge git would make (null: git reports a textual conflict). */
 function gitMergeTree(root: string, base: string, head: string): string | null {
   try {
@@ -254,6 +270,8 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       files: [],
       conflicts: [],
       invalid_files: [],
+      noncanonical_files: [],
+      bad_mode_files: [],
       merge_mismatch: [],
       plots: { count: 0, violations: [], violations_total: 0 },
       validation: { errors: 0, new_errors: [], new_errors_total: 0 },
@@ -268,14 +286,22 @@ export function prCheck(opts: PrCheckOptions): PrReport {
   // does not pass its schema is left out of the merge and fails the check by itself (S4).
   const files: PatchFile[] = [];
   const invalid: string[] = [];
+  const noncanonical: string[] = [];
   for (const path of worldFiles.filter(isPatchable)) {
     const b = atRef(root, mergeBase, path);
     const c = atRef(root, head, path);
     if (b === c) continue;
+    let canonical: string | null;
     try {
-      canonicalPatchText(path, c);
+      canonical = canonicalPatchText(path, c);
     } catch {
       invalid.push(path);
+      continue;
+    }
+    // Byte for byte (R2): `x: 03207` is 3207 here but 1671 (octal) for the Go server's
+    // yaml.v3. Only the canonical text means the same to every reader.
+    if (canonical !== c) {
+      noncanonical.push(path);
       continue;
     }
     files.push(
@@ -300,18 +326,19 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     // (B3). A chunk's palette can change on one side and a tile row on the other, and git
     // then merges them cleanly into different items.
     const tree = gitMergeTree(root, base, head);
+    const badModes = [
+      ...new Set([
+        ...nonPlainFiles(root, head),
+        ...(tree === null ? [] : nonPlainFiles(root, tree)),
+      ]),
+    ].sort();
     const conflicted = new Set(plan.conflicts.map((c) => c.path));
     const mismatch: string[] = [];
     if (tree !== null)
       for (const f of files) {
         if (conflicted.has(f.path)) continue;
-        let gitText: string | null;
-        try {
-          gitText = canonicalPatchText(f.path, atRef(root, tree, f.path));
-        } catch {
-          gitText = "\0unparsable";
-        }
-        if (gitText !== readOrNull(after, f.path)) mismatch.push(f.path);
+        // The raw blob, not canonicalized: what git writes is what the server reads.
+        if (atRef(root, tree, f.path) !== readOrNull(after, f.path)) mismatch.push(f.path);
       }
 
     // Files changed under world/ that a patch cannot carry still count for the plot check.
@@ -376,7 +403,7 @@ export function prCheck(opts: PrCheckOptions): PrReport {
 
     const failures: FailureCode[] = [];
     if (violations.length > 0 && !maintainer) failures.push("plots");
-    if (invalid.length > 0) failures.push("invalid");
+    if (invalid.length + noncanonical.length + badModes.length > 0) failures.push("invalid");
     if (plan.conflicts.length > 0) failures.push("conflicts");
     if (tree === null) failures.push("rebase");
     if (mismatch.length > 0) failures.push("merge_mismatch");
@@ -393,6 +420,8 @@ export function prCheck(opts: PrCheckOptions): PrReport {
         ...(c.at === undefined ? {} : { at: c.at }),
       })),
       invalid_files: invalid.slice(0, MAX_LISTED),
+      noncanonical_files: noncanonical.slice(0, MAX_LISTED),
+      bad_mode_files: badModes.slice(0, MAX_LISTED),
       merge_mismatch: mismatch.slice(0, MAX_LISTED),
       plots: {
         count: plots.length,

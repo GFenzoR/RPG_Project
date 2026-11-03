@@ -17,7 +17,9 @@ import { run } from "./index.ts";
 import { parseMaintainers, prCheck, tileFor } from "./prcheck.ts";
 import {
   MARKER,
+  MAX_API_FILES,
   buildComment,
+  filePaths,
   checkReport,
   isMaintainer,
   matchReport,
@@ -324,6 +326,37 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     expect(r.plots.violations).toMatchObject([{ entry: "huge", reason: "outside_plot" }]);
   });
 
+  it("fails a map file that is not byte for byte canonical, even for maintainers (R2)", () => {
+    const { root, git } = sandbox();
+    git("checkout", "-qb", "pr");
+    const SP = "world/islands/puerto/spawns.yaml";
+    // 03207 is 3207 for the TS parser but octal (1671) for the Go server's yaml.v3.
+    writeFileSync(
+      join(root, SP),
+      `${readFileSync(join(root, SP), "utf8")}\n- id: octal\n  center: { x: 03207, y: 06305, z: 7 }\n  radius: 1\n  monsters:\n    - { monster: wolf, count: 1 }\n  respawn_seconds: 60\n`,
+    );
+    git("commit", "-qam", "octal");
+    const r = prCheck({ root, base: "main", head: "pr", out: tmp("pr-out-"), author: "boss" });
+    expect(r.maintainer).toBe(true);
+    expect(r.failures).toEqual(["invalid"]);
+    expect(r.noncanonical_files).toEqual([SP]);
+    expect(r.plots.violations_total).toBe(0); // not merged, so not measured either
+  });
+
+  it("fails a world/ path that becomes a symlink without changing its blob (R3)", () => {
+    const { root, git } = sandbox();
+    git("checkout", "-qb", "pr");
+    const SP = "world/islands/puerto/spawns.yaml";
+    const blob = git("rev-parse", `HEAD:${SP}`).trim();
+    git("update-index", "--cacheinfo", `120000,${blob},${SP}`);
+    git("commit", "-qm", "mode only");
+    const r = prCheck({ root, base: "main", head: "pr", out: tmp("pr-out-"), author: "boss" });
+    expect(r.map_changes).toBe(true);
+    expect(r.files).toEqual([]);
+    expect(r.failures).toEqual(["invalid"]);
+    expect(r.bad_mode_files).toEqual([SP]);
+  });
+
   it("rejects refs that look like options", () => {
     const { root } = sandbox();
     expect(() => prCheck({ root, base: "--output=x", head: "main", out: tmp("o-") })).toThrow(
@@ -348,6 +381,8 @@ describe("pr comment", () => {
     files: [{ path: PLOT_CHUNK, status: "modified", base_matches: true, tiles_changed: 2 }],
     conflicts: [],
     invalid_files: [],
+    noncanonical_files: [],
+    bad_mode_files: [],
     merge_mismatch: [],
     plots: {
       count: 1,
@@ -490,5 +525,64 @@ describe("pr comment", () => {
       error: "no_report",
     });
     expect(noMapComment("c".repeat(40), ctx.runUrl)).toContain("ya no cambia nada en `world/`");
+  });
+  it("counts a rename by its source too, so moving a workflow to docs/ is not harmless (R1)", () => {
+    const paths = filePaths([
+      { filename: PLOT_CHUNK },
+      { filename: "docs/ci.yml", previous_filename: ".github/workflows/ci.yml" },
+      { filename: "docs/x.go", previous_filename: "server/internal/auth/x.go" },
+    ]);
+    expect(paths).toEqual([
+      PLOT_CHUNK,
+      "docs/ci.yml",
+      ".github/workflows/ci.yml",
+      "docs/x.go",
+      "server/internal/auth/x.go",
+    ]);
+    const t = trustedFacts(paths, true);
+    expect(t.checkChanged).toBe(true);
+    const body = buildComment(checkReport(good), ctx, t);
+    expect(body).not.toContain("✅");
+    expect(body).toContain("- `.github/workflows/ci.yml` ⚠️");
+    expect(body).toContain("- `server/internal/auth/x.go` ⚠️");
+  });
+
+  it("does not trust a file list the API cut short (R4)", () => {
+    const docs = Array.from({ length: MAX_API_FILES - 1 }, (_, i) => `docs/f${i}.md`);
+    const t = trustedFacts([...docs, PLOT_CHUNK], true, MAX_API_FILES + 3);
+    expect(t).toMatchObject({ truncated: true, checkChanged: true, unlisted: 3 });
+    const body = buildComment(checkReport(good), ctx, t);
+    expect(body).not.toContain("✅");
+    expect(body).toContain("la API de GitHub lista solo una parte de los 3003 archivos");
+    expect(body).toContain(`… y ${MAX_API_FILES - 1 + 3 - 40} más (ver Files changed).`);
+    // Fewer listed than the PR's own count, even far below the cap.
+    expect(trustedFacts([PLOT_CHUNK], true, 2).truncated).toBe(true);
+    expect(trustedFacts([PLOT_CHUNK], true, 1).truncated).toBe(false);
+  });
+
+  it("reports non-canonical files and odd modes with fixed text", () => {
+    const r = checkReport({
+      ...good,
+      failures: ["invalid"],
+      noncanonical_files: ["world/islands/puerto/spawns.yaml"],
+      bad_mode_files: [PLOT_CHUNK],
+    });
+    const body = buildComment(r, ctx, trustedFacts([PLOT_CHUNK], true));
+    expect(body).toContain("no está en formato canónico");
+    expect(body).toContain("no son archivos normales");
+  });
+});
+
+describe("map-pr-pending workflow (R5)", () => {
+  const yml = readFileSync(join(repo, ".github/workflows/map-pr-pending.yml"), "utf8");
+  it("runs from the base with a comment-only token and never touches the PR's code", () => {
+    expect(yml).toMatch(/pull_request_target:/);
+    expect(yml).not.toMatch(/actions\/checkout|pnpm|npm |node /);
+    expect(yml).toMatch(/permissions:\s*\n\s*pull-requests: write\s*\n/);
+    expect(yml).not.toMatch(/github\.event\.pull_request\.(title|body|head\.ref|head\.label)/);
+    // Only validated event data reaches the text.
+    expect(yml).toMatch(/\^\[0-9\]\+\$/);
+    expect(yml).toMatch(/\^\[0-9a-f\]\{40\}\$/);
+    expect(yml).toContain("<!-- rpg-map-pr-check -->");
   });
 });
