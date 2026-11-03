@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The game window: only the two app commands (server info and the HTTP API proxy). No core plugins, no shell, no file system.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": ["allow-server-info", "allow-api"]
+}

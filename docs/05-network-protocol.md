@@ -89,7 +89,9 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
   mayúsculas), manda ese token; cualquier otro esquema (p. ej. `Basic` de un staging con
   contraseña) se ignora y se usa la cookie. El token solo
   viene en el cuerpo del login si se pide `token_in_body: true` (Tauri, bots): el cliente
-  web no lo pide, así un XSS no puede leerlo de la respuesta.
+  web no lo pide, así un XSS no puede leerlo de la respuesta. En la app de escritorio lo
+  pide el lado Rust, que lo guarda en el llavero del SO y lo quita de la respuesta antes
+  de pasarla al webview (`apps/desktop`, docs/12).
 - **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
   19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
   ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin
@@ -499,7 +501,9 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
   `Disconnect{SLOW_CLIENT}` (sin mandarle los batches pendientes) en vez de consumir
   memoria.
 - Orígenes del navegador: por defecto solo el mismo host; otros (servidor de Vite,
-  Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas).
+  Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas). Un patrón con
+  `://` se compara con `esquema://host`: el cliente de escritorio usa
+  `tauri://localhost,http://tauri.localhost` (default del compose de producción).
 
 ## Presupuesto de ancho de banda
 Objetivo: < 4 KB/s promedio por jugador en zona concurrida. Con 100 jugadores ≈ 400 KB/s

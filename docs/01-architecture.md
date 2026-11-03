@@ -78,7 +78,8 @@ memoria) y se persiste ambos personajes en una sola transacción de base de dato
 - OAuth 2.0 con Google y Discord vinculados a la misma cuenta.
 - Una cuenta tiene varios personajes. Cosméticos pertenecen a la cuenta.
 - Tokens de sesión opacos en Postgres (fácil de revocar); cookie `HttpOnly` en web,
-  almacenamiento seguro en Tauri.
+  almacenamiento seguro en Tauri: el llavero del SO desde Rust, la página nunca lo ve
+  (T2.5, `apps/desktop`; si no hay llavero, solo memoria).
 
 ## Contenido y mapas en el build
 ```

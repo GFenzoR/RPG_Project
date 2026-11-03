@@ -104,7 +104,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [x] **T2.3 Map patches.** Exportar/importar/aplicar, merge por casilla, vista de diff.
 - [x] **T2.4 PR de mapas en CI.** Validación de parcelas y render antes/después
   comentado en el PR.
-- [ ] **T2.5 Cliente de escritorio Tauri** para Windows, macOS y Linux con release
+- [x] **T2.5 Cliente de escritorio Tauri** para Windows, macOS y Linux con release
   automático por tag.
 - [ ] **T2.6 Herramientas de admin.** Comandos de GM (teleport, crear item, kick, ban,
   anuncio), log de auditoría.

@@ -63,6 +63,73 @@ responde en sus puertos (`LOAD_PORT`, `LOAD_METRICS_PORT`). Con `URL` en esta m�
 bots leen `/metrics` de `127.0.0.1:9100`; para otro servidor, pasa `METRICS=...`.
 Detalle y resultados en `07-performance-budget.md`.
 
+## Cliente de escritorio (Tauri 2, T2.5)
+`apps/desktop/` envuelve el build web del cliente (`build/client`) en un webview de Tauri 2;
+no duplica código del cliente. Lo único propio está en Rust (`apps/desktop/src-tauri/src`):
+elegir el servidor y llamar a la API HTTP guardando el token de cuenta en el llavero del SO.
+
+### Dependencias del sistema (una vez)
+Rust estable (`rustup`, la versión mínima está en `Cargo.toml`) más:
+| SO | Qué instalar |
+|---|---|
+| Linux / WSL2 (Ubuntu 22.04+) | `sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev libxdo-dev libssl-dev build-essential` |
+| macOS | Xcode Command Line Tools (`xcode-select --install`) |
+| Windows (nativo) | Visual Studio Build Tools con "Desktop development with C++" y WebView2 (viene con Windows 10/11) |
+
+En **WSL2** la ventana se abre con WSLg (Windows 11 o Windows 10 21H2+); si no tienes
+WSLg, compila desde Windows nativo. El llavero de Linux es el Secret Service
+(gnome-keyring, KWallet): en WSL2 normalmente no hay, y la app guarda la sesión solo en
+memoria (hay que entrar de nuevo al abrirla).
+
+### Comandos
+```bash
+make desktop-dev          # webview sobre el Vite del cliente (:5173), API y WS a RPG_SERVER_URL
+make desktop-build        # instaladores de tu SO en apps/desktop/src-tauri/target/release/bundle/
+make desktop-test         # cargo fmt --check + clippy + cargo test (config de URL, API, CSP, versión)
+make desktop-smoke        # Linux: la app real bajo Xvfb con tauri-driver: login, entrar, screenshots
+```
+`make desktop-dev` necesita el servidor en marcha (`make run-server` o `make dev`); en dev el
+origen del webview es `http://localhost:5173`, que ambos permiten en `-ws-origins`
+(`DEV_WS_ORIGINS` del Makefile; `RPG_WS_ORIGINS` lo reemplaza).
+`make desktop-smoke` necesita además `webkit2gtk-driver` (apt), `tauri-driver`
+(`cargo install tauri-driver --locked`) y `Xvfb`; deja los screenshots en
+`apps/desktop/e2e/screenshots/`.
+
+### A qué servidor se conecta
+De mayor a menor prioridad (`src-tauri/src/config.rs`):
+1. Variable `RPG_SERVER_URL` al lanzar la app (`RPG_SERVER_URL=http://localhost:8080 make desktop-dev`).
+2. `config.json` en la carpeta de configuración de la app (identificador `dev.rpgproject.client`):
+   - Linux/WSL2: `~/.config/dev.rpgproject.client/config.json`
+   - macOS: `~/Library/Application Support/dev.rpgproject.client/config.json`
+   - Windows: `%APPDATA%\dev.rpgproject.client\config.json`
+   ```json
+   { "server_url": "https://palabras-al-azar.trycloudflare.com" }
+   ```
+3. El default compilado: `RPG_DESKTOP_SERVER_URL` al compilar (el release usa la variable
+   del repo `DESKTOP_SERVER_URL`); si no, `http://localhost:8080` en debug y un placeholder
+   en release.
+
+Solo se acepta el origen (`https://host[:puerto]`, sin ruta); `http://` solo para
+localhost o una red privada (192.168.x.x, 10.x.x.x…). El host debe ser un **nombre o una
+IPv4**: una IPv6 literal (`[::1]`) se rechaza porque la CSP no puede nombrarla y el
+WebSocket quedaría bloqueado (usa `localhost`). Un override inválido se ignora con un
+aviso en la consola, no se "corrige". La app imprime al arrancar qué servidor usa.
+
+Si la app no puede arrancar (p. ej. un default compilado inválido), escribe el error en
+`startup-error.log`, en la misma carpeta que `config.json`: en Windows el build de release
+no tiene consola donde verlo.
+
+### Qué hace distinto el cliente en la app
+- La API HTTP va por el comando `api` de Rust (`client/src/net/desktop.ts`), que agrega
+  `Authorization: Bearer`, pide `token_in_body` al hacer login y guarda el token en el
+  llavero (Keychain, Credential Manager, Secret Service): **la página nunca ve el token**.
+  Un 401 o el logout lo borran. Hay una entrada por servidor.
+- El WebSocket va directo a `wss://<servidor>/ws`. El origen del webview es
+  `tauri://localhost` (macOS/Linux) o `http://tauri.localhost` (Windows): el servidor debe
+  permitirlos en `-ws-origins`/`RPG_WS_ORIGINS` (el compose de producción ya lo hace).
+- La versión de la app es la de `client/package.json` (`tauri.conf.json` apunta a ese
+  archivo) y viaja en el `Hello`: subir `-min-client-version` deja fuera a las apps viejas.
+
 ## Diferencias con las sesiones cloud
 | | Cloud (hasta 4 nov) | Local (desde 5 nov) |
 |---|---|---|

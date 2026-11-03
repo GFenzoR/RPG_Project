@@ -71,8 +71,8 @@ personal con permiso `read:packages`.
 
 ## Proceso de release
 1. Merge a `main` → CI verde → imágenes `:main` y `:sha-<7>`.
-2. Tag `vX.Y.Z` → `images.yml` publica `:X.Y.Z` y `:latest`. El instalable de Tauri
-   (Windows, macOS, Linux) llegará en un `release.yml` aparte (hito 2).
+2. Tag `vX.Y.Z` → `images.yml` publica `:X.Y.Z` y `:latest`. El cliente de escritorio
+   tiene su propio tag `desktop-vX.Y.Z` (ver "Cliente de escritorio" abajo).
 3. En el servidor, `./deploy.sh vX.Y.Z`: fija `IMAGE_TAG` en `.env`, hace pull, backup,
    reinicia el gameserver (aplica migraciones al arrancar) y luego caddy y backup.
    Objetivo: < 1 minuto fuera de línea (en pruebas locales el gameserver vuelve en ~6 s).
@@ -105,6 +105,7 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 | `BACKUP_RETENTION_DAYS`, `BACKUP_INTERVAL_SECONDS` | Retención local y periodicidad de los dumps |
 | `BACKUP_S3_URI`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Copia a S3 opcional; en EC2 mejor un rol de instancia que claves |
 | `HTTP_PORT`, `HTTPS_PORT` | Puertos del host (solo para pruebas locales) |
+| `RPG_WS_ORIGINS` | Orígenes extra en `/ws`. Sin definir = los del cliente de escritorio (`tauri://localhost,http://tauri.localhost`); vacío = solo el sitio |
 
 ### Primer deploy (cuando haya cuenta AWS y dominio)
 1. Instancia con Docker y el plugin compose; security group con 80/443 abiertos (y 443/udp
@@ -159,6 +160,52 @@ uno agotan igual el cupo de la IP real (el undécimo responde 429).
 `docs/13` reutiliza este compose con un override: Caddy en HTTP plano (el túnel pone el
 TLS) y `COOKIE_SECURE` sigue en `true` porque el jugador ve HTTPS. Detrás del túnel,
 `Caddyfile.home` confía solo en la red del túnel y toma la IP real de `CF-Connecting-IP`.
+
+## Cliente de escritorio (T2.5)
+`.github/workflows/release-desktop.yml` compila la app de Tauri con un tag `desktop-vX.Y.Z`:
+```bash
+# 1. sube la versión en client/package.json (única fuente de la versión) y mergea
+# 2. tag con la misma versión
+git tag desktop-v0.2.0 && git push origin desktop-v0.2.0
+```
+- Requiere la variable del repo `DESKTOP_SERVER_URL` (Settings → Secrets and variables →
+  Actions → Variables) con el origen `https://` de producción: queda compilada como
+  servidor por defecto. El job `check` falla si falta, si el tag no coincide con la
+  versión o si la URL no pasa la validación de la propia app (corre el test
+  `compiled_default_is_valid` con `RPG_DESKTOP_SERVER_URL`): ruta, query, credenciales o
+  IPv6 darían instaladores que se cierran al abrir.
+- Matriz: `windows-latest` (`.msi` y `.exe` NSIS), `macos-latest` (`.dmg`/`.app`
+  universal, arm64 + x64) y `ubuntu-22.04` (`.deb`, `.rpm`, `.AppImage`). Linux se
+  compila en el runner más viejo a propósito: los paquetes enlazan glibc/GTK/WebKitGTK del
+  host, y compilados en 24.04 (glibc 2.39) fallan en Ubuntu 22.04 y Debian 12. Los sube
+  `tauri-action` a un **Release en borrador**: lo revisas y lo publicas a mano. Solo este
+  workflow tiene `contents: write`.
+- El servidor acepta los orígenes del webview por `RPG_WS_ORIGINS` (default del compose).
+  `/ws` se autentica con el token de un uso del `Hello`, nunca con cookie, así que permitir
+  esos orígenes no habilita que otra página use la sesión de nadie.
+- Para dejar fuera apps viejas: sube `-min-client-version` del gameserver (docs/05).
+
+### Sin firma de código (por ahora)
+- **Windows:** SmartScreen muestra "Windows protegió tu PC" → "Más información" →
+  "Ejecutar de todas formas". Desaparece con un certificado de firma (OV/EV o Azure
+  Trusted Signing) y reputación acumulada.
+- **macOS:** Gatekeeper dice que la app "no se puede abrir" o "está dañada". Clic derecho →
+  Abrir (o Ajustes → Privacidad y seguridad → "Abrir igualmente"); si dice dañada:
+  `xattr -dr com.apple.quarantine "/Applications/RPG Project.app"`.
+- **Linux:** sin avisos; el `.AppImage` necesita `chmod +x`. Requiere webkit2gtk 4.1
+  (Ubuntu 22.04+, Debian 12+, Fedora 37+).
+
+### Agregar firma, notarización y auto-update después
+- **Windows:** certificado en secrets y `bundle.windows.certificateThumbprint` o
+  `bundle.windows.signCommand` (p. ej. `trusted-signing-cli`) en `tauri.conf.json`.
+- **macOS:** cuenta de Apple Developer; secrets `APPLE_CERTIFICATE`,
+  `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` y para notarizar `APPLE_ID`,
+  `APPLE_PASSWORD`, `APPLE_TEAM_ID` en el env de `tauri-action` (los lee el bundler).
+- **Auto-update:** `tauri-plugin-updater` con un par de claves (`tauri signer generate`),
+  la pública en `plugins.updater.pubkey`, la privada en el secret
+  `TAURI_SIGNING_PRIVATE_KEY`, `bundle.createUpdaterArtifacts: true` y
+  `uploadUpdaterJson: true` en el workflow. Hay que sumar el permiso del updater a la
+  capability y `https://github.com` al endpoint.
 
 ## Seguridad operativa
 - Solo puertos 80 y 443 abiertos. SSH restringido a tu IP o con SSM Session Manager.

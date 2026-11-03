@@ -9,6 +9,7 @@ T_._ — <!-- título de docs/10-roadmap.md -->
 - [ ] Tests nuevos / escenarios sim:
 - [ ] Screenshots revisados (si hubo cambios visuales):
 - [ ] Prueba de carga (si toca el servidor en caliente):
+- [ ] Escritorio (si toca `apps/desktop/` o la red del cliente): `make desktop-test` y `make desktop-smoke`
 - [ ] Mapa (si toca `world/`): comentario del check `map-pr` revisado; fuera de parcelas `community_plot` solo maintainers
 
 ## Decisiones tomadas

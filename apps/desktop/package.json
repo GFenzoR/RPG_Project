@@ -1,0 +1,15 @@
+{
+  "name": "@rpg/desktop",
+  "private": true,
+  "type": "module",
+  "description": "Desktop client (Tauri 2) wrapping the web client build (T2.5). Version: client/package.json.",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  }
+}

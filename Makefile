@@ -102,9 +102,14 @@ mapcompile: ## Compile world/ + data/items into build/world.bin (server map)
 test-parity: ## mapcompile vs packages/map-format walkability on every tile
 	cd server && RPG_MAPFORMAT_PARITY=1 go test -count=1 -run TestWalkableParityWithMapFormat ./internal/world/compile/
 
+# Browser origins allowed on /ws in development: the client's Vite dev and preview servers
+# (also the webview of `make desktop-dev`). RPG_WS_ORIGINS replaces them.
+DEV_WS_ORIGINS ?= localhost:5173,localhost:4173
+
 .PHONY: run-server
-run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL)
-	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver
+run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL, RPG_WS_ORIGINS)
+	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver \
+		-ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}"
 
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
@@ -147,7 +152,7 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 	@echo "[dev] game client on http://localhost:5173, game server on :8080 (ws /ws), map editor on http://localhost:5174"
 	@trap 'kill 0' EXIT; \
 	(cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
-		go run ./cmd/gameserver -ws-origins "localhost:5173,localhost:4173") & \
+		go run ./cmd/gameserver -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}") & \
 	$(MAKE) client & \
 	$(MAKE) editor
 
@@ -185,6 +190,32 @@ endif
 .PHONY: bench-tick
 bench-tick: ## Tick benchmarks: empty loop and N players walking (internal/game, internal/session)
 	cd server && go test -run '^$$' -bench . -benchmem ./internal/game/ ./internal/session/
+
+## ---- desktop app (apps/desktop, Tauri 2; docs/12 "Cliente de escritorio") ----------
+
+DESKTOP_DIR := apps/desktop/src-tauri
+
+# The webview loads the client's Vite dev server (:5173, started by Tauri); the app talks to
+# RPG_SERVER_URL (default http://localhost:8080, run `make run-server` or `make dev`).
+.PHONY: desktop-dev
+desktop-dev: ## Desktop app in dev mode against RPG_SERVER_URL (default http://localhost:8080)
+	pnpm --filter @rpg/desktop tauri dev
+
+.PHONY: desktop-build
+desktop-build: ## Desktop installers for this OS into apps/desktop/src-tauri/target/release/bundle/
+	pnpm --filter @rpg/desktop tauri build
+
+.PHONY: desktop-build-debug
+desktop-build-debug: ## Debug desktop binary (no installers), used by desktop-smoke
+	pnpm --filter @rpg/desktop tauri build --debug --no-bundle
+
+.PHONY: desktop-test
+desktop-test: build-client ## rustfmt + clippy + cargo test of the desktop app
+	cd $(DESKTOP_DIR) && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+
+.PHONY: desktop-smoke
+desktop-smoke: db-up desktop-build-debug ## Linux: real app under Xvfb + tauri-driver: login, enter the world, screenshots
+	DATABASE_URL="$(DATABASE_URL)" apps/desktop/e2e/smoke.sh
 
 ## ---- production stack in Docker (deploy/, docs/09) ------------------------
 
