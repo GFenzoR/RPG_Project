@@ -2,7 +2,7 @@
 // inverse (returned by applyOps), so undo and redo are just applyOps again: the editor
 // never snapshots the world.
 import { applyOps } from "@rpg/map-format/ops";
-import type { MapOp, OpOptions, TouchedChunk, World } from "@rpg/map-format/ops";
+import type { MapOp, OpOptions, TouchedAux, TouchedChunk, World } from "@rpg/map-format/ops";
 
 export interface HistoryEntry {
   /** What the user did, for the UI (an i18n key). */
@@ -16,6 +16,7 @@ export interface HistoryEntry {
 export interface Step {
   world: World;
   touched: TouchedChunk[];
+  touchedAux: TouchedAux[];
   entry: HistoryEntry;
 }
 
@@ -25,9 +26,15 @@ export class History {
   private readonly done: HistoryEntry[] = [];
   private readonly undone: HistoryEntry[] = [];
   private readonly opts: OpOptions;
+  private readonly replay: OpOptions;
 
-  constructor(opts: OpOptions = {}) {
+  /**
+   * `opts` checks new edits (apply); `replay` is what undo/redo need to run the recorded
+   * ops again without the content checks: the autoborder rules (a redo of an autoborder op).
+   */
+  constructor(opts: OpOptions = {}, replay: OpOptions = {}) {
     this.opts = opts;
+    this.replay = replay;
   }
 
   get canUndo(): boolean {
@@ -56,7 +63,7 @@ export class History {
     const r = applyOps(world, ops, this.opts);
     const entry = { label, forward: ops, inverse: r.inverse };
     if (r.inverse.length > 0) this.record(entry);
-    return { world: r.world, touched: r.touched, entry };
+    return { world: r.world, touched: r.touched, touchedAux: r.touchedAux, entry };
   }
 
   /**
@@ -67,19 +74,19 @@ export class History {
   undo(world: World): Step | undefined {
     const entry = this.done.at(-1);
     if (!entry) return undefined;
-    const r = applyOps(world, entry.inverse);
+    const r = applyOps(world, entry.inverse, this.replay);
     this.done.pop();
     this.undone.push(entry);
-    return { world: r.world, touched: r.touched, entry };
+    return { world: r.world, touched: r.touched, touchedAux: r.touchedAux, entry };
   }
 
   redo(world: World): Step | undefined {
     const entry = this.undone.at(-1);
     if (!entry) return undefined;
-    const r = applyOps(world, entry.forward);
+    const r = applyOps(world, entry.forward, this.replay);
     this.undone.pop();
     this.done.push(entry);
-    return { world: r.world, touched: r.touched, entry };
+    return { world: r.world, touched: r.touched, touchedAux: r.touchedAux, entry };
   }
 }
 

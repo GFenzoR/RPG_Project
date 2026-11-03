@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,7 @@ import type { MapOp, World } from "@rpg/map-format/ops";
 import { run } from "@rpg/mapcli";
 import { afterEach, describe, expect, it } from "vitest";
 import { History } from "../src/history/history.ts";
-import { chunkFile, fromWire } from "../src/io/wire.ts";
+import { auxFile, chunkFile, fromWire } from "../src/io/wire.ts";
 import type { FileChange } from "../src/io/wire.ts";
 import {
   BadRequest,
@@ -75,10 +75,10 @@ const GONE_Z8 = "world/islands/testisle/chunks/z08/c0033_0032.json";
 function edit(root: string, ops: MapOp[] = EDITS): { world: World; changes: FileChange[] } {
   const boot = JSON.parse(JSON.stringify(bootstrap(root))) as ReturnType<typeof bootstrap>;
   const r = applyOps(fromWire(boot.world), ops, { itemKind });
-  const changes = r.touched.map((t) => {
-    const file = chunkFile(t.island, t.z, t.cx, t.cy);
-    return { file, base: boot.base[file] ?? null };
-  });
+  const changes = [
+    ...r.touched.map((t) => chunkFile(t.island, t.z, t.cx, t.cy)),
+    ...r.touchedAux.map((a) => auxFile(a.island, a.file)),
+  ].map((file) => ({ file, base: boot.base[file] ?? null }));
   return { world: r.world, changes };
 }
 
@@ -175,9 +175,9 @@ describe("saveChanges", () => {
   });
 
   it.each<[string, FileChange[], RegExp]>([
-    ["path traversal", [{ file: "world/islands/testisle/chunks/z07/../../../../../evil.json", base: null }], /not a chunk file path/],
-    ["an absolute path", [{ file: "/tmp/evil.json", base: null }], /not a chunk file path/],
-    ["a dotted island id", [{ file: "world/islands/../chunks/z07/c0032_0032.json", base: null }], /not a chunk file path/],
+    ["path traversal", [{ file: "world/islands/testisle/chunks/z07/../../../../../evil.json", base: null }], /not a chunk or auxiliary file path/],
+    ["an absolute path", [{ file: "/tmp/evil.json", base: null }], /not a chunk or auxiliary file path/],
+    ["a dotted island id", [{ file: "world/islands/../chunks/z07/c0032_0032.json", base: null }], /not a chunk or auxiliary file path/],
     ["an island not in world.yaml", [{ file: "world/islands/other/chunks/z07/c0032_0032.json", base: null }], /not in world\/world.yaml/],
     ["a floor out of range", [{ file: "world/islands/testisle/chunks/z99/c0032_0032.json", base: null }], /out of range/],
     ["a bad base hash", [{ file: Z7, base: "../x" }], /invalid base hash/],
@@ -204,6 +204,102 @@ describe("saveChanges", () => {
     chunk.ground[0] = "sand";
     chunk.cx = 99;
     expect(() => saveChanges(root, world, changes)).toThrow(/chunk says cx=99/);
+  });
+});
+
+describe("saveChanges of auxiliary lists (spawns, npcs, zones, portals)", () => {
+  const SPAWNS = "world/islands/testisle/spawns.yaml";
+  const NPCS = "world/islands/testisle/npcs.yaml";
+  const ZONES = "world/islands/testisle/zones.yaml";
+  const PORTALS = "world/islands/testisle/portals.yaml";
+  const AUX_EDITS: MapOp[] = [
+    { op: "remove_spawn", id: "testisle_crabs" },
+    {
+      op: "add_spawn",
+      id: "testisle_crabs",
+      center: { x: 1035, y: 1061, z: 7 },
+      radius: 3,
+      monsters: [{ monster: "tide_crab", count: 3 }],
+      respawn_seconds: 50,
+      notes: "moved by the editor",
+      index: 1,
+    },
+    // Moving an NPC from puerto to testisle edits both islands' npcs.yaml.
+    { op: "remove_npc", npc: "puerto_diver" },
+    { op: "place_npc", npc: "puerto_diver", pos: { x: 1057, y: 1057, z: 7 } },
+    { op: "remove_zone", id: "testisle_dock" },
+    { op: "remove_portal", id: "testisle_cave_down" },
+    { op: "remove_portal", id: "testisle_cave_up" },
+  ];
+
+  it("writes what mapcli fmt writes, creates new lists and removes emptied ones", () => {
+    const root = scratch();
+    const { world, changes } = edit(root, AUX_EDITS);
+    const PUERTO_NPCS = "world/islands/puerto/npcs.yaml";
+    expect(changes.map((c) => c.file).sort()).toEqual([PUERTO_NPCS, NPCS, PORTALS, SPAWNS, ZONES]);
+    expect(changes.find((c) => c.file === NPCS)?.base).toBeNull();
+    const r = saveChanges(root, world, changes);
+    expect(r.written).toEqual([PUERTO_NPCS, NPCS, SPAWNS, ZONES]);
+    expect(r.removed).toEqual([PORTALS]);
+    expect(fmtCheck(root)).toEqual({ code: 0, changed: [] });
+    expect(readFileSync(join(root, SPAWNS), "utf8")).toContain("moved by the editor");
+    expect(readFileSync(join(root, NPCS), "utf8")).toContain("npc: puerto_diver");
+    // Same bytes as map-format's writer (what mapcli ops apply writes).
+    const other = scratch(false);
+    writeWorldMeta(other, world.meta);
+    for (const island of world.islands.values()) writeIsland(other, island);
+    expect(tree(join(root, "world/islands"))).toEqual(tree(join(other, "world/islands")));
+  });
+
+  it("undo restores the auxiliary files byte for byte", () => {
+    const root = scratch();
+    const original = tree(join(root, "world"));
+    const boot = bootstrap(root);
+    const history = new History({ itemKind });
+    const step = history.apply(fromWire(boot.world), "edit", AUX_EDITS);
+    const files = step.touchedAux.map((a) => auxFile(a.island, a.file));
+    const saved = saveChanges(root, step.world, files.map((file) => ({ file, base: boot.base[file] ?? null })));
+    const undone = history.undo(step.world)?.world ?? step.world;
+    saveChanges(root, undone, files.map((file) => ({ file, base: saved.base[file] ?? null })));
+    expect(tree(join(root, "world"))).toEqual(original);
+  });
+
+  it("refuses with a conflict if the list changed on disk since it was loaded", () => {
+    const root = scratch();
+    const { world, changes } = edit(root, AUX_EDITS);
+    const external = readFileSync(join(root, ZONES), "utf8") + "\n# edited by hand\n";
+    writeFileSync(join(root, ZONES), external);
+    expect(() => saveChanges(root, world, changes)).toThrow(SaveConflict);
+    expect(readFileSync(join(root, ZONES), "utf8")).toBe(external);
+    expect(existsSync(join(root, NPCS))).toBe(false);
+  });
+
+  it.each<[string, string, RegExp]>([
+    ["texts.yaml (not editable yet)", "world/islands/testisle/texts.yaml", /not a chunk or auxiliary file path/],
+    ["island.yaml", "world/islands/testisle/island.yaml", /not a chunk or auxiliary file path/],
+    ["world.yaml", "world/world.yaml", /not a chunk or auxiliary file path/],
+    ["a traversal", "world/islands/testisle/../puerto/spawns.yaml", /not a chunk or auxiliary file path/],
+    ["another extension", "world/islands/testisle/spawns.yml", /not a chunk or auxiliary file path/],
+    ["an island not in world.yaml", "world/islands/other/spawns.yaml", /not in world\/world.yaml/],
+  ])("rejects %s", (_name, file, msg) => {
+    const root = scratch();
+    const before = tree(root);
+    const { world } = edit(root, AUX_EDITS);
+    expect(() => saveChanges(root, world, [{ file, base: null }])).toThrow(msg);
+    expect(tree(root)).toEqual(before);
+  });
+
+  it("rejects lists that do not pass their schema", () => {
+    const root = scratch();
+    const before = tree(root);
+    const { world, changes } = edit(root, AUX_EDITS);
+    const spawns = world.islands.get("testisle")?.spawns as unknown as Record<string, unknown>[];
+    spawns.push({ id: "../evil", center: { x: 1, y: 1, z: 7 }, radius: 1, monsters: [], respawn_seconds: 1 });
+    expect(() => saveChanges(root, world, changes)).toThrow(BadRequest);
+    spawns.pop();
+    (world.islands.get("testisle") as unknown as Record<string, unknown>)["zones"] = "nope";
+    expect(() => saveChanges(root, world, changes)).toThrow(/expected a list/);
+    expect(tree(root)).toEqual(before);
   });
 });
 
@@ -295,6 +391,15 @@ describe("bootstrap", () => {
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();
       expect(b.i18n[lang]?.["island.testisle.name"]).toBeTruthy();
     }
-    expect(Object.keys(b.base)).toHaveLength(6 + 43); // testisle + puerto chunks
+    // testisle + puerto chunks, and their spawns/npcs/zones/portals.yaml (not texts.yaml).
+    expect(Object.keys(b.base).filter((f) => f.endsWith(".json"))).toHaveLength(6 + 43);
+    expect(Object.keys(b.base).filter((f) => f.endsWith(".yaml")).sort()).toEqual(
+      [
+        ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/puerto/${f}.yaml`),
+        ...["portals", "spawns", "zones"].map((f) => `world/islands/testisle/${f}.yaml`),
+      ],
+    );
+    expect(b.borders.map((r) => r.id)).toContain("grass_sand");
+    expect(b.monsters).toContain("wolf");
   });
 });

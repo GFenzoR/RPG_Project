@@ -6,7 +6,8 @@ import { chunkKey } from "@rpg/map-format/ops";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tilePixels } from "@rpg/renderer";
 import type { TileSource } from "@rpg/renderer";
 import type { EditorController } from "../state/editor.ts";
-import { brushCells } from "../tools/tools.ts";
+import { TOOL_KEYS, brushCells } from "../tools/tools.ts";
+import { entityKey, entityPos } from "../state/editor.ts";
 
 /** Below this zoom the 1px grid lines alias into stripes, so the grid is hidden. */
 const GRID_MIN_ZOOM = 0.6;
@@ -17,6 +18,21 @@ const COLORS = {
   grid: 0xffffff,
   cursor: 0xffffff,
   eraser: 0xff5a5a,
+  selection: 0x4ad0ff,
+  paste: 0x7dff7a,
+  spawn: 0xff4040,
+  npc: 0xffd84a,
+  portal: 0xff4aff,
+  selected: 0xffffff,
+};
+
+/** Zone colours, as mapcli render draws them (docs/04-map-editor-and-ai.md). */
+const ZONE_COLORS: Record<string, number> = {
+  protection: 0x40e0e0,
+  no_logout: 0xff9a30,
+  pvp: 0xff3030,
+  no_pvp: 0x40d040,
+  community_plot: 0xb060ff,
 };
 
 export interface MapCanvas {
@@ -67,7 +83,8 @@ export async function createMapCanvas(
   const bounds = new Graphics();
   const grid = new Graphics();
   const cursor = new Graphics();
-  view.overlay.addChild(bounds, grid, cursor);
+  const entities = new Graphics();
+  view.overlay.addChild(bounds, entities, grid, cursor);
   app.stage.addChild(view.root);
 
   const size = (): { width: number; height: number } => ({
@@ -85,6 +102,20 @@ export async function createMapCanvas(
     brush: 0,
     w: 0,
     h: 0,
+    world: ctl.state.world,
+    marks: "",
+  };
+  /** Selection/drag/paste/entity state the overlays depend on, as one comparable string. */
+  const marks = (): string => {
+    const s = ctl.state;
+    return JSON.stringify([
+      s.drag,
+      s.selection,
+      s.selectionFloor,
+      s.pasting,
+      s.entitySel,
+      s.entityTab,
+    ]);
   };
   const redrawOverlays = (): void => {
     const s = ctl.state;
@@ -110,11 +141,96 @@ export async function createMapCanvas(
       grid.stroke({ width: px, color: COLORS.grid, alpha: 0.12 });
     }
     cursor.clear();
-    if (s.hover) {
-      const cells = s.tool === "item" ? [s.hover] : brushCells(s.hover.x, s.hover.y, s.brushSize);
+    if (s.selection && s.selectionFloor === s.floor) {
+      const r = s.selection;
+      cursor
+        .rect(r.x * T, r.y * T, r.w * T, r.h * T)
+        .fill({ color: COLORS.selection, alpha: 0.15 });
+      cursor.stroke({ width: 2 * px, color: COLORS.selection, alpha: 1 });
+    }
+    if (s.drag) {
+      const r = s.drag;
+      const color = s.tool === "select" ? COLORS.selection : COLORS.cursor;
+      cursor.rect(r.x * T, r.y * T, r.w * T, r.h * T).fill({ color, alpha: 0.2 });
+      cursor.stroke({ width: 2 * px, color, alpha: 1 });
+    } else if (s.hover && s.pasting && s.clipboard) {
+      const c = s.clipboard;
+      cursor
+        .rect(s.hover.x * T, s.hover.y * T, c.w * T, c.h * T)
+        .fill({ color: COLORS.paste, alpha: 0.2 });
+      cursor.stroke({ width: 2 * px, color: COLORS.paste, alpha: 1 });
+    } else if (s.hover) {
+      const single =
+        s.tool === "item" ||
+        s.tool === "fill" ||
+        s.tool === "rect" ||
+        s.tool === "select" ||
+        s.picking;
+      const cells = single ? [s.hover] : brushCells(s.hover.x, s.hover.y, s.brushSize);
       const color = s.tool === "eraser" ? COLORS.eraser : COLORS.cursor;
       for (const c of cells) cursor.rect(c.x * T, c.y * T, T, T);
       cursor.stroke({ width: 2 * px, color, alpha: 0.9 });
+    }
+    drawEntities(px);
+  };
+
+  /** Zones, spawns, NPCs and portals of the current floor (all islands). */
+  const drawEntities = (px: number): void => {
+    const s = ctl.state;
+    entities.clear();
+    const sel = (tab: string, key: string): boolean => s.entityTab === tab && s.entitySel === key;
+    for (const isl of s.world.islands.values()) {
+      for (const z of isl.zones) {
+        if (!z.floors.includes(s.floor)) continue;
+        const color = ZONE_COLORS[z.type] ?? COLORS.selected;
+        for (const r of z.rects) {
+          entities.rect(r.x * T, r.y * T, r.w * T, r.h * T).fill({ color, alpha: 0.12 });
+          entities.stroke({
+            width: (sel("zones", z.id) ? 3 : 1.5) * px,
+            color: sel("zones", z.id) ? COLORS.selected : color,
+            alpha: 0.9,
+          });
+        }
+      }
+      for (const sp of isl.spawns) {
+        if (sp.center.z !== s.floor) continue;
+        const cx = (sp.center.x + 0.5) * T;
+        const cy = (sp.center.y + 0.5) * T;
+        const on = sel("spawns", sp.id);
+        entities.circle(cx, cy, (sp.radius + 0.5) * T).stroke({
+          width: (on ? 3 : 2) * px,
+          color: on ? COLORS.selected : COLORS.spawn,
+          alpha: 0.9,
+        });
+        entities.circle(cx, cy, T * 0.2).fill({ color: COLORS.spawn, alpha: 0.9 });
+      }
+      for (const p of isl.portals) {
+        if (p.from.z !== s.floor) continue;
+        const on = sel("portals", p.id);
+        entities
+          .rect((p.from.x + 0.2) * T, (p.from.y + 0.2) * T, T * 0.6, T * 0.6)
+          .stroke({ width: (on ? 3 : 2) * px, color: on ? COLORS.selected : COLORS.portal });
+      }
+      for (const n of isl.npcs) {
+        if (n.pos.z !== s.floor) continue;
+        const on = sel("npcs", n.npc);
+        const cx = (n.pos.x + 0.5) * T;
+        const cy = (n.pos.y + 0.5) * T;
+        const r = T * 0.35;
+        entities
+          .poly([cx, cy - r, cx + r, cy, cx, cy + r, cx - r, cy])
+          .fill({ color: COLORS.npc, alpha: 0.8 })
+          .stroke({ width: (on ? 3 : 1) * px, color: on ? COLORS.selected : 0x000000 });
+      }
+    }
+    // The selected entity stands out even if it is on another floor than its marker.
+    if (s.entitySel !== undefined) {
+      const e = ctl.entities(s.entityTab).find((x) => entityKey(x) === s.entitySel);
+      const p = e && entityPos(e);
+      if (p && p.z === s.floor)
+        entities
+          .rect(p.x * T, p.y * T, T, T)
+          .stroke({ width: 2 * px, color: COLORS.selected, alpha: 1 });
     }
   };
 
@@ -132,7 +248,9 @@ export async function createMapCanvas(
       drawn.tool !== s.tool ||
       drawn.brush !== s.brushSize ||
       drawn.w !== scr.width ||
-      drawn.h !== scr.height
+      drawn.h !== scr.height ||
+      drawn.world !== s.world ||
+      drawn.marks !== marks()
     ) {
       redrawOverlays();
       drawn = {
@@ -144,6 +262,8 @@ export async function createMapCanvas(
         brush: s.brushSize,
         w: scr.width,
         h: scr.height,
+        world: s.world,
+        marks: marks(),
       };
     }
   });
@@ -225,11 +345,20 @@ export async function createMapCanvas(
     if (typing(e)) return;
     const k = e.key.toLowerCase();
     const handled = mod
-      ? k === "z" || k === "y"
-      : [" ", "pageup", "pagedown", "b", "e", "i"].includes(k);
+      ? ["z", "y", "c", "x", "v"].includes(k)
+      : [" ", "pageup", "pagedown", "escape", "delete", ...Object.keys(TOOL_KEYS)].includes(k);
     if (!handled) return; // Tab, arrows in a select, etc. keep their normal behaviour
     release(e);
-    if (mod && e.key.toLowerCase() === "z") {
+    if (mod && (k === "c" || k === "x" || k === "v")) {
+      e.preventDefault();
+      if (k === "c") ctl.copy();
+      else if (k === "x") ctl.cut();
+      else ctl.startPaste();
+    } else if (k === "escape") {
+      ctl.clearSelection();
+    } else if (k === "delete") {
+      ctl.deleteSelection();
+    } else if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
       if (e.shiftKey) ctl.redo();
       else ctl.undo();
@@ -247,9 +376,10 @@ export async function createMapCanvas(
     } else if (e.key === "PageDown") {
       e.preventDefault();
       ctl.changeFloor(1);
-    } else if (e.key === "b" || e.key === "B") ctl.setTool("brush");
-    else if (e.key === "e" || e.key === "E") ctl.setTool("eraser");
-    else if (e.key === "i" || e.key === "I") ctl.setTool("item");
+    } else {
+      const tool = TOOL_KEYS[k];
+      if (tool) ctl.setTool(tool);
+    }
   };
   const onKeyUp = (e: KeyboardEvent): void => {
     if (e.key === " ") spaceHeld = false;

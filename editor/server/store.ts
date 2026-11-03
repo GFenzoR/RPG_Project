@@ -1,6 +1,6 @@
-// Node side of the editor: reads world/ and data/ with @rpg/map-format, saves the chunks the
-// editor changed in the canonical layout (the same bytes `mapcli fmt` writes) and runs the
-// shared validator on the in-memory world.
+// Node side of the editor: reads world/ and data/ with @rpg/map-format, saves the chunks and
+// auxiliary lists (spawns/npcs/zones/portals.yaml) the editor changed in the canonical layout
+// (the same bytes `mapcli fmt` writes) and runs the shared validator on the in-memory world.
 //
 // Saving is checked against what the editor loaded: every changed file carries the hash it
 // had then, and if the file on disk is different now (git pull, mapcli, another tab) the
@@ -18,13 +18,18 @@ import {
 } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import {
+  checkSchema,
   chunkKey,
   formatChunk,
+  formatYaml,
+  loadContent,
   loadWorld,
   parseChunk,
+  parseYamlText,
   validateLoaded,
 } from "@rpg/map-format";
 import type { ContentIndex, Diagnostic, World } from "@rpg/map-format";
+import type { EntityList } from "@rpg/map-format/ops";
 import { parse } from "yaml";
 import type {
   Bootstrap,
@@ -33,7 +38,7 @@ import type {
   SaveResult,
   ValidateResult,
 } from "../src/io/wire.ts";
-import { toWire } from "../src/io/wire.ts";
+import { EDITABLE_AUX, toWire } from "../src/io/wire.ts";
 
 export const LANGUAGES = ["es", "en"] as const;
 
@@ -80,6 +85,10 @@ export const hashText = (text: string): string =>
 
 const ID = /^[a-z][a-z0-9_]*$/;
 const CHUNK_PATH = /^world\/islands\/([a-z][a-z0-9_]*)\/chunks\/z(\d{2})\/c(\d{4})_(\d{4})\.json$/;
+/** Auxiliary lists the editor may write (EDITABLE_AUX); texts.yaml and island.yaml are not. */
+const AUX_PATH = new RegExp(
+  `^world/islands/([a-z][a-z0-9_]*)/(${EDITABLE_AUX.join("|")})\\.yaml$`,
+);
 
 function readIfExists(abs: string): string | null {
   return existsSync(abs) ? readFileSync(abs, "utf8") : null;
@@ -105,8 +114,10 @@ function plan(root: string, world: World, islands: Set<string>, change: FileChan
   if (typeof change?.file !== "string") throw new BadRequest("change without a file");
   if (change.base !== null && (typeof change.base !== "string" || !/^[0-9a-f]{64}$/.test(change.base)))
     throw new BadRequest(`${change.file}: invalid base hash`);
+  const aux = AUX_PATH.exec(change.file);
+  if (aux) return planAux(root, world, islands, change.file, aux[1] ?? "", aux[2] as EntityList);
   const m = CHUNK_PATH.exec(change.file);
-  if (!m) throw new BadRequest(`${change.file} is not a chunk file path`);
+  if (!m) throw new BadRequest(`${change.file} is not a chunk or auxiliary file path`);
   const [, id = "", zs, cxs, cys] = m;
   const z = Number(zs);
   const cx = Number(cxs);
@@ -136,7 +147,44 @@ function plan(root: string, world: World, islands: Set<string>, change: FileChan
 }
 
 /**
- * Saves the chunk files in `changes` from `world`. All changes are checked first (paths,
+ * An auxiliary list (spawns/npcs/zones/portals.yaml): written as `formatYaml(list)`, the
+ * canonical text `mapcli fmt` writes; removed when the list is empty (as saveApplied does).
+ * The text must parse back and pass the file's schema before anything is written.
+ */
+function planAux(
+  root: string,
+  world: World,
+  islands: Set<string>,
+  file: string,
+  id: string,
+  list: EntityList,
+): PlannedWrite {
+  if (!islands.has(id)) throw new BadRequest(`island "${id}" is not in world/world.yaml`);
+  const abs = inside(root, file, `world/islands/${id}`);
+  const island = world.islands.get(id);
+  if (!island) throw new BadRequest(`island "${id}" is missing from the request`);
+  const entries: unknown = island[list];
+  if (!Array.isArray(entries)) throw new BadRequest(`${file}: expected a list`);
+  if (entries.length === 0) return { file, abs, text: null };
+  let text: string;
+  try {
+    text = formatYaml(entries);
+  } catch {
+    throw new BadRequest(`${file}: malformed ${list}`);
+  }
+  const diags: Diagnostic[] = [];
+  const parsed = parseYamlText(text, file, diags);
+  if (!parsed) throw new BadRequest(`${file}: ${diags.map((d) => d.message).join("; ")}`);
+  const errors = checkSchema(list, parsed.data);
+  if (errors.length > 0)
+    throw new BadRequest(
+      `${file}: ${errors.map((e) => `${e.path.join(".") || "/"} ${e.message}`).join("; ")}`,
+    );
+  return { file, abs, text };
+}
+
+/**
+ * Saves the chunk and auxiliary files in `changes` from `world`. All changes are checked first (paths,
  * islands listed in world.yaml on disk, chunk contents, conflicts with disk); only then is
  * anything written, so a refused save changes nothing.
  */
@@ -289,12 +337,17 @@ export function loadTexts(root: string): Record<string, Record<string, string>> 
 export function bootstrap(root: string): Bootstrap {
   const loaded = loadWorld(root);
   const base: Record<string, string> = {};
-  for (const f of loaded.files) if (CHUNK_PATH.test(f.file)) base[f.file] = hashText(f.text);
+  for (const f of loaded.files)
+    if (CHUNK_PATH.test(f.file) || AUX_PATH.test(f.file)) base[f.file] = hashText(f.text);
+  const content = loadContent(root);
   return {
     world: toWire(loaded.world),
     items: loadPaletteItems(root),
     i18n: loadTexts(root),
     loadErrors: loaded.diagnostics.filter((d) => d.severity === "error"),
     base,
+    borders: content.borders,
+    monsters: [...content.monsters].sort(),
+    npcs: [...content.npcs].sort(),
   };
 }

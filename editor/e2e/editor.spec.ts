@@ -202,6 +202,163 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("hito 2: rectangle, autoborder, fill, copy/paste across floors and entity panels", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/?lang=es&island=testisle");
+  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await expect(page.getByTestId("autoborder")).toBeChecked();
+
+  // Rectangle (R): drag a 4x3 sand rect into the grass; autoborder adds the grass edges.
+  await pick(page, "arena", "sand");
+  await page.keyboard.press("r");
+  await expect(page.getByTestId("tool-rect")).toHaveClass(/active/);
+  await dragTiles(page, [1045, 1046], [1048, 1048]);
+  for (const [x, y] of [
+    [1045, 1046],
+    [1048, 1048],
+  ] as const)
+    expect((await tile(page, x, y, 7))?.ground).toBe("sand");
+  expect((await tile(page, 1049, 1048, 7))?.ground).toBe("grass");
+  expect((await tile(page, 1046, 1046, 7))?.stack).toEqual(["border_grass_sand_n"]);
+  expect((await tile(page, 1046, 1048, 7))?.stack).toEqual(["border_grass_sand_s"]);
+  expect((await tile(page, 1046, 1047, 7))?.stack).toEqual([]);
+  await settled(page);
+  await shot(page, "08-rect-autoborder");
+
+  // Fill (G): the sand rect (and only it) becomes dirt; its borders go away.
+  await pick(page, "tierra", "dirt");
+  await page.keyboard.press("g");
+  await expect(page.getByTestId("tool-fill")).toHaveClass(/active/);
+  await clickTile(page, 1047, 1047);
+  expect((await tile(page, 1045, 1046, 7))?.ground).toBe("dirt");
+  expect((await tile(page, 1048, 1048, 7))?.ground).toBe("dirt");
+  expect((await tile(page, 1044, 1047, 7))?.ground).toBe("grass");
+  expect((await tile(page, 1046, 1046, 7))?.stack).toEqual([]);
+  // One undo entry for the whole flood; redo brings it back.
+  await page.keyboard.press("Control+z");
+  expect((await tile(page, 1048, 1048, 7))?.ground).toBe("sand");
+  await page.keyboard.press("Control+y");
+  expect((await tile(page, 1048, 1048, 7))?.ground).toBe("dirt");
+
+  // Selection (V) + copy, with an item inside; paste on floor 8.
+  await page.getByTestId("category-decoration").click();
+  await page.getByTestId("palette-cargo_crate").click();
+  await clickTile(page, 1046, 1047);
+  await page.keyboard.press("v");
+  await expect(page.getByTestId("tool-select")).toHaveClass(/active/);
+  await dragTiles(page, [1045, 1046], [1048, 1048]);
+  await page.keyboard.press("Control+c");
+  await expect(page.getByTestId("status")).toHaveText("Copiado: 4×3 casillas");
+  await page.keyboard.press("PageDown");
+  await expect(page.getByTestId("floor")).toHaveText("Piso 8");
+  await page.evaluate(() => window.__rpgEditor?.centerOn(1068, 1054, 8));
+  await page.keyboard.press("Control+v");
+  const target = await clientOf(page, 1067, 1053);
+  await page.mouse.move(target.x, target.y);
+  await page.waitForTimeout(100);
+  await shot(page, "09-paste-preview");
+  await clickTile(page, 1067, 1053);
+  expect(await tile(page, 1068, 1054, 8)).toEqual({ ground: "dirt", stack: ["cargo_crate"] });
+  expect((await tile(page, 1070, 1055, 8))?.ground).toBe("dirt");
+  // Copied from the toolbar button too, and the source on floor 7 is unchanged.
+  await expect(page.getByTestId("paste")).toBeEnabled();
+  expect(await tile(page, 1046, 1047, 7)).toEqual({ ground: "dirt", stack: ["cargo_crate"] });
+  await settled(page);
+  await shot(page, "10-pasted-floor-8");
+  await page.keyboard.press("PageUp");
+
+  // Spawn panel: create one at a picked tile, then edit it; undo/redo the edit.
+  await page.evaluate(() => window.__rpgEditor?.centerOn(1048, 1050, 7));
+  await page.getByTestId("entity-tab-spawns").click();
+  await expect(page.getByTestId("entity-testisle_wolves")).toBeVisible();
+  await page.getByTestId("entity-new").click();
+  await expect(page.getByTestId("field-id")).toHaveValue("testisle_spawn_1");
+  await page.getByTestId("pick-center").click();
+  await expect(page.getByTestId("status")).toHaveText("Clic en el mapa para elegir la casilla");
+  await clickTile(page, 1047, 1052);
+  await expect(page.getByTestId("field-center-x")).toHaveValue("1047");
+  await expect(page.getByTestId("field-center-y")).toHaveValue("1052");
+  await page.getByTestId("field-monster-0").selectOption("wolf");
+  await page.getByTestId("field-count-0").fill("2");
+  await page.getByTestId("entity-apply").click();
+  await expect(page.getByTestId("entity-testisle_spawn_1")).toHaveClass(/active/);
+  await page.getByTestId("field-radius").fill("3");
+  await page.getByTestId("entity-apply").click();
+  await expect(page.getByTestId("status")).not.toContainText("rechazada");
+  await page.keyboard.press("Control+z");
+  await expect(page.getByTestId("status")).toHaveText("Deshecho: editar entidad");
+  await expect(page.getByTestId("field-radius")).toHaveValue("2");
+  await page.keyboard.press("Control+y");
+  await expect(page.getByTestId("field-radius")).toHaveValue("3");
+  // A rejected entry (bad ID) reports the op's error and changes nothing.
+  await page.getByTestId("field-id").fill("Bad ID");
+  await page.getByTestId("entity-apply").click();
+  await expect(page.getByTestId("status")).toContainText("Operación rechazada");
+  await page.getByTestId("entity-cancel").click();
+
+  // Zone panel: a new zone takes its rect from the selection.
+  await page.keyboard.press("v");
+  await dragTiles(page, [1044, 1050], [1050, 1054]);
+  await page.getByTestId("entity-tab-zones").click();
+  await page.getByTestId("entity-new").click();
+  await page.getByTestId("rects-from-selection").click();
+  await expect(page.getByTestId("field-rects")).toHaveValue("1044,1050,7,5");
+  await page.getByTestId("field-type").selectOption("no_pvp");
+  await page.getByTestId("entity-apply").click();
+  await expect(page.getByTestId("entity-testisle_zone_1")).toBeVisible();
+  // Delete the dock zone (its file keeps the other entries).
+  await page.getByTestId("entity-testisle_dock").click();
+  await page.getByTestId("entity-delete").click();
+  await expect(page.getByTestId("entity-testisle_dock")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await settled(page);
+  await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
+  await page.evaluate(() => window.__rpgEditor?.centerOn(1048, 1050, 7));
+  await page.waitForTimeout(100);
+  await shot(page, "11-entities");
+
+  // Save: chunks and YAML exactly as mapcli fmt writes them.
+  await page.keyboard.press("Control+s");
+  await expect(page.getByTestId("status")).toContainText("Guardado:");
+  await expect(page.getByTestId("dirty")).toHaveText("Sin cambios");
+  const fmt = execFileSync(
+    process.execPath,
+    [
+      "--experimental-strip-types",
+      join(repo, "tools/mapcli/src/cli.ts"),
+      "fmt",
+      "--check",
+      "--root",
+      root,
+    ],
+    { encoding: "utf8" },
+  );
+  expect(JSON.parse(fmt)).toEqual({ check: true, changed: [], errors: [] });
+  const spawns = readFileSync(join(root, "world/islands/testisle/spawns.yaml"), "utf8");
+  expect(spawns).toContain("id: testisle_spawn_1");
+  expect(spawns).toContain("radius: 3");
+  const zones = readFileSync(join(root, "world/islands/testisle/zones.yaml"), "utf8");
+  expect(zones).toContain("id: testisle_zone_1");
+  expect(zones).not.toContain("testisle_dock");
+  const validate = execFileSync(
+    process.execPath,
+    [
+      "--experimental-strip-types",
+      join(repo, "tools/mapcli/src/cli.ts"),
+      "validate",
+      "testisle",
+      "--root",
+      root,
+    ],
+    { encoding: "utf8" },
+  );
+  expect(validate).not.toMatch(/"severity": ?"error"/);
+  expect(errors).toEqual([]);
+});
+
 test("asks before leaving with unsaved changes, and refuses to save over changes on disk", async ({
   page,
 }) => {

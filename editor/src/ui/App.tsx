@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatDiagnosticShort } from "./format.ts";
 import { Palette } from "../palette/Palette.tsx";
+import { EntityPanel } from "./EntityPanel.tsx";
 import { createMapCanvas } from "../canvas/map-canvas.ts";
 import type { MapCanvas } from "../canvas/map-canvas.ts";
 import type { EditorController, EditorState } from "../state/editor.ts";
@@ -142,6 +143,23 @@ export function App({
         <label class="group">
           <input
             type="checkbox"
+            data-testid="autoborder"
+            checked={s.autoborder}
+            onChange={() => ctl.toggleAutoborder()}
+          />
+          {t("editor.autoborder")}
+        </label>
+        <div class="group">
+          <button data-testid="copy" disabled={!s.selection} onClick={() => ctl.copy()}>
+            {t("editor.copy")}
+          </button>
+          <button data-testid="paste" disabled={!s.clipboard} onClick={() => ctl.startPaste()}>
+            {t("editor.paste")}
+          </button>
+        </div>
+        <label class="group">
+          <input
+            type="checkbox"
             data-testid="grid"
             checked={s.grid}
             onChange={() => ctl.toggleGrid()}
@@ -215,6 +233,11 @@ export function App({
             <h2>—</h2>
           )}
         </section>
+        <EntityPanel
+          ctl={ctl}
+          s={s}
+          onJump={(p) => canvas && ctl.centerTile(p.x, p.y, p.z, canvas.atlas.tileSize)}
+        />
         <section class="panel validation" data-testid="validation">
           <h2>{t("editor.validation")}</h2>
           {s.loadErrors.length > 0 && (
