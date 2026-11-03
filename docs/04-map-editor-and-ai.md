@@ -168,6 +168,10 @@ también genera formato 2.
   clave son conflicto del archivo entero.
 - `world.yaml`, `island.yaml` y prefabs: si cambiaron en los dos lados, es conflicto del
   archivo entero.
+- **Siempre se escribe la forma canónica** (`canonicalPatchText`), también en el
+  fast-forward y al crear un archivo. Es el mismo texto que `mapcli fmt`: un patch hecho a
+  mano se acepta, pero nunca se escriben sus bytes tal cual (un `01056` u `0x4` en YAML se
+  lee distinto en Go y en TS). Un chunk vacío o una lista vacía borran el archivo.
 
 `mapcli patch`:
 - `create [isla] [--against REF] [--out FILE]`: los archivos de mapa que difieren del ref,
@@ -178,8 +182,10 @@ también genera formato 2.
   `--partial` escribe todo lo demás y en las casillas o entradas en conflicto conserva la
   versión actual. La salida dice qué archivos se mezclaron (`merged`) y el resultado del
   validador.
-- `diff <file>`: casillas cambiadas y bbox por chunk; entradas agregadas, quitadas y
-  cambiadas por YAML; `base_matches` y, si la base no coincide, cuántos conflictos daría.
+- `diff <file>`: compara lo actual con lo que escribiría el merge, no con el contenido del
+  patch, así las ediciones locales hechas en otras casillas o entradas no aparecen como
+  revertidas. Da casillas cambiadas y bbox por chunk; entradas agregadas, quitadas y
+  cambiadas por YAML; `base_matches` y, si la base no coincide, cuántos conflictos hay.
   Sale con código 1 solo si hay conflictos.
 
 **Seguridad:** un patch es entrada no confiable. `parsePatch` rechaza:
@@ -312,7 +318,9 @@ panel de revisión (`editor/src/review/`):
   `texts.yaml`, prefabs e islas que no están en `world.yaml`): eso se aplica con
   `mapcli`. El navegador hace el merge contra el mundo en memoria con las mismas
   funciones (`mergeChunk`/`mergeList`) y lo convierte en ops (`chunkSyncOps`/
-  `listSyncOps`). Se aplica como una sola entrada de historial (un `Ctrl+Z` la deshace),
+  `listSyncOps`). Una entrada nueva o cambiada que cae fuera de la isla de su archivo
+  (rect y pisos; en zonas, todos los rects) es conflicto de archivo, porque las ops de
+  entidades eligen la isla por la posición. Se aplica como una sola entrada de historial (un `Ctrl+Z` la deshace),
   sin autoborde automático, porque el patch trae sus propios bordes. Los archivos quedan
   pendientes de guardar como cualquier edición. Si hay conflictos no se aplica nada: el
   panel los lista (casilla, entrada o archivo; clic = ir) y el canvas marca en rojo las
@@ -321,7 +329,9 @@ panel de revisión (`editor/src/review/`):
 - **Vista de diff**: lista de chunks cambiados (casillas por chunk) y de entradas
   agregadas, quitadas o cambiadas por lista. Clic = centrar en el cambio (piso incluido).
   El canvas marca las casillas cambiadas del piso en magenta. "Antes/Después" alterna el
-  canvas entre la línea base y el mundo actual. En "Antes" el mapa es solo de lectura.
+  canvas entre la línea base y el mundo actual. En "Antes" nada edita el mundo oculto
+  (`readOnly()` en herramientas, Supr, cortar, pegar, paneles y deshacer/rehacer); importar
+  desde "Antes" pasa primero a "Después".
 - Tests: `editor/src/state/editor.test.ts` (exportar, importar con merge y deshacer,
   conflicto, patch rechazado, vista "Antes"), `editor/server/store.test.ts` (round-trip
   con `mapcli patch apply`, rutas maliciosas, formato 1) y el E2E "map patches", que
