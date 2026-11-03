@@ -316,10 +316,13 @@ Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable
 1. **Parcelas de comunidad.** Las zonas `community_plot` marcan áreas del mundo abiertas
    a contribuciones (bordes de islas, cuevas sin hacer, islotes nuevos). Un patch que
    toca chunks fuera de una parcela abierta solo puede venir de un maintainer.
-2. **Map patch.** El editor exporta un archivo `.rpgpatch.json` con: hash de la versión
-   base de cada chunk tocado, el contenido nuevo de esos chunks y los cambios a
-   spawns/zonas/NPCs/portales. `mapcli patch apply` lo aplica; si la base cambió, intenta
-   un merge a nivel de casilla y marca conflictos.
+2. **Map patch.** El editor (o `mapcli patch create`) exporta un `.rpgpatch.json`
+   (formato 2) con el hash y el texto de la versión base de cada archivo tocado, más su
+   contenido nuevo: chunks y spawns/zonas/NPCs/portales. `mapcli patch apply` y el
+   "Importar patch" del editor hacen un merge de tres vías: por casilla en los chunks y
+   por entrada (`id`) en los YAML. Si algo cambió en los dos lados, es conflicto: no se
+   aplica nada y se listan las casillas o entradas. Detalle y reglas de seguridad en
+   `04-map-editor-and-ai.md`, "Map patches".
 3. **Revisión.** Hito 2: el patch se envía como pull request de GitHub (a mano o por la
    herramienta). La CI valida y publica imágenes antes/después del área. Hito 5: portal
    web con cola de moderación que crea el PR automáticamente al aprobar.

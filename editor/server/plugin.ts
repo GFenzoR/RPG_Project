@@ -6,6 +6,8 @@
 //   POST /api/validate       body: WireWorld → ValidateResult (the shared validator, in memory)
 //   POST /api/save           body: SaveRequest → SaveResult, 409 SaveConflictBody, 400 if
 //                            invalid, 500 { error, partial?: SaveResult } if it failed
+//   POST /api/patch/export   body: PatchExportRequest → .rpgpatch.json (format 2); writes nothing
+//   POST /api/patch/parse    body: { text } → ParsedPatch (checked; the browser merges it)
 //   GET  /atlas/<file>       sprite atlas built from assets/ with tools/spritepack
 // Every /api call must pass refuseRequest (same-origin only, see guard.ts).
 //
@@ -20,13 +22,15 @@ import { loadContent } from "@rpg/map-format";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import type { Plugin } from "vite";
 import { fromWire } from "../src/io/wire.ts";
-import type { SaveRequest, WireWorld } from "../src/io/wire.ts";
+import type { PatchExportRequest, SaveRequest, WireWorld } from "../src/io/wire.ts";
 import { refuseRequest } from "./guard.ts";
 import {
   BadRequest,
   PartialSave,
   SaveConflict,
   bootstrap,
+  exportPatch,
+  parseEditorPatch,
   saveChanges,
   validateInMemory,
 } from "./store.ts";
@@ -107,6 +111,16 @@ export function editorApi(): Plugin {
             const data = (await body(req)) as Partial<SaveRequest> | null;
             const world = worldOf(data?.world);
             send(res, 200, saveChanges(root, world, data?.changes as SaveRequest["changes"]));
+          } else if (req.method === "POST" && url.pathname === "/api/patch/export") {
+            const data = (await body(req)) as Partial<PatchExportRequest> | null;
+            send(
+              res,
+              200,
+              exportPatch(root, worldOf(data?.before), worldOf(data?.after), data?.files),
+            );
+          } else if (req.method === "POST" && url.pathname === "/api/patch/parse") {
+            const data = (await body(req)) as { text?: unknown } | null;
+            send(res, 200, parseEditorPatch(root, data?.text));
           } else if (req.method === "GET" && url.pathname.startsWith("/atlas/")) {
             atlasDir ??= buildAtlasDir(root);
             const name = url.pathname.slice("/atlas/".length);

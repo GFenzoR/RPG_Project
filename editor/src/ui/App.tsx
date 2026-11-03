@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { formatDiagnosticShort } from "./format.ts";
 import { Palette } from "../palette/Palette.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
+import { ReviewPanel } from "../review/ReviewPanel.tsx";
 import { createMapCanvas } from "../canvas/map-canvas.ts";
 import type { MapCanvas } from "../canvas/map-canvas.ts";
 import type { EditorController, EditorState } from "../state/editor.ts";
@@ -185,6 +186,15 @@ export function App({
             {s.dirty ? t("editor.unsaved") : t("editor.no_changes")}
           </span>
         </div>
+        <div class="group">
+          <button
+            data-testid="review"
+            class={s.review ? "active" : ""}
+            onClick={() => ctl.toggleReview()}
+          >
+            {t("editor.review.toggle")}
+          </button>
+        </div>
       </header>
 
       <aside class="left">
@@ -233,6 +243,13 @@ export function App({
             <h2>—</h2>
           )}
         </section>
+        {s.review && (
+          <ReviewPanel
+            ctl={ctl}
+            s={s}
+            onJump={(p) => canvas && ctl.centerTile(p.x, p.y, p.z, canvas.atlas.tileSize)}
+          />
+        )}
         <EntityPanel
           ctl={ctl}
           s={s}

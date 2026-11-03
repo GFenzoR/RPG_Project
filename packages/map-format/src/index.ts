@@ -49,3 +49,21 @@ export type {
 export { applyOps, MAP_OP_NAMES, OpError, prefabSize } from "./ops/index.ts";
 export { generate, RECIPES } from "./generate.ts";
 export type { GenerateOptions, Recipe } from "./generate.ts";
+export {
+  MAX_PATCH_FILES,
+  MAX_PATCH_SIZE,
+  PATCH_FORMAT,
+  PATCH_KIND,
+  PatchError,
+  canonicalPatchText,
+  describeConflict,
+  isPatchable,
+  mergePatchFile,
+  parsePatch,
+  parsePatchFile,
+  patchHash,
+  patchPath,
+  summarizeFileChange,
+} from "./patch/patch.ts";
+export type { FileMerge, FileSummary, MapPatch, PatchFile, PatchPath } from "./patch/patch.ts";
+export * from "./patch/merge.ts";

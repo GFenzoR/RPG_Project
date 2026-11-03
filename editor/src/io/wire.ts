@@ -153,3 +153,37 @@ export function fromWire(wire: WireWorld): World {
   }
   return { meta: wire.meta, islands };
 }
+
+// ---- map patches (T2.3) ----------------------------------------------------------------
+
+/** POST /api/patch/export: the files that differ, with both worlds to format them from. */
+export interface PatchExportRequest {
+  /** World as loaded from disk (the patch's base). */
+  before: WireWorld;
+  /** World as it is now in the editor. */
+  after: WireWorld;
+  /** Chunk and auxiliary files that differ (chunkFile / auxFile paths). */
+  files: string[];
+}
+
+/** One file of a patch the editor can apply, parsed and checked by the dev server. */
+export interface ParsedPatchFile {
+  path: string;
+  island: string;
+  target: { kind: "chunk"; z: number; cx: number; cy: number } | { kind: "list"; list: EntityList };
+  /** Whether `base` is known (format 1 patches whose base is not on disk: false). */
+  baseKnown: boolean;
+  /** Base version (null: no file); a Chunk or the list's entries. */
+  base: Chunk | unknown[] | null;
+  /** Version in the patch (null: the patch removes the file). */
+  content: Chunk | unknown[] | null;
+}
+
+/** POST /api/patch/parse { text } → the patch, checked, ready to merge in the browser. */
+export interface ParsedPatch {
+  base_ref: string;
+  files: ParsedPatchFile[];
+}
+
+/** Largest .rpgpatch.json the editor reads (same limit as map-format's MAX_PATCH_SIZE). */
+export const MAX_PATCH_SIZE = 32 << 20;

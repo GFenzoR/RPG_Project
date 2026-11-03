@@ -25,8 +25,10 @@ import {
   PartialSave,
   SaveConflict,
   bootstrap,
+  exportPatch,
   hashText,
   nodeIo,
+  parseEditorPatch,
   saveChanges,
   validateInMemory,
 } from "./store.ts";
@@ -386,7 +388,9 @@ describe("saveChanges of auxiliary lists (spawns, npcs, zones, portals)", () => 
     // Read back, that text is a valid spawn (radius: 4, notes: x) plus a comment line: only
     // checking the request's own data catches it.
     // (the canonical-text check would catch it too; this asserts the schema one runs first).
-    expect(() => saveChanges(root, world, changes)).toThrow(/spawns\.yaml: 3 .*(unknown field|required)/);
+    expect(() => saveChanges(root, world, changes)).toThrow(
+      /spawns\.yaml: 3 .*(unknown field|required)/,
+    );
     expect(tree(root)).toEqual(before);
     spawns.pop();
     (world.islands.get("testisle") as unknown as Record<string, unknown>)["zones"] = "nope";
@@ -495,5 +499,88 @@ describe("bootstrap", () => {
     ]);
     expect(b.borders.map((r) => r.id)).toContain("grass_sand");
     expect(b.monsters).toContain("wolf");
+  });
+});
+
+describe("map patches", () => {
+  const Z7 = "world/islands/testisle/chunks/z07/c0032_0032.json";
+  const SP = "world/islands/testisle/spawns.yaml";
+
+  it("exports a format 2 patch that mapcli applies, and writes nothing", () => {
+    const root = scratch();
+    const before = loadWorld(root).world;
+    const after = applyOps(
+      before,
+      [{ op: "paint_ground", floor: 7, rect: { x: 1045, y: 1045, w: 2, h: 2 }, item: "sand" }],
+      { itemKind },
+    ).world;
+    const snapshot = tree(join(root, "world"));
+    const patch = exportPatch(root, before, after, [Z7, Z7]);
+    expect(tree(join(root, "world"))).toEqual(snapshot);
+    expect(patch).toMatchObject({ format: 2, kind: "rpg-map-patch", base_ref: "editor" });
+    expect(patch.files.map((f) => f.path)).toEqual([Z7]);
+    const file = patch.files[0];
+    expect(file?.base_text).toBe(readFileSync(join(root, Z7), "utf8"));
+    expect(file?.base).toBe(`sha256:${hashText(file?.base_text ?? "")}`);
+
+    // Round trip: the editor parses its own patch; mapcli applies it to a copy.
+    const parsed = parseEditorPatch(root, JSON.stringify(patch));
+    expect(parsed.files[0]).toMatchObject({
+      path: Z7,
+      island: "testisle",
+      target: { kind: "chunk", z: 7, cx: 32, cy: 32 },
+      baseKnown: true,
+    });
+    const dst = scratch();
+    const pf = join(dst, "p.rpgpatch.json");
+    writeFileSync(pf, JSON.stringify(patch));
+    let out = "";
+    expect(
+      run(["patch", "apply", pf, "--root", dst], { out: (t) => (out += t), err: () => {} }),
+    ).toBe(0);
+    saveChanges(root, after, [{ file: Z7, base: hashText(readFileSync(join(root, Z7), "utf8")) }]);
+    expect(readFileSync(join(dst, Z7), "utf8")).toBe(readFileSync(join(root, Z7), "utf8"));
+  });
+
+  it("refuses unsafe or non-editor paths and malformed patches", () => {
+    const root = scratch();
+    const chunk = readFileSync(join(root, Z7), "utf8");
+    const patch = (files: unknown[]) =>
+      JSON.stringify({ format: 2, kind: "rpg-map-patch", base_ref: "editor", files });
+    for (const path of [
+      "../outside.json",
+      "world/../data/items/ground.yaml",
+      "data/items/ground.yaml",
+      "world/islands/testisle/../../world.yaml",
+      "world/world.yaml", // valid patch path, but not something the editor applies
+      "world/islands/testisle/island.yaml",
+      "world/islands/testisle/texts.yaml",
+      "world/islands/nowhere/chunks/z07/c0032_0032.json",
+    ])
+      expect(() => parseEditorPatch(root, patch([{ path, base: null, content: chunk }]))).toThrow(
+        BadRequest,
+      );
+    expect(() => parseEditorPatch(root, "not json")).toThrow(BadRequest);
+    expect(() => parseEditorPatch(root, 42)).toThrow(BadRequest);
+    expect(() =>
+      parseEditorPatch(root, patch([{ path: SP, base: null, content: "- id: Bad Id\n" }])),
+    ).toThrow(BadRequest);
+    expect(() =>
+      exportPatch(root, loadWorld(root).world, loadWorld(root).world, ["../../etc/passwd"]),
+    ).toThrow(BadRequest);
+  });
+
+  it("finds the base of format 1 patches on disk when the hash matches", () => {
+    const root = scratch();
+    const text = readFileSync(join(root, Z7), "utf8");
+    const p1 = (base: string) =>
+      JSON.stringify({
+        format: 1,
+        kind: "rpg-map-patch",
+        base_ref: "HEAD",
+        files: [{ path: Z7, base, content: text }],
+      });
+    expect(parseEditorPatch(root, p1(`sha256:${hashText(text)}`)).files[0]?.baseKnown).toBe(true);
+    expect(parseEditorPatch(root, p1(`sha256:${"0".repeat(64)}`)).files[0]?.baseKnown).toBe(false);
   });
 });

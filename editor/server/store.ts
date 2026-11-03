@@ -24,10 +24,18 @@ import {
   formatYaml,
   loadContent,
   loadWorld,
+  PATCH_FORMAT,
+  PATCH_KIND,
+  PatchError,
   parseChunk,
+  parsePatch,
+  parsePatchFile,
   parseYamlText,
+  patchHash,
+  patchPath,
   validateLoaded,
 } from "@rpg/map-format";
+import type { MapPatch, PatchFile } from "@rpg/map-format";
 import type { ContentIndex, Diagnostic, World } from "@rpg/map-format";
 import type { EntityList } from "@rpg/map-format/ops";
 import { parse } from "yaml";
@@ -35,6 +43,8 @@ import type {
   Bootstrap,
   FileChange,
   PaletteItem,
+  ParsedPatch,
+  ParsedPatchFile,
   SaveResult,
   ValidateResult,
 } from "../src/io/wire.ts";
@@ -209,11 +219,7 @@ export function saveChanges(
   io: SaveIo = nodeIo,
 ): SaveResult {
   if (!Array.isArray(changes)) throw new BadRequest("changes must be a list");
-  const islands = new Set(
-    loadWorld(root)
-      .world.meta.islands.map((i) => i.id)
-      .filter((id) => ID.test(id)),
-  );
+  const islands = worldIslands(root);
   const seen = new Set<string>();
   const planned: PlannedWrite[] = [];
   const conflicts: string[] = [];
@@ -367,4 +373,85 @@ export function bootstrap(root: string): Bootstrap {
     monsters: [...content.monsters].sort(),
     npcs: [...content.npcs].sort(),
   };
+}
+
+// ---- map patches (docs/04-map-editor-and-ai.md, "Map patches") --------------------------
+
+function worldIslands(root: string): Set<string> {
+  return new Set(
+    loadWorld(root)
+      .world.meta.islands.map((i) => i.id)
+      .filter((id) => ID.test(id)),
+  );
+}
+
+/**
+ * Builds a format 2 patch of `files` from the editor's worlds: `before` (as loaded) gives
+ * each file's base, `after` its content, both in the canonical text mapcli writes. The
+ * same checks as saving apply (paths, islands of world.yaml, schemas); nothing is written.
+ */
+export function exportPatch(root: string, before: World, after: World, files: unknown): MapPatch {
+  if (!Array.isArray(files) || files.some((f) => typeof f !== "string"))
+    throw new BadRequest("files must be a list of paths");
+  const islands = worldIslands(root);
+  const out: PatchFile[] = [];
+  for (const file of [...new Set(files as string[])].sort()) {
+    const base = plan(root, before, islands, { file, base: null }).text;
+    const content = plan(root, after, islands, { file, base: null }).text;
+    if (base === content) continue;
+    out.push(
+      base === null
+        ? { path: file, base: null, content }
+        : { path: file, base: patchHash(base), base_text: base, content },
+    );
+  }
+  return { format: PATCH_FORMAT, kind: PATCH_KIND, base_ref: "editor", files: out };
+}
+
+/**
+ * Checks a patch (untrusted: size, paths, hashes, schemas) and parses the files the editor
+ * can apply: chunks and spawns/npcs/zones/portals.yaml of islands in world.yaml. Anything
+ * else (world.yaml, island.yaml, texts.yaml, prefabs) is refused: that needs mapcli.
+ * Format 1 patches carry no base text; the file on disk is used when its hash matches.
+ */
+export function parseEditorPatch(root: string, text: unknown): ParsedPatch {
+  if (typeof text !== "string") throw new BadRequest("text must be a string");
+  let patch: MapPatch;
+  try {
+    patch = parsePatch(text);
+  } catch (e) {
+    if (e instanceof PatchError) throw new BadRequest(e.message);
+    throw e;
+  }
+  const islands = worldIslands(root);
+  const files: ParsedPatchFile[] = [];
+  for (const f of patch.files) {
+    const p = patchPath(f.path);
+    const editable =
+      (p?.kind === "chunk" || (p?.kind === "list" && p.list !== "texts")) && islands.has(p.island);
+    if (!p || !editable || (p.kind !== "chunk" && p.kind !== "list"))
+      throw new BadRequest(`the editor cannot apply ${f.path}; use mapcli patch apply`);
+    inside(root, f.path, `world/islands/${p.island}`);
+    let base: string | null | undefined = f.base === null ? null : f.base_text;
+    if (base === undefined) {
+      const disk = readIfExists(join(root, f.path));
+      if (disk !== null && patchHash(disk) === f.base) base = disk;
+    }
+    const data = (t: string | null | undefined): ParsedPatchFile["content"] =>
+      t === null || t === undefined
+        ? null
+        : (parsePatchFile(f.path, t) as ParsedPatchFile["content"]);
+    files.push({
+      path: f.path,
+      island: p.island,
+      target:
+        p.kind === "chunk"
+          ? { kind: "chunk", z: p.z, cx: p.cx, cy: p.cy }
+          : { kind: "list", list: p.list as EntityList },
+      baseKnown: base !== undefined,
+      base: data(base),
+      content: data(f.content),
+    });
+  }
+  return { base_ref: patch.base_ref, files };
 }

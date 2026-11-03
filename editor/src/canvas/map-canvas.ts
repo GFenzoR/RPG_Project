@@ -24,6 +24,9 @@ const COLORS = {
   npc: 0xffd84a,
   portal: 0xff4aff,
   selected: 0xffffff,
+  /** Review: tiles that differ from the loaded world, and patch conflicts. */
+  changed: 0xff4aff,
+  conflict: 0xff2020,
 };
 
 /** Zone colours, as mapcli render draws them (docs/04-map-editor-and-ai.md). */
@@ -72,7 +75,7 @@ export async function createMapCanvas(
   const source: TileSource = {
     chunk(z, cx, cy) {
       const key = chunkKey(z, cx, cy);
-      for (const isl of ctl.state.world.islands.values()) {
+      for (const isl of ctl.viewWorld().islands.values()) {
         const c = isl.chunks.get(key);
         if (c) return c;
       }
@@ -84,7 +87,8 @@ export async function createMapCanvas(
   const grid = new Graphics();
   const cursor = new Graphics();
   const entities = new Graphics();
-  view.overlay.addChild(bounds, entities, grid, cursor);
+  const changes = new Graphics();
+  view.overlay.addChild(bounds, changes, entities, grid, cursor);
   app.stage.addChild(view.root);
 
   const size = (): { width: number; height: number } => ({
@@ -115,6 +119,9 @@ export async function createMapCanvas(
       s.pasting,
       s.entitySel,
       s.entityTab,
+      s.review,
+      s.reviewSide,
+      s.patchConflicts.length,
     ]);
   };
   const redrawOverlays = (): void => {
@@ -129,6 +136,7 @@ export async function createMapCanvas(
         .rect(r.x * T, r.y * T, r.w * T, r.h * T)
         .stroke({ width: 2 * px, color: COLORS.island, alpha: 0.9 });
     }
+    drawChanges(px);
     grid.clear();
     if (s.grid && s.camera.zoom >= GRID_MIN_ZOOM) {
       const p = tilePixels(s.camera, T);
@@ -174,12 +182,29 @@ export async function createMapCanvas(
     drawEntities(px);
   };
 
+  /** Review: changed tiles of the current floor (against the loaded world) and conflicts. */
+  const drawChanges = (px: number): void => {
+    const s = ctl.state;
+    changes.clear();
+    if (!s.review) return;
+    for (const c of ctl.diff().chunks) {
+      if (c.z !== s.floor) continue;
+      for (const t of c.tiles) changes.rect(t.x * T, t.y * T, T, T);
+    }
+    changes.fill({ color: COLORS.changed, alpha: 0.18 });
+    changes.stroke({ width: px, color: COLORS.changed, alpha: 0.8 });
+    changes.beginPath();
+    for (const c of s.patchConflicts)
+      if (c.kind === "tile" && c.z === s.floor) changes.rect(c.x * T, c.y * T, T, T);
+    changes.stroke({ width: 3 * px, color: COLORS.conflict, alpha: 1 });
+  };
+
   /** Zones, spawns, NPCs and portals of the current floor (all islands). */
   const drawEntities = (px: number): void => {
     const s = ctl.state;
     entities.clear();
     const sel = (tab: string, key: string): boolean => s.entityTab === tab && s.entitySel === key;
-    for (const isl of s.world.islands.values()) {
+    for (const isl of ctl.viewWorld().islands.values()) {
       for (const z of isl.zones) {
         if (!z.floors.includes(s.floor)) continue;
         const color = ZONE_COLORS[z.type] ?? COLORS.selected;

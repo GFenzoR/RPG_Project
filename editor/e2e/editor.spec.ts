@@ -2,8 +2,9 @@
 // validation and floors, saves, and verifies the saved files are canonical (`mapcli fmt
 // --check` finds nothing to change). Screenshots: e2e/screenshots/actual/.
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { cpSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve, sep } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
@@ -442,4 +443,112 @@ test("the API refuses requests that do not come from the editor page", async ({ 
     headers: { "x-rpg-editor": "1" },
   });
   expect(traversal.status()).toBe(400);
+});
+
+test("hito 2: map patches — export, diff view, import with and without conflicts", async ({
+  page,
+}) => {
+  // Start from the repository's world/: earlier tests leave edits (and a broken chunk) in
+  // the scratch copy, which would show up in this test's screenshots.
+  // Only ever a scratch copy under the system temp dir (playwright.config.ts makes it).
+  if (!root || !resolve(root).startsWith(resolve(tmpdir()) + sep))
+    throw new Error(`EDITOR_E2E_ROOT ${JSON.stringify(root)} is not under ${tmpdir()}`);
+  rmSync(join(root, "world"), { recursive: true, force: true });
+  cpSync(join(repo, "world"), join(root, "world"), { recursive: true });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/?lang=es&island=testisle");
+  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
+  const CHUNK = "world/islands/testisle/chunks/z07/c0033_0032.json";
+  const onDisk = readFileSync(join(root, CHUNK), "utf8");
+  const A: [number, number] = [1058, 1040];
+  const original = await tile(page, ...A, 7);
+  expect(original?.ground).toBe("grass");
+
+  // Review panel: empty diff at first.
+  await page.getByTestId("review").click();
+  await expect(page.getByTestId("review-empty")).toBeVisible();
+
+  // A local edit (autoborder off: exactly one tile) and a new spawn.
+  await page.getByTestId("autoborder").uncheck();
+  await pick(page, "tierra", "dirt");
+  await page.getByTestId("brush-size").selectOption("1");
+  await page.evaluate(() => window.__rpgEditor?.centerOn(1058, 1040, 7));
+  await clickTile(page, ...A);
+  expect((await tile(page, ...A, 7))?.ground).toBe("dirt");
+  await expect(page.getByTestId("review-chunk")).toHaveText(
+    "testisle · z07/c0033_0032 · 1 casillas",
+  );
+  await page.getByTestId("review-after").click();
+  await page.evaluate(() => window.__rpgEditor?.centerOn(1060, 1045, 7));
+  await page.getByTestId("review-chunk").click(); // navigates to the change
+  await shot(page, "30-review-after");
+  await page.getByTestId("review-before").click();
+  await expect(page.getByTestId("review-before")).toHaveClass(/active/);
+  await shot(page, "31-review-before");
+  // The "before" view is read-only.
+  await clickTile(page, 1059, 1040);
+  await expect(page.getByTestId("status")).toContainText("Antes");
+  expect((await tile(page, 1059, 1040, 7))?.ground).toBe("grass");
+  await page.getByTestId("review-after").click();
+
+  // Export: a download, format 2, base = the file on disk; world/ untouched.
+  const [dl] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("patch-export").click(),
+  ]);
+  expect(dl.suggestedFilename()).toBe("testisle.rpgpatch.json");
+  const patchPath = join(root, "exported.rpgpatch.json");
+  await dl.saveAs(patchPath);
+  const patch = JSON.parse(readFileSync(patchPath, "utf8")) as {
+    format: number;
+    files: { path: string; base_text?: string; content: string }[];
+  };
+  expect(patch.format).toBe(2);
+  expect(patch.files.map((f) => f.path)).toEqual([CHUNK]);
+  expect(patch.files[0]?.base_text).toBe(onDisk);
+  expect(readFileSync(join(root, CHUNK), "utf8")).toBe(onDisk);
+
+  // Import without conflict: undo the edit, import the patch, undo it in one step.
+  await page.getByTestId("undo").click();
+  expect((await tile(page, ...A, 7))?.ground).toBe("grass");
+  await page.getByTestId("patch-file").setInputFiles(patchPath);
+  await expect(page.getByTestId("status")).toHaveText(
+    "Patch importado: 1 archivos (Ctrl+Z lo deshace)",
+  );
+  expect((await tile(page, ...A, 7))?.ground).toBe("dirt");
+  await shot(page, "32-imported");
+  await page.getByTestId("undo").click();
+  expect((await tile(page, ...A, 7))?.ground).toBe("grass");
+
+  // Import with a conflict: the same tile now has another ground here.
+  await pick(page, "arena", "sand");
+  await clickTile(page, ...A);
+  const before = await tile(page, ...A, 7);
+  await page.getByTestId("patch-file").setInputFiles(patchPath);
+  await expect(page.getByTestId("status")).toHaveText(
+    "El patch tiene 1 conflictos: no se aplicó nada",
+  );
+  await expect(page.getByTestId("patch-conflicts").locator("li")).toHaveText([
+    "testisle/chunks/z07/c0033_0032.json: casilla 1058,1040,7",
+  ]);
+  expect(await tile(page, ...A, 7)).toEqual(before);
+  await shot(page, "33-conflict");
+
+  // A malicious patch is refused by the dev server before anything is merged.
+  await page.getByTestId("patch-file").setInputFiles({
+    name: "evil.rpgpatch.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        format: 2,
+        kind: "rpg-map-patch",
+        base_ref: "editor",
+        files: [{ path: "world/../data/items/ground.yaml", base: null, content: "[]\n" }],
+      }),
+    ),
+  });
+  await expect(page.getByTestId("status")).toContainText("Patch rechazado");
+  expect(errors).toEqual([]);
 });

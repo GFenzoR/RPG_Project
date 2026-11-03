@@ -284,3 +284,34 @@ button.primary {
 .entity-form .monster input {
   width: 50px;
 }
+
+/* Review panel (map patches, diff) */
+.review .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.review h3 {
+  color: var(--muted);
+}
+.review h3.bad {
+  color: var(--error);
+}
+.review .changes {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  max-height: 160px;
+  overflow: auto;
+}
+.review .changes button {
+  width: 100%;
+  text-align: left;
+  font-family: monospace;
+}
+.review .hint {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0;
+}

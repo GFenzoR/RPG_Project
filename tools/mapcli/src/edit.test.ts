@@ -1,8 +1,19 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { emptyChunk, formatChunk, parseChunk } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
 import { afterEach, describe, expect, it } from "vitest";
 import { run } from "./index.ts";
@@ -364,13 +375,87 @@ describe("mapcli patch", () => {
       "--root",
       other,
     );
-    const before = read(other, "world/islands/testisle/zones.yaml");
-    const conflict = mapcli("patch", "apply", patchFile, "--root", other);
+    // The base changed elsewhere in the chunk: the patch merges tile by tile.
+    const merged = mapcli("patch", "apply", patchFile, "--root", other);
+    expect(merged.json()).toMatchObject({ ok: true, merged: [Z7] });
+    const view = (root: string, area: string) =>
+      mapcli("view", "testisle", "--floor", "7", "--area", area, "--root", root).json();
+    expect(view(other, "1045,1045,3,3")).toEqual(view(src, "1045,1045,3,3"));
+    expect(view(other, "1050,1050,1,1")).not.toEqual(view(src, "1050,1050,1,1"));
+
+    // The same tile changed differently on both sides: conflict, nothing written.
+    const clash = sandbox();
+    mapcli(
+      "paint",
+      "testisle",
+      "--floor",
+      "7",
+      "--rect",
+      "1046,1046,1,1",
+      "--ground",
+      "dirt",
+      "--root",
+      clash,
+    );
+    const before = read(clash, "world/islands/testisle/zones.yaml");
+    const conflict = mapcli("patch", "apply", patchFile, "--root", clash);
     expect(conflict.code).toBe(1);
     expect(conflict.json().conflicts).toEqual([
-      { path: Z7, reason: "the file changed since the patch was made" },
+      { path: Z7, reason: "tiles changed on both sides", at: ["1046,1046,7"] },
     ]);
-    expect(read(other, "world/islands/testisle/zones.yaml")).toBe(before);
+    expect(read(clash, "world/islands/testisle/zones.yaml")).toBe(before);
+    expect(mapcli("patch", "diff", patchFile, "--root", clash).json().files).toMatchObject([
+      { base_matches: false, conflicts: 1 },
+      { base_matches: true },
+    ]);
+    // --partial writes everything else and keeps the current tile where they clash.
+    expect(mapcli("patch", "apply", patchFile, "--partial", "--root", clash).code).toBe(0);
+    expect(read(clash, "world/islands/testisle/zones.yaml")).toBe(
+      read(src, "world/islands/testisle/zones.yaml"),
+    );
+    expect(view(clash, "1046,1046,1,1")).not.toEqual(view(src, "1046,1046,1,1"));
+  });
+
+  it("merges format 1 patches using the base at base_ref", () => {
+    const src = sandbox();
+    mapcli(
+      "paint",
+      "testisle",
+      "--floor",
+      "7",
+      "--rect",
+      "1045,1045,1,1",
+      "--ground",
+      "sand",
+      "--root",
+      src,
+    );
+    const p2 = JSON.parse(mapcli("patch", "create", "--root", src).out) as {
+      format: number;
+      files: { base_text: string }[];
+    };
+    expect(p2.format).toBe(2);
+    expect(typeof p2.files[0]?.base_text).toBe("string");
+    const p1 = { ...p2, format: 1, files: p2.files.map((f) => ({ ...f, base_text: undefined })) };
+    const dst = sandbox();
+    mapcli(
+      "paint",
+      "testisle",
+      "--floor",
+      "7",
+      "--rect",
+      "1050,1050,1,1",
+      "--ground",
+      "dirt",
+      "--root",
+      dst,
+    );
+    const file = join(dst, "p1.rpgpatch.json");
+    writeFileSync(file, JSON.stringify(p1));
+    expect(mapcli("patch", "apply", file, "--root", dst).json()).toMatchObject({
+      ok: true,
+      merged: [Z7],
+    });
   });
 
   it("rejects patches that reach outside the map files", () => {
@@ -392,5 +477,178 @@ describe("mapcli patch", () => {
       );
       expect([path, mapcli("patch", "apply", evil, "--root", root).code]).toEqual([path, 2]);
     }
+  });
+
+  it("diff shows what the merge would write, not local edits as reverted", () => {
+    const src = sandbox();
+    const paint = (root: string, rect: string, ground: string) =>
+      mapcli(
+        "paint",
+        "testisle",
+        "--floor",
+        "7",
+        "--rect",
+        rect,
+        "--ground",
+        ground,
+        "--root",
+        root,
+      );
+    const spawn = (root: string, id: string) =>
+      mapcli(
+        "spawn",
+        "add",
+        "testisle",
+        "--pos",
+        "1050,1045,7",
+        "--monster",
+        "wolf",
+        "--id",
+        id,
+        "--root",
+        root,
+      );
+    paint(src, "1045,1045,2,1", "sand");
+    spawn(src, "patch_spawn");
+    const pf = join(src, "p1.rpgpatch.json");
+    mapcli("patch", "create", "--out", pf, "--root", src);
+
+    const dst = sandbox();
+    paint(dst, "1052,1052,3,1", "dirt"); // same chunk, other tiles
+    spawn(dst, "local_spawn");
+    const diff = mapcli("patch", "diff", pf, "--root", dst);
+    expect(diff.code).toBe(0);
+    expect(diff.json().files).toEqual([
+      expect.objectContaining({
+        path: Z7,
+        status: "modified",
+        base_matches: false,
+        conflicts: 0,
+        tiles_changed: 2,
+      }),
+      expect.objectContaining({
+        path: "world/islands/testisle/spawns.yaml",
+        base_matches: false,
+        conflicts: 0,
+        added: ["patch_spawn"],
+        removed: [],
+        changed: [],
+      }),
+    ]);
+  });
+
+  it("writes patch contents in canonical form, never as they come", () => {
+    const root = sandbox();
+    const SP = "world/islands/testisle/spawns.yaml";
+    const Z8 = "world/islands/testisle/chunks/z07/c0032_0033.json";
+    const chunkText = read(root, Z7);
+    const spawns = read(root, SP);
+    const hash = (t: string) => `sha256:${createHash("sha256").update(t).digest("hex")}`;
+    // Minified, with an unused palette entry and one changed tile.
+    const raw = JSON.parse(chunkText) as { palette: string[]; ground: number[][] };
+    raw.palette.push("dirt", "wet_sand"); // wet_sand is never used
+    (raw.ground[0] as number[])[0] = raw.palette.length - 2;
+    const minified = JSON.stringify(raw);
+    // Octal-looking and hex numbers that YAML parsers read differently.
+    const odd = spawns
+      .replace("center: { x: 1056, y: 1041, z: 7 }", "center: { x: 01056, y: 01041, z: 7 }  # x")
+      .replace("radius: 4", "radius: 0x4");
+    expect(odd).not.toBe(spawns);
+    const z8 = read(root, Z8);
+    const evil = join(root, "odd.json");
+    writeFileSync(
+      evil,
+      JSON.stringify({
+        format: 2,
+        kind: "rpg-map-patch",
+        base_ref: "HEAD",
+        files: [
+          { path: Z7, base: hash(chunkText), base_text: chunkText, content: minified },
+          { path: Z8, base: hash(z8), base_text: z8, content: formatChunk(emptyChunk(32, 33, 7)) },
+          { path: SP, base: hash(spawns), base_text: spawns, content: odd },
+        ],
+      }),
+    );
+    expect(mapcli("patch", "apply", evil, "--root", root).code).toBe(0);
+    expect(read(root, Z7)).toBe(formatChunk(parseChunk(minified, Z7) ?? emptyChunk(0, 0, 0)));
+    expect(read(root, Z7)).not.toContain("wet_sand");
+    expect(existsSync(join(root, Z8))).toBe(false); // an empty chunk is removed
+    expect(read(root, SP)).toContain("center: { x: 1056, y: 1041, z: 7 }");
+    expect(read(root, SP)).toMatch(/radius: 4\n/);
+    expect(mapcli("fmt", "--check", "--root", root).code).toBe(0);
+  });
+
+  it("applying a non-canonical whole-file patch twice is a clean no-op the second time", () => {
+    const root = sandbox();
+    const hash = (t: string) => `sha256:${createHash("sha256").update(t).digest("hex")}`;
+    const ISL = "world/islands/testisle/island.yaml";
+    const WLD = "world/world.yaml";
+    const PRF = "world/prefabs/small_dock.yaml";
+    const edits: [string, string, string][] = [
+      [ISL, "level_hint: [1, 8]", "level_hint: [01, 011] # c"],
+      [WLD, "level_hint: [1, 8]", "level_hint: [01, 0x10]"],
+      [PRF, `  - "P===P"`, `  - 'P=C=P'`],
+    ];
+    const files = edits.map(([path, from, to]) => {
+      const text = read(root, path);
+      expect(text).toContain(from);
+      return { path, base: hash(text), base_text: text, content: text.replace(from, to) };
+    });
+    const pf = join(root, "odd.json");
+    writeFileSync(
+      pf,
+      JSON.stringify({ format: 2, kind: "rpg-map-patch", base_ref: "HEAD", files }),
+    );
+    expect(mapcli("patch", "apply", pf, "--root", root).code).toBe(0);
+    expect(read(root, ISL)).toContain("level_hint: [1, 11]");
+    const again = mapcli("patch", "apply", pf, "--root", root);
+    expect(again.code).toBe(0);
+    expect(again.json()).toMatchObject({ ok: true, written: [], conflicts: [] });
+    expect(mapcli("patch", "diff", pf, "--root", root).code).toBe(0);
+  });
+
+  it("diff shows what the patch would change when the whole file conflicts", () => {
+    const root = sandbox();
+    const Z = "world/islands/testisle/chunks/z07/c0033_0032.json";
+    const text = read(root, Z);
+    const raw = JSON.parse(text) as { palette: string[]; ground: number[][] };
+    if (!raw.palette.includes("sand")) raw.palette.push("sand");
+    (raw.ground[8] as number[])[2] = raw.palette.indexOf("sand"); // 1058,1040,7
+    const p1 = {
+      format: 1,
+      kind: "rpg-map-patch",
+      base_ref: "deadbeef",
+      files: [{ path: Z, base: `sha256:${"0".repeat(64)}`, content: JSON.stringify(raw) }],
+    };
+    const pf = join(root, "p1.json");
+    writeFileSync(pf, JSON.stringify(p1));
+    const diff = mapcli("patch", "diff", pf, "--root", root);
+    expect([diff.code, diff.err]).toEqual([1, ""]);
+    expect(diff.json().files).toEqual([
+      expect.objectContaining({ path: Z, status: "conflict", conflicts: 1, tiles_changed: 1 }),
+    ]);
+  });
+
+  it("never writes through a symlink that leaves world/", () => {
+    const root = sandbox();
+    const outside = mkdtempSync(join(tmpdir(), "mapcli-outside-"));
+    dirs.push(outside);
+    const chunk = read(root, Z7);
+    const z = "world/islands/testisle/chunks/z09";
+    symlinkSync(outside, join(root, z));
+    const path = `${z}/c0032_0032.json`;
+    const evil = join(root, "evil.json");
+    writeFileSync(
+      evil,
+      JSON.stringify({
+        format: 2,
+        kind: "rpg-map-patch",
+        base_ref: "HEAD",
+        files: [{ path, base: null, content: chunk.replace('"z": 7', '"z": 9') }],
+      }),
+    );
+    const r = mapcli("patch", "apply", evil, "--root", root);
+    expect(r.code).toBe(2);
+    expect(readdirSync(outside)).toEqual([]);
   });
 });
