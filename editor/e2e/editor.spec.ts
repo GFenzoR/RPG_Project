@@ -245,6 +245,7 @@ test("hito 2: rectangle, autoborder, fill, copy/paste across floors and entity p
 
   // Selection (V) + copy, with an item inside; paste on floor 8.
   await page.getByTestId("category-decoration").click();
+  await page.getByTestId("palette-search").fill("");
   await page.getByTestId("palette-cargo_crate").click();
   await clickTile(page, 1046, 1047);
   await page.keyboard.press("v");
