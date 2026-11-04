@@ -1970,9 +1970,6 @@ func (x *Projectile) GetProjectileId() uint32 {
 	return 0
 }
 
-// SpellCooldown tells the caster that it cast spell_id (or used a rune of it): that
-// spell cannot be cast again for cooldown_ms, and no spell of group for
-// group_cooldown_ms. Both are already rounded to ticks.
 // PlayerConditions is the full list of the player's own active conditions (T3.2): sent
 // after login and whenever one starts, changes or ends (an empty list = none). Other
 // creatures' conditions are never sent; observers only see their effects (speed,
@@ -2084,6 +2081,9 @@ func (x *ActiveCondition) GetTicks() uint32 {
 	return 0
 }
 
+// SpellCooldown tells the caster that it cast spell_id (or used a rune of it): that
+// spell cannot be cast again for cooldown_ms, and no spell of group for
+// group_cooldown_ms. Both are already rounded to ticks.
 type SpellCooldown struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	SpellId    string                 `protobuf:"bytes,1,opt,name=spell_id,json=spellId,proto3" json:"spell_id,omitempty"`

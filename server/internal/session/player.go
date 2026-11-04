@@ -332,12 +332,14 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		ServerTime: uint64(max(ctx.Now.UnixMilli(), 0)),
 		TickMs:     uint32(game.TickDuration.Milliseconds()),
 	}}})
+	// Saved conditions first (T3.2): the first stats, and what observers get, already
+	// carry their speed (and an invisible player is never shown).
+	w.loadConditions(ctx, p, c.Conditions)
 	w.sendFullView(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.appearToObservers(p)
-	w.loadConditions(ctx, p, c.Conditions)
 
 	// Staggered autosave: first at a random point of the first interval.
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))

@@ -508,3 +508,69 @@ func TestDeathClearsConditions(t *testing.T) {
 		t.Fatalf("after death: conditions %v, speed %d", h.w.ConditionsForTest(p), p.Speed())
 	}
 }
+
+// Review findings: a recast while invisible and the experience of a kill by its poison
+// reach only the invisible player's own client.
+func TestInvisibleRecastAndExperienceStayHidden(t *testing.T) {
+	def := targetDummyDef()
+	def.Experience = 50
+	h := condHarness(t, worldtest.Open(t, 0, 0, 32, 32), withMonster(def, 13, 12))
+	cl, p := h.join("Ghost", at(10, 10))
+	ocl, _ := h.join("Obs", at(12, 10))
+	h.sim.Step()
+	m := h.dummy()
+	h.castNow(cl, cast("veil"))
+	ocl.take()
+
+	h.castNow(cl, cast("veil")) // refresh while invisible
+	if !p.Invisible() {
+		t.Fatal("the recast ended the invisibility")
+	}
+	if evs := ocl.take(); len(find(evs, (*pb.ServerMessage).GetEffect)) != 0 {
+		t.Fatalf("observer got the recast's effect: %v", kinds(evs))
+	}
+
+	// The invisible player's poison kills the monster: its experience text stays private.
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		m.SetHealth(2)
+		h.w.ApplyConditionForTest(ctx, nil, m, &content.ConditionApply{ID: "poison", Ticks: 2, Damage: 9}, p.ID())
+	}))
+	h.sim.RunTicks(condSecond + 2)
+	if h.w.MonsterHealth(m) > 0 && len(h.w.Monsters()) == 1 {
+		t.Fatal("the poison did not kill the monster")
+	}
+	if p.Experience() == 0 {
+		t.Fatal("no experience for the poisoner")
+	}
+	for _, f := range find(ocl.take(), (*pb.ServerMessage).GetFloatingText) {
+		if f.GetKind() == pb.FloatingTextKind_FLOATING_TEXT_KIND_EXPERIENCE {
+			t.Fatalf("observer got the invisible player's experience at %v", f.GetPos())
+		}
+	}
+	if xp := find(cl.take(), (*pb.ServerMessage).GetFloatingText); len(xp) == 0 {
+		t.Error("the invisible player did not get its own experience text")
+	}
+}
+
+// A quick relog (the final snapshot not acknowledged yet) restores the persisting
+// conditions from memory; after a logout no condition event is left behind.
+func TestConditionsQuickRelogAndLogout(t *testing.T) {
+	h := condHarness(t, worldtest.Open(t, 0, 0, 32, 32))
+	pending := h.sim.Loop().Scheduler().Len()
+	nextChar++
+	c := session.Character{ID: nextChar, AccountID: nextChar, Name: "Ana", Vocation: "guardian", Level: 1, Health: 145,
+		HasPos: true, Pos: pos(10, 10)}
+	cl, p := h.joinChar(c)
+	h.apply(p, nil, content.ConditionApply{ID: "poison", Ticks: 4, Damage: 2})
+	h.apply(p, nil, content.ConditionApply{ID: "slowed", DurationMs: 5000})
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	if n := h.sim.Loop().Scheduler().Len(); n != pending {
+		t.Fatalf("%d events pending after the logout, want %d", n, pending)
+	}
+	_, again := h.joinChar(c) // the row in the database would have no conditions
+	got := h.w.ConditionsForTest(again)
+	if got["poison"] != 4 || got["slowed"] == 0 || again.Speed() >= 200 {
+		t.Fatalf("conditions after a quick relog = %v, speed %d", got, again.Speed())
+	}
+}

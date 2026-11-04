@@ -47,6 +47,8 @@ type condition struct {
 	at    game.Tick
 	event game.EventID
 	every game.Tick // interval between hits (damage kind)
+	// due is the event function, built once: a reschedule allocates nothing.
+	due game.EventFunc
 }
 
 // holder is the creature that has a condition: exactly one of p and m is set.
@@ -171,8 +173,11 @@ func (w *World) addCondition(ctx *game.TickContext, h holder, def *content.Condi
 }
 
 func (w *World) scheduleCondition(ctx *game.TickContext, h holder, c *condition, at game.Tick) {
-	c.at = at
-	c.event = ctx.Sched.At(at, func(ctx *game.TickContext) { w.conditionDue(ctx, h, c) })
+	c.at = max(at, ctx.Tick+1) // the scheduler never runs an event in the current tick
+	if c.due == nil {
+		c.due = func(ctx *game.TickContext) { w.conditionDue(ctx, h, c) }
+	}
+	c.event = ctx.Sched.At(c.at, c.due)
 }
 
 // conditionDue is c's event: the next hit of a damage condition, or the end of the others.
@@ -431,7 +436,8 @@ func (w *World) conditionStates(p *Player) []ConditionState {
 }
 
 // loadConditions gives a joining p its saved conditions. Unknown ones, or ones that do
-// not persist any more, are dropped; numbers are clamped to today's balance.
+// not persist any more, are dropped; hits and times are clamped to today's balance
+// (max_ticks, interval_ms, max_ms). The saved damage is kept: it came from a source.
 func (w *World) loadConditions(ctx *game.TickContext, p *Player, saved []ConditionState) {
 	h := holder{p: p}
 	for _, s := range saved {

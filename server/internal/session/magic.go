@@ -192,7 +192,7 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 	if !w.applySpell(ctx, p, s, target) {
 		return
 	}
-	if c := s.Effect.Condition; c == nil || c.ID != condInvisible {
+	if !w.hides(s.Effect.Condition) {
 		w.reveal(ctx, p) // T3.2: casting anything but the invisibility itself ends it
 	}
 	p.mana -= s.Mana
@@ -469,16 +469,26 @@ func (w *World) projectileAt(from world.Pos, t *Player, element string) {
 	w.eachWatcher(t, func(o *Player) { o.emit(msg) })
 }
 
-// condInvisible is the condition whose spell does not end invisibility when cast.
-const condInvisible = "invisible"
+// hides reports whether a applies an invisibility condition: casting it does not end
+// the invisibility (it refreshes it).
+func (w *World) hides(a *content.ConditionApply) bool {
+	if a == nil {
+		return false
+	}
+	def := w.cfg.Balance.Conditions[a.ID]
+	return def != nil && def.Kind == content.ConditionInvisible
+}
 
 // conditionSpell puts a's condition on p, or with a.Range (T3.2) on the monster p aims
 // at, at up to a.Range tiles in line of sight (the checks of a bolt). A spell aimed at a
 // monster costs its mana even if the monster shrugs the condition off (chance, immunity).
 func (w *World) conditionSpell(ctx *game.TickContext, p *Player, a *content.ConditionApply, target *pb.ActionTarget) bool {
 	if a.Range == 0 {
+		// The effect first, to who sees p now: an invisibility that starts hides p from
+		// then on, and a recast while invisible reaches only p's own client.
+		msg := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(p.pos), EffectId: EffectBuff}}}
+		w.eachWatcher(p, func(o *Player) { o.emit(msg) })
 		w.applyCondition(ctx, holder{p: p}, a, p.id)
-		w.buffEffect(p.pos)
 		return true
 	}
 	m := w.spellTarget(p, target)
@@ -523,12 +533,11 @@ func (w *World) cure(ctx *game.TickContext, p *Player, ids []string) bool {
 		p.emit(systemMsg(msgNothingToCure))
 		return false
 	}
-	w.buffEffect(p.pos)
+	w.buffEffect(p.pos) // cast() already revealed p: the cure is not an invisibility
 	return true
 }
 
-// buffEffect shows EffectBuff on pos to the clients that see it. On the caster it runs
-// before an invisibility starts, or after one ends.
+// buffEffect shows EffectBuff on pos to the clients that see it.
 func (w *World) buffEffect(pos world.Pos) {
 	msg := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(pos), EffectId: EffectBuff}}}
 	w.eachObserver(nil, pos, func(o *Player) { o.emit(msg) })
@@ -593,7 +602,9 @@ func (w *World) useRune(ctx *game.TickContext, p *Player, it *Item, target *pb.A
 	if !w.applySpell(ctx, p, s, target) {
 		return
 	}
-	w.reveal(ctx, p)
+	if !w.hides(s.Effect.Condition) {
+		w.reveal(ctx, p)
+	}
 	w.startCooldown(ctx, p, s, false)
 	w.useUp(it)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})

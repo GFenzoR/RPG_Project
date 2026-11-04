@@ -200,8 +200,11 @@ Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data
     monstruos no la eligen ni la mantienen de objetivo, salvo los que tienen
     `behavior.sees_invisible` (el murciélago). Por ahora ningún jugador ve invisibles.
     **Atacar o lanzar cualquier hechizo la rompe** (un golpe del arma o de varita, un
-    disparo, una runa o un hechizo, salvo volver a lanzar la invisibilidad); caminar,
-    hablar o usar items no.
+    disparo, una runa o un hechizo, salvo volver a lanzar una invisibilidad, que solo la
+    renueva); caminar, hablar o usar items no. Lo que un invisible cambia en el mundo sí
+    se ve, porque es estado del mapa: mover o soltar items (`TileUpdate`), recolectar (el
+    efecto en la casilla del recurso) o abrir una puerta. Es una pista aceptada, como en
+    el género; su criatura, su vida y sus números no viajan.
   - **Relogueo:** las de daño y `slowed` sobreviven a un logout con su tiempo restante
     (`characters.conditions`), para que salir del juego no cure; haste, invisibilidad y
     puntería son ventajas y terminan. **Morir** termina todas.

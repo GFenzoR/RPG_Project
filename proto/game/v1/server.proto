@@ -181,9 +181,6 @@ message Projectile {
   uint32 projectile_id = 3;
 }
 
-// SpellCooldown tells the caster that it cast spell_id (or used a rune of it): that
-// spell cannot be cast again for cooldown_ms, and no spell of group for
-// group_cooldown_ms. Both are already rounded to ticks.
 // PlayerConditions is the full list of the player's own active conditions (T3.2): sent
 // after login and whenever one starts, changes or ends (an empty list = none). Other
 // creatures' conditions are never sent; observers only see their effects (speed,
@@ -201,6 +198,9 @@ message ActiveCondition {
   uint32 ticks = 3;
 }
 
+// SpellCooldown tells the caster that it cast spell_id (or used a rune of it): that
+// spell cannot be cast again for cooldown_ms, and no spell of group for
+// group_cooldown_ms. Both are already rounded to ticks.
 message SpellCooldown {
   string spell_id = 1;
   uint32 cooldown_ms = 2;

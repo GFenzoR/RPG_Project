@@ -728,9 +728,6 @@ export const ProjectileSchema: GenMessage<Projectile> = /*@__PURE__*/
   messageDesc(file_game_v1_server, 19);
 
 /**
- * SpellCooldown tells the caster that it cast spell_id (or used a rune of it): that
- * spell cannot be cast again for cooldown_ms, and no spell of group for
- * group_cooldown_ms. Both are already rounded to ticks.
  * PlayerConditions is the full list of the player's own active conditions (T3.2): sent
  * after login and whenever one starts, changes or ends (an empty list = none). Other
  * creatures' conditions are never sent; observers only see their effects (speed,
@@ -786,6 +783,10 @@ export const ActiveConditionSchema: GenMessage<ActiveCondition> = /*@__PURE__*/
   messageDesc(file_game_v1_server, 21);
 
 /**
+ * SpellCooldown tells the caster that it cast spell_id (or used a rune of it): that
+ * spell cannot be cast again for cooldown_ms, and no spell of group for
+ * group_cooldown_ms. Both are already rounded to ticks.
+ *
  * @generated from message game.v1.SpellCooldown
  */
 export type SpellCooldown = Message$1<"game.v1.SpellCooldown"> & {
