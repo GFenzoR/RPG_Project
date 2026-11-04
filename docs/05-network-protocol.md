@@ -415,8 +415,8 @@ Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architectu
   nodo) y revisa los costos antes de ejecutar nada (`docs/06-content-data.md`). Si algo
   falla manda el `Message` de rechazo (`dialog.no_money`, `dialog.no_item`...) y reenvía el
   nodo. Si no, ejecuta las acciones, entra al nodo de `goto` (o se queda en el mismo si no
-  hay) y manda el `DialogOpen` nuevo; `close`, `travel` y `teleport` cierran con
-  `DialogClose`.
+  hay) y manda el `DialogOpen` nuevo; `close` y `teleport` cierran con `DialogClose` (los
+  viajes en barco son rutas, `option_id` 101+, ver arriba).
 - Alejarse a más de `TalkRange`, cambiar de piso o teletransportarse cierra el diálogo
   (`DialogClose`).
 - **Tienda:** la acción `open_shop` manda `ShopOpen{dialog_id, npc_creature_id, money,
