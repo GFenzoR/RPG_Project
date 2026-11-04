@@ -308,10 +308,6 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (escalera en 3176,6322): murciélagos al oeste, galería de vetas de hierro con escarabajos
   al este y mina inundada con mineros ahogados al norte. Los 6 NPCs del Capítulo 1 viven
   aquí. Protección en templo, plaza y depósito (el item depósito aún no existe).
-  Oficios (T3.4): fragua, yunque y fogón al norte del templo (3166–3172, 6366) y una
-  arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377). Las
-  estaciones son items comunes del mapa (`place`): lo que las hace estación es que una
-  receta de `data/recipes.yaml` las nombre.
   Pendiente: la ruta de barco del capitán de puerto a `bosque` (T3.6).
 
 ## Contribuciones de la comunidad al mapa principal
