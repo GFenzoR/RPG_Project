@@ -135,9 +135,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 
 ## Notas de T3.1
 - `SpellDef.aimsAtPlayer` (una curación con `heal.range`): su hotkey no lanza, sino que pone
-  `Game.aimingSpell` y la clase `using-item` (la mira). El siguiente click en una criatura o
-  casilla manda `CastSpell` con ese objetivo; Escape o click derecho lo cancelan
-  (`cancelUse`).
+  la mira (`Game.pending`, clase `using-item`). El siguiente click en una criatura o casilla
+  manda `CastSpell` con ese objetivo; Escape o click derecho lo cancelan.
+- La mira (herramienta "usar con" o hechizo apuntado) vive en `state/aim.ts`, que es puro y
+  tiene tests: cualquier otro hechizo o uso de item la descarta, y `resolveClick` decide qué
+  hace el click.
 - La munición se ve en el slot `ammo` con su cantidad (`.count`), como cualquier pila.
 
 ## Notas de T2.5

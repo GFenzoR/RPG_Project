@@ -21,10 +21,10 @@ const (
 )
 
 func init() {
-	testItemDefs[bowID] = "{id: test_bow, kind: weapon, weight: 2600, weapon: {type: distance, attack: 2, range: 4, hands: 2, ammo: arrow}, requires: {vocations: [ranger]}}"
-	testItemDefs[arrowID] = "{id: test_arrow, kind: ammo, weight: 70, stackable: true, max_stack: 100, ammo: {type: arrow, attack: 9}}"
+	testItemDefs[bowID] = "{id: test_bow, kind: weapon, weight: 2450, weapon: {type: distance, attack: 2, range: 4, hands: 2, ammo: arrow}, requires: {vocations: [ranger]}}"
+	testItemDefs[arrowID] = "{id: test_arrow, kind: ammo, weight: 45, stackable: true, max_stack: 100, ammo: {type: arrow, attack: 9}}"
 	testVocations["ranger"] = content.Vocation{ID: "ranger",
-		Start:        content.VocationStats{Health: 145, Mana: 400, Capacity: 400000, Speed: 200},
+		Start:        content.VocationStats{Health: 145, Mana: 400, Capacity: 405000, Speed: 200},
 		Regen:        content.Regen{Health: 1, Mana: 1, IntervalMs: 600000},
 		SkillFactors: map[string]float64{"distance": 1.1}, Weapons: []string{"distance"}}
 	testVocations["druid"] = content.Vocation{ID: "druid",
@@ -287,7 +287,7 @@ func TestAmmoSlot(t *testing.T) {
 
 // Ammo of another type does not fit the bow: no shot, the arrows stay.
 func TestBowWrongAmmo(t *testing.T) {
-	testItemDefs[74] = "{id: test_bolt, kind: ammo, weight: 80, stackable: true, max_stack: 100, ammo: {type: bolt, attack: 12}}"
+	testItemDefs[74] = "{id: test_bolt, kind: ammo, weight: 55, stackable: true, max_stack: 100, ammo: {type: bolt, attack: 12}}"
 	defer delete(testItemDefs, 74)
 	h := rangedHarness(t, worldtest.Open(t, 0, 0, 32, 32), spawnAt("dummy", 13, 10, 0, 60))
 	nextChar++
@@ -321,5 +321,34 @@ func TestHealOtherOnlyPlayersOnTheFloor(t *testing.T) {
 	}
 	if h.w.Mana(caster) != 400 {
 		t.Errorf("refused heals spent mana: %d", h.w.Mana(caster))
+	}
+}
+
+// Conjured arrows join the stack already in the backpack, so a full backpack with a
+// partial stack still takes them; once the stack would overflow into a new slot that is
+// not there, the cast is refused and costs nothing.
+func TestConjureArrowsMergesStacks(t *testing.T) {
+	h := rangedHarness(t, worldtest.Open(t, 0, 0, 16, 16))
+	cl, p := ranger(t, h, pos(5, 5), 0)
+	h.sim.Command(gameFunc(func() {
+		h.w.GiveForTest(p, "test_arrow", 30)
+		h.w.GiveForTest(p, "test_sword", 1)
+		h.w.GiveForTest(p, "test_sword", 1)
+		h.w.GiveForTest(p, "test_sword", 1) // the 4-slot backpack is full
+	}))
+	h.sim.Step()
+	cl.take()
+	for i := range 4 {
+		h.castNow(cl, cast("test_arrows"))
+		if got, want := h.w.CountItem(p, "test_arrow"), 30+15*(i+1); got != want {
+			t.Fatalf("cast %d: %d arrows, want %d", i+1, got, want)
+		}
+	}
+	mana := h.w.Mana(p)
+	if keys := sysKeys(h.castNow(cl, cast("test_arrows"))); !slices.Contains(keys, "magic.no_room") {
+		t.Fatalf("90 + 15 arrows with no free slot: %v, want magic.no_room", keys)
+	}
+	if h.w.CountItem(p, "test_arrow") != 90 || h.w.Mana(p) != mana {
+		t.Errorf("refused cast: %d arrows, mana %d → %d", h.w.CountItem(p, "test_arrow"), mana, h.w.Mana(p))
 	}
 }

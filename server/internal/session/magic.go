@@ -383,31 +383,46 @@ func (w *World) healOther(ctx *game.TickContext, p *Player, h *content.SpellHeal
 	return true
 }
 
-// conjure puts a new def in p's backpack: count units, or a rune with all its charges
-// (count 0).
+// conjure puts a new def in p's backpack: a rune with all its charges, or count units of
+// a stackable item (T3.1) merged into the stacks already there. Nothing is created unless
+// all of it fits in the backpack and in p's capacity.
 func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
-	if def == nil || bp == nil || bp.def.Container == nil || len(bp.items) >= bp.def.Slots() {
+	if def == nil || bp == nil || bp.def.Container == nil {
 		p.emit(systemMsg(msgNoRoom))
 		return false
 	}
-	if count <= 0 {
-		count = def.StackLimit()
-		if def.Rune == nil {
-			count = 1
+	var shown *pb.ItemStack
+	if def.Stackable {
+		count = max(count, 1)
+		switch {
+		case !w.room(p, def, count, 0):
+			p.emit(systemMsg(msgNoRoom))
+			return false
+		case def.Weight*count > p.capacity-p.carried():
+			p.emit(systemMsg(msgTooHeavy))
+			return false
 		}
+		w.giveItem(p, def, count) // all of it fits: nothing falls on the floor
+		shown = newItem(def, count).stack()
+	} else {
+		if len(bp.items) >= bp.def.Slots() {
+			p.emit(systemMsg(msgNoRoom))
+			return false
+		}
+		it := newItem(def, def.StackLimit()) // a rune with all its charges
+		if it.weight() > p.capacity-p.carried() {
+			p.emit(systemMsg(msgTooHeavy))
+			return false
+		}
+		w.attach(p, it, place{kind: locContainer, cont: bp})
+		w.containerChanged(bp)
+		shown = it.stack()
 	}
-	it := newItem(def, count)
-	if it.weight() > p.capacity-p.carried() {
-		p.emit(systemMsg(msgTooHeavy))
-		return false
-	}
-	w.attach(p, it, place{kind: locContainer, cont: bp})
-	w.containerChanged(bp)
 	w.eachObserver(nil, p.pos, func(o *Player) {
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(p.pos), EffectId: EffectConjure}}})
 	})
-	p.emit(systemMsg(msgConjured, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: it.stack()}}))
+	p.emit(systemMsg(msgConjured, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: shown}}))
 	return true
 }
 

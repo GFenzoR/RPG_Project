@@ -39,7 +39,7 @@
 - id: ranger
   name: vocation.ranger.name
   description: vocation.ranger.desc
-  start: { health: 145, mana: 40, capacity: 400000, speed: 205 }
+  start: { health: 145, mana: 40, capacity: 405000, speed: 205 }
   per_level: { health: 9, mana: 13, capacity: 19000, speed: 3 }
   regen: { health: 2, mana: 2, interval_ms: 5500 }
   skill_factors:
@@ -47,7 +47,7 @@
     sword: 1.24
     axe: 1.24
     club: 1.24
-    distance: 1.1
+    distance: 1.115
     shield: 1.12
     magic: 1.45
     fishing: 1.11

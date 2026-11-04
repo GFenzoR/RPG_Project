@@ -5,7 +5,7 @@
   sprite: ammo/arrow
   name: item.arrow.name
   description: item.arrow.desc
-  weight: 70
+  weight: 40
   stackable: true
   max_stack: 100
   tradeable: true

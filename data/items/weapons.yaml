@@ -100,7 +100,7 @@
   sprite: weapons/short_bow
   name: item.short_bow.name
   description: item.short_bow.desc
-  weight: 2600
+  weight: 2450
   tradeable: true
   weapon: { type: distance, attack: 2, range: 5, hands: 2, ammo: arrow }
   requires: { vocations: [ranger] }
@@ -111,7 +111,7 @@
   sprite: weapons/yew_longbow
   name: item.yew_longbow.name
   description: item.yew_longbow.desc
-  weight: 3400
+  weight: 3350
   tradeable: true
   weapon: { type: distance, attack: 7, range: 6, hands: 2, ammo: arrow }
   requires: { level: 8, vocations: [ranger] }
@@ -122,7 +122,7 @@
   sprite: weapons/sapling_staff
   name: item.sapling_staff.name
   description: item.sapling_staff.desc
-  weight: 1400
+  weight: 1350
   tradeable: true
   weapon: { type: wand, attack: 8, range: 4, element: earth, hands: 1 }
   requires: { vocations: [druid] }
@@ -133,7 +133,7 @@
   sprite: weapons/rimewood_staff
   name: item.rimewood_staff.name
   description: item.rimewood_staff.desc
-  weight: 1600
+  weight: 1550
   tradeable: true
   weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
   requires: { level: 6, vocations: [druid] }

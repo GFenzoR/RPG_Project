@@ -82,7 +82,7 @@
   sprite: armor/hide_vest
   name: item.hide_vest.name
   description: item.hide_vest.desc
-  weight: 3800
+  weight: 3650
   tradeable: true
   armor: { slot: body, armor: 3 }
   requires: { vocations: [ranger, druid] }
