@@ -46,6 +46,7 @@ message ServerMessage {
     Pong pong = 27;
     Disconnect disconnect = 28;
     SpellCooldown spell_cooldown = 29;
+    PlayerConditions player_conditions = 30;
   }
 }
 
@@ -178,6 +179,23 @@ message Projectile {
   Position from = 1;
   Position to = 2;
   uint32 projectile_id = 3;
+}
+
+// PlayerConditions is the full list of the player's own active conditions (T3.2): sent
+// after login and whenever one starts, changes or ends (an empty list = none). Other
+// creatures' conditions are never sent; observers only see their effects (speed,
+// periodic damage, an invisible player's CreatureDisappear).
+message PlayerConditions {
+  repeated ActiveCondition conditions = 1;
+}
+
+message ActiveCondition {
+  // Id of balance.yaml conditions (poison, hasted...).
+  string condition_id = 1;
+  // Time left: until it ends, or for a damage condition its hits left × its interval.
+  uint32 remaining_ms = 2;
+  // Hits left of a damage condition (0 for the others).
+  uint32 ticks = 3;
 }
 
 // SpellCooldown tells the caster that it cast spell_id (or used a rune of it): that

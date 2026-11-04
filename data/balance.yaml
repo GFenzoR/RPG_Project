@@ -92,3 +92,21 @@ death:
 
 economy:
   coin_ratio: 100
+
+# Conditions (T3.2, docs/02-game-design.md "Condiciones"). Each source (spell, monster
+# attack) says how strong and how long; these are the rules of each condition.
+#   kind: damage = a hit of `element` every interval_ms (resistances apply), up to
+#         max_ticks hits left; speed = speed × (100 + speed_pct) / 100; skill = +amount
+#         levels of `skill` in combat; invisible = unseen by players and by monsters
+#         without behavior.sees_invisible.
+#   stacking: refresh keeps the longer time (or more hits) and the stronger damage;
+#             add sums them, up to max_ticks / max_ms.
+#   persists: kept across a logout with the time left (the others end on logout).
+conditions:
+  poison:    { kind: damage, element: earth, interval_ms: 2200, max_ticks: 25, stacking: add, persists: true }
+  burning:   { kind: damage, element: fire, interval_ms: 3300, max_ticks: 7, stacking: refresh, persists: true }
+  shocked:   { kind: damage, element: energy, interval_ms: 1700, max_ticks: 5, stacking: refresh, persists: true }
+  slowed:    { kind: speed, speed_pct: -45, max_ms: 15000, stacking: refresh, cancels: [hasted], persists: true }
+  hasted:    { kind: speed, speed_pct: 35, max_ms: 45000, stacking: refresh, cancels: [slowed] }
+  invisible: { kind: invisible, max_ms: 90000, stacking: refresh }
+  keen_eye:  { kind: skill, skill: distance, amount: 7, max_ms: 45000, stacking: refresh }

@@ -6,7 +6,7 @@ cliente lo reciben ya compilado. `make validate` corre en CI.
 
 ```
 data/
-  balance.yaml          constantes de balance (XP, skills, muerte, regeneración)
+  balance.yaml          constantes de balance (XP, skills, muerte, regeneración, condiciones)
   vocations.yaml
   ids.lock.yaml         IDs numéricos estables (generado, se commitea)
   borders.yaml          reglas de autoborder
@@ -330,8 +330,14 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   juntada con las pilas que ya hay; si no entra entera, el hechizo falla sin gastar maná).
 - T3.1: `damage` y `heal` aceptan `skill` (`fist`, `sword`, `axe`, `club`, `distance` o
   `shield`) junto con `per_skill`. Ese par va siempre junto y suma `nivel de la skill ×
-  per_skill`. Los hechizos del montaraz escalan así con la distancia. `haste` y `light` están en el esquema para hitos futuros y el servidor los
-  rechaza todavía.
+  per_skill`. Los hechizos del montaraz escalan así con la distancia. `light` está en el
+  esquema para un hito futuro y el servidor lo rechaza todavía.
+- T3.2: dos efectos más. `condition: { id, duration_ms | ticks + damage, chance, range }`
+  pone una condición al que lanza o, con `range`, a un monstruo a esa distancia con línea
+  de visión (los chequeos de un hechizo de un objetivo). `cure: [ids]` quita esas
+  condiciones al que lanza; si no tiene ninguna, falla sin gastar maná. Un `damage` acepta
+  también `condition`: se aplica, con su `chance`, a cada monstruo al que el golpe le hizo
+  daño. Ver "Condiciones".
 - `group` es `attack`, `healing` o `support`; `cooldown_ms` bloquea el hechizo y
   `group_cooldown_ms` a todo su grupo. `magic_level` es el nivel mágico mínimo.
 - Las palabras deben ser únicas (el validador lo revisa) y propias. Los nombres van en
@@ -343,6 +349,29 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   conjurada o de botín trae todas sus cargas.
 - **Varitas**: `weapon: { type: wand, attack, range, element }`; golpean
   `aleatorio(attack × combat.wand_min_factor, attack)` del elemento (`balance.yaml`).
+
+## Condiciones (T3.2)
+Las reglas de cada condición viven en `balance.yaml → conditions` (`balance.schema.json
+#/$defs/condition`); las fuentes dicen cuánto y cuánto tiempo:
+```yaml
+# data/balance.yaml
+conditions:
+  poison: { kind: damage, element: earth, interval_ms: 2200, max_ticks: 25, stacking: add, persists: true }
+  hasted: { kind: speed, speed_pct: 35, max_ms: 45000, stacking: refresh, cancels: [slowed] }
+# una fuente (common.schema.json#/$defs/conditionApply): en un hechizo, un damage o un ataque
+- { type: melee, min: 0, max: 26, interval_ms: 2000, condition: { id: poison, chance: 0.3, ticks: 5, damage: 3 } }
+```
+- `kind`: `damage` (un golpe de `element` cada `interval_ms`; exige `element`,
+  `interval_ms` y `max_ticks`), `speed` (`speed_pct`, negativo frena), `skill` (`skill` +
+  `amount` niveles en combate) o `invisible`. Las que no son de daño exigen `max_ms`.
+- `stacking`: `refresh` (queda el tiempo o los golpes mayores y el daño mayor) o `add`
+  (se suman hasta `max_ticks` / `max_ms`). `cancels` lista las que quita al aplicarse.
+- `persists: true` = sobrevive a un relogueo (ver `02-game-design.md`, "Condiciones").
+- Una fuente de daño da `ticks` y `damage`; las demás `duration_ms`. `chance` vacío =
+  siempre. Los ids son el enum `conditionId` de `common.schema.json`; el servidor revisa
+  al arrancar que cada fuente nombre una condición de `balance.yaml`.
+- Un monstruo con `behavior.sees_invisible: true` ve (y ataca) a los invisibles.
+- Nombres de la UI: `condition.<id>.name` en `i18n/*/client.yaml`.
 
 ## Receta de oficio
 ```yaml

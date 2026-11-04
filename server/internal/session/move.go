@@ -305,6 +305,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)
+		w.sendConditions(p)
 		if !w.flushPlayer(ctx.Tick, p) {
 			w.slow = append(w.slow, p)
 		}

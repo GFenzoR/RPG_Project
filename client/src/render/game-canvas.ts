@@ -20,6 +20,7 @@ import {
   EFFECT_ELEMENT,
   EFFECT_GATHER,
   EFFECT_GATHER_MISS,
+  EFFECT_BUFF,
   EFFECT_HEAL,
   EFFECT_HIT,
   EFFECT_MS,
@@ -89,6 +90,11 @@ function drawEffect(g: Graphics, id: number): void {
   else if (id === EFFECT_CONJURE) g.star(16, 16, 5, 11, 5).fill({ color: 0xb08cff, alpha: 0.85 });
   else if (id === EFFECT_GATHER)
     g.circle(16, 16, 11).stroke({ width: 2, color: 0xfff2a0 }).star(16, 16, 4, 7, 3).fill(0xfff2a0);
+  else if (id === EFFECT_BUFF)
+    g.circle(16, 16, 12)
+      .stroke({ width: 2, color: 0x9ff0c8, alpha: 0.9 })
+      .star(16, 16, 4, 8, 3)
+      .fill({ color: 0x9ff0c8, alpha: 0.8 });
   else if (id === EFFECT_GATHER_MISS)
     g.circle(16, 16, 6)
       .stroke({ width: 2, color: 0xe8eef2, alpha: 0.8 })
@@ -404,6 +410,8 @@ export async function createGameCanvas(
       const s = spriteOf(c);
       const p = world.drawPos(c, now);
       s.body.position.set(Math.round(p.x * T), Math.round(p.y * T));
+      // Only the invisible player itself is sent its creature: see-through (T3.2).
+      s.body.alpha = c.id === world.selfId && world.invisible ? 0.4 : 1;
       // While walking, draw on whichever end of the step comes later in row order, so the
       // creature is never hidden under the items of the tile it is entering or leaving.
       const w = world.walking(c, now) ? c.walk : undefined;

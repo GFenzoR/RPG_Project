@@ -74,6 +74,7 @@ type Character struct {
 	CreatedAt    pgtype.Timestamptz
 	LastLoginAt  pgtype.Timestamptz
 	LastSaveAt   pgtype.Timestamptz
+	Conditions   []byte
 }
 
 type CharacterSkill struct {

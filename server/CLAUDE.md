@@ -12,7 +12,8 @@ server/
   internal/game/       game loop, tick, cola de comandos, scheduler de eventos
   internal/world/      tiles, pisos, sectores, islas, pathfinding (A* por casillas)
   internal/entity/     jugadores, monstruos, NPCs; IDs estables (uint32)
-  internal/combat/     daño, fórmulas, condiciones (veneno, fuego, paralyze)
+  internal/combat/     daño y fórmulas (las condiciones viven en session/condition.go:
+                       necesitan el scheduler, el AOI y los monstruos)
   internal/skills/     progreso de skills por uso, niveles, experiencia
   internal/ai/         (aún no existe: la IA de monstruos vive en session/monster.go porque
                        depende del índice de sectores y del AOI; separarla cuando crezca)

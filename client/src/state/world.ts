@@ -101,6 +101,8 @@ export interface PlayerStatsState {
   /** Free capacity and maximum, in grams. */
   capacity: number;
   maxCapacity: number;
+  /** Speed with the speed conditions (T3.2): what steps last. */
+  speed: number;
 }
 
 /** One skill as PlayerSkills reports it (skill ids from data/balance.yaml). */
@@ -112,6 +114,16 @@ export interface SkillState {
 }
 
 /** The last death (death.died), for the death screen. */
+/** One of the player's own active conditions (PlayerConditions, T3.2). */
+export interface ConditionView {
+  /** balance.yaml conditions id: poison, hasted... (name: condition.<id>.name). */
+  id: string;
+  /** performance.now() at which it ends (or its last hit lands). */
+  until: number;
+  /** Hits left of a damage condition (0 for the others). */
+  ticks: number;
+}
+
 export interface DeathState {
   /** Experience lost. */
   experience: number;
@@ -137,6 +149,8 @@ export const EFFECT_ELEMENT = 10;
 /** Gathering (server/internal/session/gathering.go): a harvest, or an attempt that got nothing. */
 export const EFFECT_GATHER = 5;
 export const EFFECT_GATHER_MISS = 6;
+/** A condition spell on its target, or a cure (T3.2, server/internal/session/condition.go). */
+export const EFFECT_BUFF = 7;
 /** Projectile ids are PROJECTILE_ELEMENT + index of ELEMENTS. */
 export const PROJECTILE_ELEMENT = 1;
 export const ELEMENTS = ["physical", "fire", "ice", "energy", "earth", "holy", "death"] as const;
@@ -215,10 +229,16 @@ export class WorldState implements TileSource {
   readonly creatures = new Map<number, CreatureState>();
   /** The predicted own step the server has not confirmed yet. */
   pending: { from: Pos; to: Pos } | undefined;
+  /** Whether the player is invisible (its own condition): it is drawn see-through. */
+  get invisible(): boolean {
+    return this.conditions.some((c) => c.id === "invisible");
+  }
   /** The creature the player attacks (SetTarget), if any. */
   target: number | undefined;
   stats: PlayerStatsState | undefined;
   skills: SkillState[] = [];
+  /** The player's own active conditions (T3.2), in the server's order. */
+  conditions: ConditionView[] = [];
   levelUp: LevelUpState | undefined;
   death: DeathState | undefined;
   effects: EffectState[] = [];
@@ -357,6 +377,13 @@ export class WorldState implements TileSource {
           start: now,
         });
         break;
+      case "playerConditions":
+        this.conditions = msg.value.conditions.map((c) => ({
+          id: c.conditionId,
+          until: now + c.remainingMs,
+          ticks: c.ticks,
+        }));
+        break;
       case "spellCooldown": {
         const v = msg.value;
         if (v.cooldownMs > 0)
@@ -480,6 +507,7 @@ export class WorldState implements TileSource {
           levelPercent: v.levelPercent,
           capacity: v.capacity,
           maxCapacity: v.maxCapacity,
+          speed: v.speed,
         };
         break;
       }

@@ -6,7 +6,7 @@ Todos los números de este documento son **valores iniciales** que viven en
 ## Movimiento
 - Por casillas, 8 direcciones (diagonal más lenta: ×1.5 de costo como en Tibia clásico).
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
-  nivel y con efectos (haste, paralyze).
+  nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
 - Click-to-walk con pathfinding A* en el servidor (máx. 100 casillas).
 - Cambiar de piso: escaleras, rampas, cuerdas, agujeros, escaleras de mano.
 
@@ -169,8 +169,56 @@ Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data
   línea de visión, y nunca puede ser el que lanza. Cura según el que lanza y se permite en
   zona de protección. `conjure.count` conjura una pila (flechas). En el cliente, la hotkey
   de una curación a otro pone la mira y el siguiente click elige al jugador (Escape cancela).
-- Condiciones: veneno, fuego, eléctrico, paralyze, haste, invisibilidad (T3.2). Ningún
-  hechizo de T3.1 las usa.
+- **Condiciones (T3.2, `server/internal/session/condition.go`):** las reglas de cada una
+  están en `balance.yaml → conditions`; cada fuente (hechizo, ataque de monstruo) da su
+  fuerza y su duración (`06-content-data.md`, "Condiciones"). Valen igual para jugadores y
+  monstruos, salvo la invisibilidad, que es solo de jugadores.
+  | Condición | Id | Efecto | Apilado | Relogueo |
+  |---|---|---|---|---|
+  | Veneno | `poison` | tierra cada 2,2 s, hasta 25 golpes | suma golpes | sobrevive |
+  | Fuego | `burning` | fuego cada 3,3 s, hasta 7 golpes | refresca | sobrevive |
+  | Eléctrico | `shocked` | energía cada 1,7 s, hasta 5 golpes | refresca | sobrevive |
+  | Paralyze | `slowed` | velocidad −45 %, hasta 15 s; quita `hasted` | refresca | sobrevive |
+  | Haste | `hasted` | velocidad +35 %, hasta 45 s; quita `slowed` | refresca | termina |
+  | Invisibilidad | `invisible` | no lo ven jugadores ni monstruos, hasta 90 s | refresca | termina |
+  | Puntería | `keen_eye` | +7 de distancia en combate, hasta 45 s | refresca | termina |
+  - **Daño periódico:** cada golpe aplica la resistencia del monstruo a su elemento (100 % o
+    más = inmune: la condición no se aplica); la armadura no lo frena. En una zona de
+    protección el golpe no hace daño (pero cuenta). Al monstruo, el daño suma a la parte
+    de experiencia de quien la aplicó; si otro la renueva con un daño mayor, o igual y
+    agregando golpes, los golpes que quedan pasan a su parte.
+  - **Apilado:** `refresh` = queda el mayor tiempo (o golpes) y el daño mayor; `add` = se
+    suman hasta el máximo. Una sola instancia por condición y criatura.
+  - **Velocidad:** `velocidad = base × (100 + Σ speed_pct) / 100` (mínimo 1). Cambia
+    `StepTicks` desde el paso siguiente; los clientes animan con la `duration_ms` del
+    servidor.
+  - **Skill:** `keen_eye` sube la skill de distancia que usan los ataques y los hechizos
+    (`per_skill`), no la que se entrena ni la del panel. Es la mejora de puntería del
+    montaraz que quedó pendiente de T3.1.
+  - **Invisibilidad:** se filtra en el servidor (`01-architecture.md`, "Trampas y
+    anti-bot"): a quien no puede verla no se le manda la criatura, ni sus golpes, curas,
+    vida o proyectiles hacia ella; su chat se oye con el nombre pero sin posición. Los
+    monstruos no la eligen ni la mantienen de objetivo, salvo los que tienen
+    `behavior.sees_invisible` (el murciélago). Por ahora ningún jugador ve invisibles.
+    **Atacar o lanzar cualquier hechizo la rompe** (un golpe del arma o de varita, un
+    disparo, una runa o un hechizo, salvo volver a lanzar una invisibilidad, que solo la
+    renueva); caminar, hablar o usar items no. Lo que un invisible cambia en el mundo sí
+    se ve, porque es estado del mapa: mover o soltar items (`TileUpdate`), recolectar (el
+    efecto en la casilla del recurso) o abrir una puerta. Es una pista aceptada, como en
+    el género; su criatura, su vida y sus números no viajan. Un invisible sigue ocupando
+    su casilla: quien intente pisarla recibe `WalkRejected` (un camino por click lo rodea)
+    y los monstruos lo esquivan. Es una pista aceptada.
+  - **Relogueo:** las de daño y `slowed` sobreviven a un logout con su tiempo restante
+    (`characters.conditions`), para que salir del juego no cure; haste, invisibilidad y
+    puntería son ventajas y terminan. **Morir** termina todas.
+  - **Fuentes:** `swift_stride` (haste 25 s, las cuatro vocaciones) y `purge_venom` (cura el
+    veneno) desde nivel 8-9; `keen_eye` (montaraz), `entangle` (druida, `slowed` a un
+    monstruo a 4 casillas), `shroud` (arcanista, invisibilidad). `ember_ring` puede dejar
+    ardiendo y `arc_bolt` electrizado. La araña de musgo (escupitajo) y el escarabajo de
+    mena (mordida) envenenan al hacer daño.
+  - **Pendiente:** campos en el suelo (fuego o veneno) que apliquen condiciones al pisarlos
+    (necesitan items con duración, disparar al entrar a la casilla y su render); items
+    de cura (antídoto); que un jugador vea invisibles.
 - Zonas de protección: no se puede atacar ni ser atacado.
 
 ## Items, equipo e inventario

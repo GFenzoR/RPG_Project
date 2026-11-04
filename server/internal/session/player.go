@@ -31,7 +31,10 @@ type Player struct {
 	mana       int
 	maxMana    int
 	capacity   int
-	speed      int
+	// speed is the effective speed: baseSpeed (vocation and level) with the speed
+	// conditions (T3.2).
+	speed     int
+	baseSpeed int
 
 	pos world.Pos
 	dir world.Direction
@@ -104,7 +107,16 @@ type Player struct {
 	gatherPos   world.Pos
 	gatherSince game.Tick
 	gatherLast  game.Tick
+
+	// Conditions (T3.2): the active ones (few: at most one per condition id), whether
+	// the client's list is stale, and whether p is hidden by invisibility.
+	conds           []*condition
+	conditionsDirty bool
+	invisible       bool
 }
+
+// Invisible reports whether p is invisible (T3.2).
+func (p *Player) Invisible() bool { return p.invisible }
 
 // Health returns the player's current and maximum health.
 func (p *Player) Health() (cur, maxHealth int) { return p.health, p.maxHealth }
@@ -187,6 +199,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		Skills:      p.skillStates(w.skillIDs),
 		Inventory:   p.inventoryStates(),
 		Storage:     p.storage.Values(),
+		Conditions:  w.conditionStates(p),
 		Final:       final,
 	}
 }
@@ -243,6 +256,7 @@ func (w *World) loginDone(characterID int64) {
 }
 
 func (w *World) join(ctx *game.TickContext, c Character, client Client) {
+	w.sched = ctx.Sched
 	w.loginDone(c.ID)
 	if old := w.byClient[client]; old != nil {
 		return // one character per connection
@@ -272,6 +286,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Skills = s.Skills
 		c.Inventory, c.InventoryLoaded = s.Inventory, true
 		c.Storage = s.Storage
+		c.Conditions = s.Conditions
 		seq = s.Seq
 	}
 
@@ -292,6 +307,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		maxMana:    stats.Mana,
 		capacity:   stats.Capacity,
 		speed:      max(stats.Speed, 1),
+		baseSpeed:  max(stats.Speed, 1),
 		dir:        world.South,
 		saveSeq:    seq,
 		stance:     pb.FightStance_FIGHT_STANCE_BALANCED,
@@ -316,6 +332,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		ServerTime: uint64(max(ctx.Now.UnixMilli(), 0)),
 		TickMs:     uint32(game.TickDuration.Milliseconds()),
 	}}})
+	// Saved conditions first (T3.2): the first stats, and what observers get, already
+	// carry their speed (and an invisible player is never shown).
+	w.loadConditions(ctx, p, c.Conditions)
 	w.sendFullView(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendInventory(p)
@@ -334,6 +353,7 @@ func (w *World) state(p *Player, c Character) Character {
 	c.Skills = p.skillStates(w.skillIDs)
 	c.Inventory, c.InventoryLoaded = p.inventoryStates(), true
 	c.Storage = p.storage.Values()
+	c.Conditions = w.conditionStates(p)
 	c.Pos, c.HasPos = p.pos, true
 	return c
 }
@@ -372,6 +392,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	}
 
 	s := w.snapshot(p, true)
+	w.clearConditions(ctx, holder{p: p}, true)
 	w.unsaved[p.charID] = s
 	w.save(s)
 	if slow {

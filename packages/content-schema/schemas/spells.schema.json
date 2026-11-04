@@ -60,7 +60,8 @@
             "properties": {
               "element": { "$ref": "common.schema.json#/$defs/element" },
               "radius": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-              "range": { "$ref": "common.schema.json#/$defs/positiveInt" }
+              "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
+              "condition": { "$ref": "common.schema.json#/$defs/conditionApply" }
             },
             "unevaluatedProperties": false
           },
@@ -77,14 +78,16 @@
               }
             }
           },
-          "haste": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["speed", "duration_ms"],
-            "properties": {
-              "speed": { "type": "integer" },
-              "duration_ms": { "$ref": "common.schema.json#/$defs/durationMs" }
-            }
+          "condition": {
+            "description": "T3.2: puts a condition on the caster (or, with range, on a monster).",
+            "$ref": "common.schema.json#/$defs/conditionApply"
+          },
+          "cure": {
+            "description": "T3.2: removes these conditions from the caster.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "common.schema.json#/$defs/conditionId" }
           },
           "light": {
             "type": "object",

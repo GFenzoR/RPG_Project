@@ -142,6 +142,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   hace el click.
 - La munición se ve en el slot `ammo` con su cantidad (`.count`), como cualquier pila.
 
+## Notas de T3.2
+- `WorldState.conditions` (de `PlayerConditions`, solo las propias) alimenta la barra de
+  condiciones del header (`ConditionBar` en `ui/App.tsx`, nombres `condition.<id>.name`).
+  La velocidad aplicada llega en `PlayerStats.speed` / `CreatureSpeed`: el paso predicho y
+  la interpolación ya la usan. Invisible: el propio cliente dibuja su criatura con alpha
+  0.4 (los demás no la reciben). Efecto 7 = hechizo de condición o cura.
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

@@ -127,7 +127,7 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 	p.nextAttack = ctx.Tick + w.attackFor
 	// Every swing trains the weapon's skill, hit or miss (fists without a weapon).
 	skill, attack := w.meleeSkill(p)
-	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.skillLevel(p, skill), 1), attack, p.level, w.mode(p).Attack)
+	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.combatSkill(p, skill), 1), attack, p.level, w.mode(p).Attack)
 	w.train(p, skill, w.afk(ctx, p))
 	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target), ElementPhysical)
 }
@@ -149,7 +149,7 @@ func (w *World) distanceFight(ctx *game.TickContext, p *Player, m *Monster) {
 		return
 	}
 	attack := wp.Attack + ammo.def.Ammo.Attack
-	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.skillLevel(p, SkillDistance), 1), attack, p.level, w.mode(p).Attack)
+	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.combatSkill(p, SkillDistance), 1), attack, p.level, w.mode(p).Attack)
 	w.train(p, SkillDistance, w.afk(ctx, p))
 	w.useUp(ammo)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}}) // capacity
@@ -161,6 +161,7 @@ func (w *World) distanceFight(ctx *game.TickContext, p *Player, m *Monster) {
 func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg int, element string) {
 	dmg = min(dmg, m.health)
 	m.health -= dmg
+	w.reveal(ctx, p) // T3.2: attacking ends invisibility
 	if dmg > 0 {
 		w.addShare(m, p.id, dmg)
 	}
@@ -195,6 +196,9 @@ func (w *World) hitEvents(id uint32, pos world.Pos, dmg int, pct uint32, element
 		effect = EffectHit
 	}
 	w.eachObserver(nil, pos, func(o *Player) {
+		if !o.Knows(id) {
+			return // T3.2: hits on an invisible player reach only who sees it
+		}
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(pos), EffectId: effect}}})
 		if dmg > 0 {
 			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
@@ -229,7 +233,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 			continue
 		}
 		if ranged {
-			w.projectile(m.pos, t.pos, a.Element)
+			w.projectileAt(m.pos, t, a.Element)
 		}
 		physical := a.Element == ElementPhysical
 		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense}
@@ -244,6 +248,9 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		w.damagePlayer(ctx, t, dmg, a.Element)
 		if m.target != t { // t was defeated and left
 			return
+		}
+		if a.Condition != nil && dmg > 0 {
+			w.applyCondition(ctx, holder{p: t}, a.Condition, m.id) // T3.2: a poisoning bite
 		}
 	}
 }
@@ -314,6 +321,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		}
 	}
 	pos := m.pos
+	w.clearConditions(ctx, holder{m: m}, true)
 	w.removeMonster(m)
 	w.addCorpse(ctx, pos, corpse, w.corpseFor)
 	if owner != nil {

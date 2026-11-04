@@ -56,3 +56,47 @@ func (w *World) Map() *world.Map { return w.m }
 
 // SetHealthForTest sets p's health (tests only, loop goroutine).
 func (p *Player) SetHealthForTest(h int) { p.health = h }
+
+// ApplyConditionForTest gives p (or, if p is nil, m) condition a from source (tests only,
+// loop goroutine). It reports whether it took (chance, immunity).
+func (w *World) ApplyConditionForTest(ctx *game.TickContext, p *Player, m *Monster, a *content.ConditionApply, source uint32) bool {
+	if p != nil {
+		return w.applyCondition(ctx, holder{p: p}, a, source)
+	}
+	return w.applyCondition(ctx, holder{m: m}, a, source)
+}
+
+// ConditionsForTest returns p's conditions: id → hits left (damage) or ms left (others).
+func (w *World) ConditionsForTest(p *Player) map[string]int {
+	out := map[string]int{}
+	for _, c := range p.conds {
+		if c.ticks > 0 {
+			out[c.def.ID] = c.ticks
+		} else {
+			out[c.def.ID] = w.leftMs(c)
+		}
+	}
+	return out
+}
+
+// MonsterConditionsForTest returns the ids of m's conditions.
+func (m *Monster) MonsterConditionsForTest() []string {
+	var out []string
+	for _, c := range m.conds {
+		out = append(out, c.def.ID)
+	}
+	return out
+}
+
+// CombatSkillForTest is p's skill level as combat uses it (with keen_eye).
+func (w *World) CombatSkillForTest(p *Player, id string) int { return w.combatSkill(p, id) }
+
+// DamageShareForTest is the damage creature id dealt to m (its experience share).
+func (m *Monster) DamageShareForTest(id uint32) int {
+	for _, d := range m.damage {
+		if d.player == id {
+			return d.amount
+		}
+	}
+	return 0
+}

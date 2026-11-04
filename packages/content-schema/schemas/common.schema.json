@@ -30,6 +30,28 @@
     "shopRef": { "$ref": "#/$defs/id", "x-ref": "shop" },
     "islandId": { "$ref": "#/$defs/id" },
     "chance": { "type": "number", "minimum": 0, "maximum": 1 },
+    "conditionId": {
+      "description": "T3.2: a condition of balance.yaml conditions.",
+      "enum": ["poison", "burning", "shocked", "slowed", "hasted", "invisible", "keen_eye"]
+    },
+    "conditionApply": {
+      "description": "T3.2: a condition this source applies. A damage condition takes ticks hits of damage; the others last duration_ms. No chance = always.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/conditionId" },
+        "chance": { "$ref": "#/$defs/chance" },
+        "ticks": { "$ref": "#/$defs/positiveInt" },
+        "damage": { "$ref": "#/$defs/positiveInt" },
+        "duration_ms": { "$ref": "#/$defs/durationMs" },
+        "range": {
+          "description": "Spells only: aims at a monster at up to range tiles in line of sight instead of the caster.",
+          "$ref": "#/$defs/positiveInt"
+        }
+      },
+      "oneOf": [{ "required": ["ticks", "damage"] }, { "required": ["duration_ms"] }]
+    },
     "percent": { "type": "number", "minimum": 0, "maximum": 100 },
     "positiveInt": { "type": "integer", "minimum": 1 },
     "nonNegativeInt": { "type": "integer", "minimum": 0 },

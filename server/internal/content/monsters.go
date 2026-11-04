@@ -29,6 +29,8 @@ type MonsterBehavior struct {
 	Aggressive      bool `yaml:"aggressive"`
 	FleeAtHealthPct int  `yaml:"flee_at_health_pct"`
 	TargetDistance  int  `yaml:"target_distance"`
+	// SeesInvisible lets the monster see (and fight) invisible players (T3.2).
+	SeesInvisible bool `yaml:"sees_invisible"`
 }
 
 // MonsterAttack is one attack of a monster. Chance 0 means always (1).
@@ -40,6 +42,8 @@ type MonsterAttack struct {
 	IntervalMs int     `yaml:"interval_ms"`
 	Chance     float64 `yaml:"chance"`
 	Range      int     `yaml:"range"`
+	// Condition (T3.2) is applied to the target when the attack deals damage.
+	Condition *ConditionApply `yaml:"condition"`
 }
 
 // LootEntry is one possible drop. Count is [min, max]; empty means exactly one.

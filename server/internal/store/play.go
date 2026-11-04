@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -36,6 +37,17 @@ type PlayCharacter struct {
 	Inventory []InventoryItem
 	// Storage is the quest progress and flags (quest_state: key → value).
 	Storage map[string]int64
+	// Conditions are the saved conditions (characters.conditions, T3.2).
+	Conditions []Condition
+}
+
+// Condition is one saved condition of a character (T3.2): its time left (to the next hit
+// of a damage condition, or to its end) and, for damage, the hits left and their damage.
+type Condition struct {
+	ID     string `json:"id"`
+	LeftMs int    `json:"left_ms"`
+	Ticks  int    `json:"ticks,omitempty"`
+	Damage int    `json:"damage,omitempty"`
 }
 
 // InventoryItem is one row of inventory_items with the rows inside it: Slot is the
@@ -69,7 +81,9 @@ type CharacterState struct {
 	Inventory []InventoryItem
 	// Storage replaces every quest_state row of the character, in the same transaction.
 	Storage map[string]int64
-	SavedAt time.Time
+	// Conditions replace the saved ones (T3.2).
+	Conditions []Condition
+	SavedAt    time.Time
 }
 
 // CharacterBelongsTo reports whether characterID is a character of accountID.
@@ -128,7 +142,12 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	for _, r := range qs {
 		storage[r.Key] = r.Value
 	}
+	var conds []Condition
+	if err := json.Unmarshal(row.Conditions, &conds); err != nil {
+		return PlayCharacter{}, fmt.Errorf("character conditions: %w", err)
+	}
 	return PlayCharacter{
+		Conditions: conds,
 		Storage:    storage,
 		Inventory:  inventoryTree(inv),
 		Skills:     skills,
@@ -156,7 +175,16 @@ func (s *Store) SaveCharacterState(ctx context.Context, c CharacterState) error 
 }
 
 func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) error {
+	conds := c.Conditions
+	if conds == nil {
+		conds = []Condition{}
+	}
+	rawConds, err := json.Marshal(conds)
+	if err != nil {
+		return fmt.Errorf("encode conditions of character %d: %w", c.ID, err)
+	}
 	n, err := q.SaveCharacterState(ctx, db.SaveCharacterStateParams{
+		Conditions: rawConds,
 		ID:         c.ID,
 		Level:      int32(c.Level),
 		Experience: c.Experience,

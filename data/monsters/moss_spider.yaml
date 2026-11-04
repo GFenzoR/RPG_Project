@@ -11,10 +11,11 @@ behavior:
   target_distance: 1
 attacks:
   - { type: melee, min: 0, max: 14, interval_ms: 2000 }
-  - { type: distance, element: earth, min: 4, max: 12, interval_ms: 2000, chance: 0.25, range: 3 }
+  - { type: distance, element: earth, min: 4, max: 12, interval_ms: 2000, chance: 0.25, range: 3,
+      condition: { id: poison, chance: 0.6, ticks: 6, damage: 2 } }
 resistances: { earth: 50, fire: -20, ice: -10 }
 loot:
   - { item: spider_silk, chance: 0.25, count: [1, 2] }
   - { item: copper_coin, chance: 0.6, count: [2, 12] }
 tags: [vermin, forest, puerto]
-notes: Spits sap (earth) at range; poison conditions arrive in hito 3.
+notes: Spits sap (earth) at range; the sap often poisons (T3.2).

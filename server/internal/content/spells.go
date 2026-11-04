@@ -53,6 +53,8 @@ type SpellDamage struct {
 	Element string `yaml:"element"`
 	Range   int    `yaml:"range"`
 	Radius  int    `yaml:"radius"`
+	// Condition (T3.2) is applied to every creature the damage reaches, with its chance.
+	Condition *ConditionApply `yaml:"condition"`
 }
 
 // SpellEffect is what a spell does; exactly one field is set.
@@ -60,8 +62,11 @@ type SpellEffect struct {
 	Damage  *SpellDamage  `yaml:"damage"`
 	Heal    *SpellHeal    `yaml:"heal"`
 	Conjure *SpellConjure `yaml:"conjure"`
-	// Haste and Light are in the schema for later milestones; the server rejects them.
-	Haste any `yaml:"haste"`
+	// Condition (T3.2) puts a condition on the caster, or with Range on a monster.
+	Condition *ConditionApply `yaml:"condition"`
+	// Cure (T3.2) removes these conditions from the caster.
+	Cure []string `yaml:"cure"`
+	// Light is in the schema for a later milestone; the server rejects it.
 	Light any `yaml:"light"`
 }
 
@@ -117,6 +122,27 @@ func NormalizeWords(text string) string {
 	return strings.Join(strings.Fields(strings.ToLower(text)), " ")
 }
 
+// CheckConditions validates the conditions the spells apply or cure (T3.2).
+func (ss Spells) CheckConditions(cs ConditionDefs) error {
+	for _, id := range ss.IDs() {
+		e := ss[id].Effect
+		if err := e.Condition.Check(cs); err != nil {
+			return fmt.Errorf("spells: %s: %w", id, err)
+		}
+		if e.Damage != nil {
+			if err := e.Damage.Condition.Check(cs); err != nil {
+				return fmt.Errorf("spells: %s: damage: %w", id, err)
+			}
+		}
+		for _, c := range e.Cure {
+			if cs[c] == nil {
+				return fmt.Errorf("spells: %s: cures unknown condition %q", id, c)
+			}
+		}
+	}
+	return nil
+}
+
 // LoadSpells reads <dataDir>/spells.yaml (no file means no spells) and checks what the
 // server needs: one supported effect per spell and a known group.
 func LoadSpells(dataDir string) (Spells, error) {
@@ -158,13 +184,13 @@ func (s *Spell) check() error {
 	}
 	e := s.Effect
 	n := 0
-	for _, set := range []bool{e.Damage != nil, e.Heal != nil, e.Conjure != nil} {
+	for _, set := range []bool{e.Damage != nil, e.Heal != nil, e.Conjure != nil, e.Condition != nil, len(e.Cure) > 0} {
 		if set {
 			n++
 		}
 	}
-	if e.Haste != nil || e.Light != nil {
-		return errors.New("haste and light effects are not supported yet")
+	if e.Light != nil {
+		return errors.New("light effects are not supported yet")
 	}
 	if n != 1 {
 		return errors.New("needs exactly one effect")

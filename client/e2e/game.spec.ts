@@ -1151,3 +1151,82 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   await expect(again.getByTestId("login-form")).toContainText("Esta cuenta está suspendida.");
   await shot(again, "21-banned-login");
 });
+
+test("T3.2: a guardian casts haste: condition badge, faster speed and steps", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-haste-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Swift ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  // Haste (swift_stride) needs level 8: 4704 experience on balance.yaml's curve, and the
+  // guardian's 48 mana at that level.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET level = 8, experience = 4704, mana = 48 WHERE name = '${name}'`,
+  ]);
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  errors.length = 0;
+
+  const speed = async (): Promise<number> =>
+    page.evaluate(() => window.__rpgClient?.stats()?.speed ?? 0);
+  await expect.poll(speed).toBeGreaterThan(0);
+  const before = await speed();
+  const conditions = page.getByTestId("conditions");
+  await expect(conditions.locator("[data-condition]")).toHaveCount(0);
+
+  // Cast it by its words: the server applies the condition and the faster speed.
+  const sayInput = page.getByTestId("say").getByRole("textbox");
+  await sayInput.fill("pede celeri");
+  await sayInput.press("Enter");
+  await expect(conditions.locator('[data-condition="hasted"]')).toHaveText("Acelerado");
+  await expect.poll(speed).toBeGreaterThan(before);
+  const after = await speed();
+  // balance.yaml: hasted is +35 %.
+  expect(after).toBe(Math.floor((before * 135) / 100));
+
+  // Steps take less: the client animates with the speed the server sent.
+  await sayInput.blur();
+  const start = await self(page);
+  if (!start) throw new Error("no own creature");
+  const t0 = Date.now();
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press("ArrowRight");
+    await arrived(page, start.x + i + 1, start.y);
+  }
+  expect(Date.now() - t0).toBeLessThan(10_000);
+  await shot(page, "22-haste");
+  await page.locator(".hud").screenshot({ path: join(shots, "23-conditions-hud.png") });
+  expect(errors).toEqual([]);
+});

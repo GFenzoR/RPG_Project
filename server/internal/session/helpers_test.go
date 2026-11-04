@@ -169,7 +169,7 @@ func (h *harness) checkInvariants() {
 		}
 		tiles[p.Pos()] = p.ID()
 		for _, q := range ps {
-			want := p == q || session.Sees(p.Pos(), q.Pos())
+			want := p == q || session.Sees(p.Pos(), q.Pos()) && !q.Invisible()
 			if got := p.Knows(q.ID()); got != want {
 				h.t.Fatalf("tick %d: player %d at %v knows %d at %v = %v, sees = %v",
 					h.sim.Tick(), p.ID(), p.Pos(), q.ID(), q.Pos(), got, want)

@@ -347,6 +347,9 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 	for _, s := range pc.Skills {
 		c.Skills = append(c.Skills, session.SkillState{ID: s.ID, Level: s.Level, Tries: s.Tries})
 	}
+	for _, k := range pc.Conditions {
+		c.Conditions = append(c.Conditions, session.ConditionState{ID: k.ID, LeftMs: k.LeftMs, Ticks: k.Ticks, Damage: k.Damage})
+	}
 	c.Inventory = itemStates(pc.Inventory)
 	if pc.HasPos && pc.X >= 0 && pc.X <= 0xFFFF && pc.Y >= 0 && pc.Y <= 0xFFFF && pc.Z >= 0 && pc.Z <= world.MaxFloor {
 		c.HasPos = true

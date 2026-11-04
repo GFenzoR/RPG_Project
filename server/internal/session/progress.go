@@ -195,7 +195,7 @@ func (w *World) skillList(p *Player) []*pb.SkillProgress {
 // with the vocation's stats of each new level.
 func (w *World) gainExperience(p *Player, xp int64) {
 	p.experience += xp
-	w.eachObserver(nil, p.pos, func(o *Player) {
+	w.eachWatcher(p, func(o *Player) { // not to who cannot see an invisible p (T3.2)
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
 			Pos: posMsg(p.pos), Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_EXPERIENCE, Amount: uint64(xp),
 		}}})
@@ -216,12 +216,8 @@ func (w *World) setLevel(p *Player, level int) {
 	p.maxHealth, p.maxMana, p.capacity = now.Health, now.Mana, now.Capacity
 	p.health = min(max(p.health+now.Health-old.Health, 1), p.maxHealth)
 	p.mana = min(max(p.mana+now.Mana-old.Mana, 0), p.maxMana)
-	if speed := max(now.Speed, 1); speed != p.speed {
-		p.speed = speed
-		w.eachObserver(nil, p.pos, func(o *Player) {
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureSpeed{CreatureSpeed: &pb.CreatureSpeed{Id: p.id, Speed: uint32(speed)}}})
-		})
-	}
+	p.baseSpeed = max(now.Speed, 1)
+	w.refreshSpeed(holder{p: p}) // with its speed conditions (T3.2)
 	w.healthBar(p, pct)
 	p.emit(systemMsg(msgLevelUp,
 		&pb.TextParam{Name: "from", Value: &pb.TextParam_Number{Number: int64(from)}},
@@ -234,7 +230,7 @@ func (w *World) healthBar(p *Player, before uint32) {
 	if pct == before {
 		return
 	}
-	w.eachObserver(nil, p.pos, func(o *Player) {
+	w.eachWatcher(p, func(o *Player) {
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: p.id, HealthPercent: pct}}})
 	})
 }

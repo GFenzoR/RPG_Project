@@ -843,13 +843,16 @@ func (w *World) consume(p *Player, it *Item) {
 		p.emit(systemMsg(msgAte, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: &pb.ItemStack{ItemId: uint32(it.def.Numeric)}}}))
 	}
 	if hp > 0 {
-		w.eachObserver(nil, p.pos, func(o *Player) {
+		w.eachWatcher(p, func(o *Player) {
 			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
 				Pos: posMsg(p.pos), Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_HEAL, Amount: uint64(hp),
 			}}})
 		})
 		if now := healthPercent(p.health, p.maxHealth); now != pct {
-			w.eachObserver(p, p.pos, func(o *Player) {
+			w.eachWatcher(p, func(o *Player) {
+				if o == p {
+					return
+				}
 				o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: p.id, HealthPercent: now}}})
 			})
 		}

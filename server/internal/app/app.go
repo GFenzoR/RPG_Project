@@ -268,6 +268,7 @@ func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
 		Skills:     storeSkills(s.Skills),
 		Inventory:  storeItems(s.Inventory),
 		Storage:    s.Storage,
+		Conditions: storeConditions(s.Conditions),
 		SavedAt:    a.cfg.Clock.Now(),
 	})
 	switch {
@@ -277,6 +278,14 @@ func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
 		return fmt.Errorf("%w: %w", session.ErrPermanent, err)
 	}
 	return err
+}
+
+func storeConditions(in []session.ConditionState) []store.Condition {
+	out := make([]store.Condition, len(in))
+	for i, c := range in {
+		out[i] = store.Condition{ID: c.ID, LeftMs: c.LeftMs, Ticks: c.Ticks, Damage: c.Damage}
+	}
+	return out
 }
 
 func storeSkills(in []session.SkillState) []store.Skill {

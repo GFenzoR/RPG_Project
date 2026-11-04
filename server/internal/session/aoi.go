@@ -101,6 +101,17 @@ func (w *World) eachObserver(c *Player, p world.Pos, fn func(*Player)) {
 	})
 }
 
+// eachWatcher calls fn for every player whose client knows player c (c included): what
+// happens to c goes only to who sees it, so an invisible player's hits, heals and health
+// reach nobody else (T3.2).
+func (w *World) eachWatcher(c *Player, fn func(*Player)) {
+	w.eachObserver(nil, c.pos, func(o *Player) {
+		if o.Knows(c.id) {
+			fn(o)
+		}
+	})
+}
+
 // creatureAt returns a player standing on p, or nil.
 func (w *World) creatureAt(p world.Pos) *Player {
 	for _, c := range w.sectors[sectorKey(int(p.X), int(p.Y), p.Z)] {
@@ -147,7 +158,7 @@ func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg
 		if o == pl {
 			return
 		}
-		sees := Sees(o.pos, to)
+		sees := Sees(o.pos, to) && (pl == nil || !pl.invisible)
 		switch knows := o.Knows(id); {
 		case knows && sees:
 			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureMove{CreatureMove: &pb.CreatureMove{
@@ -172,6 +183,9 @@ func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg
 // ---- appear and disappear ---------------------------------------------------------
 
 func (w *World) appearToObservers(c *Player) {
+	if c.invisible {
+		return // T3.2: an invisible player is sent to nobody
+	}
 	w.eachObserver(c, c.pos, func(o *Player) {
 		if !o.Knows(c.id) {
 			o.remember(c.id)
@@ -264,7 +278,7 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 		}
 	}
 	w.eachInRect(x0, y0, x0+wd-1, y0+ht-1, p.pos.Z, func(c *Player) {
-		if c == p || !p.Knows(c.id) {
+		if c == p || !c.invisible && !p.Knows(c.id) {
 			p.remember(c.id)
 			area.Creatures = append(area.Creatures, w.creatureMsg(c))
 		}
