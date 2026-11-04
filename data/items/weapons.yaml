@@ -157,7 +157,7 @@
   sprite: weapons/thornwood_blade
   name: item.thornwood_blade.name
   description: item.thornwood_blade.desc
-  weight: 3600
+  weight: 3450
   tradeable: true
   weapon: { type: sword, attack: 23, defense: 13, hands: 1 }
   requires: { level: 16 }
