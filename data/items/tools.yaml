@@ -6,23 +6,23 @@
   weight: 800
   tradeable: true
   tool: { use: fishing }
-  value: 150
+  value: 140
 
 - id: rope
   kind: tool
   sprite: tools/rope
   name: item.rope.name
-  weight: 1800
+  weight: 1450
   tradeable: true
   tool: { use: rope }
-  value: 50
+  value: 45
 
 - id: pickaxe
   kind: tool
   sprite: tools/pickaxe
   name: item.pickaxe.name
   description: item.pickaxe.desc
-  weight: 4500
+  weight: 4200
   tradeable: true
   tool: { use: mining }
   value: 120
@@ -44,7 +44,7 @@
   sprite: containers/backpack
   name: item.backpack.name
   description: item.backpack.desc
-  weight: 1800
+  weight: 1650
   tradeable: true
-  container: { slots: 20 }
-  value: 10
+  container: { slots: 24 }
+  value: 12

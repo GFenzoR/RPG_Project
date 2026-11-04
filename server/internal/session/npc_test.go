@@ -325,7 +325,7 @@ func TestShopBuyAndSell(t *testing.T) {
 			pelt = o
 		}
 	}
-	if rope == nil || rope.BuyPrice != 50 || rope.SellPrice != 15 || pelt == nil || pelt.Owned != 3 || pelt.BuyPrice != 0 {
+	if rope == nil || rope.BuyPrice != 45 || rope.SellPrice != 14 || pelt == nil || pelt.Owned != 3 || pelt.BuyPrice != 0 {
 		t.Fatalf("offers rope %v pelt %v", rope, pelt)
 	}
 	buy := func(item uint32, n uint32) []*pb.ServerMessage {
@@ -338,14 +338,14 @@ func TestShopBuyAndSell(t *testing.T) {
 		t.Fatal("bought three ropes with 130 coins")
 	}
 	evs = buy(rope.ItemId, 2)
-	if h.w.Money(p) != 30 || h.w.CountItem(p, "rope") != 2 || find(evs, (*pb.ServerMessage).GetShopOpen)[0].Money != 30 {
+	if h.w.Money(p) != 40 || h.w.CountItem(p, "rope") != 2 || find(evs, (*pb.ServerMessage).GetShopOpen)[0].Money != 40 {
 		t.Fatalf("buy: money %d ropes %d", h.w.Money(p), h.w.CountItem(p, "rope"))
 	}
 	if evs := sell(pelt.ItemId, 4); !messageKeys(evs)["shop.not_enough"] {
 		t.Fatal("sold more pelts than carried")
 	}
 	sell(pelt.ItemId, 3)
-	if h.w.Money(p) != 45 || h.w.CountItem(p, "wolf_pelt") != 0 {
+	if h.w.Money(p) != 55 || h.w.CountItem(p, "wolf_pelt") != 0 {
 		t.Fatalf("sell: money %d pelts %d", h.w.Money(p), h.w.CountItem(p, "wolf_pelt"))
 	}
 	if evs := buy(itemNum(t, h, p, "wolf_pelt"), 1); !messageKeys(evs)["inventory.not_possible"] {

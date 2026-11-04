@@ -2,7 +2,7 @@
   kind: armor
   sprite: armor/patched_tunic
   name: item.patched_tunic.name
-  weight: 6000
+  weight: 5600
   tradeable: true
   armor: { slot: body, armor: 2 }
   value: 20
@@ -32,7 +32,7 @@
   sprite: armor/leather_jerkin
   name: item.leather_jerkin.name
   description: item.leather_jerkin.desc
-  weight: 8000
+  weight: 7400
   tradeable: true
   armor: { slot: body, armor: 4 }
   requires: { level: 6 }

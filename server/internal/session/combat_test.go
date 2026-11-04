@@ -21,14 +21,14 @@ const (
 // testItemDefs are the items of the inventory tests, by numeric id.
 var testItemDefs = map[uint16]string{
 	corpseID: "{id: creature_remains, kind: container, pickupable: false, container: {slots: 10}}",
-	coinID:   "{id: copper_coin, kind: currency, weight: 10, stackable: true, max_stack: 100}",
+	coinID:   "{id: copper_coin, kind: currency, weight: 12, stackable: true, max_stack: 100}",
 	swordID:  "{id: test_sword, kind: weapon, weight: 3300, weapon: {type: sword, attack: 13, defense: 9, hands: 1}}",
 	axeID:    "{id: test_greataxe, kind: weapon, weight: 9000, weapon: {type: axe, attack: 20, hands: 2}}",
 	shieldID: "{id: test_shield, kind: shield, weight: 5000, shield: {defense: 12}}",
 	tunicID:  "{id: test_tunic, kind: armor, weight: 6000, armor: {slot: body, armor: 4}}",
 	crownID:  "{id: test_crown, kind: armor, weight: 800, armor: {slot: head, armor: 2}, requires: {level: 20}}",
 	wandID:   "{id: test_wand, kind: weapon, weight: 1500, weapon: {type: wand, attack: 13}, requires: {vocations: [arcanist]}}",
-	packID:   "{id: backpack, kind: container, weight: 1800, container: {slots: 4}}",
+	packID:   "{id: backpack, kind: container, weight: 1650, container: {slots: 4}}",
 	bagID:    "{id: test_bag, kind: container, weight: 500, container: {slots: 2}}",
 	salveID:  "{id: test_salve, kind: consumable, weight: 300, stackable: true, max_stack: 100, consumable: {heal_hp: 40}}",
 	anvilID:  "{id: test_anvil, kind: material, weight: 500000}",

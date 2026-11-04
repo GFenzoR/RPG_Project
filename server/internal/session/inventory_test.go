@@ -111,8 +111,8 @@ func TestLootCorpse(t *testing.T) {
 	if len(bp.Items()) != 1 || bp.Items()[0].Count() != int(coins) || bp.Items()[0].Def().ID != "copper_coin" {
 		t.Fatalf("backpack holds %v", bp.Items())
 	}
-	if p.Carried() != free+int(coins)*10 {
-		t.Errorf("carried %d, want %d", p.Carried(), free+int(coins)*10)
+	if p.Carried() != free+int(coins)*12 {
+		t.Errorf("carried %d, want %d", p.Carried(), free+int(coins)*12)
 	}
 	ups := find(evs, (*pb.ServerMessage).GetContainerUpdate)
 	if len(ups) != 2 {
@@ -193,7 +193,7 @@ func TestCapacity(t *testing.T) {
 	h.input(cl, moveItem(onTile(pos(11, 10)), coinID, 2, inContainer(pack, 0), 20))
 	h.sim.Step()
 	g := h.w.GroundAt(pos(11, 10))
-	if len(g) != 2 || g[1].Count() != 30 || p.Carried() != before+200 {
+	if len(g) != 2 || g[1].Count() != 30 || p.Carried() != before+240 {
 		t.Fatalf("after split: ground %d items, carried %d", len(g), p.Carried())
 	}
 	// 20 more join the same stack.
@@ -299,7 +299,7 @@ func TestUseAndLook(t *testing.T) {
 			weight = prm.GetNumber()
 		}
 	}
-	if weight != 1800 {
+	if weight != 1650 {
 		t.Errorf("backpack weight %d", weight)
 	}
 }

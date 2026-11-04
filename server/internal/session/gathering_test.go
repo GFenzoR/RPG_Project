@@ -29,7 +29,7 @@ const (
 // whose chance grows with fishing.
 var gatherItemDefs = map[uint16]string{
 	rodID:   "{id: fishing_rod, kind: tool, weight: 800, tool: {use: fishing}}",
-	pickID:  "{id: pickaxe, kind: tool, weight: 4500, tool: {use: mining}}",
+	pickID:  "{id: pickaxe, kind: tool, weight: 4200, tool: {use: mining}}",
 	fishID:  "{id: raw_fish, kind: consumable, weight: 500, stackable: true, max_stack: 100}",
 	oreID:   "{id: iron_ore, kind: material, weight: 2000, stackable: true, max_stack: 100}",
 	stoneID: "{id: rough_stone, kind: material, weight: 1200, stackable: true, max_stack: 100}",
