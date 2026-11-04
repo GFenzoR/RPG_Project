@@ -118,6 +118,7 @@ type Player struct {
 	// next periodic update, and the last tick p helped a fight (0 = never).
 	party         *party
 	partyView     []partyView
+	partyState    pb.SharedExperience
 	partyNext     game.Tick
 	contributedAt game.Tick
 }

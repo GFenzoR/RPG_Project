@@ -246,6 +246,7 @@ type World struct {
 	partyEvery game.Tick
 	contribFor game.Tick
 	partyBuf   []*Player
+	islandBuf  []string
 
 	// sched is the loop's scheduler, kept at the first join to know the current tick
 	// outside a TickContext (condition times in snapshots and at flush, T3.2).

@@ -119,6 +119,9 @@ func (p Party) check() error {
 	if p.MaxMembers < 2 || p.MaxMembers > 32 {
 		return errors.New("party.max_members must be in 2..32")
 	}
+	if p.InviteMs > 600_000 {
+		return errors.New("party.invite_ms must be at most 600000")
+	}
 	if p.InviteMs <= 0 || p.UpdateMs <= 0 || p.ShareDistance <= 0 || p.ContributionMs <= 0 {
 		return errors.New("party: invite_ms, update_ms, share_distance and contribution_ms must be > 0")
 	}

@@ -380,7 +380,7 @@ Las reglas de los grupos y de la experiencia compartida viven en `balance.yaml �
 ```yaml
 party:
   max_members: 6            # 2..32, el líder incluido
-  invite_ms: 45000          # vida de una invitación
+  invite_ms: 45000          # vida de una invitación (máx. 600000)
   update_ms: 1000           # cada cuánto, como mucho, se refresca vida/maná/nivel
   share_distance: 24        # casillas (Chebyshev, mismo piso) desde la muerte del monstruo
   contribution_ms: 75000    # ventana de "contribuyó hace poco"

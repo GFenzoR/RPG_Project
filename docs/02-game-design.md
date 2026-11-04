@@ -385,7 +385,8 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
 - **Formar:** el líder (o un jugador sin grupo, que pasa a ser líder) invita a un jugador
   que **ve** (lista de batalla, botón "+", o `/invite Nombre`). Invitar a alguien fuera de
   vista o invisible responde igual que un nombre que no existe: el grupo no sirve para
-  buscar a nadie. Cada invitación cuenta para el anti-flood del chat. El invitado acepta o
+  buscar a nadie. Cada invitación cuenta para el anti-flood del chat y termina la invisibilidad del que
+  invita (el invitado recibe su nombre). El invitado acepta o
   rechaza; la invitación vence a los `invite_ms` (45 s, por tick del loop). Hasta
   `max_members` (6) miembros contando al líder.
 - **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y prende o
@@ -417,13 +418,16 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   (condición 2), ni ayudar desde lejos (condición 1). El bonus solo existe entre dos o más
   que cumplen las tres. `TestSharedExperienceAntiCarry` lo fija.
 - **Loot:** igual que sin grupo, es de quien hizo más daño.
-- **Indicador:** apagada, activa (al menos dos miembros cumplen 2 y 3 ahora mismo) o
-  inactiva. La distancia se evalúa en cada muerte, no en el indicador.
+- **Indicador:** apagada, activa o inactiva. Cada miembro lo calcula solo con los miembros
+  que ve (él incluido): activa si al menos dos de ellos cumplen 2 y 3 ahora mismo. Así ni
+  el indicador ni la marca "comparte" delatan que un miembro lejos murió o está peleando.
+  La distancia se evalúa en cada muerte, no en el indicador.
 - **Información (auditoría, `01-architecture.md` "Trampas y anti-bot"):** de cada miembro
-  viajan nombre, vocación, nivel e isla. Vida y maná (en %) solo mientras está en la vista
-  del que mira (lo que el AOI ya le manda; un invisible no está en la vista). Nunca viajan
-  la posición, el piso ni la vida de un miembro fuera de vista. `TestPartyInfoAudit` lo
-  fija.
+  viajan nombre, vocación, nivel e isla. Vida, maná (en %) y la marca "comparte" solo
+  mientras está en la vista del que mira (lo que el AOI ya le manda; un invisible no está
+  en la vista). Nunca viajan
+  la posición, el piso ni la vida de un miembro fuera de vista. `TestPartyInfoAudit` y
+  `TestPartyInfoAuditShared` lo fijan.
 - **Chat de grupo:** canal `PARTY`, lo oyen todos los miembros estén donde estén, sin
   posición; mismo largo y anti-flood que el resto del chat.
 

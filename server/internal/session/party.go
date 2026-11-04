@@ -42,8 +42,6 @@ type party struct {
 	leader  *Player
 	members []*Player
 	shared  bool
-	// state is the shared experience state the members last heard of.
-	state pb.SharedExperience
 	// dirty marks a change every member must hear about at the next flush.
 	dirty bool
 }
@@ -93,9 +91,7 @@ func (w *World) partyCommand(ctx *game.TickContext, p *Player, m *pb.PartyComman
 			o.emit(systemMsg(msgPartyYouKicked))
 			w.leaveParty(o)
 			// leaveParty told the rest "left"; the leader learns who it removed.
-			if p.party != nil {
-				w.partyMsg(p.party, systemMsg(msgPartyKicked, textParam("name", o.name)))
-			}
+			p.emit(systemMsg(msgPartyKicked, textParam("name", o.name)))
 		}
 	case pb.PartyAction_PARTY_ACTION_PASS_LEADER:
 		if o := w.memberForLeader(p, id); o != nil {
@@ -177,6 +173,7 @@ func (w *World) invite(ctx *game.TickContext, p, o *Player, name string) {
 		p.emit(systemMsg(msgPartyAlreadyAsked, textParam("name", o.name)))
 		return
 	}
+	w.reveal(ctx, p) // inviting tells o who p is: it ends invisibility, like attacking
 	until := ctx.Tick + w.inviteFor
 	w.invites[key] = until
 	ctx.Sched.After(w.inviteFor, func(*game.TickContext) {
@@ -260,11 +257,11 @@ func (w *World) leaveParty(p *Player) {
 		return
 	}
 	pt.members = slices.DeleteFunc(pt.members, func(o *Player) bool { return o == p })
-	p.party, p.partyView = nil, nil
+	p.party, p.partyView, p.contributedAt = nil, nil, 0
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PartyUpdate{PartyUpdate: &pb.PartyUpdate{}}})
 	if len(pt.members) < 2 {
 		for _, o := range pt.members {
-			o.party, o.partyView = nil, nil
+			o.party, o.partyView, o.contributedAt = nil, nil, 0
 			o.emit(systemMsg(msgPartyDisbanded))
 			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PartyUpdate{PartyUpdate: &pb.PartyUpdate{}}})
 		}
@@ -319,14 +316,18 @@ func (w *World) contributed(now game.Tick, p *Player) bool {
 }
 
 // sharers returns the members of pt that share a kill at pos (or, with near false, the
-// ones that qualify wherever they are: the indicator). A member shares if it is active,
+// ones that qualify wherever they are, among those viewer sees: the indicator). A member shares if it is active,
 // close enough (near) and its level is at least level_range_pct % of the highest of the
 // members that are active and close, or at most level_gap_always below it (anti-carry). Fewer than two sharers = no sharing.
-func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, near bool, dst []*Player) []*Player {
+func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player, dst []*Player) []*Player {
+	near := viewer == nil
 	pc := w.cfg.Balance.Party
 	dst = dst[:0]
 	top := 0
 	for _, o := range pt.members {
+		if !near && o != viewer && !viewer.Knows(o.id) {
+			continue
+		}
 		if w.contributed(now, o) && o.health > 0 && (!near || o.pos.Z == pos.Z && chebyshev(o.pos, pos) <= pc.ShareDistance) {
 			dst = append(dst, o)
 			top = max(top, o.level)
@@ -373,7 +374,7 @@ func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares [
 				return -1
 			}
 		}
-		sh := w.sharers(now, p.party, pos, true, nil)
+		sh := w.sharers(now, p.party, pos, nil, nil)
 		pots = append(pots, pot{pt: p.party, sharers: sh})
 		if slices.Contains(sh, p) {
 			return len(pots) - 1
@@ -414,17 +415,9 @@ func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares [
 // every update_ms when what it sees of the others changed.
 func (w *World) flushParties(now game.Tick) {
 	for _, pt := range w.parties {
-		state := pb.SharedExperience_SHARED_EXPERIENCE_OFF
-		w.partyBuf = w.partyBuf[:0]
-		if pt.shared {
-			state = pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE
-			w.partyBuf = w.sharers(now, pt, world.Pos{}, false, w.partyBuf)
-			if len(w.partyBuf) >= 2 {
-				state = pb.SharedExperience_SHARED_EXPERIENCE_ACTIVE
-			}
-		}
-		if state != pt.state {
-			pt.state, pt.dirty = state, true
+		w.islandBuf = w.islandBuf[:0]
+		for _, o := range pt.members {
+			w.islandBuf = append(w.islandBuf, w.islandAt(o.pos))
 		}
 		for _, v := range pt.members {
 			if !pt.dirty && now < v.partyNext {
@@ -437,30 +430,49 @@ func (w *World) flushParties(now game.Tick) {
 }
 
 // sendParty sends v its view of pt if it differs from the last one (or pt is dirty).
-// Information audit: health and mana only of the members v sees; of the others, the
-// island alone.
+// Information audit: of the members v does not see, only name, vocation, level and
+// island travel. Health, mana, "sharing" (alive and fighting) and the indicator are
+// computed from the members v sees, so nothing tells v when a far member dies or fights.
 func (w *World) sendParty(now game.Tick, pt *party, v *Player) {
 	changed := pt.dirty || len(v.partyView) != len(pt.members)
 	// view reuses v.partyView's array: element i is compared before it is overwritten.
 	view := v.partyView[:0]
+	sharing := 0
+	w.partyBuf = w.partyBuf[:0]
+	if pt.shared {
+		w.partyBuf = w.sharers(now, pt, world.Pos{}, v, w.partyBuf)
+	}
 	for i, o := range pt.members {
-		pv := partyView{id: o.id, level: o.level, inView: o == v || v.Knows(o.id), island: w.islandAt(o.pos),
-			sharing: pt.shared && slices.Contains(w.partyBuf, o)}
+		pv := partyView{id: o.id, level: o.level, inView: o == v || v.Knows(o.id), island: w.islandBuf[i]}
 		if pv.inView {
 			pv.health = healthPercent(o.health, o.maxHealth)
 			pv.mana = healthPercent(o.mana, o.maxMana)
+			pv.sharing = pt.shared && slices.Contains(w.partyBuf, o)
+			if pv.sharing {
+				sharing++
+			}
 		}
 		if !changed && (i >= len(v.partyView) || v.partyView[i] != pv) {
 			changed = true
 		}
 		view = append(view, pv)
 	}
+	state := pb.SharedExperience_SHARED_EXPERIENCE_OFF
+	switch {
+	case pt.shared && sharing >= 2:
+		state = pb.SharedExperience_SHARED_EXPERIENCE_ACTIVE
+	case pt.shared:
+		state = pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE
+	}
+	if state != v.partyState {
+		v.partyState, changed = state, true
+	}
 	v.partyView = view
 	v.partyNext = now + w.partyEvery
 	if !changed {
 		return
 	}
-	u := &pb.PartyUpdate{LeaderId: pt.leader.id, Shared: pt.state, Members: make([]*pb.PartyMember, len(pt.members))}
+	u := &pb.PartyUpdate{LeaderId: pt.leader.id, Shared: state, Members: make([]*pb.PartyMember, len(pt.members))}
 	for i, o := range pt.members {
 		pv := view[i]
 		u.Members[i] = &pb.PartyMember{CreatureId: o.id, Name: o.name, Vocation: o.vocation.ID, Level: uint32(max(o.level, 0)),

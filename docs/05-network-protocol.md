@@ -449,10 +449,11 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   llegada, el propio jugador incluido. Llega cuando cambia el grupo (miembros, líder,
   experiencia compartida, indicador) y, como mucho cada `update_ms`, cuando cambia lo que
   el jugador ve de otro miembro. Sin `members` = ya no está en un grupo. `shared`:
-  `OFF`, `ACTIVE` (dos o más miembros califican) o `INACTIVE`.
+  `OFF`, `ACTIVE` (dos o más de los miembros que el jugador ve, él incluido, califican) o
+  `INACTIVE`.
 - **`PartyMember{creature_id, name, vocation, level, in_view, health_percent,
-  mana_percent, island, sharing}`**. Auditoría de información: `health_percent` y
-  `mana_percent` valen 0 si `in_view` es falso (el que mira no conoce a esa criatura: fuera
+  mana_percent, island, sharing}`**. Auditoría de información: `health_percent`,
+  `mana_percent` y `sharing` valen 0/falso si `in_view` es falso (el que mira no conoce a esa criatura: fuera
   de la ventana o invisible). Fuera de vista solo viaja la isla (`""` en el mar). El mensaje
   no tiene posición ni piso.
 - **Chat:** `Say{channel: PARTY}` → `Message{kind: PARTY, speaker_id, speaker_name, text}`

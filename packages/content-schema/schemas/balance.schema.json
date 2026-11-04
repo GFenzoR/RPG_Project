@@ -218,7 +218,9 @@
         },
         "invite_ms": {
           "description": "An invitation expires after this many ms.",
-          "$ref": "common.schema.json#/$defs/positiveInt"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600000
         },
         "update_ms": {
           "description": "Members' state refreshes at most this often (ms).",

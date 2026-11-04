@@ -11,6 +11,7 @@ import (
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/sim"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
@@ -456,5 +457,132 @@ func TestPartyChat(t *testing.T) {
 	h.sim.Step()
 	if k := systemKeys(ca.take()); k["chat.flood"] != 1 {
 		t.Fatalf("flood: %v", k)
+	}
+}
+
+// Audit with shared experience on: a far member's death or fighting does not show in
+// its "sharing" flag nor in the indicator (both use only the members the viewer sees).
+func TestPartyInfoAuditShared(t *testing.T) {
+	h := partyHarness(t)
+	ca, a := h.join("Ana", at(10, 10))
+	cb, b := h.join("Bruno", at(12, 10))
+	h.form(ca, a, member{cb, b})
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_SHARE_ON, 0))
+	h.do(func(ctx *game.TickContext) {
+		h.w.ContributeForTest(ctx, a)
+		h.w.ContributeForTest(ctx, b)
+	})
+	h.sim.RunTicks(20)
+	if up := lastParty(ca.take()); up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_ACTIVE {
+		t.Fatalf("in view: %v", up.GetShared())
+	}
+	h.do(func(*game.TickContext) { h.w.Teleport(b, pos(50, 50)) })
+	h.sim.RunTicks(20)
+	up := lastParty(ca.take())
+	for _, m := range up.GetMembers() {
+		if m.GetCreatureId() == b.ID() && (m.GetSharing() || m.GetInView()) {
+			t.Fatalf("far member: %v", m)
+		}
+	}
+	if up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE {
+		t.Fatalf("indicator with the other far: %v", up.GetShared())
+	}
+	// Bruno fights and then dies far away: Ana hears nothing.
+	h.sim.RunTicks(20)
+	ca.take()
+	h.do(func(ctx *game.TickContext) { h.w.ContributeForTest(ctx, b) })
+	h.do(func(*game.TickContext) { b.SetHealthForTest(0) })
+	h.sim.RunTicks(40)
+	if up := lastParty(ca.take()); up != nil {
+		t.Fatalf("a far member's fight or death produced an update: %v", up)
+	}
+}
+
+// Only the leader hears "you kicked"; the rest hear "left" once. Edge cases: a full
+// party, accepting while in a party, a repeated invitation, an old leader's invitation.
+func TestPartyKickAndEdges(t *testing.T) {
+	h := partyHarness(t)
+	ca, a := h.join("Ana", at(10, 10))
+	cb, b := h.join("Bruno", at(12, 10))
+	cc, c := h.join("Cora", at(11, 11))
+	cd, d := h.join("Dario", at(11, 12))
+	h.form(ca, a, member{cb, b}, member{cc, c}) // max_members 3: full
+	ca.take()
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_INVITE, d.ID()))
+	h.sim.Step()
+	if k := systemKeys(ca.take()); k["party.full"] != 1 {
+		t.Fatalf("full: %v", k)
+	}
+	cb.take()
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_KICK, c.ID()))
+	h.sim.Step()
+	if k := systemKeys(ca.take()); k["party.kicked"] != 1 || k["party.left"] != 1 {
+		t.Fatalf("leader heard %v", k)
+	}
+	if k := systemKeys(cb.take()); k["party.kicked"] != 0 || k["party.left"] != 1 {
+		t.Fatalf("member heard %v", k)
+	}
+	// Repeated invitation; then Dario, in a party of his own, must leave first.
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_INVITE, d.ID()))
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_INVITE, d.ID()))
+	h.sim.Step()
+	if k := systemKeys(ca.take()); k["party.already_invited"] != 1 {
+		t.Fatalf("repeat: %v", k)
+	}
+	h.form(cc, c, member{cd, d})
+	cd.take()
+	h.input(cd, partyCmd(pb.PartyAction_PARTY_ACTION_ACCEPT, a.ID()))
+	h.sim.Step()
+	if k := systemKeys(cd.take()); k["party.leave_first"] != 1 {
+		t.Fatalf("in a party: %v", k)
+	}
+	// An invitation from someone that stopped leading is gone.
+	h.input(cd, partyCmd(pb.PartyAction_PARTY_ACTION_LEAVE, 0))
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_PASS_LEADER, b.ID()))
+	h.sim.Step()
+	cd.take()
+	h.input(cd, partyCmd(pb.PartyAction_PARTY_ACTION_ACCEPT, a.ID()))
+	h.sim.Step()
+	if k := systemKeys(cd.take()); k["party.invite_gone"] != 1 {
+		t.Fatalf("old leader's invitation: %v", k)
+	}
+}
+
+// Two sharing parties on one monster: each pot holds only its own members' shares; a
+// member on another floor does not share.
+func TestSharedExperienceTwoParties(t *testing.T) {
+	h := partyHarness(t)
+	ca, a := h.join("Ana", at(10, 10))
+	cb, b := h.join("Bruno", at(12, 10))
+	cc, c := h.join("Cora", at(11, 11))
+	cd, d := h.join("Dario", at(11, 12))
+	h.form(ca, a, member{cb, b})
+	h.form(cc, c, member{cd, d})
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_SHARE_ON, 0))
+	h.input(cc, partyCmd(pb.PartyAction_PARTY_ACTION_SHARE_ON, 0))
+	h.do(func(ctx *game.TickContext) {
+		for _, p := range []*session.Player{a, b, c, d} {
+			h.w.ContributeForTest(ctx, p)
+		}
+	})
+	x := []int64{a.Experience(), b.Experience(), c.Experience(), d.Experience()}
+	h.do(func(ctx *game.TickContext) {
+		h.w.ShareForTest(ctx, pos(11, 10), 200, session.Share{P: a, Amount: 50}, session.Share{P: c, Amount: 50})
+	})
+	// 100 × 1.06 / 2 = 53 for each member of both parties.
+	for i, p := range []*session.Player{a, b, c, d} {
+		if got := p.Experience() - x[i]; got != 53 {
+			t.Fatalf("player %d got %d", i, got)
+		}
+	}
+	h.do(func(*game.TickContext) {
+		h.w.Teleport(b, world.Pos{X: 12, Y: 10, Z: 6})
+	})
+	xa, xb := a.Experience(), b.Experience()
+	h.do(func(ctx *game.TickContext) {
+		h.w.ShareForTest(ctx, pos(11, 10), 100, session.Share{P: a, Amount: 50})
+	})
+	if a.Experience()-xa != 100 || b.Experience() != xb {
+		t.Fatalf("other floor: %d %d", a.Experience()-xa, b.Experience()-xb)
 	}
 }
