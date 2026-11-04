@@ -326,7 +326,8 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   `radius` a todo monstruo en un círculo alrededor del que lanza; uno de los dos), `heal`
   (mismos factores; con `range`, T3.1, cura a otro jugador, el objetivo, a esa distancia y
   con línea de visión, nunca al que lanza) o `conjure: { item, count }` (crea ese item en la
-  mochila: una runa con todas sus cargas o, con `count`, una pila de esa cantidad).
+  mochila: una runa con todas sus cargas o, con `count`, esa cantidad de un item apilable,
+  juntada con las pilas que ya hay; si no entra entera, el hechizo falla sin gastar maná).
 - T3.1: `damage` y `heal` aceptan `skill` (`fist`, `sword`, `axe`, `club`, `distance` o
   `shield`) junto con `per_skill`. Ese par va siempre junto y suma `nivel de la skill ×
   per_skill`. Los hechizos del montaraz escalan así con la distancia. `haste` y `light` están en el esquema para hitos futuros y el servidor los
