@@ -1,7 +1,11 @@
 # Map texts: island names, signs and books placed in world/.
 island.testisle.name: "Test island"
 island.puerto.name: "Harbour Isle"
+island.bosque.name: "Forest Isle"
 text.testisle.temple_sign: "Temple of the test island. Nobody can hurt you here."
 text.puerto.temple_sign: "Temple of Farol. Nobody can hurt you within its walls."
 text.puerto.harbour_sign: "Farol dock. Ships sail when the harbour master says so."
 text.puerto.mine_sign: "Old mine. Beware of the bats, and of what hides further down."
+text.bosque.temple_sign: "Temple of the Root, in Raigal. Under its branches no one can harm you."
+text.bosque.dock_sign: "Raigal dock. Tavin Rema takes passengers to Harbour Isle."
+text.bosque.cave_sign: "Someone crossed out the word \"danger\" and wrote above it: \"ours\"."

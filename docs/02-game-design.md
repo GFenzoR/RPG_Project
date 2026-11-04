@@ -355,7 +355,7 @@ Valores iniciales (balance.yaml):
 | Isla | Nivel sugerido | Rol |
 |---|---|---|
 | Isla del Puerto (inicial) | 1–15 | Tutorial, primera ciudad, Capítulo 1 |
-| Isla del Bosque | 10–30 | Druidas, bestias, minería básica |
+| Isla del Bosque (T3.6) | 10–30 | Druidas, bestias, leñador (olmo), Capítulo 2 |
 | Isla Volcánica | 25–60 | Herrería avanzada, dragones jóvenes |
 | Islas Heladas | 40–80 | Hielo, mazmorras profundas |
 | Isla Hundida | 70+ | Ruinas del imperio antiguo, final de la historia actual |
@@ -405,6 +405,27 @@ mínimo**, para que el jugador explore y grindee entre capítulos:
 | 5. Lo que se hundió | 75 | Hundida | La verdad del imperio |
 
 Además: quests secundarias, libros con lore, secretos en el mapa.
+
+**Capítulo 2 "Raíces" (T3.6, Isla del Bosque).** Lo da Velia Musgo, la druida de Raigal,
+a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
+(`data/quests/ch2_*.yaml`, `data/npcs/bosque_druid.yaml`):
+1. `ch2_roots` (nivel 15): matar 8 sapos de ciénaga, juntar 6 hongos lumbre (botín de sapos
+   y espinosos), entregarlos a la druida y preguntarle al barquero dónde atracó el bote sin
+   bandera. 3500 XP y 300 monedas.
+2. `ch2_coffer` (nivel 20): romper el campamento de contrabandistas (8), entregar 4 tarjas
+   de contrabandista y recuperar el cofre sellado del nido de los reptantes huecos, en la
+   cueva bajo la costa este. 9000 XP, 600 monedas y el flag `ember_root_found`. El cofre
+   guarda una raíz de piedra tallada con las marcas del imperio, tibia: la llave que lleva
+   al Capítulo 3 (la forja antigua).
+- **Bestiario del Bosque** (nivel objetivo de `TestBosqueBalance`): ciervo de zarza (11,
+  pasivo, huye), sapo de ciénaga (13, escupe veneno a distancia), contrabandista del cofre
+  (16, cuchillos a distancia), espinoso (20, hechizo de tierra, débil al fuego) y reptante
+  hueco (24, cueva, mordida venenosa, ve invisibles). Con el equipo del pueblo un guardián
+  pasa de 15 a 20 en ~2,3 h y de 20 a 25 en ~3,1 h.
+- **Oficios en el Bosque:** el olmo (`elm_tree`) se tala como el abedul y da troncos de
+  olmo (y resina desde woodcutting 4). Recetas: escudo de olmo en el yunque y caldo de
+  hongo lumbre en el fogón; la curtidora Gisla vende el equipo de cuero de ciervo y la hoja
+  de espino.
 
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).

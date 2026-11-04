@@ -27,7 +27,9 @@ function must<T>(v: T | undefined): T {
 }
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
-const content = loadContent(repo);
+// The real routes of data/ point at the real islands, not at these mini worlds: each test
+// that checks routes brings its own.
+const content = { ...loadContent(repo), routes: [] };
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });

@@ -6,4 +6,6 @@ islands:
   - id: testisle
     rect: { x: 1024, y: 1024, w: 64, h: 64 }
     level_hint: [1, 8]
-boat_routes: []
+  - id: bosque
+    rect: { x: 4096, y: 6016, w: 192, h: 192 }
+    level_hint: [10, 30]

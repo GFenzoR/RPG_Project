@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -1485,5 +1485,142 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
   await expect(log).toContainText("Zarpaste hacia Isla de pruebas.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "28-boat-arrived");
+  expect(errors).toEqual([]);
+});
+
+// Registers an account with one guardian and returns its credentials (T3.6 tests).
+async function newGuardian(
+  playwright: { request: { newContext: (o: { baseURL: string }) => Promise<APIRequestContext> } },
+  tag: string,
+): Promise<{ email: string; password: string; name: string }> {
+  const email = `e2e-${tag}-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `${tag} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  return { email, password, name };
+}
+
+async function enterGame(page: Page, email: string, password: string): Promise<void> {
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+}
+
+test("T3.6: sail to the Forest Isle after Chapter 1 and meet its ferryman", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const { email, password, name } = await newGuardian(playwright, "Rover");
+  // Level 10 (9720 XP), Chapter 1 completed, on Puerto's dock with 100 copper coins (8)
+  // in a backpack (48). The route asks for both and costs 80.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto', level = 10, experience = 9720, pos_x = 3201, pos_y = 6431, pos_z = 7 WHERE name = '${name}';
+     INSERT INTO quest_state (character_id, key, value)
+     SELECT id, 'quest.ch1_shipwreck', 2 FROM characters WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, 0, 8, 100 FROM bp`,
+  ]);
+  await enterGame(page, email, password);
+  errors.length = 0;
+  await arrived(page, 3201, 6431);
+
+  const master = await page.evaluate(() => window.__rpgClient?.tileToClient(3201, 6433));
+  if (!master) throw new Error("no canvas");
+  await page.mouse.click(master.x, master.y, { button: "right" });
+  const dialog = page.getByTestId("dialog");
+  await dialog.getByRole("button", { name: "Quiero viajar." }).click();
+  await dialog.getByRole("button", { name: "A la Isla del Bosque (80 monedas)." }).click();
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla del Bosque");
+  await arrived(page, 4120, 6100);
+  await expect(page.getByTestId("game-log")).toContainText("Pagaste 80 monedas.");
+  await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
+  await shot(page, "29-bosque-dock");
+
+  // The ferryman of Raigal sells the way back.
+  const ferryman = await page.evaluate(() => window.__rpgClient?.tileToClient(4122, 6100));
+  if (!ferryman) throw new Error("no canvas");
+  await page.mouse.click(ferryman.x, ferryman.y, { button: "right" });
+  await expect(dialog).toContainText("Tavin Rema");
+  await dialog.getByRole("button", { name: "Quiero viajar." }).click();
+  await expect(
+    dialog.getByRole("button", { name: "A la Isla del Puerto (60 monedas)." }),
+  ).toBeVisible();
+  await shot(page, "30-bosque-ferryman");
+  expect(errors).toEqual([]);
+});
+
+test("T3.6: wake up at the temple of Raigal and talk to the druid", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const { email, password, name } = await newGuardian(playwright, "Rooted");
+  // Resident of the Forest Isle with no saved position: wakes up at its temple.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'bosque', level = 15, experience = 35280 WHERE name = '${name}';
+     INSERT INTO quest_state (character_id, key, value)
+     SELECT id, 'quest.ch1_shipwreck', 2 FROM characters WHERE name = '${name}'`,
+  ]);
+  await enterGame(page, email, password);
+  await arrived(page, 4150, 6105);
+  await shot(page, "31-bosque-temple");
+  // Out of the temple door and east across the plaza to the druid's grove, by clicks.
+  for (const [x, y] of [
+    [4150, 6109],
+    [4156, 6109],
+    [4162, 6109],
+    [4169, 6110],
+    [4175, 6110],
+  ] as const) {
+    const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {
+      tx: x,
+      ty: y,
+    });
+    if (!tile) throw new Error("no canvas");
+    await page.mouse.click(tile.x, tile.y);
+    await arrived(page, x, y);
+  }
+  await shot(page, "32-bosque-plaza");
+  const druid = await page.evaluate(() => window.__rpgClient?.tileToClient(4178, 6112));
+  if (!druid) throw new Error("no canvas");
+  await page.mouse.click(druid.x, druid.y, { button: "right" });
+  const dialog = page.getByTestId("dialog");
+  await expect(dialog).toContainText("Velia Musgo");
+  await dialog.getByRole("button", { name: "Vengo siguiendo un bote sin bandera." }).click();
+  await expect(dialog.getByRole("button", { name: "Acepto." })).toBeVisible();
+  await shot(page, "33-bosque-druid");
   expect(errors).toEqual([]);
 });

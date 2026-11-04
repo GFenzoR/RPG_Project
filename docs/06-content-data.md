@@ -304,8 +304,10 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
   `give_item` o recompensa de quest). `server/internal/sim/balance_test.go` comprueba además que la
   fuente más fácil no esté más de 4 niveles por encima del `min_level` de la quest.
 
-Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1) y las quests secundarias
-`foreman_ore` y `diver_locket`.
+Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del Capítulo 2
+(`ch2_roots` → `ch2_coffer`, T3.6: la segunda se ofrece con `quest_state` de la primera
+`completed` y su propio `level_at_least`; entregas con `has_item` + `take_item` con
+`count`) y las quests secundarias `foreman_ore` y `diver_locket`.
 
 ## Hechizo
 ```yaml
@@ -431,9 +433,9 @@ party:
     item: { item: boat_ticket, count: 1, consume: true }  # consume: false = solo llevarlo
 ```
 - `requires.item` no puede ser una moneda (el oro se cobra con `price`).
-- Hoy el archivo está vacío (`[]`): la única isla además de Puerto es `testisle`, que no
-  es parte del mundo oficial. La ruta a `bosque` está comentada en el archivo para T3.6,
-  que solo agrega datos (la ruta, `npc.harbor_master.to_forest` en i18n y la isla).
+- Rutas actuales (T3.6): `puerto_to_bosque` (Maren Holt, 80 monedas, nivel 10 y Capítulo 1
+  completo) y `bosque_to_puerto` (Tavin Rema, 60 monedas, sin requisitos). El texto de la
+  opción dice destino y precio (`npc.<capitán>.to_*`).
 - El NPC necesita un nodo con `boat_routes: true`: ahí el servidor agrega una opción por
   ruta (antes de las del nodo, `option_id` 101, 102…). Rutas + opciones del nodo ≤ 9.
   Todas las rutas se muestran; un requisito que falla se explica al elegirla.

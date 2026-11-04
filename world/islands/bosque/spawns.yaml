@@ -1,0 +1,76 @@
+- id: bosque_stags_town
+  center: { x: 4145, y: 6090, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: bramble_stag, count: 3 }
+  respawn_seconds: 70
+
+- id: bosque_stags_north
+  center: { x: 4164, y: 6066, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: bramble_stag, count: 4 }
+  respawn_seconds: 70
+
+- id: bosque_stags_cove
+  center: { x: 4182, y: 6056, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: bramble_stag, count: 3 }
+  respawn_seconds: 70
+
+- id: bosque_toads_west
+  center: { x: 4188, y: 6146, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: mire_toad, count: 5 }
+  respawn_seconds: 60
+
+- id: bosque_toads_east
+  center: { x: 4208, y: 6153, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: mire_toad, count: 4 }
+  respawn_seconds: 60
+
+- id: bosque_thornlings_south
+  center: { x: 4214, y: 6078, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: thornling, count: 4 }
+  respawn_seconds: 90
+
+- id: bosque_thornlings_north
+  center: { x: 4236, y: 6070, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: thornling, count: 3 }
+  respawn_seconds: 90
+
+- id: bosque_smugglers_camp
+  center: { x: 4248, y: 6134, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: coffer_smuggler, count: 5 }
+  respawn_seconds: 90
+
+- id: bosque_smugglers_trail
+  center: { x: 4232, y: 6113, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: coffer_smuggler, count: 3 }
+  respawn_seconds: 90
+
+- id: bosque_crawlers_west
+  center: { x: 4223, y: 6143, z: 8 }
+  radius: 4
+  monsters:
+    - { monster: hollow_crawler, count: 3 }
+  respawn_seconds: 120
+
+- id: bosque_crawlers_nest
+  center: { x: 4242, y: 6166, z: 8 }
+  radius: 5
+  monsters:
+    - { monster: hollow_crawler, count: 4 }
+  respawn_seconds: 120

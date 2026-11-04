@@ -8,3 +8,20 @@
   to: { x: 1058, y: 1056, z: 7 }
   price: 30
   requires: { level: 1 }
+
+# The official Puerto <-> Bosque routes of data/boat_routes.yaml (T3.6), copied here
+# because this file replaces that one.
+- id: puerto_to_bosque
+  captain: harbor_master
+  text: npc.harbor_master.to_forest
+  from: { x: 3201, y: 6434, z: 7 }
+  to: { x: 4120, y: 6100, z: 7 }
+  price: 80
+  requires: { level: 10, quest: ch1_shipwreck }
+
+- id: bosque_to_puerto
+  captain: bosque_ferryman
+  text: npc.bosque_ferryman.to_harbour
+  from: { x: 4117, y: 6100, z: 7 }
+  to: { x: 3201, y: 6432, z: 7 }
+  price: 60
