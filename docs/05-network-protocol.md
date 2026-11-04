@@ -444,7 +444,8 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
     alguien que ya no lidera o que se fue → `party.invite_gone`. Rechazar le avisa al que
     invitó (`party.declined`, `name`).
   - `LEAVE`; `KICK` y `PASS_LEADER` (`creature_id` = otro miembro, solo el líder);
-    `SHARE_ON` / `SHARE_OFF` (solo el líder).
+    `SHARE_ON` / `SHARE_OFF` (solo el líder). `PASS_LEADER` y un `SHARE_*` que cambia algo
+    cuentan para el anti-flood del chat (`chat.flood`, `chat.muted`).
 - **`PartyUpdate{leader_id, shared, members[]}`**: el grupo completo, en orden de
   llegada, el propio jugador incluido. Llega cuando cambia el grupo (miembros, líder,
   experiencia compartida, indicador) y, como mucho cada `update_ms`, cuando cambia lo que

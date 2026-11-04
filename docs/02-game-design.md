@@ -390,7 +390,8 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   rechaza; la invitación vence a los `invite_ms` (45 s, por tick del loop). Hasta
   `max_members` (6) miembros contando al líder.
 - **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y prende o
-  apaga la experiencia compartida. Un grupo que queda con un solo miembro se disuelve.
+  apaga la experiencia compartida. Pasar el liderazgo y prender o apagar cuentan para el
+  anti-flood del chat (cada cambio se anuncia a todos). Un grupo que queda con un solo miembro se disuelve.
 - **Desconexión:** salir del mundo (logout, conexión caída, cliente lento, reloguear en
   otro lado, expulsión de staff) es salir del grupo. Si era el líder, el liderazgo pasa al
   miembro más antiguo. Sus invitaciones (enviadas y recibidas) se borran. Los grupos **no
@@ -411,7 +412,9 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   `bonus_pct_per_member` (6 %) por cada uno después del primero, hasta `max_bonus_pct`
   (24 %), y se divide en partes iguales entre ellos (también a quien no le pegó, como un
   sanador). Los miembros que no comparten cobran su propio share. Si comparte uno solo, no
-  hay pozo: cada uno cobra lo suyo. Quests: cuenta la muerte quien le hizo daño, como antes.
+  hay pozo: cada uno cobra lo suyo. El share de quien salió del mundo (logout o relogueo)
+  se pierde: cuenta en el total pero no lo cobra nadie, así que terminar el monstruo de
+  otro no da su experiencia. Quests: cuenta la muerte quien le hizo daño, como antes.
 - **Anti-carry.** Un personaje alto no puede subir a uno bajo: el bajo queda fuera por
   nivel (condición 3), así que solo cobra el daño que él mismo hizo, y el alto, sin nadie
   más que comparta, cobra lo suyo sin bonus. Estar al lado sin hacer nada tampoco alcanza
@@ -426,7 +429,8 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
   viajan nombre, vocación, nivel e isla. Vida, maná (en %) y la marca "comparte" solo
   mientras está en la vista del que mira (lo que el AOI ya le manda; un invisible no está
   en la vista). Nunca viajan
-  la posición, el piso ni la vida de un miembro fuera de vista. `TestPartyInfoAudit` y
+  la posición, el piso ni la vida de un miembro fuera de vista. Nivel e isla sí viajan, y
+  pueden cambiar tras una muerte o una subida lejana: es aceptado. `TestPartyInfoAudit` y
   `TestPartyInfoAuditShared` lo fijan.
 - **Chat de grupo:** canal `PARTY`, lo oyen todos los miembros estén donde estén, sin
   posición; mismo largo y anti-flood que el resto del chat.

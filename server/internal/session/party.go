@@ -94,7 +94,8 @@ func (w *World) partyCommand(ctx *game.TickContext, p *Player, m *pb.PartyComman
 			p.emit(systemMsg(msgPartyKicked, textParam("name", o.name)))
 		}
 	case pb.PartyAction_PARTY_ACTION_PASS_LEADER:
-		if o := w.memberForLeader(p, id); o != nil {
+		// Each change speaks to every member: it counts against the chat anti-flood.
+		if o := w.memberForLeader(p, id); o != nil && w.chatAllowed(ctx, p) {
 			p.party.leader = o
 			p.party.dirty = true
 			w.partyMsg(p.party, systemMsg(msgPartyLeader, textParam("name", o.name)))
@@ -106,7 +107,7 @@ func (w *World) partyCommand(ctx *game.TickContext, p *Player, m *pb.PartyComman
 			p.emit(systemMsg(msgPartyNone))
 		case p.party.leader != p:
 			p.emit(systemMsg(msgPartyNotLeader))
-		case p.party.shared != on:
+		case p.party.shared != on && w.chatAllowed(ctx, p): // like PASS_LEADER
 			p.party.shared, p.party.dirty = on, true
 			key := msgPartySharedOff
 			if on {
@@ -347,11 +348,11 @@ func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player,
 // to a pot that grows by the bonus and is split equally among the sharers; every other
 // share pays its owner, as without a party.
 func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares []damageShare) {
+	// Every share counts toward the total, online or not: the share of a player that
+	// left the world (logout, re-login with a new id) is lost, never handed to the rest.
 	total := 0
 	for _, s := range shares {
-		if w.playerByID(s.player) != nil {
-			total += s.amount
-		}
+		total += s.amount
 	}
 	if total == 0 {
 		return
@@ -432,7 +433,8 @@ func (w *World) flushParties(now game.Tick) {
 // sendParty sends v its view of pt if it differs from the last one (or pt is dirty).
 // Information audit: of the members v does not see, only name, vocation, level and
 // island travel. Health, mana, "sharing" (alive and fighting) and the indicator are
-// computed from the members v sees, so nothing tells v when a far member dies or fights.
+// computed from the members v sees. Level and island do travel and may change after a
+// far death (experience loss) or level up; that is accepted.
 func (w *World) sendParty(now game.Tick, pt *party, v *Player) {
 	changed := pt.dirty || len(v.partyView) != len(pt.members)
 	// view reuses v.partyView's array: element i is compared before it is overwritten.

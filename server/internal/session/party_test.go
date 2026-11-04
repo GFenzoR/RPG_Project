@@ -487,14 +487,22 @@ func TestPartyInfoAuditShared(t *testing.T) {
 	if up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE {
 		t.Fatalf("indicator with the other far: %v", up.GetShared())
 	}
-	// Bruno fights and then dies far away: Ana hears nothing.
+	// Bruno fights and then dies far away: whatever Ana gets (level and island may
+	// change after a death), his view stays hidden and the indicator inactive.
 	h.sim.RunTicks(20)
 	ca.take()
 	h.do(func(ctx *game.TickContext) { h.w.ContributeForTest(ctx, b) })
-	h.do(func(*game.TickContext) { b.SetHealthForTest(0) })
+	h.do(func(ctx *game.TickContext) { h.w.DieForTest(ctx, b) })
 	h.sim.RunTicks(40)
 	if up := lastParty(ca.take()); up != nil {
-		t.Fatalf("a far member's fight or death produced an update: %v", up)
+		if up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE {
+			t.Fatalf("indicator after a far death: %v", up.GetShared())
+		}
+		for _, m := range up.GetMembers() {
+			if m.GetCreatureId() == b.ID() && (m.GetInView() || m.GetSharing() || m.GetHealthPercent() != 0 || m.GetManaPercent() != 0) {
+				t.Fatalf("far member after death: %v", m)
+			}
+		}
 	}
 }
 
@@ -538,6 +546,7 @@ func TestPartyKickAndEdges(t *testing.T) {
 	}
 	// An invitation from someone that stopped leading is gone.
 	h.input(cd, partyCmd(pb.PartyAction_PARTY_ACTION_LEAVE, 0))
+	h.sim.RunTicks(200) // Ana's invitations used her anti-flood bucket
 	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_PASS_LEADER, b.ID()))
 	h.sim.Step()
 	cd.take()
@@ -584,5 +593,57 @@ func TestSharedExperienceTwoParties(t *testing.T) {
 	})
 	if a.Experience()-xa != 100 || b.Experience() != xb {
 		t.Fatalf("other floor: %d %d", a.Experience()-xa, b.Experience()-xb)
+	}
+}
+
+// The share of a player that left the world is lost: a low level that finishes a monster
+// the high level almost killed gets only its own 1 %, not the whole experience.
+func TestShareOfPlayerThatLeftIsLost(t *testing.T) {
+	h := partyHarness(t)
+	ca, a := h.join("Ana", at(10, 10))
+	_, b := h.join("Bruno", at(12, 10))
+	shares := []session.Share{{P: a, Amount: 99}, {P: b, Amount: 1}}
+	h.sim.Command(h.w.Leave(ca))
+	h.sim.Step()
+	xb := b.Experience()
+	h.do(func(ctx *game.TickContext) { h.w.ShareForTest(ctx, pos(11, 10), 1000, shares...) })
+	if got := b.Experience() - xb; got != 10 {
+		t.Fatalf("low level got %d, want 10", got)
+	}
+}
+
+// Toggling shared experience and passing the lead speak to every member, so they count
+// against the chat anti-flood: past the burst they are refused and nobody hears them.
+func TestPartyLeaderActionsFloodLimit(t *testing.T) {
+	h := partyHarness(t)
+	ca, a := h.join("Ana", at(10, 10))
+	cb, b := h.join("Bruno", at(12, 10))
+	h.form(ca, a, member{cb, b})
+	h.sim.RunTicks(200) // refill the bucket used by the invitation
+	ca.take()
+	cb.take()
+	for i := range 20 {
+		act := pb.PartyAction_PARTY_ACTION_SHARE_ON
+		if i%2 == 1 {
+			act = pb.PartyAction_PARTY_ACTION_SHARE_OFF
+		}
+		h.input(ca, partyCmd(act, 0))
+	}
+	h.sim.Step()
+	k := systemKeys(cb.take())
+	if n := k["party.shared_on"] + k["party.shared_off"]; n != 5 { // flood.burst
+		t.Fatalf("member heard %d toggles: %v", n, k)
+	}
+	if ka := systemKeys(ca.take()); ka["chat.flood"] != 1 || ka["chat.muted"] == 0 {
+		t.Fatalf("leader heard %v", ka)
+	}
+	// Muted: passing the lead is refused too.
+	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_PASS_LEADER, b.ID()))
+	h.sim.Step()
+	if _, l, _ := a.PartyForTest(); l != a.ID() {
+		t.Fatal("a muted leader passed the lead")
+	}
+	if k := systemKeys(cb.take()); k["party.new_leader"] != 0 {
+		t.Fatalf("member heard %v", k)
 	}
 }

@@ -1299,8 +1299,10 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   }
   await expect(matePage.getByTestId("party-share")).toHaveCount(0);
   await leadPage.getByTestId("party-share").click();
-  // On, but nobody fought yet: inactive.
-  await expect(matePage.getByTestId("party-shared")).toHaveText("Experiencia compartida: inactiva");
+  // On, but nobody fought yet: no sharing, and the panel says why.
+  await expect(matePage.getByTestId("party-shared")).toContainText(
+    "Experiencia compartida: activada, sin reparto",
+  );
   await expect(matePage.getByTestId("game-log")).toContainText(
     "El líder activó la experiencia compartida.",
   );
