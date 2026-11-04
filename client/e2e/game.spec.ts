@@ -1324,3 +1324,90 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await leadPage.close();
   await matePage.close();
 });
+
+test("T3.4: cook a fish at the hearth of Farol from the station window", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-cook-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Cook ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  // Stand just south of Farol's cooking hearth (3172, 6366: world/islands/puerto), with a
+  // backpack (48) holding 3 raw fish (10), and cooking 30 so the grilled fish is at its
+  // 97% cap (data/recipes.yaml).
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto', pos_x = 3172, pos_y = 6367, pos_z = 7 WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, 0, 10, 3 FROM bp;
+     INSERT INTO character_skills (character_id, skill, level)
+     SELECT id, 'cooking', 30 FROM characters WHERE name = '${name}'
+     ON CONFLICT (character_id, skill) DO UPDATE SET level = 30, tries = 0`,
+  ]);
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  errors.length = 0;
+  await arrived(page, 3172, 6367);
+
+  // Right click on the hearth opens its recipes.
+  const hearth = await page.evaluate(() => window.__rpgClient?.tileToClient(3172, 6366));
+  if (!hearth) throw new Error("no canvas");
+  await page.mouse.click(hearth.x, hearth.y, { button: "right" });
+  const win = page.getByTestId("crafting");
+  await expect(win).toBeVisible();
+  await expect(win.locator("h2")).toHaveText("fogón");
+  const fish = win.locator("[data-recipe=cook_grilled_fish]");
+  await expect(fish).toHaveClass(/ready/);
+  await expect(fish.getByTestId("chance")).toContainText("97 %");
+  // The stew lacks meat and seaweed, and needs cooking 6 (we have 30).
+  await expect(win.locator("[data-recipe=cook_harbour_stew]")).toContainText("faltan");
+  await shot(page, "16-crafting-window");
+
+  // Cook until it works (3% failure); the window refreshes with the fish left.
+  const log = page.getByTestId("game-log");
+  for (let i = 0; i < 3; i++) {
+    await fish.getByRole("button", { name: "Hacer" }).click();
+    await page.waitForTimeout(400);
+    if (((await log.textContent()) ?? "").includes("Has hecho")) break;
+    await page.waitForTimeout(1800); // the recipe's time_ms
+  }
+  await expect(log).toContainText(/Has hecho [^{}]+\./);
+  await expect(page.getByTestId("skills-panel")).toContainText("Cocina");
+  await shot(page, "17-crafting-done");
+  await page.keyboard.press("Escape");
+  await expect(win).toBeHidden();
+  expect(errors).toEqual([]);
+});
