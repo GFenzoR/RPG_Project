@@ -121,7 +121,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   expulsión, salida al desconectar, experiencia compartida con anti-carry y bonus en
   `balance.yaml`, información filtrada por vista, chat de grupo y panel en el cliente. Los
   grupos no se persisten.
-- [ ] **T3.4 Herrería, leñador y cocina** con recetas y estaciones.
+- [x] **T3.4 Herrería, leñador y cocina** con recetas y estaciones.
 - [ ] **T3.5 Barcos y viajes** entre islas con requisitos.
 - [ ] **T3.6 Isla del Bosque** y Capítulo 2.
 - [ ] **T3.7 Sonido y música** (assets libres) con volumen por canal.

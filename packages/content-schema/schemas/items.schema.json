@@ -114,7 +114,7 @@
           "additionalProperties": false,
           "required": ["use"],
           "properties": {
-            "use": { "enum": ["fishing", "mining", "woodcutting", "rope", "shovel"] }
+            "use": { "enum": ["fishing", "mining", "woodcutting", "smithing", "rope", "shovel"] }
           }
         },
         "consumable": {

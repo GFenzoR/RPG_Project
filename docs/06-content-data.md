@@ -395,16 +395,25 @@ party:
 
 ## Receta de oficio
 ```yaml
-- id: iron_ingot
-  craft: smithing
-  station: furnace
-  level: 5
-  inputs: [{ item: iron_ore, count: 3 }, { item: coal, count: 1 }]
-  output: { item: iron_ingot, count: 1 }
-  base_success: 0.6
-  success_per_level: 0.02
-  xp: 12
+# data/recipes.yaml (T3.4)
+- id: smith_felling_axe
+  craft: smithing          # skill que da la chance y gana `xp` intentos por intento
+  station: anvil           # item del mapa (no recogible) junto al que hay que estar
+  tool: smithing           # opcional: tool.use de una herramienta que hay que llevar
+  level: 2                 # nivel mínimo del oficio
+  time_ms: 4000            # sin otro intento de oficio o recolección hasta entonces
+  inputs: [{ item: iron_ingot, count: 2 }, { item: birch_log, count: 1 }]
+  output: { item: felling_axe, count: 1 }
+  base_success: 0.55       # chance = min(max_success, base + per_level × (nivel − level))
+  success_per_level: 0.04
+  max_success: 0.9         # opcional, por defecto 1
+  xp: 2
 ```
+- Cada ingrediente aparece una vez; cada intento gasta todos, salga o no. El servidor (y
+  `make validate`) rechazan estaciones, ingredientes o resultados desconocidos.
+- Una estación es un item cualquiera del mapa que alguna receta nombra: no lleva campo
+  propio. Usarla manda `StationOpen` (`05-network-protocol.md`).
+- Textos: `craft.*` (mensajes del servidor) y `client.craft.*` en `i18n/*/client.yaml`.
 
 ## Bordes (autoborder)
 ```yaml

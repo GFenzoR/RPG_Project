@@ -157,6 +157,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (invitar) si se lo puede invitar. El canal "Grupo" está en el selector del chat.
 - El plugin de Vite empaqueta los nombres de `world.yaml` (`island.<id>.name`).
 
+## Notas de T3.4
+- `WorldState.station` (de `StationOpen`) abre `ui/Crafting.tsx`: las recetas de
+  `content.recipes` (de `data/recipes.yaml`) de esa estación, con lo que falta, el nivel, la
+  herramienta y la chance (`state/recipes.ts`, puro y con tests). Lo que se lleva lo dice el
+  servidor (`owned`, `tools`), porque el cliente no ve las mochilas cerradas. Se cierra con
+  ×, Escape o al alejarse más de 1 casilla; "Hacer" manda `Craft`.
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

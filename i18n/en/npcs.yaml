@@ -37,7 +37,7 @@ npc.puerto_armorer.salvage: "I buy weapons and armor, but at scrap prices: a thi
 npc.puerto_provisioner.name: "Tilde Varga, provisions"
 npc.puerto_provisioner.greet: "Come in, come in! Rope, shovels, ship's biscuit... and if you bring pelts or shells, I'll buy those too."
 npc.puerto_provisioner.opt_tools: "What is each tool for?"
-npc.puerto_provisioner.tools: "Rope gets anyone out of a pit; a shovel opens holes where the sand sounds hollow; a pickaxe pulls ore out of rock; and the rod, well, fish. Without tools you won't get far on this island."
+npc.puerto_provisioner.tools: "Rope gets anyone out of a pit; a shovel opens holes where the sand sounds hollow; a pickaxe pulls ore out of rock; the rod, well, fish; a felling axe gets logs out of the birches, and the smithing hammer is for the anvil. Without tools you won't get far on this island."
 npc.puerto_provisioner.opt_gossip: "What's the news around here?"
 npc.puerto_provisioner.gossip: "That the lantern on the point was dark the night of the wreck, and yet the sailors swear they saw a light. That the beach looters have more coin than ever. I only sell rope, but rope sells well when people are scared."
 

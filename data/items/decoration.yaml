@@ -34,6 +34,49 @@
       - { item: iron_ore, weight: 4 }
       - { item: quartz_crystal, weight: 1, min_level: 5 }
 
+# Choppable tree (T3.4): use a felling axe on it. Our own numbers.
+- id: birch_tree
+  kind: decoration
+  sprite: decor/birch_tree
+  name: item.birch_tree.name
+  description: item.birch_tree.desc
+  pickupable: false
+  blocks_movement: true
+  resource:
+    tool: woodcutting
+    skill: woodcutting
+    charges: 3              # logs before the tree is bare
+    regen_ms: 360000        # grows back 6 min after its last log
+    chance: { base: 0.35, per_level: 0.025, max: 0.85 }
+    drops:
+      - { item: birch_log, weight: 9 }
+      - { item: tree_resin, weight: 2, min_level: 6 }
+
+# Crafting stations (T3.4): use one to see its recipes (data/recipes.yaml).
+- id: smelting_forge
+  kind: decoration
+  sprite: decor/smelting_forge
+  name: item.smelting_forge.name
+  description: item.smelting_forge.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: anvil
+  kind: decoration
+  sprite: decor/anvil
+  name: item.anvil.name
+  description: item.anvil.desc
+  pickupable: false
+  blocks_movement: true
+
+- id: cooking_hearth
+  kind: decoration
+  sprite: decor/cooking_hearth
+  name: item.cooking_hearth.name
+  description: item.cooking_hearth.desc
+  pickupable: false
+  blocks_movement: true
+
 # Nature (T1.16): trees and boulders block walking; bushes do not.
 - id: oak_tree
   kind: decoration

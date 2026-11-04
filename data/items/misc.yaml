@@ -178,3 +178,73 @@
   weight: 400
   tradeable: false
   notes: Chapter 1 quest item (ch1_shipwreck). Given by puerto_foreman, taken by harbor_master. No value, so no NPC buys it.
+
+# Trade materials and dishes (T3.4). Our own numbers.
+- id: birch_log
+  kind: material
+  sprite: materials/birch_log
+  name: item.birch_log.name
+  description: item.birch_log.desc
+  weight: 1800
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 3
+
+- id: tree_resin
+  kind: material
+  sprite: materials/tree_resin
+  name: item.tree_resin.name
+  description: item.tree_resin.desc
+  weight: 150
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 16
+
+- id: iron_ingot
+  kind: material
+  sprite: materials/iron_ingot
+  name: item.iron_ingot.name
+  description: item.iron_ingot.desc
+  weight: 1600
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 34
+
+- id: grilled_fish
+  kind: consumable
+  sprite: food/grilled_fish
+  name: item.grilled_fish.name
+  description: item.grilled_fish.desc
+  weight: 450
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 150000 }
+  value: 6
+
+- id: roast_boar
+  kind: consumable
+  sprite: food/roast_boar
+  name: item.roast_boar.name
+  description: item.roast_boar.desc
+  weight: 850
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 330000 }
+  value: 11
+
+- id: harbour_stew
+  kind: consumable
+  sprite: food/harbour_stew
+  name: item.harbour_stew.name
+  description: item.harbour_stew.desc
+  weight: 700
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 480000, heal_hp: 30 }
+  value: 24

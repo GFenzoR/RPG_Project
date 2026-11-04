@@ -49,6 +49,7 @@ message ServerMessage {
     PlayerConditions player_conditions = 30;
     PartyUpdate party_update = 31;
     PartyInvitation party_invitation = 32;
+    StationOpen station_open = 33;
   }
 }
 
@@ -466,4 +467,16 @@ message PartyInvitation {
   uint32 inviter_id = 1;
   string inviter_name = 2;
   uint32 expires_ms = 3;
+}
+
+// StationOpen answers a UseItem on a crafting station within reach (T3.4), and comes
+// again after every Craft at it: the client shows the recipes of data/recipes.yaml whose
+// station is item_id and sends Craft with pos. owned is how many units of each input of
+// those recipes the player carries in its containers, and tools the tool.use of every
+// tool it carries. Nothing is sent when the player walks away: Craft is checked again.
+message StationOpen {
+  Position pos = 1;
+  uint32 item_id = 2;
+  repeated ItemStack owned = 3;
+  repeated string tools = 4;
 }

@@ -108,6 +108,30 @@ Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data
   de dos intervalos lo reinicia.
 - El estado de agotamiento vive en memoria: un reinicio del servidor deja todo lleno.
 
+Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/recipes.yaml`):
+- **Leñador** es recolección: el hacha de leñador (`tool.use: woodcutting`) sobre un abedul
+  (`birch_tree`, con su bloque `resource`) da troncos y, desde woodcutting 6, algo de resina.
+  Mismo motor que pesca y minería (cargas, regeneración, anti-bot); los robles y pinos de
+  decoración no se talan.
+- **Estaciones:** fragua (`smelting_forge`), yunque (`anvil`) y fogón (`cooking_hearth`) son
+  items del mapa. Usarlas (click derecho) a 1 casilla abre la ventana de recetas de esa
+  estación, con lo que falta y la chance a tu nivel. Herrería: mineral + tronco → lingote en
+  la fragua; lingotes → hacha de leñador, pico o espada corta forjada en el yunque (con el
+  martillo de herrero encima). Cocina: pescado crudo, carne de jabalí y algas → pescado a la
+  brasa, jabalí asado y guiso del puerto (más `food_ms` que lo crudo; el guiso cura un poco).
+- **Intento:** el servidor comprueba receta, estación en esa casilla, distancia (1 casilla,
+  mismo piso), nivel mínimo del oficio, herramienta llevada, ingredientes en los
+  contenedores (no lo equipado), capacidad (el peso de los ingredientes cuenta como
+  liberado) y sitio en la mochila (sin contar los huecos que liberarían los ingredientes).
+  Si todo vale, toma los ingredientes de una vez y tira la chance
+  `min(max_success, base_success + success_per_level × (nivel − level))` con el nivel de
+  antes del intento. Éxito o fallo, los ingredientes se gastan y el oficio gana `xp` intentos.
+- **Anti-bot:** comparte el ritmo de la recolección: tras un intento no hay otro (de oficio o
+  de recolección) hasta `max(gathering.use_interval_ms, time_ms)`, y el anti-AFK de
+  `gathering.afk` cuenta igual (mismo sitio, mismo contador).
+- Sin vendedores de recetas todavía: se conocen todas; las herramientas (hacha y martillo)
+  las vende el proveedor del Farol.
+
 ### Anti-bot y anti-AFK (desde el inicio)
 - Entrenar contra un objetivo que no responde da progreso reducido tras X minutos.
 - Recursos (vetas, árboles, peces) se agotan y regeneran.

@@ -1,0 +1,94 @@
+# Trade recipes (T3.4, docs/06-content-data.md "Receta de oficio"). Use the station on
+# the map, then pick a recipe. Every attempt spends the inputs and earns `xp` tries of
+# the craft skill; it succeeds with min(max_success, base_success + success_per_level ×
+# (skill − level)). Our own numbers (CLAUDE.md legal rule).
+
+# ---- Smithing: smelting forge ---------------------------------------------------------
+- id: smelt_iron_ingot
+  craft: smithing
+  station: smelting_forge
+  level: 1
+  time_ms: 3000
+  inputs: [{ item: iron_ore, count: 2 }, { item: birch_log, count: 1 }]
+  output: { item: iron_ingot, count: 1 }
+  base_success: 0.65
+  success_per_level: 0.03
+  max_success: 0.95
+  xp: 1
+
+# ---- Smithing: anvil (needs a smithing hammer) ---------------------------------------
+- id: smith_felling_axe
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 2
+  time_ms: 4000
+  inputs: [{ item: iron_ingot, count: 2 }, { item: birch_log, count: 1 }]
+  output: { item: felling_axe, count: 1 }
+  base_success: 0.55
+  success_per_level: 0.04
+  max_success: 0.9
+  xp: 2
+
+- id: smith_pickaxe
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 3
+  time_ms: 4000
+  inputs: [{ item: iron_ingot, count: 2 }, { item: birch_log, count: 1 }]
+  output: { item: pickaxe, count: 1 }
+  base_success: 0.55
+  success_per_level: 0.04
+  max_success: 0.9
+  xp: 2
+
+- id: smith_forged_shortsword
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 6
+  time_ms: 5000
+  inputs: [{ item: iron_ingot, count: 3 }, { item: birch_log, count: 1 }, { item: tree_resin, count: 1 }]
+  output: { item: forged_shortsword, count: 1 }
+  base_success: 0.4
+  success_per_level: 0.05
+  max_success: 0.85
+  xp: 4
+
+# ---- Cooking: cooking hearth -----------------------------------------------------------
+- id: cook_grilled_fish
+  craft: cooking
+  station: cooking_hearth
+  level: 1
+  time_ms: 2000
+  inputs: [{ item: raw_fish, count: 1 }]
+  output: { item: grilled_fish, count: 1 }
+  base_success: 0.7
+  success_per_level: 0.03
+  max_success: 0.97
+  xp: 1
+
+- id: cook_roast_boar
+  craft: cooking
+  station: cooking_hearth
+  level: 3
+  time_ms: 3000
+  inputs: [{ item: boar_meat, count: 1 }, { item: birch_log, count: 1 }]
+  output: { item: roast_boar, count: 1 }
+  base_success: 0.6
+  success_per_level: 0.035
+  max_success: 0.95
+  xp: 2
+
+- id: cook_harbour_stew
+  craft: cooking
+  station: cooking_hearth
+  level: 6
+  time_ms: 4000
+  inputs: [{ item: raw_fish, count: 2 }, { item: boar_meat, count: 1 }, { item: seaweed_poultice, count: 1 }]
+  output: { item: harbour_stew, count: 2 }
+  base_success: 0.5
+  success_per_level: 0.04
+  max_success: 0.9
+  xp: 3

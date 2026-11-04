@@ -475,6 +475,7 @@ type ServerMessage struct {
 	//	*ServerMessage_PlayerConditions
 	//	*ServerMessage_PartyUpdate
 	//	*ServerMessage_PartyInvitation
+	//	*ServerMessage_StationOpen
 	Message       isServerMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -805,6 +806,15 @@ func (x *ServerMessage) GetPartyInvitation() *PartyInvitation {
 	return nil
 }
 
+func (x *ServerMessage) GetStationOpen() *StationOpen {
+	if x != nil {
+		if x, ok := x.Message.(*ServerMessage_StationOpen); ok {
+			return x.StationOpen
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Message interface {
 	isServerMessage_Message()
 }
@@ -937,6 +947,10 @@ type ServerMessage_PartyInvitation struct {
 	PartyInvitation *PartyInvitation `protobuf:"bytes,32,opt,name=party_invitation,json=partyInvitation,proto3,oneof"`
 }
 
+type ServerMessage_StationOpen struct {
+	StationOpen *StationOpen `protobuf:"bytes,33,opt,name=station_open,json=stationOpen,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Message() {}
 
 func (*ServerMessage_FullMapView) isServerMessage_Message() {}
@@ -1000,6 +1014,8 @@ func (*ServerMessage_PlayerConditions) isServerMessage_Message() {}
 func (*ServerMessage_PartyUpdate) isServerMessage_Message() {}
 
 func (*ServerMessage_PartyInvitation) isServerMessage_Message() {}
+
+func (*ServerMessage_StationOpen) isServerMessage_Message() {}
 
 // Welcome answers a valid Hello. It is followed in the same batch by FullMapView,
 // PlayerStats, Inventory and PlayerSkills.
@@ -3741,6 +3757,79 @@ func (x *PartyInvitation) GetExpiresMs() uint32 {
 	return 0
 }
 
+// StationOpen answers a UseItem on a crafting station within reach (T3.4), and comes
+// again after every Craft at it: the client shows the recipes of data/recipes.yaml whose
+// station is item_id and sends Craft with pos. owned is how many units of each input of
+// those recipes the player carries in its containers, and tools the tool.use of every
+// tool it carries. Nothing is sent when the player walks away: Craft is checked again.
+type StationOpen struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pos           *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
+	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Owned         []*ItemStack           `protobuf:"bytes,3,rep,name=owned,proto3" json:"owned,omitempty"`
+	Tools         []string               `protobuf:"bytes,4,rep,name=tools,proto3" json:"tools,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StationOpen) Reset() {
+	*x = StationOpen{}
+	mi := &file_game_v1_server_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StationOpen) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StationOpen) ProtoMessage() {}
+
+func (x *StationOpen) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StationOpen.ProtoReflect.Descriptor instead.
+func (*StationOpen) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *StationOpen) GetPos() *Position {
+	if x != nil {
+		return x.Pos
+	}
+	return nil
+}
+
+func (x *StationOpen) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *StationOpen) GetOwned() []*ItemStack {
+	if x != nil {
+		return x.Owned
+	}
+	return nil
+}
+
+func (x *StationOpen) GetTools() []string {
+	if x != nil {
+		return x.Tools
+	}
+	return nil
+}
+
 var File_game_v1_server_proto protoreflect.FileDescriptor
 
 const file_game_v1_server_proto_rawDesc = "" +
@@ -3748,7 +3837,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x14game/v1/server.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"Q\n" +
 	"\vServerBatch\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12.\n" +
-	"\x06events\x18\x02 \x03(\v2\x16.game.v1.ServerMessageR\x06events\"\x9b\x0f\n" +
+	"\x06events\x18\x02 \x03(\v2\x16.game.v1.ServerMessageR\x06events\"\xd6\x0f\n" +
 	"\rServerMessage\x12,\n" +
 	"\awelcome\x18\x01 \x01(\v2\x10.game.v1.WelcomeH\x00R\awelcome\x12:\n" +
 	"\rfull_map_view\x18\x02 \x01(\v2\x14.game.v1.FullMapViewH\x00R\vfullMapView\x120\n" +
@@ -3788,7 +3877,8 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x0espell_cooldown\x18\x1d \x01(\v2\x16.game.v1.SpellCooldownH\x00R\rspellCooldown\x12H\n" +
 	"\x11player_conditions\x18\x1e \x01(\v2\x19.game.v1.PlayerConditionsH\x00R\x10playerConditions\x129\n" +
 	"\fparty_update\x18\x1f \x01(\v2\x14.game.v1.PartyUpdateH\x00R\vpartyUpdate\x12E\n" +
-	"\x10party_invitation\x18  \x01(\v2\x18.game.v1.PartyInvitationH\x00R\x0fpartyInvitationB\t\n" +
+	"\x10party_invitation\x18  \x01(\v2\x18.game.v1.PartyInvitationH\x00R\x0fpartyInvitation\x129\n" +
+	"\fstation_open\x18! \x01(\v2\x14.game.v1.StationOpenH\x00R\vstationOpenB\t\n" +
 	"\amessage\"d\n" +
 	"\aWelcome\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
@@ -3997,7 +4087,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"inviter_id\x18\x01 \x01(\rR\tinviterId\x12!\n" +
 	"\finviter_name\x18\x02 \x01(\tR\vinviterName\x12\x1d\n" +
 	"\n" +
-	"expires_ms\x18\x03 \x01(\rR\texpiresMs*y\n" +
+	"expires_ms\x18\x03 \x01(\rR\texpiresMs\"\x8b\x01\n" +
+	"\vStationOpen\x12#\n" +
+	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12\x17\n" +
+	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12(\n" +
+	"\x05owned\x18\x03 \x03(\v2\x12.game.v1.ItemStackR\x05owned\x12\x14\n" +
+	"\x05tools\x18\x04 \x03(\tR\x05tools*y\n" +
 	"\fCreatureKind\x12\x1d\n" +
 	"\x19CREATURE_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14CREATURE_KIND_PLAYER\x10\x01\x12\x19\n" +
@@ -4056,7 +4151,7 @@ func file_game_v1_server_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_server_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
+var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
 var file_game_v1_server_proto_goTypes = []any{
 	(CreatureKind)(0),         // 0: game.v1.CreatureKind
 	(FloatingTextKind)(0),     // 1: game.v1.FloatingTextKind
@@ -4109,11 +4204,12 @@ var file_game_v1_server_proto_goTypes = []any{
 	(*PartyUpdate)(nil),       // 48: game.v1.PartyUpdate
 	(*PartyMember)(nil),       // 49: game.v1.PartyMember
 	(*PartyInvitation)(nil),   // 50: game.v1.PartyInvitation
-	(*ItemStack)(nil),         // 51: game.v1.ItemStack
-	(*Position)(nil),          // 52: game.v1.Position
-	(Direction)(0),            // 53: game.v1.Direction
-	(EquipmentSlot)(0),        // 54: game.v1.EquipmentSlot
-	(*LocalizedText)(nil),     // 55: game.v1.LocalizedText
+	(*StationOpen)(nil),       // 51: game.v1.StationOpen
+	(*ItemStack)(nil),         // 52: game.v1.ItemStack
+	(*Position)(nil),          // 53: game.v1.Position
+	(Direction)(0),            // 54: game.v1.Direction
+	(EquipmentSlot)(0),        // 55: game.v1.EquipmentSlot
+	(*LocalizedText)(nil),     // 56: game.v1.LocalizedText
 }
 var file_game_v1_server_proto_depIdxs = []int32{
 	7,  // 0: game.v1.ServerBatch.events:type_name -> game.v1.ServerMessage
@@ -4149,56 +4245,59 @@ var file_game_v1_server_proto_depIdxs = []int32{
 	26, // 30: game.v1.ServerMessage.player_conditions:type_name -> game.v1.PlayerConditions
 	48, // 31: game.v1.ServerMessage.party_update:type_name -> game.v1.PartyUpdate
 	50, // 32: game.v1.ServerMessage.party_invitation:type_name -> game.v1.PartyInvitation
-	51, // 33: game.v1.Tile.items:type_name -> game.v1.ItemStack
-	9,  // 34: game.v1.MapArea.palette:type_name -> game.v1.Tile
-	10, // 35: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
-	16, // 36: game.v1.MapArea.creatures:type_name -> game.v1.Creature
-	11, // 37: game.v1.FullMapView.area:type_name -> game.v1.MapArea
-	11, // 38: game.v1.MapSlice.area:type_name -> game.v1.MapArea
-	52, // 39: game.v1.TileUpdate.pos:type_name -> game.v1.Position
-	9,  // 40: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
-	0,  // 41: game.v1.Creature.kind:type_name -> game.v1.CreatureKind
-	52, // 42: game.v1.Creature.pos:type_name -> game.v1.Position
-	53, // 43: game.v1.Creature.dir:type_name -> game.v1.Direction
-	15, // 44: game.v1.Creature.outfit:type_name -> game.v1.Outfit
-	16, // 45: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
-	52, // 46: game.v1.CreatureMove.from:type_name -> game.v1.Position
-	52, // 47: game.v1.CreatureMove.to:type_name -> game.v1.Position
-	53, // 48: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
-	15, // 49: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
-	52, // 50: game.v1.Effect.pos:type_name -> game.v1.Position
-	52, // 51: game.v1.Projectile.from:type_name -> game.v1.Position
-	52, // 52: game.v1.Projectile.to:type_name -> game.v1.Position
-	27, // 53: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
-	52, // 54: game.v1.FloatingText.pos:type_name -> game.v1.Position
-	1,  // 55: game.v1.FloatingText.kind:type_name -> game.v1.FloatingTextKind
-	31, // 56: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
-	54, // 57: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
-	51, // 58: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
-	33, // 59: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
-	51, // 60: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
-	51, // 61: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
-	2,  // 62: game.v1.Message.kind:type_name -> game.v1.MessageKind
-	52, // 63: game.v1.Message.pos:type_name -> game.v1.Position
-	55, // 64: game.v1.Message.localized:type_name -> game.v1.LocalizedText
-	55, // 65: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
-	55, // 66: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
-	39, // 67: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
-	42, // 68: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
-	3,  // 69: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
-	51, // 70: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
-	51, // 71: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
-	52, // 72: game.v1.WalkRejected.pos:type_name -> game.v1.Position
-	53, // 73: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
-	4,  // 74: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
-	55, // 75: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
-	5,  // 76: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
-	49, // 77: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
-	78, // [78:78] is the sub-list for method output_type
-	78, // [78:78] is the sub-list for method input_type
-	78, // [78:78] is the sub-list for extension type_name
-	78, // [78:78] is the sub-list for extension extendee
-	0,  // [0:78] is the sub-list for field type_name
+	51, // 33: game.v1.ServerMessage.station_open:type_name -> game.v1.StationOpen
+	52, // 34: game.v1.Tile.items:type_name -> game.v1.ItemStack
+	9,  // 35: game.v1.MapArea.palette:type_name -> game.v1.Tile
+	10, // 36: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
+	16, // 37: game.v1.MapArea.creatures:type_name -> game.v1.Creature
+	11, // 38: game.v1.FullMapView.area:type_name -> game.v1.MapArea
+	11, // 39: game.v1.MapSlice.area:type_name -> game.v1.MapArea
+	53, // 40: game.v1.TileUpdate.pos:type_name -> game.v1.Position
+	9,  // 41: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
+	0,  // 42: game.v1.Creature.kind:type_name -> game.v1.CreatureKind
+	53, // 43: game.v1.Creature.pos:type_name -> game.v1.Position
+	54, // 44: game.v1.Creature.dir:type_name -> game.v1.Direction
+	15, // 45: game.v1.Creature.outfit:type_name -> game.v1.Outfit
+	16, // 46: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
+	53, // 47: game.v1.CreatureMove.from:type_name -> game.v1.Position
+	53, // 48: game.v1.CreatureMove.to:type_name -> game.v1.Position
+	54, // 49: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
+	15, // 50: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
+	53, // 51: game.v1.Effect.pos:type_name -> game.v1.Position
+	53, // 52: game.v1.Projectile.from:type_name -> game.v1.Position
+	53, // 53: game.v1.Projectile.to:type_name -> game.v1.Position
+	27, // 54: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
+	53, // 55: game.v1.FloatingText.pos:type_name -> game.v1.Position
+	1,  // 56: game.v1.FloatingText.kind:type_name -> game.v1.FloatingTextKind
+	31, // 57: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
+	55, // 58: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
+	52, // 59: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
+	33, // 60: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
+	52, // 61: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
+	52, // 62: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
+	2,  // 63: game.v1.Message.kind:type_name -> game.v1.MessageKind
+	53, // 64: game.v1.Message.pos:type_name -> game.v1.Position
+	56, // 65: game.v1.Message.localized:type_name -> game.v1.LocalizedText
+	56, // 66: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
+	56, // 67: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
+	39, // 68: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
+	42, // 69: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
+	3,  // 70: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
+	52, // 71: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
+	52, // 72: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
+	53, // 73: game.v1.WalkRejected.pos:type_name -> game.v1.Position
+	54, // 74: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
+	4,  // 75: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
+	56, // 76: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
+	5,  // 77: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
+	49, // 78: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
+	53, // 79: game.v1.StationOpen.pos:type_name -> game.v1.Position
+	52, // 80: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
+	81, // [81:81] is the sub-list for method output_type
+	81, // [81:81] is the sub-list for method input_type
+	81, // [81:81] is the sub-list for extension type_name
+	81, // [81:81] is the sub-list for extension extendee
+	0,  // [0:81] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_server_proto_init() }
@@ -4240,6 +4339,7 @@ func file_game_v1_server_proto_init() {
 		(*ServerMessage_PlayerConditions)(nil),
 		(*ServerMessage_PartyUpdate)(nil),
 		(*ServerMessage_PartyInvitation)(nil),
+		(*ServerMessage_StationOpen)(nil),
 	}
 	file_game_v1_server_proto_msgTypes[32].OneofWrappers = []any{
 		(*Message_Text)(nil),
@@ -4251,7 +4351,7 @@ func file_game_v1_server_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_server_proto_rawDesc), len(file_game_v1_server_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   45,
+			NumMessages:   46,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

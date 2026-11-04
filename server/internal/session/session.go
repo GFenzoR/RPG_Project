@@ -120,6 +120,9 @@ type Config struct {
 	// must be in Items. Without NPCs the world has none (tests, tools).
 	NPCs   content.NPCs
 	Quests content.Quests
+	// Recipes come from data/recipes.yaml (T3.4): every station, input and output must
+	// be in Items and every craft a skill of Balance.
+	Recipes content.Recipes
 	// Balance.Conditions (T3.2) must hold every condition the spells and monsters apply.
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
@@ -222,6 +225,9 @@ type World struct {
 	resources      map[world.Pos]*resourceTile
 	gatherFor      game.Tick
 	gatherAFKAfter game.Tick
+	// Crafting (T3.4): the station items of the recipes (numeric id) and the inputs of
+	// their recipes, for StationOpen.
+	stations map[uint16][]*content.Item
 
 	// Chat (T1.13): balance.yaml chat converted to ticks.
 	chatRefill game.Tick
@@ -318,6 +324,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initGathering(); err != nil {
+		return nil, err
+	}
+	if err := w.initCrafting(); err != nil {
 		return nil, err
 	}
 	return w, nil

@@ -143,6 +143,10 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	recipes, err := content.LoadRecipes(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	npcs, err := content.LoadNPCs(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
@@ -182,6 +186,7 @@ func run(logger *slog.Logger, o options) error {
 		Monsters:         monsters,
 		Items:            items,
 		Spells:           spells,
+		Recipes:          recipes,
 		NPCs:             npcs,
 		Quests:           quests,
 		Map:              m,

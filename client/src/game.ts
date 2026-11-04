@@ -1,6 +1,8 @@
 // One play session: the WebSocket, the world state, the keyboard and the canvas wired
 // together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
 // the server says; the one thing it predicts is the next own step.
+import { nearStation } from "./state/recipes.ts";
+import type { StationState } from "./state/recipes.ts";
 import { ChatChannel, CreatureKind, Direction, PartyAction } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
@@ -52,6 +54,8 @@ export interface GameUi {
   /** The open NPC dialog and its shop (T1.10). */
   dialog: DialogState | undefined;
   shop: ShopState | undefined;
+  /** The crafting station window (T3.4). */
+  station: StationState | undefined;
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
@@ -194,6 +198,18 @@ export class Game {
 
   closeDialog(): void {
     this.chooseOption(0);
+  }
+
+  /** Attempts a recipe at the open station (T3.4); the server answers with craft.* messages. */
+  craft(recipeId: string): void {
+    const s = this.world.station;
+    if (s) this.conn.send({ case: "craft", value: { recipeId, station: { ...s.pos } } });
+  }
+
+  closeStation(): void {
+    if (!this.world.station) return;
+    this.world.station = undefined;
+    this.publish();
   }
 
   shopBuy(itemId: number, count: number): void {
@@ -440,6 +456,8 @@ export class Game {
 
   private publish(): void {
     const w = this.world;
+    const self = w.self;
+    if (w.station && self && !nearStation(w.station, self.pos)) w.station = undefined;
     this.opts.update({
       battle: w.battleList(),
       target: w.target,
@@ -455,6 +473,7 @@ export class Game {
       hotkeys: this.hotkeys,
       dialog: w.dialog,
       shop: w.shop,
+      station: w.station,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       selfId: w.selfId,
@@ -579,6 +598,11 @@ export class Game {
       return;
     }
     if (typingInField(e)) return;
+    if (e.code === "Escape" && this.world.station && !this.world.dialog) {
+      this.closeStation();
+      e.preventDefault();
+      return;
+    }
     if (e.code === "Escape" && this.cancelUse()) {
       e.preventDefault();
       return;

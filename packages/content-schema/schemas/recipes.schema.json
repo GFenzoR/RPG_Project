@@ -6,22 +6,59 @@
   "items": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["id", "craft", "level", "inputs", "output", "base_success", "xp"],
+    "required": ["id", "craft", "station", "level", "inputs", "output", "base_success", "xp"],
     "properties": {
-      "id": { "$ref": "common.schema.json#/$defs/id" },
-      "craft": { "$ref": "common.schema.json#/$defs/craft" },
+      "id": {
+        "$ref": "common.schema.json#/$defs/id"
+      },
+      "craft": {
+        "$ref": "common.schema.json#/$defs/craft"
+      },
       "station": {
-        "description": "Item the player must use (furnace, anvil...).",
+        "description": "Map item (not pickupable) the player must use and stand next to (forge, anvil, hearth...).",
         "$ref": "common.schema.json#/$defs/itemRef"
       },
-      "level": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-      "inputs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/stack" } },
-      "output": { "$ref": "#/$defs/stack" },
-      "base_success": { "$ref": "common.schema.json#/$defs/chance" },
-      "success_per_level": { "$ref": "common.schema.json#/$defs/chance" },
-      "xp": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
-      "notes": { "$ref": "common.schema.json#/$defs/notes" }
-    }
+      "tool": {
+        "description": "tool.use of an item the player must carry (e.g. smithing = a smithing hammer).",
+        "enum": ["fishing", "mining", "woodcutting", "smithing"]
+      },
+      "level": {
+        "$ref": "common.schema.json#/$defs/nonNegativeInt",
+        "description": "Minimum level of the craft skill."
+      },
+      "time_ms": {
+        "description": "Time an attempt takes: no other crafting or gathering attempt until then (never less than gathering.use_interval_ms).",
+        "$ref": "common.schema.json#/$defs/nonNegativeInt"
+      },
+      "inputs": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "$ref": "#/$defs/stack"
+        }
+      },
+      "output": {
+        "$ref": "#/$defs/stack"
+      },
+      "base_success": {
+        "$ref": "common.schema.json#/$defs/chance"
+      },
+      "success_per_level": {
+        "$ref": "common.schema.json#/$defs/chance"
+      },
+      "max_success": {
+        "description": "Cap of the success chance (default 1).",
+        "$ref": "common.schema.json#/$defs/chance"
+      },
+      "xp": {
+        "$ref": "common.schema.json#/$defs/nonNegativeInt",
+        "description": "Tries of the craft skill every attempt earns, success or not."
+      },
+      "notes": {
+        "$ref": "common.schema.json#/$defs/notes"
+      }
+    },
+    "description": "Chance = min(max_success, base_success + success_per_level × (skill − level)). Every attempt spends the inputs."
   },
   "$defs": {
     "stack": {
@@ -29,8 +66,12 @@
       "additionalProperties": false,
       "required": ["item", "count"],
       "properties": {
-        "item": { "$ref": "common.schema.json#/$defs/itemRef" },
-        "count": { "$ref": "common.schema.json#/$defs/positiveInt" }
+        "item": {
+          "$ref": "common.schema.json#/$defs/itemRef"
+        },
+        "count": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        }
       }
     }
   }

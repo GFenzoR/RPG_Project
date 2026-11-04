@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
-import type { ClientContent, ItemDef, SpellDef } from "../src/content-types.ts";
+import type { ClientContent, ItemDef, RecipeDef, SpellDef } from "../src/content-types.ts";
 
 const VIRTUAL_ID = "virtual:rpg-content";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
@@ -126,11 +126,47 @@ export function loadClientContent(root: string): ClientContent {
           : [],
       )
     : [];
+  let rawRecipes: unknown;
+  try {
+    rawRecipes = readYaml(join(root, "data", "recipes.yaml"));
+  } catch {
+    rawRecipes = []; // no recipes yet
+  }
+  const stack = (v: unknown): { itemId: number; count: number } | undefined => {
+    if (!isObj(v) || typeof v["item"] !== "string") return undefined;
+    const n = ids[v["item"]];
+    return typeof n === "number" ? { itemId: n, count: num(v["count"], 1) } : undefined;
+  };
+  const recipes: RecipeDef[] = Array.isArray(rawRecipes)
+    ? rawRecipes.flatMap((r) => {
+        if (!isObj(r) || typeof r["id"] !== "string" || typeof r["station"] !== "string") return [];
+        const station = ids[r["station"]];
+        const output = stack(r["output"]);
+        const inputs = Array.isArray(r["inputs"]) ? r["inputs"].map(stack) : [];
+        if (typeof station !== "number" || !output || inputs.some((i) => !i)) return [];
+        return [
+          {
+            id: r["id"],
+            craft: typeof r["craft"] === "string" ? r["craft"] : "",
+            station,
+            tool: typeof r["tool"] === "string" ? r["tool"] : "",
+            level: num(r["level"], 0),
+            timeMs: num(r["time_ms"], 0),
+            inputs: inputs.filter((i) => i !== undefined),
+            output,
+            baseSuccess: num(r["base_success"], 0),
+            successPerLevel: num(r["success_per_level"], 0),
+            maxSuccess: num(r["max_success"], 1),
+          },
+        ];
+      })
+    : [];
   return {
     items,
     monsterSprites: monsters,
     vocations,
     spells,
+    recipes,
     movement: {
       baseStepMs: num(mv["base_step_ms"], 1000),
       diagonalCost: num(mv["diagonal_cost"], 1.5),

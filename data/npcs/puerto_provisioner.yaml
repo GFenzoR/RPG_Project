@@ -36,6 +36,8 @@ shop:
     - { item: shovel, price: 40 }
     - { item: pickaxe, price: 120 }
     - { item: fishing_rod, price: 140 }
+    - { item: felling_axe, price: 110 }
+    - { item: smithing_hammer, price: 95 }
     - { item: ship_biscuit, price: 3 }
     - { item: seaweed_poultice, price: 25 }
   buys:
@@ -43,6 +45,11 @@ shop:
     - { item: shovel, price: 12 }
     - { item: pickaxe, price: 40 }
     - { item: fishing_rod, price: 50 }
+    - { item: felling_axe, price: 38 }
+    - { item: smithing_hammer, price: 32 }
+    - { item: birch_log, price: 1 }
+    - { item: iron_ingot, price: 11 }
+    - { item: grilled_fish, price: 2 }
     - { item: raw_fish, price: 1 }
     - { item: boar_meat, price: 1 }
     - { item: gull_feather, price: 1 }
