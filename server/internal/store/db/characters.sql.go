@@ -100,15 +100,22 @@ func (q *Queries) DeleteCharacterQuestState(ctx context.Context, characterID int
 }
 
 const getCharacterForPlay = `-- name: GetCharacterForPlay :one
-SELECT id, account_id, name, vocation, level, experience, health, mana,
-       pos_x, pos_y, pos_z, town
-FROM characters
-WHERE id = $1 AND account_id = $2
+SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
+       c.pos_x, c.pos_y, c.pos_z, c.town, a.role
+FROM characters c
+JOIN accounts a ON a.id = c.account_id
+WHERE c.id = $1 AND c.account_id = $2
+  AND NOT EXISTS (
+      SELECT 1 FROM account_bans b
+      WHERE b.account_id = a.id AND b.lifted_at IS NULL
+        AND (b.expires_at IS NULL OR b.expires_at > $3)
+  )
 `
 
 type GetCharacterForPlayParams struct {
 	ID        int64
 	AccountID int64
+	Now       pgtype.Timestamptz
 }
 
 type GetCharacterForPlayRow struct {
@@ -124,11 +131,13 @@ type GetCharacterForPlayRow struct {
 	PosY       pgtype.Int4
 	PosZ       pgtype.Int2
 	Town       string
+	Role       string
 }
 
-// Loads what the game server needs to put a character in the world.
+// Loads what the game server needs to put a character in the world, with its account's
+// role. A banned account's characters are not found (T2.6).
 func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error) {
-	row := q.db.QueryRow(ctx, getCharacterForPlay, arg.ID, arg.AccountID)
+	row := q.db.QueryRow(ctx, getCharacterForPlay, arg.ID, arg.AccountID, arg.Now)
 	var i GetCharacterForPlayRow
 	err := row.Scan(
 		&i.ID,
@@ -143,6 +152,7 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 		&i.PosY,
 		&i.PosZ,
 		&i.Town,
+		&i.Role,
 	)
 	return i, err
 }

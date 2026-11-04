@@ -8,6 +8,7 @@ la red o la persistencia.
 server/
   cmd/gameserver/      main: carga config, contenido, mapa compilado; arranca loop + HTTP + WS
   cmd/mapcompile/      compila world/ (JSON) a binario world.bin para carga rápida
+  cmd/gameserver admin herramienta del operador: roles y log de auditoría (T2.6)
   internal/game/       game loop, tick, cola de comandos, scheduler de eventos
   internal/world/      tiles, pisos, sectores, islas, pathfinding (A* por casillas)
   internal/entity/     jugadores, monstruos, NPCs; IDs estables (uint32)
@@ -22,7 +23,8 @@ server/
   internal/net/        WebSocket, framing, (de)serialización protobuf, rate limits
   internal/session/    sesión de jugador: AOI, caminar, envío de deltas, ping, guardado
   internal/net/gateway/ WebSocket /ws: Hello, lector/escritor por conexión, rate limit
-  internal/app/        ensambla loop + session + persistencia + gateway + API (main y tests)
+  internal/app/        ensambla loop + session + persistencia + gateway + API (main y tests);
+                       admin.go: goroutine de auditoría y bans (T2.6)
   pkg/bot/             cliente sin UI para tests de integración y tools/bots (fuera de
                        internal/ para que otro módulo lo importe)
   internal/store/      PostgreSQL: repositorios generados con sqlc, migraciones goose

@@ -20,6 +20,7 @@ type Repo struct {
 	sessions   map[string]store.Session
 	characters map[int64][]store.Character
 	names      map[string]bool
+	bans       map[int64]store.Ban
 }
 
 // NewRepo returns an empty Repo.
@@ -30,6 +31,7 @@ func NewRepo() *Repo {
 		sessions:   map[string]store.Session{},
 		characters: map[int64][]store.Character{},
 		names:      map[string]bool{},
+		bans:       map[int64]store.Ban{},
 	}
 }
 
@@ -64,6 +66,23 @@ func (r *Repo) Disable(accountID int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.accounts[accountID].Disabled = true
+}
+
+// SetBan gives an account an active ban (test helper). A zero ExpiresAt is permanent.
+func (r *Repo) SetBan(accountID int64, b store.Ban) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.bans[accountID] = b
+}
+
+// ActiveBan implements auth.Repo.
+func (r *Repo) ActiveBan(_ context.Context, accountID int64, now time.Time) (store.Ban, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if b, ok := r.bans[accountID]; ok && (b.Permanent() || b.ExpiresAt.After(now)) {
+		return b, nil
+	}
+	return store.Ban{}, store.ErrNotFound
 }
 
 // TouchLogin implements auth.Repo.

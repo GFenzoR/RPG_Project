@@ -473,6 +473,7 @@ var errorStatus = []struct {
 	{auth.ErrEmailTaken, http.StatusConflict, "email_taken"},
 	{auth.ErrInvalidCredentials, http.StatusUnauthorized, "invalid_credentials"},
 	{auth.ErrAccountDisabled, http.StatusForbidden, "account_disabled"},
+	{auth.ErrAccountBanned, http.StatusForbidden, "account_banned"},
 	{auth.ErrUnauthorized, http.StatusUnauthorized, "unauthorized"},
 	{auth.ErrInvalidName, http.StatusBadRequest, "invalid_name"},
 	{auth.ErrNameTaken, http.StatusConflict, "name_taken"},

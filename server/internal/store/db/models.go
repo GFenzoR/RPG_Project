@@ -16,6 +16,18 @@ type Account struct {
 	DisabledAt      pgtype.Timestamptz
 	CreatedAt       pgtype.Timestamptz
 	LastLoginAt     pgtype.Timestamptz
+	Role            string
+}
+
+type AccountBan struct {
+	ID        int64
+	AccountID int64
+	Reason    string
+	BannedBy  pgtype.Int8
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+	LiftedAt  pgtype.Timestamptz
+	LiftedBy  pgtype.Int8
 }
 
 type AccountCosmetic struct {
@@ -23,6 +35,21 @@ type AccountCosmetic struct {
 	CosmeticID string
 	Source     string
 	AcquiredAt pgtype.Timestamptz
+}
+
+type AuditLog struct {
+	ID                int64
+	At                pgtype.Timestamptz
+	Source            string
+	ActorAccountID    pgtype.Int8
+	ActorCharacterID  pgtype.Int8
+	ActorName         string
+	Action            string
+	TargetAccountID   pgtype.Int8
+	TargetCharacterID pgtype.Int8
+	TargetName        string
+	Args              []byte
+	Result            string
 }
 
 type Character struct {

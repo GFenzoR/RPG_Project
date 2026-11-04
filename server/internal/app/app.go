@@ -28,6 +28,7 @@ import (
 type Store interface {
 	auth.Repo
 	gateway.Characters
+	AdminStore
 	SaveCharacterState(ctx context.Context, c store.CharacterState) error
 	Ping(ctx context.Context) error
 }
@@ -77,6 +78,7 @@ type App struct {
 	World   *session.World
 	Gateway *gateway.Gateway
 	saver   *session.Saver
+	admin   *adminWorker
 	handler http.Handler
 }
 
@@ -126,6 +128,9 @@ func New(cfg Config) (*App, error) {
 			return nil, err
 		}
 		a.saver = saver
+		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, func(r session.AdminResult) {
+			_ = a.Loop.Enqueue(a.World.AdminDone(r)) // lost answer: the GM can retry
+		})
 		w, err := session.New(session.Config{
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
@@ -137,6 +142,7 @@ func New(cfg Config) (*App, error) {
 			NPCs:          cfg.NPCs,
 			Quests:        cfg.Quests,
 			Save:          saver.Submit,
+			Admin:         a.admin.Submit,
 			AutosaveEvery: cfg.AutosaveEvery,
 			Logger:        cfg.Logger,
 		})
@@ -208,6 +214,7 @@ func (a *App) Handler() http.Handler { return a.handler }
 func (a *App) Run(ctx context.Context) error {
 	if a.saver != nil {
 		a.saver.Start()
+		a.admin.Start()
 	}
 	runErr := a.Loop.Run(ctx)
 	if runErr != nil {
@@ -220,6 +227,7 @@ func (a *App) Run(ctx context.Context) error {
 	// deadline so a slow database cannot eat the others' time.
 	online := a.World.Online()
 	pending := a.World.SaveAll()
+	pendingAdmin := a.World.PendingAdmin()
 	stage := func(name string, fn func(context.Context) error) {
 		sctx, cancel := context.WithTimeout(context.Background(), a.cfg.ShutdownTimeout)
 		defer cancel()
@@ -240,6 +248,8 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		return errors.Join(errs...)
 	})
+	stage("audit log did not drain", a.admin.Stop)
+	stage("pending audit entries", func(ctx context.Context) error { return a.admin.writePending(ctx, pendingAdmin) })
 	a.log.Info("players saved at shutdown", "online", online, "ticks", uint64(a.Loop.Tick()))
 	return runErr
 }

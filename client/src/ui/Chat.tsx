@@ -22,6 +22,7 @@ const KIND_CLASS: Partial<Record<MessageKind, string>> = {
   [MessageKind.WHISPER]: "whisper",
   [MessageKind.GLOBAL]: "global",
   [MessageKind.NPC]: "npc",
+  [MessageKind.BROADCAST]: "broadcast",
 };
 
 export function ChatPanel(props: {

@@ -18,6 +18,8 @@ type Querier interface {
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error)
 	CreateCharacter(ctx context.Context, arg CreateCharacterParams) (CreateCharacterRow, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
+	// Revokes every token of an account (ban).
+	DeleteAccountSessions(ctx context.Context, accountID int64) (int64, error)
 	// A snapshot replaces the whole inventory in the same transaction as the character row.
 	DeleteCharacterInventory(ctx context.Context, characterID int64) error
 	// A snapshot replaces every storage value in the same transaction as the character row.
@@ -25,9 +27,13 @@ type Querier interface {
 	DeleteExpiredSessions(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
-	// The caller passes "now" (injected clock) so expiry is testable.
+	// The ban that ends last among the account's active bans (a permanent one first).
+	GetActiveBan(ctx context.Context, arg GetActiveBanParams) (GetActiveBanRow, error)
+	// The caller passes "now" (injected clock) so expiry is testable. A banned account has
+	// no active session (T2.6).
 	GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error)
-	// Loads what the game server needs to put a character in the world.
+	// Loads what the game server needs to put a character in the world, with its account's
+	// role. A banned account's characters are not found (T2.6).
 	GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error)
 	// Every item of a character; the server rebuilds the tree from container_id.
 	GetCharacterInventory(ctx context.Context, characterID int64) ([]GetCharacterInventoryRow, error)
@@ -35,7 +41,15 @@ type Querier interface {
 	GetCharacterQuestState(ctx context.Context, characterID int64) ([]GetCharacterQuestStateRow, error)
 	// Skills without a row are at their base level (data/balance.yaml).
 	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
+	// Resolves a character name (ignoring case) for a staff command.
+	GetCharacterTarget(ctx context.Context, name string) (GetCharacterTargetRow, error)
+	InsertAudit(ctx context.Context, arg InsertAuditParams) error
+	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
+	// Lifts every active ban of the account.
+	LiftBans(ctx context.Context, arg LiftBansParams) (int64, error)
+	// Newest entries first (operator tool and tests).
+	ListAudit(ctx context.Context, maxRows int32) ([]AuditLog, error)
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
@@ -44,6 +58,8 @@ type Querier interface {
 	SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error
 	// Written by the persistence goroutine from an immutable snapshot of the game loop.
 	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
+	// Sets the role of the account with that (normalized) email and returns the old one.
+	SetAccountRole(ctx context.Context, arg SetAccountRoleParams) (SetAccountRoleRow, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
 	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
 }

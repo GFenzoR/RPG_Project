@@ -19,6 +19,10 @@ type Player struct {
 	town      string // residence: the island whose temple it wakes up at (T1.11)
 	vocation  content.Vocation
 	client    Client
+	// role is the account's role at login (T2.6): what staff commands p may run.
+	role Role
+	// cmdTAT is the staff command rate limit's theoretical arrival tick (GCRA).
+	cmdTAT game.Tick
 
 	level      int
 	experience int64
@@ -243,6 +247,11 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	if old := w.byClient[client]; old != nil {
 		return // one character per connection
 	}
+	if w.isBanned(c.AccountID, ctx.Now) {
+		// Banned while this login was reading the database (the row it read had no ban).
+		client.Close(pb.DisconnectReason_DISCONNECT_REASON_BANNED)
+		return
+	}
 	voc, ok := w.cfg.Vocations[c.Vocation]
 	if !ok {
 		w.log.Error("session: unknown vocation, login refused", "character", c.ID, "vocation", c.Vocation)
@@ -276,6 +285,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		town:       c.Town,
 		vocation:   voc,
 		client:     client,
+		role:       c.Role,
 		level:      max(c.Level, 1),
 		experience: c.Experience,
 		maxHealth:  stats.Health,

@@ -65,6 +65,10 @@ Detalles (T1.4, `server/internal/net/gateway`):
   socket sin `Logout` también saca al personaje y lo guarda (las zonas sin logout y el
   bloqueo por combate llegan con T1.6/T1.11).
 - **Apagado:** el servidor guarda a todos y manda `Disconnect{SERVER_SHUTDOWN}`.
+- **Moderación (T2.6):** un GM expulsa con `Disconnect{KICKED}` y banea con
+  `Disconnect{BANNED}`. El token de juego de una cuenta baneada no se canjea
+  (`INVALID_SESSION`), y si el ban llega mientras un login leía la base, el `Join` se
+  rechaza con `BANNED`.
 
 ## API HTTP (cuentas y personajes)
 Implementada en `server/internal/httpapi` (T1.3). JSON en ambos sentidos; los `POST` con
@@ -162,6 +166,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `email_taken` | 409 | Email ya registrado |
 | `invalid_credentials` | 401 | Email o contraseña incorrectos (no distingue cuál) |
 | `account_disabled` | 403 | Cuenta deshabilitada |
+| `account_banned` | 403 | Cuenta suspendida por el staff (T2.6); solo con la contraseña correcta |
 | `unauthorized` | 401 | Token ausente, vencido o revocado |
 | `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
 | `name_taken` | 409 | Nombre en uso |
@@ -369,6 +374,26 @@ Reglas y números en `02-game-design.md` ("Chat") y `balance.yaml` `chat`.
   `chat.muted` (`seconds`), `chat.global_wait` (`seconds`).
 - El rate limit por conexión del gateway (comandos/s, desconexión) sigue aplicando a
   todo, chat incluido; el anti-flood es una capa más fina dentro del juego.
+
+### Comandos de staff (T2.6, `server/internal/session/admin.go`)
+Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architecture.md`.
+- No hay mensaje propio: un `Say` cuyo texto limpio empieza con `/` es un comando, en
+  cualquier canal, y nunca se reenvía como chat. Se revisa antes el largo (`chat.too_long`).
+- Comando desconocido, o que el rol de la cuenta no permite → `Message` de sistema
+  `command.unknown`, después del mismo anti-flood del chat (`chat.flood`, `chat.muted`).
+- Staff: límite propio (ráfaga de 10, luego 1/s) → `command.too_fast`. Respuestas:
+  `gm.usage` (`usage`: la sintaxis, texto sin traducir), `gm.player_offline` (`name`),
+  `gm.player_not_found` (`name`), `gm.bad_position` (`x`, `y`, `z`), `gm.teleported`
+  (`name`, `x`, `y`, `z`), `gm.item_unknown` (`id`), `gm.item_count` (`max`),
+  `gm.item_created` (`item`), `gm.protected` (`name`), `gm.kicked` (`name`),
+  `gm.ban_duration` (`days`), `gm.ban_reason` (`max`), `gm.banned`, `gm.unbanned`,
+  `gm.not_banned` (`name`) y `gm.failed`. Los de ban y unban llegan cuando responde la
+  base, unos ticks después.
+- `/announce` → `Message{kind: BROADCAST, speaker_id, speaker_name, text}` sin `pos` a
+  todos los conectados. El texto va tal cual; el cliente pone la etiqueta traducida
+  (`client.chat.line.broadcast`).
+- Expulsado → `Disconnect{KICKED}`. Baneado → `Disconnect{BANNED}`; sus tokens quedan
+  revocados, así que el cliente vuelve al login y muestra el motivo ahí.
 
 ### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
 - `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso

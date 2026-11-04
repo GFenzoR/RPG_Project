@@ -32,6 +32,11 @@ cd server && DATABASE_URL=postgres://postgres:postgres@localhost:5432/rpg go run
 El servidor aplica las migraciones pendientes al arrancar y sirve la API HTTP en `:8080`
 (ver "API HTTP" en `05-network-protocol.md`).
 
+### Roles de staff (T2.6)
+Para probar los comandos de GM, dale un rol a tu cuenta de desarrollo y vuelve a entrar:
+`make set-role EMAIL=tu@correo ROLE=admin NOTE="dev"`. `make audit-log` muestra el log de
+auditoría. Comandos en `02-game-design.md` ("Moderación").
+
 ### Mapa del servidor
 El servidor carga el mapa compilado (`build/world.bin`), no el JSON de `world/`:
 ```

@@ -297,7 +297,45 @@ Números en `data/balance.yaml` (`chat`), nunca en código.
   `flood.mute_ms` (10 s, `chat.flood`); en silencio todo mensaje se rechaza (`chat.muted`).
 - Las palabras de un hechizo dichas en el canal decir lo lanzan (T1.9) y no se muestran
   como chat ni cuentan para el anti-flood (el hechizo ya tiene sus cooldowns).
-- Fuera de este hito: canales de grupo y gremio, privados persistentes, moderación (T2.6).
+- Una línea que empieza con `/` nunca es chat: es un comando (ver "Moderación").
+- Fuera de este hito: canales de grupo y gremio, privados persistentes.
+
+## Moderación (T2.6)
+Roles por cuenta: **jugador** (por defecto), **GM** y **admin**. Los asigna solo el
+operador con su herramienta (`make set-role`, docs/09); el juego nunca cambia roles.
+El rol se lee al entrar: un cambio vale desde el próximo login (para quitarlo ya, un
+admin además expulsa al personaje).
+
+Los comandos se escriben en la línea de chat, en cualquier canal:
+
+| Comando | Rol mínimo | Qué hace |
+|---|---|---|
+| `/tp x y z` | GM | Lleva al GM a esa casilla |
+| `/tp Nombre` | GM | Lleva al GM al lado de ese jugador |
+| `/tp Nombre x y z` | GM | Lleva a ese jugador a esa casilla |
+| `/item id [cantidad]` | admin | Crea 1–100 unidades de un item de `data/items` (id de contenido o numérico) en la mochila; lo que no cabe cae al suelo |
+| `/kick Nombre` | GM | Desconecta al jugador (`KICKED`) |
+| `/ban Nombre duración motivo` | GM | Suspende la cuenta: `30m`, `12h`, `7d`; GM hasta 30 días, admin hasta 3650 días o `perm` |
+| `/unban Nombre` | GM | Levanta las suspensiones activas de la cuenta |
+| `/announce texto` | GM | Anuncio a todos los conectados (`[Anuncio] Nombre: texto`) |
+
+- **Destino del teleport:** una casilla caminable de una isla, en un piso que existe. Si
+  está ocupada, la libre más cercana (hasta 2 de distancia). Si no, `gm.bad_position`.
+- **Jerarquía:** kick y ban solo alcanzan a roles menores que el propio (`gm.protected`).
+  Nadie se puede banear a sí mismo.
+- **Ban:** es por cuenta, alcanza a todos sus personajes, conectados o no. Al aplicarse
+  revoca todos los tokens de la cuenta y desconecta a sus personajes con `BANNED`. Mientras
+  dura, el login responde `account_banned`. Termina solo al vencer o con `/unban`.
+- **Sin descubrimiento:** para un jugador, un comando de staff responde igual que uno que
+  no existe (`command.unknown`) y pasa por el mismo anti-flood del chat. Un GM ve lo mismo
+  con los comandos de admin.
+- **Ritmo:** el staff tiene un límite propio de 10 comandos seguidos y luego 1 por segundo
+  (`command.too_fast`, no se audita).
+- **Auditoría:** todo comando de staff que se ejecuta, también los que fallan por
+  argumentos, queda en el log de auditoría con quién, qué, a quién, cuándo, argumentos y
+  resultado. Los cambios de rol también.
+- Llegan después (T4.1), con lugar en el diseño: reportes de jugadores, detección de bots y
+  log de economía. Las sanciones que propongan las aplica siempre un GM con estos comandos.
 
 ## Cosméticos (monetización futura)
 - Outfits, colores de outfit, monturas (solo visual y velocidad igual para todos),

@@ -69,6 +69,7 @@ for each tick (50 ms):
 | Estado del mundo (items en el suelo) | Memoria | Se pierde al reiniciar (como Tibia en sus inicios); casas en el futuro sí persisten |
 | Logs de economía (trades, drops raros) | Postgres, tabla append-only | Asíncrono por lotes |
 | Mapa y contenido | Repo git (world/, data/) | Se despliegan con cada versión |
+| Roles, bans y log de auditoría (T2.6) | Postgres (`audit_log` append-only) | Asíncrono, goroutine de admin |
 
 Transacciones: el trade entre jugadores se resuelve atómicamente en el loop (estado en
 memoria) y se persiste ambos personajes en una sola transacción de base de datos.
@@ -171,7 +172,32 @@ Decisión del 2026-11-03: el juego se sigue jugando en el navegador y en el escr
 - Anti-flood de chat, entrenamiento que rinde menos contra un objetivo que no responde,
   recolección con un intervalo mínimo y recursos que se agotan (`02-game-design.md`).
 
+### Moderación (T2.6)
+Reglas de juego y comandos en `02-game-design.md` ("Moderación").
+- **Roles** en `accounts.role` (`player` por defecto, `gm`, `admin`). Solo los cambia la
+  herramienta del operador (`gameserver admin set-role`), que escribe el cambio y su
+  entrada de auditoría en una transacción. No hay mensaje del protocolo ni comando del
+  juego que cambie un rol: el cliente no tiene forma de escalar privilegios.
+- **Comandos por chat:** un `Say` cuyo texto empieza con `/`. Se eligió el chat y no un
+  mensaje nuevo porque no suma superficie al protocolo y un cliente común ya puede
+  escribirlos. `session/admin.go` los ejecuta en el game loop: el rol viene del login
+  (`Character.Role`), se revisa en cada comando y los argumentos se validan contra el
+  estado del servidor. Sin mutex: todo lo del mundo lo toca el loop.
+- **Persistencia fuera del tick:** el loop arma la entrada de auditoría con la hora del
+  tick (reloj inyectable) y la entrega sin bloquear a la goroutine de admin
+  (`app/admin.go`, como el `Saver`). Si la cola está llena, el loop la guarda y reintenta en
+  el próximo flush, en orden: ninguna entrada se pierde. Un error de la base se reintenta
+  con backoff. Al apagar se drena la cola y se escribe lo pendiente.
+- **Bans:** `/ban` y `/unban` son trabajos de esa goroutine. En una transacción resuelven
+  el personaje, revisan la jerarquía, insertan o levantan el ban (`account_bans`), revocan
+  los tokens y escriben la auditoría. El resultado vuelve al loop (`World.AdminDone`), que
+  desconecta a los personajes de la cuenta con `BANNED` y recuerda el ban en memoria: así
+  frena también un login que leyó la base antes del ban. Además, las consultas de sesión,
+  de canje del token de juego y de carga del personaje excluyen a las cuentas con un ban
+  activo, y el login responde `account_banned` (solo si la contraseña es correcta).
+- **`audit_log`** es append-only (triggers como `economy_log`) y no tiene claves foráneas:
+  sobrevive al borrado de cuentas. El operador lo lee con `make audit-log`.
+
 ### Lo que falta
 La detección de bots, los reportes, el log de economía y la auditoría de lo que se envía
-quedan en T4.1. Las sanciones y la moderación (kick, ban, log de auditoría) quedan en
-T2.6. Ver `10-roadmap.md`.
+quedan en T4.1. Ver `10-roadmap.md`.

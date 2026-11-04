@@ -341,6 +341,7 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 		Health:     pc.Health,
 		Mana:       pc.Mana,
 		Town:       pc.Town,
+		Role:       session.RoleFromString(pc.Role),
 		Storage:    pc.Storage,
 	}
 	for _, s := range pc.Skills {

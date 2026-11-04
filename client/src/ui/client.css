@@ -564,6 +564,10 @@ body.using-item canvas {
 .chat-lines .npc {
   color: #9fe3a0;
 }
+.chat-lines .broadcast {
+  color: #ff8a80;
+  font-weight: bold;
+}
 .say {
   display: flex;
   gap: 0.3rem;

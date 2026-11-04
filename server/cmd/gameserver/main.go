@@ -5,6 +5,9 @@
 // world (-world "") only the HTTP API runs.
 //
 // Configuration: DATABASE_URL (required), RPG_WORLD (default of -world) plus the flags below.
+//
+// "gameserver admin ..." runs the operator's commands instead (roles, audit log; see
+// admin.go).
 package main
 
 import (
@@ -65,6 +68,9 @@ type options struct {
 const sessionPurgeEvery = time.Hour
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		os.Exit(runAdmin(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	var o options
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Uint64Var(&o.seed, "seed", 0, "random seed for the game loop (0 = random)")

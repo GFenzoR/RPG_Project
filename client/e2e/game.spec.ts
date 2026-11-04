@@ -941,3 +941,102 @@ test("chat on the local and global channels, then switch the language", async ({
   await expect(page.getByTestId("language")).toHaveValue("en");
   expect(errors).toEqual([]);
 });
+
+test("a GM announces, a player cannot use staff commands, and a ban disconnects", async ({
+  browser,
+  playwright,
+}) => {
+  const password = "e2e-password-1";
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  /** Registers an account with one guardian and returns its email and character name. */
+  async function account(prefix: string, title: string): Promise<{ email: string; name: string }> {
+    const email = `e2e-${prefix}-${Date.now()}-${randomLetters(6)}@example.com`;
+    const name = `${title} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+    expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+      201,
+    );
+    const login = await apiCtx.post("/api/auth/login", {
+      data: { email, password, token_in_body: true },
+    });
+    const { token } = (await login.json()) as { token: string };
+    const created = await apiCtx.post("/api/characters", {
+      data: { name, vocation: "guardian" },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(created.status()).toBe(201);
+    return { email, name };
+  }
+  const gm = await account("gm", "Warden");
+  const player = await account("pl", "Rover");
+  await apiCtx.dispose();
+  // Roles are only granted by the operator's tool (make set-role), never from the game.
+  execFileSync(
+    "go",
+    [
+      "run",
+      "./cmd/gameserver",
+      "admin",
+      "set-role",
+      "-email",
+      gm.email,
+      "-role",
+      "gm",
+      "-note",
+      "e2e",
+    ],
+    {
+      cwd: join(import.meta.dirname, "..", "..", "server"),
+      env: { ...process.env, DATABASE_URL: databaseUrl },
+    },
+  );
+
+  async function enter(email: string): Promise<Page> {
+    const page = await browser.newPage();
+    await page.goto("/?lang=es");
+    const form = page.getByTestId("login-form");
+    await form.getByLabel("Email").fill(email);
+    await form.getByLabel("Contraseña").fill(password);
+    await form.getByRole("button", { name: "Entrar", exact: true }).click();
+    await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+    await page.waitForFunction(() => window.__rpgClient?.ready === true);
+    return page;
+  }
+  const gmPage = await enter(gm.email);
+  const plPage = await enter(player.email);
+  const type = async (page: Page, text: string): Promise<void> => {
+    const input = page.getByTestId("say").getByRole("textbox");
+    await input.fill(text);
+    await input.press("Enter");
+  };
+
+  // A player gets the same answer for a staff command as for any unknown command.
+  await type(plPage, `/kick ${gm.name}`);
+  await expect(plPage.getByTestId("game-log")).toContainText("Comando desconocido.");
+  await expect(plPage.getByTestId("chat-log")).not.toContainText("/kick");
+
+  // The announcement reaches everyone with its translated label; the GM's text as is.
+  await type(gmPage, "/announce Reinicio en 5 minutos");
+  const line = `[Anuncio] ${gm.name}: Reinicio en 5 minutos`;
+  await expect(plPage.getByTestId("chat-log")).toContainText(line);
+  await expect(gmPage.getByTestId("chat-log")).toContainText(line);
+  await plPage.locator(".side").screenshot({ path: join(shots, "18-gm-announce.png") });
+
+  // The ban disconnects the player with its own message.
+  await type(gmPage, `/ban ${player.name} 1h e2e`);
+  await expect(gmPage.getByTestId("game-log")).toContainText(
+    `Suspendiste la cuenta de ${player.name}.`,
+  );
+  await expect(plPage.getByRole("status")).toContainText("Tu cuenta fue suspendida");
+  await shot(gmPage, "19-gm-ban");
+  await shot(plPage, "20-banned");
+
+  // And the next login is refused.
+  const again = await browser.newPage();
+  await again.goto("/?lang=es");
+  const form = again.getByTestId("login-form");
+  await form.getByLabel("Email").fill(player.email);
+  await form.getByLabel("Contraseña").fill(password);
+  await form.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(again.getByTestId("login-form")).toContainText("Esta cuenta está suspendida.");
+  await shot(again, "21-banned-login");
+});
