@@ -1,0 +1,36 @@
+id: bosque_ferryman
+name: npc.bosque_ferryman.name
+sprite: npcs/ferryman
+notes: >-
+  Captain of the Raigal dock (data/boat_routes.yaml: bosque_to_puerto). Chapter 2 part 1
+  ends with him: he saw where the unflagged boat landed.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.bosque_ferryman.greet
+      options:
+        - text: npc.bosque_ferryman.opt_ch2_boat
+          if: { quest_state: { quest: ch2_roots, state: in_progress, step: ask_ferryman } }
+          goto: ch2_boat
+        - text: dialog.ask_travel
+          goto: travel
+        - text: npc.bosque_ferryman.opt_island
+          goto: island
+        - text: dialog.bye
+          action: close
+    ch2_boat:
+      text: npc.bosque_ferryman.ch2_boat
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    island:
+      text: npc.bosque_ferryman.island
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    travel:
+      text: npc.bosque_ferryman.travel
+      boat_routes: true             # data/boat_routes.yaml: routes with captain bosque_ferryman
+      options:
+        - { text: dialog.back, goto: greet }

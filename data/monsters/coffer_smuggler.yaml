@@ -1,0 +1,22 @@
+id: coffer_smuggler
+name: monster.coffer_smuggler.name
+sprite: creatures/coffer_smuggler
+health: 195
+experience: 175
+speed: 205
+armor: 10
+defense: 14
+behavior:
+  aggressive: true
+  flee_at_health_pct: 10
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 38, interval_ms: 2000 }
+  - { type: distance, min: 0, max: 24, interval_ms: 2000, chance: 0.3, range: 4 }
+loot:
+  - { item: copper_coin, chance: 0.9, count: [10, 40] }
+  - { item: smuggler_tally, chance: 0.35 }
+  - { item: ship_biscuit, chance: 0.3, count: [1, 3] }
+  - { item: stagleather_leggings, chance: 0.03 }
+tags: [human, camp, bosque]
+notes: The crew of the unflagged boat (Chapter 2), camped on the east shore, levels 15-18. Throws knives (physical) at range.

@@ -87,3 +87,36 @@
   armor: { slot: body, armor: 3 }
   requires: { vocations: [ranger, druid] }
   value: 45
+
+# Isla del Bosque gear (T3.6, levels 12-25). Our own numbers.
+- id: elmwood_shield
+  kind: shield
+  sprite: shields/elmwood_shield
+  name: item.elmwood_shield.name
+  description: item.elmwood_shield.desc
+  weight: 5600
+  tradeable: true
+  shield: { defense: 18 }
+  requires: { level: 12 }
+  value: 360
+
+- id: stagleather_coat
+  kind: armor
+  sprite: armor/stagleather_coat
+  name: item.stagleather_coat.name
+  description: item.stagleather_coat.desc
+  weight: 8200
+  tradeable: true
+  armor: { slot: body, armor: 6 }
+  requires: { level: 14 }
+  value: 520
+
+- id: stagleather_leggings
+  kind: armor
+  sprite: armor/stagleather_leggings
+  name: item.stagleather_leggings.name
+  weight: 2350
+  tradeable: true
+  armor: { slot: legs, armor: 2 }
+  requires: { level: 12 }
+  value: 140

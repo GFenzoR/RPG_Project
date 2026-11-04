@@ -248,3 +248,103 @@
   tradeable: true
   consumable: { food_ms: 480000, heal_hp: 30 }
   value: 24
+
+# Isla del Bosque (T3.6): loot of its monsters, the elm wood and the Chapter 2 items.
+# Our own numbers.
+- id: stag_antler
+  kind: material
+  sprite: materials/stag_antler
+  name: item.stag_antler.name
+  description: item.stag_antler.desc
+  weight: 1100
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 28
+
+- id: toad_gland
+  kind: material
+  sprite: materials/toad_gland
+  name: item.toad_gland.name
+  description: item.toad_gland.desc
+  weight: 120
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 20
+
+- id: glowcap
+  kind: material
+  sprite: materials/glowcap
+  name: item.glowcap.name
+  description: item.glowcap.desc
+  weight: 60
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 6
+
+- id: thorn_heartwood
+  kind: material
+  sprite: materials/thorn_heartwood
+  name: item.thorn_heartwood.name
+  description: item.thorn_heartwood.desc
+  weight: 900
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 42
+
+- id: crawler_chitin
+  kind: material
+  sprite: materials/crawler_chitin
+  name: item.crawler_chitin.name
+  description: item.crawler_chitin.desc
+  weight: 700
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 55
+
+- id: elm_log
+  kind: material
+  sprite: materials/elm_log
+  name: item.elm_log.name
+  description: item.elm_log.desc
+  weight: 2100
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 5
+
+- id: glowcap_broth
+  kind: consumable
+  sprite: food/glowcap_broth
+  name: item.glowcap_broth.name
+  description: item.glowcap_broth.desc
+  weight: 600
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 540000, heal_hp: 45 }
+  value: 30
+
+- id: smuggler_tally
+  kind: material
+  sprite: quest/smuggler_tally
+  name: item.smuggler_tally.name
+  description: item.smuggler_tally.desc
+  weight: 80
+  stackable: true
+  max_stack: 100
+  tradeable: false
+  notes: Chapter 2 quest item (ch2_coffer). Coffer smugglers drop it; bosque_druid takes four.
+
+- id: sealed_coffer
+  kind: material
+  sprite: quest/sealed_coffer
+  name: item.sealed_coffer.name
+  description: item.sealed_coffer.desc
+  weight: 2500
+  tradeable: false
+  notes: Chapter 2 quest item (ch2_coffer), the coffer stolen from the wreck of Chapter 1. Dropped by hollow crawlers in the smugglers' cave; taken by bosque_druid. No value, so no NPC buys it.

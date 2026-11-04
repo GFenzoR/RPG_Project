@@ -1,0 +1,25 @@
+id: ch2_roots
+name: quest.ch2_roots.name
+chapter: 2
+min_level: 15
+notes: >-
+  Main line, Chapter 2 "Raíces", part 1. Started by bosque_druid once Chapter 1 is done.
+  The druid wants to follow the unflagged boat of Chapter 1: clear the mire toads that foul
+  the marsh path (levels 12-15), bring glowcaps for her tracking lantern (toad and thornling
+  loot), then ask the ferryman where the boat landed. Continues in ch2_coffer.
+steps:
+  - id: cull_toads
+    description: quest.ch2_roots.step_cull_toads
+    complete_when: { kill: { monster: mire_toad, count: 8 } }
+  - id: gather_glowcaps
+    description: quest.ch2_roots.step_gather_glowcaps
+    complete_when: { has_item: { item: glowcap, count: 6 } }
+  - id: deliver_glowcaps
+    description: quest.ch2_roots.step_deliver_glowcaps
+    complete_when: { dialog_action: { npc: bosque_druid, node: ch2_lantern } }
+  - id: ask_ferryman
+    description: quest.ch2_roots.step_ask_ferryman
+    complete_when: { dialog_action: { npc: bosque_ferryman, node: ch2_boat } }
+rewards:
+  - { xp: 3500 }
+  - { gold: 300 }

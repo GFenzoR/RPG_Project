@@ -1,0 +1,55 @@
+id: bosque_merchant
+name: npc.bosque_merchant.name
+sprite: npcs/tanner
+notes: >-
+  Tanner and outfitter of Raigal: the forest gear (levels 12-16), elm work and broth, tools
+  for the elm grove, and she buys the island's hunting materials at about a third of their
+  value.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.bosque_merchant.greet
+      options:
+        - text: dialog.trade
+          action: { open_shop: tannery_shop }
+        - text: npc.bosque_merchant.opt_elm
+          goto: elm
+        - text: npc.bosque_merchant.opt_gossip
+          goto: gossip
+        - text: dialog.bye
+          action: close
+    elm:
+      text: npc.bosque_merchant.elm
+      options:
+        - text: dialog.trade
+          action: { open_shop: tannery_shop }
+        - { text: dialog.back, goto: greet }
+    gossip:
+      text: npc.bosque_merchant.gossip
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+shop:
+  id: tannery_shop
+  sells:
+    - { item: thornwood_blade, price: 1100 }
+    - { item: stagleather_coat, price: 680 }
+    - { item: stagleather_leggings, price: 190 }
+    - { item: elmwood_shield, price: 470 }
+    - { item: felling_axe, price: 120 }
+    - { item: smithing_hammer, price: 105 }
+    - { item: glowcap_broth, price: 40 }
+    - { item: arrow, price: 2 }
+  buys:
+    - { item: stagleather_coat, price: 170 }
+    - { item: stagleather_leggings, price: 45 }
+    - { item: elmwood_shield, price: 120 }
+    - { item: elm_log, price: 2 }
+    - { item: glowcap, price: 2 }
+    - { item: stag_antler, price: 9 }
+    - { item: toad_gland, price: 7 }
+    - { item: thorn_heartwood, price: 14 }
+    - { item: crawler_chitin, price: 18 }
+    - { item: spider_silk, price: 6 }
+    - { item: wolf_pelt, price: 5 }

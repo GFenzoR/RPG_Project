@@ -1,0 +1,21 @@
+id: hollow_crawler
+name: monster.hollow_crawler.name
+sprite: creatures/hollow_crawler
+health: 255
+experience: 255
+speed: 170
+armor: 13
+defense: 16
+behavior:
+  aggressive: true
+  sees_invisible: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 46, interval_ms: 2000, condition: { id: poison, chance: 0.35, ticks: 8, damage: 4 } }
+resistances: { physical: 10, earth: 40, holy: -20, fire: -10 }
+loot:
+  - { item: crawler_chitin, chance: 0.2 }
+  - { item: copper_coin, chance: 0.85, count: [20, 70] }
+  - { item: sealed_coffer, chance: 0.08 }
+tags: [insect, cave, bosque]
+notes: The smugglers' cave under the east shore (floor 8), levels 22-26. Blind, so it finds the invisible by touch; its bite poisons (T3.2). The Chapter 2 coffer was dragged into its nest.

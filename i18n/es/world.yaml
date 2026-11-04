@@ -1,7 +1,11 @@
 # Map texts: island names, signs and books placed in world/.
 island.testisle.name: "Isla de pruebas"
 island.puerto.name: "Isla del Puerto"
+island.bosque.name: "Isla del Bosque"
 text.testisle.temple_sign: "Templo de la isla de pruebas. Aquí nadie puede hacerte daño."
 text.puerto.temple_sign: "Templo del Farol. Dentro de sus muros nadie puede hacerte daño."
 text.puerto.harbour_sign: "Muelle del Farol. Los barcos zarpan cuando el capitán de puerto lo dice."
 text.puerto.mine_sign: "Mina vieja. Cuidado con los murciélagos y con lo que se esconde más abajo."
+text.bosque.temple_sign: "Templo de la Raíz, en Raigal. Bajo sus ramas nadie puede hacerte daño."
+text.bosque.dock_sign: "Muelle de Raigal. Tavin Rema lleva pasajeros a la Isla del Puerto."
+text.bosque.cave_sign: "Alguien tachó la palabra «peligro» y escribió encima: «nuestro»."

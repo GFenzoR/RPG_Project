@@ -12,3 +12,16 @@ quest.foreman_ore.step_deliver_ore: "Deliver the iron ore to Doran, the foreman.
 quest.diver_locket.name: "What the Sea Took"
 quest.diver_locket.step_find_locket: "Recover a tarnished locket from the beach looters."
 quest.diver_locket.step_return_locket: "Take the locket to Corvo the diver."
+
+# Chapter 2: Roots.
+quest.ch2_roots.name: "Chapter 2: Roots"
+quest.ch2_roots.step_cull_toads: "The toads' venom wipes out the tracks in the marsh south of Raigal. Kill 8 mire toads."
+quest.ch2_roots.step_gather_glowcaps: "Velia's tracking lantern burns glowcaps. Get 6 glowcaps."
+quest.ch2_roots.step_deliver_glowcaps: "Bring the 6 glowcaps to Velia Moss, in the grove of Raigal."
+quest.ch2_roots.step_ask_ferryman: "Ask Tavin Rema, the ferryman at the dock, where the unflagged boat landed."
+quest.ch2_coffer.name: "Chapter 2: The sealed coffer"
+quest.ch2_coffer.step_break_camp: "The smugglers are camped on the east shore. Kill 8 coffer smugglers."
+quest.ch2_coffer.step_gather_tallies: "Velia wants to know who paid them. Get 4 smuggler's tallies."
+quest.ch2_coffer.step_deliver_tallies: "Bring the 4 tallies to Velia Moss."
+quest.ch2_coffer.step_find_coffer: "The hollow crawlers dragged the coffer into their nest, in the cave under the east shore. Find the sealed coffer."
+quest.ch2_coffer.step_return_coffer: "Bring the sealed coffer to Velia Moss."
