@@ -39,13 +39,11 @@ func testSpells() content.Spells {
 		"test_ring": {ID: "test_ring", Words: "test ring", Vocations: arc, Level: 1, Mana: 20, Group: "attack",
 			CooldownMs: 4000, GroupCooldownMs: 1000, Effect: content.SpellEffect{Damage: dmg("fire", 10, 0, 2)}},
 		"test_heal": {ID: "test_heal", Words: "test heal", Vocations: arc, Level: 1, Mana: 5, Group: "healing",
-			CooldownMs: 1000, GroupCooldownMs: 1000, Effect: content.SpellEffect{Heal: &content.Scaling{Base: 30}}},
+			CooldownMs: 1000, GroupCooldownMs: 1000, Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 30}}}},
 		"test_master": {ID: "test_master", Words: "test master", Vocations: arc, Level: 1, MagicLevel: 5, Mana: 1,
-			Group: "support", Effect: content.SpellEffect{Heal: &content.Scaling{Base: 1}}},
+			Group: "support", Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 1}}}},
 		"test_conjure": {ID: "test_conjure", Words: "test conjure", Vocations: arc, Level: 1, Mana: 30, Group: "support",
-			CooldownMs: 1000, Effect: content.SpellEffect{Conjure: &struct {
-				Item string `yaml:"item"`
-			}{Item: "test_rune"}}},
+			CooldownMs: 1000, Effect: content.SpellEffect{Conjure: &content.SpellConjure{Item: "test_rune"}}},
 	}
 }
 

@@ -504,6 +504,117 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   expect(errors).toEqual([]);
 });
 
+test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo slot", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-voc-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const druidName = `Druid ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const rangerName = `Ranger ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name: rangerName, vocation: "ranger" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  // The ranger: a backpack (48), a short bow (89) in the right hand and 30 arrows (87) in
+  // the ammo slot (slots 3, 5 and 10; data/ids.lock.yaml).
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `INSERT INTO inventory_items (character_id, slot, item_id, count)
+     SELECT id, s.slot, s.item, s.count FROM characters,
+       (VALUES (3, 48, 1), (5, 89, 1), (10, 87, 30)) AS s(slot, item, count)
+     WHERE name = '${rangerName}'`,
+  ]);
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  errors.length = 0; // the 401 of opening the page without a session cookie
+
+  // The creation form offers the four vocations; create the druid there.
+  const form = page.getByTestId("create-character");
+  const select = form.getByLabel("Vocación");
+  await expect(select.locator("option")).toHaveText([
+    "Guardián",
+    "Arcanista",
+    "Montaraz",
+    "Druida",
+  ]);
+  await form.getByLabel("Nombre").fill(druidName);
+  await select.selectOption({ label: "Druida" });
+  await shot(page, "19-create-druid");
+  await form.getByRole("button", { name: "Crear personaje" }).click();
+  const list = page.getByTestId("characters");
+  await expect(list.getByText("Druida · Nivel 1")).toBeVisible();
+  await expect(list.getByText("Montaraz · Nivel 1")).toBeVisible();
+
+  // Play the druid: its spells fill the bar by level.
+  await list.locator("li", { hasText: druidName }).getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  const hotbar = page.getByTestId("hotbar");
+  await expect(hotbar.locator('[data-hotkey="F1"] [data-spell="frost_lance"]')).toBeVisible();
+  await expect(hotbar.locator('[data-hotkey="F2"] [data-spell="verdant_mend"]')).toBeVisible();
+  await expect(hotbar.locator('[data-hotkey="F3"] [data-spell="mend_other"]')).toBeVisible();
+  await page.locator("body").click({ position: { x: 1, y: 1 } }); // keys go to the game
+
+  // F2 heals the druid itself: the server spends 20 mana and starts the cooldown.
+  const mana = (): Promise<number | undefined> =>
+    page.evaluate(() => window.__rpgClient?.stats()?.mana);
+  const before = await mana();
+  if (before === undefined) throw new Error("no stats");
+  await page.keyboard.press("F2");
+  await expect.poll(mana).toBe(before - 20);
+  await expect(hotbar.locator('[data-hotkey="F2"] .cd')).toBeVisible();
+  await shot(page, "20-druid-heal");
+
+  // F3 (mend other) asks for a target with the crosshair; Escape cancels it.
+  await page.keyboard.press("F3");
+  await expect(page.locator("body.using-item")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("body.using-item")).toHaveCount(0);
+  await hotbar.screenshot({ path: join(shots, "21-druid-hotbar.png") });
+  await page.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+
+  // The ranger: the bow in hand and the arrows, with their count, in the ammo slot.
+  await list.locator("li", { hasText: rangerName }).getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  const inventory = page.getByTestId("inventory");
+  await expect(
+    inventory.getByTestId("slot-right_hand").locator("[data-item=short_bow]"),
+  ).toBeVisible();
+  const ammo = inventory.getByTestId("slot-ammo");
+  await expect(ammo.locator("[data-item=arrow]")).toBeVisible();
+  await expect(ammo.locator(".count")).toHaveText("30");
+  await expect(hotbar.locator('[data-hotkey="F1"] [data-spell="sure_shot"]')).toBeVisible();
+  await inventory.screenshot({ path: join(shots, "22-ranger-inventory.png") });
+  await page.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+  expect(errors).toEqual([]);
+});
+
 test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwright }) => {
   const errors: string[] = [];
   page.on("console", (m) => {

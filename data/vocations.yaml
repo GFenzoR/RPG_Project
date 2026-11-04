@@ -1,4 +1,4 @@
-# MVP vocations (docs/02-game-design.md). ranger and druid arrive in milestone 3.
+# Vocations (docs/02-game-design.md): guardian and arcanist (MVP), ranger and druid (T3.1).
 # Our own numbers (CLAUDE.md legal rule): never copy another game's constants.
 - id: guardian
   name: vocation.guardian.name
@@ -29,6 +29,44 @@
     axe: 1.85
     club: 1.85
     distance: 1.9
+    shield: 1.55
+    magic: 1.11
+    fishing: 1.11
+  weapons: [wand]
+
+# Ranger (T3.1): distance damage and a hybrid. Trains distance fastest of all, shield
+# almost like a guardian and some magic; health and mana per level sit between both.
+- id: ranger
+  name: vocation.ranger.name
+  description: vocation.ranger.desc
+  start: { health: 145, mana: 40, capacity: 400000, speed: 205 }
+  per_level: { health: 9, mana: 13, capacity: 19000, speed: 3 }
+  regen: { health: 2, mana: 2, interval_ms: 5500 }
+  skill_factors:
+    fist: 1.25
+    sword: 1.24
+    axe: 1.24
+    club: 1.24
+    distance: 1.1
+    shield: 1.12
+    magic: 1.45
+    fishing: 1.11
+  weapons: [distance, sword, axe, club]
+
+# Druid (T3.1): support and healing. Magic trains as fast as the arcanist's, the body
+# is as fragile, and its staffs shoot like wands.
+- id: druid
+  name: vocation.druid.name
+  description: vocation.druid.desc
+  start: { health: 140, mana: 75, capacity: 380000, speed: 205 }
+  per_level: { health: 6, mana: 27, capacity: 11500, speed: 3 }
+  regen: { health: 1, mana: 3, interval_ms: 4000 }
+  skill_factors:
+    fist: 1.45
+    sword: 1.85
+    axe: 1.85
+    club: 1.85
+    distance: 1.85
     shield: 1.55
     magic: 1.11
     fishing: 1.11

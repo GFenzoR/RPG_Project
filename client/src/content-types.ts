@@ -31,6 +31,8 @@ export interface SpellDef {
   magicLevel: number;
   mana: number;
   vocations: string[];
+  /** A heal cast on another player (T3.1): the hotkey asks for the target with a click. */
+  aimsAtPlayer: boolean;
 }
 
 export interface ClientContent {

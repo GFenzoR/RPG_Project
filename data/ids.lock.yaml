@@ -87,3 +87,9 @@ items:
   stone_wall: 84
   wooden_wall: 85
   rock_wall: 86
+  arrow: 87
+  hide_vest: 88
+  short_bow: 89
+  yew_longbow: 90
+  sapling_staff: 91
+  rimewood_staff: 92

@@ -133,6 +133,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - El login muestra el `notice` de la última desconexión: un ban revoca el token, así que
   después de `BANNED` el cliente cae al login y el motivo se ve ahí.
 
+## Notas de T3.1
+- `SpellDef.aimsAtPlayer` (una curación con `heal.range`): su hotkey no lanza, sino que pone
+  `Game.aimingSpell` y la clase `using-item` (la mira). El siguiente click en una criatura o
+  casilla manda `CastSpell` con ese objetivo; Escape o click derecho lo cancelan
+  (`cancelUse`).
+- La munición se ve en el slot `ammo` con su cantidad (`.count`), como cualquier pila.
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

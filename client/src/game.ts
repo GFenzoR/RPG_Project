@@ -117,6 +117,8 @@ export class Game {
   private clickTarget: Pos | undefined;
   /** A tool waiting for the tile to use it on (T1.12): the next click on the map picks it. */
   private usingItem: ItemRef | undefined;
+  /** A spell cast on another player (T3.1) waiting for its target: the next click. */
+  private aimingSpell: string | undefined;
   private readonly opts: GameOptions;
   private hotkeys: (string | undefined)[];
 
@@ -197,7 +199,29 @@ export class Game {
 
   /** Casts a spell by ID (hotkey) on the current target, if any. */
   castSpell(spellId: string): void {
+    if (this.opts.content.spells.find((s) => s.id === spellId)?.aimsAtPlayer) {
+      this.cancelUse();
+      this.aimingSpell = spellId;
+      document.body.classList.add("using-item");
+      return;
+    }
     this.conn.send({ case: "castSpell", value: { spell: { case: "spellId", value: spellId } } });
+  }
+
+  /** Casts the aimed spell on a creature or a tile; the server picks the player there. */
+  private castAimed(spellId: string, target: { creature: number } | { pos: Pos }): void {
+    this.conn.send({
+      case: "castSpell",
+      value: {
+        spell: { case: "spellId", value: spellId },
+        target: {
+          target:
+            "creature" in target
+              ? { case: "creatureId", value: target.creature }
+              : { case: "pos", value: { ...target.pos } },
+        },
+      },
+    });
   }
 
   /**
@@ -259,8 +283,9 @@ export class Game {
 
   /** Leaves "use with" mode; reports whether it was on. */
   private cancelUse(): boolean {
-    if (!this.usingItem) return false;
+    if (!this.usingItem && !this.aimingSpell) return false;
     this.usingItem = undefined;
+    this.aimingSpell = undefined;
     document.body.classList.remove("using-item");
     return true;
   }
@@ -383,6 +408,11 @@ export class Game {
       t: this.opts.t,
       frame: (now) => this.frame(now),
       clickTile: (x, y, z) => {
+        const aiming = this.aimingSpell;
+        if (aiming && this.cancelUse()) {
+          this.castAimed(aiming, { pos: { x, y, z } });
+          return;
+        }
         const using = this.usingItem;
         if (using && this.cancelUse()) {
           this.useItemOn(using, { x, y, z });
@@ -391,6 +421,11 @@ export class Game {
         this.clickTarget = { x, y, z };
       },
       clickCreature: (id) => {
+        const aiming = this.aimingSpell;
+        if (aiming && this.cancelUse()) {
+          this.castAimed(aiming, { creature: id });
+          return;
+        }
         if (!this.cancelUse()) this.attack(id);
       },
       useTile: (x, y, z) => {

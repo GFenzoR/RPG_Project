@@ -42,6 +42,13 @@ sprites:
   weapons/spiked_cudgel: { placeholder: { label: SK, color: "#6e5a44" } }
   weapons/coral_wand: { placeholder: { label: CW, color: "#e4d8cc" } }
   runes/arc_rune: { placeholder: { label: AR, color: "#6fb7e8" } }
+  # Items: ranger and druid (T3.1)
+  weapons/short_bow: { placeholder: { label: SB, color: "#9a7448" } }
+  weapons/yew_longbow: { placeholder: { label: YL, color: "#6e4a2a" } }
+  weapons/sapling_staff: { placeholder: { label: SS, color: "#6f9a4a" } }
+  weapons/rimewood_staff: { placeholder: { label: RS, color: "#cfe4ee" } }
+  ammo/arrow: { placeholder: { label: AW, color: "#b0a48a" } }
+  armor/hide_vest: { placeholder: { label: HV, color: "#a07850" } }
   armor/sailcloth_cap: { placeholder: { label: SC, color: "#c9bfa6" } }
   armor/leather_jerkin: { placeholder: { label: LJ, color: "#8a5a32" } }
   armor/canvas_trousers: { placeholder: { label: CT, color: "#b2a684" } }

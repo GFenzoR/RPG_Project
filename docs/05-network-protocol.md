@@ -314,7 +314,8 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
 ### Magia (T1.9, `server/internal/session/magic.go`)
 Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
 - **`CastSpell`**: `spell_id` (hotkey) o `words`; `target` opcional (criatura o tile; sin él,
-  el objetivo actual). Un `Say` en el canal `SAY` cuyo texto, en minúsculas y con los
+  el objetivo actual). Una curación a otro (`heal.range`, T3.1) exige `target` con un
+  jugador (su id o su casilla), nunca el que lanza: no usa el objetivo actual. Un `Say` en el canal `SAY` cuyo texto, en minúsculas y con los
   espacios colapsados, coincide con las palabras de un hechizo lo lanza igual (y no se muestra como chat;
   los demás textos son chat, ver "Chat"). Ids o palabras desconocidas se
   ignoran.

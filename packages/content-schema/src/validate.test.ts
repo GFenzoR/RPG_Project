@@ -100,7 +100,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:46:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:49:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),
@@ -180,7 +180,7 @@ describe("validator diagnostics", () => {
     );
     writeFileSync(
       file("data/spells.yaml"),
-      '- id: spark\n  name: spell.spark.name\n  words: "ignis parva"\n  vocations: [arcanist, druid]\n  level: 1\n  mana: 5\n  group: attack\n  cooldown_ms: 2000\n  effect: { damage: { base: 5, element: fire, power: 2 } }\n',
+      '- id: spark\n  name: spell.spark.name\n  words: "ignis parva"\n  vocations: [arcanist, monk]\n  level: 1\n  mana: 5\n  group: attack\n  cooldown_ms: 2000\n  effect: { damage: { base: 5, element: fire, power: 2 } }\n',
     );
     writeFileSync(
       file("data/recipes.yaml"),
@@ -195,7 +195,7 @@ describe("validator diagnostics", () => {
     expect(
       out.some((m) => m.startsWith("warning") && m.includes('quest "lost_net" is never started')),
     ).toBe(true);
-    expect(out.some((m) => m.includes('unknown vocation "druid"'))).toBe(true);
+    expect(out.some((m) => m.includes('unknown vocation "monk"'))).toBe(true);
     expect(out.some((m) => m.includes('effect.damage.power: unknown field "power"'))).toBe(true);
     expect(out.some((m) => m.includes('i18n key "spell.spark.name" is missing in: es, en'))).toBe(
       true,

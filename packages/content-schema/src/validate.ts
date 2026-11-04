@@ -55,6 +55,7 @@ const KIND_BLOCKS = [
   "consumable",
   "currency",
   "rune",
+  "ammo",
 ];
 
 export interface ValidateOptions {

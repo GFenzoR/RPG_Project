@@ -117,6 +117,10 @@ export function loadClientContent(root: string): ClientContent {
                 vocations: Array.isArray(s["vocations"])
                   ? s["vocations"].filter((v): v is string => typeof v === "string")
                   : [],
+                aimsAtPlayer:
+                  isObj(s["effect"]) &&
+                  isObj(s["effect"]["heal"]) &&
+                  num(s["effect"]["heal"]["range"], 0) > 0,
               },
             ]
           : [],

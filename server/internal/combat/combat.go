@@ -66,10 +66,11 @@ func HitPlayer(r *rand.Rand, c content.Combat, lo, hi int, physical bool, p Play
 }
 
 // Scaled rolls a spell amount (docs/02-game-design.md, "Daño mágico"):
-// base + level × per_level + magic level × per_magic_level, then a uniform roll within
-// ±spread of it. It never goes below zero.
-func Scaled(r *rand.Rand, s content.Scaling, level, magicLevel int) int {
-	v := s.Base + float64(level)*s.PerLevel + float64(magicLevel)*s.PerMagicLevel
+// base + level × per_level + magic level × per_magic_level + skill level × per_skill
+// (skillLevel is the level of s.Skill, T3.1), then a uniform roll within ±spread of it.
+// It never goes below zero.
+func Scaled(r *rand.Rand, s content.Scaling, level, magicLevel, skillLevel int) int {
+	v := s.Base + float64(level)*s.PerLevel + float64(magicLevel)*s.PerMagicLevel + float64(skillLevel)*s.PerSkill
 	lo := int(math.Floor(v * (1 - s.Spread)))
 	hi := int(math.Floor(v * (1 + s.Spread)))
 	return max(Roll(r, max(lo, 0), max(hi, 0)), 0)

@@ -23,8 +23,8 @@ func TestLoadSpellsFromData(t *testing.T) {
 	groups := map[string]bool{}
 	for _, s := range spells {
 		groups[s.Group] = true
-		if c := s.Effect.Conjure; c != nil && (items[c.Item] == nil || items[c.Item].Rune == nil) {
-			t.Errorf("%s conjures %q, not a rune", s.ID, c.Item)
+		if c := s.Effect.Conjure; c != nil && (items[c.Item] == nil || items[c.Item].Rune == nil && !items[c.Item].Stackable) {
+			t.Errorf("%s conjures %q, neither a rune nor a stack", s.ID, c.Item)
 		}
 		if spells.ByWords()[NormalizeWords(s.Words)] != s {
 			t.Errorf("%s: words %q do not index it", s.ID, s.Words)
@@ -42,7 +42,7 @@ func TestLoadSpellsFromData(t *testing.T) {
 
 func TestSpellCheck(t *testing.T) {
 	bad := []Spell{
-		{ID: "a", Group: "nope", Effect: SpellEffect{Heal: &Scaling{}}},
+		{ID: "a", Group: "nope", Effect: SpellEffect{Heal: &SpellHeal{}}},
 		{ID: "b", Group: SpellGroupAttack},
 		{ID: "c", Group: SpellGroupAttack, Effect: SpellEffect{Damage: &SpellDamage{}}},
 		{ID: "d", Group: SpellGroupSupport, Effect: SpellEffect{Haste: map[string]any{}}},

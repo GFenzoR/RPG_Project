@@ -5,6 +5,8 @@ npc.harbor_master.opt_shipwreck: "I came from the wreck. What happened to the sh
 npc.harbor_master.ch1_offer: "The Late Dawn broke apart on the reef last night. The ones who reached the shore made camp in the north field, and the wolves have been circling them all night. And the bosun, Edric Sall, is missing: he was seen running toward the old mine with the logbook under his arm. I need hands. Will you help me?"
 npc.harbor_master.ch1_accepted: "Good. Take this cutlass and some biscuit; it isn't much, but you arrived with less. The north field first: drive those wolves off so the survivors can come down to town."
 npc.harbor_master.ch1_accepted_arcanist: "Good. I have no wands to give you, but take these coins and some biscuit; Corvo the diver carves coral wands once you've saved enough for one. The north field first: drive those wolves off so the survivors can come down to town."
+npc.harbor_master.ch1_accepted_ranger: "Good. Take this short bow, coins for arrows (the armorer on the square sells them) and some biscuit. The north field first: drive those wolves off so the survivors can come down to town."
+npc.harbor_master.ch1_accepted_druid: "Good. This sapling staff sprouted on its own by the pier; perhaps it was waiting for you. Take some biscuit too. The north field first: drive those wolves off so the survivors can come down to town."
 npc.harbor_master.opt_ch1_wolves: "What should I do about the wolves?"
 npc.harbor_master.ch1_wolves: "Take the north road out of town and you'll find the field. Put down six wolves and the pack will think twice. If they hurt you, go back to the temple: Sister Liora charges no one for healing."
 npc.harbor_master.opt_ch1_mine: "Where do I look for the bosun?"

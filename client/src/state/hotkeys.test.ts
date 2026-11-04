@@ -10,6 +10,7 @@ const spell = (id: string, level: number, vocations = ["arcanist"]): SpellDef =>
   magicLevel: 0,
   mana: 1,
   vocations,
+  aimsAtPlayer: false,
 });
 
 const spells = [spell("heal", 6), spell("bolt", 1), spell("smash", 1, ["guardian"])];

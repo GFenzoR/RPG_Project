@@ -21,12 +21,29 @@ const (
 )
 
 // Scaling is a damage or heal amount (docs/02-game-design.md, "Combate"):
-// base + level × per_level + magic level × per_magic_level, rolled within ±spread.
+// base + level × per_level + magic level × per_magic_level (+ the level of Skill ×
+// per_skill, T3.1), rolled within ±spread.
 type Scaling struct {
 	Base          float64 `yaml:"base"`
 	PerLevel      float64 `yaml:"per_level"`
 	PerMagicLevel float64 `yaml:"per_magic_level"`
+	Skill         string  `yaml:"skill"`
+	PerSkill      float64 `yaml:"per_skill"`
 	Spread        float64 `yaml:"spread"`
+}
+
+// SpellHeal is a heal effect: the caster, or with Range (T3.1) another player at up to
+// Range tiles in line of sight.
+type SpellHeal struct {
+	Scaling `yaml:",inline"`
+	Range   int `yaml:"range"`
+}
+
+// SpellConjure creates Count units of Item in the caster's backpack (0 = a rune's
+// charges, or 1).
+type SpellConjure struct {
+	Item  string `yaml:"item"`
+	Count int    `yaml:"count"`
 }
 
 // SpellDamage is a damage effect: one creature at up to Range tiles, or every monster
@@ -40,11 +57,9 @@ type SpellDamage struct {
 
 // SpellEffect is what a spell does; exactly one field is set.
 type SpellEffect struct {
-	Damage  *SpellDamage `yaml:"damage"`
-	Heal    *Scaling     `yaml:"heal"`
-	Conjure *struct {
-		Item string `yaml:"item"`
-	} `yaml:"conjure"`
+	Damage  *SpellDamage  `yaml:"damage"`
+	Heal    *SpellHeal    `yaml:"heal"`
+	Conjure *SpellConjure `yaml:"conjure"`
 	// Haste and Light are in the schema for later milestones; the server rejects them.
 	Haste any `yaml:"haste"`
 	Light any `yaml:"light"`
@@ -157,5 +172,24 @@ func (s *Spell) check() error {
 	if d := e.Damage; d != nil && (d.Range > 0) == (d.Radius > 0) {
 		return errors.New("damage needs either range (one target) or radius (area)")
 	}
+	for _, sc := range []*Scaling{damageScaling(e.Damage), healScaling(e.Heal)} {
+		if sc != nil && (sc.Skill == "") != (sc.PerSkill == 0) {
+			return errors.New("skill and per_skill go together")
+		}
+	}
 	return nil
+}
+
+func damageScaling(d *SpellDamage) *Scaling {
+	if d == nil {
+		return nil
+	}
+	return &d.Scaling
+}
+
+func healScaling(h *SpellHeal) *Scaling {
+	if h == nil {
+		return nil
+	}
+	return &h.Scaling
 }
