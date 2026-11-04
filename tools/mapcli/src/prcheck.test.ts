@@ -95,7 +95,7 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     const r = prCheck({ root, base: "main", head: "pr", out, author: "someone", pr: 3 });
     expect(r.failures).toEqual([]);
     expect(r.ok).toBe(true);
-    expect(r.plots).toEqual({ count: 1, violations: [], violations_total: 0 });
+    expect(r.plots).toEqual({ count: 2, violations: [], violations_total: 0 });
     expect(r.files).toMatchObject([
       {
         path: "world/islands/puerto/chunks/z07/c0100_0197.json",

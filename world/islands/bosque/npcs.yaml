@@ -1,0 +1,11 @@
+- npc: bosque_priest
+  pos: { x: 4150, y: 6102, z: 7 }
+
+- npc: bosque_merchant
+  pos: { x: 4156, y: 6116, z: 7 }
+
+- npc: bosque_druid
+  pos: { x: 4178, y: 6112, z: 7 }
+
+- npc: bosque_ferryman
+  pos: { x: 4122, y: 6100, z: 7 }

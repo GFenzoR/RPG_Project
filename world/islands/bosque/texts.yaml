@@ -1,0 +1,14 @@
+- id: bosque_temple_sign
+  kind: sign
+  pos: { x: 4149, y: 6109, z: 7 }
+  text: text.bosque.temple_sign
+
+- id: bosque_dock_sign
+  kind: sign
+  pos: { x: 4128, y: 6099, z: 7 }
+  text: text.bosque.dock_sign
+
+- id: bosque_cave_sign
+  kind: sign
+  pos: { x: 4247, y: 6144, z: 7 }
+  text: text.bosque.cave_sign

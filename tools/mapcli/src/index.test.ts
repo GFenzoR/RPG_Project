@@ -36,6 +36,7 @@ describe("mapcli", () => {
       islands: [
         { id: "puerto", chunks: 43 },
         { id: "testisle", chunks: 6 },
+        { id: "bosque", chunks: 40 },
       ],
       load_errors: [],
     });

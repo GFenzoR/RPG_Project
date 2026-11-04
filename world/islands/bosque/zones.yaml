@@ -1,0 +1,25 @@
+- id: bosque_temple
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 4146, y: 6100, w: 9, h: 9 }
+
+- id: bosque_town
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 4152, y: 6099, w: 22, h: 22 }
+  notes: "Plaza, stations and the tannery of Raigal."
+
+- id: bosque_dock
+  type: no_logout
+  floors: [7]
+  rects:
+    - { x: 4115, y: 6099, w: 13, h: 3 }
+
+- id: bosque_north_cove_plot
+  type: community_plot
+  floors: [7]
+  rects:
+    - { x: 4168, y: 6032, w: 24, h: 16 }
+  notes: "North cove and its islet, open to community map patches (T2.4)."

@@ -1,0 +1,9 @@
+- id: bosque_cave_down
+  kind: stairs
+  from: { x: 4248, y: 6146, z: 7 }
+  to: { x: 4248, y: 6147, z: 8 }
+
+- id: bosque_cave_up
+  kind: stairs
+  from: { x: 4248, y: 6146, z: 8 }
+  to: { x: 4248, y: 6147, z: 7 }

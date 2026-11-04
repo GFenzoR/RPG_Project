@@ -175,9 +175,8 @@ islands:
 ```
 Las rutas de barco no van aquí: desde T3.5 viven en `data/boat_routes.yaml` (las vende un
 NPC, con precio y requisitos, como el resto del contenido; formato en
-`06-content-data.md`). El campo `boat_routes` de este archivo queda obsoleto: opcional y
-siempre vacío (`[]`), solo para que el check `map-pr` (que corre el esquema de la rama base)
-acepte el cambio; se puede quitar en un PR posterior. Lo que toca al mapa lo valida `mapcli validate` (ver "Validación").
+`06-content-data.md`). El campo `boat_routes` de este archivo quedó obsoleto en T3.5 y se
+quitó en T3.6 (el esquema todavía lo acepta, opcional y vacío, para no romper ramas viejas). Lo que toca al mapa lo valida `mapcli validate` (ver "Validación").
 **Isla inicial:** un personaje sin ciudad de residencia (`characters.town` vacío, como uno
 recién creado) despierta en el templo de la **primera isla de `world.yaml`** (hoy `puerto`,
 la isla inicial de `docs/02`). El servidor acepta `-start-town <isla>` (o `RPG_START_TOWN`)
@@ -288,6 +287,10 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Conectividad: desde el templo se puede llegar caminando a todo spawn y NPC de la
   isla (BFS en 8 direcciones por tiles caminables y portales). Zonas sin ningún tile
   alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir).
+  Advertencia (T3.6): un área caminable conexa (8 direcciones, un piso) de 10 casillas o
+  más a la que no se llega desde el templo, fuera de parcelas `community_plot` (un muelle
+  suelto, un banco de arena del generador, una sala sin escalera). Una por área, con una
+  de sus casillas.
 - **Balance de spawns**: advertencia si hay más de 0,25 monstruos por tile caminable en
   el cuadrado del radio. (Nivel de monstruos vs. `level_hint`: pendiente, los monstruos
   aún no tienen nivel en `data/`.)
@@ -315,8 +318,22 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   estaciones son items comunes del mapa (`place`): lo que las hace estación es que una
   receta de `data/recipes.yaml` las nombre.
   Muelle del capitán de puerto (`harbor_master`, 3201,6433): tablones 3200–3202,
-  6429–6434; las rutas salen de 3201,6434. Pendiente: la ruta a `bosque` (T3.6, comentada
-  en `data/boat_routes.yaml`).
+  6429–6434; las rutas salen de 3201,6434 (`puerto_to_bosque`) y la vuelta desde el Bosque
+  llega a 3201,6432.
+- `bosque` (192x192 en 4096,6016; pisos 7–8; nivel 10–30; T3.6): forma base con
+  `mapcli generate --recipe island --seed 23 --size 180` y luego una lista de ops
+  (scatter con semillas 2301–2304, autoborder al final). Superficie: pueblo de **Raigal**
+  al oeste (templo de piedra con el sacerdote en 4146–4154, 6100–6108, puerta al sur;
+  plaza de tierra con fragua, yunque y fogón; curtiduría de madera al sur de la plaza),
+  muelle de tablones al oeste (4115–4127, 6099–6101, con el barquero `bosque_ferryman` en
+  4122,6100), arboleda de olmos talables al este del pueblo con la druida, bosque de
+  ciervos al noroeste (10–13), ciénaga de sapos al sur (12–15), bosque profundo de
+  espinosos al noreste (18–22) y el campamento de contrabandistas en la costa este
+  (15–18), unidos por caminos de tierra. Piso 8: la cueva de los contrabandistas
+  (escalera en 4248,6146) con dos cámaras de reptantes huecos (22–26). Protección en el
+  templo y la plaza; `no_logout` en el muelle. Parcela de comunidad
+  `bosque_north_cove_plot` (4168,6032 24x16, piso 7): la caleta norte y su islote.
+  Sin depósito (el item todavía no existe).
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:

@@ -1,0 +1,7 @@
+id: bosque
+name: island.bosque.name
+rect: { x: 4096, y: 6016, w: 192, h: 192 }
+floors: [7, 8]
+temple: { x: 4150, y: 6105, z: 7 }
+level_hint: [10, 30]
+notes: "Forest island (T3.6): town of Raigal, west dock, stag woods, south marsh, elm grove, deep forest, smugglers' camp on the east shore and their cave on floor 8. Chapter 2."
