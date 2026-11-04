@@ -115,7 +115,7 @@
   kind: armor
   sprite: armor/stagleather_leggings
   name: item.stagleather_leggings.name
-  weight: 2600
+  weight: 2350
   tradeable: true
   armor: { slot: legs, armor: 2 }
   requires: { level: 12 }
