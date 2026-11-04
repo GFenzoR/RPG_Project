@@ -175,8 +175,9 @@ islands:
 ```
 Las rutas de barco no van aquí: desde T3.5 viven en `data/boat_routes.yaml` (las vende un
 NPC, con precio y requisitos, como el resto del contenido; formato en
-`06-content-data.md`). El campo `boat_routes` que tenía este archivo se quitó (nunca tuvo
-rutas). Lo que toca al mapa lo valida `mapcli validate` (ver "Validación").
+`06-content-data.md`). El campo `boat_routes` de este archivo queda obsoleto: opcional y
+siempre vacío (`[]`), solo para que el check `map-pr` (que corre el esquema de la rama base)
+acepte el cambio; se puede quitar en un PR posterior. Lo que toca al mapa lo valida `mapcli validate` (ver "Validación").
 **Isla inicial:** un personaje sin ciudad de residencia (`characters.town` vacío, como uno
 recién creado) despierta en el templo de la **primera isla de `world.yaml`** (hoy `puerto`,
 la isla inicial de `docs/02`). El servidor acepta `-start-town <isla>` (o `RPG_START_TOWN`)
