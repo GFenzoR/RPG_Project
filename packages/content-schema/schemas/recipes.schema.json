@@ -47,8 +47,10 @@
         "$ref": "common.schema.json#/$defs/chance"
       },
       "max_success": {
-        "description": "Cap of the success chance (default 1).",
-        "$ref": "common.schema.json#/$defs/chance"
+        "description": "Cap of the success chance (default 1, never 0).",
+        "exclusiveMinimum": 0,
+        "type": "number",
+        "maximum": 1
       },
       "xp": {
         "$ref": "common.schema.json#/$defs/nonNegativeInt",

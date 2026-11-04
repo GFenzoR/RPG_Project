@@ -345,3 +345,17 @@ func TestWoodcutting(t *testing.T) {
 		t.Fatalf("grown back: messages %v", systemKeys(evs))
 	}
 }
+
+// A tool used on a station (the hammer on the anvil) opens it instead of "nothing there".
+func TestToolOnStationOpensIt(t *testing.T) {
+	h := craftHarness(t, worldtest.Map(t, 0, 0, 7, forgeMap...))
+	nextChar++
+	c := withPack(nextChar, pos(1, 0))
+	c.Inventory = append(c.Inventory, session.ItemState{ItemID: hammerID, Count: 1, Slot: int(slotRight)})
+	cl, _ := h.joinChar(c)
+	cl.take()
+	evs := h.try(cl, hammerID, pos(0, 0))
+	if opens := find(evs, (*pb.ServerMessage).GetStationOpen); len(opens) != 1 || hasKey(evs, "gather.nothing") {
+		t.Fatalf("hammer on the forge: StationOpen %v, messages %v", opens, systemKeys(evs))
+	}
+}

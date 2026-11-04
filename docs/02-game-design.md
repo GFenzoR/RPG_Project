@@ -127,8 +127,11 @@ Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/re
   `min(max_success, base_success + success_per_level × (nivel − level))` con el nivel de
   antes del intento. Éxito o fallo, los ingredientes se gastan y el oficio gana `xp` intentos.
 - **Anti-bot:** comparte el ritmo de la recolección: tras un intento no hay otro (de oficio o
-  de recolección) hasta `max(gathering.use_interval_ms, time_ms)`, y el anti-AFK de
-  `gathering.afk` cuenta igual (mismo sitio, mismo contador).
+  de recolección) hasta `max(gathering.use_interval_ms, time_ms)`. No hay factor anti-AFK:
+  quedarse junto al yunque es lo normal y cada intento ya cuesta sus ingredientes.
+- Si la mochila está llena, el intento se rechaza aunque los ingredientes fueran a liberar
+  un hueco (el chequeo es conservador). Usar una herramienta sobre una estación (el
+  martillo sobre el yunque) también la abre.
 - Sin vendedores de recetas todavía: se conocen todas; las herramientas (hacha y martillo)
   las vende el proveedor del Farol.
 

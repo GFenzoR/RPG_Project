@@ -14,7 +14,7 @@ import (
 // containers into an output at a station item of the map (anvil, forge, stove...).
 // Using a station within reach answers StationOpen; Craft is validated in full every
 // time (docs/02-game-design.md, "Oficios"). An attempt shares the gathering rate limit
-// and anti-AFK count: one trade action at a time.
+// (one trade action at a time); there is no AFK factor: every attempt spends its inputs.
 
 // i18n keys of the crafting messages (i18n/*/client.yaml).
 const (
@@ -178,18 +178,8 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 	p.nextGather = ctx.Tick + max(w.gatherFor, ticksFor(r.TimeMs))
 
 	chance := r.SuccessChance(level) // with the level before this attempt's tries
-	factor := 1.0
-	if w.gatherAFK(ctx, p) {
-		factor = w.cfg.Balance.Gathering.AFK.Factor
-	}
-	if factor >= 1 {
-		if i, ok := w.skillIdx[r.Craft]; ok && r.XP > 0 {
-			w.addTries(p, i, int64(r.XP))
-		}
-	} else {
-		for range r.XP {
-			w.trainBy(p, r.Craft, factor)
-		}
+	if r.XP > 0 {
+		w.addTries(p, w.skillIdx[r.Craft], int64(r.XP))
 	}
 	for _, in := range r.Inputs {
 		w.takeItem(p, w.cfg.Items[in.Item], in.Count, false)

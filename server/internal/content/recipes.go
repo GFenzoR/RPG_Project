@@ -87,8 +87,12 @@ func (r *Recipe) check(items Items) error {
 	if st == nil || st.CanPickUp() {
 		return fmt.Errorf("station %q must be a known item that cannot be picked up", r.Station)
 	}
-	if r.MaxSuccess < 0 || r.MaxSuccess > 1 || r.BaseSuccess < 0 || r.BaseSuccess > 1 || r.SuccessPerLevel < 0 {
-		return errors.New("base_success and max_success in 0..1, success_per_level >= 0")
+	hi := r.MaxSuccess
+	if hi == 0 {
+		hi = 1 // missing (data and schema reject an explicit 0)
+	}
+	if hi < 0 || hi > 1 || r.BaseSuccess < 0 || r.BaseSuccess > hi || r.SuccessPerLevel < 0 {
+		return errors.New("need 0 <= base_success <= max_success <= 1 (max_success > 0) and success_per_level >= 0")
 	}
 	if len(r.Inputs) == 0 {
 		return errors.New("no inputs")
