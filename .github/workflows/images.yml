@@ -1,9 +1,11 @@
 name: images
 
 # Builds the deploy images (deploy/Dockerfile.*) for linux/amd64 and linux/arm64 and
-# publishes them to ghcr.io on pushes to main and on vX.Y.Z tags. Pull requests that touch
-# what goes into an image only build them (no push), so a broken Dockerfile fails the PR.
-# docs/09-deployment-aws.md describes the tags and how the server consumes them.
+# publishes them to ghcr.io on pushes to main and on vX.Y.Z tags. On pull requests each job
+# runs only when the change touches what it checks (.github/scripts/ci-changes.sh images):
+# `image` builds amd64 only and without pushing, when a Dockerfile changes (`stack` already
+# builds the gameserver and web images for any app change); `home-stack` runs for deploy/
+# changes. docs/09-deployment-aws.md describes the tags and how the server consumes them.
 
 on:
   push:
@@ -21,8 +23,12 @@ on:
       - package.json
       - pnpm-lock.yaml
       - .github/workflows/images.yml
+      - .github/scripts/**
       - Makefile
       - tools/bots/**
+      - tools/spritepack/**
+      - assets/**
+      - proto/**
   workflow_dispatch:
 
 permissions:
@@ -33,8 +39,31 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.f.outputs.image }}
+      deploy-lint: ${{ steps.f.outputs.deploy-lint }}
+      stack: ${{ steps.f.outputs.stack }}
+      home-stack: ${{ steps.f.outputs.home-stack }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the base of the diff
+      - name: rules self-test
+        run: .github/scripts/ci-changes.sh --test
+      - id: f
+        name: changed paths
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: .github/scripts/ci-changes.sh images
+
   image:
     name: image (${{ matrix.image }})
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -51,6 +80,8 @@ jobs:
             dockerfile: deploy/Dockerfile.backup
     env:
       PUSH: ${{ github.event_name != 'pull_request' }}
+      # Pull requests only check that the image builds: amd64, no QEMU emulation.
+      PLATFORMS: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,6 +91,7 @@ jobs:
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rpg-project-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
+        if: env.PUSH == 'true'
       - uses: docker/setup-buildx-action@v3
 
       - name: log in to ghcr.io
@@ -89,7 +121,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ env.PLATFORMS }}
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -101,6 +133,8 @@ jobs:
 
   # Static checks of deploy/: Dockerfiles, shell scripts and the compose files.
   deploy-lint:
+    needs: changes
+    if: needs.changes.outputs.deploy-lint == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,6 +157,8 @@ jobs:
   # Builds the images for the runner's platform, runs the whole stack and plays through
   # Caddy: health, client page, login, /ws with real bots, and the client-IP chain.
   stack:
+    needs: changes
+    if: needs.changes.outputs.stack == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -163,6 +199,8 @@ jobs:
   # Home hosting (docs/13): `make home-up`, the client-IP chain behind the tunnel network,
   # and a real Cloudflare Quick Tunnel with bots over wss:// and the smoke test through it.
   home-stack:
+    needs: changes
+    if: needs.changes.outputs.home-stack == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
