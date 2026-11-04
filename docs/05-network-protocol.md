@@ -193,7 +193,7 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `UseItemOn` | `from`, `item_id`, `stack_index`, `to` (pos o criatura) |
 | `MoveItem` | `from`, `item_id`, `stack_index`, `to`, `count` |
 | `LookAt` | `from` (pos, slot o contenedor), `item_id`, `stack_index` |
-| `Say` | `channel` (decir, gritar, susurrar, global), `text` (máx. 255) |
+| `Say` | `channel` (decir, gritar, susurrar, global, grupo), `text` (máx. 255) |
 | `NpcTalk` | `creature_id` del NPC (T1.10) |
 | `DialogChoose` | `dialog_id`, `option_id` (0 = cerrar) |
 | `ShopBuy` / `ShopSell` | `dialog_id`, `item_id`, `count` (1..100) (T1.10) |
@@ -201,6 +201,7 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `TradeOffer` | `item`, `item_id`, `stack_index` |
 | `TradeAccept` / `TradeCancel` | — |
 | `CloseContainer` | `container_id` (T1.8) |
+| `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
 | `Ping` | `client_time` |
 | `Logout` | — |
 
@@ -432,6 +433,39 @@ Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architectu
   `dialog.quest_completed`, con el parámetro `content_id` `quest` (el cliente muestra
   `quest.<id>.name`).
 
+### Grupos (T3.3, `server/internal/session/party.go`)
+Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
+- **`PartyCommand{action, creature_id}`**:
+  - `INVITE` (`creature_id` = un jugador que el cliente ve): solo el líder o alguien sin
+    grupo. Cuenta para el anti-flood del chat. Al invitado le llega
+    `PartyInvitation{inviter_id, inviter_name, expires_ms}`; al que invita, `party.invited`
+    (`name`). `/invite Nombre` en la línea de chat hace lo mismo por nombre.
+  - `ACCEPT` / `DECLINE` (`creature_id` = quien invitó). Aceptar una invitación vencida, de
+    alguien que ya no lidera o que se fue → `party.invite_gone`. Rechazar le avisa al que
+    invitó (`party.declined`, `name`).
+  - `LEAVE`; `KICK` y `PASS_LEADER` (`creature_id` = otro miembro, solo el líder);
+    `SHARE_ON` / `SHARE_OFF` (solo el líder). `PASS_LEADER` y un `SHARE_*` que cambia algo
+    cuentan para el anti-flood del chat (`chat.flood`, `chat.muted`).
+- **`PartyUpdate{leader_id, shared, members[]}`**: el grupo completo, en orden de
+  llegada, el propio jugador incluido. Llega cuando cambia el grupo (miembros, líder,
+  experiencia compartida, indicador) y, como mucho cada `update_ms`, cuando cambia lo que
+  el jugador ve de otro miembro. Sin `members` = ya no está en un grupo. `shared`:
+  `OFF`, `ACTIVE` (dos o más de los miembros que el jugador ve, él incluido, califican) o
+  `INACTIVE`.
+- **`PartyMember{creature_id, name, vocation, level, in_view, health_percent,
+  mana_percent, island, sharing}`**. Auditoría de información: `health_percent`,
+  `mana_percent` y `sharing` valen 0/falso si `in_view` es falso (el que mira no conoce a esa criatura: fuera
+  de la ventana o invisible). Fuera de vista solo viaja la isla (`""` en el mar). El mensaje
+  no tiene posición ni piso.
+- **Chat:** `Say{channel: PARTY}` → `Message{kind: PARTY, speaker_id, speaker_name, text}`
+  sin `pos` a todos los miembros. Sin grupo → `party.none`.
+- Mensajes de sistema: `party.invited`, `party.player_not_found` (`name`),
+  `party.player_not_seen`, `party.already_in_party` (`name`), `party.already_invited`
+  (`name`), `party.leave_first`, `party.full`, `party.not_leader`, `party.none`,
+  `party.not_a_member`, `party.invite_gone`, `party.invite_usage`, `party.declined`,
+  `party.joined`, `party.left`, `party.kicked`, `party.new_leader` (todos con `name`),
+  `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`.
+
 ### Condiciones (T3.2, `server/internal/session/condition.go`)
 Reglas en `02-game-design.md` ("Condiciones").
 - **`PlayerConditions{conditions: [ActiveCondition{condition_id, remaining_ms, ticks}]}`**:
@@ -470,6 +504,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `PlayerSkills` | Nivel y % de cada skill |
 | `SpellCooldown` | Cooldown propio y de grupo de un hechizo lanzado (T1.9) |
 | `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
+| `PartyUpdate` / `PartyInvitation` | Estado completo del grupo propio; invitación recibida (T3.3) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |
 | `DialogOpen` / `DialogClose` | Diálogo de NPC con texto y opciones |

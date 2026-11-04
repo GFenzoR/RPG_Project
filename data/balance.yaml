@@ -79,6 +79,24 @@ chat:                       # T1.13 (docs/02-game-design.md, "Chat")
     mute_ms: 10000
   global_interval_ms: 10000 # between two global-channel messages of the same player
 
+party:                      # T3.3 (docs/02-game-design.md, "Grupos")
+  max_members: 6            # leader included
+  invite_ms: 45000          # an invitation expires after this
+  update_ms: 1000           # members' health/mana/level refresh at most this often
+  # Shared experience: a kill is shared by the members that are on its floor within
+  # `share_distance` tiles (Chebyshev) of it, contributed (damage to a monster, healing a
+  # member, or a monster's attack taken) within `contribution_ms`, and whose level is at
+  # least `level_range_pct` % of the highest of them (or at most `level_gap_always`
+  # levels below it, so that low levels can share).
+  share_distance: 24
+  contribution_ms: 75000
+  level_range_pct: 70
+  level_gap_always: 3
+  # The shared pot grows `bonus_pct_per_member` % per sharing member beyond the first,
+  # up to `max_bonus_pct` %.
+  bonus_pct_per_member: 6
+  max_bonus_pct: 24
+
 death:
   xp_loss_pct: 10
   skill_loss_pct: 10

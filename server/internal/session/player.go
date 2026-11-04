@@ -113,6 +113,14 @@ type Player struct {
 	conds           []*condition
 	conditionsDirty bool
 	invisible       bool
+
+	// Parties (T3.3): the party, what p's client last heard of it, the first tick of its
+	// next periodic update, and the last tick p helped a fight (0 = never).
+	party         *party
+	partyView     []partyView
+	partyState    pb.SharedExperience
+	partyNext     game.Tick
+	contributedAt game.Tick
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -375,6 +383,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 		return
 	}
 	w.disappearFromObservers(p)
+	w.partyLeftWorld(p) // T3.3: leaving the world leaves the party
 	w.unindex(p)
 	delete(w.byClient, p.client)
 	if w.byChar[p.charID] == p {

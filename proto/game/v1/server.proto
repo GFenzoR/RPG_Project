@@ -47,6 +47,8 @@ message ServerMessage {
     Disconnect disconnect = 28;
     SpellCooldown spell_cooldown = 29;
     PlayerConditions player_conditions = 30;
+    PartyUpdate party_update = 31;
+    PartyInvitation party_invitation = 32;
   }
 }
 
@@ -298,6 +300,8 @@ enum MessageKind {
   // A staff announcement to everyone online (T2.6): the staff member's text travels as
   // is in Message.text and the client adds a translated label.
   MESSAGE_KIND_BROADCAST = 7;
+  // Party chat (T3.3): sent to every member, without pos.
+  MESSAGE_KIND_PARTY = 8;
 }
 
 // Message is chat or a system message. Player-typed chat travels as plain text;
@@ -409,4 +413,57 @@ message Disconnect {
   DisconnectReason reason = 1;
   // Optional extra explanation for the player.
   LocalizedText message = 2;
+}
+
+// ---- parties (T3.3) ------------------------------------------------------------
+
+// SharedExperience is the state of a party's shared experience as its members see it.
+enum SharedExperience {
+  SHARED_EXPERIENCE_UNSPECIFIED = 0;
+  // The leader has it turned off: every kill pays by damage, as without a party.
+  SHARED_EXPERIENCE_OFF = 1;
+  // On, and at least two members qualify right now (contributed recently and are within
+  // the level range of the highest of them): kills near them are shared.
+  SHARED_EXPERIENCE_ACTIVE = 2;
+  // On, but fewer than two members qualify: kills pay by damage.
+  SHARED_EXPERIENCE_INACTIVE = 3;
+}
+
+// PartyUpdate is the full state of the player's party: sent when it changes (members,
+// leader, shared experience) and at most once per balance.yaml party.update_ms while
+// what a member sees of the others changes. An update with no members means the player
+// is not in a party any more.
+message PartyUpdate {
+  uint32 leader_id = 1;
+  SharedExperience shared = 2;
+  // Every member, the player included, in the order they joined.
+  repeated PartyMember members = 3;
+}
+
+// PartyMember is what one member sees of another. Information audit (T3.3,
+// docs/01-architecture.md "Trampas y anti-bot"): health and mana travel only while the
+// viewer sees that member (in_view); a member out of view carries only its island (no
+// position, floor, health or mana).
+message PartyMember {
+  uint32 creature_id = 1;
+  string name = 2;
+  // Vocation id of data/vocations.yaml.
+  string vocation = 3;
+  uint32 level = 4;
+  bool in_view = 5;
+  // 0 when not in_view.
+  uint32 health_percent = 6;
+  uint32 mana_percent = 7;
+  // Island id of world/world.yaml where the member is (empty in the open sea).
+  string island = 8;
+  // The member qualifies for shared experience right now (see SharedExperience).
+  bool sharing = 9;
+}
+
+// PartyInvitation tells a player that inviter_id invited it to a party. It can answer
+// with PartyCommand ACCEPT or DECLINE until expires_ms have passed.
+message PartyInvitation {
+  uint32 inviter_id = 1;
+  string inviter_name = 2;
+  uint32 expires_ms = 3;
 }

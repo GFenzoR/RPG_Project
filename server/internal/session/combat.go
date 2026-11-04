@@ -164,6 +164,7 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	w.reveal(ctx, p) // T3.2: attacking ends invisibility
 	if dmg > 0 {
 		w.addShare(m, p.id, dmg)
+		w.contribute(ctx, p)
 	}
 	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), element)
 	if m.health <= 0 {
@@ -226,6 +227,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 			continue
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.attackTicks[i]
+		w.contribute(ctx, t) // T3.3: tanking counts for shared experience
 		if t.afkTarget == m {
 			t.answeredAt = max(ctx.Tick, 1) // the player's target fights back: not AFK training
 		}
@@ -271,27 +273,21 @@ func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element 
 
 func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	def := m.kind.def
-	// Experience, shared by the damage each online player dealt.
-	total := 0
+	// Experience, by the damage each online player dealt; a party with shared
+	// experience pools its members' shares (T3.3). The loot still goes to who dealt the
+	// most damage.
 	var owner *Player
 	best := 0
 	for _, s := range m.damage {
-		if p := w.playerByID(s.player); p != nil {
-			total += s.amount
-			if s.amount > best {
-				owner, best = p, s.amount
-			}
+		if p := w.playerByID(s.player); p != nil && s.amount > best {
+			owner, best = p, s.amount
 		}
 	}
+	w.shareExperience(ctx.Tick, m.pos, def.Experience, m.damage)
 	for _, s := range m.damage {
-		p := w.playerByID(s.player)
-		if p == nil || total == 0 {
-			continue
+		if p := w.playerByID(s.player); p != nil {
+			w.questKill(p, def.ID)
 		}
-		if xp := def.Experience * int64(s.amount) / int64(total); xp > 0 {
-			w.gainExperience(p, xp)
-		}
-		w.questKill(p, def.ID)
 	}
 
 	// Remains with the loot, on the tile where it died. Loot beyond the remains'

@@ -69,6 +69,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.shopBuy(p, m.ShopBuy.GetDialogId(), m.ShopBuy.GetItemId(), m.ShopBuy.GetCount())
 	case *pb.ClientMessage_ShopSell:
 		w.shopSell(p, m.ShopSell.GetDialogId(), m.ShopSell.GetItemId(), m.ShopSell.GetCount())
+	case *pb.ClientMessage_PartyCommand:
+		w.partyCommand(ctx, p, m.PartyCommand)
 	case *pb.ClientMessage_CloseContainer:
 		w.closeContainer(p, m.CloseContainer.GetContainerId())
 	case *pb.ClientMessage_Logout:
@@ -302,6 +304,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 		w.retryAdmin()
 	}
 	w.checkRoles(ctx)
+	w.flushParties(ctx.Tick)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)

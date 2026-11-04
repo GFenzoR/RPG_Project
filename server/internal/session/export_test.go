@@ -100,3 +100,39 @@ func (m *Monster) DamageShareForTest(id uint32) int {
 	}
 	return 0
 }
+
+// PartyForTest returns the creature ids of p's party members (join order), its leader
+// and whether shared experience is on; nil, 0, false without a party.
+func (p *Player) PartyForTest() (members []uint32, leader uint32, shared bool) {
+	if p.party == nil {
+		return nil, 0, false
+	}
+	for _, o := range p.party.members {
+		members = append(members, o.id)
+	}
+	return members, p.party.leader.id, p.party.shared
+}
+
+// Share is one damage share for ShareForTest.
+type Share struct {
+	P      *Player
+	Amount int
+}
+
+// ShareForTest pays xp of a kill at pos by shares, as killMonster does (loop goroutine).
+func (w *World) ShareForTest(ctx *game.TickContext, pos world.Pos, xp int64, shares ...Share) {
+	ds := make([]damageShare, len(shares))
+	for i, s := range shares {
+		ds[i] = damageShare{player: s.P.id, amount: s.Amount}
+	}
+	w.shareExperience(ctx.Tick, pos, xp, ds)
+}
+
+// ContributeForTest marks that p just helped a fight (loop goroutine).
+func (w *World) ContributeForTest(ctx *game.TickContext, p *Player) { w.contribute(ctx, p) }
+
+// SetLevelForTest sets p's level (loop goroutine).
+func (w *World) SetLevelForTest(p *Player, level int) { w.setLevel(p, level) }
+
+// InvitesForTest returns how many party invitations are pending.
+func (w *World) InvitesForTest() int { return len(w.invites) }

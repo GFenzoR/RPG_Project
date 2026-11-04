@@ -612,3 +612,113 @@ body.using-item canvas {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* Parties (T3.3). */
+.battle li {
+  display: flex;
+  gap: 0.25rem;
+}
+.battle button.invite {
+  width: auto;
+  flex: none;
+  justify-content: center;
+  padding: 0 0.5rem;
+  font-weight: bold;
+  border-color: #404850;
+}
+.chat-lines .party {
+  color: #8fd0ff;
+}
+.party ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.party li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.party li.away {
+  color: var(--muted);
+}
+.party .tag {
+  margin-left: 0.35rem;
+  padding: 0 0.25rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.party .tag.sharing {
+  border-color: #30c030;
+  color: #60e060;
+}
+.party .mlevel,
+.party .where {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.party .bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.party .hp,
+.party .mp {
+  display: block;
+  height: 4px;
+  background: #101010;
+}
+.party .hp span,
+.party .mp span {
+  display: block;
+  height: 100%;
+  background: #30c030;
+}
+.party .mp span {
+  background: #3070e0;
+}
+.party .actions,
+.party-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+.party .shared {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+}
+.party .shared-2 {
+  color: #60e060;
+}
+.party .shared-3 {
+  color: var(--error);
+}
+.party .empty {
+  color: var(--muted);
+  margin: 0;
+}
+.invitations {
+  position: absolute;
+  bottom: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.invitation {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid var(--accent);
+}
+.invitation p {
+  margin: 0;
+}

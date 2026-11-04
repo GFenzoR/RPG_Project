@@ -14,7 +14,8 @@
     "gathering",
     "chat",
     "death",
-    "economy"
+    "economy",
+    "party"
   ],
   "properties": {
     "movement": {
@@ -190,6 +191,72 @@
               "maximum": 1
             }
           }
+        }
+      }
+    },
+    "party": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_members",
+        "invite_ms",
+        "update_ms",
+        "share_distance",
+        "contribution_ms",
+        "level_range_pct",
+        "level_gap_always",
+        "bonus_pct_per_member",
+        "max_bonus_pct"
+      ],
+      "description": "Parties and shared experience (T3.3).",
+      "properties": {
+        "max_members": {
+          "description": "Members of a party, leader included.",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 32
+        },
+        "invite_ms": {
+          "description": "An invitation expires after this many ms.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600000
+        },
+        "update_ms": {
+          "description": "Members' state refreshes at most this often (ms).",
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "share_distance": {
+          "description": "Tiles (Chebyshev, same floor) from the kill within which a member shares.",
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "contribution_ms": {
+          "description": "A member shares only if it contributed within this many ms.",
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "level_range_pct": {
+          "description": "A member shares only if its level is at least this % of the highest sharing member (anti-carry).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "level_gap_always": {
+          "description": "A member at most this many levels below the highest sharer always qualifies by level.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "bonus_pct_per_member": {
+          "description": "Bonus % of the shared pot per sharing member beyond the first.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "max_bonus_pct": {
+          "description": "Cap of the shared bonus %.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
         }
       }
     },

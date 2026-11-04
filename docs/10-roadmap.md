@@ -117,7 +117,10 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   Motor por eventos del scheduler, reglas en `balance.yaml`, invisibilidad filtrada en el
   servidor, persistencia de las de daño y `slowed`. Pendiente: campos en el suelo y
   antídoto como item.
-- [ ] **T3.3 Grupos** con experiencia compartida.
+- [x] **T3.3 Grupos** con experiencia compartida. Invitación con vencimiento, liderazgo,
+  expulsión, salida al desconectar, experiencia compartida con anti-carry y bonus en
+  `balance.yaml`, información filtrada por vista, chat de grupo y panel en el cliente. Los
+  grupos no se persisten.
 - [ ] **T3.4 Herrería, leñador y cocina** con recetas y estaciones.
 - [ ] **T3.5 Barcos y viajes** entre islas con requisitos.
 - [ ] **T3.6 Isla del Bosque** y Capítulo 2.

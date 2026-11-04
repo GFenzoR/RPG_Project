@@ -165,6 +165,9 @@ Decisión del 2026-11-03: el juego se sigue jugando en el navegador y en el escr
      `WalkRejected` (un camino por click lo rodea) y los monstruos lo esquivan. Es una pista
      aceptada.
    - **No viaja** lo que está fuera de la ventana: jugadores, botín ni restos.
+   - **Grupos (T3.3):** de un miembro fuera de vista solo viajan nombre, vocación, nivel e
+     isla; vida y maná solo mientras está en vista, y nunca la posición. Invitar exige ver
+     al jugador. `TestPartyInfoAudit` (`internal/session/party_test.go`) es la auditoría.
 3. **Abuso de la API HTTP** (registro masivo, fuerza bruta). Respuesta: los rate limits
    por IP, por cuenta y por email+IP de T1.3.
 

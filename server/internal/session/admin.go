@@ -167,6 +167,10 @@ func (w *World) command(ctx *game.TickContext, p *Player, line string) {
 	if len(fields) > 0 {
 		name = strings.ToLower(fields[0])
 	}
+	if name == "invite" { // T3.3: the only player command so far
+		w.cmdInvite(ctx, p, fields[1:])
+		return
+	}
 	cmd, ok := gmCommands[name]
 	if !ok || p.role < cmd.min || w.cfg.Admin == nil {
 		if w.chatAllowed(ctx, p) {

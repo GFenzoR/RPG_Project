@@ -149,6 +149,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la interpolación ya la usan. Invisible: el propio cliente dibuja su criatura con alpha
   0.4 (los demás no la reciben). Efecto 7 = hechizo de condición o cura.
 
+## Notas de T3.3
+- `WorldState.party` (`state/party.ts`, puro y con tests) guarda el grupo de `PartyUpdate`
+  y las invitaciones de `PartyInvitation` hasta que vencen o se contestan. `ui/Party.tsx`:
+  panel del grupo (vida/maná solo de los miembros en vista, que es lo único que llega) y
+  las invitaciones sobre el mapa. En la lista de batalla, un jugador tiene el botón "+"
+  (invitar) si se lo puede invitar. El canal "Grupo" está en el selector del chat.
+- El plugin de Vite empaqueta los nombres de `world.yaml` (`island.<id>.name`).
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no
