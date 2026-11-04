@@ -35,6 +35,24 @@ export interface SpellDef {
   aimsAtPlayer: boolean;
 }
 
+/** A recipe of data/recipes.yaml (T3.4), for the station window (the server validates). */
+export interface RecipeDef {
+  id: string;
+  /** Skill id that sets the chance (smithing, cooking...). */
+  craft: string;
+  /** Numeric id of the station item. */
+  station: number;
+  /** tool.use of a tool the player must carry ("" = none). */
+  tool: string;
+  level: number;
+  timeMs: number;
+  inputs: { itemId: number; count: number }[];
+  output: { itemId: number; count: number };
+  baseSuccess: number;
+  successPerLevel: number;
+  maxSuccess: number;
+}
+
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
@@ -44,6 +62,8 @@ export interface ClientContent {
   vocations: string[];
   /** data/spells.yaml in file order. */
   spells: SpellDef[];
+  /** data/recipes.yaml in file order (T3.4). */
+  recipes: RecipeDef[];
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
   /** balance.yaml chat (T1.13): the server enforces it, the input only caps to it. */
   chat: { maxLength: number };

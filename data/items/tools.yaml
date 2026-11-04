@@ -48,3 +48,24 @@
   tradeable: true
   container: { slots: 24 }
   value: 12
+
+# Trade tools (T3.4). Our own numbers.
+- id: felling_axe
+  kind: tool
+  sprite: tools/felling_axe
+  name: item.felling_axe.name
+  description: item.felling_axe.desc
+  weight: 3900
+  tradeable: true
+  tool: { use: woodcutting }
+  value: 110
+
+- id: smithing_hammer
+  kind: tool
+  sprite: tools/smithing_hammer
+  name: item.smithing_hammer.name
+  description: item.smithing_hammer.desc
+  weight: 2600
+  tradeable: true
+  tool: { use: smithing }
+  value: 95

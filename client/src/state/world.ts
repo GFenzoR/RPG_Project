@@ -5,6 +5,7 @@
 // Own movement is predicted one step ahead (client/CLAUDE.md): a step the player asks for
 // moves the own creature at once; the server's CreatureMove confirms it (and gives the
 // real duration) and WalkRejected puts the creature back where the server says it is.
+import type { StationState } from "./recipes.ts";
 import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
 import type {
   Creature,
@@ -238,6 +239,8 @@ export class WorldState implements TileSource {
   target: number | undefined;
   stats: PlayerStatsState | undefined;
   skills: SkillState[] = [];
+  /** The crafting station the player opened (T3.4), until it closes the window or walks away. */
+  station: StationState | undefined;
   /** The player's own active conditions (T3.2), in the server's order. */
   conditions: ConditionView[] = [];
   levelUp: LevelUpState | undefined;
@@ -428,6 +431,16 @@ export class WorldState implements TileSource {
         if (this.dialog?.id === msg.value.dialogId) this.dialog = undefined;
         if (this.shop?.dialogId === msg.value.dialogId) this.shop = undefined;
         break;
+      case "stationOpen": {
+        const v = msg.value;
+        this.station = {
+          pos: posOf(v.pos),
+          itemId: v.itemId,
+          owned: new Map(v.owned.map((o) => [o.itemId, o.count])),
+          tools: new Set(v.tools),
+        };
+        break;
+      }
       case "shopOpen": {
         const v = msg.value;
         this.shop = {

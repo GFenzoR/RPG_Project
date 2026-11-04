@@ -136,3 +136,9 @@ func (w *World) SetLevelForTest(p *Player, level int) { w.setLevel(p, level) }
 
 // InvitesForTest returns how many party invitations are pending.
 func (w *World) InvitesForTest() int { return len(w.invites) }
+
+// TrainForTest adds n tries of skill id to p (T3.4).
+func (w *World) TrainForTest(p *Player, id string, n int64) { w.addTries(p, w.skillIdx[id], n) }
+
+// SetCapacityForTest sets p's capacity in grams (T3.4).
+func (w *World) SetCapacityForTest(p *Player, grams int) { p.capacity = grams }

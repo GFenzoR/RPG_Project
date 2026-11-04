@@ -67,6 +67,7 @@ const content: ClientContent = {
   monsterSprites: {},
   vocations: ["guardian"],
   spells: [],
+  recipes: [],
   movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
   chat: { maxLength: 255 },
   i18n: {},

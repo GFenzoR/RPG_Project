@@ -53,6 +53,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.moveItem(ctx, p, m.MoveItem)
 	case *pb.ClientMessage_UseItem:
 		w.useItem(ctx, p, m.UseItem)
+	case *pb.ClientMessage_Craft:
+		w.craft(ctx, p, m.Craft)
 	case *pb.ClientMessage_UseItemOn:
 		w.useItemOn(ctx, p, m.UseItemOn)
 	case *pb.ClientMessage_CastSpell:

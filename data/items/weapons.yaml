@@ -138,3 +138,15 @@
   weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
   requires: { level: 6, vocations: [druid] }
   value: 300
+
+# Smithed at an anvil (T3.4): a little better than the shop's sword of the same tier.
+- id: forged_shortsword
+  kind: weapon
+  sprite: weapons/forged_shortsword
+  name: item.forged_shortsword.name
+  description: item.forged_shortsword.desc
+  weight: 3100
+  tradeable: true
+  weapon: { type: sword, attack: 14, defense: 8, hands: 1 }
+  requires: { level: 6 }
+  value: 150

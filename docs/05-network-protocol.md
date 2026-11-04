@@ -202,6 +202,7 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `TradeAccept` / `TradeCancel` | — |
 | `CloseContainer` | `container_id` (T1.8) |
 | `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
+| `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
 | `Ping` | `client_time` |
 | `Logout` | — |
 
@@ -505,6 +506,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `SpellCooldown` | Cooldown propio y de grupo de un hechizo lanzado (T1.9) |
 | `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
 | `PartyUpdate` / `PartyInvitation` | Estado completo del grupo propio; invitación recibida (T3.3) |
+| `StationOpen` | Estación de oficio usada: `pos`, `item_id`, unidades llevadas de sus ingredientes (`owned`) y `tools` llevadas; llega de nuevo tras cada `Craft` (T3.4) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |
 | `DialogOpen` / `DialogClose` | Diálogo de NPC con texto y opciones |

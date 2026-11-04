@@ -237,7 +237,7 @@ describe("validator diagnostics", () => {
     );
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/puerto_provisioner.yaml:42:21 shop.buys[0].price: shop "provisions_shop" buys "rope" for 45 but shop "provisions_shop" sells it for 45: buy prices must be lower than every sell price',
+      'error data/npcs/puerto_provisioner.yaml:44:21 shop.buys[0].price: shop "provisions_shop" buys "rope" for 45 but shop "provisions_shop" sells it for 45: buy prices must be lower than every sell price',
     );
     expect(
       out.some(

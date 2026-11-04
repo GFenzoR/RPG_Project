@@ -236,6 +236,7 @@ type ClientMessage struct {
 	//	*ClientMessage_ShopBuy
 	//	*ClientMessage_ShopSell
 	//	*ClientMessage_PartyCommand
+	//	*ClientMessage_Craft
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -503,6 +504,15 @@ func (x *ClientMessage) GetPartyCommand() *PartyCommand {
 	return nil
 }
 
+func (x *ClientMessage) GetCraft() *Craft {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_Craft); ok {
+			return x.Craft
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -607,6 +617,10 @@ type ClientMessage_PartyCommand struct {
 	PartyCommand *PartyCommand `protobuf:"bytes,25,opt,name=party_command,json=partyCommand,proto3,oneof"`
 }
 
+type ClientMessage_Craft struct {
+	Craft *Craft `protobuf:"bytes,26,opt,name=craft,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -656,6 +670,8 @@ func (*ClientMessage_ShopBuy) isClientMessage_Message() {}
 func (*ClientMessage_ShopSell) isClientMessage_Message() {}
 
 func (*ClientMessage_PartyCommand) isClientMessage_Message() {}
+
+func (*ClientMessage_Craft) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -2010,11 +2026,68 @@ func (x *PartyCommand) GetCreatureId() uint32 {
 	return 0
 }
 
+// Craft attempts a recipe of data/recipes.yaml (T3.4) at the station item on the tile
+// station (from StationOpen). The server checks the skill level, the inputs in the
+// containers, the tool, the distance to the station, capacity and room, and the time
+// since the last crafting or gathering attempt, and answers with a system Message
+// (craft.*).
+type Craft struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RecipeId      string                 `protobuf:"bytes,1,opt,name=recipe_id,json=recipeId,proto3" json:"recipe_id,omitempty"`
+	Station       *Position              `protobuf:"bytes,2,opt,name=station,proto3" json:"station,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Craft) Reset() {
+	*x = Craft{}
+	mi := &file_game_v1_client_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Craft) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Craft) ProtoMessage() {}
+
+func (x *Craft) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Craft.ProtoReflect.Descriptor instead.
+func (*Craft) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *Craft) GetRecipeId() string {
+	if x != nil {
+		return x.RecipeId
+	}
+	return ""
+}
+
+func (x *Craft) GetStation() *Position {
+	if x != nil {
+		return x.Station
+	}
+	return nil
+}
+
 var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\x8a\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xb2\n" +
 	"\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
@@ -2045,7 +2118,8 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\bnpc_talk\x18\x16 \x01(\v2\x10.game.v1.NpcTalkH\x00R\anpcTalk\x12-\n" +
 	"\bshop_buy\x18\x17 \x01(\v2\x10.game.v1.ShopBuyH\x00R\ashopBuy\x120\n" +
 	"\tshop_sell\x18\x18 \x01(\v2\x11.game.v1.ShopSellH\x00R\bshopSell\x12<\n" +
-	"\rparty_command\x18\x19 \x01(\v2\x15.game.v1.PartyCommandH\x00R\fpartyCommandB\t\n" +
+	"\rparty_command\x18\x19 \x01(\v2\x15.game.v1.PartyCommandH\x00R\fpartyCommand\x12&\n" +
+	"\x05craft\x18\x1a \x01(\v2\x0e.game.v1.CraftH\x00R\x05craftB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -2134,7 +2208,10 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\fPartyCommand\x12,\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x14.game.v1.PartyActionR\x06action\x12\x1f\n" +
 	"\vcreature_id\x18\x02 \x01(\rR\n" +
-	"creatureId*~\n" +
+	"creatureId\"Q\n" +
+	"\x05Craft\x12\x1b\n" +
+	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12+\n" +
+	"\astation\x18\x02 \x01(\v2\x11.game.v1.PositionR\astation*~\n" +
 	"\vFightStance\x12\x1c\n" +
 	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
@@ -2171,7 +2248,7 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_game_v1_client_proto_goTypes = []any{
 	(FightStance)(0),       // 0: game.v1.FightStance
 	(ChatChannel)(0),       // 1: game.v1.ChatChannel
@@ -2202,9 +2279,11 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*ShopBuy)(nil),        // 26: game.v1.ShopBuy
 	(*ShopSell)(nil),       // 27: game.v1.ShopSell
 	(*PartyCommand)(nil),   // 28: game.v1.PartyCommand
-	(Direction)(0),         // 29: game.v1.Direction
-	(*ActionTarget)(nil),   // 30: game.v1.ActionTarget
-	(*ItemLocation)(nil),   // 31: game.v1.ItemLocation
+	(*Craft)(nil),          // 29: game.v1.Craft
+	(Direction)(0),         // 30: game.v1.Direction
+	(*ActionTarget)(nil),   // 31: game.v1.ActionTarget
+	(*ItemLocation)(nil),   // 32: game.v1.ItemLocation
+	(*Position)(nil),       // 33: game.v1.Position
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	4,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -2232,26 +2311,28 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	26, // 22: game.v1.ClientMessage.shop_buy:type_name -> game.v1.ShopBuy
 	27, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
 	28, // 24: game.v1.ClientMessage.party_command:type_name -> game.v1.PartyCommand
-	29, // 25: game.v1.Walk.dir:type_name -> game.v1.Direction
-	29, // 26: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	29, // 27: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 28: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	30, // 29: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	31, // 30: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	31, // 31: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	30, // 32: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	31, // 33: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	31, // 34: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	31, // 35: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 36: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	31, // 37: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	31, // 38: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	2,  // 39: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	40, // [40:40] is the sub-list for method output_type
-	40, // [40:40] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	29, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
+	30, // 26: game.v1.Walk.dir:type_name -> game.v1.Direction
+	30, // 27: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	30, // 28: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 29: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	31, // 30: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	32, // 31: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	32, // 32: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	31, // 33: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	32, // 34: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	32, // 35: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	32, // 36: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 37: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	32, // 38: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	32, // 39: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	2,  // 40: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	33, // 41: game.v1.Craft.station:type_name -> game.v1.Position
+	42, // [42:42] is the sub-list for method output_type
+	42, // [42:42] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -2286,6 +2367,7 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_ShopBuy)(nil),
 		(*ClientMessage_ShopSell)(nil),
 		(*ClientMessage_PartyCommand)(nil),
+		(*ClientMessage_Craft)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[8].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),
@@ -2297,7 +2379,7 @@ func file_game_v1_client_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   26,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

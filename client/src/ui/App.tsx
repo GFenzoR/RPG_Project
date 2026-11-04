@@ -15,6 +15,7 @@ import { InventoryPanel } from "./Inventory.tsx";
 import { Hotbar } from "./Hotbar.tsx";
 import { ChatPanel } from "./Chat.tsx";
 import { DialogWindow } from "./Dialog.tsx";
+import { CraftingWindow } from "./Crafting.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
 
 type Screen =
@@ -362,6 +363,7 @@ function GameScreen(props: {
     hotkeys: [],
     dialog: undefined,
     shop: undefined,
+    station: undefined,
     party: undefined,
     invitations: [],
     selfId: 0,
@@ -463,6 +465,9 @@ function GameScreen(props: {
           )}
           {entered && <Hotbar t={t} content={props.content} game={game.current} ui={ui} />}
           {entered && <DialogWindow t={t} content={props.content} game={game.current} ui={ui} />}
+          {entered && !ui.dialog && (
+            <CraftingWindow t={t} content={props.content} game={game.current} ui={ui} />
+          )}
           {entered && <PartyInvitations t={t} game={game.current} ui={ui} />}
         </div>
         <aside class="side">

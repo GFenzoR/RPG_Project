@@ -37,6 +37,7 @@ message ClientMessage {
     ShopBuy shop_buy = 23;
     ShopSell shop_sell = 24;
     PartyCommand party_command = 25;
+    Craft craft = 26;
   }
 }
 
@@ -227,4 +228,14 @@ enum PartyAction {
 message PartyCommand {
   PartyAction action = 1;
   uint32 creature_id = 2;
+}
+
+// Craft attempts a recipe of data/recipes.yaml (T3.4) at the station item on the tile
+// station (from StationOpen). The server checks the skill level, the inputs in the
+// containers, the tool, the distance to the station, capacity and room, and the time
+// since the last crafting or gathering attempt, and answers with a system Message
+// (craft.*).
+message Craft {
+  string recipe_id = 1;
+  Position station = 2;
 }

@@ -75,6 +75,21 @@ sprites:
   decor/mooring_post: { placeholder: { label: MP, color: "#5a4632" } }
   decor/cargo_crate: { placeholder: { label: CR, color: "#9a7a4e" } }
 
+  # Items: trades (T3.4)
+  tools/felling_axe: { placeholder: { label: FA, color: "#7a6a58" } }
+  tools/smithing_hammer: { placeholder: { label: SH, color: "#5e6570" } }
+  materials/birch_log: { placeholder: { label: BL, color: "#cdbf9e" } }
+  materials/tree_resin: { placeholder: { label: TR, color: "#c98a2a" } }
+  materials/iron_ingot: { placeholder: { label: II, color: "#8b939c" } }
+  food/grilled_fish: { placeholder: { label: GF, color: "#c48a4a" } }
+  food/roast_boar: { placeholder: { label: RB, color: "#8a4a2a" } }
+  food/harbour_stew: { placeholder: { label: HS, color: "#9a6a3a" } }
+  weapons/forged_shortsword: { placeholder: { label: FS, color: "#a0a8b2" } }
+  decor/birch_tree: { placeholder: { label: "", color: "#9ab88a" } }
+  decor/smelting_forge: { placeholder: { label: FG, color: "#b04a22" } }
+  decor/anvil: { placeholder: { label: AN, color: "#45484e" } }
+  decor/cooking_hearth: { placeholder: { label: HE, color: "#7a3a1e" } }
+
   # Creatures
   decor/oak_tree: { placeholder: { label: "", color: "#2f5a26" } }
   decor/pine_tree: { placeholder: { label: "", color: "#1f4a2e" } }

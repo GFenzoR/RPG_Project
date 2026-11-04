@@ -37,7 +37,7 @@ npc.puerto_armorer.salvage: "Compro armas y armaduras, pero a precio de chatarra
 npc.puerto_provisioner.name: "Tilde Varga, provisiones"
 npc.puerto_provisioner.greet: "¡Pasa, pasa! Cuerda, palas, galleta de barco... y si traes pieles o caparazones, también te los compro."
 npc.puerto_provisioner.opt_tools: "¿Para qué sirve cada herramienta?"
-npc.puerto_provisioner.tools: "La cuerda saca a cualquiera de un pozo; la pala abre agujeros donde la arena suena hueca; el pico arranca mineral de la roca; y la caña, bueno, pescado. Sin herramientas en esta isla no llegas lejos."
+npc.puerto_provisioner.tools: "La cuerda saca a cualquiera de un pozo; la pala abre agujeros donde la arena suena hueca; el pico arranca mineral de la roca; la caña, bueno, pescado; el hacha de leñador saca troncos de los abedules, y el martillo de herrero es para el yunque. Sin herramientas en esta isla no llegas lejos."
 npc.puerto_provisioner.opt_gossip: "¿Qué se cuenta por aquí?"
 npc.puerto_provisioner.gossip: "Que el farol de la punta estuvo apagado la noche del naufragio, y sin embargo los marineros juran que vieron una luz. Que los saqueadores de la playa tienen más monedas que nunca. Yo solo vendo cuerda, pero cuerda se vende mucho cuando hay miedo."
 

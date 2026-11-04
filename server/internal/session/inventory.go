@@ -798,8 +798,11 @@ func (w *World) forgetContainers(p *Player) {
 // ---- UseItem and LookAt --------------------------------------------------------
 
 // useItem runs a UseItem intent: containers open or close, consumables heal and are
-// eaten, runes are cast (T1.9). Other items have no use yet (tools arrive with T1.12).
+// eaten, runes are cast (T1.9), crafting stations of the map open (T3.4).
 func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
+	if w.useStation(p, m) {
+		return
+	}
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
 	if it == nil {
 		p.emit(systemMsg(msgNotPossible))

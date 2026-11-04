@@ -93,6 +93,15 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 		return
 	}
 	def := w.resourceAt(pos)
+	if def == nil && pos.Z == p.pos.Z && w.near(p, pos) {
+		// A tool used on a crafting station (a hammer on the anvil) opens it (T3.4).
+		for i := w.staticCount(pos) - 1; i >= 0; i-- {
+			if id := w.staticAt(pos, i); w.stations[id] != nil {
+				w.sendStation(p, pos, id)
+				return
+			}
+		}
+	}
 	if def == nil || def.Resource.Tool != tool.def.Tool.Use {
 		p.emit(systemMsg(msgGatherNothing))
 		return
