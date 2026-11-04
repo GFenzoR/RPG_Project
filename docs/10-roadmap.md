@@ -126,7 +126,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   `data/boat_routes.yaml` (nivel, quest, item o pasaje) ofrecidas por el diálogo del
   capitán, cobro atómico, bloqueo en combate, llegada libre o la más cercana, validación
   de muelles en `make validate`. Pendiente: viajar con el grupo.
-- [x] **T3.6 Isla del Bosque** y Capítulo 2. (PR #CONTENT contenido, PR #WORLD mapa y rutas)
+- [x] **T3.6 Isla del Bosque** y Capítulo 2. (PR #54 contenido, PR #55 mapa y rutas)
   Isla `bosque` con Raigal, muelle, olmos talables, cuatro zonas de caza y cueva en el piso
   8; 5 monstruos, 4 NPCs, recetas de olmo y el Capítulo 2 en dos quests. Pendiente: arte
   real (todo es placeholder), depósito (no hay item), puertas.
