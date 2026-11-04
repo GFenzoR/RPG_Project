@@ -32,14 +32,14 @@ dialog:
 shop:
   id: provisions_shop
   sells:
-    - { item: rope, price: 50 }
+    - { item: rope, price: 45 }
     - { item: shovel, price: 40 }
     - { item: pickaxe, price: 120 }
-    - { item: fishing_rod, price: 150 }
+    - { item: fishing_rod, price: 140 }
     - { item: ship_biscuit, price: 3 }
     - { item: seaweed_poultice, price: 25 }
   buys:
-    - { item: rope, price: 15 }
+    - { item: rope, price: 14 }
     - { item: shovel, price: 12 }
     - { item: pickaxe, price: 40 }
     - { item: fishing_rod, price: 50 }

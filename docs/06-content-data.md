@@ -211,8 +211,8 @@ dialog:
 # action: { open_shop: provisions_shop }
 shop:
   id: provisions_shop
-  sells: [{ item: rope, price: 50 }, { item: fishing_rod, price: 150 }]
-  buys:  [{ item: rope, price: 15 }, { item: wolf_pelt, price: 5 }]
+  sells: [{ item: rope, price: 45 }, { item: fishing_rod, price: 140 }]
+  buys:  [{ item: rope, price: 14 }, { item: wolf_pelt, price: 5 }]
 ```
 Viaje en barco (de `data/npcs/harbor_master.yaml`):
 ```yaml

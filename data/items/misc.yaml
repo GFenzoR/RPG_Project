@@ -2,7 +2,7 @@
   kind: currency
   sprite: currency/copper_coin
   name: item.copper_coin.name
-  weight: 10
+  weight: 12
   stackable: true
   max_stack: 100
   tradeable: true
@@ -40,7 +40,7 @@
   stackable: true
   max_stack: 100
   tradeable: true
-  consumable: { food_ms: 120000 }
+  consumable: { food_ms: 105000 }
   value: 3
 
 - id: boar_meat
@@ -51,7 +51,7 @@
   stackable: true
   max_stack: 100
   tradeable: true
-  consumable: { food_ms: 180000 }
+  consumable: { food_ms: 165000 }
   value: 4
 
 - id: seaweed_poultice
@@ -70,7 +70,7 @@
   kind: material
   sprite: materials/gull_feather
   name: item.gull_feather.name
-  weight: 10
+  weight: 6
   stackable: true
   max_stack: 100
   tradeable: true
@@ -90,7 +90,7 @@
   kind: material
   sprite: materials/bat_wing
   name: item.bat_wing.name
-  weight: 100
+  weight: 70
   stackable: true
   max_stack: 100
   tradeable: true

@@ -35,7 +35,7 @@ const content: ClientContent = {
     1: def("grass", { ground: true, walkable: true }),
     8: def("copper_coin", { stackable: true }),
     20: def("iron_sword"),
-    48: def("backpack", { slots: 20 }),
+    48: def("backpack", { slots: 24 }),
   },
   monsterSprites: {},
   vocations: [],

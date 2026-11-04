@@ -167,9 +167,9 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await backpackSlot.locator("[data-item]").click({ button: "right" });
   const backpackWindow = inventory.locator('[data-container-item="backpack"]');
   await expect(backpackWindow).toBeVisible();
-  await expect(backpackWindow.locator(".slot")).toHaveCount(20);
+  await expect(backpackWindow.locator(".slot")).toHaveCount(24);
   await backpackSlot.locator("[data-item]").click({ modifiers: ["Shift"] });
-  await expect(page.getByTestId("game-log")).toContainText("Ves mochila (20 lugares)");
+  await expect(page.getByTestId("game-log")).toContainText("Ves mochila (24 lugares)");
   await expect(inventory.getByTestId("capacity")).toContainText("Capacidad libre");
   await inventory.screenshot({ path: join(shots, "09-inventory.png") });
 
@@ -711,7 +711,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   const shop = page.getByTestId("shop");
   await expect(shop).toBeVisible();
   await expect(page.getByTestId("shop-money")).toHaveText("Dinero: 0");
-  await expect(shop.locator('[data-item="rope"]')).toContainText("50");
+  await expect(shop.locator('[data-item="rope"]')).toContainText("45");
   await page.waitForTimeout(300); // let the icons load before the screenshot
   await shot(page, "14-shop");
   await shop.getByRole("tab", { name: "Vender" }).click();

@@ -5,7 +5,7 @@
   sprite: runes/arc_rune
   name: item.arc_rune.name
   description: item.arc_rune.desc
-  weight: 120
+  weight: 90
   tradeable: true
   rune: { spell: arc_bolt, charges: 4, magic_level: 1 }
   value: 30
