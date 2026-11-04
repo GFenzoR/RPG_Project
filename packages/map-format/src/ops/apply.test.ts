@@ -266,7 +266,7 @@ describe("islands that share a chunk", () => {
       texts: [],
     });
     return {
-      meta: { format: 1, islands: [], boat_routes: [] },
+      meta: { format: 1, islands: [] },
       islands: new Map([
         ["a", island("a", 0, 40)],
         ["b", island("b", 40, 24)],

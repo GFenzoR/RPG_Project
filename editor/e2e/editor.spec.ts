@@ -437,7 +437,7 @@ test("the API refuses requests that do not come from the editor page", async ({ 
   expect(foreign.status()).toBe(403);
   const traversal = await request.post("/api/save", {
     data: {
-      world: { meta: { format: 1, islands: [], boat_routes: [] }, islands: [] },
+      world: { meta: { format: 1, islands: [] }, islands: [] },
       changes: [{ file: "world/islands/testisle/../../../evil.json", base: null }],
     },
     headers: { "x-rpg-editor": "1" },

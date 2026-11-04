@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/boat_routes.schema.json",
+  "title": "Boat routes (data/boat_routes.yaml)",
+  "description": "T3.5: routes a captain NPC offers in the dialog nodes marked boat_routes: true. make validate also checks the dock and the arrival against world/ (packages/map-format).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "captain", "text", "from", "to", "price"],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "captain": {
+        "description": "NPC that sells the route. It must stand at most 8 tiles from the dock.",
+        "$ref": "common.schema.json#/$defs/npcRef"
+      },
+      "text": {
+        "description": "Text of the dialog option (destination and price, written by hand).",
+        "$ref": "common.schema.json#/$defs/i18nKey"
+      },
+      "from": {
+        "description": "Dock tile the route leaves from (walkable).",
+        "$ref": "common.schema.json#/$defs/position"
+      },
+      "to": {
+        "description": "Arrival tile (walkable); if it is taken, the nearest free tile within travel.arrival_radius.",
+        "$ref": "common.schema.json#/$defs/position"
+      },
+      "price": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+      "requires": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "level": { "$ref": "common.schema.json#/$defs/positiveInt" },
+          "quest": {
+            "description": "Quest the player must have completed.",
+            "$ref": "common.schema.json#/$defs/questRef"
+          },
+          "item": {
+            "description": "Item the player must carry; consume: true takes it (a ticket).",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item"],
+            "properties": {
+              "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+              "count": { "$ref": "common.schema.json#/$defs/positiveInt" },
+              "consume": { "type": "boolean" }
+            }
+          }
+        }
+      },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

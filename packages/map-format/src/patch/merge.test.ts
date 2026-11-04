@@ -203,7 +203,7 @@ describe("diffWorlds and sync ops", () => {
     texts: [],
   });
   const world = (isl: Island): World => ({
-    meta: { format: 1, islands: [], boat_routes: [] },
+    meta: { format: 1, islands: [] },
     islands: new Map([["isla", isl]]),
   });
 

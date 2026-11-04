@@ -134,6 +134,12 @@ export interface DeathState {
   at: number;
 }
 
+/** The last voyage (travel.sailed, T3.5): the island sailed to, for the fade. */
+export interface VoyageState {
+  island: string;
+  at: number;
+}
+
 /** The last level-up (progress.level_up), for the on-screen notice. */
 export interface LevelUpState {
   level: number;
@@ -244,6 +250,7 @@ export class WorldState implements TileSource {
   /** The player's own active conditions (T3.2), in the server's order. */
   conditions: ConditionView[] = [];
   levelUp: LevelUpState | undefined;
+  voyage: VoyageState | undefined;
   death: DeathState | undefined;
   effects: EffectState[] = [];
   floatingTexts: FloatingTextState[] = [];
@@ -481,6 +488,10 @@ export class WorldState implements TileSource {
         if (key === "progress.level_up") {
           const p = m.body.value.params.find((x) => x.name === "level");
           if (p?.value.case === "number") this.levelUp = { level: Number(p.value.value), at: now };
+        }
+        if (key === "travel.sailed") {
+          const p = m.body.value.params.find((x) => x.name === "island");
+          if (p?.value.case === "contentId") this.voyage = { island: p.value.value, at: now };
         }
         if (key === "death.died") {
           const params = m.body.value.params;

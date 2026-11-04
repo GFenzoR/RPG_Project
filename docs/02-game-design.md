@@ -361,8 +361,35 @@ Valores iniciales (balance.yaml):
 | Isla Hundida | 70+ | Ruinas del imperio antiguo, final de la historia actual |
 
 - Viaje entre islas: NPC capitán de barco, cuesta oro, requiere nivel o quest para
-  algunas rutas.
+  algunas rutas (ver "Viajes en barco").
 - Cada isla tiene superficie (piso 7), subterráneos (8–12) y alturas (6–4).
+
+### Viajes en barco (T3.5)
+Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
+`balance.yaml → travel`.
+- Se viaja hablando con el capitán (a ≤ 3 casillas, como todo diálogo): su ventana lista
+  cada ruta que vende desde su muelle. El viaje es instantáneo: no hay barco que navegue
+  ni tiempo de viaje.
+- Al elegir una ruta, el servidor revisa, en este orden, y si algo falla no cambia nada y
+  dice por qué: **combate** (`travel.in_combat`), **nivel** mínimo, **quest**
+  completada, **item** requerido (o pasaje), **oro** y **llegada libre**.
+- **Regla de combate (decidida):** no se zarpa durante `combat_block_ms` (12 s) desde la
+  última vez que un monstruo atacó al jugador (aunque falle), que el jugador recibió daño
+  (también de veneno o fuego) o que golpeó a un monstruo.
+  La marca no se guarda: hoy salir y volver a entrar la borra, porque todavía no hay
+  bloqueo de logout en combate. Cuando llegue, cierra también este hueco.
+- **Llegada:** la casilla `to` de la ruta; si está ocupada, la libre y caminable más
+  cercana a ≤ `arrival_radius` (2) casillas. Si no hay ninguna, se rechaza
+  (`travel.no_room`) sin cobrar.
+- **Cobro atómico:** todo se comprueba antes; luego el jugador se mueve, se consume el
+  pasaje (si `consume: true`) y se paga el precio. El vuelto de una moneda grande cae en
+  la mochila o, si no cabe, a los pies del jugador en el destino.
+- Quienes lo veían en el muelle lo ven desaparecer y quienes están en la llegada lo ven
+  aparecer (mismo movimiento que el teleport de staff). El cliente funde el mapa a oscuro
+  con "Zarpaste hacia {isla}…".
+- **Grupo:** cada miembro viaja por su cuenta (pagando y cumpliendo los requisitos).
+  Viajar todos juntos cuando zarpa el líder queda pendiente: necesita que cada miembro
+  acepte el cobro, no es solo una regla.
 
 ## Historia (esqueleto)
 Un imperio antiguo se hundió en el mar y dejó un archipiélago. Las islas guardan los

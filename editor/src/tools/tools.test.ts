@@ -17,7 +17,7 @@ import type { ToolSettings } from "./tools.ts";
 
 function world(): World {
   return {
-    meta: { format: 1, islands: [], boat_routes: [] },
+    meta: { format: 1, islands: [] },
     islands: new Map([
       [
         "t",

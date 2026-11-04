@@ -122,7 +122,10 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   `balance.yaml`, información filtrada por vista, chat de grupo y panel en el cliente. Los
   grupos no se persisten.
 - [x] **T3.4 Herrería, leñador y cocina** con recetas y estaciones.
-- [ ] **T3.5 Barcos y viajes** entre islas con requisitos.
+- [x] **T3.5 Barcos y viajes** entre islas con requisitos (#53). Rutas en
+  `data/boat_routes.yaml` (nivel, quest, item o pasaje) ofrecidas por el diálogo del
+  capitán, cobro atómico, bloqueo en combate, llegada libre o la más cercana, validación
+  de muelles en `make validate`. Pendiente: viajar con el grupo; la ruta a Bosque es T3.6.
 - [ ] **T3.6 Isla del Bosque** y Capítulo 2.
 - [ ] **T3.7 Sonido y música** (assets libres) con volumen por canal.
 

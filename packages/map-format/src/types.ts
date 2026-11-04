@@ -115,17 +115,11 @@ export interface WorldIslandEntry {
   level_hint: [number, number];
 }
 
-export interface BoatRoute {
-  from_npc: string;
-  to: { island: string; pos: Position };
-  price: number;
-  requires?: { level?: number };
-}
-
 export interface WorldMeta {
   format: 1;
   islands: WorldIslandEntry[];
-  boat_routes: BoatRoute[];
+  /** Deprecated (T3.5): always empty; routes live in data/boat_routes.yaml. */
+  boat_routes?: [];
 }
 
 export interface World {

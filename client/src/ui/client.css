@@ -280,6 +280,32 @@ button.link {
   pointer-events: none;
 }
 
+/* Voyage (T3.5): the map fades to dark and back while the destination shows. */
+.voyage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #06121e;
+  color: #e8eef4;
+  font-size: 1.25rem;
+  pointer-events: none;
+  animation: voyage-fade 2600ms ease-in-out forwards;
+}
+@keyframes voyage-fade {
+  0% {
+    opacity: 0;
+  }
+  20%,
+  65% {
+    opacity: 0.92;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* Inventory (T1.8): 32 px sprites from the atlas, pixel-perfect like the canvas. */
 .inventory .equipment,
 .inventory .cells {

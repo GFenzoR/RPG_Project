@@ -27,6 +27,7 @@ import type {
   ItemView,
   DeathState,
   LevelUpState,
+  VoyageState,
   ChatLine,
   LogMessage,
   PlayerStatsState,
@@ -44,6 +45,8 @@ export interface GameUi {
   /** The player's own active conditions (T3.2). */
   conditions: ConditionView[];
   levelUp: LevelUpState | undefined;
+  /** The last voyage (T3.5), for the fade over the map. */
+  voyage: VoyageState | undefined;
   death: DeathState | undefined;
   log: LogMessage[];
   chat: ChatLine[];
@@ -465,6 +468,7 @@ export class Game {
       skills: w.skills,
       conditions: w.conditions,
       levelUp: w.levelUp,
+      voyage: w.voyage,
       death: w.death,
       log: [...w.log],
       chat: [...w.chat],

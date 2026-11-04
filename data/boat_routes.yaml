@@ -1,0 +1,16 @@
+# Boat routes (T3.5, docs/06-content-data.md "Viajes en barco"). A captain offers its
+# routes in its dialog nodes marked `boat_routes: true`. `make validate` checks that the
+# captain stands at most 8 tiles from the dock and that the dock and the arrival are
+# walkable tiles of an island in world/.
+#
+# The route to the Forest Island arrives with T3.6, once world/islands/bosque exists
+# (uncomment and set `to` to its dock; this sketch is level 10 and Chapter 1 done):
+#
+# - id: puerto_to_bosque
+#   captain: harbor_master
+#   text: npc.harbor_master.to_forest # T3.6: add it to i18n/*/npcs.yaml
+#   from: { x: 3201, y: 6434, z: 7 }
+#   to: { x: 0, y: 0, z: 7 }          # T3.6: the dock of bosque
+#   price: 80
+#   requires: { level: 10, quest: ch1_shipwreck }
+[]

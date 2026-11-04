@@ -21,6 +21,7 @@ type Balance struct {
 	Chat       Chat       `yaml:"chat"`
 	Death      Death      `yaml:"death"`
 	Party      Party      `yaml:"party"`
+	Travel     Travel     `yaml:"travel"`
 	// Conditions are the condition definitions by id (T3.2).
 	Conditions ConditionDefs `yaml:"conditions"`
 }
@@ -130,6 +131,15 @@ func (p Party) check() error {
 		return errors.New("party: level_range_pct must be in 1..100, level_gap_always, bonus_pct_per_member and max_bonus_pct in 0..100")
 	}
 	return nil
+}
+
+// Travel holds the boat travel rules (T3.5, docs/02-game-design.md "Viajes en barco").
+type Travel struct {
+	// CombatBlockMs: no sailing this long after a monster attacked the player, the
+	// player took damage or it hit a monster.
+	CombatBlockMs int `yaml:"combat_block_ms"`
+	// ArrivalRadius: a taken arrival tile falls back to the nearest free one this far.
+	ArrivalRadius int `yaml:"arrival_radius"`
 }
 
 // Inventory holds the item and container rules (T1.8).
@@ -294,6 +304,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if err := b.Party.check(); err != nil {
 		return Balance{}, err
+	}
+	if t := b.Travel; t.CombatBlockMs < 0 || t.CombatBlockMs > 600_000 || t.ArrivalRadius < 0 || t.ArrivalRadius > 5 {
+		return Balance{}, errors.New("travel: combat_block_ms must be in 0..600000 and arrival_radius in 0..5")
 	}
 	if g := b.Gathering; g.UseIntervalMs < 0 || g.AFK.AfterMs < 0 || g.AFK.Factor < 0 || g.AFK.Factor > 1 {
 		return Balance{}, errors.New("gathering: use_interval_ms and afk.after_ms must be >= 0, afk.factor in 0..1")

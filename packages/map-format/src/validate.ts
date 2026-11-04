@@ -1,6 +1,6 @@
 // World validation (docs/03-world-and-maps.md, "Validación"). The editor, mapcli, the MCP
 // server and `make validate` all call validateWorld, so they agree on what is an error.
-import { loadContent } from "./content.ts";
+import { loadContent, routesFile } from "./content.ts";
 import type { ContentIndex } from "./content.ts";
 import { Reporter } from "./diagnostics.ts";
 import type { Diagnostic, PathSegment } from "./diagnostics.ts";
@@ -27,6 +27,9 @@ export interface ValidateWorldOptions {
 /** Spawns denser than this many monsters per walkable tile in their area get a warning. */
 export const MAX_SPAWN_DENSITY = 0.25;
 
+/** Farthest (Chebyshev, same floor) a captain may stand from the dock of its route. */
+export const MAX_DOCK_DISTANCE = 8;
+
 /** Stairs and ladders that need a way back, with the kinds that can serve as it. */
 const PAIRED_KINDS = new Set(["stairs", "ladder"]);
 
@@ -39,23 +42,27 @@ export function validateWorld(root: string, opts: ValidateWorldOptions = {}): Ma
   if (opts.island !== undefined) {
     const id = opts.island;
     const prefix = `${islandDir(id)}/`;
-    // world.yaml findings about this island: its entry in `islands` and routes sailing to it.
+    // world.yaml findings about this island (its entry in `islands`) and findings about
+    // boat routes whose dock or arrival is on it.
     const entries = new Set<number>();
     loaded.world.meta.islands.forEach((e, i) => e.id === id && entries.add(i));
-    const routes = new Set<number>();
-    loaded.world.meta.boat_routes.forEach((b, i) => b.to.island === id && routes.add(i));
+    const rect = loaded.world.islands.get(id)?.meta.rect;
     // If world.yaml itself did not load, every world.yaml finding concerns every island.
     const worldBroken = !loaded.files.some((f) => f.file === worldFile);
     const aboutIsland = (d: Diagnostic): boolean => {
       if (d.file.startsWith(prefix)) return true;
+      if (d.file === routesFile) {
+        if (!rect) return false;
+        // By route: its dock or arrival on this island (a finding may have no position).
+        const r = content.routes.find((x) => x.index === d.path[0]);
+        const at = r ? [r.from, r.to] : d.pos ? [d.pos] : [];
+        return at.some((p) => rectContains(rect, p.x, p.y));
+      }
       if (d.file !== worldFile) return false;
       if (worldBroken) return true;
       const [section, index] = d.path;
       if (typeof index !== "number") return false;
-      return (
-        (section === "islands" && entries.has(index)) ||
-        (section === "boat_routes" && routes.has(index))
-      );
+      return section === "islands" && entries.has(index);
     };
     diags = diags.filter(aboutIsland);
     if (!loaded.world.islands.has(opts.island) && !diags.some((d) => d.severity === "error")) {
@@ -397,37 +404,45 @@ class WorldValidator {
     }
   }
 
+  /**
+   * Boat routes of data/boat_routes.yaml (T3.5): the captain is placed on the map, close
+   * to the dock, and the dock and the arrival are walkable tiles of an island.
+   */
   private checkBoatRoutes(): void {
-    const placed = new Set<string>();
+    const placed = new Map<string, Position>();
     for (const island of this.world.islands.values())
-      for (const n of island.npcs) placed.add(n.npc);
-    for (const [i, b] of this.world.meta.boat_routes.entries()) {
-      if (!placed.has(b.from_npc))
+      for (const n of island.npcs) placed.set(n.npc, n.pos);
+    for (const r of this.content.routes) {
+      const at = placed.get(r.captain);
+      if (!at)
         this.err(
-          worldFile,
-          ["boat_routes", i, "from_npc"],
-          `NPC "${b.from_npc}" is not placed on any island`,
+          routesFile,
+          [r.index, "captain"],
+          `NPC "${r.captain}" is not placed on any island`,
+          r.from,
         );
-      const island = this.world.islands.get(b.to.island);
-      if (!island) {
-        this.err(worldFile, ["boat_routes", i, "to", "island"], `unknown island "${b.to.island}"`);
-        continue;
-      }
-      if (!rectContains(island.meta.rect, b.to.pos.x, b.to.pos.y))
+      else if (
+        at.z !== r.from.z ||
+        Math.max(Math.abs(at.x - r.from.x), Math.abs(at.y - r.from.y)) > MAX_DOCK_DISTANCE
+      )
         this.err(
-          worldFile,
-          ["boat_routes", i, "to", "pos"],
-          `outside island "${b.to.island}"`,
-          b.to.pos,
+          routesFile,
+          [r.index, "from"],
+          `the dock is more than ${MAX_DOCK_DISTANCE} tiles from captain "${r.captain}" (${formatPos(at)})`,
+          r.from,
         );
-      else if (!isWalkable(this.tiles.tileAt(b.to.pos), this.content))
-        this.err(
-          worldFile,
-          ["boat_routes", i, "to", "pos"],
-          "boat destination is not a walkable tile",
-          b.to.pos,
-        );
+      this.checkRouteTile(r.index, ["from"], r.from, "dock");
+      this.checkRouteTile(r.index, ["to"], r.to, "arrival");
     }
+  }
+
+  private checkRouteTile(index: number, path: PathSegment[], p: Position, what: string): void {
+    const island = [...this.world.islands.values()].find((i) =>
+      rectContains(i.meta.rect, p.x, p.y),
+    );
+    if (!island) this.err(routesFile, [index, ...path], `${what} is outside every island`, p);
+    else if (!isWalkable(this.tiles.tileAt(p), this.content))
+      this.err(routesFile, [index, ...path], `${what} is not a walkable tile`, p);
   }
 
   private checkI18n(file: string, path: PathSegment[], key: string): void {

@@ -28,7 +28,6 @@ func (f *fake) Flag(k string) int64       { return f.log.Get(quest.FlagKey(k)) }
 func (f *fake) SkillLevel(string) int     { return 10 }
 func (f *fake) Money() int64              { return f.money }
 func (f *fake) HasBlessing(b string) bool { return f.blessed[b] }
-func (f *fake) CanTravel(string) bool     { return true }
 func (f *fake) CanTeleport(content.Position) bool {
 	return true
 }
@@ -42,7 +41,6 @@ func (f *fake) StartQuest(id string)                       { f.engine.Start(f.lo
 func (f *fake) SetQuestStep(q, s string)                   { f.engine.SetStep(f.log, q, s, f) }
 func (f *fake) SetFlag(k string, v int64)                  { f.engine.SetFlag(f.log, k, v, f) }
 func (f *fake) OpenShop(id string)                         { f.did = append(f.did, "shop:"+id) }
-func (f *fake) Travel(content.Travel)                      { f.did = append(f.did, "travel") }
 func (f *fake) Heal()                                      { f.did = append(f.did, "heal") }
 func (f *fake) Teleport(content.Position)                  {}
 func (f *fake) Bless(b content.Bless)                      { f.blessed[b.Blessing] = true; f.money -= b.Price }

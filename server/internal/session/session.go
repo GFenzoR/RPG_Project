@@ -123,6 +123,9 @@ type Config struct {
 	// Recipes come from data/recipes.yaml (T3.4): every station, input and output must
 	// be in Items and every craft a skill of Balance.
 	Recipes content.Recipes
+	// BoatRoutes come from data/boat_routes.yaml (T3.5): every captain must be placed on
+	// the map near the dock, and the dock and the arrival must be walkable.
+	BoatRoutes content.BoatRoutes
 	// Balance.Conditions (T3.2) must hold every condition the spells and monsters apply.
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
@@ -254,6 +257,11 @@ type World struct {
 	partyBuf   []*Player
 	islandBuf  []string
 
+	// Travel (T3.5): routes by captain NPC id, balance travel in ticks and tiles.
+	routes        map[string][]*route
+	fightFor      game.Tick
+	arrivalRadius int
+
 	// sched is the loop's scheduler, kept at the first join to know the current tick
 	// outside a TickContext (condition times in snapshots and at flush, T3.2).
 	sched *game.Scheduler
@@ -316,6 +324,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initNPCs(); err != nil {
+		return nil, err
+	}
+	if err := w.initTravel(); err != nil {
 		return nil, err
 	}
 	w.initChat()

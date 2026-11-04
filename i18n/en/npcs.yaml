@@ -23,7 +23,6 @@ npc.harbor_master.island: "A small island with a big harbor. Everything that tra
 npc.harbor_master.opt_town: "Who else lives in town?"
 npc.harbor_master.town: "Bastian forges and sells weapons by the pier; Tilde has tools and provisions; Sister Liora keeps the Temple of the Lantern. Doran watches over the old mine, and if you want strange stories, old Corvo has been diving the reef since before I was born."
 npc.harbor_master.travel: "My ship runs the route to the Forest Island. I carry people who have already proven themselves here and can defend themselves: level 10 at least. It's 80 coins."
-npc.harbor_master.to_forest: "Take me to the Forest Island (80 coins)."
 
 # Armorer: Bastian Roe.
 npc.puerto_armorer.name: "Bastian Roe, armorer"

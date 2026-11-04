@@ -62,6 +62,8 @@ type options struct {
 	metricsExplicit bool
 	// startTown is the island new characters start at (empty = the first in world.yaml).
 	startTown string
+	// boatRoutes replaces data/boat_routes.yaml (E2E fixtures; empty = the data file).
+	boatRoutes string
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -83,6 +85,7 @@ func main() {
 	flag.StringVar(&o.wsOrigins, "ws-origins", os.Getenv("RPG_WS_ORIGINS"), "extra browser origins allowed on /ws, comma-separated (e.g. localhost:5173); default $RPG_WS_ORIGINS")
 	flag.StringVar(&o.minClientVersion, "min-client-version", gateway.DefaultMinClientVersion, "oldest client version accepted in Hello (same major required)")
 	flag.StringVar(&o.startTown, "start-town", os.Getenv("RPG_START_TOWN"), "island new characters start at; default $RPG_START_TOWN or the first island of world/world.yaml")
+	flag.StringVar(&o.boatRoutes, "boat-routes", os.Getenv("RPG_BOAT_ROUTES"), "boat routes file replacing <data>/boat_routes.yaml (tests); default $RPG_BOAT_ROUTES")
 	flag.StringVar(&o.metricsAddr, "metrics-addr", envOr("RPG_METRICS_ADDR", defaultMetricsAddr), "internal listener for Prometheus /metrics, never public (empty = off); default $RPG_METRICS_ADDR or "+defaultMetricsAddr)
 	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
 	flag.Parse()
@@ -147,6 +150,13 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	routes, err := content.LoadBoatRoutes(o.dataDir)
+	if o.boatRoutes != "" {
+		routes, err = content.LoadBoatRoutesFile(o.boatRoutes, false)
+	}
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	npcs, err := content.LoadNPCs(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
@@ -187,6 +197,7 @@ func run(logger *slog.Logger, o options) error {
 		Items:            items,
 		Spells:           spells,
 		Recipes:          recipes,
+		BoatRoutes:       routes,
 		NPCs:             npcs,
 		Quests:           quests,
 		Map:              m,

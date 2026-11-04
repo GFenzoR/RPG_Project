@@ -42,6 +42,11 @@ func (w *World) Money(p *Player) int64 { return w.money(p) }
 // GiveForTest puts n units of item id in p's backpack (tests only, loop goroutine).
 func (w *World) GiveForTest(p *Player, id string, n int) { w.giveItem(p, w.cfg.Items[id], n) }
 
+// HurtForTest makes p take dmg as if a monster hit it (tests only, loop goroutine).
+func (w *World) HurtForTest(ctx *game.TickContext, p *Player, dmg int) {
+	w.damagePlayer(ctx, p, dmg, "")
+}
+
 // RestoreForTest refills p's health (tests only, loop goroutine).
 func (w *World) RestoreForTest(p *Player) { p.health = p.maxHealth }
 
@@ -142,3 +147,6 @@ func (w *World) TrainForTest(p *Player, id string, n int64) { w.addTries(p, w.sk
 
 // SetCapacityForTest sets p's capacity in grams (T3.4).
 func (w *World) SetCapacityForTest(p *Player, grams int) { p.capacity = grams }
+
+// SetStorageForTest sets a quest_state value of p (tests only, loop goroutine).
+func (p *Player) SetStorageForTest(key string, v int64) { p.storage.Set(key, v) }

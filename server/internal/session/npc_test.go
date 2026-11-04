@@ -17,6 +17,31 @@ import (
 // on an open 64x64 map with Puerto's NPCs placed around (10, 10) and the given spawns.
 func dataHarness(t *testing.T, spawns ...world.Spawn) *harness {
 	t.Helper()
+	return dataHarnessWith(t, nil, spawns...)
+}
+
+// dataHarnessWith is dataHarness with a last change to the config (nil = none).
+func dataHarnessWith(t *testing.T, edit func(*session.Config), spawns ...world.Spawn) *harness {
+	t.Helper()
+	cfg := dataConfig(t, nil, spawns...)
+	h := &harness{t: t}
+	cfg.Save = func(s session.Snapshot) bool { h.saves = append(h.saves, s); return true }
+	if edit != nil {
+		edit(&cfg)
+	}
+	w, err := session.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.w = w
+	mv, fight, flush := w.Systems()
+	h.sim = sim.New(t, sim.WithSeed(11), sim.WithSystems(mv, fight, flush))
+	return h
+}
+
+// dataConfig is the config of dataHarness, with routes as its boat routes.
+func dataConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) session.Config {
+	t.Helper()
 	dir := filepath.Join("..", "..", "..", "data")
 	must := func(err error) {
 		t.Helper()
@@ -45,17 +70,11 @@ func dataHarness(t *testing.T, spawns ...world.Spawn) *harness {
 		{NPC: "puerto_provisioner", Pos: pos(12, 10)},
 		{NPC: "puerto_priest", Pos: pos(12, 14)},
 	}
-	h := &harness{t: t}
-	w, err := session.New(session.Config{
+	return session.Config{
 		Map: m, Balance: bal, Vocations: vocs, Items: items, Monsters: monsters,
-		NPCs: npcs, Quests: quests,
-		Save: func(s session.Snapshot) bool { h.saves = append(h.saves, s); return true },
-	})
-	must(err)
-	h.w = w
-	mv, fight, flush := w.Systems()
-	h.sim = sim.New(t, sim.WithSeed(11), sim.WithSystems(mv, fight, flush))
-	return h
+		NPCs: npcs, Quests: quests, BoatRoutes: routes,
+		Save: func(session.Snapshot) bool { return true },
+	}
 }
 
 // joinFresh logs in a character that never played (it gets the starting backpack at the

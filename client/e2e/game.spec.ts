@@ -1411,3 +1411,79 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
   await expect(win).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test("T3.5: sail from Puerto's dock to the test island with the harbor master", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  const email = `e2e-sail-${Date.now()}-${randomLetters(6)}@example.com`;
+  const password = "e2e-password-1";
+  const name = `Sailor ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+    201,
+  );
+  const login = await apiCtx.post("/api/auth/login", {
+    data: { email, password, token_in_body: true },
+  });
+  const { token } = (await login.json()) as { token: string };
+  expect(
+    (
+      await apiCtx.post("/api/characters", {
+        data: { name, vocation: "guardian" },
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(201);
+  await apiCtx.dispose();
+  // On the dock next to the harbor master (3201, 6433), with a backpack (48) holding 50
+  // copper coins (8). The route is client/e2e/fixtures/boat_routes.yaml (30 coins).
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto', pos_x = 3201, pos_y = 6431, pos_z = 7 WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, 0, 8, 50 FROM bp`,
+  ]);
+
+  await page.goto("/?lang=es");
+  const loginForm = page.getByTestId("login-form");
+  await loginForm.getByLabel("Email").fill(email);
+  await loginForm.getByLabel("Contraseña").fill(password);
+  await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  errors.length = 0;
+  await arrived(page, 3201, 6431);
+
+  const master = await page.evaluate(() => window.__rpgClient?.tileToClient(3201, 6433));
+  if (!master) throw new Error("no canvas");
+  await page.mouse.click(master.x, master.y, { button: "right" });
+  const dialog = page.getByTestId("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Quiero viajar." }).click();
+  const route = dialog.getByRole("button", { name: /isla de pruebas/ });
+  await expect(route).toBeVisible();
+  await shot(page, "26-boat-routes");
+
+  await route.click();
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla de pruebas");
+  await shot(page, "27-boat-sailing");
+  await expect(dialog).toBeHidden();
+  await arrived(page, 1058, 1056);
+  const log = page.getByTestId("game-log");
+  await expect(log).toContainText("Pagaste 30 monedas.");
+  await expect(log).toContainText("Zarpaste hacia Isla de pruebas.");
+  await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
+  await shot(page, "28-boat-arrived");
+  expect(errors).toEqual([]);
+});

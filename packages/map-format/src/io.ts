@@ -226,7 +226,6 @@ export function loadWorld(root: string): LoadResult {
   const meta = l.yaml<WorldMeta>(worldFile, "world", true, {
     format: 1,
     islands: [],
-    boat_routes: [],
   });
   const islands = new Map<string, Island>();
   const islandsRel = "world/islands";

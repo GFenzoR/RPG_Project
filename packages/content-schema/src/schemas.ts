@@ -20,6 +20,7 @@ export type SchemaName =
   | "quest"
   | "spells"
   | "recipes"
+  | "boat_routes"
   | "borders"
   | "i18n"
   | "ids-lock";

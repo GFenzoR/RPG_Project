@@ -121,6 +121,10 @@ type Player struct {
 	partyState    pb.SharedExperience
 	partyNext     game.Tick
 	contributedAt game.Tick
+
+	// Travel (T3.5): the last tick p fought (attacked, hurt or hitting a monster; 0 =
+	// never), which blocks sailing for balance travel.combat_block_ms.
+	fightAt game.Tick
 }
 
 // Invisible reports whether p is invisible (T3.2).

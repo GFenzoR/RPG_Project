@@ -6,10 +6,3 @@ islands:
   - id: bosque
     rect: { x: 4096, y: 5888, w: 256, h: 256 }
     level_hint: [10, 30]
-boat_routes:
-  - from_npc: puerto_captain
-    to:
-      island: bosque
-      pos: { x: 4120, y: 6050, z: 7 }
-    price: 80
-    requires: { level: 10 }

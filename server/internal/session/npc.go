@@ -6,6 +6,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/dialog"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -204,6 +205,9 @@ func (w *World) sendDialog(p *Player) {
 	node := d.npc.def.Dialog.Nodes[d.node]
 	msg := &pb.DialogOpen{DialogId: d.id, NpcCreatureId: d.npc.id, Text: &pb.LocalizedText{Key: node.Text}}
 	a := &actor{w: w, p: p}
+	if node.BoatRoutes {
+		msg.Options = append(msg.Options, w.routeOptions(d.npc)...)
+	}
 	for _, i := range dialog.Visible(node, a) {
 		msg.Options = append(msg.Options, &pb.DialogOption{OptionId: uint32(i + 1), Text: &pb.LocalizedText{Key: node.Options[i].Text}})
 	}
@@ -228,7 +232,7 @@ func (w *World) checkDialog(p *Player) {
 
 // dialogChoose runs a DialogChoose: the server evaluates the option's conditions again
 // and its costs before running anything (docs/06-content-data.md).
-func (w *World) dialogChoose(p *Player, dialogID, optionID uint32) {
+func (w *World) dialogChoose(ctx *game.TickContext, p *Player, dialogID, optionID uint32) {
 	d := p.dialog
 	if d == nil || d.id != dialogID {
 		return // a window that is already closed
@@ -240,6 +244,10 @@ func (w *World) dialogChoose(p *Player, dialogID, optionID uint32) {
 	if !w.inTalkRange(p, d.npc) {
 		w.closeDialog(p)
 		p.emit(systemMsg(msgNPCTooFar))
+		return
+	}
+	if rt := w.pickedRoute(d, optionID); rt != nil {
+		w.sail(ctx, p, rt)
 		return
 	}
 	a := &actor{w: w, p: p, d: d}
@@ -649,7 +657,7 @@ type actor struct {
 	w *World
 	p *Player
 	d *openDialog
-	// moved is set when an action took the player away (travel, teleport).
+	// moved is set when an action took the player away (teleport).
 	moved bool
 }
 
@@ -663,11 +671,6 @@ func (a *actor) Flag(key string) int64                      { return a.p.storage
 func (a *actor) SkillLevel(skill string) int                { return a.w.skillLevel(a.p, skill) }
 func (a *actor) Money() int64                               { return a.w.money(a.p) }
 func (a *actor) HasBlessing(id string) bool                 { return a.p.storage.Get(blessKey+id) != 0 }
-
-func (a *actor) CanTravel(island string) bool {
-	_, ok := a.w.travelDest(island)
-	return ok
-}
 
 func (a *actor) CanTeleport(pos content.Position) bool {
 	_, ok := a.w.teleportDest(pos)
@@ -702,16 +705,6 @@ func (a *actor) OpenShop(string) {
 	}
 }
 
-func (a *actor) Travel(t content.Travel) {
-	to, ok := a.w.travelDest(t.Island)
-	if !ok {
-		return
-	}
-	a.TakeGold(t.Price)
-	a.moved = true
-	a.w.Teleport(a.p, to)
-}
-
 func (a *actor) Heal() {
 	a.w.heal(a.p, a.p.maxHealth)
 	a.p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: a.w.stats(a.p)}})
@@ -729,16 +722,6 @@ func (a *actor) Bless(b content.Bless) {
 		a.TakeGold(b.Price)
 	}
 	a.p.storage.Set(blessKey+b.Blessing, 1)
-}
-
-// travelDest returns a free tile next to island's temple.
-func (w *World) travelDest(island string) (world.Pos, bool) {
-	for _, is := range w.m.Islands() {
-		if is.ID == island {
-			return w.freeNear(is.Temple, 3)
-		}
-	}
-	return world.Pos{}, false
 }
 
 // teleportDest returns a free tile at or next to pos.

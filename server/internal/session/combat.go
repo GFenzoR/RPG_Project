@@ -162,6 +162,7 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	dmg = min(dmg, m.health)
 	m.health -= dmg
 	w.reveal(ctx, p) // T3.2: attacking ends invisibility
+	w.markFight(ctx, p)
 	if dmg > 0 {
 		w.addShare(m, p.id, dmg)
 		w.contribute(ctx, p)
@@ -228,6 +229,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.attackTicks[i]
 		w.contribute(ctx, t) // T3.3: tanking counts for shared experience
+		w.markFight(ctx, t)  // T3.5: no sailing right after
 		if t.afkTarget == m {
 			t.answeredAt = max(ctx.Tick, 1) // the player's target fights back: not AFK training
 		}
@@ -258,6 +260,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 }
 
 func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element string) {
+	w.markFight(ctx, p)
 	dmg = min(dmg, p.health)
 	p.health -= dmg
 	w.hitEvents(p.id, p.pos, dmg, healthPercent(p.health, p.maxHealth), element)

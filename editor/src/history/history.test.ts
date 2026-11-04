@@ -7,7 +7,7 @@ import { OpError, applyOps } from "@rpg/map-format/ops";
 /** One island, one empty chunk-sized area at the origin, floor 7. */
 function world(): World {
   return {
-    meta: { format: 1, islands: [], boat_routes: [] },
+    meta: { format: 1, islands: [] },
     islands: new Map([
       [
         "t",

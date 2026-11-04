@@ -227,6 +227,7 @@ class Validator {
 
     for (const [file, schema] of [
       ["recipes.yaml", "recipes"],
+      ["boat_routes.yaml", "boat_routes"],
       ["borders.yaml", "borders"],
     ] as const) {
       const src = single(file, schema, false);

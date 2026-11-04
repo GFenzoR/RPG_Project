@@ -3,4 +3,3 @@ islands:
   - id: mini
     rect: { x: 32, y: 32, w: 64, h: 32 }
     level_hint: [1, 2]
-boat_routes: []

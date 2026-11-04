@@ -355,6 +355,7 @@ function GameScreen(props: {
     skills: [],
     conditions: [],
     levelUp: undefined,
+    voyage: undefined,
     death: undefined,
     log: [],
     chat: [],
@@ -369,6 +370,7 @@ function GameScreen(props: {
     selfId: 0,
   });
   const [levelNotice, setLevelNotice] = useState<number | undefined>(undefined);
+  const [voyage, setVoyage] = useState<string | undefined>(undefined);
   // The death screen stays until the player closes it.
   const [deathSeen, setDeathSeen] = useState<number | undefined>(undefined);
   const death = ui.death && ui.death.at !== deathSeen ? ui.death : undefined;
@@ -402,6 +404,15 @@ function GameScreen(props: {
     const timer = setTimeout(() => setLevelNotice(undefined), LEVEL_NOTICE_MS);
     return () => clearTimeout(timer);
   }, [levelUpAt]);
+
+  // Sailing (T3.5): the map fades out and in while "You set sail for…" shows.
+  const voyageAt = ui.voyage?.at;
+  useEffect(() => {
+    if (!ui.voyage) return undefined;
+    setVoyage(ui.voyage.island);
+    const timer = setTimeout(() => setVoyage(undefined), VOYAGE_MS);
+    return () => clearTimeout(timer);
+  }, [voyageAt]);
 
   return (
     <div class="game" data-testid="game">
@@ -437,6 +448,11 @@ function GameScreen(props: {
       <div class="game-body">
         <div class="viewport" ref={host}>
           {!entered && <p class="connecting">{t("client.game.connecting")}</p>}
+          {voyage !== undefined && (
+            <div class="voyage" role="status" data-testid="voyage">
+              <span>{t("client.voyage.sailed", { island: t(`island.${voyage}.name`) })}</span>
+            </div>
+          )}
           {levelNotice !== undefined && (
             <div class="level-up" role="status" data-testid="level-up">
               <strong>{t("client.level_up.title")}</strong>
@@ -571,6 +587,8 @@ function safeStorage(): Storage | undefined {
 
 /** How long the level-up notice stays on screen, ms. */
 const LEVEL_NOTICE_MS = 4000;
+/** How long the voyage fade lasts (matches the .voyage animation in client.css). */
+const VOYAGE_MS = 2600;
 
 /** Display order of the skills panel: combat first, then crafts; unknown ids go last. */
 const SKILL_ORDER = [
