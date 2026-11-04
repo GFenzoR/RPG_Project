@@ -303,10 +303,11 @@ Números en `data/balance.yaml` (`chat`), nunca en código.
 ## Moderación (T2.6)
 Roles por cuenta: **jugador** (por defecto), **GM** y **admin**. Los asigna solo el
 operador con su herramienta (`make set-role`, docs/09); el juego nunca cambia roles.
-Cambiar un rol revoca los tokens de la cuenta. Los bans usan siempre el rol actual de la
-base, pero el resto de los comandos usa el rol leído al entrar: un staff degradado que
-sigue conectado conserva `/tp`, `/kick`, `/item` y `/announce` hasta que sale (pendiente,
-ver el PR de T2.6).
+Cambiar un rol revoca los tokens de la cuenta. Un rol quitado llega también al personaje
+conectado: el servidor vuelve a leer cada 5 s el rol de las cuentas de staff en línea (y
+el del autor después de cada comando) y lo baja. Desde ahí sus comandos responden como
+desconocidos y otro staff puede expulsarlo. Los bans además usan siempre el rol actual de
+la base. Un rol nuevo o más alto vale desde el próximo login.
 
 Los comandos se escriben en la línea de chat, en cualquier canal:
 
@@ -315,7 +316,7 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 | `/tp x y z` | GM | Lleva al GM a esa casilla |
 | `/tp Nombre` | GM | Lleva al GM al lado de ese jugador |
 | `/tp Nombre x y z` | GM | Lleva a ese jugador a esa casilla |
-| `/item id [cantidad]` | admin | Crea 1–100 unidades de un item de `data/items` (id de contenido o numérico) en la mochila; lo que no cabe cae al suelo |
+| `/item id [cantidad]` | admin | Crea 1–100 unidades de un item de `data/items` (id de contenido o numérico) en la mochila; lo que no cabe cae al suelo. No crea suelos (`kind: ground`) ni items que no se pueden levantar |
 | `/kick Nombre` | GM | Desconecta al jugador (`KICKED`) |
 | `/ban Nombre duración motivo` | GM | Suspende la cuenta: `30m`, `12h`, `7d`; GM hasta 30 días, admin hasta 3650 días o `perm` |
 | `/unban Nombre` | GM | Levanta las suspensiones activas de la cuenta |

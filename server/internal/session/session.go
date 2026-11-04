@@ -230,6 +230,8 @@ type World struct {
 	nextJob    uint64
 	jobs       map[uint64]pendingJob
 	banned     map[int64]time.Time
+	// nextRoleCheck is the tick of the next check of the online staff's roles.
+	nextRoleCheck game.Tick
 }
 
 // New validates cfg and builds an empty World.

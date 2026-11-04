@@ -36,6 +36,36 @@ func (q *Queries) GetAccountRole(ctx context.Context, id int64) (string, error) 
 	return role, err
 }
 
+const getAccountRoles = `-- name: GetAccountRoles :many
+SELECT id, role FROM accounts WHERE id = ANY($1::bigint[])
+`
+
+type GetAccountRolesRow struct {
+	ID   int64
+	Role string
+}
+
+// Current roles of some accounts: online staff lose a revoked role within seconds.
+func (q *Queries) GetAccountRoles(ctx context.Context, ids []int64) ([]GetAccountRolesRow, error) {
+	rows, err := q.db.Query(ctx, getAccountRoles, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAccountRolesRow{}
+	for rows.Next() {
+		var i GetAccountRolesRow
+		if err := rows.Scan(&i.ID, &i.Role); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getActiveBan = `-- name: GetActiveBan :one
 SELECT id, reason, expires_at
 FROM account_bans

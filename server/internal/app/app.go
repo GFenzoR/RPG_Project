@@ -130,7 +130,7 @@ func New(cfg Config) (*App, error) {
 			return nil, err
 		}
 		a.saver = saver
-		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, a.adminDone)
+		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, a.adminDone, a.rolesChanged)
 		w, err := session.New(session.Config{
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
@@ -298,8 +298,14 @@ func storeItems(in []session.ItemState) []store.InventoryItem {
 // adminDone hands a ban or unban result to the loop. It must not be lost (a banned
 // player would stay online), so a full queue is retried until the loop has room or
 // stops; it blocks only the admin goroutine.
-func (a *App) adminDone(r session.AdminResult) {
-	cmd := a.World.AdminDone(r)
+func (a *App) adminDone(r session.AdminResult) { a.enqueueRetry(a.World.AdminDone(r)) }
+
+// rolesChanged hands the current roles of online staff to the loop (a lowered role
+// must not be lost either).
+func (a *App) rolesChanged(roles map[int64]session.Role) { a.enqueueRetry(a.World.RolesChanged(roles)) }
+
+// enqueueRetry enqueues cmd, retrying a full queue every tick until the loop stops.
+func (a *App) enqueueRetry(cmd game.Command) {
 	for a.Loop.Enqueue(cmd) != nil {
 		select {
 		case <-a.loopDone:

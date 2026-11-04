@@ -48,6 +48,10 @@ func TestRolesBansAudit(t *testing.T) {
 	if pc, _ := st.PlayCharacter(ctx, gmAcc, gm.ID, now); pc.Role != store.RoleGM {
 		t.Fatalf("role after SetRole: %q", pc.Role)
 	}
+	if roles, err := st.AccountRoles(ctx, []int64{gmAcc, plAcc, 99999}); err != nil || len(roles) != 2 ||
+		roles[gmAcc] != store.RoleGM || roles[plAcc] != store.RolePlayer {
+		t.Fatalf("AccountRoles = %v, %v", roles, err)
+	}
 
 	// The player has a token; a ban revokes it and hides the account from logins.
 	tok := store.Session{TokenHash: hash("pl"), AccountID: plAcc, Kind: store.SessionAccount, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}

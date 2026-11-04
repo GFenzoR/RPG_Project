@@ -17,6 +17,7 @@ type AdminStore interface {
 	AppendAudit(ctx context.Context, e store.AuditEntry) error
 	Ban(ctx context.Context, r store.BanRequest) (store.BanResult, error)
 	Unban(ctx context.Context, r store.BanRequest) (store.BanResult, error)
+	AccountRoles(ctx context.Context, ids []int64) (map[int64]string, error)
 }
 
 // adminWorker is the goroutine that writes the audit log and runs bans for the game
@@ -29,6 +30,8 @@ type adminWorker struct {
 	clock clock.Clock
 	log   *slog.Logger
 	done  func(session.AdminResult)
+	// roles receives the current roles of accounts (World.RolesChanged).
+	roles func(map[int64]session.Role)
 
 	mu       sync.Mutex
 	ch       chan session.AdminJob
@@ -43,8 +46,9 @@ const (
 	adminWriteTimeout = 10 * time.Second
 )
 
-func newAdminWorker(st AdminStore, clk clock.Clock, log *slog.Logger, done func(session.AdminResult)) *adminWorker {
-	return &adminWorker{store: st, clock: clk, log: log, done: done,
+func newAdminWorker(st AdminStore, clk clock.Clock, log *slog.Logger, done func(session.AdminResult),
+	roles func(map[int64]session.Role)) *adminWorker {
+	return &adminWorker{store: st, clock: clk, log: log, done: done, roles: roles,
 		ch: make(chan session.AdminJob, adminQueue), finished: make(chan struct{}), stop: make(chan struct{})}
 }
 
@@ -98,6 +102,10 @@ func (a *adminWorker) Stop(ctx context.Context) error {
 
 // run writes one job, retrying transient errors until it succeeds or Stop gives up.
 func (a *adminWorker) run(job session.AdminJob) {
+	if job.Kind == session.AdminCheckRoles {
+		a.checkRoles(job.Accounts) // one try: the loop asks again every few seconds
+		return
+	}
 	backoff := 500 * time.Millisecond
 	for attempt := 1; ; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), adminWriteTimeout)
@@ -105,6 +113,9 @@ func (a *adminWorker) run(job session.AdminJob) {
 		cancel()
 		if err == nil {
 			a.report(job, res)
+			if id := job.Audit.ActorAccountID; id != 0 {
+				a.checkRoles([]int64{id}) // a demoted actor loses the role after one command
+			}
 			return
 		}
 		if store.Permanent(err) {
@@ -145,6 +156,9 @@ func (a *adminWorker) report(job session.AdminJob, res store.BanResult) {
 // abandon logs a job that will not reach the database (shutdown with the database
 // down), with everything the audit entry would have had: the log is the last copy.
 func (a *adminWorker) abandon(job session.AdminJob) {
+	if job.Kind == session.AdminCheckRoles {
+		return
+	}
 	e := job.Audit
 	a.log.Error("admin: job abandoned at shutdown", "kind", job.Kind, "at", e.At, "action", e.Action,
 		"actor_account", e.ActorAccountID, "actor", e.ActorName, "target", job.TargetName+e.TargetName,
@@ -168,6 +182,23 @@ func (a *adminWorker) fail(job session.AdminJob) {
 	if err := a.store.AppendAudit(ctx, e); err != nil {
 		a.abandon(job)
 	}
+}
+
+// checkRoles reads the current roles of accounts and hands them to the loop. An account
+// that no longer exists is a player.
+func (a *adminWorker) checkRoles(accounts []int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), adminWriteTimeout)
+	defer cancel()
+	m, err := a.store.AccountRoles(ctx, accounts)
+	if err != nil {
+		a.log.Warn("admin: role check failed", "accounts", len(accounts), "err", err)
+		return
+	}
+	out := make(map[int64]session.Role, len(accounts))
+	for _, id := range accounts {
+		out[id] = session.RoleFromString(m[id])
+	}
+	a.roles(out)
 }
 
 func banRequest(job session.AdminJob) store.BanRequest {
@@ -196,11 +227,26 @@ func auditEntry(e session.AuditEntry) store.AuditEntry {
 	}
 }
 
-// writePending writes, at shutdown, the jobs the loop could not queue.
+// writePending writes, at shutdown, the jobs the loop could not queue. A job that
+// cannot be written is kept in the structured log, like on the channel's path: the
+// log is the last copy of what the staff did.
 func (a *adminWorker) writePending(ctx context.Context, jobs []session.AdminJob) error {
 	var errs []error
 	for _, job := range jobs {
+		if job.Kind == session.AdminCheckRoles {
+			continue
+		}
+		if ctx.Err() != nil {
+			a.abandon(job)
+			errs = append(errs, ctx.Err())
+			continue
+		}
 		if _, err := a.write(ctx, job); err != nil {
+			if store.Permanent(err) {
+				a.fail(job)
+			} else {
+				a.abandon(job)
+			}
 			errs = append(errs, err)
 		}
 	}

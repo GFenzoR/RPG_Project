@@ -2,6 +2,7 @@ package session
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +57,9 @@ const (
 	AdminBan
 	// AdminUnban lifts the bans of the account of TargetName and writes Audit.
 	AdminUnban
+	// AdminCheckRoles reads the current role of Accounts (online staff) and answers
+	// through World.RolesChanged. Not audited.
+	AdminCheckRoles
 )
 
 // AdminJob is work for the admin goroutine (the audit log and bans, docs/01).
@@ -67,6 +71,8 @@ type AdminJob struct {
 	ActorRole  Role
 	Reason     string
 	Until      time.Time
+	// Accounts are the accounts of an AdminCheckRoles job.
+	Accounts []int64
 }
 
 // Results of an AdminBan or AdminUnban (AdminResult.Result).
@@ -99,6 +105,10 @@ const (
 	// Staff command rate: a burst of cmdBurst, then one per cmdRefill.
 	cmdBurst  = 10
 	cmdRefill = game.Tick(1000 / 50) // 1 s
+	// RoleCheckEvery is how often the roles of online staff are read again from the
+	// database (5 s): a role taken away with set-role is lost within that time even if
+	// the character stays connected.
+	RoleCheckEvery = game.Tick(5000 / 50)
 )
 
 // Message keys of the commands.
@@ -241,7 +251,7 @@ func (w *World) cmdTeleport(ctx *game.TickContext, p *Player, args []string) boo
 
 // cmdItem: "/item id [count]" creates count (1..MaxItemCount) units of an item of
 // data/items, by content id or numeric id, in p's backpack (on the floor if it does not
-// fit).
+// fit). Grounds (tiles) and items that never leave their tile cannot be created.
 func (w *World) cmdItem(ctx *game.TickContext, p *Player, args []string) bool {
 	if len(args) < 1 || len(args) > 2 {
 		return false
@@ -262,7 +272,7 @@ func (w *World) cmdItem(ctx *game.TickContext, p *Player, args []string) bool {
 	}
 	auditArgs := map[string]string{"item": args[0], "count": itoa(count)}
 	switch {
-	case def == nil || !def.CanPickUp():
+	case def == nil || !def.CanPickUp() || def.Kind == "ground":
 		p.emit(systemMsg(msgGMItemUnknown, textParam("id", args[0])))
 		w.audit(ctx, p, "create_item", nil, auditArgs, auditInvalid)
 		return true
@@ -503,6 +513,39 @@ func (w *World) isBanned(account int64, now time.Time) bool {
 	}
 	delete(w.banned, account)
 	return false
+}
+
+// checkRoles asks the admin goroutine, every RoleCheckEvery ticks, for the current role
+// of the accounts of online staff. A full queue skips this round; the next one asks
+// again.
+func (w *World) checkRoles(ctx *game.TickContext) {
+	if w.cfg.Admin == nil || ctx.Tick < w.nextRoleCheck {
+		return
+	}
+	w.nextRoleCheck = ctx.Tick + RoleCheckEvery
+	var accounts []int64
+	for _, p := range w.players {
+		if p.role > RolePlayer && !slices.Contains(accounts, p.accountID) {
+			accounts = append(accounts, p.accountID)
+		}
+	}
+	if len(accounts) > 0 {
+		_ = w.cfg.Admin(AdminJob{Kind: AdminCheckRoles, Accounts: accounts})
+	}
+}
+
+// RolesChanged returns the command the admin goroutine enqueues with the current roles
+// of some accounts (a missing account is a player). Online characters of those accounts
+// only ever lose privileges here; a new role is granted at the next login.
+func (w *World) RolesChanged(roles map[int64]Role) game.Command {
+	return game.CommandFunc(func(*game.TickContext) {
+		for _, p := range w.players {
+			if r, ok := roles[p.accountID]; ok && r < p.role {
+				w.log.Info("session: staff role lowered", "character", p.charID, "from", p.role.String(), "to", r.String())
+				p.role = r
+			}
+		}
+	})
 }
 
 // ---- helpers ----------------------------------------------------------------------

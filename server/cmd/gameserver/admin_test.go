@@ -46,7 +46,7 @@ func TestAdminSetRole(t *testing.T) {
 	if a := f.audit; a.Source != store.AuditCLI || a.ActorName != "cli:ops" || !a.At.Equal(now) || a.Args["note"] != "new moderator" {
 		t.Fatalf("audit %+v", a)
 	}
-	if !strings.Contains(out, "role player -> gm") {
+	if !strings.Contains(out, "role player -> gm") || !strings.Contains(out, "next login") {
 		t.Fatalf("output %q", out)
 	}
 	for _, args := range [][]string{

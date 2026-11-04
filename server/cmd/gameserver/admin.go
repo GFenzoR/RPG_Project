@@ -28,8 +28,8 @@ const adminUsage = `usage: gameserver admin <command> [flags]   (DATABASE_URL mu
 commands:
   set-role -email <email> -role player|gm|admin -note <why>
       Sets an account's role (T2.6), revokes its tokens and records it in the audit log.
-      Bans use the new role at once; an online character keeps its other commands until
-      it logs out (restart the server to remove them right away).
+      A role taken away reaches the account's online characters within ~5 s; a new or
+      higher role applies from the next login.
   audit [-n 50]
       Prints the newest audit log entries.
 `
@@ -96,6 +96,11 @@ func adminCommand(ctx context.Context, args []string, open func() (adminStore, e
 			return err
 		}
 		fmt.Fprintf(out, "account %d (%s): role %s -> %s\n", id, norm, old, *role)
+		if store.RoleRank(*role) < store.RoleRank(old) {
+			fmt.Fprintln(out, "online characters of this account lose the role within ~5 s")
+		} else if *role != old {
+			fmt.Fprintln(out, "the new role applies from the character's next login")
+		}
 		return nil
 	case "audit":
 		n := fs.Int("n", 50, "entries")

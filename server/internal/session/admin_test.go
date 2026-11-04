@@ -17,8 +17,9 @@ import (
 // queue that records every job (or refuses them while full is set).
 type adminHarness struct {
 	*harness
-	jobs []session.AdminJob
-	full bool
+	jobs   []session.AdminJob
+	checks []session.AdminJob // AdminCheckRoles jobs, kept apart
+	full   bool
 }
 
 func newAdminHarness(t *testing.T) *adminHarness {
@@ -33,6 +34,10 @@ func newAdminHarness(t *testing.T) *adminHarness {
 		c.Admin = func(j session.AdminJob) bool {
 			if a.full {
 				return false
+			}
+			if j.Kind == session.AdminCheckRoles {
+				a.checks = append(a.checks, j)
+				return true
 			}
 			a.jobs = append(a.jobs, j)
 			return true
@@ -471,3 +476,82 @@ func count(s []string, v string) int {
 }
 
 func itoa(v int) string { return strconv.Itoa(v) }
+
+// A role taken away in the database reaches an online character: after RolesChanged
+// its staff commands answer like unknown ones, and lower staff can kick it.
+func TestRoleRevokedOnline(t *testing.T) {
+	a := newAdminHarness(t)
+	thief, th := a.joinAs("Keeper", session.RoleAdmin, pos(4, 4))
+	gm, _ := a.joinAs("Warden", session.RoleGM, pos(8, 8))
+	if got := a.cmd(thief, "/item test_salve 100"); !slices.Contains(got, "gm.item_created") {
+		t.Fatalf("admin /item: %v", got)
+	}
+	if got := a.cmd(gm, "/kick Keeper"); !slices.Equal(got, []string{"gm.protected"}) {
+		t.Fatalf("GM kicking an admin: %v", got)
+	}
+	a.takeJobs()
+
+	// A role is only ever lowered online; a missing account counts as a player.
+	a.sim.Command(a.w.RolesChanged(map[int64]session.Role{th.CharacterID(): session.RolePlayer}))
+	a.sim.Step()
+	for _, line := range []string{"/item test_salve 100", "/tp 5 5 7", "/announce hi"} {
+		if got := a.cmd(thief, line); !slices.Equal(got, []string{"command.unknown"}) {
+			t.Errorf("%q after the demotion: %v", line, got)
+		}
+		a.sim.RunTicks(40)
+	}
+	if js := a.takeJobs(); len(js) != 0 {
+		t.Fatalf("a demoted admin's commands ran: %+v", js)
+	}
+	if got := a.cmd(gm, "/kick Keeper"); !slices.Equal(got, []string{"gm.kicked"}) || !thief.closed {
+		t.Fatalf("GM kicking the demoted admin: %v", got)
+	}
+
+	// RolesChanged never raises a role.
+	_, pl := a.joinAs("Plain", session.RolePlayer, pos(10, 10))
+	a.sim.Command(a.w.RolesChanged(map[int64]session.Role{pl.CharacterID(): session.RoleAdmin}))
+	a.sim.Step()
+	if got := a.cmd(gm, "/kick Plain"); !slices.Equal(got, []string{"gm.kicked"}) {
+		t.Fatalf("a raised role took effect online: %v", got)
+	}
+}
+
+// Every RoleCheckEvery ticks (by the injected clock's ticks) the World asks for the
+// roles of the online staff, and only of them.
+func TestRoleCheckCycle(t *testing.T) {
+	a := newAdminHarness(t)
+	_, ad := a.joinAs("Keeper", session.RoleAdmin, pos(4, 4))
+	a.joinAs("Plain", session.RolePlayer, pos(6, 6))
+	_, gm := a.joinAs("Warden", session.RoleGM, pos(8, 8))
+	a.checks = nil
+	a.sim.RunTicks(int(session.RoleCheckEvery) * 3)
+	if len(a.checks) != 3 {
+		t.Fatalf("%d role checks in 3 intervals, want 3", len(a.checks))
+	}
+	for _, j := range a.checks {
+		if !slices.Equal(j.Accounts, []int64{ad.CharacterID(), gm.CharacterID()}) {
+			t.Fatalf("checked accounts %v", j.Accounts)
+		}
+	}
+	// No staff online: nothing to ask.
+	b := newAdminHarness(t)
+	b.joinAs("Plain", session.RolePlayer, pos(6, 6))
+	b.sim.RunTicks(int(session.RoleCheckEvery) * 2)
+	if len(b.checks) != 0 {
+		t.Fatalf("role checks without staff: %+v", b.checks)
+	}
+}
+
+// Grounds are tiles, not items: /item refuses them like an unknown item.
+func TestCreateItemRefusesGround(t *testing.T) {
+	a := newAdminHarness(t)
+	ad, p := a.joinAs("Keeper", session.RoleAdmin, pos(4, 4))
+	for _, line := range []string{"/item test_water 50", "/item 90 5", "/item grass"} {
+		if got := a.cmd(ad, line); !slices.Equal(got, []string{"gm.item_unknown"}) {
+			t.Errorf("%q: %v", line, got)
+		}
+	}
+	if g := a.w.GroundAt(p.Pos()); len(g) != 0 {
+		t.Fatalf("ground items created: %d", len(g))
+	}
+}

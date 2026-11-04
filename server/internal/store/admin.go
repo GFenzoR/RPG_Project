@@ -262,6 +262,19 @@ func (s *Store) Unban(ctx context.Context, r BanRequest) (BanResult, error) {
 	return res, nil
 }
 
+// AccountRoles returns the current role of each of ids that exists.
+func (s *Store) AccountRoles(ctx context.Context, ids []int64) (map[int64]string, error) {
+	rows, err := s.q.GetAccountRoles(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("account roles: %w", err)
+	}
+	out := make(map[int64]string, len(rows))
+	for _, r := range rows {
+		out[r.ID] = r.Role
+	}
+	return out, nil
+}
+
 // GMMaxBan is the longest ban below admin (session.GMMaxBan checks it first, on the loop).
 const GMMaxBan = 30 * 24 * time.Hour
 

@@ -192,7 +192,13 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
 - **Bans:** `/ban` y `/unban` son trabajos de esa goroutine. En una transacción resuelven
   el personaje, revisan la jerarquía, insertan o levantan el ban (`account_bans`), revocan
   los tokens y escriben la auditoría. La jerarquía usa el rol actual del actor en la base
-(el menor entre ese y el del login), así un GM degradado pierde los bans al instante. El resultado vuelve al loop (`World.AdminDone`), que
+(el menor entre ese y el del login), así un GM degradado pierde los bans al instante.
+- **Revocación en vivo:** cada `RoleCheckEvery` (100 ticks, 5 s) el loop entrega a la
+  goroutine de admin un trabajo `AdminCheckRoles` con las cuentas del staff en línea; la
+  goroutine lee sus roles (`GetAccountRoles`) y los devuelve con `World.RolesChanged`, que
+  solo **baja** `Player.role` (una cuenta borrada cuenta como jugador). Después de cada
+  comando de staff auditado se relee también el rol de su autor. El tick nunca espera a
+  la base; si la cola está llena, esa ronda se salta. El resultado vuelve al loop (`World.AdminDone`), que
   desconecta a los personajes de la cuenta con `BANNED` y recuerda el ban en memoria: así
   frena también un login que leyó la base antes del ban. Además, las consultas de sesión,
   de canje del token de juego y de carga del personaje excluyen a las cuentas con un ban
@@ -200,7 +206,8 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
 - **El resultado de un ban no se pierde:** si la cola del loop está llena, la goroutine de
   admin reintenta encolarlo hasta que haya lugar o el loop pare. Un trabajo que la base
   rechaza por valores inválidos se responde como fallido y se audita con una entrada
-  reducida. Si al apagar la base no responde, lo que queda va completo al log estructurado.
+  reducida. Si al apagar la base no responde, lo que queda (en la cola o pendiente en el loop) va
+  completo al log estructurado: actor, acción, objetivo y argumentos.
 - **`audit_log`** es append-only (triggers como `economy_log`) y no tiene claves foráneas:
   sobrevive al borrado de cuentas. El operador lo lee con `make audit-log`.
 

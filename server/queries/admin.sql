@@ -58,3 +58,7 @@ RETURNING a.id, old.role AS old_role;
 -- name: GetAccountRole :one
 -- The actor's role now (not the one cached at login), for bans in the same transaction.
 SELECT role FROM accounts WHERE id = sqlc.arg(id);
+
+-- name: GetAccountRoles :many
+-- Current roles of some accounts: online staff lose a revoked role within seconds.
+SELECT id, role FROM accounts WHERE id = ANY(sqlc.arg(ids)::bigint[]);

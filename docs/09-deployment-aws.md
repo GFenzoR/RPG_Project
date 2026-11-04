@@ -132,9 +132,8 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec gameserv
   /app/gameserver admin audit -n 50
 ```
 En local: `make set-role EMAIL=... ROLE=gm NOTE="..."` y `make audit-log`. El cambio revoca
-los tokens de la cuenta y los bans usan ya el rol nuevo. Los demás comandos del personaje
-conectado siguen con el rol viejo hasta que sale: para quitarlo del todo de inmediato,
-reinicia el gameserver.
+los tokens de la cuenta. Si se quita un rol, los personajes conectados de esa cuenta lo
+pierden en unos 5 s, sin reiniciar nada. Un rol nuevo vale desde el próximo login.
 
 ### Backups y restauración
 - El servicio `backup` hace un `pg_dump` (formato custom, comprimido) al arrancar y luego

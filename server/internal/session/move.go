@@ -301,6 +301,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	if len(w.adminRetry) > 0 {
 		w.retryAdmin()
 	}
+	w.checkRoles(ctx)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)
