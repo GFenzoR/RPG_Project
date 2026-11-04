@@ -85,10 +85,22 @@ func TestChapterTwoPlayable(t *testing.T) {
 	if _, step := h.w.QuestState(p, "ch2_roots"); step != "gather_glowcaps" {
 		t.Fatalf("after eight toads the step is %q", step)
 	}
+	// Five glowcaps are not enough, and the ferryman has nothing to say yet.
 	h.sim.Command(gameFunc(func() {
 		h.w.Teleport(p, pos(20, 12))
-		h.w.GiveForTest(p, "glowcap", 6-h.w.CountItem(p, "glowcap"))
+		h.w.GiveForTest(p, "glowcap", max(0, 5-h.w.CountItem(p, "glowcap")))
 	}))
+	h.sim.Step()
+	cl.take()
+	if _, step := h.w.QuestState(p, "ch2_roots"); step != "gather_glowcaps" {
+		t.Fatalf("with five glowcaps the step is %q", step)
+	}
+	for _, o := range h.lastDialog(h.send(cl, talkMsg(ferryman.ID()))).Options {
+		if o.Text.Key == "npc.bosque_ferryman.opt_ch2_boat" {
+			t.Fatal("the ferryman answers before the lantern")
+		}
+	}
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "glowcap", 1) }))
 	h.sim.Step()
 	cl.take()
 	if _, step := h.w.QuestState(p, "ch2_roots"); step != "deliver_glowcaps" {
