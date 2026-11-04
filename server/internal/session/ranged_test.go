@@ -284,3 +284,42 @@ func TestAmmoSlot(t *testing.T) {
 		t.Errorf("a guardian equipped the bow: %q", got)
 	}
 }
+
+// Ammo of another type does not fit the bow: no shot, the arrows stay.
+func TestBowWrongAmmo(t *testing.T) {
+	testItemDefs[74] = "{id: test_bolt, kind: ammo, weight: 80, stackable: true, max_stack: 100, ammo: {type: bolt, attack: 12}}"
+	defer delete(testItemDefs, 74)
+	h := rangedHarness(t, worldtest.Open(t, 0, 0, 32, 32), spawnAt("dummy", 13, 10, 0, 60))
+	nextChar++
+	c := session.Character{ID: nextChar, AccountID: nextChar, Name: "Archer", Vocation: "ranger", Level: 1,
+		Health: 145, Mana: 400, HasPos: true, Pos: pos(10, 10), Inventory: []session.ItemState{
+			{ItemID: bowID, Count: 1, Slot: int(slotRight)}, {ItemID: 74, Count: 5, Slot: int(slotAmmo)}}}
+	cl, p := h.joinChar(c)
+	h.sim.Step()
+	h.input(cl, setTarget(h.dummy().ID()))
+	h.sim.RunTicks(41)
+	evs := cl.take()
+	if got := h.w.CountItem(p, "test_bolt"); got != 5 || h.w.MonsterHealth(h.dummy()) != 1000 {
+		t.Fatalf("bolts %d, dummy health %d: a bow must not shoot bolts", got, h.w.MonsterHealth(h.dummy()))
+	}
+	if !slices.Contains(sysKeys(evs), "combat.no_ammo") {
+		t.Errorf("messages %v", sysKeys(evs))
+	}
+}
+
+// A heal for others never lands on a monster, nor on a player on another floor.
+func TestHealOtherOnlyPlayersOnTheFloor(t *testing.T) {
+	h := rangedHarness(t, worldtest.Open(t, 0, 0, 16, 16), spawnAt("dummy", 6, 5, 0, 60))
+	cl, caster := druid(h, "Healer", pos(5, 5))
+	h.sim.Step()
+	cl.take()
+	if keys := sysKeys(h.castNow(cl, castAt("test_mend", h.dummy().ID()))); !slices.Contains(keys, "magic.no_target") {
+		t.Errorf("heal on a monster: %v", keys)
+	}
+	if keys := sysKeys(h.castNow(cl, castAt("test_mend", 999999))); !slices.Contains(keys, "magic.no_target") {
+		t.Errorf("heal on an unknown id: %v", keys)
+	}
+	if h.w.Mana(caster) != 400 {
+		t.Errorf("refused heals spent mana: %d", h.w.Mana(caster))
+	}
+}

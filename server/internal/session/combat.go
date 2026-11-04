@@ -152,6 +152,7 @@ func (w *World) distanceFight(ctx *game.TickContext, p *Player, m *Monster) {
 	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.skillLevel(p, SkillDistance), 1), attack, p.level, w.mode(p).Attack)
 	w.train(p, SkillDistance, w.afk(ctx, p))
 	w.useUp(ammo)
+	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}}) // capacity
 	w.projectile(p.pos, m.pos, ElementPhysical)
 	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target), ElementPhysical)
 }
