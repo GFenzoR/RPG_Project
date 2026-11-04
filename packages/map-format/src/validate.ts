@@ -524,6 +524,7 @@ class WorldValidator {
           "NPC cannot be reached on foot from the temple",
           n.pos,
         );
+    this.warnUnreachableAreas(island, reached);
     for (const [i, z] of island.zones.entries()) {
       if (z.type === "community_plot") continue;
       const any = z.floors.some((f) =>
@@ -533,7 +534,62 @@ class WorldValidator {
         this.err(`${dir}/zones.yaml`, [i], `zone "${z.id}" has no tile reachable from the temple`);
     }
   }
+
+  /**
+   * Warns once per connected walkable area (8 directions, one floor) that the temple BFS
+   * did not reach and that has at least UNREACHABLE_AREA_MIN tiles: a stranded dock, a
+   * sandbar the generator left, a room with no stairs. Areas inside a community_plot are
+   * skipped (they may be unbuilt). Smaller pockets (a tile between two trees) are noise.
+   */
+  private warnUnreachableAreas(island: Island, reached: Set<string>): void {
+    const meta = island.meta;
+    const plots = island.zones.filter((z) => z.type === "community_plot");
+    const inPlot = (p: Position): boolean =>
+      plots.some((z) => z.floors.includes(p.z) && z.rects.some((r) => rectContains(r, p.x, p.y)));
+    const seen = new Set<string>();
+    const walkable = (p: Position): boolean => isWalkable(this.tiles.tileAt(p), this.content);
+    const chunks = [...island.chunks.values()].sort(
+      (a, b) => a.z - b.z || a.cy - b.cy || a.cx - b.cx,
+    );
+    for (const c of chunks) {
+      for (let ly = 0; ly < CHUNK_SIZE; ly++)
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+          const start = { x: c.cx * CHUNK_SIZE + lx, y: c.cy * CHUNK_SIZE + ly, z: c.z };
+          const k0 = formatPos(start);
+          if (seen.has(k0) || reached.has(k0) || !rectContains(meta.rect, start.x, start.y))
+            continue;
+          if (!walkable(start)) continue;
+          seen.add(k0);
+          let size = 0;
+          let plot = false;
+          const queue: Position[] = [start];
+          while (queue.length > 0) {
+            const p = queue.pop() as Position;
+            size++;
+            plot ||= inPlot(p);
+            for (let dy = -1; dy <= 1; dy++)
+              for (let dx = -1; dx <= 1; dx++) {
+                const n = { x: p.x + dx, y: p.y + dy, z: p.z };
+                const k = formatPos(n);
+                if (seen.has(k) || !rectContains(meta.rect, n.x, n.y) || !walkable(n)) continue;
+                seen.add(k);
+                queue.push(n);
+              }
+          }
+          if (size >= UNREACHABLE_AREA_MIN && !plot)
+            this.warn(
+              `${this.dirOf(island)}/island.yaml`,
+              ["temple"],
+              `${size} walkable tiles around here cannot be reached on foot from the temple`,
+              start,
+            );
+        }
+    }
+  }
 }
+
+/** Walkable areas of at least this many tiles that cannot be reached warn (T3.6). */
+export const UNREACHABLE_AREA_MIN = 10;
 
 function rectInside(inner: Rect, outer: Rect): boolean {
   return (

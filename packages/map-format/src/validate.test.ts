@@ -256,6 +256,31 @@ describe("validateWorld", () => {
     );
   });
 
+  it("warns about large walkable areas the temple cannot reach (T3.6)", () => {
+    const i = mini();
+    const top = must(i.chunks.get(chunkKey(7, 0, 0)));
+    // A 3x4 sandbar cut off by water, a 2x2 pocket (too small to warn) and a walled-off
+    // 3x4 inside a community plot (skipped).
+    for (let y = 2; y < 30; y++) setGround(top, 24, y, "water_shallow");
+    for (let y = 2; y < 30; y++)
+      for (let x = 25; x < 30; x++) setGround(top, x, y, "water_shallow");
+    for (let y = 4; y < 8; y++) for (let x = 26; x < 29; x++) setGround(top, x, y, "sand");
+    for (let y = 12; y < 14; y++) for (let x = 26; x < 28; x++) setGround(top, x, y, "sand");
+    for (let y = 20; y < 24; y++) for (let x = 26; x < 29; x++) setGround(top, x, y, "sand");
+    i.zones.push({
+      id: "mini_plot",
+      type: "community_plot",
+      floors: [7],
+      rects: [{ x: 26, y: 20, w: 3, h: 4 }],
+    });
+    const r = check(i);
+    const warns = messages(r).filter((m) =>
+      m.includes("cannot be reached on foot from the temple"),
+    );
+    expect(warns).toEqual([expect.stringContaining("warning world/islands/mini/island.yaml")]);
+    expect(warns[0]).toContain("(26,4,7) 12 walkable tiles");
+  });
+
   it("warns about overcrowded spawns", () => {
     const i = mini();
     must(must(i.spawns[0]).monsters[0]).count = 40;

@@ -287,6 +287,10 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Conectividad: desde el templo se puede llegar caminando a todo spawn y NPC de la
   isla (BFS en 8 direcciones por tiles caminables y portales). Zonas sin ningún tile
   alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir).
+  Advertencia (T3.6): un área caminable conexa (8 direcciones, un piso) de 10 casillas o
+  más a la que no se llega desde el templo, fuera de parcelas `community_plot` (un muelle
+  suelto, un banco de arena del generador, una sala sin escalera). Una por área, con una
+  de sus casillas.
 - **Balance de spawns**: advertencia si hay más de 0,25 monstruos por tile caminable en
   el cuadrado del radio. (Nivel de monstruos vs. `level_hint`: pendiente, los monstruos
   aún no tienen nivel en `data/`.)
