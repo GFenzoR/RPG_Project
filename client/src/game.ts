@@ -1,7 +1,7 @@
 // One play session: the WebSocket, the world state, the keyboard and the canvas wired
 // together. The client only sends intents (Walk, WalkPath, Turn, Logout) and draws what
 // the server says; the one thing it predicts is the next own step.
-import { ChatChannel, CreatureKind, Direction } from "@rpg/protocol";
+import { ChatChannel, CreatureKind, Direction, PartyAction } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
@@ -17,6 +17,7 @@ import type { Pending } from "./state/aim.ts";
 import { findPath } from "./state/path.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
+import type { InvitationView, PartyView } from "./state/party.ts";
 import type {
   ContainerState,
   CreatureState,
@@ -51,6 +52,10 @@ export interface GameUi {
   /** The open NPC dialog and its shop (T1.10). */
   dialog: DialogState | undefined;
   shop: ShopState | undefined;
+  /** The party and the invitations not answered yet (T3.3). */
+  party: PartyView | undefined;
+  invitations: InvitationView[];
+  selfId: number;
 }
 
 /** Read-only hooks for the E2E tests (client/e2e). */
@@ -199,6 +204,40 @@ export class Game {
   shopSell(itemId: number, count: number): void {
     const s = this.world.shop;
     if (s) this.conn.send({ case: "shopSell", value: { dialogId: s.dialogId, itemId, count } });
+  }
+
+  // ---- parties (T3.3): the server checks leadership, sight and the party size ---------
+
+  private party(action: PartyAction, creatureId = 0): void {
+    this.conn.send({ case: "partyCommand", value: { action, creatureId } });
+  }
+
+  /** Invites a player the client sees (battle list). */
+  partyInvite(id: number): void {
+    this.party(PartyAction.INVITE, id);
+  }
+
+  /** Accepts or declines the invitation of inviterId. */
+  partyAnswer(inviterId: number, accept: boolean): void {
+    this.party(accept ? PartyAction.ACCEPT : PartyAction.DECLINE, inviterId);
+    this.world.party.answered(inviterId);
+    this.publish();
+  }
+
+  partyLeave(): void {
+    this.party(PartyAction.LEAVE);
+  }
+
+  partyKick(id: number): void {
+    this.party(PartyAction.KICK, id);
+  }
+
+  partyPassLeader(id: number): void {
+    this.party(PartyAction.PASS_LEADER, id);
+  }
+
+  partyShare(on: boolean): void {
+    this.party(on ? PartyAction.SHARE_ON : PartyAction.SHARE_OFF);
   }
 
   // ---- magic (T1.9): the server checks vocation, level, mana, cooldowns and sight -------
@@ -416,6 +455,9 @@ export class Game {
       hotkeys: this.hotkeys,
       dialog: w.dialog,
       shop: w.shop,
+      party: w.party.party,
+      invitations: [...w.party.invitations(performance.now())],
+      selfId: w.selfId,
     });
   }
 

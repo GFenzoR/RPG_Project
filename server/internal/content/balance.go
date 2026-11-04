@@ -20,6 +20,7 @@ type Balance struct {
 	Gathering  Gathering  `yaml:"gathering"`
 	Chat       Chat       `yaml:"chat"`
 	Death      Death      `yaml:"death"`
+	Party      Party      `yaml:"party"`
 	// Conditions are the condition definitions by id (T3.2).
 	Conditions ConditionDefs `yaml:"conditions"`
 }
@@ -91,6 +92,39 @@ func (c Chat) check() error {
 	}
 	if c.Flood.Burst <= 0 || c.Flood.RefillMs <= 0 || c.Flood.MuteMs <= 0 || c.GlobalIntervalMs < 0 {
 		return errors.New("chat: flood.burst, flood.refill_ms and flood.mute_ms must be > 0, global_interval_ms >= 0")
+	}
+	return nil
+}
+
+// Party holds the party and shared experience rules (T3.3, docs/02-game-design.md
+// "Grupos").
+type Party struct {
+	MaxMembers int `yaml:"max_members"`
+	InviteMs   int `yaml:"invite_ms"`
+	UpdateMs   int `yaml:"update_ms"`
+	// A kill is shared by the members on its floor within ShareDistance tiles of it that
+	// contributed within ContributionMs and whose level is at least LevelRangePct % of
+	// the highest of them, or at most LevelGapAlways levels below it.
+	ShareDistance  int `yaml:"share_distance"`
+	ContributionMs int `yaml:"contribution_ms"`
+	LevelRangePct  int `yaml:"level_range_pct"`
+	LevelGapAlways int `yaml:"level_gap_always"`
+	// The shared pot grows BonusPctPerMember % per sharing member beyond the first, up
+	// to MaxBonusPct %.
+	BonusPctPerMember int `yaml:"bonus_pct_per_member"`
+	MaxBonusPct       int `yaml:"max_bonus_pct"`
+}
+
+func (p Party) check() error {
+	if p.MaxMembers < 2 || p.MaxMembers > 32 {
+		return errors.New("party.max_members must be in 2..32")
+	}
+	if p.InviteMs <= 0 || p.UpdateMs <= 0 || p.ShareDistance <= 0 || p.ContributionMs <= 0 {
+		return errors.New("party: invite_ms, update_ms, share_distance and contribution_ms must be > 0")
+	}
+	if p.LevelRangePct < 1 || p.LevelRangePct > 100 || p.LevelGapAlways < 0 || p.LevelGapAlways > 100 || p.BonusPctPerMember < 0 || p.BonusPctPerMember > 100 ||
+		p.MaxBonusPct < 0 || p.MaxBonusPct > 100 {
+		return errors.New("party: level_range_pct must be in 1..100, level_gap_always, bonus_pct_per_member and max_bonus_pct in 0..100")
 	}
 	return nil
 }
@@ -253,6 +287,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, err
 	}
 	if err := b.Conditions.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Party.check(); err != nil {
 		return Balance{}, err
 	}
 	if g := b.Gathering; g.UseIntervalMs < 0 || g.AFK.AfterMs < 0 || g.AFK.Factor < 0 || g.AFK.Factor > 1 {

@@ -6,7 +6,7 @@ cliente lo reciben ya compilado. `make validate` corre en CI.
 
 ```
 data/
-  balance.yaml          constantes de balance (XP, skills, muerte, regeneración, condiciones)
+  balance.yaml          constantes de balance (XP, skills, muerte, regeneración, condiciones, grupos)
   vocations.yaml
   ids.lock.yaml         IDs numéricos estables (generado, se commitea)
   borders.yaml          reglas de autoborder
@@ -372,6 +372,26 @@ conditions:
   al arrancar que cada fuente nombre una condición de `balance.yaml`.
 - Un monstruo con `behavior.sees_invisible: true` ve (y ataca) a los invisibles.
 - Nombres de la UI: `condition.<id>.name` en `i18n/*/client.yaml`.
+
+## Grupos (T3.3)
+Las reglas de los grupos y de la experiencia compartida viven en `balance.yaml → party`
+(`balance.schema.json`, todas obligatorias). Qué hace cada una: `02-game-design.md`,
+"Grupos".
+```yaml
+party:
+  max_members: 6            # 2..32, el líder incluido
+  invite_ms: 45000          # vida de una invitación
+  update_ms: 1000           # cada cuánto, como mucho, se refresca vida/maná/nivel
+  share_distance: 24        # casillas (Chebyshev, mismo piso) desde la muerte del monstruo
+  contribution_ms: 75000    # ventana de "contribuyó hace poco"
+  level_range_pct: 70       # nivel mínimo, en % del más alto que comparte (anti-carry)
+  level_gap_always: 3       # o a lo sumo estos niveles por debajo
+  bonus_pct_per_member: 6   # bonus del pozo por cada miembro que comparte después del primero
+  max_bonus_pct: 24         # tope del bonus
+```
+- Textos de la UI: `client.party.*` y los mensajes del servidor `party.*` en
+  `i18n/*/client.yaml`. El nombre de la isla de un miembro fuera de vista es
+  `island.<id>.name` (`i18n/*/world.yaml`, que el cliente ahora empaqueta solo por nombres).
 
 ## Receta de oficio
 ```yaml

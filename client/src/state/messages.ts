@@ -86,6 +86,7 @@ const CHAT_KEYS: Partial<Record<MessageKind, string>> = {
   [MessageKind.GLOBAL]: "client.chat.line.global",
   [MessageKind.NPC]: "client.chat.line.npc",
   [MessageKind.BROADCAST]: "client.chat.line.broadcast",
+  [MessageKind.PARTY]: "client.chat.line.party",
 };
 
 /**

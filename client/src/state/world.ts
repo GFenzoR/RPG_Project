@@ -20,6 +20,7 @@ import type { ChunkData, TileSource } from "@rpg/renderer";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
+import { PartyState } from "./party.ts";
 import type { Pos } from "./geometry.ts";
 
 export interface Walk {
@@ -255,6 +256,8 @@ export class WorldState implements TileSource {
   inventory = new Map<EquipmentSlot, ItemView>();
   /** Open container windows, oldest first. */
   containers: ContainerState[] = [];
+  /** The party and pending invitations (T3.3). */
+  readonly party = new PartyState();
   private readonly chunks = new Map<string, ChunkTiles>();
   private readonly content: ClientContent;
 
@@ -376,6 +379,12 @@ export class WorldState implements TileSource {
           projectileId: msg.value.projectileId,
           start: now,
         });
+        break;
+      case "partyUpdate":
+        this.party.update(msg.value);
+        break;
+      case "partyInvitation":
+        this.party.invited(msg.value, now);
         break;
       case "playerConditions":
         this.conditions = msg.value.conditions.map((c) => ({

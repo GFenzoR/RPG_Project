@@ -1230,3 +1230,95 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
   await page.locator(".hud").screenshot({ path: join(shots, "23-conditions-hud.png") });
   expect(errors).toEqual([]);
 });
+
+test("T3.3: two players form a party from the battle list and see the panel", async ({
+  browser,
+  playwright,
+}) => {
+  const password = "e2e-password-1";
+  const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
+  async function account(prefix: string, title: string): Promise<{ email: string; name: string }> {
+    const email = `e2e-${prefix}-${Date.now()}-${randomLetters(6)}@example.com`;
+    const name = `${title} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+    expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
+      201,
+    );
+    const login = await apiCtx.post("/api/auth/login", {
+      data: { email, password, token_in_body: true },
+    });
+    const { token } = (await login.json()) as { token: string };
+    const created = await apiCtx.post("/api/characters", {
+      data: { name, vocation: "guardian" },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(created.status()).toBe(201);
+    return { email, name };
+  }
+  const lead = await account("party-a", "Leader");
+  const mate = await account("party-b", "Mate");
+  await apiCtx.dispose();
+
+  async function enter(email: string): Promise<Page> {
+    const page = await browser.newPage();
+    await page.goto("/?lang=es");
+    const form = page.getByTestId("login-form");
+    await form.getByLabel("Email").fill(email);
+    await form.getByLabel("Contraseña").fill(password);
+    await form.getByRole("button", { name: "Entrar", exact: true }).click();
+    await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+    await page.waitForFunction(() => window.__rpgClient?.ready === true);
+    return page;
+  }
+  const leadPage = await enter(lead.email);
+  const matePage = await enter(mate.email);
+
+  // Both wake up at the temple: the mate is in the leader's battle list, with "+".
+  const leadPanel = leadPage.getByTestId("party-panel");
+  await expect(leadPanel).toContainText("No estás en un grupo.");
+  const invite = leadPage
+    .getByTestId("battle-list")
+    .locator("li", { hasText: mate.name })
+    .getByRole("button", { name: "Invitar al grupo" });
+  await invite.click();
+  await expect(leadPage.getByTestId("game-log")).toContainText(`Invitaste a ${mate.name}`);
+
+  const invitation = matePage.getByTestId("party-invitation");
+  await expect(invitation).toContainText(`${lead.name} te invita a su grupo.`);
+  await shot(matePage, "24-party-invitation");
+  await invitation.getByRole("button", { name: "Aceptar" }).click();
+  await expect(invitation).toHaveCount(0);
+
+  // Both see the two members; the leader has the leader tag and the leader's buttons.
+  for (const page of [leadPage, matePage]) {
+    const panel = page.getByTestId("party-panel");
+    await expect(panel.locator("li[data-member]")).toHaveCount(2);
+    await expect(panel).toContainText(lead.name);
+    await expect(panel).toContainText(mate.name);
+    await expect(panel).toContainText("Líder");
+    await expect(panel).toContainText("Experiencia compartida: apagada");
+  }
+  await expect(matePage.getByTestId("party-share")).toHaveCount(0);
+  await leadPage.getByTestId("party-share").click();
+  // On, but nobody fought yet: inactive.
+  await expect(matePage.getByTestId("party-shared")).toHaveText("Experiencia compartida: inactiva");
+  await expect(matePage.getByTestId("game-log")).toContainText(
+    "El líder activó la experiencia compartida.",
+  );
+
+  // Party chat.
+  await matePage.getByTestId("chat-channel").selectOption({ label: "Grupo" });
+  const input = matePage.getByTestId("say").getByRole("textbox");
+  await input.fill("vamos a cazar");
+  await input.press("Enter");
+  await expect(leadPage.getByTestId("chat-log")).toContainText(
+    `[Grupo] ${mate.name}: vamos a cazar`,
+  );
+  await leadPage.locator(".side").screenshot({ path: join(shots, "25-party-panel.png") });
+
+  // Leaving disbands a party of two.
+  await matePage.getByTestId("party-leave").click();
+  await expect(leadPanel).toContainText("No estás en un grupo.");
+  await expect(leadPage.getByTestId("game-log")).toContainText("El grupo se disolvió.");
+  await leadPage.close();
+  await matePage.close();
+});

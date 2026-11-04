@@ -220,6 +220,7 @@ func (w *World) conditionHit(ctx *game.TickContext, h holder, c *condition) {
 	m.health -= dmg
 	if dmg > 0 && c.source != 0 {
 		w.addShare(m, c.source, dmg)
+		w.contribute(ctx, w.playerByID(c.source))
 	}
 	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), el)
 	if m.health <= 0 {

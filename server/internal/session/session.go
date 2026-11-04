@@ -238,6 +238,15 @@ type World struct {
 	// nextRoleCheck is the tick of the next check of the online staff's roles.
 	nextRoleCheck game.Tick
 
+	// Parties (T3.3): every party (creation order), pending invitations (expiry tick),
+	// balance.yaml party in ticks and a scratch list of sharers.
+	parties    []*party
+	invites    map[inviteKey]game.Tick
+	inviteFor  game.Tick
+	partyEvery game.Tick
+	contribFor game.Tick
+	partyBuf   []*Player
+
 	// sched is the loop's scheduler, kept at the first join to know the current tick
 	// outside a TickContext (condition times in snapshots and at flush, T3.2).
 	sched *game.Scheduler
@@ -303,6 +312,7 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	w.initChat()
+	w.initParty()
 	if err := w.initConditions(); err != nil {
 		return nil, err
 	}

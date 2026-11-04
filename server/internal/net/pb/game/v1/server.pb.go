@@ -142,6 +142,8 @@ const (
 	// A staff announcement to everyone online (T2.6): the staff member's text travels as
 	// is in Message.text and the client adds a translated label.
 	MessageKind_MESSAGE_KIND_BROADCAST MessageKind = 7
+	// Party chat (T3.3): sent to every member, without pos.
+	MessageKind_MESSAGE_KIND_PARTY MessageKind = 8
 )
 
 // Enum value maps for MessageKind.
@@ -155,6 +157,7 @@ var (
 		5: "MESSAGE_KIND_NPC",
 		6: "MESSAGE_KIND_SYSTEM",
 		7: "MESSAGE_KIND_BROADCAST",
+		8: "MESSAGE_KIND_PARTY",
 	}
 	MessageKind_value = map[string]int32{
 		"MESSAGE_KIND_UNSPECIFIED": 0,
@@ -165,6 +168,7 @@ var (
 		"MESSAGE_KIND_NPC":         5,
 		"MESSAGE_KIND_SYSTEM":      6,
 		"MESSAGE_KIND_BROADCAST":   7,
+		"MESSAGE_KIND_PARTY":       8,
 	}
 )
 
@@ -324,6 +328,63 @@ func (DisconnectReason) EnumDescriptor() ([]byte, []int) {
 	return file_game_v1_server_proto_rawDescGZIP(), []int{4}
 }
 
+// SharedExperience is the state of a party's shared experience as its members see it.
+type SharedExperience int32
+
+const (
+	SharedExperience_SHARED_EXPERIENCE_UNSPECIFIED SharedExperience = 0
+	// The leader has it turned off: every kill pays by damage, as without a party.
+	SharedExperience_SHARED_EXPERIENCE_OFF SharedExperience = 1
+	// On, and at least two members qualify right now (contributed recently and are within
+	// the level range of the highest of them): kills near them are shared.
+	SharedExperience_SHARED_EXPERIENCE_ACTIVE SharedExperience = 2
+	// On, but fewer than two members qualify: kills pay by damage.
+	SharedExperience_SHARED_EXPERIENCE_INACTIVE SharedExperience = 3
+)
+
+// Enum value maps for SharedExperience.
+var (
+	SharedExperience_name = map[int32]string{
+		0: "SHARED_EXPERIENCE_UNSPECIFIED",
+		1: "SHARED_EXPERIENCE_OFF",
+		2: "SHARED_EXPERIENCE_ACTIVE",
+		3: "SHARED_EXPERIENCE_INACTIVE",
+	}
+	SharedExperience_value = map[string]int32{
+		"SHARED_EXPERIENCE_UNSPECIFIED": 0,
+		"SHARED_EXPERIENCE_OFF":         1,
+		"SHARED_EXPERIENCE_ACTIVE":      2,
+		"SHARED_EXPERIENCE_INACTIVE":    3,
+	}
+)
+
+func (x SharedExperience) Enum() *SharedExperience {
+	p := new(SharedExperience)
+	*p = x
+	return p
+}
+
+func (x SharedExperience) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SharedExperience) Descriptor() protoreflect.EnumDescriptor {
+	return file_game_v1_server_proto_enumTypes[5].Descriptor()
+}
+
+func (SharedExperience) Type() protoreflect.EnumType {
+	return &file_game_v1_server_proto_enumTypes[5]
+}
+
+func (x SharedExperience) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SharedExperience.Descriptor instead.
+func (SharedExperience) EnumDescriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{5}
+}
+
 // ServerBatch is the only thing a server WebSocket frame carries: every event of one
 // session in one tick, in order. At most one frame per tick per player; no events, no frame.
 type ServerBatch struct {
@@ -412,6 +473,8 @@ type ServerMessage struct {
 	//	*ServerMessage_Disconnect
 	//	*ServerMessage_SpellCooldown
 	//	*ServerMessage_PlayerConditions
+	//	*ServerMessage_PartyUpdate
+	//	*ServerMessage_PartyInvitation
 	Message       isServerMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -724,6 +787,24 @@ func (x *ServerMessage) GetPlayerConditions() *PlayerConditions {
 	return nil
 }
 
+func (x *ServerMessage) GetPartyUpdate() *PartyUpdate {
+	if x != nil {
+		if x, ok := x.Message.(*ServerMessage_PartyUpdate); ok {
+			return x.PartyUpdate
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetPartyInvitation() *PartyInvitation {
+	if x != nil {
+		if x, ok := x.Message.(*ServerMessage_PartyInvitation); ok {
+			return x.PartyInvitation
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Message interface {
 	isServerMessage_Message()
 }
@@ -848,6 +929,14 @@ type ServerMessage_PlayerConditions struct {
 	PlayerConditions *PlayerConditions `protobuf:"bytes,30,opt,name=player_conditions,json=playerConditions,proto3,oneof"`
 }
 
+type ServerMessage_PartyUpdate struct {
+	PartyUpdate *PartyUpdate `protobuf:"bytes,31,opt,name=party_update,json=partyUpdate,proto3,oneof"`
+}
+
+type ServerMessage_PartyInvitation struct {
+	PartyInvitation *PartyInvitation `protobuf:"bytes,32,opt,name=party_invitation,json=partyInvitation,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Message() {}
 
 func (*ServerMessage_FullMapView) isServerMessage_Message() {}
@@ -907,6 +996,10 @@ func (*ServerMessage_Disconnect) isServerMessage_Message() {}
 func (*ServerMessage_SpellCooldown) isServerMessage_Message() {}
 
 func (*ServerMessage_PlayerConditions) isServerMessage_Message() {}
+
+func (*ServerMessage_PartyUpdate) isServerMessage_Message() {}
+
+func (*ServerMessage_PartyInvitation) isServerMessage_Message() {}
 
 // Welcome answers a valid Hello. It is followed in the same batch by FullMapView,
 // PlayerStats, Inventory and PlayerSkills.
@@ -3405,6 +3498,249 @@ func (x *Disconnect) GetMessage() *LocalizedText {
 	return nil
 }
 
+// PartyUpdate is the full state of the player's party: sent when it changes (members,
+// leader, shared experience) and at most once per balance.yaml party.update_ms while
+// what a member sees of the others changes. An update with no members means the player
+// is not in a party any more.
+type PartyUpdate struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	LeaderId uint32                 `protobuf:"varint,1,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
+	Shared   SharedExperience       `protobuf:"varint,2,opt,name=shared,proto3,enum=game.v1.SharedExperience" json:"shared,omitempty"`
+	// Every member, the player included, in the order they joined.
+	Members       []*PartyMember `protobuf:"bytes,3,rep,name=members,proto3" json:"members,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PartyUpdate) Reset() {
+	*x = PartyUpdate{}
+	mi := &file_game_v1_server_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PartyUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PartyUpdate) ProtoMessage() {}
+
+func (x *PartyUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PartyUpdate.ProtoReflect.Descriptor instead.
+func (*PartyUpdate) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *PartyUpdate) GetLeaderId() uint32 {
+	if x != nil {
+		return x.LeaderId
+	}
+	return 0
+}
+
+func (x *PartyUpdate) GetShared() SharedExperience {
+	if x != nil {
+		return x.Shared
+	}
+	return SharedExperience_SHARED_EXPERIENCE_UNSPECIFIED
+}
+
+func (x *PartyUpdate) GetMembers() []*PartyMember {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
+// PartyMember is what one member sees of another. Information audit (T3.3,
+// docs/01-architecture.md "Trampas y anti-bot"): health and mana travel only while the
+// viewer sees that member (in_view); a member out of view carries only its island (no
+// position, floor, health or mana).
+type PartyMember struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	CreatureId uint32                 `protobuf:"varint,1,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
+	Name       string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Vocation id of data/vocations.yaml.
+	Vocation string `protobuf:"bytes,3,opt,name=vocation,proto3" json:"vocation,omitempty"`
+	Level    uint32 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`
+	InView   bool   `protobuf:"varint,5,opt,name=in_view,json=inView,proto3" json:"in_view,omitempty"`
+	// 0 when not in_view.
+	HealthPercent uint32 `protobuf:"varint,6,opt,name=health_percent,json=healthPercent,proto3" json:"health_percent,omitempty"`
+	ManaPercent   uint32 `protobuf:"varint,7,opt,name=mana_percent,json=manaPercent,proto3" json:"mana_percent,omitempty"`
+	// Island id of world/world.yaml where the member is (empty in the open sea).
+	Island string `protobuf:"bytes,8,opt,name=island,proto3" json:"island,omitempty"`
+	// The member qualifies for shared experience right now (see SharedExperience).
+	Sharing       bool `protobuf:"varint,9,opt,name=sharing,proto3" json:"sharing,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PartyMember) Reset() {
+	*x = PartyMember{}
+	mi := &file_game_v1_server_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PartyMember) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PartyMember) ProtoMessage() {}
+
+func (x *PartyMember) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PartyMember.ProtoReflect.Descriptor instead.
+func (*PartyMember) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *PartyMember) GetCreatureId() uint32 {
+	if x != nil {
+		return x.CreatureId
+	}
+	return 0
+}
+
+func (x *PartyMember) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PartyMember) GetVocation() string {
+	if x != nil {
+		return x.Vocation
+	}
+	return ""
+}
+
+func (x *PartyMember) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *PartyMember) GetInView() bool {
+	if x != nil {
+		return x.InView
+	}
+	return false
+}
+
+func (x *PartyMember) GetHealthPercent() uint32 {
+	if x != nil {
+		return x.HealthPercent
+	}
+	return 0
+}
+
+func (x *PartyMember) GetManaPercent() uint32 {
+	if x != nil {
+		return x.ManaPercent
+	}
+	return 0
+}
+
+func (x *PartyMember) GetIsland() string {
+	if x != nil {
+		return x.Island
+	}
+	return ""
+}
+
+func (x *PartyMember) GetSharing() bool {
+	if x != nil {
+		return x.Sharing
+	}
+	return false
+}
+
+// PartyInvitation tells a player that inviter_id invited it to a party. It can answer
+// with PartyCommand ACCEPT or DECLINE until expires_ms have passed.
+type PartyInvitation struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InviterId     uint32                 `protobuf:"varint,1,opt,name=inviter_id,json=inviterId,proto3" json:"inviter_id,omitempty"`
+	InviterName   string                 `protobuf:"bytes,2,opt,name=inviter_name,json=inviterName,proto3" json:"inviter_name,omitempty"`
+	ExpiresMs     uint32                 `protobuf:"varint,3,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PartyInvitation) Reset() {
+	*x = PartyInvitation{}
+	mi := &file_game_v1_server_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PartyInvitation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PartyInvitation) ProtoMessage() {}
+
+func (x *PartyInvitation) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PartyInvitation.ProtoReflect.Descriptor instead.
+func (*PartyInvitation) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *PartyInvitation) GetInviterId() uint32 {
+	if x != nil {
+		return x.InviterId
+	}
+	return 0
+}
+
+func (x *PartyInvitation) GetInviterName() string {
+	if x != nil {
+		return x.InviterName
+	}
+	return ""
+}
+
+func (x *PartyInvitation) GetExpiresMs() uint32 {
+	if x != nil {
+		return x.ExpiresMs
+	}
+	return 0
+}
+
 var File_game_v1_server_proto protoreflect.FileDescriptor
 
 const file_game_v1_server_proto_rawDesc = "" +
@@ -3412,7 +3748,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x14game/v1/server.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"Q\n" +
 	"\vServerBatch\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12.\n" +
-	"\x06events\x18\x02 \x03(\v2\x16.game.v1.ServerMessageR\x06events\"\x99\x0e\n" +
+	"\x06events\x18\x02 \x03(\v2\x16.game.v1.ServerMessageR\x06events\"\x9b\x0f\n" +
 	"\rServerMessage\x12,\n" +
 	"\awelcome\x18\x01 \x01(\v2\x10.game.v1.WelcomeH\x00R\awelcome\x12:\n" +
 	"\rfull_map_view\x18\x02 \x01(\v2\x14.game.v1.FullMapViewH\x00R\vfullMapView\x120\n" +
@@ -3450,7 +3786,9 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"disconnect\x18\x1c \x01(\v2\x13.game.v1.DisconnectH\x00R\n" +
 	"disconnect\x12?\n" +
 	"\x0espell_cooldown\x18\x1d \x01(\v2\x16.game.v1.SpellCooldownH\x00R\rspellCooldown\x12H\n" +
-	"\x11player_conditions\x18\x1e \x01(\v2\x19.game.v1.PlayerConditionsH\x00R\x10playerConditionsB\t\n" +
+	"\x11player_conditions\x18\x1e \x01(\v2\x19.game.v1.PlayerConditionsH\x00R\x10playerConditions\x129\n" +
+	"\fparty_update\x18\x1f \x01(\v2\x14.game.v1.PartyUpdateH\x00R\vpartyUpdate\x12E\n" +
+	"\x10party_invitation\x18  \x01(\v2\x18.game.v1.PartyInvitationH\x00R\x0fpartyInvitationB\t\n" +
 	"\amessage\"d\n" +
 	"\aWelcome\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
@@ -3638,7 +3976,28 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\n" +
 	"Disconnect\x121\n" +
 	"\x06reason\x18\x01 \x01(\x0e2\x19.game.v1.DisconnectReasonR\x06reason\x120\n" +
-	"\amessage\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\amessage*y\n" +
+	"\amessage\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\amessage\"\x8d\x01\n" +
+	"\vPartyUpdate\x12\x1b\n" +
+	"\tleader_id\x18\x01 \x01(\rR\bleaderId\x121\n" +
+	"\x06shared\x18\x02 \x01(\x0e2\x19.game.v1.SharedExperienceR\x06shared\x12.\n" +
+	"\amembers\x18\x03 \x03(\v2\x14.game.v1.PartyMemberR\amembers\"\x89\x02\n" +
+	"\vPartyMember\x12\x1f\n" +
+	"\vcreature_id\x18\x01 \x01(\rR\n" +
+	"creatureId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
+	"\bvocation\x18\x03 \x01(\tR\bvocation\x12\x14\n" +
+	"\x05level\x18\x04 \x01(\rR\x05level\x12\x17\n" +
+	"\ain_view\x18\x05 \x01(\bR\x06inView\x12%\n" +
+	"\x0ehealth_percent\x18\x06 \x01(\rR\rhealthPercent\x12!\n" +
+	"\fmana_percent\x18\a \x01(\rR\vmanaPercent\x12\x16\n" +
+	"\x06island\x18\b \x01(\tR\x06island\x12\x18\n" +
+	"\asharing\x18\t \x01(\bR\asharing\"r\n" +
+	"\x0fPartyInvitation\x12\x1d\n" +
+	"\n" +
+	"inviter_id\x18\x01 \x01(\rR\tinviterId\x12!\n" +
+	"\finviter_name\x18\x02 \x01(\tR\vinviterName\x12\x1d\n" +
+	"\n" +
+	"expires_ms\x18\x03 \x01(\rR\texpiresMs*y\n" +
 	"\fCreatureKind\x12\x1d\n" +
 	"\x19CREATURE_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14CREATURE_KIND_PLAYER\x10\x01\x12\x19\n" +
@@ -3649,7 +4008,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x19FLOATING_TEXT_KIND_DAMAGE\x10\x01\x12\x1b\n" +
 	"\x17FLOATING_TEXT_KIND_HEAL\x10\x02\x12\x1b\n" +
 	"\x17FLOATING_TEXT_KIND_MANA\x10\x03\x12!\n" +
-	"\x1dFLOATING_TEXT_KIND_EXPERIENCE\x10\x04*\xd6\x01\n" +
+	"\x1dFLOATING_TEXT_KIND_EXPERIENCE\x10\x04*\xee\x01\n" +
 	"\vMessageKind\x12\x1c\n" +
 	"\x18MESSAGE_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10MESSAGE_KIND_SAY\x10\x01\x12\x15\n" +
@@ -3658,7 +4017,8 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x13MESSAGE_KIND_GLOBAL\x10\x04\x12\x14\n" +
 	"\x10MESSAGE_KIND_NPC\x10\x05\x12\x17\n" +
 	"\x13MESSAGE_KIND_SYSTEM\x10\x06\x12\x1a\n" +
-	"\x16MESSAGE_KIND_BROADCAST\x10\a*\x97\x01\n" +
+	"\x16MESSAGE_KIND_BROADCAST\x10\a\x12\x16\n" +
+	"\x12MESSAGE_KIND_PARTY\x10\b*\x97\x01\n" +
 	"\n" +
 	"TradeState\x12\x1b\n" +
 	"\x17TRADE_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
@@ -3676,7 +4036,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x1dDISCONNECT_REASON_SLOW_CLIENT\x10\x06\x12%\n" +
 	"!DISCONNECT_REASON_SERVER_SHUTDOWN\x10\a\x12\x1c\n" +
 	"\x18DISCONNECT_REASON_KICKED\x10\b\x12\x1c\n" +
-	"\x18DISCONNECT_REASON_BANNED\x10\tBFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
+	"\x18DISCONNECT_REASON_BANNED\x10\t*\x8e\x01\n" +
+	"\x10SharedExperience\x12!\n" +
+	"\x1dSHARED_EXPERIENCE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15SHARED_EXPERIENCE_OFF\x10\x01\x12\x1c\n" +
+	"\x18SHARED_EXPERIENCE_ACTIVE\x10\x02\x12\x1e\n" +
+	"\x1aSHARED_EXPERIENCE_INACTIVE\x10\x03BFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_server_proto_rawDescOnce sync.Once
@@ -3690,142 +4055,150 @@ func file_game_v1_server_proto_rawDescGZIP() []byte {
 	return file_game_v1_server_proto_rawDescData
 }
 
-var file_game_v1_server_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
+var file_game_v1_server_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_game_v1_server_proto_goTypes = []any{
 	(CreatureKind)(0),         // 0: game.v1.CreatureKind
 	(FloatingTextKind)(0),     // 1: game.v1.FloatingTextKind
 	(MessageKind)(0),          // 2: game.v1.MessageKind
 	(TradeState)(0),           // 3: game.v1.TradeState
 	(DisconnectReason)(0),     // 4: game.v1.DisconnectReason
-	(*ServerBatch)(nil),       // 5: game.v1.ServerBatch
-	(*ServerMessage)(nil),     // 6: game.v1.ServerMessage
-	(*Welcome)(nil),           // 7: game.v1.Welcome
-	(*Tile)(nil),              // 8: game.v1.Tile
-	(*MapFloor)(nil),          // 9: game.v1.MapFloor
-	(*MapArea)(nil),           // 10: game.v1.MapArea
-	(*FullMapView)(nil),       // 11: game.v1.FullMapView
-	(*MapSlice)(nil),          // 12: game.v1.MapSlice
-	(*TileUpdate)(nil),        // 13: game.v1.TileUpdate
-	(*Outfit)(nil),            // 14: game.v1.Outfit
-	(*Creature)(nil),          // 15: game.v1.Creature
-	(*CreatureAppear)(nil),    // 16: game.v1.CreatureAppear
-	(*CreatureDisappear)(nil), // 17: game.v1.CreatureDisappear
-	(*CreatureMove)(nil),      // 18: game.v1.CreatureMove
-	(*CreatureTurn)(nil),      // 19: game.v1.CreatureTurn
-	(*CreatureHealth)(nil),    // 20: game.v1.CreatureHealth
-	(*CreatureOutfit)(nil),    // 21: game.v1.CreatureOutfit
-	(*CreatureSpeed)(nil),     // 22: game.v1.CreatureSpeed
-	(*Effect)(nil),            // 23: game.v1.Effect
-	(*Projectile)(nil),        // 24: game.v1.Projectile
-	(*PlayerConditions)(nil),  // 25: game.v1.PlayerConditions
-	(*ActiveCondition)(nil),   // 26: game.v1.ActiveCondition
-	(*SpellCooldown)(nil),     // 27: game.v1.SpellCooldown
-	(*FloatingText)(nil),      // 28: game.v1.FloatingText
-	(*PlayerStats)(nil),       // 29: game.v1.PlayerStats
-	(*SkillProgress)(nil),     // 30: game.v1.SkillProgress
-	(*PlayerSkills)(nil),      // 31: game.v1.PlayerSkills
-	(*EquippedItem)(nil),      // 32: game.v1.EquippedItem
-	(*Inventory)(nil),         // 33: game.v1.Inventory
-	(*ContainerOpen)(nil),     // 34: game.v1.ContainerOpen
-	(*ContainerUpdate)(nil),   // 35: game.v1.ContainerUpdate
-	(*ContainerClose)(nil),    // 36: game.v1.ContainerClose
-	(*Message)(nil),           // 37: game.v1.Message
-	(*DialogOption)(nil),      // 38: game.v1.DialogOption
-	(*DialogOpen)(nil),        // 39: game.v1.DialogOpen
-	(*DialogClose)(nil),       // 40: game.v1.DialogClose
-	(*ShopOffer)(nil),         // 41: game.v1.ShopOffer
-	(*ShopOpen)(nil),          // 42: game.v1.ShopOpen
-	(*TradeUpdate)(nil),       // 43: game.v1.TradeUpdate
-	(*WalkRejected)(nil),      // 44: game.v1.WalkRejected
-	(*Pong)(nil),              // 45: game.v1.Pong
-	(*Disconnect)(nil),        // 46: game.v1.Disconnect
-	(*ItemStack)(nil),         // 47: game.v1.ItemStack
-	(*Position)(nil),          // 48: game.v1.Position
-	(Direction)(0),            // 49: game.v1.Direction
-	(EquipmentSlot)(0),        // 50: game.v1.EquipmentSlot
-	(*LocalizedText)(nil),     // 51: game.v1.LocalizedText
+	(SharedExperience)(0),     // 5: game.v1.SharedExperience
+	(*ServerBatch)(nil),       // 6: game.v1.ServerBatch
+	(*ServerMessage)(nil),     // 7: game.v1.ServerMessage
+	(*Welcome)(nil),           // 8: game.v1.Welcome
+	(*Tile)(nil),              // 9: game.v1.Tile
+	(*MapFloor)(nil),          // 10: game.v1.MapFloor
+	(*MapArea)(nil),           // 11: game.v1.MapArea
+	(*FullMapView)(nil),       // 12: game.v1.FullMapView
+	(*MapSlice)(nil),          // 13: game.v1.MapSlice
+	(*TileUpdate)(nil),        // 14: game.v1.TileUpdate
+	(*Outfit)(nil),            // 15: game.v1.Outfit
+	(*Creature)(nil),          // 16: game.v1.Creature
+	(*CreatureAppear)(nil),    // 17: game.v1.CreatureAppear
+	(*CreatureDisappear)(nil), // 18: game.v1.CreatureDisappear
+	(*CreatureMove)(nil),      // 19: game.v1.CreatureMove
+	(*CreatureTurn)(nil),      // 20: game.v1.CreatureTurn
+	(*CreatureHealth)(nil),    // 21: game.v1.CreatureHealth
+	(*CreatureOutfit)(nil),    // 22: game.v1.CreatureOutfit
+	(*CreatureSpeed)(nil),     // 23: game.v1.CreatureSpeed
+	(*Effect)(nil),            // 24: game.v1.Effect
+	(*Projectile)(nil),        // 25: game.v1.Projectile
+	(*PlayerConditions)(nil),  // 26: game.v1.PlayerConditions
+	(*ActiveCondition)(nil),   // 27: game.v1.ActiveCondition
+	(*SpellCooldown)(nil),     // 28: game.v1.SpellCooldown
+	(*FloatingText)(nil),      // 29: game.v1.FloatingText
+	(*PlayerStats)(nil),       // 30: game.v1.PlayerStats
+	(*SkillProgress)(nil),     // 31: game.v1.SkillProgress
+	(*PlayerSkills)(nil),      // 32: game.v1.PlayerSkills
+	(*EquippedItem)(nil),      // 33: game.v1.EquippedItem
+	(*Inventory)(nil),         // 34: game.v1.Inventory
+	(*ContainerOpen)(nil),     // 35: game.v1.ContainerOpen
+	(*ContainerUpdate)(nil),   // 36: game.v1.ContainerUpdate
+	(*ContainerClose)(nil),    // 37: game.v1.ContainerClose
+	(*Message)(nil),           // 38: game.v1.Message
+	(*DialogOption)(nil),      // 39: game.v1.DialogOption
+	(*DialogOpen)(nil),        // 40: game.v1.DialogOpen
+	(*DialogClose)(nil),       // 41: game.v1.DialogClose
+	(*ShopOffer)(nil),         // 42: game.v1.ShopOffer
+	(*ShopOpen)(nil),          // 43: game.v1.ShopOpen
+	(*TradeUpdate)(nil),       // 44: game.v1.TradeUpdate
+	(*WalkRejected)(nil),      // 45: game.v1.WalkRejected
+	(*Pong)(nil),              // 46: game.v1.Pong
+	(*Disconnect)(nil),        // 47: game.v1.Disconnect
+	(*PartyUpdate)(nil),       // 48: game.v1.PartyUpdate
+	(*PartyMember)(nil),       // 49: game.v1.PartyMember
+	(*PartyInvitation)(nil),   // 50: game.v1.PartyInvitation
+	(*ItemStack)(nil),         // 51: game.v1.ItemStack
+	(*Position)(nil),          // 52: game.v1.Position
+	(Direction)(0),            // 53: game.v1.Direction
+	(EquipmentSlot)(0),        // 54: game.v1.EquipmentSlot
+	(*LocalizedText)(nil),     // 55: game.v1.LocalizedText
 }
 var file_game_v1_server_proto_depIdxs = []int32{
-	6,  // 0: game.v1.ServerBatch.events:type_name -> game.v1.ServerMessage
-	7,  // 1: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
-	11, // 2: game.v1.ServerMessage.full_map_view:type_name -> game.v1.FullMapView
-	12, // 3: game.v1.ServerMessage.map_slice:type_name -> game.v1.MapSlice
-	13, // 4: game.v1.ServerMessage.tile_update:type_name -> game.v1.TileUpdate
-	16, // 5: game.v1.ServerMessage.creature_appear:type_name -> game.v1.CreatureAppear
-	17, // 6: game.v1.ServerMessage.creature_disappear:type_name -> game.v1.CreatureDisappear
-	18, // 7: game.v1.ServerMessage.creature_move:type_name -> game.v1.CreatureMove
-	19, // 8: game.v1.ServerMessage.creature_turn:type_name -> game.v1.CreatureTurn
-	20, // 9: game.v1.ServerMessage.creature_health:type_name -> game.v1.CreatureHealth
-	21, // 10: game.v1.ServerMessage.creature_outfit:type_name -> game.v1.CreatureOutfit
-	22, // 11: game.v1.ServerMessage.creature_speed:type_name -> game.v1.CreatureSpeed
-	23, // 12: game.v1.ServerMessage.effect:type_name -> game.v1.Effect
-	24, // 13: game.v1.ServerMessage.projectile:type_name -> game.v1.Projectile
-	28, // 14: game.v1.ServerMessage.floating_text:type_name -> game.v1.FloatingText
-	29, // 15: game.v1.ServerMessage.player_stats:type_name -> game.v1.PlayerStats
-	31, // 16: game.v1.ServerMessage.player_skills:type_name -> game.v1.PlayerSkills
-	33, // 17: game.v1.ServerMessage.inventory:type_name -> game.v1.Inventory
-	34, // 18: game.v1.ServerMessage.container_open:type_name -> game.v1.ContainerOpen
-	35, // 19: game.v1.ServerMessage.container_update:type_name -> game.v1.ContainerUpdate
-	36, // 20: game.v1.ServerMessage.container_close:type_name -> game.v1.ContainerClose
-	37, // 21: game.v1.ServerMessage.chat_message:type_name -> game.v1.Message
-	39, // 22: game.v1.ServerMessage.dialog_open:type_name -> game.v1.DialogOpen
-	40, // 23: game.v1.ServerMessage.dialog_close:type_name -> game.v1.DialogClose
-	42, // 24: game.v1.ServerMessage.shop_open:type_name -> game.v1.ShopOpen
-	43, // 25: game.v1.ServerMessage.trade_update:type_name -> game.v1.TradeUpdate
-	44, // 26: game.v1.ServerMessage.walk_rejected:type_name -> game.v1.WalkRejected
-	45, // 27: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
-	46, // 28: game.v1.ServerMessage.disconnect:type_name -> game.v1.Disconnect
-	27, // 29: game.v1.ServerMessage.spell_cooldown:type_name -> game.v1.SpellCooldown
-	25, // 30: game.v1.ServerMessage.player_conditions:type_name -> game.v1.PlayerConditions
-	47, // 31: game.v1.Tile.items:type_name -> game.v1.ItemStack
-	8,  // 32: game.v1.MapArea.palette:type_name -> game.v1.Tile
-	9,  // 33: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
-	15, // 34: game.v1.MapArea.creatures:type_name -> game.v1.Creature
-	10, // 35: game.v1.FullMapView.area:type_name -> game.v1.MapArea
-	10, // 36: game.v1.MapSlice.area:type_name -> game.v1.MapArea
-	48, // 37: game.v1.TileUpdate.pos:type_name -> game.v1.Position
-	8,  // 38: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
-	0,  // 39: game.v1.Creature.kind:type_name -> game.v1.CreatureKind
-	48, // 40: game.v1.Creature.pos:type_name -> game.v1.Position
-	49, // 41: game.v1.Creature.dir:type_name -> game.v1.Direction
-	14, // 42: game.v1.Creature.outfit:type_name -> game.v1.Outfit
-	15, // 43: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
-	48, // 44: game.v1.CreatureMove.from:type_name -> game.v1.Position
-	48, // 45: game.v1.CreatureMove.to:type_name -> game.v1.Position
-	49, // 46: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
-	14, // 47: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
-	48, // 48: game.v1.Effect.pos:type_name -> game.v1.Position
-	48, // 49: game.v1.Projectile.from:type_name -> game.v1.Position
-	48, // 50: game.v1.Projectile.to:type_name -> game.v1.Position
-	26, // 51: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
-	48, // 52: game.v1.FloatingText.pos:type_name -> game.v1.Position
-	1,  // 53: game.v1.FloatingText.kind:type_name -> game.v1.FloatingTextKind
-	30, // 54: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
-	50, // 55: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
-	47, // 56: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
-	32, // 57: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
-	47, // 58: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
-	47, // 59: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
-	2,  // 60: game.v1.Message.kind:type_name -> game.v1.MessageKind
-	48, // 61: game.v1.Message.pos:type_name -> game.v1.Position
-	51, // 62: game.v1.Message.localized:type_name -> game.v1.LocalizedText
-	51, // 63: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
-	51, // 64: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
-	38, // 65: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
-	41, // 66: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
-	3,  // 67: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
-	47, // 68: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
-	47, // 69: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
-	48, // 70: game.v1.WalkRejected.pos:type_name -> game.v1.Position
-	49, // 71: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
-	4,  // 72: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
-	51, // 73: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
-	74, // [74:74] is the sub-list for method output_type
-	74, // [74:74] is the sub-list for method input_type
-	74, // [74:74] is the sub-list for extension type_name
-	74, // [74:74] is the sub-list for extension extendee
-	0,  // [0:74] is the sub-list for field type_name
+	7,  // 0: game.v1.ServerBatch.events:type_name -> game.v1.ServerMessage
+	8,  // 1: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
+	12, // 2: game.v1.ServerMessage.full_map_view:type_name -> game.v1.FullMapView
+	13, // 3: game.v1.ServerMessage.map_slice:type_name -> game.v1.MapSlice
+	14, // 4: game.v1.ServerMessage.tile_update:type_name -> game.v1.TileUpdate
+	17, // 5: game.v1.ServerMessage.creature_appear:type_name -> game.v1.CreatureAppear
+	18, // 6: game.v1.ServerMessage.creature_disappear:type_name -> game.v1.CreatureDisappear
+	19, // 7: game.v1.ServerMessage.creature_move:type_name -> game.v1.CreatureMove
+	20, // 8: game.v1.ServerMessage.creature_turn:type_name -> game.v1.CreatureTurn
+	21, // 9: game.v1.ServerMessage.creature_health:type_name -> game.v1.CreatureHealth
+	22, // 10: game.v1.ServerMessage.creature_outfit:type_name -> game.v1.CreatureOutfit
+	23, // 11: game.v1.ServerMessage.creature_speed:type_name -> game.v1.CreatureSpeed
+	24, // 12: game.v1.ServerMessage.effect:type_name -> game.v1.Effect
+	25, // 13: game.v1.ServerMessage.projectile:type_name -> game.v1.Projectile
+	29, // 14: game.v1.ServerMessage.floating_text:type_name -> game.v1.FloatingText
+	30, // 15: game.v1.ServerMessage.player_stats:type_name -> game.v1.PlayerStats
+	32, // 16: game.v1.ServerMessage.player_skills:type_name -> game.v1.PlayerSkills
+	34, // 17: game.v1.ServerMessage.inventory:type_name -> game.v1.Inventory
+	35, // 18: game.v1.ServerMessage.container_open:type_name -> game.v1.ContainerOpen
+	36, // 19: game.v1.ServerMessage.container_update:type_name -> game.v1.ContainerUpdate
+	37, // 20: game.v1.ServerMessage.container_close:type_name -> game.v1.ContainerClose
+	38, // 21: game.v1.ServerMessage.chat_message:type_name -> game.v1.Message
+	40, // 22: game.v1.ServerMessage.dialog_open:type_name -> game.v1.DialogOpen
+	41, // 23: game.v1.ServerMessage.dialog_close:type_name -> game.v1.DialogClose
+	43, // 24: game.v1.ServerMessage.shop_open:type_name -> game.v1.ShopOpen
+	44, // 25: game.v1.ServerMessage.trade_update:type_name -> game.v1.TradeUpdate
+	45, // 26: game.v1.ServerMessage.walk_rejected:type_name -> game.v1.WalkRejected
+	46, // 27: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
+	47, // 28: game.v1.ServerMessage.disconnect:type_name -> game.v1.Disconnect
+	28, // 29: game.v1.ServerMessage.spell_cooldown:type_name -> game.v1.SpellCooldown
+	26, // 30: game.v1.ServerMessage.player_conditions:type_name -> game.v1.PlayerConditions
+	48, // 31: game.v1.ServerMessage.party_update:type_name -> game.v1.PartyUpdate
+	50, // 32: game.v1.ServerMessage.party_invitation:type_name -> game.v1.PartyInvitation
+	51, // 33: game.v1.Tile.items:type_name -> game.v1.ItemStack
+	9,  // 34: game.v1.MapArea.palette:type_name -> game.v1.Tile
+	10, // 35: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
+	16, // 36: game.v1.MapArea.creatures:type_name -> game.v1.Creature
+	11, // 37: game.v1.FullMapView.area:type_name -> game.v1.MapArea
+	11, // 38: game.v1.MapSlice.area:type_name -> game.v1.MapArea
+	52, // 39: game.v1.TileUpdate.pos:type_name -> game.v1.Position
+	9,  // 40: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
+	0,  // 41: game.v1.Creature.kind:type_name -> game.v1.CreatureKind
+	52, // 42: game.v1.Creature.pos:type_name -> game.v1.Position
+	53, // 43: game.v1.Creature.dir:type_name -> game.v1.Direction
+	15, // 44: game.v1.Creature.outfit:type_name -> game.v1.Outfit
+	16, // 45: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
+	52, // 46: game.v1.CreatureMove.from:type_name -> game.v1.Position
+	52, // 47: game.v1.CreatureMove.to:type_name -> game.v1.Position
+	53, // 48: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
+	15, // 49: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
+	52, // 50: game.v1.Effect.pos:type_name -> game.v1.Position
+	52, // 51: game.v1.Projectile.from:type_name -> game.v1.Position
+	52, // 52: game.v1.Projectile.to:type_name -> game.v1.Position
+	27, // 53: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
+	52, // 54: game.v1.FloatingText.pos:type_name -> game.v1.Position
+	1,  // 55: game.v1.FloatingText.kind:type_name -> game.v1.FloatingTextKind
+	31, // 56: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
+	54, // 57: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
+	51, // 58: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
+	33, // 59: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
+	51, // 60: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
+	51, // 61: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
+	2,  // 62: game.v1.Message.kind:type_name -> game.v1.MessageKind
+	52, // 63: game.v1.Message.pos:type_name -> game.v1.Position
+	55, // 64: game.v1.Message.localized:type_name -> game.v1.LocalizedText
+	55, // 65: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
+	55, // 66: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
+	39, // 67: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
+	42, // 68: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
+	3,  // 69: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
+	51, // 70: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
+	51, // 71: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
+	52, // 72: game.v1.WalkRejected.pos:type_name -> game.v1.Position
+	53, // 73: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
+	4,  // 74: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
+	55, // 75: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
+	5,  // 76: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
+	49, // 77: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
+	78, // [78:78] is the sub-list for method output_type
+	78, // [78:78] is the sub-list for method input_type
+	78, // [78:78] is the sub-list for extension type_name
+	78, // [78:78] is the sub-list for extension extendee
+	0,  // [0:78] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_server_proto_init() }
@@ -3865,6 +4238,8 @@ func file_game_v1_server_proto_init() {
 		(*ServerMessage_Disconnect)(nil),
 		(*ServerMessage_SpellCooldown)(nil),
 		(*ServerMessage_PlayerConditions)(nil),
+		(*ServerMessage_PartyUpdate)(nil),
+		(*ServerMessage_PartyInvitation)(nil),
 	}
 	file_game_v1_server_proto_msgTypes[32].OneofWrappers = []any{
 		(*Message_Text)(nil),
@@ -3875,8 +4250,8 @@ func file_game_v1_server_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_server_proto_rawDesc), len(file_game_v1_server_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   42,
+			NumEnums:      6,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

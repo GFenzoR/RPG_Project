@@ -15,6 +15,7 @@ import { InventoryPanel } from "./Inventory.tsx";
 import { Hotbar } from "./Hotbar.tsx";
 import { ChatPanel } from "./Chat.tsx";
 import { DialogWindow } from "./Dialog.tsx";
+import { PartyInvitations, PartyPanel } from "./Party.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -361,6 +362,9 @@ function GameScreen(props: {
     hotkeys: [],
     dialog: undefined,
     shop: undefined,
+    party: undefined,
+    invitations: [],
+    selfId: 0,
   });
   const [levelNotice, setLevelNotice] = useState<number | undefined>(undefined);
   // The death screen stays until the player closes it.
@@ -459,6 +463,7 @@ function GameScreen(props: {
           )}
           {entered && <Hotbar t={t} content={props.content} game={game.current} ui={ui} />}
           {entered && <DialogWindow t={t} content={props.content} game={game.current} ui={ui} />}
+          {entered && <PartyInvitations t={t} game={game.current} ui={ui} />}
         </div>
         <aside class="side">
           <section class="battle" data-testid="battle-list" aria-label={t("client.battle.title")}>
@@ -483,11 +488,24 @@ function GameScreen(props: {
                         <span style={{ width: `${c.health}%` }} />
                       </span>
                     </button>
+                    {c.kind === CreatureKind.PLAYER && canInvite(ui, c.id) && (
+                      <button
+                        type="button"
+                        class="invite"
+                        data-invite={c.id}
+                        title={t("client.battle.invite")}
+                        aria-label={t("client.battle.invite")}
+                        onClick={() => game.current?.partyInvite(c.id)}
+                      >
+                        +
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
           </section>
+          <PartyPanel t={t} game={game.current} ui={ui} />
           <section class="fight">
             <label>
               {t("client.fight.stance")}
@@ -529,6 +547,12 @@ function GameScreen(props: {
       </div>
     </div>
   );
+}
+
+/** A player can be invited unless it is in our party or we follow another leader. */
+function canInvite(ui: GameUi, id: number): boolean {
+  const p = ui.party;
+  return !p || (p.leaderId === ui.selfId && !p.members.some((m) => m.id === id));
 }
 
 /** localStorage, or undefined where the browser blocks it. */

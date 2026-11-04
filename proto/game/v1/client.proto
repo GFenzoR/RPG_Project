@@ -36,6 +36,7 @@ message ClientMessage {
     NpcTalk npc_talk = 22;
     ShopBuy shop_buy = 23;
     ShopSell shop_sell = 24;
+    PartyCommand party_command = 25;
   }
 }
 
@@ -131,6 +132,8 @@ enum ChatChannel {
   CHAT_CHANNEL_YELL = 2;
   CHAT_CHANNEL_WHISPER = 3;
   CHAT_CHANNEL_GLOBAL = 4;
+  // The members of the speaker's party, wherever they are (T3.3).
+  CHAT_CHANNEL_PARTY = 5;
 }
 
 // Say sends chat text (max 255 characters) to a channel.
@@ -198,4 +201,30 @@ message ShopSell {
   uint32 dialog_id = 1;
   uint32 item_id = 2;
   uint32 count = 3;
+}
+
+// PartyAction is what a PartyCommand asks for (T3.3).
+enum PartyAction {
+  PARTY_ACTION_UNSPECIFIED = 0;
+  // Invite creature_id (a player the client sees). Only a leader or a player without a
+  // party may invite; the invitation expires after balance.yaml party.invite_ms.
+  PARTY_ACTION_INVITE = 1;
+  // Accept or decline the invitation of creature_id (the inviter).
+  PARTY_ACTION_ACCEPT = 2;
+  PARTY_ACTION_DECLINE = 3;
+  // Leave the party (creature_id is ignored).
+  PARTY_ACTION_LEAVE = 4;
+  // Leader only: remove creature_id from the party, or make it the leader.
+  PARTY_ACTION_KICK = 5;
+  PARTY_ACTION_PASS_LEADER = 6;
+  // Leader only: turn shared experience on or off (creature_id is ignored).
+  PARTY_ACTION_SHARE_ON = 7;
+  PARTY_ACTION_SHARE_OFF = 8;
+}
+
+// PartyCommand is every party intent (T3.3). The server answers with PartyUpdate or a
+// system Message (party.*).
+message PartyCommand {
+  PartyAction action = 1;
+  uint32 creature_id = 2;
 }

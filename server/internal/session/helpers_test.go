@@ -60,6 +60,8 @@ func testBalance() content.Balance {
 	b.Chat.Ranges.Yell = content.ChatRange{X: 18, Y: 14}
 	b.Chat.Flood.Burst, b.Chat.Flood.RefillMs, b.Chat.Flood.MuteMs = 5, 2000, 10000
 	b.Chat.GlobalIntervalMs = 10000
+	b.Party = content.Party{MaxMembers: 3, InviteMs: 5000, UpdateMs: 1000, ShareDistance: 10, ContributionMs: 60000,
+		LevelRangePct: 70, LevelGapAlways: 3, BonusPctPerMember: 6, MaxBonusPct: 24}
 	return b
 }
 

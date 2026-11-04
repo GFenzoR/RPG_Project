@@ -394,6 +394,9 @@ func (w *World) healOther(ctx *game.TickContext, p *Player, h *content.SpellHeal
 		return false
 	}
 	w.projectile(p.pos, o.pos, ElementHoly)
+	if o.health < o.maxHealth && p.party != nil && o.party == p.party {
+		w.contribute(ctx, p) // T3.3: healing a wounded member counts for shared experience
+	}
 	w.heal(o, w.scaled(ctx, h.Scaling, p))
 	o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(o)}})
 	return true

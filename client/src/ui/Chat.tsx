@@ -1,5 +1,5 @@
 // Chat panel (T1.13): the last lines of every channel and the line to speak, with the
-// channel picker (say, yell, whisper, global). Lines are DOM text: Preact escapes them,
+// channel picker (say, yell, whisper, global, party). Lines are DOM text: Preact escapes them,
 // so nothing a player types can become markup.
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
@@ -14,6 +14,7 @@ const CHANNELS: { channel: ChatChannel; key: string }[] = [
   { channel: ChatChannel.YELL, key: "client.chat.channel.yell" },
   { channel: ChatChannel.WHISPER, key: "client.chat.channel.whisper" },
   { channel: ChatChannel.GLOBAL, key: "client.chat.channel.global" },
+  { channel: ChatChannel.PARTY, key: "client.chat.channel.party" },
 ];
 
 const KIND_CLASS: Partial<Record<MessageKind, string>> = {
@@ -23,6 +24,7 @@ const KIND_CLASS: Partial<Record<MessageKind, string>> = {
   [MessageKind.GLOBAL]: "global",
   [MessageKind.NPC]: "npc",
   [MessageKind.BROADCAST]: "broadcast",
+  [MessageKind.PARTY]: "party",
 };
 
 export function ChatPanel(props: {

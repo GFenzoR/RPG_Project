@@ -31,7 +31,8 @@ Todos los números de este documento son **valores iniciales** que viven en
   - Las bandas y los roles los fija `packages/content-schema/src/vocations-balance.test.ts`.
 
 ## Experiencia y nivel
-- Experiencia por matar monstruos (repartida en grupo según daño), por quests y por
+- Experiencia por matar monstruos (repartida según daño; un grupo puede compartirla, ver
+  "Grupos"), por quests y por
   algunos oficios (poca).
 - Curva cúbica propia, ajustable: `xp(nivel) = a·n³ + b·n² + c·n` con coeficientes en
   balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h.
@@ -376,7 +377,55 @@ Números en `data/balance.yaml` (`chat`), nunca en código.
 - Las palabras de un hechizo dichas en el canal decir lo lanzan (T1.9) y no se muestran
   como chat ni cuentan para el anti-flood (el hechizo ya tiene sus cooldowns).
 - Una línea que empieza con `/` nunca es chat: es un comando (ver "Moderación").
-- Fuera de este hito: canales de grupo y gremio, privados persistentes.
+- Canal de grupo (T3.3): ver "Grupos". Fuera de este hito: gremio y privados persistentes.
+
+## Grupos (T3.3)
+Números en `data/balance.yaml` (`party`), nunca en código. Código:
+`server/internal/session/party.go`.
+- **Formar:** el líder (o un jugador sin grupo, que pasa a ser líder) invita a un jugador
+  que **ve** (lista de batalla, botón "+", o `/invite Nombre`). Invitar a alguien fuera de
+  vista o invisible responde igual que un nombre que no existe: el grupo no sirve para
+  buscar a nadie. Cada invitación cuenta para el anti-flood del chat. El invitado acepta o
+  rechaza; la invitación vence a los `invite_ms` (45 s, por tick del loop). Hasta
+  `max_members` (6) miembros contando al líder.
+- **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y prende o
+  apaga la experiencia compartida. Un grupo que queda con un solo miembro se disuelve.
+- **Desconexión:** salir del mundo (logout, conexión caída, cliente lento, reloguear en
+  otro lado, expulsión de staff) es salir del grupo. Si era el líder, el liderazgo pasa al
+  miembro más antiguo. Sus invitaciones (enviadas y recibidas) se borran. Los grupos **no
+  se guardan**: tras un reinicio o un relogueo hay que volver a formarlo. Morir no saca a
+  nadie del grupo.
+- **Experiencia compartida** (apagada al formar el grupo). Al morir un monstruo, sus
+  shares de daño (incluido el de las condiciones de T3.2) se reparten como siempre,
+  salvo los de los miembros de un grupo con la experiencia compartida prendida que
+  **comparten** esa muerte. Comparte un miembro que cumple las tres condiciones:
+  1. **Cerca:** en el piso del monstruo y a `share_distance` (24) casillas o menos de donde
+     murió (Chebyshev). Vivo.
+  2. **Contribuyó** en los últimos `contribution_ms` (75 s): hizo daño a un monstruo,
+     curó a otro miembro herido, o un monstruo lo atacó (tanquear).
+  3. **Nivel:** al menos `level_range_pct` (70 %) del nivel más alto entre los que cumplen
+     1 y 2, o a lo sumo `level_gap_always` (3) niveles por debajo.
+
+  Si comparten dos o más, los shares de daño de los que comparten forman un pozo que crece
+  `bonus_pct_per_member` (6 %) por cada uno después del primero, hasta `max_bonus_pct`
+  (24 %), y se divide en partes iguales entre ellos (también a quien no le pegó, como un
+  sanador). Los miembros que no comparten cobran su propio share. Si comparte uno solo, no
+  hay pozo: cada uno cobra lo suyo. Quests: cuenta la muerte quien le hizo daño, como antes.
+- **Anti-carry.** Un personaje alto no puede subir a uno bajo: el bajo queda fuera por
+  nivel (condición 3), así que solo cobra el daño que él mismo hizo, y el alto, sin nadie
+  más que comparta, cobra lo suyo sin bonus. Estar al lado sin hacer nada tampoco alcanza
+  (condición 2), ni ayudar desde lejos (condición 1). El bonus solo existe entre dos o más
+  que cumplen las tres. `TestSharedExperienceAntiCarry` lo fija.
+- **Loot:** igual que sin grupo, es de quien hizo más daño.
+- **Indicador:** apagada, activa (al menos dos miembros cumplen 2 y 3 ahora mismo) o
+  inactiva. La distancia se evalúa en cada muerte, no en el indicador.
+- **Información (auditoría, `01-architecture.md` "Trampas y anti-bot"):** de cada miembro
+  viajan nombre, vocación, nivel e isla. Vida y maná (en %) solo mientras está en la vista
+  del que mira (lo que el AOI ya le manda; un invisible no está en la vista). Nunca viajan
+  la posición, el piso ni la vida de un miembro fuera de vista. `TestPartyInfoAudit` lo
+  fija.
+- **Chat de grupo:** canal `PARTY`, lo oyen todos los miembros estén donde estén, sin
+  posición; mismo largo y anti-flood que el resto del chat.
 
 ## Moderación (T2.6)
 Roles por cuenta: **jugador** (por defecto), **GM** y **admin**. Los asigna solo el
