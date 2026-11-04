@@ -23,7 +23,6 @@ npc.harbor_master.island: "Una isla chica con un puerto grande. Todo lo que viaj
 npc.harbor_master.opt_town: "¿Quién más vive en el pueblo?"
 npc.harbor_master.town: "Bastian forja y vende armas junto al muelle; Tilde tiene herramientas y provisiones; la hermana Liora cuida el templo del Farol. Doran vigila la mina vieja, y si buscas historias raras, el viejo Corvo bucea en el arrecife desde antes de que yo naciera."
 npc.harbor_master.travel: "Mi barco hace la ruta a la Isla del Bosque. Llevo a gente que ya demostró lo que vale aquí y que sabe defenderse: nivel 10 como mínimo. Son 80 monedas."
-npc.harbor_master.to_forest: "Llévame a la Isla del Bosque (80 monedas)."
 
 # Armorer: Bastian Roe.
 npc.puerto_armorer.name: "Bastian Roe, armero"

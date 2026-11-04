@@ -164,6 +164,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   servidor (`owned`, `tools`), porque el cliente no ve las mochilas cerradas. Se cierra con
   ×, Escape o al alejarse más de 1 casilla; "Hacer" manda `Craft`.
 
+## Notas de T3.5
+- `WorldState.voyage` (del mensaje `travel.sailed`, parámetro `island`) dispara el fundido
+  `.voyage` de `ui/App.tsx` (`VOYAGE_MS`, misma duración que la animación CSS) con
+  `client.voyage.sailed`. Un `content_id` llamado `island` se traduce como
+  `island.<id>.name`. Las opciones de ruta llegan como cualquier opción de diálogo.
+- El E2E corre el servidor con `-boat-routes e2e/fixtures/boat_routes.yaml` (Puerto →
+  testisle, solo para tests).
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

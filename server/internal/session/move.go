@@ -66,7 +66,7 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 	case *pb.ClientMessage_NpcTalk:
 		w.npcTalk(p, m.NpcTalk.GetCreatureId())
 	case *pb.ClientMessage_DialogChoose:
-		w.dialogChoose(p, m.DialogChoose.GetDialogId(), m.DialogChoose.GetOptionId())
+		w.dialogChoose(ctx, p, m.DialogChoose.GetDialogId(), m.DialogChoose.GetOptionId())
 	case *pb.ClientMessage_ShopBuy:
 		w.shopBuy(p, m.ShopBuy.GetDialogId(), m.ShopBuy.GetItemId(), m.ShopBuy.GetCount())
 	case *pb.ClientMessage_ShopSell:

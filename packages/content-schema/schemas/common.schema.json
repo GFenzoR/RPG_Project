@@ -170,15 +170,6 @@
             },
             "set_flag": { "$ref": "#/$defs/flag" },
             "open_shop": { "$ref": "#/$defs/shopRef" },
-            "travel": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["island", "price"],
-              "properties": {
-                "island": { "$ref": "#/$defs/islandId" },
-                "price": { "$ref": "#/$defs/nonNegativeInt" }
-              }
-            },
             "heal": { "const": true },
             "teleport": { "$ref": "#/$defs/position" },
             "bless": {

@@ -149,12 +149,8 @@ dialog:
         - { text: dialog.bye, action: close }
     travel:
       text: npc.harbor_master.travel
+      boat_routes: true             # data/boat_routes.yaml: routes with captain harbor_master
       options:
-        - text: npc.harbor_master.to_forest
-          if:
-            - { flag_equals: { key: forest_route_unlocked, value: 1 } }
-            - { level_at_least: 10 }
-          action: { travel: { island: bosque, price: 80 } }
         - text: npc.harbor_master.opt_ch1_after
           if: { quest_state: { quest: ch1_shipwreck, state: completed } }
           goto: ch1_after

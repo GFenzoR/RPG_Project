@@ -10,7 +10,7 @@
 ## Estructura en disco
 ```
 world/
-  world.yaml                     lista de islas y rutas de barco
+  world.yaml                     lista de islas (las rutas de barco están en data/boat_routes.yaml)
   islands/
     puerto/
       island.yaml                nombre (clave i18n), rectángulo, pisos usados, templo, nivel sugerido
@@ -172,14 +172,11 @@ islands:
   - id: puerto
     rect: { x: 3072, y: 6272, w: 512, h: 512 }
     level_hint: [1, 15]
-boat_routes:
-  - from_npc: puerto_captain
-    to:
-      island: bosque
-      pos: { x: 4120, y: 6050, z: 7 }
-    price: 80
-    requires: { level: 10 }
 ```
+Las rutas de barco no van aquí: desde T3.5 viven en `data/boat_routes.yaml` (las vende un
+NPC, con precio y requisitos, como el resto del contenido; formato en
+`06-content-data.md`). El campo `boat_routes` que tenía este archivo se quitó (nunca tuvo
+rutas). Lo que toca al mapa lo valida `mapcli validate` (ver "Validación").
 **Isla inicial:** un personaje sin ciudad de residencia (`characters.town` vacío, como uno
 recién creado) despierta en el templo de la **primera isla de `world.yaml`** (hoy `puerto`,
 la isla inicial de `docs/02`). El servidor acepta `-start-town <isla>` (o `RPG_START_TOWN`)
@@ -293,8 +290,12 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - **Balance de spawns**: advertencia si hay más de 0,25 monstruos por tile caminable en
   el cuadrado del radio. (Nivel de monstruos vs. `level_hint`: pendiente, los monstruos
   aún no tienen nivel en `data/`.)
-- Pendiente: alcanzabilidad entre islas por rutas de barco (falta decidir la isla de
-  inicio).
+- **Rutas de barco** (`data/boat_routes.yaml`, T3.5): el capitán está colocado en
+  algún `npcs.yaml` a ≤ 8 casillas (Chebyshev, mismo piso) del muelle `from`, y `from` y
+  `to` son casillas caminables de una isla. Los errores llevan la posición; con
+  `--island` se muestran los de rutas cuyo muelle o llegada cae en esa isla.
+- Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
+  llegue a todas).
 
 ## Islas actuales
 - `testisle` (64x64, pisos 7–8): isla de pruebas de herramientas, tests y E2E. Va primera en
@@ -312,7 +313,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377). Las
   estaciones son items comunes del mapa (`place`): lo que las hace estación es que una
   receta de `data/recipes.yaml` las nombre.
-  Pendiente: la ruta de barco del capitán de puerto a `bosque` (T3.6).
+  Muelle del capitán de puerto (`harbor_master`, 3201,6433): tablones 3200–3202,
+  6429–6434; las rutas salen de 3201,6434. Pendiente: la ruta a `bosque` (T3.6, comentada
+  en `data/boat_routes.yaml`).
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:

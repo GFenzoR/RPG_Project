@@ -40,7 +40,7 @@ function island(id: string, x: number): Island {
 
 function world(): World {
   return {
-    meta: { format: 1, islands: [], boat_routes: [] },
+    meta: { format: 1, islands: [] },
     islands: new Map([
       ["a", island("a", 0)],
       ["b", island("b", 64)],

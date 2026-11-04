@@ -15,7 +15,8 @@
     "chat",
     "death",
     "economy",
-    "party"
+    "party",
+    "travel"
   ],
   "properties": {
     "movement": {
@@ -423,6 +424,26 @@
       "type": "object",
       "propertyNames": { "$ref": "common.schema.json#/$defs/conditionId" },
       "additionalProperties": { "$ref": "#/$defs/condition" }
+    },
+    "travel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["combat_block_ms", "arrival_radius"],
+      "description": "Boat travel (T3.5).",
+      "properties": {
+        "combat_block_ms": {
+          "description": "A player cannot sail for this long after a monster attacked it, it took damage or it hit a monster.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600000
+        },
+        "arrival_radius": {
+          "description": "If the arrival tile is taken, the nearest free walkable tile at most this far (Chebyshev).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        }
+      }
     },
     "notes": {
       "$ref": "common.schema.json#/$defs/notes"

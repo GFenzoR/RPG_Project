@@ -18,7 +18,7 @@ import { loadContent } from "./content.ts";
 import { formatDiagnostic } from "./diagnostics.ts";
 import { writeIsland, writeWorldMeta } from "./io.ts";
 import { chunkKey, emptyChunk } from "./types.ts";
-import type { Island, WorldMeta } from "./types.ts";
+import type { Island, Position, WorldMeta } from "./types.ts";
 import { validateWorld } from "./validate.ts";
 
 function must<T>(v: T | undefined): T {
@@ -86,7 +86,6 @@ function worldOf(...islands: Island[]): WorldMeta {
       rect: i.meta.rect,
       level_hint: i.meta.level_hint,
     })),
-    boat_routes: [],
   };
 }
 
@@ -334,27 +333,79 @@ describe("review fixes", () => {
     ]);
   });
 
-  it("keeps world.yaml findings about the island when filtering by island", () => {
+  it("keeps world.yaml and boat route findings about the island when filtering by island", () => {
     const i = mini();
     const meta = worldOf(i);
     must(meta.islands[0]).level_hint = [9, 2];
-    meta.boat_routes.push({
-      from_npc: "harbor_master",
-      to: { island: "mini", pos: { x: 0, y: 0, z: 7 } },
-      price: 5,
-    });
-    meta.boat_routes.push({
-      from_npc: "harbor_master",
-      to: { island: "elsewhere", pos: { x: 0, y: 0, z: 7 } },
-      price: 5,
-    });
     const { root } = check(i, meta);
-    const m = validateWorld(root, { content, island: "mini" }).diagnostics.map(formatDiagnostic);
+    const withRoutes = {
+      ...content,
+      routes: [
+        {
+          index: 0,
+          id: "r",
+          captain: "harbor_master",
+          from: { x: 20, y: 21, z: 7 },
+          to: { x: 0, y: 0, z: 7 },
+        },
+        {
+          index: 1,
+          id: "s",
+          captain: "harbor_master",
+          from: { x: 20, y: 21, z: 7 },
+          to: { x: 900, y: 900, z: 7 },
+        },
+      ],
+    };
+    const m = validateWorld(root, { content: withRoutes, island: "mini" }).diagnostics.map(
+      formatDiagnostic,
+    );
     expect(m).toContainEqual(
       expect.stringContaining("islands[0].level_hint: level_hint is [min, max]"),
     );
-    expect(m).toContainEqual(expect.stringContaining("boat_routes[0].to.pos"));
-    expect(m.join("\n")).not.toContain('unknown island "elsewhere"');
+    expect(
+      m.some((l) => l.includes("[0].to:") && l.includes("arrival is not a walkable tile")),
+    ).toBe(true);
+    expect(m.join("\n")).not.toContain("outside every island");
+  });
+
+  it("checks boat routes against the map", () => {
+    const i = mini();
+    const { root } = check(i);
+    const route = (index: number, captain: string, from: Position, to: Position) => ({
+      index,
+      id: `r${index}`,
+      captain,
+      from,
+      to,
+    });
+    const withRoutes = {
+      ...content,
+      routes: [
+        route(0, "harbor_master", { x: 20, y: 21, z: 7 }, { x: 16, y: 17, z: 7 }),
+        route(1, "ghost", { x: 20, y: 21, z: 7 }, { x: 16, y: 17, z: 7 }),
+        route(2, "harbor_master", { x: 5, y: 5, z: 7 }, { x: 16, y: 17, z: 7 }),
+        route(3, "harbor_master", { x: 21, y: 30, z: 7 }, { x: 900, y: 900, z: 7 }),
+        route(4, "harbor_master", { x: 20, y: 21, z: 7 }, { x: 16, y: 17, z: 8 }),
+      ],
+    };
+    const m = validateWorld(root, { content: withRoutes })
+      .diagnostics.map(formatDiagnostic)
+      .filter((d) => d.includes("data/boat_routes.yaml"));
+    expect(m.join("\n")).not.toMatch(/boat_routes\.yaml.*\[0\]/);
+    expect(m).toContainEqual(expect.stringContaining('[1].captain: NPC "ghost" is not placed'));
+    expect(
+      m.some((l) => l.includes("[2].from:") && l.includes("the dock is more than 8 tiles")),
+    ).toBe(true);
+    expect(
+      m.some((l) => l.includes("[3].from:") && l.includes("dock is not a walkable tile")),
+    ).toBe(true);
+    expect(
+      m.some((l) => l.includes("[3].to:") && l.includes("arrival is outside every island")),
+    ).toBe(true);
+    expect(
+      m.some((l) => l.includes("[4].to:") && l.includes("arrival is not a walkable tile")),
+    ).toBe(true);
   });
 
   it("ignores dotfiles and reports wrong entry types without throwing", () => {

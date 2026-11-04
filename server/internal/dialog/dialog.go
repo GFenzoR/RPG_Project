@@ -33,8 +33,7 @@ type Facts interface {
 	// Money is the carried money in the smallest coin.
 	Money() int64
 	HasBlessing(id string) bool
-	// CanTravel and CanTeleport report whether the destination exists and is free.
-	CanTravel(island string) bool
+	// CanTeleport reports whether the destination exists and is free.
 	CanTeleport(p content.Position) bool
 }
 
@@ -50,7 +49,6 @@ type Effects interface {
 	SetQuestStep(quest, step string)
 	SetFlag(key string, value int64)
 	OpenShop(id string)
-	Travel(t content.Travel)
 	Heal()
 	Teleport(p content.Position)
 	Bless(b content.Bless)
@@ -120,11 +118,6 @@ func Check(as content.Actions, f Facts) string {
 			gold += a.TakeGold
 		case a.TakeItem != nil:
 			items[a.TakeItem.Item] += a.TakeItem.N()
-		case a.Travel != nil:
-			if !f.CanTravel(a.Travel.Island) {
-				return MsgCannotTravel
-			}
-			gold += a.Travel.Price
 		case a.Teleport != nil:
 			if !f.CanTeleport(*a.Teleport) {
 				return MsgCannotTravel
@@ -205,8 +198,6 @@ func apply(a content.Action, e Effects) {
 		e.SetFlag(a.SetFlag.Key, a.SetFlag.Value)
 	case a.OpenShop != "":
 		e.OpenShop(a.OpenShop)
-	case a.Travel != nil:
-		e.Travel(*a.Travel)
 	case a.Heal:
 		e.Heal()
 	case a.Teleport != nil:

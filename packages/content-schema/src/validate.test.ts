@@ -38,6 +38,7 @@ describe("repository content", () => {
       "quest",
       "spells",
       "recipes",
+      "boat_routes",
       "borders",
       "i18n",
       "ids-lock",
@@ -61,6 +62,27 @@ describe("validator diagnostics", () => {
     cpSync(join(REPO, "i18n"), join(root, "i18n"), { recursive: true });
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it("checks boat routes: references, fields and the boat_routes node flag (T3.5)", () => {
+    writeFileSync(
+      file("data/boat_routes.yaml"),
+      [
+        "- id: to_nowhere",
+        "  captain: ghost_captain",
+        "  text: dialog.bye",
+        "  from: { x: 1, y: 1, z: 7 }",
+        "  to: { x: 2, y: 2, z: 7 }",
+        "  price: 10",
+        "  requires: { quest: no_such_quest, item: { item: rope, consume: yes_please } }",
+        "  speed: 3",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root);
+    expect(out.some((m) => m.includes('unknown npc "ghost_captain"'))).toBe(true);
+    expect(out.some((m) => m.includes('unknown quest "no_such_quest"'))).toBe(true);
+    expect(out.some((m) => m.includes("consume") && m.includes("boolean"))).toBe(true);
+    expect(out.some((m) => m.includes('unknown field "speed"'))).toBe(true);
+  });
 
   it("checks the i18n keys the server and client code use", () => {
     mkdirSync(file("server/internal/session"), { recursive: true });

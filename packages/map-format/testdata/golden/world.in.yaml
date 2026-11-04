@@ -1,9 +1,4 @@
 # hand-written, with comments and flow/block styles mixed
-boat_routes:
-  - price: 80
-    requires: {level: 10}
-    from_npc: "puerto_captain"
-    to: {pos: {z: 7, y: 6050, x: 4120}, island: bosque}
 islands:
   - {id: puerto, level_hint: [1, 15], rect: {x: 3072, y: 6272, w: 512, h: 512}}
   - id: bosque

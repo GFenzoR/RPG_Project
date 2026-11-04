@@ -24,7 +24,25 @@ export interface ContentIndex {
   i18n: Map<string, Set<string>>;
   /** Autoborder rules of data/borders.yaml (well-formed entries only; content-schema checks the rest). */
   borders: BorderRule[];
+  /** Boat routes of data/boat_routes.yaml (T3.5): well-formed entries, with their index in the file. */
+  routes: BoatRouteInfo[];
 }
+
+/** File of the boat routes, relative to the repository root. */
+export const routesFile = "data/boat_routes.yaml";
+
+/** The map side of a boat route: who sells it, the dock and the arrival tile. */
+export interface BoatRouteInfo {
+  /** Index in data/boat_routes.yaml (for diagnostics). */
+  index: number;
+  id: string;
+  captain: string;
+  from: { x: number; y: number; z: number };
+  to: { x: number; y: number; z: number };
+}
+
+const isPos = (v: unknown): v is { x: number; y: number; z: number } =>
+  isObj(v) && [v["x"], v["y"], v["z"]].every((n) => Number.isInteger(n));
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -106,5 +124,15 @@ export function loadContent(root: string): ContentIndex {
         pieces: p as BorderRule["pieces"],
       });
     }
-  return { items, monsters: idsIn("monsters"), npcs: idsIn("npcs"), i18n, borders };
+  const routes: BoatRouteInfo[] = [];
+  const rawRoutes = readYaml(join(root, routesFile));
+  if (Array.isArray(rawRoutes))
+    for (const [index, r] of rawRoutes.entries()) {
+      if (!isObj(r)) continue;
+      const { id, captain, from, to } = r;
+      if (typeof id !== "string" || typeof captain !== "string" || !isPos(from) || !isPos(to))
+        continue;
+      routes.push({ index, id, captain, from, to });
+    }
+  return { items, monsters: idsIn("monsters"), npcs: idsIn("npcs"), i18n, borders, routes };
 }

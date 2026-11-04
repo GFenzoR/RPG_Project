@@ -49,7 +49,9 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
               ? t(`skill.${p.value.value}.name`)
               : p.name === "quest"
                 ? t(`quest.${p.value.value}.name`)
-                : t(`monster.${p.value.value}.name`);
+                : p.name === "island"
+                  ? t(`island.${p.value.value}.name`)
+                  : t(`monster.${p.value.value}.name`);
         break;
       case "item": {
         // By its own name too: one item is {item} (gather.got, shop.bought), a list of

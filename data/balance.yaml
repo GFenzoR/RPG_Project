@@ -97,6 +97,12 @@ party:                      # T3.3 (docs/02-game-design.md, "Grupos")
   bonus_pct_per_member: 6
   max_bonus_pct: 24
 
+travel:                     # boat routes (T3.5, docs/02-game-design.md "Viajes en barco")
+  # No sailing while in combat: a monster attacked the player, the player took damage or
+  # hit a monster within the last combat_block_ms.
+  combat_block_ms: 12000
+  arrival_radius: 2         # arrival taken: nearest free walkable tile at most this far
+
 death:
   xp_loss_pct: 10
   skill_loss_pct: 10

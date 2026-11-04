@@ -12,10 +12,11 @@ data/
   borders.yaml          reglas de autoborder
   items/                un archivo por categoría (ground.yaml, weapons.yaml, ...)
   monsters/             un archivo por monstruo
-  npcs/                 un archivo por NPC (diálogo, tienda, viajes)
+  npcs/                 un archivo por NPC (diálogo, tienda)
   quests/               un archivo por quest
   spells.yaml
   recipes.yaml          oficios
+  boat_routes.yaml      rutas de barco (T3.5)
   effects.yaml          efectos visuales y proyectiles
   cosmetics.yaml        outfits y monturas (futuro)
 i18n/
@@ -24,7 +25,8 @@ i18n/
 
 ## Esquemas y validador
 - Esquemas (JSON Schema 2020-12) en `packages/content-schema/schemas/`: `balance`,
-  `vocations`, `items`, `monster`, `npc`, `quest`, `spells`, `recipes`, `borders`, `i18n`,
+  `vocations`, `items`, `monster`, `npc`, `quest`, `spells`, `recipes`, `boat_routes`,
+  `borders`, `i18n`,
   `ids-lock`, más `common` con las definiciones compartidas (IDs, claves i18n, condiciones,
   acciones, elementos, skills). Son la fuente de verdad del formato; este doc da ejemplos.
 - Dos keywords propios: `x-ref: <tipo>` marca un ID que debe existir (`item`, `monster`,
@@ -214,27 +216,28 @@ shop:
   sells: [{ item: rope, price: 45 }, { item: fishing_rod, price: 140 }]
   buys:  [{ item: rope, price: 14 }, { item: wolf_pelt, price: 5 }]
 ```
-Viaje en barco (de `data/npcs/harbor_master.yaml`):
+Viaje en barco (de `data/npcs/harbor_master.yaml`): el nodo marcado ofrece las rutas de
+`data/boat_routes.yaml` cuyo `captain` es este NPC (ver "Rutas de barco"):
 ```yaml
-        - text: npc.harbor_master.to_forest
-          if:
-            - { flag_equals: { key: forest_route_unlocked, value: 1 } }
-            - { level_at_least: 10 }
-          action: { travel: { island: bosque, price: 80 } }
+    travel:
+      text: npc.harbor_master.travel
+      boat_routes: true             # las rutas van antes de las opciones del nodo
+      options:
+        - { text: dialog.back, goto: greet }
 ```
 Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
 `lacks_item` (tiene menos de `count`, por defecto 1: lo contrario de `has_item`),
 `quest_state`, `quest_not_started`, `flag_equals`, `skill_at_least`.
 Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
-`take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `travel`, `heal`,
-`teleport`, `bless`.
+`take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `heal`,
+`teleport`, `bless`. (La acción `travel` de T1.10 se quitó en T3.5: los viajes son rutas.)
 Semántica del motor (T1.10):
 - Una opción se muestra si se cumplen todas sus condiciones; al elegirla el servidor las
   vuelve a evaluar. Después revisa los costos de todas sus acciones juntas (`take_gold`,
-  precio de `bless` y `travel`, `take_item`, bendición ya comprada, destino de `travel` o
-  `teleport` inexistente): si alguno falla no ejecuta ninguna acción. Si pasan, ejecuta
+  precio de `bless`, `take_item`, bendición ya comprada, destino de `teleport`
+  inexistente): si alguno falla no ejecuta ninguna acción. Si pasan, ejecuta
   las acciones en orden y luego sigue el `goto`. Una opción sin `goto` deja el diálogo en
-  el mismo nodo (por ejemplo `open_shop`); `close`, `travel` y `teleport` lo cierran.
+  el mismo nodo (por ejemplo `open_shop`); `close` y `teleport` lo cierran.
 - `has_item`/`lacks_item` cuentan todo el inventario (equipo y contenedores anidados).
   Un contenedor con algo adentro no cuenta ni se puede quitar o vender (se perdería su
   contenido).
@@ -245,9 +248,7 @@ Semántica del motor (T1.10):
 - `give_item` da una unidad a la mochila; si no cabe (lugar o capacidad) cae al suelo
   bajo el jugador. `give_gold`/`take_gold` usan el dinero (`currency.worth`).
 - `bless` guarda la bendición en `quest_state` (`bless.<id>` = 1) y cobra el precio; al
-  morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida. `travel` cobra y lleva al
-  jugador junto al templo de la isla destino; si esa isla aún no existe en el mapa (hoy
-  `bosque`), la opción se rechaza con `dialog.cannot_travel`.
+  morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida.
 - `skill_at_least` usa el nivel de skill actual; `level_at_least`, el nivel del jugador.
 
 Estado por personaje en `quest_state` (clave → valor; una clave ausente vale 0):
@@ -414,6 +415,36 @@ party:
 - Una estación es un item cualquiera del mapa que alguna receta nombra: no lleva campo
   propio. Usarla manda `StationOpen` (`05-network-protocol.md`).
 - Textos: `craft.*` (mensajes del servidor) y `client.craft.*` en `i18n/*/client.yaml`.
+
+## Rutas de barco (T3.5)
+```yaml
+# data/boat_routes.yaml (esquema boat_routes.schema.json)
+- id: puerto_to_bosque
+  captain: harbor_master           # NPC que la vende, a ≤ 8 casillas del muelle
+  text: npc.harbor_master.to_forest  # texto de la opción (destino y precio, a mano)
+  from: { x: 3201, y: 6434, z: 7 } # muelle de salida (caminable)
+  to: { x: 4120, y: 6050, z: 7 }   # casilla de llegada (caminable, cualquier isla)
+  price: 80                        # 0..1 000 000 000
+  requires:                        # opcional; todas deben cumplirse
+    level: 10
+    quest: ch1_shipwreck           # completada
+    item: { item: boat_ticket, count: 1, consume: true }  # consume: false = solo llevarlo
+```
+- Hoy el archivo está vacío (`[]`): la única isla además de Puerto es `testisle`, que no
+  es parte del mundo oficial. La ruta a `bosque` está comentada en el archivo para T3.6,
+  que solo agrega datos (la ruta, `npc.harbor_master.to_forest` en i18n y la isla).
+- El NPC necesita un nodo con `boat_routes: true`: ahí el servidor agrega una opción por
+  ruta (antes de las del nodo, `option_id` 101, 102…). Rutas + opciones del nodo ≤ 9.
+  Todas las rutas se muestran; un requisito que falla se explica al elegirla.
+- Validación: `make validate` (`content-schema`) revisa el esquema y que existan capitán,
+  quest e item; `mapcli validate` (`packages/map-format`) revisa que el capitán esté
+  colocado a ≤ 8 casillas del muelle (mismo piso) y que `from` y `to` sean casillas
+  caminables de una isla. El servidor repite todo al arrancar y no arranca si falla.
+- `-boat-routes <archivo>` (o `RPG_BOAT_ROUTES`) reemplaza `data/boat_routes.yaml`: el
+  E2E usa `client/e2e/fixtures/boat_routes.yaml` (Puerto → testisle).
+- Reglas del viaje (combate, cobro, llegada): `02-game-design.md`, "Viajes en barco";
+  números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`).
+- Textos: `travel.*` en `i18n/*/dialog.yaml` y `client.voyage.sailed` en `client.yaml`.
 
 ## Bordes (autoborder)
 ```yaml

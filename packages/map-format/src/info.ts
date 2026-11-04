@@ -59,7 +59,6 @@ export interface WorldInfo {
     level_hint: [number, number];
     chunks: number;
   }[];
-  boat_routes: number;
   chunk_size: number;
 }
 
@@ -71,7 +70,6 @@ export function worldInfo(world: World): WorldInfo {
       level_hint: e.level_hint,
       chunks: world.islands.get(e.id)?.chunks.size ?? 0,
     })),
-    boat_routes: world.meta.boat_routes.length,
     chunk_size: CHUNK_SIZE,
   };
 }

@@ -1,0 +1,10 @@
+# E2E only (T3.5): the game server of client/playwright.config.ts runs with
+# -boat-routes pointing here. testisle is not part of the official world (docs/03), so
+# this route never goes in data/boat_routes.yaml. Same format as that file.
+- id: e2e_puerto_to_testisle
+  captain: harbor_master
+  text: dialog.travel_e2e_route
+  from: { x: 3201, y: 6434, z: 7 }
+  to: { x: 1058, y: 1056, z: 7 }
+  price: 30
+  requires: { level: 1 }

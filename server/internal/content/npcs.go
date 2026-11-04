@@ -28,8 +28,11 @@ type Dialog struct {
 
 // DialogNode is one window of the dialog: the NPC's text and up to nine options.
 type DialogNode struct {
-	Text    string         `yaml:"text"`
-	Options []DialogOption `yaml:"options"`
+	Text string `yaml:"text"`
+	// BoatRoutes offers the routes of data/boat_routes.yaml this NPC sells, before
+	// Options (T3.5).
+	BoatRoutes bool           `yaml:"boat_routes"`
+	Options    []DialogOption `yaml:"options"`
 }
 
 // DialogOption is one answer. It is shown only when every condition of If holds; picking
@@ -110,12 +113,6 @@ func (c *Conditions) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Travel moves the player to another island for a price.
-type Travel struct {
-	Island string `yaml:"island"`
-	Price  int64  `yaml:"price"`
-}
-
 // Bless sells a blessing (death rules, T1.11).
 type Bless struct {
 	Blessing string `yaml:"blessing"`
@@ -147,7 +144,6 @@ type Action struct {
 	SetQuestStep *QuestStep `yaml:"set_quest_step"`
 	SetFlag      *Flag      `yaml:"set_flag"`
 	OpenShop     string     `yaml:"open_shop"`
-	Travel       *Travel    `yaml:"travel"`
 	Heal         bool       `yaml:"heal"`
 	Teleport     *Position  `yaml:"teleport"`
 	Bless        *Bless     `yaml:"bless"`
@@ -192,10 +188,10 @@ func (as *Actions) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Closes reports whether the actions end the dialog (close or travel).
+// Closes reports whether the actions end the dialog (close or teleport).
 func (as Actions) Closes() bool {
 	for _, a := range as {
-		if a.Close || a.Travel != nil || a.Teleport != nil {
+		if a.Close || a.Teleport != nil {
 			return true
 		}
 	}

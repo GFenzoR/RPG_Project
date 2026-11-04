@@ -405,7 +405,11 @@ Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architectu
   el anterior. El servidor responde `DialogOpen` con el nodo inicial.
 - `DialogOpen` lleva solo las opciones cuyo `if` se cumple ahora; `option_id` es la
   posición de la opción en el nodo (1..9), así que no cambia mientras el nodo está
-  abierto. El cliente las elige con click o con las teclas 1–9 (la n-ésima mostrada).
+  abierto. Las rutas de barco de un nodo `boat_routes: true` (T3.5) van primero, con
+  `option_id` 100 + su posición entre las rutas del capitán (101, 102…); elegir una no
+  reenvía el nodo: si se rechaza llega solo el `Message` (`travel.*`, `dialog.no_money`)
+  y la ventana sigue abierta; si zarpa llegan `DialogClose`, la vista nueva y
+  `travel.sailed` (parámetro `island` = id de la isla). El cliente las elige con click o con las teclas 1–9 (la n-ésima mostrada).
 - `DialogChoose`: un `dialog_id` viejo se ignora; `option_id` 0 cierra. El servidor vuelve
   a evaluar el `if` (una ventana vieja no sirve para elegir una opción oculta: reenvía el
   nodo) y revisa los costos antes de ejecutar nada (`docs/06-content-data.md`). Si algo
