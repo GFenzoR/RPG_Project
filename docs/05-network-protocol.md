@@ -386,8 +386,8 @@ Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architectu
   `gm.player_not_found` (`name`), `gm.bad_position` (`x`, `y`, `z`), `gm.teleported`
   (`name`, `x`, `y`, `z`), `gm.item_unknown` (`id`), `gm.item_count` (`max`),
   `gm.item_created` (`item`), `gm.protected` (`name`), `gm.kicked` (`name`),
-  `gm.ban_duration` (`days`), `gm.ban_reason` (`max`), `gm.banned`, `gm.unbanned`,
-  `gm.not_banned` (`name`) y `gm.failed`. Los de ban y unban llegan cuando responde la
+  `gm.ban_duration` (`days`), `gm.ban_reason` (`max`), `gm.banned` (`name`),
+  `gm.unbanned` (`name`), `gm.not_banned` (`name`) y `gm.failed` (sin parámetros). Los de ban y unban llegan cuando responde la
   base, unos ticks después.
 - `/announce` → `Message{kind: BROADCAST, speaker_id, speaker_name, text}` sin `pos` a
   todos los conectados. El texto va tal cual; el cliente pone la etiqueta traducida

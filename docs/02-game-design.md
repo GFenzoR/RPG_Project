@@ -303,8 +303,10 @@ Números en `data/balance.yaml` (`chat`), nunca en código.
 ## Moderación (T2.6)
 Roles por cuenta: **jugador** (por defecto), **GM** y **admin**. Los asigna solo el
 operador con su herramienta (`make set-role`, docs/09); el juego nunca cambia roles.
-El rol se lee al entrar: un cambio vale desde el próximo login (para quitarlo ya, un
-admin además expulsa al personaje).
+Cambiar un rol revoca los tokens de la cuenta. Los bans usan siempre el rol actual de la
+base, pero el resto de los comandos usa el rol leído al entrar: un staff degradado que
+sigue conectado conserva `/tp`, `/kick`, `/item` y `/announce` hasta que sale (pendiente,
+ver el PR de T2.6).
 
 Los comandos se escriben en la línea de chat, en cualquier canal:
 
@@ -321,8 +323,9 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 
 - **Destino del teleport:** una casilla caminable de una isla, en un piso que existe. Si
   está ocupada, la libre más cercana (hasta 2 de distancia). Si no, `gm.bad_position`.
-- **Jerarquía:** kick y ban solo alcanzan a roles menores que el propio (`gm.protected`).
-  Nadie se puede banear a sí mismo.
+- **Jerarquía:** kick, ban, unban y mover a otro con `/tp` solo alcanzan a roles menores
+  que el propio (`gm.protected`). Nadie se puede banear a sí mismo. Solo un admin da bans
+  de más de 30 días o permanentes, y solo un admin levanta un ban permanente.
 - **Ban:** es por cuenta, alcanza a todos sus personajes, conectados o no. Al aplicarse
   revoca todos los tokens de la cuenta y desconecta a sus personajes con `BANNED`. Mientras
   dura, el login responde `account_banned`. Termina solo al vencer o con `/unban`.

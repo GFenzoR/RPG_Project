@@ -67,7 +67,12 @@ func (a *adminWorker) Start() {
 	go func() {
 		defer close(a.finished)
 		for job := range a.ch {
-			a.run(job)
+			select {
+			case <-a.stop: // Stop gave up: no more attempts, keep the job in the log
+				a.abandon(job)
+			default:
+				a.run(job)
+			}
 		}
 	}()
 }
@@ -111,8 +116,7 @@ func (a *adminWorker) run(job session.AdminJob) {
 			"attempt", attempt, "retry_in", backoff.String(), "err", err)
 		select {
 		case <-a.stop:
-			a.log.Error("admin: job abandoned at shutdown", "kind", job.Kind, "action", job.Audit.Action,
-				"actor", job.Audit.ActorName, "target", job.TargetName)
+			a.abandon(job)
 			return
 		case <-a.clock.After(backoff):
 		}
@@ -138,18 +142,31 @@ func (a *adminWorker) report(job session.AdminJob, res store.BanResult) {
 	a.done(session.AdminResult{ID: job.ID, Result: res.Result, AccountID: res.AccountID, Name: res.Name})
 }
 
-// fail answers a ban or unban the database rejected and still records the attempt.
+// abandon logs a job that will not reach the database (shutdown with the database
+// down), with everything the audit entry would have had: the log is the last copy.
+func (a *adminWorker) abandon(job session.AdminJob) {
+	e := job.Audit
+	a.log.Error("admin: job abandoned at shutdown", "kind", job.Kind, "at", e.At, "action", e.Action,
+		"actor_account", e.ActorAccountID, "actor", e.ActorName, "target", job.TargetName+e.TargetName,
+		"args", e.Args, "result", e.Result, "reason", job.Reason, "until", job.Until)
+}
+
+// fail handles a job the database rejected (invalid values): a ban or unban is answered
+// as failed, and the attempt is still recorded with a reduced entry (no free-form
+// arguments) that cannot break the table's constraints.
 func (a *adminWorker) fail(job session.AdminJob) {
-	if job.Kind == session.AdminAudit {
-		return
+	if job.Kind != session.AdminAudit {
+		a.done(session.AdminResult{ID: job.ID, Result: session.AdminFailed, Name: job.TargetName})
 	}
-	a.done(session.AdminResult{ID: job.ID, Result: session.AdminFailed, Name: job.TargetName})
 	e := auditEntry(job.Audit)
-	e.TargetName, e.Result = job.TargetName, session.AdminFailed
+	e.Args, e.Result = nil, session.AdminFailed
+	if e.TargetName == "" && len(job.TargetName) <= 64 {
+		e.TargetName = job.TargetName
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), adminWriteTimeout)
 	defer cancel()
 	if err := a.store.AppendAudit(ctx, e); err != nil {
-		a.log.Error("admin: audit of a failed job lost", "action", e.Action, "actor", e.ActorName, "err", err)
+		a.abandon(job)
 	}
 }
 

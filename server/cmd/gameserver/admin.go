@@ -27,8 +27,9 @@ const adminUsage = `usage: gameserver admin <command> [flags]   (DATABASE_URL mu
 
 commands:
   set-role -email <email> -role player|gm|admin -note <why>
-      Sets an account's role (T2.6). Recorded in the audit log. Takes effect on the
-      character's next login: to remove powers right away, kick it from the game too.
+      Sets an account's role (T2.6), revokes its tokens and records it in the audit log.
+      Bans use the new role at once; an online character keeps its other commands until
+      it logs out (restart the server to remove them right away).
   audit [-n 50]
       Prints the newest audit log entries.
 `

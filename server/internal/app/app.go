@@ -79,7 +79,9 @@ type App struct {
 	Gateway *gateway.Gateway
 	saver   *session.Saver
 	admin   *adminWorker
-	handler http.Handler
+	// loopDone is closed when the game loop stopped (commands can no longer run).
+	loopDone chan struct{}
+	handler  http.Handler
 }
 
 // New builds the stack. Nothing runs until Run.
@@ -93,7 +95,7 @@ func New(cfg Config) (*App, error) {
 	if cfg.ShutdownTimeout <= 0 {
 		cfg.ShutdownTimeout = 10 * time.Second
 	}
-	a := &App{cfg: cfg, log: cfg.Logger}
+	a := &App{cfg: cfg, log: cfg.Logger, loopDone: make(chan struct{})}
 	authSvc, err := auth.New(auth.Config{Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations})
 	if err != nil {
 		return nil, err
@@ -128,9 +130,7 @@ func New(cfg Config) (*App, error) {
 			return nil, err
 		}
 		a.saver = saver
-		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, func(r session.AdminResult) {
-			_ = a.Loop.Enqueue(a.World.AdminDone(r)) // lost answer: the GM can retry
-		})
+		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, a.adminDone)
 		w, err := session.New(session.Config{
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
@@ -217,6 +217,7 @@ func (a *App) Run(ctx context.Context) error {
 		a.admin.Start()
 	}
 	runErr := a.Loop.Run(ctx)
+	close(a.loopDone)
 	if runErr != nil {
 		runErr = fmt.Errorf("game loop: %w", runErr)
 	}
@@ -292,6 +293,20 @@ func storeItems(in []session.ItemState) []store.InventoryItem {
 		out = append(out, store.InventoryItem{ItemID: int(it.ItemID), Count: it.Count, Slot: it.Slot, Items: storeItems(it.Items)})
 	}
 	return out
+}
+
+// adminDone hands a ban or unban result to the loop. It must not be lost (a banned
+// player would stay online), so a full queue is retried until the loop has room or
+// stops; it blocks only the admin goroutine.
+func (a *App) adminDone(r session.AdminResult) {
+	cmd := a.World.AdminDone(r)
+	for a.Loop.Enqueue(cmd) != nil {
+		select {
+		case <-a.loopDone:
+			return
+		case <-a.cfg.Clock.After(game.TickDuration):
+		}
+	}
 }
 
 func (a *App) snapshotSaved(s session.Snapshot) {

@@ -24,6 +24,18 @@ func (q *Queries) DeleteAccountSessions(ctx context.Context, accountID int64) (i
 	return result.RowsAffected(), nil
 }
 
+const getAccountRole = `-- name: GetAccountRole :one
+SELECT role FROM accounts WHERE id = $1
+`
+
+// The actor's role now (not the one cached at login), for bans in the same transaction.
+func (q *Queries) GetAccountRole(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRow(ctx, getAccountRole, id)
+	var role string
+	err := row.Scan(&role)
+	return role, err
+}
+
 const getActiveBan = `-- name: GetActiveBan :one
 SELECT id, reason, expires_at
 FROM account_bans

@@ -176,7 +176,8 @@ Decisión del 2026-11-03: el juego se sigue jugando en el navegador y en el escr
 Reglas de juego y comandos en `02-game-design.md` ("Moderación").
 - **Roles** en `accounts.role` (`player` por defecto, `gm`, `admin`). Solo los cambia la
   herramienta del operador (`gameserver admin set-role`), que escribe el cambio y su
-  entrada de auditoría en una transacción. No hay mensaje del protocolo ni comando del
+  entrada de auditoría en una transacción, y revoca los tokens de la cuenta. El log no
+  guarda el email (no se podría borrar después): solo el id de la cuenta. No hay mensaje del protocolo ni comando del
   juego que cambie un rol: el cliente no tiene forma de escalar privilegios.
 - **Comandos por chat:** un `Say` cuyo texto empieza con `/`. Se eligió el chat y no un
   mensaje nuevo porque no suma superficie al protocolo y un cliente común ya puede
@@ -190,11 +191,16 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
   con backoff. Al apagar se drena la cola y se escribe lo pendiente.
 - **Bans:** `/ban` y `/unban` son trabajos de esa goroutine. En una transacción resuelven
   el personaje, revisan la jerarquía, insertan o levantan el ban (`account_bans`), revocan
-  los tokens y escriben la auditoría. El resultado vuelve al loop (`World.AdminDone`), que
+  los tokens y escriben la auditoría. La jerarquía usa el rol actual del actor en la base
+(el menor entre ese y el del login), así un GM degradado pierde los bans al instante. El resultado vuelve al loop (`World.AdminDone`), que
   desconecta a los personajes de la cuenta con `BANNED` y recuerda el ban en memoria: así
   frena también un login que leyó la base antes del ban. Además, las consultas de sesión,
   de canje del token de juego y de carga del personaje excluyen a las cuentas con un ban
   activo, y el login responde `account_banned` (solo si la contraseña es correcta).
+- **El resultado de un ban no se pierde:** si la cola del loop está llena, la goroutine de
+  admin reintenta encolarlo hasta que haya lugar o el loop pare. Un trabajo que la base
+  rechaza por valores inválidos se responde como fallido y se audita con una entrada
+  reducida. Si al apagar la base no responde, lo que queda va completo al log estructurado.
 - **`audit_log`** es append-only (triggers como `economy_log`) y no tiene claves foráneas:
   sobrevive al borrado de cuentas. El operador lo lee con `make audit-log`.
 

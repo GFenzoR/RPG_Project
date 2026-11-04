@@ -202,6 +202,11 @@ func (w *World) cmdTeleport(ctx *game.TickContext, p *Player, args []string) boo
 			return true
 		}
 		if hasPos {
+			if target != p && target.role >= p.role {
+				p.emit(systemMsg(msgGMProtected, textParam("name", target.name)))
+				w.audit(ctx, p, "teleport", target, nil, AdminProtected)
+				return true
+			}
 			mover = target
 		} else {
 			if target == p {
@@ -214,6 +219,9 @@ func (w *World) cmdTeleport(ctx *game.TickContext, p *Player, args []string) boo
 		return false
 	}
 	args2 := map[string]string{"x": itoa(int(dest.X)), "y": itoa(int(dest.Y)), "z": itoa(int(dest.Z))}
+	if mover == p && len(nameArgs) > 0 {
+		args2["to"] = strings.Join(nameArgs, " ") // went to that player
+	}
 	to, ok := dest, mover.pos == dest
 	if !ok && w.m.Walkable(dest) {
 		to, ok = w.freeNear(dest, 2)
@@ -317,8 +325,13 @@ func (w *World) cmdBan(ctx *game.TickContext, p *Player, args []string) bool {
 	if args[at] != "perm" {
 		m := banDuration.FindStringSubmatch(args[at])
 		n, _ := strconv.Atoi(m[1])
-		unit := map[string]time.Duration{"m": time.Minute, "h": time.Hour, "d": 24 * time.Hour}[m[2]]
-		dur = time.Duration(n) * unit
+		dur = time.Duration(n) * time.Minute
+		switch m[2] {
+		case "h":
+			dur *= 60
+		case "d":
+			dur *= 24 * 60
+		}
 	}
 	maxBan := GMMaxBan
 	if p.role >= RoleAdmin {

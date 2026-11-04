@@ -168,7 +168,17 @@ func TestTeleport(t *testing.T) {
 	if got := a.cmd(gm, "/tp lost"); !slices.Equal(got, []string{"gm.teleported"}) || chebyshev(g.Pos(), p.Pos()) != 1 {
 		t.Fatalf("/tp Name: %v, GM at %v, player at %v", got, g.Pos(), p.Pos())
 	}
-	a.takeJobs()
+	if e := a.lastAudit(t); e.Args["to"] != "lost" {
+		t.Fatalf("audit of /tp Name %+v", e)
+	}
+	// Staff of the same or a higher role cannot be moved.
+	_, boss := a.joinAs("Boss", session.RoleAdmin, pos(12, 9))
+	if got := a.cmd(gm, "/tp Boss 3 3 7"); !slices.Equal(got, []string{"gm.protected"}) || boss.Pos() != pos(12, 9) {
+		t.Fatalf("moving an admin: %v, at %v", got, boss.Pos())
+	}
+	if e := a.lastAudit(t); e.Result != "protected" {
+		t.Fatalf("audit %+v", e)
+	}
 	// Moving a player.
 	if got := a.cmd(gm, "/tp Lost 3 9 7"); !slices.Equal(got, []string{"gm.teleported"}) || p.Pos() != pos(3, 9) {
 		t.Fatalf("/tp Name x y z: %v, player at %v", got, p.Pos())

@@ -253,11 +253,15 @@ func TestStaffBan(t *testing.T) {
 	wall := clock.Real{}
 
 	gm := bot.New(srv.URL)
-	token, err := gm.Login(ctx, "gm@bots.local", "bot-password")
-	if err != nil {
+	if _, err := gm.Login(ctx, "gm@bots.local", "bot-password"); err != nil { // registers
 		t.Fatal(err)
 	}
 	if _, _, err := st.SetRole(ctx, "gm@bots.local", store.RoleGM, store.AuditEntry{At: wall.Now(), Source: store.AuditCLI, ActorName: "cli:test"}); err != nil {
+		t.Fatal(err)
+	}
+	// Changing a role revokes the account's tokens: log in again.
+	token, err := gm.Login(ctx, "gm@bots.local", "bot-password")
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := gm.Play(ctx, token, "Warden", "guardian"); err != nil {

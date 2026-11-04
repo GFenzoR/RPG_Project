@@ -183,7 +183,14 @@ func (s *Store) Ban(ctx context.Context, r BanRequest) (BanResult, error) {
 		if err != nil {
 			return err
 		}
-		if res.Result == ResultOK && RoleRank(res.role) >= r.ActorRank {
+		rank, err := actorRank(ctx, q, r)
+		if err != nil {
+			return err
+		}
+		// Only lower roles; permanent and very long bans are for admins (checked here
+		// too, with the actor's current role).
+		if res.Result == ResultOK && (RoleRank(res.role) >= rank ||
+			(rank < RoleRank(RoleAdmin) && (r.ExpiresAt.IsZero() || r.ExpiresAt.Sub(r.Audit.At) > GMMaxBan))) {
 			res.Result = ResultProtected
 		}
 		if res.Result == ResultOK {
@@ -222,6 +229,22 @@ func (s *Store) Unban(ctx context.Context, r BanRequest) (BanResult, error) {
 		if err != nil {
 			return err
 		}
+		rank, err := actorRank(ctx, q, r)
+		if err != nil {
+			return err
+		}
+		if res.Result == ResultOK && RoleRank(res.role) >= rank {
+			res.Result = ResultProtected
+		}
+		if res.Result == ResultOK && rank < RoleRank(RoleAdmin) {
+			// A permanent ban (only admins give them) is only lifted by an admin.
+			switch b, err := q.GetActiveBan(ctx, db.GetActiveBanParams{AccountID: res.AccountID, Now: ts(r.Audit.At)}); {
+			case err == nil && !b.ExpiresAt.Valid:
+				res.Result = ResultProtected
+			case err != nil && !errors.Is(notFound(err), ErrNotFound):
+				return fmt.Errorf("active ban: %w", err)
+			}
+		}
 		if res.Result == ResultOK {
 			n, err := q.LiftBans(ctx, db.LiftBansParams{Now: ts(r.Audit.At), LiftedBy: optID(r.Audit.ActorAccountID), AccountID: res.AccountID})
 			if err != nil {
@@ -237,6 +260,25 @@ func (s *Store) Unban(ctx context.Context, r BanRequest) (BanResult, error) {
 		return BanResult{}, fmt.Errorf("unban: %w", err)
 	}
 	return res, nil
+}
+
+// GMMaxBan is the longest ban below admin (session.GMMaxBan checks it first, on the loop).
+const GMMaxBan = 30 * 24 * time.Hour
+
+// actorRank is the lower of the rank the loop cached at login and the actor's role in
+// the database now: a demoted staff member loses its bans at once.
+func actorRank(ctx context.Context, q *db.Queries, r BanRequest) (int, error) {
+	if r.Audit.ActorAccountID == 0 {
+		return r.ActorRank, nil
+	}
+	role, err := q.GetAccountRole(ctx, r.Audit.ActorAccountID)
+	if errors.Is(notFound(err), ErrNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("actor role: %w", err)
+	}
+	return min(r.ActorRank, RoleRank(role)), nil
 }
 
 // target resolves a character name; a missing one gives ResultNotFound (no error).
@@ -256,7 +298,8 @@ func withTarget(e AuditEntry, r BanResult) AuditEntry {
 	return e
 }
 
-// SetRole sets the role of the account with that (normalized) email and records the
+// SetRole sets the role of the account with that (normalized) email, revokes its tokens
+// and records the
 // change in the audit log (action "set_role", args old/new role plus audit.Args) in one
 // transaction.
 // It returns ErrNotFound if no account has that email.
@@ -271,8 +314,7 @@ func (s *Store) SetRole(ctx context.Context, email, role string, audit AuditEntr
 		}
 		accountID, oldRole = row.ID, row.OldRole
 		audit.Action = "set_role"
-		audit.TargetAccountID = row.ID
-		audit.TargetName = email
+		audit.TargetAccountID = row.ID // no email in the log: it cannot be erased later
 		args := map[string]string{"old": row.OldRole, "new": role}
 		for k, v := range audit.Args { // e.g. the operator's note
 			if _, taken := args[k]; !taken {
@@ -282,6 +324,10 @@ func (s *Store) SetRole(ctx context.Context, email, role string, audit AuditEntr
 		audit.Args = args
 		if audit.Result == "" {
 			audit.Result = ResultOK
+		}
+		// New tokens are needed to play again, so a demotion reaches the HTTP API at once.
+		if _, err := q.DeleteAccountSessions(ctx, row.ID); err != nil {
+			return fmt.Errorf("revoke sessions: %w", err)
 		}
 		return appendAudit(ctx, q, audit)
 	})

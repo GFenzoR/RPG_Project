@@ -98,25 +98,50 @@ func TestRolesBansAudit(t *testing.T) {
 		t.Fatal("a protected account was banned")
 	}
 
+	// Only admins (by their role now, not the cached one) ban permanently or for long.
+	res, _ = st.Ban(ctx, store.BanRequest{Audit: actor, TargetName: "Old Tom", ActorRank: 2, Reason: "cheating"})
+	if res.Result != store.ResultProtected {
+		t.Fatalf("permanent ban by a GM claiming admin: %+v", res)
+	}
+	res, _ = st.Ban(ctx, store.BanRequest{Audit: actor, TargetName: "Old Tom", ActorRank: gmRank, Reason: "x", ExpiresAt: now.Add(31 * 24 * time.Hour)})
+	if res.Result != store.ResultProtected {
+		t.Fatalf("31-day ban by a GM: %+v", res)
+	}
+	adAcc, _ := st.CreateAccount(ctx, "ad@example.org", "h")
+	ad, _ := st.CreateCharacter(ctx, store.NewCharacter{AccountID: adAcc, Name: "Keeper", Vocation: "guardian", Health: 150}, 5)
+	if _, _, err := st.SetRole(ctx, "ad@example.org", store.RoleAdmin, cli); err != nil {
+		t.Fatal(err)
+	}
+	admin := actor
+	admin.ActorAccountID, admin.ActorCharacterID, admin.ActorName = adAcc, ad.ID, "Keeper"
+
 	// A permanent ban outlasts a timed one; unban lifts both.
-	_, _ = st.Ban(ctx, store.BanRequest{Audit: actor, TargetName: "Old Tom", ActorRank: 2, Reason: "cheating"})
+	_, _ = st.Ban(ctx, store.BanRequest{Audit: admin, TargetName: "Old Tom", ActorRank: 2, Reason: "cheating"})
 	_, _ = st.Ban(ctx, store.BanRequest{Audit: actor, TargetName: "Old Tom", ActorRank: gmRank, Reason: "spam", ExpiresAt: now.Add(time.Hour)})
 	if b, err := st.ActiveBan(ctx, plAcc, now.Add(1000*time.Hour)); err != nil || !b.Permanent() || b.Reason != "cheating" {
 		t.Fatalf("permanent ban %+v, %v", b, err)
 	}
 	unban := actor
 	unban.Action, unban.Args = "unban", nil
-	if res, err := st.Unban(ctx, store.BanRequest{Audit: unban, TargetName: "Old Tom", ActorRank: gmRank}); err != nil || res.Result != store.ResultOK {
+	// A GM cannot lift a permanent ban, nor unban staff of its rank.
+	if res, _ := st.Unban(ctx, store.BanRequest{Audit: unban, TargetName: "Old Tom", ActorRank: gmRank}); res.Result != store.ResultProtected {
+		t.Fatalf("GM lifting a permanent ban: %+v", res)
+	}
+	if res, _ := st.Unban(ctx, store.BanRequest{Audit: unban, TargetName: "Keeper", ActorRank: gmRank}); res.Result != store.ResultProtected {
+		t.Fatalf("GM unbanning an admin: %+v", res)
+	}
+	unban.ActorAccountID, unban.ActorCharacterID, unban.ActorName = adAcc, ad.ID, "Keeper"
+	if res, err := st.Unban(ctx, store.BanRequest{Audit: unban, TargetName: "Old Tom", ActorRank: 2}); err != nil || res.Result != store.ResultOK {
 		t.Fatalf("Unban = %+v, %v", res, err)
 	}
 	if _, err := st.ActiveBan(ctx, plAcc, now); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("ban not lifted")
 	}
-	if res, _ := st.Unban(ctx, store.BanRequest{Audit: unban, TargetName: "Old Tom", ActorRank: gmRank}); res.Result != store.ResultNotBanned {
+	if res, _ := st.Unban(ctx, store.BanRequest{Audit: unban, TargetName: "Old Tom", ActorRank: 2}); res.Result != store.ResultNotBanned {
 		t.Fatalf("second unban: %+v", res)
 	}
 	var lifted int
-	_ = conn.QueryRow(ctx, "SELECT count(*) FROM account_bans WHERE lifted_by = $1", gmAcc).Scan(&lifted)
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM account_bans WHERE lifted_by = $1", adAcc).Scan(&lifted)
 	if lifted != 3 { // every ban still active at the unban's time (now)
 		t.Fatalf("lifted bans = %d, want 3", lifted)
 	}
@@ -134,7 +159,8 @@ func TestRolesBansAudit(t *testing.T) {
 	for _, e := range es {
 		got = append(got, e.Action+":"+e.Result)
 	}
-	want := []string{"announce:ok", "unban:not_banned", "unban:ok", "ban:ok", "ban:ok", "ban:not_found", "ban:protected", "ban:ok", "set_role:ok"}
+	want := []string{"announce:ok", "unban:not_banned", "unban:ok", "unban:protected", "unban:protected", "ban:ok", "ban:ok",
+		"set_role:ok", "ban:protected", "ban:protected", "ban:not_found", "ban:protected", "ban:ok", "set_role:ok"}
 	if len(got) != len(want) {
 		t.Fatalf("audit %v, want %v", got, want)
 	}
@@ -144,12 +170,27 @@ func TestRolesBansAudit(t *testing.T) {
 		}
 	}
 	if e := es[len(es)-1]; e.Source != store.AuditCLI || e.ActorName != "cli:ops" || e.TargetAccountID != gmAcc ||
-		e.Args["old"] != "player" || e.Args["new"] != "gm" || e.Args["note"] != "new GM" || !e.At.Equal(now) {
+		e.Args["old"] != "player" || e.Args["new"] != "gm" || e.Args["note"] != "new GM" || !e.At.Equal(now) || e.TargetName != "" {
 		t.Fatalf("set_role entry %+v", e)
 	}
 	if e := es[len(es)-2]; e.TargetName != "Old Tom" || e.TargetCharacterID != pl.ID || e.Args["reason"] != "botting" {
 		t.Fatalf("ban entry %+v", e)
 	}
+
+	// A demoted GM loses its bans at once, whatever the loop cached at login, and its
+	// tokens are revoked.
+	gmTok := store.Session{TokenHash: hash("gm"), AccountID: gmAcc, Kind: store.SessionAccount, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
+	_ = st.CreateSession(ctx, gmTok)
+	if _, _, err := st.SetRole(ctx, "gm@example.org", store.RolePlayer, cli); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ActiveSession(ctx, gmTok.TokenHash, store.SessionAccount, now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("token survived the demotion: %v", err)
+	}
+	if res, _ := st.Ban(ctx, store.BanRequest{Audit: actor, TargetName: "Old Tom", ActorRank: gmRank, Reason: "x", ExpiresAt: now.Add(time.Hour)}); res.Result != store.ResultProtected {
+		t.Fatalf("ban by a demoted GM: %+v", res)
+	}
+	want = append([]string{"ban:protected", "set_role:ok"}, want...)
 
 	// The log is append-only and survives the deletion of the accounts it names.
 	for _, sql := range []string{"UPDATE audit_log SET result = 'x'", "DELETE FROM audit_log", "TRUNCATE audit_log"} {

@@ -54,3 +54,7 @@ SET role = sqlc.arg(role)
 FROM accounts old
 WHERE a.email = sqlc.arg(email) AND old.id = a.id
 RETURNING a.id, old.role AS old_role;
+
+-- name: GetAccountRole :one
+-- The actor's role now (not the one cached at login), for bans in the same transaction.
+SELECT role FROM accounts WHERE id = sqlc.arg(id);

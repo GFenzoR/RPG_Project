@@ -27,6 +27,8 @@ type Querier interface {
 	DeleteExpiredSessions(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
+	// The actor's role now (not the one cached at login), for bans in the same transaction.
+	GetAccountRole(ctx context.Context, id int64) (string, error)
 	// The ban that ends last among the account's active bans (a permanent one first).
 	GetActiveBan(ctx context.Context, arg GetActiveBanParams) (GetActiveBanRow, error)
 	// The caller passes "now" (injected clock) so expiry is testable. A banned account has
