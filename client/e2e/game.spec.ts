@@ -747,6 +747,17 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
      SELECT id, s.slot, s.item FROM characters, (VALUES (3, 48), (5, 38)) AS s(slot, item)
      WHERE name = '${name}'`,
   ]);
+  // Mining 38: the iron vein's chance is at its max (0.3 + 0.02 per level over 10, up to
+  // 0.85, data/items/decoration.yaml). At 0.3 a run of bad swings (each 1.5 s apart, ~3 s
+  // on a loaded single core) could take longer than the test, and a wolf wandering in
+  // from earlier tests gets that much longer to kill a level-1 miner.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `INSERT INTO character_skills (character_id, skill, level)
+     SELECT id, 'mining', 38 FROM characters WHERE name = '${name}'
+     ON CONFLICT (character_id, skill) DO UPDATE SET level = 38, tries = 0`,
+  ]);
 
   await page.goto("/?lang=es");
   const loginForm = page.getByTestId("login-form");
@@ -770,33 +781,83 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
     { x: 1068, y: 1054 },
     { x: 1069, y: 1054 },
   ];
-  // Two hops: the view only shows 7 tiles on each side.
-  let p = await toClient(1062, 1055);
-  await page.mouse.click(p.x, p.y);
-  await arrived(page, 1062, 1055);
-  p = await toClient(1067, 1055);
-  await page.mouse.click(p.x, p.y);
-  await arrived(page, 1067, 1055);
-  p = await toClient(1068, 1055);
-  await page.mouse.click(p.x, p.y);
-  await arrived(page, 1068, 1055);
+  // Walk next to the veins by clicking on the map. The view shows 7 tiles on each side, so
+  // it takes hops. The server and its world are shared by the suite (and by
+  // --repeat-each): a wolf hurt by an earlier test flees into town and hovers around, on
+  // and off the tiles on our way. The client finds no path to a tile with a creature on
+  // it and sends nothing (the CI failure: still on the spawn after 20 s), and the server
+  // walks around a creature or stops short. So, like a player would, whenever standing
+  // still short of the goal, click again on a free tile towards it (or on the goal).
+  const me = await self(page);
+  if (!me) throw new Error("no own creature");
+  const goal = { x: 1068, y: 1055 };
+  const free = (x: number, y: number): Promise<boolean> =>
+    page.evaluate(({ a, b, c }) => window.__rpgClient?.walkable(a, b, c) ?? false, {
+      a: x,
+      b: y,
+      c: me.z,
+    });
+  await expect
+    .poll(
+      async () => {
+        const s = await self(page);
+        if (!s || s.pending || s.walking) return "moving";
+        if (s.x === goal.x && s.y === goal.y) return "there";
+        const hx = s.x + Math.max(-6, Math.min(6, goal.x - s.x));
+        const hy = s.y + Math.max(-4, Math.min(4, goal.y - s.y));
+        const near = hx === goal.x && hy === goal.y;
+        const tries = near
+          ? [[0, 0]]
+          : [
+              [0, 0],
+              [-1, 0],
+              [0, -1],
+              [0, 1],
+              [-1, -1],
+              [-1, 1],
+              [-2, 0],
+            ];
+        for (const [dx = 0, dy = 0] of tries) {
+          if (await free(hx + dx, hy + dy)) {
+            const p = await toClient(hx + dx, hy + dy);
+            await page.mouse.click(p.x, p.y);
+            break;
+          }
+        }
+        return `${s.x},${s.y}`;
+      },
+      { timeout: 40_000, intervals: [1_000] },
+    )
+    .toBe("there");
+  let p: { x: number; y: number };
 
   // Right click on the pickaxe picks "use with"; the next click on the map uses it there.
+  // A vein is spent after 4 good swings and grows back 5 minutes after its last one
+  // (data/items/decoration.yaml). The world is shared by the suite and by --repeat-each,
+  // so earlier miners may have spent the first vein: swinging at it again only answers
+  // "agotado" and leaves us standing among the wolves for nothing (the failure under
+  // load: half the swings wasted, then killed by a wolf before a good one). Mine the first
+  // vein until it says it is spent, then the second one. The log keeps its last lines, so
+  // an old "agotado" stays visible: switch once and never back.
   const pickaxe = page.getByTestId("slot-right_hand").locator("[data-item=pickaxe]");
   const log = page.getByTestId("game-log");
+  let vein = 0;
   for (let i = 0; i < 16; i++) {
     await pickaxe.click({ button: "right" });
     await expect(page.locator("body")).toHaveClass(/using-item/);
-    const v = veins[i % 2];
+    const v = veins[vein];
     if (!v) throw new Error("no vein");
     p = await toClient(v.x, v.y);
     await page.mouse.click(p.x, p.y);
     await expect(page.locator("body")).not.toHaveClass(/using-item/);
     await page.waitForTimeout(350); // the answer arrives; its effect lasts 600 ms
-    if ((await log.textContent())?.includes("Conseguiste")) break;
+    const text = (await log.textContent()) ?? "";
+    if (text.includes("Conseguiste")) break;
+    if (vein === 0 && text.includes("agotado")) vein = 1;
     await page.waitForTimeout(1300); // gathering.use_interval_ms
   }
-  await expect(log).toContainText("Conseguiste");
+  // The item's name, not the raw {item} placeholder.
+  await expect(log).toContainText(/Conseguiste [^{}]+\./);
   await shot(page, "15-mining");
   expect(errors).toEqual([]);
 });

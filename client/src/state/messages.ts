@@ -25,7 +25,7 @@ function itemText(p: TextParam, content: ClientContent, t: Translate): string {
 
 /**
  * Formats a log message. Repeated "item" parameters become one comma-separated
- * {items} list (the loot message); a content id is a monster, NPC or skill by its
+ * {items} list (the loot message), and each one also fills its own name ({item}); a content id is a monster, NPC or skill by its
  * parameter name.
  */
 export function formatMessage(m: LogMessage, content: ClientContent, t: Translate): string {
@@ -51,9 +51,14 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
                 ? t(`quest.${p.value.value}.name`)
                 : t(`monster.${p.value.value}.name`);
         break;
-      case "item":
-        items.push(itemText(p, content, t));
+      case "item": {
+        // By its own name too: one item is {item} (gather.got, shop.bought), a list of
+        // them is {items} (loot, look).
+        const text = itemText(p, content, t);
+        items.push(text);
+        params[p.name] ??= text;
         break;
+      }
       default:
         break;
     }

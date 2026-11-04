@@ -150,4 +150,30 @@ describe("look messages", () => {
     expect(look("look.item", 8, 5, 50)).toBe("You see 5 copper coin. It weighs 0.50 oz.");
     expect(formatOz(420000)).toBe("4200.00");
   });
+
+  it("fills a single {item} parameter (gather.got, shop.bought)", () => {
+    const got = (itemId: number, count: number): string =>
+      formatMessage(
+        {
+          key: "gather.got",
+          at: 0,
+          params: [
+            {
+              $typeName: "game.v1.TextParam",
+              name: "item",
+              value: { case: "item", value: { $typeName: "game.v1.ItemStack", itemId, count } },
+            },
+          ],
+        },
+        content,
+        translator({
+          "gather.got": "You got {item}.",
+          "item.iron_sword.name": "iron sword",
+          "item.copper_coin.name": "copper coin",
+          "client.log.item_count": "{count} {name}",
+        }),
+      );
+    expect(got(20, 0)).toBe("You got iron sword.");
+    expect(got(8, 3)).toBe("You got 3 copper coin.");
+  });
 });
