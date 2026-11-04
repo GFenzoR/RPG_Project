@@ -277,6 +277,9 @@ enum MessageKind {
   MESSAGE_KIND_NPC = 5;
   // System messages: status line, warnings, loot, look results.
   MESSAGE_KIND_SYSTEM = 6;
+  // A staff announcement to everyone online (T2.6): the staff member's text travels as
+  // is in Message.text and the client adds a translated label.
+  MESSAGE_KIND_BROADCAST = 7;
 }
 
 // Message is chat or a system message. Player-typed chat travels as plain text;
@@ -378,7 +381,10 @@ enum DisconnectReason {
   // The client did not read fast enough and its outgoing queue filled up.
   DISCONNECT_REASON_SLOW_CLIENT = 6;
   DISCONNECT_REASON_SERVER_SHUTDOWN = 7;
+  // Kicked by a staff member, or the client broke the protocol.
   DISCONNECT_REASON_KICKED = 8;
+  // The account was banned by a staff member (T2.6).
+  DISCONNECT_REASON_BANNED = 9;
 }
 
 message Disconnect {

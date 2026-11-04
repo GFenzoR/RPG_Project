@@ -60,24 +60,21 @@ func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 		p.emit(systemMsg(msgChatTooLong, num("max", limit)))
 		return
 	}
+	if text[0] == '/' {
+		w.command(ctx, p, text)
+		return
+	}
 	now := ctx.Tick
-	if now < p.mutedUntil {
-		p.emit(systemMsg(msgChatMuted, num("seconds", seconds(p.mutedUntil-now))))
+	if w.muted(ctx, p) {
 		return
 	}
 	if ch == pb.ChatChannel_CHAT_CHANNEL_GLOBAL && now < p.globalReady {
 		p.emit(systemMsg(msgChatGlobalWait, num("seconds", seconds(p.globalReady-now))))
 		return
 	}
-	// GCRA: each message pushes the theoretical arrival time one refill ahead; more
-	// than burst messages ahead of now is flooding.
-	tat := max(p.chatTAT, now)
-	if tat-now > w.chatBurst {
-		p.mutedUntil = now + w.chatMute
-		p.emit(systemMsg(msgChatFlood, num("seconds", seconds(w.chatMute))))
+	if !w.floodAllowed(ctx, p) {
 		return
 	}
-	p.chatTAT = tat + w.chatRefill
 
 	msg := &pb.Message{Kind: kind, SpeakerId: p.id, SpeakerName: p.name, Body: &pb.Message_Text{Text: text}}
 	out := &pb.ServerMessage{Message: &pb.ServerMessage_ChatMessage{ChatMessage: msg}}
@@ -93,6 +90,36 @@ func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 	w.eachInRect(int(p.pos.X)-r.X, int(p.pos.Y)-r.Y, int(p.pos.X)+r.X, int(p.pos.Y)+r.Y, p.pos.Z, func(o *Player) {
 		o.emit(out)
 	})
+}
+
+// chatAllowed applies the mute and the anti-flood limit to one message of p (chat, or
+// a command that is not run: see World.command) and tells p when it is refused.
+func (w *World) chatAllowed(ctx *game.TickContext, p *Player) bool {
+	return !w.muted(ctx, p) && w.floodAllowed(ctx, p)
+}
+
+// muted reports whether p is muted for flooding, and tells p.
+func (w *World) muted(ctx *game.TickContext, p *Player) bool {
+	if ctx.Tick < p.mutedUntil {
+		p.emit(systemMsg(msgChatMuted, num("seconds", seconds(p.mutedUntil-ctx.Tick))))
+		return true
+	}
+	return false
+}
+
+// floodAllowed counts one message against the anti-flood limit; going over mutes p.
+func (w *World) floodAllowed(ctx *game.TickContext, p *Player) bool {
+	now := ctx.Tick
+	// GCRA: each message pushes the theoretical arrival time one refill ahead; more
+	// than burst messages ahead of now is flooding.
+	tat := max(p.chatTAT, now)
+	if tat-now > w.chatBurst {
+		p.mutedUntil = now + w.chatMute
+		p.emit(systemMsg(msgChatFlood, num("seconds", seconds(w.chatMute))))
+		return false
+	}
+	p.chatTAT = tat + w.chatRefill
+	return true
 }
 
 // chatKinds maps the channels a player can speak on to the kind listeners receive.

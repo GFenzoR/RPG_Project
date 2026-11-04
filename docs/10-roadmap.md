@@ -106,8 +106,10 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   comentado en el PR.
 - [x] **T2.5 Cliente de escritorio Tauri** para Windows, macOS y Linux con release
   automático por tag.
-- [ ] **T2.6 Herramientas de admin.** Comandos de GM (teleport, crear item, kick, ban,
-  anuncio), log de auditoría.
+- [x] **T2.6 Herramientas de admin.** Comandos de GM (teleport, crear item, kick, ban,
+  anuncio), log de auditoría. Roles por cuenta asignados por el operador
+  (`make set-role`), comandos `/` por chat validados en el loop, bans por cuenta con
+  `Disconnect{BANNED}` y `audit_log` append-only escrito fuera del tick.
 
 ## Hito 3 — Contenido y las 4 vocaciones
 - [ ] **T3.1 Montaraz y Druida** con sus hechizos y equipo.

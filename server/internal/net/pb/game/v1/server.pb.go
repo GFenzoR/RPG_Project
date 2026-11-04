@@ -139,6 +139,9 @@ const (
 	MessageKind_MESSAGE_KIND_NPC         MessageKind = 5
 	// System messages: status line, warnings, loot, look results.
 	MessageKind_MESSAGE_KIND_SYSTEM MessageKind = 6
+	// A staff announcement to everyone online (T2.6): the staff member's text travels as
+	// is in Message.text and the client adds a translated label.
+	MessageKind_MESSAGE_KIND_BROADCAST MessageKind = 7
 )
 
 // Enum value maps for MessageKind.
@@ -151,6 +154,7 @@ var (
 		4: "MESSAGE_KIND_GLOBAL",
 		5: "MESSAGE_KIND_NPC",
 		6: "MESSAGE_KIND_SYSTEM",
+		7: "MESSAGE_KIND_BROADCAST",
 	}
 	MessageKind_value = map[string]int32{
 		"MESSAGE_KIND_UNSPECIFIED": 0,
@@ -160,6 +164,7 @@ var (
 		"MESSAGE_KIND_GLOBAL":      4,
 		"MESSAGE_KIND_NPC":         5,
 		"MESSAGE_KIND_SYSTEM":      6,
+		"MESSAGE_KIND_BROADCAST":   7,
 	}
 )
 
@@ -258,7 +263,10 @@ const (
 	// The client did not read fast enough and its outgoing queue filled up.
 	DisconnectReason_DISCONNECT_REASON_SLOW_CLIENT     DisconnectReason = 6
 	DisconnectReason_DISCONNECT_REASON_SERVER_SHUTDOWN DisconnectReason = 7
-	DisconnectReason_DISCONNECT_REASON_KICKED          DisconnectReason = 8
+	// Kicked by a staff member, or the client broke the protocol.
+	DisconnectReason_DISCONNECT_REASON_KICKED DisconnectReason = 8
+	// The account was banned by a staff member (T2.6).
+	DisconnectReason_DISCONNECT_REASON_BANNED DisconnectReason = 9
 )
 
 // Enum value maps for DisconnectReason.
@@ -273,6 +281,7 @@ var (
 		6: "DISCONNECT_REASON_SLOW_CLIENT",
 		7: "DISCONNECT_REASON_SERVER_SHUTDOWN",
 		8: "DISCONNECT_REASON_KICKED",
+		9: "DISCONNECT_REASON_BANNED",
 	}
 	DisconnectReason_value = map[string]int32{
 		"DISCONNECT_REASON_UNSPECIFIED":         0,
@@ -284,6 +293,7 @@ var (
 		"DISCONNECT_REASON_SLOW_CLIENT":         6,
 		"DISCONNECT_REASON_SERVER_SHUTDOWN":     7,
 		"DISCONNECT_REASON_KICKED":              8,
+		"DISCONNECT_REASON_BANNED":              9,
 	}
 )
 
@@ -3503,7 +3513,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x19FLOATING_TEXT_KIND_DAMAGE\x10\x01\x12\x1b\n" +
 	"\x17FLOATING_TEXT_KIND_HEAL\x10\x02\x12\x1b\n" +
 	"\x17FLOATING_TEXT_KIND_MANA\x10\x03\x12!\n" +
-	"\x1dFLOATING_TEXT_KIND_EXPERIENCE\x10\x04*\xba\x01\n" +
+	"\x1dFLOATING_TEXT_KIND_EXPERIENCE\x10\x04*\xd6\x01\n" +
 	"\vMessageKind\x12\x1c\n" +
 	"\x18MESSAGE_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10MESSAGE_KIND_SAY\x10\x01\x12\x15\n" +
@@ -3511,14 +3521,15 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x14MESSAGE_KIND_WHISPER\x10\x03\x12\x17\n" +
 	"\x13MESSAGE_KIND_GLOBAL\x10\x04\x12\x14\n" +
 	"\x10MESSAGE_KIND_NPC\x10\x05\x12\x17\n" +
-	"\x13MESSAGE_KIND_SYSTEM\x10\x06*\x97\x01\n" +
+	"\x13MESSAGE_KIND_SYSTEM\x10\x06\x12\x1a\n" +
+	"\x16MESSAGE_KIND_BROADCAST\x10\a*\x97\x01\n" +
 	"\n" +
 	"TradeState\x12\x1b\n" +
 	"\x17TRADE_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15TRADE_STATE_REQUESTED\x10\x01\x12\x1b\n" +
 	"\x17TRADE_STATE_NEGOTIATING\x10\x02\x12\x19\n" +
 	"\x15TRADE_STATE_COMPLETED\x10\x03\x12\x19\n" +
-	"\x15TRADE_STATE_CANCELLED\x10\x04*\xdc\x02\n" +
+	"\x15TRADE_STATE_CANCELLED\x10\x04*\xfa\x02\n" +
 	"\x10DisconnectReason\x12!\n" +
 	"\x1dDISCONNECT_REASON_UNSPECIFIED\x10\x00\x12%\n" +
 	"!DISCONNECT_REASON_OUTDATED_CLIENT\x10\x01\x12%\n" +
@@ -3528,7 +3539,8 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x1eDISCONNECT_REASON_RATE_LIMITED\x10\x05\x12!\n" +
 	"\x1dDISCONNECT_REASON_SLOW_CLIENT\x10\x06\x12%\n" +
 	"!DISCONNECT_REASON_SERVER_SHUTDOWN\x10\a\x12\x1c\n" +
-	"\x18DISCONNECT_REASON_KICKED\x10\bBFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
+	"\x18DISCONNECT_REASON_KICKED\x10\b\x12\x1c\n" +
+	"\x18DISCONNECT_REASON_BANNED\x10\tBFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_server_proto_rawDescOnce sync.Once

@@ -19,6 +19,11 @@ WHERE s.token_hash = $1
   AND s.expires_at > $3
   AND a.id = s.account_id
   AND a.disabled_at IS NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM account_bans b
+      WHERE b.account_id = a.id AND b.lifted_at IS NULL
+        AND (b.expires_at IS NULL OR b.expires_at > $3)
+  )
 RETURNING s.account_id, s.character_id, s.expires_at
 `
 
@@ -98,6 +103,11 @@ WHERE s.token_hash = $1
   AND s.kind = $2
   AND s.expires_at > $3
   AND a.disabled_at IS NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM account_bans b
+      WHERE b.account_id = a.id AND b.lifted_at IS NULL
+        AND (b.expires_at IS NULL OR b.expires_at > $3)
+  )
 `
 
 type GetActiveSessionParams struct {
@@ -112,7 +122,8 @@ type GetActiveSessionRow struct {
 	ExpiresAt   pgtype.Timestamptz
 }
 
-// The caller passes "now" (injected clock) so expiry is testable.
+// The caller passes "now" (injected clock) so expiry is testable. A banned account has
+// no active session (T2.6).
 func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error) {
 	row := q.db.QueryRow(ctx, getActiveSession, arg.TokenHash, arg.Kind, arg.Now)
 	var i GetActiveSessionRow

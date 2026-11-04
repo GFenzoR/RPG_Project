@@ -28,6 +28,7 @@ import (
 type Store interface {
 	auth.Repo
 	gateway.Characters
+	AdminStore
 	SaveCharacterState(ctx context.Context, c store.CharacterState) error
 	Ping(ctx context.Context) error
 }
@@ -77,7 +78,10 @@ type App struct {
 	World   *session.World
 	Gateway *gateway.Gateway
 	saver   *session.Saver
-	handler http.Handler
+	admin   *adminWorker
+	// loopDone is closed when the game loop stopped (commands can no longer run).
+	loopDone chan struct{}
+	handler  http.Handler
 }
 
 // New builds the stack. Nothing runs until Run.
@@ -91,7 +95,7 @@ func New(cfg Config) (*App, error) {
 	if cfg.ShutdownTimeout <= 0 {
 		cfg.ShutdownTimeout = 10 * time.Second
 	}
-	a := &App{cfg: cfg, log: cfg.Logger}
+	a := &App{cfg: cfg, log: cfg.Logger, loopDone: make(chan struct{})}
 	authSvc, err := auth.New(auth.Config{Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations})
 	if err != nil {
 		return nil, err
@@ -126,6 +130,7 @@ func New(cfg Config) (*App, error) {
 			return nil, err
 		}
 		a.saver = saver
+		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, a.adminDone, a.rolesChanged)
 		w, err := session.New(session.Config{
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
@@ -137,6 +142,7 @@ func New(cfg Config) (*App, error) {
 			NPCs:          cfg.NPCs,
 			Quests:        cfg.Quests,
 			Save:          saver.Submit,
+			Admin:         a.admin.Submit,
 			AutosaveEvery: cfg.AutosaveEvery,
 			Logger:        cfg.Logger,
 		})
@@ -208,8 +214,10 @@ func (a *App) Handler() http.Handler { return a.handler }
 func (a *App) Run(ctx context.Context) error {
 	if a.saver != nil {
 		a.saver.Start()
+		a.admin.Start()
 	}
 	runErr := a.Loop.Run(ctx)
+	close(a.loopDone)
 	if runErr != nil {
 		runErr = fmt.Errorf("game loop: %w", runErr)
 	}
@@ -220,6 +228,7 @@ func (a *App) Run(ctx context.Context) error {
 	// deadline so a slow database cannot eat the others' time.
 	online := a.World.Online()
 	pending := a.World.SaveAll()
+	pendingAdmin := a.World.PendingAdmin()
 	stage := func(name string, fn func(context.Context) error) {
 		sctx, cancel := context.WithTimeout(context.Background(), a.cfg.ShutdownTimeout)
 		defer cancel()
@@ -240,6 +249,8 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		return errors.Join(errs...)
 	})
+	stage("audit log did not drain", a.admin.Stop)
+	stage("pending audit entries", func(ctx context.Context) error { return a.admin.writePending(ctx, pendingAdmin) })
 	a.log.Info("players saved at shutdown", "online", online, "ticks", uint64(a.Loop.Tick()))
 	return runErr
 }
@@ -282,6 +293,26 @@ func storeItems(in []session.ItemState) []store.InventoryItem {
 		out = append(out, store.InventoryItem{ItemID: int(it.ItemID), Count: it.Count, Slot: it.Slot, Items: storeItems(it.Items)})
 	}
 	return out
+}
+
+// adminDone hands a ban or unban result to the loop. It must not be lost (a banned
+// player would stay online), so a full queue is retried until the loop has room or
+// stops; it blocks only the admin goroutine.
+func (a *App) adminDone(r session.AdminResult) { a.enqueueRetry(a.World.AdminDone(r)) }
+
+// rolesChanged hands the current roles of online staff to the loop (a lowered role
+// must not be lost either).
+func (a *App) rolesChanged(roles map[int64]session.Role) { a.enqueueRetry(a.World.RolesChanged(roles)) }
+
+// enqueueRetry enqueues cmd, retrying a full queue every tick until the loop stops.
+func (a *App) enqueueRetry(cmd game.Command) {
+	for a.Loop.Enqueue(cmd) != nil {
+		select {
+		case <-a.loopDone:
+			return
+		case <-a.cfg.Clock.After(game.TickDuration):
+		}
+	}
 }
 
 func (a *App) snapshotSaved(s session.Snapshot) {

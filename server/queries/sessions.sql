@@ -4,14 +4,20 @@ VALUES (sqlc.arg(token_hash), sqlc.arg(account_id), sqlc.arg(kind),
         sqlc.narg(character_id), sqlc.arg(created_at), sqlc.arg(expires_at));
 
 -- name: GetActiveSession :one
--- The caller passes "now" (injected clock) so expiry is testable.
+-- The caller passes "now" (injected clock) so expiry is testable. A banned account has
+-- no active session (T2.6).
 SELECT s.account_id, s.character_id, s.expires_at
 FROM sessions s
 JOIN accounts a ON a.id = s.account_id
 WHERE s.token_hash = sqlc.arg(token_hash)
   AND s.kind = sqlc.arg(kind)
   AND s.expires_at > sqlc.arg(now)
-  AND a.disabled_at IS NULL;
+  AND a.disabled_at IS NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM account_bans b
+      WHERE b.account_id = a.id AND b.lifted_at IS NULL
+        AND (b.expires_at IS NULL OR b.expires_at > sqlc.arg(now))
+  );
 
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE token_hash = sqlc.arg(token_hash);
@@ -28,4 +34,9 @@ WHERE s.token_hash = sqlc.arg(token_hash)
   AND s.expires_at > sqlc.arg(now)
   AND a.id = s.account_id
   AND a.disabled_at IS NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM account_bans b
+      WHERE b.account_id = a.id AND b.lifted_at IS NULL
+        AND (b.expires_at IS NULL OR b.expires_at > sqlc.arg(now))
+  )
 RETURNING s.account_id, s.character_id, s.expires_at;

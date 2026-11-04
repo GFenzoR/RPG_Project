@@ -28,6 +28,8 @@ type PlayCharacter struct {
 	X, Y   int
 	Z      int
 	Town   string
+	// Role is the account's role (RolePlayer, RoleGM, RoleAdmin).
+	Role string
 	// Skills are the saved skills; a skill without a row is at its base level.
 	Skills []Skill
 	// Inventory is the equipped items with their content (inventory_items as a tree).
@@ -96,10 +98,10 @@ func (s *Store) ConsumeSession(ctx context.Context, tokenHash []byte, kind Sessi
 	}, nil
 }
 
-// PlayCharacter loads character id of account accountID (ErrNotFound if it is not theirs)
-// and records the login time.
+// PlayCharacter loads character id of account accountID (ErrNotFound if it is not theirs
+// or the account is banned at now) and records the login time.
 func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time.Time) (PlayCharacter, error) {
-	row, err := s.q.GetCharacterForPlay(ctx, db.GetCharacterForPlayParams{ID: id, AccountID: accountID})
+	row, err := s.q.GetCharacterForPlay(ctx, db.GetCharacterForPlayParams{ID: id, AccountID: accountID, Now: ts(now)})
 	if err != nil {
 		return PlayCharacter{}, fmt.Errorf("play character: %w", notFound(err))
 	}
@@ -143,6 +145,7 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 		Y:          int(row.PosY.Int32),
 		Z:          int(row.PosZ.Int16),
 		Town:       row.Town,
+		Role:       row.Role,
 	}, nil
 }
 

@@ -111,6 +111,15 @@ run-server: mapcompile ## Compile the map and run the game server on it (RPG_WOR
 	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver \
 		-ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}"
 
+# Operator tools (T2.6): roles are never granted from the game. Recorded in the audit log.
+.PHONY: set-role
+set-role: ## Set an account's role: make set-role EMAIL=... ROLE=player|gm|admin NOTE="why" (DATABASE_URL)
+	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin set-role -email "$(EMAIL)" -role "$(ROLE)" -note "$(NOTE)"
+
+.PHONY: audit-log
+audit-log: ## Print the newest audit log entries: make audit-log [N=50] (DATABASE_URL)
+	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin audit -n $(or $(N),50)
+
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 	$(CONTENT_CLI) gen-ids

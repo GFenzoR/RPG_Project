@@ -13,11 +13,18 @@ VALUES (sqlc.arg(account_id), sqlc.arg(name), sqlc.arg(vocation), sqlc.arg(healt
 RETURNING id, name, vocation, level;
 
 -- name: GetCharacterForPlay :one
--- Loads what the game server needs to put a character in the world.
-SELECT id, account_id, name, vocation, level, experience, health, mana,
-       pos_x, pos_y, pos_z, town
-FROM characters
-WHERE id = sqlc.arg(id) AND account_id = sqlc.arg(account_id);
+-- Loads what the game server needs to put a character in the world, with its account's
+-- role. A banned account's characters are not found (T2.6).
+SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
+       c.pos_x, c.pos_y, c.pos_z, c.town, a.role
+FROM characters c
+JOIN accounts a ON a.id = c.account_id
+WHERE c.id = sqlc.arg(id) AND c.account_id = sqlc.arg(account_id)
+  AND NOT EXISTS (
+      SELECT 1 FROM account_bans b
+      WHERE b.account_id = a.id AND b.lifted_at IS NULL
+        AND (b.expires_at IS NULL OR b.expires_at > sqlc.arg(now))
+  );
 
 -- name: CharacterBelongsToAccount :one
 SELECT EXISTS (

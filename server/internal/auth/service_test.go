@@ -10,6 +10,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/auth/authtest"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
 
 var testVocations = content.Vocations{
@@ -89,6 +90,30 @@ func TestLoginFailures(t *testing.T) {
 	repo.Disable(id)
 	if _, err := svc.Login(ctx, "ana@example.org", "secreto123"); !errors.Is(err, auth.ErrAccountDisabled) {
 		t.Fatalf("disabled: %v", err)
+	}
+}
+
+// A banned account cannot log in while the ban lasts (T2.6), and a wrong password still
+// answers invalid_credentials, so the ban is not revealed without the password.
+func TestLoginBanned(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, clk := newService(t)
+	id, _ := svc.Register(ctx, "ana@example.org", "secreto123")
+	repo.SetBan(id, store.Ban{ID: 1, Reason: "spam", ExpiresAt: clk.Now().Add(time.Hour)})
+	if _, err := svc.Login(ctx, "ana@example.org", "secreto123"); !errors.Is(err, auth.ErrAccountBanned) {
+		t.Fatalf("banned: %v", err)
+	}
+	if _, err := svc.Login(ctx, "ana@example.org", "wrongpass"); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("banned, wrong password: %v", err)
+	}
+	clk.Advance(time.Hour)
+	if _, err := svc.Login(ctx, "ana@example.org", "secreto123"); err != nil {
+		t.Fatalf("after the ban: %v", err)
+	}
+	repo.SetBan(id, store.Ban{ID: 2, Reason: "cheating"}) // permanent
+	clk.Advance(1000 * time.Hour)
+	if _, err := svc.Login(ctx, "ana@example.org", "secreto123"); !errors.Is(err, auth.ErrAccountBanned) {
+		t.Fatalf("permanent ban: %v", err)
 	}
 }
 

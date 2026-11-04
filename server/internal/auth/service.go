@@ -22,12 +22,15 @@ var (
 	ErrEmailTaken         = errors.New("auth: email already registered")
 	ErrInvalidCredentials = errors.New("auth: invalid email or password")
 	ErrAccountDisabled    = errors.New("auth: account disabled")
-	ErrUnauthorized       = errors.New("auth: missing, expired or revoked token")
-	ErrInvalidName        = errors.New("auth: invalid character name")
-	ErrNameTaken          = errors.New("auth: character name taken")
-	ErrInvalidVocation    = errors.New("auth: invalid vocation")
-	ErrCharacterLimit     = errors.New("auth: character limit reached")
-	ErrUnknownCharacter   = errors.New("auth: character does not exist or is not the account's")
+	// ErrAccountBanned means the credentials are right but the account has an active
+	// ban (T2.6).
+	ErrAccountBanned    = errors.New("auth: account banned")
+	ErrUnauthorized     = errors.New("auth: missing, expired or revoked token")
+	ErrInvalidName      = errors.New("auth: invalid character name")
+	ErrNameTaken        = errors.New("auth: character name taken")
+	ErrInvalidVocation  = errors.New("auth: invalid vocation")
+	ErrCharacterLimit   = errors.New("auth: character limit reached")
+	ErrUnknownCharacter = errors.New("auth: character does not exist or is not the account's")
 	// ErrBusy means every password-hashing slot stayed taken for HashWait.
 	ErrBusy = errors.New("auth: too many concurrent password checks")
 )
@@ -46,6 +49,7 @@ type Repo interface {
 	CreateCharacter(ctx context.Context, c store.NewCharacter, maxPerAccount int) (store.Character, error)
 	CharacterBelongsTo(ctx context.Context, accountID, characterID int64) (bool, error)
 	ConsumeSession(ctx context.Context, tokenHash []byte, kind store.SessionKind, now time.Time) (store.Session, error)
+	ActiveBan(ctx context.Context, accountID int64, now time.Time) (store.Ban, error)
 }
 
 // Config configures a Service. Zero durations and limits take the defaults below.
@@ -237,6 +241,14 @@ func (s *Service) Login(ctx context.Context, email, password string) (Token, err
 	}
 
 	now := s.clock.Now()
+	// Checked only after the password matched: the answer does not reveal bans to
+	// whoever does not know the password.
+	switch _, err := s.repo.ActiveBan(ctx, acc.ID, now); {
+	case err == nil:
+		return Token{}, ErrAccountBanned
+	case !errors.Is(err, store.ErrNotFound):
+		return Token{}, fmt.Errorf("login: %w", err)
+	}
 	if err := s.repo.TouchLogin(ctx, acc.ID, now); err != nil {
 		return Token{}, fmt.Errorf("login: %w", err)
 	}

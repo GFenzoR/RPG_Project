@@ -4,6 +4,7 @@ package app_test
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
+	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/store/storetest"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 	"github.com/GFenzoR/RPG_Project/server/pkg/bot"
@@ -208,4 +210,108 @@ func gauge(t *testing.T, m *metrics.Metrics, name string) float64 {
 	}
 	t.Fatalf("no metric %s", name)
 	return 0
+}
+
+// TestStaffBan runs a GM's commands on the whole stack (T2.6): the role comes from the
+// database at login, a ban disconnects the online player with BANNED and refuses its
+// next login, and every command lands in the audit log.
+func TestStaffBan(t *testing.T) {
+	st := storetest.Open(t, "it_app_staff", true)
+	data := filepath.Join("..", "..", "..", "data")
+	vocations, err := content.LoadVocations(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	balance, err := content.LoadBalance(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := content.LoadItems(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := app.New(app.Config{
+		Store: st, Clock: clock.Real{}, Seed: 1, Vocations: vocations, Balance: balance, Items: items,
+		Map: worldtest.Map(t, 0, 0, 7, "................", ".......T........", "................"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(a.Handler())
+	defer srv.Close()
+	runCtx, stop := context.WithCancel(context.Background())
+	runDone := make(chan error, 1)
+	go func() { runDone <- a.Run(runCtx) }()
+	defer func() {
+		stop()
+		if err := <-runDone; err != nil {
+			t.Error(err)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	wall := clock.Real{}
+
+	gm := bot.New(srv.URL)
+	if _, err := gm.Login(ctx, "gm@bots.local", "bot-password"); err != nil { // registers
+		t.Fatal(err)
+	}
+	if _, _, err := st.SetRole(ctx, "gm@bots.local", store.RoleGM, store.AuditEntry{At: wall.Now(), Source: store.AuditCLI, ActorName: "cli:test"}); err != nil {
+		t.Fatal(err)
+	}
+	// Changing a role revokes the account's tokens: log in again.
+	token, err := gm.Login(ctx, "gm@bots.local", "bot-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := gm.Play(ctx, token, "Warden", "guardian"); err != nil {
+		t.Fatal(err)
+	}
+	victim := bot.Account{Email: "pl@bots.local", Password: "bot-password", Character: "Bot Pia", Vocation: "guardian"}
+	pl := bot.New(srv.URL)
+	if err := pl.Enter(ctx, victim); err != nil {
+		t.Fatal(err)
+	}
+	// The player cannot run staff commands: nothing happens to the GM.
+	if err := pl.Say(ctx, "/ban Warden 1d no"); err != nil {
+		t.Fatal(err)
+	}
+	if err := gm.Say(ctx, "/ban bot pia 1d botting"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-pl.Done():
+	case <-ctx.Done():
+		t.Fatal("banned player still connected")
+	}
+	if got := pl.Disconnected(); got != "BANNED" {
+		t.Fatalf("player disconnected with %q", got)
+	}
+	_, err = bot.New(srv.URL).Login(ctx, victim.Email, victim.Password)
+	var apiErr *bot.APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != 403 || apiErr.Code != "account_banned" {
+		t.Fatalf("login of the banned account: %v", err)
+	}
+	select {
+	case <-gm.Done():
+		t.Fatalf("GM disconnected (%s)", gm.Disconnected())
+	default:
+	}
+
+	// The audit log has the role change and the ban, written outside the tick.
+	deadline := wall.Now().Add(5 * time.Second)
+	for {
+		es, err := st.ListAudit(ctx, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(es) == 2 && es[0].Action == "ban" && es[0].Result == "ok" && es[0].TargetName == "Bot Pia" &&
+			es[0].ActorName == "Warden" && es[0].Args["reason"] == "botting" && es[1].Action == "set_role" {
+			break
+		}
+		if wall.Now().After(deadline) {
+			t.Fatalf("audit log %+v", es)
+		}
+		<-wall.After(20 * time.Millisecond)
+	}
 }

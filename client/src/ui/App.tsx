@@ -79,11 +79,16 @@ function Screens({ content, t, locale, languagePicker }: AppProps): JSX.Element 
       case "loading":
         return <p class="panel">{t("client.loading")}</p>;
       case "login":
+        // A notice survives the way back to the login: a ban revokes the session too.
         return (
           <AuthForm
             t={t}
             mode="login"
-            onDone={toCharacters}
+            notice={notice}
+            onDone={() => {
+              setNotice(undefined);
+              toCharacters();
+            }}
             onSwitch={() => setScreen({ name: "register" })}
           />
         );
@@ -124,6 +129,8 @@ function Screens({ content, t, locale, languagePicker }: AppProps): JSX.Element 
 function AuthForm(props: {
   t: Translate;
   mode: "login" | "register";
+  /** Why the player is back at the login (e.g. a ban ended the game), if anything. */
+  notice?: string | undefined;
   onDone(): void;
   onSwitch(): void;
 }): JSX.Element {
@@ -150,6 +157,11 @@ function AuthForm(props: {
   return (
     <form class="panel" data-testid={`${mode}-form`} onSubmit={(e) => void submit(e)}>
       <h1>{t(mode === "login" ? "client.login.title" : "client.register.title")}</h1>
+      {props.notice && (
+        <p class="notice" role="status">
+          {props.notice}
+        </p>
+      )}
       <label>
         {t("client.login.email")}
         <input

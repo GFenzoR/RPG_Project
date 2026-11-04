@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -53,6 +54,8 @@ type Character struct {
 	HasPos bool
 	Pos    world.Pos
 	Town   string
+	// Role is the account's role (accounts.role); staff commands check it (T2.6).
+	Role Role
 	// Storage is the quest progress and flags (quest_state rows: key → value).
 	Storage map[string]int64
 }
@@ -116,6 +119,11 @@ type Config struct {
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
 	Save func(Snapshot) bool
+	// Admin submits a staff command's audit entry, ban or unban to the admin goroutine
+	// without blocking (T2.6). It returns false if its queue is full; the World keeps
+	// the job and retries on the next ticks, so no audit entry is lost. Without Admin,
+	// staff commands are disabled (they answer like an unknown command).
+	Admin func(AdminJob) bool
 	// AutosaveEvery is the autosave interval (default DefaultAutosaveEvery). The first
 	// autosave of a player is at a random point of the first interval, so players that
 	// joined together (after a restart) do not all save on the same tick.
@@ -215,6 +223,15 @@ type World struct {
 	chatBurst  game.Tick // tolerance: refill × (burst − 1)
 	chatMute   game.Tick
 	chatGlobal game.Tick
+
+	// Staff commands (T2.6): jobs not queued yet, bans and unbans waiting for the
+	// database, and accounts banned while online (until; zero = permanent).
+	adminRetry []AdminJob
+	nextJob    uint64
+	jobs       map[uint64]pendingJob
+	banned     map[int64]time.Time
+	// nextRoleCheck is the tick of the next check of the online staff's roles.
+	nextRoleCheck game.Tick
 }
 
 // New validates cfg and builds an empty World.
@@ -258,6 +275,8 @@ func New(cfg Config) (*World, error) {
 		sectors:  map[uint64][]*Player{},
 		unsaved:  map[int64]Snapshot{},
 		loading:  map[int64]int{},
+		jobs:     map[uint64]pendingJob{},
+		banned:   map[int64]time.Time{},
 		pf:       world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
 	}
 	if err := w.initCombat(); err != nil {

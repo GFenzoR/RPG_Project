@@ -122,6 +122,19 @@ activo por defecto). El healthcheck solo pasa cuando la API HTTP está arriba, e
 después de migrar, y `deploy.sh` espera ese estado (`up --wait`). Por eso no hay un
 servicio one-shot de migraciones. Antes de reiniciar, `deploy.sh` hace un backup.
 
+### Roles de staff (T2.6)
+Los roles (`player`, `gm`, `admin`) se asignan solo desde el servidor, nunca desde el juego.
+Cada cambio queda en el log de auditoría con el usuario del sistema que lo hizo:
+```
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec gameserver \
+  /app/gameserver admin set-role -email ana@example.org -role gm -note "nueva GM"
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec gameserver \
+  /app/gameserver admin audit -n 50
+```
+En local: `make set-role EMAIL=... ROLE=gm NOTE="..."` y `make audit-log`. El cambio revoca
+los tokens de la cuenta. Si se quita un rol, los personajes conectados de esa cuenta lo
+pierden en unos 5 s, sin reiniciar nada. Un rol nuevo vale desde el próximo login.
+
 ### Backups y restauración
 - El servicio `backup` hace un `pg_dump` (formato custom, comprimido) al arrancar y luego
   cada `BACKUP_INTERVAL_SECONDS`, borra los locales de más de `BACKUP_RETENTION_DAYS` días

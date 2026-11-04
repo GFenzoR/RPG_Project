@@ -126,6 +126,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Los NPCs viven en Puerto; testisle sigue siendo la isla de inicio del E2E. El E2E de NPCs
   pone `town = 'puerto'` con `psql` para despertar en el templo del Farol.
 
+## Notas de T2.6
+- `MessageKind.BROADCAST` (anuncio de staff) va al chat con la clase `broadcast` y la
+  etiqueta `client.chat.line.broadcast`. Los comandos `/` los escribe el jugador en la línea
+  de chat: el cliente no sabe de roles ni los filtra.
+- El login muestra el `notice` de la última desconexión: un ban revoca el token, así que
+  después de `BANNED` el cliente cae al login y el motivo se ve ahí.
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

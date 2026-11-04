@@ -33,6 +33,7 @@ var testItemDefs = map[uint16]string{
 	salveID:  "{id: test_salve, kind: consumable, weight: 300, stackable: true, max_stack: 100, consumable: {heal_hp: 40}}",
 	anvilID:  "{id: test_anvil, kind: material, weight: 500000}",
 	grassID:  "{id: grass, kind: ground}",
+	waterID:  "{id: test_water, kind: ground, weight: 0}",
 }
 
 const (
@@ -46,6 +47,7 @@ const (
 	bagID    = 67
 	salveID  = 68
 	anvilID  = 69
+	waterID  = 90
 	grassID  = worldtest.Grass
 )
 
