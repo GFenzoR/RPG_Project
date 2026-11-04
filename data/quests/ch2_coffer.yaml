@@ -1,0 +1,30 @@
+id: ch2_coffer
+name: quest.ch2_coffer.name
+chapter: 2
+min_level: 20
+notes: >-
+  Main line, Chapter 2 "Raíces", part 2. Started by bosque_druid after ch2_roots. Break the
+  smugglers' camp on the east shore (levels 15-18) and bring four of their tallies as proof,
+  then go down into their cave, where the hollow crawlers (levels 22-26) dragged the sealed
+  coffer of the Late Dawn. The druid opens it: a petrified root carved with the sunken
+  empire's marks, warm as a coal. Hook for Chapter 3 (the volcanic island's forge).
+steps:
+  - id: break_camp
+    description: quest.ch2_coffer.step_break_camp
+    complete_when: { kill: { monster: coffer_smuggler, count: 8 } }
+  - id: gather_tallies
+    description: quest.ch2_coffer.step_gather_tallies
+    complete_when: { has_item: { item: smuggler_tally, count: 4 } }
+  - id: deliver_tallies
+    description: quest.ch2_coffer.step_deliver_tallies
+    complete_when: { dialog_action: { npc: bosque_druid, node: ch2_tallies } }
+  - id: find_coffer
+    description: quest.ch2_coffer.step_find_coffer
+    complete_when: { has_item: { item: sealed_coffer } }
+  - id: return_coffer
+    description: quest.ch2_coffer.step_return_coffer
+    complete_when: { dialog_action: { npc: bosque_druid, node: ch2_coffer_opened } }
+rewards:
+  - { xp: 9000 }
+  - { gold: 600 }
+  - { set_flag: { key: ember_root_found, value: 1 } }

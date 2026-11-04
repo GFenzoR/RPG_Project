@@ -1,0 +1,20 @@
+id: bramble_stag
+name: monster.bramble_stag.name
+sprite: creatures/bramble_stag
+health: 130
+experience: 110
+speed: 215
+armor: 6
+defense: 10
+behavior:
+  aggressive: false
+  flee_at_health_pct: 15
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 34, interval_ms: 2000 }
+resistances: { earth: 20, fire: -10 }
+loot:
+  - { item: stag_antler, chance: 0.2 }
+  - { item: copper_coin, chance: 0.7, count: [5, 25] }
+tags: [beast, forest, bosque]
+notes: Forest edge near the town, levels 11-13. Passive until hit, flees when hurt; its antlers feed the stag-leather trade.

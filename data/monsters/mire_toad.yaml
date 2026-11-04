@@ -1,0 +1,22 @@
+id: mire_toad
+name: monster.mire_toad.name
+sprite: creatures/mire_toad
+health: 150
+experience: 135
+speed: 130
+armor: 5
+defense: 8
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 24, interval_ms: 2000 }
+  - { type: distance, element: earth, min: 6, max: 16, interval_ms: 2000, chance: 0.35, range: 3,
+      condition: { id: poison, chance: 0.5, ticks: 6, damage: 3 } }
+resistances: { earth: 60, fire: -15, ice: -10 }
+loot:
+  - { item: toad_gland, chance: 0.25 }
+  - { item: glowcap, chance: 0.3, count: [1, 2] }
+  - { item: copper_coin, chance: 0.7, count: [5, 25] }
+tags: [amphibian, swamp, bosque]
+notes: The marsh south of the town, levels 12-15. Slow, but spits venom (T3.2) at range.

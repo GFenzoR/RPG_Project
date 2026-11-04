@@ -90,6 +90,22 @@ sprites:
   decor/anvil: { placeholder: { label: AN, color: "#45484e" } }
   decor/cooking_hearth: { placeholder: { label: HE, color: "#7a3a1e" } }
 
+  # Items: Isla del Bosque (T3.6)
+  materials/stag_antler: { placeholder: { label: SA, color: "#b89a6a" } }
+  materials/toad_gland: { placeholder: { label: TG, color: "#7a9a3a" } }
+  materials/glowcap: { placeholder: { label: GC, color: "#d8e07a" } }
+  materials/thorn_heartwood: { placeholder: { label: TH, color: "#4a2e1e" } }
+  materials/crawler_chitin: { placeholder: { label: CH, color: "#d8d2c0" } }
+  materials/elm_log: { placeholder: { label: EL, color: "#8a7a5e" } }
+  food/glowcap_broth: { placeholder: { label: GB, color: "#b8a84a" } }
+  quest/smuggler_tally: { placeholder: { label: ST, color: "#6a4a2a" } }
+  quest/sealed_coffer: { placeholder: { label: SC, color: "#7a3a2a" } }
+  decor/elm_tree: { placeholder: { label: "", color: "#5e7a52" } }
+  shields/elmwood_shield: { placeholder: { label: ES, color: "#8a6e46" } }
+  armor/stagleather_coat: { placeholder: { label: SK, color: "#7a5a3a" } }
+  armor/stagleather_leggings: { placeholder: { label: SL, color: "#6e5236" } }
+  weapons/thornwood_blade: { placeholder: { label: TB, color: "#6a8a5a" } }
+
   # Creatures
   decor/oak_tree: { placeholder: { label: "", color: "#2f5a26" } }
   decor/pine_tree: { placeholder: { label: "", color: "#1f4a2e" } }
@@ -111,6 +127,11 @@ sprites:
   creatures/wreck_looter: { placeholder: { label: WL, color: "#8a6a4a" } }
   creatures/ore_beetle: { placeholder: { label: OB, color: "#5a3e34" } }
   creatures/drowned_miner: { placeholder: { label: DM, color: "#4a6a6e" } }
+  creatures/bramble_stag: { placeholder: { label: BS, color: "#8a6a3a" } }
+  creatures/mire_toad: { placeholder: { label: MT, color: "#5a7a2a" } }
+  creatures/coffer_smuggler: { placeholder: { label: CS, color: "#5a4a5e" } }
+  creatures/thornling: { placeholder: { label: TN, color: "#3a5a2a" } }
+  creatures/hollow_crawler: { placeholder: { label: HC, color: "#c8c0aa" } }
 
   # NPCs
   npcs/sailor_old: { placeholder: { label: SO, color: "#2f5d8a" } }
@@ -119,3 +140,7 @@ sprites:
   npcs/priestess: { placeholder: { label: PR, color: "#d8c890" } }
   npcs/miner_old: { placeholder: { label: MO, color: "#5a4a3a" } }
   npcs/diver_old: { placeholder: { label: DV, color: "#2a6a6e" } }
+  npcs/druid_elder: { placeholder: { label: DR, color: "#4a7a4a" } }
+  npcs/ferryman: { placeholder: { label: FM, color: "#3a6a8a" } }
+  npcs/priest_forest: { placeholder: { label: PF, color: "#a8b878" } }
+  npcs/tanner: { placeholder: { label: TA, color: "#8a5a3a" } }
