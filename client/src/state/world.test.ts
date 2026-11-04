@@ -1,3 +1,4 @@
+import { NO_SOUNDS } from "../audio/cues.ts";
 import {
   CreatureKind,
   CreatureSchema,
@@ -70,6 +71,8 @@ const content: ClientContent = {
   recipes: [],
   movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
   chat: { maxLength: 255 },
+  sounds: NO_SOUNDS,
+  islands: [],
   i18n: {},
 };
 

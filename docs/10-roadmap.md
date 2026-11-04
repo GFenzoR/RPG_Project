@@ -130,7 +130,12 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   Isla `bosque` con Raigal, muelle, olmos talables, cuatro zonas de caza y cueva en el piso
   8; 5 monstruos, 4 NPCs, recetas de olmo y el Capítulo 2 en dos quests. Pendiente: arte
   real (todo es placeholder), depósito (no hay item), puertas.
-- [ ] **T3.7 Sonido y música** (assets libres) con volumen por canal.
+- [x] **T3.7 Sonido y música** (assets libres) con volumen por canal. Motor Web Audio en
+  `client/src/audio/` con canales, voces y sonido posicional; eventos → sonidos en
+  `assets/sounds.yaml`. Hay 27 efectos y 3 loops de música (Puerto, Bosque y Cueva) más 2
+  de ambiente, todos generados por `make sounds` (`tools/soundgen`, CC0), y el panel
+  Opciones. Pendiente: sonidos de packs del usuario si los trae (`assets/README.md`),
+  música de combate y probar Opus en el WKWebView de macOS.
 
 ## Hito 4 — Alpha pública
 - [ ] **T4.1 Anti-bot y anti-AFK.** Todo del lado del servidor; no hay anticheat en el

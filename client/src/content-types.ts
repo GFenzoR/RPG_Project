@@ -19,6 +19,8 @@ export interface ItemDef {
   slots: number;
   /** A tool: using it picks a tile to use it on (UseItemOn), e.g. a rod on water. */
   useWith: boolean;
+  /** tool.use of a tool ("mining", "fishing"...; "" = not a tool): picks its gather sound. */
+  toolUse?: string;
 }
 
 /** A spell of data/spells.yaml, for the hotkey bar (the server validates every cast). */
@@ -53,6 +55,45 @@ export interface RecipeDef {
   maxSuccess: number;
 }
 
+/** Audio channels with their own volume (T3.7); "master" scales all of them. */
+export type SoundChannel = "sfx" | "ui" | "music" | "ambient";
+
+/** A sound of assets/sounds.yaml. */
+export interface SoundDef {
+  /** URL of the file, relative to the page ("audio/sounds/sfx/hit.ogg"). */
+  url: string;
+  channel: SoundChannel;
+  /** 0..1, multiplied with the channel volume. */
+  volume: number;
+  /** Copies of this sound that may play at once. */
+  maxVoices: number;
+}
+
+/** Which loop plays where: by island id, and under the sea floor (z > 7). */
+export interface LoopRules {
+  fadeMs: number;
+  islands: Record<string, string>;
+  underground: string | undefined;
+}
+
+/** assets/sounds.yaml as the client uses it (vite/content.ts). */
+export interface SoundManifest {
+  sounds: Record<string, SoundDef>;
+  /** Event name → sound ids (one is picked at random). */
+  events: Record<string, string[]>;
+  music: LoopRules;
+  ambient: LoopRules;
+}
+
+/** An island's rectangle (world/world.yaml), to know where the player is. */
+export interface IslandRect {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface ClientContent {
   /** By numeric item ID (data/ids.lock.yaml), the ID the protocol uses. */
   items: Record<number, ItemDef>;
@@ -67,6 +108,9 @@ export interface ClientContent {
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
   /** balance.yaml chat (T1.13): the server enforces it, the input only caps to it. */
   chat: { maxLength: number };
+  /** Sounds, event mapping and loops (assets/sounds.yaml, T3.7). */
+  sounds: SoundManifest;
+  islands: IslandRect[];
   /** Language → key → text. */
   i18n: Record<string, Record<string, string>>;
 }

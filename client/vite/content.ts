@@ -2,6 +2,8 @@
 //
 //   virtual:rpg-content  items by numeric ID (data/items + data/ids.lock.yaml), movement
 //                        constants (data/balance.yaml) and the client's i18n catalogs
+//   /audio/<file>        sound files of assets/sounds.yaml (T3.7), served as they are;
+//                        `vite build` emits them under audio/
 //   /atlas/<file>        sprite atlas built from assets/ with tools/spritepack (dev server);
 //                        `vite build` emits the same files under atlas/
 //
@@ -13,7 +15,16 @@ import { fileURLToPath } from "node:url";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
-import type { ClientContent, ItemDef, RecipeDef, SpellDef } from "../src/content-types.ts";
+import type {
+  ClientContent,
+  IslandRect,
+  ItemDef,
+  LoopRules,
+  RecipeDef,
+  SoundDef,
+  SoundManifest,
+  SpellDef,
+} from "../src/content-types.ts";
 
 const VIRTUAL_ID = "virtual:rpg-content";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
@@ -60,6 +71,8 @@ export function loadClientContent(root: string): ClientContent {
             ? raw["container"]["slots"]
             : 0,
         useWith: raw["kind"] === "tool",
+        toolUse:
+          isObj(raw["tool"]) && typeof raw["tool"]["use"] === "string" ? raw["tool"]["use"] : "",
       };
     }
   }
@@ -173,8 +186,78 @@ export function loadClientContent(root: string): ClientContent {
       maxPathTiles: num(mv["max_path_tiles"], 100),
     },
     chat: { maxLength: num(chat["max_length"], 255) },
+    sounds: loadSounds(root),
+    islands: loadIslands(root),
     i18n,
   };
+}
+
+/** Where the sound files are served: /audio/<path under assets/>. */
+export const AUDIO_PREFIX = "audio/";
+
+const loopRules = (v: unknown): LoopRules => {
+  const l = isObj(v) ? v : {};
+  const islands: Record<string, string> = {};
+  if (isObj(l["islands"]))
+    for (const [k, id] of Object.entries(l["islands"])) if (typeof id === "string") islands[k] = id;
+  return {
+    fadeMs: typeof l["fade_ms"] === "number" ? l["fade_ms"] : 2000,
+    islands,
+    underground: typeof l["underground"] === "string" ? l["underground"] : undefined,
+  };
+};
+
+/** assets/sounds.yaml (make validate checks it); empty when there is none. */
+export function loadSounds(root: string): SoundManifest {
+  let raw: unknown;
+  try {
+    raw = readYaml(join(root, "assets", "sounds.yaml"));
+  } catch {
+    raw = {};
+  }
+  const m = isObj(raw) ? raw : {};
+  const sounds: Record<string, SoundDef> = {};
+  if (isObj(m["sounds"]))
+    for (const [id, s] of Object.entries(m["sounds"])) {
+      if (!isObj(s) || typeof s["file"] !== "string") continue;
+      const ch = s["channel"];
+      if (ch !== "sfx" && ch !== "ui" && ch !== "music" && ch !== "ambient") continue;
+      sounds[id] = {
+        url: AUDIO_PREFIX + s["file"],
+        channel: ch,
+        volume: typeof s["volume"] === "number" ? s["volume"] : 1,
+        maxVoices: typeof s["max_voices"] === "number" ? s["max_voices"] : 3,
+      };
+    }
+  const events: Record<string, string[]> = {};
+  if (isObj(m["events"]))
+    for (const [ev, v] of Object.entries(m["events"])) {
+      const ids = (Array.isArray(v) ? v : [v]).filter(
+        (id): id is string => typeof id === "string" && id in sounds,
+      );
+      if (ids.length > 0) events[ev] = ids;
+    }
+  return { sounds, events, music: loopRules(m["music"]), ambient: loopRules(m["ambient"]) };
+}
+
+function loadIslands(root: string): IslandRect[] {
+  const w = readYaml(join(root, "world", "world.yaml"));
+  const list = isObj(w) && Array.isArray(w["islands"]) ? w["islands"] : [];
+  return list.flatMap((i) => {
+    if (!isObj(i) || typeof i["id"] !== "string" || !isObj(i["rect"])) return [];
+    const r = i["rect"];
+    return [{ id: i["id"], x: num0(r["x"]), y: num0(r["y"]), w: num0(r["w"]), h: num0(r["h"]) }];
+  });
+}
+
+const num0 = (v: unknown): number => (typeof v === "number" ? v : 0);
+
+/** The sound files to serve or emit: published path → file on disk. */
+function soundFiles(root: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const s of Object.values(loadSounds(root).sounds))
+    out.set(s.url, join(root, "assets", s.url.slice(AUDIO_PREFIX.length)));
+  return out;
 }
 
 /** Builds the sprite atlas into a fresh temporary directory and returns its files. */
@@ -210,6 +293,18 @@ export function rpgContent(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const path = new URL(req.url ?? "/", "http://client").pathname;
+        if (req.method === "GET" && path.startsWith("/" + AUDIO_PREFIX)) {
+          // Only files listed in sounds.yaml, read on each request (make sounds updates them).
+          const file = soundFiles(root).get(decodeURIComponent(path.slice(1)));
+          if (!file) {
+            res.statusCode = 404;
+            res.end();
+            return;
+          }
+          res.setHeader("content-type", "audio/ogg");
+          res.end(readFileSync(file));
+          return;
+        }
         if (req.method !== "GET" || !path.startsWith("/atlas/")) return next();
         atlas ??= buildAtlasFiles(root);
         const name = path.slice("/atlas/".length);
@@ -226,6 +321,8 @@ export function rpgContent(): Plugin {
     generateBundle() {
       for (const [name, source] of buildAtlasFiles(root))
         this.emitFile({ type: "asset", fileName: `atlas/${name}`, source });
+      for (const [fileName, file] of soundFiles(root))
+        this.emitFile({ type: "asset", fileName, source: readFileSync(file) });
     },
   };
 }

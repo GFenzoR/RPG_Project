@@ -31,6 +31,26 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 | Descarga inicial (web) | < 5 MB sin contar sprites; atlas cargados por demanda |
 | Memoria | < 300 MB |
 
+### Audio (T3.7)
+El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez que suena
+(carga perezosa) y queda decodificado en memoria.
+
+| Métrica | Presupuesto | Hoy |
+|---|---|---|
+| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~526 KiB (32 archivos) |
+| Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
+| Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~154 KiB / ~29 KiB |
+| Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
+| Memoria decodificada (PCM float, 48 kHz mono) | < 40 MB | ~27 MB con todo cargado |
+
+- Formato: **Ogg Opus mono**, 48 kHz. Bitrates: 32 kbps en efectos, 24 en música y 16 en
+  ambiente.
+- El test de `tools/soundgen` (`checkBudget`) falla si algún archivo o el total se pasan.
+  También lo comprueba `make sounds`. Los límites están en `BUDGET`
+  (`tools/soundgen/src/index.ts`): si se cambian, se actualiza esta tabla.
+- Un sonido silenciado no ocupa voz. Si el archivo llega más de 300 ms tarde, ese sonido
+  se descarta.
+
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.
 - Escenario base: 100 bots repartidos en la isla inicial durante 10 minutos.

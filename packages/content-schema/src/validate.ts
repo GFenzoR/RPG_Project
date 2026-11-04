@@ -135,6 +135,7 @@ class Validator {
     this.checkShopPrices();
     this.checkQuestItemSources();
     this.checkI18n();
+    this.checkSounds();
     const lockFile = join(dataDir, "ids.lock.yaml");
     const lock = existsSync(lockFile)
       ? this.load(lockFile, "data/ids.lock.yaml", "ids-lock")
@@ -802,6 +803,77 @@ class Validator {
         });
       }
     }
+  }
+
+  /**
+   * assets/sounds.yaml (T3.7, optional): files exist, vendor packs have their CREDITS.md
+   * row, events and loops name declared sounds of the right channel, islands exist.
+   */
+  private checkSounds(): void {
+    const abs = join(this.root, "assets", "sounds.yaml");
+    if (!existsSync(abs)) return;
+    const src = this.load(abs, "assets/sounds.yaml", "sounds");
+    if (!src || !isObj(src.data)) return;
+    const sounds = isObj(src.data["sounds"]) ? src.data["sounds"] : {};
+    const creditsFile = join(this.root, "assets", "CREDITS.md");
+    const credits = existsSync(creditsFile) ? readFileSync(creditsFile, "utf8") : "";
+    for (const [id, s] of Object.entries(sounds)) {
+      const file = isObj(s) ? s["file"] : undefined;
+      if (typeof file !== "string") continue;
+      if (!existsSync(join(this.root, "assets", file)))
+        this.error(
+          src,
+          ["sounds", id, "file"],
+          `assets/${file} does not exist (run \`make sounds\`)`,
+        );
+      const pack = /^vendor\/([^/]+)\//.exec(file)?.[1];
+      if (pack && !credits.includes(`assets/vendor/${pack}/`))
+        this.error(src, ["sounds", id, "file"], `pack "${pack}" has no row in assets/CREDITS.md`);
+    }
+    const channelOf = (id: string): unknown => {
+      const s = sounds[id];
+      return isObj(s) ? s["channel"] : undefined;
+    };
+    const ref = (path: PathSegment[], id: unknown, loop?: "music" | "ambient"): void => {
+      if (typeof id !== "string") return;
+      const ch = channelOf(id);
+      if (ch === undefined) this.error(src, path, `unknown sound "${id}"`);
+      else if (loop && ch !== loop)
+        this.error(src, path, `sound "${id}" is on channel ${String(ch)}, not ${loop}`);
+      else if (!loop && (ch === "music" || ch === "ambient"))
+        this.error(src, path, `sound "${id}" is a ${ch} loop, not an event sound`);
+    };
+    const events = isObj(src.data["events"]) ? src.data["events"] : {};
+    for (const [ev, v] of Object.entries(events)) {
+      if (Array.isArray(v)) v.forEach((id, i) => ref(["events", ev, i], id));
+      else ref(["events", ev], v);
+    }
+    const islands = this.worldIslands();
+    for (const loop of ["music", "ambient"] as const) {
+      const l = src.data[loop];
+      if (!isObj(l)) continue;
+      ref([loop, "underground"], l["underground"], loop);
+      const by = isObj(l["islands"]) ? l["islands"] : {};
+      for (const [island, id] of Object.entries(by)) {
+        if (islands && !islands.has(island))
+          this.error(
+            src,
+            [loop, "islands", island],
+            `unknown island "${island}" (world/world.yaml)`,
+          );
+        ref([loop, "islands", island], id, loop);
+      }
+    }
+  }
+
+  /** Island ids of world/world.yaml, or undefined when there is no world/ (tests). */
+  private worldIslands(): Set<string> | undefined {
+    const abs = join(this.root, "world", "world.yaml");
+    if (!existsSync(abs)) return undefined;
+    const diags: Diagnostic[] = [];
+    const w = parseYaml(readFileSync(abs, "utf8"), "world/world.yaml", diags);
+    const list = w && isObj(w.data) ? asList(w.data["islands"]) : [];
+    return new Set(list.map(idOf).filter((id): id is string => id !== undefined));
   }
 
   private parseBaseLock(text: string): SourceFile | undefined {

@@ -1,0 +1,15 @@
+{
+  "name": "@rpg/soundgen",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Procedural sound effects and music loops, encoded to Ogg Opus (make sounds). Built in T3.7.",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  }
+}

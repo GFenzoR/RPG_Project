@@ -129,6 +129,15 @@ gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeholders for missing art)
 	node --experimental-strip-types tools/spritepack/src/cli.ts build $(if $(STRICT),--strict)
 
+# soundgen renders our own effects and music and encodes them with ffmpeg (libopus) into
+# assets/sounds/ (committed, so builds and CI never need ffmpeg). T3.7, assets/README.md.
+.PHONY: sounds
+sounds: ## Render assets/sounds/** (needs ffmpeg with libopus) and check the size budget
+	node --experimental-strip-types tools/soundgen/src/cli.ts build $(if $(ONLY),--only $(ONLY))
+
+.PHONY: assets
+assets: sprites sounds ## make sprites + make sounds
+
 # The editor has no "build" script (it runs on Vite's dev server with its file API), so the
 # production bundle is built directly; the client's "build" writes build/client (+ atlas/).
 .PHONY: build

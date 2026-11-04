@@ -7,6 +7,7 @@ import { CreatureKind, DisconnectReason, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import { Game } from "../game.ts";
 import type { GameUi } from "../game.ts";
+import type { AudioEngine } from "../audio/engine.ts";
 import { creatureName, formatMessage } from "../state/messages.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api } from "../net/api.ts";
@@ -31,6 +32,8 @@ export interface AppProps {
   locale: string;
   /** The language selector: fixed in a corner, or in the game's header. */
   languagePicker?: JSX.Element;
+  /** Sound (T3.7); undefined = silent. */
+  audio?: AudioEngine | undefined;
 }
 
 /** Translated text of an API error code (error.<code>), or a generic message. */
@@ -51,7 +54,7 @@ export function App(props: AppProps): JSX.Element {
   return <Screens {...props} />;
 }
 
-function Screens({ content, t, locale, languagePicker }: AppProps): JSX.Element {
+function Screens({ content, t, locale, languagePicker, audio }: AppProps): JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
   const [notice, setNotice] = useState<string | undefined>(undefined);
 
@@ -116,6 +119,7 @@ function Screens({ content, t, locale, languagePicker }: AppProps): JSX.Element 
             content={content}
             locale={locale}
             languagePicker={languagePicker}
+            audio={audio}
             character={screen.character}
             sessionToken={screen.sessionToken}
             onEnd={(reason) => {
@@ -337,6 +341,7 @@ function GameScreen(props: {
   content: ClientContent;
   locale: string;
   languagePicker: JSX.Element | undefined;
+  audio: AudioEngine | undefined;
   character: Character;
   sessionToken: string;
   onEnd(reason: DisconnectReason | undefined): void;
@@ -387,6 +392,7 @@ function GameScreen(props: {
       sessionToken: props.sessionToken,
       vocation: props.character.vocation,
       storage: safeStorage(),
+      audio: props.audio,
       entered: () => setEntered(true),
       ended: (reason) => props.onEnd(reason),
       update: setUi,

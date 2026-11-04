@@ -113,6 +113,25 @@ consola o excepción no capturada hace fallar el test. Screenshots en
 `client/e2e/screenshots/actual/` (`01-register` … `06-walked-click`); el job `e2e` los sube
 junto con los del editor.
 
+### Audio (T3.7)
+- **Unitarias** (`client/src/audio/*.test.ts`): el motor corre sobre un `AudioContext`
+  falso que registra ganancias, fuentes y rampas. Se prueban los canales y sus volúmenes,
+  el silencio, el desbloqueo tras el primer gesto, la caché de decodificación, el límite de
+  voces, la atenuación y el paneo, y el fundido cruzado de loops. También el mapeo
+  mensaje → evento (`cues.ts`) y que `assets/sounds.yaml` cubra los eventos principales.
+- **Contenido**: `make validate` valida `assets/sounds.yaml` contra
+  `sounds.schema.json`. Comprueba además que existan los archivos, que cada pack de
+  `vendor/` tenga su fila en `CREDITS.md`, que cada referencia apunte a un sonido del canal
+  correcto y que las islas existan.
+- **Generador** (`tools/soundgen`): mismos samples en cada render, duración exacta de los
+  loops y el presupuesto de tamaño (07). No encoda: la CI no necesita ffmpeg.
+- **E2E** (`T3.7: sound starts…`): en headless no se escucha nada, así que se espía
+  `AudioBufferSourceNode.prototype.start`. El test comprueba que nada empiece antes del
+  primer gesto, que al entrar suenen el loop y el ambiente de la isla, que los clicks y
+  los pasos programen reproducciones, que un canal silenciado no gaste voz y que el slider
+  y el silencio persistan tras recargar. Screenshots: `26-sound-options` a
+  `28-sound-options-login`.
+
 ## Checklist del PR
 - [ ] `make lint test validate` pasa
 - [ ] Tests nuevos para la lógica nueva
