@@ -1,9 +1,13 @@
 name: ci
 
+# Each job runs only when the change touches what it checks (.github/scripts/ci-changes.sh
+# decides; docs/08 "CI (GitHub Actions)"). A skipped job counts as passed for required
+# checks. workflow_dispatch runs every job.
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,35 +17,80 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      go-server: ${{ steps.f.outputs.go-server }}
+      go-bots: ${{ steps.f.outputs.go-bots }}
+      ts: ${{ steps.f.outputs.ts }}
+      validate: ${{ steps.f.outputs.validate }}
+      actionlint: ${{ steps.f.outputs.actionlint }}
+      build: ${{ steps.f.outputs.build }}
+      desktop: ${{ steps.f.outputs.desktop }}
+      e2e: ${{ steps.f.outputs.e2e }}
+      integration: ${{ steps.f.outputs.integration }}
+      bench: ${{ steps.f.outputs.bench }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the base of the diff
+      - name: rules self-test
+        run: .github/scripts/ci-changes.sh --test
+      - id: f
+        name: changed paths
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: .github/scripts/ci-changes.sh ci
+
+  # One matrix job so the check names stay "go (server)" and "go (tools/bots)"; a module
+  # with no changes passes at once (a job-level `if` cannot read the matrix).
   go:
     name: go (${{ matrix.module }})
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        module: [server, tools/bots]
+        include:
+          - module: server
+            run: ${{ needs.changes.outputs.go-server }}
+          - module: tools/bots
+            run: ${{ needs.changes.outputs.go-bots }}
     steps:
+      - name: nothing to check
+        if: matrix.run != 'true'
+        run: echo "no changes that affect ${{ matrix.module }}"
       - uses: actions/checkout@v4
+        if: matrix.run == 'true'
       - uses: actions/setup-go@v5
+        if: matrix.run == 'true'
         with:
           go-version-file: ${{ matrix.module }}/go.mod
           cache-dependency-path: ${{ matrix.module }}/go.mod
       - name: gofmt
+        if: matrix.run == 'true'
         working-directory: ${{ matrix.module }}
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: go vet
+        if: matrix.run == 'true'
         working-directory: ${{ matrix.module }}
         run: go vet ./...
       - name: golangci-lint
+        if: matrix.run == 'true'
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.15.0 # keep in sync with scripts/local-setup.sh
           working-directory: ${{ matrix.module }}
       - name: go test
+        if: matrix.run == 'true'
         working-directory: ${{ matrix.module }}
         run: go test -race ./...
 
   ts:
+    needs: changes
+    if: needs.changes.outputs.ts == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,6 +108,8 @@ jobs:
         run: pnpm test
 
   validate:
+    needs: changes
+    if: needs.changes.outputs.validate == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +135,8 @@ jobs:
         run: make test-parity
 
   actionlint:
+    needs: changes
+    if: needs.changes.outputs.actionlint == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +148,8 @@ jobs:
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -color
 
   build:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -110,6 +165,8 @@ jobs:
   # Desktop app (apps/desktop, Tauri 2) on Linux: Rust checks and tests, then a debug
   # build with the .deb bundle. Windows and macOS build in release-desktop.yml.
   desktop:
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -138,6 +195,8 @@ jobs:
         run: pnpm --filter @rpg/desktop tauri build --debug --bundles deb
 
   e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The client E2E runs the game server, which needs Postgres (it applies migrations).
@@ -203,6 +262,8 @@ jobs:
           if-no-files-found: warn
 
   integration:
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -230,6 +291,8 @@ jobs:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/rpg_test?sslmode=disable
 
   bench:
+    needs: changes
+    if: needs.changes.outputs.bench == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

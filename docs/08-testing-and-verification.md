@@ -54,6 +54,29 @@ Workflow `ci.yml` en cada PR y en cada push a `main`. Los jobs corren en paralel
 corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pnpm
 (`setup-node`) y de módulos/build de Go (`setup-go`).
 
+**Solo corre lo que el cambio necesita**, para ahorrar minutos de Actions.
+- El job `changes` corre `.github/scripts/ci-changes.sh`. Ese script compara el PR contra
+  su base (o el push contra el commit anterior) y decide qué jobs corren. Las reglas están
+  en el script, que se autoverifica con `--test` en cada corrida.
+- Un job saltado cuenta como aprobado para los checks requeridos.
+- Algunos ejemplos:
+  - un PR solo de docs no corre ningún job;
+  - uno del editor corre `ts`, `validate`, `build` y `e2e`;
+  - uno del servidor corre los jobs de Go, `integration`, `e2e` y el `stack`;
+  - `desktop`, que compila Rust, solo corre por `apps/desktop/` o por el puente de red del
+    cliente (`client/src/net/`, `client/package.json`).
+- Corren todos los jobs cuando el cambio toca la CI, el `Makefile`, el lockfile o la
+  config del workspace, cuando no se puede calcular el diff (por ejemplo, tras un force
+  push) y al lanzar `ci.yml` a mano (`workflow_dispatch`).
+- En `images.yml` el criterio es este:
+  - en los PR, `image` solo compila para amd64, sin QEMU, y solo si cambia un Dockerfile;
+  - `stack` ya compila las imágenes del gameserver y la web para cualquier cambio de la
+    app;
+  - `home-stack` solo corre por cambios en `deploy/`;
+  - en `main` y en los tags de versión se compila y publica todo, multi-arch.
+- Una regla nueva va en el script, con su caso en `self_test`. Ante la duda, el patrón
+  pertenece al job: equivocarse ahí solo cuesta minutos.
+
 | Job | Qué corre | Artefactos |
 |---|---|---|
 | `go (server)`, `go (tools/bots)` | gofmt, `go vet`, golangci-lint, `go test -race ./...` | — |
