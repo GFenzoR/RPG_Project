@@ -138,12 +138,15 @@ func (w *World) addCondition(ctx *game.TickContext, h holder, def *content.Condi
 			w.scheduleCondition(ctx, h, c, ctx.Tick+c.every)
 			*list = append(*list, c)
 		} else {
+			before := c.ticks
 			if def.Stacking == content.StackAdd {
 				c.ticks = min(c.ticks+ticks, def.MaxTicks)
 			} else {
 				c.ticks = max(c.ticks, ticks)
 			}
-			if damage > c.damage {
+			// The hits left count for whoever made them: a stronger application, or an
+			// equal one that added hits, takes over the experience share.
+			if damage > c.damage || damage == c.damage && c.ticks > before {
 				c.damage, c.source = damage, source
 			}
 		}

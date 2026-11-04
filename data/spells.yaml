@@ -169,7 +169,7 @@
   group: support
   cooldown_ms: 2000
   group_cooldown_ms: 2000
-  effect: { condition: { id: hasted, duration_ms: 22000 } }
+  effect: { condition: { id: hasted, duration_ms: 25000 } }
   notes: The caster walks faster for a while; ends a slow.
 
 - id: purge_venom

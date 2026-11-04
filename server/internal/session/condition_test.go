@@ -38,7 +38,7 @@ func condSpells() content.Spells {
 	ss := testSpells()
 	for _, s := range []*content.Spell{
 		spell("haste", content.SpellEffect{Condition: &content.ConditionApply{ID: "hasted", DurationMs: 4000}}),
-		spell("veil", content.SpellEffect{Condition: &content.ConditionApply{ID: "invisible", DurationMs: 8000}}),
+		spell("veil", content.SpellEffect{Condition: &content.ConditionApply{ID: "invisible", DurationMs: 10000}}),
 		spell("root", content.SpellEffect{Condition: &content.ConditionApply{ID: "slowed", DurationMs: 3000, Range: 4}}),
 		spell("purge", content.SpellEffect{Cure: []string{"poison"}}),
 		spell("aim", content.SpellEffect{Condition: &content.ConditionApply{ID: "keen_eye", DurationMs: 3000}}),
@@ -410,6 +410,31 @@ func TestInvisibilityIsFilteredByServer(t *testing.T) {
 	}
 	h.checkInvariants()
 
+	// Accepted hint (docs/02): an invisible player still takes its tile. Walking into it
+	// is refused with WalkRejected at the walker's own position, and nothing else about
+	// the invisible player is sent.
+	ocl.take()
+	h.input(ocl, walk(W)) // (22,10) → (21,10): one step is 10 ticks
+	h.sim.RunTicks(12)
+	h.input(ocl, walk(pb.Direction_DIRECTION_NORTH_WEST)) // into the invisible at (20,9)
+	h.sim.RunTicks(3)
+	if !p.Invisible() {
+		t.Fatal("the invisibility ended before the collision")
+	}
+	evs = ocl.take()
+	if rej := find(evs, (*pb.ServerMessage).GetWalkRejected); len(rej) != 1 || o.Pos() != pos(21, 10) {
+		t.Fatalf("walking into the invisible: rejections %v, observer at %v (events %v)", rej, o.Pos(), kinds(evs))
+	}
+	if app, _, moved := knowsByEvents(evs, p.ID()); app || moved || o.Knows(p.ID()) {
+		t.Fatalf("the collision sent the invisible player: invisible %v, p at %v, o at %v, events %v", p.Invisible(), p.Pos(), o.Pos(), kinds(evs))
+	}
+	for _, e := range evs {
+		if e.GetCreatureHealth() != nil || e.GetEffect() != nil || e.GetCreatureSpeed() != nil {
+			t.Errorf("collision sent %v", kinds([]*pb.ServerMessage{e}))
+		}
+	}
+	h.checkInvariants()
+
 	// The end: it appears to everyone who sees it.
 	h.sim.RunTicks(4 * condSecond)
 	if p.Invisible() {
@@ -572,5 +597,39 @@ func TestConditionsQuickRelogAndLogout(t *testing.T) {
 	got := h.w.ConditionsForTest(again)
 	if got["poison"] != 4 || got["slowed"] == 0 || again.Speed() >= 200 {
 		t.Fatalf("conditions after a quick relog = %v, speed %d", got, again.Speed())
+	}
+}
+
+// A second player who extends a damage condition with as strong hits takes over the
+// experience share of the hits left (review of #49).
+func TestConditionShareFollowsWhoExtendsIt(t *testing.T) {
+	def := targetDummyDef() // fire −20 %: a hit of 5 is 6
+	h := condHarness(t, worldtest.Open(t, 0, 0, 32, 32), withMonster(def, 13, 10))
+	_, a := h.join("Ana", at(10, 10))
+	_, b := h.join("Bea", at(10, 12))
+	h.sim.Step()
+	m := h.dummy()
+	apply := func(src *session.Player, ticks int) {
+		h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+			h.w.ApplyConditionForTest(ctx, nil, m, &content.ConditionApply{ID: "burning", Ticks: ticks, Damage: 5}, src.ID())
+		}))
+		h.sim.Step()
+	}
+	apply(a, 1)
+	apply(b, 4)
+	h.sim.RunTicks(5 * condSecond)
+	if got := m.DamageShareForTest(b.ID()); got != 4*6 {
+		t.Errorf("B's share %d, want the 4 hits it made (24)", got)
+	}
+	if got := m.DamageShareForTest(a.ID()); got != 0 {
+		t.Errorf("A's share %d, want 0", got)
+	}
+	// A weaker extension does not take it.
+	apply(a, 2)
+	apply(b, 4)
+	apply(a, 1)
+	h.sim.RunTicks(5 * condSecond)
+	if got := m.DamageShareForTest(a.ID()); got != 0 {
+		t.Errorf("A's share %d after an extension that added nothing, want 0", got)
 	}
 }

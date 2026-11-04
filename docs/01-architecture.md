@@ -161,7 +161,9 @@ Decisión del 2026-11-03: el juego se sigue jugando en el navegador y en el escr
      No alcanza con que el cliente no lo dibuje. La invisibilidad ya lo hace (qué no viaja:
      `05-network-protocol.md`, "Condiciones"); `TestInvisibilityIsFilteredByServer`
      (`internal/session/condition_test.go`) es la auditoría de información de T4.1 para ese
-     caso.
+     caso. Un invisible sigue ocupando su casilla: quien intente pisarla recibe
+     `WalkRejected` (un camino por click lo rodea) y los monstruos lo esquivan. Es una pista
+     aceptada.
    - **No viaja** lo que está fuera de la ventana: jugadores, botín ni restos.
 3. **Abuso de la API HTTP** (registro masivo, fuerza bruta). Respuesta: los rate limits
    por IP, por cuenta y por email+IP de T1.3.

@@ -90,3 +90,13 @@ func (m *Monster) MonsterConditionsForTest() []string {
 
 // CombatSkillForTest is p's skill level as combat uses it (with keen_eye).
 func (w *World) CombatSkillForTest(p *Player, id string) int { return w.combatSkill(p, id) }
+
+// DamageShareForTest is the damage creature id dealt to m (its experience share).
+func (m *Monster) DamageShareForTest(id uint32) int {
+	for _, d := range m.damage {
+		if d.player == id {
+			return d.amount
+		}
+	}
+	return 0
+}

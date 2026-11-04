@@ -185,7 +185,8 @@ Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data
   - **Daño periódico:** cada golpe aplica la resistencia del monstruo a su elemento (100 % o
     más = inmune: la condición no se aplica); la armadura no lo frena. En una zona de
     protección el golpe no hace daño (pero cuenta). Al monstruo, el daño suma a la parte
-    de experiencia de quien la aplicó.
+    de experiencia de quien la aplicó; si otro la renueva con un daño mayor, o igual y
+    agregando golpes, los golpes que quedan pasan a su parte.
   - **Apilado:** `refresh` = queda el mayor tiempo (o golpes) y el daño mayor; `add` = se
     suman hasta el máximo. Una sola instancia por condición y criatura.
   - **Velocidad:** `velocidad = base × (100 + Σ speed_pct) / 100` (mínimo 1). Cambia
@@ -204,11 +205,13 @@ Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data
     renueva); caminar, hablar o usar items no. Lo que un invisible cambia en el mundo sí
     se ve, porque es estado del mapa: mover o soltar items (`TileUpdate`), recolectar (el
     efecto en la casilla del recurso) o abrir una puerta. Es una pista aceptada, como en
-    el género; su criatura, su vida y sus números no viajan.
+    el género; su criatura, su vida y sus números no viajan. Un invisible sigue ocupando
+    su casilla: quien intente pisarla recibe `WalkRejected` (un camino por click lo rodea)
+    y los monstruos lo esquivan. Es una pista aceptada.
   - **Relogueo:** las de daño y `slowed` sobreviven a un logout con su tiempo restante
     (`characters.conditions`), para que salir del juego no cure; haste, invisibilidad y
     puntería son ventajas y terminan. **Morir** termina todas.
-  - **Fuentes:** `swift_stride` (haste, las cuatro vocaciones) y `purge_venom` (cura el
+  - **Fuentes:** `swift_stride` (haste 25 s, las cuatro vocaciones) y `purge_venom` (cura el
     veneno) desde nivel 8-9; `keen_eye` (montaraz), `entangle` (druida, `slowed` a un
     monstruo a 4 casillas), `shroud` (arcanista, invisibilidad). `ember_ring` puede dejar
     ardiendo y `arc_bolt` electrizado. La araña de musgo (escupitajo) y el escarabajo de

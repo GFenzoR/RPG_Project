@@ -451,6 +451,8 @@ Reglas en `02-game-design.md` ("Condiciones").
   (`Effect`, `FloatingText`, `CreatureHealth`), ni un `Projectile` hacia él. Su chat local
   llega con su nombre pero sin `pos`. Al terminar le llega `CreatureAppear` a quien ve su
   casilla. Solo su propio cliente lo sigue recibiendo (y lo dibuja semitransparente).
+  Un invisible sigue ocupando su casilla: quien intente pisarla recibe `WalkRejected` (un
+  camino por click lo rodea) y los monstruos lo esquivan. Es una pista aceptada.
 
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
