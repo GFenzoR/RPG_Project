@@ -37,6 +37,7 @@ const KEY_ORDER = [
   "requires",
   "level",
   "islands",
+  "boat_routes",
   "x",
   "y",
   "z",

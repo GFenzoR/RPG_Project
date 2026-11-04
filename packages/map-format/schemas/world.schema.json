@@ -27,6 +27,11 @@
           }
         }
       }
+    },
+    "boat_routes": {
+      "description": "Deprecated (T3.5): boat routes live in data/boat_routes.yaml. Kept empty only so the base branch's map-pr check accepts this file; remove in a later PR.",
+      "type": "array",
+      "maxItems": 0
     }
   }
 }

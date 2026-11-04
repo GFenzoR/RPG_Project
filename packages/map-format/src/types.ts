@@ -118,6 +118,8 @@ export interface WorldIslandEntry {
 export interface WorldMeta {
   format: 1;
   islands: WorldIslandEntry[];
+  /** Deprecated (T3.5): always empty; routes live in data/boat_routes.yaml. */
+  boat_routes?: [];
 }
 
 export interface World {
