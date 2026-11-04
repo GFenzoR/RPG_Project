@@ -430,6 +430,7 @@ party:
     quest: ch1_shipwreck           # completada
     item: { item: boat_ticket, count: 1, consume: true }  # consume: false = solo llevarlo
 ```
+- `requires.item` no puede ser una moneda (el oro se cobra con `price`).
 - Hoy el archivo está vacío (`[]`): la única isla además de Puerto es `testisle`, que no
   es parte del mundo oficial. La ruta a `bosque` está comentada en el archivo para T3.6,
   que solo agrega datos (la ruta, `npc.harbor_master.to_forest` en i18n y la isla).

@@ -376,6 +376,8 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
 - **Regla de combate (decidida):** no se zarpa durante `combat_block_ms` (12 s) desde la
   última vez que un monstruo atacó al jugador (aunque falle), que el jugador recibió daño
   (también de veneno o fuego) o que golpeó a un monstruo.
+  La marca no se guarda: hoy salir y volver a entrar la borra, porque todavía no hay
+  bloqueo de logout en combate. Cuando llegue, cierra también este hueco.
 - **Llegada:** la casilla `to` de la ruta; si está ocupada, la libre y caminable más
   cercana a ≤ `arrival_radius` (2) casillas. Si no hay ninguna, se rechaza
   (`travel.no_room`) sin cobrar.

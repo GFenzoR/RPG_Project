@@ -25,6 +25,7 @@ type BoatRoute struct {
 	To       Position      `yaml:"to"`
 	Price    int64         `yaml:"price"`
 	Requires RouteRequires `yaml:"requires"`
+	Notes    string        `yaml:"notes"`
 }
 
 // RouteRequires are a route's requirements (zero values mean none).
@@ -90,8 +91,8 @@ func (rs BoatRoutes) Check(npcs NPCs, quests Quests, items Items) error {
 		if q := r.Requires.Quest; q != "" && quests[q] == nil {
 			return fmt.Errorf("%s: unknown quest %q", where, q)
 		}
-		if it := r.Requires.Item; it != nil && (items[it.Item] == nil || it.Count < 0) {
-			return fmt.Errorf("%s: unknown item %q or negative count", where, it.Item)
+		if it := r.Requires.Item; it != nil && (items[it.Item] == nil || it.Count < 0 || items[it.Item].Currency != nil) {
+			return fmt.Errorf("%s: item %q must be a known non-currency item with count >= 0 (gold is price)", where, it.Item)
 		}
 		hasNode := false
 		for _, n := range npcs[r.Captain].Dialog.Nodes {

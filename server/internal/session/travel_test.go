@@ -242,6 +242,9 @@ func TestBoatRoutesCheckedAtStart(t *testing.T) {
 		"arrival off the map":     func(r *content.BoatRoute) { r.To = content.Position{X: 500, Y: 500, Z: 7} },
 		"captain sells no routes": func(r *content.BoatRoute) { r.Captain = "puerto_priest" },
 		"unknown quest":           func(r *content.BoatRoute) { r.Requires.Quest = "nope" },
+		"coins as the ticket": func(r *content.BoatRoute) {
+			r.Requires.Item = &content.RouteItem{Item: "copper_coin", Count: 5, Consume: true}
+		},
 	}
 	for name, edit := range bad {
 		t.Run(name, func(t *testing.T) {

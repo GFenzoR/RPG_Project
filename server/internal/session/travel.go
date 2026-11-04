@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -73,16 +74,30 @@ func (w *World) initTravel() error {
 				rt.island = is.ID
 			}
 		}
+		if rt.island == "" {
+			return fmt.Errorf("session: boat route %q: the arrival is outside every island", r.ID)
+		}
 		w.routes[r.Captain] = append(w.routes[r.Captain], rt)
 	}
-	for captain, rs := range w.routes {
-		for id, n := range w.cfg.NPCs[captain].Dialog.Nodes {
-			if n.BoatRoutes && len(rs)+len(n.Options) > 9 {
-				return fmt.Errorf("session: npc %q node %q: %d routes and %d options are more than 9", captain, id, len(rs), len(n.Options))
+	for _, r := range w.cfg.BoatRoutes { // file order, so the reported error is stable
+		rs := w.routes[r.Captain]
+		def := w.cfg.NPCs[r.Captain]
+		for _, id := range sortedKeys(def.Dialog.Nodes) {
+			if n := def.Dialog.Nodes[id]; n.BoatRoutes && len(rs)+len(n.Options) > 9 {
+				return fmt.Errorf("session: npc %q node %q: %d routes and %d options are more than 9", r.Captain, id, len(rs), len(n.Options))
 			}
 		}
 	}
 	return nil
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func worldPos(p content.Position) (world.Pos, bool) {
@@ -130,6 +145,9 @@ func (w *World) inCombat(now game.Tick, p *Player) bool {
 // arrival tile. Then p moves (Teleport updates the observers at both ends), the ticket
 // is taken and the price paid, so any change falls at the arrival.
 func (w *World) sail(ctx *game.TickContext, p *Player, r *route) {
+	if w.byClient[p.client] != p {
+		return // not in the world (Teleport would do nothing): charge nothing
+	}
 	req := r.def.Requires
 	var ticket *content.Item
 	if req.Item != nil {
