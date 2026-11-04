@@ -42,8 +42,8 @@ export function validateWorld(root: string, opts: ValidateWorldOptions = {}): Ma
   if (opts.island !== undefined) {
     const id = opts.island;
     const prefix = `${islandDir(id)}/`;
-    // world.yaml findings about this island (its entry in `islands`) and boat routes
-    // whose dock or arrival is on it.
+    // world.yaml findings about this island (its entry in `islands`) and findings about
+    // boat routes whose dock or arrival is on it.
     const entries = new Set<number>();
     loaded.world.meta.islands.forEach((e, i) => e.id === id && entries.add(i));
     const rect = loaded.world.islands.get(id)?.meta.rect;
@@ -51,7 +51,13 @@ export function validateWorld(root: string, opts: ValidateWorldOptions = {}): Ma
     const worldBroken = !loaded.files.some((f) => f.file === worldFile);
     const aboutIsland = (d: Diagnostic): boolean => {
       if (d.file.startsWith(prefix)) return true;
-      if (d.file === routesFile) return !!rect && !!d.pos && rectContains(rect, d.pos.x, d.pos.y);
+      if (d.file === routesFile) {
+        if (!rect) return false;
+        // By route: its dock or arrival on this island (a finding may have no position).
+        const r = content.routes.find((x) => x.index === d.path[0]);
+        const at = r ? [r.from, r.to] : d.pos ? [d.pos] : [];
+        return at.some((p) => rectContains(rect, p.x, p.y));
+      }
       if (d.file !== worldFile) return false;
       if (worldBroken) return true;
       const [section, index] = d.path;
@@ -413,6 +419,7 @@ class WorldValidator {
           routesFile,
           [r.index, "captain"],
           `NPC "${r.captain}" is not placed on any island`,
+          r.from,
         );
       else if (
         at.z !== r.from.z ||

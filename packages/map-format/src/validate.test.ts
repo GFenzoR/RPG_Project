@@ -355,6 +355,13 @@ describe("review fixes", () => {
           from: { x: 20, y: 21, z: 7 },
           to: { x: 900, y: 900, z: 7 },
         },
+        {
+          index: 2,
+          id: "t",
+          captain: "ghost",
+          from: { x: 20, y: 21, z: 7 },
+          to: { x: 16, y: 17, z: 7 },
+        },
       ],
     };
     const m = validateWorld(root, { content: withRoutes, island: "mini" }).diagnostics.map(
@@ -366,7 +373,15 @@ describe("review fixes", () => {
     expect(
       m.some((l) => l.includes("[0].to:") && l.includes("arrival is not a walkable tile")),
     ).toBe(true);
-    expect(m.join("\n")).not.toContain("outside every island");
+    // Route 1 leaves from this island, so its arrival elsewhere is reported here too.
+    expect(m.some((l) => l.includes("[1].to:") && l.includes("outside every island"))).toBe(true);
+    // A captain that is not placed anywhere concerns the island of its dock.
+    expect(m.some((l) => l.includes("[2].captain:") && l.includes('"ghost" is not placed'))).toBe(
+      true,
+    );
+    // Filtering by another island drops it.
+    const other = validateWorld(root, { content: withRoutes, island: "nope" }).diagnostics;
+    expect(other.some((d) => d.file === "data/boat_routes.yaml")).toBe(false);
   });
 
   it("checks boat routes against the map", () => {
@@ -393,7 +408,9 @@ describe("review fixes", () => {
       .diagnostics.map(formatDiagnostic)
       .filter((d) => d.includes("data/boat_routes.yaml"));
     expect(m.join("\n")).not.toMatch(/boat_routes\.yaml.*\[0\]/);
-    expect(m).toContainEqual(expect.stringContaining('[1].captain: NPC "ghost" is not placed'));
+    expect(m.some((l) => l.includes("[1].captain:") && l.includes('"ghost" is not placed'))).toBe(
+      true,
+    );
     expect(
       m.some((l) => l.includes("[2].from:") && l.includes("the dock is more than 8 tiles")),
     ).toBe(true);
