@@ -42,7 +42,17 @@
         "maxProperties": 1,
         "additionalProperties": false,
         "properties": {
-          "heal": { "type": "object", "$ref": "#/$defs/scaling", "unevaluatedProperties": false },
+          "heal": {
+            "type": "object",
+            "allOf": [{ "$ref": "#/$defs/scaling" }],
+            "properties": {
+              "range": {
+                "description": "T3.1: heals another player (the target) at up to range tiles in line of sight instead of the caster.",
+                "$ref": "common.schema.json#/$defs/positiveInt"
+              }
+            },
+            "unevaluatedProperties": false
+          },
           "damage": {
             "type": "object",
             "allOf": [{ "$ref": "#/$defs/scaling" }],
@@ -55,11 +65,17 @@
             "unevaluatedProperties": false
           },
           "conjure": {
-            "description": "Creates one item (a rune, with its charges) in the caster's backpack.",
+            "description": "Creates one item (a rune, with its charges, or count units) in the caster's backpack.",
             "type": "object",
             "additionalProperties": false,
             "required": ["item"],
-            "properties": { "item": { "$ref": "common.schema.json#/$defs/itemRef" } }
+            "properties": {
+              "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+              "count": {
+                "description": "T3.1: units of a stackable item (arrows). Default: a rune's charges, or 1.",
+                "$ref": "common.schema.json#/$defs/positiveInt"
+              }
+            }
           },
           "haste": {
             "type": "object",
@@ -89,10 +105,16 @@
     "scaling": {
       "type": "object",
       "required": ["base"],
+      "dependentRequired": { "per_skill": ["skill"], "skill": ["per_skill"] },
       "properties": {
         "base": { "type": "number", "minimum": 0 },
         "per_level": { "type": "number", "minimum": 0 },
         "per_magic_level": { "type": "number", "minimum": 0 },
+        "skill": {
+          "description": "T3.1: a weapon skill (distance...) whose level adds per_skill each.",
+          "enum": ["fist", "sword", "axe", "club", "distance", "shield"]
+        },
+        "per_skill": { "type": "number", "minimum": 0 },
         "spread": {
           "description": "Random range as a fraction (0.2 = ±20%).",
           "$ref": "common.schema.json#/$defs/chance"

@@ -83,7 +83,7 @@ items:
 ```yaml
 # data/items/weapons.yaml
 - id: iron_sword
-  kind: weapon            # ground | wall | decoration | container | weapon | armor | shield | tool | consumable | currency | material | rune
+  kind: weapon            # ground | wall | decoration | container | weapon | armor | shield | tool | consumable | currency | material | rune | ammo
   sprite: weapons/iron_sword
   name: item.iron_sword.name
   description: item.iron_sword.desc
@@ -98,6 +98,21 @@ items:
   requires: { level: 5 }
   value: 120              # precio base que usan los NPCs como referencia
 ```
+- **Distancia y munición** (T3.1): un arma `type: distance` exige `range` y `ammo` (el
+  `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type: arrow, attack }`,
+  apilable, y va en el slot de munición. Cada disparo gasta una y suma su `attack` al del
+  arma:
+  ```yaml
+  - id: short_bow
+    kind: weapon
+    weapon: { type: distance, attack: 2, range: 5, hands: 2, ammo: arrow }
+    requires: { vocations: [ranger] }
+  - id: arrow
+    kind: ammo
+    stackable: true
+    max_stack: 100
+    ammo: { type: arrow, attack: 9 }
+  ```
 - **Contenedores** (`kind: container`, T1.8): `container.slots` es cuántos items caben.
   `creature_remains` (los restos de un monstruo) es un contenedor con `pickupable: false`.
   `pickupable: false` vale para cualquier item que no deba moverse de su tile.
@@ -309,8 +324,13 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
 - `effect` tiene exactamente uno de: `damage` (`element`, `base`, `per_level`,
   `per_magic_level`, `spread`; con `range` golpea a un objetivo a esa distancia, con
   `radius` a todo monstruo en un círculo alrededor del que lanza; uno de los dos), `heal`
-  (mismos factores) o `conjure: { item }` (crea ese item, una runa con todas sus cargas, en
-  la mochila). `haste` y `light` están en el esquema para hitos futuros y el servidor los
+  (mismos factores; con `range`, T3.1, cura a otro jugador, el objetivo, a esa distancia y
+  con línea de visión, nunca al que lanza) o `conjure: { item, count }` (crea ese item en la
+  mochila: una runa con todas sus cargas o, con `count`, esa cantidad de un item apilable,
+  juntada con las pilas que ya hay; si no entra entera, el hechizo falla sin gastar maná).
+- T3.1: `damage` y `heal` aceptan `skill` (`fist`, `sword`, `axe`, `club`, `distance` o
+  `shield`) junto con `per_skill`. Ese par va siempre junto y suma `nivel de la skill ×
+  per_skill`. Los hechizos del montaraz escalan así con la distancia. `haste` y `light` están en el esquema para hitos futuros y el servidor los
   rechaza todavía.
 - `group` es `attack`, `healing` o `support`; `cooldown_ms` bloquea el hechizo y
   `group_cooldown_ms` a todo su grupo. `magic_level` es el nivel mágico mínimo.

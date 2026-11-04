@@ -1,8 +1,8 @@
 # Spells (docs/02-game-design.md "Combate", docs/06-content-data.md "Hechizo").
 # Words are invented for this game and numbers are our own (CLAUDE.md legal rule):
 # never use another game's magic words or constants.
-# Milestone 1 has only the Arcanist; the druid's spells arrive with milestone 3.
-# Damage/heal = base + level × per_level + magic level × per_magic_level, ± spread.
+# Damage/heal = base + level × per_level + magic level × per_magic_level
+#   (+ skill level × per_skill, T3.1: the ranger's spells scale with distance), ± spread.
 
 - id: arc_bolt
   name: spell.arc_bolt.name
@@ -39,7 +39,7 @@
   cooldown_ms: 1500
   group_cooldown_ms: 1000
   effect: { heal: { base: 18, per_level: 0.25, per_magic_level: 1.4 } }
-  notes: The druid joins this list in milestone 3.
+  notes: The druid has its own, stronger heals (verdant_mend, mend_other).
 
 - id: conjure_arc_rune
   name: spell.conjure_arc_rune.name
@@ -53,3 +53,100 @@
   group_cooldown_ms: 2000
   effect: { conjure: { item: arc_rune } }
   notes: Puts an arc rune (with its charges) in the caster's backpack.
+
+# ---- Ranger (T3.1): distance damage that grows with the distance skill, a small heal
+# and arrows conjured with mana.
+- id: sure_shot
+  name: spell.sure_shot.name
+  words: "sagitta certa"
+  vocations: [ranger]
+  level: 2
+  mana: 15
+  group: attack
+  cooldown_ms: 2000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: physical, range: 5, base: 6, per_level: 0.2, skill: distance, per_skill: 1.1, spread: 0.2 } }
+  notes: An aimed shot at up to 5 tiles; physical, so physical resistance applies but armor does not.
+
+- id: briar_arrow
+  name: spell.briar_arrow.name
+  words: "spina volans"
+  vocations: [ranger]
+  level: 12
+  magic_level: 1
+  mana: 35
+  group: attack
+  cooldown_ms: 4000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: earth, range: 5, base: 12, per_level: 0.3, skill: distance, per_skill: 1.6, spread: 0.2 } }
+
+- id: ranger_mend
+  name: spell.ranger_mend.name
+  words: "cura silvae"
+  vocations: [ranger]
+  level: 4
+  mana: 20
+  group: healing
+  cooldown_ms: 1500
+  group_cooldown_ms: 1000
+  effect: { heal: { base: 12, per_level: 0.25, per_magic_level: 1 } }
+
+- id: conjure_arrows
+  name: spell.conjure_arrows.name
+  words: "fabrica sagittas"
+  vocations: [ranger]
+  level: 6
+  mana: 40
+  group: support
+  cooldown_ms: 2000
+  group_cooldown_ms: 2000
+  effect: { conjure: { item: arrow, count: 15 } }
+
+# ---- Druid (T3.1): the best healer (also of other players) and ice and nature damage.
+- id: frost_lance
+  name: spell.frost_lance.name
+  words: "glacies hasta"
+  vocations: [druid]
+  level: 1
+  mana: 10
+  group: attack
+  cooldown_ms: 2000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: ice, range: 4, base: 8, per_level: 0.2, per_magic_level: 2.4, spread: 0.25 } }
+
+- id: verdant_mend
+  name: spell.verdant_mend.name
+  words: "viridis cura"
+  vocations: [druid]
+  level: 1
+  mana: 20
+  group: healing
+  cooldown_ms: 1000
+  group_cooldown_ms: 1000
+  effect: { heal: { base: 22, per_level: 0.3, per_magic_level: 1.9 } }
+
+- id: mend_other
+  name: spell.mend_other.name
+  words: "sana amicum"
+  vocations: [druid]
+  level: 8
+  magic_level: 2
+  mana: 40
+  group: healing
+  cooldown_ms: 1500
+  group_cooldown_ms: 1000
+  effect: { heal: { range: 5, base: 22, per_level: 0.3, per_magic_level: 1.9 } }
+  notes: Heals the targeted player (not the caster) at up to 5 tiles in line of sight.
+
+- id: bramble_burst
+  name: spell.bramble_burst.name
+  words: "rubus orbis"
+  vocations: [druid]
+  level: 12
+  magic_level: 4
+  mana: 50
+  group: attack
+  cooldown_ms: 4000
+  group_cooldown_ms: 2000
+  effect: { damage: { element: earth, radius: 1, base: 12, per_level: 0.25, per_magic_level: 2.6, spread: 0.2 } }
+  notes: Thorns on every monster next to the druid; a smaller area than the arcanist's.

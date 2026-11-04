@@ -69,7 +69,7 @@ func TestAPIWithPostgres(t *testing.T) {
 
 	call("POST", "/api/characters", login.Token, `{"name":"Mira","vocation":"arcanist"}`, 201)
 	call("POST", "/api/characters", login.Token, `{"name":"Mira","vocation":"guardian"}`, 409)
-	call("POST", "/api/characters", login.Token, `{"name":"Tom","vocation":"druid"}`, 400) // not in MVP data
+	call("POST", "/api/characters", login.Token, `{"name":"Tom","vocation":"monk"}`, 400) // no such vocation
 
 	var list struct {
 		Characters []struct {

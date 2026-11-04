@@ -112,7 +112,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   `Disconnect{BANNED}` y `audit_log` append-only escrito fuera del tick.
 
 ## Hito 3 — Contenido y las 4 vocaciones
-- [ ] **T3.1 Montaraz y Druida** con sus hechizos y equipo.
+- [x] **T3.1 Montaraz y Druida** con sus hechizos y equipo (#47).
 - [ ] **T3.2 Condiciones** (veneno, fuego, eléctrico, paralyze, haste, invisibilidad).
 - [ ] **T3.3 Grupos** con experiencia compartida.
 - [ ] **T3.4 Herrería, leñador y cocina** con recetas y estaciones.

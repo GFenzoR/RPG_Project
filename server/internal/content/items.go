@@ -29,10 +29,18 @@ type Item struct {
 		Attack  int    `yaml:"attack"`
 		Defense int    `yaml:"defense"`
 		Hands   int    `yaml:"hands"`
-		// Range and Element are a wand's (T1.9): it hits at up to Range tiles.
+		// Range is how far a wand (T1.9) or distance weapon (T3.1) hits; Element is a
+		// wand's.
 		Range   int    `yaml:"range"`
 		Element string `yaml:"element"`
+		// Ammo is the ammo.type a distance weapon shoots, one per shot (T3.1).
+		Ammo string `yaml:"ammo"`
 	} `yaml:"weapon"`
+	// Ammo goes in the ammo slot and adds Attack to a weapon that shoots Type (T3.1).
+	Ammo *struct {
+		Type   string `yaml:"type"`
+		Attack int    `yaml:"attack"`
+	} `yaml:"ammo"`
 	Armor *struct {
 		Slot  string `yaml:"slot"`
 		Armor int    `yaml:"armor"`

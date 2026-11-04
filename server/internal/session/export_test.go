@@ -53,3 +53,6 @@ func (p *Player) MaxMana() int { return p.maxMana }
 
 // Map returns the world's map.
 func (w *World) Map() *world.Map { return w.m }
+
+// SetHealthForTest sets p's health (tests only, loop goroutine).
+func (p *Player) SetHealthForTest(h int) { p.health = h }

@@ -75,3 +75,15 @@
   shield: { defense: 15 }
   requires: { level: 8 }
   value: 220
+
+# Light armor for the ranger and the druid (T3.1): less armor than a jerkin, lighter.
+- id: hide_vest
+  kind: armor
+  sprite: armor/hide_vest
+  name: item.hide_vest.name
+  description: item.hide_vest.desc
+  weight: 3650
+  tradeable: true
+  armor: { slot: body, armor: 3 }
+  requires: { vocations: [ranger, druid] }
+  value: 45

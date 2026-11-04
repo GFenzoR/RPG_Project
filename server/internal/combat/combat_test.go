@@ -69,12 +69,16 @@ func TestScaledAndResist(t *testing.T) {
 	r := rand.New(rand.NewPCG(1, 2))
 	s := content.Scaling{Base: 10, PerLevel: 0.5, PerMagicLevel: 2}
 	// No spread: exact value 10 + 20×0.5 + 5×2 = 30.
-	if got := Scaled(r, s, 20, 5); got != 30 {
+	if got := Scaled(r, s, 20, 5, 0); got != 30 {
 		t.Fatalf("Scaled without spread = %d, want 30", got)
+	}
+	// A skill term (T3.1): + 30 distance × 1.5 = 75.
+	if got := Scaled(r, content.Scaling{Base: 10, PerLevel: 0.5, PerMagicLevel: 2, Skill: "distance", PerSkill: 1.5}, 20, 5, 30); got != 75 {
+		t.Fatalf("Scaled with a skill = %d, want 75", got)
 	}
 	s.Spread = 0.2
 	for range 200 {
-		if got := Scaled(r, s, 20, 5); got < 24 || got > 36 {
+		if got := Scaled(r, s, 20, 5, 0); got < 24 || got > 36 {
 			t.Fatalf("Scaled = %d outside [24, 36]", got)
 		}
 	}

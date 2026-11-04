@@ -91,3 +91,50 @@
   weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
   requires: { level: 6, vocations: [arcanist] }
   value: 300
+
+# Ranger and druid (T3.1). A bow shoots one arrow of its weapon.ammo per round from the
+# ammo slot: attack = bow + arrow, trained and scaled by distance. A staff is the druid's
+# wand: same rules as coral_wand.
+- id: short_bow
+  kind: weapon
+  sprite: weapons/short_bow
+  name: item.short_bow.name
+  description: item.short_bow.desc
+  weight: 2450
+  tradeable: true
+  weapon: { type: distance, attack: 2, range: 5, hands: 2, ammo: arrow }
+  requires: { vocations: [ranger] }
+  value: 40
+
+- id: yew_longbow
+  kind: weapon
+  sprite: weapons/yew_longbow
+  name: item.yew_longbow.name
+  description: item.yew_longbow.desc
+  weight: 3350
+  tradeable: true
+  weapon: { type: distance, attack: 7, range: 6, hands: 2, ammo: arrow }
+  requires: { level: 8, vocations: [ranger] }
+  value: 380
+
+- id: sapling_staff
+  kind: weapon
+  sprite: weapons/sapling_staff
+  name: item.sapling_staff.name
+  description: item.sapling_staff.desc
+  weight: 1350
+  tradeable: true
+  weapon: { type: wand, attack: 8, range: 4, element: earth, hands: 1 }
+  requires: { vocations: [druid] }
+  value: 40
+
+- id: rimewood_staff
+  kind: weapon
+  sprite: weapons/rimewood_staff
+  name: item.rimewood_staff.name
+  description: item.rimewood_staff.desc
+  weight: 1550
+  tradeable: true
+  weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
+  requires: { level: 6, vocations: [druid] }
+  value: 300

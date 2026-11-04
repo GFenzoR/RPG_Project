@@ -295,6 +295,8 @@ func slotFor(def *content.Item) pb.EquipmentSlot {
 		return armorSlots[def.Armor.Slot]
 	case def.Container != nil:
 		return pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK
+	case def.Ammo != nil:
+		return pb.EquipmentSlot_EQUIPMENT_SLOT_AMMO
 	}
 	return pb.EquipmentSlot_EQUIPMENT_SLOT_UNSPECIFIED
 }

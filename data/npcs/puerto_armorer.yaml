@@ -47,6 +47,10 @@ shop:
     - { item: barrel_lid_shield, price: 10 }
     - { item: plank_shield, price: 25 }
     - { item: riveted_round_shield, price: 220 }
+    - { item: short_bow, price: 40 }
+    - { item: yew_longbow, price: 380 }
+    - { item: arrow, price: 1 }
+    - { item: hide_vest, price: 45 }
   buys:
     - { item: driftwood_club, price: 1 }
     - { item: belaying_pin, price: 6 }
@@ -64,3 +68,6 @@ shop:
     - { item: barrel_lid_shield, price: 3 }
     - { item: plank_shield, price: 8 }
     - { item: riveted_round_shield, price: 70 }
+    - { item: short_bow, price: 12 }
+    - { item: yew_longbow, price: 120 }
+    - { item: hide_vest, price: 15 }

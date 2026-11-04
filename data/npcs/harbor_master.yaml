@@ -5,7 +5,10 @@ notes: >-
   Opens and closes Chapter 1 (ch1_shipwreck) and runs the boat to the forest island
   (Chapter 2). Not a merchant: tools and provisions live in puerto_provisioner.
   Gifts depend on the vocation: guardians get a cutlass and an iron sword, arcanists (wand
-  only) get the same value in coins (25 and 120). A new vocation needs its own branch here.
+  only) get the same value in coins (25 and 120). Rangers get a short bow and coins for
+  arrows, druids a sapling staff, and both the arcanist's coins for the logbook (T3.1;
+  the greeting has no room for a tenth option).
+  A new vocation needs its own branch here.
 dialog:
   start: greet
   nodes:
@@ -37,7 +40,7 @@ dialog:
           if:
             - { quest_state: { quest: ch1_shipwreck, state: in_progress, step: return_logbook } }
             - { has_item: { item: bosun_logbook } }
-            - { vocation_in: [arcanist] }
+            - { vocation_in: [arcanist, ranger, druid] }
           action:
             - { take_item: { item: bosun_logbook } }
             - { give_gold: 120 }
@@ -65,6 +68,21 @@ dialog:
             - { give_gold: 25 }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_arcanist
+        - text: dialog.accept
+          if: { vocation_in: [ranger] }
+          action:
+            - { start_quest: ch1_shipwreck }
+            - { give_item: short_bow }
+            - { give_gold: 20 }
+            - { give_item: ship_biscuit }
+          goto: ch1_accepted_ranger
+        - text: dialog.accept
+          if: { vocation_in: [druid] }
+          action:
+            - { start_quest: ch1_shipwreck }
+            - { give_item: sapling_staff }
+            - { give_item: ship_biscuit }
+          goto: ch1_accepted_druid
         - text: dialog.decline
           goto: greet
     ch1_accepted:
@@ -74,6 +92,16 @@ dialog:
         - { text: dialog.bye, action: close }
     ch1_accepted_arcanist:
       text: npc.harbor_master.ch1_accepted_arcanist
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch1_accepted_ranger:
+      text: npc.harbor_master.ch1_accepted_ranger
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch1_accepted_druid:
+      text: npc.harbor_master.ch1_accepted_druid
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

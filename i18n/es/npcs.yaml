@@ -5,6 +5,8 @@ npc.harbor_master.opt_shipwreck: "Vengo del naufragio. ¿Qué pasó con el barco
 npc.harbor_master.ch1_offer: "El Alba Tardía se partió contra el arrecife anoche. Los que llegaron a la orilla acamparon en el campo del norte, y los lobos llevan toda la noche rondándolos. Y falta el contramaestre, Edric Sall: lo vieron correr hacia la mina vieja con la bitácora bajo el brazo. Necesito manos. ¿Me ayudas?"
 npc.harbor_master.ch1_accepted: "Bien. Toma este alfanje y algo de galleta; no es mucho, pero llegaste con menos. Primero el campo del norte: espanta a esos lobos para que los sobrevivientes puedan bajar al pueblo."
 npc.harbor_master.ch1_accepted_arcanist: "Bien. No tengo varitas que darte, pero toma estas monedas y algo de galleta; Corvo, el buzo, talla varitas de coral cuando juntes para una. Primero el campo del norte: espanta a esos lobos para que los sobrevivientes puedan bajar al pueblo."
+npc.harbor_master.ch1_accepted_ranger: "Bien. Toma este arco corto, monedas para flechas (el armero de la plaza las vende) y algo de galleta. Primero el campo del norte: espanta a esos lobos para que los sobrevivientes puedan bajar al pueblo."
+npc.harbor_master.ch1_accepted_druid: "Bien. Esta vara de retoño brotó sola en el muelle; quizá te esperaba. Toma también algo de galleta. Primero el campo del norte: espanta a esos lobos para que los sobrevivientes puedan bajar al pueblo."
 npc.harbor_master.opt_ch1_wolves: "¿Qué hago con los lobos?"
 npc.harbor_master.ch1_wolves: "Saliendo por el camino del norte está el campo. Acaba con seis lobos y la manada se lo pensará dos veces. Si te hieren, vuelve al templo: la hermana Liora no le cobra a nadie por curar."
 npc.harbor_master.opt_ch1_mine: "¿Dónde busco al contramaestre?"

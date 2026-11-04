@@ -3,7 +3,7 @@ name: npc.puerto_diver.name
 sprite: npcs/diver_old
 notes: >-
   Retired reef diver on the beach near the wreck. Lore about the sunken empire, the
-  diver_locket side quest and a one-item shop (coral wands he carves himself).
+  diver_locket side quest and a small shop: coral wands, and the druid's staffs (T3.1).
 dialog:
   start: greet
   nodes:
@@ -63,5 +63,9 @@ shop:
   id: diver_shop
   sells:
     - { item: coral_wand, price: 300 }
+    - { item: sapling_staff, price: 40 }
+    - { item: rimewood_staff, price: 300 }
   buys:
     - { item: coral_wand, price: 100 }
+    - { item: sapling_staff, price: 12 }
+    - { item: rimewood_staff, price: 100 }

@@ -22,6 +22,7 @@ const (
 // i18n keys of the system messages combat sends (i18n/*/client.yaml).
 const (
 	msgCannotAttack = "combat.cannot_attack"
+	msgNoAmmo       = "combat.no_ammo"
 	msgLoot         = "combat.loot"
 	msgLootNone     = "combat.loot_none"
 )
@@ -101,9 +102,15 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 	if w.inProtection(p.pos) {
 		return
 	}
-	if wp := p.weapon; wp != nil && wp.Weapon != nil && wp.Weapon.Type == WeaponWand {
-		w.wandFight(ctx, p, m)
-		return
+	if wp := p.weapon; wp != nil && wp.Weapon != nil {
+		switch wp.Weapon.Type {
+		case WeaponWand:
+			w.wandFight(ctx, p, m)
+			return
+		case WeaponDistance:
+			w.distanceFight(ctx, p, m)
+			return
+		}
 	}
 	if chebyshev(p.pos, m.pos) > 1 {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
@@ -122,6 +129,31 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 	skill, attack := w.meleeSkill(p)
 	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.skillLevel(p, skill), 1), attack, p.level, w.mode(p).Attack)
 	w.train(p, skill, w.afk(ctx, p))
+	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target), ElementPhysical)
+}
+
+// distanceFight is playerFight with a distance weapon (T3.1): every attack round, within
+// weapon.range tiles and in line of sight, it spends one ammo of the weapon's weapon.ammo
+// from the ammo slot and shoots it. The hit is physical, like melee, with the distance
+// skill and attack = weapon + ammo; every shot trains distance, hit or miss. Without the
+// right ammo it does not shoot and tells the player once per round.
+func (w *World) distanceFight(ctx *game.TickContext, p *Player, m *Monster) {
+	wp := p.weapon.Weapon
+	if !w.rangedReady(ctx, p, m, wp.Range) {
+		return
+	}
+	p.nextAttack = ctx.Tick + w.attackFor
+	ammo := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_AMMO]
+	if ammo == nil || ammo.def.Ammo == nil || ammo.def.Ammo.Type != wp.Ammo {
+		p.emit(systemMsg(msgNoAmmo))
+		return
+	}
+	attack := wp.Attack + ammo.def.Ammo.Attack
+	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.skillLevel(p, SkillDistance), 1), attack, p.level, w.mode(p).Attack)
+	w.train(p, SkillDistance, w.afk(ctx, p))
+	w.useUp(ammo)
+	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}}) // capacity
+	w.projectile(p.pos, m.pos, ElementPhysical)
 	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target), ElementPhysical)
 }
 

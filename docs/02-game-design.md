@@ -21,7 +21,14 @@ Todos los números de este documento son **valores iniciales** que viven en
 - Se elige al crear el personaje (sin isla de novatos sin vocación).
 - Cada vocación define en `data/vocations.yaml`: HP/MP/capacidad por nivel, multiplicadores
   de entrenamiento por skill, regeneración, hechizos disponibles y equipo permitido.
-- MVP: Guardián y Arcanista. Montaraz y Druida en el hito 3.
+- MVP: Guardián y Arcanista. Montaraz y Druida desde T3.1:
+  - **Montaraz:** la distancia es la skill que entrena más rápido de todas las vocaciones, el
+    escudo casi como el guardián y algo de magia. Su vida y su maná por nivel quedan entre
+    los del tanque y los del mago. Usa arcos (y también armas cuerpo a cuerpo, que entrena
+    lento). Sus hechizos de daño escalan con la distancia.
+  - **Druida:** tan frágil como el arcanista y con su mismo ritmo de nivel mágico. Usa varas
+    (varitas de tierra o hielo). Es el mejor sanador y el único que cura a otro jugador.
+  - Las bandas y los roles los fija `packages/content-schema/src/vocations-balance.test.ts`.
 
 ## Experiencia y nivel
 - Experiencia por matar monstruos (repartida en grupo según daño), por quests y por
@@ -138,13 +145,32 @@ Implementado en T1.12 (`server/internal/session/gathering.go`, números en `data
     la magia.
   - Área (`radius`): cada monstruo del círculo (`dx² + dy² ≤ r² + r`) con línea de visión
     desde el que lanza tira su propio daño; lo que queda detrás de un muro no se toca.
-  - Varitas: arma a distancia del Arcanista; no entrenan skill ni gastan maná.
+  - Varitas: arma a distancia del Arcanista (y las varas del Druida); no entrenan skill ni
+    gastan maná.
   - Runas: las conjura un hechizo de soporte; cualquiera con su nivel mágico las usa sobre
     una criatura o tile; comparten el cooldown de grupo de su hechizo, no el propio.
   - Monstruos: sus ataques `distance` y `spell` pegan a su objetivo dentro de `range` y con
     línea de visión, también mientras se acercan (el `radius` de sus hechizos llega más
     adelante).
-- Condiciones: veneno, fuego, eléctrico, paralyze, haste, invisibilidad (hito 3).
+- **Distancia (T3.1, `server/internal/session/combat.go`):** un arma `weapon.type:
+  distance` (arco) dispara a su objetivo dentro de `weapon.range` casillas y con línea de
+  visión (los muros la cortan, `03-world-and-maps.md`), una vez por ronda de ataque. Cada
+  disparo gasta una munición del slot de munición, que debe ser del `ammo.type` que pide el
+  arma (`weapon.ammo`). Sin la munición correcta no dispara y el servidor avisa
+  (`combat.no_ammo`). El golpe es físico, con la fórmula del cuerpo a cuerpo: skill de
+  distancia y `ataque = arma + munición`, contra la armadura y la defensa del monstruo. Cada
+  disparo entrena la distancia, acierte o no, con el mismo anti-AFK. Si persigue, se acerca
+  solo hasta tener rango y visión. La flecha se consume: no queda en el suelo.
+  - Los arcos son de dos manos. Sin chance de fallo propia: los ceros salen de la tirada y
+    de la armadura, como en el cuerpo a cuerpo.
+- **Hechizos de T3.1:** el daño o la curación pueden sumar `skill × per_skill` (el montaraz
+  escala con la distancia). Una curación con `range` cura a **otro** jugador: el objetivo
+  (por id o por casilla) debe estar a la vista, en el mismo piso, dentro del rango y con
+  línea de visión, y nunca puede ser el que lanza. Cura según el que lanza y se permite en
+  zona de protección. `conjure.count` conjura una pila (flechas). En el cliente, la hotkey
+  de una curación a otro pone la mira y el siguiente click elige al jugador (Escape cancela).
+- Condiciones: veneno, fuego, eléctrico, paralyze, haste, invisibilidad (T3.2). Ningún
+  hechizo de T3.1 las usa.
 - Zonas de protección: no se puede atacar ni ser atacado.
 
 ## Items, equipo e inventario
@@ -158,7 +184,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   derecha, `shield` en la izquierda, `armor` en el de su `armor.slot` (`body` = torso),
   `container` en el de mochila. Un arma de dos manos (`hands: 2`) exige la izquierda
   libre. `requires.level`, `requires.vocations` y los `weapons` de la vocación
-  (`data/vocations.yaml`) se validan al equipar. Munición: sin items todavía.
+  (`data/vocations.yaml`) se validan al equipar. `ammo` (flechas, T3.1) va en el slot de
+  munición.
 - **Combate:** el arma de la mano derecha da el ataque y la skill (`weapon.type`; una
   varita dispara a distancia desde T1.9), el escudo de la izquierda la defensa y la suma
   de `armor` de todo el equipo la armadura del jugador contra golpes físicos.
@@ -180,7 +207,10 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   `inventory.use_cooldown_ms` entre usos. Las runas (T1.9) y las herramientas (T1.12) se
   usan sobre una criatura o casilla con `UseItemOn`.
 - **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
-  slot de mochila. El kit de cada vocación llega con los diálogos (T1.10).
+  slot de mochila. El kit de cada vocación llega con los diálogos (T1.10): al aceptar el
+  capítulo 1, el capitán del puerto da un alfanje al guardián, monedas al arcanista, un arco
+  corto y monedas para flechas al montaraz, y una vara de retoño al druida. El armero vende
+  arcos, flechas y el chaleco de piel; el buzo vende las varas.
 - **Límite conocido:** cada personaje guarda su inventario en su propio snapshot. Si A
   suelta un item, B lo levanta y se guarda, y el servidor cae antes del siguiente guardado
   de A, el item vuelve en ambos. Los items del suelo no se guardan ni desaparecen solos

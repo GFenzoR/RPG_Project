@@ -1,0 +1,13 @@
+# Ammunition (T3.1): goes in the ammo slot; a distance weapon whose weapon.ammo matches
+# spends one per shot and adds its attack.
+- id: arrow
+  kind: ammo
+  sprite: ammo/arrow
+  name: item.arrow.name
+  description: item.arrow.desc
+  weight: 40
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  ammo: { type: arrow, attack: 9 }
+  value: 1

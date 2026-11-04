@@ -24,7 +24,8 @@
             "consumable",
             "currency",
             "material",
-            "rune"
+            "rune",
+            "ammo"
           ]
         },
         "sprite": { "$ref": "common.schema.json#/$defs/sprite" },
@@ -70,7 +71,21 @@
             "defense": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
             "hands": { "enum": [1, 2] },
             "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
-            "element": { "$ref": "common.schema.json#/$defs/element" }
+            "element": { "$ref": "common.schema.json#/$defs/element" },
+            "ammo": {
+              "description": "Distance weapons (T3.1): the ammo.type it shoots from the ammo slot, one per shot.",
+              "enum": ["arrow"]
+            }
+          }
+        },
+        "ammo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "attack"],
+          "description": "Ammunition (T3.1): adds attack to a distance weapon whose weapon.ammo is type.",
+          "properties": {
+            "type": { "enum": ["arrow"] },
+            "attack": { "$ref": "common.schema.json#/$defs/nonNegativeInt" }
           }
         },
         "armor": {
@@ -233,6 +248,25 @@
         {
           "if": { "properties": { "kind": { "const": "rune" } } },
           "then": { "required": ["rune"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "ammo" } } },
+          "then": { "required": ["ammo"] }
+        },
+        {
+          "if": {
+            "properties": {
+              "weapon": {
+                "type": "object",
+                "properties": { "type": { "const": "distance" } },
+                "required": ["type"]
+              }
+            },
+            "required": ["weapon"]
+          },
+          "then": {
+            "properties": { "weapon": { "type": "object", "required": ["ammo", "range"] } }
+          }
         }
       ]
     }

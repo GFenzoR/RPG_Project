@@ -17,8 +17,15 @@ import (
 // Elements of data/ (common.schema.json "element"), in protocol order.
 const (
 	ElementPhysical = "physical"
+	// ElementHoly colors the projectile of a heal cast on another player (T3.1).
+	ElementHoly = "holy"
 	// WeaponWand is the weapon type of wands: a distance attack of their element.
 	WeaponWand = "wand"
+	// WeaponDistance is the weapon type of bows (T3.1): it shoots ammo and trains
+	// SkillDistance.
+	WeaponDistance = "distance"
+	// SkillDistance is the skill of distance weapons.
+	SkillDistance = "distance"
 	// SkillMagic is the magic level: it rises with the mana spent.
 	SkillMagic = "magic"
 )
@@ -77,8 +84,23 @@ func (w *World) initMagic() error {
 		return nil
 	}
 	for _, id := range w.cfg.Spells.IDs() {
-		if c := w.cfg.Spells[id].Effect.Conjure; c != nil && w.cfg.Items[c.Item] == nil {
-			return fmt.Errorf("session: spell %q conjures unknown item %q", id, c.Item)
+		e := w.cfg.Spells[id].Effect
+		if c := e.Conjure; c != nil {
+			it := w.cfg.Items[c.Item]
+			if it == nil {
+				return fmt.Errorf("session: spell %q conjures unknown item %q", id, c.Item)
+			}
+			if c.Count > it.StackLimit() {
+				return fmt.Errorf("session: spell %q conjures %d of %q, more than one stack", id, c.Count, c.Item)
+			}
+		}
+		for _, sc := range []*content.Scaling{damageScaling(e.Damage), healScaling(e.Heal)} {
+			if sc == nil || sc.Skill == "" {
+				continue
+			}
+			if _, ok := w.skillIdx[sc.Skill]; !ok {
+				return fmt.Errorf("session: spell %q scales with unknown skill %q", id, sc.Skill)
+			}
 		}
 	}
 	for _, it := range w.cfg.Items {
@@ -100,6 +122,30 @@ func (w *World) magicLevel(p *Player) int {
 		return 0
 	}
 	return p.skills[w.magicIdx].Level
+}
+
+func damageScaling(d *content.SpellDamage) *content.Scaling {
+	if d == nil {
+		return nil
+	}
+	return &d.Scaling
+}
+
+func healScaling(h *content.SpellHeal) *content.Scaling {
+	if h == nil {
+		return nil
+	}
+	return &h.Scaling
+}
+
+// scaled rolls s for caster p: its level, magic level and, when s names one, the level
+// of s.Skill (the ranger's spells scale with distance, T3.1).
+func (w *World) scaled(ctx *game.TickContext, s content.Scaling, p *Player) int {
+	skill := 0
+	if s.Skill != "" {
+		skill = w.skillLevel(p, s.Skill)
+	}
+	return combat.Scaled(ctx.Rand, s, p.level, w.magicLevel(p), skill)
 }
 
 func num(name string, v int) *pb.TextParam {
@@ -184,11 +230,13 @@ func (w *World) applySpell(ctx *game.TickContext, p *Player, s *content.Spell, t
 		return w.boltSpell(ctx, p, e.Damage, target)
 	case e.Damage != nil:
 		return w.areaSpell(ctx, p, e.Damage)
+	case e.Heal != nil && e.Heal.Range > 0:
+		return w.healOther(ctx, p, e.Heal, target)
 	case e.Heal != nil:
-		w.heal(p, combat.Scaled(ctx.Rand, *e.Heal, p.level, w.magicLevel(p)))
+		w.heal(p, w.scaled(ctx, e.Heal.Scaling, p))
 		return true
 	case e.Conjure != nil:
-		return w.conjure(p, w.cfg.Items[e.Conjure.Item])
+		return w.conjure(p, w.cfg.Items[e.Conjure.Item], e.Conjure.Count)
 	}
 	return false
 }
@@ -229,7 +277,7 @@ func (w *World) boltSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 		return false
 	}
 	w.projectile(p.pos, m.pos, d.Element)
-	dmg := combat.Resist(combat.Scaled(ctx.Rand, d.Scaling, p.level, w.magicLevel(p)), m.kind.def.Resistances[d.Element])
+	dmg := combat.Resist(w.scaled(ctx, d.Scaling, p), m.kind.def.Resistances[d.Element])
 	w.damageMonster(ctx, m, p, dmg, d.Element)
 	return true
 }
@@ -272,7 +320,7 @@ func (w *World) areaSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 		if w.monByID[m.id] != m {
 			continue
 		}
-		dmg := combat.Resist(combat.Scaled(ctx.Rand, d.Scaling, p.level, w.magicLevel(p)), m.kind.def.Resistances[d.Element])
+		dmg := combat.Resist(w.scaled(ctx, d.Scaling, p), m.kind.def.Resistances[d.Element])
 		w.damageMonster(ctx, m, p, dmg, d.Element)
 	}
 	return true
@@ -294,24 +342,87 @@ func (w *World) heal(p *Player, amount int) {
 	w.healthBar(p, pct)
 }
 
-// conjure puts a new def (a rune with all its charges) in p's backpack.
-func (w *World) conjure(p *Player, def *content.Item) bool {
+// healTarget resolves the player a heal-other spell aims at: the creature or the tile of
+// target. Only players the caster sees count; there is no default target.
+func (w *World) healTarget(p *Player, target *pb.ActionTarget) *Player {
+	switch t := target.GetTarget().(type) {
+	case *pb.ActionTarget_CreatureId:
+		if p.Knows(t.CreatureId) {
+			return w.playerByID(t.CreatureId)
+		}
+	case *pb.ActionTarget_Pos:
+		if pos, ok := posFromMsg(t.Pos); ok {
+			for _, o := range w.players {
+				if o.pos == pos && p.Knows(o.id) {
+					return o
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// healOther heals another player at up to h.Range tiles in line of sight (T3.1). The
+// amount scales with the caster, not the target; healing is allowed in protection zones.
+func (w *World) healOther(ctx *game.TickContext, p *Player, h *content.SpellHeal, target *pb.ActionTarget) bool {
+	o := w.healTarget(p, target)
+	switch {
+	case o == nil || o == p || o.health <= 0:
+		p.emit(systemMsg(msgNoTarget))
+		return false
+	case o.pos.Z != p.pos.Z || chebyshev(p.pos, o.pos) > h.Range:
+		p.emit(systemMsg(msgOutOfRange))
+		return false
+	case !w.m.LineOfSight(p.pos, o.pos):
+		p.emit(systemMsg(msgNoSight))
+		return false
+	}
+	w.projectile(p.pos, o.pos, ElementHoly)
+	w.heal(o, w.scaled(ctx, h.Scaling, p))
+	o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(o)}})
+	return true
+}
+
+// conjure puts a new def in p's backpack: a rune with all its charges, or count units of
+// a stackable item (T3.1) merged into the stacks already there. Nothing is created unless
+// all of it fits in the backpack and in p's capacity.
+func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
-	if def == nil || bp == nil || bp.def.Container == nil || len(bp.items) >= bp.def.Slots() {
+	if def == nil || bp == nil || bp.def.Container == nil {
 		p.emit(systemMsg(msgNoRoom))
 		return false
 	}
-	if def.Weight > p.capacity-p.carried() {
-		p.emit(systemMsg(msgTooHeavy))
-		return false
+	var shown *pb.ItemStack
+	if def.Stackable {
+		count = max(count, 1)
+		switch {
+		case !w.room(p, def, count, 0):
+			p.emit(systemMsg(msgNoRoom))
+			return false
+		case def.Weight*count > p.capacity-p.carried():
+			p.emit(systemMsg(msgTooHeavy))
+			return false
+		}
+		w.giveItem(p, def, count) // all of it fits: nothing falls on the floor
+		shown = newItem(def, count).stack()
+	} else {
+		if len(bp.items) >= bp.def.Slots() {
+			p.emit(systemMsg(msgNoRoom))
+			return false
+		}
+		it := newItem(def, def.StackLimit()) // a rune with all its charges
+		if it.weight() > p.capacity-p.carried() {
+			p.emit(systemMsg(msgTooHeavy))
+			return false
+		}
+		w.attach(p, it, place{kind: locContainer, cont: bp})
+		w.containerChanged(bp)
+		shown = it.stack()
 	}
-	it := newItem(def, def.StackLimit())
-	w.attach(p, it, place{kind: locContainer, cont: bp})
-	w.containerChanged(bp)
 	w.eachObserver(nil, p.pos, func(o *Player) {
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(p.pos), EffectId: EffectConjure}}})
 	})
-	p.emit(systemMsg(msgConjured, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: it.stack()}}))
+	p.emit(systemMsg(msgConjured, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: shown}}))
 	return true
 }
 
@@ -335,17 +446,7 @@ func (w *World) projectile(from, to world.Pos, element string) {
 // to weapon.range tiles in line of sight. Chasing stops once the target is in range.
 func (w *World) wandFight(ctx *game.TickContext, p *Player, m *Monster) {
 	wp := p.weapon.Weapon
-	inRange := chebyshev(p.pos, m.pos) <= max(wp.Range, 1)
-	if inRange && ctx.Tick < p.nextAttack {
-		return
-	}
-	if !inRange || !w.m.LineOfSight(p.pos, m.pos) {
-		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
-			if d, ok := w.chaseStep(p.pos, m.pos, false); ok {
-				p.stopWalk()
-				p.queue = append(p.queue, d)
-			}
-		}
+	if !w.rangedReady(ctx, p, m, wp.Range) {
 		return
 	}
 	p.nextAttack = ctx.Tick + w.attackFor
@@ -356,6 +457,26 @@ func (w *World) wandFight(ctx *game.TickContext, p *Player, m *Monster) {
 	w.projectile(p.pos, m.pos, element)
 	dmg := combat.Resist(combat.WandHit(ctx.Rand, wp.Attack, w.cfg.Balance.Combat.WandMinFactor), m.kind.def.Resistances[element])
 	w.damageMonster(ctx, m, p, dmg, element)
+}
+
+// rangedReady reports whether p can shoot m this tick: within rng tiles (at least 1), in
+// line of sight and with the attack round due. Out of range or sight it chases (if p
+// chases) and reports false.
+func (w *World) rangedReady(ctx *game.TickContext, p *Player, m *Monster, rng int) bool {
+	inRange := chebyshev(p.pos, m.pos) <= max(rng, 1)
+	if inRange && ctx.Tick < p.nextAttack {
+		return false
+	}
+	if !inRange || !w.m.LineOfSight(p.pos, m.pos) {
+		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
+			if d, ok := w.chaseStep(p.pos, m.pos, false); ok {
+				p.stopWalk()
+				p.queue = append(p.queue, d)
+			}
+		}
+		return false
+	}
+	return true
 }
 
 // useRune casts it's spell on target (or the current target) without mana or words.

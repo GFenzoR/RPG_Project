@@ -12,6 +12,8 @@ import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
 import { locationInit, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
+import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
+import type { Pending } from "./state/aim.ts";
 import { findPath } from "./state/path.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
@@ -115,8 +117,11 @@ export class Game {
   private destroyed = false;
   /** A click that arrived while a predicted step was unconfirmed. */
   private clickTarget: Pos | undefined;
-  /** A tool waiting for the tile to use it on (T1.12): the next click on the map picks it. */
-  private usingItem: ItemRef | undefined;
+  /**
+   * What waits for the next click on the map (the crosshair): a "use with" tool (T1.12) or
+   * a heal for another player (T3.1). Any other cast or use drops it (`state/aim.ts`).
+   */
+  private pending: Pending<ItemRef>;
   private readonly opts: GameOptions;
   private hotkeys: (string | undefined)[];
 
@@ -197,7 +202,26 @@ export class Game {
 
   /** Casts a spell by ID (hotkey) on the current target, if any. */
   castSpell(spellId: string): void {
+    const aims = this.opts.content.spells.find((s) => s.id === spellId)?.aimsAtPlayer ?? false;
+    this.setPending(afterCast(spellId, aims));
+    if (aims) return;
     this.conn.send({ case: "castSpell", value: { spell: { case: "spellId", value: spellId } } });
+  }
+
+  /** Casts the aimed spell on a creature or a tile; the server picks the player there. */
+  private castAimed(spellId: string, target: { creature: number } | { pos: Pos }): void {
+    this.conn.send({
+      case: "castSpell",
+      value: {
+        spell: { case: "spellId", value: spellId },
+        target: {
+          target:
+            "creature" in target
+              ? { case: "creatureId", value: target.creature }
+              : { case: "pos", value: { ...target.pos } },
+        },
+      },
+    });
   }
 
   /**
@@ -233,11 +257,9 @@ export class Game {
   // ---- items (T1.8): the server validates every one of these ---------------------------
 
   useItem(ref: ItemRef): void {
-    if (this.opts.content.items[ref.itemId]?.useWith) {
-      this.usingItem = ref;
-      document.body.classList.add("using-item");
-      return;
-    }
+    const useWith = this.opts.content.items[ref.itemId]?.useWith ?? false;
+    this.setPending(afterUse(ref, useWith));
+    if (useWith) return;
     this.conn.send({
       case: "useItem",
       value: { from: locationInit(ref.loc), itemId: ref.itemId, stackIndex: ref.stackIndex },
@@ -259,10 +281,40 @@ export class Game {
 
   /** Leaves "use with" mode; reports whether it was on. */
   private cancelUse(): boolean {
-    if (!this.usingItem) return false;
-    this.usingItem = undefined;
-    document.body.classList.remove("using-item");
+    if (!this.pending) return false;
+    this.setPending(undefined);
     return true;
+  }
+
+  /** Sets what waits for the next click, with the crosshair while something does. */
+  private setPending(p: Pending<ItemRef>): void {
+    this.pending = p;
+    document.body.classList.toggle("using-item", p !== undefined);
+  }
+
+  /** A left click on the map: consumes what was pending and does what it resolves to. */
+  private click(target: { creature: number } | { pos: Pos }): void {
+    const action = resolveClick(this.pending, target);
+    this.setPending(undefined);
+    switch (action.kind) {
+      case "attack":
+        this.attack(action.creature);
+        break;
+      case "walk":
+        this.clickTarget = action.pos;
+        break;
+      case "castOnCreature":
+        this.castAimed(action.spellId, { creature: action.creature });
+        break;
+      case "castOnTile":
+        this.castAimed(action.spellId, { pos: action.pos });
+        break;
+      case "useOn":
+        this.useItemOn(action.ref, action.pos);
+        break;
+      case "none":
+        break;
+    }
   }
 
   lookAt(ref: ItemRef): void {
@@ -382,17 +434,8 @@ export class Game {
       content: this.opts.content,
       t: this.opts.t,
       frame: (now) => this.frame(now),
-      clickTile: (x, y, z) => {
-        const using = this.usingItem;
-        if (using && this.cancelUse()) {
-          this.useItemOn(using, { x, y, z });
-          return;
-        }
-        this.clickTarget = { x, y, z };
-      },
-      clickCreature: (id) => {
-        if (!this.cancelUse()) this.attack(id);
-      },
+      clickTile: (x, y, z) => this.click({ pos: { x, y, z } }),
+      clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z) => {
         if (this.cancelUse()) return;
         const ref = topItem(this.world, x, y, z, false);

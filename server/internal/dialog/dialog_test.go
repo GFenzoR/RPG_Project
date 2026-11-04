@@ -134,3 +134,30 @@ func TestCostsAreAllOrNothing(t *testing.T) {
 		t.Fatal("take_item without the items should be refused")
 	}
 }
+
+// The ranger and the druid get their own starter weapon when they accept (T3.1).
+func TestHarborMasterKitForRangerAndDruid(t *testing.T) {
+	hm := load(t, "harbor_master")
+	for _, c := range []struct {
+		vocation, node, item string
+		money                int64
+	}{
+		{"ranger", "ch1_accepted_ranger", "short_bow", 20},
+		{"druid", "ch1_accepted_druid", "sapling_staff", 0},
+	} {
+		f := newFake(t, c.vocation)
+		accept := -1
+		for i, o := range hm.Dialog.Nodes["ch1_offer"].Options {
+			if o.Goto == c.node {
+				accept = i
+			}
+		}
+		if accept < 0 {
+			t.Fatalf("%s: no accept option leads to %s", c.vocation, c.node)
+		}
+		r := Choose(hm, "ch1_offer", accept, f)
+		if r.Node != c.node || f.items[c.item] != 1 || f.money != c.money || f.items["ship_biscuit"] != 1 {
+			t.Errorf("%s: %+v money %d items %v", c.vocation, r, f.money, f.items)
+		}
+	}
+}
