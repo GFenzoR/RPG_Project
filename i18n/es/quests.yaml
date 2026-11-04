@@ -12,3 +12,16 @@ quest.foreman_ore.step_deliver_ore: "Entrega el mineral de hierro a Doran, el ca
 quest.diver_locket.name: "Lo que el mar se llevó"
 quest.diver_locket.step_find_locket: "Recupera un relicario ennegrecido de los saqueadores de la playa."
 quest.diver_locket.step_return_locket: "Lleva el relicario a Corvo, el buzo."
+
+# Chapter 2: Raíces.
+quest.ch2_roots.name: "Capítulo 2: Raíces"
+quest.ch2_roots.step_cull_toads: "El veneno de los sapos borra las huellas en la ciénaga del sur de Raigal. Mata 8 sapos de ciénaga."
+quest.ch2_roots.step_gather_glowcaps: "El farol de rastreo de Velia arde con hongo lumbre. Consigue 6 hongos lumbre."
+quest.ch2_roots.step_deliver_glowcaps: "Lleva los 6 hongos lumbre a Velia Musgo, en el bosquecillo de Raigal."
+quest.ch2_roots.step_ask_ferryman: "Pregúntale a Tavin Rema, el barquero del muelle, dónde atracó el bote sin bandera."
+quest.ch2_coffer.name: "Capítulo 2: El cofre sellado"
+quest.ch2_coffer.step_break_camp: "Los contrabandistas acampan en la costa este. Mata 8 contrabandistas del cofre."
+quest.ch2_coffer.step_gather_tallies: "Velia quiere saber quién les pagó. Consigue 4 tarjas de contrabandista."
+quest.ch2_coffer.step_deliver_tallies: "Lleva las 4 tarjas a Velia Musgo."
+quest.ch2_coffer.step_find_coffer: "Los reptantes huecos arrastraron el cofre a su nido, en la cueva bajo la costa este. Encuentra el cofre sellado."
+quest.ch2_coffer.step_return_coffer: "Lleva el cofre sellado a Velia Musgo."

@@ -92,3 +92,29 @@
   success_per_level: 0.04
   max_success: 0.9
   xp: 3
+
+# ---- Isla del Bosque (T3.6): elm wood ----------------------------------------------
+- id: smith_elmwood_shield
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 5
+  time_ms: 5000
+  inputs: [{ item: elm_log, count: 3 }, { item: iron_ingot, count: 1 }, { item: tree_resin, count: 1 }]
+  output: { item: elmwood_shield, count: 1 }
+  base_success: 0.45
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 4
+
+- id: cook_glowcap_broth
+  craft: cooking
+  station: cooking_hearth
+  level: 4
+  time_ms: 4000
+  inputs: [{ item: glowcap, count: 3 }, { item: elm_log, count: 1 }]
+  output: { item: glowcap_broth, count: 1 }
+  base_success: 0.55
+  success_per_level: 0.04
+  max_success: 0.9
+  xp: 3

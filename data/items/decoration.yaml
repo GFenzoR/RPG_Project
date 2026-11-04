@@ -274,3 +274,22 @@
   sprite: borders/sand_water_inner_sw
   name: item.border_sand_water.name
   pickupable: false
+
+# Choppable tree of the Isla del Bosque (T3.6): sturdier wood than birch. Our own numbers.
+- id: elm_tree
+  kind: decoration
+  sprite: decor/elm_tree
+  name: item.elm_tree.name
+  description: item.elm_tree.desc
+  pickupable: false
+  blocks_movement: true
+  resource:
+    tool: woodcutting
+    skill: woodcutting
+    charges: 4
+    regen_ms: 420000
+    chance: { base: 0.25, per_level: 0.025, max: 0.8 }
+    drops:
+      - { item: elm_log, weight: 8 }
+      - { item: tree_resin, weight: 1, min_level: 4 }
+  value: 4

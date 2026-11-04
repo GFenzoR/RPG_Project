@@ -121,9 +121,14 @@ type fightStats struct{ seconds, damagePct float64 }
 
 func (d *balanceData) simulate(t *testing.T, m *content.Monster, level int) fightStats {
 	t.Helper()
+	return d.simulateWith(t, m, level, kitFor(level))
+}
+
+// simulateWith is simulate with an explicit kit (each island has its own shops).
+func (d *balanceData) simulateWith(t *testing.T, m *content.Monster, level int, k kit) fightStats {
+	t.Helper()
 	r := rand.New(rand.NewPCG(1, uint64(level)))
 	c := d.balance.Combat
-	k := kitFor(level)
 	weapon := d.item(t, k.weapon).Weapon
 	if weapon == nil {
 		t.Fatalf("%s is not a weapon", k.weapon)
@@ -185,7 +190,11 @@ func (d *balanceData) simulate(t *testing.T, m *content.Monster, level int) figh
 }
 
 func (d *balanceData) xpPerHour(t *testing.T, m *content.Monster, level int) float64 {
-	s := d.simulate(t, m, level)
+	return d.xpPerHourWith(t, m, level, kitFor(level))
+}
+
+func (d *balanceData) xpPerHourWith(t *testing.T, m *content.Monster, level int, k kit) float64 {
+	s := d.simulateWith(t, m, level, k)
 	return float64(m.Experience) * 3600 / (s.seconds + overheadSeconds)
 }
 
@@ -198,11 +207,13 @@ func (d *balanceData) lootValue(t *testing.T, m *content.Monster) float64 {
 	return sum
 }
 
-func (d *balanceData) puerto() []*content.Monster {
+func (d *balanceData) puerto() []*content.Monster { return d.island("puerto") }
+
+func (d *balanceData) island(tag string) []*content.Monster {
 	var out []*content.Monster
 	for _, id := range d.monsters.IDs() {
 		m := d.monsters[id]
-		if slices.Contains(monsterTags(id), "puerto") {
+		if slices.Contains(monsterTags(id), tag) {
 			out = append(out, m)
 		}
 	}
@@ -350,6 +361,9 @@ func TestPuertoBalance(t *testing.T) {
 					for _, l := range m.Loot {
 						if l.Item == want {
 							if tl, ok := targetLevel[m.ID]; ok {
+								source = min(source, tl)
+							}
+							if tl, ok := bosqueTargetLevel[m.ID]; ok {
 								source = min(source, tl)
 							}
 						}

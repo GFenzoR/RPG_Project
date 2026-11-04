@@ -150,3 +150,15 @@
   weapon: { type: sword, attack: 14, defense: 8, hands: 1 }
   requires: { level: 6 }
   value: 150
+
+# Isla del Bosque weapons (T3.6). Our own numbers.
+- id: thornwood_blade
+  kind: weapon
+  sprite: weapons/thornwood_blade
+  name: item.thornwood_blade.name
+  description: item.thornwood_blade.desc
+  weight: 3600
+  tradeable: true
+  weapon: { type: sword, attack: 23, defense: 13, hands: 1 }
+  requires: { level: 16 }
+  value: 850

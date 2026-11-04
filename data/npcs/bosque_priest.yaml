@@ -1,0 +1,56 @@
+id: bosque_priest
+name: npc.bosque_priest.name
+sprite: npcs/priest_forest
+notes: >-
+  Temple of the Root in Raigal (respawn point of the island). Heals for free and sells the
+  same five blessings as the Farol temple (they are the same blessings, so the same flat
+  price: docs/02 "Muerte").
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.bosque_priest.greet
+      options:
+        - text: npc.bosque_priest.opt_blessings
+          goto: blessings
+        - text: npc.bosque_priest.opt_heal
+          action: { heal: true }
+          goto: healed
+        - text: npc.bosque_priest.opt_root
+          goto: root
+        - text: dialog.bye
+          action: close
+    blessings:
+      text: npc.bosque_priest.blessings
+      options:
+        - text: npc.puerto_priest.bless_shore
+          action: { bless: { blessing: shore_light, price: 200 } }
+          goto: blessed
+        - text: npc.puerto_priest.bless_hearth
+          action: { bless: { blessing: hearth_light, price: 200 } }
+          goto: blessed
+        - text: npc.puerto_priest.bless_keel
+          action: { bless: { blessing: keel_light, price: 200 } }
+          goto: blessed
+        - text: npc.puerto_priest.bless_star
+          action: { bless: { blessing: star_light, price: 200 } }
+          goto: blessed
+        - text: npc.puerto_priest.bless_deep
+          action: { bless: { blessing: deep_light, price: 200 } }
+          goto: blessed
+        - { text: dialog.back, goto: greet }
+    blessed:
+      text: npc.bosque_priest.blessed
+      options:
+        - { text: npc.bosque_priest.opt_more, goto: blessings }
+        - { text: dialog.bye, action: close }
+    healed:
+      text: npc.bosque_priest.healed
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    root:
+      text: npc.bosque_priest.root
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
