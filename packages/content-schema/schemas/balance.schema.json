@@ -351,11 +351,54 @@
         }
       }
     },
+    "conditions": {
+      "description": "Condition rules by id (T3.2). Sources (spells, monster attacks) give the strength and duration.",
+      "type": "object",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/conditionId" },
+      "additionalProperties": { "$ref": "#/$defs/condition" }
+    },
     "notes": {
       "$ref": "common.schema.json#/$defs/notes"
     }
   },
   "$defs": {
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "stacking"],
+      "properties": {
+        "kind": { "enum": ["damage", "speed", "skill", "invisible"] },
+        "element": { "$ref": "common.schema.json#/$defs/element" },
+        "interval_ms": { "type": "integer", "minimum": 50 },
+        "max_ticks": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "max_ms": { "type": "integer", "minimum": 50 },
+        "speed_pct": { "type": "integer", "exclusiveMinimum": -100, "maximum": 500 },
+        "skill": { "enum": ["fist", "sword", "axe", "club", "distance", "shield"] },
+        "amount": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "stacking": { "enum": ["refresh", "add"] },
+        "cancels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/$defs/conditionId" }
+        },
+        "persists": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "damage" } } },
+          "then": { "required": ["element", "interval_ms", "max_ticks"] },
+          "else": { "required": ["max_ms"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "speed" } } },
+          "then": { "required": ["speed_pct"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "skill" } } },
+          "then": { "required": ["skill", "amount"] }
+        }
+      ]
+    },
     "mode": {
       "type": "object",
       "additionalProperties": false,

@@ -129,6 +129,24 @@ func TestPlayTokensAndCharacterState(t *testing.T) {
 	if pc, _ = st.PlayCharacter(ctx, acc, c.ID, now); !reflect.DeepEqual(pc.Storage, state.Storage) {
 		t.Fatalf("storage after replacing: %v", pc.Storage)
 	}
+	// Conditions (T3.2) are replaced by every save; none is an empty list.
+	if len(pc.Conditions) != 0 {
+		t.Fatalf("conditions before any: %+v", pc.Conditions)
+	}
+	state.Conditions = []store.Condition{{ID: "poison", LeftMs: 1200, Ticks: 4, Damage: 3}, {ID: "slowed", LeftMs: 5000}}
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	if pc, _ = st.PlayCharacter(ctx, acc, c.ID, now); !reflect.DeepEqual(pc.Conditions, state.Conditions) {
+		t.Fatalf("conditions after save: %+v", pc.Conditions)
+	}
+	state.Conditions = nil
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	if pc, _ = st.PlayCharacter(ctx, acc, c.ID, now); len(pc.Conditions) != 0 {
+		t.Fatalf("conditions after clearing: %+v", pc.Conditions)
+	}
 	state.ID = 999999
 	if err := st.SaveCharacterState(ctx, state); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("save of a missing character: %v", err)

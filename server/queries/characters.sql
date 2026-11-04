@@ -16,7 +16,7 @@ RETURNING id, name, vocation, level;
 -- Loads what the game server needs to put a character in the world, with its account's
 -- role. A banned account's characters are not found (T2.6).
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
-       c.pos_x, c.pos_y, c.pos_z, c.town, a.role
+       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, a.role
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
 WHERE c.id = sqlc.arg(id) AND c.account_id = sqlc.arg(account_id)
@@ -44,6 +44,7 @@ SET level        = sqlc.arg(level),
     pos_x        = sqlc.arg(pos_x),
     pos_y        = sqlc.arg(pos_y),
     pos_z        = sqlc.arg(pos_z),
+    conditions   = sqlc.arg(conditions),
     last_save_at = sqlc.arg(saved_at)
 WHERE id = sqlc.arg(id);
 

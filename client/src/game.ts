@@ -29,6 +29,7 @@ import type {
   PlayerStatsState,
   ShopState,
   SkillState,
+  ConditionView,
 } from "./state/world.ts";
 
 /** What the DOM UI shows next to the canvas, refreshed after every server batch. */
@@ -37,6 +38,8 @@ export interface GameUi {
   target: number | undefined;
   stats: PlayerStatsState | undefined;
   skills: SkillState[];
+  /** The player's own active conditions (T3.2). */
+  conditions: ConditionView[];
   levelUp: LevelUpState | undefined;
   death: DeathState | undefined;
   log: LogMessage[];
@@ -403,6 +406,7 @@ export class Game {
       target: w.target,
       stats: w.stats,
       skills: w.skills,
+      conditions: w.conditions,
       levelUp: w.levelUp,
       death: w.death,
       log: [...w.log],

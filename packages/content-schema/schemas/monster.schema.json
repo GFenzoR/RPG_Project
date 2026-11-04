@@ -20,7 +20,11 @@
       "properties": {
         "aggressive": { "type": "boolean" },
         "flee_at_health_pct": { "$ref": "common.schema.json#/$defs/percent" },
-        "target_distance": { "$ref": "common.schema.json#/$defs/positiveInt" }
+        "target_distance": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "sees_invisible": {
+          "description": "T3.2: sees and fights invisible players.",
+          "type": "boolean"
+        }
       }
     },
     "attacks": {
@@ -39,6 +43,10 @@
           "chance": { "$ref": "common.schema.json#/$defs/chance" },
           "range": { "$ref": "common.schema.json#/$defs/positiveInt" },
           "radius": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+          "condition": {
+            "description": "T3.2: applied to the target when the attack deals damage.",
+            "$ref": "common.schema.json#/$defs/conditionApply"
+          },
           "visual": { "$ref": "common.schema.json#/$defs/id" }
         }
       }

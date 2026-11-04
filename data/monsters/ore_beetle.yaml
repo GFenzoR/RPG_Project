@@ -10,7 +10,7 @@ behavior:
   aggressive: true
   target_distance: 1
 attacks:
-  - { type: melee, min: 0, max: 26, interval_ms: 2000 }
+  - { type: melee, min: 0, max: 26, interval_ms: 2000, condition: { id: poison, chance: 0.3, ticks: 5, damage: 3 } }
 resistances: { physical: 10, earth: 30, fire: -15, energy: -10 }
 loot:
   - { item: iron_ore, chance: 0.35 }

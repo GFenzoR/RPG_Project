@@ -85,10 +85,21 @@ func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 		}
 		return
 	}
+	// An invisible speaker is heard by name, but its position goes only to the clients
+	// that see it (T3.2).
+	unseen := out
 	msg.Pos = posMsg(p.pos)
+	if p.invisible {
+		hidden := &pb.Message{Kind: kind, SpeakerId: p.id, SpeakerName: p.name, Body: msg.Body}
+		unseen = &pb.ServerMessage{Message: &pb.ServerMessage_ChatMessage{ChatMessage: hidden}}
+	}
 	r := w.chatRange(ch)
 	w.eachInRect(int(p.pos.X)-r.X, int(p.pos.Y)-r.Y, int(p.pos.X)+r.X, int(p.pos.Y)+r.Y, p.pos.Z, func(o *Player) {
-		o.emit(out)
+		if o.Knows(p.id) {
+			o.emit(out)
+		} else {
+			o.emit(unseen)
+		}
 	})
 }
 

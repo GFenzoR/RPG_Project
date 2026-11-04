@@ -101,7 +101,7 @@ func (q *Queries) DeleteCharacterQuestState(ctx context.Context, characterID int
 
 const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
-       c.pos_x, c.pos_y, c.pos_z, c.town, a.role
+       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, a.role
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
 WHERE c.id = $1 AND c.account_id = $2
@@ -131,6 +131,7 @@ type GetCharacterForPlayRow struct {
 	PosY       pgtype.Int4
 	PosZ       pgtype.Int2
 	Town       string
+	Conditions []byte
 	Role       string
 }
 
@@ -152,6 +153,7 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 		&i.PosY,
 		&i.PosZ,
 		&i.Town,
+		&i.Conditions,
 		&i.Role,
 	)
 	return i, err
@@ -383,8 +385,9 @@ SET level        = $1,
     pos_x        = $5,
     pos_y        = $6,
     pos_z        = $7,
-    last_save_at = $8
-WHERE id = $9
+    conditions   = $8,
+    last_save_at = $9
+WHERE id = $10
 `
 
 type SaveCharacterStateParams struct {
@@ -395,6 +398,7 @@ type SaveCharacterStateParams struct {
 	PosX       pgtype.Int4
 	PosY       pgtype.Int4
 	PosZ       pgtype.Int2
+	Conditions []byte
 	SavedAt    pgtype.Timestamptz
 	ID         int64
 }
@@ -409,6 +413,7 @@ func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterState
 		arg.PosX,
 		arg.PosY,
 		arg.PosZ,
+		arg.Conditions,
 		arg.SavedAt,
 		arg.ID,
 	)

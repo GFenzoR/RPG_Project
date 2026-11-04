@@ -93,7 +93,13 @@ type Monster struct {
 	damage []damageShare
 	// thought is the last tick the monster thought (it may change sector mid-tick).
 	thought game.Tick
+	// speed is the effective speed: the kind's with its speed conditions (T3.2).
+	speed int
+	conds []*condition
 }
+
+// Speed returns the monster's effective speed.
+func (m *Monster) Speed() int { return m.speed }
 
 type damageShare struct {
 	player uint32
@@ -275,7 +281,7 @@ func (w *World) monsterMsg(m *Monster) *pb.Creature {
 		Pos:           posMsg(m.pos),
 		Dir:           dirMsg(m.dir),
 		HealthPercent: healthPercent(m.health, m.maxHealth),
-		Speed:         uint32(m.kind.def.Speed),
+		Speed:         uint32(m.speed),
 	}
 }
 
@@ -335,6 +341,7 @@ func (w *World) spawnMonster(ctx *game.TickContext, slot *spawnSlot, initial boo
 		dir:        world.South,
 		health:     def.Health,
 		maxHealth:  def.Health,
+		speed:      def.Speed,
 		nextAttack: make([]game.Tick, len(def.Attacks)),
 	}
 	w.monsters = append(w.monsters, m) // ids grow: the slice stays ordered
@@ -404,7 +411,8 @@ func (w *World) inProtection(p world.Pos) bool { return w.m.Flags(p)&world.FlagP
 
 // validTarget reports whether monster m may keep fighting player t.
 func (w *World) validTarget(m *Monster, t *Player) bool {
-	return t != nil && w.byClient[t.client] == t && t.pos.Z == m.pos.Z && Sees(m.pos, t.pos) && !w.inProtection(t.pos)
+	return t != nil && w.byClient[t.client] == t && t.pos.Z == m.pos.Z && Sees(m.pos, t.pos) && !w.inProtection(t.pos) &&
+		seesPlayer(m, t)
 }
 
 // findTarget returns the closest player m can see and reach, or nil.
@@ -412,7 +420,7 @@ func (w *World) findTarget(m *Monster) *Player {
 	var best *Player
 	bestD := 0
 	w.eachObserver(nil, m.pos, func(o *Player) {
-		if o.pos.Z != m.pos.Z || w.inProtection(o.pos) {
+		if o.pos.Z != m.pos.Z || w.inProtection(o.pos) || !seesPlayer(m, o) {
 			return
 		}
 		d := chebyshev(m.pos, o.pos)
@@ -576,7 +584,7 @@ func (w *World) fleeStep(m *Monster, threat world.Pos) (world.Direction, bool) {
 func (w *World) stepMonster(ctx *game.TickContext, m *Monster, d world.Direction) {
 	to, _ := m.pos.Step(d)
 	ground, _, _ := w.m.Tile(to)
-	ticks := w.StepTicks(ground, m.kind.def.Speed, d.Diagonal())
+	ticks := w.StepTicks(ground, m.speed, d.Diagonal())
 	m.readyAt = ctx.Tick + ticks
 	from := m.pos
 	w.munindex(m)

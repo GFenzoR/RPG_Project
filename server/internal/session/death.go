@@ -72,8 +72,12 @@ func (w *World) die(ctx *game.TickContext, p *Player) {
 		p.level = level
 		stats := p.vocation.AtLevel(level)
 		p.maxHealth, p.maxMana, p.capacity = stats.Health, stats.Mana, stats.Capacity
-		p.speed = max(stats.Speed, 1)
+		p.baseSpeed = max(stats.Speed, 1)
 	}
+	// A death ends every condition (T3.2): the speed returns to its base, an invisible
+	// player shows up again before it is teleported.
+	w.clearConditions(ctx, holder{p: p}, false)
+	w.refreshSpeed(holder{p: p})
 	for i, id := range w.skillIDs {
 		p.skills[i].Lose(w.cfg.Balance.Skills.Base[id], p.vocation.SkillFactor(id), pen.SkillPct)
 		p.skills[i].carry = 0

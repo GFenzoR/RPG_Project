@@ -20,6 +20,8 @@ type Balance struct {
 	Gathering  Gathering  `yaml:"gathering"`
 	Chat       Chat       `yaml:"chat"`
 	Death      Death      `yaml:"death"`
+	// Conditions are the condition definitions by id (T3.2).
+	Conditions ConditionDefs `yaml:"conditions"`
 }
 
 // Death holds the death rules (docs/02-game-design.md, "Muerte", T1.11).
@@ -248,6 +250,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, errors.New("inventory: max_open_containers and reach must be > 0, use_cooldown_ms >= 0")
 	}
 	if err := b.Chat.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Conditions.check(); err != nil {
 		return Balance{}, err
 	}
 	if g := b.Gathering; g.UseIntervalMs < 0 || g.AFK.AfterMs < 0 || g.AFK.Factor < 0 || g.AFK.Factor > 1 {

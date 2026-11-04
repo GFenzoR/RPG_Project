@@ -178,10 +178,13 @@ describe("spell roles", () => {
     return Math.max(0, ...amounts);
   };
 
-  it("every vocation but the guardian has 3-4 spells of its own", () => {
+  it("every vocation but the guardian has 3-5 spells of its own", () => {
+    // Own = only it casts them; the support spells every vocation shares (haste and the
+    // poison cure, T3.2) do not count.
+    const own = (v: string) => castBy(v).filter((s) => s.vocations.length === 1);
     for (const v of ["arcanist", "ranger", "druid"]) {
-      expect(castBy(v).length, v).toBeGreaterThanOrEqual(3);
-      expect(castBy(v).length, v).toBeLessThanOrEqual(5);
+      expect(own(v).length, v).toBeGreaterThanOrEqual(3);
+      expect(own(v).length, v).toBeLessThanOrEqual(5);
     }
   });
 

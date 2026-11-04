@@ -130,6 +130,26 @@ button.link {
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
 }
+/* Own conditions (T3.2): one named badge each, coloured by kind. */
+.hud .conditions {
+  display: flex;
+  gap: 0.3rem;
+}
+.hud .condition {
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  border: 1px solid currentColor;
+}
+.hud .condition-damage {
+  color: #e8a050;
+}
+.hud .condition-debuff {
+  color: #c890ff;
+}
+.hud .condition-buff {
+  color: #8fe0a8;
+}
 .game-body {
   flex: 1;
   min-height: 0;

@@ -6,6 +6,9 @@ import {
   MapFloorSchema,
   TileSchema,
   ItemStackSchema,
+  ActiveConditionSchema,
+  PlayerConditionsSchema,
+  PlayerStatsSchema,
   create,
 } from "@rpg/protocol";
 import type { ServerMessage } from "@rpg/protocol";
@@ -278,5 +281,42 @@ describe("NPC dialogs and shops (T1.10)", () => {
     w.apply(ev({ case: "dialogClose", value: { dialogId: 3 } as never }), 0);
     expect(w.dialog).toBeUndefined();
     expect(w.shop).toBeUndefined();
+  });
+});
+
+describe("conditions (T3.2)", () => {
+  const conditions = (...cs: [string, number, number][]): Msg => ({
+    case: "playerConditions",
+    value: create(PlayerConditionsSchema, {
+      conditions: cs.map(([conditionId, remainingMs, ticks]) =>
+        create(ActiveConditionSchema, { conditionId, remainingMs, ticks }),
+      ),
+    }),
+  });
+
+  it("replaces the list with each PlayerConditions and knows when the player is invisible", () => {
+    const w = entered();
+    w.apply(conditions(["poison", 4000, 3], ["invisible", 9000, 0]), 1000);
+    expect(w.conditions).toEqual([
+      { id: "poison", until: 5000, ticks: 3 },
+      { id: "invisible", until: 10000, ticks: 0 },
+    ]);
+    expect(w.invisible).toBe(true);
+    w.apply(conditions(), 2000);
+    expect(w.conditions).toEqual([]);
+    expect(w.invisible).toBe(false);
+  });
+
+  it("walks at the speed of its PlayerStats (haste)", () => {
+    const w = entered();
+    const before = w.self?.speed ?? 0;
+    w.apply(
+      {
+        case: "playerStats",
+        value: create(PlayerStatsSchema, { health: 1, maxHealth: 1, speed: before * 2 }),
+      },
+      0,
+    );
+    expect(w.self?.speed).toBe(before * 2);
   });
 });

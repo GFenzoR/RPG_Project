@@ -45,7 +45,7 @@ func TestSpellCheck(t *testing.T) {
 		{ID: "a", Group: "nope", Effect: SpellEffect{Heal: &SpellHeal{}}},
 		{ID: "b", Group: SpellGroupAttack},
 		{ID: "c", Group: SpellGroupAttack, Effect: SpellEffect{Damage: &SpellDamage{}}},
-		{ID: "d", Group: SpellGroupSupport, Effect: SpellEffect{Haste: map[string]any{}}},
+		{ID: "d", Group: SpellGroupSupport, Effect: SpellEffect{Light: map[string]any{}}},
 	}
 	for _, s := range bad {
 		if err := s.check(); err == nil {

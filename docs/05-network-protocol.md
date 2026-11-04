@@ -432,6 +432,26 @@ Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architectu
   `dialog.quest_completed`, con el parámetro `content_id` `quest` (el cliente muestra
   `quest.<id>.name`).
 
+### Condiciones (T3.2, `server/internal/session/condition.go`)
+Reglas en `02-game-design.md` ("Condiciones").
+- **`PlayerConditions{conditions: [ActiveCondition{condition_id, remaining_ms, ticks}]}`**:
+  la lista completa de las condiciones propias. Llega al entrar (si tiene alguna) y al
+  final del tick en que alguna empezó, cambió (un golpe más, se apiló) o terminó; una lista
+  vacía = ninguna. `remaining_ms` es lo que falta hasta el final, o en una de daño los
+  golpes que quedan × su intervalo. Las condiciones de otras criaturas no se mandan.
+- **Daño periódico**: cada golpe es un golpe más (`Effect 10 + elemento`, `FloatingText`,
+  `CreatureHealth`, `PlayerStats` al afectado).
+- **Velocidad**: el afectado recibe `PlayerStats.speed` y quien lo ve `CreatureSpeed`; los
+  `CreatureMove.duration_ms` siguientes ya usan la velocidad nueva.
+- **Efecto 7** (`EffectBuff`): un hechizo de condición sobre su objetivo o una cura.
+- `magic.nothing_to_cure`: una cura sin nada que curar (no gasta maná).
+- **Invisibilidad, filtrada en el servidor**: al volverse invisible, quien lo conocía recibe
+  `CreatureDisappear`. Mientras dure, nadie más lo recibe: ni en `FullMapView` /
+  `MapSlice`, ni `CreatureAppear` o `CreatureMove`, ni sus golpes, curas o vida
+  (`Effect`, `FloatingText`, `CreatureHealth`), ni un `Projectile` hacia él. Su chat local
+  llega con su nombre pero sin `pos`. Al terminar le llega `CreatureAppear` a quien ve su
+  casilla. Solo su propio cliente lo sigue recibiendo (y lo dibuja semitransparente).
+
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
 |---|---|
@@ -447,6 +467,7 @@ Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architectu
 | `PlayerStats` | HP, MP, nivel, XP, capacidad, velocidad, alma |
 | `PlayerSkills` | Nivel y % de cada skill |
 | `SpellCooldown` | Cooldown propio y de grupo de un hechizo lanzado (T1.9) |
+| `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |
 | `DialogOpen` / `DialogClose` | Diálogo de NPC con texto y opciones |

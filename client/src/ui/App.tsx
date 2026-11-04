@@ -351,6 +351,7 @@ function GameScreen(props: {
     target: undefined,
     stats: undefined,
     skills: [],
+    conditions: [],
     levelUp: undefined,
     death: undefined,
     log: [],
@@ -420,6 +421,7 @@ function GameScreen(props: {
             {t("client.game.experience", { experience: ui.stats.experience })}
           </span>
         )}
+        <ConditionBar t={t} conditions={ui.conditions} />
         <span class="hint">{t("client.game.controls")}</span>
         {props.languagePicker}
         <button type="button" onClick={() => game.current?.logout()}>
@@ -564,6 +566,39 @@ const skillRank = (id: string): number => {
 };
 
 /** Skills panel: level and progress bar of every skill the server reports. */
+/** Kind of each condition, for its badge colour (balance.yaml conditions, T3.2). */
+const CONDITION_CLASS: Record<string, string> = {
+  poison: "damage",
+  burning: "damage",
+  shocked: "damage",
+  slowed: "debuff",
+  hasted: "buff",
+  invisible: "buff",
+  keen_eye: "buff",
+};
+
+/** The player's own conditions as named badges; the tooltip has the time left. */
+function ConditionBar(props: { t: Translate; conditions: GameUi["conditions"] }): JSX.Element {
+  const { t } = props;
+  const now = performance.now();
+  return (
+    <span class="conditions" data-testid="conditions" aria-label={t("client.conditions.title")}>
+      {props.conditions.map((c) => (
+        <span
+          key={c.id}
+          class={`condition condition-${CONDITION_CLASS[c.id] ?? "buff"}`}
+          data-condition={c.id}
+          title={t("client.conditions.left", {
+            seconds: Math.max(0, Math.ceil((c.until - now) / 1000)),
+          })}
+        >
+          {t(`condition.${c.id}.name`)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function SkillsPanel(props: { t: Translate; skills: GameUi["skills"] }): JSX.Element {
   const { t } = props;
   const skills = [...props.skills].sort((a, b) => skillRank(a.id) - skillRank(b.id));

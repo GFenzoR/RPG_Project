@@ -58,6 +58,8 @@ type Character struct {
 	Role Role
 	// Storage is the quest progress and flags (quest_state rows: key → value).
 	Storage map[string]int64
+	// Conditions are the saved conditions that survive a logout (T3.2).
+	Conditions []ConditionState
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -77,6 +79,8 @@ type Snapshot struct {
 	Inventory []ItemState
 	// Storage is every non-zero quest_state value (a copy).
 	Storage map[string]int64
+	// Conditions are the active conditions that persist (T3.2), with their time left.
+	Conditions []ConditionState
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -116,6 +120,7 @@ type Config struct {
 	// must be in Items. Without NPCs the world has none (tests, tools).
 	NPCs   content.NPCs
 	Quests content.Quests
+	// Balance.Conditions (T3.2) must hold every condition the spells and monsters apply.
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
 	Save func(Snapshot) bool
@@ -232,6 +237,10 @@ type World struct {
 	banned     map[int64]time.Time
 	// nextRoleCheck is the tick of the next check of the online staff's roles.
 	nextRoleCheck game.Tick
+
+	// sched is the loop's scheduler, kept at the first join to know the current tick
+	// outside a TickContext (condition times in snapshots and at flush, T3.2).
+	sched *game.Scheduler
 }
 
 // New validates cfg and builds an empty World.
@@ -294,6 +303,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	w.initChat()
+	if err := w.initConditions(); err != nil {
+		return nil, err
+	}
 	if err := w.initGathering(); err != nil {
 		return nil, err
 	}

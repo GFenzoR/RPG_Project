@@ -143,7 +143,7 @@ func healScaling(h *content.SpellHeal) *content.Scaling {
 func (w *World) scaled(ctx *game.TickContext, s content.Scaling, p *Player) int {
 	skill := 0
 	if s.Skill != "" {
-		skill = w.skillLevel(p, s.Skill)
+		skill = w.combatSkill(p, s.Skill)
 	}
 	return combat.Scaled(ctx.Rand, s, p.level, w.magicLevel(p), skill)
 }
@@ -192,6 +192,9 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 	if !w.applySpell(ctx, p, s, target) {
 		return
 	}
+	if c := s.Effect.Condition; c == nil || c.ID != condInvisible {
+		w.reveal(ctx, p) // T3.2: casting anything but the invisibility itself ends it
+	}
 	p.mana -= s.Mana
 	if s.Mana > 0 && w.magicIdx >= 0 {
 		w.addTries(p, w.magicIdx, int64(s.Mana))
@@ -237,6 +240,10 @@ func (w *World) applySpell(ctx *game.TickContext, p *Player, s *content.Spell, t
 		return true
 	case e.Conjure != nil:
 		return w.conjure(p, w.cfg.Items[e.Conjure.Item], e.Conjure.Count)
+	case e.Condition != nil:
+		return w.conditionSpell(ctx, p, e.Condition, target)
+	case len(e.Cure) > 0:
+		return w.cure(ctx, p, e.Cure)
 	}
 	return false
 }
@@ -279,7 +286,15 @@ func (w *World) boltSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 	w.projectile(p.pos, m.pos, d.Element)
 	dmg := combat.Resist(w.scaled(ctx, d.Scaling, p), m.kind.def.Resistances[d.Element])
 	w.damageMonster(ctx, m, p, dmg, d.Element)
+	w.spellCondition(ctx, m, p, d, dmg)
 	return true
+}
+
+// spellCondition puts d's condition (T3.2) on m, if the spell hurt it and it is alive.
+func (w *World) spellCondition(ctx *game.TickContext, m *Monster, p *Player, d *content.SpellDamage, dmg int) {
+	if d.Condition != nil && dmg > 0 && w.monByID[m.id] == m {
+		w.applyCondition(ctx, holder{m: m}, d.Condition, p.id)
+	}
 }
 
 // inArea reports whether a tile at offset (dx, dy) lies in a round area of radius r.
@@ -322,6 +337,7 @@ func (w *World) areaSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 		}
 		dmg := combat.Resist(w.scaled(ctx, d.Scaling, p), m.kind.def.Resistances[d.Element])
 		w.damageMonster(ctx, m, p, dmg, d.Element)
+		w.spellCondition(ctx, m, p, d, dmg)
 	}
 	return true
 }
@@ -331,7 +347,7 @@ func (w *World) heal(p *Player, amount int) {
 	hp := min(max(amount, 0), p.maxHealth-p.health)
 	pct := healthPercent(p.health, p.maxHealth)
 	p.health += hp
-	w.eachObserver(nil, p.pos, func(o *Player) {
+	w.eachWatcher(p, func(o *Player) {
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(p.pos), EffectId: EffectHeal}}})
 		if hp > 0 {
 			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
@@ -419,7 +435,7 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 		w.containerChanged(bp)
 		shown = it.stack()
 	}
-	w.eachObserver(nil, p.pos, func(o *Player) {
+	w.eachWatcher(p, func(o *Player) {
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(p.pos), EffectId: EffectConjure}}})
 	})
 	p.emit(systemMsg(msgConjured, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: shown}}))
@@ -438,6 +454,84 @@ func (w *World) projectile(from, to world.Pos, element string) {
 			o.emit(msg)
 		}
 	})
+}
+
+// projectileAt is projectile from `from` to player t: a client that does not see t (it is
+// invisible, T3.2) gets nothing, so the shot does not give its tile away.
+func (w *World) projectileAt(from world.Pos, t *Player, element string) {
+	if !t.invisible {
+		w.projectile(from, t.pos, element)
+		return
+	}
+	msg := &pb.ServerMessage{Message: &pb.ServerMessage_Projectile{Projectile: &pb.Projectile{
+		From: posMsg(from), To: posMsg(t.pos), ProjectileId: ProjectileElementBase + elementIndex(element),
+	}}}
+	w.eachWatcher(t, func(o *Player) { o.emit(msg) })
+}
+
+// condInvisible is the condition whose spell does not end invisibility when cast.
+const condInvisible = "invisible"
+
+// conditionSpell puts a's condition on p, or with a.Range (T3.2) on the monster p aims
+// at, at up to a.Range tiles in line of sight (the checks of a bolt). A spell aimed at a
+// monster costs its mana even if the monster shrugs the condition off (chance, immunity).
+func (w *World) conditionSpell(ctx *game.TickContext, p *Player, a *content.ConditionApply, target *pb.ActionTarget) bool {
+	if a.Range == 0 {
+		w.applyCondition(ctx, holder{p: p}, a, p.id)
+		w.buffEffect(p.pos)
+		return true
+	}
+	m := w.spellTarget(p, target)
+	switch {
+	case m == nil:
+		p.emit(systemMsg(msgNoTarget))
+		return false
+	case w.inProtection(p.pos) || w.inProtection(m.pos):
+		p.emit(systemMsg(msgSpellProtection))
+		return false
+	case m.pos.Z != p.pos.Z || chebyshev(p.pos, m.pos) > a.Range:
+		p.emit(systemMsg(msgOutOfRange))
+		return false
+	case !w.m.LineOfSight(p.pos, m.pos):
+		p.emit(systemMsg(msgNoSight))
+		return false
+	}
+	el := ElementPhysical
+	if def := w.cfg.Balance.Conditions[a.ID]; def != nil && def.Element != "" {
+		el = def.Element
+	}
+	w.projectile(p.pos, m.pos, el)
+	w.buffEffect(m.pos)
+	w.applyCondition(ctx, holder{m: m}, a, p.id)
+	w.reveal(ctx, p)
+	if m.target == nil && w.validTarget(m, p) {
+		m.target, m.state = p, StateAlert // like a hit: it fights back
+	}
+	return true
+}
+
+// cure removes the listed conditions from p (T3.2); with none of them it fails and
+// costs nothing.
+func (w *World) cure(ctx *game.TickContext, p *Player, ids []string) bool {
+	cured := false
+	for _, id := range ids {
+		if w.removeCondition(ctx, holder{p: p}, id) {
+			cured = true
+		}
+	}
+	if !cured {
+		p.emit(systemMsg(msgNothingToCure))
+		return false
+	}
+	w.buffEffect(p.pos)
+	return true
+}
+
+// buffEffect shows EffectBuff on pos to the clients that see it. On the caster it runs
+// before an invisibility starts, or after one ends.
+func (w *World) buffEffect(pos world.Pos) {
+	msg := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(pos), EffectId: EffectBuff}}}
+	w.eachObserver(nil, pos, func(o *Player) { o.emit(msg) })
 }
 
 // ---- wands and runes -------------------------------------------------------------
@@ -499,6 +593,7 @@ func (w *World) useRune(ctx *game.TickContext, p *Player, it *Item, target *pb.A
 	if !w.applySpell(ctx, p, s, target) {
 		return
 	}
+	w.reveal(ctx, p)
 	w.startCooldown(ctx, p, s, false)
 	w.useUp(it)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})

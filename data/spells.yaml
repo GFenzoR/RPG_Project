@@ -13,8 +13,11 @@
   group: attack
   cooldown_ms: 2000
   group_cooldown_ms: 2000
-  effect: { damage: { element: energy, range: 4, base: 9, per_level: 0.2, per_magic_level: 2.5, spread: 0.25 } }
-  notes: Single target at up to 4 tiles in line of sight (the current target by default).
+  effect:
+    damage:
+      { element: energy, range: 4, base: 9, per_level: 0.2, per_magic_level: 2.5, spread: 0.25,
+        condition: { id: shocked, chance: 0.2, ticks: 3, damage: 3 } }
+  notes: Single target at up to 4 tiles in line of sight (the current target by default); sometimes leaves it shocked (T3.2).
 
 - id: ember_ring
   name: spell.ember_ring.name
@@ -26,8 +29,11 @@
   group: attack
   cooldown_ms: 4000
   group_cooldown_ms: 2000
-  effect: { damage: { element: fire, radius: 2, base: 14, per_level: 0.25, per_magic_level: 3, spread: 0.2 } }
-  notes: Burns every monster within 2 tiles of the caster that the caster can see.
+  effect:
+    damage:
+      { element: fire, radius: 2, base: 14, per_level: 0.25, per_magic_level: 3, spread: 0.2,
+        condition: { id: burning, chance: 0.35, ticks: 4, damage: 4 } }
+  notes: Burns every monster within 2 tiles of the caster that the caster can see; some keep burning (T3.2).
 
 - id: light_heal
   name: spell.light_heal.name
@@ -150,3 +156,68 @@
   group_cooldown_ms: 2000
   effect: { damage: { element: earth, radius: 1, base: 12, per_level: 0.25, per_magic_level: 2.6, spread: 0.2 } }
   notes: Thorns on every monster next to the druid; a smaller area than the arcanist's.
+
+# ---- Conditions (T3.2): haste and the poison cure for everyone, and one condition spell
+# of each vocation's own. Durations and strengths are ours; the rules of each condition
+# (speed_pct, stacking, tick interval...) live in balance.yaml conditions.
+- id: swift_stride
+  name: spell.swift_stride.name
+  words: "pede celeri"
+  vocations: [guardian, ranger, arcanist, druid]
+  level: 8
+  mana: 30
+  group: support
+  cooldown_ms: 2000
+  group_cooldown_ms: 2000
+  effect: { condition: { id: hasted, duration_ms: 22000 } }
+  notes: The caster walks faster for a while; ends a slow.
+
+- id: purge_venom
+  name: spell.purge_venom.name
+  words: "venenum pelle"
+  vocations: [guardian, ranger, arcanist, druid]
+  level: 9
+  mana: 25
+  group: healing
+  cooldown_ms: 3000
+  group_cooldown_ms: 1000
+  effect: { cure: [poison] }
+  notes: Removes the caster's poison.
+
+- id: keen_eye
+  name: spell.keen_eye.name
+  words: "oculus acer"
+  vocations: [ranger]
+  level: 10
+  mana: 50
+  group: support
+  cooldown_ms: 2000
+  group_cooldown_ms: 2000
+  effect: { condition: { id: keen_eye, duration_ms: 30000 } }
+  notes: The ranger's aim improves (distance skill in combat) for a while.
+
+- id: entangle
+  name: spell.entangle.name
+  words: "radix vincit"
+  vocations: [druid]
+  level: 10
+  magic_level: 3
+  mana: 40
+  group: attack
+  cooldown_ms: 6000
+  group_cooldown_ms: 2000
+  effect: { condition: { id: slowed, range: 4, duration_ms: 7000 } }
+  notes: Roots slow down a monster at up to 4 tiles in line of sight.
+
+- id: shroud
+  name: spell.shroud.name
+  words: "umbra tegit"
+  vocations: [arcanist]
+  level: 14
+  magic_level: 4
+  mana: 110
+  group: support
+  cooldown_ms: 4000
+  group_cooldown_ms: 2000
+  effect: { condition: { id: invisible, duration_ms: 40000 } }
+  notes: Hides the caster from players and from most monsters; attacking or casting ends it.
