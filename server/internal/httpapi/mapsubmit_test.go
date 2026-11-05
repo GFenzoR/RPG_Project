@@ -563,6 +563,11 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 	for try := 0; ; try++ {
 		pr, pw := io.Pipe()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		// The transport waits for its body writer, blocked on the pipe: end it with the try.
+		go func() {
+			<-ctx.Done()
+			_ = pw.CloseWithError(ctx.Err())
+		}()
 		req, _ := http.NewRequestWithContext(ctx, "POST", srv.URL+"/api/maps/submissions", pr)
 		req.ContentLength = 1 << 20
 		req.Header.Set("Content-Type", "application/json")
