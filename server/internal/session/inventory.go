@@ -601,7 +601,9 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	if from.kind == locSlot || to.kind == locSlot {
 		w.equipmentChanged(p)
 	}
-	p.active(ctx.Tick, antibot.KindItem)
+	// KindOther, not KindItem: a move has no cooldown, and must not clear a refused use,
+	// gathering or crafting try (earlyTry).
+	p.active(ctx.Tick, antibot.KindOther)
 	if p.carried() != before {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}

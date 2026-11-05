@@ -45,6 +45,7 @@ func testBalance() content.Balance {
 	var b content.Balance
 	b.Movement = content.Movement{BaseStepMs: 1000, DiagonalCost: 1.5, MaxPathTiles: 100}
 	b.Experience.Curve.A, b.Experience.Curve.B, b.Experience.Curve.C = 12, -24, 12
+	b.Experience.Pace = []content.PaceAnchor{{Level: 8, Hours: 1}, {Level: 20, Hours: 8}, {Level: 50, Hours: 80}}
 	b.Skills.Base = map[string]content.SkillBase{"sword": {StartLevel: 10, BaseTries: 45}, "fist": {StartLevel: 10, BaseTries: 45},
 		"shield": {StartLevel: 10, BaseTries: 85}}
 	b.Skills.ShieldMaxTriesPerRound = 2

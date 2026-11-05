@@ -506,7 +506,8 @@ idle: { kick_after_ms: 900000, warn_before_ms: 60000 } # kick_after_ms 0 lo apag
 - `idle`: `kick_after_ms` es 0 o al menos 60000, y `warn_before_ms` menor que él.
 - `antibot` (detección de bots): `eval_every_ms` (0 la apaga), `half_life_ms`, `pause_ms`,
   `signals.<regularity|reaction|route|session|income>` con su `weight` y sus límites,
-  `thresholds` (`log < notify < presence < suspend`), `presence` (`timeout_ms` y
+  `thresholds` (`log < notify < presence < suspend`, y ningún peso solo puede llegar a
+  `notify`: `peso / (1 − 0,5^(eval_every_ms / half_life_ms)) < notify`), `presence` (`timeout_ms` y
   `defer_alert_ms` ≥ 60000, `delay_ms`, `fail_points`, `confirm_ms`, `random_per_hour`
   0..1) y `suspend_ms` (hasta 30 días). Qué mide cada señal y por qué
   esos números: `01-architecture.md`, "Detección de bots". Textos del chequeo:

@@ -155,6 +155,9 @@ type habits struct {
 	clickWalk bool // clicks the same far tile and back (the same A* path every time)
 	mash      bool // mashes a cooldown hotkey: one key press every 150-300 ms
 	quickHeal bool // heals at human reaction speed: N(250, 50) ms + 50 ms of latency
+	fastHeal  bool // a faster healer: N(220, 35) ms from the hit, server-side
+	manaTrain bool // trains magic: casts 0.3-3 s after the mana bar fills; no hits, chat every 1-4 min
+	press     bool // presses a cooldown hotkey steadily at the cue: ready + N(300, 50) ms
 	pauses    bool // takes Human()'s breaks (otherwise plays without a pause)
 }
 
@@ -163,7 +166,8 @@ func (hb habits) String() string {
 	for _, x := range []struct {
 		on   bool
 		name string
-	}{{hb.clickWalk, "clickwalk"}, {hb.mash, "mash"}, {hb.quickHeal, "quickheal"}, {hb.pauses, "pauses"}} {
+	}{{hb.clickWalk, "clickwalk"}, {hb.mash, "mash"}, {hb.quickHeal, "quickheal"}, {hb.fastHeal, "fastheal"},
+		{hb.manaTrain, "manatrain"}, {hb.press, "press"}, {hb.pauses, "pauses"}} {
 		if x.on {
 			out = append(out, x.name)
 		}
@@ -184,8 +188,15 @@ func playHabits(t *testing.T, hb habits, d time.Duration, seed uint64) (int, []s
 		c.Balance.AntiBot.Presence.RandomPerHour = 0 // only the score's checks
 		c.Spells = content.Spells{"bot_heal": {ID: "bot_heal", Words: "bot heal", Vocations: []string{"guardian"},
 			Level: 1, Group: "healing", CooldownMs: 1000, GroupCooldownMs: 1000,
-			Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 30}}}}}
+			Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 30}}},
+		}, "bot_train": {ID: "bot_train", Words: "bot train", Vocations: []string{"guardian"}, Level: 1, Mana: 20,
+			Group: "support", CooldownMs: 1000, GroupCooldownMs: 1000,
+			Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 1}}}}}
 		c.Balance.Skills.Base["magic"] = content.SkillBase{BaseTries: 1000}
+		// A caster's regeneration (3 mana every 4 s): a full bar of 20 every 28 s.
+		g := testVocations["guardian"]
+		g.Regen = content.Regen{Health: 1, Mana: 3, IntervalMs: 4000}
+		c.Vocations = content.Vocations{"guardian": g}
 		c.Admin = func(j session.AdminJob) bool {
 			if j.Audit.ActorName == "system:antibot" {
 				acts = append(acts, j.Audit.Action+":"+j.Audit.Result)
@@ -202,7 +213,7 @@ func playHabits(t *testing.T, hb habits, d time.Duration, seed uint64) (int, []s
 	back := []pb.Direction{N, N, N, N, W, W, W, W, W, W, W, W}
 	out := true
 	tk := func(d time.Duration) game.Tick { return max(ticksOf(d), 1) }
-	var nextStep, nextKey, nextBeat, paused, heal game.Tick
+	var nextStep, nextKey, nextBeat, paused, heal, train, nextPress game.Tick
 	nextHurt := h.sim.Tick() + tk(10*time.Second)
 	end := h.sim.Tick() + ticksOf(d)
 	for h.sim.Tick() < end {
@@ -216,11 +227,27 @@ func playHabits(t *testing.T, hb habits, d time.Duration, seed uint64) (int, []s
 				h.input(cl, cast("bot_heal"))
 				nextKey = now + tk(time.Duration(150+r.IntN(151))*time.Millisecond)
 			}
+			if hb.press && now >= nextPress { // never early: the cooldown is 1 s
+				h.input(cl, cast("bot_heal"))
+				nextPress = now + tk(time.Second+max(time.Duration(300+50*r.NormFloat64()), 50)*time.Millisecond)
+			}
+			if hb.manaTrain {
+				if train == 0 && p.Mana() >= p.MaxMana() { // the bar is full: cast a moment later
+					train = now + tk(time.Duration(300+r.IntN(2701))*time.Millisecond)
+				}
+				if train != 0 && now >= train {
+					train = 0
+					h.input(cl, cast("bot_train"))
+				}
+			}
 			if now >= nextBeat {
 				h.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hm"))
 				nextBeat = now + tk(prof.BeatDelay(r))
+				if hb.manaTrain {
+					nextBeat = now + tk(time.Duration(60+r.IntN(181))*time.Second)
+				}
 			}
-			if now >= nextStep && !p.Walking() {
+			if now >= nextStep && !p.Walking() && !hb.manaTrain {
 				wait := prof.Delay(r)
 				if hb.clickWalk {
 					if out {
@@ -242,14 +269,20 @@ func playHabits(t *testing.T, hb habits, d time.Duration, seed uint64) (int, []s
 					}
 				}
 			}
-			if now >= nextHurt {
+			if now >= nextHurt && !hb.manaTrain {
 				nextHurt = now + tk(5*time.Second) + game.Tick(r.Uint64N(uint64(tk(10*time.Second))))
 				h.sim.Command(ctxFunc(func(ctx *game.TickContext) { h.w.HurtForTest(ctx, p, 3) }))
 				react := prof.HealDelay(r)
-				if hb.quickHeal {
+				switch {
+				case hb.quickHeal:
 					react = time.Duration(250+50*r.NormFloat64())*time.Millisecond + 50*time.Millisecond
+				case hb.fastHeal: // the heal lands a tick after the press: 220 ms in all
+					react = time.Duration(170+35*r.NormFloat64()) * time.Millisecond
 				}
 				heal = now + 1 + tk(react)
+				if hb.press { // the steady presser heals with its presses
+					heal = 0
+				}
 			}
 		}
 		h.sim.Step()
@@ -261,8 +294,11 @@ func playHabits(t *testing.T, hb habits, d time.Duration, seed uint64) (int, []s
 }
 
 // Negative controls (T4.1): habits a real player can have with the shipped client, alone
-// and in pairs, with and without breaks, for 6 hours of play. None reaches a GM notice,
-// a presence check or a suspension ("a normal player never reaches notify").
+// and in pairs, with and without breaks, for 6 hours of play, and three more for 8 hours
+// without a break: training magic by hand (the pace is the mana regeneration, a server
+// timer), pressing a hotkey steadily at its cooldown, and a fast healer who also
+// click-walks. None reaches a GM notice, a presence check or a suspension ("a normal
+// player never reaches notify").
 func TestAntiBotHumanHabitsNeverNotify(t *testing.T) {
 	var cases []habits
 	singles := []habits{{clickWalk: true}, {mash: true}, {quickHeal: true}}
@@ -272,10 +308,15 @@ func TestAntiBotHumanHabitsNeverNotify(t *testing.T) {
 		hb.pauses = true
 		cases = append(cases, hb)
 	}
-	for i, hb := range cases {
+	long := []habits{{manaTrain: true}, {press: true}, {clickWalk: true, fastHeal: true}}
+	for i, hb := range append(cases, long...) {
+		d := 6 * time.Hour
+		if i >= len(cases) {
+			d = 8 * time.Hour
+		}
 		t.Run(hb.String(), func(t *testing.T) {
 			t.Parallel()
-			lv, acts := playHabits(t, hb, 6*time.Hour, uint64(i+1))
+			lv, acts := playHabits(t, hb, d, uint64(i+1))
 			if lv >= 2 { // antibot.LevelNotify
 				t.Errorf("level %d, actions %v", lv, acts)
 			}

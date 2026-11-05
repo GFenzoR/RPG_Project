@@ -438,9 +438,12 @@ Diseño en `01-architecture.md` ("Detección de bots").
   `presence.option.<color>`). Los ids de las opciones van del 1 al 9 en orden al azar.
   `timeout_ms` es lo que queda: el plazo corre solo mientras el personaje está en línea y
   activo. Con un chequeo pendiente se manda otra vez, con el mismo `check_id` y el tiempo
-  que queda, al volver a entrar y al volver a jugar después de estar inactivo. El cliente
-  lo muestra hasta que se conteste o lo reemplace otro. Los chequeos al azar y los de GM
-  son idénticos a los de la detección.
+  que queda, al volver a entrar y al volver a jugar después de estar inactivo, así que
+  `ahora + timeout_ms` nunca es más tarde que el plazo del servidor (solo por la latencia).
+  Al vencer, el servidor no manda nada: el cliente lo cierra solo, 2 s antes de esa hora, y
+  no manda una respuesta fuera de plazo. Si llega otra vez un `check_id` que el cliente ya
+  contestó (el reenvío se cruzó con la respuesta), lo ignora. Los chequeos al azar y los
+  de GM son idénticos a los de la detección.
 - **`PresenceAnswer{check_id, option_id}`**: con un `check_id` que no está pendiente no
   pasa nada. Con el pendiente, correcto o no, la respuesta es siempre el `Message` de
   sistema `presence.thanks`.

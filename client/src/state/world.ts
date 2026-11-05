@@ -7,6 +7,9 @@
 // real duration) and WalkRejected puts the creature back where the server says it is.
 import type { StationState } from "./recipes.ts";
 
+/** How long before its time a presence check closes (covers the latency). */
+export const PRESENCE_GRACE_MS = 2000;
+
 /** A presence check (T4.1): the question's i18n key, the options and when it runs out. */
 export interface PresenceState {
   id: number;
@@ -255,8 +258,15 @@ export class WorldState implements TileSource {
   skills: SkillState[] = [];
   /** The crafting station the player opened (T3.4), until it closes the window or walks away. */
   station: StationState | undefined;
-  /** A presence check waiting for an answer (T4.1), until answered or out of time. */
+  /**
+   * A presence check waiting for an answer (T4.1), until answered or out of time (see
+   * `activePresence`). The server's clock runs only while the player plays, and every
+   * idle stretch ends with the check sent again with the time left, so `until` is never
+   * later than the server's own deadline (only by the latency).
+   */
   presence: PresenceState | undefined;
+  /** The last check answered: the server may send it again before the answer reached it. */
+  private presenceAnswered = 0;
   /** The player's own active conditions (T3.2), in the server's order. */
   conditions: ConditionView[] = [];
   levelUp: LevelUpState | undefined;
@@ -356,6 +366,21 @@ export class WorldState implements TileSource {
 
   // ---- server events ------------------------------------------------------------------
 
+  /** Forgets the check once answered, and ignores it if the server sends it again. */
+  answerPresence(id: number): void {
+    this.presenceAnswered = id;
+    if (this.presence?.id === id) this.presence = undefined;
+  }
+
+  /**
+   * The presence check still open at now: it closes PRESENCE_GRACE_MS before its time, so
+   * an answer is never sent after the server gave up on it (a timeout sends nothing).
+   */
+  activePresence(now: number): PresenceState | undefined {
+    if (this.presence && this.presence.until - PRESENCE_GRACE_MS <= now) this.presence = undefined;
+    return this.presence;
+  }
+
   apply(msg: ServerMessage["message"], now: number): void {
     switch (msg.case) {
       case "welcome":
@@ -407,6 +432,7 @@ export class WorldState implements TileSource {
         this.party.invited(msg.value, now);
         break;
       case "presenceCheck":
+        if (msg.value.checkId === this.presenceAnswered) break;
         this.presence = {
           id: msg.value.checkId,
           question: msg.value.question?.key ?? "",

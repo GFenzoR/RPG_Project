@@ -511,12 +511,14 @@ func (w *World) incomeRates(tick game.Tick, p *Player) (xp, gold float64, ok boo
 	return float64(e.xp) / h, float64(max(e.gold, 0)) / h, true
 }
 
-// incomeFloors are the least a band median counts as at level: a level per hour of
-// experience (the curve's pace) and a quarter of economy.outlier.gold_per_hour. A band
-// whose peers earn little does not make an ordinary hunter look like an outlier.
+// incomeFloors are the least a band median counts as at level: the experience of the
+// pace target (experience.pace: the levels per hour at that level × the experience of
+// one) and a quarter of economy.outlier.gold_per_hour. A band whose peers earn little
+// does not make an ordinary hunter look like an outlier.
 func (w *World) incomeFloors(level int) (xp, gold float64) {
 	e := w.cfg.Balance.Experience
-	return float64(e.TotalFor(level+1) - e.TotalFor(level)), float64(w.cfg.Balance.Economy.Outlier.GoldPerHour.At(level)) / 4
+	xp = float64(e.TotalFor(level+1)-e.TotalFor(level)) * e.LevelsPerHour(level)
+	return xp, float64(w.cfg.Balance.Economy.Outlier.GoldPerHour.At(level)) / 4
 }
 
 // incomeRatio is p's income over its band's median (floored), the larger of experience

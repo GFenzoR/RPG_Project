@@ -199,6 +199,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - `WorldState.presence` (de `PresenceCheck`) abre `ui/Presence.tsx` arriba del mapa: la
   pregunta y las opciones son claves i18n; no toma teclas ni bloquea el juego. Responder
   manda `PresenceAnswer` y la cierra; el servidor contesta igual con cualquier respuesta.
+  Se cierra sola 2 s antes de su plazo (`WorldState.activePresence`; al vencer el servidor
+  no avisa) e ignora el reenvío de un chequeo ya contestado.
 
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta

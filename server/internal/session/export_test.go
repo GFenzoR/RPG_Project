@@ -59,6 +59,9 @@ func (w *World) DieForTest(ctx *game.TickContext, p *Player) { w.die(ctx, p) }
 // MaxMana returns p's maximum mana.
 func (p *Player) MaxMana() int { return p.maxMana }
 
+// Mana returns p's mana.
+func (p *Player) Mana() int { return p.mana }
+
 // Map returns the world's map.
 func (w *World) Map() *world.Map { return w.m }
 

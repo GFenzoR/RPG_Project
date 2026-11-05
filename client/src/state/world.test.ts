@@ -15,7 +15,7 @@ import {
 import type { ServerMessage } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
-import { WorldState } from "./world.ts";
+import { PRESENCE_GRACE_MS, WorldState } from "./world.ts";
 import type { CreatureState } from "./world.ts";
 
 const content: ClientContent = {
@@ -322,5 +322,41 @@ describe("conditions (T3.2)", () => {
       0,
     );
     expect(w.self?.speed).toBe(before * 2);
+  });
+});
+
+describe("presence check (T4.1)", () => {
+  const check = (id: number, timeoutMs: number): ServerMessage["message"] => ({
+    case: "presenceCheck",
+    value: {
+      checkId: id,
+      question: { key: "presence.question.yellow", params: [] },
+      options: [{ optionId: 1, text: { key: "presence.option.yellow", params: [] } }],
+      timeoutMs,
+    } as never,
+  });
+  it("closes before its time runs out (the server sends nothing on a timeout)", () => {
+    const w = new WorldState(content);
+    w.apply(check(4, 600_000), 1000);
+    expect(w.activePresence(500_000)?.id).toBe(4);
+    expect(w.activePresence(601_000 - PRESENCE_GRACE_MS)).toBeUndefined();
+    expect(w.presence).toBeUndefined();
+  });
+  it("is sent again with the time left after an idle stretch", () => {
+    const w = new WorldState(content);
+    w.apply(check(4, 600_000), 0);
+    expect(w.activePresence(700_000)).toBeUndefined(); // idle: the server's clock stopped
+    w.apply(check(4, 300_000), 700_000); // back: the time left
+    expect(w.activePresence(900_000)?.id).toBe(4);
+  });
+  it("ignores a resend of the check it already answered", () => {
+    const w = new WorldState(content);
+    w.apply(check(4, 600_000), 0);
+    w.answerPresence(4);
+    expect(w.presence).toBeUndefined();
+    w.apply(check(4, 500_000), 10); // the resend crossed the answer
+    expect(w.activePresence(20)).toBeUndefined();
+    w.apply(check(5, 600_000), 30); // a new check opens
+    expect(w.activePresence(40)?.id).toBe(5);
   });
 });

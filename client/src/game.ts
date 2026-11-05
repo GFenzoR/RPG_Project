@@ -254,8 +254,11 @@ export class Game {
 
   /** Answers the presence check (T4.1); the server replies the same whatever the answer. */
   presenceAnswer(id: number, option: number): void {
-    this.conn.send({ case: "presenceAnswer", value: { checkId: id, optionId: option } });
-    if (this.world.presence?.id === id) this.world.presence = undefined;
+    // Out of time (the dialog was still drawn): the server would drop it, so do not send.
+    if (this.world.activePresence(performance.now())?.id === id) {
+      this.conn.send({ case: "presenceAnswer", value: { checkId: id, optionId: option } });
+    }
+    this.world.answerPresence(id);
     this.publish();
   }
 
@@ -509,9 +512,8 @@ export class Game {
       dialog: w.dialog,
       shop: w.shop,
       station: w.station,
-      // Shown until answered or replaced: the server's clock stops while the player is
-      // idle and sends it again (with the time left) when the player is back.
-      presence: w.presence,
+      // Until answered or out of time (the server sends nothing on a timeout).
+      presence: w.activePresence(performance.now()),
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       selfId: w.selfId,

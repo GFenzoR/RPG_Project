@@ -204,11 +204,12 @@ func TestSignalsAgeWithTheirEvidence(t *testing.T) {
 	}
 }
 
-// One quick first reaction does not dominate the reaction signal at min_samples.
+// One quick first reaction (under fast_ms) does not dominate the reaction signal at
+// min_samples: the rest are human and tight, so only the share of fast ones can flag.
 func TestReactionFirstSampleDoesNotDominate(t *testing.T) {
 	cfg := repoConfig(t)
 	var tr Tracker
-	reactions := []int64{260, 420, 300, 560, 410, 380, 520, 450, 330, 600, 470, 390, 510, 440, 360}
+	reactions := []int64{150, 260, 300, 250, 320, 280, 240, 310, 270, 290, 330, 255, 285, 305, 265}
 	for i, r := range reactions {
 		at := int64(i+1) * 10_000
 		tr.Hurt(at)

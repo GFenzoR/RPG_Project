@@ -187,7 +187,8 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 		p.tooEarly(ctx.Tick, antibot.KindSpell)
 		p.emit(systemMsg(msgSpellNotReady))
 		return
-	case p.mana < s.Mana:
+	case p.mana < s.Mana: // waiting for mana: the server sets the pace too
+		p.tooEarly(ctx.Tick, antibot.KindSpell)
 		p.emit(systemMsg(msgNoMana))
 		return
 	}

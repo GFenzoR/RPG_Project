@@ -137,3 +137,25 @@ func TestAntiBotBalance(t *testing.T) {
 		t.Error("economy.outlier.window_ms 1000 accepted")
 	}
 }
+
+// The pace target is a power law between its anchors: about 3 levels an hour at 9, 0.9 at
+// 21, 0.5 at 32 and 0.27 at 47 for level 8 in 1 h, 20 in 8 h and 50 in 80 h.
+func TestExperiencePace(t *testing.T) {
+	e := Experience{Pace: []PaceAnchor{{8, 1}, {20, 8}, {50, 80}}}
+	if err := e.check(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		level  int
+		lo, hi float64
+	}{{9, 2.8, 3.3}, {21, 0.85, 1.05}, {32, 0.45, 0.55}, {47, 0.25, 0.3}, {100, 0.05, 0.12}} {
+		if got := e.LevelsPerHour(c.level); got < c.lo || got > c.hi {
+			t.Errorf("level %d: %.3f levels/h", c.level, got)
+		}
+	}
+	for _, bad := range [][]PaceAnchor{{{8, 1}}, {{8, 1}, {8, 2}}, {{8, 2}, {20, 1}}, {{1, 1}, {20, 8}}} {
+		if (Experience{Pace: bad}).check() == nil {
+			t.Errorf("accepted %v", bad)
+		}
+	}
+}

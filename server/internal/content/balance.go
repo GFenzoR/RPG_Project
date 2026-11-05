@@ -3,6 +3,7 @@ package content
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -251,6 +252,10 @@ type AntiBot struct {
 			// the signal is 1 and 0.
 			CVLow  float64 `yaml:"cv_low"`
 			CVHigh float64 `yaml:"cv_high"`
+			// StdMs: the standard deviation of the intervals must also be this small
+			// (0 at twice it): a person's timing error does not shrink as the interval
+			// grows, so a long, server-paced interval (a full mana bar) has a low CV.
+			StdMs int `yaml:"std_ms"`
 		} `yaml:"regularity"`
 		Reaction struct {
 			Weight     float64 `yaml:"weight"`
@@ -324,16 +329,24 @@ func (a AntiBot) check() error {
 			return fmt.Errorf("antibot.signals.%s.weight must be >= 0", name)
 		}
 	}
-	if s.Regularity.CVLow < 0 || s.Regularity.CVHigh <= s.Regularity.CVLow || s.Reaction.FastMs <= 0 ||
+	if s.Regularity.CVLow < 0 || s.Regularity.CVHigh <= s.Regularity.CVLow || s.Regularity.StdMs <= 0 || s.Reaction.FastMs <= 0 ||
 		s.Reaction.WindowMs < s.Reaction.FastMs || s.Reaction.StdMs <= 0 || s.Route.Segment < 2 || s.Route.Segment > 32 ||
 		s.Route.RepeatHigh <= s.Route.RepeatLow || s.Session.HighMs <= s.Session.LowMs || s.Income.BandLevels < 1 ||
 		s.Income.MinPeers < 2 || s.Income.RatioHigh <= s.Income.RatioLow {
-		return errors.New("antibot.signals: cv_low < cv_high, 0 < fast_ms <= window_ms, std_ms > 0, segment in 2..32, " +
+		return errors.New("antibot.signals: cv_low < cv_high, regularity.std_ms > 0, 0 < fast_ms <= window_ms, std_ms > 0, segment in 2..32, " +
 			"repeat_low < repeat_high, low_ms < high_ms, band_levels >= 1, min_peers >= 2, ratio_low < ratio_high")
 	}
 	t := a.Thresholds
 	if !(0 < t.Log && t.Log < t.Notify && t.Notify < t.Presence && t.Presence < t.Suspend) {
 		return errors.New("antibot.thresholds: 0 < log < notify < presence < suspend")
+	}
+	// A signal held forever settles at weight / (1 − 0.5^(eval/half_life)): one signal
+	// alone (a habit of a real player) must never tell the GMs.
+	settle := 1 / (1 - math.Pow(0.5, float64(a.EvalEveryMs)/float64(a.HalfLifeMs)))
+	for _, w := range []float64{s.Regularity.Weight, s.Reaction.Weight, s.Route.Weight, s.Session.Weight, s.Income.Weight} {
+		if w*settle >= t.Notify {
+			return fmt.Errorf("antibot: a weight of %v alone settles at %.0f points, not under notify", w, w*settle)
+		}
 	}
 	if pr := a.Presence; pr.TimeoutMs < 60_000 || pr.DelayMs < 0 || pr.FailPoints < 0 || pr.ConfirmMs < 0 ||
 		pr.DeferAlertMs < 60_000 || pr.RandomPerHour < 0 || pr.RandomPerHour > 1 {
@@ -405,6 +418,46 @@ type Experience struct {
 		A, B, C, D float64
 	} `yaml:"curve"`
 	MaxLevel int `yaml:"max_level"`
+	// Pace is the leveling pace target: hours of play to reach each level, at least two
+	// anchors with increasing levels and hours. Between anchors (and beyond them) it is a
+	// power law in level, so the pace keeps slowing down as the curve does.
+	Pace []PaceAnchor `yaml:"pace"`
+}
+
+// PaceAnchor says that reaching Level takes about Hours of play.
+type PaceAnchor struct {
+	Level int     `yaml:"level"`
+	Hours float64 `yaml:"hours"`
+}
+
+func (e Experience) check() error {
+	for i, a := range e.Pace {
+		if a.Level < 2 || a.Hours <= 0 || i > 0 && (a.Level <= e.Pace[i-1].Level || a.Hours <= e.Pace[i-1].Hours) {
+			return errors.New("experience.pace: levels >= 2 and hours > 0, both increasing")
+		}
+	}
+	if len(e.Pace) < 2 {
+		return errors.New("experience.pace needs at least two anchors")
+	}
+	return nil
+}
+
+// LevelsPerHour is the target pace at level: hours(L) = h_i × (L / L_i)^k between the
+// anchors around L (the first or last pair beyond them), so its rate is
+// 1 / (k × hours(L) / L) levels per hour.
+func (e Experience) LevelsPerHour(level int) float64 {
+	if len(e.Pace) < 2 {
+		return 0
+	}
+	i := 1
+	for i < len(e.Pace)-1 && level > e.Pace[i].Level {
+		i++
+	}
+	a, b := e.Pace[i-1], e.Pace[i]
+	k := math.Log(b.Hours/a.Hours) / math.Log(float64(b.Level)/float64(a.Level))
+	l := float64(max(level, 1))
+	hours := a.Hours * math.Pow(l/float64(a.Level), k)
+	return l / (k * hours)
 }
 
 // TotalFor returns the total experience needed to reach level n (0 for n <= 1).
@@ -487,6 +540,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 100 {
 		return Balance{}, errors.New("movement.max_path_tiles must be in 1..100 (world.MaxPathLength)")
+	}
+	if err := b.Experience.check(); err != nil {
+		return Balance{}, err
 	}
 	if err := b.Combat.check(); err != nil {
 		return Balance{}, err

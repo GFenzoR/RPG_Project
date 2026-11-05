@@ -29,9 +29,9 @@ const (
 // beat even when other actions (heals answering hits) fall in between.
 const (
 	KindSpell = iota // a spell or a rune
-	KindItem         // using or moving an item, gathering, crafting
+	KindItem         // using an item, gathering, crafting
 	KindChat         // a chat line
-	KindOther        // a target, an NPC, a shop, a presence answer
+	KindOther        // moving an item, a target, an NPC, a shop, a presence answer
 	NumKinds
 )
 
@@ -215,7 +215,10 @@ func (t *Tracker) Signals(ms int64, incomeRatio float64, cfg *content.AntiBot) S
 	r := sc.Regularity
 	for k, iv := range t.interval { // the most regular kind of action
 		if !stale(t.lastOf[k]) && iv.n >= r.MinSamples && iv.mean > 0 {
-			s[Regularity] = max(s[Regularity], ramp(iv.std()/iv.mean, r.CVHigh, r.CVLow)) // low variation → 1
+			// Low variation, relative and absolute → 1.
+			sd := iv.std()
+			s[Regularity] = max(s[Regularity], min(ramp(sd/iv.mean, r.CVHigh, r.CVLow),
+				ramp(sd, float64(r.StdMs)*2, float64(r.StdMs))))
 		}
 	}
 	if r := sc.Reaction; !stale(t.lastHeal) && t.reaction.n >= r.MinSamples {

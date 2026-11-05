@@ -42,8 +42,22 @@
     "experience": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["curve", "max_level"],
+      "required": ["curve", "max_level", "pace"],
       "properties": {
+        "pace": {
+          "description": "Leveling pace target: hours of play to reach each level (a power law between anchors; levels and hours increasing). The bot detection's income floor.",
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["level", "hours"],
+            "properties": {
+              "level": { "type": "integer", "minimum": 2 },
+              "hours": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        },
         "curve": {
           "description": "Total XP for level n: a*n^3 + b*n^2 + c*n + d.",
           "type": "object",
@@ -512,15 +526,16 @@
           "required": ["regularity", "reaction", "route", "session", "income"],
           "properties": {
             "regularity": {
-              "description": "Time between real actions with too little variation (coefficient of variation cv_low → 1, cv_high → 0).",
+              "description": "Time between real actions with too little variation: coefficient of variation cv_low → 1, cv_high → 0, and standard deviation std_ms → 1, twice it → 0 (both must be low).",
               "type": "object",
               "additionalProperties": false,
-              "required": ["weight", "min_samples", "cv_low", "cv_high"],
+              "required": ["weight", "min_samples", "cv_low", "cv_high", "std_ms"],
               "properties": {
                 "weight": { "$ref": "#/$defs/weight" },
                 "min_samples": { "type": "integer", "minimum": 1 },
                 "cv_low": { "type": "number", "minimum": 0 },
-                "cv_high": { "type": "number", "exclusiveMinimum": 0 }
+                "cv_high": { "type": "number", "exclusiveMinimum": 0 },
+                "std_ms": { "type": "integer", "minimum": 1 }
               }
             },
             "reaction": {

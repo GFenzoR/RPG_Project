@@ -35,7 +35,8 @@ Todos los números de este documento son **valores iniciales** que viven en
   "Grupos"), por quests y por
   algunos oficios (poca).
 - Curva cúbica propia, ajustable: `xp(nivel) = a·n³ + b·n² + c·n` con coeficientes en
-  balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h.
+  balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h
+  (`experience.pace` en balance.yaml; la detección de bots lo usa como ritmo esperado).
 - Al subir de nivel: +HP, +MP, +capacidad, +velocidad según vocación.
 
 ## Skills que suben con el uso
@@ -178,10 +179,12 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   cualquiera le puede tocar un chequeo al azar de vez en cuando, sin consecuencias. El ban lo
   decide siempre un GM.
 - Los umbrales son conservadores a propósito: un jugador que juega mucho, rápido o con
-  macros de teclado legítimas no llega solo con una señal. Hace falta un patrón sostenido de
-  varias. En la prueba, un script tarda ~1 h 40 en llegar a la suspensión; hábitos de un
-  jugador real (ir y venir por click entre dos puntos, machacar un hotkey, curarse rápido),
-  solos o de a dos, durante 6 h no pasan de quedar registrados.
+  macros de teclado legítimas no llega a avisar a los GM con una sola señal (el balance no
+  carga si un peso solo lo permitiera). Hace falta un patrón sostenido de varias. En la
+  prueba, un script tarda ~1 h 40 en llegar a la suspensión; hábitos de un jugador real (ir
+  y venir por click entre dos puntos, machacar un hotkey o apretarlo parejo, curarse
+  rápido, entrenar magia a mano), solos o de a dos, durante 6–8 h no pasan de quedar
+  registrados.
 
 ## Combate
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está

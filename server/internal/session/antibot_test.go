@@ -103,9 +103,9 @@ func TestAntiBotGradedResponses(t *testing.T) {
 	gm, _ := a.joinAs("Warden", session.RoleGM, pos(30, 5))
 	a.takeJobs()
 	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi")) // active
-	a.setScore(p, 260)                                      // past log and notify
+	a.setScore(p, 310)                                      // past log and notify
 	if got := a.antibotActions(); !slices.Equal(got, []string{"bot_suspect:log", "bot_suspect:notify"}) {
-		t.Fatalf("at 260: %v", got)
+		t.Fatalf("at 310: %v", got)
 	}
 	if k := sysKeys(gm.take()); !slices.Contains(k, "gm.bot_suspect") {
 		t.Fatalf("GM heard %v", k)
@@ -278,25 +278,46 @@ func TestAntiBotSkipsStaff(t *testing.T) {
 	}
 }
 
-// Income compares with peers who play and earn, floored at the level's normal pace: in a
-// band whose median is a low-level character, a level 9 hunter levelling at the target
-// pace (a level an hour) is not an outlier; one earning ten times its level's pace is.
+// Income compares with peers who play and earn, floored at the pace target of the level
+// (experience.pace): in a band whose peers earn little, a level 5 hunter
+// levelling at the target pace is not an outlier. In a high band, where a level takes
+// hours, one earning ten times the pace is, with nearly the full ratio.
 func TestIncomeAgainstPlayingPeers(t *testing.T) {
 	a := antibotHarness(t)
 	e := testBalance().Experience
-	perHour := func(level int) int64 { return e.TotalFor(level+1) - e.TotalFor(level) }
-	var cls []*fakeClient
-	var ps []*session.Player
-	for i, lv := range []int{2, 3, 3, 4, 9, 5} {
-		cl, p := a.joinAs([]string{"Ana", "Bea", "Cid", "Dan", "Eve", "Idle"}[i], session.RolePlayer, pos(2+i*2, 5))
-		a.sim.Command(gameFunc(func() { a.w.SetLevelForTest(p, lv) }))
-		cls, ps = append(cls, cl), append(ps, p)
+	pace := func(level int) float64 { // experience per hour at the target pace
+		return float64(e.TotalFor(level+1)-e.TotalFor(level)) * e.LevelsPerHour(level)
 	}
+	join := func(names []string, levels []int, y int) ([]*fakeClient, []*session.Player) {
+		var cls []*fakeClient
+		var ps []*session.Player
+		for i, lv := range levels {
+			cl, p := a.joinAs(names[i], session.RolePlayer, pos(2+i*2, y))
+			a.sim.Command(gameFunc(func() { a.w.SetLevelForTest(p, lv) }))
+			cls, ps = append(cls, cl), append(ps, p)
+		}
+		return cls, ps
+	}
+	low := []int{2, 3, 3, 4, 5} // the first four earn a tenth of the pace, the last one all of it
+	cls, ps := join([]string{"Ana", "Bea", "Cid", "Dan", "Eve", "Idle"}, append(slices.Clone(low), 5), 5)
+	high := []int{40, 41, 42, 43, 45, 44} // the last one earns ten times the pace
+	hcls, hps := join([]string{"Hal", "Ivo", "Jon", "Kim", "Lia", "Max"}, high, 9)
+	cls = append(cls, hcls...)
 	a.sim.Step()
-	for range 10 { // 20 min of play: a third of a level each (the idle one only chats)
+	for range 10 { // 20 min of play (the idle one only chats)
 		for i, p := range ps[:5] {
-			lv := []int{2, 3, 3, 4, 9}[i]
-			a.sim.Command(gameFunc(func() { a.w.GainExperienceForTest(p, perHour(lv)/30) }))
+			f := 0.1
+			if i == 4 {
+				f = 1
+			}
+			a.sim.Command(gameFunc(func() { a.w.GainExperienceForTest(p, int64(f*pace(low[i])/30)) }))
+		}
+		for i, p := range hps {
+			f := 1.0
+			if i == len(hps)-1 {
+				f = 10
+			}
+			a.sim.Command(gameFunc(func() { a.w.GainExperienceForTest(p, int64(f*pace(high[i])/30)) }))
 		}
 		for _, cl := range cls {
 			a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hm"))
@@ -306,12 +327,42 @@ func TestIncomeAgainstPlayingPeers(t *testing.T) {
 	if r := a.w.IncomeRatioForTest(ps[4]); r <= 0 || r >= 2 {
 		t.Fatalf("a hunter at the normal pace: ratio %.1f", r)
 	}
-	// Ten times that: Bea (level 3) earns 30 of its levels' worth and ends near level 9,
-	// still in the band, far above the floor of its new level.
-	a.sim.Command(gameFunc(func() { a.w.GainExperienceForTest(ps[1], perHour(3)*30) }))
+	if r := a.w.IncomeRatioForTest(hps[0]); r <= 0 || r >= 2 {
+		t.Fatalf("a level 40 hunter at the normal pace: ratio %.1f", r)
+	}
+	if r := a.w.IncomeRatioForTest(hps[5]); r < 8 {
+		t.Fatalf("ten times the pace at level 44: ratio %.1f", r)
+	}
+}
+
+// The contract the client's countdown relies on: a check played through runs out no
+// sooner than its timeout_ms (the client closes it before), the server says nothing to
+// the player then, and a late answer is dropped without the usual reply (T4.1).
+func TestPresenceTimeoutWhilePlaying(t *testing.T) {
+	a := antibotHarness(t)
+	cl, p := a.joinAs("Busy", session.RolePlayer, pos(5, 5))
+	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+	a.setScore(p, 450)
+	c := a.presence(cl)
+	a.takeJobs()
+	a.playFor(cl, time.Duration(c.GetTimeoutMs())*time.Millisecond-30*time.Second)
+	if got := a.antibotActions(); slices.Contains(got, "presence_check:failed_timeout") {
+		t.Fatalf("failed before timeout_ms of play: %v", got)
+	}
+	cl.take()
+	a.playFor(cl, time.Minute)
+	if got := a.antibotActions(); !slices.Contains(got, "presence_check:failed_timeout") {
+		t.Fatalf("not failed after timeout_ms of play: %v", got)
+	}
+	for _, e := range cl.take() {
+		if e.GetPresenceCheck() != nil || slices.Contains(sysKeys([]*pb.ServerMessage{e}), "presence.thanks") {
+			t.Fatalf("the player heard of the timeout: %v", e)
+		}
+	}
+	a.input(cl, answer(c, true))
 	a.sim.Step()
-	if r := a.w.IncomeRatioForTest(ps[1]); r < 8 {
-		t.Fatalf("ten times the pace: ratio %.1f", r)
+	if k := sysKeys(cl.take()); len(k) != 0 {
+		t.Fatalf("late answer: %v", k)
 	}
 }
 
