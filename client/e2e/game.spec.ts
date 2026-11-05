@@ -1344,6 +1344,18 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     .getByRole("button", { name: "Reportar al equipo del juego" })
     .click();
   await expect(report.getByRole("textbox")).toBeFocused();
+  // Clicking a "!" again with the form open gives the field the focus back.
+  await matePage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await expect(report.getByRole("textbox")).not.toBeFocused();
+  await matePage
+    .getByTestId("battle-list")
+    .locator("li", { hasText: lead.name })
+    .getByRole("button", { name: "Reportar al equipo del juego" })
+    .click();
+  await expect(report.getByRole("textbox")).toBeFocused();
+  const still = await self(matePage);
+  await matePage.keyboard.type("wasd");
+  expect(await self(matePage)).toEqual(still);
   await matePage.keyboard.press("Escape");
   await expect(report).toHaveCount(0);
 

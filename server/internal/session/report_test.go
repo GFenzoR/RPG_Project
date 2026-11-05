@@ -20,6 +20,7 @@ func reportMsg(id uint32, reason string) *pb.ClientMessage {
 // the server builds (both positions and the reported player's recent events); GMs
 // online hear of it. Everything is audited.
 func TestReportCommandAndContext(t *testing.T) {
+	// Every /report past the usage check spends quota (the invalid lines below too).
 	a := newAdminHarness(t, func(c *session.Config) { c.Balance.Reports.Burst = 20 })
 	ana, pa := a.joinAs("Ana", session.RolePlayer, pos(5, 5))
 	bob, pb2 := a.joinAs("Bob Rude", session.RolePlayer, pos(8, 5))
@@ -229,5 +230,38 @@ func TestReportKeepsChatLine(t *testing.T) {
 	}
 	if _, chat := count(jobs[1]); !chat {
 		t.Fatalf("after the flood the chat line is gone: %+v", jobs[1].Report.Context.Events)
+	}
+}
+
+// The button spends quota only on a report that is filed: answers that reveal nothing
+// (a player out of view, the same target again) leave it intact (T4.1).
+func TestReportButtonKeepsQuota(t *testing.T) {
+	a := newAdminHarness(t, func(c *session.Config) { c.Balance.Reports.Burst = 3 })
+	ana, _ := a.joinAs("Ana", session.RolePlayer, pos(5, 5))
+	_, bob := a.joinAs("Bob", session.RolePlayer, pos(7, 5))
+	_, gone := a.joinAs("Gone", session.RolePlayer, pos(35, 5)) // out of view
+	_, carl := a.joinAs("Carl", session.RolePlayer, pos(5, 7))
+	send := func(id uint32) []string {
+		ana.take()
+		a.input(ana, reportMsg(id, "bot"))
+		a.sim.Step()
+		return sysKeys(ana.take())
+	}
+	if k := send(bob.ID()); !slices.Equal(k, []string{"report.sent"}) {
+		t.Fatalf("first report: %v", k)
+	}
+	for range 3 {
+		if k := send(gone.ID()); !slices.Equal(k, []string{"report.not_visible"}) {
+			t.Fatalf("out of view: %v", k)
+		}
+	}
+	if k := send(bob.ID()); !slices.Equal(k, []string{"report.same_target"}) {
+		t.Fatalf("same target: %v", k)
+	}
+	if k := send(carl.ID()); !slices.Equal(k, []string{"report.sent"}) {
+		t.Fatalf("a visible player after refusals: %v", k)
+	}
+	if n := len(a.takeJobs()); n != 2 {
+		t.Fatalf("%d reports queued", n)
 	}
 }

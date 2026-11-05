@@ -293,7 +293,8 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
 - `/report Nombre` confirma si un nombre está conectado (`report.offline`), y a cambio cuesta
   un reporte de la cuota de la cuenta: cada intento que pasa el uso se cobra antes de
   resolver el nombre, así que pasada la ráfaga todos responden `report.too_fast` sin decir
-  nada. Un invisible que el jugador no ve figura como desconectado.
+  nada. Un invisible que el jugador no ve figura como desconectado. El botón no revela nada
+  (solo alcanza a jugadores a la vista), así que cobra solo el reporte que se archiva.
 
 ### Auditoría de información (T4.1)
 `internal/session/info_audit_test.go` recorre con reflexión de protobuf cada mensaje que

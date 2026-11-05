@@ -547,8 +547,9 @@ function GameScreen(props: {
             )}
             {reporting && (
               <ReportForm
+                key={reporting.id}
                 t={t}
-                name={reporting.name}
+                target={reporting}
                 onSend={(reason) => {
                   game.current?.reportPlayer(reporting.id, reason);
                   setReporting(undefined);
@@ -610,7 +611,7 @@ const REPORT_REASON_MAX = 200;
  */
 function ReportForm(props: {
   t: Translate;
-  name: string;
+  target: { id: number; name: string };
   onSend(reason: string): void;
   onCancel(): void;
 }) {
@@ -619,9 +620,10 @@ function ReportForm(props: {
   // Preact ignores autoFocus: focus the field on open, so typing the reason does not
   // walk (keys in an input are not game keys) and Escape reaches the form.
   const input = useRef<HTMLInputElement>(null);
+  // Every click on a "!" makes a new target object: the field takes the focus again.
   useEffect(() => {
     input.current?.focus();
-  }, []);
+  }, [props.target]);
   return (
     <form
       class="report-form"
@@ -635,7 +637,7 @@ function ReportForm(props: {
       }}
     >
       <label>
-        {t("client.report.title", { name: props.name })}
+        {t("client.report.title", { name: props.target.name })}
         <input
           type="text"
           value={reason}

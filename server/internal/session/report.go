@@ -199,7 +199,7 @@ func (w *World) cmdReport(ctx *game.TickContext, p *Player, args []string) {
 	}
 	for k := len(args) - 1; k >= 1; k-- {
 		if t := w.onlineByName(strings.Join(args[:k], " ")); t != nil && (!t.invisible || p.Knows(t.id) || t == p) {
-			w.report(ctx, p, t, strings.Join(args[k:], " "))
+			w.report(ctx, p, t, strings.Join(args[k:], " "), false)
 			return
 		}
 	}
@@ -230,23 +230,19 @@ func (w *World) reportCharge(ctx *game.TickContext, p *Player) bool {
 
 // reportPlayer runs a ReportPlayer intent: only a player p sees.
 func (w *World) reportPlayer(ctx *game.TickContext, p *Player, id uint32, reason string) {
-	// The reason does not depend on the target: checked before spending the quota.
-	if r := cleanChat(reason); r == "" || utf8.RuneCountInString(r) > w.reportReasonMax() {
-		p.emit(systemMsg(msgReportReason, num("max", w.reportReasonMax())))
-		return
-	}
-	if !w.reportCharge(ctx, p) {
-		return
-	}
+	// Nothing here reveals anything (an unknown id is always not_visible, a known one is
+	// a player the client sees): the quota is spent only when the report is filed.
 	t := w.playerByID(id)
 	if t == nil || !p.Knows(id) {
 		p.emit(systemMsg(msgReportUnseen))
 		return
 	}
-	w.report(ctx, p, t, reason)
+	w.report(ctx, p, t, reason, true)
 }
 
-func (w *World) report(ctx *game.TickContext, p, t *Player, reason string) {
+// report files a report of t by p. With charge, the quota is spent here, once every
+// check passed (the button); the command charged it before resolving the name.
+func (w *World) report(ctx *game.TickContext, p, t *Player, reason string, charge bool) {
 	reason = cleanChat(reason)
 	limit := w.reportReasonMax()
 	switch {
@@ -264,6 +260,9 @@ func (w *World) report(ctx *game.TickContext, p, t *Player, reason string) {
 	key := reportKey{p.accountID, t.charID}
 	if last, ok := w.reportLast[key]; ok && w.reportSame > 0 && now-last < w.reportSame {
 		p.emit(systemMsg(msgReportSame, textParam("name", t.name)))
+		return
+	}
+	if charge && !w.reportCharge(ctx, p) {
 		return
 	}
 	w.reportLast[key] = now
