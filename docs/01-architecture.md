@@ -356,10 +356,12 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
   `delay_ms`. **Nunca en combate, sobre una casilla sin logout ni a alguien inactivo:** se
   espera a que se pueda. No bloquea el juego. Plazo generoso (`timeout_ms`, 10 min) que
   corre **solo mientras el personaje juega** (conectado y activo), así que estar ausente
-  nunca es un fallo: al volver se manda otra vez con el tiempo que le queda. Así el plazo
-  del cliente nunca pasa el del servidor, y el cliente lo cierra 2 s antes de su hora (al
-  vencer, el servidor no le dice nada al jugador y descarta una respuesta tardía). La
-  respuesta, correcta o no, recibe siempre `presence.thanks`.
+  nunca es un fallo: al volver se manda otra vez con el tiempo que le queda, y el servidor
+  no vence antes de ese tiempo jugado. El cliente lo cierra solo 3 s antes de su hora (al
+  vencer, el servidor no le dice nada al jugador y descarta una respuesta tardía); un click
+  en la ventana se manda siempre, porque si el jugador estuvo ausente el chequeo puede
+  seguir pendiente en el servidor. La respuesta, correcta o no, recibe siempre
+  `presence.thanks`.
 - **Qué prueba y qué no:** un chequeo prueba que algo contestó, no que no haya un bot: las
   preguntas y sus textos son públicos y un script las puede contestar. Por eso **acertar no
   baja el puntaje** (solo queda auditado) y la suspensión no depende de fallar: también llega
@@ -393,12 +395,15 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
     con pausas y sin ellas, 6 h cada caso. Y 8 h sin pausas de: entrenar magia a mano
     (lanzar 0,3–3 s después de llenarse el maná, sin moverse, un chat cada 1–4 min), apretar
     un hotkey parejo a la señal del cooldown (listo + N(300, 50) ms, nunca antes) y curarse
-    más rápido, N(220, 35) ms, yendo y viniendo por click. Ninguno llega a `notify`, a un
-    chequeo ni a una suspensión: el peor queda en `log` (~260 puntos, el hotkey parejo, que
-    solo marca `regularity`).
+    más rápido, N(220, 35) ms, yendo y viniendo por click. Ninguno de esos casos llega a
+    `notify`, a un chequeo ni a una suspensión: el peor queda en `log` (~260 puntos, el
+    hotkey parejo, que solo marca `regularity`). Dos señales completas sí avisan, a
+    propósito: apretar parejo y además ir y venir por click llega a `notify` (y sin pausas
+    a un chequeo). Con el contenido real nadie lo sostiene: el maná se acaba, y lo que se
+    rechaza por falta de maná cuenta como ritmo del servidor.
+  - `TestAntiBotPastHuntStopsScoring`: 30 min de caza mecánica y después 5 h solo
+    chateando y acertando los chequeos terminan en el nivel 0, sin suspensión.
 - **Límite conocido:** un script puede esconder su ritmo de `regularity` mandando un
   intento rechazado justo después de cada acción (así cada una cuenta como "ritmo del
   servidor"). Es el precio de no marcar a quien machaca un hotkey; lo cubren las demás
   señales (reacción, ruta, sesión, ingreso), y un GM puede pedir un chequeo cuando quiera.
-  - `TestAntiBotPastHuntStopsScoring`: 30 min de caza mecánica y después 5 h solo
-    chateando y acertando los chequeos terminan en el nivel 0, sin suspensión.

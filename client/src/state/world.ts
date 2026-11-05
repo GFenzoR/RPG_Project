@@ -8,7 +8,7 @@
 import type { StationState } from "./recipes.ts";
 
 /** How long before its time a presence check closes (covers the latency). */
-export const PRESENCE_GRACE_MS = 2000;
+export const PRESENCE_GRACE_MS = 3000;
 
 /** A presence check (T4.1): the question's i18n key, the options and when it runs out. */
 export interface PresenceState {
@@ -260,9 +260,10 @@ export class WorldState implements TileSource {
   station: StationState | undefined;
   /**
    * A presence check waiting for an answer (T4.1), until answered or out of time (see
-   * `activePresence`). The server's clock runs only while the player plays, and every
-   * idle stretch ends with the check sent again with the time left, so `until` is never
-   * later than the server's own deadline (only by the latency).
+   * `activePresence`). The server's clock runs only while the player plays, it is sent
+   * again with the time left after every idle stretch, and the server's deadline is never
+   * earlier than that time: `until` is later only by the latency. While the player is
+   * away it is earlier than the server's (its clock stopped).
    */
   presence: PresenceState | undefined;
   /** The last check answered: the server may send it again before the answer reached it. */
@@ -374,11 +375,17 @@ export class WorldState implements TileSource {
 
   /**
    * The presence check still open at now: it closes PRESENCE_GRACE_MS before its time, so
-   * an answer is never sent after the server gave up on it (a timeout sends nothing).
+   * an answer from the dialog reaches the server in time (a timeout sends nothing).
    */
   activePresence(now: number): PresenceState | undefined {
     if (this.presence && this.presence.until - PRESENCE_GRACE_MS <= now) this.presence = undefined;
     return this.presence;
+  }
+
+  /** How long until the open presence check closes, or undefined if none is open. */
+  presenceClosesIn(now: number): number | undefined {
+    const p = this.activePresence(now);
+    return p && p.until - PRESENCE_GRACE_MS - now;
   }
 
   apply(msg: ServerMessage["message"], now: number): void {

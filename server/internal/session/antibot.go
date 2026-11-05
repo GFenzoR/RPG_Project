@@ -79,6 +79,9 @@ type presenceCheck struct {
 	// paused: the clock stopped while the player was idle; it is sent again when the
 	// player is back (the client may have closed it).
 	paused bool
+	// sent: it was just sent with left as its timeout_ms; the next second of the clock
+	// is not charged, so the server's deadline is never earlier than the client's.
+	sent bool
 }
 
 func (w *World) initAntiBot() {
@@ -258,6 +261,10 @@ func (w *World) presenceDue(ctx *game.TickContext, p *Player, s *suspect) {
 			c.paused = false
 			w.sendPresence(p, c)
 		}
+		if c.sent { // the time sent is all left: this second is not charged
+			c.sent = false
+			return
+		}
 		c.left -= min(c.left, idleCheckEvery)
 		if c.left == 0 {
 			s.check = nil
@@ -316,6 +323,7 @@ func checkResult(random bool, r string) string {
 }
 
 func (w *World) sendPresence(p *Player, c *presenceCheck) {
+	c.sent = true
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PresenceCheck{PresenceCheck: &pb.PresenceCheck{
 		CheckId: c.id, Question: &pb.LocalizedText{Key: c.question}, Options: c.options,
 		TimeoutMs: uint32(c.left.Duration().Milliseconds()),

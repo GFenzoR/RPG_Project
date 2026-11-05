@@ -360,3 +360,33 @@ describe("presence check (T4.1)", () => {
     expect(w.activePresence(40)?.id).toBe(5);
   });
 });
+
+describe("presence check after an idle stretch (T4.1)", () => {
+  const check = (id: number, timeoutMs: number): ServerMessage["message"] => ({
+    case: "presenceCheck",
+    value: {
+      checkId: id,
+      question: { key: "presence.question.red", params: [] },
+      options: [{ optionId: 1, text: { key: "presence.option.red", params: [] } }],
+      timeoutMs,
+    } as never,
+  });
+  it("says when the dialog closes, so it closes without a server batch", () => {
+    const w = new WorldState(content);
+    expect(w.presenceClosesIn(0)).toBeUndefined();
+    w.apply(check(7, 600_000), 0);
+    expect(w.presenceClosesIn(100_000)).toBe(600_000 - PRESENCE_GRACE_MS - 100_000);
+    expect(w.presenceClosesIn(600_000)).toBeUndefined();
+  });
+  it("an answer to a check gone stale on screen is final (the client sends it)", () => {
+    // Away 12 min: the dialog's time ran out here, the server's clock stopped. The click
+    // is sent (Game.presenceAnswer always sends) and answers the check there; the
+    // server's resend crossing it is ignored.
+    const w = new WorldState(content);
+    w.apply(check(7, 600_000), 0);
+    expect(w.activePresence(720_000)).toBeUndefined();
+    w.answerPresence(7);
+    w.apply(check(7, 420_000), 721_000);
+    expect(w.activePresence(722_000)).toBeUndefined();
+  });
+});

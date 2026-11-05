@@ -294,11 +294,12 @@ func playHabits(t *testing.T, hb habits, d time.Duration, seed uint64) (int, []s
 }
 
 // Negative controls (T4.1): habits a real player can have with the shipped client, alone
-// and in pairs, with and without breaks, for 6 hours of play, and three more for 8 hours
-// without a break: training magic by hand (the pace is the mana regeneration, a server
-// timer), pressing a hotkey steadily at its cooldown, and a fast healer who also
-// click-walks. None reaches a GM notice, a presence check or a suspension ("a normal
-// player never reaches notify").
+// and in the pairs listed here, with and without breaks, for 6 hours of play, and three
+// more for 8 hours without a break: training magic by hand (the pace is the mana
+// regeneration, a server timer), pressing a hotkey steadily at its cooldown, and a fast
+// healer who also click-walks. None reaches a GM notice, a presence check or a
+// suspension ("a normal player never reaches notify"). Not every pair stays under it: two
+// full signals (pressing steadily and click-walking) notify by design, and need free casts.
 func TestAntiBotHumanHabitsNeverNotify(t *testing.T) {
 	var cases []habits
 	singles := []habits{{clickWalk: true}, {mash: true}, {quickHeal: true}}

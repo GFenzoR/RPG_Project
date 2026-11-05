@@ -378,19 +378,26 @@ func TestPresenceResentAfterIdle(t *testing.T) {
 	a.sim.RunFor(12 * time.Minute) // away: about pause_ms of it counts, then the clock stops
 	cl.take()
 	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "back"))
-	a.sim.RunFor(2 * time.Second)
 	var again *pb.PresenceCheck
-	for _, e := range cl.take() {
-		if c2 := e.GetPresenceCheck(); c2 != nil {
-			again = c2
+	a.sim.RunUntil(func() bool { // to the tick it is sent again
+		for _, e := range cl.take() {
+			if c2 := e.GetPresenceCheck(); c2 != nil {
+				again = c2
+			}
 		}
-	}
+		return again != nil
+	}, sim.MaxSeconds(3))
 	if again == nil || again.GetCheckId() != c.GetCheckId() || again.GetTimeoutMs() < 380000 || again.GetTimeoutMs() > 460000 {
 		t.Fatalf("sent again %v", again)
 	}
-	a.playFor(cl, 6*time.Minute)
+	// The time sent is all there is: no failure before it is played to the last moment.
+	a.playFor(cl, time.Duration(again.GetTimeoutMs())*time.Millisecond-200*time.Millisecond)
 	if got := a.antibotActions(); slices.Contains(got, "presence_check:failed_timeout") {
 		t.Fatalf("failed before its time was played: %v", got)
+	}
+	a.playFor(cl, 3*time.Second)
+	if got := a.antibotActions(); !slices.Contains(got, "presence_check:failed_timeout") {
+		t.Fatalf("not failed after its time: %v", got)
 	}
 }
 

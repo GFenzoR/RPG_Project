@@ -254,10 +254,9 @@ export class Game {
 
   /** Answers the presence check (T4.1); the server replies the same whatever the answer. */
   presenceAnswer(id: number, option: number): void {
-    // Out of time (the dialog was still drawn): the server would drop it, so do not send.
-    if (this.world.activePresence(performance.now())?.id === id) {
-      this.conn.send({ case: "presenceAnswer", value: { checkId: id, optionId: option } });
-    }
+    // Always sent, even past its time on this side: while the player was away the server's
+    // clock stopped, so the check may still be pending there (it ignores one that is not).
+    this.conn.send({ case: "presenceAnswer", value: { checkId: id, optionId: option } });
     this.world.answerPresence(id);
     this.publish();
   }
@@ -491,6 +490,18 @@ export class Game {
     return this.canvas?.itemIcon(itemId);
   }
 
+  /** Publishes again when the presence check runs out: no server batch may come then. */
+  private presenceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private armPresenceTimer(): void {
+    clearTimeout(this.presenceTimer);
+    this.presenceTimer = undefined;
+    const ms = this.world.presenceClosesIn(performance.now());
+    if (ms !== undefined && !this.destroyed) {
+      this.presenceTimer = setTimeout(() => this.publish(), ms + 50);
+    }
+  }
+
   private publish(): void {
     const w = this.world;
     const self = w.self;
@@ -518,6 +529,7 @@ export class Game {
       invitations: [...w.party.invitations(performance.now())],
       selfId: w.selfId,
     });
+    this.armPresenceTimer();
   }
 
   // ---- sound (T3.7): what each event sounds like is assets/sounds.yaml --------------------
@@ -545,6 +557,7 @@ export class Game {
 
   destroy(): void {
     this.destroyed = true;
+    clearTimeout(this.presenceTimer);
     this.opts.audio?.setLoops(undefined, undefined);
     this.cancelUse();
     window.removeEventListener("keydown", this.onKeyDown);

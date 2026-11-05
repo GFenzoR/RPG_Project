@@ -181,10 +181,11 @@ umbrales en `01-architecture.md`, "Detección de bots"):
 - Los umbrales son conservadores a propósito: un jugador que juega mucho, rápido o con
   macros de teclado legítimas no llega a avisar a los GM con una sola señal (el balance no
   carga si un peso solo lo permitiera). Hace falta un patrón sostenido de varias. En la
-  prueba, un script tarda ~1 h 40 en llegar a la suspensión; hábitos de un jugador real (ir
-  y venir por click entre dos puntos, machacar un hotkey o apretarlo parejo, curarse
-  rápido, entrenar magia a mano), solos o de a dos, durante 6–8 h no pasan de quedar
-  registrados.
+  prueba, un script tarda ~1 h 40 en llegar a la suspensión. Hábitos de un jugador real
+  durante 6–8 h no pasan de quedar registrados: cada uno solo (ir y venir por click entre
+  dos puntos, machacar un hotkey o apretarlo parejo, curarse rápido, entrenar magia a mano)
+  y los pares probados (click, machacar y curarse rápido entre sí; click y curarse más
+  rápido). Dos señales completas sostenidas sí avisan a los GM, a propósito.
 
 ## Combate
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está
