@@ -598,6 +598,7 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	if from.kind == locSlot || to.kind == locSlot {
 		w.equipmentChanged(p)
 	}
+	p.active(ctx.Tick)
 	if p.carried() != before {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}
@@ -837,6 +838,7 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 		}
 		p.nextUse = ctx.Tick + w.useFor
 		w.consume(p, it)
+		p.active(ctx.Tick)
 	case it.def.Rune != nil:
 		w.useRune(ctx, p, it, nil) // on the current target, or the caster for a heal
 	default:
@@ -852,7 +854,7 @@ func (w *World) consume(p *Player, it *Item) {
 	pct := healthPercent(p.health, p.maxHealth)
 	p.health += hp
 	p.mana += mp
-	w.useUp(it)
+	w.useUp(p, it)
 	if c.HealHP == 0 && c.HealMP == 0 {
 		p.emit(systemMsg(msgAte, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: &pb.ItemStack{ItemId: uint32(it.def.Numeric)}}}))
 	}
@@ -879,10 +881,14 @@ func (w *World) consume(p *Player, it *Item) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }
 
-// useUp spends one unit (or charge) of it; the last one removes it.
-func (w *World) useUp(it *Item) {
-	if o := it.carriedBy(); o != nil && (it.def.Stackable || it.count <= 1) {
-		w.econItem(o, EconConsume, "", it.def, -1) // a rune's charge is not a unit: only its last one
+// useUp spends one unit (or charge) of it, used by p; the last one removes it.
+func (w *World) useUp(p *Player, it *Item) {
+	if it.def.Stackable || it.count <= 1 { // a rune's charge is not a unit: only its last one
+		if o := it.carriedBy(); o != nil {
+			w.econItem(o, EconConsume, "", it.def, -1)
+		} else {
+			w.econWorld(p.charID, EconConsume, "", it.def, -1) // on the ground: no ledger moves
+		}
 	}
 	if it.count > 1 {
 		it.count--

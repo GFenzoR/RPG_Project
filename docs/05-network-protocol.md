@@ -71,10 +71,11 @@ Detalles (T1.4, `server/internal/net/gateway`):
   rechaza con `BANNED`.
 - **Inactividad (T4.1):** sin acciones reales durante `balance.yaml` `idle.kick_after_ms`
   → `Message` de sistema `idle.warning` (`seconds`) `idle.warn_before_ms` antes y después
-  `Disconnect{IDLE}`, con el personaje guardado. Cuentan `Walk`, `WalkPath`, `SetTarget`,
-  `CastSpell`, `UseItem`, `UseItemOn`, `MoveItem`, `Say`, `NpcTalk`, `DialogChoose`,
-  `ShopBuy`, `ShopSell`, `PartyCommand` y `Craft`; `Ping`, `Turn`, `LookAt`,
-  `SetFightMode`, `StopWalk`, `CloseContainer` y `ReportPlayer` no. Nunca en combate
+  `Disconnect{IDLE}`, con el personaje guardado. Cuenta lo que el servidor acepta y hace:
+  un paso dado, un objetivo elegido, un hechizo o runa lanzado, un item movido o usado, un
+  chat dicho, un diálogo abierto o una opción elegida, una compra o venta, un intento de
+  recolección o de oficio. `Ping`, `Turn`, `LookAt`, `SetFightMode`, `StopWalk`,
+  `CloseContainer`, `ReportPlayer` y cualquier intención rechazada no. Nunca en combate
   (`travel.combat_block_ms`) ni sobre una casilla sin logout: se reintenta cada segundo.
 
 ## API HTTP (cuentas y personajes)

@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -178,4 +179,67 @@ func countOf(s []string, v string) int {
 		}
 	}
 	return n
+}
+
+// A duplication right before leaving is caught at the logout (the periodic check might
+// not have come yet).
+func TestEconomyMismatchAtLogout(t *testing.T) {
+	h := deathHarness(t, func(c *session.Config) { c.Balance.Economy.CheckEveryMs = 3600000 })
+	h.allowMismatch = true
+	cl, p := h.geared("Quick", 30, 0)
+	h.sim.Command(gameFunc(func() { h.w.DupeForTest(p, "copper_coin", 25) }))
+	h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
+	h.sim.Step()
+	if n := countOf(h.alerts, session.AlertMismatch); n != 1 || !cl.closed {
+		t.Fatalf("mismatch alerts %d, closed %v", n, cl.closed)
+	}
+}
+
+// Eating from the ground and remains that decay with loot inside are logged too (no
+// ledger moves: nobody carried them).
+func TestEconomyGroundConsumeAndDecay(t *testing.T) {
+	h := monsterHarness(t, []*content.Monster{wolfDef()}, spawnAt("wolf", 20, 20, 0, 600))
+	cl, p := h.join("Eater", at(22, 20))
+	h.sim.Step()
+	wolf := onlyMonster(t, h)
+	h.input(cl, fightMode(pb.FightStance_FIGHT_STANCE_OFFENSIVE, true))
+	h.input(cl, setTarget(wolf.ID()))
+	h.sim.RunUntil(func() bool { return len(h.w.Monsters()) == 0 }, sim.MaxSeconds(120))
+	h.sim.RunFor(61 * time.Second) // combat.monster_corpse_ms
+	_, looted := sumGold(h.entries(session.EconLoot))
+	decay := h.entries(session.EconDecay)
+	if _, u := sumGold(decay); len(decay) == 0 || u != -looted || decay[0].Ref != "wolf" {
+		t.Fatalf("loot %d, decay %+v", looted, decay)
+	}
+	salve := testItems()["test_salve"]
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(salve, 2, p.Pos()) }))
+	h.sim.Step()
+	h.input(cl, useItem(onTile(p.Pos()), salveID, 1)) // index 0 is the ground
+	h.sim.Step()
+	eaten := h.entries(session.EconConsume)
+	if len(eaten) != 1 || eaten[0].Count != -1 || eaten[0].CharacterID != p.CharacterID() {
+		t.Fatalf("eaten %+v", eaten)
+	}
+}
+
+// Logging out and in does not restart the outlier window.
+func TestEconomyOutlierSurvivesRelogin(t *testing.T) {
+	h := deathHarness(t, func(c *session.Config) {
+		c.Balance.Economy.Outlier.ItemsPerHour = content.PerLevel{Base: 100, PerLevel: 0}
+	})
+	c := withPack(970, pos(10, 10))
+	c.Name, c.Vocation = "Hopper", "guardian"
+	for range 3 {
+		cl := &fakeClient{}
+		h.sim.Command(h.w.Join(c, cl))
+		h.sim.Step()
+		p := h.w.PlayerByCharacter(970)
+		h.sim.Command(gameFunc(func() { h.w.GiveForTest(p, "copper_coin", 40) }))
+		h.sim.RunTicks(2)
+		h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
+		h.sim.Step()
+	}
+	if n := countOf(h.alerts, session.AlertItemsOutlier); n != 1 {
+		t.Fatalf("items outlier alerts %d (%v)", n, h.alerts)
+	}
 }

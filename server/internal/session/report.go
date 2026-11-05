@@ -143,6 +143,10 @@ func (w *World) initReports() {
 // cmdReport: "/report Name reason". The name is the longest run of leading words that
 // names an online player (names may have spaces).
 func (w *World) cmdReport(ctx *game.TickContext, p *Player, args []string) {
+	// Like a chat line: the flood limit bounds probing who is online by name.
+	if !w.chatAllowed(ctx, p) {
+		return
+	}
 	if len(args) < 2 {
 		p.emit(systemMsg(msgReportUsage))
 		return

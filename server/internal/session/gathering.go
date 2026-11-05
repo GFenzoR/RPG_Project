@@ -124,6 +124,7 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 		return
 	}
 	p.nextGather = ctx.Tick + w.gatherFor
+	p.active(ctx.Tick)
 	rt := w.resources[pos]
 	if rt != nil && rt.left == 0 {
 		p.emit(systemMsg(msgGatherDepleted))

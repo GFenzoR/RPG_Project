@@ -127,15 +127,11 @@ type Player struct {
 	fightAt game.Tick
 
 	// Economy (T4.1): what p carried at login, what the log says it gained and lost
-	// since, the tick of the next reconciliation, and what it created in the current
-	// outlier window (since earnStart; earnAlerted: 1 gold, 2 items already alerted).
-	econBase    holdings
-	econDelta   holdings
-	econNext    game.Tick
-	earnStart   game.Tick
-	earnGold    int64
-	earnItems   int64
-	earnAlerted uint8
+	// since, the tick of the next reconciliation, and its outlier window (World.earnings).
+	econBase  holdings
+	econDelta holdings
+	econNext  game.Tick
+	earn      *earning
 
 	// Reports (T4.1): a ring of p's recent events (recent[recentHead] is the next slot).
 	recent     [content.MaxReportEvents]recentEvent
@@ -409,6 +405,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	if w.byClient[p.client] != p {
 		return
 	}
+	w.reconcile(ctx.Tick, p) // a duplication right before leaving is caught too (T4.1)
 	w.disappearFromObservers(p)
 	w.partyLeftWorld(p) // T3.3: leaving the world leaves the party
 	w.unindex(p)

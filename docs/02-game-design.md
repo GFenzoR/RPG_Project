@@ -150,10 +150,12 @@ Revisado en T4.1 (`server/internal/session/idle.go`):
   (`gathering.use_interval_ms`) y el agotamiento de los recursos.
 - **Desconexión por inactividad:** sin acciones reales durante `idle.kick_after_ms`
   (15 min) el servidor desconecta al jugador (`client.disconnect.idle`), después de avisar
-  con un mensaje del sistema `idle.warn_before_ms` antes (1 min). Acciones reales:
-  caminar, atacar (elegir objetivo), lanzar, usar, mover items, hablar, hablar con un NPC,
-  comprar, vender, grupo y fabricar. No cuentan los pings, girar, mirar, cambiar de modo
-  de combate, parar ni cerrar ventanas: es lo que mandaría un "keepalive".
+  con un mensaje del sistema `idle.warn_before_ms` antes (1 min). Acciones reales, y solo
+  si pasan de verdad: dar un paso, elegir un objetivo, lanzar un hechizo o una runa,
+  mover o usar un item, decir algo en el chat, hablar con un NPC o elegir una opción,
+  comprar, vender, recolectar y fabricar. No cuentan los pings, girar, mirar, cambiar de
+  modo de combate, parar, cerrar ventanas ni una intención rechazada (caminar contra una
+  pared, un item que no existe): es lo que mandaría un "keepalive".
 - Nunca saca a alguien **en combate** (`travel.combat_block_ms`: le pegaron, recibió daño o
   pegó hace poco) ni sobre una **casilla sin logout**: lo vuelve a intentar cada segundo.
   Quien entrena contra un monstruo sigue en combate y no se desconecta; para eso está

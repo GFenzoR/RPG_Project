@@ -33,6 +33,7 @@ const (
 	EconGM      = "gm"       // created by a staff command (/item)
 	EconConsume = "consume"  // eaten, drunk, a rune's last charge, ammo shot
 	EconConjure = "conjure"  // created by a spell
+	EconDecay   = "decay"    // left in remains that decayed (character: the dead player, if any)
 )
 
 // EconomyEntry is one row of the economy log. Count (item units) and Amount (money, in
@@ -76,6 +77,7 @@ func (w *World) initEconomy() {
 	e := w.cfg.Balance.Economy
 	w.econCheckFor = game.TicksFor(time.Duration(e.CheckEveryMs) * time.Millisecond)
 	w.outlierFor = game.TicksFor(time.Duration(e.Outlier.WindowMs) * time.Millisecond)
+	w.earnings = map[int64]*earning{}
 }
 
 // measure returns the holdings of count units of it (all of it if count >= it.count)
@@ -118,7 +120,7 @@ func (w *World) econItem(p *Player, kind, ref string, def *content.Item, n int) 
 	}
 	p.econDelta.units += int64(n)
 	if n > 0 && earns(kind) {
-		p.earnItems += int64(n)
+		p.earn.items += int64(n)
 	}
 	w.econRecord(p, EconomyEntry{Kind: kind, CharacterID: p.charID, ItemID: def.Numeric, Count: int32(n), Ref: ref})
 }
@@ -129,8 +131,11 @@ func (w *World) econGold(p *Player, kind, ref string, amount int64) {
 		return
 	}
 	p.econDelta.gold += amount
-	if amount > 0 && earns(kind) {
-		p.earnGold += amount
+	switch {
+	case amount > 0 && earns(kind):
+		p.earn.gold += amount
+	case kind == EconNPCBuy:
+		p.earn.gold += amount // buying back from an NPC is not new wealth (sell and rebuy)
 	}
 	w.econRecord(p, EconomyEntry{Kind: kind, CharacterID: p.charID, Amount: amount, Ref: ref})
 }
@@ -141,6 +146,29 @@ func (w *World) econTree(p *Player, kind, ref string, it *Item, sign int) {
 	w.econItem(p, kind, ref, it.def, sign*units(it))
 	for _, c := range it.items {
 		w.econTree(p, kind, ref, c, sign)
+	}
+}
+
+// econWorld records n units (signed) of def that are not anyone's possessions (used
+// or decayed on the ground): logged for character id charID (0 = nobody), no ledger.
+func (w *World) econWorld(charID int64, kind, ref string, def *content.Item, n int) {
+	if def == nil || n == 0 {
+		return
+	}
+	e := EconomyEntry{Kind: kind, CharacterID: charID, Ref: ref}
+	if c := def.Currency; c != nil {
+		e.Amount = c.Worth * int64(n)
+	} else {
+		e.ItemID, e.Count = def.Numeric, int32(n)
+	}
+	w.econRecord(nil, e)
+}
+
+// econWorldTree records it and everything inside it as destroyed (econWorld).
+func (w *World) econWorldTree(charID int64, kind, ref string, it *Item) {
+	w.econWorld(charID, kind, ref, it.def, -units(it))
+	for _, c := range it.items {
+		w.econWorldTree(charID, kind, ref, c)
 	}
 }
 
@@ -155,12 +183,12 @@ func (w *World) econLoot(owner *Player, monster string, it *Item) {
 	if c := it.def.Currency; c != nil {
 		e.Amount = c.Worth * int64(n)
 		if owner != nil {
-			owner.earnGold += e.Amount
+			owner.earn.gold += e.Amount
 		}
 	} else {
 		e.ItemID, e.Count = it.def.Numeric, int32(n)
 		if owner != nil {
-			owner.earnItems += int64(n)
+			owner.earn.items += int64(n)
 		}
 	}
 	w.econRecord(owner, e)
@@ -229,17 +257,31 @@ func (w *World) PendingEconomy(now time.Time) []EconomyEntry {
 	return out
 }
 
-// startLedger sets p's ledger to what it carries at login.
+// earning is what a character created in its current outlier window. It lives in the
+// World by character, so logging out and in does not restart the window.
+type earning struct {
+	start   game.Tick
+	gold    int64
+	items   int64
+	alerted uint8 // 1 gold, 2 items already alerted in this window
+}
+
+// startLedger sets p's ledger to what it carries at login and finds its outlier window.
 func (w *World) startLedger(tick game.Tick, p *Player) {
 	p.econBase, p.econDelta = w.held(p), holdings{}
-	p.earnStart = tick
+	p.earn = w.earnings[p.charID]
+	if p.earn == nil {
+		p.earn = &earning{start: tick}
+		w.earnings[p.charID] = p.earn
+	}
 	if w.econCheckFor > 0 {
 		// Staggered by creature id (no random draw: the seeded sequence stays the same).
 		p.econNext = tick + 1 + game.Tick(p.id)%w.econCheckFor
 	}
 }
 
-// checkEconomy reconciles the ledgers that are due and checks the outliers.
+// checkEconomy reconciles the ledgers that are due and checks the outliers. Once per
+// window it forgets the windows of characters that are offline and expired.
 func (w *World) checkEconomy(tick game.Tick) {
 	if w.econCheckFor == 0 {
 		return
@@ -250,6 +292,14 @@ func (w *World) checkEconomy(tick game.Tick) {
 		}
 		p.econNext = tick + w.econCheckFor
 		w.reconcile(tick, p)
+	}
+	if tick >= w.earnPrune {
+		w.earnPrune = tick + max(w.outlierFor, 1)
+		for id, e := range w.earnings {
+			if w.byChar[id] == nil && tick-e.start >= w.outlierFor {
+				delete(w.earnings, id)
+			}
+		}
 	}
 }
 
@@ -262,23 +312,28 @@ func (w *World) reconcile(tick game.Tick, p *Player) {
 		w.alert(AlertMismatch)
 		p.econBase, p.econDelta = got, holdings{}
 	}
-	o := w.cfg.Balance.Economy.Outlier
-	if tick-p.earnStart >= w.outlierFor {
-		p.earnStart, p.earnGold, p.earnItems, p.earnAlerted = tick, 0, 0, 0
+	e := p.earn
+	if e == nil {
+		return
 	}
+	o := w.cfg.Balance.Economy.Outlier
 	window := time.Duration(o.WindowMs) * time.Millisecond
 	perWindow := func(perHour int64) int64 { return int64(float64(perHour) * window.Hours()) }
-	if p.earnAlerted&1 == 0 && p.earnGold > perWindow(o.GoldPerHour.At(p.level)) {
-		p.earnAlerted |= 1
+	// Compare first, then start a new window: what came in since the last check counts.
+	if e.alerted&1 == 0 && e.gold > perWindow(o.GoldPerHour.At(p.level)) {
+		e.alerted |= 1
 		w.log.Warn("economy: character earns gold far above normal", "character", p.charID, "name", p.name,
-			"level", p.level, "gold", p.earnGold, "window", window.String())
+			"level", p.level, "gold", e.gold, "window", window.String())
 		w.alert(AlertGoldOutlier)
 	}
-	if p.earnAlerted&2 == 0 && p.earnItems > perWindow(o.ItemsPerHour.At(p.level)) {
-		p.earnAlerted |= 2
+	if e.alerted&2 == 0 && e.items > perWindow(o.ItemsPerHour.At(p.level)) {
+		e.alerted |= 2
 		w.log.Warn("economy: character creates items far above normal", "character", p.charID, "name", p.name,
-			"level", p.level, "items", p.earnItems, "window", window.String())
+			"level", p.level, "items", e.items, "window", window.String())
 		w.alert(AlertItemsOutlier)
+	}
+	if tick-e.start >= w.outlierFor {
+		*e = earning{start: tick}
 	}
 }
 

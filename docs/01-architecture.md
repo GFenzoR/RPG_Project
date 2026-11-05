@@ -231,7 +231,9 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
   items de quest, bendiciones), `quest` (recompensas), `travel` (pasaje y ticket),
   `gather` (pesca, minería, tala), `craft` (ingredientes y resultado), `death` (lo que cae
   en los restos al morir), `gm` (`/item`), `consume` (comida, pociones, la última carga
-  de una runa, munición) y `conjure` (hechizos que crean items). `trade` queda reservado
+  de una runa, munición; también lo usado del suelo, a nombre de quien lo usó), `conjure`
+  (hechizos que crean items) y `decay` (lo que quedaba en unos restos al pudrirse, a nombre
+  del muerto si era un jugador). `trade` queda reservado
   para la ventana de intercambio, que todavía no existe. `count` (unidades) y `amount`
   (dinero, en cobre) llevan signo: positivo se crea o se recibe, negativo se destruye o se
   pierde. `details.ref` es el id de contenido de la fuente (monstruo, NPC, receta, quest).
@@ -240,21 +242,31 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
   canal a su goroutine (`app/economy.go`), sin esperar. Si la cola está llena, la guarda en
   orden para el próximo tick, hasta 65536; después las descarta con log y alerta
   `log_dropped`. La goroutine junta lotes de hasta `economy.log.batch_size` filas o
-  `flush_ms`, une las entradas que solo difieren en la hora (flecha tras flecha) y escribe
-  con COPY. Un error de la base se reintenta con backoff; al apagar se drena.
+  `flush_ms`, une las entradas seguidas que solo difieren en la hora (flecha tras flecha,
+  sin cambiar el orden del log) y escribe con COPY. Un error de la base se reintenta con
+  backoff; al apagar se drena, y si vence el plazo del apagado lo que queda se abandona
+  (con log) sin intentarlo, así el apagado no se alarga con la base colgada.
+- **Decisión: el log puede perder entradas, con límite y aviso.** A diferencia de
+  `audit_log`, no es el registro de verdad (el estado de cada personaje está en su
+  guardado) sino un dato para investigar. Mientras la base no responde, la cola del canal
+  (16384) y la del loop (65536) dan unos minutos con mucha actividad. Después se descarta y
+  se avisa, antes que dejar crecer la memoria del loop sin límite.
 - **Cuadratura:** cada personaje en línea tiene un libro con lo que llevaba al entrar más
   lo que el log dice que ganó y perdió, más lo que pasó del suelo a su inventario y al
   revés (eso no se registra: sigue en el mundo). Cada `economy.check_every_ms`
   (escalonado por id de criatura) su oro y sus unidades de items tienen que dar lo mismo.
   Si no dan, un camino del código creó o destruyó algo sin decirlo (posible duplicación):
   log de error con lo esperado y lo real, alerta `mismatch`, y el libro se vuelve a
-  alinear. En los tests de `session` la cuadratura corre en cada tick y una diferencia
+  alinear. También se cuadra al salir del mundo, así no se escapa una duplicación justo
+  antes del logout. En los tests de `session` la cuadratura corre en cada tick y una diferencia
   hace fallar el test, así cada test de la suite también prueba el log.
 - **Atípicos:** lo que un personaje crea en una ventana de `outlier.window_ms` (oro de
   botín, ventas y recompensas; items de botín, recolección, oficios, conjuros, recompensas y
   GM; las compras no cuentan) se compara con `base + per_level × nivel` por hora. Si lo
-  pasa: log de aviso y alerta `gold_outlier` o `items_outlier`, una vez por ventana. Es
-  para que un GM mire; no sanciona nada.
+  pasa: log de aviso y alerta `gold_outlier` o `items_outlier`, una vez por ventana. Lo
+  comprado a un NPC descuenta del oro (vender y recomprar no suma). La ventana es del
+  personaje, no de la sesión: volver a entrar no la reinicia. Es para que un GM mire; no
+  sanciona nada.
 
 ### Reportes de jugadores (T4.1)
 - Reglas en `02-game-design.md` ("Moderación"). El cliente manda solo el motivo; el
@@ -266,7 +278,10 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
   (`AdminReport`), que lo inserta en `player_reports` junto con su entrada de
   `audit_log` en una transacción. Listar y cerrar (`AdminListReports`,
   `AdminCloseReport`) también se auditan en la misma transacción y la respuesta vuelve al
-  loop con `World.AdminDone`.
+  loop con `World.AdminDone`. Si la base rechaza un reporte, queda entero en el log
+  estructurado.
+- `/report Nombre` dice si ese nombre está conectado (`report.offline`), como `/invite`.
+  Se acepta: pasa por el anti-flood del chat, que limita el sondeo.
 
 ### Auditoría de información (T4.1)
 `internal/session/info_audit_test.go` recorre con reflexión de protobuf cada mensaje que

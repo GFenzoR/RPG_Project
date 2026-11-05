@@ -32,6 +32,10 @@ func TestIdleDisconnect(t *testing.T) {
 	for range 40 { // keepalives for the rest of the time
 		h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: 1}}})
 		h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Turn{Turn: &pb.Turn{Dir: N}}})
+		// Intents that do nothing do not count either.
+		h.input(cl, setTarget(0))
+		h.input(cl, useItem(onTile(pos(30, 30)), 999, 0))
+		h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopBuy{ShopBuy: &pb.ShopBuy{DialogId: 9, ItemId: 1, Count: 1}}})
 		h.sim.RunFor(time.Second)
 	}
 	if !hasKey(cl.take(), "idle.warning") || cl.closed {

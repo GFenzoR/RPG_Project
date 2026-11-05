@@ -185,6 +185,8 @@ func storeReport(job session.AdminJob) store.Report {
 		r = &session.ReportJob{}
 	} else if raw, err := json.Marshal(r.Context); err == nil {
 		ctxJSON = raw
+	} else {
+		slog.Error("admin: report context not encodable, stored without it", "target", e.TargetName, "err", err)
 	}
 	return store.Report{At: e.At, ReporterAccountID: e.ActorAccountID, ReporterCharacterID: e.ActorCharacterID,
 		ReporterName: e.ActorName, TargetAccountID: e.TargetAccountID, TargetCharacterID: e.TargetCharacterID,
@@ -216,6 +218,12 @@ func (a *adminWorker) abandon(job session.AdminJob) {
 func (a *adminWorker) fail(job session.AdminJob) {
 	if job.Kind != session.AdminAudit && job.Kind != session.AdminReport {
 		a.done(session.AdminResult{ID: job.ID, Result: session.AdminFailed, Name: job.TargetName, ReportID: job.ReportID})
+	}
+	if job.Kind == session.AdminReport && job.Report != nil {
+		// The report itself is not stored: keep all of it in the structured log.
+		raw, _ := json.Marshal(job.Report.Context)
+		a.log.Error("admin: report rejected by the database", "reporter", job.Audit.ActorName,
+			"target", job.TargetName, "reason", job.Report.Reason, "context", string(raw))
 	}
 	e := auditEntry(job.Audit)
 	e.Args, e.Result = nil, session.AdminFailed

@@ -176,6 +176,7 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 		return
 	}
 	p.nextGather = ctx.Tick + max(w.gatherFor, ticksFor(r.TimeMs))
+	p.active(ctx.Tick)
 
 	chance := r.SuccessChance(level) // with the level before this attempt's tries
 	if r.XP > 0 {

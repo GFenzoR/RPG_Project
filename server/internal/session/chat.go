@@ -80,6 +80,7 @@ func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 		return
 	}
 	p.recordEvent(now, eventChat, text, 0, int64(ch))
+	p.active(now)
 
 	if ch == pb.ChatChannel_CHAT_CHANNEL_PARTY {
 		w.partySay(p, text)

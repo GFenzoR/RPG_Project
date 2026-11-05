@@ -52,9 +52,9 @@ func TestCoalesce(t *testing.T) {
 		{At: at, Kind: session.EconCraft, CharacterID: 1, ItemID: 30, Count: 2},
 		{At: at, Kind: session.EconCraft, CharacterID: 1, ItemID: 30, Count: -2},
 	}
-	out := coalesce(in)
-	if len(out) != 5 || out[0].Count != -2 || !out[0].At.Equal(at) || out[1].Amount != 25 || out[1].Ref != "wolf" ||
-		out[2].CharacterID != 2 || out[3].Count != 2 || out[4].Count != -2 {
+	out := coalesce(in) // only consecutive runs merge: the order of the log stays
+	if len(out) != 6 || out[0].Count != -2 || !out[0].At.Equal(at) || out[1].Amount != 20 || out[1].Ref != "wolf" ||
+		out[2].CharacterID != 2 || out[3].Amount != 5 || out[4].Count != 2 || out[5].Count != -2 {
 		t.Fatalf("coalesce = %+v", out)
 	}
 }
@@ -93,4 +93,31 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(time.Millisecond) //nolint:forbidigo // waits for another goroutine, not game time
 	}
 	t.Fatal("condition not met")
+}
+
+type hungStore struct{ calls int }
+
+func (s *hungStore) AppendEconomy(ctx context.Context, _ []store.EconomyEntry) error {
+	s.calls++
+	<-ctx.Done() // the database never answers
+	return ctx.Err()
+}
+
+// With the database hung, Stop's deadline ends the write in flight and abandons the rest
+// of the queue without trying it: shutdown stays bounded.
+func TestEconomyWriterStopBoundedWhenHung(t *testing.T) {
+	st := &hungStore{}
+	w := newEconomyWriter(st, clock.Real{}, slog.New(slog.DiscardHandler), time.Hour, 1)
+	w.Start()
+	for i := range 50 {
+		w.Submit(session.EconomyEntry{Kind: session.EconGather, CharacterID: int64(i + 1), ItemID: 9, Count: 1})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if err := w.Stop(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Stop = %v", err)
+	}
+	if st.calls > 2 {
+		t.Fatalf("%d writes tried after the deadline", st.calls)
+	}
 }

@@ -36,13 +36,18 @@ type economyWriter struct {
 	finished chan struct{}
 	stop     chan struct{}
 	stopOnce sync.Once
+	// base is cancelled when Stop gives up: a write in flight ends at once.
+	base   context.Context
+	cancel context.CancelFunc
 }
 
 const economyQueue = 16384
 
 func newEconomyWriter(st EconomyStore, clk clock.Clock, log *slog.Logger, flush time.Duration, batch int) *economyWriter {
+	base, cancel := context.WithCancel(context.Background())
 	return &economyWriter{store: st, clock: clk, log: log, flush: max(flush, time.Millisecond), batch: max(batch, 1),
-		ch: make(chan session.EconomyEntry, economyQueue), finished: make(chan struct{}), stop: make(chan struct{})}
+		ch: make(chan session.EconomyEntry, economyQueue), finished: make(chan struct{}), stop: make(chan struct{}),
+		base: base, cancel: cancel}
 }
 
 // Submit queues e without blocking (session.Config.Economy).
@@ -100,7 +105,7 @@ func (w *economyWriter) Stop(ctx context.Context) error {
 	case <-w.finished:
 		return nil
 	case <-ctx.Done():
-		w.stopOnce.Do(func() { close(w.stop) })
+		w.stopOnce.Do(func() { close(w.stop); w.cancel() })
 		<-w.finished
 		return ctx.Err()
 	}
@@ -114,7 +119,13 @@ func (w *economyWriter) write(batch []session.EconomyEntry) {
 	rows := coalesce(batch)
 	backoff := 500 * time.Millisecond
 	for attempt := 1; ; attempt++ {
-		ctx, cancel := context.WithTimeout(context.Background(), adminWriteTimeout)
+		select {
+		case <-w.stop: // Stop gave up: the rest of the queue goes to the log, not the database
+			w.log.Error("economy: batch abandoned at shutdown", "rows", len(rows))
+			return
+		default:
+		}
+		ctx, cancel := context.WithTimeout(w.base, adminWriteTimeout)
 		err := w.store.AppendEconomy(ctx, rows)
 		cancel()
 		switch {
@@ -144,23 +155,24 @@ type coalesceKey struct {
 	money, minus bool
 }
 
-// coalesce merges the entries of a batch that only differ in time and size, keeping the
-// first time and the order of first appearance. Sums never overflow a row's column.
+// coalesce merges runs of consecutive entries that only differ in time and size (arrow
+// after arrow), keeping the first time, so the log keeps the order things happened in.
+// Sums never overflow a row's column.
 func coalesce(batch []session.EconomyEntry) []store.EconomyEntry {
 	out := make([]store.EconomyEntry, 0, len(batch))
-	at := make(map[coalesceKey]int, len(batch))
+	var last coalesceKey
 	for _, e := range batch {
 		k := coalesceKey{kind: e.Kind, char: e.CharacterID, other: e.OtherCharacterID, item: e.ItemID, ref: e.Ref,
 			money: e.ItemID == 0, minus: e.Count < 0 || e.Amount < 0}
-		if i, ok := at[k]; ok {
-			r := &out[i]
+		if len(out) > 0 && k == last {
+			r := &out[len(out)-1]
 			sum := int64(r.Count) + int64(e.Count)
 			if sum >= math.MinInt32 && sum <= math.MaxInt32 && (e.Amount >= 0) == (r.Amount+e.Amount >= 0) {
 				r.Count, r.Amount = int(sum), r.Amount+e.Amount
 				continue
 			}
 		}
-		at[k] = len(out)
+		last = k
 		out = append(out, store.EconomyEntry{At: e.At, Kind: e.Kind, CharacterID: e.CharacterID,
 			OtherCharacterID: e.OtherCharacterID, ItemID: int(e.ItemID), Count: int(e.Count), Amount: e.Amount, Ref: e.Ref})
 	}

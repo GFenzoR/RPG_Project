@@ -10,16 +10,15 @@ import (
 
 // Idle disconnect (T4.1, docs/02-game-design.md "Anti-bot y anti-AFK"). A player
 // without a real action for balance idle.kick_after_ms is disconnected with IDLE, after
-// a warning idle.warn_before_ms before. Pings, turning, looking, fight stances and
-// closing windows are not real actions: they are what a keepalive would send. A player
+// a warning idle.warn_before_ms before. Pings, turning, looking, fight stances, closing
+// windows and refused intents are not real actions: they are what a keepalive sends. A player
 // in combat (travel.combat_block_ms) or on a no-logout tile is never disconnected; it
 // is checked again until it can be.
 
-const (
-	msgIdleWarning = "idle.warning"
-	// idleCheckEvery is how often the idle times are checked (1 s).
-	idleCheckEvery = game.Tick(1000 / 50)
-)
+const msgIdleWarning = "idle.warning"
+
+// idleCheckEvery is how often the idle times are checked.
+var idleCheckEvery = game.TicksFor(time.Second)
 
 func (w *World) initIdle() {
 	i := w.cfg.Balance.Idle
@@ -27,17 +26,13 @@ func (w *World) initIdle() {
 	w.idleWarnFor = game.TicksFor(time.Duration(i.WarnBeforeMs) * time.Millisecond)
 }
 
-// realAction reports whether msg is something a player does (it resets the idle time).
-func realAction(msg *pb.ClientMessage) bool {
-	switch msg.GetMessage().(type) {
-	case *pb.ClientMessage_Walk, *pb.ClientMessage_WalkPath, *pb.ClientMessage_SetTarget,
-		*pb.ClientMessage_CastSpell, *pb.ClientMessage_UseItem, *pb.ClientMessage_UseItemOn,
-		*pb.ClientMessage_MoveItem, *pb.ClientMessage_Say, *pb.ClientMessage_NpcTalk,
-		*pb.ClientMessage_DialogChoose, *pb.ClientMessage_ShopBuy, *pb.ClientMessage_ShopSell,
-		*pb.ClientMessage_PartyCommand, *pb.ClientMessage_Craft:
-		return true
-	}
-	return false
+// active marks a real action of p: something that happened, not only an intent. The
+// handlers call it after validating (a step taken, a target set, a spell cast, an item
+// moved or used, a chat line said, a dialog, a trade, a gathering or crafting attempt),
+// so an invalid or empty intent (a walk into a wall, SetTarget 0, an unknown item) does
+// not keep an idle player online.
+func (p *Player) active(tick game.Tick) {
+	p.lastAction, p.idleWarned = tick, false
 }
 
 // checkIdle warns and disconnects idle players, once a second.

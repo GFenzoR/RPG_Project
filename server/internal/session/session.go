@@ -277,6 +277,10 @@ type World struct {
 	econDropped  uint64
 	econCheckFor game.Tick
 	outlierFor   game.Tick
+	// earnings are the outlier windows by character (kept across logins until they
+	// expire) and earnPrune the tick of the next sweep of the expired ones.
+	earnings  map[int64]*earning
+	earnPrune game.Tick
 
 	// Reports (T4.1): the per-account rate limit (GCRA tick), the last report of each
 	// account and character, balance.yaml reports in ticks and the next prune.

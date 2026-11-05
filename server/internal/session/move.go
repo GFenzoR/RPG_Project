@@ -20,9 +20,6 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 }
 
 func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
-	if realAction(msg) {
-		p.lastAction, p.idleWarned = ctx.Tick, false
-	}
 	switch m := msg.GetMessage().(type) {
 	case *pb.ClientMessage_Walk:
 		d, ok := dirFromMsg(m.Walk.GetDir())
@@ -199,6 +196,7 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	ticks := w.StepTicks(ground, p.speed, d.Diagonal())
 	p.readyAt = ctx.Tick + ticks
 	w.move(p, to, d, ticks)
+	p.active(ctx.Tick)
 }
 
 // searchCost is the worst case of one reroute search, in expanded tiles: Find may run

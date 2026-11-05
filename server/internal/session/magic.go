@@ -205,6 +205,7 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 
 // startCooldown blocks s (if own) and its group, and tells the client.
 func (w *World) startCooldown(ctx *game.TickContext, p *Player, s *content.Spell, own bool) {
+	p.active(ctx.Tick) // a spell or a rune was cast
 	if p.spellReady == nil {
 		p.spellReady, p.groupReady = map[string]game.Tick{}, map[string]game.Tick{}
 	}
@@ -621,7 +622,7 @@ func (w *World) useRune(ctx *game.TickContext, p *Player, it *Item, target *pb.A
 		w.reveal(ctx, p)
 	}
 	w.startCooldown(ctx, p, s, false)
-	w.useUp(it)
+	w.useUp(p, it)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }
 
