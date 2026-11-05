@@ -563,6 +563,17 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 	}
 
+	// Economy ledger (T4.1): what crosses between a character and the ground.
+	if from := it.carriedBy(); from != toOwner {
+		h := measure(it, count)
+		if from != nil {
+			from.ground(h, -1)
+		}
+		if toOwner != nil {
+			toOwner.ground(h, 1)
+		}
+	}
+
 	// Run it: take the units out of their place and put them in the new one.
 	before := p.carried()
 	moving := it
@@ -870,6 +881,9 @@ func (w *World) consume(p *Player, it *Item) {
 
 // useUp spends one unit (or charge) of it; the last one removes it.
 func (w *World) useUp(it *Item) {
+	if o := it.carriedBy(); o != nil && (it.def.Stackable || it.count <= 1) {
+		w.econItem(o, EconConsume, "", it.def, -1) // a rune's charge is not a unit: only its last one
+	}
 	if it.count > 1 {
 		it.count--
 		w.changed(it)

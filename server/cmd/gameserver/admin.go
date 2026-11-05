@@ -20,6 +20,7 @@ import (
 type adminStore interface {
 	SetRole(ctx context.Context, email, role string, audit store.AuditEntry) (int64, string, error)
 	ListAudit(ctx context.Context, n int) ([]store.AuditEntry, error)
+	OpenReports(ctx context.Context, n int) ([]store.Report, error)
 	Close()
 }
 
@@ -32,6 +33,10 @@ commands:
       higher role applies from the next login.
   audit [-n 50]
       Prints the newest audit log entries.
+  reports [-n 20]
+      Prints the oldest open player reports (T4.1) with the context the server attached
+      (positions and the reported character's recent events). GMs close them in the
+      game with /closereport.
 `
 
 // runAdmin runs "gameserver admin ..." and returns the exit code.
@@ -119,6 +124,28 @@ func adminCommand(ctx context.Context, args []string, open func() (adminStore, e
 		for _, e := range es {
 			fmt.Fprintf(out, "%s %-4s %-20s %-12s %-20s %-10s %v\n", e.At.UTC().Format(time.RFC3339),
 				e.Source, e.ActorName, e.Action, e.TargetName, e.Result, e.Args)
+		}
+		return nil
+	case "reports":
+		n := fs.Int("n", 20, "reports")
+		if err := fs.Parse(args[1:]); err != nil || fs.NArg() > 0 {
+			return errUsage
+		}
+		st, err := open()
+		if err != nil {
+			return err
+		}
+		defer st.Close()
+		rs, err := st.OpenReports(ctx, *n)
+		if err != nil {
+			return err
+		}
+		for _, r := range rs {
+			fmt.Fprintf(out, "#%d %s %s reported %s: %q\n    %s\n", r.ID, r.At.UTC().Format(time.RFC3339),
+				r.ReporterName, r.TargetName, r.Reason, r.Context)
+		}
+		if len(rs) == 0 {
+			fmt.Fprintln(out, "no open reports")
 		}
 		return nil
 	default:

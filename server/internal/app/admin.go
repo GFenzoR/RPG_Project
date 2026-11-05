@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"sync"
@@ -18,6 +19,10 @@ type AdminStore interface {
 	Ban(ctx context.Context, r store.BanRequest) (store.BanResult, error)
 	Unban(ctx context.Context, r store.BanRequest) (store.BanResult, error)
 	AccountRoles(ctx context.Context, ids []int64) (map[int64]string, error)
+	// Player reports (T4.1).
+	CreateReport(ctx context.Context, r store.Report, audit store.AuditEntry) (int64, error)
+	ListReportsAudited(ctx context.Context, n int, audit store.AuditEntry) ([]store.Report, error)
+	CloseReport(ctx context.Context, id int64, resolution string, audit store.AuditEntry) (string, error)
 }
 
 // adminWorker is the goroutine that writes the audit log and runs bans for the game
@@ -135,22 +140,62 @@ func (a *adminWorker) run(job session.AdminJob) {
 	}
 }
 
-func (a *adminWorker) write(ctx context.Context, job session.AdminJob) (store.BanResult, error) {
+func (a *adminWorker) write(ctx context.Context, job session.AdminJob) (session.AdminResult, error) {
+	res := session.AdminResult{ID: job.ID, Result: session.AdminOK, ReportID: job.ReportID}
+	var err error
 	switch job.Kind {
-	case session.AdminBan:
-		return a.store.Ban(ctx, banRequest(job))
-	case session.AdminUnban:
-		return a.store.Unban(ctx, banRequest(job))
+	case session.AdminBan, session.AdminUnban:
+		var b store.BanResult
+		if job.Kind == session.AdminBan {
+			b, err = a.store.Ban(ctx, banRequest(job))
+		} else {
+			b, err = a.store.Unban(ctx, banRequest(job))
+		}
+		res.Result, res.AccountID, res.Name = b.Result, b.AccountID, b.Name
+	case session.AdminReport:
+		_, err = a.store.CreateReport(ctx, storeReport(job), auditEntry(job.Audit))
+	case session.AdminListReports:
+		var rs []store.Report
+		rs, err = a.store.ListReportsAudited(ctx, reportsListed, withResult(auditEntry(job.Audit), store.ResultOK))
+		for _, r := range rs {
+			res.Reports = append(res.Reports, session.ReportSummary{ID: r.ID, At: r.At, Reporter: r.ReporterName,
+				Target: r.TargetName, Reason: r.Reason})
+		}
+	case session.AdminCloseReport:
+		res.Result, err = a.store.CloseReport(ctx, job.ReportID, job.Reason, auditEntry(job.Audit))
 	default:
-		return store.BanResult{}, a.store.AppendAudit(ctx, auditEntry(job.Audit))
+		err = a.store.AppendAudit(ctx, auditEntry(job.Audit))
 	}
+	return res, err
 }
 
-func (a *adminWorker) report(job session.AdminJob, res store.BanResult) {
-	if job.Kind == session.AdminAudit {
+// reportsListed is how many open reports a GM's /reports shows.
+const reportsListed = 10
+
+func withResult(e store.AuditEntry, r string) store.AuditEntry {
+	e.Result = r
+	return e
+}
+
+// storeReport is the report row of an AdminReport job; its context goes as JSON.
+func storeReport(job session.AdminJob) store.Report {
+	e, r := job.Audit, job.Report
+	var ctxJSON json.RawMessage
+	if r == nil {
+		r = &session.ReportJob{}
+	} else if raw, err := json.Marshal(r.Context); err == nil {
+		ctxJSON = raw
+	}
+	return store.Report{At: e.At, ReporterAccountID: e.ActorAccountID, ReporterCharacterID: e.ActorCharacterID,
+		ReporterName: e.ActorName, TargetAccountID: e.TargetAccountID, TargetCharacterID: e.TargetCharacterID,
+		TargetName: e.TargetName, Reason: r.Reason, Context: ctxJSON}
+}
+
+func (a *adminWorker) report(job session.AdminJob, res session.AdminResult) {
+	if job.Kind == session.AdminAudit || job.Kind == session.AdminReport {
 		return
 	}
-	a.done(session.AdminResult{ID: job.ID, Result: res.Result, AccountID: res.AccountID, Name: res.Name})
+	a.done(res)
 }
 
 // abandon logs a job that will not reach the database (shutdown with the database
@@ -169,8 +214,8 @@ func (a *adminWorker) abandon(job session.AdminJob) {
 // as failed, and the attempt is still recorded with a reduced entry (no free-form
 // arguments) that cannot break the table's constraints.
 func (a *adminWorker) fail(job session.AdminJob) {
-	if job.Kind != session.AdminAudit {
-		a.done(session.AdminResult{ID: job.ID, Result: session.AdminFailed, Name: job.TargetName})
+	if job.Kind != session.AdminAudit && job.Kind != session.AdminReport {
+		a.done(session.AdminResult{ID: job.ID, Result: session.AdminFailed, Name: job.TargetName, ReportID: job.ReportID})
 	}
 	e := auditEntry(job.Audit)
 	e.Args, e.Result = nil, session.AdminFailed

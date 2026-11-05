@@ -183,10 +183,12 @@ func (w *World) sail(ctx *game.TickContext, p *Player, r *route) {
 	w.Teleport(p, to)
 	if ticket != nil && req.Item.Consume {
 		w.takeItem(p, ticket, req.Item.N(), true)
+		w.econItem(p, EconTravel, r.def.ID, ticket, -req.Item.N())
 		p.questDirty = true
 	}
 	if r.def.Price > 0 {
 		w.pay(p, r.def.Price)
+		w.econGold(p, EconTravel, r.def.ID, -r.def.Price)
 		p.emit(systemMsg(msgPaid, num("amount", int(r.def.Price))))
 		p.questDirty = true
 	}

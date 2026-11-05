@@ -29,6 +29,7 @@ type Store interface {
 	auth.Repo
 	gateway.Characters
 	AdminStore
+	EconomyStore
 	SaveCharacterState(ctx context.Context, c store.CharacterState) error
 	Ping(ctx context.Context) error
 }
@@ -83,6 +84,7 @@ type App struct {
 	Gateway *gateway.Gateway
 	saver   *session.Saver
 	admin   *adminWorker
+	economy *economyWriter
 	// loopDone is closed when the game loop stopped (commands can no longer run).
 	loopDone chan struct{}
 	handler  http.Handler
@@ -135,6 +137,8 @@ func New(cfg Config) (*App, error) {
 		}
 		a.saver = saver
 		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, a.adminDone, a.rolesChanged)
+		el := cfg.Balance.Economy.Log
+		a.economy = newEconomyWriter(cfg.Store, cfg.Clock, cfg.Logger, time.Duration(el.FlushMs)*time.Millisecond, el.BatchSize)
 		w, err := session.New(session.Config{
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
@@ -149,6 +153,8 @@ func New(cfg Config) (*App, error) {
 			Quests:        cfg.Quests,
 			Save:          saver.Submit,
 			Admin:         a.admin.Submit,
+			Economy:       a.economy.Submit,
+			Alert:         economyAlert(cfg.Metrics),
 			AutosaveEvery: cfg.AutosaveEvery,
 			Logger:        cfg.Logger,
 		})
@@ -203,6 +209,14 @@ func onTick(m *metrics.Metrics) func(game.TickStats) {
 	return m.ObserveTick
 }
 
+// economyAlert counts economy alerts in m (nil without metrics).
+func economyAlert(m *metrics.Metrics) func(string) {
+	if m == nil {
+		return nil
+	}
+	return m.EconomyAlert
+}
+
 // gatewayMetrics avoids handing the gateway a non-nil interface holding a nil pointer.
 func gatewayMetrics(m *metrics.Metrics) gateway.Observer {
 	if m == nil {
@@ -221,6 +235,7 @@ func (a *App) Run(ctx context.Context) error {
 	if a.saver != nil {
 		a.saver.Start()
 		a.admin.Start()
+		a.economy.Start()
 	}
 	runErr := a.Loop.Run(ctx)
 	close(a.loopDone)
@@ -235,6 +250,7 @@ func (a *App) Run(ctx context.Context) error {
 	online := a.World.Online()
 	pending := a.World.SaveAll()
 	pendingAdmin := a.World.PendingAdmin()
+	pendingEconomy := a.World.PendingEconomy(a.cfg.Clock.Now())
 	stage := func(name string, fn func(context.Context) error) {
 		sctx, cancel := context.WithTimeout(context.Background(), a.cfg.ShutdownTimeout)
 		defer cancel()
@@ -257,6 +273,8 @@ func (a *App) Run(ctx context.Context) error {
 	})
 	stage("audit log did not drain", a.admin.Stop)
 	stage("pending audit entries", func(ctx context.Context) error { return a.admin.writePending(ctx, pendingAdmin) })
+	stage("economy log did not drain", a.economy.Stop)
+	stage("pending economy entries", func(ctx context.Context) error { return a.economy.writePending(ctx, pendingEconomy) })
 	a.log.Info("players saved at shutdown", "online", online, "ticks", uint64(a.Loop.Tick()))
 	return runErr
 }

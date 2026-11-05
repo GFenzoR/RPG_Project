@@ -38,6 +38,7 @@ message ClientMessage {
     ShopSell shop_sell = 24;
     PartyCommand party_command = 25;
     Craft craft = 26;
+    ReportPlayer report_player = 27;
   }
 }
 
@@ -238,4 +239,15 @@ message PartyCommand {
 message Craft {
   string recipe_id = 1;
   Position station = 2;
+}
+
+// ReportPlayer reports another player to the staff (T4.1): the report button of the
+// battle list. creature_id must be a player the reporter sees; reason is free text (1 to
+// balance reports.max_reason characters, at most 200). The server attaches the context
+// (both positions and the reported player's recent events), rate limits it per account
+// and answers with a system Message (report.*). The chat command "/report Name reason"
+// does the same for any online player.
+message ReportPlayer {
+  uint32 creature_id = 1;
+  string reason = 2;
 }

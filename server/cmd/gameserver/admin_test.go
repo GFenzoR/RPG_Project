@@ -29,7 +29,25 @@ func (f *fakeAdminStore) ListAudit(context.Context, int) ([]store.AuditEntry, er
 	return []store.AuditEntry{{Source: "cli", ActorName: "cli:ops", Action: "set_role", Result: "ok"}}, nil
 }
 
+func (f *fakeAdminStore) OpenReports(context.Context, int) ([]store.Report, error) {
+	return []store.Report{{ID: 3, ReporterName: "Ana", TargetName: "Bob", Reason: "bot", Context: []byte(`{"target_level":4}`)}}, nil
+}
+
 func (f *fakeAdminStore) Close() { f.closed = true }
+
+func TestAdminReports(t *testing.T) {
+	var out bytes.Buffer
+	f := &fakeAdminStore{}
+	now := func() time.Time { return time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC) }
+	err := adminCommand(context.Background(), []string{"reports", "-n", "5"}, func() (adminStore, error) { return f, nil }, &out, "cli:ops", now)
+	if err != nil || !strings.Contains(out.String(), `#3`) || !strings.Contains(out.String(), `Ana reported Bob: "bot"`) ||
+		!strings.Contains(out.String(), `"target_level":4`) || !f.closed {
+		t.Fatalf("reports: %v %q", err, out.String())
+	}
+	if err := adminCommand(context.Background(), []string{"reports", "x"}, nil, &out, "", now); !errors.Is(err, errUsage) {
+		t.Fatalf("extra argument: %v", err)
+	}
+}
 
 func TestAdminSetRole(t *testing.T) {
 	now := time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)

@@ -40,7 +40,10 @@ func (w *World) CountItem(p *Player, id string) int { return w.countItem(p, w.cf
 func (w *World) Money(p *Player) int64 { return w.money(p) }
 
 // GiveForTest puts n units of item id in p's backpack (tests only, loop goroutine).
-func (w *World) GiveForTest(p *Player, id string, n int) { w.giveItem(p, w.cfg.Items[id], n) }
+func (w *World) GiveForTest(p *Player, id string, n int) {
+	w.giveItem(p, w.cfg.Items[id], n)
+	w.econItem(p, EconGM, "test", w.cfg.Items[id], n) // keeps the economy ledger right
+}
 
 // HurtForTest makes p take dmg as if a monster hit it (tests only, loop goroutine).
 func (w *World) HurtForTest(ctx *game.TickContext, p *Player, dmg int) {
@@ -150,3 +153,9 @@ func (w *World) SetCapacityForTest(p *Player, grams int) { p.capacity = grams }
 
 // SetStorageForTest sets a quest_state value of p (tests only, loop goroutine).
 func (p *Player) SetStorageForTest(key string, v int64) { p.storage.Set(key, v) }
+
+// DupeForTest gives items without telling the economy log: what a duplication bug does.
+func (w *World) DupeForTest(p *Player, id string, n int) { w.giveItem(p, w.cfg.Items[id], n) }
+
+// ProjectileForTest shows a physical projectile between two tiles.
+func (w *World) ProjectileForTest(from, to world.Pos) { w.projectile(from, to, ElementPhysical) }

@@ -423,6 +423,7 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 			return false
 		}
 		w.giveItem(p, def, count) // all of it fits: nothing falls on the floor
+		w.econItem(p, EconConjure, "", def, count)
 		shown = newItem(def, count).stack()
 	} else {
 		if len(bp.items) >= bp.def.Slots() {
@@ -436,6 +437,7 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 		}
 		w.attach(p, it, place{kind: locContainer, cont: bp})
 		w.containerChanged(bp)
+		w.econItem(p, EconConjure, "", def, 1)
 		shown = it.stack()
 	}
 	w.eachWatcher(p, func(o *Player) {
@@ -446,17 +448,27 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 }
 
 // projectile shows a projectile of element flying from one tile to another to everyone
-// who sees either end.
+// who sees either end. A client that sees only where it lands gets it from the edge of
+// its own window: the shooter's tile beyond the window is not sent (T4.1).
 func (w *World) projectile(from, to world.Pos, element string) {
+	id := ProjectileElementBase + elementIndex(element)
 	msg := &pb.ServerMessage{Message: &pb.ServerMessage_Projectile{Projectile: &pb.Projectile{
-		From: posMsg(from), To: posMsg(to), ProjectileId: ProjectileElementBase + elementIndex(element),
+		From: posMsg(from), To: posMsg(to), ProjectileId: id,
 	}}}
 	w.eachObserver(nil, from, func(o *Player) { o.emit(msg) })
 	w.eachObserver(nil, to, func(o *Player) {
 		if !Sees(o.pos, from) {
-			o.emit(msg)
+			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Projectile{Projectile: &pb.Projectile{
+				From: posMsg(clampToView(o.pos, from)), To: posMsg(to), ProjectileId: id,
+			}}})
 		}
 	})
+}
+
+// clampToView moves p to the nearest tile of the window seen from viewer (same floor).
+func clampToView(viewer, p world.Pos) world.Pos {
+	clamp := func(v, c, half int) uint16 { return uint16(min(max(v, c-half), c+half)) }
+	return world.Pos{X: clamp(int(p.X), int(viewer.X), ViewHalfW), Y: clamp(int(p.Y), int(viewer.Y), ViewHalfH), Z: p.Z}
 }
 
 // projectileAt is projectile from `from` to player t: a client that does not see t (it is

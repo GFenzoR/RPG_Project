@@ -60,6 +60,15 @@ const (
 	// AdminCheckRoles reads the current role of Accounts (online staff) and answers
 	// through World.RolesChanged. Not audited.
 	AdminCheckRoles
+	// AdminReport stores Report in the report queue and writes Audit (T4.1). Nothing
+	// is reported back.
+	AdminReport
+	// AdminListReports reads the oldest open reports and writes Audit; the result
+	// (AdminResult.Reports) comes back through World.AdminDone.
+	AdminListReports
+	// AdminCloseReport closes the open report ReportID with the resolution Reason and
+	// writes Audit with the result, in one transaction; World.AdminDone answers.
+	AdminCloseReport
 )
 
 // AdminJob is work for the admin goroutine (the audit log and bans, docs/01).
@@ -73,6 +82,10 @@ type AdminJob struct {
 	Until      time.Time
 	// Accounts are the accounts of an AdminCheckRoles job.
 	Accounts []int64
+	// Report is the new report of an AdminReport job; ReportID the report an
+	// AdminCloseReport closes.
+	Report   *ReportJob
+	ReportID int64
 }
 
 // Results of an AdminBan or AdminUnban (AdminResult.Result).
@@ -90,6 +103,10 @@ type AdminResult struct {
 	Result    string
 	AccountID int64
 	Name      string
+	// Reports are the open reports of an AdminListReports; ReportID the report of an
+	// AdminCloseReport.
+	Reports  []ReportSummary
+	ReportID int64
 }
 
 // Limits of the commands.
@@ -155,6 +172,9 @@ var gmCommands = map[string]gmCommand{
 	"ban":      {RoleGM, "ban", "/ban Name 30m|12h|7d|perm reason", (*World).cmdBan},
 	"unban":    {RoleGM, "unban", "/unban Name", (*World).cmdUnban},
 	"announce": {RoleGM, "announce", "/announce text", (*World).cmdAnnounce},
+	// Player reports (T4.1).
+	"reports":     {RoleGM, "list_reports", "/reports", (*World).cmdReports},
+	"closereport": {RoleGM, "close_report", "/closereport id resolution", (*World).cmdCloseReport},
 }
 
 // command runs a chat line that starts with "/". An unknown command and one the
@@ -167,8 +187,12 @@ func (w *World) command(ctx *game.TickContext, p *Player, line string) {
 	if len(fields) > 0 {
 		name = strings.ToLower(fields[0])
 	}
-	if name == "invite" { // T3.3: the only player command so far
+	switch name { // player commands
+	case "invite": // T3.3
 		w.cmdInvite(ctx, p, fields[1:])
+		return
+	case "report": // T4.1
+		w.cmdReport(ctx, p, fields[1:])
 		return
 	}
 	cmd, ok := gmCommands[name]
@@ -287,6 +311,7 @@ func (w *World) cmdItem(ctx *game.TickContext, p *Player, args []string) bool {
 	}
 	auditArgs["item"] = def.ID
 	w.giveItem(p, def, count)
+	w.econItem(p, EconGM, "", def, count)
 	p.emit(systemMsg(msgGMItemCreated, itemParam(def, count)))
 	w.audit(ctx, p, "create_item", nil, auditArgs, auditOK)
 	return true
@@ -470,6 +495,12 @@ func (w *World) AdminDone(r AdminResult) game.Command {
 			return
 		}
 		delete(w.jobs, r.ID)
+		if job.kind == AdminListReports || job.kind == AdminCloseReport {
+			if gm := w.byChar[job.charID]; gm != nil {
+				w.reportsDone(ctx, gm, job.kind, r)
+			}
+			return
+		}
 		if r.Result == AdminOK {
 			switch job.kind {
 			case AdminBan:

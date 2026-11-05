@@ -69,6 +69,13 @@ Detalles (T1.4, `server/internal/net/gateway`):
   `Disconnect{BANNED}`. El token de juego de una cuenta baneada no se canjea
   (`INVALID_SESSION`), y si el ban llega mientras un login leía la base, el `Join` se
   rechaza con `BANNED`.
+- **Inactividad (T4.1):** sin acciones reales durante `balance.yaml` `idle.kick_after_ms`
+  → `Message` de sistema `idle.warning` (`seconds`) `idle.warn_before_ms` antes y después
+  `Disconnect{IDLE}`, con el personaje guardado. Cuentan `Walk`, `WalkPath`, `SetTarget`,
+  `CastSpell`, `UseItem`, `UseItemOn`, `MoveItem`, `Say`, `NpcTalk`, `DialogChoose`,
+  `ShopBuy`, `ShopSell`, `PartyCommand` y `Craft`; `Ping`, `Turn`, `LookAt`,
+  `SetFightMode`, `StopWalk`, `CloseContainer` y `ReportPlayer` no. Nunca en combate
+  (`travel.combat_block_ms`) ni sobre una casilla sin logout: se reintenta cada segundo.
 
 ## API HTTP (cuentas y personajes)
 Implementada en `server/internal/httpapi` (T1.3). JSON en ambos sentidos; los `POST` con
@@ -203,6 +210,7 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `CloseContainer` | `container_id` (T1.8) |
 | `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
+| `ReportPlayer` | `creature_id` (un jugador a la vista), `reason` (1..200 caracteres) (T4.1) |
 | `Ping` | `client_time` |
 | `Logout` | — |
 
@@ -336,7 +344,9 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   el 2.
 - **`Projectile{from, to, projectile_id}`** con `projectile_id = 1 + elemento`: hechizos de
   un objetivo, disparos de varita y ataques a distancia o hechizos de monstruos. Lo recibe
-  quien ve cualquiera de las dos puntas.
+  quien ve cualquiera de las dos puntas. Quien ve solo la llegada lo recibe con `from` llevado
+  al borde de su ventana (T4.1): la casilla de un tirador fuera de la ventana no viaja. Quien ve solo la llegada lo recibe con `from` llevado
+  al borde de su ventana (T4.1): la casilla de un tirador fuera de la ventana no viaja.
 - **Curación**: `Effect` 3, `FloatingText{HEAL}` si curó algo y `CreatureHealth` si cambió
   el %.
 - **Conjurar**: la runa aparece en la mochila equipada (`ContainerUpdate` a quien la tiene
@@ -370,6 +380,8 @@ Reglas y números en `02-game-design.md` ("Chat") y `balance.yaml` `chat`.
   speaker_id, speaker_name, pos, text}` a todo jugador dentro del rectángulo del modo en el
   mismo piso (incluido quien habla). `GLOBAL` → `Message{kind: GLOBAL, speaker_id,
   speaker_name, text}` sin `pos` a todos los conectados. `UNSPECIFIED` se ignora.
+  Solo quien ve a quien habla recibe `pos`: un grito llega más lejos que la ventana, y quien
+  no lo ve (o no ve a un invisible) lo oye por nombre, sin `pos` (T4.1).
 - El servidor limpia el texto (controles y caracteres de formato → espacio, espacios
   colapsados) y lo reenvía **tal cual**: no escapa HTML. El cliente lo dibuja siempre como
   texto (nodos DOM de Preact o `Text` de Pixi), nunca como HTML ni como plantilla i18n.
@@ -397,6 +409,24 @@ Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architectu
   (`client.chat.line.broadcast`).
 - Expulsado → `Disconnect{KICKED}`. Baneado → `Disconnect{BANNED}`; sus tokens quedan
   revocados, así que el cliente vuelve al login y muestra el motivo ahí.
+
+### Reportes de jugadores (T4.1, `server/internal/session/report.go`)
+Reglas en `02-game-design.md` ("Moderación"); diseño en `01-architecture.md`.
+- **`ReportPlayer{creature_id, reason}`** (el botón "!" de la lista de batalla) o el comando
+  de chat `/report Nombre motivo` (cualquier jugador en línea; el nombre es la tira más
+  larga de palabras iniciales que nombra a alguien conectado). El cliente solo manda el
+  motivo: el servidor adjunta las dos posiciones, el nivel y los últimos
+  `reports.events` eventos del reportado (chat, objetivo elegido, muertes de monstruos,
+  su muerte y movimientos de economía).
+- Respuestas (`Message` de sistema): `report.sent` (`name`), `report.usage`,
+  `report.self`, `report.offline` (`name`), `report.not_visible` (botón sobre alguien
+  que no ve), `report.reason` (`max`), `report.too_fast` (`minutes`),
+  `report.same_target` (`name`) y `report.unavailable`. Los GM en línea reciben
+  `gm.report_new` (`name`, `reporter`, `reason`).
+- GM: `/reports` → `gm.reports` (`count`) y un `gm.report_entry` (`id`, `name`,
+  `reporter`, `reason`, `minutes`) por reporte, o `gm.reports_none`. `/closereport id
+  resolución` → `gm.report_closed`, `gm.report_not_found` o `gm.report_not_open` (`id`).
+  Llegan cuando responde la base, unos ticks después.
 
 ### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
 - `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso

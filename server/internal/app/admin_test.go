@@ -109,6 +109,15 @@ func (downStore) Unban(context.Context, store.BanRequest) (store.BanResult, erro
 func (downStore) AccountRoles(context.Context, []int64) (map[int64]string, error) {
 	return nil, errDown
 }
+func (downStore) CreateReport(context.Context, store.Report, store.AuditEntry) (int64, error) {
+	return 0, errDown
+}
+func (downStore) ListReportsAudited(context.Context, int, store.AuditEntry) ([]store.Report, error) {
+	return nil, errDown
+}
+func (downStore) CloseReport(context.Context, int64, string, store.AuditEntry) (string, error) {
+	return "", errDown
+}
 
 // At shutdown with the database down, every pending job stays in the structured log
 // with its actor, action and arguments: the log is the last copy.

@@ -62,6 +62,12 @@ func testBalance() content.Balance {
 	b.Chat.GlobalIntervalMs = 10000
 	b.Party = content.Party{MaxMembers: 3, InviteMs: 5000, UpdateMs: 1000, ShareDistance: 10, ContributionMs: 60000,
 		LevelRangePct: 70, LevelGapAlways: 3, BonusPctPerMember: 6, MaxBonusPct: 24}
+	// T4.1: reconcile every ledger every tick (newHarness fails the test on a
+	// mismatch), so every test of the package checks the economy log too.
+	b.Economy.CheckEveryMs = 50
+	b.Economy.Outlier.WindowMs = 3600000
+	b.Economy.Outlier.GoldPerHour.Base, b.Economy.Outlier.ItemsPerHour.Base = 1<<40, 1<<40
+	b.Reports = content.Reports{Burst: 2, RefillMs: 60000, SameTargetMs: 600000, MaxReason: 200, Events: 20}
 	return b
 }
 
@@ -79,6 +85,11 @@ type harness struct {
 	w     *session.World
 	saves []session.Snapshot
 	full  bool // Save fails
+	// economy is every economy log entry; alerts every economy alert but mismatches
+	// (those fail the test unless allowMismatch).
+	economy       []session.EconomyEntry
+	alerts        []string
+	allowMismatch bool
 }
 
 type option func(*session.Config)
@@ -98,6 +109,7 @@ func newHarness(t *testing.T, m *world.Map, opts ...option) *harness {
 			return true
 		},
 	}
+	h.wireEconomy(&cfg)
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -109,6 +121,20 @@ func newHarness(t *testing.T, m *world.Map, opts ...option) *harness {
 	mv, fight, flush := w.Systems()
 	h.sim = sim.New(t, sim.WithSeed(7), sim.WithSystems(mv, fight, flush))
 	return h
+}
+
+// wireEconomy records the economy log and its alerts in h; a mismatch fails the test.
+func (h *harness) wireEconomy(cfg *session.Config) {
+	cfg.Economy = func(e session.EconomyEntry) bool {
+		h.economy = append(h.economy, e)
+		return true
+	}
+	cfg.Alert = func(kind string) {
+		if kind == session.AlertMismatch && !h.allowMismatch {
+			h.t.Errorf("tick %d: economy mismatch (see the log)", h.sim.Tick())
+		}
+		h.alerts = append(h.alerts, kind)
+	}
 }
 
 var nextChar int64

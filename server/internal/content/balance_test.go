@@ -109,3 +109,31 @@ func TestParseMonsterErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestAntiBotBalance(t *testing.T) {
+	b, err := LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := b.Economy; e.Log.FlushMs <= 0 || e.Log.BatchSize <= 0 || e.CheckEveryMs <= 0 || e.Outlier.GoldPerHour.At(10) <= e.Outlier.GoldPerHour.Base {
+		t.Errorf("economy = %+v", e)
+	}
+	if r := b.Reports; r.Burst <= 0 || r.MaxReason != MaxReportReason || r.Events <= 0 {
+		t.Errorf("reports = %+v", r)
+	}
+	if i := b.Idle; i.KickAfterMs < 60_000 || i.WarnBeforeMs <= 0 || i.WarnBeforeMs >= i.KickAfterMs {
+		t.Errorf("idle = %+v", i)
+	}
+	if (Idle{KickAfterMs: 120_000, WarnBeforeMs: 120_000}).check() == nil || (Idle{}).check() != nil {
+		t.Error("idle check")
+	}
+	if (Reports{Burst: 1, RefillMs: 1, MaxReason: 201}).check() == nil || (Reports{Burst: 1, RefillMs: 1, MaxReason: 10, Events: 33}).check() == nil {
+		t.Error("reports check")
+	}
+	var e Economy
+	e.Log.FlushMs, e.Log.BatchSize, e.Outlier.WindowMs = 1000, 10, 1000
+	e.Outlier.GoldPerHour.Base, e.Outlier.ItemsPerHour.Base = 1, 1
+	if e.check() == nil {
+		t.Error("economy.outlier.window_ms 1000 accepted")
+	}
+}

@@ -22,6 +22,14 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 - Envío por deltas (MapSlice, TileUpdate). Un frame por jugador por tick como máximo.
 - Pools para buffers de serialización.
 - Persistencia fuera del loop con snapshots copiados.
+- Log de economía (T4.1): el loop agrega cada entrada por valor a un buffer reutilizado y
+  la entrega por canal en el flush; nada de mapas ni JSON en el tick (los arma la
+  goroutine del log). Los eventos recientes de cada jugador (contexto de los reportes)
+  van a un anillo fijo. La cuadratura recorre el inventario de un jugador cada
+  `economy.check_every_ms` (60 s, escalonado), no cada tick; la inactividad se mira una vez
+  por segundo. Con `make bench-tick` las asignaciones por tick no cambiaron (341 con 100
+  jugadores caminando, 1013 con 256 monstruos) y el tiempo quedó dentro del ruido aun con
+  la cuadratura en cada tick, como en los tests.
 
 ## Cliente
 | Métrica | Presupuesto |

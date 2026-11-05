@@ -191,6 +191,12 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `audio.currentPrefs()`.
 - Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`).
 
+## Notas de T4.1
+- Botón "!" de la lista de batalla en cada jugador: abre `ReportForm` (`ui/App.tsx`), que
+  manda `ReportPlayer` solo con el motivo (`Game.reportPlayer`). El contexto lo pone el
+  servidor; la respuesta llega como mensaje del sistema (`report.*`).
+- `Disconnect{IDLE}` → `client.disconnect.idle` (la tabla de motivos es automática).
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

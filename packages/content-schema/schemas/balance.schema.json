@@ -16,7 +16,9 @@
     "death",
     "economy",
     "party",
-    "travel"
+    "travel",
+    "reports",
+    "idle"
   ],
   "properties": {
     "movement": {
@@ -411,11 +413,88 @@
     "economy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["coin_ratio"],
+      "required": ["coin_ratio", "log", "check_every_ms", "outlier"],
       "properties": {
         "coin_ratio": {
           "description": "Copper per silver and silver per gold.",
           "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "log": {
+          "description": "Economy log batches (T4.1): written outside the tick, at least every flush_ms or every batch_size rows.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["flush_ms", "batch_size"],
+          "properties": {
+            "flush_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+            "batch_size": { "type": "integer", "minimum": 1, "maximum": 10000 }
+          }
+        },
+        "check_every_ms": {
+          "description": "How often each online character's gold and items are reconciled with the log (0 = never).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "outlier": {
+          "description": "Alert when a character creates more than this per hour of play within a window (gold in copper, items in units).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["window_ms", "gold_per_hour", "items_per_hour"],
+          "properties": {
+            "window_ms": { "type": "integer", "minimum": 60000 },
+            "gold_per_hour": { "$ref": "#/$defs/perLevel" },
+            "items_per_hour": { "$ref": "#/$defs/perLevel" }
+          }
+        }
+      }
+    },
+    "reports": {
+      "description": "Player reports (T4.1): rate limit per account and the context attached.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["burst", "refill_ms", "same_target_ms", "max_reason", "events"],
+      "properties": {
+        "burst": {
+          "description": "Reports in a row per account.",
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "refill_ms": {
+          "description": "Then one report every this long.",
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "same_target_ms": {
+          "description": "The same account reports the same character at most once per this long.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_reason": {
+          "description": "Longest reason, in characters.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "events": {
+          "description": "Recent events of the reported character attached.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        }
+      }
+    },
+    "idle": {
+      "description": "Idle disconnect (T4.1): no real action (walk, attack, use, talk) for kick_after_ms; never in combat or on a no-logout tile.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kick_after_ms", "warn_before_ms"],
+      "properties": {
+        "kick_after_ms": {
+          "description": "0 turns it off; otherwise at least 60000.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "warn_before_ms": {
+          "description": "A system message this long before the disconnect.",
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -450,6 +529,16 @@
     }
   },
   "$defs": {
+    "perLevel": {
+      "description": "Threshold base + per_level × level.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "per_level"],
+      "properties": {
+        "base": { "type": "integer", "minimum": 1 },
+        "per_level": { "type": "integer", "minimum": 0 }
+      }
+    },
     "condition": {
       "type": "object",
       "additionalProperties": false,

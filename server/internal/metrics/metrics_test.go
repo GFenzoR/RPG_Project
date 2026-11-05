@@ -19,6 +19,7 @@ func TestMetricsRecordAndServe(t *testing.T) {
 	m.ConnOpened()
 	m.ConnOpened()
 	m.ConnClosed()
+	m.EconomyAlert("mismatch")
 
 	rec := httptest.NewRecorder()
 	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
@@ -33,6 +34,7 @@ func TestMetricsRecordAndServe(t *testing.T) {
 		"ws_sent_bytes_total 128",
 		"ws_sent_batches_total 2",
 		"ws_connections 1",
+		`economy_alerts_total{kind="mismatch"} 1`,
 		"process_cpu_seconds_total",
 		"process_resident_memory_bytes",
 	} {
@@ -48,6 +50,7 @@ func TestNilMetricsRecordNothing(t *testing.T) {
 	m.Sent(1)
 	m.ConnOpened()
 	m.ConnClosed()
+	m.EconomyAlert("mismatch")
 }
 
 // BenchmarkObserveTick is the cost the metrics add to every tick.

@@ -22,6 +22,10 @@ type Balance struct {
 	Death      Death      `yaml:"death"`
 	Party      Party      `yaml:"party"`
 	Travel     Travel     `yaml:"travel"`
+	Economy    Economy    `yaml:"economy"`
+	// Reports and Idle are the player reports and the idle disconnect (T4.1).
+	Reports Reports `yaml:"reports"`
+	Idle    Idle    `yaml:"idle"`
 	// Conditions are the condition definitions by id (T3.2).
 	Conditions ConditionDefs `yaml:"conditions"`
 }
@@ -140,6 +144,91 @@ type Travel struct {
 	CombatBlockMs int `yaml:"combat_block_ms"`
 	// ArrivalRadius: a taken arrival tile falls back to the nearest free one this far.
 	ArrivalRadius int `yaml:"arrival_radius"`
+}
+
+// Economy holds the economy rules and the economy log (T4.1, docs/01-architecture.md
+// "Trampas y anti-bot").
+type Economy struct {
+	CoinRatio int `yaml:"coin_ratio"`
+	// Log: the persistence goroutine writes the economy log in batches of up to
+	// BatchSize rows, at least every FlushMs.
+	Log struct {
+		FlushMs   int `yaml:"flush_ms"`
+		BatchSize int `yaml:"batch_size"`
+	} `yaml:"log"`
+	// CheckEveryMs is how often each online character's gold and items are reconciled
+	// with what the log says it gained and lost (0 = never).
+	CheckEveryMs int `yaml:"check_every_ms"`
+	// Outlier: a character that creates more than these, per hour of play within a
+	// window of WindowMs, raises an alert (once per window).
+	Outlier struct {
+		WindowMs     int      `yaml:"window_ms"`
+		GoldPerHour  PerLevel `yaml:"gold_per_hour"`
+		ItemsPerHour PerLevel `yaml:"items_per_hour"`
+	} `yaml:"outlier"`
+}
+
+// PerLevel is a threshold that grows with the level: Base + PerLevel × level.
+type PerLevel struct {
+	Base     int64 `yaml:"base"`
+	PerLevel int64 `yaml:"per_level"`
+}
+
+// At returns the threshold at level.
+func (p PerLevel) At(level int) int64 { return p.Base + p.PerLevel*int64(level) }
+
+func (e Economy) check() error {
+	if e.Log.FlushMs <= 0 || e.Log.FlushMs > 60_000 || e.Log.BatchSize <= 0 || e.Log.BatchSize > 10_000 {
+		return errors.New("economy.log: flush_ms must be in 1..60000 and batch_size in 1..10000")
+	}
+	o := e.Outlier
+	if e.CheckEveryMs < 0 || o.WindowMs < 60_000 || o.GoldPerHour.Base <= 0 || o.GoldPerHour.PerLevel < 0 ||
+		o.ItemsPerHour.Base <= 0 || o.ItemsPerHour.PerLevel < 0 {
+		return errors.New("economy: check_every_ms >= 0, outlier.window_ms >= 60000, outlier bases > 0 and per_level >= 0")
+	}
+	return nil
+}
+
+// MaxReportReason is the longest report reason, in characters (player_reports.reason).
+const MaxReportReason = 200
+
+// MaxReportEvents is how many recent events of a character the server keeps for the
+// context of a report.
+const MaxReportEvents = 32
+
+// Reports holds the player report rules (T4.1): per account, a bucket of Burst
+// reports refilled one every RefillMs, and one report of the same character every
+// SameTargetMs. Events is how many recent events of the reported one go with it.
+type Reports struct {
+	Burst        int `yaml:"burst"`
+	RefillMs     int `yaml:"refill_ms"`
+	SameTargetMs int `yaml:"same_target_ms"`
+	MaxReason    int `yaml:"max_reason"`
+	Events       int `yaml:"events"`
+}
+
+func (r Reports) check() error {
+	if r.Burst <= 0 || r.RefillMs <= 0 || r.SameTargetMs < 0 || r.MaxReason <= 0 || r.MaxReason > MaxReportReason ||
+		r.Events < 0 || r.Events > MaxReportEvents {
+		return fmt.Errorf("reports: burst and refill_ms > 0, same_target_ms >= 0, max_reason in 1..%d, events in 0..%d",
+			MaxReportReason, MaxReportEvents)
+	}
+	return nil
+}
+
+// Idle holds the idle disconnect (T4.1): a player without a real action (walking,
+// attacking, using, talking) for KickAfterMs is disconnected, warned WarnBeforeMs
+// before. Never in combat or on a no-logout tile. KickAfterMs 0 turns it off.
+type Idle struct {
+	KickAfterMs  int `yaml:"kick_after_ms"`
+	WarnBeforeMs int `yaml:"warn_before_ms"`
+}
+
+func (i Idle) check() error {
+	if i.KickAfterMs < 0 || i.WarnBeforeMs < 0 || (i.KickAfterMs > 0 && (i.KickAfterMs < 60_000 || i.WarnBeforeMs >= i.KickAfterMs)) {
+		return errors.New("idle: kick_after_ms 0 or >= 60000, warn_before_ms in 0..kick_after_ms")
+	}
+	return nil
 }
 
 // Inventory holds the item and container rules (T1.8).
@@ -307,6 +396,15 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if t := b.Travel; t.CombatBlockMs < 0 || t.CombatBlockMs > 600_000 || t.ArrivalRadius < 0 || t.ArrivalRadius > 5 {
 		return Balance{}, errors.New("travel: combat_block_ms must be in 0..600000 and arrival_radius in 0..5")
+	}
+	if err := b.Economy.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Reports.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Idle.check(); err != nil {
+		return Balance{}, err
 	}
 	if g := b.Gathering; g.UseIntervalMs < 0 || g.AFK.AfterMs < 0 || g.AFK.Factor < 0 || g.AFK.Factor > 1 {
 		return Balance{}, errors.New("gathering: use_interval_ms and afk.after_ms must be >= 0, afk.factor in 0..1")

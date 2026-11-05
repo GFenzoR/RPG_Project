@@ -183,6 +183,7 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 	}
 	for _, in := range r.Inputs {
 		w.takeItem(p, w.cfg.Items[in.Item], in.Count, false)
+		w.econItem(p, EconCraft, r.ID, w.cfg.Items[in.Item], -in.Count)
 	}
 	if ctx.Rand.Float64() >= chance {
 		w.gatherEffect(pos, EffectGatherMiss)
@@ -191,6 +192,7 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 		w.gatherEffect(pos, EffectGather)
 		p.emit(systemMsg(msgCraftDone, itemParam(out, r.Output.Count)))
 		w.giveItem(p, out, r.Output.Count)
+		w.econItem(p, EconCraft, r.ID, out, r.Output.Count)
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendStation(p, pos, station.Numeric)

@@ -26,6 +26,8 @@ func dataHarnessWith(t *testing.T, edit func(*session.Config), spawns ...world.S
 	cfg := dataConfig(t, nil, spawns...)
 	h := &harness{t: t}
 	cfg.Save = func(s session.Snapshot) bool { h.saves = append(h.saves, s); return true }
+	h.wireEconomy(&cfg)
+	cfg.Balance.Economy.CheckEveryMs = 50 // reconcile every tick (T4.1)
 	if edit != nil {
 		edit(&cfg)
 	}

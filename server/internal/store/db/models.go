@@ -113,6 +113,24 @@ type InventoryItem struct {
 	Attributes  []byte
 }
 
+type PlayerReport struct {
+	ID                  int64
+	CreatedAt           pgtype.Timestamptz
+	ReporterAccountID   int64
+	ReporterCharacterID int64
+	ReporterName        string
+	TargetAccountID     int64
+	TargetCharacterID   int64
+	TargetName          string
+	Reason              string
+	Context             []byte
+	Status              string
+	ClosedAt            pgtype.Timestamptz
+	ClosedBy            pgtype.Int8
+	ClosedByName        pgtype.Text
+	Resolution          pgtype.Text
+}
+
 type QuestState struct {
 	CharacterID int64
 	Key         string

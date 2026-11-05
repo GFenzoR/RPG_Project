@@ -76,6 +76,9 @@ func (w *World) setTarget(p *Player, id uint32) {
 		// (even after clearing the target) keeps it, so it cannot be reset by the client.
 		p.afkTarget, p.answeredAt = m, 0
 	}
+	if p.target != m {
+		p.recordEvent(w.nowTick(), eventAttack, m.kind.def.ID, 0, 0)
+	}
 	p.target = m
 }
 
@@ -290,6 +293,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	for _, s := range m.damage {
 		if p := w.playerByID(s.player); p != nil {
 			w.questKill(p, def.ID)
+			p.recordEvent(ctx.Tick, eventKill, def.ID, 0, 0)
 		}
 	}
 
@@ -318,6 +322,9 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 			add(newItem(l.def, c))
 			n -= c
 		}
+	}
+	for _, it := range corpse.Item.items {
+		w.econLoot(owner, def.ID, it)
 	}
 	pos := m.pos
 	w.clearConditions(ctx, holder{m: m}, true)

@@ -20,6 +20,9 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 }
 
 func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
+	if realAction(msg) {
+		p.lastAction, p.idleWarned = ctx.Tick, false
+	}
 	switch m := msg.GetMessage().(type) {
 	case *pb.ClientMessage_Walk:
 		d, ok := dirFromMsg(m.Walk.GetDir())
@@ -75,6 +78,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.partyCommand(ctx, p, m.PartyCommand)
 	case *pb.ClientMessage_CloseContainer:
 		w.closeContainer(p, m.CloseContainer.GetContainerId())
+	case *pb.ClientMessage_ReportPlayer:
+		w.reportPlayer(ctx, p, m.ReportPlayer.GetCreatureId(), m.ReportPlayer.GetReason())
 	case *pb.ClientMessage_Logout:
 		// No-logout zones and the combat lock arrive with death and PvP rules (T1.11).
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
@@ -307,6 +312,9 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	}
 	w.checkRoles(ctx)
 	w.flushParties(ctx.Tick)
+	w.checkEconomy(ctx.Tick)
+	w.checkIdle(ctx)
+	w.flushEconomy(ctx)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)

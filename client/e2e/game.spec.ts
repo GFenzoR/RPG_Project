@@ -1317,6 +1317,22 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   );
   await leadPage.locator(".side").screenshot({ path: join(shots, "25-party-panel.png") });
 
+  // T4.1: the mate reports the leader from the battle list; the server answers.
+  await matePage
+    .getByTestId("battle-list")
+    .locator("li", { hasText: lead.name })
+    .getByRole("button", { name: "Reportar al equipo del juego" })
+    .click();
+  const report = matePage.getByTestId("report-form");
+  await expect(report).toContainText(`Reportar a ${lead.name}`);
+  await report.getByRole("textbox").fill("prueba de reporte E2E");
+  await matePage.locator(".side").screenshot({ path: join(shots, "37-report-form.png") });
+  await report.getByRole("button", { name: "Enviar reporte" }).click();
+  await expect(report).toHaveCount(0);
+  await expect(matePage.getByTestId("game-log")).toContainText(
+    `Tu reporte sobre ${lead.name} llegó al equipo del juego.`,
+  );
+
   // Leaving disbands a party of two.
   await matePage.getByTestId("party-leave").click();
   await expect(leadPanel).toContainText("No estás en un grupo.");

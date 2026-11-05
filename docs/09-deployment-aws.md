@@ -135,6 +135,12 @@ En local: `make set-role EMAIL=... ROLE=gm NOTE="..."` y `make audit-log`. El ca
 los tokens de la cuenta. Si se quita un rol, los personajes conectados de esa cuenta lo
 pierden en unos 5 s, sin reiniciar nada. Un rol nuevo vale desde el próximo login.
 
+Los reportes de jugadores abiertos (T4.1), con el contexto que adjuntó el servidor, se
+leen con `/app/gameserver admin reports -n 20` (en local `make reports`). Los GM los
+cierran dentro del juego con `/closereport`. Las alertas de economía (posible duplicación,
+personajes muy por encima de lo normal) van al log estructurado (`economy:`) y a la métrica
+`economy_alerts_total{kind}`.
+
 ### Backups y restauración
 - El servicio `backup` hace un `pg_dump` (formato custom, comprimido) al arrancar y luego
   cada `BACKUP_INTERVAL_SECONDS`, borra los locales de más de `BACKUP_RETENTION_DAYS` días

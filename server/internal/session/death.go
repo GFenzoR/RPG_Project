@@ -36,6 +36,7 @@ func (w *World) die(ctx *game.TickContext, p *Player) {
 	blessings := w.Blessings(p)
 	pen := skills.DeathPenalty(d, blessings, p.level)
 	at := p.pos
+	p.recordEvent(ctx.Tick, eventDied, "", 0, 0)
 
 	// Corpse with the dropped items, in slot order (deterministic with the seeded rand).
 	if w.corpseItem != nil {
@@ -52,6 +53,7 @@ func (w *World) die(ctx *game.TickContext, p *Player) {
 			if chance <= 0 || ctx.Rand.Float64()*100 >= chance {
 				continue
 			}
+			w.econTree(p, EconDeath, "", it, -1)
 			w.detach(it)
 			if len(corpse.Item.items) < w.corpseItem.Slots() {
 				it.parent = corpse.Item
