@@ -1703,14 +1703,27 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await expect
     .poll(() => page.evaluate(() => window.__rpgAudio?.loops()))
     .toEqual({ music: "music_puerto", ambient: "amb_olas" });
-  await expect.poll(history).toContain("click"); // "Entrar" and "Jugar"
-  // An own step makes a sound too.
+  // An own step makes a sound too. The engine drops a sound whose file is still loading
+  // after LATE_MS (a late sound is worse than none), so on a slow runner the first step can
+  // be silent: walk back and forth until one plays (its file is cached by then).
   const start = await self(page);
   if (!start) throw new Error("no own creature");
-  await page.keyboard.press("ArrowRight");
-  await arrived(page, start.x + 1, start.y);
-  await expect.poll(history).toContain("step");
-  expect(await starts()).toBeGreaterThanOrEqual(4); // two clicks, two loops, a step
+  for (let i = 0; ; i++) {
+    await page.keyboard.press("ArrowRight");
+    await arrived(page, start.x + 1, start.y);
+    const played = await expect
+      .poll(history, { timeout: 2000 })
+      .toContain("step")
+      .then(
+        () => true,
+        () => false,
+      );
+    if (played || i === 4) break;
+    await page.keyboard.press("ArrowLeft");
+    await arrived(page, start.x, start.y);
+  }
+  expect(await history()).toContain("step");
+  expect(await starts()).toBeGreaterThanOrEqual(3); // two loops and a step
 
   // Options: lower the music, mute the effects.
   await page.locator(".hud").getByTestId("options-button").click();
@@ -1729,6 +1742,13 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await page.keyboard.press("ArrowLeft");
   await arrived(page, start.x, start.y);
   expect((await history()).slice(before)).not.toContain("step");
+  // Buttons sound on the interface channel, which is not muted. "Entrar" and "Jugar" may
+  // have been dropped while the file loaded (see above); after the options clicks it is
+  // cached, so one more button click plays.
+  await page.locator(".hud").getByTestId("options-button").click();
+  await expect(options).toHaveCount(1);
+  await options.getByRole("button", { name: "Cerrar" }).click();
+  await expect.poll(history).toContain("click");
 
   // Saved: after a reload the panel (on the login screen) shows the same values.
   await page.reload();
