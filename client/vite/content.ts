@@ -207,12 +207,8 @@ export function loadSiteContent(root: string): SiteContent {
   for (const lang of LANGUAGES) {
     const texts: Record<string, string> = {};
     for (const name of SITE_CATALOGS) {
-      let cat: unknown;
-      try {
-        cat = readYaml(join(root, "i18n", lang, name));
-      } catch {
-        continue;
-      }
+      // Every catalog is required: a missing one would publish raw keys.
+      const cat = readYaml(join(root, "i18n", lang, name));
       if (isObj(cat))
         for (const [k, v] of Object.entries(cat)) if (typeof v === "string") texts[k] = v;
     }
@@ -368,12 +364,11 @@ export function rpgContent(): Plugin {
       server.middlewares.use((req, res, next) => {
         const url = new URL(req.url ?? "/", "http://client");
         const path = url.pathname;
-        // The game page (T4.3): /play → /play/ like Caddy, keeping ?lang=.
+        // The game page (T4.3): /play serves play/index.html as it is, like Caddy (no
+        // redirect; the page only uses root-absolute URLs).
         if (path === "/play") {
-          res.statusCode = 308;
-          res.setHeader("location", "/play/" + url.search);
-          res.end();
-          return;
+          req.url = "/play/" + url.search;
+          return next();
         }
         if (req.method === "GET" && path.startsWith("/" + AUDIO_PREFIX)) {
           // Only files listed in sounds.yaml, read on each request (make sounds updates them).

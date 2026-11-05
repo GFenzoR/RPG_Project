@@ -212,7 +212,7 @@ test.describe.serial("public website", () => {
       "Un mundo abierto, casilla por casilla",
     );
     await page.goto("/play");
-    await expect(page).toHaveURL(/\/play\/$/);
+    await expect(page).toHaveURL(/\/play$/);
     await expect(page.getByTestId("characters").getByText(name)).toBeVisible();
     expect(errors).toEqual([]);
   });

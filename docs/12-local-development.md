@@ -37,7 +37,7 @@ El servidor aplica las migraciones pendientes al arrancar y sirve la API HTTP en
 páginas del cliente, como detrás de Caddy:
 - `http://localhost:5173/` → sitio público: landing, `/highscores`, `/news` (las rutas
   desconocidas caen en esta página);
-- `http://localhost:5173/play/` → el juego (`/play` redirige a `/play/`).
+- `http://localhost:5173/play/` → el juego (también en `/play`, sin redirección, como Caddy).
 
 Vite hace de proxy de `/api` y `/ws` al servidor (`RPG_SERVER`, por defecto `:8080`): el
 estado del servidor y el ranking de la landing necesitan el servidor en marcha. Una noticia
