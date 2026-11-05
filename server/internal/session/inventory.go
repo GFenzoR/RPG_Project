@@ -836,6 +836,7 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 		w.toggleContainer(p, it)
 	case it.def.Consumable != nil:
 		if ctx.Tick < p.nextUse {
+			p.tooEarly(ctx.Tick, antibot.KindItem)
 			p.emit(systemMsg(msgNotReady))
 			return
 		}

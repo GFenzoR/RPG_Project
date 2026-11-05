@@ -158,7 +158,7 @@ antibot:
   pause_ms: 180000          # 3 min without a real action is a pause
   signals:
     regularity: { weight: 3, min_samples: 300, cv_low: 0.05, cv_high: 0.25 }   # time between actions
-    reaction: { weight: 3, min_samples: 15, window_ms: 4000, fast_ms: 300, std_ms: 60 }  # heal after a hit
+    reaction: { weight: 3, min_samples: 15, window_ms: 4000, fast_ms: 200, std_ms: 60 }  # heal after a hit (people: ~300 ms)
     route: { weight: 2, segment: 12, min_steps: 300, repeat_low: 0.5, repeat_high: 0.9 }  # same exact path
     session: { weight: 1, low_ms: 28800000, high_ms: 57600000 }   # 8..16 h without a pause
     income: { weight: 2, min_peers: 5, band_levels: 10, ratio_low: 4, ratio_high: 8 }  # vs median of the band

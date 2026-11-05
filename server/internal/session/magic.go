@@ -184,6 +184,7 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 		p.emit(systemMsg(msgMagicLevel, num("level", s.MagicLevel)))
 		return
 	case ctx.Tick < p.spellReady[s.ID] || ctx.Tick < p.groupReady[s.Group]:
+		p.tooEarly(ctx.Tick, antibot.KindSpell)
 		p.emit(systemMsg(msgSpellNotReady))
 		return
 	case p.mana < s.Mana:
@@ -648,6 +649,7 @@ func (w *World) useRune(ctx *game.TickContext, p *Player, it *Item, target *pb.A
 		p.emit(systemMsg(msgMagicLevel, num("level", r.MagicLevel)))
 		return
 	case ctx.Tick < p.groupReady[s.Group]:
+		p.tooEarly(ctx.Tick, antibot.KindSpell)
 		p.emit(systemMsg(msgSpellNotReady))
 		return
 	}

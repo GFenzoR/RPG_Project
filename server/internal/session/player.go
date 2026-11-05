@@ -3,6 +3,7 @@ package session
 import (
 	"sort"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -144,8 +145,12 @@ type Player struct {
 	idleWarned bool
 	// Bot detection (T4.1 2/2): p's state (World.suspects; nil when off) and the tick
 	// of its next evaluation.
-	sus      *suspect
-	abNext   game.Tick
+	sus    *suspect
+	abNext game.Tick
+	// earlyTry: the last try of each kind of action refused for its cooldown; kindLast:
+	// the last accepted one (antibot.Kind*; see activePaced).
+	earlyTry [antibot.NumKinds]game.Tick
+	kindLast [antibot.NumKinds]game.Tick
 	joinedAt game.Tick
 }
 

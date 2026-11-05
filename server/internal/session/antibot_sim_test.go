@@ -38,7 +38,9 @@ var botDirs = map[bot.Direction]pb.Direction{bot.North: N, bot.East: E, bot.Sout
 func (b *simBot) tick(h *harness, now game.Tick) {
 	if b.heal != 0 && now >= b.heal {
 		b.heal = 0
-		h.input(b.cl, cast("bot_heal"))
+		if now >= b.paused { // a break is a real break: no heal either
+			h.input(b.cl, cast("bot_heal"))
+		}
 	}
 	// A human answers a presence check after reading it; a script never does.
 	for _, e := range b.cl.take() {
@@ -116,6 +118,9 @@ func TestAntiBotFlagsMechanicalNotHuman(t *testing.T) {
 		if now >= nextHurt {
 			nextHurt = now + hurtEvery/2 + game.Tick(r.Uint64N(uint64(hurtEvery)))
 			for _, b := range bots {
+				if now < b.paused { // nobody hits a player on a break (it is somewhere safe)
+					continue
+				}
 				h.sim.Command(ctxFunc(func(ctx *game.TickContext) { h.w.HurtForTest(ctx, b.p, 3) }))
 				b.heal = now + 1 + ticksOf(b.prof.HealDelay(b.r))
 			}
@@ -145,16 +150,35 @@ func TestAntiBotFlagsMechanicalNotHuman(t *testing.T) {
 	}
 }
 
-// A person with legitimate habits that look mechanical: holding the heal hotkey (the
-// server's cooldown sets the pace) and clicking the same far tile back and forth (the same
-// A* path every time), for 8 hours without a break. It may be logged, but it never gets
-// a presence check.
-func TestAntiBotHeldKeyAndClickWalkNotPresence(t *testing.T) {
+// habits are things a real player does with the shipped client that look mechanical.
+type habits struct {
+	clickWalk bool // clicks the same far tile and back (the same A* path every time)
+	mash      bool // mashes a cooldown hotkey: one key press every 150-300 ms
+	quickHeal bool // heals at human reaction speed: N(250, 50) ms + 50 ms of latency
+	pauses    bool // takes Human()'s breaks (otherwise plays without a pause)
+}
+
+func (hb habits) String() string {
+	var out []string
+	for _, x := range []struct {
+		on   bool
+		name string
+	}{{hb.clickWalk, "clickwalk"}, {hb.mash, "mash"}, {hb.quickHeal, "quickheal"}, {hb.pauses, "pauses"}} {
+		if x.on {
+			out = append(out, x.name)
+		}
+	}
+	return strings.Join(out, "+")
+}
+
+// playHabits plays a Human() profile with hb for d of game time and returns the final
+// response level and the bot detection's audit actions.
+func playHabits(t *testing.T, hb habits, d time.Duration, seed uint64) (int, []string) {
 	bal, err := content.LoadBalance(filepath.Join("..", "..", "..", "data"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var jobs []session.AdminJob
+	var acts []string
 	h := newHarness(t, worldtest.Open(t, 0, 0, 64, 64), func(c *session.Config) {
 		c.Balance.AntiBot = bal.AntiBot
 		c.Balance.AntiBot.Presence.RandomPerHour = 0 // only the score's checks
@@ -163,47 +187,165 @@ func TestAntiBotHeldKeyAndClickWalkNotPresence(t *testing.T) {
 			Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 30}}}}}
 		c.Balance.Skills.Base["magic"] = content.SkillBase{BaseTries: 1000}
 		c.Admin = func(j session.AdminJob) bool {
-			if j.Kind != session.AdminCheckRoles {
-				jobs = append(jobs, j)
+			if j.Audit.ActorName == "system:antibot" {
+				acts = append(acts, j.Audit.Action+":"+j.Audit.Result)
 			}
 			return true
 		}
 	})
-	cl, p := h.join("Grinder", at(20, 20))
-	r := h.sim.Rand()
+	prof := bot.Human()
+	r := rand.New(rand.NewPCG(seed, 5))
+	cl, p := h.join("Person", at(20, 20))
 	there := []pb.Direction{E, E, E, E, E, E, E, E, S, S, S, S}
 	back := []pb.Direction{N, N, N, N, W, W, W, W, W, W, W, W}
 	out := true
-	nextHurt := h.sim.Tick() + ticksOf(10*time.Second)
-	end := h.sim.Tick() + ticksOf(8*time.Hour)
+	tk := func(d time.Duration) game.Tick { return max(ticksOf(d), 1) }
+	var nextStep, nextKey, nextBeat, paused, heal game.Tick
+	nextHurt := h.sim.Tick() + tk(10*time.Second)
+	end := h.sim.Tick() + ticksOf(d)
 	for h.sim.Tick() < end {
 		now := h.sim.Tick()
-		if now%2 == 0 { // the held key repeats; the server casts when the cooldown allows
-			h.input(cl, cast("bot_heal"))
-		}
-		if !p.Walking() && now%10 == 0 { // a click on the other end when it arrives
-			if out {
-				h.input(cl, walkPath(there...))
-			} else {
-				h.input(cl, walkPath(back...))
+		if now >= paused {
+			if heal != 0 && now >= heal {
+				heal = 0
+				h.input(cl, cast("bot_heal"))
 			}
-			out = !out
-		}
-		if now >= nextHurt {
-			nextHurt = now + ticksOf(5*time.Second) + game.Tick(r.Uint64N(uint64(ticksOf(10*time.Second))))
-			h.sim.Command(ctxFunc(func(ctx *game.TickContext) { h.w.HurtForTest(ctx, p, 3) }))
+			if hb.mash && now >= nextKey { // one press: the server casts if the cooldown is over
+				h.input(cl, cast("bot_heal"))
+				nextKey = now + tk(time.Duration(150+r.IntN(151))*time.Millisecond)
+			}
+			if now >= nextBeat {
+				h.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hm"))
+				nextBeat = now + tk(prof.BeatDelay(r))
+			}
+			if now >= nextStep && !p.Walking() {
+				wait := prof.Delay(r)
+				if hb.clickWalk {
+					if out {
+						h.input(cl, walkPath(there...))
+					} else {
+						h.input(cl, walkPath(back...))
+					}
+					out = !out
+					wait += time.Duration(1000+r.IntN(3000)) * time.Millisecond // a look before the next click
+				} else {
+					pos := p.Pos()
+					h.input(cl, walk(botDirs[prof.Step(r, 0, int(pos.X)-20, int(pos.Y)-20)]))
+				}
+				nextStep = now + tk(wait)
+				if hb.pauses {
+					if pause := prof.Pause(r, wait); pause > 0 {
+						paused = nextStep + tk(pause)
+						nextStep, nextBeat, nextKey, heal = paused, paused, paused, 0
+					}
+				}
+			}
+			if now >= nextHurt {
+				nextHurt = now + tk(5*time.Second) + game.Tick(r.Uint64N(uint64(tk(10*time.Second))))
+				h.sim.Command(ctxFunc(func(ctx *game.TickContext) { h.w.HurtForTest(ctx, p, 3) }))
+				react := prof.HealDelay(r)
+				if hb.quickHeal {
+					react = time.Duration(250+50*r.NormFloat64())*time.Millisecond + 50*time.Millisecond
+				}
+				heal = now + 1 + tk(react)
+			}
 		}
 		h.sim.Step()
 		cl.take()
 	}
 	sc, sg, lv := h.w.SuspicionForTest(p)
-	t.Logf("after 8 h: score %.0f level %d signals %.2f", sc, lv, sg)
-	if lv >= 3 {
-		t.Fatalf("a held key and click-walking reached the presence check (level %d)", lv)
+	t.Logf("%s: score %.0f level %d signals %.2f", hb, sc, lv, sg)
+	return lv, acts
+}
+
+// Negative controls (T4.1): habits a real player can have with the shipped client, alone
+// and in pairs, with and without breaks, for 6 hours of play. None reaches a GM notice,
+// a presence check or a suspension ("a normal player never reaches notify").
+func TestAntiBotHumanHabitsNeverNotify(t *testing.T) {
+	var cases []habits
+	singles := []habits{{clickWalk: true}, {mash: true}, {quickHeal: true}}
+	pairs := []habits{{clickWalk: true, mash: true}, {clickWalk: true, quickHeal: true}, {mash: true, quickHeal: true}}
+	for _, hb := range append(singles, pairs...) {
+		cases = append(cases, hb)
+		hb.pauses = true
+		cases = append(cases, hb)
 	}
-	for _, j := range jobs {
-		if j.Audit.Action == "presence_check" || j.Kind == session.AdminBan {
-			t.Fatalf("job %s:%s", j.Audit.Action, j.Audit.Result)
+	for i, hb := range cases {
+		t.Run(hb.String(), func(t *testing.T) {
+			t.Parallel()
+			lv, acts := playHabits(t, hb, 6*time.Hour, uint64(i+1))
+			if lv >= 2 { // antibot.LevelNotify
+				t.Errorf("level %d, actions %v", lv, acts)
+			}
+			for _, a := range acts {
+				if strings.HasPrefix(a, "presence_check") || strings.HasPrefix(a, "ban") || a == "bot_suspect:notify" {
+					t.Errorf("response %s", a)
+				}
+			}
+		})
+	}
+}
+
+// Signals age with their own evidence: after 30 minutes of scripted hunting, five hours
+// of only chatting (and answering the checks right) bring the character back to level 0,
+// with no suspension (T4.1: a past hunt used to keep scoring).
+func TestAntiBotPastHuntStopsScoring(t *testing.T) {
+	bal, err := content.LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var acts []string
+	h := newHarness(t, worldtest.Open(t, 0, 0, 96, 64), func(c *session.Config) {
+		c.Balance.AntiBot = bal.AntiBot
+		c.Balance.AntiBot.Presence.RandomPerHour = 0
+		c.Spells = content.Spells{"bot_heal": {ID: "bot_heal", Words: "bot heal", Vocations: []string{"guardian"},
+			Level: 1, Group: "healing", CooldownMs: 1000, GroupCooldownMs: 1000,
+			Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 30}}}}}
+		c.Balance.Skills.Base["magic"] = content.SkillBase{BaseTries: 1000}
+		c.Admin = func(j session.AdminJob) bool {
+			if j.Audit.ActorName == "system:antibot" {
+				acts = append(acts, j.Audit.Action+":"+j.Audit.Result)
+			}
+			return true
+		}
+	})
+	b := &simBot{prof: bot.Mechanical(), home: [2]int{60, 30}, r: rand.New(rand.NewPCG(3, 99))}
+	b.cl, b.p = h.join("Retired", at(60, 30))
+	end := h.sim.Tick() + ticksOf(30*time.Minute)
+	for h.sim.Tick() < end { // the scripted hunt
+		now := h.sim.Tick()
+		if now%ticksOf(10*time.Second) == 0 {
+			h.sim.Command(ctxFunc(func(ctx *game.TickContext) { h.w.HurtForTest(ctx, b.p, 3) }))
+			b.heal = now + 1 + ticksOf(b.prof.HealDelay(b.r))
+		}
+		b.tick(h, now)
+		h.sim.Step()
+	}
+	if _, sg, _ := h.w.SuspicionForTest(b.p); sg[0]+sg[1]+sg[2] < 2 {
+		t.Fatalf("the hunt did not look scripted: %v", sg)
+	}
+	r := rand.New(rand.NewPCG(4, 4))
+	end = h.sim.Tick() + ticksOf(5*time.Hour)
+	next := h.sim.Tick()
+	for h.sim.Tick() < end { // then a person in town: a chat line every 1-4 min
+		now := h.sim.Tick()
+		if now >= next {
+			h.input(b.cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+			next = now + ticksOf(time.Duration(60+r.IntN(180))*time.Second)
+		}
+		for _, e := range b.cl.take() {
+			if c := e.GetPresenceCheck(); c != nil {
+				h.input(b.cl, answer(c, true))
+			}
+		}
+		h.sim.Step()
+	}
+	if _, sg, lv := h.w.SuspicionForTest(b.p); lv != 0 {
+		t.Fatalf("level %d after five hours of chatting (signals %v): %v", lv, sg, acts)
+	}
+	for _, a := range acts {
+		if strings.HasPrefix(a, "ban") {
+			t.Fatalf("suspended: %v", acts)
 		}
 	}
 }

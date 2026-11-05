@@ -176,3 +176,47 @@ func TestPacedAndIdle(t *testing.T) {
 		t.Errorf("idle signals %v", s)
 	}
 }
+
+// Each signal ages with its own evidence: after a hunt, chatting alone keeps the
+// character active but scores nothing, and a new burst starts from zero.
+func TestSignalsAgeWithTheirEvidence(t *testing.T) {
+	cfg := repoConfig(t)
+	var tr Tracker
+	ms := int64(0)
+	for i := range 600 { // a scripted hunt: metronome casts, instant heals, one loop
+		ms = int64(i) * 1000
+		tr.Action(ms, KindSpell, false, cfg)
+		side := (i / 6) % 4
+		tr.Step(ms, uint16(100+[]int{i % 6, 6, 6 - i%6, 0}[side]), uint16(100+[]int{0, i % 6, 6, 6 - i%6}[side]), 7, uint8(side), cfg)
+		if i%10 == 0 {
+			tr.Hurt(ms)
+			tr.Heal(ms+100, cfg)
+		}
+	}
+	if s := tr.Signals(ms+500, 0, cfg); s[Regularity] != 1 || s[Reaction] < 0.99 || s[Route] != 1 {
+		t.Fatalf("during the hunt %v", s)
+	}
+	for k := 1; k <= 10; k++ { // then only a chat line every two minutes, for 20 min
+		tr.Action(ms+int64(k)*120_000, KindChat, false, cfg)
+	}
+	if s := tr.Signals(ms+10*120_000+1000, 0, cfg); s != (Signals{}) {
+		t.Fatalf("chatting after the hunt: %v", s)
+	}
+}
+
+// One quick first reaction does not dominate the reaction signal at min_samples.
+func TestReactionFirstSampleDoesNotDominate(t *testing.T) {
+	cfg := repoConfig(t)
+	var tr Tracker
+	reactions := []int64{260, 420, 300, 560, 410, 380, 520, 450, 330, 600, 470, 390, 510, 440, 360}
+	for i, r := range reactions {
+		at := int64(i+1) * 10_000
+		tr.Hurt(at)
+		tr.Heal(at+r, cfg)
+	}
+	end := int64(len(reactions)+1) * 10_000
+	tr.Action(end, KindOther, false, cfg) // playing (an idle character has no signals)
+	if s := tr.Signals(end, 0, cfg); s[Reaction] >= 0.2 {
+		t.Fatalf("reaction %.2f after a quick first heal", s[Reaction])
+	}
+}

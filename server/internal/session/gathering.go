@@ -121,6 +121,7 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 		return
 	}
 	if ctx.Tick < p.nextGather {
+		p.tooEarly(ctx.Tick, antibot.KindItem)
 		p.emit(systemMsg(msgGatherNotReady))
 		return
 	}

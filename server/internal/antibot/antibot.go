@@ -42,6 +42,8 @@ var Names = [NumSignals]string{"regularity", "reaction", "route", "session", "in
 type Signals [NumSignals]float64
 
 // ewma is an exponentially weighted mean and variance (West's update), constant cost.
+// For the first 1/alpha samples it is the plain running mean and variance (Welford), so
+// one odd first sample does not dominate a signal that starts at min_samples.
 type ewma struct {
 	n        int
 	mean, vr float64
@@ -49,13 +51,10 @@ type ewma struct {
 
 func (e *ewma) add(x, alpha float64) {
 	e.n++
-	if e.n == 1 {
-		e.mean, e.vr = x, 0
-		return
-	}
+	a := max(alpha, 1/float64(e.n))
 	d := x - e.mean
-	e.mean += alpha * d
-	e.vr = (1 - alpha) * (e.vr + alpha*d*d)
+	e.mean += a * d
+	e.vr = (1 - a) * (e.vr + a*d*d)
 }
 
 func (e *ewma) std() float64 { return math.Sqrt(max(e.vr, 0)) }
@@ -73,6 +72,8 @@ type Tracker struct {
 	interval   [NumKinds]ewma  // ms between actions of each kind (pauses excluded)
 
 	lastHurt int64 // ms of the last damage taken that no heal answered yet
+	lastHeal int64 // ms of the last heal sample (its evidence ages with it)
+	lastStep int64 // ms of the last route sample
 	reaction ewma  // ms from a hit to the heal that answered it
 	fast     ewma  // 1 if that reaction was faster than fast_ms, else 0
 
@@ -98,8 +99,12 @@ func (t *Tracker) Action(ms int64, kind int, paced bool, cfg *content.AntiBot) {
 	if kind < 0 || kind >= NumKinds {
 		kind = KindOther
 	}
-	if last := t.lastOf[kind]; last > 0 && !paced {
-		if gap := ms - last; gap > 0 && gap < int64(cfg.PauseMs) {
+	if last := t.lastOf[kind]; last > 0 {
+		gap := ms - last
+		switch {
+		case gap >= int64(cfg.PauseMs):
+			t.interval[kind] = ewma{} // old evidence: start over
+		case gap > 0 && !paced:
 			t.interval[kind].add(float64(gap), alpha)
 		}
 	}
@@ -137,6 +142,10 @@ func (t *Tracker) Heal(ms int64, cfg *content.AntiBot) {
 	if r < 0 || r > int64(c.WindowMs) {
 		return
 	}
+	if t.lastHeal > 0 && ms-t.lastHeal >= int64(cfg.PauseMs) {
+		t.reaction, t.fast = ewma{}, ewma{} // old evidence: start over
+	}
+	t.lastHeal = ms
 	t.reaction.add(float64(r), alpha)
 	f := 0.0
 	if r <= int64(c.FastMs) {
@@ -168,6 +177,10 @@ func (t *Tracker) Step(ms int64, x, y uint16, z uint8, dir uint8, cfg *content.A
 			break
 		}
 	}
+	if t.lastStep > 0 && ms-t.lastStep >= int64(cfg.PauseMs) {
+		t.segRep = ewma{} // old evidence: start over
+	}
+	t.lastStep = ms
 	t.segRep.add(rep, alpha)
 	t.segments[t.segHead] = h
 	t.segHead = (t.segHead + 1) % len(t.segments)
@@ -191,21 +204,25 @@ func ramp(v, lo, hi float64) float64 {
 // statistics must not keep adding points to someone who is away.
 func (t *Tracker) Signals(ms int64, incomeRatio float64, cfg *content.AntiBot) Signals {
 	var s Signals
-	if t.lastAction == 0 || ms-t.lastAction >= int64(cfg.PauseMs) {
+	// Each signal stands on its own evidence: once that is older than pause_ms (the
+	// character stopped doing that, or is idle) it is 0, so a past hunt does not keep
+	// scoring while the character only chats, nor after a relogin.
+	stale := func(last int64) bool { return last == 0 || ms-last >= int64(cfg.PauseMs) }
+	if stale(t.lastAction) {
 		return s
 	}
 	sc := cfg.Signals
 	r := sc.Regularity
-	for _, iv := range t.interval { // the most regular kind of action
-		if iv.n >= r.MinSamples && iv.mean > 0 {
+	for k, iv := range t.interval { // the most regular kind of action
+		if !stale(t.lastOf[k]) && iv.n >= r.MinSamples && iv.mean > 0 {
 			s[Regularity] = max(s[Regularity], ramp(iv.std()/iv.mean, r.CVHigh, r.CVLow)) // low variation → 1
 		}
 	}
-	if r := sc.Reaction; t.reaction.n >= r.MinSamples {
+	if r := sc.Reaction; !stale(t.lastHeal) && t.reaction.n >= r.MinSamples {
 		consistent := ramp(t.reaction.std(), float64(r.StdMs)*2, float64(r.StdMs))
 		s[Reaction] = t.fast.mean * consistent
 	}
-	if r := sc.Route; t.segRep.n >= r.MinSteps {
+	if r := sc.Route; !stale(t.lastStep) && t.segRep.n >= r.MinSteps {
 		s[Route] = ramp(t.segRep.mean, r.RepeatLow, r.RepeatHigh)
 	}
 	s[Session] = ramp(float64(ms-t.activeSince), float64(sc.Session.LowMs), float64(sc.Session.HighMs))

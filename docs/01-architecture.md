@@ -322,14 +322,17 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
 
 | Señal | Qué mide | 1 cuando… | Peso |
 |---|---|---|---|
-| `regularity` | Coeficiente de variación del tiempo entre acciones del **mismo tipo** (hechizo/runa, item, chat, otra). No cuentan los pasos ni las acciones que llegan justo al vencer su cooldown (≤ 100 ms): su ritmo lo pone el servidor, y una tecla mantenida es igual de pareja que un script. | CV ≤ `cv_low` (0,05); 0 desde `cv_high` (0,25), con ≥ 300 muestras | 3 |
-| `reaction` | Tiempo desde un golpe recibido hasta la cura (hechizo propio o consumible) que lo contesta, dentro de `window_ms`. | Las curas llegan en ≤ `fast_ms` (300 ms) y con desvío ≤ `std_ms` (60 ms), con ≥ 15 muestras | 3 |
+| `regularity` | Coeficiente de variación del tiempo entre acciones del **mismo tipo** (hechizo/runa, item, chat, otra). No cuentan los pasos ni las acciones cuyo ritmo puso el servidor: las que llegan justo al vencer su cooldown (≤ 100 ms) y las que siguen a un intento rechazado por cooldown (quien machaca un hotkey: el cliente manda una acción por pulsación, sin repetición automática, y el servidor acepta la primera después del cooldown). | CV ≤ `cv_low` (0,05); 0 desde `cv_high` (0,25), con ≥ 300 muestras | 3 |
+| `reaction` | Tiempo desde un golpe recibido hasta la cura (hechizo propio o consumible) que lo contesta, dentro de `window_ms`. | Las curas llegan en ≤ `fast_ms` (200 ms; una persona reacciona en unos 300 ms con la latencia) y con desvío ≤ `std_ms` (60 ms), con ≥ 15 muestras | 3 |
 | `route` | Parte de los segmentos de `segment` (12) pasos exactos (casilla y dirección) ya caminados. | ≥ `repeat_high` (90 %) repetidos; 0 bajo `repeat_low` (50 %), con ≥ 300 pasos | 2 |
 | `session` | Juego sin una pausa de `pause_ms` (3 min). | 16 h seguidas; 0 hasta 8 h | 1 |
-| `income` | Experiencia u oro por hora (la ventana de atípicos del log de economía) sobre la mediana de los conectados de su banda de 10 niveles (≥ 5 pares). | 8 veces la mediana; 0 hasta 4 veces | 2 |
+| `income` | Experiencia u oro por hora (la ventana de atípicos del log de economía) sobre la mediana de su banda de 10 niveles, cada serie por separado: cuentan solo los pares que juegan (activos) y ganaron algo en esa serie (≥ 5). La mediana nunca cuenta como menos que el ritmo normal del nivel del personaje: un nivel por hora de experiencia y un cuarto de `economy.outlier.gold_per_hour` de oro. | 8 veces la mediana; 0 hasta 4 veces | 2 |
 
-- Mientras el personaje está inactivo (sin acciones durante `pause_ms`) todas las señales
-  valen 0: las estadísticas congeladas no siguen sumando a alguien que no está.
+- **Cada señal envejece con su propia evidencia:** cuando la última muestra de una señal
+  (acciones de ese tipo, curas, pasos) tiene más de `pause_ms`, la señal vale 0, y la
+  próxima muestra empieza la estadística de cero. Así una caza terminada no sigue sumando
+  mientras el personaje solo chatea, ni al volver a entrar. Inactivo, todas valen 0. Las
+  primeras muestras usan la media simple (no un primer valor que domine la media móvil).
 - **Puntaje:** en cada evaluación, `puntaje × 0,5^(Δt / half_life_ms) + Σ peso × señal`.
   Con media vida de 1 h y una evaluación por minuto, una señal sostenida de peso `w` se
   estabiliza cerca de `w × 87`. Un minuto raro se desvanece; solo un patrón sostenido suma.
@@ -351,7 +354,9 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
   `delay_ms`. **Nunca en combate, sobre una casilla sin logout ni a alguien inactivo:** se
   espera a que se pueda. No bloquea el juego. Plazo generoso (`timeout_ms`, 10 min) que
   corre **solo mientras el personaje juega** (conectado y activo), así que estar ausente
-  nunca es un fallo. La respuesta, correcta o no, recibe siempre `presence.thanks`.
+  nunca es un fallo: al volver se manda otra vez con el tiempo que le queda, y el cliente lo
+  muestra hasta que se conteste. La respuesta, correcta o no, recibe siempre
+  `presence.thanks`.
 - **Qué prueba y qué no:** un chequeo prueba que algo contestó, no que no haya un bot: las
   preguntas y sus textos son públicos y un script las puede contestar. Por eso **acertar no
   baja el puntaje** (solo queda auditado) y la suspensión no depende de fallar: también llega
@@ -360,17 +365,29 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
   suspensión por sí solo** (queda justo debajo): solo suspende un puntaje que ya estaba ahí.
 - **No es un oráculo de sospecha:** con `random_per_hour` (2 % por hora de juego) cualquier
   jugador activo recibe a veces un chequeo al azar, idéntico, que no tiene efecto si se
-  falla (auditado como `random_*`). Un GM puede pedir uno con `/presence Nombre` (también
-  sin efecto en el puntaje; auditado).
+  falla (auditado como `random_*`). Un GM puede pedir uno con `/presence Nombre`: si ya había
+  uno de respuesta pendiente solo lo adelanta; si no, es como uno al azar. Si el puntaje
+  pasa `presence` mientras hay uno al azar abierto, al cerrarse viene el de respuesta.
+- **Fin de un episodio:** si el puntaje baja de la mitad de `presence`, un chequeo de
+  respuesta todavía pendiente pasa a ser uno al azar (se pregunta igual, así que salir del
+  juego no lo esquiva, pero ya no tiene efecto).
 - **Esquivarlo no sirve:** si un chequeo debido no se puede hacer durante `defer_alert_ms`
-  (30 min) porque el personaje vive en combate o en una casilla sin logout, se avisa a los
-  GM y se audita (`deferred`): lo decide una persona.
+  (30 min) **de juego** porque el personaje vive en combate o en una casilla sin logout, se
+  avisa a los GM y se audita (`deferred`): lo decide una persona. El tiempo inactivo o
+  desconectado no cuenta, y al volver a entrar el puntaje se evalúa (con su decaimiento)
+  antes de cualquier chequeo.
 - **Staff:** los personajes de GM y admin no se evalúan ni cuentan para las medianas.
-- **Prueba:** `TestAntiBotFlagsMechanicalNotHuman` (`internal/session/antibot_sim_test.go`)
-  juega horas de juego en simulación determinista, con la configuración de
-  `data/balance.yaml`, los perfiles `bot.Human()` y `bot.Mechanical()` de `server/pkg/bot`
-  (los mismos de `tools/bots -profile`). El mecánico pasa por log, aviso, chequeo, fallo y
-  suspensión (en ~1 h 45 de juego); el humano no recibe ninguna marca. Tarda ~0,1 s.
-  `TestAntiBotHeldKeyAndClickWalkNotPresence`: 8 h sin pausas con el hotkey de cura
-  mantenido y click a la misma casilla de ida y vuelta (la misma ruta A*) no llega al
-  chequeo (queda en `log`, por la ruta).
+- **Pruebas** (`internal/session/antibot_sim_test.go`, simulación determinista con
+  `data/balance.yaml`; ~3 s en total):
+  - `TestAntiBotFlagsMechanicalNotHuman`: `bot.Mechanical()` de `server/pkg/bot` (el mismo
+    de `tools/bots -profile`) pasa por log, aviso, chequeo, fallo y suspensión en ~1 h 40
+    de juego. `bot.Human()` no recibe ninguna marca, pero es solo un control de cordura: por
+    construcción no dispara ninguna señal.
+  - **La evidencia contra falsos positivos** es `TestAntiBotHumanHabitsNeverNotify`:
+    hábitos que un jugador real tiene con el cliente (click de ida y vuelta entre dos
+    casillas, que da la misma ruta A*; machacar un hotkey con cooldown cada 150–300 ms;
+    curarse a velocidad humana, N(250, 50) ms más 50 ms de latencia), solos y de a pares,
+    con pausas y sin ellas, 6 h cada caso. Ninguno llega a `notify`, a un chequeo ni a una
+    suspensión: el peor queda en `log` (la ruta repetida, ~170 puntos).
+  - `TestAntiBotPastHuntStopsScoring`: 30 min de caza mecánica y después 5 h solo
+    chateando y acertando los chequeos terminan en el nivel 0, sin suspensión.

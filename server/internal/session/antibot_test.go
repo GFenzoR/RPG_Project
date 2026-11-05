@@ -277,3 +277,160 @@ func TestAntiBotSkipsStaff(t *testing.T) {
 		t.Fatalf("GM on a GM: %v", k)
 	}
 }
+
+// Income compares with peers who play and earn, floored at the level's normal pace: in a
+// band whose median is a low-level character, a level 9 hunter levelling at the target
+// pace (a level an hour) is not an outlier; one earning ten times its level's pace is.
+func TestIncomeAgainstPlayingPeers(t *testing.T) {
+	a := antibotHarness(t)
+	e := testBalance().Experience
+	perHour := func(level int) int64 { return e.TotalFor(level+1) - e.TotalFor(level) }
+	var cls []*fakeClient
+	var ps []*session.Player
+	for i, lv := range []int{2, 3, 3, 4, 9, 5} {
+		cl, p := a.joinAs([]string{"Ana", "Bea", "Cid", "Dan", "Eve", "Idle"}[i], session.RolePlayer, pos(2+i*2, 5))
+		a.sim.Command(gameFunc(func() { a.w.SetLevelForTest(p, lv) }))
+		cls, ps = append(cls, cl), append(ps, p)
+	}
+	a.sim.Step()
+	for range 10 { // 20 min of play: a third of a level each (the idle one only chats)
+		for i, p := range ps[:5] {
+			lv := []int{2, 3, 3, 4, 9}[i]
+			a.sim.Command(gameFunc(func() { a.w.GainExperienceForTest(p, perHour(lv)/30) }))
+		}
+		for _, cl := range cls {
+			a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hm"))
+		}
+		a.sim.RunFor(2 * time.Minute)
+	}
+	if r := a.w.IncomeRatioForTest(ps[4]); r <= 0 || r >= 2 {
+		t.Fatalf("a hunter at the normal pace: ratio %.1f", r)
+	}
+	// Ten times that: Bea (level 3) earns 30 of its levels' worth and ends near level 9,
+	// still in the band, far above the floor of its new level.
+	a.sim.Command(gameFunc(func() { a.w.GainExperienceForTest(ps[1], perHour(3)*30) }))
+	a.sim.Step()
+	if r := a.w.IncomeRatioForTest(ps[1]); r < 8 {
+		t.Fatalf("ten times the pace: ratio %.1f", r)
+	}
+}
+
+// The clock of a check stops while the player is away; on the way back the check is sent
+// again with the time left, and it does not fail before that time is played (T4.1).
+func TestPresenceResentAfterIdle(t *testing.T) {
+	a := antibotHarness(t)
+	cl, p := a.joinAs("Afk", session.RolePlayer, pos(5, 5))
+	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+	a.setScore(p, 450)
+	c := a.presence(cl)
+	a.takeJobs()
+	a.sim.RunFor(12 * time.Minute) // away: about pause_ms of it counts, then the clock stops
+	cl.take()
+	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "back"))
+	a.sim.RunFor(2 * time.Second)
+	var again *pb.PresenceCheck
+	for _, e := range cl.take() {
+		if c2 := e.GetPresenceCheck(); c2 != nil {
+			again = c2
+		}
+	}
+	if again == nil || again.GetCheckId() != c.GetCheckId() || again.GetTimeoutMs() < 380000 || again.GetTimeoutMs() > 460000 {
+		t.Fatalf("sent again %v", again)
+	}
+	a.playFor(cl, 6*time.Minute)
+	if got := a.antibotActions(); slices.Contains(got, "presence_check:failed_timeout") {
+		t.Fatalf("failed before its time was played: %v", got)
+	}
+}
+
+// Idle time is not dodging: a due check waiting for a player who is away does not alert
+// the GMs, however long it waits (nor does offline time: the relogin evaluates first).
+func TestPresenceDeferralNotCountedAway(t *testing.T) {
+	a := antibotHarness(t)
+	gm, _ := a.joinAs("Warden", session.RoleGM, pos(30, 5))
+	cl, p := a.joinAs("Sleeper", session.RolePlayer, pos(5, 5))
+	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+	a.sim.RunFor(4 * time.Minute) // away from here
+	a.setScore(p, 450)
+	a.sim.RunFor(40 * time.Minute) // the due check waits
+	if k := sysKeys(gm.take()); slices.Contains(k, "gm.presence_deferred") {
+		t.Fatalf("GM heard %v", k)
+	}
+	if got := a.antibotActions(); slices.Contains(got, "presence_check:deferred") {
+		t.Fatalf("audited %v", got)
+	}
+	for _, e := range cl.take() {
+		if e.GetPresenceCheck() != nil {
+			t.Fatal("asked while away")
+		}
+	}
+}
+
+// A response check left over from an episode that ended (the score decayed while
+// offline) still comes, but as a random one: ignoring it has no effect.
+func TestPresenceLeftoverCheckIsRandom(t *testing.T) {
+	a := antibotHarness(t)
+	gm, _ := a.joinAs("Warden", session.RoleGM, pos(30, 5))
+	cl, p := a.joinAs("Leaver", session.RolePlayer, pos(5, 5))
+	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+	a.setScore(p, 450) // a check is scheduled
+	a.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
+	a.sim.RunFor(8 * time.Hour)
+	c2 := &fakeClient{}
+	a.sim.Command(a.w.Join(session.Character{ID: p.CharacterID(), AccountID: p.CharacterID(), Name: "Leaver",
+		Vocation: "guardian", Level: 1, Health: 145, Mana: 20, HasPos: true, Pos: pos(5, 5)}, c2))
+	a.sim.Step()
+	a.takeJobs()
+	gm.take()
+	if a.presence(c2) == nil {
+		t.Fatal("the leftover check was dropped")
+	}
+	a.playFor(c2, 12*time.Minute) // ignored
+	got := a.antibotActions()
+	if !slices.Equal(got, []string{"presence_check:random_sent", "presence_check:random_failed_timeout"}) {
+		t.Fatalf("leftover check: %v", got)
+	}
+	if k := sysKeys(gm.take()); slices.Contains(k, "gm.presence_failed") {
+		t.Fatalf("GM heard %v", k)
+	}
+	if sc, _, _ := a.w.SuspicionForTest(a.w.PlayerByCharacter(p.CharacterID())); sc >= 100 {
+		t.Fatalf("score %.0f", sc)
+	}
+}
+
+// A GM's /presence moves a pending response check forward without making it random,
+// and a random check that was open when the score crossed presence is followed by the
+// response check.
+func TestPresenceGMAndRandomKeepTheResponse(t *testing.T) {
+	a := antibotHarness(t)
+	gm, _ := a.joinAs("Warden", session.RoleGM, pos(30, 5))
+	cl, p := a.joinAs("Bot", session.RolePlayer, pos(5, 5))
+	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+	a.setScore(p, 450)
+	a.cmd(gm, "/presence Bot")
+	c := a.presence(cl)
+	a.takeJobs()
+	a.input(cl, answer(c, false))
+	a.sim.Step()
+	if got := a.antibotActions(); !slices.Equal(got, []string{"presence_check:failed_wrong"}) {
+		t.Fatalf("after the GM moved the response check forward: %v", got)
+	}
+	if k := sysKeys(gm.take()); !slices.Contains(k, "gm.presence_failed") {
+		t.Fatalf("GM heard %v", k)
+	}
+
+	cl2, q := a.joinAs("Other", session.RolePlayer, pos(8, 5))
+	a.input(cl2, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+	a.cmd(gm, "/presence Other") // a random one, open...
+	r := a.presence(cl2)
+	a.setScore(q, 450) // ...when the score crosses presence
+	a.takeJobs()
+	a.input(cl2, answer(r, true))
+	a.sim.Step()
+	if a.presence(cl2) == nil {
+		t.Fatal("no response check after the random one")
+	}
+	if got := a.antibotActions(); !slices.Equal(got, []string{"presence_check:random_passed", "presence_check:sent"}) {
+		t.Fatalf("after the random check: %v", got)
+	}
+}

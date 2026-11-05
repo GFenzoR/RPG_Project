@@ -33,6 +33,8 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 - Detección de bots (T4.1): cada acción, paso, golpe o cura actualiza medias móviles y
   anillos fijos del personaje (costo constante, sin asignar). La evaluación es una por
   personaje por minuto, escalonada, y las medianas de ingreso se calculan una vez por ronda.
+  No está medida con `make bench-tick` (sus benchmarks la tienen apagada); los tests de
+  simulación juegan entre 6 y 8 h de juego de un personaje en menos de un segundo cada uno.
 
 ## Cliente
 | Métrica | Presupuesto |

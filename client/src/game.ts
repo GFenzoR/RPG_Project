@@ -509,7 +509,9 @@ export class Game {
       dialog: w.dialog,
       shop: w.shop,
       station: w.station,
-      presence: w.presence && w.presence.until > performance.now() ? w.presence : undefined,
+      // Shown until answered or replaced: the server's clock stops while the player is
+      // idle and sends it again (with the time left) when the player is back.
+      presence: w.presence,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       selfId: w.selfId,

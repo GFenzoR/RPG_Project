@@ -179,7 +179,9 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   decide siempre un GM.
 - Los umbrales son conservadores a propósito: un jugador que juega mucho, rápido o con
   macros de teclado legítimas no llega solo con una señal. Hace falta un patrón sostenido de
-  varias (en la prueba, un script tarda ~1 h 45 en llegar a la suspensión, y 8 h con una tecla mantenida y el mismo recorrido por click no llegan al chequeo).
+  varias. En la prueba, un script tarda ~1 h 40 en llegar a la suspensión; hábitos de un
+  jugador real (ir y venir por click entre dos puntos, machacar un hotkey, curarse rápido),
+  solos o de a dos, durante 6 h no pasan de quedar registrados.
 
 ## Combate
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está
@@ -589,9 +591,11 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 - **Auditoría:** todo comando de staff que se ejecuta, también los que fallan por
   argumentos, queda en el log de auditoría con quién, qué, a quién, cuándo, argumentos y
   resultado. Los cambios de rol también.
-- La detección de bots (T4.1, "Anti-bot y anti-AFK") solo suspende por 24 h y después de un
-  chequeo de presencia fallado; cualquier sanción mayor la aplica siempre un GM con estos
-  comandos.
+- La detección de bots (T4.1, "Anti-bot y anti-AFK") solo suspende por 24 h, y solo si el
+  puntaje sigue alto después de un chequeo de presencia fallado o una hora después de uno,
+  aunque se haya acertado; cualquier sanción mayor la aplica siempre un GM con estos
+  comandos. La entrada de auditoría del ban dice cuál fue (`check`: `failed` o
+  `passed_confirm_ms`).
 
 ### Reportes de jugadores (T4.1)
 - Cualquier jugador reporta a otro con **`/report Nombre motivo`** (cualquier jugador en

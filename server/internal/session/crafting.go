@@ -173,6 +173,7 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 		return
 	}
 	if ctx.Tick < p.nextGather {
+		p.tooEarly(ctx.Tick, antibot.KindItem)
 		p.emit(systemMsg(msgCraftNotReady))
 		return
 	}

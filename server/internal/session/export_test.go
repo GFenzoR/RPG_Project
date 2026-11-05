@@ -187,3 +187,12 @@ func (w *World) SetSuspicionForTest(p *Player, score float64) {
 
 // EvaluateNowForTest makes p's next bot detection evaluation due on the next tick.
 func (w *World) EvaluateNowForTest(p *Player) { p.abNext = 0 }
+
+// IncomeRatioForTest recomputes the band medians and returns p's income ratio now.
+func (w *World) IncomeRatioForTest(p *Player) float64 {
+	w.incomeMedians(w.nowTick())
+	return w.incomeRatio(w.nowTick(), p)
+}
+
+// GainExperienceForTest gives p experience as a kill would.
+func (w *World) GainExperienceForTest(p *Player, xp int64) { w.gainExperience(p, xp) }

@@ -3,6 +3,7 @@ package session
 import (
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -38,15 +39,26 @@ func (p *Player) active(tick game.Tick, kind int) { p.activePaced(tick, kind, 0)
 // pacedSlack is how soon after its cooldown an action counts as paced by the server.
 const pacedSlack = game.Tick(2) // 100 ms
 
-// activePaced is active for an action with a cooldown that ended at readyAt: one that came
-// right when it allowed (a held hotkey) is not a timing sample for the bot detection.
+// activePaced is active for an action with a cooldown that ended at readyAt. The server
+// set its pace, so it is no timing sample for the bot detection, when it came right as
+// the cooldown allowed, or when an earlier try of the same kind was refused for the
+// cooldown since the last one (a player mashing the hotkey: the client sends one action
+// per key press, never an auto-repeat).
 func (p *Player) activePaced(tick game.Tick, kind int, readyAt game.Tick) {
 	p.lastAction, p.idleWarned = tick, false
+	if kind < 0 || kind >= antibot.NumKinds {
+		kind = antibot.KindOther
+	}
+	paced := readyAt > 0 && tick <= readyAt+pacedSlack ||
+		p.earlyTry[kind] != 0 && p.earlyTry[kind] >= p.kindLast[kind]
+	p.earlyTry[kind], p.kindLast[kind] = 0, tick
 	if p.sus != nil { // bot detection: the time between real actions, steps aside (T4.1)
-		paced := readyAt > 0 && tick <= readyAt+pacedSlack
 		p.sus.tracker.Action(tickMs(tick), kind, paced, p.sus.cfg)
 	}
 }
+
+// tooEarly records a try refused because its cooldown had not ended.
+func (p *Player) tooEarly(tick game.Tick, kind int) { p.earlyTry[kind] = tick }
 
 // checkIdle warns and disconnects idle players, once a second.
 func (w *World) checkIdle(ctx *game.TickContext) {

@@ -437,8 +437,10 @@ Diseño en `01-architecture.md` ("Detección de bots").
   `DialogOption.text` son claves i18n (`presence.question.<color>`,
   `presence.option.<color>`). Los ids de las opciones van del 1 al 9 en orden al azar.
   `timeout_ms` es lo que queda: el plazo corre solo mientras el personaje está en línea y
-  activo. Al volver a entrar con un chequeo pendiente se manda otra vez con el mismo
-  `check_id`. Los chequeos al azar y los de GM son idénticos a los de la detección.
+  activo. Con un chequeo pendiente se manda otra vez, con el mismo `check_id` y el tiempo
+  que queda, al volver a entrar y al volver a jugar después de estar inactivo. El cliente
+  lo muestra hasta que se conteste o lo reemplace otro. Los chequeos al azar y los de GM
+  son idénticos a los de la detección.
 - **`PresenceAnswer{check_id, option_id}`**: con un `check_id` que no está pendiente no
   pasa nada. Con el pendiente, correcto o no, la respuesta es siempre el `Message` de
   sistema `presence.thanks`.

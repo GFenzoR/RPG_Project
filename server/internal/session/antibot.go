@@ -20,7 +20,8 @@ import (
 //	log       → structured log and audit_log
 //	notify    → a message to every online GM, audited
 //	presence  → an in-game presence check (never in combat or on a no-logout tile)
-//	suspend   → a temporary suspension, only after a failed presence check
+//	suspend   → a temporary suspension, only after a failed presence check or one asked
+//	            presence.confirm_ms ago with the score still high
 //
 // A failed check only adds points; the suspension still needs the score. A ban is always
 // a GM's decision. Staff characters are not evaluated. The state lives in the World by
@@ -59,10 +60,11 @@ type suspect struct {
 	askAt     game.Tick
 	askRandom bool
 	check     *presenceCheck
-	// deferredSince: since when a due check could not be asked (combat, no-logout tile,
-	// idle); deferWarned: the GMs were told it is being dodged.
-	deferredSince game.Tick
-	deferWarned   bool
+	// deferredFor: how long a due check could not be asked while the character played
+	// (in combat or on a no-logout tile; idle and offline time do not count);
+	// deferWarned: the GMs were told it is being dodged.
+	deferredFor game.Tick
+	deferWarned bool
 }
 
 type presenceCheck struct {
@@ -74,6 +76,9 @@ type presenceCheck struct {
 	// online and active, so being away is never a failure by itself.
 	left   game.Tick
 	random bool
+	// paused: the clock stopped while the player was idle; it is sent again when the
+	// player is back (the client may have closed it).
+	paused bool
 }
 
 func (w *World) initAntiBot() {
@@ -98,6 +103,9 @@ func (w *World) antibotJoin(tick game.Tick, p *Player) {
 	}
 	p.sus = s
 	p.abNext = tick + 1 + game.Tick(p.id)%w.abEvalFor
+	if s.lastEval != tick {
+		p.abNext = tick // a returning character: the offline decay first, before any check
+	}
 	if c := s.check; c != nil {
 		w.sendPresence(p, c)
 	}
@@ -178,7 +186,15 @@ func (w *World) respond(ctx *game.TickContext, p *Player) {
 	for s.level > 0 && s.score < antibot.Threshold(s.level, a)/2 {
 		s.level--
 		if s.level < antibot.LevelPresence {
-			s.failed, s.askedAt, s.deferredSince, s.deferWarned = false, 0, 0, false
+			s.failed, s.askedAt, s.deferredFor, s.deferWarned = false, 0, 0, false
+			// The episode is over: a response check still pending from it has no effect
+			// now (it is still asked, so logging out does not dodge it).
+			if s.askAt != 0 {
+				s.askRandom = true
+			}
+			if s.check != nil {
+				s.check.random = true
+			}
 		}
 	}
 	target := antibot.Level(s.score, a)
@@ -234,29 +250,33 @@ func (w *World) presenceDue(ctx *game.TickContext, p *Player, s *suspect) {
 	tick := ctx.Tick
 	active := s.tracker.Active(tickMs(tick), w.abCfg)
 	if c := s.check; c != nil {
-		if active {
-			c.left -= min(c.left, idleCheckEvery)
+		if !active {
+			c.paused = true // the clock stops while the player is away
+			return
 		}
+		if c.paused { // back: show it again (with the time it has left)
+			c.paused = false
+			w.sendPresence(p, c)
+		}
+		c.left -= min(c.left, idleCheckEvery)
 		if c.left == 0 {
 			s.check = nil
 			w.presenceFailed(ctx, p, c.random, "timeout")
 		}
 		return
 	}
-	if s.askAt == 0 || tick < s.askAt {
+	// Only to someone who is playing (it would be answered by nobody): idle, it waits.
+	if s.askAt == 0 || tick < s.askAt || !active {
 		return
 	}
-	// Never in combat or on a no-logout tile (a question must not get anyone killed), and
-	// only to someone who is playing (it would be answered by nobody).
-	if w.inCombat(tick, p) || w.m.Flags(p.pos)&world.FlagNoLogout != 0 || !active {
+	// Never in combat or on a no-logout tile (a question must not get anyone killed).
+	if w.inCombat(tick, p) || w.m.Flags(p.pos)&world.FlagNoLogout != 0 {
 		if s.askRandom {
 			return
 		}
-		if s.deferredSince == 0 {
-			s.deferredSince = tick
-		}
+		s.deferredFor += idleCheckEvery
 		// Dodged for long (always fighting, or living on a no-logout tile): a GM decides.
-		if !s.deferWarned && tick-s.deferredSince >= game.TicksFor(time.Duration(w.abCfg.Presence.DeferAlertMs)*time.Millisecond) {
+		if !s.deferWarned && s.deferredFor >= game.TicksFor(time.Duration(w.abCfg.Presence.DeferAlertMs)*time.Millisecond) {
 			s.deferWarned = true
 			w.notifyGMs(p, systemMsg(msgGMPresenceDefer, textParam("name", p.name)))
 			w.antibotAudit(ctx, p, "presence_check", "deferred", s)
@@ -268,7 +288,7 @@ func (w *World) presenceDue(ctx *game.TickContext, p *Player, s *suspect) {
 	c := &presenceCheck{id: w.nextCheck, random: s.askRandom,
 		left: game.TicksFor(time.Duration(w.abCfg.Presence.TimeoutMs) * time.Millisecond)}
 	if !c.random {
-		s.askedAt, s.deferredSince = tick, 0
+		s.askedAt, s.deferredFor, s.deferWarned = tick, 0, false
 	}
 	want := presenceColors[ctx.Rand.IntN(len(presenceColors))]
 	c.question = "presence.question." + want
@@ -319,6 +339,17 @@ func (w *World) presenceAnswer(ctx *game.TickContext, p *Player, id, option uint
 	// Passed: it is recorded, and nothing else changes. A script can answer a question
 	// too (the texts are public), so a right answer never clears the suspicion.
 	w.antibotAudit(ctx, p, "presence_check", checkResult(c.random, "passed"), s)
+	if c.random {
+		w.afterRandomCheck(ctx, s)
+	}
+}
+
+// afterRandomCheck asks the response check that a random one (or a GM's) stood in for:
+// the score may have reached it while the random check was open.
+func (w *World) afterRandomCheck(ctx *game.TickContext, s *suspect) {
+	if s.level >= antibot.LevelPresence && s.askedAt == 0 && !s.failed {
+		w.schedulePresence(ctx, s, false)
+	}
 }
 
 // presenceFailed records a failure. A random check's failure has no effect. A response
@@ -328,6 +359,7 @@ func (w *World) presenceFailed(ctx *game.TickContext, p *Player, random bool, wh
 	s := p.sus
 	if random {
 		w.antibotAudit(ctx, p, "presence_check", checkResult(true, "failed_"+why), s)
+		w.afterRandomCheck(ctx, s)
 		return
 	}
 	s.failed = true
@@ -353,10 +385,19 @@ func (w *World) suspend(ctx *game.TickContext, p *Player) {
 		Until: ctx.Now.Add(dur)}
 	job.Audit = AuditEntry{At: ctx.Now, ActorName: antibotActor, Action: "ban",
 		Args: map[string]string{"duration": dur.String(), "reason": reason, "score": strconv.Itoa(int(p.sus.score)),
-			"signals": signalArgs(p.sus.signals)}}
+			"signals": signalArgs(p.sus.signals), "check": suspendCause(p.sus)}}
 	w.jobs[job.ID] = pendingJob{kind: AdminBan, until: job.Until, system: true}
 	w.queueAdmin(job)
 	w.log.Warn("antibot: suspended", "character", p.charID, "name", p.name, "score", int(p.sus.score))
+}
+
+// suspendCause is why a suspension was allowed: a failed check, or a check asked
+// presence.confirm_ms ago (answered or not) with the score still past the threshold.
+func suspendCause(s *suspect) string {
+	if s.failed {
+		return "failed"
+	}
+	return "passed_confirm_ms"
 }
 
 // cmdPresence: "/presence Name" asks an online player a presence check now (GM).
@@ -377,8 +418,13 @@ func (w *World) cmdPresence(ctx *game.TickContext, p *Player, args []string) boo
 		p.emit(systemMsg(msgGMProtected, textParam("name", t.name)))
 		w.audit(ctx, p, "presence_request", t, nil, AdminProtected)
 	default:
-		if t.sus.check == nil {
-			t.sus.askAt, t.sus.askRandom = ctx.Tick, true // as soon as it is safe; no effect on the score
+		// As soon as it is safe. Only moved forward: a pending response check stays one
+		// (a GM's own check has no effect on the score).
+		if s := t.sus; s.check == nil {
+			if s.askAt == 0 {
+				s.askRandom = true
+			}
+			s.askAt = ctx.Tick
 		}
 		p.emit(systemMsg(msgGMPresenceSent, textParam("name", t.name)))
 		w.audit(ctx, p, "presence_request", t, nil, auditOK)
@@ -415,17 +461,19 @@ func signalArgs(s antibot.Signals) string {
 	return out
 }
 
-// incomeMedians computes, once per evaluation round, the median income per hour
-// (experience and gold) of the online players of each level band.
+// incomeMedians computes, once per evaluation round, the median experience and gold per
+// hour of each level band. A peer counts in a series only if it is playing (active) and
+// earned something in it, and a series needs antibot.income.min_peers peers: characters
+// idling in town or crafting do not drag the median down (0 = no median).
 func (w *World) incomeMedians(tick game.Tick) {
-	clear(w.abMedians)
 	if w.abMedians == nil {
 		w.abMedians = map[int][2]float64{}
 	}
+	clear(w.abMedians)
 	band := max(w.abCfg.Signals.Income.BandLevels, 1)
 	byBand := map[int][2][]float64{}
 	for _, p := range w.players {
-		if p.sus == nil { // staff is not a peer
+		if p.sus == nil || !p.sus.tracker.Active(tickMs(tick), w.abCfg) { // staff, or not playing
 			continue
 		}
 		xp, gold, ok := w.incomeRates(tick, p)
@@ -433,13 +481,22 @@ func (w *World) incomeMedians(tick game.Tick) {
 			continue
 		}
 		b := byBand[p.level/band]
-		b[0], b[1] = append(b[0], xp), append(b[1], gold)
+		if xp > 0 {
+			b[0] = append(b[0], xp)
+		}
+		if gold > 0 {
+			b[1] = append(b[1], gold)
+		}
 		byBand[p.level/band] = b
 	}
 	for k, b := range byBand {
-		if len(b[0]) >= w.abCfg.Signals.Income.MinPeers {
-			w.abMedians[k] = [2]float64{antibot.Median(b[0]), antibot.Median(b[1])}
+		var m [2]float64
+		for i := range b {
+			if len(b[i]) >= w.abCfg.Signals.Income.MinPeers {
+				m[i] = antibot.Median(b[i])
+			}
 		}
+		w.abMedians[k] = m
 	}
 }
 
@@ -454,20 +511,29 @@ func (w *World) incomeRates(tick game.Tick, p *Player) (xp, gold float64, ok boo
 	return float64(e.xp) / h, float64(max(e.gold, 0)) / h, true
 }
 
-// incomeRatio is p's income over the median of its band (the larger of experience and
-// gold), or 0 when there are too few peers.
+// incomeFloors are the least a band median counts as at level: a level per hour of
+// experience (the curve's pace) and a quarter of economy.outlier.gold_per_hour. A band
+// whose peers earn little does not make an ordinary hunter look like an outlier.
+func (w *World) incomeFloors(level int) (xp, gold float64) {
+	e := w.cfg.Balance.Experience
+	return float64(e.TotalFor(level+1) - e.TotalFor(level)), float64(w.cfg.Balance.Economy.Outlier.GoldPerHour.At(level)) / 4
+}
+
+// incomeRatio is p's income over its band's median (floored), the larger of experience
+// and gold, or 0 when no series of its band has enough peers.
 func (w *World) incomeRatio(tick game.Tick, p *Player) float64 {
 	m, ok := w.abMedians[p.level/max(w.abCfg.Signals.Income.BandLevels, 1)]
 	xp, gold, ok2 := w.incomeRates(tick, p)
 	if !ok || !ok2 {
 		return 0
 	}
+	fx, fg := w.incomeFloors(p.level)
 	r := 0.0
 	if m[0] > 0 {
-		r = xp / m[0]
+		r = xp / max(m[0], fx)
 	}
 	if m[1] > 0 {
-		r = max(r, gold/m[1])
+		r = max(r, gold/max(m[1], fg))
 	}
 	return r
 }
