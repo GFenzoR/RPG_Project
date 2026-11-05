@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/pkg/bot"
@@ -157,7 +158,7 @@ func (p *player) loop(ctx context.Context) error {
 		}
 		if pr := p.b.TakePresence(); pr != nil && p.prof.Wander {
 			if err := p.send(ctx, func(ctx context.Context) error {
-				return p.b.AnswerPresence(ctx, pr.ID, bot.AnswerFor(pr))
+				return p.b.AnswerPresence(ctx, pr.ID, answerFor(pr))
 			}); err != nil {
 				return err
 			}
@@ -358,4 +359,17 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+// answerFor is the option a person picks for a presence check: the one its question asks
+// for (presence.question.<x> asks for presence.option.<x>). A script can do the same: the
+// server never treats a right answer as proof that nobody is botting (docs/01).
+func answerFor(pr *bot.Presence) uint32 {
+	want := "presence.option." + strings.TrimPrefix(pr.Question, "presence.question.")
+	for id, key := range pr.Options {
+		if key == want {
+			return id
+		}
+	}
+	return 0
 }

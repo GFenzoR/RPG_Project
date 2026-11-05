@@ -169,14 +169,17 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   encima de los jugadores de su nivel conectados. Cada señal suma puntos a un puntaje de
   sospecha que baja solo con el tiempo (media vida de 1 h).
 - Las respuestas son graduales: queda registrado, se avisa a los GM, el juego pide un
-  **chequeo de presencia** (una pregunta simple, como "elige el color rojo", con 10 min para
-  contestar y sin interrumpir el juego) y, solo si se falla un chequeo y el puntaje sigue
-  alto, una suspensión de 24 h. Nunca se pregunta en combate ni en una zona sin logout. Un
-  chequeo fallado suma puntos, pero no suspende por sí solo; acertar baja el puntaje a la
-  mitad. El ban lo decide siempre un GM.
+  **chequeo de presencia** (una pregunta simple, como "elige el color rojo", con 10 min de
+  juego para contestar y sin interrumpir nada) y, si el puntaje sigue alto después de un
+  chequeo fallado o una hora después de uno, una suspensión de 24 h. Nunca se pregunta en
+  combate, en una zona sin logout ni a quien está ausente, y el plazo no corre mientras uno
+  no juega. Un chequeo fallado suma puntos, pero no suspende por sí solo. Acertar no borra
+  la sospecha (un programa también puede contestar): el chequeo sirve para avisar. A
+  cualquiera le puede tocar un chequeo al azar de vez en cuando, sin consecuencias. El ban lo
+  decide siempre un GM.
 - Los umbrales son conservadores a propósito: un jugador que juega mucho, rápido o con
   macros de teclado legítimas no llega solo con una señal. Hace falta un patrón sostenido de
-  varias (en la prueba, un script tarda ~1 h 40 en llegar a la suspensión).
+  varias (en la prueba, un script tarda ~1 h 45 en llegar a la suspensión, y 8 h con una tecla mantenida y el mismo recorrido por click no llegan al chequeo).
 
 ## Combate
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está
@@ -568,7 +571,7 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 | `/announce texto` | GM | Anuncio a todos los conectados (`[Anuncio] Nombre: texto`) |
 | `/reports` | GM | Lista los 10 reportes abiertos más antiguos (T4.1) |
 | `/closereport id resolución` | GM | Cierra un reporte abierto con la resolución (T4.1) |
-| `/presence Nombre` | GM | Le pide un chequeo de presencia a ese jugador en cuanto no esté en combate (T4.1) |
+| `/presence Nombre` | GM | Le pide un chequeo de presencia a ese jugador en cuanto se pueda (fuera de combate y activo); no cambia su puntaje (T4.1) |
 
 - **Destino del teleport:** una casilla caminable de una isla, en un piso que existe. Si
   está ocupada, la libre más cercana (hasta 2 de distancia). Si no, `gm.bad_position`.

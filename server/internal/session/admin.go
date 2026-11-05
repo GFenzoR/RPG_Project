@@ -484,6 +484,7 @@ type pendingJob struct {
 	kind   AdminJobKind
 	charID int64 // the staff character to answer
 	until  time.Time
+	system bool // an automatic suspension (bot detection, T4.1): nobody to answer
 }
 
 // AdminDone returns the command the admin goroutine enqueues after a ban or unban job.
@@ -497,6 +498,9 @@ func (w *World) AdminDone(r AdminResult) game.Command {
 			return
 		}
 		delete(w.jobs, r.ID)
+		if job.system && r.Result != AdminOK {
+			w.log.Warn("antibot: automatic suspension not applied", "name", r.Name, "result", r.Result)
+		}
 		if job.kind == AdminListReports || job.kind == AdminCloseReport {
 			if gm := w.byChar[job.charID]; gm != nil {
 				w.reportsDone(ctx, gm, job.kind, r)

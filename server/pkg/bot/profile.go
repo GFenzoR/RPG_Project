@@ -3,7 +3,6 @@ package bot
 import (
 	"math"
 	"math/rand/v2"
-	"strings"
 	"time"
 )
 
@@ -86,19 +85,6 @@ func (p Profile) HealDelay(r *rand.Rand) time.Duration {
 		return p.Heal
 	}
 	return p.Heal - p.HealJitter + time.Duration(r.Int64N(int64(2*p.HealJitter)+1))
-}
-
-// AnswerFor returns the option a person picks for a presence check (the one its
-// question asks for), or 0 if none matches. Keys: presence.question.<x> asks for
-// presence.option.<x>.
-func AnswerFor(pr *Presence) uint32 {
-	want := "presence.option." + strings.TrimPrefix(pr.Question, "presence.question.")
-	for id, key := range pr.Options {
-		if key == want {
-			return id
-		}
-	}
-	return 0
 }
 
 // loop is the fixed square a Mechanical profile walks.

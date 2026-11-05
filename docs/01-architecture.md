@@ -322,12 +322,14 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
 
 | Señal | Qué mide | 1 cuando… | Peso |
 |---|---|---|---|
-| `regularity` | Coeficiente de variación del tiempo entre acciones del **mismo tipo** (hechizo/runa, item, chat, otra). Los pasos no cuentan: su ritmo lo pone el servidor. | CV ≤ `cv_low` (0,05); 0 desde `cv_high` (0,25), con ≥ 300 muestras | 3 |
+| `regularity` | Coeficiente de variación del tiempo entre acciones del **mismo tipo** (hechizo/runa, item, chat, otra). No cuentan los pasos ni las acciones que llegan justo al vencer su cooldown (≤ 100 ms): su ritmo lo pone el servidor, y una tecla mantenida es igual de pareja que un script. | CV ≤ `cv_low` (0,05); 0 desde `cv_high` (0,25), con ≥ 300 muestras | 3 |
 | `reaction` | Tiempo desde un golpe recibido hasta la cura (hechizo propio o consumible) que lo contesta, dentro de `window_ms`. | Las curas llegan en ≤ `fast_ms` (300 ms) y con desvío ≤ `std_ms` (60 ms), con ≥ 15 muestras | 3 |
 | `route` | Parte de los segmentos de `segment` (12) pasos exactos (casilla y dirección) ya caminados. | ≥ `repeat_high` (90 %) repetidos; 0 bajo `repeat_low` (50 %), con ≥ 300 pasos | 2 |
 | `session` | Juego sin una pausa de `pause_ms` (3 min). | 16 h seguidas; 0 hasta 8 h | 1 |
 | `income` | Experiencia u oro por hora (la ventana de atípicos del log de economía) sobre la mediana de los conectados de su banda de 10 niveles (≥ 5 pares). | 8 veces la mediana; 0 hasta 4 veces | 2 |
 
+- Mientras el personaje está inactivo (sin acciones durante `pause_ms`) todas las señales
+  valen 0: las estadísticas congeladas no siguen sumando a alguien que no está.
 - **Puntaje:** en cada evaluación, `puntaje × 0,5^(Δt / half_life_ms) + Σ peso × señal`.
   Con media vida de 1 h y una evaluación por minuto, una señal sostenida de peso `w` se
   estabiliza cerca de `w × 87`. Un minuto raro se desvanece; solo un patrón sostenido suma.
@@ -339,23 +341,36 @@ Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números 
      con el puntaje y las señales).
   2. `notify` (250): mensaje a los GM en línea (`gm.bot_suspect`), auditado.
   3. `presence` (400): un chequeo de presencia (ver abajo).
-  4. `suspend` (600): suspensión de `suspend_ms` (24 h), por la goroutine de admin como un
-     `/ban` de GM (solo alcanza a cuentas de jugador; auditada en la misma transacción).
-     **Solo después de un chequeo fallado** en este episodio: si el puntaje llega al umbral
-     sin uno, se pide un chequeo. El ban largo o permanente lo decide siempre un GM.
+  4. `suspend` (600): suspensión de `suspend_ms` (24 h, motivo `antibot`), por la goroutine
+     de admin como un `/ban` de GM (solo alcanza a cuentas de jugador; auditada en la misma
+     transacción; si no se aplica, queda en el log). Necesita, en este episodio, **un
+     chequeo fallado o uno hecho hace al menos `confirm_ms` (1 h)** con el puntaje todavía
+     ahí; si no, se pide un chequeo. El ban largo o permanente lo decide siempre un GM.
 - **Chequeo de presencia** (`PresenceCheck`/`PresenceAnswer`): una pregunta simple (elegir
   un color entre cuatro, textos i18n `presence.*`) en un momento al azar de los próximos
-  `delay_ms`. **Nunca en combate ni sobre una casilla sin logout:** se espera a que se
-  pueda. No bloquea el juego. Plazo generoso (`timeout_ms`, 10 min) que corre solo mientras
-  el personaje está conectado. No es un oráculo: el orden de las opciones y sus ids son al
-  azar, y la respuesta, correcta o no, recibe siempre `presence.thanks`. Fallar (mala
-  respuesta o fuera de plazo) suma `fail_points` y avisa a los GM; **nunca suspende por sí
-  solo**: la suspensión la decide la evaluación siguiente si el puntaje ya pasa ese umbral.
-  Acertar divide el puntaje por dos. Un GM puede pedir uno con `/presence Nombre`
-  (auditado).
-- **Staff:** los personajes de GM y admin no se evalúan.
+  `delay_ms`. **Nunca en combate, sobre una casilla sin logout ni a alguien inactivo:** se
+  espera a que se pueda. No bloquea el juego. Plazo generoso (`timeout_ms`, 10 min) que
+  corre **solo mientras el personaje juega** (conectado y activo), así que estar ausente
+  nunca es un fallo. La respuesta, correcta o no, recibe siempre `presence.thanks`.
+- **Qué prueba y qué no:** un chequeo prueba que algo contestó, no que no haya un bot: las
+  preguntas y sus textos son públicos y un script las puede contestar. Por eso **acertar no
+  baja el puntaje** (solo queda auditado) y la suspensión no depende de fallar: también llega
+  si el patrón sigue una hora después del chequeo. Fallar (mala respuesta o fuera de plazo)
+  suma `fail_points` y avisa a los GM, pero **nunca lleva el puntaje al umbral de
+  suspensión por sí solo** (queda justo debajo): solo suspende un puntaje que ya estaba ahí.
+- **No es un oráculo de sospecha:** con `random_per_hour` (2 % por hora de juego) cualquier
+  jugador activo recibe a veces un chequeo al azar, idéntico, que no tiene efecto si se
+  falla (auditado como `random_*`). Un GM puede pedir uno con `/presence Nombre` (también
+  sin efecto en el puntaje; auditado).
+- **Esquivarlo no sirve:** si un chequeo debido no se puede hacer durante `defer_alert_ms`
+  (30 min) porque el personaje vive en combate o en una casilla sin logout, se avisa a los
+  GM y se audita (`deferred`): lo decide una persona.
+- **Staff:** los personajes de GM y admin no se evalúan ni cuentan para las medianas.
 - **Prueba:** `TestAntiBotFlagsMechanicalNotHuman` (`internal/session/antibot_sim_test.go`)
   juega horas de juego en simulación determinista, con la configuración de
   `data/balance.yaml`, los perfiles `bot.Human()` y `bot.Mechanical()` de `server/pkg/bot`
   (los mismos de `tools/bots -profile`). El mecánico pasa por log, aviso, chequeo, fallo y
-  suspensión (en ~1 h 40 de juego); el humano no recibe ninguna marca. Tarda ~0,1 s.
+  suspensión (en ~1 h 45 de juego); el humano no recibe ninguna marca. Tarda ~0,1 s.
+  `TestAntiBotHeldKeyAndClickWalkNotPresence`: 8 h sin pausas con el hotkey de cura
+  mantenido y click a la misma casilla de ida y vuelta (la misma ruta A*) no llega al
+  chequeo (queda en `log`, por la ruta).

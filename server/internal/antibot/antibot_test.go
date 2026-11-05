@@ -26,20 +26,20 @@ func TestRegularity(t *testing.T) {
 	jitter := []int64{0, 900, 2500, 400, 1700, 3100, 600}
 	for i := range 400 {
 		at := 1000 + int64(i)*2000
-		bot.Action(at, KindSpell, cfg)
-		bot.Action(at+jitter[i%len(jitter)]/3, KindItem, cfg) // irregular other actions
+		bot.Action(at, KindSpell, false, cfg)
+		bot.Action(at+jitter[i%len(jitter)]/3, KindItem, false, cfg) // irregular other actions
 		ms += 2000 + jitter[i%len(jitter)]
-		person.Action(ms, KindSpell, cfg)
+		person.Action(ms, KindSpell, false, cfg)
 	}
-	if s := bot.Signals(ms, 0, cfg); s[Regularity] != 1 {
+	if s := bot.Signals(1000+399*2000+1000, 0, cfg); s[Regularity] != 1 {
 		t.Errorf("metronome regularity %.2f", s[Regularity])
 	}
 	if s := person.Signals(ms, 0, cfg); s[Regularity] != 0 {
 		t.Errorf("varied pace regularity %.2f", s[Regularity])
 	}
 	var few Tracker
-	few.Action(10, KindSpell, cfg)
-	few.Action(20, KindSpell, cfg)
+	few.Action(10, KindSpell, false, cfg)
+	few.Action(20, KindSpell, false, cfg)
 	if s := few.Signals(20, 0, cfg); s[Regularity] != 0 {
 		t.Error("regularity before min_samples")
 	}
@@ -57,6 +57,8 @@ func TestReaction(t *testing.T) {
 		person.Hurt(at)
 		person.Heal(at+700+int64(i%5)*300, cfg)
 	}
+	bot.Action(499_000, KindOther, false, cfg) // active (idle characters have no signals)
+	person.Action(499_000, KindOther, false, cfg)
 	if s := bot.Signals(500_000, 0, cfg); s[Reaction] < 0.99 {
 		t.Errorf("bot reaction %.2f", s[Reaction])
 	}
@@ -96,6 +98,8 @@ func TestRoute(t *testing.T) {
 		}
 		walk.Step(int64(i)*600, x, y, 7, uint8(seed>>30), cfg)
 	}
+	loop.Action(599_000, KindOther, false, cfg)
+	walk.Action(599_000, KindOther, false, cfg)
 	if s := loop.Signals(600_000, 0, cfg); s[Route] != 1 {
 		t.Errorf("loop route %.2f", s[Route])
 	}
@@ -111,12 +115,12 @@ func TestSessionAndIncome(t *testing.T) {
 	step := int64(60_000)
 	end := int64(cfg.Signals.Session.HighMs) + step
 	for ms := step; ms <= end; ms += step {
-		tr.Action(ms, KindOther, cfg)
+		tr.Action(ms, KindOther, false, cfg)
 	}
 	if s := tr.Signals(end, 0, cfg); s[Session] != 1 {
 		t.Errorf("16 h without a pause: %.2f", s[Session])
 	}
-	tr.Action(end+int64(cfg.PauseMs), KindOther, cfg) // a pause
+	tr.Action(end+int64(cfg.PauseMs), KindOther, false, cfg) // a pause
 	if s := tr.Signals(end+int64(cfg.PauseMs), 0, cfg); s[Session] != 0 {
 		t.Errorf("after a pause: %.2f", s[Session])
 	}
@@ -146,5 +150,29 @@ func TestScoreHelpers(t *testing.T) {
 	}
 	if Median([]float64{5, 1, 3}) != 3 || Median([]float64{4, 1, 3, 2}) != 2.5 || Median(nil) != 0 {
 		t.Error("median")
+	}
+}
+
+// A held hotkey fires as soon as the cooldown allows: those actions are not intervals.
+// And an idle character has no signals, however machine-like it was before.
+func TestPacedAndIdle(t *testing.T) {
+	cfg := repoConfig(t)
+	var held Tracker
+	for i := range 400 {
+		held.Action(int64(1000+i*1000), KindItem, true, cfg)
+	}
+	if held.interval[KindItem].n != 0 {
+		t.Errorf("%d paced intervals counted", held.interval[KindItem].n)
+	}
+	var bot Tracker
+	for i := range 400 {
+		bot.Action(int64(1000+i*2000), KindSpell, false, cfg)
+	}
+	last := int64(1000 + 399*2000)
+	if s := bot.Signals(last+1000, 0, cfg); s[Regularity] != 1 {
+		t.Fatalf("active metronome %.2f", s[Regularity])
+	}
+	if s := bot.Signals(last+int64(cfg.PauseMs), 0, cfg); s != (Signals{}) {
+		t.Errorf("idle signals %v", s)
 	}
 }

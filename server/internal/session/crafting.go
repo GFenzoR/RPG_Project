@@ -176,8 +176,8 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 		p.emit(systemMsg(msgCraftNotReady))
 		return
 	}
+	p.activePaced(ctx.Tick, antibot.KindItem, p.nextGather)
 	p.nextGather = ctx.Tick + max(w.gatherFor, ticksFor(r.TimeMs))
-	p.active(ctx.Tick, antibot.KindItem)
 
 	chance := r.SuccessChance(level) // with the level before this attempt's tries
 	if r.XP > 0 {

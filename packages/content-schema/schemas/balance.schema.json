@@ -588,14 +588,37 @@
           }
         },
         "presence": {
-          "description": "In-game presence check: never in combat or on a no-logout tile; a failure adds fail_points and never suspends on its own.",
+          "description": "In-game presence check: never in combat, on a no-logout tile or idle; a failure adds fail_points but never past suspend by itself; a suspension needs a failed check or one asked confirm_ms ago.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["timeout_ms", "delay_ms", "fail_points"],
+          "required": [
+            "timeout_ms",
+            "delay_ms",
+            "fail_points",
+            "confirm_ms",
+            "defer_alert_ms",
+            "random_per_hour"
+          ],
           "properties": {
-            "timeout_ms": { "type": "integer", "minimum": 60000 },
+            "timeout_ms": {
+              "description": "Time of active play to answer.",
+              "type": "integer",
+              "minimum": 60000
+            },
             "delay_ms": { "type": "integer", "minimum": 0 },
-            "fail_points": { "type": "number", "minimum": 0 }
+            "fail_points": { "type": "number", "minimum": 0 },
+            "confirm_ms": { "type": "integer", "minimum": 0 },
+            "defer_alert_ms": {
+              "description": "A due check dodged this long alerts the GMs.",
+              "type": "integer",
+              "minimum": 60000
+            },
+            "random_per_hour": {
+              "description": "Chance per hour of play of a random check (no effect if failed).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
           }
         },
         "suspend_ms": {

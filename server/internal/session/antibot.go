@@ -1,7 +1,6 @@
 package session
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -29,11 +28,12 @@ import (
 
 // Message keys of the bot detection.
 const (
-	msgPresenceThanks = "presence.thanks"
-	msgGMBotSuspect   = "gm.bot_suspect"
-	msgGMPresenceFail = "gm.presence_failed"
-	msgGMPresenceSent = "gm.presence_sent"
-	antibotActor      = "system:antibot"
+	msgPresenceThanks  = "presence.thanks"
+	msgGMBotSuspect    = "gm.bot_suspect"
+	msgGMPresenceFail  = "gm.presence_failed"
+	msgGMPresenceSent  = "gm.presence_sent"
+	msgGMPresenceDefer = "gm.presence_deferred"
+	antibotActor       = "system:antibot"
 )
 
 // presenceColors are the presence check's questions and answers: the question
@@ -50,12 +50,19 @@ type suspect struct {
 	// score falls under half of its threshold).
 	level    int
 	lastEval game.Tick
-	// failed: a presence check failed in this episode (needed to suspend).
-	failed bool
-	// askAt is when a presence check is due (0 = none); check is the one waiting for an
-	// answer, with the ticks it has left while its character is online.
-	askAt game.Tick
-	check *presenceCheck
+	// failed: a presence check failed in this episode; askedAt: when this episode's check
+	// was asked (0 = none). A suspension needs one of them (see respond).
+	failed  bool
+	askedAt game.Tick
+	// askAt is when a presence check is due (0 = none), askRandom whether it is a random
+	// one (not a response to the score), and check the one waiting for an answer.
+	askAt     game.Tick
+	askRandom bool
+	check     *presenceCheck
+	// deferredSince: since when a due check could not be asked (combat, no-logout tile,
+	// idle); deferWarned: the GMs were told it is being dodged.
+	deferredSince game.Tick
+	deferWarned   bool
 }
 
 type presenceCheck struct {
@@ -63,8 +70,10 @@ type presenceCheck struct {
 	answer   uint32
 	question string
 	options  []*pb.DialogOption
-	deadline game.Tick // while online
-	left     game.Tick // while offline
+	// left is the time to answer that is left; it only runs while the character is
+	// online and active, so being away is never a failure by itself.
+	left   game.Tick
+	random bool
 }
 
 func (w *World) initAntiBot() {
@@ -79,7 +88,7 @@ func tickMs(t game.Tick) int64 { return int64(t.Duration() / time.Millisecond) }
 
 // antibotJoin attaches p to its detection state and resumes a pending presence check.
 func (w *World) antibotJoin(tick game.Tick, p *Player) {
-	if w.abEvalFor == 0 {
+	if w.abEvalFor == 0 || p.role > RolePlayer { // staff is not evaluated
 		return
 	}
 	s := w.suspects[p.charID]
@@ -90,15 +99,7 @@ func (w *World) antibotJoin(tick game.Tick, p *Player) {
 	p.sus = s
 	p.abNext = tick + 1 + game.Tick(p.id)%w.abEvalFor
 	if c := s.check; c != nil {
-		c.deadline = tick + c.left
 		w.sendPresence(p, c)
-	}
-}
-
-// antibotLeave keeps the time a pending check has left while p is offline.
-func (w *World) antibotLeave(tick game.Tick, p *Player) {
-	if s := p.sus; s != nil && s.check != nil {
-		s.check.left = max(s.check.deadline-tick, game.TicksFor(time.Minute))
 	}
 }
 
@@ -160,6 +161,14 @@ func (w *World) evaluate(ctx *game.TickContext, p *Player) {
 	s.score = s.score*antibot.Decay(tickMs(tick-s.lastEval), a) + antibot.Points(s.signals, a)
 	s.lastEval = tick
 	w.respond(ctx, p)
+	// Random checks for anyone who plays, suspected or not: a check alone tells nothing
+	// about the score, and failing a random one has no effect.
+	pr := w.abCfg.Presence
+	if pr.RandomPerHour > 0 && s.level < antibot.LevelPresence && s.check == nil && s.askAt == 0 &&
+		s.tracker.Active(tickMs(tick), w.abCfg) &&
+		ctx.Rand.Float64() < pr.RandomPerHour*float64(w.abCfg.EvalEveryMs)/3_600_000 {
+		w.schedulePresence(ctx, s, true)
+	}
 }
 
 // respond gives every response p's score reached that this episode has not given yet,
@@ -169,16 +178,20 @@ func (w *World) respond(ctx *game.TickContext, p *Player) {
 	for s.level > 0 && s.score < antibot.Threshold(s.level, a)/2 {
 		s.level--
 		if s.level < antibot.LevelPresence {
-			s.failed = false
+			s.failed, s.askedAt, s.deferredSince, s.deferWarned = false, 0, 0, false
 		}
 	}
 	target := antibot.Level(s.score, a)
 	for s.level < target {
 		next := s.level + 1
-		if next == antibot.LevelSuspend && !s.failed {
-			// Never suspended without a failed presence check: ask one if none is on.
-			if s.check == nil && s.askAt == 0 {
-				w.schedulePresence(ctx, s)
+		// A suspension needs, in this episode, a failed presence check or one asked at
+		// least presence.confirm_ms ago with the score still this high: answering a check
+		// proves someone (or something) answered, not that nobody is botting.
+		confirm := game.TicksFor(time.Duration(a.Presence.ConfirmMs) * time.Millisecond)
+		if next == antibot.LevelSuspend && !s.failed && (s.askedAt == 0 || ctx.Tick-s.askedAt < confirm) {
+			if s.askedAt == 0 && s.check == nil && (s.askAt == 0 || s.askRandom) {
+				s.askAt = 0
+				w.schedulePresence(ctx, s, false)
 			}
 			return
 		}
@@ -192,7 +205,10 @@ func (w *World) respond(ctx *game.TickContext, p *Player) {
 			w.notifyGMs(p, systemMsg(msgGMBotSuspect, textParam("name", p.name), num("score", int(s.score))))
 			w.antibotAudit(ctx, p, "bot_suspect", "notify", s)
 		case antibot.LevelPresence:
-			w.schedulePresence(ctx, s)
+			if s.askAt != 0 && s.askRandom { // a due random check becomes this one
+				s.askAt = 0
+			}
+			w.schedulePresence(ctx, s, false)
 		case antibot.LevelSuspend:
 			w.suspend(ctx, p)
 		}
@@ -200,10 +216,11 @@ func (w *World) respond(ctx *game.TickContext, p *Player) {
 }
 
 // schedulePresence asks a check at a random moment of the next presence.delay_ms.
-func (w *World) schedulePresence(ctx *game.TickContext, s *suspect) {
+func (w *World) schedulePresence(ctx *game.TickContext, s *suspect, random bool) {
 	if s.check != nil || s.askAt != 0 {
 		return
 	}
+	s.askRandom = random
 	delay := game.TicksFor(time.Duration(w.abCfg.Presence.DelayMs) * time.Millisecond)
 	s.askAt = ctx.Tick + 1
 	if delay > 0 {
@@ -211,25 +228,48 @@ func (w *World) schedulePresence(ctx *game.TickContext, s *suspect) {
 	}
 }
 
-// presenceDue asks a due check when p can answer it safely and fails an expired one.
+// presenceDue (once a second) runs the clock of a pending check while p is active, fails
+// it when it runs out, and asks a due check when p can answer it safely.
 func (w *World) presenceDue(ctx *game.TickContext, p *Player, s *suspect) {
 	tick := ctx.Tick
-	if c := s.check; c != nil && tick >= c.deadline {
-		s.check = nil
-		w.presenceFailed(ctx, p, "timeout")
+	active := s.tracker.Active(tickMs(tick), w.abCfg)
+	if c := s.check; c != nil {
+		if active {
+			c.left -= min(c.left, idleCheckEvery)
+		}
+		if c.left == 0 {
+			s.check = nil
+			w.presenceFailed(ctx, p, c.random, "timeout")
+		}
 		return
 	}
-	if s.askAt == 0 || tick < s.askAt || s.check != nil {
+	if s.askAt == 0 || tick < s.askAt {
 		return
 	}
-	// Never in combat or on a no-logout tile: a question must not get anyone killed.
-	if w.inCombat(tick, p) || w.m.Flags(p.pos)&world.FlagNoLogout != 0 {
+	// Never in combat or on a no-logout tile (a question must not get anyone killed), and
+	// only to someone who is playing (it would be answered by nobody).
+	if w.inCombat(tick, p) || w.m.Flags(p.pos)&world.FlagNoLogout != 0 || !active {
+		if s.askRandom {
+			return
+		}
+		if s.deferredSince == 0 {
+			s.deferredSince = tick
+		}
+		// Dodged for long (always fighting, or living on a no-logout tile): a GM decides.
+		if !s.deferWarned && tick-s.deferredSince >= game.TicksFor(time.Duration(w.abCfg.Presence.DeferAlertMs)*time.Millisecond) {
+			s.deferWarned = true
+			w.notifyGMs(p, systemMsg(msgGMPresenceDefer, textParam("name", p.name)))
+			w.antibotAudit(ctx, p, "presence_check", "deferred", s)
+		}
 		return
 	}
 	s.askAt = 0
 	w.nextCheck++
-	c := &presenceCheck{id: w.nextCheck,
-		deadline: tick + game.TicksFor(time.Duration(w.abCfg.Presence.TimeoutMs)*time.Millisecond)}
+	c := &presenceCheck{id: w.nextCheck, random: s.askRandom,
+		left: game.TicksFor(time.Duration(w.abCfg.Presence.TimeoutMs) * time.Millisecond)}
+	if !c.random {
+		s.askedAt, s.deferredSince = tick, 0
+	}
 	want := presenceColors[ctx.Rand.IntN(len(presenceColors))]
 	c.question = "presence.question." + want
 	ids := ctx.Rand.Perm(9) // option ids 1..9 in a random order: the id says nothing
@@ -244,14 +284,21 @@ func (w *World) presenceDue(ctx *game.TickContext, p *Player, s *suspect) {
 	}
 	s.check = c
 	w.sendPresence(p, c)
-	w.antibotAudit(ctx, p, "presence_check", "sent", s)
+	w.antibotAudit(ctx, p, "presence_check", checkResult(c.random, "sent"), s)
+}
+
+// checkResult is the audit result of a check event: random checks are marked apart.
+func checkResult(random bool, r string) string {
+	if random {
+		return "random_" + r
+	}
+	return r
 }
 
 func (w *World) sendPresence(p *Player, c *presenceCheck) {
-	left := max(c.deadline-w.nowTick(), 0)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PresenceCheck{PresenceCheck: &pb.PresenceCheck{
 		CheckId: c.id, Question: &pb.LocalizedText{Key: c.question}, Options: c.options,
-		TimeoutMs: uint32(left.Duration().Milliseconds()),
+		TimeoutMs: uint32(c.left.Duration().Milliseconds()),
 	}}})
 }
 
@@ -266,22 +313,29 @@ func (w *World) presenceAnswer(ctx *game.TickContext, p *Player, id, option uint
 	p.active(ctx.Tick, antibot.KindOther)
 	p.emit(systemMsg(msgPresenceThanks))
 	if option != c.answer {
-		w.presenceFailed(ctx, p, "wrong")
+		w.presenceFailed(ctx, p, c.random, "wrong")
 		return
 	}
-	// Passed: the suspicion halves and the episode restarts from its new level.
-	s.score /= 2
-	s.failed = false
-	s.level = min(s.level, antibot.Level(s.score, w.abCfg))
-	w.antibotAudit(ctx, p, "presence_check", "passed", s)
+	// Passed: it is recorded, and nothing else changes. A script can answer a question
+	// too (the texts are public), so a right answer never clears the suspicion.
+	w.antibotAudit(ctx, p, "presence_check", checkResult(c.random, "passed"), s)
 }
 
-// presenceFailed adds the failure points and tells the GMs; it never suspends by itself
-// (the next evaluation does, if the score is past the threshold).
-func (w *World) presenceFailed(ctx *game.TickContext, p *Player, why string) {
+// presenceFailed records a failure. A random check's failure has no effect. A response
+// check's adds presence.fail_points and tells the GMs, but never past the suspension
+// threshold by itself: only a score that was already there suspends.
+func (w *World) presenceFailed(ctx *game.TickContext, p *Player, random bool, why string) {
 	s := p.sus
+	if random {
+		w.antibotAudit(ctx, p, "presence_check", checkResult(true, "failed_"+why), s)
+		return
+	}
 	s.failed = true
-	s.score += w.abCfg.Presence.FailPoints
+	if sus := w.abCfg.Thresholds.Suspend; s.score < sus {
+		s.score = min(s.score+w.abCfg.Presence.FailPoints, sus-1)
+	} else {
+		s.score += w.abCfg.Presence.FailPoints
+	}
 	w.notifyGMs(p, systemMsg(msgGMPresenceFail, textParam("name", p.name)))
 	w.antibotAudit(ctx, p, "presence_check", "failed_"+why, s)
 }
@@ -293,13 +347,14 @@ func (w *World) suspend(ctx *game.TickContext, p *Player) {
 		return
 	}
 	dur := time.Duration(w.abCfg.SuspendMs) * time.Millisecond
-	reason := fmt.Sprintf("automatic: suspected bot (score %d)", int(p.sus.score))
+	reason := "antibot" // shown as is at login: a neutral code, the details are in the audit log
 	w.nextJob++
 	job := AdminJob{ID: w.nextJob, Kind: AdminBan, TargetName: p.name, ActorRole: RoleGM, Reason: reason,
 		Until: ctx.Now.Add(dur)}
 	job.Audit = AuditEntry{At: ctx.Now, ActorName: antibotActor, Action: "ban",
-		Args: map[string]string{"duration": dur.String(), "reason": reason, "signals": signalArgs(p.sus.signals)}}
-	w.jobs[job.ID] = pendingJob{kind: AdminBan, until: job.Until}
+		Args: map[string]string{"duration": dur.String(), "reason": reason, "score": strconv.Itoa(int(p.sus.score)),
+			"signals": signalArgs(p.sus.signals)}}
+	w.jobs[job.ID] = pendingJob{kind: AdminBan, until: job.Until, system: true}
 	w.queueAdmin(job)
 	w.log.Warn("antibot: suspended", "character", p.charID, "name", p.name, "score", int(p.sus.score))
 }
@@ -311,6 +366,9 @@ func (w *World) cmdPresence(ctx *game.TickContext, p *Player, args []string) boo
 	}
 	name := strings.Join(args, " ")
 	t := w.onlineByName(name)
+	if t != nil && t.invisible && !p.Knows(t.id) {
+		t = nil // like /report: an unseen invisible player is not online for this
+	}
 	switch {
 	case t == nil:
 		p.emit(systemMsg(msgGMOffline, textParam("name", name)))
@@ -320,7 +378,7 @@ func (w *World) cmdPresence(ctx *game.TickContext, p *Player, args []string) boo
 		w.audit(ctx, p, "presence_request", t, nil, AdminProtected)
 	default:
 		if t.sus.check == nil {
-			t.sus.askAt = ctx.Tick // asked as soon as it is safe (out of combat)
+			t.sus.askAt, t.sus.askRandom = ctx.Tick, true // as soon as it is safe; no effect on the score
 		}
 		p.emit(systemMsg(msgGMPresenceSent, textParam("name", t.name)))
 		w.audit(ctx, p, "presence_request", t, nil, auditOK)
@@ -367,6 +425,9 @@ func (w *World) incomeMedians(tick game.Tick) {
 	band := max(w.abCfg.Signals.Income.BandLevels, 1)
 	byBand := map[int][2][]float64{}
 	for _, p := range w.players {
+		if p.sus == nil { // staff is not a peer
+			continue
+		}
 		xp, gold, ok := w.incomeRates(tick, p)
 		if !ok {
 			continue
@@ -415,7 +476,7 @@ func (w *World) incomeRatio(tick game.Tick, p *Player) float64 {
 // have no pending check), once per evaluation round.
 func (w *World) pruneSuspects(tick game.Tick) {
 	for id, s := range w.suspects {
-		if w.byChar[id] == nil && s.check == nil && s.askAt == 0 &&
+		if w.byChar[id] == nil && s.check == nil &&
 			s.score*antibot.Decay(tickMs(tick-s.lastEval), w.abCfg) < 1 {
 			delete(w.suspects, id)
 		}

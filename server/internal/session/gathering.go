@@ -124,8 +124,8 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 		p.emit(systemMsg(msgGatherNotReady))
 		return
 	}
+	p.activePaced(ctx.Tick, antibot.KindItem, p.nextGather)
 	p.nextGather = ctx.Tick + w.gatherFor
-	p.active(ctx.Tick, antibot.KindItem)
 	rt := w.resources[pos]
 	if rt != nil && rt.left == 0 {
 		p.emit(systemMsg(msgGatherDepleted))

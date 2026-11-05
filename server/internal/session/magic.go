@@ -206,7 +206,8 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 
 // startCooldown blocks s (if own) and its group, and tells the client.
 func (w *World) startCooldown(ctx *game.TickContext, p *Player, s *content.Spell, own bool) {
-	p.active(ctx.Tick, antibot.KindSpell) // a spell or a rune was cast
+	// A spell or a rune was cast; right when its cooldowns ended it is paced (T4.1).
+	p.activePaced(ctx.Tick, antibot.KindSpell, max(p.spellReady[s.ID], p.groupReady[s.Group]))
 	if p.spellReady == nil {
 		p.spellReady, p.groupReady = map[string]game.Tick{}, map[string]game.Tick{}
 	}

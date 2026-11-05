@@ -292,12 +292,19 @@ type AntiBot struct {
 		Presence float64 `yaml:"presence"`
 		Suspend  float64 `yaml:"suspend"`
 	} `yaml:"thresholds"`
-	// Presence is the in-game presence check: answered within TimeoutMs; a failure adds
-	// FailPoints. It is asked after a random delay of up to DelayMs.
+	// Presence is the in-game presence check: answered within TimeoutMs of active play; a
+	// failure adds FailPoints (never past the suspension threshold by itself). It is asked
+	// after a random delay of up to DelayMs. A suspension needs a failed check or one asked
+	// ConfirmMs ago. A due check dodged for DeferAlertMs (combat, no-logout tile) alerts
+	// the GMs. RandomPerHour: chance per hour of play of a random check for anyone (no
+	// effect if failed), so a check says nothing about the score.
 	Presence struct {
-		TimeoutMs  int     `yaml:"timeout_ms"`
-		DelayMs    int     `yaml:"delay_ms"`
-		FailPoints float64 `yaml:"fail_points"`
+		TimeoutMs     int     `yaml:"timeout_ms"`
+		DelayMs       int     `yaml:"delay_ms"`
+		FailPoints    float64 `yaml:"fail_points"`
+		ConfirmMs     int     `yaml:"confirm_ms"`
+		DeferAlertMs  int     `yaml:"defer_alert_ms"`
+		RandomPerHour float64 `yaml:"random_per_hour"`
 	} `yaml:"presence"`
 	// SuspendMs is the length of an automatic suspension (at most 30 days).
 	SuspendMs int64 `yaml:"suspend_ms"`
@@ -328,8 +335,10 @@ func (a AntiBot) check() error {
 	if !(0 < t.Log && t.Log < t.Notify && t.Notify < t.Presence && t.Presence < t.Suspend) {
 		return errors.New("antibot.thresholds: 0 < log < notify < presence < suspend")
 	}
-	if a.Presence.TimeoutMs < 60_000 || a.Presence.DelayMs < 0 || a.Presence.FailPoints < 0 {
-		return errors.New("antibot.presence: timeout_ms >= 60000, delay_ms and fail_points >= 0")
+	if pr := a.Presence; pr.TimeoutMs < 60_000 || pr.DelayMs < 0 || pr.FailPoints < 0 || pr.ConfirmMs < 0 ||
+		pr.DeferAlertMs < 60_000 || pr.RandomPerHour < 0 || pr.RandomPerHour > 1 {
+		return errors.New("antibot.presence: timeout_ms and defer_alert_ms >= 60000, delay_ms, fail_points and " +
+			"confirm_ms >= 0, random_per_hour in 0..1")
 	}
 	if a.SuspendMs < 60_000 || a.SuspendMs > 30*24*3600*1000 {
 		return errors.New("antibot.suspend_ms must be in 60000..30 days (longer bans are a GM's decision)")

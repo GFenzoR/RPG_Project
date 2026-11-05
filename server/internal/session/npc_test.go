@@ -28,6 +28,9 @@ func dataHarnessWith(t *testing.T, edit func(*session.Config), spawns ...world.S
 	cfg.Save = func(s session.Snapshot) bool { h.saves = append(h.saves, s); return true }
 	h.wireEconomy(&cfg)
 	cfg.Balance.Economy.CheckEveryMs = 50 // reconcile every tick (T4.1)
+	// No bot detection: its random checks draw from the seeded source and would change
+	// these scripted runs (it has its own tests, antibot_test.go).
+	cfg.Balance.AntiBot.EvalEveryMs = 0
 	if edit != nil {
 		edit(&cfg)
 	}

@@ -144,3 +144,66 @@ func TestAntiBotFlagsMechanicalNotHuman(t *testing.T) {
 		t.Errorf("mechanical responses %v, want %v", g, want)
 	}
 }
+
+// A person with legitimate habits that look mechanical: holding the heal hotkey (the
+// server's cooldown sets the pace) and clicking the same far tile back and forth (the same
+// A* path every time), for 8 hours without a break. It may be logged, but it never gets
+// a presence check.
+func TestAntiBotHeldKeyAndClickWalkNotPresence(t *testing.T) {
+	bal, err := content.LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jobs []session.AdminJob
+	h := newHarness(t, worldtest.Open(t, 0, 0, 64, 64), func(c *session.Config) {
+		c.Balance.AntiBot = bal.AntiBot
+		c.Balance.AntiBot.Presence.RandomPerHour = 0 // only the score's checks
+		c.Spells = content.Spells{"bot_heal": {ID: "bot_heal", Words: "bot heal", Vocations: []string{"guardian"},
+			Level: 1, Group: "healing", CooldownMs: 1000, GroupCooldownMs: 1000,
+			Effect: content.SpellEffect{Heal: &content.SpellHeal{Scaling: content.Scaling{Base: 30}}}}}
+		c.Balance.Skills.Base["magic"] = content.SkillBase{BaseTries: 1000}
+		c.Admin = func(j session.AdminJob) bool {
+			if j.Kind != session.AdminCheckRoles {
+				jobs = append(jobs, j)
+			}
+			return true
+		}
+	})
+	cl, p := h.join("Grinder", at(20, 20))
+	r := h.sim.Rand()
+	there := []pb.Direction{E, E, E, E, E, E, E, E, S, S, S, S}
+	back := []pb.Direction{N, N, N, N, W, W, W, W, W, W, W, W}
+	out := true
+	nextHurt := h.sim.Tick() + ticksOf(10*time.Second)
+	end := h.sim.Tick() + ticksOf(8*time.Hour)
+	for h.sim.Tick() < end {
+		now := h.sim.Tick()
+		if now%2 == 0 { // the held key repeats; the server casts when the cooldown allows
+			h.input(cl, cast("bot_heal"))
+		}
+		if !p.Walking() && now%10 == 0 { // a click on the other end when it arrives
+			if out {
+				h.input(cl, walkPath(there...))
+			} else {
+				h.input(cl, walkPath(back...))
+			}
+			out = !out
+		}
+		if now >= nextHurt {
+			nextHurt = now + ticksOf(5*time.Second) + game.Tick(r.Uint64N(uint64(ticksOf(10*time.Second))))
+			h.sim.Command(ctxFunc(func(ctx *game.TickContext) { h.w.HurtForTest(ctx, p, 3) }))
+		}
+		h.sim.Step()
+		cl.take()
+	}
+	sc, sg, lv := h.w.SuspicionForTest(p)
+	t.Logf("after 8 h: score %.0f level %d signals %.2f", sc, lv, sg)
+	if lv >= 3 {
+		t.Fatalf("a held key and click-walking reached the presence check (level %d)", lv)
+	}
+	for _, j := range jobs {
+		if j.Audit.Action == "presence_check" || j.Kind == session.AdminBan {
+			t.Fatalf("job %s:%s", j.Audit.Action, j.Audit.Result)
+		}
+	}
+}

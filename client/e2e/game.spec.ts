@@ -1132,10 +1132,12 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   await expect(gmPage.getByTestId("chat-log")).toContainText(line);
   await plPage.locator(".side").screenshot({ path: join(shots, "18-gm-announce.png") });
 
-  // T4.1: a GM asks the player a presence check; any answer gets the same reply.
+  // T4.1: a GM asks the player a presence check; any answer gets the same reply. It is
+  // only asked to someone playing: the player says something first.
+  await type(plPage, "hola");
   await type(gmPage, `/presence ${player.name}`);
   await expect(gmPage.getByTestId("game-log")).toContainText(
-    `chequeo de presencia a ${player.name}`,
+    `chequeo de presencia a ${player.name} en cuanto se pueda`,
   );
   const check = plPage.getByTestId("presence-check");
   await expect(check).toContainText("Chequeo de presencia");

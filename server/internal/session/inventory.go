@@ -839,9 +839,9 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 			p.emit(systemMsg(msgNotReady))
 			return
 		}
+		p.activePaced(ctx.Tick, antibot.KindItem, p.nextUse)
 		p.nextUse = ctx.Tick + w.useFor
 		w.consume(p, it)
-		p.active(ctx.Tick, antibot.KindItem)
 	case it.def.Rune != nil:
 		w.useRune(ctx, p, it, nil) // on the current target, or the caster for a heal
 	default:

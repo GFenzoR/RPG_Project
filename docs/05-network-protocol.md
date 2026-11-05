@@ -436,14 +436,16 @@ Diseño en `01-architecture.md` ("Detección de bots").
 - **`PresenceCheck{check_id, question, options[], timeout_ms}`**: `question` y cada
   `DialogOption.text` son claves i18n (`presence.question.<color>`,
   `presence.option.<color>`). Los ids de las opciones van del 1 al 9 en orden al azar.
-  `timeout_ms` es lo que queda (el plazo corre solo mientras el personaje está en línea);
-  al volver a entrar con un chequeo pendiente se manda otra vez con el mismo `check_id`.
+  `timeout_ms` es lo que queda: el plazo corre solo mientras el personaje está en línea y
+  activo. Al volver a entrar con un chequeo pendiente se manda otra vez con el mismo
+  `check_id`. Los chequeos al azar y los de GM son idénticos a los de la detección.
 - **`PresenceAnswer{check_id, option_id}`**: con un `check_id` que no está pendiente no
   pasa nada. Con el pendiente, correcto o no, la respuesta es siempre el `Message` de
   sistema `presence.thanks`.
-- GM: `/presence Nombre` → `gm.presence_sent` (`name`) o `gm.player_offline` /
-  `gm.protected`. A los GM en línea les llegan `gm.bot_suspect` (`name`, `score`) y
-  `gm.presence_failed` (`name`).
+- GM: `/presence Nombre` → `gm.presence_sent` (`name`) o `gm.player_offline` (también un
+  invisible que el GM no ve) / `gm.protected`. A los GM en línea les llegan
+  `gm.bot_suspect` (`name`, `score`), `gm.presence_failed` (`name`) y
+  `gm.presence_deferred` (`name`).
 
 ### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
 - `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso

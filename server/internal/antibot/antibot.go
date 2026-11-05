@@ -76,7 +76,7 @@ type Tracker struct {
 	reaction ewma  // ms from a hit to the heal that answered it
 	fast     ewma  // 1 if that reaction was faster than fast_ms, else 0
 
-	steps    [32]uint32 // last steps (position and direction), a ring
+	steps    [32]uint64 // last steps (position and direction), a ring
 	stepHead int
 	stepN    int
 	segments [routeTable]uint64 // hashes of recent segments of `segment` steps, a ring
@@ -88,8 +88,9 @@ type Tracker struct {
 
 // Action records a real action of kind at ms. A gap of at least cfg.PauseMs since the
 // last action is a pause: it restarts the continuous session, and since the last action
-// of the same kind it is not an interval.
-func (t *Tracker) Action(ms int64, kind int, cfg *content.AntiBot) {
+// of the same kind it is not an interval. paced marks an action that came as soon as its
+// cooldown allowed (a held hotkey): the server set that pace, so it is no interval either.
+func (t *Tracker) Action(ms int64, kind int, paced bool, cfg *content.AntiBot) {
 	if t.lastAction == 0 || ms-t.lastAction >= int64(cfg.PauseMs) {
 		t.activeSince = ms
 	}
@@ -97,12 +98,17 @@ func (t *Tracker) Action(ms int64, kind int, cfg *content.AntiBot) {
 	if kind < 0 || kind >= NumKinds {
 		kind = KindOther
 	}
-	if last := t.lastOf[kind]; last > 0 {
+	if last := t.lastOf[kind]; last > 0 && !paced {
 		if gap := ms - last; gap > 0 && gap < int64(cfg.PauseMs) {
 			t.interval[kind].add(float64(gap), alpha)
 		}
 	}
 	t.lastOf[kind] = ms
+}
+
+// Active reports whether the character did something within cfg.PauseMs before ms.
+func (t *Tracker) Active(ms int64, cfg *content.AntiBot) bool {
+	return t.lastAction > 0 && ms-t.lastAction < int64(cfg.PauseMs)
 }
 
 // Steps also count as activity for the continuous session (not for the regularity).
@@ -142,7 +148,7 @@ func (t *Tracker) Heal(ms int64, cfg *content.AntiBot) {
 // Step records a step to (x, y, z) facing dir.
 func (t *Tracker) Step(ms int64, x, y uint16, z uint8, dir uint8, cfg *content.AntiBot) {
 	t.stepped(ms, cfg)
-	t.steps[t.stepHead] = uint32(x)<<16 ^ uint32(y)<<4 ^ uint32(z)<<28 ^ uint32(dir)
+	t.steps[t.stepHead] = uint64(x) | uint64(y)<<16 | uint64(z)<<32 | uint64(dir)<<40
 	t.stepHead = (t.stepHead + 1) % len(t.steps)
 	t.stepN++
 	k := min(max(cfg.Signals.Route.Segment, 2), len(t.steps))
@@ -152,7 +158,7 @@ func (t *Tracker) Step(ms int64, x, y uint16, z uint8, dir uint8, cfg *content.A
 	// FNV-1a over the last k steps: k is small and fixed, so the cost is constant.
 	h := uint64(14695981039346656037)
 	for i := k; i >= 1; i-- {
-		h ^= uint64(t.steps[(t.stepHead-i+len(t.steps))%len(t.steps)])
+		h ^= t.steps[(t.stepHead-i+len(t.steps))%len(t.steps)]
 		h *= 1099511628211
 	}
 	rep := 0.0
@@ -180,8 +186,14 @@ func ramp(v, lo, hi float64) float64 {
 
 // Signals returns the signals at ms. incomeRatio is the character's income per hour over
 // the median of its level band (0 when there are too few peers to compare).
+//
+// While the character is idle (no action for cfg.PauseMs) every signal is 0: frozen
+// statistics must not keep adding points to someone who is away.
 func (t *Tracker) Signals(ms int64, incomeRatio float64, cfg *content.AntiBot) Signals {
 	var s Signals
+	if t.lastAction == 0 || ms-t.lastAction >= int64(cfg.PauseMs) {
+		return s
+	}
 	sc := cfg.Signals
 	r := sc.Regularity
 	for _, iv := range t.interval { // the most regular kind of action
@@ -196,9 +208,7 @@ func (t *Tracker) Signals(ms int64, incomeRatio float64, cfg *content.AntiBot) S
 	if r := sc.Route; t.segRep.n >= r.MinSteps {
 		s[Route] = ramp(t.segRep.mean, r.RepeatLow, r.RepeatHigh)
 	}
-	if t.lastAction > 0 && ms-t.lastAction < int64(cfg.PauseMs) {
-		s[Session] = ramp(float64(ms-t.activeSince), float64(sc.Session.LowMs), float64(sc.Session.HighMs))
-	}
+	s[Session] = ramp(float64(ms-t.activeSince), float64(sc.Session.LowMs), float64(sc.Session.HighMs))
 	s[Income] = ramp(incomeRatio, sc.Income.RatioLow, sc.Income.RatioHigh)
 	return s
 }
