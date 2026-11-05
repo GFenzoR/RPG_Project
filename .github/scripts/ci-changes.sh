@@ -20,7 +20,7 @@ declare -A RULES=(
 	# ci.yml
 	[go-server]='^(server|proto|data|world)/'
 	[go-bots]='^(tools/bots|server|proto)/'
-	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/spritepack|data|world|i18n|assets|proto)/'
+	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/spritepack|tools/soundgen|data|world|i18n|assets|proto)/'
 	[validate]='^(data|world|i18n|assets|packages|tools/mapcli|server/internal/world|server/cmd/mapcompile)/'
 	[actionlint]='^\.github/'
 	[build]='^(client|editor|packages|data|world|i18n|assets|proto|tools/spritepack)/'
@@ -105,6 +105,12 @@ self_test() {
 	check go-bots true tools/bots/cmd/bots/main.go
 	check stack true tools/bots/cmd/bots/main.go
 	check go-server false tools/bots/cmd/bots/main.go
+	# Sound (T3.7): the .ogg files and sounds.yaml are client assets (validated, bundled, played
+	# in the E2E); soundgen itself only has unit tests (it needs ffmpeg, which CI never runs).
+	for j in ts validate build e2e stack; do check "$j" true assets/sounds.yaml assets/sounds/music/puerto.ogg; done
+	for j in go-server go-bots integration desktop bench; do check "$j" false assets/sounds/sfx/hit.ogg; done
+	check ts true tools/soundgen/src/sfx.ts
+	for j in e2e build validate go-server stack desktop; do check "$j" false tools/soundgen/src/sfx.ts; done
 	if ((fails > 0)); then
 		echo "ci-changes: $fails rule check(s) failed" >&2
 		exit 1

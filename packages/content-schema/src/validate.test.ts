@@ -40,6 +40,7 @@ describe("repository content", () => {
       "recipes",
       "boat_routes",
       "borders",
+      "sounds",
       "i18n",
       "ids-lock",
     ];
@@ -82,6 +83,92 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('unknown quest "no_such_quest"'))).toBe(true);
     expect(out.some((m) => m.includes("consume") && m.includes("boolean"))).toBe(true);
     expect(out.some((m) => m.includes('unknown field "speed"'))).toBe(true);
+  });
+
+  it("checks assets/sounds.yaml: files, credits, references and islands (T3.7)", () => {
+    mkdirSync(file("assets/sounds"), { recursive: true });
+    mkdirSync(file("world"), { recursive: true });
+    writeFileSync(file("world/world.yaml"), "format: 1\nislands:\n  - id: puerto\n");
+    writeFileSync(file("assets/sounds/hit.ogg"), "x");
+    writeFileSync(file("assets/sounds/song.ogg"), "x");
+    writeFileSync(
+      file("assets/sounds.yaml"),
+      [
+        "format: 1",
+        "sounds:",
+        "  hit: { file: sounds/hit.ogg, channel: sfx }",
+        "  gone: { file: sounds/gone.ogg, channel: sfx }",
+        "  borrowed: { file: vendor/somepack/x.ogg, channel: ui }",
+        "  song: { file: sounds/song.ogg, channel: music, volume: 2 }",
+        "events:",
+        "  effect.hit: [hit, nope]",
+        "  ui.click: song",
+        "music:",
+        "  islands: { puerto: song, atlantis: song }",
+        "  underground: hit",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root).filter((m) => m.includes("sounds.yaml"));
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has("assets/sounds/gone.ogg does not exist")).toBe(true);
+    expect(has('pack "somepack" has no row in assets/CREDITS.md')).toBe(true);
+    expect(has('unknown sound "nope"')).toBe(true);
+    expect(has('sound "song" is a music loop, not an event sound')).toBe(true);
+    expect(has('sound "hit" is on channel sfx, not music')).toBe(true);
+    expect(has('unknown island "atlantis"')).toBe(true);
+    expect(has("volume")).toBe(true);
+  });
+
+  it("accepts a third-party sound pack with its CREDITS row and LICENSE, as spritepack does", () => {
+    const pack = file("assets/vendor/kenney-impact");
+    mkdirSync(join(pack, "Audio"), { recursive: true });
+    writeFileSync(join(pack, "Audio", "impactMetal_heavy_000.ogg"), "x");
+    writeFileSync(join(pack, "License.txt"), "CC0");
+    mkdirSync(file("assets/vendor/nolicence"), { recursive: true });
+    writeFileSync(file("assets/vendor/nolicence/x.ogg"), "x");
+    // The table form of the template, with no trailing slash after the folder.
+    writeFileSync(
+      file("assets/CREDITS.md"),
+      [
+        "| Pack | Autor | Licencia | Fuente | Carpeta | Atribución |",
+        "|---|---|---|---|---|---|",
+        "| Impact Sounds | Kenney | CC0 | https://example.com | `assets/vendor/kenney-impact` | No |",
+        "| Something | Someone | CC0 | https://example.com | `assets/vendor/nolicence` | No |",
+        "See also assets/vendor/notatable/ (prose, not a row).",
+      ].join("\n") + "\n",
+    );
+    const write = (sounds: string[]): string[] => {
+      writeFileSync(
+        file("assets/sounds.yaml"),
+        ["format: 1", "sounds:", ...sounds].join("\n") + "\n",
+      );
+      return messages(root).filter((m) => m.includes("sounds.yaml"));
+    };
+    expect(
+      write([
+        "  metal: { file: vendor/kenney-impact/Audio/impactMetal_heavy_000.ogg, channel: sfx }",
+      ]),
+    ).toEqual([]);
+    expect(
+      write(['  spaced: { file: "vendor/kenney-impact/Sound Pack 1.2/x y.ogg", channel: sfx }']),
+    ).toEqual([expect.stringContaining("does not exist")]);
+    const bare = write(["  bare: { file: vendor/nolicence/x.ogg, channel: sfx }"]);
+    expect(bare).toEqual([
+      expect.stringContaining('pack "nolicence" has no LICENSE or COPYING file'),
+    ]);
+    const prose = write(["  prose: { file: vendor/notatable/x.ogg, channel: sfx }"]);
+    expect(prose.some((m) => m.includes('pack "notatable" has no row'))).toBe(true);
+    for (const bad of [
+      "vendor/kenney-impact/../x.ogg",
+      "vendor/kenney-impact/.hidden.ogg",
+      "sounds/../x.ogg",
+    ]) {
+      const out = write([`  bad: { file: "${bad}", channel: sfx }`]);
+      expect(
+        out.some((m) => m.includes("file: must match ^")),
+        bad,
+      ).toBe(true);
+    }
   });
 
   it("checks the i18n keys the server and client code use", () => {

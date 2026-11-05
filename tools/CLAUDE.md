@@ -46,6 +46,13 @@ resumen Markdown con tick, RAM, CPU (de `/metrics` del servidor), latencia de co
 levanta su propio servidor (`loadtest.sh`); con `URL=` juega contra uno existente. Sale
 con código 1 si algún bot no entra o se desconecta.
 
+## soundgen
+`tools/soundgen` (T3.7) genera los efectos, la música y el ambiente propios de
+`assets/sounds/`. Es un sintetizador determinista en TS (`synth.ts`) con las recetas en
+`sfx.ts` y `music.ts`, y encoda a Ogg Opus con ffmpeg. Uso: `make sounds` (o
+`ONLY=sfx/hit`). `cli.ts check` solo revisa el presupuesto de tamaño. Los `.ogg` se
+commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
+
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera
 placeholders (cuadros de color con la sigla del item) cuando falta un sprite.

@@ -172,6 +172,25 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - El E2E corre el servidor con `-boat-routes e2e/fixtures/boat_routes.yaml` (Puerto →
   testisle, solo para tests).
 
+## Notas de T3.7
+- Un solo `AudioEngine` (`audio/engine.ts`) por página, creado en `main.tsx`. Se desbloquea
+  con el primer gesto: `pointerdown`, `pointerup`, `touchend`, `click` o `keydown`. En
+  pantallas táctiles, `pointerdown` solo no cuenta. Todo `<button>` suena con `ui.click`.
+  Mientras el contexto no esté `running`, los efectos se descartan; los loops no.
+  `Game` recibe el motor en `GameOptions.audio`: traduce cada mensaje con `cuesOf`
+  (`audio/cues.ts`, puro) y, después del batch, los reproduce alrededor de la posición
+  propia. También fija la música y el ambiente con `loopFor` (isla de `content.islands` o
+  subsuelo). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
+  de un efecto 5 en esa misma casilla. Se olvida al fabricar o al usar otro item.
+- Qué suena con cada evento está en `assets/sounds.yaml` (`content.sounds`). El plugin de
+  Vite sirve esos archivos en `/audio/` y `vite build` los emite. No escribas nombres de
+  archivo de sonido en el código.
+- Preferencias en `audio/prefs.ts` (`localStorage` `rpg.audio`). El panel es
+  `ui/AudioOptions.tsx` y va junto al selector de idioma, dentro y fuera del juego. Se
+  vuelve a montar al entrar o salir del juego, y cada vez parte de
+  `audio.currentPrefs()`.
+- Hooks E2E de solo lectura: `window.__rpgAudio` (`unlocked`, `history`, `loops`).
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

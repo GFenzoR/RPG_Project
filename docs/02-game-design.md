@@ -551,6 +551,43 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 - Llegan después (T4.1), con lugar en el diseño: reportes de jugadores, detección de bots y
   log de economía. Las sanciones que propongan las aplica siempre un GM con estos comandos.
 
+## Sonido (T3.7)
+El sonido es solo del cliente: el servidor no sabe de él y no manda nada nuevo. Cada
+mensaje que ya llega se traduce en un **evento de sonido** con nombre
+(`client/src/audio/cues.ts`) y `assets/sounds.yaml` dice qué suena con cada uno. Cambiar
+un sonido o asignarle uno a un evento nuevo no requiere tocar código.
+
+| Evento | Sale de | Suena por defecto |
+|---|---|---|
+| `effect.hit`, `effect.block` | `Effect` 1 y 2 (golpe, bloqueo o fallo) | golpe, fallo |
+| `effect.element.<elemento>` | `Effect` 10–16 (golpe mágico o casilla de área) | hechizo del elemento |
+| `projectile.<elemento>` | `Projectile` (desde donde sale) | flecha (físico) o hechizo |
+| `effect.heal`, `effect.conjure`, `effect.buff` | `Effect` 3, 4 y 7 | curación, conjurar, refuerzo |
+| `effect.gather.<tool.use>`, `effect.gather` | `Effect` 5, con la herramienta usada | minería, tala, pesca |
+| `effect.gather_miss` | `Effect` 6 | fallo |
+| `message.<clave>`, `message.<clave>.<oficio>` | mensaje de sistema (`craft.done` con el oficio de la estación abierta) | level up, muerte, viaje, herrería, cocina, monedas, rechazo |
+| `step.self` | `CreatureMove` propio | paso |
+| `ui.dialog_open` | `DialogOpen` | campana suave |
+| `ui.click` | click en cualquier botón del DOM | click |
+
+- **Canales**: general (master), música, efectos, interfaz y ambiente. Cada uno tiene
+  volumen y silencio, que se guardan en el navegador (`rpg.audio`). Se cambian en el
+  panel **Opciones**, que está junto al selector de idioma.
+- **Posicional**: un evento en una casilla suena más bajo cuanto más lejos está del
+  jugador. Se oye hasta 8 casillas (distancia de Chebyshev), con paneo estéreo según la
+  diferencia en x. No se oyen los eventos de otro piso. Los sonidos propios (pasos,
+  mensajes, UI) no son posicionales.
+- **Música y ambiente**: un loop por isla (`world/world.yaml`) y otro para los pisos
+  subterráneos (z > 7). Al cambiar de isla o de zona hay un fundido cruzado (`fade_ms`).
+  Hoy hay tres loops: Puerto, Bosque y Cueva. El ambiente son olas en Puerto y bosque en
+  Bosque; bajo tierra no hay ambiente.
+- **Autoplay**: nada suena hasta el primer gesto (click, toque o tecla). Así lo exigen los
+  navegadores y los webviews de la app de escritorio. Mientras el audio esté suspendido,
+  los efectos se descartan, para que no suenen todos juntos al reanudarse.
+- **Recolección**: el sonido de la herramienta (minería, tala, pesca) solo se oye en la
+  casilla donde el jugador la usó. La cosecha de otros jugadores y el efecto de una
+  estación al fabricar suenan como recolección genérica.
+
 ## Cosméticos (monetización futura)
 - Outfits, colores de outfit, monturas (solo visual y velocidad igual para todos),
   efectos de nombre. Se compran con una moneda premium (cuando exista la tienda) y

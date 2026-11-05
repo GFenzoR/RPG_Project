@@ -10,3 +10,9 @@ con esa carpeta y un archivo `LICENSE` dentro. Procedimiento completo: `assets/R
 | Pack / archivo | Autor | Licencia | Fuente (URL) | Carpeta | Atribución requerida |
 |---|---|---|---|---|---|
 | | | | | `assets/vendor/...` | |
+
+## Obra propia
+
+| Archivos | Autor | Licencia | Fuente reproducible |
+|---|---|---|---|
+| `assets/sounds/**/*.ogg` (efectos, interfaz, música y ambiente) | RPG Project (generado proceduralmente) | CC0 1.0 | `tools/soundgen` (`make sounds`). Recetas y melodías propias, sin muestras externas |

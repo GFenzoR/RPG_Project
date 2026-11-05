@@ -1624,3 +1624,94 @@ test("T3.6: wake up at the temple of Raigal and talk to the druid", async ({
   await shot(page, "33-bosque-druid");
   expect(errors).toEqual([]);
 });
+
+test("T3.7: sound starts after the first gesture, follows the island, and volumes persist", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  // Headless Chromium plays to no device: spy on Web Audio to see what gets scheduled.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __audioStarts: number };
+    w.__audioStarts = 0;
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof start>) {
+      w.__audioStarts++;
+      return start.apply(this, args);
+    };
+  });
+  const starts = (): Promise<number> =>
+    page.evaluate(() => (window as unknown as { __audioStarts: number }).__audioStarts);
+  const history = (): Promise<string[]> => page.evaluate(() => window.__rpgAudio?.history() ?? []);
+
+  const { email, password } = await newGuardian(playwright, "Hark");
+  await page.goto("/?lang=es");
+  // Nothing may start before a gesture (browser autoplay rules).
+  expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(false);
+  expect(await starts()).toBe(0);
+
+  await enterGame(page, email, password);
+  errors.length = 0;
+  expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(true);
+  // The test island plays the harbour loop and the waves (assets/sounds.yaml).
+  await expect
+    .poll(() => page.evaluate(() => window.__rpgAudio?.loops()))
+    .toEqual({ music: "music_puerto", ambient: "amb_olas" });
+  await expect.poll(history).toContain("click"); // "Entrar" and "Jugar"
+  // An own step makes a sound too.
+  const start = await self(page);
+  if (!start) throw new Error("no own creature");
+  await page.keyboard.press("ArrowRight");
+  await arrived(page, start.x + 1, start.y);
+  await expect.poll(history).toContain("step");
+  expect(await starts()).toBeGreaterThanOrEqual(4); // two clicks, two loops, a step
+
+  // Options: lower the music, mute the effects.
+  await page.locator(".hud").getByTestId("options-button").click();
+  const options = page.getByTestId("options");
+  await expect(options.getByRole("heading")).toHaveText("Sonido");
+  await options.getByTestId("volume-music").fill("20");
+  await options.getByTestId("mute-sfx").check();
+  await expect(options.locator(".channel").nth(1)).toContainText("Música");
+  await expect(options.locator(".channel").nth(1).locator(".value")).toHaveText("20");
+  await options.screenshot({ path: join(shots, "34-sound-options.png") });
+  await shot(page, "35-sound-options-game");
+  // Muted effects spend no voice: a step is silent now.
+  await options.getByRole("button", { name: "Cerrar" }).click();
+  await expect(options).toHaveCount(0);
+  const before = (await history()).length;
+  await page.keyboard.press("ArrowLeft");
+  await arrived(page, start.x, start.y);
+  expect((await history()).slice(before)).not.toContain("step");
+
+  // Saved: after a reload the panel (on the login screen) shows the same values.
+  await page.reload();
+  await page.locator(".corner").getByTestId("options-button").click();
+  await expect(page.getByTestId("volume-music")).toHaveValue("20");
+  await expect(page.getByTestId("mute-sfx")).toBeChecked();
+  await expect(page.getByTestId("volume-master")).toHaveValue("80");
+  await shot(page, "36-sound-options-login");
+
+  // The panel moves from the corner to the game's header: it must show what is in use
+  // now, not what the page loaded with (no reload this time).
+  await page.getByTestId("mute-ambient").check();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  await page.locator(".hud").getByTestId("options-button").click();
+  const hud = page.locator(".hud").getByTestId("options");
+  await expect(hud.getByTestId("mute-ambient")).toBeChecked();
+  await expect(hud.getByTestId("volume-music")).toHaveValue("20");
+  await expect(hud.getByTestId("mute-sfx")).toBeChecked();
+  // A change here keeps the others as they are, in the engine and in storage.
+  await hud.getByTestId("volume-ui").fill("50");
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("rpg.audio") ?? "{}"));
+  expect(saved).toMatchObject({
+    volume: { music: 0.2, ui: 0.5, master: 0.8 },
+    muted: { sfx: true, ambient: true, music: false },
+  });
+  expect(errors).toEqual([]);
+});

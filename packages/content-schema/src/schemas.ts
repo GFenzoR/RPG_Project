@@ -22,6 +22,7 @@ export type SchemaName =
   | "recipes"
   | "boat_routes"
   | "borders"
+  | "sounds"
   | "i18n"
   | "ids-lock";
 

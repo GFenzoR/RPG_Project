@@ -10,9 +10,50 @@ import { initDesktop } from "./net/desktop.ts";
 import { LANGUAGE_STORAGE_KEY, pickLanguage, translator } from "./i18n/i18n.ts";
 import { App } from "./ui/App.tsx";
 import { LanguagePicker } from "./ui/LanguagePicker.tsx";
+import { AudioOptions } from "./ui/AudioOptions.tsx";
+import { AudioEngine, browserPorts } from "./audio/engine.ts";
+import { loadPrefs } from "./audio/prefs.ts";
 import "./ui/client.css";
 
 const languages = Object.keys(content.i18n);
+
+function safeStorage(): Storage | undefined {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+// One engine for the whole page (T3.7): the menus click too, and the context survives
+// leaving and entering the game.
+const storage = safeStorage();
+const audio = new AudioEngine(content.sounds, loadPrefs(storage), browserPorts());
+// Browsers only start audio after a gesture: the first one unlocks it. On touch screens
+// pointerdown does not count as one (pointerup, touchend and click do).
+const unlock = (): void => audio.unlock();
+for (const ev of ["pointerdown", "pointerup", "touchend", "click", "keydown"])
+  window.addEventListener(ev, unlock, { capture: true });
+// Every button of the DOM UI clicks.
+document.addEventListener("click", (e) => {
+  if (e.target instanceof Element && e.target.closest("button")) audio.play(["ui.click"]);
+});
+
+declare global {
+  interface Window {
+    /** Read-only audio hooks for the E2E tests. */
+    __rpgAudio?: {
+      unlocked(): boolean;
+      history(): string[];
+      loops(): { music: string | undefined; ambient: string | undefined };
+    };
+  }
+}
+window.__rpgAudio = {
+  unlocked: () => audio.unlocked,
+  history: () => [...audio.history],
+  loops: () => audio.playingLoops(),
+};
 
 function readStored(): string | null {
   try {
@@ -46,17 +87,20 @@ function Root(): JSX.Element {
     document.title = t("client.title");
   }, [lang, t]);
   const picker = (
-    <LanguagePicker
-      t={t}
-      lang={lang}
-      languages={languages}
-      onChange={(l) => {
-        store(l);
-        setLang(l);
-      }}
-    />
+    <>
+      <LanguagePicker
+        t={t}
+        lang={lang}
+        languages={languages}
+        onChange={(l) => {
+          store(l);
+          setLang(l);
+        }}
+      />
+      <AudioOptions t={t} audio={audio} storage={storage} />
+    </>
   );
-  return <App content={content} t={t} locale={lang} languagePicker={picker} />;
+  return <App content={content} t={t} locale={lang} languagePicker={picker} audio={audio} />;
 }
 
 const root = document.getElementById("app");

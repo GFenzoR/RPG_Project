@@ -1,3 +1,4 @@
+import { NO_SOUNDS } from "../audio/cues.ts";
 import { MessageKind, MessageSchema, TextParamSchema, create } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
@@ -13,6 +14,8 @@ const content: ClientContent = {
   recipes: [],
   movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
   chat: { maxLength: 255 },
+  sounds: NO_SOUNDS,
+  islands: [],
   i18n: {},
 };
 

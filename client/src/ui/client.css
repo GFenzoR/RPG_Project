@@ -813,3 +813,56 @@ body.using-item canvas {
 .invitation p {
   margin: 0;
 }
+
+/* Sound options (T3.7): a button next to the language selector and a panel under it. */
+.corner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.options {
+  position: relative;
+  font-size: 0.75rem;
+}
+.options-panel {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  z-index: 30;
+  width: 22rem;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: var(--text);
+  background: rgba(20, 20, 30, 0.96);
+  border: 1px solid #666;
+  border-radius: 4px;
+}
+.options-panel h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+.options-panel .channel {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr) 2rem max-content;
+  align-items: center;
+  gap: 0.4rem;
+}
+.options-panel .value {
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.options-panel .mute {
+  display: flex;
+  flex-direction: row;
+  white-space: nowrap;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--muted);
+}
+.options-panel > button {
+  align-self: flex-end;
+}
