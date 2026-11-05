@@ -86,6 +86,31 @@ responde en sus puertos (`LOAD_PORT`, `LOAD_METRICS_PORT`). Con `URL` en esta m�
 bots leen `/metrics` de `127.0.0.1:9100`; para otro servidor, pasa `METRICS=...`.
 Detalle y resultados en `07-performance-budget.md`.
 
+### Monitoreo (T4.4)
+El stack de producción en Docker más el profile `monitoring`: Prometheus, Alertmanager,
+Grafana y node-exporter. Todo queda solo en `127.0.0.1`:
+```
+make monitoring-up     # make docker-up + monitoreo; agrega GRAFANA_ADMIN_PASSWORD a deploy/.env si falta
+# Grafana       http://localhost:3000/grafana/   (admin / GRAFANA_ADMIN_PASSWORD de deploy/.env)
+# Prometheus    http://localhost:9090            Alertmanager  http://localhost:9093
+make bots N=20 URL=https://localhost DURATION=5m   # carga (ver abajo: certificado local)
+make monitoring-test   # detiene el gameserver y espera la alerta GameServerDown en un webhook de prueba
+make monitoring-check  # promtool/amtool, tests de las reglas y JSON del dashboard (solo Docker)
+make monitoring-down   # apaga todo (los volúmenes quedan)
+```
+- Con `https://localhost`, los bots (Go) tienen que confiar en la CA local de Caddy:
+  `docker compose -f deploy/docker-compose.yml --env-file deploy/.env cp caddy:/data/caddy/pki/authorities/local/root.crt .`
+  y `SSL_CERT_FILE=<bundle del sistema + root.crt>`.
+- `monitoring-test` usa las imágenes ya construidas (`--no-build`): corre antes
+  `make monitoring-up` (o `make docker-build`). Recrea Alertmanager apuntando al receptor de prueba (`alert-receiver`,
+  profile `monitoring-test`). Después, `make monitoring-up` vuelve a los canales de
+  `deploy/.env`.
+- Para cambiar un umbral, edita `deploy/monitoring/prometheus/rules/alerts.yml` (y su test
+  en `prometheus/tests/alerts_test.yml`), corre `make monitoring-check` y recarga:
+  `curl -X POST localhost:9090/-/reload`.
+- El dashboard es `deploy/monitoring/grafana/dashboards/rpg-overview.json`. Grafana no
+  guarda cambios hechos en la UI: exporta el JSON y commitéalo.
+
 ## Cliente de escritorio (Tauri 2, T2.5)
 `apps/desktop/` envuelve el build web del cliente (`build/client`) en un webview de Tauri 2;
 no duplica código del cliente. Lo único propio está en Rust (`apps/desktop/src-tauri/src`):

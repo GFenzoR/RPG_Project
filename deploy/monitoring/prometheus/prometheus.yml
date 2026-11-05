@@ -1,0 +1,35 @@
+# Prometheus for the RPG Project (docs/01-architecture.md, "Observabilidad"). Started by the
+# `monitoring` compose profile; scrapes only containers on the `monitoring` network.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    stack: rpg
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+# Every threshold lives in rules/alerts.yml.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # The gameserver's internal /metrics listener (-metrics-addr=:9100). Never routed by Caddy.
+  - job_name: gameserver
+    static_configs:
+      - targets: ["gameserver:9100"]
+
+  # Machine CPU, RAM, disk and the backup textfile (deploy/backup.sh).
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]

@@ -1,0 +1,6 @@
+# /grafana/ route OFF (default; GRAFANA_PUBLIC=off). Imported by caddy-routes.caddy.
+# Grafana is reached through an SSH tunnel to 127.0.0.1:3000 (docs/09, "Monitoreo").
+@grafana path /grafana /grafana/*
+handle @grafana {
+	respond 404
+}

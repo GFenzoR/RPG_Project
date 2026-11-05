@@ -144,3 +144,39 @@ está dominada por la espera al siguiente tick, no por el servidor. Pendientes:
   `walks_rejected` y cubre solo la ventana estable.
 - RAM medida con el mundo del hito 1. El presupuesto de 600 MB es para el mundo del
   hito 3: hay que repetir la prueba cuando crezca.
+
+## Medir con el dashboard (T4.4)
+Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en
+producción), el dashboard "RPG Project — servidor" de Grafana muestra en vivo los mismos
+números de esta tabla:
+- **Tick:** p50/p95/p99 con ventana de 1 min y una línea roja en 10 ms. El tile de arriba
+  es el p99 de 5 min, el mismo que usa la alerta `TickP99OverBudget`. Los ticks de más de
+  50 ms aparecen en "Ticks lentos".
+- **RAM y CPU:** RSS y CPU del gameserver contra la máquina (node-exporter).
+- **Salida por jugador:** `rate(ws_sent_bytes_total[1m]) / players_online`, con una línea
+  en 4 KB/s.
+- **Comandos y cola:** comandos por segundo y lo que queda en cola tras cada tick. Si la
+  cola crece sostenida, el loop no da abasto.
+
+Para una prueba de carga, corre `make bots N=... URL=...` contra el stack con monitoreo
+y mira la ventana estable. El reporte JSON de `tools/bots` sigue siendo la referencia de
+los PR. El dashboard sirve para verlo en vivo y para producción.
+
+### Consumo del monitoreo (medido 2026-11-05)
+Medido en la sesión cloud (4 vCPU, 16 GB) con el stack de producción y 20 bots durante
+6 min, con `docker stats`. Hay ~2000 series activas, con scrape cada 15 s.
+
+| Servicio | RAM medida | Límite (`mem_limit`) |
+|---|---|---|
+| Prometheus | 34 MB | 256 MB |
+| Grafana | 91 MB | 256 MB |
+| Alertmanager | 22 MB | 64 MB |
+| node-exporter | 8 MB | 64 MB |
+| **Total** | **~155 MB** | 640 MB |
+
+En la misma corrida, el resto del stack usaba: gameserver 35–66 MB, Postgres 45 MB, Caddy
+16 MB. En una instancia de 2 GB, todo junto queda bajo ~400 MB. La RAM de Prometheus crece
+con las series y con la ventana de la cabeza del TSDB (~2 h). Con la retención de 15 días
+y estas series, el disco no pasa de unos cientos de MB, y el tope es 1 GB
+(`PROMETHEUS_RETENTION_SIZE`). Grafana sube un poco mientras alguien mira dashboards.
+Repite la medición cuando aparezcan métricas con muchas series.

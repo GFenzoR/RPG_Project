@@ -272,10 +272,56 @@ docker-down: ## Stop the local production stack (volumes are kept)
 docker-logs: ## Follow the logs of the local production stack
 	$(COMPOSE_PROD) logs -f --tail=100
 
+## ---- monitoring (T4.4; docs/09 "Monitoreo") --------------------------------
+
+# Prometheus + Alertmanager + Grafana + node-exporter: the `monitoring` profile of the same
+# compose file, on 127.0.0.1 only. A Grafana admin password is added to deploy/.env on the
+# first run (only when missing); the ALERT_* channels are optional (docs/09).
+COMPOSE_MON := $(COMPOSE_PROD) --profile monitoring
+
+.PHONY: monitoring-env
+monitoring-env: deploy/.env
+	@grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' deploy/.env || { \
+		echo "GRAFANA_ADMIN_PASSWORD=$$(openssl rand -hex 16)" >> deploy/.env; \
+		echo "added a random GRAFANA_ADMIN_PASSWORD to deploy/.env (user admin)"; }
+
+.PHONY: monitoring-up
+monitoring-up: docker-build monitoring-env ## Production stack + monitoring: Grafana on http://localhost:3000/grafana/
+	$(COMPOSE_MON) up -d --wait
+	$(COMPOSE_MON) ps
+	@echo "Grafana: http://localhost:3000/grafana/ (admin, GRAFANA_ADMIN_PASSWORD in deploy/.env)"
+	@echo "Prometheus: http://localhost:9090  Alertmanager: http://localhost:9093"
+
+.PHONY: monitoring-down
+monitoring-down: ## Stop the local stack and its monitoring (volumes are kept)
+	$(COMPOSE_MON) --profile monitoring-test down
+
+.PHONY: monitoring-check
+monitoring-check: ## promtool/amtool checks, rule unit tests and dashboard JSON (needs Docker)
+	deploy/monitoring/check.sh
+
+# End-to-end alert test: a webhook receiver joins the stack, the gameserver is stopped and
+# GameServerDown must reach the receiver (~2 min: 1 min `for`, scrape and group_wait).
+# Alertmanager is recreated with ALERT_WEBHOOK_URL pointing at the receiver; run
+# `make monitoring-up` afterwards to go back to the channels of deploy/.env.
+.PHONY: monitoring-test
+monitoring-test: monitoring-env ## Fire GameServerDown for real on a test webhook (after make monitoring-up: uses the built images)
+	ALERT_WEBHOOK_URL=http://alert-receiver:8000/ $(COMPOSE_MON) --profile monitoring-test up -d --wait --no-build
+	$(COMPOSE_PROD) stop gameserver
+	@echo "waiting for GameServerDown on the test receiver (up to 4 min)..."; \
+	ok=0; for i in $$(seq 1 48); do \
+		if $(COMPOSE_PROD) logs alert-receiver 2>/dev/null | grep -q 'ALERT firing GameServerDown'; then \
+			$(COMPOSE_PROD) logs --no-log-prefix alert-receiver | grep ALERT; ok=1; break; fi; \
+		sleep 5; \
+	done; \
+	$(COMPOSE_PROD) start gameserver >/dev/null; \
+	test "$$ok" = 1 || { echo "GameServerDown did not arrive"; exit 1; }; \
+	echo "monitoring-test: alert delivered (gameserver restarted)"
+
 ## ---- home hosting (docs/13-hosting-de-pruebas.md) --------------------------
 
 COMPOSE_HOME := docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml --env-file deploy/.env.home
-HOME_PROFILES := --profile quick-tunnel --profile tunnel
+HOME_PROFILES := --profile quick-tunnel --profile tunnel --profile monitoring
 
 deploy/.env.home:
 	cp deploy/.env.home.example $@
@@ -297,8 +343,18 @@ home-tunnel-domain: deploy/.env.home ## Named Cloudflare Tunnel with your domain
 	@grep -qE '^CLOUDFLARE_TUNNEL_TOKEN=.+' deploy/.env.home || { echo "set CLOUDFLARE_TUNNEL_TOKEN in deploy/.env.home (docs/13)"; exit 1; }
 	$(COMPOSE_HOME) --profile tunnel up -d cloudflared
 
+# Same monitoring profile as production (T4.4): Grafana on http://localhost:3000/grafana/.
+# A random GRAFANA_ADMIN_PASSWORD is added to deploy/.env.home when missing.
+.PHONY: home-monitoring-up
+home-monitoring-up: deploy/.env.home ## Monitoring for the home stack (Prometheus, Alertmanager, Grafana; docs/13)
+	@grep -qE '^GRAFANA_ADMIN_PASSWORD=.+' deploy/.env.home || { \
+		echo "GRAFANA_ADMIN_PASSWORD=$$(openssl rand -hex 16)" >> deploy/.env.home; \
+		echo "added a random GRAFANA_ADMIN_PASSWORD to deploy/.env.home (user admin)"; }
+	VERSION=dev COMMIT=$(GIT_COMMIT) $(COMPOSE_HOME) --profile monitoring up -d --build --wait
+	@echo "Grafana: http://localhost:3000/grafana/ (admin, GRAFANA_ADMIN_PASSWORD in deploy/.env.home)"
+
 .PHONY: home-down
-home-down: ## Stop the home stack and its tunnels (the database volume is kept)
+home-down: ## Stop the home stack, its tunnels and its monitoring (the database volume is kept)
 	$(COMPOSE_HOME) $(HOME_PROFILES) down
 
 .PHONY: home-logs

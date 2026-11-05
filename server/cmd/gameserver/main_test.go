@@ -180,3 +180,24 @@ func TestServeMetricsBindsBeforeReturning(t *testing.T) {
 		t.Fatal("binding a busy address succeeded")
 	}
 }
+
+func TestMetricsLingerOnlyAfterAbandonedWrites(t *testing.T) {
+	m := metrics.New()
+	if d := metricsLinger(m, true, 20*time.Second); d != 0 {
+		t.Fatalf("linger %v without abandoned writes", d)
+	}
+	m.PersistenceError(metrics.WriterEconomy, metrics.OutcomeRetry)
+	if d := metricsLinger(m, true, 20*time.Second); d != 0 {
+		t.Fatalf("linger %v after a retry only", d)
+	}
+	m.PersistenceError(metrics.WriterEconomy, metrics.OutcomeAbandoned)
+	if d := metricsLinger(m, true, 20*time.Second); d != 20*time.Second {
+		t.Fatalf("linger %v, want 20s", d)
+	}
+	if d := metricsLinger(m, false, 20*time.Second); d != 0 {
+		t.Fatalf("linger %v with no metrics listener", d)
+	}
+	if d := metricsLinger(nil, true, 20*time.Second); d != 0 {
+		t.Fatalf("linger %v without metrics", d)
+	}
+}

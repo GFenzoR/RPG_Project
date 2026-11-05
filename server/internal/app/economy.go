@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
@@ -34,6 +35,8 @@ type economyWriter struct {
 	log   *slog.Logger
 	flush time.Duration
 	batch int
+	// metrics counts failed writes (persistence_errors_total{writer="economy"}); nil is fine.
+	metrics *metrics.Metrics
 
 	mu       sync.Mutex
 	ch       chan session.EconomyEntry
@@ -134,6 +137,7 @@ func (w *economyWriter) write(batch []session.EconomyEntry) {
 		select {
 		case <-w.stop: // Stop gave up: the rest of the queue goes to the log, not the database
 			w.log.Error("economy: batch abandoned at shutdown", "rows", len(rows))
+			w.metrics.PersistenceError(metrics.WriterEconomy, metrics.OutcomeAbandoned)
 			return
 		default:
 		}
@@ -145,12 +149,15 @@ func (w *economyWriter) write(batch []session.EconomyEntry) {
 			return
 		case store.Permanent(err):
 			w.log.Error("economy: batch rejected by the database", "rows", len(rows), "err", err)
+			w.metrics.PersistenceError(metrics.WriterEconomy, metrics.OutcomeRejected)
 			return
 		}
 		w.log.Error("economy: batch failed, retrying", "rows", len(rows), "attempt", attempt, "retry_in", backoff.String(), "err", err)
+		w.metrics.PersistenceError(metrics.WriterEconomy, metrics.OutcomeRetry)
 		select {
 		case <-w.stop:
 			w.log.Error("economy: batch abandoned at shutdown", "rows", len(rows))
+			w.metrics.PersistenceError(metrics.WriterEconomy, metrics.OutcomeAbandoned)
 			return
 		case <-w.clock.After(backoff):
 		}

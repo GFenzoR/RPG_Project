@@ -56,7 +56,7 @@ fi
 
 # TODO(admin-commands): announce the restart in game (e.g. 5 and 1 minute warnings) and
 # ask the server to save every player before stopping, once the admin command exists.
-# Until then the SIGTERM shutdown (stop_grace_period: 30s) is the only save point.
+# Until then the SIGTERM shutdown (stop_grace_period: 90s) is the only save point.
 
 "${COMPOSE[@]}" up -d --wait postgres
 if ((backup)); then

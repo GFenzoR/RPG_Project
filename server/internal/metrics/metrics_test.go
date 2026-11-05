@@ -19,7 +19,24 @@ func TestMetricsRecordAndServe(t *testing.T) {
 	m.ConnOpened()
 	m.ConnOpened()
 	m.ConnClosed()
+	m.EconomyAlertKinds("mismatch", "log_dropped")
 	m.EconomyAlert("mismatch")
+	m.PersistenceError(WriterCharacter, OutcomeRetry)
+	m.PersistenceError(WriterCharacter, OutcomeRetry)
+	m.PersistenceError(WriterEconomy, OutcomeRejected)
+	m.HTTPRequest("GET /api/highscores", 503, 20*time.Millisecond)
+	m.HTTPRequest("GET /healthz", 200, time.Millisecond)
+	if m.Abandoned() != 0 {
+		t.Fatal("abandoned before any abandoned write")
+	}
+	m.PersistenceError(WriterEconomy, OutcomeAbandoned)
+	if m.Abandoned() != 1 {
+		t.Fatalf("Abandoned = %d, want 1", m.Abandoned())
+	}
+	online := 7
+	if err := m.PlayersOnline(func() int { return online }); err != nil {
+		t.Fatal(err)
+	}
 
 	rec := httptest.NewRecorder()
 	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
@@ -35,6 +52,15 @@ func TestMetricsRecordAndServe(t *testing.T) {
 		"ws_sent_batches_total 2",
 		"ws_connections 1",
 		`economy_alerts_total{kind="mismatch"} 1`,
+		`economy_alerts_total{kind="log_dropped"} 0`,
+		`persistence_errors_total{outcome="retry",writer="character"} 2`,
+		`persistence_errors_total{outcome="rejected",writer="economy"} 1`,
+		`persistence_errors_total{outcome="abandoned",writer="audit"} 0`,
+		`persistence_errors_total{outcome="abandoned",writer="economy"} 1`,
+		`http_requests_total{code="503",route="GET /api/highscores"} 1`,
+		`http_requests_total{code="200",route="GET /healthz"} 1`,
+		`http_request_duration_seconds_bucket{route="GET /api/highscores",le="0.025"} 1`,
+		"players_online 7",
 		"process_cpu_seconds_total",
 		"process_resident_memory_bytes",
 	} {
@@ -51,6 +77,15 @@ func TestNilMetricsRecordNothing(t *testing.T) {
 	m.ConnOpened()
 	m.ConnClosed()
 	m.EconomyAlert("mismatch")
+	m.EconomyAlertKinds("mismatch")
+	m.PersistenceError(WriterAudit, OutcomeRetry)
+	if m.Abandoned() != 0 {
+		t.Fatal("nil Metrics counted")
+	}
+	m.HTTPRequest("GET /healthz", 200, time.Millisecond)
+	if err := m.PlayersOnline(func() int { return 1 }); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // BenchmarkObserveTick is the cost the metrics add to every tick.

@@ -72,7 +72,9 @@ type Config struct {
 	AuthRateLimit httpapi.RateLimit
 	// AutosaveEvery overrides session.DefaultAutosaveEvery (tests).
 	AutosaveEvery game.Tick
-	// Metrics, if set, records the tick and network metrics (internal/metrics).
+	// Metrics, if set, records the tick, network, persistence and HTTP metrics
+	// (internal/metrics). One App per *metrics.Metrics: New registers players_online on it
+	// and fails if that is already registered.
 	Metrics *metrics.Metrics
 	// ShutdownTimeout bounds the final saves and the closing of connections (default 10 s).
 	ShutdownTimeout time.Duration
@@ -137,6 +139,7 @@ func New(cfg Config) (*App, error) {
 		Vocations:     vocations,
 		Status:        a.status,
 		Version:       buildinfo.Version,
+		Observe:       httpObserver(cfg.Metrics),
 	})
 	if err != nil {
 		return nil, err
@@ -152,6 +155,7 @@ func New(cfg Config) (*App, error) {
 			Saved:  a.snapshotSaved,
 			Clock:  cfg.Clock,
 			Logger: cfg.Logger,
+			Failed: saveFailed(cfg.Metrics),
 		})
 		if err != nil {
 			return nil, err
@@ -160,6 +164,7 @@ func New(cfg Config) (*App, error) {
 		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, a.adminDone, a.rolesChanged)
 		el := cfg.Balance.Economy.Log
 		a.economy = newEconomyWriter(cfg.Store, cfg.Clock, cfg.Logger, time.Duration(el.FlushMs)*time.Millisecond, el.BatchSize)
+		a.admin.metrics, a.economy.metrics = cfg.Metrics, cfg.Metrics
 		w, err := session.New(session.Config{
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
@@ -184,6 +189,10 @@ func New(cfg Config) (*App, error) {
 			return nil, err
 		}
 		a.World = w
+		cfg.Metrics.EconomyAlertKinds(session.AlertMismatch, session.AlertGoldOutlier, session.AlertItemsOutlier, session.AlertLogDropped)
+		if err := cfg.Metrics.PlayersOnline(w.PublishedOnline); err != nil {
+			return nil, fmt.Errorf("metrics: %w", err)
+		}
 		mv, fight, flush := w.Systems()
 		systems = append(systems, mv, fight, flush)
 	}
@@ -237,6 +246,22 @@ func economyAlert(m *metrics.Metrics) func(string) {
 		return nil
 	}
 	return m.EconomyAlert
+}
+
+// httpObserver records the HTTP API requests in m (nil without metrics).
+func httpObserver(m *metrics.Metrics) httpapi.RequestObserver {
+	if m == nil {
+		return nil
+	}
+	return m.HTTPRequest
+}
+
+// saveFailed counts the failed character saves in m (nil without metrics).
+func saveFailed(m *metrics.Metrics) func(string) {
+	if m == nil {
+		return nil
+	}
+	return func(outcome string) { m.PersistenceError(metrics.WriterCharacter, outcome) }
 }
 
 // gatewayMetrics avoids handing the gateway a non-nil interface holding a nil pointer.

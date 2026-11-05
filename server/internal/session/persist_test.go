@@ -262,9 +262,11 @@ func TestSaverRetriesAndAcks(t *testing.T) {
 	clk := clock.NewFake(time.Time{})
 	var mu sync.Mutex
 	var written, acked []session.Snapshot
+	var failed []string
 	fails := 2
 	s, err := session.NewSaver(session.SaverConfig{
-		Clock: clk,
+		Clock:  clk,
+		Failed: func(o string) { mu.Lock(); failed = append(failed, o); mu.Unlock() },
 		Write: func(_ context.Context, snap session.Snapshot) error {
 			mu.Lock()
 			defer mu.Unlock()
@@ -307,12 +309,19 @@ func TestSaverRetriesAndAcks(t *testing.T) {
 	if len(written) != 2 || written[0].Seq != 1 || written[1].Seq != 2 || len(acked) != 3 {
 		t.Fatalf("written %v acked %v", written, acked)
 	}
+	// ErrGone is not a failure; each failed attempt is one retry (persistence_errors_total).
+	if fmt.Sprint(failed) != "[retry retry]" {
+		t.Fatalf("failed outcomes %v", failed)
+	}
 }
 
 func TestSaverStopDeadlineAbandonsRetries(t *testing.T) {
+	var mu sync.Mutex
+	var failed []string
 	s, _ := session.NewSaver(session.SaverConfig{
-		Clock: clock.NewFake(time.Time{}),
-		Write: func(context.Context, session.Snapshot) error { return errors.New("db down") },
+		Clock:  clock.NewFake(time.Time{}),
+		Write:  func(context.Context, session.Snapshot) error { return errors.New("db down") },
+		Failed: func(o string) { mu.Lock(); failed = append(failed, o); mu.Unlock() },
 	})
 	s.Start()
 	s.Submit(session.Snapshot{CharacterID: 1})
@@ -320,6 +329,11 @@ func TestSaverStopDeadlineAbandonsRetries(t *testing.T) {
 	defer cancel()
 	if err := s.Stop(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Stop = %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if fmt.Sprint(failed) != "[retry abandoned]" {
+		t.Fatalf("failed outcomes %v", failed)
 	}
 }
 
@@ -372,8 +386,10 @@ func lookup(h *harness, p *session.Player) session.Client {
 func TestSaverDropsPermanentErrors(t *testing.T) {
 	var mu sync.Mutex
 	var written []int64
+	var failed []string
 	s, _ := session.NewSaver(session.SaverConfig{
-		Clock: clock.NewFake(time.Time{}), // never advances: a retry would hang Stop
+		Failed: func(o string) { mu.Lock(); failed = append(failed, o); mu.Unlock() },
+		Clock:  clock.NewFake(time.Time{}), // never advances: a retry would hang Stop
 		Write: func(_ context.Context, snap session.Snapshot) error {
 			if snap.CharacterID == 1 {
 				return fmt.Errorf("%w: check violation", session.ErrPermanent)
@@ -395,7 +411,7 @@ func TestSaverDropsPermanentErrors(t *testing.T) {
 	if err := s.Stop(ctx); err != nil { // idempotent
 		t.Fatal(err)
 	}
-	if len(written) != 1 || written[0] != 2 {
-		t.Fatalf("written %v", written)
+	if len(written) != 1 || written[0] != 2 || fmt.Sprint(failed) != "[rejected]" {
+		t.Fatalf("written %v, failed outcomes %v", written, failed)
 	}
 }

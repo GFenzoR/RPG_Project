@@ -73,6 +73,11 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
   - `stack` ya compila las imágenes del gameserver y la web para cualquier cambio de la
     app;
   - `home-stack` solo corre por cambios en `deploy/`;
+  - el paso `monitoring config` de `deploy-lint` (T4.4: `deploy/monitoring/check.sh`, con
+    `promtool`, los tests de las reglas, `amtool`, la ruta `/grafana/` de Caddy con
+    credenciales a medias y el JSON del dashboard) solo corre si cambia
+    `deploy/monitoring/`, `deploy/docker-compose.yml` o los archivos de Caddy de esa ruta. En local es
+    `make monitoring-check`;
   - en `main` y en los tags de versión se compila y publica todo, multi-arch.
 - Una regla nueva va en el script, con su caso en `self_test`. Ante la duda, el patrón
   pertenece al job: equivocarse ahí solo cuesta minutos.

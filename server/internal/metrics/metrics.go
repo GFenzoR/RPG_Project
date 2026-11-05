@@ -9,6 +9,9 @@ package metrics
 
 import (
 	"net/http"
+	"strconv"
+	"sync/atomic"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -32,7 +35,29 @@ type Metrics struct {
 	connections  prometheus.Gauge
 	// economyAlerts counts the economy alerts by kind (T4.1, session.Alert*).
 	economyAlerts *prometheus.CounterVec
+	// persistenceErrors counts failed database writes of the persistence goroutines by
+	// writer and outcome (T4.4): a fixed 3×3 set.
+	persistenceErrors *prometheus.CounterVec
+	// httpRequests and httpDuration cover the HTTP API by route pattern (bounded).
+	httpRequests *prometheus.CounterVec
+	httpDuration *prometheus.HistogramVec
+	// abandoned mirrors the abandoned writes, read at shutdown (Abandoned).
+	abandoned atomic.Int64
 }
+
+// Persistence writers and outcomes, the labels of persistence_errors_total.
+const (
+	WriterCharacter = "character" // player snapshots (session.Saver)
+	WriterAudit     = "audit"     // audit log, bans and reports (app adminWorker)
+	WriterEconomy   = "economy"   // economy log batches (app economyWriter)
+
+	OutcomeRetry     = "retry"     // transient error: the write is retried with backoff
+	OutcomeRejected  = "rejected"  // permanent error: the database refused the values, dropped
+	OutcomeAbandoned = "abandoned" // given up at shutdown while still failing
+)
+
+// HTTPBuckets are the http_request_duration_seconds buckets.
+var HTTPBuckets = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}
 
 // New registers the metrics on a fresh registry.
 func New() *Metrics {
@@ -63,9 +88,26 @@ func New() *Metrics {
 		economyAlerts: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "economy_alerts_total", Help: "Economy alerts: mismatch (possible duplication), gold_outlier, items_outlier, log_dropped.",
 		}, []string{"kind"}),
+		persistenceErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "persistence_errors_total", Help: "Failed database writes by writer (character, audit, economy) and outcome (retry, rejected, abandoned).",
+		}, []string{"writer", "outcome"}),
+		httpRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "http_requests_total", Help: "HTTP API requests by route pattern and status code.",
+		}, []string{"route", "code"}),
+		httpDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "http_request_duration_seconds", Help: "HTTP API request duration by route pattern.",
+			Buckets: HTTPBuckets,
+		}, []string{"route"}),
+	}
+	// Every writer/outcome pair starts at 0, so rate() and increase() see the first error.
+	for _, w := range []string{WriterCharacter, WriterAudit, WriterEconomy} {
+		for _, o := range []string{OutcomeRetry, OutcomeRejected, OutcomeAbandoned} {
+			m.persistenceErrors.WithLabelValues(w, o)
+		}
 	}
 	m.reg.MustRegister(m.tickDuration, m.tickOverruns, m.tickCommands, m.queuePending,
 		m.bytesSent, m.batchesSent, m.connections, m.economyAlerts,
+		m.persistenceErrors, m.httpRequests, m.httpDuration,
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		collectors.NewGoCollector())
 	return m
@@ -121,4 +163,59 @@ func (m *Metrics) EconomyAlert(kind string) {
 	if m != nil {
 		m.economyAlerts.WithLabelValues(kind).Inc()
 	}
+}
+
+// EconomyAlertKinds starts economy_alerts_total at 0 for every kind, so an alert rule
+// with increase() sees the first alert of a kind (a series born at 1 has no increase).
+func (m *Metrics) EconomyAlertKinds(kinds ...string) {
+	if m == nil {
+		return
+	}
+	for _, k := range kinds {
+		m.economyAlerts.WithLabelValues(k)
+	}
+}
+
+// PersistenceError counts one failed write of writer (Writer*) with outcome (Outcome*).
+// Called from the persistence goroutines, never from the game loop.
+func (m *Metrics) PersistenceError(writer, outcome string) {
+	if m == nil {
+		return
+	}
+	m.persistenceErrors.WithLabelValues(writer, outcome).Inc()
+	if outcome == OutcomeAbandoned {
+		m.abandoned.Add(1)
+	}
+}
+
+// Abandoned is how many writes this process abandoned at shutdown. These happen only
+// after a shutdown deadline, microseconds before the process exits: gameserver keeps
+// /metrics up a bit longer when it is not 0, so Prometheus can scrape the counter
+// (docs/01, alert PersistenceDataLost).
+func (m *Metrics) Abandoned() int64 {
+	if m == nil {
+		return 0
+	}
+	return m.abandoned.Load()
+}
+
+// HTTPRequest records one finished HTTP API request; it is httpapi.Config.Observe. route
+// must come from a bounded set (ServeMux patterns), never from the raw path.
+func (m *Metrics) HTTPRequest(route string, code int, d time.Duration) {
+	if m == nil {
+		return
+	}
+	m.httpRequests.WithLabelValues(route, strconv.Itoa(code)).Inc()
+	m.httpDuration.WithLabelValues(route).Observe(d.Seconds())
+}
+
+// PlayersOnline registers players_online, read from online at scrape time (it must be
+// safe from any goroutine, like session.World.PublishedOnline). Call it at most once.
+func (m *Metrics) PlayersOnline(online func() int) error {
+	if m == nil {
+		return nil
+	}
+	return m.reg.Register(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "players_online", Help: "Players in the world.",
+	}, func() float64 { return float64(online()) }))
 }

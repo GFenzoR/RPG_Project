@@ -4,7 +4,8 @@
 Una sola instancia con Docker Compose:
 ```
 deploy/
-  docker-compose.yml        postgres, gameserver, caddy (web), backup
+  docker-compose.yml        postgres, gameserver, caddy (web), backup; profile `monitoring`
+                            (Prometheus, Alertmanager, Grafana, node-exporter; T4.4)
   Dockerfile.gameserver     Go → distroless, con world.bin, data/ e i18n/
   Dockerfile.web            Caddy + build estático del cliente
   Dockerfile.backup         pg_dump 16 + AWS CLI
@@ -16,6 +17,9 @@ deploy/
   deploy.sh                 pull + backup + reinicio (migraciones al arrancar)
   healthcheck/              sonda HTTP mínima para el HEALTHCHECK de la imagen distroless
   smoke.sh                  prueba del stack levantado: login, /api/play, /ws, IP del cliente
+  caddy-grafana-{off,on}.caddy  ruta /grafana/ opcional (apagada por defecto; T4.4)
+  monitoring/               Prometheus (config, reglas de alertas y sus tests), entrypoint
+                            de Alertmanager, Grafana (datasources y dashboard), check.sh
 ```
 ```
 Internet ─:80/:443─▶ caddy ──red edge──▶ gameserver:8080 ──red internal──▶ postgres:5432
@@ -85,7 +89,7 @@ personal con permiso `read:packages`.
    Objetivo: < 1 minuto fuera de línea (en pruebas locales el gameserver vuelve en ~6 s).
    **Pendiente:** el anuncio de reinicio en el juego y el guardado explícito de jugadores
    (`TODO(admin-commands)` en `deploy.sh`), cuando exista el comando de admin. Hasta
-   entonces el único punto de guardado es el apagado por SIGTERM (`stop_grace_period: 30s`).
+   entonces el único punto de guardado es el apagado por SIGTERM (`stop_grace_period: 90s`).
 
 ## Guía de uso de `deploy/`
 
@@ -154,6 +158,9 @@ personajes muy por encima de lo normal) van al log estructurado (`economy:`) y a
   y, si `BACKUP_S3_URI` está definido, sube cada dump. La retención en S3 se configura con
   una regla de lifecycle del bucket.
 - Queda `unhealthy` si pasan dos intervalos sin un backup exitoso.
+- Cada corrida escribe sus métricas (`rpg_backup_*`) en `/backups/metrics/backup.prom`.
+  Con el monitoreo activo alimentan el panel de backups y las alertas `BackupFailed` y
+  `BackupStale`.
 - Backup manual: `docker compose -f docker-compose.yml run --rm backup --once`.
 - Listar y copiar: `docker compose exec backup ls -lh /backups` y
   `docker compose cp backup:/backups/rpg-<fecha>.dump .`.
@@ -166,6 +173,120 @@ personajes muy por encima de lo normal) van al log estructurado (`economy:`) y a
   ```
   Probado localmente: dump → `pg_restore` en una base nueva → datos presentes.
   Haz una prueba de restauración al mes.
+
+### Monitoreo (T4.4)
+Stack opcional en el profile `monitoring` del mismo compose. No se levanta con el `up`
+normal ni con `deploy.sh`: hay que pedirlo.
+
+| Servicio | Imagen (fija) | Licencia | Límite de RAM | Puerto en el host |
+|---|---|---|---|---|
+| `prometheus` | `prom/prometheus:v3.5.0` | Apache-2.0 | 256 MB | `127.0.0.1:9090` |
+| `alertmanager` | `prom/alertmanager:v0.28.1` | Apache-2.0 | 64 MB | `127.0.0.1:9093` |
+| `grafana` | `grafana/grafana:12.1.1` (OSS) | AGPL-3.0 | 256 MB | `127.0.0.1:3000` |
+| `node-exporter` | `prom/node-exporter:v1.9.1` | Apache-2.0 | 64 MB | ninguno |
+
+- Las imágenes corren sin modificar. La AGPL de Grafana solo obliga a publicar el código
+  si lo modificamos y lo ofrecemos por red, y no lo hacemos. Las cuatro se configuran
+  con archivos montados desde `deploy/monitoring/`.
+- **Por qué Prometheus y no VictoriaMetrics:** VictoriaMetrics single-node usa menos RAM
+  para guardar series. Pero no evalúa reglas: necesitaría además `vmalert`. Con nuestras
+  ~2000 series, Prometheus solo usó 34 MB, y así las reglas y sus tests se
+  validan con `promtool`. El consumo medido está en `07-performance-budget.md`.
+- **Retención:** 15 días o 1 GB de disco, lo que llegue primero (`PROMETHEUS_RETENTION`,
+  `PROMETHEUS_RETENTION_SIZE`). Scrape cada 15 s.
+- **Red:** red `monitoring` interna, sin salida. El gameserver escucha `/metrics` en
+  `:9100` sin publicarlo en el host. Prometheus lo lee por `monitoring`, pero los otros
+  contenedores del stack también lo alcanzan por sus redes. Caddy no tiene ruta a
+  `/metrics`, a Prometheus ni a Alertmanager.
+  Alertmanager también está en `edge`, para llegar a Discord, Telegram o al SMTP.
+- **node-exporter** monta `/` del host en solo lectura (CPU, RAM, disco) y el volumen de
+  backups (métricas de `backup.sh`).
+
+Activarlo en el servidor:
+1. Copia `deploy/monitoring/` junto a `docker-compose.yml`. Las rutas son relativas al
+   compose.
+2. En `.env`, agrega `GRAFANA_ADMIN_PASSWORD=<openssl rand -hex 16>`. Grafana no
+   arranca sin él. Opcionalmente, agrega los canales de alertas (tabla de abajo).
+3. `docker compose -f docker-compose.yml --env-file .env --profile monitoring up -d --wait`.
+   Para apagarlo: `docker compose ... stop prometheus alertmanager grafana node-exporter`.
+4. Entra por **túnel SSH**. Nada del monitoreo se publica a internet:
+   ```
+   ssh -N -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 9093:127.0.0.1:9093 usuario@<servidor>
+   # Grafana:      http://localhost:3000/grafana/   (usuario admin)
+   # Prometheus:   http://localhost:9090            Alertmanager: http://localhost:9093
+   ```
+   El dashboard "RPG Project — servidor" es la página de inicio de Grafana.
+5. Si cambias reglas o el dashboard: `make monitoring-check`, copia los archivos y
+   recarga. Prometheus se recarga con `curl -X POST localhost:9090/-/reload` desde el
+   túnel. Grafana relee los dashboards cada minuto.
+
+Variables del monitoreo (en `deploy/.env`; ninguna va al repo). Todas tienen un default
+en `docker-compose.yml`; solo `GRAFANA_ADMIN_PASSWORD` hay que definirla:
+
+| Variable | Default | Para qué |
+|---|---|---|
+| `GRAFANA_ADMIN_PASSWORD` | vacía: Grafana no arranca | Contraseña del login de Grafana. `make monitoring-up` genera una si falta |
+| `GRAFANA_ADMIN_USER` | `admin` | Usuario del login de Grafana |
+| `GRAFANA_ROOT_URL` | `http://localhost:3000/grafana/` | URL pública de Grafana; con la ruta pública, `https://<dominio>/grafana/` |
+| `GRAFANA_PUBLIC` | `off` | `on` activa la ruta `/grafana/` de Caddy (ver abajo) |
+| `GRAFANA_BASIC_AUTH_USER` | `disabled` | Usuario del basic auth de esa ruta |
+| `GRAFANA_BASIC_AUTH_HASH` | hash bcrypt de un secreto aleatorio que nadie tiene | Hash del basic auth (`caddy hash-password --bcrypt-cost 10`) |
+| `GRAFANA_ALLOW_IPS` | `192.0.2.0/32` (TEST-NET: nadie) | IPs que pueden intentar el basic auth, en formato del matcher `client_ip` de Caddy (`203.0.113.7/32`, varias separadas por espacio); el resto recibe 403. Sin definirla, todos reciben 403 |
+| `ALERT_DISCORD_WEBHOOK_URL` | vacía | Webhook de un canal de Discord |
+| `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | vacías | Bot de Telegram y chat de destino (hacen falta las dos) |
+| `ALERT_WEBHOOK_URL` | vacía | Cualquier endpoint HTTP (POST JSON de Alertmanager) |
+| `ALERT_EMAIL_TO`, `ALERT_SMTP_SMARTHOST` (`host:puerto`), `ALERT_SMTP_FROM` | vacías | Email (hacen falta las tres) |
+| `ALERT_SMTP_USER`, `ALERT_SMTP_PASSWORD` | vacías | Credenciales SMTP, si el servidor las pide |
+| `PROMETHEUS_RETENTION`, `PROMETHEUS_RETENTION_SIZE` | `15d`, `1GB` | Retención del TSDB (lo que llegue primero) |
+| `GRAFANA_PORT`, `PROMETHEUS_PORT`, `ALERTMANAGER_PORT` | `3000`, `9090`, `9093` | Puertos en `127.0.0.1` del host |
+
+- Los canales se combinan: se usan todos los que estén definidos. Sin ninguno, las
+  alertas solo se ven en Grafana y en Alertmanager.
+- El entrypoint de Alertmanager (`deploy/monitoring/alertmanager/entrypoint.sh`) genera
+  la configuración al arrancar. Los secretos van a archivos en un tmpfs, nunca al YAML.
+- Al cambiar un canal: `docker compose ... --profile monitoring up -d alertmanager`.
+- Alertas, umbrales y métricas: `01-architecture.md` ("Observabilidad").
+
+Ruta pública opcional `/grafana/` (desactivada por defecto). Úsala solo si el túnel SSH
+no te sirve. Cada intento de basic auth cuesta una comparación bcrypt en la misma máquina
+que corre el tick de 50 ms. Con usuarios desconocidos, Caddy compara contra un hash
+interno de costo 14 (alrededor de 1 s de CPU), así que unas pocas peticiones por segundo
+con credenciales al azar saturan 2 vCPU. Por eso la ruta filtra por IP antes de
+autenticar.
+1. Genera el hash con costo bajo:
+   `docker run --rm caddy:2.11-alpine caddy hash-password --bcrypt-cost 10 --plaintext '<contraseña>'`.
+2. En `.env`, pon:
+   - `GRAFANA_PUBLIC=on`;
+   - `GRAFANA_BASIC_AUTH_USER=<usuario>` (que no sea el admin de Grafana);
+   - `GRAFANA_BASIC_AUTH_HASH='<hash>'` (entre comillas simples, porque lleva `$`);
+   - `GRAFANA_ALLOW_IPS=<tu IP IPv4>/32`. Sin ella, todos reciben 403. Con Tailscale,
+     usa la IP de tu equipo en la tailnet (`100.x.y.z/32`; `100.64.0.0/10` no es un rango
+     privado para Caddy);
+   - `GRAFANA_ROOT_URL=https://<dominio>/grafana/`.
+3. Recrea `caddy` y `grafana`.
+
+Cómo responde la ruta:
+- Fuera de `GRAFANA_ALLOW_IPS`: 403, sin trabajo de bcrypt. `client_ip` respeta los
+  proxies de confianza, así que en casa se usa la IP real que llega por el túnel.
+- **IPv6:** la red `edge` de Docker es solo IPv4. En un host con IPv6 (registro `AAAA`),
+  Docker reenvía las conexiones IPv6 con `docker-proxy` desde el gateway de la red
+  (`172.x.0.1`), así que Caddy ve esa IP y no la del visitante. No pongas
+  `private_ranges` ni el rango `172.16.0.0/12` en `GRAFANA_ALLOW_IPS`: dejarías entrar a
+  cualquier visitante por IPv6. Si tu navegador prefiere IPv6 y recibes 403 con tu IPv4
+  en la lista, entra por IPv4 (`curl -4`, o un nombre sin `AAAA`) o usa el túnel SSH.
+- Si solo definiste el usuario o solo el hash, el otro valor queda con un placeholder.
+  Solo autentica la combinación configurada (por ejemplo, el usuario `disabled` con la
+  contraseña de tu hash). Con los dos placeholders, nadie entra. El compose nunca le pasa
+  a Caddy valores vacíos, así que Caddy arranca igual y el sitio no se cae.
+  `deploy/monitoring/check.sh` lo comprueba.
+- Las dos capas quedan separadas: Caddy no reenvía el header `Authorization` y Grafana
+  tiene el basic auth apagado (`GF_AUTH_BASIC_ENABLED=false`). Siempre se entra por el
+  formulario de login de Grafana.
+- `GRAFANA_PUBLIC` solo acepta `on` u `off` (es el nombre de un archivo
+  `caddy-grafana-*.caddy`).
+
+El gameserver tiene `stop_grace_period: 90s`: las etapas de apagado más
+`-metrics-linger` (20 s, solo si se abandonaron escrituras; ver `01-architecture.md`).
 
 ### IP del cliente y rate limits
 Los límites por IP de login/registro (T1.3) usan la IP que ve el gameserver. La cadena es:
@@ -237,6 +358,7 @@ git tag desktop-v0.2.0 && git push origin desktop-v0.2.0
 
 ## Seguridad operativa
 - Solo puertos 80 y 443 abiertos. SSH restringido a tu IP o con SSM Session Manager.
+- Monitoreo (Grafana, Prometheus, Alertmanager) solo en `127.0.0.1`, por túnel SSH.
 - Postgres sin puerto expuesto (solo red interna de Docker).
 - Secretos (OAuth, clave de sesiones) en `.env` del servidor, nunca en el repo.
 - Backups diarios a S3 y prueba de restauración mensual.

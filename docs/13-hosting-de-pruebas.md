@@ -61,7 +61,8 @@ deploy/
 | `make home-tunnel-domain` | Túnel con nombre y dominio propio (`CLOUDFLARE_TUNNEL_TOKEN`) |
 | `make home-logs` | Logs en vivo de todo el stack |
 | `make home-backup` | `pg_dump` a `deploy/backups/home-<fecha>.dump` |
-| `make home-down` | Apaga todo (los datos quedan en el volumen `rpg-home_pgdata`) |
+| `make home-monitoring-up` | Monitoreo opcional (T4.4): Grafana en `http://localhost:3000/grafana/`, ver "Monitoreo en casa" |
+| `make home-down` | Apaga todo, monitoreo incluido (los datos quedan en el volumen `rpg-home_pgdata`) |
 
 ## Paso a paso
 
@@ -169,6 +170,26 @@ $C exec -T postgres sh -c 'pg_restore --clean --if-exists --no-owner -U "$POSTGR
 $C start gameserver
 ```
 Para borrar todo y empezar de cero: `make home-down` y `docker volume rm rpg-home_pgdata`.
+
+## Monitoreo en casa (T4.4)
+El mismo profile `monitoring` de producción funciona en casa:
+```
+make home-monitoring-up   # Prometheus, Alertmanager, Grafana y node-exporter sobre el stack de casa
+# Grafana: http://localhost:3000/grafana/  (admin / GRAFANA_ADMIN_PASSWORD de deploy/.env.home)
+```
+- **Nada del monitoreo pasa por el túnel.** Grafana (3000), Prometheus (9090) y
+  Alertmanager (9093) escuchan solo en `127.0.0.1` de tu PC. Los túneles solo llevan a
+  Caddy, y la ruta `/grafana/` está apagada (`GRAFANA_PUBLIC=off`). No la actives con un
+  Quick Tunnel: cualquiera con la URL llegaría al login.
+- **Gasta unos 300 MB más de RAM** (medido en `07-performance-budget.md`).
+- **Backups:** en casa no corre el servicio `backup` (los dumps son `make home-backup`).
+  Por eso el panel de backups queda vacío y `BackupStale` no se dispara.
+- **Notificaciones:** si quieres recibirlas (Discord o Telegram es lo más simple), pon
+  las variables `ALERT_*` en `deploy/.env.home` (tabla en `09-deployment-aws.md`,
+  "Monitoreo") y repite `make home-monitoring-up`.
+- **Puertos:** si 3000 está ocupado (por ejemplo, por otro dev server), cambia
+  `GRAFANA_PORT` en `deploy/.env.home`.
+- `make home-down` también apaga el monitoreo.
 
 ## Problemas comunes
 | Síntoma | Causa y solución |

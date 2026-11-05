@@ -1,0 +1,163 @@
+# promtool unit tests of rules/alerts.yml (`make monitoring-check`, CI deploy-lint).
+rule_files:
+  - ../rules/alerts.yml
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - series: 'up{job="gameserver",instance="gameserver:9100"}'
+        values: "1 1 1 1 0x8" # goes down at 1m
+    alert_rule_test:
+      - eval_time: 1m30s
+        alertname: GameServerDown
+        exp_alerts: [] # down for 30 s only
+      - eval_time: 2m15s
+        alertname: GameServerDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: gameserver, instance: "gameserver:9100"}
+            exp_annotations:
+              summary: "Gameserver is down (scrape of gameserver:9100 failing)"
+              description: "Prometheus cannot reach the gameserver's /metrics for 1 minute. Check `docker compose ps` and the gameserver logs."
+
+  - interval: 1m
+    input_series:
+      - series: 'economy_alerts_total{job="gameserver",kind="mismatch"}'
+        values: "0 0 0 1 1 1"
+      - series: 'economy_alerts_total{job="gameserver",kind="gold_outlier"}'
+        values: "0 3 6 9 12 15"
+      - series: 'persistence_errors_total{job="gameserver",writer="character",outcome="retry"}'
+        values: "0 2 4 6 8 10"
+      - series: 'persistence_errors_total{job="gameserver",writer="economy",outcome="rejected"}'
+        values: "0 0 0 0 1 1"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: EconomyMismatch
+        exp_alerts:
+          - exp_labels: {severity: critical, job: gameserver, kind: mismatch}
+            exp_annotations:
+              summary: "Economy mismatch: possible item or gold duplication"
+              description: "See docs/02 (economy) and the 'economy' log entries of the gameserver."
+      - eval_time: 5m
+        alertname: PersistenceRetrying
+        exp_alerts:
+          - exp_labels: {severity: warning, writer: character}
+            exp_annotations:
+              summary: "character writes failing (10 retries in 10 min)"
+              description: "The database rejects or times out writes; they are retried, nothing is lost yet. Check Postgres and the gameserver logs."
+      - eval_time: 5m
+        alertname: PersistenceDataLost
+        exp_alerts:
+          - exp_labels: {severity: critical, writer: economy, outcome: rejected}
+            exp_annotations:
+              summary: "economy write rejected"
+              description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database' or 'abandoned'). 'abandoned' is best effort: it happens at shutdown and is only seen if the scrape catches the 20 s -metrics-linger; the logs are the source of truth."
+
+  - interval: 5m
+    input_series:
+      # Daily backups; the last success at t=0, the run at 24h failed.
+      - series: 'rpg_backup_last_success_timestamp_seconds{job="node"}'
+        values: "0x700"
+      - series: 'rpg_backup_interval_seconds{job="node"}'
+        values: "86400x700"
+      - series: 'rpg_backup_last_run_success{job="node"}'
+        values: "1x287 0x412"
+    alert_rule_test:
+      - eval_time: 12h
+        alertname: BackupFailed
+        exp_alerts: []
+      - eval_time: 25h
+        alertname: BackupFailed
+        exp_alerts:
+          - exp_labels: {severity: critical, job: node}
+            exp_annotations:
+              summary: "The last database backup failed"
+              description: "Check `docker compose logs backup`. The previous dump is still on the volume."
+      - eval_time: 47h
+        alertname: BackupStale
+        exp_alerts: []
+      - eval_time: 49h
+        alertname: BackupStale
+        exp_alerts:
+          - exp_labels: {severity: critical, job: node}
+            exp_annotations:
+              summary: "Last successful backup is 2d 1h 0m 0s old"
+              description: "No successful dump in two backup intervals. Check the backup container."
+
+  - interval: 1m
+    input_series:
+      # 1000 ticks/min, all in the 12.5 ms bucket: p99 ≈ 12 ms, over budget for 15 min.
+      - series: 'tick_duration_ms_bucket{job="gameserver",le="10"}'
+        values: "0x20"
+      - series: 'tick_duration_ms_bucket{job="gameserver",le="12.5"}'
+        values: "0+1000x20"
+      - series: 'tick_duration_ms_bucket{job="gameserver",le="+Inf"}'
+        values: "0+1000x20"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: TickP99OverBudget
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: TickP99OverBudget
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Tick p99 12.5 ms, over the 10 ms budget"
+              description: "The tick p99 has been over 10 ms (docs/07) for 10 minutes."
+
+  - interval: 10s
+    input_series:
+      # Nobody playing, Postgres down at 0: the compose healthcheck gets a 503 every 10 s
+      # and nothing else happens (no writes, 0.1 req/s total).
+      - series: 'up{job="gameserver",instance="gameserver:9100"}'
+        values: "1x200"
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="503"}'
+        values: "0+1x200"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: GameServerNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: GameServerNotReady
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Gameserver not ready: /healthz answers 503"
+              description: "The gameserver runs but cannot reach Postgres. Check `docker compose ps postgres` and its logs; players cannot log in."
+      - eval_time: 30m
+        alertname: HTTPErrorsHigh
+        exp_alerts: [] # 0.1 req/s is not "some traffic": this is why GameServerNotReady exists
+      - eval_time: 30m
+        alertname: GameServerDown
+        exp_alerts: []
+
+  - interval: 10s
+    input_series:
+      # A 45 s Postgres blip at 10m: never fires, neither during nor after it.
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="200"}'
+        values: "0+1x59 59x4 60+1x100"
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="503"}'
+        values: "0x59 1+1x4 5x100"
+    alert_rule_test:
+      - {eval_time: 10m30s, alertname: GameServerNotReady, exp_alerts: []}
+      - {eval_time: 11m, alertname: GameServerNotReady, exp_alerts: []}
+      - {eval_time: 11m30s, alertname: GameServerNotReady, exp_alerts: []}
+      - {eval_time: 12m, alertname: GameServerNotReady, exp_alerts: []}
+      - {eval_time: 13m, alertname: GameServerNotReady, exp_alerts: []}
+
+  - interval: 10s
+    input_series:
+      # A 5 min outage from 10m to 15m: fires during it and resolves soon after recovery.
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="200"}'
+        values: "0+1x59 59x29 60+1x60"
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="503"}'
+        values: "0x59 1+1x29 30x60"
+    alert_rule_test:
+      - {eval_time: 11m, alertname: GameServerNotReady, exp_alerts: []}
+      - eval_time: 14m
+        alertname: GameServerNotReady
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Gameserver not ready: /healthz answers 503"
+              description: "The gameserver runs but cannot reach Postgres. Check `docker compose ps postgres` and its logs; players cannot log in."
+      - {eval_time: 16m, alertname: GameServerNotReady, exp_alerts: []}

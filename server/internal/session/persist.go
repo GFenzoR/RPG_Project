@@ -31,7 +31,18 @@ type SaverConfig struct {
 	// WriteTimeout bounds one write (default 10 s).
 	WriteTimeout time.Duration
 	Logger       *slog.Logger
+	// Failed is told about every failed write with its outcome (SaveRetry, SaveRejected,
+	// SaveAbandoned), for the metrics. Called on the persistence goroutine. Optional.
+	Failed func(outcome string)
 }
+
+// Outcomes of a failed write, given to SaverConfig.Failed. They are the outcome labels of
+// persistence_errors_total (internal/metrics).
+const (
+	SaveRetry     = "retry"
+	SaveRejected  = "rejected"
+	SaveAbandoned = "abandoned"
+)
 
 // Saver is the persistence goroutine: it writes the snapshots the game loop submits, in
 // order, outside the loop. A failed write is retried with backoff, so a database outage
@@ -126,17 +137,26 @@ func (s *Saver) write(snap Snapshot) {
 		case errors.Is(err, ErrPermanent):
 			s.cfg.Logger.Error("session: save dropped, rejected by the database", "character", snap.CharacterID,
 				"final", snap.Final, "err", err)
+			s.failed(SaveRejected)
 			return // not acked: the World keeps a final snapshot for the next login
 		}
 		s.cfg.Logger.Error("session: save failed, retrying", "character", snap.CharacterID,
 			"attempt", attempt, "retry_in", backoff.String(), "err", err)
+		s.failed(SaveRetry)
 		select {
 		case <-s.stop:
 			s.cfg.Logger.Error("session: save abandoned at shutdown", "character", snap.CharacterID, "final", snap.Final)
+			s.failed(SaveAbandoned)
 			return
 		case <-s.cfg.Clock.After(backoff):
 		}
 		backoff = min(backoff*2, 30*time.Second)
+	}
+}
+
+func (s *Saver) failed(outcome string) {
+	if s.cfg.Failed != nil {
+		s.cfg.Failed(outcome)
 	}
 }
 

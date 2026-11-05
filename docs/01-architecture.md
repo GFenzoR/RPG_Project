@@ -112,15 +112,79 @@ assets/sprites ──spritepack──▶ atlas.png + atlas.json (cliente y edito
 - `packages/content-schema`: JSON Schemas de `data/` y tipos TS generados.
 - `packages/renderer`: dibujo de tiles e items con Pixi, compartido por cliente y editor.
 
-## Observabilidad mínima
+## Observabilidad
 - `/healthz` en la API pública. `/metrics` (Prometheus, `internal/metrics`) va en un
   listener aparte, `-metrics-addr` (por defecto `127.0.0.1:9100`, vacío lo apaga), para
-  que el proxy de la API nunca lo exponga.
-- Logs JSON con `slog`. Métricas que hay (T1.17): `tick_duration_ms` (histograma),
-  `tick_overruns_total`, `tick_commands_total`, `command_queue_pending`, `ws_connections`,
-  `ws_sent_bytes_total`, `ws_sent_batches_total`, más las estándar `process_*` (CPU, RSS) y
-  `go_*`. Desde T4.1, `economy_alerts_total{kind}` (`mismatch`, `gold_outlier`,
-  `items_outlier`, `log_dropped`). Pendientes: errores de persistencia.
+  que el proxy de la API nunca lo exponga. En Docker Compose escucha en `:9100` dentro
+  del contenedor. No se publica en el host y Caddy no tiene ruta hacia él. Prometheus lo
+  lee por la red `monitoring`, aunque los demás contenedores del stack también lo
+  alcanzan por sus redes. No lleva datos de jugadores.
+- Logs JSON con `slog`.
+- Stack de monitoreo opcional (T4.4): profile `monitoring` del compose, con Prometheus,
+  Alertmanager, Grafana y node-exporter. Configuración versionada en `deploy/monitoring/`.
+  Cómo activarlo: `09-deployment-aws.md` ("Monitoreo"), `13-hosting-de-pruebas.md` y
+  `12-local-development.md`. Cómo medir con el dashboard: `07-performance-budget.md`.
+
+### Métricas del servidor
+| Métrica | Tipo | Desde | Qué mide |
+|---|---|---|---|
+| `tick_duration_ms` | histograma | T1.17 | duración de cada tick (buckets finos bajo 10 ms) |
+| `tick_overruns_total` | contador | T1.17 | ticks de más de 50 ms |
+| `tick_commands_total`, `command_queue_pending` | contador, gauge | T1.17 | comandos ejecutados y los que quedan en cola tras el tick |
+| `ws_connections`, `ws_sent_bytes_total`, `ws_sent_batches_total` | gauge, contadores | T1.17 | conexiones WS abiertas y salida |
+| `players_online` | gauge | T4.4 | jugadores en el mundo (`World.PublishedOnline`, el mismo atomic de `/api/status`) |
+| `economy_alerts_total{kind}` | contador | T4.1 | `mismatch`, `gold_outlier`, `items_outlier`, `log_dropped`; empiezan en 0 |
+| `persistence_errors_total{writer,outcome}` | contador | T4.4 | escrituras fallidas a Postgres. `writer`: `character` (snapshots), `audit` (auditoría, bans, reportes), `economy` (log de economía). `outcome`: `retry` (se reintenta), `rejected` (la base rechazó los valores; se descarta y queda en el log), `abandoned` (se abandonó al apagar) |
+| `http_requests_total{route,code}` | contador | T4.4 | API HTTP por patrón de ruta (`GET /api/status`, `unmatched`...) y código. Sin `/ws` |
+| `http_request_duration_seconds{route}` | histograma | T4.4 | latencia de la API por patrón de ruta |
+| `process_*`, `go_*` | estándar | T1.17 | CPU, RSS, goroutines, GC |
+
+Las etiquetas son conjuntos fijos: patrones de rutas del `ServeMux` (nunca la URL), códigos
+HTTP, escritores y resultados. Ninguna lleva datos del jugador (nombre, cuenta, IP).
+La detección de bots (T4.1) no publica métrica todavía: su puntaje vive en la base y en
+`/reports`.
+
+Métricas de fuera del gameserver:
+- **Máquina** (node-exporter): CPU, RAM y disco de `/` del host.
+- **Backups**: `deploy/backup.sh` escribe `rpg_backup_last_run_success`,
+  `rpg_backup_last_run_timestamp_seconds`, `rpg_backup_last_success_timestamp_seconds`,
+  `rpg_backup_last_size_bytes` y `rpg_backup_interval_seconds` en
+  `/backups/metrics/backup.prom`. node-exporter lo lee con su collector `textfile`.
+
+### Alertas
+Reglas en `deploy/monitoring/prometheus/rules/alerts.yml`, el único archivo con umbrales.
+Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
+
+| Alerta | Severidad | Condición |
+|---|---|---|
+| `GameServerDown` | critical | scrape de `/metrics` fallido (`up == 0`) durante 1 min: proceso parado, caído o colgado |
+| `GameServerNotReady` | critical | más de la mitad de las llamadas a `/healthz` del último minuto responden 503 (Postgres no contesta), sostenido durante 2 min. Un corte de un par de minutos (por ejemplo, Postgres recreado por `deploy.sh`) no avisa, y la alerta se resuelve ~30 s después de la recuperación. `/metrics` tiene su propio listener y sigue respondiendo, así que `GameServerDown` no lo ve. Funciona sin jugadores: el healthcheck del compose llama a `/healthz` cada 10 s |
+| `GameServerMetricsMissing` | warning | no existe el target del gameserver durante 5 min |
+| `TickP99OverBudget` | warning | tick p99 (ventana de 5 min) > 10 ms durante 10 min (docs/07) |
+| `TickOverruns` | warning | más de 5 ticks de más de 50 ms en 5 min |
+| `GameServerMemoryHigh` | warning | RSS del proceso > 600 MB durante 10 min (docs/07) |
+| `HostMemoryHigh` | critical | menos de 10 % de la RAM de la máquina disponible durante 5 min |
+| `HostDiskAlmostFull` / `HostDiskCritical` | warning / critical | menos de 15 % / 5 % libre en `/` |
+| `PersistenceRetrying` | warning | más de 3 reintentos de un escritor en 10 min |
+| `PersistenceDataLost` | critical | cualquier escritura `rejected` o `abandoned` en 15 min (`abandoned` es best effort, ver abajo) |
+| `EconomyMismatch` | critical | cualquier `economy_alerts_total{kind="mismatch"}` nuevo en 15 min |
+| `BackupFailed` | critical | la última corrida de `backup.sh` falló |
+| `BackupStale` | critical | sin backup exitoso en dos intervalos (la regla de `backup.sh --check`) durante 10 min |
+| `HTTPErrorsHigh` | warning | más de 5 % de respuestas 5xx de la API (con algo de tráfico) durante 5 min |
+
+Las alertas se ven siempre en Grafana: en el dashboard (panel "Alertas activas") y en
+Alerting → Alert rules. Las notificaciones van por Alertmanager a los canales que estén
+configurados por variables de entorno: Discord, Telegram, un webhook o email
+(`09-deployment-aws.md`). Sin canales configurados, no se envían. Mientras
+`GameServerDown` está activa, se silencian las `warning`.
+
+`outcome="abandoned"` solo ocurre al apagar, cuando vence el plazo de una etapa. Pasa
+microsegundos antes de que el proceso termine, y el proceso siguiente empieza la serie en
+0. Para que Prometheus alcance a leerlo, el gameserver mantiene `/metrics` arriba
+`-metrics-linger` (20 s, más que un scrape) después de apagarse, solo si hubo algo
+abandonado. Por eso el compose le da `stop_grace_period: 90s`. Aun así es best effort:
+la fuente de verdad son los logs `save abandoned at shutdown`, `job abandoned at
+shutdown` y `batch abandoned at shutdown`, que llevan el contenido completo.
 
 ## Seguridad básica
 - Rate limit por IP en login y por conexión en comandos.
