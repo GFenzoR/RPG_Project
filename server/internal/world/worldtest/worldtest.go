@@ -144,3 +144,32 @@ func Open(t testing.TB, ox, oy, w, h int) *world.Map {
 	}
 	return Map(t, ox, oy, 7, rows...)
 }
+
+// Join puts the islands of maps (each built by this package, so each has one island)
+// in one map, renaming them to ids in order. The maps must not overlap.
+func Join(t testing.TB, ids []string, maps ...*world.Map) *world.Map {
+	t.Helper()
+	var islands []*world.Island
+	sectors := map[string][]*world.Sector{}
+	for i, m := range maps {
+		src := m.Islands()[0]
+		is := *src
+		is.ID = ids[i]
+		islands = append(islands, &is)
+		r := is.Rect
+		for _, z := range is.Floors {
+			for y := r.Y; y < r.Y+r.H; y += world.SectorSize {
+				for x := r.X; x < r.X+r.W; x += world.SectorSize {
+					if s := m.SectorAt(world.Pos{X: uint16(x), Y: uint16(y), Z: z}); s != nil {
+						sectors[is.ID] = append(sectors[is.ID], s)
+					}
+				}
+			}
+		}
+	}
+	m, err := world.NewMap(islands, sectors, Speeds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}

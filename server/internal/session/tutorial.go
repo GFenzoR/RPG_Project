@@ -47,7 +47,8 @@ func (w *World) initTutorial() error {
 }
 
 // tutorialJoin resumes p's tutorial, or starts it for a new character: never played
-// (level 1, no experience), residing on the tutorial island, and with no tutorial state.
+// (level 1, no experience), whose home island (homeIsland: a new character has no town
+// and wakes up on the start island) is the tutorial island, and with no tutorial state.
 // A character that existed before the tutorial did has experience or levels, so it never
 // sees it.
 func (w *World) tutorialJoin(p *Player) {
@@ -57,7 +58,7 @@ func (w *World) tutorialJoin(p *Player) {
 	}
 	step := p.storage.Get(tutStepKey)
 	if step == 0 {
-		if p.level != 1 || p.experience != 0 || p.town != t.Island {
+		if p.level != 1 || p.experience != 0 || w.homeIsland(p.town) != t.Island {
 			return
 		}
 		w.tutorialEnter(p, 0)
@@ -96,14 +97,36 @@ func (w *World) tutorialEnter(p *Player, i int) {
 	w.sendTutorial(p)
 }
 
-// tutorialMet reports whether step s already holds for p without a new event: a
-// quest_start step whose quest p started earlier (it cannot be started twice).
+// tutorialMet reports whether step s (a single-event one) already holds for p when it
+// becomes current, so that the hint never asks for something done that cannot be done
+// again as asked: a quest p already started (it cannot start twice), a container already
+// open (the hinted click would close it), a target already chosen (clicking it again
+// clears it), or a kill made this tick by the action that completed the step before (a
+// spell that kills its target).
 func (w *World) tutorialMet(p *Player, s *content.TutorialStep) bool {
-	if s.When.Event != content.TriggerQuestStart || s.When.Ref == "" {
+	if s.When.N() != 1 {
 		return false
 	}
-	st, _ := w.quests.State(p.storage, s.When.Ref)
-	return st != quest.NotStarted
+	ref := s.When.Ref
+	switch s.When.Event {
+	case content.TriggerQuestStart:
+		if ref == "" {
+			return false
+		}
+		st, _ := w.quests.State(p.storage, ref)
+		return st != quest.NotStarted
+	case content.TriggerOpenContainer:
+		for _, o := range p.open {
+			if ref == "" || o.item.def.ID == ref {
+				return true
+			}
+		}
+	case content.TriggerTarget:
+		return p.target != nil && (ref == "" || p.target.kind.def.ID == ref)
+	case content.TriggerKill:
+		return p.tutKillAt == w.nowTick() && p.tutKillAt != 0 && (ref == "" || p.tutKill == ref)
+	}
+	return false
 }
 
 // tutorialEvent counts one server event toward p's current step. ref is the content id
@@ -111,6 +134,9 @@ func (w *World) tutorialMet(p *Player, s *content.TutorialStep) bool {
 func (w *World) tutorialEvent(p *Player, event, ref string) {
 	if p.tut == 0 {
 		return
+	}
+	if event == content.TriggerKill {
+		p.tutKillAt, p.tutKill = w.nowTick(), ref // see tutorialMet
 	}
 	s := &w.cfg.Tutorial.Steps[p.tut-1]
 	if s.When.Event != event || s.When.Ref != "" && s.When.Ref != ref {

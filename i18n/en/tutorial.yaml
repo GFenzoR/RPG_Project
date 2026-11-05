@@ -3,7 +3,7 @@ tutorial.step.first_steps: "You wake up in the temple of the Lantern. Walk {coun
 tutorial.step.meet_priestess: "The temple's priestess welcomes those who come from the sea. Right-click her to talk."
 tutorial.step.open_backpack: "You carry a backpack. Right-click it in your equipment to open it."
 tutorial.step.pick_target: "Rats and gulls prowl the harbor, south-east of here. Pick a creature with a right click or from the battle list."
-tutorial.step.first_spell: "Your vocation knows a spell. Put it on F1 with the bar's pencil and cast it at your target."
+tutorial.step.first_spell: "Your spells are already on the bar below: the first one on F1. With your target chosen, press F1 or click that slot."
 tutorial.step.first_victory: "Defeat your target. If you get hurt, step back and wait to recover."
 tutorial.step.harbor_master_task: "Maren Holt, the harbor master, needs a hand. Find her on the pier and accept her task."
 tutorial.completed: "You finished the tutorial. Fair winds!"

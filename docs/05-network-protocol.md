@@ -75,7 +75,7 @@ Detalles (T1.4, `server/internal/net/gateway`):
   un paso dado, un objetivo elegido, un hechizo o runa lanzado, un item movido o usado, un
   chat dicho, un diálogo abierto o una opción elegida, una compra o venta, un intento de
   recolección o de oficio. `Ping`, `Turn`, `LookAt`, `SetFightMode`, `StopWalk`,
-  `CloseContainer`, `ReportPlayer` y cualquier intención rechazada no. Nunca en combate
+  `CloseContainer`, `ReportPlayer`, `TutorialSkip` y cualquier intención rechazada no. Nunca en combate
   (`travel.combat_block_ms`) ni sobre una casilla sin logout: se reintenta cada segundo.
 
 ## API HTTP (cuentas y personajes)
@@ -213,6 +213,7 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
 | `ReportPlayer` | `creature_id` (un jugador a la vista), `reason` (1..200 caracteres) (T4.1) |
 | `PresenceAnswer` | `check_id`, `option_id` (respuesta a un `PresenceCheck`, T4.1) |
+| `TutorialSkip` | — (termina el tutorial sin premio, T4.2) |
 | `Ping` | `client_time` |
 | `Logout` | — |
 
@@ -467,7 +468,10 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   ninguno) y `progress`/`count` = eventos contados y necesarios. Llega al entrar (si está
   activo), cada vez que cambia el paso o su progreso, y una vez con `DONE`/`SKIPPED` al
   terminar. Al terminar llega además el `Message` de sistema `tutorial.completed` (y el
-  premio: `dialog.received_gold`) o `tutorial.skipped`.
+  premio: `dialog.received_gold`) o `tutorial.skipped`. Un paso de un solo evento que ya
+  se cumple al volverse el actual se da por hecho en el acto: la quest ya empezada, el
+  contenedor ya abierto, el objetivo ya elegido o la muerte que causó, en ese mismo tick,
+  la acción que cerró el paso anterior (un hechizo que mata a su objetivo).
 - **`TutorialSkip{}`** (cliente → servidor): termina el tutorial sin premio. Sin tutorial
   activo no pasa nada. **No hay mensaje para completar un paso:** los pasos avanzan con
   eventos del servidor ya validados (un `NpcTalk` fuera de rango, un `SetTarget` inválido o

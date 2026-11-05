@@ -5,9 +5,9 @@ import type { Translate } from "../i18n/i18n.ts";
 
 /**
  * The tutorial's hint panel (T4.2), over the map: the current step's text, its progress
- * and a button to skip the tutorial. It never blocks the game (no key, no overlay). The
- * step's UI element is highlighted through `body[data-tutorial-focus]` and the element's
- * `data-tutorial` attribute (client.css).
+ * and a button to skip the tutorial. It never blocks the game (no key, no overlay) and
+ * hides while an NPC dialog, shop or station window is open. The step's UI element (its
+ * `data-tutorial` attribute) gets `data-tutorial-active`, which client.css highlights.
  */
 export function TutorialPanel(props: {
   t: Translate;
@@ -17,14 +17,18 @@ export function TutorialPanel(props: {
   const { t } = props;
   const s = props.ui.tutorial;
   const focus = s?.highlight;
+  // After every render (an element may mount later): mark the step's element.
   useEffect(() => {
-    if (focus) document.body.dataset["tutorialFocus"] = focus;
-    else delete document.body.dataset["tutorialFocus"];
+    if (!focus) return undefined;
+    const marked = [...document.querySelectorAll<HTMLElement>(`[data-tutorial="${focus}"]`)];
+    for (const el of marked) el.dataset["tutorialActive"] = "";
     return () => {
-      delete document.body.dataset["tutorialFocus"];
+      for (const el of marked) delete el.dataset["tutorialActive"];
     };
-  }, [focus]);
-  if (!s) return null;
+  });
+  // Out of the way of the windows over the map (dialog, shop, station): on a narrow
+  // screen they reach the top right corner.
+  if (!s || props.ui.dialog || props.ui.shop || props.ui.station) return null;
   return (
     <section
       class="tutorial"

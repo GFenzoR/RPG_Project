@@ -10,26 +10,45 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/sim"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
+	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
 // tutorialHarness runs the real data/tutorial.yaml on dataHarness's map (its island is
 // "test", so the tutorial is moved there) with a bilge rat at (30, 30).
 func tutorialHarness(t *testing.T) *harness {
 	t.Helper()
-	tut, err := content.LoadTutorial(filepath.Join("..", "..", "..", "data"))
+	return tutorialHarnessWith(t, nil)
+}
+
+// tutorialHarnessWith is tutorialHarness with a last change to the config; it also has
+// the spells of data/spells.yaml.
+func tutorialHarnessWith(t *testing.T, edit func(*session.Config)) *harness {
+	t.Helper()
+	dir := filepath.Join("..", "..", "..", "data")
+	tut, err := content.LoadTutorial(dir)
 	if err != nil || tut == nil {
 		t.Fatalf("tutorial: %v", err)
 	}
+	spells, err := content.LoadSpells(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	moved := *tut
 	moved.Island = "test"
-	return dataHarnessWith(t, func(c *session.Config) { c.Tutorial = &moved },
+	return dataHarnessWith(t, func(c *session.Config) {
+		c.Tutorial, c.Spells = &moved, spells
+		if edit != nil {
+			edit(c)
+		}
+	},
 		world.Spawn{ID: "rat", Center: pos(30, 30), Radius: 0, RespawnSeconds: 600,
 			Monsters: []world.SpawnMonster{{Monster: "bilge_rat", Count: 1}}})
 }
 
-// newcomer is a character that never played, residing on the test island.
+// newcomer is a character that never played: like a new row of characters, it has no
+// town yet and wakes up on the start island (the map's only island, "test").
 func newcomer(id int64, vocation string) session.Character {
-	return session.Character{ID: id, AccountID: id, Name: "Newcomer", Vocation: vocation, Town: "test", Level: 1, Health: 145, Mana: 20}
+	return session.Character{ID: id, AccountID: id, Name: "Newcomer", Vocation: vocation, Level: 1, Health: 145, Mana: 20}
 }
 
 func lastTutorial(evs []*pb.ServerMessage) *pb.TutorialStep {
@@ -213,20 +232,15 @@ func TestTutorialPersists(t *testing.T) {
 	expectStep(t, lastTutorial(h.runFor(cl, 2*time.Second)), "meet_priestess", 0)
 }
 
-// Characters that existed before the tutorial (experience or levels), and those of
-// another island, never get it.
+// Characters that existed before the tutorial (experience or levels) never get it.
 func TestTutorialOnlyNewCharacters(t *testing.T) {
 	h := tutorialHarness(t)
 	for i, c := range []session.Character{
 		{Level: 1, Experience: 40},
 		{Level: 3, Experience: 0},
-		{Level: 1, Town: "elsewhere"},
 	} {
 		id := int64(960 + i)
 		c.ID, c.AccountID, c.Name, c.Vocation, c.Health = id, id, "Veteran", "guardian", 145
-		if c.Town == "" {
-			c.Town = "test"
-		}
 		cl, p := h.joinChar(c)
 		if ts := lastTutorial(cl.take()); ts != nil || p.TutorialStep(h.w) != "" {
 			t.Fatalf("%+v got the tutorial: %v", c, ts)
@@ -338,4 +352,74 @@ func TestTutorialQuestStartedEarly(t *testing.T) {
 			t.Fatalf("relog %v: %v, +%d coins", relog, ts, h.w.Money(p)-money)
 		}
 	}
+}
+
+// The tutorial island is the home island of a new character (no town) only when it is the
+// start island: on a server that starts characters elsewhere, they never get it.
+func TestTutorialHomeIsland(t *testing.T) {
+	for _, c := range []struct {
+		start string
+		want  bool
+	}{{"", false}, {"other", true}} {
+		h := tutorialHarnessWith(t, func(cfg *session.Config) {
+			cfg.Map = worldtest.Join(t, []string{"test", "other"}, cfg.Map, worldtest.Open(t, 128, 0, 32, 32))
+			cfg.Tutorial.Island = "other"
+			cfg.StartTown = c.start
+		})
+		cl, p := h.joinChar(newcomer(990, "guardian"))
+		got := lastTutorial(cl.take()) != nil
+		if got != c.want || (p.TutorialStep(h.w) != "") != c.want {
+			t.Fatalf("start town %q: tutorial %v, want %v", c.start, got, c.want)
+		}
+	}
+}
+
+// Steps that already hold when they become current complete at once: the backpack the
+// hint asks to open is open already (the hinted click would close it), the target is
+// already chosen, or the spell that completed first_spell killed the target.
+func TestTutorialStepsAlreadyMet(t *testing.T) {
+	h := tutorialHarness(t)
+	openPack := func(cl *fakeClient, p *session.Player) []*pb.ServerMessage {
+		pack := p.Equipped(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK)
+		return h.send(cl, useItem(inSlot(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK), uint32(pack.Def().Numeric), 0))
+	}
+	// resume logs id in at stored step (index + 1).
+	resume := func(id int64, step int64) (*fakeClient, *session.Player) {
+		cl, p := h.joinChar(newcomer(id, "arcanist"))
+		h.sim.Command(gameFunc(func() { p.SetStorageForTest("tutorial.step", step) }))
+		h.sim.Step()
+		h.sim.Command(h.w.Leave(cl))
+		h.sim.Step()
+		c := newcomer(id, "arcanist")
+		c.Storage = h.saves[len(h.saves)-1].Storage
+		cl, p = h.joinChar(c)
+		cl.take()
+		return cl, p
+	}
+
+	// The backpack opened before its step: talking to the priestess skips open_backpack.
+	cl, p := resume(991, 2) // meet_priestess
+	openPack(cl, p)
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(12, 13)) }))
+	h.sim.Step()
+	cl.take()
+	expectStep(t, lastTutorial(h.send(cl, talkMsg(h.npc("puerto_priest").ID()))), "pick_target", 0)
+
+	// The target chosen before its step: opening the backpack skips pick_target.
+	cl, p = resume(992, 3) // open_backpack
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(28, 30)) }))
+	h.sim.Step()
+	cl.take()
+	rat := onlyMonster(t, h)
+	h.send(cl, setTarget(rat.ID()))
+	expectStep(t, lastTutorial(openPack(cl, p)), "first_spell", 0)
+
+	// The first spell kills the target: first_victory is met in the same tick.
+	h.sim.Command(gameFunc(func() { rat.SetHealth(1) }))
+	h.sim.Step()
+	evs := h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_CastSpell{CastSpell: &pb.CastSpell{Spell: &pb.CastSpell_SpellId{SpellId: "arc_bolt"}}}})
+	if len(h.w.Monsters()) != 0 {
+		t.Fatalf("the bolt did not kill the rat: %v", systemKeys(evs))
+	}
+	expectStep(t, lastTutorial(evs), "harbor_master_task", 0)
 }
