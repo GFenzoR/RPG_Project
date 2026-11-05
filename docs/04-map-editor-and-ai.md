@@ -413,18 +413,29 @@ nombre del personaje elegido, nunca el email.
 **Moderación.** Solo gm y admin (rol de `accounts`, que asigna `gameserver admin set-role`),
 leído en cada pedido y otra vez dentro de la transacción de la decisión. Un player que
 conoce las URLs recibe `403` en la cola y en la decisión, y `404` en el detalle y la
-descarga de envíos ajenos. Pendiente para más adelante (opcional en T4.5): avisar a los gm
+descarga de envíos ajenos. Un moderador no decide sobre su propio envío
+(`own_submission`): lo revisa otro, así nadie manda su patch directo al worker. Los
+intentos de un player contra la API de moderación van al log del servidor, no a
+`audit_log` (que no se llene con ruido de una cuenta cualquiera). Pendiente para más adelante (opcional en T4.5): avisar a los gm
 conectados cuando llega un envío.
 
-**Contrato con el worker (PR 2/2).** La cola es la tabla: el worker toma el aprobado más
-viejo que toque con
-`SELECT … FROM map_submissions WHERE status = 'approved' AND (next_attempt_at IS NULL OR
-next_attempt_at <= now) ORDER BY reviewed_at, id LIMIT 1 FOR UPDATE SKIP LOCKED`
-(índice parcial `map_submissions_approved_idx`), y lo pasa a `pr_opened` (`pr_url`,
-`pr_number`) o `failed` (`failure`, un código `[a-z_]` fijo, nunca un mensaje de GitHub o
-del merge), o lo deja `approved` con `attempts + 1` y un `next_attempt_at` posterior para
-reintentar. La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y
-`reason` en `rejected`.
+**Contrato con el worker (PR 2/2).** La cola es la tabla, y ninguna transacción queda
+abierta mientras se habla con GitHub:
+1. **Reservar**, en una transacción corta: el aprobado más viejo que toque,
+   `SELECT … FROM map_submissions WHERE status = 'approved' AND (next_attempt_at IS NULL OR
+   next_attempt_at <= now) ORDER BY reviewed_at, id LIMIT 1 FOR UPDATE SKIP LOCKED`
+   (índice parcial `map_submissions_approved_idx`); se le suma `attempts + 1` y
+   `next_attempt_at = now + lease` (minutos), y se confirma. El lease aleja a otros
+   workers; si el worker muere, vence solo.
+2. **Trabajar** sin transacción. Es idempotente por construcción: la rama es siempre
+   `map-submission/<id>`, y si ya hay un PR abierto desde esa rama se reusa, nunca se
+   abre otro. Un reinicio a mitad de camino no duplica nada.
+3. **Cerrar**, en otra transacción corta con `status = 'approved'` como guarda: `pr_opened`
+   (`pr_url`, `pr_number`) o `failed` (`failure`, un código `[a-z_]` fijo, nunca un
+   mensaje de GitHub o del merge). Un error reintentable lo deja `approved`, y el lease
+   hace de espera.
+La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y `reason` en
+`rejected`.
 
 ## Flujo recomendado para que una IA construya una zona
 1. `map_info` y `content_search` para saber qué hay disponible.

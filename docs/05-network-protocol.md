@@ -256,6 +256,12 @@ test sin Postgres) las rutas no existen (404).
 - La descarga sale con `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`
   y `Content-Security-Policy: default-src 'none'; sandbox`: el navegador nunca la muestra.
   La de un moderador queda en `audit_log` (`map_download`).
+- Antes de leer el cuerpo, `POST /api/maps/submissions` mira la cuenta sin locks
+  (`CheckSubmitter`: deshabilitada o baneada, antigüedad, cupo del día) y corta con su
+  código; una cuenta que sería rechazada no ocupa los MB de lectura. La transacción del
+  alta lo vuelve a mirar con la cuenta bloqueada.
+- La descarga del patch es un `<a download>`: usa la cookie, así que la cola de moderación
+  es del sitio web (la app de escritorio, con token Bearer, no la ofrece).
 - Límites (flags de `gameserver`): `-map-submit-max-bytes` (2 MiB), `-map-submit-per-day`
   (3 envíos guardados por cuenta en 24 h móviles) y `-map-submit-min-account-age` (24 h).
   Además, 5 intentos por minuto por cuenta (`DefaultMapSubmitRateLimit`, válidos o no).
@@ -272,6 +278,8 @@ test sin Postgres) las rutas no existen (404).
 | `duplicate_submission` | 409 | El mismo patch (sha256) de la cuenta sigue pendiente |
 | `forbidden` | 403 | Cuenta deshabilitada o baneada al enviar, o una ruta de moderación sin ser gm/admin |
 | `not_pending` | 409 | Revisar un envío que ya se decidió |
+| `own_submission` | 403 | Un moderador revisando su propio envío (lo decide otro) |
+| `unauthorized` | 401 | Además de lo habitual: la sesión sobrevivió a su cuenta |
 
 ## Mensajes cliente → servidor (intenciones)
 | Mensaje | Campos |

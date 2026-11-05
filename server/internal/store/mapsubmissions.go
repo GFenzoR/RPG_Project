@@ -33,6 +33,8 @@ var (
 	ErrDuplicateSubmission = errors.New("store: the same patch is already waiting for review")
 	ErrForbidden           = errors.New("store: forbidden")
 	ErrNotPending          = errors.New("store: submission is not pending")
+	// ErrOwnSubmission: a moderator cannot decide on their own submission.
+	ErrOwnSubmission = errors.New("store: moderators cannot review their own submission")
 )
 
 // ValidSubmissionStatus reports whether s is a status of map_submissions.
@@ -111,20 +113,15 @@ func (s *Store) CreateMapSubmission(ctx context.Context, n NewMapSubmission) (Ma
 		if err != nil {
 			return fmt.Errorf("submitter: %w", notFound(err))
 		}
-		if acc.DisabledAt.Valid || acc.Banned {
-			return ErrForbidden
-		}
-		if n.At.Sub(acc.CreatedAt.Time) < n.MinAccountAge {
-			return ErrAccountTooNew
-		}
 		recent, err := q.CountRecentSubmissions(ctx, db.CountRecentSubmissionsParams{
 			AccountID: n.AccountID, Since: ts(n.At.Add(-24 * time.Hour)),
 		})
 		if err != nil {
 			return fmt.Errorf("count submissions: %w", err)
 		}
-		if recent >= int64(n.PerDay) {
-			return ErrSubmitLimit
+		if err := submitterError(acc.DisabledAt.Valid || acc.Banned,
+			n.At.Sub(acc.CreatedAt.Time) < n.MinAccountAge, recent >= int64(n.PerDay)); err != nil {
+			return err
 		}
 		out.AuthorName, err = q.CharacterOfAccount(ctx, db.CharacterOfAccountParams{ID: n.CharacterID, AccountID: n.AccountID})
 		if err != nil {
@@ -155,6 +152,31 @@ func (s *Store) CreateMapSubmission(ctx context.Context, n NewMapSubmission) (Ma
 		return MapSubmission{}, fmt.Errorf("create map submission: %w", err)
 	}
 	return out, nil
+}
+
+// CheckSubmitter is a cheap check, without locks, of what CreateMapSubmission enforces
+// on the account (disabled or banned, age, daily limit), so an upload that would be
+// refused is refused before its body is read. CreateMapSubmission checks again.
+func (s *Store) CheckSubmitter(ctx context.Context, accountID int64, at time.Time, perDay int, minAge time.Duration) error {
+	row, err := s.q.SubmitterStatus(ctx, db.SubmitterStatusParams{
+		AccountID: accountID, Now: ts(at), Since: ts(at.Add(-24 * time.Hour)),
+	})
+	if err != nil {
+		return fmt.Errorf("check submitter: %w", notFound(err))
+	}
+	return submitterError(row.DisabledAt.Valid || row.Banned, at.Sub(row.CreatedAt.Time) < minAge, row.Recent >= int64(perDay))
+}
+
+func submitterError(blocked, tooNew, overLimit bool) error {
+	switch {
+	case blocked:
+		return ErrForbidden
+	case tooNew:
+		return ErrAccountTooNew
+	case overLimit:
+		return ErrSubmitLimit
+	}
+	return nil
 }
 
 // AccountRole returns the current role of an account (ErrNotFound if it does not exist).
@@ -230,7 +252,8 @@ type ReviewRequest struct {
 
 // ReviewMapSubmission approves or rejects a pending submission and audits it
 // ("map_approve" / "map_reject") in one transaction. The actor's role is read in the same
-// transaction: ErrForbidden below gm. ErrNotFound, or ErrNotPending once decided.
+// transaction: ErrForbidden below gm, ErrOwnSubmission for the author's own submission.
+// ErrNotFound, or ErrNotPending once decided.
 func (s *Store) ReviewMapSubmission(ctx context.Context, r ReviewRequest) (MapSubmission, error) {
 	status, action := SubmissionRejected, "map_reject"
 	if r.Approve {
@@ -244,14 +267,18 @@ func (s *Store) ReviewMapSubmission(ctx context.Context, r ReviewRequest) (MapSu
 		if RoleRank(role) < RoleRank(RoleGM) {
 			return ErrForbidden
 		}
+		author, err := q.SubmissionAuthor(ctx, r.ID)
+		if err != nil {
+			return fmt.Errorf("submission: %w", notFound(err))
+		}
+		if author == r.ActorAccountID {
+			return ErrOwnSubmission
+		}
 		row, err := q.ReviewSubmission(ctx, db.ReviewSubmissionParams{
 			Status: status, Now: ts(r.At), ReviewedBy: optID(r.ActorAccountID),
 			Reason: pgtype.Text{String: r.Reason, Valid: r.Reason != ""}, ID: r.ID,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
-			if _, err := q.SubmissionStatus(ctx, r.ID); err != nil {
-				return fmt.Errorf("submission: %w", notFound(err))
-			}
 			return ErrNotPending
 		}
 		if err != nil {

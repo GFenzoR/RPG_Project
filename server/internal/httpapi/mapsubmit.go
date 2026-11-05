@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/mappatch"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
@@ -25,6 +26,7 @@ import (
 // MapSubmissions is the storage of the portal. *store.Store implements it.
 type MapSubmissions interface {
 	CreateMapSubmission(ctx context.Context, n store.NewMapSubmission) (store.MapSubmission, error)
+	CheckSubmitter(ctx context.Context, accountID int64, at time.Time, perDay int, minAge time.Duration) error
 	AccountRole(ctx context.Context, accountID int64) (string, error)
 	AccountMapSubmissions(ctx context.Context, accountID int64, n int) ([]store.MapSubmission, error)
 	MapSubmissionsByStatus(ctx context.Context, status string, n int) ([]store.MapSubmission, error)
@@ -156,6 +158,12 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type")
 		return
 	}
+	// An account that would be refused (new, banned, over its daily limit) is refused
+	// before a few MB of body are read; the transaction checks again.
+	if err := a.cfg.MapSubmissions.CheckSubmitter(r.Context(), accountID, a.cfg.Clock.Now(), lim.PerDay, lim.MinAccountAge); err != nil {
+		a.failSubmission(w, r, err, "unauthorized")
+		return
+	}
 	// The server's 10 s read timeout is short for a few MB on a slow link. A network
 	// deadline, not game logic: it needs the wall clock (a fake clock would expire it).
 	rc := http.NewResponseController(w)
@@ -231,8 +239,13 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 		BaseRef: sum.BaseRef, Files: files, Patch: []byte(in.Patch),
 		PerDay: lim.PerDay, MinAccountAge: lim.MinAccountAge,
 	})
+	if errors.Is(err, store.ErrNotFound) {
+		// The account was checked a moment ago: what is missing is the character.
+		writeError(w, http.StatusNotFound, "character_not_found")
+		return
+	}
 	if err != nil {
-		a.failSubmission(w, r, err, "character_not_found")
+		a.failSubmission(w, r, err, "unauthorized")
 		return
 	}
 	a.log.Info("map submission", "id", m.ID, "account", accountID, "files", len(files), "size", m.SizeBytes)
@@ -399,6 +412,9 @@ func (a *api) reviewSubmission(w http.ResponseWriter, r *http.Request, accountID
 
 func (a *api) isStaff(ctx context.Context, accountID int64) (bool, error) {
 	role, err := a.cfg.MapSubmissions.AccountRole(ctx, accountID)
+	if errors.Is(err, store.ErrNotFound) {
+		return false, auth.ErrUnauthorized // the session outlived its account
+	}
 	if err != nil {
 		return false, err
 	}
@@ -433,6 +449,10 @@ func (a *api) failSubmission(w http.ResponseWriter, r *http.Request, err error, 
 		writeError(w, http.StatusForbidden, "forbidden")
 	case errors.Is(err, store.ErrNotPending):
 		writeError(w, http.StatusConflict, "not_pending")
+	case errors.Is(err, store.ErrOwnSubmission):
+		writeError(w, http.StatusForbidden, "own_submission")
+	case errors.Is(err, store.ErrNotFound) && notFound == "unauthorized":
+		writeError(w, http.StatusUnauthorized, notFound)
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, notFound)
 	default:

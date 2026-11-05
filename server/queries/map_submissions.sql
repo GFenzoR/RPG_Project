@@ -65,5 +65,16 @@ SET status = sqlc.arg(status), reviewed_at = sqlc.arg(now), reviewed_by = sqlc.a
 WHERE id = sqlc.arg(id) AND status = 'pending'
 RETURNING id, account_id, author_name, sha256;
 
--- name: SubmissionStatus :one
-SELECT status FROM map_submissions WHERE id = sqlc.arg(id);
+-- name: SubmissionAuthor :one
+SELECT account_id FROM map_submissions WHERE id = sqlc.arg(id);
+
+-- name: SubmitterStatus :one
+-- The same as LockSubmitter without the lock: a cheap check before reading an upload.
+SELECT a.created_at, a.disabled_at,
+       EXISTS (SELECT 1 FROM account_bans b
+               WHERE b.account_id = a.id AND b.lifted_at IS NULL
+                 AND (b.expires_at IS NULL OR b.expires_at > sqlc.arg(now))) AS banned,
+       (SELECT count(*) FROM map_submissions s
+        WHERE s.account_id = a.id AND s.created_at > sqlc.arg(since)) AS recent
+FROM accounts a
+WHERE a.id = sqlc.arg(account_id);

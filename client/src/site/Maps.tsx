@@ -16,6 +16,7 @@ import {
   errorKey,
   formatSize,
   groupFiles,
+  groupLabel,
   isMapStatus,
   precheckPatch,
   safePrUrl,
@@ -594,7 +595,7 @@ function Detail(props: MapsProps & { id: number }): JSX.Element {
       <h2>{t("site.maps.review.files", { count: m.files.length })}</h2>
       {[...groupFiles(m.files)].map(([group, files]) => (
         <div key={group}>
-          <h3>{group}</h3>
+          <h3>{groupLabel(group, t)}</h3>
           <ul class="maps-files">
             {files.map((f) => (
               <li key={f.path}>

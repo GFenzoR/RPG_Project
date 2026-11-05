@@ -7,12 +7,21 @@
 -- (the worker). Ids are not foreign keys: a submission and its history survive the
 -- deletion of the accounts and characters it names, like player_reports.
 --
--- Contract with the PR worker: it takes the oldest approved submission that is due with
---   SELECT ... FROM map_submissions
---   WHERE status = 'approved' AND (next_attempt_at IS NULL OR next_attempt_at <= now)
---   ORDER BY reviewed_at, id LIMIT 1 FOR UPDATE SKIP LOCKED
--- and moves it to pr_opened (pr_url, pr_number) or failed (failure, a fixed code), or
--- leaves it approved with attempts + 1 and a later next_attempt_at to retry.
+-- Contract with the PR worker (no transaction stays open during calls to GitHub):
+--   1. Claim, in a short transaction: the oldest approved submission that is due,
+--        SELECT ... FROM map_submissions
+--        WHERE status = 'approved' AND (next_attempt_at IS NULL OR next_attempt_at <= now)
+--        ORDER BY reviewed_at, id LIMIT 1 FOR UPDATE SKIP LOCKED
+--      then attempts + 1 and next_attempt_at = now + a lease (minutes), and commit. The
+--      lease keeps other workers away; a worker that dies leaves it to expire.
+--   2. Work without a transaction. Idempotent by construction: the branch is always
+--      map-submission/<id>, and an open PR from that branch is reused, never duplicated.
+--   3. Finish, in a short transaction guarded by status = 'approved': pr_opened (pr_url,
+--      pr_number) or failed (failure, a fixed code). A retryable error leaves it approved
+--      with the lease as the backoff (next_attempt_at).
+--
+-- Down only works before any website action was audited: audit_log is append-only, so
+-- rows with source 'web' cannot be deleted and block the old CHECK.
 CREATE TABLE map_submissions (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     created_at          TIMESTAMPTZ NOT NULL,

@@ -41,6 +41,7 @@ const MAP_ERRORS = new Set([
   "duplicate_submission",
   "not_pending",
   "forbidden",
+  "own_submission",
 ]);
 
 /** i18n key of a failed portal call (ApiError code and detail). */
@@ -85,7 +86,7 @@ export function formatSize(bytes: number, lang: string): string {
   return `${num(bytes / (1024 * 1024))} MiB`;
 }
 
-/** Map files a submission touches, grouped by island (or "world"/"prefabs"). */
+/** Map files a submission touches, grouped by island id (data), or "world"/"prefabs". */
 export function groupFiles(files: MapSubmission["files"]): Map<string, MapSubmission["files"]> {
   const out = new Map<string, MapSubmission["files"]>();
   for (const f of files) {
@@ -114,6 +115,11 @@ export function canSubmit(f: {
   return (
     !f.busy && cleanInput(f.title) !== "" && f.characterId !== null && f.license && f.patch !== null
   );
+}
+
+/** Heading of a file group: an island id is shown as is, the other two are i18n keys. */
+export function groupLabel(group: string, t: (key: string) => string): string {
+  return group === "world" || group === "prefabs" ? t(`site.maps.group.${group}`) : group;
 }
 
 export const isMapStatus = (s: string): s is MapStatus =>

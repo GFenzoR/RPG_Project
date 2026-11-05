@@ -109,6 +109,8 @@ func TestValidateRejects(t *testing.T) {
 		{"base not hash", string(patchJSON(t, map[string]any{"path": chunk, "base": "abc", "base_text": "a", "content": "x"})), CodeBase},
 		{"base_text without base", string(patchJSON(t, map[string]any{"path": chunk, "base": nil, "base_text": "a", "content": "x"})), CodeBase},
 		{"no base_text", string(patchJSON(t, map[string]any{"path": chunk, "base": hash("a"), "content": "x"})), CodeMissingBaseText},
+		{"base_text null", string(patchJSON(t, map[string]any{"path": chunk, "base": hash(""), "base_text": nil, "content": "x"})), CodeMissingBaseText},
+		{"base_text number", string(patchJSON(t, map[string]any{"path": chunk, "base": hash(""), "base_text": 1, "content": "x"})), CodeMissingBaseText},
 		{"base_text mismatch", string(patchJSON(t, map[string]any{"path": chunk, "base": hash("a"), "base_text": "b", "content": "x"})), CodeBaseMismatch},
 		{"content number", string(patchJSON(t, map[string]any{"path": chunk, "base": nil, "content": 3})), CodeContent},
 		{"content missing", `{"format":2,"kind":"rpg-map-patch","base_ref":"HEAD","files":[{"path":"world/world.yaml","base":null}]}`, CodeNotPatch},

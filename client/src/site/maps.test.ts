@@ -6,6 +6,7 @@ import {
   errorKey,
   formatSize,
   groupFiles,
+  groupLabel,
   isMapStatus,
   precheckPatch,
   safePrUrl,
@@ -43,6 +44,7 @@ describe("errorKey", () => {
   it("uses portal texts, then the shared errors", () => {
     expect(errorKey("submit_limit")).toBe("site.maps.error.submit_limit");
     expect(errorKey("forbidden")).toBe("site.maps.error.forbidden");
+    expect(errorKey("own_submission")).toBe("site.maps.error.own_submission");
     expect(errorKey("unauthorized")).toBe("error.unauthorized");
     expect(errorKey("network")).toBe("error.network");
   });
@@ -82,6 +84,9 @@ describe("helpers", () => {
       { path: "world/world.yaml", action: "modify" },
     ]);
     expect([...g.keys()]).toEqual(["puerto", "prefabs", "world"]);
+    const t = (k: string): string => `<${k}>`;
+    expect(groupLabel("puerto", t)).toBe("puerto");
+    expect(groupLabel("world", t)).toBe("<site.maps.group.world>");
     expect(g.get("puerto")).toHaveLength(2);
   });
   it("cleans inputs and gates the form", () => {

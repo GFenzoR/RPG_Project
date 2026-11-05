@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,12 +77,74 @@ func TestMapSubmissions(t *testing.T) {
 	if _, err := sub(author, authorChar, "c", now.Add(25*time.Hour)); err != nil {
 		t.Fatalf("a day later: %v", err)
 	}
-	// A banned account cannot submit.
+	// The cheap check before reading an upload agrees.
+	if err := st.CheckSubmitter(ctx, author, now.Add(3*time.Minute), 2, 24*time.Hour); !errors.Is(err, store.ErrSubmitLimit) {
+		t.Fatalf("check, over the limit: %v", err)
+	}
+	if err := st.CheckSubmitter(ctx, young, now, 2, 24*time.Hour); !errors.Is(err, store.ErrAccountTooNew) {
+		t.Fatalf("check, young: %v", err)
+	}
+	if err := st.CheckSubmitter(ctx, author, now.Add(26*time.Hour), 2, 24*time.Hour); err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	if err := st.CheckSubmitter(ctx, 999999, now, 2, 0); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("check, no account: %v", err)
+	}
+	// An expired and a lifted ban do not block; an active one does, also in the check.
+	later := now.Add(26 * time.Hour)
+	if _, err := conn.Exec(ctx, `INSERT INTO account_bans (account_id, reason, created_at, expires_at) VALUES ($1, 'x', $2, $3)`,
+		author, now, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO account_bans (account_id, reason, created_at, lifted_at) VALUES ($1, 'x', $2, $2)`, author, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CheckSubmitter(ctx, author, later, 2, 24*time.Hour); err != nil {
+		t.Fatalf("expired or lifted ban: %v", err)
+	}
 	if _, err := conn.Exec(ctx, `INSERT INTO account_bans (account_id, reason, created_at) VALUES ($1, 'x', $2)`, author, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sub(author, authorChar, "d", now.Add(26*time.Hour)); !errors.Is(err, store.ErrForbidden) {
+	if _, err := sub(author, authorChar, "d", later); !errors.Is(err, store.ErrForbidden) {
 		t.Fatalf("banned: %v", err)
+	}
+	if err := st.CheckSubmitter(ctx, author, later, 2, 24*time.Hour); !errors.Is(err, store.ErrForbidden) {
+		t.Fatalf("check, banned: %v", err)
+	}
+	// A disabled account neither.
+	disabled, disabledChar := account("off@example.com", "player", 48*time.Hour)
+	if _, err := conn.Exec(ctx, `UPDATE accounts SET disabled_at = $2 WHERE id = $1`, disabled, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sub(disabled, disabledChar, "e", now); !errors.Is(err, store.ErrForbidden) {
+		t.Fatalf("disabled: %v", err)
+	}
+	// Uploads at once from one account cannot pass the daily limit together (the
+	// account row is locked): with 2 a day and none yet, exactly 2 of 6 are stored.
+	racer, racerChar := account("race@example.com", "player", 48*time.Hour)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	stored, limited := 0, 0
+	for i := range 6 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := sub(racer, racerChar, string(rune('a'+i)), now)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				stored++
+			case errors.Is(err, store.ErrSubmitLimit):
+				limited++
+			default:
+				t.Errorf("race: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if stored != 2 || limited != 4 {
+		t.Fatalf("concurrent uploads: %d stored, %d limited", stored, limited)
 	}
 
 	got, err := st.MapSubmission(ctx, m.ID)
@@ -94,7 +157,13 @@ func TestMapSubmissions(t *testing.T) {
 		t.Fatalf("mine = %+v, %v", mine, err)
 	}
 	queue, err := st.MapSubmissionsByStatus(ctx, store.SubmissionPending, 10)
-	if err != nil || len(queue) != 3 || queue[0].ID != m.ID {
+	var authorQueue []store.MapSubmission
+	for _, q := range queue {
+		if q.AccountID == author {
+			authorQueue = append(authorQueue, q)
+		}
+	}
+	if err != nil || len(queue) != 5 || len(authorQueue) != 3 || queue[0].ID != m.ID {
 		t.Fatalf("queue = %+v, %v", queue, err)
 	}
 	acc, sha, patch, err := st.MapSubmissionPatch(ctx, m.ID)
@@ -107,6 +176,18 @@ func TestMapSubmissions(t *testing.T) {
 	if _, err := st.ReviewMapSubmission(ctx, store.ReviewRequest{At: at, ID: m.ID, ActorAccountID: player, Approve: true}); !errors.Is(err, store.ErrForbidden) {
 		t.Fatalf("player review: %v", err)
 	}
+	// A moderator's own submission needs another moderator.
+	gmChar := int64(0)
+	if err := conn.QueryRow(ctx, `SELECT id FROM characters WHERE account_id = $1`, gm).Scan(&gmChar); err != nil {
+		t.Fatal(err)
+	}
+	own, err := sub(gm, gmChar, "f", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ReviewMapSubmission(ctx, store.ReviewRequest{At: at, ID: own.ID, ActorAccountID: gm, Approve: true}); !errors.Is(err, store.ErrOwnSubmission) {
+		t.Fatalf("own review: %v", err)
+	}
 	r, err := st.ReviewMapSubmission(ctx, store.ReviewRequest{At: at, ID: m.ID, ActorAccountID: gm, Reason: "Tapa el muelle"})
 	if err != nil || r.Status != store.SubmissionRejected || r.Reason != "Tapa el muelle" || r.ReviewedBy != gm || !r.ReviewedAt.Equal(at) {
 		t.Fatalf("reject = %+v, %v", r, err)
@@ -118,7 +199,7 @@ func TestMapSubmissions(t *testing.T) {
 		t.Fatalf("missing: %v", err)
 	}
 	// Identities skip the ids of rolled-back inserts: take the second one from the queue.
-	second := queue[1].ID
+	second := authorQueue[1].ID
 	if _, err := st.ReviewMapSubmission(ctx, store.ReviewRequest{At: at, ID: second, ActorAccountID: gm, Approve: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +230,7 @@ func TestMapSubmissions(t *testing.T) {
 			t.Errorf("reject audit %+v", e)
 		}
 	}
-	if actions["map_submit"] != 3 || actions["map_reject"] != 1 || actions["map_approve"] != 1 || len(actions) != 3 {
+	if actions["map_submit"] != 6 || actions["map_reject"] != 1 || actions["map_approve"] != 1 || len(actions) != 3 {
 		t.Errorf("audit actions = %v", actions)
 	}
 	role, err := st.AccountRole(ctx, gm)

@@ -27,6 +27,14 @@ type fakeSubmissions struct {
 	created []store.NewMapSubmission
 	// createErr, when set, is returned by CreateMapSubmission.
 	createErr error
+	// checkErr, when set, is returned by CheckSubmitter.
+	checkErr error
+}
+
+func (f *fakeSubmissions) CheckSubmitter(context.Context, int64, time.Time, int, time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.checkErr
 }
 
 func newFakeSubmissions() *fakeSubmissions {
@@ -113,6 +121,9 @@ func (f *fakeSubmissions) ReviewMapSubmission(_ context.Context, r store.ReviewR
 		return store.MapSubmission{}, store.ErrNotFound
 	}
 	m := &f.subs[r.ID-1]
+	if m.AccountID == r.ActorAccountID {
+		return store.MapSubmission{}, store.ErrOwnSubmission
+	}
 	if m.Status != store.SubmissionPending {
 		return store.MapSubmission{}, store.ErrNotPending
 	}
@@ -332,6 +343,42 @@ func TestSubmitMapStoreErrors(t *testing.T) {
 			_, tok := p.account("aria@example.com", "")
 			expect(t, p.do(req{method: "POST", path: "/api/maps/submissions", token: tok, body: submitBody(t, nil)}), c.status, c.code)
 		})
+	}
+}
+
+// An account that would be refused is refused before the body is read: the answer comes
+// even for a body far over the limit.
+func TestSubmitMapChecksTheAccountFirst(t *testing.T) {
+	for _, c := range []struct {
+		err    error
+		status int
+		code   string
+	}{
+		{store.ErrSubmitLimit, 429, "submit_limit"},
+		{store.ErrAccountTooNew, 403, "account_too_new"},
+		{store.ErrForbidden, 403, "forbidden"},
+		{store.ErrNotFound, 401, "unauthorized"},
+	} {
+		t.Run(c.code, func(t *testing.T) {
+			p := newPortal(t, func(cfg *httpapi.Config) { cfg.MapSubmitLimits = httpapi.MapSubmitLimits{MaxBytes: 1024} })
+			p.subs.checkErr = c.err
+			_, tok := p.account("aria@example.com", "")
+			huge := `{"patch":"` + strings.Repeat("a", 1<<20) + `"}`
+			expect(t, p.do(req{method: "POST", path: "/api/maps/submissions", token: tok, body: huge}), c.status, c.code)
+			if len(p.subs.created) != 0 {
+				t.Error("stored")
+			}
+		})
+	}
+}
+
+func TestModeratorCannotReviewOwnSubmission(t *testing.T) {
+	p := newPortal(t, nil)
+	_, gm := p.account("gm@example.com", store.RoleGM)
+	expect(t, p.do(req{method: "POST", path: "/api/maps/submissions", token: gm, body: submitBody(t, nil)}), 201, "")
+	expect(t, p.do(req{method: "POST", path: "/api/maps/submissions/1/review", token: gm, body: `{"decision":"approve"}`}), 403, "own_submission")
+	if p.subs.subs[0].Status != store.SubmissionPending {
+		t.Fatal("approved its own")
 	}
 }
 

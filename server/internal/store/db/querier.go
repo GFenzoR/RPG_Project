@@ -101,7 +101,9 @@ type Querier interface {
 	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
 	// Sets the role of the account with that (normalized) email and returns the old one.
 	SetAccountRole(ctx context.Context, arg SetAccountRoleParams) (SetAccountRoleRow, error)
-	SubmissionStatus(ctx context.Context, id int64) (string, error)
+	SubmissionAuthor(ctx context.Context, id int64) (int64, error)
+	// The same as LockSubmitter without the lock: a cheap check before reading an upload.
+	SubmitterStatus(ctx context.Context, arg SubmitterStatusParams) (SubmitterStatusRow, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
 	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
 }

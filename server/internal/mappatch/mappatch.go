@@ -232,10 +232,11 @@ func checkFile(f map[string]json.RawMessage, i int) (File, error) {
 	case base != nil && !hasText:
 		return File{}, fail(CodeMissingBaseText, i)
 	case base != nil:
-		var text string
-		if json.Unmarshal(raw, &text) != nil {
+		textp, ok := optString(raw)
+		if !ok || textp == nil { // null is not a base text (parsePatch: typeof !== "string")
 			return File{}, fail(CodeMissingBaseText, i)
 		}
+		text := *textp
 		if hasForbidden(text) {
 			return File{}, fail(CodeForbiddenChar, i)
 		}

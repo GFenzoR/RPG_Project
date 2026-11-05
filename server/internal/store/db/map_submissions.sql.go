@@ -405,13 +405,50 @@ func (q *Queries) ReviewSubmission(ctx context.Context, arg ReviewSubmissionPara
 	return i, err
 }
 
-const submissionStatus = `-- name: SubmissionStatus :one
-SELECT status FROM map_submissions WHERE id = $1
+const submissionAuthor = `-- name: SubmissionAuthor :one
+SELECT account_id FROM map_submissions WHERE id = $1
 `
 
-func (q *Queries) SubmissionStatus(ctx context.Context, id int64) (string, error) {
-	row := q.db.QueryRow(ctx, submissionStatus, id)
-	var status string
-	err := row.Scan(&status)
-	return status, err
+func (q *Queries) SubmissionAuthor(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, submissionAuthor, id)
+	var account_id int64
+	err := row.Scan(&account_id)
+	return account_id, err
+}
+
+const submitterStatus = `-- name: SubmitterStatus :one
+SELECT a.created_at, a.disabled_at,
+       EXISTS (SELECT 1 FROM account_bans b
+               WHERE b.account_id = a.id AND b.lifted_at IS NULL
+                 AND (b.expires_at IS NULL OR b.expires_at > $1)) AS banned,
+       (SELECT count(*) FROM map_submissions s
+        WHERE s.account_id = a.id AND s.created_at > $2) AS recent
+FROM accounts a
+WHERE a.id = $3
+`
+
+type SubmitterStatusParams struct {
+	Now       pgtype.Timestamptz
+	Since     pgtype.Timestamptz
+	AccountID int64
+}
+
+type SubmitterStatusRow struct {
+	CreatedAt  pgtype.Timestamptz
+	DisabledAt pgtype.Timestamptz
+	Banned     bool
+	Recent     int64
+}
+
+// The same as LockSubmitter without the lock: a cheap check before reading an upload.
+func (q *Queries) SubmitterStatus(ctx context.Context, arg SubmitterStatusParams) (SubmitterStatusRow, error) {
+	row := q.db.QueryRow(ctx, submitterStatus, arg.Now, arg.Since, arg.AccountID)
+	var i SubmitterStatusRow
+	err := row.Scan(
+		&i.CreatedAt,
+		&i.DisabledAt,
+		&i.Banned,
+		&i.Recent,
+	)
+	return i, err
 }
