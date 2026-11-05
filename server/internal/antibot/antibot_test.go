@@ -1,0 +1,150 @@
+package antibot
+
+import (
+	"math"
+	"path/filepath"
+	"testing"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
+)
+
+func repoConfig(t *testing.T) *content.AntiBot {
+	t.Helper()
+	b, err := content.LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &b.AntiBot
+}
+
+// A metronome of one kind of action is regular even with other actions in between; a
+// varied pace is not.
+func TestRegularity(t *testing.T) {
+	cfg := repoConfig(t)
+	var bot, person Tracker
+	ms := int64(1000)
+	jitter := []int64{0, 900, 2500, 400, 1700, 3100, 600}
+	for i := range 400 {
+		at := 1000 + int64(i)*2000
+		bot.Action(at, KindSpell, cfg)
+		bot.Action(at+jitter[i%len(jitter)]/3, KindItem, cfg) // irregular other actions
+		ms += 2000 + jitter[i%len(jitter)]
+		person.Action(ms, KindSpell, cfg)
+	}
+	if s := bot.Signals(ms, 0, cfg); s[Regularity] != 1 {
+		t.Errorf("metronome regularity %.2f", s[Regularity])
+	}
+	if s := person.Signals(ms, 0, cfg); s[Regularity] != 0 {
+		t.Errorf("varied pace regularity %.2f", s[Regularity])
+	}
+	var few Tracker
+	few.Action(10, KindSpell, cfg)
+	few.Action(20, KindSpell, cfg)
+	if s := few.Signals(20, 0, cfg); s[Regularity] != 0 {
+		t.Error("regularity before min_samples")
+	}
+}
+
+// Heals always 100 ms after a hit are inhuman; slow or varied ones are not; a heal
+// without a hit or outside the window is no sample.
+func TestReaction(t *testing.T) {
+	cfg := repoConfig(t)
+	var bot, person Tracker
+	for i := range 40 {
+		at := int64(10_000 * (i + 1))
+		bot.Hurt(at)
+		bot.Heal(at+100, cfg)
+		person.Hurt(at)
+		person.Heal(at+700+int64(i%5)*300, cfg)
+	}
+	if s := bot.Signals(500_000, 0, cfg); s[Reaction] < 0.99 {
+		t.Errorf("bot reaction %.2f", s[Reaction])
+	}
+	if s := person.Signals(500_000, 0, cfg); s[Reaction] != 0 {
+		t.Errorf("person reaction %.2f", s[Reaction])
+	}
+	var lone Tracker
+	lone.Heal(100, cfg)
+	lone.Hurt(1000)
+	lone.Heal(1000+int64(cfg.Signals.Reaction.WindowMs)+1, cfg)
+	if lone.reaction.n != 0 {
+		t.Error("a heal without a recent hit counted")
+	}
+}
+
+// The same loop of tiles again and again is a repeated route; a random walk is not.
+func TestRoute(t *testing.T) {
+	cfg := repoConfig(t)
+	var loop, walk Tracker
+	x, y := uint16(100), uint16(100)
+	seed := uint32(7)
+	for i := range 1000 {
+		side := (i / 6) % 4
+		lx := uint16(100 + []int{i % 6, 6, 6 - i%6, 0}[side])
+		ly := uint16(100 + []int{0, i % 6, 6, 6 - i%6}[side])
+		loop.Step(int64(i)*600, lx, ly, 7, uint8(side), cfg)
+		seed = seed*1664525 + 1013904223
+		switch seed >> 30 {
+		case 0:
+			x++
+		case 1:
+			x--
+		case 2:
+			y++
+		default:
+			y--
+		}
+		walk.Step(int64(i)*600, x, y, 7, uint8(seed>>30), cfg)
+	}
+	if s := loop.Signals(600_000, 0, cfg); s[Route] != 1 {
+		t.Errorf("loop route %.2f", s[Route])
+	}
+	if s := walk.Signals(600_000, 0, cfg); s[Route] != 0 {
+		t.Errorf("random walk route %.2f", s[Route])
+	}
+}
+
+// Play without a pause counts from low_ms; a pause restarts it; the income ramps.
+func TestSessionAndIncome(t *testing.T) {
+	cfg := repoConfig(t)
+	var tr Tracker
+	step := int64(60_000)
+	end := int64(cfg.Signals.Session.HighMs) + step
+	for ms := step; ms <= end; ms += step {
+		tr.Action(ms, KindOther, cfg)
+	}
+	if s := tr.Signals(end, 0, cfg); s[Session] != 1 {
+		t.Errorf("16 h without a pause: %.2f", s[Session])
+	}
+	tr.Action(end+int64(cfg.PauseMs), KindOther, cfg) // a pause
+	if s := tr.Signals(end+int64(cfg.PauseMs), 0, cfg); s[Session] != 0 {
+		t.Errorf("after a pause: %.2f", s[Session])
+	}
+	in := cfg.Signals.Income
+	if s := tr.Signals(end, in.RatioLow, cfg); s[Income] != 0 {
+		t.Errorf("income at ratio_low %.2f", s[Income])
+	}
+	if s := tr.Signals(end, (in.RatioLow+in.RatioHigh)/2, cfg); math.Abs(s[Income]-0.5) > 1e-9 {
+		t.Errorf("income halfway %.2f", s[Income])
+	}
+}
+
+func TestScoreHelpers(t *testing.T) {
+	cfg := repoConfig(t)
+	if d := Decay(int64(cfg.HalfLifeMs), cfg); math.Abs(d-0.5) > 1e-9 {
+		t.Errorf("decay over a half-life %.3f", d)
+	}
+	th := cfg.Thresholds
+	for score, want := range map[float64]int{0: 0, th.Log: LevelLog, th.Notify: LevelNotify, th.Presence - 1: LevelNotify,
+		th.Presence: LevelPresence, th.Suspend: LevelSuspend} {
+		if got := Level(score, cfg); got != want {
+			t.Errorf("Level(%v) = %d, want %d", score, got, want)
+		}
+	}
+	if Points(Signals{1, 1, 1, 1, 1}, cfg) != Weights(cfg)[0]+Weights(cfg)[1]+Weights(cfg)[2]+Weights(cfg)[3]+Weights(cfg)[4] {
+		t.Error("points of all ones")
+	}
+	if Median([]float64{5, 1, 3}) != 3 || Median([]float64{4, 1, 3, 2}) != 2.5 || Median(nil) != 0 {
+		t.Error("median")
+	}
+}

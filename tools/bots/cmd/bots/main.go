@@ -48,6 +48,8 @@ type config struct {
 	metricsURL string
 	reportPath string
 	minGap     time.Duration
+	// profile is the pace of play (pkg/bot: human or mechanical; zero: the default mix).
+	profile bot.Profile
 	// requireMetrics fails the run when /metrics cannot be read (loadtest.sh started
 	// the server itself, so the server numbers must be there).
 	requireMetrics bool
@@ -66,8 +68,17 @@ func main() {
 	flag.StringVar(&c.metricsURL, "metrics", "", "server's internal /metrics (default "+localMetricsURL+" when -url is on this machine; empty elsewhere: client-side numbers only)")
 	flag.StringVar(&c.reportPath, "report", "", "write the JSON report here")
 	flag.BoolVar(&c.requireMetrics, "require-metrics", false, "fail if the server's /metrics cannot be read")
+	profName := flag.String("profile", "", "pace of play, as the bot detection sees it (T4.1): human or mechanical (default: the load test mix)")
 	flag.DurationVar(&c.minGap, "min-gap", 250*time.Millisecond, "bot rate limit: minimum time between two commands of a bot")
 	flag.Parse()
+	if *profName != "" {
+		prof, ok := bot.ProfileByName(*profName)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "unknown -profile %q (human, mechanical)\n", *profName)
+			os.Exit(2)
+		}
+		c.profile = prof
+	}
 
 	if err := validateCount(c.n); err != nil {
 		fmt.Fprintln(os.Stderr, "bots:", err)
@@ -326,7 +337,7 @@ func runBot(ctx context.Context, c config, f *fleet, nav *bot.Nav, token string,
 	p := &player{
 		b: b, nav: nav, sc: c.scenario, home: c.scenario.areaFor(i),
 		r:    rand.New(rand.NewPCG(c.seed, uint64(i))),
-		pace: pacer{minGap: c.minGap, now: time.Now},
+		pace: pacer{minGap: c.minGap, now: time.Now}, prof: c.profile,
 	}
 	err = p.run(ctx)
 	f.mu.Lock()

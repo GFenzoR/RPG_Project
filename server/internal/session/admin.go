@@ -175,6 +175,8 @@ var gmCommands = map[string]gmCommand{
 	// Player reports (T4.1).
 	"reports":     {RoleGM, "list_reports", "/reports", (*World).cmdReports},
 	"closereport": {RoleGM, "close_report", "/closereport id resolution", (*World).cmdCloseReport},
+	// Bot detection (T4.1).
+	"presence": {RoleGM, "presence_request", "/presence Name", (*World).cmdPresence},
 }
 
 // command runs a chat line that starts with "/". An unknown command and one the

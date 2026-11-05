@@ -39,6 +39,7 @@ message ClientMessage {
     PartyCommand party_command = 25;
     Craft craft = 26;
     ReportPlayer report_player = 27;
+    PresenceAnswer presence_answer = 28;
   }
 }
 
@@ -250,4 +251,10 @@ message Craft {
 message ReportPlayer {
   uint32 creature_id = 1;
   string reason = 2;
+}
+
+// PresenceAnswer answers a PresenceCheck (T4.1) with one of its option ids.
+message PresenceAnswer {
+  uint32 check_id = 1;
+  uint32 option_id = 2;
 }

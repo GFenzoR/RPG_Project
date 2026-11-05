@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/dialog"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -196,7 +197,7 @@ func (w *World) npcTalk(p *Player, id uint32) {
 	p.dialog = &openDialog{id: p.nextDialog, npc: n, node: n.def.Dialog.Start}
 	w.quests.ReachedNode(p.storage, n.def.ID, n.def.Dialog.Start, &questHost{w: w, p: p})
 	w.sendDialog(p)
-	p.active(w.nowTick())
+	p.active(w.nowTick(), antibot.KindOther)
 }
 
 // sendDialog sends the current node with the options p sees now. option_id is the
@@ -269,7 +270,7 @@ func (w *World) dialogChoose(ctx *game.TickContext, p *Player, dialogID, optionI
 	if r.Entered {
 		w.quests.ReachedNode(p.storage, d.npc.def.ID, r.Node, &questHost{w: w, p: p})
 	}
-	p.active(ctx.Tick)
+	p.active(ctx.Tick, antibot.KindOther)
 	w.sendDialog(p)
 	if d.shop && r.Refused == "" {
 		w.sendShop(p)
@@ -367,7 +368,7 @@ func (w *World) shopSell(p *Player, dialogID, itemID, count uint32) {
 }
 
 func (w *World) afterTrade(p *Player) {
-	p.active(w.nowTick())
+	p.active(w.nowTick(), antibot.KindOther)
 	p.questDirty = true
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendShop(p)

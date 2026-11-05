@@ -44,7 +44,9 @@ con su propio rate limit (`-min-gap`). Escenarios en `cmd/bots/scenario.go`: `ba
 resumen Markdown con tick, RAM, CPU (de `/metrics` del servidor), latencia de comando
 (Ping→Pong), bytes por jugador y desconexiones, comparados con `docs/07`. `make bots N=100`
 levanta su propio servidor (`loadtest.sh`); con `URL=` juega contra uno existente. Sale
-con código 1 si algún bot no entra o se desconecta.
+con código 1 si algún bot no entra o se desconecta. `-profile human|mechanical` (T4.1) les da
+el ritmo de los perfiles de `server/pkg/bot` (los mismos del test de la detección de bots):
+el humano varía, hace pausas y contesta los chequeos de presencia; el mecánico no.
 
 ## soundgen
 `tools/soundgen` (T3.7) genera los efectos, la música y el ambiente propios de

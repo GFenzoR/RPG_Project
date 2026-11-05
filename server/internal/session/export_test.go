@@ -171,3 +171,19 @@ func (w *World) SetInvisibleForTest(p *Player, on bool) {
 		w.unhide(p)
 	}
 }
+
+// SuspicionForTest returns p's suspicion score, its last signals and response level.
+func (w *World) SuspicionForTest(p *Player) (float64, [5]float64, int) {
+	if p.sus == nil {
+		return -1, [5]float64{}, 0
+	}
+	return p.sus.score, p.sus.signals, p.sus.level
+}
+
+// SetSuspicionForTest sets p's score as of now (bot detection, T4.1).
+func (w *World) SetSuspicionForTest(p *Player, score float64) {
+	p.sus.score, p.sus.lastEval = score, w.nowTick()
+}
+
+// EvaluateNowForTest makes p's next bot detection evaluation due on the next tick.
+func (w *World) EvaluateNowForTest(p *Player) { p.abNext = 0 }

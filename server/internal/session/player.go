@@ -142,7 +142,11 @@ type Player struct {
 	// Idle (T4.1): the tick of p's last real action and whether it was warned.
 	lastAction game.Tick
 	idleWarned bool
-	joinedAt   game.Tick
+	// Bot detection (T4.1 2/2): p's state (World.suspects; nil when off) and the tick
+	// of its next evaluation.
+	sus      *suspect
+	abNext   game.Tick
+	joinedAt game.Tick
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -371,6 +375,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
+	w.antibotJoin(ctx.Tick, p)
 	p.joinedAt = ctx.Tick
 
 	// Staggered autosave: first at a random point of the first interval.
@@ -407,6 +412,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 		return
 	}
 	w.reconcile(ctx.Tick, p) // a duplication right before leaving is caught too (T4.1)
+	w.antibotLeave(ctx.Tick, p)
 	w.disappearFromObservers(p)
 	w.partyLeftWorld(p) // T3.3: leaving the world leaves the party
 	w.unindex(p)

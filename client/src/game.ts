@@ -3,6 +3,7 @@
 // the server says; the one thing it predicts is the next own step.
 import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
+import type { PresenceState } from "./state/world.ts";
 import { ChatChannel, CreatureKind, Direction, PartyAction } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
@@ -62,6 +63,8 @@ export interface GameUi {
   shop: ShopState | undefined;
   /** The crafting station window (T3.4). */
   station: StationState | undefined;
+  /** A presence check waiting for an answer (T4.1), or undefined. */
+  presence: PresenceState | undefined;
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
@@ -247,6 +250,13 @@ export class Game {
   /** Invites a player the client sees (battle list). */
   partyInvite(id: number): void {
     this.party(PartyAction.INVITE, id);
+  }
+
+  /** Answers the presence check (T4.1); the server replies the same whatever the answer. */
+  presenceAnswer(id: number, option: number): void {
+    this.conn.send({ case: "presenceAnswer", value: { checkId: id, optionId: option } });
+    if (this.world.presence?.id === id) this.world.presence = undefined;
+    this.publish();
   }
 
   /** Reports a player the client sees to the staff (T4.1, battle list). */
@@ -499,6 +509,7 @@ export class Game {
       dialog: w.dialog,
       shop: w.shop,
       station: w.station,
+      presence: w.presence && w.presence.until > performance.now() ? w.presence : undefined,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       selfId: w.selfId,

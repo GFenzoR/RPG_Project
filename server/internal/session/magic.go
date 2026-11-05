@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/combat"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -205,7 +206,7 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 
 // startCooldown blocks s (if own) and its group, and tells the client.
 func (w *World) startCooldown(ctx *game.TickContext, p *Player, s *content.Spell, own bool) {
-	p.active(ctx.Tick) // a spell or a rune was cast
+	p.active(ctx.Tick, antibot.KindSpell) // a spell or a rune was cast
 	if p.spellReady == nil {
 		p.spellReady, p.groupReady = map[string]game.Tick{}, map[string]game.Tick{}
 	}
@@ -238,6 +239,7 @@ func (w *World) applySpell(ctx *game.TickContext, p *Player, s *content.Spell, t
 		return w.healOther(ctx, p, e.Heal, target)
 	case e.Heal != nil:
 		w.heal(p, w.scaled(ctx, e.Heal.Scaling, p))
+		w.abHeal(ctx.Tick, p) // bot detection: how fast p heals after a hit (T4.1)
 		return true
 	case e.Conjure != nil:
 		return w.conjure(p, w.cfg.Items[e.Conjure.Item], e.Conjure.Count)

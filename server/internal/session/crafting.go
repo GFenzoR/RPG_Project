@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -176,7 +177,7 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 		return
 	}
 	p.nextGather = ctx.Tick + max(w.gatherFor, ticksFor(r.TimeMs))
-	p.active(ctx.Tick)
+	p.active(ctx.Tick, antibot.KindItem)
 
 	chance := r.SuccessChance(level) // with the level before this attempt's tries
 	if r.XP > 0 {

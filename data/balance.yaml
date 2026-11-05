@@ -145,6 +145,29 @@ idle:                       # idle disconnect (T4.1); pings and keepalives do no
   kick_after_ms: 900000     # 15 min without walking, attacking, using or talking
   warn_before_ms: 60000     # a system message this long before
 
+# Bot detection (T4.1, docs/01-architecture.md "Trampas y anti-bot"). Each signal is 0..1;
+# every eval_every_ms the score gains sum(weight × signal) and halves every half_life_ms.
+# A sustained signal of weight w settles near w × 87 points (60 evaluations per half-life
+# ≈ 1 / (1 − 0.5^(1/60))). Responses are graded and conservative: log, notify the GMs, ask
+# an in-game presence check, and only after a failed check a temporary suspension. A ban
+# is always a GM's decision (/ban).
+antibot:
+  eval_every_ms: 60000
+  half_life_ms: 3600000
+  pause_ms: 180000          # 3 min without a real action is a pause
+  signals:
+    regularity: { weight: 3, min_samples: 300, cv_low: 0.05, cv_high: 0.25 }   # time between actions
+    reaction: { weight: 3, min_samples: 15, window_ms: 4000, fast_ms: 300, std_ms: 60 }  # heal after a hit
+    route: { weight: 2, segment: 12, min_steps: 300, repeat_low: 0.5, repeat_high: 0.9 }  # same exact path
+    session: { weight: 1, low_ms: 28800000, high_ms: 57600000 }   # 8..16 h without a pause
+    income: { weight: 2, min_peers: 5, band_levels: 10, ratio_low: 4, ratio_high: 8 }  # vs median of the band
+  thresholds: { log: 100, notify: 250, presence: 400, suspend: 600 }
+  presence:
+    timeout_ms: 600000      # 10 min to answer; never asked in combat or on a no-logout tile
+    delay_ms: 300000        # asked at a random moment of the next 5 min
+    fail_points: 150        # a failed check adds this (it never suspends on its own)
+  suspend_ms: 86400000      # 24 h; longer bans are for a GM
+
 # Conditions (T3.2, docs/02-game-design.md "Condiciones"). Each source (spell, monster
 # attack) says how strong and how long; these are the rules of each condition.
 #   kind: damage = a hit of `element` every interval_ms (resistances apply), up to

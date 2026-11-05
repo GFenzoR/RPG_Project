@@ -30,6 +30,9 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   por segundo. Con `make bench-tick` las asignaciones por tick no cambiaron (341 con 100
   jugadores caminando, 1013 con 256 monstruos) y el tiempo quedó dentro del ruido aun con
   la cuadratura en cada tick, como en los tests.
+- Detección de bots (T4.1): cada acción, paso, golpe o cura actualiza medias móviles y
+  anillos fijos del personaje (costo constante, sin asignar). La evaluación es una por
+  personaje por minuto, escalonada, y las medianas de ingreso se calculan una vez por ronda.
 
 ## Cliente
 | Métrica | Presupuesto |

@@ -18,7 +18,8 @@
     "party",
     "travel",
     "reports",
-    "idle"
+    "idle",
+    "antibot"
   ],
   "properties": {
     "movement": {
@@ -480,6 +481,131 @@
         }
       }
     },
+    "antibot": {
+      "description": "Bot detection (T4.1): behaviour signals 0..1, a score that adds sum(weight × signal) every eval_every_ms and halves every half_life_ms, and graded responses.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eval_every_ms",
+        "half_life_ms",
+        "pause_ms",
+        "signals",
+        "thresholds",
+        "presence",
+        "suspend_ms"
+      ],
+      "properties": {
+        "eval_every_ms": {
+          "description": "0 turns the detection off.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "half_life_ms": { "type": "integer", "minimum": 60000 },
+        "pause_ms": {
+          "description": "A gap between actions this long is a pause.",
+          "type": "integer",
+          "minimum": 1000
+        },
+        "signals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["regularity", "reaction", "route", "session", "income"],
+          "properties": {
+            "regularity": {
+              "description": "Time between real actions with too little variation (coefficient of variation cv_low → 1, cv_high → 0).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["weight", "min_samples", "cv_low", "cv_high"],
+              "properties": {
+                "weight": { "$ref": "#/$defs/weight" },
+                "min_samples": { "type": "integer", "minimum": 1 },
+                "cv_low": { "type": "number", "minimum": 0 },
+                "cv_high": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            },
+            "reaction": {
+              "description": "Heals that answer a hit within fast_ms, constantly (standard deviation up to std_ms).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["weight", "min_samples", "window_ms", "fast_ms", "std_ms"],
+              "properties": {
+                "weight": { "$ref": "#/$defs/weight" },
+                "min_samples": { "type": "integer", "minimum": 1 },
+                "window_ms": { "type": "integer", "minimum": 1 },
+                "fast_ms": { "type": "integer", "minimum": 1 },
+                "std_ms": { "type": "integer", "minimum": 1 }
+              }
+            },
+            "route": {
+              "description": "Share of route segments (segment steps, exact tiles) walked before.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["weight", "segment", "min_steps", "repeat_low", "repeat_high"],
+              "properties": {
+                "weight": { "$ref": "#/$defs/weight" },
+                "segment": { "type": "integer", "minimum": 2, "maximum": 32 },
+                "min_steps": { "type": "integer", "minimum": 1 },
+                "repeat_low": { "type": "number", "minimum": 0, "maximum": 1 },
+                "repeat_high": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            },
+            "session": {
+              "description": "Play without a pause: low_ms → 0, high_ms → 1.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["weight", "low_ms", "high_ms"],
+              "properties": {
+                "weight": { "$ref": "#/$defs/weight" },
+                "low_ms": { "type": "integer", "minimum": 0 },
+                "high_ms": { "type": "integer", "minimum": 1 }
+              }
+            },
+            "income": {
+              "description": "Experience or gold per hour over the median of the online characters of its level band.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["weight", "min_peers", "band_levels", "ratio_low", "ratio_high"],
+              "properties": {
+                "weight": { "$ref": "#/$defs/weight" },
+                "min_peers": { "type": "integer", "minimum": 2 },
+                "band_levels": { "type": "integer", "minimum": 1 },
+                "ratio_low": { "type": "number", "minimum": 1 },
+                "ratio_high": { "type": "number", "minimum": 1 }
+              }
+            }
+          }
+        },
+        "thresholds": {
+          "description": "Score of each graded response: log < notify < presence < suspend.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["log", "notify", "presence", "suspend"],
+          "properties": {
+            "log": { "type": "number", "exclusiveMinimum": 0 },
+            "notify": { "type": "number", "exclusiveMinimum": 0 },
+            "presence": { "type": "number", "exclusiveMinimum": 0 },
+            "suspend": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "presence": {
+          "description": "In-game presence check: never in combat or on a no-logout tile; a failure adds fail_points and never suspends on its own.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["timeout_ms", "delay_ms", "fail_points"],
+          "properties": {
+            "timeout_ms": { "type": "integer", "minimum": 60000 },
+            "delay_ms": { "type": "integer", "minimum": 0 },
+            "fail_points": { "type": "number", "minimum": 0 }
+          }
+        },
+        "suspend_ms": {
+          "description": "Length of an automatic suspension (at most 30 days; longer bans are a GM's decision).",
+          "type": "integer",
+          "minimum": 60000,
+          "maximum": 2592000000
+        }
+      }
+    },
     "idle": {
       "description": "Idle disconnect (T4.1): no real action (walk, attack, use, talk) for kick_after_ms; never in combat or on a no-logout tile.",
       "type": "object",
@@ -529,6 +655,11 @@
     }
   },
   "$defs": {
+    "weight": {
+      "description": "Points per evaluation at signal 1.",
+      "type": "number",
+      "minimum": 0
+    },
     "perLevel": {
       "description": "Threshold base + per_level × level.",
       "type": "object",

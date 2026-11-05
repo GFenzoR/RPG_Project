@@ -18,6 +18,7 @@ import { ChatPanel } from "./Chat.tsx";
 import { DialogWindow } from "./Dialog.tsx";
 import { CraftingWindow } from "./Crafting.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
+import { PresenceCheck } from "./Presence.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -370,6 +371,7 @@ function GameScreen(props: {
     dialog: undefined,
     shop: undefined,
     station: undefined,
+    presence: undefined,
     party: undefined,
     invitations: [],
     selfId: 0,
@@ -493,6 +495,7 @@ function GameScreen(props: {
             <CraftingWindow t={t} content={props.content} game={game.current} ui={ui} />
           )}
           {entered && <PartyInvitations t={t} game={game.current} ui={ui} />}
+          {entered && <PresenceCheck t={t} game={game.current} ui={ui} />}
         </div>
         <aside class="side">
           <section class="battle" data-testid="battle-list" aria-label={t("client.battle.title")}>

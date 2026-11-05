@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -124,7 +125,7 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 		return
 	}
 	p.nextGather = ctx.Tick + w.gatherFor
-	p.active(ctx.Tick)
+	p.active(ctx.Tick, antibot.KindItem)
 	rt := w.resources[pos]
 	if rt != nil && rt.left == 0 {
 		p.emit(systemMsg(msgGatherDepleted))

@@ -5,6 +5,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -80,7 +81,7 @@ func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 		return
 	}
 	p.recordEvent(now, eventChat, text, 0, int64(ch))
-	p.active(now)
+	p.active(now, antibot.KindChat)
 
 	if ch == pb.ChatChannel_CHAT_CHANNEL_PARTY {
 		w.partySay(p, text)

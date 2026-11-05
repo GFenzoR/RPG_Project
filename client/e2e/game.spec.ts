@@ -1132,6 +1132,22 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   await expect(gmPage.getByTestId("chat-log")).toContainText(line);
   await plPage.locator(".side").screenshot({ path: join(shots, "18-gm-announce.png") });
 
+  // T4.1: a GM asks the player a presence check; any answer gets the same reply.
+  await type(gmPage, `/presence ${player.name}`);
+  await expect(gmPage.getByTestId("game-log")).toContainText(
+    `chequeo de presencia a ${player.name}`,
+  );
+  const check = plPage.getByTestId("presence-check");
+  await expect(check).toContainText("Chequeo de presencia");
+  await expect(check.getByRole("button")).toHaveCount(4);
+  await shot(plPage, "38-presence-check");
+  const question = (await check.locator("p").first().textContent()) ?? "";
+  const color = ["rojo", "azul", "verde", "amarillo"].find((c) => question.includes(c));
+  expect(color).toBeDefined();
+  await check.getByRole("button", { name: new RegExp(color ?? "", "i") }).click();
+  await expect(check).toHaveCount(0);
+  await expect(plPage.getByTestId("game-log")).toContainText("Gracias por responder.");
+
   // The ban disconnects the player with its own message.
   await type(gmPage, `/ban ${player.name} 1h e2e`);
   await expect(gmPage.getByTestId("game-log")).toContainText(

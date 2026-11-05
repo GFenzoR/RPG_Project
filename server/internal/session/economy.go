@@ -261,6 +261,7 @@ func (w *World) PendingEconomy(now time.Time) []EconomyEntry {
 // World by character, so logging out and in does not restart the window.
 type earning struct {
 	start   game.Tick
+	xp      int64 // experience gained (bot detection, T4.1 2/2)
 	gold    int64
 	items   int64
 	alerted uint8 // 1 gold, 2 items already alerted in this window

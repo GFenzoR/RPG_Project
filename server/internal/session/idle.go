@@ -31,8 +31,13 @@ func (w *World) initIdle() {
 // moved or used, a chat line said, a dialog, a trade, a gathering or crafting attempt),
 // so an invalid or empty intent (a walk into a wall, SetTarget 0, an unknown item) does
 // not keep an idle player online.
-func (p *Player) active(tick game.Tick) {
+// kind is the kind of action for the bot detection (antibot.Kind*): the time between
+// actions of the same kind is what is measured.
+func (p *Player) active(tick game.Tick, kind int) {
 	p.lastAction, p.idleWarned = tick, false
+	if p.sus != nil { // bot detection: the time between real actions, steps aside (T4.1)
+		p.sus.tracker.Action(tickMs(tick), kind, p.sus.cfg)
+	}
 }
 
 // checkIdle warns and disconnects idle players, once a second.

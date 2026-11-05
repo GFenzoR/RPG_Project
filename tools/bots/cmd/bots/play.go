@@ -67,6 +67,9 @@ type player struct {
 	pace  pacer
 	acts  actions
 	lastP time.Time
+	// prof, when set (-profile), paces the bot like that profile: its waits, its breaks,
+	// and whether it answers presence checks (a person does, a script does not).
+	prof bot.Profile
 }
 
 // errDisconnected reports that the server closed the connection.
@@ -149,10 +152,27 @@ func (p *player) loop(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := p.idle(ctx, time.Duration(1000+p.r.IntN(3000))*time.Millisecond); err != nil {
+		if err := p.idle(ctx, p.rest()); err != nil {
 			return err
 		}
+		if pr := p.b.TakePresence(); pr != nil && p.prof.Wander {
+			if err := p.send(ctx, func(ctx context.Context) error {
+				return p.b.AnswerPresence(ctx, pr.ID, bot.AnswerFor(pr))
+			}); err != nil {
+				return err
+			}
+		}
 	}
+}
+
+// rest is the wait between two activities: the profile's beat and breaks with
+// -profile, else 1-4 s.
+func (p *player) rest() time.Duration {
+	if p.prof.Name == "" {
+		return time.Duration(1000+p.r.IntN(3000)) * time.Millisecond
+	}
+	d := p.prof.BeatDelay(p.r)
+	return d + p.prof.Pause(p.r, d)
 }
 
 // walkTo sends a planned path and waits until the bot arrives, is stopped or the

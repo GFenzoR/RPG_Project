@@ -504,4 +504,9 @@ idle: { kick_after_ms: 900000, warn_before_ms: 60000 } # kick_after_ms 0 lo apag
   cuenta reporta al mismo personaje una vez cada `same_target_ms`. `max_reason` ≤ 200 y
   `events` ≤ 32 (el anillo de eventos recientes de cada jugador).
 - `idle`: `kick_after_ms` es 0 o al menos 60000, y `warn_before_ms` menor que él.
-
+- `antibot` (detección de bots): `eval_every_ms` (0 la apaga), `half_life_ms`, `pause_ms`,
+  `signals.<regularity|reaction|route|session|income>` con su `weight` y sus límites,
+  `thresholds` (`log < notify < presence < suspend`), `presence` (`timeout_ms` ≥ 60000,
+  `delay_ms`, `fail_points`) y `suspend_ms` (hasta 30 días). Qué mide cada señal y por qué
+  esos números: `01-architecture.md`, "Detección de bots". Textos del chequeo:
+  `presence.question.<color>` y `presence.option.<color>` en `i18n/*/client.yaml`.

@@ -12,6 +12,7 @@ server/
   internal/game/       game loop, tick, cola de comandos, scheduler de eventos
   internal/world/      tiles, pisos, sectores, islas, pathfinding (A* por casillas)
   internal/entity/     jugadores, monstruos, NPCs; IDs estables (uint32)
+  internal/antibot/    señales de comportamiento y puntaje de sospecha (T4.1, puro)
   internal/combat/     daño y fórmulas (las condiciones viven en session/condition.go:
                        necesitan el scheduler, el AOI y los monstruos)
   internal/skills/     progreso de skills por uso, niveles, experiencia

@@ -138,7 +138,7 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
   música de combate y probar Opus en el WKWebView de macOS.
 
 ## Hito 4 — Alpha pública
-- [ ] **T4.1 Anti-bot y anti-AFK.** Todo del lado del servidor; no hay anticheat en el
+- [x] **T4.1 Anti-bot y anti-AFK.** Todo del lado del servidor; no hay anticheat en el
   cliente (`01-architecture.md`, "Trampas y anti-bot"). [T2.6]
   - **Señales por personaje.** Se calculan fuera del tick, o a costo constante dentro de
     él (`07-performance-budget.md`):
@@ -165,10 +165,10 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
     variación) y otro "mecánico". El detector tiene que marcar al segundo y no al primero.
   - **Anti-AFK.** Revisar los límites que ya existen en el entrenamiento y la recolección
     (`02-game-design.md`) y agregar la desconexión por inactividad.
-  - Parte 1/2 hecha: log de economía con cuadratura y atípicos, reportes, auditoría de
-    información (arregló dos fugas: grito y proyectil desde fuera de la ventana) y
-    desconexión por inactividad. Falta la parte 2: señales, puntaje de sospecha y la
-    simulación con `tools/bots`.
+  - Hecha en dos PR: #57 (log de economía con cuadratura y atípicos, reportes, auditoría
+    de información y sus arreglos, desconexión por inactividad) y la parte 2 (señales,
+    puntaje de sospecha con respuestas graduales y chequeo de presencia, perfiles humano y
+    mecánico en `server/pkg/bot` y `tools/bots -profile`).
 - [ ] **T4.2 Tutorial** guiado en la isla inicial.
 - [ ] **T4.3 Landing page**, ranking (highscores), noticias.
 - [ ] **T4.4 Observabilidad**: dashboard de métricas y alertas básicas.

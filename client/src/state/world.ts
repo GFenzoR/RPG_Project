@@ -6,6 +6,14 @@
 // moves the own creature at once; the server's CreatureMove confirms it (and gives the
 // real duration) and WalkRejected puts the creature back where the server says it is.
 import type { StationState } from "./recipes.ts";
+
+/** A presence check (T4.1): the question's i18n key, the options and when it runs out. */
+export interface PresenceState {
+  id: number;
+  question: string;
+  options: { id: number; key: string }[];
+  until: number;
+}
 import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
 import type {
   Creature,
@@ -247,6 +255,8 @@ export class WorldState implements TileSource {
   skills: SkillState[] = [];
   /** The crafting station the player opened (T3.4), until it closes the window or walks away. */
   station: StationState | undefined;
+  /** A presence check waiting for an answer (T4.1), until answered or out of time. */
+  presence: PresenceState | undefined;
   /** The player's own active conditions (T3.2), in the server's order. */
   conditions: ConditionView[] = [];
   levelUp: LevelUpState | undefined;
@@ -395,6 +405,14 @@ export class WorldState implements TileSource {
         break;
       case "partyInvitation":
         this.party.invited(msg.value, now);
+        break;
+      case "presenceCheck":
+        this.presence = {
+          id: msg.value.checkId,
+          question: msg.value.question?.key ?? "",
+          options: msg.value.options.map((o) => ({ id: o.optionId, key: o.text?.key ?? "" })),
+          until: now + msg.value.timeoutMs,
+        };
         break;
       case "playerConditions":
         this.conditions = msg.value.conditions.map((c) => ({

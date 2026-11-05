@@ -75,6 +75,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.partyCommand(ctx, p, m.PartyCommand)
 	case *pb.ClientMessage_CloseContainer:
 		w.closeContainer(p, m.CloseContainer.GetContainerId())
+	case *pb.ClientMessage_PresenceAnswer:
+		w.presenceAnswer(ctx, p, m.PresenceAnswer.GetCheckId(), m.PresenceAnswer.GetOptionId())
 	case *pb.ClientMessage_ReportPlayer:
 		w.reportPlayer(ctx, p, m.ReportPlayer.GetCreatureId(), m.ReportPlayer.GetReason())
 	case *pb.ClientMessage_Logout:
@@ -196,7 +198,10 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	ticks := w.StepTicks(ground, p.speed, d.Diagonal())
 	p.readyAt = ctx.Tick + ticks
 	w.move(p, to, d, ticks)
-	p.active(ctx.Tick)
+	// A step resets the idle time but is not a timed action for the bot detection: its
+	// pace is the server's (a held key walks as evenly as a script).
+	p.lastAction, p.idleWarned = ctx.Tick, false
+	w.abStep(ctx.Tick, p, d)
 }
 
 // searchCost is the worst case of one reroute search, in expanded tiles: Find may run
@@ -312,6 +317,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushParties(ctx.Tick)
 	w.checkEconomy(ctx.Tick)
 	w.checkIdle(ctx)
+	w.checkAntiBot(ctx)
 	w.flushEconomy(ctx)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {

@@ -291,6 +291,16 @@ type World struct {
 	reportSame   game.Tick
 	reportPrune  game.Tick
 
+	// Bot detection (T4.1 2/2): balance.yaml antibot, the evaluation period in ticks,
+	// the state by character, the last presence check id, and the income medians by
+	// level band (experience and gold per hour) with the tick they are due again.
+	abCfg        *content.AntiBot
+	abEvalFor    game.Tick
+	suspects     map[int64]*suspect
+	nextCheck    uint32
+	abMedians    map[int][2]float64
+	abMedianNext game.Tick
+
 	// Idle (T4.1): balance.yaml idle in ticks (kickFor 0 = off) and a scratch list.
 	idleKickFor game.Tick
 	idleWarnFor game.Tick
@@ -367,6 +377,7 @@ func New(cfg Config) (*World, error) {
 	w.initEconomy()
 	w.initReports()
 	w.initIdle()
+	w.initAntiBot()
 	w.initParty()
 	if err := w.initConditions(); err != nil {
 		return nil, err

@@ -308,6 +308,54 @@ inventario, contenedores, condiciones) y que los mensajes sobre criaturas no ten
 de vida exacta, maná, skills ni inventario (solo `health_percent`). Invisibilidad y grupos
 siguen en sus tests (ver arriba).
 
-### Lo que falta
-La detección de bots por comportamiento (señales y puntaje de sospecha) queda para la
-segunda parte de T4.1. Ver `10-roadmap.md`.
+### Detección de bots (T4.1)
+Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números en
+`balance.yaml → antibot` (esquema en `balance.schema.json`).
+- **Dónde corre:** `internal/antibot` es puro (sin reloj, sin azar, sin mundo). El loop
+  alimenta un `Tracker` por personaje con tiempos de juego en ms (tick × 50): acciones
+  reales, pasos, golpes recibidos y curas. Cada actualización cuesta lo mismo, sin importar
+  el historial: medias y varianzas móviles exponenciales (unas 100 muestras), un anillo de
+  32 pasos y una tabla fija de 128 hashes de segmentos de ruta. Cada `eval_every_ms` (60 s,
+  escalonado por id de criatura) se leen las señales y se actualiza el puntaje. Las
+  medianas de ingreso por banda de nivel se calculan una vez por ronda.
+- **Señales** (cada una entre 0 y 1):
+
+| Señal | Qué mide | 1 cuando… | Peso |
+|---|---|---|---|
+| `regularity` | Coeficiente de variación del tiempo entre acciones del **mismo tipo** (hechizo/runa, item, chat, otra). Los pasos no cuentan: su ritmo lo pone el servidor. | CV ≤ `cv_low` (0,05); 0 desde `cv_high` (0,25), con ≥ 300 muestras | 3 |
+| `reaction` | Tiempo desde un golpe recibido hasta la cura (hechizo propio o consumible) que lo contesta, dentro de `window_ms`. | Las curas llegan en ≤ `fast_ms` (300 ms) y con desvío ≤ `std_ms` (60 ms), con ≥ 15 muestras | 3 |
+| `route` | Parte de los segmentos de `segment` (12) pasos exactos (casilla y dirección) ya caminados. | ≥ `repeat_high` (90 %) repetidos; 0 bajo `repeat_low` (50 %), con ≥ 300 pasos | 2 |
+| `session` | Juego sin una pausa de `pause_ms` (3 min). | 16 h seguidas; 0 hasta 8 h | 1 |
+| `income` | Experiencia u oro por hora (la ventana de atípicos del log de economía) sobre la mediana de los conectados de su banda de 10 niveles (≥ 5 pares). | 8 veces la mediana; 0 hasta 4 veces | 2 |
+
+- **Puntaje:** en cada evaluación, `puntaje × 0,5^(Δt / half_life_ms) + Σ peso × señal`.
+  Con media vida de 1 h y una evaluación por minuto, una señal sostenida de peso `w` se
+  estabiliza cerca de `w × 87`. Un minuto raro se desvanece; solo un patrón sostenido suma.
+  El estado vive en el `World` por personaje: volver a entrar no lo reinicia. Se olvida
+  cuando el personaje está desconectado y el puntaje decayó a menos de 1.
+- **Respuestas graduales**, una vez por episodio (un nivel vuelve a armarse cuando el
+  puntaje baja de la mitad de su umbral):
+  1. `log` (100): log estructurado y `audit_log` (`bot_suspect`, actor `system:antibot`,
+     con el puntaje y las señales).
+  2. `notify` (250): mensaje a los GM en línea (`gm.bot_suspect`), auditado.
+  3. `presence` (400): un chequeo de presencia (ver abajo).
+  4. `suspend` (600): suspensión de `suspend_ms` (24 h), por la goroutine de admin como un
+     `/ban` de GM (solo alcanza a cuentas de jugador; auditada en la misma transacción).
+     **Solo después de un chequeo fallado** en este episodio: si el puntaje llega al umbral
+     sin uno, se pide un chequeo. El ban largo o permanente lo decide siempre un GM.
+- **Chequeo de presencia** (`PresenceCheck`/`PresenceAnswer`): una pregunta simple (elegir
+  un color entre cuatro, textos i18n `presence.*`) en un momento al azar de los próximos
+  `delay_ms`. **Nunca en combate ni sobre una casilla sin logout:** se espera a que se
+  pueda. No bloquea el juego. Plazo generoso (`timeout_ms`, 10 min) que corre solo mientras
+  el personaje está conectado. No es un oráculo: el orden de las opciones y sus ids son al
+  azar, y la respuesta, correcta o no, recibe siempre `presence.thanks`. Fallar (mala
+  respuesta o fuera de plazo) suma `fail_points` y avisa a los GM; **nunca suspende por sí
+  solo**: la suspensión la decide la evaluación siguiente si el puntaje ya pasa ese umbral.
+  Acertar divide el puntaje por dos. Un GM puede pedir uno con `/presence Nombre`
+  (auditado).
+- **Staff:** los personajes de GM y admin no se evalúan.
+- **Prueba:** `TestAntiBotFlagsMechanicalNotHuman` (`internal/session/antibot_sim_test.go`)
+  juega horas de juego en simulación determinista, con la configuración de
+  `data/balance.yaml`, los perfiles `bot.Human()` y `bot.Mechanical()` de `server/pkg/bot`
+  (los mismos de `tools/bots -profile`). El mecánico pasa por log, aviso, chequeo, fallo y
+  suspensión (en ~1 h 40 de juego); el humano no recibe ninguna marca. Tarda ~0,1 s.
