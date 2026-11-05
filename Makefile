@@ -105,11 +105,13 @@ test-parity: ## mapcompile vs packages/map-format walkability on every tile
 # Browser origins allowed on /ws in development: the client's Vite dev and preview servers
 # (also the webview of `make desktop-dev`). RPG_WS_ORIGINS replaces them.
 DEV_WS_ORIGINS ?= localhost:5173,localhost:4173
+# Local servers let a brand-new account submit maps (T4.5; production waits 24 h).
+DEV_SERVER_FLAGS ?= -map-submit-min-account-age 0
 
 .PHONY: run-server
 run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL, RPG_WS_ORIGINS)
 	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver \
-		-ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}"
+		-ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)
 
 # Operator tools (T2.6): roles are never granted from the game. Recorded in the audit log.
 .PHONY: set-role
@@ -174,7 +176,7 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 	@echo "[dev] game client on http://localhost:5173, game server on :8080 (ws /ws), map editor on http://localhost:5174"
 	@trap 'kill 0' EXIT; \
 	(cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
-		go run ./cmd/gameserver -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}") & \
+		go run ./cmd/gameserver -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)) & \
 	$(MAKE) client & \
 	$(MAKE) editor
 

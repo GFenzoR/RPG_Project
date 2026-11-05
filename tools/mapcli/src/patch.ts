@@ -57,6 +57,26 @@ function atRef(root: string, ref: string, path: string): string | null {
   }
 }
 
+/**
+ * The commit a ref names right now (a symbolic ref such as HEAD says nothing once the
+ * patch leaves this clone: a reviewer sees the exact base). The ref itself if git cannot
+ * resolve it.
+ */
+function resolveRef(root: string, ref: string): string {
+  try {
+    const sha = git(root, [
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      "--end-of-options",
+      `${ref}^{commit}`,
+    ]).trim();
+    return /^[0-9a-f]{40,64}$/.test(sha) ? sha : ref;
+  } catch {
+    return ref;
+  }
+}
+
 /** Patch with every patchable file under world/ that differs from `ref` (default HEAD). */
 export function createPatch(root: string, ref = "HEAD", island?: string): MapPatch {
   const scope = island === undefined ? "world" : `world/islands/${island}`;
@@ -77,7 +97,7 @@ export function createPatch(root: string, ref = "HEAD", island?: string): MapPat
         : { path, base: patchHash(baseText), base_text: baseText, content },
     );
   }
-  return { format: PATCH_FORMAT, kind: PATCH_KIND, base_ref: ref, files };
+  return { format: PATCH_FORMAT, kind: PATCH_KIND, base_ref: resolveRef(root, ref), files };
 }
 
 /**

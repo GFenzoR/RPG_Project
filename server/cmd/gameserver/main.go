@@ -66,6 +66,10 @@ type options struct {
 	startTown string
 	// boatRoutes replaces data/boat_routes.yaml (E2E fixtures; empty = the data file).
 	boatRoutes string
+	// mapSubmit bounds the map submission portal (T4.5).
+	mapSubmit httpapi.MapSubmitLimits
+	// mapPatchRetention: patch bytes of decided submissions are dropped after it (0 = kept).
+	mapPatchRetention time.Duration
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -91,6 +95,11 @@ func main() {
 	flag.StringVar(&o.metricsAddr, "metrics-addr", envOr("RPG_METRICS_ADDR", defaultMetricsAddr), "internal listener for Prometheus /metrics, never public (empty = off); default $RPG_METRICS_ADDR or "+defaultMetricsAddr)
 	flag.DurationVar(&o.metricsLinger, "metrics-linger", 20*time.Second, "after shutdown, keep /metrics up this long if database writes were abandoned, so Prometheus scrapes them (0 = off)")
 	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
+	def := httpapi.DefaultMapSubmitLimits
+	flag.IntVar(&o.mapSubmit.MaxBytes, "map-submit-max-bytes", def.MaxBytes, "largest map patch the website accepts, in bytes (T4.5)")
+	flag.IntVar(&o.mapSubmit.PerDay, "map-submit-per-day", def.PerDay, "map submissions per account in 24 hours")
+	flag.DurationVar(&o.mapSubmit.MinAccountAge, "map-submit-min-account-age", def.MinAccountAge, "how old an account must be to submit maps (0 = no minimum)")
+	flag.DurationVar(&o.mapPatchRetention, "map-patch-retention", defaultMapPatchRetention, "drop the patch bytes of rejected, pr_opened and failed map submissions this long after their last change (0 = keep them)")
 	flag.Parse()
 	_, o.metricsExplicit = os.LookupEnv("RPG_METRICS_ADDR")
 	flag.Visit(func(f *flag.Flag) {
@@ -215,6 +224,7 @@ func run(logger *slog.Logger, o options) error {
 		MinClientVersion: o.minClientVersion,
 		AuthRateLimit:    authRateLimit(o.authRateBurst),
 		StartTown:        o.startTown,
+		MapSubmitLimits:  o.mapSubmit,
 	})
 	if err != nil {
 		return err
@@ -230,6 +240,9 @@ func run(logger *slog.Logger, o options) error {
 		close(httpErr)
 	}()
 	go purgeSessions(ctx, logger, clk, a.Auth)
+	if o.mapPatchRetention > 0 {
+		go purgeMapPatches(ctx, logger, clk, st, o.mapPatchRetention)
+	}
 	metricsUp := false
 	if mets != nil {
 		msrv, err := serveMetrics(o.metricsAddr, mets, logger)
@@ -410,6 +423,34 @@ func purgeSessions(ctx context.Context, logger *slog.Logger, clk clock.Clock, sv
 		}
 		if n > 0 {
 			logger.Info("purged expired sessions", "count", n)
+		}
+	}
+}
+
+// defaultMapPatchRetention: patches of decided map submissions are kept 30 days (docs/04).
+const defaultMapPatchRetention = 30 * 24 * time.Hour
+
+// mapPatchPurger is the store method purgeMapPatches calls (*store.Store).
+type mapPatchPurger interface {
+	PurgeMapPatches(ctx context.Context, before time.Time) (int64, error)
+}
+
+// purgeMapPatches drops, every sessionPurgeEvery, the patch bytes of map submissions that
+// reached a final status more than retention ago; their metadata and sha256 stay.
+func purgeMapPatches(ctx context.Context, logger *slog.Logger, clk clock.Clock, st mapPatchPurger, retention time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-clk.After(sessionPurgeEvery):
+		}
+		n, err := st.PurgeMapPatches(ctx, clk.Now().Add(-retention))
+		if err != nil {
+			logger.Warn("purge map patches", "err", err)
+			continue
+		}
+		if n > 0 {
+			logger.Info("purged map patches", "count", n)
 		}
 	}
 }

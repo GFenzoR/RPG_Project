@@ -188,6 +188,11 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
     `http_requests_total`/`http_request_duration_seconds` por ruta. Métricas de backup por
     textfile. Pendiente: postgres_exporter y una métrica de la detección de bots.
 - [ ] **T4.5 Portal de envío de mapas** con cola de moderación que abre PR.
+  - [x] 1/2: envío desde el sitio (`/maps/submit`), "Mis envíos", cola de moderación para
+    gm/admin con auditoría, chequeo del patch en Go (`server/internal/mappatch`), tabla
+    `map_submissions` con el contrato para el worker. Licencia propuesta: CC BY 4.0
+    (docs/04, a confirmar).
+  - [ ] 2/2: worker que abre el PR en GitHub.
 
 ## Hito 5 — Post-lanzamiento
 - Mercado global · Tienda cosmética con pasarela de pago · PvP con skulls · Casas ·

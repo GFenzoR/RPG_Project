@@ -1,0 +1,43 @@
+{
+  "_comment": "Paths a map patch may and may not touch. Read by patch tests here and by server/internal/mappatch (T4.5), so the server's first check and parsePatch agree.",
+  "allowed": [
+    "world/world.yaml",
+    "world/islands/puerto/island.yaml",
+    "world/islands/puerto/spawns.yaml",
+    "world/islands/puerto/npcs.yaml",
+    "world/islands/puerto/zones.yaml",
+    "world/islands/puerto/portals.yaml",
+    "world/islands/puerto/texts.yaml",
+    "world/islands/new_isle2/chunks/z07/c0100_0196.json",
+    "world/islands/a/chunks/z00/c0000_0000.json",
+    "world/islands/a/chunks/z15/c9999_9999.json",
+    "world/prefabs/small_house.yaml"
+  ],
+  "rejected": [
+    "",
+    "world",
+    "world/",
+    "world/islands/puerto/chunks/z16/c0100_0196.json",
+    "world/islands/puerto/chunks/z7/c0100_0196.json",
+    "world/islands/puerto/chunks/z07/c100_196.json",
+    "world/islands/puerto/chunks/z07/c0100_0196.json.bak",
+    "world/islands/Puerto/zones.yaml",
+    "world/islands/1puerto/zones.yaml",
+    "world/islands/puerto/../puerto/zones.yaml",
+    "world/islands/../../data/items.yaml",
+    "/world/world.yaml",
+    "./world/world.yaml",
+    "world\\world.yaml",
+    "world/islands/puerto/zones.yml",
+    "world/islands/puerto/other.yaml",
+    "world/islands/puerto/zones.yaml\u0000",
+    "world/islands/puerto/zones.yaml\n",
+    "world/CONTRIBUTORS.md",
+    "world/prefabs/sub/house.yaml",
+    "data/items.yaml",
+    ".github/workflows/ci.yml",
+    "tools/mapcli/src/cli.ts",
+    "world/islands/puerto/chunks/z07/c０100_0196.json",
+    "world/islands/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/zones.yaml"
+  ]
+}

@@ -12,10 +12,12 @@ import (
 
 type Querier interface {
 	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
+	CharacterOfAccount(ctx context.Context, arg CharacterOfAccountParams) (string, error)
 	CloseReport(ctx context.Context, arg CloseReportParams) (int64, error)
 	// Deletes a token and returns it if it was active: play tokens are single-use.
 	ConsumeSession(ctx context.Context, arg ConsumeSessionParams) (ConsumeSessionRow, error)
 	CountCharactersByAccount(ctx context.Context, accountID int64) (int64, error)
+	CountRecentSubmissions(ctx context.Context, arg CountRecentSubmissionsParams) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error)
 	CreateCharacter(ctx context.Context, arg CreateCharacterParams) (CreateCharacterRow, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
@@ -30,6 +32,7 @@ type Querier interface {
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	// The actor's role now (not the one cached at login), for bans in the same transaction.
 	GetAccountRole(ctx context.Context, id int64) (string, error)
+	GetAccountRoleEmail(ctx context.Context, id int64) (GetAccountRoleEmailRow, error)
 	// Current roles of some accounts: online staff lose a revoked role within seconds.
 	GetAccountRoles(ctx context.Context, ids []int64) ([]GetAccountRolesRow, error)
 	// The ban that ends last among the account's active bans (a permanent one first).
@@ -48,6 +51,8 @@ type Querier interface {
 	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
 	// Resolves a character name (ignoring case) for a staff command.
 	GetCharacterTarget(ctx context.Context, name string) (GetCharacterTargetRow, error)
+	GetSubmission(ctx context.Context, id int64) (GetSubmissionRow, error)
+	GetSubmissionPatch(ctx context.Context, id int64) (GetSubmissionPatchRow, error)
 	// Highscores (T4.3, GET /api/highscores). Only players' characters are ranked: staff
 	// (gm/admin), disabled accounts and accounts with an active ban are left out. Ties keep
 	// the older character first. A page is limit rows from offset; callers ask for one more
@@ -66,9 +71,12 @@ type Querier interface {
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
+	InsertMapSubmission(ctx context.Context, arg InsertMapSubmissionParams) (int64, error)
 	InsertReport(ctx context.Context, arg InsertReportParams) (int64, error)
 	// Lifts every active ban of the account.
 	LiftBans(ctx context.Context, arg LiftBansParams) (int64, error)
+	// An author's submissions, newest first.
+	ListAccountSubmissions(ctx context.Context, arg ListAccountSubmissionsParams) ([]ListAccountSubmissionsRow, error)
 	// Newest entries first (operator tool and tests).
 	ListAudit(ctx context.Context, maxRows int32) ([]AuditLog, error)
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
@@ -76,9 +84,22 @@ type Querier interface {
 	ListEconomy(ctx context.Context, arg ListEconomyParams) ([]ListEconomyRow, error)
 	// The oldest open reports first: the queue order.
 	ListOpenReports(ctx context.Context, maxRows int32) ([]ListOpenReportsRow, error)
+	// The moderation queue: oldest first (arrival order), a page after a cursor.
+	ListPendingSubmissions(ctx context.Context, arg ListPendingSubmissionsParams) ([]ListPendingSubmissionsRow, error)
+	// Decided submissions of one status: the most recently changed first, a page before a
+	// cursor (map_submissions_history_idx).
+	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
+	// Map submissions (T4.5). Lists never read the patch bytes.
+	// The author's account, locked for the rest of the transaction so two uploads at once
+	// cannot both pass the daily limit.
+	LockSubmitter(ctx context.Context, arg LockSubmitterParams) (LockSubmitterRow, error)
+	// Drops the bytes of patches whose submission reached a final status before the cutoff.
+	PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	ReportExists(ctx context.Context, id int64) (bool, error)
+	// Approve or reject a pending submission. No row: it is not pending (or does not exist).
+	ReviewSubmission(ctx context.Context, arg ReviewSubmissionParams) (ReviewSubmissionRow, error)
 	SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error
 	// Upserts every skill of a snapshot in one statement (parallel arrays).
 	SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error
@@ -86,6 +107,9 @@ type Querier interface {
 	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
 	// Sets the role of the account with that (normalized) email and returns the old one.
 	SetAccountRole(ctx context.Context, arg SetAccountRoleParams) (SetAccountRoleRow, error)
+	SubmissionAuthor(ctx context.Context, id int64) (int64, error)
+	// The same as LockSubmitter without the lock: a cheap check before reading an upload.
+	SubmitterStatus(ctx context.Context, arg SubmitterStatusParams) (SubmitterStatusRow, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
 	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
 }

@@ -18,7 +18,8 @@ GLOBAL='^(\.github/workflows/ci\.yml|\.github/workflows/images\.yml|\.github/scr
 # Per job: paths (extended regex, anchored) that make it run. GLOBAL is added to all.
 declare -A RULES=(
 	# ci.yml
-	[go-server]='^(server|proto|data|world)/'
+	# The patch path fixture is shared with server/internal/mappatch (T4.5).
+	[go-server]='^(server|proto|data|world|packages/map-format/src/patch/testdata)/'
 	[go-bots]='^(tools/bots|server|proto)/'
 	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/spritepack|tools/soundgen|data|world|i18n|assets|proto)/'
 	[validate]='^(data|world|i18n|assets|packages|tools/mapcli|server/internal/world|server/cmd/mapcompile)/'
@@ -97,6 +98,9 @@ self_test() {
 	check desktop true apps/desktop/src-tauri/src/api.rs
 	check e2e false apps/desktop/src-tauri/src/api.rs
 	check go-server false apps/desktop/src-tauri/src/api.rs
+	# The patch path fixture: the TS tests and the server's patch check (T4.5).
+	for j in go-server ts; do check "$j" true packages/map-format/src/patch/testdata/paths.json; done
+	check go-server false packages/map-format/src/patch/merge.ts
 	# Maps and content: validation, server, E2E.
 	for j in validate go-server e2e ts integration; do check "$j" true world/islands/puerto/chunks/z07/c0100_0196.json; done
 	check desktop false world/islands/puerto/chunks/z07/c0100_0196.json
