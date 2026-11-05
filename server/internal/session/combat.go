@@ -74,8 +74,12 @@ func (w *World) setTarget(p *Player, id uint32) {
 	if m != p.afkTarget {
 		// A different monster: the anti-AFK clock restarts. Re-targeting the same one
 		// (even after clearing the target) keeps it, so it cannot be reset by the client.
+		// Only then it is a recent event too: toggling the same target cannot flood the
+		// report context (T4.1).
 		p.afkTarget, p.answeredAt = m, 0
+		p.recordEvent(w.nowTick(), eventAttack, m.kind.def.ID, 0, 0)
 	}
+	p.active(w.nowTick())
 	p.target = m
 }
 
@@ -151,7 +155,7 @@ func (w *World) distanceFight(ctx *game.TickContext, p *Player, m *Monster) {
 	attack := wp.Attack + ammo.def.Ammo.Attack
 	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.combatSkill(p, SkillDistance), 1), attack, p.level, w.mode(p).Attack)
 	w.train(p, SkillDistance, w.afk(ctx, p))
-	w.useUp(ammo)
+	w.useUp(p, ammo)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}}) // capacity
 	w.projectile(p.pos, m.pos, ElementPhysical)
 	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target), ElementPhysical)
@@ -290,6 +294,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	for _, s := range m.damage {
 		if p := w.playerByID(s.player); p != nil {
 			w.questKill(p, def.ID)
+			p.recordEvent(ctx.Tick, eventKill, def.ID, 0, 0)
 		}
 	}
 
@@ -318,6 +323,9 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 			add(newItem(l.def, c))
 			n -= c
 		}
+	}
+	for _, it := range corpse.Item.items {
+		w.econLoot(owner, def.ID, it)
 	}
 	pos := m.pos
 	w.clearConditions(ctx, holder{m: m}, true)
@@ -353,7 +361,11 @@ func (w *World) removeCorpse(pos world.Pos, c *Corpse) {
 	} else {
 		w.corpses[pos] = list
 	}
-	// The remains decay with whatever is still inside them.
+	// The remains decay with whatever is still inside them (logged: loot and dropped
+	// items were logged when they were created or lost).
+	for _, it := range c.Item.items {
+		w.econWorldTree(c.Owner, EconDecay, c.Monster, it)
+	}
 	w.closeAll(c.Item)
 	w.detach(c.Item)
 	w.tileChanged(pos)

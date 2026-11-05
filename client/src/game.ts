@@ -249,6 +249,11 @@ export class Game {
     this.party(PartyAction.INVITE, id);
   }
 
+  /** Reports a player the client sees to the staff (T4.1, battle list). */
+  reportPlayer(id: number, reason: string): void {
+    this.conn.send({ case: "reportPlayer", value: { creatureId: id, reason } });
+  }
+
   /** Accepts or declines the invitation of inviterId. */
   partyAnswer(inviterId: number, accept: boolean): void {
     this.party(accept ? PartyAction.ACCEPT : PartyAction.DECLINE, inviterId);

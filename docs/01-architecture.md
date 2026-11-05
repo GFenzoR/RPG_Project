@@ -67,7 +67,8 @@ for each tick (50 ms):
 |---|---|---|
 | Cuentas, personajes, inventario, skills, quests | Postgres | Al salir + autoguardado cada 5 min escalonado |
 | Estado del mundo (items en el suelo) | Memoria | Se pierde al reiniciar (como Tibia en sus inicios); casas en el futuro sí persisten |
-| Logs de economía (trades, drops raros) | Postgres, tabla append-only | Asíncrono por lotes |
+| Log de economía (T4.1: creación y destrucción de oro e items por fuente) | Postgres, `economy_log` append-only | Asíncrono por lotes (COPY), goroutine propia |
+| Reportes de jugadores (T4.1) | Postgres, `player_reports` | Asíncrono, goroutine de admin |
 | Mapa y contenido | Repo git (world/, data/) | Se despliegan con cada versión |
 | Roles, bans y log de auditoría (T2.6) | Postgres (`audit_log` append-only) | Asíncrono, goroutine de admin |
 
@@ -102,7 +103,8 @@ assets/sprites ──spritepack──▶ atlas.png + atlas.json (cliente y edito
 - Logs JSON con `slog`. Métricas que hay (T1.17): `tick_duration_ms` (histograma),
   `tick_overruns_total`, `tick_commands_total`, `command_queue_pending`, `ws_connections`,
   `ws_sent_bytes_total`, `ws_sent_batches_total`, más las estándar `process_*` (CPU, RSS) y
-  `go_*`. Pendientes: errores de persistencia.
+  `go_*`. Desde T4.1, `economy_alerts_total{kind}` (`mismatch`, `gold_outlier`,
+  `items_outlier`, `log_dropped`). Pendientes: errores de persistencia.
 
 ## Seguridad básica
 - Rate limit por IP en login y por conexión en comandos.
@@ -164,7 +166,14 @@ Decisión del 2026-11-03: el juego se sigue jugando en el navegador y en el escr
      caso. Un invisible sigue ocupando su casilla: quien intente pisarla recibe
      `WalkRejected` (un camino por click lo rodea) y los monstruos lo esquivan. Es una pista
      aceptada.
-   - **No viaja** lo que está fuera de la ventana: jugadores, botín ni restos.
+   - **No viaja** lo que está fuera de la ventana: jugadores, botín ni restos. Tampoco su
+     posición por otro camino: un grito llega más lejos que la ventana, y quien no ve a
+     quien grita lo oye por nombre, sin posición; de un proyectil con una punta fuera de la
+     ventana esa punta llega en el borde, alineada con la otra (solo se sabe el lado).
+     Tampoco por las respuestas: una acción sobre un item del suelo o un hechizo o runa
+     apuntado a una casilla que el jugador no ve responde igual haya algo ahí o no (antes
+     decía "muy lejos" o "fuera de alcance" solo si lo había). Todas estas fugas las encontró
+     la auditoría de T4.1.
    - **Grupos (T3.3):** de un miembro fuera de vista solo viajan nombre, vocación, nivel e
      isla; vida y maná solo mientras está en vista, y nunca la posición. Invitar exige ver
      al jugador. `TestPartyInfoAudit` (`internal/session/party_test.go`) es la auditoría.
@@ -219,6 +228,86 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
 - **`audit_log`** es append-only (triggers como `economy_log`) y no tiene claves foráneas:
   sobrevive al borrado de cuentas. El operador lo lee con `make audit-log`.
 
+### Log de economía (T4.1)
+- **Qué se registra:** toda creación y destrucción de oro e items, por fuente
+  (`economy_log.kind`): `loot` (al llenarse los restos de un monstruo, a nombre de quien se
+  lleva el botín), `npc_buy` y `npc_sell` (tienda), `npc` (lo que da o quita un diálogo:
+  items de quest, bendiciones), `quest` (recompensas), `travel` (pasaje y ticket),
+  `gather` (pesca, minería, tala), `craft` (ingredientes y resultado), `death` (lo que cae
+  en los restos al morir), `gm` (`/item`), `consume` (comida, pociones, la última carga
+  de una runa, munición; también lo usado del suelo, a nombre de quien lo usó), `conjure`
+  (hechizos que crean items) y `decay` (lo que quedaba en unos restos al pudrirse, a nombre
+  del muerto si era un jugador). `trade` queda reservado
+  para la ventana de intercambio, que todavía no existe. `count` (unidades) y `amount`
+  (dinero, en cobre) llevan signo: positivo se crea o se recibe, negativo se destruye o se
+  pierde. `details.ref` es el id de contenido de la fuente (monstruo, NPC, receta, quest).
+- **Costo en el tick:** el loop solo agrega la entrada (un struct por valor, sin punteros
+  nuevos) a un buffer que reutiliza; en el flush le pone la hora del tick y la entrega por
+  canal a su goroutine (`app/economy.go`), sin esperar. Si la cola está llena, la guarda en
+  orden para el próximo tick, hasta 65536; después las descarta con log y alerta
+  `log_dropped`. La goroutine junta lotes de hasta `economy.log.batch_size` filas o
+  `flush_ms`, une las entradas seguidas que solo difieren en la hora (flecha tras flecha,
+  sin cambiar el orden del log) y escribe con COPY a una tabla temporal y luego `INSERT …
+  ON CONFLICT DO NOTHING`. Cada fila lleva el id de su lote y su índice (índice único), y
+  un reintento usa el mismo id: si el COPY llegó a confirmarse pero la respuesta se perdió
+  (timeout), el reintento no duplica filas, que parecerían una duplicación de items. Un
+  error de la base se reintenta con backoff; al apagar se drena, y si vence el plazo del apagado lo que queda se abandona
+  (con log) sin intentarlo, así el apagado no se alarga con la base colgada.
+- **Decisión: el log puede perder entradas, con límite y aviso.** A diferencia de
+  `audit_log`, no es el registro de verdad (el estado de cada personaje está en su
+  guardado) sino un dato para investigar. Mientras la base no responde, la cola del canal
+  (16384) y la del loop (65536) dan unos minutos con mucha actividad. Después se descarta y
+  se avisa, antes que dejar crecer la memoria del loop sin límite.
+- **Cuadratura:** cada personaje en línea tiene un libro con lo que llevaba al entrar más
+  lo que el log dice que ganó y perdió, más lo que pasó del suelo a su inventario y al
+  revés (eso no se registra: sigue en el mundo). Cada `economy.check_every_ms`
+  (escalonado por id de criatura) su oro y sus unidades de items tienen que dar lo mismo.
+  Si no dan, un camino del código creó o destruyó algo sin decirlo (posible duplicación):
+  log de error con lo esperado y lo real, alerta `mismatch`, y el libro se vuelve a
+  alinear. También se cuadra al salir del mundo, así no se escapa una duplicación justo
+  antes del logout. En los tests de `session` la cuadratura corre en cada tick y una diferencia
+  hace fallar el test, así cada test de la suite también prueba el log.
+- **Atípicos:** lo que un personaje crea en una ventana de `outlier.window_ms` (oro de
+  botín, ventas y recompensas; items de botín, recolección, oficios, conjuros, recompensas y
+  GM; las compras no cuentan) se compara con `base + per_level × nivel` por hora. Si lo
+  pasa: log de aviso y alerta `gold_outlier` o `items_outlier`, una vez por ventana. Lo
+  comprado a un NPC descuenta del oro (vender y recomprar no suma). La ventana es del
+  personaje, no de la sesión: volver a entrar no la reinicia. Es para que un GM mire; no
+  sanciona nada.
+
+### Reportes de jugadores (T4.1)
+- Reglas en `02-game-design.md` ("Moderación"). El cliente manda solo el motivo; el
+  contexto lo arma el servidor con lo que sabe: posiciones, nivel y los últimos eventos de
+  cada jugador, en dos anillos fijos de 32: uno para el chat y otro para lo demás
+  (objetivo nuevo, muertes, economía). El reporte lleva hasta la mitad de líneas de chat y
+  completa con lo demás, en orden de tiempo, así el reportado no puede sacar del contexto lo
+  que dijo con una ráfaga de otros eventos. Volver a elegir el mismo objetivo no es un
+  evento nuevo. Agregar un evento cuesta lo mismo siempre y no asigna memoria.
+- El rate limit (GCRA por cuenta y un mapa cuenta→personaje) vive en el loop; los mapas
+  se podan solos. El reporte va a la goroutine de admin como un trabajo más
+  (`AdminReport`), que lo inserta en `player_reports` junto con su entrada de
+  `audit_log` en una transacción. Listar y cerrar (`AdminListReports`,
+  `AdminCloseReport`) también se auditan en la misma transacción y la respuesta vuelve al
+  loop con `World.AdminDone`. Si la base rechaza un reporte, queda entero en el log
+  estructurado.
+- `/report Nombre` confirma si un nombre está conectado (`report.offline`), y a cambio cuesta
+  un reporte de la cuota de la cuenta: cada intento que pasa el uso se cobra antes de
+  resolver el nombre, así que pasada la ráfaga todos responden `report.too_fast` sin decir
+  nada. Un invisible que el jugador no ve figura como desconectado. El botón no revela nada
+  (solo alcanza a jugadores a la vista), así que cobra solo el reporte que se archiva.
+
+### Auditoría de información (T4.1)
+`internal/session/info_audit_test.go` recorre con reflexión de protobuf cada mensaje que
+recibe un observador y comprueba que toda posición, área de mapa y piso esté dentro de lo
+que ve: criaturas, items y restos fuera de la ventana, pisos de arriba y de abajo bajo
+tierra, pisos subterráneos desde la superficie, un grito desde lejos y un proyectil con
+una punta fuera (tirador o blanco, también fuera de su columna). También pide: acciones
+sobre items del suelo y hechizos y runas apuntados a casillas que no ve (lejos o en otro
+piso) responden igual haya algo o no, sin gastar maná ni cargas. También que de otro jugador no llegue nada privado (`PlayerStats`, skills,
+inventario, contenedores, condiciones) y que los mensajes sobre criaturas no tengan campos
+de vida exacta, maná, skills ni inventario (solo `health_percent`). Invisibilidad y grupos
+siguen en sus tests (ver arriba).
+
 ### Lo que falta
-La detección de bots, los reportes, el log de economía y la auditoría de lo que se envía
-quedan en T4.1. Ver `10-roadmap.md`.
+La detección de bots por comportamiento (señales y puntaje de sospecha) queda para la
+segunda parte de T4.1. Ver `10-roadmap.md`.

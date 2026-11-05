@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
+	CloseReport(ctx context.Context, arg CloseReportParams) (int64, error)
 	// Deletes a token and returns it if it was active: play tokens are single-use.
 	ConsumeSession(ctx context.Context, arg ConsumeSessionParams) (ConsumeSessionRow, error)
 	CountCharactersByAccount(ctx context.Context, accountID int64) (int64, error)
@@ -50,13 +51,19 @@ type Querier interface {
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
+	InsertReport(ctx context.Context, arg InsertReportParams) (int64, error)
 	// Lifts every active ban of the account.
 	LiftBans(ctx context.Context, arg LiftBansParams) (int64, error)
 	// Newest entries first (operator tool and tests).
 	ListAudit(ctx context.Context, maxRows int32) ([]AuditLog, error)
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
+	// Newest entries of a character first (tests and the operator).
+	ListEconomy(ctx context.Context, arg ListEconomyParams) ([]ListEconomyRow, error)
+	// The oldest open reports first: the queue order.
+	ListOpenReports(ctx context.Context, maxRows int32) ([]ListOpenReportsRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
+	ReportExists(ctx context.Context, id int64) (bool, error)
 	SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error
 	// Upserts every skill of a snapshot in one statement (parallel arrays).
 	SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error

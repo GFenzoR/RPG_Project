@@ -381,12 +381,14 @@ func (p *Player) openByID(id uint32) *Item {
 func (w *World) staticCount(pos world.Pos) int { return 1 + len(w.m.Stack(pos)) }
 
 // itemAt resolves the item a client action points at. stale views (another item, an
-// index out of range, a closed container) give nil.
+// index out of range, a closed container) give nil. A tile p does not see gives nil too,
+// before looking at it: otherwise the answer (too far or not possible) would tell what
+// lies on any tile of any floor (T4.1).
 func (w *World) itemAt(p *Player, loc *pb.ItemLocation, itemID, index uint32) (*Item, place) {
 	switch l := loc.GetLocation().(type) {
 	case *pb.ItemLocation_Pos:
 		pos, ok := posFromMsg(l.Pos)
-		if !ok {
+		if !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) {
 			return nil, place{}
 		}
 		i := int(index) - w.staticCount(pos)
@@ -563,6 +565,17 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 	}
 
+	// Economy ledger (T4.1): what crosses between a character and the ground.
+	if from := it.carriedBy(); from != toOwner {
+		h := measure(it, count)
+		if from != nil {
+			from.ground(h, -1)
+		}
+		if toOwner != nil {
+			toOwner.ground(h, 1)
+		}
+	}
+
 	// Run it: take the units out of their place and put them in the new one.
 	before := p.carried()
 	moving := it
@@ -587,6 +600,7 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	if from.kind == locSlot || to.kind == locSlot {
 		w.equipmentChanged(p)
 	}
+	p.active(ctx.Tick)
 	if p.carried() != before {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}
@@ -826,6 +840,7 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 		}
 		p.nextUse = ctx.Tick + w.useFor
 		w.consume(p, it)
+		p.active(ctx.Tick)
 	case it.def.Rune != nil:
 		w.useRune(ctx, p, it, nil) // on the current target, or the caster for a heal
 	default:
@@ -841,7 +856,7 @@ func (w *World) consume(p *Player, it *Item) {
 	pct := healthPercent(p.health, p.maxHealth)
 	p.health += hp
 	p.mana += mp
-	w.useUp(it)
+	w.useUp(p, it)
 	if c.HealHP == 0 && c.HealMP == 0 {
 		p.emit(systemMsg(msgAte, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: &pb.ItemStack{ItemId: uint32(it.def.Numeric)}}}))
 	}
@@ -868,8 +883,15 @@ func (w *World) consume(p *Player, it *Item) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }
 
-// useUp spends one unit (or charge) of it; the last one removes it.
-func (w *World) useUp(it *Item) {
+// useUp spends one unit (or charge) of it, used by p; the last one removes it.
+func (w *World) useUp(p *Player, it *Item) {
+	if it.def.Stackable || it.count <= 1 { // a rune's charge is not a unit: only its last one
+		if o := it.carriedBy(); o != nil {
+			w.econItem(o, EconConsume, "", it.def, -1)
+		} else {
+			w.econWorld(p.charID, EconConsume, "", it.def, -1) // on the ground: no ledger moves
+		}
+	}
 	if it.count > 1 {
 		it.count--
 		w.changed(it)

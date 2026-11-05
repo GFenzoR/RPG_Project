@@ -196,6 +196,7 @@ func (w *World) npcTalk(p *Player, id uint32) {
 	p.dialog = &openDialog{id: p.nextDialog, npc: n, node: n.def.Dialog.Start}
 	w.quests.ReachedNode(p.storage, n.def.ID, n.def.Dialog.Start, &questHost{w: w, p: p})
 	w.sendDialog(p)
+	p.active(w.nowTick())
 }
 
 // sendDialog sends the current node with the options p sees now. option_id is the
@@ -268,6 +269,7 @@ func (w *World) dialogChoose(ctx *game.TickContext, p *Player, dialogID, optionI
 	if r.Entered {
 		w.quests.ReachedNode(p.storage, d.npc.def.ID, r.Node, &questHost{w: w, p: p})
 	}
+	p.active(ctx.Tick)
 	w.sendDialog(p)
 	if d.shop && r.Refused == "" {
 		w.sendShop(p)
@@ -333,6 +335,8 @@ func (w *World) shopBuy(p *Player, dialogID, itemID, count uint32) {
 	}
 	w.pay(p, price)
 	w.giveItem(p, l.def, n)
+	w.econGold(p, EconNPCBuy, p.dialog.npc.def.ID, -price)
+	w.econItem(p, EconNPCBuy, p.dialog.npc.def.ID, l.def, n)
 	w.log.Info("economy: npc sale", "character", p.charID, "npc", p.dialog.npc.def.ID, "item", l.def.ID, "count", n, "amount", price)
 	p.emit(systemMsg(msgShopBought, itemParam(l.def, n), num("price", int(price))))
 	w.afterTrade(p)
@@ -355,12 +359,15 @@ func (w *World) shopSell(p *Player, dialogID, itemID, count uint32) {
 	amount := l.sell * int64(n)
 	w.takeItem(p, l.def, n, false)
 	w.giveMoney(p, amount)
+	w.econItem(p, EconNPCSell, p.dialog.npc.def.ID, l.def, -n)
+	w.econGold(p, EconNPCSell, p.dialog.npc.def.ID, amount)
 	w.log.Info("economy: npc purchase", "character", p.charID, "npc", p.dialog.npc.def.ID, "item", l.def.ID, "count", n, "amount", amount)
 	p.emit(systemMsg(msgShopSold, itemParam(l.def, n), num("price", int(amount))))
 	w.afterTrade(p)
 }
 
 func (w *World) afterTrade(p *Player) {
+	p.active(w.nowTick())
 	p.questDirty = true
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendShop(p)
@@ -540,6 +547,7 @@ func (w *World) giveItem(p *Player, def *content.Item, n int) {
 			}
 			w.drop(it, p.pos)
 			w.tileChanged(p.pos)
+			p.ground(measure(it, it.count), -1) // created for p, but it landed on the floor
 			floor = true
 		}
 		n -= k
@@ -604,15 +612,17 @@ func (h *questHost) ItemCount(item string) int {
 	return h.w.countItem(h.p, h.w.cfg.Items[item], true)
 }
 
-func (h *questHost) Reward(_ *content.Quest, r content.QuestReward) {
+func (h *questHost) Reward(q *content.Quest, r content.QuestReward) {
 	switch {
 	case r.XP > 0:
 		h.w.gainExperience(h.p, r.XP)
 	case r.Gold > 0:
 		h.w.giveMoney(h.p, r.Gold)
+		h.w.econGold(h.p, EconQuest, q.ID, r.Gold)
 		h.p.emit(systemMsg(msgReceivedGold, num("amount", int(r.Gold))))
 	case r.Item != "":
 		h.w.giveItem(h.p, h.w.cfg.Items[r.Item], 1)
+		h.w.econItem(h.p, EconQuest, q.ID, h.w.cfg.Items[r.Item], 1)
 	}
 }
 
@@ -677,17 +687,31 @@ func (a *actor) CanTeleport(pos content.Position) bool {
 	return ok
 }
 
-func (a *actor) GiveItem(item string) { a.w.giveItem(a.p, a.w.cfg.Items[item], 1) }
+func (a *actor) GiveItem(item string) {
+	a.w.giveItem(a.p, a.w.cfg.Items[item], 1)
+	a.w.econItem(a.p, EconNPC, a.npcID(), a.w.cfg.Items[item], 1)
+}
 func (a *actor) TakeItem(item string, n int) {
 	a.w.takeItem(a.p, a.w.cfg.Items[item], n, true)
+	a.w.econItem(a.p, EconNPC, a.npcID(), a.w.cfg.Items[item], -n)
+}
+
+// npcID is the NPC whose dialog runs the action (economy log), or "".
+func (a *actor) npcID() string {
+	if a.d == nil || a.d.npc == nil {
+		return ""
+	}
+	return a.d.npc.def.ID
 }
 func (a *actor) GiveXP(xp int64) { a.w.gainExperience(a.p, xp) }
 func (a *actor) GiveGold(n int64) {
 	a.w.giveMoney(a.p, n)
+	a.w.econGold(a.p, EconNPC, a.npcID(), n)
 	a.p.emit(systemMsg(msgReceivedGold, num("amount", int(n))))
 }
 func (a *actor) TakeGold(n int64) {
 	a.w.pay(a.p, n)
+	a.w.econGold(a.p, EconNPC, a.npcID(), -n)
 	a.p.emit(systemMsg(msgPaid, num("amount", int(n))))
 }
 func (a *actor) StartQuest(id string) {

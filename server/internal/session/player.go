@@ -125,6 +125,24 @@ type Player struct {
 	// Travel (T3.5): the last tick p fought (attacked, hurt or hitting a monster; 0 =
 	// never), which blocks sailing for balance travel.combat_block_ms.
 	fightAt game.Tick
+
+	// Economy (T4.1): what p carried at login, what the log says it gained and lost
+	// since, the tick of the next reconciliation, and its outlier window (World.earnings).
+	econBase  holdings
+	econDelta holdings
+	econNext  game.Tick
+	earn      *earning
+
+	// Reports (T4.1): p's recent events, chat lines in a ring of their own so that a
+	// burst of other events cannot push them out before a report.
+	recent   eventRing
+	chats    eventRing
+	eventSeq uint64
+
+	// Idle (T4.1): the tick of p's last real action and whether it was warned.
+	lastAction game.Tick
+	idleWarned bool
+	joinedAt   game.Tick
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -352,6 +370,8 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.appearToObservers(p)
+	w.startLedger(ctx.Tick, p)
+	p.joinedAt = ctx.Tick
 
 	// Staggered autosave: first at a random point of the first interval.
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
@@ -386,6 +406,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	if w.byClient[p.client] != p {
 		return
 	}
+	w.reconcile(ctx.Tick, p) // a duplication right before leaving is caught too (T4.1)
 	w.disappearFromObservers(p)
 	w.partyLeftWorld(p) // T3.3: leaving the world leaves the party
 	w.unindex(p)

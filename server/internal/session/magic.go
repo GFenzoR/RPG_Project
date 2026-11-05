@@ -205,6 +205,7 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 
 // startCooldown blocks s (if own) and its group, and tells the client.
 func (w *World) startCooldown(ctx *game.TickContext, p *Player, s *content.Spell, own bool) {
+	p.active(ctx.Tick) // a spell or a rune was cast
 	if p.spellReady == nil {
 		p.spellReady, p.groupReady = map[string]game.Tick{}, map[string]game.Tick{}
 	}
@@ -258,8 +259,12 @@ func (w *World) spellTarget(p *Player, target *pb.ActionTarget) *Monster {
 		}
 		return nil
 	case *pb.ActionTarget_Pos:
+		// Only a monster p's client knows: the answer must not tell whether an unseen
+		// tile holds one (T4.1).
 		if pos, ok := posFromMsg(t.Pos); ok {
-			return w.monsterAt(pos)
+			if m := w.monsterAt(pos); m != nil && p.Knows(m.id) {
+				return m
+			}
 		}
 		return nil
 	}
@@ -423,6 +428,7 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 			return false
 		}
 		w.giveItem(p, def, count) // all of it fits: nothing falls on the floor
+		w.econItem(p, EconConjure, "", def, count)
 		shown = newItem(def, count).stack()
 	} else {
 		if len(bp.items) >= bp.def.Slots() {
@@ -436,6 +442,7 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 		}
 		w.attach(p, it, place{kind: locContainer, cont: bp})
 		w.containerChanged(bp)
+		w.econItem(p, EconConjure, "", def, 1)
 		shown = it.stack()
 	}
 	w.eachWatcher(p, func(o *Player) {
@@ -446,17 +453,56 @@ func (w *World) conjure(p *Player, def *content.Item, count int) bool {
 }
 
 // projectile shows a projectile of element flying from one tile to another to everyone
-// who sees either end.
+// who sees either end. A client that sees only one end gets the other one moved to the
+// edge of its own window, in line with the end it sees (T4.1): the tile of a shooter or
+// of a target beyond the window is not sent, only the side the shot crosses.
 func (w *World) projectile(from, to world.Pos, element string) {
-	msg := &pb.ServerMessage{Message: &pb.ServerMessage_Projectile{Projectile: &pb.Projectile{
-		From: posMsg(from), To: posMsg(to), ProjectileId: ProjectileElementBase + elementIndex(element),
-	}}}
-	w.eachObserver(nil, from, func(o *Player) { o.emit(msg) })
+	id := ProjectileElementBase + elementIndex(element)
+	var msg *pb.ServerMessage // the exact one, shared by everyone who sees both ends
+	shot := func(o *Player, a, b world.Pos) {
+		if a == b {
+			return // the seen end is already on that edge (or the other is on another floor)
+		}
+		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Projectile{Projectile: &pb.Projectile{
+			From: posMsg(a), To: posMsg(b), ProjectileId: id,
+		}}})
+	}
+	w.eachObserver(nil, from, func(o *Player) {
+		if !Sees(o.pos, to) {
+			shot(o, from, edgePoint(o.pos, to, from))
+			return
+		}
+		if msg == nil {
+			msg = &pb.ServerMessage{Message: &pb.ServerMessage_Projectile{Projectile: &pb.Projectile{
+				From: posMsg(from), To: posMsg(to), ProjectileId: id,
+			}}}
+		}
+		o.emit(msg)
+	})
 	w.eachObserver(nil, to, func(o *Player) {
 		if !Sees(o.pos, from) {
-			o.emit(msg)
+			shot(o, edgePoint(o.pos, from, to), to)
 		}
 	})
+}
+
+// edgePoint stands in for hidden, an end of a shot beyond viewer's window, given the end
+// seen: it is seen, moved on one axis to the window's edge on hidden's side. Nothing of
+// hidden's offset along the edge is kept, so its tile cannot be worked out.
+func edgePoint(viewer, hidden, seen world.Pos) world.Pos {
+	dx, dy := int(hidden.X)-int(viewer.X), int(hidden.Y)-int(viewer.Y)
+	o := seen
+	switch {
+	case dy > ViewHalfH:
+		o.Y = uint16(int(viewer.Y) + ViewHalfH)
+	case dy < -ViewHalfH:
+		o.Y = uint16(int(viewer.Y) - ViewHalfH)
+	case dx > ViewHalfW:
+		o.X = uint16(int(viewer.X) + ViewHalfW)
+	case dx < -ViewHalfW:
+		o.X = uint16(int(viewer.X) - ViewHalfW)
+	}
+	return o
 }
 
 // projectileAt is projectile from `from` to player t: a client that does not see t (it is
@@ -609,7 +655,7 @@ func (w *World) useRune(ctx *game.TickContext, p *Player, it *Item, target *pb.A
 		w.reveal(ctx, p)
 	}
 	w.startCooldown(ctx, p, s, false)
-	w.useUp(it)
+	w.useUp(p, it)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }
 

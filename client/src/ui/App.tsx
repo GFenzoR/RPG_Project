@@ -380,6 +380,8 @@ function GameScreen(props: {
   const [deathSeen, setDeathSeen] = useState<number | undefined>(undefined);
   const death = ui.death && ui.death.at !== deathSeen ? ui.death : undefined;
   const [stance, setStance] = useState(FightStance.BALANCED);
+  // T4.1: the player being reported from the battle list (the reason form is open).
+  const [reporting, setReporting] = useState<{ id: number; name: string } | undefined>(undefined);
   const [chase, setChase] = useState(false);
 
   useEffect(() => {
@@ -527,9 +529,33 @@ function GameScreen(props: {
                         +
                       </button>
                     )}
+                    {c.kind === CreatureKind.PLAYER && (
+                      <button
+                        type="button"
+                        class="report"
+                        data-report={c.id}
+                        title={t("client.battle.report")}
+                        aria-label={t("client.battle.report")}
+                        onClick={() => setReporting({ id: c.id, name: creatureName(c, t) })}
+                      >
+                        !
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
+            )}
+            {reporting && (
+              <ReportForm
+                key={reporting.id}
+                t={t}
+                target={reporting}
+                onSend={(reason) => {
+                  game.current?.reportPlayer(reporting.id, reason);
+                  setReporting(undefined);
+                }}
+                onCancel={() => setReporting(undefined)}
+              />
             )}
           </section>
           <PartyPanel t={t} game={game.current} ui={ui} />
@@ -573,6 +599,64 @@ function GameScreen(props: {
         </aside>
       </div>
     </div>
+  );
+}
+
+/** Longest report reason (balance.yaml reports.max_reason; the server checks it). */
+const REPORT_REASON_MAX = 200;
+
+/**
+ * The reason form of a report (T4.1). The client only sends the reason: the server
+ * attaches the context (positions and recent events) and rate limits it.
+ */
+function ReportForm(props: {
+  t: Translate;
+  target: { id: number; name: string };
+  onSend(reason: string): void;
+  onCancel(): void;
+}) {
+  const { t } = props;
+  const [reason, setReason] = useState("");
+  // Preact ignores autoFocus: focus the field on open, so typing the reason does not
+  // walk (keys in an input are not game keys) and Escape reaches the form.
+  const input = useRef<HTMLInputElement>(null);
+  // Every click on a "!" makes a new target object: the field takes the focus again.
+  useEffect(() => {
+    input.current?.focus();
+  }, [props.target]);
+  return (
+    <form
+      class="report-form"
+      data-testid="report-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (reason.trim() !== "") props.onSend(reason.trim());
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") props.onCancel();
+      }}
+    >
+      <label>
+        {t("client.report.title", { name: props.target.name })}
+        <input
+          type="text"
+          value={reason}
+          ref={input}
+          maxLength={REPORT_REASON_MAX}
+          placeholder={t("client.report.reason")}
+          onInput={(e) => setReason(e.currentTarget.value)}
+        />
+      </label>
+      <p class="hint">{t("client.report.hint")}</p>
+      <div class="buttons">
+        <button type="submit" disabled={reason.trim() === ""}>
+          {t("client.report.send")}
+        </button>
+        <button type="button" onClick={props.onCancel}>
+          {t("client.report.cancel")}
+        </button>
+      </div>
+    </form>
   );
 }
 

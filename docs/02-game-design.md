@@ -143,6 +143,24 @@ Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/re
   por comportamiento. Las señales, los reportes y el log de economía están en T4.1, y el
   por qué en `01-architecture.md`, "Trampas y anti-bot".
 
+Revisado en T4.1 (`server/internal/session/idle.go`):
+- Los límites que ya había siguen igual y se complementan: `skills.afk` (10 min contra un
+  objetivo que no responde → intentos al 25 %), `gathering.afk` (15 min recolectando sin
+  moverse → 25 %), el intervalo mínimo de recolección y oficios
+  (`gathering.use_interval_ms`) y el agotamiento de los recursos.
+- **Desconexión por inactividad:** sin acciones reales durante `idle.kick_after_ms`
+  (15 min) el servidor desconecta al jugador (`client.disconnect.idle`), después de avisar
+  con un mensaje del sistema `idle.warn_before_ms` antes (1 min). Acciones reales, y solo
+  si pasan de verdad: dar un paso, elegir un objetivo, lanzar un hechizo o una runa,
+  mover o usar un item, decir algo en el chat, hablar con un NPC o elegir una opción,
+  comprar, vender, recolectar y fabricar. No cuentan los pings, girar, mirar, cambiar de
+  modo de combate, parar, cerrar ventanas ni una intención rechazada (caminar contra una
+  pared, un item que no existe): es lo que mandaría un "keepalive".
+- Nunca saca a alguien **en combate** (`travel.combat_block_ms`: le pegaron, recibió daño o
+  pegó hace poco) ni sobre una **casilla sin logout**: lo vuelve a intentar cada segundo.
+  Quien entrena contra un monstruo sigue en combate y no se desconecta; para eso está
+  `skills.afk`.
+
 ## Combate
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está
   en rango. Modos: ofensivo / equilibrado / defensivo, y perseguir / quedarse quieto.
@@ -531,6 +549,8 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 | `/ban Nombre duración motivo` | GM | Suspende la cuenta: `30m`, `12h`, `7d`; GM hasta 30 días, admin hasta 3650 días o `perm` |
 | `/unban Nombre` | GM | Levanta las suspensiones activas de la cuenta |
 | `/announce texto` | GM | Anuncio a todos los conectados (`[Anuncio] Nombre: texto`) |
+| `/reports` | GM | Lista los 10 reportes abiertos más antiguos (T4.1) |
+| `/closereport id resolución` | GM | Cierra un reporte abierto con la resolución (T4.1) |
 
 - **Destino del teleport:** una casilla caminable de una isla, en un piso que existe. Si
   está ocupada, la libre más cercana (hasta 2 de distancia). Si no, `gm.bad_position`.
@@ -548,8 +568,26 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 - **Auditoría:** todo comando de staff que se ejecuta, también los que fallan por
   argumentos, queda en el log de auditoría con quién, qué, a quién, cuándo, argumentos y
   resultado. Los cambios de rol también.
-- Llegan después (T4.1), con lugar en el diseño: reportes de jugadores, detección de bots y
-  log de economía. Las sanciones que propongan las aplica siempre un GM con estos comandos.
+- Llegan después (T4.1), con lugar en el diseño: la detección de bots. Las sanciones que
+  proponga las aplica siempre un GM con estos comandos.
+
+### Reportes de jugadores (T4.1)
+- Cualquier jugador reporta a otro con **`/report Nombre motivo`** (cualquier jugador en
+  línea) o con el botón **"!"** de la lista de batalla (un jugador a la vista). El motivo es
+  texto libre de hasta `reports.max_reason` caracteres.
+- El servidor adjunta solo el **contexto**: la posición de los dos, el nivel del reportado y
+  sus últimos `reports.events` eventos (lo que dijo en el chat, a qué atacó, qué mató, si
+  murió, qué ganó o perdió en la economía), con cuánto antes del reporte pasó cada uno.
+- **Rate limit por cuenta** (no por personaje): `reports.burst` reportes seguidos y luego
+  uno cada `reports.refill_ms`; la misma cuenta reporta al mismo personaje una vez cada
+  `reports.same_target_ms`. Así un reporte no sirve para acosar a alguien. Con el comando
+  cada intento cuenta, aunque el nombre no esté conectado: `/report` no sirve para vigilar
+  quién juega. Con el botón solo cuenta el reporte que se envía.
+- El reporte entra en una **cola** (`player_reports`) y en el log de auditoría. Los GM en
+  línea reciben un aviso. Los GM ven la cola con `/reports` (y el operador con
+  `make reports`, con el contexto completo) y la cierran con `/closereport`. Ver la cola y
+  cerrar un reporte también quedan en la auditoría. Un reporte no sanciona a nadie: las
+  sanciones las decide un GM con `/kick` o `/ban`.
 
 ## Sonido (T3.7)
 El sonido es solo del cliente: el servidor no sabe de él y no manda nada nuevo. Cada

@@ -36,67 +36,88 @@ var Speeds = []uint16{0, 0, 50, 200, 0, 0}
 // the temple is the first walkable tile.
 func Map(t testing.TB, ox, oy int, z uint8, rows ...string) *world.Map {
 	t.Helper()
-	w := 0
-	for _, r := range rows {
-		w = max(w, len(r))
+	return Floors(t, ox, oy, Layer{Z: z, Rows: rows})
+}
+
+// Layer is the drawing of one floor for Floors.
+type Layer struct {
+	Z    uint8
+	Rows []string
+}
+
+// Floors builds a one-island map with several floors, each drawn like Map with its
+// top-left tile at (ox, oy). The temple is on the first layer.
+func Floors(t testing.TB, ox, oy int, layers ...Layer) *world.Map {
+	t.Helper()
+	w, h := 0, 0
+	floors := make([]uint8, 0, len(layers))
+	for _, l := range layers {
+		for _, r := range l.Rows {
+			w = max(w, len(r))
+		}
+		h = max(h, len(l.Rows))
+		floors = append(floors, l.Z)
 	}
 	const ss = world.SectorSize
 	x0, y0 := ox/ss*ss, oy/ss*ss
 	x1 := (ox + w + ss - 1) / ss * ss
-	y1 := (oy + len(rows) + ss - 1) / ss * ss
+	y1 := (oy + h + ss - 1) / ss * ss
 	is := &world.Island{
 		ID:     "test",
 		Rect:   world.Rect{X: uint32(x0), Y: uint32(y0), W: uint32(x1 - x0), H: uint32(y1 - y0)},
-		Floors: []uint8{z},
+		Floors: floors,
 	}
 	templeSet := false
-	byKey := map[[2]int]*world.Sector{}
+	byKey := map[[3]int]*world.Sector{}
 	var list []*world.Sector
 	stacks := map[*world.Sector][]world.TileStack{}
-	for y, row := range rows {
-		for x, c := range row {
-			gx, gy := ox+x, oy+y
-			key := [2]int{gx / ss, gy / ss}
-			s := byKey[key]
-			if s == nil {
-				s = &world.Sector{CX: uint16(key[0]), CY: uint16(key[1]), Z: z}
-				for i := range s.Flags {
-					s.Flags[i] = world.FlagBlocksMovement
+	for _, l := range layers {
+		z := l.Z
+		for y, row := range l.Rows {
+			for x, c := range row {
+				gx, gy := ox+x, oy+y
+				key := [3]int{gx / ss, gy / ss, int(z)}
+				s := byKey[key]
+				if s == nil {
+					s = &world.Sector{CX: uint16(key[0]), CY: uint16(key[1]), Z: z}
+					for i := range s.Flags {
+						s.Flags[i] = world.FlagBlocksMovement
+					}
+					byKey[key] = s
+					list = append(list, s)
 				}
-				byKey[key] = s
-				list = append(list, s)
-			}
-			i := (gy%ss)*ss + gx%ss
-			var g uint16
-			var f world.Flags
-			switch c {
-			case '.', 'T':
-				g = Grass
-			case '=':
-				g = Road
-			case 'm':
-				g = Mud
-			case '_':
-				g = Floor
-			case '#':
-				g, f = Grass, world.FlagBlocksMovement|world.FlagBlocksSight
-				stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Wall}})
-			case '~':
-				g, f = Floor, world.FlagBlocksMovement
-			case 'f':
-				g, f = FishWater, world.FlagBlocksMovement
-			case 'v':
-				g, f = Grass, world.FlagBlocksMovement
-				stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Vein}})
-			case ' ':
-				f = world.FlagBlocksMovement
-			default:
-				t.Fatalf("worldtest: unknown map char %q", c)
-			}
-			s.Ground[i], s.Flags[i] = g, f
-			p := world.Pos{X: uint16(gx), Y: uint16(gy), Z: z}
-			if c == 'T' || (!templeSet && f == 0 && g != 0) {
-				is.Temple, templeSet = p, true
+				i := (gy%ss)*ss + gx%ss
+				var g uint16
+				var f world.Flags
+				switch c {
+				case '.', 'T':
+					g = Grass
+				case '=':
+					g = Road
+				case 'm':
+					g = Mud
+				case '_':
+					g = Floor
+				case '#':
+					g, f = Grass, world.FlagBlocksMovement|world.FlagBlocksSight
+					stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Wall}})
+				case '~':
+					g, f = Floor, world.FlagBlocksMovement
+				case 'f':
+					g, f = FishWater, world.FlagBlocksMovement
+				case 'v':
+					g, f = Grass, world.FlagBlocksMovement
+					stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Vein}})
+				case ' ':
+					f = world.FlagBlocksMovement
+				default:
+					t.Fatalf("worldtest: unknown map char %q", c)
+				}
+				s.Ground[i], s.Flags[i] = g, f
+				p := world.Pos{X: uint16(gx), Y: uint16(gy), Z: z}
+				if c == 'T' || (!templeSet && f == 0 && g != 0) {
+					is.Temple, templeSet = p, true
+				}
 			}
 		}
 	}

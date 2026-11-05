@@ -408,6 +408,8 @@ enum DisconnectReason {
   DISCONNECT_REASON_KICKED = 8;
   // The account was banned by a staff member (T2.6).
   DISCONNECT_REASON_BANNED = 9;
+  // No real action (walk, attack, use, talk) for balance idle.kick_after_ms (T4.1).
+  DISCONNECT_REASON_IDLE = 10;
 }
 
 message Disconnect {

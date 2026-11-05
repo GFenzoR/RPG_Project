@@ -75,6 +75,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.partyCommand(ctx, p, m.PartyCommand)
 	case *pb.ClientMessage_CloseContainer:
 		w.closeContainer(p, m.CloseContainer.GetContainerId())
+	case *pb.ClientMessage_ReportPlayer:
+		w.reportPlayer(ctx, p, m.ReportPlayer.GetCreatureId(), m.ReportPlayer.GetReason())
 	case *pb.ClientMessage_Logout:
 		// No-logout zones and the combat lock arrive with death and PvP rules (T1.11).
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
@@ -194,6 +196,7 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	ticks := w.StepTicks(ground, p.speed, d.Diagonal())
 	p.readyAt = ctx.Tick + ticks
 	w.move(p, to, d, ticks)
+	p.active(ctx.Tick)
 }
 
 // searchCost is the worst case of one reroute search, in expanded tiles: Find may run
@@ -307,6 +310,9 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	}
 	w.checkRoles(ctx)
 	w.flushParties(ctx.Tick)
+	w.checkEconomy(ctx.Tick)
+	w.checkIdle(ctx)
+	w.flushEconomy(ctx)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)

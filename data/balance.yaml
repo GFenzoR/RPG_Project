@@ -116,6 +116,34 @@ death:
 
 economy:
   coin_ratio: 100
+  # Economy log (T4.1, docs/01-architecture.md "Trampas y anti-bot"): every creation and
+  # destruction of gold and items, by source. Written outside the tick, in batches.
+  log:
+    flush_ms: 2000          # a batch goes out at least this often...
+    batch_size: 500         # ...or when it has this many rows
+  # Reconciliation: each online character's gold and item count must equal what it had
+  # at login plus what the log says it gained and lost. A mismatch (possible
+  # duplication) is logged and counted (economy_alerts_total{kind="mismatch"}).
+  check_every_ms: 60000
+  # Outliers: creating more than this per hour of play (in copper, and item units) within
+  # a window raises economy_alerts_total{kind="gold_outlier"|"items_outlier"}. Gold
+  # counts loot, NPC sales and rewards; items count loot, gathering, crafting, conjuring,
+  # rewards and GM items. Generous on purpose: an alert is for a GM to look, not a sanction.
+  outlier:
+    window_ms: 3600000
+    gold_per_hour: { base: 20000, per_level: 2000 }
+    items_per_hour: { base: 5000, per_level: 50 }
+
+reports:                    # player reports (T4.1, docs/02-game-design.md "Moderación")
+  burst: 3                  # per account: 3 reports in a row...
+  refill_ms: 600000         # ...then one every 10 minutes
+  same_target_ms: 3600000   # the same account reports the same character once per hour
+  max_reason: 200           # characters
+  events: 20                # recent events of the reported character in the report
+
+idle:                       # idle disconnect (T4.1); pings and keepalives do not count
+  kick_after_ms: 900000     # 15 min without walking, attacking, using or talking
+  warn_before_ms: 60000     # a system message this long before
 
 # Conditions (T3.2, docs/02-game-design.md "Condiciones"). Each source (spell, monster
 # attack) says how strong and how long; these are the rules of each condition.

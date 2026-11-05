@@ -709,7 +709,8 @@ body.using-item canvas {
   display: flex;
   gap: 0.25rem;
 }
-.battle button.invite {
+.battle button.invite,
+.battle button.report {
   width: auto;
   flex: none;
   justify-content: center;
@@ -865,4 +866,29 @@ body.using-item canvas {
 }
 .options-panel > button {
   align-self: flex-end;
+}
+
+/* Player reports (T4.1). */
+.report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #404850;
+  border-radius: 4px;
+}
+.report-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.report-form .hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.report-form .buttons {
+  display: flex;
+  gap: 0.35rem;
 }

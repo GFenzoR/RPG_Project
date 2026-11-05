@@ -120,6 +120,10 @@ set-role: ## Set an account's role: make set-role EMAIL=... ROLE=player|gm|admin
 audit-log: ## Print the newest audit log entries: make audit-log [N=50] (DATABASE_URL)
 	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin audit -n $(or $(N),50)
 
+.PHONY: reports
+reports: ## Print the open player reports with their context: make reports [N=20] (DATABASE_URL)
+	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin reports -n "$(or $(N),20)"
+
 .PHONY: gen-ids
 gen-ids: ## Assign numeric IDs to new items in data/ids.lock.yaml (append-only)
 	$(CONTENT_CLI) gen-ids

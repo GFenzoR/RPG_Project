@@ -53,6 +53,10 @@ server/
 - Guardado de jugador: al salir y autoguardado escalonado cada 5 minutos fuera del tick
   (snapshot inmutable → goroutine de persistencia).
 - Logs estructurados con `log/slog`. Métricas Prometheus en `/metrics` (solo interno).
+- **Economía (T4.1):** todo camino que crea, destruye o saca de un personaje oro o items
+  lo dice con `econItem`/`econGold` (fuente `Econ*` de `session/economy.go`), y lo que pasa
+  entre un personaje y el suelo con `Player.ground`. Los tests de `session` reconcilian en
+  cada tick: si te olvidas, falla `economy mismatch`.
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

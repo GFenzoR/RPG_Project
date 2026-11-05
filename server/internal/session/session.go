@@ -135,6 +135,14 @@ type Config struct {
 	// the job and retries on the next ticks, so no audit entry is lost. Without Admin,
 	// staff commands are disabled (they answer like an unknown command).
 	Admin func(AdminJob) bool
+	// Economy submits an economy log entry to the persistence goroutine without blocking
+	// (T4.1). It returns false if its queue is full; the World keeps the entry and
+	// retries on the next ticks (up to a bound). Without Economy nothing is written, but
+	// the ledgers are still reconciled.
+	Economy func(EconomyEntry) bool
+	// Alert is told about every economy alert (AlertMismatch...), for the metrics. It is
+	// called on the loop and must not block. Optional.
+	Alert func(kind string)
 	// AutosaveEvery is the autosave interval (default DefaultAutosaveEvery). The first
 	// autosave of a player is at a random point of the first interval, so players that
 	// joined together (after a restart) do not all save on the same tick.
@@ -262,6 +270,32 @@ type World struct {
 	fightFor      game.Tick
 	arrivalRadius int
 
+	// Economy log (T4.1): this tick's entries, entries the queue did not take yet, how
+	// many were dropped, and balance.yaml economy in ticks.
+	econBuf      []EconomyEntry
+	econRetry    []EconomyEntry
+	econDropped  uint64
+	econCheckFor game.Tick
+	outlierFor   game.Tick
+	// earnings are the outlier windows by character (kept across logins until they
+	// expire) and earnPrune the tick of the next sweep of the expired ones.
+	earnings  map[int64]*earning
+	earnPrune game.Tick
+
+	// Reports (T4.1): the per-account rate limit (GCRA tick), the last report of each
+	// account and character, balance.yaml reports in ticks and the next prune.
+	reportTAT    map[int64]game.Tick
+	reportLast   map[reportKey]game.Tick
+	reportRefill game.Tick
+	reportBurst  game.Tick
+	reportSame   game.Tick
+	reportPrune  game.Tick
+
+	// Idle (T4.1): balance.yaml idle in ticks (kickFor 0 = off) and a scratch list.
+	idleKickFor game.Tick
+	idleWarnFor game.Tick
+	idleBuf     []*Player
+
 	// sched is the loop's scheduler, kept at the first join to know the current tick
 	// outside a TickContext (condition times in snapshots and at flush, T3.2).
 	sched *game.Scheduler
@@ -330,6 +364,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	w.initChat()
+	w.initEconomy()
+	w.initReports()
+	w.initIdle()
 	w.initParty()
 	if err := w.initConditions(); err != nil {
 		return nil, err

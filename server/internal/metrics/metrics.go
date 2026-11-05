@@ -30,6 +30,8 @@ type Metrics struct {
 	bytesSent    prometheus.Counter
 	batchesSent  prometheus.Counter
 	connections  prometheus.Gauge
+	// economyAlerts counts the economy alerts by kind (T4.1, session.Alert*).
+	economyAlerts *prometheus.CounterVec
 }
 
 // New registers the metrics on a fresh registry.
@@ -58,9 +60,12 @@ func New() *Metrics {
 		connections: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "ws_connections", Help: "Open game WebSocket connections.",
 		}),
+		economyAlerts: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "economy_alerts_total", Help: "Economy alerts: mismatch (possible duplication), gold_outlier, items_outlier, log_dropped.",
+		}, []string{"kind"}),
 	}
 	m.reg.MustRegister(m.tickDuration, m.tickOverruns, m.tickCommands, m.queuePending,
-		m.bytesSent, m.batchesSent, m.connections,
+		m.bytesSent, m.batchesSent, m.connections, m.economyAlerts,
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		collectors.NewGoCollector())
 	return m
@@ -107,5 +112,13 @@ func (m *Metrics) ConnOpened() {
 func (m *Metrics) ConnClosed() {
 	if m != nil {
 		m.connections.Dec()
+	}
+}
+
+// EconomyAlert counts an economy alert of kind (session.Config.Alert). Called on the
+// game loop: a counter increment, no blocking.
+func (m *Metrics) EconomyAlert(kind string) {
+	if m != nil {
+		m.economyAlerts.WithLabelValues(kind).Inc()
 	}
 }

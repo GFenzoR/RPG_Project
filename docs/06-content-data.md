@@ -6,7 +6,8 @@ cliente lo reciben ya compilado. `make validate` corre en CI.
 
 ```
 data/
-  balance.yaml          constantes de balance (XP, skills, muerte, regeneración, condiciones, grupos)
+  balance.yaml          constantes de balance (XP, skills, muerte, regeneración, condiciones, grupos,
+                        economía, reportes e inactividad)
   vocations.yaml
   ids.lock.yaml         IDs numéricos estables (generado, se commitea)
   borders.yaml          reglas de autoborder
@@ -483,3 +484,24 @@ item.iron_sword.desc: "A simple but reliable sword."
 - Los valores de los parámetros se insertan tal cual y nunca se vuelven a interpretar: el
   texto de un jugador no puede inyectar `{...}` ni HTML.
 - La CI falla si una clave usada no existe en algún idioma.
+
+## Anti-bot y anti-AFK (T4.1)
+Tres bloques de `balance.yaml` (esquema en `balance.schema.json`, diseño en
+`01-architecture.md`, "Trampas y anti-bot"):
+```yaml
+economy:
+  coin_ratio: 100
+  log: { flush_ms: 2000, batch_size: 500 }   # lotes del log de economía, fuera del tick
+  check_every_ms: 60000                      # cuadratura de cada personaje en línea (0 = nunca)
+  outlier:                                   # alerta si crea más que esto por hora de juego
+    window_ms: 3600000
+    gold_per_hour: { base: 20000, per_level: 2000 }   # en cobre: base + per_level × nivel
+    items_per_hour: { base: 5000, per_level: 50 }     # unidades
+reports: { burst: 3, refill_ms: 600000, same_target_ms: 3600000, max_reason: 200, events: 20 }
+idle: { kick_after_ms: 900000, warn_before_ms: 60000 } # kick_after_ms 0 lo apaga
+```
+- `reports`: por cuenta, `burst` reportes seguidos y luego uno cada `refill_ms`; la misma
+  cuenta reporta al mismo personaje una vez cada `same_target_ms`. `max_reason` ≤ 200 y
+  `events` ≤ 32 (el anillo de eventos recientes de cada jugador).
+- `idle`: `kick_after_ms` es 0 o al menos 60000, y `warn_before_ms` menor que él.
+
