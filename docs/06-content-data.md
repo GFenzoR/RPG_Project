@@ -450,6 +450,41 @@ party:
   números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`).
 - Textos: `travel.*` en `i18n/*/dialog.yaml` y `client.voyage.sailed` en `client.yaml`.
 
+## Tutorial (T4.2)
+```yaml
+# data/tutorial.yaml (esquema tutorial.schema.json); sin archivo no hay tutorial
+island: puerto                 # isla de world/world.yaml: solo sus personajes nuevos lo ven
+steps:                         # en orden; 1..64
+  - id: first_steps
+    text: tutorial.step.first_steps   # clave i18n; puede usar {count}
+    when: { event: walk, count: 5 }   # count por defecto 1, máximo 1000
+  - id: meet_priestess
+    text: tutorial.step.meet_priestess
+    when: { event: talk_npc, ref: puerto_priest }
+  - id: first_spell
+    text: tutorial.step.first_spell
+    when: { event: cast_spell }
+    highlight: hotbar                 # opcional: data-tutorial del elemento a resaltar
+    vocations: [arcanist, druid]      # opcional: las demás vocaciones lo saltan
+rewards:                         # opcional; al terminar, nunca al saltar
+  - { gold: 20 }                 # 1..1000
+  - { item: seaweed_poultice, count: 2 }   # 1..100
+```
+- Eventos (`when.event`) y su `ref` opcional (vacío = cualquiera): `walk` (pasos
+  caminados; sin `ref`), `target` y `kill` (monstruo), `open_container`, `pick_up`
+  (un item que entra al equipo desde afuera), `equip`, `use_item` (consumible), `gather`
+  (el item obtenido) → item; `cast_spell` → hechizo; `talk_npc` → NPC; `craft` → receta de
+  `recipes.yaml`; `quest_start` → quest. Agregar un evento nuevo sí requiere Go
+  (`session/tutorial.go` y un enganche donde ocurre).
+- `highlight`: `inventory`, `hotbar`, `battle`, `chat`, `skills` o `stats`.
+- Progreso en `quest_state` del personaje: `tutorial.step` (índice + 1), `tutorial.count`
+  y `tutorial.done` (1 = terminado, 2 = saltado). Reordenar o quitar pasos mueve a quien
+  está en medio; si su paso ya no existe, el tutorial termina sin premio.
+- Validación: `make validate` revisa esquema, referencias, ids únicos, la isla y las
+  recetas; el servidor repite todo al arrancar (`content.Tutorial.Check`) y no arranca si
+  falla. Textos en `i18n/*/tutorial.yaml` (pasos y `tutorial.completed`/`skipped`) y el
+  panel en `client.tutorial.*` de `client.yaml`.
+
 ## Bordes (autoborder)
 ```yaml
 # data/borders.yaml: cuando "from" toca a "to", las piezas se apilan sobre las casillas "to"

@@ -1795,3 +1795,120 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   });
   expect(errors).toEqual([]);
 });
+
+test("T4.2: a new character in Puerto follows the tutorial, then skips it", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  // A brand-new character that starts in Puerto (the tutorial island) wakes up at the
+  // temple of the Lantern with the first hint; testisle characters never see it.
+  const { email, password, name } = await newGuardian(playwright, "Pupil");
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto' WHERE name = '${name}'`,
+  ]);
+  await enterGame(page, email, password);
+  errors.length = 0; // the 401 of opening the page without a session cookie
+
+  const panel = page.getByTestId("tutorial-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute("data-step", "first_steps");
+  await expect(panel).toContainText("1 / 6"); // a guardian skips the spell step
+  await expect(panel).toContainText("Camina 5 pasos");
+
+  // Walking advances it: find a free direction, then step back and forth. The server
+  // counts each confirmed step.
+  await page.locator("body").click({ position: { x: 1, y: 1 } });
+  const still = async (): Promise<Self> => {
+    let s: Self | undefined;
+    await expect
+      .poll(async () => {
+        s = await self(page);
+        return s !== undefined && !s.pending && !s.walking;
+      })
+      .toBe(true);
+    if (!s) throw new Error("no self");
+    return s;
+  };
+  const back: Record<string, string> = {
+    ArrowLeft: "ArrowRight",
+    ArrowRight: "ArrowLeft",
+    ArrowUp: "ArrowDown",
+    ArrowDown: "ArrowUp",
+  };
+  let key = "";
+  for (const k of Object.keys(back)) {
+    const before = await still();
+    await page.keyboard.press(k);
+    await page.waitForTimeout(700);
+    const after = await still();
+    if (after.x !== before.x || after.y !== before.y) {
+      key = back[k] ?? "";
+      break;
+    }
+  }
+  expect(key).not.toBe("");
+  await expect(page.getByTestId("tutorial-progress")).toHaveText("Llevas 1 de 5.");
+  await page.keyboard.press(key);
+  await page.waitForTimeout(700);
+  await still();
+  await expect(page.getByTestId("tutorial-progress")).toHaveText("Llevas 2 de 5.");
+  await shot(page, "40-tutorial-walk");
+  await panel.screenshot({ path: join(shots, "40-tutorial-panel.png") });
+  for (let i = 0; i < 3; i++) {
+    key = back[key] ?? "";
+    await page.keyboard.press(key);
+    await page.waitForTimeout(700);
+    await still();
+  }
+  await expect(panel).toHaveAttribute("data-step", "meet_priestess");
+  await expect(panel).toContainText("2 / 6");
+
+  // Talking to the priestess advances it (the server sees the conversation start) and
+  // the next hint highlights the equipment panel.
+  let priest: { id: number; x: number; y: number } | undefined;
+  await expect
+    .poll(async () => {
+      const list = await page.evaluate(() => window.__rpgClient?.npcs() ?? []);
+      priest = list.find((n) => n.contentId === "puerto_priest");
+      return priest !== undefined;
+    })
+    .toBe(true);
+  if (!priest) throw new Error("no priestess");
+  const at = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+    a: priest.x,
+    b: priest.y,
+  });
+  if (!at) throw new Error("no canvas");
+  await page.mouse.click(at.x, at.y, { button: "right" });
+  await expect(page.getByTestId("dialog")).toBeVisible();
+  await expect(panel).toHaveAttribute("data-step", "open_backpack");
+  await expect(page.locator("body")).toHaveAttribute("data-tutorial-focus", "inventory");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("dialog")).toBeHidden();
+  await page.waitForTimeout(800); // a full pulse of the highlight's outline
+  await shot(page, "41-tutorial-highlight");
+
+  // Skipping ends it for good: the server confirms and the panel and highlight go away.
+  await page.getByTestId("tutorial-skip").click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByTestId("game-log")).toContainText("Saltaste el tutorial.");
+  await expect(page.locator("body")).not.toHaveAttribute("data-tutorial-focus", /.*/);
+  await shot(page, "42-tutorial-skipped");
+
+  await page.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saliste del juego.");
+  // Back in: still no tutorial.
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  await page.waitForTimeout(500);
+  await expect(panel).toBeHidden();
+  expect(errors).toEqual([]);
+});

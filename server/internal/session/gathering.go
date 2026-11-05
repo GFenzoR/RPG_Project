@@ -166,6 +166,7 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 	p.emit(systemMsg(msgGatherGot, itemParam(item, n)))
 	w.giveItem(p, item, n)
 	w.econItem(p, EconGather, def.ID, item, n)
+	w.tutorialEvent(p, content.TriggerGather, item.ID)
 }
 
 // pickDrop picks one of res's drops by weight among those level reaches (nil if none).

@@ -40,6 +40,7 @@ message ClientMessage {
     Craft craft = 26;
     ReportPlayer report_player = 27;
     PresenceAnswer presence_answer = 28;
+    TutorialSkip tutorial_skip = 29;
   }
 }
 
@@ -258,3 +259,7 @@ message PresenceAnswer {
   uint32 check_id = 1;
   uint32 option_id = 2;
 }
+
+// TutorialSkip ends the tutorial for good (T4.2). There is no message to complete a step:
+// the server advances the tutorial with its own events.
+message TutorialSkip {}

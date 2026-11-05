@@ -239,6 +239,7 @@ type ClientMessage struct {
 	//	*ClientMessage_Craft
 	//	*ClientMessage_ReportPlayer
 	//	*ClientMessage_PresenceAnswer
+	//	*ClientMessage_TutorialSkip
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -533,6 +534,15 @@ func (x *ClientMessage) GetPresenceAnswer() *PresenceAnswer {
 	return nil
 }
 
+func (x *ClientMessage) GetTutorialSkip() *TutorialSkip {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_TutorialSkip); ok {
+			return x.TutorialSkip
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -649,6 +659,10 @@ type ClientMessage_PresenceAnswer struct {
 	PresenceAnswer *PresenceAnswer `protobuf:"bytes,28,opt,name=presence_answer,json=presenceAnswer,proto3,oneof"`
 }
 
+type ClientMessage_TutorialSkip struct {
+	TutorialSkip *TutorialSkip `protobuf:"bytes,29,opt,name=tutorial_skip,json=tutorialSkip,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -704,6 +718,8 @@ func (*ClientMessage_Craft) isClientMessage_Message() {}
 func (*ClientMessage_ReportPlayer) isClientMessage_Message() {}
 
 func (*ClientMessage_PresenceAnswer) isClientMessage_Message() {}
+
+func (*ClientMessage_TutorialSkip) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -2226,11 +2242,49 @@ func (x *PresenceAnswer) GetOptionId() uint32 {
 	return 0
 }
 
+// TutorialSkip ends the tutorial for good (T4.2). There is no message to complete a step:
+// the server advances the tutorial with its own events.
+type TutorialSkip struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TutorialSkip) Reset() {
+	*x = TutorialSkip{}
+	mi := &file_game_v1_client_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TutorialSkip) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TutorialSkip) ProtoMessage() {}
+
+func (x *TutorialSkip) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TutorialSkip.ProtoReflect.Descriptor instead.
+func (*TutorialSkip) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{29}
+}
+
 var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xb4\v\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xf2\v\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
 	"\x04walk\x18\x02 \x01(\v2\r.game.v1.WalkH\x00R\x04walk\x120\n" +
@@ -2263,7 +2317,8 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\rparty_command\x18\x19 \x01(\v2\x15.game.v1.PartyCommandH\x00R\fpartyCommand\x12&\n" +
 	"\x05craft\x18\x1a \x01(\v2\x0e.game.v1.CraftH\x00R\x05craft\x12<\n" +
 	"\rreport_player\x18\x1b \x01(\v2\x15.game.v1.ReportPlayerH\x00R\freportPlayer\x12B\n" +
-	"\x0fpresence_answer\x18\x1c \x01(\v2\x17.game.v1.PresenceAnswerH\x00R\x0epresenceAnswerB\t\n" +
+	"\x0fpresence_answer\x18\x1c \x01(\v2\x17.game.v1.PresenceAnswerH\x00R\x0epresenceAnswer\x12<\n" +
+	"\rtutorial_skip\x18\x1d \x01(\v2\x15.game.v1.TutorialSkipH\x00R\ftutorialSkipB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -2362,7 +2417,8 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"H\n" +
 	"\x0ePresenceAnswer\x12\x19\n" +
 	"\bcheck_id\x18\x01 \x01(\rR\acheckId\x12\x1b\n" +
-	"\toption_id\x18\x02 \x01(\rR\boptionId*~\n" +
+	"\toption_id\x18\x02 \x01(\rR\boptionId\"\x0e\n" +
+	"\fTutorialSkip*~\n" +
 	"\vFightStance\x12\x1c\n" +
 	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
@@ -2399,7 +2455,7 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_game_v1_client_proto_goTypes = []any{
 	(FightStance)(0),       // 0: game.v1.FightStance
 	(ChatChannel)(0),       // 1: game.v1.ChatChannel
@@ -2433,10 +2489,11 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*Craft)(nil),          // 29: game.v1.Craft
 	(*ReportPlayer)(nil),   // 30: game.v1.ReportPlayer
 	(*PresenceAnswer)(nil), // 31: game.v1.PresenceAnswer
-	(Direction)(0),         // 32: game.v1.Direction
-	(*ActionTarget)(nil),   // 33: game.v1.ActionTarget
-	(*ItemLocation)(nil),   // 34: game.v1.ItemLocation
-	(*Position)(nil),       // 35: game.v1.Position
+	(*TutorialSkip)(nil),   // 32: game.v1.TutorialSkip
+	(Direction)(0),         // 33: game.v1.Direction
+	(*ActionTarget)(nil),   // 34: game.v1.ActionTarget
+	(*ItemLocation)(nil),   // 35: game.v1.ItemLocation
+	(*Position)(nil),       // 36: game.v1.Position
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	4,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -2467,27 +2524,28 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	29, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
 	30, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
 	31, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
-	32, // 28: game.v1.Walk.dir:type_name -> game.v1.Direction
-	32, // 29: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	32, // 30: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 31: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	33, // 32: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	34, // 33: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	34, // 34: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	33, // 35: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	34, // 36: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	34, // 37: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	34, // 38: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 39: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	34, // 40: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	34, // 41: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	2,  // 42: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	35, // 43: game.v1.Craft.station:type_name -> game.v1.Position
-	44, // [44:44] is the sub-list for method output_type
-	44, // [44:44] is the sub-list for method input_type
-	44, // [44:44] is the sub-list for extension type_name
-	44, // [44:44] is the sub-list for extension extendee
-	0,  // [0:44] is the sub-list for field type_name
+	32, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
+	33, // 29: game.v1.Walk.dir:type_name -> game.v1.Direction
+	33, // 30: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	33, // 31: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 32: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	34, // 33: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	35, // 34: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	35, // 35: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	34, // 36: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	35, // 37: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	35, // 38: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	35, // 39: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 40: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	35, // 41: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	35, // 42: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	2,  // 43: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	36, // 44: game.v1.Craft.station:type_name -> game.v1.Position
+	45, // [45:45] is the sub-list for method output_type
+	45, // [45:45] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -2525,6 +2583,7 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_Craft)(nil),
 		(*ClientMessage_ReportPlayer)(nil),
 		(*ClientMessage_PresenceAnswer)(nil),
+		(*ClientMessage_TutorialSkip)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[8].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),
@@ -2536,7 +2595,7 @@ func file_game_v1_client_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

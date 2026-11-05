@@ -204,6 +204,18 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   seguir pendiente en el servidor si el jugador estuvo ausente) e ignora el reenvío de un
   chequeo ya contestado.
 
+## Notas de T4.2
+- `WorldState.tutorial` (de `TutorialStep`, `state/tutorial.ts`, puro y con tests) es el paso
+  que dice el servidor; `undefined` cuando terminó. `ui/Tutorial.tsx` dibuja el panel de
+  pistas arriba a la derecha del mapa (no toma teclas) con "Saltar tutorial"
+  (`Game.skipTutorial` → `TutorialSkip`; el panel se cierra cuando el servidor confirma).
+- Resaltado: el panel pone `body[data-tutorial-focus]` y `client.css` marca el elemento
+  con el mismo `data-tutorial` (`inventory`, `hotbar`, `battle`, `chat`, `skills`,
+  `stats`; lista en `TUTORIAL_TARGETS` y en el esquema). Un elemento nuevo resaltable
+  necesita los tres.
+- El plugin de Vite empaqueta `i18n/*/tutorial.yaml`. Los E2E que ponen `town = 'puerto'`
+  a un personaje nuevo ven el panel; no tapa NPCs ni el centro del mapa.
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

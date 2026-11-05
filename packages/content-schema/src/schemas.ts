@@ -21,6 +21,7 @@ export type SchemaName =
   | "spells"
   | "recipes"
   | "boat_routes"
+  | "tutorial"
   | "borders"
   | "sounds"
   | "i18n"

@@ -152,6 +152,9 @@ type Player struct {
 	earlyTry [antibot.NumKinds]game.Tick
 	kindLast [antibot.NumKinds]game.Tick
 	joinedAt game.Tick
+
+	// Tutorial (T4.2): the current step index + 1, 0 when not in the tutorial.
+	tut int
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -378,6 +381,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
+	w.tutorialJoin(p)
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
 	w.antibotJoin(ctx.Tick, p)

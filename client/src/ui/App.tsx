@@ -19,6 +19,7 @@ import { DialogWindow } from "./Dialog.tsx";
 import { CraftingWindow } from "./Crafting.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { PresenceCheck } from "./Presence.tsx";
+import { TutorialPanel } from "./Tutorial.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -372,6 +373,7 @@ function GameScreen(props: {
     shop: undefined,
     station: undefined,
     presence: undefined,
+    tutorial: undefined,
     party: undefined,
     invitations: [],
     selfId: 0,
@@ -426,7 +428,7 @@ function GameScreen(props: {
 
   return (
     <div class="game" data-testid="game">
-      <header class="hud">
+      <header class="hud" data-tutorial="stats">
         <span class="name">{props.character.name}</span>
         {ui.stats && (
           <span class="stat" data-testid="health">
@@ -496,9 +498,15 @@ function GameScreen(props: {
           )}
           {entered && <PartyInvitations t={t} game={game.current} ui={ui} />}
           {entered && <PresenceCheck t={t} game={game.current} ui={ui} />}
+          {entered && <TutorialPanel t={t} game={game.current} ui={ui} />}
         </div>
         <aside class="side">
-          <section class="battle" data-testid="battle-list" aria-label={t("client.battle.title")}>
+          <section
+            class="battle"
+            data-testid="battle-list"
+            data-tutorial="battle"
+            aria-label={t("client.battle.title")}
+          >
             <h2>{t("client.battle.title")}</h2>
             {ui.battle.length === 0 ? (
               <p class="empty">{t("client.battle.empty")}</p>
@@ -743,7 +751,12 @@ function SkillsPanel(props: { t: Translate; skills: GameUi["skills"] }): JSX.Ele
   const { t } = props;
   const skills = [...props.skills].sort((a, b) => skillRank(a.id) - skillRank(b.id));
   return (
-    <section class="skills" data-testid="skills-panel" aria-label={t("client.skills.title")}>
+    <section
+      class="skills"
+      data-testid="skills-panel"
+      data-tutorial="skills"
+      aria-label={t("client.skills.title")}
+    >
       <h2>{t("client.skills.title")}</h2>
       <ul>
         {skills.map((s) => (

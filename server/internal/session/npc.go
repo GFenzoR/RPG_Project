@@ -198,6 +198,7 @@ func (w *World) npcTalk(p *Player, id uint32) {
 	w.quests.ReachedNode(p.storage, n.def.ID, n.def.Dialog.Start, &questHost{w: w, p: p})
 	w.sendDialog(p)
 	p.active(w.nowTick(), antibot.KindOther)
+	w.tutorialEvent(p, content.TriggerTalkNPC, n.def.ID)
 }
 
 // sendDialog sends the current node with the options p sees now. option_id is the
@@ -632,6 +633,7 @@ func (h *questHost) Notify(e quest.Event) {
 	switch e.Kind {
 	case quest.Started:
 		h.p.emit(systemMsg(msgQuestStarted, q))
+		h.w.tutorialEvent(h.p, content.TriggerQuestStart, e.Quest.ID)
 	case quest.StepDone:
 		if e.Step.ID != e.Quest.Steps[len(e.Quest.Steps)-1].ID {
 			h.p.emit(systemMsg(msgQuestUpdated, q))

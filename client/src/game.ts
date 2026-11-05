@@ -4,6 +4,7 @@
 import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
+import type { TutorialView } from "./state/tutorial.ts";
 import { ChatChannel, CreatureKind, Direction, PartyAction } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
@@ -65,6 +66,8 @@ export interface GameUi {
   station: StationState | undefined;
   /** A presence check waiting for an answer (T4.1), or undefined. */
   presence: PresenceState | undefined;
+  /** The tutorial step (T4.2), or undefined when there is none. */
+  tutorial: TutorialView | undefined;
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
@@ -250,6 +253,11 @@ export class Game {
   /** Invites a player the client sees (battle list). */
   partyInvite(id: number): void {
     this.party(PartyAction.INVITE, id);
+  }
+
+  /** Asks the server to end the tutorial (T4.2); the panel closes when it says so. */
+  skipTutorial(): void {
+    this.conn.send({ case: "tutorialSkip", value: {} });
   }
 
   /** Answers the presence check (T4.1); the server replies the same whatever the answer. */
@@ -525,6 +533,7 @@ export class Game {
       station: w.station,
       // Until answered or out of time (the server sends nothing on a timeout).
       presence: w.activePresence(performance.now()),
+      tutorial: w.tutorial,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       selfId: w.selfId,

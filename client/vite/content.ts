@@ -30,7 +30,7 @@ const VIRTUAL_ID = "virtual:rpg-content";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
 const LANGUAGES = ["es", "en"];
 /** i18n catalogs the client uses (all keys), and those it only takes names from. */
-const CATALOGS = ["client.yaml", "vocations.yaml", "dialog.yaml", "npcs.yaml"];
+const CATALOGS = ["client.yaml", "vocations.yaml", "dialog.yaml", "npcs.yaml", "tutorial.yaml"];
 const NAME_CATALOGS = ["monsters.yaml", "items.yaml", "spells.yaml", "quests.yaml", "world.yaml"];
 const ATLAS_FILE = /^atlas(-\d+)?\.(png|json)$/;
 

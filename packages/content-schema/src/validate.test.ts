@@ -39,6 +39,7 @@ describe("repository content", () => {
       "spells",
       "recipes",
       "boat_routes",
+      "tutorial",
       "borders",
       "sounds",
       "i18n",
@@ -83,6 +84,34 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('unknown quest "no_such_quest"'))).toBe(true);
     expect(out.some((m) => m.includes("consume") && m.includes("boolean"))).toBe(true);
     expect(out.some((m) => m.includes('unknown field "speed"'))).toBe(true);
+  });
+
+  it("checks the tutorial: events, refs by event, recipes, islands and rewards (T4.2)", () => {
+    mkdirSync(file("world"), { recursive: true });
+    writeFileSync(file("world/world.yaml"), "format: 1\nislands:\n  - id: puerto\n");
+    writeFileSync(
+      file("data/tutorial.yaml"),
+      [
+        "island: atlantis",
+        "steps:",
+        "  - { id: a, text: dialog.bye, when: { event: walk, ref: wolf } }",
+        "  - { id: b, text: dialog.bye, when: { event: kill, ref: no_such_monster } }",
+        "  - { id: c, text: dialog.bye, when: { event: craft, ref: no_such_recipe } }",
+        "  - { id: c, text: dialog.bye, when: { event: dance } }",
+        "  - { id: e, text: dialog.bye, when: { event: target }, highlight: everything }",
+        "rewards:",
+        "  - { gold: 5000 }",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root);
+    expect(out.some((m) => m.includes('unknown island "atlantis"'))).toBe(true);
+    expect(out.some((m) => m.includes("steps[0].when"))).toBe(true);
+    expect(out.some((m) => m.includes('unknown monster "no_such_monster"'))).toBe(true);
+    expect(out.some((m) => m.includes('unknown recipe "no_such_recipe"'))).toBe(true);
+    expect(out.some((m) => m.includes('duplicate id "c"'))).toBe(true);
+    expect(out.some((m) => m.includes("steps[3].when.event"))).toBe(true);
+    expect(out.some((m) => m.includes("steps[4].highlight"))).toBe(true);
+    expect(out.some((m) => m.includes("rewards[0]"))).toBe(true);
   });
 
   it("checks assets/sounds.yaml: files, credits, references and islands (T3.7)", () => {

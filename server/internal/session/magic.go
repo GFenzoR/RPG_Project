@@ -204,6 +204,7 @@ func (w *World) cast(ctx *game.TickContext, p *Player, s *content.Spell, target 
 	}
 	w.startCooldown(ctx, p, s, true)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
+	w.tutorialEvent(p, content.TriggerCastSpell, s.ID)
 }
 
 // startCooldown blocks s (if own) and its group, and tells the client.

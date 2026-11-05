@@ -1,6 +1,7 @@
 package session
 
 import (
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -79,6 +80,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.presenceAnswer(ctx, p, m.PresenceAnswer.GetCheckId(), m.PresenceAnswer.GetOptionId())
 	case *pb.ClientMessage_ReportPlayer:
 		w.reportPlayer(ctx, p, m.ReportPlayer.GetCreatureId(), m.ReportPlayer.GetReason())
+	case *pb.ClientMessage_TutorialSkip:
+		w.tutorialSkip(p)
 	case *pb.ClientMessage_Logout:
 		// No-logout zones and the combat lock arrive with death and PvP rules (T1.11).
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
@@ -267,6 +270,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 		}
 		w.sendSlice(p, x0, int(to.Y)+dy*ViewHalfH, wd, 1)
 	}
+	w.tutorialEvent(p, content.TriggerWalk, "")
 }
 
 // Teleport moves p anywhere (another floor included). Loop goroutine only. It does not

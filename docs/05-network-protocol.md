@@ -456,6 +456,23 @@ Diseño en `01-architecture.md` ("Detección de bots").
   `gm.bot_suspect` (`name`, `score`), `gm.presence_failed` (`name`) y
   `gm.presence_deferred` (`name`).
 
+### Tutorial (T4.2, `server/internal/session/tutorial.go`)
+Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
+`02-game-design.md`, "Tutorial".
+- **`TutorialStep{state, step_id, index, total, text, highlight, progress, count}`**
+  (servidor → cliente). `state` = `ACTIVE` (hay paso), `DONE` o `SKIPPED` (terminó, para
+  siempre). Con `ACTIVE`: `step_id` del YAML, `index` (desde 0) y `total` contando solo los
+  pasos de la vocación del personaje, `text` = clave i18n con el parámetro `count`,
+  `highlight` = valor del atributo `data-tutorial` del elemento de UI a resaltar (vacío =
+  ninguno) y `progress`/`count` = eventos contados y necesarios. Llega al entrar (si está
+  activo), cada vez que cambia el paso o su progreso, y una vez con `DONE`/`SKIPPED` al
+  terminar. Al terminar llega además el `Message` de sistema `tutorial.completed` (y el
+  premio: `dialog.received_gold`) o `tutorial.skipped`.
+- **`TutorialSkip{}`** (cliente → servidor): termina el tutorial sin premio. Sin tutorial
+  activo no pasa nada. **No hay mensaje para completar un paso:** los pasos avanzan con
+  eventos del servidor ya validados (un `NpcTalk` fuera de rango, un `SetTarget` inválido o
+  un `Walk` rechazado no cuentan).
+
 ### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
 - `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso
   y a ≤ `TalkRange` (3) casillas (Chebyshev). Fuera de rango → `Message` de sistema
@@ -568,6 +585,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `SpellCooldown` | Cooldown propio y de grupo de un hechizo lanzado (T1.9) |
 | `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
 | `PartyUpdate` / `PartyInvitation` | Estado completo del grupo propio; invitación recibida (T3.3) |
+| `TutorialStep` | Paso actual del tutorial y su progreso, o su fin (T4.2) |
 | `StationOpen` | Estación de oficio usada: `pos`, `item_id`, unidades llevadas de sus ingredientes (`owned`) y `tools` llevadas; llega de nuevo tras cada `Craft` (T3.4) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |

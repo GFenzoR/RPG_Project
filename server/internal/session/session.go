@@ -126,6 +126,9 @@ type Config struct {
 	// BoatRoutes come from data/boat_routes.yaml (T3.5): every captain must be placed on
 	// the map near the dock, and the dock and the arrival must be walkable.
 	BoatRoutes content.BoatRoutes
+	// Tutorial comes from data/tutorial.yaml (T4.2): its island must be on the map and
+	// what its steps reference must exist. Nil means no tutorial.
+	Tutorial *content.Tutorial
 	// Balance.Conditions (T3.2) must hold every condition the spells and monsters apply.
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
@@ -386,6 +389,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initCrafting(); err != nil {
+		return nil, err
+	}
+	if err := w.initTutorial(); err != nil {
 		return nil, err
 	}
 	return w, nil
