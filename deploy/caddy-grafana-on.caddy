@@ -1,13 +1,24 @@
 # /grafana/ route ON (GRAFANA_PUBLIC=on; docs/09, "Monitoreo"). Imported by caddy-routes.caddy.
-# Basic auth in front of Grafana's own login. With GRAFANA_BASIC_AUTH_USER or _HASH empty
-# there is no account and every request gets 401 (fails closed; checked in T4.4). Hash with:
-#   docker run --rm caddy:2.11-alpine caddy hash-password --plaintext '<password>'
 # Needs the monitoring profile running (otherwise 502). Prometheus and Alertmanager are
-# never routed.
+# never routed. In order (route keeps it):
+#   1. clients outside GRAFANA_ALLOW_IPS get 403 before any bcrypt work (default in the
+#      compose file: private_ranges). client_ip honours trusted_proxies, so at home it is
+#      the player's IP from the tunnel, not cloudflared's;
+#   2. basic auth. The compose file never passes an empty user or hash (its placeholders
+#      can never authenticate), so a half-configured pair answers 401 instead of stopping
+#      Caddy. Hash with a cheap cost, each wrong try burns CPU on the game's machine:
+#        docker run --rm caddy:2.11-alpine caddy hash-password --bcrypt-cost 10 --plaintext '<password>'
+#   3. Grafana, without the Authorization header: its own login form stays a separate layer.
 @grafana path /grafana /grafana/*
 handle @grafana {
-	basic_auth {
-		{$GRAFANA_BASIC_AUTH_USER} {$GRAFANA_BASIC_AUTH_HASH}
+	route {
+		@grafana_denied not client_ip {$GRAFANA_ALLOW_IPS}
+		respond @grafana_denied 403
+		basic_auth {
+			{$GRAFANA_BASIC_AUTH_USER} {$GRAFANA_BASIC_AUTH_HASH}
+		}
+		reverse_proxy grafana:3000 {
+			header_up -Authorization
+		}
 	}
-	reverse_proxy grafana:3000
 }

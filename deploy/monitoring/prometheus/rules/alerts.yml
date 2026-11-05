@@ -7,7 +7,9 @@ groups:
   - name: rpg-availability
     rules:
       - alert: GameServerDown
-        # Scrape failed (container stopped, crashed or unhealthy) for 1 minute.
+        # Scrape failed (process stopped, crashed or hung) for 1 minute. /metrics has its own
+        # listener: a gameserver that is up but not ready (database down) still answers it,
+        # see GameServerNotReady.
         expr: up{job="gameserver"} == 0
         for: 1m
         labels:
@@ -15,6 +17,18 @@ groups:
         annotations:
           summary: "Gameserver is down (scrape of {{ $labels.instance }} failing)"
           description: "Prometheus cannot reach the gameserver's /metrics for 1 minute. Check `docker compose ps` and the gameserver logs."
+
+      - alert: GameServerNotReady
+        # /healthz answers 503 (the database does not answer its ping). The compose
+        # healthcheck calls it every 10 s, so this fires even with nobody playing, when no
+        # write fails and the 5xx ratio of HTTPErrorsHigh has no traffic to work with.
+        expr: sum(rate(http_requests_total{job="gameserver",route="GET /healthz",code="503"}[2m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gameserver not ready: /healthz answers 503"
+          description: "The gameserver runs but cannot reach Postgres. Check `docker compose ps postgres` and its logs; players cannot log in."
 
       - alert: GameServerMetricsMissing
         # No gameserver target at all (wrong config): `up` itself is absent.
@@ -104,7 +118,7 @@ groups:
           severity: critical
         annotations:
           summary: "{{ $labels.writer }} write {{ $labels.outcome }}"
-          description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database' or 'abandoned')."
+          description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database' or 'abandoned'). 'abandoned' is best effort: it happens at shutdown and is only seen if the scrape catches the 20 s -metrics-linger; the logs are the source of truth."
 
       - alert: EconomyMismatch
         # T4.1: the economy reconciliation found gold or items that no source explains.

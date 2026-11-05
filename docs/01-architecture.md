@@ -157,7 +157,8 @@ Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
 
 | Alerta | Severidad | Condición |
 |---|---|---|
-| `GameServerDown` | critical | scrape de `/metrics` fallido (`up == 0`) durante 1 min |
+| `GameServerDown` | critical | scrape de `/metrics` fallido (`up == 0`) durante 1 min: proceso parado, caído o colgado |
+| `GameServerNotReady` | critical | `/healthz` responde 503 (Postgres no contesta) durante 2 min. `/metrics` tiene su propio listener y sigue respondiendo, así que `GameServerDown` no lo ve. Funciona sin jugadores: el healthcheck del compose llama a `/healthz` cada 10 s |
 | `GameServerMetricsMissing` | warning | no existe el target del gameserver durante 5 min |
 | `TickP99OverBudget` | warning | tick p99 (ventana de 5 min) > 10 ms durante 10 min (docs/07) |
 | `TickOverruns` | warning | más de 5 ticks de más de 50 ms en 5 min |
@@ -165,7 +166,7 @@ Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
 | `HostMemoryHigh` | critical | menos de 10 % de la RAM de la máquina disponible durante 5 min |
 | `HostDiskAlmostFull` / `HostDiskCritical` | warning / critical | menos de 15 % / 5 % libre en `/` |
 | `PersistenceRetrying` | warning | más de 3 reintentos de un escritor en 10 min |
-| `PersistenceDataLost` | critical | cualquier escritura `rejected` o `abandoned` en 15 min |
+| `PersistenceDataLost` | critical | cualquier escritura `rejected` o `abandoned` en 15 min (`abandoned` es best effort, ver abajo) |
 | `EconomyMismatch` | critical | cualquier `economy_alerts_total{kind="mismatch"}` nuevo en 15 min |
 | `BackupFailed` | critical | la última corrida de `backup.sh` falló |
 | `BackupStale` | critical | sin backup exitoso en dos intervalos (la regla de `backup.sh --check`) durante 10 min |
@@ -176,6 +177,14 @@ Alerting → Alert rules. Las notificaciones van por Alertmanager a los canales 
 configurados por variables de entorno: Discord, Telegram, un webhook o email
 (`09-deployment-aws.md`). Sin canales configurados, no se envían. Mientras
 `GameServerDown` está activa, se silencian las `warning`.
+
+`outcome="abandoned"` solo ocurre al apagar, cuando vence el plazo de una etapa. Pasa
+microsegundos antes de que el proceso termine, y el proceso siguiente empieza la serie en
+0. Para que Prometheus alcance a leerlo, el gameserver mantiene `/metrics` arriba
+`-metrics-linger` (20 s, más que un scrape) después de apagarse, solo si hubo algo
+abandonado. Por eso el compose le da `stop_grace_period: 90s`. Aun así es best effort:
+la fuente de verdad son los logs `save abandoned at shutdown`, `job abandoned at
+shutdown` y `batch abandoned at shutdown`, que llevan el contenido completo.
 
 ## Seguridad básica
 - Rate limit por IP en login y por conexión en comandos.

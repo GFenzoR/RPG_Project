@@ -10,6 +10,7 @@ package metrics
 import (
 	"net/http"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -40,6 +41,8 @@ type Metrics struct {
 	// httpRequests and httpDuration cover the HTTP API by route pattern (bounded).
 	httpRequests *prometheus.CounterVec
 	httpDuration *prometheus.HistogramVec
+	// abandoned mirrors the abandoned writes, read at shutdown (Abandoned).
+	abandoned atomic.Int64
 }
 
 // Persistence writers and outcomes, the labels of persistence_errors_total.
@@ -176,9 +179,24 @@ func (m *Metrics) EconomyAlertKinds(kinds ...string) {
 // PersistenceError counts one failed write of writer (Writer*) with outcome (Outcome*).
 // Called from the persistence goroutines, never from the game loop.
 func (m *Metrics) PersistenceError(writer, outcome string) {
-	if m != nil {
-		m.persistenceErrors.WithLabelValues(writer, outcome).Inc()
+	if m == nil {
+		return
 	}
+	m.persistenceErrors.WithLabelValues(writer, outcome).Inc()
+	if outcome == OutcomeAbandoned {
+		m.abandoned.Add(1)
+	}
+}
+
+// Abandoned is how many writes this process abandoned at shutdown. These happen only
+// after a shutdown deadline, microseconds before the process exits: gameserver keeps
+// /metrics up a bit longer when it is not 0, so Prometheus can scrape the counter
+// (docs/01, alert PersistenceDataLost).
+func (m *Metrics) Abandoned() int64 {
+	if m == nil {
+		return 0
+	}
+	return m.abandoned.Load()
 }
 
 // HTTPRequest records one finished HTTP API request; it is httpapi.Config.Observe. route

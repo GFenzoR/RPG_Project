@@ -42,6 +42,6 @@ COPY --from=client /out/client/ /srv/client/
 # hadolint ignore=SC2016
 RUN SITE_ADDRESS=localhost ACME_EMAIL=ops@example.com caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
     && TUNNEL_SUBNET=172.31.250.0/24 caddy validate --config /etc/caddy/Caddyfile.home --adapter caddyfile \
-    && SITE_ADDRESS=localhost ACME_EMAIL=ops@example.com GRAFANA_PUBLIC=on GRAFANA_BASIC_AUTH_USER=ops \
+    && SITE_ADDRESS=localhost ACME_EMAIL=ops@example.com GRAFANA_PUBLIC=on GRAFANA_BASIC_AUTH_USER=ops GRAFANA_ALLOW_IPS=private_ranges \
        GRAFANA_BASIC_AUTH_HASH='$2a$14$9c1ITR8o.uwsu8mituNQDu7j88G8iVuyk4xV4EyPZhqSJEEX1rQci' \
        caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

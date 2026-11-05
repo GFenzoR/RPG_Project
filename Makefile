@@ -305,7 +305,7 @@ monitoring-check: ## promtool/amtool checks, rule unit tests and dashboard JSON 
 # Alertmanager is recreated with ALERT_WEBHOOK_URL pointing at the receiver; run
 # `make monitoring-up` afterwards to go back to the channels of deploy/.env.
 .PHONY: monitoring-test
-monitoring-test: monitoring-env ## Fire GameServerDown for real and check it reaches a test webhook receiver
+monitoring-test: monitoring-env ## Fire GameServerDown for real on a test webhook (after make monitoring-up: uses the built images)
 	ALERT_WEBHOOK_URL=http://alert-receiver:8000/ $(COMPOSE_MON) --profile monitoring-test up -d --wait --no-build
 	$(COMPOSE_PROD) stop gameserver
 	@echo "waiting for GameServerDown on the test receiver (up to 4 min)..."; \

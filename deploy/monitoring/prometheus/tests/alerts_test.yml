@@ -50,7 +50,7 @@ tests:
           - exp_labels: {severity: critical, writer: economy, outcome: rejected}
             exp_annotations:
               summary: "economy write rejected"
-              description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database' or 'abandoned')."
+              description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database' or 'abandoned'). 'abandoned' is best effort: it happens at shutdown and is only seen if the scrape catches the 20 s -metrics-linger; the logs are the source of truth."
 
   - interval: 5m
     input_series:
@@ -103,3 +103,29 @@ tests:
             exp_annotations:
               summary: "Tick p99 12.5 ms, over the 10 ms budget"
               description: "The tick p99 has been over 10 ms (docs/07) for 10 minutes."
+
+  - interval: 10s
+    input_series:
+      # Nobody playing, Postgres down at 0: the compose healthcheck gets a 503 every 10 s
+      # and nothing else happens (no writes, 0.1 req/s total).
+      - series: 'up{job="gameserver",instance="gameserver:9100"}'
+        values: "1x200"
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="503"}'
+        values: "0+1x200"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: GameServerNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: GameServerNotReady
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Gameserver not ready: /healthz answers 503"
+              description: "The gameserver runs but cannot reach Postgres. Check `docker compose ps postgres` and its logs; players cannot log in."
+      - eval_time: 30m
+        alertname: HTTPErrorsHigh
+        exp_alerts: [] # 0.1 req/s is not "some traffic": this is why GameServerNotReady exists
+      - eval_time: 30m
+        alertname: GameServerDown
+        exp_alerts: []

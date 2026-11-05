@@ -84,7 +84,9 @@ services:
       retries: 3
       start_period: 30s
     # SIGTERM → the server stops the loop and drains HTTP; give it time to save players.
-    stop_grace_period: 30s
+    # 90 s: the shutdown stages (10 s each at most) plus -metrics-linger (20 s), which keeps
+    # /metrics up for one more scrape only when writes were abandoned (docs/01).
+    stop_grace_period: 90s
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -108,8 +110,14 @@ services:
       # Optional public /grafana/ route with basic auth (caddy-routes.caddy, docs/09). Off
       # by default: Grafana is reached through an SSH tunnel.
       GRAFANA_PUBLIC: ${GRAFANA_PUBLIC:-off}
-      GRAFANA_BASIC_AUTH_USER: ${GRAFANA_BASIC_AUTH_USER:-}
-      GRAFANA_BASIC_AUTH_HASH: ${GRAFANA_BASIC_AUTH_HASH:-}
+      # Never empty, so a half-configured pair still parses (Caddy would refuse to start and
+      # take the whole site down). The placeholder hash is of a random secret nobody has:
+      # an unset user or hash means 401 for everyone.
+      GRAFANA_BASIC_AUTH_USER: ${GRAFANA_BASIC_AUTH_USER:-disabled}
+      GRAFANA_BASIC_AUTH_HASH: ${GRAFANA_BASIC_AUTH_HASH:-$$2a$$10$$h5iRjwthGVRQaUfhHaqSI.HfHTqlpCTohb2XJVOQpnwN8qsLbPWb2}
+      # Who may even try the basic auth (each try costs a bcrypt compare): Caddy matcher
+      # values, e.g. "203.0.113.7/32". Default: private ranges only (LAN, VPN, Tailscale).
+      GRAFANA_ALLOW_IPS: ${GRAFANA_ALLOW_IPS:-private_ranges}
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
@@ -248,6 +256,9 @@ services:
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000/grafana/}
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # Login form and session cookie only: an Authorization header (like the optional
+      # Caddy basic auth) never counts as a Grafana login.
+      GF_AUTH_BASIC_ENABLED: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"

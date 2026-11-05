@@ -42,7 +42,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "1 = /metrics del gameserver responde (alerta GameServerDown).",
+      "description": "ARRIBA = /metrics responde y /healthz no da 503; SIN BASE = arriba pero /healthz 503 (GameServerNotReady); CAÍDO = sin scrape (GameServerDown).",
       "gridPos": {
         "h": 4,
         "w": 3,
@@ -55,9 +55,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=\"gameserver\"}",
+          "expr": "up{job=\"gameserver\"} * on() group_left() (1 + ((sum(rate(http_requests_total{job=\"gameserver\",route=\"GET /healthz\",code=\"503\"}[2m])) > bool 0) or on() vector(0)))",
           "refId": "A",
-          "range": true
+          "instant": true,
+          "range": false
         }
       ],
       "options": {
@@ -84,6 +85,10 @@
               {
                 "color": "green",
                 "value": 1
+              },
+              {
+                "color": "orange",
+                "value": 2
               }
             ]
           },
@@ -96,10 +101,17 @@
                 },
                 "1": {
                   "text": "ARRIBA"
+                },
+                "2": {
+                  "text": "SIN BASE"
                 }
               }
             }
-          ]
+          ],
+          "noValue": "—",
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       }
@@ -112,7 +124,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
+      "description": "— mientras el servidor está caído.",
       "gridPos": {
         "h": 4,
         "w": 4,
@@ -125,9 +137,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "players_online{job=\"gameserver\"}",
+          "expr": "players_online{job=\"gameserver\"} and on() up{job=\"gameserver\"} == 1",
           "refId": "A",
-          "range": true
+          "instant": true,
+          "range": false
         }
       ],
       "options": {
@@ -148,12 +161,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               }
             ]
           },
-          "mappings": []
+          "mappings": [],
+          "noValue": "—",
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       }
@@ -179,9 +196,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "ws_connections{job=\"gameserver\"}",
+          "expr": "ws_connections{job=\"gameserver\"} and on() up{job=\"gameserver\"} == 1",
           "refId": "A",
-          "range": true
+          "instant": true,
+          "range": false
         }
       ],
       "options": {
@@ -202,12 +220,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               }
             ]
           },
-          "mappings": []
+          "mappings": [],
+          "noValue": "—",
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       }
@@ -233,9 +255,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(tick_duration_ms_bucket{job=\"gameserver\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(tick_duration_ms_bucket{job=\"gameserver\"}[5m]))) and on() up{job=\"gameserver\"} == 1",
           "refId": "A",
-          "range": true
+          "instant": true,
+          "range": false
         }
       ],
       "options": {
@@ -270,6 +293,10 @@
             ]
           },
           "mappings": [],
+          "noValue": "—",
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 2
         },
         "overrides": []
@@ -298,7 +325,8 @@
           },
           "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
           "refId": "A",
-          "range": true
+          "instant": true,
+          "range": false
         }
       ],
       "options": {
@@ -328,7 +356,11 @@
               }
             ]
           },
-          "mappings": []
+          "mappings": [],
+          "noValue": "—",
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       }
@@ -356,7 +388,8 @@
           },
           "expr": "time() - rpg_backup_last_success_timestamp_seconds",
           "refId": "A",
-          "range": true
+          "instant": true,
+          "range": false
         }
       ],
       "options": {
@@ -390,7 +423,11 @@
               }
             ]
           },
-          "mappings": []
+          "mappings": [],
+          "noValue": "—",
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       }
@@ -418,7 +455,8 @@
           },
           "expr": "node_filesystem_avail_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}",
           "refId": "A",
-          "range": true
+          "instant": true,
+          "range": false
         }
       ],
       "options": {
@@ -453,6 +491,10 @@
             ]
           },
           "mappings": [],
+          "noValue": "—",
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 0
         },
         "overrides": []

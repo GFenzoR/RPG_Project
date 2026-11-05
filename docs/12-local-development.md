@@ -101,7 +101,8 @@ make monitoring-down   # apaga todo (los volúmenes quedan)
 - Con `https://localhost`, los bots (Go) tienen que confiar en la CA local de Caddy:
   `docker compose -f deploy/docker-compose.yml --env-file deploy/.env cp caddy:/data/caddy/pki/authorities/local/root.crt .`
   y `SSL_CERT_FILE=<bundle del sistema + root.crt>`.
-- `monitoring-test` recrea Alertmanager apuntando al receptor de prueba (`alert-receiver`,
+- `monitoring-test` usa las imágenes ya construidas (`--no-build`): corre antes
+  `make monitoring-up` (o `make docker-build`). Recrea Alertmanager apuntando al receptor de prueba (`alert-receiver`,
   profile `monitoring-test`). Después, `make monitoring-up` vuelve a los canales de
   `deploy/.env`.
 - Para cambiar un umbral, edita `deploy/monitoring/prometheus/rules/alerts.yml` (y su test

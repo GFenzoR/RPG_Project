@@ -220,16 +220,25 @@ Activarlo en el servidor:
    recarga. Prometheus se recarga con `curl -X POST localhost:9090/-/reload` desde el
    túnel. Grafana relee los dashboards cada minuto.
 
-Variables del monitoreo (en `deploy/.env`; ninguna va al repo):
-| Variable | Para qué |
-|---|---|
-| `GRAFANA_ADMIN_PASSWORD` (obligatoria), `GRAFANA_ADMIN_USER` | Login de Grafana (usuario por defecto `admin`). `make monitoring-up` genera la contraseña si falta |
-| `ALERT_DISCORD_WEBHOOK_URL` | Webhook de un canal de Discord |
-| `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | Bot de Telegram y chat de destino |
-| `ALERT_WEBHOOK_URL` | Cualquier endpoint HTTP (POST JSON de Alertmanager) |
-| `ALERT_EMAIL_TO`, `ALERT_SMTP_SMARTHOST` (`host:puerto`), `ALERT_SMTP_FROM`, `ALERT_SMTP_USER`, `ALERT_SMTP_PASSWORD` | Email |
-| `GRAFANA_PUBLIC` (`off`), `GRAFANA_BASIC_AUTH_USER`, `GRAFANA_BASIC_AUTH_HASH`, `GRAFANA_ROOT_URL` | Ruta pública opcional, ver abajo |
-| `PROMETHEUS_RETENTION`, `PROMETHEUS_RETENTION_SIZE`, `GRAFANA_PORT`, `PROMETHEUS_PORT`, `ALERTMANAGER_PORT` | Retención y puertos locales |
+Variables del monitoreo (en `deploy/.env`; ninguna va al repo). Todas tienen un default
+en `docker-compose.yml`; solo `GRAFANA_ADMIN_PASSWORD` hay que definirla:
+
+| Variable | Default | Para qué |
+|---|---|---|
+| `GRAFANA_ADMIN_PASSWORD` | vacía: Grafana no arranca | Contraseña del login de Grafana. `make monitoring-up` genera una si falta |
+| `GRAFANA_ADMIN_USER` | `admin` | Usuario del login de Grafana |
+| `GRAFANA_ROOT_URL` | `http://localhost:3000/grafana/` | URL pública de Grafana; con la ruta pública, `https://<dominio>/grafana/` |
+| `GRAFANA_PUBLIC` | `off` | `on` activa la ruta `/grafana/` de Caddy (ver abajo) |
+| `GRAFANA_BASIC_AUTH_USER` | `disabled` | Usuario del basic auth de esa ruta |
+| `GRAFANA_BASIC_AUTH_HASH` | hash bcrypt de un secreto aleatorio que nadie tiene | Hash del basic auth (`caddy hash-password --bcrypt-cost 10`) |
+| `GRAFANA_ALLOW_IPS` | `private_ranges` | IPs que pueden intentar el basic auth, en formato del matcher `client_ip` de Caddy (`203.0.113.7/32`, varias separadas por espacio); el resto recibe 403 |
+| `ALERT_DISCORD_WEBHOOK_URL` | vacía | Webhook de un canal de Discord |
+| `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | vacías | Bot de Telegram y chat de destino (hacen falta las dos) |
+| `ALERT_WEBHOOK_URL` | vacía | Cualquier endpoint HTTP (POST JSON de Alertmanager) |
+| `ALERT_EMAIL_TO`, `ALERT_SMTP_SMARTHOST` (`host:puerto`), `ALERT_SMTP_FROM` | vacías | Email (hacen falta las tres) |
+| `ALERT_SMTP_USER`, `ALERT_SMTP_PASSWORD` | vacías | Credenciales SMTP, si el servidor las pide |
+| `PROMETHEUS_RETENTION`, `PROMETHEUS_RETENTION_SIZE` | `15d`, `1GB` | Retención del TSDB (lo que llegue primero) |
+| `GRAFANA_PORT`, `PROMETHEUS_PORT`, `ALERTMANAGER_PORT` | `3000`, `9090`, `9093` | Puertos en `127.0.0.1` del host |
 
 - Los canales se combinan: se usan todos los que estén definidos. Sin ninguno, las
   alertas solo se ven en Grafana y en Alertmanager.
@@ -239,18 +248,36 @@ Variables del monitoreo (en `deploy/.env`; ninguna va al repo):
 - Alertas, umbrales y métricas: `01-architecture.md` ("Observabilidad").
 
 Ruta pública opcional `/grafana/` (desactivada por defecto). Úsala solo si el túnel SSH
-no te sirve:
-1. Genera el hash de la contraseña:
-   `docker run --rm caddy:2.11-alpine caddy hash-password --plaintext '<contraseña>'`.
-2. En `.env`, pon `GRAFANA_PUBLIC=on`, `GRAFANA_BASIC_AUTH_USER=<usuario>`,
-   `GRAFANA_BASIC_AUTH_HASH='<hash>'` (entre comillas simples, lleva `$`) y
-   `GRAFANA_ROOT_URL=https://<dominio>/grafana/`.
+no te sirve. Cada intento de basic auth cuesta una comparación bcrypt en la misma máquina
+que corre el tick de 50 ms. Con usuarios desconocidos, Caddy compara contra un hash
+interno de costo 14 (alrededor de 1 s de CPU), así que unas pocas peticiones por segundo
+con credenciales al azar saturan 2 vCPU. Por eso la ruta filtra por IP antes de
+autenticar.
+1. Genera el hash con costo bajo:
+   `docker run --rm caddy:2.11-alpine caddy hash-password --bcrypt-cost 10 --plaintext '<contraseña>'`.
+2. En `.env`, pon:
+   - `GRAFANA_PUBLIC=on`;
+   - `GRAFANA_BASIC_AUTH_USER=<usuario>` (que no sea el admin de Grafana);
+   - `GRAFANA_BASIC_AUTH_HASH='<hash>'` (entre comillas simples, porque lleva `$`);
+   - `GRAFANA_ALLOW_IPS=<tu IP>/32`. Con el default `private_ranges`, desde internet
+     todos reciben 403;
+   - `GRAFANA_ROOT_URL=https://<dominio>/grafana/`.
 3. Recrea `caddy` y `grafana`.
 
-Con `on`, si el usuario o el hash quedan vacíos, la ruta responde 401 a todo: falla
-cerrada. Delante queda el basic auth de Caddy y detrás el login de Grafana.
-`GRAFANA_PUBLIC` solo acepta `on` u `off` (es el nombre de un archivo
-`caddy-grafana-*.caddy`).
+Cómo responde la ruta:
+- Fuera de `GRAFANA_ALLOW_IPS`: 403, sin trabajo de bcrypt. `client_ip` respeta los
+  proxies de confianza, así que en casa se usa la IP real que llega por el túnel.
+- Si solo definiste el usuario o solo el hash: 401 para todos. El compose nunca le pasa a
+  Caddy valores vacíos, así que Caddy arranca igual y el sitio no se cae.
+  `deploy/monitoring/check.sh` lo comprueba.
+- Las dos capas quedan separadas: Caddy no reenvía el header `Authorization` y Grafana
+  tiene el basic auth apagado (`GF_AUTH_BASIC_ENABLED=false`). Siempre se entra por el
+  formulario de login de Grafana.
+- `GRAFANA_PUBLIC` solo acepta `on` u `off` (es el nombre de un archivo
+  `caddy-grafana-*.caddy`).
+
+El gameserver tiene `stop_grace_period: 90s`: las etapas de apagado más
+`-metrics-linger` (20 s, solo si se abandonaron escrituras; ver `01-architecture.md`).
 
 ### IP del cliente y rate limits
 Los límites por IP de login/registro (T1.3) usan la IP que ve el gameserver. La cadena es:

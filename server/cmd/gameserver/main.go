@@ -60,6 +60,8 @@ type options struct {
 	// metricsExplicit: -metrics-addr or $RPG_METRICS_ADDR was set, so a failed bind is
 	// fatal (with the default address it is only a warning).
 	metricsExplicit bool
+	// metricsLinger keeps /metrics up after shutdown when writes were abandoned.
+	metricsLinger time.Duration
 	// startTown is the island new characters start at (empty = the first in world.yaml).
 	startTown string
 	// boatRoutes replaces data/boat_routes.yaml (E2E fixtures; empty = the data file).
@@ -87,6 +89,7 @@ func main() {
 	flag.StringVar(&o.startTown, "start-town", os.Getenv("RPG_START_TOWN"), "island new characters start at; default $RPG_START_TOWN or the first island of world/world.yaml")
 	flag.StringVar(&o.boatRoutes, "boat-routes", os.Getenv("RPG_BOAT_ROUTES"), "boat routes file replacing <data>/boat_routes.yaml (tests); default $RPG_BOAT_ROUTES")
 	flag.StringVar(&o.metricsAddr, "metrics-addr", envOr("RPG_METRICS_ADDR", defaultMetricsAddr), "internal listener for Prometheus /metrics, never public (empty = off); default $RPG_METRICS_ADDR or "+defaultMetricsAddr)
+	flag.DurationVar(&o.metricsLinger, "metrics-linger", 20*time.Second, "after shutdown, keep /metrics up this long if database writes were abandoned, so Prometheus scrapes them (0 = off)")
 	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
 	flag.Parse()
 	_, o.metricsExplicit = os.LookupEnv("RPG_METRICS_ADDR")
@@ -227,10 +230,12 @@ func run(logger *slog.Logger, o options) error {
 		close(httpErr)
 	}()
 	go purgeSessions(ctx, logger, clk, a.Auth)
+	metricsUp := false
 	if mets != nil {
 		msrv, err := serveMetrics(o.metricsAddr, mets, logger)
 		switch {
 		case err == nil:
+			metricsUp = true
 			defer func() { _ = msrv.Close() }()
 		case o.metricsExplicit:
 			return err
@@ -264,8 +269,23 @@ func run(logger *slog.Logger, o options) error {
 		}
 	}
 	shutdownHTTP(srv, cancelRequests, httpShutdownTimeout, logger)
+	if d := metricsLinger(mets, metricsUp, o.metricsLinger); d > 0 {
+		logger.Warn("writes abandoned at shutdown: keeping /metrics up for one more scrape",
+			"abandoned", mets.Abandoned(), "for", d.String())
+		<-clk.After(d)
+	}
 	logger.Info("gameserver stopped", "ticks", uint64(a.Loop.Tick()))
 	return runErr
+}
+
+// metricsLinger is how long to keep /metrics up after shutdown: linger when writes were
+// abandoned (persistence_errors_total{outcome="abandoned"} would otherwise vanish with
+// the process before any scrape), else 0. The compose stop_grace_period leaves room.
+func metricsLinger(m *metrics.Metrics, up bool, linger time.Duration) time.Duration {
+	if !up || m.Abandoned() == 0 {
+		return 0
+	}
+	return linger
 }
 
 // defaultMetricsAddr is loopback only: /metrics is internal (docs/01-architecture.md).

@@ -26,6 +26,13 @@ func TestMetricsRecordAndServe(t *testing.T) {
 	m.PersistenceError(WriterEconomy, OutcomeRejected)
 	m.HTTPRequest("GET /api/highscores", 503, 20*time.Millisecond)
 	m.HTTPRequest("GET /healthz", 200, time.Millisecond)
+	if m.Abandoned() != 0 {
+		t.Fatal("abandoned before any abandoned write")
+	}
+	m.PersistenceError(WriterEconomy, OutcomeAbandoned)
+	if m.Abandoned() != 1 {
+		t.Fatalf("Abandoned = %d, want 1", m.Abandoned())
+	}
 	online := 7
 	if err := m.PlayersOnline(func() int { return online }); err != nil {
 		t.Fatal(err)
@@ -49,6 +56,7 @@ func TestMetricsRecordAndServe(t *testing.T) {
 		`persistence_errors_total{outcome="retry",writer="character"} 2`,
 		`persistence_errors_total{outcome="rejected",writer="economy"} 1`,
 		`persistence_errors_total{outcome="abandoned",writer="audit"} 0`,
+		`persistence_errors_total{outcome="abandoned",writer="economy"} 1`,
 		`http_requests_total{code="503",route="GET /api/highscores"} 1`,
 		`http_requests_total{code="200",route="GET /healthz"} 1`,
 		`http_request_duration_seconds_bucket{route="GET /api/highscores",le="0.025"} 1`,
@@ -71,6 +79,9 @@ func TestNilMetricsRecordNothing(t *testing.T) {
 	m.EconomyAlert("mismatch")
 	m.EconomyAlertKinds("mismatch")
 	m.PersistenceError(WriterAudit, OutcomeRetry)
+	if m.Abandoned() != 0 {
+		t.Fatal("nil Metrics counted")
+	}
 	m.HTTPRequest("GET /healthz", 200, time.Millisecond)
 	if err := m.PlayersOnline(func() int { return 1 }); err != nil {
 		t.Fatal(err)

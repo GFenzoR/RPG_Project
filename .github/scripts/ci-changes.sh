@@ -37,8 +37,9 @@ declare -A RULES=(
 	[stack]='^(deploy|server|client|packages|data|world|i18n|assets|proto|tools/bots|tools/spritepack)/'
 	[home-stack]='^deploy/'
 	# Step of deploy-lint (T4.4): promtool/amtool and the dashboards, only for the
-	# monitoring config or the compose file that pins its images.
-	[monitoring]='^deploy/(monitoring/|docker-compose\.yml$)'
+	# monitoring config, the compose file that pins its images, and the Caddy files of
+	# the optional /grafana/ route (check.sh parses them with half-set credentials).
+	[monitoring]='^deploy/(monitoring/|docker-compose\.yml$|Caddyfile$|caddy-routes\.caddy$|caddy-grafana-.*\.caddy$)'
 )
 CI_JOBS=(go-server go-bots ts validate actionlint build desktop e2e integration bench)
 IMAGES_JOBS=(image deploy-lint stack home-stack monitoring)
@@ -113,7 +114,8 @@ self_test() {
 	for j in monitoring deploy-lint stack home-stack; do check "$j" true deploy/monitoring/prometheus/rules/alerts.yml; done
 	check image false deploy/monitoring/grafana/dashboards/rpg-overview.json
 	check monitoring true deploy/docker-compose.yml
-	check monitoring false deploy/backup.sh deploy/Caddyfile
+	check monitoring false deploy/backup.sh deploy/Caddyfile.home
+	check monitoring true deploy/caddy-grafana-on.caddy
 	check monitoring false server/internal/metrics/metrics.go
 	check image true deploy/caddy-grafana-on.caddy
 	# The bots: their Go job and the stack (they play in it), not the server's.
