@@ -295,7 +295,8 @@ El gameserver tiene `stop_grace_period: 90s`: las etapas de apagado más
 Un envío del portal de mapas (`/maps/submit`) que un moderador aprueba queda `approved`. El
 servicio `map-pr-worker` (perfil `map-pr`, `tools/map-pr-worker`) lo toma, mezcla el patch
 sobre la rama base **actual** con el merge de `packages/map-format` y abre un PR en este repo
-desde la rama `map-submission/<id>`. El PR toca solo archivos de mapa de `world/` y
+desde la rama `map-submission/<id>-<sha256[:12]>` (el sha del patch en el nombre: dos bases
+que comparten el repo, como producción y un servidor de pruebas, nunca comparten rama). El PR toca solo archivos de mapa de `world/` y
 `world/CONTRIBUTORS.md` (el crédito). Sobre ese PR corren los checks de mapas de siempre
 (`map-pr`, docs/04). El worker no expone puertos: habla con Postgres (red `internal`) y con la
 API de GitHub (red `edge`).
@@ -343,6 +344,9 @@ instalada solo en este repo), con la ventaja de no depender de una cuenta de bot
 de hoy usa un token fijo; para una App habría que generar el token de instalación (JWT
 firmado con la clave de la App, válido 1 h) antes de cada ronda. Queda como mejora.
 
+`RPG_MAP_PR_WORKER=on` sale de que haya token, no de que el perfil esté activo: pon los dos
+(paso 3) o ninguno, si no el sitio dirá que el PR se abre solo.
+
 **Sin token**, el servicio arranca, avisa `GITHUB_MAP_PR_TOKEN is not set` y termina con
 código 0 (`restart: on-failure` no lo relanza). Los envíos aprobados quedan `approved` y la
 página de moderación avisa que hay que abrirlos a mano: descargar el patch y, en una rama
@@ -350,15 +354,23 @@ página de moderación avisa que hay que abrirlos a mano: descargar el patch y, 
 
 **Qué hace con cada envío** (contrato de la migración 00010, docs/04):
 - Lo reserva con `FOR UPDATE SKIP LOCKED` y un lease de 10 min (`attempts + 1`).
-- Si ya hay un PR desde `map-submission/<id>`, lo registra; si la rama existe sin PR, abre
-  el PR; si no hay nada, mezcla el patch sobre la base y escribe blobs, árbol, commit y
-  rama con la API Git Data (sin `git clone`). Cada paso se puede repetir después de una
-  caída sin abrir dos PR.
+- Si ya hay un PR desde su rama **y** su cuerpo lleva la marca de ese envío
+  (`<!-- rpg-map-submission: <id> sha256:<sha> -->`), lo registra. Si la rama existe sin PR
+  y su commit lleva los trailers `Map-Submission`/`Sha256` del envío, abre el PR. Si no hay
+  nada, mezcla el patch sobre la base y escribe árbol (con el texto de los archivos en el
+  mismo pedido: uno solo, sin importar cuántos archivos), commit y rama con la API Git Data
+  (sin `git clone`). Cada paso se puede repetir después de una caída sin abrir dos PR.
 - Resultado: `pr_opened` con la URL, o `failed` con un código fijo que el autor ve en "Mis
   envíos": `conflict` (la base cambió en las mismas casillas), `outside_plot`,
   `invalid_patch`, `no_changes` (la base ya lo tiene) o `github` (10 intentos fallidos).
 - Un error de GitHub o de red lo deja `approved` y reintenta con espera creciente (1, 2, 4…
-  minutos, hasta 6 h).
+  minutos, hasta 6 h). Si GitHub rechaza **al worker** (401, 403 sin rate limit, 404: token
+  vencido o revocado, permiso que falta, repo o rama base mal escritos), el envío no gasta
+  su intento, el worker se detiene 15 min y lo dice en el log con nivel `error`: un token
+  vencido nunca deja en `failed` los envíos de nadie.
+- El título del jugador va al título del PR y del commit con `#`, `@` y `GH-` neutralizados
+  (un carácter de ancho cero): `fixes #12` no cierra el issue 12 al mergear, y `@alguien` no
+  avisa a nadie.
 
 **Rotar o revocar.** Genera el token nuevo, cámbialo en `deploy/.env` y
 `docker compose up -d map-pr-worker`; después borra el viejo en GitHub. Si se filtra:

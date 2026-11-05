@@ -4,14 +4,21 @@
 // token (docs/09, "Worker de PR de mapas"). The token only ever goes in the Authorization
 // header; errors carry the method, the path and the status, never the token or a body.
 
-/** A failed GitHub call. `retryable`: worth trying again later (network, 5xx, rate limit). */
+/**
+ * A failed GitHub call. `retryable`: transient (network, 5xx, rate limit), worth trying
+ * again later. `config`: the operator's problem (bad or expired token, missing permission,
+ * wrong repository or base branch): the submission waits without spending its attempts.
+ * Neither: the answer will not change (a file that is not UTF-8...).
+ */
 export class GitHubError extends Error {
   readonly status: number;
   readonly retryable: boolean;
-  constructor(message: string, status: number, retryable: boolean) {
+  readonly config: boolean;
+  constructor(message: string, status: number, retryable: boolean, config = false) {
     super(message);
     this.status = status;
     this.retryable = retryable;
+    this.config = config;
   }
 }
 
@@ -30,12 +37,14 @@ export interface PullRequest {
   number: number;
   url: string;
   state: string;
+  /** Its description (the worker checks its marker before trusting a found PR). */
+  body: string;
 }
 
 export interface TreeEntry {
   path: string;
-  /** Blob sha, or null to delete the file. */
-  sha: string | null;
+  /** The file's new text, or null to delete it. */
+  content: string | null;
 }
 
 const OWNER_REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/;
@@ -60,7 +69,13 @@ function pullOf(raw: unknown): PullRequest {
     !/^https:\/\/[^\s"<>]+$/.test(p.html_url)
   )
     throw new GitHubError("unexpected pull request in the response", 0, false);
-  return { number: p.number, url: p.html_url, state: typeof p.state === "string" ? p.state : "" };
+  const body = (raw as { body?: unknown }).body;
+  return {
+    number: p.number,
+    url: p.html_url,
+    state: typeof p.state === "string" ? p.state : "",
+    body: typeof body === "string" ? body : "",
+  };
 }
 
 export class GitHub {
@@ -81,7 +96,7 @@ export class GitHub {
     path: string,
     body?: unknown,
     accept = "application/vnd.github+json",
-  ): Promise<{ status: number; data: unknown; bytes: Uint8Array }> {
+  ): Promise<{ status: number; data: unknown; bytes: Uint8Array; headers: Headers }> {
     const url = `${this.opts.apiUrl.replace(/\/+$/, "")}${path}`;
     let res: Response;
     try {
@@ -111,17 +126,30 @@ export class GitHub {
         data = undefined;
       }
     }
-    return { status: res.status, data, bytes };
+    return { status: res.status, data, bytes, headers: res.headers };
   }
 
-  private fail(method: string, path: string, status: number, data?: unknown): never {
-    // Rate limits answer 403 or 429; 5xx and 408 are transient. 401/403/404 are a
-    // configuration problem (token, permissions, repository): retrying later lets the
-    // operator fix it without failing anyone's submission.
-    const msg = (data as { message?: unknown } | undefined)?.message;
+  private fail(
+    method: string,
+    path: string,
+    r: { status: number; data?: unknown; headers: Headers },
+  ): never {
+    // Rate limits answer 429, or 403 with retry-after or no remaining requests: transient.
+    // 401, 404 and any other 403 are configuration (token, permissions, repository).
+    const msg = (r.data as { message?: unknown } | undefined)?.message;
     const hint =
       typeof msg === "string" ? `: ${msg.slice(0, 120).replace(/[^\x20-\x7e]/g, "?")}` : "";
-    throw new GitHubError(`${method} ${path}: HTTP ${status}${hint}`, status, true);
+    const limited =
+      r.status === 429 ||
+      (r.status === 403 &&
+        (r.headers.has("retry-after") || r.headers.get("x-ratelimit-remaining") === "0"));
+    const config = !limited && (r.status === 401 || r.status === 403 || r.status === 404);
+    throw new GitHubError(
+      `${method} ${path}: HTTP ${String(r.status)}${hint}`,
+      r.status,
+      !config,
+      config,
+    );
   }
 
   private repoPath(rest: string): string {
@@ -133,17 +161,26 @@ export class GitHub {
     const path = this.repoPath(`/git/ref/heads/${encodePath(branch)}`);
     const r = await this.request("GET", path);
     if (r.status === 404) return null;
-    if (r.status !== 200) this.fail("GET", path, r.status, r.data);
+    if (r.status !== 200) this.fail("GET", path, r);
     const sha = (r.data as { object?: { sha?: unknown } }).object?.sha;
     if (typeof sha !== "string") throw new GitHubError(`GET ${path}: no sha`, 0, true);
     return sha;
+  }
+
+  /** The message of a commit (the worker checks its trailer before reusing a branch). */
+  async commitMessage(sha: string): Promise<string> {
+    const path = this.repoPath(`/git/commits/${encodeURIComponent(sha)}`);
+    const r = await this.request("GET", path);
+    if (r.status !== 200) this.fail("GET", path, r);
+    const message = (r.data as { message?: unknown }).message;
+    return typeof message === "string" ? message : "";
   }
 
   /** The tree of a commit. */
   async commitTree(sha: string): Promise<string> {
     const path = this.repoPath(`/git/commits/${encodeURIComponent(sha)}`);
     const r = await this.request("GET", path);
-    if (r.status !== 200) this.fail("GET", path, r.status, r.data);
+    if (r.status !== 200) this.fail("GET", path, r);
     const tree = (r.data as { tree?: { sha?: unknown } }).tree?.sha;
     if (typeof tree !== "string") throw new GitHubError(`GET ${path}: no tree`, 0, true);
     return tree;
@@ -157,7 +194,7 @@ export class GitHub {
     const path = this.repoPath(`/contents/${encodePath(filePath)}?ref=${encodeURIComponent(ref)}`);
     const r = await this.request("GET", path, undefined, "application/vnd.github.raw+json");
     if (r.status === 404) return null;
-    if (r.status !== 200) this.fail("GET", path, r.status);
+    if (r.status !== 200) this.fail("GET", path, r);
     try {
       return new TextDecoder("utf-8", { fatal: true }).decode(r.bytes);
     } catch {
@@ -165,26 +202,27 @@ export class GitHub {
     }
   }
 
-  async createBlob(content: string): Promise<string> {
-    const path = this.repoPath("/git/blobs");
-    const r = await this.request("POST", path, { content, encoding: "utf-8" });
-    if (r.status !== 201) this.fail("POST", path, r.status, r.data);
-    return shaOf(r.data, path);
-  }
-
-  /** A tree on top of baseTree: regular files (100644) or deletions. */
+  /**
+   * A tree on top of baseTree: regular files (100644) with their text inline, or
+   * deletions. One request for the whole change, whatever its number of files (GitHub
+   * limits how many objects may be created per minute).
+   */
   async createTree(baseTree: string, entries: readonly TreeEntry[]): Promise<string> {
     const path = this.repoPath("/git/trees");
-    const tree = entries.map((e) => ({ path: e.path, mode: "100644", type: "blob", sha: e.sha }));
+    const tree = entries.map((e) =>
+      e.content === null
+        ? { path: e.path, mode: "100644", type: "blob", sha: null }
+        : { path: e.path, mode: "100644", type: "blob", content: e.content },
+    );
     const r = await this.request("POST", path, { base_tree: baseTree, tree });
-    if (r.status !== 201) this.fail("POST", path, r.status, r.data);
+    if (r.status !== 201) this.fail("POST", path, r);
     return shaOf(r.data, path);
   }
 
   async createCommit(message: string, tree: string, parents: readonly string[]): Promise<string> {
     const path = this.repoPath("/git/commits");
     const r = await this.request("POST", path, { message, tree, parents });
-    if (r.status !== 201) this.fail("POST", path, r.status, r.data);
+    if (r.status !== 201) this.fail("POST", path, r);
     return shaOf(r.data, path);
   }
 
@@ -194,7 +232,7 @@ export class GitHub {
     const r = await this.request("POST", path, { ref: `refs/heads/${branch}`, sha });
     if (r.status === 201) return true;
     if (r.status === 422 && (await this.branchSha(branch)) !== null) return false;
-    this.fail("POST", path, r.status, r.data);
+    this.fail("POST", path, r);
   }
 
   /** The newest pull request (any state) whose head is `branch` of this repository. */
@@ -206,7 +244,7 @@ export class GitHub {
     });
     const path = this.repoPath(`/pulls?${q.toString()}`);
     const r = await this.request("GET", path);
-    if (r.status !== 200) this.fail("GET", path, r.status, r.data);
+    if (r.status !== 200) this.fail("GET", path, r);
     if (!Array.isArray(r.data) || r.data.length === 0) return null;
     return pullOf(r.data[0]);
   }
@@ -225,7 +263,7 @@ export class GitHub {
       const existing = await this.findPull(p.head);
       if (existing) return existing;
     }
-    this.fail("POST", path, r.status, r.data);
+    this.fail("POST", path, r);
   }
 }
 

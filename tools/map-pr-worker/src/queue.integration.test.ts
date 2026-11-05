@@ -91,7 +91,10 @@ describe.skipIf(!url)("PgQueue (Postgres)", () => {
     // A failure code outside the contract is refused by the table.
     const c = await approved(3);
     await expect(q.failed(c, at, "Not A Code")).rejects.toThrow();
-    await q.retryAt(c, new Date(at.getTime() + 60_000));
+    await q.retryAt(c, new Date(at.getTime() + 60_000), true);
+    expect(
+      (await pool.query(`SELECT attempts FROM map_submissions WHERE id = $1`, [c])).rows[0],
+    ).toEqual({ attempts: 0 });
     expect(await q.claim(at, at)).toBeNull();
     expect((await q.claim(new Date(at.getTime() + 60_000), at, c))?.id).toBe(c);
   });
@@ -115,7 +118,7 @@ describe.skipIf(!url)("PgQueue (Postgres)", () => {
         id,
       ]);
       expect(r.rows[0]).toEqual({ status: "pr_opened", pr_number: 1 });
-      expect(fake.pulls[0]?.head).toBe(`map-submission/${String(id)}`);
+      expect(fake.pulls[0]?.head).toBe(`map-submission/${String(id)}-${"b".repeat(12)}`);
     } finally {
       await fake.close();
     }

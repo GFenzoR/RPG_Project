@@ -33,7 +33,8 @@ declare -A RULES=(
 	[integration]='^(server|proto|data|world|tools/map-pr-worker|packages/map-format)/'
 	[bench]='^server/(internal/(game|world|session|clock)|go\.(mod|sum))'
 	# images.yml (on pull requests; pushes to main and tags always build and publish)
-	[image]='^deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-.*\.caddy$)'
+	# The map PR worker's image runs its TypeScript and these packages as they are (T4.5).
+	[image]='^(deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-.*\.caddy$)|tools/map-pr-worker/|packages/map-format/|packages/content-schema/)'
 	[deploy-lint]='^deploy/'
 	[stack]='^(deploy|server|client|packages|data|world|i18n|assets|proto|tools/bots|tools/spritepack)/'
 	[home-stack]='^deploy/'
@@ -102,6 +103,10 @@ self_test() {
 	for j in ts integration e2e; do check "$j" true tools/map-pr-worker/src/worker.ts; done
 	for j in go-server go-bots bench desktop; do check "$j" false tools/map-pr-worker/src/worker.ts; done
 	check integration true packages/map-format/src/patch/merge.ts
+	for f in tools/map-pr-worker/src/cli.ts packages/map-format/src/patch/merge.ts packages/content-schema/src/index.ts; do
+		check image true "$f"
+	done
+	check image false client/src/main.tsx
 	# The patch path fixture: the TS tests and the server's patch check (T4.5).
 	for j in go-server ts; do check "$j" true packages/map-format/src/patch/testdata/paths.json; done
 	check go-server false packages/map-format/src/patch/merge.ts

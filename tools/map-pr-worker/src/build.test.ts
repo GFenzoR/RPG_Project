@@ -115,6 +115,14 @@ describe("texts", () => {
     );
   });
 
+  it("titles cannot close issues or mention anyone", () => {
+    const t = prTitle({ ...s, title: "fixes #12, closes acme/rpg#3, GH-4 @admin" });
+    expect(t.slice(0, t.indexOf(" (envío"))).not.toMatch(/#\d|@[a-z]|gh-\d/i);
+    expect(t.replace(/\u2060/g, "")).toBe(
+      "map: fixes #12, closes acme/rpg#3, GH-4 @admin (envío #7)",
+    );
+  });
+
   it("titles are one line", () => {
     expect(prTitle({ ...s, title: "a\nb\u202ec" })).toBe("map: a b c (envío #7)");
     expect(prTitle({ ...s, title: "x".repeat(200) }).length).toBeLessThan(90);

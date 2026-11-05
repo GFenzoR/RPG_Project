@@ -146,12 +146,18 @@ export async function startFakeGitHub(o: FakeGitHubOptions): Promise<FakeGitHub>
       const entries = new Map<string, string | null>();
       for (const e of (body?.["tree"] ?? []) as {
         path: string;
-        sha: string | null;
+        sha?: string | null;
+        content?: string;
         mode: string;
       }[]) {
-        if (e.mode !== "100644" || (e.sha !== null && !blobs.has(e.sha)))
-          return send(res, 422, { message: "bad entry" });
-        entries.set(e.path, e.sha);
+        if (e.mode !== "100644") return send(res, 422, { message: "bad entry" });
+        if (typeof e.content === "string") {
+          const blob = sha1(`blob ${e.content}`);
+          blobs.set(blob, e.content);
+          entries.set(e.path, blob);
+        } else if (e.sha === null || (typeof e.sha === "string" && blobs.has(e.sha))) {
+          entries.set(e.path, e.sha);
+        } else return send(res, 422, { message: "bad entry" });
       }
       const sha = sha1(`tree ${parent} ${JSON.stringify([...entries])}`);
       trees.set(sha, { parent, entries });
@@ -208,6 +214,7 @@ export async function startFakeGitHub(o: FakeGitHubOptions): Promise<FakeGitHub>
   const pullJSON = (p: FakePull): unknown => ({
     number: p.number,
     state: p.state,
+    body: p.body,
     html_url: `https://github.com/${o.owner}/${o.repo}/pull/${String(p.number)}`,
     head: { ref: p.head },
   });

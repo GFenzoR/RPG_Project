@@ -380,9 +380,11 @@ docs/09, "Worker de PR de mapas").
 propio):
 - Lee la rama base **actual** con la API de contenidos de GitHub y mezcla cada archivo del
   patch con `mergePatchFile` (el mismo merge de tres vías que `mapcli patch apply`, con la
-  `base_text` del patch como base). Escribe el resultado con la API Git Data (blobs, árbol
-  sobre el de la base, commit con la base como padre, rama `map-submission/<id>`): sin
-  `git clone` ni nada que ejecutar en el contenedor.
+  `base_text` del patch como base). Escribe el resultado con la API Git Data (árbol sobre
+  el de la base con el texto de los archivos en el mismo pedido, commit con la base como
+  padre, rama `map-submission/<id>-<sha12>`): sin `git clone` ni nada que ejecutar en el
+  contenedor. Un PR o una rama que ya existen solo se reusan si llevan la marca o los
+  trailers de ese envío.
 - Vuelve a chequear todo lo que importa, sin confiar en el servidor: `parsePatch`, solo
   formato 2, y cada ruta tiene que ser un archivo de mapa de `world/` (`writablePath`).
   También repite el chequeo de **parcelas** contra las zonas de la base (`checkPlots`):
@@ -394,7 +396,8 @@ propio):
   el PR todavía no existe cuando se escribe el commit. Dos PR del portal abiertos a la vez
   agregan filas al final del mismo archivo: el segundo en mergearse tiene un conflicto de
   una línea que se resuelve con "Resolve conflicts" en GitHub.
-- **El PR** se titula `map: <título> (envío #<id>)` y su cuerpo dice autor (personaje),
+- **El PR** se titula `map: <título> (envío #<id>)`, con `#`, `@` y `GH-` del título
+  neutralizados (no cierra issues ni menciona a nadie), y su cuerpo dice autor (personaje),
   licencia, islas, archivos y sha256 del patch, y lleva la descripción del autor dentro de
   un bloque de código con un cerco más largo que cualquier secuencia de backticks: no se
   renderiza como Markdown, y sus `@menciones` o `#referencias` no avisan a nadie. Nunca el

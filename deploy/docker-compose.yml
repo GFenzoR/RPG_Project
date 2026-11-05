@@ -196,6 +196,7 @@ services:
       GITHUB_MAP_PR_TOKEN: ${GITHUB_MAP_PR_TOKEN:-}
       GITHUB_REPOSITORY: ${MAP_PR_REPOSITORY:-GFenzoR/RPG_Project}
       MAP_PR_BASE: ${MAP_PR_BASE:-main}
+      MAP_PR_POLL_SECONDS: ${MAP_PR_POLL_SECONDS:-30}
     mem_limit: 192m
     read_only: true
     cap_drop: [ALL]

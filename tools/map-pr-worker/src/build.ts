@@ -31,8 +31,21 @@ export interface Submission {
 
 export const CONTRIBUTORS = "world/CONTRIBUTORS.md";
 
-/** The branch of a submission: one per submission, so a retry finds it. */
-export const branchOf = (id: number): string => `map-submission/${String(id)}`;
+/**
+ * The branch of a submission: one per submission and patch, so a retry finds it, and two
+ * databases (production and a test server) that share the repository and an id never
+ * share a branch.
+ */
+export const branchOf = (s: Pick<Submission, "id" | "sha256">): string =>
+  `map-submission/${String(s.id)}-${s.sha256.slice(0, 12)}`;
+
+/** The marker a pull request of this submission carries in its body (checked on reuse). */
+export const markerOf = (s: Pick<Submission, "id" | "sha256">): string =>
+  `<!-- rpg-map-submission: ${String(s.id)} sha256:${s.sha256} -->`;
+
+/** Trailers of the commit (checked before reusing a branch). */
+export const trailersOf = (s: Pick<Submission, "id" | "sha256">): string =>
+  `Map-Submission: ${String(s.id)}\nSha256: ${s.sha256}`;
 
 /** Files to write: path → new text, or null to delete. */
 export type Writes = Map<string, string | null>;
@@ -101,7 +114,12 @@ export async function buildChange(s: Submission, read: ReadBase): Promise<BuildR
   for (const f of patch.files) {
     const ours = await read(f.path);
     const base = f.base === null ? null : (f.base_text ?? undefined);
-    const m = mergePatchFile(f.path, base, ours, f.content);
+    let m;
+    try {
+      m = mergePatchFile(f.path, base, ours, f.content);
+    } catch {
+      return { ok: false, code: "invalid_patch" };
+    }
     if (m.conflicts.length > 0) return { ok: false, code: "conflict" };
     if (m.text === ours) continue;
     writes.set(f.path, m.text);
@@ -146,13 +164,25 @@ function oneLine(s: string, n: number): string {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 }
 
+/**
+ * The player's title made inert where GitHub reads it: "#12", "GH-12" and "owner/repo#12"
+ * would link (and, after "fixes", close) an issue when the commit reaches main, and "@x"
+ * would mention someone. A word joiner (U+2060, invisible) after "#", "@" and "GH-"
+ * breaks every one of them.
+ */
+export function inert(text: string): string {
+  return text
+    .replace(/([#@])(?=[\p{L}\p{N}_])/gu, "$1\u2060")
+    .replace(/\b(gh-)(?=\d)/giu, "$1\u2060");
+}
+
 /** Title of the commit and of the pull request. */
 export function prTitle(s: Submission): string {
-  return `map: ${oneLine(s.title, 60)} (envío #${String(s.id)})`;
+  return `map: ${inert(oneLine(s.title, 60))} (envío #${String(s.id)})`;
 }
 
 export function commitMessage(s: Submission): string {
-  return `${prTitle(s)}\n\nMap-Submission: ${String(s.id)}\nSha256: ${s.sha256}\n`;
+  return `${prTitle(s)}\n\n${trailersOf(s)}\n`;
 }
 
 /**
@@ -186,7 +216,7 @@ export function patchFiles(s: Submission): { files: string[]; islands: string[] 
 export function prBody(s: Submission): string {
   const { files, islands } = patchFiles(s);
   const lines = [
-    `<!-- rpg-map-submission: ${String(s.id)} -->`,
+    markerOf(s),
     `Envío #${String(s.id)} del portal de mapas, aprobado por un moderador (docs/04, "Portal de envío de mapas").`,
     "",
     `- **Autor:** ${safeName(s.author)} (nombre de su personaje)`,
@@ -194,11 +224,11 @@ export function prBody(s: Submission): string {
     `- **Islas:** ${islands.join(", ") || "—"}`,
     `- **Patch:** sha256 \`${s.sha256}\`, hecho sobre \`${oneLine(s.baseRef, 64).replace(/`/g, "")}\``,
     "",
-    "Archivos:",
+    "Archivos del patch:",
     ...files.map((p) => `- \`${p}\``),
     "",
     "El patch se mezcló sobre la rama base actual con el merge de `packages/map-format`. El check `map-pr` revisa parcelas, validador y conflictos como en cualquier PR de mapas.",
-    `El crédito ya está en \`${CONTRIBUTORS}\` (\`envío #${String(s.id)}\`).`,
+    `El crédito va en \`${CONTRIBUTORS}\` como \`envío #${String(s.id)}\` (si el archivo existe en la base).`,
   ];
   if (s.description.trim() !== "")
     lines.push(

@@ -392,7 +392,8 @@ test.describe.serial("map submission portal", () => {
         );
       });
       expect(code).toBe(0);
-      const branch = `map-submission/${id}`;
+      const sha = psql(`SELECT sha256 FROM map_submissions WHERE id = ${id}`);
+      const branch = `map-submission/${id}-${sha.slice(0, 12)}`;
       expect(fake.pulls).toHaveLength(1);
       expect(fake.pulls[0]).toMatchObject({ head: branch, base: "main" });
       expect(fake.pulls[0]?.body).toContain(author.name);

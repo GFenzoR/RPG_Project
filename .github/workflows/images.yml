@@ -144,9 +144,12 @@ jobs:
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
-          out=$(docker run --rm --read-only "$(head -n1 <<<"$TAGS")")
+          image=$(head -n1 <<<"$TAGS")
+          out=$(docker run --rm --read-only "$image")
           echo "$out"
           grep -q 'the map PR worker does not run' <<<"$out"
+          # Merges a built-in patch: the map schemas and the merge load inside the image.
+          docker run --rm --read-only "$image" --self-check
 
   # Static checks of deploy/: Dockerfiles, shell scripts and the compose files.
   deploy-lint:

@@ -15,8 +15,8 @@ export interface Queue {
   opened(id: number, now: Date, url: string, num: number): Promise<boolean>;
   /** approved → failed with a fixed code. */
   failed(id: number, now: Date, code: string): Promise<boolean>;
-  /** Stays approved; tried again from `at`. */
-  retryAt(id: number, at: Date): Promise<void>;
+  /** Stays approved; tried again from `at`. `refund` gives this attempt back. */
+  retryAt(id: number, at: Date, refund?: boolean): Promise<void>;
 }
 
 export interface Claimed extends Submission {
@@ -67,8 +67,9 @@ export class PgQueue implements Queue {
       author: String(row["author_name"]),
       sha256: String(row["sha256"]),
       baseRef: String(row["base_ref"]),
-      // bytea → Buffer; a strict decode: a stored patch is always UTF-8 (the server checked).
-      patch: Buffer.isBuffer(patch) ? new TextDecoder("utf-8", { fatal: true }).decode(patch) : "",
+      // bytea → Buffer, decoded strictly (the server checked it is UTF-8). If it is not, the
+      // empty text fails as invalid_patch instead of being claimed again forever.
+      patch: decodePatch(patch),
       reviewedAt:
         row["reviewed_at"] instanceof Date
           ? row["reviewed_at"]
@@ -97,10 +98,21 @@ export class PgQueue implements Queue {
     return r.rowCount === 1;
   }
 
-  async retryAt(id: number, at: Date): Promise<void> {
+  async retryAt(id: number, at: Date, refund = false): Promise<void> {
     await this.db.query(
-      `UPDATE map_submissions SET next_attempt_at = $2 WHERE id = $1 AND status = 'approved'`,
-      [id, at],
+      `UPDATE map_submissions
+       SET next_attempt_at = $2, attempts = GREATEST(attempts - CASE WHEN $3 THEN 1 ELSE 0 END, 0)
+       WHERE id = $1 AND status = 'approved'`,
+      [id, at, refund],
     );
+  }
+}
+
+function decodePatch(raw: unknown): string {
+  if (!Buffer.isBuffer(raw)) return "";
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(raw);
+  } catch {
+    return "";
   }
 }
