@@ -133,10 +133,10 @@ type Player struct {
 	econNext  game.Tick
 	earn      *earning
 
-	// Reports (T4.1): a ring of p's recent events (recent[recentHead] is the next slot).
-	recent     [content.MaxReportEvents]recentEvent
-	recentHead int
-	recentLen  int
+	// Reports (T4.1): p's recent events, chat lines in a ring of their own so that a
+	// burst of other events cannot push them out before a report.
+	recent eventRing
+	chats  eventRing
 
 	// Idle (T4.1): the tick of p's last real action and whether it was warned.
 	lastAction game.Tick

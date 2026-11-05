@@ -50,8 +50,6 @@ type Querier interface {
 	GetCharacterTarget(ctx context.Context, name string) (GetCharacterTargetRow, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
-	// Economy log batches (T4.1), written by the persistence goroutine.
-	InsertEconomy(ctx context.Context, arg []InsertEconomyParams) (int64, error)
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
 	InsertReport(ctx context.Context, arg InsertReportParams) (int64, error)
 	// Lifts every active ban of the account.
@@ -60,7 +58,7 @@ type Querier interface {
 	ListAudit(ctx context.Context, maxRows int32) ([]AuditLog, error)
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
 	// Newest entries of a character first (tests and the operator).
-	ListEconomy(ctx context.Context, arg ListEconomyParams) ([]EconomyLog, error)
+	ListEconomy(ctx context.Context, arg ListEconomyParams) ([]ListEconomyRow, error)
 	// The oldest open reports first: the queue order.
 	ListOpenReports(ctx context.Context, maxRows int32) ([]ListOpenReportsRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).

@@ -11,17 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type InsertEconomyParams struct {
-	At               pgtype.Timestamptz
-	Kind             string
-	CharacterID      pgtype.Int8
-	OtherCharacterID pgtype.Int8
-	ItemID           pgtype.Int4
-	Count            pgtype.Int4
-	Amount           pgtype.Int8
-	Details          []byte
-}
-
 const listEconomy = `-- name: ListEconomy :many
 SELECT id, at, kind, character_id, other_character_id, item_id, count, amount, details
 FROM economy_log
@@ -35,16 +24,28 @@ type ListEconomyParams struct {
 	MaxRows     int32
 }
 
+type ListEconomyRow struct {
+	ID               int64
+	At               pgtype.Timestamptz
+	Kind             string
+	CharacterID      pgtype.Int8
+	OtherCharacterID pgtype.Int8
+	ItemID           pgtype.Int4
+	Count            pgtype.Int4
+	Amount           pgtype.Int8
+	Details          []byte
+}
+
 // Newest entries of a character first (tests and the operator).
-func (q *Queries) ListEconomy(ctx context.Context, arg ListEconomyParams) ([]EconomyLog, error) {
+func (q *Queries) ListEconomy(ctx context.Context, arg ListEconomyParams) ([]ListEconomyRow, error) {
 	rows, err := q.db.Query(ctx, listEconomy, arg.CharacterID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []EconomyLog{}
+	items := []ListEconomyRow{}
 	for rows.Next() {
-		var i EconomyLog
+		var i ListEconomyRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.At,

@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"math"
+	"strconv"
 	"sync"
 	"time"
 
@@ -14,7 +17,9 @@ import (
 
 // EconomyStore writes economy log batches (T4.1). *store.Store implements it.
 type EconomyStore interface {
-	AppendEconomy(ctx context.Context, es []store.EconomyEntry) error
+	// AppendEconomy writes es as batch batchID; the same batchID again writes nothing
+	// twice (idempotent retries).
+	AppendEconomy(ctx context.Context, batchID string, es []store.EconomyEntry) error
 }
 
 // economyWriter is the persistence goroutine of the economy log: the loop submits
@@ -39,13 +44,19 @@ type economyWriter struct {
 	// base is cancelled when Stop gives up: a write in flight ends at once.
 	base   context.Context
 	cancel context.CancelFunc
+	// run names this process's batches (random) and seq numbers them: batch ids are
+	// unique, and a retried batch keeps its id, so it is never written twice.
+	run string
+	seq uint64
 }
 
 const economyQueue = 16384
 
 func newEconomyWriter(st EconomyStore, clk clock.Clock, log *slog.Logger, flush time.Duration, batch int) *economyWriter {
 	base, cancel := context.WithCancel(context.Background())
-	return &economyWriter{store: st, clock: clk, log: log, flush: max(flush, time.Millisecond), batch: max(batch, 1),
+	var nonce [8]byte
+	_, _ = rand.Read(nonce[:]) // crypto/rand never fails on supported platforms
+	return &economyWriter{run: hex.EncodeToString(nonce[:]), store: st, clock: clk, log: log, flush: max(flush, time.Millisecond), batch: max(batch, 1),
 		ch: make(chan session.EconomyEntry, economyQueue), finished: make(chan struct{}), stop: make(chan struct{}),
 		base: base, cancel: cancel}
 }
@@ -117,6 +128,7 @@ func (w *economyWriter) write(batch []session.EconomyEntry) {
 		return
 	}
 	rows := coalesce(batch)
+	id := w.nextBatch()
 	backoff := 500 * time.Millisecond
 	for attempt := 1; ; attempt++ {
 		select {
@@ -126,7 +138,7 @@ func (w *economyWriter) write(batch []session.EconomyEntry) {
 		default:
 		}
 		ctx, cancel := context.WithTimeout(w.base, adminWriteTimeout)
-		err := w.store.AppendEconomy(ctx, rows)
+		err := w.store.AppendEconomy(ctx, id, rows)
 		cancel()
 		switch {
 		case err == nil:
@@ -184,5 +196,11 @@ func (w *economyWriter) writePending(ctx context.Context, es []session.EconomyEn
 	if len(es) == 0 {
 		return nil
 	}
-	return w.store.AppendEconomy(ctx, coalesce(es))
+	return w.store.AppendEconomy(ctx, w.nextBatch(), coalesce(es))
+}
+
+// nextBatch returns a new batch id (writer goroutine, or after it finished).
+func (w *economyWriter) nextBatch() string {
+	w.seq++
+	return w.run + "-" + strconv.FormatUint(w.seq, 10)
 }

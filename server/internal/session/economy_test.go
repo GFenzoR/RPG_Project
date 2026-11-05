@@ -243,3 +243,28 @@ func TestEconomyOutlierSurvivesRelogin(t *testing.T) {
 		t.Fatalf("items outlier alerts %d (%v)", n, h.alerts)
 	}
 }
+
+// With the checks off (economy.check_every_ms 0) the outlier windows of characters that
+// left are still forgotten once they expire: the map does not grow forever.
+func TestEconomyEarningsPrunedWithChecksOff(t *testing.T) {
+	h := deathHarness(t, func(c *session.Config) {
+		c.Balance.Economy.CheckEveryMs = 0
+		c.Balance.Economy.Outlier.WindowMs = 60000
+	})
+	for i := range 3 {
+		c := withPack(int64(990+i), pos(10+i, 10))
+		c.Name, c.Vocation = "Passer", "guardian"
+		cl := &fakeClient{}
+		h.sim.Command(h.w.Join(c, cl))
+		h.sim.Step()
+		h.input(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
+		h.sim.Step()
+	}
+	if n := h.w.EarningsForTest(); n != 3 {
+		t.Fatalf("%d windows after the logins", n)
+	}
+	h.sim.RunFor(2*time.Minute + time.Second)
+	if n := h.w.EarningsForTest(); n != 0 {
+		t.Fatalf("%d windows left after two windows", n)
+	}
+}

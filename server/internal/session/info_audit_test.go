@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -310,4 +311,138 @@ func TestInfoAuditProjectileFromOutsideWindow(t *testing.T) {
 	if f := shots[0].GetFrom(); f.GetX() != 20 || f.GetY() != 10+session.ViewHalfH || shots[0].GetTo().GetY() != 11 {
 		t.Errorf("projectile from %v", f)
 	}
+}
+
+// A shot from beyond the window keeps nothing of the shooter's offset along the edge:
+// the origin is the landing tile moved to the edge (only the side leaks).
+func TestInfoAuditProjectileOffColumn(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 64, 32))
+	cl, p := h.join("Viewer", at(20, 10))
+	h.sim.Step()
+	cl.take()
+	h.sim.Command(gameFunc(func() { h.w.ProjectileForTest(pos(23, 17), pos(21, 13)) }))
+	h.sim.Step()
+	evs := cl.take()
+	shots := find(evs, (*pb.ServerMessage).GetProjectile)
+	if len(shots) != 1 {
+		t.Fatalf("got %v", kinds(evs))
+	}
+	checkWindow(t, "projectile", p.Pos(), scan(evs))
+	if f, to := shots[0].GetFrom(), shots[0].GetTo(); f.GetX() != to.GetX() || f.GetY() != 10+session.ViewHalfH || to.GetY() != 13 {
+		t.Errorf("projectile from %v to %v", f, to)
+	}
+}
+
+// Mirror: who sees the shooter but not where the shot lands gets the landing moved to
+// its window's edge (T4.1 found the landing tile leaking).
+func TestInfoAuditProjectileToOutsideWindow(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 64, 32))
+	cl, p := h.join("Watcher", at(14, 10))
+	h.sim.Step()
+	cl.take()
+	h.sim.Command(gameFunc(func() { h.w.ProjectileForTest(pos(20, 10), pos(24, 12)) })) // dx 10: out of view
+	h.sim.Step()
+	evs := cl.take()
+	shots := find(evs, (*pb.ServerMessage).GetProjectile)
+	if len(shots) != 1 {
+		t.Fatalf("got %v", kinds(evs))
+	}
+	checkWindow(t, "projectile", p.Pos(), scan(evs))
+	if f, to := shots[0].GetFrom(), shots[0].GetTo(); f.GetX() != 20 || to.GetX() != 14+session.ViewHalfW || to.GetY() != f.GetY() {
+		t.Errorf("projectile from %v to %v", f, to)
+	}
+}
+
+// probeKeys sends m, runs a tick and returns the system message keys (sorted, joined).
+func (h *harness) probeKeys(cl *fakeClient, m *pb.ClientMessage) string {
+	h.input(cl, m)
+	h.sim.Step()
+	keys := systemKeys(cl.take())
+	out := make([]string, 0, len(keys))
+	for k := range keys {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return strings.Join(out, ",")
+}
+
+func twoFloors(t *testing.T) *world.Map {
+	rows := make([]string, 32)
+	for i := range rows {
+		rows[i] = strings.Repeat(".", 96)
+	}
+	return worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 7, Rows: rows}, worldtest.Layer{Z: 8, Rows: rows})
+}
+
+// Actions on ground items answer the same whether an unseen tile (beyond the window, or
+// on another floor) holds the item or nothing: itemAt is not an oracle (T4.1 found it was).
+func TestInfoAuditItemActionsAreNoOracle(t *testing.T) {
+	h := magicHarness(t, twoFloors(t))
+	cl, p := arcanist(t, h, pos(10, 10))
+	sword := testItems()["test_sword"]
+	far, below := pos(70, 20), world.Pos{X: 12, Y: 10, Z: 8}
+	h.sim.Command(gameFunc(func() {
+		h.w.DropForTest(sword, 1, far)
+		h.w.DropForTest(sword, 1, below)
+	}))
+	h.sim.Step()
+	cl.take()
+	at := func(q world.Pos) *pb.ItemLocation {
+		return &pb.ItemLocation{Location: &pb.ItemLocation_Pos{Pos: &pb.Position{X: uint32(q.X), Y: uint32(q.Y), Z: uint32(q.Z)}}}
+	}
+	probes := map[string]func(q world.Pos) *pb.ClientMessage{
+		"use": func(q world.Pos) *pb.ClientMessage { return useItem(at(q), swordID, 1) },
+		"move": func(q world.Pos) *pb.ClientMessage {
+			return moveItem(at(q), swordID, 1, onTile(p.Pos()), 1)
+		},
+		"use_on": func(q world.Pos) *pb.ClientMessage {
+			return &pb.ClientMessage{Message: &pb.ClientMessage_UseItemOn{UseItemOn: &pb.UseItemOn{From: at(q), ItemId: swordID,
+				StackIndex: 1, To: &pb.ActionTarget{Target: &pb.ActionTarget_Pos{Pos: posMsgT(p.Pos())}}}}}
+		},
+	}
+	for name, mk := range probes {
+		for _, c := range [][2]world.Pos{{far, pos(70, 21)}, {below, {X: 13, Y: 10, Z: 8}}} {
+			full, empty := h.probeKeys(cl, mk(c[0])), h.probeKeys(cl, mk(c[1]))
+			if full != empty {
+				t.Errorf("%s at %v answers %q, at an empty tile %q", name, c[0], full, empty)
+			}
+		}
+	}
+}
+
+// Spells and runes aimed at a tile answer the same whether an unseen monster stands
+// there or not, and a refused cast costs nothing either way (T4.1 found an oracle).
+func TestInfoAuditSpellTargetIsNoOracle(t *testing.T) {
+	h := magicHarness(t, twoFloors(t), spawnAt("dummy", 70, 20, 0, 60))
+	cl, p := arcanist(t, h, pos(10, 10))
+	if d := h.dummy(); d.Pos() != pos(70, 20) || p.Knows(d.ID()) {
+		t.Fatalf("dummy at %v, known %v", d.Pos(), p.Knows(d.ID()))
+	}
+	pack := openPack(t, h, cl)
+	h.castNow(cl, cast("test_conjure"))
+	h.sim.RunTicks(40)
+	cl.take()
+	mana := h.w.Mana(p)
+	bolt := func(q world.Pos) *pb.ClientMessage {
+		m := cast("test_bolt")
+		m.GetCastSpell().Target = &pb.ActionTarget{Target: &pb.ActionTarget_Pos{Pos: posMsgT(q)}}
+		return m
+	}
+	rune := func(q world.Pos) *pb.ClientMessage {
+		return &pb.ClientMessage{Message: &pb.ClientMessage_UseItemOn{UseItemOn: &pb.UseItemOn{
+			From: inContainer(pack, 0), ItemId: runeID, To: &pb.ActionTarget{Target: &pb.ActionTarget_Pos{Pos: posMsgT(q)}}}}}
+	}
+	for name, mk := range map[string]func(world.Pos) *pb.ClientMessage{"bolt": bolt, "rune": rune} {
+		full, empty := h.probeKeys(cl, mk(pos(70, 20))), h.probeKeys(cl, mk(pos(70, 21)))
+		if full != empty {
+			t.Errorf("%s at the unseen dummy answers %q, at an empty tile %q", name, full, empty)
+		}
+	}
+	if h.w.Mana(p) != mana || p.Equipped(slotBackpack).Items()[0].Count() != 3 {
+		t.Errorf("refused casts cost mana %d→%d or a rune charge", mana, h.w.Mana(p))
+	}
+}
+
+func posMsgT(q world.Pos) *pb.Position {
+	return &pb.Position{X: uint32(q.X), Y: uint32(q.Y), Z: uint32(q.Z)}
 }

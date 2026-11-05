@@ -101,6 +101,8 @@ type EconomyLog struct {
 	Count            pgtype.Int4
 	Amount           pgtype.Int8
 	Details          []byte
+	BatchID          pgtype.Text
+	BatchRow         pgtype.Int4
 }
 
 type InventoryItem struct {

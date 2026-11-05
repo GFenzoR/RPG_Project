@@ -1,6 +1,8 @@
 package session
 
 import (
+	"cmp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -64,11 +66,46 @@ type recentEvent struct {
 	n    int64
 }
 
-// recordEvent adds an event to p's ring (constant cost).
+// eventRing keeps the last content.MaxReportEvents events (ev[head] is the next slot).
+type eventRing struct {
+	ev   [content.MaxReportEvents]recentEvent
+	head int
+	n    int
+}
+
+func (r *eventRing) add(e recentEvent) {
+	r.ev[r.head] = e
+	r.head = (r.head + 1) % len(r.ev)
+	r.n = min(r.n+1, len(r.ev))
+}
+
+// last returns the i-th newest event (1 = the newest), i in 1..r.n.
+func (r *eventRing) last(i int) recentEvent { return r.ev[(r.head-i+len(r.ev))%len(r.ev)] }
+
+// recordEvent adds an event to p's rings (constant cost, no allocation).
 func (p *Player) recordEvent(tick game.Tick, kind, ref string, item uint16, n int64) {
-	p.recent[p.recentHead] = recentEvent{tick: tick, pos: p.pos, kind: kind, ref: ref, item: item, n: n}
-	p.recentHead = (p.recentHead + 1) % len(p.recent)
-	p.recentLen = min(p.recentLen+1, len(p.recent))
+	e := recentEvent{tick: tick, pos: p.pos, kind: kind, ref: ref, item: item, n: n}
+	if kind == eventChat {
+		p.chats.add(e)
+		return
+	}
+	p.recent.add(e)
+}
+
+// recentEvents returns up to n of p's newest events, oldest first: up to half of them
+// chat lines (more if there are fewer other events), the rest the newest others.
+func (p *Player) recentEvents(n int) []recentEvent {
+	chats := min(p.chats.n, max(n/2, n-p.recent.n))
+	others := min(p.recent.n, n-chats)
+	out := make([]recentEvent, 0, chats+others)
+	for i := chats; i >= 1; i-- {
+		out = append(out, p.chats.last(i))
+	}
+	for i := others; i >= 1; i-- {
+		out = append(out, p.recent.last(i))
+	}
+	slices.SortStableFunc(out, func(a, b recentEvent) int { return cmp.Compare(a.tick, b.tick) })
+	return out
 }
 
 func (p *Player) recordEconomy(tick game.Tick, e *EconomyEntry) {
@@ -142,17 +179,21 @@ func (w *World) initReports() {
 
 // cmdReport: "/report Name reason". The name is the longest run of leading words that
 // names an online player (names may have spaces).
+//
+// Every attempt past the usage check spends the account's report quota before the name
+// is resolved, so asking whether names are online costs reports: past the burst,
+// report.too_fast answers the same for anyone (T4.1). An invisible player p does not see
+// is offline for this.
 func (w *World) cmdReport(ctx *game.TickContext, p *Player, args []string) {
-	// Like a chat line: the flood limit bounds probing who is online by name.
-	if !w.chatAllowed(ctx, p) {
-		return
-	}
 	if len(args) < 2 {
 		p.emit(systemMsg(msgReportUsage))
 		return
 	}
+	if !w.reportCharge(ctx, p) {
+		return
+	}
 	for k := len(args) - 1; k >= 1; k-- {
-		if t := w.onlineByName(strings.Join(args[:k], " ")); t != nil {
+		if t := w.onlineByName(strings.Join(args[:k], " ")); t != nil && (!t.invisible || p.Knows(t.id) || t == p) {
 			w.report(ctx, p, t, strings.Join(args[k:], " "))
 			return
 		}
@@ -160,8 +201,24 @@ func (w *World) cmdReport(ctx *game.TickContext, p *Player, args []string) {
 	p.emit(systemMsg(msgReportOffline, textParam("name", args[0])))
 }
 
+// reportCharge spends one report of p's account (GCRA, like the chat flood limit); a
+// spent quota answers report.too_fast and returns false.
+func (w *World) reportCharge(ctx *game.TickContext, p *Player) bool {
+	now := ctx.Tick
+	tat := max(w.reportTAT[p.accountID], now)
+	if tat-now > w.reportBurst {
+		p.emit(systemMsg(msgReportTooFast, num("minutes", int((tat-now-w.reportBurst).Duration().Minutes())+1)))
+		return false
+	}
+	w.reportTAT[p.accountID] = tat + w.reportRefill
+	return true
+}
+
 // reportPlayer runs a ReportPlayer intent: only a player p sees.
 func (w *World) reportPlayer(ctx *game.TickContext, p *Player, id uint32, reason string) {
+	if !w.reportCharge(ctx, p) {
+		return
+	}
 	t := w.playerByID(id)
 	if t == nil || !p.Knows(id) {
 		p.emit(systemMsg(msgReportUnseen))
@@ -193,21 +250,13 @@ func (w *World) report(ctx *game.TickContext, p, t *Player, reason string) {
 		p.emit(systemMsg(msgReportSame, textParam("name", t.name)))
 		return
 	}
-	// GCRA per account, like the chat flood limit.
-	tat := max(w.reportTAT[p.accountID], now)
-	if tat-now > w.reportBurst {
-		p.emit(systemMsg(msgReportTooFast, num("minutes", int((tat-now-w.reportBurst).Duration().Minutes())+1)))
-		return
-	}
-	w.reportTAT[p.accountID] = tat + w.reportRefill
 	w.reportLast[key] = now
 	w.pruneReports(now)
 
 	rc := ReportContext{ReporterPos: reportPos(p.pos), TargetPos: reportPos(t.pos), TargetLevel: t.level}
-	n := min(t.recentLen, w.cfg.Balance.Reports.Events)
-	rc.Events = make([]ReportEvent, 0, n)
-	for i := n; i >= 1; i-- { // oldest first
-		e := t.recent[(t.recentHead-i+len(t.recent))%len(t.recent)]
+	evs := t.recentEvents(w.cfg.Balance.Reports.Events)
+	rc.Events = make([]ReportEvent, 0, len(evs))
+	for _, e := range evs { // oldest first
 		rc.Events = append(rc.Events, ReportEvent{AgoMs: (now - e.tick).Duration().Milliseconds(), Kind: e.kind,
 			Ref: e.ref, Item: e.item, N: e.n, Pos: reportPos(e.pos)})
 	}

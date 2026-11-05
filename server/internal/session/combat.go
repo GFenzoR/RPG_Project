@@ -74,9 +74,9 @@ func (w *World) setTarget(p *Player, id uint32) {
 	if m != p.afkTarget {
 		// A different monster: the anti-AFK clock restarts. Re-targeting the same one
 		// (even after clearing the target) keeps it, so it cannot be reset by the client.
+		// Only then it is a recent event too: toggling the same target cannot flood the
+		// report context (T4.1).
 		p.afkTarget, p.answeredAt = m, 0
-	}
-	if p.target != m {
 		p.recordEvent(w.nowTick(), eventAttack, m.kind.def.ID, 0, 0)
 	}
 	p.active(w.nowTick())

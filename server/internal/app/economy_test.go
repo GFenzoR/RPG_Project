@@ -16,12 +16,14 @@ import (
 type econStore struct {
 	mu      sync.Mutex
 	batches [][]store.EconomyEntry
-	fail    int // the first fail writes fail
+	ids     []string // every attempt's batch id
+	fail    int      // the first fail writes fail
 }
 
-func (s *econStore) AppendEconomy(_ context.Context, es []store.EconomyEntry) error {
+func (s *econStore) AppendEconomy(_ context.Context, id string, es []store.EconomyEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.ids = append(s.ids, id)
 	if s.fail > 0 {
 		s.fail--
 		return errors.New("connection refused")
@@ -77,6 +79,10 @@ func TestEconomyWriterBatchesAndRetries(t *testing.T) {
 	if err := w.Stop(context.Background()); err != nil || st.rows() != 5 {
 		t.Fatalf("Stop = %v, rows %d", err, st.rows())
 	}
+	// The retry of the failed batch kept its id (idempotent in the store); others are new.
+	if ids := st.ids; len(ids) != 4 || ids[0] != ids[1] || ids[1] == ids[2] || ids[2] == ids[3] {
+		t.Fatalf("batch ids %v", ids)
+	}
 	if w.Submit(session.EconomyEntry{}) {
 		t.Fatal("accepted after Stop")
 	}
@@ -97,7 +103,7 @@ func waitFor(t *testing.T, cond func() bool) {
 
 type hungStore struct{ calls int }
 
-func (s *hungStore) AppendEconomy(ctx context.Context, _ []store.EconomyEntry) error {
+func (s *hungStore) AppendEconomy(ctx context.Context, _ string, _ []store.EconomyEntry) error {
 	s.calls++
 	<-ctx.Done() // the database never answers
 	return ctx.Err()

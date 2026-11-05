@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/store/db"
@@ -25,9 +26,16 @@ type EconomyEntry struct {
 	Ref              string
 }
 
-// AppendEconomy writes a batch of economy entries with COPY (one round trip).
-func (s *Store) AppendEconomy(ctx context.Context, es []EconomyEntry) error {
-	rows := make([]db.InsertEconomyParams, len(es))
+// economyCols are the columns AppendEconomy writes (staging table and economy_log).
+var economyCols = []string{"at", "kind", "character_id", "other_character_id", "item_id", "count", "amount",
+	"details", "batch_id", "batch_row"}
+
+// AppendEconomy writes a batch of economy entries in one transaction: COPY into a temporary
+// staging table, then INSERT … ON CONFLICT DO NOTHING on (batch_id, batch_row). Calling
+// it again with the same batchID and entries (a retry after a timeout or a lost commit
+// acknowledgement, when COPY may already have committed) writes nothing twice.
+func (s *Store) AppendEconomy(ctx context.Context, batchID string, es []EconomyEntry) error {
+	rows := make([][]any, len(es))
 	for i, e := range es {
 		details := []byte("{}")
 		if e.Ref != "" {
@@ -37,19 +45,34 @@ func (s *Store) AppendEconomy(ctx context.Context, es []EconomyEntry) error {
 			}
 			details = raw
 		}
-		rows[i] = db.InsertEconomyParams{
-			At:               ts(e.At),
-			Kind:             e.Kind,
-			CharacterID:      optID(e.CharacterID),
-			OtherCharacterID: optID(e.OtherCharacterID),
-			ItemID:           pgtype.Int4{Int32: int32(e.ItemID), Valid: e.ItemID != 0},
-			Count:            pgtype.Int4{Int32: int32(e.Count), Valid: e.ItemID != 0},
-			Amount:           pgtype.Int8{Int64: e.Amount, Valid: e.ItemID == 0},
-			Details:          details,
-		}
+		rows[i] = []any{ts(e.At), e.Kind, optID(e.CharacterID), optID(e.OtherCharacterID),
+			pgtype.Int4{Int32: int32(e.ItemID), Valid: e.ItemID != 0},
+			pgtype.Int4{Int32: int32(e.Count), Valid: e.ItemID != 0},
+			pgtype.Int8{Int64: e.Amount, Valid: e.ItemID == 0},
+			details, batchID, int32(i)}
 	}
-	if _, err := s.q.InsertEconomy(ctx, rows); err != nil {
-		return fmt.Errorf("append economy: %w", err)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("append economy: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after Commit
+	if _, err := tx.Exec(ctx, `CREATE TEMP TABLE IF NOT EXISTS economy_staging (
+		at TIMESTAMPTZ, kind TEXT, character_id BIGINT, other_character_id BIGINT, item_id INTEGER,
+		count INTEGER, amount BIGINT, details JSONB, batch_id TEXT, batch_row INTEGER) ON COMMIT DELETE ROWS`); err != nil {
+		return fmt.Errorf("append economy: staging: %w", err)
+	}
+	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"economy_staging"}, economyCols, pgx.CopyFromRows(rows)); err != nil {
+		return fmt.Errorf("append economy: copy: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO economy_log (at, kind, character_id, other_character_id, item_id, count,
+		amount, details, batch_id, batch_row)
+		SELECT at, kind, character_id, other_character_id, item_id, count, amount, details, batch_id, batch_row
+		FROM economy_staging ORDER BY batch_row
+		ON CONFLICT (batch_id, batch_row) WHERE batch_id IS NOT NULL DO NOTHING`); err != nil {
+		return fmt.Errorf("append economy: insert: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("append economy: commit: %w", err)
 	}
 	return nil
 }

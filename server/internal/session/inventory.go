@@ -381,12 +381,14 @@ func (p *Player) openByID(id uint32) *Item {
 func (w *World) staticCount(pos world.Pos) int { return 1 + len(w.m.Stack(pos)) }
 
 // itemAt resolves the item a client action points at. stale views (another item, an
-// index out of range, a closed container) give nil.
+// index out of range, a closed container) give nil. A tile p does not see gives nil too,
+// before looking at it: otherwise the answer (too far or not possible) would tell what
+// lies on any tile of any floor (T4.1).
 func (w *World) itemAt(p *Player, loc *pb.ItemLocation, itemID, index uint32) (*Item, place) {
 	switch l := loc.GetLocation().(type) {
 	case *pb.ItemLocation_Pos:
 		pos, ok := posFromMsg(l.Pos)
-		if !ok {
+		if !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) {
 			return nil, place{}
 		}
 		i := int(index) - w.staticCount(pos)

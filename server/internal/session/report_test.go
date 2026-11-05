@@ -5,8 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
+	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
 func reportMsg(id uint32, reason string) *pb.ClientMessage {
@@ -17,7 +20,7 @@ func reportMsg(id uint32, reason string) *pb.ClientMessage {
 // the server builds (both positions and the reported player's recent events); GMs
 // online hear of it. Everything is audited.
 func TestReportCommandAndContext(t *testing.T) {
-	a := newAdminHarness(t)
+	a := newAdminHarness(t, func(c *session.Config) { c.Balance.Reports.Burst = 20 })
 	ana, pa := a.joinAs("Ana", session.RolePlayer, pos(5, 5))
 	bob, pb2 := a.joinAs("Bob Rude", session.RolePlayer, pos(8, 5))
 	gm, _ := a.joinAs("Warden", session.RoleGM, pos(30, 5))
@@ -143,5 +146,88 @@ func TestReportQueueCommands(t *testing.T) {
 		if k := sysKeys(gm.take()); !slices.Equal(k, []string{want}) {
 			t.Errorf("%s: %v", res, k)
 		}
+	}
+}
+
+// /report spends the quota before resolving the name: past the burst, an online name, an
+// offline one and an invisible one all answer report.too_fast, and before it an
+// invisible player the reporter does not see looks offline (T4.1).
+func TestReportIsNoOnlineOracle(t *testing.T) {
+	a := newAdminHarness(t)
+	ana, _ := a.joinAs("Ana", session.RolePlayer, pos(5, 5))
+	_, ghost := a.joinAs("Ghost", session.RolePlayer, pos(35, 5))
+	a.sim.Command(gameFunc(func() { a.w.SetInvisibleForTest(ghost, true) }))
+	a.sim.Step()
+	if k := a.cmd(ana, "/report Ghost bot"); !slices.Equal(k, []string{"report.offline"}) {
+		t.Fatalf("invisible unseen target: %v", k)
+	}
+	a.cmd(ana, "/report Nobody spam") // the burst (2) is spent
+	for _, line := range []string{"/report Ghost bot", "/report Nobody spam", "/report Ana x"} {
+		if k := a.cmd(ana, line); !slices.Equal(k, []string{"report.too_fast"}) {
+			t.Errorf("%q past the burst: %v", line, k)
+		}
+	}
+	if len(a.takeJobs()) != 0 {
+		t.Fatal("a report was queued")
+	}
+}
+
+// The reported player cannot push its chat line out of the report's context in a tick:
+// chat has its own ring, and toggling the same target is not a new event (T4.1).
+func TestReportKeepsChatLine(t *testing.T) {
+	var jobs []session.AdminJob
+	m := worldtest.Open(t, 0, 0, 64, 64)
+	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 30, 30, 0, 600)}
+	wolf := wolfDef()
+	wolf.Behavior.Aggressive = false
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Monsters = content.Monsters{"wolf": wolf}
+		c.Items = testItems()
+		c.Admin = func(j session.AdminJob) bool { jobs = append(jobs, j); return true }
+	})
+	ana, _ := h.join("Ana", at(26, 30))
+	bob, _ := h.join("Bob", at(26, 31))
+	rude, pr := h.join("Rude", at(28, 30))
+	h.sim.Step()
+	w := onlyMonster(t, h)
+	h.input(rude, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "abusive line"))
+	h.sim.Step()
+	count := func(j session.AdminJob) (attacks int, chat bool) {
+		for _, e := range j.Report.Context.Events {
+			switch {
+			case e.Kind == "chat" && e.Ref == "abusive line":
+				chat = true
+			case e.Kind == "attack":
+				attacks++
+			}
+		}
+		return attacks, chat
+	}
+	for range 20 { // toggling the same target is one event
+		h.input(rude, setTarget(w.ID()))
+		h.input(rude, setTarget(0))
+	}
+	h.sim.Step()
+	h.input(bob, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/report Rude abuse"))
+	h.sim.Step()
+	if len(jobs) != 1 || jobs[0].Report == nil {
+		t.Fatalf("jobs %+v", jobs)
+	}
+	if attacks, chat := count(jobs[0]); !chat || attacks != 1 {
+		t.Fatalf("after the toggles: chat kept %v, attack events %d", chat, attacks)
+	}
+	h.sim.Command(gameFunc(func() { // a flood of other events (economy)
+		for range 30 {
+			h.w.GiveForTest(pr, "copper_coin", 1)
+		}
+	}))
+	h.sim.Step()
+	h.input(ana, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/report Rude abuse"))
+	h.sim.Step()
+	if len(jobs) != 2 {
+		t.Fatalf("jobs %+v", jobs)
+	}
+	if _, chat := count(jobs[1]); !chat {
+		t.Fatalf("after the flood the chat line is gone: %+v", jobs[1].Report.Context.Events)
 	}
 }

@@ -22,7 +22,7 @@ type adminHarness struct {
 	full   bool
 }
 
-func newAdminHarness(t *testing.T) *adminHarness {
+func newAdminHarness(t *testing.T, opts ...option) *adminHarness {
 	t.Helper()
 	rows := make([]string, 12)
 	for i := range rows {
@@ -41,6 +41,9 @@ func newAdminHarness(t *testing.T) *adminHarness {
 			}
 			a.jobs = append(a.jobs, j)
 			return true
+		}
+		for _, o := range opts {
+			o(c)
 		}
 	})
 	return a

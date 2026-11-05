@@ -580,7 +580,8 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
   murió, qué ganó o perdió en la economía), con cuánto antes del reporte pasó cada uno.
 - **Rate limit por cuenta** (no por personaje): `reports.burst` reportes seguidos y luego
   uno cada `reports.refill_ms`; la misma cuenta reporta al mismo personaje una vez cada
-  `reports.same_target_ms`. Así un reporte no sirve para acosar a alguien.
+  `reports.same_target_ms`. Así un reporte no sirve para acosar a alguien. Cada intento
+  cuenta, aunque el nombre no esté conectado: `/report` no sirve para vigilar quién juega.
 - El reporte entra en una **cola** (`player_reports`) y en el log de auditoría. Los GM en
   línea reciben un aviso. Los GM ven la cola con `/reports` (y el operador con
   `make reports`, con el contexto completo) y la cierran con `/closereport`. Ver la cola y

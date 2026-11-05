@@ -283,6 +283,7 @@ func (w *World) startLedger(tick game.Tick, p *Player) {
 // checkEconomy reconciles the ledgers that are due and checks the outliers. Once per
 // window it forgets the windows of characters that are offline and expired.
 func (w *World) checkEconomy(tick game.Tick) {
+	w.pruneEarnings(tick) // also with the checks off: the map must not grow forever
 	if w.econCheckFor == 0 {
 		return
 	}
@@ -293,6 +294,11 @@ func (w *World) checkEconomy(tick game.Tick) {
 		p.econNext = tick + w.econCheckFor
 		w.reconcile(tick, p)
 	}
+}
+
+// pruneEarnings forgets, once per outlier window, the windows of characters that are
+// offline and expired.
+func (w *World) pruneEarnings(tick game.Tick) {
 	if tick >= w.earnPrune {
 		w.earnPrune = tick + max(w.outlierFor, 1)
 		for id, e := range w.earnings {

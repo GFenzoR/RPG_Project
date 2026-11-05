@@ -1325,13 +1325,27 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     .click();
   const report = matePage.getByTestId("report-form");
   await expect(report).toContainText(`Reportar a ${lead.name}`);
-  await report.getByRole("textbox").fill("prueba de reporte E2E");
+  // The field has the focus: typing goes to it, not to the game (WASD would walk).
+  await expect(report.getByRole("textbox")).toBeFocused();
+  const before = await self(matePage);
+  await matePage.keyboard.type("prueba de reporte E2E");
+  await expect(report.getByRole("textbox")).toHaveValue("prueba de reporte E2E");
+  expect(await self(matePage)).toEqual(before);
   await matePage.locator(".side").screenshot({ path: join(shots, "37-report-form.png") });
   await report.getByRole("button", { name: "Enviar reporte" }).click();
   await expect(report).toHaveCount(0);
   await expect(matePage.getByTestId("game-log")).toContainText(
     `Tu reporte sobre ${lead.name} llegó al equipo del juego.`,
   );
+  // Escape closes the form (the field has the focus).
+  await matePage
+    .getByTestId("battle-list")
+    .locator("li", { hasText: lead.name })
+    .getByRole("button", { name: "Reportar al equipo del juego" })
+    .click();
+  await expect(report.getByRole("textbox")).toBeFocused();
+  await matePage.keyboard.press("Escape");
+  await expect(report).toHaveCount(0);
 
   // Leaving disbands a party of two.
   await matePage.getByTestId("party-leave").click();

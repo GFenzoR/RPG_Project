@@ -25,7 +25,11 @@ func TestEconomyLogAndReports(t *testing.T) {
 		{At: now, Kind: "npc_sell", CharacterID: 7, ItemID: 120, Count: -3, Ref: "puerto_provisioner"},
 		{At: now, Kind: "loot", CharacterID: 8, ItemID: 5, Count: 1},
 	}
-	if err := st.AppendEconomy(ctx, es); err != nil {
+	if err := st.AppendEconomy(ctx, "b1", es); err != nil {
+		t.Fatal(err)
+	}
+	// A retry of the same batch (its commit was not acknowledged) writes nothing twice.
+	if err := st.AppendEconomy(ctx, "b1", es); err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.ListEconomy(ctx, 7, 10)

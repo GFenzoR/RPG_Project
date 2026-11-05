@@ -345,9 +345,10 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   el 2.
 - **`Projectile{from, to, projectile_id}`** con `projectile_id = 1 + elemento`: hechizos de
   un objetivo, disparos de varita y ataques a distancia o hechizos de monstruos. Lo recibe
-  quien ve cualquiera de las dos puntas. Quien ve solo la llegada lo recibe con `from` llevado
-  al borde de su ventana (T4.1): la casilla de un tirador fuera de la ventana no viaja. Quien ve solo la llegada lo recibe con `from` llevado
-  al borde de su ventana (T4.1): la casilla de un tirador fuera de la ventana no viaja.
+  quien ve cualquiera de las dos puntas. Quien ve solo una punta recibe la otra como la punta
+  que ve, movida en un eje hasta el borde de su ventana del lado por donde cruza el disparo
+  (T4.1): no viaja la casilla de un tirador ni la de un blanco fuera de la ventana, solo el
+  lado.
 - **Curación**: `Effect` 3, `FloatingText{HEAL}` si curó algo y `CreatureHealth` si cambió
   el %.
 - **Conjurar**: la runa aparece en la mochila equipada (`ContainerUpdate` a quien la tiene

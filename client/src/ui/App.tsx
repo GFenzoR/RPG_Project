@@ -616,6 +616,12 @@ function ReportForm(props: {
 }) {
   const { t } = props;
   const [reason, setReason] = useState("");
+  // Preact ignores autoFocus: focus the field on open, so typing the reason does not
+  // walk (keys in an input are not game keys) and Escape reaches the form.
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    input.current?.focus();
+  }, []);
   return (
     <form
       class="report-form"
@@ -633,9 +639,9 @@ function ReportForm(props: {
         <input
           type="text"
           value={reason}
+          ref={input}
           maxLength={REPORT_REASON_MAX}
           placeholder={t("client.report.reason")}
-          autoFocus
           onInput={(e) => setReason(e.currentTarget.value)}
         />
       </label>
