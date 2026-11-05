@@ -1,0 +1,25 @@
+{
+  "name": "@rpg/map-pr-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Opens a GitHub pull request for each approved map submission (T4.5): merges the patch onto the current base with map-format and writes it with the Git Data API.",
+  "exports": {
+    ".": "./src/worker.ts",
+    "./fake-github": "./test/fake-github.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@rpg/map-format": "workspace:*",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  },
+  "bin": {
+    "map-pr-worker": "./src/cli.ts"
+  }
+}

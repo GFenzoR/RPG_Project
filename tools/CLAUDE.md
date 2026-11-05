@@ -35,6 +35,18 @@ Expone las mismas operaciones de map-format como herramientas MCP (`map_info`, `
 lo use directamente; a mano: `node --experimental-strip-types tools/mcp-world/src/cli.ts
 [--root DIR]`. Límites y detalle en `docs/04-map-editor-and-ai.md`.
 
+## map-pr-worker (TypeScript, T4.5)
+`tools/map-pr-worker`: abre un PR por cada envío aprobado del portal de mapas. Toma la cola
+de `map_submissions` (`src/queue.ts`, contrato en la migración 00010), mezcla el patch sobre
+la rama base actual con `mergePatchFile` de `packages/map-format` (`src/build.ts`, puro:
+también repite rutas y parcelas y arma los textos) y escribe con la API Git Data
+(`src/github.ts`). `src/worker.ts` hace los pasos idempotentes: PR existente → rama
+existente → construir. No expone puertos; config por entorno (`src/config.ts`, docs/09). Tests:
+`src/*.test.ts` contra `test/fake-github.ts` (un GitHub en memoria, también lo usa el E2E
+de `client/e2e/maps.spec.ts`) y `queue.integration.test.ts` con Postgres
+(`MAP_PR_WORKER_DATABASE_URL`, `make test-integration`). Nunca loguees el token ni metas un
+merge propio: si el formato cambia, se cambia en `packages/map-format`.
+
 ## bots (Go)
 `tools/bots` (T1.17): prueba de carga con clientes headless (`server/pkg/bot`) que se
 registran, crean personaje y juegan en la Isla del Puerto: caminan con rutas A* sobre

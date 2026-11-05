@@ -21,7 +21,7 @@ declare -A RULES=(
 	# The patch path fixture is shared with server/internal/mappatch (T4.5).
 	[go-server]='^(server|proto|data|world|packages/map-format/src/patch/testdata)/'
 	[go-bots]='^(tools/bots|server|proto)/'
-	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/spritepack|tools/soundgen|data|world|i18n|assets|proto)/'
+	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/soundgen|data|world|i18n|assets|proto)/'
 	[validate]='^(data|world|i18n|assets|packages|tools/mapcli|server/internal/world|server/cmd/mapcompile)/'
 	[actionlint]='^\.github/'
 	[build]='^(client|editor|packages|data|world|i18n|assets|proto|tools/spritepack)/'
@@ -29,8 +29,8 @@ declare -A RULES=(
 	# (a web client build failure already fails `build`), plus the game page the app opens
 	# (client/play/, and the Vite pages config; T4.3).
 	[desktop]='^(apps/desktop/|client/src/net/|client/package\.json$|client/play/|client/vite\.config\.ts$)'
-	[e2e]='^(client|editor|packages|server|proto|data|world|i18n|assets|tools/mapcli|tools/spritepack)/'
-	[integration]='^(server|proto|data|world)/'
+	[e2e]='^(client|editor|packages|server|proto|data|world|i18n|assets|tools/mapcli|tools/map-pr-worker|tools/spritepack)/'
+	[integration]='^(server|proto|data|world|tools/map-pr-worker|packages/map-format)/'
 	[bench]='^server/(internal/(game|world|session|clock)|go\.(mod|sum))'
 	# images.yml (on pull requests; pushes to main and tags always build and publish)
 	[image]='^deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-.*\.caddy$)'
@@ -98,6 +98,10 @@ self_test() {
 	check desktop true apps/desktop/src-tauri/src/api.rs
 	check e2e false apps/desktop/src-tauri/src/api.rs
 	check go-server false apps/desktop/src-tauri/src/api.rs
+	# The map PR worker (T4.5): its TS tests, its Postgres test and the E2E; not Go.
+	for j in ts integration e2e; do check "$j" true tools/map-pr-worker/src/worker.ts; done
+	for j in go-server go-bots bench desktop; do check "$j" false tools/map-pr-worker/src/worker.ts; done
+	check integration true packages/map-format/src/patch/merge.ts
 	# The patch path fixture: the TS tests and the server's patch check (T4.5).
 	for j in go-server ts; do check "$j" true packages/map-format/src/patch/testdata/paths.json; done
 	check go-server false packages/map-format/src/patch/merge.ts

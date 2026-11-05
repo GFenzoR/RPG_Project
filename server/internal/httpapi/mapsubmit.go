@@ -280,10 +280,12 @@ type mineResponse struct {
 	// CanReview: the account is gm or admin (the website shows the queue link).
 	CanReview bool `json:"can_review"`
 	// Email is the account's own email ("signed in as"); never anybody else's.
-	Email    string `json:"email"`
-	License  string `json:"license"`
-	MaxBytes int    `json:"max_bytes"`
-	PerDay   int    `json:"per_day"`
+	Email   string `json:"email"`
+	License string `json:"license"`
+	// PRWorker: approved submissions become pull requests on their own (Config.MapPRWorker).
+	PRWorker bool `json:"pr_worker"`
+	MaxBytes int  `json:"max_bytes"`
+	PerDay   int  `json:"per_day"`
 }
 
 func (a *api) mySubmissions(w http.ResponseWriter, r *http.Request, accountID int64) {
@@ -303,6 +305,7 @@ func (a *api) mySubmissions(w http.ResponseWriter, r *http.Request, accountID in
 	}
 	writeJSON(w, http.StatusOK, mineResponse{
 		Submissions: submissionsOut(ms), CanReview: staff, Email: email, License: MapLicense,
+		PRWorker: a.cfg.MapPRWorker,
 		MaxBytes: a.cfg.MapSubmitLimits.MaxBytes, PerDay: a.cfg.MapSubmitLimits.PerDay,
 	})
 }

@@ -14,6 +14,7 @@ import {
   canSubmit,
   cleanInput,
   errorKey,
+  failureKey,
   formatSize,
   groupFiles,
   groupLabel,
@@ -474,7 +475,7 @@ function MineList(props: MapsProps & { mine: MySubmissions }): JSX.Element {
                   author: m.author,
                 })}
               </p>
-              <Outcome t={t} m={m} />
+              <Outcome t={t} m={m} prWorker={mine.pr_worker} />
             </li>
           ))}
         </ul>
@@ -484,14 +485,18 @@ function MineList(props: MapsProps & { mine: MySubmissions }): JSX.Element {
 }
 
 /** What happened to a submission, for its author. */
-function Outcome(props: { t: Translate; m: MapSubmission }): JSX.Element | null {
+function Outcome(props: { t: Translate; m: MapSubmission; prWorker: boolean }): JSX.Element | null {
   const { t, m } = props;
   const pr = safePrUrl(m);
   switch (m.status) {
     case "pending":
       return <p>{t("site.maps.outcome.pending")}</p>;
     case "approved":
-      return <p>{t("site.maps.outcome.approved")}</p>;
+      return (
+        <p>
+          {t(props.prWorker ? "site.maps.outcome.approved" : "site.maps.outcome.approved_manual")}
+        </p>
+      );
     case "rejected":
       return (
         <p data-testid="maps-reason">
@@ -500,10 +505,10 @@ function Outcome(props: { t: Translate; m: MapSubmission }): JSX.Element | null 
         </p>
       );
     case "failed":
-      return <p>{t("site.maps.outcome.failed")}</p>;
+      return <p data-testid="maps-failure">{t(failureKey(m.failure))}</p>;
     case "pr_opened":
       return pr ? (
-        <p>
+        <p data-testid="maps-pr">
           <a href={pr} target="_blank" rel="noopener noreferrer">
             {t("site.maps.outcome.pr", { number: m.pr_number ?? 0 })}
           </a>
@@ -527,7 +532,7 @@ export function ReviewPage(props: MapsProps & { id?: number; search: string }): 
         ) : props.id === undefined ? (
           <Queue {...props} />
         ) : (
-          <Detail {...props} id={props.id} />
+          <Detail {...props} id={props.id} prWorker={mine.pr_worker} />
         )
       }
     </WithAccount>
@@ -600,7 +605,7 @@ function Queue(props: MapsProps & { search: string }): JSX.Element {
   );
 }
 
-function Detail(props: MapsProps & { id: number }): JSX.Element {
+function Detail(props: MapsProps & { id: number; prWorker: boolean }): JSX.Element {
   const { t, lang } = props;
   const [loaded] = useLoad(() => mapsApi.get(props.id), [props.id]);
   // The answer to a decision replaces the loaded row in place: nothing unmounts, and focus
@@ -696,6 +701,14 @@ function Detail(props: MapsProps & { id: number }): JSX.Element {
         </p>
       )}
       <p class="muted">{t("site.maps.review.check_hint")}</p>
+      {m.status === "approved" && !props.prWorker && (
+        <p class="notice" data-testid="maps-manual">
+          {t("site.maps.review.manual_hint", { id: m.id })}
+        </p>
+      )}
+      {(m.status === "pr_opened" || m.status === "failed") && (
+        <Outcome t={t} m={m} prWorker={props.prWorker} />
+      )}
       {m.status === "rejected" && m.reason && (
         <p>
           <strong>{t("site.maps.outcome.rejected")}</strong>{" "}
@@ -714,7 +727,7 @@ function Detail(props: MapsProps & { id: number }): JSX.Element {
               onInput={(e) => setReason(e.currentTarget.value)}
             />
           </label>
-          {error && <ErrorText t={t} code={error} />}
+          {error && error !== "unauthorized" && <ErrorText t={t} code={error} />}
           <div class="maps-actions">
             <button
               type="button"
@@ -735,6 +748,10 @@ function Detail(props: MapsProps & { id: number }): JSX.Element {
             </button>
           </div>
         </form>
+      )}
+      {m.status === "pending" && error === "unauthorized" && (
+        // The session ended while writing the reason: log in here, keep it, decide again.
+        <SiteLogin t={t} onDone={() => setError(null)} />
       )}
     </article>
   );

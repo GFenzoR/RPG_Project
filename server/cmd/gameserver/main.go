@@ -70,6 +70,8 @@ type options struct {
 	mapSubmit httpapi.MapSubmitLimits
 	// mapPatchRetention: patch bytes of decided submissions are dropped after it (0 = kept).
 	mapPatchRetention time.Duration
+	// mapPRWorker: the map PR worker runs (only shown to moderators).
+	mapPRWorker bool
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -100,6 +102,7 @@ func main() {
 	flag.IntVar(&o.mapSubmit.PerDay, "map-submit-per-day", def.PerDay, "map submissions per account in 24 hours")
 	flag.DurationVar(&o.mapSubmit.MinAccountAge, "map-submit-min-account-age", def.MinAccountAge, "how old an account must be to submit maps (0 = no minimum)")
 	flag.DurationVar(&o.mapPatchRetention, "map-patch-retention", defaultMapPatchRetention, "drop the patch bytes of rejected, pr_opened and failed map submissions this long after their last change (0 = keep them)")
+	flag.BoolVar(&o.mapPRWorker, "map-pr-worker", os.Getenv("RPG_MAP_PR_WORKER") == "on", "the map PR worker runs, so approved map submissions become pull requests on their own; default $RPG_MAP_PR_WORKER == on")
 	flag.Parse()
 	_, o.metricsExplicit = os.LookupEnv("RPG_METRICS_ADDR")
 	flag.Visit(func(f *flag.Flag) {
@@ -225,6 +228,7 @@ func run(logger *slog.Logger, o options) error {
 		AuthRateLimit:    authRateLimit(o.authRateBurst),
 		StartTown:        o.startTown,
 		MapSubmitLimits:  o.mapSubmit,
+		MapPRWorker:      o.mapPRWorker,
 	})
 	if err != nil {
 		return err

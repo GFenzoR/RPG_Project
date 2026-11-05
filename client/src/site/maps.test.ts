@@ -4,6 +4,7 @@ import {
   canSubmit,
   cleanInput,
   errorKey,
+  failureKey,
   formatSize,
   groupFiles,
   groupLabel,
@@ -100,6 +101,12 @@ describe("helpers", () => {
     expect(canSubmit({ ...ok, license: false })).toBe(false);
     expect(canSubmit({ ...ok, patch: null })).toBe(false);
     expect(canSubmit({ ...ok, busy: true })).toBe(false);
+  });
+  it("names worker failures, never building a key from an unknown code", () => {
+    expect(failureKey("conflict")).toBe("site.maps.failure.conflict");
+    expect(failureKey("outside_plot")).toBe("site.maps.failure.outside_plot");
+    expect(failureKey("constructor")).toBe("site.maps.outcome.failed");
+    expect(failureKey(undefined)).toBe("site.maps.outcome.failed");
   });
   it("checks statuses and PR links", () => {
     expect(isMapStatus("pr_opened")).toBe(true);

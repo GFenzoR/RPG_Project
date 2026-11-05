@@ -3,13 +3,14 @@
 // gm (role set with psql) reviews the queue, downloads the patch and approves it; a second
 // submission is rejected with a reason the author then sees. A player gets nothing from
 // the moderation pages or API.
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
+import { startFakeGitHub } from "../../tools/map-pr-worker/test/fake-github.ts";
 
 const repo = join(import.meta.dirname, "..", "..");
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -277,6 +278,9 @@ test.describe.serial("map submission portal", () => {
     // The page stays; focus goes to the heading, which the new status describes.
     await expect(detail.getByRole("heading", { level: 1 })).toBeFocused();
     await expect(page.getByTestId("maps-approve")).toHaveCount(0);
+    // This server runs without the PR worker (-map-pr-worker): moderators are told to open
+    // it by hand.
+    await expect(page.getByTestId("maps-manual")).toContainText("mapcli patch apply");
     await shot(page, "maps-review-approved");
 
     // The author sends a second change; the gm rejects it with a reason.
@@ -300,6 +304,14 @@ test.describe.serial("map submission portal", () => {
       .getByRole("link", { name: pathTitle, exact: true })
       .click();
     await page.getByTestId("maps-reason-input").fill("El sendero corta la playa; muévelo al este.");
+    // The session ends while the reason is being written: the login appears in place and
+    // the reason is still there afterwards.
+    expect((await page.request.post("/api/auth/logout")).status()).toBe(204);
+    await page.getByTestId("maps-reject").click();
+    await siteLogin(page, gm.email);
+    await expect(page.getByTestId("maps-reason-input")).toHaveValue(
+      "El sendero corta la playa; muévelo al este.",
+    );
     await page.getByTestId("maps-reject").click();
     await expect(page.getByTestId("maps-detail").locator(".badge").first()).toHaveAttribute(
       "data-status",
@@ -319,6 +331,7 @@ test.describe.serial("map submission portal", () => {
       "El sendero corta la playa; muévelo al este.",
     );
     await expect(approved.locator(".badge")).toHaveAttribute("data-status", "approved");
+    await expect(approved).toContainText("Un maintainer lo abrirá como pull request a mano.");
     await shot(authorPage, "maps-mine-reviewed");
     await authorPage.setViewportSize({ width: 375, height: 800 });
     await shot(authorPage, "maps-mine-phone");
@@ -330,6 +343,86 @@ test.describe.serial("map submission portal", () => {
     );
     expect(actions).toBe("map_submit,map_download,map_approve,map_submit,map_reject");
     await authorPage.context().close();
+    await page.context().close();
+  });
+
+  test("the worker opens the approved one as a pull request (fake GitHub)", async ({ browser }) => {
+    const id = psql(`SELECT id FROM map_submissions WHERE title = '${grassTitle}'`);
+    expect(id).toMatch(/^\d+$/);
+    // The fake's main branch is this checkout's world/, the base the patch was made on.
+    const fake = await startFakeGitHub({
+      owner: "acme",
+      repo: "rpg",
+      token: "e2e-token",
+      readBase: (path) => {
+        try {
+          return readFileSync(join(repo, path), "utf8");
+        } catch {
+          return null;
+        }
+      },
+    });
+    try {
+      // The worker as the compose service runs it, for this submission only (the dev
+      // database may hold someone's real approved submissions).
+      const code = await new Promise<number>((resolve) => {
+        execFile(
+          "node",
+          [
+            "--experimental-strip-types",
+            "--no-warnings",
+            join(repo, "tools/map-pr-worker/src/cli.ts"),
+            "--once",
+            "--only",
+            id,
+          ],
+          {
+            env: {
+              ...process.env,
+              DATABASE_URL: databaseUrl,
+              GITHUB_MAP_PR_TOKEN: "e2e-token",
+              GITHUB_REPOSITORY: "acme/rpg",
+              GITHUB_API_URL: fake.url,
+            },
+          },
+          (err, stdout) => {
+            if (stdout.includes("e2e-token")) throw new Error("the worker logged its token");
+            resolve(err ? Number((err as { code?: number }).code ?? 1) : 0);
+          },
+        );
+      });
+      expect(code).toBe(0);
+      const branch = `map-submission/${id}`;
+      expect(fake.pulls).toHaveLength(1);
+      expect(fake.pulls[0]).toMatchObject({ head: branch, base: "main" });
+      expect(fake.pulls[0]?.body).toContain(author.name);
+      expect(fake.pulls[0]?.body).not.toContain(author.email);
+      // The branch has exactly the patch's chunk (same base: a fast-forward) and the credit.
+      const exported = JSON.parse(readFileSync(grassPatch, "utf8")) as {
+        files: { path: string; content: string }[];
+      };
+      const chunk = exported.files[0];
+      expect(fake.fileOn(branch, chunk?.path ?? "")).toBe(chunk?.content);
+      expect(fake.fileOn(branch, "world/CONTRIBUTORS.md")).toContain(
+        `| ${author.name} | puerto | envío #${id} |`,
+      );
+      expect(psql(`SELECT status || ' ' || pr_number FROM map_submissions WHERE id = ${id}`)).toBe(
+        "pr_opened 1",
+      );
+    } finally {
+      await fake.close();
+    }
+
+    const page = await newPage(browser);
+    await page.goto("/maps/mine?lang=es");
+    await siteLogin(page, author.email);
+    const item = page.getByTestId("maps-mine").locator("li", { hasText: grassTitle });
+    await expect(item.locator(".badge")).toHaveAttribute("data-status", "pr_opened");
+    await expect(item.getByRole("link", { name: "Ver el pull request #1" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/rpg/pull/1",
+    );
+    await shot(page, "maps-mine-pr");
     await page.context().close();
   });
 });

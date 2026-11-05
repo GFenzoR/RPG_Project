@@ -124,6 +124,16 @@ export function groupLabel(group: string, t: (key: string) => string): string {
   return group === "world" || group === "prefabs" ? t(`site.maps.group.${group}`) : group;
 }
 
+/** Why the worker could not open a pull request (map_submissions.failure). */
+const FAILURES = new Set(["conflict", "outside_plot", "invalid_patch", "no_changes", "github"]);
+
+/** i18n key of a failure code; an unknown one gets the generic text. */
+export function failureKey(code: string | undefined): string {
+  return code !== undefined && FAILURES.has(code)
+    ? `site.maps.failure.${code}`
+    : "site.maps.outcome.failed";
+}
+
 export const isMapStatus = (s: string): s is MapStatus =>
   (MAP_STATUSES as readonly string[]).includes(s);
 

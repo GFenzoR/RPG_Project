@@ -116,6 +116,9 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 | `BACKUP_RETENTION_DAYS`, `BACKUP_INTERVAL_SECONDS` | Retención local y periodicidad de los dumps |
 | `BACKUP_S3_URI`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Copia a S3 opcional; en EC2 mejor un rol de instancia que claves |
 | `HTTP_PORT`, `HTTPS_PORT` | Puertos del host (solo para pruebas locales) |
+| `COMPOSE_PROFILES` | Perfiles opcionales separados por coma: `monitoring` (T4.4), `map-pr` (worker de PR de mapas, T4.5) |
+| `GITHUB_MAP_PR_TOKEN` | Token del worker de PR de mapas (sección "Worker de PR de mapas"). Vacío = el worker no corre |
+| `MAP_PR_REPOSITORY`, `MAP_PR_BASE` | Repo (`owner/repo`, por defecto `GFenzoR/RPG_Project`) y rama base (`main`) de esos PR |
 | `RPG_WS_ORIGINS` | Orígenes extra en `/ws`. Sin definir = los del cliente de escritorio (`tauri://localhost,http://tauri.localhost`); vacío = solo el sitio |
 
 ### Primer deploy (cuando haya cuenta AWS y dominio)
@@ -287,6 +290,80 @@ Cómo responde la ruta:
 
 El gameserver tiene `stop_grace_period: 90s`: las etapas de apagado más
 `-metrics-linger` (20 s, solo si se abandonaron escrituras; ver `01-architecture.md`).
+
+### Worker de PR de mapas (T4.5)
+Un envío del portal de mapas (`/maps/submit`) que un moderador aprueba queda `approved`. El
+servicio `map-pr-worker` (perfil `map-pr`, `tools/map-pr-worker`) lo toma, mezcla el patch
+sobre la rama base **actual** con el merge de `packages/map-format` y abre un PR en este repo
+desde la rama `map-submission/<id>`. El PR toca solo archivos de mapa de `world/` y
+`world/CONTRIBUTORS.md` (el crédito). Sobre ese PR corren los checks de mapas de siempre
+(`map-pr`, docs/04). El worker no expone puertos: habla con Postgres (red `internal`) y con la
+API de GitHub (red `edge`).
+
+**Cómo activarlo**
+1. **Una cuenta de bot (recomendado).** Crea una cuenta de GitHub aparte (por ejemplo
+   `rpg-map-bot`), invítala al repo como colaboradora con permiso **Write** y **no** la
+   agregues a `.github/MAINTAINERS`. El check de mapas decide si un PR puede tocar fuera de
+   las parcelas mirando a su autor: con un token del dueño del repo (`OWNER`), el PR de un
+   jugador saldría como si lo hubiera hecho un maintainer. El worker ya rechaza los cambios
+   fuera de parcelas antes de abrir el PR (falla `outside_plot`), pero así el check de la CI
+   tampoco tiene esa excepción.
+2. **El token (fine-grained, alcance mínimo).** Con la sesión de la cuenta del bot:
+   *Settings → Developer settings → Personal access tokens → Fine-grained tokens →
+   Generate new token*.
+   - *Resource owner*: el dueño del repo (si es una organización, puede pedir aprobación).
+   - *Expiration*: un año como máximo; anota la fecha para rotarlo.
+   - *Repository access*: **Only select repositories** → solo este repo.
+   - *Repository permissions*: **Contents: Read and write** y **Pull requests: Read and
+     write**. *Metadata: Read* se agrega solo. Nada más: ni Actions, ni Workflows, ni
+     Administration, ni permisos de cuenta.
+   El token no puede tocar `.github/workflows/` (eso pide el permiso *Workflows*), y el worker
+   igual rechaza toda ruta fuera de `world/`.
+3. En el servidor, en `deploy/.env`:
+   ```
+   COMPOSE_PROFILES=map-pr            # o monitoring,map-pr
+   GITHUB_MAP_PR_TOKEN=github_pat_...
+   MAP_PR_REPOSITORY=GFenzoR/RPG_Project
+   ```
+   y `./deploy.sh` (o `docker compose up -d map-pr-worker`). `deploy/.env` no se commitea
+   (`.gitignore`) y debe quedar con permisos `600`. El gameserver recibe
+   `RPG_MAP_PR_WORKER=on` cuando hay token, y la página de moderación deja de mostrar el
+   aviso de "ábrelo a mano".
+4. Comprueba con `docker compose logs map-pr-worker`: `map PR worker started` y, al aprobar
+   un envío, `map submission pull request` con su número. El token nunca aparece en los logs.
+
+**Por qué no el `GITHUB_TOKEN` de Actions.** Un PR o un push hecho con el `GITHUB_TOKEN` de
+un workflow **no dispara otros workflows** (GitHub lo evita para que no haya ejecuciones en
+cadena). Un PR abierto así no correría `map-pr`, ni `map-pr-pending`, ni la CI, y quedaría
+sin veredicto. Además, ese token solo existe dentro de un job de Actions y el worker corre en
+el servidor del juego, que es quien ve la cola en Postgres.
+
+**Una GitHub App** también serviría (mismos permisos: Contents y Pull requests de escritura,
+instalada solo en este repo), con la ventaja de no depender de una cuenta de bot. El worker
+de hoy usa un token fijo; para una App habría que generar el token de instalación (JWT
+firmado con la clave de la App, válido 1 h) antes de cada ronda. Queda como mejora.
+
+**Sin token**, el servicio arranca, avisa `GITHUB_MAP_PR_TOKEN is not set` y termina con
+código 0 (`restart: on-failure` no lo relanza). Los envíos aprobados quedan `approved` y la
+página de moderación avisa que hay que abrirlos a mano: descargar el patch y, en una rama
+`map-submission/<id>`, `mapcli patch apply <archivo>` y abrir el PR.
+
+**Qué hace con cada envío** (contrato de la migración 00010, docs/04):
+- Lo reserva con `FOR UPDATE SKIP LOCKED` y un lease de 10 min (`attempts + 1`).
+- Si ya hay un PR desde `map-submission/<id>`, lo registra; si la rama existe sin PR, abre
+  el PR; si no hay nada, mezcla el patch sobre la base y escribe blobs, árbol, commit y
+  rama con la API Git Data (sin `git clone`). Cada paso se puede repetir después de una
+  caída sin abrir dos PR.
+- Resultado: `pr_opened` con la URL, o `failed` con un código fijo que el autor ve en "Mis
+  envíos": `conflict` (la base cambió en las mismas casillas), `outside_plot`,
+  `invalid_patch`, `no_changes` (la base ya lo tiene) o `github` (10 intentos fallidos).
+- Un error de GitHub o de red lo deja `approved` y reintenta con espera creciente (1, 2, 4…
+  minutos, hasta 6 h).
+
+**Rotar o revocar.** Genera el token nuevo, cámbialo en `deploy/.env` y
+`docker compose up -d map-pr-worker`; después borra el viejo en GitHub. Si se filtra:
+revócalo en GitHub de inmediato (los PR ya abiertos siguen siendo PR comunes; revisa los
+que abrió el bot).
 
 ### IP del cliente y rate limits
 Los límites por IP de login/registro (T1.3) usan la IP que ve el gameserver. La cadena es:

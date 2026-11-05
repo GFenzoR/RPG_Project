@@ -464,3 +464,7 @@ figcaption {
     padding: 0 0.5rem 0 0;
   }
 }
+.notice {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+}

@@ -54,7 +54,7 @@ func (f *fakeSubmissions) CreateMapSubmission(_ context.Context, n store.NewMapS
 		ID: int64(len(f.subs) + 1), CreatedAt: n.At, UpdatedAt: n.At, AccountID: n.AccountID,
 		AuthorCharacterID: n.CharacterID, AuthorName: "Aria", Title: n.Title, Description: n.Description,
 		License: n.License, Status: store.SubmissionPending, SHA256: n.SHA256, SizeBytes: len(n.Patch),
-		BaseRef: n.BaseRef, Files: n.Files, HasPatch: true,
+		BaseRef: n.BaseRef, Files: n.Files, HasPatch: len(n.Patch) > 0,
 	}
 	f.subs = append(f.subs, m)
 	f.patches[m.ID] = n.Patch
@@ -251,6 +251,9 @@ func TestSubmitMap(t *testing.T) {
 	w := p.do(req{method: "POST", path: "/api/maps/submissions", token: tok, body: body})
 	expect(t, w, http.StatusCreated, "")
 	got := decodeJSON[submissionResp](t, w.Body.Bytes())
+	if !strings.Contains(w.Body.String(), `"has_patch":true`) {
+		t.Errorf("created without has_patch: %s", w.Body.String())
+	}
 	if got.Submission.Status != "pending" || len(got.Submission.Files) != 1 ||
 		got.Submission.Files[0].Path != testChunk || got.Submission.Files[0].Action != "modify" {
 		t.Fatalf("submission = %+v", got.Submission)
@@ -670,11 +673,12 @@ func TestQueuePagesAndHistoryOrder(t *testing.T) {
 }
 
 func TestMineSaysWhoIsSignedIn(t *testing.T) {
-	p := newPortal(t, nil)
+	p := newPortal(t, func(c *httpapi.Config) { c.MapPRWorker = true })
 	acc, tok := p.account("aria@example.com", "")
 	w := p.do(req{method: "GET", path: "/api/maps/submissions/mine", token: tok})
 	expect(t, w, 200, "")
-	if !strings.Contains(w.Body.String(), `"email":"account`+strconv.FormatInt(acc, 10)+`@example.com"`) {
+	if !strings.Contains(w.Body.String(), `"email":"account`+strconv.FormatInt(acc, 10)+`@example.com"`) ||
+		!strings.Contains(w.Body.String(), `"pr_worker":true`) {
 		t.Errorf("mine = %s", w.Body.String())
 	}
 }

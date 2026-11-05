@@ -396,8 +396,9 @@ migrate-new: ## Create a migration: make migrate-new NAME=add_houses
 	goose -dir server/migrations -s create $(NAME) sql
 
 .PHONY: test-integration
-test-integration: ## Go integration tests against Postgres (TEST_DATABASE_URL)
+test-integration: ## Go integration tests + the map PR worker's queue against Postgres (TEST_DATABASE_URL)
 	cd server && TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -tags integration -count=1 ./...
+	MAP_PR_WORKER_DATABASE_URL="$(TEST_DATABASE_URL)" pnpm exec vitest run tools/map-pr-worker/src/queue.integration.test.ts
 
 .PHONY: db-up
 db-up: ## Start dev Postgres (Docker locally, VM service in cloud sessions)
