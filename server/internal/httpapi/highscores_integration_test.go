@@ -166,4 +166,14 @@ func TestHighscoresWithPostgres(t *testing.T) {
 	if es, _ = get("/api/highscores?page=3"); len(es) != 0 {
 		t.Fatalf("page 3 = %q", names(es))
 	}
+	// A skill ranking pages across its two parts: 2 characters with a sword row, then 28 at
+	// the base level by age (Bea, Forgiven, Served, then the fillers).
+	es, more = get("/api/highscores?category=sword")
+	if len(es) != 20 || !more || es[1].Name != "Ana" || es[2].Name != "Bea" || es[19].Name != "Fillerao" {
+		t.Fatalf("sword page 1 = %q (more %v)", names(es), more)
+	}
+	es, more = get("/api/highscores?category=sword&page=2")
+	if len(es) != 10 || more || es[0].Rank != 21 || es[0].Name != "Fillerap" || es[9].Name != "Filleray" || es[9].Value != 10 {
+		t.Fatalf("sword page 2 = %q (more %v)", names(es), more)
+	}
 }

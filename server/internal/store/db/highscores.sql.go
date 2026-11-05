@@ -69,24 +69,26 @@ func (q *Queries) HighscoresByLevel(ctx context.Context, arg HighscoresByLevelPa
 	return items, nil
 }
 
-const highscoresBySkill = `-- name: HighscoresBySkill :many
-SELECT c.name, c.vocation, COALESCE(s.level, $1::int)::bigint AS value
+const highscoresBySkillBase = `-- name: HighscoresBySkillBase :many
+SELECT c.name, c.vocation
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
-LEFT JOIN character_skills s ON s.character_id = c.id AND s.skill = $2
-WHERE a.role = 'player' AND a.disabled_at IS NULL
-  AND ($3::text IS NULL OR c.vocation = $3::text)
+WHERE NOT EXISTS (
+      SELECT 1 FROM character_skills s
+      WHERE s.character_id = c.id AND s.skill = $1
+  )
+  AND a.role = 'player' AND a.disabled_at IS NULL
+  AND ($2::text IS NULL OR c.vocation = $2::text)
   AND NOT EXISTS (
       SELECT 1 FROM account_bans b
       WHERE b.account_id = a.id AND b.lifted_at IS NULL
-        AND (b.expires_at IS NULL OR b.expires_at > $4)
+        AND (b.expires_at IS NULL OR b.expires_at > $3)
   )
-ORDER BY COALESCE(s.level, $1::int) DESC, COALESCE(s.tries, 0) DESC, c.id
-LIMIT $6 OFFSET $5
+ORDER BY c.id
+LIMIT $5 OFFSET $4
 `
 
-type HighscoresBySkillParams struct {
-	BaseLevel int32
+type HighscoresBySkillBaseParams struct {
 	Skill     string
 	Vocation  pgtype.Text
 	Now       pgtype.Timestamptz
@@ -94,17 +96,13 @@ type HighscoresBySkillParams struct {
 	RowLimit  int32
 }
 
-type HighscoresBySkillRow struct {
+type HighscoresBySkillBaseRow struct {
 	Name     string
 	Vocation string
-	Value    int64
 }
 
-// A character without a row for the skill is at its base level (data/balance.yaml), which
-// the caller passes as base_level.
-func (q *Queries) HighscoresBySkill(ctx context.Context, arg HighscoresBySkillParams) ([]HighscoresBySkillRow, error) {
-	rows, err := q.db.Query(ctx, highscoresBySkill,
-		arg.BaseLevel,
+func (q *Queries) HighscoresBySkillBase(ctx context.Context, arg HighscoresBySkillBaseParams) ([]HighscoresBySkillBaseRow, error) {
+	rows, err := q.db.Query(ctx, highscoresBySkillBase,
 		arg.Skill,
 		arg.Vocation,
 		arg.Now,
@@ -115,9 +113,76 @@ func (q *Queries) HighscoresBySkill(ctx context.Context, arg HighscoresBySkillPa
 		return nil, err
 	}
 	defer rows.Close()
-	items := []HighscoresBySkillRow{}
+	items := []HighscoresBySkillBaseRow{}
 	for rows.Next() {
-		var i HighscoresBySkillRow
+		var i HighscoresBySkillBaseRow
+		if err := rows.Scan(&i.Name, &i.Vocation); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const highscoresBySkillRows = `-- name: HighscoresBySkillRows :many
+
+SELECT c.name, c.vocation, s.level::bigint AS value
+FROM character_skills s
+JOIN characters c ON c.id = s.character_id
+JOIN accounts a ON a.id = c.account_id
+WHERE s.skill = $1
+  AND a.role = 'player' AND a.disabled_at IS NULL
+  AND ($2::text IS NULL OR c.vocation = $2::text)
+  AND NOT EXISTS (
+      SELECT 1 FROM account_bans b
+      WHERE b.account_id = a.id AND b.lifted_at IS NULL
+        AND (b.expires_at IS NULL OR b.expires_at > $3)
+  )
+ORDER BY s.level DESC, s.tries DESC, s.character_id
+LIMIT $5 OFFSET $4
+`
+
+type HighscoresBySkillRowsParams struct {
+	Skill     string
+	Vocation  pgtype.Text
+	Now       pgtype.Timestamptz
+	RowOffset int32
+	RowLimit  int32
+}
+
+type HighscoresBySkillRowsRow struct {
+	Name     string
+	Vocation string
+	Value    int64
+}
+
+// A skill ranking is two ordered parts (store.Highscores joins them):
+//  1. characters with a row for the skill, in the order of character_skills_highscore_idx
+//     (skill, level DESC, tries DESC, character_id): HighscoresBySkillRows;
+//  2. after them, characters without a row, at the base level of data/balance.yaml,
+//     oldest first: HighscoresBySkillBase, only when part 1 does not fill the page.
+//
+// Skill rows are never stored below the base level, so a character with a row ranks at
+// least as high as one without (a row at exactly the base level with 0 tries ties with
+// them and is listed first). Neither query sorts every character.
+func (q *Queries) HighscoresBySkillRows(ctx context.Context, arg HighscoresBySkillRowsParams) ([]HighscoresBySkillRowsRow, error) {
+	rows, err := q.db.Query(ctx, highscoresBySkillRows,
+		arg.Skill,
+		arg.Vocation,
+		arg.Now,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HighscoresBySkillRowsRow{}
+	for rows.Next() {
+		var i HighscoresBySkillRowsRow
 		if err := rows.Scan(&i.Name, &i.Vocation, &i.Value); err != nil {
 			return nil, err
 		}

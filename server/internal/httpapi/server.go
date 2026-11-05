@@ -59,6 +59,8 @@ type Config struct {
 	Version           string
 	PublicRateLimit   RateLimit     // per IP; default DefaultPublicRateLimit
 	HighscoreCacheTTL time.Duration // default DefaultHighscoreCacheTTL
+	// HighscoreQueryTimeout: default DefaultHighscoreQueryTimeout.
+	HighscoreQueryTimeout time.Duration
 }
 
 // Accounts is the account service the API calls. *auth.Service implements it; tests
@@ -118,6 +120,9 @@ func newAPI(cfg Config) (*api, error) {
 	cfg.PublicRateLimit = orDefault(cfg.PublicRateLimit, DefaultPublicRateLimit)
 	if cfg.HighscoreCacheTTL <= 0 {
 		cfg.HighscoreCacheTTL = DefaultHighscoreCacheTTL
+	}
+	if cfg.HighscoreQueryTimeout <= 0 {
+		cfg.HighscoreQueryTimeout = DefaultHighscoreQueryTimeout
 	}
 	// One entry per valid key at most: (level + skills) × (all + vocations) × pages.
 	keys := (len(cfg.Skills) + 1) * (len(cfg.Vocations) + 1) * HighscoreMaxPages

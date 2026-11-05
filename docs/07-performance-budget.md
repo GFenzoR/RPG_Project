@@ -35,6 +35,28 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   personaje por minuto, escalonada, y las medianas de ingreso se calculan una vez por ronda.
   No está medida con `make bench-tick` (sus benchmarks la tienen apagada); los tests de
   simulación juegan entre 6 y 8 h de juego de un personaje en menos de un segundo cada uno.
+- Ranking público (T4.3, `queries/highscores.sql`): fuera del tick, pero comparte el pool de
+  Postgres con los guardados. Hay como mucho 2 consultas a la vez, con 5 s de presupuesto;
+  cada página se cachea 60 s por clave. Ninguna consulta ordena todos los personajes:
+  - el ranking de nivel recorre `characters_highscore_level_idx`;
+  - el de una skill recorre `character_skills_highscore_idx` (skill, level, tries,
+    personaje), y solo si eso no llena la página sigue con los personajes que no tienen
+    fila de esa skill, por la clave primaria.
+
+  Medido con `EXPLAIN ANALYZE` (Postgres 16, en local) sobre 200k personajes, 1,9M filas
+  de skills y 167 bans:
+
+  | Consulta | Tiempo |
+  |---|---|
+  | Nivel, página 1 | 0,3 ms |
+  | Nivel, página 50 filtrada por vocación | 6 ms |
+  | Skill, página 1 | 3 ms |
+  | Skill, página 50 filtrada por vocación (lee 1001 filas del índice) | 21 ms |
+  | Skill sin filas (todos en el nivel base), página 50 | 2 ms |
+
+  En ningún plan hay seq scans. La versión anterior (`LEFT JOIN` + `COALESCE` en el
+  `ORDER BY`) hacía un seq scan y ordenaba todo: unos 100 ms por página. Peor caso
+  sostenido: 2 consultas de ~20 ms a la vez.
 
 ## Cliente
 | Métrica | Presupuesto |

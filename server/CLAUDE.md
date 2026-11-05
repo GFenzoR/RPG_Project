@@ -67,9 +67,11 @@ server/
   `atomic` que el loop actualiza al entrar o salir un jugador) y `App.running`; nunca
   llames a métodos "Loop goroutine only" desde un handler. `GET /api/highscores` usa
   `queries/highscores.sql` vía `store.Highscores` (el `app` la conecta si el `Store` la
-  implementa) con una cache de 60 s por filtros en `httpapi`. Las exclusiones (staff,
-  deshabilitadas, baneadas) viven en la query: si agregas borrado de personajes,
-  filtra ahí.
+  implementa) con una cache de 60 s por filtros en `httpapi`. Ninguna query del ranking
+  puede ordenar todos los personajes: cada una lee un índice y corta en la página (costos
+  en docs/07); si cambias una, mírala con `EXPLAIN ANALYZE` sobre muchos personajes. Las
+  exclusiones (staff, deshabilitadas, baneadas) viven en las queries: si agregas borrado
+  de personajes, filtra ahí.
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

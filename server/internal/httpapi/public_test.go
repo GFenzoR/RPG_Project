@@ -260,3 +260,53 @@ func TestHighscoresQueryPanic(t *testing.T) {
 		t.Fatalf("after a panic = %d %s", w.Code, w.Body.String())
 	}
 }
+
+// blockingRanking blocks every query until its context ends, then returns what pgx does:
+// an error that wraps context.DeadlineExceeded.
+type blockingRanking struct{ calls atomic.Int32 }
+
+func (b *blockingRanking) Highscores(ctx context.Context, _ store.HighscoreQuery) ([]store.HighscoreRow, error) {
+	b.calls.Add(1)
+	<-ctx.Done()
+	return nil, fmt.Errorf("highscores by level: %w", ctx.Err())
+}
+
+// A query over its time budget answers 503 busy, not 500.
+func TestHighscoresQueryOverBudgetIsBusy(t *testing.T) {
+	b := &blockingRanking{}
+	h := newHarness(t, func(c *httpapi.Config) {
+		c.Highscores = b
+		c.HighscoreQueryTimeout = 50 * time.Millisecond
+	})
+	expect(t, h.do(req{method: "GET", path: "/api/highscores"}), http.StatusServiceUnavailable, "busy")
+	if n := b.calls.Load(); n != 1 {
+		t.Fatalf("queries = %d, want 1", n)
+	}
+}
+
+// A request that never gets a query slot within its budget answers 503 busy.
+func TestHighscoresNoSlotIsBusy(t *testing.T) {
+	f := &fakeRanking{n: 3, release: make(chan struct{})} // ignores its context
+	h := newHarness(t, func(c *httpapi.Config) {
+		c.Highscores = f
+		c.Vocations = []string{"guardian", "arcanist"}
+		c.HighscoreQueryTimeout = 50 * time.Millisecond
+	})
+	var wg sync.WaitGroup
+	for i, p := range []string{"/api/highscores", "/api/highscores?vocation=guardian"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h.do(req{method: "GET", path: p, remote: fmt.Sprintf("10.1.0.%d:1", i)})
+		}()
+	}
+	for f.calls.Load() < 2 { // both slots taken
+		time.Sleep(time.Millisecond) //nolint:forbidigo // waits for the real goroutines
+	}
+	expect(t, h.do(req{method: "GET", path: "/api/highscores?vocation=arcanist"}), http.StatusServiceUnavailable, "busy")
+	if n := f.calls.Load(); n != 2 {
+		t.Fatalf("queries = %d, want 2", n)
+	}
+	close(f.release)
+	wg.Wait()
+}

@@ -120,7 +120,11 @@ auth). Pasado el límite responden `429 rate_limited`.
   mucho una entrada por clave válida, y el TTL cuenta desde que termina la consulta.
 - **Presupuesto de Postgres:** el pool es el mismo que usan los guardados del juego, así que
   el ranking corre como mucho 2 consultas a la vez (claves distintas). Cada una tiene 5 s
-  en total para conseguir su turno y terminar; si no lo logra responde `503 busy`. Quien
+  en total para conseguir su turno y terminar; si no consigue turno, o la consulta pasa el
+  plazo, responde `503 busy` (y queda un warning en el log, no un error). Las consultas
+  leen índices y no ordenan todos los personajes (costos en docs/07). En un ranking de
+  skill, los personajes con fila de la skill van antes que los que siguen en el nivel base
+  sin fila; uno con fila en el nivel base y 0 tries empata con ellos y va primero. Quien
   espera la consulta de otra petición deja de esperar si su cliente se va.
 
 - **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base

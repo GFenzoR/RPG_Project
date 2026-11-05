@@ -46,15 +46,14 @@ var (
 	DefaultPublicRateLimit = RateLimit{Burst: 30, Every: 500 * time.Millisecond}
 	// DefaultHighscoreCacheTTL: how long a page of the ranking is served from memory.
 	DefaultHighscoreCacheTTL = 60 * time.Second
+	// DefaultHighscoreQueryTimeout: budget of one ranking query, its wait for a slot
+	// included; past it the request answers 503 busy.
+	DefaultHighscoreQueryTimeout = 5 * time.Second
 )
 
-// Ranking queries at once (different keys) and how long one may wait for its turn and
-// run: the pgx pool is shared with the game's saves, so the website never takes more than
-// this from it.
-const (
-	maxHighscoreQueries   = 2
-	highscoreQueryTimeout = 5 * time.Second
-)
+// Ranking queries at once (different keys): the pgx pool is shared with the game's saves,
+// so the website never takes more than this from it.
+const maxHighscoreQueries = 2
 
 type highscoreEntry struct {
 	Rank     int    `json:"rank"`
@@ -145,7 +144,8 @@ func (c *pageCache) get(ctx context.Context, key string, fill func() ([]byte, er
 	return fill()
 }
 
-// errBusy: every ranking query slot stayed taken for highscoreQueryTimeout.
+// errBusy: the ranking query did not get a slot, or did not finish, within
+// Config.HighscoreQueryTimeout.
 var errBusy = errors.New("highscores: database busy")
 
 // highscores serves GET /api/highscores?category=level|<skill>&vocation=<id>&page=N.
@@ -178,12 +178,16 @@ func (a *api) highscores(w http.ResponseWriter, r *http.Request) {
 	body, err := a.cache.get(r.Context(), key, func() ([]byte, error) {
 		// The query outlives a client that goes away (others may be waiting on it), but not
 		// highscoreQueryTimeout, waiting for a free slot included.
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), highscoreQueryTimeout)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), a.cfg.HighscoreQueryTimeout)
 		defer cancel()
 		select {
 		case a.querySlots <- struct{}{}:
 			defer func() { <-a.querySlots }()
 		case <-ctx.Done():
+			return nil, errBusy
+		}
+		// A slot may free up just as the budget runs out: select picks either case.
+		if ctx.Err() != nil {
 			return nil, errBusy
 		}
 		now := a.cfg.Clock.Now()
@@ -195,6 +199,10 @@ func (a *api) highscores(w http.ResponseWriter, r *http.Request) {
 			Skill: skill, BaseLevel: base, Vocation: vocation,
 			Offset: (page - 1) * HighscorePageSize, Limit: HighscorePageSize + 1, Now: now,
 		})
+		if errors.Is(err, context.DeadlineExceeded) {
+			a.log.Warn("highscores: query over its time budget", "category", category, "vocation", vocation, "page", page)
+			return nil, errBusy
+		}
 		if err != nil {
 			return nil, err
 		}
