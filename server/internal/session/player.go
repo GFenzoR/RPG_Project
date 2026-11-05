@@ -381,11 +381,12 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
-	w.tutorialJoin(p)
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
 	w.antibotJoin(ctx.Tick, p)
 	p.joinedAt = ctx.Tick
+	// After the ledger: resuming may end the tutorial and give its reward (T4.2).
+	w.tutorialJoin(p)
 
 	// Staggered autosave: first at a random point of the first interval.
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))

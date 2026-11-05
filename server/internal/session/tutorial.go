@@ -5,6 +5,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 )
 
 // The guided tutorial (T4.2): the steps of data/tutorial.yaml, advanced by the server's
@@ -29,9 +30,6 @@ const (
 	msgTutorialDone    = "tutorial.completed"
 	msgTutorialSkipped = "tutorial.skipped"
 )
-
-// EconTutorial is the economy log source of the tutorial's reward.
-const EconTutorial = "tutorial"
 
 // initTutorial checks Config.Tutorial against the content and the map.
 func (w *World) initTutorial() error {
@@ -70,7 +68,7 @@ func (w *World) tutorialJoin(p *Player) {
 		return
 	}
 	p.tut = int(step)
-	if !t.Steps[p.tut-1].For(p.vocation.ID) { // the step's vocations changed
+	if s := &t.Steps[p.tut-1]; !s.For(p.vocation.ID) || w.tutorialMet(p, s) { // vocations changed, or done meanwhile
 		w.tutorialEnter(p, p.tut-1)
 		return
 	}
@@ -91,7 +89,21 @@ func (w *World) tutorialEnter(p *Player, i int) {
 	p.tut = i + 1
 	p.storage.Set(tutStepKey, int64(p.tut))
 	p.storage.Set(tutCountKey, 0)
+	if w.tutorialMet(p, &t.Steps[i]) {
+		w.tutorialEnter(p, i+1)
+		return
+	}
 	w.sendTutorial(p)
+}
+
+// tutorialMet reports whether step s already holds for p without a new event: a
+// quest_start step whose quest p started earlier (it cannot be started twice).
+func (w *World) tutorialMet(p *Player, s *content.TutorialStep) bool {
+	if s.When.Event != content.TriggerQuestStart || s.When.Ref == "" {
+		return false
+	}
+	st, _ := w.quests.State(p.storage, s.When.Ref)
+	return st != quest.NotStarted
 }
 
 // tutorialEvent counts one server event toward p's current step. ref is the content id

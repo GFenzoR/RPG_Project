@@ -474,7 +474,9 @@ rewards:                         # opcional; al terminar, nunca al saltar
   caminados; sin `ref`), `target` y `kill` (monstruo), `open_container`, `pick_up`
   (un item que entra al equipo desde afuera), `equip`, `use_item` (consumible), `gather`
   (el item obtenido) → item; `cast_spell` → hechizo; `talk_npc` → NPC; `craft` → receta de
-  `recipes.yaml`; `quest_start` → quest. Agregar un evento nuevo sí requiere Go
+  `recipes.yaml`; `quest_start` → quest (si la quest ya empezó antes de llegar al paso, el
+  paso se da por cumplido: una quest no se puede empezar dos veces). Mover un item del
+  suelo a un slot cuenta como `equip`, no como `pick_up`. Agregar un evento nuevo sí requiere Go
   (`session/tutorial.go` y un enganche donde ocurre).
 - `highlight`: `inventory`, `hotbar`, `battle`, `chat`, `skills` o `stats`.
 - Progreso en `quest_state` del personaje: `tutorial.step` (índice + 1), `tutorial.count`

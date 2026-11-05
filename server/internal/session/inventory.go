@@ -609,11 +609,11 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	if p.carried() != before {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}
-	if pickedUp {
-		w.tutorialEvent(p, content.TriggerPickUp, moving.def.ID)
-	}
+	// One tutorial event per move: equipping from the ground is an equip.
 	if to.kind == locSlot {
 		w.tutorialEvent(p, content.TriggerEquip, moving.def.ID)
+	} else if pickedUp {
+		w.tutorialEvent(p, content.TriggerPickUp, moving.def.ID)
 	}
 }
 

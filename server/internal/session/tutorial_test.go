@@ -273,3 +273,69 @@ func TestTutorialClientCannotForce(t *testing.T) {
 		t.Fatalf("step %q count %d", p.TutorialStep(h.w), p.Storage("tutorial.count"))
 	}
 }
+
+// Accepting the harbor master's quest before its step (out of order) does not lock the
+// last step: entering it, or resuming at it after a relog, completes it at once.
+func TestTutorialQuestStartedEarly(t *testing.T) {
+	for _, relog := range []bool{false, true} {
+		h := tutorialHarness(t)
+		cl, p := h.joinChar(newcomer(980, "guardian"))
+		cl.take()
+		h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(9, 10)) }))
+		h.sim.Step()
+		cl.take()
+		d := h.lastDialog(h.send(cl, talkMsg(h.npc("harbor_master").ID())))
+		d = h.lastDialog(h.pick(cl, d, "npc.harbor_master.opt_shipwreck"))
+		h.pick(cl, d, "dialog.accept")
+		if p.TutorialStep(h.w) != "first_steps" {
+			t.Fatalf("the quest moved the tutorial to %q", p.TutorialStep(h.w))
+		}
+		money := h.w.Money(p)
+		var evs []*pb.ServerMessage
+		if relog {
+			// Stored at first_victory (index 5 + 1), then back in.
+			h.sim.Command(gameFunc(func() { p.SetStorageForTest("tutorial.step", 6) }))
+			h.sim.Step()
+			h.sim.Command(h.w.Leave(cl))
+			h.sim.Step()
+			c := newcomer(980, "guardian")
+			c.Storage = h.saves[len(h.saves)-1].Storage
+			cl, p = h.joinChar(c)
+			evs = cl.take()
+			expectStep(t, lastTutorial(evs), "first_victory", 0)
+			h.sim.Command(gameFunc(func() { p.SetStorageForTest("tutorial.step", 7) }))
+			h.sim.Step()
+			h.sim.Command(h.w.Leave(cl))
+			h.sim.Step()
+			c.Storage = h.saves[len(h.saves)-1].Storage
+			cl, p = h.joinChar(c)
+			evs = cl.take()
+		} else {
+			// Kill-free path to the last step: the kill step completes with a kill.
+			h.sim.Command(gameFunc(func() { p.SetStorageForTest("tutorial.step", 6) }))
+			h.sim.Step()
+			h.sim.Command(h.w.Leave(cl))
+			h.sim.Step()
+			c := newcomer(980, "guardian")
+			c.Storage = h.saves[len(h.saves)-1].Storage
+			cl, p = h.joinChar(c)
+			cl.take()
+			h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(28, 30)) }))
+			h.sim.Step()
+			cl.take()
+			rat := onlyMonster(t, h)
+			h.input(cl, fightMode(pb.FightStance_FIGHT_STANCE_OFFENSIVE, true))
+			h.input(cl, setTarget(rat.ID()))
+			h.sim.Command(gameFunc(func() { rat.SetHealth(1) }))
+			h.sim.RunUntil(func() bool {
+				evs = append(evs, cl.take()...)
+				return len(h.w.Monsters()) == 0
+			}, sim.MaxSeconds(30))
+			evs = append(evs, cl.take()...)
+		}
+		ts := lastTutorial(evs)
+		if ts == nil || ts.State != pb.TutorialState_TUTORIAL_STATE_DONE || h.w.Money(p)-money != 20 {
+			t.Fatalf("relog %v: %v, +%d coins", relog, ts, h.w.Money(p)-money)
+		}
+	}
+}

@@ -17,7 +17,7 @@ steps:
     when: { event: talk_npc, ref: puerto_priest }
   - id: open_backpack
     text: tutorial.step.open_backpack
-    when: { event: open_container }
+    when: { event: open_container, ref: backpack }
     highlight: inventory
   - id: pick_target
     text: tutorial.step.pick_target
