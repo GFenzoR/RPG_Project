@@ -129,8 +129,8 @@ junto con los del editor.
   `AudioBufferSourceNode.prototype.start`. El test comprueba que nada empiece antes del
   primer gesto, que al entrar suenen el loop y el ambiente de la isla, que los clicks y
   los pasos programen reproducciones, que un canal silenciado no gaste voz y que el slider
-  y el silencio persistan tras recargar. Screenshots: `26-sound-options` a
-  `28-sound-options-login`.
+  y el silencio persistan tras recargar. Screenshots: `34-sound-options` a
+  `36-sound-options-login`.
 
 ## Checklist del PR
 - [ ] `make lint test validate` pasa

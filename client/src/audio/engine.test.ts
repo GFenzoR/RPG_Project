@@ -78,6 +78,7 @@ class FakeContext implements ContextLike {
   readonly panners: FakePanner[] = [];
   decoded = 0;
   async resume(): Promise<void> {
+    await Promise.resolve(); // a real context reports "running" only later, too
     this.state = "running";
   }
   createGain(): FakeGain {
@@ -157,6 +158,12 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 5; i++) await Promise.resolve();
 };
 
+/** A gesture: the fake context, like a real one, starts running a microtask later. */
+const unlockNow = async (e: AudioEngine): Promise<void> => {
+  e.unlock();
+  await flush();
+};
+
 describe("AudioEngine", () => {
   it("stays silent until the first gesture unlocks it, then resumes the context", async () => {
     const { ctx, engine } = setup();
@@ -182,6 +189,13 @@ describe("AudioEngine", () => {
     expect(ui?.gain.value).toBe(0.7);
   });
 
+  it("hands back the volumes in use, for a panel that mounts later", () => {
+    const { engine } = setup();
+    const muted = withMuted(defaultPrefs(), "music", true);
+    engine.setPrefs(muted);
+    expect(engine.currentPrefs()).toBe(muted);
+  });
+
   it("effective level multiplies by master and is 0 when either is muted", () => {
     const { engine } = setup(withVolume(defaultPrefs(), "master", 0.5));
     expect(engine.level("sfx")).toBeCloseTo(0.45);
@@ -192,7 +206,7 @@ describe("AudioEngine", () => {
 
   it("loads a sound once, caches the decoded buffer and plays it on its channel", async () => {
     const { ctx, engine, fetched } = setup();
-    engine.unlock();
+    await unlockNow(engine);
     expect(engine.play(["effect.hit"])).toBe("hit");
     await flush();
     expect(ctx.sources).toHaveLength(1);
@@ -209,17 +223,17 @@ describe("AudioEngine", () => {
     expect(engine.history).toEqual(["hit", "hit"]);
   });
 
-  it("plays the most specific event that is mapped and ignores unknown ones", () => {
+  it("plays the most specific event that is mapped and ignores unknown ones", async () => {
     const { engine } = setup();
-    engine.unlock();
+    await unlockNow(engine);
     expect(engine.play(["effect.gather.mining", "effect.gather"])).toBe("a");
     expect(engine.play(["nothing.here"])).toBeUndefined();
     expect(engine.play(["loopy"])).toBeUndefined(); // music is not an event sound
   });
 
-  it("picks a random variant", () => {
+  it("picks a random variant", async () => {
     const { engine, setRandom } = setup();
-    engine.unlock();
+    await unlockNow(engine);
     setRandom(0.1);
     expect(engine.play(["many"])).toBe("a");
     setRandom(0.99);
@@ -228,7 +242,7 @@ describe("AudioEngine", () => {
 
   it("does not spend a voice on a muted channel", async () => {
     const { ctx, engine } = setup(withMuted(defaultPrefs(), "sfx", true));
-    engine.unlock();
+    await unlockNow(engine);
     expect(engine.play(["effect.hit"])).toBeUndefined();
     await flush();
     expect(ctx.sources).toHaveLength(0);
@@ -236,7 +250,7 @@ describe("AudioEngine", () => {
 
   it("caps copies of one sound and voices in total; ended voices free their slot", async () => {
     const { ctx, engine } = setup();
-    engine.unlock();
+    await unlockNow(engine);
     engine.play(["ui.click"]);
     await flush();
     expect(engine.play(["ui.click"])).toBeUndefined(); // max_voices 1
@@ -245,7 +259,7 @@ describe("AudioEngine", () => {
 
     const { ctx: c2, engine: e2, setRandom } = setup();
     setRandom(0.99); // "many" picks b, "effect.gather" is always a
-    e2.unlock();
+    await unlockNow(e2);
     e2.play(["effect.gather"]);
     e2.play(["many"]);
     await flush();
@@ -256,9 +270,34 @@ describe("AudioEngine", () => {
     expect(started).toBe(MAX_VOICES);
   });
 
+  it("keeps max_voices for plays asked while the file was still loading", async () => {
+    const { ctx, engine } = setup();
+    await unlockNow(engine);
+    // An area spell: one effect per tile in the same tick, before the file has arrived.
+    for (let i = 0; i < 21; i++) engine.play(["ui.click"]);
+    await flush();
+    expect(ctx.sources).toHaveLength(1); // click: max_voices 1
+    for (let i = 0; i < 21; i++) engine.play(["effect.hit"]);
+    await flush();
+    expect(ctx.sources).toHaveLength(1 + 3); // hit: max_voices 3
+  });
+
+  it("drops one-shots while the context is suspended, without using up voices", async () => {
+    const { ctx, engine } = setup();
+    engine.unlock(); // resume() has not finished: still suspended
+    expect(engine.play(["effect.hit"])).toBeUndefined();
+    await flush();
+    expect(ctx.sources).toHaveLength(0);
+    expect(engine.activeVoices).toBe(0);
+    ctx.state = "suspended"; // e.g. the browser paused audio in a background tab
+    expect(engine.play(["effect.hit"])).toBeUndefined();
+    ctx.state = "running";
+    expect(engine.play(["effect.hit"])).toBe("hit");
+  });
+
   it("drops a sound whose file arrives too late", async () => {
     const { ctx, engine, setNow } = setup();
-    engine.unlock();
+    await unlockNow(engine);
     engine.play(["effect.hit"]);
     setNow(1000);
     await flush();
@@ -267,7 +306,7 @@ describe("AudioEngine", () => {
 
   it("attenuates and pans positional sounds, and skips them out of earshot", async () => {
     const { ctx, engine } = setup();
-    engine.unlock();
+    await unlockNow(engine);
     const me = { x: 100, y: 100, z: 7 };
     engine.play(["effect.hit"], { x: 104, y: 100, z: 7 }, me);
     await flush();
@@ -282,7 +321,7 @@ describe("AudioEngine", () => {
 });
 
 describe("spatial", () => {
-  it("is full volume and centred on the player's tile, quieter and to the side away", () => {
+  it("is full volume and centred on the player's tile, quieter and to the side away", async () => {
     const me = { x: 0, y: 0, z: 7 };
     expect(spatial(me, me)).toEqual({ gain: 1, pan: 0 });
     const left = spatial({ x: -20, y: 0, z: 7 }, me);
@@ -300,7 +339,7 @@ describe("loops", () => {
     const { ctx, engine } = setup();
     engine.setLoops("tune", "waves");
     expect(ctx.sources).toHaveLength(0);
-    engine.unlock();
+    await unlockNow(engine);
     await flush();
     expect(engine.playingLoops()).toEqual({ music: "tune", ambient: "waves" });
     const src = ctx.sources.find((s) => s.loop && (s.buffer?.duration ?? 0) === 60);
@@ -314,7 +353,7 @@ describe("loops", () => {
 
   it("crossfades to a new loop and stops the old one after the fade", async () => {
     const { ctx, engine } = setup();
-    engine.unlock();
+    await unlockNow(engine);
     engine.setLoops("tune", undefined);
     await flush();
     const first = ctx.sources[0];
@@ -337,7 +376,7 @@ describe("loops", () => {
 
   it("does not start a loop that stopped being wanted while it loaded", async () => {
     const { ctx, engine } = setup();
-    engine.unlock();
+    await unlockNow(engine);
     engine.setLoops("tune", undefined);
     engine.setLoops("other", undefined);
     await flush();

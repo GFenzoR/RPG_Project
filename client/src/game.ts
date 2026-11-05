@@ -20,7 +20,7 @@ import { findPath } from "./state/path.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { cuesOf, loopFor } from "./audio/cues.ts";
-import type { Cue } from "./audio/cues.ts";
+import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
 import type {
@@ -144,8 +144,8 @@ export class Game {
   private pending: Pending<ItemRef>;
   private readonly opts: GameOptions;
   private hotkeys: (string | undefined)[];
-  /** tool.use of the last tool used on a tile: which gather sound its result makes. */
-  private toolUse: string | undefined;
+  /** The last tool used on a tile and that tile: which gather sound its result makes. */
+  private toolAt: { use: string; pos: Pos } | undefined;
 
   constructor(opts: GameOptions) {
     this.opts = opts;
@@ -218,6 +218,7 @@ export class Game {
   /** Attempts a recipe at the open station (T3.4); the server answers with craft.* messages. */
   craft(recipeId: string): void {
     const s = this.world.station;
+    this.toolAt = undefined; // the station's effect is not a swing of the tool
     if (s) this.conn.send({ case: "craft", value: { recipeId, station: { ...s.pos } } });
   }
 
@@ -332,6 +333,7 @@ export class Game {
   useItem(ref: ItemRef): void {
     const useWith = this.opts.content.items[ref.itemId]?.useWith ?? false;
     this.setPending(afterUse(ref, useWith));
+    this.toolAt = undefined;
     if (useWith) return;
     this.conn.send({
       case: "useItem",
@@ -341,7 +343,8 @@ export class Game {
 
   /** Uses ref on a tile (a fishing rod on water, a pickaxe on a vein). */
   useItemOn(ref: ItemRef, pos: Pos): void {
-    this.toolUse = this.opts.content.items[ref.itemId]?.toolUse || undefined;
+    const use = this.opts.content.items[ref.itemId]?.toolUse;
+    this.toolAt = use ? { use, pos: { ...pos } } : undefined;
     this.conn.send({
       case: "useItemOn",
       value: {
@@ -499,12 +502,12 @@ export class Game {
 
   // ---- sound (T3.7): what each event sounds like is assets/sounds.yaml --------------------
 
-  private cueContext(): { selfId: number; toolUse: string | undefined; craft: string | undefined } {
+  private cueContext(): CueContext {
     const station = this.world.station;
     const craft = station
       ? this.opts.content.recipes.find((r) => r.station === station.itemId)?.craft
       : undefined;
-    return { selfId: this.world.selfId, toolUse: this.toolUse, craft };
+    return { selfId: this.world.selfId, tool: this.toolAt, craft };
   }
 
   /** Plays a batch's cues around the player and keeps the zone's loops. */

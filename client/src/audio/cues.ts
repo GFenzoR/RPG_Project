@@ -5,6 +5,7 @@
 import { MessageKind } from "@rpg/protocol";
 import type { ServerMessage } from "@rpg/protocol";
 import type { IslandRect, LoopRules, SoundManifest } from "../content-types.ts";
+import { samePos } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import {
   EFFECT_BLOCK,
@@ -28,8 +29,11 @@ export interface Cue {
 /** What the client knows around a message that picks a more specific sound. */
 export interface CueContext {
   selfId: number;
-  /** tool.use of the last tool used on a tile ("mining"...), for gather sounds. */
-  toolUse: string | undefined;
+  /**
+   * The last tool the player used on a tile (tool.use "mining"... and that tile), until
+   * a craft or another use: picks the gather sound of an effect on that same tile only.
+   */
+  tool: { use: string; pos: Pos } | undefined;
   /** Craft skill of the open station ("smithing", "cooking"), for craft sounds. */
   craft: string | undefined;
 }
@@ -61,8 +65,12 @@ export function effectEvents(effectId: number, toolUse: string | undefined): str
 export function cuesOf(msg: ServerMessage["message"], ctx: CueContext): Cue[] {
   switch (msg.case) {
     case "effect": {
-      const events = effectEvents(msg.value.effectId, ctx.toolUse);
-      return events.length > 0 ? [{ events, pos: pos(msg.value.pos) }] : [];
+      const at = pos(msg.value.pos);
+      // Gather effects reach every observer, and crafts make one at the station: the tool
+      // only says what the player's own swing on its own tile sounds like.
+      const own = ctx.tool && at && samePos(at, ctx.tool.pos) ? ctx.tool.use : undefined;
+      const events = effectEvents(msg.value.effectId, own);
+      return events.length > 0 ? [{ events, pos: at }] : [];
     }
     case "projectile": {
       const el = ELEMENTS[msg.value.projectileId - PROJECTILE_ELEMENT];
@@ -78,7 +86,8 @@ export function cuesOf(msg: ServerMessage["message"], ctx: CueContext): Cue[] {
       const key = `message.${m.body.value.key}`;
       const events = [key];
       if (key.startsWith("message.craft.") && ctx.craft) events.unshift(`${key}.${ctx.craft}`);
-      if (key.startsWith("message.gather.") && ctx.toolUse) events.unshift(`${key}.${ctx.toolUse}`);
+      // gather.* messages go only to the gatherer.
+      if (key.startsWith("message.gather.") && ctx.tool) events.unshift(`${key}.${ctx.tool.use}`);
       return [{ events }];
     }
     default:

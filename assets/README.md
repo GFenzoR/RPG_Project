@@ -24,8 +24,11 @@
 - Presupuesto de tamaño en `docs/07-performance-budget.md`, "Audio".
 
 ### Reemplazar sonidos por un pack de terceros
-1. Copia el pack sin modificar a `assets/vendor/<pack>/` con su `LICENSE`, y agrega su fila
-   en `CREDITS.md` (CC0, CC-BY o OGA-BY), igual que con los sprites.
+1. Copia el pack sin modificar a `assets/vendor/<pack>/` con su `LICENSE` (o `COPYING`), y
+   agrega su fila en la tabla de `CREDITS.md` (CC0, CC-BY o OGA-BY). Son las mismas reglas
+   que para los sprites, y `make validate` comprueba las dos cosas. Se mantienen los
+   nombres del pack (mayúsculas, espacios, subcarpetas como `Audio/impactMetal_000.ogg`);
+   solo la carpeta `<pack>` va en minúsculas y sin espacios.
 2. Si el pack no viene en Ogg Opus u Ogg Vorbis, conviértelo sin tocar el original. Por
    ejemplo:
    `ffmpeg -i vendor/<pack>/x.wav -ac 1 -c:a libopus -b:a 32k vendor/<pack>/x.ogg`.

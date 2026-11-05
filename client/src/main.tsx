@@ -28,11 +28,12 @@ function safeStorage(): Storage | undefined {
 // One engine for the whole page (T3.7): the menus click too, and the context survives
 // leaving and entering the game.
 const storage = safeStorage();
-const audioPrefs = loadPrefs(storage);
-const audio = new AudioEngine(content.sounds, audioPrefs, browserPorts());
-// Browsers only start audio after a gesture: the first one unlocks it.
+const audio = new AudioEngine(content.sounds, loadPrefs(storage), browserPorts());
+// Browsers only start audio after a gesture: the first one unlocks it. On touch screens
+// pointerdown does not count as one (pointerup, touchend and click do).
 const unlock = (): void => audio.unlock();
-for (const ev of ["pointerdown", "keydown"]) window.addEventListener(ev, unlock, { capture: true });
+for (const ev of ["pointerdown", "pointerup", "touchend", "click", "keydown"])
+  window.addEventListener(ev, unlock, { capture: true });
 // Every button of the DOM UI clicks.
 document.addEventListener("click", (e) => {
   if (e.target instanceof Element && e.target.closest("button")) audio.play(["ui.click"]);
@@ -96,7 +97,7 @@ function Root(): JSX.Element {
           setLang(l);
         }}
       />
-      <AudioOptions t={t} audio={audio} initial={audioPrefs} storage={storage} />
+      <AudioOptions t={t} audio={audio} storage={storage} />
     </>
   );
   return <App content={content} t={t} locale={lang} languagePicker={picker} audio={audio} />;

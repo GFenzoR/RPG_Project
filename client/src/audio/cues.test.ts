@@ -1,16 +1,19 @@
 import { create, MessageKind, ServerMessageSchema } from "@rpg/protocol";
 import type { MessageInitShape, ServerMessage } from "@rpg/protocol";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { cuesOf, effectEvents, islandAt, loopFor } from "./cues.ts";
 import type { CueContext } from "./cues.ts";
-import { loadSounds, repoRoot } from "../../vite/content.ts";
+import { loadSounds, repoRoot, soundFiles } from "../../vite/content.ts";
 
 type Msg = ServerMessage["message"];
 type Init = MessageInitShape<typeof ServerMessageSchema>;
 /** A server message from its plain-object init (protobuf fills the defaults). */
 const msg = (m: NonNullable<Init["message"]>): Msg =>
   create(ServerMessageSchema, { message: m } as Init).message;
-const ctx: CueContext = { selfId: 7, toolUse: undefined, craft: undefined };
+const ctx: CueContext = { selfId: 7, tool: undefined, craft: undefined };
 const at = { x: 3, y: 4, z: 7 };
 
 const system = (key: string): Msg =>
@@ -35,6 +38,24 @@ describe("cuesOf", () => {
     expect(effectEvents(5, undefined)).toEqual(["effect.gather"]);
   });
 
+  it("only an effect on the tile the tool was used on sounds like that tool", () => {
+    const vein = { x: 10, y: 10, z: 7 };
+    const mining = { ...ctx, tool: { use: "mining", pos: vein } };
+    const gather = (p: typeof at): Msg => msg({ case: "effect", value: { pos: p, effectId: 5 } });
+    expect(cuesOf(gather(vein), mining)).toEqual([
+      { events: ["effect.gather.mining", "effect.gather"], pos: vein },
+    ]);
+    // Another player's harvest a few tiles away, seen by this one.
+    expect(cuesOf(gather({ x: 12, y: 10, z: 7 }), mining)).toEqual([
+      { events: ["effect.gather"], pos: { x: 12, y: 10, z: 7 } },
+    ]);
+    // A craft makes the same effect at the station; Game.craft forgets the tool, and even
+    // if it did not, the station is not the vein.
+    const hearth = { x: 3, y: 4, z: 7 };
+    expect(cuesOf(gather(hearth), mining)[0]?.events).toEqual(["effect.gather"]);
+    expect(cuesOf(gather(hearth), ctx)[0]?.events).toEqual(["effect.gather"]);
+  });
+
   it("projectiles sound from where they leave", () => {
     const p = msg({
       case: "projectile",
@@ -57,7 +78,7 @@ describe("cuesOf", () => {
     expect(cuesOf(system("craft.done"), { ...ctx, craft: "cooking" })).toEqual([
       { events: ["message.craft.done.cooking", "message.craft.done"] },
     ]);
-    expect(cuesOf(system("gather.got"), { ...ctx, toolUse: "fishing" })).toEqual([
+    expect(cuesOf(system("gather.got"), { ...ctx, tool: { use: "fishing", pos: at } })).toEqual([
       { events: ["message.gather.got.fishing", "message.gather.got"] },
     ]);
   });
@@ -136,5 +157,33 @@ describe("assets/sounds.yaml", () => {
 
   it("serves files under audio/", () => {
     expect(m.sounds["hit"]?.url).toBe("audio/sounds/sfx/hit.ogg");
+  });
+});
+
+describe("audio files served by the Vite plugin", () => {
+  it("keeps pack file names as they are and never leaves assets/", () => {
+    const root = mkdtempSync(join(tmpdir(), "client-sounds-"));
+    try {
+      mkdirSync(join(root, "assets"), { recursive: true });
+      writeFileSync(
+        join(root, "assets", "sounds.yaml"),
+        [
+          "format: 1",
+          "sounds:",
+          '  metal: { file: "vendor/kenney-impact/Sound Pack/impactMetal 000.ogg", channel: sfx }',
+          '  sneaky: { file: "vendor/p/../../../etc/passwd.ogg", channel: sfx }',
+        ].join("\n") + "\n",
+      );
+      const files = soundFiles(root);
+      const url = "audio/vendor/kenney-impact/Sound Pack/impactMetal 000.ogg";
+      expect([...files.keys()]).toEqual([url]);
+      expect(files.get(url)).toBe(
+        join(root, "assets", "vendor", "kenney-impact", "Sound Pack", "impactMetal 000.ogg"),
+      );
+      // The page fetches encodeURI(url); the plugin decodes the path back to the key.
+      expect(decodeURIComponent(encodeURI(url))).toBe(url);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

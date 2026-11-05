@@ -48,12 +48,12 @@ describe("generated sounds", () => {
       if (g.kind === "sfx") expect(sec, g.path).toBeLessThan(2);
       else expect(sec, g.path).toBeGreaterThanOrEqual(15);
     }
-  });
+  }, 30_000); // renders every sound twice: ~3 s locally, more on a busy runner
 
   it("music loops last a whole number of bars", () => {
     // puerto: 16 bars of 4 beats at 96 bpm = 40 s.
     expect(render({ path: "music/puerto", kind: "music" }).length).toBe(40 * RATE);
-  });
+  }, 30_000);
 
   it("sounds.yaml uses every generated file and every own file exists", () => {
     const files = manifestFiles(root);

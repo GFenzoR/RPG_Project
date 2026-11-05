@@ -10,7 +10,7 @@
 // The client never reads world/: the map arrives from the server (FullMapView, MapSlice).
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import type { Plugin } from "vite";
@@ -252,11 +252,17 @@ function loadIslands(root: string): IslandRect[] {
 
 const num0 = (v: unknown): number => (typeof v === "number" ? v : 0);
 
-/** The sound files to serve or emit: published path → file on disk. */
-function soundFiles(root: string): Map<string, string> {
+/**
+ * The sound files to serve or emit: published path (as in SoundDef.url, not encoded) →
+ * file on disk. Only what sounds.yaml lists, inside assets/ (make validate checks it too).
+ */
+export function soundFiles(root: string): Map<string, string> {
+  const assets = resolve(root, "assets");
   const out = new Map<string, string>();
-  for (const s of Object.values(loadSounds(root).sounds))
-    out.set(s.url, join(root, "assets", s.url.slice(AUDIO_PREFIX.length)));
+  for (const s of Object.values(loadSounds(root).sounds)) {
+    const file = resolve(assets, s.url.slice(AUDIO_PREFIX.length));
+    if (file.startsWith(assets + sep)) out.set(s.url, file);
+  }
   return out;
 }
 
@@ -295,7 +301,15 @@ export function rpgContent(): Plugin {
         const path = new URL(req.url ?? "/", "http://client").pathname;
         if (req.method === "GET" && path.startsWith("/" + AUDIO_PREFIX)) {
           // Only files listed in sounds.yaml, read on each request (make sounds updates them).
-          const file = soundFiles(root).get(decodeURIComponent(path.slice(1)));
+          // The page encodes the URL (spaces in pack names); the lookup is an allowlist, so a
+          // "../" in the request cannot reach anything else.
+          let wanted = "";
+          try {
+            wanted = decodeURIComponent(path.slice(1));
+          } catch {
+            // malformed escape: 404 below
+          }
+          const file = soundFiles(root).get(wanted);
           if (!file) {
             res.statusCode = 404;
             res.end();

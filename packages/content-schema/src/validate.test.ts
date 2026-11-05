@@ -119,6 +119,58 @@ describe("validator diagnostics", () => {
     expect(has("volume")).toBe(true);
   });
 
+  it("accepts a third-party sound pack with its CREDITS row and LICENSE, as spritepack does", () => {
+    const pack = file("assets/vendor/kenney-impact");
+    mkdirSync(join(pack, "Audio"), { recursive: true });
+    writeFileSync(join(pack, "Audio", "impactMetal_heavy_000.ogg"), "x");
+    writeFileSync(join(pack, "License.txt"), "CC0");
+    mkdirSync(file("assets/vendor/nolicence"), { recursive: true });
+    writeFileSync(file("assets/vendor/nolicence/x.ogg"), "x");
+    // The table form of the template, with no trailing slash after the folder.
+    writeFileSync(
+      file("assets/CREDITS.md"),
+      [
+        "| Pack | Autor | Licencia | Fuente | Carpeta | Atribución |",
+        "|---|---|---|---|---|---|",
+        "| Impact Sounds | Kenney | CC0 | https://example.com | `assets/vendor/kenney-impact` | No |",
+        "| Something | Someone | CC0 | https://example.com | `assets/vendor/nolicence` | No |",
+        "See also assets/vendor/notatable/ (prose, not a row).",
+      ].join("\n") + "\n",
+    );
+    const write = (sounds: string[]): string[] => {
+      writeFileSync(
+        file("assets/sounds.yaml"),
+        ["format: 1", "sounds:", ...sounds].join("\n") + "\n",
+      );
+      return messages(root).filter((m) => m.includes("sounds.yaml"));
+    };
+    expect(
+      write([
+        "  metal: { file: vendor/kenney-impact/Audio/impactMetal_heavy_000.ogg, channel: sfx }",
+      ]),
+    ).toEqual([]);
+    expect(
+      write(['  spaced: { file: "vendor/kenney-impact/Sound Pack 1.2/x y.ogg", channel: sfx }']),
+    ).toEqual([expect.stringContaining("does not exist")]);
+    const bare = write(["  bare: { file: vendor/nolicence/x.ogg, channel: sfx }"]);
+    expect(bare).toEqual([
+      expect.stringContaining('pack "nolicence" has no LICENSE or COPYING file'),
+    ]);
+    const prose = write(["  prose: { file: vendor/notatable/x.ogg, channel: sfx }"]);
+    expect(prose.some((m) => m.includes('pack "notatable" has no row'))).toBe(true);
+    for (const bad of [
+      "vendor/kenney-impact/../x.ogg",
+      "vendor/kenney-impact/.hidden.ogg",
+      "sounds/../x.ogg",
+    ]) {
+      const out = write([`  bad: { file: "${bad}", channel: sfx }`]);
+      expect(
+        out.some((m) => m.includes("file: must match ^")),
+        bad,
+      ).toBe(true);
+    }
+  });
+
   it("checks the i18n keys the server and client code use", () => {
     mkdirSync(file("server/internal/session"), { recursive: true });
     mkdirSync(file("client/src/ui"), { recursive: true });

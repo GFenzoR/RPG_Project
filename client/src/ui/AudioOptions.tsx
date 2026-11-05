@@ -10,12 +10,13 @@ import type { AudioPrefs } from "../audio/prefs.ts";
 export function AudioOptions(props: {
   t: Translate;
   audio: AudioEngine;
-  initial: AudioPrefs;
   storage: Storage | undefined;
 }): JSX.Element {
   const { t, audio } = props;
   const [open, setOpen] = useState(false);
-  const [prefs, setPrefs] = useState(props.initial);
+  // The panel mounts again when it moves between the corner and the game's header: start
+  // from what the engine uses now, never from the values the page loaded with.
+  const [prefs, setPrefs] = useState(() => audio.currentPrefs());
   const change = (next: AudioPrefs): void => {
     setPrefs(next);
     audio.setPrefs(next);

@@ -79,7 +79,8 @@ export function browserPorts(): AudioPorts {
       return Ctor ? (new Ctor() as unknown as ContextLike) : undefined;
     },
     async fetch(url) {
-      const res = await fetch(url);
+      // Pack file names may have capitals and spaces (vendor/<pack>/Sound Pack/x y.ogg).
+      const res = await fetch(encodeURI(url));
       if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
       return res.arrayBuffer();
     },
@@ -173,6 +174,11 @@ export class AudioEngine {
     if (this.ctx.state === "suspended") void this.ctx.resume().catch(() => undefined);
   }
 
+  /** The volumes in use: the options panel starts from these each time it mounts. */
+  currentPrefs(): AudioPrefs {
+    return this.prefs;
+  }
+
   setPrefs(prefs: AudioPrefs): void {
     this.prefs = prefs;
     this.applyVolumes();
@@ -202,6 +208,9 @@ export class AudioEngine {
   play(events: readonly string[], at?: Pos, listener?: Pos): string | undefined {
     const ctx = this.ctx;
     if (!ctx) return undefined;
+    // Suspended (no gesture yet, or the tab's audio is paused): drop one-shots, or they
+    // would pile up on a frozen clock and all fire when it resumes. Loops are unaffected.
+    if (ctx.state !== "running") return undefined;
     let ids: string[] | undefined;
     for (const e of events) {
       ids = this.manifest.events[e];
@@ -227,6 +236,8 @@ export class AudioEngine {
       if (!b || this.ports.now() - asked > LATE_MS) return;
       this.pruneVoices();
       if (this.voices.length >= MAX_VOICES) return;
+      // Plays queued while the file loaded run in order: the cap counts the ones before.
+      if (this.voices.filter((v) => v.sound === id).length >= def.maxVoices) return;
       this.startVoice(id, b, def.volume * where.gain, where.pan);
     });
     return id;

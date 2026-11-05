@@ -1678,8 +1678,8 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await options.getByTestId("mute-sfx").check();
   await expect(options.locator(".channel").nth(1)).toContainText("Música");
   await expect(options.locator(".channel").nth(1).locator(".value")).toHaveText("20");
-  await options.screenshot({ path: join(shots, "26-sound-options.png") });
-  await shot(page, "27-sound-options-game");
+  await options.screenshot({ path: join(shots, "34-sound-options.png") });
+  await shot(page, "35-sound-options-game");
   // Muted effects spend no voice: a step is silent now.
   await options.getByRole("button", { name: "Cerrar" }).click();
   await expect(options).toHaveCount(0);
@@ -1694,6 +1694,24 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await expect(page.getByTestId("volume-music")).toHaveValue("20");
   await expect(page.getByTestId("mute-sfx")).toBeChecked();
   await expect(page.getByTestId("volume-master")).toHaveValue("80");
-  await shot(page, "28-sound-options-login");
+  await shot(page, "36-sound-options-login");
+
+  // The panel moves from the corner to the game's header: it must show what is in use
+  // now, not what the page loaded with (no reload this time).
+  await page.getByTestId("mute-ambient").check();
+  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  await page.locator(".hud").getByTestId("options-button").click();
+  const hud = page.locator(".hud").getByTestId("options");
+  await expect(hud.getByTestId("mute-ambient")).toBeChecked();
+  await expect(hud.getByTestId("volume-music")).toHaveValue("20");
+  await expect(hud.getByTestId("mute-sfx")).toBeChecked();
+  // A change here keeps the others as they are, in the engine and in storage.
+  await hud.getByTestId("volume-ui").fill("50");
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("rpg.audio") ?? "{}"));
+  expect(saved).toMatchObject({
+    volume: { music: 0.2, ui: 0.5, master: 0.8 },
+    muted: { sfx: true, ambient: true, music: false },
+  });
   expect(errors).toEqual([]);
 });

@@ -1,7 +1,8 @@
 // Validates data/ and i18n/ against the JSON Schemas plus the rules a schema cannot
 // express: unique IDs, cross references, dialog graphs, translations and ids.lock.yaml.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
+import { isLicenseFile, registeredPacks } from "./credits.ts";
 import { checkIdsLock } from "./ids.ts";
 import { SchemaSet } from "./schemas.ts";
 import type { RefKind, SchemaName, Usage } from "./schemas.ts";
@@ -816,19 +817,35 @@ class Validator {
     if (!src || !isObj(src.data)) return;
     const sounds = isObj(src.data["sounds"]) ? src.data["sounds"] : {};
     const creditsFile = join(this.root, "assets", "CREDITS.md");
-    const credits = existsSync(creditsFile) ? readFileSync(creditsFile, "utf8") : "";
+    const packs = registeredPacks(existsSync(creditsFile) ? readFileSync(creditsFile, "utf8") : "");
+    const unlicensed = new Set<string>();
     for (const [id, s] of Object.entries(sounds)) {
       const file = isObj(s) ? s["file"] : undefined;
       if (typeof file !== "string") continue;
-      if (!existsSync(join(this.root, "assets", file)))
-        this.error(
-          src,
-          ["sounds", id, "file"],
-          `assets/${file} does not exist (run \`make sounds\`)`,
-        );
+      const where: PathSegment[] = ["sounds", id, "file"];
+      const abs = resolve(this.root, "assets", file);
+      if (!abs.startsWith(resolve(this.root, "assets") + sep)) {
+        this.error(src, where, `assets/${file} is outside assets/`);
+        continue;
+      }
+      if (!existsSync(abs))
+        this.error(src, where, `assets/${file} does not exist (run \`make sounds\`)`);
       const pack = /^vendor\/([^/]+)\//.exec(file)?.[1];
-      if (pack && !credits.includes(`assets/vendor/${pack}/`))
-        this.error(src, ["sounds", id, "file"], `pack "${pack}" has no row in assets/CREDITS.md`);
+      if (!pack) continue;
+      if (!packs.has(pack)) {
+        this.error(src, where, `pack "${pack}" has no row in assets/CREDITS.md`);
+        continue;
+      }
+      const dir = join(this.root, "assets", "vendor", pack);
+      if (unlicensed.has(pack) || !existsSync(dir) || !readdirSync(dir).some(isLicenseFile)) {
+        if (!unlicensed.has(pack))
+          this.error(
+            src,
+            where,
+            `pack "${pack}" has no LICENSE or COPYING file in assets/vendor/${pack}/`,
+          );
+        unlicensed.add(pack);
+      }
     }
     const channelOf = (id: string): unknown => {
       const s = sounds[id];

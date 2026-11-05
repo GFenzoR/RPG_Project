@@ -581,8 +581,12 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   subterráneos (z > 7). Al cambiar de isla o de zona hay un fundido cruzado (`fade_ms`).
   Hoy hay tres loops: Puerto, Bosque y Cueva. El ambiente son olas en Puerto y bosque en
   Bosque; bajo tierra no hay ambiente.
-- **Autoplay**: nada suena hasta el primer click o tecla. Así lo exigen los navegadores y
-  los webviews de la app de escritorio.
+- **Autoplay**: nada suena hasta el primer gesto (click, toque o tecla). Así lo exigen los
+  navegadores y los webviews de la app de escritorio. Mientras el audio esté suspendido,
+  los efectos se descartan, para que no suenen todos juntos al reanudarse.
+- **Recolección**: el sonido de la herramienta (minería, tala, pesca) solo se oye en la
+  casilla donde el jugador la usó. La cosecha de otros jugadores y el efecto de una
+  estación al fabricar suenan como recolección genérica.
 
 ## Cosméticos (monetización futura)
 - Outfits, colores de outfit, monturas (solo visual y velocidad igual para todos),
