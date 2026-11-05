@@ -3,6 +3,7 @@ package content
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,6 +27,8 @@ type Balance struct {
 	// Reports and Idle are the player reports and the idle disconnect (T4.1).
 	Reports Reports `yaml:"reports"`
 	Idle    Idle    `yaml:"idle"`
+	// AntiBot is the bot detection (T4.1 2/2): signals, score and responses.
+	AntiBot AntiBot `yaml:"antibot"`
 	// Conditions are the condition definitions by id (T3.2).
 	Conditions ConditionDefs `yaml:"conditions"`
 }
@@ -231,6 +234,131 @@ func (i Idle) check() error {
 	return nil
 }
 
+// AntiBot holds the behaviour signals, the suspicion score and its graded responses
+// (T4.1, docs/01-architecture.md "Trampas y anti-bot"). Times are in ms of game time.
+type AntiBot struct {
+	// EvalEveryMs is how often each online character's score is updated (0 = off).
+	EvalEveryMs int `yaml:"eval_every_ms"`
+	// HalfLifeMs: the score halves over this long without new points.
+	HalfLifeMs int `yaml:"half_life_ms"`
+	// PauseMs: a gap between actions this long is a pause (not an interval, and it ends
+	// a continuous session).
+	PauseMs int `yaml:"pause_ms"`
+	Signals struct {
+		Regularity struct {
+			Weight     float64 `yaml:"weight"`
+			MinSamples int     `yaml:"min_samples"`
+			// CVLow and CVHigh: the coefficient of variation of the intervals at which
+			// the signal is 1 and 0.
+			CVLow  float64 `yaml:"cv_low"`
+			CVHigh float64 `yaml:"cv_high"`
+			// StdMs: the standard deviation of the intervals must also be this small
+			// (0 at twice it): a person's timing error does not shrink as the interval
+			// grows, so a long, server-paced interval (a full mana bar) has a low CV.
+			StdMs int `yaml:"std_ms"`
+		} `yaml:"regularity"`
+		Reaction struct {
+			Weight     float64 `yaml:"weight"`
+			MinSamples int     `yaml:"min_samples"`
+			// A heal within WindowMs of a hit answers it; FastMs or less is inhuman, and
+			// a standard deviation of StdMs or less is constant.
+			WindowMs int `yaml:"window_ms"`
+			FastMs   int `yaml:"fast_ms"`
+			StdMs    int `yaml:"std_ms"`
+		} `yaml:"reaction"`
+		Route struct {
+			Weight float64 `yaml:"weight"`
+			// Segment is how many steps make a route segment; MinSteps the steps needed.
+			Segment  int `yaml:"segment"`
+			MinSteps int `yaml:"min_steps"`
+			// RepeatLow and RepeatHigh: the share of repeated segments at 0 and 1.
+			RepeatLow  float64 `yaml:"repeat_low"`
+			RepeatHigh float64 `yaml:"repeat_high"`
+		} `yaml:"route"`
+		Session struct {
+			Weight float64 `yaml:"weight"`
+			LowMs  int     `yaml:"low_ms"`
+			HighMs int     `yaml:"high_ms"`
+		} `yaml:"session"`
+		Income struct {
+			Weight float64 `yaml:"weight"`
+			// Peers: characters of the same band of BandLevels levels online, at least
+			// MinPeers, whose median income per hour is compared.
+			MinPeers   int     `yaml:"min_peers"`
+			BandLevels int     `yaml:"band_levels"`
+			RatioLow   float64 `yaml:"ratio_low"`
+			RatioHigh  float64 `yaml:"ratio_high"`
+		} `yaml:"income"`
+	} `yaml:"signals"`
+	// Thresholds of the graded responses, in score points.
+	Thresholds struct {
+		Log      float64 `yaml:"log"`
+		Notify   float64 `yaml:"notify"`
+		Presence float64 `yaml:"presence"`
+		Suspend  float64 `yaml:"suspend"`
+	} `yaml:"thresholds"`
+	// Presence is the in-game presence check: answered within TimeoutMs of active play; a
+	// failure adds FailPoints (never past the suspension threshold by itself). It is asked
+	// after a random delay of up to DelayMs. A suspension needs a failed check or one asked
+	// ConfirmMs ago. A due check dodged for DeferAlertMs (combat, no-logout tile) alerts
+	// the GMs. RandomPerHour: chance per hour of play of a random check for anyone (no
+	// effect if failed), so a check says nothing about the score.
+	Presence struct {
+		TimeoutMs     int     `yaml:"timeout_ms"`
+		DelayMs       int     `yaml:"delay_ms"`
+		FailPoints    float64 `yaml:"fail_points"`
+		ConfirmMs     int     `yaml:"confirm_ms"`
+		DeferAlertMs  int     `yaml:"defer_alert_ms"`
+		RandomPerHour float64 `yaml:"random_per_hour"`
+	} `yaml:"presence"`
+	// SuspendMs is the length of an automatic suspension (at most 30 days).
+	SuspendMs int64 `yaml:"suspend_ms"`
+}
+
+func (a AntiBot) check() error {
+	if a.EvalEveryMs < 0 || (a.EvalEveryMs > 0 && (a.HalfLifeMs < 60_000 || a.PauseMs < 1000)) {
+		return errors.New("antibot: eval_every_ms >= 0; when on, half_life_ms >= 60000 and pause_ms >= 1000")
+	}
+	if a.EvalEveryMs == 0 {
+		return nil
+	}
+	s := a.Signals
+	for name, w := range map[string]float64{"regularity": s.Regularity.Weight, "reaction": s.Reaction.Weight,
+		"route": s.Route.Weight, "session": s.Session.Weight, "income": s.Income.Weight} {
+		if w < 0 {
+			return fmt.Errorf("antibot.signals.%s.weight must be >= 0", name)
+		}
+	}
+	if s.Regularity.CVLow < 0 || s.Regularity.CVHigh <= s.Regularity.CVLow || s.Regularity.StdMs <= 0 || s.Reaction.FastMs <= 0 ||
+		s.Reaction.WindowMs < s.Reaction.FastMs || s.Reaction.StdMs <= 0 || s.Route.Segment < 2 || s.Route.Segment > 32 ||
+		s.Route.RepeatHigh <= s.Route.RepeatLow || s.Session.HighMs <= s.Session.LowMs || s.Income.BandLevels < 1 ||
+		s.Income.MinPeers < 2 || s.Income.RatioHigh <= s.Income.RatioLow {
+		return errors.New("antibot.signals: cv_low < cv_high, regularity.std_ms > 0, 0 < fast_ms <= window_ms, std_ms > 0, segment in 2..32, " +
+			"repeat_low < repeat_high, low_ms < high_ms, band_levels >= 1, min_peers >= 2, ratio_low < ratio_high")
+	}
+	t := a.Thresholds
+	if !(0 < t.Log && t.Log < t.Notify && t.Notify < t.Presence && t.Presence < t.Suspend) {
+		return errors.New("antibot.thresholds: 0 < log < notify < presence < suspend")
+	}
+	// A signal held forever settles at weight / (1 − 0.5^(eval/half_life)): one signal
+	// alone (a habit of a real player) must never tell the GMs.
+	settle := 1 / (1 - math.Pow(0.5, float64(a.EvalEveryMs)/float64(a.HalfLifeMs)))
+	for _, w := range []float64{s.Regularity.Weight, s.Reaction.Weight, s.Route.Weight, s.Session.Weight, s.Income.Weight} {
+		if w*settle >= t.Notify {
+			return fmt.Errorf("antibot: a weight of %v alone settles at %.0f points, not under notify", w, w*settle)
+		}
+	}
+	if pr := a.Presence; pr.TimeoutMs < 60_000 || pr.DelayMs < 0 || pr.FailPoints < 0 || pr.ConfirmMs < 0 ||
+		pr.DeferAlertMs < 60_000 || pr.RandomPerHour < 0 || pr.RandomPerHour > 1 {
+		return errors.New("antibot.presence: timeout_ms and defer_alert_ms >= 60000, delay_ms, fail_points and " +
+			"confirm_ms >= 0, random_per_hour in 0..1")
+	}
+	if a.SuspendMs < 60_000 || a.SuspendMs > 30*24*3600*1000 {
+		return errors.New("antibot.suspend_ms must be in 60000..30 days (longer bans are a GM's decision)")
+	}
+	return nil
+}
+
 // Inventory holds the item and container rules (T1.8).
 type Inventory struct {
 	// StartContainer is the container item a character that never played starts with.
@@ -290,6 +418,46 @@ type Experience struct {
 		A, B, C, D float64
 	} `yaml:"curve"`
 	MaxLevel int `yaml:"max_level"`
+	// Pace is the leveling pace target: hours of play to reach each level, at least two
+	// anchors with increasing levels and hours. Between anchors (and beyond them) it is a
+	// power law in level, so the pace keeps slowing down as the curve does.
+	Pace []PaceAnchor `yaml:"pace"`
+}
+
+// PaceAnchor says that reaching Level takes about Hours of play.
+type PaceAnchor struct {
+	Level int     `yaml:"level"`
+	Hours float64 `yaml:"hours"`
+}
+
+func (e Experience) check() error {
+	for i, a := range e.Pace {
+		if a.Level < 2 || a.Hours <= 0 || i > 0 && (a.Level <= e.Pace[i-1].Level || a.Hours <= e.Pace[i-1].Hours) {
+			return errors.New("experience.pace: levels >= 2 and hours > 0, both increasing")
+		}
+	}
+	if len(e.Pace) < 2 {
+		return errors.New("experience.pace needs at least two anchors")
+	}
+	return nil
+}
+
+// LevelsPerHour is the target pace at level: hours(L) = h_i × (L / L_i)^k between the
+// anchors around L (the first or last pair beyond them), so its rate is
+// 1 / (k × hours(L) / L) levels per hour.
+func (e Experience) LevelsPerHour(level int) float64 {
+	if len(e.Pace) < 2 {
+		return 0
+	}
+	i := 1
+	for i < len(e.Pace)-1 && level > e.Pace[i].Level {
+		i++
+	}
+	a, b := e.Pace[i-1], e.Pace[i]
+	k := math.Log(b.Hours/a.Hours) / math.Log(float64(b.Level)/float64(a.Level))
+	l := float64(max(level, 1))
+	hours := a.Hours * math.Pow(l/float64(a.Level), k)
+	return l / (k * hours)
 }
 
 // TotalFor returns the total experience needed to reach level n (0 for n <= 1).
@@ -373,6 +541,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 100 {
 		return Balance{}, errors.New("movement.max_path_tiles must be in 1..100 (world.MaxPathLength)")
 	}
+	if err := b.Experience.check(); err != nil {
+		return Balance{}, err
+	}
 	if err := b.Combat.check(); err != nil {
 		return Balance{}, err
 	}
@@ -404,6 +575,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, err
 	}
 	if err := b.Idle.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.AntiBot.check(); err != nil {
 		return Balance{}, err
 	}
 	if g := b.Gathering; g.UseIntervalMs < 0 || g.AFK.AfterMs < 0 || g.AFK.Factor < 0 || g.AFK.Factor > 1 {

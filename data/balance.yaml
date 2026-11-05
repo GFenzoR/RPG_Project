@@ -8,9 +8,14 @@ movement:
 
 experience:
   # Total XP for level n = a*n^3 + b*n^2 + c*n (+ d). Own curve, zero at level 1.
-  # Pace target: level 8 in ~1 h, 20 in ~8 h, 50 in ~80 h.
   curve: { a: 12, b: -24, c: 12 }
   max_level: 1000
+  # Pace target (hours of play to reach a level): a power law between anchors. It is what
+  # the bot detection takes as the least a level band earns (antibot.signals.income).
+  pace:
+    - { level: 8, hours: 1 }
+    - { level: 20, hours: 8 }
+    - { level: 50, hours: 80 }
 
 skills:
   base:
@@ -144,6 +149,34 @@ reports:                    # player reports (T4.1, docs/02-game-design.md "Mode
 idle:                       # idle disconnect (T4.1); pings and keepalives do not count
   kick_after_ms: 900000     # 15 min without walking, attacking, using or talking
   warn_before_ms: 60000     # a system message this long before
+
+# Bot detection (T4.1, docs/01-architecture.md "Detección de bots"). Each signal is 0..1;
+# every eval_every_ms the score gains sum(weight × signal) and halves every half_life_ms.
+# A sustained signal of weight w settles near w × 87 points (60 evaluations per half-life
+# ≈ 1 / (1 − 0.5^(1/60))). Idle characters have no signals. Responses are graded and
+# conservative: log, notify the GMs, an in-game presence check, and a temporary suspension
+# only after a failed check or a check an hour ago with the score still there. A ban is
+# always a GM's decision (/ban).
+antibot:
+  eval_every_ms: 60000
+  half_life_ms: 3600000
+  pause_ms: 180000          # 3 min without a real action is a pause
+  signals:
+    regularity: { weight: 3, min_samples: 300, cv_low: 0.05, cv_high: 0.25, std_ms: 60 }   # time between actions
+    reaction: { weight: 3, min_samples: 15, window_ms: 4000, fast_ms: 200, std_ms: 60 }  # heal after a hit (people: ~300 ms)
+    route: { weight: 2, segment: 12, min_steps: 300, repeat_low: 0.5, repeat_high: 0.9 }  # same exact path
+    session: { weight: 1, low_ms: 28800000, high_ms: 57600000 }   # 8..16 h without a pause
+    income: { weight: 2, min_peers: 5, band_levels: 10, ratio_low: 4, ratio_high: 8 }  # vs median of the band
+  # One signal alone settles under notify (3 × 87 = 261 < 300): it takes two to tell a GM.
+  thresholds: { log: 100, notify: 300, presence: 400, suspend: 600 }
+  presence:
+    timeout_ms: 600000      # 10 min of active play to answer; never asked in combat, on a no-logout tile or idle
+    delay_ms: 300000        # asked at a random moment of the next 5 min
+    fail_points: 150        # a failed check adds this (never past suspend by itself)
+    confirm_ms: 3600000     # or suspend if the score is still there an hour after a check
+    defer_alert_ms: 1800000 # a due check dodged for 30 min (always fighting...) alerts the GMs
+    random_per_hour: 0.02   # random checks for anyone (no effect if failed): a check reveals nothing
+  suspend_ms: 86400000      # 24 h; longer bans are for a GM
 
 # Conditions (T3.2, docs/02-game-design.md "Condiciones"). Each source (spell, monster
 # attack) says how strong and how long; these are the rules of each condition.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/pkg/bot"
@@ -67,6 +68,9 @@ type player struct {
 	pace  pacer
 	acts  actions
 	lastP time.Time
+	// prof, when set (-profile), paces the bot like that profile: its waits, its breaks,
+	// and whether it answers presence checks (a person does, a script does not).
+	prof bot.Profile
 }
 
 // errDisconnected reports that the server closed the connection.
@@ -149,10 +153,27 @@ func (p *player) loop(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := p.idle(ctx, time.Duration(1000+p.r.IntN(3000))*time.Millisecond); err != nil {
+		if err := p.idle(ctx, p.rest()); err != nil {
 			return err
 		}
+		if pr := p.b.TakePresence(); pr != nil && p.prof.Wander {
+			if err := p.send(ctx, func(ctx context.Context) error {
+				return p.b.AnswerPresence(ctx, pr.ID, answerFor(pr))
+			}); err != nil {
+				return err
+			}
+		}
 	}
+}
+
+// rest is the wait between two activities: the profile's beat and breaks with
+// -profile, else 1-4 s.
+func (p *player) rest() time.Duration {
+	if p.prof.Name == "" {
+		return time.Duration(1000+p.r.IntN(3000)) * time.Millisecond
+	}
+	d := p.prof.BeatDelay(p.r)
+	return d + p.prof.Pause(p.r, d)
 }
 
 // walkTo sends a planned path and waits until the bot arrives, is stopped or the
@@ -338,4 +359,17 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+// answerFor is the option a person picks for a presence check: the one its question asks
+// for (presence.question.<x> asks for presence.option.<x>). A script can do the same: the
+// server never treats a right answer as proof that nobody is botting (docs/01).
+func answerFor(pr *bot.Presence) uint32 {
+	want := "presence.option." + strings.TrimPrefix(pr.Question, "presence.question.")
+	for id, key := range pr.Options {
+		if key == want {
+			return id
+		}
+	}
+	return 0
 }

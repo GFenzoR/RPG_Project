@@ -59,6 +59,9 @@ func (w *World) DieForTest(ctx *game.TickContext, p *Player) { w.die(ctx, p) }
 // MaxMana returns p's maximum mana.
 func (p *Player) MaxMana() int { return p.maxMana }
 
+// Mana returns p's mana.
+func (p *Player) Mana() int { return p.mana }
+
 // Map returns the world's map.
 func (w *World) Map() *world.Map { return w.m }
 
@@ -171,3 +174,28 @@ func (w *World) SetInvisibleForTest(p *Player, on bool) {
 		w.unhide(p)
 	}
 }
+
+// SuspicionForTest returns p's suspicion score, its last signals and response level.
+func (w *World) SuspicionForTest(p *Player) (float64, [5]float64, int) {
+	if p.sus == nil {
+		return -1, [5]float64{}, 0
+	}
+	return p.sus.score, p.sus.signals, p.sus.level
+}
+
+// SetSuspicionForTest sets p's score as of now (bot detection, T4.1).
+func (w *World) SetSuspicionForTest(p *Player, score float64) {
+	p.sus.score, p.sus.lastEval = score, w.nowTick()
+}
+
+// EvaluateNowForTest makes p's next bot detection evaluation due on the next tick.
+func (w *World) EvaluateNowForTest(p *Player) { p.abNext = 0 }
+
+// IncomeRatioForTest recomputes the band medians and returns p's income ratio now.
+func (w *World) IncomeRatioForTest(p *Player) float64 {
+	w.incomeMedians(w.nowTick())
+	return w.incomeRatio(w.nowTick(), p)
+}
+
+// GainExperienceForTest gives p experience as a kill would.
+func (w *World) GainExperienceForTest(p *Player, xp int64) { w.gainExperience(p, xp) }

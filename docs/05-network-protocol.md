@@ -212,6 +212,7 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
 | `ReportPlayer` | `creature_id` (un jugador a la vista), `reason` (1..200 caracteres) (T4.1) |
+| `PresenceAnswer` | `check_id`, `option_id` (respuesta a un `PresenceCheck`, T4.1) |
 | `Ping` | `client_time` |
 | `Logout` | — |
 
@@ -429,6 +430,31 @@ Reglas en `02-game-design.md` ("Moderación"); diseño en `01-architecture.md`.
   `reporter`, `reason`, `minutes`) por reporte, o `gm.reports_none`. `/closereport id
   resolución` → `gm.report_closed`, `gm.report_not_found` o `gm.report_not_open` (`id`).
   Llegan cuando responde la base, unos ticks después.
+
+### Chequeo de presencia (T4.1, `server/internal/session/antibot.go`)
+Diseño en `01-architecture.md` ("Detección de bots").
+- **`PresenceCheck{check_id, question, options[], timeout_ms}`**: `question` y cada
+  `DialogOption.text` son claves i18n (`presence.question.<color>`,
+  `presence.option.<color>`). Los ids de las opciones van del 1 al 9 en orden al azar.
+  `timeout_ms` es lo que queda: el plazo corre solo mientras el personaje está en línea y
+  activo. Con un chequeo pendiente se manda otra vez, con el mismo `check_id` y el tiempo
+  que queda, al volver a entrar y al volver a jugar después de estar inactivo. El servidor
+  no vence antes de que se juegue todo `timeout_ms` desde que lo manda, así que
+  `ahora + timeout_ms` en el cliente es más tarde que el plazo real solo por la latencia
+  (y mientras el jugador está ausente, más temprano: el reloj del servidor se para). Al
+  vencer, el servidor no manda nada: el cliente lo cierra solo, 3 s antes de esa hora (con
+  un timer, sin esperar mensajes). Una respuesta se manda siempre, aunque la ventana ya
+  estuviera vencida en el cliente: si el chequeo sigue pendiente vale, si no, se ignora.
+  Si llega otra vez un `check_id` que el cliente ya contestó (el reenvío se cruzó con la
+  respuesta), lo ignora. Los chequeos al azar y los
+  de GM son idénticos a los de la detección.
+- **`PresenceAnswer{check_id, option_id}`**: con un `check_id` que no está pendiente no
+  pasa nada. Con el pendiente, correcto o no, la respuesta es siempre el `Message` de
+  sistema `presence.thanks`.
+- GM: `/presence Nombre` → `gm.presence_sent` (`name`) o `gm.player_offline` (también un
+  invisible que el GM no ve) / `gm.protected`. A los GM en línea les llegan
+  `gm.bot_suspect` (`name`, `score`), `gm.presence_failed` (`name`) y
+  `gm.presence_deferred` (`name`).
 
 ### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
 - `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso

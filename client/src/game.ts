@@ -3,6 +3,7 @@
 // the server says; the one thing it predicts is the next own step.
 import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
+import type { PresenceState } from "./state/world.ts";
 import { ChatChannel, CreatureKind, Direction, PartyAction } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
@@ -62,6 +63,8 @@ export interface GameUi {
   shop: ShopState | undefined;
   /** The crafting station window (T3.4). */
   station: StationState | undefined;
+  /** A presence check waiting for an answer (T4.1), or undefined. */
+  presence: PresenceState | undefined;
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
@@ -247,6 +250,15 @@ export class Game {
   /** Invites a player the client sees (battle list). */
   partyInvite(id: number): void {
     this.party(PartyAction.INVITE, id);
+  }
+
+  /** Answers the presence check (T4.1); the server replies the same whatever the answer. */
+  presenceAnswer(id: number, option: number): void {
+    // Always sent, even past its time on this side: while the player was away the server's
+    // clock stopped, so the check may still be pending there (it ignores one that is not).
+    this.conn.send({ case: "presenceAnswer", value: { checkId: id, optionId: option } });
+    this.world.answerPresence(id);
+    this.publish();
   }
 
   /** Reports a player the client sees to the staff (T4.1, battle list). */
@@ -478,6 +490,18 @@ export class Game {
     return this.canvas?.itemIcon(itemId);
   }
 
+  /** Publishes again when the presence check runs out: no server batch may come then. */
+  private presenceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private armPresenceTimer(): void {
+    clearTimeout(this.presenceTimer);
+    this.presenceTimer = undefined;
+    const ms = this.world.presenceClosesIn(performance.now());
+    if (ms !== undefined && !this.destroyed) {
+      this.presenceTimer = setTimeout(() => this.publish(), ms + 50);
+    }
+  }
+
   private publish(): void {
     const w = this.world;
     const self = w.self;
@@ -499,10 +523,13 @@ export class Game {
       dialog: w.dialog,
       shop: w.shop,
       station: w.station,
+      // Until answered or out of time (the server sends nothing on a timeout).
+      presence: w.activePresence(performance.now()),
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       selfId: w.selfId,
     });
+    this.armPresenceTimer();
   }
 
   // ---- sound (T3.7): what each event sounds like is assets/sounds.yaml --------------------
@@ -530,6 +557,7 @@ export class Game {
 
   destroy(): void {
     this.destroyed = true;
+    clearTimeout(this.presenceTimer);
     this.opts.audio?.setLoops(undefined, undefined);
     this.cancelUse();
     window.removeEventListener("keydown", this.onKeyDown);

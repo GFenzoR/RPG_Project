@@ -3,6 +3,7 @@ package session
 import (
 	"slices"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/combat"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -79,7 +80,7 @@ func (w *World) setTarget(p *Player, id uint32) {
 		p.afkTarget, p.answeredAt = m, 0
 		p.recordEvent(w.nowTick(), eventAttack, m.kind.def.ID, 0, 0)
 	}
-	p.active(w.nowTick())
+	p.active(w.nowTick(), antibot.KindOther)
 	p.target = m
 }
 
@@ -267,6 +268,9 @@ func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element 
 	w.markFight(ctx, p)
 	dmg = min(dmg, p.health)
 	p.health -= dmg
+	if dmg > 0 {
+		w.abHurt(ctx.Tick, p)
+	}
 	w.hitEvents(p.id, p.pos, dmg, healthPercent(p.health, p.maxHealth), element)
 	if dmg > 0 {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})

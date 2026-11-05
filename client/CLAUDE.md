@@ -196,6 +196,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   manda `ReportPlayer` solo con el motivo (`Game.reportPlayer`). El contexto lo pone el
   servidor; la respuesta llega como mensaje del sistema (`report.*`).
 - `Disconnect{IDLE}` → `client.disconnect.idle` (la tabla de motivos es automática).
+- `WorldState.presence` (de `PresenceCheck`) abre `ui/Presence.tsx` arriba del mapa: la
+  pregunta y las opciones son claves i18n; no toma teclas ni bloquea el juego. Responder
+  manda `PresenceAnswer` y la cierra; el servidor contesta igual con cualquier respuesta.
+  Se cierra sola 3 s antes de su plazo (`WorldState.activePresence`, y un timer en `Game`
+  porque al vencer el servidor no avisa); un click se manda siempre (el chequeo puede
+  seguir pendiente en el servidor si el jugador estuvo ausente) e ignora el reenvío de un
+  chequeo ya contestado.
 
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta

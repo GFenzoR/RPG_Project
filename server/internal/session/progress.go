@@ -195,6 +195,9 @@ func (w *World) skillList(p *Player) []*pb.SkillProgress {
 // with the vocation's stats of each new level.
 func (w *World) gainExperience(p *Player, xp int64) {
 	p.experience += xp
+	if p.earn != nil && xp > 0 {
+		p.earn.xp += xp // income per hour, for the bot detection (T4.1)
+	}
 	w.eachWatcher(p, func(o *Player) { // not to who cannot see an invisible p (T3.2)
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
 			Pos: posMsg(p.pos), Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_EXPERIENCE, Amount: uint64(xp),

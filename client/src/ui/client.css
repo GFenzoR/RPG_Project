@@ -892,3 +892,36 @@ body.using-item canvas {
   display: flex;
   gap: 0.35rem;
 }
+
+/* Presence check (T4.1): over the map, top centre, without blocking the game. */
+.presence {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  max-width: 22rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--panel, #1c2128);
+  border: 1px solid #e0a060;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.presence h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.presence p {
+  margin: 0;
+}
+.presence .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.presence .hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}

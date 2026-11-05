@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -600,7 +601,9 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	if from.kind == locSlot || to.kind == locSlot {
 		w.equipmentChanged(p)
 	}
-	p.active(ctx.Tick)
+	// KindOther, not KindItem: a move has no cooldown, and must not clear a refused use,
+	// gathering or crafting try (earlyTry).
+	p.active(ctx.Tick, antibot.KindOther)
 	if p.carried() != before {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}
@@ -835,12 +838,13 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 		w.toggleContainer(p, it)
 	case it.def.Consumable != nil:
 		if ctx.Tick < p.nextUse {
+			p.tooEarly(ctx.Tick, antibot.KindItem)
 			p.emit(systemMsg(msgNotReady))
 			return
 		}
+		p.activePaced(ctx.Tick, antibot.KindItem, p.nextUse)
 		p.nextUse = ctx.Tick + w.useFor
 		w.consume(p, it)
-		p.active(ctx.Tick)
 	case it.def.Rune != nil:
 		w.useRune(ctx, p, it, nil) // on the current target, or the caster for a heal
 	default:
@@ -857,6 +861,9 @@ func (w *World) consume(p *Player, it *Item) {
 	p.health += hp
 	p.mana += mp
 	w.useUp(p, it)
+	if c.HealHP > 0 {
+		w.abHeal(w.nowTick(), p) // bot detection: how fast p heals after a hit (T4.1)
+	}
 	if c.HealHP == 0 && c.HealMP == 0 {
 		p.emit(systemMsg(msgAte, &pb.TextParam{Name: "item", Value: &pb.TextParam_Item{Item: &pb.ItemStack{ItemId: uint32(it.def.Numeric)}}}))
 	}

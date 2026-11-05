@@ -35,7 +35,8 @@ Todos los números de este documento son **valores iniciales** que viven en
   "Grupos"), por quests y por
   algunos oficios (poca).
 - Curva cúbica propia, ajustable: `xp(nivel) = a·n³ + b·n² + c·n` con coeficientes en
-  balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h.
+  balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h
+  (`experience.pace` en balance.yaml; la detección de bots lo usa como ritmo esperado).
 - Al subir de nivel: +HP, +MP, +capacidad, +velocidad según vocación.
 
 ## Skills que suben con el uso
@@ -160,6 +161,31 @@ Revisado en T4.1 (`server/internal/session/idle.go`):
   pegó hace poco) ni sobre una **casilla sin logout**: lo vuelve a intentar cada segundo.
   Quien entrena contra un monstruo sigue en combate y no se desconecta; para eso está
   `skills.afk`.
+
+Detección de bots (T4.1, `server/internal/antibot` y `session/antibot.go`; diseño, pesos y
+umbrales en `01-architecture.md`, "Detección de bots"):
+- El servidor mira **cómo** se juega, nunca el cliente: tiempos entre acciones del mismo
+  tipo demasiado parejos, curas siempre a los pocos ms de un golpe, la misma ruta exacta
+  una y otra vez, sesiones muy largas sin pausas, y experiencia u oro por hora muy por
+  encima de los jugadores de su nivel conectados. Cada señal suma puntos a un puntaje de
+  sospecha que baja solo con el tiempo (media vida de 1 h).
+- Las respuestas son graduales: queda registrado, se avisa a los GM, el juego pide un
+  **chequeo de presencia** (una pregunta simple, como "elige el color rojo", con 10 min de
+  juego para contestar y sin interrumpir nada) y, si el puntaje sigue alto después de un
+  chequeo fallado o una hora después de uno, una suspensión de 24 h. Nunca se pregunta en
+  combate, en una zona sin logout ni a quien está ausente, y el plazo no corre mientras uno
+  no juega. Un chequeo fallado suma puntos, pero no suspende por sí solo. Acertar no borra
+  la sospecha (un programa también puede contestar): el chequeo sirve para avisar. A
+  cualquiera le puede tocar un chequeo al azar de vez en cuando, sin consecuencias. El ban lo
+  decide siempre un GM.
+- Los umbrales son conservadores a propósito: un jugador que juega mucho, rápido o con
+  macros de teclado legítimas no llega a avisar a los GM con una sola señal (el balance no
+  carga si un peso solo lo permitiera). Hace falta un patrón sostenido de varias. En la
+  prueba, un script tarda ~1 h 40 en llegar a la suspensión. Hábitos de un jugador real
+  durante 6–8 h no pasan de quedar registrados: cada uno solo (ir y venir por click entre
+  dos puntos, machacar un hotkey o apretarlo parejo, curarse rápido, entrenar magia a mano)
+  y los pares probados (click, machacar y curarse rápido entre sí; click y curarse más
+  rápido). Dos señales completas sostenidas sí avisan a los GM, a propósito.
 
 ## Combate
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está
@@ -551,6 +577,7 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 | `/announce texto` | GM | Anuncio a todos los conectados (`[Anuncio] Nombre: texto`) |
 | `/reports` | GM | Lista los 10 reportes abiertos más antiguos (T4.1) |
 | `/closereport id resolución` | GM | Cierra un reporte abierto con la resolución (T4.1) |
+| `/presence Nombre` | GM | Le pide un chequeo de presencia a ese jugador en cuanto se pueda (fuera de combate y activo); no cambia su puntaje (T4.1) |
 
 - **Destino del teleport:** una casilla caminable de una isla, en un piso que existe. Si
   está ocupada, la libre más cercana (hasta 2 de distancia). Si no, `gm.bad_position`.
@@ -568,8 +595,11 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 - **Auditoría:** todo comando de staff que se ejecuta, también los que fallan por
   argumentos, queda en el log de auditoría con quién, qué, a quién, cuándo, argumentos y
   resultado. Los cambios de rol también.
-- Llegan después (T4.1), con lugar en el diseño: la detección de bots. Las sanciones que
-  proponga las aplica siempre un GM con estos comandos.
+- La detección de bots (T4.1, "Anti-bot y anti-AFK") solo suspende por 24 h, y solo si el
+  puntaje sigue alto después de un chequeo de presencia fallado o una hora después de uno,
+  aunque se haya acertado; cualquier sanción mayor la aplica siempre un GM con estos
+  comandos. La entrada de auditoría del ban dice cuál fue (`check`: `failed` o
+  `passed_confirm_ms`).
 
 ### Reportes de jugadores (T4.1)
 - Cualquier jugador reporta a otro con **`/report Nombre motivo`** (cualquier jugador en

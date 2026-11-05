@@ -3,6 +3,7 @@ package session
 import (
 	"sort"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -142,7 +143,15 @@ type Player struct {
 	// Idle (T4.1): the tick of p's last real action and whether it was warned.
 	lastAction game.Tick
 	idleWarned bool
-	joinedAt   game.Tick
+	// Bot detection (T4.1 2/2): p's state (World.suspects; nil when off) and the tick
+	// of its next evaluation.
+	sus    *suspect
+	abNext game.Tick
+	// earlyTry: the last try of each kind of action refused for its cooldown; kindLast:
+	// the last accepted one (antibot.Kind*; see activePaced).
+	earlyTry [antibot.NumKinds]game.Tick
+	kindLast [antibot.NumKinds]game.Tick
+	joinedAt game.Tick
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -371,6 +380,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
+	w.antibotJoin(ctx.Tick, p)
 	p.joinedAt = ctx.Tick
 
 	// Staggered autosave: first at a random point of the first interval.

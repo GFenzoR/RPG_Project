@@ -308,6 +308,102 @@ inventario, contenedores, condiciones) y que los mensajes sobre criaturas no ten
 de vida exacta, maná, skills ni inventario (solo `health_percent`). Invisibilidad y grupos
 siguen en sus tests (ver arriba).
 
-### Lo que falta
-La detección de bots por comportamiento (señales y puntaje de sospecha) queda para la
-segunda parte de T4.1. Ver `10-roadmap.md`.
+### Detección de bots (T4.1)
+Reglas para el jugador en `02-game-design.md` ("Anti-bot y anti-AFK"); números en
+`balance.yaml → antibot` (esquema en `balance.schema.json`).
+- **Dónde corre:** `internal/antibot` es puro (sin reloj, sin azar, sin mundo). El loop
+  alimenta un `Tracker` por personaje con tiempos de juego en ms (tick × 50): acciones
+  reales, pasos, golpes recibidos y curas. Cada actualización cuesta lo mismo, sin importar
+  el historial: medias y varianzas móviles exponenciales (unas 100 muestras), un anillo de
+  32 pasos y una tabla fija de 128 hashes de segmentos de ruta. Cada `eval_every_ms` (60 s,
+  escalonado por id de criatura) se leen las señales y se actualiza el puntaje. Las
+  medianas de ingreso por banda de nivel se calculan una vez por ronda.
+- **Señales** (cada una entre 0 y 1):
+
+| Señal | Qué mide | 1 cuando… | Peso |
+|---|---|---|---|
+| `regularity` | Variación del tiempo entre acciones del **mismo tipo** (hechizo/runa, uso de item, chat, otra; mover items es "otra"). Tiene que ser baja en relación (coeficiente de variación) **y** en absoluto (desvío estándar): el error de una persona no se achica con el intervalo, así que un ritmo largo que pone un recurso del servidor (lanzar al llenarse el maná, con la regeneración fija) da un CV bajo pero un desvío de segundos. No cuentan los pasos ni las acciones cuyo ritmo puso el servidor: las que llegan justo al vencer su cooldown (≤ 100 ms) y las que siguen a un intento rechazado por cooldown o por falta de maná (quien machaca un hotkey: el cliente manda una acción por pulsación, sin repetición automática, y el servidor acepta la primera que puede). | CV ≤ `cv_low` (0,05) y desvío ≤ `std_ms` (60 ms); 0 desde `cv_high` (0,25) o desde 2 × `std_ms`; con ≥ 300 muestras | 3 |
+| `reaction` | Tiempo desde un golpe recibido hasta la cura (hechizo propio o consumible) que lo contesta, dentro de `window_ms`. | Las curas llegan en ≤ `fast_ms` (200 ms; una persona reacciona en unos 300 ms con la latencia) y con desvío ≤ `std_ms` (60 ms), con ≥ 15 muestras | 3 |
+| `route` | Parte de los segmentos de `segment` (12) pasos exactos (casilla y dirección) ya caminados. | ≥ `repeat_high` (90 %) repetidos; 0 bajo `repeat_low` (50 %), con ≥ 300 pasos | 2 |
+| `session` | Juego sin una pausa de `pause_ms` (3 min). | 16 h seguidas; 0 hasta 8 h | 1 |
+| `income` | Experiencia u oro por hora (la ventana de atípicos del log de economía) sobre la mediana de su banda de 10 niveles, cada serie por separado: cuentan solo los pares que juegan (activos) y ganaron algo en esa serie (≥ 5). La mediana nunca cuenta como menos que el ritmo esperado del nivel del personaje: de experiencia, el objetivo de ritmo `experience.pace` (horas para llegar a cada nivel, una ley de potencia entre anclas: unos 3 niveles por hora al 9, 1 al 20, 0,3 al 45) por la experiencia de un nivel; de oro, un cuarto de `economy.outlier.gold_per_hour`. | 8 veces la mediana; 0 hasta 4 veces | 2 |
+
+- **Cada señal envejece con su propia evidencia:** cuando la última muestra de una señal
+  (acciones de ese tipo, curas, pasos) tiene más de `pause_ms`, la señal vale 0, y la
+  próxima muestra empieza la estadística de cero. Así una caza terminada no sigue sumando
+  mientras el personaje solo chatea, ni al volver a entrar. Inactivo, todas valen 0. Las
+  primeras muestras usan la media simple (no un primer valor que domine la media móvil).
+- **Puntaje:** en cada evaluación, `puntaje × 0,5^(Δt / half_life_ms) + Σ peso × señal`.
+  Con media vida de 1 h y una evaluación por minuto, una señal sostenida de peso `w` se
+  estabiliza cerca de `w × 87`. Un minuto raro se desvanece; solo un patrón sostenido suma.
+  El estado vive en el `World` por personaje: volver a entrar no lo reinicia. Se olvida
+  cuando el personaje está desconectado y el puntaje decayó a menos de 1.
+- **Respuestas graduales**, una vez por episodio (un nivel vuelve a armarse cuando el
+  puntaje baja de la mitad de su umbral):
+  1. `log` (100): log estructurado y `audit_log` (`bot_suspect`, actor `system:antibot`,
+     con el puntaje y las señales).
+  2. `notify` (300): mensaje a los GM en línea (`gm.bot_suspect`), auditado. Ninguna
+     señal sola llega: la mayor pesa 3 y se estabiliza en ~261. La carga del balance lo
+     exige (un peso × 87 tiene que quedar por debajo de `notify`).
+  3. `presence` (400): un chequeo de presencia (ver abajo).
+  4. `suspend` (600): suspensión de `suspend_ms` (24 h, motivo `antibot`), por la goroutine
+     de admin como un `/ban` de GM (solo alcanza a cuentas de jugador; auditada en la misma
+     transacción; si no se aplica, queda en el log). Necesita, en este episodio, **un
+     chequeo fallado o uno hecho hace al menos `confirm_ms` (1 h)** con el puntaje todavía
+     ahí; si no, se pide un chequeo. El ban largo o permanente lo decide siempre un GM.
+- **Chequeo de presencia** (`PresenceCheck`/`PresenceAnswer`): una pregunta simple (elegir
+  un color entre cuatro, textos i18n `presence.*`) en un momento al azar de los próximos
+  `delay_ms`. **Nunca en combate, sobre una casilla sin logout ni a alguien inactivo:** se
+  espera a que se pueda. No bloquea el juego. Plazo generoso (`timeout_ms`, 10 min) que
+  corre **solo mientras el personaje juega** (conectado y activo), así que estar ausente
+  nunca es un fallo: al volver se manda otra vez con el tiempo que le queda, y el servidor
+  no vence antes de ese tiempo jugado. El cliente lo cierra solo 3 s antes de su hora (al
+  vencer, el servidor no le dice nada al jugador y descarta una respuesta tardía); un click
+  en la ventana se manda siempre, porque si el jugador estuvo ausente el chequeo puede
+  seguir pendiente en el servidor. La respuesta, correcta o no, recibe siempre
+  `presence.thanks`.
+- **Qué prueba y qué no:** un chequeo prueba que algo contestó, no que no haya un bot: las
+  preguntas y sus textos son públicos y un script las puede contestar. Por eso **acertar no
+  baja el puntaje** (solo queda auditado) y la suspensión no depende de fallar: también llega
+  si el patrón sigue una hora después del chequeo. Fallar (mala respuesta o fuera de plazo)
+  suma `fail_points` y avisa a los GM, pero **nunca lleva el puntaje al umbral de
+  suspensión por sí solo** (queda justo debajo): solo suspende un puntaje que ya estaba ahí.
+- **No es un oráculo de sospecha:** con `random_per_hour` (2 % por hora de juego) cualquier
+  jugador activo recibe a veces un chequeo al azar, idéntico, que no tiene efecto si se
+  falla (auditado como `random_*`). Un GM puede pedir uno con `/presence Nombre`: si ya había
+  uno de respuesta pendiente solo lo adelanta; si no, es como uno al azar. Si el puntaje
+  pasa `presence` mientras hay uno al azar abierto, al cerrarse viene el de respuesta.
+- **Fin de un episodio:** si el puntaje baja de la mitad de `presence`, un chequeo de
+  respuesta todavía pendiente pasa a ser uno al azar (se pregunta igual, así que salir del
+  juego no lo esquiva, pero ya no tiene efecto).
+- **Esquivarlo no sirve:** si un chequeo debido no se puede hacer durante `defer_alert_ms`
+  (30 min) **de juego** porque el personaje vive en combate o en una casilla sin logout, se
+  avisa a los GM y se audita (`deferred`): lo decide una persona. El tiempo inactivo o
+  desconectado no cuenta, y al volver a entrar el puntaje se evalúa (con su decaimiento)
+  antes de cualquier chequeo.
+- **Staff:** los personajes de GM y admin no se evalúan ni cuentan para las medianas.
+- **Pruebas** (`internal/session/antibot_sim_test.go`, simulación determinista con
+  `data/balance.yaml`; ~3 s en total):
+  - `TestAntiBotFlagsMechanicalNotHuman`: `bot.Mechanical()` de `server/pkg/bot` (el mismo
+    de `tools/bots -profile`) pasa por log, aviso, chequeo, fallo y suspensión en ~1 h 40
+    de juego. `bot.Human()` no recibe ninguna marca, pero es solo un control de cordura: por
+    construcción no dispara ninguna señal.
+  - **La evidencia contra falsos positivos** es `TestAntiBotHumanHabitsNeverNotify`:
+    hábitos que un jugador real tiene con el cliente (click de ida y vuelta entre dos
+    casillas, que da la misma ruta A*; machacar un hotkey con cooldown cada 150–300 ms;
+    curarse a velocidad humana, N(250, 50) ms más 50 ms de latencia), solos y de a pares,
+    con pausas y sin ellas, 6 h cada caso. Y 8 h sin pausas de: entrenar magia a mano
+    (lanzar 0,3–3 s después de llenarse el maná, sin moverse, un chat cada 1–4 min), apretar
+    un hotkey parejo a la señal del cooldown (listo + N(300, 50) ms, nunca antes) y curarse
+    más rápido, N(220, 35) ms, yendo y viniendo por click. Ninguno de esos casos llega a
+    `notify`, a un chequeo ni a una suspensión: el peor queda en `log` (~260 puntos, el
+    hotkey parejo, que solo marca `regularity`). Dos señales completas sí avisan, a
+    propósito: apretar parejo y además ir y venir por click llega a `notify` (y sin pausas
+    a un chequeo). Con el contenido real nadie lo sostiene: el maná se acaba, y lo que se
+    rechaza por falta de maná cuenta como ritmo del servidor.
+  - `TestAntiBotPastHuntStopsScoring`: 30 min de caza mecánica y después 5 h solo
+    chateando y acertando los chequeos terminan en el nivel 0, sin suspensión.
+- **Límite conocido:** un script puede esconder su ritmo de `regularity` mandando un
+  intento rechazado justo después de cada acción (así cada una cuenta como "ritmo del
+  servidor"). Es el precio de no marcar a quien machaca un hotkey; lo cubren las demás
+  señales (reacción, ruta, sesión, ingreso), y un GM puede pedir un chequeo cuando quiera.

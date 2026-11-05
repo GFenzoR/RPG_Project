@@ -94,6 +94,14 @@ type Dialog struct {
 	Options []uint32
 }
 
+// Presence is a presence check waiting for an answer (T4.1): the question's key and the
+// key of each option, by option id.
+type Presence struct {
+	ID       uint32
+	Question string
+	Options  map[uint32]string
+}
+
 // Bot is one connected player. Its methods are safe for concurrent use.
 type Bot struct {
 	base  string
@@ -111,6 +119,7 @@ type Bot struct {
 	readErr    error
 	creatures  map[uint32]*Creature
 	dialog     *Dialog
+	presence   *Presence
 	pingSeq    uint64
 	pings      map[uint64]time.Time
 	latencies  []time.Duration
@@ -364,6 +373,13 @@ func (b *Bot) apply(e *pb.ServerMessage) {
 		}
 		b.dialog = d
 		b.stats.Dialogs++
+	case *pb.ServerMessage_PresenceCheck:
+		c := m.PresenceCheck
+		pr := &Presence{ID: c.GetCheckId(), Question: c.GetQuestion().GetKey(), Options: map[uint32]string{}}
+		for _, o := range c.GetOptions() {
+			pr.Options[o.GetOptionId()] = o.GetText().GetKey()
+		}
+		b.presence = pr
 	case *pb.ServerMessage_DialogClose:
 		if b.dialog != nil && b.dialog.ID == m.DialogClose.GetDialogId() {
 			b.dialog = nil
@@ -514,6 +530,20 @@ func (b *Bot) TalkTo(ctx context.Context, npc uint32) error {
 // Choose picks an option of the open dialog (0 closes it).
 func (b *Bot) Choose(ctx context.Context, dialogID, option uint32) error {
 	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_DialogChoose{DialogChoose: &pb.DialogChoose{DialogId: dialogID, OptionId: option}}})
+}
+
+// TakePresence returns the presence check waiting for an answer and forgets it, or nil.
+func (b *Bot) TakePresence() *Presence {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	pr := b.presence
+	b.presence = nil
+	return pr
+}
+
+// AnswerPresence answers presence check id with option.
+func (b *Bot) AnswerPresence(ctx context.Context, id, option uint32) error {
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_PresenceAnswer{PresenceAnswer: &pb.PresenceAnswer{CheckId: id, OptionId: option}}})
 }
 
 // Walk asks for one step.

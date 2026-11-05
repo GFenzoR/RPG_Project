@@ -50,7 +50,20 @@ message ServerMessage {
     PartyUpdate party_update = 31;
     PartyInvitation party_invitation = 32;
     StationOpen station_open = 33;
+    PresenceCheck presence_check = 34;
   }
+}
+
+// PresenceCheck asks the player a simple question with options (T4.1, bot detection):
+// it is answered with PresenceAnswer{check_id, option_id} within timeout_ms. It is never
+// asked in combat or on a no-logout tile and does not block the game. Whatever the answer,
+// the server replies with the same system message (presence.thanks), so the check says
+// nothing about whether the answer was right.
+message PresenceCheck {
+  uint32 check_id = 1;
+  LocalizedText question = 2;
+  repeated DialogOption options = 3;
+  uint32 timeout_ms = 4;
 }
 
 // Welcome answers a valid Hello. It is followed in the same batch by FullMapView,
