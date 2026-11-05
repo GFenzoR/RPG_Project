@@ -27,9 +27,9 @@ import (
 type MapSubmissions interface {
 	CreateMapSubmission(ctx context.Context, n store.NewMapSubmission) (store.MapSubmission, error)
 	CheckSubmitter(ctx context.Context, accountID int64, at time.Time, perDay int, minAge time.Duration) error
-	AccountRole(ctx context.Context, accountID int64) (string, error)
+	AccountInfo(ctx context.Context, accountID int64) (role, email string, err error)
 	AccountMapSubmissions(ctx context.Context, accountID int64, n int) ([]store.MapSubmission, error)
-	MapSubmissionsByStatus(ctx context.Context, status string, n int) ([]store.MapSubmission, error)
+	MapSubmissionsByStatus(ctx context.Context, status string, cursor store.SubmissionCursor, n int) ([]store.MapSubmission, error)
 	MapSubmission(ctx context.Context, id int64) (store.MapSubmission, error)
 	MapSubmissionPatch(ctx context.Context, id int64) (accountID int64, sha string, patch []byte, err error)
 	ReviewMapSubmission(ctx context.Context, r store.ReviewRequest) (store.MapSubmission, error)
@@ -64,17 +64,30 @@ const (
 	MapTitleMax       = 80
 	MapDescriptionMax = 2000
 	MapReasonMax      = 500
-	// mapQueuePage is how many submissions a list returns.
-	mapQueuePage = 100
-	// uploadTimeout is how long an upload may take to arrive.
-	uploadTimeout = 2 * time.Minute
-	// maxSubmitChecks is how many uploads are parsed at once (each up to MaxBytes).
-	maxSubmitChecks = 2
+	// mapMinePage is how many of their submissions an author sees (3 a day: a month).
+	mapMinePage = 100
+	// mapQueuePage is how many submissions a page of the moderation lists has.
+	mapQueuePage = 50
+	// uploadTimeout is how long an upload may take to arrive: 2 × 2 MiB in 30 s is about
+	// 140 KB/s. A slower link gets 408-like failures; a stalled one frees its slot.
+	uploadTimeout = 30 * time.Second
+	// maxPatchDownloads is how many patch downloads run at once (each up to MaxBytes from
+	// the pgx pool the game's saves share).
+	maxPatchDownloads = 2
 )
+
+// DefaultMapUploadSlots is how many uploads are in flight at once, from the first body
+// byte to the answer. Each holds at most about 5 × MaxBytes (body, decoded text, the
+// stored copy): with 2 MiB patches, 4 slots bound the portal to about 40 MiB. A request
+// that finds every slot taken answers 503 busy without reading its body.
+const DefaultMapUploadSlots = 4
 
 // DefaultMapSubmitRateLimit is the upload attempts per account (valid or not), on top of the
 // daily limit of stored submissions.
 var DefaultMapSubmitRateLimit = RateLimit{Burst: 5, Every: time.Minute}
+
+// DefaultMapDownloadRateLimit is the patch downloads per account.
+var DefaultMapDownloadRateLimit = RateLimit{Burst: 10, Every: 6 * time.Second}
 
 func (a *api) mapRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/maps/submissions", a.authed(a.submitMap))
@@ -103,6 +116,8 @@ type submissionJSON struct {
 	Failure     string                    `json:"failure,omitempty"`
 	PRURL       string                    `json:"pr_url,omitempty"`
 	PRNumber    int                       `json:"pr_number,omitempty"`
+	// HasPatch is false once the patch bytes were dropped (retention, docs/04).
+	HasPatch bool `json:"has_patch"`
 }
 
 func submissionOut(m store.MapSubmission) submissionJSON {
@@ -110,7 +125,7 @@ func submissionOut(m store.MapSubmission) submissionJSON {
 		ID: m.ID, Title: m.Title, Description: m.Description, Author: m.AuthorName, License: m.License,
 		Status: m.Status, SHA256: m.SHA256, Size: m.SizeBytes, BaseRef: m.BaseRef, Files: m.Files,
 		CreatedAt: m.CreatedAt.UTC(), UpdatedAt: m.UpdatedAt.UTC(), Reason: m.Reason,
-		Failure: m.Failure, PRURL: m.PRURL, PRNumber: m.PRNumber,
+		Failure: m.Failure, PRURL: m.PRURL, PRNumber: m.PRNumber, HasPatch: m.HasPatch,
 	}
 	if out.Files == nil {
 		out.Files = []store.MapSubmissionFile{}
@@ -161,20 +176,33 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 	// An account that would be refused (new, banned, over its daily limit) is refused
 	// before a few MB of body are read; the transaction checks again.
 	if err := a.cfg.MapSubmissions.CheckSubmitter(r.Context(), accountID, a.cfg.Clock.Now(), lim.PerDay, lim.MinAccountAge); err != nil {
-		a.failSubmission(w, r, err, "unauthorized")
+		a.failSubmitter(w, r, err)
 		return
 	}
-	// The server's 10 s read timeout is short for a few MB on a slow link. A network
-	// deadline, not game logic: it needs the wall clock (a fake clock would expire it).
+	// A JSON string can take up to twice the bytes of its text (quotes, backslashes and
+	// newlines are escaped); the text itself is checked against MaxBytes below.
+	bodyCap := int64(2*lim.MaxBytes + 16<<10)
+	if r.ContentLength > bodyCap {
+		writeError(w, http.StatusRequestEntityTooLarge, "patch_too_large")
+		return
+	}
+	// Memory is bounded before a byte of the body is read: every upload in flight holds a
+	// slot until it answers (DefaultMapUploadSlots), and a full house answers 503.
+	select {
+	case a.uploadSlots <- struct{}{}:
+		defer func() { <-a.uploadSlots }()
+	default:
+		writeError(w, http.StatusServiceUnavailable, "busy")
+		return
+	}
+	// The server's 10 s read timeout is short for a few MB; 30 s, then the slot is free.
+	// A network deadline, not game logic: it needs the wall clock (a fake clock would
+	// expire it at once).
 	rc := http.NewResponseController(w)
 	_ = rc.SetReadDeadline(time.Now().Add(uploadTimeout))  //nolint:forbidigo // network deadline
 	_ = rc.SetWriteDeadline(time.Now().Add(uploadTimeout)) //nolint:forbidigo // network deadline
-	// A JSON string can take up to twice the bytes of its text (quotes, backslashes and
-	// newlines are escaped); the text itself is checked against MaxBytes below.
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, int64(2*lim.MaxBytes+16<<10)))
-	dec.DisallowUnknownFields()
-	var in submitRequest
-	if err := dec.Decode(&in); err != nil {
+	body, err := readBody(w, r, bodyCap)
+	if err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
 			writeError(w, http.StatusRequestEntityTooLarge, "patch_too_large")
@@ -183,7 +211,9 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 		writeError(w, http.StatusBadRequest, "bad_request")
 		return
 	}
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+	in, ok := decodeSubmit(body)
+	body = nil //nolint:ineffassign,wastedassign // lets the GC take the body during the checks
+	if !ok {
 		writeError(w, http.StatusBadRequest, "bad_request")
 		return
 	}
@@ -205,16 +235,9 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 		writeError(w, http.StatusRequestEntityTooLarge, "patch_too_large")
 		return
 	}
-	// Checking and storing hold a slot; reading the body above does not, so a slow upload
-	// does not keep others waiting.
-	select {
-	case a.submitSlots <- struct{}{}:
-		defer func() { <-a.submitSlots }()
-	default:
-		writeError(w, http.StatusServiceUnavailable, "busy")
-		return
-	}
-	sum, err := mappatch.Validate([]byte(in.Patch), lim.MaxBytes, lim.MaxFiles)
+	patch := []byte(in.Patch)
+	in.Patch = ""
+	sum, err := mappatch.Validate(patch, lim.MaxBytes, lim.MaxFiles)
 	if err != nil {
 		var pe *mappatch.Error
 		if !errors.As(err, &pe) {
@@ -236,7 +259,7 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 	m, err := a.cfg.MapSubmissions.CreateMapSubmission(r.Context(), store.NewMapSubmission{
 		At: a.cfg.Clock.Now(), AccountID: accountID, CharacterID: in.CharacterID,
 		Title: title, Description: desc, License: MapLicense, SHA256: sum.SHA256,
-		BaseRef: sum.BaseRef, Files: files, Patch: []byte(in.Patch),
+		BaseRef: sum.BaseRef, Files: files, Patch: patch,
 		PerDay: lim.PerDay, MinAccountAge: lim.MinAccountAge,
 	})
 	if errors.Is(err, store.ErrNotFound) {
@@ -245,7 +268,7 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 		return
 	}
 	if err != nil {
-		a.failSubmission(w, r, err, "unauthorized")
+		a.failSubmitter(w, r, err)
 		return
 	}
 	a.log.Info("map submission", "id", m.ID, "account", accountID, "files", len(files), "size", m.SizeBytes)
@@ -255,47 +278,84 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 type mineResponse struct {
 	Submissions []submissionJSON `json:"submissions"`
 	// CanReview: the account is gm or admin (the website shows the queue link).
-	CanReview bool   `json:"can_review"`
-	License   string `json:"license"`
-	MaxBytes  int    `json:"max_bytes"`
-	PerDay    int    `json:"per_day"`
+	CanReview bool `json:"can_review"`
+	// Email is the account's own email ("signed in as"); never anybody else's.
+	Email    string `json:"email"`
+	License  string `json:"license"`
+	MaxBytes int    `json:"max_bytes"`
+	PerDay   int    `json:"per_day"`
 }
 
 func (a *api) mySubmissions(w http.ResponseWriter, r *http.Request, accountID int64) {
-	staff, err := a.isStaff(r.Context(), accountID)
+	role, email, err := a.cfg.MapSubmissions.AccountInfo(r.Context(), accountID)
+	if errors.Is(err, store.ErrNotFound) {
+		err = auth.ErrUnauthorized // the session outlived its account
+	}
 	if err != nil {
 		a.fail(w, r, err)
 		return
 	}
-	ms, err := a.cfg.MapSubmissions.AccountMapSubmissions(r.Context(), accountID, mapQueuePage)
+	staff := store.RoleRank(role) >= store.RoleRank(store.RoleGM)
+	ms, err := a.cfg.MapSubmissions.AccountMapSubmissions(r.Context(), accountID, mapMinePage)
 	if err != nil {
 		a.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, mineResponse{
-		Submissions: submissionsOut(ms), CanReview: staff, License: MapLicense,
+		Submissions: submissionsOut(ms), CanReview: staff, Email: email, License: MapLicense,
 		MaxBytes: a.cfg.MapSubmitLimits.MaxBytes, PerDay: a.cfg.MapSubmitLimits.PerDay,
 	})
+}
+
+type queueResponse struct {
+	Status      string           `json:"status"`
+	Submissions []submissionJSON `json:"submissions"`
+	// Next is the cursor of the following page; empty on the last one.
+	Next string `json:"next,omitempty"`
 }
 
 func (a *api) submissionQueue(w http.ResponseWriter, r *http.Request, accountID int64) {
 	if !a.requireStaff(w, r, accountID) {
 		return
 	}
-	status := r.URL.Query().Get("status")
+	q := r.URL.Query()
+	status := q.Get("status")
 	if status == "" {
 		status = store.SubmissionPending
 	}
-	if !store.ValidSubmissionStatus(status) {
+	cursor, ok := parseCursor(q.Get("cursor"))
+	if !store.ValidSubmissionStatus(status) || !ok {
 		writeError(w, http.StatusBadRequest, "bad_request")
 		return
 	}
-	ms, err := a.cfg.MapSubmissions.MapSubmissionsByStatus(r.Context(), status, mapQueuePage)
+	ms, err := a.cfg.MapSubmissions.MapSubmissionsByStatus(r.Context(), status, cursor, mapQueuePage)
 	if err != nil {
 		a.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": status, "submissions": submissionsOut(ms)})
+	out := queueResponse{Status: status, Submissions: submissionsOut(ms)}
+	if len(ms) == mapQueuePage {
+		out.Next = formatCursor(ms[len(ms)-1].Cursor())
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// A list cursor in a URL: "<unix microseconds>-<id>" (Postgres keeps microseconds).
+func formatCursor(c store.SubmissionCursor) string {
+	return strconv.FormatInt(c.At.UnixMicro(), 10) + "-" + strconv.FormatInt(c.ID, 10)
+}
+
+func parseCursor(s string) (store.SubmissionCursor, bool) {
+	if s == "" {
+		return store.SubmissionCursor{}, true
+	}
+	at, id, ok := strings.Cut(s, "-")
+	micros, err1 := strconv.ParseInt(at, 10, 64)
+	n, err2 := strconv.ParseInt(id, 10, 64)
+	if !ok || err1 != nil || err2 != nil || n <= 0 || micros < 0 {
+		return store.SubmissionCursor{}, false
+	}
+	return store.SubmissionCursor{At: time.UnixMicro(micros).UTC(), ID: n}, true
 }
 
 // visibleSubmission loads a submission its author or a moderator may see; anybody else
@@ -338,13 +398,32 @@ func (a *api) submissionDetail(w http.ResponseWriter, r *http.Request, accountID
 // submissionPatch downloads the patch as an attachment that the browser never renders.
 // A moderator's download is audited.
 func (a *api) submissionPatch(w http.ResponseWriter, r *http.Request, accountID int64) {
+	if ok, _ := a.downloadLimiter.allow(strconv.FormatInt(accountID, 10)); !ok {
+		a.tooMany(w, a.cfg.MapDownloadRateLimit)
+		return
+	}
 	m, staff, ok := a.visibleSubmission(w, r, accountID)
 	if !ok {
+		return
+	}
+	if !m.HasPatch {
+		writeError(w, http.StatusGone, "patch_gone")
+		return
+	}
+	select {
+	case a.downloadSlots <- struct{}{}:
+		defer func() { <-a.downloadSlots }()
+	default:
+		writeError(w, http.StatusServiceUnavailable, "busy")
 		return
 	}
 	_, sha, patch, err := a.cfg.MapSubmissions.MapSubmissionPatch(r.Context(), m.ID)
 	if err != nil {
 		a.fail(w, r, err)
+		return
+	}
+	if patch == nil { // purged since the row above was read
+		writeError(w, http.StatusGone, "patch_gone")
 		return
 	}
 	if staff && m.AccountID != accountID {
@@ -411,7 +490,7 @@ func (a *api) reviewSubmission(w http.ResponseWriter, r *http.Request, accountID
 }
 
 func (a *api) isStaff(ctx context.Context, accountID int64) (bool, error) {
-	role, err := a.cfg.MapSubmissions.AccountRole(ctx, accountID)
+	role, _, err := a.cfg.MapSubmissions.AccountInfo(ctx, accountID)
 	if errors.Is(err, store.ErrNotFound) {
 		return false, auth.ErrUnauthorized // the session outlived its account
 	}
@@ -434,6 +513,64 @@ func (a *api) requireStaff(w http.ResponseWriter, r *http.Request, accountID int
 		writeError(w, http.StatusForbidden, "forbidden")
 	}
 	return staff
+}
+
+// failSubmitter answers why the account cannot submit: banned or disabled is
+// account_blocked (not the moderation pages' forbidden), the rest as failSubmission.
+func (a *api) failSubmitter(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, store.ErrForbidden) {
+		writeError(w, http.StatusForbidden, "account_blocked")
+		return
+	}
+	a.failSubmission(w, r, err, "unauthorized")
+}
+
+// readBody reads a whole request body of at most limit bytes into one buffer sized from
+// Content-Length when the client sent it (json.Decoder would grow its own by doubling).
+func readBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, error) {
+	body := http.MaxBytesReader(w, r.Body, limit)
+	if n := r.ContentLength; n >= 0 && n <= limit {
+		buf := make([]byte, n)
+		if _, err := io.ReadFull(body, buf); err != nil {
+			return nil, err
+		}
+		// Nothing may follow what Content-Length announced.
+		if k, err := body.Read(make([]byte, 1)); k > 0 || (err != nil && !errors.Is(err, io.EOF)) {
+			if err == nil {
+				err = errors.New("body longer than Content-Length")
+			}
+			return nil, err
+		}
+		return buf, nil
+	}
+	return io.ReadAll(body)
+}
+
+// submitFields are the only keys of an upload; the check is byte for byte because
+// encoding/json matches struct fields without case.
+var submitFields = map[string]bool{"title": true, "description": true, "character_id": true, "license": true, "patch": true}
+
+// skipJSON reads any JSON value without keeping it.
+type skipJSON struct{}
+
+func (*skipJSON) UnmarshalJSON([]byte) error { return nil }
+
+// decodeSubmit decodes an upload body: one JSON object with only submitFields.
+func decodeSubmit(body []byte) (submitRequest, bool) {
+	var keys map[string]skipJSON
+	if json.Unmarshal(body, &keys) != nil || keys == nil {
+		return submitRequest{}, false
+	}
+	for k := range keys {
+		if !submitFields[k] {
+			return submitRequest{}, false
+		}
+	}
+	var in submitRequest
+	if json.Unmarshal(body, &in) != nil {
+		return submitRequest{}, false
+	}
+	return in, true
 }
 
 // failSubmission maps the store's submission errors; notFound is the code of ErrNotFound.

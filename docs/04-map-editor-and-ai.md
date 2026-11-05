@@ -133,8 +133,9 @@ Formato (`.rpgpatch.json`, formato 2 desde T2.3):
 `{ format: 2, kind: "rpg-map-patch", base_ref, files: [{ path, base, base_text?, content }] }`.
 `base` = `sha256:<hex>` de la versión base (o `null` si el patch crea el archivo),
 `base_text` = el texto de esa base (obligatorio en formato 2 cuando `base` no es `null`),
-`content` = texto nuevo (o `null` si lo borra). `base_ref` es el ref de git contra el que se
-hizo (`mapcli`, MCP) o `"editor"`. El formato 1 (T1.15, sin `base_text`) se sigue leyendo.
+`content` = texto nuevo (o `null` si lo borra). `base_ref` es el commit contra el que se
+hizo (`mapcli` y el MCP escriben el sha al que apunta el ref pedido, `HEAD` por defecto,
+porque un ref simbólico no dice nada fuera de ese clon; T4.5) o `"editor"`. El formato 1 (T1.15, sin `base_text`) se sigue leyendo.
 
 **Decisión: la base viaja en el patch.** Para mezclar hace falta la base completa, no solo
 el hash. Se eligió incluirla (formato 2) en vez de sacarla con `git show base_ref:path`
@@ -396,11 +397,19 @@ El error es un código fijo (`site.maps.patch_error.<código>` en el sitio) y, a
 índice del archivo: nunca texto del patch. El patch se guarda tal cual (sha256 de esos
 bytes) y nunca se ejecuta ni se interpreta fuera de estos chequeos.
 
+**Retención.** Los bytes del patch de un envío `rejected`, `pr_opened` o `failed` se borran
+30 días después de su último cambio (`-map-patch-retention`; job horario del servidor).
+Quedan el sha256, los archivos tocados y el resto de los datos, y la descarga responde
+`410`. Un envío `pending` o `approved` nunca pierde su patch.
+
 **Límites y abuso.** 3 envíos guardados por cuenta en 24 h (`-map-submit-per-day`, contado
 en la misma transacción con la cuenta bloqueada `FOR UPDATE`), cuentas de al menos 24 h
 (`-map-submit-min-account-age`), 5 intentos por minuto por cuenta, 2 chequeos a la vez, y
 el mismo patch de una cuenta no puede estar dos veces pendiente. Una cuenta baneada o
-deshabilitada no envía.
+deshabilitada no envía. La memoria tiene un tope antes de leer cualquier cuerpo: 4 subidas
+en curso a la vez (el resto, `503`), 30 s por subida y un solo buffer por cuerpo (≈ 40 MiB
+como máximo; detalle en docs/05 y docs/07). Las descargas del patch tienen su propio
+límite por cuenta y 2 lugares.
 
 **Licencia (decisión, a confirmar por el dueño del repo).** Ni `docs/00` ni
 `world/CONTRIBUTORS.md` fijaban una. El checkbox acepta **CC BY 4.0**

@@ -287,6 +287,45 @@ figcaption {
 }
 
 /* Map submission portal (T4.5). */
+.maps-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+.maps-account {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+#site .link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.maps-pager {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+.maps-retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+#main .card p,
+#main .card h1,
+#main .card h2,
+.maps-queue th,
+.maps-queue td {
+  overflow-wrap: anywhere;
+}
 .maps-nav,
 .maps-filter {
   display: flex;

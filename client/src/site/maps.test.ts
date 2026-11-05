@@ -45,6 +45,8 @@ describe("errorKey", () => {
     expect(errorKey("submit_limit")).toBe("site.maps.error.submit_limit");
     expect(errorKey("forbidden")).toBe("site.maps.error.forbidden");
     expect(errorKey("own_submission")).toBe("site.maps.error.own_submission");
+    expect(errorKey("account_blocked")).toBe("site.maps.error.account_blocked");
+    expect(errorKey("patch_gone")).toBe("site.maps.error.patch_gone");
     expect(errorKey("unauthorized")).toBe("error.unauthorized");
     expect(errorKey("network")).toBe("error.network");
   });

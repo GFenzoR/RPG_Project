@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -52,20 +54,21 @@ func (f *fakeSubmissions) CreateMapSubmission(_ context.Context, n store.NewMapS
 		ID: int64(len(f.subs) + 1), CreatedAt: n.At, UpdatedAt: n.At, AccountID: n.AccountID,
 		AuthorCharacterID: n.CharacterID, AuthorName: "Aria", Title: n.Title, Description: n.Description,
 		License: n.License, Status: store.SubmissionPending, SHA256: n.SHA256, SizeBytes: len(n.Patch),
-		BaseRef: n.BaseRef, Files: n.Files,
+		BaseRef: n.BaseRef, Files: n.Files, HasPatch: true,
 	}
 	f.subs = append(f.subs, m)
 	f.patches[m.ID] = n.Patch
 	return m, nil
 }
 
-func (f *fakeSubmissions) AccountRole(_ context.Context, id int64) (string, error) {
+func (f *fakeSubmissions) AccountInfo(_ context.Context, id int64) (string, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	email := "account" + strconv.FormatInt(id, 10) + "@example.com"
 	if r, ok := f.roles[id]; ok {
-		return r, nil
+		return r, email, nil
 	}
-	return store.RolePlayer, nil
+	return store.RolePlayer, email, nil
 }
 
 func (f *fakeSubmissions) AccountMapSubmissions(_ context.Context, id int64, _ int) ([]store.MapSubmission, error) {
@@ -80,12 +83,18 @@ func (f *fakeSubmissions) AccountMapSubmissions(_ context.Context, id int64, _ i
 	return out, nil
 }
 
-func (f *fakeSubmissions) MapSubmissionsByStatus(_ context.Context, status string, _ int) ([]store.MapSubmission, error) {
+// MapSubmissionsByStatus pages by id: pending oldest first, the rest newest first.
+func (f *fakeSubmissions) MapSubmissionsByStatus(_ context.Context, status string, c store.SubmissionCursor, n int) ([]store.MapSubmission, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []store.MapSubmission
-	for _, m := range f.subs {
-		if m.Status == status {
+	for i := range f.subs {
+		m := f.subs[i]
+		if status != store.SubmissionPending {
+			m = f.subs[len(f.subs)-1-i]
+		}
+		after := c.ID == 0 || (status == store.SubmissionPending && m.ID > c.ID) || (status != store.SubmissionPending && m.ID < c.ID)
+		if m.Status == status && after && len(out) < n {
 			out = append(out, m)
 		}
 	}
@@ -333,7 +342,7 @@ func TestSubmitMapStoreErrors(t *testing.T) {
 		{store.ErrSubmitLimit, 429, "submit_limit"},
 		{store.ErrAccountTooNew, 403, "account_too_new"},
 		{store.ErrDuplicateSubmission, 409, "duplicate_submission"},
-		{store.ErrForbidden, 403, "forbidden"},
+		{store.ErrForbidden, 403, "account_blocked"},
 		{store.ErrNotFound, 404, "character_not_found"},
 	}
 	for _, c := range cases {
@@ -356,7 +365,7 @@ func TestSubmitMapChecksTheAccountFirst(t *testing.T) {
 	}{
 		{store.ErrSubmitLimit, 429, "submit_limit"},
 		{store.ErrAccountTooNew, 403, "account_too_new"},
-		{store.ErrForbidden, 403, "forbidden"},
+		{store.ErrForbidden, 403, "account_blocked"},
 		{store.ErrNotFound, 401, "unauthorized"},
 	} {
 		t.Run(c.code, func(t *testing.T) {
@@ -502,4 +511,170 @@ func TestReviewSubmission(t *testing.T) {
 func TestMapRoutesNeedTheStore(t *testing.T) {
 	h := newHarness(t, nil)
 	expect(t, h.do(req{method: "GET", path: "/api/maps/submissions/mine"}), 404, "not_found")
+}
+
+// Uploads in flight are bounded before their bodies are read: with every slot held by a
+// stalled upload, the next one answers 503 busy at once, without reading its body.
+func TestStalledUploadsGetBusy(t *testing.T) {
+	subs := newFakeSubmissions()
+	h := newHarness(t, func(c *httpapi.Config) {
+		c.MapSubmissions = subs
+		c.MapUploadSlots = 2
+		c.MapSubmitRateLimit = httpapi.RateLimit{Burst: 100, Every: time.Second}
+	})
+	srv := httptest.NewServer(h.h)
+	defer srv.Close()
+	p := &portal{harness: h, subs: subs}
+	_, tok := p.account("aria@example.com", "")
+
+	post := func(body io.Reader, length int64) (*http.Response, error) {
+		req, _ := http.NewRequest("POST", srv.URL+"/api/maps/submissions", body)
+		req.ContentLength = length
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tok)
+		return http.DefaultClient.Do(req)
+	}
+	// Two uploads that send their first bytes and stall.
+	var writers []*io.PipeWriter
+	done := make(chan *http.Response, 2)
+	for range 2 {
+		pr, pw := io.Pipe()
+		writers = append(writers, pw)
+		go func() {
+			resp, err := post(pr, 1<<20)
+			if err == nil {
+				resp.Body.Close()
+			}
+			done <- resp
+		}()
+		if _, err := pw.Write([]byte(`{"patch":"`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The third: a body that is never sent. It must be answered anyway.
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	resp, err := post(pr, 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), `"busy"`) {
+		t.Fatalf("third upload = %d %s, want 503 busy", resp.StatusCode, b)
+	}
+	// Once the stalled ones end, a slot is free again.
+	for _, w := range writers {
+		_ = w.CloseWithError(io.ErrUnexpectedEOF)
+	}
+	for range 2 {
+		<-done
+	}
+	body := submitBody(t, nil)
+	resp, err = post(strings.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("after the stall = %d", resp.StatusCode)
+	}
+}
+
+func TestUploadContentLengthOverTheCap(t *testing.T) {
+	p := newPortal(t, func(c *httpapi.Config) { c.MapSubmitLimits = httpapi.MapSubmitLimits{MaxBytes: 1024} })
+	_, tok := p.account("aria@example.com", "")
+	hr := httptest.NewRequest("POST", "/api/maps/submissions", strings.NewReader("{}"))
+	hr.ContentLength = 1 << 30
+	hr.Header.Set("Content-Type", "application/json")
+	hr.Header.Set("Authorization", "Bearer "+tok)
+	w := httptest.NewRecorder()
+	p.h.ServeHTTP(w, hr)
+	expect(t, w, http.StatusRequestEntityTooLarge, "patch_too_large")
+}
+
+func TestPatchDownloadLimitsAndRetention(t *testing.T) {
+	p := newPortal(t, func(c *httpapi.Config) {
+		c.MapDownloadRateLimit = httpapi.RateLimit{Burst: 3, Every: time.Hour}
+	})
+	_, author := p.account("aria@example.com", "")
+	expect(t, p.do(req{method: "POST", path: "/api/maps/submissions", token: author, body: submitBody(t, nil)}), 201, "")
+	for range 3 {
+		expect(t, p.do(req{method: "GET", path: "/api/maps/submissions/1/patch", token: author}), 200, "")
+	}
+	expect(t, p.do(req{method: "GET", path: "/api/maps/submissions/1/patch", token: author}), 429, "rate_limited")
+
+	_, other := p.account("bo@example.com", "")
+	p.subs.subs[0].AccountID = 0 // now the submission is nobody's: 404 for a player
+	expect(t, p.do(req{method: "GET", path: "/api/maps/submissions/1/patch", token: other}), 404, "not_found")
+
+	_, gm := p.account("gm@example.com", store.RoleGM)
+	p.subs.subs[0].HasPatch = false
+	p.subs.patches[1] = nil
+	expect(t, p.do(req{method: "GET", path: "/api/maps/submissions/1/patch", token: gm}), 410, "patch_gone")
+	w := p.do(req{method: "GET", path: "/api/maps/submissions/1", token: gm})
+	if !strings.Contains(w.Body.String(), `"has_patch":false`) {
+		t.Errorf("detail = %s", w.Body.String())
+	}
+}
+
+func TestQueuePagesAndHistoryOrder(t *testing.T) {
+	p := newPortal(t, func(c *httpapi.Config) {
+		c.MapSubmitRateLimit = httpapi.RateLimit{Burst: 1000, Every: time.Second}
+	})
+	acc, _ := p.account("aria@example.com", "")
+	_, gm := p.account("gm@example.com", store.RoleGM)
+	for i := range 55 {
+		status := store.SubmissionPending
+		if i%2 == 1 {
+			status = store.SubmissionRejected
+		}
+		p.subs.subs = append(p.subs.subs, store.MapSubmission{ID: int64(i + 1), AccountID: acc, Status: status, HasPatch: true,
+			Files: []store.MapSubmissionFile{{Path: testChunk, Action: "modify"}}, UpdatedAt: p.clock.Now()})
+	}
+	type page struct {
+		Submissions []struct{ ID int64 } `json:"submissions"`
+		Next        string               `json:"next"`
+	}
+	get := func(path string) page {
+		t.Helper()
+		w := p.do(req{method: "GET", path: path, token: gm})
+		expect(t, w, 200, "")
+		return decodeJSON[page](t, w.Body.Bytes())
+	}
+	// 28 pending (ids 1, 3, ..., 55), oldest first: one page.
+	pend := get("/api/maps/submissions")
+	if len(pend.Submissions) != 28 || pend.Submissions[0].ID != 1 || pend.Next != "" {
+		t.Fatalf("pending = %+v", pend)
+	}
+	// 27 rejected, newest first.
+	rej := get("/api/maps/submissions?status=rejected")
+	if len(rej.Submissions) != 27 || rej.Submissions[0].ID != 54 {
+		t.Fatalf("rejected = %+v", rej)
+	}
+	expect(t, p.do(req{method: "GET", path: "/api/maps/submissions?cursor=x", token: gm}), 400, "bad_request")
+	expect(t, p.do(req{method: "GET", path: "/api/maps/submissions?cursor=1-0", token: gm}), 400, "bad_request")
+	// A full page has a next cursor that continues after its last row.
+	for i := range 60 {
+		p.subs.subs = append(p.subs.subs, store.MapSubmission{ID: int64(56 + i), AccountID: acc, Status: store.SubmissionApproved,
+			HasPatch: true, Files: []store.MapSubmissionFile{}, UpdatedAt: p.clock.Now()})
+	}
+	first := get("/api/maps/submissions?status=approved")
+	if len(first.Submissions) != 50 || first.Submissions[0].ID != 115 || first.Next == "" {
+		t.Fatalf("approved page 1: %d rows, first %d, next %q", len(first.Submissions), first.Submissions[0].ID, first.Next)
+	}
+	second := get("/api/maps/submissions?status=approved&cursor=" + first.Next)
+	if len(second.Submissions) != 10 || second.Submissions[0].ID != 65 || second.Next != "" {
+		t.Fatalf("approved page 2: %+v", second)
+	}
+}
+
+func TestMineSaysWhoIsSignedIn(t *testing.T) {
+	p := newPortal(t, nil)
+	acc, tok := p.account("aria@example.com", "")
+	w := p.do(req{method: "GET", path: "/api/maps/submissions/mine", token: tok})
+	expect(t, w, 200, "")
+	if !strings.Contains(w.Body.String(), `"email":"account`+strconv.FormatInt(acc, 10)+`@example.com"`) {
+		t.Errorf("mine = %s", w.Body.String())
+	}
 }

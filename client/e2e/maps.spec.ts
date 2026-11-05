@@ -33,6 +33,13 @@ const author = {
 const gm = { email: `maps-gm-${run}@example.com` };
 const player = { email: `maps-player-${run}@example.com` };
 
+// Titles carry the run's tag: the dev database outlives a run, and an interrupted run
+// must not make the next one see two rows with the same title.
+const tag = randomLetters(6);
+const grassTitle = `Pasto en la playa norte ${tag}`;
+// One long word: it must wrap, not widen the page, at phone width.
+const pathTitle = `Sendero-al-faro-por-la-playa-norte-de-la-parcela-comunitaria-${tag}`;
+
 const psql = (sql: string): string =>
   execFileSync("psql", [databaseUrl, "-At", "-c", sql], { encoding: "utf8" }).trim();
 
@@ -85,6 +92,15 @@ async function newPage(browser: Browser): Promise<Page> {
   return page;
 }
 
+/** No horizontal scroll at the current width. */
+async function fitsWidth(page: Page): Promise<void> {
+  const { scroll, width } = await page.evaluate(() => ({
+    scroll: document.documentElement.scrollWidth,
+    width: window.innerWidth,
+  }));
+  expect(scroll).toBeLessThanOrEqual(width);
+}
+
 /** Logs in with the website's own form (shown by a portal page without a session). */
 async function siteLogin(page: Page, email: string): Promise<void> {
   await expect(page.locator(".maps-login")).toBeVisible();
@@ -132,6 +148,10 @@ test.describe.serial("map submission portal", () => {
 
   test.afterAll(() => {
     rmSync(tmp, { recursive: true, force: true });
+    // This run's rows (audit_log is append-only and stays).
+    psql(
+      `DELETE FROM map_submissions WHERE account_id IN (SELECT id FROM accounts WHERE email IN ('${author.email}', '${gm.email}', '${player.email}'))`,
+    );
   });
 
   test("a player submits a patch and sees it pending", async ({ browser }) => {
@@ -140,12 +160,13 @@ test.describe.serial("map submission portal", () => {
     await siteLogin(page, author.email);
     await expect(page.getByTestId("maps-submit-form")).toBeVisible();
     await expect(page.locator(".maps-nav a")).toHaveCount(2); // no moderation link
+    await expect(page.getByTestId("maps-signed-in")).toContainText(author.email);
 
     await page.getByTestId("maps-file").setInputFiles(grassPatch);
     await expect(page.getByTestId("maps-file-ok")).toContainText(
       "plot-3202-6298-2-2.rpgpatch.json",
     );
-    await page.getByTestId("maps-title").fill("Pasto en la playa norte");
+    await page.getByTestId("maps-title").fill(grassTitle);
     await page
       .getByTestId("maps-description")
       .fill("Un rincón de pasto en la parcela de la comunidad.\nCuatro casillas.");
@@ -154,25 +175,43 @@ test.describe.serial("map submission portal", () => {
     await page.getByTestId("maps-license").check();
     await shot(page, "maps-submit-form");
     await page.getByTestId("maps-send").click();
-    await expect(page.getByTestId("maps-submitted")).toContainText("Pasto en la playa norte");
+    await expect(page.getByTestId("maps-submitted")).toContainText(grassTitle);
+    // The confirmation's heading takes the focus (announced; not lost on <body>).
+    await expect(page.getByTestId("maps-submitted").getByRole("heading")).toBeFocused();
     await shot(page, "maps-submit-done");
 
-    // The same patch again, while the first waits: refused with its own text.
+    // The same patch again, while the first waits: refused with its own text. On a phone,
+    // with a file name that is one long word: nothing widens the page.
+    await page.setViewportSize({ width: 375, height: 800 });
+    const longName = join(
+      tmp,
+      `${"parcela-comunitaria-de-la-playa-norte-".repeat(3)}${tag}.rpgpatch.json`,
+    );
+    cpSync(grassPatch, longName);
     await page.goto("/maps/submit");
-    await page.getByTestId("maps-file").setInputFiles(grassPatch);
+    await page.getByTestId("maps-file").setInputFiles(longName);
+    await expect(page.getByTestId("maps-file-ok")).toBeVisible();
     await page.getByTestId("maps-title").fill("Otra vez");
     await page.getByTestId("maps-license").check();
     await page.getByTestId("maps-send").click();
     await expect(page.getByTestId("maps-error")).toHaveText(
       "Ese mismo patch ya está esperando revisión.",
     );
+    await fitsWidth(page);
+    await shot(page, "maps-submit-phone");
+    await page.setViewportSize({ width: 1280, height: 800 });
 
     await page.goto("/maps/mine");
     const item = page.getByTestId("maps-mine").locator("li").first();
-    await expect(item).toContainText("Pasto en la playa norte");
+    await expect(item).toContainText(grassTitle);
     await expect(item.locator(".badge")).toHaveAttribute("data-status", "pending");
     await expect(item).toContainText(author.name);
     await shot(page, "maps-mine-pending");
+
+    // Log out from the website: the portal asks for a login again.
+    await page.getByTestId("maps-logout").click();
+    await expect(page.locator(".maps-login")).toBeVisible();
+    expect((await page.request.get("/api/maps/submissions/mine")).status()).toBe(401);
 
     const row = psql(
       `SELECT s.status || ' ' || s.author_name || ' ' || s.files::text FROM map_submissions s JOIN accounts a ON a.id = s.account_id WHERE a.email = '${author.email}'`,
@@ -207,9 +246,9 @@ test.describe.serial("map submission portal", () => {
     await page.goto("/maps/review?lang=es");
     await siteLogin(page, gm.email);
     await expect(page.locator(".maps-nav a")).toHaveCount(3);
-    const link = page.getByTestId("maps-queue").getByRole("link", {
-      name: "Pasto en la playa norte",
-    });
+    const link = page
+      .getByTestId("maps-queue")
+      .getByRole("link", { name: grassTitle, exact: true });
     await expect(link).toBeVisible();
     await shot(page, "maps-review-queue");
     await link.click();
@@ -220,6 +259,8 @@ test.describe.serial("map submission portal", () => {
       "Un rincón de pasto en la parcela de la comunidad.\nCuatro casillas.",
     );
     await expect(page.getByTestId("maps-reject")).toBeDisabled(); // needs a reason
+    // The base is the commit the patch was made on, not a symbolic "HEAD".
+    await expect(detail.locator(".maps-facts")).toContainText(/[0-9a-f]{40}/);
     await shot(page, "maps-review-detail");
 
     const [download] = await Promise.all([
@@ -233,6 +274,8 @@ test.describe.serial("map submission portal", () => {
 
     await page.getByTestId("maps-approve").click();
     await expect(detail.locator(".badge").first()).toHaveAttribute("data-status", "approved");
+    // The page stays; focus goes to the heading, which the new status describes.
+    await expect(detail.getByRole("heading", { level: 1 })).toBeFocused();
     await expect(page.getByTestId("maps-approve")).toHaveCount(0);
     await shot(page, "maps-review-approved");
 
@@ -241,13 +284,21 @@ test.describe.serial("map submission portal", () => {
     await authorPage.goto("/maps/submit?lang=es");
     await siteLogin(authorPage, author.email);
     await authorPage.getByTestId("maps-file").setInputFiles(pathPatch);
-    await authorPage.getByTestId("maps-title").fill("Sendero al faro");
+    await authorPage.getByTestId("maps-title").fill(pathTitle);
     await authorPage.getByTestId("maps-license").check();
     await authorPage.getByTestId("maps-send").click();
     await expect(authorPage.getByTestId("maps-submitted")).toBeVisible();
 
     await page.goto("/maps/review");
-    await page.getByTestId("maps-queue").getByRole("link", { name: "Sendero al faro" }).click();
+    await page.setViewportSize({ width: 375, height: 800 });
+    await expect(page.getByTestId("maps-queue")).toBeVisible();
+    await fitsWidth(page);
+    await shot(page, "maps-review-phone");
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page
+      .getByTestId("maps-queue")
+      .getByRole("link", { name: pathTitle, exact: true })
+      .click();
     await page.getByTestId("maps-reason-input").fill("El sendero corta la playa; muévelo al este.");
     await page.getByTestId("maps-reject").click();
     await expect(page.getByTestId("maps-detail").locator(".badge").first()).toHaveAttribute(
@@ -255,23 +306,23 @@ test.describe.serial("map submission portal", () => {
       "rejected",
     );
     await page.goto("/maps/review?status=approved");
-    await expect(page.getByTestId("maps-queue")).toContainText("Pasto en la playa norte");
+    await expect(
+      page.getByTestId("maps-queue").getByRole("link", { name: grassTitle, exact: true }),
+    ).toBeVisible();
 
     await authorPage.goto("/maps/mine");
-    const items = authorPage.getByTestId("maps-mine").locator("li");
-    await expect(items.nth(0).locator(".badge")).toHaveAttribute("data-status", "rejected");
-    await expect(items.nth(0).getByTestId("maps-reason")).toContainText(
+    const mine = authorPage.getByTestId("maps-mine");
+    const rejected = mine.locator("li", { hasText: pathTitle });
+    const approved = mine.locator("li", { hasText: grassTitle });
+    await expect(rejected.locator(".badge")).toHaveAttribute("data-status", "rejected");
+    await expect(rejected.getByTestId("maps-reason")).toContainText(
       "El sendero corta la playa; muévelo al este.",
     );
-    await expect(items.nth(1).locator(".badge")).toHaveAttribute("data-status", "approved");
+    await expect(approved.locator(".badge")).toHaveAttribute("data-status", "approved");
     await shot(authorPage, "maps-mine-reviewed");
     await authorPage.setViewportSize({ width: 375, height: 800 });
     await shot(authorPage, "maps-mine-phone");
-    const { scroll, width } = await authorPage.evaluate(() => ({
-      scroll: document.documentElement.scrollWidth,
-      width: window.innerWidth,
-    }));
-    expect(scroll).toBeLessThanOrEqual(width);
+    await fitsWidth(authorPage);
 
     // Everything is in the audit log.
     const actions = psql(

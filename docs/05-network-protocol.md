@@ -233,21 +233,28 @@ test sin Postgres) las rutas no existen (404).
 | Método y ruta | Quién | Cuerpo | Respuesta OK |
 |---|---|---|---|
 | `POST /api/maps/submissions` | cualquier cuenta | `{title, description, character_id, license, patch}` | `201 {submission}` |
-| `GET /api/maps/submissions/mine` | cualquier cuenta | — | `200 {submissions, can_review, license, max_bytes, per_day}` (las 100 más nuevas) |
-| `GET /api/maps/submissions?status=` | gm, admin | — | `200 {status, submissions}` (default `pending`; las 100 más viejas) |
+| `GET /api/maps/submissions/mine` | cualquier cuenta | — | `200 {submissions, can_review, email, license, max_bytes, per_day}` (las 100 más nuevas; `email` es el de la propia cuenta, para "Sesión: …") |
+| `GET /api/maps/submissions?status=&cursor=` | gm, admin | — | `200 {status, submissions, next?}`: páginas de 50. `pending` (default) del más viejo al más nuevo por creación; los demás estados del cambio más reciente al más viejo (`updated_at`). `next` es el `cursor` de la página siguiente (`<µs unix>-<id>`, keyset) |
 | `GET /api/maps/submissions/{id}` | autor, gm, admin | — | `200 {submission}` |
-| `GET /api/maps/submissions/{id}/patch` | autor, gm, admin | — | `200` el patch tal cual se subió, como adjunto |
+| `GET /api/maps/submissions/{id}/patch` | autor, gm, admin | — | `200` el patch tal cual se subió, como adjunto; `410 patch_gone` si ya se purgó |
 | `POST /api/maps/submissions/{id}/review` | gm, admin | `{decision: "approve"\|"reject", reason}` | `200 {submission}` |
 
 - `submission`: `{id, title, description, author, license, status, sha256, size, base_ref,
   files: [{path, action: create|modify|delete}], created_at, updated_at, reviewed_at?,
-  reason?, failure?, pr_url?, pr_number?}`. `author` es el nombre del personaje elegido
+  reason?, failure?, pr_url?, pr_number?, has_patch}`. `has_patch` es `false` cuando la
+  retención ya borró los bytes (docs/04). `author` es el nombre del personaje elegido
   (`character_id`, tiene que ser de la cuenta); el email nunca sale. Quien no es autor ni
   staff recibe el mismo `404` que con un id inexistente.
 - `patch` es el **texto** del `.rpgpatch.json` como string JSON. El cuerpo puede medir hasta
   `2 × max_bytes + 16 KiB` (el escape de JSON); el texto, hasta `max_bytes`. Un envío no
-  pasa por el límite general de 4 KiB, tiene 2 min para llegar y, después de leído, toma
-  uno de 2 turnos para el chequeo (`busy` si no hay).
+  pasa por el límite general de 4 KiB. **Presupuesto de memoria:** antes de leer un byte
+  del cuerpo, el envío toma uno de `DefaultMapUploadSlots` (4) lugares, que suelta al
+  responder; si no hay, `503 busy` sin leer el cuerpo. Un `Content-Length` sobre el tope es
+  `413` de entrada. El cuerpo se lee en un solo buffer del tamaño de `Content-Length` (no
+  con el decoder de JSON, que dobla su buffer) y tiene 30 s para llegar (≈ 140 KB/s con el
+  tope de 4 MiB). Cada envío en curso retiene a lo sumo ≈ 5 × `max_bytes` (cuerpo, texto
+  decodificado, copia guardada): con 2 MiB, el portal entero no pasa de ≈ 40 MiB. Caddy
+  corta en 5 MB los cuerpos de `/api/maps/*` antes de que lleguen al servidor.
 - `license` tiene que ser exactamente `cc-by-4.0` (`httpapi.MapLicense`): es el checkbox.
 - Textos: `title` 1–80 caracteres, `description` ≤ 2000 y `reason` ≤ 500 (obligatorio para
   rechazar). Se recortan y `\r\n` pasa a `\n`. Se rechazan controles (salvo salto y tab en
@@ -258,13 +265,19 @@ test sin Postgres) las rutas no existen (404).
   La de un moderador queda en `audit_log` (`map_download`).
 - Antes de leer el cuerpo, `POST /api/maps/submissions` mira la cuenta sin locks
   (`CheckSubmitter`: deshabilitada o baneada, antigüedad, cupo del día) y corta con su
-  código; una cuenta que sería rechazada no ocupa los MB de lectura. La transacción del
+  código, incluso antes de tomar un lugar del presupuesto; una cuenta que sería rechazada no ocupa los MB de lectura. La transacción del
   alta lo vuelve a mirar con la cuenta bloqueada.
 - La descarga del patch es un `<a download>`: usa la cookie, así que la cola de moderación
   es del sitio web (la app de escritorio, con token Bearer, no la ofrece).
 - Límites (flags de `gameserver`): `-map-submit-max-bytes` (2 MiB), `-map-submit-per-day`
   (3 envíos guardados por cuenta en 24 h móviles) y `-map-submit-min-account-age` (24 h).
   Además, 5 intentos por minuto por cuenta (`DefaultMapSubmitRateLimit`, válidos o no).
+- Descargas del patch: 10 por cuenta con una más cada 6 s (`DefaultMapDownloadRateLimit`)
+  y 2 a la vez en todo el servidor (`busy` si no hay lugar): cada una lee hasta 2 MiB del
+  pool de Postgres que comparten los guardados del juego.
+- `-map-patch-retention` (30 días; 0 = nunca): los bytes del patch de un envío
+  `rejected`, `pr_opened` o `failed` se borran ese tiempo después de su último cambio
+  (job horario, como la purga de sesiones). Quedan el sha256 y los metadatos.
 
 | Código | HTTP | Cuándo |
 |---|---|---|
@@ -276,7 +289,10 @@ test sin Postgres) las rutas no existen (404).
 | `account_too_new` | 403 | La cuenta es más nueva que el mínimo |
 | `submit_limit` | 429 | Ya hizo `per_day` envíos en 24 h |
 | `duplicate_submission` | 409 | El mismo patch (sha256) de la cuenta sigue pendiente |
-| `forbidden` | 403 | Cuenta deshabilitada o baneada al enviar, o una ruta de moderación sin ser gm/admin |
+| `account_blocked` | 403 | Enviar con la cuenta deshabilitada o baneada |
+| `forbidden` | 403 | Una ruta de moderación sin ser gm/admin |
+| `patch_gone` | 410 | Descargar un patch que la retención ya borró |
+| `busy` | 503 | Además de lo habitual: no hay lugar para otra subida o descarga del portal |
 | `not_pending` | 409 | Revisar un envío que ya se decidió |
 | `own_submission` | 403 | Un moderador revisando su propio envío (lo decide otro) |
 | `unauthorized` | 401 | Además de lo habitual: la sesión sobrevivió a su cuenta |

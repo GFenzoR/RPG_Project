@@ -12,6 +12,7 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 | Latencia de comando (recibido → evento enviado) | < 60 ms p95 en el servidor | bots |
 | Arranque del servidor | < 10 s | log de arranque |
 | Asignaciones por tick | sin crecimiento sostenido | `go test -bench` con `-benchmem` |
+| Memoria del portal de mapas (T4.5) | ≤ 40 MiB en total para subidas en curso | 4 lugares (`DefaultMapUploadSlots`) × ≈ 5 × 2 MiB, tomados antes de leer el cuerpo; `TestStalledUploadsGetBusy` |
 
 ## Técnicas obligatorias
 - Mundo en memoria con arrays planos por sector, no mapas de Go por casilla.

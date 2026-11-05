@@ -42,6 +42,8 @@ const MAP_ERRORS = new Set([
   "not_pending",
   "forbidden",
   "own_submission",
+  "account_blocked",
+  "patch_gone",
 ]);
 
 /** i18n key of a failed portal call (ApiError code and detail). */

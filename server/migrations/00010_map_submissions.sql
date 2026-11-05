@@ -43,7 +43,9 @@ CREATE TABLE map_submissions (
     base_ref            TEXT        NOT NULL CHECK (length(base_ref) BETWEEN 1 AND 200),
     -- [{"path": "world/...", "action": "create|modify|delete"}], from the server's check.
     files               JSONB       NOT NULL CHECK (jsonb_typeof(files) = 'array' AND jsonb_array_length(files) >= 1),
-    patch               BYTEA       NOT NULL,
+    -- The uploaded bytes. Dropped (NULL) some days after a final status (rejected,
+    -- pr_opened, failed; gameserver -map-patch-retention): sha256 and the rest stay.
+    patch               BYTEA,
     -- The moderator's decision.
     reviewed_at         TIMESTAMPTZ,
     reviewed_by         BIGINT,
@@ -64,6 +66,11 @@ CREATE TABLE map_submissions (
 CREATE INDEX map_submissions_account_idx ON map_submissions (account_id, created_at);
 CREATE INDEX map_submissions_pending_idx ON map_submissions (created_at, id) WHERE status = 'pending';
 CREATE INDEX map_submissions_approved_idx ON map_submissions (reviewed_at, id) WHERE status = 'approved';
+-- The moderation history (every status but pending), newest first, a page at a time.
+CREATE INDEX map_submissions_history_idx ON map_submissions (status, updated_at DESC, id DESC) WHERE status <> 'pending';
+-- Patches still kept after a final status: what the retention job purges.
+CREATE INDEX map_submissions_kept_idx ON map_submissions (updated_at)
+    WHERE patch IS NOT NULL AND status IN ('rejected', 'pr_opened', 'failed');
 -- The same patch twice from one account while the first is still waiting.
 CREATE UNIQUE INDEX map_submissions_pending_sha_key ON map_submissions (account_id, sha256) WHERE status = 'pending';
 

@@ -156,7 +156,7 @@ func TestMapSubmissions(t *testing.T) {
 	if err != nil || len(mine) != 3 || mine[0].SHA256 != strings.Repeat("c", 64) {
 		t.Fatalf("mine = %+v, %v", mine, err)
 	}
-	queue, err := st.MapSubmissionsByStatus(ctx, store.SubmissionPending, 10)
+	queue, err := st.MapSubmissionsByStatus(ctx, store.SubmissionPending, store.SubmissionCursor{}, 10)
 	var authorQueue []store.MapSubmission
 	for _, q := range queue {
 		if q.AccountID == author {
@@ -203,7 +203,7 @@ func TestMapSubmissions(t *testing.T) {
 	if _, err := st.ReviewMapSubmission(ctx, store.ReviewRequest{At: at, ID: second, ActorAccountID: gm, Approve: true}); err != nil {
 		t.Fatal(err)
 	}
-	approved, err := st.MapSubmissionsByStatus(ctx, store.SubmissionApproved, 10)
+	approved, err := st.MapSubmissionsByStatus(ctx, store.SubmissionApproved, store.SubmissionCursor{}, 10)
 	if err != nil || len(approved) != 1 || approved[0].ID != second {
 		t.Fatalf("approved = %+v, %v", approved, err)
 	}
@@ -233,8 +233,56 @@ func TestMapSubmissions(t *testing.T) {
 	if actions["map_submit"] != 6 || actions["map_reject"] != 1 || actions["map_approve"] != 1 || len(actions) != 3 {
 		t.Errorf("audit actions = %v", actions)
 	}
-	role, err := st.AccountRole(ctx, gm)
-	if err != nil || role != "gm" {
-		t.Errorf("AccountRole = %q, %v", role, err)
+	role, email, err := st.AccountInfo(ctx, gm)
+	if err != nil || role != "gm" || email != "gm@example.com" {
+		t.Errorf("AccountInfo = %q %q, %v", role, email, err)
+	}
+
+	// Paging: pending oldest first after a cursor; the history newest first before one.
+	page1, err := st.MapSubmissionsByStatus(ctx, store.SubmissionPending, store.SubmissionCursor{}, 2)
+	if err != nil || len(page1) != 2 {
+		t.Fatalf("pending page 1 = %d, %v", len(page1), err)
+	}
+	page2, err := st.MapSubmissionsByStatus(ctx, store.SubmissionPending, page1[1].Cursor(), 100)
+	if err != nil || len(page2) == 0 || page2[0].ID == page1[1].ID || !page2[0].CreatedAt.After(page1[1].CreatedAt.Add(-time.Nanosecond)) {
+		t.Fatalf("pending page 2 = %+v, %v", page2, err)
+	}
+	for _, m := range append(page1, page2...) {
+		if m.Status != store.SubmissionPending {
+			t.Fatalf("not pending: %+v", m)
+		}
+	}
+	// A newer rejection comes before an older one.
+	rejected2 := page2[len(page2)-1]
+	if _, err := st.ReviewMapSubmission(ctx, store.ReviewRequest{At: at.Add(time.Hour), ID: rejected2.ID, ActorAccountID: gm, Reason: "otra"}); err != nil {
+		t.Fatal(err)
+	}
+	hist, err := st.MapSubmissionsByStatus(ctx, store.SubmissionRejected, store.SubmissionCursor{}, 10)
+	if err != nil || len(hist) != 2 || hist[0].ID != rejected2.ID || hist[1].ID != m.ID {
+		t.Fatalf("rejected history = %+v, %v", hist, err)
+	}
+	rest, err := st.MapSubmissionsByStatus(ctx, store.SubmissionRejected, hist[0].Cursor(), 10)
+	if err != nil || len(rest) != 1 || rest[0].ID != m.ID {
+		t.Fatalf("rejected after cursor = %+v, %v", rest, err)
+	}
+
+	// Retention: only final statuses changed before the cutoff lose their bytes.
+	n, err := st.PurgeMapPatches(ctx, at.Add(30*time.Minute))
+	if err != nil || n != 1 {
+		t.Fatalf("purge = %d, %v", n, err)
+	}
+	gone, err := st.MapSubmission(ctx, m.ID)
+	if err != nil || gone.HasPatch || gone.SHA256 == "" {
+		t.Fatalf("purged = %+v, %v", gone, err)
+	}
+	if _, _, patch, err := st.MapSubmissionPatch(ctx, m.ID); err != nil || patch != nil {
+		t.Fatalf("purged patch = %q, %v", patch, err)
+	}
+	kept, err := st.MapSubmission(ctx, rejected2.ID)
+	if err != nil || !kept.HasPatch {
+		t.Fatalf("recent rejection lost its patch: %+v, %v", kept, err)
+	}
+	if ok, err := st.MapSubmission(ctx, second); err != nil || !ok.HasPatch {
+		t.Fatalf("approved lost its patch: %+v, %v", ok, err)
 	}
 }

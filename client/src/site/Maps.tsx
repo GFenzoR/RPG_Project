@@ -4,7 +4,7 @@
 // key or the player's own text rendered as text (never innerHTML).
 import { Fragment } from "preact";
 import type { JSX } from "preact";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api, mapsApi } from "../net/api.ts";
 import type { Character, MapSubmission, MySubmissions } from "../net/api.ts";
@@ -141,15 +141,43 @@ function SiteLogin(props: { t: Translate; onDone: () => void }): JSX.Element {
   );
 }
 
-/** The portal's own menu: submit, mine and (staff) the queue. */
-function MapsNav(props: MapsProps & { current: string; canReview: boolean }): JSX.Element {
+/** The portal's own menu (submit, mine and, for staff, the queue), who is signed in and
+ *  the way out: the website's login sets the same 30-day cookie as the game. */
+function MapsNav(
+  props: MapsProps & {
+    current: string;
+    canReview: boolean;
+    email: string;
+    onLogout: () => void;
+  },
+): JSX.Element {
   const { t, link, current } = props;
+  const [busy, setBusy] = useState(false);
   return (
-    <nav class="maps-nav" aria-label={t("site.maps.nav.label")}>
-      {link("/maps/submit", t("site.maps.nav.submit"), current === "submit")}
-      {link("/maps/mine", t("site.maps.nav.mine"), current === "mine")}
-      {props.canReview && link("/maps/review", t("site.maps.nav.review"), current === "review")}
-    </nav>
+    <div class="maps-bar">
+      <nav class="maps-nav" aria-label={t("site.maps.nav.label")}>
+        {link("/maps/submit", t("site.maps.nav.submit"), current === "submit")}
+        {link("/maps/mine", t("site.maps.nav.mine"), current === "mine")}
+        {props.canReview && link("/maps/review", t("site.maps.nav.review"), current === "review")}
+      </nav>
+      <p class="maps-account">
+        <span data-testid="maps-signed-in">
+          {t("site.maps.account.signed_in", { email: props.email })}
+        </span>{" "}
+        <button
+          type="button"
+          class="link-button"
+          data-testid="maps-logout"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            props.onLogout();
+          }}
+        >
+          {t("site.maps.account.logout")}
+        </button>
+      </p>
+    </div>
   );
 }
 
@@ -174,9 +202,18 @@ function WithAccount(
     ) : (
       <ErrorText t={t} code={mine.code} />
     );
+  // Logging out (or failing to) reloads: without a session the login form shows.
+  const logout = (): void => {
+    api.logout().then(reload, reload);
+  };
   return (
     <>
-      <MapsNav {...props} canReview={mine.data.can_review} />
+      <MapsNav
+        {...props}
+        canReview={mine.data.can_review}
+        email={mine.data.email}
+        onLogout={logout}
+      />
       {props.children(mine.data, reload)}
     </>
   );
@@ -194,7 +231,8 @@ export function SubmitPage(props: MapsProps): JSX.Element {
 
 function SubmitForm(props: MapsProps & { mine: MySubmissions }): JSX.Element {
   const { t, lang, mine } = props;
-  const [chars] = useLoad<Character[]>(() => api.characters(), []);
+  const [chars, reloadChars] = useLoad<Character[]>(() => api.characters(), []);
+  const doneRef = useRef<HTMLHeadingElement>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [characterId, setCharacterId] = useState<number | null>(null);
@@ -209,11 +247,18 @@ function SubmitForm(props: MapsProps & { mine: MySubmissions }): JSX.Element {
     if (chars.state === "ok" && characterId === null && chars.data[0])
       setCharacterId(chars.data[0].id);
   }, [chars, characterId]);
+  // The form is replaced by the confirmation: focus its heading so it is announced and
+  // keyboard users do not land on <body>.
+  useEffect(() => {
+    if (done) doneRef.current?.focus();
+  }, [done]);
 
   if (done)
     return (
-      <section class="card" data-testid="maps-submitted" aria-live="polite">
-        <h1>{t("site.maps.submit.done_title")}</h1>
+      <section class="card" data-testid="maps-submitted">
+        <h1 tabIndex={-1} ref={doneRef}>
+          {t("site.maps.submit.done_title")}
+        </h1>
         <p>{t("site.maps.submit.done_body", { title: done.title })}</p>
         <p>{props.link("/maps/mine", t("site.maps.nav.mine"))}</p>
       </section>
@@ -276,7 +321,14 @@ function SubmitForm(props: MapsProps & { mine: MySubmissions }): JSX.Element {
           count: mine.per_day,
         })}
       </p>
-      {chars.state === "ok" && chars.data.length === 0 ? (
+      {chars.state === "error" ? (
+        <div class="maps-retry">
+          <ErrorText t={t} code={chars.code} />
+          <button type="button" data-testid="maps-retry" onClick={reloadChars}>
+            {t("site.maps.retry")}
+          </button>
+        </div>
+      ) : chars.state === "ok" && chars.data.length === 0 ? (
         <p class="error" role="alert">
           {t("site.maps.submit.no_character")} <a href="/play/">{t("site.play")}</a>
         </p>
@@ -362,7 +414,7 @@ function SubmitForm(props: MapsProps & { mine: MySubmissions }): JSX.Element {
               </a>
             </span>
           </label>
-          {error && (
+          {error && error.code !== "unauthorized" && (
             <ErrorText
               t={t}
               code={error.code}
@@ -377,6 +429,11 @@ function SubmitForm(props: MapsProps & { mine: MySubmissions }): JSX.Element {
             {busy ? t("site.maps.submit.sending") : t("site.maps.submit.send")}
           </button>
         </form>
+      )}
+      {error?.code === "unauthorized" && (
+        // The session ended while filling the form: log in here, keep what was typed, and
+        // send again.
+        <SiteLogin t={t} onDone={() => setError(null)} />
       )}
     </section>
   );
@@ -479,27 +536,27 @@ export function ReviewPage(props: MapsProps & { id?: number; search: string }): 
 
 function Queue(props: MapsProps & { search: string }): JSX.Element {
   const { t, lang } = props;
-  const param = new URLSearchParams(props.search).get("status") ?? "pending";
+  const query = new URLSearchParams(props.search);
+  const param = query.get("status") ?? "pending";
   const status: MapStatus = isMapStatus(param) ? param : "pending";
-  const [list] = useLoad(() => mapsApi.queue(status), [status]);
+  const cursor = query.get("cursor") ?? "";
+  const [list] = useLoad(() => mapsApi.queue(status, cursor), [status, cursor]);
+  const statusHref = (s: string): string =>
+    s === "pending" ? "/maps/review" : `/maps/review?status=${s}`;
   return (
     <section aria-labelledby="queue-title">
       <h1 id="queue-title">{t("site.maps.review.title")}</h1>
       <nav class="maps-filter" aria-label={t("site.maps.review.filter")}>
         {MAP_STATUSES.map((s) => (
           <Fragment key={s}>
-            {props.link(
-              s === "pending" ? "/maps/review" : `/maps/review?status=${s}`,
-              t(`site.maps.status.${s}`),
-              s === status,
-            )}
+            {props.link(statusHref(s), t(`site.maps.status.${s}`), s === status)}
           </Fragment>
         ))}
       </nav>
       {list.state === "loading" && <p class="muted">{t("site.maps.loading")}</p>}
       {list.state === "error" && <ErrorText t={t} code={list.code} />}
       {list.state === "ok" &&
-        (list.data.length === 0 ? (
+        (list.data.submissions.length === 0 ? (
           <p class="muted">{t("site.maps.review.empty")}</p>
         ) : (
           <table class="maps-queue" data-testid="maps-queue">
@@ -517,7 +574,7 @@ function Queue(props: MapsProps & { search: string }): JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {list.data.map((m) => (
+              {list.data.submissions.map((m) => (
                 <tr key={m.id}>
                   <th scope="row">{props.link(`/maps/review/${String(m.id)}`, m.title)}</th>
                   <td>{m.author}</td>
@@ -529,27 +586,44 @@ function Queue(props: MapsProps & { search: string }): JSX.Element {
             </tbody>
           </table>
         ))}
+      {list.state === "ok" && (cursor !== "" || list.data.next) && (
+        <nav class="maps-pager" aria-label={t("site.maps.review.pages")}>
+          {cursor !== "" && props.link(statusHref(status), t("site.maps.review.first_page"))}
+          {list.data.next &&
+            props.link(
+              `/maps/review?${new URLSearchParams({ status, cursor: list.data.next }).toString()}`,
+              t("site.maps.review.next_page"),
+            )}
+        </nav>
+      )}
     </section>
   );
 }
 
 function Detail(props: MapsProps & { id: number }): JSX.Element {
   const { t, lang } = props;
-  const [loaded, reload] = useLoad(() => mapsApi.get(props.id), [props.id]);
+  const [loaded] = useLoad(() => mapsApi.get(props.id), [props.id]);
+  // The answer to a decision replaces the loaded row in place: nothing unmounts, and focus
+  // moves to the heading, whose badge now says the new status.
+  const [decided, setDecided] = useState<MapSubmission | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (decided) headingRef.current?.focus();
+  }, [decided]);
   if (loaded.state === "loading") return <p class="muted">{t("site.maps.loading")}</p>;
   if (loaded.state === "error") return <ErrorText t={t} code={loaded.code} />;
-  const m = loaded.data;
+  const m = decided?.id === loaded.data.id ? decided : loaded.data;
   const decide = (decision: "approve" | "reject"): void => {
     setBusy(true);
     setError(null);
     mapsApi.review(m.id, decision, cleanInput(reason)).then(
-      () => {
+      (updated) => {
         setBusy(false);
         setReason("");
-        reload();
+        setDecided(updated);
       },
       (e: unknown) => {
         setError(codeOf(e));
@@ -561,8 +635,12 @@ function Detail(props: MapsProps & { id: number }): JSX.Element {
     <article class="card maps-detail" data-testid="maps-detail" aria-labelledby="detail-title">
       <p>{props.link("/maps/review", t("site.maps.review.back"))}</p>
       <div class="maps-row">
-        <h1 id="detail-title">{m.title}</h1>
-        <StatusBadge t={t} status={m.status} />
+        <h1 id="detail-title" tabIndex={-1} ref={headingRef} aria-describedby="detail-status">
+          {m.title}
+        </h1>
+        <span id="detail-status">
+          <StatusBadge t={t} status={m.status} />
+        </span>
       </div>
       <dl class="maps-facts">
         <dt>{t("site.maps.review.col_author")}</dt>
@@ -606,11 +684,17 @@ function Detail(props: MapsProps & { id: number }): JSX.Element {
           </ul>
         </div>
       ))}
-      <p>
-        <a href={mapsApi.patchUrl(m.id)} download data-testid="maps-download">
-          {t("site.maps.review.download")}
-        </a>
-      </p>
+      {m.has_patch ? (
+        <p>
+          <a href={mapsApi.patchUrl(m.id)} download data-testid="maps-download">
+            {t("site.maps.review.download")}
+          </a>
+        </p>
+      ) : (
+        <p class="muted" data-testid="maps-patch-gone">
+          {t("site.maps.review.patch_gone")}
+        </p>
+      )}
       <p class="muted">{t("site.maps.review.check_hint")}</p>
       {m.status === "rejected" && m.reason && (
         <p>

@@ -45,10 +45,27 @@ func (q *Queries) CountRecentSubmissions(ctx context.Context, arg CountRecentSub
 	return count, err
 }
 
+const getAccountRoleEmail = `-- name: GetAccountRoleEmail :one
+SELECT role, email FROM accounts WHERE id = $1
+`
+
+type GetAccountRoleEmailRow struct {
+	Role  string
+	Email string
+}
+
+func (q *Queries) GetAccountRoleEmail(ctx context.Context, id int64) (GetAccountRoleEmailRow, error) {
+	row := q.db.QueryRow(ctx, getAccountRoleEmail, id)
+	var i GetAccountRoleEmailRow
+	err := row.Scan(&i.Role, &i.Email)
+	return i, err
+}
+
 const getSubmission = `-- name: GetSubmission :one
 SELECT id, created_at, updated_at, account_id, author_character_id, author_name, title, description,
        license, status, sha256, size_bytes, base_ref, files, reviewed_at, reviewed_by, reason,
-       failure, pr_url, pr_number
+       failure, pr_url, pr_number,
+       (patch IS NOT NULL)::boolean AS has_patch
 FROM map_submissions
 WHERE id = $1
 `
@@ -74,6 +91,7 @@ type GetSubmissionRow struct {
 	Failure           pgtype.Text
 	PrUrl             pgtype.Text
 	PrNumber          pgtype.Int4
+	HasPatch          bool
 }
 
 func (q *Queries) GetSubmission(ctx context.Context, id int64) (GetSubmissionRow, error) {
@@ -100,6 +118,7 @@ func (q *Queries) GetSubmission(ctx context.Context, id int64) (GetSubmissionRow
 		&i.Failure,
 		&i.PrUrl,
 		&i.PrNumber,
+		&i.HasPatch,
 	)
 	return i, err
 }
@@ -168,7 +187,8 @@ func (q *Queries) InsertMapSubmission(ctx context.Context, arg InsertMapSubmissi
 const listAccountSubmissions = `-- name: ListAccountSubmissions :many
 SELECT id, created_at, updated_at, account_id, author_character_id, author_name, title, description,
        license, status, sha256, size_bytes, base_ref, files, reviewed_at, reviewed_by, reason,
-       failure, pr_url, pr_number
+       failure, pr_url, pr_number,
+       (patch IS NOT NULL)::boolean AS has_patch
 FROM map_submissions
 WHERE account_id = $1
 ORDER BY created_at DESC, id DESC
@@ -201,6 +221,7 @@ type ListAccountSubmissionsRow struct {
 	Failure           pgtype.Text
 	PrUrl             pgtype.Text
 	PrNumber          pgtype.Int4
+	HasPatch          bool
 }
 
 // An author's submissions, newest first.
@@ -234,6 +255,7 @@ func (q *Queries) ListAccountSubmissions(ctx context.Context, arg ListAccountSub
 			&i.Failure,
 			&i.PrUrl,
 			&i.PrNumber,
+			&i.HasPatch,
 		); err != nil {
 			return nil, err
 		}
@@ -245,22 +267,26 @@ func (q *Queries) ListAccountSubmissions(ctx context.Context, arg ListAccountSub
 	return items, nil
 }
 
-const listSubmissionsByStatus = `-- name: ListSubmissionsByStatus :many
+const listPendingSubmissions = `-- name: ListPendingSubmissions :many
 SELECT id, created_at, updated_at, account_id, author_character_id, author_name, title, description,
        license, status, sha256, size_bytes, base_ref, files, reviewed_at, reviewed_by, reason,
-       failure, pr_url, pr_number
+       failure, pr_url, pr_number,
+       (patch IS NOT NULL)::boolean AS has_patch
 FROM map_submissions
-WHERE status = $1
+WHERE status = 'pending'
+  AND ($1::timestamptz IS NULL
+       OR (created_at, id) > ($1::timestamptz, $2::bigint))
 ORDER BY created_at, id
-LIMIT $2
+LIMIT $3
 `
 
-type ListSubmissionsByStatusParams struct {
-	Status  string
+type ListPendingSubmissionsParams struct {
+	AfterAt pgtype.Timestamptz
+	AfterID pgtype.Int8
 	MaxRows int32
 }
 
-type ListSubmissionsByStatusRow struct {
+type ListPendingSubmissionsRow struct {
 	ID                int64
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
@@ -281,18 +307,19 @@ type ListSubmissionsByStatusRow struct {
 	Failure           pgtype.Text
 	PrUrl             pgtype.Text
 	PrNumber          pgtype.Int4
+	HasPatch          bool
 }
 
-// The moderation queue: oldest first, so pending ones are reviewed in arrival order.
-func (q *Queries) ListSubmissionsByStatus(ctx context.Context, arg ListSubmissionsByStatusParams) ([]ListSubmissionsByStatusRow, error) {
-	rows, err := q.db.Query(ctx, listSubmissionsByStatus, arg.Status, arg.MaxRows)
+// The moderation queue: oldest first (arrival order), a page after a cursor.
+func (q *Queries) ListPendingSubmissions(ctx context.Context, arg ListPendingSubmissionsParams) ([]ListPendingSubmissionsRow, error) {
+	rows, err := q.db.Query(ctx, listPendingSubmissions, arg.AfterAt, arg.AfterID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListSubmissionsByStatusRow{}
+	items := []ListPendingSubmissionsRow{}
 	for rows.Next() {
-		var i ListSubmissionsByStatusRow
+		var i ListPendingSubmissionsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedAt,
@@ -314,6 +341,100 @@ func (q *Queries) ListSubmissionsByStatus(ctx context.Context, arg ListSubmissio
 			&i.Failure,
 			&i.PrUrl,
 			&i.PrNumber,
+			&i.HasPatch,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubmissionHistory = `-- name: ListSubmissionHistory :many
+SELECT id, created_at, updated_at, account_id, author_character_id, author_name, title, description,
+       license, status, sha256, size_bytes, base_ref, files, reviewed_at, reviewed_by, reason,
+       failure, pr_url, pr_number,
+       (patch IS NOT NULL)::boolean AS has_patch
+FROM map_submissions
+WHERE status = $1
+  AND ($2::timestamptz IS NULL
+       OR (updated_at, id) < ($2::timestamptz, $3::bigint))
+ORDER BY updated_at DESC, id DESC
+LIMIT $4
+`
+
+type ListSubmissionHistoryParams struct {
+	Status   string
+	BeforeAt pgtype.Timestamptz
+	BeforeID pgtype.Int8
+	MaxRows  int32
+}
+
+type ListSubmissionHistoryRow struct {
+	ID                int64
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	AccountID         int64
+	AuthorCharacterID int64
+	AuthorName        string
+	Title             string
+	Description       string
+	License           string
+	Status            string
+	Sha256            string
+	SizeBytes         int32
+	BaseRef           string
+	Files             []byte
+	ReviewedAt        pgtype.Timestamptz
+	ReviewedBy        pgtype.Int8
+	Reason            pgtype.Text
+	Failure           pgtype.Text
+	PrUrl             pgtype.Text
+	PrNumber          pgtype.Int4
+	HasPatch          bool
+}
+
+// Decided submissions of one status: the most recently changed first, a page before a
+// cursor (map_submissions_history_idx).
+func (q *Queries) ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error) {
+	rows, err := q.db.Query(ctx, listSubmissionHistory,
+		arg.Status,
+		arg.BeforeAt,
+		arg.BeforeID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubmissionHistoryRow{}
+	for rows.Next() {
+		var i ListSubmissionHistoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AccountID,
+			&i.AuthorCharacterID,
+			&i.AuthorName,
+			&i.Title,
+			&i.Description,
+			&i.License,
+			&i.Status,
+			&i.Sha256,
+			&i.SizeBytes,
+			&i.BaseRef,
+			&i.Files,
+			&i.ReviewedAt,
+			&i.ReviewedBy,
+			&i.Reason,
+			&i.Failure,
+			&i.PrUrl,
+			&i.PrNumber,
+			&i.HasPatch,
 		); err != nil {
 			return nil, err
 		}
@@ -361,6 +482,21 @@ func (q *Queries) LockSubmitter(ctx context.Context, arg LockSubmitterParams) (L
 		&i.Banned,
 	)
 	return i, err
+}
+
+const purgeSubmissionPatches = `-- name: PurgeSubmissionPatches :execrows
+UPDATE map_submissions SET patch = NULL
+WHERE patch IS NOT NULL AND status IN ('rejected', 'pr_opened', 'failed')
+  AND updated_at < $1
+`
+
+// Drops the bytes of patches whose submission reached a final status before the cutoff.
+func (q *Queries) PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeSubmissionPatches, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const reviewSubmission = `-- name: ReviewSubmission :one

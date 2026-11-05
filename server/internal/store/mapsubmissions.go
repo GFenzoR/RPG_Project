@@ -74,6 +74,15 @@ type MapSubmission struct {
 	Failure           string
 	PRURL             string
 	PRNumber          int
+	// HasPatch is false once the retention job dropped the patch bytes.
+	HasPatch bool
+}
+
+// SubmissionCursor is where a page of a submission list continues: the sort time and id
+// of the last row of the previous page. The zero value is the first page.
+type SubmissionCursor struct {
+	At time.Time
+	ID int64
 }
 
 // NewMapSubmission is an upload that already passed the patch check (mappatch).
@@ -179,13 +188,24 @@ func submitterError(blocked, tooNew, overLimit bool) error {
 	return nil
 }
 
-// AccountRole returns the current role of an account (ErrNotFound if it does not exist).
-func (s *Store) AccountRole(ctx context.Context, accountID int64) (string, error) {
-	role, err := s.q.GetAccountRole(ctx, accountID)
+// AccountInfo returns the current role and the email of an account (ErrNotFound if it
+// does not exist). The email is only ever shown to the account itself.
+func (s *Store) AccountInfo(ctx context.Context, accountID int64) (role, email string, err error) {
+	row, err := s.q.GetAccountRoleEmail(ctx, accountID)
 	if err != nil {
-		return "", fmt.Errorf("account role: %w", notFound(err))
+		return "", "", fmt.Errorf("account info: %w", notFound(err))
 	}
-	return role, nil
+	return row.Role, row.Email, nil
+}
+
+// PurgeMapPatches drops the patch bytes of submissions that reached a final status
+// (rejected, pr_opened, failed) before the cutoff, and returns how many.
+func (s *Store) PurgeMapPatches(ctx context.Context, before time.Time) (int64, error) {
+	n, err := s.q.PurgeSubmissionPatches(ctx, ts(before))
+	if err != nil {
+		return 0, fmt.Errorf("purge map patches: %w", err)
+	}
+	return n, nil
 }
 
 // AccountMapSubmissions returns an account's newest n submissions.
@@ -205,21 +225,48 @@ func (s *Store) AccountMapSubmissions(ctx context.Context, accountID int64, n in
 	return out, nil
 }
 
-// MapSubmissionsByStatus returns the oldest n submissions with a status (the queue).
-func (s *Store) MapSubmissionsByStatus(ctx context.Context, status string, n int) ([]MapSubmission, error) {
-	rows, err := s.q.ListSubmissionsByStatus(ctx, db.ListSubmissionsByStatusParams{Status: status, MaxRows: rowLimit(n)})
-	if err != nil {
-		return nil, fmt.Errorf("map submissions by status: %w", err)
+// MapSubmissionsByStatus returns a page of n submissions with a status after cursor.
+// Pending ones come oldest first (the queue, by creation time); every other status
+// comes most recently changed first (the history, by update time). Use Cursor on the
+// last row to get the next page.
+func (s *Store) MapSubmissionsByStatus(ctx context.Context, status string, cursor SubmissionCursor, n int) ([]MapSubmission, error) {
+	var rows []db.GetSubmissionRow
+	at := pgtype.Timestamptz{Time: cursor.At, Valid: cursor.ID != 0}
+	id := pgtype.Int8{Int64: cursor.ID, Valid: cursor.ID != 0}
+	if status == SubmissionPending {
+		rs, err := s.q.ListPendingSubmissions(ctx, db.ListPendingSubmissionsParams{AfterAt: at, AfterID: id, MaxRows: rowLimit(n)})
+		if err != nil {
+			return nil, fmt.Errorf("pending map submissions: %w", err)
+		}
+		for _, r := range rs {
+			rows = append(rows, db.GetSubmissionRow(r))
+		}
+	} else {
+		rs, err := s.q.ListSubmissionHistory(ctx, db.ListSubmissionHistoryParams{Status: status, BeforeAt: at, BeforeID: id, MaxRows: rowLimit(n)})
+		if err != nil {
+			return nil, fmt.Errorf("map submission history: %w", err)
+		}
+		for _, r := range rs {
+			rows = append(rows, db.GetSubmissionRow(r))
+		}
 	}
 	out := make([]MapSubmission, 0, len(rows))
 	for _, r := range rows {
-		m, err := submissionOf(db.GetSubmissionRow(r))
+		m, err := submissionOf(r)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, m)
 	}
 	return out, nil
+}
+
+// Cursor is where a list of submissions with m's status continues after m.
+func (m MapSubmission) Cursor() SubmissionCursor {
+	if m.Status == SubmissionPending {
+		return SubmissionCursor{At: m.CreatedAt, ID: m.ID}
+	}
+	return SubmissionCursor{At: m.UpdatedAt, ID: m.ID}
 }
 
 // MapSubmission returns one submission (ErrNotFound if there is none).
@@ -231,7 +278,8 @@ func (s *Store) MapSubmission(ctx context.Context, id int64) (MapSubmission, err
 	return submissionOf(r)
 }
 
-// MapSubmissionPatch returns the patch bytes of a submission and its author's account.
+// MapSubmissionPatch returns the patch bytes of a submission and its author's account;
+// patch is nil once the retention job dropped it.
 func (s *Store) MapSubmissionPatch(ctx context.Context, id int64) (accountID int64, sha string, patch []byte, err error) {
 	r, err := s.q.GetSubmissionPatch(ctx, id)
 	if err != nil {
@@ -313,7 +361,7 @@ func submissionOf(r db.GetSubmissionRow) (MapSubmission, error) {
 		Description: r.Description, License: r.License, Status: r.Status, SHA256: r.Sha256,
 		SizeBytes: int(r.SizeBytes), BaseRef: r.BaseRef, ReviewedAt: r.ReviewedAt.Time,
 		ReviewedBy: r.ReviewedBy.Int64, Reason: r.Reason.String, Failure: r.Failure.String,
-		PRURL: r.PrUrl.String, PRNumber: int(r.PrNumber.Int32),
+		PRURL: r.PrUrl.String, PRNumber: int(r.PrNumber.Int32), HasPatch: r.HasPatch,
 	}
 	if err := json.Unmarshal(r.Files, &m.Files); err != nil {
 		return MapSubmission{}, fmt.Errorf("map submission %d files: %w", r.ID, err)

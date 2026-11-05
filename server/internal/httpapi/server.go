@@ -69,6 +69,10 @@ type Config struct {
 	MapSubmissions     MapSubmissions
 	MapSubmitLimits    MapSubmitLimits // zero sizes take DefaultMapSubmitLimits; zero MinAccountAge = none
 	MapSubmitRateLimit RateLimit       // per account; default DefaultMapSubmitRateLimit
+	// MapDownloadRateLimit: patch downloads per account; default DefaultMapDownloadRateLimit.
+	MapDownloadRateLimit RateLimit
+	// MapUploadSlots: uploads in flight at once; default DefaultMapUploadSlots.
+	MapUploadSlots int
 }
 
 // Accounts is the account service the API calls. *auth.Service implements it; tests
@@ -97,8 +101,10 @@ type api struct {
 	querySlots    chan struct{} // semaphore of ranking queries
 	vocations     map[string]bool
 
-	submitLimiter *limiter
-	submitSlots   chan struct{} // semaphore of upload checks
+	submitLimiter   *limiter
+	downloadLimiter *limiter
+	uploadSlots     chan struct{} // semaphore of uploads in flight (body read to answer)
+	downloadSlots   chan struct{} // semaphore of patch downloads
 }
 
 func orDefault(rl, def RateLimit) RateLimit {
@@ -136,14 +142,19 @@ func newAPI(cfg Config) (*api, error) {
 		cfg.HighscoreQueryTimeout = DefaultHighscoreQueryTimeout
 	}
 	cfg.MapSubmitRateLimit = orDefault(cfg.MapSubmitRateLimit, DefaultMapSubmitRateLimit)
+	cfg.MapDownloadRateLimit = orDefault(cfg.MapDownloadRateLimit, DefaultMapDownloadRateLimit)
+	if cfg.MapUploadSlots <= 0 {
+		cfg.MapUploadSlots = DefaultMapUploadSlots
+	}
 	cfg.MapSubmitLimits = mapLimitsOrDefault(cfg.MapSubmitLimits)
 	// One entry per valid key at most: (level + skills) × (all + vocations) × pages.
 	keys := (len(cfg.Skills) + 1) * (len(cfg.Vocations) + 1) * HighscoreMaxPages
 	a := &api{
 		cfg: cfg, log: cfg.Logger, vocations: make(map[string]bool),
-		cache:       newPageCache(cfg.HighscoreCacheTTL, keys, cfg.Clock),
-		querySlots:  make(chan struct{}, maxHighscoreQueries),
-		submitSlots: make(chan struct{}, maxSubmitChecks),
+		cache:         newPageCache(cfg.HighscoreCacheTTL, keys, cfg.Clock),
+		querySlots:    make(chan struct{}, maxHighscoreQueries),
+		uploadSlots:   make(chan struct{}, cfg.MapUploadSlots),
+		downloadSlots: make(chan struct{}, maxPatchDownloads),
 	}
 	for _, v := range cfg.Vocations {
 		a.vocations[v] = true
@@ -158,6 +169,7 @@ func newAPI(cfg Config) (*api, error) {
 		{&a.emailLimiter, cfg.LoginEmailRateLimit, failClosed},
 		{&a.publicLimiter, cfg.PublicRateLimit, failOpen},
 		{&a.submitLimiter, cfg.MapSubmitRateLimit, failOpen},
+		{&a.downloadLimiter, cfg.MapDownloadRateLimit, failOpen},
 	} {
 		lim, err := newLimiter(l.rl, l.policy, cfg.Clock)
 		if err != nil {

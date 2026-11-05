@@ -12,6 +12,11 @@ encode zstd gzip
 # own; flush_interval -1 streams frames without buffering.
 @backend path /api/* /ws /ws/* /healthz
 handle @backend {
+	# Map patch uploads (T4.5) are the only big bodies: the gameserver caps them at
+	# 2 x 2 MiB + 16 KiB; Caddy drops anything past 5 MB before it reaches it.
+	request_body /api/maps/* {
+		max_size 5MB
+	}
 	reverse_proxy gameserver:8080 {
 		flush_interval -1
 		# Long-lived WebSockets must survive a Caddy config reload.

@@ -344,6 +344,9 @@ describe("mapcli patch", () => {
     const patchFile = join(src, "change.rpgpatch.json");
     const created = mapcli("patch", "create", "--out", patchFile, "--root", src);
     expect(created.json().files).toEqual([Z7, "world/islands/testisle/zones.yaml"]);
+    // base_ref is the commit HEAD named, not "HEAD": it means something outside this clone.
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: src, encoding: "utf8" }).trim();
+    expect(JSON.parse(read(src, "change.rpgpatch.json")).base_ref).toBe(head);
 
     const dst = sandbox();
     const diff = mapcli("patch", "diff", patchFile, "--root", dst).json();
@@ -414,7 +417,7 @@ describe("mapcli patch", () => {
       read(src, "world/islands/testisle/zones.yaml"),
     );
     expect(view(clash, "1046,1046,1,1")).not.toEqual(view(src, "1046,1046,1,1"));
-  });
+  }, 30_000); // ~10 mapcli processes and git calls: over 5 s on a slow machine
 
   it("merges format 1 patches using the base at base_ref", () => {
     const src = sandbox();
@@ -436,7 +439,14 @@ describe("mapcli patch", () => {
     };
     expect(p2.format).toBe(2);
     expect(typeof p2.files[0]?.base_text).toBe("string");
-    const p1 = { ...p2, format: 1, files: p2.files.map((f) => ({ ...f, base_text: undefined })) };
+    // Each sandbox is its own git repository: the commit create wrote as base_ref does not
+    // exist in dst, so the format 1 patch names dst's HEAD (the same tree).
+    const p1 = {
+      ...p2,
+      format: 1,
+      base_ref: "HEAD",
+      files: p2.files.map((f) => ({ ...f, base_text: undefined })),
+    };
     const dst = sandbox();
     mapcli(
       "paint",

@@ -106,11 +106,15 @@ export interface MapSubmission {
   failure?: string;
   pr_url?: string;
   pr_number?: number;
+  /** False once the patch bytes were dropped (retention): no download. */
+  has_patch: boolean;
 }
 
 export interface MySubmissions {
   submissions: MapSubmission[];
   can_review: boolean;
+  /** The account's own email, for "signed in as". */
+  email: string;
   license: string;
   max_bytes: number;
   per_day: number;
@@ -131,13 +135,12 @@ export const mapsApi = {
   mine: (): Promise<MySubmissions> => call("GET", "/api/maps/submissions/mine"),
   submit: async (s: NewSubmission): Promise<MapSubmission> =>
     (await call<{ submission: MapSubmission }>("POST", "/api/maps/submissions", s)).submission,
-  queue: async (status: string): Promise<MapSubmission[]> =>
-    (
-      await call<{ submissions: MapSubmission[] }>(
-        "GET",
-        `/api/maps/submissions?${new URLSearchParams({ status }).toString()}`,
-      )
-    ).submissions,
+  /** A page of the moderation lists; `next` is the cursor of the following page. */
+  queue: (status: string, cursor = ""): Promise<{ submissions: MapSubmission[]; next?: string }> =>
+    call(
+      "GET",
+      `/api/maps/submissions?${new URLSearchParams(cursor ? { status, cursor } : { status }).toString()}`,
+    ),
   get: async (id: number): Promise<MapSubmission> =>
     (await call<{ submission: MapSubmission }>("GET", submissionPath(id))).submission,
   /** Where the browser downloads the patch (an attachment; the server sets the name). */

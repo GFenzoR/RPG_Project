@@ -32,6 +32,7 @@ type Querier interface {
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	// The actor's role now (not the one cached at login), for bans in the same transaction.
 	GetAccountRole(ctx context.Context, id int64) (string, error)
+	GetAccountRoleEmail(ctx context.Context, id int64) (GetAccountRoleEmailRow, error)
 	// Current roles of some accounts: online staff lose a revoked role within seconds.
 	GetAccountRoles(ctx context.Context, ids []int64) ([]GetAccountRolesRow, error)
 	// The ban that ends last among the account's active bans (a permanent one first).
@@ -83,14 +84,19 @@ type Querier interface {
 	ListEconomy(ctx context.Context, arg ListEconomyParams) ([]ListEconomyRow, error)
 	// The oldest open reports first: the queue order.
 	ListOpenReports(ctx context.Context, maxRows int32) ([]ListOpenReportsRow, error)
-	// The moderation queue: oldest first, so pending ones are reviewed in arrival order.
-	ListSubmissionsByStatus(ctx context.Context, arg ListSubmissionsByStatusParams) ([]ListSubmissionsByStatusRow, error)
+	// The moderation queue: oldest first (arrival order), a page after a cursor.
+	ListPendingSubmissions(ctx context.Context, arg ListPendingSubmissionsParams) ([]ListPendingSubmissionsRow, error)
+	// Decided submissions of one status: the most recently changed first, a page before a
+	// cursor (map_submissions_history_idx).
+	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
 	// Map submissions (T4.5). Lists never read the patch bytes.
 	// The author's account, locked for the rest of the transaction so two uploads at once
 	// cannot both pass the daily limit.
 	LockSubmitter(ctx context.Context, arg LockSubmitterParams) (LockSubmitterRow, error)
+	// Drops the bytes of patches whose submission reached a final status before the cutoff.
+	PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	ReportExists(ctx context.Context, id int64) (bool, error)
 	// Approve or reject a pending submission. No row: it is not pending (or does not exist).
 	ReviewSubmission(ctx context.Context, arg ReviewSubmissionParams) (ReviewSubmissionRow, error)
