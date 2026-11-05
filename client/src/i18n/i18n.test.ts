@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickLanguage, translator } from "./i18n.ts";
+import { pickLanguage, takeLangParam, translator } from "./i18n.ts";
 
 describe("i18n", () => {
   it("picks ?lang=, then the stored choice, then the browser language, then Spanish", () => {
@@ -33,5 +33,14 @@ describe("i18n", () => {
     expect(t("k", { name: "A", text: "{name} <b>#</b> {n, plural, other {x}}" })).toBe(
       "A: {name} <b>#</b> {n, plural, other {x}}",
     );
+  });
+});
+
+describe("takeLangParam (T4.3)", () => {
+  it("splits ?lang= off and keeps the other parameters", () => {
+    expect(takeLangParam("?lang=en&page=2")).toEqual({ lang: "en", rest: "?page=2" });
+    expect(takeLangParam("?lang=es")).toEqual({ lang: "es", rest: "" });
+    expect(takeLangParam("?category=sword")).toEqual({ lang: null, rest: "?category=sword" });
+    expect(takeLangParam("")).toEqual({ lang: null, rest: "" });
   });
 });

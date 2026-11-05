@@ -2,7 +2,7 @@
 // /highscores and /news[/<slug>]; the game is another page at /play/. Every text comes
 // from i18n (site.yaml, plus skill and vocation names) or from data/news.
 import type { ComponentChildren, JSX } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
 import type { NewsPost, SiteContent } from "../content-types.ts";
 import { Markdown } from "./Markdown.tsx";
@@ -142,10 +142,23 @@ function localized(texts: Record<string, string>, lang: string): string {
 }
 
 export function Site(props: SiteProps): JSX.Element {
-  const { t, lang } = props;
+  const { t } = props;
   const loc = useLocation();
   const route = parseRoute(loc.pathname);
-  const playHref = `/play/?lang=${encodeURIComponent(lang)}`;
+  // No ?lang=: both pages share the stored choice (i18n LANGUAGE_STORAGE_KEY), and a
+  // ?lang= in the game's URL would win over a language picked there after a reload.
+  const playHref = "/play/";
+  // Client-side navigation: move focus to the new page's content so keyboard and screen
+  // reader users land on it (not on the link, which may be gone). Filters change only the
+  // query, so a select keeps its focus.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    document.getElementById("main")?.focus({ preventScroll: true });
+  }, [loc.pathname]);
   const section = route.page === "post" ? "news" : route.page;
   return (
     <>
@@ -192,7 +205,7 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       highscores: t("site.highscores.title"),
       news: t("site.news.title"),
       post: "",
-      not_found: "",
+      not_found: t("site.not_found.title"),
     };
     let title = titles[route.page];
     if (route.page === "post") {
@@ -212,8 +225,9 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       return <NewsDetail {...props} slug={route.slug} />;
     default:
       return (
-        <section class="card">
-          <h1>{t("site.news.not_found")}</h1>
+        <section class="card" data-testid="not-found">
+          <h1>{t("site.not_found.title")}</h1>
+          <p>{t("site.not_found.body")}</p>
           <Link href="/">{t("site.nav.home")}</Link>
         </section>
       );

@@ -4,7 +4,7 @@ import { render } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import site from "virtual:rpg-site";
-import { LANGUAGE_STORAGE_KEY, pickLanguage, translator } from "../i18n/i18n.ts";
+import { LANGUAGE_STORAGE_KEY, pickLanguage, takeLangParam, translator } from "../i18n/i18n.ts";
 import { LanguagePicker } from "../ui/LanguagePicker.tsx";
 import { Site } from "./Site.tsx";
 import "../ui/client.css";
@@ -28,14 +28,16 @@ function store(lang: string): void {
   }
 }
 
+// ?lang= is read once: stored as the choice and removed from the URL (takeLangParam).
+const urlLang = takeLangParam(location.search);
+if (urlLang.lang !== null) {
+  if (languages.includes(urlLang.lang)) store(urlLang.lang);
+  history.replaceState(history.state, "", location.pathname + urlLang.rest + location.hash);
+}
+
 function Root(): JSX.Element {
   const [lang, setLang] = useState(() =>
-    pickLanguage(
-      languages,
-      new URLSearchParams(location.search).get("lang"),
-      navigator.language,
-      readStored(),
-    ),
+    pickLanguage(languages, urlLang.lang, navigator.language, readStored()),
   );
   const t = useMemo(() => translator(site.i18n[lang] ?? {}, lang), [lang]);
   useEffect(() => {

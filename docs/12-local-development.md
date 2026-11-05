@@ -39,6 +39,11 @@ páginas del cliente, como detrás de Caddy:
   desconocidas caen en esta página);
 - `http://localhost:5173/play/` → el juego (también en `/play`, sin redirección, como Caddy).
 
+Las rutas que el sitio no conoce (`/ranking`, `/foo`) responden 200 con la página del sitio,
+que muestra "Página no encontrada": es una SPA, en Vite y detrás de Caddy. El idioma se
+comparte entre las dos páginas (`localStorage` `rpg.lang`): un `?lang=` se lee una vez, se
+guarda y se quita de la URL, y "Jugar" lleva a `/play/` sin `?lang=`.
+
 Vite hace de proxy de `/api` y `/ws` al servidor (`RPG_SERVER`, por defecto `:8080`): el
 estado del servidor y el ranking de la landing necesitan el servidor en marcha. Una noticia
 nueva en `data/news/` se ve al reiniciar Vite. El ranking se cachea 60 s en el servidor: un
