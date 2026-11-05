@@ -64,6 +64,7 @@ type recentEvent struct {
 	ref  string
 	item uint16
 	n    int64
+	seq  uint64 // order among events of the same tick, across both rings
 }
 
 // eventRing keeps the last content.MaxReportEvents events (ev[head] is the next slot).
@@ -84,7 +85,8 @@ func (r *eventRing) last(i int) recentEvent { return r.ev[(r.head-i+len(r.ev))%l
 
 // recordEvent adds an event to p's rings (constant cost, no allocation).
 func (p *Player) recordEvent(tick game.Tick, kind, ref string, item uint16, n int64) {
-	e := recentEvent{tick: tick, pos: p.pos, kind: kind, ref: ref, item: item, n: n}
+	p.eventSeq++
+	e := recentEvent{tick: tick, pos: p.pos, kind: kind, ref: ref, item: item, n: n, seq: p.eventSeq}
 	if kind == eventChat {
 		p.chats.add(e)
 		return
@@ -104,7 +106,7 @@ func (p *Player) recentEvents(n int) []recentEvent {
 	for i := others; i >= 1; i-- {
 		out = append(out, p.recent.last(i))
 	}
-	slices.SortStableFunc(out, func(a, b recentEvent) int { return cmp.Compare(a.tick, b.tick) })
+	slices.SortFunc(out, func(a, b recentEvent) int { return cmp.Compare(a.seq, b.seq) })
 	return out
 }
 
@@ -185,6 +187,9 @@ func (w *World) initReports() {
 // report.too_fast answers the same for anyone (T4.1). An invisible player p does not see
 // is offline for this.
 func (w *World) cmdReport(ctx *game.TickContext, p *Player, args []string) {
+	if !w.chatAllowed(ctx, p) { // like a chat line, usage answers included
+		return
+	}
 	if len(args) < 2 {
 		p.emit(systemMsg(msgReportUsage))
 		return
@@ -199,6 +204,15 @@ func (w *World) cmdReport(ctx *game.TickContext, p *Player, args []string) {
 		}
 	}
 	p.emit(systemMsg(msgReportOffline, textParam("name", args[0])))
+}
+
+// reportReasonMax is balance reports.max_reason, within the protocol's limit.
+func (w *World) reportReasonMax() int {
+	limit := w.cfg.Balance.Reports.MaxReason
+	if limit <= 0 || limit > content.MaxReportReason {
+		limit = content.MaxReportReason
+	}
+	return limit
 }
 
 // reportCharge spends one report of p's account (GCRA, like the chat flood limit); a
@@ -216,6 +230,11 @@ func (w *World) reportCharge(ctx *game.TickContext, p *Player) bool {
 
 // reportPlayer runs a ReportPlayer intent: only a player p sees.
 func (w *World) reportPlayer(ctx *game.TickContext, p *Player, id uint32, reason string) {
+	// The reason does not depend on the target: checked before spending the quota.
+	if r := cleanChat(reason); r == "" || utf8.RuneCountInString(r) > w.reportReasonMax() {
+		p.emit(systemMsg(msgReportReason, num("max", w.reportReasonMax())))
+		return
+	}
 	if !w.reportCharge(ctx, p) {
 		return
 	}
@@ -229,10 +248,7 @@ func (w *World) reportPlayer(ctx *game.TickContext, p *Player, id uint32, reason
 
 func (w *World) report(ctx *game.TickContext, p, t *Player, reason string) {
 	reason = cleanChat(reason)
-	limit := w.cfg.Balance.Reports.MaxReason
-	if limit <= 0 || limit > content.MaxReportReason {
-		limit = content.MaxReportReason
-	}
+	limit := w.reportReasonMax()
 	switch {
 	case t == p:
 		p.emit(systemMsg(msgReportSelf))

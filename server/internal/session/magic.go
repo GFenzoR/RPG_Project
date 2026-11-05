@@ -460,6 +460,9 @@ func (w *World) projectile(from, to world.Pos, element string) {
 	id := ProjectileElementBase + elementIndex(element)
 	var msg *pb.ServerMessage // the exact one, shared by everyone who sees both ends
 	shot := func(o *Player, a, b world.Pos) {
+		if a == b {
+			return // the seen end is already on that edge (or the other is on another floor)
+		}
 		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Projectile{Projectile: &pb.Projectile{
 			From: posMsg(a), To: posMsg(b), ProjectileId: id,
 		}}})

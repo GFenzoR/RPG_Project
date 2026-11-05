@@ -135,8 +135,9 @@ type Player struct {
 
 	// Reports (T4.1): p's recent events, chat lines in a ring of their own so that a
 	// burst of other events cannot push them out before a report.
-	recent eventRing
-	chats  eventRing
+	recent   eventRing
+	chats    eventRing
+	eventSeq uint64
 
 	// Idle (T4.1): the tick of p's last real action and whether it was warned.
 	lastAction game.Tick
