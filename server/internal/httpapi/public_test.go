@@ -241,3 +241,22 @@ func TestStatus(t *testing.T) {
 	// No ranking source: 404 like any unknown route.
 	expect(t, h.do(req{method: "GET", path: "/api/highscores"}), http.StatusNotFound, "not_found")
 }
+
+type panickyRanking struct{ calls atomic.Int32 }
+
+func (p *panickyRanking) Highscores(context.Context, store.HighscoreQuery) ([]store.HighscoreRow, error) {
+	if p.calls.Add(1) == 1 {
+		panic("boom") //nolint:forbidigo // the panic is what the test checks
+	}
+	return nil, nil
+}
+
+// A query that panics answers the standard 500 and is not cached.
+func TestHighscoresQueryPanic(t *testing.T) {
+	p := &panickyRanking{}
+	h := newHarness(t, func(c *httpapi.Config) { c.Highscores = p })
+	expect(t, h.do(req{method: "GET", path: "/api/highscores"}), http.StatusInternalServerError, "internal")
+	if w := h.do(req{method: "GET", path: "/api/highscores"}); w.Code != http.StatusOK {
+		t.Fatalf("after a panic = %d %s", w.Code, w.Body.String())
+	}
+}

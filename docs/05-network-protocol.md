@@ -116,7 +116,12 @@ auth). Pasado el límite responden `429 rate_limited`.
 - **Cache:** cada combinación `category × vocation × page` se sirve 60 s desde memoria
   (`DefaultHighscoreCacheTTL`, reloj inyectable). Si varias peticiones llegan con la cache
   vacía, solo la primera consulta Postgres y las demás esperan su resultado. Los errores no
-  se guardan. La respuesta lleva `Cache-Control: public, max-age=30`.
+  se guardan. La respuesta lleva `Cache-Control: public, max-age=30`. La cache guarda como
+  mucho una entrada por clave válida, y el TTL cuenta desde que termina la consulta.
+- **Presupuesto de Postgres:** el pool es el mismo que usan los guardados del juego, así que
+  el ranking corre como mucho 2 consultas a la vez (claves distintas). Cada una tiene 5 s
+  en total para conseguir su turno y terminar; si no lo logra responde `503 busy`. Quien
+  espera la consulta de otra petición deja de esperar si su cliente se va.
 
 - **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
   se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
@@ -206,7 +211,7 @@ auth). Pasado el límite responden `429 rate_limited`.
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
 | `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |
 | `rate_limited` | 429 | Demasiados intentos de login/registro (por IP o por email) |
-| `busy` | 503 | Servidor saturado de logins; reintentar más tarde |
+| `busy` | 503 | Servidor saturado de logins, o el ranking no consiguió turno en Postgres; reintentar más tarde |
 | `invalid_category` / `invalid_vocation` / `invalid_page` | 400 | Filtros de `GET /api/highscores` |
 | `not_found` | 404 | Ruta `/api/...` inexistente |
 | `internal` | 500 | Error del servidor (queda en el log) |

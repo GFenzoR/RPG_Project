@@ -84,6 +84,7 @@ type api struct {
 
 	publicLimiter *limiter
 	cache         *pageCache
+	querySlots    chan struct{} // semaphore of ranking queries
 	vocations     map[string]bool
 }
 
@@ -118,7 +119,13 @@ func newAPI(cfg Config) (*api, error) {
 	if cfg.HighscoreCacheTTL <= 0 {
 		cfg.HighscoreCacheTTL = DefaultHighscoreCacheTTL
 	}
-	a := &api{cfg: cfg, log: cfg.Logger, cache: newPageCache(cfg.HighscoreCacheTTL), vocations: make(map[string]bool)}
+	// One entry per valid key at most: (level + skills) × (all + vocations) × pages.
+	keys := (len(cfg.Skills) + 1) * (len(cfg.Vocations) + 1) * HighscoreMaxPages
+	a := &api{
+		cfg: cfg, log: cfg.Logger, vocations: make(map[string]bool),
+		cache:      newPageCache(cfg.HighscoreCacheTTL, keys, cfg.Clock),
+		querySlots: make(chan struct{}, maxHighscoreQueries),
+	}
 	for _, v := range cfg.Vocations {
 		a.vocations[v] = true
 	}

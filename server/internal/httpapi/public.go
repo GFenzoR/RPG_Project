@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
 
@@ -46,9 +48,13 @@ var (
 	DefaultHighscoreCacheTTL = 60 * time.Second
 )
 
-// maxCacheEntries bounds the cache. The keys are validated (category × vocation × page),
-// so this is only reached with a large content set; expired entries are dropped first.
-const maxCacheEntries = 4096
+// Ranking queries at once (different keys) and how long one may wait for its turn and
+// run: the pgx pool is shared with the game's saves, so the website never takes more than
+// this from it.
+const (
+	maxHighscoreQueries   = 2
+	highscoreQueryTimeout = 5 * time.Second
+)
 
 type highscoreEntry struct {
 	Rank     int    `json:"rank"`
@@ -83,25 +89,34 @@ type cacheEntry struct {
 }
 
 // pageCache is a small TTL cache of encoded responses with one query in flight per key.
+// Its size is bounded by max, the number of valid keys (category × vocation × page).
 type pageCache struct {
 	mu      sync.Mutex
 	ttl     time.Duration
+	max     int
+	clock   clock.Clock
 	entries map[string]*cacheEntry
 }
 
-func newPageCache(ttl time.Duration) *pageCache {
-	return &pageCache{ttl: ttl, entries: make(map[string]*cacheEntry)}
+func newPageCache(ttl time.Duration, maxEntries int, clk clock.Clock) *pageCache {
+	return &pageCache{ttl: ttl, max: maxEntries, clock: clk, entries: make(map[string]*cacheEntry)}
 }
 
 // get returns the body cached under key, or computes it with fill. Errors are not cached.
-func (c *pageCache) get(key string, now time.Time, fill func() ([]byte, error)) ([]byte, error) {
+// A request waiting for another one's query gives up when its own ctx ends.
+func (c *pageCache) get(ctx context.Context, key string, fill func() ([]byte, error)) (body []byte, err error) {
+	now := c.clock.Now()
 	c.mu.Lock()
 	if e, ok := c.entries[key]; ok && (!e.done || now.Before(e.expires)) {
 		c.mu.Unlock()
-		<-e.ready
-		return e.body, e.err
+		select {
+		case <-e.ready:
+			return e.body, e.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
-	if len(c.entries) >= maxCacheEntries {
+	if len(c.entries) >= c.max {
 		for k, e := range c.entries {
 			if e.done && !now.Before(e.expires) {
 				delete(c.entries, k)
@@ -109,25 +124,29 @@ func (c *pageCache) get(key string, now time.Time, fill func() ([]byte, error)) 
 		}
 	}
 	e := &cacheEntry{ready: make(chan struct{})}
-	if len(c.entries) < maxCacheEntries {
+	if len(c.entries) < c.max {
 		c.entries[key] = e
 	}
 	c.mu.Unlock()
 
-	var body []byte
-	err := errors.New("highscores: query panicked")
-	defer func() { // also runs if fill panics, so waiters never hang
+	defer func() { // also runs if fill panics: waiters never hang and the caller gets a 500
+		if v := recover(); v != nil {
+			body, err = nil, fmt.Errorf("highscores: query panicked: %v", v)
+		}
 		c.mu.Lock()
-		e.body, e.err, e.done, e.expires = body, err, true, now.Add(c.ttl)
+		// The TTL counts from the end of the query, not from the request.
+		e.body, e.err, e.done, e.expires = body, err, true, c.clock.Now().Add(c.ttl)
 		if err != nil && c.entries[key] == e {
 			delete(c.entries, key)
 		}
 		c.mu.Unlock()
 		close(e.ready)
 	}()
-	body, err = fill()
-	return body, err
+	return fill()
 }
+
+// errBusy: every ranking query slot stayed taken for highscoreQueryTimeout.
+var errBusy = errors.New("highscores: database busy")
 
 // highscores serves GET /api/highscores?category=level|<skill>&vocation=<id>&page=N.
 func (a *api) highscores(w http.ResponseWriter, r *http.Request) {
@@ -156,10 +175,18 @@ func (a *api) highscores(w http.ResponseWriter, r *http.Request) {
 		page = n
 	}
 	key := category + "\x00" + vocation + "\x00" + strconv.Itoa(page)
-	now := a.cfg.Clock.Now()
-	body, err := a.cache.get(key, now, func() ([]byte, error) {
-		// The query outlives a client that goes away: other requests may be waiting on it.
-		ctx := context.WithoutCancel(r.Context())
+	body, err := a.cache.get(r.Context(), key, func() ([]byte, error) {
+		// The query outlives a client that goes away (others may be waiting on it), but not
+		// highscoreQueryTimeout, waiting for a free slot included.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), highscoreQueryTimeout)
+		defer cancel()
+		select {
+		case a.querySlots <- struct{}{}:
+			defer func() { <-a.querySlots }()
+		case <-ctx.Done():
+			return nil, errBusy
+		}
+		now := a.cfg.Clock.Now()
 		skill := ""
 		if isSkill {
 			skill = category
@@ -187,6 +214,10 @@ func (a *api) highscores(w http.ResponseWriter, r *http.Request) {
 		}
 		return buf.Bytes(), nil
 	})
+	if errors.Is(err, errBusy) {
+		writeError(w, http.StatusServiceUnavailable, "busy")
+		return
+	}
 	if err != nil {
 		a.fail(w, r, err)
 		return
