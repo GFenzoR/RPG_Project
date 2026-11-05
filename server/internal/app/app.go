@@ -51,6 +51,8 @@ type Config struct {
 	Recipes content.Recipes
 	// BoatRoutes come from data/boat_routes.yaml (T3.5); nil means no boat travel.
 	BoatRoutes content.BoatRoutes
+	// Tutorial comes from data/tutorial.yaml (T4.2); nil means no tutorial.
+	Tutorial *content.Tutorial
 	// NPCs and Quests come from data/npcs and data/quests (session.Config); nil means
 	// no NPCs.
 	NPCs   content.NPCs
@@ -149,6 +151,7 @@ func New(cfg Config) (*App, error) {
 			Spells:        cfg.Spells,
 			Recipes:       cfg.Recipes,
 			BoatRoutes:    cfg.BoatRoutes,
+			Tutorial:      cfg.Tutorial,
 			NPCs:          cfg.NPCs,
 			Quests:        cfg.Quests,
 			Save:          saver.Submit,

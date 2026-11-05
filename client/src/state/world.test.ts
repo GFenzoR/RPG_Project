@@ -390,3 +390,28 @@ describe("presence check after an idle stretch (T4.1)", () => {
     expect(w.activePresence(722_000)).toBeUndefined();
   });
 });
+
+describe("tutorial (T4.2)", () => {
+  const msg = (state: number, stepId: string): ServerMessage["message"] => ({
+    case: "tutorialStep",
+    value: {
+      state,
+      stepId,
+      index: 1,
+      total: 7,
+      text: { key: `tutorial.step.${stepId}`, params: [] },
+      highlight: "inventory",
+      progress: 0,
+      count: 1,
+    } as never,
+  });
+  it("follows the server's step and closes when it ends", () => {
+    const w = new WorldState(content);
+    expect(w.tutorial).toBeUndefined();
+    w.apply(msg(1, "open_backpack"), 0);
+    expect(w.tutorial?.stepId).toBe("open_backpack");
+    expect(w.tutorial?.highlight).toBe("inventory");
+    w.apply(msg(3, ""), 10); // SKIPPED
+    expect(w.tutorial).toBeUndefined();
+  });
+});

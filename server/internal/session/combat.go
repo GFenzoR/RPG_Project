@@ -82,6 +82,7 @@ func (w *World) setTarget(p *Player, id uint32) {
 	}
 	p.active(w.nowTick(), antibot.KindOther)
 	p.target = m
+	w.tutorialEvent(p, content.TriggerTarget, m.kind.def.ID)
 }
 
 func (w *World) setFightMode(p *Player, stance pb.FightStance, chase bool) {
@@ -299,6 +300,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		if p := w.playerByID(s.player); p != nil {
 			w.questKill(p, def.ID)
 			p.recordEvent(ctx.Tick, eventKill, def.ID, 0, 0)
+			w.tutorialEvent(p, content.TriggerKill, def.ID)
 		}
 	}
 

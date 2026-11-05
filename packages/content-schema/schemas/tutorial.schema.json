@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/tutorial.schema.json",
+  "title": "Guided tutorial (data/tutorial.yaml)",
+  "description": "T4.2: the hints new characters of the starting island see, in order. Each step waits for a fixed server event; the server is the only one that advances it (docs/06-content-data.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["island", "steps"],
+  "properties": {
+    "island": {
+      "description": "Island id of world/world.yaml: only characters that start there get the tutorial.",
+      "$ref": "common.schema.json#/$defs/islandId"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "rewards": {
+      "description": "Given once when the last step completes (never when skipped). Keep it small: it must not break the balance.",
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["gold"],
+            "properties": { "gold": { "type": "integer", "minimum": 1, "maximum": 1000 } }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item"],
+            "properties": {
+              "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+              "count": { "type": "integer", "minimum": 1, "maximum": 100 }
+            }
+          }
+        ]
+      }
+    },
+    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "when"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/id" },
+        "text": {
+          "description": "Hint shown in the client's tutorial panel; it may use {count}.",
+          "$ref": "common.schema.json#/$defs/i18nKey"
+        },
+        "when": { "$ref": "#/$defs/trigger" },
+        "highlight": {
+          "description": "UI element to highlight: the value of its data-tutorial attribute in the client.",
+          "enum": ["inventory", "hotbar", "battle", "chat", "skills", "stats"]
+        },
+        "vocations": {
+          "description": "Only these vocations get the step; the others skip it (for example, a spell step for vocations with a level 1 spell).",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "common.schema.json#/$defs/vocationRef" }
+        },
+        "notes": { "$ref": "common.schema.json#/$defs/notes" }
+      }
+    },
+    "trigger": {
+      "description": "The server event that completes the step, count times (default 1). ref narrows it to one monster, item, spell, NPC, recipe or quest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event"],
+      "properties": {
+        "event": {
+          "enum": [
+            "walk",
+            "target",
+            "kill",
+            "open_container",
+            "pick_up",
+            "equip",
+            "use_item",
+            "cast_spell",
+            "talk_npc",
+            "gather",
+            "craft",
+            "quest_start"
+          ]
+        },
+        "ref": { "$ref": "common.schema.json#/$defs/id" },
+        "count": { "type": "integer", "minimum": 1, "maximum": 1000 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "event": { "const": "walk" } } },
+          "then": { "not": { "required": ["ref"] } }
+        },
+        {
+          "if": { "properties": { "event": { "enum": ["target", "kill"] } } },
+          "then": { "properties": { "ref": { "$ref": "common.schema.json#/$defs/monsterRef" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "event": { "enum": ["open_container", "pick_up", "equip", "use_item", "gather"] }
+            }
+          },
+          "then": { "properties": { "ref": { "$ref": "common.schema.json#/$defs/itemRef" } } }
+        },
+        {
+          "if": { "properties": { "event": { "const": "cast_spell" } } },
+          "then": { "properties": { "ref": { "$ref": "common.schema.json#/$defs/spellRef" } } }
+        },
+        {
+          "if": { "properties": { "event": { "const": "talk_npc" } } },
+          "then": { "properties": { "ref": { "$ref": "common.schema.json#/$defs/npcRef" } } }
+        },
+        {
+          "if": { "properties": { "event": { "const": "quest_start" } } },
+          "then": { "properties": { "ref": { "$ref": "common.schema.json#/$defs/questRef" } } }
+        }
+      ]
+    }
+  }
+}

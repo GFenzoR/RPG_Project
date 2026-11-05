@@ -24,7 +24,12 @@ export function Hotbar(props: {
   }, []);
   const name = (id: string): string => t(`spell.${id}.name`);
   return (
-    <section class="hotbar" data-testid="hotbar" aria-label={t("client.hotbar.title")}>
+    <section
+      class="hotbar"
+      data-testid="hotbar"
+      data-tutorial="hotbar"
+      aria-label={t("client.hotbar.title")}
+    >
       <ol>
         {props.ui.hotkeys.map((id, i) => {
           const key = `F${i + 1}`;

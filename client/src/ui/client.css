@@ -925,3 +925,57 @@ body.using-item canvas {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* Tutorial (T4.2): the hint panel over the map and the highlighted UI element. */
+.tutorial {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 5;
+  max-width: 17rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--panel, #1c2128);
+  border: 1px solid #6fb3e0;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+.tutorial header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.tutorial h2 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.tutorial p {
+  margin: 0;
+}
+.tutorial .step,
+.tutorial .progress {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.tutorial button {
+  align-self: flex-end;
+}
+[data-tutorial-active] {
+  outline: 2px solid #6fb3e0;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 0 rgba(111, 179, 224, 0.6);
+  animation: tutorial-pulse 1.4s ease-in-out infinite;
+}
+@keyframes tutorial-pulse {
+  50% {
+    box-shadow: 0 0 10px 4px rgba(111, 179, 224, 0.6);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-tutorial-active] {
+    animation: none;
+  }
+}

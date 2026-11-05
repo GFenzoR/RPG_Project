@@ -1,0 +1,38 @@
+# Guided tutorial (T4.2): the hints a new character of the starting island sees, in order.
+# Each step waits for a fixed server event (docs/06-content-data.md, "Tutorial"); the
+# server advances it and the client only shows the hint. Original route around the town
+# of Farol: temple -> harbor -> the harbor master's first Chapter 1 quest.
+island: puerto
+notes: >-
+  Characters wake up at the temple of the Lantern (3158,6386). The priestess stands next
+  to it; the harbor, with bilge rats and gulls, is south-east, and the harbor master
+  starts ch1_shipwreck on the pier. Only arcanists and druids have a level 1 spell, so
+  the spell step is theirs. The reward is deliberately tiny (a few coins).
+steps:
+  - id: first_steps
+    text: tutorial.step.first_steps
+    when: { event: walk, count: 5 }
+  - id: meet_priestess
+    text: tutorial.step.meet_priestess
+    when: { event: talk_npc, ref: puerto_priest }
+  - id: open_backpack
+    text: tutorial.step.open_backpack
+    when: { event: open_container, ref: backpack }
+    highlight: inventory
+  - id: pick_target
+    text: tutorial.step.pick_target
+    when: { event: target }
+    highlight: battle
+  - id: first_spell
+    text: tutorial.step.first_spell
+    when: { event: cast_spell }
+    highlight: hotbar
+    vocations: [arcanist, druid]
+  - id: first_victory
+    text: tutorial.step.first_victory
+    when: { event: kill }
+  - id: harbor_master_task
+    text: tutorial.step.harbor_master_task
+    when: { event: quest_start, ref: ch1_shipwreck }
+rewards:
+  - { gold: 20 }

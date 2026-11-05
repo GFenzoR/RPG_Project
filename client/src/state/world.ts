@@ -33,6 +33,8 @@ import type { ClientContent, ItemDef } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import { PartyState } from "./party.ts";
+import { tutorialFrom } from "./tutorial.ts";
+import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
 
 export interface Walk {
@@ -268,6 +270,8 @@ export class WorldState implements TileSource {
   presence: PresenceState | undefined;
   /** The last check answered: the server may send it again before the answer reached it. */
   private presenceAnswered = 0;
+  /** The tutorial step on screen (T4.2), until the server says it ended. */
+  tutorial: TutorialView | undefined;
   /** The player's own active conditions (T3.2), in the server's order. */
   conditions: ConditionView[] = [];
   levelUp: LevelUpState | undefined;
@@ -437,6 +441,9 @@ export class WorldState implements TileSource {
         break;
       case "partyInvitation":
         this.party.invited(msg.value, now);
+        break;
+      case "tutorialStep":
+        this.tutorial = tutorialFrom(msg.value);
         break;
       case "presenceCheck":
         if (msg.value.checkId === this.presenceAnswered) break;

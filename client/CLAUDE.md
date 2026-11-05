@@ -204,6 +204,23 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   seguir pendiente en el servidor si el jugador estuvo ausente) e ignora el reenvío de un
   chequeo ya contestado.
 
+## Notas de T4.2
+- `WorldState.tutorial` (de `TutorialStep`, `state/tutorial.ts`, puro y con tests) es el paso
+  que dice el servidor; `undefined` cuando terminó. `ui/Tutorial.tsx` dibuja el panel de
+  pistas arriba a la derecha del mapa (no toma teclas) con "Saltar tutorial"
+  (`Game.skipTutorial` → `TutorialSkip`; el panel se cierra cuando el servidor confirma).
+  Se oculta mientras hay `dialog`, `shop` o `station` abiertos: en pantallas angostas
+  (la app de escritorio a 960 px) la tienda llega a esa esquina.
+- Resaltado: el panel marca con `data-tutorial-active` el elemento cuyo `data-tutorial` es
+  el `highlight` del paso, y `client.css` tiene una sola regla para eso. Valores:
+  `inventory`, `hotbar`, `battle`, `chat`, `skills`, `stats`. Un elemento nuevo resaltable
+  necesita su `data-tutorial`, el valor en `TUTORIAL_TARGETS` y en el enum del esquema.
+- El plugin de Vite empaqueta `i18n/*/tutorial.yaml`. El E2E del tutorial usa un segundo
+  servidor con `-start-town puerto` y su propio Vite (`puertoServerURL`/`puertoClientURL`
+  de `playwright.config.ts`): el personaje se crea como cualquiera y despierta en Puerto
+  sin tocar la base. Los E2E que ponen `town = 'puerto'` a un personaje nuevo también ven
+  el panel.
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

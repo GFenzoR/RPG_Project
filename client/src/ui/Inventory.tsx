@@ -49,7 +49,12 @@ interface Props {
 
 export function InventoryPanel({ t, content, game, ui }: Props): JSX.Element {
   return (
-    <section class="inventory" data-testid="inventory" aria-label={t("client.inventory.title")}>
+    <section
+      class="inventory"
+      data-testid="inventory"
+      data-tutorial="inventory"
+      aria-label={t("client.inventory.title")}
+    >
       <h2>{t("client.inventory.title")}</h2>
       <div class="equipment">
         {LAYOUT.map((slot, i) =>

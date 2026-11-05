@@ -165,6 +165,10 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	tutorial, err := content.LoadTutorial(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
 	m, err := loadWorld(logger, o.worldPath)
 	if err != nil {
 		return err
@@ -198,6 +202,7 @@ func run(logger *slog.Logger, o options) error {
 		Spells:           spells,
 		Recipes:          recipes,
 		BoatRoutes:       routes,
+		Tutorial:         tutorial,
 		NPCs:             npcs,
 		Quests:           quests,
 		Map:              m,

@@ -169,7 +169,11 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
     de información y sus arreglos, desconexión por inactividad) y la parte 2 (señales,
     puntaje de sospecha con respuestas graduales y chequeo de presencia, perfiles humano y
     mecánico en `server/pkg/bot` y `tools/bots -profile`).
-- [ ] **T4.2 Tutorial** guiado en la isla inicial.
+- [x] **T4.2 Tutorial** guiado en la isla inicial.
+  - Pasos como datos en `data/tutorial.yaml` (eventos fijos del servidor, texto i18n,
+    resaltado opcional, filtro por vocación, premio chico), progreso en `quest_state`,
+    mensaje `TutorialStep`/`TutorialSkip` y panel de pistas en el cliente. Termina al
+    aceptar `ch1_shipwreck`; se puede saltar; los personajes previos no lo ven.
 - [ ] **T4.3 Landing page**, ranking (highscores), noticias.
 - [ ] **T4.4 Observabilidad**: dashboard de métricas y alertas básicas.
 - [ ] **T4.5 Portal de envío de mapas** con cola de moderación que abre PR.

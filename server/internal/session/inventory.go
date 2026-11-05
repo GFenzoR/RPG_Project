@@ -577,6 +577,8 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 	}
 
+	pickedUp := toOwner == p && it.carriedBy() != p
+
 	// Run it: take the units out of their place and put them in the new one.
 	before := p.carried()
 	moving := it
@@ -606,6 +608,12 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	p.active(ctx.Tick, antibot.KindOther)
 	if p.carried() != before {
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
+	}
+	// One tutorial event per move: equipping from the ground is an equip.
+	if to.kind == locSlot {
+		w.tutorialEvent(p, content.TriggerEquip, moving.def.ID)
+	} else if pickedUp {
+		w.tutorialEvent(p, content.TriggerPickUp, moving.def.ID)
 	}
 }
 
@@ -742,6 +750,7 @@ func (w *World) toggleContainer(p *Player, c *Item) {
 		ContainerId: id, ItemId: uint32(c.def.Numeric), Capacity: uint32(c.def.Slots()),
 		Items: c.stacks(), HasParent: c.parent != nil,
 	}}})
+	w.tutorialEvent(p, content.TriggerOpenContainer, c.def.ID)
 }
 
 // closeContainer closes p's window id (if open) and tells the client.
@@ -844,7 +853,9 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 		}
 		p.activePaced(ctx.Tick, antibot.KindItem, p.nextUse)
 		p.nextUse = ctx.Tick + w.useFor
+		def := it.def
 		w.consume(p, it)
+		w.tutorialEvent(p, content.TriggerUseItem, def.ID)
 	case it.def.Rune != nil:
 		w.useRune(ctx, p, it, nil) // on the current target, or the caster for a heal
 	default:

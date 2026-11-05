@@ -51,7 +51,40 @@ message ServerMessage {
     PartyInvitation party_invitation = 32;
     StationOpen station_open = 33;
     PresenceCheck presence_check = 34;
+    TutorialStep tutorial_step = 35;
   }
+}
+
+// TutorialState is where the character is in the tutorial (T4.2).
+enum TutorialState {
+  TUTORIAL_STATE_UNSPECIFIED = 0;
+  // ACTIVE: step_id is the current step; the client shows the hint.
+  TUTORIAL_STATE_ACTIVE = 1;
+  // DONE: the last step completed (the reward, if any, came as system messages).
+  TUTORIAL_STATE_DONE = 2;
+  // SKIPPED: the player skipped it (TutorialSkip). It never comes back.
+  TUTORIAL_STATE_SKIPPED = 3;
+}
+
+// TutorialStep is the tutorial's current step (T4.2, data/tutorial.yaml). It is sent on
+// login while the tutorial is active, whenever the step or its progress changes, and once
+// with DONE or SKIPPED when it ends. Only the server completes steps: they advance with
+// the server's own events (walking, killing, talking...), never with a client message.
+message TutorialStep {
+  TutorialState state = 1;
+  // Step id from data/tutorial.yaml; empty unless ACTIVE.
+  string step_id = 2;
+  // 0-based position of the step and number of steps, counting only the steps of the
+  // character's vocation (for "2 / 7").
+  uint32 index = 3;
+  uint32 total = 4;
+  // The hint, with parameter count (the step's target count).
+  LocalizedText text = 5;
+  // UI element to highlight (the client's data-tutorial attribute); empty for none.
+  string highlight = 6;
+  // Events counted toward the step so far, and how many it needs.
+  uint32 progress = 7;
+  uint32 count = 8;
 }
 
 // PresenceCheck asks the player a simple question with options (T4.1, bot detection):

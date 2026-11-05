@@ -238,6 +238,9 @@ class Validator {
       if (schema === "borders") this.checkBorders(src);
     }
 
+    const tutorial = single("tutorial.yaml", "tutorial", false);
+    if (tutorial) this.checkTutorial(tutorial, dataDir);
+
     for (const entry of readdirSync(dataDir).sort()) {
       if (!known.has(entry)) {
         this.error(
@@ -302,13 +305,7 @@ class Validator {
   }
 
   private checkUniqueIds(src: SourceFile): void {
-    const seen = new Set<string>();
-    for (const [i, entry] of asList(src.data).entries()) {
-      const id = idOf(entry);
-      if (id === undefined) continue;
-      if (seen.has(id)) this.error(src, [i, "id"], `duplicate id "${id}"`);
-      seen.add(id);
-    }
+    this.checkUniqueIdsOf(src, asList(src.data), []);
   }
 
   // ---- per-type rules --------------------------------------------------------
@@ -880,6 +877,47 @@ class Validator {
           );
         ref([loop, "islands", island], id, loop);
       }
+    }
+  }
+
+  /**
+   * data/tutorial.yaml (T4.2): unique step ids, the island exists and craft steps name a
+   * recipe of data/recipes.yaml (the other refs are x-ref in the schema).
+   */
+  private checkTutorial(src: SourceFile, dataDir: string): void {
+    if (!isObj(src.data)) return;
+    const steps = asList(src.data["steps"]);
+    this.checkUniqueIdsOf(src, steps, ["steps"]);
+    const island = src.data["island"];
+    const islands = this.worldIslands();
+    if (typeof island === "string" && islands && !islands.has(island))
+      this.error(src, ["island"], `unknown island "${island}" (world/world.yaml)`);
+    let recipes: Set<string> | undefined;
+    for (const [i, step] of steps.entries()) {
+      const when = isObj(step) && isObj(step["when"]) ? step["when"] : undefined;
+      if (!when || when["event"] !== "craft" || typeof when["ref"] !== "string") continue;
+      if (!recipes) {
+        const abs = join(dataDir, "recipes.yaml");
+        const diags: Diagnostic[] = [];
+        const r = existsSync(abs)
+          ? parseYaml(readFileSync(abs, "utf8"), "data/recipes.yaml", diags)
+          : undefined;
+        recipes = new Set(
+          (r ? asList(r.data) : []).map(idOf).filter((id): id is string => id !== undefined),
+        );
+      }
+      if (!recipes.has(when["ref"]))
+        this.error(src, ["steps", i, "when", "ref"], `unknown recipe "${when["ref"]}"`);
+    }
+  }
+
+  private checkUniqueIdsOf(src: SourceFile, list: unknown[], path: PathSegment[]): void {
+    const seen = new Set<string>();
+    for (const [i, entry] of list.entries()) {
+      const id = idOf(entry);
+      if (id === undefined) continue;
+      if (seen.has(id)) this.error(src, [...path, i, "id"], `duplicate id "${id}"`);
+      seen.add(id);
     }
   }
 

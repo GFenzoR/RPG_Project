@@ -152,6 +152,12 @@ type Player struct {
 	earlyTry [antibot.NumKinds]game.Tick
 	kindLast [antibot.NumKinds]game.Tick
 	joinedAt game.Tick
+
+	// Tutorial (T4.2): the current step index + 1, 0 when not in the tutorial, and the
+	// tick and monster of p's last kill while in it (tutorialMet).
+	tut       int
+	tutKillAt game.Tick
+	tutKill   string
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -382,6 +388,8 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.startLedger(ctx.Tick, p)
 	w.antibotJoin(ctx.Tick, p)
 	p.joinedAt = ctx.Tick
+	// After the ledger: resuming may end the tutorial and give its reward (T4.2).
+	w.tutorialJoin(p)
 
 	// Staggered autosave: first at a random point of the first interval.
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
@@ -507,16 +515,25 @@ func (w *World) placement(c Character) world.Pos {
 }
 
 func (w *World) temple(town string) world.Pos {
-	if is := w.m.Island(town); is != nil {
+	if is := w.m.Island(w.homeIsland(town)); is != nil {
 		return is.Temple
-	}
-	if is := w.m.Island(w.cfg.StartTown); is != nil {
-		return is.Temple
-	}
-	if islands := w.m.Islands(); len(islands) > 0 {
-		return islands[0].Temple
 	}
 	return world.Pos{}
+}
+
+// homeIsland is the island a character of town lives on: town if it is an island of the
+// map, else the start town, else the first island (a new character has no town yet).
+func (w *World) homeIsland(town string) string {
+	if w.m.Island(town) != nil {
+		return town
+	}
+	if w.m.Island(w.cfg.StartTown) != nil {
+		return w.cfg.StartTown
+	}
+	if islands := w.m.Islands(); len(islands) > 0 {
+		return islands[0].ID
+	}
+	return ""
 }
 
 // freeNear returns the walkable, unoccupied tile closest to p (by rings) within radius.

@@ -44,7 +44,7 @@ export function ChatPanel(props: {
     if (el) el.scrollTop = el.scrollHeight;
   }, [last?.at, props.ui.chat.length]);
   return (
-    <section class="chat" aria-label={t("client.chat.title")}>
+    <section class="chat" data-tutorial="chat" aria-label={t("client.chat.title")}>
       <ul class="chat-lines" data-testid="chat-log" ref={list} aria-live="polite">
         {props.ui.chat.map((l, i) => (
           <li key={`${l.at}-${i}`} class={KIND_CLASS[l.kind] ?? ""}>

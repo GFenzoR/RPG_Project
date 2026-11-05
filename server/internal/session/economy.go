@@ -20,20 +20,21 @@ import (
 
 // Sources of the economy log (economy_log.kind).
 const (
-	EconLoot    = "loot"     // a monster's remains were filled (character: the loot owner)
-	EconNPCBuy  = "npc_buy"  // bought from an NPC: money out, items in
-	EconNPCSell = "npc_sell" // sold to an NPC: items out, money in
-	EconNPC     = "npc"      // given or taken by an NPC dialog (quest items, blessings)
-	EconQuest   = "quest"    // quest rewards
-	EconTravel  = "travel"   // boat fare and ticket
-	EconTrade   = "trade"    // player trade (reserved: the trade window does not exist yet)
-	EconGather  = "gather"   // fishing, mining, woodcutting
-	EconCraft   = "craft"    // crafting inputs out, output in
-	EconDeath   = "death"    // lost into the remains at death
-	EconGM      = "gm"       // created by a staff command (/item)
-	EconConsume = "consume"  // eaten, drunk, a rune's last charge, ammo shot
-	EconConjure = "conjure"  // created by a spell
-	EconDecay   = "decay"    // left in remains that decayed (character: the dead player, if any)
+	EconLoot     = "loot"     // a monster's remains were filled (character: the loot owner)
+	EconNPCBuy   = "npc_buy"  // bought from an NPC: money out, items in
+	EconNPCSell  = "npc_sell" // sold to an NPC: items out, money in
+	EconNPC      = "npc"      // given or taken by an NPC dialog (quest items, blessings)
+	EconQuest    = "quest"    // quest rewards
+	EconTutorial = "tutorial" // the tutorial's reward (T4.2)
+	EconTravel   = "travel"   // boat fare and ticket
+	EconTrade    = "trade"    // player trade (reserved: the trade window does not exist yet)
+	EconGather   = "gather"   // fishing, mining, woodcutting
+	EconCraft    = "craft"    // crafting inputs out, output in
+	EconDeath    = "death"    // lost into the remains at death
+	EconGM       = "gm"       // created by a staff command (/item)
+	EconConsume  = "consume"  // eaten, drunk, a rune's last charge, ammo shot
+	EconConjure  = "conjure"  // created by a spell
+	EconDecay    = "decay"    // left in remains that decayed (character: the dead player, if any)
 )
 
 // EconomyEntry is one row of the economy log. Count (item units) and Amount (money, in

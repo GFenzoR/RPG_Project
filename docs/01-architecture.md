@@ -232,7 +232,7 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
 - **Qué se registra:** toda creación y destrucción de oro e items, por fuente
   (`economy_log.kind`): `loot` (al llenarse los restos de un monstruo, a nombre de quien se
   lleva el botín), `npc_buy` y `npc_sell` (tienda), `npc` (lo que da o quita un diálogo:
-  items de quest, bendiciones), `quest` (recompensas), `travel` (pasaje y ticket),
+  items de quest, bendiciones), `quest` (recompensas), `tutorial` (premio del tutorial, T4.2), `travel` (pasaje y ticket),
   `gather` (pesca, minería, tala), `craft` (ingredientes y resultado), `death` (lo que cae
   en los restos al morir), `gm` (`/item`), `consume` (comida, pociones, la última carga
   de una runa, munición; también lo usado del suelo, a nombre de quien lo usó), `conjure`

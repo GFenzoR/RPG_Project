@@ -75,7 +75,7 @@ Detalles (T1.4, `server/internal/net/gateway`):
   un paso dado, un objetivo elegido, un hechizo o runa lanzado, un item movido o usado, un
   chat dicho, un diálogo abierto o una opción elegida, una compra o venta, un intento de
   recolección o de oficio. `Ping`, `Turn`, `LookAt`, `SetFightMode`, `StopWalk`,
-  `CloseContainer`, `ReportPlayer` y cualquier intención rechazada no. Nunca en combate
+  `CloseContainer`, `ReportPlayer`, `TutorialSkip` y cualquier intención rechazada no. Nunca en combate
   (`travel.combat_block_ms`) ni sobre una casilla sin logout: se reintenta cada segundo.
 
 ## API HTTP (cuentas y personajes)
@@ -213,6 +213,7 @@ OAuth, verificación de email y reset de contraseña llegan con T2.1.
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
 | `ReportPlayer` | `creature_id` (un jugador a la vista), `reason` (1..200 caracteres) (T4.1) |
 | `PresenceAnswer` | `check_id`, `option_id` (respuesta a un `PresenceCheck`, T4.1) |
+| `TutorialSkip` | — (termina el tutorial sin premio, T4.2) |
 | `Ping` | `client_time` |
 | `Logout` | — |
 
@@ -456,6 +457,26 @@ Diseño en `01-architecture.md` ("Detección de bots").
   `gm.bot_suspect` (`name`, `score`), `gm.presence_failed` (`name`) y
   `gm.presence_deferred` (`name`).
 
+### Tutorial (T4.2, `server/internal/session/tutorial.go`)
+Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
+`02-game-design.md`, "Tutorial".
+- **`TutorialStep{state, step_id, index, total, text, highlight, progress, count}`**
+  (servidor → cliente). `state` = `ACTIVE` (hay paso), `DONE` o `SKIPPED` (terminó, para
+  siempre). Con `ACTIVE`: `step_id` del YAML, `index` (desde 0) y `total` contando solo los
+  pasos de la vocación del personaje, `text` = clave i18n con el parámetro `count`,
+  `highlight` = valor del atributo `data-tutorial` del elemento de UI a resaltar (vacío =
+  ninguno) y `progress`/`count` = eventos contados y necesarios. Llega al entrar (si está
+  activo), cada vez que cambia el paso o su progreso, y una vez con `DONE`/`SKIPPED` al
+  terminar. Al terminar llega además el `Message` de sistema `tutorial.completed` (y el
+  premio: `dialog.received_gold`) o `tutorial.skipped`. Un paso de un solo evento que ya
+  se cumple al volverse el actual se da por hecho en el acto: la quest ya empezada, el
+  contenedor ya abierto, el objetivo ya elegido o la muerte que causó, en ese mismo tick,
+  la acción que cerró el paso anterior (un hechizo que mata a su objetivo).
+- **`TutorialSkip{}`** (cliente → servidor): termina el tutorial sin premio. Sin tutorial
+  activo no pasa nada. **No hay mensaje para completar un paso:** los pasos avanzan con
+  eventos del servidor ya validados (un `NpcTalk` fuera de rango, un `SetTarget` inválido o
+  un `Walk` rechazado no cuentan).
+
 ### NPCs, diálogos y tiendas (T1.10, `server/internal/session/npc.go`)
 - `NpcTalk{creature_id}` abre el diálogo de un NPC que el cliente conoce, en el mismo piso
   y a ≤ `TalkRange` (3) casillas (Chebyshev). Fuera de rango → `Message` de sistema
@@ -568,6 +589,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `SpellCooldown` | Cooldown propio y de grupo de un hechizo lanzado (T1.9) |
 | `PlayerConditions` | Lista completa de las condiciones propias activas (T3.2) |
 | `PartyUpdate` / `PartyInvitation` | Estado completo del grupo propio; invitación recibida (T3.3) |
+| `TutorialStep` | Paso actual del tutorial y su progreso, o su fin (T4.2) |
 | `StationOpen` | Estación de oficio usada: `pos`, `item_id`, unidades llevadas de sus ingredientes (`owned`) y `tools` llevadas; llega de nuevo tras cada `Craft` (T3.4) |
 | `Inventory` / `ContainerOpen` / `ContainerUpdate` / `ContainerClose` | |
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |

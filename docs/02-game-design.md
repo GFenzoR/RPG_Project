@@ -408,6 +408,33 @@ Valores iniciales (balance.yaml):
   algunas rutas (ver "Viajes en barco").
 - Cada isla tiene superficie (piso 7), subterráneos (8–12) y alturas (6–4).
 
+### Tutorial (T4.2)
+- **Quién lo ve:** solo un personaje nuevo cuya isla de origen es la del tutorial (Puerto,
+  `data/tutorial.yaml → island`): nivel 1, sin experiencia y sin estado de tutorial. Un
+  personaje recién creado no tiene `town` y su isla de origen es la de inicio del servidor
+  (`-start-town`, o la primera de `world.yaml`), la misma cuyo templo lo recibe; en un
+  servidor que hace empezar en otra isla, nadie ve el tutorial. Un
+  personaje que existía antes del despliegue ya tiene experiencia o niveles y no lo ve
+  nunca. No hay isla de novatos aparte: la vocación se elige al crear el personaje y el
+  tutorial ocurre en el pueblo del Farol.
+- **Recorrido (original):** caminar unos pasos desde el templo del Farol, hablar con la
+  sacerdotisa, abrir la mochila, elegir una criatura del puerto como objetivo, lanzar el
+  primer hechizo (solo arcanistas y druidas, que tienen uno de nivel 1), derrotarla y
+  aceptar el encargo de Maren Holt, la jefa del puerto: el tutorial termina cuando empieza
+  la primera quest del Capítulo 1 (`ch1_shipwreck`). Los pasos se numeran entre los de la
+  vocación del personaje.
+- **Nunca bloquea:** es un panel de pistas sin teclas ni overlay, que se oculta mientras
+  hay un diálogo, una tienda o una estación abiertos; todo lo que pide es juego normal. Un
+  paso que ya se cumple cuando le toca (la mochila ya abierta, el objetivo ya elegido, el
+  objetivo muerto por el primer hechizo) se salta solo. Se puede saltar en cualquier momento (botón del panel) y no vuelve.
+- **Sin ventajas:** al terminarlo da 20 monedas (dato en `rewards`, tope 1000 en el
+  esquema); saltarlo no da nada.
+- **Autoridad:** el servidor guarda el paso y lo avanza con sus propios eventos (caminar,
+  hablar, abrir un contenedor, fijar objetivo, lanzar, matar, empezar una quest...). El
+  cliente solo muestra el texto y puede pedir saltarlo.
+- No hacen falta NPC guía ni carteles nuevos: la sacerdotisa y Maren Holt ya están en el
+  recorrido y Puerto ya tiene carteles en el templo y el muelle.
+
 ### Viajes en barco (T3.5)
 Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
 `balance.yaml → travel`.

@@ -196,6 +196,7 @@ func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 		p.emit(systemMsg(msgCraftDone, itemParam(out, r.Output.Count)))
 		w.giveItem(p, out, r.Output.Count)
 		w.econItem(p, EconCraft, r.ID, out, r.Output.Count)
+		w.tutorialEvent(p, content.TriggerCraft, r.ID)
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendStation(p, pos, station.Numeric)

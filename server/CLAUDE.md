@@ -58,6 +58,10 @@ server/
   lo dice con `econItem`/`econGold` (fuente `Econ*` de `session/economy.go`), y lo que pasa
   entre un personaje y el suelo con `Player.ground`. Los tests de `session` reconcilian en
   cada tick: si te olvidas, falla `economy mismatch`.
+- **Tutorial (T4.2):** `session/tutorial.go`. Un evento nuevo del tutorial necesita una
+  constante `content.Trigger*`, su caso en `Tutorial.Check`, el enum del esquema y una
+  llamada `w.tutorialEvent(p, evento, ref)` donde el evento ya ocurrió y fue validado.
+  `tutorialEvent` cuesta una comparación para quien no está en el tutorial (`Player.tut`).
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

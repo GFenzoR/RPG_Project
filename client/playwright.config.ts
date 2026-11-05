@@ -9,6 +9,12 @@ const clientPort = Number(process.env["CLIENT_E2E_PORT"] ?? 5176);
 export const databaseUrl =
   process.env["DATABASE_URL"] ?? "postgres://postgres:postgres@localhost:5432/rpg";
 export const serverURL = `http://localhost:${serverPort}`;
+// A second server whose start island is Puerto, like production (T4.2: a new character
+// starts there with no town and gets the tutorial), with its own Vite.
+const puertoServerPort = Number(process.env["CLIENT_E2E_PUERTO_SERVER_PORT"] ?? 18081);
+const puertoClientPort = Number(process.env["CLIENT_E2E_PUERTO_PORT"] ?? 5177);
+export const puertoServerURL = `http://localhost:${puertoServerPort}`;
+export const puertoClientURL = `http://localhost:${puertoClientPort}`;
 
 export default defineConfig({
   testDir: "e2e",
@@ -45,6 +51,26 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60_000,
       env: { RPG_SERVER: serverURL },
+    },
+    {
+      // Its own world.bin: both servers compile the map at the same time.
+      command:
+        "go run ./cmd/mapcompile -root .. -out ../build/world-puerto.bin && " +
+        `go run ./cmd/gameserver -http :${puertoServerPort} -world ../build/world-puerto.bin -seed 1 -auth-rate-burst 1000 -start-town puerto -metrics-addr ""`,
+      cwd: `${import.meta.dirname}/../server`,
+      url: `${puertoServerURL}/healthz`,
+      reuseExistingServer: false,
+      timeout: 240_000,
+      env: { DATABASE_URL: databaseUrl },
+      stdout: "pipe",
+    },
+    {
+      command: `pnpm exec vite --port ${puertoClientPort} --strictPort`,
+      cwd: import.meta.dirname,
+      url: `${puertoClientURL}/`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: { RPG_SERVER: puertoServerURL },
     },
   ],
 });
