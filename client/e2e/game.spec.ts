@@ -1893,7 +1893,7 @@ test("T4.2: a new character in Puerto follows the tutorial, then skips it", asyn
   await expect(page.locator("body")).toHaveAttribute("data-tutorial-focus", "inventory");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("dialog")).toBeHidden();
-  await page.waitForTimeout(800); // a full pulse of the highlight's outline
+  await page.waitForTimeout(300); // the highlight is drawn
   await shot(page, "41-tutorial-highlight");
 
   // Skipping ends it for good: the server confirms and the panel and highlight go away.
