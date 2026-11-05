@@ -44,6 +44,7 @@ jobs:
     outputs:
       image: ${{ steps.f.outputs.image }}
       deploy-lint: ${{ steps.f.outputs.deploy-lint }}
+      monitoring: ${{ steps.f.outputs.monitoring }}
       stack: ${{ steps.f.outputs.stack }}
       home-stack: ${{ steps.f.outputs.home-stack }}
     steps:
@@ -146,13 +147,20 @@ jobs:
             docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < "$f"
           done
       - name: shellcheck
-        run: shellcheck deploy/*.sh
+        run: shellcheck deploy/*.sh deploy/monitoring/*.sh deploy/monitoring/alertmanager/*.sh
       - name: docker compose config
         run: |
           printf 'POSTGRES_PASSWORD=x\nSITE_ADDRESS=example.com\nACME_EMAIL=ops@example.com\n' > "$RUNNER_TEMP/ci.env"
           docker compose -f deploy/docker-compose.yml --env-file "$RUNNER_TEMP/ci.env" config -q
           docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml \
-            --env-file deploy/.env.home.example --profile quick-tunnel --profile tunnel config -q
+            --env-file deploy/.env.home.example --profile quick-tunnel --profile tunnel --profile monitoring config -q
+          docker compose -f deploy/docker-compose.yml --env-file "$RUNNER_TEMP/ci.env" \
+            --profile monitoring --profile monitoring-test config -q
+      # T4.4: promtool (config, rules, rule unit tests), amtool and the dashboard JSON, with
+      # the pinned images of the compose file. Only when deploy/monitoring/ changes.
+      - name: monitoring config
+        if: needs.changes.outputs.monitoring == 'true'
+        run: deploy/monitoring/check.sh
 
   # Builds the images for the runner's platform, runs the whole stack and plays through
   # Caddy: health, client page, login, /ws with real bots, and the client-IP chain.

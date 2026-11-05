@@ -61,6 +61,9 @@ type Config struct {
 	HighscoreCacheTTL time.Duration // default DefaultHighscoreCacheTTL
 	// HighscoreQueryTimeout: default DefaultHighscoreQueryTimeout.
 	HighscoreQueryTimeout time.Duration
+	// Observe, if set, is told about every finished request (route pattern, status,
+	// duration) for the metrics (T4.4). Optional.
+	Observe RequestObserver
 }
 
 // Accounts is the account service the API calls. *auth.Service implements it; tests
@@ -103,7 +106,7 @@ func New(cfg Config) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return a.recoverer(a.routes()), nil
+	return a.observe(a.recoverer(a.routes())), nil
 }
 
 // newAPI validates cfg, applies defaults and builds the limiters.

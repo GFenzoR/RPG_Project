@@ -5,6 +5,11 @@
 #   docker compose -f deploy/docker-compose.yml up -d --wait
 #
 # Locally: `make docker-build` and `make docker-up` build the images from this checkout.
+#
+# Optional monitoring (T4.4, docs/09 "Monitoreo"): Prometheus, Alertmanager, Grafana and
+# node-exporter behind the `monitoring` profile, published only on 127.0.0.1 (SSH tunnel):
+#   docker compose -f deploy/docker-compose.yml --profile monitoring up -d --wait
+# Locally: `make monitoring-up`.
 name: rpg
 
 x-logging: &logging
@@ -66,8 +71,12 @@ services:
       # is never published: every request arrives through Caddy.
       - -trust-proxy=true
       - -cookie-secure=${COOKIE_SECURE:-true}
+      # /metrics on its own listener: never published on the host and Caddy has no route to
+      # it. Containers of the stack's networks can reach it; Prometheus scrapes it over
+      # `monitoring`. No player data in it (docs/01).
+      - -metrics-addr=:9100
     # Only Caddy talks to it; 8080 is not published on the host.
-    expose: ["8080"]
+    expose: ["8080", "9100"]
     healthcheck:
       test: ["CMD", "/app/healthcheck", "http://127.0.0.1:8080/healthz"]
       interval: 10s
@@ -79,7 +88,7 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    networks: [internal, edge]
+    networks: [internal, edge, monitoring]
     logging: *logging
 
   caddy:
@@ -96,6 +105,11 @@ services:
       SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in deploy/.env}
       # Required: Caddy exits on start when the `email` global option is empty.
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
+      # Optional public /grafana/ route with basic auth (caddy-routes.caddy, docs/09). Off
+      # by default: Grafana is reached through an SSH tunnel.
+      GRAFANA_PUBLIC: ${GRAFANA_PUBLIC:-off}
+      GRAFANA_BASIC_AUTH_USER: ${GRAFANA_BASIC_AUTH_USER:-}
+      GRAFANA_BASIC_AUTH_HASH: ${GRAFANA_BASIC_AUTH_HASH:-}
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
@@ -146,14 +160,169 @@ services:
     networks: [internal, edge]
     logging: *logging
 
+  # ---- monitoring profile (T4.4) ------------------------------------------------------
+  # Pinned images, run unmodified: Prometheus, Alertmanager, node-exporter (Apache-2.0),
+  # Grafana OSS (AGPL-3.0). Memory limits sized for a 2 GB instance (docs/09).
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # Whichever comes first: 15 days or 1 GB of disk.
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-1GB}
+      - --web.listen-address=:9090
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    # Localhost only: reach it through an SSH tunnel (docs/09).
+    ports: ["127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Docker publishes no port of a container that is only on internal networks: edge is
+    # there for the 127.0.0.1 port above.
+    networks: [monitoring, edge]
+    logging: *logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    # The config is generated from the ALERT_* variables at start (no credentials in git).
+    entrypoint: ["/bin/sh", "/etc/alertmanager-rpg/entrypoint.sh"]
+    environment:
+      ALERT_DISCORD_WEBHOOK_URL: ${ALERT_DISCORD_WEBHOOK_URL:-}
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-}
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_SMTP_SMARTHOST: ${ALERT_SMTP_SMARTHOST:-}
+      ALERT_SMTP_FROM: ${ALERT_SMTP_FROM:-}
+      ALERT_SMTP_USER: ${ALERT_SMTP_USER:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager-rpg:ro
+      - alertmanager_data:/alertmanager
+    tmpfs: [/tmp]
+    ports: ["127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"]
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # monitoring for Prometheus; edge to reach Discord, Telegram or the SMTP server.
+    networks: [monitoring, edge]
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    # Refuses to start without a password (Grafana would fall back to admin/admin).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - '[ -n "$$GF_SECURITY_ADMIN_PASSWORD" ] || { echo "grafana: set GRAFANA_ADMIN_PASSWORD in deploy/.env (docs/09)" >&2; exit 1; }; exec /run.sh'
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      # Always under /grafana/, so the SSH tunnel and the optional Caddy route use the same
+      # paths. GRAFANA_ROOT_URL = https://<domain>/grafana/ when the route is on.
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/rpg-overview.json
+      GF_LOG_MODE: console
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports: ["127.0.0.1:${GRAFANA_PORT:-3000}:3000"]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # edge only for the optional Caddy route; the data sources are on monitoring.
+    networks: [monitoring, edge]
+    logging: *logging
+
+  # Machine metrics (CPU, RAM, disk of /) and the backup textfile (deploy/backup.sh).
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/backups/metrics
+      # Only the real filesystems of the host.
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+|var/lib/containerd/.+)($$|/)
+    volumes:
+      # Read-only host root for the filesystem stats. Without `rslave`: it fails where / is
+      # not a shared mount (Docker Desktop, some VMs), and / itself is all we measure.
+      - /:/host:ro
+      - backups:/backups:ro
+    mem_limit: 64m
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [monitoring]
+    logging: *logging
+
+  # Test receiver for alerts (only `make monitoring-test`): prints every webhook it gets.
+  alert-receiver:
+    image: python:3.12-alpine
+    profiles: [monitoring-test]
+    command: ["python", "-u", "/receiver.py"]
+    volumes:
+      - ./monitoring/test/receiver.py:/receiver.py:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [monitoring]
+    logging: *logging
+
 networks:
   # No route outside the host: Postgres lives only here.
   internal:
     internal: true
   edge: {}
+  # Scrapes and dashboards (monitoring profile); no route outside the host either.
+  monitoring:
+    internal: true
 
 volumes:
   pgdata:
   backups: # list with: docker compose exec backup ls -lh /backups
   caddy_data:
   caddy_config:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:

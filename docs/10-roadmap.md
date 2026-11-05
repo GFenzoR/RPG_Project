@@ -179,7 +179,14 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
     juego en `/play/`; `GET /api/status` (contador atómico del game loop) y
     `GET /api/highscores` (sqlc, cache de 60 s por filtros, excluye staff y cuentas
     deshabilitadas o baneadas); noticias en `data/news/*.yaml` validadas con esquema.
-- [ ] **T4.4 Observabilidad**: dashboard de métricas y alertas básicas.
+- [x] **T4.4 Observabilidad**: dashboard de métricas y alertas básicas.
+  - Profile `monitoring` del compose (Prometheus, Alertmanager, Grafana y node-exporter;
+    solo en 127.0.0.1, por túnel SSH) con config versionada en `deploy/monitoring/`.
+    Dashboard provisionado; 14 alertas con umbrales en un solo archivo y tests de
+    `promtool`; notificaciones a Discord, Telegram, webhook o email por variables de
+    entorno. Métricas nuevas: `persistence_errors_total`, `players_online` y
+    `http_requests_total`/`http_request_duration_seconds` por ruta. Métricas de backup por
+    textfile. Pendiente: postgres_exporter y una métrica de la detección de bots.
 - [ ] **T4.5 Portal de envío de mapas** con cola de moderación que abre PR.
 
 ## Hito 5 — Post-lanzamiento

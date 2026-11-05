@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
@@ -66,6 +67,7 @@ func TestEconomyWriterBatchesAndRetries(t *testing.T) {
 	clk := clock.NewFake(time.Unix(0, 0))
 	st := &econStore{fail: 1}
 	w := newEconomyWriter(st, clk, slog.New(slog.DiscardHandler), 2*time.Second, 3)
+	w.metrics = metrics.New()
 	w.Start()
 	for i := range 3 { // a full batch: written at once (after one failed attempt)
 		if !w.Submit(session.EconomyEntry{Kind: session.EconGather, CharacterID: int64(i + 1), ItemID: 9, Count: 1}) {
@@ -85,6 +87,47 @@ func TestEconomyWriterBatchesAndRetries(t *testing.T) {
 	}
 	if w.Submit(session.EconomyEntry{}) {
 		t.Fatal("accepted after Stop")
+	}
+	if got := persistenceErrors(t, w.metrics, metrics.WriterEconomy, metrics.OutcomeRetry); got != 1 {
+		t.Fatalf("economy retries counted %v, want 1", got)
+	}
+}
+
+// persistenceErrors reads persistence_errors_total{writer, outcome} from m.
+func persistenceErrors(t *testing.T, m *metrics.Metrics, writer, outcome string) float64 {
+	t.Helper()
+	mfs, err := m.Registry().Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mf := range mfs {
+		if mf.GetName() != "persistence_errors_total" {
+			continue
+		}
+		for _, c := range mf.GetMetric() {
+			l := map[string]string{}
+			for _, p := range c.GetLabel() {
+				l[p.GetName()] = p.GetValue()
+			}
+			if l["writer"] == writer && l["outcome"] == outcome {
+				return c.GetCounter().GetValue()
+			}
+		}
+	}
+	t.Fatalf("no persistence_errors_total{writer=%q,outcome=%q}", writer, outcome)
+	return 0
+}
+
+// The Saver's outcomes are the outcome labels of the metric (app wires one into the other).
+func TestSaverOutcomesMatchMetricLabels(t *testing.T) {
+	if session.SaveRetry != metrics.OutcomeRetry || session.SaveRejected != metrics.OutcomeRejected ||
+		session.SaveAbandoned != metrics.OutcomeAbandoned {
+		t.Fatal("session.Save* and metrics.Outcome* differ")
+	}
+	m := metrics.New()
+	saveFailed(m)(session.SaveRejected)
+	if got := persistenceErrors(t, m, metrics.WriterCharacter, metrics.OutcomeRejected); got != 1 {
+		t.Fatalf("character rejections counted %v, want 1", got)
 	}
 }
 

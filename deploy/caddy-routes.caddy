@@ -26,6 +26,11 @@ handle @backend {
 	}
 }
 
+# Grafana (T4.4): off by default (404). GRAFANA_PUBLIC=on imports the basic-auth route to
+# the monitoring profile's Grafana; anything else fails at start (no such file). The
+# gameserver's /metrics, Prometheus and Alertmanager are never routed.
+import caddy-grafana-{$GRAFANA_PUBLIC:off}.caddy
+
 # Map editor (docs/04): published in a later phase. Today the editor saves chunks to world/
 # through a local development backend (Vite dev server on the contributor's machine), so a
 # static build here could not save anything. It arrives with patch submission to review

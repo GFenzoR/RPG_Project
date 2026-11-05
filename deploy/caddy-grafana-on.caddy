@@ -1,0 +1,13 @@
+# /grafana/ route ON (GRAFANA_PUBLIC=on; docs/09, "Monitoreo"). Imported by caddy-routes.caddy.
+# Basic auth in front of Grafana's own login. With GRAFANA_BASIC_AUTH_USER or _HASH empty
+# there is no account and every request gets 401 (fails closed; checked in T4.4). Hash with:
+#   docker run --rm caddy:2.11-alpine caddy hash-password --plaintext '<password>'
+# Needs the monitoring profile running (otherwise 502). Prometheus and Alertmanager are
+# never routed.
+@grafana path /grafana /grafana/*
+handle @grafana {
+	basic_auth {
+		{$GRAFANA_BASIC_AUTH_USER} {$GRAFANA_BASIC_AUTH_HASH}
+	}
+	reverse_proxy grafana:3000
+}

@@ -32,13 +32,16 @@ declare -A RULES=(
 	[integration]='^(server|proto|data|world)/'
 	[bench]='^server/(internal/(game|world|session|clock)|go\.(mod|sum))'
 	# images.yml (on pull requests; pushes to main and tags always build and publish)
-	[image]='^deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-routes\.caddy$)'
+	[image]='^deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-.*\.caddy$)'
 	[deploy-lint]='^deploy/'
 	[stack]='^(deploy|server|client|packages|data|world|i18n|assets|proto|tools/bots|tools/spritepack)/'
 	[home-stack]='^deploy/'
+	# Step of deploy-lint (T4.4): promtool/amtool and the dashboards, only for the
+	# monitoring config or the compose file that pins its images.
+	[monitoring]='^deploy/(monitoring/|docker-compose\.yml$)'
 )
 CI_JOBS=(go-server go-bots ts validate actionlint build desktop e2e integration bench)
-IMAGES_JOBS=(image deploy-lint stack home-stack)
+IMAGES_JOBS=(image deploy-lint stack home-stack monitoring)
 
 # decide JOB < changed-files: prints true or false.
 decide() {
@@ -105,6 +108,14 @@ self_test() {
 	check image true deploy/caddy-routes.caddy
 	check home-stack true deploy/docker-compose.home.yml
 	check e2e false deploy/docker-compose.yml
+	# Monitoring (T4.4): its checks run for deploy/monitoring/ and the compose file only;
+	# the optional Grafana route of Caddy is part of the web image.
+	for j in monitoring deploy-lint stack home-stack; do check "$j" true deploy/monitoring/prometheus/rules/alerts.yml; done
+	check image false deploy/monitoring/grafana/dashboards/rpg-overview.json
+	check monitoring true deploy/docker-compose.yml
+	check monitoring false deploy/backup.sh deploy/Caddyfile
+	check monitoring false server/internal/metrics/metrics.go
+	check image true deploy/caddy-grafana-on.caddy
 	# The bots: their Go job and the stack (they play in it), not the server's.
 	check go-bots true tools/bots/cmd/bots/main.go
 	check stack true tools/bots/cmd/bots/main.go

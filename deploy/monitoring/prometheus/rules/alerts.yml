@@ -1,0 +1,150 @@
+# Basic alerts of the RPG Project (T4.4). Every threshold is in this file; docs/01
+# ("Observabilidad", table of alerts) explains each one. Change a number here, run
+# `make monitoring-check`, and reload: `docker compose ... kill -s SIGHUP prometheus`.
+#
+# Severities: critical = act now (players affected or data at risk); warning = look today.
+groups:
+  - name: rpg-availability
+    rules:
+      - alert: GameServerDown
+        # Scrape failed (container stopped, crashed or unhealthy) for 1 minute.
+        expr: up{job="gameserver"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gameserver is down (scrape of {{ $labels.instance }} failing)"
+          description: "Prometheus cannot reach the gameserver's /metrics for 1 minute. Check `docker compose ps` and the gameserver logs."
+
+      - alert: GameServerMetricsMissing
+        # No gameserver target at all (wrong config): `up` itself is absent.
+        expr: absent(up{job="gameserver"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No gameserver scrape target"
+          description: "Prometheus has no gameserver target; check deploy/monitoring/prometheus/prometheus.yml."
+
+  - name: rpg-performance
+    rules:
+      - alert: TickP99OverBudget
+        # docs/07: tick p99 < 10 ms. Sustained for 10 minutes, not a single spike.
+        expr: histogram_quantile(0.99, sum by (le) (rate(tick_duration_ms_bucket{job="gameserver"}[5m]))) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tick p99 {{ $value | printf \"%.1f\" }} ms, over the 10 ms budget"
+          description: "The tick p99 has been over 10 ms (docs/07) for 10 minutes."
+
+      - alert: TickOverruns
+        # A tick longer than 50 ms delays the whole world. More than 5 in 5 minutes.
+        expr: increase(tick_overruns_total{job="gameserver"}[5m]) > 5
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} tick overruns (> 50 ms) in 5 minutes"
+          description: "Ticks are taking longer than the 50 ms period. Look at the tick panels and the CPU of the machine."
+
+      - alert: GameServerMemoryHigh
+        # docs/07: the process should stay under 600 MB.
+        expr: process_resident_memory_bytes{job="gameserver"} > 600 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gameserver RSS {{ $value | humanize1024 }}B, over the 600 MB budget"
+          description: "The gameserver has used more than 600 MB (docs/07) for 10 minutes."
+
+      - alert: HostMemoryHigh
+        # Less than 10 % of the machine's RAM available (2 GB instance: ~200 MB).
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Only {{ $value | humanizePercentage }} of the machine's RAM is available"
+          description: "The machine is about to swap or OOM-kill a container. Stop the monitoring profile if it is the cause."
+
+      - alert: HostDiskAlmostFull
+        # Root filesystem (database, backups, logs) under 15 % free.
+        expr: node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} < 0.15
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ $value | humanizePercentage }} free"
+          description: "Less than 15 % free on /. Prune old backups (BACKUP_RETENTION_DAYS) or images (`docker image prune`)."
+
+      - alert: HostDiskCritical
+        expr: node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} < 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk {{ $value | humanizePercentage }} free: Postgres will stop writing soon"
+          description: "Less than 5 % free on /. Free space now."
+
+  - name: rpg-data
+    rules:
+      - alert: PersistenceRetrying
+        # Saves of players, audit or economy failing and being retried (database down or slow).
+        expr: sum by (writer) (increase(persistence_errors_total{job="gameserver",outcome="retry"}[10m])) > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.writer }} writes failing ({{ $value | printf \"%.0f\" }} retries in 10 min)"
+          description: "The database rejects or times out writes; they are retried, nothing is lost yet. Check Postgres and the gameserver logs."
+
+      - alert: PersistenceDataLost
+        # A write dropped (rejected by the database) or abandoned at shutdown: data is only in the logs.
+        expr: sum by (writer, outcome) (increase(persistence_errors_total{job="gameserver",outcome=~"rejected|abandoned"}[15m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.writer }} write {{ $labels.outcome }}"
+          description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database' or 'abandoned')."
+
+      - alert: EconomyMismatch
+        # T4.1: the economy reconciliation found gold or items that no source explains.
+        expr: increase(economy_alerts_total{job="gameserver",kind="mismatch"}[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Economy mismatch: possible item or gold duplication"
+          description: "See docs/02 (economy) and the 'economy' log entries of the gameserver."
+
+      - alert: BackupFailed
+        # deploy/backup.sh writes rpg_backup_* to the node-exporter textfile collector.
+        expr: rpg_backup_last_run_success == 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "The last database backup failed"
+          description: "Check `docker compose logs backup`. The previous dump is still on the volume."
+
+      - alert: BackupStale
+        # Same rule as `backup.sh --check`: no successful dump in two intervals.
+        expr: time() - rpg_backup_last_success_timestamp_seconds > 2 * rpg_backup_interval_seconds
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Last successful backup is {{ $value | humanizeDuration }} old"
+          description: "No successful dump in two backup intervals. Check the backup container."
+
+  - name: rpg-http
+    rules:
+      - alert: HTTPErrorsHigh
+        # More than 5 % of API requests answered 5xx, with some traffic.
+        expr: |
+          sum(rate(http_requests_total{job="gameserver",code=~"5.."}[5m]))
+            / sum(rate(http_requests_total{job="gameserver"}[5m])) > 0.05
+          and sum(rate(http_requests_total{job="gameserver"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of API requests fail with 5xx"
+          description: "Look at the HTTP panel by route; /healthz 503 means the database is unreachable."

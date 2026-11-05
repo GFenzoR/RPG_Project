@@ -1,0 +1,24 @@
+# Provisioned from deploy/monitoring (T4.4): edits in the UI are not kept.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s
+      # Lets Grafana's Alerting page list Prometheus' rules and silence them in Alertmanager.
+      manageAlerts: true
+      alertmanagerUid: alertmanager
+  - name: Alertmanager
+    uid: alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    editable: false
+    jsonData:
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false

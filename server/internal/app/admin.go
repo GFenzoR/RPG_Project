@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
@@ -37,6 +38,8 @@ type adminWorker struct {
 	done  func(session.AdminResult)
 	// roles receives the current roles of accounts (World.RolesChanged).
 	roles func(map[int64]session.Role)
+	// metrics counts failed writes (persistence_errors_total{writer="audit"}); nil is fine.
+	metrics *metrics.Metrics
 
 	mu       sync.Mutex
 	ch       chan session.AdminJob
@@ -125,13 +128,16 @@ func (a *adminWorker) run(job session.AdminJob) {
 		}
 		if store.Permanent(err) {
 			a.log.Error("admin: job rejected by the database", "kind", job.Kind, "action", job.Audit.Action, "err", err)
+			a.metrics.PersistenceError(metrics.WriterAudit, metrics.OutcomeRejected)
 			a.fail(job)
 			return
 		}
 		a.log.Error("admin: job failed, retrying", "kind", job.Kind, "action", job.Audit.Action,
 			"attempt", attempt, "retry_in", backoff.String(), "err", err)
+		a.metrics.PersistenceError(metrics.WriterAudit, metrics.OutcomeRetry)
 		select {
 		case <-a.stop:
+			a.metrics.PersistenceError(metrics.WriterAudit, metrics.OutcomeAbandoned)
 			a.abandon(job)
 			return
 		case <-a.clock.After(backoff):
