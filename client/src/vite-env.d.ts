@@ -5,3 +5,9 @@ declare module "virtual:rpg-content" {
   const content: ClientContent;
   export default content;
 }
+
+declare module "virtual:rpg-site" {
+  import type { SiteContent } from "./content-types.ts";
+  const site: SiteContent;
+  export default site;
+}

@@ -10,9 +10,11 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
+	"github.com/GFenzoR/RPG_Project/server/internal/buildinfo"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -89,7 +91,9 @@ type App struct {
 	economy *economyWriter
 	// loopDone is closed when the game loop stopped (commands can no longer run).
 	loopDone chan struct{}
-	handler  http.Handler
+	// running is true while the game loop runs (GET /api/status).
+	running atomic.Bool
+	handler http.Handler
 }
 
 // New builds the stack. Nothing runs until Run.
@@ -109,6 +113,16 @@ func New(cfg Config) (*App, error) {
 		return nil, err
 	}
 	a.Auth = authSvc
+	// The ranking reads Postgres; fake stores of tests may not implement it.
+	highscores, _ := cfg.Store.(httpapi.Highscores)
+	skills := make(map[string]int, len(cfg.Balance.Skills.Base))
+	for id, b := range cfg.Balance.Skills.Base {
+		skills[id] = b.StartLevel
+	}
+	vocations := make([]string, 0, len(cfg.Vocations))
+	for id := range cfg.Vocations {
+		vocations = append(vocations, id)
+	}
 	api, err := httpapi.New(httpapi.Config{
 		Auth:         authSvc,
 		Clock:        cfg.Clock,
@@ -118,6 +132,11 @@ func New(cfg Config) (*App, error) {
 		TrustProxy:   cfg.TrustProxy,
 		// The zero value keeps httpapi.DefaultAuthRateLimit.
 		AuthRateLimit: cfg.AuthRateLimit,
+		Highscores:    highscores,
+		Skills:        skills,
+		Vocations:     vocations,
+		Status:        a.status,
+		Version:       buildinfo.Version,
 	})
 	if err != nil {
 		return nil, err
@@ -228,6 +247,16 @@ func gatewayMetrics(m *metrics.Metrics) gateway.Observer {
 	return m
 }
 
+// status is what GET /api/status reports. It reads only atomics the game loop publishes:
+// the HTTP goroutine never touches the world (CLAUDE.md, principle 2).
+func (a *App) status() httpapi.Status {
+	s := httpapi.Status{Online: a.running.Load()}
+	if a.World != nil && s.Online {
+		s.Players = a.World.PublishedOnline()
+	}
+	return s
+}
+
 // Handler serves the HTTP API and /ws.
 func (a *App) Handler() http.Handler { return a.handler }
 
@@ -240,7 +269,9 @@ func (a *App) Run(ctx context.Context) error {
 		a.admin.Start()
 		a.economy.Start()
 	}
+	a.running.Store(true)
 	runErr := a.Loop.Run(ctx)
+	a.running.Store(false)
 	close(a.loopDone)
 	if runErr != nil {
 		runErr = fmt.Errorf("game loop: %w", runErr)

@@ -25,13 +25,14 @@ declare -A RULES=(
 	[actionlint]='^\.github/'
 	[build]='^(client|editor|packages|data|world|i18n|assets|proto|tools/spritepack)/'
 	# The desktop job compiles Rust: only for the app itself and the client's bridge to it
-	# (a web client build failure already fails `build`).
-	[desktop]='^(apps/desktop/|client/src/net/|client/package\.json$)'
+	# (a web client build failure already fails `build`), plus the game page the app opens
+	# (client/play/, and the Vite pages config; T4.3).
+	[desktop]='^(apps/desktop/|client/src/net/|client/package\.json$|client/play/|client/vite\.config\.ts$)'
 	[e2e]='^(client|editor|packages|server|proto|data|world|i18n|assets|tools/mapcli|tools/spritepack)/'
 	[integration]='^(server|proto|data|world)/'
 	[bench]='^server/(internal/(game|world|session|clock)|go\.(mod|sum))'
 	# images.yml (on pull requests; pushes to main and tags always build and publish)
-	[image]='^deploy/(Dockerfile|.*\.dockerignore$|Caddyfile)'
+	[image]='^deploy/(Dockerfile|.*\.dockerignore$|Caddyfile|caddy-routes\.caddy$)'
 	[deploy-lint]='^deploy/'
 	[stack]='^(deploy|server|client|packages|data|world|i18n|assets|proto|tools/bots|tools/spritepack)/'
 	[home-stack]='^deploy/'
@@ -83,6 +84,8 @@ self_test() {
 	check desktop false client/src/ui/App.tsx
 	check desktop false editor/src/state/editor.ts
 	check desktop true client/package.json
+	check desktop true client/play/index.html client/vite.config.ts
+	check desktop false client/index.html
 	# Texts: TS, validation, build and E2E, not the Go jobs.
 	for j in ts validate build e2e; do check "$j" true i18n/es/client.yaml; done
 	for j in go-server go-bots integration desktop; do check "$j" false i18n/es/client.yaml; done
@@ -99,6 +102,7 @@ self_test() {
 	# deploy/: lint, images, both stacks; a compose change does not build the images.
 	for j in deploy-lint image stack home-stack; do check "$j" true deploy/Dockerfile.gameserver; done
 	check image false deploy/docker-compose.home.yml
+	check image true deploy/caddy-routes.caddy
 	check home-stack true deploy/docker-compose.home.yml
 	check e2e false deploy/docker-compose.yml
 	# The bots: their Go job and the stack (they play in it), not the server's.

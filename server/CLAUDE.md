@@ -31,7 +31,8 @@ server/
                        internal/ para que otro módulo lo importe)
   internal/store/      PostgreSQL: repositorios generados con sqlc, migraciones goose
   internal/auth/       cuentas, contraseñas (argon2id), OAuth Google/Discord, tokens
-  internal/httpapi/    API HTTP: login, lista de personajes, health
+  internal/httpapi/    API HTTP: login, lista de personajes, health; public.go: status y
+                       ranking públicos con cache (T4.3)
   internal/metrics/    métricas Prometheus (tick, red, proceso); /metrics en -metrics-addr
   internal/clock/      reloj inyectable (real y falso para tests)
   internal/sim/        harness de simulación determinista para tests
@@ -62,6 +63,13 @@ server/
   constante `content.Trigger*`, su caso en `Tutorial.Check`, el enum del esquema y una
   llamada `w.tutorialEvent(p, evento, ref)` donde el evento ya ocurrió y fue validado.
   `tutorialEvent` cuesta una comparación para quien no está en el tutorial (`Player.tut`).
+- **Sitio público (T4.3):** `GET /api/status` lee `session.World.PublishedOnline` (un
+  `atomic` que el loop actualiza al entrar o salir un jugador) y `App.running`; nunca
+  llames a métodos "Loop goroutine only" desde un handler. `GET /api/highscores` usa
+  `queries/highscores.sql` vía `store.Highscores` (el `app` la conecta si el `Store` la
+  implementa) con una cache de 60 s por filtros en `httpapi`. Las exclusiones (staff,
+  deshabilitadas, baneadas) viven en la query: si agregas borrado de personajes,
+  filtra ahí.
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

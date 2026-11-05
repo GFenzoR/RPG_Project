@@ -48,6 +48,14 @@ type Querier interface {
 	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
 	// Resolves a character name (ignoring case) for a staff command.
 	GetCharacterTarget(ctx context.Context, name string) (GetCharacterTargetRow, error)
+	// Highscores (T4.3, GET /api/highscores). Only players' characters are ranked: staff
+	// (gm/admin), disabled accounts and accounts with an active ban are left out. Ties keep
+	// the older character first. A page is limit rows from offset; callers ask for one more
+	// row than they show to know whether there is a next page.
+	HighscoresByLevel(ctx context.Context, arg HighscoresByLevelParams) ([]HighscoresByLevelRow, error)
+	// A character without a row for the skill is at its base level (data/balance.yaml), which
+	// the caller passes as base_level.
+	HighscoresBySkill(ctx context.Context, arg HighscoresBySkillParams) ([]HighscoresBySkillRow, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)

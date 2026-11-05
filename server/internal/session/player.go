@@ -368,6 +368,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.storage = quest.NewLog(c.Storage)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
+	w.published.Store(int32(len(w.players)))
 	w.byClient[client] = p
 	w.byChar[c.ID] = p
 	w.index(p)
@@ -434,6 +435,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	}
 	i := sort.Search(len(w.players), func(i int) bool { return w.players[i].id >= p.id })
 	w.players = append(w.players[:i], w.players[i+1:]...)
+	w.published.Store(int32(len(w.players)))
 	ctx.Sched.Cancel(p.autosave)
 	ctx.Sched.Cancel(p.regen)
 	w.forgetContainers(p)

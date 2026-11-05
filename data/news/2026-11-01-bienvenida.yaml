@@ -1,0 +1,28 @@
+# News post (T4.3, docs/06-content-data.md "Noticias"). Body: minimal Markdown subset.
+date: "2026-11-01"
+title:
+  es: "Bienvenidos a RPG Project"
+  en: "Welcome to RPG Project"
+body:
+  es: |
+    Abrimos las puertas del mundo de pruebas. Es un juego de rol en línea de vista cenital:
+    caminas casilla por casilla, tus habilidades mejoran con el uso y el mundo es uno solo,
+    compartido con todos los jugadores.
+
+    Qué puedes hacer hoy:
+    - Elegir una de las cuatro **vocaciones** y crear tu personaje.
+    - Seguir el tutorial de la isla de inicio y viajar en barco a Puerto.
+    - Pescar, minar, talar y fabricar tu propio equipo.
+
+    Es una versión *temprana*: puede haber reinicios del mundo. ¡Gracias por probarla!
+  en: |
+    The doors of the test world are open. It is an online top-down role-playing game:
+    you walk tile by tile, your skills improve as you use them and there is a single
+    world shared by every player.
+
+    What you can do today:
+    - Pick one of the four **vocations** and create your character.
+    - Follow the tutorial on the starting island and sail to Puerto.
+    - Fish, mine, chop wood and craft your own gear.
+
+    This is an *early* version: the world may be reset. Thanks for trying it!

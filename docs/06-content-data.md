@@ -505,6 +505,38 @@ reglas `grass_sand` y `sand_water`; su arte placeholder propio lo genera
 `tools/spritepack/src/gen-borders.ts` en `assets/sprites/borders/` (un test verifica que
 los PNG commiteados son los que produce).
 
+## Noticias (T4.3)
+Una noticia es un archivo `data/news/<YYYY-MM-DD>-<slug>.yaml` (slug: `a-z`, `0-9` y `-`).
+El nombre del archivo es su URL en el sitio (`/news/2026-11-01-bienvenida`) y su fecha. Se
+publican con el build del cliente (`virtual:rpg-site` en `client/vite/content.ts`): no hay
+admin web ni base de datos, así que una noticia se propone y se revisa como un PR.
+Esquema: `packages/content-schema/schemas/news.schema.json`; `make validate` revisa además
+que `date` coincida con el nombre del archivo.
+
+```yaml
+date: "2026-11-01"           # igual al prefijo del nombre del archivo
+title:                       # una línea, máx. 120 caracteres, sin < >
+  es: "Bienvenidos a RPG Project"
+  en: "Welcome to RPG Project"
+body:                        # obligatorios es y en
+  es: |
+    Primer párrafo. Un salto de línea simple se une con un espacio.
+
+    Una lista:
+    - con **negrita**
+    - y *cursiva*
+  en: |
+    ...
+```
+
+El título y el cuerpo se escriben en la misma noticia, no en `i18n/`: son contenido de un
+solo uso. El cuerpo es un subconjunto mínimo de Markdown (`client/src/site/markdown.ts`):
+párrafos separados por una línea en blanco, líneas que empiezan con `- ` como lista, y
+`**negrita**` y `*cursiva*` (sin espacio justo dentro de los marcadores, sin anidar). Nada
+más: ni HTML ni links. Se dibuja como nodos de texto de Preact, nunca con `innerHTML`, así
+que un `<` en el cuerpo se ve tal cual. Los textos fijos del sitio están en
+`i18n/<lang>/site.yaml` (claves `site.*`).
+
 ## i18n
 ```yaml
 # i18n/es/items.yaml

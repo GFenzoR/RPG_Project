@@ -32,6 +32,18 @@ cd server && DATABASE_URL=postgres://postgres:postgres@localhost:5432/rpg go run
 El servidor aplica las migraciones pendientes al arrancar y sirve la API HTTP en `:8080`
 (ver "API HTTP" en `05-network-protocol.md`).
 
+### Sitio público y juego (T4.3)
+`make client` (o `make dev`) levanta un solo Vite en `http://localhost:5173` con las dos
+páginas del cliente, como detrás de Caddy:
+- `http://localhost:5173/` → sitio público: landing, `/highscores`, `/news` (las rutas
+  desconocidas caen en esta página);
+- `http://localhost:5173/play/` → el juego (`/play` redirige a `/play/`).
+
+Vite hace de proxy de `/api` y `/ws` al servidor (`RPG_SERVER`, por defecto `:8080`): el
+estado del servidor y el ranking de la landing necesitan el servidor en marcha. Una noticia
+nueva en `data/news/` se ve al reiniciar Vite. El ranking se cachea 60 s en el servidor: un
+personaje recién creado puede tardar ese minuto en aparecer.
+
 ### Roles de staff (T2.6)
 Para probar los comandos de GM, dale un rol a tu cuenta de desarrollo y vuelve a entrar:
 `make set-role EMAIL=tu@correo ROLE=admin NOTE="dev"`. `make audit-log` muestra el log de
@@ -94,7 +106,8 @@ make desktop-build        # instaladores de tu SO en apps/desktop/src-tauri/targ
 make desktop-test         # cargo fmt --check + clippy + cargo test (config de URL, API, CSP, versión)
 make desktop-smoke        # Linux: la app real bajo Xvfb con tauri-driver: login, entrar, screenshots
 ```
-`make desktop-dev` necesita el servidor en marcha (`make run-server` o `make dev`); en dev el
+`make desktop-dev` necesita el servidor en marcha (`make run-server` o `make dev`); la ventana
+abre `http://localhost:5173/play/index.html` (el juego, no la landing); en dev el
 origen del webview es `http://localhost:5173`, que ambos permiten en `-ws-origins`
 (`DEV_WS_ORIGINS` del Makefile; `RPG_WS_ORIGINS` lo reemplaza).
 `make desktop-smoke` necesita además `webkit2gtk-driver` (apt), `tauri-driver`

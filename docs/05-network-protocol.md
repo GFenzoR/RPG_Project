@@ -78,7 +78,7 @@ Detalles (T1.4, `server/internal/net/gateway`):
   `CloseContainer`, `ReportPlayer`, `TutorialSkip` y cualquier intención rechazada no. Nunca en combate
   (`travel.combat_block_ms`) ni sobre una casilla sin logout: se reintenta cada segundo.
 
-## API HTTP (cuentas y personajes)
+## API HTTP (cuentas, personajes y sitio público)
 Implementada en `server/internal/httpapi` (T1.3). JSON en ambos sentidos; los `POST` con
 cuerpo exigen `Content-Type: application/json` (también frena formularios cross-site),
 cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Control: no-store`.
@@ -92,6 +92,31 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/characters` | token | `{name, vocation}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
 | `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde |
+| `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
+| `GET /api/highscores?category=&vocation=&page=` | — | — | `200 {category, vocation, page, page_size, has_more, entries: [{rank, name, vocation, value}]}` (T4.3, público) |
+
+### Endpoints públicos del sitio (T4.3, `httpapi/public.go`)
+Los usa la landing (`/`, `/highscores`). No piden cuenta, y comparten un rate limit por IP
+propio (`DefaultPublicRateLimit`: ráfaga de 30, uno cada 500 ms; `/64` en IPv6, como el de
+auth). Pasado el límite responden `429 rate_limited`.
+
+- **`GET /api/status`:** `online` es si el game loop está corriendo, `players` los jugadores
+  en el mundo y `version` la del build del servidor (`buildinfo.Version`). No toca Postgres
+  ni el mundo: lee un `atomic` que el game loop actualiza cuando alguien entra o sale
+  (`session.World.PublishedOnline`).
+- **`GET /api/highscores`:** `category` = `level` (por defecto) o un id de skill de
+  `data/balance.yaml` (`skills.base`); `vocation` = un id de `data/vocations.yaml` o vacío
+  (todas); `page` = 1…50, de 20 filas (top 1000). Un valor inválido responde `400`
+  `invalid_category`, `invalid_vocation` o `invalid_page`. Solo devuelve nombre, vocación,
+  valor (nivel o nivel de la skill) y posición. Excluye cuentas de staff (`gm`, `admin`),
+  deshabilitadas o con un ban activo (permanente o temporal); un ban levantado o vencido
+  vuelve a contar. No hay borrado de personajes todavía: cuando exista, la query debe
+  filtrarlos. Empates: más experiencia (nivel) o más tries (skill), y luego el personaje más
+  antiguo. Un personaje sin fila de esa skill está en su nivel base.
+- **Cache:** cada combinación `category × vocation × page` se sirve 60 s desde memoria
+  (`DefaultHighscoreCacheTTL`, reloj inyectable). Si varias peticiones llegan con la cache
+  vacía, solo la primera consulta Postgres y las demás esperan su resultado. Los errores no
+  se guardan. La respuesta lleva `Cache-Control: public, max-age=30`.
 
 - **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
   se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
@@ -182,6 +207,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |
 | `rate_limited` | 429 | Demasiados intentos de login/registro (por IP o por email) |
 | `busy` | 503 | Servidor saturado de logins; reintentar más tarde |
+| `invalid_category` / `invalid_vocation` / `invalid_page` | 400 | Filtros de `GET /api/highscores` |
 | `not_found` | 404 | Ruta `/api/...` inexistente |
 | `internal` | 500 | Error del servidor (queda en el log) |
 

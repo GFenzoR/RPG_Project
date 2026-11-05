@@ -1,5 +1,5 @@
 // Package httpapi serves the HTTP API: account registration and login, the account's
-// characters and health checks (docs/05-network-protocol.md, "API HTTP").
+// characters, health checks and the public website data (highscores, status; T4.3) (docs/05-network-protocol.md, "API HTTP").
 //
 // Errors are JSON {"error":{"code":"..."}} with a stable code; the client turns the code
 // into an i18n text, so no player-visible string is produced here.
@@ -46,6 +46,19 @@ type Config struct {
 	AuthRateLimit       RateLimit // per IP; default DefaultAuthRateLimit
 	LoginPairRateLimit  RateLimit // failed logins per (email, IP); default DefaultLoginPairRateLimit
 	LoginEmailRateLimit RateLimit // failed logins per email; default DefaultLoginEmailRateLimit
+
+	// Public website endpoints (T4.3). Without Highscores, /api/highscores answers 404.
+	Highscores Highscores
+	// Skills maps every rankable skill id to its base level (data/balance.yaml).
+	Skills map[string]int
+	// Vocations are the vocation ids the ranking can filter by.
+	Vocations []string
+	// Status reports whether the game loop runs and how many players are online.
+	Status func() Status
+	// Version is the server build version shown by /api/status.
+	Version           string
+	PublicRateLimit   RateLimit     // per IP; default DefaultPublicRateLimit
+	HighscoreCacheTTL time.Duration // default DefaultHighscoreCacheTTL
 }
 
 // Accounts is the account service the API calls. *auth.Service implements it; tests
@@ -68,6 +81,10 @@ type api struct {
 	limiter      *limiter
 	pairLimiter  *limiter
 	emailLimiter *limiter
+
+	publicLimiter *limiter
+	cache         *pageCache
+	vocations     map[string]bool
 }
 
 func orDefault(rl, def RateLimit) RateLimit {
@@ -97,7 +114,14 @@ func newAPI(cfg Config) (*api, error) {
 	cfg.AuthRateLimit = orDefault(cfg.AuthRateLimit, DefaultAuthRateLimit)
 	cfg.LoginPairRateLimit = orDefault(cfg.LoginPairRateLimit, DefaultLoginPairRateLimit)
 	cfg.LoginEmailRateLimit = orDefault(cfg.LoginEmailRateLimit, DefaultLoginEmailRateLimit)
-	a := &api{cfg: cfg, log: cfg.Logger}
+	cfg.PublicRateLimit = orDefault(cfg.PublicRateLimit, DefaultPublicRateLimit)
+	if cfg.HighscoreCacheTTL <= 0 {
+		cfg.HighscoreCacheTTL = DefaultHighscoreCacheTTL
+	}
+	a := &api{cfg: cfg, log: cfg.Logger, cache: newPageCache(cfg.HighscoreCacheTTL), vocations: make(map[string]bool)}
+	for _, v := range cfg.Vocations {
+		a.vocations[v] = true
+	}
 	for _, l := range []struct {
 		dst    **limiter
 		rl     RateLimit
@@ -106,6 +130,7 @@ func newAPI(cfg Config) (*api, error) {
 		{&a.limiter, cfg.AuthRateLimit, failOpen},
 		{&a.pairLimiter, cfg.LoginPairRateLimit, failClosed},
 		{&a.emailLimiter, cfg.LoginEmailRateLimit, failClosed},
+		{&a.publicLimiter, cfg.PublicRateLimit, failOpen},
 	} {
 		lim, err := newLimiter(l.rl, l.policy, cfg.Clock)
 		if err != nil {
@@ -126,6 +151,10 @@ func (a *api) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/characters", a.authed(a.listCharacters))
 	mux.HandleFunc("POST /api/characters", a.authed(a.createCharacter))
 	mux.HandleFunc("POST /api/play", a.authed(a.play))
+	mux.HandleFunc("GET /api/status", a.publicLimited(a.status))
+	if a.cfg.Highscores != nil {
+		mux.HandleFunc("GET /api/highscores", a.publicLimited(a.highscores))
+	}
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})

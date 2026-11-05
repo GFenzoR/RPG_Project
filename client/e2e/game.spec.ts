@@ -78,7 +78,7 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await apiCtx.dispose();
 
   // Login screen (Spanish by default), a look at sign-up, then log in.
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await expect(loginForm).toBeVisible();
   await page.getByRole("button", { name: "¿No tienes cuenta? Regístrate" }).click();
@@ -243,7 +243,7 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   ).toBe(201);
   await apiCtx.dispose();
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -365,7 +365,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   ).toBe(201);
   await apiCtx.dispose();
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -546,7 +546,7 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
      WHERE name = '${rangerName}'`,
   ]);
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -650,7 +650,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
     `UPDATE characters SET town = 'puerto' WHERE name = '${name}'`,
   ]);
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -766,7 +766,7 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
     `UPDATE characters SET health = 1 WHERE name = '${name}'`,
   ]);
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -870,7 +870,7 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
      ON CONFLICT (character_id, skill) DO UPDATE SET level = 38, tries = 0`,
   ]);
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -1004,7 +1004,7 @@ test("chat on the local and global channels, then switch the language", async ({
   ).toBe(201);
   await apiCtx.dispose();
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -1047,7 +1047,7 @@ test("chat on the local and global channels, then switch the language", async ({
   await shot(page, "17-language-en");
 
   // The choice is remembered: without ?lang= the next visit opens in English.
-  await page.goto("/");
+  await page.goto("/play/");
   await expect(page.getByTestId("characters").getByRole("button", { name: "Play" })).toBeVisible();
   await expect(page.getByTestId("language")).toHaveValue("en");
   expect(errors).toEqual([]);
@@ -1103,7 +1103,7 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
 
   async function enter(email: string): Promise<Page> {
     const page = await browser.newPage();
-    await page.goto("/?lang=es");
+    await page.goto("/play/?lang=es");
     const form = page.getByTestId("login-form");
     await form.getByLabel("Email").fill(email);
     await form.getByLabel("Contraseña").fill(password);
@@ -1161,7 +1161,7 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
 
   // And the next login is refused.
   const again = await browser.newPage();
-  await again.goto("/?lang=es");
+  await again.goto("/play/?lang=es");
   const form = again.getByTestId("login-form");
   await form.getByLabel("Email").fill(player.email);
   await form.getByLabel("Contraseña").fill(password);
@@ -1208,7 +1208,7 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
     `UPDATE characters SET level = 8, experience = 4704, mana = 48 WHERE name = '${name}'`,
   ]);
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -1278,7 +1278,7 @@ test("T3.3: two players form a party from the battle list and see the panel", as
 
   async function enter(email: string): Promise<Page> {
     const page = await browser.newPage();
-    await page.goto("/?lang=es");
+    await page.goto("/play/?lang=es");
     const form = page.getByTestId("login-form");
     await form.getByLabel("Email").fill(email);
     await form.getByLabel("Contraseña").fill(password);
@@ -1432,7 +1432,7 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
      ON CONFLICT (character_id, skill) DO UPDATE SET level = 30, tries = 0`,
   ]);
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -1515,7 +1515,7 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
      SELECT character_id, id, 0, 8, 50 FROM bp`,
   ]);
 
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -1578,7 +1578,7 @@ async function newGuardian(
 }
 
 async function enterGame(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
@@ -1710,7 +1710,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   const history = (): Promise<string[]> => page.evaluate(() => window.__rpgAudio?.history() ?? []);
 
   const { email, password } = await newGuardian(playwright, "Hark");
-  await page.goto("/?lang=es");
+  await page.goto("/play/?lang=es");
   // Nothing may start before a gesture (browser autoplay rules).
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(false);
   expect(await starts()).toBe(0);

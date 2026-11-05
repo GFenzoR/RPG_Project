@@ -40,6 +40,7 @@ describe("repository content", () => {
       "recipes",
       "boat_routes",
       "tutorial",
+      "news",
       "borders",
       "sounds",
       "i18n",
@@ -112,6 +113,29 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes("steps[3].when.event"))).toBe(true);
     expect(out.some((m) => m.includes("steps[4].highlight"))).toBe(true);
     expect(out.some((m) => m.includes("rewards[0]"))).toBe(true);
+  });
+
+  it("checks news posts: file name, date and both languages (T4.3)", () => {
+    mkdirSync(file("data/news"), { recursive: true });
+    const post = (date: string, en = true): string =>
+      [
+        `date: "${date}"`,
+        "title:",
+        "  es: Hola",
+        ...(en ? ["  en: Hello"] : []),
+        "body:",
+        "  es: Texto",
+        "  en: Text",
+      ].join("\n") + "\n";
+    writeFileSync(file("data/news/2026-01-02-ok.yaml"), post("2026-01-02"));
+    writeFileSync(file("data/news/2026-01-03-wrong-date.yaml"), post("2026-01-04"));
+    writeFileSync(file("data/news/2026-01-05-no-en.yaml"), post("2026-01-05", false));
+    writeFileSync(file("data/news/Bad_Name.yaml"), post("2026-01-06"));
+    const out = messages(root);
+    expect(out.some((m) => m.includes("2026-01-02-ok.yaml"))).toBe(false);
+    expect(out.some((m) => m.includes('date "2026-01-04" must match'))).toBe(true);
+    expect(out.some((m) => m.includes("2026-01-05-no-en.yaml") && m.includes("title"))).toBe(true);
+    expect(out.some((m) => m.includes("Bad_Name.yaml") && m.includes("file names"))).toBe(true);
   });
 
   it("checks assets/sounds.yaml: files, credits, references and islands (T3.7)", () => {

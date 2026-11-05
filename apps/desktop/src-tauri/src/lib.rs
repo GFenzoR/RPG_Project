@@ -129,4 +129,14 @@ mod tests {
         let context_version = context.config().version.clone();
         assert_eq!(context_version.as_deref(), pkg["version"].as_str());
     }
+
+    /// The window opens the game page of the client build, not the public website at /
+    /// (T4.3: the client is a two-page Vite build; the game is play/index.html).
+    #[test]
+    fn window_opens_the_game_page() {
+        let conf: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(conf["app"]["windows"][0]["url"], "play/index.html");
+        let page = include_str!("../../../../client/play/index.html");
+        assert!(page.contains("/src/main.tsx"), "{page}");
+    }
 }

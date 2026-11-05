@@ -3,7 +3,7 @@
 #
 #   deploy/smoke.sh http://localhost:8080
 #
-# Checks: /healthz, the client page, register + login, the /ws upgrade, and that a
+# Checks: /healthz, the website, the game page and the public API (T4.3), register + login, the /ws upgrade, and that a
 # client-supplied X-Forwarded-For / CF-Connecting-IP cannot dodge the per-IP auth rate
 # limit (T1.3). The last check consumes this machine's auth budget for about a minute.
 set -euo pipefail
@@ -20,7 +20,20 @@ ok "/healthz"
 
 page=$(curl "${curl_opts[@]}" "$base/")
 grep -qi '<script' <<<"$page" || fail "/ is not the client build"
-ok "client page"
+ok "website page"
+
+# T4.3: the game lives in /play/ (a different page of the same build); website routes such
+# as /highscores fall back to the website page.
+game=$(curl "${curl_opts[@]}" "$base/play/")
+grep -qi '<script' <<<"$game" && [[ $game != "$page" ]] || fail "/play/ is not the game page"
+hs=$(curl "${curl_opts[@]}" "$base/highscores")
+[[ $hs == "$page" ]] || fail "/highscores does not fall back to the website page"
+ok "game page (/play/) and website routes"
+status=$(curl "${curl_opts[@]}" "$base/api/status")
+grep -q '"online":true' <<<"$status" || fail "/api/status: $status"
+code=$(curl "${curl_opts[@]}" -o /dev/null -w '%{http_code}' "$base/api/highscores?category=level")
+[[ $code == 200 ]] || fail "/api/highscores answered $code"
+ok "/api/status and /api/highscores"
 
 email="smoke-$(date +%s)-$RANDOM@example.org"
 creds="{\"email\":\"$email\",\"password\":\"smoke-password-1\"}"

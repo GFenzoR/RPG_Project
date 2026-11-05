@@ -14,6 +14,22 @@
                                   │ backups diarios → S3                          │
                                   └───────────────────────────────────────────────┘
 ```
+### Rutas HTTP (T4.3)
+Caddy (`deploy/caddy-routes.caddy`) reparte una sola origin:
+
+| Ruta | Destino |
+|---|---|
+| `/api/*`, `/ws`, `/healthz` | gameserver: API HTTP (cuentas, personajes, `play`, y los públicos `status` y `highscores`; docs/05), WebSocket del juego y health |
+| `/play`, `/play/*` | página del juego del build del cliente (`client/play/index.html`) |
+| todo lo demás | sitio público (`client/index.html`): landing en `/`, `/highscores`, `/news` y `/news/<fecha>-<slug>`; primero los archivos estáticos del build (`/assets`, `/atlas`, `/audio`) |
+
+El cliente es un build multipágina de Vite (`client/`): las dos páginas comparten i18n,
+estilos y el selector de idioma. El atlas y los sonidos se piden desde la raíz del sitio,
+así que sirven a las dos páginas. La app de escritorio abre `play/index.html` directo. Las
+noticias (`data/news`) se publican en el build: no hay admin web ni tabla en la base.
+El handler de `/api/status` no toca el mundo: lee contadores atómicos que publica el game
+loop (principio 2).
+
 Un solo binario Go para todo el backend. Separar servicios es una decisión para cuando
 haya más de ~500 jugadores simultáneos; hasta entonces es complejidad sin beneficio.
 

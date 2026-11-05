@@ -2,7 +2,9 @@
 # tunnel, plain HTTP). Imported inside a site block.
 #
 #   /api/*, /ws, /healthz  → gameserver:8080 (HTTP API, WebSocket, health)
-#   /                       → static client build in /srv/client (SPA fallback to index.html)
+#   /play, /play/*          → the game page of the client build (/srv/client/play/index.html)
+#   everything else         → the public website (/srv/client/index.html: landing,
+#                             /highscores, /news; T4.3), static files of the build first
 
 encode zstd gzip
 
@@ -29,14 +31,24 @@ handle @backend {
 # static build here could not save anything. It arrives with patch submission to review
 # (milestone 4-5), which needs accounts and moderation.
 
-# Game client (static Vite build). Hashed assets are immutable; index.html is not cached so
-# a deploy is picked up on the next page load.
+# Client build (static Vite build, two pages; T4.3). Hashed assets are immutable; the rest
+# (pages, atlas, sounds) is revalidated, so a deploy is picked up on the next page load.
+@play path /play /play/*
+handle @play {
+	root * /srv/client
+	header Cache-Control "no-cache"
+	# /play has no file: it falls back to the game page, like any path under /play/.
+	try_files {path} /play/index.html
+	file_server
+}
+
 handle {
 	root * /srv/client
 	@hashed path /assets/*
 	header @hashed Cache-Control "public, max-age=31536000, immutable"
-	@html path / /index.html
-	header @html Cache-Control "no-cache"
+	@revalidate not path /assets/*
+	header @revalidate Cache-Control "no-cache"
+	# SPA fallback: /highscores and /news/<slug> are routes of the website page.
 	try_files {path} /index.html
 	file_server
 }
