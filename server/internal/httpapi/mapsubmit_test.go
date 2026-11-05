@@ -554,17 +554,33 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// The third: a body that is never sent. It must be answered anyway.
-	pr, pw := io.Pipe()
-	defer pw.Close()
-	resp, err := post(pr, 1<<20)
-	if err != nil {
-		t.Fatal(err)
+	// The third: a body that is never sent. It must be answered anyway. The stalled ones
+	// sent their first bytes, but their handlers may not hold their slots yet: until they
+	// do, the third can take one and wait for its body, so each try has a deadline (which
+	// frees that slot) and the test tries again.
+	var resp *http.Response
+	var b []byte
+	for try := 0; ; try++ {
+		pr, pw := io.Pipe()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		req, _ := http.NewRequestWithContext(ctx, "POST", srv.URL+"/api/maps/submissions", pr)
+		req.ContentLength = 1 << 20
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tok)
+		r, err := http.DefaultClient.Do(req)
+		if err == nil {
+			b, _ = io.ReadAll(r.Body)
+			r.Body.Close()
+			resp = r
+		}
+		cancel()
+		_ = pw.Close()
+		if resp != nil || try == 10 {
+			break
+		}
 	}
-	b, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), `"busy"`) {
-		t.Fatalf("third upload = %d %s, want 503 busy", resp.StatusCode, b)
+	if resp == nil || resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), `"busy"`) {
+		t.Fatalf("third upload = %v %s, want 503 busy", resp, b)
 	}
 	// Once the stalled ones end, a slot is free again.
 	for _, w := range writers {
@@ -574,7 +590,7 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 		<-done
 	}
 	body := submitBody(t, nil)
-	resp, err = post(strings.NewReader(body), int64(len(body)))
+	resp, err := post(strings.NewReader(body), int64(len(body)))
 	if err != nil {
 		t.Fatal(err)
 	}
