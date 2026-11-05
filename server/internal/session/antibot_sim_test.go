@@ -195,7 +195,9 @@ func playHabits(t *testing.T, hb habits, d time.Duration, seed uint64) (int, []s
 	})
 	prof := bot.Human()
 	r := rand.New(rand.NewPCG(seed, 5))
-	cl, p := h.join("Person", at(20, 20))
+	// Not h.join: the subtests run in parallel and its package-level id counter would race.
+	cl, p := h.joinChar(session.Character{ID: 1, AccountID: 1, Name: "Person", Vocation: "guardian",
+		Level: 1, Health: 145, Mana: 20, Pos: *at(20, 20), HasPos: true})
 	there := []pb.Direction{E, E, E, E, E, E, E, E, S, S, S, S}
 	back := []pb.Direction{N, N, N, N, W, W, W, W, W, W, W, W}
 	out := true
