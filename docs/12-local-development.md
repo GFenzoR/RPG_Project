@@ -55,6 +55,15 @@ Para probar los comandos de GM, dale un rol a tu cuenta de desarrollo y vuelve a
 auditoría y `make reports` la cola de reportes de jugadores (T4.1). Comandos en
 `02-game-design.md` ("Moderación").
 
+### Portal de mapas (T4.5)
+`http://localhost:5173/maps/submit`: sube un patch de `mapcli patch create` o del editor
+(Exportar patch) con una cuenta que tenga personaje. `make dev` y `make run-server` arrancan
+el servidor con `-map-submit-min-account-age 0` (`DEV_SERVER_FLAGS`), así una cuenta recién
+creada puede enviar; en producción tiene que tener 24 h. Para revisar la cola
+(`/maps/review`), dale `gm` a otra cuenta con `make set-role` y entra con ella. El PR en
+GitHub lo abre el worker de T4.5 (2/2); mientras tanto, un envío aprobado se aplica a mano
+con `mapcli patch apply` sobre el patch descargado.
+
 ### Mapa del servidor
 El servidor carga el mapa compilado (`build/world.bin`), no el JSON de `world/`:
 ```

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
 import type { NewsPost, SiteContent } from "../content-types.ts";
 import { Markdown } from "./Markdown.tsx";
+import { MinePage, ReviewPage, SubmitPage } from "./Maps.tsx";
 import { excerpt } from "./markdown.ts";
 import {
   LEVEL,
@@ -87,6 +88,13 @@ function Link(props: {
   );
 }
 
+/** Internal links for the map portal's pages. */
+const mapLink = (href: string, text: string, current?: boolean): JSX.Element => (
+  <Link href={href} current={current ?? false}>
+    {text}
+  </Link>
+);
+
 function getJSON<T>(path: string, signal: AbortSignal): Promise<T> {
   return fetch(path, { signal, credentials: "omit" }).then((r) => {
     if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
@@ -159,7 +167,8 @@ export function Site(props: SiteProps): JSX.Element {
     }
     document.getElementById("main")?.focus({ preventScroll: true });
   }, [loc.pathname]);
-  const section = route.page === "post" ? "news" : route.page;
+  const section =
+    route.page === "post" ? "news" : route.page.startsWith("maps_") ? "maps" : route.page;
   return (
     <>
       <a class="skip" href="#main">
@@ -178,6 +187,9 @@ export function Site(props: SiteProps): JSX.Element {
           </Link>
           <Link href="/news" current={section === "news"}>
             {t("site.nav.news")}
+          </Link>
+          <Link href="/maps/submit" current={section === "maps"}>
+            {t("site.nav.maps")}
           </Link>
         </nav>
         <div class="site-tools">
@@ -205,6 +217,9 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       highscores: t("site.highscores.title"),
       news: t("site.news.title"),
       post: "",
+      maps_submit: t("site.maps.submit.title"),
+      maps_mine: t("site.maps.mine.title"),
+      maps_review: t("site.maps.review.title"),
       not_found: t("site.not_found.title"),
     };
     let title = titles[route.page];
@@ -223,6 +238,20 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       return <NewsList {...props} />;
     case "post":
       return <NewsDetail {...props} slug={route.slug} />;
+    case "maps_submit":
+      return <SubmitPage t={t} lang={props.lang} link={mapLink} />;
+    case "maps_mine":
+      return <MinePage t={t} lang={props.lang} link={mapLink} />;
+    case "maps_review":
+      return (
+        <ReviewPage
+          t={t}
+          lang={props.lang}
+          link={mapLink}
+          search={props.search}
+          {...(route.id === undefined ? {} : { id: route.id })}
+        />
+      );
     default:
       return (
         <section class="card" data-testid="not-found">

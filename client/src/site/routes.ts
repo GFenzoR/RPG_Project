@@ -6,6 +6,9 @@ export type Route =
   | { page: "highscores" }
   | { page: "news" }
   | { page: "post"; slug: string }
+  | { page: "maps_submit" }
+  | { page: "maps_mine" }
+  | { page: "maps_review"; id?: number }
   | { page: "not_found" };
 
 /** The website's route for a path. The game is /play/ (another page, not routed here). */
@@ -16,6 +19,11 @@ export function parseRoute(pathname: string): Route {
   if (path === "/news") return { page: "news" };
   const m = /^\/news\/([a-z0-9-]+)$/.exec(path);
   if (m?.[1]) return { page: "post", slug: m[1] };
+  if (path === "/maps" || path === "/maps/submit") return { page: "maps_submit" };
+  if (path === "/maps/mine") return { page: "maps_mine" };
+  if (path === "/maps/review") return { page: "maps_review" };
+  const r = /^\/maps\/review\/([1-9][0-9]{0,15})$/.exec(path);
+  if (r?.[1]) return { page: "maps_review", id: Number(r[1]) };
   return { page: "not_found" };
 }
 

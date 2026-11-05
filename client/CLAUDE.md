@@ -249,6 +249,20 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   "Jugar" → login → juego conservando el idioma elegido en el juego tras recargar). Los E2E
   del juego van a `/play/?lang=es`.
 
+## Notas de T4.5
+- Portal de mapas en el sitio (`src/site/Maps.tsx`): `/maps/submit`, `/maps/mine` y
+  `/maps/review[/<id>]` (rutas en `site/routes.ts`). Helpers puros con tests en
+  `site/maps.ts` (prechequeo del archivo, clave i18n de cada error, tamaños, enlace del PR
+  solo si es `https://github.com`). La API está en `net/api.ts` (`mapsApi`); `ApiError`
+  trae `detail` (el código del chequeo del patch → `site.maps.patch_error.<código>`).
+- Sin sesión, una página del portal muestra el login del propio sitio (cookie de `/api`,
+  la misma del juego). El sitio no conoce roles: `GET .../mine` dice `can_review` y el
+  servidor rechaza lo demás. Títulos, descripciones y motivos son texto del jugador:
+  siempre como texto (`.user-text`, `pre-wrap`), nunca `innerHTML`.
+- E2E: `e2e/maps.spec.ts` exporta un patch real con `mapcli` (pinta la parcela de comunidad
+  de Puerto en una copia temporal de `world/`), lo envía por el sitio, y un gm sembrado
+  con `psql` lo descarga y lo aprueba; un segundo envío se rechaza con motivo.
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

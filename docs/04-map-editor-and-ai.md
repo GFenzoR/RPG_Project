@@ -352,6 +352,80 @@ Prueba local, sin GitHub: `make map-pr BASE=main HEAD=<rama>` (reporte y PNG en
 confianza del propio reporte y por eso es solo una vista previa). Tests:
 `packages/map-format/src/patch/plots.test.ts` y `tools/mapcli/src/prcheck.test.ts`.
 
+### Portal de envío de mapas (T4.5)
+Para quien no usa git: el editor (o `mapcli patch create`) exporta un map patch y el sitio
+lo manda a revisión. Un moderador lo aprueba o rechaza, y uno aprobado se abre como PR en
+este repo, donde corren los checks de siempre (sección anterior). T4.5 llega en dos PR:
+el portal y la cola (1/2) y el worker que abre el PR (2/2).
+
+**Flujo:**
+1. El jugador, con sesión, entra a `/maps/submit` (sitio público, `client/src/site/Maps.tsx`;
+   si no tiene sesión, el mismo sitio le muestra un login). Sube el `.rpgpatch.json`, pone
+   título y descripción, elige con qué personaje se lo acredita y acepta la licencia.
+2. El servidor (`httpapi/mapsubmit.go`) chequea el patch como entrada no confiable
+   (`server/internal/mappatch`) y lo guarda en `map_submissions` (migración 00010) como
+   `pending`, con su `audit_log` (`map_submit`).
+3. `/maps/mine` muestra al autor el estado de cada envío y, si se rechazó, el motivo.
+4. Un gm o admin abre `/maps/review` (la cola, por estado), mira el detalle (archivos
+   tocados agrupados por isla, tamaño, autor, sha256, descripción), descarga el patch para
+   revisarlo con `mapcli patch diff` o en el editor (Importar patch), y lo aprueba o lo
+   rechaza con motivo. Cada decisión y cada descarga quedan en `audit_log`
+   (`map_approve`, `map_reject`, `map_download`, fuente `web`).
+5. Aprobado = `approved`. El worker del PR 2/2 lo toma de la cola de la base (contrato
+   abajo) y lo deja en `pr_opened` (con la URL) o `failed` (con un código fijo).
+
+**Qué chequea el servidor (y qué no).** Es una primera barrera barata, no la validación
+del mapa: el merge, los esquemas, las parcelas `community_plot` y el validador los corre
+el check del PR (`mapcli pr-check`) con el mismo código TS de siempre. `mappatch.Validate`:
+- tamaño (`-map-submit-max-bytes`, 2 MiB, muy por debajo de los 32 MB de `parsePatch`) y
+  hasta 256 archivos;
+- UTF-8 válido, un solo valor JSON, sin claves repetidas (Go y JS se quedarían con copias
+  distintas), sin campos desconocidos (comparados byte a byte: `encoding/json` ignora
+  mayúsculas) y a lo sumo 8 niveles;
+- `kind: "rpg-map-patch"` y **solo formato 2** (la base viaja en el patch; el worker no
+  tiene que buscarla en git);
+- `base_ref` con la misma regex que `parsePatch`; las rutas, con la misma lista que
+  `patchPath` (el fixture `packages/map-format/src/patch/testdata/paths.json` lo leen los
+  tests de los dos lados, así no se separan);
+- `base` (`sha256:<hex>` o `null`), `base_text` obligatorio con base y con su hash
+  correcto, `content` string o `null`, nunca los dos `null`, y sin archivos sin cambios;
+- los caracteres prohibidos de los mapas (`FORBIDDEN_CHARS`) en `content` y `base_text`,
+  más U+FFFD: es lo que el decodificador de Go hace de un `\ud800` suelto que JS
+  conservaría. Los escapes YAML (`"\x7f"`) los rechaza después `parsePatch`.
+El error es un código fijo (`site.maps.patch_error.<código>` en el sitio) y, a lo sumo, el
+índice del archivo: nunca texto del patch. El patch se guarda tal cual (sha256 de esos
+bytes) y nunca se ejecuta ni se interpreta fuera de estos chequeos.
+
+**Límites y abuso.** 3 envíos guardados por cuenta en 24 h (`-map-submit-per-day`, contado
+en la misma transacción con la cuenta bloqueada `FOR UPDATE`), cuentas de al menos 24 h
+(`-map-submit-min-account-age`), 5 intentos por minuto por cuenta, 2 chequeos a la vez, y
+el mismo patch de una cuenta no puede estar dos veces pendiente. Una cuenta baneada o
+deshabilitada no envía.
+
+**Licencia (decisión, a confirmar por el dueño del repo).** Ni `docs/00` ni
+`world/CONTRIBUTORS.md` fijaban una. El checkbox acepta **CC BY 4.0**
+(`httpapi.MapLicense = "cc-by-4.0"`): la misma familia que el arte (`assets/CREDITS.md`),
+permite usar y modificar el mapa con atribución, y la atribución es justamente la fila de
+`world/CONTRIBUTORS.md` y el crédito del PR. Cada envío guarda el id de la licencia que su
+autor aceptó; cambiarla es un id nuevo, no reescribir los viejos. El crédito es siempre el
+nombre del personaje elegido, nunca el email.
+
+**Moderación.** Solo gm y admin (rol de `accounts`, que asigna `gameserver admin set-role`),
+leído en cada pedido y otra vez dentro de la transacción de la decisión. Un player que
+conoce las URLs recibe `403` en la cola y en la decisión, y `404` en el detalle y la
+descarga de envíos ajenos. Pendiente para más adelante (opcional en T4.5): avisar a los gm
+conectados cuando llega un envío.
+
+**Contrato con el worker (PR 2/2).** La cola es la tabla: el worker toma el aprobado más
+viejo que toque con
+`SELECT … FROM map_submissions WHERE status = 'approved' AND (next_attempt_at IS NULL OR
+next_attempt_at <= now) ORDER BY reviewed_at, id LIMIT 1 FOR UPDATE SKIP LOCKED`
+(índice parcial `map_submissions_approved_idx`), y lo pasa a `pr_opened` (`pr_url`,
+`pr_number`) o `failed` (`failure`, un código `[a-z_]` fijo, nunca un mensaje de GitHub o
+del merge), o lo deja `approved` con `attempts + 1` y un `next_attempt_at` posterior para
+reintentar. La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y
+`reason` en `rejected`.
+
 ## Flujo recomendado para que una IA construya una zona
 1. `map_info` y `content_search` para saber qué hay disponible.
 2. Generar base: `mapcli generate` (forma de isla, costas, ríos con semilla) o pintar

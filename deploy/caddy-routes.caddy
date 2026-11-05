@@ -31,10 +31,10 @@ handle @backend {
 # gameserver's /metrics, Prometheus and Alertmanager are never routed.
 import caddy-grafana-{$GRAFANA_PUBLIC:off}.caddy
 
-# Map editor (docs/04): published in a later phase. Today the editor saves chunks to world/
-# through a local development backend (Vite dev server on the contributor's machine), so a
-# static build here could not save anything. It arrives with patch submission to review
-# (milestone 4-5), which needs accounts and moderation.
+# Map editor (docs/04): not published. It saves chunks to world/ through a local
+# development backend (Vite dev server on the contributor's machine), so a static build
+# here could not save anything. Contributors export a map patch from it and submit it on
+# the website's /maps/submit (T4.5), which needs an account and goes through moderation.
 
 # Client build (static Vite build, two pages; T4.3). Hashed assets are immutable; the rest
 # (pages, atlas, sounds) is revalidated, so a deploy is picked up on the next page load.

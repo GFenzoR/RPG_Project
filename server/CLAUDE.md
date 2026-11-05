@@ -33,6 +33,7 @@ server/
   internal/auth/       cuentas, contraseñas (argon2id), OAuth Google/Discord, tokens
   internal/httpapi/    API HTTP: login, lista de personajes, health; public.go: status y
                        ranking públicos con cache (T4.3)
+  internal/mappatch/   chequeo de un map patch subido como entrada no confiable (T4.5, puro)
   internal/metrics/    métricas Prometheus (tick, red, proceso); /metrics en -metrics-addr
   internal/clock/      reloj inyectable (real y falso para tests)
   internal/sim/        harness de simulación determinista para tests
@@ -72,6 +73,14 @@ server/
   en docs/07); si cambias una, mírala con `EXPLAIN ANALYZE` sobre muchos personajes. Las
   exclusiones (staff, deshabilitadas, baneadas) viven en las queries: si agregas borrado
   de personajes, filtra ahí.
+- **Portal de mapas (T4.5):** `httpapi/mapsubmit.go` + `store/mapsubmissions.go` +
+  `mappatch`. El patch es entrada no confiable: `mappatch.Validate` sigue las reglas de
+  `parsePatch` (rutas con el fixture compartido `packages/map-format/src/patch/testdata/
+  paths.json`) y es más estricto donde Go y JS leerían distinto. Sus errores son códigos
+  fijos, nunca texto del patch. El merge y las parcelas no se hacen en Go: los hace el
+  check del PR (TS). El rol de moderación se lee en cada pedido y otra vez en la
+  transacción de la decisión; toda acción va a `audit_log` con fuente `web`. La cola del
+  worker es la tabla (contrato en la migración 00010 y en docs/04).
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

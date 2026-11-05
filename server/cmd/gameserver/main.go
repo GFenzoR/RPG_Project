@@ -66,6 +66,8 @@ type options struct {
 	startTown string
 	// boatRoutes replaces data/boat_routes.yaml (E2E fixtures; empty = the data file).
 	boatRoutes string
+	// mapSubmit bounds the map submission portal (T4.5).
+	mapSubmit httpapi.MapSubmitLimits
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -91,6 +93,10 @@ func main() {
 	flag.StringVar(&o.metricsAddr, "metrics-addr", envOr("RPG_METRICS_ADDR", defaultMetricsAddr), "internal listener for Prometheus /metrics, never public (empty = off); default $RPG_METRICS_ADDR or "+defaultMetricsAddr)
 	flag.DurationVar(&o.metricsLinger, "metrics-linger", 20*time.Second, "after shutdown, keep /metrics up this long if database writes were abandoned, so Prometheus scrapes them (0 = off)")
 	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
+	def := httpapi.DefaultMapSubmitLimits
+	flag.IntVar(&o.mapSubmit.MaxBytes, "map-submit-max-bytes", def.MaxBytes, "largest map patch the website accepts, in bytes (T4.5)")
+	flag.IntVar(&o.mapSubmit.PerDay, "map-submit-per-day", def.PerDay, "map submissions per account in 24 hours")
+	flag.DurationVar(&o.mapSubmit.MinAccountAge, "map-submit-min-account-age", def.MinAccountAge, "how old an account must be to submit maps (0 = no minimum)")
 	flag.Parse()
 	_, o.metricsExplicit = os.LookupEnv("RPG_METRICS_ADDR")
 	flag.Visit(func(f *flag.Flag) {
@@ -215,6 +221,7 @@ func run(logger *slog.Logger, o options) error {
 		MinClientVersion: o.minClientVersion,
 		AuthRateLimit:    authRateLimit(o.authRateBurst),
 		StartTown:        o.startTown,
+		MapSubmitLimits:  o.mapSubmit,
 	})
 	if err != nil {
 		return err

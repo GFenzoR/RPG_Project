@@ -15,10 +15,13 @@ export interface Character {
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
-  constructor(status: number, code: string) {
+  /** More precise reason of some codes (invalid_patch: the patch check's code). */
+  readonly detail: string | undefined;
+  constructor(status: number, code: string, detail?: string) {
     super(`api ${status} ${code}`);
     this.status = status;
     this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -60,8 +63,12 @@ async function send(
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const { status, data } = await send(method, path, body);
   if (status < 200 || status > 299) {
-    const err = (data as { error?: { code?: unknown } } | undefined)?.error;
-    throw new ApiError(status, typeof err?.code === "string" ? err.code : "internal");
+    const err = (data as { error?: { code?: unknown; detail?: unknown } } | undefined)?.error;
+    throw new ApiError(
+      status,
+      typeof err?.code === "string" ? err.code : "internal",
+      typeof err?.detail === "string" ? err.detail : undefined,
+    );
   }
   return data as T;
 }
@@ -78,4 +85,72 @@ export const api = {
     (await call<{ character: Character }>("POST", "/api/characters", { name, vocation })).character,
   play: (characterId: number): Promise<{ session_token: string; expires_at: string }> =>
     call("POST", "/api/play", { character_id: characterId }),
+};
+
+/** A map submission of the portal (T4.5, docs/05 "Envío de mapas"). */
+export interface MapSubmission {
+  id: number;
+  title: string;
+  description: string;
+  author: string;
+  license: string;
+  status: "pending" | "approved" | "rejected" | "pr_opened" | "failed";
+  sha256: string;
+  size: number;
+  base_ref: string;
+  files: { path: string; action: "create" | "modify" | "delete" }[];
+  created_at: string;
+  updated_at: string;
+  reviewed_at?: string;
+  reason?: string;
+  failure?: string;
+  pr_url?: string;
+  pr_number?: number;
+}
+
+export interface MySubmissions {
+  submissions: MapSubmission[];
+  can_review: boolean;
+  license: string;
+  max_bytes: number;
+  per_day: number;
+}
+
+export interface NewSubmission {
+  title: string;
+  description: string;
+  character_id: number;
+  license: string;
+  /** The text of the .rpgpatch.json file. */
+  patch: string;
+}
+
+const submissionPath = (id: number): string => `/api/maps/submissions/${String(id)}`;
+
+export const mapsApi = {
+  mine: (): Promise<MySubmissions> => call("GET", "/api/maps/submissions/mine"),
+  submit: async (s: NewSubmission): Promise<MapSubmission> =>
+    (await call<{ submission: MapSubmission }>("POST", "/api/maps/submissions", s)).submission,
+  queue: async (status: string): Promise<MapSubmission[]> =>
+    (
+      await call<{ submissions: MapSubmission[] }>(
+        "GET",
+        `/api/maps/submissions?${new URLSearchParams({ status }).toString()}`,
+      )
+    ).submissions,
+  get: async (id: number): Promise<MapSubmission> =>
+    (await call<{ submission: MapSubmission }>("GET", submissionPath(id))).submission,
+  /** Where the browser downloads the patch (an attachment; the server sets the name). */
+  patchUrl: (id: number): string => `${submissionPath(id)}/patch`,
+  review: async (
+    id: number,
+    decision: "approve" | "reject",
+    reason: string,
+  ): Promise<MapSubmission> =>
+    (
+      await call<{ submission: MapSubmission }>("POST", `${submissionPath(id)}/review`, {
+        decision,
+        reason,
+      })
+    ).submission,
 };

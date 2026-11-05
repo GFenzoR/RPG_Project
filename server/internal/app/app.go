@@ -76,6 +76,8 @@ type Config struct {
 	// (internal/metrics). One App per *metrics.Metrics: New registers players_online on it
 	// and fails if that is already registered.
 	Metrics *metrics.Metrics
+	// MapSubmitLimits bounds the map submission portal (T4.5; httpapi.MapSubmitLimits).
+	MapSubmitLimits httpapi.MapSubmitLimits
 	// ShutdownTimeout bounds the final saves and the closing of connections (default 10 s).
 	ShutdownTimeout time.Duration
 }
@@ -117,6 +119,8 @@ func New(cfg Config) (*App, error) {
 	a.Auth = authSvc
 	// The ranking reads Postgres; fake stores of tests may not implement it.
 	highscores, _ := cfg.Store.(httpapi.Highscores)
+	// The map submission portal (T4.5) also lives in Postgres only.
+	submissions, _ := cfg.Store.(httpapi.MapSubmissions)
 	skills := make(map[string]int, len(cfg.Balance.Skills.Base))
 	for id, b := range cfg.Balance.Skills.Base {
 		skills[id] = b.StartLevel
@@ -140,6 +144,9 @@ func New(cfg Config) (*App, error) {
 		Status:        a.status,
 		Version:       buildinfo.Version,
 		Observe:       httpObserver(cfg.Metrics),
+
+		MapSubmissions:  submissions,
+		MapSubmitLimits: cfg.MapSubmitLimits,
 	})
 	if err != nil {
 		return nil, err

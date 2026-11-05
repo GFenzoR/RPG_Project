@@ -115,6 +115,32 @@ type InventoryItem struct {
 	Attributes  []byte
 }
 
+type MapSubmission struct {
+	ID                int64
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	AccountID         int64
+	AuthorCharacterID int64
+	AuthorName        string
+	Title             string
+	Description       string
+	License           string
+	Status            string
+	Sha256            string
+	SizeBytes         int32
+	BaseRef           string
+	Files             []byte
+	Patch             []byte
+	ReviewedAt        pgtype.Timestamptz
+	ReviewedBy        pgtype.Int8
+	Reason            pgtype.Text
+	Failure           pgtype.Text
+	PrUrl             pgtype.Text
+	PrNumber          pgtype.Int4
+	Attempts          int32
+	NextAttemptAt     pgtype.Timestamptz
+}
+
 type PlayerReport struct {
 	ID                  int64
 	CreatedAt           pgtype.Timestamptz
