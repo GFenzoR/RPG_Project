@@ -11,6 +11,7 @@ Lee `docs/12-local-development.md` ("Cliente de escritorio") y `docs/09-deployme
 - Seguridad: comandos deny-by-default (`build.rs` declara el manifiesto) y la capability
   `default` solo concede esos dos; sin plugins de shell/fs; sin acceso IPC remoto.
   `freezePrototype` está apagado porque rompe Preact (asigna `constructor` a sus vnodes).
+- La ventana abre `play/index.html` (el juego; `/` es el sitio público desde T4.3).
 - Versión: `tauri.conf.json` apunta a `client/package.json`; no pongas otra.
 - Verificación: `make desktop-test`; si tocas el webview o el flujo de login,
   `make desktop-smoke` (Linux) y revisa `e2e/screenshots/` con Read.

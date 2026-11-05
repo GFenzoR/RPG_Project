@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -165,11 +166,14 @@ type World struct {
 	diag int64 // diagonal_cost in thousandths
 	log  *slog.Logger
 
-	nextID   uint32
-	players  []*Player // ordered by creature id: deterministic iteration
-	byClient map[Client]*Player
-	byChar   map[int64]*Player
-	sectors  map[uint64][]*Player
+	nextID  uint32
+	players []*Player // ordered by creature id: deterministic iteration
+	// published is len(players), stored by the loop goroutine whenever it changes, so
+	// other goroutines (GET /api/status) can read it without touching the world.
+	published atomic.Int32
+	byClient  map[Client]*Player
+	byChar    map[int64]*Player
+	sectors   map[uint64][]*Player
 
 	// unsaved holds the final snapshot of characters that left until the database
 	// acknowledges it: a quick re-login must not load an older row.
@@ -397,8 +401,12 @@ func New(cfg Config) (*World, error) {
 	return w, nil
 }
 
-// Online returns how many players are in the world.
+// Online returns how many players are in the world. Loop goroutine only.
 func (w *World) Online() int { return len(w.players) }
+
+// PublishedOnline returns how many players are in the world as of the last join or
+// leave. Safe from any goroutine (T4.3, /api/status).
+func (w *World) PublishedOnline() int { return int(w.published.Load()) }
 
 // Players returns the online players ordered by creature id. Loop goroutine only.
 func (w *World) Players() []*Player { return w.players }

@@ -221,6 +221,34 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   sin tocar la base. Los E2E que ponen `town = 'puerto'` a un personaje nuevo también ven
   el panel.
 
+## Notas de T4.3
+- Dos páginas en el mismo build (`vite.config.ts`): `index.html` es el sitio público
+  (`src/site/`: `main.tsx`, `Site.tsx`, `site.css`) en `/`, `/highscores` y `/news[/<slug>]`;
+  `play/index.html` es el juego (`src/main.tsx`) en `/play/`. Comparten `i18n/`,
+  `client.css` y `LanguagePicker`. La app de escritorio abre `play/index.html`.
+- Bajo `/play/` las URLs relativas apuntarían a `/play/...`: el atlas y los sonidos se piden
+  desde la raíz (`new URL("/atlas/", ...)`, `siteRoot()` en `audio/engine.ts`). No uses
+  `<base href>`: la CSP de escritorio tiene `base-uri 'none'`.
+- `virtual:rpg-site` (`vite/content.ts`, `loadSiteContent`): catálogos `client.yaml`,
+  `vocations.yaml` y `site.yaml`, ids de vocaciones y skills (categorías del ranking) y las
+  noticias de `data/news`, de la más nueva a la más vieja. Se lee al arrancar Vite.
+- El router del sitio es History API (`navigate`, `Link` con `<a href>` reales);
+  `site/routes.ts` (puro, con tests) parsea rutas y filtros del ranking, que viven en la
+  query (`?category=&vocation=&page=`). "Jugar" lleva a `/play/` sin `?lang=`.
+- Idioma entre páginas: las dos comparten `rpg.lang` en `localStorage`. Cada página lee
+  `?lang=` una sola vez al arrancar (`takeLangParam`): lo guarda como elección y lo saca de
+  la URL con `history.replaceState`. Si quedara en la URL, ganaría sobre un idioma elegido
+  después y se perdería al recargar.
+- Al navegar a otra ruta del sitio, el foco va a `#main` (`tabIndex=-1`); un cambio de
+  filtros (solo query) no lo mueve. Una ruta desconocida muestra `site.not_found.*` (la SPA
+  responde 200 a cualquier ruta).
+- Noticias: `site/markdown.ts` (puro, con tests) arma bloques y `site/Markdown.tsx` los dibuja
+  como texto: nunca `innerHTML`.
+- E2E: `e2e/site.spec.ts` (landing es/en a 1280 y 375 px, ranking con un personaje creado,
+  noticia, ruta desconocida, foco, paginación con 21 montaraces sembrados con `psql`, y
+  "Jugar" → login → juego conservando el idioma elegido en el juego tras recargar). Los E2E
+  del juego van a `/play/?lang=es`.
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

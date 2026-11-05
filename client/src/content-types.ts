@@ -114,3 +114,24 @@ export interface ClientContent {
   /** Language → key → text. */
   i18n: Record<string, Record<string, string>>;
 }
+
+/** A post of data/news (T4.3); title and body per language. */
+export interface NewsPost {
+  /** File name without .yaml ("2026-11-01-welcome"): the URL /news/<slug>. */
+  slug: string;
+  date: string;
+  title: Record<string, string>;
+  /** Minimal Markdown subset (site/markdown.ts), rendered as text. */
+  body: Record<string, string>;
+}
+
+/** Shape of the `virtual:rpg-site` module (the public website, T4.3). */
+export interface SiteContent {
+  /** client.yaml, vocations.yaml and site.yaml per language. */
+  i18n: Record<string, Record<string, string>>;
+  vocations: string[];
+  /** Skill ids of data/balance.yaml, in their order: the highscore categories. */
+  skills: string[];
+  /** Newest first. */
+  news: NewsPost[];
+}

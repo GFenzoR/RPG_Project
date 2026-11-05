@@ -18,13 +18,16 @@ Vercel, se puede sumar sin cambiar el servidor.
 ## Topología en casa
 ```
 Internet ──HTTPS/WSS──▶ Cloudflare Tunnel (o Tailscale) ──▶ tu PC (Docker Compose)
-                                                            ├─ caddy (cliente, editor, /api y /ws → gameserver)
+                                                            ├─ caddy (sitio en /, juego en /play, /api y /ws → gameserver)
                                                             ├─ gameserver
                                                             └─ postgres
 ```
 - Mismo `docker compose` que producción (T1.18) con un override `deploy/docker-compose.home.yml`:
   sin backups a S3, Caddy en HTTP interno (el túnel pone el TLS).
 - **No hay que abrir puertos del router** ni tener IP fija.
+- Las rutas son las de producción (`deploy/caddy-routes.caddy`, compartido): el link que
+  compartes abre el sitio público (landing, ranking, noticias; T4.3) y el botón "Jugar"
+  lleva al juego en `/play/`. Si alguien tenía guardado el link viejo, verá la landing.
 
 ## Cómo exponerlo
 | Opción | Para quién | Costo | Notas |

@@ -241,6 +241,8 @@ class Validator {
     const tutorial = single("tutorial.yaml", "tutorial", false);
     if (tutorial) this.checkTutorial(tutorial, dataDir);
 
+    for (const src of this.loadDir(dataDir, "news", "news", known)) this.checkNews(src);
+
     for (const entry of readdirSync(dataDir).sort()) {
       if (!known.has(entry)) {
         this.error(
@@ -302,6 +304,19 @@ class Validator {
       return;
     }
     this.index.ids[kind].set(id, { src, path });
+  }
+
+  /** data/news/<YYYY-MM-DD>-<slug>.yaml (T4.3): the name gives the URL; date must match it. */
+  private checkNews(src: SourceFile): void {
+    const name = src.file.replace(/^.*\//, "");
+    const m = /^(\d{4}-\d{2}-\d{2})-([a-z0-9]+(?:-[a-z0-9]+)*)\.yaml$/.exec(name);
+    if (!m) {
+      this.error(src, [], "news file names are <YYYY-MM-DD>-<slug>.yaml (slug: a-z, 0-9, -)");
+      return;
+    }
+    const date = isObj(src.data) ? src.data["date"] : undefined;
+    if (typeof date === "string" && date !== m[1])
+      this.error(src, ["date"], `date "${date}" must match the file name (${m[1] ?? ""})`);
   }
 
   private checkUniqueIds(src: SourceFile): void {

@@ -9,7 +9,8 @@ deploy/
   Dockerfile.web            Caddy + build estático del cliente
   Dockerfile.backup         pg_dump 16 + AWS CLI
   Caddyfile                 sitio con TLS automático; importa caddy-routes.caddy
-  caddy-routes.caddy        /api, /ws y /healthz → gameserver, / → cliente (compartido con docs/13)
+  caddy-routes.caddy        /api, /ws y /healthz → gameserver; /play → juego; resto → sitio
+                            público (landing, ranking, noticias; T4.3). Compartido con docs/13
   .env.example              variables necesarias (sin valores reales)
   backup.sh                 pg_dump comprimido con retención; copia a S3 opcional
   deploy.sh                 pull + backup + reinicio (migraciones al arrancar)
@@ -55,6 +56,12 @@ Las publica `.github/workflows/images.yml` en GitHub Container Registry, para
   El servidor lo carga con `-world=/app/build/world.bin` (también `$RPG_WORLD`).
 - El cliente se compila con su script `build` (`pnpm --filter @rpg/client build`, que
   escribe `build/client/` con el atlas de sprites) y Caddy lo sirve desde `/srv/client`.
+  Son dos páginas (T4.3): `index.html` es el sitio público (landing, `/highscores`,
+  `/news/...`, con fallback a esa página) y `play/index.html` es el juego (`/play` y
+  `/play/*`). Solo `/assets/*` (con hash) se cachea como inmutable; páginas, atlas y
+  sonidos llevan `Cache-Control: no-cache` (revalidan con ETag), así un deploy se ve en la
+  siguiente carga. `deploy/smoke.sh` revisa las dos páginas, `/api/status` y
+  `/api/highscores`.
 - En los PR que tocan algo que entra en una imagen, el workflow solo **construye** (sin
   push), así un Dockerfile roto falla en el PR.
 
@@ -203,6 +210,8 @@ git tag desktop-v0.2.0 && git push origin desktop-v0.2.0
   `/ws` se autentica con el token de un uso del `Hello`, nunca con cookie, así que permitir
   esos orígenes no habilita que otra página use la sesión de nadie.
 - Para dejar fuera apps viejas: sube `-min-client-version` del gameserver (docs/05).
+- La app abre directo el juego (`play/index.html`, `app.windows[0].url` de
+  `tauri.conf.json`), nunca la landing (T4.3).
 
 ### Sin firma de código (por ahora)
 - **Windows:** SmartScreen muestra "Windows protegió tu PC" → "Más información" →

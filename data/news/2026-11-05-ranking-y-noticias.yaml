@@ -1,0 +1,22 @@
+# News post (T4.3, docs/06-content-data.md "Noticias"). Body: minimal Markdown subset.
+date: "2026-11-05"
+title:
+  es: "Nuevo sitio: ranking y noticias"
+  en: "New website: highscores and news"
+body:
+  es: |
+    El sitio tiene portada propia. Desde aquí ves si el servidor está en línea, cuántos
+    jugadores hay conectados y las últimas noticias.
+
+    El **ranking** muestra los mejores personajes por nivel y por cada habilidad, con
+    filtro por vocación. Se actualiza cada minuto.
+
+    El juego ahora vive en su propia página: usa el botón **Jugar**.
+  en: |
+    The website has its own front page. From here you can see whether the server is
+    online, how many players are connected and the latest news.
+
+    The **highscores** list the best characters by level and by each skill, with a
+    vocation filter. They refresh every minute.
+
+    The game now lives on its own page: use the **Play** button.

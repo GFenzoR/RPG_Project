@@ -70,6 +70,11 @@ export interface AudioPorts {
 }
 
 /** The browser's implementation of the ports. */
+/** The site root ("/"), where atlas/ and audio/ are served, whatever page loaded us. */
+export function siteRoot(): string {
+  return new URL("/", document.baseURI).href;
+}
+
 export function browserPorts(): AudioPorts {
   return {
     createContext() {
@@ -80,7 +85,8 @@ export function browserPorts(): AudioPorts {
     },
     async fetch(url) {
       // Pack file names may have capitals and spaces (vendor/<pack>/Sound Pack/x y.ogg).
-      const res = await fetch(encodeURI(url));
+      // Resolved from the site root: the game page lives in /play/ (T4.3).
+      const res = await fetch(new URL(encodeURI(url), siteRoot()).href);
       if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
       return res.arrayBuffer();
     },

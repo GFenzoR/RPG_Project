@@ -4,7 +4,9 @@ package app_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
@@ -114,11 +116,23 @@ func TestBotEntersAndWalks(t *testing.T) {
 	if got := gauge(t, mets, "ws_sent_bytes_total"); got <= 0 {
 		t.Fatalf("ws_sent_bytes_total = %v", got)
 	}
+	// T4.3: the public status reads the count the loop publishes; the ranking reads Postgres.
+	if got := getStatus(t, srv.URL); !got.Online || got.Players != 2 {
+		t.Fatalf("status = %+v, want online with 2 players", got)
+	}
+	if resp, err := http.Get(srv.URL + "/api/highscores?category=sword"); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("highscores = %v %v", resp, err)
+	} else {
+		_ = resp.Body.Close()
+	}
 
 	if err := b1.Logout(ctx); err != nil {
 		t.Fatal(err)
 	}
 	waitStat(ctx, t, b2, func(s bot.Stats) bool { return s.Disappear >= 1 })
+	if got := getStatus(t, srv.URL); got.Players != 1 {
+		t.Fatalf("status after a logout = %+v, want 1 player", got)
+	}
 
 	// The final save reaches Postgres shortly after the logout.
 	deadline := wall.Now().Add(5 * time.Second)
@@ -314,4 +328,23 @@ func TestStaffBan(t *testing.T) {
 		}
 		<-wall.After(20 * time.Millisecond)
 	}
+}
+
+type statusBody struct {
+	Online  bool
+	Players int
+}
+
+func getStatus(t *testing.T, base string) statusBody {
+	t.Helper()
+	resp, err := http.Get(base + "/api/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var b statusBody
+	if err := json.NewDecoder(resp.Body).Decode(&b); err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

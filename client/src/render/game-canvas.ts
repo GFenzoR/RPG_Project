@@ -167,7 +167,8 @@ export async function createGameCanvas(
 ): Promise<GameCanvas> {
   const { world, content, t } = opts;
   TextureStyle.defaultOptions.scaleMode = "nearest";
-  const atlas = await Atlas.load(new URL("atlas/", document.baseURI).href);
+  // From the site root: the game page lives in /play/ (T4.3).
+  const atlas = await Atlas.load(new URL("/atlas/", document.baseURI).href);
   const T = atlas.tileSize;
   const app = new Application();
   await app.init({

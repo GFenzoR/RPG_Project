@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/news.schema.json",
+  "title": "News post (data/news/<YYYY-MM-DD>-<slug>.yaml)",
+  "description": "T4.3: a news post of the website, published with the client build. The file name gives its date and its slug (the URL /news/<date>-<slug>). Title and body are written in every language here, not in i18n/. The body is a minimal Markdown subset rendered as text (docs/06-content-data.md, \"Noticias\"): paragraphs separated by a blank line, lines starting with \"- \" as a list, **bold** and *italics*. No HTML and no links.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["date", "title", "body"],
+  "properties": {
+    "date": {
+      "description": "Publication date (YYYY-MM-DD); must match the file name.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+    },
+    "title": { "$ref": "#/$defs/localized", "description": "One line, at most 120 characters." },
+    "body": { "$ref": "#/$defs/localizedText" },
+    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+  },
+  "$defs": {
+    "localized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["es", "en"],
+      "properties": {
+        "es": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[^\\n<>]+$" },
+        "en": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[^\\n<>]+$" }
+      }
+    },
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["es", "en"],
+      "properties": {
+        "es": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "en": { "type": "string", "minLength": 1, "maxLength": 8000 }
+      }
+    }
+  }
+}

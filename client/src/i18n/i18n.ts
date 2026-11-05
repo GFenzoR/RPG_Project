@@ -25,6 +25,19 @@ export function pickLanguage(
   return available.includes(DEFAULT_LANGUAGE) ? DEFAULT_LANGUAGE : (available[0] ?? "es");
 }
 
+/**
+ * Splits ?lang= off a query string (T4.3). Both pages read it once at start, store it as
+ * the chosen language and drop it from the URL: left in the URL it would win over a
+ * language picked later, after a reload or on the other page.
+ */
+export function takeLangParam(search: string): { lang: string | null; rest: string } {
+  const q = new URLSearchParams(search);
+  const lang = q.get("lang");
+  q.delete("lang");
+  const s = q.toString();
+  return { lang, rest: s === "" ? "" : `?${s}` };
+}
+
 /** Looks keys up in `texts`; an unknown key is returned as is so it shows up in review. */
 export function translator(
   texts: Readonly<Record<string, string>>,

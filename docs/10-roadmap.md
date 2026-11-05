@@ -174,7 +174,11 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
     resaltado opcional, filtro por vocación, premio chico), progreso en `quest_state`,
     mensaje `TutorialStep`/`TutorialSkip` y panel de pistas en el cliente. Termina al
     aceptar `ch1_shipwreck`; se puede saltar; los personajes previos no lo ven.
-- [ ] **T4.3 Landing page**, ranking (highscores), noticias.
+- [x] **T4.3 Landing page**, ranking (highscores), noticias.
+  - Sitio público en `/` (build multipágina de Vite: landing, `/highscores`, `/news`) y el
+    juego en `/play/`; `GET /api/status` (contador atómico del game loop) y
+    `GET /api/highscores` (sqlc, cache de 60 s por filtros, excluye staff y cuentas
+    deshabilitadas o baneadas); noticias en `data/news/*.yaml` validadas con esquema.
 - [ ] **T4.4 Observabilidad**: dashboard de métricas y alertas básicas.
 - [ ] **T4.5 Portal de envío de mapas** con cola de moderación que abre PR.
 

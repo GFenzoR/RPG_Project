@@ -4,6 +4,8 @@
 //                        constants (data/balance.yaml) and the client's i18n catalogs
 //   /audio/<file>        sound files of assets/sounds.yaml (T3.7), served as they are;
 //                        `vite build` emits them under audio/
+//   virtual:rpg-site     the public website (T4.3): its i18n catalogs, vocations, skill ids
+//                        (highscore categories) and the posts of data/news
 //   /atlas/<file>        sprite atlas built from assets/ with tools/spritepack (dev server);
 //                        `vite build` emits the same files under atlas/
 //
@@ -19,6 +21,8 @@ import type {
   ClientContent,
   IslandRect,
   ItemDef,
+  NewsPost,
+  SiteContent,
   LoopRules,
   RecipeDef,
   SoundDef,
@@ -28,6 +32,11 @@ import type {
 
 const VIRTUAL_ID = "virtual:rpg-content";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
+const SITE_ID = "virtual:rpg-site";
+const RESOLVED_SITE_ID = "\0" + SITE_ID;
+/** i18n catalogs of the website (all keys). */
+const SITE_CATALOGS = ["client.yaml", "vocations.yaml", "site.yaml"];
+const NEWS_FILE = /^(\d{4}-\d{2}-\d{2})-[a-z0-9-]+\.yaml$/;
 const LANGUAGES = ["es", "en"];
 /** i18n catalogs the client uses (all keys), and those it only takes names from. */
 const CATALOGS = ["client.yaml", "vocations.yaml", "dialog.yaml", "npcs.yaml", "tutorial.yaml"];
@@ -192,6 +201,57 @@ export function loadClientContent(root: string): ClientContent {
   };
 }
 
+/** The website's content (T4.3). make validate checks data/news against its schema. */
+export function loadSiteContent(root: string): SiteContent {
+  const i18n: Record<string, Record<string, string>> = {};
+  for (const lang of LANGUAGES) {
+    const texts: Record<string, string> = {};
+    for (const name of SITE_CATALOGS) {
+      // Every catalog is required: a missing one would publish raw keys.
+      const cat = readYaml(join(root, "i18n", lang, name));
+      if (isObj(cat))
+        for (const [k, v] of Object.entries(cat)) if (typeof v === "string") texts[k] = v;
+    }
+    i18n[lang] = texts;
+  }
+  const vocs = readYaml(join(root, "data", "vocations.yaml"));
+  const vocations = Array.isArray(vocs)
+    ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
+    : [];
+  const balance = readYaml(join(root, "data", "balance.yaml"));
+  const base =
+    isObj(balance) && isObj(balance["skills"]) && isObj(balance["skills"]["base"])
+      ? balance["skills"]["base"]
+      : {};
+  const texts = (v: unknown): Record<string, string> => {
+    const out: Record<string, string> = {};
+    if (isObj(v)) for (const [k, t] of Object.entries(v)) if (typeof t === "string") out[k] = t;
+    return out;
+  };
+  const news: NewsPost[] = [];
+  const dir = join(root, "data", "news");
+  let files: string[] = [];
+  try {
+    files = readdirSync(dir);
+  } catch {
+    // no news yet
+  }
+  for (const file of files) {
+    const m = NEWS_FILE.exec(file);
+    if (!m) continue;
+    const raw = readYaml(join(dir, file));
+    if (!isObj(raw)) continue;
+    news.push({
+      slug: file.slice(0, -".yaml".length),
+      date: m[1] ?? "",
+      title: texts(raw["title"]),
+      body: texts(raw["body"]),
+    });
+  }
+  news.sort((a, b) => (a.slug < b.slug ? 1 : a.slug > b.slug ? -1 : 0));
+  return { i18n, vocations, skills: Object.keys(base), news };
+}
+
 /** Where the sound files are served: /audio/<path under assets/>. */
 export const AUDIO_PREFIX = "audio/";
 
@@ -290,15 +350,26 @@ export function rpgContent(): Plugin {
   return {
     name: "rpg-client-content",
     resolveId(id) {
-      return id === VIRTUAL_ID ? RESOLVED_ID : undefined;
+      if (id === VIRTUAL_ID) return RESOLVED_ID;
+      return id === SITE_ID ? RESOLVED_SITE_ID : undefined;
     },
     load(id) {
+      // Read once per dev server start, like the game's content: restart to see a new post.
+      if (id === RESOLVED_SITE_ID)
+        return `export default ${JSON.stringify(loadSiteContent(root))};`;
       if (id !== RESOLVED_ID) return undefined;
       return `export default ${JSON.stringify(loadClientContent(root))};`;
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const path = new URL(req.url ?? "/", "http://client").pathname;
+        const url = new URL(req.url ?? "/", "http://client");
+        const path = url.pathname;
+        // The game page (T4.3): /play serves play/index.html as it is, like Caddy (no
+        // redirect; the page only uses root-absolute URLs).
+        if (path === "/play") {
+          req.url = "/play/" + url.search;
+          return next();
+        }
         if (req.method === "GET" && path.startsWith("/" + AUDIO_PREFIX)) {
           // Only files listed in sounds.yaml, read on each request (make sounds updates them).
           // The page encodes the URL (spaces in pack names); the lookup is an allowlist, so a

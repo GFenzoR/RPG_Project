@@ -48,6 +48,21 @@ type Querier interface {
 	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
 	// Resolves a character name (ignoring case) for a staff command.
 	GetCharacterTarget(ctx context.Context, name string) (GetCharacterTargetRow, error)
+	// Highscores (T4.3, GET /api/highscores). Only players' characters are ranked: staff
+	// (gm/admin), disabled accounts and accounts with an active ban are left out. Ties keep
+	// the older character first. A page is limit rows from offset; callers ask for one more
+	// row than they show to know whether there is a next page.
+	HighscoresByLevel(ctx context.Context, arg HighscoresByLevelParams) ([]HighscoresByLevelRow, error)
+	HighscoresBySkillBase(ctx context.Context, arg HighscoresBySkillBaseParams) ([]HighscoresBySkillBaseRow, error)
+	// A skill ranking is two ordered parts (store.Highscores joins them):
+	//   1. characters with a row for the skill, in the order of character_skills_highscore_idx
+	//      (skill, level DESC, tries DESC, character_id): HighscoresBySkillRows;
+	//   2. after them, characters without a row, at the base level of data/balance.yaml,
+	//      oldest first: HighscoresBySkillBase, only when part 1 does not fill the page.
+	// Skill rows are never stored below the base level, so a character with a row ranks at
+	// least as high as one without (a row at exactly the base level with 0 tries ties with
+	// them and is listed first). Neither query sorts every character.
+	HighscoresBySkillRows(ctx context.Context, arg HighscoresBySkillRowsParams) ([]HighscoresBySkillRowsRow, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
