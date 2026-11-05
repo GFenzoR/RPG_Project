@@ -158,7 +158,7 @@ Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
 | Alerta | Severidad | Condición |
 |---|---|---|
 | `GameServerDown` | critical | scrape de `/metrics` fallido (`up == 0`) durante 1 min: proceso parado, caído o colgado |
-| `GameServerNotReady` | critical | `/healthz` responde 503 (Postgres no contesta) durante 2 min. `/metrics` tiene su propio listener y sigue respondiendo, así que `GameServerDown` no lo ve. Funciona sin jugadores: el healthcheck del compose llama a `/healthz` cada 10 s |
+| `GameServerNotReady` | critical | más de la mitad de las llamadas a `/healthz` del último minuto responden 503 (Postgres no contesta), sostenido durante 2 min. Un corte de un par de minutos (por ejemplo, Postgres recreado por `deploy.sh`) no avisa, y la alerta se resuelve ~30 s después de la recuperación. `/metrics` tiene su propio listener y sigue respondiendo, así que `GameServerDown` no lo ve. Funciona sin jugadores: el healthcheck del compose llama a `/healthz` cada 10 s |
 | `GameServerMetricsMissing` | warning | no existe el target del gameserver durante 5 min |
 | `TickP99OverBudget` | warning | tick p99 (ventana de 5 min) > 10 ms durante 10 min (docs/07) |
 | `TickOverruns` | warning | más de 5 ticks de más de 50 ms en 5 min |

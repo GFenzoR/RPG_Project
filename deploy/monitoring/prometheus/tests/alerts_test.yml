@@ -129,3 +129,35 @@ tests:
       - eval_time: 30m
         alertname: GameServerDown
         exp_alerts: []
+
+  - interval: 10s
+    input_series:
+      # A 45 s Postgres blip at 10m: never fires, neither during nor after it.
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="200"}'
+        values: "0+1x59 59x4 60+1x100"
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="503"}'
+        values: "0x59 1+1x4 5x100"
+    alert_rule_test:
+      - {eval_time: 10m30s, alertname: GameServerNotReady, exp_alerts: []}
+      - {eval_time: 11m, alertname: GameServerNotReady, exp_alerts: []}
+      - {eval_time: 11m30s, alertname: GameServerNotReady, exp_alerts: []}
+      - {eval_time: 12m, alertname: GameServerNotReady, exp_alerts: []}
+      - {eval_time: 13m, alertname: GameServerNotReady, exp_alerts: []}
+
+  - interval: 10s
+    input_series:
+      # A 5 min outage from 10m to 15m: fires during it and resolves soon after recovery.
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="200"}'
+        values: "0+1x59 59x29 60+1x60"
+      - series: 'http_requests_total{job="gameserver",route="GET /healthz",code="503"}'
+        values: "0x59 1+1x29 30x60"
+    alert_rule_test:
+      - {eval_time: 11m, alertname: GameServerNotReady, exp_alerts: []}
+      - eval_time: 14m
+        alertname: GameServerNotReady
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Gameserver not ready: /healthz answers 503"
+              description: "The gameserver runs but cannot reach Postgres. Check `docker compose ps postgres` and its logs; players cannot log in."
+      - {eval_time: 16m, alertname: GameServerNotReady, exp_alerts: []}

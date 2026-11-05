@@ -19,10 +19,15 @@ groups:
           description: "Prometheus cannot reach the gameserver's /metrics for 1 minute. Check `docker compose ps` and the gameserver logs."
 
       - alert: GameServerNotReady
-        # /healthz answers 503 (the database does not answer its ping). The compose
-        # healthcheck calls it every 10 s, so this fires even with nobody playing, when no
-        # write fails and the 5xx ratio of HTTPErrorsHigh has no traffic to work with.
-        expr: sum(rate(http_requests_total{job="gameserver",route="GET /healthz",code="503"}[2m])) > 0
+        # Most /healthz calls answer 503 (the database does not answer its ping) for 2
+        # minutes. The compose healthcheck calls it every 10 s, so this fires even with
+        # nobody playing, when no write fails and the 5xx ratio of HTTPErrorsHigh has no
+        # traffic to work with. A ratio over 1 minute, not "any 503 in the window": a blip
+        # of a minute or two (Postgres recreated by deploy.sh) does not fire after it is
+        # over, and the alert resolves ~30 s after recovery.
+        expr: |
+          sum(rate(http_requests_total{job="gameserver",route="GET /healthz",code="503"}[1m]))
+            / sum(rate(http_requests_total{job="gameserver",route="GET /healthz"}[1m])) > 0.5
         for: 2m
         labels:
           severity: critical

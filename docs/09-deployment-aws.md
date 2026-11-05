@@ -89,7 +89,7 @@ personal con permiso `read:packages`.
    Objetivo: < 1 minuto fuera de línea (en pruebas locales el gameserver vuelve en ~6 s).
    **Pendiente:** el anuncio de reinicio en el juego y el guardado explícito de jugadores
    (`TODO(admin-commands)` en `deploy.sh`), cuando exista el comando de admin. Hasta
-   entonces el único punto de guardado es el apagado por SIGTERM (`stop_grace_period: 30s`).
+   entonces el único punto de guardado es el apagado por SIGTERM (`stop_grace_period: 90s`).
 
 ## Guía de uso de `deploy/`
 
@@ -231,7 +231,7 @@ en `docker-compose.yml`; solo `GRAFANA_ADMIN_PASSWORD` hay que definirla:
 | `GRAFANA_PUBLIC` | `off` | `on` activa la ruta `/grafana/` de Caddy (ver abajo) |
 | `GRAFANA_BASIC_AUTH_USER` | `disabled` | Usuario del basic auth de esa ruta |
 | `GRAFANA_BASIC_AUTH_HASH` | hash bcrypt de un secreto aleatorio que nadie tiene | Hash del basic auth (`caddy hash-password --bcrypt-cost 10`) |
-| `GRAFANA_ALLOW_IPS` | `private_ranges` | IPs que pueden intentar el basic auth, en formato del matcher `client_ip` de Caddy (`203.0.113.7/32`, varias separadas por espacio); el resto recibe 403 |
+| `GRAFANA_ALLOW_IPS` | `192.0.2.0/32` (TEST-NET: nadie) | IPs que pueden intentar el basic auth, en formato del matcher `client_ip` de Caddy (`203.0.113.7/32`, varias separadas por espacio); el resto recibe 403. Sin definirla, todos reciben 403 |
 | `ALERT_DISCORD_WEBHOOK_URL` | vacía | Webhook de un canal de Discord |
 | `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | vacías | Bot de Telegram y chat de destino (hacen falta las dos) |
 | `ALERT_WEBHOOK_URL` | vacía | Cualquier endpoint HTTP (POST JSON de Alertmanager) |
@@ -259,16 +259,25 @@ autenticar.
    - `GRAFANA_PUBLIC=on`;
    - `GRAFANA_BASIC_AUTH_USER=<usuario>` (que no sea el admin de Grafana);
    - `GRAFANA_BASIC_AUTH_HASH='<hash>'` (entre comillas simples, porque lleva `$`);
-   - `GRAFANA_ALLOW_IPS=<tu IP>/32`. Con el default `private_ranges`, desde internet
-     todos reciben 403;
+   - `GRAFANA_ALLOW_IPS=<tu IP IPv4>/32`. Sin ella, todos reciben 403. Con Tailscale,
+     usa la IP de tu equipo en la tailnet (`100.x.y.z/32`; `100.64.0.0/10` no es un rango
+     privado para Caddy);
    - `GRAFANA_ROOT_URL=https://<dominio>/grafana/`.
 3. Recrea `caddy` y `grafana`.
 
 Cómo responde la ruta:
 - Fuera de `GRAFANA_ALLOW_IPS`: 403, sin trabajo de bcrypt. `client_ip` respeta los
   proxies de confianza, así que en casa se usa la IP real que llega por el túnel.
-- Si solo definiste el usuario o solo el hash: 401 para todos. El compose nunca le pasa a
-  Caddy valores vacíos, así que Caddy arranca igual y el sitio no se cae.
+- **IPv6:** la red `edge` de Docker es solo IPv4. En un host con IPv6 (registro `AAAA`),
+  Docker reenvía las conexiones IPv6 con `docker-proxy` desde el gateway de la red
+  (`172.x.0.1`), así que Caddy ve esa IP y no la del visitante. No pongas
+  `private_ranges` ni el rango `172.16.0.0/12` en `GRAFANA_ALLOW_IPS`: dejarías entrar a
+  cualquier visitante por IPv6. Si tu navegador prefiere IPv6 y recibes 403 con tu IPv4
+  en la lista, entra por IPv4 (`curl -4`, o un nombre sin `AAAA`) o usa el túnel SSH.
+- Si solo definiste el usuario o solo el hash, el otro valor queda con un placeholder.
+  Solo autentica la combinación configurada (por ejemplo, el usuario `disabled` con la
+  contraseña de tu hash). Con los dos placeholders, nadie entra. El compose nunca le pasa
+  a Caddy valores vacíos, así que Caddy arranca igual y el sitio no se cae.
   `deploy/monitoring/check.sh` lo comprueba.
 - Las dos capas quedan separadas: Caddy no reenvía el header `Authorization` y Grafana
   tiene el basic auth apagado (`GF_AUTH_BASIC_ENABLED=false`). Siempre se entra por el

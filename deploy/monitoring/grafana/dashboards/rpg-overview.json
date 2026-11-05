@@ -42,7 +42,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "ARRIBA = /metrics responde y /healthz no da 503; SIN BASE = arriba pero /healthz 503 (GameServerNotReady); CAÍDO = sin scrape (GameServerDown).",
+      "description": "ARRIBA = /metrics responde y /healthz no da 503; SIN BASE = arriba pero más de la mitad de /healthz del último minuto da 503 (GameServerNotReady); CAÍDO = sin scrape (GameServerDown).",
       "gridPos": {
         "h": 4,
         "w": 3,
@@ -55,7 +55,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=\"gameserver\"} * on() group_left() (1 + ((sum(rate(http_requests_total{job=\"gameserver\",route=\"GET /healthz\",code=\"503\"}[2m])) > bool 0) or on() vector(0)))",
+          "expr": "up{job=\"gameserver\"} * on() group_left() (1 + ((sum(rate(http_requests_total{job=\"gameserver\",route=\"GET /healthz\",code=\"503\"}[1m])) / sum(rate(http_requests_total{job=\"gameserver\",route=\"GET /healthz\"}[1m])) > bool 0.5) or on() vector(0)))",
           "refId": "A",
           "instant": true,
           "range": false

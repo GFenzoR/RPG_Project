@@ -40,13 +40,13 @@ CADDY=caddy:2.11-alpine
 printf 'POSTGRES_PASSWORD=x\nSITE_ADDRESS=localhost\nACME_EMAIL=ops@example.com\n' >"${TMPDIR:-/tmp}/rpg-check.env"
 for pair in "" "GRAFANA_BASIC_AUTH_USER=ops" "GRAFANA_BASIC_AUTH_HASH=\$2a\$10\$h5iRjwthGVRQaUfhHaqSI.HfHTqlpCTohb2XJVOQpnwN8qsLbPWb2"; do
 	# Caddy's environment as compose interpolates it (config escapes $ as $$).
-	mapfile -t caddy_env < <(env -i PATH="$PATH" HOME="${HOME:-/tmp}" ${pair:+"$pair"} GRAFANA_PUBLIC=on \
+	# No mapfile, and args never empty under set -u: bash 3.2 (macOS) runs this too.
+	args=(-e GRAFANA_PUBLIC=on)
+	while IFS= read -r e; do args+=(-e "$e"); done < <(env -i PATH="$PATH" HOME="${HOME:-/tmp}" ${pair:+"$pair"} GRAFANA_PUBLIC=on \
 		docker compose -f "$compose" --env-file "${TMPDIR:-/tmp}/rpg-check.env" config --format json |
 		python3 -c 'import json, sys
 for k, v in json.load(sys.stdin)["services"]["caddy"]["environment"].items():
     print(k + "=" + v.replace(chr(36) * 2, chr(36)))')
-	args=()
-	for e in "${caddy_env[@]}"; do args+=(-e "$e"); done
 	echo "  case [${pair%%=*}]"
 	out=$(docker run --rm "${args[@]}" -v "$PWD/..:/etc/caddy:ro" "$CADDY" \
 		caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1) || {

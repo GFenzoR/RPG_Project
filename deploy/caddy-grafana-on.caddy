@@ -1,9 +1,10 @@
 # /grafana/ route ON (GRAFANA_PUBLIC=on; docs/09, "Monitoreo"). Imported by caddy-routes.caddy.
 # Needs the monitoring profile running (otherwise 502). Prometheus and Alertmanager are
 # never routed. In order (route keeps it):
-#   1. clients outside GRAFANA_ALLOW_IPS get 403 before any bcrypt work (default in the
-#      compose file: private_ranges). client_ip honours trusted_proxies, so at home it is
-#      the player's IP from the tunnel, not cloudflared's;
+#   1. clients outside GRAFANA_ALLOW_IPS get 403 before any bcrypt work (the compose
+#      default matches nobody). client_ip honours trusted_proxies, so at home it is the
+#      visitor's IP from the tunnel, not cloudflared's. IPv6 visitors of a dual-stack host
+#      appear as the edge network's gateway (docker-proxy): see docs/09;
 #   2. basic auth. The compose file never passes an empty user or hash (its placeholders
 #      can never authenticate), so a half-configured pair answers 401 instead of stopping
 #      Caddy. Hash with a cheap cost, each wrong try burns CPU on the game's machine:

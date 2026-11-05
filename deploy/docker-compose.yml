@@ -115,9 +115,12 @@ services:
       # an unset user or hash means 401 for everyone.
       GRAFANA_BASIC_AUTH_USER: ${GRAFANA_BASIC_AUTH_USER:-disabled}
       GRAFANA_BASIC_AUTH_HASH: ${GRAFANA_BASIC_AUTH_HASH:-$$2a$$10$$h5iRjwthGVRQaUfhHaqSI.HfHTqlpCTohb2XJVOQpnwN8qsLbPWb2}
-      # Who may even try the basic auth (each try costs a bcrypt compare): Caddy matcher
-      # values, e.g. "203.0.113.7/32". Default: private ranges only (LAN, VPN, Tailscale).
-      GRAFANA_ALLOW_IPS: ${GRAFANA_ALLOW_IPS:-private_ranges}
+      # Who may even try the basic auth (each try costs a bcrypt compare): Caddy client_ip
+      # values, e.g. "203.0.113.7/32". Default: a TEST-NET address no client ever has, so
+      # with the route on and this unset everyone gets 403 (fails closed). Not
+      # private_ranges: IPv6 visitors reach Caddy through docker-proxy from the edge
+      # gateway (172.x), which private_ranges would let in (docs/09).
+      GRAFANA_ALLOW_IPS: ${GRAFANA_ALLOW_IPS:-192.0.2.0/32}
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
