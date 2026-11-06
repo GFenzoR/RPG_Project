@@ -16,6 +16,7 @@ import { decodePng } from "@rpg/spritepack";
 import { afterEach, describe, expect, it } from "vitest";
 import { run } from "./index.ts";
 import { parseMaintainers, prCheck, tileFor } from "./prcheck.ts";
+import { parseMaintainers as parseMaintainersCopy } from "./prcomment.ts";
 import {
   MARKER,
   MAX_API_FILES,
@@ -75,6 +76,14 @@ describe("parseMaintainers", () => {
   it("reads one login per line, ignoring comments, @ and case", () => {
     expect(parseMaintainers("# x\n@Alice\nbob # lead\n\nnot valid!\n")).toEqual(["alice", "bob"]);
     expect(parseMaintainers(null)).toEqual([]);
+  });
+  it("is the same in prcomment.ts (its own copy: it runs without dependencies)", () => {
+    for (const text of [
+      "# x\n@Alice\nbob # lead\n\nnot valid!\n",
+      "  @RPG-Map-Bot   # the bot\r\n@@double\n-dash\nok-name\n",
+      "a".repeat(40) + "\n" + "b".repeat(39) + "\n",
+    ])
+      expect(parseMaintainersCopy(text)).toEqual(parseMaintainers(text));
   });
 });
 

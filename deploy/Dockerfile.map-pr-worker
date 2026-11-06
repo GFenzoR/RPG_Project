@@ -8,7 +8,8 @@
 #   docker build -f deploy/Dockerfile.map-pr-worker -t rpg-map-pr-worker .
 #
 # Configuration by environment (docs/09, "Worker de PR de mapas"); without
-# GITHUB_MAP_PR_TOKEN it logs that it is disabled and exits 0.
+# GITHUB_MAP_PR_TOKEN it logs once that it is disabled and idles until stopped (--once:
+# exits 0).
 
 ARG NODE_VERSION=22
 

@@ -115,6 +115,12 @@ export async function startFakeGitHub(o: FakeGitHubOptions): Promise<FakeGitHub>
       return send(res, 401, { message: "Bad credentials" });
     if (req.method === "GET" && url.pathname === "/user") {
       requests.push("GET /user");
+      const uf = failures.find((x) => x.route === "GET /user" && x.times > 0);
+      if (uf) {
+        uf.times--;
+        res.writeHead(uf.status, { "Content-Type": "application/json", ...uf.headers });
+        return void res.end(JSON.stringify({ message: "injected failure" }));
+      }
       return send(res, 200, { login: o.login ?? "rpg-map-bot" });
     }
     if (!url.pathname.startsWith(`${prefix}/`)) return send(res, 404, { message: "Not Found" });

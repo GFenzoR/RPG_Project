@@ -47,6 +47,20 @@ export type PlotViolation =
     }
   | { kind: "file"; path: string; reason: "not_map_file" | "invalid" | "island_meta" };
 
+/**
+ * GitHub logins of .github/MAINTAINERS: one per line, `#` comments, an optional leading
+ * `@`, case-insensitive; anything that is not a login is ignored. The map PR check
+ * (mapcli prcheck) and the map PR worker read the file with this; prcomment.ts keeps a
+ * copy (it runs without dependencies) that prcomment.test.ts compares with this one.
+ */
+export function parseMaintainers(text: string | null): string[] {
+  if (text === null) return [];
+  return text
+    .split("\n")
+    .map((l) => (l.split("#")[0] ?? "").trim().replace(/^@/, "").toLowerCase())
+    .filter((l) => /^[a-z0-9](?:[a-z0-9-]{0,38})$/.test(l));
+}
+
 /** Files under world/ that anyone may change, outside the plot rules (credits). */
 export const PLOT_FREE_FILES: readonly string[] = ["world/CONTRIBUTORS.md"];
 

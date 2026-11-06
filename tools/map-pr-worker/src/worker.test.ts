@@ -3,9 +3,16 @@
 // never opens a second pull request.
 import { afterEach, describe, expect, it } from "vitest";
 import { CONTRIBUTORS, branchOf } from "./build.ts";
-import { GitHub } from "./github.ts";
+import { GitHub, GitHubError } from "./github.ts";
 import type { Claimed, Queue } from "./queue.ts";
-import { CONFIG_WAIT, backoff, checkIdentity, pausedUntil, runOnce } from "./worker.ts";
+import {
+  CONFIG_WAIT,
+  backoff,
+  checkIdentity,
+  identityRetryWait,
+  pausedUntil,
+  runOnce,
+} from "./worker.ts";
 import { startFakeGitHub } from "../test/fake-github.ts";
 import type { FakeGitHub } from "../test/fake-github.ts";
 import { PLOT_CHUNK, paint, plotSubmission, readRepo } from "../test/fixtures.ts";
@@ -339,11 +346,42 @@ describe("map PR worker", () => {
 });
 
 describe("identity", () => {
+  it("waits as a rate-limited GET /user asks before checking the token again", async () => {
+    fake = await startFakeGitHub({
+      owner: "acme",
+      repo: "rpg",
+      token: TOKEN,
+      readBase: () => null,
+    });
+    const gh = new GitHub({ apiUrl: fake.url, token: TOKEN, owner: "acme", repo: "rpg" });
+    fake.fail({ route: "GET /user", status: 429, headers: { "retry-after": "300" } });
+    const e = await checkIdentity(gh, "main").catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(GitHubError);
+    expect(identityRetryWait(e, 1000)).toBe(300_000);
+    // Without a hint, a minute at least, even with a 1 s poll; a refusal, 15 minutes.
+    fake.fail({ route: "GET /user", status: 403, headers: { "x-ratelimit-remaining": "0" } });
+    expect(identityRetryWait(await checkIdentity(gh, "main").catch((x: unknown) => x), 1000)).toBe(
+      60_000,
+    );
+    fake.fail({ route: "GET /user", status: 502 });
+    expect(identityRetryWait(await checkIdentity(gh, "main").catch((x: unknown) => x), 1000)).toBe(
+      60_000,
+    );
+    fake.fail({ route: "GET /user", status: 401 });
+    expect(identityRetryWait(await checkIdentity(gh, "main").catch((x: unknown) => x), 1000)).toBe(
+      CONFIG_WAIT,
+    );
+    await fake.close();
+  });
+
   it("refuses the repository owner and the map maintainers, accepts a bot", async () => {
     for (const [login, maintainers, ok] of [
       ["rpg-map-bot", "# maintainers\nsomeone\n", true],
       ["ACME", null, false],
       ["Someone", "# maintainers\nsomeone # map lead\n", false],
+      // The map PR check accepts "@login": a bot listed so is a maintainer for it too.
+      ["rpg-map-bot", "@rpg-map-bot\n", false],
+      ["rpg-map-bot", "  @RPG-Map-Bot   # the bot, by mistake\n", false],
     ] as const) {
       fake = await startFakeGitHub({
         owner: "acme",

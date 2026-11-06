@@ -24,6 +24,7 @@ import {
   trailersOf,
 } from "./build.ts";
 import type { FailureCode, Submission } from "./build.ts";
+import { parseMaintainers } from "@rpg/map-format";
 import { GitHubError } from "./github.ts";
 import type { GitHub, PullRequest, TreeEntry } from "./github.ts";
 import type { Claimed, Queue } from "./queue.ts";
@@ -236,6 +237,17 @@ export async function runOnce(
   }
 }
 
+/**
+ * How long to wait before checking the token again after GET /user (or MAINTAINERS)
+ * failed: what a rate limit asks for, 15 min for a configuration refusal, else the poll
+ * interval but at least a minute.
+ */
+export function identityRetryWait(e: unknown, pollMs: number): number {
+  if (e instanceof GitHubError && e.waitMs !== undefined) return e.waitMs;
+  if (e instanceof GitHubError && e.config) return CONFIG_WAIT;
+  return Math.max(pollMs, MINUTE);
+}
+
 /** When the worker may go on after a round: the latest pause, if any. */
 export function pausedUntil(outcomes: readonly Outcome[]): Date | undefined {
   let until: Date | undefined;
@@ -256,11 +268,8 @@ export async function checkIdentity(
   const me = login.toLowerCase();
   if (me === gh.owner.toLowerCase())
     return { ok: false, login, reason: "the token belongs to the repository owner" };
-  const maintainers = (await gh.fileAt(".github/MAINTAINERS", base)) ?? "";
-  const listed = maintainers
-    .split("\n")
-    .map((l) => l.replace(/#.*/, "").trim().toLowerCase())
-    .filter((l) => l !== "");
+  // Read exactly as the map PR check reads it (`@login` included).
+  const listed = parseMaintainers(await gh.fileAt(".github/MAINTAINERS", base));
   if (listed.includes(me))
     return {
       ok: false,

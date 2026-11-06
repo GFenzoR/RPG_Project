@@ -28,6 +28,7 @@ import {
   isPatchable,
   loadContent,
   loadWorld,
+  parseMaintainers,
   patchHash,
   renderAreas,
   validateWorld,
@@ -198,14 +199,8 @@ export function decodeStrict(b: Buffer): string | undefined {
 const sameBytes = (a: Buffer | null, b: Buffer | null): boolean =>
   a === null || b === null ? a === b : a.equals(b);
 
-/** GitHub logins of the maintainers: one per line, `#` comments, case-insensitive. */
-export function parseMaintainers(text: string | null): string[] {
-  if (text === null) return [];
-  return text
-    .split("\n")
-    .map((l) => (l.split("#")[0] ?? "").trim().replace(/^@/, "").toLowerCase())
-    .filter((l) => /^[a-z0-9](?:[a-z0-9-]{0,38})$/.test(l));
-}
+/** GitHub logins of the maintainers (shared with the map PR worker: map-format). */
+export { parseMaintainers };
 
 const readOrNull = (root: string, path: string): string | null =>
   existsSync(join(root, path)) ? readFileSync(join(root, path), "utf8") : null;

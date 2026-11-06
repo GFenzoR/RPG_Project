@@ -18,7 +18,7 @@ import pg from "pg";
 import { readConfig } from "./config.ts";
 import { GitHub, GitHubError } from "./github.ts";
 import { PgQueue } from "./queue.ts";
-import { CONFIG_WAIT, checkIdentity, pausedUntil, runOnce } from "./worker.ts";
+import { checkIdentity, identityRetryWait, pausedUntil, runOnce } from "./worker.ts";
 import { buildChange } from "./build.ts";
 
 /** Merges a one-zone patch onto a one-zone base: map-format, its schemas and the build load. */
@@ -153,11 +153,13 @@ async function main(): Promise<number> {
         log("info", "map PR worker token", { login: id.login });
       } catch (e) {
         const config = e instanceof GitHubError && e.config;
+        const wait = identityRetryWait(e, cfg.pollMs);
         log(config ? "error" : "warn", "map PR worker: cannot check the token", {
           err: e instanceof Error ? e.message : String(e),
+          retry_in_s: Math.round(wait / 1000),
         });
         if (values.once) return 1;
-        await life.sleep(config ? CONFIG_WAIT : cfg.pollMs);
+        await life.sleep(wait);
       }
     }
     while (!life.stopped) {
