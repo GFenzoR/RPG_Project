@@ -296,7 +296,7 @@ monitoring-up: docker-build monitoring-env ## Production stack + monitoring: Gra
 
 .PHONY: monitoring-down
 monitoring-down: ## Stop the local stack and its monitoring (volumes are kept)
-	$(COMPOSE_MON) --profile monitoring-test down
+	$(COMPOSE_MON) --profile monitoring-test --profile map-pr down
 
 .PHONY: monitoring-check
 monitoring-check: ## promtool/amtool checks, rule unit tests and dashboard JSON (needs Docker)
@@ -323,7 +323,9 @@ monitoring-test: monitoring-env ## Fire GameServerDown for real on a test webhoo
 ## ---- home hosting (docs/13-hosting-de-pruebas.md) --------------------------
 
 COMPOSE_HOME := docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml --env-file deploy/.env.home
-HOME_PROFILES := --profile quick-tunnel --profile tunnel --profile monitoring
+# Every optional profile: with --profile flags compose ignores COMPOSE_PROFILES, so down and
+# logs must name map-pr (T4.5) too or its worker would be left running.
+HOME_PROFILES := --profile quick-tunnel --profile tunnel --profile monitoring --profile map-pr
 
 deploy/.env.home:
 	cp deploy/.env.home.example $@
@@ -396,8 +398,9 @@ migrate-new: ## Create a migration: make migrate-new NAME=add_houses
 	goose -dir server/migrations -s create $(NAME) sql
 
 .PHONY: test-integration
-test-integration: ## Go integration tests against Postgres (TEST_DATABASE_URL)
+test-integration: ## Go integration tests + the map PR worker's queue against Postgres (TEST_DATABASE_URL)
 	cd server && TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -tags integration -count=1 ./...
+	MAP_PR_WORKER_DATABASE_URL="$(TEST_DATABASE_URL)" pnpm exec vitest run tools/map-pr-worker/src/queue.integration.test.ts
 
 .PHONY: db-up
 db-up: ## Start dev Postgres (Docker locally, VM service in cloud sessions)

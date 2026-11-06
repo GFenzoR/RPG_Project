@@ -124,6 +124,31 @@ export function groupLabel(group: string, t: (key: string) => string): string {
   return group === "world" || group === "prefabs" ? t(`site.maps.group.${group}`) : group;
 }
 
+/** Why the worker could not open a pull request (map_submissions.failure). */
+const FAILURES = new Set(["conflict", "outside_plot", "invalid_patch", "no_changes", "github"]);
+
+/** i18n key of a failure code; an unknown one gets the generic text. */
+export function failureKey(code: string | undefined): string {
+  return code !== undefined && FAILURES.has(code)
+    ? `site.maps.failure.${code}`
+    : "site.maps.outcome.failed";
+}
+
+/**
+ * The branch and the marker the PR worker uses for a submission (tools/map-pr-worker,
+ * branchOf and markerOf): a pull request opened by hand with both is the one the worker
+ * finds and records later, instead of opening a second one.
+ */
+export function manualPr(m: Pick<MapSubmission, "id" | "sha256">): {
+  branch: string;
+  marker: string;
+} {
+  return {
+    branch: `map-submission/${String(m.id)}-${m.sha256.slice(0, 12)}`,
+    marker: `<!-- rpg-map-submission: ${String(m.id)} sha256:${m.sha256} -->`,
+  };
+}
+
 export const isMapStatus = (s: string): s is MapStatus =>
   (MAP_STATUSES as readonly string[]).includes(s);
 

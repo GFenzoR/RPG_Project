@@ -69,7 +69,11 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
   config del workspace, cuando no se puede calcular el diff (por ejemplo, tras un force
   push) y al lanzar `ci.yml` a mano (`workflow_dispatch`).
 - En `images.yml` el criterio es este:
-  - en los PR, `image` solo compila para amd64, sin QEMU, y solo si cambia un Dockerfile;
+  - en los PR, `image` solo compila para amd64, sin QEMU, y solo si cambia un Dockerfile
+    o lo que la imagen del worker de PR de mapas corre tal cual (`tools/map-pr-worker/`,
+    `packages/map-format/`, `packages/content-schema/`; T4.5). En ese caso también arranca
+    el contenedor del worker sin token y con `--self-check` (`on.pull_request.paths` de
+    `images.yml` incluye `tools/map-pr-worker/**` y `pnpm-workspace.yaml`);
   - `stack` ya compila las imágenes del gameserver y la web para cualquier cambio de la
     app;
   - `home-stack` solo corre por cambios en `deploy/`;

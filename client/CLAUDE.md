@@ -261,7 +261,12 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   siempre como texto (`.user-text`, `pre-wrap`), nunca `innerHTML`.
 - E2E: `e2e/maps.spec.ts` exporta un patch real con `mapcli` (pinta la parcela de comunidad
   de Puerto en una copia temporal de `world/`), lo envía por el sitio, y un gm sembrado
-  con `psql` lo descarga y lo aprueba; un segundo envío se rechaza con motivo.
+  con `psql` lo descarga y lo aprueba; un segundo envío se rechaza con motivo. Al final
+  corre el worker (`tools/map-pr-worker`, `--once --only <id>`) contra un GitHub falso
+  en el mismo proceso de Playwright y comprueba el PR y el enlace en "Mis envíos".
+- `MySubmissions.pr_worker` decide el texto de un envío aprobado (se abre solo o a mano) y
+  el aviso de la página de moderación; `failure` se traduce con `failureKey`
+  (`site.maps.failure.<código>`).
 
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta

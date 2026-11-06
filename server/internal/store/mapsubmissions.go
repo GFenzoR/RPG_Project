@@ -116,6 +116,7 @@ func (s *Store) CreateMapSubmission(ctx context.Context, n NewMapSubmission) (Ma
 		CreatedAt: n.At, UpdatedAt: n.At, AccountID: n.AccountID, AuthorCharacterID: n.CharacterID,
 		Title: n.Title, Description: n.Description, License: n.License, Status: SubmissionPending,
 		SHA256: n.SHA256, SizeBytes: len(n.Patch), BaseRef: n.BaseRef, Files: n.Files,
+		HasPatch: len(n.Patch) > 0,
 	}
 	err = s.inTx(ctx, func(q *db.Queries) error {
 		acc, err := q.LockSubmitter(ctx, db.LockSubmitterParams{AccountID: n.AccountID, Now: ts(n.At)})

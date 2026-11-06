@@ -285,7 +285,14 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.mod
-      - name: go integration tests (Postgres)
+      # The map PR worker's queue test (TS, T4.5) runs in the same target.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: integration tests (Postgres)
         run: make test-integration
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/rpg_test?sslmode=disable

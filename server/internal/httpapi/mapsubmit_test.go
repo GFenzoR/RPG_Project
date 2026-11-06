@@ -54,7 +54,7 @@ func (f *fakeSubmissions) CreateMapSubmission(_ context.Context, n store.NewMapS
 		ID: int64(len(f.subs) + 1), CreatedAt: n.At, UpdatedAt: n.At, AccountID: n.AccountID,
 		AuthorCharacterID: n.CharacterID, AuthorName: "Aria", Title: n.Title, Description: n.Description,
 		License: n.License, Status: store.SubmissionPending, SHA256: n.SHA256, SizeBytes: len(n.Patch),
-		BaseRef: n.BaseRef, Files: n.Files, HasPatch: true,
+		BaseRef: n.BaseRef, Files: n.Files, HasPatch: len(n.Patch) > 0,
 	}
 	f.subs = append(f.subs, m)
 	f.patches[m.ID] = n.Patch
@@ -251,6 +251,9 @@ func TestSubmitMap(t *testing.T) {
 	w := p.do(req{method: "POST", path: "/api/maps/submissions", token: tok, body: body})
 	expect(t, w, http.StatusCreated, "")
 	got := decodeJSON[submissionResp](t, w.Body.Bytes())
+	if !strings.Contains(w.Body.String(), `"has_patch":true`) {
+		t.Errorf("created without has_patch: %s", w.Body.String())
+	}
 	if got.Submission.Status != "pending" || len(got.Submission.Files) != 1 ||
 		got.Submission.Files[0].Path != testChunk || got.Submission.Files[0].Action != "modify" {
 		t.Fatalf("submission = %+v", got.Submission)
@@ -534,7 +537,36 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+tok)
 		return http.DefaultClient.Do(req)
 	}
-	// Two uploads that send their first bytes and stall.
+	// Slots in use, as the handlers take and free them (no racing the handlers).
+	var mu sync.Mutex
+	inUse := 0
+	changed := make(chan struct{}, 64)
+	defer httpapi.SetUploadSlotHook(func(d int) {
+		mu.Lock()
+		inUse += d
+		mu.Unlock()
+		changed <- struct{}{}
+	})()
+	waitSlots := func(n int) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		for {
+			mu.Lock()
+			got := inUse
+			mu.Unlock()
+			if got == n {
+				return
+			}
+			select {
+			case <-changed:
+			case <-ctx.Done():
+				t.Fatalf("slots in use = %d, want %d", got, n)
+			}
+		}
+	}
+
+	// Two uploads that send their first bytes and stall, each holding a slot.
 	var writers []*io.PipeWriter
 	done := make(chan *http.Response, 2)
 	for range 2 {
@@ -551,27 +583,41 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// The third: a body that is never sent. It must be answered anyway.
+	waitSlots(2)
+
+	// The third: a body that is never sent. It must be answered anyway, at once. (The
+	// deadline only keeps a broken server from hanging the test.)
 	pr, pw := io.Pipe()
-	defer pw.Close()
-	resp, err := post(pr, 1<<20)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = pw.CloseWithError(ctx.Err())
+	}()
+	req, _ := http.NewRequestWithContext(ctx, "POST", srv.URL+"/api/maps/submissions", pr)
+	req.ContentLength = 1 << 20
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	third, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), `"busy"`) {
-		t.Fatalf("third upload = %d %s, want 503 busy", resp.StatusCode, b)
+	b, _ := io.ReadAll(third.Body)
+	third.Body.Close()
+	if third.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), `"busy"`) {
+		t.Fatalf("third upload = %d %s, want 503 busy", third.StatusCode, b)
 	}
-	// Once the stalled ones end, a slot is free again.
+
+	// Once the stalled ones end (and their handlers free their slots), uploads work again.
 	for _, w := range writers {
 		_ = w.CloseWithError(io.ErrUnexpectedEOF)
 	}
 	for range 2 {
 		<-done
 	}
+	waitSlots(0)
 	body := submitBody(t, nil)
-	resp, err = post(strings.NewReader(body), int64(len(body)))
+	resp, err := post(strings.NewReader(body), int64(len(body)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,6 +625,8 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("after the stall = %d", resp.StatusCode)
 	}
+	// Its handler frees the slot after answering: wait, so the hook is restored after it.
+	waitSlots(0)
 }
 
 func TestUploadContentLengthOverTheCap(t *testing.T) {
@@ -670,11 +718,12 @@ func TestQueuePagesAndHistoryOrder(t *testing.T) {
 }
 
 func TestMineSaysWhoIsSignedIn(t *testing.T) {
-	p := newPortal(t, nil)
+	p := newPortal(t, func(c *httpapi.Config) { c.MapPRWorker = true })
 	acc, tok := p.account("aria@example.com", "")
 	w := p.do(req{method: "GET", path: "/api/maps/submissions/mine", token: tok})
 	expect(t, w, 200, "")
-	if !strings.Contains(w.Body.String(), `"email":"account`+strconv.FormatInt(acc, 10)+`@example.com"`) {
+	if !strings.Contains(w.Body.String(), `"email":"account`+strconv.FormatInt(acc, 10)+`@example.com"`) ||
+		!strings.Contains(w.Body.String(), `"pr_worker":true`) {
 		t.Errorf("mine = %s", w.Body.String())
 	}
 }

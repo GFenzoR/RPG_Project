@@ -78,6 +78,8 @@ type Config struct {
 	Metrics *metrics.Metrics
 	// MapSubmitLimits bounds the map submission portal (T4.5; httpapi.MapSubmitLimits).
 	MapSubmitLimits httpapi.MapSubmitLimits
+	// MapPRWorker: the map PR worker runs (httpapi.Config.MapPRWorker).
+	MapPRWorker bool
 	// ShutdownTimeout bounds the final saves and the closing of connections (default 10 s).
 	ShutdownTimeout time.Duration
 }
@@ -147,6 +149,7 @@ func New(cfg Config) (*App, error) {
 
 		MapSubmissions:  submissions,
 		MapSubmitLimits: cfg.MapSubmitLimits,
+		MapPRWorker:     cfg.MapPRWorker,
 	})
 	if err != nil {
 		return nil, err

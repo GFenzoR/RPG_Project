@@ -61,8 +61,21 @@ auditoría y `make reports` la cola de reportes de jugadores (T4.1). Comandos en
 el servidor con `-map-submit-min-account-age 0` (`DEV_SERVER_FLAGS`), así una cuenta recién
 creada puede enviar; en producción tiene que tener 24 h. Para revisar la cola
 (`/maps/review`), dale `gm` a otra cuenta con `make set-role` y entra con ella. El PR en
-GitHub lo abre el worker de T4.5 (2/2); mientras tanto, un envío aprobado se aplica a mano
-con `mapcli patch apply` sobre el patch descargado.
+GitHub lo abre el worker (`tools/map-pr-worker`, T4.5): sin token no corre, y un envío
+aprobado se aplica a mano con `mapcli patch apply` sobre el patch descargado.
+
+Para probar el worker en local sin GitHub, el E2E (`client/e2e/maps.spec.ts`) levanta un
+GitHub falso (`tools/map-pr-worker/test/fake-github.ts`) y corre el worker contra él. Contra
+GitHub de verdad, usa un fork tuyo y el token clásico (`public_repo`) de una cuenta de bot
+colaboradora de ese fork: el worker no corre con el token del dueño del repo (docs/09):
+```
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/rpg \
+GITHUB_MAP_PR_TOKEN=github_pat_... GITHUB_REPOSITORY=tu-usuario/RPG_Project \
+node --experimental-strip-types tools/map-pr-worker/src/cli.ts --once --only <id>
+```
+`--once` procesa lo que esté listo y termina; `--only <id>` solo ese envío (la base de
+desarrollo puede tener otros aprobados). Los tests: `pnpm exec vitest run tools/map-pr-worker`
+y, con Postgres, `make test-integration`.
 
 ### Mapa del servidor
 El servidor carga el mapa compilado (`build/world.bin`), no el JSON de `world/`:

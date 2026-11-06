@@ -73,6 +73,10 @@ type Config struct {
 	MapDownloadRateLimit RateLimit
 	// MapUploadSlots: uploads in flight at once; default DefaultMapUploadSlots.
 	MapUploadSlots int
+	// MapPRWorker: the worker that opens pull requests for approved submissions runs
+	// (T4.5 2/2). Only informative: without it the website tells moderators to open
+	// approved submissions by hand.
+	MapPRWorker bool
 }
 
 // Accounts is the account service the API calls. *auth.Service implements it; tests

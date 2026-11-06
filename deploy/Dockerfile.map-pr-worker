@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1.7
+#
+# Map PR worker image (T4.5): opens a GitHub pull request for each approved map
+# submission (tools/map-pr-worker). Node runs the TypeScript sources directly (type
+# stripping), with the workspace packages it needs: @rpg/map-format (the merge) and
+# @rpg/content-schema. No port; it only talks to Postgres and to the GitHub API.
+#
+#   docker build -f deploy/Dockerfile.map-pr-worker -t rpg-map-pr-worker .
+#
+# Configuration by environment (docs/09, "Worker de PR de mapas"); without
+# GITHUB_MAP_PR_TOKEN it logs once that it is disabled and idles until stopped (--once:
+# exits 0).
+
+ARG NODE_VERSION=22
+
+# ---- dependencies: the worker and its workspace packages, production only --------------
+FROM node:${NODE_VERSION}-alpine AS deps
+WORKDIR /src
+# corepack installs the pnpm version pinned in package.json ("packageManager").
+RUN corepack enable
+COPY . .
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --prod --filter "@rpg/map-pr-worker..."
+
+# ---- runtime: the same layout, so pnpm's relative symlinks keep working -----------------
+FROM node:${NODE_VERSION}-alpine
+ARG VERSION=dev
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="rpg-project-map-pr-worker" \
+      org.opencontainers.image.description="RPG Project: opens a pull request for each approved map submission" \
+      org.opencontainers.image.source="https://github.com/GFenzoR/RPG_Project" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
+WORKDIR /app
+COPY --from=deps /src/package.json /src/pnpm-workspace.yaml ./
+COPY --from=deps /src/node_modules ./node_modules
+COPY --from=deps /src/packages/map-format ./packages/map-format
+COPY --from=deps /src/packages/content-schema ./packages/content-schema
+COPY --from=deps /src/tools/map-pr-worker ./tools/map-pr-worker
+USER node
+ENV NODE_ENV=production
+ENTRYPOINT ["node", "--experimental-strip-types", "--no-warnings", "tools/map-pr-worker/src/cli.ts"]

@@ -56,7 +56,7 @@ func TestMapSubmissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.ID <= 0 || m.AuthorName != "Char aria" || m.Status != store.SubmissionPending {
+	if m.ID <= 0 || m.AuthorName != "Char aria" || m.Status != store.SubmissionPending || !m.HasPatch {
 		t.Fatalf("created %+v", m)
 	}
 	if _, err := sub(author, authorChar, "a", now); !errors.Is(err, store.ErrDuplicateSubmission) {

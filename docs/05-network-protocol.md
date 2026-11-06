@@ -233,7 +233,7 @@ test sin Postgres) las rutas no existen (404).
 | Método y ruta | Quién | Cuerpo | Respuesta OK |
 |---|---|---|---|
 | `POST /api/maps/submissions` | cualquier cuenta | `{title, description, character_id, license, patch}` | `201 {submission}` |
-| `GET /api/maps/submissions/mine` | cualquier cuenta | — | `200 {submissions, can_review, email, license, max_bytes, per_day}` (las 100 más nuevas; `email` es el de la propia cuenta, para "Sesión: …") |
+| `GET /api/maps/submissions/mine` | cualquier cuenta | — | `200 {submissions, can_review, email, license, max_bytes, per_day, pr_worker}` (las 100 más nuevas; `email` es el de la propia cuenta, para "Sesión: …"; `pr_worker`: corre el worker que abre los PR, flag `-map-pr-worker` o `RPG_MAP_PR_WORKER=on`) |
 | `GET /api/maps/submissions?status=&cursor=` | gm, admin | — | `200 {status, submissions, next?}`: páginas de 50. `pending` (default) del más viejo al más nuevo por creación; los demás estados del cambio más reciente al más viejo (`updated_at`). `next` es el `cursor` de la página siguiente (`<µs unix>-<id>`, keyset) |
 | `GET /api/maps/submissions/{id}` | autor, gm, admin | — | `200 {submission}` |
 | `GET /api/maps/submissions/{id}/patch` | autor, gm, admin | — | `200` el patch tal cual se subió, como adjunto; `410 patch_gone` si ya se purgó |
@@ -241,7 +241,8 @@ test sin Postgres) las rutas no existen (404).
 
 - `submission`: `{id, title, description, author, license, status, sha256, size, base_ref,
   files: [{path, action: create|modify|delete}], created_at, updated_at, reviewed_at?,
-  reason?, failure?, pr_url?, pr_number?, has_patch}`. `has_patch` es `false` cuando la
+  reason?, failure?, pr_url?, pr_number?, has_patch}`. `failure` es un código del worker
+  (`conflict`, `outside_plot`, `invalid_patch`, `no_changes`, `github`; docs/04). `has_patch` es `false` cuando la
   retención ya borró los bytes (docs/04). `author` es el nombre del personaje elegido
   (`character_id`, tiene que ser de la cuenta); el email nunca sale. Quien no es autor ni
   staff recibe el mismo `404` que con un id inexistente.

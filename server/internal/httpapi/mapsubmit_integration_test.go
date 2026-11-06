@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
@@ -91,8 +92,9 @@ func TestMapPortalWithPostgres(t *testing.T) {
 	}
 
 	var sub submissionResp
-	_ = json.Unmarshal(call("POST", "/api/maps/submissions", author, body(validPatch(t)), 201), &sub)
-	if sub.Submission.Author != "Aria" {
+	created := call("POST", "/api/maps/submissions", author, body(validPatch(t)), 201)
+	_ = json.Unmarshal(created, &sub)
+	if sub.Submission.Author != "Aria" || !strings.Contains(string(created), `"has_patch":true`) {
 		t.Fatalf("author = %q", sub.Submission.Author)
 	}
 	id := strconv.FormatInt(sub.Submission.ID, 10)

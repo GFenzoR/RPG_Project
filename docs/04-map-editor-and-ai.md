@@ -356,8 +356,9 @@ confianza del propio reporte y por eso es solo una vista previa). Tests:
 ### Portal de envío de mapas (T4.5)
 Para quien no usa git: el editor (o `mapcli patch create`) exporta un map patch y el sitio
 lo manda a revisión. Un moderador lo aprueba o rechaza, y uno aprobado se abre como PR en
-este repo, donde corren los checks de siempre (sección anterior). T4.5 llega en dos PR:
-el portal y la cola (1/2) y el worker que abre el PR (2/2).
+este repo, donde corren los checks de siempre (sección anterior). El portal y la cola son
+el servidor y el sitio; el PR lo abre el worker `tools/map-pr-worker` (deploy y token en
+docs/09, "Worker de PR de mapas").
 
 **Flujo:**
 1. El jugador, con sesión, entra a `/maps/submit` (sitio público, `client/src/site/Maps.tsx`;
@@ -372,8 +373,40 @@ el portal y la cola (1/2) y el worker que abre el PR (2/2).
    revisarlo con `mapcli patch diff` o en el editor (Importar patch), y lo aprueba o lo
    rechaza con motivo. Cada decisión y cada descarga quedan en `audit_log`
    (`map_approve`, `map_reject`, `map_download`, fuente `web`).
-5. Aprobado = `approved`. El worker del PR 2/2 lo toma de la cola de la base (contrato
-   abajo) y lo deja en `pr_opened` (con la URL) o `failed` (con un código fijo).
+5. Aprobado = `approved`. El worker lo toma de la cola de la base (contrato abajo) y lo
+   deja en `pr_opened` (con la URL) o `failed` (con un código fijo).
+
+**El worker** (`tools/map-pr-worker`, Node; reutiliza `packages/map-format`, nunca un merge
+propio):
+- Lee la rama base **actual** con la API de contenidos de GitHub y mezcla cada archivo del
+  patch con `mergePatchFile` (el mismo merge de tres vías que `mapcli patch apply`, con la
+  `base_text` del patch como base). Escribe el resultado con la API Git Data (árbol sobre
+  el de la base con el texto de los archivos en el mismo pedido, commit con la base como
+  padre, rama `map-submission/<id>-<sha12>`): sin `git clone` ni nada que ejecutar en el
+  contenedor. Un PR o una rama que ya existen solo se reusan si llevan la marca o los
+  trailers de ese envío.
+- Vuelve a chequear todo lo que importa, sin confiar en el servidor: `parsePatch`, solo
+  formato 2, y cada ruta tiene que ser un archivo de mapa de `world/` (`writablePath`).
+  También repite el chequeo de **parcelas** contra las zonas de la base (`checkPlots`):
+  el portal es para cambios dentro de `community_plot`, y el autor del PR es el token del
+  worker, no el jugador. El worker se niega a correr con el token del dueño del repo o de
+  alguien de `MAINTAINERS` (docs/09: una cuenta de bot colaboradora con un PAT clásico
+  `public_repo`).
+- **Crédito:** el mismo commit agrega a `world/CONTRIBUTORS.md` una fila
+  `| <personaje> | <islas> | envío n.º <id> | <fecha de aprobación> |`. Es el archivo que
+  `PLOT_FREE_FILES` deja tocar a cualquiera. Va el número de envío y no el del PR porque
+  el PR todavía no existe cuando se escribe el commit. Dos PR del portal abiertos a la vez
+  agregan filas al final del mismo archivo: el segundo en mergearse tiene un conflicto de
+  una línea que se resuelve con "Resolve conflicts" en GitHub.
+- **El PR** se titula `map: <título> (envío n.º <id>)`, con `#`, `@` y `GH-` del título
+  neutralizados (no cierra issues ni menciona a nadie), y su cuerpo dice autor (personaje),
+  licencia, islas, archivos y sha256 del patch, y lleva la descripción del autor dentro de
+  un bloque de código con un cerco más largo que cualquier secuencia de backticks: no se
+  renderiza como Markdown, y sus `@menciones` o `#referencias` no avisan a nadie. Nunca el
+  email ni nada interno.
+- **Fallas** (`failure`, las ve el autor en "Mis envíos"): `conflict`, `outside_plot`,
+  `invalid_patch`, `no_changes` y `github`. Un error de red o de GitHub reintenta con
+  espera creciente y, después de 10 intentos, pasa a `github`.
 
 **Qué chequea el servidor (y qué no).** Es una primera barrera barata, no la validación
 del mapa: el merge, los esquemas, las parcelas `community_plot` y el validador los corre
@@ -437,12 +470,15 @@ abierta mientras se habla con GitHub:
    `next_attempt_at = now + lease` (minutos), y se confirma. El lease aleja a otros
    workers; si el worker muere, vence solo.
 2. **Trabajar** sin transacción. Es idempotente por construcción: la rama es siempre
-   `map-submission/<id>`, y si ya hay un PR abierto desde esa rama se reusa, nunca se
-   abre otro. Un reinicio a mitad de camino no duplica nada.
+   `map-submission/<id>-<sha12>`, y un PR desde esa rama con la marca
+   `<!-- rpg-map-submission: <id> sha256:<sha> -->` se reusa (también uno abierto a mano
+   siguiendo la página de moderación), nunca se abre otro. Un reinicio a mitad de camino no
+   duplica nada; antes de un `failed`/`github` final se vuelve a buscar el PR.
 3. **Cerrar**, en otra transacción corta con `status = 'approved'` como guarda: `pr_opened`
    (`pr_url`, `pr_number`) o `failed` (`failure`, un código `[a-z_]` fijo, nunca un
-   mensaje de GitHub o del merge). Un error reintentable lo deja `approved`, y el lease
-   hace de espera.
+   mensaje de GitHub o del merge). Un error reintentable lo deja `approved` con espera
+   creciente; un rate limit o un rechazo de configuración pausan todo el worker y devuelven
+   el intento (`attempts - 1`).
 La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y `reason` en
 `rejected`.
 

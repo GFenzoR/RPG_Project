@@ -72,6 +72,16 @@ log "restarting gameserver (applies pending migrations)"
 log "restarting caddy and backup"
 "${COMPOSE[@]}" up -d --wait caddy backup
 
+# The map PR worker (T4.5) only runs with the map-pr profile (COMPOSE_PROFILES in .env):
+# restart it after the gameserver, so it never works on a schema older than the server's.
+if "${COMPOSE[@]}" config --services | grep -qx map-pr-worker; then
+	log "restarting the map PR worker"
+	if ((pull)); then
+		"${COMPOSE[@]}" pull --quiet map-pr-worker
+	fi
+	"${COMPOSE[@]}" up -d --no-deps map-pr-worker
+fi
+
 log "removing unused images"
 docker image prune -f >/dev/null
 

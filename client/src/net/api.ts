@@ -116,6 +116,8 @@ export interface MySubmissions {
   /** The account's own email, for "signed in as". */
   email: string;
   license: string;
+  /** The worker that opens pull requests runs (otherwise a maintainer does it by hand). */
+  pr_worker: boolean;
   max_bytes: number;
   per_day: number;
 }

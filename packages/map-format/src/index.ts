@@ -73,6 +73,7 @@ export {
   checkPlots,
   communityPlots,
   inPlot,
+  parseMaintainers,
   renderAreas,
 } from "./patch/plots.ts";
 export type {

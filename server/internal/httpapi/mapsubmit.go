@@ -76,6 +76,10 @@ const (
 	maxPatchDownloads = 2
 )
 
+// uploadSlotHook is told when an upload takes (+1) and frees (-1) a slot. Tests only
+// (export_test.go): they wait on it instead of racing the handlers.
+var uploadSlotHook = func(int) {}
+
 // DefaultMapUploadSlots is how many uploads are in flight at once, from the first body
 // byte to the answer. Each holds at most about 5 × MaxBytes (body, decoded text, the
 // stored copy): with 2 MiB patches, 4 slots bound the portal to about 40 MiB. A request
@@ -190,7 +194,11 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 	// slot until it answers (DefaultMapUploadSlots), and a full house answers 503.
 	select {
 	case a.uploadSlots <- struct{}{}:
-		defer func() { <-a.uploadSlots }()
+		uploadSlotHook(+1)
+		defer func() {
+			<-a.uploadSlots
+			uploadSlotHook(-1)
+		}()
 	default:
 		writeError(w, http.StatusServiceUnavailable, "busy")
 		return
@@ -280,10 +288,12 @@ type mineResponse struct {
 	// CanReview: the account is gm or admin (the website shows the queue link).
 	CanReview bool `json:"can_review"`
 	// Email is the account's own email ("signed in as"); never anybody else's.
-	Email    string `json:"email"`
-	License  string `json:"license"`
-	MaxBytes int    `json:"max_bytes"`
-	PerDay   int    `json:"per_day"`
+	Email   string `json:"email"`
+	License string `json:"license"`
+	// PRWorker: approved submissions become pull requests on their own (Config.MapPRWorker).
+	PRWorker bool `json:"pr_worker"`
+	MaxBytes int  `json:"max_bytes"`
+	PerDay   int  `json:"per_day"`
 }
 
 func (a *api) mySubmissions(w http.ResponseWriter, r *http.Request, accountID int64) {
@@ -303,6 +313,7 @@ func (a *api) mySubmissions(w http.ResponseWriter, r *http.Request, accountID in
 	}
 	writeJSON(w, http.StatusOK, mineResponse{
 		Submissions: submissionsOut(ms), CanReview: staff, Email: email, License: MapLicense,
+		PRWorker: a.cfg.MapPRWorker,
 		MaxBytes: a.cfg.MapSubmitLimits.MaxBytes, PerDay: a.cfg.MapSubmitLimits.PerDay,
 	})
 }
