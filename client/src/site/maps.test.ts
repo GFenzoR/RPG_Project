@@ -9,6 +9,7 @@ import {
   groupFiles,
   groupLabel,
   isMapStatus,
+  manualPr,
   precheckPatch,
   safePrUrl,
 } from "./maps.ts";
@@ -107,6 +108,12 @@ describe("helpers", () => {
     expect(failureKey("outside_plot")).toBe("site.maps.failure.outside_plot");
     expect(failureKey("constructor")).toBe("site.maps.outcome.failed");
     expect(failureKey(undefined)).toBe("site.maps.outcome.failed");
+  });
+  it("gives the worker's branch and marker for a PR opened by hand", () => {
+    expect(manualPr({ id: 12, sha256: "ab".repeat(32) })).toEqual({
+      branch: "map-submission/12-abababababab",
+      marker: `<!-- rpg-map-submission: 12 sha256:${"ab".repeat(32)} -->`,
+    });
   });
   it("checks statuses and PR links", () => {
     expect(isMapStatus("pr_opened")).toBe(true);

@@ -468,3 +468,8 @@ figcaption {
   border-left: 3px solid var(--accent);
   padding-left: 0.75rem;
 }
+.notice pre {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

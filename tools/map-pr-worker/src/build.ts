@@ -145,12 +145,12 @@ const safeName = (name: string): string => name.replace(/[^\p{L}\p{M} '-]/gu, ""
 /** The credits row of a submission: author, islands, the submission, the approval date. */
 export function creditRow(s: Submission, islands: readonly string[]): string {
   const date = s.reviewedAt.toISOString().slice(0, 10);
-  return `| ${safeName(s.author)} | ${islands.join(", ")} | envío #${String(s.id)} | ${date} |`;
+  return `| ${safeName(s.author)} | ${islands.join(", ")} | envío n.º ${String(s.id)} | ${date} |`;
 }
 
 /** The credits file with the submission's row appended (once). */
 export function withCredit(text: string, s: Submission, islands: readonly string[]): string {
-  if (text.includes(`| envío #${String(s.id)} |`)) return text;
+  if (text.includes(`| envío n.º ${String(s.id)} |`)) return text;
   const body = text.endsWith("\n") ? text : `${text}\n`;
   return `${body}${creditRow(s, islands)}\n`;
 }
@@ -161,7 +161,9 @@ function oneLine(s: string, n: number): string {
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  // By code points: cutting UTF-16 units could leave half a surrogate pair.
+  const cps = Array.from(t);
+  return cps.length > n ? `${cps.slice(0, n - 1).join("")}…` : t;
 }
 
 /**
@@ -171,14 +173,23 @@ function oneLine(s: string, n: number): string {
  * breaks every one of them.
  */
 export function inert(text: string): string {
-  return text
-    .replace(/([#@])(?=[\p{L}\p{N}_])/gu, "$1\u2060")
-    .replace(/\b(gh-)(?=\d)/giu, "$1\u2060");
+  return (
+    text
+      .replace(/([#@])(?=[\p{L}\p{N}_])/gu, "$1\u2060")
+      .replace(/\b(gh-)(?=\d)/giu, "$1\u2060")
+      // A closing keyword followed by a full issue URL closes it too: break both the
+      // keywords and every URL (no autolink, no reference).
+      .replace(
+        /\b(clos|fix|resolv)(?=e[sd]?\b|es\b|ed\b|\b)/giu,
+        (m) => `${m.charAt(0)}\u2060${m.slice(1)}`,
+      )
+      .replace(/:\/\//g, ":\u2060//")
+  );
 }
 
 /** Title of the commit and of the pull request. */
 export function prTitle(s: Submission): string {
-  return `map: ${inert(oneLine(s.title, 60))} (envío #${String(s.id)})`;
+  return `map: ${inert(oneLine(s.title, 60))} (envío n.º ${String(s.id)})`;
 }
 
 export function commitMessage(s: Submission): string {
@@ -217,7 +228,7 @@ export function prBody(s: Submission): string {
   const { files, islands } = patchFiles(s);
   const lines = [
     markerOf(s),
-    `Envío #${String(s.id)} del portal de mapas, aprobado por un moderador (docs/04, "Portal de envío de mapas").`,
+    `Envío n.º ${String(s.id)} del portal de mapas, aprobado por un moderador (docs/04, "Portal de envío de mapas").`,
     "",
     `- **Autor:** ${safeName(s.author)} (nombre de su personaje)`,
     "- **Licencia:** CC BY 4.0 (`cc-by-4.0`), aceptada al enviar",
@@ -228,7 +239,7 @@ export function prBody(s: Submission): string {
     ...files.map((p) => `- \`${p}\``),
     "",
     "El patch se mezcló sobre la rama base actual con el merge de `packages/map-format`. El check `map-pr` revisa parcelas, validador y conflictos como en cualquier PR de mapas.",
-    `El crédito va en \`${CONTRIBUTORS}\` como \`envío #${String(s.id)}\` (si el archivo existe en la base).`,
+    `El crédito va en \`${CONTRIBUTORS}\` como \`envío n.º ${String(s.id)}\` (si el archivo existe en la base).`,
   ];
   if (s.description.trim() !== "")
     lines.push(

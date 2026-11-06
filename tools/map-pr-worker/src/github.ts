@@ -1,6 +1,6 @@
 // Minimal GitHub REST client for the map PR worker (T4.5): read a ref and files of the base
 // branch, write blobs, a tree, a commit and a branch with the Git Data API, and open or
-// find the pull request. No git clone, no shell: everything is HTTP with a fine-grained
+// find the pull request. No git clone, no shell: everything is HTTP with the bot's
 // token (docs/09, "Worker de PR de mapas"). The token only ever goes in the Authorization
 // header; errors carry the method, the path and the status, never the token or a body.
 
@@ -14,12 +14,34 @@ export class GitHubError extends Error {
   readonly status: number;
   readonly retryable: boolean;
   readonly config: boolean;
-  constructor(message: string, status: number, retryable: boolean, config = false) {
+  /** A rate limit: how long GitHub asks to wait (ms, at least a minute); else undefined. */
+  readonly waitMs: number | undefined;
+  constructor(
+    message: string,
+    status: number,
+    retryable: boolean,
+    config = false,
+    waitMs?: number,
+  ) {
     super(message);
     this.status = status;
     this.retryable = retryable;
     this.config = config;
+    this.waitMs = waitMs;
   }
+}
+
+const MIN_RATE_WAIT = 60_000;
+
+/** How long a rate-limited answer asks to wait: Retry-After, x-ratelimit-reset, 60 s. */
+export function rateLimitWait(headers: Headers, nowMs: number): number {
+  const after = Number(headers.get("retry-after") ?? "");
+  const reset = Number(headers.get("x-ratelimit-reset") ?? "");
+  return Math.max(
+    MIN_RATE_WAIT,
+    Number.isFinite(after) && after > 0 ? after * 1000 : 0,
+    Number.isFinite(reset) && reset > 0 ? reset * 1000 - nowMs : 0,
+  );
 }
 
 export interface GitHubOptions {
@@ -91,6 +113,11 @@ export class GitHub {
     this.doFetch = opts.fetch ?? fetch;
   }
 
+  /**
+   * One call. Everything that can go wrong on the way (the connection, the timeout, a body
+   * cut short while it streams) is a retryable GitHubError carrying only the error's name;
+   * so is a 2xx JSON answer that does not parse into an object or array.
+   */
   private async request(
     method: string,
     path: string,
@@ -99,6 +126,7 @@ export class GitHub {
   ): Promise<{ status: number; data: unknown; bytes: Uint8Array; headers: Headers }> {
     const url = `${this.opts.apiUrl.replace(/\/+$/, "")}${path}`;
     let res: Response;
+    let bytes: Uint8Array;
     try {
       res = await this.doFetch(url, {
         method,
@@ -113,18 +141,24 @@ export class GitHub {
         signal: AbortSignal.timeout(this.opts.timeoutMs ?? 30_000),
         redirect: "error",
       });
+      bytes = new Uint8Array(await res.arrayBuffer());
     } catch (e) {
       const name = e instanceof Error ? e.name : "error";
       throw new GitHubError(`${method} ${path}: network (${name})`, 0, true);
     }
-    const bytes = new Uint8Array(await res.arrayBuffer());
     let data: unknown;
-    if (accept.endsWith("+json") || accept === "application/json") {
+    if (accept.endsWith("+json") && !accept.includes(".raw")) {
       try {
         data = bytes.length === 0 ? undefined : JSON.parse(new TextDecoder().decode(bytes));
       } catch {
         data = undefined;
       }
+      if (res.ok && (data === null || typeof data !== "object"))
+        throw new GitHubError(
+          `${method} ${path}: HTTP ${String(res.status)} without a JSON body`,
+          res.status,
+          true,
+        );
     }
     return { status: res.status, data, bytes, headers: res.headers };
   }
@@ -134,8 +168,9 @@ export class GitHub {
     path: string,
     r: { status: number; data?: unknown; headers: Headers },
   ): never {
-    // Rate limits answer 429, or 403 with retry-after or no remaining requests: transient.
-    // 401, 404 and any other 403 are configuration (token, permissions, repository).
+    // Rate limits answer 429, or 403 with retry-after or no remaining requests: the whole
+    // worker waits (waitMs). 401, 404 and any other 403 are configuration (token,
+    // permissions, repository).
     const msg = (r.data as { message?: unknown } | undefined)?.message;
     const hint =
       typeof msg === "string" ? `: ${msg.slice(0, 120).replace(/[^\x20-\x7e]/g, "?")}` : "";
@@ -149,7 +184,18 @@ export class GitHub {
       r.status,
       !config,
       config,
+      limited ? rateLimitWait(r.headers, Date.now()) : undefined,
     );
+  }
+
+  /** The login the token belongs to. */
+  async login(): Promise<string> {
+    const r = await this.request("GET", "/user");
+    if (r.status !== 200) this.fail("GET", "/user", r);
+    const login = (r.data as { login?: unknown }).login;
+    if (typeof login !== "string" || login === "")
+      throw new GitHubError("GET /user: no login", 0, true);
+    return login;
   }
 
   private repoPath(rest: string): string {
@@ -162,7 +208,7 @@ export class GitHub {
     const r = await this.request("GET", path);
     if (r.status === 404) return null;
     if (r.status !== 200) this.fail("GET", path, r);
-    const sha = (r.data as { object?: { sha?: unknown } }).object?.sha;
+    const sha = (r.data as { object?: { sha?: unknown } } | undefined)?.object?.sha;
     if (typeof sha !== "string") throw new GitHubError(`GET ${path}: no sha`, 0, true);
     return sha;
   }
@@ -172,7 +218,7 @@ export class GitHub {
     const path = this.repoPath(`/git/commits/${encodeURIComponent(sha)}`);
     const r = await this.request("GET", path);
     if (r.status !== 200) this.fail("GET", path, r);
-    const message = (r.data as { message?: unknown }).message;
+    const message = (r.data as { message?: unknown } | undefined)?.message;
     return typeof message === "string" ? message : "";
   }
 
@@ -181,7 +227,7 @@ export class GitHub {
     const path = this.repoPath(`/git/commits/${encodeURIComponent(sha)}`);
     const r = await this.request("GET", path);
     if (r.status !== 200) this.fail("GET", path, r);
-    const tree = (r.data as { tree?: { sha?: unknown } }).tree?.sha;
+    const tree = (r.data as { tree?: { sha?: unknown } } | undefined)?.tree?.sha;
     if (typeof tree !== "string") throw new GitHubError(`GET ${path}: no tree`, 0, true);
     return tree;
   }

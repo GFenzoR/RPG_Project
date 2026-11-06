@@ -164,4 +164,5 @@ site.maps.failure.outside_plot: "No se pudo abrir el pull request: el cambio sal
 site.maps.failure.invalid_patch: "No se pudo abrir el pull request: el patch no es válido."
 site.maps.failure.no_changes: "No hizo falta abrir un pull request: el mapa ya tiene este cambio."
 site.maps.failure.github: "No se pudo abrir el pull request por un problema con GitHub. Avisa al equipo."
-site.maps.review.manual_hint: "El worker de PR no está activo: descarga el patch y aplícalo con «mapcli patch apply» en una rama map-submission/{id} para abrir el PR a mano."
+site.maps.review.manual_hint: "El worker de PR no está activo: descarga el patch, aplícalo con «mapcli patch apply» en la rama {branch} (ese nombre exacto) y abre el PR a mano."
+site.maps.review.manual_marker: "Pega esta línea en la descripción del PR: así el worker, cuando se active, lo reconoce y no abre otro."

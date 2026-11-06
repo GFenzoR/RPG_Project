@@ -537,7 +537,35 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+tok)
 		return http.DefaultClient.Do(req)
 	}
-	// Two uploads that send their first bytes and stall.
+	// Slots in use, as the handlers take and free them (no racing the handlers).
+	var mu sync.Mutex
+	inUse := 0
+	changed := make(chan struct{}, 64)
+	defer httpapi.SetUploadSlotHook(func(d int) {
+		mu.Lock()
+		inUse += d
+		mu.Unlock()
+		changed <- struct{}{}
+	})()
+	waitSlots := func(n int) {
+		t.Helper()
+		deadline := time.After(10 * time.Second)
+		for {
+			mu.Lock()
+			got := inUse
+			mu.Unlock()
+			if got == n {
+				return
+			}
+			select {
+			case <-changed:
+			case <-deadline:
+				t.Fatalf("slots in use = %d, want %d", got, n)
+			}
+		}
+	}
+
+	// Two uploads that send their first bytes and stall, each holding a slot.
 	var writers []*io.PipeWriter
 	done := make(chan *http.Response, 2)
 	for range 2 {
@@ -554,46 +582,39 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// The third: a body that is never sent. It must be answered anyway. The stalled ones
-	// sent their first bytes, but their handlers may not hold their slots yet: until they
-	// do, the third can take one and wait for its body, so each try has a deadline (which
-	// frees that slot) and the test tries again.
-	var resp *http.Response
-	var b []byte
-	for try := 0; ; try++ {
-		pr, pw := io.Pipe()
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		// The transport waits for its body writer, blocked on the pipe: end it with the try.
-		go func() {
-			<-ctx.Done()
-			_ = pw.CloseWithError(ctx.Err())
-		}()
-		req, _ := http.NewRequestWithContext(ctx, "POST", srv.URL+"/api/maps/submissions", pr)
-		req.ContentLength = 1 << 20
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+tok)
-		r, err := http.DefaultClient.Do(req)
-		if err == nil {
-			b, _ = io.ReadAll(r.Body)
-			r.Body.Close()
-			resp = r
-		}
-		cancel()
-		_ = pw.Close()
-		if resp != nil || try == 10 {
-			break
-		}
+	waitSlots(2)
+
+	// The third: a body that is never sent. It must be answered anyway, at once. (The
+	// deadline only keeps a broken server from hanging the test.)
+	pr, pw := io.Pipe()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = pw.CloseWithError(ctx.Err())
+	}()
+	req, _ := http.NewRequestWithContext(ctx, "POST", srv.URL+"/api/maps/submissions", pr)
+	req.ContentLength = 1 << 20
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	third, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if resp == nil || resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), `"busy"`) {
-		t.Fatalf("third upload = %v %s, want 503 busy", resp, b)
+	b, _ := io.ReadAll(third.Body)
+	third.Body.Close()
+	if third.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(b), `"busy"`) {
+		t.Fatalf("third upload = %d %s, want 503 busy", third.StatusCode, b)
 	}
-	// Once the stalled ones end, a slot is free again.
+
+	// Once the stalled ones end (and their handlers free their slots), uploads work again.
 	for _, w := range writers {
 		_ = w.CloseWithError(io.ErrUnexpectedEOF)
 	}
 	for range 2 {
 		<-done
 	}
+	waitSlots(0)
 	body := submitBody(t, nil)
 	resp, err := post(strings.NewReader(body), int64(len(body)))
 	if err != nil {
@@ -603,6 +624,8 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("after the stall = %d", resp.StatusCode)
 	}
+	// Its handler frees the slot after answering: wait, so the hook is restored after it.
+	waitSlots(0)
 }
 
 func TestUploadContentLengthOverTheCap(t *testing.T) {

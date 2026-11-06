@@ -177,8 +177,8 @@ services:
   # ---- map PR worker (T4.5), profile map-pr ----------------------------------------------
   # Opens a pull request for each approved map submission (tools/map-pr-worker). Off unless
   # the profile is on (COMPOSE_PROFILES=map-pr) AND GITHUB_MAP_PR_TOKEN is set in
-  # deploy/.env: without the token it logs that it is disabled and exits 0, and
-  # `on-failure` does not restart it. No port: it only reaches Postgres (internal) and the
+  # deploy/.env: without the token it logs once that it is disabled and idles (so
+  # `up --wait` passes). It refuses to run with the owner's or a maintainer's token. No port: it only reaches Postgres (internal) and the
   # GitHub API (edge). How to create the token: docs/09, "Worker de PR de mapas".
   map-pr-worker:
     image: ${IMAGE_REGISTRY:-ghcr.io/gfenzor}/rpg-project-map-pr-worker:${IMAGE_TAG:-latest}

@@ -2,8 +2,9 @@
 // The map PR worker's process (T4.5 2/2, docs/09 "Worker de PR de mapas"). No port: it only
 // talks to Postgres and to the GitHub API. Configuration comes from the environment:
 //   DATABASE_URL            Postgres of the game (map_submissions)
-//   GITHUB_MAP_PR_TOKEN     fine-grained token: this repository only, Contents and Pull
-//                           requests read/write. Without it the worker does not run.
+//   GITHUB_MAP_PR_TOKEN     token of a bot account (docs/09): a write collaborator that
+//                           is neither the owner nor in .github/MAINTAINERS. Without it the
+//                           worker does nothing (it idles until stopped).
 //   GITHUB_REPOSITORY       owner/repo the pull requests go to
 //   MAP_PR_BASE             base branch (default main)
 //   MAP_PR_POLL_SECONDS     how often to look for approved submissions (default 30)
@@ -11,14 +12,13 @@
 // Flags: --once (handle what is due and exit), --only <id> (that submission only),
 // --self-check (merge a small built-in patch with map-format and exit: the image's smoke
 // test, which proves the modules and the map schemas load).
-//   MAP_PR_POLL_SECONDS     how often to look for approved submissions (default 30)
 // Logs are JSON lines on stdout; the token is never logged.
 import { parseArgs } from "node:util";
 import pg from "pg";
 import { readConfig } from "./config.ts";
-import { GitHub } from "./github.ts";
+import { GitHub, GitHubError } from "./github.ts";
 import { PgQueue } from "./queue.ts";
-import { runOnce } from "./worker.ts";
+import { CONFIG_WAIT, checkIdentity, pausedUntil, runOnce } from "./worker.ts";
 import { buildChange } from "./build.ts";
 
 /** Merges a one-zone patch onto a one-zone base: map-format, its schemas and the build load. */
@@ -63,7 +63,41 @@ function log(level: string, msg: string, fields: Record<string, unknown> = {}): 
   );
 }
 
+/**
+ * Stop signals and sleeps. A sleep keeps the process alive (its timer is ref'd: an idle
+ * pg pool closes its connections after 10 s and would otherwise leave nothing pending),
+ * and SIGTERM or SIGINT end it at once.
+ */
+class Lifecycle {
+  stopped = false;
+  private wake: (() => void) | undefined;
+  constructor() {
+    for (const sig of ["SIGTERM", "SIGINT"] as const)
+      process.on(sig, () => {
+        this.stopped = true;
+        this.wake?.();
+      });
+  }
+  /** Sleeps ms (a stop ends it early). */
+  sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.stopped) return resolve();
+      const timer = setTimeout(done, Math.max(0, ms));
+      function done(): void {
+        clearTimeout(timer);
+        resolve();
+      }
+      this.wake = done;
+    });
+  }
+  /** Sleeps until stopped. */
+  async idle(): Promise<void> {
+    while (!this.stopped) await this.sleep(3_600_000);
+  }
+}
+
 async function main(): Promise<number> {
+  const life = new Lifecycle();
   const { values } = parseArgs({
     options: {
       once: { type: "boolean", default: false },
@@ -85,8 +119,10 @@ async function main(): Promise<number> {
   const cfg = readConfig(process.env);
   if (cfg === "disabled") {
     // Not an error: without a token, approved submissions wait and a maintainer opens
-    // them by hand with `mapcli patch apply` (docs/04).
+    // them by hand (docs/04). As a service it stays up doing nothing, so `compose up
+    // --wait` with the map-pr profile still passes; --once just exits.
     log("warn", "GITHUB_MAP_PR_TOKEN is not set: the map PR worker does not run");
+    if (!values.once) await life.idle();
     return 0;
   }
   if ("error" in cfg) {
@@ -97,35 +133,52 @@ async function main(): Promise<number> {
   pool.on("error", (e) => log("warn", "postgres", { err: e.message }));
   const gh = new GitHub({ apiUrl: cfg.apiUrl, token: cfg.token, owner: cfg.owner, repo: cfg.repo });
   const queue = new PgQueue(pool);
-  let stop = false;
-  let wake: (() => void) | undefined;
-  for (const sig of ["SIGTERM", "SIGINT"] as const)
-    process.on(sig, () => {
-      stop = true;
-      wake?.();
-    });
   log("info", "map PR worker started", { repo: `${cfg.owner}/${cfg.repo}`, base: cfg.base });
   try {
-    do {
+    // Who the token is, before any submission is touched (checkIdentity).
+    let identity: string | undefined;
+    while (identity === undefined && !life.stopped) {
+      try {
+        const id = await checkIdentity(gh, cfg.base);
+        if (!id.ok) {
+          log("error", "map PR worker refuses to run with this token", {
+            login: id.login,
+            reason: id.reason,
+          });
+          if (values.once) return 2;
+          await life.idle();
+          return 0;
+        }
+        identity = id.login;
+        log("info", "map PR worker token", { login: id.login });
+      } catch (e) {
+        const config = e instanceof GitHubError && e.config;
+        log(config ? "error" : "warn", "map PR worker: cannot check the token", {
+          err: e instanceof Error ? e.message : String(e),
+        });
+        if (values.once) return 1;
+        await life.sleep(config ? CONFIG_WAIT : cfg.pollMs);
+      }
+    }
+    while (!life.stopped) {
+      let wait = cfg.pollMs;
       try {
         const done = await runOnce(gh, queue, {
           base: cfg.base,
           log,
           ...(onlyId === undefined ? {} : { onlyId }),
         });
-        if (values.once)
-          return done.some((o) => o.kind === "retry" || o.kind === "blocked") ? 1 : 0;
+        if (values.once) return done.some((o) => o.kind === "retry" || o.kind === "paused") ? 1 : 0;
+        const until = pausedUntil(done);
+        if (until) wait = Math.max(wait, until.getTime() - Date.now());
       } catch (e) {
         log("warn", "map PR worker: queue unavailable", {
           err: e instanceof Error ? e.message : String(e),
         });
         if (values.once) return 1;
       }
-      await new Promise<void>((resolve) => {
-        wake = resolve;
-        setTimeout(resolve, cfg.pollMs).unref();
-      });
-    } while (!stop);
+      await life.sleep(wait);
+    }
     return 0;
   } finally {
     await pool.end();

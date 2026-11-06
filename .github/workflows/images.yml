@@ -27,6 +27,9 @@ on:
       - Makefile
       - tools/bots/**
       - tools/spritepack/**
+      # The map PR worker's image (T4.5) and its smoke test.
+      - tools/map-pr-worker/**
+      - pnpm-workspace.yaml
       - assets/**
       - proto/**
   workflow_dispatch:
@@ -145,7 +148,8 @@ jobs:
         run: |
           set -euo pipefail
           image=$(head -n1 <<<"$TAGS")
-          out=$(docker run --rm --read-only "$image")
+          # Without a token the service idles until stopped; --once just reports and exits.
+          out=$(docker run --rm --read-only "$image" --once)
           echo "$out"
           grep -q 'the map PR worker does not run' <<<"$out"
           # Merges a built-in patch: the map schemas and the merge load inside the image.

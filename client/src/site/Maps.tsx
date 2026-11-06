@@ -19,6 +19,7 @@ import {
   groupFiles,
   groupLabel,
   isMapStatus,
+  manualPr,
   precheckPatch,
   safePrUrl,
 } from "./maps.ts";
@@ -702,9 +703,13 @@ function Detail(props: MapsProps & { id: number; prWorker: boolean }): JSX.Eleme
       )}
       <p class="muted">{t("site.maps.review.check_hint")}</p>
       {m.status === "approved" && !props.prWorker && (
-        <p class="notice" data-testid="maps-manual">
-          {t("site.maps.review.manual_hint", { id: m.id })}
-        </p>
+        <div class="notice" data-testid="maps-manual">
+          <p>{t("site.maps.review.manual_hint", { branch: manualPr(m).branch })}</p>
+          <p>{t("site.maps.review.manual_marker")}</p>
+          <pre>
+            <code data-testid="maps-manual-marker">{manualPr(m).marker}</code>
+          </pre>
+        </div>
       )}
       {(m.status === "pr_opened" || m.status === "failed") && (
         <Outcome t={t} m={m} prWorker={props.prWorker} />

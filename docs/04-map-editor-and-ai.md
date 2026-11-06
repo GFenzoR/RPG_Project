@@ -389,14 +389,16 @@ propio):
   formato 2, y cada ruta tiene que ser un archivo de mapa de `world/` (`writablePath`).
   También repite el chequeo de **parcelas** contra las zonas de la base (`checkPlots`):
   el portal es para cambios dentro de `community_plot`, y el autor del PR es el token del
-  worker, no el jugador (docs/09: una cuenta de bot que no está en `MAINTAINERS`).
+  worker, no el jugador. El worker se niega a correr con el token del dueño del repo o de
+  alguien de `MAINTAINERS` (docs/09: una cuenta de bot colaboradora con un PAT clásico
+  `public_repo`).
 - **Crédito:** el mismo commit agrega a `world/CONTRIBUTORS.md` una fila
-  `| <personaje> | <islas> | envío #<id> | <fecha de aprobación> |`. Es el archivo que
+  `| <personaje> | <islas> | envío n.º <id> | <fecha de aprobación> |`. Es el archivo que
   `PLOT_FREE_FILES` deja tocar a cualquiera. Va el número de envío y no el del PR porque
   el PR todavía no existe cuando se escribe el commit. Dos PR del portal abiertos a la vez
   agregan filas al final del mismo archivo: el segundo en mergearse tiene un conflicto de
   una línea que se resuelve con "Resolve conflicts" en GitHub.
-- **El PR** se titula `map: <título> (envío #<id>)`, con `#`, `@` y `GH-` del título
+- **El PR** se titula `map: <título> (envío n.º <id>)`, con `#`, `@` y `GH-` del título
   neutralizados (no cierra issues ni menciona a nadie), y su cuerpo dice autor (personaje),
   licencia, islas, archivos y sha256 del patch, y lleva la descripción del autor dentro de
   un bloque de código con un cerco más largo que cualquier secuencia de backticks: no se
@@ -468,12 +470,15 @@ abierta mientras se habla con GitHub:
    `next_attempt_at = now + lease` (minutos), y se confirma. El lease aleja a otros
    workers; si el worker muere, vence solo.
 2. **Trabajar** sin transacción. Es idempotente por construcción: la rama es siempre
-   `map-submission/<id>`, y si ya hay un PR abierto desde esa rama se reusa, nunca se
-   abre otro. Un reinicio a mitad de camino no duplica nada.
+   `map-submission/<id>-<sha12>`, y un PR desde esa rama con la marca
+   `<!-- rpg-map-submission: <id> sha256:<sha> -->` se reusa (también uno abierto a mano
+   siguiendo la página de moderación), nunca se abre otro. Un reinicio a mitad de camino no
+   duplica nada; antes de un `failed`/`github` final se vuelve a buscar el PR.
 3. **Cerrar**, en otra transacción corta con `status = 'approved'` como guarda: `pr_opened`
    (`pr_url`, `pr_number`) o `failed` (`failure`, un código `[a-z_]` fijo, nunca un
-   mensaje de GitHub o del merge). Un error reintentable lo deja `approved`, y el lease
-   hace de espera.
+   mensaje de GitHub o del merge). Un error reintentable lo deja `approved` con espera
+   creciente; un rate limit o un rechazo de configuración pausan todo el worker y devuelven
+   el intento (`attempts - 1`).
 La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y `reason` en
 `rejected`.
 

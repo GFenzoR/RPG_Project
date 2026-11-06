@@ -36,6 +36,8 @@ export interface FakeGitHubOptions {
   /** Base branch and its files (null: not there). */
   base?: string;
   readBase: (path: string) => string | null;
+  /** Who the token is (GET /user); default a bot that is neither owner nor maintainer. */
+  login?: string;
 }
 
 export interface Failure {
@@ -44,6 +46,12 @@ export interface Failure {
   status: number;
   /** How many requests fail (default 1). */
   times?: number;
+  /**
+   * How: an error status (default), a 200 whose body is cut short ("truncate"), a 200
+   * that never finishes its body ("stall") or a 200 with an empty body ("empty").
+   */
+  mode?: "status" | "truncate" | "stall" | "empty";
+  headers?: Record<string, string>;
 }
 
 export interface FakeGitHub {
@@ -78,7 +86,8 @@ export async function startFakeGitHub(o: FakeGitHubOptions): Promise<FakeGitHub>
   const refs = new Map<string, string>([[base, "c".repeat(40)]]);
   const pulls: FakePull[] = [];
   const requests: string[] = [];
-  const failures: Required<Failure>[] = [];
+  const failures: (Failure & { times: number })[] = [];
+  const stalled: ServerResponse[] = [];
   const prefix = `/repos/${o.owner}/${o.repo}`;
 
   const readTree = (treeSha: string, path: string): string | null => {
@@ -104,6 +113,10 @@ export async function startFakeGitHub(o: FakeGitHubOptions): Promise<FakeGitHub>
     const url = new URL(req.url ?? "/", "http://fake");
     if (req.headers.authorization !== `Bearer ${o.token}`)
       return send(res, 401, { message: "Bad credentials" });
+    if (req.method === "GET" && url.pathname === "/user") {
+      requests.push("GET /user");
+      return send(res, 200, { login: o.login ?? "rpg-map-bot" });
+    }
     if (!url.pathname.startsWith(`${prefix}/`)) return send(res, 404, { message: "Not Found" });
     const rest = decodeURIComponent(url.pathname.slice(prefix.length));
     const route = `${req.method ?? ""} /${rest.split("/")[1] === "git" ? `git/${rest.split("/")[2] ?? ""}` : (rest.split("/")[1] ?? "")}`;
@@ -111,7 +124,23 @@ export async function startFakeGitHub(o: FakeGitHubOptions): Promise<FakeGitHub>
     const f = failures.find((x) => x.route === route && x.times > 0);
     if (f) {
       f.times--;
-      return send(res, f.status, { message: "injected failure" });
+      if (f.mode === "truncate") {
+        res.writeHead(200, { "Content-Type": "application/json", "Content-Length": "100000" });
+        res.write('{"sha":"');
+        return void setTimeout(() => res.socket?.destroy(), 20);
+      }
+      if (f.mode === "stall") {
+        res.writeHead(200, { "Content-Type": "application/json", "Content-Length": "100000" });
+        res.write('{"sha":"');
+        stalled.push(res);
+        return;
+      }
+      if (f.mode === "empty") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return void res.end();
+      }
+      res.writeHead(f.status, { "Content-Type": "application/json", ...f.headers });
+      return void res.end(JSON.stringify({ message: "injected failure" }));
     }
     const body = (await bodyOf(req)) as Record<string, unknown> | undefined;
     let m: RegExpExecArray | null;
@@ -235,6 +264,10 @@ export async function startFakeGitHub(o: FakeGitHubOptions): Promise<FakeGitHub>
       const c = commits.get(refs.get(branch) ?? "");
       return c ? readTree(c.tree, path) : null;
     },
-    close: () => new Promise<void>((r) => server.close(() => r())),
+    close: () => {
+      for (const r of stalled) r.socket?.destroy();
+      server.closeAllConnections();
+      return new Promise<void>((r) => server.close(() => r()));
+    },
   };
 }

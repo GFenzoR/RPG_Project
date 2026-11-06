@@ -281,6 +281,10 @@ test.describe.serial("map submission portal", () => {
     // This server runs without the PR worker (-map-pr-worker): moderators are told to open
     // it by hand.
     await expect(page.getByTestId("maps-manual")).toContainText("mapcli patch apply");
+    await expect(page.getByTestId("maps-manual")).toContainText(/map-submission\/\d+-[0-9a-f]{12}/);
+    await expect(page.getByTestId("maps-manual-marker")).toHaveText(
+      /^<!-- rpg-map-submission: \d+ sha256:[0-9a-f]{64} -->$/,
+    );
     await shot(page, "maps-review-approved");
 
     // The author sends a second change; the gm rejects it with a reason.
@@ -405,7 +409,7 @@ test.describe.serial("map submission portal", () => {
       const chunk = exported.files[0];
       expect(fake.fileOn(branch, chunk?.path ?? "")).toBe(chunk?.content);
       expect(fake.fileOn(branch, "world/CONTRIBUTORS.md")).toContain(
-        `| ${author.name} | puerto | envío #${id} |`,
+        `| ${author.name} | puerto | envío n.º ${id} |`,
       );
       expect(psql(`SELECT status || ' ' || pr_number FROM map_submissions WHERE id = ${id}`)).toBe(
         "pr_opened 1",

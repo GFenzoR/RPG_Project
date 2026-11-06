@@ -302,36 +302,47 @@ que comparten el repo, como producción y un servidor de pruebas, nunca comparte
 API de GitHub (red `edge`).
 
 **Cómo activarlo**
-1. **Una cuenta de bot (recomendado).** Crea una cuenta de GitHub aparte (por ejemplo
-   `rpg-map-bot`), invítala al repo como colaboradora con permiso **Write** y **no** la
-   agregues a `.github/MAINTAINERS`. El check de mapas decide si un PR puede tocar fuera de
-   las parcelas mirando a su autor: con un token del dueño del repo (`OWNER`), el PR de un
-   jugador saldría como si lo hubiera hecho un maintainer. El worker ya rechaza los cambios
-   fuera de parcelas antes de abrir el PR (falla `outside_plot`), pero así el check de la CI
-   tampoco tiene esa excepción.
-2. **El token (fine-grained, alcance mínimo).** Con la sesión de la cuenta del bot:
-   *Settings → Developer settings → Personal access tokens → Fine-grained tokens →
-   Generate new token*.
-   - *Resource owner*: el dueño del repo (si es una organización, puede pedir aprobación).
+1. **Una cuenta de bot.** Crea una cuenta de GitHub aparte (por ejemplo `rpg-map-bot`),
+   invítala al repo como colaboradora con permiso **Write** y **no** la agregues a
+   `.github/MAINTAINERS`. El check de mapas decide si un PR puede tocar fuera de las
+   parcelas mirando a su autor: un PR abierto con el token del dueño del repo (`OWNER`) o de
+   un maintainer saldría eximido de esa regla aunque traiga el cambio de un jugador. Por eso
+   el worker **se niega a correr** si el token es del dueño o de alguien de `MAINTAINERS`
+   (lo comprueba al arrancar con `GET /user` y el `MAINTAINERS` de la rama base, y queda en
+   pausa con un log de nivel `error`). Además rechaza por su cuenta los cambios fuera de
+   parcelas (`outside_plot`).
+2. **El token: un PAT clásico con solo `public_repo`.** Este repo es de una cuenta de
+   usuario (`GFenzoR`), y un token *fine-grained* solo puede apuntar a repos de su propia
+   cuenta o de organizaciones de las que es miembro: GitHub no los admite para un
+   colaborador externo. Así que, con la sesión de la cuenta del bot: *Settings → Developer
+   settings → Personal access tokens → Tokens (classic) → Generate new token (classic)*.
+   - *Note*: `rpg map PR worker`.
    - *Expiration*: un año como máximo; anota la fecha para rotarlo.
-   - *Repository access*: **Only select repositories** → solo este repo.
-   - *Repository permissions*: **Contents: Read and write** y **Pull requests: Read and
-     write**. *Metadata: Read* se agrega solo. Nada más: ni Actions, ni Workflows, ni
-     Administration, ni permisos de cuenta.
-   El token no puede tocar `.github/workflows/` (eso pide el permiso *Workflows*), y el worker
-   igual rechaza toda ruta fuera de `world/`.
+   - *Scopes*: **solo `public_repo`** (el repo es público). Ni `repo` completo, ni
+     `workflow` (sin él no puede tocar `.github/workflows/`), ni nada de cuenta u
+     organización.
+   Lo que ese token puede tocar lo limita el permiso de la cuenta del bot: **Write** en este
+   repo (y nada en los demás). El worker, aparte, rechaza toda ruta fuera de `world/`.
+
+   **Alternativas.** Si el repo pasa a una **organización**, el bot (miembro de la org)
+   puede usar un token *fine-grained* de solo este repo con **Contents** y **Pull
+   requests** de lectura y escritura, que es lo más acotado. Una **GitHub App** instalada
+   solo en este repo (mismos permisos) evitaría la cuenta de bot; el worker de hoy no la
+   implementa (habría que firmar un JWT y pedir el token de instalación antes de cada
+   ronda).
 3. En el servidor, en `deploy/.env`:
    ```
    COMPOSE_PROFILES=map-pr            # o monitoring,map-pr
-   GITHUB_MAP_PR_TOKEN=github_pat_...
+   GITHUB_MAP_PR_TOKEN=ghp_...
    MAP_PR_REPOSITORY=GFenzoR/RPG_Project
    ```
    y `./deploy.sh` (o `docker compose up -d map-pr-worker`). `deploy/.env` no se commitea
    (`.gitignore`) y debe quedar con permisos `600`. El gameserver recibe
    `RPG_MAP_PR_WORKER=on` cuando hay token, y la página de moderación deja de mostrar el
    aviso de "ábrelo a mano".
-4. Comprueba con `docker compose logs map-pr-worker`: `map PR worker started` y, al aprobar
-   un envío, `map submission pull request` con su número. El token nunca aparece en los logs.
+4. Comprueba con `docker compose logs map-pr-worker`: `map PR worker started`, `map PR
+   worker token` con el login del bot y, al aprobar un envío, `map submission pull request`
+   con su número. El token nunca aparece en los logs.
 
 **Por qué no el `GITHUB_TOKEN` de Actions.** Un PR o un push hecho con el `GITHUB_TOKEN` de
 un workflow **no dispara otros workflows** (GitHub lo evita para que no haya ejecuciones en
@@ -339,38 +350,43 @@ cadena). Un PR abierto así no correría `map-pr`, ni `map-pr-pending`, ni la CI
 sin veredicto. Además, ese token solo existe dentro de un job de Actions y el worker corre en
 el servidor del juego, que es quien ve la cola en Postgres.
 
-**Una GitHub App** también serviría (mismos permisos: Contents y Pull requests de escritura,
-instalada solo en este repo), con la ventaja de no depender de una cuenta de bot. El worker
-de hoy usa un token fijo; para una App habría que generar el token de instalación (JWT
-firmado con la clave de la App, válido 1 h) antes de cada ronda. Queda como mejora.
-
 `RPG_MAP_PR_WORKER=on` sale de que haya token, no de que el perfil esté activo: pon los dos
 (paso 3) o ninguno, si no el sitio dirá que el PR se abre solo.
 
-**Sin token**, el servicio arranca, avisa `GITHUB_MAP_PR_TOKEN is not set` y termina con
-código 0 (`restart: on-failure` no lo relanza). Los envíos aprobados quedan `approved` y la
-página de moderación avisa que hay que abrirlos a mano: descargar el patch y, en una rama
-`map-submission/<id>`, `mapcli patch apply <archivo>` y abrir el PR.
+**Sin token**, el servicio arranca, avisa una vez `GITHUB_MAP_PR_TOKEN is not set` y queda
+inactivo hasta que se lo detiene (así `docker compose up --wait` con el perfil activo no
+falla). Los envíos aprobados quedan `approved` y la página de moderación explica cómo
+abrirlos a mano: descargar el patch, aplicarlo con `mapcli patch apply <archivo>` en la rama
+**exacta** que muestra (`map-submission/<id>-<sha12>`) y abrir el PR pegando en la
+descripción la línea de marca que también muestra
+(`<!-- rpg-map-submission: <id> sha256:<sha> -->`). Cuando el worker se active, encuentra
+ese PR por la rama y la marca, y lo registra en lugar de abrir otro.
 
 **Qué hace con cada envío** (contrato de la migración 00010, docs/04):
 - Lo reserva con `FOR UPDATE SKIP LOCKED` y un lease de 10 min (`attempts + 1`).
-- Si ya hay un PR desde su rama **y** su cuerpo lleva la marca de ese envío
-  (`<!-- rpg-map-submission: <id> sha256:<sha> -->`), lo registra. Si la rama existe sin PR
-  y su commit lleva los trailers `Map-Submission`/`Sha256` del envío, abre el PR. Si no hay
-  nada, mezcla el patch sobre la base y escribe árbol (con el texto de los archivos en el
-  mismo pedido: uno solo, sin importar cuántos archivos), commit y rama con la API Git Data
-  (sin `git clone`). Cada paso se puede repetir después de una caída sin abrir dos PR.
+- Si ya hay un PR desde su rama **y** su cuerpo lleva la marca de ese envío, lo registra.
+  Si la rama existe sin PR y su commit lleva los trailers `Map-Submission`/`Sha256` del
+  envío, abre el PR. Si no hay nada, mezcla el patch sobre la base y escribe árbol (con el
+  texto de los archivos en el mismo pedido: uno solo, sin importar cuántos archivos),
+  commit y rama con la API Git Data (sin `git clone`). Cada paso se puede repetir después de
+  una caída sin abrir dos PR.
 - Resultado: `pr_opened` con la URL, o `failed` con un código fijo que el autor ve en "Mis
   envíos": `conflict` (la base cambió en las mismas casillas), `outside_plot`,
   `invalid_patch`, `no_changes` (la base ya lo tiene) o `github` (10 intentos fallidos).
-- Un error de GitHub o de red lo deja `approved` y reintenta con espera creciente (1, 2, 4…
-  minutos, hasta 6 h). Si GitHub rechaza **al worker** (401, 403 sin rate limit, 404: token
-  vencido o revocado, permiso que falta, repo o rama base mal escritos), el envío no gasta
-  su intento, el worker se detiene 15 min y lo dice en el log con nivel `error`: un token
-  vencido nunca deja en `failed` los envíos de nadie.
-- El título del jugador va al título del PR y del commit con `#`, `@` y `GH-` neutralizados
-  (un carácter de ancho cero): `fixes #12` no cierra el issue 12 al mergear, y `@alguien` no
-  avisa a nadie.
+  Antes de dejar un envío en `failed`/`github`, el worker vuelve a buscar su PR: si el
+  último intento murió justo después de que GitHub lo creara, lo registra.
+- Un error de red, un 5xx o una respuesta cortada lo deja `approved` y reintenta con espera
+  creciente (1, 2, 4… minutos, hasta 6 h).
+- Las pausas son **de todo el worker**, no por envío, y no gastan el intento de nadie:
+  - **rate limit** (429, o 403 con `retry-after` o sin pedidos restantes): espera lo que
+    pida GitHub (`Retry-After`, `x-ratelimit-reset`, como mínimo 60 s);
+  - **configuración** (401, 403 sin rate limit, 404: token vencido o revocado, permiso que
+    falta, repo o rama base mal escritos): 15 min, con un log de nivel `error`. Un token
+    vencido nunca deja en `failed` los envíos de nadie.
+- El título del jugador va al título del PR y del commit con `#`, `@`, `GH-`, las palabras
+  que cierran issues (`fixes`, `closes`, `resolves`…) y las URL neutralizados con un carácter
+  de ancho cero: no cierra issues al mergear ni menciona a nadie. El propio worker escribe
+  "envío n.º 12", nunca "#12", que enlazaría a otro issue o PR.
 
 **Rotar o revocar.** Genera el token nuevo, cámbialo en `deploy/.env` y
 `docker compose up -d map-pr-worker`; después borra el viejo en GitHub. Si se filtra:

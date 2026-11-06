@@ -66,7 +66,8 @@ aprobado se aplica a mano con `mapcli patch apply` sobre el patch descargado.
 
 Para probar el worker en local sin GitHub, el E2E (`client/e2e/maps.spec.ts`) levanta un
 GitHub falso (`tools/map-pr-worker/test/fake-github.ts`) y corre el worker contra él. Contra
-GitHub de verdad, usa un fork tuyo y un token fine-grained de ese fork (docs/09):
+GitHub de verdad, usa un fork tuyo y el token clásico (`public_repo`) de una cuenta de bot
+colaboradora de ese fork: el worker no corre con el token del dueño del repo (docs/09):
 ```
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/rpg \
 GITHUB_MAP_PR_TOKEN=github_pat_... GITHUB_REPOSITORY=tu-usuario/RPG_Project \

@@ -194,10 +194,13 @@ make home-monitoring-up   # Prometheus, Alertmanager, Grafana y node-exporter so
 ## Worker de PR de mapas (T4.5)
 Igual que en AWS (docs/09, "Worker de PR de mapas"): en `deploy/.env.home` agrega
 `COMPOSE_PROFILES=map-pr` (con los otros perfiles que uses, separados por coma) y
-`GITHUB_MAP_PR_TOKEN` con un token fine-grained de una cuenta de bot, solo de este repo y con
-*Contents* y *Pull requests* de escritura. Sale a Internet por la red `edge`, igual que las
-copias a S3; no abre puertos en tu casa. Sin token no corre, y los envíos aprobados se abren
-a mano con `mapcli patch apply`. Para probarlo sin tocar el repo real, usa un fork tuyo
+`GITHUB_MAP_PR_TOKEN` con el token clásico de una cuenta de bot colaboradora con permiso
+Write, solo con el scope `public_repo`, que no sea la dueña del repo ni esté en
+`.github/MAINTAINERS` (si lo es, el worker no corre). `make home-down` y `make home-logs`
+incluyen el perfil `map-pr`. Sale a Internet por la red `edge`, igual que las
+copias a S3; no abre puertos en tu casa. Sin token queda inactivo, y los envíos aprobados se
+abren a mano con `mapcli patch apply` en la rama y con la marca que muestra la página de
+moderación. Para probarlo sin tocar el repo real, usa un fork tuyo
 como `MAP_PR_REPOSITORY`.
 
 ## Problemas comunes

@@ -24,7 +24,7 @@ describe("buildChange", () => {
     expect(r.writes.get(PLOT_CHUNK)).toBe(paint(readRepo(PLOT_CHUNK) ?? "", 3202, 6298, "grass"));
     expect(r.islands).toEqual(["puerto"]);
     expect(r.writes.get(CONTRIBUTORS)).toContain(
-      "| Cartographer Aria | puerto | envío #7 | 2026-11-05 |",
+      "| Cartographer Aria | puerto | envío n.º 7 | 2026-11-05 |",
     );
   });
 
@@ -111,7 +111,7 @@ describe("texts", () => {
     const once = withCredit("# Contribuidores\n", s, ["puerto"]);
     expect(withCredit(once, s, ["puerto"])).toBe(once);
     expect(creditRow({ ...s, author: "Bad | Name <b>" }, ["puerto"])).toBe(
-      "| Bad  Name b | puerto | envío #7 | 2026-11-05 |",
+      "| Bad  Name b | puerto | envío n.º 7 | 2026-11-05 |",
     );
   });
 
@@ -119,12 +119,29 @@ describe("texts", () => {
     const t = prTitle({ ...s, title: "fixes #12, closes acme/rpg#3, GH-4 @admin" });
     expect(t.slice(0, t.indexOf(" (envío"))).not.toMatch(/#\d|@[a-z]|gh-\d/i);
     expect(t.replace(/\u2060/g, "")).toBe(
-      "map: fixes #12, closes acme/rpg#3, GH-4 @admin (envío #7)",
+      "map: fixes #12, closes acme/rpg#3, GH-4 @admin (envío n.º 7)",
     );
   });
 
+  it("titles cannot close an issue by URL either", () => {
+    const t = prTitle({ ...s, title: "fixes https://github.com/GFenzoR/RPG_Project/issues/12" });
+    const player = t.slice(0, t.indexOf(" (envío"));
+    expect(player).not.toContain("://");
+    expect(player).not.toMatch(/\bfixes\b/i);
+    expect(t.replace(/\u2060/g, "")).toContain(
+      "fixes https://github.com/GFenzoR/RPG_Project/issues/12",
+    );
+    expect(prTitle({ ...s, title: "prefix fixture closet" })).toContain("fixture closet");
+  });
+
+  it("titles are cut by code points, never inside a surrogate pair", () => {
+    const t = prTitle({ ...s, title: `${"a".repeat(58)}🌊🌊🌊` });
+    expect(t).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+    expect(t).toContain("a🌊…");
+  });
+
   it("titles are one line", () => {
-    expect(prTitle({ ...s, title: "a\nb\u202ec" })).toBe("map: a b c (envío #7)");
+    expect(prTitle({ ...s, title: "a\nb\u202ec" })).toBe("map: a b c (envío n.º 7)");
     expect(prTitle({ ...s, title: "x".repeat(200) }).length).toBeLessThan(90);
   });
 

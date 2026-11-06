@@ -41,8 +41,11 @@ de `map_submissions` (`src/queue.ts`, contrato en la migración 00010), mezcla e
 la rama base actual con `mergePatchFile` de `packages/map-format` (`src/build.ts`, puro:
 también repite rutas y parcelas y arma los textos) y escribe con la API Git Data
 (`src/github.ts`). `src/worker.ts` hace los pasos idempotentes: PR existente (con la marca del envío) → rama
-existente (con sus trailers) → construir. Los errores de configuración de GitHub (401/403/404)
-no gastan intentos; `--self-check` es el smoke de la imagen. No expone puertos; config por entorno (`src/config.ts`, docs/09). Tests:
+existente (con sus trailers) → construir. Un rate limit o un error de configuración (401/403/404)
+pausan todo el worker sin gastar intentos (`pausedUntil`); al arrancar, `checkIdentity` se
+niega a usar el token del dueño o de un maintainer; sin token queda inactivo hasta SIGTERM
+(el temporizador de la espera está ref'd: un pool pg ocioso no mantiene vivo a Node);
+`--self-check` es el smoke de la imagen. No expone puertos; config por entorno (`src/config.ts`, docs/09). Tests:
 `src/*.test.ts` contra `test/fake-github.ts` (un GitHub en memoria, también lo usa el E2E
 de `client/e2e/maps.spec.ts`) y `queue.integration.test.ts` con Postgres
 (`MAP_PR_WORKER_DATABASE_URL`, `make test-integration`). Nunca loguees el token ni metas un

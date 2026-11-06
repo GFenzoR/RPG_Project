@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CONTRIBUTORS, branchOf } from "./build.ts";
 import { GitHub } from "./github.ts";
 import type { Claimed, Queue } from "./queue.ts";
-import { backoff, runOnce } from "./worker.ts";
+import { CONFIG_WAIT, backoff, checkIdentity, pausedUntil, runOnce } from "./worker.ts";
 import { startFakeGitHub } from "../test/fake-github.ts";
 import type { FakeGitHub } from "../test/fake-github.ts";
 import { PLOT_CHUNK, paint, plotSubmission, readRepo } from "../test/fixtures.ts";
@@ -97,13 +97,13 @@ describe("map PR worker", () => {
     });
     const pr = fake.pulls[0];
     expect(pr).toMatchObject({ head: B7, base: "main" });
-    expect(pr?.title).toBe("map: Pasto en la playa norte (envío #7)");
+    expect(pr?.title).toBe("map: Pasto en la playa norte (envío n.º 7)");
     expect(pr?.body).toContain("Cartographer Aria");
     // The branch's commit: the merged chunk and the credits row, nothing else.
     expect(fake.fileOn(B7, PLOT_CHUNK)).toBe(
       paint(readRepo(PLOT_CHUNK) ?? "", 3202, 6298, "grass"),
     );
-    expect(fake.fileOn(B7, CONTRIBUTORS)).toContain("| Cartographer Aria | puerto | envío #7 |");
+    expect(fake.fileOn(B7, CONTRIBUTORS)).toContain("| Cartographer Aria | puerto | envío n.º 7 |");
     const head = fake.commits.get(fake.refs.get(B7) ?? "");
     expect(head?.parents).toEqual([fake.refs.get("main")]);
     expect(head?.message).toContain("Map-Submission: 7");
@@ -216,7 +216,7 @@ describe("map PR worker", () => {
     const bad = new GitHub({ apiUrl: fake.url, token: "expired", owner: "acme", repo: "rpg" });
     for (let i = 0; i < 20; i++) {
       const out = await runOnce(bad, q, opts);
-      expect(out.map((o) => o.kind)).toEqual(["blocked"]); // stops at the first one
+      expect(out.map((o) => o.kind)).toEqual(["paused"]); // stops at the first one
       clock = new Date((a.nextAt ?? clock).getTime());
     }
     expect(a).toMatchObject({ status: "approved", attempts: 0 });
@@ -228,16 +228,65 @@ describe("map PR worker", () => {
     expect((await runOnce(gh, q, opts)).map((o) => o.kind)).toEqual(["opened", "opened"]);
   });
 
-  it("a missing permission (403 without rate limit) blocks too; a rate limit retries", async () => {
+  it("a missing permission (403 without rate limit) pauses the worker for 15 minutes", async () => {
     const { gh, q } = await setup();
     const row = q.add();
+    const other = q.add(plotSubmission(8, 3204, 6299));
     fake.fail({ route: "POST /git/trees", status: 403 });
-    expect((await runOnce(gh, q, opts))[0]?.kind).toBe("blocked");
+    const out = await runOnce(gh, q, opts);
+    expect(out).toEqual([
+      { kind: "paused", until: new Date(clock.getTime() + CONFIG_WAIT), reason: "config" },
+    ]);
+    expect(pausedUntil(out)).toEqual(new Date(clock.getTime() + CONFIG_WAIT));
     expect(row.attempts).toBe(0);
-    clock = new Date((row.nextAt ?? clock).getTime());
-    fake.fail({ route: "POST /git/trees", status: 429 });
-    expect((await runOnce(gh, q, opts))[0]?.kind).toBe("retry");
-    expect(row.attempts).toBe(1);
+    expect(other.attempts).toBe(0); // not claimed in the same round
+  });
+
+  it("a rate limit pauses the whole worker for as long as GitHub asks", async () => {
+    const { gh, q } = await setup();
+    const row = q.add();
+    const other = q.add(plotSubmission(8, 3204, 6299));
+    fake.fail({ route: "POST /git/trees", status: 429, headers: { "retry-after": "120" } });
+    const out = await runOnce(gh, q, opts);
+    expect(out).toEqual([
+      { kind: "paused", until: new Date(clock.getTime() + 120_000), reason: "rate_limit" },
+    ]);
+    expect(row).toMatchObject({ status: "approved", attempts: 0 });
+    expect(other.attempts).toBe(0);
+    // A 403 with no requests left is a rate limit too; without a hint, at least a minute.
+    clock = new Date(clock.getTime() + 120_000);
+    fake.fail({ route: "POST /git/trees", status: 403, headers: { "x-ratelimit-remaining": "0" } });
+    const again = await runOnce(gh, q, opts);
+    expect(again[0]).toMatchObject({ kind: "paused", reason: "rate_limit" });
+    expect(pausedUntil(again)?.getTime()).toBeGreaterThanOrEqual(clock.getTime() + 60_000);
+    // When the limit is over, both go through.
+    clock = new Date((pausedUntil(again) ?? clock).getTime());
+    expect((await runOnce(gh, q, opts)).map((o) => o.kind)).toEqual(["opened", "opened"]);
+  });
+
+  it("a body cut short, a stalled body or an empty 200 is retried, never invalid_patch", async () => {
+    const { q } = await setup();
+    const gh = new GitHub({
+      apiUrl: fake.url,
+      token: TOKEN,
+      owner: "acme",
+      repo: "rpg",
+      timeoutMs: 300,
+    });
+    const row = q.add();
+    for (const [route, mode] of [
+      ["GET /pulls", "truncate"],
+      ["GET /git/ref", "stall"],
+      ["GET /git/ref", "empty"],
+    ] as const) {
+      fake.fail({ route, status: 200, mode });
+      expect((await runOnce(gh, q, opts))[0]?.kind).toBe("retry");
+      expect(row.status).toBe("approved");
+      clock = new Date((row.nextAt ?? clock).getTime());
+    }
+    expect(row.attempts).toBe(3);
+    await runOnce(gh, q, opts);
+    expect(row.status).toBe("pr_opened");
   });
 
   it("never takes a pull request or a branch of another submission as its own", async () => {
@@ -258,12 +307,13 @@ describe("map PR worker", () => {
   it("a database failure after the PR opened never marks it failed", async () => {
     const { gh, q } = await setup();
     const row = q.add();
-    row.attempts = 9; // the last attempt
+    row.attempts = 9; // the next one is the last attempt (default maxAttempts 10)
     q.crashOnOpened = 1;
-    await expect(runOnce(gh, q, { ...opts, maxAttempts: 10 })).rejects.toThrow("connection lost");
+    await expect(runOnce(gh, q, opts)).rejects.toThrow("connection lost");
     expect(row.status).toBe("approved");
     clock = new Date((row.nextAt ?? clock).getTime());
-    await runOnce(gh, q, { ...opts, maxAttempts: 11 });
+    // Out of attempts: before failing it, the worker finds the pull request and records it.
+    await runOnce(gh, q, opts);
     expect(row).toMatchObject({ status: "pr_opened", prNumber: 1 });
     expect(fake.pulls).toHaveLength(1);
   });
@@ -274,7 +324,38 @@ describe("map PR worker", () => {
     row.attempts = 10; // ten claims, no outcome
     expect(await runOnce(gh, q, opts)).toEqual([{ kind: "failed", code: "github" }]);
     expect(row).toMatchObject({ status: "failed", failure: "github" });
-    expect(fake.requests).toHaveLength(0);
+    expect(fake.requests).toEqual(["GET /pulls"]); // only the check for a pull request
+  });
+
+  it("the last attempt failing on POST /pulls fails it only if no PR exists", async () => {
+    const { gh, q } = await setup();
+    const row = q.add();
+    row.attempts = 9;
+    fake.fail({ route: "POST /pulls", status: 502 });
+    expect(await runOnce(gh, q, opts)).toEqual([{ kind: "failed", code: "github" }]);
+    expect(fake.refs.has(B7)).toBe(true);
+    expect(row.status).toBe("failed");
+  });
+});
+
+describe("identity", () => {
+  it("refuses the repository owner and the map maintainers, accepts a bot", async () => {
+    for (const [login, maintainers, ok] of [
+      ["rpg-map-bot", "# maintainers\nsomeone\n", true],
+      ["ACME", null, false],
+      ["Someone", "# maintainers\nsomeone # map lead\n", false],
+    ] as const) {
+      fake = await startFakeGitHub({
+        owner: "acme",
+        repo: "rpg",
+        token: TOKEN,
+        login,
+        readBase: (p) => (p === ".github/MAINTAINERS" ? maintainers : null),
+      });
+      const gh = new GitHub({ apiUrl: fake.url, token: TOKEN, owner: "acme", repo: "rpg" });
+      expect((await checkIdentity(gh, "main")).ok).toBe(ok);
+      await fake.close();
+    }
   });
 });
 
