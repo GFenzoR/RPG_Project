@@ -549,7 +549,8 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 	})()
 	waitSlots := func(n int) {
 		t.Helper()
-		deadline := time.After(10 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		for {
 			mu.Lock()
 			got := inUse
@@ -559,7 +560,7 @@ func TestStalledUploadsGetBusy(t *testing.T) {
 			}
 			select {
 			case <-changed:
-			case <-deadline:
+			case <-ctx.Done():
 				t.Fatalf("slots in use = %d, want %d", got, n)
 			}
 		}
