@@ -207,4 +207,32 @@ func TestMarketTransfers(t *testing.T) {
 	if d, err = st.LoadMarket(ctx, now, 30, 10, 5); err != nil || len(d.Bans) != 1 || !d.Bans[acc].IsZero() {
 		t.Fatalf("bans %v, %v", d.Bans, err)
 	}
+
+	// Closing an offer whose units the loop has wrong (a fill of it was not stored) fails
+	// whole: the database keeps the offer and nothing smaller reaches the mailbox.
+	sellOffer := store.Transfer{ID: 103, Market: []store.MarketOp{{Kind: store.MarketOfferAdd, Offer: store.MarketOffer{ID: 3,
+		CharacterID: sela, Side: store.MarketSell, ItemID: salve, Amount: 10, Price: 4, Created: now, Expires: now.Add(time.Hour)}}},
+		OfferHigh: 3, MailHigh: 4}
+	if err := st.SaveTransfer(ctx, sellOffer); err != nil {
+		t.Fatal(err)
+	}
+	cancelSell := store.Transfer{ID: 104, Market: []store.MarketOp{
+		{Kind: store.MarketOfferRemove, ID: 3, Units: 5},
+		{Kind: store.MarketMailAdd, Mail: store.MarketMail{ID: 5, CharacterID: sela, Item: store.InventoryItem{ItemID: salve, Count: 5}, Created: now}},
+	}, OfferHigh: 3, MailHigh: 5}
+	if err := st.SaveTransfer(ctx, cancelSell); !errors.Is(err, store.ErrMarketConflict) || offerLeft(3) != 10 {
+		t.Fatalf("sell offer closed with the wrong units: %v, left %d", err, offerLeft(3))
+	}
+	cancelBuy := store.Transfer{ID: 104, Market: []store.MarketOp{
+		{Kind: store.MarketOfferRemove, ID: 2, Units: 3}, // the database has 4
+		{Kind: store.MarketGoldAdd, CharacterID: dos, Gold: 18},
+	}}
+	if err := st.SaveTransfer(ctx, cancelBuy); !errors.Is(err, store.ErrMarketConflict) || offerLeft(2) != 4 {
+		t.Fatalf("buy offer closed with the wrong units: %v, left %d", err, offerLeft(2))
+	}
+	// With the right units it closes.
+	cancelBuy.Market[0].Units, cancelBuy.Market[1].Gold = 4, 24
+	if err := st.SaveTransfer(ctx, cancelBuy); err != nil || offerLeft(2) != -1 {
+		t.Fatalf("buy offer closed: %v, left %d", err, offerLeft(2))
+	}
 }

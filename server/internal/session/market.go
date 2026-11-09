@@ -132,7 +132,9 @@ const (
 	// MarketOfferFill takes Units from offer ID (deleting it at zero). It fails the
 	// transaction if the offer has fewer units left: no unit is sold twice.
 	MarketOfferFill
-	// MarketOfferRemove deletes offer ID (cancelled or expired).
+	// MarketOfferRemove deletes offer ID (cancelled or expired), which must have exactly
+	// Units left: if the database disagrees (a fill of it was not stored), the transfer
+	// fails whole instead of returning a smaller deposit than the database holds.
 	MarketOfferRemove
 	// MarketMailAdd inserts Mail; MarketMailRemove deletes mail ID of CharacterID.
 	MarketMailAdd
@@ -245,7 +247,7 @@ func (w *World) initMarket() {
 			// A retired item: the offer is closed. A buy offer's gold goes back to the
 			// mailbox; a sell offer's units of an item that no longer exists are gone.
 			w.log.Warn("market: offer of a retired item closed", "offer", o.ID, "item", o.ItemID, "sell", o.Sell)
-			retired = append(retired, MarketOp{Kind: MarketOfferRemove, ID: o.ID})
+			retired = append(retired, MarketOp{Kind: MarketOfferRemove, ID: o.ID, Units: o.Amount})
 			if !o.Sell {
 				gold := int64(o.Amount) * o.Price
 				w.box(o.CharacterID).gold += gold
@@ -659,7 +661,7 @@ func (w *World) marketCancel(ctx *game.TickContext, p *Player, id int64) {
 // (cancelled, expired or removed by staff). No inventory changes: no snapshot.
 func (w *World) closeOffer(o *offer, now time.Time) {
 	w.dropOffer(o)
-	ops := []MarketOp{{Kind: MarketOfferRemove, ID: o.ID}}
+	ops := []MarketOp{{Kind: MarketOfferRemove, ID: o.ID, Units: o.Amount}}
 	if o.Sell {
 		ops = append(ops, w.mailItems(o.CharacterID, o.def, o.Amount, now)...)
 	} else {

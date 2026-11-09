@@ -483,9 +483,11 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
 - **Falla segura:** si un cambio del mercado o un intercambio no se pudo guardar (un bug o
   la base caída al apagar), sus personajes salen del juego con un aviso y no pueden
   entrar hasta que el servidor reinicie, y el mercado y el intercambio quedan en solo
-  lectura (se puede mirar, no operar) hasta entonces. Al reiniciar, todos vuelven al
-  estado guardado antes de ese cambio: se pierde lo jugado desde ahí, nunca se duplica
-  nada (docs/01, "Transacciones").
+  lectura (se puede mirar, no operar) hasta entonces. Al reiniciar, esos personajes
+  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Límite: lo que uno
+  de ellos soltó en el suelo o dejó en su cadáver en el instante antes del aviso puede
+  quedar con quien lo levantó; las alertas de economía (T4.1) son la red (docs/01,
+  "Transacciones").
 - Una oferta de un item retirado del juego se cierra al arrancar: el oro de una de
   compra vuelve al buzón.
 - **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).

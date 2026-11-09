@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -705,7 +706,7 @@ func TestSaverTaintSpreadsThroughTrades(t *testing.T) {
 }
 
 // At shutdown the pending jobs follow the same rules: a pending transfer that fails taints
-// its characters and their final snapshots are not written.
+// its characters, and being the shutdown, nothing after it is written (crash semantics).
 func TestSaverWritePendingTaints(t *testing.T) {
 	f := &fakeDB{reject: map[uint64]bool{7: true}}
 	s := f.saver(t)
@@ -718,7 +719,7 @@ func TestSaverWritePendingTaints(t *testing.T) {
 		{Snapshot: session.Snapshot{CharacterID: 1, Final: true}},
 		{Snapshot: session.Snapshot{CharacterID: 2, Final: true}},
 	})
-	if err == nil || !slices.Equal(f.stored, []string{"snap 2"}) || len(f.tainted) != 1 {
+	if err == nil || len(f.stored) != 0 || len(f.tainted) != 1 {
 		t.Fatalf("err %v, stored %v, tainted %v", err, f.stored, f.tainted)
 	}
 }
@@ -805,5 +806,54 @@ func TestMarketRetiredItemOffers(t *testing.T) {
 	}
 	if len(h.transfers) != 1 || h.transfers[0].ID != 41 || len(h.transfers[0].Market) != 3 {
 		t.Fatalf("transfers %+v", h.transfers)
+	}
+}
+
+// At shutdown a transfer that is abandoned (or fails) is a crash at that point: no later
+// job is written, of any character, and they count as abandoned.
+func TestSaverShutdownCrashSemantics(t *testing.T) {
+	var stored []int64
+	var outcomes []string
+	s, err := session.NewSaver(session.SaverConfig{
+		Write: func(_ context.Context, sn session.Snapshot) error {
+			stored = append(stored, sn.CharacterID)
+			return nil
+		},
+		WriteTransfer: func(context.Context, session.Transfer) error {
+			return errors.New("database down") // transient: retried until the deadline
+		},
+		Failed: func(o string) { outcomes = append(outcomes, o) },
+		Clock:  clock.NewFake(clock.Epoch), // backoff never ends: only Stop's deadline does
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Start()
+	s.SubmitTransfer(tr(1, 1))
+	s.Submit(session.Snapshot{CharacterID: 2, Final: true})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_ = s.Stop(ctx)
+	if len(stored) != 0 {
+		t.Fatalf("written after the abandoned transfer: %v", stored)
+	}
+	if err := s.WritePending(context.Background(), []session.Job{{Snapshot: session.Snapshot{CharacterID: 3, Final: true}}}); err == nil || len(stored) != 0 {
+		t.Fatalf("pending written after the crash: %v %v", err, stored)
+	}
+	if n := slices.Index(outcomes, session.SaveAbandoned); n < 0 || slices.Contains(outcomes[n:], session.SaveSkipped) {
+		t.Fatalf("outcomes %v", outcomes)
+	}
+
+	// A pending transfer that fails in WritePending crashes the rest too.
+	f := &fakeDB{reject: map[uint64]bool{5: true}}
+	s2 := f.saver(t)
+	s2.Start()
+	_ = s2.Stop(context.Background())
+	_ = s2.WritePending(context.Background(), []session.Job{
+		{Transfer: &session.Transfer{ID: 5, Snapshots: []session.Snapshot{{CharacterID: 1}}}},
+		{Snapshot: session.Snapshot{CharacterID: 9, Final: true}},
+	})
+	if len(f.stored) != 0 {
+		t.Fatalf("stored %v", f.stored)
 	}
 }

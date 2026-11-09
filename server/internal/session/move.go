@@ -347,6 +347,9 @@ func (w *World) playerByID(id uint32) *Player {
 // there is nothing to say) and retries snapshots that persistence could not take.
 func (w *World) flushSystem(ctx *game.TickContext) {
 	w.retrySaves()
+	if n := int32(len(w.retry)); n != w.publishedRetry.Load() {
+		w.publishedRetry.Store(n)
+	}
 	if len(w.adminRetry) > 0 {
 		w.retryAdmin()
 	}

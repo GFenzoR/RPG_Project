@@ -60,7 +60,9 @@ type Querier interface {
 	DeleteGuildMember(ctx context.Context, arg DeleteGuildMemberParams) (int64, error)
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (int64, error)
 	DeleteMarketMailItem(ctx context.Context, arg DeleteMarketMailItemParams) (int64, error)
-	DeleteMarketOffer(ctx context.Context, id int64) (int64, error)
+	// Closes an offer that has exactly units left (no row otherwise: the loop and the
+	// database disagree, and the whole transfer fails).
+	DeleteMarketOffer(ctx context.Context, arg DeleteMarketOfferParams) (int64, error)
 	DeleteOAuthPending(ctx context.Context, tokenHash []byte) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	// After a password reset (the mailbox owner is in control): identities that never proved

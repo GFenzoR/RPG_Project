@@ -65,7 +65,9 @@ RETURNING amount;
 DELETE FROM market_offers WHERE id = sqlc.arg(id) AND amount = sqlc.arg(units)::integer;
 
 -- name: DeleteMarketOffer :execrows
-DELETE FROM market_offers WHERE id = $1;
+-- Closes an offer that has exactly units left (no row otherwise: the loop and the
+-- database disagree, and the whole transfer fails).
+DELETE FROM market_offers WHERE id = $1 AND amount = sqlc.arg(units)::integer;
 
 -- name: InsertMarketMailItem :exec
 INSERT INTO market_mail_items (id, character_id, item_id, count, item, created_at) VALUES ($1, $2, $3, $4, $5, $6);

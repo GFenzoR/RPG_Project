@@ -178,7 +178,7 @@ func applyMarketOp(ctx context.Context, q *db.Queries, op MarketOp) error {
 		}
 		return err
 	case MarketOfferRemove:
-		n, err := q.DeleteMarketOffer(ctx, op.ID)
+		n, err := q.DeleteMarketOffer(ctx, db.DeleteMarketOfferParams{ID: op.ID, Units: int32(op.Units)})
 		if err == nil && n == 0 {
 			err = ErrMarketConflict
 		}

@@ -46,6 +46,9 @@ func TestMetricsRecordAndServe(t *testing.T) {
 	if err := m.AntiBot(&ab); err != nil {
 		t.Fatal(err)
 	}
+	if err := m.PersistenceBacklog(func() int { return 12 }); err != nil {
+		t.Fatal(err)
+	}
 
 	rec := httptest.NewRecorder()
 	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
@@ -70,6 +73,8 @@ func TestMetricsRecordAndServe(t *testing.T) {
 		`http_requests_total{code="200",route="GET /healthz"} 1`,
 		`http_request_duration_seconds_bucket{route="GET /api/highscores",le="0.025"} 1`,
 		"players_online 7",
+		"persistence_backlog 12",
+		`persistence_errors_total{outcome="skipped",writer="character"} 0`,
 		`antibot_suspects{level="log"} 0`,
 		`antibot_suspects{level="notify"} 3`,
 		`antibot_suspects{level="suspend"} 0`,

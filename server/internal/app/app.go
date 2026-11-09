@@ -262,6 +262,9 @@ func New(cfg Config) (*App, error) {
 		if err := cfg.Metrics.PlayersOnline(w.PublishedOnline); err != nil {
 			return nil, fmt.Errorf("metrics: %w", err)
 		}
+		if err := cfg.Metrics.PersistenceBacklog(func() int { return saver.Backlog() + w.PendingJobs() }); err != nil {
+			return nil, fmt.Errorf("metrics: %w", err)
+		}
 		if err := cfg.Metrics.AntiBot(w.AntiBotStats()); err != nil {
 			return nil, fmt.Errorf("metrics: %w", err)
 		}

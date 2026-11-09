@@ -223,6 +223,19 @@ func (m *Metrics) PlayersOnline(online func() int) error {
 	}, func() float64 { return float64(online()) }))
 }
 
+// PersistenceBacklog registers persistence_backlog: the character jobs (snapshots and
+// trade or market transfers) waiting to be written, in the saver's queue and held by the
+// loop when that queue is full (T5.3). It grows when the database is slow even if no write
+// fails. Call it at most once.
+func (m *Metrics) PersistenceBacklog(backlog func() int) error {
+	if m == nil {
+		return nil
+	}
+	return m.reg.Register(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "persistence_backlog", Help: "Character saves and transfers waiting to be written (queue + held by the loop).",
+	}, func() float64 { return float64(backlog()) }))
+}
+
 // AntiBot registers the bot detection's metrics (T4.1), read from s at scrape time (the
 // loop writes it with atomics). No label names a character: the levels and results are
 // fixed sets. Call it at most once.

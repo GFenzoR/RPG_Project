@@ -189,5 +189,8 @@ del mercado. Un transfer de dos personajes con ~20 filas de inventario cada uno 
 escalonados (N jugadores / 300 s) más las acciones del comercio, acotadas por los
 anti-flood de `balance.yaml` (`trade.action_*`: un intercambio completo necesita varias
 acciones de cada lado y no se confirma vacío; `market.action_*`). Si la cola (4096) se
-llena, el loop retiene los trabajos en orden y la métrica `persistence_errors_total`
-`retry` lo muestra antes de que se note en el juego.
+llena, el loop retiene los trabajos en orden. El gauge `persistence_backlog` (cola del
+Saver más lo que retiene el loop, publicado por el loop sin costo en el tick) lo mide
+aunque ninguna escritura falle, y la alerta `PersistenceBacklog` avisa si pasa de 1000
+durante 5 minutos. `persistence_errors_total{outcome="retry"}` solo cuenta escrituras que
+fallaron.

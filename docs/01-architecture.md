@@ -164,8 +164,26 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     no marca a nadie, pero también pone el mercado en solo lectura.
   - **El operador se entera:** log de error, `persistence_errors_total{writer="character",
     outcome="rejected|abandoned|skipped"}` y la alerta `PersistenceDataLost`
-    (tabla de alertas de este doc). Al reiniciar se carga lo que tiene la base: los marcados pierden lo jugado
-    desde el transfer, nunca se duplica nada.
+    (tabla de alertas de este doc). Al reiniciar se carga lo que tiene la base: los
+    marcados pierden todo lo jugado desde su **último guardado escrito** (no solo desde el
+    transfer).
+  - **Bajas con guarda:** cerrar una oferta (cancelar, vencer, `/marketcancel`) lleva las
+    unidades que el loop cree que quedan (`DeleteMarketOffer ... AND amount = $units`). Si
+    un llenado de esa oferta no se guardó, la base tiene más: el cierre falla entero
+    (`ErrMarketConflict`) y pone el mercado en solo lectura, en vez de devolver al buzón
+    menos de lo depositado.
+  - **Apagado con semántica de caída:** si un transfer se abandona o falla durante el
+    apagado (el plazo de `Stop` o en `WritePending`), ningún trabajo posterior se escribe,
+    de ningún personaje (se cuentan como `abandoned`), como si el proceso se hubiera caído
+    en ese punto.
+  - **Límite conocido (en ejecución).** Entre el transfer que se va a descartar y
+    `World.Tainted` (un tick más lo que tenga la cola del Saver), el personaje sigue
+    jugando: lo que recibió y suelta en el suelo o deja en su cadáver puede levantarlo
+    otro, cuyo guardado normal sí se escribe. Eso duplica lo recibido. Cerrarlo pediría
+    atar cada instancia al ack de su transfer; como solo pasa tras un rechazo permanente
+    (ya un bug), la red son la alerta y la cuadratura del log de economía (T4.1). La falla
+    segura garantiza que no se guarde la mitad de un transfer ni nada construido sobre él
+    por el mercado o el intercambio, no que nunca se duplique nada.
 - Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
   oferta y, si era de compra, devolver el oro al buzón).
 - **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un
@@ -301,6 +319,7 @@ Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
 | `HostMemoryHigh` | critical | menos de 10 % de la RAM de la máquina disponible durante 5 min |
 | `HostDiskAlmostFull` / `HostDiskCritical` | warning / critical | menos de 15 % / 5 % libre en `/` |
 | `PersistenceRetrying` | warning | más de 3 reintentos de un escritor en 10 min |
+| `PersistenceBacklog` | warning | `persistence_backlog` > 1000 durante 5 min: la base escribe más lento de lo que el juego produce guardados (T5.3, docs/07) |
 | `PersistenceDataLost` | critical | cualquier escritura `rejected`, `abandoned` o `skipped` (T5.3) en 15 min (`abandoned` es best effort, ver abajo) |
 | `EconomyMismatch` | critical | cualquier `economy_alerts_total{kind="mismatch"}` nuevo en 15 min |
 | `BackupFailed` | critical | la última corrida de `backup.sh` falló |

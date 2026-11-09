@@ -81,6 +81,10 @@ type Saver struct {
 	// would store one half of that transfer (the inventory without the market rows, or
 	// the other way round). Guarded by mu.
 	tainted map[int64]bool
+	// crashed: a transfer failed while shutting down. Nothing after it is written, of any
+	// character, as if the process had crashed right there (the items of that transfer
+	// may already have moved on to others in the loop). Guarded by mu.
+	crashed bool
 }
 
 // NewSaver builds a Saver; call Start to run it.
@@ -127,6 +131,9 @@ func (s *Saver) submit(j Job) bool {
 	}
 }
 
+// Backlog is how many jobs wait in the queue. Safe from any goroutine (metrics).
+func (s *Saver) Backlog() int { return len(s.ch) }
+
 // Start runs the persistence goroutine.
 func (s *Saver) Start() { go s.run() }
 
@@ -153,7 +160,7 @@ func (s *Saver) Stop(ctx context.Context) error {
 func (s *Saver) run() {
 	defer close(s.done)
 	for j := range s.ch {
-		if s.skipTainted(j) {
+		if s.skipCrashed(j) || s.skipTainted(j) {
 			continue
 		}
 		if j.Transfer != nil {
@@ -232,12 +239,47 @@ func (s *Saver) skipTainted(j Job) bool {
 	return true
 }
 
+// crash marks the shutdown as a crash at this job: everything after it is abandoned.
+func (s *Saver) crash() {
+	s.mu.Lock()
+	s.crashed = true
+	s.mu.Unlock()
+}
+
+// skipCrashed reports whether the shutdown crashed before j; then j is abandoned.
+func (s *Saver) skipCrashed(j Job) bool {
+	s.mu.Lock()
+	crashed := s.crashed
+	s.mu.Unlock()
+	if !crashed {
+		return false
+	}
+	s.cfg.Logger.Error("session: save abandoned, an earlier transfer failed at shutdown", "characters", jobCharacters(j),
+		"transfer", j.Transfer != nil)
+	s.failed(SaveAbandoned)
+	return true
+}
+
+func (s *Saver) stopping() bool {
+	select {
+	case <-s.stop:
+		return true
+	default:
+		return false
+	}
+}
+
 // WritePending writes, once each and in order, the jobs the queue could not take at
 // shutdown (World.SaveAll), with the same rules as the goroutine: a tainted job is
-// skipped, and a transfer that fails taints its characters. Call it after Stop.
+// skipped, and a transfer that fails taints its characters and, being the shutdown,
+// abandons every job after it (crash semantics). Call it after Stop.
 func (s *Saver) WritePending(ctx context.Context, jobs []Job) error {
 	var errs []error
 	for _, j := range jobs {
+		if s.skipCrashed(j) {
+			errs = append(errs, fmt.Errorf("characters %v: %w", jobCharacters(j), errCrashedSkip))
+			continue
+		}
 		if s.skipTainted(j) {
 			errs = append(errs, fmt.Errorf("characters %v: %w", jobCharacters(j), errTaintedSkip))
 			continue
@@ -252,6 +294,7 @@ func (s *Saver) WritePending(ctx context.Context, jobs []Job) error {
 			if err != nil {
 				s.failed(SaveAbandoned)
 				s.taint(j)
+				s.crash()
 				err = fmt.Errorf("transfer %d: %w", j.Transfer.ID, err)
 			}
 		} else if err = s.cfg.Write(ctx, j.Snapshot); err != nil {
@@ -265,7 +308,10 @@ func (s *Saver) WritePending(ctx context.Context, jobs []Job) error {
 	return errors.Join(errs...)
 }
 
-var errTaintedSkip = errors.New("save skipped: a transfer of its character was not stored")
+var (
+	errTaintedSkip = errors.New("save skipped: a transfer of its character was not stored")
+	errCrashedSkip = errors.New("save abandoned: an earlier transfer failed at shutdown")
+)
 
 // writeTransfer writes t like write writes a snapshot: retried until it is stored, it is
 // rejected (ErrPermanent) or the saver stops. A transfer that is not stored taints its
@@ -287,6 +333,9 @@ func (s *Saver) writeTransfer(t Transfer) {
 			s.cfg.Logger.Error("session: transfer dropped, rejected by the database", "transfer", t.ID, "err", err)
 			s.failed(SaveRejected)
 			s.taint(Job{Transfer: &t})
+			if s.stopping() {
+				s.crash()
+			}
 			return
 		}
 		s.cfg.Logger.Error("session: transfer failed, retrying", "transfer", t.ID, "attempt", attempt,
@@ -297,6 +346,7 @@ func (s *Saver) writeTransfer(t Transfer) {
 			s.cfg.Logger.Error("session: transfer abandoned at shutdown", "transfer", t.ID)
 			s.failed(SaveAbandoned)
 			s.taint(Job{Transfer: &t})
+			s.crash()
 			return
 		case <-s.cfg.Clock.After(backoff):
 		}

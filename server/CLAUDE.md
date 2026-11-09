@@ -140,7 +140,10 @@ server/
   (`World.Tainted`): los saca, rechaza su login y deja el mercado y el intercambio en solo
   lectura (`w.readOnly`) hasta reiniciar. Toda acción nueva que escriba un transfer tiene
   que respetar `w.readOnly`. Los ids de transfer crecen entre reinicios (`transfer_high`)
-  y `SaveTransfer` los reclama: un reintento de uno ya confirmado no aplica nada.
+  y `SaveTransfer` los reclama: un reintento de uno ya confirmado no aplica nada. Cerrar
+  una oferta lleva sus unidades (`MarketOfferRemove.Units`, baja con guarda). Un transfer
+  que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
+  mide la cola del Saver más `World.PendingJobs`.
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

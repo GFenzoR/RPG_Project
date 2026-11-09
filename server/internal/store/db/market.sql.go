@@ -91,11 +91,18 @@ func (q *Queries) DeleteMarketMailItem(ctx context.Context, arg DeleteMarketMail
 }
 
 const deleteMarketOffer = `-- name: DeleteMarketOffer :execrows
-DELETE FROM market_offers WHERE id = $1
+DELETE FROM market_offers WHERE id = $1 AND amount = $2::integer
 `
 
-func (q *Queries) DeleteMarketOffer(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteMarketOffer, id)
+type DeleteMarketOfferParams struct {
+	ID    int64
+	Units int32
+}
+
+// Closes an offer that has exactly units left (no row otherwise: the loop and the
+// database disagree, and the whole transfer fails).
+func (q *Queries) DeleteMarketOffer(ctx context.Context, arg DeleteMarketOfferParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMarketOffer, arg.ID, arg.Units)
 	if err != nil {
 		return 0, err
 	}

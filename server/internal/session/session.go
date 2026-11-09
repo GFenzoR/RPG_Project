@@ -197,8 +197,10 @@ type World struct {
 	// Join or LoginAborted). While a character has one, Saved keeps its unsaved
 	// snapshot: the read may have seen the row from before that save.
 	loading map[int64]int
-	// retry holds snapshots that Config.Save could not queue yet.
-	retry []Job
+	// retry holds jobs that Config.Save or Config.Transfer could not queue yet;
+	// publishedRetry is len(retry), stored by the loop for the metrics.
+	retry          []Job
+	publishedRetry atomic.Int32
 	// slow collects players whose Send failed during flush.
 	slow []*Player
 
@@ -493,6 +495,10 @@ func New(cfg Config) (*World, error) {
 	}
 	return w, nil
 }
+
+// PendingJobs returns how many persistence jobs wait in the loop because the queue was
+// full, as of the last flush. Safe from any goroutine (metrics, persistence_backlog).
+func (w *World) PendingJobs() int { return int(w.publishedRetry.Load()) }
 
 // Online returns how many players are in the world. Loop goroutine only.
 func (w *World) Online() int { return len(w.players) }
