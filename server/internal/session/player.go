@@ -486,6 +486,9 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 		return
 	}
 	w.reconcile(ctx.Tick, p) // a duplication right before leaving is caught too (T4.1)
+	// T5.4: a house p changed this tick is written with p's snapshot while p is still
+	// online, before its final save.
+	w.flushHouses()
 	w.disappearFromObservers(p)
 	w.partyLeftWorld(p)               // T3.3: leaving the world leaves the party
 	w.guildLeftWorld(p)               // T5.1: the guild sees it offline
