@@ -16,13 +16,20 @@ type Querier interface {
 	CloseReport(ctx context.Context, arg CloseReportParams) (int64, error)
 	// Deletes a token and returns it if it was still valid: tokens are single-use.
 	ConsumeAccountToken(ctx context.Context, arg ConsumeAccountTokenParams) (ConsumeAccountTokenRow, error)
+	// Single use: the row is deleted whether or not the rest of the callback works.
+	ConsumeOAuthState(ctx context.Context, arg ConsumeOAuthStateParams) (ConsumeOAuthStateRow, error)
 	// Deletes a token and returns it if it was active: play tokens are single-use.
 	ConsumeSession(ctx context.Context, arg ConsumeSessionParams) (ConsumeSessionRow, error)
 	CountCharactersByAccount(ctx context.Context, accountID int64) (int64, error)
+	CountIdentities(ctx context.Context, accountID int64) (int64, error)
 	CountRecentSubmissions(ctx context.Context, arg CountRecentSubmissionsParams) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error)
 	CreateAccountToken(ctx context.Context, arg CreateAccountTokenParams) error
 	CreateCharacter(ctx context.Context, arg CreateCharacterParams) (CreateCharacterRow, error)
+	// An account without a password (it logs in with its identity).
+	CreateOAuthAccount(ctx context.Context, arg CreateOAuthAccountParams) (int64, error)
+	CreateOAuthPending(ctx context.Context, arg CreateOAuthPendingParams) error
+	CreateOAuthState(ctx context.Context, arg CreateOAuthStateParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	// Revokes every token of an account (ban).
 	DeleteAccountSessions(ctx context.Context, accountID int64) (int64, error)
@@ -33,7 +40,10 @@ type Querier interface {
 	// A snapshot replaces every storage value in the same transaction as the character row.
 	DeleteCharacterQuestState(ctx context.Context, characterID int64) error
 	DeleteExpiredAccountTokens(ctx context.Context, now pgtype.Timestamptz) (int64, error)
+	DeleteExpiredOAuth(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, now pgtype.Timestamptz) (int64, error)
+	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (int64, error)
+	DeleteOAuthPending(ctx context.Context, tokenHash []byte) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	GetAccountProfile(ctx context.Context, id int64) (GetAccountProfileRow, error)
@@ -59,6 +69,8 @@ type Querier interface {
 	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
 	// Resolves a character name (ignoring case) for a staff command.
 	GetCharacterTarget(ctx context.Context, name string) (GetCharacterTargetRow, error)
+	GetIdentity(ctx context.Context, arg GetIdentityParams) (int64, error)
+	GetOAuthPending(ctx context.Context, arg GetOAuthPendingParams) (GetOAuthPendingRow, error)
 	GetSubmission(ctx context.Context, id int64) (GetSubmissionRow, error)
 	GetSubmissionPatch(ctx context.Context, id int64) (GetSubmissionPatchRow, error)
 	// Highscores (T4.3, GET /api/highscores). Only players' characters are ranked: staff
@@ -78,6 +90,7 @@ type Querier interface {
 	HighscoresBySkillRows(ctx context.Context, arg HighscoresBySkillRowsParams) ([]HighscoresBySkillRowsRow, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
+	InsertIdentity(ctx context.Context, arg InsertIdentityParams) error
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
 	InsertMapSubmission(ctx context.Context, arg InsertMapSubmissionParams) (int64, error)
 	InsertReport(ctx context.Context, arg InsertReportParams) (int64, error)
@@ -90,6 +103,7 @@ type Querier interface {
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
 	// Newest entries of a character first (tests and the operator).
 	ListEconomy(ctx context.Context, arg ListEconomyParams) ([]ListEconomyRow, error)
+	ListIdentities(ctx context.Context, accountID int64) ([]ListIdentitiesRow, error)
 	// The oldest open reports first: the queue order.
 	ListOpenReports(ctx context.Context, maxRows int32) ([]ListOpenReportsRow, error)
 	// The moderation queue: oldest first (arrival order), a page after a cursor.
@@ -99,6 +113,8 @@ type Querier interface {
 	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
+	// Serializes changes to an account's login methods (unlinking the last one).
+	LockAccountForIdentities(ctx context.Context, id int64) (LockAccountForIdentitiesRow, error)
 	// Map submissions (T4.5). Lists never read the patch bytes.
 	// The author's account, locked for the rest of the transaction so two uploads at once
 	// cannot both pass the daily limit.

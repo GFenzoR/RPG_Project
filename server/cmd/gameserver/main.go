@@ -231,6 +231,11 @@ func run(logger *slog.Logger, o options) error {
 		go q.Run(ctx)
 	}
 	logger.Info("account emails", "mail", ms.what, "require_verified_email", o.requireVerifiedEmail)
+	providers, providerNames, err := providersFromEnv(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("oauth: %w", err)
+	}
+	logger.Info("oauth providers", "enabled", providerNames)
 
 	var mets *metrics.Metrics
 	if o.metricsAddr != "" {
@@ -265,6 +270,7 @@ func run(logger *slog.Logger, o options) error {
 		Mail:                 sender,
 		PublicURL:            o.publicURL,
 		RequireVerifiedEmail: o.requireVerifiedEmail,
+		Providers:            providers,
 	})
 	if err != nil {
 		return err

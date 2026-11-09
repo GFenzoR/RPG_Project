@@ -102,6 +102,17 @@ type Accounts interface {
 	VerifyEmail(ctx context.Context, token string) error
 	RequestPasswordReset(ctx context.Context, email, lang string) error
 	ResetPassword(ctx context.Context, token, password string) error
+
+	// OAuth and linked identities (T2.1 2/2, oauth.go).
+	Providers() []string
+	StartLogin(ctx context.Context, provider, returnTo string) (auth.OAuthStart, error)
+	StartLink(ctx context.Context, token, provider, password string) (auth.OAuthStart, error)
+	FinishOAuth(ctx context.Context, provider, state, code, providerError, binding string) (auth.OAuthResult, error)
+	Pending(ctx context.Context, token string) (auth.PendingIdentity, error)
+	ConfirmPending(ctx context.Context, token, password string) (auth.Token, string, error)
+	CreateFromPending(ctx context.Context, token, email string) (auth.Token, string, error)
+	Identities(ctx context.Context, accountID int64) ([]store.Identity, error)
+	Unlink(ctx context.Context, accountID int64, provider string) error
 }
 
 var _ Accounts = (*auth.Service)(nil)
@@ -219,6 +230,7 @@ func (a *api) routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/play", a.authed(a.play))
 	mux.HandleFunc("GET /api/status", a.publicLimited(a.status))
 	a.emailRoutes(mux)
+	a.oauthRoutes(mux)
 	if a.cfg.Highscores != nil {
 		mux.HandleFunc("GET /api/highscores", a.publicLimited(a.highscores))
 	}
@@ -286,29 +298,10 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, auth.ErrInvalidCredentials)
 		return
 	}
-	pairKey := email + "\x00" + a.clientKey(r) // NUL cannot appear in either part
-	ok, pairRes := a.pairLimiter.allow(pairKey)
+	tok, ok := a.limitedLogin(w, r, email, func() (auth.Token, error) {
+		return a.cfg.Auth.Login(r.Context(), in.Email, in.Password)
+	})
 	if !ok {
-		a.tooMany(w, a.cfg.LoginPairRateLimit)
-		return
-	}
-	ok, emailRes := a.emailLimiter.allow(email)
-	if !ok {
-		a.pairLimiter.refund(pairRes)
-		a.tooMany(w, a.cfg.LoginEmailRateLimit)
-		return
-	}
-	spent := false
-	defer func() { // also runs if Login panics
-		if !spent {
-			a.pairLimiter.refund(pairRes)
-			a.emailLimiter.refund(emailRes)
-		}
-	}()
-	tok, err := a.cfg.Auth.Login(r.Context(), in.Email, in.Password)
-	spent = errors.Is(err, auth.ErrInvalidCredentials)
-	if err != nil {
-		a.fail(w, r, err)
 		return
 	}
 	http.SetCookie(w, a.cookie(tok.Token, tok.ExpiresAt))
@@ -317,6 +310,40 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		resp.Token = tok.Token
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// limitedLogin runs check (a password check for email) under the failed-login limits:
+// per (email, client) pair (strict) and per email (loose). A token of each is reserved
+// before the check, so concurrent requests cannot all slip through on one token, and
+// refunded unless the password was wrong: only failures count (docs/05). On false the
+// response was written.
+func (a *api) limitedLogin(w http.ResponseWriter, r *http.Request, email string, check func() (auth.Token, error)) (auth.Token, bool) {
+	pairKey := email + "\x00" + a.clientKey(r) // NUL cannot appear in either part
+	ok, pairRes := a.pairLimiter.allow(pairKey)
+	if !ok {
+		a.tooMany(w, a.cfg.LoginPairRateLimit)
+		return auth.Token{}, false
+	}
+	ok, emailRes := a.emailLimiter.allow(email)
+	if !ok {
+		a.pairLimiter.refund(pairRes)
+		a.tooMany(w, a.cfg.LoginEmailRateLimit)
+		return auth.Token{}, false
+	}
+	spent := false
+	defer func() { // also runs if check panics
+		if !spent {
+			a.pairLimiter.refund(pairRes)
+			a.emailLimiter.refund(emailRes)
+		}
+	}()
+	tok, err := check()
+	spent = errors.Is(err, auth.ErrInvalidCredentials)
+	if err != nil {
+		a.fail(w, r, err)
+		return auth.Token{}, false
+	}
+	return tok, true
 }
 
 func (a *api) logout(w http.ResponseWriter, r *http.Request) {
@@ -587,6 +614,13 @@ var errorStatus = []struct {
 	{auth.ErrEmailUnverified, http.StatusForbidden, "email_unverified"},
 	{auth.ErrAlreadyVerified, http.StatusConflict, "already_verified"},
 	{auth.ErrEmailDisabled, http.StatusNotFound, "email_disabled"},
+	{auth.ErrUnknownProvider, http.StatusNotFound, "unknown_provider"},
+	{auth.ErrReauthRequired, http.StatusForbidden, "reauth_required"},
+	{auth.ErrPendingExpired, http.StatusGone, "pending_expired"},
+	{auth.ErrIdentityTaken, http.StatusConflict, "identity_taken"},
+	{auth.ErrProviderLinked, http.StatusConflict, "provider_linked"},
+	{auth.ErrLastLoginMethod, http.StatusConflict, "last_login_method"},
+	{auth.ErrNotLinked, http.StatusNotFound, "not_linked"},
 }
 
 func (a *api) fail(w http.ResponseWriter, r *http.Request, err error) {

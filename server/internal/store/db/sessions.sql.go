@@ -96,7 +96,7 @@ func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) error {
 }
 
 const getActiveSession = `-- name: GetActiveSession :one
-SELECT s.account_id, s.character_id, s.expires_at
+SELECT s.account_id, s.character_id, s.created_at, s.expires_at
 FROM sessions s
 JOIN accounts a ON a.id = s.account_id
 WHERE s.token_hash = $1
@@ -119,6 +119,7 @@ type GetActiveSessionParams struct {
 type GetActiveSessionRow struct {
 	AccountID   int64
 	CharacterID pgtype.Int8
+	CreatedAt   pgtype.Timestamptz
 	ExpiresAt   pgtype.Timestamptz
 }
 
@@ -127,6 +128,11 @@ type GetActiveSessionRow struct {
 func (q *Queries) GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error) {
 	row := q.db.QueryRow(ctx, getActiveSession, arg.TokenHash, arg.Kind, arg.Now)
 	var i GetActiveSessionRow
-	err := row.Scan(&i.AccountID, &i.CharacterID, &i.ExpiresAt)
+	err := row.Scan(
+		&i.AccountID,
+		&i.CharacterID,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+	)
 	return i, err
 }

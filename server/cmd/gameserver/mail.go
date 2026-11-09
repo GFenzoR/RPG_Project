@@ -9,6 +9,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/mail"
+	"github.com/GFenzoR/RPG_Project/server/internal/oauth"
 )
 
 // Mail modes (-mail, T2.1).
@@ -90,4 +91,36 @@ func newSender(m mail.Mailer, i18nDir string, clk clock.Clock, logger *slog.Logg
 		return nil, nil, err
 	}
 	return &mail.Sender{Templates: tpl, Queue: q}, q, nil
+}
+
+// providersFromEnv builds the OAuth providers whose client id and secret are set
+// (GOOGLE_CLIENT_ID/SECRET, DISCORD_CLIENT_ID/SECRET; T2.1 2/2). A provider without both
+// is off and its button does not show. The *_URL and GOOGLE_ISSUER variables only exist
+// for tests against a fake provider. Secrets go to the provider and nowhere else.
+func providersFromEnv(getenv func(string) string) ([]*oauth.Provider, []string, error) {
+	var out []*oauth.Provider
+	var names []string
+	for _, spec := range []struct {
+		name, prefix string
+	}{{oauth.Google, "GOOGLE"}, {oauth.Discord, "DISCORD"}} {
+		id, secret := getenv(spec.prefix+"_CLIENT_ID"), getenv(spec.prefix+"_CLIENT_SECRET")
+		if id == "" && secret == "" {
+			continue
+		}
+		if id == "" || secret == "" {
+			return nil, nil, fmt.Errorf("set both %s_CLIENT_ID and %s_CLIENT_SECRET, or neither", spec.prefix, spec.prefix)
+		}
+		p, err := oauth.New(spec.name, oauth.Config{
+			ClientID: id, ClientSecret: secret,
+			AuthURL: getenv(spec.prefix + "_AUTH_URL"), TokenURL: getenv(spec.prefix + "_TOKEN_URL"),
+			JWKSURL: getenv(spec.prefix + "_JWKS_URL"), Issuer: getenv(spec.prefix + "_ISSUER"),
+			APIURL: getenv(spec.prefix + "_API_URL"),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		out = append(out, p)
+		names = append(names, spec.name)
+	}
+	return out, names, nil
 }

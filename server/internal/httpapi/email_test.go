@@ -86,7 +86,7 @@ func accountOf(t *testing.T, h *mailHarness, token string) map[string]any {
 func TestRegisterSendsVerificationAndVerify(t *testing.T) {
 	h := newMailHarness(t, nil)
 	w := h.do(req{method: "GET", path: "/api/auth/config"})
-	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"email":true}` {
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"email":true,"providers":[]}` {
 		t.Fatalf("config %d %s", w.Code, w.Body.String())
 	}
 	h.register("ana@example.org", "en")
@@ -183,7 +183,7 @@ func TestResetPasswordRevokesSessionsAndCookie(t *testing.T) {
 func TestEmailRoutesWithoutMail(t *testing.T) {
 	h := newHarness(t, nil)
 	w := h.do(req{method: "GET", path: "/api/auth/config"})
-	if strings.TrimSpace(w.Body.String()) != `{"email":false}` {
+	if strings.TrimSpace(w.Body.String()) != `{"email":false,"providers":[]}` {
 		t.Fatalf("config %s", w.Body.String())
 	}
 	expect(t, h.do(req{method: "POST", path: "/api/auth/password/forgot", body: `{"email":"a@example.org"}`}), http.StatusNotFound, "email_disabled")

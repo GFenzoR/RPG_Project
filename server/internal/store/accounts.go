@@ -124,6 +124,7 @@ func (s *Store) ActiveSession(ctx context.Context, tokenHash []byte, kind Sessio
 		AccountID:   row.AccountID,
 		Kind:        kind,
 		CharacterID: row.CharacterID.Int64,
+		CreatedAt:   row.CreatedAt.Time,
 		ExpiresAt:   row.ExpiresAt.Time,
 	}, nil
 }

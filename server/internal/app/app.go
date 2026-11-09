@@ -21,6 +21,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
+	"github.com/GFenzoR/RPG_Project/server/internal/oauth"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -84,6 +85,9 @@ type Config struct {
 	Mail auth.Emailer
 	// PublicURL is the website's base URL for the links of the emails (required with Mail).
 	PublicURL string
+	// Providers are the OAuth providers with keys (T2.1 2/2); they need PublicURL and a
+	// Store that implements auth.OAuthRepo (Postgres does).
+	Providers []*oauth.Provider
 	// RequireVerifiedEmail: only accounts with a verified email may play.
 	RequireVerifiedEmail bool
 	// ShutdownTimeout bounds the final saves and the closing of connections (default 10 s).
@@ -120,10 +124,14 @@ func New(cfg Config) (*App, error) {
 		cfg.ShutdownTimeout = 10 * time.Second
 	}
 	a := &App{cfg: cfg, log: cfg.Logger, loopDone: make(chan struct{})}
+	// OAuth lives in Postgres; fake stores of tests may not implement it.
+	oauthRepo, _ := cfg.Store.(auth.OAuthRepo)
 	authSvc, err := auth.New(auth.Config{
 		Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations,
 		Mail: cfg.Mail, PublicURL: cfg.PublicURL, RequireVerifiedEmail: cfg.RequireVerifiedEmail,
 		SessionsRevoked: a.sessionsRevoked,
+		Providers:       cfg.Providers,
+		OAuth:           oauthRepo,
 	})
 	if err != nil {
 		return nil, err

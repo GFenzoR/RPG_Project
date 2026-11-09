@@ -24,6 +24,9 @@ type Repo struct {
 	verified   map[int64]bool
 	locales    map[int64]string
 	tokens     map[string]store.AccountToken
+	identities map[string]identityRow
+	states     map[string]store.OAuthState
+	pendings   map[string]pendingRow
 	// Audit holds the audit entries the store would have written (VerifyEmail,
 	// ResetPassword).
 	Audit []store.AuditEntry
