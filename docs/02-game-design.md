@@ -802,7 +802,9 @@ apaga todo y el juego queda como antes de T5.2: nadie puede herir a otro jugador
   (`puerto`, también el tutorial) es `no_pvp` entera.
 - **`pvp` (arena):** si los dos están adentro se pelea sin marcas, sin bloqueo y sin
   castigo: el derrotado despierta en su templo sin perder experiencia, skills, items ni
-  bendiciones. Hay una chica en la arena de Raigal (Isla del Bosque).
+  bendiciones. Se juzga golpe por golpe: si alguien que se lleva la muerte golpeó desde
+  afuera, la muerte cuenta como cualquier otra. Un duelo en la arena no da derecho a
+  defensa propia afuera. Hay una chica en la arena de Raigal (Isla del Bosque).
 - **El resto del mundo:** PvP abierto con marcas.
 - **Nivel:** por debajo de `min_level` (20) no se ataca ni se es atacado por jugadores. Es
   más que la protección de novato (8) a propósito: quien llega a 20 ya salió de Puerto y
@@ -853,7 +855,8 @@ Las duraciones (60 h y 200 h) obligan a jugar varios días con la marca puesta.
 Toda muerte en la que un jugador hirió a la víctima en los últimos `kill_credit_ms` (50 s)
 cuenta para cada uno de ellos: suma a su contador de muertes (`pvp_kills`), y es
 injustificada para quien la atacó sin justificación. Los dos reciben un mensaje (quién
-derrotó a quién) y el servidor registra la muerte en su log (ids de los personajes, si fue
+derrotó a quién; si la víctima no veía a quien la mató, `pvp.killed_unseen` sin nombre) y
+el servidor registra la muerte en su log (ids de los personajes, si fue
 justificada, arena, guerra y posición; nada más).
 
 ### Daño
@@ -867,7 +870,8 @@ daña donde ese jugador podría atacar ahora.
 Interruptor del cliente, **activado por defecto** (cada login empieza así hasta que el
 cliente diga otra cosa). Con él no se puede atacar a un jugador si sería injustificado, y
 los hechizos de área no lo alcanzan. Sin él, el área golpea a todo jugador atacable del
-círculo (salvo grupo y gremio) y marca como un ataque directo.
+círculo (salvo grupo y gremio) y marca como un ataque directo. El área nunca alcanza a un
+jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.
 
 ### Guerras de gremios
 - El líder declara la guerra a otro gremio por nombre; el líder del otro la acepta o la
@@ -876,7 +880,7 @@ círculo (salvo grupo y gremio) y marca como un ataque directo.
   líder se rinde (gana el otro), a las `war.hours` (96 h; gana quien tiene más muertes o
   es empate) o si uno de los gremios se disuelve.
 - Mientras dura, los miembros de ambos se atacan sin marcas (también en modo seguro) y cada
-  muerte entre ellos suma al marcador de su gremio.
+  muerte entre ellos suma **una** al marcador de su gremio, la golpeen cuantos la golpeen.
 - Un gremio tiene como mucho `war.max_wars` (3) guerras abiertas (declaradas o activas), y
   una sola con cada gremio.
 - Panel "Gremio": guerras con su estado, marcador y tiempo; el líder declara, acepta,
@@ -892,6 +896,9 @@ círculo (salvo grupo y gremio) y marca como un ataque directo.
 - Reportes: el contexto incluye `attack_player` y `kill_player` con el nombre del otro.
 
 ### Pendiente
-Que un personaje con bloqueo quede en el mundo al cerrar la conexión; hechizos de condición
+Que un personaje con bloqueo quede en el mundo al cerrar la conexión (hoy, desconectar y
+volver a entrar borra el bloqueo, también el de una muerte injustificada); que una condición
+de otro jugador recuerde a su autor tras un relogueo (hoy pasa a dañar como una del mundo);
+hechizos de condición
 a distancia contra jugadores (hoy solo contra monstruos); sprites de las marcas (hoy son
 formas dibujadas); un ranking público de guerras.

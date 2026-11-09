@@ -472,6 +472,7 @@ pvp.protection_locked: "Atacaste a un jugador hace poco: todavía no puedes entr
 pvp.kill: "Derrotaste a {name}."
 pvp.kill_unjust: "Derrotaste a {name} sin motivo. Esta muerte cuenta en tu contra."
 pvp.killed_by: "Te derrotó {name}."
+pvp.killed_unseen: "Te derrotó alguien a quien no veías."
 pvp.arena_defeat: "Perdiste en la arena. No pierdes nada."
 pvp.skull_gained: "Ahora llevas la marca de {skull}."
 pvp.skull_removed_staff: "Un miembro del personal te quitó la marca."

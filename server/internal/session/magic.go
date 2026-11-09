@@ -293,8 +293,8 @@ func (w *World) spellFoe(p *Player, target *pb.ActionTarget) foe {
 				}
 			}
 		case nil:
-			if p.ptarget != nil {
-				return foe{p: p.ptarget}
+			if v := p.ptarget; v != nil && w.byClient[v.client] == v && p.Knows(v.id) {
+				return foe{p: v}
 			}
 		}
 	}

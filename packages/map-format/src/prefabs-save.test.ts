@@ -79,6 +79,7 @@ describe("saveApplied", () => {
       { op: "paint_ground", floor: 7, rect: { x: 1040, y: 1040, w: 2, h: 2 }, item: "sand" },
       { op: "remove_zone", id: "testisle_dock" },
       { op: "remove_zone", id: "testisle_temple" },
+      { op: "remove_zone", id: "testisle_no_pvp" },
       { op: "erase", floor: 8, rect: { x: 1056, y: 1024, w: 32, h: 32 }, layer: "all" },
     ]);
     const saved = saveApplied(root, r.world, r);

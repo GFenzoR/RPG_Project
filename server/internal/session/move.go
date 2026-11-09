@@ -194,13 +194,6 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		w.reject(p, dirMsg(d))
 		return
 	}
-	if ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
-		// T5.2: an attacker cannot hide in a protection zone while its PvP lock lasts.
-		p.stopWalk()
-		w.reject(p, dirMsg(d))
-		p.emit(systemMsg(msgPvPProtLocked))
-		return
-	}
 	if w.occupied(to) {
 		if p.hasDest && w.pathBudget < w.searchCost() {
 			return // out of pathfinding quota this tick: try again on the next one
@@ -213,6 +206,14 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		d = p.queue[p.qhead]
 		to, _ = p.pos.Step(d) // the new path starts on a free walkable tile
 	}
+	if ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
+		// T5.2: an attacker cannot hide in a protection zone while its PvP lock lasts.
+		p.stopWalk()
+		w.reject(p, dirMsg(d))
+		p.emit(systemMsg(msgPvPProtLocked))
+		return
+	}
+
 	p.qhead++
 	if p.qhead == len(p.queue) {
 		p.stopWalk()

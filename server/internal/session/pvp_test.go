@@ -604,3 +604,47 @@ func TestPvPUnskull(t *testing.T) {
 		t.Fatalf("jobs %+v", g.jobs)
 	}
 }
+
+// One death is one kill in a war, however many enemies hit the victim.
+func TestGuildWarOneKillPerDeath(t *testing.T) {
+	tg := newTwoGuilds(t)
+	id := tg.pendingWar()
+	tg.war(tg.cc, wAccept, "", id)
+	tg.hit(tg.a, tg.d)
+	tg.kill(tg.b, tg.d)
+	tg.sim.Step()
+	ws := lastGuild(tg.ca).GetWars()
+	if len(ws) != 1 || ws[0].GetOurKills() != 1 {
+		t.Fatalf("wars %v", ws)
+	}
+	for _, p := range []*session.Player{tg.a, tg.b} {
+		if st := tg.w.PvPStateForTest(p); st.Kills != 1 || len(st.Unjust) != 0 {
+			t.Fatalf("%d: %+v", p.CharacterID(), st)
+		}
+	}
+}
+
+// The arena is judged per hit: a hit from outside it on a player inside it is not an arena
+// hit, so the death costs the victim as usual and the attacker counts an unjustified kill;
+// an arena kill marks nobody.
+func TestPvPArenaPerHit(t *testing.T) {
+	g := newPvP(t, nil)
+	_, a := g.fighter("Ana", 0, 39, 45, 30, 0) // just outside the arena (x 40..50)
+	_, v := g.fighter("Bea", 0, 40, 45, 30, 0, func(c *session.Character) { c.Experience = 200000 })
+	xp := v.Experience()
+	g.kill(a, v)
+	if v.Experience() >= xp || len(g.w.PvPStateForTest(a).Unjust) != 1 {
+		t.Fatalf("experience %d → %d, Ana %+v", xp, v.Experience(), g.w.PvPStateForTest(a))
+	}
+
+	_, c := g.fighter("Cid", 0, 45, 45, 30, 0)
+	_, d := g.fighter("Dan", 0, 46, 45, 30, 0)
+	g.hit(c, d) // an arena duel
+	if c.Skull() != pb.Skull_SKULL_UNSPECIFIED {
+		t.Fatalf("arena hit marked Cid: %v", c.Skull())
+	}
+	g.kill(c, d)
+	if st := g.w.PvPStateForTest(c); st.Kills != 1 || len(st.Unjust) != 0 || c.Skull() != pb.Skull_SKULL_UNSPECIFIED {
+		t.Fatalf("an arena kill counted against Cid: %+v %v", st, c.Skull())
+	}
+}

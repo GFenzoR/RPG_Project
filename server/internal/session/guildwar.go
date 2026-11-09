@@ -238,6 +238,9 @@ func (w *World) warSurrender(ctx *game.TickContext, p *Player, id int64) {
 
 // warKill counts a kill of a's guild in war; reaching the limit wins it.
 func (w *World) warKill(ctx *game.TickContext, war *guildWar, a *Player) {
+	if w.wars[war.id] != war || a.gm == nil {
+		return
+	}
 	i := war.side(a.gm.g)
 	if i < 0 {
 		return

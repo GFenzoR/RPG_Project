@@ -797,7 +797,8 @@ Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
   incluido) cuando cambia. `Skull`: `UNSPECIFIED` (sin marca), `AGGRESSOR`, `MURDERER`,
   `OUTLAW`.
 - **Mensajes de sistema:** `pvp.kill` / `pvp.kill_unjust` (`name` = la víctima) a cada
-  jugador que se llevó la muerte, `pvp.killed_by` (`name`) a la víctima,
+  jugador que se llevó la muerte, `pvp.killed_by` (`name`) a la víctima (o
+  `pvp.killed_unseen` si no veía a quien la mató),
   `pvp.arena_defeat`, `pvp.skull_gained` (`skull` content_id: `aggressor`, `murderer`,
   `outlaw`, que el cliente traduce como `client.skull.<id>`), `pvp.logout_locked` (un
   `Logout` rechazado: la conexión sigue), `pvp.protection_locked` (con su

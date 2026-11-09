@@ -34,6 +34,7 @@ const (
 	msgPvPKill           = "pvp.kill"
 	msgPvPKillUnjust     = "pvp.kill_unjust"
 	msgPvPKilledBy       = "pvp.killed_by"
+	msgPvPKilledUnseen   = "pvp.killed_unseen"
 	msgPvPArenaDefeat    = "pvp.arena_defeat"
 	msgPvPSkullGained    = "pvp.skull_gained"
 	msgPvPSafeOn         = "pvp.safe_on"
@@ -72,6 +73,8 @@ type pvpHit struct {
 	char   int64
 	at     game.Tick
 	unjust bool
+	// arena: every hit of the entry was an arena hit (both in a pvp zone).
+	arena bool
 }
 
 func (w *World) initPvP() {
@@ -165,6 +168,11 @@ func (w *World) listSkulled(p *Player) {
 // pvpLeftWorld forgets p in the PvP lists when it leaves the world.
 func (w *World) pvpLeftWorld(p *Player) {
 	p.ptarget = nil
+	for _, o := range w.players {
+		if o.ptarget == p {
+			o.ptarget = nil // a spell without a target must not reach a gone player
+		}
+	}
 	if p.skullList {
 		p.skullList = false
 		w.skulled = slices.DeleteFunc(w.skulled, func(o *Player) bool { return o == p })
@@ -228,7 +236,8 @@ func (w *World) justified(tick game.Tick, a, v *Player) bool {
 		return true
 	}
 	for _, h := range a.hitBy {
-		if h.char == v.charID && tick-h.at < w.pvpAggrFor {
+		// Arena duels give no right of self-defense outside the arena.
+		if h.char == v.charID && !h.arena && tick-h.at < w.pvpAggrFor {
 			return true
 		}
 	}
@@ -257,6 +266,9 @@ func refuseMsg(key string, level int) *pb.ServerMessage {
 // areaHits reports whether a's area spell hurts v: an attack a could start, never on a
 // member of a's party or guild.
 func (w *World) areaHits(tick game.Tick, a, v *Player) bool {
+	if !a.Knows(v.id) {
+		return false // an unseen (invisible) player: no hit, no mark, no hint
+	}
 	if a.party != nil && a.party == v.party || a.gm != nil && v.gm != nil && a.gm.g == v.gm.g {
 		return false
 	}
@@ -350,7 +362,7 @@ func (w *World) hurtPlayer(ctx *game.TickContext, a, v *Player, dmg int, element
 func (w *World) aggress(ctx *game.TickContext, a, v *Player) {
 	arena := w.arena(a, v)
 	unjust := !arena && !w.justified(ctx.Tick, a, v)
-	w.rememberHit(ctx.Tick, v, a.charID, unjust)
+	w.rememberHit(ctx.Tick, v, a.charID, unjust, arena)
 	if arena {
 		return
 	}
@@ -364,15 +376,15 @@ func (w *World) aggress(ctx *game.TickContext, a, v *Player) {
 
 // rememberHit records on v a hit by character char. An entry older than the aggressor
 // time starts afresh; with maxHitBy entries the oldest is replaced.
-func (w *World) rememberHit(tick game.Tick, v *Player, char int64, unjust bool) {
+func (w *World) rememberHit(tick game.Tick, v *Player, char int64, unjust, arena bool) {
 	oldest := -1
 	for i := range v.hitBy {
 		h := &v.hitBy[i]
 		if h.char == char {
 			if tick-h.at >= w.pvpAggrFor {
-				h.unjust = false
+				h.unjust, h.arena = false, true
 			}
-			h.at, h.unjust = tick, h.unjust || unjust
+			h.at, h.unjust, h.arena = tick, h.unjust || unjust, h.arena && arena
 			return
 		}
 		if oldest < 0 || h.at < v.hitBy[oldest].at {
@@ -380,10 +392,10 @@ func (w *World) rememberHit(tick game.Tick, v *Player, char int64, unjust bool) 
 		}
 	}
 	if len(v.hitBy) < maxHitBy {
-		v.hitBy = append(v.hitBy, pvpHit{char: char, at: tick, unjust: unjust})
+		v.hitBy = append(v.hitBy, pvpHit{char: char, at: tick, unjust: unjust, arena: arena})
 		return
 	}
-	v.hitBy[oldest] = pvpHit{char: char, at: tick, unjust: unjust}
+	v.hitBy[oldest] = pvpHit{char: char, at: tick, unjust: unjust, arena: arena}
 }
 
 // pvpSource returns the online player that applied a condition to v, if it was another
@@ -398,16 +410,20 @@ func (w *World) pvpSource(source uint32, v *Player) *Player {
 // ---- deaths -----------------------------------------------------------------------
 
 // pvpDeath settles the death of v if players took part in it: every player that hurt v
-// within balance pvp.kill_credit_ms gets the kill (its counter, the war score, and an
-// unjustified kill if any of its hits was), both sides are told, and the kill is logged.
-// It reports whether v died in an arena (no penalty).
+// within balance pvp.kill_credit_ms gets the kill (its counter, and an unjustified kill if
+// any of its hits was), each war it was fought in scores once, both sides are told, and
+// the kill is logged. It reports whether it was an arena defeat (every credited hit was
+// an arena hit): no penalty.
 func (w *World) pvpDeath(ctx *game.TickContext, v *Player) (arena bool) {
 	if !w.pvpOn || len(v.hitBy) == 0 {
 		return false
 	}
 	var last *Player
 	var lastAt game.Tick
-	inArena := w.m.Flags(v.pos)&world.FlagPvP != 0
+	var wars [maxHitBy]*guildWar
+	var scorers [maxHitBy]*Player
+	nw := 0
+	arena = true
 	for _, h := range v.hitBy {
 		if ctx.Tick-h.at >= w.pvpCreditFor {
 			continue
@@ -416,14 +432,14 @@ func (w *World) pvpDeath(ctx *game.TickContext, v *Player) (arena bool) {
 		if a == nil {
 			continue
 		}
-		arena = arena || inArena && w.m.Flags(a.pos)&world.FlagPvP != 0
+		arena = arena && h.arena
 		if last == nil || h.at > lastAt {
 			last, lastAt = a, h.at
 		}
 		a.pvpKills++
 		a.recordEvent(ctx.Tick, eventKillPlayer, v.name, 0, 0)
 		war := w.activeWar(a, v)
-		unjust := h.unjust && war == nil && !inArena
+		unjust := h.unjust && war == nil
 		if unjust {
 			w.unjustKill(ctx, a)
 			a.emit(systemMsg(msgPvPKillUnjust, textParam("name", v.name)))
@@ -433,14 +449,27 @@ func (w *World) pvpDeath(ctx *game.TickContext, v *Player) (arena bool) {
 		var warID int64
 		if war != nil {
 			warID = war.id
-			w.warKill(ctx, war, a)
+			if !slices.Contains(wars[:nw], war) {
+				wars[nw], scorers[nw] = war, a
+				nw++
+			}
 		}
-		w.log.Info("pvp kill", "killer", a.charID, "victim", v.charID, "justified", !unjust, "arena", inArena,
+		w.log.Info("pvp kill", "killer", a.charID, "victim", v.charID, "justified", !unjust, "arena", h.arena,
 			"war", warID, "x", v.pos.X, "y", v.pos.Y, "z", v.pos.Z)
 	}
 	v.hitBy = v.hitBy[:0]
-	if last != nil {
+	if last == nil {
+		return false
+	}
+	// One death is one kill in each war it was part of (after every attacker was judged:
+	// a war that ends now does not change how the others counted).
+	for i := range nw {
+		w.warKill(ctx, wars[i], scorers[i])
+	}
+	if v.Knows(last.id) {
 		v.emit(systemMsg(msgPvPKilledBy, textParam("name", last.name)))
+	} else {
+		v.emit(systemMsg(msgPvPKilledUnseen)) // an invisible killer stays unnamed
 	}
 	return arena
 }

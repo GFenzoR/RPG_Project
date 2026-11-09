@@ -472,6 +472,7 @@ pvp.protection_locked: "You attacked a player a moment ago: you cannot enter a p
 pvp.kill: "You defeated {name}."
 pvp.kill_unjust: "You defeated {name} without a reason. This death counts against you."
 pvp.killed_by: "You were defeated by {name}."
+pvp.killed_unseen: "You were defeated by someone you could not see."
 pvp.arena_defeat: "You lost in the arena. You lose nothing."
 pvp.skull_gained: "You now bear the mark of the {skull}."
 pvp.skull_removed_staff: "A staff member removed your mark."
