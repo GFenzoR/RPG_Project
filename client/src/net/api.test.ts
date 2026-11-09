@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, authConfig, forgetEmailConfig, registerBody } from "./api.ts";
+import { api, authConfig, forgetEmailConfig, originOf, registerBody } from "./api.ts";
 
 describe("register body (T2.1)", () => {
   it("sends lang only to a server that sends emails", () => {
@@ -50,6 +50,15 @@ describe("authConfig", () => {
         ),
       ),
     );
-    expect(await authConfig()).toEqual({ email: true, providers: ["google", "discord"] });
+    expect(await authConfig()).toEqual({
+      email: true,
+      providers: ["google", "discord"],
+      publicOrigin: "",
+    });
+  });
+  it("keeps only an http(s) public origin", () => {
+    expect(originOf("https://game.example/x")).toBe("https://game.example");
+    expect(originOf("javascript:alert(1)")).toBe("");
+    expect(originOf(7)).toBe("");
   });
 });

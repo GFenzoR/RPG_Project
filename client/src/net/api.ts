@@ -97,6 +97,19 @@ export interface AuthConfig {
   email: boolean;
   /** OAuth providers with keys ("google", "discord"); never their secrets. */
   providers: string[];
+  /** Origin of PUBLIC_URL ("" if unknown): OAuth only works from exactly there. */
+  publicOrigin: string;
+}
+
+/** The origin of an http(s) URL, or "" for anything else. */
+export function originOf(url: unknown): string {
+  if (typeof url !== "string") return "";
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.origin : "";
+  } catch {
+    return "";
+  }
 }
 
 const KNOWN_PROVIDERS = ["google", "discord"];
@@ -107,7 +120,7 @@ let authConfigCache: Promise<AuthConfig> | undefined;
  * 404 (or fails), which means none.
  */
 export function authConfig(): Promise<AuthConfig> {
-  authConfigCache ??= call<{ email?: unknown; providers?: unknown }>(
+  authConfigCache ??= call<{ email?: unknown; providers?: unknown; public_url?: unknown }>(
     "GET",
     "/api/auth/config",
   ).then(
@@ -116,8 +129,9 @@ export function authConfig(): Promise<AuthConfig> {
       providers: Array.isArray(c.providers)
         ? KNOWN_PROVIDERS.filter((p) => (c.providers as unknown[]).includes(p))
         : [],
+      publicOrigin: originOf(c.public_url),
     }),
-    () => ({ email: false, providers: [] }),
+    () => ({ email: false, providers: [], publicOrigin: "" }),
   );
   return authConfigCache;
 }

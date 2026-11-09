@@ -27,6 +27,11 @@ Todos los números de este documento son **valores iniciales** que viven en
   - Un reset de contraseña (quien controla el buzón recupera la cuenta) también quita las
     identidades que nunca probaron ese email (no verificadas por el proveedor, o con otro
     email): así no se queda adentro quien ocupó la dirección con un proveedor.
+    Para que el dueño del buzón llegue a eso, una cuenta nueva cuyo email no probó nadie
+    (proveedor que no lo verificó, o email escrito en `/oauth/confirm`) recibe el email de
+    verificación: confirma, pide el reset y recupera la dirección.
+  - Un vínculo empezado en "Mi cuenta" muere si la sesión que lo empezó termina antes de
+    volver del proveedor (logout, reset, ban).
   - Si la cuenta existente con ese email no tiene contraseña, `/oauth/confirm` no la pide:
     explica que se entra con el proveedor que ya usa y se vincula desde "Mi cuenta".
   - La app de escritorio no ofrece OAuth (necesitaría abrir el navegador del sistema y

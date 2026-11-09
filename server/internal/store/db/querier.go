@@ -31,6 +31,8 @@ type Querier interface {
 	CreateOAuthPending(ctx context.Context, arg CreateOAuthPendingParams) error
 	CreateOAuthState(ctx context.Context, arg CreateOAuthStateParams) error
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
+	// Cancels the account's links in flight (password reset, ban, role change).
+	DeleteAccountOAuthStates(ctx context.Context, accountID pgtype.Int8) error
 	// Revokes every token of an account (ban).
 	DeleteAccountSessions(ctx context.Context, accountID int64) (int64, error)
 	// Drops every token of one purpose of an account (a new link replaces the old ones).

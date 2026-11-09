@@ -31,11 +31,17 @@ CREATE TABLE oauth_states (
     -- 'login' or 'link' (then account_id is the account to link to).
     mode         TEXT        NOT NULL CHECK (mode IN ('login', 'link')),
     account_id   BIGINT      REFERENCES accounts (id) ON DELETE CASCADE,
+    -- mode 'link': SHA-256 of the session token that passed the re-authentication. The
+    -- callback links only while that session is still active (a logout or a password
+    -- reset in between cancels the link).
+    session_hash BYTEA       CHECK (session_hash IS NULL OR length(session_hash) = 32),
     return_to    TEXT        NOT NULL,
     expires_at   TIMESTAMPTZ NOT NULL,
-    CHECK ((mode = 'link') = (account_id IS NOT NULL))
+    CHECK ((mode = 'link') = (account_id IS NOT NULL)),
+    CHECK ((mode = 'link') = (session_hash IS NOT NULL))
 );
 CREATE INDEX oauth_states_expires_idx ON oauth_states (expires_at);
+CREATE INDEX oauth_states_account_idx ON oauth_states (account_id) WHERE account_id IS NOT NULL;
 
 -- An identity whose reported email belongs to an existing account that it is not linked
 -- to: it is never linked on its own (account takeover). The browser holds a random token

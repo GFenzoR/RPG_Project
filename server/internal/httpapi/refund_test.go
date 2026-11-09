@@ -45,6 +45,7 @@ func (*fakeAccounts) RequestPasswordReset(context.Context, string, string) error
 func (*fakeAccounts) ResetPassword(context.Context, string, string) error        { return nil }
 
 func (*fakeAccounts) Providers() []string { return nil }
+func (*fakeAccounts) PublicURL() string   { return "" }
 func (*fakeAccounts) StartLogin(context.Context, string, string) (auth.OAuthStart, error) {
 	return auth.OAuthStart{}, nil
 }

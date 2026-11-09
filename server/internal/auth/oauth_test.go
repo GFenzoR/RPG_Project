@@ -35,6 +35,23 @@ func newOAuthEnv(t *testing.T) *oauthEnv {
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
 	fake.Base = srv.URL
+	repo := authtest.NewRepo()
+	svc, err := auth.New(auth.Config{
+		Repo: repo, OAuth: repo, Clock: clk, Vocations: testVocations,
+		Hash:      auth.HashParams{MemoryKiB: 64, Time: 1, Threads: 1},
+		PublicURL: "https://game.example", Providers: providersFor(t, fake),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &oauthEnv{t: t, svc: svc, repo: repo, fake: fake, clk: clk, srv: srv}
+}
+
+func (e *oauthEnv) svcProviders(t *testing.T) []*oauth.Provider { return providersFor(t, e.fake) }
+
+// providersFor configures Google and Discord against the fake.
+func providersFor(t *testing.T, fake *oauthtest.Fake) []*oauth.Provider {
+	t.Helper()
 	ep := fake.Endpoints()
 	g, err := oauth.New(oauth.Google, oauth.Config{ClientID: oauthtest.ClientID, ClientSecret: oauthtest.ClientSecret,
 		AuthURL: ep["GOOGLE_AUTH_URL"], TokenURL: ep["GOOGLE_TOKEN_URL"], JWKSURL: ep["GOOGLE_JWKS_URL"], Issuer: ep["GOOGLE_ISSUER"]})
@@ -46,16 +63,7 @@ func newOAuthEnv(t *testing.T) *oauthEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := authtest.NewRepo()
-	svc, err := auth.New(auth.Config{
-		Repo: repo, OAuth: repo, Clock: clk, Vocations: testVocations,
-		Hash:      auth.HashParams{MemoryKiB: 64, Time: 1, Threads: 1},
-		PublicURL: "https://game.example", Providers: []*oauth.Provider{g, d},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &oauthEnv{t: t, svc: svc, repo: repo, fake: fake, clk: clk, srv: srv}
+	return []*oauth.Provider{g, d}
 }
 
 // authorize follows the provider's authorization URL like a browser and returns the
@@ -362,5 +370,98 @@ func TestPendingSaysWhetherTheAccountHasAPassword(t *testing.T) {
 	p, err := e.svc.Pending(ctx, res.Pending)
 	if err != nil || p.HasPassword {
 		t.Fatalf("%+v %v", p, err)
+	}
+}
+
+// A link started by a session dies with it: whoever held the provider URL and the
+// binding cookie cannot finish it after a logout or a password reset (the owner taking
+// the account back).
+func TestLinkInFlightDiesWithItsSession(t *testing.T) {
+	for _, end := range []string{"logout", "reset"} {
+		t.Run(end, func(t *testing.T) {
+			e := newOAuthEnv(t)
+			ctx := context.Background()
+			id, _ := e.svc.Register(ctx, "victim@example.org", "squatter-pass1")
+			tok, _ := e.svc.Login(ctx, "victim@example.org", "squatter-pass1")
+			e.fake.SetNext(oauth.Google, oauthtest.User{Subject: "attacker", Email: "attacker@example.org", Verified: true})
+			st, err := e.svc.StartLink(ctx, tok.Token, oauth.Google, "squatter-pass1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			q := e.authorize(st.URL)
+			switch end {
+			case "logout":
+				_ = e.svc.Logout(ctx, tok.Token)
+			case "reset":
+				e.repo.SetVerified(id)
+				link, _, err := auth.IssueResetLink(ctx, e.repo, e.clk.Now(), "https://game.example", "victim@example.org")
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, rt, _ := strings.Cut(link, "#token=")
+				if err := e.svc.ResetPassword(ctx, rt, "owner-password-1"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err = e.svc.FinishOAuth(ctx, oauth.Google, q.Get("state"), q.Get("code"), "", st.Binding)
+			if !errors.Is(err, auth.ErrOAuthState) {
+				t.Fatalf("held link after %s: %v", end, err)
+			}
+			if ids, _ := e.svc.Identities(ctx, id); len(ids) != 0 {
+				t.Fatalf("identity linked after %s: %+v", end, ids)
+			}
+		})
+	}
+}
+
+// An address a provider does not vouch for gets the verification email, and through it
+// the mailbox owner takes the account back: verify, reset, and the squatter is out.
+func TestUnprovenAddressGetsMailAndItsOwnerGetsItBack(t *testing.T) {
+	e := newOAuthEnv(t)
+	ctx := context.Background()
+	box := &authtest.Mailbox{}
+	svc, err := auth.New(auth.Config{
+		Repo: e.repo, OAuth: e.repo, Clock: e.clk, Vocations: testVocations,
+		Hash: auth.HashParams{MemoryKiB: 64, Time: 1, Threads: 1}, Mail: box,
+		PublicURL: "https://game.example", Providers: e.svcProviders(t),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.svc = svc
+	res, err := e.login(oauth.Discord, oauthtest.User{Subject: "squatter", Email: "victim@example.org"})
+	if err != nil || res.Kind != "login" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	verify, ok := box.Last()
+	if !ok || verify.To != "victim@example.org" || !strings.Contains(verify.Link, "/verify") {
+		t.Fatalf("no verification email for the unproven address: %+v", verify)
+	}
+	// The owner clicks it, asks for a reset and sets a password.
+	if err := svc.VerifyEmail(ctx, verify.Token()); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequestPasswordReset(ctx, "victim@example.org", ""); err != nil {
+		t.Fatal(err)
+	}
+	reset, _ := box.Last()
+	if err := svc.ResetPassword(ctx, reset.Token(), "owner-password-1"); err != nil {
+		t.Fatal(err)
+	}
+	if ids, _ := svc.Identities(ctx, res.Token.AccountID); len(ids) != 0 {
+		t.Fatalf("the squatter's identity survived: %+v", ids)
+	}
+	if again, _ := e.login(oauth.Discord, oauthtest.User{Subject: "squatter", Email: "victim@example.org"}); again.Kind == "login" {
+		t.Fatal("the squatter still logs in")
+	}
+
+	// An account created on /oauth/confirm with a typed address gets the email too.
+	_, _ = svc.Register(ctx, "carla@example.org", "secreto123")
+	p, _ := e.login(oauth.Google, oauthtest.User{Subject: "g-c", Email: "carla@example.org", Verified: true})
+	if _, _, err := svc.CreateFromPending(ctx, p.Pending, "typed@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := box.Last(); m.To != "typed@example.org" || !strings.Contains(m.Link, "/verify") {
+		t.Fatalf("no verification email for the typed address: %+v", m)
 	}
 }

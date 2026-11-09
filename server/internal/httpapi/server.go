@@ -105,6 +105,7 @@ type Accounts interface {
 
 	// OAuth and linked identities (T2.1 2/2, oauth.go).
 	Providers() []string
+	PublicURL() string
 	StartLogin(ctx context.Context, provider, returnTo string) (auth.OAuthStart, error)
 	StartLink(ctx context.Context, token, provider, password string) (auth.OAuthStart, error)
 	FinishOAuth(ctx context.Context, provider, state, code, providerError, binding string) (auth.OAuthResult, error)

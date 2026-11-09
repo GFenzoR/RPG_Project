@@ -1,15 +1,15 @@
 -- name: CreateOAuthState :exec
 INSERT INTO oauth_states (state_hash, binding_hash, provider, verifier, nonce, mode,
-                          account_id, return_to, expires_at)
+                          account_id, session_hash, return_to, expires_at)
 VALUES (sqlc.arg(state_hash), sqlc.arg(binding_hash), sqlc.arg(provider), sqlc.arg(verifier),
-        sqlc.arg(nonce), sqlc.arg(mode), sqlc.narg(account_id), sqlc.arg(return_to),
-        sqlc.arg(expires_at));
+        sqlc.arg(nonce), sqlc.arg(mode), sqlc.narg(account_id), sqlc.narg(session_hash),
+        sqlc.arg(return_to), sqlc.arg(expires_at));
 
 -- name: ConsumeOAuthState :one
 -- Single use: the row is deleted whether or not the rest of the callback works.
 DELETE FROM oauth_states
 WHERE state_hash = sqlc.arg(state_hash) AND expires_at > sqlc.arg(now)
-RETURNING binding_hash, provider, verifier, nonce, mode, account_id, return_to;
+RETURNING binding_hash, provider, verifier, nonce, mode, account_id, session_hash, return_to;
 
 -- name: DeleteExpiredOAuth :one
 WITH s AS (DELETE FROM oauth_states WHERE oauth_states.expires_at <= sqlc.arg(now) RETURNING 1),
@@ -65,3 +65,7 @@ SELECT id, password_hash FROM accounts WHERE id = sqlc.arg(id) FOR UPDATE;
 DELETE FROM account_identities
 WHERE account_id = sqlc.arg(account_id)
   AND (NOT email_verified OR email <> sqlc.arg(email));
+
+-- name: DeleteAccountOAuthStates :exec
+-- Cancels the account's links in flight (password reset, ban, role change).
+DELETE FROM oauth_states WHERE account_id = sqlc.arg(account_id);

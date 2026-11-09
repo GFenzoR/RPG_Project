@@ -9,7 +9,7 @@ import { ApiError, accountApi, api, oauthApi } from "../net/api.ts";
 import type { Account } from "../net/api.ts";
 import { VerifyNotice, useProviders } from "../ui/Account.tsx";
 import { SiteLogin } from "./Maps.tsx";
-import { oauthErrorKey } from "./routes.ts";
+import { linkedProvider, oauthErrorKey } from "./routes.ts";
 
 interface Props {
   t: Translate;
@@ -45,7 +45,18 @@ export function AccountPage(props: Props & { search: string }): JSX.Element {
         setAccount(codeOf(e) === "unauthorized" ? "login" : codeOf(e)),
       );
   }, [round]);
-  const linked = new URLSearchParams(props.search).get("linked");
+  // Only a provider the account really has linked; the query is then dropped.
+  const linked =
+    account && typeof account !== "string"
+      ? linkedProvider(
+          props.search,
+          account.identities.map((i) => i.provider),
+        )
+      : undefined;
+  useEffect(() => {
+    if (new URLSearchParams(props.search).has("linked"))
+      history.replaceState(history.state, "", location.pathname);
+  }, [props.search, account]);
   if (account === undefined) return <p class="muted">{t("site.maps.loading")}</p>;
   if (account === "login") return <SiteLogin t={t} onDone={reload} />;
   if (typeof account === "string") return <ErrorLine t={t} code={account} />;

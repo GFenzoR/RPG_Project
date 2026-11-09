@@ -218,6 +218,6 @@ site.oauth.error.unknown_provider: "That sign-in method is not available on this
 site.oauth.error.account_disabled: "The account is disabled."
 site.oauth.error.account_banned: "This account is suspended."
 site.oauth.error.internal: "Something failed on the server. Try again."
-site.oauth.confirm.no_password: "That account has no password: sign in with the provider it already uses and link this one from \"My account\"."
+site.oauth.confirm.no_password: "That account has no password: if it is yours, sign in with the provider it already uses and link this one from \"My account\". If you did not create it, check your email: we sent a link to confirm the address; then recover it with \"Forgot your password?\" (that removes whoever created it)."
 site.oauth.error.email_taken: "That email already has an account. Try again from the sign-in page."
 site.oauth.error.busy: "The server is busy. Try again in a moment."

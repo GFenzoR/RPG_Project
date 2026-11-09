@@ -92,6 +92,10 @@ type OAuthRepo interface {
 	DeleteExpiredOAuth(ctx context.Context, now time.Time) (int64, error)
 }
 
+// PublicURL is the website's base URL (PUBLIC_URL; "" when neither email nor OAuth is
+// on). OAuth only works from exactly this origin.
+func (s *Service) PublicURL() string { return s.publicURL }
+
 // Providers returns the configured providers' names, sorted.
 func (s *Service) Providers() []string {
 	out := make([]string, 0, len(s.providers))
@@ -115,7 +119,7 @@ type OAuthStart struct {
 // StartLogin begins a login with provider; the browser lands on returnTo (allowlisted)
 // afterwards.
 func (s *Service) StartLogin(ctx context.Context, provider, returnTo string) (OAuthStart, error) {
-	return s.start(ctx, provider, "login", 0, SafeReturn(returnTo))
+	return s.start(ctx, provider, "login", 0, nil, SafeReturn(returnTo))
 }
 
 // StartLink begins linking provider to the account of the session token. It needs a
@@ -147,7 +151,7 @@ func (s *Service) StartLink(ctx context.Context, token, provider, password strin
 	} else if now.Sub(sess.CreatedAt) > ReauthWindow {
 		return OAuthStart{}, ErrReauthRequired
 	}
-	return s.start(ctx, provider, "link", sess.AccountID, "/account")
+	return s.start(ctx, provider, "link", sess.AccountID, hashToken(token), "/account")
 }
 
 // checkPassword verifies the password of the account with email: ErrReauthRequired if it
@@ -179,7 +183,7 @@ func (s *Service) checkPassword(ctx context.Context, email, password string) err
 	return nil
 }
 
-func (s *Service) start(ctx context.Context, provider, mode string, accountID int64, returnTo string) (OAuthStart, error) {
+func (s *Service) start(ctx context.Context, provider, mode string, accountID int64, sessionHash []byte, returnTo string) (OAuthStart, error) {
 	p, ok := s.providers[provider]
 	if !ok {
 		return OAuthStart{}, ErrUnknownProvider
@@ -198,7 +202,8 @@ func (s *Service) start(ctx context.Context, provider, mode string, accountID in
 	}
 	if err := s.oauthRepo.CreateOAuthState(ctx, store.OAuthState{
 		StateHash: hashToken(state), BindingHash: hashToken(binding), Provider: provider,
-		Verifier: verifier, Nonce: nonce, Mode: mode, AccountID: accountID, ReturnTo: returnTo,
+		Verifier: verifier, Nonce: nonce, Mode: mode, AccountID: accountID, SessionHash: sessionHash,
+		ReturnTo:  returnTo,
 		ExpiresAt: s.clock.Now().Add(OAuthStateTTL),
 	}); err != nil {
 		return OAuthStart{}, fmt.Errorf("start oauth: %w", err)
@@ -263,6 +268,15 @@ func (s *Service) FinishOAuth(ctx context.Context, provider, state, code, provid
 
 func (s *Service) finishLink(ctx context.Context, st store.OAuthState, ext store.ExternalIdentity) (OAuthResult, error) {
 	res := OAuthResult{Kind: "linked", ReturnTo: st.ReturnTo}
+	// The session that passed the re-authentication must still be active and the
+	// account's: a logout, a password reset or a ban in between cancels the link.
+	sess, err := s.repo.ActiveSession(ctx, st.SessionHash, store.SessionAccount, s.clock.Now())
+	if errors.Is(err, store.ErrNotFound) || (err == nil && sess.AccountID != st.AccountID) {
+		return OAuthResult{}, ErrOAuthState
+	}
+	if err != nil {
+		return OAuthResult{}, fmt.Errorf("link: %w", err)
+	}
 	switch owner, err := s.oauthRepo.IdentityAccount(ctx, ext.Provider, ext.Subject); {
 	case err == nil && owner == st.AccountID:
 		return res, nil // already linked: nothing to do
@@ -331,11 +345,26 @@ func (s *Service) finishLogin(ctx context.Context, ext store.ExternalIdentity, r
 	if err != nil {
 		return OAuthResult{}, identityErr(err)
 	}
+	if !ext.EmailVerified {
+		s.verifyNewAddress(ctx, id)
+	}
 	tok, err := s.loginAccount(ctx, id)
 	if err != nil {
 		return OAuthResult{}, err
 	}
 	return OAuthResult{Kind: "login", Token: tok, ReturnTo: returnTo}, nil
+}
+
+// verifyNewAddress emails a verification link to a new account whose address nobody has
+// proved (a provider that does not vouch for it, or one typed on /oauth/confirm), as a
+// password sign-up does. It is also the mailbox owner's way back if the address was
+// taken by someone else: verify, then "forgot your password?", whose reset drops every
+// identity that never proved the address. Best effort: a full queue does not undo the
+// account (the owner can ask again).
+func (s *Service) verifyNewAddress(ctx context.Context, accountID int64) {
+	if s.mail != nil {
+		_ = s.SendVerification(ctx, accountID, "")
+	}
 }
 
 // PendingIdentity is what the confirmation page shows.
@@ -412,6 +441,7 @@ func (s *Service) CreateFromPending(ctx context.Context, token, email string) (T
 	if err != nil {
 		return Token{}, "", identityErr(err)
 	}
+	s.verifyNewAddress(ctx, id)
 	if err := s.oauthRepo.DeleteOAuthPending(ctx, hash); err != nil {
 		return Token{}, "", err
 	}

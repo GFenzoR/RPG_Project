@@ -118,7 +118,7 @@ func (o *oauthHarness) callback(authURL string) string {
 func TestOAuthLoginOverHTTP(t *testing.T) {
 	o := newOAuthHarness(t)
 	w := o.do("GET", "/api/auth/config", "")
-	if strings.TrimSpace(w.Body.String()) != `{"email":false,"providers":["discord","google"]}` || strings.Contains(w.Body.String(), "secret") {
+	if strings.TrimSpace(w.Body.String()) != `{"email":false,"providers":["discord","google"],"public_url":"https://game.example"}` || strings.Contains(w.Body.String(), "secret") {
 		t.Fatalf("config %s", w.Body.String())
 	}
 	if loc := o.login(oauth.Google, oauthtest.User{Subject: "g1", Email: "ana@example.org", Verified: true}, "/maps/mine"); loc != "/maps/mine" {

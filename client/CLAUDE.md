@@ -293,5 +293,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `/account` (vínculos), `/oauth/confirm` y `/oauth/error` (códigos fijos en
   `routes.ts` `OAUTH_ERRORS`). El navegador sale al proveedor con `location.assign` de la
   URL que dio el servidor. E2E: `e2e/oauth.spec.ts` contra `server/cmd/fakeoauth`.
+  Fuera del origen de `public_url` (de `/api/auth/config`) los botones no se muestran: el
+  login no puede volver ahí. El aviso de `/account?linked=` solo aparece para un proveedor
+  que la cuenta tiene vinculado (`routes.ts` `linkedProvider`).
 - E2E: `e2e/account.spec.ts` contra un tercer servidor (solo HTTP, emails activados) y un
   SMTP falso (`e2e/fake-smtp.ts`, mensajes en `smtpMessagesURL`).

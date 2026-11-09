@@ -14,7 +14,7 @@ import (
 const consumeOAuthState = `-- name: ConsumeOAuthState :one
 DELETE FROM oauth_states
 WHERE state_hash = $1 AND expires_at > $2
-RETURNING binding_hash, provider, verifier, nonce, mode, account_id, return_to
+RETURNING binding_hash, provider, verifier, nonce, mode, account_id, session_hash, return_to
 `
 
 type ConsumeOAuthStateParams struct {
@@ -29,6 +29,7 @@ type ConsumeOAuthStateRow struct {
 	Nonce       string
 	Mode        string
 	AccountID   pgtype.Int8
+	SessionHash []byte
 	ReturnTo    string
 }
 
@@ -43,6 +44,7 @@ func (q *Queries) ConsumeOAuthState(ctx context.Context, arg ConsumeOAuthStatePa
 		&i.Nonce,
 		&i.Mode,
 		&i.AccountID,
+		&i.SessionHash,
 		&i.ReturnTo,
 	)
 	return i, err
@@ -109,10 +111,10 @@ func (q *Queries) CreateOAuthPending(ctx context.Context, arg CreateOAuthPending
 
 const createOAuthState = `-- name: CreateOAuthState :exec
 INSERT INTO oauth_states (state_hash, binding_hash, provider, verifier, nonce, mode,
-                          account_id, return_to, expires_at)
+                          account_id, session_hash, return_to, expires_at)
 VALUES ($1, $2, $3, $4,
         $5, $6, $7, $8,
-        $9)
+        $9, $10)
 `
 
 type CreateOAuthStateParams struct {
@@ -123,6 +125,7 @@ type CreateOAuthStateParams struct {
 	Nonce       string
 	Mode        string
 	AccountID   pgtype.Int8
+	SessionHash []byte
 	ReturnTo    string
 	ExpiresAt   pgtype.Timestamptz
 }
@@ -136,9 +139,20 @@ func (q *Queries) CreateOAuthState(ctx context.Context, arg CreateOAuthStatePara
 		arg.Nonce,
 		arg.Mode,
 		arg.AccountID,
+		arg.SessionHash,
 		arg.ReturnTo,
 		arg.ExpiresAt,
 	)
+	return err
+}
+
+const deleteAccountOAuthStates = `-- name: DeleteAccountOAuthStates :exec
+DELETE FROM oauth_states WHERE account_id = $1
+`
+
+// Cancels the account's links in flight (password reset, ban, role change).
+func (q *Queries) DeleteAccountOAuthStates(ctx context.Context, accountID pgtype.Int8) error {
+	_, err := q.db.Exec(ctx, deleteAccountOAuthStates, accountID)
 	return err
 }
 

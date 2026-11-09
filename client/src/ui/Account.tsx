@@ -5,7 +5,7 @@ import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, accountApi, authConfig, emailEnabled, oauthApi } from "../net/api.ts";
-import type { Account } from "../net/api.ts";
+import type { Account, AuthConfig } from "../net/api.ts";
 import { desktopServer, isDesktop } from "../net/desktop.ts";
 
 /** Whether the server sends emails; undefined while asking. Asked once per page. */
@@ -93,17 +93,22 @@ export function VerifyNotice(props: { t: Translate; lang: string }): JSX.Element
   );
 }
 
-/** The OAuth providers of the server (T2.1); undefined while asking. */
-export function useProviders(): string[] | undefined {
-  const [list, setList] = useState<string[] | undefined>(undefined);
+/** The server's account features (T2.1); undefined while asking. */
+export function useAuthConfig(): AuthConfig | undefined {
+  const [cfg, setCfg] = useState<AuthConfig | undefined>(undefined);
   useEffect(() => {
     let live = true;
-    void authConfig().then((c) => live && setList(c.providers));
+    void authConfig().then((c) => live && setCfg(c));
     return () => {
       live = false;
     };
   }, []);
-  return list;
+  return cfg;
+}
+
+/** The OAuth providers of the server (T2.1); undefined while asking. */
+export function useProviders(): string[] | undefined {
+  return useAuthConfig()?.providers;
 }
 
 /**
@@ -114,17 +119,28 @@ export function useProviders(): string[] | undefined {
  */
 export function OAuthButtons(props: { t: Translate; returnTo: string }): JSX.Element | null {
   const { t } = props;
-  const providers = useProviders();
+  const cfg = useAuthConfig();
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
-  if (!providers || providers.length === 0) return null;
+  const providers = cfg?.providers;
+  if (!cfg || !providers || providers.length === 0) return null;
   if (isDesktop()) {
     const origin = desktopServer()?.origin;
     return origin ? (
       <p class="oauth-hint muted" data-testid="oauth-desktop">
         {t("client.oauth.desktop", { url: origin })}
+        {cfg.email && ` ${t("client.oauth.desktop_password")}`}
       </p>
     ) : null;
+  }
+  // The provider sends the browser back to PUBLIC_URL only, and the binding cookie is
+  // this origin's: from any other address (a LAN or Tailscale IP) the login cannot work.
+  if (cfg.publicOrigin && cfg.publicOrigin !== location.origin) {
+    return (
+      <p class="oauth-hint muted" data-testid="oauth-other-origin">
+        {t("client.oauth.other_origin", { url: cfg.publicOrigin })}
+      </p>
+    );
   }
   return (
     <div class="oauth-buttons" data-testid="oauth-buttons">

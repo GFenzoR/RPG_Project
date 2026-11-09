@@ -59,6 +59,9 @@ type OAuthState struct {
 	Nonce       string
 	Mode        string // "login" or "link"
 	AccountID   int64  // the account to link to (mode link)
+	// SessionHash is the SHA-256 of the session that passed the re-authentication (mode
+	// link): the callback links only while it is active.
+	SessionHash []byte
 	ReturnTo    string
 	ExpiresAt   time.Time
 }
@@ -74,8 +77,9 @@ func (s *Store) CreateOAuthState(ctx context.Context, st OAuthState) error {
 	err := s.q.CreateOAuthState(ctx, db.CreateOAuthStateParams{
 		StateHash: st.StateHash, BindingHash: st.BindingHash, Provider: st.Provider,
 		Verifier: st.Verifier, Nonce: st.Nonce, Mode: st.Mode,
-		AccountID: pgtype.Int8{Int64: st.AccountID, Valid: st.AccountID != 0},
-		ReturnTo:  st.ReturnTo, ExpiresAt: ts(st.ExpiresAt),
+		AccountID:   pgtype.Int8{Int64: st.AccountID, Valid: st.AccountID != 0},
+		SessionHash: st.SessionHash,
+		ReturnTo:    st.ReturnTo, ExpiresAt: ts(st.ExpiresAt),
 	})
 	if err != nil {
 		return fmt.Errorf("create oauth state: %w", err)
@@ -93,7 +97,7 @@ func (s *Store) ConsumeOAuthState(ctx context.Context, stateHash []byte, now tim
 	return OAuthState{
 		StateHash: stateHash, BindingHash: row.BindingHash, Provider: row.Provider,
 		Verifier: row.Verifier, Nonce: row.Nonce, Mode: row.Mode, AccountID: row.AccountID.Int64,
-		ReturnTo: row.ReturnTo,
+		SessionHash: row.SessionHash, ReturnTo: row.ReturnTo,
 	}, nil
 }
 

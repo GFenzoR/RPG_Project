@@ -4,6 +4,7 @@ import {
   filtersToSearch,
   highscoresPath,
   linkToken,
+  linkedProvider,
   oauthErrorKey,
   parseFilters,
   parseRoute,
@@ -91,5 +92,10 @@ describe("oauth pages (T2.1 2/2)", () => {
     expect(oauthErrorKey("?code=denied")).toBe("site.oauth.error.denied");
     expect(oauthErrorKey("?code=<script>")).toBe("site.oauth.error.internal");
     expect(oauthErrorKey("")).toBe("site.oauth.error.internal");
+    expect(linkedProvider("?linked=discord", ["discord"])).toBe("discord");
+    expect(linkedProvider("?linked=discord", [])).toBeUndefined();
+    expect(
+      linkedProvider("?linked=%20--%20Your%20account%20will%20be%20deleted", ["google"]),
+    ).toBeUndefined();
   });
 });

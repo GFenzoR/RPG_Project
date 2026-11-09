@@ -78,7 +78,7 @@ func TestOAuthStoreWithPostgres(t *testing.T) {
 		t.Fatalf("%+v %v", p, err)
 	}
 	_ = st.CreateOAuthState(ctx, store.OAuthState{StateHash: hash("s2"), BindingHash: hash("b"), Provider: "discord",
-		Verifier: "v", Mode: "link", AccountID: bob, ReturnTo: "/account", ExpiresAt: now.Add(time.Minute)})
+		Verifier: "v", Mode: "link", AccountID: bob, SessionHash: hash("bob-session"), ReturnTo: "/account", ExpiresAt: now.Add(time.Minute)})
 	if n, err := st.DeleteExpiredOAuth(ctx, now.Add(time.Hour)); err != nil || n != 2 {
 		t.Fatalf("purged %d %v", n, err)
 	}
@@ -91,8 +91,13 @@ func TestOAuthStoreWithPostgres(t *testing.T) {
 		Purpose: store.TokenResetPassword, Email: "zed@example.org", CreatedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
+	_ = st.CreateOAuthState(ctx, store.OAuthState{StateHash: hash("zed-link"), BindingHash: hash("b"), Provider: "google",
+		Verifier: "v", Mode: "link", AccountID: zed, SessionHash: hash("zed-session"), ReturnTo: "/account", ExpiresAt: now.Add(time.Minute)})
 	if _, err := st.ResetPassword(ctx, hash("reset-zed"), "$argon2id$y", now); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := st.ConsumeOAuthState(ctx, hash("zed-link"), now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("a link in flight survived the reset: %v", err)
 	}
 	if ids, _ := st.Identities(ctx, zed); len(ids) != 1 || ids[0].Provider != "google" {
 		t.Fatalf("after reset %+v", ids)

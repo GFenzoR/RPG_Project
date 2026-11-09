@@ -86,7 +86,7 @@ func accountOf(t *testing.T, h *mailHarness, token string) map[string]any {
 func TestRegisterSendsVerificationAndVerify(t *testing.T) {
 	h := newMailHarness(t, nil)
 	w := h.do(req{method: "GET", path: "/api/auth/config"})
-	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"email":true,"providers":[]}` {
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"email":true,"providers":[],"public_url":"https://game.example"}` {
 		t.Fatalf("config %d %s", w.Code, w.Body.String())
 	}
 	h.register("ana@example.org", "en")

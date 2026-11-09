@@ -129,6 +129,10 @@ func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHas
 		if err := q.DeleteAccountTokens(ctx, db.DeleteAccountTokensParams{AccountID: id, Purpose: string(TokenResetPassword)}); err != nil {
 			return err
 		}
+		// Links in flight die with the sessions that started them.
+		if err := q.DeleteAccountOAuthStates(ctx, pgtype.Int8{Int64: id, Valid: true}); err != nil {
+			return err
+		}
 		n, err := q.DeleteAccountSessions(ctx, id)
 		if err != nil {
 			return err

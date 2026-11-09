@@ -121,7 +121,7 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 | `MAP_PR_REPOSITORY`, `MAP_PR_BASE` | Repo (`owner/repo`, por defecto `GFenzoR/RPG_Project`) y rama base (`main`) de esos PR |
 | `PUBLIC_URL` | Dirección de los enlaces de los emails (T2.1). Por defecto `https://$SITE_ADDRESS` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Emails de la cuenta (sección "Emails de la cuenta"). Sin `SMTP_HOST` no hay emails |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Login con Google/Discord ("Login con Google y Discord"). Un proveedor sin los dos queda apagado |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Login con Google/Discord ("Login con Google y Discord"). Sin ninguno de los dos, ese proveedor queda apagado; con uno solo, el servidor no arranca y el log nombra la variable que falta |
 | `REQUIRE_VERIFIED_EMAIL` | `true` = solo cuentas con email verificado juegan (necesita SMTP) |
 | `RPG_WS_ORIGINS` | Orígenes extra en `/ws`. Sin definir = los del cliente de escritorio (`tauri://localhost,http://tauri.localhost`); vacío = solo el sitio |
 
@@ -193,7 +193,14 @@ proveedor necesita una "redirect URI" exacta, que el servidor arma como
 | Túnel de Cloudflare con dominio (paso 5) | `https://juego.tudominio.com` | `https://juego.tudominio.com/api/auth/oauth/google/callback` | `https://juego.tudominio.com/api/auth/oauth/discord/callback` |
 | AWS (docs/09) | `https://tudominio.com` | `https://tudominio.com/api/auth/oauth/google/callback` | `https://tudominio.com/api/auth/oauth/discord/callback` |
 
-Puedes registrar varias URIs en la misma app (por ejemplo localhost y el dominio).
+**OAuth funciona solo desde exactamente `PUBLIC_URL`.** El proveedor devuelve el navegador a
+esa dirección y la cookie que ata el intento vive en la dirección donde se apretó el
+botón: si alguien juega por otra (`localhost` cuando `PUBLIC_URL` es el dominio, una IP de
+la LAN o de Tailscale), el login termina en `/oauth/error?code=state`. Por eso, en una
+dirección distinta, el juego esconde los botones y dice dónde abrirlo. Registrar varias
+URIs en la app solo sirve para cambiar `PUBLIC_URL` sin tocar la app, no para usar varias
+direcciones a la vez. Quien entre por la LAN o Tailscale usa email y contraseña (o pon
+como `PUBLIC_URL` el nombre https de `tailscale serve`, si todos entran por ahí).
 **El Quick Tunnel (`make home-tunnel`) no sirve para OAuth:** su URL
 `https://….trycloudflare.com` cambia cada vez que arranca, y los proveedores solo
 aceptan redirect URIs registradas de antemano y escritas exactas. Usa el túnel con
@@ -205,6 +212,8 @@ dominio propio, o prueba solo en `http://localhost:8080`.
    email de soporte. Permisos: `openid` y `email` (no hace falta verificar la app para
    esos dos). Mientras esté en modo "Prueba", agrega los emails de quienes van a probar
    en "Usuarios de prueba"; "Publicar" la abre a todos.
+   Si usas un dominio, agrégalo en "Dominios autorizados" (por ejemplo `tudominio.com`);
+   `localhost` no hace falta.
 2. "Credenciales" (o "Clients") → "Crear credenciales" → "ID de cliente de OAuth" → tipo
    **Aplicación web**. En "URIs de redireccionamiento autorizados" pega las de la tabla.
    (Los "orígenes de JavaScript" no hacen falta: el login no usa JS de Google.)

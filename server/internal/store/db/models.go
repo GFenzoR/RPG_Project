@@ -178,6 +178,7 @@ type OauthState struct {
 	Nonce       string
 	Mode        string
 	AccountID   pgtype.Int8
+	SessionHash []byte
 	ReturnTo    string
 	ExpiresAt   pgtype.Timestamptz
 }

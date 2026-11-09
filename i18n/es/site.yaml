@@ -218,6 +218,6 @@ site.oauth.error.unknown_provider: "Ese método de entrada no está disponible e
 site.oauth.error.account_disabled: "La cuenta está deshabilitada."
 site.oauth.error.account_banned: "Esta cuenta está suspendida."
 site.oauth.error.internal: "Algo falló en el servidor. Intenta de nuevo."
-site.oauth.confirm.no_password: "Esa cuenta no tiene contraseña: entra con el proveedor que ya usa y vincula este desde «Mi cuenta»."
+site.oauth.confirm.no_password: "Esa cuenta no tiene contraseña: si es tuya, entra con el proveedor que ya usa y vincula este desde «Mi cuenta». Si no la creaste tú, revisa tu email: te mandamos un enlace para confirmar la dirección; después recupérala con «¿Olvidaste tu contraseña?» (eso saca de la cuenta a quien la haya creado)."
 site.oauth.error.email_taken: "Ese email ya tiene una cuenta. Vuelve a intentarlo desde el login."
 site.oauth.error.busy: "El servidor está ocupado. Intenta de nuevo en un momento."

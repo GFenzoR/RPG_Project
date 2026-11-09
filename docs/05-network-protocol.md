@@ -141,7 +141,7 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
 ### OAuth con Google y Discord (T2.1, `httpapi/oauth.go`)
 | Método y ruta | Auth | Cuerpo | Respuesta OK |
 |---|---|---|---|
-| `GET /api/auth/config` | — | — | `{email, providers: ["discord","google"]}` (solo los que tienen claves; nunca secretos) |
+| `GET /api/auth/config` | — | — | `{email, providers: ["discord","google"], public_url}` (solo los que tienen claves; nunca secretos). En otra dirección que `public_url` el cliente esconde los botones |
 | `POST /api/auth/oauth/{provider}/start` | — | `{return?}` | `200 {url}` + cookie `rpg_oauth`; el navegador va a `url` |
 | `POST /api/auth/oauth/{provider}/link` | token | `{password?}` | igual que `start`, para vincular a la cuenta |
 | `GET /api/auth/oauth/{provider}/callback` | cookie `rpg_oauth` | — | `303` a una página fija del sitio (abajo) |
@@ -150,7 +150,9 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
 | `POST /api/auth/oauth/pending/create` | cookie pendiente | `{email}` | `200 {return}` + cookie de sesión |
 | `POST /api/account/unlink` | token | `{provider}` | `204`; `409 last_login_method`, `404 not_linked` |
 
-`GET /api/account` suma `has_password` e `identities: [{provider, email, linked_at}]`.
+`GET /api/account` suma `has_password` e `identities: [{provider, email, linked_at}]`. La
+página muestra el aviso de `?linked=` solo si es un proveedor conocido que la cuenta tiene
+vinculado, y después lo saca de la URL.
 
 - **Inicio:** un `POST` con JSON (ningún formulario de otro sitio puede iniciar un login en
   el navegador de otro). El servidor guarda en `oauth_states` el SHA-256 del `state`, el
@@ -174,6 +176,12 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
   `internal`.
 - **Confirmar con contraseña:** mismos límites de login fallido por (email, IP) y por email
   que `/api/auth/login`, y el mismo error `invalid_credentials`.
+- Un vínculo en curso queda atado a la sesión que pasó la re-autenticación
+  (`oauth_states.session_hash`): si esa sesión ya no está activa al volver (logout, reset
+  de contraseña, ban, cambio de rol), el callback termina en `code=state` y no vincula
+  nada. El reset, el ban y el cambio de rol borran además los vínculos en curso.
+- Una cuenta nueva cuyo email el proveedor no verificó (o el que se escribió en
+  `/oauth/confirm`) recibe el email de verificación, igual que un registro con contraseña.
 - **Vincular** exige re-autenticarse: `password` si la cuenta tiene (`403 reauth_required`
   si falta, `401 invalid_credentials` si no coincide, bajo los mismos límites de login
   fallido por email), o una sesión creada hace menos de 10 min si no tiene.

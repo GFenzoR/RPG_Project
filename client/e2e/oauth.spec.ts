@@ -47,7 +47,7 @@ test("new account with Google, link and unlink Discord", async ({ page }) => {
   // No password: linking works because the login was a moment ago.
   await next("discord", { sub: `d-${id}`, email: `oauth-${id}@example.com`, verified: true });
   await page.getByTestId("link-discord").click();
-  await expect(page).toHaveURL(/\/account\?linked=discord$/);
+  await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByTestId("account-linked")).toContainText("vinculaste Discord");
   await expect(page.getByTestId("identity-discord")).toBeVisible();
   await shot(page, "oauth-02-account-linked");

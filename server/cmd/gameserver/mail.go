@@ -94,8 +94,8 @@ func newSender(m mail.Mailer, i18nDir string, clk clock.Clock, logger *slog.Logg
 }
 
 // providersFromEnv builds the OAuth providers whose client id and secret are set
-// (GOOGLE_CLIENT_ID/SECRET, DISCORD_CLIENT_ID/SECRET; T2.1 2/2). A provider without both
-// is off and its button does not show. The *_URL and GOOGLE_ISSUER variables only exist
+// (GOOGLE_CLIENT_ID/SECRET, DISCORD_CLIENT_ID/SECRET; T2.1 2/2). A provider with neither
+// is off (no button); with only one the server refuses to start, naming the missing one. The *_URL and GOOGLE_ISSUER variables only exist
 // for tests against a fake provider. Secrets go to the provider and nowhere else.
 func providersFromEnv(getenv func(string) string) ([]*oauth.Provider, []string, error) {
 	var out []*oauth.Provider

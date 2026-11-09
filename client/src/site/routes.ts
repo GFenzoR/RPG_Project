@@ -122,3 +122,12 @@ export function oauthErrorKey(search: string): string {
   const code = new URLSearchParams(search).get("code") ?? "";
   return `site.oauth.error.${(OAUTH_ERRORS as readonly string[]).includes(code) ? code : "internal"}`;
 }
+
+/**
+ * The provider of /account?linked=<provider>, only if it is a known provider that the
+ * account really has linked (anything else in the URL is ignored, never shown).
+ */
+export function linkedProvider(search: string, linked: readonly string[]): string | undefined {
+  const p = new URLSearchParams(search).get("linked") ?? "";
+  return ["google", "discord"].includes(p) && linked.includes(p) ? p : undefined;
+}

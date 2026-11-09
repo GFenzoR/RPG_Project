@@ -77,10 +77,13 @@ func (a *api) authConfig(w http.ResponseWriter, _ *http.Request) {
 	if providers == nil {
 		providers = []string{}
 	}
+	// PublicURL is not a secret: OAuth only works from that origin (the redirect_uri and
+	// the binding cookie), so the client hides the buttons anywhere else.
 	writeJSON(w, http.StatusOK, struct {
 		Email     bool     `json:"email"`
 		Providers []string `json:"providers"`
-	}{a.cfg.Auth.EmailEnabled(), providers})
+		PublicURL string   `json:"public_url,omitempty"`
+	}{a.cfg.Auth.EmailEnabled(), providers, a.cfg.Auth.PublicURL()})
 }
 
 func (a *api) account(w http.ResponseWriter, r *http.Request, accountID int64) {
