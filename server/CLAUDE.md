@@ -30,6 +30,7 @@ server/
   pkg/bot/             cliente sin UI para tests de integración y tools/bots (fuera de
                        internal/ para que otro módulo lo importe)
   internal/store/      PostgreSQL: repositorios generados con sqlc, migraciones goose
+  internal/guild/      reglas puras de gremios: rangos, permisos y nombres (T5.1)
   internal/auth/       cuentas, contraseñas (argon2id), OAuth Google/Discord, tokens
   internal/httpapi/    API HTTP: login, lista de personajes, health; public.go: status y
                        ranking públicos con cache (T4.3)
@@ -96,6 +97,16 @@ server/
   `store/oauth.go`. Nunca vincules una identidad por coincidencia de email; todo login
   emite la sesión con `Service.loginAccount`; toda ruta de vuelta pasa por
   `auth.SafeReturn`; el `redirect_uri` sale de `PUBLIC_URL`.
+
+- **Gremios (T5.1):** `session/guild.go` + `guild` (puro) + `store/guilds.go` +
+  `httpapi/guilds.go`. El loop es dueño de todos los gremios: `app` los carga una vez
+  (`GuildStore.LoadGuilds`) antes de arrancar y cada cambio sale como `AdminJob{Kind:
+  AdminGuild}` por `queueAdmin` (en orden, nunca se pierde); nada vuelve al loop. No leas
+  gremios de la base desde el loop ni desde un handler del juego. Un cambio nuevo necesita
+  su `GuildOp` en `session` y en `store` (mismos valores) y su caso en `applyGuild`. Todo
+  comando de gremio pasa por `chatAllowed`. Si un jugador recibe o pierde un gremio,
+  llama a `announceGuild` (el nombre bajo el personaje) y `queueGuildSend`. Lo que sale
+  por `/api/guilds` es público: nunca el mensaje del día ni quién está en línea.
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

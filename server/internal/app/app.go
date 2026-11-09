@@ -94,6 +94,9 @@ type Config struct {
 	ShutdownTimeout time.Duration
 }
 
+// guildLoadTimeout bounds the read of every guild at start.
+const guildLoadTimeout = 30 * time.Second
+
 // App is an assembled server. Serve Handler over HTTP and call Run once.
 type App struct {
 	cfg     Config
@@ -141,6 +144,8 @@ func New(cfg Config) (*App, error) {
 	highscores, _ := cfg.Store.(httpapi.Highscores)
 	// The map submission portal (T4.5) also lives in Postgres only.
 	submissions, _ := cfg.Store.(httpapi.MapSubmissions)
+	// The public guild pages too (T5.1).
+	publicGuilds, _ := cfg.Store.(httpapi.PublicGuilds)
 	skills := make(map[string]int, len(cfg.Balance.Skills.Base))
 	for id, b := range cfg.Balance.Skills.Base {
 		skills[id] = b.StartLevel
@@ -159,6 +164,7 @@ func New(cfg Config) (*App, error) {
 		// The zero value keeps httpapi.DefaultAuthRateLimit.
 		AuthRateLimit: cfg.AuthRateLimit,
 		Highscores:    highscores,
+		Guilds:        publicGuilds,
 		Skills:        skills,
 		Vocations:     vocations,
 		Status:        a.status,
@@ -194,6 +200,17 @@ func New(cfg Config) (*App, error) {
 		el := cfg.Balance.Economy.Log
 		a.economy = newEconomyWriter(cfg.Store, cfg.Clock, cfg.Logger, time.Duration(el.FlushMs)*time.Millisecond, el.BatchSize)
 		a.admin.metrics, a.economy.metrics = cfg.Metrics, cfg.Metrics
+		// Guilds (T5.1) are loaded once, before the loop owns them.
+		var guilds *session.GuildData
+		if gs, ok := cfg.Store.(GuildStore); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), guildLoadTimeout)
+			rows, err := gs.LoadGuilds(ctx, cfg.Clock.Now())
+			cancel()
+			if err != nil {
+				return nil, err
+			}
+			a.admin.guilds, guilds = gs, guildData(rows)
+		}
 		w, err := session.New(session.Config{
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
@@ -209,6 +226,7 @@ func New(cfg Config) (*App, error) {
 			Quests:        cfg.Quests,
 			Save:          saver.Submit,
 			Admin:         a.admin.Submit,
+			Guilds:        guilds,
 			Economy:       a.economy.Submit,
 			Alert:         economyAlert(cfg.Metrics),
 			AutosaveEvery: cfg.AutosaveEvery,

@@ -1968,3 +1968,123 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     expect(errors).toEqual([]);
   });
 });
+
+test("T5.1: two players found a guild, invite, talk on its channel and see its name", async ({
+  browser,
+  playwright,
+}) => {
+  const founder = await newGuardian(playwright, "Founder");
+  const mate = await newGuardian(playwright, "Fellow");
+  // The founder needs level 18 (62424 XP) and the founding cost (2000 copper coins, 8) in
+  // a backpack (48): data/balance.yaml guild.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET level = 18, experience = 62424 WHERE name = '${founder.name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${founder.name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, s, 8, 100 FROM bp, generate_series(0, 19) AS s`,
+  ]);
+  const guildName = `Faro ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const errors: string[] = [];
+  async function enter(email: string): Promise<Page> {
+    const page = await browser.newPage();
+    // The login screen's session check answers 401 before signing in: listen after it.
+    await enterGame(page, email, founder.password);
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    return page;
+  }
+  const lead = await enter(founder.email);
+  const mateP = await enter(mate.email);
+
+  // Found it from the panel.
+  const panel = lead.getByTestId("guild-panel");
+  await expect(panel).toContainText("No estás en un gremio.");
+  await expect(panel).toContainText("Cuesta 2000 monedas de cobre y pide nivel 18.");
+  await panel.getByLabel("Nombre del gremio").fill(guildName);
+  await panel.getByRole("button", { name: "Fundar" }).click();
+  await expect(lead.getByTestId("game-log")).toContainText(`Fundaste el gremio ${guildName}.`);
+  await expect(panel.locator("h2")).toContainText(guildName);
+  await expect(panel.locator("h2")).toContainText("Líder");
+
+  // Invite the mate by name; the invitation shows over the mate's map.
+  await panel.getByLabel("Nombre del personaje").fill(mate.name);
+  await panel.getByRole("button", { name: "Invitar" }).click();
+  await expect(lead.getByTestId("game-log")).toContainText(`Invitaste a ${mate.name} a tu gremio.`);
+  await expect(panel).toContainText(`${mate.name} (vence en 36 horas)`);
+  const invitation = mateP.getByTestId("guild-invitation");
+  await expect(invitation).toContainText(`Te invitan al gremio ${guildName}.`);
+  await shot(mateP, "45-guild-invitation");
+  await invitation.getByRole("button", { name: "Aceptar" }).click();
+  await expect(invitation).toHaveCount(0);
+
+  for (const page of [lead, mateP]) {
+    const p = page.getByTestId("guild-panel");
+    await expect(p.locator("li[data-member]")).toHaveCount(2);
+    await expect(p).toContainText("Miembros (2 en línea de 2)");
+  }
+  await expect(mateP.getByTestId("guild-leave")).toBeVisible();
+  await panel.getByPlaceholder("Mensaje del día").fill("Cacería al amanecer");
+  await panel.getByRole("button", { name: "Cambiar" }).click();
+  await expect(mateP.getByTestId("guild-motd")).toHaveText("Cacería al amanecer");
+
+  // Guild chat.
+  await mateP.getByTestId("chat-channel").selectOption({ label: "Gremio" });
+  const input = mateP.getByTestId("say").getByRole("textbox");
+  await input.fill("hola gremio");
+  await input.press("Enter");
+  await expect(lead.getByTestId("chat-log")).toContainText(`[Gremio] ${mate.name}: hola gremio`);
+  await lead.locator(".side").screenshot({ path: join(shots, "46-guild-panel.png") });
+
+  // The founder looks at the mate (Shift+click on its tile) and sees the guild.
+  const at = await self(mateP);
+  if (!at) throw new Error("no mate position");
+  const tile = await lead.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+    a: at.x,
+    b: at.y,
+  });
+  if (!tile) throw new Error("mate not on screen");
+  await lead.mouse.move(tile.x, tile.y);
+  await lead.keyboard.down("Shift");
+  await lead.mouse.click(tile.x, tile.y);
+  await lead.keyboard.up("Shift");
+  await expect(lead.getByTestId("game-log")).toContainText(
+    `Ves a ${mate.name}, Guardián de nivel 1. Es Miembro del gremio ${guildName}.`,
+  );
+  // Both names carry the guild under them on the map.
+  await shot(lead, "47-guild-name-on-map");
+
+  // The public site lists it once the database has the change (written off the loop).
+  await expect
+    .poll(() =>
+      execFileSync("psql", [
+        databaseUrl,
+        "-tAc",
+        `SELECT count(*) FROM guild_members m JOIN guilds g ON g.id = m.guild_id WHERE g.name = '${guildName}'`,
+      ])
+        .toString()
+        .trim(),
+    )
+    .toBe("2");
+  const site = await browser.newPage();
+  await site.goto("/guilds?lang=es");
+  const row = site.getByTestId("guilds").locator("tr", { hasText: guildName });
+  await expect(row).toContainText(founder.name);
+  await row.getByRole("link", { name: guildName }).click();
+  const members = site.getByTestId("guild-members");
+  await expect(members.locator("tbody tr")).toHaveCount(2);
+  await expect(members).toContainText("Líder");
+  await expect(members).toContainText("Miembro");
+  await expect(site.getByTestId("guild-page")).not.toContainText("Cacería");
+  await shot(site, "48-site-guild");
+  await site.close();
+
+  expect(errors).toEqual([]);
+  await lead.close();
+  await mateP.close();
+});

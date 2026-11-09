@@ -50,10 +50,18 @@ Nombre provisional: **RPG Project**.
 | Primer hito | Rebanada vertical (ver `10-roadmap.md`) |
 
 ## Fuera de alcance por ahora (pero contemplado en el modelo de datos)
-- PvP y sistema de skulls → campos `pvp_flags`, `skull`, zonas `pvp` ya existen.
-- Mercado global → la tabla de items tiene `tradeable` y el inventario es transaccional.
-- Tienda cosmética → tablas `cosmetics` y `account_cosmetics`; sin pasarela de pago aún.
-- Casas de jugadores, gremios, mazmorras instanciadas, cliente móvil nativo.
+Estas piezas ya no están fuera del plan: forman el Hito 5 (`10-roadmap.md`). Hasta que
+llegue su tarea, siguen como estaban:
+- Gremios → T5.1.
+- PvP y sistema de skulls → T5.2; campos `pvp_flags`, `skull`, zonas `pvp` ya existen.
+- Mercado global → T5.3; la tabla de items tiene `tradeable` y el inventario es
+  transaccional.
+- Casas de jugadores → T5.4.
+- Cliente móvil → T5.6 (controles táctiles y Tauri mobile; sigue siendo plataforma
+  secundaria).
+- Tienda cosmética → T5.7; tablas `cosmetics` y `account_cosmetics`, con pasarela de pago
+  en modo prueba hasta que el dueño elija proveedor. Solo cosméticos.
+- Sigue fuera de alcance, sin tarea: mazmorras instanciadas.
 
 ## Lo que NO vamos a hacer
 - Usar sprites, mapas, nombres o textos de Tibia.

@@ -37,13 +37,18 @@ type Querier interface {
 	DeleteAccountSessions(ctx context.Context, accountID int64) (int64, error)
 	// Drops every token of one purpose of an account (a new link replaces the old ones).
 	DeleteAccountTokens(ctx context.Context, arg DeleteAccountTokensParams) error
+	DeleteCharacterGuildInvites(ctx context.Context, characterID int64) error
 	// A snapshot replaces the whole inventory in the same transaction as the character row.
 	DeleteCharacterInventory(ctx context.Context, characterID int64) error
 	// A snapshot replaces every storage value in the same transaction as the character row.
 	DeleteCharacterQuestState(ctx context.Context, characterID int64) error
 	DeleteExpiredAccountTokens(ctx context.Context, now pgtype.Timestamptz) (int64, error)
+	DeleteExpiredGuildInvites(ctx context.Context, now pgtype.Timestamptz) error
 	DeleteExpiredOAuth(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, now pgtype.Timestamptz) (int64, error)
+	DeleteGuild(ctx context.Context, id int64) (int64, error)
+	DeleteGuildInvite(ctx context.Context, arg DeleteGuildInviteParams) error
+	DeleteGuildMember(ctx context.Context, arg DeleteGuildMemberParams) (int64, error)
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (int64, error)
 	DeleteOAuthPending(ctx context.Context, tokenHash []byte) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
@@ -95,6 +100,8 @@ type Querier interface {
 	HighscoresBySkillRows(ctx context.Context, arg HighscoresBySkillRowsParams) ([]HighscoresBySkillRowsRow, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
+	InsertGuild(ctx context.Context, arg InsertGuildParams) error
+	InsertGuildMember(ctx context.Context, arg InsertGuildMemberParams) error
 	InsertIdentity(ctx context.Context, arg InsertIdentityParams) error
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
 	InsertMapSubmission(ctx context.Context, arg InsertMapSubmissionParams) (int64, error)
@@ -108,6 +115,10 @@ type Querier interface {
 	ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error)
 	// Newest entries of a character first (tests and the operator).
 	ListEconomy(ctx context.Context, arg ListEconomyParams) ([]ListEconomyRow, error)
+	ListGuildInvites(ctx context.Context) ([]ListGuildInvitesRow, error)
+	ListGuildMembers(ctx context.Context) ([]ListGuildMembersRow, error)
+	// Guilds (T5.1). The game loop decides; these only load and apply its changes.
+	ListGuilds(ctx context.Context) ([]Guild, error)
 	ListIdentities(ctx context.Context, accountID int64) ([]ListIdentitiesRow, error)
 	// The oldest open reports first: the queue order.
 	ListOpenReports(ctx context.Context, maxRows int32) ([]ListOpenReportsRow, error)
@@ -126,8 +137,15 @@ type Querier interface {
 	LockSubmitter(ctx context.Context, arg LockSubmitterParams) (LockSubmitterRow, error)
 	// Only verifies the address the link was sent to.
 	MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedParams) (int64, error)
+	PublicGuild(ctx context.Context, id int64) (PublicGuildRow, error)
+	PublicGuildMembers(ctx context.Context, guildID int64) ([]PublicGuildMembersRow, error)
+	// Public website (T5.1, /api/guilds): no private data, only names, ranks, vocation and
+	// level (as on the highscores).
+	// Every guild with its member count and leader, by name. Bounded by max_rows.
+	PublicGuilds(ctx context.Context, maxRows int32) ([]PublicGuildsRow, error)
 	// Drops the bytes of patches whose submission reached a final status before the cutoff.
 	PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	RenameGuild(ctx context.Context, arg RenameGuildParams) (int64, error)
 	ReportExists(ctx context.Context, id int64) (bool, error)
 	// Approve or reject a pending submission. No row: it is not pending (or does not exist).
 	ReviewSubmission(ctx context.Context, arg ReviewSubmissionParams) (ReviewSubmissionRow, error)
@@ -139,12 +157,15 @@ type Querier interface {
 	SetAccountLocale(ctx context.Context, arg SetAccountLocaleParams) error
 	// Sets the role of the account with that (normalized) email and returns the old one.
 	SetAccountRole(ctx context.Context, arg SetAccountRoleParams) (SetAccountRoleRow, error)
+	SetGuildMemberRank(ctx context.Context, arg SetGuildMemberRankParams) (int64, error)
+	SetGuildMotd(ctx context.Context, arg SetGuildMotdParams) (int64, error)
 	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
 	SubmissionAuthor(ctx context.Context, id int64) (int64, error)
 	// The same as LockSubmitter without the lock: a cheap check before reading an upload.
 	SubmitterStatus(ctx context.Context, arg SubmitterStatusParams) (SubmitterStatusRow, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
 	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
+	UpsertGuildInvite(ctx context.Context, arg UpsertGuildInviteParams) error
 }
 
 var _ Querier = (*Queries)(nil)

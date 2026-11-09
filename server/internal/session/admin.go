@@ -69,6 +69,9 @@ const (
 	// AdminCloseReport closes the open report ReportID with the resolution Reason and
 	// writes Audit with the result, in one transaction; World.AdminDone answers.
 	AdminCloseReport
+	// AdminGuild writes the guild change Guild (T5.1). Nothing is reported back: the
+	// loop already applied it.
+	AdminGuild
 )
 
 // AdminJob is work for the admin goroutine (the audit log and bans, docs/01).
@@ -86,6 +89,8 @@ type AdminJob struct {
 	// AdminCloseReport closes.
 	Report   *ReportJob
 	ReportID int64
+	// Guild is the change of an AdminGuild job.
+	Guild *GuildChange
 }
 
 // Results of an AdminBan or AdminUnban (AdminResult.Result).
@@ -177,6 +182,9 @@ var gmCommands = map[string]gmCommand{
 	"closereport": {RoleGM, "close_report", "/closereport id resolution", (*World).cmdCloseReport},
 	// Bot detection (T4.1).
 	"presence": {RoleGM, "presence_request", "/presence Name", (*World).cmdPresence},
+	// Guilds (T5.1).
+	"guildrename":  {RoleGM, "guild_rename", "/guildrename Old Name = New Name", (*World).cmdGuildRename},
+	"guilddisband": {RoleGM, "guild_disband", "/guilddisband Name", (*World).cmdGuildDisband},
 }
 
 // command runs a chat line that starts with "/". An unknown command and one the
@@ -195,6 +203,9 @@ func (w *World) command(ctx *game.TickContext, p *Player, line string) {
 		return
 	case "report": // T4.1
 		w.cmdReport(ctx, p, fields[1:])
+		return
+	case "guild": // T5.1
+		w.cmdGuild(ctx, p, fields[1:])
 		return
 	}
 	cmd, ok := gmCommands[name]

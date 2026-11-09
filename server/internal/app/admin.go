@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/guild"
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
@@ -26,6 +27,15 @@ type AdminStore interface {
 	CloseReport(ctx context.Context, id int64, resolution string, audit store.AuditEntry) (string, error)
 }
 
+// GuildStore is the persistence of guilds (T5.1). *store.Store implements it; without
+// it (fake stores of tests) guilds are off.
+type GuildStore interface {
+	LoadGuilds(ctx context.Context, now time.Time) (store.GuildRows, error)
+	ApplyGuild(ctx context.Context, c store.GuildChange, audit *store.AuditEntry) error
+}
+
+var _ GuildStore = (*store.Store)(nil)
+
 // adminWorker is the goroutine that writes the audit log and runs bans for the game
 // loop, like session.Saver does for snapshots: the loop submits jobs without blocking,
 // the worker writes them in order and retries a failed write with backoff, so a
@@ -33,9 +43,11 @@ type AdminStore interface {
 // back to the loop through done.
 type adminWorker struct {
 	store AdminStore
-	clock clock.Clock
-	log   *slog.Logger
-	done  func(session.AdminResult)
+	// guilds writes the guild changes (AdminGuild); nil when guilds are off.
+	guilds GuildStore
+	clock  clock.Clock
+	log    *slog.Logger
+	done   func(session.AdminResult)
 	// roles receives the current roles of accounts (World.RolesChanged).
 	roles func(map[int64]session.Role)
 	// metrics counts failed writes (persistence_errors_total{writer="audit"}); nil is fine.
@@ -169,6 +181,11 @@ func (a *adminWorker) write(ctx context.Context, job session.AdminJob) (session.
 		}
 	case session.AdminCloseReport:
 		res.Result, err = a.store.CloseReport(ctx, job.ReportID, job.Reason, auditEntry(job.Audit))
+	case session.AdminGuild:
+		if a.guilds == nil || job.Guild == nil {
+			return res, nil
+		}
+		err = a.guilds.ApplyGuild(ctx, guildChange(*job.Guild), nil)
 	default:
 		err = a.store.AppendAudit(ctx, auditEntry(job.Audit))
 	}
@@ -200,7 +217,7 @@ func storeReport(job session.AdminJob) store.Report {
 }
 
 func (a *adminWorker) report(job session.AdminJob, res session.AdminResult) {
-	if job.Kind == session.AdminAudit || job.Kind == session.AdminReport {
+	if job.Kind == session.AdminAudit || job.Kind == session.AdminReport || job.Kind == session.AdminGuild {
 		return
 	}
 	a.done(res)
@@ -210,6 +227,12 @@ func (a *adminWorker) report(job session.AdminJob, res session.AdminResult) {
 // down), with everything the audit entry would have had: the log is the last copy.
 func (a *adminWorker) abandon(job session.AdminJob) {
 	if job.Kind == session.AdminCheckRoles {
+		return
+	}
+	if job.Kind == session.AdminGuild && job.Guild != nil {
+		g := job.Guild
+		a.log.Error("admin: guild change abandoned at shutdown", "op", g.Op, "guild", g.GuildID, "character", g.CharacterID,
+			"other", g.OtherID, "name", g.Name, "text", g.Text, "rank", g.Rank, "at", g.At, "expires", g.Expires)
 		return
 	}
 	e := job.Audit
@@ -222,6 +245,12 @@ func (a *adminWorker) abandon(job session.AdminJob) {
 // as failed, and the attempt is still recorded with a reduced entry (no free-form
 // arguments) that cannot break the table's constraints.
 func (a *adminWorker) fail(job session.AdminJob) {
+	if job.Kind == session.AdminGuild {
+		// The loop and the database disagree (a bug): the change is kept in the log; the
+		// next start loads what the database has.
+		a.abandon(job)
+		return
+	}
 	if job.Kind != session.AdminAudit && job.Kind != session.AdminReport {
 		a.done(session.AdminResult{ID: job.ID, Result: session.AdminFailed, Name: job.TargetName, ReportID: job.ReportID})
 	}
@@ -258,6 +287,34 @@ func (a *adminWorker) checkRoles(accounts []int64) {
 		out[id] = session.RoleFromString(m[id])
 	}
 	a.roles(out)
+}
+
+func guildChange(c session.GuildChange) store.GuildChange {
+	return store.GuildChange{Op: store.GuildOp(c.Op), GuildID: c.GuildID, CharacterID: c.CharacterID, OtherID: c.OtherID,
+		InvitedBy: c.InvitedBy, Name: c.Name, Text: c.Text, Rank: int(c.Rank), At: c.At, Expires: c.Expires}
+}
+
+// guildData converts what the store loaded to the World's start state.
+func guildData(r store.GuildRows) *session.GuildData {
+	out := &session.GuildData{Guilds: make([]session.GuildRecord, len(r.Guilds))}
+	idx := make(map[int64]int, len(r.Guilds))
+	for i, g := range r.Guilds {
+		out.Guilds[i] = session.GuildRecord{ID: g.ID, Name: g.Name, Motd: g.Motd, CreatedAt: g.CreatedAt}
+		idx[g.ID] = i
+	}
+	for _, m := range r.Members {
+		if i, ok := idx[m.GuildID]; ok {
+			out.Guilds[i].Members = append(out.Guilds[i].Members, session.GuildMemberRecord{CharacterID: m.CharacterID,
+				Name: m.Name, Rank: guild.Rank(m.Rank), JoinedAt: m.JoinedAt})
+		}
+	}
+	for _, v := range r.Invites {
+		if i, ok := idx[v.GuildID]; ok {
+			out.Guilds[i].Invites = append(out.Guilds[i].Invites, session.GuildInviteRecord{CharacterID: v.CharacterID,
+				Name: v.Name, Expires: v.Expires})
+		}
+	}
+	return out
 }
 
 func banRequest(job session.AdminJob) store.BanRequest {

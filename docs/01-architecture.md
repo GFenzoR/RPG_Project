@@ -19,9 +19,9 @@ Caddy (`deploy/caddy-routes.caddy`) reparte una sola origin:
 
 | Ruta | Destino |
 |---|---|
-| `/api/*`, `/ws`, `/healthz` | gameserver: API HTTP (cuentas, personajes, `play`, y los públicos `status` y `highscores`; docs/05), WebSocket del juego y health |
+| `/api/*`, `/ws`, `/healthz` | gameserver: API HTTP (cuentas, personajes, `play`, y los públicos `status`, `highscores` y `guilds`; docs/05), WebSocket del juego y health |
 | `/play`, `/play/*` | página del juego del build del cliente (`client/play/index.html`) |
-| todo lo demás | sitio público (`client/index.html`): landing en `/`, `/highscores`, `/news` y `/news/<fecha>-<slug>`; primero los archivos estáticos del build (`/assets`, `/atlas`, `/audio`) |
+| todo lo demás | sitio público (`client/index.html`): landing en `/`, `/highscores`, `/guilds[/<id>]` (T5.1), `/news` y `/news/<fecha>-<slug>`; primero los archivos estáticos del build (`/assets`, `/atlas`, `/audio`) |
 
 El cliente es un build multipágina de Vite (`client/`): las dos páginas comparten i18n,
 estilos y el selector de idioma. El atlas y los sonidos se piden desde la raíz del sitio,
@@ -87,6 +87,21 @@ for each tick (50 ms):
 | Reportes de jugadores (T4.1) | Postgres, `player_reports` | Asíncrono, goroutine de admin |
 | Mapa y contenido | Repo git (world/, data/) | Se despliegan con cada versión |
 | Roles, bans y log de auditoría (T2.6) | Postgres (`audit_log` append-only) | Asíncrono, goroutine de admin |
+| Gremios: `guilds`, `guild_members`, `guild_invites` (T5.1) | Postgres; el loop tiene todos en memoria | Se cargan una vez al arrancar; cada cambio, asíncrono y en orden por la goroutine de admin |
+
+**Gremios (T5.1).** El game loop es el dueño de los gremios, como del resto del mundo:
+`app` lee todos (gremios, miembros e invitaciones vigentes) antes de arrancar el loop y se
+los pasa al `World` (`session.Config.Guilds`). Cada comando se valida y se aplica en
+memoria en el tick, y el cambio (`session.GuildChange`) se encola como trabajo de la
+goroutine de admin (`AdminGuild`), que lo escribe en orden con reintentos, igual que el
+log de auditoría; nada vuelve al loop. Por eso el id de un gremio lo asigna el servidor
+(el siguiente al mayor cargado). Las restricciones de la base (un personaje en un solo
+gremio, un líder por gremio, nombre único sin mayúsculas) son la red de seguridad: un
+cambio que las rompe es un bug y queda en el log (`persistence_errors_total{writer="audit",
+outcome="rejected"}`); el próximo arranque carga lo que tiene la base. Costo en el tick:
+cada comando toca un solo gremio (a lo sumo `max_members` miembros y `max_invites`
+invitaciones) y los nombres se buscan en un mapa; entrar o salir del mundo marca el gremio
+para mandar un `GuildUpdate` a sus miembros conectados en el flush.
 
 Transacciones: el trade entre jugadores se resuelve atómicamente en el loop (estado en
 memoria) y se persiste ambos personajes en una sola transacción de base de datos.
@@ -343,7 +358,7 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
 - **Qué se registra:** toda creación y destrucción de oro e items, por fuente
   (`economy_log.kind`): `loot` (al llenarse los restos de un monstruo, a nombre de quien se
   lleva el botín), `npc_buy` y `npc_sell` (tienda), `npc` (lo que da o quita un diálogo:
-  items de quest, bendiciones), `quest` (recompensas), `tutorial` (premio del tutorial, T4.2), `travel` (pasaje y ticket),
+  items de quest, bendiciones), `quest` (recompensas), `tutorial` (premio del tutorial, T4.2), `travel` (pasaje y ticket), `guild` (costo de fundar un gremio, T5.1),
   `gather` (pesca, minería, tala), `craft` (ingredientes y resultado), `death` (lo que cae
   en los restos al morir), `gm` (`/item`), `consume` (comida, pociones, la última carga
   de una runa, munición; también lo usado del suelo, a nombre de quien lo usó), `conjure`

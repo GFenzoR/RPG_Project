@@ -33,6 +33,7 @@ import type { ClientContent, ItemDef } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import { PartyState } from "./party.ts";
+import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
 import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
@@ -57,6 +58,8 @@ export interface CreatureState {
   /** Health bar, 0-100. */
   health: number;
   walk: Walk | undefined;
+  /** A player's guild name (T5.1), "" for none. */
+  guild: string;
 }
 
 /** A visual effect on a tile (Effect.effect_id, docs/05 "Combate"). */
@@ -293,6 +296,8 @@ export class WorldState implements TileSource {
   containers: ContainerState[] = [];
   /** The party and pending invitations (T3.3). */
   readonly party = new PartyState();
+  /** The guild and the invitations to one (T5.1). */
+  readonly guild = new GuildState();
   private readonly chunks = new Map<string, ChunkTiles>();
   private readonly content: ClientContent;
 
@@ -442,6 +447,14 @@ export class WorldState implements TileSource {
       case "partyInvitation":
         this.party.invited(msg.value, now);
         break;
+      case "guildUpdate":
+        this.guild.update(msg.value, now);
+        break;
+      case "creatureGuild": {
+        const c = this.creatures.get(msg.value.id);
+        if (c) c.guild = msg.value.guild;
+        break;
+      }
       case "tutorialStep":
         this.tutorial = tutorialFrom(msg.value);
         break;
@@ -708,6 +721,7 @@ export class WorldState implements TileSource {
       speed: c.speed || prev?.speed || 0,
       health: c.healthPercent,
       walk: undefined,
+      guild: c.guild,
     });
   }
 

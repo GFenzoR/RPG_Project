@@ -140,6 +140,10 @@ type Config struct {
 	// the job and retries on the next ticks, so no audit entry is lost. Without Admin,
 	// staff commands are disabled (they answer like an unknown command).
 	Admin func(AdminJob) bool
+	// Guilds are every guild, loaded from the database before the loop starts (T5.1).
+	// Their changes are written through Admin (AdminGuild jobs). Nil, or no Admin,
+	// turns guilds off (commands answer guild.unavailable).
+	Guilds *GuildData
 	// Economy submits an economy log entry to the persistence goroutine without blocking
 	// (T4.1). It returns false if its queue is full; the World keeps the entry and
 	// retries on the next ticks (up to a bound). Without Economy nothing is written, but
@@ -273,6 +277,18 @@ type World struct {
 	partyBuf   []*Player
 	islandBuf  []string
 
+	// Guilds (T5.1, guild.go): every guild by id and by name key, members by
+	// character, the guilds that invited each character, the last guild id, and this
+	// tick's GuildUpdates to send.
+	guildOn      bool
+	guilds       map[int64]*guildState
+	guildByName  map[string]*guildState
+	guildMembers map[int64]*guildMember
+	guildInvited map[int64][]*guildState
+	nextGuildID  int64
+	guildDirty   []*guildState
+	guildSend    []*Player
+
 	// Travel (T3.5): routes by captain NPC id, balance travel in ticks and tiles.
 	routes        map[string][]*route
 	fightFor      game.Tick
@@ -392,6 +408,7 @@ func New(cfg Config) (*World, error) {
 	w.initIdle()
 	w.initAntiBot()
 	w.initParty()
+	w.initGuilds()
 	if err := w.initConditions(); err != nil {
 		return nil, err
 	}

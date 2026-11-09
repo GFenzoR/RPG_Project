@@ -124,6 +124,37 @@ type EconomyLog struct {
 	BatchRow         pgtype.Int4
 }
 
+type Guild struct {
+	ID        int64
+	Name      string
+	Motd      string
+	CreatedAt pgtype.Timestamptz
+}
+
+type GuildInvite struct {
+	GuildID     int64
+	CharacterID int64
+	InvitedBy   pgtype.Int8
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+type GuildMember struct {
+	CharacterID int64
+	GuildID     int64
+	Rank        int16
+	JoinedAt    pgtype.Timestamptz
+}
+
+// T5.2 (PvP): prepared by T5.1, not used yet
+type GuildWar struct {
+	ID         int64
+	GuildID    int64
+	EnemyID    int64
+	DeclaredAt pgtype.Timestamptz
+	EndedAt    pgtype.Timestamptz
+}
+
 type InventoryItem struct {
 	ID          int64
 	CharacterID int64

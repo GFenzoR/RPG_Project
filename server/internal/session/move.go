@@ -63,6 +63,10 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 	case *pb.ClientMessage_Say:
 		w.say(ctx, p, m.Say)
 	case *pb.ClientMessage_LookAt:
+		if id := m.LookAt.GetCreatureId(); id != 0 {
+			w.lookCreature(p, id)
+			return
+		}
 		w.lookAt(p, m.LookAt)
 	case *pb.ClientMessage_NpcTalk:
 		w.npcTalk(p, m.NpcTalk.GetCreatureId())
@@ -74,6 +78,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.shopSell(p, m.ShopSell.GetDialogId(), m.ShopSell.GetItemId(), m.ShopSell.GetCount())
 	case *pb.ClientMessage_PartyCommand:
 		w.partyCommand(ctx, p, m.PartyCommand)
+	case *pb.ClientMessage_GuildCommand:
+		w.guildCommand(ctx, p, m.GuildCommand)
 	case *pb.ClientMessage_CloseContainer:
 		w.closeContainer(p, m.CloseContainer.GetContainerId())
 	case *pb.ClientMessage_PresenceAnswer:
@@ -319,6 +325,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	}
 	w.checkRoles(ctx)
 	w.flushParties(ctx.Tick)
+	w.flushGuilds(ctx.Now)
 	w.checkEconomy(ctx.Tick)
 	w.checkIdle(ctx)
 	w.checkAntiBot(ctx)

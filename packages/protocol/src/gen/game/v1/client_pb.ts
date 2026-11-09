@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/client.proto.
  */
 export const file_game_v1_client: GenFile = /*@__PURE__*/
-  fileDesc("ChRnYW1lL3YxL2NsaWVudC5wcm90bxIHZ2FtZS52MSK/CQoNQ2xpZW50TWVzc2FnZRIfCgVoZWxsbxgBIAEoCzIOLmdhbWUudjEuSGVsbG9IABIdCgR3YWxrGAIgASgLMg0uZ2FtZS52MS5XYWxrSAASJgoJd2Fsa19wYXRoGAMgASgLMhEuZ2FtZS52MS5XYWxrUGF0aEgAEiYKCXN0b3Bfd2FsaxgEIAEoCzIRLmdhbWUudjEuU3RvcFdhbGtIABIdCgR0dXJuGAUgASgLMg0uZ2FtZS52MS5UdXJuSAASKAoKc2V0X3RhcmdldBgGIAEoCzISLmdhbWUudjEuU2V0VGFyZ2V0SAASLwoOc2V0X2ZpZ2h0X21vZGUYByABKAsyFS5nYW1lLnYxLlNldEZpZ2h0TW9kZUgAEigKCmNhc3Rfc3BlbGwYCCABKAsyEi5nYW1lLnYxLkNhc3RTcGVsbEgAEiQKCHVzZV9pdGVtGAkgASgLMhAuZ2FtZS52MS5Vc2VJdGVtSAASKQoLdXNlX2l0ZW1fb24YCiABKAsyEi5nYW1lLnYxLlVzZUl0ZW1PbkgAEiYKCW1vdmVfaXRlbRgLIAEoCzIRLmdhbWUudjEuTW92ZUl0ZW1IABIiCgdsb29rX2F0GAwgASgLMg8uZ2FtZS52MS5Mb29rQXRIABIbCgNzYXkYDSABKAsyDC5nYW1lLnYxLlNheUgAEi4KDWRpYWxvZ19jaG9vc2UYDiABKAsyFS5nYW1lLnYxLkRpYWxvZ0Nob29zZUgAEi4KDXRyYWRlX3JlcXVlc3QYDyABKAsyFS5nYW1lLnYxLlRyYWRlUmVxdWVzdEgAEioKC3RyYWRlX29mZmVyGBAgASgLMhMuZ2FtZS52MS5UcmFkZU9mZmVySAASLAoMdHJhZGVfYWNjZXB0GBEgASgLMhQuZ2FtZS52MS5UcmFkZUFjY2VwdEgAEiwKDHRyYWRlX2NhbmNlbBgSIAEoCzIULmdhbWUudjEuVHJhZGVDYW5jZWxIABIdCgRwaW5nGBMgASgLMg0uZ2FtZS52MS5QaW5nSAASIQoGbG9nb3V0GBQgASgLMg8uZ2FtZS52MS5Mb2dvdXRIABIyCg9jbG9zZV9jb250YWluZXIYFSABKAsyFy5nYW1lLnYxLkNsb3NlQ29udGFpbmVySAASJAoIbnBjX3RhbGsYFiABKAsyEC5nYW1lLnYxLk5wY1RhbGtIABIkCghzaG9wX2J1eRgXIAEoCzIQLmdhbWUudjEuU2hvcEJ1eUgAEiYKCXNob3Bfc2VsbBgYIAEoCzIRLmdhbWUudjEuU2hvcFNlbGxIABIuCg1wYXJ0eV9jb21tYW5kGBkgASgLMhUuZ2FtZS52MS5QYXJ0eUNvbW1hbmRIABIfCgVjcmFmdBgaIAEoCzIOLmdhbWUudjEuQ3JhZnRIABIuCg1yZXBvcnRfcGxheWVyGBsgASgLMhUuZ2FtZS52MS5SZXBvcnRQbGF5ZXJIABIyCg9wcmVzZW5jZV9hbnN3ZXIYHCABKAsyFy5nYW1lLnYxLlByZXNlbmNlQW5zd2VySAASLgoNdHV0b3JpYWxfc2tpcBgdIAEoCzIVLmdhbWUudjEuVHV0b3JpYWxTa2lwSABCCQoHbWVzc2FnZSJGCgVIZWxsbxIVCg1zZXNzaW9uX3Rva2VuGAEgASgJEhYKDmNsaWVudF92ZXJzaW9uGAIgASgJEg4KBmxvY2FsZRgDIAEoCSInCgRXYWxrEh8KA2RpchgBIAEoDjISLmdhbWUudjEuRGlyZWN0aW9uIi0KCFdhbGtQYXRoEiEKBXN0ZXBzGAEgAygOMhIuZ2FtZS52MS5EaXJlY3Rpb24iCgoIU3RvcFdhbGsiJwoEVHVybhIfCgNkaXIYASABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiIgCglTZXRUYXJnZXQSEwoLY3JlYXR1cmVfaWQYASABKA0iQwoMU2V0RmlnaHRNb2RlEiQKBnN0YW5jZRgBIAEoDjIULmdhbWUudjEuRmlnaHRTdGFuY2USDQoFY2hhc2UYAiABKAgiYAoJQ2FzdFNwZWxsEhIKCHNwZWxsX2lkGAEgASgJSAASDwoFd29yZHMYAiABKAlIABIlCgZ0YXJnZXQYAyABKAsyFS5nYW1lLnYxLkFjdGlvblRhcmdldEIHCgVzcGVsbCJUCgdVc2VJdGVtEiMKBGZyb20YASABKAsyFS5nYW1lLnYxLkl0ZW1Mb2NhdGlvbhIPCgdpdGVtX2lkGAIgASgNEhMKC3N0YWNrX2luZGV4GAMgASgNInkKCVVzZUl0ZW1PbhIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIhCgJ0bxgEIAEoCzIVLmdhbWUudjEuQWN0aW9uVGFyZ2V0IocBCghNb3ZlSXRlbRIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIhCgJ0bxgEIAEoCzIVLmdhbWUudjEuSXRlbUxvY2F0aW9uEg0KBWNvdW50GAUgASgNIlMKBkxvb2tBdBIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDSI6CgNTYXkSJQoHY2hhbm5lbBgBIAEoDjIULmdhbWUudjEuQ2hhdENoYW5uZWwSDAoEdGV4dBgCIAEoCSI0CgxEaWFsb2dDaG9vc2USEQoJZGlhbG9nX2lkGAEgASgNEhEKCW9wdGlvbl9pZBgCIAEoDSJuCgxUcmFkZVJlcXVlc3QSEwoLY3JlYXR1cmVfaWQYASABKA0SIwoEaXRlbRgCIAEoCzIVLmdhbWUudjEuSXRlbUxvY2F0aW9uEg8KB2l0ZW1faWQYAyABKA0SEwoLc3RhY2tfaW5kZXgYBCABKA0iVwoKVHJhZGVPZmZlchIjCgRpdGVtGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDSINCgtUcmFkZUFjY2VwdCINCgtUcmFkZUNhbmNlbCIbCgRQaW5nEhMKC2NsaWVudF90aW1lGAEgASgEIggKBkxvZ291dCImCg5DbG9zZUNvbnRhaW5lchIUCgxjb250YWluZXJfaWQYASABKA0iHgoHTnBjVGFsaxITCgtjcmVhdHVyZV9pZBgBIAEoDSI8CgdTaG9wQnV5EhEKCWRpYWxvZ19pZBgBIAEoDRIPCgdpdGVtX2lkGAIgASgNEg0KBWNvdW50GAMgASgNIj0KCFNob3BTZWxsEhEKCWRpYWxvZ19pZBgBIAEoDRIPCgdpdGVtX2lkGAIgASgNEg0KBWNvdW50GAMgASgNIkkKDFBhcnR5Q29tbWFuZBIkCgZhY3Rpb24YASABKA4yFC5nYW1lLnYxLlBhcnR5QWN0aW9uEhMKC2NyZWF0dXJlX2lkGAIgASgNIj4KBUNyYWZ0EhEKCXJlY2lwZV9pZBgBIAEoCRIiCgdzdGF0aW9uGAIgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbiIzCgxSZXBvcnRQbGF5ZXISEwoLY3JlYXR1cmVfaWQYASABKA0SDgoGcmVhc29uGAIgASgJIjUKDlByZXNlbmNlQW5zd2VyEhAKCGNoZWNrX2lkGAEgASgNEhEKCW9wdGlvbl9pZBgCIAEoDSIOCgxUdXRvcmlhbFNraXAqfgoLRmlnaHRTdGFuY2USHAoYRklHSFRfU1RBTkNFX1VOU1BFQ0lGSUVEEAASGgoWRklHSFRfU1RBTkNFX09GRkVOU0lWRRABEhkKFUZJR0hUX1NUQU5DRV9CQUxBTkNFRBACEhoKFkZJR0hUX1NUQU5DRV9ERUZFTlNJVkUQAyqjAQoLQ2hhdENoYW5uZWwSHAoYQ0hBVF9DSEFOTkVMX1VOU1BFQ0lGSUVEEAASFAoQQ0hBVF9DSEFOTkVMX1NBWRABEhUKEUNIQVRfQ0hBTk5FTF9ZRUxMEAISGAoUQ0hBVF9DSEFOTkVMX1dISVNQRVIQAxIXChNDSEFUX0NIQU5ORUxfR0xPQkFMEAQSFgoSQ0hBVF9DSEFOTkVMX1BBUlRZEAUq+wEKC1BhcnR5QWN0aW9uEhwKGFBBUlRZX0FDVElPTl9VTlNQRUNJRklFRBAAEhcKE1BBUlRZX0FDVElPTl9JTlZJVEUQARIXChNQQVJUWV9BQ1RJT05fQUNDRVBUEAISGAoUUEFSVFlfQUNUSU9OX0RFQ0xJTkUQAxIWChJQQVJUWV9BQ1RJT05fTEVBVkUQBBIVChFQQVJUWV9BQ1RJT05fS0lDSxAFEhwKGFBBUlRZX0FDVElPTl9QQVNTX0xFQURFUhAGEhkKFVBBUlRZX0FDVElPTl9TSEFSRV9PThAHEhoKFlBBUlRZX0FDVElPTl9TSEFSRV9PRkYQCEJGWkRnaXRodWIuY29tL0dGZW56b1IvUlBHX1Byb2plY3Qvc2VydmVyL2ludGVybmFsL25ldC9wYi9nYW1lL3YxO2dhbWV2MWIGcHJvdG8z", [file_game_v1_common]);
+  fileDesc("ChRnYW1lL3YxL2NsaWVudC5wcm90bxIHZ2FtZS52MSLvCQoNQ2xpZW50TWVzc2FnZRIfCgVoZWxsbxgBIAEoCzIOLmdhbWUudjEuSGVsbG9IABIdCgR3YWxrGAIgASgLMg0uZ2FtZS52MS5XYWxrSAASJgoJd2Fsa19wYXRoGAMgASgLMhEuZ2FtZS52MS5XYWxrUGF0aEgAEiYKCXN0b3Bfd2FsaxgEIAEoCzIRLmdhbWUudjEuU3RvcFdhbGtIABIdCgR0dXJuGAUgASgLMg0uZ2FtZS52MS5UdXJuSAASKAoKc2V0X3RhcmdldBgGIAEoCzISLmdhbWUudjEuU2V0VGFyZ2V0SAASLwoOc2V0X2ZpZ2h0X21vZGUYByABKAsyFS5nYW1lLnYxLlNldEZpZ2h0TW9kZUgAEigKCmNhc3Rfc3BlbGwYCCABKAsyEi5nYW1lLnYxLkNhc3RTcGVsbEgAEiQKCHVzZV9pdGVtGAkgASgLMhAuZ2FtZS52MS5Vc2VJdGVtSAASKQoLdXNlX2l0ZW1fb24YCiABKAsyEi5nYW1lLnYxLlVzZUl0ZW1PbkgAEiYKCW1vdmVfaXRlbRgLIAEoCzIRLmdhbWUudjEuTW92ZUl0ZW1IABIiCgdsb29rX2F0GAwgASgLMg8uZ2FtZS52MS5Mb29rQXRIABIbCgNzYXkYDSABKAsyDC5nYW1lLnYxLlNheUgAEi4KDWRpYWxvZ19jaG9vc2UYDiABKAsyFS5nYW1lLnYxLkRpYWxvZ0Nob29zZUgAEi4KDXRyYWRlX3JlcXVlc3QYDyABKAsyFS5nYW1lLnYxLlRyYWRlUmVxdWVzdEgAEioKC3RyYWRlX29mZmVyGBAgASgLMhMuZ2FtZS52MS5UcmFkZU9mZmVySAASLAoMdHJhZGVfYWNjZXB0GBEgASgLMhQuZ2FtZS52MS5UcmFkZUFjY2VwdEgAEiwKDHRyYWRlX2NhbmNlbBgSIAEoCzIULmdhbWUudjEuVHJhZGVDYW5jZWxIABIdCgRwaW5nGBMgASgLMg0uZ2FtZS52MS5QaW5nSAASIQoGbG9nb3V0GBQgASgLMg8uZ2FtZS52MS5Mb2dvdXRIABIyCg9jbG9zZV9jb250YWluZXIYFSABKAsyFy5nYW1lLnYxLkNsb3NlQ29udGFpbmVySAASJAoIbnBjX3RhbGsYFiABKAsyEC5nYW1lLnYxLk5wY1RhbGtIABIkCghzaG9wX2J1eRgXIAEoCzIQLmdhbWUudjEuU2hvcEJ1eUgAEiYKCXNob3Bfc2VsbBgYIAEoCzIRLmdhbWUudjEuU2hvcFNlbGxIABIuCg1wYXJ0eV9jb21tYW5kGBkgASgLMhUuZ2FtZS52MS5QYXJ0eUNvbW1hbmRIABIfCgVjcmFmdBgaIAEoCzIOLmdhbWUudjEuQ3JhZnRIABIuCg1yZXBvcnRfcGxheWVyGBsgASgLMhUuZ2FtZS52MS5SZXBvcnRQbGF5ZXJIABIyCg9wcmVzZW5jZV9hbnN3ZXIYHCABKAsyFy5nYW1lLnYxLlByZXNlbmNlQW5zd2VySAASLgoNdHV0b3JpYWxfc2tpcBgdIAEoCzIVLmdhbWUudjEuVHV0b3JpYWxTa2lwSAASLgoNZ3VpbGRfY29tbWFuZBgeIAEoCzIVLmdhbWUudjEuR3VpbGRDb21tYW5kSABCCQoHbWVzc2FnZSJGCgVIZWxsbxIVCg1zZXNzaW9uX3Rva2VuGAEgASgJEhYKDmNsaWVudF92ZXJzaW9uGAIgASgJEg4KBmxvY2FsZRgDIAEoCSInCgRXYWxrEh8KA2RpchgBIAEoDjISLmdhbWUudjEuRGlyZWN0aW9uIi0KCFdhbGtQYXRoEiEKBXN0ZXBzGAEgAygOMhIuZ2FtZS52MS5EaXJlY3Rpb24iCgoIU3RvcFdhbGsiJwoEVHVybhIfCgNkaXIYASABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiIgCglTZXRUYXJnZXQSEwoLY3JlYXR1cmVfaWQYASABKA0iQwoMU2V0RmlnaHRNb2RlEiQKBnN0YW5jZRgBIAEoDjIULmdhbWUudjEuRmlnaHRTdGFuY2USDQoFY2hhc2UYAiABKAgiYAoJQ2FzdFNwZWxsEhIKCHNwZWxsX2lkGAEgASgJSAASDwoFd29yZHMYAiABKAlIABIlCgZ0YXJnZXQYAyABKAsyFS5nYW1lLnYxLkFjdGlvblRhcmdldEIHCgVzcGVsbCJUCgdVc2VJdGVtEiMKBGZyb20YASABKAsyFS5nYW1lLnYxLkl0ZW1Mb2NhdGlvbhIPCgdpdGVtX2lkGAIgASgNEhMKC3N0YWNrX2luZGV4GAMgASgNInkKCVVzZUl0ZW1PbhIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIhCgJ0bxgEIAEoCzIVLmdhbWUudjEuQWN0aW9uVGFyZ2V0IocBCghNb3ZlSXRlbRIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIhCgJ0bxgEIAEoCzIVLmdhbWUudjEuSXRlbUxvY2F0aW9uEg0KBWNvdW50GAUgASgNImgKBkxvb2tBdBIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRITCgtjcmVhdHVyZV9pZBgEIAEoDSI6CgNTYXkSJQoHY2hhbm5lbBgBIAEoDjIULmdhbWUudjEuQ2hhdENoYW5uZWwSDAoEdGV4dBgCIAEoCSI0CgxEaWFsb2dDaG9vc2USEQoJZGlhbG9nX2lkGAEgASgNEhEKCW9wdGlvbl9pZBgCIAEoDSJuCgxUcmFkZVJlcXVlc3QSEwoLY3JlYXR1cmVfaWQYASABKA0SIwoEaXRlbRgCIAEoCzIVLmdhbWUudjEuSXRlbUxvY2F0aW9uEg8KB2l0ZW1faWQYAyABKA0SEwoLc3RhY2tfaW5kZXgYBCABKA0iVwoKVHJhZGVPZmZlchIjCgRpdGVtGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDSINCgtUcmFkZUFjY2VwdCINCgtUcmFkZUNhbmNlbCIbCgRQaW5nEhMKC2NsaWVudF90aW1lGAEgASgEIggKBkxvZ291dCImCg5DbG9zZUNvbnRhaW5lchIUCgxjb250YWluZXJfaWQYASABKA0iHgoHTnBjVGFsaxITCgtjcmVhdHVyZV9pZBgBIAEoDSI8CgdTaG9wQnV5EhEKCWRpYWxvZ19pZBgBIAEoDRIPCgdpdGVtX2lkGAIgASgNEg0KBWNvdW50GAMgASgNIj0KCFNob3BTZWxsEhEKCWRpYWxvZ19pZBgBIAEoDRIPCgdpdGVtX2lkGAIgASgNEg0KBWNvdW50GAMgASgNIkkKDFBhcnR5Q29tbWFuZBIkCgZhY3Rpb24YASABKA4yFC5nYW1lLnYxLlBhcnR5QWN0aW9uEhMKC2NyZWF0dXJlX2lkGAIgASgNImIKDEd1aWxkQ29tbWFuZBIkCgZhY3Rpb24YASABKA4yFC5nYW1lLnYxLkd1aWxkQWN0aW9uEgwKBG5hbWUYAiABKAkSDAoEdGV4dBgDIAEoCRIQCghndWlsZF9pZBgEIAEoBCI+CgVDcmFmdBIRCglyZWNpcGVfaWQYASABKAkSIgoHc3RhdGlvbhgCIAEoCzIRLmdhbWUudjEuUG9zaXRpb24iMwoMUmVwb3J0UGxheWVyEhMKC2NyZWF0dXJlX2lkGAEgASgNEg4KBnJlYXNvbhgCIAEoCSI1Cg5QcmVzZW5jZUFuc3dlchIQCghjaGVja19pZBgBIAEoDRIRCglvcHRpb25faWQYAiABKA0iDgoMVHV0b3JpYWxTa2lwKn4KC0ZpZ2h0U3RhbmNlEhwKGEZJR0hUX1NUQU5DRV9VTlNQRUNJRklFRBAAEhoKFkZJR0hUX1NUQU5DRV9PRkZFTlNJVkUQARIZChVGSUdIVF9TVEFOQ0VfQkFMQU5DRUQQAhIaChZGSUdIVF9TVEFOQ0VfREVGRU5TSVZFEAMquwEKC0NoYXRDaGFubmVsEhwKGENIQVRfQ0hBTk5FTF9VTlNQRUNJRklFRBAAEhQKEENIQVRfQ0hBTk5FTF9TQVkQARIVChFDSEFUX0NIQU5ORUxfWUVMTBACEhgKFENIQVRfQ0hBTk5FTF9XSElTUEVSEAMSFwoTQ0hBVF9DSEFOTkVMX0dMT0JBTBAEEhYKEkNIQVRfQ0hBTk5FTF9QQVJUWRAFEhYKEkNIQVRfQ0hBTk5FTF9HVUlMRBAGKvsBCgtQYXJ0eUFjdGlvbhIcChhQQVJUWV9BQ1RJT05fVU5TUEVDSUZJRUQQABIXChNQQVJUWV9BQ1RJT05fSU5WSVRFEAESFwoTUEFSVFlfQUNUSU9OX0FDQ0VQVBACEhgKFFBBUlRZX0FDVElPTl9ERUNMSU5FEAMSFgoSUEFSVFlfQUNUSU9OX0xFQVZFEAQSFQoRUEFSVFlfQUNUSU9OX0tJQ0sQBRIcChhQQVJUWV9BQ1RJT05fUEFTU19MRUFERVIQBhIZChVQQVJUWV9BQ1RJT05fU0hBUkVfT04QBxIaChZQQVJUWV9BQ1RJT05fU0hBUkVfT0ZGEAgq1wIKC0d1aWxkQWN0aW9uEhwKGEdVSUxEX0FDVElPTl9VTlNQRUNJRklFRBAAEhcKE0dVSUxEX0FDVElPTl9DUkVBVEUQARIXChNHVUlMRF9BQ1RJT05fSU5WSVRFEAISFwoTR1VJTERfQUNUSU9OX1JFVk9LRRADEhcKE0dVSUxEX0FDVElPTl9BQ0NFUFQQBBIYChRHVUlMRF9BQ1RJT05fREVDTElORRAFEhYKEkdVSUxEX0FDVElPTl9MRUFWRRAGEhUKEUdVSUxEX0FDVElPTl9LSUNLEAcSGAoUR1VJTERfQUNUSU9OX1BST01PVEUQCBIXChNHVUlMRF9BQ1RJT05fREVNT1RFEAkSFQoRR1VJTERfQUNUSU9OX01PVEQQChIYChRHVUlMRF9BQ1RJT05fRElTQkFORBALEhkKFUdVSUxEX0FDVElPTl9UUkFOU0ZFUhAMQkZaRGdpdGh1Yi5jb20vR0ZlbnpvUi9SUEdfUHJvamVjdC9zZXJ2ZXIvaW50ZXJuYWwvbmV0L3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM", [file_game_v1_common]);
 
 /**
  * ClientMessage is the only thing a client WebSocket frame carries (max 4 KB).
@@ -197,6 +197,12 @@ export type ClientMessage = Message<"game.v1.ClientMessage"> & {
      */
     value: TutorialSkip;
     case: "tutorialSkip";
+  } | {
+    /**
+     * @generated from field: game.v1.GuildCommand guild_command = 30;
+     */
+    value: GuildCommand;
+    case: "guildCommand";
   } | { case: undefined; value?: undefined };
 };
 
@@ -511,6 +517,14 @@ export type LookAt = Message<"game.v1.LookAt"> & {
    * @generated from field: uint32 stack_index = 3;
    */
   stackIndex: number;
+
+  /**
+   * T5.1: look at this creature instead (one the client sees; the rest is ignored). For
+   * a player the answer names its vocation, level and guild (look.player*).
+   *
+   * @generated from field: uint32 creature_id = 4;
+   */
+  creatureId: number;
 };
 
 /**
@@ -816,6 +830,41 @@ export const PartyCommandSchema: GenMessage<PartyCommand> = /*@__PURE__*/
   messageDesc(file_game_v1_client, 25);
 
 /**
+ * GuildCommand is every guild intent (T5.1). The chat command "/guild ..." does the same.
+ * The server answers with GuildUpdate or a system Message (guild.*).
+ *
+ * @generated from message game.v1.GuildCommand
+ */
+export type GuildCommand = Message<"game.v1.GuildCommand"> & {
+  /**
+   * @generated from field: game.v1.GuildAction action = 1;
+   */
+  action: GuildAction;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string text = 3;
+   */
+  text: string;
+
+  /**
+   * @generated from field: uint64 guild_id = 4;
+   */
+  guildId: bigint;
+};
+
+/**
+ * Describes the message game.v1.GuildCommand.
+ * Use `create(GuildCommandSchema)` to create a new message.
+ */
+export const GuildCommandSchema: GenMessage<GuildCommand> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 26);
+
+/**
  * Craft attempts a recipe of data/recipes.yaml (T3.4) at the station item on the tile
  * station (from StationOpen). The server checks the skill level, the inputs in the
  * containers, the tool, the distance to the station, capacity and room, and the time
@@ -841,7 +890,7 @@ export type Craft = Message<"game.v1.Craft"> & {
  * Use `create(CraftSchema)` to create a new message.
  */
 export const CraftSchema: GenMessage<Craft> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 26);
+  messageDesc(file_game_v1_client, 27);
 
 /**
  * ReportPlayer reports another player to the staff (T4.1): the report button of the
@@ -870,7 +919,7 @@ export type ReportPlayer = Message<"game.v1.ReportPlayer"> & {
  * Use `create(ReportPlayerSchema)` to create a new message.
  */
 export const ReportPlayerSchema: GenMessage<ReportPlayer> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 27);
+  messageDesc(file_game_v1_client, 28);
 
 /**
  * PresenceAnswer answers a PresenceCheck (T4.1) with one of its option ids.
@@ -894,7 +943,7 @@ export type PresenceAnswer = Message<"game.v1.PresenceAnswer"> & {
  * Use `create(PresenceAnswerSchema)` to create a new message.
  */
 export const PresenceAnswerSchema: GenMessage<PresenceAnswer> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 28);
+  messageDesc(file_game_v1_client, 29);
 
 /**
  * TutorialSkip ends the tutorial for good (T4.2). There is no message to complete a step:
@@ -910,7 +959,7 @@ export type TutorialSkip = Message<"game.v1.TutorialSkip"> & {
  * Use `create(TutorialSkipSchema)` to create a new message.
  */
 export const TutorialSkipSchema: GenMessage<TutorialSkip> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 29);
+  messageDesc(file_game_v1_client, 30);
 
 /**
  * @generated from enum game.v1.FightStance
@@ -978,6 +1027,13 @@ export enum ChatChannel {
    * @generated from enum value: CHAT_CHANNEL_PARTY = 5;
    */
   PARTY = 5,
+
+  /**
+   * The members of the speaker's guild who are online, wherever they are (T5.1).
+   *
+   * @generated from enum value: CHAT_CHANNEL_GUILD = 6;
+   */
+  GUILD = 6,
 }
 
 /**
@@ -1054,4 +1110,101 @@ export enum PartyAction {
  */
 export const PartyActionSchema: GenEnum<PartyAction> = /*@__PURE__*/
   enumDesc(file_game_v1_client, 2);
+
+/**
+ * GuildAction is what a GuildCommand asks for (T5.1, docs/02 "Gremios"). Members are
+ * named by character name: they may be offline. The server checks every rank and rule.
+ *
+ * @generated from enum game.v1.GuildAction
+ */
+export enum GuildAction {
+  /**
+   * @generated from enum value: GUILD_ACTION_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Found a guild called name (costs gold, needs a level; the founder leads it).
+   *
+   * @generated from enum value: GUILD_ACTION_CREATE = 1;
+   */
+  CREATE = 1,
+
+  /**
+   * Vice or leader: invite the online character name; REVOKE withdraws its invitation.
+   *
+   * @generated from enum value: GUILD_ACTION_INVITE = 2;
+   */
+  INVITE = 2,
+
+  /**
+   * @generated from enum value: GUILD_ACTION_REVOKE = 3;
+   */
+  REVOKE = 3,
+
+  /**
+   * Accept or decline the invitation of guild_id.
+   *
+   * @generated from enum value: GUILD_ACTION_ACCEPT = 4;
+   */
+  ACCEPT = 4,
+
+  /**
+   * @generated from enum value: GUILD_ACTION_DECLINE = 5;
+   */
+  DECLINE = 5,
+
+  /**
+   * Leave the guild (the leader must transfer or disband first).
+   *
+   * @generated from enum value: GUILD_ACTION_LEAVE = 6;
+   */
+  LEAVE = 6,
+
+  /**
+   * Remove member name (leader: anyone else; vice: members only).
+   *
+   * @generated from enum value: GUILD_ACTION_KICK = 7;
+   */
+  KICK = 7,
+
+  /**
+   * Leader: member name becomes vice leader, or a vice leader a member.
+   *
+   * @generated from enum value: GUILD_ACTION_PROMOTE = 8;
+   */
+  PROMOTE = 8,
+
+  /**
+   * @generated from enum value: GUILD_ACTION_DEMOTE = 9;
+   */
+  DEMOTE = 9,
+
+  /**
+   * Vice or leader: set the message of the day to text (empty clears it).
+   *
+   * @generated from enum value: GUILD_ACTION_MOTD = 10;
+   */
+  MOTD = 10,
+
+  /**
+   * Leader: disband the guild. name must repeat the guild's name (a confirmation).
+   *
+   * @generated from enum value: GUILD_ACTION_DISBAND = 11;
+   */
+  DISBAND = 11,
+
+  /**
+   * Leader: member name becomes the leader; the old leader becomes a vice leader.
+   *
+   * @generated from enum value: GUILD_ACTION_TRANSFER = 12;
+   */
+  TRANSFER = 12,
+}
+
+/**
+ * Describes the enum game.v1.GuildAction.
+ */
+export const GuildActionSchema: GenEnum<GuildAction> = /*@__PURE__*/
+  enumDesc(file_game_v1_client, 3);
 

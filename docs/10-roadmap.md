@@ -208,6 +208,37 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
     avisar a los gm cuando llega un envío.
 
 ## Hito 5 — Post-lanzamiento
-- Mercado global · Tienda cosmética con pasarela de pago · PvP con skulls · Casas ·
-  Gremios · Cliente móvil (controles táctiles + Tauri mobile) · Isla Volcánica y
-  Capítulo 3.
+Objetivo: las piezas sociales y de economía que el modelo de datos ya contemplaba
+(`00-vision.md`), más la segunda isla de contenido avanzado y el cliente táctil. Las
+decisiones cerradas no cambian: monetización solo cosmética y móvil como plataforma
+secundaria.
+
+- [x] **T5.1 Gremios.** Fundar (costo en oro y nivel mínimo), nombre único validado,
+  rangos líder/vicelíder/miembro, invitaciones que vencen, mensaje del día, canal de chat
+  "Gremio", nombre bajo el personaje y página pública `/guilds`. Persistidos fuera del
+  game loop. [T3.3, T2.6]
+  - Hecha: `session/guild.go` (el loop carga todos al arrancar y escribe cada cambio en
+    orden por la goroutine de admin), migración 00013 (`guilds`, `guild_members`,
+    `guild_invites` y `guild_wars` vacía para T5.2), `GuildCommand`/`GuildUpdate`/
+    `CreatureGuild`, `/guild ...`, `/guildrename` y `/guilddisband` auditados, `LookAt` de
+    criaturas, panel y canal en el cliente, `/guilds` en el sitio. Pendiente: avisar a un
+    jugador desconectado que lo expulsaron (hoy lo ve al entrar) y borrar de la base las
+    invitaciones vencidas sin reiniciar.
+- [ ] **T5.2 PvP con skulls.** Zonas `pvp`/`no_pvp` del mapa, ataque entre jugadores,
+  skulls por asesinatos injustificados con su castigo, y guerras de gremios sobre lo que
+  T5.1 dejó preparado. [T5.1]
+- [ ] **T5.3 Mercado global.** Ofertas de compra y venta de items `tradeable` entre
+  jugadores, con depósito y comisión en oro (sumidero), transaccional y con log de
+  economía. [T4.1]
+- [ ] **T5.4 Casas.** Casas del mapa que se alquilan con oro, con lista de invitados y
+  puertas; los items dentro persisten entre reinicios. [T5.1]
+- [ ] **T5.5 Isla Volcánica y Capítulo 3.** Tercera isla con su mapa, monstruos, NPCs,
+  recetas y la continuación de la historia. 👤 arte si se quiere reemplazar placeholders.
+  [T3.6]
+- [ ] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
+  en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
+  nativas necesitan cuentas de las tiendas (Apple y Google) y su firma.
+- [ ] **T5.7 Tienda cosmética con pasarela de pago.** Moneda premium, catálogo de
+  `cosmetics` y compras en `account_cosmetics`, siempre sin ventaja de juego. Se arma
+  contra el modo prueba del proveedor. 👤 elegir el proveedor de pagos y darle las claves
+  de producción.

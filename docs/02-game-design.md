@@ -557,7 +557,8 @@ Números en `data/balance.yaml` (`chat`), nunca en código.
 - Las palabras de un hechizo dichas en el canal decir lo lanzan (T1.9) y no se muestran
   como chat ni cuentan para el anti-flood (el hechizo ya tiene sus cooldowns).
 - Una línea que empieza con `/` nunca es chat: es un comando (ver "Moderación").
-- Canal de grupo (T3.3): ver "Grupos". Fuera de este hito: gremio y privados persistentes.
+- Canal de grupo (T3.3): ver "Grupos". Canal de gremio (T5.1): ver "Gremios". Fuera de
+  alcance: privados persistentes.
 
 ## Grupos (T3.3)
 Números en `data/balance.yaml` (`party`), nunca en código. Código:
@@ -615,6 +616,57 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
 - **Chat de grupo:** canal `PARTY`, lo oyen todos los miembros estén donde estén, sin
   posición; mismo largo y anti-flood que el resto del chat.
 
+## Gremios (T5.1)
+Números en `data/balance.yaml` (`guild`), nunca en código. Código:
+`server/internal/session/guild.go` (reglas puras en `server/internal/guild`). Los gremios
+son pocos y simples a propósito: lo que no está acá no existe.
+
+- **Fundar:** un personaje sin gremio, de nivel `found_min_level` (18) o más, paga
+  `found_cost` (2000 monedas de cobre). Ese oro se destruye: es un sumidero de la economía
+  (fuente `guild` del log de economía). El fundador es el líder.
+- **Nombre:** de `name_min` a `name_max` caracteres (3–24), de 1 a `name_max_words` (4)
+  palabras de letras ASCII (al menos dos por palabra) separadas por un espacio; la primera
+  empieza con mayúscula ("Faro del Norte"). Único sin importar mayúsculas. No puede
+  contener (sin espacios, en minúsculas) ninguna parte de `reserved_parts` (hacerse pasar
+  por el staff o el juego, y palabras ofensivas) ni tener como palabra una de
+  `reserved_words`. El staff puede renombrarlo (ver "Moderación").
+- **Rangos y permisos.** Tres rangos; los permisos dependen solo del rango:
+
+  | Acción | Líder | Vicelíder | Miembro |
+  |---|---|---|---|
+  | Invitar y retirar invitaciones | sí | sí | no |
+  | Cambiar el mensaje del día | sí | sí | no |
+  | Expulsar | a cualquiera | solo a miembros | no |
+  | Promover a vicelíder / degradar a miembro | sí | no | no |
+  | Pasar el liderazgo | sí | no | no |
+  | Disolver | sí | no | no |
+  | Salir | no (primero pasa el liderazgo o disuelve) | sí | sí |
+
+  Como mucho `max_vice_leaders` (4) vicelíderes. Al pasar el liderazgo, el líder anterior
+  queda como vicelíder si hay lugar, y como miembro si no.
+- **Invitaciones:** a un personaje **conectado**, por nombre (no hace falta verlo). Una
+  invitación sobrevive al logout y vence a las `invite_hours` (36 h) del reloj del juego.
+  Un gremio tiene como mucho `max_invites` (15) pendientes. El invitado acepta o rechaza
+  desde el panel (o `/guild accept Gremio`); al entrar a un gremio se borran sus otras
+  invitaciones. Invitar dice si alguien está conectado, igual que la lista de miembros:
+  se acepta, y cada intento cuenta para el anti-flood.
+- **Límite:** `max_members` (50) miembros contando al líder; lleno, nadie más acepta.
+- **Mensaje del día:** hasta `motd_max` (160) caracteres, limpiado como el chat. Solo lo
+  ven los miembros (no la página pública).
+- **Disolver:** el líder escribe el nombre del gremio para confirmar. Se borran miembros e
+  invitaciones; el nombre queda libre.
+- **Chat y presencia:** canal `GUILD` ("Gremio"): lo oyen los miembros conectados estén
+  donde estén, sin posición; mismo largo y anti-flood que el resto. El panel muestra a
+  cada miembro con su rango y si está en línea. El nombre del gremio va bajo el nombre del
+  personaje en el mapa y al mirarlo (Mayús+click): "Ves a Ana, Guardián de nivel 20. Es
+  Líder del gremio Faro del Norte."
+- **Comandos:** `/guild create|invite|revoke|accept|decline|leave|kick|promote|demote|
+  motd|transfer|disband ...` hacen lo mismo que el panel. Todo comando de gremio cuenta
+  para el anti-flood del chat.
+- **Sitio público:** `/guilds` lista los gremios (nombre, líder, miembros, fundación) y
+  `/guilds/<id>` sus miembros con rango, vocación y nivel. Nada privado.
+- **Guerras (T5.2):** la tabla `guild_wars` existe vacía; ninguna regla todavía.
+
 ## Moderación (T2.6)
 Roles por cuenta: **jugador** (por defecto), **GM** y **admin**. Los asigna solo el
 operador con su herramienta (`make set-role`, docs/09); el juego nunca cambia roles.
@@ -639,6 +691,8 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 | `/reports` | GM | Lista los 10 reportes abiertos más antiguos (T4.1) |
 | `/closereport id resolución` | GM | Cierra un reporte abierto con la resolución (T4.1) |
 | `/presence Nombre` | GM | Le pide un chequeo de presencia a ese jugador en cuanto se pueda (fuera de combate y activo); no cambia su puntaje (T4.1) |
+| `/guildrename Viejo Nombre = Nuevo Nombre` | GM | Renombra un gremio (el nombre nuevo sigue las reglas de siempre); se avisa a sus miembros (T5.1) |
+| `/guilddisband Nombre` | GM | Disuelve un gremio (T5.1) |
 
 Los GM conectados también reciben avisos de sistema: posibles bots y chequeos fallados o
 esquivados (T4.1), y cada envío nuevo al portal de mapas con su número y título, sin datos
