@@ -458,8 +458,9 @@ conoce las URLs recibe `403` en la cola y en la decisión, y `404` en el detalle
 descarga de envíos ajenos. Un moderador no decide sobre su propio envío
 (`own_submission`): lo revisa otro, así nadie manda su patch directo al worker. Los
 intentos de un player contra la API de moderación van al log del servidor, no a
-`audit_log` (que no se llene con ruido de una cuenta cualquiera). Pendiente para más adelante (opcional en T4.5): avisar a los gm
-conectados cuando llega un envío.
+`audit_log` (que no se llene con ruido de una cuenta cualquiera). Los gm y admin conectados
+reciben en el juego un aviso con el número y el título de cada envío nuevo, agrupado si
+llegan muchos seguidos (docs/05, "Envío de mapas").
 
 **Contrato con el worker (PR 2/2).** La cola es la tabla, y ninguna transacción queda
 abierta mientras se habla con GitHub:

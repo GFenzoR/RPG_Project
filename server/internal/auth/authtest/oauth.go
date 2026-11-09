@@ -95,6 +95,21 @@ func (r *Repo) LinkIdentity(_ context.Context, accountID int64, id store.Externa
 	return r.insertIdentity(accountID, id, at, store.AuditIdentityLinked)
 }
 
+// LinkPendingIdentity implements auth.OAuthRepo.
+func (r *Repo) LinkPendingIdentity(_ context.Context, hash []byte, accountID int64, id store.ExternalIdentity, at time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.oauthInit()
+	if _, ok := r.pendings[string(hash)]; !ok {
+		return store.ErrNotFound
+	}
+	if err := r.insertIdentity(accountID, id, at, store.AuditIdentityLinked); err != nil {
+		return err
+	}
+	delete(r.pendings, string(hash))
+	return nil
+}
+
 // CreateOAuthAccount implements auth.OAuthRepo.
 func (r *Repo) CreateOAuthAccount(_ context.Context, email string, verified bool, id store.ExternalIdentity, at time.Time) (int64, error) {
 	r.mu.Lock()

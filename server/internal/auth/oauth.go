@@ -83,6 +83,9 @@ type OAuthRepo interface {
 	ConsumeOAuthState(ctx context.Context, stateHash []byte, now time.Time) (store.OAuthState, error)
 	IdentityAccount(ctx context.Context, provider, subject string) (int64, error)
 	LinkIdentity(ctx context.Context, accountID int64, id store.ExternalIdentity, at time.Time) error
+	// LinkPendingIdentity consumes the pending identity of tokenHash and links it to the
+	// account in one transaction: ErrNotFound if it was already used.
+	LinkPendingIdentity(ctx context.Context, tokenHash []byte, accountID int64, id store.ExternalIdentity, at time.Time) error
 	CreateOAuthAccount(ctx context.Context, email string, verified bool, id store.ExternalIdentity, at time.Time) (int64, error)
 	Identities(ctx context.Context, accountID int64) ([]store.Identity, error)
 	UnlinkIdentity(ctx context.Context, accountID int64, provider string, at time.Time) error
@@ -416,12 +419,14 @@ func (s *Service) ConfirmPending(ctx context.Context, token, password string) (T
 	if err != nil {
 		return Token{}, "", err
 	}
-	if err := s.oauthRepo.LinkIdentity(ctx, tok.AccountID, p.Identity, s.clock.Now()); err != nil {
+	// The pending identity is consumed with the link: two confirmations of one token
+	// cannot both link, and a link never leaves its pending row behind.
+	if err := s.oauthRepo.LinkPendingIdentity(ctx, hash, tok.AccountID, p.Identity, s.clock.Now()); err != nil {
 		_ = s.Logout(ctx, tok.Token)
+		if errors.Is(err, store.ErrNotFound) {
+			return Token{}, "", ErrPendingExpired
+		}
 		return Token{}, "", identityErr(err)
-	}
-	if err := s.oauthRepo.DeleteOAuthPending(ctx, hash); err != nil {
-		return Token{}, "", err
 	}
 	return tok, p.ReturnTo, nil
 }

@@ -640,6 +640,10 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 | `/closereport id resolución` | GM | Cierra un reporte abierto con la resolución (T4.1) |
 | `/presence Nombre` | GM | Le pide un chequeo de presencia a ese jugador en cuanto se pueda (fuera de combate y activo); no cambia su puntaje (T4.1) |
 
+Los GM conectados también reciben avisos de sistema: posibles bots y chequeos fallados o
+esquivados (T4.1), y cada envío nuevo al portal de mapas con su número y título, sin datos
+del autor; si llegan muchos seguidos, un solo aviso por minuto con cuántos fueron (T4.5).
+
 - **Destino del teleport:** una casilla caminable de una isla, en un piso que existe. Si
   está ocupada, la libre más cercana (hasta 2 de distancia). Si no, `gm.bad_position`.
 - **Jerarquía:** kick, ban, unban y mover a otro con `/tp` solo alcanzan a roles menores

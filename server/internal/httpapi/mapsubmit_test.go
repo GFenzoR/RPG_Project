@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -245,7 +246,10 @@ func decodeJSON[T any](t *testing.T, raw []byte) T {
 }
 
 func TestSubmitMap(t *testing.T) {
-	p := newPortal(t, nil)
+	var told []string
+	p := newPortal(t, func(c *httpapi.Config) {
+		c.MapSubmitted = func(id int64, title string) { told = append(told, fmt.Sprint(id, " ", title)) }
+	})
 	acc, tok := p.account("aria@example.com", "")
 	body := submitBody(t, nil)
 	w := p.do(req{method: "POST", path: "/api/maps/submissions", token: tok, body: body})
@@ -273,12 +277,17 @@ func TestSubmitMap(t *testing.T) {
 	if !n.At.Equal(p.clock.Now()) {
 		t.Errorf("at = %v", n.At)
 	}
+	// The GMs are told the number and the cleaned title, nothing about the author.
+	if want := fmt.Sprint(got.Submission.ID, " Muelle norte"); len(told) != 1 || told[0] != want {
+		t.Errorf("MapSubmitted %q, want %q", told, want)
+	}
 }
 
 func TestSubmitMapRejects(t *testing.T) {
 	p := newPortal(t, func(c *httpapi.Config) {
 		c.MapSubmitLimits = httpapi.MapSubmitLimits{MaxBytes: 4096}
 		c.MapSubmitRateLimit = httpapi.RateLimit{Burst: 1000, Every: time.Second}
+		c.MapSubmitted = func(id int64, _ string) { t.Errorf("rejected submission %d told to the GMs", id) }
 	})
 	_, tok := p.account("aria@example.com", "")
 	big := `{"format":2,"kind":"rpg-map-patch","base_ref":"HEAD","files":[{"path":"world/world.yaml","base":null,"content":"` + strings.Repeat("a", 5000) + `"}]}`

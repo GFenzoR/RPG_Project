@@ -112,6 +112,10 @@ memoria) y se persiste ambos personajes en una sola transacción de base de dato
   + `auth/oauth.go` + `httpapi/oauth.go`): Authorization Code con PKCE S256, `state` de un
   solo uso atado a una cookie corta del navegador que empezó, y en Google OpenID Connect
   con `nonce` y el `id_token` verificado contra sus JWKS (firma RS256, `iss`, `aud`, `exp`).
+  La cache de JWKS nunca tiene el lock tomado durante el pedido HTTP: un solo pedido en
+  vuelo a la vez (con su propio timeout de 10 s: cancelar el login que lo empezó no lo
+  corta), los que buscan un `kid` desconocido esperan ese mismo, y una clave ya
+  conocida se sigue usando mientras tanto.
   Discord se valida con `GET /users/@me`. Las identidades viven en `account_identities`
   (proveedor + id del sujeto + email informado). Un login por OAuth emite la misma sesión y
   cookie que el de contraseña. Nunca se vincula una identidad a una cuenta existente solo
@@ -160,12 +164,16 @@ assets/sprites ──spritepack──▶ atlas.png + atlas.json (cliente y edito
 | `persistence_errors_total{writer,outcome}` | contador | T4.4 | escrituras fallidas a Postgres. `writer`: `character` (snapshots), `audit` (auditoría, bans, reportes), `economy` (log de economía). `outcome`: `retry` (se reintenta), `rejected` (la base rechazó los valores; se descarta y queda en el log), `abandoned` (se abandonó al apagar) |
 | `http_requests_total{route,code}` | contador | T4.4 | API HTTP por patrón de ruta (`GET /api/status`, `unmatched`...) y código. Sin `/ws` |
 | `http_request_duration_seconds{route}` | histograma | T4.4 | latencia de la API por patrón de ruta |
+| `antibot_suspects{level}` | gauge | T4.1 | personajes seguidos por la detección de bots (conectados o no) en cada nivel de respuesta: `log`, `notify`, `presence`, `suspend`. Se recuenta una vez por ronda de evaluación |
+| `antibot_presence_checks_total{result}` | contador | T4.1 | chequeos de presencia: `sent`, `passed` (respuesta correcta), `failed` (equivocada), `expired` (sin respuesta a tiempo). Incluye los aleatorios y los pedidos por un GM |
+| `antibot_suspensions_total` | contador | T4.1 | suspensiones automáticas de la detección de bots |
 | `process_*`, `go_*` | estándar | T1.17 | CPU, RSS, goroutines, GC |
 
 Las etiquetas son conjuntos fijos: patrones de rutas del `ServeMux` (nunca la URL), códigos
-HTTP, escritores y resultados. Ninguna lleva datos del jugador (nombre, cuenta, IP).
-La detección de bots (T4.1) no publica métrica todavía: su puntaje vive en la base y en
-`/reports`.
+HTTP, escritores, resultados y niveles. Ninguna lleva datos del jugador (nombre, cuenta, IP).
+Las de la detección de bots salen de `antibot.Stats` (atomics que el loop escribe a costo
+constante y el handler de `/metrics` lee al hacer scrape); el puntaje de cada personaje
+sigue solo en la base y en `/reports`.
 
 Métricas de fuera del gameserver:
 - **Máquina** (node-exporter): CPU, RAM y disco de `/` del host.

@@ -322,6 +322,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.checkEconomy(ctx.Tick)
 	w.checkIdle(ctx)
 	w.checkAntiBot(ctx)
+	w.flushMapNotices(ctx.Tick)
 	w.flushEconomy(ctx)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {

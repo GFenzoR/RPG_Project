@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -307,6 +308,11 @@ type World struct {
 	nextCheck    uint32
 	abMedians    map[int][2]float64
 	abMedianNext game.Tick
+	// abStats are the aggregate numbers for /metrics (atomics, read from any goroutine).
+	abStats antibot.Stats
+
+	// mapNote groups the GM notices of new map submissions (mapnotify.go).
+	mapNote mapNotice
 
 	// Idle (T4.1): balance.yaml idle in ticks (kickFor 0 = off) and a scratch list.
 	idleKickFor game.Tick

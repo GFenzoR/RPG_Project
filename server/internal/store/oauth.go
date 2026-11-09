@@ -149,6 +149,29 @@ func (s *Store) LinkIdentity(ctx context.Context, accountID int64, id ExternalId
 	return nil
 }
 
+// LinkPendingIdentity deletes the pending identity of tokenHash and links id to the
+// account, audited, in one transaction. ErrNotFound if the pending row is gone (a
+// concurrent confirmation used it); ErrIdentityTaken as LinkIdentity.
+func (s *Store) LinkPendingIdentity(ctx context.Context, tokenHash []byte, accountID int64, id ExternalIdentity, at time.Time) error {
+	err := s.inTx(ctx, func(q *db.Queries) error {
+		n, err := q.DeleteOAuthPending(ctx, tokenHash)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		if err := insertIdentity(ctx, q, accountID, id, at); err != nil {
+			return err
+		}
+		return appendAudit(ctx, q, identityAudit(AuditIdentityLinked, accountID, id.Provider, at))
+	})
+	if err != nil {
+		return fmt.Errorf("link pending identity: %w", err)
+	}
+	return nil
+}
+
 // CreateOAuthAccount creates an account without a password, with email (verified at at
 // only if verified), links id to it and audits it, in one transaction. ErrEmailTaken if
 // the email has an account; ErrIdentityTaken if the identity is linked meanwhile.

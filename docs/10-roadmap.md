@@ -194,6 +194,9 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
     `http_requests_total`/`http_request_duration_seconds` por ruta. Métricas de backup por
     textfile. Pendiente: postgres_exporter y una métrica de la detección de bots.
 - [x] **T4.5 Portal de envío de mapas** con cola de moderación que abre PR.
+  - [x] Pendientes de T4.1/T4.4/T4.5/T2.1: aviso en el juego a los gm/admin por cada
+    envío de mapa (agrupado), métricas `antibot_*` en Prometheus y su panel en el
+    dashboard, cache de JWKS sin lock durante el fetch y `ConfirmPending` atómico.
   - [x] 1/2 (PR #63): envío desde el sitio (`/maps/submit`), "Mis envíos", cola de
     moderación para gm/admin con auditoría, chequeo del patch en Go
     (`server/internal/mappatch`), tabla `map_submissions` con el contrato para el worker.

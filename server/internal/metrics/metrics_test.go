@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 )
 
@@ -37,6 +38,14 @@ func TestMetricsRecordAndServe(t *testing.T) {
 	if err := m.PlayersOnline(func() int { return online }); err != nil {
 		t.Fatal(err)
 	}
+	var ab antibot.Stats
+	ab.Suspects[antibot.LevelNotify].Store(3)
+	ab.ChecksSent.Add(5)
+	ab.ChecksExpired.Add(2)
+	ab.Suspensions.Add(1)
+	if err := m.AntiBot(&ab); err != nil {
+		t.Fatal(err)
+	}
 
 	rec := httptest.NewRecorder()
 	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
@@ -61,6 +70,13 @@ func TestMetricsRecordAndServe(t *testing.T) {
 		`http_requests_total{code="200",route="GET /healthz"} 1`,
 		`http_request_duration_seconds_bucket{route="GET /api/highscores",le="0.025"} 1`,
 		"players_online 7",
+		`antibot_suspects{level="log"} 0`,
+		`antibot_suspects{level="notify"} 3`,
+		`antibot_suspects{level="suspend"} 0`,
+		`antibot_presence_checks_total{result="sent"} 5`,
+		`antibot_presence_checks_total{result="passed"} 0`,
+		`antibot_presence_checks_total{result="expired"} 2`,
+		"antibot_suspensions_total 1",
 		"process_cpu_seconds_total",
 		"process_resident_memory_bytes",
 	} {
@@ -84,6 +100,9 @@ func TestNilMetricsRecordNothing(t *testing.T) {
 	}
 	m.HTTPRequest("GET /healthz", 200, time.Millisecond)
 	if err := m.PlayersOnline(func() int { return 1 }); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.AntiBot(&antibot.Stats{}); err != nil {
 		t.Fatal(err)
 	}
 }

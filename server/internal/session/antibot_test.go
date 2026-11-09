@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -135,6 +136,17 @@ func TestAntiBotGradedResponses(t *testing.T) {
 		js[0].ActorRole != session.RoleGM || js[0].Audit.ActorName != "system:antibot" ||
 		js[0].Until.Sub(a.sim.Now()) > 24*time.Hour {
 		t.Fatalf("suspension %+v", js)
+	}
+	// The aggregate numbers for /metrics (no character in them); the levels are
+	// recounted once per evaluation round.
+	st := a.w.AntiBotStats()
+	if st.ChecksSent.Load() != 1 || st.ChecksFailed.Load() != 1 || st.ChecksPassed.Load() != 0 ||
+		st.ChecksExpired.Load() != 0 || st.Suspensions.Load() != 1 {
+		t.Fatalf("stats sent=%d failed=%d suspensions=%d", st.ChecksSent.Load(), st.ChecksFailed.Load(), st.Suspensions.Load())
+	}
+	a.sim.RunFor(time.Duration(a.w.AntiBotEvalMsForTest()) * time.Millisecond)
+	if st.Suspects[antibot.LevelSuspend].Load() != 1 || st.Suspects[antibot.LevelLog].Load() != 0 {
+		t.Fatalf("suspects by level: suspend=%d", st.Suspects[antibot.LevelSuspend].Load())
 	}
 }
 
@@ -490,5 +502,40 @@ func TestPresenceGMAndRandomKeepTheResponse(t *testing.T) {
 	}
 	if got := a.antibotActions(); !slices.Equal(got, []string{"presence_check:random_passed", "presence_check:sent"}) {
 		t.Fatalf("after the random check: %v", got)
+	}
+}
+
+// The antibot_suspects gauge follows the decayed score of offline characters (their
+// level only drops when they are evaluated online): a notify level fades in hours, and
+// a pending check does not keep anyone in the presence bucket forever.
+func TestAntiBotStatsLevelsDecayOffline(t *testing.T) {
+	a := antibotHarness(t)
+	round := time.Duration(a.w.AntiBotEvalMsForTest()) * time.Millisecond
+	cl, p := a.joinAs("Notified", session.RolePlayer, pos(5, 5))
+	a.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+	a.setScore(p, 310) // log and notify
+	c2, p2 := a.joinAs("Checked", session.RolePlayer, pos(9, 5))
+	a.input(c2, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "hi"))
+	a.setScore(p2, 450)
+	if a.presence(c2) == nil { // asked, never answered
+		t.Fatal("no check")
+	}
+	for _, c := range []*fakeClient{cl, c2} {
+		a.input(c, &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}})
+	}
+	a.sim.RunFor(round)
+	st := a.w.AntiBotStats()
+	if st.Suspects[antibot.LevelNotify].Load() != 1 || st.Suspects[antibot.LevelPresence].Load() != 1 {
+		t.Fatalf("just logged out: notify=%d presence=%d", st.Suspects[antibot.LevelNotify].Load(), st.Suspects[antibot.LevelPresence].Load())
+	}
+	a.sim.RunFor(3 * time.Hour)
+	if st.Suspects[antibot.LevelNotify].Load() != 0 || st.Suspects[antibot.LevelPresence].Load() != 0 {
+		t.Fatalf("3 h offline: notify=%d presence=%d", st.Suspects[antibot.LevelNotify].Load(), st.Suspects[antibot.LevelPresence].Load())
+	}
+	a.sim.RunFor(48 * time.Hour)
+	for l := antibot.LevelLog; l <= antibot.LevelSuspend; l++ {
+		if n := st.Suspects[l].Load(); n != 0 {
+			t.Fatalf("48 h offline: level %d = %d", l, n)
+		}
 	}
 }

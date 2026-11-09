@@ -279,6 +279,8 @@ gm.bot_suspect: "Posible bot: {name} (puntaje {score}). Revisa el log de auditor
 gm.presence_failed: "{name} no pasó el chequeo de presencia."
 gm.presence_sent: "Se le hará un chequeo de presencia a {name} en cuanto se pueda (fuera de combate y jugando)."
 gm.presence_deferred: "{name} lleva mucho tiempo sin poder recibir su chequeo de presencia (siempre en combate o en zona sin logout). Revísalo."
+gm.map_submission: "Nuevo envío de mapa #{id}: \"{title}\". Revísalo en el portal de mapas."
+gm.map_submissions: "Envíos de mapa nuevos desde el último aviso: {count} (el último, #{id}). Revísalos en el portal de mapas."
 client.chat.channel.party: "Grupo"
 client.chat.line.party: "[Grupo] {name}: {text}"
 client.battle.invite: "Invitar al grupo"

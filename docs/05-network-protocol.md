@@ -175,7 +175,9 @@ vinculado, y después lo saca de la URL.
   `unknown_provider`, `account_disabled`, `account_banned`, `email_taken`, `busy` o
   `internal`.
 - **Confirmar con contraseña:** mismos límites de login fallido por (email, IP) y por email
-  que `/api/auth/login`, y el mismo error `invalid_credentials`.
+  que `/api/auth/login`, y el mismo error `invalid_credentials`. El pendiente se consume en
+  la misma transacción que crea el vínculo: dos confirmaciones del mismo token no vinculan
+  dos veces (la segunda recibe `pending_expired`), y un vínculo fallido no lo consume.
 - Un vínculo en curso queda atado a la sesión que pasó la re-autenticación
   (`oauth_states.session_hash`): si esa sesión ya no está activa al volver (logout, reset
   de contraseña, ban, cambio de rol), el callback termina en `code=state` y no vincula
@@ -325,6 +327,13 @@ docs/04, "Portal de envío de mapas"). Todas las rutas piden sesión (cookie o B
 de moderación miran el rol de la cuenta **en cada pedido** (`accounts.role`, gm o admin):
 un rol quitado deja de servir al instante. Sin `MapSubmissions` en la config (stores de
 test sin Postgres) las rutas no existen (404).
+
+Aviso en el juego: cada envío guardado encola un comando al loop (`World.MapSubmitted`; el
+handler no toca el mundo) y los gm y admin conectados reciben el `Message` de sistema
+`gm.map_submission` (`id`, `title`: el título ya saneado, como texto). Nada del autor va en
+él. Después de un aviso, durante un minuto los envíos solo se cuentan, y al final llega uno
+solo `gm.map_submissions` (`count`, `id` del último). Con la cola del loop llena el aviso se
+pierde (el envío sigue en la cola de moderación).
 
 | Método y ruta | Quién | Cuerpo | Respuesta OK |
 |---|---|---|---|
