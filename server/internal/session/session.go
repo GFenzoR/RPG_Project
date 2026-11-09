@@ -337,12 +337,20 @@ type World struct {
 	nextMail     int64
 	nextTransfer uint64
 	mkNext       game.Tick
+	// readOnly: a transfer could not be stored (Tainted): until a restart the market can
+	// only be browsed and nobody trades. locked are the characters whose state in memory
+	// is ahead of the database: out of the world and refused at login until a restart.
+	readOnly bool
+	locked   map[int64]bool
 	// Trade window (T5.3, trade.go): balance trade (tradeOn = enabled with
 	// Config.Transfer), the open trades and invitations in creation order.
 	tradeOn  bool
 	trade    content.Trade
 	trades   []*trade
 	tradeFor game.Tick
+	// tradeRefill and tradeBurst are the trade anti-flood in ticks.
+	tradeRefill game.Tick
+	tradeBurst  game.Tick
 
 	// Travel (T3.5): routes by captain NPC id, balance travel in ticks and tiles.
 	routes        map[string][]*route
@@ -438,6 +446,7 @@ func New(cfg Config) (*World, error) {
 		loading:  map[int64]int{},
 		jobs:     map[uint64]pendingJob{},
 		banned:   map[int64]time.Time{},
+		locked:   map[int64]bool{},
 		pf:       world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
 	}
 	if err := w.initCombat(); err != nil {
@@ -465,11 +474,11 @@ func New(cfg Config) (*World, error) {
 	w.initParty()
 	w.initGuilds()
 	w.initPvP()
-	w.initMarket()
-	w.initTrade()
 	if cfg.Market != nil {
 		w.nextTransfer = uint64(max(cfg.Market.TransferHigh, 0))
 	}
+	w.initMarket()
+	w.initTrade()
 	if err := w.initConditions(); err != nil {
 		return nil, err
 	}

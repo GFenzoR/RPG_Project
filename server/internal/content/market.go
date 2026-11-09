@@ -72,11 +72,16 @@ type Trade struct {
 	MaxItems int `yaml:"max_items"`
 	// RequestMs: an invitation that is not answered expires after this.
 	RequestMs int `yaml:"request_ms"`
+	// Anti-flood: a burst of ActionBurst trade actions (invite, offer, confirm), then one
+	// every ActionRefillMs. A completed trade writes both characters.
+	ActionBurst    int `yaml:"action_burst"`
+	ActionRefillMs int `yaml:"action_refill_ms"`
 }
 
 func (t Trade) check() error {
-	if t.Enabled && (t.MaxItems < 1 || t.MaxItems > 32 || t.RequestMs < 1000 || t.RequestMs > 600_000) {
-		return errors.New("trade: max_items in 1..32 and request_ms in 1000..600000")
+	if t.Enabled && (t.MaxItems < 1 || t.MaxItems > 32 || t.RequestMs < 1000 || t.RequestMs > 600_000 ||
+		t.ActionBurst < 1 || t.ActionRefillMs < 1 || t.ActionRefillMs > 60_000) {
+		return errors.New("trade: max_items in 1..32, request_ms in 1000..600000, action_burst >= 1, action_refill_ms in 1..60000")
 	}
 	return nil
 }

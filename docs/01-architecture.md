@@ -145,13 +145,32 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
   `market_id_high.transfer_high` tras reiniciar). La transacción lo reclama primero
   (`ClaimTransfer`); si ya está tomado, es el reintento de uno que sí se confirmó pero cuya
   respuesta se perdió (timeout en el COMMIT), y no aplica nada otra vez.
-- **Sin mitades:** uno que no se guarda (error permanente como `ErrMarketConflict` o una
-  restricción, o abandonado al apagar con la base caída) se descarta con log y métrica, y
-  **marca a sus personajes**: el Saver no escribe ninguno de sus guardados siguientes en
-  ese proceso (tampoco los pendientes del apagado), así la base queda con el estado de
-  antes del transfer en ambos lados y no con la mitad (el inventario nuevo sin las filas
-  del mercado). Es un bug o una caída: el personaje pierde lo jugado desde ahí, nunca se
-  duplica nada.
+- **Falla segura (sin mitades).** Un transfer que no se guarda (error permanente como
+  `ErrMarketConflict` o una restricción, abandonado al apagar con la base caída, o uno
+  pendiente del apagado que falla) deja la base con el estado de antes en **todos** sus
+  lados, mientras el loop ya va por delante. Desde ahí:
+  - **Marca** a sus personajes en el Saver: ningún trabajo posterior que toque a un
+    personaje marcado se escribe en ese proceso, y saltar un transfer marca también a sus
+    otros personajes (punto fijo: un intercambio con un marcado no llega a la base por el
+    próximo guardado del otro). La misma regla rige los pendientes del apagado
+    (`Saver.WritePending`, que usa `app` en "final saves").
+  - **Avisa al loop** (`SaverConfig.Tainted` → `World.Tainted`): saca del mundo a los
+    marcados (`Disconnect{SAVE_FAILED}`), descarta su estado sin guardar y rechaza su
+    login (`Disconnect{CHARACTER_LOCKED}`) hasta reiniciar; el mercado queda en **solo
+    lectura** (se puede buscar; crear, aceptar, cancelar, retirar y el vencimiento se
+    detienen; `MarketUpdate.read_only`) y se cancelan los intercambios abiertos y no se
+    abren otros. Así nadie más construye sobre una oferta o un buzón que la base no
+    tiene. Un transfer solo de mercado (un vencimiento, una cancelación) que no se guarda
+    no marca a nadie, pero también pone el mercado en solo lectura.
+  - **El operador se entera:** log de error, `persistence_errors_total{writer="character",
+    outcome="rejected|abandoned|skipped"}` y la alerta `PersistenceDataLost`
+    (tabla de alertas de este doc). Al reiniciar se carga lo que tiene la base: los marcados pierden lo jugado
+    desde el transfer, nunca se duplica nada.
+- Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
+  oferta y, si era de compra, devolver el oro al buzón).
+- **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un
+  autoguardado); por eso el intercambio no se confirma vacío y tiene anti-flood, y el
+  mercado también (docs/07).
 - La otra parte de una operación del mercado no necesita snapshot: lo que recibe va a su
   buzón, que es una fila del mercado. Por eso funciona aunque esté desconectada.
 
@@ -282,7 +301,7 @@ Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
 | `HostMemoryHigh` | critical | menos de 10 % de la RAM de la máquina disponible durante 5 min |
 | `HostDiskAlmostFull` / `HostDiskCritical` | warning / critical | menos de 15 % / 5 % libre en `/` |
 | `PersistenceRetrying` | warning | más de 3 reintentos de un escritor en 10 min |
-| `PersistenceDataLost` | critical | cualquier escritura `rejected` o `abandoned` en 15 min (`abandoned` es best effort, ver abajo) |
+| `PersistenceDataLost` | critical | cualquier escritura `rejected`, `abandoned` o `skipped` (T5.3) en 15 min (`abandoned` es best effort, ver abajo) |
 | `EconomyMismatch` | critical | cualquier `economy_alerts_total{kind="mismatch"}` nuevo en 15 min |
 | `BackupFailed` | critical | la última corrida de `backup.sh` falló |
 | `BackupStale` | critical | sin backup exitoso en dos intervalos (la regla de `backup.sh --check`) durante 10 min |

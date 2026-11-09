@@ -472,6 +472,8 @@ trade:
   enabled: true
   max_items: 6              # items (pilas o contenedores vacíos) por lado (1..32)
   request_ms: 25000         # la invitación vence (1000..600000)
+  action_burst: 6           # anti-flood de las acciones del intercambio
+  action_refill_ms: 300
 ```
 - Items: `tradeable: true` permite el intercambio y, si además no es moneda ni fijo del
   mapa, el mercado. `market_board: true` (en un item fijo del mapa) lo hace tablero del

@@ -161,8 +161,20 @@ func TestMarketTransfers(t *testing.T) {
 	if err := st.SaveTransfer(ctx, over); !store.Permanent(err) || units(sela, coin) != 0 {
 		t.Fatalf("overdrawn mailbox: %v, coins saved %d", err, units(sela, coin))
 	}
+	// A withdrawal of what there is works (5 of 15), with the snapshot that receives it.
+	take := store.Transfer{ID: 100, Characters: []store.CharacterState{state(sela, store.InventoryItem{ItemID: coin, Count: 5})},
+		Market: []store.MarketOp{{Kind: store.MarketGoldAdd, CharacterID: sela, Gold: -5}}}
+	if err := st.SaveTransfer(ctx, take); err != nil || units(sela, coin) != 5 {
+		t.Fatalf("withdrawal: %v, coins saved %d", err, units(sela, coin))
+	}
+	// (The overdraw rolled back, its id too: the withdrawal reuses 100.) From a mailbox
+	// that never had gold: a conflict, nothing written.
+	none := store.Transfer{ID: 101, Market: []store.MarketOp{{Kind: store.MarketGoldAdd, CharacterID: dos, Gold: -1}}}
+	if err := st.SaveTransfer(ctx, none); !errors.Is(err, store.ErrMarketConflict) {
+		t.Fatalf("withdrawal from an empty mailbox: %v", err)
+	}
 	// An offer that stays open for the reload.
-	open := store.Transfer{ID: 101, Market: []store.MarketOp{{Kind: store.MarketOfferAdd, Offer: store.MarketOffer{ID: 2, CharacterID: dos,
+	open := store.Transfer{ID: 102, Market: []store.MarketOp{{Kind: store.MarketOfferAdd, Offer: store.MarketOffer{ID: 2, CharacterID: dos,
 		Side: store.MarketBuy, ItemID: salve, Amount: 4, Price: 6, Created: now, Expires: now.Add(2 * time.Hour)}}},
 		OfferHigh: 2, MailHigh: 4}
 	if err := st.SaveTransfer(ctx, open); err != nil {
@@ -177,10 +189,10 @@ func TestMarketTransfers(t *testing.T) {
 	if len(d.Offers) != 1 || d.Offers[0].ID != 2 || d.Offers[0].Name != "Dos" || d.Offers[0].AccountID != acc {
 		t.Fatalf("offers %+v", d.Offers)
 	}
-	if d.TransferHigh != 101 {
+	if d.TransferHigh != 102 {
 		t.Fatalf("transfer high %d", d.TransferHigh)
 	}
-	if d.Gold[sela] != 15 || len(d.Mail) != 1 || d.Mail[0].Item.Count != 2 || d.OfferHigh != 2 || d.MailHigh != 4 {
+	if d.Gold[sela] != 10 || len(d.Mail) != 1 || d.Mail[0].Item.Count != 2 || d.OfferHigh != 2 || d.MailHigh != 4 {
 		t.Fatalf("gold %v, mail %+v, high %d/%d", d.Gold, d.Mail, d.OfferHigh, d.MailHigh)
 	}
 	if len(d.History) != 2 || len(d.Sales) != 1 || d.Sales[0].Units != 3 || d.Sales[0].Total != 15 {

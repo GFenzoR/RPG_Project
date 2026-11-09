@@ -56,6 +56,7 @@ const (
 	OutcomeRetry     = "retry"     // transient error: the write is retried with backoff
 	OutcomeRejected  = "rejected"  // permanent error: the database refused the values, dropped
 	OutcomeAbandoned = "abandoned" // given up at shutdown while still failing
+	OutcomeSkipped   = "skipped"   // not written: a character of it is tainted (T5.3)
 )
 
 // HTTPBuckets are the http_request_duration_seconds buckets.
@@ -91,7 +92,7 @@ func New() *Metrics {
 			Name: "economy_alerts_total", Help: "Economy alerts: mismatch (possible duplication), gold_outlier, items_outlier, log_dropped.",
 		}, []string{"kind"}),
 		persistenceErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "persistence_errors_total", Help: "Failed database writes by writer (character, audit, economy) and outcome (retry, rejected, abandoned).",
+			Name: "persistence_errors_total", Help: "Failed database writes by writer (character, audit, economy) and outcome (retry, rejected, abandoned, skipped).",
 		}, []string{"writer", "outcome"}),
 		httpRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "http_requests_total", Help: "HTTP API requests by route pattern and status code.",
@@ -103,7 +104,7 @@ func New() *Metrics {
 	}
 	// Every writer/outcome pair starts at 0, so rate() and increase() see the first error.
 	for _, w := range []string{WriterCharacter, WriterAudit, WriterEconomy} {
-		for _, o := range []string{OutcomeRetry, OutcomeRejected, OutcomeAbandoned} {
+		for _, o := range []string{OutcomeRetry, OutcomeRejected, OutcomeAbandoned, OutcomeSkipped} {
 			m.persistenceErrors.WithLabelValues(w, o)
 		}
 	}

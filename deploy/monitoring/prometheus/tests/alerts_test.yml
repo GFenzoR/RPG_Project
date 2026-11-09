@@ -29,6 +29,8 @@ tests:
         values: "0 2 4 6 8 10"
       - series: 'persistence_errors_total{job="gameserver",writer="economy",outcome="rejected"}'
         values: "0 0 0 0 1 1"
+      - series: 'persistence_errors_total{job="gameserver",writer="character",outcome="skipped"}'
+        values: "0 0 0 0 1 1"
     alert_rule_test:
       - eval_time: 5m
         alertname: EconomyMismatch
@@ -50,7 +52,11 @@ tests:
           - exp_labels: {severity: critical, writer: economy, outcome: rejected}
             exp_annotations:
               summary: "economy write rejected"
-              description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database' or 'abandoned'). 'abandoned' is best effort: it happens at shutdown and is only seen if the scrape catches the 20 s -metrics-linger; the logs are the source of truth."
+              description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database', 'abandoned' or 'tainted'). With 'skipped', a trade or market change was not stored: its characters are locked out and the market is read-only until the gameserver restarts. 'abandoned' is best effort: it happens at shutdown and is only seen if the scrape catches the 20 s -metrics-linger; the logs are the source of truth."
+          - exp_labels: {severity: critical, writer: character, outcome: skipped}
+            exp_annotations:
+              summary: "character write skipped"
+              description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database', 'abandoned' or 'tainted'). With 'skipped', a trade or market change was not stored: its characters are locked out and the market is read-only until the gameserver restarts. 'abandoned' is best effort: it happens at shutdown and is only seen if the scrape catches the 20 s -metrics-linger; the logs are the source of truth."
 
   - interval: 5m
     input_series:

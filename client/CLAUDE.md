@@ -317,7 +317,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   "⇄" de la lista de batalla (`data-trade`); lo ofrecible es lo `tradeable` de los
   contenedores abiertos. El mercado se abre con click derecho sobre un tablero (es un
   `UseItem` como cualquier item del mapa); la búsqueda es un `<datalist>` de los nombres
-  traducidos.
+  traducidos: la búsqueda prefiere el nombre exacto, luego el prefijo (`searchItems`).
+- `MarketView.readOnly` (`MarketUpdate.read_only`) muestra el aviso
+  `data-testid="market-read-only"`; `Disconnect{SAVE_FAILED}` y `{CHARACTER_LOCKED}` usan
+  la tabla automática de motivos (`client.disconnect.*`).
 - E2E "T5.3" de `e2e/game.spec.ts`: dos guardianes sembrados con `psql` junto al tablero de
   Puerto (3168, 6382) intercambian pescado por monedas, uno publica una oferta, el otro
   compra 3 y el primero retira el oro (screenshots 52–55).

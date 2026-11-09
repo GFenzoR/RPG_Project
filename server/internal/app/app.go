@@ -197,6 +197,7 @@ func New(cfg Config) (*App, error) {
 			Clock:         cfg.Clock,
 			Logger:        cfg.Logger,
 			Failed:        saveFailed(cfg.Metrics),
+			Tainted:       a.charactersTainted,
 		})
 		if err != nil {
 			return nil, err
@@ -392,23 +393,9 @@ func (a *App) Run(ctx context.Context) error {
 	// Drain the saver first: its queue holds older snapshots of the same characters, and
 	// writing the pending (newer) ones concurrently could let an old one land last.
 	stage("persistence did not drain", a.saver.Stop)
-	stage("final saves", func(ctx context.Context) error {
-		var errs []error
-		for _, j := range pending { // the saver's queue was full when SaveAll ran
-			if a.saver.Tainted(j) {
-				errs = append(errs, errors.New("save skipped: a transfer of its character was not stored"))
-				continue
-			}
-			if j.Transfer != nil {
-				if err := a.writeTransfer(ctx, *j.Transfer); err != nil {
-					errs = append(errs, fmt.Errorf("transfer %d: %w", j.Transfer.ID, err))
-				}
-			} else if err := a.writeSnapshot(ctx, j.Snapshot); err != nil {
-				errs = append(errs, fmt.Errorf("character %d: %w", j.Snapshot.CharacterID, err))
-			}
-		}
-		return errors.Join(errs...)
-	})
+	// The jobs the saver's queue could not take when SaveAll ran, with the saver's rules
+	// (a failed transfer taints its characters; their later jobs are skipped, T5.3).
+	stage("final saves", func(ctx context.Context) error { return a.saver.WritePending(ctx, pending) })
 	stage("audit log did not drain", a.admin.Stop)
 	stage("pending audit entries", func(ctx context.Context) error { return a.admin.writePending(ctx, pendingAdmin) })
 	stage("economy log did not drain", a.economy.Stop)
@@ -512,6 +499,16 @@ func (a *App) enqueueRetry(cmd game.Command) {
 		case <-a.cfg.Clock.After(game.TickDuration):
 		}
 	}
+}
+
+// charactersTainted hands characters whose transfer was not stored to the loop (T5.3): it
+// must not be lost, so a full queue is retried in its own goroutine (the persistence
+// goroutine never waits for the loop). After the loop stopped there is nothing to tell.
+func (a *App) charactersTainted(ids []int64) {
+	if a.World == nil {
+		return
+	}
+	go a.enqueueRetry(a.World.Tainted(ids))
 }
 
 func (a *App) snapshotSaved(s session.Snapshot) {

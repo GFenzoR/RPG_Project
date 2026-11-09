@@ -2332,8 +2332,8 @@ func (x *MarketAccept) GetAmount() uint32 {
 	return 0
 }
 
-// MarketWithdraw moves the mailbox (gold, then items in order while they fit) into the
-// inventory.
+// MarketWithdraw moves the mailbox into the inventory: the items in order while they fit,
+// then as much of the gold as fits; the rest waits in the mailbox.
 type MarketWithdraw struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields

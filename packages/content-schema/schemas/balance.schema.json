@@ -18,6 +18,8 @@
     "party",
     "guild",
     "pvp",
+    "market",
+    "trade",
     "travel",
     "reports",
     "idle",
@@ -811,11 +813,13 @@
       "type": "object",
       "additionalProperties": false,
       "description": "Trade window between two adjacent players (T5.3). Absent or enabled: false turns it off.",
-      "required": ["enabled", "max_items", "request_ms"],
+      "required": ["enabled", "max_items", "request_ms", "action_burst", "action_refill_ms"],
       "properties": {
         "enabled": { "type": "boolean" },
         "max_items": { "type": "integer", "minimum": 1, "maximum": 32 },
-        "request_ms": { "type": "integer", "minimum": 1000, "maximum": 600000 }
+        "request_ms": { "type": "integer", "minimum": 1000, "maximum": 600000 },
+        "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
       }
     },
     "pvp": {

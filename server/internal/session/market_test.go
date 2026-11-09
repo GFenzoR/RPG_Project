@@ -65,7 +65,7 @@ func newMarketHarness(t *testing.T, opts ...option) *marketHarness {
 		c.Balance.Market = content.Market{Enabled: true, FeePermille: 100, FeeMin: 2, FeeMax: 50, MaxOffers: 2,
 			MaxAmount: 100, MaxPrice: 1000, DurationsHours: []int{1, 2}, ListSize: 5, HistorySize: 4,
 			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50}
-		c.Balance.Trade = content.Trade{Enabled: true, MaxItems: 2, RequestMs: 5000}
+		c.Balance.Trade = content.Trade{Enabled: true, MaxItems: 2, RequestMs: 5000, ActionBurst: 50, ActionRefillMs: 50}
 		c.Transfer = func(tr session.Transfer) bool { mh.transfers = append(mh.transfers, tr); return true }
 	})
 	return mh
@@ -639,4 +639,171 @@ func TestMarketWithdrawPartialGold(t *testing.T) {
 		t.Fatalf("money %d, mailbox %d %v", h.w.Money(s), gold, items)
 	}
 	h.sim.Step()
+}
+
+// fakeDB is a Saver write target that rejects the transfers in reject and records what
+// it stores.
+type fakeDB struct {
+	reject  map[uint64]bool
+	stored  []string
+	tainted [][]int64
+}
+
+func (f *fakeDB) saver(t *testing.T) *session.Saver {
+	t.Helper()
+	s, err := session.NewSaver(session.SaverConfig{
+		Write: func(_ context.Context, sn session.Snapshot) error {
+			f.stored = append(f.stored, fmt.Sprintf("snap %d", sn.CharacterID))
+			return nil
+		},
+		WriteTransfer: func(_ context.Context, tr session.Transfer) error {
+			if f.reject[tr.ID] {
+				return fmt.Errorf("%w: injected", session.ErrPermanent)
+			}
+			f.stored = append(f.stored, fmt.Sprintf("transfer %d", tr.ID))
+			return nil
+		},
+		Tainted: func(ids []int64) { f.tainted = append(f.tainted, ids) },
+		Clock:   clock.NewFake(clock.Epoch),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func tr(id uint64, chars ...int64) session.Transfer {
+	t := session.Transfer{ID: id}
+	for _, c := range chars {
+		t.Snapshots = append(t.Snapshots, session.Snapshot{CharacterID: c})
+	}
+	return t
+}
+
+// The taint is a fixed point: a trade with a tainted character is skipped and taints its
+// partner, whose later saves are skipped too; the World hears about each new character.
+func TestSaverTaintSpreadsThroughTrades(t *testing.T) {
+	f := &fakeDB{reject: map[uint64]bool{1: true}}
+	s := f.saver(t)
+	s.Start()
+	f.reject[9] = true
+	s.SubmitTransfer(tr(9))       // an expiry (no character): rejected, the World is told
+	s.SubmitTransfer(tr(1, 1))    // Ana's market change: rejected, Ana tainted
+	s.SubmitTransfer(tr(2, 1, 2)) // Ana trades with Caio: skipped, Caio tainted
+	s.Submit(session.Snapshot{CharacterID: 2, Final: true})
+	s.Submit(session.Snapshot{CharacterID: 3})
+	if err := s.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(f.stored, []string{"snap 3"}) {
+		t.Fatalf("stored %v", f.stored)
+	}
+	if len(f.tainted) != 3 || len(f.tainted[0]) != 0 || !slices.Equal(f.tainted[1], []int64{1}) ||
+		!slices.Equal(f.tainted[2], []int64{2}) {
+		t.Fatalf("tainted %v", f.tainted)
+	}
+}
+
+// At shutdown the pending jobs follow the same rules: a pending transfer that fails taints
+// its characters and their final snapshots are not written.
+func TestSaverWritePendingTaints(t *testing.T) {
+	f := &fakeDB{reject: map[uint64]bool{7: true}}
+	s := f.saver(t)
+	s.Start()
+	if err := s.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	err := s.WritePending(context.Background(), []session.Job{
+		{Transfer: &session.Transfer{ID: 7, Snapshots: []session.Snapshot{{CharacterID: 1}}}},
+		{Snapshot: session.Snapshot{CharacterID: 1, Final: true}},
+		{Snapshot: session.Snapshot{CharacterID: 2, Final: true}},
+	})
+	if err == nil || !slices.Equal(f.stored, []string{"snap 2"}) || len(f.tainted) != 1 {
+		t.Fatalf("err %v, stored %v, tainted %v", err, f.stored, f.tainted)
+	}
+}
+
+// When the persistence side reports tainted characters, the World takes them out, refuses
+// their logins until a restart, cancels open trades and turns the market read-only.
+func TestWorldTaintedFailsSafe(t *testing.T) {
+	h := newMarketHarness(t)
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 5, 0), stack(coinID, 50, 1))
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 50, 0))
+	cc, c := h.trader("Caio", pos(1, 1), stack(swordID, 1, 0))
+	h.send(cb, tradeReq(c.ID(), nil, 0))
+	h.sim.Command(h.w.Tainted([]int64{s.CharacterID()}))
+	h.sim.Step()
+	if !cs.closed || cs.reason != pb.DisconnectReason_DISCONNECT_REASON_SAVE_FAILED {
+		t.Fatalf("Sela closed %v reason %v", cs.closed, cs.reason)
+	}
+	if u := lastTrade(cc.take()); u.GetState() != pb.TradeState_TRADE_STATE_CANCELLED || u.GetReason() != "trade.cancel.read_only" {
+		t.Fatalf("trade %v", u)
+	}
+	if u := lastMarket(cb.take()); !u.GetReadOnly() {
+		t.Fatal("the open market window was not told")
+	}
+	if !hasKey(h.send(cb, createOffer(pb.MarketSide_MARKET_SIDE_BUY, salveID, 1, 5)), "market.read_only") ||
+		len(h.w.MarketOffers(b.CharacterID())) != 0 {
+		t.Fatal("an offer was posted while read-only")
+	}
+	if u := lastMarket(h.send(cb, marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: salveID}}}))); u.GetItemId() != salveID {
+		t.Fatal("browsing stopped working")
+	}
+	if !hasKey(h.send(cb, tradeReq(c.ID(), nil, 0)), "trade.read_only") {
+		t.Fatal("a trade opened while read-only")
+	}
+	again := &fakeClient{}
+	h.sim.Command(h.w.Join(withPack(s.CharacterID(), pos(2, 2)), again))
+	h.sim.Step()
+	if !again.closed || again.reason != pb.DisconnectReason_DISCONNECT_REASON_CHARACTER_LOCKED {
+		t.Fatalf("relogin closed %v reason %v", again.closed, again.reason)
+	}
+	if !h.w.ReadOnly() {
+		t.Fatal("not read-only")
+	}
+}
+
+// A partner without a backpack can still complete a trade it only gives in; nothing is
+// confirmed while both offers are empty.
+func TestTradeWithoutBackpackAndEmpty(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, a := h.trader("Ana", pos(2, 2), stack(salveID, 3, 0))
+	nextChar++
+	cn, n := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Nopack", Vocation: "guardian",
+		Level: 1, Health: 145, HasPos: true, Pos: pos(3, 2), InventoryLoaded: true})
+	cn.take()
+	h.send(ca, tradeReq(n.ID(), nil, 0))
+	h.send(cn, tradeReq(a.ID(), nil, 0))
+	if !hasKey(h.send(ca, tradeAccept), "trade.empty") {
+		t.Fatal("an empty trade was confirmed")
+	}
+	// Nopack offers nothing and gets nothing: Ana offers her salves, which Nopack cannot
+	// take (no backpack), so the trade is refused cleanly instead of panicking.
+	wa := openPack(t, h.harness, ca)
+	h.send(ca, tradeOffer(inContainer(wa, 0), salveID))
+	h.send(ca, tradeAccept)
+	evs := h.send(cn, tradeAccept)
+	if u := lastTrade(evs); u.GetState() != pb.TradeState_TRADE_STATE_CANCELLED || u.GetReason() != "trade.cancel.no_room" {
+		t.Fatalf("got %v", u)
+	}
+	if h.sim.LastStats().Panics != 0 {
+		t.Fatal("panicked")
+	}
+}
+
+// Offers of an item retired from data/ are closed at load: a buy offer's gold goes back to
+// the mailbox, in one transfer.
+func TestMarketRetiredItemOffers(t *testing.T) {
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Market = &session.MarketData{OfferHigh: 2, TransferHigh: 40, Offers: []session.MarketOffer{
+			{ID: 1, CharacterID: 77, AccountID: 77, Sell: false, ItemID: 4000, Amount: 10, Price: 50},
+			{ID: 2, CharacterID: 77, AccountID: 77, Sell: true, ItemID: 4001, Amount: 3, Price: 9},
+		}}
+	})
+	if gold, _ := h.w.Mailbox(77); gold != 500 || h.w.MarketOfferAmount(1) != -1 {
+		t.Fatalf("mailbox gold %d", gold)
+	}
+	if len(h.transfers) != 1 || h.transfers[0].ID != 41 || len(h.transfers[0].Market) != 3 {
+		t.Fatalf("transfers %+v", h.transfers)
+	}
 }

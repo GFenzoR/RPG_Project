@@ -885,8 +885,8 @@ export const MarketAcceptSchema: GenMessage<MarketAccept> = /*@__PURE__*/
   messageDesc(file_game_v1_client, 24);
 
 /**
- * MarketWithdraw moves the mailbox (gold, then items in order while they fit) into the
- * inventory.
+ * MarketWithdraw moves the mailbox into the inventory: the items in order while they fit,
+ * then as much of the gold as fits; the rest waits in the mailbox.
  *
  * @generated from message game.v1.MarketWithdraw
  */

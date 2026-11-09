@@ -74,9 +74,15 @@ INSERT INTO market_mail_items (id, character_id, item_id, count, item, created_a
 DELETE FROM market_mail_items WHERE id = $1 AND character_id = $2;
 
 -- name: AddMarketMailGold :exec
--- A negative amount withdraws: the CHECK (gold >= 0) refuses more than there is.
+-- Deposits a positive amount.
 INSERT INTO market_mail_gold (character_id, gold) VALUES ($1, sqlc.arg(amount)::bigint)
 ON CONFLICT (character_id) DO UPDATE SET gold = market_mail_gold.gold + EXCLUDED.gold;
+
+-- name: TakeMarketMailGold :execrows
+-- Withdraws amount; no row when the mailbox has less (an INSERT ... ON CONFLICT with a
+-- negative amount would break the CHECK on the proposed row before the conflict).
+UPDATE market_mail_gold SET gold = gold - sqlc.arg(amount)::bigint
+WHERE character_id = $1 AND gold >= sqlc.arg(amount)::bigint;
 
 -- name: InsertMarketHistory :exec
 INSERT INTO market_history (character_id, other_character_id, side, item_id, amount, price, at)

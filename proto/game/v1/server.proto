@@ -522,6 +522,9 @@ message MarketUpdate {
   repeated uint32 durations_hours = 18;
   // Units of the browsed item the player could put on sale (in the backpack).
   uint32 owned = 19;
+  // The market is read-only until the server restarts (a change could not be saved): it
+  // can be browsed, but nothing is created, accepted, cancelled or withdrawn.
+  bool read_only = 20;
 }
 
 // ---- movement and connection ------------------------------------------------
@@ -556,6 +559,12 @@ enum DisconnectReason {
   DISCONNECT_REASON_IDLE = 10;
   // The account's password was reset: every session of the account ends (T2.1).
   DISCONNECT_REASON_PASSWORD_CHANGED = 11;
+  // A trade or market change of the character could not be saved (T5.3): it leaves the
+  // world so it does not keep playing on a state the database will not have.
+  DISCONNECT_REASON_SAVE_FAILED = 12;
+  // Login refused: the character's last trade or market change could not be saved; it
+  // can play again after the server restarts (T5.3).
+  DISCONNECT_REASON_CHARACTER_LOCKED = 13;
 }
 
 message Disconnect {

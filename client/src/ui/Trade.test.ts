@@ -164,6 +164,7 @@ const market = (over: Partial<MarketView>): MarketView => ({
     durationsHours: [12, 48],
   },
   owned: 4,
+  readOnly: false,
   ...over,
 });
 
@@ -221,5 +222,18 @@ describe("MarketWindow", () => {
     submit(create, { side: "sell", amount: "4", price: "6", duration: "1" });
     submit(create, { side: "buy", amount: "10", price: "10", duration: "0" }); // 100 + fee > money
     expect(sent).toEqual(["cancel 4", "create sell 68 4 6 1"]);
+  });
+});
+
+describe("MarketWindow read-only", () => {
+  it("shows the notice", () => {
+    const { game } = recorder();
+    const tree = MarketWindow({
+      t,
+      content,
+      game,
+      ui: { market: market({ readOnly: true }) } as GameUi,
+    });
+    expect(byAttr(tree, "data-testid", "market-read-only")).toHaveLength(1);
   });
 });

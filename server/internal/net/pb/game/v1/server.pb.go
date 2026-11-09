@@ -394,6 +394,12 @@ const (
 	DisconnectReason_DISCONNECT_REASON_IDLE DisconnectReason = 10
 	// The account's password was reset: every session of the account ends (T2.1).
 	DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED DisconnectReason = 11
+	// A trade or market change of the character could not be saved (T5.3): it leaves the
+	// world so it does not keep playing on a state the database will not have.
+	DisconnectReason_DISCONNECT_REASON_SAVE_FAILED DisconnectReason = 12
+	// Login refused: the character's last trade or market change could not be saved; it
+	// can play again after the server restarts (T5.3).
+	DisconnectReason_DISCONNECT_REASON_CHARACTER_LOCKED DisconnectReason = 13
 )
 
 // Enum value maps for DisconnectReason.
@@ -411,6 +417,8 @@ var (
 		9:  "DISCONNECT_REASON_BANNED",
 		10: "DISCONNECT_REASON_IDLE",
 		11: "DISCONNECT_REASON_PASSWORD_CHANGED",
+		12: "DISCONNECT_REASON_SAVE_FAILED",
+		13: "DISCONNECT_REASON_CHARACTER_LOCKED",
 	}
 	DisconnectReason_value = map[string]int32{
 		"DISCONNECT_REASON_UNSPECIFIED":         0,
@@ -425,6 +433,8 @@ var (
 		"DISCONNECT_REASON_BANNED":              9,
 		"DISCONNECT_REASON_IDLE":                10,
 		"DISCONNECT_REASON_PASSWORD_CHANGED":    11,
+		"DISCONNECT_REASON_SAVE_FAILED":         12,
+		"DISCONNECT_REASON_CHARACTER_LOCKED":    13,
 	}
 )
 
@@ -4226,7 +4236,10 @@ type MarketUpdate struct {
 	MaxPrice       uint64   `protobuf:"varint,17,opt,name=max_price,json=maxPrice,proto3" json:"max_price,omitempty"`
 	DurationsHours []uint32 `protobuf:"varint,18,rep,packed,name=durations_hours,json=durationsHours,proto3" json:"durations_hours,omitempty"`
 	// Units of the browsed item the player could put on sale (in the backpack).
-	Owned         uint32 `protobuf:"varint,19,opt,name=owned,proto3" json:"owned,omitempty"`
+	Owned uint32 `protobuf:"varint,19,opt,name=owned,proto3" json:"owned,omitempty"`
+	// The market is read-only until the server restarts (a change could not be saved): it
+	// can be browsed, but nothing is created, accepted, cancelled or withdrawn.
+	ReadOnly      bool `protobuf:"varint,20,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4392,6 +4405,13 @@ func (x *MarketUpdate) GetOwned() uint32 {
 		return x.Owned
 	}
 	return 0
+}
+
+func (x *MarketUpdate) GetReadOnly() bool {
+	if x != nil {
+		return x.ReadOnly
+	}
+	return false
 }
 
 // WalkRejected tells the client its predicted step failed; it snaps back to pos.
@@ -5585,7 +5605,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\rR\x06amount\x12\x14\n" +
 	"\x05price\x18\x04 \x01(\x04R\x05price\x12\x0e\n" +
-	"\x02at\x18\x05 \x01(\x04R\x02at\"\xa2\x05\n" +
+	"\x02at\x18\x05 \x01(\x04R\x02at\"\xbf\x05\n" +
 	"\fMarketUpdate\x12\x12\n" +
 	"\x04open\x18\x01 \x01(\bR\x04open\x12\x14\n" +
 	"\x05money\x18\x02 \x01(\x04R\x05money\x12\x17\n" +
@@ -5608,7 +5628,8 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"max_amount\x18\x10 \x01(\rR\tmaxAmount\x12\x1b\n" +
 	"\tmax_price\x18\x11 \x01(\x04R\bmaxPrice\x12'\n" +
 	"\x0fdurations_hours\x18\x12 \x03(\rR\x0edurationsHours\x12\x14\n" +
-	"\x05owned\x18\x13 \x01(\rR\x05owned\"Y\n" +
+	"\x05owned\x18\x13 \x01(\rR\x05owned\x12\x1b\n" +
+	"\tread_only\x18\x14 \x01(\bR\breadOnly\"Y\n" +
 	"\fWalkRejected\x12#\n" +
 	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12$\n" +
 	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\"H\n" +
@@ -5723,7 +5744,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x15TRADE_STATE_REQUESTED\x10\x01\x12\x1b\n" +
 	"\x17TRADE_STATE_NEGOTIATING\x10\x02\x12\x19\n" +
 	"\x15TRADE_STATE_COMPLETED\x10\x03\x12\x19\n" +
-	"\x15TRADE_STATE_CANCELLED\x10\x04*\xbe\x03\n" +
+	"\x15TRADE_STATE_CANCELLED\x10\x04*\x89\x04\n" +
 	"\x10DisconnectReason\x12!\n" +
 	"\x1dDISCONNECT_REASON_UNSPECIFIED\x10\x00\x12%\n" +
 	"!DISCONNECT_REASON_OUTDATED_CLIENT\x10\x01\x12%\n" +
@@ -5737,7 +5758,9 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x18DISCONNECT_REASON_BANNED\x10\t\x12\x1a\n" +
 	"\x16DISCONNECT_REASON_IDLE\x10\n" +
 	"\x12&\n" +
-	"\"DISCONNECT_REASON_PASSWORD_CHANGED\x10\v*\x8e\x01\n" +
+	"\"DISCONNECT_REASON_PASSWORD_CHANGED\x10\v\x12!\n" +
+	"\x1dDISCONNECT_REASON_SAVE_FAILED\x10\f\x12&\n" +
+	"\"DISCONNECT_REASON_CHARACTER_LOCKED\x10\r*\x8e\x01\n" +
 	"\x10SharedExperience\x12!\n" +
 	"\x1dSHARED_EXPERIENCE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SHARED_EXPERIENCE_OFF\x10\x01\x12\x1c\n" +

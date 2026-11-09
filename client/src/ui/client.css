@@ -1356,3 +1356,15 @@ body.using-item canvas {
 .trade .offerable button {
   margin-left: auto;
 }
+.market .reference {
+  margin: 0 0 0.3rem;
+  color: #ffd27a;
+  font-size: 0.8rem;
+}
+.market .read-only {
+  margin: 0.3rem 0;
+  padding: 0.3rem 0.4rem;
+  color: #ffd0c8;
+  background: rgba(160, 40, 30, 0.35);
+  border-radius: 3px;
+}

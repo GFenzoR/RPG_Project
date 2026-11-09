@@ -29,13 +29,17 @@ const (
 	msgTradeCombat    = "trade.combat"
 	msgTradeCompleted = "trade.completed"
 
-	tradeCancelFar     = "trade.cancel.too_far"
-	tradeCancelDied    = "trade.cancel.died"
-	tradeCancelCombat  = "trade.cancel.combat"
-	tradeCancelLeft    = "trade.cancel.left"
-	tradeCancelExpired = "trade.cancel.expired"
-	tradeCancelNoRoom  = "trade.cancel.no_room"
-	tradeCancelStaff   = "trade.cancel.staff"
+	tradeCancelFar      = "trade.cancel.too_far"
+	tradeCancelDied     = "trade.cancel.died"
+	tradeCancelCombat   = "trade.cancel.combat"
+	tradeCancelLeft     = "trade.cancel.left"
+	tradeCancelExpired  = "trade.cancel.expired"
+	tradeCancelNoRoom   = "trade.cancel.no_room"
+	tradeCancelStaff    = "trade.cancel.staff"
+	tradeCancelReadOnly = "trade.cancel.read_only"
+	msgTradeReadOnly    = "trade.read_only"
+	msgTradeEmpty       = "trade.empty"
+	msgTradeTooFast     = "trade.too_fast"
 )
 
 // trade is a trade between two players: p[0] invited p[1]. Loop goroutine only.
@@ -70,6 +74,20 @@ func (w *World) initTrade() {
 	}
 	w.tradeOn, w.trade = true, t
 	w.tradeFor = max(game.Tick(t.RequestMs/int(game.TickDuration.Milliseconds())), 1)
+	w.tradeRefill = max(game.Tick(t.ActionRefillMs/int(game.TickDuration.Milliseconds())), 1)
+	w.tradeBurst = w.tradeRefill * game.Tick(max(t.ActionBurst-1, 0))
+}
+
+// tradeFlood counts one trade action against the trade anti-flood limit (GCRA): every
+// completed trade is a write of two whole characters.
+func (w *World) tradeFlood(ctx *game.TickContext, p *Player) bool {
+	tat := max(p.tradeTAT, ctx.Tick)
+	if tat-ctx.Tick > w.tradeBurst {
+		p.emit(systemMsg(msgTradeTooFast))
+		return false
+	}
+	p.tradeTAT = tat + w.tradeRefill
+	return true
 }
 
 // adjacent reports whether a and b stand on the same floor at most one tile apart.
@@ -88,6 +106,13 @@ func absInt(v int) int {
 func (w *World) tradeRequest(ctx *game.TickContext, p *Player, m *pb.TradeRequest) {
 	if !w.tradeOn {
 		p.emit(systemMsg(msgTradeOff))
+		return
+	}
+	if w.readOnly {
+		p.emit(systemMsg(msgTradeReadOnly))
+		return
+	}
+	if !w.tradeFlood(ctx, p) {
 		return
 	}
 	o := w.playerByID(m.GetCreatureId())
@@ -131,7 +156,7 @@ func (w *World) tradeRequest(ctx *game.TickContext, p *Player, m *pb.TradeReques
 // tradeOffer is TradeOffer: add an item to p's offer or take one out.
 func (w *World) tradeOffer(ctx *game.TickContext, p *Player, m *pb.TradeOffer) {
 	t := p.trade
-	if t == nil || (!t.started && t.side(p) == 1) {
+	if t == nil || (!t.started && t.side(p) == 1) || !w.tradeFlood(ctx, p) {
 		return
 	}
 	p.active(ctx.Tick, antibot.KindOther)
@@ -180,7 +205,12 @@ func tradeableItem(it *Item) bool {
 // tradeAccept is TradeAccept: p confirms; the second confirmation swaps the items.
 func (w *World) tradeAccept(ctx *game.TickContext, p *Player) {
 	t := p.trade
-	if t == nil || !t.started || !w.checkTrade(ctx, t) {
+	if t == nil || !t.started || !w.tradeFlood(ctx, p) || !w.checkTrade(ctx, t) {
+		return
+	}
+	if len(t.offer[0]) == 0 && len(t.offer[1]) == 0 {
+		// Nothing to swap: confirming would only write two snapshots for nothing.
+		p.emit(systemMsg(msgTradeEmpty))
 		return
 	}
 	p.active(ctx.Tick, antibot.KindOther)
@@ -285,6 +315,9 @@ func (w *World) completeTrade(ctx *game.TickContext, t *trade) {
 	for s := range 2 {
 		giver, taker := t.p[s], t.p[1-s]
 		bp := taker.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
+		if len(t.offer[s]) == 0 || bp == nil { // tradeFits: nil only when nothing comes
+			continue
+		}
 		for _, x := range t.offer[s] {
 			w.attach(taker, x.it, place{kind: locContainer, cont: bp})
 			w.econItemWith(taker, EconTrade, "trade", giver.charID, x.it.def, units(x.it))

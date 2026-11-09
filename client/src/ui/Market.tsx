@@ -112,6 +112,11 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
         </button>
       </header>
 
+      {m.readOnly && (
+        <p class="read-only" data-testid="market-read-only" role="alert">
+          {t("client.market.read_only")}
+        </p>
+      )}
       <form
         class="search"
         data-testid="market-search"
@@ -141,13 +146,13 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
       {def && (
         <div class="browse" data-testid="market-browse" data-item={def.id}>
           <h3>
-            <ItemLabel t={t} content={content} game={game} itemId={m.itemId} count={1} />{" "}
-            <span class="reference" data-testid="market-reference">
-              {m.referencePrice > 0
-                ? t("client.market.reference", { price: m.referencePrice })
-                : t("client.market.no_reference")}
-            </span>
+            <ItemLabel t={t} content={content} game={game} itemId={m.itemId} count={1} />
           </h3>
+          <p class="reference" data-testid="market-reference">
+            {m.referencePrice > 0
+              ? t("client.market.reference", { price: m.referencePrice })
+              : t("client.market.no_reference")}
+          </p>
           <h4>{t("client.market.sells")}</h4>
           <OfferTable {...props} m={m} offers={m.sells} sell={true} now={now} />
           <h4>{t("client.market.buys")}</h4>

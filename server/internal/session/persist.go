@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -36,8 +37,14 @@ type SaverConfig struct {
 	WriteTimeout time.Duration
 	Logger       *slog.Logger
 	// Failed is told about every failed write with its outcome (SaveRetry, SaveRejected,
-	// SaveAbandoned), for the metrics. Called on the persistence goroutine. Optional.
+	// SaveAbandoned, SaveSkipped), for the metrics. Called on the persistence goroutine.
+	// Optional.
 	Failed func(outcome string)
+	// Tainted is told about characters that just became tainted (a transfer of theirs was
+	// not stored, T5.3), or with none when a market-only transfer was not stored: the World
+	// must stop them and turn the market read-only (World.Tainted). Called on the goroutine
+	// that writes; it must not block. Optional.
+	Tainted func(characters []int64)
 }
 
 // Outcomes of a failed write, given to SaverConfig.Failed. They are the outcome labels of
@@ -46,6 +53,8 @@ const (
 	SaveRetry     = "retry"
 	SaveRejected  = "rejected"
 	SaveAbandoned = "abandoned"
+	// SaveSkipped: not written because a character of it is tainted (T5.3).
+	SaveSkipped = "skipped"
 )
 
 // Job is one unit of the persistence queue: a snapshot, or (Transfer non-nil) a transfer.
@@ -144,10 +153,7 @@ func (s *Saver) Stop(ctx context.Context) error {
 func (s *Saver) run() {
 	defer close(s.done)
 	for j := range s.ch {
-		if s.Tainted(j) {
-			s.cfg.Logger.Error("session: save skipped, an earlier transfer of the character was not stored",
-				"character", j.Snapshot.CharacterID, "transfer", j.Transfer != nil)
-			s.failed(SaveRejected)
+		if s.skipTainted(j) {
 			continue
 		}
 		if j.Transfer != nil {
@@ -158,33 +164,108 @@ func (s *Saver) run() {
 	}
 }
 
-// Tainted reports whether j touches a character whose earlier transfer was not stored:
-// then j must not be written (the caller writing pending jobs at shutdown checks it too).
+// Taint (T5.3, docs/01 "Transacciones"). A transfer that is not stored (rejected, or
+// abandoned at shutdown) leaves the database with the state before it, on every side. Its
+// characters are tainted: no later job that touches one of them is written in this
+// process, and a skipped transfer taints its other characters too (a fixed point: a trade
+// with a tainted character must not reach the database through its partner's next save).
+// The World is told (SaverConfig.Tainted): it takes those characters out of the world and
+// turns the market and the trade window read-only until the server restarts.
+
+// jobCharacters returns the characters whose saved state j writes.
+func jobCharacters(j Job) []int64 {
+	if j.Transfer == nil {
+		return []int64{j.Snapshot.CharacterID}
+	}
+	out := make([]int64, 0, len(j.Transfer.Snapshots))
+	for _, sn := range j.Transfer.Snapshots {
+		out = append(out, sn.CharacterID)
+	}
+	return out
+}
+
+// Tainted reports whether j touches a tainted character.
 func (s *Saver) Tainted(j Job) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.tainted) == 0 {
-		return false
-	}
-	if j.Transfer == nil {
-		return s.tainted[j.Snapshot.CharacterID]
-	}
-	for _, sn := range j.Transfer.Snapshots {
-		if s.tainted[sn.CharacterID] {
+	for _, id := range jobCharacters(j) {
+		if s.tainted[id] {
 			return true
 		}
 	}
 	return false
 }
 
-// taint marks the characters of a transfer that was not stored.
-func (s *Saver) taint(t Transfer) {
+// taint marks the characters of j and tells the World about the new ones.
+func (s *Saver) taint(j Job) {
+	var fresh []int64
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, sn := range t.Snapshots {
-		s.tainted[sn.CharacterID] = true
+	for _, id := range jobCharacters(j) {
+		if !s.tainted[id] {
+			s.tainted[id] = true
+			fresh = append(fresh, id)
+		}
+	}
+	s.mu.Unlock()
+	// A dropped market-only transfer (expiry, cancel) taints nobody, but the market in
+	// memory is ahead of the database all the same: the World must go read-only too.
+	marketOnly := j.Transfer != nil && len(j.Transfer.Snapshots) == 0
+	if len(fresh) > 0 || marketOnly {
+		s.cfg.Logger.Error("session: transfer not stored, market read-only and characters tainted until a restart",
+			"characters", fresh)
+		if s.cfg.Tainted != nil {
+			s.cfg.Tainted(fresh)
+		}
 	}
 }
+
+// skipTainted reports whether j touches a tainted character; then it taints all of j's
+// characters (the fixed point) and logs and counts the skip.
+func (s *Saver) skipTainted(j Job) bool {
+	if !s.Tainted(j) {
+		return false
+	}
+	s.taint(j)
+	s.cfg.Logger.Error("session: save skipped, a character of it is tainted", "characters", jobCharacters(j),
+		"transfer", j.Transfer != nil, "final", j.Transfer == nil && j.Snapshot.Final)
+	s.failed(SaveSkipped)
+	return true
+}
+
+// WritePending writes, once each and in order, the jobs the queue could not take at
+// shutdown (World.SaveAll), with the same rules as the goroutine: a tainted job is
+// skipped, and a transfer that fails taints its characters. Call it after Stop.
+func (s *Saver) WritePending(ctx context.Context, jobs []Job) error {
+	var errs []error
+	for _, j := range jobs {
+		if s.skipTainted(j) {
+			errs = append(errs, fmt.Errorf("characters %v: %w", jobCharacters(j), errTaintedSkip))
+			continue
+		}
+		var err error
+		if j.Transfer != nil {
+			if s.cfg.WriteTransfer == nil {
+				err = errors.New("no transfer writer")
+			} else {
+				err = s.cfg.WriteTransfer(ctx, *j.Transfer)
+			}
+			if err != nil {
+				s.failed(SaveAbandoned)
+				s.taint(j)
+				err = fmt.Errorf("transfer %d: %w", j.Transfer.ID, err)
+			}
+		} else if err = s.cfg.Write(ctx, j.Snapshot); err != nil {
+			s.failed(SaveAbandoned)
+			err = fmt.Errorf("character %d: %w", j.Snapshot.CharacterID, err)
+		}
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+var errTaintedSkip = errors.New("save skipped: a transfer of its character was not stored")
 
 // writeTransfer writes t like write writes a snapshot: retried until it is stored, it is
 // rejected (ErrPermanent) or the saver stops. A transfer that is not stored taints its
@@ -205,7 +286,7 @@ func (s *Saver) writeTransfer(t Transfer) {
 		case errors.Is(err, ErrPermanent) || errors.Is(err, ErrGone):
 			s.cfg.Logger.Error("session: transfer dropped, rejected by the database", "transfer", t.ID, "err", err)
 			s.failed(SaveRejected)
-			s.taint(t)
+			s.taint(Job{Transfer: &t})
 			return
 		}
 		s.cfg.Logger.Error("session: transfer failed, retrying", "transfer", t.ID, "attempt", attempt,
@@ -215,7 +296,7 @@ func (s *Saver) writeTransfer(t Transfer) {
 		case <-s.stop:
 			s.cfg.Logger.Error("session: transfer abandoned at shutdown", "transfer", t.ID)
 			s.failed(SaveAbandoned)
-			s.taint(t)
+			s.taint(Job{Transfer: &t})
 			return
 		case <-s.cfg.Clock.After(backoff):
 		}

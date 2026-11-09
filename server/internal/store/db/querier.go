@@ -11,7 +11,7 @@ import (
 )
 
 type Querier interface {
-	// A negative amount withdraws: the CHECK (gold >= 0) refuses more than there is.
+	// Deposits a positive amount.
 	AddMarketMailGold(ctx context.Context, arg AddMarketMailGoldParams) error
 	BumpMarketHigh(ctx context.Context, arg BumpMarketHighParams) error
 	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
@@ -212,6 +212,9 @@ type Querier interface {
 	SubmissionAuthor(ctx context.Context, id int64) (int64, error)
 	// The same as LockSubmitter without the lock: a cheap check before reading an upload.
 	SubmitterStatus(ctx context.Context, arg SubmitterStatusParams) (SubmitterStatusRow, error)
+	// Withdraws amount; no row when the mailbox has less (an INSERT ... ON CONFLICT with a
+	// negative amount would break the CHECK on the proposed row before the conflict).
+	TakeMarketMailGold(ctx context.Context, arg TakeMarketMailGoldParams) (int64, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
 	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
 	UpsertGuildInvite(ctx context.Context, arg UpsertGuildInviteParams) error

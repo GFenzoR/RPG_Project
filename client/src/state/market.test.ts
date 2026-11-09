@@ -124,7 +124,32 @@ describe("searchItems", () => {
       copper_coin: "pescado",
     };
     const found = searchItems(items, "pescádo", (d) => names[d.id] ?? d.id);
-    expect(found.map((f) => f.itemId)).toEqual([3, 2]);
+    expect(found.map((f) => f.itemId)).toEqual([2, 3]); // the prefix first
     expect(searchItems(items, "  ", (d) => d.id)).toEqual([]);
+  });
+});
+
+describe("searchItems ranking", () => {
+  it("prefers the exact name, then a prefix, over a name that contains it", () => {
+    const items: Record<number, ItemDef> = {
+      112: { id: "glowcap", marketable: true } as ItemDef,
+      116: { id: "glowcap_broth", marketable: true } as ItemDef,
+      117: { id: "glowcap_dust", marketable: true } as ItemDef,
+    };
+    const names: Record<string, string> = {
+      glowcap: "hongo lumbre",
+      glowcap_broth: "caldo de hongo lumbre",
+      glowcap_dust: "hongo lumbre molido",
+    };
+    const name = (d: ItemDef): string => names[d.id] ?? d.id;
+    expect(searchItems(items, "Hongo Lumbre", name, 1)[0]?.itemId).toBe(112);
+    expect(searchItems(items, "hongo", name).map((f) => f.itemId)).toEqual([112, 117, 116]);
+    expect(searchItems(items, "caldo", name, 1)[0]?.itemId).toBe(116);
+  });
+
+  it("reads the read-only flag", () => {
+    expect(marketFrom(create(MarketUpdateSchema, { open: true, readOnly: true }))?.readOnly).toBe(
+      true,
+    );
   });
 });

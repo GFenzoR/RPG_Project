@@ -129,6 +129,8 @@ type Player struct {
 	market *marketView
 	mkTAT  game.Tick
 	trade  *trade
+	// tradeTAT is the trade anti-flood's theoretical arrival tick (GCRA).
+	tradeTAT game.Tick
 
 	// Guilds (T5.1): p's membership (nil: none) and whether a GuildUpdate is queued.
 	gm          *guildMember
@@ -344,6 +346,12 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	if w.isBanned(c.AccountID, ctx.Now) {
 		// Banned while this login was reading the database (the row it read had no ban).
 		client.Close(pb.DisconnectReason_DISCONNECT_REASON_BANNED)
+		return
+	}
+	if w.locked[c.ID] {
+		// T5.3: a trade or market change of the character could not be saved; the database
+		// is behind its last state in memory, which was dropped. Until a restart.
+		client.Close(pb.DisconnectReason_DISCONNECT_REASON_CHARACTER_LOCKED)
 		return
 	}
 	voc, ok := w.cfg.Vocations[c.Vocation]

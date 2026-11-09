@@ -54,6 +54,7 @@ const (
 	msgMarketWithdrawn  = "market.withdrawn"
 	msgMarketMailEmpty  = "market.mailbox_empty"
 	msgMarketMailRoom   = "market.mailbox_room"
+	msgMarketReadOnly   = "market.read_only"
 	msgGMMarketSell     = "gm.market_offer_sell"
 	msgGMMarketBuy      = "gm.market_offer_buy"
 	msgGMMarketNone     = "gm.market_none"
@@ -233,21 +234,33 @@ func (w *World) initMarket() {
 		return
 	}
 	w.nextOffer, w.nextMail = d.OfferHigh, d.MailHigh
+	for id, g := range d.Gold {
+		w.box(id).gold = g
+	}
+	var retired []MarketOp
 	for _, o := range d.Offers {
+		w.nextOffer = max(w.nextOffer, o.ID)
 		def := w.byNum[o.ItemID]
 		if def == nil {
-			w.log.Error("market: offer of an unknown item kept in the database", "offer", o.ID, "item", o.ItemID)
+			// A retired item: the offer is closed. A buy offer's gold goes back to the
+			// mailbox; a sell offer's units of an item that no longer exists are gone.
+			w.log.Warn("market: offer of a retired item closed", "offer", o.ID, "item", o.ItemID, "sell", o.Sell)
+			retired = append(retired, MarketOp{Kind: MarketOfferRemove, ID: o.ID})
+			if !o.Sell {
+				gold := int64(o.Amount) * o.Price
+				w.box(o.CharacterID).gold += gold
+				retired = append(retired, MarketOp{Kind: MarketGoldAdd, CharacterID: o.CharacterID, Gold: gold})
+			}
 			continue
 		}
 		w.addOffer(&offer{MarketOffer: o, def: def})
-		w.nextOffer = max(w.nextOffer, o.ID)
 	}
 	for _, m := range d.Mail {
 		w.box(m.CharacterID).items = append(w.box(m.CharacterID).items, m)
 		w.nextMail = max(w.nextMail, m.ID)
 	}
-	for id, g := range d.Gold {
-		w.box(id).gold = g
+	if len(retired) > 0 {
+		w.transfer(nil, retired...) // queued now, written when persistence starts
 	}
 	for _, h := range d.History {
 		w.addHistory(h)
@@ -449,6 +462,11 @@ func (w *World) marketCommand(ctx *game.TickContext, p *Player, m *pb.MarketComm
 		return
 	}
 	p.active(ctx.Tick, antibot.KindOther)
+	if _, browse := m.GetAction().(*pb.MarketCommand_Browse); !browse && w.readOnly {
+		p.emit(systemMsg(msgMarketReadOnly))
+		w.sendMarket(ctx.Now, p)
+		return
+	}
 	switch a := m.GetAction().(type) {
 	case *pb.MarketCommand_Browse:
 		if def := w.byNum[uint16(min(a.Browse.GetItemId(), 0xFFFF))]; def != nil && marketItem(def) {
@@ -828,7 +846,7 @@ func (w *World) transfer(players []*Player, ops ...MarketOp) {
 // checkMarketExpiry returns the deposits of the expired offers to their mailboxes, once
 // per second; at most marketExpireBatch per sweep keeps the tick's cost bounded.
 func (w *World) checkMarketExpiry(ctx *game.TickContext) {
-	if !w.mkOn || ctx.Tick < w.mkNext {
+	if !w.mkOn || w.readOnly || ctx.Tick < w.mkNext {
 		return
 	}
 	w.mkNext = ctx.Tick + game.Tick(1000/game.TickDuration.Milliseconds())
@@ -866,7 +884,7 @@ func (w *World) sendMarket(now time.Time, p *Player) {
 	u := &pb.MarketUpdate{
 		Open: true, Money: uint64(max(w.money(p), 0)), FeePermille: uint32(mk.FeePermille),
 		FeeMin: uint64(mk.FeeMin), FeeMax: uint64(mk.FeeMax), MaxOffers: uint32(mk.MaxOffers),
-		MaxAmount: uint32(mk.MaxAmount), MaxPrice: uint64(mk.MaxPrice),
+		MaxAmount: uint32(mk.MaxAmount), MaxPrice: uint64(mk.MaxPrice), ReadOnly: w.readOnly,
 	}
 	for _, h := range mk.DurationsHours {
 		u.DurationsHours = append(u.DurationsHours, uint32(h))
@@ -959,6 +977,10 @@ func (w *World) cmdMarketCancel(ctx *game.TickContext, p *Player, args []string)
 	if len(args) != 1 || !w.mkOn {
 		return false
 	}
+	if w.readOnly {
+		p.emit(systemMsg(msgMarketReadOnly))
+		return true
+	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	o := w.offers[id]
 	if err != nil || o == nil {
@@ -982,3 +1004,41 @@ func sideName(sell bool) string {
 	}
 	return "buy"
 }
+
+// ---- a transfer that was not stored ------------------------------------------------
+
+// Tainted returns the command the persistence side enqueues when transfers of characters
+// could not be stored (T5.3, Saver taint): the database stays behind what the loop holds
+// for them, and anything else built on it would be saved by halves. So the failure is
+// made safe until a restart: those characters leave the world (SAVE_FAILED), their
+// unsaved state is dropped and their logins are refused (CHARACTER_LOCKED); the market
+// becomes read-only (browse only, no expiry) and every open trade is cancelled. The
+// operator sees the error log, persistence_errors_total{outcome="skipped"} and its alert.
+func (w *World) Tainted(ids []int64) game.Command {
+	return game.CommandFunc(func(ctx *game.TickContext) {
+		if !w.readOnly {
+			w.log.Error("market: a transfer was not stored; market and trades are read-only until a restart")
+		}
+		w.readOnly = true
+		for len(w.trades) > 0 {
+			w.endTrade(w.trades[0], pb.TradeState_TRADE_STATE_CANCELLED, tradeCancelReadOnly)
+		}
+		for _, id := range ids {
+			w.locked[id] = true
+			if p := w.byChar[id]; p != nil {
+				w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_SAVE_FAILED, false)
+			}
+			delete(w.unsaved, id)
+			w.log.Error("session: character locked until a restart, a transfer of it was not stored", "character", id)
+		}
+		for _, p := range w.players {
+			if p.market != nil {
+				w.sendMarket(ctx.Now, p)
+			}
+		}
+	})
+}
+
+// ReadOnly reports whether the market and the trade window are read-only (Tainted).
+// Loop goroutine only.
+func (w *World) ReadOnly() bool { return w.readOnly }

@@ -141,6 +141,8 @@ trade:                      # T5.3: the trade window between two adjacent player
   enabled: true
   max_items: 6              # items (stacks or containers) per side
   request_ms: 25000         # an unanswered invitation expires
+  action_burst: 6           # anti-flood: 6 trade actions at once, then one every 300 ms
+  action_refill_ms: 300     # (a completed trade writes both characters)
 
 pvp:                        # T5.2 (docs/02-game-design.md, "PvP"). Own numbers, see there why.
   enabled: true             # false: no player can hurt another one (PvE only, as before T5.2)

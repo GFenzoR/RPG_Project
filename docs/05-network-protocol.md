@@ -834,9 +834,11 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   cambio. `REQUESTED` = invitación pendiente (`invited` en quien la recibió);
   `NEGOTIATING`; `COMPLETED` y `CANCELLED` cierran la ventana. `reason` es la clave i18n
   del motivo (`trade.cancel.too_far`, `died`, `combat`, `left`, `expired`, `no_room`,
-  `staff`; vacío si un jugador la cerró), que el cliente muestra en el log. Mensajes:
-  `trade.unavailable`, `trade.busy`, `trade.too_far`, `trade.bad_item`, `trade.offer_full`
-  (`max`), `trade.staff`, `trade.combat`, `trade.completed`.
+  `staff`, `read_only`; vacío si un jugador la cerró), que el cliente muestra en el log.
+  Mensajes: `trade.unavailable`, `trade.busy`, `trade.too_far`, `trade.bad_item`,
+  `trade.offer_full` (`max`), `trade.staff`, `trade.combat`, `trade.completed`,
+  `trade.empty` (confirmar sin nada ofrecido), `trade.too_fast` (anti-flood),
+  `trade.read_only`.
 - **Mercado.** Se abre con `UseItem` sobre un tablero del mapa (item con
   `market_board: true`); el servidor contesta `MarketUpdate{open: true, ...}`. Cada
   `MarketCommand` exige seguir junto al tablero y responde otra `MarketUpdate` completa:
@@ -848,8 +850,10 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   (`mailbox_gold`, `mailbox_items` hasta `mailbox_shown` y `mailbox_more`), el
   `history` propio (más nuevo primero), las reglas del formulario (`fee_permille`,
   `fee_min`, `fee_max`, `max_offers`, `max_amount`, `max_price`, `durations_hours`) y
-  `owned` (unidades del item buscado en la mochila). `open: false` cierra la ventana (el
-  jugador se alejó). Precios en la moneda más chica, fechas en ms Unix. Mensajes:
+  `owned` (unidades del item buscado en la mochila) y `read_only` (solo se puede buscar
+  hasta que el servidor reinicie; las demás acciones responden `market.read_only`).
+  `open: false` cierra la ventana (el jugador se alejó). `withdraw` entrega primero los
+  items en orden mientras entren y después todo el oro que entre. Precios en la moneda más chica, fechas en ms Unix. Mensajes:
   `market.closed`, `staff`, `too_fast`, `not_at_board`, `bad_item`, `bad_amount` (`max`),
   `bad_price` (`max`), `too_many_offers` (`max`), `not_enough_items`, `not_enough_money`
   (`price`), `no_room`, `offer_gone`, `own_offer`, `created` (`item`, `fee`), `cancelled`
@@ -857,6 +861,9 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   dueño), `withdrawn` (`price`), `mailbox_empty`, `mailbox_room`; staff:
   `gm.market_offer_sell` / `gm.market_offer_buy` (`id`, `name`, `item`, `price`),
   `gm.market_none`, `gm.market_cancelled`, `gm.market_unknown`.
+- **Falla segura** (docs/01 "Transacciones"): si un cambio del comercio no se pudo
+  guardar, sus personajes reciben `Disconnect{SAVE_FAILED}` y sus logins
+  `Disconnect{CHARACTER_LOCKED}` hasta que el servidor reinicie.
 
 ### Gremios (T5.1, `server/internal/session/guild.go`)
 Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.

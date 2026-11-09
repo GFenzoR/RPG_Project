@@ -198,7 +198,14 @@ func applyMarketOp(ctx context.Context, q *db.Queries, op MarketOp) error {
 		}
 		return err
 	case MarketGoldAdd:
-		return q.AddMarketMailGold(ctx, db.AddMarketMailGoldParams{CharacterID: op.CharacterID, Amount: op.Gold})
+		if op.Gold >= 0 {
+			return q.AddMarketMailGold(ctx, db.AddMarketMailGoldParams{CharacterID: op.CharacterID, Amount: op.Gold})
+		}
+		n, err := q.TakeMarketMailGold(ctx, db.TakeMarketMailGoldParams{CharacterID: op.CharacterID, Amount: -op.Gold})
+		if err == nil && n == 0 {
+			err = ErrMarketConflict
+		}
+		return err
 	case MarketHistoryAdd:
 		h := op.History
 		return q.InsertMarketHistory(ctx, db.InsertMarketHistoryParams{CharacterID: h.CharacterID,

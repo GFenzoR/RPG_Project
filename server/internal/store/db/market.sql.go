@@ -21,7 +21,7 @@ type AddMarketMailGoldParams struct {
 	Amount      int64
 }
 
-// A negative amount withdraws: the CHECK (gold >= 0) refuses more than there is.
+// Deposits a positive amount.
 func (q *Queries) AddMarketMailGold(ctx context.Context, arg AddMarketMailGoldParams) error {
 	_, err := q.db.Exec(ctx, addMarketMailGold, arg.CharacterID, arg.Amount)
 	return err
@@ -457,4 +457,24 @@ func (q *Queries) LoadMarketSales(ctx context.Context, since pgtype.Timestamptz)
 		return nil, err
 	}
 	return items, nil
+}
+
+const takeMarketMailGold = `-- name: TakeMarketMailGold :execrows
+UPDATE market_mail_gold SET gold = gold - $2::bigint
+WHERE character_id = $1 AND gold >= $2::bigint
+`
+
+type TakeMarketMailGoldParams struct {
+	CharacterID int64
+	Amount      int64
+}
+
+// Withdraws amount; no row when the mailbox has less (an INSERT ... ON CONFLICT with a
+// negative amount would break the CHECK on the proposed row before the conflict).
+func (q *Queries) TakeMarketMailGold(ctx context.Context, arg TakeMarketMailGoldParams) (int64, error) {
+	result, err := q.db.Exec(ctx, takeMarketMailGold, arg.CharacterID, arg.Amount)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

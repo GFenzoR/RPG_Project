@@ -2298,6 +2298,18 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
         .trim(),
     )
     .toBe("5");
+  // ...and the withdrawal too: the mailbox's gold is 0 in the database.
+  await expect
+    .poll(() =>
+      execFileSync("psql", [
+        databaseUrl,
+        "-tAc",
+        `SELECT g.gold FROM market_mail_gold g JOIN characters c ON c.id = g.character_id WHERE c.name = '${buyer.name}'`,
+      ])
+        .toString()
+        .trim(),
+    )
+    .toBe("0");
   expect(errors).toEqual([]);
   await a.close();
   await b.close();

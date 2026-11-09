@@ -76,6 +76,8 @@ export interface MarketView {
   history: { sold: boolean; itemId: number; amount: number; price: number; at: number }[];
   rules: MarketRules;
   owned: number;
+  /** Read-only until the server restarts (a change could not be saved): browse only. */
+  readOnly: boolean;
 }
 
 /** The limits of the create form (balance.yaml market, as the server sends them). */
@@ -136,6 +138,7 @@ export function marketFrom(u: MarketUpdate): MarketView | undefined {
       durationsHours: [...u.durationsHours],
     },
     owned: u.owned,
+    readOnly: u.readOnly,
   };
 }
 
@@ -189,12 +192,17 @@ export function searchItems(
       .toLowerCase();
   const q = fold(query.trim());
   if (!q) return [];
-  const out: { itemId: number; name: string }[] = [];
+  // The exact name first, then names that start with the query, then the rest that
+  // contain it: a name inside another ("hongo lumbre" in "caldo de hongo lumbre") wins.
+  const out: { itemId: number; name: string; rank: number }[] = [];
   for (const [id, def] of Object.entries(items)) {
     if (!def.marketable) continue;
     const n = name(def);
-    if (fold(n).includes(q)) out.push({ itemId: Number(id), name: n });
+    const f = fold(n);
+    if (!f.includes(q)) continue;
+    const rank = f === q ? 0 : f.startsWith(q) ? 1 : 2;
+    out.push({ itemId: Number(id), name: n, rank });
   }
-  out.sort((a, b) => a.name.localeCompare(b.name));
-  return out.slice(0, limit);
+  out.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+  return out.slice(0, limit).map(({ itemId, name }) => ({ itemId, name }));
 }

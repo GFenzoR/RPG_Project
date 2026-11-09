@@ -135,6 +135,12 @@ server/
   no leas ofertas de la base en el loop. Toda acción del mercado pasa por `atMarket` y
   `marketFlood`; todo lo que entra o sale de un personaje se registra con
   `econItemWith`/`econGoldWith` (fuente `EconMarket` / `EconTrade`). El staff no comercia.
+  Un transfer que no se guarda **marca** a sus personajes en el Saver (punto fijo: lo que
+  los toque después no se escribe, tampoco en `WritePending` del apagado) y avisa al loop
+  (`World.Tainted`): los saca, rechaza su login y deja el mercado y el intercambio en solo
+  lectura (`w.readOnly`) hasta reiniciar. Toda acción nueva que escriba un transfer tiene
+  que respetar `w.readOnly`. Los ids de transfer crecen entre reinicios (`transfer_high`)
+  y `SaveTransfer` los reclama: un reintento de uno ya confirmado no aplica nada.
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).
