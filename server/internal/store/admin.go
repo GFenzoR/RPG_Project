@@ -207,6 +207,9 @@ func (s *Store) Ban(ctx context.Context, r BanRequest) (BanResult, error) {
 			}); err != nil {
 				return fmt.Errorf("insert ban: %w", err)
 			}
+			if err := q.DeleteAccountOAuthStates(ctx, pgtype.Int8{Int64: res.AccountID, Valid: true}); err != nil {
+				return err
+			}
 			if _, err := q.DeleteAccountSessions(ctx, res.AccountID); err != nil {
 				return fmt.Errorf("revoke sessions: %w", err)
 			}
@@ -339,6 +342,9 @@ func (s *Store) SetRole(ctx context.Context, email, role string, audit AuditEntr
 			audit.Result = ResultOK
 		}
 		// New tokens are needed to play again, so a demotion reaches the HTTP API at once.
+		if err := q.DeleteAccountOAuthStates(ctx, pgtype.Int8{Int64: row.ID, Valid: true}); err != nil {
+			return err
+		}
 		if _, err := q.DeleteAccountSessions(ctx, row.ID); err != nil {
 			return fmt.Errorf("revoke sessions: %w", err)
 		}

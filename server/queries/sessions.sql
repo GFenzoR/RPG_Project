@@ -6,7 +6,7 @@ VALUES (sqlc.arg(token_hash), sqlc.arg(account_id), sqlc.arg(kind),
 -- name: GetActiveSession :one
 -- The caller passes "now" (injected clock) so expiry is testable. A banned account has
 -- no active session (T2.6).
-SELECT s.account_id, s.character_id, s.expires_at
+SELECT s.account_id, s.character_id, s.created_at, s.expires_at
 FROM sessions s
 JOIN accounts a ON a.id = s.account_id
 WHERE s.token_hash = sqlc.arg(token_hash)

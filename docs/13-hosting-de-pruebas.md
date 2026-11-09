@@ -231,6 +231,60 @@ confirmar se puede jugar pero no enviar mapas ni pedir un reset por email; apare
 confirmado también para jugar. Las contraseñas SMTP solo viven en `deploy/.env.home`
 (ignorado por git) y nunca van a los logs.
 
+### 8c. Login con Google y Discord (T2.1)
+Apagado hasta que pongas las claves de **tus** apps (el proyecto no trae ninguna). Cada
+proveedor necesita una "redirect URI" exacta, que el servidor arma como
+`<PUBLIC_URL>/api/auth/oauth/<proveedor>/callback`:
+
+| Dónde juegan | `PUBLIC_URL` | Redirect URI de Google | Redirect URI de Discord |
+|---|---|---|---|
+| Tu PC | `http://localhost:8080` | `http://localhost:8080/api/auth/oauth/google/callback` | `http://localhost:8080/api/auth/oauth/discord/callback` |
+| Túnel de Cloudflare con dominio (paso 5) | `https://juego.tudominio.com` | `https://juego.tudominio.com/api/auth/oauth/google/callback` | `https://juego.tudominio.com/api/auth/oauth/discord/callback` |
+| AWS (docs/09) | `https://tudominio.com` | `https://tudominio.com/api/auth/oauth/google/callback` | `https://tudominio.com/api/auth/oauth/discord/callback` |
+
+**OAuth funciona solo desde exactamente `PUBLIC_URL`.** El proveedor devuelve el navegador a
+esa dirección y la cookie que ata el intento vive en la dirección donde se apretó el
+botón: si alguien juega por otra (`localhost` cuando `PUBLIC_URL` es el dominio, una IP de
+la LAN o de Tailscale), el login termina en `/oauth/error?code=state`. Por eso, en una
+dirección distinta, el juego esconde los botones y dice dónde abrirlo. Registrar varias
+URIs en la app solo sirve para cambiar `PUBLIC_URL` sin tocar la app, no para usar varias
+direcciones a la vez. Quien entre por la LAN o Tailscale usa email y contraseña (o pon
+como `PUBLIC_URL` el nombre https de `tailscale serve`, si todos entran por ahí).
+**El Quick Tunnel (`make home-tunnel`) no sirve para OAuth:** su URL
+`https://….trycloudflare.com` cambia cada vez que arranca, y los proveedores solo
+aceptan redirect URIs registradas de antemano y escritas exactas. Usa el túnel con
+dominio propio, o prueba solo en `http://localhost:8080`.
+
+**Google** (Google Cloud Console, console.cloud.google.com):
+1. Crea un proyecto (o elige uno) → "APIs y servicios" → "Pantalla de consentimiento de
+   OAuth" (o "Google Auth Platform" → "Branding"): tipo **Externo**, nombre de la app,
+   email de soporte. Permisos: `openid` y `email` (no hace falta verificar la app para
+   esos dos). Mientras esté en modo "Prueba", agrega los emails de quienes van a probar
+   en "Usuarios de prueba"; "Publicar" la abre a todos.
+   Si usas un dominio, agrégalo en "Dominios autorizados" (por ejemplo `tudominio.com`);
+   `localhost` no hace falta.
+2. "Credenciales" (o "Clients") → "Crear credenciales" → "ID de cliente de OAuth" → tipo
+   **Aplicación web**. En "URIs de redireccionamiento autorizados" pega las de la tabla.
+   (Los "orígenes de JavaScript" no hacen falta: el login no usa JS de Google.)
+3. Copia el ID y el secreto a `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+
+**Discord** (Discord Developer Portal, discord.com/developers/applications):
+1. "New Application" → nombre → acepta los términos.
+2. "OAuth2" → "Redirects" → "Add Redirect" con las URIs de la tabla → "Save Changes".
+3. En la misma página: "Client ID" y "Reset Secret" (se ve una sola vez) →
+   `DISCORD_CLIENT_ID` y `DISCORD_CLIENT_SECRET`. Permisos que pide el juego: `identify` y
+   `email` (no hace falta bot ni marcar la app como pública).
+
+Pon los cuatro valores en `deploy/.env.home` (y `PUBLIC_URL` si no es localhost) y
+`make home-up`. Sin ninguno de los dos valores de un proveedor, queda apagado; con uno
+solo (el ID sin el secreto, o al revés), el servidor **no arranca** y `make home-logs`
+dice qué variable falta. Aparecen los botones "Continuar con Google/Discord" en el login del juego
+y del sitio, y la página "Mi cuenta". Los secretos solo viven en `deploy/.env.home`, nunca
+en los logs ni en `/api/auth/config`. La app de escritorio no ofrece estos botones (dice
+que se use el sitio). Una cuenta creada con Google o Discord no tiene contraseña: para
+entrar desde la app de escritorio, su dueño le pone una con "¿Olvidaste tu contraseña?",
+que **necesita SMTP** (paso 8b) y el email confirmado; sin SMTP, `make home-reset-password`.
+
 ### 9. Actualizar después de un `git pull`
 ```bash
 git pull
@@ -269,6 +323,7 @@ Todas son opcionales salvo las dos contraseñas, que se generan solas.
 | `COMPOSE_PROFILES` | — | `map-pr` enciende el worker de PRs de mapas; `mail`, Mailpit (paso 8b) |
 | `PUBLIC_URL` | `http://localhost:8080` | Dirección de los enlaces de los emails (T2.1) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | — (sin emails), `587`, `starttls` | Servidor de correo (paso 8b) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | — (botón apagado) | Login con Google/Discord (paso 8c) |
 | `REQUIRE_VERIFIED_EMAIL` | `false` | `true`: solo cuentas con email confirmado pueden jugar |
 | `MAILPIT_UI_PORT` | `8025` | Puerto de Mailpit (perfil `mail`, solo `127.0.0.1`) |
 | `GITHUB_MAP_PR_TOKEN` | — | Token del bot del worker |
@@ -354,6 +409,9 @@ como `MAP_PR_REPOSITORY`.
 | `files have Windows line endings (CRLF)` o `$'\r': command not found` | El clon convirtió los fines de línea. Con este repo ya no pasa (`.gitattributes`); en un clon viejo: `git config core.autocrlf false && git rm -rq --cached . && git reset -q --hard` (descarta cambios sin commitear) |
 | En Windows el juego deja de responder al rato | WSL o Docker Desktop se durmieron, o Windows suspendió el PC. Desactiva la suspensión; en Docker Desktop desactiva *Resource Saver*. Vuelve con `make home-up` |
 | `make home-up` muy lento en Windows | El repo está en `/mnt/c/...` (el aviso de `home-up` lo dice): clónalo en `~` dentro de WSL |
+| El servidor no arranca después de poner claves de Google o Discord | Falta una de las dos variables de ese proveedor (`*_CLIENT_ID` o `*_CLIENT_SECRET`): `make home-logs` la nombra. Pon las dos, o ninguna |
+| Login con Google/Discord termina en `/oauth/error?code=state` | Abriste el juego en una dirección distinta de `PUBLIC_URL` (otra IP, `localhost` en vez del dominio), tardaste más de 10 minutos, o el navegador bloquea cookies. Entra por exactamente `PUBLIC_URL` (paso 8c) |
+| Google dice `redirect_uri_mismatch` (o Discord `Invalid OAuth2 redirect_uri`) | La URI registrada en la app no es exactamente `<PUBLIC_URL>/api/auth/oauth/<proveedor>/callback` (http/https, puerto, barra final). Cópiala de la tabla del paso 8c |
 | Mis amigos no entran por la LAN | `HOME_BIND=0.0.0.0` y `COOKIE_SECURE=false` en `deploy/.env.home`, y permite el puerto en el firewall: Windows Defender Firewall (Docker Desktop lo pide la primera vez; acepta *Redes privadas*), `sudo ufw allow 8080/tcp` en Linux, macOS *Ajustes → Red → Firewall*. Por Internet usa el túnel: no necesita firewall ni router |
 | `Pool overlaps with other one on this address space` | `TUNNEL_SUBNET` choca con otra red: elige otra `/24` privada |
 | `make home-tunnel` no imprime URL | Sin salida a internet o Cloudflare limitó Quick Tunnels: mira `make home-logs` y reintenta |

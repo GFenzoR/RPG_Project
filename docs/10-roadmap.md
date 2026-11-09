@@ -101,9 +101,10 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
     y ayuda de controles plegable a 960 px.
 
 ## Hito 2 — Cuentas completas, comunidad y escritorio
-- [ ] **T2.1 OAuth Google y Discord** 👤 (crear apps y claves), verificación de email,
-  reset de contraseña, vincular cuentas. Parte 1/2 (verificación de email y reset de
-  contraseña, apagados sin SMTP) hecha; falta la 2/2 (OAuth y vincular cuentas).
+- [x] **T2.1 OAuth Google y Discord** 👤 (crear apps y claves), verificación de email,
+  reset de contraseña, vincular cuentas. (#66, #67) Apagados hasta que el dueño ponga las
+  claves de SMTP y de las apps (docs/13 pasos 8b y 8c). Pendiente: OAuth en la app de
+  escritorio (navegador del sistema + deep link o loopback).
 - [x] **T2.2 Editor v2.** Relleno, rectángulo, selección/copiar/pegar, autoborder,
   paneles de spawns/NPCs/zonas/portales.
 - [x] **T2.3 Map patches.** Exportar/importar/aplicar, merge por casilla, vista de diff.

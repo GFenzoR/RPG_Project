@@ -12,6 +12,9 @@ export type Route =
   | { page: "verify" }
   | { page: "forgot_password" }
   | { page: "reset_password" }
+  | { page: "account" }
+  | { page: "oauth_confirm" }
+  | { page: "oauth_error" }
   | { page: "not_found" };
 
 /** The website's route for a path. The game is /play/ (another page, not routed here). */
@@ -27,6 +30,9 @@ export function parseRoute(pathname: string): Route {
   if (path === "/verify") return { page: "verify" };
   if (path === "/forgot-password") return { page: "forgot_password" };
   if (path === "/reset-password") return { page: "reset_password" };
+  if (path === "/account") return { page: "account" };
+  if (path === "/oauth/confirm") return { page: "oauth_confirm" };
+  if (path === "/oauth/error") return { page: "oauth_error" };
   if (path === "/maps/review") return { page: "maps_review" };
   const r = /^\/maps\/review\/([1-9][0-9]{0,15})$/.exec(path);
   if (r?.[1]) return { page: "maps_review", id: Number(r[1]) };
@@ -93,4 +99,35 @@ export function categoryKey(category: string): string {
 export function linkToken(hash: string): string | undefined {
   const token = new URLSearchParams(hash.replace(/^#/, "")).get("token") ?? "";
   return /^[A-Za-z0-9_-]{43}$/.test(token) ? token : undefined;
+}
+
+/** Codes of /oauth/error?code= (site.oauth.error.<code>); anything else is "internal". */
+export const OAUTH_ERRORS = [
+  "state",
+  "denied",
+  "provider",
+  "no_email",
+  "identity_taken",
+  "provider_linked",
+  "unknown_provider",
+  "account_disabled",
+  "account_banned",
+  "email_taken",
+  "busy",
+  "internal",
+] as const;
+
+/** i18n key of the error of /oauth/error's query. */
+export function oauthErrorKey(search: string): string {
+  const code = new URLSearchParams(search).get("code") ?? "";
+  return `site.oauth.error.${(OAUTH_ERRORS as readonly string[]).includes(code) ? code : "internal"}`;
+}
+
+/**
+ * The provider of /account?linked=<provider>, only if it is a known provider that the
+ * account really has linked (anything else in the URL is ignored, never shown).
+ */
+export function linkedProvider(search: string, linked: readonly string[]): string | undefined {
+  const p = new URLSearchParams(search).get("linked") ?? "";
+  return ["google", "discord"].includes(p) && linked.includes(p) ? p : undefined;
 }

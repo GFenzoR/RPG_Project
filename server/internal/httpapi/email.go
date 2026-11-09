@@ -55,6 +55,9 @@ type accountJSON struct {
 	EmailVerified bool   `json:"email_verified"`
 	// EmailEnabled: the server sends emails, so verifying is possible (and asked for).
 	EmailEnabled bool `json:"email_enabled"`
+	// HasPassword: the account can log in with a password (T2.1 2/2).
+	HasPassword bool           `json:"has_password"`
+	Identities  []identityJSON `json:"identities"`
 }
 
 func (a *api) emailRoutes(mux *http.ServeMux) {
@@ -68,8 +71,19 @@ func (a *api) emailRoutes(mux *http.ServeMux) {
 
 // authConfig tells the website and the game which account features this server has,
 // so they never offer what cannot work (a reset email without SMTP).
+// Providers lists the OAuth providers with keys; their secrets never leave the server.
 func (a *api) authConfig(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"email": a.cfg.Auth.EmailEnabled()})
+	providers := a.cfg.Auth.Providers()
+	if providers == nil {
+		providers = []string{}
+	}
+	// PublicURL is not a secret: OAuth only works from that origin (the redirect_uri and
+	// the binding cookie), so the client hides the buttons anywhere else.
+	writeJSON(w, http.StatusOK, struct {
+		Email     bool     `json:"email"`
+		Providers []string `json:"providers"`
+		PublicURL string   `json:"public_url,omitempty"`
+	}{a.cfg.Auth.EmailEnabled(), providers, a.cfg.Auth.PublicURL()})
 }
 
 func (a *api) account(w http.ResponseWriter, r *http.Request, accountID int64) {
@@ -78,8 +92,14 @@ func (a *api) account(w http.ResponseWriter, r *http.Request, accountID int64) {
 		a.fail(w, r, err)
 		return
 	}
+	ids, err := a.identitiesOf(r.Context(), accountID)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, accountJSON{
 		Email: p.Email, EmailVerified: p.EmailVerified, EmailEnabled: a.cfg.Auth.EmailEnabled(),
+		HasPassword: p.HasPassword, Identities: ids,
 	})
 }
 

@@ -73,31 +73,75 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return data as T;
 }
 
+/** A provider identity linked to the account (T2.1). */
+export interface Identity {
+  provider: string;
+  /** The email the provider reported when it was linked. */
+  email: string;
+  linked_at: string;
+}
+
 /** The signed-in account (T2.1). */
 export interface Account {
   email: string;
   email_verified: boolean;
   /** The server sends emails: verifying is possible and asked for. */
   email_enabled: boolean;
+  has_password: boolean;
+  identities: Identity[];
 }
 
-let emailConfig: Promise<boolean> | undefined;
+/** What the server offers for accounts (GET /api/auth/config, T2.1). */
+export interface AuthConfig {
+  /** The server sends emails (verification, password reset). */
+  email: boolean;
+  /** OAuth providers with keys ("google", "discord"); never their secrets. */
+  providers: string[];
+  /** Origin of PUBLIC_URL ("" if unknown): OAuth only works from exactly there. */
+  publicOrigin: string;
+}
+
+/** The origin of an http(s) URL, or "" for anything else. */
+export function originOf(url: unknown): string {
+  if (typeof url !== "string") return "";
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.origin : "";
+  } catch {
+    return "";
+  }
+}
+
+const KNOWN_PROVIDERS = ["google", "discord"];
+let authConfigCache: Promise<AuthConfig> | undefined;
 
 /**
- * Whether the server sends emails (T2.1), asked once per page. A server older than T2.1
- * answers 404 (or fails), which counts as no.
+ * The server's account features, asked once per page. A server older than T2.1 answers
+ * 404 (or fails), which means none.
  */
-export function emailEnabled(): Promise<boolean> {
-  emailConfig ??= call<{ email?: unknown }>("GET", "/api/auth/config").then(
-    (c) => c.email === true,
-    () => false,
+export function authConfig(): Promise<AuthConfig> {
+  authConfigCache ??= call<{ email?: unknown; providers?: unknown; public_url?: unknown }>(
+    "GET",
+    "/api/auth/config",
+  ).then(
+    (c) => ({
+      email: c.email === true,
+      providers: Array.isArray(c.providers)
+        ? KNOWN_PROVIDERS.filter((p) => (c.providers as unknown[]).includes(p))
+        : [],
+      publicOrigin: originOf(c.public_url),
+    }),
+    () => ({ email: false, providers: [], publicOrigin: "" }),
   );
-  return emailConfig;
+  return authConfigCache;
 }
 
-/** Tests: forget the cached answer of emailEnabled. */
+/** Whether the server sends emails (T2.1). */
+export const emailEnabled = async (): Promise<boolean> => (await authConfig()).email;
+
+/** Tests: forget the cached answer of authConfig. */
 export function forgetEmailConfig(): void {
-  emailConfig = undefined;
+  authConfigCache = undefined;
 }
 
 /**
@@ -146,6 +190,28 @@ export const accountApi = {
     call("POST", "/api/auth/password/forgot", { email, lang }),
   reset: (token: string, password: string): Promise<void> =>
     call("POST", "/api/auth/password/reset", { token, password }),
+};
+
+/** OAuth login and linked identities (T2.1, docs/05 "OAuth"). */
+export const oauthApi = {
+  /** Where to send the browser to log in with provider; `ret` is where it comes back. */
+  start: (provider: string, ret: string): Promise<{ url: string }> =>
+    call("POST", `/api/auth/oauth/${encodeURIComponent(provider)}/start`, { return: ret }),
+  /** Linking needs the password of an account that has one (recent re-authentication). */
+  link: (provider: string, password: string): Promise<{ url: string }> =>
+    call(
+      "POST",
+      `/api/auth/oauth/${encodeURIComponent(provider)}/link`,
+      password ? { password } : {},
+    ),
+  /** has_password: false = the existing account signs in only with a provider. */
+  pending: (): Promise<{ provider: string; email: string; has_password: boolean }> =>
+    call("GET", "/api/auth/oauth/pending"),
+  confirm: (password: string): Promise<{ return: string }> =>
+    call("POST", "/api/auth/oauth/pending/confirm", { password }),
+  create: (email: string): Promise<{ return: string }> =>
+    call("POST", "/api/auth/oauth/pending/create", { email }),
+  unlink: (provider: string): Promise<void> => call("POST", "/api/account/unlink", { provider }),
 };
 
 /** A map submission of the portal (T4.5, docs/05 "Envío de mapas"). */

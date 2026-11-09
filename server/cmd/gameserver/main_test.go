@@ -201,3 +201,17 @@ func TestMetricsLingerOnlyAfterAbandonedWrites(t *testing.T) {
 		t.Fatalf("linger %v without metrics", d)
 	}
 }
+
+func TestProvidersFromEnv(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	ps, names, err := providersFromEnv(env(map[string]string{"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "s"}))
+	if err != nil || len(ps) != 1 || names[0] != "google" {
+		t.Fatalf("%v %v", names, err)
+	}
+	if ps, _, err := providersFromEnv(env(nil)); err != nil || len(ps) != 0 {
+		t.Fatal("no keys must mean no providers")
+	}
+	if _, _, err := providersFromEnv(env(map[string]string{"DISCORD_CLIENT_ID": "id"})); err == nil {
+		t.Fatal("half a provider accepted")
+	}
+}

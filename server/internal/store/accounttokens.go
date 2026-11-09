@@ -99,8 +99,9 @@ func (s *Store) VerifyEmail(ctx context.Context, tokenHash []byte, now time.Time
 }
 
 // ResetPassword consumes a reset_password token valid at now, sets the new password
-// hash, deletes the account's other reset tokens, revokes every session of the account
-// and audits it, all in one transaction. ErrNotFound if the token is not valid, or its
+// hash, deletes the account's other reset tokens, revokes every session of the account,
+// drops the linked identities that never proved the account's email and audits it, all
+// in one transaction. ErrNotFound if the token is not valid, or its
 // account is disabled or no longer has the address the link was sent to.
 func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHash string, now time.Time) (int64, error) {
 	var id int64
@@ -128,14 +129,25 @@ func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHas
 		if err := q.DeleteAccountTokens(ctx, db.DeleteAccountTokensParams{AccountID: id, Purpose: string(TokenResetPassword)}); err != nil {
 			return err
 		}
+		// Links in flight die with the sessions that started them.
+		if err := q.DeleteAccountOAuthStates(ctx, pgtype.Int8{Int64: id, Valid: true}); err != nil {
+			return err
+		}
 		n, err := q.DeleteAccountSessions(ctx, id)
+		if err != nil {
+			return err
+		}
+		// Linked identities that never proved this email (T2.1 2/2) go too: the address
+		// may have been squatted through a provider before its owner took it back.
+		dropped, err := q.DeleteUnprovenIdentities(ctx, db.DeleteUnprovenIdentitiesParams{AccountID: id, Email: row.Email})
 		if err != nil {
 			return err
 		}
 		return appendAudit(ctx, q, AuditEntry{
 			At: now, Source: AuditWeb, ActorAccountID: id, ActorName: "account",
 			Action: AuditPasswordReset, TargetAccountID: id,
-			Args: map[string]string{"sessions_revoked": fmt.Sprint(n)}, Result: ResultOK,
+			Args:   map[string]string{"sessions_revoked": fmt.Sprint(n), "identities_dropped": fmt.Sprint(dropped)},
+			Result: ResultOK,
 		})
 	})
 	if err != nil {

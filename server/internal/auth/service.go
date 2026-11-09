@@ -13,6 +13,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/oauth"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 )
 
@@ -90,7 +91,12 @@ type Config struct {
 	// not block (the app hands it to the game loop from its own goroutine).
 	SessionsRevoked func(accountID int64)
 	VerifyTokenTTL  time.Duration // default DefaultVerifyTokenTTL
-	ResetTokenTTL   time.Duration // default DefaultResetTokenTTL
+	// Providers are the configured OAuth providers (T2.1 2/2); they need OAuth and
+	// PublicURL (the redirect_uri is PublicURL + /api/auth/oauth/<name>/callback).
+	Providers []*oauth.Provider
+	// OAuth stores the OAuth flows and linked identities. *store.Store implements it.
+	OAuth         OAuthRepo
+	ResetTokenTTL time.Duration // default DefaultResetTokenTTL
 }
 
 // Defaults for Config.
@@ -122,6 +128,8 @@ type Service struct {
 	publicURL       string
 	requireVerified bool
 	revoked         func(accountID int64)
+	providers       map[string]*oauth.Provider
+	oauthRepo       OAuthRepo
 	verifyTTL       time.Duration
 	resetTTL        time.Duration
 }
@@ -176,7 +184,15 @@ func New(cfg Config) (*Service, error) {
 	if s.requireVerified && s.mail == nil {
 		return nil, errors.New("auth: requiring a verified email needs a mailer (SMTP)")
 	}
-	if s.mail != nil {
+	s.providers = map[string]*oauth.Provider{}
+	for _, p := range cfg.Providers {
+		s.providers[p.Name()] = p
+	}
+	s.oauthRepo = cfg.OAuth
+	if len(s.providers) > 0 && s.oauthRepo == nil {
+		return nil, errors.New("auth: OAuth providers need an OAuth repository")
+	}
+	if s.mail != nil || len(s.providers) > 0 {
 		u, err := CheckPublicURL(cfg.PublicURL)
 		if err != nil {
 			return nil, err
@@ -289,17 +305,29 @@ func (s *Service) Login(ctx context.Context, email, password string) (Token, err
 	if acc.Disabled {
 		return Token{}, ErrAccountDisabled
 	}
+	return s.loginAccount(ctx, acc.ID)
+}
 
+// loginAccount issues an account token for an account whose credentials (password or
+// OAuth identity) were already checked: the same session and cookie for every way in.
+func (s *Service) loginAccount(ctx context.Context, accountID int64) (Token, error) {
+	p, err := s.Profile(ctx, accountID)
+	if err != nil {
+		return Token{}, err
+	}
+	if p.Disabled {
+		return Token{}, ErrAccountDisabled
+	}
 	now := s.clock.Now()
-	// Checked only after the password matched: the answer does not reveal bans to
-	// whoever does not know the password.
-	switch _, err := s.repo.ActiveBan(ctx, acc.ID, now); {
+	// Checked only after the credentials matched: the answer does not reveal bans to
+	// whoever does not have them.
+	switch _, err := s.repo.ActiveBan(ctx, accountID, now); {
 	case err == nil:
 		return Token{}, ErrAccountBanned
 	case !errors.Is(err, store.ErrNotFound):
 		return Token{}, fmt.Errorf("login: %w", err)
 	}
-	if err := s.repo.TouchLogin(ctx, acc.ID, now); err != nil {
+	if err := s.repo.TouchLogin(ctx, accountID, now); err != nil {
 		return Token{}, fmt.Errorf("login: %w", err)
 	}
 	token, hash, err := newToken()
@@ -308,7 +336,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (Token, err
 	}
 	sess := store.Session{
 		TokenHash: hash,
-		AccountID: acc.ID,
+		AccountID: accountID,
 		Kind:      store.SessionAccount,
 		CreatedAt: now,
 		ExpiresAt: now.Add(s.tokenTTL),
@@ -316,7 +344,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (Token, err
 	if err := s.repo.CreateSession(ctx, sess); err != nil {
 		return Token{}, fmt.Errorf("login: %w", err)
 	}
-	return Token{Token: token, AccountID: acc.ID, ExpiresAt: sess.ExpiresAt}, nil
+	return Token{Token: token, AccountID: accountID, ExpiresAt: sess.ExpiresAt}, nil
 }
 
 // Authenticate resolves an account token to its account id.
@@ -356,6 +384,13 @@ func (s *Service) PurgeExpiredSessions(ctx context.Context) (int64, error) {
 	m, err := s.repo.DeleteExpiredAccountTokens(ctx, now)
 	if err != nil {
 		return n, fmt.Errorf("purge account tokens: %w", err)
+	}
+	if s.oauthRepo != nil {
+		o, err := s.oauthRepo.DeleteExpiredOAuth(ctx, now)
+		if err != nil {
+			return n + m, fmt.Errorf("purge oauth: %w", err)
+		}
+		m += o
 	}
 	return n + m, nil
 }

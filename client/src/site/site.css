@@ -478,3 +478,15 @@ figcaption {
   display: inline-block;
   margin-top: 0.75rem;
 }
+.account-methods {
+  padding-left: 1.25rem;
+}
+.account-page h2 {
+  margin-top: 1rem;
+}
+.account-page .notice {
+  margin-bottom: 0.75rem;
+}
+.account-page form + form {
+  margin-top: 1.25rem;
+}

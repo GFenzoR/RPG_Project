@@ -288,5 +288,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - `site/Account.tsx`: `/verify`, `/forgot-password`, `/reset-password`. El token llega en el
   fragmento (`#token=`, `routes.ts` `linkToken`), se manda en el cuerpo del `POST` y se
   borra de la URL con `history.replaceState`. Nunca lo pongas en una query.
+- OAuth (2/2): `OAuthButtons` (`ui/Account.tsx`, solo los proveedores de
+  `/api/auth/config`; en escritorio, un texto que manda al sitio) y `site/OAuth.tsx`:
+  `/account` (vínculos), `/oauth/confirm` y `/oauth/error` (códigos fijos en
+  `routes.ts` `OAUTH_ERRORS`). El navegador sale al proveedor con `location.assign` de la
+  URL que dio el servidor. E2E: `e2e/oauth.spec.ts` contra `server/cmd/fakeoauth`.
+  Fuera del origen de `public_url` (de `/api/auth/config`) los botones no se muestran: el
+  login no puede volver ahí. El aviso de `/account?linked=` solo aparece para un proveedor
+  que la cuenta tiene vinculado (`routes.ts` `linkedProvider`).
 - E2E: `e2e/account.spec.ts` contra un tercer servidor (solo HTTP, emails activados) y un
   SMTP falso (`e2e/fake-smtp.ts`, mensajes en `smtpMessagesURL`).

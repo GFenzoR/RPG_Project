@@ -13,6 +13,29 @@ Todos los números de este documento son **valores iniciales** que viven en
   verificado también para jugar (`POST /api/play` → `email_unverified`). Necesita SMTP: el
   servidor no arranca con esa opción y sin emails.
 - Sin SMTP no se pide verificar nada y el sitio no ofrece "¿Olvidaste tu contraseña?".
+- **Login con Google o Discord (T2.1):** solo aparece el botón de un proveedor con claves.
+  - Identidad ya vinculada → entra a esa cuenta.
+  - Identidad nueva cuyo email (informado por el proveedor) ya tiene una cuenta → **no** se
+    vincula sola (evita el robo de cuentas): se pide la contraseña de esa cuenta para
+    vincularla, o se crea una cuenta nueva con otro email.
+  - Si no, se crea la cuenta. Su email queda verificado solo si el proveedor dice que lo
+    está (`email_verified` en Google, `verified` en Discord). Una cuenta creada así no
+    tiene contraseña (puede pedir un reset por email para ponerle una).
+  - En "Mi cuenta" (`/account`) se ven los vínculos. Vincular otro pide re-autenticarse: la
+    contraseña, o, en una cuenta sin contraseña, haber entrado hace menos de 10 minutos.
+    No se puede desvincular la última forma de entrar.
+  - Un reset de contraseña (quien controla el buzón recupera la cuenta) también quita las
+    identidades que nunca probaron ese email (no verificadas por el proveedor, o con otro
+    email): así no se queda adentro quien ocupó la dirección con un proveedor.
+    Para que el dueño del buzón llegue a eso, una cuenta nueva cuyo email no probó nadie
+    (proveedor que no lo verificó, o email escrito en `/oauth/confirm`) recibe el email de
+    verificación: confirma, pide el reset y recupera la dirección.
+  - Un vínculo empezado en "Mi cuenta" muere si la sesión que lo empezó termina antes de
+    volver del proveedor (logout, reset, ban).
+  - Si la cuenta existente con ese email no tiene contraseña, `/oauth/confirm` no la pide:
+    explica que se entra con el proveedor que ya usa y se vincula desde "Mi cuenta".
+  - La app de escritorio no ofrece OAuth (necesitaría abrir el navegador del sistema y
+    volver por deep link o loopback; pendiente): muestra que se haga en el sitio.
 
 ## Movimiento
 - Por casillas, 8 direcciones (diagonal más lenta: ×1.5 de costo como en Tibia clásico).

@@ -121,6 +121,7 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 | `MAP_PR_REPOSITORY`, `MAP_PR_BASE` | Repo (`owner/repo`, por defecto `GFenzoR/RPG_Project`) y rama base (`main`) de esos PR |
 | `PUBLIC_URL` | Dirección de los enlaces de los emails (T2.1). Por defecto `https://$SITE_ADDRESS` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Emails de la cuenta (sección "Emails de la cuenta"). Sin `SMTP_HOST` no hay emails |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Login con Google/Discord ("Login con Google y Discord"). Sin ninguno de los dos, ese proveedor queda apagado; con uno solo, el servidor no arranca y el log nombra la variable que falta |
 | `REQUIRE_VERIFIED_EMAIL` | `true` = solo cuentas con email verificado juegan (necesita SMTP) |
 | `RPG_WS_ORIGINS` | Orígenes extra en `/ws`. Sin definir = los del cliente de escritorio (`tauri://localhost,http://tauri.localhost`); vacío = solo el sitio |
 
@@ -180,6 +181,55 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec gameserv
   /app/gameserver admin reset-link -email ana@example.org
 ```
 Imprime un enlace de un solo uso (1 h); queda auditado como `reset_link_issued`.
+
+### Login con Google y Discord (T2.1)
+Apagado hasta que pongas las claves de **tus** apps (el proyecto no trae ninguna). Cada
+proveedor necesita una "redirect URI" exacta, que el servidor arma como
+`<PUBLIC_URL>/api/auth/oauth/<proveedor>/callback`:
+
+| Dónde juegan | `PUBLIC_URL` | Redirect URI de Google | Redirect URI de Discord |
+|---|---|---|---|
+| Tu PC | `http://localhost:8080` | `http://localhost:8080/api/auth/oauth/google/callback` | `http://localhost:8080/api/auth/oauth/discord/callback` |
+| Túnel de Cloudflare con dominio (paso 5) | `https://juego.tudominio.com` | `https://juego.tudominio.com/api/auth/oauth/google/callback` | `https://juego.tudominio.com/api/auth/oauth/discord/callback` |
+| AWS (docs/09) | `https://tudominio.com` | `https://tudominio.com/api/auth/oauth/google/callback` | `https://tudominio.com/api/auth/oauth/discord/callback` |
+
+**OAuth funciona solo desde exactamente `PUBLIC_URL`.** El proveedor devuelve el navegador a
+esa dirección y la cookie que ata el intento vive en la dirección donde se apretó el
+botón: si alguien juega por otra (`localhost` cuando `PUBLIC_URL` es el dominio, una IP de
+la LAN o de Tailscale), el login termina en `/oauth/error?code=state`. Por eso, en una
+dirección distinta, el juego esconde los botones y dice dónde abrirlo. Registrar varias
+URIs en la app solo sirve para cambiar `PUBLIC_URL` sin tocar la app, no para usar varias
+direcciones a la vez. Quien entre por la LAN o Tailscale usa email y contraseña (o pon
+como `PUBLIC_URL` el nombre https de `tailscale serve`, si todos entran por ahí).
+**El Quick Tunnel (`make home-tunnel`) no sirve para OAuth:** su URL
+`https://….trycloudflare.com` cambia cada vez que arranca, y los proveedores solo
+aceptan redirect URIs registradas de antemano y escritas exactas. Usa el túnel con
+dominio propio, o prueba solo en `http://localhost:8080`.
+
+**Google** (Google Cloud Console, console.cloud.google.com):
+1. Crea un proyecto (o elige uno) → "APIs y servicios" → "Pantalla de consentimiento de
+   OAuth" (o "Google Auth Platform" → "Branding"): tipo **Externo**, nombre de la app,
+   email de soporte. Permisos: `openid` y `email` (no hace falta verificar la app para
+   esos dos). Mientras esté en modo "Prueba", agrega los emails de quienes van a probar
+   en "Usuarios de prueba"; "Publicar" la abre a todos.
+   Si usas un dominio, agrégalo en "Dominios autorizados" (por ejemplo `tudominio.com`);
+   `localhost` no hace falta.
+2. "Credenciales" (o "Clients") → "Crear credenciales" → "ID de cliente de OAuth" → tipo
+   **Aplicación web**. En "URIs de redireccionamiento autorizados" pega las de la tabla.
+   (Los "orígenes de JavaScript" no hacen falta: el login no usa JS de Google.)
+3. Copia el ID y el secreto a `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+
+**Discord** (Discord Developer Portal, discord.com/developers/applications):
+1. "New Application" → nombre → acepta los términos.
+2. "OAuth2" → "Redirects" → "Add Redirect" con las URIs de la tabla → "Save Changes".
+3. En la misma página: "Client ID" y "Reset Secret" (se ve una sola vez) →
+   `DISCORD_CLIENT_ID` y `DISCORD_CLIENT_SECRET`. Permisos que pide el juego: `identify` y
+   `email` (no hace falta bot ni marcar la app como pública).
+
+En AWS, `PUBLIC_URL` es `https://tudominio.com` (el default es `https://$SITE_ADDRESS`).
+Para el paso a paso en Google Cloud y Discord ver `13-hosting-de-pruebas.md` (paso 8c): es
+igual, con la URI del dominio. Con la app de Google en modo "Prueba" solo entran los
+usuarios de prueba: publícala antes de abrir el juego.
 
 ### Backups y restauración
 - El servicio `backup` hace un `pg_dump` (formato custom, comprimido) al arrancar y luego

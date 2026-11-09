@@ -1058,3 +1058,16 @@ body.using-item canvas {
 .verify-notice button {
   align-self: flex-start;
 }
+/* T2.1 2/2: OAuth buttons (ui/Account.tsx). Plain text buttons: no provider logos. */
+.oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.oauth-button {
+  width: 100%;
+}
+.oauth-hint {
+  font-size: 0.9rem;
+}

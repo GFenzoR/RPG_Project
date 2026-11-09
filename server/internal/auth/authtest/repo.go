@@ -24,6 +24,9 @@ type Repo struct {
 	verified   map[int64]bool
 	locales    map[int64]string
 	tokens     map[string]store.AccountToken
+	identities map[string]identityRow
+	states     map[string]store.OAuthState
+	pendings   map[string]pendingRow
 	// Audit holds the audit entries the store would have written (VerifyEmail,
 	// ResetPassword).
 	Audit []store.AuditEntry
@@ -313,6 +316,16 @@ func (r *Repo) ResetPassword(_ context.Context, hash []byte, passwordHash string
 	for k, s := range r.sessions {
 		if s.AccountID == t.AccountID {
 			delete(r.sessions, k)
+		}
+	}
+	for k, row := range r.identities {
+		if row.accountID == t.AccountID && (!row.EmailVerified || row.Email != t.Email) {
+			delete(r.identities, k)
+		}
+	}
+	for k, st := range r.states {
+		if st.AccountID == t.AccountID {
+			delete(r.states, k)
 		}
 	}
 	r.Audit = append(r.Audit, store.AuditEntry{At: now, Source: store.AuditWeb, ActorAccountID: t.AccountID,

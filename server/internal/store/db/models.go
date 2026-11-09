@@ -38,6 +38,15 @@ type AccountCosmetic struct {
 	AcquiredAt pgtype.Timestamptz
 }
 
+type AccountIdentity struct {
+	Provider      string
+	Subject       string
+	AccountID     int64
+	Email         string
+	EmailVerified bool
+	CreatedAt     pgtype.Timestamptz
+}
+
 type AccountToken struct {
 	TokenHash []byte
 	AccountID int64
@@ -149,6 +158,29 @@ type MapSubmission struct {
 	PrNumber          pgtype.Int4
 	Attempts          int32
 	NextAttemptAt     pgtype.Timestamptz
+}
+
+type OauthPending struct {
+	TokenHash     []byte
+	Provider      string
+	Subject       string
+	Email         string
+	EmailVerified bool
+	ReturnTo      string
+	ExpiresAt     pgtype.Timestamptz
+}
+
+type OauthState struct {
+	StateHash   []byte
+	BindingHash []byte
+	Provider    string
+	Verifier    string
+	Nonce       string
+	Mode        string
+	AccountID   pgtype.Int8
+	SessionHash []byte
+	ReturnTo    string
+	ExpiresAt   pgtype.Timestamptz
 }
 
 type PlayerReport struct {

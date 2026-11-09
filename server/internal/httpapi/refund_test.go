@@ -44,6 +44,29 @@ func (*fakeAccounts) VerifyEmail(context.Context, string) error                 
 func (*fakeAccounts) RequestPasswordReset(context.Context, string, string) error { return nil }
 func (*fakeAccounts) ResetPassword(context.Context, string, string) error        { return nil }
 
+func (*fakeAccounts) Providers() []string { return nil }
+func (*fakeAccounts) PublicURL() string   { return "" }
+func (*fakeAccounts) StartLogin(context.Context, string, string) (auth.OAuthStart, error) {
+	return auth.OAuthStart{}, nil
+}
+func (*fakeAccounts) StartLink(context.Context, string, string, string) (auth.OAuthStart, error) {
+	return auth.OAuthStart{}, nil
+}
+func (*fakeAccounts) FinishOAuth(context.Context, string, string, string, string, string) (auth.OAuthResult, error) {
+	return auth.OAuthResult{}, nil
+}
+func (*fakeAccounts) Pending(context.Context, string) (auth.PendingIdentity, error) {
+	return auth.PendingIdentity{}, nil
+}
+func (*fakeAccounts) ConfirmPending(context.Context, string, string) (auth.Token, string, error) {
+	return auth.Token{}, "", nil
+}
+func (*fakeAccounts) CreateFromPending(context.Context, string, string) (auth.Token, string, error) {
+	return auth.Token{}, "", nil
+}
+func (*fakeAccounts) Identities(context.Context, int64) ([]store.Identity, error) { return nil, nil }
+func (*fakeAccounts) Unlink(context.Context, int64, string) error                 { return nil }
+
 func wrongPassword() (auth.Token, error) { return auth.Token{}, auth.ErrInvalidCredentials }
 
 // newRefundHarness: pair and email budgets of 1 that never refill during the test, and

@@ -73,6 +73,14 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       RPG_REQUIRE_VERIFIED_EMAIL: ${REQUIRE_VERIFIED_EMAIL:-false}
+      # OAuth login (T2.1 2/2; docs/09 "Login con Google y Discord"). A provider with
+      # neither value is off (no button); with only one, the server refuses to start and
+      # logs the missing variable. Redirect URI to register at the
+      # provider: ${PUBLIC_URL}/api/auth/oauth/<google|discord>/callback.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-rpg}?sslmode=disable
     # Pending migrations (embedded in the binary) are applied on start (-migrate, default
     # true); the healthcheck only passes once the HTTP API is up, after migrating.
