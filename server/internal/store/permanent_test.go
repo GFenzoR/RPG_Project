@@ -18,4 +18,8 @@ func TestPermanent(t *testing.T) {
 	if Permanent(errors.New("timeout")) || Permanent(nil) {
 		t.Error("non-Postgres errors are not permanent")
 	}
+	// The store's own guild refusals (no pg error inside) are permanent too (T5.1).
+	if !Permanent(fmt.Errorf("guild change: %w: unknown op 99", ErrGuildConflict)) {
+		t.Error("ErrGuildConflict is not permanent")
+	}
 }

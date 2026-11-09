@@ -83,6 +83,8 @@ const (
 	ChatChannel_CHAT_CHANNEL_GLOBAL      ChatChannel = 4
 	// The members of the speaker's party, wherever they are (T3.3).
 	ChatChannel_CHAT_CHANNEL_PARTY ChatChannel = 5
+	// The members of the speaker's guild who are online, wherever they are (T5.1).
+	ChatChannel_CHAT_CHANNEL_GUILD ChatChannel = 6
 )
 
 // Enum value maps for ChatChannel.
@@ -94,6 +96,7 @@ var (
 		3: "CHAT_CHANNEL_WHISPER",
 		4: "CHAT_CHANNEL_GLOBAL",
 		5: "CHAT_CHANNEL_PARTY",
+		6: "CHAT_CHANNEL_GUILD",
 	}
 	ChatChannel_value = map[string]int32{
 		"CHAT_CHANNEL_UNSPECIFIED": 0,
@@ -102,6 +105,7 @@ var (
 		"CHAT_CHANNEL_WHISPER":     3,
 		"CHAT_CHANNEL_GLOBAL":      4,
 		"CHAT_CHANNEL_PARTY":       5,
+		"CHAT_CHANNEL_GUILD":       6,
 	}
 )
 
@@ -206,6 +210,97 @@ func (PartyAction) EnumDescriptor() ([]byte, []int) {
 	return file_game_v1_client_proto_rawDescGZIP(), []int{2}
 }
 
+// GuildAction is what a GuildCommand asks for (T5.1, docs/02 "Gremios"). Members are
+// named by character name: they may be offline. The server checks every rank and rule.
+type GuildAction int32
+
+const (
+	GuildAction_GUILD_ACTION_UNSPECIFIED GuildAction = 0
+	// Found a guild called name (costs gold, needs a level; the founder leads it).
+	GuildAction_GUILD_ACTION_CREATE GuildAction = 1
+	// Vice or leader: invite the online character name; REVOKE withdraws its invitation.
+	GuildAction_GUILD_ACTION_INVITE GuildAction = 2
+	GuildAction_GUILD_ACTION_REVOKE GuildAction = 3
+	// Accept or decline the invitation of guild_id.
+	GuildAction_GUILD_ACTION_ACCEPT  GuildAction = 4
+	GuildAction_GUILD_ACTION_DECLINE GuildAction = 5
+	// Leave the guild (the leader must transfer or disband first).
+	GuildAction_GUILD_ACTION_LEAVE GuildAction = 6
+	// Remove member name (leader: anyone else; vice: members only).
+	GuildAction_GUILD_ACTION_KICK GuildAction = 7
+	// Leader: member name becomes vice leader, or a vice leader a member.
+	GuildAction_GUILD_ACTION_PROMOTE GuildAction = 8
+	GuildAction_GUILD_ACTION_DEMOTE  GuildAction = 9
+	// Vice or leader: set the message of the day to text (empty clears it).
+	GuildAction_GUILD_ACTION_MOTD GuildAction = 10
+	// Leader: disband the guild. name must repeat the guild's name (a confirmation).
+	GuildAction_GUILD_ACTION_DISBAND GuildAction = 11
+	// Leader: member name becomes the leader; the old leader becomes a vice leader if there
+	// is room (balance guild.max_vice_leaders), a member otherwise.
+	GuildAction_GUILD_ACTION_TRANSFER GuildAction = 12
+)
+
+// Enum value maps for GuildAction.
+var (
+	GuildAction_name = map[int32]string{
+		0:  "GUILD_ACTION_UNSPECIFIED",
+		1:  "GUILD_ACTION_CREATE",
+		2:  "GUILD_ACTION_INVITE",
+		3:  "GUILD_ACTION_REVOKE",
+		4:  "GUILD_ACTION_ACCEPT",
+		5:  "GUILD_ACTION_DECLINE",
+		6:  "GUILD_ACTION_LEAVE",
+		7:  "GUILD_ACTION_KICK",
+		8:  "GUILD_ACTION_PROMOTE",
+		9:  "GUILD_ACTION_DEMOTE",
+		10: "GUILD_ACTION_MOTD",
+		11: "GUILD_ACTION_DISBAND",
+		12: "GUILD_ACTION_TRANSFER",
+	}
+	GuildAction_value = map[string]int32{
+		"GUILD_ACTION_UNSPECIFIED": 0,
+		"GUILD_ACTION_CREATE":      1,
+		"GUILD_ACTION_INVITE":      2,
+		"GUILD_ACTION_REVOKE":      3,
+		"GUILD_ACTION_ACCEPT":      4,
+		"GUILD_ACTION_DECLINE":     5,
+		"GUILD_ACTION_LEAVE":       6,
+		"GUILD_ACTION_KICK":        7,
+		"GUILD_ACTION_PROMOTE":     8,
+		"GUILD_ACTION_DEMOTE":      9,
+		"GUILD_ACTION_MOTD":        10,
+		"GUILD_ACTION_DISBAND":     11,
+		"GUILD_ACTION_TRANSFER":    12,
+	}
+)
+
+func (x GuildAction) Enum() *GuildAction {
+	p := new(GuildAction)
+	*p = x
+	return p
+}
+
+func (x GuildAction) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildAction) Descriptor() protoreflect.EnumDescriptor {
+	return file_game_v1_client_proto_enumTypes[3].Descriptor()
+}
+
+func (GuildAction) Type() protoreflect.EnumType {
+	return &file_game_v1_client_proto_enumTypes[3]
+}
+
+func (x GuildAction) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildAction.Descriptor instead.
+func (GuildAction) EnumDescriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{3}
+}
+
 // ClientMessage is the only thing a client WebSocket frame carries (max 4 KB).
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -240,6 +335,7 @@ type ClientMessage struct {
 	//	*ClientMessage_ReportPlayer
 	//	*ClientMessage_PresenceAnswer
 	//	*ClientMessage_TutorialSkip
+	//	*ClientMessage_GuildCommand
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -543,6 +639,15 @@ func (x *ClientMessage) GetTutorialSkip() *TutorialSkip {
 	return nil
 }
 
+func (x *ClientMessage) GetGuildCommand() *GuildCommand {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_GuildCommand); ok {
+			return x.GuildCommand
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -663,6 +768,10 @@ type ClientMessage_TutorialSkip struct {
 	TutorialSkip *TutorialSkip `protobuf:"bytes,29,opt,name=tutorial_skip,json=tutorialSkip,proto3,oneof"`
 }
 
+type ClientMessage_GuildCommand struct {
+	GuildCommand *GuildCommand `protobuf:"bytes,30,opt,name=guild_command,json=guildCommand,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -720,6 +829,8 @@ func (*ClientMessage_ReportPlayer) isClientMessage_Message() {}
 func (*ClientMessage_PresenceAnswer) isClientMessage_Message() {}
 
 func (*ClientMessage_TutorialSkip) isClientMessage_Message() {}
+
+func (*ClientMessage_GuildCommand) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -1355,10 +1466,13 @@ func (x *MoveItem) GetCount() uint32 {
 // LookAt inspects an item or creature on a tile, or an item in the equipment or an
 // open container.
 type LookAt struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	From          *ItemLocation          `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
-	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	StackIndex    uint32                 `protobuf:"varint,3,opt,name=stack_index,json=stackIndex,proto3" json:"stack_index,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	From       *ItemLocation          `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	ItemId     uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	StackIndex uint32                 `protobuf:"varint,3,opt,name=stack_index,json=stackIndex,proto3" json:"stack_index,omitempty"`
+	// T5.1: look at this creature instead (one the client sees; the rest is ignored). For
+	// a player the answer names its vocation, level and guild (look.player*).
+	CreatureId    uint32 `protobuf:"varint,4,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1410,6 +1524,13 @@ func (x *LookAt) GetItemId() uint32 {
 func (x *LookAt) GetStackIndex() uint32 {
 	if x != nil {
 		return x.StackIndex
+	}
+	return 0
+}
+
+func (x *LookAt) GetCreatureId() uint32 {
+	if x != nil {
+		return x.CreatureId
 	}
 	return 0
 }
@@ -2074,6 +2195,76 @@ func (x *PartyCommand) GetCreatureId() uint32 {
 	return 0
 }
 
+// GuildCommand is every guild intent (T5.1). The chat command "/guild ..." does the same.
+// The server answers with GuildUpdate or a system Message (guild.*).
+type GuildCommand struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Action        GuildAction            `protobuf:"varint,1,opt,name=action,proto3,enum=game.v1.GuildAction" json:"action,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	GuildId       uint64                 `protobuf:"varint,4,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildCommand) Reset() {
+	*x = GuildCommand{}
+	mi := &file_game_v1_client_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildCommand) ProtoMessage() {}
+
+func (x *GuildCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildCommand.ProtoReflect.Descriptor instead.
+func (*GuildCommand) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GuildCommand) GetAction() GuildAction {
+	if x != nil {
+		return x.Action
+	}
+	return GuildAction_GUILD_ACTION_UNSPECIFIED
+}
+
+func (x *GuildCommand) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *GuildCommand) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *GuildCommand) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
 // Craft attempts a recipe of data/recipes.yaml (T3.4) at the station item on the tile
 // station (from StationOpen). The server checks the skill level, the inputs in the
 // containers, the tool, the distance to the station, capacity and room, and the time
@@ -2089,7 +2280,7 @@ type Craft struct {
 
 func (x *Craft) Reset() {
 	*x = Craft{}
-	mi := &file_game_v1_client_proto_msgTypes[26]
+	mi := &file_game_v1_client_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2101,7 +2292,7 @@ func (x *Craft) String() string {
 func (*Craft) ProtoMessage() {}
 
 func (x *Craft) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[26]
+	mi := &file_game_v1_client_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2114,7 +2305,7 @@ func (x *Craft) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Craft.ProtoReflect.Descriptor instead.
 func (*Craft) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{26}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Craft) GetRecipeId() string {
@@ -2147,7 +2338,7 @@ type ReportPlayer struct {
 
 func (x *ReportPlayer) Reset() {
 	*x = ReportPlayer{}
-	mi := &file_game_v1_client_proto_msgTypes[27]
+	mi := &file_game_v1_client_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2159,7 +2350,7 @@ func (x *ReportPlayer) String() string {
 func (*ReportPlayer) ProtoMessage() {}
 
 func (x *ReportPlayer) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[27]
+	mi := &file_game_v1_client_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2172,7 +2363,7 @@ func (x *ReportPlayer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportPlayer.ProtoReflect.Descriptor instead.
 func (*ReportPlayer) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{27}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ReportPlayer) GetCreatureId() uint32 {
@@ -2200,7 +2391,7 @@ type PresenceAnswer struct {
 
 func (x *PresenceAnswer) Reset() {
 	*x = PresenceAnswer{}
-	mi := &file_game_v1_client_proto_msgTypes[28]
+	mi := &file_game_v1_client_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2212,7 +2403,7 @@ func (x *PresenceAnswer) String() string {
 func (*PresenceAnswer) ProtoMessage() {}
 
 func (x *PresenceAnswer) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[28]
+	mi := &file_game_v1_client_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2225,7 +2416,7 @@ func (x *PresenceAnswer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PresenceAnswer.ProtoReflect.Descriptor instead.
 func (*PresenceAnswer) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{28}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *PresenceAnswer) GetCheckId() uint32 {
@@ -2252,7 +2443,7 @@ type TutorialSkip struct {
 
 func (x *TutorialSkip) Reset() {
 	*x = TutorialSkip{}
-	mi := &file_game_v1_client_proto_msgTypes[29]
+	mi := &file_game_v1_client_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2264,7 +2455,7 @@ func (x *TutorialSkip) String() string {
 func (*TutorialSkip) ProtoMessage() {}
 
 func (x *TutorialSkip) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[29]
+	mi := &file_game_v1_client_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2277,14 +2468,14 @@ func (x *TutorialSkip) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TutorialSkip.ProtoReflect.Descriptor instead.
 func (*TutorialSkip) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{29}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{30}
 }
 
 var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xf2\v\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xb0\f\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
 	"\x04walk\x18\x02 \x01(\v2\r.game.v1.WalkH\x00R\x04walk\x120\n" +
@@ -2318,7 +2509,8 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x05craft\x18\x1a \x01(\v2\x0e.game.v1.CraftH\x00R\x05craft\x12<\n" +
 	"\rreport_player\x18\x1b \x01(\v2\x15.game.v1.ReportPlayerH\x00R\freportPlayer\x12B\n" +
 	"\x0fpresence_answer\x18\x1c \x01(\v2\x17.game.v1.PresenceAnswerH\x00R\x0epresenceAnswer\x12<\n" +
-	"\rtutorial_skip\x18\x1d \x01(\v2\x15.game.v1.TutorialSkipH\x00R\ftutorialSkipB\t\n" +
+	"\rtutorial_skip\x18\x1d \x01(\v2\x15.game.v1.TutorialSkipH\x00R\ftutorialSkip\x12<\n" +
+	"\rguild_command\x18\x1e \x01(\v2\x15.game.v1.GuildCommandH\x00R\fguildCommandB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -2360,12 +2552,14 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\vstack_index\x18\x03 \x01(\rR\n" +
 	"stackIndex\x12%\n" +
 	"\x02to\x18\x04 \x01(\v2\x15.game.v1.ItemLocationR\x02to\x12\x14\n" +
-	"\x05count\x18\x05 \x01(\rR\x05count\"m\n" +
+	"\x05count\x18\x05 \x01(\rR\x05count\"\x8e\x01\n" +
 	"\x06LookAt\x12)\n" +
 	"\x04from\x18\x01 \x01(\v2\x15.game.v1.ItemLocationR\x04from\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x1f\n" +
 	"\vstack_index\x18\x03 \x01(\rR\n" +
-	"stackIndex\"I\n" +
+	"stackIndex\x12\x1f\n" +
+	"\vcreature_id\x18\x04 \x01(\rR\n" +
+	"creatureId\"I\n" +
 	"\x03Say\x12.\n" +
 	"\achannel\x18\x01 \x01(\x0e2\x14.game.v1.ChatChannelR\achannel\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\"H\n" +
@@ -2407,7 +2601,12 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\fPartyCommand\x12,\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x14.game.v1.PartyActionR\x06action\x12\x1f\n" +
 	"\vcreature_id\x18\x02 \x01(\rR\n" +
-	"creatureId\"Q\n" +
+	"creatureId\"\x7f\n" +
+	"\fGuildCommand\x12,\n" +
+	"\x06action\x18\x01 \x01(\x0e2\x14.game.v1.GuildActionR\x06action\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\x12\x19\n" +
+	"\bguild_id\x18\x04 \x01(\x04R\aguildId\"Q\n" +
 	"\x05Craft\x12\x1b\n" +
 	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12+\n" +
 	"\astation\x18\x02 \x01(\v2\x11.game.v1.PositionR\astation\"G\n" +
@@ -2423,14 +2622,15 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
 	"\x15FIGHT_STANCE_BALANCED\x10\x02\x12\x1a\n" +
-	"\x16FIGHT_STANCE_DEFENSIVE\x10\x03*\xa3\x01\n" +
+	"\x16FIGHT_STANCE_DEFENSIVE\x10\x03*\xbb\x01\n" +
 	"\vChatChannel\x12\x1c\n" +
 	"\x18CHAT_CHANNEL_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10CHAT_CHANNEL_SAY\x10\x01\x12\x15\n" +
 	"\x11CHAT_CHANNEL_YELL\x10\x02\x12\x18\n" +
 	"\x14CHAT_CHANNEL_WHISPER\x10\x03\x12\x17\n" +
 	"\x13CHAT_CHANNEL_GLOBAL\x10\x04\x12\x16\n" +
-	"\x12CHAT_CHANNEL_PARTY\x10\x05*\xfb\x01\n" +
+	"\x12CHAT_CHANNEL_PARTY\x10\x05\x12\x16\n" +
+	"\x12CHAT_CHANNEL_GUILD\x10\x06*\xfb\x01\n" +
 	"\vPartyAction\x12\x1c\n" +
 	"\x18PARTY_ACTION_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13PARTY_ACTION_INVITE\x10\x01\x12\x17\n" +
@@ -2440,7 +2640,22 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x11PARTY_ACTION_KICK\x10\x05\x12\x1c\n" +
 	"\x18PARTY_ACTION_PASS_LEADER\x10\x06\x12\x19\n" +
 	"\x15PARTY_ACTION_SHARE_ON\x10\a\x12\x1a\n" +
-	"\x16PARTY_ACTION_SHARE_OFF\x10\bBFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
+	"\x16PARTY_ACTION_SHARE_OFF\x10\b*\xd7\x02\n" +
+	"\vGuildAction\x12\x1c\n" +
+	"\x18GUILD_ACTION_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13GUILD_ACTION_CREATE\x10\x01\x12\x17\n" +
+	"\x13GUILD_ACTION_INVITE\x10\x02\x12\x17\n" +
+	"\x13GUILD_ACTION_REVOKE\x10\x03\x12\x17\n" +
+	"\x13GUILD_ACTION_ACCEPT\x10\x04\x12\x18\n" +
+	"\x14GUILD_ACTION_DECLINE\x10\x05\x12\x16\n" +
+	"\x12GUILD_ACTION_LEAVE\x10\x06\x12\x15\n" +
+	"\x11GUILD_ACTION_KICK\x10\a\x12\x18\n" +
+	"\x14GUILD_ACTION_PROMOTE\x10\b\x12\x17\n" +
+	"\x13GUILD_ACTION_DEMOTE\x10\t\x12\x15\n" +
+	"\x11GUILD_ACTION_MOTD\x10\n" +
+	"\x12\x18\n" +
+	"\x14GUILD_ACTION_DISBAND\x10\v\x12\x19\n" +
+	"\x15GUILD_ACTION_TRANSFER\x10\fBFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_client_proto_rawDescOnce sync.Once
@@ -2454,98 +2669,102 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 	return file_game_v1_client_proto_rawDescData
 }
 
-var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_game_v1_client_proto_goTypes = []any{
 	(FightStance)(0),       // 0: game.v1.FightStance
 	(ChatChannel)(0),       // 1: game.v1.ChatChannel
 	(PartyAction)(0),       // 2: game.v1.PartyAction
-	(*ClientMessage)(nil),  // 3: game.v1.ClientMessage
-	(*Hello)(nil),          // 4: game.v1.Hello
-	(*Walk)(nil),           // 5: game.v1.Walk
-	(*WalkPath)(nil),       // 6: game.v1.WalkPath
-	(*StopWalk)(nil),       // 7: game.v1.StopWalk
-	(*Turn)(nil),           // 8: game.v1.Turn
-	(*SetTarget)(nil),      // 9: game.v1.SetTarget
-	(*SetFightMode)(nil),   // 10: game.v1.SetFightMode
-	(*CastSpell)(nil),      // 11: game.v1.CastSpell
-	(*UseItem)(nil),        // 12: game.v1.UseItem
-	(*UseItemOn)(nil),      // 13: game.v1.UseItemOn
-	(*MoveItem)(nil),       // 14: game.v1.MoveItem
-	(*LookAt)(nil),         // 15: game.v1.LookAt
-	(*Say)(nil),            // 16: game.v1.Say
-	(*DialogChoose)(nil),   // 17: game.v1.DialogChoose
-	(*TradeRequest)(nil),   // 18: game.v1.TradeRequest
-	(*TradeOffer)(nil),     // 19: game.v1.TradeOffer
-	(*TradeAccept)(nil),    // 20: game.v1.TradeAccept
-	(*TradeCancel)(nil),    // 21: game.v1.TradeCancel
-	(*Ping)(nil),           // 22: game.v1.Ping
-	(*Logout)(nil),         // 23: game.v1.Logout
-	(*CloseContainer)(nil), // 24: game.v1.CloseContainer
-	(*NpcTalk)(nil),        // 25: game.v1.NpcTalk
-	(*ShopBuy)(nil),        // 26: game.v1.ShopBuy
-	(*ShopSell)(nil),       // 27: game.v1.ShopSell
-	(*PartyCommand)(nil),   // 28: game.v1.PartyCommand
-	(*Craft)(nil),          // 29: game.v1.Craft
-	(*ReportPlayer)(nil),   // 30: game.v1.ReportPlayer
-	(*PresenceAnswer)(nil), // 31: game.v1.PresenceAnswer
-	(*TutorialSkip)(nil),   // 32: game.v1.TutorialSkip
-	(Direction)(0),         // 33: game.v1.Direction
-	(*ActionTarget)(nil),   // 34: game.v1.ActionTarget
-	(*ItemLocation)(nil),   // 35: game.v1.ItemLocation
-	(*Position)(nil),       // 36: game.v1.Position
+	(GuildAction)(0),       // 3: game.v1.GuildAction
+	(*ClientMessage)(nil),  // 4: game.v1.ClientMessage
+	(*Hello)(nil),          // 5: game.v1.Hello
+	(*Walk)(nil),           // 6: game.v1.Walk
+	(*WalkPath)(nil),       // 7: game.v1.WalkPath
+	(*StopWalk)(nil),       // 8: game.v1.StopWalk
+	(*Turn)(nil),           // 9: game.v1.Turn
+	(*SetTarget)(nil),      // 10: game.v1.SetTarget
+	(*SetFightMode)(nil),   // 11: game.v1.SetFightMode
+	(*CastSpell)(nil),      // 12: game.v1.CastSpell
+	(*UseItem)(nil),        // 13: game.v1.UseItem
+	(*UseItemOn)(nil),      // 14: game.v1.UseItemOn
+	(*MoveItem)(nil),       // 15: game.v1.MoveItem
+	(*LookAt)(nil),         // 16: game.v1.LookAt
+	(*Say)(nil),            // 17: game.v1.Say
+	(*DialogChoose)(nil),   // 18: game.v1.DialogChoose
+	(*TradeRequest)(nil),   // 19: game.v1.TradeRequest
+	(*TradeOffer)(nil),     // 20: game.v1.TradeOffer
+	(*TradeAccept)(nil),    // 21: game.v1.TradeAccept
+	(*TradeCancel)(nil),    // 22: game.v1.TradeCancel
+	(*Ping)(nil),           // 23: game.v1.Ping
+	(*Logout)(nil),         // 24: game.v1.Logout
+	(*CloseContainer)(nil), // 25: game.v1.CloseContainer
+	(*NpcTalk)(nil),        // 26: game.v1.NpcTalk
+	(*ShopBuy)(nil),        // 27: game.v1.ShopBuy
+	(*ShopSell)(nil),       // 28: game.v1.ShopSell
+	(*PartyCommand)(nil),   // 29: game.v1.PartyCommand
+	(*GuildCommand)(nil),   // 30: game.v1.GuildCommand
+	(*Craft)(nil),          // 31: game.v1.Craft
+	(*ReportPlayer)(nil),   // 32: game.v1.ReportPlayer
+	(*PresenceAnswer)(nil), // 33: game.v1.PresenceAnswer
+	(*TutorialSkip)(nil),   // 34: game.v1.TutorialSkip
+	(Direction)(0),         // 35: game.v1.Direction
+	(*ActionTarget)(nil),   // 36: game.v1.ActionTarget
+	(*ItemLocation)(nil),   // 37: game.v1.ItemLocation
+	(*Position)(nil),       // 38: game.v1.Position
 }
 var file_game_v1_client_proto_depIdxs = []int32{
-	4,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
-	5,  // 1: game.v1.ClientMessage.walk:type_name -> game.v1.Walk
-	6,  // 2: game.v1.ClientMessage.walk_path:type_name -> game.v1.WalkPath
-	7,  // 3: game.v1.ClientMessage.stop_walk:type_name -> game.v1.StopWalk
-	8,  // 4: game.v1.ClientMessage.turn:type_name -> game.v1.Turn
-	9,  // 5: game.v1.ClientMessage.set_target:type_name -> game.v1.SetTarget
-	10, // 6: game.v1.ClientMessage.set_fight_mode:type_name -> game.v1.SetFightMode
-	11, // 7: game.v1.ClientMessage.cast_spell:type_name -> game.v1.CastSpell
-	12, // 8: game.v1.ClientMessage.use_item:type_name -> game.v1.UseItem
-	13, // 9: game.v1.ClientMessage.use_item_on:type_name -> game.v1.UseItemOn
-	14, // 10: game.v1.ClientMessage.move_item:type_name -> game.v1.MoveItem
-	15, // 11: game.v1.ClientMessage.look_at:type_name -> game.v1.LookAt
-	16, // 12: game.v1.ClientMessage.say:type_name -> game.v1.Say
-	17, // 13: game.v1.ClientMessage.dialog_choose:type_name -> game.v1.DialogChoose
-	18, // 14: game.v1.ClientMessage.trade_request:type_name -> game.v1.TradeRequest
-	19, // 15: game.v1.ClientMessage.trade_offer:type_name -> game.v1.TradeOffer
-	20, // 16: game.v1.ClientMessage.trade_accept:type_name -> game.v1.TradeAccept
-	21, // 17: game.v1.ClientMessage.trade_cancel:type_name -> game.v1.TradeCancel
-	22, // 18: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
-	23, // 19: game.v1.ClientMessage.logout:type_name -> game.v1.Logout
-	24, // 20: game.v1.ClientMessage.close_container:type_name -> game.v1.CloseContainer
-	25, // 21: game.v1.ClientMessage.npc_talk:type_name -> game.v1.NpcTalk
-	26, // 22: game.v1.ClientMessage.shop_buy:type_name -> game.v1.ShopBuy
-	27, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
-	28, // 24: game.v1.ClientMessage.party_command:type_name -> game.v1.PartyCommand
-	29, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
-	30, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
-	31, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
-	32, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
-	33, // 29: game.v1.Walk.dir:type_name -> game.v1.Direction
-	33, // 30: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	33, // 31: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 32: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	34, // 33: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	35, // 34: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	35, // 35: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	34, // 36: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	35, // 37: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	35, // 38: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	35, // 39: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 40: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	35, // 41: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	35, // 42: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	2,  // 43: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	36, // 44: game.v1.Craft.station:type_name -> game.v1.Position
-	45, // [45:45] is the sub-list for method output_type
-	45, // [45:45] is the sub-list for method input_type
-	45, // [45:45] is the sub-list for extension type_name
-	45, // [45:45] is the sub-list for extension extendee
-	0,  // [0:45] is the sub-list for field type_name
+	5,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
+	6,  // 1: game.v1.ClientMessage.walk:type_name -> game.v1.Walk
+	7,  // 2: game.v1.ClientMessage.walk_path:type_name -> game.v1.WalkPath
+	8,  // 3: game.v1.ClientMessage.stop_walk:type_name -> game.v1.StopWalk
+	9,  // 4: game.v1.ClientMessage.turn:type_name -> game.v1.Turn
+	10, // 5: game.v1.ClientMessage.set_target:type_name -> game.v1.SetTarget
+	11, // 6: game.v1.ClientMessage.set_fight_mode:type_name -> game.v1.SetFightMode
+	12, // 7: game.v1.ClientMessage.cast_spell:type_name -> game.v1.CastSpell
+	13, // 8: game.v1.ClientMessage.use_item:type_name -> game.v1.UseItem
+	14, // 9: game.v1.ClientMessage.use_item_on:type_name -> game.v1.UseItemOn
+	15, // 10: game.v1.ClientMessage.move_item:type_name -> game.v1.MoveItem
+	16, // 11: game.v1.ClientMessage.look_at:type_name -> game.v1.LookAt
+	17, // 12: game.v1.ClientMessage.say:type_name -> game.v1.Say
+	18, // 13: game.v1.ClientMessage.dialog_choose:type_name -> game.v1.DialogChoose
+	19, // 14: game.v1.ClientMessage.trade_request:type_name -> game.v1.TradeRequest
+	20, // 15: game.v1.ClientMessage.trade_offer:type_name -> game.v1.TradeOffer
+	21, // 16: game.v1.ClientMessage.trade_accept:type_name -> game.v1.TradeAccept
+	22, // 17: game.v1.ClientMessage.trade_cancel:type_name -> game.v1.TradeCancel
+	23, // 18: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
+	24, // 19: game.v1.ClientMessage.logout:type_name -> game.v1.Logout
+	25, // 20: game.v1.ClientMessage.close_container:type_name -> game.v1.CloseContainer
+	26, // 21: game.v1.ClientMessage.npc_talk:type_name -> game.v1.NpcTalk
+	27, // 22: game.v1.ClientMessage.shop_buy:type_name -> game.v1.ShopBuy
+	28, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
+	29, // 24: game.v1.ClientMessage.party_command:type_name -> game.v1.PartyCommand
+	31, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
+	32, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
+	33, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
+	34, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
+	30, // 29: game.v1.ClientMessage.guild_command:type_name -> game.v1.GuildCommand
+	35, // 30: game.v1.Walk.dir:type_name -> game.v1.Direction
+	35, // 31: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	35, // 32: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 33: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	36, // 34: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	37, // 35: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	37, // 36: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	36, // 37: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	37, // 38: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	37, // 39: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	37, // 40: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 41: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	37, // 42: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	37, // 43: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	2,  // 44: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	3,  // 45: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
+	38, // 46: game.v1.Craft.station:type_name -> game.v1.Position
+	47, // [47:47] is the sub-list for method output_type
+	47, // [47:47] is the sub-list for method input_type
+	47, // [47:47] is the sub-list for extension type_name
+	47, // [47:47] is the sub-list for extension extendee
+	0,  // [0:47] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -2584,6 +2803,7 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_ReportPlayer)(nil),
 		(*ClientMessage_PresenceAnswer)(nil),
 		(*ClientMessage_TutorialSkip)(nil),
+		(*ClientMessage_GuildCommand)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[8].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),
@@ -2594,8 +2814,8 @@ func file_game_v1_client_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   30,
+			NumEnums:      4,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

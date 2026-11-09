@@ -1071,3 +1071,121 @@ body.using-item canvas {
 .oauth-hint {
   font-size: 0.9rem;
 }
+
+/* Guilds (T5.1). */
+.chat-lines .guild {
+  color: #b8e986;
+}
+.guild h2 .tag,
+.guild .tag {
+  margin-left: 0.35rem;
+  padding: 0 0.25rem;
+  font-size: 0.7rem;
+  font-weight: normal;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.guild h3 {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.guild .motd {
+  margin: 0 0 0.3rem;
+  font-size: 0.8rem;
+  font-style: italic;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.guild .empty,
+.guild .hint {
+  color: var(--muted);
+  margin: 0 0 0.3rem;
+  font-size: 0.8rem;
+}
+.guild ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+.guild li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.guild li.offline {
+  color: var(--muted);
+}
+.guild .dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+  background: #505860;
+}
+.guild li.online .dot {
+  background: #30c030;
+}
+.guild .actions,
+.guild-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+.guild-row,
+.guild-create {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0.2rem 0;
+}
+.guild-row input,
+.guild-create input {
+  flex: 1;
+  min-width: 0;
+}
+/* The side panel is 14rem wide: compact buttons, and a field never pushes its button out. */
+.guild button {
+  flex: none;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.75rem;
+}
+.guild-actions form {
+  flex: 1 1 100%;
+  margin: 0;
+  /* the confirmation field over its button: the long placeholder needs the whole width */
+  flex-direction: column;
+  align-items: stretch;
+}
+.guild input {
+  box-sizing: border-box;
+}
+.guild-actions form input {
+  flex: none;
+  width: 100%;
+}
+.guild-actions form button {
+  align-self: flex-start;
+}
+.guild-create label {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  font-size: 0.8rem;
+}
+.guild button.danger {
+  background: transparent;
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+.guild-invitations {
+  bottom: 8rem;
+}

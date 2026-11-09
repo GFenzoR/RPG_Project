@@ -13,6 +13,7 @@ import { excerpt } from "./markdown.ts";
 import {
   LEVEL,
   categoryKey,
+  guildRankKey,
   filtersToSearch,
   highscoresPath,
   parseFilters,
@@ -170,7 +171,13 @@ export function Site(props: SiteProps): JSX.Element {
     document.getElementById("main")?.focus({ preventScroll: true });
   }, [loc.pathname]);
   const section =
-    route.page === "post" ? "news" : route.page.startsWith("maps_") ? "maps" : route.page;
+    route.page === "post"
+      ? "news"
+      : route.page === "guild"
+        ? "guilds"
+        : route.page.startsWith("maps_")
+          ? "maps"
+          : route.page;
   return (
     <>
       <a class="skip" href="#main">
@@ -189,6 +196,9 @@ export function Site(props: SiteProps): JSX.Element {
           </Link>
           <Link href="/news" current={section === "news"}>
             {t("site.nav.news")}
+          </Link>
+          <Link href="/guilds" current={section === "guilds"}>
+            {t("site.nav.guilds")}
           </Link>
           <Link href="/maps/submit" current={section === "maps"}>
             {t("site.nav.maps")}
@@ -220,6 +230,8 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
     const titles: Record<Route["page"], string> = {
       home: "",
       highscores: t("site.highscores.title"),
+      guilds: t("site.guilds.title"),
+      guild: t("site.guilds.title"),
       news: t("site.news.title"),
       post: "",
       maps_submit: t("site.maps.submit.title"),
@@ -245,6 +257,10 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       return <Home {...props} />;
     case "highscores":
       return <HighscoresPage {...props} />;
+    case "guilds":
+      return <GuildsPage t={t} lang={props.lang} />;
+    case "guild":
+      return <GuildPage t={t} lang={props.lang} id={route.id} />;
     case "news":
       return <NewsList {...props} />;
     case "post":
@@ -563,5 +579,153 @@ function NewsDetail(props: SiteProps & { slug: string }): JSX.Element {
         <Link href="/news">{t("site.news.back")}</Link>
       </p>
     </article>
+  );
+}
+
+// ---- guilds (T5.1): GET /api/guilds and /api/guilds/{id}, public data only -------------
+
+interface GuildSummary {
+  id: number;
+  name: string;
+  leader: string;
+  members: number;
+  created_at: string;
+}
+
+interface GuildDetail {
+  id: number;
+  name: string;
+  created_at: string;
+  members: { name: string; vocation: string; level: number; rank: string }[];
+}
+
+/** Loads path as JSON: undefined while loading, "missing" on 404, "error" otherwise. */
+function useJSON<T>(path: string): T | "missing" | "error" | undefined {
+  const [data, setData] = useState<T | "missing" | "error" | undefined>(undefined);
+  useEffect(() => {
+    const ctl = new AbortController();
+    setData(undefined);
+    fetch(path, { signal: ctl.signal, credentials: "omit" })
+      .then(async (r) => {
+        if (r.status === 404) return setData("missing");
+        if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+        setData((await r.json()) as T);
+      })
+      .catch(() => {
+        if (!ctl.signal.aborted) setData("error");
+      });
+    return () => ctl.abort();
+  }, [path]);
+  return data;
+}
+
+function formatInstant(iso: string, lang: string): string {
+  try {
+    return new Intl.DateTimeFormat(lang, { dateStyle: "long", timeZone: "UTC" }).format(
+      new Date(iso),
+    );
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+function GuildsPage(props: { t: Translate; lang: string }): JSX.Element {
+  const { t } = props;
+  const data = useJSON<{ guilds: GuildSummary[] }>("/api/guilds");
+  return (
+    <section class="card" aria-labelledby="guilds-title">
+      <h1 id="guilds-title">{t("site.guilds.title")}</h1>
+      <p class="muted">{t("site.guilds.intro")}</p>
+      {data === undefined ? (
+        <p class="muted" role="status">
+          {t("site.guilds.loading")}
+        </p>
+      ) : data === "error" || data === "missing" ? (
+        <p class="error" role="alert">
+          {t("site.guilds.error")}
+        </p>
+      ) : data.guilds.length === 0 ? (
+        <p class="muted">{t("site.guilds.empty")}</p>
+      ) : (
+        <table class="highscores" data-testid="guilds">
+          <thead>
+            <tr>
+              <th scope="col">{t("site.guilds.name")}</th>
+              <th scope="col">{t("site.guilds.leader")}</th>
+              <th scope="col">{t("site.guilds.members")}</th>
+              <th scope="col">{t("site.guilds.founded")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.guilds.map((g) => (
+              <tr key={g.id}>
+                <td>
+                  <Link href={`/guilds/${g.id}`}>{g.name}</Link>
+                </td>
+                <td>{g.leader}</td>
+                <td>{g.members}</td>
+                <td>{formatInstant(g.created_at, props.lang)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function GuildPage(props: { t: Translate; lang: string; id: number }): JSX.Element {
+  const { t } = props;
+  const data = useJSON<GuildDetail>(`/api/guilds/${props.id}`);
+  if (data === undefined) {
+    return (
+      <p class="muted" role="status">
+        {t("site.guilds.loading")}
+      </p>
+    );
+  }
+  if (data === "missing" || data === "error") {
+    return (
+      <section class="card" data-testid="guild-missing">
+        <h1>{t("site.guilds.title")}</h1>
+        <p class={data === "error" ? "error" : "muted"}>
+          {t(data === "missing" ? "site.guilds.not_found" : "site.guilds.error")}
+        </p>
+        <p>
+          <Link href="/guilds">{t("site.guilds.back")}</Link>
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section class="card" aria-labelledby="guild-title" data-testid="guild-page">
+      <h1 id="guild-title">{data.name}</h1>
+      <p class="muted">
+        {t("site.guilds.founded_on", { date: formatInstant(data.created_at, props.lang) })}
+      </p>
+      <table class="highscores" data-testid="guild-members">
+        <thead>
+          <tr>
+            <th scope="col">{t("site.guilds.member")}</th>
+            <th scope="col">{t("site.guilds.rank")}</th>
+            <th scope="col">{t("site.highscores.vocation")}</th>
+            <th scope="col">{t("site.highscores.level")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.members.map((m) => (
+            <tr key={m.name}>
+              <td>{m.name}</td>
+              <td>{t(guildRankKey(m.rank))}</td>
+              <td>{t(`vocation.${m.vocation}.name`)}</td>
+              <td>{m.level}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p>
+        <Link href="/guilds">{t("site.guilds.back")}</Link>
+      </p>
+    </section>
   );
 }

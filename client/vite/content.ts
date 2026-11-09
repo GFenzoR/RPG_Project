@@ -89,6 +89,7 @@ export function loadClientContent(root: string): ClientContent {
   const mv = isObj(balance) && isObj(balance["movement"]) ? balance["movement"] : {};
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
   const chat = isObj(balance) && isObj(balance["chat"]) ? balance["chat"] : {};
+  const guild = isObj(balance) && isObj(balance["guild"]) ? balance["guild"] : {};
   const i18n: Record<string, Record<string, string>> = {};
   for (const lang of LANGUAGES) {
     const texts: Record<string, string> = {};
@@ -195,6 +196,12 @@ export function loadClientContent(root: string): ClientContent {
       maxPathTiles: num(mv["max_path_tiles"], 100),
     },
     chat: { maxLength: num(chat["max_length"], 255) },
+    guild: {
+      foundCost: num(guild["found_cost"], 0),
+      foundMinLevel: num(guild["found_min_level"], 1),
+      nameMax: num(guild["name_max"], 32),
+      motdMax: num(guild["motd_max"], 255),
+    },
     sounds: loadSounds(root),
     islands: loadIslands(root),
     i18n,

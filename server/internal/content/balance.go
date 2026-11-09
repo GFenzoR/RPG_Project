@@ -22,6 +22,7 @@ type Balance struct {
 	Chat       Chat       `yaml:"chat"`
 	Death      Death      `yaml:"death"`
 	Party      Party      `yaml:"party"`
+	Guild      Guild      `yaml:"guild"`
 	Travel     Travel     `yaml:"travel"`
 	Economy    Economy    `yaml:"economy"`
 	// Reports and Idle are the player reports and the idle disconnect (T4.1).
@@ -136,6 +137,38 @@ func (p Party) check() error {
 	if p.LevelRangePct < 1 || p.LevelRangePct > 100 || p.LevelGapAlways < 0 || p.LevelGapAlways > 100 || p.BonusPctPerMember < 0 || p.BonusPctPerMember > 100 ||
 		p.MaxBonusPct < 0 || p.MaxBonusPct > 100 {
 		return errors.New("party: level_range_pct must be in 1..100, level_gap_always, bonus_pct_per_member and max_bonus_pct in 0..100")
+	}
+	return nil
+}
+
+// Guild holds the guild rules (T5.1, docs/02-game-design.md "Gremios").
+type Guild struct {
+	FoundCost      int `yaml:"found_cost"`
+	FoundMinLevel  int `yaml:"found_min_level"`
+	MaxMembers     int `yaml:"max_members"`
+	MaxViceLeaders int `yaml:"max_vice_leaders"`
+	MaxInvites     int `yaml:"max_invites"`
+	InviteHours    int `yaml:"invite_hours"`
+	NameMin        int `yaml:"name_min"`
+	NameMax        int `yaml:"name_max"`
+	NameMaxWords   int `yaml:"name_max_words"`
+	MotdMax        int `yaml:"motd_max"`
+	// ReservedParts are refused as substrings of the lowercased name without spaces;
+	// ReservedWords as whole words.
+	ReservedParts []string `yaml:"reserved_parts"`
+	ReservedWords []string `yaml:"reserved_words"`
+}
+
+// MaxGuildName is the longest guild name the database stores (guilds.name).
+const MaxGuildName = 32
+
+func (g Guild) check() error {
+	if g.FoundCost < 0 || g.FoundMinLevel < 1 || g.MaxMembers < 2 || g.MaxMembers > 500 || g.MaxViceLeaders < 0 ||
+		g.MaxInvites < 1 || g.MaxInvites > 100 || g.InviteHours < 1 || g.InviteHours > 720 {
+		return errors.New("guild: found_cost >= 0, found_min_level >= 1, max_members in 2..500, max_vice_leaders >= 0, max_invites in 1..100, invite_hours in 1..720")
+	}
+	if g.NameMin < 2 || g.NameMax < g.NameMin || g.NameMax > MaxGuildName || g.NameMaxWords < 1 || g.MotdMax < 1 || g.MotdMax > MaxChatLength {
+		return fmt.Errorf("guild: name_min >= 2, name_max in name_min..%d, name_max_words >= 1, motd_max in 1..%d", MaxGuildName, MaxChatLength)
 	}
 	return nil
 }
@@ -563,6 +596,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, err
 	}
 	if err := b.Party.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Guild.check(); err != nil {
 		return Balance{}, err
 	}
 	if t := b.Travel; t.CombatBlockMs < 0 || t.CombatBlockMs > 600_000 || t.ArrivalRadius < 0 || t.ArrivalRadius > 5 {

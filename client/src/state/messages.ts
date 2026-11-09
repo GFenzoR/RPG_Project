@@ -51,7 +51,11 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
                 ? t(`quest.${p.value.value}.name`)
                 : p.name === "island"
                   ? t(`island.${p.value.value}.name`)
-                  : t(`monster.${p.value.value}.name`);
+                  : p.name === "vocation"
+                    ? t(`vocation.${p.value.value}.name`)
+                    : p.name === "rank"
+                      ? t(`client.guild.rank.${p.value.value}`)
+                      : t(`monster.${p.value.value}.name`);
         break;
       case "item": {
         // By its own name too: one item is {item} (gather.got, shop.bought), a list of
@@ -89,6 +93,7 @@ const CHAT_KEYS: Partial<Record<MessageKind, string>> = {
   [MessageKind.NPC]: "client.chat.line.npc",
   [MessageKind.BROADCAST]: "client.chat.line.broadcast",
   [MessageKind.PARTY]: "client.chat.line.party",
+  [MessageKind.GUILD]: "client.chat.line.guild",
 };
 
 /**

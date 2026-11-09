@@ -43,6 +43,7 @@ const COLORS = {
   player: 0xd59a3a,
   monster: 0xb03a2e,
   npc: 0x7d4fb0,
+  guild: 0xb8e986,
   marker: 0xffffff,
   outline: 0x101010,
   target: 0xff2020,
@@ -155,6 +156,8 @@ interface CreatureSprite {
   shape: Graphics;
   frame: Graphics;
   label: Text;
+  /** The guild name, between the name and the health bar (T5.1); empty = hidden. */
+  guild: Text;
   bar: Graphics;
   drawnDir: number;
   drawnHealth: number;
@@ -292,12 +295,36 @@ export async function createGameCanvas(
         roundPixels: true,
       });
       labels.addChild(label);
-      s = { body, shape, frame, label, bar, drawnDir: -1, drawnHealth: -1, drawnTarget: false };
+      const guild = new Text({
+        text: c.guild,
+        style: {
+          fontFamily: "sans-serif",
+          fontSize: 10,
+          fill: COLORS.guild,
+          stroke: { color: 0x000000, width: 3 },
+        },
+        anchor: { x: 0.5, y: 1 },
+        roundPixels: true,
+      });
+      labels.addChild(guild);
+      s = {
+        body,
+        shape,
+        frame,
+        label,
+        guild,
+        bar,
+        drawnDir: -1,
+        drawnHealth: -1,
+        drawnTarget: false,
+      };
       sprites.set(c.id, s);
     }
     // The language can change during the game (T1.13).
     const name = nameOf(c);
     if (s.label.text !== name) s.label.text = name;
+    if (s.guild.text !== c.guild) s.guild.text = c.guild;
+    s.guild.visible = c.guild !== "";
     if (s.drawnDir !== c.dir) drawShape(s, c);
     if (s.drawnHealth !== c.health) drawBar(s, c.health);
     const targeted = world.target === c.id;
@@ -311,6 +338,7 @@ export async function createGameCanvas(
     view.removeEntity(s.body);
     s.body.destroy({ children: true });
     s.label.destroy();
+    s.guild.destroy();
     s.bar.destroy();
     sprites.delete(id);
   };
@@ -423,7 +451,13 @@ export async function createGameCanvas(
       const barTop = Math.round(head.y) - BAR_H * scale;
       s.bar.position.set(Math.round(head.x), barTop);
       s.bar.scale.set(scale);
-      s.label.position.set(Math.round(head.x), barTop - 1);
+      if (s.guild.visible) {
+        // The guild name goes right above the bar and the player's name above it.
+        s.guild.position.set(Math.round(head.x), barTop - 1);
+        s.label.position.set(Math.round(head.x), barTop - 1 - Math.round(s.guild.height));
+      } else {
+        s.label.position.set(Math.round(head.x), barTop - 1);
+      }
     }
     for (const id of [...sprites.keys()]) if (!seen.has(id)) dropSprite(id);
     world.expire(now);

@@ -397,6 +397,29 @@ party:
   `i18n/*/client.yaml`. El nombre de la isla de un miembro fuera de vista es
   `island.<id>.name` (`i18n/*/world.yaml`, que el cliente ahora empaqueta solo por nombres).
 
+## Gremios (T5.1)
+Las reglas de los gremios viven en `balance.yaml → guild` (`balance.schema.json`, todas
+obligatorias). Qué hace cada una: `02-game-design.md`, "Gremios". El cliente también lee
+`found_cost`, `found_min_level`, `name_max` y `motd_max` (panel e inputs).
+```yaml
+guild:
+  found_cost: 2000          # monedas de cobre que se pagan y se destruyen (sumidero)
+  found_min_level: 18
+  max_members: 50           # 2..500, el líder incluido
+  max_vice_leaders: 4
+  max_invites: 15           # invitaciones pendientes por gremio (1..100)
+  invite_hours: 36          # vida de una invitación (1..720)
+  name_min: 3               # caracteres
+  name_max: 24              # hasta 32 (guilds.name)
+  name_max_words: 4
+  motd_max: 160             # hasta 255 (largo del chat)
+  reserved_parts: [admin, staff, ...]   # minúsculas, sin espacios, como subcadena
+  reserved_words: [gm, mod, ...]        # minúsculas, como palabra entera
+```
+- Textos: `client.guild.*` (panel), `guild.*` y `look.player*` (mensajes del servidor) en
+  `i18n/*/client.yaml`; la página pública usa `site.guilds.*` (`i18n/*/site.yaml`). El
+  rango de un miembro se traduce con `client.guild.rank.<leader|vice|member>`.
+
 ## Receta de oficio
 ```yaml
 # data/recipes.yaml (T3.4)

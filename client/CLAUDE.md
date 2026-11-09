@@ -268,6 +268,26 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   el aviso de la página de moderación; `failure` se traduce con `failureKey`
   (`site.maps.failure.<código>`).
 
+## Notas de T5.1
+- `WorldState.guild` (`state/guild.ts`, puro y con tests) guarda el gremio y las
+  invitaciones de `GuildUpdate`; `guildPowers`/`memberActions` deciden qué botones mostrar
+  con las mismas reglas que el servidor (que igual valida todo). `ui/Guild.tsx`: panel del
+  gremio en la columna lateral y las invitaciones sobre el mapa (`.guild-invitations`, más
+  arriba que las del grupo). El panel no usa hooks (formularios no controlados que leen sus
+  campos al enviar): `ui/Guild.test.ts` recorre su árbol sin DOM. Si le agregas estado,
+  mantén ese test posible o muévelo a otro componente.
+- `CreatureState.guild` (de `Creature.guild` y `CreatureGuild`) se dibuja bajo el nombre
+  en el canvas (`guild` en `CreatureSprite`, color `COLORS.guild`), el nombre sube.
+- Mayús+click en una casilla con una criatura manda `LookAt{creature_id}`
+  (`Game.lookCreature`); un `content_id` llamado `vocation` se traduce como
+  `vocation.<id>.name` y uno llamado `rank` como `client.guild.rank.<id>`.
+- `content.guild` (de `balance.yaml guild`, opcional en los fixtures) da costo, nivel y
+  largos al panel. Canal "Gremio" en el selector del chat.
+- Sitio: `/guilds` y `/guilds/<id>` en `site/Site.tsx` (`useJSON`, sin cuenta), rutas en
+  `site/routes.ts`. E2E: el test "T5.1" de `e2e/game.spec.ts` siembra nivel y monedas
+  con `psql`, funda, invita, habla por el canal, mira al otro y revisa el sitio
+  (screenshots 45–48).
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

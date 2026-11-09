@@ -18,6 +18,7 @@ import { ChatPanel } from "./Chat.tsx";
 import { DialogWindow } from "./Dialog.tsx";
 import { CraftingWindow } from "./Crafting.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
+import { GuildInvitations, GuildPanel } from "./Guild.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
 import { ServerPicker } from "./ServerPicker.tsx";
@@ -393,6 +394,9 @@ function GameScreen(props: {
     tutorial: undefined,
     party: undefined,
     invitations: [],
+    guild: undefined,
+    guildInvitations: [],
+    selfName: "",
     selfId: 0,
   });
   const [levelNotice, setLevelNotice] = useState<number | undefined>(undefined);
@@ -520,6 +524,7 @@ function GameScreen(props: {
             <CraftingWindow t={t} content={props.content} game={game.current} ui={ui} />
           )}
           {entered && <PartyInvitations t={t} game={game.current} ui={ui} />}
+          {entered && <GuildInvitations t={t} game={game.current} ui={ui} />}
           {entered && <PresenceCheck t={t} game={game.current} ui={ui} />}
           {entered && <TutorialPanel t={t} game={game.current} ui={ui} />}
         </div>
@@ -593,6 +598,13 @@ function GameScreen(props: {
             )}
           </section>
           <PartyPanel t={t} game={game.current} ui={ui} />
+          <GuildPanel
+            t={t}
+            content={props.content}
+            game={game.current}
+            ui={ui}
+            now={performance.now()}
+          />
           <section class="fight">
             <label>
               {t("client.fight.stance")}

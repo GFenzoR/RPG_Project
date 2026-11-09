@@ -18,6 +18,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
@@ -59,6 +60,8 @@ type Config struct {
 	Vocations []string
 	// Status reports whether the game loop runs and how many players are online.
 	Status func() Status
+	// Guilds is the public guild list and pages (T5.1); without it /api/guilds answers 404.
+	Guilds PublicGuilds
 	// Version is the server build version shown by /api/status.
 	Version           string
 	PublicRateLimit   RateLimit     // per IP; default DefaultPublicRateLimit
@@ -130,8 +133,15 @@ type api struct {
 
 	publicLimiter *limiter
 	cache         *pageCache
-	querySlots    chan struct{} // semaphore of ranking queries
-	vocations     map[string]bool
+	// T5.1: the guild list in a cache of its own (no other key can push it out), the
+	// pages of guilds that exist, the 404s apart, and the highest guild id the last list
+	// saw (-1 until a list was read).
+	guildListC   *pageCache
+	guildPages   *pageCache
+	guildMissing *pageCache
+	guildHigh    atomic.Int64
+	querySlots   chan struct{} // semaphore of ranking queries
+	vocations    map[string]bool
 
 	submitLimiter   *limiter
 	downloadLimiter *limiter
@@ -190,6 +200,9 @@ func newAPI(cfg Config) (*api, error) {
 	a := &api{
 		cfg: cfg, log: cfg.Logger, vocations: make(map[string]bool),
 		cache:         newPageCache(cfg.HighscoreCacheTTL, keys, cfg.Clock),
+		guildListC:    newPageCache(cfg.HighscoreCacheTTL, 1, cfg.Clock),
+		guildPages:    newPageCache(cfg.HighscoreCacheTTL, guildCacheEntries, cfg.Clock),
+		guildMissing:  newPageCache(cfg.HighscoreCacheTTL, guildMissingEntries, cfg.Clock),
 		querySlots:    make(chan struct{}, maxHighscoreQueries),
 		uploadSlots:   make(chan struct{}, cfg.MapUploadSlots),
 		downloadSlots: make(chan struct{}, maxPatchDownloads),
@@ -198,6 +211,7 @@ func newAPI(cfg Config) (*api, error) {
 	for _, v := range cfg.Vocations {
 		a.vocations[v] = true
 	}
+	a.guildHigh.Store(-1)
 	for _, l := range []struct {
 		dst    **limiter
 		rl     RateLimit
@@ -237,6 +251,10 @@ func (a *api) routes() *http.ServeMux {
 	a.oauthRoutes(mux)
 	if a.cfg.Highscores != nil {
 		mux.HandleFunc("GET /api/highscores", a.publicLimited(a.highscores))
+	}
+	if a.cfg.Guilds != nil {
+		mux.HandleFunc("GET /api/guilds", a.publicLimited(a.guildList))
+		mux.HandleFunc("GET /api/guilds/{id}", a.publicLimited(a.guildPage))
 	}
 	if a.cfg.MapSubmissions != nil {
 		a.mapRoutes(mux)

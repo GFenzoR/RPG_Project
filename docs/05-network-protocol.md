@@ -226,6 +226,21 @@ auth). Pasado el límite responden `429 rate_limited`.
   sin fila; uno con fila en el nivel base y 0 tries empata con ellos y va primero. Quien
   espera la consulta de otra petición deja de esperar si su cliente se va.
 
+- **`GET /api/guilds`** (T5.1, `httpapi/guilds.go`): `{guilds: [{id, name, leader,
+  members, created_at}]}`, hasta 500 por nombre. **`GET /api/guilds/{id}`**: `{id, name,
+  created_at, members: [{name, vocation, level, rank}]}` (`rank` = `leader`, `vice` o
+  `member`, de mayor a menor); un id que no existe → `404 not_found`, uno inválido →
+  `400 invalid_id`. Solo datos públicos: ni el mensaje del día, ni quién está en línea, ni
+  nada de las cuentas. Excluye, como el ranking, a los personajes de staff y de cuentas
+  deshabilitadas o con un ban activo (no aparecen ni cuentan en `members`; un líder así
+  sale como `""`). Comparten el rate limit público, las 2 consultas a la vez y el plazo
+  del ranking. Caches de 60 s: la lista tiene una propia (ninguna otra clave la saca), y
+  al leerla se guarda el id más alto emitido alguna vez (`guild_id_high`). Un id mayor
+  responde 404 sin consultar Postgres; las páginas de gremios que existen van a otra
+  cache, y los 404 de gremios disueltos a una tercera, chica. Así ids al azar no llenan
+  la cache ni llegan a Postgres. Un cambio del juego, o un gremio nuevo, se ve como mucho
+  60 s después.
+
 - **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
   se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como
   `Authorization: Bearer <token>` (Tauri, herramientas, bots) o en la cookie
@@ -765,6 +780,50 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   `party.not_a_member`, `party.invite_gone`, `party.invite_usage`, `party.declined`,
   `party.joined`, `party.left`, `party.kicked`, `party.new_leader` (todos con `name`),
   `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`.
+
+### Gremios (T5.1, `server/internal/session/guild.go`)
+Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.
+- **`GuildCommand{action, name, text, guild_id}`**. Los miembros se nombran por nombre de
+  personaje (pueden estar desconectados). Cada comando cuenta para el anti-flood del chat.
+  - `CREATE` (`name` = el gremio), `INVITE` / `REVOKE` (`name` = un personaje conectado),
+    `ACCEPT` / `DECLINE` (`guild_id` de la invitación), `LEAVE`, `KICK`, `PROMOTE`,
+    `DEMOTE`, `TRANSFER` (`name` = un miembro), `MOTD` (`text`; vacío lo borra) y
+    `DISBAND` (`name` repite el nombre del gremio, como confirmación).
+  - El chat hace lo mismo: `/guild create|invite|revoke|accept|decline|leave|kick|promote|
+    demote|motd|transfer|disband ...`; `accept`, `decline` y `disband` llevan el nombre del
+    gremio. Sin argumentos o con una acción desconocida → `guild.usage`.
+- **`GuildUpdate{guild_id, name, motd, rank, members[], pending[], invitations[]}`**: el
+  estado completo, al entrar al mundo y cada vez que cambia (miembros, rangos, quién está
+  en línea, mensaje del día, invitaciones), como mucho uno por tick. `guild_id` 0 = sin
+  gremio. `members` = `GuildMember{name, rank, online}`, de mayor rango a menor y por
+  antigüedad. `pending` = `GuildPendingInvite{name, expires_ms}`, solo para vicelíderes y
+  el líder. `invitations` = `GuildInvitation{guild_id, guild_name, expires_ms}`: las
+  invitaciones vigentes al propio jugador. Auditoría de información: de los otros miembros
+  solo viajan nombre, rango y si están en línea; nunca posición, nivel ni vida.
+- **`Creature.guild`** (nombre del gremio de un jugador, vacío si no tiene) y
+  **`CreatureGuild{id, guild}`** a quienes ven a ese jugador cuando cambia (entra, sale,
+  lo expulsan, se renombra o se disuelve).
+- **`LookAt{creature_id}`** (T5.1): mirar una criatura que el cliente ve. Un jugador →
+  `look.player` (`name`, `vocation` content_id, `level`) o `look.player_guild` (además
+  `guild` y `rank` content_id: `leader`, `vice` o `member`). Un monstruo → `look.monster`
+  (`monster`), un NPC → `look.npc` (`npc`). Una criatura que no ve → `inventory.not_possible`.
+- **Chat:** `Say{channel: GUILD}` → `Message{kind: GUILD, speaker_id, speaker_name, text}`
+  sin `pos` a los miembros conectados. Sin gremio → `guild.none`.
+- Mensajes de sistema: `guild.unavailable`, `guild.usage`, `guild.none`,
+  `guild.already_member`, `guild.level` (`level`), `guild.cost` (`amount`),
+  `guild.name_length` / `guild.name_chars` / `guild.name_reserved` (`min`, `max`, `words`),
+  `guild.name_taken` (`name`), `guild.created` (`guild`, `amount`), `guild.no_permission`,
+  `guild.player_offline`, `guild.target_in_guild`, `guild.already_invited`,
+  `guild.invite_sent`, `guild.invite_revoked`, `guild.invite_unknown`,
+  `guild.not_a_member`, `guild.same_rank`, `guild.joined`, `guild.left`, `guild.promoted`,
+  `guild.demoted`, `guild.motd_changed`, `guild.new_leader` (con `name`), `guild.self`,
+  `guild.too_many_invites` / `guild.full` / `guild.too_many_vices` / `guild.motd_too_long`
+  (`max`), `guild.invited_you` (`guild`, `name`), `guild.no_invite`, `guild.invite_gone`,
+  `guild.leave_first`, `guild.declined` / `guild.you_left` / `guild.you_were_kicked` /
+  `guild.disbanded` / `guild.disbanded_staff` / `guild.renamed_staff` /
+  `guild.disband_confirm` (`guild`), `guild.kicked` (`name`, `by`),
+  `guild.leader_cannot_leave`. Staff: `gm.guild_not_found` (`guild`), `gm.guild_renamed`
+  (`guild`, `name`), `gm.guild_disbanded` (`guild`).
 
 ### Condiciones (T3.2, `server/internal/session/condition.go`)
 Reglas en `02-game-design.md` ("Condiciones").

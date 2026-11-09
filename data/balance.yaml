@@ -102,6 +102,25 @@ party:                      # T3.3 (docs/02-game-design.md, "Grupos")
   bonus_pct_per_member: 6
   max_bonus_pct: 24
 
+guild:                      # T5.1 (docs/02-game-design.md, "Gremios")
+  found_cost: 2000          # copper coins paid (and destroyed: a sink) to found a guild
+  found_min_level: 18       # founder's minimum level
+  max_members: 50           # leader included
+  max_vice_leaders: 4
+  max_invites: 15           # pending invitations of one guild at a time
+  invite_hours: 36          # an invitation expires after this (it survives logouts)
+  name_min: 3               # characters
+  name_max: 24
+  name_max_words: 4
+  motd_max: 160             # characters of the message of the day
+  # A name is refused if, lowercased and without spaces, it contains one of
+  # `reserved_parts` (posing as staff or the game, or offensive), or if one of its words
+  # is in `reserved_words` (too short to match inside other words).
+  reserved_parts: [admin, gamemaster, moderat, moderad, soporte, support, staff, tutor,
+    sistema, system, official, oficial, rpgproject, mierda, puta, fuck, shit, nazi,
+    hitler, nigger, faggot, maricon, retard]
+  reserved_words: [gm, cm, god, mod, dev]
+
 travel:                     # boat routes (T3.5, docs/02-game-design.md "Viajes en barco")
   # No sailing while in combat: a monster attacked the player, the player took damage or
   # hit a monster within the last combat_block_ms.

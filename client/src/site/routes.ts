@@ -4,6 +4,8 @@
 export type Route =
   | { page: "home" }
   | { page: "highscores" }
+  | { page: "guilds" }
+  | { page: "guild"; id: number }
   | { page: "news" }
   | { page: "post"; slug: string }
   | { page: "maps_submit" }
@@ -23,6 +25,9 @@ export function parseRoute(pathname: string): Route {
   if (path === "/" || path === "/index.html") return { page: "home" };
   if (path === "/highscores") return { page: "highscores" };
   if (path === "/news") return { page: "news" };
+  if (path === "/guilds") return { page: "guilds" };
+  const g = /^\/guilds\/([1-9][0-9]{0,15})$/.exec(path);
+  if (g?.[1]) return { page: "guild", id: Number(g[1]) };
   const m = /^\/news\/([a-z0-9-]+)$/.exec(path);
   if (m?.[1]) return { page: "post", slug: m[1] };
   if (path === "/maps" || path === "/maps/submit") return { page: "maps_submit" };
@@ -130,4 +135,9 @@ export function oauthErrorKey(search: string): string {
 export function linkedProvider(search: string, linked: readonly string[]): string | undefined {
   const p = new URLSearchParams(search).get("linked") ?? "";
   return ["google", "discord"].includes(p) && linked.includes(p) ? p : undefined;
+}
+
+/** i18n key of a guild rank of the public API ("leader", "vice", "member"). */
+export function guildRankKey(rank: string): string {
+  return `client.guild.rank.${["leader", "vice"].includes(rank) ? rank : "member"}`;
 }

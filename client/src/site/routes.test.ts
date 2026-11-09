@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   categoryKey,
   filtersToSearch,
+  guildRankKey,
   highscoresPath,
   linkToken,
   linkedProvider,
@@ -25,6 +26,18 @@ describe("site routes", () => {
     });
     expect(parseRoute("/news/../etc")).toEqual({ page: "not_found" });
     expect(parseRoute("/elsewhere")).toEqual({ page: "not_found" });
+  });
+});
+
+describe("guild routes (T5.1)", () => {
+  it("maps /guilds and /guilds/<id>", () => {
+    expect(parseRoute("/guilds")).toEqual({ page: "guilds" });
+    expect(parseRoute("/guilds/")).toEqual({ page: "guilds" });
+    expect(parseRoute("/guilds/12")).toEqual({ page: "guild", id: 12 });
+    expect(parseRoute("/guilds/0")).toEqual({ page: "not_found" });
+    expect(parseRoute("/guilds/abc")).toEqual({ page: "not_found" });
+    expect(guildRankKey("vice")).toBe("client.guild.rank.vice");
+    expect(guildRankKey("<x>")).toBe("client.guild.rank.member");
   });
 });
 

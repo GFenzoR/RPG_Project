@@ -123,6 +123,10 @@ type Player struct {
 	partyNext     game.Tick
 	contributedAt game.Tick
 
+	// Guilds (T5.1): p's membership (nil: none) and whether a GuildUpdate is queued.
+	gm          *guildMember
+	guildQueued bool
+
 	// Travel (T3.5): the last tick p fought (attacked, hurt or hitting a monster; 0 =
 	// never), which blocks sailing for balance travel.combat_block_ms.
 	fightAt game.Tick
@@ -366,6 +370,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.loadSkills(p, c.Skills)
 	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
 	p.storage = quest.NewLog(c.Storage)
+	if w.guildOn {
+		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
+	}
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
 	w.published.Store(int32(len(w.players)))
@@ -391,6 +398,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.joinedAt = ctx.Tick
 	// After the ledger: resuming may end the tutorial and give its reward (T4.2).
 	w.tutorialJoin(p)
+	w.guildJoin(p) // T5.1: its GuildUpdate, and the others see it online
 
 	// Staggered autosave: first at a random point of the first interval.
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
@@ -428,6 +436,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.reconcile(ctx.Tick, p) // a duplication right before leaving is caught too (T4.1)
 	w.disappearFromObservers(p)
 	w.partyLeftWorld(p) // T3.3: leaving the world leaves the party
+	w.guildLeftWorld(p) // T5.1: the guild sees it offline
 	w.unindex(p)
 	delete(w.byClient, p.client)
 	if w.byChar[p.charID] == p {
@@ -593,6 +602,7 @@ func (w *World) creatureMsg(p *Player) *pb.Creature {
 		Dir:           dirMsg(p.dir),
 		HealthPercent: uint32(p.health * 100 / max(p.maxHealth, 1)),
 		Speed:         uint32(p.speed),
+		Guild:         guildName(p),
 	}
 }
 

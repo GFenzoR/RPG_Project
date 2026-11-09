@@ -5,7 +5,7 @@ import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
-import { ChatChannel, CreatureKind, Direction, PartyAction } from "@rpg/protocol";
+import { ChatChannel, CreatureKind, Direction, GuildAction, PartyAction } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
@@ -25,6 +25,7 @@ import { cuesOf, loopFor } from "./audio/cues.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
+import type { GuildInvitationView, GuildView } from "./state/guild.ts";
 import type {
   ContainerState,
   CreatureState,
@@ -71,6 +72,11 @@ export interface GameUi {
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
+  /** The guild and the invitations to one (T5.1). */
+  guild: GuildView | undefined;
+  guildInvitations: GuildInvitationView[];
+  /** The player's own name (to tell itself apart in the guild's member list). */
+  selfName: string;
   selfId: number;
 }
 
@@ -295,6 +301,25 @@ export class Game {
 
   partyShare(on: boolean): void {
     this.party(on ? PartyAction.SHARE_ON : PartyAction.SHARE_OFF);
+  }
+
+  // ---- guilds (T5.1): the server checks ranks, names, gold and limits -----------------
+
+  /** Sends a GuildCommand: `name` is a character or the guild (create, disband). */
+  guild(action: GuildAction, name = "", text = "", guildId = 0n): void {
+    this.conn.send({ case: "guildCommand", value: { action, name, text, guildId } });
+  }
+
+  /** Accepts or declines the invitation of guildId. */
+  guildAnswer(guildId: bigint, accept: boolean): void {
+    this.guild(accept ? GuildAction.ACCEPT : GuildAction.DECLINE, "", "", guildId);
+    this.world.guild.answered(guildId);
+    this.publish();
+  }
+
+  /** Looks at a creature the client sees (T5.1: a player's vocation, level and guild). */
+  lookCreature(id: number): void {
+    this.conn.send({ case: "lookAt", value: { creatureId: id } });
   }
 
   // ---- magic (T1.9): the server checks vocation, level, mana, cooldowns and sight -------
@@ -536,6 +561,9 @@ export class Game {
       tutorial: w.tutorial,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
+      guild: w.guild.view(performance.now()),
+      guildInvitations: [...w.guild.invitations(performance.now())],
+      selfName: w.self?.name ?? "",
       selfId: w.selfId,
     });
     this.armPresenceTimer();
@@ -593,6 +621,13 @@ export class Game {
         if (ref) this.useItem(ref);
       },
       lookTile: (x, y, z) => {
+        const c = [...this.world.creatures.values()].find(
+          (o) => o.pos.x === x && o.pos.y === y && o.pos.z === z,
+        );
+        if (c) {
+          this.lookCreature(c.id);
+          return;
+        }
         const ref = topItem(this.world, x, y, z, true);
         if (ref) this.lookAt(ref);
       },

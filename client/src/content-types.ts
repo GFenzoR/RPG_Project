@@ -108,6 +108,11 @@ export interface ClientContent {
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
   /** balance.yaml chat (T1.13): the server enforces it, the input only caps to it. */
   chat: { maxLength: number };
+  /**
+   * balance.yaml guild (T5.1): shown in the guild panel and caps its inputs; the server
+   * enforces it. Optional so test fixtures can leave it out.
+   */
+  guild?: { foundCost: number; foundMinLevel: number; nameMax: number; motdMax: number };
   /** Sounds, event mapping and loops (assets/sounds.yaml, T3.7). */
   sounds: SoundManifest;
   islands: IslandRect[];

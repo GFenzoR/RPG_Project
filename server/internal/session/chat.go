@@ -70,6 +70,10 @@ func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 		p.emit(systemMsg(msgPartyNone))
 		return
 	}
+	if ch == pb.ChatChannel_CHAT_CHANNEL_GUILD && p.gm == nil {
+		p.emit(systemMsg(msgGuildNone))
+		return
+	}
 	if w.muted(ctx, p) {
 		return
 	}
@@ -85,6 +89,10 @@ func (w *World) say(ctx *game.TickContext, p *Player, m *pb.Say) {
 
 	if ch == pb.ChatChannel_CHAT_CHANNEL_PARTY {
 		w.partySay(p, text)
+		return
+	}
+	if ch == pb.ChatChannel_CHAT_CHANNEL_GUILD {
+		w.guildSay(p, text)
 		return
 	}
 	msg := &pb.Message{Kind: kind, SpeakerId: p.id, SpeakerName: p.name, Body: &pb.Message_Text{Text: text}}
@@ -152,6 +160,7 @@ var chatKinds = map[pb.ChatChannel]pb.MessageKind{
 	pb.ChatChannel_CHAT_CHANNEL_WHISPER: pb.MessageKind_MESSAGE_KIND_WHISPER,
 	pb.ChatChannel_CHAT_CHANNEL_GLOBAL:  pb.MessageKind_MESSAGE_KIND_GLOBAL,
 	pb.ChatChannel_CHAT_CHANNEL_PARTY:   pb.MessageKind_MESSAGE_KIND_PARTY,
+	pb.ChatChannel_CHAT_CHANNEL_GUILD:   pb.MessageKind_MESSAGE_KIND_GUILD,
 }
 
 func (w *World) chatRange(ch pb.ChatChannel) content.ChatRange {
