@@ -265,8 +265,10 @@ jobs:
             -d '{"email":"home-admin@example.com","password":"home-admin-pass-1"}' http://localhost:8080/api/auth/register)
           test "$code" = 201
           make home-admin EMAIL=home-admin@example.com ROLE=gm
-          CONFIRM=yes make home-restore FILE="$(ls deploy/backups/home-*.dump | head -n 1)"
-          ! make home-admin EMAIL=home-admin@example.com ROLE=gm
+          CONFIRM=yes make home-restore FILE="$(find deploy/backups -name 'home-*.dump' | sort | head -n 1)"
+          if make home-admin EMAIL=home-admin@example.com ROLE=gm; then
+            echo "the account registered after the backup survived the restore"; exit 1
+          fi
           curl -fsS http://localhost:8080/healthz
       - name: logs
         if: ${{ !cancelled() }}
