@@ -18,6 +18,8 @@
     "party",
     "guild",
     "pvp",
+    "market",
+    "trade",
     "travel",
     "reports",
     "idle",
@@ -754,6 +756,71 @@
       "type": "object",
       "propertyNames": { "$ref": "common.schema.json#/$defs/conditionId" },
       "additionalProperties": { "$ref": "#/$defs/condition" }
+    },
+    "market": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Global market (T5.3, docs/02 \"Economía\"). Absent or enabled: false turns it off.",
+      "required": [
+        "enabled",
+        "fee_permille",
+        "fee_min",
+        "fee_max",
+        "max_offers",
+        "max_amount",
+        "max_price",
+        "durations_hours",
+        "list_size",
+        "history_size",
+        "reference_days",
+        "mailbox_shown",
+        "action_burst",
+        "action_refill_ms"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "fee_permille": {
+          "description": "Posting fee in thousandths of amount x unit price (a gold sink).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "fee_min": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+        "fee_max": { "$ref": "common.schema.json#/$defs/nonNegativeInt" },
+        "max_offers": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "max_amount": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "max_price": {
+          "description": "Copper coins per unit.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "durations_hours": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "type": "integer", "minimum": 1, "maximum": 1440 }
+        },
+        "list_size": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "history_size": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "reference_days": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "mailbox_shown": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    },
+    "trade": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Trade window between two adjacent players (T5.3). Absent or enabled: false turns it off.",
+      "required": ["enabled", "max_items", "request_ms", "action_burst", "action_refill_ms"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "max_items": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "request_ms": { "type": "integer", "minimum": 1000, "maximum": 600000 },
+        "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
     },
     "pvp": {
       "type": "object",

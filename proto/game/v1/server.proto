@@ -55,6 +55,7 @@ message ServerMessage {
     GuildUpdate guild_update = 36;
     CreatureGuild creature_guild = 37;
     CreatureSkull creature_skull = 38;
+    MarketUpdate market_update = 39;
   }
 }
 
@@ -438,22 +439,92 @@ message ShopOpen {
 
 enum TradeState {
   TRADE_STATE_UNSPECIFIED = 0;
-  // Waiting for the other player to offer an item.
+  // An invitation is pending: sent by this player, or received (invited = true).
   TRADE_STATE_REQUESTED = 1;
   TRADE_STATE_NEGOTIATING = 2;
   TRADE_STATE_COMPLETED = 3;
   TRADE_STATE_CANCELLED = 4;
 }
 
+// TradeUpdate is the state of the trade window (T5.3). It is sent to both players after
+// every change; COMPLETED and CANCELLED close it (reason says why it was cancelled).
 message TradeUpdate {
   TradeState state = 1;
   uint32 partner_creature_id = 2;
   string partner_name = 3;
-  // Offered items, flattened (a container is sent with its contents after it).
+  // Offered items, one per offered stack or container, in offer order.
   repeated ItemStack own_offer = 4;
   repeated ItemStack partner_offer = 5;
   bool own_accepted = 6;
   bool partner_accepted = 7;
+  // REQUESTED: this player received the invitation (it may accept or decline).
+  bool invited = 8;
+  // CANCELLED: i18n key of the reason (trade.cancel.*), empty when a player closed it.
+  string reason = 9;
+  // How many items each side may offer.
+  uint32 max_items = 10;
+}
+
+// MarketOffer is one offer of the global market (T5.3). price is per unit, in the
+// smallest coin; expires_at is Unix milliseconds.
+message MarketOffer {
+  uint64 offer_id = 1;
+  MarketSide side = 2;
+  uint32 item_id = 3;
+  uint32 amount = 4;
+  uint64 price = 5;
+  uint64 expires_at = 6;
+  string owner_name = 7;
+  bool own = 8;
+}
+
+// MarketMailItem is an item waiting in the mailbox.
+message MarketMailItem {
+  uint64 id = 1;
+  ItemStack item = 2;
+}
+
+// MarketHistoryEntry is one own operation: side SELL = sold, BUY = bought.
+message MarketHistoryEntry {
+  MarketSide side = 1;
+  uint32 item_id = 2;
+  uint32 amount = 3;
+  uint64 price = 4;
+  uint64 at = 5;
+}
+
+// MarketUpdate opens or refreshes the market window (T5.3); open = false closes it (the
+// player walked away from the board). Lists are bounded by data/balance.yaml market.
+message MarketUpdate {
+  bool open = 1;
+  // Money the player carries, in the smallest coin.
+  uint64 money = 2;
+  // The browsed item (0: none), its best offers per side and its reference price
+  // (average unit price of the recent sales; 0 = no sales).
+  uint32 item_id = 3;
+  repeated MarketOffer sells = 4;
+  repeated MarketOffer buys = 5;
+  uint64 reference_price = 6;
+  // The player's own active offers.
+  repeated MarketOffer own = 7;
+  uint64 mailbox_gold = 8;
+  repeated MarketMailItem mailbox_items = 9;
+  // Items in the mailbox beyond mailbox_items.
+  uint32 mailbox_more = 10;
+  repeated MarketHistoryEntry history = 11;
+  // Rules for the create form: fee in thousandths clamped to fee_min..fee_max, limits.
+  uint32 fee_permille = 12;
+  uint64 fee_min = 13;
+  uint64 fee_max = 14;
+  uint32 max_offers = 15;
+  uint32 max_amount = 16;
+  uint64 max_price = 17;
+  repeated uint32 durations_hours = 18;
+  // Units of the browsed item the player could put on sale (in the backpack).
+  uint32 owned = 19;
+  // The market is read-only until the server restarts (a change could not be saved): it
+  // can be browsed, but nothing is created, accepted, cancelled or withdrawn.
+  bool read_only = 20;
 }
 
 // ---- movement and connection ------------------------------------------------
@@ -488,6 +559,12 @@ enum DisconnectReason {
   DISCONNECT_REASON_IDLE = 10;
   // The account's password was reset: every session of the account ends (T2.1).
   DISCONNECT_REASON_PASSWORD_CHANGED = 11;
+  // A trade or market change of the character could not be saved (T5.3): it leaves the
+  // world so it does not keep playing on a state the database will not have.
+  DISCONNECT_REASON_SAVE_FAILED = 12;
+  // Login refused: the character's last trade or market change could not be saved; it
+  // can play again after the server restarts (T5.3).
+  DISCONNECT_REASON_CHARACTER_LOCKED = 13;
 }
 
 message Disconnect {

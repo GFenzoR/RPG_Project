@@ -181,3 +181,16 @@ con las series y con la ventana de la cabeza del TSDB (~2 h). Con la retención 
 y estas series, el disco no pasa de unos cientos de MB, y el tope es 1 GB
 (`PROMETHEUS_RETENTION_SIZE`). Grafana sube un poco mientras alguien mira dashboards.
 Repite la medición cuando aparezcan métricas con muchas series.
+
+## Escrituras del Saver (T5.3)
+Una sola goroutine escribe en orden los autoguardados y los transfers del intercambio y
+del mercado. Un transfer de dos personajes con ~20 filas de inventario cada uno tarda
+~4 ms en Postgres local (unos 240 por segundo como techo). El presupuesto: autoguardados
+escalonados (N jugadores / 300 s) más las acciones del comercio, acotadas por los
+anti-flood de `balance.yaml` (`trade.action_*`: un intercambio completo necesita varias
+acciones de cada lado y no se confirma vacío; `market.action_*`). Si la cola (4096) se
+llena, el loop retiene los trabajos en orden. El gauge `persistence_backlog` (cola del
+Saver más lo que retiene el loop, publicado por el loop sin costo en el tick) lo mide
+aunque ninguna escritura falle, y la alerta `PersistenceBacklog` avisa si pasa de 1000
+durante 5 minutos. `persistence_errors_total{outcome="retry"}` solo cuenta escrituras que
+fallaron.

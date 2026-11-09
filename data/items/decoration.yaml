@@ -69,6 +69,16 @@
   pickupable: false
   blocks_movement: true
 
+# Market (T5.3): using a board of a town opens the global market.
+- id: market_board
+  kind: decoration
+  sprite: decor/market_board
+  name: item.market_board.name
+  description: item.market_board.desc
+  pickupable: false
+  blocks_movement: true
+  market_board: true
+
 - id: cooking_hearth
   kind: decoration
   sprite: decor/cooking_hearth

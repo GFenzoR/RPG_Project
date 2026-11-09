@@ -38,6 +38,7 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	d := w.cfg.Balance.Death
 	at := p.pos
 	p.recordEvent(ctx.Tick, eventDied, "", 0, 0)
+	w.cancelTrade(p, tradeCancelDied) // T5.3
 	// T5.2: the players that took part get the kill; a defeat in an arena costs nothing.
 	if w.pvpDeath(ctx, p, killer) {
 		w.arenaDefeat(ctx, p)

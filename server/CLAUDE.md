@@ -124,6 +124,27 @@ server/
   enviarle nada) hasta que `checkPvP` lo saca; un login nuevo lo retoma con `pvpCarry`.
   `kill_credit_ms <= lock_ms` lo valida el balance: quien cobra una muerte sigue en el mundo.
 
+- **Mercado e intercambio (T5.3):** `session/trade.go` + `session/market.go` +
+  `store/market.go` + `app/market.go` (`balance.yaml trade` / `market`; sin bloque, o sin
+  `Config.Transfer`, apagados). Todo lo que mueve items u oro entre personajes o con el
+  mercado termina en `w.transfer(jugadores, ops...)`: un `Transfer` con los snapshots de
+  los jugadores en línea cuyo inventario cambió y los `MarketOp`, por la misma cola que los
+  guardados (`submitJob`; nunca llames `cfg.Save` directo). `store.SaveTransfer` lo escribe
+  en una transacción. Un `MarketOp` nuevo necesita su valor en `session` y en `store`
+  (mismos números) y su caso en `applyMarketOp`. El loop tiene todo el mercado en memoria:
+  no leas ofertas de la base en el loop. Toda acción del mercado pasa por `atMarket` y
+  `marketFlood`; todo lo que entra o sale de un personaje se registra con
+  `econItemWith`/`econGoldWith` (fuente `EconMarket` / `EconTrade`). El staff no comercia.
+  Un transfer que no se guarda **marca** a sus personajes en el Saver (punto fijo: lo que
+  los toque después no se escribe, tampoco en `WritePending` del apagado) y avisa al loop
+  (`World.Tainted`): los saca, rechaza su login y deja el mercado y el intercambio en solo
+  lectura (`w.readOnly`) hasta reiniciar. Toda acción nueva que escriba un transfer tiene
+  que respetar `w.readOnly`. Los ids de transfer crecen entre reinicios (`transfer_high`)
+  y `SaveTransfer` los reclama: un reintento de uno ya confirmado no aplica nada. Cerrar
+  una oferta lleva sus unidades (`MarketOfferRemove.Units`, baja con guarda). Un transfer
+  que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
+  mide la cola del Saver más `World.PendingJobs`.
+
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).
 - Tests de integración con Postgres llevan build tag `integration` (`make test-integration`,

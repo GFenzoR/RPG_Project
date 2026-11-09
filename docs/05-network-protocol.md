@@ -436,9 +436,10 @@ pierde (el envío sigue en la cola de moderación).
 | `NpcTalk` | `creature_id` del NPC (T1.10) |
 | `DialogChoose` | `dialog_id`, `option_id` (0 = cerrar) |
 | `ShopBuy` / `ShopSell` | `dialog_id`, `item_id`, `count` (1..100) (T1.10) |
-| `TradeRequest` | `creature_id`, `item`, `item_id`, `stack_index` |
-| `TradeOffer` | `item`, `item_id`, `stack_index` |
-| `TradeAccept` / `TradeCancel` | — |
+| `TradeRequest` | `creature_id`, `item?`, `item_id`, `stack_index` (T5.3: invitar o aceptar la invitación) |
+| `TradeOffer` | `item`, `item_id`, `stack_index`, o `remove` + `index` (T5.3) |
+| `TradeAccept` / `TradeCancel` | — (T5.3) |
+| `MarketCommand` | `browse`, `create`, `cancel`, `accept`, `withdraw` o `close` (T5.3) |
 | `CloseContainer` | `container_id` (T1.8) |
 | `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
@@ -820,6 +821,50 @@ Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
   `guild.war_won` / `guild.war_lost` / `guild.war_draw` (`our_kills`, `their_kills`),
   `guild.war_surrendered`, `guild.war_disbanded`, `guild.war_not_found`.
 
+### Intercambio y mercado (T5.3, `server/internal/session/trade.go` y `market.go`)
+Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` y `market`.
+- **Intercambio.** `TradeRequest{creature_id}` invita a un jugador adyacente; el invitado
+  acepta mandando `TradeRequest` con el `creature_id` de quien lo invitó (o rechaza con
+  `TradeCancel`). Ambos opcionalmente ofrecen ya un item (`item`, `item_id`,
+  `stack_index`). `TradeOffer` agrega un item de un contenedor abierto (la pila entera, o
+  un contenedor vacío) o, con `remove`, saca el ofrecido en `index`. `TradeAccept`
+  confirma; con las dos confirmaciones el servidor intercambia en el mismo tick.
+  `TradeUpdate{state, partner_creature_id, partner_name, own_offer[], partner_offer[],
+  own_accepted, partner_accepted, invited, reason, max_items}` llega a los dos tras cada
+  cambio. `REQUESTED` = invitación pendiente (`invited` en quien la recibió);
+  `NEGOTIATING`; `COMPLETED` y `CANCELLED` cierran la ventana. `reason` es la clave i18n
+  del motivo (`trade.cancel.too_far`, `died`, `combat`, `left`, `expired`, `no_room`,
+  `staff`, `read_only`; vacío si un jugador la cerró), que el cliente muestra en el log.
+  Mensajes: `trade.unavailable`, `trade.busy`, `trade.too_far`, `trade.bad_item`,
+  `trade.offer_full` (`max`), `trade.staff`, `trade.combat`, `trade.completed`,
+  `trade.empty` (confirmar sin nada ofrecido), `trade.too_fast` (anti-flood),
+  `trade.read_only`.
+- **Mercado.** Se abre con `UseItem` sobre un tablero del mapa (item con
+  `market_board: true`); el servidor contesta `MarketUpdate{open: true, ...}`. Cada
+  `MarketCommand` exige seguir junto al tablero y responde otra `MarketUpdate` completa:
+  `browse{item_id}`, `create{side, item_id, amount, price, duration_index}`,
+  `cancel{offer_id}`, `accept{offer_id, amount}`, `withdraw{}` y `close{}` (sin
+  respuesta). `MarketUpdate`: `money`, el item buscado con sus mejores `sells` / `buys`
+  (`MarketOffer{offer_id, side, item_id, amount, price, expires_at, owner_name, own}`,
+  hasta `list_size` por lado) y `reference_price`, las ofertas propias (`own`), el buzón
+  (`mailbox_gold`, `mailbox_items` hasta `mailbox_shown` y `mailbox_more`), el
+  `history` propio (más nuevo primero), las reglas del formulario (`fee_permille`,
+  `fee_min`, `fee_max`, `max_offers`, `max_amount`, `max_price`, `durations_hours`) y
+  `owned` (unidades del item buscado en la mochila) y `read_only` (solo se puede buscar
+  hasta que el servidor reinicie; las demás acciones responden `market.read_only`).
+  `open: false` cierra la ventana (el jugador se alejó). `withdraw` entrega primero los
+  items en orden mientras entren y después todo el oro que entre. Precios en la moneda más chica, fechas en ms Unix. Mensajes:
+  `market.closed`, `staff`, `too_fast`, `not_at_board`, `bad_item`, `bad_amount` (`max`),
+  `bad_price` (`max`), `too_many_offers` (`max`), `not_enough_items`, `not_enough_money`
+  (`price`), `no_room`, `offer_gone`, `own_offer`, `created` (`item`, `fee`), `cancelled`
+  (`item`), `bought` / `sold` (`item`, `price`), `offer_filled` y `offer_expired` (al
+  dueño), `withdrawn` (`price`), `mailbox_empty`, `mailbox_room`; staff:
+  `gm.market_offer_sell` / `gm.market_offer_buy` (`id`, `name`, `item`, `price`),
+  `gm.market_none`, `gm.market_cancelled`, `gm.market_unknown`.
+- **Falla segura** (docs/01 "Transacciones"): si un cambio del comercio no se pudo
+  guardar, sus personajes reciben `Disconnect{SAVE_FAILED}` y sus logins
+  `Disconnect{CHARACTER_LOCKED}` hasta que el servidor reinicie.
+
 ### Gremios (T5.1, `server/internal/session/guild.go`)
 Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.
 - **`GuildCommand{action, name, text, guild_id, war_id}`** (`war_id`: T5.2). Los miembros se nombran por nombre de
@@ -909,7 +954,8 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `Message` | Chat y mensajes del sistema (clave i18n + parámetros) |
 | `DialogOpen` / `DialogClose` | Diálogo de NPC con texto y opciones |
 | `ShopOpen` | Lista de compra/venta |
-| `TradeUpdate` | Estado del trade |
+| `TradeUpdate` | Estado de la ventana de intercambio (T5.3) |
+| `MarketUpdate` | La ventana del mercado, o su cierre (T5.3) |
 | `WalkRejected` | El cliente corrige su predicción |
 | `Pong`, `Disconnect` | |
 

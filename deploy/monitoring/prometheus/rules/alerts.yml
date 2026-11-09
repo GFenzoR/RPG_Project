@@ -116,14 +116,26 @@ groups:
           summary: "{{ $labels.writer }} writes failing ({{ $value | printf \"%.0f\" }} retries in 10 min)"
           description: "The database rejects or times out writes; they are retried, nothing is lost yet. Check Postgres and the gameserver logs."
 
+      - alert: PersistenceBacklog
+        # T5.3: character saves and trade/market transfers piling up (database slow even without
+        # errors). Above ~4096 the loop holds them in memory and every logout waits behind them.
+        expr: max by (instance) (persistence_backlog{job="gameserver"}) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }} character saves waiting to be written"
+          description: "The persistence goroutine writes slower than the game produces saves and transfers for 5 minutes. Check Postgres latency and the trade/market activity (docs/07, Saver writes)."
+
       - alert: PersistenceDataLost
-        # A write dropped (rejected by the database) or abandoned at shutdown: data is only in the logs.
-        expr: sum by (writer, outcome) (increase(persistence_errors_total{job="gameserver",outcome=~"rejected|abandoned"}[15m])) > 0
+        # A write dropped (rejected by the database), abandoned at shutdown, or skipped because a
+        # trade/market transfer of its character was not stored (T5.3: market read-only until restart).
+        expr: sum by (writer, outcome) (increase(persistence_errors_total{job="gameserver",outcome=~"rejected|abandoned|skipped"}[15m])) > 0
         labels:
           severity: critical
         annotations:
           summary: "{{ $labels.writer }} write {{ $labels.outcome }}"
-          description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database' or 'abandoned'). 'abandoned' is best effort: it happens at shutdown and is only seen if the scrape catches the 20 s -metrics-linger; the logs are the source of truth."
+          description: "A write did not reach the database. The structured log has its content (search for 'rejected by the database', 'abandoned' or 'tainted'). With 'skipped', a trade or market change was not stored: its characters are locked out and the market is read-only until the gameserver restarts. 'abandoned' is best effort: it happens at shutdown and is only seen if the scrape catches the 20 s -metrics-linger; the logs are the source of truth."
 
       - alert: EconomyMismatch
         # T4.1: the economy reconciliation found gold or items that no source explains.

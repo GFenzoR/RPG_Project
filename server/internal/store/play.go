@@ -68,10 +68,10 @@ type Condition struct {
 // InventoryItem is one row of inventory_items with the rows inside it: Slot is the
 // equipment slot of a top-level item and the index inside its container otherwise.
 type InventoryItem struct {
-	ItemID int
-	Count  int
-	Slot   int
-	Items  []InventoryItem
+	ItemID int             `json:"item_id"`
+	Count  int             `json:"count"`
+	Slot   int             `json:"slot,omitempty"`
+	Items  []InventoryItem `json:"items,omitempty"`
 }
 
 // Skill is one row of character_skills.

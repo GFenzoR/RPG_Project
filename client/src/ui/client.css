@@ -756,6 +756,7 @@ body.using-item canvas {
   gap: 0.25rem;
 }
 .battle button.invite,
+.battle button.trade-with,
 .battle button.report {
   width: auto;
   flex: none;
@@ -1218,4 +1219,152 @@ body.using-item canvas {
 }
 .guild-wars li.active {
   color: #ffb0a0;
+}
+
+/* ---- Trade window and market (T5.3): top left (market) and top right (trade) ------ */
+.market,
+.trade {
+  position: absolute;
+  top: 0.5rem;
+  z-index: 3;
+  max-width: calc(100% - 1rem);
+  max-height: calc(100% - 5rem);
+  overflow-y: auto;
+  padding: 0.5rem 0.6rem;
+  color: #eee;
+  background: rgba(20, 20, 30, 0.95);
+  border: 1px solid #666;
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+.market {
+  left: 0.5rem;
+  width: 27rem;
+}
+.trade {
+  right: 0.5rem;
+  width: 22rem;
+}
+.market header,
+.trade header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.market header h2,
+.trade header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  flex: 1;
+}
+.market h3,
+.trade h3 {
+  margin: 0.6rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: #ffd27a;
+}
+.market h4 {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.market .money {
+  color: #ffd27a;
+}
+.market ul,
+.trade ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.market li,
+.trade li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.12rem 0;
+}
+.market li form,
+.market .search,
+.market .create {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+.market li form {
+  margin-left: auto;
+}
+.market input[type="number"] {
+  width: 4.2rem;
+}
+.market .search input[name="item"] {
+  flex: 1;
+}
+.market .create h4,
+.market .create .fee {
+  flex-basis: 100%;
+  margin: 0.2rem 0 0;
+}
+.market output {
+  flex-basis: 100%;
+  color: #ff8a7a;
+}
+.market .mside {
+  color: var(--muted);
+}
+.market .owner {
+  min-width: 5.5rem;
+}
+.market .expires,
+.market .fee {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.item-label .item {
+  display: inline-block;
+  flex: none;
+}
+.item-label .item.missing {
+  width: 32px;
+  height: 32px;
+  font-size: 0.7rem;
+  line-height: 32px;
+  text-align: center;
+  background: #333;
+}
+.trade .columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.trade .state {
+  color: var(--muted);
+  font-weight: normal;
+}
+.trade .actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.trade .offerable button {
+  margin-left: auto;
+}
+.market .reference {
+  margin: 0 0 0.3rem;
+  color: #ffd27a;
+  font-size: 0.8rem;
+}
+.market .read-only {
+  margin: 0.3rem 0;
+  padding: 0.3rem 0.4rem;
+  color: #ffd0c8;
+  background: rgba(160, 40, 30, 0.35);
+  border-radius: 3px;
 }

@@ -24,7 +24,11 @@ type Balance struct {
 	Party      Party      `yaml:"party"`
 	Guild      Guild      `yaml:"guild"`
 	// PvP is player versus player (T5.2); absent or enabled: false turns it off.
-	PvP     PvP     `yaml:"pvp"`
+	PvP PvP `yaml:"pvp"`
+	// Market and Trade are the global market and the trade window (T5.3); absent or
+	// enabled: false turns each off.
+	Market  Market  `yaml:"market"`
+	Trade   Trade   `yaml:"trade"`
 	Travel  Travel  `yaml:"travel"`
 	Economy Economy `yaml:"economy"`
 	// Reports and Idle are the player reports and the idle disconnect (T4.1).
@@ -704,6 +708,12 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, err
 	}
 	if err := b.PvP.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Market.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.Trade.check(); err != nil {
 		return Balance{}, err
 	}
 	if t := b.Travel; t.CombatBlockMs < 0 || t.CombatBlockMs > 600_000 || t.ArrivalRadius < 0 || t.ArrivalRadius > 5 {

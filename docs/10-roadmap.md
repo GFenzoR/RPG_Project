@@ -234,9 +234,18 @@ secundaria.
     marca en el mapa y la lista de batalla, modo seguro y guerras en el panel del gremio.
     Pendiente: que una condición recuerde a su autor tras un relogueo,
     hechizos de condición a distancia contra jugadores y sprites de las marcas.
-- [ ] **T5.3 Mercado global.** Ofertas de compra y venta de items `tradeable` entre
-  jugadores, con depósito y comisión en oro (sumidero), transaccional y con log de
-  economía. [T4.1]
+- [x] **T5.3 Mercado global e intercambio directo.** Ventana de intercambio entre dos
+  jugadores adyacentes con confirmación doble, y ofertas de compra y venta de items
+  `tradeable` entre jugadores, con depósito, buzón y comisión en oro (sumidero),
+  transaccional y con log de economía. [T4.1]
+  - Hecha: `session/trade.go` y `session/market.go` (el loop tiene el mercado en memoria;
+    cada movimiento es un `Transfer` del Saver que escribe los snapshots y el mercado en
+    una transacción), migración 00015 (`market_offers`, buzón de items y de oro,
+    `market_history`, `market_id_high`), `MarketCommand`/`MarketUpdate` y los mensajes de
+    trade, `/marketoffers` y `/marketcancel` auditados, tableros en Puerto y Raigal,
+    ventanas en el cliente. Pendiente: sprite del tablero, refrescar las ventanas abiertas
+    de otros cuando cambia un libro que miran, y ocultar en el momento las ofertas de una
+    cuenta suspendida por la herramienta del operador (hoy, desde el próximo arranque).
 - [ ] **T5.4 Casas.** Casas del mapa que se alquilan con oro, con lista de invitados y
   puertas; los items dentro persisten entre reinicios. [T5.1]
 - [ ] **T5.5 Isla Volcánica y Capítulo 3.** Tercera isla con su mapa, monstruos, NPCs,

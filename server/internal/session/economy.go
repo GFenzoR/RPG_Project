@@ -27,7 +27,8 @@ const (
 	EconQuest    = "quest"    // quest rewards
 	EconTutorial = "tutorial" // the tutorial's reward (T4.2)
 	EconTravel   = "travel"   // boat fare and ticket
-	EconTrade    = "trade"    // player trade (reserved: the trade window does not exist yet)
+	EconTrade    = "trade"    // trade window between two players (T5.3): items out and in
+	EconMarket   = "market"   // global market (T5.3): deposits, fills, withdrawals; ref fee = the posting fee (a sink)
 	EconGather   = "gather"   // fishing, mining, woodcutting
 	EconCraft    = "craft"    // crafting inputs out, output in
 	EconDeath    = "death"    // lost into the remains at death
@@ -112,22 +113,33 @@ func (w *World) held(p *Player) holdings {
 
 // econItem records n units (signed) of def for p from source kind and books them.
 func (w *World) econItem(p *Player, kind, ref string, def *content.Item, n int) {
+	w.econItemWith(p, kind, ref, 0, def, n)
+}
+
+// econItemWith is econItem with the other character of a trade or market operation.
+func (w *World) econItemWith(p *Player, kind, ref string, other int64, def *content.Item, n int) {
 	if def == nil || n == 0 || p == nil {
 		return
 	}
 	if c := def.Currency; c != nil {
-		w.econGold(p, kind, ref, c.Worth*int64(n))
+		w.econGoldWith(p, kind, ref, other, c.Worth*int64(n))
 		return
 	}
 	p.econDelta.units += int64(n)
 	if n > 0 && earns(kind) {
 		p.earn.items += int64(n)
 	}
-	w.econRecord(p, EconomyEntry{Kind: kind, CharacterID: p.charID, ItemID: def.Numeric, Count: int32(n), Ref: ref})
+	w.econRecord(p, EconomyEntry{Kind: kind, CharacterID: p.charID, OtherCharacterID: other, ItemID: def.Numeric,
+		Count: int32(n), Ref: ref})
 }
 
 // econGold records amount (signed) of money for p and books it.
 func (w *World) econGold(p *Player, kind, ref string, amount int64) {
+	w.econGoldWith(p, kind, ref, 0, amount)
+}
+
+// econGoldWith is econGold with the other character of a trade or market operation.
+func (w *World) econGoldWith(p *Player, kind, ref string, other int64, amount int64) {
 	if amount == 0 || p == nil {
 		return
 	}
@@ -138,7 +150,7 @@ func (w *World) econGold(p *Player, kind, ref string, amount int64) {
 	case kind == EconNPCBuy:
 		p.earn.gold += amount // buying back from an NPC is not new wealth (sell and rebuy)
 	}
-	w.econRecord(p, EconomyEntry{Kind: kind, CharacterID: p.charID, Amount: amount, Ref: ref})
+	w.econRecord(p, EconomyEntry{Kind: kind, CharacterID: p.charID, OtherCharacterID: other, Amount: amount, Ref: ref})
 }
 
 // econTree records it and everything inside it (signed by sign) for p: a whole
@@ -197,7 +209,7 @@ func (w *World) econLoot(owner *Player, monster string, it *Item) {
 
 // earns reports whether a positive entry of kind is new wealth for the outlier check
 // (buying from an NPC is not: it was paid for).
-func earns(kind string) bool { return kind != EconNPCBuy && kind != EconTrade }
+func earns(kind string) bool { return kind != EconNPCBuy && kind != EconTrade && kind != EconMarket }
 
 // ground books h moving between p and the ground (sign +1 picked up, -1 dropped). It is
 // not logged: items on the ground stay in the world.

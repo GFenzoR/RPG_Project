@@ -90,6 +90,7 @@ for each tick (50 ms):
 | Gremios: `guilds`, `guild_members`, `guild_invites` (T5.1) | Postgres; el loop tiene todos en memoria | Se cargan una vez al arrancar; cada cambio, asíncrono y en orden por la goroutine de admin |
 | Guerras de gremios: `guild_wars` (T5.2) | Postgres; el loop tiene las abiertas en memoria | Como los gremios: se cargan con ellos y cada cambio va en orden por la goroutine de admin |
 | Marca PvP, contador y muertes injustificadas (T5.2): `characters.skull`, `skull_until`, `pvp_kills`, `pvp_unjust_kills` | Postgres | Con el snapshot del personaje (la misma transacción) |
+| Mercado (T5.3): `market_offers`, `market_mail_items`, `market_mail_gold`, `market_history`, `market_id_high` | Postgres; el loop tiene ofertas, buzones e historial reciente en memoria | Se cargan una vez al arrancar; cada cambio es un `Transfer` del Saver, en la misma transacción que los snapshots de los personajes que tocó |
 
 **Gremios (T5.1).** El game loop es el dueño de los gremios, como del resto del mundo:
 `app` lee todos (gremios, miembros e invitaciones vigentes) antes de arrancar el loop y se
@@ -121,8 +122,96 @@ segundo recorre solo a los jugadores con marca y las guerras abiertas (como much
 el bloqueo PvP activo sigue en el mundo (link-dead: su lote se descarta en el flush) hasta
 que el bloqueo vence; el mismo barrido lo saca y guarda su snapshot final.
 
-Transacciones: el trade entre jugadores se resuelve atómicamente en el loop (estado en
-memoria) y se persiste ambos personajes en una sola transacción de base de datos.
+### Transacciones (T5.3)
+El inventario vive en el loop y se guarda con el snapshot de cada personaje. Todo lo que
+mueve items u oro **entre personajes, o entre un personaje y el mercado**, se decide en un
+tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del loop como
+**un solo trabajo de persistencia**, un `session.Transfer`:
+- lleva los snapshots de los personajes en línea cuyo inventario cambió (los dos del
+  intercambio; quien crea, acepta o retira en el mercado) y los cambios del mercado en
+  orden (`MarketOp`: insertar, llenar o borrar una oferta, agregar o sacar del buzón,
+  historial) con las marcas de ids;
+- entra en **la misma cola del Saver** que los autoguardados (`Job`: snapshot o transfer).
+  El Saver es una goroutine que escribe en orden, así un transfer queda detrás de los
+  guardados anteriores de sus personajes y delante de los siguientes. Si la cola está
+  llena, el `World` lo guarda y todo trabajo posterior espera detrás de él
+  (`submitJob`): un autoguardado con el inventario nuevo nunca llega antes que el
+  transfer que lo explica;
+- `store.SaveTransfer` lo escribe en **una transacción**: los snapshots (con
+  `saveCharacterState`, como un guardado normal) y luego cada cambio del mercado. Una
+  caída antes del commit deja todo como estaba (el inventario viejo y el mercado viejo);
+  después, todo nuevo. Un error transitorio se reintenta entero con backoff.
+- **Idempotente:** cada transfer tiene un id creciente que asigna el loop (sigue desde
+  `market_id_high.transfer_high` tras reiniciar). La transacción lo reclama primero
+  (`ClaimTransfer`); si ya está tomado, es el reintento de uno que sí se confirmó pero cuya
+  respuesta se perdió (timeout en el COMMIT), y no aplica nada otra vez.
+- **Falla segura (sin mitades).** Un transfer que no se guarda (error permanente como
+  `ErrMarketConflict` o una restricción, abandonado al apagar con la base caída, o uno
+  pendiente del apagado que falla) deja la base con el estado de antes en **todos** sus
+  lados, mientras el loop ya va por delante. Desde ahí:
+  - **Marca** a sus personajes en el Saver: ningún trabajo posterior que toque a un
+    personaje marcado se escribe en ese proceso, y saltar un transfer marca también a sus
+    otros personajes (punto fijo: un intercambio con un marcado no llega a la base por el
+    próximo guardado del otro). La misma regla rige los pendientes del apagado
+    (`Saver.WritePending`, que usa `app` en "final saves").
+  - **Avisa al loop** (`SaverConfig.Tainted` → `World.Tainted`): saca del mundo a los
+    marcados (`Disconnect{SAVE_FAILED}`), descarta su estado sin guardar y rechaza su
+    login (`Disconnect{CHARACTER_LOCKED}`) hasta reiniciar; el mercado queda en **solo
+    lectura** (se puede buscar; crear, aceptar, cancelar, retirar y el vencimiento se
+    detienen; `MarketUpdate.read_only`) y se cancelan los intercambios abiertos y no se
+    abren otros. Así nadie más construye sobre una oferta o un buzón que la base no
+    tiene. Un transfer solo de mercado (un vencimiento, una cancelación) que no se guarda
+    no marca a nadie, pero también pone el mercado en solo lectura.
+  - **El operador se entera:** log de error, `persistence_errors_total{writer="character",
+    outcome="rejected|abandoned|skipped"}` y la alerta `PersistenceDataLost`
+    (tabla de alertas de este doc). Al reiniciar se carga lo que tiene la base: los
+    marcados pierden todo lo jugado desde su **último guardado escrito** (no solo desde el
+    transfer).
+  - **Bajas con guarda:** cerrar una oferta (cancelar, vencer, `/marketcancel`) lleva las
+    unidades que el loop cree que quedan (`DeleteMarketOffer ... AND amount = $units`). Si
+    un llenado de esa oferta no se guardó, la base tiene más: el cierre falla entero
+    (`ErrMarketConflict`) y pone el mercado en solo lectura, en vez de devolver al buzón
+    menos de lo depositado.
+  - **Apagado con semántica de caída:** si un transfer se abandona o falla durante el
+    apagado (el plazo de `Stop` o en `WritePending`), ningún trabajo posterior se escribe,
+    de ningún personaje (se cuentan como `abandoned`), como si el proceso se hubiera caído
+    en ese punto.
+  - **Límite conocido (en ejecución).** Entre el transfer que se va a descartar y
+    `World.Tainted` (un tick más lo que tenga la cola del Saver), el personaje sigue
+    jugando: lo que recibió y suelta en el suelo o deja en su cadáver puede levantarlo
+    otro, cuyo guardado normal sí se escribe. Eso duplica lo recibido. Cerrarlo pediría
+    atar cada instancia al ack de su transfer; como solo pasa tras un rechazo permanente
+    (ya un bug), la red son la alerta y la cuadratura del log de economía (T4.1). La falla
+    segura garantiza que no se guarde la mitad de un transfer ni nada construido sobre él
+    por el mercado o el intercambio, no que nunca se duplique nada.
+- Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
+  oferta y, si era de compra, devolver el oro al buzón).
+- **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un
+  autoguardado); por eso el intercambio no se confirma vacío y tiene anti-flood, y el
+  mercado también (docs/07).
+- La otra parte de una operación del mercado no necesita snapshot: lo que recibe va a su
+  buzón, que es una fila del mercado. Por eso funciona aunque esté desconectada.
+
+**Ofertas en memoria, como los gremios.** `app` carga el mercado entero antes de arrancar
+el loop (`LoadMarket`: ofertas, buzones, marcas de ids, historial reciente por personaje,
+ventas de los últimos días para el precio de referencia y suspensiones vigentes de los
+dueños de ofertas) y el loop es su único dueño: buscar, aceptar o cancelar nunca toca la
+base. Elegimos esto y no una reserva asíncrona en la base porque (1) dos compradores de la
+última unidad son dos comandos en orden en el mismo loop: el primero la lleva y el
+segundo ve la oferta agotada, sin estados intermedios ni locks; (2) aceptar es inmediato
+y en el mismo tick que el pago, como el intercambio; (3) el tamaño está acotado
+(`max_offers` por personaje). La red de seguridad está en la base: llenar más unidades de
+las que quedan (`FillMarketOffer` exige `amount > units`, o borra exactamente las últimas)
+falla toda la transacción, así que dos escrituras de la misma unidad nunca confirman las
+dos (probado con dos transacciones concurrentes en `store`). Los ids de ofertas y del buzón
+los asigna el loop (el siguiente al mayor emitido, `market_id_high`), así un id no se
+reusa tras reiniciar.
+
+**Costo en el tick.** Cada acción toca una oferta, un libro (búsqueda binaria en una lista
+ordenada por precio) y un buzón; listar recorre a lo sumo `list_size` ofertas visibles por
+lado. El vencimiento barre una vez por segundo la lista ordenada por vencimiento, como
+mucho 64 por barrido. Los intercambios abiertos se revisan cada tick (pocos, con a lo sumo
+`max_items` por lado).
 
 ## Autenticación y cuentas
 - Email + contraseña (argon2id), verificación de email, reset de contraseña.
@@ -230,7 +319,8 @@ Tienen tests (`prometheus/tests/alerts_test.yml`, `make monitoring-check`).
 | `HostMemoryHigh` | critical | menos de 10 % de la RAM de la máquina disponible durante 5 min |
 | `HostDiskAlmostFull` / `HostDiskCritical` | warning / critical | menos de 15 % / 5 % libre en `/` |
 | `PersistenceRetrying` | warning | más de 3 reintentos de un escritor en 10 min |
-| `PersistenceDataLost` | critical | cualquier escritura `rejected` o `abandoned` en 15 min (`abandoned` es best effort, ver abajo) |
+| `PersistenceBacklog` | warning | `persistence_backlog` > 1000 durante 5 min: la base escribe más lento de lo que el juego produce guardados (T5.3, docs/07) |
+| `PersistenceDataLost` | critical | cualquier escritura `rejected`, `abandoned` o `skipped` (T5.3) en 15 min (`abandoned` es best effort, ver abajo) |
 | `EconomyMismatch` | critical | cualquier `economy_alerts_total{kind="mismatch"}` nuevo en 15 min |
 | `BackupFailed` | critical | la última corrida de `backup.sh` falló |
 | `BackupStale` | critical | sin backup exitoso en dos intervalos (la regla de `backup.sh --check`) durante 10 min |
@@ -381,8 +471,11 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
   en los restos al morir), `gm` (`/item`), `consume` (comida, pociones, la última carga
   de una runa, munición; también lo usado del suelo, a nombre de quien lo usó), `conjure`
   (hechizos que crean items) y `decay` (lo que quedaba en unos restos al pudrirse, a nombre
-  del muerto si era un jugador). `trade` queda reservado
-  para la ventana de intercambio, que todavía no existe. `count` (unidades) y `amount`
+  del muerto si era un jugador). `trade` (ventana de
+  intercambio, T5.3: lo que sale y entra de cada uno, con el otro personaje) y `market`
+  (mercado, T5.3: depósitos al crear con ref `offer`, la comisión con ref `fee`,
+  compras y ventas con ref `buy` / `sell` y el otro personaje, retiros del buzón con ref
+  `mailbox`). `count` (unidades) y `amount`
   (dinero, en cobre) llevan signo: positivo se crea o se recibe, negativo se destruye o se
   pierde. `details.ref` es el id de contenido de la fuente (monstruo, NPC, receta, quest).
 - **Costo en el tick:** el loop solo agrega la entrada (un struct por valor, sin punteros

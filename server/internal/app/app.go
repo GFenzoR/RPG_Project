@@ -185,12 +185,19 @@ func New(cfg Config) (*App, error) {
 
 	var systems []game.System
 	if cfg.Map != nil {
+		ms, _ := cfg.Store.(MarketStore)
+		var writeTransfer func(context.Context, session.Transfer) error
+		if ms != nil {
+			writeTransfer = a.writeTransfer
+		}
 		saver, err := session.NewSaver(session.SaverConfig{
-			Write:  a.writeSnapshot,
-			Saved:  a.snapshotSaved,
-			Clock:  cfg.Clock,
-			Logger: cfg.Logger,
-			Failed: saveFailed(cfg.Metrics),
+			Write:         a.writeSnapshot,
+			WriteTransfer: writeTransfer,
+			Saved:         a.snapshotSaved,
+			Clock:         cfg.Clock,
+			Logger:        cfg.Logger,
+			Failed:        saveFailed(cfg.Metrics),
+			Tainted:       a.charactersTainted,
 		})
 		if err != nil {
 			return nil, err
@@ -211,7 +218,22 @@ func New(cfg Config) (*App, error) {
 			}
 			a.admin.guilds, guilds = gs, guildData(rows)
 		}
+		// The market and the trade window (T5.3) need transactions across characters: only
+		// a store that writes transfers (Postgres) turns them on. The market is loaded once,
+		// before the loop owns it.
+		var transfer func(session.Transfer) bool
+		var market *session.MarketData
+		if ms != nil {
+			transfer = saver.SubmitTransfer
+			// Loaded even with the market off: the trade window's transfers continue
+			// from the last transfer id written.
+			if market, err = loadMarket(ms, cfg.Clock.Now(), cfg.Balance.Market); err != nil {
+				return nil, err
+			}
+		}
 		w, err := session.New(session.Config{
+			Transfer:      transfer,
+			Market:        market,
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
 			Balance:       cfg.Balance,
@@ -238,6 +260,9 @@ func New(cfg Config) (*App, error) {
 		a.World = w
 		cfg.Metrics.EconomyAlertKinds(session.AlertMismatch, session.AlertGoldOutlier, session.AlertItemsOutlier, session.AlertLogDropped)
 		if err := cfg.Metrics.PlayersOnline(w.PublishedOnline); err != nil {
+			return nil, fmt.Errorf("metrics: %w", err)
+		}
+		if err := cfg.Metrics.PersistenceBacklog(func() int { return saver.Backlog() + w.PendingJobs() }); err != nil {
 			return nil, fmt.Errorf("metrics: %w", err)
 		}
 		if err := cfg.Metrics.AntiBot(w.AntiBotStats()); err != nil {
@@ -371,15 +396,9 @@ func (a *App) Run(ctx context.Context) error {
 	// Drain the saver first: its queue holds older snapshots of the same characters, and
 	// writing the pending (newer) ones concurrently could let an old one land last.
 	stage("persistence did not drain", a.saver.Stop)
-	stage("final saves", func(ctx context.Context) error {
-		var errs []error
-		for _, s := range pending { // the saver's queue was full when SaveAll ran
-			if err := a.writeSnapshot(ctx, s); err != nil {
-				errs = append(errs, fmt.Errorf("character %d: %w", s.CharacterID, err))
-			}
-		}
-		return errors.Join(errs...)
-	})
+	// The jobs the saver's queue could not take when SaveAll ran, with the saver's rules
+	// (a failed transfer taints its characters; their later jobs are skipped, T5.3).
+	stage("final saves", func(ctx context.Context) error { return a.saver.WritePending(ctx, pending) })
 	stage("audit log did not drain", a.admin.Stop)
 	stage("pending audit entries", func(ctx context.Context) error { return a.admin.writePending(ctx, pendingAdmin) })
 	stage("economy log did not drain", a.economy.Stop)
@@ -389,7 +408,18 @@ func (a *App) Run(ctx context.Context) error {
 }
 
 func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
-	err := a.cfg.Store.SaveCharacterState(ctx, store.CharacterState{
+	err := a.cfg.Store.SaveCharacterState(ctx, a.characterState(s))
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return session.ErrGone
+	case store.Permanent(err):
+		return fmt.Errorf("%w: %w", session.ErrPermanent, err)
+	}
+	return err
+}
+
+func (a *App) characterState(s session.Snapshot) store.CharacterState {
+	return store.CharacterState{
 		ID:         s.CharacterID,
 		Level:      s.Level,
 		Experience: s.Experience,
@@ -405,14 +435,7 @@ func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
 		PvP: store.PvPState{Skull: s.PvP.Skull, SkullUntil: s.PvP.SkullUntil, Kills: s.PvP.Kills,
 			Unjust: s.PvP.Unjust},
 		SavedAt: a.cfg.Clock.Now(),
-	})
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		return session.ErrGone
-	case store.Permanent(err):
-		return fmt.Errorf("%w: %w", session.ErrPermanent, err)
 	}
-	return err
 }
 
 func storeConditions(in []session.ConditionState) []store.Condition {
@@ -479,6 +502,16 @@ func (a *App) enqueueRetry(cmd game.Command) {
 		case <-a.cfg.Clock.After(game.TickDuration):
 		}
 	}
+}
+
+// charactersTainted hands characters whose transfer was not stored to the loop (T5.3): it
+// must not be lost, so a full queue is retried in its own goroutine (the persistence
+// goroutine never waits for the loop). After the loop stopped there is nothing to tell.
+func (a *App) charactersTainted(ids []int64) {
+	if a.World == nil {
+		return
+	}
+	go a.enqueueRetry(a.World.Tainted(ids))
 }
 
 func (a *App) snapshotSaved(s session.Snapshot) {

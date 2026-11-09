@@ -2175,3 +2175,142 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
   await hunterP.close();
   await preyP.close();
 });
+
+test("T5.3: two players trade, one posts a market offer, the other buys it, the gold is withdrawn", async ({
+  browser,
+  playwright,
+}) => {
+  const seller = await newGuardian(playwright, "Mercader");
+  const buyer = await newGuardian(playwright, "Cliente");
+  // Both stand next to Puerto's market board (3168, 6382: world/islands/puerto), each with
+  // a backpack (48): the seller with 20 raw fish (10), the buyer with two stacks of 50
+  // copper coins (8).
+  const seed = (name: string, x: number, y: number, items: string): string =>
+    `UPDATE characters SET town = 'puerto', pos_x = ${x}, pos_y = ${y}, pos_z = 7 WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, s, i, c FROM bp, (VALUES ${items}) AS v(s, i, c);`;
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    seed(seller.name, 3167, 6382, "(0, 10, 20)") +
+      seed(buyer.name, 3167, 6383, "(0, 8, 50), (1, 8, 50)"),
+  ]);
+  const errors: string[] = [];
+  async function enter(email: string): Promise<Page> {
+    const page = await browser.newPage();
+    await enterGame(page, email, seller.password);
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    return page;
+  }
+  const a = await enter(seller.email);
+  const b = await enter(buyer.email);
+  await arrived(a, 3167, 6382);
+  await arrived(b, 3167, 6383);
+  for (const page of [a, b]) {
+    const slot = page.getByTestId("inventory").getByTestId("slot-backpack");
+    await slot.locator("[data-item]").click({ button: "right" });
+    await expect(
+      page.getByTestId("inventory").locator('[data-container-item="backpack"]'),
+    ).toBeVisible();
+  }
+
+  // Trade: the seller invites from the battle list, the buyer joins; fish for 50 coins.
+  await a.getByTestId("battle-list").locator("[data-trade]").first().click();
+  const invite = b.getByTestId("trade-invitation");
+  await expect(invite).toContainText(`${seller.name} quiere intercambiar contigo.`);
+  await b.getByTestId("trade-join").click();
+  const ta = a.getByTestId("trade");
+  const tb = b.getByTestId("trade");
+  await ta.locator("[data-trade-add=raw_fish]").click();
+  await tb.locator("[data-trade-add=copper_coin]").first().click();
+  await expect(ta.getByTestId("trade-partner")).toContainText("50");
+  await expect(tb.getByTestId("trade-partner")).toContainText("20");
+  await ta.getByTestId("trade-accept").click();
+  await expect(tb.getByTestId("trade-partner-state")).toHaveText("(confirmó)");
+  await shot(b, "52-trade-window");
+  await tb.getByTestId("trade-accept").click();
+  for (const page of [a, b]) {
+    await expect(page.getByTestId("game-log")).toContainText("Intercambio completado.");
+    await expect(page.getByTestId("trade")).toHaveCount(0);
+  }
+
+  // Market: the buyer (now with the fish) uses the board and posts 8 fish at 6 coins.
+  const board = await b.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
+  if (!board) throw new Error("no canvas");
+  await b.mouse.click(board.x, board.y, { button: "right" });
+  const mb = b.getByTestId("market");
+  await expect(mb).toBeVisible();
+  await mb.getByTestId("market-search").getByRole("combobox").fill("pescado crudo");
+  await mb.getByTestId("market-search").getByRole("button", { name: "Buscar" }).click();
+  await expect(mb.getByTestId("market-browse")).toHaveAttribute("data-item", "raw_fish");
+  const create = mb.getByTestId("market-create");
+  await create.getByLabel("Cantidad").fill("8");
+  await create.getByLabel("Precio por unidad").fill("6");
+  await create.getByRole("button", { name: "Publicar" }).click();
+  await expect(b.getByTestId("game-log")).toContainText(
+    /Publicaste una oferta de .+ Comisión: 5 monedas\./,
+  );
+  await expect(mb.getByTestId("market-own").locator("li")).toHaveCount(1);
+  await shot(b, "53-market-offer-posted");
+
+  // The seller (now with the coins) buys 3 of them from the listing.
+  const boardA = await a.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
+  if (!boardA) throw new Error("no canvas");
+  await a.mouse.click(boardA.x, boardA.y, { button: "right" });
+  const ma = a.getByTestId("market");
+  await ma.getByTestId("market-search").getByRole("combobox").fill("pescado crudo");
+  await ma.getByTestId("market-search").getByRole("button", { name: "Buscar" }).click();
+  // Earlier runs against the same database may have left offers: pick this one.
+  const offer = ma.getByTestId("market-sells").locator("li", { hasText: buyer.name });
+  await expect(offer).toContainText("8 unidades");
+  await offer.getByLabel("Cantidad").fill("3");
+  await offer.getByRole("button", { name: "Comprar" }).click();
+  await expect(a.getByTestId("game-log")).toContainText(/Compraste .+ por 18 monedas\./);
+  await expect(offer).toContainText("5 unidades");
+  await expect(ma.getByTestId("market-reference")).toContainText("Precio de referencia: 6 c/u");
+  await expect(ma.getByTestId("market-history")).toContainText("Compraste");
+  await shot(a, "54-market-bought");
+
+  // The first one is told and withdraws the 18 coins from the mailbox.
+  await expect(b.getByTestId("game-log")).toContainText(/Mercado: se cerró parte de tu oferta/);
+  await expect(mb.getByTestId("market-mailbox-gold")).toHaveText("Oro: 18 monedas");
+  await mb.getByTestId("market-withdraw").click();
+  await expect(b.getByTestId("game-log")).toContainText("Retiraste 18 monedas del buzón.");
+  await expect(mb.getByTestId("market-mailbox-gold")).toHaveText("Oro: 0 monedas");
+  await expect(mb.getByTestId("market-money")).toHaveText("Dinero: 63");
+  await shot(b, "55-market-withdrawn");
+
+  // The database has it: the offer with 5 left, written with the snapshots.
+  await expect
+    .poll(() =>
+      execFileSync("psql", [
+        databaseUrl,
+        "-tAc",
+        `SELECT o.amount FROM market_offers o JOIN characters c ON c.id = o.character_id WHERE c.name = '${buyer.name}'`,
+      ])
+        .toString()
+        .trim(),
+    )
+    .toBe("5");
+  // ...and the withdrawal too: the mailbox's gold is 0 in the database.
+  await expect
+    .poll(() =>
+      execFileSync("psql", [
+        databaseUrl,
+        "-tAc",
+        `SELECT g.gold FROM market_mail_gold g JOIN characters c ON c.id = g.character_id WHERE c.name = '${buyer.name}'`,
+      ])
+        .toString()
+        .trim(),
+    )
+    .toBe("0");
+  expect(errors).toEqual([]);
+  await a.close();
+  await b.close();
+});

@@ -210,3 +210,39 @@ func (w *World) PvPHitForTest(ctx *game.TickContext, a, v *Player, dmg int) {
 
 // PvPStateForTest is what a snapshot would save of p's PvP state.
 func (w *World) PvPStateForTest(p *Player) PvPState { return w.pvpState(p) }
+
+// SetPvPLockForTest puts p in a PvP fight until tick (tests only, loop goroutine).
+func (w *World) SetPvPLockForTest(p *Player, until game.Tick) { p.fightUntil = until }
+
+// MarketOfferAmount returns the units left of offer id, or -1 if it is not in the book.
+func (w *World) MarketOfferAmount(id int64) int {
+	if o := w.offers[id]; o != nil {
+		return o.Amount
+	}
+	return -1
+}
+
+// MarketOffers returns the ids of the offers of character charID (tests only).
+func (w *World) MarketOffers(charID int64) []int64 {
+	var out []int64
+	for _, o := range w.byOwner[charID] {
+		out = append(out, o.ID)
+	}
+	return out
+}
+
+// Mailbox returns the gold and the item stacks waiting in charID's mailbox.
+func (w *World) Mailbox(charID int64) (int64, []ItemState) {
+	b := w.mail[charID]
+	if b == nil {
+		return 0, nil
+	}
+	var items []ItemState
+	for _, m := range b.items {
+		items = append(items, m.Item)
+	}
+	return b.gold, items
+}
+
+// SetRoleForTest changes p's role (tests only, loop goroutine).
+func (w *World) SetRoleForTest(p *Player, r Role) { p.role = r }

@@ -425,10 +425,72 @@ Valores iniciales (balance.yaml):
 - Monedas de oro, plata, cobre (100:1).
 - NPCs compran y venden con precios en `data/npcs/*.yaml`. Los NPCs compran barato
   para que el comercio entre jugadores tenga sentido.
-- **Trade directo**: ventana de intercambio con confirmación doble. Transacción atómica.
-- Mercado global: hito posterior. El inventario ya es transaccional para soportarlo.
-- Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio.
+- Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
+  fundación de un gremio y la comisión del mercado.
 - Log de economía para detectar duplicación y bots.
+
+Mecánicas de comercio entre jugadores conocidas del género; reglas, números y textos
+propios (`balance.yaml → trade` y `→ market`, docs/06).
+
+### Intercambio directo (T5.3)
+- Dos jugadores **adyacentes** (misma planta, a una casilla, diagonal incluida). Uno invita
+  desde la lista de batalla; el otro acepta o rechaza. La invitación vence a los
+  `request_ms` (25 s).
+- Cada uno ofrece items de sus contenedores (no lo equipado): solo `tradeable`, la pila
+  entera o un contenedor **vacío**, hasta `max_items` (6) por lado. Se puede ofrecer oro
+  (las monedas son `tradeable`).
+- **Confirmación doble:** el intercambio se hace cuando confirmaron los dos. Cualquier
+  cambio en una oferta (agregar, quitar, que un item ofrecido se mueva o cambie de
+  cantidad) o un paso de cualquiera de los dos anula las dos confirmaciones.
+- Se cancela si se alejan, si uno muere, si uno entra en combate PvP (bloqueo PvP), si uno
+  se desconecta o si alguno es del personal del juego. Personal del juego no intercambia.
+- No se confirma un intercambio sin nada ofrecido de ningún lado, y las acciones del
+  intercambio tienen anti-flood propio (`action_burst` / `action_refill_ms`): cada
+  intercambio completo guarda a los dos personajes enteros.
+- **Atómico:** el servidor revisa que a cada uno le entre lo que recibe (lugares de la
+  mochila y capacidad, contando lo que entrega) y mueve las instancias en el mismo tick;
+  si a alguno no le entra, se cancela sin mover nada. Lo recibido va a la mochila.
+
+### Mercado global (T5.3)
+- Se usa en un **tablero del mercado** de cada ciudad (Puerto y Raigal), parado junto a
+  él; alejarse cierra la ventana. Es uno solo para todas las islas.
+- **Ofertas de venta:** las unidades salen de la mochila y quedan en depósito. **Ofertas de
+  compra:** cantidad × precio sale en monedas y queda en depósito. Cada oferta tiene
+  cantidad (hasta `max_amount`), precio por unidad (hasta `max_price`) y duración (12, 48
+  o 120 horas): al vencer se cierra sola.
+- **Comisión:** crear una oferta cuesta el 2 % de cantidad × precio, con mínimo 5 y
+  máximo 4000 monedas. Se destruye (sumidero) y queda en el log de economía (`market`,
+  ref `fee`). No se devuelve al cancelar.
+- **Aceptar** una oferta es inmediato y parcial (cualquier cantidad hasta la que queda):
+  quien acepta paga o entrega en el momento y recibe en el momento (si le entra; si no,
+  no pasa nada). Lo que le toca al dueño de la oferta (oro o items) va a su **buzón del
+  mercado**, aunque esté desconectado, y lo retira en cualquier tablero. Cancelar o
+  vencer devuelve el depósito al buzón. Retirar entrega primero los items, en orden,
+  mientras entren, y después todo el oro que entre; el resto espera en el buzón.
+- **Límites:** `max_offers` (15) ofertas activas por personaje; solo items `tradeable`
+  que no son moneda; sin contenedores con algo adentro; las runas, solo con todas sus
+  cargas; los apilables, por unidades. Un personaje no acepta ofertas de su propia cuenta.
+- **Lo que se ve:** al buscar un item, sus mejores `list_size` ofertas de venta (más
+  baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
+  historial (lo que compró y vendió) y un **precio de referencia**: el promedio por unidad
+  de las ventas de los últimos `reference_days` días. Es solo informativo.
+- **Seguridad:** el personal del juego no usa el mercado. Una cuenta suspendida no opera
+  y sus ofertas no se listan ni se pueden aceptar mientras dure la suspensión. Anti-flood
+  propio (`action_burst` / `action_refill_ms`). Comandos de staff auditados:
+  `/marketoffers Nombre` (lista las ofertas de un personaje) y `/marketcancel id` (retira
+  una oferta; su depósito va al buzón del dueño). El anti-bot (T4.1) puede leer el log de
+  economía (`market`, `trade`), pero esta tarea no lo cambia.
+- **Falla segura:** si un cambio del mercado o un intercambio no se pudo guardar (un bug o
+  la base caída al apagar), sus personajes salen del juego con un aviso y no pueden
+  entrar hasta que el servidor reinicie, y el mercado y el intercambio quedan en solo
+  lectura (se puede mirar, no operar) hasta entonces. Al reiniciar, esos personajes
+  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Límite: lo que uno
+  de ellos soltó en el suelo o dejó en su cadáver en el instante antes del aviso puede
+  quedar con quien lo levantó; las alertas de economía (T4.1) son la red (docs/01,
+  "Transacciones").
+- Una oferta de un item retirado del juego se cierra al arrancar: el oro de una de
+  compra vuelve al buzón.
+- **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).
 
 ## Mundo e islas (estructura inicial)
 | Isla | Nivel sugerido | Rol |

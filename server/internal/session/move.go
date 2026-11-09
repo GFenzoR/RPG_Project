@@ -90,6 +90,16 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.tutorialSkip(p)
 	case *pb.ClientMessage_SetSafeMode:
 		w.setSafeMode(p, m.SetSafeMode.GetEnabled())
+	case *pb.ClientMessage_TradeRequest:
+		w.tradeRequest(ctx, p, m.TradeRequest)
+	case *pb.ClientMessage_TradeOffer:
+		w.tradeOffer(ctx, p, m.TradeOffer)
+	case *pb.ClientMessage_TradeAccept:
+		w.tradeAccept(ctx, p)
+	case *pb.ClientMessage_TradeCancel:
+		w.tradeCancel(p)
+	case *pb.ClientMessage_MarketCommand:
+		w.marketCommand(ctx, p, m.MarketCommand)
 	case *pb.ClientMessage_Logout:
 		// T5.2: no logout while the PvP lock lasts (attacked a player, or was attacked by
 		// one). Closing the connection still takes the character out (docs/02 "PvP").
@@ -262,6 +272,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	w.observeMove(p, nil, from, to, mv.From, mv.To, durMs)
 	w.checkContainers(p)
 	w.checkDialog(p)
+	w.checkMarket(p)
 
 	// The mover's own client: creatures out of view disappear, the new edge arrives.
 	kept := p.known[:0]
@@ -308,6 +319,7 @@ func (w *World) Teleport(p *Player, to world.Pos) {
 	w.index(p)
 	w.checkContainers(p)
 	w.checkDialog(p)
+	w.checkMarket(p)
 	w.sendFullView(p)
 	w.appearToObservers(p)
 }
@@ -335,12 +347,17 @@ func (w *World) playerByID(id uint32) *Player {
 // there is nothing to say) and retries snapshots that persistence could not take.
 func (w *World) flushSystem(ctx *game.TickContext) {
 	w.retrySaves()
+	if n := int32(len(w.retry)); n != w.publishedRetry.Load() {
+		w.publishedRetry.Store(n)
+	}
 	if len(w.adminRetry) > 0 {
 		w.retryAdmin()
 	}
 	w.checkRoles(ctx)
 	w.flushParties(ctx.Tick)
 	w.checkPvP(ctx) // T5.2: before the guilds, so an ended war is in this tick's update
+	w.checkTrades(ctx)
+	w.checkMarketExpiry(ctx)
 	w.flushGuilds(ctx.Now)
 	w.checkEconomy(ctx.Tick)
 	w.checkIdle(ctx)

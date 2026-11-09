@@ -36,6 +36,10 @@
         "max_stack": { "$ref": "common.schema.json#/$defs/positiveInt" },
         "tradeable": { "type": "boolean" },
         "pickupable": { "type": "boolean" },
+        "market_board": {
+          "type": "boolean",
+          "description": "Using this map item opens the global market (T5.3, docs/02 \"Economía\")."
+        },
         "blocks_movement": {
           "type": "boolean",
           "description": "Blocks walking. Defaults to true for kind: wall, false otherwise (docs/03)."

@@ -306,6 +306,25 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   al atacante y la víctima en modo seguro puede defenderse; el atacante no puede salir
   (screenshots 49–51).
 
+## Notas de T5.3
+- `WorldState.trade` / `market` (`state/market.ts`, puro y con tests: `tradeFrom`,
+  `marketFrom`, `marketFee`, `createProblem`, `searchItems`). Un `TradeUpdate` que cierra con
+  `reason` deja esa clave en el log. `ItemDef.tradeable` y `marketable` salen de
+  `vite/content.ts`.
+- `ui/Trade.tsx` (arriba a la derecha del mapa) y `ui/Market.tsx` (arriba a la izquierda)
+  no usan hooks: formularios no controlados que leen sus campos al enviar, y
+  `ui/Trade.test.ts` recorre sus árboles sin DOM. El intercambio se propone con el botón
+  "⇄" de la lista de batalla (`data-trade`); lo ofrecible es lo `tradeable` de los
+  contenedores abiertos. El mercado se abre con click derecho sobre un tablero (es un
+  `UseItem` como cualquier item del mapa); la búsqueda es un `<datalist>` de los nombres
+  traducidos: la búsqueda prefiere el nombre exacto, luego el prefijo (`searchItems`).
+- `MarketView.readOnly` (`MarketUpdate.read_only`) muestra el aviso
+  `data-testid="market-read-only"`; `Disconnect{SAVE_FAILED}` y `{CHARACTER_LOCKED}` usan
+  la tabla automática de motivos (`client.disconnect.*`).
+- E2E "T5.3" de `e2e/game.spec.ts`: dos guardianes sembrados con `psql` junto al tablero de
+  Puerto (3168, 6382) intercambian pescado por monedas, uno publica una oferta, el otro
+  compra 3 y el primero retira el oro (screenshots 52–55).
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no
