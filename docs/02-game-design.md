@@ -24,6 +24,11 @@ Todos los números de este documento son **valores iniciales** que viven en
   - En "Mi cuenta" (`/account`) se ven los vínculos. Vincular otro pide re-autenticarse: la
     contraseña, o, en una cuenta sin contraseña, haber entrado hace menos de 10 minutos.
     No se puede desvincular la última forma de entrar.
+  - Un reset de contraseña (quien controla el buzón recupera la cuenta) también quita las
+    identidades que nunca probaron ese email (no verificadas por el proveedor, o con otro
+    email): así no se queda adentro quien ocupó la dirección con un proveedor.
+  - Si la cuenta existente con ese email no tiene contraseña, `/oauth/confirm` no la pide:
+    explica que se entra con el proveedor que ya usa y se vincula desde "Mi cuenta".
   - La app de escritorio no ofrece OAuth (necesitaría abrir el navegador del sistema y
     volver por deep link o loopback; pendiente): muestra que se haga en el sitio.
 

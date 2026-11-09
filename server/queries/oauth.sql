@@ -58,3 +58,10 @@ DELETE FROM oauth_pending WHERE token_hash = sqlc.arg(token_hash);
 -- name: LockAccountForIdentities :one
 -- Serializes changes to an account's login methods (unlinking the last one).
 SELECT id, password_hash FROM accounts WHERE id = sqlc.arg(id) FOR UPDATE;
+
+-- name: DeleteUnprovenIdentities :execrows
+-- After a password reset (the mailbox owner is in control): identities that never proved
+-- the account's email go, so one linked by whoever squatted the address cannot stay.
+DELETE FROM account_identities
+WHERE account_id = sqlc.arg(account_id)
+  AND (NOT email_verified OR email <> sqlc.arg(email));

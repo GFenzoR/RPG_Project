@@ -31,7 +31,8 @@ type jwks struct {
 
 	mu      sync.Mutex
 	keys    map[string]*rsa.PublicKey
-	fetched time.Time
+	fetched time.Time // last successful fetch
+	tried   time.Time // last attempt, failed or not
 }
 
 type jwkSet struct {
@@ -54,9 +55,13 @@ func (j *jwks) key(ctx context.Context, kid string, now time.Time) (*rsa.PublicK
 	if ok && !stale {
 		return k, nil
 	}
-	if !stale && now.Sub(j.fetched) < jwksMinRefetch {
+	if !j.tried.IsZero() && now.Sub(j.tried) < jwksMinRefetch {
+		if ok { // stale but known: keep it until the next allowed fetch
+			return k, nil
+		}
 		return nil, fmt.Errorf("%w: unknown key", ErrInvalidToken)
 	}
+	j.tried = now
 	if err := j.fetch(ctx, now); err != nil {
 		if ok { // keep using a known key while the provider is unreachable
 			return k, nil

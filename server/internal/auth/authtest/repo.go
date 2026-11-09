@@ -318,6 +318,11 @@ func (r *Repo) ResetPassword(_ context.Context, hash []byte, passwordHash string
 			delete(r.sessions, k)
 		}
 	}
+	for k, row := range r.identities {
+		if row.accountID == t.AccountID && (!row.EmailVerified || row.Email != t.Email) {
+			delete(r.identities, k)
+		}
+	}
 	r.Audit = append(r.Audit, store.AuditEntry{At: now, Source: store.AuditWeb, ActorAccountID: t.AccountID,
 		Action: store.AuditPasswordReset, TargetAccountID: t.AccountID, Result: store.ResultOK})
 	return t.AccountID, nil

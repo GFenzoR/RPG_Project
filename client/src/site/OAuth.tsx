@@ -181,9 +181,9 @@ function LoginMethods(props: { t: Translate; account: Account; reload: () => voi
 
 export function OAuthConfirmPage(props: Props): JSX.Element {
   const { t } = props;
-  const [pending, setPending] = useState<{ provider: string; email: string } | string | undefined>(
-    undefined,
-  );
+  const [pending, setPending] = useState<
+    { provider: string; email: string; has_password: boolean } | string | undefined
+  >(undefined);
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
@@ -212,31 +212,37 @@ export function OAuthConfirmPage(props: Props): JSX.Element {
     <section class="card account-page" data-testid="oauth-confirm">
       <h1>{t("site.oauth.confirm.title")}</h1>
       <p>{t("site.oauth.confirm.intro", { provider, email: pending.email })}</p>
-      <form
-        class="maps-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setBusy(true);
-          setError(undefined);
-          oauthApi.confirm(password).then(done, fail);
-        }}
-      >
-        <h2>{t("site.oauth.confirm.link_title")}</h2>
-        <label>
-          <span>{t("site.oauth.confirm.password", { email: pending.email })}</span>
-          <input
-            type="password"
-            name="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onInput={(e) => setPassword(e.currentTarget.value)}
-          />
-        </label>
-        <button type="submit" disabled={busy} data-testid="oauth-confirm-link">
-          {t("site.oauth.confirm.link_submit", { provider })}
-        </button>
-      </form>
+      {pending.has_password ? (
+        <form
+          class="maps-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setBusy(true);
+            setError(undefined);
+            oauthApi.confirm(password).then(done, fail);
+          }}
+        >
+          <h2>{t("site.oauth.confirm.link_title")}</h2>
+          <label>
+            <span>{t("site.oauth.confirm.password", { email: pending.email })}</span>
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onInput={(e) => setPassword(e.currentTarget.value)}
+            />
+          </label>
+          <button type="submit" disabled={busy} data-testid="oauth-confirm-link">
+            {t("site.oauth.confirm.link_submit", { provider })}
+          </button>
+        </form>
+      ) : (
+        <p class="notice" data-testid="oauth-confirm-no-password">
+          {t("site.oauth.confirm.no_password")}
+        </p>
+      )}
       <form
         class="maps-form"
         onSubmit={(e) => {

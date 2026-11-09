@@ -190,7 +190,8 @@ export const oauthApi = {
       `/api/auth/oauth/${encodeURIComponent(provider)}/link`,
       password ? { password } : {},
     ),
-  pending: (): Promise<{ provider: string; email: string }> =>
+  /** has_password: false = the existing account signs in only with a provider. */
+  pending: (): Promise<{ provider: string; email: string; has_password: boolean }> =>
     call("GET", "/api/auth/oauth/pending"),
   confirm: (password: string): Promise<{ return: string }> =>
     call("POST", "/api/auth/oauth/pending/confirm", { password }),

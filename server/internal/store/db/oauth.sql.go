@@ -185,6 +185,27 @@ func (q *Queries) DeleteOAuthPending(ctx context.Context, tokenHash []byte) (int
 	return result.RowsAffected(), nil
 }
 
+const deleteUnprovenIdentities = `-- name: DeleteUnprovenIdentities :execrows
+DELETE FROM account_identities
+WHERE account_id = $1
+  AND (NOT email_verified OR email <> $2)
+`
+
+type DeleteUnprovenIdentitiesParams struct {
+	AccountID int64
+	Email     string
+}
+
+// After a password reset (the mailbox owner is in control): identities that never proved
+// the account's email go, so one linked by whoever squatted the address cannot stay.
+func (q *Queries) DeleteUnprovenIdentities(ctx context.Context, arg DeleteUnprovenIdentitiesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUnprovenIdentities, arg.AccountID, arg.Email)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getIdentity = `-- name: GetIdentity :one
 SELECT account_id FROM account_identities
 WHERE provider = $1 AND subject = $2

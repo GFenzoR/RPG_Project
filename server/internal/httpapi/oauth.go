@@ -96,9 +96,37 @@ func (a *api) oauthLink(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &in) {
 		return
 	}
-	st, err := a.cfg.Auth.StartLink(r.Context(), requestToken(r), r.PathValue("provider"), in.Password)
+	token := requestToken(r)
+	start := func() (auth.OAuthStart, error) {
+		return a.cfg.Auth.StartLink(r.Context(), token, r.PathValue("provider"), in.Password)
+	}
+	if in.Password == "" {
+		st, err := start()
+		if err != nil {
+			a.fail(w, r, err)
+			return
+		}
+		a.writeStart(w, st)
+		return
+	}
+	// A password check: under the same failed-login limits as /api/auth/login, keyed by
+	// the account's email (a stolen session cookie cannot guess the password faster).
+	id, err := a.cfg.Auth.Authenticate(r.Context(), token)
 	if err != nil {
 		a.fail(w, r, err)
+		return
+	}
+	p, err := a.cfg.Auth.Profile(r.Context(), id)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	var st auth.OAuthStart
+	if _, ok := a.limitedLogin(w, r, p.Email, func() (auth.Token, error) {
+		var err error
+		st, err = start()
+		return auth.Token{}, err
+	}); !ok {
 		return
 	}
 	a.writeStart(w, st)
@@ -118,6 +146,8 @@ var oauthErrorCodes = []struct {
 	{auth.ErrUnknownProvider, "unknown_provider"},
 	{auth.ErrAccountDisabled, "account_disabled"},
 	{auth.ErrAccountBanned, "account_banned"},
+	{auth.ErrEmailTaken, "email_taken"},
+	{auth.ErrBusy, "busy"},
 }
 
 // oauthCallback ends at a page of the site whatever happens: the return path of the
@@ -178,7 +208,7 @@ func (a *api) oauthPending(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"provider": p.Provider, "email": p.Email})
+	writeJSON(w, http.StatusOK, map[string]any{"provider": p.Provider, "email": p.Email, "has_password": p.HasPassword})
 }
 
 // pendingConfirm checks the password of the existing account under the same failed-login

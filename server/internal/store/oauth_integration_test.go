@@ -83,15 +83,31 @@ func TestOAuthStoreWithPostgres(t *testing.T) {
 		t.Fatalf("purged %d %v", n, err)
 	}
 
+	// A password reset drops identities that never proved the account's email.
+	zed, _ := st.CreateAccount(ctx, "zed@example.org", "$argon2id$x")
+	_ = st.LinkIdentity(ctx, zed, store.ExternalIdentity{Provider: "discord", Subject: "squat", Email: "zed@example.org"}, now)
+	_ = st.LinkIdentity(ctx, zed, store.ExternalIdentity{Provider: "google", Subject: "own", Email: "zed@example.org", EmailVerified: true}, now)
+	if err := st.ReplaceAccountToken(ctx, store.AccountToken{TokenHash: hash("reset-zed"), AccountID: zed,
+		Purpose: store.TokenResetPassword, Email: "zed@example.org", CreatedAt: now, ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ResetPassword(ctx, hash("reset-zed"), "$argon2id$y", now); err != nil {
+		t.Fatal(err)
+	}
+	if ids, _ := st.Identities(ctx, zed); len(ids) != 1 || ids[0].Provider != "google" {
+		t.Fatalf("after reset %+v", ids)
+	}
+
 	// Audit: created, linked, unlinked; never the email.
 	audit, _ := st.ListAudit(ctx, 10)
 	var actions []string
 	for _, e := range audit {
 		actions = append(actions, e.Action)
-		if e.TargetName != "" || e.Args["provider"] == "" {
+		if e.TargetName != "" || (e.Args["provider"] == "" && e.Action != store.AuditPasswordReset) {
 			t.Fatalf("audit %+v", e)
 		}
 	}
+	actions = actions[3:] // zed: reset, linked, linked
 	if len(actions) != 3 || actions[0] != store.AuditIdentityUnlinked || actions[2] != store.AuditOAuthAccount {
 		t.Fatalf("audit %v", actions)
 	}

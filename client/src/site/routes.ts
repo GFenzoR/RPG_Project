@@ -112,6 +112,8 @@ export const OAUTH_ERRORS = [
   "unknown_provider",
   "account_disabled",
   "account_banned",
+  "email_taken",
+  "busy",
   "internal",
 ] as const;
 

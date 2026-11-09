@@ -45,6 +45,9 @@ type Querier interface {
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (int64, error)
 	DeleteOAuthPending(ctx context.Context, tokenHash []byte) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
+	// After a password reset (the mailbox owner is in control): identities that never proved
+	// the account's email go, so one linked by whoever squatted the address cannot stay.
+	DeleteUnprovenIdentities(ctx context.Context, arg DeleteUnprovenIdentitiesParams) (int64, error)
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	GetAccountProfile(ctx context.Context, id int64) (GetAccountProfileRow, error)
 	GetAccountProfileByEmail(ctx context.Context, email string) (GetAccountProfileByEmailRow, error)

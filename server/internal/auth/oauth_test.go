@@ -248,8 +248,11 @@ func TestLinkNeedsReauthAndUnlinkKeepsOneWayIn(t *testing.T) {
 	ctx := context.Background()
 	id, _ := e.svc.Register(ctx, "ana@example.org", "secreto123")
 	tok, _ := e.svc.Login(ctx, "ana@example.org", "secreto123")
-	if _, err := e.svc.StartLink(ctx, tok.Token, oauth.Discord, "wrong-pass1"); !errors.Is(err, auth.ErrReauthRequired) {
+	if _, err := e.svc.StartLink(ctx, tok.Token, oauth.Discord, ""); !errors.Is(err, auth.ErrReauthRequired) {
 		t.Fatalf("link without the password: %v", err)
+	}
+	if _, err := e.svc.StartLink(ctx, tok.Token, oauth.Discord, "wrong-pass1"); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("link with a wrong password: %v", err)
 	}
 	e.fake.SetNext(oauth.Discord, oauthtest.User{Subject: "d-ana", Email: "ana.discord@example.org", Verified: true})
 	st, err := e.svc.StartLink(ctx, tok.Token, oauth.Discord, "secreto123")
@@ -318,5 +321,46 @@ func TestSafeReturn(t *testing.T) {
 		if got := auth.SafeReturn(in); got != want {
 			t.Errorf("SafeReturn(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Someone squats an address through a provider that does not vouch for it; once the
+// address's owner takes the account back with a password reset, that identity is gone.
+func TestResetDropsIdentitiesThatNeverProvedTheEmail(t *testing.T) {
+	e := newOAuthEnv(t)
+	ctx := context.Background()
+	res, err := e.login(oauth.Discord, oauthtest.User{Subject: "squatter", Email: "victim@example.org", Verified: false})
+	if err != nil || res.Kind != "login" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	id := res.Token.AccountID
+	e.repo.SetVerified(id) // the owner verified the address from the email they got
+	now := e.clk.Now()
+	link, _, err := auth.IssueResetLink(ctx, e.repo, now, "https://game.example", "victim@example.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, token, _ := strings.Cut(link, "#token=")
+	if err := e.svc.ResetPassword(ctx, token, "owner-password-1"); err != nil {
+		t.Fatal(err)
+	}
+	if ids, _ := e.svc.Identities(ctx, id); len(ids) != 0 {
+		t.Fatalf("the squatter's identity survived: %+v", ids)
+	}
+	if res, _ := e.login(oauth.Discord, oauthtest.User{Subject: "squatter", Email: "victim@example.org"}); res.Kind == "login" && res.Token.AccountID == id {
+		t.Fatal("the squatter still logs in")
+	}
+}
+
+func TestPendingSaysWhetherTheAccountHasAPassword(t *testing.T) {
+	e := newOAuthEnv(t)
+	ctx := context.Background()
+	if _, err := e.login(oauth.Google, oauthtest.User{Subject: "g", Email: "solo@example.org", Verified: true}); err != nil {
+		t.Fatal(err)
+	}
+	res, _ := e.login(oauth.Discord, oauthtest.User{Subject: "d", Email: "solo@example.org", Verified: true})
+	p, err := e.svc.Pending(ctx, res.Pending)
+	if err != nil || p.HasPassword {
+		t.Fatalf("%+v %v", p, err)
 	}
 }

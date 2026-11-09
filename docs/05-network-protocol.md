@@ -170,11 +170,15 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
   `/account?linked=<proveedor>`; email de una cuenta existente → `/oauth/confirm` (cookie
   `rpg_oauth_pending`, `SameSite=Strict`, 15 min); error → `/oauth/error?code=` con
   `state`, `denied`, `provider`, `no_email`, `identity_taken`, `provider_linked`,
-  `unknown_provider`, `account_disabled`, `account_banned` o `internal`.
+  `unknown_provider`, `account_disabled`, `account_banned`, `email_taken`, `busy` o
+  `internal`.
 - **Confirmar con contraseña:** mismos límites de login fallido por (email, IP) y por email
   que `/api/auth/login`, y el mismo error `invalid_credentials`.
 - **Vincular** exige re-autenticarse: `password` si la cuenta tiene (`403 reauth_required`
-  si falta o no coincide), o una sesión creada hace menos de 10 min si no tiene.
+  si falta, `401 invalid_credentials` si no coincide, bajo los mismos límites de login
+  fallido por email), o una sesión creada hace menos de 10 min si no tiene.
+- `GET /api/auth/oauth/pending` dice también `has_password`: sin contraseña la página no la
+  pide (se vincula desde "Mi cuenta" entrando con el otro proveedor).
 - Todas estas rutas gastan el límite por IP de registro y login, salvo `pending` y `unlink`.
 - Los secretos de cliente salen solo de variables de entorno y no se registran nunca; los
   errores del proveedor se registran por su tipo (estado HTTP, chequeo fallido), nunca con

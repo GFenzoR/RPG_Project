@@ -178,7 +178,7 @@ func TestOAuthPendingOverHTTP(t *testing.T) {
 		t.Fatal("logged in without the password")
 	}
 	w = o.do("GET", "/api/auth/oauth/pending", "")
-	if strings.TrimSpace(w.Body.String()) != `{"email":"ana@example.org","provider":"google"}` {
+	if strings.TrimSpace(w.Body.String()) != `{"email":"ana@example.org","has_password":true,"provider":"google"}` {
 		t.Fatalf("pending %s", w.Body.String())
 	}
 	expect(t, o.do("POST", "/api/auth/oauth/pending/confirm", `{"password":"wrong-password"}`), http.StatusUnauthorized, "invalid_credentials")
@@ -208,6 +208,7 @@ func TestLinkOverHTTPNeedsPassword(t *testing.T) {
 	o.do("POST", "/api/auth/register", `{"email":"ana@example.org","password":"long-password-1"}`)
 	expect(t, o.do("POST", "/api/auth/login", `{"email":"ana@example.org","password":"long-password-1"}`), http.StatusOK, "")
 	expect(t, o.do("POST", "/api/auth/oauth/discord/link", `{}`), http.StatusForbidden, "reauth_required")
+	expect(t, o.do("POST", "/api/auth/oauth/discord/link", `{"password":"wrong-password-1"}`), http.StatusUnauthorized, "invalid_credentials")
 	o.fake.SetNext(oauth.Discord, oauthtest.User{Subject: "d1", Email: "ana@example.org", Verified: true})
 	w := o.do("POST", "/api/auth/oauth/discord/link", `{"password":"long-password-1"}`)
 	var b struct{ URL string }

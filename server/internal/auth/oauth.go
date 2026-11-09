@@ -151,10 +151,14 @@ func (s *Service) StartLink(ctx context.Context, token, provider, password strin
 }
 
 // checkPassword verifies the password of the account with email: ErrReauthRequired if it
-// does not match.
+// is missing, ErrInvalidCredentials if it does not match (the HTTP API counts those under
+// the failed-login limits, like a login).
 func (s *Service) checkPassword(ctx context.Context, email, password string) error {
-	if !ValidPassword(password) {
+	if password == "" {
 		return ErrReauthRequired
+	}
+	if !ValidPassword(password) {
+		return ErrInvalidCredentials
 	}
 	acc, err := s.repo.AccountByEmail(ctx, email)
 	if err != nil {
@@ -170,7 +174,7 @@ func (s *Service) checkPassword(ctx context.Context, email, password string) err
 		return err
 	}
 	if !match {
-		return ErrReauthRequired
+		return ErrInvalidCredentials
 	}
 	return nil
 }
@@ -338,6 +342,9 @@ func (s *Service) finishLogin(ctx context.Context, ext store.ExternalIdentity, r
 type PendingIdentity struct {
 	Provider string
 	Email    string
+	// HasPassword: the existing account has a password to prove. Without one (an
+	// OAuth-only account) its owner links the new provider from "My account" instead.
+	HasPassword bool
 }
 
 func (s *Service) pending(ctx context.Context, token string) (store.OAuthPending, []byte, error) {
@@ -361,7 +368,11 @@ func (s *Service) Pending(ctx context.Context, token string) (PendingIdentity, e
 	if err != nil {
 		return PendingIdentity{}, err
 	}
-	return PendingIdentity{Provider: p.Identity.Provider, Email: p.Identity.Email}, nil
+	acc, err := s.repo.AccountByEmail(ctx, p.Identity.Email)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return PendingIdentity{}, fmt.Errorf("oauth pending: %w", err)
+	}
+	return PendingIdentity{Provider: p.Identity.Provider, Email: p.Identity.Email, HasPassword: acc.PasswordHash != ""}, nil
 }
 
 // ConfirmPending links the pending identity to the existing account with its email,
