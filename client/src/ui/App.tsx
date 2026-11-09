@@ -18,6 +18,8 @@ import { Hotbar } from "./Hotbar.tsx";
 import { ChatPanel } from "./Chat.tsx";
 import { DialogWindow } from "./Dialog.tsx";
 import { CraftingWindow } from "./Crafting.tsx";
+import { TradeWindow } from "./Trade.tsx";
+import { MarketWindow } from "./Market.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { GuildInvitations, GuildPanel } from "./Guild.tsx";
 import { PresenceCheck } from "./Presence.tsx";
@@ -392,6 +394,8 @@ function GameScreen(props: {
     dialog: undefined,
     shop: undefined,
     station: undefined,
+    trade: undefined,
+    market: undefined,
     presence: undefined,
     tutorial: undefined,
     party: undefined,
@@ -525,6 +529,10 @@ function GameScreen(props: {
           {entered && !ui.dialog && (
             <CraftingWindow t={t} content={props.content} game={game.current} ui={ui} />
           )}
+          {entered && !ui.dialog && (
+            <MarketWindow t={t} content={props.content} game={game.current} ui={ui} />
+          )}
+          {entered && <TradeWindow t={t} content={props.content} game={game.current} ui={ui} />}
           {entered && <PartyInvitations t={t} game={game.current} ui={ui} />}
           {entered && <GuildInvitations t={t} game={game.current} ui={ui} />}
           {entered && <PresenceCheck t={t} game={game.current} ui={ui} />}
@@ -577,6 +585,18 @@ function GameScreen(props: {
                         onClick={() => game.current?.partyInvite(c.id)}
                       >
                         +
+                      </button>
+                    )}
+                    {c.kind === CreatureKind.PLAYER && !ui.trade && (
+                      <button
+                        type="button"
+                        class="trade-with"
+                        data-trade={c.id}
+                        title={t("client.battle.trade")}
+                        aria-label={t("client.battle.trade")}
+                        onClick={() => game.current?.tradeRequest(c.id)}
+                      >
+                        ⇄
                       </button>
                     )}
                     {c.kind === CreatureKind.PLAYER && (

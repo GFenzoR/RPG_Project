@@ -139,6 +139,12 @@ type Config struct {
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
 	Save func(Snapshot) bool
+	// Transfer submits a trade or market change (T5.3) to the same persistence queue,
+	// without blocking, like Save. Without it the trade window and the market are off.
+	Transfer func(Transfer) bool
+	// Market is the market state loaded from the database before the loop starts (T5.3).
+	// Nil with a Transfer starts an empty market.
+	Market *MarketData
 	// Admin submits a staff command's audit entry, ban or unban to the admin goroutine
 	// without blocking (T2.6). It returns false if its queue is full; the World keeps
 	// the job and retries on the next ticks, so no audit entry is lost. Without Admin,
@@ -192,7 +198,7 @@ type World struct {
 	// snapshot: the read may have seen the row from before that save.
 	loading map[int64]int
 	// retry holds snapshots that Config.Save could not queue yet.
-	retry []Snapshot
+	retry []Job
 	// slow collects players whose Send failed during flush.
 	slow []*Player
 
@@ -311,6 +317,32 @@ type World struct {
 	wars         map[int64]*guildWar
 	warList      []*guildWar
 	nextWarID    int64
+
+	// Market (T5.3, market.go): balance market (mkOn = enabled with Config.Transfer),
+	// the anti-flood in ticks, every offer by id, the books by item, the offers by owner
+	// and by expiry, the mailboxes, the recent history by character, the recent sales by
+	// item, the last ids issued, the transfers submitted and the next expiry sweep.
+	mkOn         bool
+	mk           content.Market
+	mkRefill     game.Tick
+	mkBurst      game.Tick
+	offers       map[int64]*offer
+	books        map[uint16]*book
+	byOwner      map[int64][]*offer
+	expiry       []*offer
+	mail         map[int64]*mailbox
+	history      map[int64][]MarketHistory
+	sales        map[uint16][]priceDay
+	nextOffer    int64
+	nextMail     int64
+	nextTransfer uint64
+	mkNext       game.Tick
+	// Trade window (T5.3, trade.go): balance trade (tradeOn = enabled with
+	// Config.Transfer), the open trades and invitations in creation order.
+	tradeOn  bool
+	trade    content.Trade
+	trades   []*trade
+	tradeFor game.Tick
 
 	// Travel (T3.5): routes by captain NPC id, balance travel in ticks and tiles.
 	routes        map[string][]*route
@@ -433,6 +465,8 @@ func New(cfg Config) (*World, error) {
 	w.initParty()
 	w.initGuilds()
 	w.initPvP()
+	w.initMarket()
+	w.initTrade()
 	if err := w.initConditions(); err != nil {
 		return nil, err
 	}

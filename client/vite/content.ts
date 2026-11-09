@@ -80,6 +80,9 @@ export function loadClientContent(root: string): ClientContent {
             ? raw["container"]["slots"]
             : 0,
         useWith: raw["kind"] === "tool",
+        tradeable: raw["tradeable"] === true,
+        marketable:
+          raw["tradeable"] === true && raw["kind"] !== "currency" && raw["pickupable"] !== false,
         toolUse:
           isObj(raw["tool"]) && typeof raw["tool"]["use"] === "string" ? raw["tool"]["use"] : "",
       };

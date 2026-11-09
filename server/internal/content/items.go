@@ -22,8 +22,10 @@ type Item struct {
 	Tradeable bool `yaml:"tradeable"`
 	// Pickupable is false for items that never leave their tile (nil = true).
 	Pickupable *bool `yaml:"pickupable"`
-	Value      int   `yaml:"value"`
-	Weapon     *struct {
+	// MarketBoard: using this map item opens the global market (T5.3).
+	MarketBoard bool `yaml:"market_board"`
+	Value       int  `yaml:"value"`
+	Weapon      *struct {
 		// Type is the skill the weapon trains and uses (sword, axe, club...).
 		Type    string `yaml:"type"`
 		Attack  int    `yaml:"attack"`

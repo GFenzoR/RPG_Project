@@ -11,6 +11,9 @@ import (
 )
 
 type Querier interface {
+	// A negative amount withdraws: the CHECK (gold >= 0) refuses more than there is.
+	AddMarketMailGold(ctx context.Context, arg AddMarketMailGoldParams) error
+	BumpMarketHigh(ctx context.Context, arg BumpMarketHighParams) error
 	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
 	CharacterOfAccount(ctx context.Context, arg CharacterOfAccountParams) (string, error)
 	CloseReport(ctx context.Context, arg CloseReportParams) (int64, error)
@@ -48,16 +51,23 @@ type Querier interface {
 	DeleteExpiredGuildInvites(ctx context.Context, now pgtype.Timestamptz) error
 	DeleteExpiredOAuth(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, now pgtype.Timestamptz) (int64, error)
+	// Takes the last units of an offer: deletes it only if exactly units are left.
+	DeleteFilledMarketOffer(ctx context.Context, arg DeleteFilledMarketOfferParams) (int64, error)
 	DeleteGuild(ctx context.Context, id int64) (int64, error)
 	DeleteGuildInvite(ctx context.Context, arg DeleteGuildInviteParams) error
 	DeleteGuildMember(ctx context.Context, arg DeleteGuildMemberParams) (int64, error)
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (int64, error)
+	DeleteMarketMailItem(ctx context.Context, arg DeleteMarketMailItemParams) (int64, error)
+	DeleteMarketOffer(ctx context.Context, id int64) (int64, error)
 	DeleteOAuthPending(ctx context.Context, tokenHash []byte) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	// After a password reset (the mailbox owner is in control): identities that never proved
 	// the account's email go, so one linked by whoever squatted the address cannot stay.
 	DeleteUnprovenIdentities(ctx context.Context, arg DeleteUnprovenIdentitiesParams) (int64, error)
 	EndGuildWar(ctx context.Context, arg EndGuildWarParams) (int64, error)
+	// Takes units from an offer that keeps some; no row when the offer is gone or does not
+	// have more than units left (then DeleteFilledMarketOffer takes the last ones).
+	FillMarketOffer(ctx context.Context, arg FillMarketOfferParams) (int32, error)
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	GetAccountProfile(ctx context.Context, id int64) (GetAccountProfileRow, error)
 	GetAccountProfileByEmail(ctx context.Context, email string) (GetAccountProfileByEmailRow, error)
@@ -116,6 +126,9 @@ type Querier interface {
 	InsertIdentity(ctx context.Context, arg InsertIdentityParams) error
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
 	InsertMapSubmission(ctx context.Context, arg InsertMapSubmissionParams) (int64, error)
+	InsertMarketHistory(ctx context.Context, arg InsertMarketHistoryParams) error
+	InsertMarketMailItem(ctx context.Context, arg InsertMarketMailItemParams) error
+	InsertMarketOffer(ctx context.Context, arg InsertMarketOfferParams) error
 	InsertReport(ctx context.Context, arg InsertReportParams) (int64, error)
 	// Lifts every active ban of the account.
 	LiftBans(ctx context.Context, arg LiftBansParams) (int64, error)
@@ -140,6 +153,19 @@ type Querier interface {
 	// Decided submissions of one status: the most recently changed first, a page before a
 	// cursor (map_submissions_history_idx).
 	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
+	// The active bans of the accounts that own offers (their offers are hidden). until is
+	// NULL for a permanent ban.
+	LoadMarketBans(ctx context.Context, now pgtype.Timestamptz) ([]LoadMarketBansRow, error)
+	LoadMarketHigh(ctx context.Context) (LoadMarketHighRow, error)
+	// The newest operations of every character since a time, at most per_character each.
+	LoadMarketHistory(ctx context.Context, arg LoadMarketHistoryParams) ([]LoadMarketHistoryRow, error)
+	LoadMarketMailGold(ctx context.Context) ([]MarketMailGold, error)
+	LoadMarketMailItems(ctx context.Context) ([]MarketMailItem, error)
+	// Global market (T5.3). The loop owns the market in memory: these queries load it at
+	// start and write each change inside the transaction of a session.Transfer.
+	LoadMarketOffers(ctx context.Context) ([]LoadMarketOffersRow, error)
+	// Units sold and money paid by item and day since a time (reference prices).
+	LoadMarketSales(ctx context.Context, since pgtype.Timestamptz) ([]LoadMarketSalesRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
 	// Serializes changes to an account's login methods (unlinking the last one).

@@ -96,3 +96,11 @@ message TextParam {
     ItemStack item = 5;
   }
 }
+
+// MarketSide is the side of a market offer (T5.3): SELL offers items for gold, BUY
+// offers gold for items. In history entries it is what the character did.
+enum MarketSide {
+  MARKET_SIDE_UNSPECIFIED = 0;
+  MARKET_SIDE_SELL = 1;
+  MARKET_SIDE_BUY = 2;
+}

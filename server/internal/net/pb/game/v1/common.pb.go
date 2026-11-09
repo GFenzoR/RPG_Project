@@ -161,6 +161,57 @@ func (EquipmentSlot) EnumDescriptor() ([]byte, []int) {
 	return file_game_v1_common_proto_rawDescGZIP(), []int{1}
 }
 
+// MarketSide is the side of a market offer (T5.3): SELL offers items for gold, BUY
+// offers gold for items. In history entries it is what the character did.
+type MarketSide int32
+
+const (
+	MarketSide_MARKET_SIDE_UNSPECIFIED MarketSide = 0
+	MarketSide_MARKET_SIDE_SELL        MarketSide = 1
+	MarketSide_MARKET_SIDE_BUY         MarketSide = 2
+)
+
+// Enum value maps for MarketSide.
+var (
+	MarketSide_name = map[int32]string{
+		0: "MARKET_SIDE_UNSPECIFIED",
+		1: "MARKET_SIDE_SELL",
+		2: "MARKET_SIDE_BUY",
+	}
+	MarketSide_value = map[string]int32{
+		"MARKET_SIDE_UNSPECIFIED": 0,
+		"MARKET_SIDE_SELL":        1,
+		"MARKET_SIDE_BUY":         2,
+	}
+)
+
+func (x MarketSide) Enum() *MarketSide {
+	p := new(MarketSide)
+	*p = x
+	return p
+}
+
+func (x MarketSide) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MarketSide) Descriptor() protoreflect.EnumDescriptor {
+	return file_game_v1_common_proto_enumTypes[2].Descriptor()
+}
+
+func (MarketSide) Type() protoreflect.EnumType {
+	return &file_game_v1_common_proto_enumTypes[2]
+}
+
+func (x MarketSide) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MarketSide.Descriptor instead.
+func (MarketSide) EnumDescriptor() ([]byte, []int) {
+	return file_game_v1_common_proto_rawDescGZIP(), []int{2}
+}
+
 // Position is a tile in the global world space: x, y in [0, 65535], z (floor) in
 // [0, 15], floor 7 = sea level, lower numbers are higher up.
 type Position struct {
@@ -756,7 +807,12 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"\x13EQUIPMENT_SLOT_FEET\x10\b\x12\x17\n" +
 	"\x13EQUIPMENT_SLOT_RING\x10\t\x12\x17\n" +
 	"\x13EQUIPMENT_SLOT_AMMO\x10\n" +
-	"BFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
+	"*T\n" +
+	"\n" +
+	"MarketSide\x12\x1b\n" +
+	"\x17MARKET_SIDE_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10MARKET_SIDE_SELL\x10\x01\x12\x13\n" +
+	"\x0fMARKET_SIDE_BUY\x10\x02BFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_common_proto_rawDescOnce sync.Once
@@ -770,26 +826,27 @@ func file_game_v1_common_proto_rawDescGZIP() []byte {
 	return file_game_v1_common_proto_rawDescData
 }
 
-var file_game_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_game_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_game_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_game_v1_common_proto_goTypes = []any{
 	(Direction)(0),        // 0: game.v1.Direction
 	(EquipmentSlot)(0),    // 1: game.v1.EquipmentSlot
-	(*Position)(nil),      // 2: game.v1.Position
-	(*ContainerSlot)(nil), // 3: game.v1.ContainerSlot
-	(*ItemLocation)(nil),  // 4: game.v1.ItemLocation
-	(*ActionTarget)(nil),  // 5: game.v1.ActionTarget
-	(*ItemStack)(nil),     // 6: game.v1.ItemStack
-	(*LocalizedText)(nil), // 7: game.v1.LocalizedText
-	(*TextParam)(nil),     // 8: game.v1.TextParam
+	(MarketSide)(0),       // 2: game.v1.MarketSide
+	(*Position)(nil),      // 3: game.v1.Position
+	(*ContainerSlot)(nil), // 4: game.v1.ContainerSlot
+	(*ItemLocation)(nil),  // 5: game.v1.ItemLocation
+	(*ActionTarget)(nil),  // 6: game.v1.ActionTarget
+	(*ItemStack)(nil),     // 7: game.v1.ItemStack
+	(*LocalizedText)(nil), // 8: game.v1.LocalizedText
+	(*TextParam)(nil),     // 9: game.v1.TextParam
 }
 var file_game_v1_common_proto_depIdxs = []int32{
-	2, // 0: game.v1.ItemLocation.pos:type_name -> game.v1.Position
+	3, // 0: game.v1.ItemLocation.pos:type_name -> game.v1.Position
 	1, // 1: game.v1.ItemLocation.slot:type_name -> game.v1.EquipmentSlot
-	3, // 2: game.v1.ItemLocation.container:type_name -> game.v1.ContainerSlot
-	2, // 3: game.v1.ActionTarget.pos:type_name -> game.v1.Position
-	8, // 4: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
-	6, // 5: game.v1.TextParam.item:type_name -> game.v1.ItemStack
+	4, // 2: game.v1.ItemLocation.container:type_name -> game.v1.ContainerSlot
+	3, // 3: game.v1.ActionTarget.pos:type_name -> game.v1.Position
+	9, // 4: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
+	7, // 5: game.v1.TextParam.item:type_name -> game.v1.ItemStack
 	6, // [6:6] is the sub-list for method output_type
 	6, // [6:6] is the sub-list for method input_type
 	6, // [6:6] is the sub-list for extension type_name
@@ -822,7 +879,7 @@ func file_game_v1_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_common_proto_rawDesc), len(file_game_v1_common_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,

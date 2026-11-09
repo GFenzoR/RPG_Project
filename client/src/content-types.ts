@@ -19,6 +19,10 @@ export interface ItemDef {
   slots: number;
   /** A tool: using it picks a tile to use it on (UseItemOn), e.g. a rod on water. */
   useWith: boolean;
+  /** It may change hands in the trade window (T5.3). */
+  tradeable?: boolean;
+  /** It may be offered on the global market: tradeable, not money, not fixed (T5.3). */
+  marketable?: boolean;
   /** tool.use of a tool ("mining", "fishing"...; "" = not a tool): picks its gather sound. */
   toolUse?: string;
 }

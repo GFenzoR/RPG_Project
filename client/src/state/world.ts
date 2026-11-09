@@ -36,6 +36,8 @@ import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
+import { marketFrom, tradeFrom } from "./market.ts";
+import type { MarketView, TradeView } from "./market.ts";
 import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
 
@@ -306,6 +308,10 @@ export class WorldState implements TileSource {
   chat: ChatLine[] = [];
   dialog: DialogState | undefined;
   shop: ShopState | undefined;
+  /** The trade window (T5.3), until completed or cancelled. */
+  trade: TradeView | undefined;
+  /** The market window (T5.3), until closed or the player walks away from the board. */
+  market: MarketView | undefined;
   /** Equipped items by slot (Inventory). */
   inventory = new Map<EquipmentSlot, ItemView>();
   /** Open container windows, oldest first. */
@@ -540,6 +546,18 @@ export class WorldState implements TileSource {
         };
         break;
       }
+      case "tradeUpdate": {
+        const r = tradeFrom(msg.value);
+        this.trade = r.view;
+        if (r.closedReason) {
+          this.log.push({ key: r.closedReason, params: [], at: now });
+          if (this.log.length > LOG_SIZE) this.log.shift();
+        }
+        break;
+      }
+      case "marketUpdate":
+        this.market = marketFrom(msg.value);
+        break;
       case "shopOpen": {
         const v = msg.value;
         this.shop = {

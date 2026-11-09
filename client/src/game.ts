@@ -5,7 +5,14 @@ import { nearStation } from "./state/recipes.ts";
 import type { StationState } from "./state/recipes.ts";
 import type { PresenceState } from "./state/world.ts";
 import type { TutorialView } from "./state/tutorial.ts";
-import { ChatChannel, CreatureKind, Direction, GuildAction, PartyAction } from "@rpg/protocol";
+import {
+  ChatChannel,
+  CreatureKind,
+  Direction,
+  GuildAction,
+  MarketSide,
+  PartyAction,
+} from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
@@ -27,6 +34,7 @@ import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
 import type { GuildInvitationView, GuildView } from "./state/guild.ts";
+import type { MarketView, TradeView } from "./state/market.ts";
 import type {
   ContainerState,
   CreatureState,
@@ -66,6 +74,9 @@ export interface GameUi {
   shop: ShopState | undefined;
   /** The crafting station window (T3.4). */
   station: StationState | undefined;
+  /** The trade and market windows (T5.3). */
+  trade: TradeView | undefined;
+  market: MarketView | undefined;
   /** A presence check waiting for an answer (T4.1), or undefined. */
   presence: PresenceState | undefined;
   /** The tutorial step (T4.2), or undefined when there is none. */
@@ -270,6 +281,86 @@ export class Game {
   shopSell(itemId: number, count: number): void {
     const s = this.world.shop;
     if (s) this.conn.send({ case: "shopSell", value: { dialogId: s.dialogId, itemId, count } });
+  }
+
+  // ---- trade and market (T5.3): the server validates distance, items, money and limits --
+
+  /** Invites a player the client sees to trade, or accepts its invitation. */
+  tradeRequest(id: number): void {
+    this.conn.send({ case: "tradeRequest", value: { creatureId: id } });
+  }
+
+  /** Adds an item of an open container to the own trade offer. */
+  tradeOffer(ref: ItemRef): void {
+    this.conn.send({
+      case: "tradeOffer",
+      value: { item: locationInit(ref.loc), itemId: ref.itemId, stackIndex: ref.stackIndex },
+    });
+  }
+
+  /** Takes the offered item at index out of the own offer. */
+  tradeRemove(index: number): void {
+    this.conn.send({ case: "tradeOffer", value: { remove: true, index } });
+  }
+
+  tradeAccept(): void {
+    this.conn.send({ case: "tradeAccept", value: {} });
+  }
+
+  tradeCancel(): void {
+    this.conn.send({ case: "tradeCancel", value: {} });
+  }
+
+  marketBrowse(itemId: number): void {
+    this.conn.send({
+      case: "marketCommand",
+      value: { action: { case: "browse", value: { itemId } } },
+    });
+  }
+
+  marketCreate(
+    sell: boolean,
+    itemId: number,
+    amount: number,
+    price: number,
+    durationIndex: number,
+  ): void {
+    const side = sell ? MarketSide.SELL : MarketSide.BUY;
+    this.conn.send({
+      case: "marketCommand",
+      value: {
+        action: {
+          case: "create",
+          value: { side, itemId, amount, price: BigInt(price), durationIndex },
+        },
+      },
+    });
+  }
+
+  marketAccept(offerId: bigint, amount: number): void {
+    this.conn.send({
+      case: "marketCommand",
+      value: { action: { case: "accept", value: { offerId, amount } } },
+    });
+  }
+
+  marketCancel(offerId: bigint): void {
+    this.conn.send({
+      case: "marketCommand",
+      value: { action: { case: "cancel", value: { offerId } } },
+    });
+  }
+
+  marketWithdraw(): void {
+    this.conn.send({ case: "marketCommand", value: { action: { case: "withdraw", value: {} } } });
+  }
+
+  /** Closes the market window (the server forgets it too). */
+  marketClose(): void {
+    if (!this.world.market) return;
+    this.world.market = undefined;
+    this.conn.send({ case: "marketCommand", value: { action: { case: "close", value: {} } } });
+    this.publish();
   }
 
   // ---- parties (T3.3): the server checks leadership, sight and the party size ---------
@@ -583,6 +674,8 @@ export class Game {
       dialog: w.dialog,
       shop: w.shop,
       station: w.station,
+      trade: w.trade,
+      market: w.market,
       // Until answered or out of time (the server sends nothing on a timeout).
       presence: w.activePresence(performance.now()),
       tutorial: w.tutorial,

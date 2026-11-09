@@ -448,6 +448,37 @@ pvp:
   `client.guild.war*` (cliente) en `i18n/*/client.yaml`.
 - Zonas `pvp` y `no_pvp` del mapa: `03-world-and-maps.md`.
 
+## Mercado e intercambio (T5.3)
+`balance.yaml → market` y `→ trade` (`balance.schema.json`; obligatorios en los datos del
+juego, opcionales para el servidor: sin bloque o `enabled: false`, apagados). Reglas:
+`02-game-design.md`, "Economía". Los números son propios.
+```yaml
+market:
+  enabled: true
+  fee_permille: 20          # comisión: milésimas de cantidad × precio, destruida (sumidero)
+  fee_min: 5                # y entre fee_min y fee_max monedas de cobre
+  fee_max: 4000
+  max_offers: 15            # ofertas activas por personaje (1..100)
+  max_amount: 2000          # unidades por oferta (1..100000)
+  max_price: 5000000        # cobre por unidad (1..1000000000)
+  durations_hours: [12, 48, 120]   # 1..8 opciones, cada una 1..1440
+  list_size: 15             # ofertas por lado en una búsqueda
+  history_size: 25          # operaciones propias que se ven
+  reference_days: 5         # ventana del precio de referencia
+  mailbox_shown: 30         # items del buzón por ventana
+  action_burst: 6           # anti-flood: ráfaga y recarga por acción
+  action_refill_ms: 400
+trade:
+  enabled: true
+  max_items: 6              # items (pilas o contenedores vacíos) por lado (1..32)
+  request_ms: 25000         # la invitación vence (1000..600000)
+```
+- Items: `tradeable: true` permite el intercambio y, si además no es moneda ni fijo del
+  mapa, el mercado. `market_board: true` (en un item fijo del mapa) lo hace tablero del
+  mercado (`market_board`, en Puerto y en Raigal).
+- Textos: `trade.*`, `market.*` y `gm.market_*` (servidor), `client.trade.*`,
+  `client.market.*` y `client.battle.trade` (cliente) en `i18n/*/client.yaml`.
+
 ## Receta de oficio
 ```yaml
 # data/recipes.yaml (T3.4)

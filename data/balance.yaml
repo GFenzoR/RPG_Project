@@ -121,6 +121,27 @@ guild:                      # T5.1 (docs/02-game-design.md, "Gremios")
     hitler, nigger, faggot, maricon, retard]
   reserved_words: [gm, cm, god, mod, dev]
 
+market:                     # T5.3 (docs/02-game-design.md, "Economía"). Own numbers.
+  enabled: true             # false: the market boards answer "closed"
+  fee_permille: 20          # posting fee: 2% of amount x unit price, destroyed (gold sink)
+  fee_min: 5                # copper coins, at least
+  fee_max: 4000             # and at most
+  max_offers: 15            # active offers (buy + sell) per character
+  max_amount: 2000          # units per offer
+  max_price: 5000000        # copper coins per unit
+  durations_hours: [12, 48, 120]
+  list_size: 15             # offers per side in a search, best prices first
+  history_size: 25          # own operations shown, newest first
+  reference_days: 5         # reference price: average unit price of the trades of these days
+  mailbox_shown: 30         # mailbox items sent to the window at once
+  action_burst: 6           # anti-flood: 6 actions at once, then one every 400 ms
+  action_refill_ms: 400
+
+trade:                      # T5.3: the trade window between two adjacent players
+  enabled: true
+  max_items: 6              # items (stacks or containers) per side
+  request_ms: 25000         # an unanswered invitation expires
+
 pvp:                        # T5.2 (docs/02-game-design.md, "PvP"). Own numbers, see there why.
   enabled: true             # false: no player can hurt another one (PvE only, as before T5.2)
   min_level: 20             # below it: neither attacks players nor can be attacked by them

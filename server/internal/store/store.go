@@ -175,7 +175,7 @@ func (s *Store) StatementTimeout(ctx context.Context) (string, error) {
 // cannot fix: invalid data (SQLSTATE class 22), a violated constraint (class 23), or a
 // guild change the store itself refuses (ErrGuildConflict).
 func Permanent(err error) bool {
-	if errors.Is(err, ErrGuildConflict) {
+	if errors.Is(err, ErrGuildConflict) || errors.Is(err, ErrMarketConflict) {
 		return true
 	}
 	var pgErr *pgconn.PgError

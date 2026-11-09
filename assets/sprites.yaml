@@ -89,6 +89,7 @@ sprites:
   decor/smelting_forge: { placeholder: { label: FG, color: "#b04a22" } }
   decor/anvil: { placeholder: { label: AN, color: "#45484e" } }
   decor/cooking_hearth: { placeholder: { label: HE, color: "#7a3a1e" } }
+  decor/market_board: { placeholder: { label: MK, color: "#b8862e" } }
 
   # Items: Isla del Bosque (T3.6)
   materials/stag_antler: { placeholder: { label: SA, color: "#b89a6a" } }

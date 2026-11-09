@@ -206,6 +206,48 @@ type MapSubmission struct {
 	NextAttemptAt     pgtype.Timestamptz
 }
 
+type MarketHistory struct {
+	ID               int64
+	CharacterID      int64
+	OtherCharacterID int64
+	Side             int16
+	ItemID           int32
+	Amount           int32
+	Price            int64
+	At               pgtype.Timestamptz
+}
+
+type MarketIDHigh struct {
+	One       bool
+	OfferHigh int64
+	MailHigh  int64
+}
+
+type MarketMailGold struct {
+	CharacterID int64
+	Gold        int64
+}
+
+type MarketMailItem struct {
+	ID          int64
+	CharacterID int64
+	ItemID      int32
+	Count       int32
+	Item        []byte
+	CreatedAt   pgtype.Timestamptz
+}
+
+type MarketOffer struct {
+	ID          int64
+	CharacterID int64
+	Side        int16
+	ItemID      int32
+	Amount      int32
+	Price       int64
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
 type OauthPending struct {
 	TokenHash     []byte
 	Provider      string

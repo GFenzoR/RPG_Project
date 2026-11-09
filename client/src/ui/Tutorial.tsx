@@ -28,7 +28,15 @@ export function TutorialPanel(props: {
   });
   // Out of the way of the windows over the map (dialog, shop, station): on a narrow
   // screen they reach the top right corner.
-  if (!s || props.ui.dialog || props.ui.shop || props.ui.station) return null;
+  if (
+    !s ||
+    props.ui.dialog ||
+    props.ui.shop ||
+    props.ui.station ||
+    props.ui.market ||
+    props.ui.trade
+  )
+    return null;
   return (
     <section
       class="tutorial"

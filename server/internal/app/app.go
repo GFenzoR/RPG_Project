@@ -185,12 +185,18 @@ func New(cfg Config) (*App, error) {
 
 	var systems []game.System
 	if cfg.Map != nil {
+		ms, _ := cfg.Store.(MarketStore)
+		var writeTransfer func(context.Context, session.Transfer) error
+		if ms != nil {
+			writeTransfer = a.writeTransfer
+		}
 		saver, err := session.NewSaver(session.SaverConfig{
-			Write:  a.writeSnapshot,
-			Saved:  a.snapshotSaved,
-			Clock:  cfg.Clock,
-			Logger: cfg.Logger,
-			Failed: saveFailed(cfg.Metrics),
+			Write:         a.writeSnapshot,
+			WriteTransfer: writeTransfer,
+			Saved:         a.snapshotSaved,
+			Clock:         cfg.Clock,
+			Logger:        cfg.Logger,
+			Failed:        saveFailed(cfg.Metrics),
 		})
 		if err != nil {
 			return nil, err
@@ -211,7 +217,22 @@ func New(cfg Config) (*App, error) {
 			}
 			a.admin.guilds, guilds = gs, guildData(rows)
 		}
+		// The market and the trade window (T5.3) need transactions across characters: only
+		// a store that writes transfers (Postgres) turns them on. The market is loaded once,
+		// before the loop owns it.
+		var transfer func(session.Transfer) bool
+		var market *session.MarketData
+		if ms != nil {
+			transfer = saver.SubmitTransfer
+			if cfg.Balance.Market.Enabled {
+				if market, err = loadMarket(ms, cfg.Clock.Now(), cfg.Balance.Market); err != nil {
+					return nil, err
+				}
+			}
+		}
 		w, err := session.New(session.Config{
+			Transfer:      transfer,
+			Market:        market,
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
 			Balance:       cfg.Balance,
@@ -373,9 +394,13 @@ func (a *App) Run(ctx context.Context) error {
 	stage("persistence did not drain", a.saver.Stop)
 	stage("final saves", func(ctx context.Context) error {
 		var errs []error
-		for _, s := range pending { // the saver's queue was full when SaveAll ran
-			if err := a.writeSnapshot(ctx, s); err != nil {
-				errs = append(errs, fmt.Errorf("character %d: %w", s.CharacterID, err))
+		for _, j := range pending { // the saver's queue was full when SaveAll ran
+			if j.Transfer != nil {
+				if err := a.writeTransfer(ctx, *j.Transfer); err != nil {
+					errs = append(errs, fmt.Errorf("transfer %d: %w", j.Transfer.ID, err))
+				}
+			} else if err := a.writeSnapshot(ctx, j.Snapshot); err != nil {
+				errs = append(errs, fmt.Errorf("character %d: %w", j.Snapshot.CharacterID, err))
 			}
 		}
 		return errors.Join(errs...)
@@ -389,7 +414,18 @@ func (a *App) Run(ctx context.Context) error {
 }
 
 func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
-	err := a.cfg.Store.SaveCharacterState(ctx, store.CharacterState{
+	err := a.cfg.Store.SaveCharacterState(ctx, a.characterState(s))
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return session.ErrGone
+	case store.Permanent(err):
+		return fmt.Errorf("%w: %w", session.ErrPermanent, err)
+	}
+	return err
+}
+
+func (a *App) characterState(s session.Snapshot) store.CharacterState {
+	return store.CharacterState{
 		ID:         s.CharacterID,
 		Level:      s.Level,
 		Experience: s.Experience,
@@ -405,14 +441,7 @@ func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
 		PvP: store.PvPState{Skull: s.PvP.Skull, SkullUntil: s.PvP.SkullUntil, Kills: s.PvP.Kills,
 			Unjust: s.PvP.Unjust},
 		SavedAt: a.cfg.Clock.Now(),
-	})
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		return session.ErrGone
-	case store.Permanent(err):
-		return fmt.Errorf("%w: %w", session.ErrPermanent, err)
 	}
-	return err
 }
 
 func storeConditions(in []session.ConditionState) []store.Condition {

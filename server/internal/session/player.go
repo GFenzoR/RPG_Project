@@ -124,6 +124,12 @@ type Player struct {
 	partyNext     game.Tick
 	contributedAt game.Tick
 
+	// Market and trade (T5.3): the open market window, the market anti-flood (GCRA) and
+	// the trade p is in (as requester or partner).
+	market *marketView
+	mkTAT  game.Tick
+	trade  *trade
+
 	// Guilds (T5.1): p's membership (nil: none) and whether a GuildUpdate is queued.
 	gm          *guildMember
 	guildQueued bool
@@ -469,8 +475,10 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	}
 	w.reconcile(ctx.Tick, p) // a duplication right before leaving is caught too (T4.1)
 	w.disappearFromObservers(p)
-	w.partyLeftWorld(p) // T3.3: leaving the world leaves the party
-	w.guildLeftWorld(p) // T5.1: the guild sees it offline
+	w.partyLeftWorld(p)               // T3.3: leaving the world leaves the party
+	w.guildLeftWorld(p)               // T5.1: the guild sees it offline
+	w.cancelTrade(p, tradeCancelLeft) // T5.3
+	p.market = nil
 	w.unindex(p)
 	delete(w.byClient, p.client)
 	if w.byChar[p.charID] == p {
@@ -501,31 +509,42 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 }
 
 // save submits s to persistence, keeping it for a retry if the queue is full.
-func (w *World) save(s Snapshot) {
-	if len(w.retry) > 0 || !w.cfg.Save(s) {
-		w.retry = append(w.retry, s)
+func (w *World) save(s Snapshot) { w.submitJob(Job{Snapshot: s}) }
+
+// submitJob submits j to persistence in order: while older jobs wait for a retry, j
+// waits behind them (a snapshot must never overtake the transfer before it, T5.3).
+func (w *World) submitJob(j Job) {
+	if len(w.retry) > 0 || !w.submitNow(j) {
+		w.retry = append(w.retry, j)
 	}
+}
+
+func (w *World) submitNow(j Job) bool {
+	if j.Transfer != nil {
+		return w.cfg.Transfer != nil && w.cfg.Transfer(*j.Transfer)
+	}
+	return w.cfg.Save(j.Snapshot)
 }
 
 func (w *World) retrySaves() {
 	n := 0
-	for n < len(w.retry) && w.cfg.Save(w.retry[n]) {
+	for n < len(w.retry) && w.submitNow(w.retry[n]) {
 		n++
 	}
 	w.retry = append(w.retry[:0], w.retry[n:]...)
 }
 
 // SaveAll takes a final snapshot of every online player, for shutdown, and returns the
-// snapshots that Config.Save could not queue (the caller writes them synchronously).
-// Call it only after the loop stopped.
-func (w *World) SaveAll() []Snapshot {
+// jobs that Config.Save or Config.Transfer could not queue, in order (the caller writes
+// them synchronously). Call it only after the loop stopped.
+func (w *World) SaveAll() []Job {
 	w.retrySaves()
-	pending := append([]Snapshot(nil), w.retry...)
+	pending := append([]Job(nil), w.retry...)
 	w.retry = w.retry[:0]
 	for _, p := range w.players {
-		s := w.snapshot(p, true)
-		if len(pending) > 0 || !w.cfg.Save(s) {
-			pending = append(pending, s)
+		j := Job{Snapshot: w.snapshot(p, true)}
+		if len(pending) > 0 || !w.submitNow(j) {
+			pending = append(pending, j)
 		}
 	}
 	return pending

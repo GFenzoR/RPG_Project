@@ -90,6 +90,7 @@ for each tick (50 ms):
 | Gremios: `guilds`, `guild_members`, `guild_invites` (T5.1) | Postgres; el loop tiene todos en memoria | Se cargan una vez al arrancar; cada cambio, asíncrono y en orden por la goroutine de admin |
 | Guerras de gremios: `guild_wars` (T5.2) | Postgres; el loop tiene las abiertas en memoria | Como los gremios: se cargan con ellos y cada cambio va en orden por la goroutine de admin |
 | Marca PvP, contador y muertes injustificadas (T5.2): `characters.skull`, `skull_until`, `pvp_kills`, `pvp_unjust_kills` | Postgres | Con el snapshot del personaje (la misma transacción) |
+| Mercado (T5.3): `market_offers`, `market_mail_items`, `market_mail_gold`, `market_history`, `market_id_high` | Postgres; el loop tiene ofertas, buzones e historial reciente en memoria | Se cargan una vez al arrancar; cada cambio es un `Transfer` del Saver, en la misma transacción que los snapshots de los personajes que tocó |
 
 **Gremios (T5.1).** El game loop es el dueño de los gremios, como del resto del mundo:
 `app` lee todos (gremios, miembros e invitaciones vigentes) antes de arrancar el loop y se
@@ -121,8 +122,50 @@ segundo recorre solo a los jugadores con marca y las guerras abiertas (como much
 el bloqueo PvP activo sigue en el mundo (link-dead: su lote se descarta en el flush) hasta
 que el bloqueo vence; el mismo barrido lo saca y guarda su snapshot final.
 
-Transacciones: el trade entre jugadores se resuelve atómicamente en el loop (estado en
-memoria) y se persiste ambos personajes en una sola transacción de base de datos.
+### Transacciones (T5.3)
+El inventario vive en el loop y se guarda con el snapshot de cada personaje. Todo lo que
+mueve items u oro **entre personajes, o entre un personaje y el mercado**, se decide en un
+tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del loop como
+**un solo trabajo de persistencia**, un `session.Transfer`:
+- lleva los snapshots de los personajes en línea cuyo inventario cambió (los dos del
+  intercambio; quien crea, acepta o retira en el mercado) y los cambios del mercado en
+  orden (`MarketOp`: insertar, llenar o borrar una oferta, agregar o sacar del buzón,
+  historial) con las marcas de ids;
+- entra en **la misma cola del Saver** que los autoguardados (`Job`: snapshot o transfer).
+  El Saver es una goroutine que escribe en orden, así un transfer queda detrás de los
+  guardados anteriores de sus personajes y delante de los siguientes. Si la cola está
+  llena, el `World` lo guarda y todo trabajo posterior espera detrás de él
+  (`submitJob`): un autoguardado con el inventario nuevo nunca llega antes que el
+  transfer que lo explica;
+- `store.SaveTransfer` lo escribe en **una transacción**: los snapshots (con
+  `saveCharacterState`, como un guardado normal) y luego cada cambio del mercado. Una
+  caída antes del commit deja todo como estaba (el inventario viejo y el mercado viejo);
+  después, todo nuevo. Un error transitorio se reintenta entero con backoff; uno
+  permanente (`ErrMarketConflict`, una restricción) se descarta con log y métrica
+  `rejected`: es un bug, la base queda coherente consigo misma.
+- La otra parte de una operación del mercado no necesita snapshot: lo que recibe va a su
+  buzón, que es una fila del mercado. Por eso funciona aunque esté desconectada.
+
+**Ofertas en memoria, como los gremios.** `app` carga el mercado entero antes de arrancar
+el loop (`LoadMarket`: ofertas, buzones, marcas de ids, historial reciente por personaje,
+ventas de los últimos días para el precio de referencia y suspensiones vigentes de los
+dueños de ofertas) y el loop es su único dueño: buscar, aceptar o cancelar nunca toca la
+base. Elegimos esto y no una reserva asíncrona en la base porque (1) dos compradores de la
+última unidad son dos comandos en orden en el mismo loop: el primero la lleva y el
+segundo ve la oferta agotada, sin estados intermedios ni locks; (2) aceptar es inmediato
+y en el mismo tick que el pago, como el intercambio; (3) el tamaño está acotado
+(`max_offers` por personaje). La red de seguridad está en la base: llenar más unidades de
+las que quedan (`FillMarketOffer` exige `amount > units`, o borra exactamente las últimas)
+falla toda la transacción, así que dos escrituras de la misma unidad nunca confirman las
+dos (probado con dos transacciones concurrentes en `store`). Los ids de ofertas y del buzón
+los asigna el loop (el siguiente al mayor emitido, `market_id_high`), así un id no se
+reusa tras reiniciar.
+
+**Costo en el tick.** Cada acción toca una oferta, un libro (búsqueda binaria en una lista
+ordenada por precio) y un buzón; listar recorre a lo sumo `list_size` ofertas visibles por
+lado. El vencimiento barre una vez por segundo la lista ordenada por vencimiento, como
+mucho 64 por barrido. Los intercambios abiertos se revisan cada tick (pocos, con a lo sumo
+`max_items` por lado).
 
 ## Autenticación y cuentas
 - Email + contraseña (argon2id), verificación de email, reset de contraseña.
@@ -381,8 +424,11 @@ Reglas de juego y comandos en `02-game-design.md` ("Moderación").
   en los restos al morir), `gm` (`/item`), `consume` (comida, pociones, la última carga
   de una runa, munición; también lo usado del suelo, a nombre de quien lo usó), `conjure`
   (hechizos que crean items) y `decay` (lo que quedaba en unos restos al pudrirse, a nombre
-  del muerto si era un jugador). `trade` queda reservado
-  para la ventana de intercambio, que todavía no existe. `count` (unidades) y `amount`
+  del muerto si era un jugador). `trade` (ventana de
+  intercambio, T5.3: lo que sale y entra de cada uno, con el otro personaje) y `market`
+  (mercado, T5.3: depósitos al crear con ref `offer`, la comisión con ref `fee`,
+  compras y ventas con ref `buy` / `sell` y el otro personaje, retiros del buzón con ref
+  `mailbox`). `count` (unidades) y `amount`
   (dinero, en cobre) llevan signo: positivo se crea o se recibe, negativo se destruye o se
   pierde. `details.ref` es el id de contenido de la fuente (monstruo, NPC, receta, quest).
 - **Costo en el tick:** el loop solo agrega la entrada (un struct por valor, sin punteros

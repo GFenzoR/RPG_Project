@@ -187,6 +187,9 @@ var gmCommands = map[string]gmCommand{
 	"guilddisband": {RoleGM, "guild_disband", "/guilddisband Name", (*World).cmdGuildDisband},
 	// PvP (T5.2).
 	"unskull": {RoleGM, "remove_skull", "/unskull Name", (*World).cmdUnskull},
+	// Market (T5.3).
+	"marketoffers": {RoleGM, "market_offers", "/marketoffers Name", (*World).cmdMarketOffers},
+	"marketcancel": {RoleGM, "market_cancel", "/marketcancel id", (*World).cmdMarketCancel},
 }
 
 // command runs a chat line that starts with "/". An unknown command and one the
