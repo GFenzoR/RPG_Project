@@ -355,3 +355,5 @@ error.invalid_token: "The link is not valid, was already used or expired. Ask fo
 error.email_unverified: "Confirm your email first (check the link we sent you)."
 error.already_verified: "Your email is already confirmed."
 error.email_disabled: "This server does not send emails yet. Ask whoever runs it for help."
+client.login.forgot_desktop: "Forgot your password? Open this in your browser: {url}"
+client.disconnect.password_changed: "The account's password was changed: every session was closed. Sign in with the new one."

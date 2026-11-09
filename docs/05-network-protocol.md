@@ -102,15 +102,20 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/password/forgot` | — | `{email, lang?}` | `202` siempre (exista o no la cuenta); `404 email_disabled` |
 | `POST /api/auth/password/reset` | — | `{token, password}` | `204`, revoca todas las sesiones y borra la cookie; `400 invalid_token` / `invalid_password` |
 
-`POST /api/auth/register` acepta además `lang` (idioma del email de verificación).
+`POST /api/auth/register` acepta además `lang` (idioma del email de verificación). El
+cliente solo lo manda si `GET /api/auth/config` dice `email: true`: los servidores
+anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede hablar con uno).
 
 ### Verificación de email y reset de contraseña (T2.1, `httpapi/email.go`)
 - Solo funcionan con emails activados (SMTP, o `-mail log` en desarrollo;
   `GET /api/auth/config` → `{"email": true}`); si no, las rutas de envío responden
   `404 email_disabled` y el cliente no las ofrece. `-require-verified-email` exige SMTP real.
-- "Revoca todas las sesiones" son los tokens guardados (cuenta y juego): nadie puede volver
-  a entrar ni pedir un token de juego. Un personaje que **ya está conectado** sigue hasta
-  que se desconecta (expulsarlo necesita un comando al game loop; pendiente en T2.1 2/2).
+- "Revoca todas las sesiones" incluye las conexiones abiertas: el reset borra los tokens
+  guardados (cuenta y juego) y después el `app` encola `World.KickAccount`, que desconecta
+  a **todos** los personajes conectados de la cuenta con `Disconnect{PASSWORD_CHANGED}`
+  (se guardan como en un logout). Vale igual para un enlace de `gameserver admin reset-link`.
+  Ventana residual: un token de juego canjeado justo antes del reset cuyo `Hello` llegue al
+  loop después del kick (milisegundos) entra igual; no puede volver a entrar después.
 - Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
 - La cola de emails no se traba con una dirección que falla: cada reintento espera fuera
   de la goroutine de envío (30 s, 2 min, 10 min) y después se descarta.

@@ -81,10 +81,50 @@ export interface Account {
   email_enabled: boolean;
 }
 
+let emailConfig: Promise<boolean> | undefined;
+
+/**
+ * Whether the server sends emails (T2.1), asked once per page. A server older than T2.1
+ * answers 404 (or fails), which counts as no.
+ */
+export function emailEnabled(): Promise<boolean> {
+  emailConfig ??= call<{ email?: unknown }>("GET", "/api/auth/config").then(
+    (c) => c.email === true,
+    () => false,
+  );
+  return emailConfig;
+}
+
+/** Tests: forget the cached answer of emailEnabled. */
+export function forgetEmailConfig(): void {
+  emailConfig = undefined;
+}
+
+/**
+ * Body of POST /api/auth/register. `lang` only goes to a server that sends emails:
+ * servers older than T2.1 reject unknown fields, and a desktop app may talk to one.
+ */
+export function registerBody(
+  email: string,
+  password: string,
+  lang: string | undefined,
+  emailOn: boolean,
+): { email: string; password: string; lang?: string } {
+  return lang && emailOn ? { email, password, lang } : { email, password };
+}
+
 export const api = {
-  /** `lang` is the language of the verification email (T2.1). */
-  register: (email: string, password: string, lang?: string): Promise<{ account_id: number }> =>
-    call("POST", "/api/auth/register", lang ? { email, password, lang } : { email, password }),
+  /** `lang` is the language of the verification email (T2.1), when the server sends one. */
+  register: async (
+    email: string,
+    password: string,
+    lang?: string,
+  ): Promise<{ account_id: number }> =>
+    call(
+      "POST",
+      "/api/auth/register",
+      registerBody(email, password, lang, lang ? await emailEnabled() : false),
+    ),
   login: (email: string, password: string): Promise<{ expires_at: string }> =>
     call("POST", "/api/auth/login", { email, password }),
   logout: (): Promise<void> => call("POST", "/api/auth/logout"),
@@ -98,8 +138,6 @@ export const api = {
 
 /** Email verification and password reset (T2.1, docs/05). Tokens go in POST bodies. */
 export const accountApi = {
-  /** Whether this server sends emails (no SMTP = no reset, no verification). */
-  config: (): Promise<{ email: boolean }> => call("GET", "/api/auth/config"),
   account: (): Promise<Account> => call("GET", "/api/account"),
   verify: (token: string): Promise<void> => call("POST", "/api/auth/verify", { token }),
   resend: (lang: string): Promise<void> => call("POST", "/api/auth/verify/resend", { lang }),

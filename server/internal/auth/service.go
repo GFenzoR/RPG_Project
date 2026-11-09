@@ -85,8 +85,12 @@ type Config struct {
 	// RequireVerifiedEmail refuses play tokens to accounts without a verified email
 	// (-require-verified-email). Needs Mail.
 	RequireVerifiedEmail bool
-	VerifyTokenTTL       time.Duration // default DefaultVerifyTokenTTL
-	ResetTokenTTL        time.Duration // default DefaultResetTokenTTL
+	// SessionsRevoked is told the account id after a password reset revoked every stored
+	// session, so the game can also disconnect its online characters. Optional; it must
+	// not block (the app hands it to the game loop from its own goroutine).
+	SessionsRevoked func(accountID int64)
+	VerifyTokenTTL  time.Duration // default DefaultVerifyTokenTTL
+	ResetTokenTTL   time.Duration // default DefaultResetTokenTTL
 }
 
 // Defaults for Config.
@@ -117,6 +121,7 @@ type Service struct {
 	mail            Emailer
 	publicURL       string
 	requireVerified bool
+	revoked         func(accountID int64)
 	verifyTTL       time.Duration
 	resetTTL        time.Duration
 }
@@ -167,7 +172,7 @@ func New(cfg Config) (*Service, error) {
 	if s.hashWait <= 0 {
 		s.hashWait = DefaultHashWait
 	}
-	s.mail, s.requireVerified = cfg.Mail, cfg.RequireVerifiedEmail
+	s.mail, s.requireVerified, s.revoked = cfg.Mail, cfg.RequireVerifiedEmail, cfg.SessionsRevoked
 	if s.requireVerified && s.mail == nil {
 		return nil, errors.New("auth: requiring a verified email needs a mailer (SMTP)")
 	}

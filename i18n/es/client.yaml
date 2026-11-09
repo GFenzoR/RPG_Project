@@ -355,3 +355,5 @@ error.invalid_token: "El enlace no es válido, ya se usó o venció. Pide uno nu
 error.email_unverified: "Primero confirma tu email (revisa el enlace que te mandamos)."
 error.already_verified: "Tu email ya está confirmado."
 error.email_disabled: "Este servidor no envía emails todavía. Pide ayuda a quien lo administra."
+client.login.forgot_desktop: "¿Olvidaste tu contraseña? Ábrelo en tu navegador: {url}"
+client.disconnect.password_changed: "Se cambió la contraseña de la cuenta: se cerraron todas sus sesiones. Entra con la nueva."

@@ -177,7 +177,8 @@ jobs:
           docker compose -f deploy/docker-compose.yml --env-file "$RUNNER_TEMP/ci.env" config -q
           sed 's/__RANDOM__/x/' deploy/env.home.template > "$RUNNER_TEMP/home.env"
           docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml \
-            --env-file "$RUNNER_TEMP/home.env" --profile quick-tunnel --profile tunnel --profile monitoring config -q
+            --env-file "$RUNNER_TEMP/home.env" --profile quick-tunnel --profile tunnel --profile monitoring --profile mail config -q
+          docker compose -f deploy/docker-compose.dev.yml --profile mail config -q
           docker compose -f deploy/docker-compose.yml --env-file "$RUNNER_TEMP/ci.env" \
             --profile monitoring --profile monitoring-test config -q
       # T4.4: promtool (config, rules, rule unit tests), amtool and the dashboard JSON, with

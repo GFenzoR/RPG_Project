@@ -81,7 +81,7 @@ export default defineConfig({
       env: { RPG_SERVER: puertoServerURL },
     },
     {
-      command: `node e2e/fake-smtp.ts ${smtpPort} ${smtpHttpPort}`,
+      command: `node --experimental-strip-types e2e/fake-smtp.ts ${smtpPort} ${smtpHttpPort}`,
       cwd: import.meta.dirname,
       url: `http://127.0.0.1:${smtpHttpPort}/`,
       reuseExistingServer: false,

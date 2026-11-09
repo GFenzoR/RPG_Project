@@ -159,7 +159,7 @@ func adminCommand(ctx context.Context, args []string, open func() (adminStore, e
 		}
 		if err := st.AppendAudit(ctx, store.AuditEntry{
 			At: now(), Source: store.AuditCLI, ActorName: operator,
-			Action: store.AuditResetLinkIssue, TargetAccountID: p.ID, TargetName: p.Email, Result: store.ResultOK,
+			Action: store.AuditResetLinkIssue, TargetAccountID: p.ID, Result: store.ResultOK,
 		}); err != nil {
 			return err
 		}

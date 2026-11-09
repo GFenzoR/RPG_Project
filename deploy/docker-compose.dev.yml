@@ -25,7 +25,7 @@ services:
   # of a real inbox. Web UI http://localhost:8025, SMTP on 127.0.0.1:1025 (no TLS, no
   # login). Optional: `make mail-up` (and `make dev`) start it. MIT license, pinned.
   mailpit:
-    image: axllent/mailpit:v1.21.8
+    image: axllent/mailpit:v1.33.1
     profiles: [mail]
     ports:
       - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
@@ -15,7 +16,8 @@ type QueueConfig struct {
 	Mailer Mailer
 	Clock  clock.Clock
 	Logger *slog.Logger
-	// Size is how many messages may wait; Enqueue fails when it is full.
+	// Size is how many messages may be in the queue at once, waiting retries included;
+	// Enqueue fails when it is full. It bounds memory and goroutines.
 	Size int // default 256
 	// Backoff lists the waits before each retry; its length is the number of retries.
 	Backoff []time.Duration // default 30 s, 2 min, 10 min
@@ -44,6 +46,10 @@ type Queue struct {
 	cfg QueueConfig
 	log *slog.Logger
 	ch  chan queued
+	// pending counts the accepted messages not yet delivered or dropped (in the channel,
+	// being sent or waiting for a retry). It never exceeds Size, so a retry always fits
+	// back in the channel.
+	pending atomic.Int64
 	// sent is told about each finished message (tests); nil in production.
 	sent func(Message, error)
 }
@@ -70,13 +76,13 @@ func (q *Queue) Enqueue(m Message) error {
 	if m.Date.IsZero() {
 		m.Date = q.cfg.Clock.Now()
 	}
-	select {
-	case q.ch <- queued{m: m}:
-		return nil
-	default:
+	if q.pending.Add(1) > int64(q.cfg.Size) {
+		q.pending.Add(-1)
 		q.log.Warn("mail: queue full, message dropped", "subject", m.Subject)
 		return ErrQueueFull
 	}
+	q.ch <- queued{m: m} // cannot block: pending <= Size = cap(ch)
+	return nil
 }
 
 // Run delivers queued messages until ctx is done. Messages still waiting then are
@@ -87,8 +93,11 @@ func (q *Queue) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case it := <-q.ch:
-			if done, err := q.deliver(ctx, it); done && q.sent != nil {
-				q.sent(it.m, err)
+			if done, err := q.deliver(ctx, it); done {
+				q.pending.Add(-1)
+				if q.sent != nil {
+					q.sent(it.m, err)
+				}
 			}
 		}
 	}
@@ -109,12 +118,9 @@ func (q *Queue) deliver(ctx context.Context, it queued) (done bool, err error) {
 		go func() {
 			select {
 			case <-ctx.Done():
+				q.pending.Add(-1)
 			case <-wait:
-				select {
-				case q.ch <- it:
-				default:
-					q.log.Error("mail: queue full, retry dropped", "subject", it.m.Subject)
-				}
+				q.ch <- it // cannot block: it still counts in pending
 			}
 		}()
 		return false, err

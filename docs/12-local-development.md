@@ -57,7 +57,7 @@ auditoría y `make reports` la cola de reportes de jugadores (T4.1). Comandos en
 
 ### Emails de la cuenta (T2.1)
 `make dev` levanta [Mailpit](https://github.com/axllent/mailpit) (Docker, `make mail-up`,
-imagen fija `v1.21.8`, licencia MIT) y apunta el servidor a él: los emails de verificación y
+imagen fija `v1.33.1`, licencia MIT) y apunta el servidor a él: los emails de verificación y
 de reset llegan a **http://localhost:8025** y sus enlaces abren el sitio de Vite
 (`PUBLIC_URL=http://localhost:5173`). Sin Docker, `make dev` sigue sin emails (todo como
 antes); `DEV_MAIL=0 make dev` los apaga a propósito.

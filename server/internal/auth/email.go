@@ -220,8 +220,10 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email, lang string) 
 	return nil
 }
 
-// ResetPassword redeems a reset token: it sets the new password and revokes every
-// session of the account (both in one transaction).
+// ResetPassword redeems a reset token (emailed, or from gameserver admin reset-link): it
+// sets the new password and revokes every stored session of the account (one
+// transaction), then has the game disconnect the account's online characters
+// (Config.SessionsRevoked).
 func (s *Service) ResetPassword(ctx context.Context, token, password string) error {
 	if !ValidPassword(password) {
 		return ErrInvalidPassword
@@ -241,12 +243,15 @@ func (s *Service) ResetPassword(ctx context.Context, token, password string) err
 	if err != nil {
 		return err
 	}
-	_, err = s.repo.ResetPassword(ctx, hashToken(token), hash, s.clock.Now())
+	id, err := s.repo.ResetPassword(ctx, hashToken(token), hash, s.clock.Now())
 	if errors.Is(err, store.ErrNotFound) {
 		return ErrInvalidToken
 	}
 	if err != nil {
 		return fmt.Errorf("reset password: %w", err)
+	}
+	if s.revoked != nil {
+		s.revoked(id) // online characters too, not only the stored tokens
 	}
 	return nil
 }

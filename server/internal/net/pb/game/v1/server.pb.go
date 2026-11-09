@@ -329,6 +329,8 @@ const (
 	DisconnectReason_DISCONNECT_REASON_BANNED DisconnectReason = 9
 	// No real action (walk, attack, use, talk) for balance idle.kick_after_ms (T4.1).
 	DisconnectReason_DISCONNECT_REASON_IDLE DisconnectReason = 10
+	// The account's password was reset: every session of the account ends (T2.1).
+	DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED DisconnectReason = 11
 )
 
 // Enum value maps for DisconnectReason.
@@ -345,6 +347,7 @@ var (
 		8:  "DISCONNECT_REASON_KICKED",
 		9:  "DISCONNECT_REASON_BANNED",
 		10: "DISCONNECT_REASON_IDLE",
+		11: "DISCONNECT_REASON_PASSWORD_CHANGED",
 	}
 	DisconnectReason_value = map[string]int32{
 		"DISCONNECT_REASON_UNSPECIFIED":         0,
@@ -358,6 +361,7 @@ var (
 		"DISCONNECT_REASON_KICKED":              8,
 		"DISCONNECT_REASON_BANNED":              9,
 		"DISCONNECT_REASON_IDLE":                10,
+		"DISCONNECT_REASON_PASSWORD_CHANGED":    11,
 	}
 )
 
@@ -4417,7 +4421,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x15TRADE_STATE_REQUESTED\x10\x01\x12\x1b\n" +
 	"\x17TRADE_STATE_NEGOTIATING\x10\x02\x12\x19\n" +
 	"\x15TRADE_STATE_COMPLETED\x10\x03\x12\x19\n" +
-	"\x15TRADE_STATE_CANCELLED\x10\x04*\x96\x03\n" +
+	"\x15TRADE_STATE_CANCELLED\x10\x04*\xbe\x03\n" +
 	"\x10DisconnectReason\x12!\n" +
 	"\x1dDISCONNECT_REASON_UNSPECIFIED\x10\x00\x12%\n" +
 	"!DISCONNECT_REASON_OUTDATED_CLIENT\x10\x01\x12%\n" +
@@ -4430,7 +4434,8 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x18DISCONNECT_REASON_KICKED\x10\b\x12\x1c\n" +
 	"\x18DISCONNECT_REASON_BANNED\x10\t\x12\x1a\n" +
 	"\x16DISCONNECT_REASON_IDLE\x10\n" +
-	"*\x8e\x01\n" +
+	"\x12&\n" +
+	"\"DISCONNECT_REASON_PASSWORD_CHANGED\x10\v*\x8e\x01\n" +
 	"\x10SharedExperience\x12!\n" +
 	"\x1dSHARED_EXPERIENCE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SHARED_EXPERIENCE_OFF\x10\x01\x12\x1c\n" +

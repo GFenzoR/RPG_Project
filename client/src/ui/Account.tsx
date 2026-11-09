@@ -4,21 +4,16 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
-import { ApiError, accountApi } from "../net/api.ts";
+import { ApiError, accountApi, emailEnabled } from "../net/api.ts";
 import type { Account } from "../net/api.ts";
-import { isDesktop } from "../net/desktop.ts";
+import { desktopServer, isDesktop } from "../net/desktop.ts";
 
 /** Whether the server sends emails; undefined while asking. Asked once per page. */
-let emailConfig: Promise<boolean> | undefined;
 export function useEmailEnabled(): boolean | undefined {
   const [on, setOn] = useState<boolean | undefined>(undefined);
   useEffect(() => {
-    emailConfig ??= accountApi.config().then(
-      (c) => c.email,
-      () => false,
-    );
     let live = true;
-    void emailConfig.then((v) => live && setOn(v));
+    void emailEnabled().then((v) => live && setOn(v));
     return () => {
       live = false;
     };
@@ -27,12 +22,22 @@ export function useEmailEnabled(): boolean | undefined {
 }
 
 /**
- * "Forgot your password?" → the website's /forgot-password page. Not in the desktop
- * app: its pages are not the website's, and the link would open inside the app.
+ * "Forgot your password?" → the website's /forgot-password page. In the desktop app the
+ * page is not the website, so it shows the address to open in a browser instead (plain,
+ * selectable text: the app does not open external links).
  */
 export function ForgotPasswordLink(props: { t: Translate }): JSX.Element | null {
   const on = useEmailEnabled();
-  if (!on || isDesktop()) return null;
+  if (!on) return null;
+  if (isDesktop()) {
+    const origin = desktopServer()?.origin;
+    if (!origin) return null;
+    return (
+      <p class="forgot-link muted" data-testid="forgot-password-desktop">
+        {props.t("client.login.forgot_desktop", { url: `${origin}/forgot-password` })}
+      </p>
+    );
+  }
   return (
     <a class="forgot-link" href="/forgot-password" data-testid="forgot-password">
       {props.t("client.login.forgot")}

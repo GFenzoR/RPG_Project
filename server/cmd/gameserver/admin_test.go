@@ -78,7 +78,9 @@ func TestAdminResetLink(t *testing.T) {
 	if strings.Contains(string(f.token.TokenHash), token) || len(f.token.TokenHash) != 32 {
 		t.Fatal("the plain token was stored")
 	}
-	if f.audit.Action != store.AuditResetLinkIssue || f.audit.Source != store.AuditCLI || f.audit.TargetAccountID != 7 {
+	// The audit log is append-only: the email (personal data) never goes in it.
+	if f.audit.Action != store.AuditResetLinkIssue || f.audit.Source != store.AuditCLI || f.audit.TargetAccountID != 7 ||
+		f.audit.TargetName != "" || strings.Contains(fmt.Sprint(f.audit), "gm@example.org") {
 		t.Fatalf("audit %+v", f.audit)
 	}
 	if strings.Contains(fmt.Sprint(f.audit.Args), token) {

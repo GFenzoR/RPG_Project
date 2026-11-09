@@ -117,7 +117,10 @@ func TestVerifyEmailIsSingleUseAndExpires(t *testing.T) {
 
 func TestPasswordResetRevokesEverySession(t *testing.T) {
 	ctx := context.Background()
-	svc, repo, box, _ := newMailService(t, nil)
+	var kicked []int64
+	svc, repo, box, _ := newMailService(t, func(c *auth.Config) {
+		c.SessionsRevoked = func(id int64) { kicked = append(kicked, id) }
+	})
 	id, _ := svc.Register(ctx, "ana@example.org", "secreto123")
 	repo.SetVerified(id)
 	tok1, _ := svc.Login(ctx, "ana@example.org", "secreto123")
@@ -142,6 +145,9 @@ func TestPasswordResetRevokesEverySession(t *testing.T) {
 	}
 	if repo.SessionCount() != 0 {
 		t.Fatalf("%d sessions survived the reset", repo.SessionCount())
+	}
+	if len(kicked) != 1 || kicked[0] != id {
+		t.Fatalf("online characters of %v disconnected, want [%d]", kicked, id)
 	}
 	if _, err := svc.Authenticate(ctx, tok1.Token); !errors.Is(err, auth.ErrUnauthorized) {
 		t.Fatal("old token still works")

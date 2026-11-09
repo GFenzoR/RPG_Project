@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -343,5 +344,37 @@ func TestQueueRetryDoesNotBlockOthers(t *testing.T) {
 	clk.Advance(time.Hour)
 	if got := <-results; got.To != "bad@example.org" {
 		t.Fatalf("then %q", got.To)
+	}
+}
+
+// failFast fails every send at once with a temporary error (a relay refusing connections).
+type failFast struct{ sends atomic.Int64 }
+
+func (f *failFast) Send(context.Context, Message) error {
+	f.sends.Add(1)
+	return errors.New("421 try later")
+}
+
+func TestQueueSizeBoundsWaitingRetries(t *testing.T) {
+	clk := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	f := &failFast{}
+	q, _ := NewQueue(QueueConfig{Mailer: f, Clock: clk, Size: 4})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go q.Run(ctx)
+	accepted := 0
+	for i := 0; i < 5000; i++ {
+		if q.Enqueue(Message{To: "a@b.example"}) == nil {
+			accepted++
+		}
+		if i == 10 {
+			clk.BlockUntil(4) // the first 4 are parked on their retry timer
+		}
+	}
+	if accepted != 4 {
+		t.Fatalf("accepted %d messages with Size 4", accepted)
+	}
+	if w := clk.Waiters(); w > 4 {
+		t.Fatalf("%d retry timers with Size 4", w)
 	}
 }

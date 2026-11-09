@@ -123,6 +123,7 @@ func New(cfg Config) (*App, error) {
 	authSvc, err := auth.New(auth.Config{
 		Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations,
 		Mail: cfg.Mail, PublicURL: cfg.PublicURL, RequireVerifiedEmail: cfg.RequireVerifiedEmail,
+		SessionsRevoked: a.sessionsRevoked,
 	})
 	if err != nil {
 		return nil, err
@@ -410,6 +411,16 @@ func storeItems(in []session.ItemState) []store.InventoryItem {
 // player would stay online), so a full queue is retried until the loop has room or
 // stops; it blocks only the admin goroutine.
 func (a *App) adminDone(r session.AdminResult) { a.enqueueRetry(a.World.AdminDone(r)) }
+
+// sessionsRevoked disconnects the online characters of an account whose password was
+// reset (T2.1). Like a ban it must not be lost, so a full queue is retried, in its own
+// goroutine: the HTTP handler that reset the password does not wait for the loop.
+func (a *App) sessionsRevoked(accountID int64) {
+	if a.World == nil {
+		return
+	}
+	go a.enqueueRetry(a.World.KickAccount(accountID))
+}
 
 // rolesChanged hands the current roles of online staff to the loop (a lowered role
 // must not be lost either).
