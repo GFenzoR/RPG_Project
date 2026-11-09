@@ -106,14 +106,18 @@ type MarketOp struct {
 // then the market changes in order, then the id high-water marks. ID grows with every
 // transfer (also across restarts: LoadMarket gives the last one written).
 type Transfer struct {
-	ID                  int64
-	Characters          []CharacterState
+	ID         int64
+	Characters []CharacterState
+	// Houses are the house changes (T5.4), applied after the snapshots and before the
+	// market changes.
+	Houses              []HouseOp
 	Market              []MarketOp
 	OfferHigh, MailHigh int64
 }
 
 // transferHook, when set (tests), runs inside the transaction after step n (0: after
-// the snapshots, i: after market change i); an error aborts the transaction.
+// the snapshots and the house changes, i: after market change i); an error aborts the
+// transaction.
 var transferHook func(step int) error
 
 // SaveTransfer writes t in one transaction: all of it or nothing.
@@ -131,6 +135,11 @@ func (s *Store) SaveTransfer(ctx context.Context, t Transfer) error {
 		for _, c := range t.Characters {
 			if err := saveCharacterState(ctx, q, c); err != nil {
 				return err
+			}
+		}
+		for i, op := range t.Houses {
+			if err := applyHouseOp(ctx, q, op); err != nil {
+				return fmt.Errorf("house change %d (kind %d, %s): %w", i, op.Kind, op.House, err)
 			}
 		}
 		if transferHook != nil {

@@ -164,6 +164,8 @@ type MarketOp struct {
 type Transfer struct {
 	ID        uint64
 	Snapshots []Snapshot
+	// Houses are the house changes (T5.4), applied before the market changes.
+	Houses    []HouseOp
 	Market    []MarketOp
 	OfferHigh int64
 	MailHigh  int64
@@ -791,7 +793,21 @@ func (w *World) marketWithdraw(ctx *game.TickContext, p *Player) {
 		}
 		n := m.Item.Count
 		if !def.Stackable {
-			n = 1
+			// The saved instance itself (T5.4): a container from a house keeps its content
+			// and a rune its charges.
+			it := w.loadItem(m.Item)
+			bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
+			if it == nil || bp == nil || bp.def.Container == nil || len(bp.items) >= bp.def.Slots() ||
+				it.weight() > p.capacity-p.carried() || depth(bp)+1+it.height() > maxDepth {
+				full = true
+				break
+			}
+			w.attach(p, it, place{kind: locContainer, cont: bp})
+			w.containerChanged(bp)
+			w.econTree(p, EconMarket, "mailbox", it, 1)
+			ops = append(ops, MarketOp{Kind: MarketMailRemove, ID: m.ID, CharacterID: p.charID})
+			taken++
+			continue
 		}
 		if !w.canReceive(p, def, n, 0) {
 			full = true

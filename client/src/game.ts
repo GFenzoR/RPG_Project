@@ -35,6 +35,8 @@ import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
 import type { GuildInvitationView, GuildView } from "./state/guild.ts";
 import type { MarketView, TradeView } from "./state/market.ts";
+import { doorKey } from "./state/house.ts";
+import type { HouseView } from "./state/house.ts";
 import type {
   ContainerState,
   CreatureState,
@@ -77,6 +79,8 @@ export interface GameUi {
   /** The trade and market windows (T5.3). */
   trade: TradeView | undefined;
   market: MarketView | undefined;
+  /** The house window (T5.4). */
+  house: HouseView | undefined;
   /** A presence check waiting for an answer (T4.1), or undefined. */
   presence: PresenceState | undefined;
   /** The tutorial step (T4.2), or undefined when there is none. */
@@ -353,6 +357,66 @@ export class Game {
 
   marketWithdraw(): void {
     this.conn.send({ case: "marketCommand", value: { action: { case: "withdraw", value: {} } } });
+  }
+
+  // ---- houses (T5.4): the server validates the door, the owner, money and limits ----
+
+  houseRent(): void {
+    this.conn.send({ case: "houseCommand", value: { action: { case: "rent", value: {} } } });
+  }
+
+  houseExtend(): void {
+    this.conn.send({ case: "houseCommand", value: { action: { case: "extend", value: {} } } });
+  }
+
+  houseLeave(): void {
+    this.conn.send({ case: "houseCommand", value: { action: { case: "leave", value: {} } } });
+  }
+
+  houseGuest(name: string, add: boolean): void {
+    this.conn.send({
+      case: "houseCommand",
+      value: {
+        action: add
+          ? { case: "guestAdd", value: { name } }
+          : { case: "guestRemove", value: { name } },
+      },
+    });
+  }
+
+  houseGuildAccess(enabled: boolean): void {
+    this.conn.send({
+      case: "houseCommand",
+      value: { action: { case: "guildAccess", value: { enabled } } },
+    });
+  }
+
+  houseTransfer(name: string, price: number): void {
+    this.conn.send({
+      case: "houseCommand",
+      value: { action: { case: "transferOffer", value: { name, price: BigInt(price) } } },
+    });
+  }
+
+  houseTransferCancel(): void {
+    this.conn.send({
+      case: "houseCommand",
+      value: { action: { case: "transferCancel", value: {} } },
+    });
+  }
+
+  houseAccept(): void {
+    this.conn.send({
+      case: "houseCommand",
+      value: { action: { case: "transferAccept", value: {} } },
+    });
+  }
+
+  /** Closes the house window (the server forgets it too). */
+  houseClose(): void {
+    if (!this.world.house) return;
+    this.world.house = undefined;
+    this.conn.send({ case: "houseCommand", value: { action: { case: "close", value: {} } } });
   }
 
   /** Closes the market window (the server forgets it too). */
@@ -676,6 +740,7 @@ export class Game {
       station: w.station,
       trade: w.trade,
       market: w.market,
+      house: w.house,
       // Until answered or out of time (the server sends nothing on a timeout).
       presence: w.activePresence(performance.now()),
       tutorial: w.tutorial,
@@ -738,7 +803,12 @@ export class Game {
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z) => {
         if (this.cancelUse()) return;
-        const ref = topItem(this.world, x, y, z, false);
+        const ref =
+          topItem(this.world, x, y, z, false) ??
+          // T5.4: a bare door tile opens the house window (UseItem on its ground).
+          (this.opts.content.houseDoors?.includes(doorKey(x, y, z))
+            ? topItem(this.world, x, y, z, true)
+            : undefined);
         if (ref) this.useItem(ref);
       },
       lookTile: (x, y, z) => {

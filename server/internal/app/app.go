@@ -146,6 +146,20 @@ func New(cfg Config) (*App, error) {
 	submissions, _ := cfg.Store.(httpapi.MapSubmissions)
 	// The public guild pages too (T5.1).
 	publicGuilds, _ := cfg.Store.(httpapi.PublicGuilds)
+	houseOwners, _ := cfg.Store.(httpapi.PublicHouses)
+	var houses []httpapi.HouseInfo
+	if cfg.Map != nil {
+		for _, h := range cfg.Map.Houses() {
+			size := 0
+			for _, r := range h.Rects {
+				size += int(r.W) * int(r.H)
+			}
+			houses = append(houses, httpapi.HouseInfo{ID: h.ID, Name: h.Name, Island: h.Island, Rent: h.Rent, Size: size})
+		}
+	}
+	if !cfg.Balance.Houses.Enabled || len(houses) == 0 {
+		houseOwners = nil
+	}
 	skills := make(map[string]int, len(cfg.Balance.Skills.Base))
 	for id, b := range cfg.Balance.Skills.Base {
 		skills[id] = b.StartLevel
@@ -165,6 +179,8 @@ func New(cfg Config) (*App, error) {
 		AuthRateLimit: cfg.AuthRateLimit,
 		Highscores:    highscores,
 		Guilds:        publicGuilds,
+		Houses:        houses,
+		HouseOwners:   houseOwners,
 		Skills:        skills,
 		Vocations:     vocations,
 		Status:        a.status,
@@ -223,6 +239,7 @@ func New(cfg Config) (*App, error) {
 		// before the loop owns it.
 		var transfer func(session.Transfer) bool
 		var market *session.MarketData
+		var houseData *session.HouseData
 		if ms != nil {
 			transfer = saver.SubmitTransfer
 			// Loaded even with the market off: the trade window's transfers continue
@@ -230,10 +247,17 @@ func New(cfg Config) (*App, error) {
 			if market, err = loadMarket(ms, cfg.Clock.Now(), cfg.Balance.Market); err != nil {
 				return nil, err
 			}
+			// Houses (T5.4) are loaded once, like the market, before the loop owns them.
+			if hs, ok := cfg.Store.(HouseStore); ok && cfg.Balance.Houses.Enabled {
+				if houseData, err = loadHouses(hs); err != nil {
+					return nil, err
+				}
+			}
 		}
 		w, err := session.New(session.Config{
 			Transfer:      transfer,
 			Market:        market,
+			Houses:        houseData,
 			Map:           cfg.Map,
 			StartTown:     cfg.StartTown,
 			Balance:       cfg.Balance,

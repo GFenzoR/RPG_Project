@@ -77,6 +77,7 @@ function mini(): Island {
       { id: "mini_up", from: { x: 10, y: 10, z: 8 }, to: { x: 11, y: 10, z: 7 }, kind: "stairs" },
     ],
     texts: [],
+    houses: [],
   };
 }
 
@@ -111,6 +112,65 @@ describe("validateWorld", () => {
   it("accepts the repository world (world/islands/testisle)", () => {
     const r = validateWorld(repo, { content });
     expect(messages(r)).toEqual([]);
+  });
+
+  it("accepts a house and checks its rules (T5.4)", () => {
+    const house = () => ({
+      id: "mini_house",
+      name: "house.puerto_house_net.name",
+      rent: 100,
+      rects: [{ x: 20, y: 5, z: 7, w: 3, h: 2 }],
+      doors: [{ x: 21, y: 6, z: 7 }],
+      exit: { x: 21, y: 7, z: 7 },
+    });
+    const ok = mini();
+    ok.houses = [house()];
+    expect(messages(check(ok))).toEqual([]);
+
+    const bad = mini();
+    bad.houses = [
+      { ...house(), doors: [{ x: 10, y: 20, z: 7 }], exit: { x: 21, y: 6, z: 7 } },
+      { ...house(), id: "mini_house2", name: "house.missing.name", exit: { x: 25, y: 25, z: 7 } },
+    ];
+    bad.npcs = [{ npc: "harbor_master", pos: { x: 21, y: 5, z: 7 } }];
+    bad.zones.push({
+      id: "mini_nl",
+      type: "no_logout",
+      floors: [7],
+      rects: [{ x: 20, y: 5, w: 1, h: 1 }],
+    });
+    const m = messages(check(bad));
+    expect(m).toContainEqual(expect.stringContaining("door is not a tile of the house"));
+    expect(m).toContainEqual(expect.stringContaining('shares tiles with house "mini_house"'));
+    expect(m).toContainEqual(expect.stringContaining('house exit is inside house "mini_house"'));
+    expect(m).toContainEqual(expect.stringContaining("house exit must be next to a door"));
+    expect(m).toContainEqual(expect.stringContaining('i18n key "house.missing.name"'));
+    expect(m).toContainEqual(expect.stringContaining('NPC is inside house "mini_house"'));
+    expect(m).toContainEqual(expect.stringContaining('no_logout zone "mini_nl" covers a house'));
+  });
+
+  it("rejects a house id used twice in the world (T5.4)", () => {
+    const i = mini();
+    const h = {
+      id: "mini_house",
+      name: "house.puerto_house_net.name",
+      rent: 100,
+      rects: [{ x: 20, y: 5, z: 7, w: 1, h: 1 }],
+      doors: [{ x: 20, y: 5, z: 7 }],
+      exit: { x: 20, y: 6, z: 7 },
+    };
+    i.houses = [
+      h,
+      {
+        ...h,
+        rects: [{ x: 24, y: 5, z: 7, w: 1, h: 1 }],
+        doors: [{ x: 24, y: 5, z: 7 }],
+        exit: { x: 24, y: 6, z: 7 },
+      },
+    ];
+    expect(messages(check(i))).toContainEqual(
+      expect.stringContaining('house "mini_house" is already defined'),
+    );
   });
 
   it("rejects unknown items and ground items in the wrong layer", () => {

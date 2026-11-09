@@ -36,6 +36,8 @@ describe("guild routes (T5.1)", () => {
     expect(parseRoute("/guilds/12")).toEqual({ page: "guild", id: 12 });
     expect(parseRoute("/guilds/0")).toEqual({ page: "not_found" });
     expect(parseRoute("/guilds/abc")).toEqual({ page: "not_found" });
+    expect(parseRoute("/houses")).toEqual({ page: "houses" });
+    expect(parseRoute("/houses/1")).toEqual({ page: "not_found" });
     expect(guildRankKey("vice")).toBe("client.guild.rank.vice");
     expect(guildRankKey("<x>")).toBe("client.guild.rank.member");
   });

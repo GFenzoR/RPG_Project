@@ -22,7 +22,7 @@ import type { Prefab } from "./ops/prefab.ts";
 import { PREFAB_DIR, formatPrefab } from "./prefabs.ts";
 import { formatYaml, parseYamlText } from "./yaml.ts";
 
-export const AUX_FILES = ["spawns", "npcs", "zones", "portals", "texts"] as const;
+export const AUX_FILES = ["spawns", "npcs", "zones", "portals", "texts", "houses"] as const;
 export type AuxFile = (typeof AUX_FILES)[number];
 
 export const worldFile = "world/world.yaml";
@@ -158,6 +158,7 @@ class Loader {
       zones: this.yaml(`${dir}/zones.yaml`, "zones", false, []),
       portals: this.yaml(`${dir}/portals.yaml`, "portals", false, []),
       texts: this.yaml(`${dir}/texts.yaml`, "texts", false, []),
+      houses: this.yaml(`${dir}/houses.yaml`, "houses", false, []),
     };
     const known = new Set(["island.yaml", ...AUX_FILES.map((a) => `${a}.yaml`)]);
     let hasChunks = false;

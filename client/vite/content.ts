@@ -35,7 +35,7 @@ const RESOLVED_ID = "\0" + VIRTUAL_ID;
 const SITE_ID = "virtual:rpg-site";
 const RESOLVED_SITE_ID = "\0" + SITE_ID;
 /** i18n catalogs of the website (all keys). */
-const SITE_CATALOGS = ["client.yaml", "vocations.yaml", "site.yaml"];
+const SITE_CATALOGS = ["client.yaml", "vocations.yaml", "site.yaml", "world.yaml"];
 const NEWS_FILE = /^(\d{4}-\d{2}-\d{2})-[a-z0-9-]+\.yaml$/;
 const LANGUAGES = ["es", "en"];
 /** i18n catalogs the client uses (all keys), and those it only takes names from. */
@@ -207,6 +207,7 @@ export function loadClientContent(root: string): ClientContent {
     },
     sounds: loadSounds(root),
     islands: loadIslands(root),
+    houseDoors: loadHouseDoors(root),
     i18n,
   };
 }
@@ -318,6 +319,32 @@ function loadIslands(root: string): IslandRect[] {
     const r = i["rect"];
     return [{ id: i["id"], x: num0(r["x"]), y: num0(r["y"]), w: num0(r["w"]), h: num0(r["h"]) }];
   });
+}
+
+/** Door tiles of every houses.yaml (T5.4), as "x,y,z"; make validate checks the files. */
+function loadHouseDoors(root: string): string[] {
+  const dir = join(root, "world", "islands");
+  let islands: string[];
+  try {
+    islands = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const id of islands.sort()) {
+    let raw: unknown;
+    try {
+      raw = readYaml(join(dir, id, "houses.yaml"));
+    } catch {
+      continue; // no houses on this island
+    }
+    if (!Array.isArray(raw)) continue;
+    for (const h of raw)
+      if (isObj(h) && Array.isArray(h["doors"]))
+        for (const d of h["doors"])
+          if (isObj(d)) out.push(`${num0(d["x"])},${num0(d["y"])},${num0(d["z"])}`);
+  }
+  return out;
 }
 
 const num0 = (v: unknown): number => (typeof v === "number" ? v : 0);

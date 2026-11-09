@@ -190,6 +190,10 @@ var gmCommands = map[string]gmCommand{
 	// Market (T5.3).
 	"marketoffers": {RoleGM, "market_offers", "/marketoffers Name", (*World).cmdMarketOffers},
 	"marketcancel": {RoleGM, "market_cancel", "/marketcancel id", (*World).cmdMarketCancel},
+	// Houses (T5.4).
+	"house":      {RoleGM, "house_info", "/house id", (*World).cmdHouse},
+	"houseevict": {RoleGM, "house_evict", "/houseevict id", (*World).cmdHouseEvict},
+	"housemove":  {RoleGM, "house_move", "/housemove id Name", (*World).cmdHouseMove},
 }
 
 // command runs a chat line that starts with "/". An unknown command and one the

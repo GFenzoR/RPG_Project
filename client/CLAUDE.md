@@ -325,6 +325,22 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   Puerto (3168, 6382) intercambian pescado por monedas, uno publica una oferta, el otro
   compra 3 y el primero retira el oro (screenshots 52–55).
 
+## Notas de T5.4
+- `WorldState.house` (`state/house.ts`, puro y con tests: `houseFrom`, `houseActions`,
+  `daysLeft`). `ui/House.tsx` (arriba a la izquierda, como el mercado, y oculta si hay
+  diálogo o mercado abiertos) no usa hooks; `ui/House.test.ts` recorre su árbol sin DOM.
+- La ventana se abre con click derecho sobre una puerta: si la casilla no tiene nada
+  encima, `useTile` manda `UseItem` con el suelo cuando la casilla está en
+  `content.houseDoors` (de `world/islands/*/houses.yaml`, `vite/content.ts`). Un
+  `content_id` llamado `house` se traduce como `house.<id>.name` (`world.yaml`, que ahora
+  también va en los catálogos del sitio).
+- Sitio: `/houses` (`site/Site.tsx` `HousesPage`, `GET /api/houses`), por pueblo.
+- E2E "T5.4" de `e2e/game.spec.ts`: tres guardianes de nivel 15 sembrados con `psql` al
+  sur de `puerto_house_net` (si una corrida anterior la dejó alquilada, un gm sembrado la
+  libera con `/houseevict`); el dueño alquila, deja un pescado adentro (la página del dueño
+  es más alta para que la mochila no quede bajo el chat), invita, el invitado entra y el
+  tercero no; el sitio la muestra alquilada (screenshots 56–62).
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no

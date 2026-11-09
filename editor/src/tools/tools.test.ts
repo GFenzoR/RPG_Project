@@ -36,6 +36,7 @@ function world(): World {
           zones: [],
           portals: [],
           texts: [],
+          houses: [],
         },
       ],
     ]),

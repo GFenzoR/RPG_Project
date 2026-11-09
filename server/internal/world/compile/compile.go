@@ -14,6 +14,8 @@
 //     unless it says `blocks_sight: false` (walls block sight like they block movement).
 //   - Zone flags from zones.yaml: protection, no_logout, pvp, no_pvp. community_plot only
 //     matters to the editor and sets no flag.
+//   - Houses (houses.yaml, T5.4) travel as data; world.NewMap marks their tiles with
+//     FlagHouse and FlagProtection.
 package compile
 
 import (
@@ -329,6 +331,11 @@ func compileIsland(root, id string, worldRect rect, content *Content) (*world.Is
 		return nil, nil, err
 	}
 	is.NPCs = npcs
+	houses, err := readHouses(root, dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	is.Houses = houses
 	return is, sectors, nil
 }
 
@@ -547,6 +554,63 @@ func readNPCs(root, dir string) ([]world.NPCPlacement, error) {
 			return nil, fmt.Errorf("%s: npcs[%d]: unknown NPC %q", where, i, nf.NPC)
 		}
 		out = append(out, world.NPCPlacement{NPC: nf.NPC, Pos: world.Pos{X: uint16(c.X), Y: uint16(c.Y), Z: uint8(c.Z)}})
+	}
+	return out, nil
+}
+
+type houseFile struct {
+	ID    string `yaml:"id"`
+	Name  string `yaml:"name"`
+	Rent  int64  `yaml:"rent"`
+	Rects []struct {
+		X int `yaml:"x"`
+		Y int `yaml:"y"`
+		Z int `yaml:"z"`
+		W int `yaml:"w"`
+		H int `yaml:"h"`
+	} `yaml:"rects"`
+	Doors []pos `yaml:"doors"`
+	Exit  pos   `yaml:"exit"`
+}
+
+// readHouses reads houses.yaml (optional, T5.4). The rest (inside the island, no shared
+// tiles, doors and exit) is checked by world.NewMap, which also marks the house tiles.
+func readHouses(root, dir string) ([]world.House, error) {
+	path := filepath.Join(dir, "houses.yaml")
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	var list []houseFile
+	if err := readYAML(path, &list); err != nil {
+		return nil, err
+	}
+	where := rel(root, path)
+	inWorld := func(c pos) bool {
+		return c.X >= 0 && c.Y >= 0 && c.X <= 0xFFFF && c.Y <= 0xFFFF && c.Z >= 0 && c.Z <= world.MaxFloor
+	}
+	out := make([]world.House, 0, len(list))
+	for i, hf := range list {
+		if hf.Rent <= 0 || hf.Rent > 0xFFFFFFFF {
+			return nil, fmt.Errorf("%s: houses[%d] (%s): rent must be 1..4294967295", where, i, hf.ID)
+		}
+		h := world.House{ID: hf.ID, Name: hf.Name, Rent: uint32(hf.Rent)}
+		for _, r := range hf.Rects {
+			if !inWorld(pos{r.X, r.Y, r.Z}) || r.W <= 0 || r.H <= 0 || r.W > 255 || r.H > 255 {
+				return nil, fmt.Errorf("%s: houses[%d] (%s): rect %+v outside the world or larger than 255", where, i, hf.ID, r)
+			}
+			h.Rects = append(h.Rects, world.HouseRect{X: uint16(r.X), Y: uint16(r.Y), Z: uint8(r.Z), W: uint8(r.W), H: uint8(r.H)})
+		}
+		for _, d := range hf.Doors {
+			if !inWorld(d) {
+				return nil, fmt.Errorf("%s: houses[%d] (%s): door %+v outside the world", where, i, hf.ID, d)
+			}
+			h.Doors = append(h.Doors, world.Pos{X: uint16(d.X), Y: uint16(d.Y), Z: uint8(d.Z)})
+		}
+		if !inWorld(hf.Exit) {
+			return nil, fmt.Errorf("%s: houses[%d] (%s): exit %+v outside the world", where, i, hf.ID, hf.Exit)
+		}
+		h.Exit = world.Pos{X: uint16(hf.Exit.X), Y: uint16(hf.Exit.Y), Z: uint8(hf.Exit.Z)}
+		out = append(out, h)
 	}
 	return out, nil
 }

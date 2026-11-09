@@ -98,6 +98,42 @@ export interface MapText {
   notes?: string;
 }
 
+/** One rectangle of house tiles on floor z (T5.4). */
+export interface HouseRect {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * A player house (T5.4, docs/03 "Casas"): tiles a character rents. Doors are tiles of the
+ * house where the outside meets it; exit is the tile outside, next to a door, where
+ * whoever may not stay is put. rent is the price of one period in the smallest coin.
+ */
+export interface House {
+  id: string;
+  /** i18n key. */
+  name: string;
+  rent: number;
+  rects: HouseRect[];
+  doors: Position[];
+  exit: Position;
+  notes?: string;
+}
+
+/** Largest rect side, rects and doors per house (the server's world.bin limits). */
+export const MAX_HOUSE_SIDE = 255;
+export const MAX_HOUSE_RECTS = 16;
+export const MAX_HOUSE_DOORS = 8;
+
+export const houseContains = (h: House, p: Position): boolean =>
+  h.rects.some((r) => r.z === p.z && rectContains(r, p.x, p.y));
+
+/** Number of tiles of a house (its size). Rects of one house never overlap (validated). */
+export const houseSize = (h: House): number => h.rects.reduce((n, r) => n + r.w * r.h, 0);
+
 export interface Island {
   meta: IslandMeta;
   /** Keyed by chunkKey(z, cx, cy). */
@@ -107,6 +143,8 @@ export interface Island {
   zones: Zone[];
   portals: Portal[];
   texts: MapText[];
+  /** Player houses (T5.4); not editable by ops or patches: edit houses.yaml. */
+  houses: House[];
 }
 
 export interface WorldIslandEntry {

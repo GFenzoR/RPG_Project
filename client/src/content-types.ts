@@ -120,6 +120,11 @@ export interface ClientContent {
   /** Sounds, event mapping and loops (assets/sounds.yaml, T3.7). */
   sounds: SoundManifest;
   islands: IslandRect[];
+  /**
+   * Door tiles of the houses ("x,y,z", world/islands/<id>/houses.yaml, T5.4): a right
+   * click on a bare door opens the house window. Optional so fixtures can leave it out.
+   */
+  houseDoors?: string[];
   /** Language → key → text. */
   i18n: Record<string, Record<string, string>>;
 }

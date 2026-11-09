@@ -170,6 +170,31 @@ type GuildWar struct {
 	WinnerID   pgtype.Int8
 }
 
+type HouseGuest struct {
+	HouseID string
+	NameKey string
+	Name    string
+}
+
+type HouseItem struct {
+	HouseID string
+	X       int32
+	Y       int32
+	Z       int16
+	Seq     int16
+	ItemID  int32
+	Item    []byte
+}
+
+type HouseOwner struct {
+	HouseID     string
+	CharacterID int64
+	AccountID   int64
+	PaidUntil   pgtype.Timestamptz
+	Since       pgtype.Timestamptz
+	GuildAccess bool
+}
+
 type InventoryItem struct {
 	ID          int64
 	CharacterID int64

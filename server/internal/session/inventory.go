@@ -547,6 +547,11 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 	}
 
+	// T5.4: houses (access, only the owner takes items out, item limit, anti-flood).
+	if !w.checkHouseMove(ctx, p, it, to, merge, count < it.count) {
+		return
+	}
+
 	// Capacity: only what enters p's equipment from outside it weighs on p.
 	var toOwner *Player
 	switch to.kind {
@@ -718,8 +723,10 @@ func (w *World) sendInventory(p *Player) {
 
 // containerChanged sends the content of c to everyone who has it open.
 func (w *World) containerChanged(c *Item) {
-	if o := c.carriedBy(); o != nil {
-		o.questDirty = true
+	if r := c.root(); r.owner != nil {
+		r.owner.questDirty = true
+	} else if r.onGround {
+		w.houseTouched(r.pos) // T5.4: a container lying in a house
 	}
 	for _, v := range c.viewers {
 		v.p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_ContainerUpdate{ContainerUpdate: &pb.ContainerUpdate{
@@ -826,7 +833,7 @@ func (w *World) forgetContainers(p *Player) {
 // useItem runs a UseItem intent: containers open or close, consumables heal and are
 // eaten, runes are cast (T1.9), crafting stations of the map open (T3.4).
 func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
-	if w.useMarketBoard(ctx, p, m) || w.useStation(p, m) {
+	if w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.useStation(p, m) {
 		return
 	}
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
@@ -840,6 +847,9 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 	}
 	if from.kind == locContainer && it.def.Container == nil && w.reserved(ctx.Tick, p, it) {
 		p.emit(systemMsg(msgNotOwner))
+		return
+	}
+	if !w.mayUseInHouse(p, it) {
 		return
 	}
 	switch {

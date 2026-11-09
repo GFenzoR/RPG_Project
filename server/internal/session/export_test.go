@@ -246,3 +246,22 @@ func (w *World) Mailbox(charID int64) (int64, []ItemState) {
 
 // SetRoleForTest changes p's role (tests only, loop goroutine).
 func (w *World) SetRoleForTest(p *Player, r Role) { p.role = r }
+
+// MailGoldForTest adds add to the market mailbox gold of a character and returns it.
+func (w *World) MailGoldForTest(charID, add int64) int64 {
+	b := w.box(charID)
+	b.gold += add
+	return b.gold
+}
+
+// MailItemsForTest is how many items wait in a character's mailbox.
+func (w *World) MailItemsForTest(charID int64) int { return len(w.box(charID).items) }
+
+// ForceSaveForTest submits an autosave of client's player now.
+func (w *World) ForceSaveForTest(c Client) game.Command {
+	return game.CommandFunc(func(*game.TickContext) {
+		if p := w.byClient[c]; p != nil {
+			w.save(w.snapshot(p, false))
+		}
+	})
+}

@@ -19,6 +19,7 @@ import { ChatPanel } from "./Chat.tsx";
 import { DialogWindow } from "./Dialog.tsx";
 import { CraftingWindow } from "./Crafting.tsx";
 import { TradeWindow } from "./Trade.tsx";
+import { HouseWindow } from "./House.tsx";
 import { MarketWindow } from "./Market.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { GuildInvitations, GuildPanel } from "./Guild.tsx";
@@ -396,6 +397,7 @@ function GameScreen(props: {
     station: undefined,
     trade: undefined,
     market: undefined,
+    house: undefined,
     presence: undefined,
     tutorial: undefined,
     party: undefined,
@@ -532,6 +534,7 @@ function GameScreen(props: {
           {entered && !ui.dialog && (
             <MarketWindow t={t} content={props.content} game={game.current} ui={ui} />
           )}
+          {entered && !ui.dialog && !ui.market && <HouseWindow t={t} game={game.current} ui={ui} />}
           {entered && <TradeWindow t={t} content={props.content} game={game.current} ui={ui} />}
           {entered && <PartyInvitations t={t} game={game.current} ui={ui} />}
           {entered && <GuildInvitations t={t} game={game.current} ui={ui} />}

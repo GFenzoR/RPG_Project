@@ -35,6 +35,7 @@ function island(id: string, x: number): Island {
     zones: [],
     portals: [],
     texts: [],
+    houses: [],
   };
 }
 

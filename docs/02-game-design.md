@@ -426,7 +426,7 @@ Valores iniciales (balance.yaml):
 - NPCs compran y venden con precios en `data/npcs/*.yaml`. Los NPCs compran barato
   para que el comercio entre jugadores tenga sentido.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
-  fundación de un gremio y la comisión del mercado.
+  fundación de un gremio, la comisión del mercado y el alquiler de las casas (T5.4).
 - Log de economía para detectar duplicación y bots.
 
 Mecánicas de comercio entre jugadores conocidas del género; reglas, números y textos
@@ -491,6 +491,63 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
 - Una oferta de un item retirado del juego se cierra al arrancar: el oro de una de
   compra vuelve al buzón.
 - **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).
+
+## Casas (T5.4)
+Mecánica conocida del género (casas del mapa que se alquilan); reglas, números, nombres y
+textos propios. Números en `balance.yaml → houses` (docs/06); cada casa (casillas, puertas,
+alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
+
+- **Qué es una casa:** un área del mapa con nombre, pueblo (su isla), casillas por piso,
+  una o más **puertas** (casillas de la casa donde se entra) y una **salida** afuera,
+  junto a una puerta. Hoy hay 5: tres en el Farol (Puerto) y dos en Raigal (Bosque), de
+  21 a 37 casillas y de 500 a 1000 monedas por semana. Las casas son **zona de
+  protección**: sin combate y sin PvP (T5.2), y salir del juego adentro es seguro.
+- **Alquilar:** se usa la puerta (click derecho) y se abre la ventana de la casa; mirar la
+  puerta dice de quién es o que está libre, con su precio. Elegimos la puerta y no un NPC
+  o un tablero: es lo más simple (no hay diálogo ni item nuevo) y se ve la casa antes de
+  alquilarla; la lista de todas está en el sitio (`/houses`). Pide nivel `min_level` (12)
+  y se paga **por adelantado** un período de `period_days` (7 días) con el oro de la
+  mochila. Con la ventana se puede pagar más períodos por adelantado, hasta `max_periods`
+  (4) por delante.
+- **Renovación sin estar conectado:** al vencer, el servidor cobra el período siguiente
+  del **oro del buzón del mercado** del dueño (T5.3): ahí llega lo que vende en el
+  mercado, y el servidor lo puede cobrar aunque no esté. Si no alcanza, la casa se libera.
+  No agregamos un "fondo de la casa" aparte: sería un segundo buzón de oro con sus propias
+  reglas, y pagar por adelantado desde la ventana ya cubre a quien no usa el mercado.
+- **Una casa por cuenta** (no solo por personaje): con pocas casas por pueblo, una cuenta
+  con varios personajes no puede acapararlas. La base lo garantiza (`account_id` único).
+- **Sumidero:** todo alquiler se destruye y va al log de economía (`house`, ref `rent`).
+  Al dejar la casa, lo pagado no se devuelve.
+- **Acceso:** pasan la puerta el dueño, los invitados (lista por nombre de personaje, hasta
+  `max_guests`, 20) y, si el dueño lo activa, los miembros de su gremio. Los demás no
+  entran (el paso a cualquier casilla de la casa se valida en el servidor), y quien queda
+  adentro sin permiso (lo sacaron de la lista, dejó el gremio, la casa cambió de dueño o
+  se liberó) sale por la puerta a la salida en el acto o, a lo sumo, en un segundo. Quien
+  entra al juego dentro de una casa a la que ya no tiene acceso aparece en la salida. El
+  personal del juego entra a cualquier casa.
+- **Dejar y transferir:** el dueño puede dejar la casa o ofrecerla a otro personaje
+  conectado por un precio (puede ser 0); la oferta espera `transfer_minutes` (10) a que el
+  otro la acepte en la puerta, con el nivel y la regla de una por cuenta. El precio va al
+  buzón del dueño; lo pagado del alquiler sigue con la casa; la lista de invitados y el
+  gremio se borran.
+- **Objetos adentro:** lo que se deja en el suelo de la casa o en contenedores sobre él
+  **persiste entre reinicios** (la excepción a "el suelo vive en memoria", docs/01). Límite:
+  `items_per_tile` (3) × casillas instancias por casa (una pila cuenta una vez; un
+  contenedor, una más cada objeto de adentro). Solo el dueño y los invitados mueven
+  objetos adentro; desde afuera nadie alcanza el suelo de la casa. **Los invitados pueden
+  traer y acomodar objetos, pero no sacarlos** (ni a su mochila ni afuera): así invitar a
+  alguien no le abre el depósito del dueño. Lo que un invitado deja es de la casa.
+- **Al liberarse** (dejarla, falta de pago, transferencia o staff) todos los objetos van al
+  **buzón del mercado** del dueño, enteros (un contenedor con su contenido, una runa con
+  sus cargas), en la misma transacción que libera la casa: no se pierde nada. Se retiran en
+  cualquier tablero del mercado.
+- **Anti-flood** propio (`action_burst` / `action_refill_ms`) para las acciones de la casa
+  y para mover objetos dentro de ella: cada movimiento guarda la casa y al que lo movió.
+- **Falla segura (T5.3):** si algo no se pudo guardar, las casas quedan en solo lectura
+  hasta reiniciar: no se alquila ni se paga, nada entra ni sale de una casa y el cobro
+  automático se detiene.
+- **Staff:** `/house`, `/houseevict` y `/housemove` (tabla de Moderación), auditados.
+- **Fuera de alcance:** subastas de casas, decoración especial y casas de gremio.
 
 ## Mundo e islas (estructura inicial)
 | Isla | Nivel sugerido | Rol |
@@ -763,6 +820,9 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 | `/guildrename Viejo Nombre = Nuevo Nombre` | GM | Renombra un gremio (el nombre nuevo sigue las reglas de siempre); se avisa a sus miembros (T5.1) |
 | `/guilddisband Nombre` | GM | Disuelve un gremio (T5.1) |
 | `/unskull Nombre` | GM | Quita la marca PvP de un jugador conectado y olvida sus muertes injustificadas (T5.2) |
+| `/house id` | GM | Muestra una casa: dueño, pagada hasta, invitados y objetos (T5.4) |
+| `/houseevict id` | GM | Libera una casa; sus objetos van al buzón del dueño (T5.4) |
+| `/housemove id Nombre` | GM | Da una casa a un personaje conectado, sin pago; los objetos van al buzón del dueño anterior (T5.4) |
 
 Los GM conectados también reciben avisos de sistema: posibles bots y chequeos fallados o
 esquivados (T4.1), y cada envío nuevo al portal de mapas con su número y título, sin datos

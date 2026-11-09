@@ -200,6 +200,9 @@ export function Site(props: SiteProps): JSX.Element {
           <Link href="/guilds" current={section === "guilds"}>
             {t("site.nav.guilds")}
           </Link>
+          <Link href="/houses" current={section === "houses"}>
+            {t("site.nav.houses")}
+          </Link>
           <Link href="/maps/submit" current={section === "maps"}>
             {t("site.nav.maps")}
           </Link>
@@ -232,6 +235,7 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       highscores: t("site.highscores.title"),
       guilds: t("site.guilds.title"),
       guild: t("site.guilds.title"),
+      houses: t("site.houses.title"),
       news: t("site.news.title"),
       post: "",
       maps_submit: t("site.maps.submit.title"),
@@ -261,6 +265,8 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       return <GuildsPage t={t} lang={props.lang} />;
     case "guild":
       return <GuildPage t={t} lang={props.lang} id={route.id} />;
+    case "houses":
+      return <HousesPage t={t} />;
     case "news":
       return <NewsList {...props} />;
     case "post":
@@ -726,6 +732,72 @@ function GuildPage(props: { t: Translate; lang: string; id: number }): JSX.Eleme
       <p>
         <Link href="/guilds">{t("site.guilds.back")}</Link>
       </p>
+    </section>
+  );
+}
+
+// ---- houses (T5.4): GET /api/houses, the houses of the map by town -------------------
+
+interface HouseEntry {
+  id: string;
+  name: string;
+  island: string;
+  rent: number;
+  size: number;
+  owner: string;
+}
+
+function HousesPage(props: { t: Translate }): JSX.Element {
+  const { t } = props;
+  const data = useJSON<{ houses: HouseEntry[] }>("/api/houses");
+  const towns: string[] = [];
+  if (data && typeof data === "object")
+    for (const h of data.houses) if (!towns.includes(h.island)) towns.push(h.island);
+  return (
+    <section class="card" aria-labelledby="houses-title">
+      <h1 id="houses-title">{t("site.houses.title")}</h1>
+      <p class="muted">{t("site.houses.intro")}</p>
+      {data === undefined ? (
+        <p class="muted" role="status">
+          {t("site.houses.loading")}
+        </p>
+      ) : data === "error" || data === "missing" ? (
+        <p class="error" role="alert">
+          {t("site.houses.error")}
+        </p>
+      ) : (
+        towns.map((town) => (
+          <section key={town} data-testid={`houses-${town}`}>
+            <h2>{t(`island.${town}.name`)}</h2>
+            <table class="highscores">
+              <thead>
+                <tr>
+                  <th scope="col">{t("site.houses.name")}</th>
+                  <th scope="col">{t("site.houses.size")}</th>
+                  <th scope="col">{t("site.houses.rent")}</th>
+                  <th scope="col">{t("site.houses.status")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.houses
+                  .filter((h) => h.island === town)
+                  .map((h) => (
+                    <tr key={h.id} data-house={h.id}>
+                      <td>{t(h.name)}</td>
+                      <td>{t("site.houses.tiles", { count: h.size })}</td>
+                      <td>{t("site.houses.coins", { price: h.rent })}</td>
+                      <td>
+                        {h.owner
+                          ? t("site.houses.rented", { name: h.owner })
+                          : t("site.houses.free")}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </section>
+        ))
+      )}
     </section>
   );
 }

@@ -14,6 +14,8 @@ type Querier interface {
 	// Deposits a positive amount.
 	AddMarketMailGold(ctx context.Context, arg AddMarketMailGoldParams) error
 	BumpMarketHigh(ctx context.Context, arg BumpMarketHighParams) error
+	// Gives a house to another character; no row when the database has another owner.
+	ChangeHouseOwner(ctx context.Context, arg ChangeHouseOwnerParams) (int64, error)
 	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
 	CharacterOfAccount(ctx context.Context, arg CharacterOfAccountParams) (string, error)
 	// Takes transfer id: no row when a transfer with this id (or a later one) was written.
@@ -58,6 +60,9 @@ type Querier interface {
 	DeleteGuild(ctx context.Context, id int64) (int64, error)
 	DeleteGuildInvite(ctx context.Context, arg DeleteGuildInviteParams) error
 	DeleteGuildMember(ctx context.Context, arg DeleteGuildMemberParams) (int64, error)
+	DeleteHouseGuests(ctx context.Context, houseID string) error
+	DeleteHouseItems(ctx context.Context, houseID string) error
+	DeleteHouseOwner(ctx context.Context, arg DeleteHouseOwnerParams) (int64, error)
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (int64, error)
 	DeleteMarketMailItem(ctx context.Context, arg DeleteMarketMailItemParams) (int64, error)
 	// Closes an offer that has exactly units left (no row otherwise: the loop and the
@@ -127,6 +132,10 @@ type Querier interface {
 	InsertGuild(ctx context.Context, arg InsertGuildParams) error
 	InsertGuildMember(ctx context.Context, arg InsertGuildMemberParams) error
 	InsertGuildWar(ctx context.Context, arg InsertGuildWarParams) error
+	InsertHouseGuest(ctx context.Context, arg InsertHouseGuestParams) error
+	InsertHouseItems(ctx context.Context, arg []InsertHouseItemsParams) (int64, error)
+	// Rents a free house (a row already there is a conflict: the transfer fails).
+	InsertHouseOwner(ctx context.Context, arg InsertHouseOwnerParams) error
 	InsertIdentity(ctx context.Context, arg InsertIdentityParams) error
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
 	InsertMapSubmission(ctx context.Context, arg InsertMapSubmissionParams) (int64, error)
@@ -157,6 +166,11 @@ type Querier interface {
 	// Decided submissions of one status: the most recently changed first, a page before a
 	// cursor (map_submissions_history_idx).
 	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
+	LoadHouseGuests(ctx context.Context) ([]LoadHouseGuestsRow, error)
+	LoadHouseItems(ctx context.Context) ([]LoadHouseItemsRow, error)
+	// Player houses (T5.4). The loop owns them in memory: these queries load them at start and
+	// write each change inside the transaction of a session.Transfer.
+	LoadHouseOwners(ctx context.Context) ([]LoadHouseOwnersRow, error)
 	// The active bans of the accounts that own offers (their offers are hidden). until is
 	// NULL for a permanent ban.
 	LoadMarketBans(ctx context.Context, now pgtype.Timestamptz) ([]LoadMarketBansRow, error)
@@ -189,6 +203,9 @@ type Querier interface {
 	// the highscores (T4.3), characters of staff, disabled or banned accounts are not shown:
 	// they do not count and a hidden leader shows as "".
 	PublicGuilds(ctx context.Context, arg PublicGuildsParams) ([]PublicGuildsRow, error)
+	// Owners for the public list (/api/houses): the name only, and nobody hidden by the
+	// ranking's rules (staff, disabled or banned accounts) shows as owner.
+	PublicHouses(ctx context.Context, now pgtype.Timestamptz) ([]PublicHousesRow, error)
 	// Drops the bytes of patches whose submission reached a final status before the cutoff.
 	PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	RaiseGuildIDHigh(ctx context.Context, id int64) error
@@ -209,6 +226,8 @@ type Querier interface {
 	SetGuildMemberRank(ctx context.Context, arg SetGuildMemberRankParams) (int64, error)
 	SetGuildMotd(ctx context.Context, arg SetGuildMotdParams) (int64, error)
 	SetGuildWarKills(ctx context.Context, arg SetGuildWarKillsParams) (int64, error)
+	SetHouseGuildAccess(ctx context.Context, arg SetHouseGuildAccessParams) (int64, error)
+	SetHousePaid(ctx context.Context, arg SetHousePaidParams) (int64, error)
 	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
 	StartGuildWar(ctx context.Context, arg StartGuildWarParams) (int64, error)
 	SubmissionAuthor(ctx context.Context, id int64) (int64, error)

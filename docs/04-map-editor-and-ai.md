@@ -620,6 +620,13 @@ panel de revisión (`editor/src/review/`):
   exporta, alterna antes/después, importa con y sin conflicto e intenta un patch
   malicioso.
 
+**Casas (T5.4).** `houses.yaml` (formato en `03-world-and-maps.md`) no tiene ops ni entra
+en map patches (la ruta no es parcheable: un PR que lo cambia es de maintainer). `mapcli
+validate`/`fmt`, el MCP `map_validate` y el editor la cargan y validan (`validateWorld`);
+`mapcli info` y `map_info` listan cada casa con su tamaño, alquiler y salida. El editor la
+dibuja (solo lectura) en el canvas: contorno violeta de sus casillas, puertas y salida;
+se edita a mano en el YAML. Prefabs de casas: `house_wood_small` y `house_wood_medium`.
+
 **Hito 4–5:** prefabs, generación procedural desde el editor, envío de patch a revisión
 con cuenta, cola de moderación, comentarios por casilla.
 

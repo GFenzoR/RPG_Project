@@ -2314,3 +2314,167 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   await a.close();
   await b.close();
 });
+
+test("T5.4: a player rents a house, leaves an item inside, invites another; a third cannot enter", async ({
+  browser,
+  playwright,
+}) => {
+  const owner = await newGuardian(playwright, "Inquilino");
+  const guest = await newGuardian(playwright, "Visita");
+  const stranger = await newGuardian(playwright, "Extrano");
+  const house = "puerto_house_net"; // world/islands/puerto/houses.yaml: door 3153,6401
+  const psql = (sql: string): string =>
+    execFileSync("psql", [databaseUrl, "-tAc", sql]).toString().trim();
+  // An earlier run against the same database may have left the house rented: a gm frees it
+  // (the server owns the houses in memory, so it goes through the game, audited).
+  if (psql(`SELECT count(*) FROM house_owners WHERE house_id = '${house}'`) !== "0") {
+    const gm = await newGuardian(playwright, "Guardia");
+    psql(`UPDATE accounts SET role = 'gm' WHERE email = lower('${gm.email}')`);
+    const page = await browser.newPage();
+    await enterGame(page, gm.email, gm.password);
+    const say = page.getByTestId("say").getByRole("textbox");
+    await say.fill(`/houseevict ${house}`);
+    await say.press("Enter");
+    await expect(page.getByTestId("game-log")).toContainText(`Liberaste la casa ${house}`);
+    await page.close();
+  }
+  // Level 15 (35280 XP, min_level 12), a backpack (48) with 10 x 100 copper coins (8) and
+  // 5 raw fish (10) for the owner; the others just a backpack. In Puerto, south of the door.
+  const seed = (name: string, x: number, items: string): string =>
+    `UPDATE characters SET town = 'puerto', level = 15, experience = 35280, pos_x = ${x}, pos_y = 6403, pos_z = 7
+       WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, s, i, c FROM bp, (VALUES ${items}) AS v(s, i, c);`;
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    seed(
+      owner.name,
+      3153,
+      "(0, 10, 5)" + [...Array(10).keys()].map((s) => `, (${s + 1}, 8, 100)`).join(""),
+    ) +
+      seed(guest.name, 3152, "(0, 8, 1)") +
+      seed(stranger.name, 3154, "(0, 8, 1)"),
+  ]);
+  const errors: string[] = [];
+  async function enter(email: string, height = 800): Promise<Page> {
+    // The owner's page is taller: its backpack window must not sit under the chat.
+    const page = await browser.newPage({ viewport: { width: 1280, height } });
+    await enterGame(page, email, owner.password);
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    return page;
+  }
+  const a = await enter(owner.email, 1100);
+  const b = await enter(guest.email);
+  const c = await enter(stranger.email);
+  await arrived(a, 3153, 6403);
+  await arrived(b, 3152, 6403);
+  await arrived(c, 3154, 6403);
+  const step = async (page: Page, key: string, x: number, y: number): Promise<void> => {
+    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    await page.keyboard.press(key);
+    await arrived(page, x, y);
+  };
+  const openDoor = async (page: Page): Promise<void> => {
+    const door = await page.evaluate(() => window.__rpgClient?.tileToClient(3153, 6401));
+    if (!door) throw new Error("no canvas");
+    await page.mouse.click(door.x, door.y, { button: "right" });
+    await expect(page.getByTestId("house")).toBeVisible();
+  };
+
+  // Looking at the door says it is free and its rent; using it opens the window.
+  await step(a, "ArrowUp", 3153, 6402);
+  const doorA = await a.evaluate(() => window.__rpgClient?.tileToClient(3153, 6401));
+  if (!doorA) throw new Error("no canvas");
+  await a.keyboard.down("Shift");
+  await a.mouse.click(doorA.x, doorA.y);
+  await a.keyboard.up("Shift");
+  await expect(a.getByTestId("game-log")).toContainText(
+    "Casa de la Red Tendida: libre. Alquiler: 800 monedas cada 7 días (32 casillas).",
+  );
+  await openDoor(a);
+  const win = a.getByTestId("house");
+  await expect(win.getByTestId("house-name")).toHaveText("Casa de la Red Tendida");
+  await expect(win.getByTestId("house-owner")).toHaveText("Libre.");
+  await shot(a, "56-house-free");
+  await win.getByTestId("house-rent").click();
+  await expect(a.getByTestId("game-log")).toContainText(
+    "Alquilaste Casa de la Red Tendida por 7 días (800 monedas).",
+  );
+  await expect(win.getByTestId("house-owner")).toHaveText(`La alquila ${owner.name}.`);
+  await expect(win.getByTestId("house-paid")).toContainText("(7 días)");
+  await shot(a, "57-house-rented");
+  await win.getByRole("button", { name: "Cerrar la ventana de la casa" }).click();
+
+  // The owner walks in and drops the fish on the floor of the house.
+  await step(a, "ArrowUp", 3153, 6401);
+  await step(a, "ArrowUp", 3153, 6400);
+  await step(a, "ArrowUp", 3153, 6399);
+  const inventory = a.getByTestId("inventory");
+  await inventory.getByTestId("slot-backpack").locator("[data-item]").click({ button: "right" });
+  const fish = inventory.locator('[data-container-item="backpack"] [data-item="raw_fish"]');
+  await expect(fish).toBeVisible();
+  await fish.scrollIntoViewIfNeeded();
+  const from = await fish.boundingBox();
+  const to = await a.evaluate(() => window.__rpgClient?.tileToClient(3154, 6398));
+  if (!from || !to) throw new Error("no drag points");
+  await a.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await a.mouse.down();
+  await a.mouse.move(to.x, to.y, { steps: 8 });
+  await a.mouse.up();
+  const fishId = await a.evaluate(() => window.__rpgClient?.itemNumber("raw_fish"));
+  await expect
+    .poll(() => a.evaluate(() => window.__rpgClient?.tile(3154, 6398, 7)?.at(-1)))
+    .toBe(fishId);
+  // Written with the owner's inventory, in one transfer.
+  await expect
+    .poll(() => psql(`SELECT count(*) FROM house_items WHERE house_id = '${house}'`))
+    .toBe("1");
+  await shot(a, "58-house-item-inside");
+
+  // Back next to the door, the owner invites the guest.
+  await step(a, "ArrowDown", 3153, 6400);
+  await openDoor(a);
+  await win.getByTestId("house-guest-name").fill(guest.name);
+  await win.getByTestId("house-guest-add").click();
+  await expect(a.getByTestId("game-log")).toContainText(
+    `${guest.name} ahora puede entrar a tu casa.`,
+  );
+  await expect(win.getByTestId("house-guests")).toContainText(guest.name);
+  await shot(a, "59-house-guest-invited");
+  await win.getByRole("button", { name: "Cerrar la ventana de la casa" }).click();
+  await step(a, "ArrowRight", 3154, 6400);
+
+  // The guest walks in through the door; the stranger cannot.
+  await step(b, "ArrowRight", 3153, 6403);
+  await step(b, "ArrowUp", 3153, 6402);
+  await step(b, "ArrowUp", 3153, 6401);
+  await step(b, "ArrowUp", 3153, 6400);
+  await step(c, "ArrowLeft", 3153, 6403);
+  await step(c, "ArrowUp", 3153, 6402);
+  await c.locator("body").click({ position: { x: 1, y: 1 } });
+  await c.keyboard.press("ArrowUp");
+  await expect(c.getByTestId("game-log")).toContainText(
+    "La puerta de esta casa no se abre para ti.",
+  );
+  await arrived(c, 3153, 6402);
+  await shot(b, "60-house-guest-inside");
+  await shot(c, "61-house-stranger-refused");
+
+  // The public list shows the house rented by the owner (and nothing private).
+  const site = await browser.newPage();
+  await site.goto("/houses?lang=es");
+  const row = site.getByTestId("houses-puerto").locator(`[data-house="${house}"]`);
+  await expect(row).toContainText(`Alquilada por ${owner.name}`, { timeout: 70_000 });
+  await shot(site, "62-site-houses");
+  await site.close();
+
+  expect(errors).toEqual([]);
+  for (const page of [a, b, c]) await page.close();
+});

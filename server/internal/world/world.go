@@ -50,6 +50,9 @@ const (
 	FlagNoLogout
 	FlagPvP
 	FlagNoPvP
+	// FlagHouse marks a tile of a house (T5.4). NewMap sets it, with FlagProtection, on
+	// every tile with ground inside a house's rects: houses are protection zones.
+	FlagHouse
 )
 
 // TileStack is the item stack of one tile, bottom to top, as numeric item IDs.
@@ -99,6 +102,8 @@ type Island struct {
 	// NPCs are the NPCs placed on the island (world/islands/<id>/npcs.yaml), in file
 	// order. Each data/npcs id appears once in the whole world.
 	NPCs []NPCPlacement
+	// Houses are the island's player houses (world/islands/<id>/houses.yaml, T5.4).
+	Houses []House
 
 	cx0, cy0 int                // first sector column/row
 	cw, ch   int                // sectors per row/column
@@ -156,12 +161,60 @@ type SpawnMonster struct {
 	Count   uint16
 }
 
+// House is a player house (T5.4, docs/03 "Casas"): an area of tiles that a character
+// rents. Its tiles are Rects (each on one floor); Doors are tiles of the house where the
+// outside meets it, and Exit the tile outside the house, next to a door, where whoever
+// may not stay is put. Rent is the price of one period in the smallest coin.
+type House struct {
+	ID    string
+	Name  string // i18n key
+	Rent  uint32
+	Rects []HouseRect
+	Doors []Pos
+	Exit  Pos
+	// Island is the id of the island (the town) of the house; NewMap fills it.
+	Island string
+}
+
+// HouseRect is one rectangle of house tiles on floor Z.
+type HouseRect struct {
+	X, Y uint16
+	Z    uint8
+	W, H uint8
+}
+
+// Contains reports whether p lies inside r.
+func (r HouseRect) Contains(p Pos) bool {
+	return p.Z == r.Z && int(p.X) >= int(r.X) && int(p.Y) >= int(r.Y) && int(p.X) < int(r.X)+int(r.W) &&
+		int(p.Y) < int(r.Y)+int(r.H)
+}
+
+// Contains reports whether p is a tile of the house.
+func (h *House) Contains(p Pos) bool {
+	for _, r := range h.Rects {
+		if r.Contains(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// Limits of the houses (a crafted world.bin must not make the server index millions of
+// tiles): rects per house and doors per house.
+const (
+	MaxHouseRects = 16
+	MaxHouseDoors = 8
+)
+
 // Map is the whole loaded world.
 type Map struct {
 	islands []*Island
 	// groundSpeed is indexed by numeric item ID; 0 means DefaultGroundSpeed.
 	groundSpeed []uint16
 	minSpeed    int32
+	// houseAt indexes the tiles of every house (T5.4).
+	houseAt map[Pos]*House
+	houses  []*House
 }
 
 // NewMap builds a Map. Island IDs must be unique, rects aligned to SectorSize and disjoint,
@@ -169,7 +222,7 @@ type Map struct {
 // on one of its floors. groundSpeed is indexed by
 // numeric item ID (0 = DefaultGroundSpeed).
 func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint16) (*Map, error) {
-	m := &Map{groundSpeed: groundSpeed}
+	m := &Map{groundSpeed: groundSpeed, houseAt: map[Pos]*House{}}
 	npcs := map[string]bool{}
 	npcTiles := map[Pos]bool{}
 	for i, is := range islands {
@@ -223,9 +276,90 @@ func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint1
 		}
 		m.islands = append(m.islands, is)
 	}
+	if err := m.indexHouses(); err != nil {
+		return nil, err
+	}
 	m.minSpeed = m.slowestCost()
 	return m, nil
 }
+
+// indexHouses checks the houses of every island and marks their tiles: ids unique in the
+// world, rects inside the island on a listed floor, no tile in two houses, doors on
+// tiles of the house and the exit outside every house, on the island, next to a door.
+// Every tile with ground of a house gets FlagHouse and FlagProtection.
+func (m *Map) indexHouses() error {
+	ids := map[string]bool{}
+	for _, is := range m.islands {
+		for i := range is.Houses {
+			h := &is.Houses[i]
+			h.Island = is.ID
+			if h.ID == "" || h.Name == "" || h.Rent == 0 || ids[h.ID] {
+				return fmt.Errorf("island %q: house %q needs a unique id, a name and a rent > 0", is.ID, h.ID)
+			}
+			ids[h.ID] = true
+			if len(h.Rects) == 0 || len(h.Rects) > MaxHouseRects || len(h.Doors) == 0 || len(h.Doors) > MaxHouseDoors {
+				return fmt.Errorf("island %q: house %q needs 1..%d rects and 1..%d doors", is.ID, h.ID, MaxHouseRects, MaxHouseDoors)
+			}
+			for _, r := range h.Rects {
+				if r.W == 0 || r.H == 0 || !is.hasFloor(r.Z) || !is.Rect.Contains(int(r.X), int(r.Y)) ||
+					!is.Rect.Contains(int(r.X)+int(r.W)-1, int(r.Y)+int(r.H)-1) {
+					return fmt.Errorf("island %q: house %q: rect %+v is empty, outside the island or on a floor it does not list", is.ID, h.ID, r)
+				}
+				for y := int(r.Y); y < int(r.Y)+int(r.H); y++ {
+					for x := int(r.X); x < int(r.X)+int(r.W); x++ {
+						p := Pos{X: uint16(x), Y: uint16(y), Z: r.Z}
+						if o := m.houseAt[p]; o != nil && o != h {
+							return fmt.Errorf("island %q: house %q shares tile %v with house %q", is.ID, h.ID, p, o.ID)
+						}
+						m.houseAt[p] = h
+					}
+				}
+			}
+			m.houses = append(m.houses, h)
+		}
+	}
+	for _, h := range m.houses {
+		is := m.Island(h.Island)
+		near := false
+		for _, d := range h.Doors {
+			if !h.Contains(d) {
+				return fmt.Errorf("island %q: house %q: door %v is not a tile of the house", is.ID, h.ID, d)
+			}
+			if d.Z == h.Exit.Z && max(absDiff(d.X, h.Exit.X), absDiff(d.Y, h.Exit.Y)) == 1 {
+				near = true
+			}
+		}
+		if !near || m.houseAt[h.Exit] != nil || !is.Rect.Contains(int(h.Exit.X), int(h.Exit.Y)) || !is.hasFloor(h.Exit.Z) {
+			return fmt.Errorf("island %q: house %q: exit %v must be on the island, outside every house, next to a door", is.ID, h.ID, h.Exit)
+		}
+	}
+	for p := range m.houseAt {
+		s, i := m.sectorAt(int(p.X), int(p.Y), int(p.Z))
+		if s == nil || s.Ground[i] == 0 {
+			continue
+		}
+		s.Flags[i] |= FlagHouse | FlagProtection
+	}
+	return nil
+}
+
+func absDiff(a, b uint16) int {
+	if a > b {
+		return int(a - b)
+	}
+	return int(b - a)
+}
+
+// HouseAt returns the house p belongs to, or nil (T5.4).
+func (m *Map) HouseAt(p Pos) *House {
+	if len(m.houseAt) == 0 {
+		return nil
+	}
+	return m.houseAt[p]
+}
+
+// Houses returns every house of the map, island by island in file order.
+func (m *Map) Houses() []*House { return m.houses }
 
 // slowestCost is the lowest terrain cost among the walkable tiles of the map (the A*
 // heuristic must not exceed it), or DefaultGroundSpeed for a map without walkable tiles.

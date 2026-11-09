@@ -8,7 +8,7 @@ import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
 import { TileMap, isWalkable } from "./tiles.ts";
-import { CHUNK_SIZE, formatPos, rectContains, rectsOverlap } from "./types.ts";
+import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
 import type { Island, Position, Rect, World } from "./types.ts";
 
 export interface MapReport {
@@ -316,7 +316,102 @@ class WorldValidator {
       this.checkI18n(textsFile, [i, "text"], t.text);
     }
 
+    this.checkHouses(island, where, needWalkable);
     this.checkReachability(island);
+  }
+
+  /**
+   * Houses (T5.4, docs/03 "Casas"): rects on the island and its floors, no tile in two
+   * houses, doors walkable tiles of the house, the exit a walkable tile outside every
+   * house next to a door, every house tile with ground; nothing else lives inside (NPCs,
+   * spawn centers, texts, portals, no_logout zones). The server (world.NewMap) repeats
+   * the geometric rules.
+   */
+  private checkHouses(
+    island: Island,
+    where: (p: Position) => string | undefined,
+    needWalkable: (f: string, path: PathSegment[], p: Position, what: string) => void,
+  ): void {
+    const dir = this.dirOf(island);
+    const file = `${dir}/houses.yaml`;
+    const owner = new Map<string, string>();
+    for (const [i, h] of island.houses.entries()) {
+      this.checkI18n(file, [i, "name"], h.name);
+      for (const [j, r] of h.rects.entries()) {
+        const corner = { x: r.x + r.w - 1, y: r.y + r.h - 1, z: r.z };
+        const out = where(r) ?? where(corner);
+        if (out) {
+          this.err(file, [i, "rects", j], `house rectangle is ${out}`, r);
+          continue;
+        }
+        let bare = false;
+        let shared: [string, Position] | undefined;
+        for (let y = r.y; y < r.y + r.h; y++)
+          for (let x = r.x; x < r.x + r.w; x++) {
+            const p = { x, y, z: r.z };
+            const k = formatPos(p);
+            const prev = owner.get(k);
+            if (prev === undefined) owner.set(k, h.id);
+            else if (prev !== h.id) shared ??= [prev, p];
+            bare ||= !this.tiles.tileAt(p)?.ground;
+          }
+        if (shared)
+          this.err(
+            file,
+            [i, "rects", j],
+            `house rectangle shares tiles with house "${shared[0]}"`,
+            shared[1],
+          );
+        if (bare) this.err(file, [i, "rects", j], "house rectangle has tiles without ground", r);
+      }
+      for (const [j, d] of h.doors.entries()) {
+        if (!houseContains(h, d))
+          this.err(file, [i, "doors", j], "door is not a tile of the house", d);
+        else needWalkable(file, [i, "doors", j], d, "door");
+      }
+      needWalkable(file, [i, "exit"], h.exit, "house exit");
+      if (
+        !h.doors.some(
+          (d) =>
+            d.z === h.exit.z && Math.max(Math.abs(d.x - h.exit.x), Math.abs(d.y - h.exit.y)) === 1,
+        )
+      )
+        this.err(file, [i, "exit"], "house exit must be next to a door", h.exit);
+    }
+    const inHouse = (p: Position): string | undefined => owner.get(formatPos(p));
+    for (const [i, h] of island.houses.entries()) {
+      const o = inHouse(h.exit);
+      if (o !== undefined) this.err(file, [i, "exit"], `house exit is inside house "${o}"`, h.exit);
+    }
+    if (owner.size === 0) return;
+    const inside = (f: string, path: PathSegment[], p: Position, what: string): void => {
+      const o = inHouse(p);
+      if (o !== undefined) this.err(f, path, `${what} is inside house "${o}"`, p);
+    };
+    for (const [i, n] of island.npcs.entries())
+      inside(`${dir}/npcs.yaml`, [i, "pos"], n.pos, "NPC");
+    for (const [i, s] of island.spawns.entries())
+      inside(`${dir}/spawns.yaml`, [i, "center"], s.center, "spawn center");
+    for (const [i, t] of island.texts.entries())
+      inside(`${dir}/texts.yaml`, [i, "pos"], t.pos, "text");
+    for (const [i, p] of island.portals.entries()) {
+      inside(`${dir}/portals.yaml`, [i, "from"], p.from, "portal entrance");
+      inside(`${dir}/portals.yaml`, [i, "to"], p.to, "portal destination");
+    }
+    if (inHouse(island.meta.temple) !== undefined)
+      this.err(`${dir}/island.yaml`, ["temple"], "temple is inside a house", island.meta.temple);
+    for (const [i, z] of island.zones.entries()) {
+      if (z.type !== "no_logout") continue;
+      const hit = z.floors.some((f) =>
+        z.rects.some((r) => anyIn(r, (x, y) => inHouse({ x, y, z: f }) !== undefined)),
+      );
+      if (hit)
+        this.err(
+          `${dir}/zones.yaml`,
+          [i],
+          `no_logout zone "${z.id}" covers a house (logout is safe inside)`,
+        );
+    }
   }
 
   private checkChunks(island: Island, floors: Set<number>): void {
@@ -401,6 +496,8 @@ class WorldValidator {
         claim("text", t.id, `${dir}/texts.yaml`, [i, "id"]);
       for (const [i, n] of island.npcs.entries())
         claim("placed NPC", n.npc, `${dir}/npcs.yaml`, [i, "npc"]);
+      for (const [i, h] of island.houses.entries())
+        claim("house", h.id, `${dir}/houses.yaml`, [i, "id"]);
     }
   }
 
@@ -523,6 +620,14 @@ class WorldValidator {
           [i, "pos"],
           "NPC cannot be reached on foot from the temple",
           n.pos,
+        );
+    for (const [i, h] of island.houses.entries())
+      if (walkable(h.exit) && !ok(h.exit))
+        this.err(
+          `${dir}/houses.yaml`,
+          [i, "exit"],
+          "house exit cannot be reached on foot from the temple",
+          h.exit,
         );
     this.warnUnreachableAreas(island, reached);
     for (const [i, z] of island.zones.entries()) {

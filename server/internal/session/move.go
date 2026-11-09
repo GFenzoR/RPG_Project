@@ -16,7 +16,9 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 		if p == nil {
 			return
 		}
+		w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
 		w.input(ctx, p, msg)
+		w.cmdPlayer = nil
 	})
 }
 
@@ -68,6 +70,9 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 			return
 		}
 		w.lookAt(p, m.LookAt)
+		if pos, ok := posFromMsg(m.LookAt.GetFrom().GetPos()); ok && pos.Z == p.pos.Z && Sees(p.pos, pos) {
+			w.lookHouse(p, pos) // T5.4: whose house a door belongs to
+		}
 	case *pb.ClientMessage_NpcTalk:
 		w.npcTalk(p, m.NpcTalk.GetCreatureId())
 	case *pb.ClientMessage_DialogChoose:
@@ -100,6 +105,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.tradeCancel(p)
 	case *pb.ClientMessage_MarketCommand:
 		w.marketCommand(ctx, p, m.MarketCommand)
+	case *pb.ClientMessage_HouseCommand:
+		w.houseCommand(ctx, p, m.HouseCommand)
 	case *pb.ClientMessage_Logout:
 		// T5.2: no logout while the PvP lock lasts (attacked a player, or was attacked by
 		// one). Closing the connection still takes the character out (docs/02 "PvP").
@@ -216,6 +223,13 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		d = p.queue[p.qhead]
 		to, _ = p.pos.Step(d) // the new path starts on a free walkable tile
 	}
+	if !w.mayEnter(p, to) {
+		// T5.4: a house door only lets its owner, guests and (if allowed) guild in.
+		p.stopWalk()
+		w.reject(p, dirMsg(d))
+		p.emit(systemMsg(msgHouseNoAccess))
+		return
+	}
 	if ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
 		// T5.2: an attacker cannot hide in a protection zone while its PvP lock lasts.
 		p.stopWalk()
@@ -273,6 +287,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	w.checkContainers(p)
 	w.checkDialog(p)
 	w.checkMarket(p)
+	w.checkHouseView(p)
 
 	// The mover's own client: creatures out of view disappear, the new edge arrives.
 	kept := p.known[:0]
@@ -320,6 +335,7 @@ func (w *World) Teleport(p *Player, to world.Pos) {
 	w.checkContainers(p)
 	w.checkDialog(p)
 	w.checkMarket(p)
+	w.checkHouseView(p)
 	w.sendFullView(p)
 	w.appearToObservers(p)
 }
@@ -358,6 +374,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.checkPvP(ctx) // T5.2: before the guilds, so an ended war is in this tick's update
 	w.checkTrades(ctx)
 	w.checkMarketExpiry(ctx)
+	w.checkHouses(ctx) // T5.4: also flushes this tick's house item changes
 	w.flushGuilds(ctx.Now)
 	w.checkEconomy(ctx.Tick)
 	w.checkIdle(ctx)

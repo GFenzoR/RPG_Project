@@ -128,7 +128,10 @@ type Player struct {
 	// the trade p is in (as requester or partner).
 	market *marketView
 	mkTAT  game.Tick
-	trade  *trade
+	// house is the house window p has open and hsTAT its anti-flood (T5.4).
+	house *houseView
+	hsTAT game.Tick
+	trade *trade
 	// tradeTAT is the trade anti-flood's theoretical arrival tick (GCRA).
 	tradeTAT game.Tick
 
@@ -420,6 +423,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	if w.guildOn {
 		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
 	}
+	p.pos = w.houseLogin(p, p.pos) // T5.4: a house it may no longer enter (after the guild)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
 	w.published.Store(int32(len(w.players)))
@@ -487,6 +491,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.guildLeftWorld(p)               // T5.1: the guild sees it offline
 	w.cancelTrade(p, tradeCancelLeft) // T5.3
 	p.market = nil
+	p.house = nil
 	w.unindex(p)
 	delete(w.byClient, p.client)
 	if w.byChar[p.charID] == p {
@@ -522,6 +527,9 @@ func (w *World) save(s Snapshot) { w.submitJob(Job{Snapshot: s}) }
 // submitJob submits j to persistence in order: while older jobs wait for a retry, j
 // waits behind them (a snapshot must never overtake the transfer before it, T5.3).
 func (w *World) submitJob(j Job) {
+	// T5.4: this tick's house item changes go first, so no later save of a mover writes
+	// its inventory without the house (or the other way round).
+	w.flushHouses()
 	if len(w.retry) > 0 || !w.submitNow(j) {
 		w.retry = append(w.retry, j)
 	}
@@ -546,6 +554,7 @@ func (w *World) retrySaves() {
 // jobs that Config.Save or Config.Transfer could not queue, in order (the caller writes
 // them synchronously). Call it only after the loop stopped.
 func (w *World) SaveAll() []Job {
+	w.flushHouses()
 	w.retrySaves()
 	pending := append([]Job(nil), w.retry...)
 	w.retry = w.retry[:0]

@@ -9,3 +9,9 @@ text.puerto.mine_sign: "Old mine. Beware of the bats, and of what hides further 
 text.bosque.temple_sign: "Temple of the Root, in Raigal. Under its branches no one can harm you."
 text.bosque.dock_sign: "Raigal dock. Tavin Rema takes passengers to Harbour Isle."
 text.bosque.cave_sign: "Someone crossed out the word \"danger\" and wrote above it: \"ours\"."
+# Player houses (T5.4, world/islands/<id>/houses.yaml).
+house.puerto_house_net.name: "Hanging Net House"
+house.puerto_house_oar.name: "Old Oar House"
+house.puerto_house_anchor.name: "Broken Anchor House"
+house.bosque_house_moss.name: "Moss Cabin"
+house.bosque_house_resin.name: "Resin House"

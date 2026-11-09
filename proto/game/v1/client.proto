@@ -44,6 +44,7 @@ message ClientMessage {
     GuildCommand guild_command = 30;
     SetSafeMode set_safe_mode = 31;
     MarketCommand market_command = 32;
+    HouseCommand house_command = 33;
   }
 }
 
@@ -242,6 +243,65 @@ message MarketAccept {
 message MarketWithdraw {}
 
 message MarketClose {}
+
+// HouseCommand is one action of the house window (T5.4). The player opened the window
+// with UseItem on a door of the house (any item of the door tile) and must still be next
+// to a door or inside the house. The server answers every action with a HouseUpdate (and
+// a system message when it was refused).
+message HouseCommand {
+  oneof action {
+    HouseRent rent = 1;
+    HouseExtend extend = 2;
+    HouseLeave leave = 3;
+    HouseGuestAdd guest_add = 4;
+    HouseGuestRemove guest_remove = 5;
+    HouseGuildAccess guild_access = 6;
+    HouseTransferOffer transfer_offer = 7;
+    HouseTransferCancel transfer_cancel = 8;
+    HouseTransferAccept transfer_accept = 9;
+    HouseClose close = 10;
+  }
+}
+
+// HouseRent rents the free house of the window: one period, paid from the backpack.
+message HouseRent {}
+
+// HouseExtend (owner) pays one more period in advance, up to the balance's limit.
+message HouseExtend {}
+
+// HouseLeave (owner) gives the house up: its items go to the owner's market mailbox.
+// Paid rent is not returned.
+message HouseLeave {}
+
+// HouseGuestAdd and HouseGuestRemove (owner) change the guest list, by character name.
+message HouseGuestAdd {
+  string name = 1;
+}
+
+message HouseGuestRemove {
+  string name = 1;
+}
+
+// HouseGuildAccess (owner) lets the members of the owner's guild in, or not.
+message HouseGuildAccess {
+  bool enabled = 1;
+}
+
+// HouseTransferOffer (owner) offers the house to another character for price (smallest
+// coin, may be 0). It waits a few minutes for that character to accept at the door.
+message HouseTransferOffer {
+  string name = 1;
+  uint64 price = 2;
+}
+
+// HouseTransferCancel (owner) withdraws the transfer offer.
+message HouseTransferCancel {}
+
+// HouseTransferAccept takes the house offered to the player: it pays the price (to the
+// owner's mailbox) and becomes the owner.
+message HouseTransferAccept {}
+
+message HouseClose {}
 
 // Ping measures latency. client_time is the client clock in milliseconds and comes
 // back unchanged in Pong.

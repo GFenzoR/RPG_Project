@@ -62,6 +62,10 @@ type Config struct {
 	Status func() Status
 	// Guilds is the public guild list and pages (T5.1); without it /api/guilds answers 404.
 	Guilds PublicGuilds
+	// Houses are the houses of the map and HouseOwners their owners (T5.4); without
+	// HouseOwners /api/houses answers 404.
+	Houses      []HouseInfo
+	HouseOwners PublicHouses
 	// Version is the server build version shown by /api/status.
 	Version           string
 	PublicRateLimit   RateLimit     // per IP; default DefaultPublicRateLimit
@@ -140,8 +144,10 @@ type api struct {
 	guildPages   *pageCache
 	guildMissing *pageCache
 	guildHigh    atomic.Int64
-	querySlots   chan struct{} // semaphore of ranking queries
-	vocations    map[string]bool
+	// T5.4: the house list, in a cache of its own.
+	houseListC *pageCache
+	querySlots chan struct{} // semaphore of ranking queries
+	vocations  map[string]bool
 
 	submitLimiter   *limiter
 	downloadLimiter *limiter
@@ -201,6 +207,7 @@ func newAPI(cfg Config) (*api, error) {
 		cfg: cfg, log: cfg.Logger, vocations: make(map[string]bool),
 		cache:         newPageCache(cfg.HighscoreCacheTTL, keys, cfg.Clock),
 		guildListC:    newPageCache(cfg.HighscoreCacheTTL, 1, cfg.Clock),
+		houseListC:    newPageCache(cfg.HighscoreCacheTTL, 1, cfg.Clock),
 		guildPages:    newPageCache(cfg.HighscoreCacheTTL, guildCacheEntries, cfg.Clock),
 		guildMissing:  newPageCache(cfg.HighscoreCacheTTL, guildMissingEntries, cfg.Clock),
 		querySlots:    make(chan struct{}, maxHighscoreQueries),
@@ -255,6 +262,9 @@ func (a *api) routes() *http.ServeMux {
 	if a.cfg.Guilds != nil {
 		mux.HandleFunc("GET /api/guilds", a.publicLimited(a.guildList))
 		mux.HandleFunc("GET /api/guilds/{id}", a.publicLimited(a.guildPage))
+	}
+	if a.cfg.HouseOwners != nil {
+		mux.HandleFunc("GET /api/houses", a.publicLimited(a.houseList))
 	}
 	if a.cfg.MapSubmissions != nil {
 		a.mapRoutes(mux)
