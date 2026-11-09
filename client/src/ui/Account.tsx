@@ -81,7 +81,7 @@ export function VerifyNotice(props: { t: Translate; lang: string }): JSX.Element
       )}
       {error && (
         <p class="error" role="alert">
-          {t(`error.${error}`)}
+          {t(`error.${error}`) === `error.${error}` ? t("error.unknown") : t(`error.${error}`)}
         </p>
       )}
     </div>

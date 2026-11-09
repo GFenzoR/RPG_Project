@@ -100,7 +100,8 @@ func (s *Store) VerifyEmail(ctx context.Context, tokenHash []byte, now time.Time
 
 // ResetPassword consumes a reset_password token valid at now, sets the new password
 // hash, deletes the account's other reset tokens, revokes every session of the account
-// and audits it, all in one transaction. ErrNotFound if the token is not valid.
+// and audits it, all in one transaction. ErrNotFound if the token is not valid, or its
+// account is disabled or no longer has the address the link was sent to.
 func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHash string, now time.Time) (int64, error) {
 	var id int64
 	err := s.inTx(ctx, func(q *db.Queries) error {
@@ -111,6 +112,14 @@ func (s *Store) ResetPassword(ctx context.Context, tokenHash []byte, passwordHas
 			return notFound(err)
 		}
 		id = row.AccountID
+		// The account must still be enabled and still have the address the link went to.
+		acc, err := q.GetAccountProfile(ctx, id)
+		if err != nil {
+			return err
+		}
+		if acc.DisabledAt.Valid || acc.Email != row.Email {
+			return ErrNotFound // the token is spent: the rollback keeps it, but it cannot work
+		}
 		if err := q.SetPasswordHash(ctx, db.SetPasswordHashParams{
 			PasswordHash: pgtype.Text{String: passwordHash, Valid: true}, ID: id,
 		}); err != nil {

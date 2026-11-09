@@ -307,3 +307,41 @@ func TestQueueGivesUpOnPermanentErrorsAndWhenFull(t *testing.T) {
 		t.Fatalf("err %v after %d sends", err, f.sends)
 	}
 }
+
+// byAddress fails every send to bad@ and records the others.
+type byAddress struct {
+	mu   sync.Mutex
+	good []string
+}
+
+func (b *byAddress) Send(_ context.Context, m Message) error {
+	if m.To == "bad@example.org" {
+		return errors.New("451 try later")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.good = append(b.good, m.To)
+	return nil
+}
+
+func TestQueueRetryDoesNotBlockOthers(t *testing.T) {
+	clk := clock.NewFake(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	m := &byAddress{}
+	q, _ := NewQueue(QueueConfig{Mailer: m, Clock: clk, Backoff: []time.Duration{time.Hour}})
+	results := make(chan Message, 4)
+	q.sent = func(m Message, _ error) { results <- m }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go q.Run(ctx)
+	_ = q.Enqueue(Message{To: "bad@example.org"})
+	_ = q.Enqueue(Message{To: "ana@example.org"})
+	// The good one is delivered while the bad one waits an hour for its retry.
+	if got := <-results; got.To != "ana@example.org" {
+		t.Fatalf("first finished %q", got.To)
+	}
+	clk.BlockUntil(1)
+	clk.Advance(time.Hour)
+	if got := <-results; got.To != "bad@example.org" {
+		t.Fatalf("then %q", got.To)
+	}
+}

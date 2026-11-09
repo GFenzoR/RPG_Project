@@ -117,7 +117,7 @@ func TestVerifyEmailIsSingleUseAndExpires(t *testing.T) {
 
 func TestPasswordResetRevokesEverySession(t *testing.T) {
 	ctx := context.Background()
-	svc, repo, box, clk := newMailService(t, nil)
+	svc, repo, box, _ := newMailService(t, nil)
 	id, _ := svc.Register(ctx, "ana@example.org", "secreto123")
 	repo.SetVerified(id)
 	tok1, _ := svc.Login(ctx, "ana@example.org", "secreto123")
@@ -156,9 +156,23 @@ func TestPasswordResetRevokesEverySession(t *testing.T) {
 		t.Fatal("old password still works")
 	}
 
-	// 1 hour expiry.
+	// A disabled account cannot redeem a reset link.
 	_ = svc.RequestPasswordReset(ctx, "ana@example.org", "")
 	e, _ = box.Last()
+	repo.Disable(id)
+	if err := svc.ResetPassword(ctx, e.Token(), "otraclave99"); !errors.Is(err, auth.ErrInvalidToken) {
+		t.Fatalf("disabled account: %v", err)
+	}
+}
+
+func TestPasswordResetExpires(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, box, clk := newMailService(t, nil)
+	id, _ := svc.Register(ctx, "ana@example.org", "secreto123")
+	repo.SetVerified(id)
+	// 1 hour expiry.
+	_ = svc.RequestPasswordReset(ctx, "ana@example.org", "")
+	e, _ := box.Last()
 	clk.Advance(time.Hour)
 	if err := svc.ResetPassword(ctx, e.Token(), "otraclave99"); !errors.Is(err, auth.ErrInvalidToken) {
 		t.Fatalf("expired: %v", err)

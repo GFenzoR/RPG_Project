@@ -214,6 +214,9 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("mail: %w", err)
 	}
+	if o.requireVerifiedEmail && !ms.delivers {
+		return errors.New("-require-verified-email needs real email delivery (-mail smtp): nobody could verify")
+	}
 	var sender auth.Emailer
 	if ms.mailer != nil {
 		dir := o.i18nDir

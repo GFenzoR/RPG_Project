@@ -25,6 +25,8 @@ const (
 // mailSetup is the account email configuration taken from the environment.
 type mailSetup struct {
 	mailer mail.Mailer // nil = email flows off
+	// delivers: emails really reach the player (SMTP), not only the log.
+	delivers bool
 	// what is a short description for the startup log (never a secret).
 	what string
 }
@@ -73,7 +75,7 @@ func mailFromEnv(mode string, getenv func(string) string, logger *slog.Logger) (
 	if err != nil {
 		return mailSetup{}, err
 	}
-	return mailSetup{mailer: m, what: fmt.Sprintf("smtp %s:%d (%s)", host, port, security)}, nil
+	return mailSetup{mailer: m, delivers: true, what: fmt.Sprintf("smtp %s:%d (%s)", host, port, security)}, nil
 }
 
 // newSender loads the templates and builds the queue of the account emails. The queue

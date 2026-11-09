@@ -105,8 +105,15 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 `POST /api/auth/register` acepta además `lang` (idioma del email de verificación).
 
 ### Verificación de email y reset de contraseña (T2.1, `httpapi/email.go`)
-- Solo existen con SMTP configurado (`GET /api/auth/config` → `{"email": true}`); si no,
-  las rutas de envío responden `404 email_disabled` y el cliente no las ofrece.
+- Solo funcionan con emails activados (SMTP, o `-mail log` en desarrollo;
+  `GET /api/auth/config` → `{"email": true}`); si no, las rutas de envío responden
+  `404 email_disabled` y el cliente no las ofrece. `-require-verified-email` exige SMTP real.
+- "Revoca todas las sesiones" son los tokens guardados (cuenta y juego): nadie puede volver
+  a entrar ni pedir un token de juego. Un personaje que **ya está conectado** sigue hasta
+  que se desconecta (expulsarlo necesita un comando al game loop; pendiente en T2.1 2/2).
+- Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
+- La cola de emails no se traba con una dirección que falla: cada reintento espera fuera
+  de la goroutine de envío (30 s, 2 min, 10 min) y después se descarta.
 - Al registrarse se manda el email de verificación (si falla la cola, el registro igual
   vale: se puede reenviar). Los enlaces son `PUBLIC_URL/verify?lang=xx#token=…` y
   `PUBLIC_URL/reset-password?lang=xx#token=…`; `PUBLIC_URL` es configuración, nunca el

@@ -301,6 +301,9 @@ func (r *Repo) ResetPassword(_ context.Context, hash []byte, passwordHash string
 	if !ok {
 		return 0, store.ErrNotFound
 	}
+	if a := r.accounts[t.AccountID]; a.Disabled || a.Email != t.Email {
+		return 0, store.ErrNotFound
+	}
 	r.accounts[t.AccountID].PasswordHash = passwordHash
 	for k, old := range r.tokens {
 		if old.AccountID == t.AccountID && old.Purpose == store.TokenResetPassword {

@@ -152,7 +152,11 @@ func (s *SMTP) Send(ctx context.Context, m Message) error {
 		return fmt.Errorf("mail: hello: %w", err)
 	}
 	defer func() { _ = c.Close() }()
-	if err := c.Hello("localhost"); err != nil {
+	helo := s.host
+	if helo == "" {
+		helo = "localhost"
+	}
+	if err := c.Hello(helo); err != nil {
 		return classify("hello", err)
 	}
 	if s.cfg.Security == StartTLS {

@@ -27,16 +27,23 @@ var (
 	DefaultBackoff   = []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute}
 )
 
+// queued is a message and how many deliveries it already failed.
+type queued struct {
+	m       Message
+	attempt int
+}
+
 // ErrQueueFull is returned by Enqueue when Size messages are already waiting.
 var ErrQueueFull = errors.New("mail: queue full")
 
 // Queue delivers messages from one goroutine (Run), so a slow or failing SMTP server
-// never blocks an HTTP handler, let alone the game loop. A message that keeps failing
-// is retried len(Backoff) times and then dropped (logged without its body).
+// never blocks an HTTP handler, let alone the game loop. A message that fails waits for
+// its retry outside that goroutine (one address that keeps failing never holds up the
+// others) and is retried len(Backoff) times, then dropped (logged without its body).
 type Queue struct {
 	cfg QueueConfig
 	log *slog.Logger
-	ch  chan Message
+	ch  chan queued
 	// sent is told about each finished message (tests); nil in production.
 	sent func(Message, error)
 }
@@ -55,7 +62,7 @@ func NewQueue(cfg QueueConfig) (*Queue, error) {
 	if cfg.Backoff == nil {
 		cfg.Backoff = DefaultBackoff
 	}
-	return &Queue{cfg: cfg, log: cfg.Logger, ch: make(chan Message, cfg.Size)}, nil
+	return &Queue{cfg: cfg, log: cfg.Logger, ch: make(chan queued, cfg.Size)}, nil
 }
 
 // Enqueue adds m without blocking; ErrQueueFull if the queue is full.
@@ -64,7 +71,7 @@ func (q *Queue) Enqueue(m Message) error {
 		m.Date = q.cfg.Clock.Now()
 	}
 	select {
-	case q.ch <- m:
+	case q.ch <- queued{m: m}:
 		return nil
 	default:
 		q.log.Warn("mail: queue full, message dropped", "subject", m.Subject)
@@ -79,33 +86,39 @@ func (q *Queue) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case m := <-q.ch:
-			err := q.deliver(ctx, m)
-			if q.sent != nil {
-				q.sent(m, err)
+		case it := <-q.ch:
+			if done, err := q.deliver(ctx, it); done && q.sent != nil {
+				q.sent(it.m, err)
 			}
 		}
 	}
 }
 
-func (q *Queue) deliver(ctx context.Context, m Message) error {
-	var err error
-	for attempt := 0; ; attempt++ {
-		err = q.cfg.Mailer.Send(ctx, m)
-		if err == nil {
-			return nil
-		}
-		if errors.Is(err, ErrPermanent) || attempt >= len(q.cfg.Backoff) {
-			break
-		}
-		// The error comes from the SMTP client: no body or link in it.
-		q.log.Warn("mail: send failed, will retry", "subject", m.Subject, "attempt", attempt+1, "err", err)
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("mail: %w", ctx.Err())
-		case <-q.cfg.Clock.After(q.cfg.Backoff[attempt]):
-		}
+// deliver tries it once. On a temporary failure with retries left it schedules the retry
+// and reports done = false.
+func (q *Queue) deliver(ctx context.Context, it queued) (done bool, err error) {
+	err = q.cfg.Mailer.Send(ctx, it.m)
+	if err == nil {
+		return true, nil
 	}
-	q.log.Error("mail: message dropped", "subject", m.Subject, "err", err)
-	return err
+	if !errors.Is(err, ErrPermanent) && it.attempt < len(q.cfg.Backoff) {
+		// The error comes from the SMTP client: no body or link in it.
+		q.log.Warn("mail: send failed, will retry", "subject", it.m.Subject, "attempt", it.attempt+1, "err", err)
+		wait := q.cfg.Clock.After(q.cfg.Backoff[it.attempt])
+		it.attempt++
+		go func() {
+			select {
+			case <-ctx.Done():
+			case <-wait:
+				select {
+				case q.ch <- it:
+				default:
+					q.log.Error("mail: queue full, retry dropped", "subject", it.m.Subject)
+				}
+			}
+		}()
+		return false, err
+	}
+	q.log.Error("mail: message dropped", "subject", it.m.Subject, "err", err)
+	return true, fmt.Errorf("mail: %w", err)
 }
