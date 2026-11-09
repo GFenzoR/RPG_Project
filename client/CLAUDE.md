@@ -337,7 +337,7 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Sitio: `/houses` (`site/Site.tsx` `HousesPage`, `GET /api/houses`), por pueblo.
 - E2E "T5.4" de `e2e/game.spec.ts`: tres guardianes de nivel 15 sembrados con `psql` al
   sur de `puerto_house_net` (si una corrida anterior la dejó alquilada, un gm sembrado la
-  libera con `/houseevict`); el dueño alquila, deja un pescado adentro (la página del dueño
+  libera con `/houseevict`); el dueño alquila, deja su mochila (con un pescado) adentro arrastrándola desde el slot de equipo (la página del dueño
   es más alta para que la mochila no quede bajo el chat), invita, el invitado entra y el
   tercero no; el sitio la muestra alquilada (screenshots 56–62).
 

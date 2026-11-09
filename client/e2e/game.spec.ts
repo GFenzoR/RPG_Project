@@ -2412,22 +2412,19 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await shot(a, "57-house-rented");
   await win.getByRole("button", { name: "Cerrar la ventana de la casa" }).click();
 
-  // The owner walks in and drops the fish on the floor of the house.
+  // The owner walks in and drops its backpack (with the fish and the coins) on the floor of
+  // the house: the equipment slot is always in view (a container window may sit under the
+  // chat on a short screen).
   await step(a, "ArrowUp", 3153, 6401);
   await step(a, "ArrowUp", 3153, 6400);
   await step(a, "ArrowUp", 3153, 6399);
-  const inventory = a.getByTestId("inventory");
-  await inventory.getByTestId("slot-backpack").locator("[data-item]").click({ button: "right" });
-  const fish = inventory.locator('[data-container-item="backpack"] [data-item="raw_fish"]');
-  await expect(fish).toBeVisible();
-  const fishId = await a.evaluate(() => window.__rpgClient?.itemNumber("raw_fish"));
-  const fishOnFloor = (): Promise<number | undefined> =>
+  const slot = a.getByTestId("inventory").getByTestId("slot-backpack");
+  const bagId = await a.evaluate(() => window.__rpgClient?.itemNumber("backpack"));
+  const onFloor = (): Promise<number | undefined> =>
     a.evaluate(() => window.__rpgClient?.tile(3154, 6398, 7)?.at(-1));
-  // The side panel can still change height (log lines, panels): measure right before each
-  // try, and try again if the drop did not land.
-  for (let attempt = 0; attempt < 3 && (await fishOnFloor()) !== fishId; attempt++) {
-    await fish.scrollIntoViewIfNeeded();
-    const from = await fish.boundingBox();
+  for (let attempt = 0; attempt < 3 && (await onFloor()) !== bagId; attempt++) {
+    await slot.scrollIntoViewIfNeeded();
+    const from = await slot.boundingBox();
     const to = await a.evaluate(() => window.__rpgClient?.tileToClient(3154, 6398));
     if (!from || !to) throw new Error("no drag points");
     await a.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
@@ -2435,11 +2432,12 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
     await a.mouse.move(to.x, to.y, { steps: 8 });
     await a.mouse.up();
     await expect
-      .poll(fishOnFloor, { timeout: 2000 })
-      .toBe(fishId)
+      .poll(onFloor, { timeout: 2000 })
+      .toBe(bagId)
       .catch(() => undefined);
   }
-  expect(await fishOnFloor()).toBe(fishId);
+  expect(await onFloor()).toBe(bagId);
+  await expect(slot.locator("[data-item]")).toHaveCount(0);
   // Written with the owner's inventory, in one transfer.
   await expect
     .poll(() => psql(`SELECT count(*) FROM house_items WHERE house_id = '${house}'`))
