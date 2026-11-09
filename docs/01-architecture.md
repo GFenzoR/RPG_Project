@@ -19,9 +19,9 @@ Caddy (`deploy/caddy-routes.caddy`) reparte una sola origin:
 
 | Ruta | Destino |
 |---|---|
-| `/api/*`, `/ws`, `/healthz` | gameserver: API HTTP (cuentas, personajes, `play`, y los públicos `status`, `highscores` y `guilds`; docs/05), WebSocket del juego y health |
+| `/api/*`, `/ws`, `/healthz` | gameserver: API HTTP (cuentas, personajes, `play`, y los públicos `status`, `highscores`, `guilds` y `houses`; docs/05), WebSocket del juego y health |
 | `/play`, `/play/*` | página del juego del build del cliente (`client/play/index.html`) |
-| todo lo demás | sitio público (`client/index.html`): landing en `/`, `/highscores`, `/guilds[/<id>]` (T5.1), `/news` y `/news/<fecha>-<slug>`; primero los archivos estáticos del build (`/assets`, `/atlas`, `/audio`) |
+| todo lo demás | sitio público (`client/index.html`): landing en `/`, `/highscores`, `/guilds[/<id>]` (T5.1), `/houses` (T5.4), `/news` y `/news/<fecha>-<slug>`; primero los archivos estáticos del build (`/assets`, `/atlas`, `/audio`) |
 
 El cliente es un build multipágina de Vite (`client/`): las dos páginas comparten i18n,
 estilos y el selector de idioma. El atlas y los sonidos se piden desde la raíz del sitio,
@@ -82,7 +82,7 @@ for each tick (50 ms):
 | Qué | Dónde | Cuándo |
 |---|---|---|
 | Cuentas, personajes, inventario, skills, quests | Postgres | Al salir + autoguardado cada 5 min escalonado |
-| Estado del mundo (items en el suelo) | Memoria | Se pierde al reiniciar (como Tibia en sus inicios); casas en el futuro sí persisten |
+| Estado del mundo (items en el suelo) | Memoria | Se pierde al reiniciar (como Tibia en sus inicios), salvo el suelo de las casas |
 | Log de economía (T4.1: creación y destrucción de oro e items por fuente) | Postgres, `economy_log` append-only | Asíncrono por lotes (COPY), goroutine propia |
 | Reportes de jugadores (T4.1) | Postgres, `player_reports` | Asíncrono, goroutine de admin |
 | Mapa y contenido | Repo git (world/, data/) | Se despliegan con cada versión |
@@ -90,6 +90,7 @@ for each tick (50 ms):
 | Gremios: `guilds`, `guild_members`, `guild_invites` (T5.1) | Postgres; el loop tiene todos en memoria | Se cargan una vez al arrancar; cada cambio, asíncrono y en orden por la goroutine de admin |
 | Guerras de gremios: `guild_wars` (T5.2) | Postgres; el loop tiene las abiertas en memoria | Como los gremios: se cargan con ellos y cada cambio va en orden por la goroutine de admin |
 | Marca PvP, contador y muertes injustificadas (T5.2): `characters.skull`, `skull_until`, `pvp_kills`, `pvp_unjust_kills` | Postgres | Con el snapshot del personaje (la misma transacción) |
+| Casas (T5.4): `house_owners`, `house_guests`, `house_items` | Postgres; el loop tiene dueños, invitados y los items del suelo de cada casa en memoria | Se cargan una vez al arrancar, como el mercado; cada cambio es un `Transfer` del Saver con `HouseOp`, en la misma transacción que los snapshots de quienes movieron items u oro |
 | Mercado (T5.3): `market_offers`, `market_mail_items`, `market_mail_gold`, `market_history`, `market_id_high` | Postgres; el loop tiene ofertas, buzones e historial reciente en memoria | Se cargan una vez al arrancar; cada cambio es un `Transfer` del Saver, en la misma transacción que los snapshots de los personajes que tocó |
 
 **Gremios (T5.1).** El game loop es el dueño de los gremios, como del resto del mundo:
@@ -121,6 +122,39 @@ segundo recorre solo a los jugadores con marca y las guerras abiertas (como much
 `max_wars` por gremio), nunca a todos los jugadores. Un jugador que pierde la conexión con
 el bloqueo PvP activo sigue en el mundo (link-dead: su lote se descarta en el flush) hasta
 que el bloqueo vence; el mismo barrido lo saca y guarda su snapshot final.
+
+**Casas (T5.4).** Las casas son datos del mapa (`world.House` en `world.bin` v4); quién
+alquila cada una, sus invitados y los items de su suelo los tiene el loop, que los carga
+una vez antes de arrancar (`app` → `HouseStore.LoadHouses` → `session.Config.Houses`) y es
+su único dueño. Todo cambio sale como `Transfer` (ver "Transacciones") con `HouseOp`:
+- alquilar, pagar, dejar, transferir, invitados y gremio: en el tick del comando, con el
+  snapshot del personaje que pagó (si el inventario cambió) y, si corresponde, las filas
+  del buzón del mercado (precio de una transferencia, items de una casa liberada);
+- los **items del suelo**: todo cambio de una casilla de casa (`tileChanged`) o de un
+  contenedor apoyado en ella (`containerChanged`) marca la casa como sucia y anota al
+  jugador cuyo comando la cambió (`World.cmdPlayer`). Las casas sucias de un tick salen en
+  **un solo transfer** (`flushHouses`) con la lista entera de items de cada una (se
+  reemplaza en la base: idempotente) y los snapshots de esos jugadores. Se vacía al final
+  de cada comando (`Input`), antes de numerar cualquier otro transfer (`transfer`,
+  `houseTransfer`), antes de tomar cualquier snapshot (`snapshot`), al liberar o
+  transferir una casa, al sacar a un jugador del mundo y al final del tick: los ids de los
+  transfers crecen en el orden en que se encolan, un lote nunca lleva un snapshot a mitad
+  de otra operación y un autoguardado nunca escribe un inventario sin la casa que lo
+  explica. `SaveTransfer` acepta un id igual al último escrito como reintento (no aplica
+  nada) y rechaza uno menor (`ErrTransferOrder`, permanente): un error de orden activa la
+  falla segura en vez de perder un transfer en silencio.
+  Así mover un item del inventario al suelo de la casa, o al revés, no duplica ni pierde
+  nada si el servidor se cae: o están los dos lados nuevos o los dos viejos.
+- Cobro del alquiler: un barrido por segundo de a lo sumo 32 casas (round robin) con el
+  reloj inyectable; renovar descuenta el oro del buzón (`MarketGoldAdd` negativo, con
+  guarda en la base) y liberar mueve los items al buzón (`MarketMailAdd`, aplanados: cada
+  item en su fila) en el mismo transfer que borra al dueño. Nada de esto corre en la base desde el loop.
+- La base es la red de seguridad: `house_owners` tiene una fila por casa (PK), un dueño
+  por personaje y una casa por cuenta (UNIQUE), y cada cambio de dueño, pago o acceso
+  lleva el dueño que el loop cree (`... AND character_id = $old`): si no coincide, el
+  transfer falla entero (`ErrHouseConflict`, permanente) y rige la falla segura.
+- Falla segura: con `w.readOnly` las casas no aceptan acciones, movimientos ni usos de
+  items, `flushHouses` no escribe nada y el barrido se detiene. Los cadáveres que caen en una casa no se guardan (se pudren).
 
 ### Transacciones (T5.3)
 El inventario vive en el loop y se guarda con el snapshot de cada personaje. Todo lo que

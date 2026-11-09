@@ -24,6 +24,10 @@ import (
 // change), never a partial write.
 var ErrMarketConflict = errors.New("store: market change conflicts with the database")
 
+// ErrTransferOrder reports a transfer whose id is lower than the last one written (not a
+// retry of it): the queue lost its order. Permanent.
+var ErrTransferOrder = errors.New("store: transfer older than the last one written")
+
 // MarketOpKind is the kind of a MarketOp (same values as session.MarketOpKind).
 type MarketOpKind uint8
 
@@ -106,14 +110,18 @@ type MarketOp struct {
 // then the market changes in order, then the id high-water marks. ID grows with every
 // transfer (also across restarts: LoadMarket gives the last one written).
 type Transfer struct {
-	ID                  int64
-	Characters          []CharacterState
+	ID         int64
+	Characters []CharacterState
+	// Houses are the house changes (T5.4), applied after the snapshots and before the
+	// market changes.
+	Houses              []HouseOp
 	Market              []MarketOp
 	OfferHigh, MailHigh int64
 }
 
 // transferHook, when set (tests), runs inside the transaction after step n (0: after
-// the snapshots, i: after market change i); an error aborts the transaction.
+// the snapshots and the house changes, i: after market change i); an error aborts the
+// transaction.
 var transferHook func(step int) error
 
 // SaveTransfer writes t in one transaction: all of it or nothing.
@@ -126,11 +134,25 @@ func (s *Store) SaveTransfer(ctx context.Context, t Transfer) error {
 			return fmt.Errorf("claim transfer %d: %w", t.ID, err)
 		}
 		if n == 0 {
-			return nil
+			high, err := q.LoadMarketHigh(ctx)
+			if err != nil {
+				return fmt.Errorf("transfer ids: %w", err)
+			}
+			if high.TransferHigh == t.ID {
+				return nil // the retry of the last transfer written: already applied
+			}
+			// An older id after a newer one is a bug in the order of the queue: refuse it
+			// (permanent, so the fail-safe stops what depends on it) instead of dropping it.
+			return fmt.Errorf("transfer %d after %d: %w", t.ID, high.TransferHigh, ErrTransferOrder)
 		}
 		for _, c := range t.Characters {
 			if err := saveCharacterState(ctx, q, c); err != nil {
 				return err
+			}
+		}
+		for i, op := range t.Houses {
+			if err := applyHouseOp(ctx, q, op); err != nil {
+				return fmt.Errorf("house change %d (kind %d, %s): %w", i, op.Kind, op.House, err)
 			}
 		}
 		if transferHook != nil {

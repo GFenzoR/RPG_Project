@@ -173,3 +173,29 @@ func Join(t testing.TB, ids []string, maps ...*world.Map) *world.Map {
 	}
 	return m
 }
+
+// WithHouses returns m (one island, built by this package) with houses on its island
+// (T5.4): world.NewMap marks their tiles with FlagHouse and FlagProtection.
+func WithHouses(t testing.TB, m *world.Map, houses ...world.House) *world.Map {
+	t.Helper()
+	src := m.Islands()[0]
+	is := *src
+	is.Houses = append([]world.House(nil), houses...)
+	var list []*world.Sector
+	r := is.Rect
+	for _, z := range is.Floors {
+		for y := r.Y; y < r.Y+r.H; y += world.SectorSize {
+			for x := r.X; x < r.X+r.W; x += world.SectorSize {
+				if s := m.SectorAt(world.Pos{X: uint16(x), Y: uint16(y), Z: z}); s != nil {
+					c := *s
+					list = append(list, &c)
+				}
+			}
+		}
+	}
+	out, err := world.NewMap([]*world.Island{&is}, map[string][]*world.Sector{is.ID: list}, Speeds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}

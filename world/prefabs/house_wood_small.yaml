@@ -1,0 +1,12 @@
+id: house_wood_small
+notes: "Small wooden house (5x4 inside) with a one-tile door in the middle of the south wall. Player house of T5.4: declare it in houses.yaml."
+legend:
+  - { char: "W", ground: wooden_floor, items: [wooden_wall] }
+  - { char: "_", ground: wooden_floor, items: [] }
+rows:
+  - "WWWWWWW"
+  - "W_____W"
+  - "W_____W"
+  - "W_____W"
+  - "W_____W"
+  - "WWW_WWW"

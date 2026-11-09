@@ -423,9 +423,12 @@ func (w *World) removeCorpse(pos world.Pos, c *Corpse) {
 
 // tileChanged sends the full stack of pos to everyone who sees it.
 func (w *World) tileChanged(pos world.Pos) {
-	ground, _, ok := w.m.Tile(pos)
+	ground, flags, ok := w.m.Tile(pos)
 	if !ok {
 		return
+	}
+	if flags&world.FlagHouse != 0 {
+		w.houseTouched(pos) // T5.4: its items are written with the house
 	}
 	t := &pb.Tile{Items: []*pb.ItemStack{{ItemId: uint32(ground)}}}
 	for _, id := range w.m.Stack(pos) {

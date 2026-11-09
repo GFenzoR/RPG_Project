@@ -6,6 +6,7 @@ export type Route =
   | { page: "highscores" }
   | { page: "guilds" }
   | { page: "guild"; id: number }
+  | { page: "houses" }
   | { page: "news" }
   | { page: "post"; slug: string }
   | { page: "maps_submit" }
@@ -26,6 +27,7 @@ export function parseRoute(pathname: string): Route {
   if (path === "/highscores") return { page: "highscores" };
   if (path === "/news") return { page: "news" };
   if (path === "/guilds") return { page: "guilds" };
+  if (path === "/houses") return { page: "houses" };
   const g = /^\/guilds\/([1-9][0-9]{0,15})$/.exec(path);
   if (g?.[1]) return { page: "guild", id: Number(g[1]) };
   const m = /^\/news\/([a-z0-9-]+)$/.exec(path);

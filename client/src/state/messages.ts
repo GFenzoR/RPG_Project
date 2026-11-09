@@ -51,13 +51,15 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
                 ? t(`quest.${p.value.value}.name`)
                 : p.name === "island"
                   ? t(`island.${p.value.value}.name`)
-                  : p.name === "vocation"
-                    ? t(`vocation.${p.value.value}.name`)
-                    : p.name === "rank"
-                      ? t(`client.guild.rank.${p.value.value}`)
-                      : p.name === "skull"
-                        ? t(`client.skull.${p.value.value}`)
-                        : t(`monster.${p.value.value}.name`);
+                  : p.name === "house"
+                    ? t(`house.${p.value.value}.name`)
+                    : p.name === "vocation"
+                      ? t(`vocation.${p.value.value}.name`)
+                      : p.name === "rank"
+                        ? t(`client.guild.rank.${p.value.value}`)
+                        : p.name === "skull"
+                          ? t(`client.skull.${p.value.value}`)
+                          : t(`monster.${p.value.value}.name`);
         break;
       case "item": {
         // By its own name too: one item is {item} (gather.got, shop.bought), a list of

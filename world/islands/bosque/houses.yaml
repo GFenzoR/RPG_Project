@@ -1,0 +1,22 @@
+- id: bosque_house_moss
+  name: house.bosque_house_moss.name
+  rent: 500
+  rects:
+    - { x: 4157, y: 6088, z: 7, w: 5, h: 4 }
+    - { x: 4159, y: 6092, z: 7, w: 1, h: 1 }
+  doors:
+    - { x: 4159, y: 6092, z: 7 }
+  exit: { x: 4159, y: 6093, z: 7 }
+  notes: "Small cabin on the beach north of Raigal (prefab house_wood_small, T5.4)."
+
+- id: bosque_house_resin
+  name: house.bosque_house_resin.name
+  rent: 750
+  rects:
+    - { x: 4166, y: 6087, z: 7, w: 6, h: 5 }
+    - { x: 4168, y: 6092, z: 7, w: 2, h: 1 }
+  doors:
+    - { x: 4168, y: 6092, z: 7 }
+    - { x: 4169, y: 6092, z: 7 }
+  exit: { x: 4168, y: 6093, z: 7 }
+  notes: "House on the beach north of Raigal (prefab house_wood_medium, T5.4)."

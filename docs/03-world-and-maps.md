@@ -23,6 +23,7 @@ world/
       zones.yaml                 zonas: protección, no-logout, pvp, no_pvp, community-plot
       portals.yaml               teletransportes y conexiones especiales
       texts.yaml                 carteles y libros (claves i18n)
+      houses.yaml                casas de jugadores (T5.4)
   prefabs/
     small_dock.yaml              piezas reutilizables para la op `stamp`
   patches/                       map patches generados (ignorado por git)
@@ -150,6 +151,47 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   to: { x: 3289, y: 6402, z: 7 }
 ```
 
+`houses.yaml` (T5.4, reglas de juego en `02-game-design.md` "Casas"):
+```yaml
+- id: puerto_house_net
+  name: house.puerto_house_net.name
+  rent: 800
+  rects:
+    - { x: 3151, y: 6396, z: 7, w: 6, h: 5 }
+    - { x: 3153, y: 6401, z: 7, w: 2, h: 1 }
+  doors:
+    - { x: 3153, y: 6401, z: 7 }
+    - { x: 3154, y: 6401, z: 7 }
+  exit: { x: 3153, y: 6402, z: 7 }
+```
+- `id` único en todo el mundo (es la clave de las tablas `house_owners`, `house_guests` y
+  `house_items`: **no se cambia** una vez publicado). `name` es siempre
+  `house.<id>.name` (los mensajes del servidor nombran la casa por su id). Una casa quitada o renombrada deja
+  sus filas en la base: el servidor ignora la casa con un aviso, la cuenta de su dueño no
+  puede alquilar otra hasta que un operador borre esa fila, y los items guardados que ya
+  no caen en la casa (rects achicados) se descartan al arrancar y desaparecen de la base
+  con el próximo cambio de esa casa: antes de achicar una casa ocupada, libérala con
+  `/houseevict`. `name` es una clave i18n de
+  `i18n/*/world.yaml` (`house.<id>.name`). El pueblo de la casa es su isla.
+- `rent`: precio de un período (`balance.yaml houses.period_days`) en monedas de cobre.
+- `rects`: las casillas de la casa, cada rect en un piso (`z`), de 1 a 255 de lado, hasta
+  16. Las paredes no van: solo lo caminable de adentro y las puertas. El tamaño de la casa
+  es la cantidad de casillas.
+- `doors`: casillas de la casa por donde se entra (1 a 8). La ventana de la casa se abre
+  usando una puerta; mirarla dice de quién es. `exit`: casilla fuera de toda casa, junto
+  (a una casilla, mismo piso) a una puerta: ahí va quien no puede quedarse adentro.
+- Validación (`mapcli validate`, editor y CI): rects dentro de la isla y en sus pisos,
+  todas sus casillas con suelo, ninguna casilla en dos casas ni en dos rects de la misma, puertas caminables dentro de
+  la casa, salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
+  el templo, nombre con texto en todos los idiomas, id único en el mundo. Adentro de una
+  casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y
+  ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro).
+- **Solo maintainers:** `houses.yaml` no es parte de los map patches (docs/04): un PR que
+  lo cambia queda fuera de las parcelas de comunidad. Se edita como YAML (el editor lo
+  muestra, sin herramienta de edición) con `mapcli fmt` para el formato canónico. Para
+  construir una casa: `stamp` de los prefabs `house_wood_small` / `house_wood_medium` y
+  luego su entrada en `houses.yaml`.
+
 ## Prefabs (`world/prefabs/<id>.yaml`)
 Piezas de mapa reutilizables (muelle, casa) que la op `stamp` copia con su esquina superior
 izquierda en `pos`, sobre un solo piso. `rows` es un dibujo, un carácter por casilla, que
@@ -210,6 +252,7 @@ Se calculan al compilar, uno por casilla (implementación: `server/internal/worl
 | `blocks_movement` | No hay suelo (`-1`), el suelo no tiene `ground.walkable: true`, o algún item de la pila tiene `blocks_movement: true`, o es `kind: wall` y **no** declara `blocks_movement: false`. |
 | `blocks_sight` | Algún item **de la pila** tiene `blocks_sight: true`, o es `kind: wall` y **no** declara `blocks_sight: false`. El suelo nunca bloquea la vista. Lo usan la línea de visión y los proyectiles. |
 | `protection`, `no_logout`, `pvp`, `no_pvp` | La casilla tiene suelo y cae en un rect de una zona de ese tipo de `zones.yaml`, en uno de sus `floors`. |
+| `house` (y `protection`) | La casilla tiene suelo y es de una casa de `houses.yaml` (T5.4). Lo calcula `world.NewMap` al cargar a partir de las casas, también en tests con `worldtest.WithHouses`. |
 
 `community_plot` no marca ningún flag: solo le importa al editor y a los patches.
 La regla de `blocks_movement` es la misma que `isWalkable` de `packages/map-format`:
@@ -223,13 +266,13 @@ no de render: el cliente sigue mostrando toda la ventana de 15x11 del piso actua
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
 
-### Formato de `world.bin` (versión 3)
+### Formato de `world.bin` (versión 4)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
 mismas fuentes producen siempre los mismos bytes.
 
 ```text
 magic        8 bytes "RPGWORLD"
-version      u16 = 3
+version      u16 = 4
 speedCount   u32, luego speedCount × u16
              costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
 islandCount  u16, luego por isla (en el orden de world.yaml):
@@ -243,17 +286,26 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
     id u8 largo + bytes (data/monsters), count u16
   npcs       u16 cantidad, luego por NPC (en el orden de npcs.yaml):
     id u8 largo + bytes (data/npcs), x u16, y u16, z u8
+  houses     u16 cantidad, luego por casa (en el orden de houses.yaml, T5.4):
+    id u8 largo + bytes, name u8 largo + bytes (clave i18n), rent u32,
+    rects u8 cantidad × (x u16, y u16, z u8, w u8, h u8),
+    doors u8 cantidad × (x u16, y u16, z u8), exit x u16, y u16, z u8
   sectors    u32 cantidad, luego por sector, ordenados por z, cy, cx:
     z u8, cx u16, cy u16
     ground   1024 × u16   ID numérico del suelo, fila por fila; 0 = sin tile
     flags    1024 × u8    bit 0 blocks_movement, 1 blocks_sight, 2 protection,
-                          3 no_logout, 4 pvp, 5 no_pvp
+                          3 no_logout, 4 pvp, 5 no_pvp, 6 house
     stacks   u16 cantidad, luego por pila (índice ascendente):
              u16 índice (y*32+x), u8 n, n × u16 IDs de abajo hacia arriba
 crc32        u32 (IEEE) de todos los bytes anteriores
 ```
 
-- Historial: la versión 3 (T1.10) agregó `npcs` por isla: `mapcompile` comprueba que cada
+- Historial: la versión 4 (T5.4) agregó `houses` por isla y el bit 6 (`house`) de
+  `flags`: `NewMap` rechaza ids repetidos en el mundo, rects fuera de la isla o en pisos
+  que no lista, casillas en dos casas, puertas fuera de su casa y salidas dentro de una
+  casa, fuera de la isla o lejos de toda puerta, y marca las casillas con `house` y
+  `protection`.
+- La versión 3 (T1.10) agregó `npcs` por isla: `mapcompile` comprueba que cada
   NPC tenga su `data/npcs/<id>.yaml` y `Decode`/`NewMap` rechazan un NPC fuera de su isla,
   en un piso que no lista o colocado dos veces en el mundo. El servidor los pone en su
   casilla al arrancar (no caminan) y bloquean el paso como cualquier criatura.
@@ -324,6 +376,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377). Las
   estaciones son items comunes del mapa (`place`): lo que las hace estación es que una
   receta de `data/recipes.yaml` las nombre.
+  Casas (T5.4): las casas de madera del pueblo, `puerto_house_net` (3150–3157,
+  6395–6401) y `puerto_house_oar` (3160–3167, 6395–6401), con puerta al sur, y la más
+  grande, `puerto_house_anchor` (3180–3188, 6408–6414), con puerta al norte.
   Muelle del capitán de puerto (`harbor_master`, 3201,6433): tablones 3200–3202,
   6429–6434; las rutas salen de 3201,6434 (`puerto_to_bosque`) y la vuelta desde el Bosque
   llega a 3201,6432.
@@ -341,6 +396,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   templo y la plaza; `no_logout` en el muelle. Parcela de comunidad
   `bosque_north_cove_plot` (4168,6032 24x16, piso 7): la caleta norte y su islote.
   Sin depósito (el item todavía no existe).
+  Casas (T5.4): `bosque_house_moss` (prefab `house_wood_small` en 4156,6087) y
+  `bosque_house_resin` (prefab `house_wood_medium` en 4165,6086), en la playa al norte del
+  pueblo, con la puerta al sur.
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:

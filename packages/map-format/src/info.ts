@@ -1,5 +1,5 @@
 // Summaries for `mapcli info` and the MCP `map_info` tool.
-import { CHUNK_SIZE } from "./types.ts";
+import { CHUNK_SIZE, houseSize } from "./types.ts";
 import type { Island, World } from "./types.ts";
 
 export interface IslandInfo {
@@ -21,6 +21,8 @@ export interface IslandInfo {
     to: Island["meta"]["temple"];
   }[];
   texts: number;
+  /** T5.4: houses with their size in tiles and rent. */
+  houses: { id: string; size: number; rent: number; exit: Island["meta"]["temple"] }[];
 }
 
 export function islandInfo(island: Island): IslandInfo {
@@ -49,6 +51,12 @@ export function islandInfo(island: Island): IslandInfo {
     zones: island.zones.map((z) => ({ id: z.id, type: z.type })),
     portals: island.portals.map((p) => ({ id: p.id, kind: p.kind, from: p.from, to: p.to })),
     texts: island.texts.length,
+    houses: island.houses.map((h) => ({
+      id: h.id,
+      size: houseSize(h),
+      rent: h.rent,
+      exit: h.exit,
+    })),
   };
 }
 

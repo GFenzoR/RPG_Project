@@ -36,6 +36,8 @@ import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
+import { houseFrom } from "./house.ts";
+import type { HouseView } from "./house.ts";
 import { marketFrom, tradeFrom } from "./market.ts";
 import type { MarketView, TradeView } from "./market.ts";
 import type { TutorialView } from "./tutorial.ts";
@@ -312,6 +314,8 @@ export class WorldState implements TileSource {
   trade: TradeView | undefined;
   /** The market window (T5.3), until closed or the player walks away from the board. */
   market: MarketView | undefined;
+  /** The house window (T5.4), until closed or the player walks away from the door. */
+  house: HouseView | undefined;
   /** Equipped items by slot (Inventory). */
   inventory = new Map<EquipmentSlot, ItemView>();
   /** Open container windows, oldest first. */
@@ -557,6 +561,9 @@ export class WorldState implements TileSource {
       }
       case "marketUpdate":
         this.market = marketFrom(msg.value);
+        break;
+      case "houseUpdate":
+        this.house = houseFrom(msg.value);
         break;
       case "shopOpen": {
         const v = msg.value;

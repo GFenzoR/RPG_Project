@@ -448,6 +448,27 @@ pvp:
   `client.guild.war*` (cliente) en `i18n/*/client.yaml`.
 - Zonas `pvp` y `no_pvp` del mapa: `03-world-and-maps.md`.
 
+## Casas (T5.4)
+`balance.yaml → houses` (`balance.schema.json`; sin bloque o `enabled: false`, apagadas;
+necesitan el mercado, que cobra el alquiler y recibe los items). Reglas: `02-game-design.md`,
+"Casas". Las casas mismas (casillas, puertas, alquiler) son datos del mapa:
+`world/islands/<isla>/houses.yaml` (`03-world-and-maps.md`), y sus nombres van en
+`i18n/*/world.yaml` (`house.<id>.name`). Los números son propios.
+```yaml
+houses:
+  enabled: true
+  min_level: 12             # para alquilar o recibir una casa
+  period_days: 7            # período de alquiler, pagado por adelantado (1..90)
+  max_periods: 4            # períodos pagados por delante (1..12)
+  max_guests: 20            # nombres en la lista de invitados (0..100)
+  items_per_tile: 3         # instancias de items por casilla de la casa (1..50)
+  transfer_minutes: 10      # una oferta de transferencia espera (1..120)
+  action_burst: 8           # anti-flood de acciones y movimientos de items en casas
+  action_refill_ms: 300
+```
+- Textos: `house.*` y `gm.house_*` (servidor), `client.house.*` (ventana) en
+  `i18n/*/client.yaml`; `site.houses.*` en `site.yaml`.
+
 ## Mercado e intercambio (T5.3)
 `balance.yaml → market` y `→ trade` (`balance.schema.json`; obligatorios en los datos del
 juego, opcionales para el servidor: sin bloque o `enabled: false`, apagados). Reglas:

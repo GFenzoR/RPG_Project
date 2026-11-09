@@ -822,6 +822,33 @@
         "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
       }
     },
+    "houses": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Player houses (T5.4, docs/02 \"Casas\"). Absent or enabled: false turns them off; they need the market. The houses are map data (houses.yaml).",
+      "required": [
+        "enabled",
+        "min_level",
+        "period_days",
+        "max_periods",
+        "max_guests",
+        "items_per_tile",
+        "transfer_minutes",
+        "action_burst",
+        "action_refill_ms"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "min_level": { "type": "integer", "minimum": 1 },
+        "period_days": { "type": "integer", "minimum": 1, "maximum": 90 },
+        "max_periods": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "max_guests": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "items_per_tile": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "transfer_minutes": { "type": "integer", "minimum": 1, "maximum": 120 },
+        "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+      }
+    },
     "pvp": {
       "type": "object",
       "additionalProperties": false,

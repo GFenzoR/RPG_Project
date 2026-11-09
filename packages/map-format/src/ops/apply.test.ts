@@ -264,6 +264,7 @@ describe("islands that share a chunk", () => {
       zones: [],
       portals: [],
       texts: [],
+      houses: [],
     });
     return {
       meta: { format: 1, islands: [] },

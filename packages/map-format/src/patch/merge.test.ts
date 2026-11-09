@@ -201,6 +201,7 @@ describe("diffWorlds and sync ops", () => {
     zones: [],
     portals: [],
     texts: [],
+    houses: [],
   });
   const world = (isl: Island): World => ({
     meta: { format: 1, islands: [] },

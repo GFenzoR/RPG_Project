@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file game/v1/client.proto.
  */
 export const file_game_v1_client: GenFile = /*@__PURE__*/
-  fileDesc("ChRnYW1lL3YxL2NsaWVudC5wcm90bxIHZ2FtZS52MSLQCgoNQ2xpZW50TWVzc2FnZRIfCgVoZWxsbxgBIAEoCzIOLmdhbWUudjEuSGVsbG9IABIdCgR3YWxrGAIgASgLMg0uZ2FtZS52MS5XYWxrSAASJgoJd2Fsa19wYXRoGAMgASgLMhEuZ2FtZS52MS5XYWxrUGF0aEgAEiYKCXN0b3Bfd2FsaxgEIAEoCzIRLmdhbWUudjEuU3RvcFdhbGtIABIdCgR0dXJuGAUgASgLMg0uZ2FtZS52MS5UdXJuSAASKAoKc2V0X3RhcmdldBgGIAEoCzISLmdhbWUudjEuU2V0VGFyZ2V0SAASLwoOc2V0X2ZpZ2h0X21vZGUYByABKAsyFS5nYW1lLnYxLlNldEZpZ2h0TW9kZUgAEigKCmNhc3Rfc3BlbGwYCCABKAsyEi5nYW1lLnYxLkNhc3RTcGVsbEgAEiQKCHVzZV9pdGVtGAkgASgLMhAuZ2FtZS52MS5Vc2VJdGVtSAASKQoLdXNlX2l0ZW1fb24YCiABKAsyEi5nYW1lLnYxLlVzZUl0ZW1PbkgAEiYKCW1vdmVfaXRlbRgLIAEoCzIRLmdhbWUudjEuTW92ZUl0ZW1IABIiCgdsb29rX2F0GAwgASgLMg8uZ2FtZS52MS5Mb29rQXRIABIbCgNzYXkYDSABKAsyDC5nYW1lLnYxLlNheUgAEi4KDWRpYWxvZ19jaG9vc2UYDiABKAsyFS5nYW1lLnYxLkRpYWxvZ0Nob29zZUgAEi4KDXRyYWRlX3JlcXVlc3QYDyABKAsyFS5nYW1lLnYxLlRyYWRlUmVxdWVzdEgAEioKC3RyYWRlX29mZmVyGBAgASgLMhMuZ2FtZS52MS5UcmFkZU9mZmVySAASLAoMdHJhZGVfYWNjZXB0GBEgASgLMhQuZ2FtZS52MS5UcmFkZUFjY2VwdEgAEiwKDHRyYWRlX2NhbmNlbBgSIAEoCzIULmdhbWUudjEuVHJhZGVDYW5jZWxIABIdCgRwaW5nGBMgASgLMg0uZ2FtZS52MS5QaW5nSAASIQoGbG9nb3V0GBQgASgLMg8uZ2FtZS52MS5Mb2dvdXRIABIyCg9jbG9zZV9jb250YWluZXIYFSABKAsyFy5nYW1lLnYxLkNsb3NlQ29udGFpbmVySAASJAoIbnBjX3RhbGsYFiABKAsyEC5nYW1lLnYxLk5wY1RhbGtIABIkCghzaG9wX2J1eRgXIAEoCzIQLmdhbWUudjEuU2hvcEJ1eUgAEiYKCXNob3Bfc2VsbBgYIAEoCzIRLmdhbWUudjEuU2hvcFNlbGxIABIuCg1wYXJ0eV9jb21tYW5kGBkgASgLMhUuZ2FtZS52MS5QYXJ0eUNvbW1hbmRIABIfCgVjcmFmdBgaIAEoCzIOLmdhbWUudjEuQ3JhZnRIABIuCg1yZXBvcnRfcGxheWVyGBsgASgLMhUuZ2FtZS52MS5SZXBvcnRQbGF5ZXJIABIyCg9wcmVzZW5jZV9hbnN3ZXIYHCABKAsyFy5nYW1lLnYxLlByZXNlbmNlQW5zd2VySAASLgoNdHV0b3JpYWxfc2tpcBgdIAEoCzIVLmdhbWUudjEuVHV0b3JpYWxTa2lwSAASLgoNZ3VpbGRfY29tbWFuZBgeIAEoCzIVLmdhbWUudjEuR3VpbGRDb21tYW5kSAASLQoNc2V0X3NhZmVfbW9kZRgfIAEoCzIULmdhbWUudjEuU2V0U2FmZU1vZGVIABIwCg5tYXJrZXRfY29tbWFuZBggIAEoCzIWLmdhbWUudjEuTWFya2V0Q29tbWFuZEgAQgkKB21lc3NhZ2UiRgoFSGVsbG8SFQoNc2Vzc2lvbl90b2tlbhgBIAEoCRIWCg5jbGllbnRfdmVyc2lvbhgCIAEoCRIOCgZsb2NhbGUYAyABKAkiJwoEV2FsaxIfCgNkaXIYASABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiItCghXYWxrUGF0aBIhCgVzdGVwcxgBIAMoDjISLmdhbWUudjEuRGlyZWN0aW9uIgoKCFN0b3BXYWxrIicKBFR1cm4SHwoDZGlyGAEgASgOMhIuZ2FtZS52MS5EaXJlY3Rpb24iIAoJU2V0VGFyZ2V0EhMKC2NyZWF0dXJlX2lkGAEgASgNIh4KC1NldFNhZmVNb2RlEg8KB2VuYWJsZWQYASABKAgiQwoMU2V0RmlnaHRNb2RlEiQKBnN0YW5jZRgBIAEoDjIULmdhbWUudjEuRmlnaHRTdGFuY2USDQoFY2hhc2UYAiABKAgiYAoJQ2FzdFNwZWxsEhIKCHNwZWxsX2lkGAEgASgJSAASDwoFd29yZHMYAiABKAlIABIlCgZ0YXJnZXQYAyABKAsyFS5nYW1lLnYxLkFjdGlvblRhcmdldEIHCgVzcGVsbCJUCgdVc2VJdGVtEiMKBGZyb20YASABKAsyFS5nYW1lLnYxLkl0ZW1Mb2NhdGlvbhIPCgdpdGVtX2lkGAIgASgNEhMKC3N0YWNrX2luZGV4GAMgASgNInkKCVVzZUl0ZW1PbhIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIhCgJ0bxgEIAEoCzIVLmdhbWUudjEuQWN0aW9uVGFyZ2V0IocBCghNb3ZlSXRlbRIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIhCgJ0bxgEIAEoCzIVLmdhbWUudjEuSXRlbUxvY2F0aW9uEg0KBWNvdW50GAUgASgNImgKBkxvb2tBdBIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRITCgtjcmVhdHVyZV9pZBgEIAEoDSI6CgNTYXkSJQoHY2hhbm5lbBgBIAEoDjIULmdhbWUudjEuQ2hhdENoYW5uZWwSDAoEdGV4dBgCIAEoCSI0CgxEaWFsb2dDaG9vc2USEQoJZGlhbG9nX2lkGAEgASgNEhEKCW9wdGlvbl9pZBgCIAEoDSJuCgxUcmFkZVJlcXVlc3QSEwoLY3JlYXR1cmVfaWQYASABKA0SIwoEaXRlbRgCIAEoCzIVLmdhbWUudjEuSXRlbUxvY2F0aW9uEg8KB2l0ZW1faWQYAyABKA0SEwoLc3RhY2tfaW5kZXgYBCABKA0idgoKVHJhZGVPZmZlchIjCgRpdGVtGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIOCgZyZW1vdmUYBCABKAgSDQoFaW5kZXgYBSABKA0iDQoLVHJhZGVBY2NlcHQiDQoLVHJhZGVDYW5jZWwikQIKDU1hcmtldENvbW1hbmQSJwoGYnJvd3NlGAEgASgLMhUuZ2FtZS52MS5NYXJrZXRCcm93c2VIABInCgZjcmVhdGUYAiABKAsyFS5nYW1lLnYxLk1hcmtldENyZWF0ZUgAEicKBmNhbmNlbBgDIAEoCzIVLmdhbWUudjEuTWFya2V0Q2FuY2VsSAASJwoGYWNjZXB0GAQgASgLMhUuZ2FtZS52MS5NYXJrZXRBY2NlcHRIABIrCgh3aXRoZHJhdxgFIAEoCzIXLmdhbWUudjEuTWFya2V0V2l0aGRyYXdIABIlCgVjbG9zZRgGIAEoCzIULmdhbWUudjEuTWFya2V0Q2xvc2VIAEIICgZhY3Rpb24iHwoMTWFya2V0QnJvd3NlEg8KB2l0ZW1faWQYASABKA0ieQoMTWFya2V0Q3JlYXRlEiEKBHNpZGUYASABKA4yEy5nYW1lLnYxLk1hcmtldFNpZGUSDwoHaXRlbV9pZBgCIAEoDRIOCgZhbW91bnQYAyABKA0SDQoFcHJpY2UYBCABKAQSFgoOZHVyYXRpb25faW5kZXgYBSABKA0iIAoMTWFya2V0Q2FuY2VsEhAKCG9mZmVyX2lkGAEgASgEIjAKDE1hcmtldEFjY2VwdBIQCghvZmZlcl9pZBgBIAEoBBIOCgZhbW91bnQYAiABKA0iEAoOTWFya2V0V2l0aGRyYXciDQoLTWFya2V0Q2xvc2UiGwoEUGluZxITCgtjbGllbnRfdGltZRgBIAEoBCIICgZMb2dvdXQiJgoOQ2xvc2VDb250YWluZXISFAoMY29udGFpbmVyX2lkGAEgASgNIh4KB05wY1RhbGsSEwoLY3JlYXR1cmVfaWQYASABKA0iPAoHU2hvcEJ1eRIRCglkaWFsb2dfaWQYASABKA0SDwoHaXRlbV9pZBgCIAEoDRINCgVjb3VudBgDIAEoDSI9CghTaG9wU2VsbBIRCglkaWFsb2dfaWQYASABKA0SDwoHaXRlbV9pZBgCIAEoDRINCgVjb3VudBgDIAEoDSJJCgxQYXJ0eUNvbW1hbmQSJAoGYWN0aW9uGAEgASgOMhQuZ2FtZS52MS5QYXJ0eUFjdGlvbhITCgtjcmVhdHVyZV9pZBgCIAEoDSJyCgxHdWlsZENvbW1hbmQSJAoGYWN0aW9uGAEgASgOMhQuZ2FtZS52MS5HdWlsZEFjdGlvbhIMCgRuYW1lGAIgASgJEgwKBHRleHQYAyABKAkSEAoIZ3VpbGRfaWQYBCABKAQSDgoGd2FyX2lkGAUgASgEIj4KBUNyYWZ0EhEKCXJlY2lwZV9pZBgBIAEoCRIiCgdzdGF0aW9uGAIgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbiIzCgxSZXBvcnRQbGF5ZXISEwoLY3JlYXR1cmVfaWQYASABKA0SDgoGcmVhc29uGAIgASgJIjUKDlByZXNlbmNlQW5zd2VyEhAKCGNoZWNrX2lkGAEgASgNEhEKCW9wdGlvbl9pZBgCIAEoDSIOCgxUdXRvcmlhbFNraXAqfgoLRmlnaHRTdGFuY2USHAoYRklHSFRfU1RBTkNFX1VOU1BFQ0lGSUVEEAASGgoWRklHSFRfU1RBTkNFX09GRkVOU0lWRRABEhkKFUZJR0hUX1NUQU5DRV9CQUxBTkNFRBACEhoKFkZJR0hUX1NUQU5DRV9ERUZFTlNJVkUQAyq7AQoLQ2hhdENoYW5uZWwSHAoYQ0hBVF9DSEFOTkVMX1VOU1BFQ0lGSUVEEAASFAoQQ0hBVF9DSEFOTkVMX1NBWRABEhUKEUNIQVRfQ0hBTk5FTF9ZRUxMEAISGAoUQ0hBVF9DSEFOTkVMX1dISVNQRVIQAxIXChNDSEFUX0NIQU5ORUxfR0xPQkFMEAQSFgoSQ0hBVF9DSEFOTkVMX1BBUlRZEAUSFgoSQ0hBVF9DSEFOTkVMX0dVSUxEEAYq+wEKC1BhcnR5QWN0aW9uEhwKGFBBUlRZX0FDVElPTl9VTlNQRUNJRklFRBAAEhcKE1BBUlRZX0FDVElPTl9JTlZJVEUQARIXChNQQVJUWV9BQ1RJT05fQUNDRVBUEAISGAoUUEFSVFlfQUNUSU9OX0RFQ0xJTkUQAxIWChJQQVJUWV9BQ1RJT05fTEVBVkUQBBIVChFQQVJUWV9BQ1RJT05fS0lDSxAFEhwKGFBBUlRZX0FDVElPTl9QQVNTX0xFQURFUhAGEhkKFVBBUlRZX0FDVElPTl9TSEFSRV9PThAHEhoKFlBBUlRZX0FDVElPTl9TSEFSRV9PRkYQCCrQAwoLR3VpbGRBY3Rpb24SHAoYR1VJTERfQUNUSU9OX1VOU1BFQ0lGSUVEEAASFwoTR1VJTERfQUNUSU9OX0NSRUFURRABEhcKE0dVSUxEX0FDVElPTl9JTlZJVEUQAhIXChNHVUlMRF9BQ1RJT05fUkVWT0tFEAMSFwoTR1VJTERfQUNUSU9OX0FDQ0VQVBAEEhgKFEdVSUxEX0FDVElPTl9ERUNMSU5FEAUSFgoSR1VJTERfQUNUSU9OX0xFQVZFEAYSFQoRR1VJTERfQUNUSU9OX0tJQ0sQBxIYChRHVUlMRF9BQ1RJT05fUFJPTU9URRAIEhcKE0dVSUxEX0FDVElPTl9ERU1PVEUQCRIVChFHVUlMRF9BQ1RJT05fTU9URBAKEhgKFEdVSUxEX0FDVElPTl9ESVNCQU5EEAsSGQoVR1VJTERfQUNUSU9OX1RSQU5TRkVSEAwSHAoYR1VJTERfQUNUSU9OX1dBUl9ERUNMQVJFEA0SGwoXR1VJTERfQUNUSU9OX1dBUl9BQ0NFUFQQDhIcChhHVUlMRF9BQ1RJT05fV0FSX0RFQ0xJTkUQDxIeChpHVUlMRF9BQ1RJT05fV0FSX1NVUlJFTkRFUhAQQkZaRGdpdGh1Yi5jb20vR0ZlbnpvUi9SUEdfUHJvamVjdC9zZXJ2ZXIvaW50ZXJuYWwvbmV0L3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM", [file_game_v1_common]);
+  fileDesc("ChRnYW1lL3YxL2NsaWVudC5wcm90bxIHZ2FtZS52MSKACwoNQ2xpZW50TWVzc2FnZRIfCgVoZWxsbxgBIAEoCzIOLmdhbWUudjEuSGVsbG9IABIdCgR3YWxrGAIgASgLMg0uZ2FtZS52MS5XYWxrSAASJgoJd2Fsa19wYXRoGAMgASgLMhEuZ2FtZS52MS5XYWxrUGF0aEgAEiYKCXN0b3Bfd2FsaxgEIAEoCzIRLmdhbWUudjEuU3RvcFdhbGtIABIdCgR0dXJuGAUgASgLMg0uZ2FtZS52MS5UdXJuSAASKAoKc2V0X3RhcmdldBgGIAEoCzISLmdhbWUudjEuU2V0VGFyZ2V0SAASLwoOc2V0X2ZpZ2h0X21vZGUYByABKAsyFS5nYW1lLnYxLlNldEZpZ2h0TW9kZUgAEigKCmNhc3Rfc3BlbGwYCCABKAsyEi5nYW1lLnYxLkNhc3RTcGVsbEgAEiQKCHVzZV9pdGVtGAkgASgLMhAuZ2FtZS52MS5Vc2VJdGVtSAASKQoLdXNlX2l0ZW1fb24YCiABKAsyEi5nYW1lLnYxLlVzZUl0ZW1PbkgAEiYKCW1vdmVfaXRlbRgLIAEoCzIRLmdhbWUudjEuTW92ZUl0ZW1IABIiCgdsb29rX2F0GAwgASgLMg8uZ2FtZS52MS5Mb29rQXRIABIbCgNzYXkYDSABKAsyDC5nYW1lLnYxLlNheUgAEi4KDWRpYWxvZ19jaG9vc2UYDiABKAsyFS5nYW1lLnYxLkRpYWxvZ0Nob29zZUgAEi4KDXRyYWRlX3JlcXVlc3QYDyABKAsyFS5nYW1lLnYxLlRyYWRlUmVxdWVzdEgAEioKC3RyYWRlX29mZmVyGBAgASgLMhMuZ2FtZS52MS5UcmFkZU9mZmVySAASLAoMdHJhZGVfYWNjZXB0GBEgASgLMhQuZ2FtZS52MS5UcmFkZUFjY2VwdEgAEiwKDHRyYWRlX2NhbmNlbBgSIAEoCzIULmdhbWUudjEuVHJhZGVDYW5jZWxIABIdCgRwaW5nGBMgASgLMg0uZ2FtZS52MS5QaW5nSAASIQoGbG9nb3V0GBQgASgLMg8uZ2FtZS52MS5Mb2dvdXRIABIyCg9jbG9zZV9jb250YWluZXIYFSABKAsyFy5nYW1lLnYxLkNsb3NlQ29udGFpbmVySAASJAoIbnBjX3RhbGsYFiABKAsyEC5nYW1lLnYxLk5wY1RhbGtIABIkCghzaG9wX2J1eRgXIAEoCzIQLmdhbWUudjEuU2hvcEJ1eUgAEiYKCXNob3Bfc2VsbBgYIAEoCzIRLmdhbWUudjEuU2hvcFNlbGxIABIuCg1wYXJ0eV9jb21tYW5kGBkgASgLMhUuZ2FtZS52MS5QYXJ0eUNvbW1hbmRIABIfCgVjcmFmdBgaIAEoCzIOLmdhbWUudjEuQ3JhZnRIABIuCg1yZXBvcnRfcGxheWVyGBsgASgLMhUuZ2FtZS52MS5SZXBvcnRQbGF5ZXJIABIyCg9wcmVzZW5jZV9hbnN3ZXIYHCABKAsyFy5nYW1lLnYxLlByZXNlbmNlQW5zd2VySAASLgoNdHV0b3JpYWxfc2tpcBgdIAEoCzIVLmdhbWUudjEuVHV0b3JpYWxTa2lwSAASLgoNZ3VpbGRfY29tbWFuZBgeIAEoCzIVLmdhbWUudjEuR3VpbGRDb21tYW5kSAASLQoNc2V0X3NhZmVfbW9kZRgfIAEoCzIULmdhbWUudjEuU2V0U2FmZU1vZGVIABIwCg5tYXJrZXRfY29tbWFuZBggIAEoCzIWLmdhbWUudjEuTWFya2V0Q29tbWFuZEgAEi4KDWhvdXNlX2NvbW1hbmQYISABKAsyFS5nYW1lLnYxLkhvdXNlQ29tbWFuZEgAQgkKB21lc3NhZ2UiRgoFSGVsbG8SFQoNc2Vzc2lvbl90b2tlbhgBIAEoCRIWCg5jbGllbnRfdmVyc2lvbhgCIAEoCRIOCgZsb2NhbGUYAyABKAkiJwoEV2FsaxIfCgNkaXIYASABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiItCghXYWxrUGF0aBIhCgVzdGVwcxgBIAMoDjISLmdhbWUudjEuRGlyZWN0aW9uIgoKCFN0b3BXYWxrIicKBFR1cm4SHwoDZGlyGAEgASgOMhIuZ2FtZS52MS5EaXJlY3Rpb24iIAoJU2V0VGFyZ2V0EhMKC2NyZWF0dXJlX2lkGAEgASgNIh4KC1NldFNhZmVNb2RlEg8KB2VuYWJsZWQYASABKAgiQwoMU2V0RmlnaHRNb2RlEiQKBnN0YW5jZRgBIAEoDjIULmdhbWUudjEuRmlnaHRTdGFuY2USDQoFY2hhc2UYAiABKAgiYAoJQ2FzdFNwZWxsEhIKCHNwZWxsX2lkGAEgASgJSAASDwoFd29yZHMYAiABKAlIABIlCgZ0YXJnZXQYAyABKAsyFS5nYW1lLnYxLkFjdGlvblRhcmdldEIHCgVzcGVsbCJUCgdVc2VJdGVtEiMKBGZyb20YASABKAsyFS5nYW1lLnYxLkl0ZW1Mb2NhdGlvbhIPCgdpdGVtX2lkGAIgASgNEhMKC3N0YWNrX2luZGV4GAMgASgNInkKCVVzZUl0ZW1PbhIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIhCgJ0bxgEIAEoCzIVLmdhbWUudjEuQWN0aW9uVGFyZ2V0IocBCghNb3ZlSXRlbRIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIhCgJ0bxgEIAEoCzIVLmdhbWUudjEuSXRlbUxvY2F0aW9uEg0KBWNvdW50GAUgASgNImgKBkxvb2tBdBIjCgRmcm9tGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRITCgtjcmVhdHVyZV9pZBgEIAEoDSI6CgNTYXkSJQoHY2hhbm5lbBgBIAEoDjIULmdhbWUudjEuQ2hhdENoYW5uZWwSDAoEdGV4dBgCIAEoCSI0CgxEaWFsb2dDaG9vc2USEQoJZGlhbG9nX2lkGAEgASgNEhEKCW9wdGlvbl9pZBgCIAEoDSJuCgxUcmFkZVJlcXVlc3QSEwoLY3JlYXR1cmVfaWQYASABKA0SIwoEaXRlbRgCIAEoCzIVLmdhbWUudjEuSXRlbUxvY2F0aW9uEg8KB2l0ZW1faWQYAyABKA0SEwoLc3RhY2tfaW5kZXgYBCABKA0idgoKVHJhZGVPZmZlchIjCgRpdGVtGAEgASgLMhUuZ2FtZS52MS5JdGVtTG9jYXRpb24SDwoHaXRlbV9pZBgCIAEoDRITCgtzdGFja19pbmRleBgDIAEoDRIOCgZyZW1vdmUYBCABKAgSDQoFaW5kZXgYBSABKA0iDQoLVHJhZGVBY2NlcHQiDQoLVHJhZGVDYW5jZWwikQIKDU1hcmtldENvbW1hbmQSJwoGYnJvd3NlGAEgASgLMhUuZ2FtZS52MS5NYXJrZXRCcm93c2VIABInCgZjcmVhdGUYAiABKAsyFS5nYW1lLnYxLk1hcmtldENyZWF0ZUgAEicKBmNhbmNlbBgDIAEoCzIVLmdhbWUudjEuTWFya2V0Q2FuY2VsSAASJwoGYWNjZXB0GAQgASgLMhUuZ2FtZS52MS5NYXJrZXRBY2NlcHRIABIrCgh3aXRoZHJhdxgFIAEoCzIXLmdhbWUudjEuTWFya2V0V2l0aGRyYXdIABIlCgVjbG9zZRgGIAEoCzIULmdhbWUudjEuTWFya2V0Q2xvc2VIAEIICgZhY3Rpb24iHwoMTWFya2V0QnJvd3NlEg8KB2l0ZW1faWQYASABKA0ieQoMTWFya2V0Q3JlYXRlEiEKBHNpZGUYASABKA4yEy5nYW1lLnYxLk1hcmtldFNpZGUSDwoHaXRlbV9pZBgCIAEoDRIOCgZhbW91bnQYAyABKA0SDQoFcHJpY2UYBCABKAQSFgoOZHVyYXRpb25faW5kZXgYBSABKA0iIAoMTWFya2V0Q2FuY2VsEhAKCG9mZmVyX2lkGAEgASgEIjAKDE1hcmtldEFjY2VwdBIQCghvZmZlcl9pZBgBIAEoBBIOCgZhbW91bnQYAiABKA0iEAoOTWFya2V0V2l0aGRyYXciDQoLTWFya2V0Q2xvc2UitgQKDEhvdXNlQ29tbWFuZBIiCgRyZW50GAEgASgLMhIuZ2FtZS52MS5Ib3VzZVJlbnRIABImCgZleHRlbmQYAiABKAsyFC5nYW1lLnYxLkhvdXNlRXh0ZW5kSAASJAoFbGVhdmUYAyABKAsyEy5nYW1lLnYxLkhvdXNlTGVhdmVIABIrCglndWVzdF9hZGQYBCABKAsyFi5nYW1lLnYxLkhvdXNlR3Vlc3RBZGRIABIxCgxndWVzdF9yZW1vdmUYBSABKAsyGS5nYW1lLnYxLkhvdXNlR3Vlc3RSZW1vdmVIABIxCgxndWlsZF9hY2Nlc3MYBiABKAsyGS5nYW1lLnYxLkhvdXNlR3VpbGRBY2Nlc3NIABI1Cg50cmFuc2Zlcl9vZmZlchgHIAEoCzIbLmdhbWUudjEuSG91c2VUcmFuc2Zlck9mZmVySAASNwoPdHJhbnNmZXJfY2FuY2VsGAggASgLMhwuZ2FtZS52MS5Ib3VzZVRyYW5zZmVyQ2FuY2VsSAASNwoPdHJhbnNmZXJfYWNjZXB0GAkgASgLMhwuZ2FtZS52MS5Ib3VzZVRyYW5zZmVyQWNjZXB0SAASJAoFY2xvc2UYCiABKAsyEy5nYW1lLnYxLkhvdXNlQ2xvc2VIABIkCgVlbnRlchgLIAEoCzITLmdhbWUudjEuSG91c2VFbnRlckgAEiIKBGV4aXQYDCABKAsyEi5nYW1lLnYxLkhvdXNlRXhpdEgAQggKBmFjdGlvbiILCglIb3VzZVJlbnQiDQoLSG91c2VFeHRlbmQiDAoKSG91c2VMZWF2ZSIdCg1Ib3VzZUd1ZXN0QWRkEgwKBG5hbWUYASABKAkiIAoQSG91c2VHdWVzdFJlbW92ZRIMCgRuYW1lGAEgASgJIiMKEEhvdXNlR3VpbGRBY2Nlc3MSDwoHZW5hYmxlZBgBIAEoCCIxChJIb3VzZVRyYW5zZmVyT2ZmZXISDAoEbmFtZRgBIAEoCRINCgVwcmljZRgCIAEoBCIVChNIb3VzZVRyYW5zZmVyQ2FuY2VsIjYKE0hvdXNlVHJhbnNmZXJBY2NlcHQSEAoIaG91c2VfaWQYASABKAkSDQoFcHJpY2UYAiABKAQiDAoKSG91c2VFbnRlciILCglIb3VzZUV4aXQiDAoKSG91c2VDbG9zZSIbCgRQaW5nEhMKC2NsaWVudF90aW1lGAEgASgEIggKBkxvZ291dCImCg5DbG9zZUNvbnRhaW5lchIUCgxjb250YWluZXJfaWQYASABKA0iHgoHTnBjVGFsaxITCgtjcmVhdHVyZV9pZBgBIAEoDSI8CgdTaG9wQnV5EhEKCWRpYWxvZ19pZBgBIAEoDRIPCgdpdGVtX2lkGAIgASgNEg0KBWNvdW50GAMgASgNIj0KCFNob3BTZWxsEhEKCWRpYWxvZ19pZBgBIAEoDRIPCgdpdGVtX2lkGAIgASgNEg0KBWNvdW50GAMgASgNIkkKDFBhcnR5Q29tbWFuZBIkCgZhY3Rpb24YASABKA4yFC5nYW1lLnYxLlBhcnR5QWN0aW9uEhMKC2NyZWF0dXJlX2lkGAIgASgNInIKDEd1aWxkQ29tbWFuZBIkCgZhY3Rpb24YASABKA4yFC5nYW1lLnYxLkd1aWxkQWN0aW9uEgwKBG5hbWUYAiABKAkSDAoEdGV4dBgDIAEoCRIQCghndWlsZF9pZBgEIAEoBBIOCgZ3YXJfaWQYBSABKAQiPgoFQ3JhZnQSEQoJcmVjaXBlX2lkGAEgASgJEiIKB3N0YXRpb24YAiABKAsyES5nYW1lLnYxLlBvc2l0aW9uIjMKDFJlcG9ydFBsYXllchITCgtjcmVhdHVyZV9pZBgBIAEoDRIOCgZyZWFzb24YAiABKAkiNQoOUHJlc2VuY2VBbnN3ZXISEAoIY2hlY2tfaWQYASABKA0SEQoJb3B0aW9uX2lkGAIgASgNIg4KDFR1dG9yaWFsU2tpcCp+CgtGaWdodFN0YW5jZRIcChhGSUdIVF9TVEFOQ0VfVU5TUEVDSUZJRUQQABIaChZGSUdIVF9TVEFOQ0VfT0ZGRU5TSVZFEAESGQoVRklHSFRfU1RBTkNFX0JBTEFOQ0VEEAISGgoWRklHSFRfU1RBTkNFX0RFRkVOU0lWRRADKrsBCgtDaGF0Q2hhbm5lbBIcChhDSEFUX0NIQU5ORUxfVU5TUEVDSUZJRUQQABIUChBDSEFUX0NIQU5ORUxfU0FZEAESFQoRQ0hBVF9DSEFOTkVMX1lFTEwQAhIYChRDSEFUX0NIQU5ORUxfV0hJU1BFUhADEhcKE0NIQVRfQ0hBTk5FTF9HTE9CQUwQBBIWChJDSEFUX0NIQU5ORUxfUEFSVFkQBRIWChJDSEFUX0NIQU5ORUxfR1VJTEQQBir7AQoLUGFydHlBY3Rpb24SHAoYUEFSVFlfQUNUSU9OX1VOU1BFQ0lGSUVEEAASFwoTUEFSVFlfQUNUSU9OX0lOVklURRABEhcKE1BBUlRZX0FDVElPTl9BQ0NFUFQQAhIYChRQQVJUWV9BQ1RJT05fREVDTElORRADEhYKElBBUlRZX0FDVElPTl9MRUFWRRAEEhUKEVBBUlRZX0FDVElPTl9LSUNLEAUSHAoYUEFSVFlfQUNUSU9OX1BBU1NfTEVBREVSEAYSGQoVUEFSVFlfQUNUSU9OX1NIQVJFX09OEAcSGgoWUEFSVFlfQUNUSU9OX1NIQVJFX09GRhAIKtADCgtHdWlsZEFjdGlvbhIcChhHVUlMRF9BQ1RJT05fVU5TUEVDSUZJRUQQABIXChNHVUlMRF9BQ1RJT05fQ1JFQVRFEAESFwoTR1VJTERfQUNUSU9OX0lOVklURRACEhcKE0dVSUxEX0FDVElPTl9SRVZPS0UQAxIXChNHVUlMRF9BQ1RJT05fQUNDRVBUEAQSGAoUR1VJTERfQUNUSU9OX0RFQ0xJTkUQBRIWChJHVUlMRF9BQ1RJT05fTEVBVkUQBhIVChFHVUlMRF9BQ1RJT05fS0lDSxAHEhgKFEdVSUxEX0FDVElPTl9QUk9NT1RFEAgSFwoTR1VJTERfQUNUSU9OX0RFTU9URRAJEhUKEUdVSUxEX0FDVElPTl9NT1REEAoSGAoUR1VJTERfQUNUSU9OX0RJU0JBTkQQCxIZChVHVUlMRF9BQ1RJT05fVFJBTlNGRVIQDBIcChhHVUlMRF9BQ1RJT05fV0FSX0RFQ0xBUkUQDRIbChdHVUlMRF9BQ1RJT05fV0FSX0FDQ0VQVBAOEhwKGEdVSUxEX0FDVElPTl9XQVJfREVDTElORRAPEh4KGkdVSUxEX0FDVElPTl9XQVJfU1VSUkVOREVSEBBCRlpEZ2l0aHViLmNvbS9HRmVuem9SL1JQR19Qcm9qZWN0L3NlcnZlci9pbnRlcm5hbC9uZXQvcGIvZ2FtZS92MTtnYW1ldjFiBnByb3RvMw", [file_game_v1_common]);
 
 /**
  * ClientMessage is the only thing a client WebSocket frame carries (max 4 KB).
@@ -215,6 +215,12 @@ export type ClientMessage = Message<"game.v1.ClientMessage"> & {
      */
     value: MarketCommand;
     case: "marketCommand";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseCommand house_command = 33;
+     */
+    value: HouseCommand;
+    case: "houseCommand";
   } | { case: undefined; value?: undefined };
 };
 
@@ -914,6 +920,312 @@ export const MarketCloseSchema: GenMessage<MarketClose> = /*@__PURE__*/
   messageDesc(file_game_v1_client, 26);
 
 /**
+ * HouseCommand is one action of the house window (T5.4). The player opened the window
+ * with UseItem on a door of the house (any item of the door tile) and must still be next
+ * to a door or inside the house. The server answers every action with a HouseUpdate (and
+ * a system message when it was refused).
+ *
+ * @generated from message game.v1.HouseCommand
+ */
+export type HouseCommand = Message<"game.v1.HouseCommand"> & {
+  /**
+   * @generated from oneof game.v1.HouseCommand.action
+   */
+  action: {
+    /**
+     * @generated from field: game.v1.HouseRent rent = 1;
+     */
+    value: HouseRent;
+    case: "rent";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseExtend extend = 2;
+     */
+    value: HouseExtend;
+    case: "extend";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseLeave leave = 3;
+     */
+    value: HouseLeave;
+    case: "leave";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseGuestAdd guest_add = 4;
+     */
+    value: HouseGuestAdd;
+    case: "guestAdd";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseGuestRemove guest_remove = 5;
+     */
+    value: HouseGuestRemove;
+    case: "guestRemove";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseGuildAccess guild_access = 6;
+     */
+    value: HouseGuildAccess;
+    case: "guildAccess";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseTransferOffer transfer_offer = 7;
+     */
+    value: HouseTransferOffer;
+    case: "transferOffer";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseTransferCancel transfer_cancel = 8;
+     */
+    value: HouseTransferCancel;
+    case: "transferCancel";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseTransferAccept transfer_accept = 9;
+     */
+    value: HouseTransferAccept;
+    case: "transferAccept";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseClose close = 10;
+     */
+    value: HouseClose;
+    case: "close";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseEnter enter = 11;
+     */
+    value: HouseEnter;
+    case: "enter";
+  } | {
+    /**
+     * @generated from field: game.v1.HouseExit exit = 12;
+     */
+    value: HouseExit;
+    case: "exit";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message game.v1.HouseCommand.
+ * Use `create(HouseCommandSchema)` to create a new message.
+ */
+export const HouseCommandSchema: GenMessage<HouseCommand> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 27);
+
+/**
+ * HouseRent rents the free house of the window: one period, paid from the backpack.
+ *
+ * @generated from message game.v1.HouseRent
+ */
+export type HouseRent = Message<"game.v1.HouseRent"> & {
+};
+
+/**
+ * Describes the message game.v1.HouseRent.
+ * Use `create(HouseRentSchema)` to create a new message.
+ */
+export const HouseRentSchema: GenMessage<HouseRent> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 28);
+
+/**
+ * HouseExtend (owner) pays one more period in advance, up to the balance's limit.
+ *
+ * @generated from message game.v1.HouseExtend
+ */
+export type HouseExtend = Message<"game.v1.HouseExtend"> & {
+};
+
+/**
+ * Describes the message game.v1.HouseExtend.
+ * Use `create(HouseExtendSchema)` to create a new message.
+ */
+export const HouseExtendSchema: GenMessage<HouseExtend> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 29);
+
+/**
+ * HouseLeave (owner) gives the house up: its items go to the owner's market mailbox.
+ * Paid rent is not returned.
+ *
+ * @generated from message game.v1.HouseLeave
+ */
+export type HouseLeave = Message<"game.v1.HouseLeave"> & {
+};
+
+/**
+ * Describes the message game.v1.HouseLeave.
+ * Use `create(HouseLeaveSchema)` to create a new message.
+ */
+export const HouseLeaveSchema: GenMessage<HouseLeave> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 30);
+
+/**
+ * HouseGuestAdd and HouseGuestRemove (owner) change the guest list, by character name.
+ *
+ * @generated from message game.v1.HouseGuestAdd
+ */
+export type HouseGuestAdd = Message<"game.v1.HouseGuestAdd"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message game.v1.HouseGuestAdd.
+ * Use `create(HouseGuestAddSchema)` to create a new message.
+ */
+export const HouseGuestAddSchema: GenMessage<HouseGuestAdd> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 31);
+
+/**
+ * @generated from message game.v1.HouseGuestRemove
+ */
+export type HouseGuestRemove = Message<"game.v1.HouseGuestRemove"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message game.v1.HouseGuestRemove.
+ * Use `create(HouseGuestRemoveSchema)` to create a new message.
+ */
+export const HouseGuestRemoveSchema: GenMessage<HouseGuestRemove> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 32);
+
+/**
+ * HouseGuildAccess (owner) lets the members of the owner's guild in, or not.
+ *
+ * @generated from message game.v1.HouseGuildAccess
+ */
+export type HouseGuildAccess = Message<"game.v1.HouseGuildAccess"> & {
+  /**
+   * @generated from field: bool enabled = 1;
+   */
+  enabled: boolean;
+};
+
+/**
+ * Describes the message game.v1.HouseGuildAccess.
+ * Use `create(HouseGuildAccessSchema)` to create a new message.
+ */
+export const HouseGuildAccessSchema: GenMessage<HouseGuildAccess> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 33);
+
+/**
+ * HouseTransferOffer (owner) offers the house to another character for price (smallest
+ * coin, may be 0). It waits a few minutes for that character to accept at the door.
+ *
+ * @generated from message game.v1.HouseTransferOffer
+ */
+export type HouseTransferOffer = Message<"game.v1.HouseTransferOffer"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: uint64 price = 2;
+   */
+  price: bigint;
+};
+
+/**
+ * Describes the message game.v1.HouseTransferOffer.
+ * Use `create(HouseTransferOfferSchema)` to create a new message.
+ */
+export const HouseTransferOfferSchema: GenMessage<HouseTransferOffer> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 34);
+
+/**
+ * HouseTransferCancel (owner) withdraws the transfer offer.
+ *
+ * @generated from message game.v1.HouseTransferCancel
+ */
+export type HouseTransferCancel = Message<"game.v1.HouseTransferCancel"> & {
+};
+
+/**
+ * Describes the message game.v1.HouseTransferCancel.
+ * Use `create(HouseTransferCancelSchema)` to create a new message.
+ */
+export const HouseTransferCancelSchema: GenMessage<HouseTransferCancel> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 35);
+
+/**
+ * HouseTransferAccept takes the house offered to the player: it pays the price (to the
+ * owner's mailbox) and becomes the owner. house_id and price are what the player saw: if
+ * the offer changed since, the accept is refused.
+ *
+ * @generated from message game.v1.HouseTransferAccept
+ */
+export type HouseTransferAccept = Message<"game.v1.HouseTransferAccept"> & {
+  /**
+   * @generated from field: string house_id = 1;
+   */
+  houseId: string;
+
+  /**
+   * @generated from field: uint64 price = 2;
+   */
+  price: bigint;
+};
+
+/**
+ * Describes the message game.v1.HouseTransferAccept.
+ * Use `create(HouseTransferAcceptSchema)` to create a new message.
+ */
+export const HouseTransferAcceptSchema: GenMessage<HouseTransferAccept> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 36);
+
+/**
+ * HouseEnter takes a player who may enter the house, a few tiles from one of its doors, to
+ * a free tile inside next to that door (strangers standing in front of a door cannot lock
+ * the owner out).
+ *
+ * @generated from message game.v1.HouseEnter
+ */
+export type HouseEnter = Message<"game.v1.HouseEnter"> & {
+};
+
+/**
+ * Describes the message game.v1.HouseEnter.
+ * Use `create(HouseEnterSchema)` to create a new message.
+ */
+export const HouseEnterSchema: GenMessage<HouseEnter> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 37);
+
+/**
+ * HouseExit takes a player inside the house to a free tile outside, by its exit.
+ *
+ * @generated from message game.v1.HouseExit
+ */
+export type HouseExit = Message<"game.v1.HouseExit"> & {
+};
+
+/**
+ * Describes the message game.v1.HouseExit.
+ * Use `create(HouseExitSchema)` to create a new message.
+ */
+export const HouseExitSchema: GenMessage<HouseExit> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 38);
+
+/**
+ * @generated from message game.v1.HouseClose
+ */
+export type HouseClose = Message<"game.v1.HouseClose"> & {
+};
+
+/**
+ * Describes the message game.v1.HouseClose.
+ * Use `create(HouseCloseSchema)` to create a new message.
+ */
+export const HouseCloseSchema: GenMessage<HouseClose> = /*@__PURE__*/
+  messageDesc(file_game_v1_client, 39);
+
+/**
  * Ping measures latency. client_time is the client clock in milliseconds and comes
  * back unchanged in Pong.
  *
@@ -931,7 +1243,7 @@ export type Ping = Message<"game.v1.Ping"> & {
  * Use `create(PingSchema)` to create a new message.
  */
 export const PingSchema: GenMessage<Ping> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 27);
+  messageDesc(file_game_v1_client, 40);
 
 /**
  * @generated from message game.v1.Logout
@@ -944,7 +1256,7 @@ export type Logout = Message<"game.v1.Logout"> & {
  * Use `create(LogoutSchema)` to create a new message.
  */
 export const LogoutSchema: GenMessage<Logout> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 28);
+  messageDesc(file_game_v1_client, 41);
 
 /**
  * CloseContainer closes a container window (container_id from ContainerOpen). The
@@ -964,7 +1276,7 @@ export type CloseContainer = Message<"game.v1.CloseContainer"> & {
  * Use `create(CloseContainerSchema)` to create a new message.
  */
 export const CloseContainerSchema: GenMessage<CloseContainer> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 29);
+  messageDesc(file_game_v1_client, 42);
 
 /**
  * NpcTalk starts talking to an NPC the client knows (creature id). The server answers
@@ -984,7 +1296,7 @@ export type NpcTalk = Message<"game.v1.NpcTalk"> & {
  * Use `create(NpcTalkSchema)` to create a new message.
  */
 export const NpcTalkSchema: GenMessage<NpcTalk> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 30);
+  messageDesc(file_game_v1_client, 43);
 
 /**
  * ShopBuy buys count units of an item from the shop opened in dialog dialog_id.
@@ -1013,7 +1325,7 @@ export type ShopBuy = Message<"game.v1.ShopBuy"> & {
  * Use `create(ShopBuySchema)` to create a new message.
  */
 export const ShopBuySchema: GenMessage<ShopBuy> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 31);
+  messageDesc(file_game_v1_client, 44);
 
 /**
  * ShopSell sells count units of an item to the shop opened in dialog dialog_id.
@@ -1042,7 +1354,7 @@ export type ShopSell = Message<"game.v1.ShopSell"> & {
  * Use `create(ShopSellSchema)` to create a new message.
  */
 export const ShopSellSchema: GenMessage<ShopSell> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 32);
+  messageDesc(file_game_v1_client, 45);
 
 /**
  * PartyCommand is every party intent (T3.3). The server answers with PartyUpdate or a
@@ -1067,7 +1379,7 @@ export type PartyCommand = Message<"game.v1.PartyCommand"> & {
  * Use `create(PartyCommandSchema)` to create a new message.
  */
 export const PartyCommandSchema: GenMessage<PartyCommand> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 33);
+  messageDesc(file_game_v1_client, 46);
 
 /**
  * GuildCommand is every guild intent (T5.1). The chat command "/guild ..." does the same.
@@ -1109,7 +1421,7 @@ export type GuildCommand = Message<"game.v1.GuildCommand"> & {
  * Use `create(GuildCommandSchema)` to create a new message.
  */
 export const GuildCommandSchema: GenMessage<GuildCommand> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 34);
+  messageDesc(file_game_v1_client, 47);
 
 /**
  * Craft attempts a recipe of data/recipes.yaml (T3.4) at the station item on the tile
@@ -1137,7 +1449,7 @@ export type Craft = Message<"game.v1.Craft"> & {
  * Use `create(CraftSchema)` to create a new message.
  */
 export const CraftSchema: GenMessage<Craft> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 35);
+  messageDesc(file_game_v1_client, 48);
 
 /**
  * ReportPlayer reports another player to the staff (T4.1): the report button of the
@@ -1166,7 +1478,7 @@ export type ReportPlayer = Message<"game.v1.ReportPlayer"> & {
  * Use `create(ReportPlayerSchema)` to create a new message.
  */
 export const ReportPlayerSchema: GenMessage<ReportPlayer> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 36);
+  messageDesc(file_game_v1_client, 49);
 
 /**
  * PresenceAnswer answers a PresenceCheck (T4.1) with one of its option ids.
@@ -1190,7 +1502,7 @@ export type PresenceAnswer = Message<"game.v1.PresenceAnswer"> & {
  * Use `create(PresenceAnswerSchema)` to create a new message.
  */
 export const PresenceAnswerSchema: GenMessage<PresenceAnswer> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 37);
+  messageDesc(file_game_v1_client, 50);
 
 /**
  * TutorialSkip ends the tutorial for good (T4.2). There is no message to complete a step:
@@ -1206,7 +1518,7 @@ export type TutorialSkip = Message<"game.v1.TutorialSkip"> & {
  * Use `create(TutorialSkipSchema)` to create a new message.
  */
 export const TutorialSkipSchema: GenMessage<TutorialSkip> = /*@__PURE__*/
-  messageDesc(file_game_v1_client, 38);
+  messageDesc(file_game_v1_client, 51);
 
 /**
  * @generated from enum game.v1.FightStance

@@ -1,0 +1,13 @@
+id: house_wood_medium
+notes: "Wooden house (6x5 inside) with a two-tile door in the middle of the south wall. Player house of T5.4: declare it in houses.yaml."
+legend:
+  - { char: "W", ground: wooden_floor, items: [wooden_wall] }
+  - { char: "_", ground: wooden_floor, items: [] }
+rows:
+  - "WWWWWWWW"
+  - "W______W"
+  - "W______W"
+  - "W______W"
+  - "W______W"
+  - "W______W"
+  - "WWW__WWW"

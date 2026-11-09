@@ -56,6 +56,7 @@ message ServerMessage {
     CreatureGuild creature_guild = 37;
     CreatureSkull creature_skull = 38;
     MarketUpdate market_update = 39;
+    HouseUpdate house_update = 40;
   }
 }
 
@@ -525,6 +526,49 @@ message MarketUpdate {
   // The market is read-only until the server restarts (a change could not be saved): it
   // can be browsed, but nothing is created, accepted, cancelled or withdrawn.
   bool read_only = 20;
+}
+
+// HouseUpdate opens or refreshes the house window (T5.4); open = false closes it (the
+// player walked away from the door). Owner-only fields are empty for anyone else.
+message HouseUpdate {
+  bool open = 1;
+  // House id (world/islands/<island>/houses.yaml), its name (i18n key) and island (town).
+  string house_id = 2;
+  string name = 3;
+  string island = 4;
+  // Rent of one period (smallest coin) and its length in days.
+  uint64 rent = 5;
+  uint32 period_days = 6;
+  // Size in tiles.
+  uint32 size = 7;
+  // Owner's name; empty when the house is free.
+  string owner = 8;
+  bool is_owner = 9;
+  // Unix milliseconds the rent is paid until (owner only).
+  uint64 paid_until = 10;
+  // Guests by name and whether the owner's guild may enter (owner only).
+  repeated string guests = 11;
+  bool guild_access = 12;
+  uint32 max_guests = 13;
+  // Items in the house and the limit.
+  uint32 items = 14;
+  uint32 max_items = 15;
+  // Minimum level to rent and how many periods may be paid ahead.
+  uint32 min_level = 16;
+  uint32 max_periods = 17;
+  // Pending transfer: to whom (owner sees it) and the price; for_me: offered to this
+  // player, who may accept it.
+  string transfer_to = 18;
+  uint64 transfer_price = 19;
+  bool transfer_for_me = 20;
+  // Money the player carries, in the smallest coin.
+  uint64 money = 21;
+  // Houses are read-only until the server restarts (a change could not be saved).
+  bool read_only = 22;
+  // The player may enter (owner, guest or guild member).
+  bool access = 23;
+  // The player stands inside the house.
+  bool inside = 24;
 }
 
 // ---- movement and connection ------------------------------------------------

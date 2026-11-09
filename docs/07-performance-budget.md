@@ -194,3 +194,20 @@ Saver más lo que retiene el loop, publicado por el loop sin costo en el tick) l
 aunque ninguna escritura falle, y la alerta `PersistenceBacklog` avisa si pasa de 1000
 durante 5 minutos. `persistence_errors_total{outcome="retry"}` solo cuenta escrituras que
 fallaron.
+
+### Casas (T5.4)
+- **Transfers de items de casa:** como mucho uno por tick para todas las casas que
+  cambiaron en ese tick (`flushHouses`), con la lista entera de items de cada casa sucia y
+  el snapshot de quienes las tocaron. Una casa tiene a lo sumo `items_per_tile` (3) ×
+  casillas instancias (hoy, la más grande: 37 × 3 = 111 filas de `house_items`, que se
+  reescriben con `COPY` dentro de la transacción) y cada movimiento cuenta contra el
+  anti-flood de casas (`houses.action_burst` 8, `action_refill_ms` 300): un jugador
+  sostiene como mucho ~3 transfers por segundo moviendo cosas en su casa, del orden de un
+  intercambio (≈ 4–6 ms cada uno en Postgres local). Cien jugadores ordenando sus casas a
+  la vez (imposible: hay 5 casas) seguirían por debajo del techo del Saver.
+- **En el tick:** el paso de un jugador mira un bit de la casilla (`FlagHouse`) y solo en
+  casillas de casa busca la casa en un mapa; un cambio de casilla marca su casa sucia con
+  el mismo bit. Contar los items de una casa (límite) recorre sus casillas (≤ unas
+  decenas). El barrido de alquiler es una vez por segundo, de a lo sumo 32 casas, y el de
+  intrusos recorre los jugadores conectados mirando un bit. Nada lee la base en el loop.
+- **Arranque:** `LoadHouses` lee tres tablas chicas (dueños, invitados, items) una vez.

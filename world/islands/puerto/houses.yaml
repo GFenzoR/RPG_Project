@@ -1,0 +1,35 @@
+- id: puerto_house_net
+  name: house.puerto_house_net.name
+  rent: 800
+  rects:
+    - { x: 3151, y: 6396, z: 7, w: 6, h: 5 }
+    - { x: 3153, y: 6401, z: 7, w: 2, h: 1 }
+  doors:
+    - { x: 3153, y: 6401, z: 7 }
+    - { x: 3154, y: 6401, z: 7 }
+  exit: { x: 3153, y: 6402, z: 7 }
+  notes: "West wooden house south of the temple (T5.4)."
+
+- id: puerto_house_oar
+  name: house.puerto_house_oar.name
+  rent: 800
+  rects:
+    - { x: 3161, y: 6396, z: 7, w: 6, h: 5 }
+    - { x: 3163, y: 6401, z: 7, w: 2, h: 1 }
+  doors:
+    - { x: 3163, y: 6401, z: 7 }
+    - { x: 3164, y: 6401, z: 7 }
+  exit: { x: 3163, y: 6402, z: 7 }
+  notes: "East wooden house south of the temple, next to the road (T5.4)."
+
+- id: puerto_house_anchor
+  name: house.puerto_house_anchor.name
+  rent: 1000
+  rects:
+    - { x: 3181, y: 6409, z: 7, w: 7, h: 5 }
+    - { x: 3183, y: 6408, z: 7, w: 2, h: 1 }
+  doors:
+    - { x: 3183, y: 6408, z: 7 }
+    - { x: 3184, y: 6408, z: 7 }
+  exit: { x: 3183, y: 6407, z: 7 }
+  notes: "Largest house of Farol, east of the road below the main street (T5.4)."

@@ -865,6 +865,52 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   guardar, sus personajes reciben `Disconnect{SAVE_FAILED}` y sus logins
   `Disconnect{CHARACTER_LOCKED}` hasta que el servidor reinicie.
 
+### Casas (T5.4, `server/internal/session/house.go`)
+Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
+- **Abrir:** `UseItem` sobre una casilla de **puerta** de una casa (cualquier índice de la
+  pila; si hay items sueltos en la puerta, sobre ellos se usan como siempre) a hasta 3
+  casillas; el servidor contesta `HouseUpdate{open: true, ...}`. El cliente conoce las
+  puertas por `houses.yaml` (plugin de Vite) para mandar el `UseItem` con el suelo
+  (`stack_index` 0) cuando la casilla no tiene nada encima. `LookAt` sobre una puerta,
+  además del mensaje de siempre, manda `house.look_free` (`house`, `price`, `days`,
+  `size`) o `house.look_owned` (`house`, `name`).
+- `HouseCommand` exige seguir junto a una puerta o dentro de la casa y responde otra
+  `HouseUpdate` completa: `rent{}`, `extend{}`, `leave{}`, `guest_add{name}`,
+  `guest_remove{name}`, `guild_access{enabled}`, `transfer_offer{name, price}`,
+  `transfer_cancel{}`, `transfer_accept{house_id, price}` (lo que vio: si la oferta cambió,
+  `house.transfer_changed`), `enter{}` (con acceso, a hasta 3 casillas de una puerta: a una
+  casilla libre adentro junto a ella; `house.crowded` si no hay), `exit{}` (de adentro a la
+  salida) y `close{}` (sin respuesta). La ventana se abre y se usa a hasta 3 casillas de
+  una puerta o dentro de la casa. Fuera de `rent`, `transfer_accept`, `enter` y `exit`,
+  solo el dueño.
+- `HouseUpdate`: `house_id`, `name` (clave i18n), `island`, `rent` y `period_days`,
+  `size`, `owner` (vacío: libre), `is_owner`, solo para el dueño `paid_until` (ms Unix),
+  `guests` y `guild_access`; `max_guests`, `items` / `max_items`, `min_level`,
+  `max_periods`, la transferencia pendiente (`transfer_to`, `transfer_price`; para el
+  invitado `transfer_for_me`), `money`, `read_only`, `access` (puede entrar) e `inside`
+  (está adentro). `open:
+  false` cierra la ventana (se alejó de la puerta).
+- Pasar a una casilla de casa sin acceso: `WalkRejected` y `house.no_access`. Mover items
+  desde o hacia una casa: `house.no_access`, `house.owner_only` (un invitado saca algo),
+  `house.full` (`max`), `house.too_fast`, `house.read_only`.
+- Mensajes (`house` es un `content_id`: el cliente lo traduce como `house.<id>.name`):
+  `house.closed`, `staff`, `not_at_door`, `too_fast`, `read_only`, `no_access`,
+  `level_required` (`level`), `has_house`, `taken`, `not_enough_money` (`price`),
+  `rented` (`house`, `days`, `price`), `extended`, `max_periods` (`max`), `left`,
+  `not_owner`, `guest_bad_name`, `guests_full` (`max`), `guest_added` /
+  `guest_removed` (`name`), `guild_on` / `guild_off`, `transfer_bad`,
+  `transfer_offered` / `transfer_for_you` (`house`, `name`, `price`), `transfer_none`,
+  `transfer_cancelled`, `transfer_done`, `transferred_away`, `full`, `owner_only`,
+  `expelled`, `renewed` (`house`, `price`), `lost_unpaid`, `evicted`, `items_mailed`
+  (`house`, `count`); staff: `gm.house_info` (`id`, `name`, `until`, `guests`, `items`),
+  `gm.house_free`, `gm.house_unknown`, `gm.house_evicted`, `gm.house_moved`,
+  `gm.house_no_target`.
+- `GET /api/houses` (público, sin cuenta): `{houses: [{id, name, island, rent, size,
+  taken, owner}]}`, todas las casas del mapa; `taken` dice si está alquilada y `owner` es
+  el nombre del personaje, o `""` si está libre o el dueño no se muestra (personal,
+  cuentas deshabilitadas o suspendidas, como el ranking). Cache de
+  60 s, límite por IP y cupos de consulta compartidos con `/api/guilds`.
+
 ### Gremios (T5.1, `server/internal/session/guild.go`)
 Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.
 - **`GuildCommand{action, name, text, guild_id, war_id}`** (`war_id`: T5.2). Los miembros se nombran por nombre de
@@ -956,6 +1002,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `ShopOpen` | Lista de compra/venta |
 | `TradeUpdate` | Estado de la ventana de intercambio (T5.3) |
 | `MarketUpdate` | La ventana del mercado, o su cierre (T5.3) |
+| `HouseUpdate` | La ventana de una casa, o su cierre (T5.4) |
 | `WalkRejected` | El cliente corrige su predicción |
 | `Pong`, `Disconnect` | |
 

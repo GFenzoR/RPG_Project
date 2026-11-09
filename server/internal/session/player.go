@@ -128,7 +128,10 @@ type Player struct {
 	// the trade p is in (as requester or partner).
 	market *marketView
 	mkTAT  game.Tick
-	trade  *trade
+	// house is the house window p has open and hsTAT its anti-flood (T5.4).
+	house *houseView
+	hsTAT game.Tick
+	trade *trade
 	// tradeTAT is the trade anti-flood's theoretical arrival tick (GCRA).
 	tradeTAT game.Tick
 
@@ -268,6 +271,10 @@ func (p *Player) stopWalk() {
 }
 
 func (w *World) snapshot(p *Player, final bool) Snapshot {
+	// T5.4: no snapshot is taken while a house has unwritten item changes (an autosave
+	// would carry an inventory without the house that explains it). Every site that
+	// numbers a transfer flushes before numbering; inside the flush this is a no-op.
+	w.flushHouses()
 	p.saveSeq++
 	return Snapshot{
 		CharacterID: p.charID,
@@ -420,6 +427,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	if w.guildOn {
 		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
 	}
+	p.pos = w.houseLogin(p, p.pos) // T5.4: a house it may no longer enter (after the guild)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
 	w.published.Store(int32(len(w.players)))
@@ -482,11 +490,15 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 		return
 	}
 	w.reconcile(ctx.Tick, p) // a duplication right before leaving is caught too (T4.1)
+	// T5.4: a house p changed this tick is written with p's snapshot while p is still
+	// online, before its final save.
+	w.flushHouses()
 	w.disappearFromObservers(p)
 	w.partyLeftWorld(p)               // T3.3: leaving the world leaves the party
 	w.guildLeftWorld(p)               // T5.1: the guild sees it offline
 	w.cancelTrade(p, tradeCancelLeft) // T5.3
 	p.market = nil
+	p.house = nil
 	w.unindex(p)
 	delete(w.byClient, p.client)
 	if w.byChar[p.charID] == p {
@@ -546,6 +558,7 @@ func (w *World) retrySaves() {
 // jobs that Config.Save or Config.Transfer could not queue, in order (the caller writes
 // them synchronously). Call it only after the loop stopped.
 func (w *World) SaveAll() []Job {
+	w.flushHouses()
 	w.retrySaves()
 	pending := append([]Job(nil), w.retry...)
 	w.retry = w.retry[:0]

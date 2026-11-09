@@ -27,8 +27,10 @@ type Balance struct {
 	PvP PvP `yaml:"pvp"`
 	// Market and Trade are the global market and the trade window (T5.3); absent or
 	// enabled: false turns each off.
-	Market  Market  `yaml:"market"`
-	Trade   Trade   `yaml:"trade"`
+	Market Market `yaml:"market"`
+	Trade  Trade  `yaml:"trade"`
+	// Houses are the player houses (T5.4); absent or enabled: false turns them off.
+	Houses  Houses  `yaml:"houses"`
 	Travel  Travel  `yaml:"travel"`
 	Economy Economy `yaml:"economy"`
 	// Reports and Idle are the player reports and the idle disconnect (T4.1).
@@ -715,6 +717,12 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if err := b.Trade.check(); err != nil {
 		return Balance{}, err
+	}
+	if err := b.Houses.check(); err != nil {
+		return Balance{}, err
+	}
+	if b.Houses.Enabled && !b.Market.Enabled {
+		return Balance{}, errors.New("houses: they need the market (rent from and items to the market mailbox)")
 	}
 	if t := b.Travel; t.CombatBlockMs < 0 || t.CombatBlockMs > 600_000 || t.ArrivalRadius < 0 || t.ArrivalRadius > 5 {
 		return Balance{}, errors.New("travel: combat_block_ms must be in 0..600000 and arrival_radius in 0..5")

@@ -246,8 +246,12 @@ secundaria.
     ventanas en el cliente. Pendiente: sprite del tablero, refrescar las ventanas abiertas
     de otros cuando cambia un libro que miran, y ocultar en el momento las ofertas de una
     cuenta suspendida por la herramienta del operador (hoy, desde el próximo arranque).
-- [ ] **T5.4 Casas.** Casas del mapa que se alquilan con oro, con lista de invitados y
+- [x] **T5.4 Casas.** Casas del mapa que se alquilan con oro, con lista de invitados y
   puertas; los items dentro persisten entre reinicios. [T5.1]
+  Hecho: `houses.yaml` por isla (5 casas en el Farol y Raigal, `world.bin` v4), alquiler en
+  la puerta con renovación desde el buzón del mercado, una casa por cuenta, invitados y
+  gremio, transferir y dejar, items del suelo persistentes (`house_owners`, `house_guests`,
+  `house_items`) escritos por transfers agrupados por tick, staff `/house*` y `/houses`.
 - [ ] **T5.5 Isla Volcánica y Capítulo 3.** Tercera isla con su mapa, monstruos, NPCs,
   recetas y la continuación de la historia. 👤 arte si se quiere reemplazar placeholders.
   [T3.6]

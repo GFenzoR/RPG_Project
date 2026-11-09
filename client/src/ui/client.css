@@ -1222,7 +1222,9 @@ body.using-item canvas {
 }
 
 /* ---- Trade window and market (T5.3): top left (market) and top right (trade) ------ */
+/* ---- House window (T5.4): top left like the market ---- */
 .market,
+.house,
 .trade {
   position: absolute;
   top: 0.5rem;
@@ -1240,6 +1242,68 @@ body.using-item canvas {
 .market {
   left: 0.5rem;
   width: 27rem;
+}
+.house {
+  left: 0.5rem;
+  width: 22rem;
+}
+.house header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.house header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  flex: 1;
+}
+.house h3 {
+  margin: 0.6rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: #ffd27a;
+}
+.house p {
+  margin: 0.25rem 0;
+}
+.house .hint,
+.house .facts {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.house ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.house li,
+.house form {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0;
+}
+.house form input:not([type="number"]) {
+  flex: 1;
+  min-width: 0;
+}
+.house input[type="number"] {
+  width: 4.5rem;
+}
+.house label.guild {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.3rem 0;
+}
+.house label.guild input {
+  width: auto;
+  margin: 0;
+}
+.house .danger {
+  color: #fff;
+  background: #8a2a20;
 }
 .trade {
   right: 0.5rem;

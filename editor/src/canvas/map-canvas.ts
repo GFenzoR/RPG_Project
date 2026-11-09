@@ -15,6 +15,7 @@ const GRID_MIN_ZOOM = 0.6;
 const COLORS = {
   background: 0x0e1116,
   island: 0xe0b84a,
+  house: 0xd070ff,
   grid: 0xffffff,
   cursor: 0xffffff,
   eraser: 0xff5a5a,
@@ -216,6 +217,26 @@ export async function createMapCanvas(
             alpha: 0.9,
           });
         }
+      }
+      // Houses (T5.4): read-only outline, doors and exit (edited in houses.yaml).
+      for (const h of isl.houses) {
+        for (const r of h.rects) {
+          if (r.z !== s.floor) continue;
+          entities
+            .rect(r.x * T, r.y * T, r.w * T, r.h * T)
+            .fill({ color: COLORS.house, alpha: 0.1 });
+          entities.stroke({ width: 2 * px, color: COLORS.house, alpha: 0.9 });
+        }
+        for (const d of h.doors) {
+          if (d.z !== s.floor) continue;
+          entities
+            .rect((d.x + 0.25) * T, (d.y + 0.25) * T, T * 0.5, T * 0.5)
+            .fill({ color: COLORS.house, alpha: 0.9 });
+        }
+        if (h.exit.z === s.floor)
+          entities
+            .circle((h.exit.x + 0.5) * T, (h.exit.y + 0.5) * T, T * 0.15)
+            .fill({ color: COLORS.house, alpha: 0.9 });
       }
       for (const sp of isl.spawns) {
         if (sp.center.z !== s.floor) continue;

@@ -5,6 +5,7 @@ import type {
   BorderRule,
   Chunk,
   EntityList,
+  House,
   Island,
   IslandMeta,
   MapText,
@@ -24,6 +25,8 @@ export interface WireIsland {
   zones: Zone[];
   portals: Portal[];
   texts: MapText[];
+  /** T5.4: shown and validated, edited only in houses.yaml. */
+  houses: House[];
 }
 
 export interface WireWorld {
@@ -132,6 +135,7 @@ export function toWire(world: World): WireWorld {
       zones: i.zones,
       portals: i.portals,
       texts: i.texts,
+      houses: i.houses,
     })),
   };
 }
@@ -149,6 +153,7 @@ export function fromWire(wire: WireWorld): World {
       zones: w.zones,
       portals: w.portals,
       texts: w.texts,
+      houses: w.houses ?? [],
     });
   }
   return { meta: wire.meta, islands };

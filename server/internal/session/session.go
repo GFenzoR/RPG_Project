@@ -145,6 +145,9 @@ type Config struct {
 	// Market is the market state loaded from the database before the loop starts (T5.3).
 	// Nil with a Transfer starts an empty market.
 	Market *MarketData
+	// Houses is the house state loaded from the database before the loop starts (T5.4):
+	// owners, guests and items. Nil with houses enabled starts every house free.
+	Houses *HouseData
 	// Admin submits a staff command's audit entry, ban or unban to the admin goroutine
 	// without blocking (T2.6). It returns false if its queue is full; the World keeps
 	// the job and retries on the next ticks, so no audit entry is lost. Without Admin,
@@ -354,6 +357,27 @@ type World struct {
 	tradeRefill game.Tick
 	tradeBurst  game.Tick
 
+	// Houses (T5.4, house.go): balance houses (houseOn = enabled with the market), the
+	// period and anti-flood in ticks, every house by id and in map order, the houses by
+	// owner and by owner account, this tick's dirty houses and the players whose commands
+	// touched them, the player whose command runs now, the sweep's cursor and next tick.
+	houseOn       bool
+	hs            content.Houses
+	hsPeriod      time.Duration
+	hsRefill      game.Tick
+	hsBurst       game.Tick
+	houseByID     map[string]*house
+	houseList     []*house
+	houseByOwner  map[int64]*house
+	houseByAcc    map[int64]*house
+	houseOrphans  map[int64]bool // accounts owning a house no longer on the map
+	houseDirty    []*house
+	houseActors   []*Player
+	houseFlushing bool
+	cmdPlayer     *Player
+	houseCursor   int
+	houseNext     game.Tick
+
 	// Travel (T3.5): routes by captain NPC id, balance travel in ticks and tiles.
 	routes        map[string][]*route
 	fightFor      game.Tick
@@ -481,6 +505,7 @@ func New(cfg Config) (*World, error) {
 	}
 	w.initMarket()
 	w.initTrade()
+	w.initHouses()
 	if err := w.initConditions(); err != nil {
 		return nil, err
 	}

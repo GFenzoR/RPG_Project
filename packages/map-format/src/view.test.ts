@@ -23,6 +23,7 @@ function tiny(): Island {
     zones: [],
     portals: [],
     texts: [],
+    houses: [],
   };
 }
 

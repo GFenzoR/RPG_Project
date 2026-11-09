@@ -145,6 +145,26 @@ server/
   que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
   mide la cola del Saver más `World.PendingJobs`.
 
+- **Casas (T5.4):** `session/house.go` + `store/houses.go` + `app/houses.go` +
+  `httpapi/houses.go` (`balance.yaml houses`; necesita el mercado). Las casas son datos del
+  mapa (`world.House`, `world.bin` v4; `Map.HouseAt` y el bit `FlagHouse`, que `NewMap`
+  pone con `FlagProtection`). El loop es dueño de dueños, invitados e items de las casas
+  (cargados con `LoadHouses`). Todo cambio es un `Transfer` con `HouseOp` (mismos números en
+  `session` y `store`, caso en `applyHouseOp`). Los items del suelo de una casa: cualquier
+  camino que cambie una casilla tiene que pasar por `tileChanged` (o `containerChanged`
+  para un contenedor en el suelo), que marca la casa sucia; `flushHouses` la escribe
+  entera, con los snapshots de los jugadores cuyos comandos la tocaron
+  (`World.cmdPlayer`, puesto en `Input`), al final de cada comando, al principio de
+  `transfer`/`houseTransfer` (**antes de numerar**) y de `snapshot`, y al final del tick.
+  Todo sitio nuevo que numere un transfer tiene que vaciar las casas antes de
+  `nextTransfer++`: `SaveTransfer` rechaza un id menor que el último escrito
+  (`ErrTransferOrder`). Un movimiento de items desde o hacia una casa pasa por
+  `checkHouseMove` (acceso, solo el dueño saca, límite, anti-flood, `w.readOnly`) y un
+  uso por `mayUseInHouse`; un paso por `mayEnter`. Quien pierde el acceso sale por
+  `expel`/`expelIntruders`. Al liberar una casa, `mailHouseItems` manda los items
+  aplanados (`mailFlat`) al buzón del mercado en el mismo transfer. `/api/houses` es público: solo el
+  nombre del dueño, con las exclusiones del ranking (`queries/houses.sql`).
+
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).
 - Tests de integración con Postgres llevan build tag `integration` (`make test-integration`,

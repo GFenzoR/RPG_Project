@@ -29,6 +29,7 @@ const (
 	EconTravel   = "travel"   // boat fare and ticket
 	EconTrade    = "trade"    // trade window between two players (T5.3): items out and in
 	EconMarket   = "market"   // global market (T5.3): deposits, fills, withdrawals; ref fee = the posting fee (a sink)
+	EconHouse    = "house"    // houses (T5.4): rent (a sink), transfer price, items sent to the mailbox
 	EconGather   = "gather"   // fishing, mining, woodcutting
 	EconCraft    = "craft"    // crafting inputs out, output in
 	EconDeath    = "death"    // lost into the remains at death

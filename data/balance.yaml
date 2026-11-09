@@ -144,6 +144,17 @@ trade:                      # T5.3: the trade window between two adjacent player
   action_burst: 6           # anti-flood: 6 trade actions at once, then one every 300 ms
   action_refill_ms: 300     # (a completed trade writes both characters)
 
+houses:                     # T5.4 (docs/02-game-design.md, "Casas"). Own numbers.
+  enabled: true             # false: doors answer "closed" and nobody rents
+  min_level: 12             # to rent or receive a house
+  period_days: 7            # rent is paid in advance for this long (rent per house: houses.yaml)
+  max_periods: 4            # periods that may be paid ahead (renting pays the first)
+  max_guests: 20            # names on the guest list (the owner's guild is a switch apart)
+  items_per_tile: 3         # item instances per house tile (a stack counts once)
+  transfer_minutes: 10      # a transfer offer waits this long at the door
+  action_burst: 8           # anti-flood of house actions and item moves in houses:
+  action_refill_ms: 300     # 8 at once, then one every 300 ms (each move writes the house)
+
 pvp:                        # T5.2 (docs/02-game-design.md, "PvP"). Own numbers, see there why.
   enabled: true             # false: no player can hurt another one (PvE only, as before T5.2)
   min_level: 20             # below it: neither attacks players nor can be attacked by them

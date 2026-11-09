@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-// world.bin, format version 3. Little endian throughout:
+// world.bin, format version 4. Little endian throughout:
 //
 //	magic        "RPGWORLD"
 //	version      u16
@@ -24,6 +24,9 @@ import (
 //	    id u8 length + bytes, center u16 x, u16 y, u8 z, radius u8, respawn u32 seconds,
 //	    monsters u8 count, then per monster: id u8 length + bytes, count u16
 //	  npcs       u16 count, then per NPC: id u8 length + bytes, u16 x, u16 y, u8 z
+//	  houses     u16 count, then per house (T5.4): id u8 length + bytes, name u8 length +
+//	             bytes, rent u32, rects u8 count × (u16 x, u16 y, u8 z, u8 w, u8 h),
+//	             doors u8 count × (u16 x, u16 y, u8 z), exit u16 x, u16 y, u8 z
 //	  sectors    u32 count, then per sector (ordered by z, cy, cx):
 //	    z u8, cx u16, cy u16
 //	    ground   1024 × u16
@@ -34,7 +37,7 @@ import (
 // Encoding the same Map always produces the same bytes.
 
 // BinaryVersion is the world.bin format version this package reads and writes.
-const BinaryVersion = 3
+const BinaryVersion = 4
 
 var binaryMagic = [8]byte{'R', 'P', 'G', 'W', 'O', 'R', 'L', 'D'}
 
@@ -90,6 +93,14 @@ func checkEncodable(m *Map) error {
 		for _, n := range is.NPCs {
 			if len(n.NPC) > 0xFF {
 				return fmt.Errorf("island %q: NPC id %q too long", is.ID, n.NPC)
+			}
+		}
+		if len(is.Houses) > 0xFFFF {
+			return fmt.Errorf("island %q: %d houses do not fit", is.ID, len(is.Houses))
+		}
+		for _, h := range is.Houses {
+			if len(h.ID) > 0xFF || len(h.Name) > 0xFF || len(h.Rects) > 0xFF || len(h.Doors) > 0xFF {
+				return fmt.Errorf("island %q: house %q: id, name, rects or doors too long", is.ID, h.ID)
 			}
 		}
 		for _, s := range is.Sectors() {
@@ -156,6 +167,31 @@ func Encode(w io.Writer, m *Map) error {
 			b.u16(n.Pos.X)
 			b.u16(n.Pos.Y)
 			b.u8(n.Pos.Z)
+		}
+		b.u16(uint16(len(is.Houses)))
+		for _, h := range is.Houses {
+			b.u8(uint8(len(h.ID)))
+			b.bytes([]byte(h.ID))
+			b.u8(uint8(len(h.Name)))
+			b.bytes([]byte(h.Name))
+			b.u32(h.Rent)
+			b.u8(uint8(len(h.Rects)))
+			for _, r := range h.Rects {
+				b.u16(r.X)
+				b.u16(r.Y)
+				b.u8(r.Z)
+				b.u8(r.W)
+				b.u8(r.H)
+			}
+			b.u8(uint8(len(h.Doors)))
+			for _, d := range h.Doors {
+				b.u16(d.X)
+				b.u16(d.Y)
+				b.u8(d.Z)
+			}
+			b.u16(h.Exit.X)
+			b.u16(h.Exit.Y)
+			b.u8(h.Exit.Z)
 		}
 		sectors := is.Sectors()
 		b.u32(uint32(len(sectors)))
@@ -288,6 +324,25 @@ func Decode(data []byte) (*Map, error) {
 			n := NPCPlacement{NPC: string(b.take(int(b.u8())))}
 			n.Pos = Pos{X: b.u16(), Y: b.u16(), Z: b.u8()}
 			is.NPCs = append(is.NPCs, n)
+		}
+		houses := int(b.u16())
+		for range houses {
+			if b.err != nil {
+				break
+			}
+			h := House{ID: string(b.take(int(b.u8())))}
+			h.Name = string(b.take(int(b.u8())))
+			h.Rent = b.u32()
+			rects := int(b.u8())
+			for range rects {
+				h.Rects = append(h.Rects, HouseRect{X: b.u16(), Y: b.u16(), Z: b.u8(), W: b.u8(), H: b.u8()})
+			}
+			doors := int(b.u8())
+			for range doors {
+				h.Doors = append(h.Doors, Pos{X: b.u16(), Y: b.u16(), Z: b.u8()})
+			}
+			h.Exit = Pos{X: b.u16(), Y: b.u16(), Z: b.u8()}
+			is.Houses = append(is.Houses, h)
 		}
 		count := int(b.u32())
 		const minSectorBytes = 5 + SectorTiles*3 + 2
