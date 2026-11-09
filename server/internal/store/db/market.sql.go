@@ -42,6 +42,19 @@ func (q *Queries) BumpMarketHigh(ctx context.Context, arg BumpMarketHighParams) 
 	return err
 }
 
+const claimTransfer = `-- name: ClaimTransfer :execrows
+UPDATE market_id_high SET transfer_high = $1::bigint WHERE transfer_high < $1::bigint
+`
+
+// Takes transfer id: no row when a transfer with this id (or a later one) was written.
+func (q *Queries) ClaimTransfer(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, claimTransfer, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteFilledMarketOffer = `-- name: DeleteFilledMarketOffer :execrows
 DELETE FROM market_offers WHERE id = $1 AND amount = $2::integer
 `
@@ -228,18 +241,19 @@ func (q *Queries) LoadMarketBans(ctx context.Context, now pgtype.Timestamptz) ([
 }
 
 const loadMarketHigh = `-- name: LoadMarketHigh :one
-SELECT offer_high, mail_high FROM market_id_high
+SELECT offer_high, mail_high, transfer_high FROM market_id_high
 `
 
 type LoadMarketHighRow struct {
-	OfferHigh int64
-	MailHigh  int64
+	OfferHigh    int64
+	MailHigh     int64
+	TransferHigh int64
 }
 
 func (q *Queries) LoadMarketHigh(ctx context.Context) (LoadMarketHighRow, error) {
 	row := q.db.QueryRow(ctx, loadMarketHigh)
 	var i LoadMarketHighRow
-	err := row.Scan(&i.OfferHigh, &i.MailHigh)
+	err := row.Scan(&i.OfferHigh, &i.MailHigh, &i.TransferHigh)
 	return i, err
 }
 

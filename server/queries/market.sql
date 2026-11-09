@@ -39,7 +39,11 @@ WHERE b.lifted_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > sqlc.arg(n
 GROUP BY b.account_id;
 
 -- name: LoadMarketHigh :one
-SELECT offer_high, mail_high FROM market_id_high;
+SELECT offer_high, mail_high, transfer_high FROM market_id_high;
+
+-- name: ClaimTransfer :execrows
+-- Takes transfer id: no row when a transfer with this id (or a later one) was written.
+UPDATE market_id_high SET transfer_high = sqlc.arg(id)::bigint WHERE transfer_high < sqlc.arg(id)::bigint;
 
 -- name: BumpMarketHigh :exec
 UPDATE market_id_high SET offer_high = GREATEST(offer_high, sqlc.arg(offer_high)::bigint),

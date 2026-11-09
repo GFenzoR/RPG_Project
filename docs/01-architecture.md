@@ -140,9 +140,18 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
 - `store.SaveTransfer` lo escribe en **una transacción**: los snapshots (con
   `saveCharacterState`, como un guardado normal) y luego cada cambio del mercado. Una
   caída antes del commit deja todo como estaba (el inventario viejo y el mercado viejo);
-  después, todo nuevo. Un error transitorio se reintenta entero con backoff; uno
-  permanente (`ErrMarketConflict`, una restricción) se descarta con log y métrica
-  `rejected`: es un bug, la base queda coherente consigo misma.
+  después, todo nuevo. Un error transitorio se reintenta entero con backoff.
+- **Idempotente:** cada transfer tiene un id creciente que asigna el loop (sigue desde
+  `market_id_high.transfer_high` tras reiniciar). La transacción lo reclama primero
+  (`ClaimTransfer`); si ya está tomado, es el reintento de uno que sí se confirmó pero cuya
+  respuesta se perdió (timeout en el COMMIT), y no aplica nada otra vez.
+- **Sin mitades:** uno que no se guarda (error permanente como `ErrMarketConflict` o una
+  restricción, o abandonado al apagar con la base caída) se descarta con log y métrica, y
+  **marca a sus personajes**: el Saver no escribe ninguno de sus guardados siguientes en
+  ese proceso (tampoco los pendientes del apagado), así la base queda con el estado de
+  antes del transfer en ambos lados y no con la mitad (el inventario nuevo sin las filas
+  del mercado). Es un bug o una caída: el personaje pierde lo jugado desde ahí, nunca se
+  duplica nada.
 - La otra parte de una operación del mercado no necesita snapshot: lo que recibe va a su
   buzón, que es una fila del mercado. Por eso funciona aunque esté desconectada.
 

@@ -224,10 +224,10 @@ func New(cfg Config) (*App, error) {
 		var market *session.MarketData
 		if ms != nil {
 			transfer = saver.SubmitTransfer
-			if cfg.Balance.Market.Enabled {
-				if market, err = loadMarket(ms, cfg.Clock.Now(), cfg.Balance.Market); err != nil {
-					return nil, err
-				}
+			// Loaded even with the market off: the trade window's transfers continue
+			// from the last transfer id written.
+			if market, err = loadMarket(ms, cfg.Clock.Now(), cfg.Balance.Market); err != nil {
+				return nil, err
 			}
 		}
 		w, err := session.New(session.Config{
@@ -395,6 +395,10 @@ func (a *App) Run(ctx context.Context) error {
 	stage("final saves", func(ctx context.Context) error {
 		var errs []error
 		for _, j := range pending { // the saver's queue was full when SaveAll ran
+			if a.saver.Tainted(j) {
+				errs = append(errs, errors.New("save skipped: a transfer of its character was not stored"))
+				continue
+			}
 			if j.Transfer != nil {
 				if err := a.writeTransfer(ctx, *j.Transfer); err != nil {
 					errs = append(errs, fmt.Errorf("transfer %d: %w", j.Transfer.ID, err))

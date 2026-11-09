@@ -16,6 +16,8 @@ type Querier interface {
 	BumpMarketHigh(ctx context.Context, arg BumpMarketHighParams) error
 	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
 	CharacterOfAccount(ctx context.Context, arg CharacterOfAccountParams) (string, error)
+	// Takes transfer id: no row when a transfer with this id (or a later one) was written.
+	ClaimTransfer(ctx context.Context, id int64) (int64, error)
 	CloseReport(ctx context.Context, arg CloseReportParams) (int64, error)
 	// Deletes a token and returns it if it was still valid: tokens are single-use.
 	ConsumeAccountToken(ctx context.Context, arg ConsumeAccountTokenParams) (ConsumeAccountTokenRow, error)

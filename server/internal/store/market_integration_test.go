@@ -63,7 +63,10 @@ func TestMarketTransfers(t *testing.T) {
 	if err := st.SaveCharacterState(ctx, state(sela, store.InventoryItem{ItemID: salve, Count: 10})); err != nil {
 		t.Fatal(err)
 	}
+	nextID := int64(0)
+	id := func() int64 { nextID++; return nextID }
 	post := store.Transfer{
+		ID:         id(),
 		Characters: []store.CharacterState{state(sela, store.InventoryItem{ItemID: salve, Count: 7})},
 		Market: []store.MarketOp{{Kind: store.MarketOfferAdd, Offer: store.MarketOffer{ID: 1, CharacterID: sela,
 			Side: store.MarketSell, ItemID: salve, Amount: 3, Price: 5, Created: now, Expires: now.Add(time.Hour)}}},
@@ -92,22 +95,30 @@ func TestMarketTransfers(t *testing.T) {
 	if units(sela, salve) != 7 || offerLeft(1) != 3 {
 		t.Fatalf("after the transfer: %d salves saved, offer %d", units(sela, salve), offerLeft(1))
 	}
-	// Writing it again (a duplicate) breaks the primary key: permanent, all rolled back.
-	if err := st.SaveTransfer(ctx, post); !store.Permanent(err) {
+	// A retry of the same transfer (its COMMIT went through, the answer was lost) is a
+	// no-op: nothing is applied twice.
+	if err := st.SaveTransfer(ctx, post); err != nil || offerLeft(1) != 3 {
+		t.Fatalf("retry of a stored transfer: %v, offer %d", err, offerLeft(1))
+	}
+	// The same rows under a new id (a bug) break the primary key: permanent, rolled back.
+	dup := post
+	dup.ID = id()
+	if err := st.SaveTransfer(ctx, dup); !store.Permanent(err) {
 		t.Fatalf("duplicate offer: %v", err)
 	}
 
 	// Two buyers of the last 3 units at once: each transfer saves its buyer with the
 	// salves and fills the offer; exactly one commits.
-	buy := func(id int64) store.Transfer {
+	buy := func(char, tid int64) store.Transfer {
 		return store.Transfer{
-			Characters: []store.CharacterState{state(id, store.InventoryItem{ItemID: salve, Count: 3})},
+			ID:         tid,
+			Characters: []store.CharacterState{state(char, store.InventoryItem{ItemID: salve, Count: 3})},
 			Market: []store.MarketOp{
 				{Kind: store.MarketOfferFill, ID: 1, Units: 3},
 				{Kind: store.MarketGoldAdd, CharacterID: sela, Gold: 15},
-				{Kind: store.MarketHistoryAdd, History: store.MarketHistory{CharacterID: sela, Other: id, Side: store.MarketSell,
+				{Kind: store.MarketHistoryAdd, History: store.MarketHistory{CharacterID: sela, Other: char, Side: store.MarketSell,
 					ItemID: salve, Amount: 3, Price: 5, At: now}},
-				{Kind: store.MarketHistoryAdd, History: store.MarketHistory{CharacterID: id, Other: sela, Side: store.MarketBuy,
+				{Kind: store.MarketHistoryAdd, History: store.MarketHistory{CharacterID: char, Other: sela, Side: store.MarketBuy,
 					ItemID: salve, Amount: 3, Price: 5, At: now}},
 			},
 			OfferHigh: 1,
@@ -115,37 +126,43 @@ func TestMarketTransfers(t *testing.T) {
 	}
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
-	for i, id := range []int64{uno, dos} {
+	// Two loops cannot write the same market, but the database must hold anyway: distinct
+	// transfer ids, the same unit.
+	tids := []int64{id(), id()}
+	for i, c := range []int64{uno, dos} {
 		wg.Add(1)
-		go func() { defer wg.Done(); errs[i] = st.SaveTransfer(ctx, buy(id)) }()
+		go func() { defer wg.Done(); errs[i] = st.SaveTransfer(ctx, buy(c, tids[i])) }()
 	}
 	wg.Wait()
-	ok := 0
 	for _, err := range errs {
-		switch {
-		case err == nil:
-			ok++
-		case !errors.Is(err, store.ErrMarketConflict):
+		if err != nil && !errors.Is(err, store.ErrMarketConflict) {
 			t.Fatalf("losing buyer: %v", err)
 		}
 	}
-	if ok != 1 || units(uno, salve)+units(dos, salve) != 3 || offerLeft(1) != -1 {
-		t.Fatalf("winners %d, salves %d+%d, offer %d", ok, units(uno, salve), units(dos, salve), offerLeft(1))
+	// Exactly one got the unit (the other either finds it gone or, with the lower id,
+	// is taken for a retry of an older transfer and applies nothing).
+	if units(uno, salve)+units(dos, salve) != 3 || offerLeft(1) != -1 {
+		t.Fatalf("salves %d+%d, offer %d", units(uno, salve), units(dos, salve), offerLeft(1))
+	}
+	// A later fill of the gone offer fails whole: the buyer's snapshot is not saved.
+	late := buy(sela, id())
+	if err := st.SaveTransfer(ctx, late); !errors.Is(err, store.ErrMarketConflict) || units(sela, salve) != 7 {
+		t.Fatalf("fill of a gone offer: %v, seller salves %d", err, units(sela, salve))
 	}
 
 	// Mailbox: an item and gold; a withdrawal of more gold than there is fails whole.
-	mail := store.Transfer{Market: []store.MarketOp{{Kind: store.MarketMailAdd, Mail: store.MarketMail{ID: 4, CharacterID: uno,
+	mail := store.Transfer{ID: id() + 10, Market: []store.MarketOp{{Kind: store.MarketMailAdd, Mail: store.MarketMail{ID: 4, CharacterID: uno,
 		Item: store.InventoryItem{ItemID: salve, Count: 2}, Created: now}}}, MailHigh: 4}
 	if err := st.SaveTransfer(ctx, mail); err != nil {
 		t.Fatal(err)
 	}
-	over := store.Transfer{Characters: []store.CharacterState{state(sela, store.InventoryItem{ItemID: coin, Count: 99})},
+	over := store.Transfer{ID: 100, Characters: []store.CharacterState{state(sela, store.InventoryItem{ItemID: coin, Count: 99})},
 		Market: []store.MarketOp{{Kind: store.MarketGoldAdd, CharacterID: sela, Gold: -99}}}
 	if err := st.SaveTransfer(ctx, over); !store.Permanent(err) || units(sela, coin) != 0 {
 		t.Fatalf("overdrawn mailbox: %v, coins saved %d", err, units(sela, coin))
 	}
 	// An offer that stays open for the reload.
-	open := store.Transfer{Market: []store.MarketOp{{Kind: store.MarketOfferAdd, Offer: store.MarketOffer{ID: 2, CharacterID: dos,
+	open := store.Transfer{ID: 101, Market: []store.MarketOp{{Kind: store.MarketOfferAdd, Offer: store.MarketOffer{ID: 2, CharacterID: dos,
 		Side: store.MarketBuy, ItemID: salve, Amount: 4, Price: 6, Created: now, Expires: now.Add(2 * time.Hour)}}},
 		OfferHigh: 2, MailHigh: 4}
 	if err := st.SaveTransfer(ctx, open); err != nil {
@@ -159,6 +176,9 @@ func TestMarketTransfers(t *testing.T) {
 	}
 	if len(d.Offers) != 1 || d.Offers[0].ID != 2 || d.Offers[0].Name != "Dos" || d.Offers[0].AccountID != acc {
 		t.Fatalf("offers %+v", d.Offers)
+	}
+	if d.TransferHigh != 101 {
+		t.Fatalf("transfer high %d", d.TransferHigh)
 	}
 	if d.Gold[sela] != 15 || len(d.Mail) != 1 || d.Mail[0].Item.Count != 2 || d.OfferHigh != 2 || d.MailHigh != 4 {
 		t.Fatalf("gold %v, mail %+v, high %d/%d", d.Gold, d.Mail, d.OfferHigh, d.MailHigh)

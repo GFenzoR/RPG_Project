@@ -86,6 +86,8 @@ type MarketData struct {
 	Sales               []MarketSale
 	Bans                map[int64]time.Time // zero: permanent
 	OfferHigh, MailHigh int64
+	// TransferHigh is the id of the last transfer written.
+	TransferHigh int64
 }
 
 // MarketOp is one market change of a Transfer.
@@ -101,8 +103,10 @@ type MarketOp struct {
 }
 
 // Transfer is what SaveTransfer writes in one transaction: the characters' states,
-// then the market changes in order, then the id high-water marks.
+// then the market changes in order, then the id high-water marks. ID grows with every
+// transfer (also across restarts: LoadMarket gives the last one written).
 type Transfer struct {
+	ID                  int64
 	Characters          []CharacterState
 	Market              []MarketOp
 	OfferHigh, MailHigh int64
@@ -115,6 +119,15 @@ var transferHook func(step int) error
 // SaveTransfer writes t in one transaction: all of it or nothing.
 func (s *Store) SaveTransfer(ctx context.Context, t Transfer) error {
 	return s.inTx(ctx, func(q *db.Queries) error {
+		// A retry of a transfer that was already committed (its answer was lost) finds
+		// its id taken: nothing is applied twice.
+		n, err := q.ClaimTransfer(ctx, t.ID)
+		if err != nil {
+			return fmt.Errorf("claim transfer %d: %w", t.ID, err)
+		}
+		if n == 0 {
+			return nil
+		}
 		for _, c := range t.Characters {
 			if err := saveCharacterState(ctx, q, c); err != nil {
 				return err
@@ -205,7 +218,7 @@ func (s *Store) LoadMarket(ctx context.Context, now time.Time, historyDays, perC
 		if err != nil {
 			return fmt.Errorf("market ids: %w", err)
 		}
-		d.OfferHigh, d.MailHigh = high.OfferHigh, high.MailHigh
+		d.OfferHigh, d.MailHigh, d.TransferHigh = high.OfferHigh, high.MailHigh, high.TransferHigh
 		offers, err := q.LoadMarketOffers(ctx)
 		if err != nil {
 			return fmt.Errorf("market offers: %w", err)

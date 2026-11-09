@@ -117,6 +117,8 @@ type MarketData struct {
 	Bans      map[int64]time.Time
 	OfferHigh int64
 	MailHigh  int64
+	// TransferHigh is the id of the last transfer written: new ones continue after it.
+	TransferHigh int64
 }
 
 // MarketOpKind says what a MarketOp changes.
@@ -522,6 +524,23 @@ func (w *World) marketFee(v int64) int64 {
 	return min(max(v*int64(w.mk.FeePermille)/1000, w.mk.FeeMin), w.mk.FeeMax)
 }
 
+// moneyThatFits is the largest part of amount (up to it) that canReceiveMoney accepts.
+func (w *World) moneyThatFits(p *Player, amount int64) int64 {
+	if w.canReceiveMoney(p, amount) {
+		return amount
+	}
+	lo, hi := int64(0), amount // lo fits, hi does not
+	for hi-lo > 1 {
+		mid := lo + (hi-lo)/2
+		if w.canReceiveMoney(p, mid) {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return lo
+}
+
 // canReceiveMoney reports whether amount, in the fewest coins, fits in p's backpack
 // (new stacks only: conservative) and capacity.
 func (w *World) canReceiveMoney(p *Player, amount int64) bool {
@@ -742,20 +761,8 @@ func (w *World) marketWithdraw(ctx *game.TickContext, p *Player) {
 	}
 	var ops []MarketOp
 	full := false
-	if b.gold > 0 {
-		if w.canReceiveMoney(p, b.gold) {
-			gold := b.gold
-			w.giveMoney(p, gold)
-			w.econGold(p, EconMarket, "mailbox", gold)
-			b.gold = 0
-			ops = append(ops, MarketOp{Kind: MarketGoldAdd, CharacterID: p.charID, Gold: -gold})
-			p.emit(systemMsg(msgMarketWithdrawn, num("price", int(gold))))
-		} else {
-			full = true
-		}
-	}
 	taken := 0
-	for !full && taken < len(b.items) {
+	for taken < len(b.items) {
 		m := b.items[taken]
 		def := w.byNum[m.Item.ItemID]
 		if def == nil { // retired item: it stays in the database, out of the way
@@ -776,6 +783,20 @@ func (w *World) marketWithdraw(ctx *game.TickContext, p *Player) {
 		taken++
 	}
 	b.items = slices.Delete(b.items, 0, taken)
+	if b.gold > 0 {
+		// Then as much of the gold as fits (the rest waits): it never takes the room of items.
+		gold := w.moneyThatFits(p, b.gold)
+		if gold < b.gold {
+			full = true
+		}
+		if gold > 0 {
+			w.giveMoney(p, gold)
+			w.econGold(p, EconMarket, "mailbox", gold)
+			b.gold -= gold
+			ops = append(ops, MarketOp{Kind: MarketGoldAdd, CharacterID: p.charID, Gold: -gold})
+			p.emit(systemMsg(msgMarketWithdrawn, num("price", int(gold))))
+		}
+	}
 	if b.gold == 0 && len(b.items) == 0 {
 		delete(w.mail, p.charID)
 	}

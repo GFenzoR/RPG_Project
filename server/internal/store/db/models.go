@@ -218,9 +218,10 @@ type MarketHistory struct {
 }
 
 type MarketIDHigh struct {
-	One       bool
-	OfferHigh int64
-	MailHigh  int64
+	One          bool
+	OfferHigh    int64
+	MailHigh     int64
+	TransferHigh int64
 }
 
 type MarketMailGold struct {

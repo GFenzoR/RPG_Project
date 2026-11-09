@@ -67,6 +67,11 @@ type Saver struct {
 	done     chan struct{}
 	stop     chan struct{} // closed when Stop's deadline passes: abandon retries
 	stopOnce sync.Once
+	// tainted are the characters of a transfer that was dropped (rejected or abandoned):
+	// none of their later snapshots or transfers is written in this process, because it
+	// would store one half of that transfer (the inventory without the market rows, or
+	// the other way round). Guarded by mu.
+	tainted map[int64]bool
 }
 
 // NewSaver builds a Saver; call Start to run it.
@@ -83,7 +88,8 @@ func NewSaver(cfg SaverConfig) (*Saver, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
-	return &Saver{cfg: cfg, ch: make(chan Job, cfg.Queue), done: make(chan struct{}), stop: make(chan struct{})}, nil
+	return &Saver{cfg: cfg, ch: make(chan Job, cfg.Queue), done: make(chan struct{}), stop: make(chan struct{}),
+		tainted: map[int64]bool{}}, nil
 }
 
 // Submit queues s without blocking. It returns false if the queue is full or the saver
@@ -138,6 +144,12 @@ func (s *Saver) Stop(ctx context.Context) error {
 func (s *Saver) run() {
 	defer close(s.done)
 	for j := range s.ch {
+		if s.Tainted(j) {
+			s.cfg.Logger.Error("session: save skipped, an earlier transfer of the character was not stored",
+				"character", j.Snapshot.CharacterID, "transfer", j.Transfer != nil)
+			s.failed(SaveRejected)
+			continue
+		}
 		if j.Transfer != nil {
 			s.writeTransfer(*j.Transfer)
 		} else {
@@ -146,9 +158,38 @@ func (s *Saver) run() {
 	}
 }
 
+// Tainted reports whether j touches a character whose earlier transfer was not stored:
+// then j must not be written (the caller writing pending jobs at shutdown checks it too).
+func (s *Saver) Tainted(j Job) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.tainted) == 0 {
+		return false
+	}
+	if j.Transfer == nil {
+		return s.tainted[j.Snapshot.CharacterID]
+	}
+	for _, sn := range j.Transfer.Snapshots {
+		if s.tainted[sn.CharacterID] {
+			return true
+		}
+	}
+	return false
+}
+
+// taint marks the characters of a transfer that was not stored.
+func (s *Saver) taint(t Transfer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, sn := range t.Snapshots {
+		s.tainted[sn.CharacterID] = true
+	}
+}
+
 // writeTransfer writes t like write writes a snapshot: retried until it is stored, it is
-// rejected (ErrPermanent: logged loudly, the loop's state and the database may now
-// differ until the next save of its characters) or the saver stops.
+// rejected (ErrPermanent) or the saver stops. A transfer that is not stored taints its
+// characters: their later saves are skipped (logged), so the database keeps the state
+// before the transfer on both sides instead of half of it.
 func (s *Saver) writeTransfer(t Transfer) {
 	backoff := 500 * time.Millisecond
 	for attempt := 1; ; attempt++ {
@@ -164,6 +205,7 @@ func (s *Saver) writeTransfer(t Transfer) {
 		case errors.Is(err, ErrPermanent) || errors.Is(err, ErrGone):
 			s.cfg.Logger.Error("session: transfer dropped, rejected by the database", "transfer", t.ID, "err", err)
 			s.failed(SaveRejected)
+			s.taint(t)
 			return
 		}
 		s.cfg.Logger.Error("session: transfer failed, retrying", "transfer", t.ID, "attempt", attempt,
@@ -173,6 +215,7 @@ func (s *Saver) writeTransfer(t Transfer) {
 		case <-s.stop:
 			s.cfg.Logger.Error("session: transfer abandoned at shutdown", "transfer", t.ID)
 			s.failed(SaveAbandoned)
+			s.taint(t)
 			return
 		case <-s.cfg.Clock.After(backoff):
 		}

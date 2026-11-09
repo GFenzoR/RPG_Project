@@ -62,11 +62,15 @@ CREATE INDEX market_history_character_idx ON market_history (character_id, id DE
 -- Reference prices: the sales of the last days, by item.
 CREATE INDEX market_history_item_idx ON market_history (item_id, at) WHERE side = 1;
 
--- The highest offer and mail item ids ever issued (one row).
+-- The highest offer and mail item ids ever issued (one row), and the last transfer
+-- written: transfer ids grow (the loop continues from transfer_high after a restart) and
+-- the persistence goroutine writes them in order, so a retry of a transfer whose COMMIT
+-- went through but whose answer was lost finds its id already taken and applies nothing.
 CREATE TABLE market_id_high (
-    one        BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (one),
-    offer_high BIGINT NOT NULL CHECK (offer_high >= 0),
-    mail_high  BIGINT NOT NULL CHECK (mail_high >= 0)
+    one           BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (one),
+    offer_high    BIGINT NOT NULL CHECK (offer_high >= 0),
+    mail_high     BIGINT NOT NULL CHECK (mail_high >= 0),
+    transfer_high BIGINT NOT NULL DEFAULT 0 CHECK (transfer_high >= 0)
 );
 INSERT INTO market_id_high (offer_high, mail_high) VALUES (0, 0);
 

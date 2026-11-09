@@ -467,6 +467,9 @@ func New(cfg Config) (*World, error) {
 	w.initPvP()
 	w.initMarket()
 	w.initTrade()
+	if cfg.Market != nil {
+		w.nextTransfer = uint64(max(cfg.Market.TransferHigh, 0))
+	}
 	if err := w.initConditions(); err != nil {
 		return nil, err
 	}

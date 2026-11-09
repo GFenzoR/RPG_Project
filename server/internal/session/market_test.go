@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 	"testing"
@@ -590,4 +591,52 @@ func TestSaverWritesTransfers(t *testing.T) {
 	if len(got) != 1 || !slices.Equal(saved, []uint64{5, 9}) {
 		t.Fatalf("got %v, saved %v", got, saved)
 	}
+}
+
+// A transfer that is not stored taints its characters: their later snapshots are not
+// written (only half of the transfer would reach the database), others' still are.
+func TestSaverSkipsSavesAfterADroppedTransfer(t *testing.T) {
+	var wrote []int64
+	s, err := session.NewSaver(session.SaverConfig{
+		Write: func(_ context.Context, sn session.Snapshot) error { wrote = append(wrote, sn.CharacterID); return nil },
+		WriteTransfer: func(context.Context, session.Transfer) error {
+			return fmt.Errorf("%w: conflict", session.ErrPermanent)
+		},
+		Clock: clock.NewFake(clock.Epoch),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Start()
+	s.SubmitTransfer(session.Transfer{ID: 1, Snapshots: []session.Snapshot{{CharacterID: 1}}})
+	s.Submit(session.Snapshot{CharacterID: 1, Final: true})
+	s.Submit(session.Snapshot{CharacterID: 2})
+	if err := s.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(wrote, []int64{2}) || !s.Tainted(session.Job{Snapshot: session.Snapshot{CharacterID: 1}}) {
+		t.Fatalf("wrote %v", wrote)
+	}
+}
+
+// Mailbox gold that does not fit at once is withdrawn in part, and the items still come.
+func TestMarketWithdrawPartialGold(t *testing.T) {
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Market = &session.MarketData{
+			Gold:     map[int64]int64{nextChar + 1: 1000},
+			Mail:     []session.MarketMail{{ID: 1, CharacterID: nextChar + 1, Item: session.ItemState{ItemID: salveID, Count: 2}}},
+			MailHigh: 1,
+		}
+	})
+	// Two free slots: the salves take one, then 100 of the 1000 copper (10 stacks) fit.
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(swordID, 1, 0), stack(bagID, 1, 1))
+	evs := h.send(cs, withdraw)
+	if !hasKey(evs, "market.withdrawn") || !hasKey(evs, "market.mailbox_room") {
+		t.Fatalf("keys %v", systemKeys(evs))
+	}
+	gold, items := h.w.Mailbox(s.CharacterID())
+	if h.w.Money(s) != 100 || gold != 900 || len(items) != 0 || h.w.CountItem(s, "test_salve") != 2 {
+		t.Fatalf("money %d, mailbox %d %v", h.w.Money(s), gold, items)
+	}
+	h.sim.Step()
 }

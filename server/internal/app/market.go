@@ -32,7 +32,8 @@ func loadMarket(ms MarketStore, now time.Time, cfg content.Market) (*session.Mar
 	if err != nil {
 		return nil, fmt.Errorf("load market: %w", err)
 	}
-	out := &session.MarketData{Gold: d.Gold, Bans: d.Bans, OfferHigh: d.OfferHigh, MailHigh: d.MailHigh}
+	out := &session.MarketData{Gold: d.Gold, Bans: d.Bans, OfferHigh: d.OfferHigh, MailHigh: d.MailHigh,
+		TransferHigh: d.TransferHigh}
 	for _, o := range d.Offers {
 		out.Offers = append(out.Offers, session.MarketOffer{ID: o.ID, CharacterID: o.CharacterID, AccountID: o.AccountID,
 			Name: o.Name, Sell: o.Side == store.MarketSell, ItemID: uint16(o.ItemID), Amount: o.Amount, Price: o.Price,
@@ -74,7 +75,7 @@ func (a *App) writeTransfer(ctx context.Context, t session.Transfer) error {
 	if !ok {
 		return fmt.Errorf("%w: the store has no transfers", session.ErrPermanent)
 	}
-	st := store.Transfer{OfferHigh: t.OfferHigh, MailHigh: t.MailHigh}
+	st := store.Transfer{ID: int64(t.ID), OfferHigh: t.OfferHigh, MailHigh: t.MailHigh}
 	for _, s := range t.Snapshots {
 		st.Characters = append(st.Characters, a.characterState(s))
 	}
