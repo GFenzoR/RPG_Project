@@ -321,7 +321,7 @@ func (w *World) damagePlayerBy(ctx *game.TickContext, p *Player, dmg int, elemen
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	}
 	if p.health <= 0 {
-		w.die(ctx, p)
+		w.dieBy(ctx, p, attacker)
 	}
 }
 

@@ -31,12 +31,15 @@ func (w *World) Blessings(p *Player) int {
 // corpse, it loses experience and skills by the blessings it held (which it loses),
 // and wakes up at its residence temple with full health and mana. The new state is
 // saved at once so a crash cannot undo the death.
-func (w *World) die(ctx *game.TickContext, p *Player) {
+func (w *World) die(ctx *game.TickContext, p *Player) { w.dieBy(ctx, p, nil) }
+
+// dieBy is die with the player whose hit killed p (nil for a monster or the world).
+func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	d := w.cfg.Balance.Death
 	at := p.pos
 	p.recordEvent(ctx.Tick, eventDied, "", 0, 0)
 	// T5.2: the players that took part get the kill; a defeat in an arena costs nothing.
-	if w.pvpDeath(ctx, p) {
+	if w.pvpDeath(ctx, p, killer) {
 		w.arenaDefeat(ctx, p)
 		return
 	}
@@ -97,7 +100,7 @@ func (w *World) die(ctx *game.TickContext, p *Player) {
 		}
 	}
 
-	w.wakeAtTemple(ctx, p)
+	w.wakeAtTemple(ctx, p, false)
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
@@ -109,7 +112,7 @@ func (w *World) die(ctx *game.TickContext, p *Player) {
 
 // wakeAtTemple ends a death: full health and mana, no target, nobody attacking p, and p
 // at its residence temple.
-func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player) {
+func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player, arena bool) {
 	p.health, p.mana = p.maxHealth, p.maxMana
 	p.target = nil
 	for _, m := range w.monsters {
@@ -117,7 +120,7 @@ func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player) {
 			m.target = nil
 		}
 	}
-	w.pvpDied(ctx.Now, p)
+	w.pvpDied(ctx.Now, p, arena)
 	temple := w.temple(p.town)
 	to, ok := w.freeNear(temple, 3)
 	if !ok {
@@ -132,7 +135,7 @@ func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player) {
 func (w *World) arenaDefeat(ctx *game.TickContext, p *Player) {
 	w.clearConditions(ctx, holder{p: p}, false)
 	w.refreshSpeed(holder{p: p})
-	w.wakeAtTemple(ctx, p)
+	w.wakeAtTemple(ctx, p, true)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	p.emit(systemMsg(msgPvPArenaDefeat))
 	w.save(w.snapshot(p, false))

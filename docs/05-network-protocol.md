@@ -803,6 +803,11 @@ Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
   `outlaw`, que el cliente traduce como `client.skull.<id>`), `pvp.logout_locked` (un
   `Logout` rechazado: la conexión sigue), `pvp.protection_locked` (con su
   `WalkRejected`), `pvp.skull_removed_staff`, y para el staff `gm.skull_removed` (`name`).
+- **Desconexión con bloqueo PvP:** si la conexión se cierra mientras dura el bloqueo, el
+  personaje no sale del mundo: queda sin conexión (no recibe nada) y atacable hasta que el
+  bloqueo vence; ahí se guarda y sale. Un login de ese personaje en ese tiempo lo retoma
+  como un relogueo normal (`Welcome` y vista completa, mismo estado y mismo bloqueo); no hay
+  mensaje nuevo ni rechazo.
 - **Guerras de gremios** dentro de `GuildCommand` (campo nuevo `war_id`):
   `WAR_DECLARE` (`name` = el gremio enemigo), `WAR_ACCEPT` / `WAR_DECLINE` / `WAR_SURRENDER`
   (`war_id`). Solo el líder. Por chat: `/guild war declare|accept|decline|surrender Gremio`.

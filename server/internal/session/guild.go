@@ -754,6 +754,9 @@ func (w *World) cmdGuildRename(ctx *game.TickContext, p *Player, args []string) 
 		}
 	}
 	w.guildChanged(g)
+	for _, war := range g.wars { // T5.2: the enemies' war lists name it
+		w.guildChanged(war.sides[1-war.side(g)])
+	}
 	p.emit(systemMsg(msgGMGuildRenamed, textParam("guild", old), textParam("name", newName)))
 	w.audit(ctx, p, "guild_rename", nil, auditArgs, auditOK)
 	return true

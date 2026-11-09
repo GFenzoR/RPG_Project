@@ -803,7 +803,7 @@
           "maximum": 3600000
         },
         "kill_credit_ms": {
-          "description": "A death is a kill of every player that hurt the victim this long before it (at most aggressor_ms).",
+          "description": "A death is a kill of every player that hurt the victim this long before it (at most aggressor_ms and lock_ms, so the attacker is still in the world).",
           "type": "integer",
           "minimum": 1000
         },
@@ -836,7 +836,7 @@
                   "kills": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 1000
+                    "maximum": 256
                   }
                 }
               }
@@ -884,7 +884,7 @@
                   "kills": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 1000
+                    "maximum": 256
                   }
                 }
               }

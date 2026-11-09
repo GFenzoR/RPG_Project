@@ -2153,9 +2153,15 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
     preyBattle.getByRole("button", { name: hunter.name }).locator('[data-skull="aggressor"]'),
   ).toBeVisible({ timeout: 10_000 });
   await expect(preyBattle.locator('[data-skull="aggressor"]')).toHaveAttribute("title", "agresor");
-  // The prey, in safe mode, may defend itself against a marked attacker.
+  // The prey, in safe mode, may defend itself against a marked attacker. The client sets
+  // its target at once, so wait for the server: a refusal (pvp.safe_mode) would clear it
+  // and log the reason; the hunter's health bar dropping is the server's own answer.
   await preyBattle.getByRole("button", { name: hunter.name }).click();
-  await expect.poll(() => preyP.evaluate(() => window.__rpgClient?.target())).toBeTruthy();
+  const hunterHp = async (): Promise<number | undefined> =>
+    (await preyP.evaluate(() => window.__rpgClient?.battle()))?.find((c) => c.health < 100)?.health;
+  await expect.poll(hunterHp, { timeout: 15_000 }).toBeDefined();
+  await expect(preyP.getByTestId("game-log")).not.toContainText("El modo seguro no te deja");
+  expect(await preyP.evaluate(() => window.__rpgClient?.target())).toBeTruthy();
   // The attacker cannot log out in the middle of the fight.
   await hunterP.getByRole("button", { name: "Salir del juego" }).click();
   await expect(hunterP.getByTestId("game-log")).toContainText(

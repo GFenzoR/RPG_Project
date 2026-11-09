@@ -305,6 +305,7 @@ type World struct {
 	aggrDur      time.Duration
 	unjustKeep   time.Duration
 	skulled      []*Player
+	linkDead     []*Player
 	pvpNext      game.Tick
 	pvpBuf       []*Player
 	wars         map[int64]*guildWar

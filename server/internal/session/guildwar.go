@@ -41,14 +41,14 @@ const (
 	msgWarDisbanded    = "guild.war_disbanded"
 )
 
-// Guild war end reasons; the values match store.WarEnd*.
+// Guild war end reasons (GuildChange.Reason); the values match store.WarEnd*.
 const (
-	warEndDeclined = iota + 1
-	warEndExpired
-	warEndSurrender
-	warEndKillLimit
-	warEndTime
-	warEndDisbanded
+	WarEndDeclined = iota + 1
+	WarEndExpired
+	WarEndSurrender
+	WarEndKillLimit
+	WarEndTime
+	WarEndDisbanded
 )
 
 // GuildWarRecord is one stored open war (GuildData.Wars).
@@ -207,7 +207,7 @@ func (w *World) warAnswer(ctx *game.TickContext, p *Player, id int64, accept boo
 		return
 	}
 	if !accept {
-		w.endWar(ctx, war, warEndDeclined, -1)
+		w.endWar(ctx, war, WarEndDeclined, -1)
 		return
 	}
 	war.active = true
@@ -233,7 +233,7 @@ func (w *World) warSurrender(ctx *game.TickContext, p *Player, id int64) {
 		p.emit(systemMsg(msgWarNotFound))
 		return
 	}
-	w.endWar(ctx, war, warEndSurrender, 1-war.side(g))
+	w.endWar(ctx, war, WarEndSurrender, 1-war.side(g))
 }
 
 // warKill counts a kill of a's guild in war; reaching the limit wins it.
@@ -251,7 +251,7 @@ func (w *World) warKill(ctx *game.TickContext, war *guildWar, a *Player) {
 	w.guildChanged(war.sides[0])
 	w.guildChanged(war.sides[1])
 	if war.kills[i] >= war.limit {
-		w.endWar(ctx, war, warEndKillLimit, i)
+		w.endWar(ctx, war, WarEndKillLimit, i)
 	}
 }
 
@@ -264,7 +264,7 @@ func (w *World) checkWars(ctx *game.TickContext) {
 			continue
 		}
 		if !war.active {
-			w.endWar(ctx, war, warEndExpired, -1)
+			w.endWar(ctx, war, WarEndExpired, -1)
 			continue // endWar removed index i
 		}
 		winner := -1
@@ -274,7 +274,7 @@ func (w *World) checkWars(ctx *game.TickContext) {
 		case war.kills[1] > war.kills[0]:
 			winner = 1
 		}
-		w.endWar(ctx, war, warEndTime, winner)
+		w.endWar(ctx, war, WarEndTime, winner)
 	}
 }
 
@@ -291,13 +291,13 @@ func (w *World) endWar(ctx *game.TickContext, war *guildWar, reason, winner int)
 		enemy := textParam("guild", war.sides[1-i].name)
 		var key string
 		switch {
-		case reason == warEndDeclined:
+		case reason == WarEndDeclined:
 			key = msgWarDeclined
-		case reason == warEndExpired:
+		case reason == WarEndExpired:
 			key = msgWarExpired
-		case reason == warEndDisbanded:
+		case reason == WarEndDisbanded:
 			key = msgWarDisbanded
-		case reason == warEndSurrender && winner != i:
+		case reason == WarEndSurrender && winner != i:
 			key = msgWarSurrendered
 		case winner == i:
 			key = msgWarWon
@@ -325,7 +325,7 @@ func (w *World) dropWar(war *guildWar) {
 // its rows with the guild; the change is written first so the order stays clear).
 func (w *World) endWarsOf(ctx *game.TickContext, g *guildState) {
 	for len(g.wars) > 0 {
-		w.endWar(ctx, g.wars[0], warEndDisbanded, -1)
+		w.endWar(ctx, g.wars[0], WarEndDisbanded, -1)
 	}
 }
 

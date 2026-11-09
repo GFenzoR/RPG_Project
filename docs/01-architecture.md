@@ -117,7 +117,9 @@ del snapshot sin guardar. Las guerras siguen el camino de los gremios: se cargan
 inyectable (`ctx.Now`); los bloqueos, en ticks. Costo en el tick: cada chequeo lee unas
 pocas banderas de casilla y como mucho 8 atacantes recientes por víctima; un barrido por
 segundo recorre solo a los jugadores con marca y las guerras abiertas (como mucho
-`max_wars` por gremio), nunca a todos los jugadores.
+`max_wars` por gremio), nunca a todos los jugadores. Un jugador que pierde la conexión con
+el bloqueo PvP activo sigue en el mundo (link-dead: su lote se descarta en el flush) hasta
+que el bloqueo vence; el mismo barrido lo saca y guarda su snapshot final.
 
 Transacciones: el trade entre jugadores se resuelve atómicamente en el loop (estado en
 memoria) y se persiste ambos personajes en una sola transacción de base de datos.

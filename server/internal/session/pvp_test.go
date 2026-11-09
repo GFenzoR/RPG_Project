@@ -22,7 +22,7 @@ import (
 //	pvp (arena) x 40..50, y 40..50
 func pvpRules() content.PvP {
 	return content.PvP{Enabled: true, MinLevel: 20, DamagePct: 50, AggressorMs: 60000, LockMs: 10000,
-		KillLockMs: 30000, KillCreditMs: 20000,
+		KillLockMs: 30000, KillCreditMs: 10000,
 		Murderer: content.PvPMark{Hours: 2, Windows: []content.PvPWindow{{Hours: 1, Kills: 2}},
 			EquipmentDropPct: 100, BackpackDropPct: 100},
 		Outlaw: content.PvPMark{Hours: 5, Windows: []content.PvPWindow{{Hours: 1, Kills: 4}},
@@ -36,6 +36,7 @@ func newPvP(t *testing.T, data *session.GuildData, opts ...option) *pvpWorld {
 	t.Helper()
 	all := append([]option{func(c *session.Config) {
 		c.Balance.PvP = pvpRules()
+		c.Balance.Conditions = testConditions()
 		c.Spells = testSpells()
 		c.Balance.Skills.Base["magic"] = content.SkillBase{StartLevel: 0, BaseTries: magicTries}
 	}}, opts...)
@@ -646,5 +647,185 @@ func TestPvPArenaPerHit(t *testing.T) {
 	g.kill(c, d)
 	if st := g.w.PvPStateForTest(c); st.Kills != 1 || len(st.Unjust) != 0 || c.Skull() != pb.Skull_SKULL_UNSPECIFIED {
 		t.Fatalf("an arena kill counted against Cid: %+v %v", st, c.Skull())
+	}
+}
+
+// burn puts a burning of a on v (20 per hit, 4 hits).
+func (g *pvpWorld) burn(a, v *session.Player) {
+	g.t.Helper()
+	g.do(func(ctx *game.TickContext) {
+		if !g.w.ApplyConditionForTest(ctx, v, nil, &content.ConditionApply{ID: "burning", Damage: 20, Ticks: 4}, a.ID()) {
+			g.t.Fatal("no burn")
+		}
+	})
+}
+
+// A condition never starts an unjustified attack: a burn from an arena duel stops hurting
+// once its victim leaves the arena, even with the caster's safe mode off.
+func TestPvPConditionAfterArena(t *testing.T) {
+	g := newPvP(t, nil)
+	ca, a := g.fighter("Ana", 0, 45, 45, 30, 0)
+	_, v := g.fighter("Bea", 0, 46, 45, 30, 0)
+	g.unsafe(ca)
+	g.hit(v, a)
+	g.burn(a, v)
+	g.do(func(*game.TickContext) { g.w.Teleport(v, pos(30, 30)) })
+	before, _ := v.Health()
+	g.sim.RunFor(5 * time.Second)
+	if cur, _ := v.Health(); cur < before || a.Skull() != pb.Skull_SKULL_UNSPECIFIED {
+		t.Fatalf("Bea %d → %d, Ana %v", before, cur, a.Skull())
+	}
+	g.input(ca, logout())
+	g.sim.Step()
+	if !ca.closed {
+		t.Fatal("the burn locked Ana")
+	}
+}
+
+// Nor after the war that justified it ends.
+func TestPvPConditionAfterWar(t *testing.T) {
+	tg := newTwoGuilds(t)
+	id := tg.pendingWar()
+	tg.war(tg.cc, wAccept, "", id)
+	tg.unsafe(tg.cb)
+	tg.burn(tg.b, tg.d)
+	tg.war(tg.cc, wSurrender, "", id)
+	before, _ := tg.d.Health()
+	tg.sim.RunFor(5 * time.Second)
+	if cur, _ := tg.d.Health(); cur < before || tg.b.Skull() != pb.Skull_SKULL_UNSPECIFIED {
+		t.Fatalf("Dan %d → %d, Bea %v", before, cur, tg.b.Skull())
+	}
+}
+
+// A burn may continue an unjustified attack its author made by hand.
+func TestPvPConditionContinuesOwnAttack(t *testing.T) {
+	g := newPvP(t, nil)
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	_, v := g.fighter("Bea", 0, 11, 10, 30, 0)
+	g.unsafe(ca)
+	g.hit(a, v)
+	g.burn(a, v)
+	before, _ := v.Health()
+	g.sim.RunFor(3 * time.Second)
+	if cur, _ := v.Health(); cur >= before {
+		t.Fatalf("Bea %d → %d", before, cur)
+	}
+}
+
+// Losing the connection during the PvP lock leaves the character in the world, link-dead
+// and attackable, until the lock ends; a death meanwhile still credits it.
+func TestPvPLinkDead(t *testing.T) {
+	g := newPvP(t, nil)
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	_, v := g.fighter("Bea", 0, 11, 10, 30, 0, func(c *session.Character) { c.Experience = 200000 })
+	g.hit(a, v)
+	g.sim.Command(g.w.Leave(ca))
+	g.sim.Step()
+	if p := g.w.PlayerByCharacter(a.CharacterID()); p != a || !a.LinkDead() {
+		t.Fatalf("Ana left the world: %v", p)
+	}
+	// A monster finishes Bea: Ana still gets the unjustified kill (and its 30 s lock).
+	g.do(func(ctx *game.TickContext) { g.w.HurtForTest(ctx, v, 1_000_000) })
+	if st := g.w.PvPStateForTest(a); len(st.Unjust) != 1 || st.Kills != 1 {
+		t.Fatalf("Ana %+v", st)
+	}
+	// Attacking her renews the lock.
+	_, c := g.fighter("Cid", 0, 11, 11, 30, 0)
+	g.sim.RunFor(25 * time.Second)
+	g.hit(c, a)
+	g.sim.RunFor(8 * time.Second)
+	if g.w.PlayerByCharacter(a.CharacterID()) == nil {
+		t.Fatal("Ana left while her lock lasted")
+	}
+	g.sim.RunFor(4 * time.Second)
+	if g.w.PlayerByCharacter(a.CharacterID()) != nil {
+		t.Fatal("Ana is still in the world after her lock")
+	}
+	last := g.saves[len(g.saves)-1]
+	if last.CharacterID != a.CharacterID() || !last.Final || len(last.PvP.Unjust) != 1 {
+		t.Fatalf("last save %+v", last)
+	}
+}
+
+// A new login during the lock takes the link-dead character over, lock included.
+func TestPvPRejoinDuringLock(t *testing.T) {
+	g := newPvP(t, nil)
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	_, v := g.fighter("Bea", 0, 11, 10, 30, 0)
+	g.hit(a, v)
+	g.sim.Command(g.w.Leave(ca))
+	g.sim.Step()
+	ca2, a2 := g.fighter("Ana", a.CharacterID(), 10, 10, 30, 0)
+	if a2 == a || a2.LinkDead() || a2.Pos() != a.Pos() || len(g.w.Players()) != 2 {
+		t.Fatalf("took over: %v, link-dead %v, at %v", a2 != a, a2.LinkDead(), a2.Pos())
+	}
+	g.input(ca2, logout())
+	g.sim.Step()
+	if keys := sysKeys(ca2.take()); ca2.closed || !slices.Contains(keys, "pvp.logout_locked") {
+		t.Fatalf("the lock did not carry over: %v", keys)
+	}
+}
+
+// An arena hit gives no kill outside it: a monster that kills the victim away from the
+// arena is an ordinary death, and the duelist gets nothing.
+func TestPvPArenaHitThenMonster(t *testing.T) {
+	g := newPvP(t, nil)
+	_, a := g.fighter("Ana", 0, 45, 45, 30, 0)
+	_, v := g.fighter("Bea", 0, 46, 45, 30, 0, func(c *session.Character) { c.Experience = 200000 })
+	g.hit(a, v)
+	g.do(func(*game.TickContext) { g.w.Teleport(v, pos(20, 30)) })
+	xp := v.Experience()
+	g.do(func(ctx *game.TickContext) { g.w.HurtForTest(ctx, v, 1_000_000) })
+	if v.Experience() >= xp || g.w.PvPStateForTest(a).Kills != 0 {
+		t.Fatalf("experience %d → %d, Ana %+v", xp, v.Experience(), g.w.PvPStateForTest(a))
+	}
+}
+
+// Losing a duel is no way out of a fight: the aggressor skull stays.
+func TestPvPArenaDefeatKeepsSkull(t *testing.T) {
+	g := newPvP(t, nil)
+	_, a := g.fighter("Ana", 0, 45, 45, 30, 0, func(c *session.Character) { c.Experience = 200000 })
+	_, c := g.fighter("Cid", 0, 39, 45, 30, 0)
+	_, f := g.fighter("Fay", 0, 46, 45, 30, 0)
+	g.hit(a, c)
+	if a.Skull() != pb.Skull_SKULL_AGGRESSOR {
+		t.Fatal("no skull")
+	}
+	xp := a.Experience()
+	g.kill(f, a)
+	if a.Experience() != xp || a.Skull() != pb.Skull_SKULL_AGGRESSOR {
+		t.Fatalf("experience %d → %d, skull %v", xp, a.Experience(), a.Skull())
+	}
+}
+
+// A GM renames a guild at war: the enemy's war list names it anew.
+func TestGuildWarRename(t *testing.T) {
+	tg := newTwoGuilds(t)
+	id := tg.pendingWar()
+	tg.war(tg.cc, wAccept, "", id)
+	cgm, _ := tg.fighter("Gina", 0, 20, 20, 30, session.RoleGM)
+	tg.cc.take()
+	tg.input(cgm, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/guildrename Alpha = Gamma"))
+	tg.sim.RunTicks(2)
+	ws := lastGuild(tg.cc).GetWars()
+	if len(ws) != 1 || ws[0].GetEnemyName() != "Gamma" {
+		t.Fatalf("Cid's wars %v", ws)
+	}
+}
+
+// With PvP off nobody sees a saved skull, and it is saved back as it was.
+func TestPvPOffKeepsSavedSkull(t *testing.T) {
+	g := newPvP(t, nil, func(c *session.Config) { c.Balance.PvP.Enabled = false })
+	until := g.sim.Now().Add(time.Hour)
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0, func(c *session.Character) {
+		c.PvP = session.PvPState{Skull: int(pb.Skull_SKULL_MURDERER), SkullUntil: until, Kills: 3}
+	})
+	if a.Skull() != pb.Skull_SKULL_UNSPECIFIED {
+		t.Fatalf("skull %v", a.Skull())
+	}
+	g.sim.Command(g.w.Leave(ca))
+	g.sim.Step()
+	if st := g.saves[len(g.saves)-1].PvP; st.Skull != int(pb.Skull_SKULL_MURDERER) || !st.SkullUntil.Equal(until) || st.Kills != 3 {
+		t.Fatalf("saved %+v", st)
 	}
 }

@@ -227,6 +227,10 @@ type PvPWar struct {
 	MaxWars int `yaml:"max_wars"`
 }
 
+// MaxUnjustKills is how many unjustified kills of a character the server keeps (the
+// newest): a window cannot ask for more.
+const MaxUnjustKills = 256
+
 // MaxWindowHours is the longest window of m.
 func (m PvPMark) MaxWindowHours() int {
 	h := 0
@@ -243,8 +247,8 @@ func (m PvPMark) check(name string) error {
 		return fmt.Errorf("pvp.%s: hours in 1..8760, 1..4 windows, drop percentages in 0..100", name)
 	}
 	for _, w := range m.Windows {
-		if w.Hours < 1 || w.Hours > 24*60 || w.Kills < 1 || w.Kills > 1000 {
-			return fmt.Errorf("pvp.%s.windows: hours in 1..1440, kills in 1..1000", name)
+		if w.Hours < 1 || w.Hours > 24*60 || w.Kills < 1 || w.Kills > MaxUnjustKills {
+			return fmt.Errorf("pvp.%s.windows: hours in 1..1440, kills in 1..%d", name, MaxUnjustKills)
 		}
 	}
 	return nil
@@ -255,8 +259,8 @@ func (p PvP) check() error {
 		return nil
 	}
 	if p.MinLevel < 1 || p.DamagePct < 1 || p.DamagePct > 100 || p.AggressorMs < 1000 || p.LockMs < 1000 ||
-		p.KillLockMs < p.LockMs || p.KillLockMs > 3_600_000 || p.KillCreditMs < 1000 || p.KillCreditMs > p.AggressorMs {
-		return errors.New("pvp: min_level >= 1, damage_pct in 1..100, aggressor_ms and lock_ms >= 1000, kill_lock_ms in lock_ms..3600000, kill_credit_ms in 1000..aggressor_ms")
+		p.KillLockMs < p.LockMs || p.KillLockMs > 3_600_000 || p.KillCreditMs < 1000 || p.KillCreditMs > p.AggressorMs || p.KillCreditMs > p.LockMs {
+		return errors.New("pvp: min_level >= 1, damage_pct in 1..100, aggressor_ms and lock_ms >= 1000, kill_lock_ms in lock_ms..3600000, kill_credit_ms in 1000..min(aggressor_ms, lock_ms)")
 	}
 	if err := p.Murderer.check("murderer"); err != nil {
 		return err

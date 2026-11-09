@@ -232,8 +232,7 @@ secundaria.
     `SetSafeMode`, `Creature.skull`/`CreatureSkull`, acciones de guerra en `GuildCommand`
     y `GuildUpdate.wars`, `/unskull` auditado, toda Puerto `no_pvp`, arena en Raigal,
     marca en el mapa y la lista de batalla, modo seguro y guerras en el panel del gremio.
-    Pendiente: que un personaje bloqueado quede en el mundo al cerrar la conexión (hoy
-    reconectar borra el bloqueo), que una condición recuerde a su autor tras un relogueo,
+    Pendiente: que una condición recuerde a su autor tras un relogueo,
     hechizos de condición a distancia contra jugadores y sprites de las marcas.
 - [ ] **T5.3 Mercado global.** Ofertas de compra y venta de items `tradeable` entre
   jugadores, con depósito y comisión en oro (sumidero), transaccional y con log de

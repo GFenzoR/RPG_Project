@@ -367,6 +367,11 @@ func (w *World) flushPlayer(tick game.Tick, p *Player) bool {
 	if len(p.out) == 0 {
 		return true
 	}
+	if p.linkDead {
+		clear(p.out)
+		p.out = p.out[:0] // no connection: nobody to tell (T5.2)
+		return true
+	}
 	b := &pb.ServerBatch{Tick: uint64(tick), Events: p.out}
 	p.out = make([]*pb.ServerMessage, 0, cap(p.out)) // the batch now belongs to the client
 	return p.client.Send(b)

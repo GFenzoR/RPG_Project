@@ -802,9 +802,11 @@ apaga todo y el juego queda como antes de T5.2: nadie puede herir a otro jugador
   (`puerto`, también el tutorial) es `no_pvp` entera.
 - **`pvp` (arena):** si los dos están adentro se pelea sin marcas, sin bloqueo y sin
   castigo: el derrotado despierta en su templo sin perder experiencia, skills, items ni
-  bendiciones. Se juzga golpe por golpe: si alguien que se lleva la muerte golpeó desde
-  afuera, la muerte cuenta como cualquier otra. Un duelo en la arena no da derecho a
-  defensa propia afuera. Hay una chica en la arena de Raigal (Isla del Bosque).
+  bendiciones. Es una derrota de arena solo si la víctima muere en una casilla `pvp` por el
+  golpe de un jugador que también está en la arena; cualquier otra muerte (un monstruo,
+  un golpe desde afuera, fuera de la arena) es una muerte normal, y los golpes de arena no
+  dan crédito de muerte fuera de ella. Un duelo en la arena no da derecho a defensa propia
+  afuera, y perderlo no quita la marca de agresor ni el bloqueo que se traían de afuera. Hay una chica en la arena de Raigal (Isla del Bosque).
 - **El resto del mundo:** PvP abierto con marcas.
 - **Nivel:** por debajo de `min_level` (20) no se ataca ni se es atacado por jugadores. Es
   más que la protección de novato (8) a propósito: quien llega a 20 ya salió de Puerto y
@@ -843,16 +845,19 @@ Las duraciones (60 h y 200 h) obligan a jugar varios días con la marca puesta.
   sin bendiciones (que siguen bajando la pérdida de experiencia).
 - **Bloqueo de combate PvP:** quien ataca a un jugador no puede salir del juego ni entrar a
   una zona de protección por `lock_ms` (40 s); tras una muerte injustificada,
-  `kill_lock_ms` (9 min). Quien recibe el ataque no puede salir del juego por `lock_ms`,
+  `kill_lock_ms` (9 min). `kill_credit_ms` no puede pasar de `lock_ms`: quien se lleva una muerte sigue en
+  el mundo para cobrarla. Quien recibe el ataque no puede salir del juego por `lock_ms`,
   pero sí refugiarse en una zona de protección. El bloqueo también cuenta como "en combate"
   para los barcos, la desconexión por inactividad y los chequeos de presencia. Cerrar la
-  conexión saca igual al personaje del mundo (pendiente: que quede en el mundo mientras
-  dure el bloqueo).
+  conexión durante el bloqueo **no** saca al personaje: queda en el mundo sin conexión
+  ("link-dead"), sin actuar y atacable, y cada golpe que recibe renueva el bloqueo. Cuando
+  vence, se guarda y sale. Si su dueño vuelve a entrar mientras tanto, retoma ese mismo
+  personaje (posición, vida, marca y bloqueo incluidos).
 - **Recompensa:** matar jugadores no da experiencia ni otra recompensa (sería farmeable
   entre cuentas propias). Golpear jugadores tampoco entrena skills ni el escudo.
 
 ### Muerte por PvP
-Toda muerte en la que un jugador hirió a la víctima en los últimos `kill_credit_ms` (50 s)
+Toda muerte en la que un jugador hirió a la víctima en los últimos `kill_credit_ms` (40 s)
 cuenta para cada uno de ellos: suma a su contador de muertes (`pvp_kills`), y es
 injustificada para quien la atacó sin justificación. Los dos reciben un mensaje (quién
 derrotó a quién; si la víctima no veía a quien la mató, `pvp.killed_unseen` sin nombre) y
@@ -864,7 +869,9 @@ Todo golpe de un jugador a otro (cuerpo a cuerpo, distancia, varitas, hechizos, 
 las condiciones que deja) se escala a `damage_pct` (60 %): sin golpes de un solo turno.
 Los jugadores no tienen resistencias elementales; la armadura y el escudo frenan los golpes
 físicos como contra un monstruo. Una condición de otro jugador (fuego, veneno...) solo
-daña donde ese jugador podría atacar ahora.
+daña si ese jugador podría atacar ahora (zonas, niveles, staff y su modo seguro) y nunca
+empieza un ataque injustificado: solo continúa uno que su autor ya hizo con la mano. Una
+quemadura de un duelo de arena o de una guerra que terminó deja de dañar.
 
 ### Modo seguro
 Interruptor del cliente, **activado por defecto** (cada login empieza así hasta que el
@@ -896,8 +903,7 @@ jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.
 - Reportes: el contexto incluye `attack_player` y `kill_player` con el nombre del otro.
 
 ### Pendiente
-Que un personaje con bloqueo quede en el mundo al cerrar la conexión (hoy, desconectar y
-volver a entrar borra el bloqueo, también el de una muerte injustificada); que una condición
+Que una condición
 de otro jugador recuerde a su autor tras un relogueo (hoy pasa a dañar como una del mundo);
 hechizos de condición
 a distancia contra jugadores (hoy solo contra monstruos); sprites de las marcas (hoy son

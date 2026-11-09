@@ -128,7 +128,7 @@ pvp:                        # T5.2 (docs/02-game-design.md, "PvP"). Own numbers,
   aggressor_ms: 420000      # aggressor skull: 7 min after the last unjustified attack
   lock_ms: 40000            # attacker: no logout or protection zone; victim: no logout
   kill_lock_ms: 540000      # 9 min after an unjustified kill
-  kill_credit_ms: 50000     # a death is a kill of everyone that hurt the victim this recently
+  kill_credit_ms: 40000     # a death is a kill of everyone that hurt the victim this recently (<= lock_ms)
   murderer:
     hours: 60               # lasts since the last unjustified kill
     windows: [{hours: 20, kills: 4}, {hours: 120, kills: 9}]

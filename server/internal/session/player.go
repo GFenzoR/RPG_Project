@@ -145,6 +145,8 @@ type Player struct {
 	hitBy      []pvpHit
 	lockUntil  game.Tick
 	fightUntil game.Tick
+	// linkDead: its connection closed during the lock; it stays until the lock ends.
+	linkDead bool
 
 	// Travel (T3.5): the last tick p fought (attacked, hurt or hitting a monster; 0 =
 	// never), which blocks sailing for balance travel.combat_block_ms.
@@ -289,7 +291,7 @@ func (w *World) Join(c Character, client Client) game.Command {
 // idempotent: a client that already left is ignored.
 func (w *World) Leave(client Client) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
-		if p := w.byClient[client]; p != nil {
+		if p := w.byClient[client]; p != nil && !w.linkDeadOnLeave(ctx.Tick, p) {
 			w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false)
 		}
 	})
@@ -345,7 +347,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		return
 	}
 	var seq uint64
+	var carry *Player // T5.2: the player this login replaces, for its PvP locks
 	if old := w.byChar[c.ID]; old != nil {
+		carry = old
 		// Logged in again while online: continue from the in-memory state.
 		c = w.state(old, c)
 		w.remove(ctx, old, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_IN_ELSEWHERE, false)
@@ -396,6 +400,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
 	p.storage = quest.NewLog(c.Storage)
 	w.loadPvP(ctx, p, c.PvP) // before anyone is told about p (Creature.skull)
+	if carry != nil {
+		w.pvpCarry(carry, p) // a link-dead character taken over keeps its lock
+	}
 	if w.guildOn {
 		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
 	}

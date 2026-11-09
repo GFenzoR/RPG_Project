@@ -232,7 +232,9 @@ func (a *adminWorker) abandon(job session.AdminJob) {
 	if job.Kind == session.AdminGuild && job.Guild != nil {
 		g := job.Guild
 		a.log.Error("admin: guild change abandoned at shutdown", "op", g.Op, "guild", g.GuildID, "character", g.CharacterID,
-			"other", g.OtherID, "name", g.Name, "text", g.Text, "rank", g.Rank, "at", g.At, "expires", g.Expires)
+			"other", g.OtherID, "name", g.Name, "text", g.Text, "rank", g.Rank, "at", g.At, "expires", g.Expires,
+			"war", g.WarID, "enemy", g.EnemyID, "kill_limit", g.KillLimit, "kills", g.Kills, "enemy_kills", g.EnemyKills,
+			"reason", g.Reason, "winner", g.WinnerID)
 		return
 	}
 	e := job.Audit

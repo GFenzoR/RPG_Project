@@ -118,7 +118,11 @@ server/
   `ctx.Now` (persisten en el snapshot) y los bloqueos ticks; `checkPvP` barre una vez por
   segundo solo `World.skulled` y las guerras abiertas. Las guerras son cambios de gremio
   (`GuildWar*` en `session` y `store`, mismos valores) y su id lo asigna el loop
-  (`war_high`). Pegarle a jugadores no entrena ni alimenta `abHurt` (anti-bot).
+  (`war_high`). Pegarle a jugadores no entrena ni alimenta `abHurt` (anti-bot). Una
+  condición de un jugador pasa por `conditionMayHurt` (nunca empieza un ataque
+  injustificado). `Leave` con bloqueo deja al jugador link-dead (`linkDeadOnLeave`, sin
+  enviarle nada) hasta que `checkPvP` lo saca; un login nuevo lo retoma con `pvpCarry`.
+  `kill_credit_ms <= lock_ms` lo valida el balance: quien cobra una muerte sigue en el mundo.
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

@@ -214,8 +214,9 @@ func (w *World) conditionHit(ctx *game.TickContext, h holder, c *condition) {
 			return
 		}
 		if a := w.pvpSource(c.source, p); a != nil {
-			// T5.2: a player's condition hurts only where that player could hurt p now.
-			if key, _ := w.pvpPlace(a, p); key == "" {
+			// T5.2: a player's condition hurts only where that player could attack p now,
+			// and never starts an unjustified attack (see conditionMayHurt).
+			if w.conditionMayHurt(ctx.Tick, a, p) {
 				w.hurtPlayer(ctx, a, p, c.damage, el, false)
 			}
 			return

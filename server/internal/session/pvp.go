@@ -54,7 +54,7 @@ const maxHitBy = 8
 
 // maxUnjust bounds the unjustified kills remembered per player (older ones beyond the
 // windows are dropped anyway).
-const maxUnjust = 256
+const maxUnjust = content.MaxUnjustKills
 
 // PvPState is the persisted PvP state of a character (Character.PvP, Snapshot.PvP).
 type PvPState struct {
@@ -105,6 +105,9 @@ func (w *World) loadPvP(ctx *game.TickContext, p *Player, s PvPState) {
 	case pb.Skull_SKULL_MURDERER, pb.Skull_SKULL_OUTLAW:
 		p.mark, p.markUntil = pb.Skull(s.Skull), s.SkullUntil
 	}
+	if !w.pvpOn {
+		return // kept for the next snapshot, but nobody sees a skull with PvP off
+	}
 	p.skull = w.currentSkull(p, ctx.Now)
 	if p.skull != pb.Skull_SKULL_UNSPECIFIED {
 		w.listSkulled(p)
@@ -113,12 +116,14 @@ func (w *World) loadPvP(ctx *game.TickContext, p *Player, s PvPState) {
 
 // pvpState is what a snapshot saves of p.
 func (w *World) pvpState(p *Player) PvPState {
-	s := PvPState{Skull: int(p.skull), Kills: p.pvpKills, Unjust: slices.Clone(p.unjust)}
-	switch p.skull {
-	case pb.Skull_SKULL_AGGRESSOR:
-		s.SkullUntil = p.aggrUntil
-	case pb.Skull_SKULL_MURDERER, pb.Skull_SKULL_OUTLAW:
-		s.SkullUntil = p.markUntil
+	// From the marks themselves, not p.skull: with PvP off a saved skull is kept as it was.
+	// An expired one is saved too; loadPvP ignores it.
+	s := PvPState{Kills: p.pvpKills, Unjust: slices.Clone(p.unjust)}
+	switch {
+	case p.mark != pb.Skull_SKULL_UNSPECIFIED:
+		s.Skull, s.SkullUntil = int(p.mark), p.markUntil
+	case !p.aggrUntil.IsZero():
+		s.Skull, s.SkullUntil = int(pb.Skull_SKULL_AGGRESSOR), p.aggrUntil
 	}
 	return s
 }
@@ -168,6 +173,10 @@ func (w *World) listSkulled(p *Player) {
 // pvpLeftWorld forgets p in the PvP lists when it leaves the world.
 func (w *World) pvpLeftWorld(p *Player) {
 	p.ptarget = nil
+	if p.linkDead {
+		p.linkDead = false
+		w.linkDead = slices.DeleteFunc(w.linkDead, func(o *Player) bool { return o == p })
+	}
 	for _, o := range w.players {
 		if o.ptarget == p {
 			o.ptarget = nil // a spell without a target must not reach a gone player
@@ -185,6 +194,13 @@ func (w *World) checkPvP(ctx *game.TickContext) {
 		return
 	}
 	w.pvpNext = ctx.Tick + ticksFor(1000)
+	for i := 0; i < len(w.linkDead); {
+		if p := w.linkDead[i]; !w.pvpLocked(ctx.Tick, p) {
+			w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED, false) // drops index i
+			continue
+		}
+		i++
+	}
 	for i := 0; i < len(w.skulled); {
 		p := w.skulled[i]
 		w.refreshSkull(p, ctx.Now)
@@ -242,6 +258,28 @@ func (w *World) justified(tick game.Tick, a, v *Player) bool {
 		}
 	}
 	return false
+}
+
+// unjustHit reports whether a's recent hits on v (within the aggressor time) include an
+// unjustified one: an attack a condition of a may continue.
+func (w *World) unjustHit(tick game.Tick, v *Player, a *Player) bool {
+	for _, h := range v.hitBy {
+		if h.char == a.charID && h.unjust && tick-h.at < w.pvpAggrFor {
+			return true
+		}
+	}
+	return false
+}
+
+// conditionMayHurt reports whether a condition that a applied may hurt v now: an attack a
+// could start itself (zones, levels, staff, safe mode), and never a new unjustified one —
+// only one a already made by hand (a burn that outlives an arena duel or a war hurts
+// nobody).
+func (w *World) conditionMayHurt(tick game.Tick, a, v *Player) bool {
+	if key, _ := w.canAttack(tick, a, v); key != "" {
+		return false
+	}
+	return w.arena(a, v) || w.justified(tick, a, v) || w.unjustHit(tick, v, a)
 }
 
 // canAttack is pvpPlace plus the safe mode: with it on, only justified attacks.
@@ -409,31 +447,32 @@ func (w *World) pvpSource(source uint32, v *Player) *Player {
 
 // ---- deaths -----------------------------------------------------------------------
 
-// pvpDeath settles the death of v if players took part in it: every player that hurt v
-// within balance pvp.kill_credit_ms gets the kill (its counter, and an unjustified kill if
-// any of its hits was), each war it was fought in scores once, both sides are told, and
-// the kill is logged. It reports whether it was an arena defeat (every credited hit was
-// an arena hit): no penalty.
-func (w *World) pvpDeath(ctx *game.TickContext, v *Player) (arena bool) {
+// pvpDeath settles the death of v if players took part in it. killer is the player whose
+// hit killed v (nil: a monster, the world or a condition of nobody online). It is an arena
+// defeat (no penalty, reported) only if v died on a pvp tile by a killer standing on one
+// too. Every player that hurt v within balance pvp.kill_credit_ms gets the kill (its
+// counter, and an unjustified kill if any of its hits was) — arena hits only in an arena
+// defeat —, each war it was fought in scores once, both sides are told, and the kill is
+// logged.
+func (w *World) pvpDeath(ctx *game.TickContext, v, killer *Player) (arena bool) {
 	if !w.pvpOn || len(v.hitBy) == 0 {
 		return false
 	}
-	var last *Player
+	arena = killer != nil && w.arena(killer, v)
+	last := killer
 	var lastAt game.Tick
 	var wars [maxHitBy]*guildWar
 	var scorers [maxHitBy]*Player
 	nw := 0
-	arena = true
 	for _, h := range v.hitBy {
-		if ctx.Tick-h.at >= w.pvpCreditFor {
+		if ctx.Tick-h.at >= w.pvpCreditFor || h.arena && !arena {
 			continue
 		}
-		a := w.byChar[h.char]
+		a := w.byChar[h.char] // a locked attacker that lost its connection is still here (link-dead)
 		if a == nil {
 			continue
 		}
-		arena = arena && h.arena
-		if last == nil || h.at > lastAt {
+		if killer == nil && (last == nil || h.at > lastAt) {
 			last, lastAt = a, h.at
 		}
 		a.pvpKills++
@@ -457,7 +496,11 @@ func (w *World) pvpDeath(ctx *game.TickContext, v *Player) (arena bool) {
 		w.log.Info("pvp kill", "killer", a.charID, "victim", v.charID, "justified", !unjust, "arena", h.arena,
 			"war", warID, "x", v.pos.X, "y", v.pos.Y, "z", v.pos.Z)
 	}
-	v.hitBy = v.hitBy[:0]
+	if arena {
+		v.hitBy = slices.DeleteFunc(v.hitBy, func(h pvpHit) bool { return h.arena })
+	} else {
+		v.hitBy = v.hitBy[:0]
+	}
 	if last == nil {
 		return false
 	}
@@ -562,12 +605,16 @@ func (w *World) deathDrop(now time.Time, p *Player, equipment, backpack float64)
 
 // pvpDied clears what a death ends: the aggressor skull, the attackers remembered and
 // every player's attack on v.
-func (w *World) pvpDied(now time.Time, v *Player) {
+// After an arena defeat (arena) the aggressor skull, the locks and the attacks from
+// outside the arena stay: losing a duel is not a way out of a fight.
+func (w *World) pvpDied(now time.Time, v *Player, arena bool) {
 	if !w.pvpOn {
 		return
 	}
-	v.aggrUntil = time.Time{}
-	v.hitBy = v.hitBy[:0]
+	if !arena {
+		v.aggrUntil = time.Time{}
+		v.hitBy = v.hitBy[:0]
+	}
 	v.ptarget = nil
 	for _, o := range w.players {
 		if o.ptarget == v {
@@ -605,4 +652,34 @@ func (w *World) cmdUnskull(ctx *game.TickContext, p *Player, args []string) bool
 		w.audit(ctx, p, "remove_skull", t, map[string]string{"skull": was}, auditOK)
 	}
 	return true
+}
+
+// ---- link-dead --------------------------------------------------------------------
+
+// linkDeadOnLeave keeps p in the world when its connection closes while its PvP lock
+// lasts (docs/02 "Bloqueo de combate PvP"): link-dead, it does nothing but can still be
+// attacked (which renews the lock) until the lock ends; checkPvP then saves it and takes it
+// out. It reports whether p stays. A new login of the character takes it over (join).
+func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
+	if !w.pvpOn || p.linkDead || !w.pvpLocked(tick, p) {
+		return false
+	}
+	p.linkDead = true
+	p.target, p.ptarget = nil, nil
+	p.stopWalk()
+	p.out = p.out[:0]
+	w.linkDead = append(w.linkDead, p)
+	w.log.Info("pvp link-dead", "character", p.charID)
+	return true
+}
+
+// LinkDead reports whether p lost its connection and stays in the world for its PvP lock.
+func (p *Player) LinkDead() bool { return p.linkDead }
+
+// pvpCarry is what a new login takes over from the player it replaces: the locks and the
+// recent attacks on it (the rest travels in the Character).
+func (w *World) pvpCarry(from, to *Player) {
+	to.lockUntil, to.fightUntil = from.lockUntil, from.fightUntil
+	to.hitBy = append(to.hitBy[:0], from.hitBy...)
+	to.aggrUntil = from.aggrUntil
 }
