@@ -18,6 +18,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
@@ -132,9 +133,15 @@ type api struct {
 
 	publicLimiter *limiter
 	cache         *pageCache
-	guildCache    *pageCache    // T5.1: /api/guilds and /api/guilds/{id}
-	querySlots    chan struct{} // semaphore of ranking queries
-	vocations     map[string]bool
+	// T5.1: the guild list in a cache of its own (no other key can push it out), the
+	// pages of guilds that exist, the 404s apart, and the highest guild id the last list
+	// saw (-1 until a list was read).
+	guildListC   *pageCache
+	guildPages   *pageCache
+	guildMissing *pageCache
+	guildHigh    atomic.Int64
+	querySlots   chan struct{} // semaphore of ranking queries
+	vocations    map[string]bool
 
 	submitLimiter   *limiter
 	downloadLimiter *limiter
@@ -193,7 +200,9 @@ func newAPI(cfg Config) (*api, error) {
 	a := &api{
 		cfg: cfg, log: cfg.Logger, vocations: make(map[string]bool),
 		cache:         newPageCache(cfg.HighscoreCacheTTL, keys, cfg.Clock),
-		guildCache:    newPageCache(cfg.HighscoreCacheTTL, guildCacheEntries, cfg.Clock),
+		guildListC:    newPageCache(cfg.HighscoreCacheTTL, 1, cfg.Clock),
+		guildPages:    newPageCache(cfg.HighscoreCacheTTL, guildCacheEntries, cfg.Clock),
+		guildMissing:  newPageCache(cfg.HighscoreCacheTTL, guildMissingEntries, cfg.Clock),
 		querySlots:    make(chan struct{}, maxHighscoreQueries),
 		uploadSlots:   make(chan struct{}, cfg.MapUploadSlots),
 		downloadSlots: make(chan struct{}, maxPatchDownloads),
@@ -202,6 +211,7 @@ func newAPI(cfg Config) (*api, error) {
 	for _, v := range cfg.Vocations {
 		a.vocations[v] = true
 	}
+	a.guildHigh.Store(-1)
 	for _, l := range []struct {
 		dst    **limiter
 		rl     RateLimit

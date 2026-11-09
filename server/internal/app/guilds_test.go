@@ -1,9 +1,15 @@
 package app
 
 import (
+	"bytes"
+	"context"
+	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/guild"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
@@ -38,5 +44,40 @@ func TestGuildData(t *testing.T) {
 	if len(d.Guilds) != 2 || d.Guilds[1].Motd != "m" || len(d.Guilds[1].Members) != 1 ||
 		d.Guilds[1].Members[0].Rank != guild.Leader || len(d.Guilds[0].Invites) != 1 || !d.Guilds[0].Invites[0].Expires.Equal(now) {
 		t.Fatalf("guildData = %+v", d)
+	}
+}
+
+type conflictGuilds struct{ calls int }
+
+func (c *conflictGuilds) LoadGuilds(context.Context, time.Time) (store.GuildRows, error) {
+	return store.GuildRows{}, nil
+}
+
+func (c *conflictGuilds) ApplyGuild(context.Context, store.GuildChange, *store.AuditEntry) error {
+	c.calls++
+	return fmt.Errorf("guild change 99: %w: unknown op", store.ErrGuildConflict)
+}
+
+// A guild change the store refuses is rejected once, logged and dropped: it never
+// blocks the ordered admin queue with retries (T5.1).
+func TestGuildConflictIsNotRetried(t *testing.T) {
+	var buf bytes.Buffer
+	a := newAdminWorker(downStore{}, clock.NewFake(time.Unix(0, 0)), slog.New(slog.NewJSONHandler(&buf, nil)),
+		func(session.AdminResult) {}, func(map[int64]session.Role) {})
+	g := &conflictGuilds{}
+	a.guilds = g
+	done := make(chan struct{})
+	go func() {
+		a.run(session.AdminJob{Kind: session.AdminGuild, Guild: &session.GuildChange{Op: 99, GuildID: 3}})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second): //nolint:forbidigo // a real deadline: a retry loop would never return
+		t.Fatal("the conflicting change is being retried")
+	}
+	if g.calls != 1 || !strings.Contains(buf.String(), "rejected by the database") ||
+		!strings.Contains(buf.String(), "guild change abandoned") {
+		t.Fatalf("calls %d, log %s", g.calls, buf.String())
 	}
 }

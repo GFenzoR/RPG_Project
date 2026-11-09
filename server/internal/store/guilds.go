@@ -269,16 +269,27 @@ type PublicGuildDetail struct {
 	Members   []PublicGuildMember
 }
 
+// PublicGuildList is the public guild list and the highest guild id ever issued (a
+// larger id cannot exist: the site answers 404 for it without a query).
+type PublicGuildList struct {
+	Guilds []PublicGuildSummary
+	IDHigh int64
+}
+
 // PublicGuilds returns up to n guilds by name, with their leader and member count. Like
 // the highscores, characters of staff, disabled or banned (at now) accounts are left out.
-func (s *Store) PublicGuilds(ctx context.Context, n int, now time.Time) ([]PublicGuildSummary, error) {
+func (s *Store) PublicGuilds(ctx context.Context, n int, now time.Time) (PublicGuildList, error) {
 	rows, err := s.q.PublicGuilds(ctx, db.PublicGuildsParams{Now: ts(now), MaxRows: int32(min(max(n, 1), 10000))})
 	if err != nil {
-		return nil, fmt.Errorf("public guilds: %w", err)
+		return PublicGuildList{}, fmt.Errorf("public guilds: %w", err)
 	}
-	out := make([]PublicGuildSummary, len(rows))
+	high, err := s.q.GuildIDHigh(ctx)
+	if err != nil {
+		return PublicGuildList{}, fmt.Errorf("guild id high: %w", err)
+	}
+	out := PublicGuildList{IDHigh: high, Guilds: make([]PublicGuildSummary, len(rows))}
 	for i, r := range rows {
-		out[i] = PublicGuildSummary{ID: r.ID, Name: r.Name, Leader: r.Leader, Members: int(r.Members), CreatedAt: r.CreatedAt.Time}
+		out.Guilds[i] = PublicGuildSummary{ID: r.ID, Name: r.Name, Leader: r.Leader, Members: int(r.Members), CreatedAt: r.CreatedAt.Time}
 	}
 	return out, nil
 }

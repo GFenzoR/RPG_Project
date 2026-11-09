@@ -98,7 +98,7 @@ func TestGuilds(t *testing.T) {
 	}
 
 	list, err := st.PublicGuilds(ctx, 10, now)
-	if err != nil || len(list) != 1 || list[0].Leader != "Bea" || list[0].Members != 2 {
+	if err != nil || len(list.Guilds) != 1 || list.Guilds[0].Leader != "Bea" || list.Guilds[0].Members != 2 || list.IDHigh != 1 {
 		t.Fatalf("PublicGuilds = %+v, %v", list, err)
 	}
 	page, err := st.PublicGuild(ctx, 1, now)
@@ -158,9 +158,14 @@ func TestGuilds(t *testing.T) {
 			t.Fatalf("invitation of a disbanded guild %+v", i)
 		}
 	}
-	// The disbanded guild's id stays issued (the highest so far is 4).
-	if rows.IDHigh != 4 {
-		t.Fatalf("id high after disband %d", rows.IDHigh)
+	// The disbanded guild's id stays issued. The highest so far is the "Twin Name" winner's:
+	// 3 or 4 (the loser's transaction rolled back, raise included).
+	wantHigh := int64(4)
+	if errs[2] == nil {
+		wantHigh = 3
+	}
+	if rows.IDHigh != wantHigh {
+		t.Fatalf("id high after disband %d, want %d", rows.IDHigh, wantHigh)
 	}
 	// The public pages leave out characters of staff accounts, like the highscores.
 	staff, err := st.CreateAccount(ctx, "guild-gm@example.org", "h")
@@ -179,7 +184,7 @@ func TestGuilds(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, g := range l {
+		for _, g := range l.Guilds {
 			if g.ID == 1 {
 				return g.Members
 			}

@@ -234,8 +234,12 @@ auth). Pasado el límite responden `429 rate_limited`.
   nada de las cuentas. Excluye, como el ranking, a los personajes de staff y de cuentas
   deshabilitadas o con un ban activo (no aparecen ni cuentan en `members`; un líder así
   sale como `""`). Comparten el rate limit público, las 2 consultas a la vez y el plazo
-  del ranking, y una cache propia de 60 s (también para los 404: ids al azar no llegan a
-  Postgres). Un cambio del juego se ve como mucho 60 s después.
+  del ranking. Caches de 60 s: la lista tiene una propia (ninguna otra clave la saca), y
+  al leerla se guarda el id más alto emitido alguna vez (`guild_id_high`). Un id mayor
+  responde 404 sin consultar Postgres; las páginas de gremios que existen van a otra
+  cache, y los 404 de gremios disueltos a una tercera, chica. Así ids al azar no llenan
+  la cache ni llegan a Postgres. Un cambio del juego, o un gremio nuevo, se ve como mucho
+  60 s después.
 
 - **Token de cuenta:** opaco (32 bytes aleatorios, base64url), dura 30 días. En la base
   se guarda solo su SHA-256 (tabla `sessions`, `kind = 'account'`). Se envía como

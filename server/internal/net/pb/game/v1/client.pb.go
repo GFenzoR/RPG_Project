@@ -235,7 +235,8 @@ const (
 	GuildAction_GUILD_ACTION_MOTD GuildAction = 10
 	// Leader: disband the guild. name must repeat the guild's name (a confirmation).
 	GuildAction_GUILD_ACTION_DISBAND GuildAction = 11
-	// Leader: member name becomes the leader; the old leader becomes a vice leader.
+	// Leader: member name becomes the leader; the old leader becomes a vice leader if there
+	// is room (balance guild.max_vice_leaders), a member otherwise.
 	GuildAction_GUILD_ACTION_TRANSFER GuildAction = 12
 )
 

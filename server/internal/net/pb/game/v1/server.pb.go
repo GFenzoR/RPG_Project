@@ -4149,7 +4149,8 @@ type GuildUpdate struct {
 	// Invitations the guild sent and nobody answered yet; only for vice leaders and the
 	// leader (who can revoke them).
 	Pending []*GuildPendingInvite `protobuf:"bytes,6,rep,name=pending,proto3" json:"pending,omitempty"`
-	// Invitations to the player, oldest first (also while in a guild: it can leave first).
+	// Invitations to the player, oldest first. Always empty for a guild member: a member
+	// cannot be invited, and joining or founding a guild drops its invitations.
 	Invitations   []*GuildInvitation `protobuf:"bytes,7,rep,name=invitations,proto3" json:"invitations,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -1195,7 +1195,8 @@ export enum GuildAction {
   DISBAND = 11,
 
   /**
-   * Leader: member name becomes the leader; the old leader becomes a vice leader.
+   * Leader: member name becomes the leader; the old leader becomes a vice leader if there
+   * is room (balance guild.max_vice_leaders), a member otherwise.
    *
    * @generated from enum value: GUILD_ACTION_TRANSFER = 12;
    */

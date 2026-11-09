@@ -691,7 +691,9 @@ function GuildPage(props: { t: Translate; lang: string; id: number }): JSX.Eleme
         <p class={data === "error" ? "error" : "muted"}>
           {t(data === "missing" ? "site.guilds.not_found" : "site.guilds.error")}
         </p>
-        <Link href="/guilds">{t("site.guilds.back")}</Link>
+        <p>
+          <Link href="/guilds">{t("site.guilds.back")}</Link>
+        </p>
       </section>
     );
   }
@@ -721,7 +723,9 @@ function GuildPage(props: { t: Translate; lang: string; id: number }): JSX.Eleme
           ))}
         </tbody>
       </table>
-      <Link href="/guilds">{t("site.guilds.back")}</Link>
+      <p>
+        <Link href="/guilds">{t("site.guilds.back")}</Link>
+      </p>
     </section>
   );
 }

@@ -363,6 +363,10 @@ func (w *World) guildCreate(ctx *game.TickContext, p *Player, name string) {
 		w.pay(p, cost)
 		w.econGold(p, EconGuild, "", -cost)
 		p.questDirty = true
+		// The guild row goes through the admin goroutine within milliseconds; save the
+		// founder now too (like a death does), so a crash cannot leave the guild with its
+		// cost unpaid until the next autosave.
+		w.save(w.snapshot(p, false))
 	}
 	w.nextGuildID++
 	g := &guildState{id: w.nextGuildID, name: name}

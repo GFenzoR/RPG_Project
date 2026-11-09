@@ -1756,7 +1756,8 @@ export type GuildUpdate = Message$1<"game.v1.GuildUpdate"> & {
   pending: GuildPendingInvite[];
 
   /**
-   * Invitations to the player, oldest first (also while in a guild: it can leave first).
+   * Invitations to the player, oldest first. Always empty for a guild member: a member
+   * cannot be invited, and joining or founding a guild drops its invitations.
    *
    * @generated from field: repeated game.v1.GuildInvitation invitations = 7;
    */

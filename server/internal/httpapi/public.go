@@ -144,6 +144,19 @@ func (c *pageCache) get(ctx context.Context, key string, fill func() ([]byte, er
 	return fill()
 }
 
+// peek returns the body cached under key if it is complete and fresh, without
+// computing anything (the guild pages' negative cache, T5.1).
+func (c *pageCache) peek(key string) ([]byte, bool) {
+	now := c.clock.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.entries[key]
+	if !ok || !e.done || !now.Before(e.expires) {
+		return nil, false
+	}
+	return e.body, true
+}
+
 // errBusy: the ranking query did not get a slot, or did not finish, within
 // Config.HighscoreQueryTimeout.
 var errBusy = errors.New("highscores: database busy")

@@ -65,6 +65,18 @@ func (g *guildHarness) founder(name string, x int, lvl, coins int) (*fakeClient,
 	return cl, p
 }
 
+// coinsIn counts the copper coins in a snapshot's inventory, containers included.
+func coinsIn(items []session.ItemState) int {
+	n := 0
+	for _, it := range items {
+		if it.ItemID == coinID {
+			n += it.Count
+		}
+		n += coinsIn(it.Items)
+	}
+	return n
+}
+
 func guildCmd(a pb.GuildAction, name, text string, id uint64) *pb.ClientMessage {
 	return &pb.ClientMessage{Message: &pb.ClientMessage_GuildCommand{GuildCommand: &pb.GuildCommand{
 		Action: a, Name: name, Text: text, GuildId: id}}}
@@ -153,6 +165,10 @@ func TestGuildLifecycle(t *testing.T) {
 	wantKeys(t, g.send(ca, gCreate, "  Salt   Lanterns ", "", 0), "guild.created")
 	if got := g.w.Money(a); got != 50 {
 		t.Fatalf("money after founding = %d, want 50", got)
+	}
+	// The founder is saved right away with the cost paid (not at the next autosave).
+	if n := len(g.saves); n == 0 || g.saves[n-1].CharacterID != a.CharacterID() || coinsIn(g.saves[n-1].Inventory) != 50 {
+		t.Fatalf("no snapshot of the founder with the cost paid: %+v", g.saves)
 	}
 	if !slices.ContainsFunc(g.economy, func(e session.EconomyEntry) bool { return e.Kind == session.EconGuild && e.Amount == -100 }) {
 		t.Fatalf("no economy entry for the founding cost: %+v", g.economy)
@@ -370,8 +386,14 @@ func TestGuildInvitations(t *testing.T) {
 	if m := members(lastGuild(cc)); len(m) != 3 {
 		t.Fatalf("members %v", m)
 	}
+	// Dino's invitation was sent before the guild filled: accepting it now is refused.
+	wantKeys(t, g.send(cd, gAccept, "", "", gid), "guild.full")
+	if u := lastGuild(cd); u.GetGuildId() != 0 {
+		t.Fatalf("Dino joined a full guild: %v", u)
+	}
+	// And a full guild sends no new invitations.
+	wantKeys(t, g.send(ca, gRevoke, "Dino", "", 0), "guild.invite_revoked")
 	wantKeys(t, g.send(ca, gInvite, "Dino", "", 0), "guild.full")
-	_ = cd
 }
 
 // Guilds loaded at start: an offline member shows offline, the member that logs in is
