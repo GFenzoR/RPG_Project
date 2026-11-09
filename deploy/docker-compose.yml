@@ -74,6 +74,9 @@ services:
       # is never published: every request arrives through Caddy.
       - -trust-proxy=true
       - -cookie-secure=${COOKIE_SECURE:-true}
+      # How old an account must be to send maps on /maps/submit (T4.5). The home template
+      # sets 0s so a test server can try the portal right away.
+      - -map-submit-min-account-age=${MAP_SUBMIT_MIN_ACCOUNT_AGE:-24h}
       # /metrics on its own listener: never published on the host and Caddy has no route to
       # it. Containers of the stack's networks can reach it; Prometheus scrapes it over
       # `monitoring`. No player data in it (docs/01).

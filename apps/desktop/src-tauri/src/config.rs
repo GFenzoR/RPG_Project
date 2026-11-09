@@ -166,6 +166,31 @@ pub fn read_file_override(path: &Path) -> Result<Option<String>, String> {
     }
 }
 
+/// Saves `server_url` (the origin of an already validated server) in the override file,
+/// keeping its other keys. A file that is not a JSON object was being ignored anyway, so it
+/// is replaced. Used by the server picker of the login screen.
+pub fn save_server_url(path: &Path, server: &Server) -> Result<(), String> {
+    let mut map = match std::fs::read_to_string(path) {
+        Ok(body) => match serde_json::from_str::<serde_json::Value>(&body) {
+            Ok(serde_json::Value::Object(map)) => map,
+            _ => serde_json::Map::new(),
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::Map::new(),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    map.insert(
+        "server_url".to_owned(),
+        serde_json::Value::String(server.origin()),
+    );
+    let mut body = serde_json::to_string_pretty(&serde_json::Value::Object(map))
+        .map_err(|e| format!("{CONFIG_FILE}: {e}"))?;
+    body.push('\n');
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    std::fs::write(path, body).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,6 +305,35 @@ mod tests {
         assert_eq!(
             read_file_override(&path).unwrap().as_deref(),
             Some("http://192.168.0.2:8080")
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn saves_the_server_keeping_other_keys() {
+        let dir = std::env::temp_dir().join(format!("rpg-desktop-save-{}", std::process::id()));
+        let path = dir.join("nested").join(CONFIG_FILE);
+        let local = Server::parse("http://localhost:8080/").unwrap();
+        save_server_url(&path, &local).unwrap();
+        assert_eq!(
+            read_file_override(&path).unwrap().as_deref(),
+            Some("http://localhost:8080")
+        );
+
+        std::fs::write(&path, r#"{"server_url":"https://a.example.com","other":1}"#).unwrap();
+        let tunnel = Server::parse("https://x.trycloudflare.com").unwrap();
+        save_server_url(&path, &tunnel).unwrap();
+        let body: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(body["server_url"], "https://x.trycloudflare.com");
+        assert_eq!(body["other"], 1);
+
+        // A broken file was ignored on start; saving replaces it.
+        std::fs::write(&path, "server_url=x").unwrap();
+        save_server_url(&path, &local).unwrap();
+        assert_eq!(
+            read_file_override(&path).unwrap().as_deref(),
+            Some("http://localhost:8080")
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

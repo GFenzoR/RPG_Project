@@ -126,6 +126,52 @@ button.link {
   color: var(--muted);
   font-size: 0.85rem;
 }
+/* Controls help as a button under 1200 px (wide windows show .hint inline). */
+.hud {
+  position: relative;
+}
+.hud .controls-help {
+  display: none;
+  flex: 1;
+}
+.hud .controls-help summary {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--muted);
+  border-radius: 0.3rem;
+  list-style: none;
+}
+.hud .controls-help summary::-webkit-details-marker {
+  display: none;
+}
+.hud .controls-help[open] summary {
+  color: inherit;
+}
+.hud .controls-help p {
+  position: absolute;
+  top: 100%;
+  left: 0.75rem;
+  z-index: 30;
+  max-width: 28rem;
+  margin: 0.25rem 0 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+@media (max-width: 1199px) {
+  .hud .hint {
+    display: none;
+  }
+  .hud .controls-help {
+    display: block;
+  }
+}
 .hud .stat {
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
@@ -978,4 +1024,19 @@ body.using-item canvas {
   [data-tutorial-active] {
     animation: none;
   }
+}
+/* Desktop app: the game server under the login form (ServerPicker.tsx). */
+.server-picker {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.server-picker summary {
+  cursor: pointer;
+}
+.server-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  color: var(--text);
 }

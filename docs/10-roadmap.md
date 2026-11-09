@@ -95,6 +95,10 @@ skills, hablar con un NPC, hacer una quest, morir y reaparecer, con el editor b�
 - [x] **T1.19 Hosting de pruebas en casa.** Docker Compose del juego completo en tu PC
   expuesto con Cloudflare Tunnel o Tailscale, targets `make home-*`, guía para
   WSL2/macOS/Linux. Ver `13-hosting-de-pruebas.md`. [T1.5]
+  - [x] Puesta al día tras T4.1–T4.5: `make home-up` de un comando (plantilla
+    `deploy/env.home.template`, secretos, espera y URLs), `home-admin`, `home-restore`,
+    `home-reset`, `.gitattributes` para WSL2, selector de servidor en la app de escritorio
+    y ayuda de controles plegable a 960 px.
 
 ## Hito 2 — Cuentas completas, comunidad y escritorio
 - [ ] **T2.1 OAuth Google y Discord** 👤 (crear apps y claves), verificación de email,

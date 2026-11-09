@@ -167,6 +167,15 @@ origen del webview es `http://localhost:5173`, que ambos permiten en `-ws-origin
 `apps/desktop/e2e/screenshots/`.
 
 ### A qué servidor se conecta
+La forma más simple: en la pantalla de login de la app, abre **"Servidor: …"**, escribe la
+dirección (`http://localhost:8080`, el link del túnel o `https://juego.tudominio.com`) y
+pulsa **Guardar y reiniciar** (o Enter). Una dirección local sin esquema, como
+`192.168.1.20:8080`, se guarda como `http://192.168.1.20:8080`. La app la valida con las mismas reglas de abajo, la guarda en
+`config.json` (conserva las demás claves) y se reinicia, porque la CSP que deja salir al
+WebSocket se arma al arrancar (comando `set_server` de `src-tauri/src/lib.rs`). Si la app se
+lanzó con `RPG_SERVER_URL`, el campo no se puede editar. Ese panel solo existe en la app de
+escritorio (`client/src/ui/ServerPicker.tsx`); en el navegador no aparece.
+
 De mayor a menor prioridad (`src-tauri/src/config.rs`):
 1. Variable `RPG_SERVER_URL` al lanzar la app (`RPG_SERVER_URL=http://localhost:8080 make desktop-dev`).
 2. `config.json` en la carpeta de configuración de la app (identificador `dev.rpgproject.client`):

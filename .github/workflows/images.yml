@@ -175,8 +175,9 @@ jobs:
         run: |
           printf 'POSTGRES_PASSWORD=x\nSITE_ADDRESS=example.com\nACME_EMAIL=ops@example.com\n' > "$RUNNER_TEMP/ci.env"
           docker compose -f deploy/docker-compose.yml --env-file "$RUNNER_TEMP/ci.env" config -q
+          sed 's/__RANDOM__/x/' deploy/env.home.template > "$RUNNER_TEMP/home.env"
           docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml \
-            --env-file deploy/.env.home.example --profile quick-tunnel --profile tunnel --profile monitoring config -q
+            --env-file "$RUNNER_TEMP/home.env" --profile quick-tunnel --profile tunnel --profile monitoring config -q
           docker compose -f deploy/docker-compose.yml --env-file "$RUNNER_TEMP/ci.env" \
             --profile monitoring --profile monitoring-test config -q
       # T4.4: promtool (config, rules, rule unit tests), amtool and the dashboard JSON, with
@@ -256,9 +257,22 @@ jobs:
         run: deploy/smoke.sh "$(cat "$RUNNER_TEMP/tunnel-url")"
       - name: make home-backup
         run: make home-backup && find deploy/backups -name 'home-*.dump' -size +0 | grep -q .
+      # The operator commands of docs/13: a role for a registered account, then a restore
+      # (the account registered after the backup must be gone) and the game back up.
+      - name: make home-admin and make home-restore
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d '{"email":"home-admin@example.com","password":"home-admin-pass-1"}' http://localhost:8080/api/auth/register)
+          test "$code" = 201
+          make home-admin EMAIL=home-admin@example.com ROLE=gm
+          CONFIRM=yes make home-restore FILE="$(find deploy/backups -name 'home-*.dump' | sort | head -n 1)"
+          if make home-admin EMAIL=home-admin@example.com ROLE=gm; then
+            echo "the account registered after the backup survived the restore"; exit 1
+          fi
+          curl -fsS http://localhost:8080/healthz
       - name: logs
         if: ${{ !cancelled() }}
         run: docker compose -p rpg-home logs --no-color --tail=300
       - name: stop
         if: ${{ always() }}
-        run: make home-down
+        run: CONFIRM=yes make home-reset

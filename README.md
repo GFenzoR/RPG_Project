@@ -8,6 +8,18 @@ editor web que también puede usar una IA.
 > Estado: preproducción. Existe el esqueleto del monorepo (T0.1); el código se construye
 > siguiendo `docs/10-roadmap.md`.
 
+## Jugar en tu PC en 3 pasos
+Sin instalar Go ni Node: solo Docker (Docker Desktop en Windows/macOS), `make` y `git`. En
+Windows, usa la terminal de Ubuntu (WSL2) y clona dentro de ella, no en `/mnt/c`.
+1. `git clone https://github.com/GFenzoR/RPG_Project.git && cd RPG_Project`
+2. `make home-up` (la primera vez tarda unos minutos; al final imprime qué abrir)
+3. Abre `http://localhost:8080`, entra con **Jugar**, crea tu cuenta y hazte admin con
+   `make home-admin EMAIL=tu@email.com`.
+
+`make home-tunnel` te da un link `https://…` para invitar amigos. Guía completa (túneles,
+app de escritorio, backups, actualizar, problemas comunes):
+[`docs/13-hosting-de-pruebas.md`](docs/13-hosting-de-pruebas.md).
+
 ## Empieza aquí
 - Visión y decisiones: [`docs/00-vision.md`](docs/00-vision.md)
 - Cómo trabajar con Claude Code: [`docs/11-claude-code-workflow.md`](docs/11-claude-code-workflow.md)
@@ -36,7 +48,7 @@ volumen Docker. Copia `.env.example` a `.env` si necesitas `DATABASE_URL`.
 | `client/`, `editor/` | Cliente del juego y map editor (TypeScript) |
 | `packages/*` | Librerías TS compartidas: `map-format`, `content-schema`, `renderer`, `protocol` |
 | `tools/mapcli`, `tools/mcp-world`, `tools/spritepack` | Herramientas TS de mapas y sprites |
-| `deploy/` | `docker-compose.dev.yml` (Postgres local); producción en T1.18 |
+| `deploy/` | Compose de producción (`docs/09`), del home stack (`docs/13`) y `docker-compose.dev.yml` (Postgres local) |
 | `docs/` | Diseño y arquitectura |
 
 ## Stack
