@@ -34,8 +34,8 @@ func TestPublicHouses(t *testing.T) {
 		w := h.do(req{method: "GET", path: "/api/houses"})
 		body := w.Body.String()
 		if w.Code != http.StatusOK ||
-			!strings.Contains(body, `{"id":"puerto_house_net","name":"house.puerto_house_net.name","island":"puerto","rent":800,"size":32,"owner":"Ana"}`) ||
-			!strings.Contains(body, `"id":"bosque_house_moss"`) || !strings.Contains(body, `"owner":""`) {
+			!strings.Contains(body, `{"id":"puerto_house_net","name":"house.puerto_house_net.name","island":"puerto","rent":800,"size":32,"taken":true,"owner":"Ana"}`) ||
+			!strings.Contains(body, `"id":"bosque_house_moss"`) || !strings.Contains(body, `"taken":false,"owner":""`) {
 			t.Fatalf("list = %d %s", w.Code, body)
 		}
 	}

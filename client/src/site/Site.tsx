@@ -744,6 +744,7 @@ interface HouseEntry {
   island: string;
   rent: number;
   size: number;
+  taken: boolean;
   owner: string;
 }
 
@@ -789,7 +790,9 @@ function HousesPage(props: { t: Translate }): JSX.Element {
                       <td>
                         {h.owner
                           ? t("site.houses.rented", { name: h.owner })
-                          : t("site.houses.free")}
+                          : h.taken
+                            ? t("site.houses.taken")
+                            : t("site.houses.free")}
                       </td>
                     </tr>
                   ))}

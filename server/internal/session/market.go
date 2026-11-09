@@ -793,6 +793,9 @@ func (w *World) marketWithdraw(ctx *game.TickContext, p *Player) {
 		}
 		n := m.Item.Count
 		if !def.Stackable {
+			n = 1
+		}
+		if !def.Stackable && (len(m.Item.Items) > 0 || m.Item.Count != def.StackLimit()) {
 			// The saved instance itself (T5.4): a container from a house keeps its content
 			// and a rune its charges.
 			it := w.loadItem(m.Item)

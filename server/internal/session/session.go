@@ -370,6 +370,7 @@ type World struct {
 	houseList     []*house
 	houseByOwner  map[int64]*house
 	houseByAcc    map[int64]*house
+	houseOrphans  map[int64]bool // accounts owning a house no longer on the map
 	houseDirty    []*house
 	houseActors   []*Player
 	houseFlushing bool

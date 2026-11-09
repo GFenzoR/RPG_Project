@@ -203,8 +203,8 @@ type Querier interface {
 	// the highscores (T4.3), characters of staff, disabled or banned accounts are not shown:
 	// they do not count and a hidden leader shows as "".
 	PublicGuilds(ctx context.Context, arg PublicGuildsParams) ([]PublicGuildsRow, error)
-	// Owners for the public list (/api/houses): the name only, and nobody hidden by the
-	// ranking's rules (staff, disabled or banned accounts) shows as owner.
+	// Owners for the public list (/api/houses): every rented house, with the owner's name
+	// only when the ranking's rules (staff, disabled or banned accounts) allow showing it.
 	PublicHouses(ctx context.Context, now pgtype.Timestamptz) ([]PublicHousesRow, error)
 	// Drops the bytes of patches whose submission reached a final status before the cutoff.
 	PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error)

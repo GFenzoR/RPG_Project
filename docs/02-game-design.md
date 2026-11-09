@@ -535,8 +535,10 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   `items_per_tile` (3) × casillas instancias por casa (una pila cuenta una vez; un
   contenedor, una más cada objeto de adentro). Solo el dueño y los invitados mueven
   objetos adentro; desde afuera nadie alcanza el suelo de la casa. **Los invitados pueden
-  traer y acomodar objetos, pero no sacarlos** (ni a su mochila ni afuera): así invitar a
-  alguien no le abre el depósito del dueño. Lo que un invitado deja es de la casa.
+  traer y acomodar objetos y abrir contenedores, pero no sacarlos** (ni a su mochila ni
+  afuera) ni gastarlos (comer, usar runas): así invitar a alguien no le abre el depósito
+  del dueño. Lo que un invitado deja es de la casa. Lo que cae al suelo por otra vía (una
+  compra con la mochila llena) no cuenta para el límite.
 - **Al liberarse** (dejarla, falta de pago, transferencia o staff) todos los objetos van al
   **buzón del mercado** del dueño, enteros (un contenedor con su contenido, una runa con
   sus cargas), en la misma transacción que libera la casa: no se pierde nada. Se retiran en

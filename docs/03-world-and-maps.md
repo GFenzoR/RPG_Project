@@ -165,8 +165,12 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   exit: { x: 3153, y: 6402, z: 7 }
 ```
 - `id` único en todo el mundo (es la clave de las tablas `house_owners`, `house_guests` y
-  `house_items`: **no se cambia** una vez publicado; una casa quitada del mapa deja sus
-  filas en la base y el servidor las ignora con un aviso). `name` es una clave i18n de
+  `house_items`: **no se cambia** una vez publicado). Una casa quitada o renombrada deja
+  sus filas en la base: el servidor ignora la casa con un aviso, la cuenta de su dueño no
+  puede alquilar otra hasta que un operador borre esa fila, y los items guardados que ya
+  no caen en la casa (rects achicados) se descartan al arrancar y desaparecen de la base
+  con el próximo cambio de esa casa: antes de achicar una casa ocupada, libérala con
+  `/houseevict`. `name` es una clave i18n de
   `i18n/*/world.yaml` (`house.<id>.name`). El pueblo de la casa es su isla.
 - `rent`: precio de un período (`balance.yaml houses.period_days`) en monedas de cobre.
 - `rects`: las casillas de la casa, cada rect en un piso (`z`), de 1 a 255 de lado, hasta

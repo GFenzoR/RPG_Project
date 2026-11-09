@@ -174,6 +174,7 @@ func (w *World) initHouses() {
 	w.houseByID = map[string]*house{}
 	w.houseByOwner = map[int64]*house{}
 	w.houseByAcc = map[int64]*house{}
+	w.houseOrphans = map[int64]bool{}
 	for _, def := range w.m.Houses() {
 		h := &house{def: def}
 		for _, r := range def.Rects {
@@ -198,7 +199,10 @@ func (w *World) initHouses() {
 		if h == nil {
 			// A house removed from the map: its row stays in the database (an operator
 			// decides; the items there too). Logged.
+			// The account still owns it in the database (one house per account): it may not
+			// rent another until an operator frees that row.
 			w.log.Warn("house: owner of a house that is not on the map", "house", o.HouseID, "character", o.CharacterID)
+			w.houseOrphans[o.AccountID] = true
 			continue
 		}
 		w.setOwner(h, o)
@@ -464,8 +468,17 @@ func (w *World) checkHouseMove(ctx *game.TickContext, p *Player, it *Item, to pl
 // mayUseInHouse reports whether p may use (open, eat, read) it: an item in a house needs
 // access.
 func (w *World) mayUseInHouse(p *Player, it *Item) bool {
-	if h := w.itemHouse(it); h != nil && !w.houseAccess(p, h) {
+	h := w.itemHouse(it)
+	switch {
+	case h == nil:
+		return true
+	case !w.houseAccess(p, h):
 		p.emit(systemMsg(msgHouseNoAccess))
+		return false
+	case it.def.Container == nil && p.charID != h.owner && p.role == RolePlayer:
+		// A guest opens containers but never uses up (eats, casts) what is in the house:
+		// that would take it out (docs/02 "Casas").
+		p.emit(systemMsg(msgHouseTakeOut))
 		return false
 	}
 	return true
@@ -716,6 +729,9 @@ func (w *World) houseCommand(ctx *game.TickContext, p *Player, m *pb.HouseComman
 		case *pb.HouseCommand_GuestRemove:
 			w.houseGuest(ctx, p, h, a.GuestRemove.GetName(), false)
 		case *pb.HouseCommand_GuildAccess:
+			if h.guildAccess == a.GuildAccess.GetEnabled() {
+				break
+			}
 			h.guildAccess = a.GuildAccess.GetEnabled()
 			w.houseTransfer(nil, []HouseOp{w.accessOp(h)})
 			key := msgHouseGuildOff
@@ -752,7 +768,7 @@ func (w *World) canOwn(p *Player, except *house) bool {
 		p.emit(systemMsg(msgHouseLevel, num("level", w.hs.MinLevel)))
 		return false
 	}
-	if o := w.houseByAcc[p.accountID]; o != nil && o != except {
+	if o := w.houseByAcc[p.accountID]; o != nil && o != except || w.houseOrphans[p.accountID] {
 		p.emit(systemMsg(msgHouseHasOne))
 		return false
 	}
@@ -785,7 +801,7 @@ func (w *World) houseRent(ctx *game.TickContext, p *Player, h *house) {
 
 func (w *World) houseExtend(ctx *game.TickContext, p *Player, h *house) {
 	limit := ctx.Now.Add(time.Duration(w.hs.MaxPeriods) * w.hsPeriod)
-	next := h.paidUntil.Add(w.hsPeriod)
+	next := maxTime(h.paidUntil, ctx.Now).Add(w.hsPeriod)
 	if next.After(limit) {
 		p.emit(systemMsg(msgHouseMaxPeriods, num("max", w.hs.MaxPeriods)))
 		return
@@ -881,6 +897,7 @@ func (w *World) houseAccept(ctx *game.TickContext, p *Player, h *house) {
 // the old owner's mailbox, the guests and the guild switch are cleared, the paid rent
 // stays with the house.
 func (w *World) changeOwner(now time.Time, h *house, to, acc int64, name string, players []*Player, market []MarketOp) {
+	w.flushHouses() // this tick's earlier changes, with their movers' snapshots, first
 	from := h.owner
 	ops, mail := w.mailHouseItems(now, h)
 	o := HouseOwner{HouseID: h.def.ID, CharacterID: to, AccountID: acc, Name: name, PaidUntil: h.paidUntil, Since: now}
@@ -894,6 +911,7 @@ func (w *World) changeOwner(now time.Time, h *house, to, acc int64, name string,
 // releaseHouse frees h (left, unpaid or staff): its items go to the owner's mailbox and
 // the owner row goes, in one transfer with the snapshots of players.
 func (w *World) releaseHouse(now time.Time, h *house, players []*Player, market ...MarketOp) {
+	w.flushHouses() // this tick's earlier changes, with their movers' snapshots, first
 	from := h.owner
 	ops, mail := w.mailHouseItems(now, h)
 	ops = append(ops, HouseOp{Kind: HouseOwnerRemove, House: h.def.ID, CharacterID: from})
@@ -986,7 +1004,8 @@ func (w *World) renewHouse(now time.Time, h *house) {
 	owner := h.owner
 	if b := w.mail[owner]; b != nil && b.gold >= rent {
 		b.gold -= rent
-		h.paidUntil = h.paidUntil.Add(w.hsPeriod)
+		// After a long downtime the new period starts now (no period per second to catch up).
+		h.paidUntil = maxTime(h.paidUntil, now).Add(w.hsPeriod)
 		w.econRecord(nil, EconomyEntry{Kind: EconHouse, CharacterID: owner, Amount: -rent, Ref: "rent"})
 		w.houseTransfer(nil, []HouseOp{{Kind: HousePaid, House: h.def.ID, CharacterID: owner, PaidUntil: h.paidUntil}},
 			MarketOp{Kind: MarketGoldAdd, CharacterID: owner, Gold: -rent})
@@ -1086,7 +1105,8 @@ func (w *World) cmdHouseMove(ctx *game.TickContext, p *Player, args []string) bo
 	name := strings.Join(args[1:], " ")
 	to := w.onlineByName(name)
 	auditArgs := map[string]string{"house": h.def.ID, "to": name, "from": h.ownerName}
-	if to == nil || to.role > RolePlayer || to.charID == h.owner || w.houseByAcc[to.accountID] != nil && w.houseByAcc[to.accountID] != h {
+	if to == nil || to.role > RolePlayer || to.charID == h.owner || w.houseByAcc[to.accountID] != nil && w.houseByAcc[to.accountID] != h ||
+		w.houseOrphans[to.accountID] {
 		p.emit(systemMsg(msgGMHouseNoTarget, textParam("name", name)))
 		w.audit(ctx, p, "house_move", nil, auditArgs, auditInvalid)
 		return true
@@ -1132,4 +1152,11 @@ func (w *World) HouseOwnerOf(id int64) string {
 		return h.def.ID
 	}
 	return ""
+}
+
+func maxTime(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
 }

@@ -585,3 +585,73 @@ func TestHouseReadOnly(t *testing.T) {
 		t.Fatal("the sweep released a house while read-only")
 	}
 }
+
+// A guest drops an item and the owner leaves in the same tick: the guest's snapshot is
+// written (with the drop) before the transfer that sends the items to the mailbox.
+func TestHouseReleaseAfterAMoveInTheSameTick(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, _ := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	h.rent(cl)
+	cb, b := h.tenant("Beto", 0, pos(2, 5), stack(swordID, 1, 0))
+	h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Beto"}))
+	h.step(cl, E) // off the exit, still next to the door
+	h.step(cb, NE)
+	bp := openPack(t, h.harness, cb)
+	before := len(h.transfers)
+	h.input(cb, moveItem(inContainer(bp, 0), swordID, 0, onTile(pos(3, 3)), 1))
+	h.input(cl, houseCmd(&pb.HouseLeave{}))
+	h.sim.Step()
+	got := h.transfers[before:]
+	if len(got) != 2 || len(got[0].Snapshots) != 1 || got[0].Snapshots[0].CharacterID != b.CharacterID() ||
+		len(got[0].Houses) != 1 || len(got[0].Houses[0].Items) != 1 {
+		t.Fatalf("transfers = %+v, want the drop with Beto's snapshot first", got)
+	}
+	if len(got[1].Houses) != 2 || len(got[1].Market) != 1 || got[1].Market[0].Kind != session.MarketMailAdd {
+		t.Fatalf("release = %+v", got[1])
+	}
+}
+
+// Guests open containers but do not use up the owner's things, with UseItem or UseItemOn;
+// strangers do not even reach them.
+func TestHouseGuestUses(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, _ := h.tenant("Ana", 0, cottageExit, stack(salveID, 5, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	h.rent(cl)
+	h.step(cl, N)
+	pack := openPack(t, h.harness, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), salveID, 0, onTile(pos(3, 3)), 5))
+	h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Beto"}))
+	h.step(cl, pb.Direction_DIRECTION_NORTH_WEST)
+	cb, _ := h.tenant("Beto", 0, pos(2, 5))
+	h.step(cb, NE)
+	if evs := h.send(cb, useItem(onTile(pos(3, 3)), salveID, 1)); !hasKey(evs, "house.owner_only") {
+		t.Fatalf("guest eats: %v", systemKeys(evs))
+	}
+	on := &pb.ClientMessage{Message: &pb.ClientMessage_UseItemOn{UseItemOn: &pb.UseItemOn{
+		From: onTile(pos(3, 3)), ItemId: salveID, StackIndex: 1,
+		To: &pb.ActionTarget{Target: &pb.ActionTarget_Pos{Pos: &pb.Position{X: 3, Y: 4, Z: 7}}}}}}
+	if evs := h.send(cb, on); !hasKey(evs, "house.owner_only") {
+		t.Fatalf("guest uses on: %v", systemKeys(evs))
+	}
+	if n := h.w.GroundAt(pos(3, 3)); len(n) != 1 || n[0].Count() != 5 {
+		t.Fatal("the guest used up the salves")
+	}
+}
+
+// The owner of a house that left the map keeps its account's house in the database: it
+// may not rent another (the database would refuse it and turn everything read-only).
+func TestHouseOrphanOwner(t *testing.T) {
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	h := newHouseHarness(t, func(c *session.Config) {
+		c.Houses = &session.HouseData{Owners: []session.HouseOwner{{HouseID: "gone", CharacterID: 9300,
+			AccountID: 9300, Name: "Ana", PaidUntil: now, Since: now}}}
+	})
+	nextChar++
+	c := withPack(nextChar, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	c.Name, c.Level, c.AccountID = "Alba", 10, 9300
+	cl, _ := h.joinChar(c)
+	h.openDoor(cl, cottageDoor)
+	if evs := h.send(cl, houseCmd(&pb.HouseRent{})); !hasKey(evs, "house.has_house") {
+		t.Fatalf("rent with an orphan house: %v", systemKeys(evs))
+	}
+}

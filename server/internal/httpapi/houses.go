@@ -34,7 +34,8 @@ type HouseInfo struct {
 
 type houseEntry struct {
 	HouseInfo
-	Owner string `json:"owner"` // "" = free
+	Taken bool   `json:"taken"`
+	Owner string `json:"owner"` // "" when free, or when the owner may not be shown
 }
 
 type houseListResponse struct {
@@ -54,7 +55,8 @@ func (a *api) houseList(w http.ResponseWriter, r *http.Request) {
 		}
 		out := houseListResponse{Houses: make([]houseEntry, len(a.cfg.Houses))}
 		for i, h := range a.cfg.Houses {
-			out.Houses[i] = houseEntry{HouseInfo: h, Owner: by[h.ID]}
+			name, taken := by[h.ID]
+			out.Houses[i] = houseEntry{HouseInfo: h, Taken: taken, Owner: name}
 		}
 		return out, nil
 	}))

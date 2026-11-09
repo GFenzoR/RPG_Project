@@ -17,8 +17,8 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 			return
 		}
 		w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
+		defer func() { w.cmdPlayer = nil }()
 		w.input(ctx, p, msg)
-		w.cmdPlayer = nil
 	})
 }
 

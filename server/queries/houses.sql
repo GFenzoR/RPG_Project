@@ -45,13 +45,13 @@ DELETE FROM house_items WHERE house_id = $1;
 INSERT INTO house_items (house_id, x, y, z, seq, item_id, item) VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: PublicHouses :many
--- Owners for the public list (/api/houses): the name only, and nobody hidden by the
--- ranking's rules (staff, disabled or banned accounts) shows as owner.
-SELECT h.house_id, c.name
+-- Owners for the public list (/api/houses): every rented house, with the owner's name
+-- only when the ranking's rules (staff, disabled or banned accounts) allow showing it.
+SELECT h.house_id, c.name,
+    (a.role = 'player' AND a.disabled_at IS NULL
+     AND NOT EXISTS (SELECT 1 FROM account_bans b WHERE b.account_id = a.id AND b.lifted_at IS NULL
+                     AND (b.expires_at IS NULL OR b.expires_at > sqlc.arg(now))))::boolean AS visible
 FROM house_owners h
 JOIN characters c ON c.id = h.character_id
 JOIN accounts a ON a.id = c.account_id
-WHERE a.role = 'player' AND a.disabled_at IS NULL
-  AND NOT EXISTS (SELECT 1 FROM account_bans b WHERE b.account_id = a.id AND b.lifted_at IS NULL
-                  AND (b.expires_at IS NULL OR b.expires_at > sqlc.arg(now)))
 ORDER BY h.house_id;

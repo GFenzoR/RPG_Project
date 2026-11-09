@@ -68,7 +68,8 @@ type HouseData struct {
 	Items  []HouseItem
 }
 
-// PublicHouseOwner is an owner shown on /api/houses.
+// PublicHouseOwner is a rented house on /api/houses; Name is empty when the owner may not
+// be shown (staff, disabled or banned account).
 type PublicHouseOwner struct {
 	HouseID, Name string
 }
@@ -171,8 +172,8 @@ func (s *Store) LoadHouses(ctx context.Context) (HouseData, error) {
 	return d, err
 }
 
-// PublicHouses returns the owners shown on /api/houses: staff, disabled and banned
-// accounts are left out (like the highscores).
+// PublicHouses returns the rented houses for /api/houses; the owner's name is left out
+// for staff, disabled and banned accounts (like the highscores).
 func (s *Store) PublicHouses(ctx context.Context, now time.Time) ([]PublicHouseOwner, error) {
 	rows, err := s.q.PublicHouses(ctx, ts(now))
 	if err != nil {
@@ -180,7 +181,11 @@ func (s *Store) PublicHouses(ctx context.Context, now time.Time) ([]PublicHouseO
 	}
 	out := make([]PublicHouseOwner, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, PublicHouseOwner{HouseID: r.HouseID, Name: r.Name})
+		o := PublicHouseOwner{HouseID: r.HouseID}
+		if r.Visible {
+			o.Name = r.Name
+		}
+		out = append(out, o)
 	}
 	return out, nil
 }

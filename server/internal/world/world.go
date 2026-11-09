@@ -204,7 +204,24 @@ func (h *House) Contains(p Pos) bool {
 const (
 	MaxHouseRects = 16
 	MaxHouseDoors = 8
+	// MaxHouseTiles bounds the tiles of one house: the loop walks them to count and
+	// save its items.
+	MaxHouseTiles = 2048
 )
+
+// validHouseID matches the house_id CHECK of the database: ^[a-z][a-z0-9_]*$, 1..64.
+func validHouseID(id string) bool {
+	if id == "" || len(id) > 64 || id[0] < 'a' || id[0] > 'z' {
+		return false
+	}
+	for i := 1; i < len(id); i++ {
+		c := id[i]
+		if ok := c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_'; !ok {
+			return false
+		}
+	}
+	return true
+}
 
 // Map is the whole loaded world.
 type Map struct {
@@ -293,14 +310,18 @@ func (m *Map) indexHouses() error {
 		for i := range is.Houses {
 			h := &is.Houses[i]
 			h.Island = is.ID
-			if h.ID == "" || h.Name == "" || h.Rent == 0 || ids[h.ID] {
+			if !validHouseID(h.ID) || h.Name == "" || h.Rent == 0 || ids[h.ID] {
 				return fmt.Errorf("island %q: house %q needs a unique id, a name and a rent > 0", is.ID, h.ID)
 			}
 			ids[h.ID] = true
 			if len(h.Rects) == 0 || len(h.Rects) > MaxHouseRects || len(h.Doors) == 0 || len(h.Doors) > MaxHouseDoors {
 				return fmt.Errorf("island %q: house %q needs 1..%d rects and 1..%d doors", is.ID, h.ID, MaxHouseRects, MaxHouseDoors)
 			}
+			tiles := 0
 			for _, r := range h.Rects {
+				if tiles += int(r.W) * int(r.H); tiles > MaxHouseTiles {
+					return fmt.Errorf("island %q: house %q has more than %d tiles", is.ID, h.ID, MaxHouseTiles)
+				}
 				if r.W == 0 || r.H == 0 || !is.hasFloor(r.Z) || !is.Rect.Contains(int(r.X), int(r.Y)) ||
 					!is.Rect.Contains(int(r.X)+int(r.W)-1, int(r.Y)+int(r.H)-1) {
 					return fmt.Errorf("island %q: house %q: rect %+v is empty, outside the island or on a floor it does not list", is.ID, h.ID, r)

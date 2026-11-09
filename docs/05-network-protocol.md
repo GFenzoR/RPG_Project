@@ -901,8 +901,9 @@ Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
   `gm.house_free`, `gm.house_unknown`, `gm.house_evicted`, `gm.house_moved`,
   `gm.house_no_target`.
 - `GET /api/houses` (público, sin cuenta): `{houses: [{id, name, island, rent, size,
-  owner}]}`, todas las casas del mapa; `owner` es el nombre del personaje o `""` si está
-  libre (sin personal, cuentas deshabilitadas ni suspendidas, como el ranking). Cache de
+  taken, owner}]}`, todas las casas del mapa; `taken` dice si está alquilada y `owner` es
+  el nombre del personaje, o `""` si está libre o el dueño no se muestra (personal,
+  cuentas deshabilitadas o suspendidas, como el ranking). Cache de
   60 s, límite por IP y cupos de consulta compartidos con `/api/guilds`.
 
 ### Gremios (T5.1, `server/internal/session/guild.go`)

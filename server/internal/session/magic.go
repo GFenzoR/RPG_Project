@@ -772,6 +772,9 @@ func (w *World) useItemOn(ctx *game.TickContext, p *Player, m *pb.UseItemOn) {
 		p.emit(systemMsg(msgNotOwner))
 		return
 	}
+	if !w.mayUseInHouse(p, it) { // T5.4
+		return
+	}
 	switch {
 	case m.GetTo() == nil:
 		p.emit(systemMsg(msgCannotUse))

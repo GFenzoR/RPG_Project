@@ -245,23 +245,24 @@ func (q *Queries) LoadHouseOwners(ctx context.Context) ([]LoadHouseOwnersRow, er
 }
 
 const publicHouses = `-- name: PublicHouses :many
-SELECT h.house_id, c.name
+SELECT h.house_id, c.name,
+    (a.role = 'player' AND a.disabled_at IS NULL
+     AND NOT EXISTS (SELECT 1 FROM account_bans b WHERE b.account_id = a.id AND b.lifted_at IS NULL
+                     AND (b.expires_at IS NULL OR b.expires_at > $1)))::boolean AS visible
 FROM house_owners h
 JOIN characters c ON c.id = h.character_id
 JOIN accounts a ON a.id = c.account_id
-WHERE a.role = 'player' AND a.disabled_at IS NULL
-  AND NOT EXISTS (SELECT 1 FROM account_bans b WHERE b.account_id = a.id AND b.lifted_at IS NULL
-                  AND (b.expires_at IS NULL OR b.expires_at > $1))
 ORDER BY h.house_id
 `
 
 type PublicHousesRow struct {
 	HouseID string
 	Name    string
+	Visible bool
 }
 
-// Owners for the public list (/api/houses): the name only, and nobody hidden by the
-// ranking's rules (staff, disabled or banned accounts) shows as owner.
+// Owners for the public list (/api/houses): every rented house, with the owner's name
+// only when the ranking's rules (staff, disabled or banned accounts) allow showing it.
 func (q *Queries) PublicHouses(ctx context.Context, now pgtype.Timestamptz) ([]PublicHousesRow, error) {
 	rows, err := q.db.Query(ctx, publicHouses, now)
 	if err != nil {
@@ -271,7 +272,7 @@ func (q *Queries) PublicHouses(ctx context.Context, now pgtype.Timestamptz) ([]P
 	items := []PublicHousesRow{}
 	for rows.Next() {
 		var i PublicHousesRow
-		if err := rows.Scan(&i.HouseID, &i.Name); err != nil {
+		if err := rows.Scan(&i.HouseID, &i.Name, &i.Visible); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
