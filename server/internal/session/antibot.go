@@ -558,7 +558,7 @@ func (w *World) incomeRatio(tick game.Tick, p *Player) float64 {
 
 // pruneSuspects forgets offline characters whose score has decayed to nothing (and that
 // have no pending check), once per evaluation round, and publishes how many of the rest
-// are at each response level (AntiBotStats).
+// are at each response level (AntiBotStats), as of their decayed score.
 func (w *World) pruneSuspects(tick game.Tick) {
 	var levels [antibot.LevelSuspend + 1]int64
 	for id, s := range w.suspects {
@@ -567,7 +567,14 @@ func (w *World) pruneSuspects(tick game.Tick) {
 			delete(w.suspects, id)
 			continue
 		}
-		levels[s.level]++
+		// The level shown is the one respond would leave with the decayed score: an
+		// offline character's s.level only drops when it is evaluated again, online.
+		lvl := s.level
+		d := s.score * antibot.Decay(tickMs(tick-s.lastEval), w.abCfg)
+		for lvl > 0 && d < antibot.Threshold(lvl, w.abCfg)/2 {
+			lvl--
+		}
+		levels[lvl]++
 	}
 	for l := antibot.LevelLog; l <= antibot.LevelSuspend; l++ {
 		w.abStats.Suspects[l].Store(levels[l])

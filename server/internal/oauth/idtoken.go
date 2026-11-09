@@ -43,6 +43,10 @@ type jwks struct {
 	call *jwksCall
 }
 
+// jwksWaiting is called when a lookup starts waiting for the fetch in flight. Tests
+// only: they count the waiters instead of sleeping.
+var jwksWaiting = func() {}
+
 // jwksCall is one fetch in flight; done is closed when err is set.
 type jwksCall struct {
 	done chan struct{}
@@ -76,6 +80,7 @@ func (j *jwks) key(ctx context.Context, kid string, now time.Time) (*rsa.PublicK
 		return k, nil
 	case c != nil: // someone is fetching: wait for that fetch
 		j.mu.Unlock()
+		jwksWaiting()
 		select {
 		case <-c.done:
 		case <-ctx.Done():
