@@ -70,11 +70,7 @@ func (m *mailHarness) forgot(email string, wait bool) {
 		m.t.Fatalf("forgot %s: %d %q", email, w.Code, w.Body.String())
 	}
 	if wait {
-		select {
-		case <-m.resets:
-		case <-time.After(5 * time.Second):
-			m.t.Fatal("reset request did not finish")
-		}
+		<-m.resets // the go test timeout catches a request that never finishes
 	}
 }
 

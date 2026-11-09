@@ -345,3 +345,13 @@ client.tutorial.title: "First steps"
 client.tutorial.step: "{step} / {total}"
 client.tutorial.progress: "{progress} of {count} done."
 client.tutorial.skip: "Skip tutorial"
+# Account: email verification and forgotten password (T2.1). The pages of the links are
+# in site.yaml.
+client.login.forgot: "Forgot your password?"
+client.verify.notice: "Confirm your email: we sent a link to {email}. Until then you cannot send maps or recover your password by email."
+client.verify.resend: "Send the email again"
+client.verify.sent: "Done: check your inbox (and your spam folder)."
+error.invalid_token: "The link is not valid, was already used or expired. Ask for a new one."
+error.email_unverified: "Confirm your email first (check the link we sent you)."
+error.already_verified: "Your email is already confirmed."
+error.email_disabled: "This server does not send emails yet. Ask whoever runs it for help."

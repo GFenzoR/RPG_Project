@@ -93,6 +93,21 @@ memoria) y se persiste ambos personajes en una sola transacción de base de dato
 
 ## Autenticación y cuentas
 - Email + contraseña (argon2id), verificación de email, reset de contraseña.
+- Emails de la cuenta (T2.1, `server/internal/mail`): `auth` arma el mensaje (plantillas de
+  `i18n/<idioma>/email.yaml`, texto plano + HTML escapado con `html/template`) y lo pone en
+  una cola acotada; una goroutine propia lo manda por SMTP (STARTTLS obligatorio, o TLS
+  implícito) con reintentos. Nunca corre en el game loop ni bloquea un handler. Sin SMTP
+  configurado todo queda apagado y se comporta como antes.
+- Los enlaces llevan un token aleatorio de 256 bits **en el fragmento** (`/verify#token=…`,
+  `/reset-password#token=…`): el navegador no lo manda a ningún servidor, así que no queda
+  en logs; la página del sitio lo canjea con un `POST`. En la base (`account_tokens`) va
+  solo su SHA-256, un uso, vencimiento (24 h verificar, 1 h reset) y un enlace nuevo anula
+  los anteriores del mismo tipo. La búsqueda es por el hash: nunca se compara el secreto.
+- Reset de contraseña: en una transacción cambia el hash, borra los otros enlaces de reset,
+  revoca **todas** las sesiones (cuenta y juego) y escribe `audit_log` (`password_reset`,
+  fuente `web`). Verificar escribe `email_verified`. Sin SMTP, el operador genera un enlace
+  con `gameserver admin reset-link` (auditado como `reset_link_issued`, el enlace no se
+  registra).
 - OAuth 2.0 con Google y Discord vinculados a la misma cuenta.
 - Una cuenta tiene varios personajes. Cosméticos pertenecen a la cuenta.
 - Tokens de sesión opacos en Postgres (fácil de revocar); cookie `HttpOnly` en web,

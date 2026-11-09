@@ -55,6 +55,25 @@ Para probar los comandos de GM, dale un rol a tu cuenta de desarrollo y vuelve a
 auditoría y `make reports` la cola de reportes de jugadores (T4.1). Comandos en
 `02-game-design.md` ("Moderación").
 
+### Emails de la cuenta (T2.1)
+`make dev` levanta [Mailpit](https://github.com/axllent/mailpit) (Docker, `make mail-up`,
+imagen fija `v1.21.8`, licencia MIT) y apunta el servidor a él: los emails de verificación y
+de reset llegan a **http://localhost:8025** y sus enlaces abren el sitio de Vite
+(`PUBLIC_URL=http://localhost:5173`). Sin Docker, `make dev` sigue sin emails (todo como
+antes); `DEV_MAIL=0 make dev` los apaga a propósito.
+
+- Enlace de reset a mano (sin SMTP): `make reset-link EMAIL=ana@example.org`.
+- Para probar contra SMTP real, exporta antes de `make run-server`: `SMTP_HOST`,
+  `SMTP_PORT` (587), `SMTP_SECURITY` (`starttls`; `tls` con 465; `none` solo para un
+  catcher local), `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` y `PUBLIC_URL`. Con Gmail:
+  activa la verificación en dos pasos, crea una "contraseña de aplicación"
+  (myaccount.google.com → Seguridad → Contraseñas de aplicaciones) y usa `smtp.gmail.com`,
+  587, tu dirección como usuario y remitente.
+- `-mail log` (o `RPG_MAIL=log`) activa los flujos sin mandar nada: solo registra
+  destinatario y asunto (nunca el enlace). Sirve poco; prefiere Mailpit.
+- El E2E (`client/e2e/account.spec.ts`) usa un SMTP falso en Node (`e2e/fake-smtp.ts`) y un
+  tercer servidor solo-HTTP con emails activados (`playwright.config.ts`).
+
 ### Portal de mapas (T4.5)
 `http://localhost:5173/maps/submit`: sube un patch de `mapcli patch create` o del editor
 (Exportar patch) con una cuenta que tenga personaje. `make dev` y `make run-server` arrancan

@@ -73,9 +73,18 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return data as T;
 }
 
+/** The signed-in account (T2.1). */
+export interface Account {
+  email: string;
+  email_verified: boolean;
+  /** The server sends emails: verifying is possible and asked for. */
+  email_enabled: boolean;
+}
+
 export const api = {
-  register: (email: string, password: string): Promise<{ account_id: number }> =>
-    call("POST", "/api/auth/register", { email, password }),
+  /** `lang` is the language of the verification email (T2.1). */
+  register: (email: string, password: string, lang?: string): Promise<{ account_id: number }> =>
+    call("POST", "/api/auth/register", lang ? { email, password, lang } : { email, password }),
   login: (email: string, password: string): Promise<{ expires_at: string }> =>
     call("POST", "/api/auth/login", { email, password }),
   logout: (): Promise<void> => call("POST", "/api/auth/logout"),
@@ -85,6 +94,20 @@ export const api = {
     (await call<{ character: Character }>("POST", "/api/characters", { name, vocation })).character,
   play: (characterId: number): Promise<{ session_token: string; expires_at: string }> =>
     call("POST", "/api/play", { character_id: characterId }),
+};
+
+/** Email verification and password reset (T2.1, docs/05). Tokens go in POST bodies. */
+export const accountApi = {
+  /** Whether this server sends emails (no SMTP = no reset, no verification). */
+  config: (): Promise<{ email: boolean }> => call("GET", "/api/auth/config"),
+  account: (): Promise<Account> => call("GET", "/api/account"),
+  verify: (token: string): Promise<void> => call("POST", "/api/auth/verify", { token }),
+  resend: (lang: string): Promise<void> => call("POST", "/api/auth/verify/resend", { lang }),
+  /** Answers the same whether or not the account exists. */
+  forgot: (email: string, lang: string): Promise<void> =>
+    call("POST", "/api/auth/password/forgot", { email, lang }),
+  reset: (token: string, password: string): Promise<void> =>
+    call("POST", "/api/auth/password/reset", { token, password }),
 };
 
 /** A map submission of the portal (T4.5, docs/05 "Envío de mapas"). */

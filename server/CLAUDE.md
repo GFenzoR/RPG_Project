@@ -82,6 +82,14 @@ server/
   transacción de la decisión; toda acción va a `audit_log` con fuente `web`. La cola del
   worker es la tabla (contrato en la migración 00010 y en docs/04).
 
+- **Emails de la cuenta (T2.1):** `internal/mail` (Mailer SMTP/log, `Queue` con su propia
+  goroutine, plantillas de `i18n/<idioma>/email.yaml`) + `auth/email.go` + `httpapi/email.go`
+  + `store/accounttokens.go`. Un token de enlace nunca va a un log, a una URL que vea el
+  servidor ni a la base en claro (solo SHA-256). Sin `Config.Mail` todo se comporta como
+  antes: cualquier chequeo nuevo de "email verificado" pasa por `Service.RequireVerified`.
+  `forgot` contesta igual para cualquier email y trabaja en segundo plano: no agregues
+  respuestas ni tiempos que dependan de la cuenta.
+
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).
 - Tests de integración con Postgres llevan build tag `integration` (`make test-integration`,

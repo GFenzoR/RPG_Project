@@ -199,6 +199,38 @@ una cuenta nueva puede enviar al instante (`MAP_SUBMIT_MIN_ACCOUNT_AGE=0s` en la
 producción espera 24 h). Sin el worker, aprobar un envío muestra cómo aplicarlo a mano con
 `mapcli patch apply`. El worker opcional abre el PR solo: ver "Worker de PR de mapas".
 
+### 8b. Emails de la cuenta (verificación y "olvidé mi contraseña", T2.1)
+Por defecto el servidor de casa **no manda emails**: nadie tiene que confirmar su email y
+el sitio no ofrece "¿Olvidaste tu contraseña?". Si alguien la olvida:
+```
+make home-reset-password EMAIL=ana@example.org
+```
+imprime un enlace de un solo uso que vence en 1 hora (queda en el log de auditoría, el
+enlace no). Pásaselo por un canal de confianza: quien lo tenga puede tomar la cuenta. El
+enlace apunta a `PUBLIC_URL` (por defecto `http://localhost:8080`; si tus amigos entran por
+el túnel con dominio, pon `PUBLIC_URL=https://juego.tudominio.com` en `deploy/.env.home`).
+
+**Probar los emails sin bandeja real (Mailpit):** en `deploy/.env.home` descomenta
+`COMPOSE_PROFILES=mail` (o agrega `mail` a la lista, p. ej. `map-pr,mail`) y las líneas
+`SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_SECURITY=none`, `SMTP_FROM=…`; luego
+`make home-up`. Los emails aparecen en http://localhost:8025 (solo en tu PC).
+
+**SMTP real** (para que lleguen a los jugadores), en `deploy/.env.home`:
+- *Gmail* (lo más rápido para pocos jugadores; límite de ~500 emails al día): activa la
+  verificación en dos pasos de la cuenta, crea una contraseña de aplicación
+  (myaccount.google.com → Seguridad → Contraseñas de aplicaciones) y pon
+  `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURITY=starttls`,
+  `SMTP_USERNAME=tu@gmail.com`, `SMTP_PASSWORD=<la contraseña de aplicación>`,
+  `SMTP_FROM=RPG Project <tu@gmail.com>`.
+- *Proveedor transaccional* (Brevo, Mailjet, Resend, Postmark, Amazon SES…): te da host,
+  puerto, usuario y clave SMTP; verifica tu dominio (SPF/DKIM) para no caer en spam.
+
+Después `make home-up`. Qué cambia: al registrarse llega un email para confirmar; sin
+confirmar se puede jugar pero no enviar mapas ni pedir un reset por email; aparece
+"¿Olvidaste tu contraseña?" en el login. `REQUIRE_VERIFIED_EMAIL=true` exige el email
+confirmado también para jugar. Las contraseñas SMTP solo viven en `deploy/.env.home`
+(ignorado por git) y nunca van a los logs.
+
 ### 9. Actualizar después de un `git pull`
 ```bash
 git pull
@@ -234,7 +266,11 @@ Todas son opcionales salvo las dos contraseñas, que se generan solas.
 | `ALERT_DISCORD_WEBHOOK_URL`, `ALERT_TELEGRAM_*`, `ALERT_EMAIL_TO`, `ALERT_SMTP_*`, `ALERT_WEBHOOK_URL` | — | Canales de alertas (`09-deployment-aws.md`, "Monitoreo") |
 | `PROMETHEUS_RETENTION`, `PROMETHEUS_RETENTION_SIZE` | `15d`, `1GB` | Cuánto guarda Prometheus |
 | `GRAFANA_PUBLIC` y `GRAFANA_*` de la ruta pública | `off` | No la actives en casa (ver "Monitoreo en casa") |
-| `COMPOSE_PROFILES` | — | `map-pr` enciende el worker de PRs de mapas |
+| `COMPOSE_PROFILES` | — | `map-pr` enciende el worker de PRs de mapas; `mail`, Mailpit (paso 8b) |
+| `PUBLIC_URL` | `http://localhost:8080` | Dirección de los enlaces de los emails (T2.1) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | — (sin emails), `587`, `starttls` | Servidor de correo (paso 8b) |
+| `REQUIRE_VERIFIED_EMAIL` | `false` | `true`: solo cuentas con email confirmado pueden jugar |
+| `MAILPIT_UI_PORT` | `8025` | Puerto de Mailpit (perfil `mail`, solo `127.0.0.1`) |
 | `GITHUB_MAP_PR_TOKEN` | — | Token del bot del worker |
 | `MAP_PR_REPOSITORY`, `MAP_PR_BASE`, `MAP_PR_POLL_SECONDS` | `GFenzoR/RPG_Project`, `main`, `30` | Repo, rama y frecuencia del worker |
 | `POSTGRES_USER`, `POSTGRES_DB` | `rpg` | Usuario y base; déjalos así |

@@ -22,6 +22,29 @@ services:
       - "${HOME_BIND:-127.0.0.1}:${HOME_HTTP_PORT:-8080}:80"
     networks: [edge, tunnel]
 
+  gameserver:
+    environment:
+      # Links in emails point at the PC (or set PUBLIC_URL to the tunnel's fixed domain).
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${HOME_HTTP_PORT:-8080}}
+
+  # Email catcher (T2.1, profile `mail`): with SMTP_HOST=mailpit, SMTP_PORT=1025 and
+  # SMTP_SECURITY=none in deploy/.env.home every email lands in http://localhost:8025
+  # instead of a real inbox. For trying the flows; real players need real SMTP (docs/13).
+  mailpit:
+    image: axllent/mailpit:v1.21.8
+    profiles: [mail]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_MAX_MESSAGES: "500"
+    networks: [edge]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # S3 backups are a production concern; at home `make home-backup` writes a local dump.
   backup:
     profiles: [s3-backup]

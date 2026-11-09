@@ -95,6 +95,36 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
 | `GET /api/highscores?category=&vocation=&page=` | — | — | `200 {category, vocation, page, page_size, has_more, entries: [{rank, name, vocation, value}]}` (T4.3, público) |
 | `POST /api/maps/submissions` y demás `/api/maps/...` | token | ver "Envío de mapas" | T4.5 |
+| `GET /api/auth/config` | — | — | `200 {email}`: si el servidor manda emails (T2.1) |
+| `GET /api/account` | token | — | `200 {email, email_verified, email_enabled}` |
+| `POST /api/auth/verify` | — | `{token}` | `204`; `400 invalid_token` |
+| `POST /api/auth/verify/resend` | token | `{lang?}` | `202`; `409 already_verified`, `404 email_disabled`, `429` |
+| `POST /api/auth/password/forgot` | — | `{email, lang?}` | `202` siempre (exista o no la cuenta); `404 email_disabled` |
+| `POST /api/auth/password/reset` | — | `{token, password}` | `204`, revoca todas las sesiones y borra la cookie; `400 invalid_token` / `invalid_password` |
+
+`POST /api/auth/register` acepta además `lang` (idioma del email de verificación).
+
+### Verificación de email y reset de contraseña (T2.1, `httpapi/email.go`)
+- Solo existen con SMTP configurado (`GET /api/auth/config` → `{"email": true}`); si no,
+  las rutas de envío responden `404 email_disabled` y el cliente no las ofrece.
+- Al registrarse se manda el email de verificación (si falla la cola, el registro igual
+  vale: se puede reenviar). Los enlaces son `PUBLIC_URL/verify?lang=xx#token=…` y
+  `PUBLIC_URL/reset-password?lang=xx#token=…`; `PUBLIC_URL` es configuración, nunca el
+  header `Host`. El token (43 caracteres base64url) viaja en el fragmento y la página lo
+  manda en el cuerpo del `POST`; un token en la query se ignora.
+- El idioma del email es el de la cuenta (`accounts.locale`, se guarda el del primer pedido
+  con un idioma válido); si no hay, el del pedido; si no, `es`.
+- `forgot` responde `202` sin cuerpo exista o no la cuenta, esté verificada o no, y aunque
+  la dirección haya pasado su límite. La búsqueda y el email corren en segundo plano (como
+  mucho 8 a la vez; el resto se descarta), así que ni el tiempo de respuesta depende de la
+  cuenta. Un email mal formado sí da `400 invalid_email` (no dice nada de cuentas).
+- Rate limits: `forgot`, `reset` y `verify` gastan el límite por IP de registro y login
+  (10 de ráfaga, 1 cada 6 s). Emails de reset por dirección: 3, luego 1 cada 20 min (en
+  silencio). Emails de verificación por cuenta: 3, luego 1 cada 10 min (`429`); el del
+  registro cuenta.
+- Errores: `invalid_token` (desconocido, usado, vencido o reemplazado), `email_unverified`
+  (portal de mapas o, con `-require-verified-email`, `POST /api/play`), `already_verified`,
+  `email_disabled`.
 
 ### Endpoints públicos del sitio (T4.3, `httpapi/public.go`)
 Los usa la landing (`/`, `/highscores`). No piden cuenta, y comparten un rate limit por IP

@@ -1040,3 +1040,21 @@ body.using-item canvas {
   margin-top: 0.5rem;
   color: var(--text);
 }
+/* T2.1: "forgot your password?" and "confirm your email" (ui/Account.tsx). */
+.forgot-link {
+  align-self: flex-start;
+  font-size: 0.9rem;
+}
+.verify-notice {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.verify-notice p {
+  margin: 0;
+}
+.verify-notice button {
+  align-self: flex-start;
+}

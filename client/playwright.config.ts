@@ -15,6 +15,14 @@ const puertoServerPort = Number(process.env["CLIENT_E2E_PUERTO_SERVER_PORT"] ?? 
 const puertoClientPort = Number(process.env["CLIENT_E2E_PUERTO_PORT"] ?? 5177);
 export const puertoServerURL = `http://localhost:${puertoServerPort}`;
 export const puertoClientURL = `http://localhost:${puertoClientPort}`;
+// Account emails (T2.1): a server with email on (HTTP API only, no world), its own Vite
+// and a fake SMTP server (e2e/fake-smtp.ts) whose messages are read over HTTP.
+const mailServerPort = Number(process.env["CLIENT_E2E_MAIL_SERVER_PORT"] ?? 18082);
+const mailClientPort = Number(process.env["CLIENT_E2E_MAIL_PORT"] ?? 5178);
+const smtpPort = Number(process.env["CLIENT_E2E_SMTP_PORT"] ?? 18025);
+const smtpHttpPort = Number(process.env["CLIENT_E2E_SMTP_HTTP_PORT"] ?? 18026);
+export const mailClientURL = `http://localhost:${mailClientPort}`;
+export const smtpMessagesURL = `http://127.0.0.1:${smtpHttpPort}/messages`;
 
 export default defineConfig({
   testDir: "e2e",
@@ -71,6 +79,37 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60_000,
       env: { RPG_SERVER: puertoServerURL },
+    },
+    {
+      command: `node e2e/fake-smtp.ts ${smtpPort} ${smtpHttpPort}`,
+      cwd: import.meta.dirname,
+      url: `http://127.0.0.1:${smtpHttpPort}/`,
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
+      command: `go run ./cmd/gameserver -http :${mailServerPort} -world "" -seed 1 -auth-rate-burst 1000 -metrics-addr ""`,
+      cwd: `${import.meta.dirname}/../server`,
+      url: `http://localhost:${mailServerPort}/healthz`,
+      reuseExistingServer: false,
+      timeout: 240_000,
+      env: {
+        DATABASE_URL: databaseUrl,
+        PUBLIC_URL: mailClientURL,
+        SMTP_HOST: "127.0.0.1",
+        SMTP_PORT: String(smtpPort),
+        SMTP_SECURITY: "none",
+        SMTP_FROM: "RPG Project <noreply@rpg.test>",
+      },
+      stdout: "pipe",
+    },
+    {
+      command: `pnpm exec vite --port ${mailClientPort} --strictPort`,
+      cwd: import.meta.dirname,
+      url: `${mailClientURL}/`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: { RPG_SERVER: `http://localhost:${mailServerPort}` },
     },
   ],
 });

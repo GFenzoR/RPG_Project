@@ -3,6 +3,17 @@
 Todos los números de este documento son **valores iniciales** que viven en
 `data/balance.yaml`. El código lee de ahí; nunca hardcodees una constante de balance.
 
+## Cuentas (T2.1)
+- Con emails activados (SMTP configurado), una cuenta sin email verificado **puede jugar**,
+  pero no puede enviar mapas al portal (`email_unverified`) ni recibir un enlace de reset
+  de contraseña (el pedido responde igual, pero no se manda nada: un email sin verificar
+  puede no ser del dueño). El operador puede igual darle un enlace a mano
+  (`gameserver admin reset-link`).
+- `-require-verified-email` (o `REQUIRE_VERIFIED_EMAIL=true` en el compose) exige el email
+  verificado también para jugar (`POST /api/play` → `email_unverified`). Necesita SMTP: el
+  servidor no arranca con esa opción y sin emails.
+- Sin SMTP no se pide verificar nada y el sitio no ofrece "¿Olvidaste tu contraseña?".
+
 ## Movimiento
 - Por casillas, 8 direcciones (diagonal más lenta: ×1.5 de costo como en Tibia clásico).
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el

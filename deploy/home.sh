@@ -6,6 +6,7 @@
 #   deploy/home.sh env                      create/complete deploy/.env.home
 #   deploy/home.sh up [--monitoring]        build, start, wait until healthy, print the URLs
 #   deploy/home.sh admin EMAIL [ROLE]       give an account the gm or admin role
+#   deploy/home.sh reset-password EMAIL     print a one-use password reset link (no SMTP)
 #   deploy/home.sh backup                   pg_dump into deploy/backups/
 #   deploy/home.sh restore FILE             replace the database with a backup
 #   deploy/home.sh reset                    delete every volume of the home stack
@@ -24,7 +25,7 @@ TEMPLATE=deploy/env.home.template
 BACKUP_DIR=deploy/backups
 # Every optional profile: with --profile flags compose ignores COMPOSE_PROFILES, so down,
 # stop and logs must name them all or a worker or tunnel would be left running.
-ALL_PROFILES=(--profile quick-tunnel --profile tunnel --profile monitoring --profile map-pr)
+ALL_PROFILES=(--profile quick-tunnel --profile tunnel --profile monitoring --profile map-pr --profile mail)
 
 say() { printf '[home] %s\n' "$*"; }
 die() {
@@ -169,6 +170,16 @@ cmd_up() {
 	banner
 }
 
+# One-use password reset link (T2.1) for when the server has no SMTP: the operator gives
+# it to the owner of the account by a channel they trust. PUBLIC_URL comes from the
+# gameserver's environment (deploy/.env.home or http://localhost:8080).
+cmd_reset_password() {
+	local email=${1:-}
+	[[ -n $email ]] || die "usage: make home-reset-password EMAIL=you@example.com"
+	running gameserver || die "the game is not running: make home-up first"
+	compose exec -T gameserver /app/gameserver admin reset-link -email "$email"
+}
+
 cmd_admin() {
 	local email=${1:-} role=${2:-admin}
 	[[ -n $email ]] || die "usage: make home-admin EMAIL=you@example.com [ROLE=admin|gm|player]"
@@ -239,6 +250,7 @@ main() {
 	env) ensure_env ;;
 	up) cmd_up "$@" ;;
 	admin) cmd_admin "$@" ;;
+	reset-password) cmd_reset_password "$@" ;;
 	backup) cmd_backup ;;
 	restore) cmd_restore "$@" ;;
 	reset) cmd_reset ;;

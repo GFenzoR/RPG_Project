@@ -62,6 +62,17 @@ services:
       # T4.5: "on" when the map PR worker has a token; otherwise the moderation page tells
       # moderators to open approved submissions by hand (mapcli patch apply).
       RPG_MAP_PR_WORKER: ${GITHUB_MAP_PR_TOKEN:+on}
+      # Account emails (T2.1; docs/09 "Emails de la cuenta"). Without SMTP_HOST they are off:
+      # nobody is asked to verify and "forgot your password?" is not offered. PUBLIC_URL is
+      # where the links point (never taken from the request's Host header).
+      PUBLIC_URL: ${PUBLIC_URL:-https://${SITE_ADDRESS:-localhost}}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      RPG_REQUIRE_VERIFIED_EMAIL: ${REQUIRE_VERIFIED_EMAIL:-false}
       DATABASE_URL: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-rpg}?sslmode=disable
     # Pending migrations (embedded in the binary) are applied on start (-migrate, default
     # true); the healthcheck only passes once the HTTP API is up, after migrating.
