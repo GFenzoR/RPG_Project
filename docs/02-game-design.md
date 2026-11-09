@@ -524,10 +524,14 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   adentro sin permiso (lo sacaron de la lista, dejó el gremio, la casa cambió de dueño o
   se liberó) sale por la puerta a la salida en el acto o, a lo sumo, en un segundo. Quien
   entra al juego dentro de una casa a la que ya no tiene acceso aparece en la salida. El
-  personal del juego entra a cualquier casa.
+  personal del juego entra a cualquier casa. Desde la ventana de la casa (que se abre a
+  hasta 3 casillas de una puerta) quien tiene acceso puede **entrar** (lo lleva a una
+  casilla libre adentro, junto a la puerta) y quien está adentro, **salir** (a la salida):
+  nadie puede encerrar al dueño afuera ni a sus invitados adentro parándose en la puerta.
 - **Dejar y transferir:** el dueño puede dejar la casa o ofrecerla a otro personaje
   conectado por un precio (puede ser 0); la oferta espera `transfer_minutes` (10) a que el
-  otro la acepte en la puerta, con el nivel y la regla de una por cuenta. El precio va al
+  otro la acepte en la puerta, con el nivel y la regla de una por cuenta. El que acepta
+  manda el precio que vio: si el dueño lo cambió, la aceptación se rechaza. El precio va al
   buzón del dueño; lo pagado del alquiler sigue con la casa; la lista de invitados y el
   gremio se borran.
 - **Objetos adentro:** lo que se deja en el suelo de la casa o en contenedores sobre él
@@ -540,14 +544,16 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   del dueño. Lo que un invitado deja es de la casa. Lo que cae al suelo por otra vía (una
   compra con la mochila llena) no cuenta para el límite.
 - **Al liberarse** (dejarla, falta de pago, transferencia o staff) todos los objetos van al
-  **buzón del mercado** del dueño, enteros (un contenedor con su contenido, una runa con
-  sus cargas), en la misma transacción que libera la casa: no se pierde nada. Se retiran en
-  cualquier tablero del mercado.
+  **buzón del mercado** del dueño, en la misma transacción que libera la casa: no se pierde
+  nada. Los contenedores van **aplanados** (el contenedor vacío y cada cosa de adentro en
+  su propia fila; una runa con sus cargas), así nada es demasiado profundo o pesado para
+  retirarlo. Se retiran en cualquier tablero del mercado; lo que no entra (por peso o lugar)
+  espera sin trabar lo que viene después.
 - **Anti-flood** propio (`action_burst` / `action_refill_ms`) para las acciones de la casa
   y para mover objetos dentro de ella: cada movimiento guarda la casa y al que lo movió.
 - **Falla segura (T5.3):** si algo no se pudo guardar, las casas quedan en solo lectura
-  hasta reiniciar: no se alquila ni se paga, nada entra ni sale de una casa y el cobro
-  automático se detiene.
+  hasta reiniciar: no se alquila ni se paga, nada entra ni sale de una casa, no se usan
+  sus objetos, nada de las casas se escribe y el cobro automático se detiene.
 - **Staff:** `/house`, `/houseevict` y `/housemove` (tabla de Moderación), auditados.
 - **Fuera de alcance:** subastas de casas, decoración especial y casas de gremio.
 

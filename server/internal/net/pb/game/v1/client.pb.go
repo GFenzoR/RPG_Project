@@ -2440,6 +2440,8 @@ type HouseCommand struct {
 	//	*HouseCommand_TransferCancel
 	//	*HouseCommand_TransferAccept
 	//	*HouseCommand_Close
+	//	*HouseCommand_Enter
+	//	*HouseCommand_Exit
 	Action        isHouseCommand_Action `protobuf_oneof:"action"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2572,6 +2574,24 @@ func (x *HouseCommand) GetClose() *HouseClose {
 	return nil
 }
 
+func (x *HouseCommand) GetEnter() *HouseEnter {
+	if x != nil {
+		if x, ok := x.Action.(*HouseCommand_Enter); ok {
+			return x.Enter
+		}
+	}
+	return nil
+}
+
+func (x *HouseCommand) GetExit() *HouseExit {
+	if x != nil {
+		if x, ok := x.Action.(*HouseCommand_Exit); ok {
+			return x.Exit
+		}
+	}
+	return nil
+}
+
 type isHouseCommand_Action interface {
 	isHouseCommand_Action()
 }
@@ -2616,6 +2636,14 @@ type HouseCommand_Close struct {
 	Close *HouseClose `protobuf:"bytes,10,opt,name=close,proto3,oneof"`
 }
 
+type HouseCommand_Enter struct {
+	Enter *HouseEnter `protobuf:"bytes,11,opt,name=enter,proto3,oneof"`
+}
+
+type HouseCommand_Exit struct {
+	Exit *HouseExit `protobuf:"bytes,12,opt,name=exit,proto3,oneof"`
+}
+
 func (*HouseCommand_Rent) isHouseCommand_Action() {}
 
 func (*HouseCommand_Extend) isHouseCommand_Action() {}
@@ -2635,6 +2663,10 @@ func (*HouseCommand_TransferCancel) isHouseCommand_Action() {}
 func (*HouseCommand_TransferAccept) isHouseCommand_Action() {}
 
 func (*HouseCommand_Close) isHouseCommand_Action() {}
+
+func (*HouseCommand_Enter) isHouseCommand_Action() {}
+
+func (*HouseCommand_Exit) isHouseCommand_Action() {}
 
 // HouseRent rents the free house of the window: one period, paid from the backpack.
 type HouseRent struct {
@@ -2974,9 +3006,12 @@ func (*HouseTransferCancel) Descriptor() ([]byte, []int) {
 }
 
 // HouseTransferAccept takes the house offered to the player: it pays the price (to the
-// owner's mailbox) and becomes the owner.
+// owner's mailbox) and becomes the owner. house_id and price are what the player saw: if
+// the offer changed since, the accept is refused.
 type HouseTransferAccept struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	HouseId       string                 `protobuf:"bytes,1,opt,name=house_id,json=houseId,proto3" json:"house_id,omitempty"`
+	Price         uint64                 `protobuf:"varint,2,opt,name=price,proto3" json:"price,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3011,6 +3046,96 @@ func (*HouseTransferAccept) Descriptor() ([]byte, []int) {
 	return file_game_v1_client_proto_rawDescGZIP(), []int{36}
 }
 
+func (x *HouseTransferAccept) GetHouseId() string {
+	if x != nil {
+		return x.HouseId
+	}
+	return ""
+}
+
+func (x *HouseTransferAccept) GetPrice() uint64 {
+	if x != nil {
+		return x.Price
+	}
+	return 0
+}
+
+// HouseEnter takes a player who may enter the house, a few tiles from one of its doors, to
+// a free tile inside next to that door (strangers standing in front of a door cannot lock
+// the owner out).
+type HouseEnter struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HouseEnter) Reset() {
+	*x = HouseEnter{}
+	mi := &file_game_v1_client_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HouseEnter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HouseEnter) ProtoMessage() {}
+
+func (x *HouseEnter) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HouseEnter.ProtoReflect.Descriptor instead.
+func (*HouseEnter) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{37}
+}
+
+// HouseExit takes a player inside the house to a free tile outside, by its exit.
+type HouseExit struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HouseExit) Reset() {
+	*x = HouseExit{}
+	mi := &file_game_v1_client_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HouseExit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HouseExit) ProtoMessage() {}
+
+func (x *HouseExit) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HouseExit.ProtoReflect.Descriptor instead.
+func (*HouseExit) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{38}
+}
+
 type HouseClose struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -3019,7 +3144,7 @@ type HouseClose struct {
 
 func (x *HouseClose) Reset() {
 	*x = HouseClose{}
-	mi := &file_game_v1_client_proto_msgTypes[37]
+	mi := &file_game_v1_client_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3031,7 +3156,7 @@ func (x *HouseClose) String() string {
 func (*HouseClose) ProtoMessage() {}
 
 func (x *HouseClose) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[37]
+	mi := &file_game_v1_client_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3044,7 +3169,7 @@ func (x *HouseClose) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HouseClose.ProtoReflect.Descriptor instead.
 func (*HouseClose) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{37}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{39}
 }
 
 // Ping measures latency. client_time is the client clock in milliseconds and comes
@@ -3058,7 +3183,7 @@ type Ping struct {
 
 func (x *Ping) Reset() {
 	*x = Ping{}
-	mi := &file_game_v1_client_proto_msgTypes[38]
+	mi := &file_game_v1_client_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3070,7 +3195,7 @@ func (x *Ping) String() string {
 func (*Ping) ProtoMessage() {}
 
 func (x *Ping) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[38]
+	mi := &file_game_v1_client_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3083,7 +3208,7 @@ func (x *Ping) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ping.ProtoReflect.Descriptor instead.
 func (*Ping) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{38}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *Ping) GetClientTime() uint64 {
@@ -3101,7 +3226,7 @@ type Logout struct {
 
 func (x *Logout) Reset() {
 	*x = Logout{}
-	mi := &file_game_v1_client_proto_msgTypes[39]
+	mi := &file_game_v1_client_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3113,7 +3238,7 @@ func (x *Logout) String() string {
 func (*Logout) ProtoMessage() {}
 
 func (x *Logout) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[39]
+	mi := &file_game_v1_client_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3126,7 +3251,7 @@ func (x *Logout) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Logout.ProtoReflect.Descriptor instead.
 func (*Logout) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{39}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{41}
 }
 
 // CloseContainer closes a container window (container_id from ContainerOpen). The
@@ -3140,7 +3265,7 @@ type CloseContainer struct {
 
 func (x *CloseContainer) Reset() {
 	*x = CloseContainer{}
-	mi := &file_game_v1_client_proto_msgTypes[40]
+	mi := &file_game_v1_client_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3152,7 +3277,7 @@ func (x *CloseContainer) String() string {
 func (*CloseContainer) ProtoMessage() {}
 
 func (x *CloseContainer) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[40]
+	mi := &file_game_v1_client_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3165,7 +3290,7 @@ func (x *CloseContainer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseContainer.ProtoReflect.Descriptor instead.
 func (*CloseContainer) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{40}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *CloseContainer) GetContainerId() uint32 {
@@ -3186,7 +3311,7 @@ type NpcTalk struct {
 
 func (x *NpcTalk) Reset() {
 	*x = NpcTalk{}
-	mi := &file_game_v1_client_proto_msgTypes[41]
+	mi := &file_game_v1_client_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3198,7 +3323,7 @@ func (x *NpcTalk) String() string {
 func (*NpcTalk) ProtoMessage() {}
 
 func (x *NpcTalk) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[41]
+	mi := &file_game_v1_client_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3211,7 +3336,7 @@ func (x *NpcTalk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NpcTalk.ProtoReflect.Descriptor instead.
 func (*NpcTalk) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{41}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *NpcTalk) GetCreatureId() uint32 {
@@ -3233,7 +3358,7 @@ type ShopBuy struct {
 
 func (x *ShopBuy) Reset() {
 	*x = ShopBuy{}
-	mi := &file_game_v1_client_proto_msgTypes[42]
+	mi := &file_game_v1_client_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3245,7 +3370,7 @@ func (x *ShopBuy) String() string {
 func (*ShopBuy) ProtoMessage() {}
 
 func (x *ShopBuy) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[42]
+	mi := &file_game_v1_client_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3258,7 +3383,7 @@ func (x *ShopBuy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShopBuy.ProtoReflect.Descriptor instead.
 func (*ShopBuy) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{42}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ShopBuy) GetDialogId() uint32 {
@@ -3294,7 +3419,7 @@ type ShopSell struct {
 
 func (x *ShopSell) Reset() {
 	*x = ShopSell{}
-	mi := &file_game_v1_client_proto_msgTypes[43]
+	mi := &file_game_v1_client_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3306,7 +3431,7 @@ func (x *ShopSell) String() string {
 func (*ShopSell) ProtoMessage() {}
 
 func (x *ShopSell) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[43]
+	mi := &file_game_v1_client_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3319,7 +3444,7 @@ func (x *ShopSell) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShopSell.ProtoReflect.Descriptor instead.
 func (*ShopSell) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{43}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ShopSell) GetDialogId() uint32 {
@@ -3355,7 +3480,7 @@ type PartyCommand struct {
 
 func (x *PartyCommand) Reset() {
 	*x = PartyCommand{}
-	mi := &file_game_v1_client_proto_msgTypes[44]
+	mi := &file_game_v1_client_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3367,7 +3492,7 @@ func (x *PartyCommand) String() string {
 func (*PartyCommand) ProtoMessage() {}
 
 func (x *PartyCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[44]
+	mi := &file_game_v1_client_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3380,7 +3505,7 @@ func (x *PartyCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PartyCommand.ProtoReflect.Descriptor instead.
 func (*PartyCommand) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{44}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *PartyCommand) GetAction() PartyAction {
@@ -3413,7 +3538,7 @@ type GuildCommand struct {
 
 func (x *GuildCommand) Reset() {
 	*x = GuildCommand{}
-	mi := &file_game_v1_client_proto_msgTypes[45]
+	mi := &file_game_v1_client_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3425,7 +3550,7 @@ func (x *GuildCommand) String() string {
 func (*GuildCommand) ProtoMessage() {}
 
 func (x *GuildCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[45]
+	mi := &file_game_v1_client_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3438,7 +3563,7 @@ func (x *GuildCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GuildCommand.ProtoReflect.Descriptor instead.
 func (*GuildCommand) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{45}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *GuildCommand) GetAction() GuildAction {
@@ -3491,7 +3616,7 @@ type Craft struct {
 
 func (x *Craft) Reset() {
 	*x = Craft{}
-	mi := &file_game_v1_client_proto_msgTypes[46]
+	mi := &file_game_v1_client_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3503,7 +3628,7 @@ func (x *Craft) String() string {
 func (*Craft) ProtoMessage() {}
 
 func (x *Craft) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[46]
+	mi := &file_game_v1_client_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3516,7 +3641,7 @@ func (x *Craft) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Craft.ProtoReflect.Descriptor instead.
 func (*Craft) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{46}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *Craft) GetRecipeId() string {
@@ -3549,7 +3674,7 @@ type ReportPlayer struct {
 
 func (x *ReportPlayer) Reset() {
 	*x = ReportPlayer{}
-	mi := &file_game_v1_client_proto_msgTypes[47]
+	mi := &file_game_v1_client_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3561,7 +3686,7 @@ func (x *ReportPlayer) String() string {
 func (*ReportPlayer) ProtoMessage() {}
 
 func (x *ReportPlayer) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[47]
+	mi := &file_game_v1_client_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3574,7 +3699,7 @@ func (x *ReportPlayer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportPlayer.ProtoReflect.Descriptor instead.
 func (*ReportPlayer) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{47}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ReportPlayer) GetCreatureId() uint32 {
@@ -3602,7 +3727,7 @@ type PresenceAnswer struct {
 
 func (x *PresenceAnswer) Reset() {
 	*x = PresenceAnswer{}
-	mi := &file_game_v1_client_proto_msgTypes[48]
+	mi := &file_game_v1_client_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3614,7 +3739,7 @@ func (x *PresenceAnswer) String() string {
 func (*PresenceAnswer) ProtoMessage() {}
 
 func (x *PresenceAnswer) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[48]
+	mi := &file_game_v1_client_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3627,7 +3752,7 @@ func (x *PresenceAnswer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PresenceAnswer.ProtoReflect.Descriptor instead.
 func (*PresenceAnswer) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{48}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *PresenceAnswer) GetCheckId() uint32 {
@@ -3654,7 +3779,7 @@ type TutorialSkip struct {
 
 func (x *TutorialSkip) Reset() {
 	*x = TutorialSkip{}
-	mi := &file_game_v1_client_proto_msgTypes[49]
+	mi := &file_game_v1_client_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3666,7 +3791,7 @@ func (x *TutorialSkip) String() string {
 func (*TutorialSkip) ProtoMessage() {}
 
 func (x *TutorialSkip) ProtoReflect() protoreflect.Message {
-	mi := &file_game_v1_client_proto_msgTypes[49]
+	mi := &file_game_v1_client_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3679,7 +3804,7 @@ func (x *TutorialSkip) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TutorialSkip.ProtoReflect.Descriptor instead.
 func (*TutorialSkip) Descriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{49}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{51}
 }
 
 var File_game_v1_client_proto protoreflect.FileDescriptor
@@ -3821,7 +3946,7 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\boffer_id\x18\x01 \x01(\x04R\aofferId\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\rR\x06amount\"\x10\n" +
 	"\x0eMarketWithdraw\"\r\n" +
-	"\vMarketClose\"\xdb\x04\n" +
+	"\vMarketClose\"\xb2\x05\n" +
 	"\fHouseCommand\x12(\n" +
 	"\x04rent\x18\x01 \x01(\v2\x12.game.v1.HouseRentH\x00R\x04rent\x12.\n" +
 	"\x06extend\x18\x02 \x01(\v2\x14.game.v1.HouseExtendH\x00R\x06extend\x12+\n" +
@@ -3833,7 +3958,9 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x0ftransfer_cancel\x18\b \x01(\v2\x1c.game.v1.HouseTransferCancelH\x00R\x0etransferCancel\x12G\n" +
 	"\x0ftransfer_accept\x18\t \x01(\v2\x1c.game.v1.HouseTransferAcceptH\x00R\x0etransferAccept\x12+\n" +
 	"\x05close\x18\n" +
-	" \x01(\v2\x13.game.v1.HouseCloseH\x00R\x05closeB\b\n" +
+	" \x01(\v2\x13.game.v1.HouseCloseH\x00R\x05close\x12+\n" +
+	"\x05enter\x18\v \x01(\v2\x13.game.v1.HouseEnterH\x00R\x05enter\x12(\n" +
+	"\x04exit\x18\f \x01(\v2\x12.game.v1.HouseExitH\x00R\x04exitB\b\n" +
 	"\x06action\"\v\n" +
 	"\tHouseRent\"\r\n" +
 	"\vHouseExtend\"\f\n" +
@@ -3848,8 +3975,13 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x12HouseTransferOffer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05price\x18\x02 \x01(\x04R\x05price\"\x15\n" +
-	"\x13HouseTransferCancel\"\x15\n" +
-	"\x13HouseTransferAccept\"\f\n" +
+	"\x13HouseTransferCancel\"F\n" +
+	"\x13HouseTransferAccept\x12\x19\n" +
+	"\bhouse_id\x18\x01 \x01(\tR\ahouseId\x12\x14\n" +
+	"\x05price\x18\x02 \x01(\x04R\x05price\"\f\n" +
+	"\n" +
+	"HouseEnter\"\v\n" +
+	"\tHouseExit\"\f\n" +
 	"\n" +
 	"HouseClose\"'\n" +
 	"\x04Ping\x12\x1f\n" +
@@ -3946,7 +4078,7 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
 var file_game_v1_client_proto_goTypes = []any{
 	(FightStance)(0),            // 0: game.v1.FightStance
 	(ChatChannel)(0),            // 1: game.v1.ChatChannel
@@ -3989,24 +4121,26 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*HouseTransferOffer)(nil),  // 38: game.v1.HouseTransferOffer
 	(*HouseTransferCancel)(nil), // 39: game.v1.HouseTransferCancel
 	(*HouseTransferAccept)(nil), // 40: game.v1.HouseTransferAccept
-	(*HouseClose)(nil),          // 41: game.v1.HouseClose
-	(*Ping)(nil),                // 42: game.v1.Ping
-	(*Logout)(nil),              // 43: game.v1.Logout
-	(*CloseContainer)(nil),      // 44: game.v1.CloseContainer
-	(*NpcTalk)(nil),             // 45: game.v1.NpcTalk
-	(*ShopBuy)(nil),             // 46: game.v1.ShopBuy
-	(*ShopSell)(nil),            // 47: game.v1.ShopSell
-	(*PartyCommand)(nil),        // 48: game.v1.PartyCommand
-	(*GuildCommand)(nil),        // 49: game.v1.GuildCommand
-	(*Craft)(nil),               // 50: game.v1.Craft
-	(*ReportPlayer)(nil),        // 51: game.v1.ReportPlayer
-	(*PresenceAnswer)(nil),      // 52: game.v1.PresenceAnswer
-	(*TutorialSkip)(nil),        // 53: game.v1.TutorialSkip
-	(Direction)(0),              // 54: game.v1.Direction
-	(*ActionTarget)(nil),        // 55: game.v1.ActionTarget
-	(*ItemLocation)(nil),        // 56: game.v1.ItemLocation
-	(MarketSide)(0),             // 57: game.v1.MarketSide
-	(*Position)(nil),            // 58: game.v1.Position
+	(*HouseEnter)(nil),          // 41: game.v1.HouseEnter
+	(*HouseExit)(nil),           // 42: game.v1.HouseExit
+	(*HouseClose)(nil),          // 43: game.v1.HouseClose
+	(*Ping)(nil),                // 44: game.v1.Ping
+	(*Logout)(nil),              // 45: game.v1.Logout
+	(*CloseContainer)(nil),      // 46: game.v1.CloseContainer
+	(*NpcTalk)(nil),             // 47: game.v1.NpcTalk
+	(*ShopBuy)(nil),             // 48: game.v1.ShopBuy
+	(*ShopSell)(nil),            // 49: game.v1.ShopSell
+	(*PartyCommand)(nil),        // 50: game.v1.PartyCommand
+	(*GuildCommand)(nil),        // 51: game.v1.GuildCommand
+	(*Craft)(nil),               // 52: game.v1.Craft
+	(*ReportPlayer)(nil),        // 53: game.v1.ReportPlayer
+	(*PresenceAnswer)(nil),      // 54: game.v1.PresenceAnswer
+	(*TutorialSkip)(nil),        // 55: game.v1.TutorialSkip
+	(Direction)(0),              // 56: game.v1.Direction
+	(*ActionTarget)(nil),        // 57: game.v1.ActionTarget
+	(*ItemLocation)(nil),        // 58: game.v1.ItemLocation
+	(MarketSide)(0),             // 59: game.v1.MarketSide
+	(*Position)(nil),            // 60: game.v1.Position
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	5,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -4027,42 +4161,42 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	21, // 15: game.v1.ClientMessage.trade_offer:type_name -> game.v1.TradeOffer
 	22, // 16: game.v1.ClientMessage.trade_accept:type_name -> game.v1.TradeAccept
 	23, // 17: game.v1.ClientMessage.trade_cancel:type_name -> game.v1.TradeCancel
-	42, // 18: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
-	43, // 19: game.v1.ClientMessage.logout:type_name -> game.v1.Logout
-	44, // 20: game.v1.ClientMessage.close_container:type_name -> game.v1.CloseContainer
-	45, // 21: game.v1.ClientMessage.npc_talk:type_name -> game.v1.NpcTalk
-	46, // 22: game.v1.ClientMessage.shop_buy:type_name -> game.v1.ShopBuy
-	47, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
-	48, // 24: game.v1.ClientMessage.party_command:type_name -> game.v1.PartyCommand
-	50, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
-	51, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
-	52, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
-	53, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
-	49, // 29: game.v1.ClientMessage.guild_command:type_name -> game.v1.GuildCommand
+	44, // 18: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
+	45, // 19: game.v1.ClientMessage.logout:type_name -> game.v1.Logout
+	46, // 20: game.v1.ClientMessage.close_container:type_name -> game.v1.CloseContainer
+	47, // 21: game.v1.ClientMessage.npc_talk:type_name -> game.v1.NpcTalk
+	48, // 22: game.v1.ClientMessage.shop_buy:type_name -> game.v1.ShopBuy
+	49, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
+	50, // 24: game.v1.ClientMessage.party_command:type_name -> game.v1.PartyCommand
+	52, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
+	53, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
+	54, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
+	55, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
+	51, // 29: game.v1.ClientMessage.guild_command:type_name -> game.v1.GuildCommand
 	11, // 30: game.v1.ClientMessage.set_safe_mode:type_name -> game.v1.SetSafeMode
 	24, // 31: game.v1.ClientMessage.market_command:type_name -> game.v1.MarketCommand
 	31, // 32: game.v1.ClientMessage.house_command:type_name -> game.v1.HouseCommand
-	54, // 33: game.v1.Walk.dir:type_name -> game.v1.Direction
-	54, // 34: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	54, // 35: game.v1.Turn.dir:type_name -> game.v1.Direction
+	56, // 33: game.v1.Walk.dir:type_name -> game.v1.Direction
+	56, // 34: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	56, // 35: game.v1.Turn.dir:type_name -> game.v1.Direction
 	0,  // 36: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	55, // 37: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	56, // 38: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	56, // 39: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	55, // 40: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	56, // 41: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	56, // 42: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	56, // 43: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	57, // 37: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	58, // 38: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	58, // 39: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	57, // 40: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	58, // 41: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	58, // 42: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	58, // 43: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
 	1,  // 44: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	56, // 45: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	56, // 46: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	58, // 45: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	58, // 46: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
 	25, // 47: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
 	26, // 48: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
 	27, // 49: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
 	28, // 50: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
 	29, // 51: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
 	30, // 52: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
-	57, // 53: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
+	59, // 53: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
 	32, // 54: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
 	33, // 55: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
 	34, // 56: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
@@ -4072,15 +4206,17 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	38, // 60: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
 	39, // 61: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
 	40, // 62: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
-	41, // 63: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
-	2,  // 64: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	3,  // 65: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
-	58, // 66: game.v1.Craft.station:type_name -> game.v1.Position
-	67, // [67:67] is the sub-list for method output_type
-	67, // [67:67] is the sub-list for method input_type
-	67, // [67:67] is the sub-list for extension type_name
-	67, // [67:67] is the sub-list for extension extendee
-	0,  // [0:67] is the sub-list for field type_name
+	43, // 63: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
+	41, // 64: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
+	42, // 65: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
+	2,  // 66: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	3,  // 67: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
+	60, // 68: game.v1.Craft.station:type_name -> game.v1.Position
+	69, // [69:69] is the sub-list for method output_type
+	69, // [69:69] is the sub-list for method input_type
+	69, // [69:69] is the sub-list for extension type_name
+	69, // [69:69] is the sub-list for extension extendee
+	0,  // [0:69] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -4147,6 +4283,8 @@ func file_game_v1_client_proto_init() {
 		(*HouseCommand_TransferCancel)(nil),
 		(*HouseCommand_TransferAccept)(nil),
 		(*HouseCommand_Close)(nil),
+		(*HouseCommand_Enter)(nil),
+		(*HouseCommand_Exit)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -4154,7 +4292,7 @@ func file_game_v1_client_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   50,
+			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -4469,7 +4469,9 @@ type HouseUpdate struct {
 	// Houses are read-only until the server restarts (a change could not be saved).
 	ReadOnly bool `protobuf:"varint,22,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
 	// The player may enter (owner, guest or guild member).
-	Access        bool `protobuf:"varint,23,opt,name=access,proto3" json:"access,omitempty"`
+	Access bool `protobuf:"varint,23,opt,name=access,proto3" json:"access,omitempty"`
+	// The player stands inside the house.
+	Inside        bool `protobuf:"varint,24,opt,name=inside,proto3" json:"inside,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4661,6 +4663,13 @@ func (x *HouseUpdate) GetReadOnly() bool {
 func (x *HouseUpdate) GetAccess() bool {
 	if x != nil {
 		return x.Access
+	}
+	return false
+}
+
+func (x *HouseUpdate) GetInside() bool {
+	if x != nil {
+		return x.Inside
 	}
 	return false
 }
@@ -5881,7 +5890,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\tmax_price\x18\x11 \x01(\x04R\bmaxPrice\x12'\n" +
 	"\x0fdurations_hours\x18\x12 \x03(\rR\x0edurationsHours\x12\x14\n" +
 	"\x05owned\x18\x13 \x01(\rR\x05owned\x12\x1b\n" +
-	"\tread_only\x18\x14 \x01(\bR\breadOnly\"\x87\x05\n" +
+	"\tread_only\x18\x14 \x01(\bR\breadOnly\"\x9f\x05\n" +
 	"\vHouseUpdate\x12\x12\n" +
 	"\x04open\x18\x01 \x01(\bR\x04open\x12\x19\n" +
 	"\bhouse_id\x18\x02 \x01(\tR\ahouseId\x12\x12\n" +
@@ -5911,7 +5920,8 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x0ftransfer_for_me\x18\x14 \x01(\bR\rtransferForMe\x12\x14\n" +
 	"\x05money\x18\x15 \x01(\x04R\x05money\x12\x1b\n" +
 	"\tread_only\x18\x16 \x01(\bR\breadOnly\x12\x16\n" +
-	"\x06access\x18\x17 \x01(\bR\x06access\"Y\n" +
+	"\x06access\x18\x17 \x01(\bR\x06access\x12\x16\n" +
+	"\x06inside\x18\x18 \x01(\bR\x06inside\"Y\n" +
 	"\fWalkRejected\x12#\n" +
 	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12$\n" +
 	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\"H\n" +

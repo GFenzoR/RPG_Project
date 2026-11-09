@@ -22,8 +22,11 @@ var houseMap = []string{
 	".#...#....",
 	".##.##....",
 	"..........",
-	"..........",
+	".........v",
 }
+
+// houseBoard is the market board of houseMap (its 'v').
+var houseBoard = pos(9, 6)
 
 var (
 	cottageDoor = pos(3, 4)
@@ -112,6 +115,10 @@ func houseCmd(a any) *pb.ClientMessage {
 		c.Action = &pb.HouseCommand_TransferOffer{TransferOffer: a}
 	case *pb.HouseTransferAccept:
 		c.Action = &pb.HouseCommand_TransferAccept{TransferAccept: a}
+	case *pb.HouseEnter:
+		c.Action = &pb.HouseCommand_Enter{Enter: a}
+	case *pb.HouseExit:
+		c.Action = &pb.HouseCommand_Exit{Exit: a}
 	}
 	return &pb.ClientMessage{Message: &pb.ClientMessage_HouseCommand{HouseCommand: c}}
 }
@@ -292,26 +299,45 @@ func TestHouseDoorsGuestsAndExpel(t *testing.T) {
 	}
 }
 
-// Logout inside is safe: whoever lost the access while offline logs in at the door.
+// Logout inside is safe: the owner and a guest log in where they logged out; someone
+// without access (here a stranger saved inside) logs in at the exit.
 func TestHouseLoginOutside(t *testing.T) {
 	h := newHouseHarness(t)
-	cl, _ := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
-	h.rent(cl)
-	nextChar++
-	c := withPack(nextChar, pos(3, 2))
-	c.Name, c.Level = "Beto", 10
-	cb, b := h.joinChar(c)
-	if h.w.Map().HouseAt(b.Pos()) != nil {
-		t.Fatalf("Beto logged in inside at %v", b.Pos())
+	join := func(name string, at world.Pos, id int64, pack ...session.ItemState) (*fakeClient, *session.Player, session.Character) {
+		c := withPack(id, at, pack...)
+		c.Name, c.Level = name, 10
+		cl, p := h.joinChar(c)
+		cl.take()
+		return cl, p, c
 	}
-	cb.take()
-	// The owner logs in where it logged out.
+	nextChar += 3
+	ana, beto := nextChar-2, nextChar-1
+	cl, a, ac := join("Ana", cottageExit, ana, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	h.rent(cl)
+	h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Beto"}))
+	h.step(cl, N)
+	h.step(cl, N) // (3,3)
+	cb, b, bc := join("Beto", cottageExit, beto)
+	h.step(cb, N)
+	h.step(cb, pb.Direction_DIRECTION_NORTH_WEST) // (2,3)
+	insideA, insideB := a.Pos(), b.Pos()
+	if insideA != pos(3, 3) || insideB != pos(2, 3) {
+		t.Fatalf("inside at %v and %v", insideA, insideB)
+	}
+	logout := &pb.ClientMessage{Message: &pb.ClientMessage_Logout{Logout: &pb.Logout{}}}
+	h.input(cl, logout)
+	h.input(cb, logout)
+	h.sim.Step()
+	_, a2, _ := join("Ana", ac.Pos, ana)
+	_, b2, _ := join("Beto", bc.Pos, beto)
+	if a2.Pos() != insideA || b2.Pos() != insideB {
+		t.Fatalf("owner and guest logged in at %v and %v, want %v and %v", a2.Pos(), b2.Pos(), insideA, insideB)
+	}
+	// A character without access saved inside logs in outside.
 	nextChar++
-	own := withPack(nextChar, pos(2, 2))
-	own.Name, own.Level = "Gil", 10
-	_, g := h.joinChar(own)
-	if g.Pos() == pos(2, 2) {
-		t.Fatal("a stranger kept its place inside")
+	_, g, _ := join("Gil", pos(4, 2), nextChar)
+	if h.w.Map().HouseAt(g.Pos()) != nil {
+		t.Fatalf("a stranger logged in inside at %v", g.Pos())
 	}
 	f := h.w.Map().Flags(pos(3, 2))
 	if f&world.FlagProtection == 0 || f&world.FlagHouse == 0 {
@@ -452,7 +478,17 @@ func TestHouseTransfer(t *testing.T) {
 	if u := h.openDoor(cb, cottageDoor); !u.GetTransferForMe() || u.GetTransferPrice() != 80 {
 		t.Fatalf("Beto's window = %v", u)
 	}
-	evs := h.send(cb, houseCmd(&pb.HouseTransferAccept{}))
+	// The owner raises the price in the same tick the buyer accepts what it saw: refused.
+	h.input(cl, houseCmd(&pb.HouseTransferOffer{Name: "Beto", Price: 100}))
+	if evs := h.send(cb, houseCmd(&pb.HouseTransferAccept{HouseId: "cottage", Price: 80})); !hasKey(evs, "house.transfer_changed") ||
+		h.w.Money(b) != 100 {
+		t.Fatalf("accept of a changed offer: %v, money %d", systemKeys(evs), h.w.Money(b))
+	}
+	h.send(cl, houseCmd(&pb.HouseTransferOffer{Name: "Beto", Price: 80}))
+	if evs := h.send(cb, houseCmd(&pb.HouseTransferAccept{HouseId: "shed", Price: 80})); !hasKey(evs, "house.transfer_changed") {
+		t.Fatalf("accept of another house: %v", systemKeys(evs))
+	}
+	evs := h.send(cb, houseCmd(&pb.HouseTransferAccept{HouseId: "cottage", Price: 80}))
 	if !hasKey(evs, "house.transfer_done") || h.w.HouseOwnerOf(b.CharacterID()) != "cottage" || h.w.HouseOwnerOf(a.CharacterID()) != "" {
 		t.Fatalf("after accepting: %v", systemKeys(evs))
 	}
@@ -571,10 +607,27 @@ func TestHouseReadOnly(t *testing.T) {
 	h.rent(cl)
 	h.step(cl, N)
 	pack := openPack(t, h.harness, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(3, 3)), 1))
 	h.sim.Command(h.w.Tainted(nil))
 	h.sim.Step()
-	if evs := h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(3, 3)), 1)); !hasKey(evs, "house.read_only") {
-		t.Fatalf("drop in read-only: %v", systemKeys(evs))
+	before := len(h.transfers)
+	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), swordID, 1, inContainer(pack, 0), 1)); !hasKey(evs, "house.read_only") {
+		t.Fatalf("take in read-only: %v", systemKeys(evs))
+	}
+	if evs := h.send(cl, useItem(onTile(pos(3, 3)), swordID, 1)); !hasKey(evs, "house.read_only") {
+		t.Fatalf("use in read-only: %v", systemKeys(evs))
+	}
+	on := &pb.ClientMessage{Message: &pb.ClientMessage_UseItemOn{UseItemOn: &pb.UseItemOn{
+		From: onTile(pos(3, 3)), ItemId: swordID, StackIndex: 1,
+		To: &pb.ActionTarget{Target: &pb.ActionTarget_Pos{Pos: &pb.Position{X: 3, Y: 2, Z: 7}}}}}}
+	if evs := h.send(cl, on); !hasKey(evs, "house.read_only") {
+		t.Fatalf("use on in read-only: %v", systemKeys(evs))
+	}
+	// What still changes a house in memory (here a drop by the server) is not written.
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_salve"), 1, pos(2, 2)) }))
+	h.sim.Step()
+	if len(h.transfers) != before {
+		t.Fatalf("%d transfers written in read-only", len(h.transfers)-before)
 	}
 	if evs := h.send(cl, houseCmd(&pb.HouseLeave{})); !hasKey(evs, "house.read_only") {
 		t.Fatalf("leave in read-only: %v", systemKeys(evs))
@@ -653,5 +706,122 @@ func TestHouseOrphanOwner(t *testing.T) {
 	h.openDoor(cl, cottageDoor)
 	if evs := h.send(cl, houseCmd(&pb.HouseRent{})); !hasKey(evs, "house.has_house") {
 		t.Fatalf("rent with an orphan house: %v", systemKeys(evs))
+	}
+}
+
+// Transfer ids grow in submission order even when a house changed earlier in the tick
+// outside any command (the store refuses an older id after a newer one).
+func TestHouseTransferIDsInOrder(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, _ := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	h.rent(cl)
+	cs, _ := h.tenant("Sela", 0, pos(7, 1), stack(coinID, 100, 0))
+	h.openDoor(cs, shedDoor)
+	before := len(h.transfers)
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_sword"), 1, pos(2, 2)) }))
+	h.input(cs, houseCmd(&pb.HouseRent{}))
+	h.sim.Step()
+	got := h.transfers[before:]
+	if len(got) != 2 || len(got[0].Houses) != 1 || got[0].Houses[0].Kind != session.HouseItems ||
+		got[1].Houses[0].Kind != session.HouseOwnerAdd {
+		t.Fatalf("transfers = %+v", got)
+	}
+	for i := 1; i < len(h.transfers); i++ {
+		if h.transfers[i].ID <= h.transfers[i-1].ID {
+			t.Fatalf("transfer %d has id %d after %d", i, h.transfers[i].ID, h.transfers[i-1].ID)
+		}
+	}
+}
+
+// A released house mails its containers flat (each item its own row), so a deep chain or
+// a heavy bag never sticks in the mailbox; what does not fit now waits without blocking
+// what comes after it.
+func TestHouseReleaseMailsFlatAndWithdraws(t *testing.T) {
+	bags := session.ItemState{ItemID: bagID, Count: 1}
+	for range 7 { // 8 nested bags: too deep to carry as a whole
+		bags = session.ItemState{ItemID: bagID, Count: 1, Items: []session.ItemState{bags}}
+	}
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	nextChar++
+	ana := nextChar
+	h := newHouseHarness(t, func(c *session.Config) {
+		c.Houses = &session.HouseData{
+			Owners: []session.HouseOwner{{HouseID: "cottage", CharacterID: ana, AccountID: ana, Name: "Ana",
+				PaidUntil: now.Add(100 * 24 * time.Hour), Since: now}},
+			Items: []session.HouseItem{
+				{HouseID: "cottage", Pos: pos(2, 2), Item: bags},
+				{HouseID: "cottage", Pos: pos(3, 2), Item: session.ItemState{ItemID: swordID, Count: 1}},
+				{HouseID: "cottage", Pos: pos(4, 2), Item: session.ItemState{ItemID: salveID, Count: 1}},
+			},
+		}
+	})
+	c := withPack(ana, cottageExit)
+	c.Name, c.Level = "Ana", 10
+	cl, a := h.joinChar(c)
+	h.openDoor(cl, cottageDoor)
+	h.send(cl, houseCmd(&pb.HouseLeave{}))
+	for range 5 { // to (8,5), next to the board
+		h.step(cl, E)
+	}
+	mail := h.w.MailForTest(ana)
+	if len(mail) != 10 {
+		t.Fatalf("mailbox rows = %d, want 8 bags + sword + salve", len(mail))
+	}
+	for _, m := range mail {
+		if len(m.Items) != 0 {
+			t.Fatalf("a mailed item still holds %+v", m.Items)
+		}
+	}
+	// Strength for a salve (300 g) but not for a bag (500 g) or the sword: the salve, last
+	// in the mailbox, comes out; the rest waits without blocking it.
+	h.w.SetCapacityForTest(a, a.Carried()+400)
+	h.send(cl, useItem(onTile(houseBoard), boardID, 1))
+	evs := h.send(cl, withdraw)
+	if !hasKey(evs, "market.mailbox_room") || h.w.CountItem(a, "test_salve") != 1 || h.w.CountItem(a, "test_sword") != 0 ||
+		len(h.w.MailForTest(ana)) != 9 {
+		t.Fatalf("withdraw: %v, salves %d, mailbox %d", systemKeys(evs), h.w.CountItem(a, "test_salve"), len(h.w.MailForTest(ana)))
+	}
+	// With room, the bags come out empty, one by one (the backpack has 4 slots).
+	h.w.SetCapacityForTest(a, a.Carried()+100000)
+	h.send(cl, withdraw)
+	if n := h.w.CountItem(a, "test_bag"); n != 3 {
+		t.Fatalf("bags withdrawn = %d, want 3 (one slot holds the salve)", n)
+	}
+	h.sim.Step() // the ledgers reconcile every tick
+}
+
+// Strangers standing in front of the only door cannot keep the owner out or the guests
+// in: the window lets them enter (from a few tiles) and leave.
+func TestHouseEnterAndExitPastBlockers(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	h.rent(cl)
+	h.step(cl, S) // (3,6)
+	for _, x := range []int{2, 3, 4} {
+		h.tenant("Muro", 0, pos(x, 5))
+	}
+	for _, d := range []pb.Direction{N, NE, pb.Direction_DIRECTION_NORTH_WEST} {
+		h.step(cl, d)
+	}
+	if a.Pos() != pos(3, 6) {
+		t.Fatalf("Ana walked past the wall to %v", a.Pos())
+	}
+	u := h.openDoor(cl, cottageDoor)
+	if u.GetInside() || !u.GetAccess() {
+		t.Fatalf("window = %v", u)
+	}
+	u = lastHouse(h.send(cl, houseCmd(&pb.HouseEnter{})))
+	if !u.GetInside() || h.w.Map().HouseAt(a.Pos()) == nil {
+		t.Fatalf("after entering at %v: %v", a.Pos(), u)
+	}
+	// A stranger may not use it.
+	cs, s := h.tenant("Cid", 0, pos(5, 5))
+	h.openDoor(cs, cottageDoor)
+	if evs := h.send(cs, houseCmd(&pb.HouseEnter{})); !hasKey(evs, "house.no_access") || h.w.Map().HouseAt(s.Pos()) != nil {
+		t.Fatalf("stranger enters: %v", systemKeys(evs))
+	}
+	h.send(cl, houseCmd(&pb.HouseExit{}))
+	if h.w.Map().HouseAt(a.Pos()) != nil {
+		t.Fatalf("Ana still inside at %v", a.Pos())
 	}
 }

@@ -334,7 +334,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `content.houseDoors` (de `world/islands/*/houses.yaml`, `vite/content.ts`). Un
   `content_id` llamado `house` se traduce como `house.<id>.name` (`world.yaml`, que ahora
   también va en los catálogos del sitio).
-- Sitio: `/houses` (`site/Site.tsx` `HousesPage`, `GET /api/houses`), por pueblo.
+- La ventana tiene "Entrar" / "Salir" (`Game.houseEnter`/`houseExit`, según `access` e
+  `inside`) y "Aceptar" manda el id y el precio que se ven (`Game.houseAccept`).
+- Sitio: `/houses` (`site/Site.tsx` `HousesPage`, `GET /api/houses`), una tabla por
+  pueblo con las mismas columnas (`.houses-table`).
 - E2E "T5.4" de `e2e/game.spec.ts`: tres guardianes de nivel 15 sembrados con `psql` al
   sur de `puerto_house_net` (si una corrida anterior la dejó alquilada, un gm sembrado la
   libera con `/houseevict`); el dueño alquila, deja su mochila (con un pescado) adentro arrastrándola desde el slot de equipo (la página del dueño

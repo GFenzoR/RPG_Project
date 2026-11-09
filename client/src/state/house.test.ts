@@ -38,26 +38,50 @@ describe("houseFrom", () => {
   it("a free house can be rented", () => {
     const h = houseFrom(update());
     expect(h?.owner).toBe("");
-    expect(h && houseActions(h)).toEqual({ rent: true, manage: false, accept: false });
+    expect(h && houseActions(h)).toEqual({
+      rent: true,
+      manage: false,
+      accept: false,
+      enter: false,
+      exit: false,
+    });
   });
 
   it("the owner manages; the one offered the house accepts", () => {
     const own = houseFrom(
       update({ owner: "Ana", isOwner: true, paidUntil: 3n * 86_400_000n, guests: ["Beto"] }),
     );
-    expect(own && houseActions(own)).toEqual({ rent: false, manage: true, accept: false });
+    expect(own && houseActions(own)).toEqual({
+      rent: false,
+      manage: true,
+      accept: false,
+      enter: false,
+      exit: false,
+    });
     expect(own?.guests).toEqual(["Beto"]);
     expect(own && daysLeft(own, 86_400_000 + 1)).toBe(2);
     const other = houseFrom(
       update({ owner: "Ana", transferTo: "Beto", transferPrice: 80n, transferForMe: true }),
     );
     expect(other?.transfer).toEqual({ to: "Beto", price: 80, forMe: true });
-    expect(other && houseActions(other)).toEqual({ rent: false, manage: false, accept: true });
+    expect(other && houseActions(other)).toEqual({
+      rent: false,
+      manage: false,
+      accept: true,
+      enter: false,
+      exit: false,
+    });
   });
 
   it("read-only offers nothing", () => {
     const h = houseFrom(update({ readOnly: true }));
-    expect(h && houseActions(h)).toEqual({ rent: false, manage: false, accept: false });
+    expect(h && houseActions(h)).toEqual({
+      rent: false,
+      manage: false,
+      accept: false,
+      enter: false,
+      exit: false,
+    });
   });
 
   it("door keys", () => {

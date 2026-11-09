@@ -260,6 +260,8 @@ message HouseCommand {
     HouseTransferCancel transfer_cancel = 8;
     HouseTransferAccept transfer_accept = 9;
     HouseClose close = 10;
+    HouseEnter enter = 11;
+    HouseExit exit = 12;
   }
 }
 
@@ -298,8 +300,20 @@ message HouseTransferOffer {
 message HouseTransferCancel {}
 
 // HouseTransferAccept takes the house offered to the player: it pays the price (to the
-// owner's mailbox) and becomes the owner.
-message HouseTransferAccept {}
+// owner's mailbox) and becomes the owner. house_id and price are what the player saw: if
+// the offer changed since, the accept is refused.
+message HouseTransferAccept {
+  string house_id = 1;
+  uint64 price = 2;
+}
+
+// HouseEnter takes a player who may enter the house, a few tiles from one of its doors, to
+// a free tile inside next to that door (strangers standing in front of a door cannot lock
+// the owner out).
+message HouseEnter {}
+
+// HouseExit takes a player inside the house to a free tile outside, by its exit.
+message HouseExit {}
 
 message HouseClose {}
 

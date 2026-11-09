@@ -50,7 +50,9 @@ function recorder(): { game: Game; sent: string[] } {
     houseGuildAccess: (on: boolean) => sent.push(`guild ${on}`),
     houseTransfer: (n: string, p: number) => sent.push(`transfer ${n} ${p}`),
     houseTransferCancel: () => sent.push("transfer cancel"),
-    houseAccept: () => sent.push("accept"),
+    houseAccept: (id: string, price: number) => sent.push(`accept ${id} ${price}`),
+    houseEnter: () => sent.push("enter"),
+    houseExit: () => sent.push("exit"),
     houseClose: () => sent.push("close"),
   } as unknown as Game;
   return { game, sent };
@@ -77,6 +79,7 @@ const house = (over: Partial<HouseView>): HouseView => ({
   money: 900,
   readOnly: false,
   access: false,
+  inside: false,
   ...over,
 });
 
@@ -129,7 +132,18 @@ describe("HouseWindow", () => {
       game,
     );
     click(byAttr(tree, "data-testid", "house-accept")[0]);
-    expect(sent).toEqual(["accept"]);
+    expect(sent).toEqual(["accept puerto_house_net 80"]);
+  });
+
+  it("enter and exit", () => {
+    const { game, sent } = recorder();
+    click(
+      byAttr(render(house({ owner: "Ana", access: true }), game), "data-testid", "house-enter")[0],
+    );
+    const inside = render(house({ owner: "Ana", access: true, inside: true }), game);
+    expect(byAttr(inside, "data-testid", "house-enter")).toHaveLength(0);
+    click(byAttr(inside, "data-testid", "house-exit")[0]);
+    expect(sent).toEqual(["enter", "exit"]);
   });
 
   it("read-only shows the notice and no actions", () => {

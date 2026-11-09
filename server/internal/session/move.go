@@ -19,6 +19,9 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 		w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
 		defer func() { w.cmdPlayer = nil }()
 		w.input(ctx, p, msg)
+		// T5.4: what this command did to a house is written now, with p's snapshot: a
+		// later command never adds a half-done operation to that batch.
+		w.flushHouses()
 	})
 }
 

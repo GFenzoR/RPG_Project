@@ -336,7 +336,10 @@ class WorldValidator {
     const file = `${dir}/houses.yaml`;
     const owner = new Map<string, string>();
     for (const [i, h] of island.houses.entries()) {
-      this.checkI18n(file, [i, "name"], h.name);
+      if (h.name !== `house.${h.id}.name`)
+        // Messages name a house by its id (the client shows house.<id>.name).
+        this.err(file, [i, "name"], `a house's name key is house.${h.id}.name`);
+      else this.checkI18n(file, [i, "name"], h.name);
       for (const [j, r] of h.rects.entries()) {
         const corner = { x: r.x + r.w - 1, y: r.y + r.h - 1, z: r.z };
         const out = where(r) ?? where(corner);
@@ -352,7 +355,7 @@ class WorldValidator {
             const k = formatPos(p);
             const prev = owner.get(k);
             if (prev === undefined) owner.set(k, h.id);
-            else if (prev !== h.id) shared ??= [prev, p];
+            else shared ??= [prev, p]; // also two rects of the same house
             bare ||= !this.tiles.tileAt(p)?.ground;
           }
         if (shared)

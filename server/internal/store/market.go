@@ -24,6 +24,10 @@ import (
 // change), never a partial write.
 var ErrMarketConflict = errors.New("store: market change conflicts with the database")
 
+// ErrTransferOrder reports a transfer whose id is lower than the last one written (not a
+// retry of it): the queue lost its order. Permanent.
+var ErrTransferOrder = errors.New("store: transfer older than the last one written")
+
 // MarketOpKind is the kind of a MarketOp (same values as session.MarketOpKind).
 type MarketOpKind uint8
 
@@ -130,7 +134,16 @@ func (s *Store) SaveTransfer(ctx context.Context, t Transfer) error {
 			return fmt.Errorf("claim transfer %d: %w", t.ID, err)
 		}
 		if n == 0 {
-			return nil
+			high, err := q.LoadMarketHigh(ctx)
+			if err != nil {
+				return fmt.Errorf("transfer ids: %w", err)
+			}
+			if high.TransferHigh == t.ID {
+				return nil // the retry of the last transfer written: already applied
+			}
+			// An older id after a newer one is a bug in the order of the queue: refuse it
+			// (permanent, so the fail-safe stops what depends on it) instead of dropping it.
+			return fmt.Errorf("transfer %d after %d: %w", t.ID, high.TransferHigh, ErrTransferOrder)
 		}
 		for _, c := range t.Characters {
 			if err := saveCharacterState(ctx, q, c); err != nil {

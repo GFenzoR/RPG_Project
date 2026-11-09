@@ -405,11 +405,21 @@ export class Game {
     });
   }
 
-  houseAccept(): void {
+  /** Accepts the transfer of houseId at the price the player saw (refused if it changed). */
+  houseAccept(houseId: string, price: number): void {
     this.conn.send({
       case: "houseCommand",
-      value: { action: { case: "transferAccept", value: {} } },
+      value: { action: { case: "transferAccept", value: { houseId, price: BigInt(price) } } },
     });
+  }
+
+  /** Steps in (past whoever stands at the door) or out of the house of the window. */
+  houseEnter(): void {
+    this.conn.send({ case: "houseCommand", value: { action: { case: "enter", value: {} } } });
+  }
+
+  houseExit(): void {
+    this.conn.send({ case: "houseCommand", value: { action: { case: "exit", value: {} } } });
   }
 
   /** Closes the house window (the server forgets it too). */

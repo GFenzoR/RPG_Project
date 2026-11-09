@@ -768,9 +768,15 @@ function HousesPage(props: { t: Translate }): JSX.Element {
         </p>
       ) : (
         towns.map((town) => (
-          <section key={town} data-testid={`houses-${town}`}>
+          <section key={town} class="houses-town" data-testid={`houses-${town}`}>
             <h2>{t(`island.${town}.name`)}</h2>
-            <table class="highscores">
+            <table class="highscores houses-table">
+              <colgroup>
+                <col class="name" />
+                <col class="size" />
+                <col class="rent" />
+                <col class="status" />
+              </colgroup>
               <thead>
                 <tr>
                   <th scope="col">{t("site.houses.name")}</th>

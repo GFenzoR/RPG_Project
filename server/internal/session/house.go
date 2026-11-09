@@ -58,12 +58,14 @@ const (
 	msgHouseOffered      = "house.transfer_offered"
 	msgHouseOfferedYou   = "house.transfer_for_you"
 	msgHouseOfferNone    = "house.transfer_none"
+	msgHouseOfferChanged = "house.transfer_changed"
 	msgHouseOfferOff     = "house.transfer_cancelled"
 	msgHouseTransferred  = "house.transfer_done"
 	msgHouseGivenAway    = "house.transferred_away"
 	msgHouseFull         = "house.full"
 	msgHouseTakeOut      = "house.owner_only"
 	msgHouseExpelled     = "house.expelled"
+	msgHouseCrowded      = "house.crowded"
 	msgHouseRenewed      = "house.renewed"
 	msgHouseLost         = "house.lost_unpaid"
 	msgHouseEvicted      = "house.evicted"
@@ -168,6 +170,21 @@ type houseView struct{ h *house }
 
 // houseSweepBatch bounds the houses one rent sweep looks at (round robin).
 const houseSweepBatch = 32
+
+// doorReach is how far (Chebyshev, same floor) from a door a player may use the house
+// window: a little more than an arm, so a few strangers standing in front of the door
+// cannot keep the owner from it (HouseEnter).
+const doorReach = 3
+
+// nearDoor reports whether p is within doorReach of a door of h, and which.
+func nearDoor(p *Player, h *house) (world.Pos, bool) {
+	for _, d := range h.def.Doors {
+		if d.Z == p.pos.Z && chebyshev(p.pos, d) <= doorReach {
+			return d, true
+		}
+	}
+	return world.Pos{}, false
+}
 
 func (w *World) initHouses() {
 	hs := w.cfg.Balance.Houses
@@ -472,6 +489,9 @@ func (w *World) mayUseInHouse(p *Player, it *Item) bool {
 	switch {
 	case h == nil:
 		return true
+	case w.readOnly:
+		p.emit(systemMsg(msgHouseReadOnly))
+		return false
 	case !w.houseAccess(p, h):
 		p.emit(systemMsg(msgHouseNoAccess))
 		return false
@@ -526,6 +546,18 @@ func (w *World) flushHouses() {
 		w.houseActors = w.houseActors[:0]
 		return
 	}
+	if w.readOnly {
+		// Fail-safe (T5.3): nothing about houses is written until a restart. Moves and
+		// uses are refused already; what still changes a house (a corpse decaying, an NPC
+		// purchase landing on the floor) stays in memory only.
+		for _, h := range w.houseDirty {
+			h.dirty = false
+		}
+		w.houseDirty = w.houseDirty[:0]
+		clear(w.houseActors)
+		w.houseActors = w.houseActors[:0]
+		return
+	}
 	w.houseFlushing = true
 	defer func() { w.houseFlushing = false }()
 	var ops []HouseOp
@@ -548,6 +580,7 @@ func (w *World) flushHouses() {
 // houseTransfer submits a transfer with the snapshots of players and house (and market)
 // changes.
 func (w *World) houseTransfer(players []*Player, ops []HouseOp, market ...MarketOp) {
+	w.flushHouses() // before numbering: transfer ids must grow in submission order
 	w.nextTransfer++
 	t := Transfer{ID: w.nextTransfer, Houses: ops, Market: market, OfferHigh: w.nextOffer, MailHigh: w.nextMail}
 	for _, p := range players {
@@ -576,7 +609,7 @@ func (w *World) useHouseDoor(ctx *game.TickContext, p *Player, m *pb.UseItem) bo
 	switch {
 	case !w.houseOn:
 		p.emit(systemMsg(msgHouseClosed))
-	case pos.Z != p.pos.Z || !w.near(p, pos):
+	case pos.Z != p.pos.Z || chebyshev(p.pos, pos) > doorReach:
 		p.emit(systemMsg(msgTooFar))
 	default:
 		p.house = &houseView{h: h}
@@ -608,12 +641,8 @@ func (w *World) nearHouse(p *Player, h *house) bool {
 	if h.def.Contains(p.pos) {
 		return true
 	}
-	for _, d := range h.def.Doors {
-		if w.near(p, d) {
-			return true
-		}
-	}
-	return false
+	_, ok := nearDoor(p, h)
+	return ok
 }
 
 // checkHouseView closes the window of a player that walked away from its house.
@@ -640,7 +669,7 @@ func (w *World) sendHouse(p *Player) {
 		PeriodDays: uint32(hs.PeriodDays), Size: uint32(h.size), Owner: h.ownerName, IsOwner: h.owner == p.charID,
 		MaxGuests: uint32(hs.MaxGuests), Items: uint32(w.houseCount(h)), MaxItems: uint32(w.maxItems(h)),
 		MinLevel: uint32(hs.MinLevel), MaxPeriods: uint32(hs.MaxPeriods), Money: uint64(max(w.money(p), 0)),
-		ReadOnly: w.readOnly, Access: w.houseAccess(p, h),
+		ReadOnly: w.readOnly, Access: w.houseAccess(p, h), Inside: h.def.Contains(p.pos),
 	}
 	if u.IsOwner {
 		u.PaidUntil = uint64(max(h.paidUntil.UnixMilli(), 0))
@@ -711,7 +740,11 @@ func (w *World) houseCommand(ctx *game.TickContext, p *Player, m *pb.HouseComman
 	case *pb.HouseCommand_Rent:
 		w.houseRent(ctx, p, h)
 	case *pb.HouseCommand_TransferAccept:
-		w.houseAccept(ctx, p, h)
+		w.houseAccept(ctx, p, h, a.TransferAccept.GetHouseId(), a.TransferAccept.GetPrice())
+	case *pb.HouseCommand_Enter:
+		w.houseEnter(ctx, p, h)
+	case *pb.HouseCommand_Exit:
+		w.houseLeaveTiles(p, h)
 	default:
 		if h.owner != p.charID {
 			p.emit(systemMsg(msgHouseNotOwner))
@@ -755,6 +788,53 @@ func (w *World) houseCommand(ctx *game.TickContext, p *Player, m *pb.HouseComman
 	if p.house != nil && p.house.h != h {
 		w.sendHouse(p)
 	}
+}
+
+// houseEnter takes p (with access, near a door) to a free tile inside next to that door.
+func (w *World) houseEnter(ctx *game.TickContext, p *Player, h *house) {
+	door, near := nearDoor(p, h)
+	switch {
+	case h.def.Contains(p.pos):
+		return
+	case !w.houseAccess(p, h):
+		p.emit(systemMsg(msgHouseNoAccess))
+		return
+	case !near:
+		p.emit(systemMsg(msgHouseNotHere))
+		return
+	case ctx.Tick < p.lockUntil:
+		// T5.2: an attacker cannot hide in a protection zone while its PvP lock lasts.
+		p.emit(systemMsg(msgPvPProtLocked))
+		return
+	}
+	// The door itself, then the house tiles around it.
+	for r := 0; r <= 1; r++ {
+		for dy := -r; dy <= r; dy++ {
+			for dx := -r; dx <= r; dx++ {
+				if max(abs(dx), abs(dy)) != r {
+					continue
+				}
+				x, y := int(door.X)+dx, int(door.Y)+dy
+				if x < 0 || y < 0 || x > 0xFFFF || y > 0xFFFF {
+					continue
+				}
+				q := world.Pos{X: uint16(x), Y: uint16(y), Z: door.Z}
+				if h.def.Contains(q) && w.m.Walkable(q) && !w.occupied(q) {
+					w.Teleport(p, q)
+					return
+				}
+			}
+		}
+	}
+	p.emit(systemMsg(msgHouseCrowded))
+}
+
+// houseLeaveTiles takes p from inside h to the free tile closest to its exit.
+func (w *World) houseLeaveTiles(p *Player, h *house) {
+	if !h.def.Contains(p.pos) {
+		return
+	}
+	w.Teleport(p, w.houseExit(h))
 }
 
 // canOwn reports (with the message) whether p may own a house: not staff, the level, and
@@ -863,10 +943,15 @@ func (w *World) houseOffer(ctx *game.TickContext, p *Player, h *house, name stri
 	to.emit(systemMsg(msgHouseOfferedYou, houseParam(h), textParam("name", p.name), num("price", int(price))))
 }
 
-func (w *World) houseAccept(ctx *game.TickContext, p *Player, h *house) {
+func (w *World) houseAccept(ctx *game.TickContext, p *Player, h *house, id string, price uint64) {
 	o := h.offer
 	if o == nil || o.to != p.charID || ctx.Tick > o.until || h.owner == 0 {
 		p.emit(systemMsg(msgHouseOfferNone))
+		return
+	}
+	if id != h.def.ID || price != uint64(o.price) {
+		// The offer changed after the player saw it: nobody pays a price it did not see.
+		p.emit(systemMsg(msgHouseOfferChanged))
 		return
 	}
 	if !w.canOwn(p, h) {
@@ -945,10 +1030,7 @@ func (w *World) mailHouseItems(now time.Time, h *house) ([]HouseOp, []MarketOp) 
 			w.closeAll(it)
 			w.detach(it)
 			w.econWorldTree(owner, EconHouse, "to_mailbox", it)
-			w.nextMail++
-			m := MarketMail{ID: w.nextMail, CharacterID: owner, Item: it.state(0), Created: now}
-			w.box(owner).items = append(w.box(owner).items, m)
-			mail = append(mail, MarketOp{Kind: MarketMailAdd, Mail: m})
+			mail = w.mailFlat(mail, owner, it, now)
 		}
 		w.tileChanged(pos)
 	})
@@ -958,6 +1040,22 @@ func (w *World) mailHouseItems(now time.Time, h *house) ([]HouseOp, []MarketOp) 
 		w.houseDirty = slices.DeleteFunc(w.houseDirty, func(x *house) bool { return x == h })
 	}
 	return []HouseOp{{Kind: HouseItems, House: h.def.ID, Items: w.houseItems(h)}}, mail
+}
+
+// mailFlat puts it in owner's mailbox flattened: a container goes empty, each item inside
+// it in its own row (recursively), so nothing in the mailbox is too deep or too heavy as
+// a whole to be withdrawn; a rune keeps its charges.
+func (w *World) mailFlat(mail []MarketOp, owner int64, it *Item, now time.Time) []MarketOp {
+	s := it.state(0)
+	s.Items = nil
+	w.nextMail++
+	m := MarketMail{ID: w.nextMail, CharacterID: owner, Item: s, Created: now}
+	w.box(owner).items = append(w.box(owner).items, m)
+	mail = append(mail, MarketOp{Kind: MarketMailAdd, Mail: m})
+	for _, c := range it.items {
+		mail = w.mailFlat(mail, owner, c, now)
+	}
+	return mail
 }
 
 // ---- rent and expiry ------------------------------------------------------------------

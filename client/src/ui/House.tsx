@@ -54,6 +54,21 @@ export function HouseWindow(props: Props & { now?: number }): JSX.Element | null
         {h.owner ? t("client.house.owner", { name: h.owner }) : t("client.house.free")}
       </p>
 
+      {(can.enter || can.exit) && (
+        <div class="actions">
+          {can.enter && (
+            <button type="button" data-testid="house-enter" onClick={() => game?.houseEnter()}>
+              {t("client.house.enter")}
+            </button>
+          )}
+          {can.exit && (
+            <button type="button" data-testid="house-exit" onClick={() => game?.houseExit()}>
+              {t("client.house.exit")}
+            </button>
+          )}
+        </div>
+      )}
+
       {can.rent && (
         <div class="actions">
           <p class="hint">{t("client.house.rent_hint", { level: h.minLevel, money: h.money })}</p>
@@ -66,7 +81,11 @@ export function HouseWindow(props: Props & { now?: number }): JSX.Element | null
       {can.accept && h.transfer && (
         <div class="actions">
           <p>{t("client.house.offer_for_you", { name: h.owner, price: h.transfer.price })}</p>
-          <button type="button" data-testid="house-accept" onClick={() => game?.houseAccept()}>
+          <button
+            type="button"
+            data-testid="house-accept"
+            onClick={() => game?.houseAccept(h.id, h.transfer?.price ?? 0)}
+          >
             {t("client.house.accept")}
           </button>
         </div>

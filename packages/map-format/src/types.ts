@@ -131,7 +131,7 @@ export const MAX_HOUSE_DOORS = 8;
 export const houseContains = (h: House, p: Position): boolean =>
   h.rects.some((r) => r.z === p.z && rectContains(r, p.x, p.y));
 
-/** Number of tiles of a house (its size). Rects of one house never overlap (validated). */
+/** Number of tiles of a house (its size). No tile is in two rects (validated). */
 export const houseSize = (h: House): number => h.rects.reduce((n, r) => n + r.w * r.h, 0);
 
 export interface Island {

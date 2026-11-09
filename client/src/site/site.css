@@ -490,3 +490,28 @@ figcaption {
 .account-page form + form {
   margin-top: 1.25rem;
 }
+
+/* ---- Houses (T5.4): one table per town, same columns ---- */
+.houses-town {
+  margin-top: 1.5rem;
+}
+.houses-town h2 {
+  margin: 0 0 0.5rem;
+}
+.houses-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.houses-table col.name {
+  width: 40%;
+}
+.houses-table col.size,
+.houses-table col.rent {
+  width: 18%;
+}
+.houses-table col.status {
+  width: 24%;
+}
+.houses-table td {
+  overflow-wrap: anywhere;
+}

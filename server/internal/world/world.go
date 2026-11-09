@@ -310,8 +310,8 @@ func (m *Map) indexHouses() error {
 		for i := range is.Houses {
 			h := &is.Houses[i]
 			h.Island = is.ID
-			if !validHouseID(h.ID) || h.Name == "" || h.Rent == 0 || ids[h.ID] {
-				return fmt.Errorf("island %q: house %q needs a unique id, a name and a rent > 0", is.ID, h.ID)
+			if !validHouseID(h.ID) || h.Name != "house."+h.ID+".name" || h.Rent == 0 || ids[h.ID] {
+				return fmt.Errorf("island %q: house %q needs a unique id, the name house.<id>.name and a rent > 0", is.ID, h.ID)
 			}
 			ids[h.ID] = true
 			if len(h.Rects) == 0 || len(h.Rects) > MaxHouseRects || len(h.Doors) == 0 || len(h.Doors) > MaxHouseDoors {
@@ -329,7 +329,9 @@ func (m *Map) indexHouses() error {
 				for y := int(r.Y); y < int(r.Y)+int(r.H); y++ {
 					for x := int(r.X); x < int(r.X)+int(r.W); x++ {
 						p := Pos{X: uint16(x), Y: uint16(y), Z: r.Z}
-						if o := m.houseAt[p]; o != nil && o != h {
+						if o := m.houseAt[p]; o != nil {
+							// Also two rects of the same house: each tile once (its items are
+							// counted and saved by walking the rects).
 							return fmt.Errorf("island %q: house %q shares tile %v with house %q", is.ID, h.ID, p, o.ID)
 						}
 						m.houseAt[p] = h

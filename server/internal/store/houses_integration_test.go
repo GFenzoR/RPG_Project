@@ -115,6 +115,17 @@ func TestHouseTransfers(t *testing.T) {
 	if err := st.SaveTransfer(ctx, drop); err != nil || inHouse("cottage") != 2 {
 		t.Fatalf("retry: %v, %d items", err, inHouse("cottage"))
 	}
+	// An older transfer after a newer one is not a retry: it fails (permanent) instead of
+	// being dropped in silence.
+	newer := store.Transfer{ID: id() + 1, Houses: []store.HouseOp{{Kind: store.HouseItems, House: "shed"}}}
+	if err := st.SaveTransfer(ctx, newer); err != nil {
+		t.Fatal(err)
+	}
+	older := store.Transfer{ID: newer.ID - 1, Characters: []store.CharacterState{state(ana)}}
+	if err := st.SaveTransfer(ctx, older); !errors.Is(err, store.ErrTransferOrder) || !store.Permanent(err) {
+		t.Fatalf("older transfer after a newer one: %v", err)
+	}
+	nextID = newer.ID
 
 	// Guests and the guild switch.
 	if err := st.SaveTransfer(ctx, store.Transfer{ID: id(), Houses: []store.HouseOp{{Kind: store.HouseAccess,

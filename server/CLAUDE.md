@@ -154,12 +154,15 @@ server/
   camino que cambie una casilla tiene que pasar por `tileChanged` (o `containerChanged`
   para un contenedor en el suelo), que marca la casa sucia; `flushHouses` la escribe
   entera, con los snapshots de los jugadores cuyos comandos la tocaron
-  (`World.cmdPlayer`, puesto en `Input`), antes de cualquier otro trabajo (`submitJob`) y
-  al final del tick. Un movimiento de items desde o hacia una casa pasa por
+  (`World.cmdPlayer`, puesto en `Input`), al final de cada comando, al principio de
+  `transfer`/`houseTransfer` (**antes de numerar**) y de `snapshot`, y al final del tick.
+  Todo sitio nuevo que numere un transfer tiene que vaciar las casas antes de
+  `nextTransfer++`: `SaveTransfer` rechaza un id menor que el último escrito
+  (`ErrTransferOrder`). Un movimiento de items desde o hacia una casa pasa por
   `checkHouseMove` (acceso, solo el dueño saca, límite, anti-flood, `w.readOnly`) y un
   uso por `mayUseInHouse`; un paso por `mayEnter`. Quien pierde el acceso sale por
-  `expel`/`expelIntruders`. Al liberar una casa, `mailHouseItems` manda las instancias
-  enteras al buzón del mercado en el mismo transfer. `/api/houses` es público: solo el
+  `expel`/`expelIntruders`. Al liberar una casa, `mailHouseItems` manda los items
+  aplanados (`mailFlat`) al buzón del mercado en el mismo transfer. `/api/houses` es público: solo el
   nombre del dueño, con las exclusiones del ranking (`queries/houses.sql`).
 
 ## Tests

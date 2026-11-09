@@ -29,6 +29,8 @@ export interface HouseView {
   money: number;
   readOnly: boolean;
   access: boolean;
+  /** The player stands inside the house. */
+  inside: boolean;
 }
 
 /** The window of a HouseUpdate, or undefined when it closes it. */
@@ -57,6 +59,7 @@ export function houseFrom(u: HouseUpdate): HouseView | undefined {
     money: Number(u.money),
     readOnly: u.readOnly,
     access: u.access,
+    inside: u.inside,
   };
 }
 
@@ -65,12 +68,16 @@ export function houseActions(h: HouseView): {
   rent: boolean;
   manage: boolean;
   accept: boolean;
+  enter: boolean;
+  exit: boolean;
 } {
   const live = !h.readOnly;
   return {
     rent: live && h.owner === "",
     manage: live && h.isOwner,
     accept: live && !h.isOwner && h.transfer?.forMe === true,
+    enter: h.access && !h.inside,
+    exit: h.inside,
   };
 }
 

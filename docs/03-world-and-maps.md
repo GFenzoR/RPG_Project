@@ -165,7 +165,8 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   exit: { x: 3153, y: 6402, z: 7 }
 ```
 - `id` único en todo el mundo (es la clave de las tablas `house_owners`, `house_guests` y
-  `house_items`: **no se cambia** una vez publicado). Una casa quitada o renombrada deja
+  `house_items`: **no se cambia** una vez publicado). `name` es siempre
+  `house.<id>.name` (los mensajes del servidor nombran la casa por su id). Una casa quitada o renombrada deja
   sus filas en la base: el servidor ignora la casa con un aviso, la cuenta de su dueño no
   puede alquilar otra hasta que un operador borre esa fila, y los items guardados que ya
   no caen en la casa (rects achicados) se descartan al arrancar y desaparecen de la base
@@ -180,7 +181,7 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   usando una puerta; mirarla dice de quién es. `exit`: casilla fuera de toda casa, junto
   (a una casilla, mismo piso) a una puerta: ahí va quien no puede quedarse adentro.
 - Validación (`mapcli validate`, editor y CI): rects dentro de la isla y en sus pisos,
-  todas sus casillas con suelo, ninguna casilla en dos casas, puertas caminables dentro de
+  todas sus casillas con suelo, ninguna casilla en dos casas ni en dos rects de la misma, puertas caminables dentro de
   la casa, salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
   el templo, nombre con texto en todos los idiomas, id único en el mundo. Adentro de una
   casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y

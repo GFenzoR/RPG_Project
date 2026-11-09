@@ -77,7 +77,9 @@ func TestHouseChecks(t *testing.T) {
 	}{
 		{"no rent", []House{mod(func(h *House) { h.Rent = 0 })}, "rent > 0"},
 		{"twice", []House{testHouse(), mod(func(h *House) { h.Rects = []HouseRect{{X: 30, Y: 30, Z: 7, W: 1, H: 1}} })}, "unique id"},
-		{"overlap", []House{testHouse(), mod(func(h *House) { h.ID = "other" })}, "shares tile"},
+		{"overlap", []House{testHouse(), mod(func(h *House) { h.ID, h.Name = "other", "house.other.name" })}, "shares tile"},
+		{"own overlap", []House{mod(func(h *House) { h.Rects = append(h.Rects, HouseRect{X: 32, Y: 31, Z: 7, W: 1, H: 2}) })}, "shares tile"},
+		{"name", []House{mod(func(h *House) { h.Name = "house.other.name" })}, "house.<id>.name"},
 		{"outside", []House{mod(func(h *House) { h.Rects[0].X = 70 })}, "outside the island"},
 		{"floor", []House{mod(func(h *House) { h.Rects[0].Z = 8 })}, "floor"},
 		{"door out", []House{mod(func(h *House) { h.Doors = []Pos{pt(30, 30)} })}, "door"},

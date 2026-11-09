@@ -271,6 +271,10 @@ func (p *Player) stopWalk() {
 }
 
 func (w *World) snapshot(p *Player, final bool) Snapshot {
+	// T5.4: no snapshot is taken while a house has unwritten item changes (an autosave
+	// would carry an inventory without the house that explains it). Every site that
+	// numbers a transfer flushes before numbering; inside the flush this is a no-op.
+	w.flushHouses()
 	p.saveSeq++
 	return Snapshot{
 		CharacterID: p.charID,
@@ -530,9 +534,6 @@ func (w *World) save(s Snapshot) { w.submitJob(Job{Snapshot: s}) }
 // submitJob submits j to persistence in order: while older jobs wait for a retry, j
 // waits behind them (a snapshot must never overtake the transfer before it, T5.3).
 func (w *World) submitJob(j Job) {
-	// T5.4: this tick's house item changes go first, so no later save of a mover writes
-	// its inventory without the house (or the other way round).
-	w.flushHouses()
 	if len(w.retry) > 0 || !w.submitNow(j) {
 		w.retry = append(w.retry, j)
 	}

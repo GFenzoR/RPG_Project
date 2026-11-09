@@ -135,12 +135,12 @@ func TestMarketTransfers(t *testing.T) {
 	}
 	wg.Wait()
 	for _, err := range errs {
-		if err != nil && !errors.Is(err, store.ErrMarketConflict) {
+		if err != nil && !errors.Is(err, store.ErrMarketConflict) && !errors.Is(err, store.ErrTransferOrder) {
 			t.Fatalf("losing buyer: %v", err)
 		}
 	}
 	// Exactly one got the unit (the other either finds it gone or, with the lower id,
-	// is taken for a retry of an older transfer and applies nothing).
+	// fails as older than the last transfer written: T5.4, never applied in silence).
 	if units(uno, salve)+units(dos, salve) != 3 || offerLeft(1) != -1 {
 		t.Fatalf("salves %d+%d, offer %d", units(uno, salve), units(dos, salve), offerLeft(1))
 	}

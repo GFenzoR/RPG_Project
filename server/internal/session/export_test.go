@@ -265,3 +265,15 @@ func (w *World) ForceSaveForTest(c Client) game.Command {
 		}
 	})
 }
+
+// MailForTest is the items waiting in a character's mailbox.
+func (w *World) MailForTest(charID int64) []ItemState {
+	var out []ItemState
+	for _, m := range w.box(charID).items {
+		out = append(out, m.Item)
+	}
+	return out
+}
+
+// ItemForTest is an item definition by content id.
+func (w *World) ItemForTest(id string) *content.Item { return w.cfg.Items[id] }

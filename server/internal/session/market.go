@@ -783,12 +783,12 @@ func (w *World) marketWithdraw(ctx *game.TickContext, p *Player) {
 	}
 	var ops []MarketOp
 	full := false
-	taken := 0
-	for taken < len(b.items) {
-		m := b.items[taken]
+	// In order, every item that fits; one that does not (too heavy, no room) stays and the
+	// next ones are still tried, so nothing blocks the mailbox (T5.4).
+	kept := b.items[:0]
+	for _, m := range b.items {
 		def := w.byNum[m.Item.ItemID]
 		if def == nil { // retired item: it stays in the database, out of the way
-			taken++
 			continue
 		}
 		n := m.Item.Count
@@ -796,32 +796,33 @@ func (w *World) marketWithdraw(ctx *game.TickContext, p *Player) {
 			n = 1
 		}
 		if !def.Stackable && (len(m.Item.Items) > 0 || m.Item.Count != def.StackLimit()) {
-			// The saved instance itself (T5.4): a container from a house keeps its content
-			// and a rune its charges.
+			// The saved instance itself (T5.4): a rune keeps its charges (a container that
+			// still has content, from before houses mailed them flat, keeps it).
 			it := w.loadItem(m.Item)
 			bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
 			if it == nil || bp == nil || bp.def.Container == nil || len(bp.items) >= bp.def.Slots() ||
 				it.weight() > p.capacity-p.carried() || depth(bp)+1+it.height() > maxDepth {
 				full = true
-				break
+				kept = append(kept, m)
+				continue
 			}
 			w.attach(p, it, place{kind: locContainer, cont: bp})
 			w.containerChanged(bp)
 			w.econTree(p, EconMarket, "mailbox", it, 1)
 			ops = append(ops, MarketOp{Kind: MarketMailRemove, ID: m.ID, CharacterID: p.charID})
-			taken++
 			continue
 		}
 		if !w.canReceive(p, def, n, 0) {
 			full = true
-			break
+			kept = append(kept, m)
+			continue
 		}
 		w.giveItem(p, def, n)
 		w.econItem(p, EconMarket, "mailbox", def, n)
 		ops = append(ops, MarketOp{Kind: MarketMailRemove, ID: m.ID, CharacterID: p.charID})
-		taken++
 	}
-	b.items = slices.Delete(b.items, 0, taken)
+	clear(b.items[len(kept):])
+	b.items = kept
 	if b.gold > 0 {
 		// Then as much of the gold as fits (the rest waits): it never takes the room of items.
 		gold := w.moneyThatFits(p, b.gold)
@@ -856,6 +857,7 @@ func (w *World) afterMarket(p *Player) {
 // transfer submits one Transfer with the snapshots of players (whose inventory changed)
 // and the market changes ops.
 func (w *World) transfer(players []*Player, ops ...MarketOp) {
+	w.flushHouses() // T5.4: before numbering, so transfer ids grow in submission order
 	w.nextTransfer++
 	t := Transfer{ID: w.nextTransfer, Market: ops, OfferHigh: w.nextOffer, MailHigh: w.nextMail}
 	for _, p := range players {

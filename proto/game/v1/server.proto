@@ -567,6 +567,8 @@ message HouseUpdate {
   bool read_only = 22;
   // The player may enter (owner, guest or guild member).
   bool access = 23;
+  // The player stands inside the house.
+  bool inside = 24;
 }
 
 // ---- movement and connection ------------------------------------------------

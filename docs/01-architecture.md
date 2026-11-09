@@ -134,21 +134,27 @@ su único dueño. Todo cambio sale como `Transfer` (ver "Transacciones") con `Ho
   contenedor apoyado en ella (`containerChanged`) marca la casa como sucia y anota al
   jugador cuyo comando la cambió (`World.cmdPlayer`). Las casas sucias de un tick salen en
   **un solo transfer** (`flushHouses`) con la lista entera de items de cada una (se
-  reemplaza en la base: idempotente) y los snapshots de esos jugadores. Ese transfer sale
-  antes que cualquier otro trabajo del Saver (`submitJob` lo vacía primero) y, si no, al
-  final del tick: un autoguardado nunca escribe un inventario sin la casa que lo explica.
+  reemplaza en la base: idempotente) y los snapshots de esos jugadores. Se vacía al final
+  de cada comando (`Input`), antes de numerar cualquier otro transfer (`transfer`,
+  `houseTransfer`), antes de tomar cualquier snapshot (`snapshot`), al liberar o
+  transferir una casa, al sacar a un jugador del mundo y al final del tick: los ids de los
+  transfers crecen en el orden en que se encolan, un lote nunca lleva un snapshot a mitad
+  de otra operación y un autoguardado nunca escribe un inventario sin la casa que lo
+  explica. `SaveTransfer` acepta un id igual al último escrito como reintento (no aplica
+  nada) y rechaza uno menor (`ErrTransferOrder`, permanente): un error de orden activa la
+  falla segura en vez de perder un transfer en silencio.
   Así mover un item del inventario al suelo de la casa, o al revés, no duplica ni pierde
   nada si el servidor se cae: o están los dos lados nuevos o los dos viejos.
 - Cobro del alquiler: un barrido por segundo de a lo sumo 32 casas (round robin) con el
   reloj inyectable; renovar descuenta el oro del buzón (`MarketGoldAdd` negativo, con
-  guarda en la base) y liberar mueve los items al buzón (`MarketMailAdd`) en el mismo
-  transfer que borra al dueño. Nada de esto corre en la base desde el loop.
+  guarda en la base) y liberar mueve los items al buzón (`MarketMailAdd`, aplanados: cada
+  item en su fila) en el mismo transfer que borra al dueño. Nada de esto corre en la base desde el loop.
 - La base es la red de seguridad: `house_owners` tiene una fila por casa (PK), un dueño
   por personaje y una casa por cuenta (UNIQUE), y cada cambio de dueño, pago o acceso
   lleva el dueño que el loop cree (`... AND character_id = $old`): si no coincide, el
   transfer falla entero (`ErrHouseConflict`, permanente) y rige la falla segura.
-- Falla segura: con `w.readOnly` las casas no aceptan acciones ni movimientos de items y
-  el barrido se detiene. Los cadáveres que caen en una casa no se guardan (se pudren).
+- Falla segura: con `w.readOnly` las casas no aceptan acciones, movimientos ni usos de
+  items, `flushHouses` no escribe nada y el barrido se detiene. Los cadáveres que caen en una casa no se guardan (se pudren).
 
 ### Transacciones (T5.3)
 El inventario vive en el loop y se guarda con el snapshot de cada personaje. Todo lo que

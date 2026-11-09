@@ -116,7 +116,7 @@ describe("validateWorld", () => {
 
   it("accepts a house and checks its rules (T5.4)", () => {
     const house = () => ({
-      id: "mini_house",
+      id: "puerto_house_net",
       name: "house.puerto_house_net.name",
       rent: 100,
       rects: [{ x: 20, y: 5, z: 7, w: 3, h: 2 }],
@@ -130,7 +130,12 @@ describe("validateWorld", () => {
     const bad = mini();
     bad.houses = [
       { ...house(), doors: [{ x: 10, y: 20, z: 7 }], exit: { x: 21, y: 6, z: 7 } },
-      { ...house(), id: "mini_house2", name: "house.missing.name", exit: { x: 25, y: 25, z: 7 } },
+      {
+        ...house(),
+        id: "puerto_house_oar",
+        name: "house.missing.name",
+        exit: { x: 25, y: 25, z: 7 },
+      },
     ];
     bad.npcs = [{ npc: "harbor_master", pos: { x: 21, y: 5, z: 7 } }];
     bad.zones.push({
@@ -141,18 +146,22 @@ describe("validateWorld", () => {
     });
     const m = messages(check(bad));
     expect(m).toContainEqual(expect.stringContaining("door is not a tile of the house"));
-    expect(m).toContainEqual(expect.stringContaining('shares tiles with house "mini_house"'));
-    expect(m).toContainEqual(expect.stringContaining('house exit is inside house "mini_house"'));
+    expect(m).toContainEqual(expect.stringContaining('shares tiles with house "puerto_house_net"'));
+    expect(m).toContainEqual(
+      expect.stringContaining('house exit is inside house "puerto_house_net"'),
+    );
     expect(m).toContainEqual(expect.stringContaining("house exit must be next to a door"));
-    expect(m).toContainEqual(expect.stringContaining('i18n key "house.missing.name"'));
-    expect(m).toContainEqual(expect.stringContaining('NPC is inside house "mini_house"'));
+    expect(m).toContainEqual(
+      expect.stringContaining("a house's name key is house.puerto_house_oar.name"),
+    );
+    expect(m).toContainEqual(expect.stringContaining('NPC is inside house "puerto_house_net"'));
     expect(m).toContainEqual(expect.stringContaining('no_logout zone "mini_nl" covers a house'));
   });
 
   it("rejects a house id used twice in the world (T5.4)", () => {
     const i = mini();
     const h = {
-      id: "mini_house",
+      id: "puerto_house_net",
       name: "house.puerto_house_net.name",
       rent: 100,
       rects: [{ x: 20, y: 5, z: 7, w: 1, h: 1 }],
@@ -169,7 +178,27 @@ describe("validateWorld", () => {
       },
     ];
     expect(messages(check(i))).toContainEqual(
-      expect.stringContaining('house "mini_house" is already defined'),
+      expect.stringContaining('house "puerto_house_net" is already defined'),
+    );
+  });
+
+  it("rejects two rects of one house on the same tile (T5.4)", () => {
+    const i = mini();
+    i.houses = [
+      {
+        id: "puerto_house_net",
+        name: "house.puerto_house_net.name",
+        rent: 100,
+        rects: [
+          { x: 20, y: 5, z: 7, w: 3, h: 2 },
+          { x: 21, y: 6, z: 7, w: 1, h: 2 },
+        ],
+        doors: [{ x: 21, y: 7, z: 7 }],
+        exit: { x: 21, y: 8, z: 7 },
+      },
+    ];
+    expect(messages(check(i))).toContainEqual(
+      expect.stringContaining('house rectangle shares tiles with house "puerto_house_net"'),
     );
   });
 

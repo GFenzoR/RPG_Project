@@ -868,8 +868,8 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
 ### Casas (T5.4, `server/internal/session/house.go`)
 Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
 - **Abrir:** `UseItem` sobre una casilla de **puerta** de una casa (cualquier índice de la
-  pila; si hay items sueltos en la puerta, sobre ellos se usan como siempre) a una casilla
-  de distancia; el servidor contesta `HouseUpdate{open: true, ...}`. El cliente conoce las
+  pila; si hay items sueltos en la puerta, sobre ellos se usan como siempre) a hasta 3
+  casillas; el servidor contesta `HouseUpdate{open: true, ...}`. El cliente conoce las
   puertas por `houses.yaml` (plugin de Vite) para mandar el `UseItem` con el suelo
   (`stack_index` 0) cuando la casilla no tiene nada encima. `LookAt` sobre una puerta,
   además del mensaje de siempre, manda `house.look_free` (`house`, `price`, `days`,
@@ -877,13 +877,18 @@ Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
 - `HouseCommand` exige seguir junto a una puerta o dentro de la casa y responde otra
   `HouseUpdate` completa: `rent{}`, `extend{}`, `leave{}`, `guest_add{name}`,
   `guest_remove{name}`, `guild_access{enabled}`, `transfer_offer{name, price}`,
-  `transfer_cancel{}`, `transfer_accept{}` y `close{}` (sin respuesta). Fuera de `rent` y
-  `transfer_accept`, solo el dueño.
+  `transfer_cancel{}`, `transfer_accept{house_id, price}` (lo que vio: si la oferta cambió,
+  `house.transfer_changed`), `enter{}` (con acceso, a hasta 3 casillas de una puerta: a una
+  casilla libre adentro junto a ella; `house.crowded` si no hay), `exit{}` (de adentro a la
+  salida) y `close{}` (sin respuesta). La ventana se abre y se usa a hasta 3 casillas de
+  una puerta o dentro de la casa. Fuera de `rent`, `transfer_accept`, `enter` y `exit`,
+  solo el dueño.
 - `HouseUpdate`: `house_id`, `name` (clave i18n), `island`, `rent` y `period_days`,
   `size`, `owner` (vacío: libre), `is_owner`, solo para el dueño `paid_until` (ms Unix),
   `guests` y `guild_access`; `max_guests`, `items` / `max_items`, `min_level`,
   `max_periods`, la transferencia pendiente (`transfer_to`, `transfer_price`; para el
-  invitado `transfer_for_me`), `money`, `read_only` y `access` (puede entrar). `open:
+  invitado `transfer_for_me`), `money`, `read_only`, `access` (puede entrar) e `inside`
+  (está adentro). `open:
   false` cierra la ventana (se alejó de la puerta).
 - Pasar a una casilla de casa sin acceso: `WalkRejected` y `house.no_access`. Mover items
   desde o hacia una casa: `house.no_access`, `house.owner_only` (un invitado saca algo),
