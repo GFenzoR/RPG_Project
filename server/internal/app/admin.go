@@ -291,12 +291,18 @@ func (a *adminWorker) checkRoles(accounts []int64) {
 
 func guildChange(c session.GuildChange) store.GuildChange {
 	return store.GuildChange{Op: store.GuildOp(c.Op), GuildID: c.GuildID, CharacterID: c.CharacterID, OtherID: c.OtherID,
-		InvitedBy: c.InvitedBy, Name: c.Name, Text: c.Text, Rank: int(c.Rank), At: c.At, Expires: c.Expires}
+		InvitedBy: c.InvitedBy, Name: c.Name, Text: c.Text, Rank: int(c.Rank), At: c.At, Expires: c.Expires,
+		WarID: c.WarID, EnemyID: c.EnemyID, KillLimit: c.KillLimit, Kills: c.Kills, EnemyKills: c.EnemyKills,
+		Reason: c.Reason, WinnerID: c.WinnerID}
 }
 
 // guildData converts what the store loaded to the World's start state.
 func guildData(r store.GuildRows) *session.GuildData {
-	out := &session.GuildData{IDHigh: r.IDHigh, Guilds: make([]session.GuildRecord, len(r.Guilds))}
+	out := &session.GuildData{IDHigh: r.IDHigh, WarIDHigh: r.WarIDHigh, Guilds: make([]session.GuildRecord, len(r.Guilds))}
+	for _, v := range r.Wars {
+		out.Wars = append(out.Wars, session.GuildWarRecord{ID: v.ID, GuildID: v.GuildID, EnemyID: v.EnemyID, Active: v.Active,
+			DeclaredAt: v.DeclaredAt, Expires: v.Expires, KillLimit: v.KillLimit, Kills: v.Kills, EnemyKills: v.EnemyKills})
+	}
 	idx := make(map[int64]int, len(r.Guilds))
 	for i, g := range r.Guilds {
 		out.Guilds[i] = session.GuildRecord{ID: g.ID, Name: g.Name, Motd: g.Motd, CreatedAt: g.CreatedAt}

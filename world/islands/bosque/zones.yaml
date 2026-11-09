@@ -23,3 +23,10 @@
   rects:
     - { x: 4168, y: 6032, w: 24, h: 16 }
   notes: "North cove and its islet, open to community map patches (T2.4)."
+
+- id: bosque_arena
+  type: pvp
+  floors: [7]
+  rects:
+    - { x: 4139, y: 6121, w: 6, h: 5 }
+  notes: "Small PvP arena on the sand south-west of Raigal (T5.2): no skulls, no death penalty."

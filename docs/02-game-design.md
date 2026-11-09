@@ -325,7 +325,7 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - **Pendiente:** campos en el suelo (fuego o veneno) que apliquen condiciones al pisarlos
     (necesitan items con duración, disparar al entrar a la casilla y su render); items
     de cura (antídoto); que un jugador vea invisibles.
-- Zonas de protección: no se puede atacar ni ser atacado.
+- Zonas de protección: no se puede atacar ni ser atacado. El PvP está en "PvP (T5.2)".
 
 ## Items, equipo e inventario
 Implementado en T1.8 (`server/internal/session/inventory.go`):
@@ -418,7 +418,8 @@ Valores iniciales (balance.yaml):
   bendiciones (pérdida mínima de XP y skills, sin drop).
 - El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;
   durante `corpse_owner_only_ms` solo el dueño puede sacar o usar lo que contiene (otros
-  pueden abrirlo y mirar). Regla pensada para cuando haya PvP.
+  pueden abrirlo y mirar), también tras una muerte por PvP. Con marca de asesino o
+  proscrito se pierde más ("PvP", "Castigo").
 
 ## Economía
 - Monedas de oro, plata, cobre (100:1).
@@ -671,7 +672,7 @@ son pocos y simples a propósito: lo que no está acá no existe.
   baneadas no aparecen ni cuentan.
 - **Ids:** el id de un gremio disuelto no se vuelve a usar (`guild_id_high`), así el log
   de auditoría y los enlaces públicos siempre nombran al mismo gremio.
-- **Guerras (T5.2):** la tabla `guild_wars` existe vacía; ninguna regla todavía.
+- **Guerras (T5.2):** ver "PvP", "Guerras de gremios".
 
 ## Moderación (T2.6)
 Roles por cuenta: **jugador** (por defecto), **GM** y **admin**. Los asigna solo el
@@ -699,6 +700,7 @@ Los comandos se escriben en la línea de chat, en cualquier canal:
 | `/presence Nombre` | GM | Le pide un chequeo de presencia a ese jugador en cuanto se pueda (fuera de combate y activo); no cambia su puntaje (T4.1) |
 | `/guildrename Viejo Nombre = Nuevo Nombre` | GM | Renombra un gremio (el nombre nuevo sigue las reglas de siempre); se avisa a sus miembros (T5.1) |
 | `/guilddisband Nombre` | GM | Disuelve un gremio (T5.1) |
+| `/unskull Nombre` | GM | Quita la marca PvP de un jugador conectado y olvida sus muertes injustificadas (T5.2) |
 
 Los GM conectados también reciben avisos de sistema: posibles bots y chequeos fallados o
 esquivados (T4.1), y cada envío nuevo al portal de mapas con su número y título, sin datos
@@ -787,6 +789,109 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   algunos se ganan en el juego.
 - Regla: **ningún cosmético da ventaja de juego**.
 
-## PvP (futuro, ya contemplado)
-- Campos `skull`, `pvp_flags`, zonas `pvp` y `no_pvp` en el modelo.
-- Sistema de skulls tipo Tibia y castigo por asesinatos injustificados.
+## PvP (T5.2)
+Números en `data/balance.yaml` (`pvp`), nunca en código. Código:
+`server/internal/session/pvp.go` (reglas, marcas, muertes) y `session/guildwar.go`
+(guerras). Copiamos la **idea** de las marcas por asesinato del género, no sus números,
+nombres ni textos: todo lo de abajo es propio. `pvp.enabled: false` (o sin bloque `pvp`)
+apaga todo y el juego queda como antes de T5.2: nadie puede herir a otro jugador.
+
+### Dónde y quién
+- **Zonas de protección:** nadie pelea, como siempre.
+- **`no_pvp`:** no se puede atacar a jugadores (ni desde ni hacia la zona). La isla inicial
+  (`puerto`, también el tutorial) es `no_pvp` entera.
+- **`pvp` (arena):** si los dos están adentro se pelea sin marcas, sin bloqueo y sin
+  castigo: el derrotado despierta en su templo sin perder experiencia, skills, items ni
+  bendiciones. Hay una chica en la arena de Raigal (Isla del Bosque).
+- **El resto del mundo:** PvP abierto con marcas.
+- **Nivel:** por debajo de `min_level` (20) no se ataca ni se es atacado por jugadores. Es
+  más que la protección de novato (8) a propósito: quien llega a 20 ya salió de Puerto y
+  conoce el combate.
+- **Staff:** GM y admin son inmunes y no pueden atacar a jugadores.
+- **Grupos y gremios:** se pueden atacar directamente (un duelo amistoso en la arena),
+  pero los hechizos de área nunca dañan a miembros del propio grupo o gremio.
+
+### Justificado o no
+Atacar a alguien es **justificado** si: tiene cualquier marca; sus gremios están en guerra
+activa; ese jugador te atacó en los últimos `aggressor_ms` (defensa propia); o los dos están
+en una arena. Lo demás es **injustificado**.
+
+### Marcas (skulls)
+| Marca | Cómo se gana | Cuánto dura |
+|---|---|---|
+| Agresor (ámbar) | Un ataque injustificado | `aggressor_ms` (7 min) desde el último ataque injustificado |
+| Asesino (carmesí) | Alguna ventana de `murderer.windows` llega a su cantidad de muertes injustificadas: 4 en 20 h o 9 en 120 h | `murderer.hours` (60 h) desde la última muerte injustificada |
+| Proscrito (violeta) | Igual con `outlaw.windows`: 7 en 20 h o 14 en 120 h | `outlaw.hours` (200 h) |
+
+- Quien se defiende de un agresor no queda marcado. Una muerte nueva renueva el tiempo de
+  la marca y nunca la baja.
+- Se ve junto al nombre en el mapa y en la lista de batalla. Una muerte quita la marca de
+  agresor; la de asesino o proscrito sigue.
+- Las muertes injustificadas se cuentan por ventanas de tiempo con el reloj del juego y se
+  guardan con el personaje (solo las que caben en la ventana más larga).
+
+**Por qué estos números:** 7 min alcanza para terminar una pelea y alejarse; 4 muertes en
+un día de juego separan al que se defiende o se venga del que caza por deporte; las
+ventanas de 20 h y 120 h siguen el ritmo de quien juega a diario sin castigar un mal día.
+Las duraciones (60 h y 200 h) obligan a jugar varios días con la marca puesta.
+
+### Castigo
+- **Al morir con marca de asesino o proscrito:** cada pieza de equipo cae con al menos
+  `equipment_drop_pct` (40 % / 100 %) y la mochila con `backpack_drop_pct` (100 %), con o
+  sin bendiciones (que siguen bajando la pérdida de experiencia).
+- **Bloqueo de combate PvP:** quien ataca a un jugador no puede salir del juego ni entrar a
+  una zona de protección por `lock_ms` (40 s); tras una muerte injustificada,
+  `kill_lock_ms` (9 min). Quien recibe el ataque no puede salir del juego por `lock_ms`,
+  pero sí refugiarse en una zona de protección. El bloqueo también cuenta como "en combate"
+  para los barcos, la desconexión por inactividad y los chequeos de presencia. Cerrar la
+  conexión saca igual al personaje del mundo (pendiente: que quede en el mundo mientras
+  dure el bloqueo).
+- **Recompensa:** matar jugadores no da experiencia ni otra recompensa (sería farmeable
+  entre cuentas propias). Golpear jugadores tampoco entrena skills ni el escudo.
+
+### Muerte por PvP
+Toda muerte en la que un jugador hirió a la víctima en los últimos `kill_credit_ms` (50 s)
+cuenta para cada uno de ellos: suma a su contador de muertes (`pvp_kills`), y es
+injustificada para quien la atacó sin justificación. Los dos reciben un mensaje (quién
+derrotó a quién) y el servidor registra la muerte en su log (ids de los personajes, si fue
+justificada, arena, guerra y posición; nada más).
+
+### Daño
+Todo golpe de un jugador a otro (cuerpo a cuerpo, distancia, varitas, hechizos, runas y
+las condiciones que deja) se escala a `damage_pct` (60 %): sin golpes de un solo turno.
+Los jugadores no tienen resistencias elementales; la armadura y el escudo frenan los golpes
+físicos como contra un monstruo. Una condición de otro jugador (fuego, veneno...) solo
+daña donde ese jugador podría atacar ahora.
+
+### Modo seguro
+Interruptor del cliente, **activado por defecto** (cada login empieza así hasta que el
+cliente diga otra cosa). Con él no se puede atacar a un jugador si sería injustificado, y
+los hechizos de área no lo alcanzan. Sin él, el área golpea a todo jugador atacable del
+círculo (salvo grupo y gremio) y marca como un ataque directo.
+
+### Guerras de gremios
+- El líder declara la guerra a otro gremio por nombre; el líder del otro la acepta o la
+  rechaza. Una declaración sin respuesta vence a las `war.answer_hours` (24 h).
+- Activa, termina cuando un lado llega a `war.kill_limit` (30) muertes (gana), cuando un
+  líder se rinde (gana el otro), a las `war.hours` (96 h; gana quien tiene más muertes o
+  es empate) o si uno de los gremios se disuelve.
+- Mientras dura, los miembros de ambos se atacan sin marcas (también en modo seguro) y cada
+  muerte entre ellos suma al marcador de su gremio.
+- Un gremio tiene como mucho `war.max_wars` (3) guerras abiertas (declaradas o activas), y
+  una sola con cada gremio.
+- Panel "Gremio": guerras con su estado, marcador y tiempo; el líder declara, acepta,
+  rechaza o se rinde. También `/guild war declare|accept|decline|surrender Gremio`. Cada
+  acción cuenta para el anti-flood del chat como todo comando de gremio.
+
+### Staff, anti-bot y reportes
+- `/unskull Nombre` (GM): quita la marca de un jugador conectado y olvida sus muertes
+  injustificadas; queda en el log de auditoría (`remove_skull`, con la marca que tenía).
+- Anti-bot: elegir de objetivo a un jugador no es un evento de entrenamiento y el daño de
+  otro jugador no cuenta como golpe para la señal de reacción de curación (en PvP todos se
+  curan rápido).
+- Reportes: el contexto incluye `attack_player` y `kill_player` con el nombre del otro.
+
+### Pendiente
+Que un personaje con bloqueo quede en el mundo al cerrar la conexión; hechizos de condición
+a distancia contra jugadores (hoy solo contra monstruos); sprites de las marcas (hoy son
+formas dibujadas); un ranking público de guerras.

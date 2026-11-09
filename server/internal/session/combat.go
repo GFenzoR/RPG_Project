@@ -35,7 +35,7 @@ func (w *World) combatSystem(ctx *game.TickContext) {
 		w.spawnAll(ctx)
 	}
 	for _, p := range w.players {
-		if p.target != nil {
+		if p.target != nil || p.ptarget != nil {
 			w.playerFight(ctx, p)
 		}
 	}
@@ -60,14 +60,19 @@ func (w *World) combatSystem(ctx *game.TickContext) {
 
 // ---- intents ---------------------------------------------------------------------
 
-func (w *World) setTarget(p *Player, id uint32) {
+func (w *World) setTarget(ctx *game.TickContext, p *Player, id uint32) {
 	if id == 0 {
-		p.target = nil
+		p.target, p.ptarget = nil, nil
 		return
 	}
+	if v := w.playerByID(id); v != nil && w.pvpOn {
+		w.setPlayerTarget(ctx, p, v) // T5.2
+		return
+	}
+	p.ptarget = nil
 	m := w.monByID[id]
 	if m == nil || !p.Knows(id) || m.pos.Z != p.pos.Z || w.inProtection(p.pos) || w.inProtection(m.pos) {
-		// Players are not targets until PvP; NPCs never are.
+		// Players are targets only with PvP on (T5.2); NPCs never are.
 		p.target = nil
 		p.emit(systemMsg(msgCannotAttack))
 		return
@@ -78,9 +83,9 @@ func (w *World) setTarget(p *Player, id uint32) {
 		// Only then it is a recent event too: toggling the same target cannot flood the
 		// report context (T4.1).
 		p.afkTarget, p.answeredAt = m, 0
-		p.recordEvent(w.nowTick(), eventAttack, m.kind.def.ID, 0, 0)
+		p.recordEvent(ctx.Tick, eventAttack, m.kind.def.ID, 0, 0)
 	}
-	p.active(w.nowTick(), antibot.KindOther)
+	p.active(ctx.Tick, antibot.KindOther)
 	p.target = m
 	w.tutorialEvent(p, content.TriggerTarget, m.kind.def.ID)
 }
@@ -99,11 +104,32 @@ func (w *World) mode(p *Player) content.CombatMode {
 
 // ---- player attacks --------------------------------------------------------------
 
+// foe is what a player attacks: a monster or, with PvP (T5.2), a player.
+type foe struct {
+	m *Monster
+	p *Player
+}
+
+func (f foe) pos() world.Pos {
+	if f.p != nil {
+		return f.p.pos
+	}
+	return f.m.pos
+}
+
 func (w *World) playerFight(ctx *game.TickContext, p *Player) {
-	m := p.target
-	if m.pos.Z != p.pos.Z || !Sees(p.pos, m.pos) {
-		p.target = nil // out of view: the client got CreatureDisappear and drops it too
-		return
+	var f foe
+	if p.ptarget != nil {
+		if f.p = w.pvpFoe(ctx, p); f.p == nil {
+			return
+		}
+	} else {
+		m := p.target
+		if m.pos.Z != p.pos.Z || !Sees(p.pos, m.pos) {
+			p.target = nil // out of view: the client got CreatureDisappear and drops it too
+			return
+		}
+		f.m = m
 	}
 	if w.inProtection(p.pos) {
 		return
@@ -111,16 +137,16 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 	if wp := p.weapon; wp != nil && wp.Weapon != nil {
 		switch wp.Weapon.Type {
 		case WeaponWand:
-			w.wandFight(ctx, p, m)
+			w.wandFight(ctx, p, f)
 			return
 		case WeaponDistance:
-			w.distanceFight(ctx, p, m)
+			w.distanceFight(ctx, p, f)
 			return
 		}
 	}
-	if chebyshev(p.pos, m.pos) > 1 {
+	if chebyshev(p.pos, f.pos()) > 1 {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
-			if d, ok := w.chaseStep(p.pos, m.pos, false); ok {
+			if d, ok := w.chaseStep(p.pos, f.pos(), false); ok {
 				p.stopWalk()
 				p.queue = append(p.queue, d)
 			}
@@ -131,11 +157,23 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 		return
 	}
 	p.nextAttack = ctx.Tick + w.attackFor
-	// Every swing trains the weapon's skill, hit or miss (fists without a weapon).
+	// Every swing at a monster trains the weapon's skill, hit or miss (fists without a
+	// weapon). Hitting players trains nothing (T5.2): two friends cannot train on each other.
 	skill, attack := w.meleeSkill(p)
 	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.combatSkill(p, skill), 1), attack, p.level, w.mode(p).Attack)
+	w.physicalHit(ctx, p, f, maxHit, skill)
+}
+
+// physicalHit lands one physical hit of up to maxHit on f: a monster's armor and defense,
+// or a player's armor, shield and stance. A monster hit trains skill.
+func (w *World) physicalHit(ctx *game.TickContext, p *Player, f foe, maxHit int, skill string) {
+	if v := f.p; v != nil {
+		dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, 0, maxHit, true, w.playerDefense(v))
+		w.hurtPlayer(ctx, p, v, dmg, ElementPhysical, true)
+		return
+	}
 	w.train(p, skill, w.afk(ctx, p))
-	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target), ElementPhysical)
+	w.damageMonster(ctx, f.m, p, combat.HitMonster(ctx.Rand, maxHit, f.m.kind.target), ElementPhysical)
 }
 
 // distanceFight is playerFight with a distance weapon (T3.1): every attack round, within
@@ -143,9 +181,9 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 // from the ammo slot and shoots it. The hit is physical, like melee, with the distance
 // skill and attack = weapon + ammo; every shot trains distance, hit or miss. Without the
 // right ammo it does not shoot and tells the player once per round.
-func (w *World) distanceFight(ctx *game.TickContext, p *Player, m *Monster) {
+func (w *World) distanceFight(ctx *game.TickContext, p *Player, f foe) {
 	wp := p.weapon.Weapon
-	if !w.rangedReady(ctx, p, m, wp.Range) {
+	if !w.rangedReady(ctx, p, f.pos(), wp.Range) {
 		return
 	}
 	p.nextAttack = ctx.Tick + w.attackFor
@@ -156,11 +194,10 @@ func (w *World) distanceFight(ctx *game.TickContext, p *Player, m *Monster) {
 	}
 	attack := wp.Attack + ammo.def.Ammo.Attack
 	maxHit := combat.MaxHit(w.cfg.Balance.Combat, max(w.combatSkill(p, SkillDistance), 1), attack, p.level, w.mode(p).Attack)
-	w.train(p, SkillDistance, w.afk(ctx, p))
 	w.useUp(p, ammo)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}}) // capacity
-	w.projectile(p.pos, m.pos, ElementPhysical)
-	w.damageMonster(ctx, m, p, combat.HitMonster(ctx.Rand, maxHit, m.kind.target), ElementPhysical)
+	w.projectile(p.pos, f.pos(), ElementPhysical)
+	w.physicalHit(ctx, p, f, maxHit, SkillDistance)
 }
 
 // damageMonster applies one hit of player p, of element, to m.
@@ -266,10 +303,17 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 }
 
 func (w *World) damagePlayer(ctx *game.TickContext, p *Player, dmg int, element string) {
+	w.damagePlayerBy(ctx, p, dmg, element, nil)
+}
+
+// damagePlayerBy is damagePlayer by attacker (a player, T5.2) or by a monster or the
+// world (nil). A player's hit does not feed the bot detection's reaction to damage: in
+// PvP everyone heals fast.
+func (w *World) damagePlayerBy(ctx *game.TickContext, p *Player, dmg int, element string, attacker *Player) {
 	w.markFight(ctx, p)
 	dmg = min(dmg, p.health)
 	p.health -= dmg
-	if dmg > 0 {
+	if dmg > 0 && attacker == nil {
 		w.abHurt(ctx.Tick, p)
 	}
 	w.hitEvents(p.id, p.pos, dmg, healthPercent(p.health, p.maxHealth), element)

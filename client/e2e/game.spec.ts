@@ -2088,3 +2088,84 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   await lead.close();
   await mateP.close();
 });
+
+test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker gets a skull", async ({
+  browser,
+  playwright,
+}) => {
+  const hunter = await newGuardian(playwright, "Hunter");
+  const prey = await newGuardian(playwright, "Prey");
+  // Level 25 (172800 XP: over balance pvp.min_level 20), standing side by side inside the
+  // test island's no_pvp zone (x 1046-1051, y 1053-1059), west of the temple.
+  for (const [who, x] of [
+    [hunter, 1048],
+    [prey, 1049],
+  ] as const) {
+    execFileSync("psql", [
+      databaseUrl,
+      "-c",
+      `UPDATE characters SET level = 25, experience = 172800, health = 400,
+         pos_x = ${x}, pos_y = 1057, pos_z = 7 WHERE name = '${who.name}'`,
+    ]);
+  }
+  const errors: string[] = [];
+  async function enter(email: string): Promise<Page> {
+    const page = await browser.newPage();
+    await enterGame(page, email, hunter.password);
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    return page;
+  }
+  const hunterP = await enter(hunter.email);
+  const preyP = await enter(prey.email);
+
+  // The safe mode starts on; the hunter turns it off.
+  const safe = hunterP.getByTestId("safe-mode");
+  await expect(safe).toBeChecked();
+  await safe.uncheck();
+  await expect(hunterP.getByTestId("game-log")).toContainText("Modo seguro desactivado");
+
+  // In the no_pvp zone the server refuses the attack.
+  const battle = hunterP.getByTestId("battle-list");
+  await battle.getByRole("button", { name: prey.name }).click();
+  await expect(hunterP.getByTestId("game-log")).toContainText(
+    "Aquí no se puede pelear contra otros jugadores.",
+  );
+  await expect.poll(() => hunterP.evaluate(() => window.__rpgClient?.target())).toBeFalsy();
+  await shot(hunterP, "49-pvp-no-pvp-refused");
+
+  // Both walk three tiles south, out of the zone (y 1060).
+  for (const page of [hunterP, preyP]) {
+    const me = await self(page);
+    if (!me) throw new Error("no position");
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press("ArrowDown");
+      await arrived(page, me.x, me.y + i + 1);
+    }
+  }
+
+  // Now the attack goes through and the hunter is marked as an aggressor for everyone.
+  await battle.getByRole("button", { name: prey.name }).click();
+  const preyBattle = preyP.getByTestId("battle-list");
+  await expect(
+    preyBattle.getByRole("button", { name: hunter.name }).locator('[data-skull="aggressor"]'),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(preyBattle.locator('[data-skull="aggressor"]')).toHaveAttribute("title", "agresor");
+  // The prey, in safe mode, may defend itself against a marked attacker.
+  await preyBattle.getByRole("button", { name: hunter.name }).click();
+  await expect.poll(() => preyP.evaluate(() => window.__rpgClient?.target())).toBeTruthy();
+  // The attacker cannot log out in the middle of the fight.
+  await hunterP.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(hunterP.getByTestId("game-log")).toContainText(
+    "Peleaste contra un jugador hace poco: todavía no puedes salir del juego.",
+  );
+  await expect(hunterP.getByTestId("battle-list")).toBeVisible();
+  await shot(preyP, "50-pvp-aggressor-skull");
+  await preyP.locator(".side").screenshot({ path: join(shots, "51-pvp-battle-list.png") });
+
+  expect(errors).toEqual([]);
+  await hunterP.close();
+  await preyP.close();
+});

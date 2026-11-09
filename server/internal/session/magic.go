@@ -277,9 +277,38 @@ func (w *World) spellTarget(p *Player, target *pb.ActionTarget) *Monster {
 	return p.target
 }
 
-// boltSpell hits one monster at up to d.Range tiles in line of sight.
+// spellFoe is spellTarget for damage spells (T5.2): the monster or, with PvP, the player
+// of target, or p's current target (monster or player).
+func (w *World) spellFoe(p *Player, target *pb.ActionTarget) foe {
+	if w.pvpOn {
+		switch t := target.GetTarget().(type) {
+		case *pb.ActionTarget_CreatureId:
+			if v := w.playerByID(t.CreatureId); v != nil && p.Knows(v.id) {
+				return foe{p: v}
+			}
+		case *pb.ActionTarget_Pos:
+			if pos, ok := posFromMsg(t.Pos); ok && w.monsterAt(pos) == nil {
+				if v := w.creatureAt(pos); v != nil && p.Knows(v.id) {
+					return foe{p: v}
+				}
+			}
+		case nil:
+			if p.ptarget != nil {
+				return foe{p: p.ptarget}
+			}
+		}
+	}
+	return foe{m: w.spellTarget(p, target)}
+}
+
+// boltSpell hits one monster (or, with PvP, one player: T5.2) at up to d.Range tiles in
+// line of sight.
 func (w *World) boltSpell(ctx *game.TickContext, p *Player, d *content.SpellDamage, target *pb.ActionTarget) bool {
-	m := w.spellTarget(p, target)
+	f := w.spellFoe(p, target)
+	if f.p != nil {
+		return w.boltPlayer(ctx, p, f.p, d)
+	}
+	m := f.m
 	switch {
 	case m == nil:
 		p.emit(systemMsg(msgNoTarget))
@@ -299,6 +328,35 @@ func (w *World) boltSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 	w.damageMonster(ctx, m, p, dmg, d.Element)
 	w.spellCondition(ctx, m, p, d, dmg)
 	return true
+}
+
+// boltPlayer is boltSpell on the player v (T5.2): the PvP rules, then the checks of a
+// bolt. Players have no resistances; the condition of the spell reaches them too.
+func (w *World) boltPlayer(ctx *game.TickContext, p, v *Player, d *content.SpellDamage) bool {
+	if key, n := w.canAttack(ctx.Tick, p, v); key != "" {
+		p.emit(refuseMsg(key, n))
+		return false
+	}
+	switch {
+	case v.pos.Z != p.pos.Z || chebyshev(p.pos, v.pos) > d.Range:
+		p.emit(systemMsg(msgOutOfRange))
+		return false
+	case !w.m.LineOfSight(p.pos, v.pos):
+		p.emit(systemMsg(msgNoSight))
+		return false
+	}
+	w.projectile(p.pos, v.pos, d.Element)
+	dmg := w.scaled(ctx, d.Scaling, p)
+	w.hurtPlayer(ctx, p, v, dmg, d.Element, true)
+	w.playerSpellCondition(ctx, v, p, d, dmg)
+	return true
+}
+
+// playerSpellCondition puts d's condition on v, if the spell hurt it and it is alive.
+func (w *World) playerSpellCondition(ctx *game.TickContext, v, p *Player, d *content.SpellDamage, dmg int) {
+	if d.Condition != nil && dmg > 0 && w.byClient[v.client] == v && v.health > 0 {
+		w.applyCondition(ctx, holder{p: v}, d.Condition, p.id)
+	}
 }
 
 // spellCondition puts d's condition (T3.2) on m, if the spell hurt it and it is alive.
@@ -350,7 +408,35 @@ func (w *World) areaSpell(ctx *game.TickContext, p *Player, d *content.SpellDama
 		w.damageMonster(ctx, m, p, dmg, d.Element)
 		w.spellCondition(ctx, m, p, d, dmg)
 	}
+	if w.pvpOn {
+		w.areaPlayers(ctx, p, d)
+	}
 	return true
+}
+
+// areaPlayers is the PvP part of an area spell (T5.2): every player in the circle, in
+// line of sight and outside protection zones, that p could attack (the safe mode skips
+// unmarked players) and that is not in p's party or guild.
+func (w *World) areaPlayers(ctx *game.TickContext, p *Player, d *content.SpellDamage) {
+	r := d.Radius
+	hit := w.pvpBuf[:0]
+	w.eachInRect(int(p.pos.X)-r, int(p.pos.Y)-r, int(p.pos.X)+r, int(p.pos.Y)+r, p.pos.Z, func(o *Player) {
+		if o != p && o.pos.Z == p.pos.Z && inArea(int(o.pos.X)-int(p.pos.X), int(o.pos.Y)-int(p.pos.Y), r) &&
+			w.areaHits(ctx.Tick, p, o) && w.m.LineOfSight(p.pos, o.pos) {
+			hit = append(hit, o)
+		}
+	})
+	for _, o := range hit {
+		if w.byClient[o.client] != o || o.pos.Z != p.pos.Z ||
+			!inArea(int(o.pos.X)-int(p.pos.X), int(o.pos.Y)-int(p.pos.Y), r) {
+			continue // left the world or died (and woke up at a temple) during this spell
+		}
+		dmg := w.scaled(ctx, d.Scaling, p)
+		w.hurtPlayer(ctx, p, o, dmg, d.Element, true)
+		w.playerSpellCondition(ctx, o, p, d, dmg)
+	}
+	clear(hit)
+	w.pvpBuf = hit[:0]
 }
 
 // heal gives p up to amount health, with its effect and floating text.
@@ -602,9 +688,9 @@ func (w *World) buffEffect(pos world.Pos) {
 
 // wandFight is playerFight with a wand: every attack round it shoots its target at up
 // to weapon.range tiles in line of sight. Chasing stops once the target is in range.
-func (w *World) wandFight(ctx *game.TickContext, p *Player, m *Monster) {
+func (w *World) wandFight(ctx *game.TickContext, p *Player, f foe) {
 	wp := p.weapon.Weapon
-	if !w.rangedReady(ctx, p, m, wp.Range) {
+	if !w.rangedReady(ctx, p, f.pos(), wp.Range) {
 		return
 	}
 	p.nextAttack = ctx.Tick + w.attackFor
@@ -612,22 +698,26 @@ func (w *World) wandFight(ctx *game.TickContext, p *Player, m *Monster) {
 	if element == "" {
 		element = ElementPhysical
 	}
-	w.projectile(p.pos, m.pos, element)
-	dmg := combat.Resist(combat.WandHit(ctx.Rand, wp.Attack, w.cfg.Balance.Combat.WandMinFactor), m.kind.def.Resistances[element])
-	w.damageMonster(ctx, m, p, dmg, element)
+	w.projectile(p.pos, f.pos(), element)
+	dmg := combat.WandHit(ctx.Rand, wp.Attack, w.cfg.Balance.Combat.WandMinFactor)
+	if f.p != nil {
+		w.hurtPlayer(ctx, p, f.p, dmg, element, true) // T5.2: players have no resistances
+		return
+	}
+	w.damageMonster(ctx, f.m, p, combat.Resist(dmg, f.m.kind.def.Resistances[element]), element)
 }
 
-// rangedReady reports whether p can shoot m this tick: within rng tiles (at least 1), in
-// line of sight and with the attack round due. Out of range or sight it chases (if p
-// chases) and reports false.
-func (w *World) rangedReady(ctx *game.TickContext, p *Player, m *Monster, rng int) bool {
-	inRange := chebyshev(p.pos, m.pos) <= max(rng, 1)
+// rangedReady reports whether p can shoot at pos this tick: within rng tiles (at least
+// 1), in line of sight and with the attack round due. Out of range or sight it chases
+// (if p chases) and reports false.
+func (w *World) rangedReady(ctx *game.TickContext, p *Player, pos world.Pos, rng int) bool {
+	inRange := chebyshev(p.pos, pos) <= max(rng, 1)
 	if inRange && ctx.Tick < p.nextAttack {
 		return false
 	}
-	if !inRange || !w.m.LineOfSight(p.pos, m.pos) {
+	if !inRange || !w.m.LineOfSight(p.pos, pos) {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
-			if d, ok := w.chaseStep(p.pos, m.pos, false); ok {
+			if d, ok := w.chaseStep(p.pos, pos, false); ok {
 				p.stopWalk()
 				p.queue = append(p.queue, d)
 			}

@@ -2,6 +2,7 @@ package session
 
 import (
 	"sort"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -127,6 +128,24 @@ type Player struct {
 	gm          *guildMember
 	guildQueued bool
 
+	// PvP (T5.2, pvp.go): the player p attacks (instead of target), safe mode, the
+	// marks (mark is murderer or outlaw until markUntil; aggressor until aggrUntil), the
+	// skull its observers last heard, whether p is in World.skulled, its kill counter and
+	// unjustified kills (oldest first), the recent player hits on p, and the locks: no
+	// logout or protection zone until lockUntil (attacker), no logout until fightUntil.
+	ptarget    *Player
+	safe       bool
+	mark       pb.Skull
+	markUntil  time.Time
+	aggrUntil  time.Time
+	skull      pb.Skull
+	skullList  bool
+	pvpKills   int
+	unjust     []time.Time
+	hitBy      []pvpHit
+	lockUntil  game.Tick
+	fightUntil game.Tick
+
 	// Travel (T3.5): the last tick p fought (attacked, hurt or hitting a monster; 0 =
 	// never), which blocks sailing for balance travel.combat_block_ms.
 	fightAt game.Tick
@@ -175,6 +194,9 @@ func (p *Player) Experience() int64 { return p.experience }
 
 // Target returns the creature id the player attacks, or 0.
 func (p *Player) Target() uint32 {
+	if p.ptarget != nil {
+		return p.ptarget.id
+	}
 	if p.target == nil {
 		return 0
 	}
@@ -249,6 +271,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		Inventory:   p.inventoryStates(),
 		Storage:     p.storage.Values(),
 		Conditions:  w.conditionStates(p),
+		PvP:         w.pvpState(p),
 		Final:       final,
 	}
 }
@@ -336,6 +359,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Inventory, c.InventoryLoaded = s.Inventory, true
 		c.Storage = s.Storage
 		c.Conditions = s.Conditions
+		c.PvP = s.PvP
 		seq = s.Seq
 	}
 
@@ -360,6 +384,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		dir:        world.South,
 		saveSeq:    seq,
 		stance:     pb.FightStance_FIGHT_STANCE_BALANCED,
+		safe:       true, // T5.2: until the client says otherwise
 	}
 	p.health = min(max(c.Health, 0), p.maxHealth)
 	if p.health == 0 {
@@ -370,6 +395,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.loadSkills(p, c.Skills)
 	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
 	p.storage = quest.NewLog(c.Storage)
+	w.loadPvP(ctx, p, c.PvP) // before anyone is told about p (Creature.skull)
 	if w.guildOn {
 		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
 	}
@@ -413,6 +439,7 @@ func (w *World) state(p *Player, c Character) Character {
 	c.Inventory, c.InventoryLoaded = p.inventoryStates(), true
 	c.Storage = p.storage.Values()
 	c.Conditions = w.conditionStates(p)
+	c.PvP = w.pvpState(p)
 	c.Pos, c.HasPos = p.pos, true
 	return c
 }
@@ -448,6 +475,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	ctx.Sched.Cancel(p.autosave)
 	ctx.Sched.Cancel(p.regen)
 	w.forgetContainers(p)
+	w.pvpLeftWorld(p)
 	for _, m := range w.monsters {
 		if m.target == p {
 			m.target = nil // do not keep the gone player alive from a sleeping monster
@@ -603,6 +631,7 @@ func (w *World) creatureMsg(p *Player) *pb.Creature {
 		HealthPercent: uint32(p.health * 100 / max(p.maxHealth, 1)),
 		Speed:         uint32(p.speed),
 		Guild:         guildName(p),
+		Skull:         p.skull,
 	}
 }
 

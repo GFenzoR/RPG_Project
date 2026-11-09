@@ -6,8 +6,18 @@ import {
   GuildPendingInviteSchema,
   GuildRank,
   GuildUpdateSchema,
+  GuildWarSchema,
+  GuildWarState,
 } from "@rpg/protocol";
-import { GuildState, guildPowers, hoursLeft, memberActions, rankKey } from "./guild.ts";
+import {
+  GuildState,
+  guildPowers,
+  hoursLeft,
+  memberActions,
+  rankKey,
+  warActions,
+  warLine,
+} from "./guild.ts";
 
 const L = GuildRank.LEADER;
 const V = GuildRank.VICE;
@@ -95,5 +105,60 @@ describe("guild permissions", () => {
     expect(rankKey(GuildRank.UNSPECIFIED)).toBe("client.guild.rank.member");
     expect(hoursLeft(3_600_001, 0)).toBe(2);
     expect(hoursLeft(10, 0)).toBe(1);
+  });
+});
+
+describe("guild wars (T5.2)", () => {
+  it("keeps the wars of an update with their deadline", () => {
+    const s = new GuildState();
+    s.update(
+      create(GuildUpdateSchema, {
+        guildId: 1n,
+        name: "Alpha",
+        rank: L,
+        wars: [
+          create(GuildWarSchema, {
+            warId: 3n,
+            enemyName: "Beta",
+            state: GuildWarState.ACTIVE,
+            ourKills: 2,
+            theirKills: 5,
+            killLimit: 30,
+            endsMs: 7_200_000,
+          }),
+          create(GuildWarSchema, {
+            warId: 4n,
+            enemyName: "Gamma",
+            state: GuildWarState.PENDING,
+            declaredByUs: true,
+            endsMs: 1_000,
+          }),
+        ],
+      }),
+      100,
+    );
+    const wars = s.view(100)?.wars ?? [];
+    const active = wars[0];
+    const pending = wars[1];
+    if (!active || !pending) throw new Error("wars missing");
+    expect(active).toMatchObject({
+      id: 3n,
+      enemy: "Beta",
+      active: true,
+      ours: 2,
+      theirs: 5,
+      until: 7_200_100,
+    });
+    expect(warLine(active, 100)).toEqual({
+      key: "client.guild.war_active",
+      params: { guild: "Beta", ours: 2, theirs: 5, limit: 30, hours: 2 },
+    });
+    expect(warLine(pending, 100).key).toBe("client.guild.war_pending_ours");
+    expect(warActions(L, pending)).toEqual({ accept: false, decline: false, surrender: false });
+    expect(warActions(L, active)).toEqual({ accept: false, decline: false, surrender: true });
+    expect(warActions(V, active).surrender).toBe(false);
+    const theirs = { ...pending, declaredByUs: false };
+    expect(warActions(L, theirs)).toEqual({ accept: true, decline: true, surrender: false });
+    expect(warActions(M, theirs).accept).toBe(false);
   });
 });

@@ -9,3 +9,10 @@
   floors: [7]
   rects:
     - { x: 1055, y: 1079, w: 3, h: 6 }
+
+- id: testisle_no_pvp
+  type: no_pvp
+  floors: [7]
+  rects:
+    - { x: 1046, y: 1053, w: 6, h: 7 }
+  notes: "West of the temple: the PvP E2E checks that an attack here is refused (T5.2)."

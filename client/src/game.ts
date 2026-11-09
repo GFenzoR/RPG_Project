@@ -11,6 +11,7 @@ import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
 import { MovementKeys, typingInField } from "./input/keyboard.ts";
 import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
+import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
@@ -74,6 +75,8 @@ export interface GameUi {
   invitations: InvitationView[];
   /** The guild and the invitations to one (T5.1). */
   guild: GuildView | undefined;
+  /** The safe mode switch (T5.2). */
+  safeMode: boolean;
   guildInvitations: GuildInvitationView[];
   /** The player's own name (to tell itself apart in the guild's member list). */
   selfName: string;
@@ -158,10 +161,13 @@ export class Game {
   private hotkeys: (string | undefined)[];
   /** The last tool used on a tile and that tile: which gather sound its result makes. */
   private toolAt: { use: string; pos: Pos } | undefined;
+  /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
+  private safe = true;
 
   constructor(opts: GameOptions) {
     this.opts = opts;
     this.hotkeys = loadHotkeys(opts.content.spells, opts.vocation, opts.storage);
+    this.safe = loadSafeMode(opts.storage);
     this.world = new WorldState(opts.content);
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
@@ -173,6 +179,10 @@ export class Game {
         for (const e of batch.events) {
           if (opts.audio) cues.push(...cuesOf(e.message, this.cueContext()));
           this.world.apply(e.message, now);
+          if (e.message.case === "welcome" && !this.safe) {
+            // T5.2: the server starts every login in safe mode.
+            this.conn.send({ case: "setSafeMode", value: { enabled: false } });
+          }
         }
         this.sound(cues);
         if (this.world.self && !this.canvas && !this.starting) void this.startCanvas();
@@ -207,6 +217,18 @@ export class Game {
 
   setFightMode(stance: FightStance, chase: boolean): void {
     this.conn.send({ case: "setFightMode", value: { stance, chase } });
+  }
+
+  /** The safe mode (T5.2): kept in the browser and sent to the server, which enforces it. */
+  get safeMode(): boolean {
+    return this.safe;
+  }
+
+  setSafeMode(on: boolean): void {
+    this.safe = on;
+    saveSafeMode(on, this.opts.storage);
+    this.conn.send({ case: "setSafeMode", value: { enabled: on } });
+    this.publish();
   }
 
   // ---- NPCs (T1.10): the server checks distance, conditions and costs -----------------
@@ -308,6 +330,11 @@ export class Game {
   /** Sends a GuildCommand: `name` is a character or the guild (create, disband). */
   guild(action: GuildAction, name = "", text = "", guildId = 0n): void {
     this.conn.send({ case: "guildCommand", value: { action, name, text, guildId } });
+  }
+
+  /** A war action (T5.2): declare on the guild `name`, or answer/surrender war `warId`. */
+  guildWar(action: GuildAction, name = "", warId = 0n): void {
+    this.conn.send({ case: "guildCommand", value: { action, name, warId } });
   }
 
   /** Accepts or declines the invitation of guildId. */
@@ -562,6 +589,7 @@ export class Game {
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
       guild: w.guild.view(performance.now()),
+      safeMode: this.safe,
       guildInvitations: [...w.guild.invitations(performance.now())],
       selfName: w.self?.name ?? "",
       selfId: w.selfId,

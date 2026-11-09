@@ -29,7 +29,7 @@ func guildBalance() content.Guild {
 		ReservedParts: []string{"admin"}, ReservedWords: []string{"gm"}}
 }
 
-func newGuildHarness(t *testing.T, data *session.GuildData) *guildHarness {
+func newGuildHarness(t *testing.T, data *session.GuildData, opts ...option) *guildHarness {
 	t.Helper()
 	g := &guildHarness{}
 	items := testItems()
@@ -47,6 +47,9 @@ func newGuildHarness(t *testing.T, data *session.GuildData) *guildHarness {
 		c.Admin = func(j session.AdminJob) bool {
 			g.jobs = append(g.jobs, j)
 			return true
+		}
+		for _, o := range opts {
+			o(c)
 		}
 	})
 	return g

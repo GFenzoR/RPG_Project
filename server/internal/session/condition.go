@@ -210,9 +210,17 @@ func (w *World) conditionDue(ctx *game.TickContext, h holder, c *condition) {
 func (w *World) conditionHit(ctx *game.TickContext, h holder, c *condition) {
 	el := c.def.Element
 	if p := h.p; p != nil {
-		if !w.inProtection(p.pos) {
-			w.damagePlayer(ctx, p, c.damage, el)
+		if w.inProtection(p.pos) {
+			return
 		}
+		if a := w.pvpSource(c.source, p); a != nil {
+			// T5.2: a player's condition hurts only where that player could hurt p now.
+			if key, _ := w.pvpPlace(a, p); key == "" {
+				w.hurtPlayer(ctx, a, p, c.damage, el, false)
+			}
+			return
+		}
+		w.damagePlayer(ctx, p, c.damage, el)
 		return
 	}
 	m := h.m

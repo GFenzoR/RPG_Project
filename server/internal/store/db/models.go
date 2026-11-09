@@ -94,6 +94,7 @@ type Character struct {
 	LastLoginAt  pgtype.Timestamptz
 	LastSaveAt   pgtype.Timestamptz
 	Conditions   []byte
+	PvpKills     int32
 }
 
 type CharacterSkill struct {
@@ -132,8 +133,9 @@ type Guild struct {
 }
 
 type GuildIDHigh struct {
-	One  bool
-	High int64
+	One     bool
+	High    int64
+	WarHigh int64
 }
 
 type GuildInvite struct {
@@ -151,13 +153,21 @@ type GuildMember struct {
 	JoinedAt    pgtype.Timestamptz
 }
 
-// T5.2 (PvP): prepared by T5.1, not used yet
+// Guild wars (T5.2): written by the game loop through the admin goroutine
 type GuildWar struct {
 	ID         int64
 	GuildID    int64
 	EnemyID    int64
 	DeclaredAt pgtype.Timestamptz
 	EndedAt    pgtype.Timestamptz
+	State      int16
+	StartedAt  pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+	KillLimit  int32
+	GuildKills int32
+	EnemyKills int32
+	EndReason  int16
+	WinnerID   pgtype.Int8
 }
 
 type InventoryItem struct {
@@ -235,6 +245,11 @@ type PlayerReport struct {
 	ClosedBy            pgtype.Int8
 	ClosedByName        pgtype.Text
 	Resolution          pgtype.Text
+}
+
+type PvpUnjustKill struct {
+	CharacterID int64
+	KilledAt    pgtype.Timestamptz
 }
 
 type QuestState struct {

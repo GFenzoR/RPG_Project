@@ -12,7 +12,7 @@ import type { Message as Message$1 } from "@bufbuild/protobuf";
  * Describes the file game/v1/server.proto.
  */
 export const file_game_v1_server: GenFile = /*@__PURE__*/
-  fileDesc("ChRnYW1lL3YxL3NlcnZlci5wcm90bxIHZ2FtZS52MSJDCgtTZXJ2ZXJCYXRjaBIMCgR0aWNrGAEgASgEEiYKBmV2ZW50cxgCIAMoCzIWLmdhbWUudjEuU2VydmVyTWVzc2FnZSLdDQoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASLQoNZnVsbF9tYXBfdmlldxgCIAEoCzIULmdhbWUudjEuRnVsbE1hcFZpZXdIABImCgltYXBfc2xpY2UYAyABKAsyES5nYW1lLnYxLk1hcFNsaWNlSAASKgoLdGlsZV91cGRhdGUYBCABKAsyEy5nYW1lLnYxLlRpbGVVcGRhdGVIABIyCg9jcmVhdHVyZV9hcHBlYXIYBSABKAsyFy5nYW1lLnYxLkNyZWF0dXJlQXBwZWFySAASOAoSY3JlYXR1cmVfZGlzYXBwZWFyGAYgASgLMhouZ2FtZS52MS5DcmVhdHVyZURpc2FwcGVhckgAEi4KDWNyZWF0dXJlX21vdmUYByABKAsyFS5nYW1lLnYxLkNyZWF0dXJlTW92ZUgAEi4KDWNyZWF0dXJlX3R1cm4YCCABKAsyFS5nYW1lLnYxLkNyZWF0dXJlVHVybkgAEjIKD2NyZWF0dXJlX2hlYWx0aBgJIAEoCzIXLmdhbWUudjEuQ3JlYXR1cmVIZWFsdGhIABIyCg9jcmVhdHVyZV9vdXRmaXQYCiABKAsyFy5nYW1lLnYxLkNyZWF0dXJlT3V0Zml0SAASMAoOY3JlYXR1cmVfc3BlZWQYCyABKAsyFi5nYW1lLnYxLkNyZWF0dXJlU3BlZWRIABIhCgZlZmZlY3QYDCABKAsyDy5nYW1lLnYxLkVmZmVjdEgAEikKCnByb2plY3RpbGUYDSABKAsyEy5nYW1lLnYxLlByb2plY3RpbGVIABIuCg1mbG9hdGluZ190ZXh0GA4gASgLMhUuZ2FtZS52MS5GbG9hdGluZ1RleHRIABIsCgxwbGF5ZXJfc3RhdHMYDyABKAsyFC5nYW1lLnYxLlBsYXllclN0YXRzSAASLgoNcGxheWVyX3NraWxscxgQIAEoCzIVLmdhbWUudjEuUGxheWVyU2tpbGxzSAASJwoJaW52ZW50b3J5GBEgASgLMhIuZ2FtZS52MS5JbnZlbnRvcnlIABIwCg5jb250YWluZXJfb3BlbhgSIAEoCzIWLmdhbWUudjEuQ29udGFpbmVyT3BlbkgAEjQKEGNvbnRhaW5lcl91cGRhdGUYEyABKAsyGC5nYW1lLnYxLkNvbnRhaW5lclVwZGF0ZUgAEjIKD2NvbnRhaW5lcl9jbG9zZRgUIAEoCzIXLmdhbWUudjEuQ29udGFpbmVyQ2xvc2VIABIoCgxjaGF0X21lc3NhZ2UYFSABKAsyEC5nYW1lLnYxLk1lc3NhZ2VIABIqCgtkaWFsb2dfb3BlbhgWIAEoCzITLmdhbWUudjEuRGlhbG9nT3BlbkgAEiwKDGRpYWxvZ19jbG9zZRgXIAEoCzIULmdhbWUudjEuRGlhbG9nQ2xvc2VIABImCglzaG9wX29wZW4YGCABKAsyES5nYW1lLnYxLlNob3BPcGVuSAASLAoMdHJhZGVfdXBkYXRlGBkgASgLMhQuZ2FtZS52MS5UcmFkZVVwZGF0ZUgAEi4KDXdhbGtfcmVqZWN0ZWQYGiABKAsyFS5nYW1lLnYxLldhbGtSZWplY3RlZEgAEh0KBHBvbmcYGyABKAsyDS5nYW1lLnYxLlBvbmdIABIpCgpkaXNjb25uZWN0GBwgASgLMhMuZ2FtZS52MS5EaXNjb25uZWN0SAASMAoOc3BlbGxfY29vbGRvd24YHSABKAsyFi5nYW1lLnYxLlNwZWxsQ29vbGRvd25IABI2ChFwbGF5ZXJfY29uZGl0aW9ucxgeIAEoCzIZLmdhbWUudjEuUGxheWVyQ29uZGl0aW9uc0gAEiwKDHBhcnR5X3VwZGF0ZRgfIAEoCzIULmdhbWUudjEuUGFydHlVcGRhdGVIABI0ChBwYXJ0eV9pbnZpdGF0aW9uGCAgASgLMhguZ2FtZS52MS5QYXJ0eUludml0YXRpb25IABIsCgxzdGF0aW9uX29wZW4YISABKAsyFC5nYW1lLnYxLlN0YXRpb25PcGVuSAASMAoOcHJlc2VuY2VfY2hlY2sYIiABKAsyFi5nYW1lLnYxLlByZXNlbmNlQ2hlY2tIABIuCg10dXRvcmlhbF9zdGVwGCMgASgLMhUuZ2FtZS52MS5UdXRvcmlhbFN0ZXBIABIsCgxndWlsZF91cGRhdGUYJCABKAsyFC5nYW1lLnYxLkd1aWxkVXBkYXRlSAASMAoOY3JlYXR1cmVfZ3VpbGQYJSABKAsyFi5nYW1lLnYxLkNyZWF0dXJlR3VpbGRIAEIJCgdtZXNzYWdlIr4BCgxUdXRvcmlhbFN0ZXASJQoFc3RhdGUYASABKA4yFi5nYW1lLnYxLlR1dG9yaWFsU3RhdGUSDwoHc3RlcF9pZBgCIAEoCRINCgVpbmRleBgDIAEoDRINCgV0b3RhbBgEIAEoDRIkCgR0ZXh0GAUgASgLMhYuZ2FtZS52MS5Mb2NhbGl6ZWRUZXh0EhEKCWhpZ2hsaWdodBgGIAEoCRIQCghwcm9ncmVzcxgHIAEoDRINCgVjb3VudBgIIAEoDSKHAQoNUHJlc2VuY2VDaGVjaxIQCghjaGVja19pZBgBIAEoDRIoCghxdWVzdGlvbhgCIAEoCzIWLmdhbWUudjEuTG9jYWxpemVkVGV4dBImCgdvcHRpb25zGAMgAygLMhUuZ2FtZS52MS5EaWFsb2dPcHRpb24SEgoKdGltZW91dF9tcxgEIAEoDSJECgdXZWxjb21lEhMKC2NyZWF0dXJlX2lkGAEgASgNEhMKC3NlcnZlcl90aW1lGAIgASgEEg8KB3RpY2tfbXMYAyABKA0iKQoEVGlsZRIhCgVpdGVtcxgBIAMoCzISLmdhbWUudjEuSXRlbVN0YWNrIiQKCE1hcEZsb29yEgkKAXoYASABKA0SDQoFdGlsZXMYAiADKBEipwEKB01hcEFyZWESCQoBeBgBIAEoDRIJCgF5GAIgASgNEg0KBXdpZHRoGAMgASgNEg4KBmhlaWdodBgEIAEoDRIeCgdwYWxldHRlGAUgAygLMg0uZ2FtZS52MS5UaWxlEiEKBmZsb29ycxgGIAMoCzIRLmdhbWUudjEuTWFwRmxvb3ISJAoJY3JlYXR1cmVzGAcgAygLMhEuZ2FtZS52MS5DcmVhdHVyZSItCgtGdWxsTWFwVmlldxIeCgRhcmVhGAEgASgLMhAuZ2FtZS52MS5NYXBBcmVhIioKCE1hcFNsaWNlEh4KBGFyZWEYASABKAsyEC5nYW1lLnYxLk1hcEFyZWEiSQoKVGlsZVVwZGF0ZRIeCgNwb3MYASABKAsyES5nYW1lLnYxLlBvc2l0aW9uEhsKBHRpbGUYAiABKAsyDS5nYW1lLnYxLlRpbGUiaQoGT3V0Zml0Eg8KB2xvb2tfaWQYASABKA0SEgoKaGVhZF9jb2xvchgCIAEoDRISCgpib2R5X2NvbG9yGAMgASgNEhIKCmxlZ3NfY29sb3IYBCABKA0SEgoKZmVldF9jb2xvchgFIAEoDSL1AQoIQ3JlYXR1cmUSCgoCaWQYASABKA0SIwoEa2luZBgCIAEoDjIVLmdhbWUudjEuQ3JlYXR1cmVLaW5kEgwKBG5hbWUYAyABKAkSEgoKY29udGVudF9pZBgEIAEoCRIeCgNwb3MYBSABKAsyES5nYW1lLnYxLlBvc2l0aW9uEh8KA2RpchgGIAEoDjISLmdhbWUudjEuRGlyZWN0aW9uEhYKDmhlYWx0aF9wZXJjZW50GAcgASgNEh8KBm91dGZpdBgIIAEoCzIPLmdhbWUudjEuT3V0Zml0Eg0KBXNwZWVkGAkgASgNEg0KBWd1aWxkGAogASgJIjUKDkNyZWF0dXJlQXBwZWFyEiMKCGNyZWF0dXJlGAEgASgLMhEuZ2FtZS52MS5DcmVhdHVyZSIfChFDcmVhdHVyZURpc2FwcGVhchIKCgJpZBgBIAEoDSJvCgxDcmVhdHVyZU1vdmUSCgoCaWQYASABKA0SHwoEZnJvbRgCIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SHQoCdG8YAyABKAsyES5nYW1lLnYxLlBvc2l0aW9uEhMKC2R1cmF0aW9uX21zGAQgASgNIjsKDENyZWF0dXJlVHVybhIKCgJpZBgBIAEoDRIfCgNkaXIYAiABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiI0Cg5DcmVhdHVyZUhlYWx0aBIKCgJpZBgBIAEoDRIWCg5oZWFsdGhfcGVyY2VudBgCIAEoDSI9Cg5DcmVhdHVyZU91dGZpdBIKCgJpZBgBIAEoDRIfCgZvdXRmaXQYAiABKAsyDy5nYW1lLnYxLk91dGZpdCIqCg1DcmVhdHVyZVNwZWVkEgoKAmlkGAEgASgNEg0KBXNwZWVkGAIgASgNIjsKBkVmZmVjdBIeCgNwb3MYASABKAsyES5nYW1lLnYxLlBvc2l0aW9uEhEKCWVmZmVjdF9pZBgCIAEoDSJjCgpQcm9qZWN0aWxlEh8KBGZyb20YASABKAsyES5nYW1lLnYxLlBvc2l0aW9uEh0KAnRvGAIgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbhIVCg1wcm9qZWN0aWxlX2lkGAMgASgNIkAKEFBsYXllckNvbmRpdGlvbnMSLAoKY29uZGl0aW9ucxgBIAMoCzIYLmdhbWUudjEuQWN0aXZlQ29uZGl0aW9uIkwKD0FjdGl2ZUNvbmRpdGlvbhIUCgxjb25kaXRpb25faWQYASABKAkSFAoMcmVtYWluaW5nX21zGAIgASgNEg0KBXRpY2tzGAMgASgNImAKDVNwZWxsQ29vbGRvd24SEAoIc3BlbGxfaWQYASABKAkSEwoLY29vbGRvd25fbXMYAiABKA0SDQoFZ3JvdXAYAyABKAkSGQoRZ3JvdXBfY29vbGRvd25fbXMYBCABKA0iZwoMRmxvYXRpbmdUZXh0Eh4KA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SJwoEa2luZBgCIAEoDjIZLmdhbWUudjEuRmxvYXRpbmdUZXh0S2luZBIOCgZhbW91bnQYAyABKAQi0AEKC1BsYXllclN0YXRzEg4KBmhlYWx0aBgBIAEoDRISCgptYXhfaGVhbHRoGAIgASgNEgwKBG1hbmEYAyABKA0SEAoIbWF4X21hbmEYBCABKA0SDQoFbGV2ZWwYBSABKA0SEgoKZXhwZXJpZW5jZRgGIAEoBBIVCg1sZXZlbF9wZXJjZW50GAcgASgNEhAKCGNhcGFjaXR5GAggASgNEhQKDG1heF9jYXBhY2l0eRgJIAEoDRINCgVzcGVlZBgKIAEoDRIMCgRzb3VsGAsgASgNIkEKDVNraWxsUHJvZ3Jlc3MSEAoIc2tpbGxfaWQYASABKAkSDQoFbGV2ZWwYAiABKA0SDwoHcGVyY2VudBgDIAEoDSI2CgxQbGF5ZXJTa2lsbHMSJgoGc2tpbGxzGAEgAygLMhYuZ2FtZS52MS5Ta2lsbFByb2dyZXNzIlYKDEVxdWlwcGVkSXRlbRIkCgRzbG90GAEgASgOMhYuZ2FtZS52MS5FcXVpcG1lbnRTbG90EiAKBGl0ZW0YAiABKAsyEi5nYW1lLnYxLkl0ZW1TdGFjayIxCglJbnZlbnRvcnkSJAoFc2xvdHMYASADKAsyFS5nYW1lLnYxLkVxdWlwcGVkSXRlbSJ/Cg1Db250YWluZXJPcGVuEhQKDGNvbnRhaW5lcl9pZBgBIAEoDRIPCgdpdGVtX2lkGAIgASgNEhAKCGNhcGFjaXR5GAMgASgNEiEKBWl0ZW1zGAQgAygLMhIuZ2FtZS52MS5JdGVtU3RhY2sSEgoKaGFzX3BhcmVudBgFIAEoCCJKCg9Db250YWluZXJVcGRhdGUSFAoMY29udGFpbmVyX2lkGAEgASgNEiEKBWl0ZW1zGAIgAygLMhIuZ2FtZS52MS5JdGVtU3RhY2siJgoOQ29udGFpbmVyQ2xvc2USFAoMY29udGFpbmVyX2lkGAEgASgNItgBCgdNZXNzYWdlEiIKBGtpbmQYASABKA4yFC5nYW1lLnYxLk1lc3NhZ2VLaW5kEhIKCnNwZWFrZXJfaWQYAiABKA0SFAoMc3BlYWtlcl9uYW1lGAMgASgJEhoKEnNwZWFrZXJfY29udGVudF9pZBgEIAEoCRIeCgNwb3MYBSABKAsyES5nYW1lLnYxLlBvc2l0aW9uEg4KBHRleHQYBiABKAlIABIrCglsb2NhbGl6ZWQYByABKAsyFi5nYW1lLnYxLkxvY2FsaXplZFRleHRIAEIGCgRib2R5IkcKDERpYWxvZ09wdGlvbhIRCglvcHRpb25faWQYASABKA0SJAoEdGV4dBgCIAEoCzIWLmdhbWUudjEuTG9jYWxpemVkVGV4dCKGAQoKRGlhbG9nT3BlbhIRCglkaWFsb2dfaWQYASABKA0SFwoPbnBjX2NyZWF0dXJlX2lkGAIgASgNEiQKBHRleHQYAyABKAsyFi5nYW1lLnYxLkxvY2FsaXplZFRleHQSJgoHb3B0aW9ucxgEIAMoCzIVLmdhbWUudjEuRGlhbG9nT3B0aW9uIiAKC0RpYWxvZ0Nsb3NlEhEKCWRpYWxvZ19pZBgBIAEoDSJSCglTaG9wT2ZmZXISDwoHaXRlbV9pZBgBIAEoDRIRCglidXlfcHJpY2UYAiABKAQSEgoKc2VsbF9wcmljZRgDIAEoBBINCgVvd25lZBgEIAEoDSJpCghTaG9wT3BlbhIXCg9ucGNfY3JlYXR1cmVfaWQYASABKA0SIgoGb2ZmZXJzGAIgAygLMhIuZ2FtZS52MS5TaG9wT2ZmZXISEQoJZGlhbG9nX2lkGAMgASgNEg0KBW1vbmV5GAQgASgEIuYBCgtUcmFkZVVwZGF0ZRIiCgVzdGF0ZRgBIAEoDjITLmdhbWUudjEuVHJhZGVTdGF0ZRIbChNwYXJ0bmVyX2NyZWF0dXJlX2lkGAIgASgNEhQKDHBhcnRuZXJfbmFtZRgDIAEoCRIlCglvd25fb2ZmZXIYBCADKAsyEi5nYW1lLnYxLkl0ZW1TdGFjaxIpCg1wYXJ0bmVyX29mZmVyGAUgAygLMhIuZ2FtZS52MS5JdGVtU3RhY2sSFAoMb3duX2FjY2VwdGVkGAYgASgIEhgKEHBhcnRuZXJfYWNjZXB0ZWQYByABKAgiTwoMV2Fsa1JlamVjdGVkEh4KA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SHwoDZGlyGAIgASgOMhIuZ2FtZS52MS5EaXJlY3Rpb24iMAoEUG9uZxITCgtjbGllbnRfdGltZRgBIAEoBBITCgtzZXJ2ZXJfdGltZRgCIAEoBCJgCgpEaXNjb25uZWN0EikKBnJlYXNvbhgBIAEoDjIZLmdhbWUudjEuRGlzY29ubmVjdFJlYXNvbhInCgdtZXNzYWdlGAIgASgLMhYuZ2FtZS52MS5Mb2NhbGl6ZWRUZXh0InIKC1BhcnR5VXBkYXRlEhEKCWxlYWRlcl9pZBgBIAEoDRIpCgZzaGFyZWQYAiABKA4yGS5nYW1lLnYxLlNoYXJlZEV4cGVyaWVuY2USJQoHbWVtYmVycxgDIAMoCzIULmdhbWUudjEuUGFydHlNZW1iZXIisQEKC1BhcnR5TWVtYmVyEhMKC2NyZWF0dXJlX2lkGAEgASgNEgwKBG5hbWUYAiABKAkSEAoIdm9jYXRpb24YAyABKAkSDQoFbGV2ZWwYBCABKA0SDwoHaW5fdmlldxgFIAEoCBIWCg5oZWFsdGhfcGVyY2VudBgGIAEoDRIUCgxtYW5hX3BlcmNlbnQYByABKA0SDgoGaXNsYW5kGAggASgJEg8KB3NoYXJpbmcYCSABKAgiTwoPUGFydHlJbnZpdGF0aW9uEhIKCmludml0ZXJfaWQYASABKA0SFAoMaW52aXRlcl9uYW1lGAIgASgJEhIKCmV4cGlyZXNfbXMYAyABKA0i4QEKC0d1aWxkVXBkYXRlEhAKCGd1aWxkX2lkGAEgASgEEgwKBG5hbWUYAiABKAkSDAoEbW90ZBgDIAEoCRIgCgRyYW5rGAQgASgOMhIuZ2FtZS52MS5HdWlsZFJhbmsSJQoHbWVtYmVycxgFIAMoCzIULmdhbWUudjEuR3VpbGRNZW1iZXISLAoHcGVuZGluZxgGIAMoCzIbLmdhbWUudjEuR3VpbGRQZW5kaW5nSW52aXRlEi0KC2ludml0YXRpb25zGAcgAygLMhguZ2FtZS52MS5HdWlsZEludml0YXRpb24iTQoLR3VpbGRNZW1iZXISDAoEbmFtZRgBIAEoCRIgCgRyYW5rGAIgASgOMhIuZ2FtZS52MS5HdWlsZFJhbmsSDgoGb25saW5lGAMgASgIIjYKEkd1aWxkUGVuZGluZ0ludml0ZRIMCgRuYW1lGAEgASgJEhIKCmV4cGlyZXNfbXMYAiABKA0iSwoPR3VpbGRJbnZpdGF0aW9uEhAKCGd1aWxkX2lkGAEgASgEEhIKCmd1aWxkX25hbWUYAiABKAkSEgoKZXhwaXJlc19tcxgDIAEoDSIqCg1DcmVhdHVyZUd1aWxkEgoKAmlkGAEgASgNEg0KBWd1aWxkGAIgASgJInAKC1N0YXRpb25PcGVuEh4KA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SDwoHaXRlbV9pZBgCIAEoDRIhCgVvd25lZBgDIAMoCzISLmdhbWUudjEuSXRlbVN0YWNrEg0KBXRvb2xzGAQgAygJKn8KDVR1dG9yaWFsU3RhdGUSHgoaVFVUT1JJQUxfU1RBVEVfVU5TUEVDSUZJRUQQABIZChVUVVRPUklBTF9TVEFURV9BQ1RJVkUQARIXChNUVVRPUklBTF9TVEFURV9ET05FEAISGgoWVFVUT1JJQUxfU1RBVEVfU0tJUFBFRBADKnkKDENyZWF0dXJlS2luZBIdChlDUkVBVFVSRV9LSU5EX1VOU1BFQ0lGSUVEEAASGAoUQ1JFQVRVUkVfS0lORF9QTEFZRVIQARIZChVDUkVBVFVSRV9LSU5EX01PTlNURVIQAhIVChFDUkVBVFVSRV9LSU5EX05QQxADKrIBChBGbG9hdGluZ1RleHRLaW5kEiIKHkZMT0FUSU5HX1RFWFRfS0lORF9VTlNQRUNJRklFRBAAEh0KGUZMT0FUSU5HX1RFWFRfS0lORF9EQU1BR0UQARIbChdGTE9BVElOR19URVhUX0tJTkRfSEVBTBACEhsKF0ZMT0FUSU5HX1RFWFRfS0lORF9NQU5BEAMSIQodRkxPQVRJTkdfVEVYVF9LSU5EX0VYUEVSSUVOQ0UQBCqGAgoLTWVzc2FnZUtpbmQSHAoYTUVTU0FHRV9LSU5EX1VOU1BFQ0lGSUVEEAASFAoQTUVTU0FHRV9LSU5EX1NBWRABEhUKEU1FU1NBR0VfS0lORF9ZRUxMEAISGAoUTUVTU0FHRV9LSU5EX1dISVNQRVIQAxIXChNNRVNTQUdFX0tJTkRfR0xPQkFMEAQSFAoQTUVTU0FHRV9LSU5EX05QQxAFEhcKE01FU1NBR0VfS0lORF9TWVNURU0QBhIaChZNRVNTQUdFX0tJTkRfQlJPQURDQVNUEAcSFgoSTUVTU0FHRV9LSU5EX1BBUlRZEAgSFgoSTUVTU0FHRV9LSU5EX0dVSUxEEAkqlwEKClRyYWRlU3RhdGUSGwoXVFJBREVfU1RBVEVfVU5TUEVDSUZJRUQQABIZChVUUkFERV9TVEFURV9SRVFVRVNURUQQARIbChdUUkFERV9TVEFURV9ORUdPVElBVElORxACEhkKFVRSQURFX1NUQVRFX0NPTVBMRVRFRBADEhkKFVRSQURFX1NUQVRFX0NBTkNFTExFRBAEKr4DChBEaXNjb25uZWN0UmVhc29uEiEKHURJU0NPTk5FQ1RfUkVBU09OX1VOU1BFQ0lGSUVEEAASJQohRElTQ09OTkVDVF9SRUFTT05fT1VUREFURURfQ0xJRU5UEAESJQohRElTQ09OTkVDVF9SRUFTT05fSU5WQUxJRF9TRVNTSU9OEAISIAocRElTQ09OTkVDVF9SRUFTT05fTE9HR0VEX09VVBADEikKJURJU0NPTk5FQ1RfUkVBU09OX0xPR0dFRF9JTl9FTFNFV0hFUkUQBBIiCh5ESVNDT05ORUNUX1JFQVNPTl9SQVRFX0xJTUlURUQQBRIhCh1ESVNDT05ORUNUX1JFQVNPTl9TTE9XX0NMSUVOVBAGEiUKIURJU0NPTk5FQ1RfUkVBU09OX1NFUlZFUl9TSFVURE9XThAHEhwKGERJU0NPTk5FQ1RfUkVBU09OX0tJQ0tFRBAIEhwKGERJU0NPTk5FQ1RfUkVBU09OX0JBTk5FRBAJEhoKFkRJU0NPTk5FQ1RfUkVBU09OX0lETEUQChImCiJESVNDT05ORUNUX1JFQVNPTl9QQVNTV09SRF9DSEFOR0VEEAsqjgEKEFNoYXJlZEV4cGVyaWVuY2USIQodU0hBUkVEX0VYUEVSSUVOQ0VfVU5TUEVDSUZJRUQQABIZChVTSEFSRURfRVhQRVJJRU5DRV9PRkYQARIcChhTSEFSRURfRVhQRVJJRU5DRV9BQ1RJVkUQAhIeChpTSEFSRURfRVhQRVJJRU5DRV9JTkFDVElWRRADKmoKCUd1aWxkUmFuaxIaChZHVUlMRF9SQU5LX1VOU1BFQ0lGSUVEEAASFQoRR1VJTERfUkFOS19NRU1CRVIQARITCg9HVUlMRF9SQU5LX1ZJQ0UQAhIVChFHVUlMRF9SQU5LX0xFQURFUhADQkZaRGdpdGh1Yi5jb20vR0ZlbnpvUi9SUEdfUHJvamVjdC9zZXJ2ZXIvaW50ZXJuYWwvbmV0L3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM", [file_game_v1_common]);
+  fileDesc("ChRnYW1lL3YxL3NlcnZlci5wcm90bxIHZ2FtZS52MSJDCgtTZXJ2ZXJCYXRjaBIMCgR0aWNrGAEgASgEEiYKBmV2ZW50cxgCIAMoCzIWLmdhbWUudjEuU2VydmVyTWVzc2FnZSKPDgoNU2VydmVyTWVzc2FnZRIjCgd3ZWxjb21lGAEgASgLMhAuZ2FtZS52MS5XZWxjb21lSAASLQoNZnVsbF9tYXBfdmlldxgCIAEoCzIULmdhbWUudjEuRnVsbE1hcFZpZXdIABImCgltYXBfc2xpY2UYAyABKAsyES5nYW1lLnYxLk1hcFNsaWNlSAASKgoLdGlsZV91cGRhdGUYBCABKAsyEy5nYW1lLnYxLlRpbGVVcGRhdGVIABIyCg9jcmVhdHVyZV9hcHBlYXIYBSABKAsyFy5nYW1lLnYxLkNyZWF0dXJlQXBwZWFySAASOAoSY3JlYXR1cmVfZGlzYXBwZWFyGAYgASgLMhouZ2FtZS52MS5DcmVhdHVyZURpc2FwcGVhckgAEi4KDWNyZWF0dXJlX21vdmUYByABKAsyFS5nYW1lLnYxLkNyZWF0dXJlTW92ZUgAEi4KDWNyZWF0dXJlX3R1cm4YCCABKAsyFS5nYW1lLnYxLkNyZWF0dXJlVHVybkgAEjIKD2NyZWF0dXJlX2hlYWx0aBgJIAEoCzIXLmdhbWUudjEuQ3JlYXR1cmVIZWFsdGhIABIyCg9jcmVhdHVyZV9vdXRmaXQYCiABKAsyFy5nYW1lLnYxLkNyZWF0dXJlT3V0Zml0SAASMAoOY3JlYXR1cmVfc3BlZWQYCyABKAsyFi5nYW1lLnYxLkNyZWF0dXJlU3BlZWRIABIhCgZlZmZlY3QYDCABKAsyDy5nYW1lLnYxLkVmZmVjdEgAEikKCnByb2plY3RpbGUYDSABKAsyEy5nYW1lLnYxLlByb2plY3RpbGVIABIuCg1mbG9hdGluZ190ZXh0GA4gASgLMhUuZ2FtZS52MS5GbG9hdGluZ1RleHRIABIsCgxwbGF5ZXJfc3RhdHMYDyABKAsyFC5nYW1lLnYxLlBsYXllclN0YXRzSAASLgoNcGxheWVyX3NraWxscxgQIAEoCzIVLmdhbWUudjEuUGxheWVyU2tpbGxzSAASJwoJaW52ZW50b3J5GBEgASgLMhIuZ2FtZS52MS5JbnZlbnRvcnlIABIwCg5jb250YWluZXJfb3BlbhgSIAEoCzIWLmdhbWUudjEuQ29udGFpbmVyT3BlbkgAEjQKEGNvbnRhaW5lcl91cGRhdGUYEyABKAsyGC5nYW1lLnYxLkNvbnRhaW5lclVwZGF0ZUgAEjIKD2NvbnRhaW5lcl9jbG9zZRgUIAEoCzIXLmdhbWUudjEuQ29udGFpbmVyQ2xvc2VIABIoCgxjaGF0X21lc3NhZ2UYFSABKAsyEC5nYW1lLnYxLk1lc3NhZ2VIABIqCgtkaWFsb2dfb3BlbhgWIAEoCzITLmdhbWUudjEuRGlhbG9nT3BlbkgAEiwKDGRpYWxvZ19jbG9zZRgXIAEoCzIULmdhbWUudjEuRGlhbG9nQ2xvc2VIABImCglzaG9wX29wZW4YGCABKAsyES5nYW1lLnYxLlNob3BPcGVuSAASLAoMdHJhZGVfdXBkYXRlGBkgASgLMhQuZ2FtZS52MS5UcmFkZVVwZGF0ZUgAEi4KDXdhbGtfcmVqZWN0ZWQYGiABKAsyFS5nYW1lLnYxLldhbGtSZWplY3RlZEgAEh0KBHBvbmcYGyABKAsyDS5nYW1lLnYxLlBvbmdIABIpCgpkaXNjb25uZWN0GBwgASgLMhMuZ2FtZS52MS5EaXNjb25uZWN0SAASMAoOc3BlbGxfY29vbGRvd24YHSABKAsyFi5nYW1lLnYxLlNwZWxsQ29vbGRvd25IABI2ChFwbGF5ZXJfY29uZGl0aW9ucxgeIAEoCzIZLmdhbWUudjEuUGxheWVyQ29uZGl0aW9uc0gAEiwKDHBhcnR5X3VwZGF0ZRgfIAEoCzIULmdhbWUudjEuUGFydHlVcGRhdGVIABI0ChBwYXJ0eV9pbnZpdGF0aW9uGCAgASgLMhguZ2FtZS52MS5QYXJ0eUludml0YXRpb25IABIsCgxzdGF0aW9uX29wZW4YISABKAsyFC5nYW1lLnYxLlN0YXRpb25PcGVuSAASMAoOcHJlc2VuY2VfY2hlY2sYIiABKAsyFi5nYW1lLnYxLlByZXNlbmNlQ2hlY2tIABIuCg10dXRvcmlhbF9zdGVwGCMgASgLMhUuZ2FtZS52MS5UdXRvcmlhbFN0ZXBIABIsCgxndWlsZF91cGRhdGUYJCABKAsyFC5nYW1lLnYxLkd1aWxkVXBkYXRlSAASMAoOY3JlYXR1cmVfZ3VpbGQYJSABKAsyFi5nYW1lLnYxLkNyZWF0dXJlR3VpbGRIABIwCg5jcmVhdHVyZV9za3VsbBgmIAEoCzIWLmdhbWUudjEuQ3JlYXR1cmVTa3VsbEgAQgkKB21lc3NhZ2UivgEKDFR1dG9yaWFsU3RlcBIlCgVzdGF0ZRgBIAEoDjIWLmdhbWUudjEuVHV0b3JpYWxTdGF0ZRIPCgdzdGVwX2lkGAIgASgJEg0KBWluZGV4GAMgASgNEg0KBXRvdGFsGAQgASgNEiQKBHRleHQYBSABKAsyFi5nYW1lLnYxLkxvY2FsaXplZFRleHQSEQoJaGlnaGxpZ2h0GAYgASgJEhAKCHByb2dyZXNzGAcgASgNEg0KBWNvdW50GAggASgNIocBCg1QcmVzZW5jZUNoZWNrEhAKCGNoZWNrX2lkGAEgASgNEigKCHF1ZXN0aW9uGAIgASgLMhYuZ2FtZS52MS5Mb2NhbGl6ZWRUZXh0EiYKB29wdGlvbnMYAyADKAsyFS5nYW1lLnYxLkRpYWxvZ09wdGlvbhISCgp0aW1lb3V0X21zGAQgASgNIkQKB1dlbGNvbWUSEwoLY3JlYXR1cmVfaWQYASABKA0SEwoLc2VydmVyX3RpbWUYAiABKAQSDwoHdGlja19tcxgDIAEoDSIpCgRUaWxlEiEKBWl0ZW1zGAEgAygLMhIuZ2FtZS52MS5JdGVtU3RhY2siJAoITWFwRmxvb3ISCQoBehgBIAEoDRINCgV0aWxlcxgCIAMoESKnAQoHTWFwQXJlYRIJCgF4GAEgASgNEgkKAXkYAiABKA0SDQoFd2lkdGgYAyABKA0SDgoGaGVpZ2h0GAQgASgNEh4KB3BhbGV0dGUYBSADKAsyDS5nYW1lLnYxLlRpbGUSIQoGZmxvb3JzGAYgAygLMhEuZ2FtZS52MS5NYXBGbG9vchIkCgljcmVhdHVyZXMYByADKAsyES5nYW1lLnYxLkNyZWF0dXJlIi0KC0Z1bGxNYXBWaWV3Eh4KBGFyZWEYASABKAsyEC5nYW1lLnYxLk1hcEFyZWEiKgoITWFwU2xpY2USHgoEYXJlYRgBIAEoCzIQLmdhbWUudjEuTWFwQXJlYSJJCgpUaWxlVXBkYXRlEh4KA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SGwoEdGlsZRgCIAEoCzINLmdhbWUudjEuVGlsZSJpCgZPdXRmaXQSDwoHbG9va19pZBgBIAEoDRISCgpoZWFkX2NvbG9yGAIgASgNEhIKCmJvZHlfY29sb3IYAyABKA0SEgoKbGVnc19jb2xvchgEIAEoDRISCgpmZWV0X2NvbG9yGAUgASgNIpQCCghDcmVhdHVyZRIKCgJpZBgBIAEoDRIjCgRraW5kGAIgASgOMhUuZ2FtZS52MS5DcmVhdHVyZUtpbmQSDAoEbmFtZRgDIAEoCRISCgpjb250ZW50X2lkGAQgASgJEh4KA3BvcxgFIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SHwoDZGlyGAYgASgOMhIuZ2FtZS52MS5EaXJlY3Rpb24SFgoOaGVhbHRoX3BlcmNlbnQYByABKA0SHwoGb3V0Zml0GAggASgLMg8uZ2FtZS52MS5PdXRmaXQSDQoFc3BlZWQYCSABKA0SDQoFZ3VpbGQYCiABKAkSHQoFc2t1bGwYCyABKA4yDi5nYW1lLnYxLlNrdWxsIjoKDUNyZWF0dXJlU2t1bGwSCgoCaWQYASABKA0SHQoFc2t1bGwYAiABKA4yDi5nYW1lLnYxLlNrdWxsIjUKDkNyZWF0dXJlQXBwZWFyEiMKCGNyZWF0dXJlGAEgASgLMhEuZ2FtZS52MS5DcmVhdHVyZSIfChFDcmVhdHVyZURpc2FwcGVhchIKCgJpZBgBIAEoDSJvCgxDcmVhdHVyZU1vdmUSCgoCaWQYASABKA0SHwoEZnJvbRgCIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SHQoCdG8YAyABKAsyES5nYW1lLnYxLlBvc2l0aW9uEhMKC2R1cmF0aW9uX21zGAQgASgNIjsKDENyZWF0dXJlVHVybhIKCgJpZBgBIAEoDRIfCgNkaXIYAiABKA4yEi5nYW1lLnYxLkRpcmVjdGlvbiI0Cg5DcmVhdHVyZUhlYWx0aBIKCgJpZBgBIAEoDRIWCg5oZWFsdGhfcGVyY2VudBgCIAEoDSI9Cg5DcmVhdHVyZU91dGZpdBIKCgJpZBgBIAEoDRIfCgZvdXRmaXQYAiABKAsyDy5nYW1lLnYxLk91dGZpdCIqCg1DcmVhdHVyZVNwZWVkEgoKAmlkGAEgASgNEg0KBXNwZWVkGAIgASgNIjsKBkVmZmVjdBIeCgNwb3MYASABKAsyES5nYW1lLnYxLlBvc2l0aW9uEhEKCWVmZmVjdF9pZBgCIAEoDSJjCgpQcm9qZWN0aWxlEh8KBGZyb20YASABKAsyES5nYW1lLnYxLlBvc2l0aW9uEh0KAnRvGAIgASgLMhEuZ2FtZS52MS5Qb3NpdGlvbhIVCg1wcm9qZWN0aWxlX2lkGAMgASgNIkAKEFBsYXllckNvbmRpdGlvbnMSLAoKY29uZGl0aW9ucxgBIAMoCzIYLmdhbWUudjEuQWN0aXZlQ29uZGl0aW9uIkwKD0FjdGl2ZUNvbmRpdGlvbhIUCgxjb25kaXRpb25faWQYASABKAkSFAoMcmVtYWluaW5nX21zGAIgASgNEg0KBXRpY2tzGAMgASgNImAKDVNwZWxsQ29vbGRvd24SEAoIc3BlbGxfaWQYASABKAkSEwoLY29vbGRvd25fbXMYAiABKA0SDQoFZ3JvdXAYAyABKAkSGQoRZ3JvdXBfY29vbGRvd25fbXMYBCABKA0iZwoMRmxvYXRpbmdUZXh0Eh4KA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SJwoEa2luZBgCIAEoDjIZLmdhbWUudjEuRmxvYXRpbmdUZXh0S2luZBIOCgZhbW91bnQYAyABKAQi0AEKC1BsYXllclN0YXRzEg4KBmhlYWx0aBgBIAEoDRISCgptYXhfaGVhbHRoGAIgASgNEgwKBG1hbmEYAyABKA0SEAoIbWF4X21hbmEYBCABKA0SDQoFbGV2ZWwYBSABKA0SEgoKZXhwZXJpZW5jZRgGIAEoBBIVCg1sZXZlbF9wZXJjZW50GAcgASgNEhAKCGNhcGFjaXR5GAggASgNEhQKDG1heF9jYXBhY2l0eRgJIAEoDRINCgVzcGVlZBgKIAEoDRIMCgRzb3VsGAsgASgNIkEKDVNraWxsUHJvZ3Jlc3MSEAoIc2tpbGxfaWQYASABKAkSDQoFbGV2ZWwYAiABKA0SDwoHcGVyY2VudBgDIAEoDSI2CgxQbGF5ZXJTa2lsbHMSJgoGc2tpbGxzGAEgAygLMhYuZ2FtZS52MS5Ta2lsbFByb2dyZXNzIlYKDEVxdWlwcGVkSXRlbRIkCgRzbG90GAEgASgOMhYuZ2FtZS52MS5FcXVpcG1lbnRTbG90EiAKBGl0ZW0YAiABKAsyEi5nYW1lLnYxLkl0ZW1TdGFjayIxCglJbnZlbnRvcnkSJAoFc2xvdHMYASADKAsyFS5nYW1lLnYxLkVxdWlwcGVkSXRlbSJ/Cg1Db250YWluZXJPcGVuEhQKDGNvbnRhaW5lcl9pZBgBIAEoDRIPCgdpdGVtX2lkGAIgASgNEhAKCGNhcGFjaXR5GAMgASgNEiEKBWl0ZW1zGAQgAygLMhIuZ2FtZS52MS5JdGVtU3RhY2sSEgoKaGFzX3BhcmVudBgFIAEoCCJKCg9Db250YWluZXJVcGRhdGUSFAoMY29udGFpbmVyX2lkGAEgASgNEiEKBWl0ZW1zGAIgAygLMhIuZ2FtZS52MS5JdGVtU3RhY2siJgoOQ29udGFpbmVyQ2xvc2USFAoMY29udGFpbmVyX2lkGAEgASgNItgBCgdNZXNzYWdlEiIKBGtpbmQYASABKA4yFC5nYW1lLnYxLk1lc3NhZ2VLaW5kEhIKCnNwZWFrZXJfaWQYAiABKA0SFAoMc3BlYWtlcl9uYW1lGAMgASgJEhoKEnNwZWFrZXJfY29udGVudF9pZBgEIAEoCRIeCgNwb3MYBSABKAsyES5nYW1lLnYxLlBvc2l0aW9uEg4KBHRleHQYBiABKAlIABIrCglsb2NhbGl6ZWQYByABKAsyFi5nYW1lLnYxLkxvY2FsaXplZFRleHRIAEIGCgRib2R5IkcKDERpYWxvZ09wdGlvbhIRCglvcHRpb25faWQYASABKA0SJAoEdGV4dBgCIAEoCzIWLmdhbWUudjEuTG9jYWxpemVkVGV4dCKGAQoKRGlhbG9nT3BlbhIRCglkaWFsb2dfaWQYASABKA0SFwoPbnBjX2NyZWF0dXJlX2lkGAIgASgNEiQKBHRleHQYAyABKAsyFi5nYW1lLnYxLkxvY2FsaXplZFRleHQSJgoHb3B0aW9ucxgEIAMoCzIVLmdhbWUudjEuRGlhbG9nT3B0aW9uIiAKC0RpYWxvZ0Nsb3NlEhEKCWRpYWxvZ19pZBgBIAEoDSJSCglTaG9wT2ZmZXISDwoHaXRlbV9pZBgBIAEoDRIRCglidXlfcHJpY2UYAiABKAQSEgoKc2VsbF9wcmljZRgDIAEoBBINCgVvd25lZBgEIAEoDSJpCghTaG9wT3BlbhIXCg9ucGNfY3JlYXR1cmVfaWQYASABKA0SIgoGb2ZmZXJzGAIgAygLMhIuZ2FtZS52MS5TaG9wT2ZmZXISEQoJZGlhbG9nX2lkGAMgASgNEg0KBW1vbmV5GAQgASgEIuYBCgtUcmFkZVVwZGF0ZRIiCgVzdGF0ZRgBIAEoDjITLmdhbWUudjEuVHJhZGVTdGF0ZRIbChNwYXJ0bmVyX2NyZWF0dXJlX2lkGAIgASgNEhQKDHBhcnRuZXJfbmFtZRgDIAEoCRIlCglvd25fb2ZmZXIYBCADKAsyEi5nYW1lLnYxLkl0ZW1TdGFjaxIpCg1wYXJ0bmVyX29mZmVyGAUgAygLMhIuZ2FtZS52MS5JdGVtU3RhY2sSFAoMb3duX2FjY2VwdGVkGAYgASgIEhgKEHBhcnRuZXJfYWNjZXB0ZWQYByABKAgiTwoMV2Fsa1JlamVjdGVkEh4KA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SHwoDZGlyGAIgASgOMhIuZ2FtZS52MS5EaXJlY3Rpb24iMAoEUG9uZxITCgtjbGllbnRfdGltZRgBIAEoBBITCgtzZXJ2ZXJfdGltZRgCIAEoBCJgCgpEaXNjb25uZWN0EikKBnJlYXNvbhgBIAEoDjIZLmdhbWUudjEuRGlzY29ubmVjdFJlYXNvbhInCgdtZXNzYWdlGAIgASgLMhYuZ2FtZS52MS5Mb2NhbGl6ZWRUZXh0InIKC1BhcnR5VXBkYXRlEhEKCWxlYWRlcl9pZBgBIAEoDRIpCgZzaGFyZWQYAiABKA4yGS5nYW1lLnYxLlNoYXJlZEV4cGVyaWVuY2USJQoHbWVtYmVycxgDIAMoCzIULmdhbWUudjEuUGFydHlNZW1iZXIisQEKC1BhcnR5TWVtYmVyEhMKC2NyZWF0dXJlX2lkGAEgASgNEgwKBG5hbWUYAiABKAkSEAoIdm9jYXRpb24YAyABKAkSDQoFbGV2ZWwYBCABKA0SDwoHaW5fdmlldxgFIAEoCBIWCg5oZWFsdGhfcGVyY2VudBgGIAEoDRIUCgxtYW5hX3BlcmNlbnQYByABKA0SDgoGaXNsYW5kGAggASgJEg8KB3NoYXJpbmcYCSABKAgiTwoPUGFydHlJbnZpdGF0aW9uEhIKCmludml0ZXJfaWQYASABKA0SFAoMaW52aXRlcl9uYW1lGAIgASgJEhIKCmV4cGlyZXNfbXMYAyABKA0iggIKC0d1aWxkVXBkYXRlEhAKCGd1aWxkX2lkGAEgASgEEgwKBG5hbWUYAiABKAkSDAoEbW90ZBgDIAEoCRIgCgRyYW5rGAQgASgOMhIuZ2FtZS52MS5HdWlsZFJhbmsSJQoHbWVtYmVycxgFIAMoCzIULmdhbWUudjEuR3VpbGRNZW1iZXISLAoHcGVuZGluZxgGIAMoCzIbLmdhbWUudjEuR3VpbGRQZW5kaW5nSW52aXRlEi0KC2ludml0YXRpb25zGAcgAygLMhguZ2FtZS52MS5HdWlsZEludml0YXRpb24SHwoEd2FycxgIIAMoCzIRLmdhbWUudjEuR3VpbGRXYXIiugEKCEd1aWxkV2FyEg4KBndhcl9pZBgBIAEoBBISCgplbmVteV9uYW1lGAIgASgJEiUKBXN0YXRlGAMgASgOMhYuZ2FtZS52MS5HdWlsZFdhclN0YXRlEhYKDmRlY2xhcmVkX2J5X3VzGAQgASgIEhEKCW91cl9raWxscxgFIAEoDRITCgt0aGVpcl9raWxscxgGIAEoDRISCgpraWxsX2xpbWl0GAcgASgNEg8KB2VuZHNfbXMYCCABKA0iTQoLR3VpbGRNZW1iZXISDAoEbmFtZRgBIAEoCRIgCgRyYW5rGAIgASgOMhIuZ2FtZS52MS5HdWlsZFJhbmsSDgoGb25saW5lGAMgASgIIjYKEkd1aWxkUGVuZGluZ0ludml0ZRIMCgRuYW1lGAEgASgJEhIKCmV4cGlyZXNfbXMYAiABKA0iSwoPR3VpbGRJbnZpdGF0aW9uEhAKCGd1aWxkX2lkGAEgASgEEhIKCmd1aWxkX25hbWUYAiABKAkSEgoKZXhwaXJlc19tcxgDIAEoDSIqCg1DcmVhdHVyZUd1aWxkEgoKAmlkGAEgASgNEg0KBWd1aWxkGAIgASgJInAKC1N0YXRpb25PcGVuEh4KA3BvcxgBIAEoCzIRLmdhbWUudjEuUG9zaXRpb24SDwoHaXRlbV9pZBgCIAEoDRIhCgVvd25lZBgDIAMoCzISLmdhbWUudjEuSXRlbVN0YWNrEg0KBXRvb2xzGAQgAygJKn8KDVR1dG9yaWFsU3RhdGUSHgoaVFVUT1JJQUxfU1RBVEVfVU5TUEVDSUZJRUQQABIZChVUVVRPUklBTF9TVEFURV9BQ1RJVkUQARIXChNUVVRPUklBTF9TVEFURV9ET05FEAISGgoWVFVUT1JJQUxfU1RBVEVfU0tJUFBFRBADKnkKDENyZWF0dXJlS2luZBIdChlDUkVBVFVSRV9LSU5EX1VOU1BFQ0lGSUVEEAASGAoUQ1JFQVRVUkVfS0lORF9QTEFZRVIQARIZChVDUkVBVFVSRV9LSU5EX01PTlNURVIQAhIVChFDUkVBVFVSRV9LSU5EX05QQxADKlkKBVNrdWxsEhUKEVNLVUxMX1VOU1BFQ0lGSUVEEAASEwoPU0tVTExfQUdHUkVTU09SEAESEgoOU0tVTExfTVVSREVSRVIQAhIQCgxTS1VMTF9PVVRMQVcQAyqyAQoQRmxvYXRpbmdUZXh0S2luZBIiCh5GTE9BVElOR19URVhUX0tJTkRfVU5TUEVDSUZJRUQQABIdChlGTE9BVElOR19URVhUX0tJTkRfREFNQUdFEAESGwoXRkxPQVRJTkdfVEVYVF9LSU5EX0hFQUwQAhIbChdGTE9BVElOR19URVhUX0tJTkRfTUFOQRADEiEKHUZMT0FUSU5HX1RFWFRfS0lORF9FWFBFUklFTkNFEAQqhgIKC01lc3NhZ2VLaW5kEhwKGE1FU1NBR0VfS0lORF9VTlNQRUNJRklFRBAAEhQKEE1FU1NBR0VfS0lORF9TQVkQARIVChFNRVNTQUdFX0tJTkRfWUVMTBACEhgKFE1FU1NBR0VfS0lORF9XSElTUEVSEAMSFwoTTUVTU0FHRV9LSU5EX0dMT0JBTBAEEhQKEE1FU1NBR0VfS0lORF9OUEMQBRIXChNNRVNTQUdFX0tJTkRfU1lTVEVNEAYSGgoWTUVTU0FHRV9LSU5EX0JST0FEQ0FTVBAHEhYKEk1FU1NBR0VfS0lORF9QQVJUWRAIEhYKEk1FU1NBR0VfS0lORF9HVUlMRBAJKpcBCgpUcmFkZVN0YXRlEhsKF1RSQURFX1NUQVRFX1VOU1BFQ0lGSUVEEAASGQoVVFJBREVfU1RBVEVfUkVRVUVTVEVEEAESGwoXVFJBREVfU1RBVEVfTkVHT1RJQVRJTkcQAhIZChVUUkFERV9TVEFURV9DT01QTEVURUQQAxIZChVUUkFERV9TVEFURV9DQU5DRUxMRUQQBCq+AwoQRGlzY29ubmVjdFJlYXNvbhIhCh1ESVNDT05ORUNUX1JFQVNPTl9VTlNQRUNJRklFRBAAEiUKIURJU0NPTk5FQ1RfUkVBU09OX09VVERBVEVEX0NMSUVOVBABEiUKIURJU0NPTk5FQ1RfUkVBU09OX0lOVkFMSURfU0VTU0lPThACEiAKHERJU0NPTk5FQ1RfUkVBU09OX0xPR0dFRF9PVVQQAxIpCiVESVNDT05ORUNUX1JFQVNPTl9MT0dHRURfSU5fRUxTRVdIRVJFEAQSIgoeRElTQ09OTkVDVF9SRUFTT05fUkFURV9MSU1JVEVEEAUSIQodRElTQ09OTkVDVF9SRUFTT05fU0xPV19DTElFTlQQBhIlCiFESVNDT05ORUNUX1JFQVNPTl9TRVJWRVJfU0hVVERPV04QBxIcChhESVNDT05ORUNUX1JFQVNPTl9LSUNLRUQQCBIcChhESVNDT05ORUNUX1JFQVNPTl9CQU5ORUQQCRIaChZESVNDT05ORUNUX1JFQVNPTl9JRExFEAoSJgoiRElTQ09OTkVDVF9SRUFTT05fUEFTU1dPUkRfQ0hBTkdFRBALKo4BChBTaGFyZWRFeHBlcmllbmNlEiEKHVNIQVJFRF9FWFBFUklFTkNFX1VOU1BFQ0lGSUVEEAASGQoVU0hBUkVEX0VYUEVSSUVOQ0VfT0ZGEAESHAoYU0hBUkVEX0VYUEVSSUVOQ0VfQUNUSVZFEAISHgoaU0hBUkVEX0VYUEVSSUVOQ0VfSU5BQ1RJVkUQAypqCglHdWlsZFJhbmsSGgoWR1VJTERfUkFOS19VTlNQRUNJRklFRBAAEhUKEUdVSUxEX1JBTktfTUVNQkVSEAESEwoPR1VJTERfUkFOS19WSUNFEAISFQoRR1VJTERfUkFOS19MRUFERVIQAyppCg1HdWlsZFdhclN0YXRlEh8KG0dVSUxEX1dBUl9TVEFURV9VTlNQRUNJRklFRBAAEhsKF0dVSUxEX1dBUl9TVEFURV9QRU5ESU5HEAESGgoWR1VJTERfV0FSX1NUQVRFX0FDVElWRRACQkZaRGdpdGh1Yi5jb20vR0ZlbnpvUi9SUEdfUHJvamVjdC9zZXJ2ZXIvaW50ZXJuYWwvbmV0L3BiL2dhbWUvdjE7Z2FtZXYxYgZwcm90bzM", [file_game_v1_common]);
 
 /**
  * ServerBatch is the only thing a server WebSocket frame carries: every event of one
@@ -268,6 +268,12 @@ export type ServerMessage = Message$1<"game.v1.ServerMessage"> & {
      */
     value: CreatureGuild;
     case: "creatureGuild";
+  } | {
+    /**
+     * @generated from field: game.v1.CreatureSkull creature_skull = 38;
+     */
+    value: CreatureSkull;
+    case: "creatureSkull";
   } | { case: undefined; value?: undefined };
 };
 
@@ -670,6 +676,13 @@ export type Creature = Message$1<"game.v1.Creature"> & {
    * @generated from field: string guild = 10;
    */
   guild: string;
+
+  /**
+   * Players: its PvP mark (T5.2). CreatureSkull changes it.
+   *
+   * @generated from field: game.v1.Skull skull = 11;
+   */
+  skull: Skull;
 };
 
 /**
@@ -678,6 +691,31 @@ export type Creature = Message$1<"game.v1.Creature"> & {
  */
 export const CreatureSchema: GenMessage<Creature> = /*@__PURE__*/
   messageDesc(file_game_v1_server, 12);
+
+/**
+ * CreatureSkull tells the clients that see player id (the player included) that its
+ * skull changed.
+ *
+ * @generated from message game.v1.CreatureSkull
+ */
+export type CreatureSkull = Message$1<"game.v1.CreatureSkull"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: game.v1.Skull skull = 2;
+   */
+  skull: Skull;
+};
+
+/**
+ * Describes the message game.v1.CreatureSkull.
+ * Use `create(CreatureSkullSchema)` to create a new message.
+ */
+export const CreatureSkullSchema: GenMessage<CreatureSkull> = /*@__PURE__*/
+  messageDesc(file_game_v1_server, 13);
 
 /**
  * @generated from message game.v1.CreatureAppear
@@ -694,7 +732,7 @@ export type CreatureAppear = Message$1<"game.v1.CreatureAppear"> & {
  * Use `create(CreatureAppearSchema)` to create a new message.
  */
 export const CreatureAppearSchema: GenMessage<CreatureAppear> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 13);
+  messageDesc(file_game_v1_server, 14);
 
 /**
  * @generated from message game.v1.CreatureDisappear
@@ -711,7 +749,7 @@ export type CreatureDisappear = Message$1<"game.v1.CreatureDisappear"> & {
  * Use `create(CreatureDisappearSchema)` to create a new message.
  */
 export const CreatureDisappearSchema: GenMessage<CreatureDisappear> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 14);
+  messageDesc(file_game_v1_server, 15);
 
 /**
  * @generated from message game.v1.CreatureMove
@@ -743,7 +781,7 @@ export type CreatureMove = Message$1<"game.v1.CreatureMove"> & {
  * Use `create(CreatureMoveSchema)` to create a new message.
  */
 export const CreatureMoveSchema: GenMessage<CreatureMove> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 15);
+  messageDesc(file_game_v1_server, 16);
 
 /**
  * @generated from message game.v1.CreatureTurn
@@ -765,7 +803,7 @@ export type CreatureTurn = Message$1<"game.v1.CreatureTurn"> & {
  * Use `create(CreatureTurnSchema)` to create a new message.
  */
 export const CreatureTurnSchema: GenMessage<CreatureTurn> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 16);
+  messageDesc(file_game_v1_server, 17);
 
 /**
  * @generated from message game.v1.CreatureHealth
@@ -787,7 +825,7 @@ export type CreatureHealth = Message$1<"game.v1.CreatureHealth"> & {
  * Use `create(CreatureHealthSchema)` to create a new message.
  */
 export const CreatureHealthSchema: GenMessage<CreatureHealth> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 17);
+  messageDesc(file_game_v1_server, 18);
 
 /**
  * @generated from message game.v1.CreatureOutfit
@@ -809,7 +847,7 @@ export type CreatureOutfit = Message$1<"game.v1.CreatureOutfit"> & {
  * Use `create(CreatureOutfitSchema)` to create a new message.
  */
 export const CreatureOutfitSchema: GenMessage<CreatureOutfit> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 18);
+  messageDesc(file_game_v1_server, 19);
 
 /**
  * @generated from message game.v1.CreatureSpeed
@@ -831,7 +869,7 @@ export type CreatureSpeed = Message$1<"game.v1.CreatureSpeed"> & {
  * Use `create(CreatureSpeedSchema)` to create a new message.
  */
 export const CreatureSpeedSchema: GenMessage<CreatureSpeed> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 19);
+  messageDesc(file_game_v1_server, 20);
 
 /**
  * @generated from message game.v1.Effect
@@ -853,7 +891,7 @@ export type Effect = Message$1<"game.v1.Effect"> & {
  * Use `create(EffectSchema)` to create a new message.
  */
 export const EffectSchema: GenMessage<Effect> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 20);
+  messageDesc(file_game_v1_server, 21);
 
 /**
  * @generated from message game.v1.Projectile
@@ -880,7 +918,7 @@ export type Projectile = Message$1<"game.v1.Projectile"> & {
  * Use `create(ProjectileSchema)` to create a new message.
  */
 export const ProjectileSchema: GenMessage<Projectile> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 21);
+  messageDesc(file_game_v1_server, 22);
 
 /**
  * PlayerConditions is the full list of the player's own active conditions (T3.2): sent
@@ -902,7 +940,7 @@ export type PlayerConditions = Message$1<"game.v1.PlayerConditions"> & {
  * Use `create(PlayerConditionsSchema)` to create a new message.
  */
 export const PlayerConditionsSchema: GenMessage<PlayerConditions> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 22);
+  messageDesc(file_game_v1_server, 23);
 
 /**
  * @generated from message game.v1.ActiveCondition
@@ -935,7 +973,7 @@ export type ActiveCondition = Message$1<"game.v1.ActiveCondition"> & {
  * Use `create(ActiveConditionSchema)` to create a new message.
  */
 export const ActiveConditionSchema: GenMessage<ActiveCondition> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 23);
+  messageDesc(file_game_v1_server, 24);
 
 /**
  * SpellCooldown tells the caster that it cast spell_id (or used a rune of it): that
@@ -973,7 +1011,7 @@ export type SpellCooldown = Message$1<"game.v1.SpellCooldown"> & {
  * Use `create(SpellCooldownSchema)` to create a new message.
  */
 export const SpellCooldownSchema: GenMessage<SpellCooldown> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 24);
+  messageDesc(file_game_v1_server, 25);
 
 /**
  * @generated from message game.v1.FloatingText
@@ -1000,7 +1038,7 @@ export type FloatingText = Message$1<"game.v1.FloatingText"> & {
  * Use `create(FloatingTextSchema)` to create a new message.
  */
 export const FloatingTextSchema: GenMessage<FloatingText> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 25);
+  messageDesc(file_game_v1_server, 26);
 
 /**
  * @generated from message game.v1.PlayerStats
@@ -1071,7 +1109,7 @@ export type PlayerStats = Message$1<"game.v1.PlayerStats"> & {
  * Use `create(PlayerStatsSchema)` to create a new message.
  */
 export const PlayerStatsSchema: GenMessage<PlayerStats> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 26);
+  messageDesc(file_game_v1_server, 27);
 
 /**
  * SkillProgress is one skill or craft. skill_id is the id from data/ (e.g. "sword",
@@ -1103,7 +1141,7 @@ export type SkillProgress = Message$1<"game.v1.SkillProgress"> & {
  * Use `create(SkillProgressSchema)` to create a new message.
  */
 export const SkillProgressSchema: GenMessage<SkillProgress> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 27);
+  messageDesc(file_game_v1_server, 28);
 
 /**
  * @generated from message game.v1.PlayerSkills
@@ -1120,7 +1158,7 @@ export type PlayerSkills = Message$1<"game.v1.PlayerSkills"> & {
  * Use `create(PlayerSkillsSchema)` to create a new message.
  */
 export const PlayerSkillsSchema: GenMessage<PlayerSkills> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 28);
+  messageDesc(file_game_v1_server, 29);
 
 /**
  * @generated from message game.v1.EquippedItem
@@ -1142,7 +1180,7 @@ export type EquippedItem = Message$1<"game.v1.EquippedItem"> & {
  * Use `create(EquippedItemSchema)` to create a new message.
  */
 export const EquippedItemSchema: GenMessage<EquippedItem> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 29);
+  messageDesc(file_game_v1_server, 30);
 
 /**
  * Inventory lists the occupied equipment slots; slots not listed are empty.
@@ -1161,7 +1199,7 @@ export type Inventory = Message$1<"game.v1.Inventory"> & {
  * Use `create(InventorySchema)` to create a new message.
  */
 export const InventorySchema: GenMessage<Inventory> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 30);
+  messageDesc(file_game_v1_server, 31);
 
 /**
  * ContainerOpen opens a container window. container_id is session-local and is what
@@ -1201,7 +1239,7 @@ export type ContainerOpen = Message$1<"game.v1.ContainerOpen"> & {
  * Use `create(ContainerOpenSchema)` to create a new message.
  */
 export const ContainerOpenSchema: GenMessage<ContainerOpen> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 31);
+  messageDesc(file_game_v1_server, 32);
 
 /**
  * ContainerUpdate replaces the contents of an open container.
@@ -1225,7 +1263,7 @@ export type ContainerUpdate = Message$1<"game.v1.ContainerUpdate"> & {
  * Use `create(ContainerUpdateSchema)` to create a new message.
  */
 export const ContainerUpdateSchema: GenMessage<ContainerUpdate> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 32);
+  messageDesc(file_game_v1_server, 33);
 
 /**
  * @generated from message game.v1.ContainerClose
@@ -1242,7 +1280,7 @@ export type ContainerClose = Message$1<"game.v1.ContainerClose"> & {
  * Use `create(ContainerCloseSchema)` to create a new message.
  */
 export const ContainerCloseSchema: GenMessage<ContainerClose> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 33);
+  messageDesc(file_game_v1_server, 34);
 
 /**
  * Message is chat or a system message. Player-typed chat travels as plain text;
@@ -1307,7 +1345,7 @@ export type Message = Message$1<"game.v1.Message"> & {
  * Use `create(MessageSchema)` to create a new message.
  */
 export const MessageSchema: GenMessage<Message> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 34);
+  messageDesc(file_game_v1_server, 35);
 
 /**
  * @generated from message game.v1.DialogOption
@@ -1329,7 +1367,7 @@ export type DialogOption = Message$1<"game.v1.DialogOption"> & {
  * Use `create(DialogOptionSchema)` to create a new message.
  */
 export const DialogOptionSchema: GenMessage<DialogOption> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 35);
+  messageDesc(file_game_v1_server, 36);
 
 /**
  * DialogOpen shows (or advances) an NPC dialog. dialog_id is session-local.
@@ -1363,7 +1401,7 @@ export type DialogOpen = Message$1<"game.v1.DialogOpen"> & {
  * Use `create(DialogOpenSchema)` to create a new message.
  */
 export const DialogOpenSchema: GenMessage<DialogOpen> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 36);
+  messageDesc(file_game_v1_server, 37);
 
 /**
  * @generated from message game.v1.DialogClose
@@ -1380,7 +1418,7 @@ export type DialogClose = Message$1<"game.v1.DialogClose"> & {
  * Use `create(DialogCloseSchema)` to create a new message.
  */
 export const DialogCloseSchema: GenMessage<DialogClose> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 37);
+  messageDesc(file_game_v1_server, 38);
 
 /**
  * ShopOffer is one line of an NPC shop. A price of 0 means the NPC does not buy
@@ -1417,7 +1455,7 @@ export type ShopOffer = Message$1<"game.v1.ShopOffer"> & {
  * Use `create(ShopOfferSchema)` to create a new message.
  */
 export const ShopOfferSchema: GenMessage<ShopOffer> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 38);
+  messageDesc(file_game_v1_server, 39);
 
 /**
  * ShopOpen opens (or refreshes, after each purchase or sale) the shop of the NPC of
@@ -1454,7 +1492,7 @@ export type ShopOpen = Message$1<"game.v1.ShopOpen"> & {
  * Use `create(ShopOpenSchema)` to create a new message.
  */
 export const ShopOpenSchema: GenMessage<ShopOpen> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 39);
+  messageDesc(file_game_v1_server, 40);
 
 /**
  * @generated from message game.v1.TradeUpdate
@@ -1503,7 +1541,7 @@ export type TradeUpdate = Message$1<"game.v1.TradeUpdate"> & {
  * Use `create(TradeUpdateSchema)` to create a new message.
  */
 export const TradeUpdateSchema: GenMessage<TradeUpdate> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 40);
+  messageDesc(file_game_v1_server, 41);
 
 /**
  * WalkRejected tells the client its predicted step failed; it snaps back to pos.
@@ -1527,7 +1565,7 @@ export type WalkRejected = Message$1<"game.v1.WalkRejected"> & {
  * Use `create(WalkRejectedSchema)` to create a new message.
  */
 export const WalkRejectedSchema: GenMessage<WalkRejected> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 41);
+  messageDesc(file_game_v1_server, 42);
 
 /**
  * @generated from message game.v1.Pong
@@ -1551,7 +1589,7 @@ export type Pong = Message$1<"game.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 42);
+  messageDesc(file_game_v1_server, 43);
 
 /**
  * @generated from message game.v1.Disconnect
@@ -1575,7 +1613,7 @@ export type Disconnect = Message$1<"game.v1.Disconnect"> & {
  * Use `create(DisconnectSchema)` to create a new message.
  */
 export const DisconnectSchema: GenMessage<Disconnect> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 43);
+  messageDesc(file_game_v1_server, 44);
 
 /**
  * PartyUpdate is the full state of the player's party: sent when it changes (members,
@@ -1609,7 +1647,7 @@ export type PartyUpdate = Message$1<"game.v1.PartyUpdate"> & {
  * Use `create(PartyUpdateSchema)` to create a new message.
  */
 export const PartyUpdateSchema: GenMessage<PartyUpdate> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 44);
+  messageDesc(file_game_v1_server, 45);
 
 /**
  * PartyMember is what one member sees of another. Information audit (T3.3,
@@ -1679,7 +1717,7 @@ export type PartyMember = Message$1<"game.v1.PartyMember"> & {
  * Use `create(PartyMemberSchema)` to create a new message.
  */
 export const PartyMemberSchema: GenMessage<PartyMember> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 45);
+  messageDesc(file_game_v1_server, 46);
 
 /**
  * PartyInvitation tells a player that inviter_id invited it to a party. It can answer
@@ -1709,7 +1747,7 @@ export type PartyInvitation = Message$1<"game.v1.PartyInvitation"> & {
  * Use `create(PartyInvitationSchema)` to create a new message.
  */
 export const PartyInvitationSchema: GenMessage<PartyInvitation> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 46);
+  messageDesc(file_game_v1_server, 47);
 
 /**
  * GuildUpdate is the full guild state of the player (T5.1): sent at login and whenever
@@ -1762,6 +1800,14 @@ export type GuildUpdate = Message$1<"game.v1.GuildUpdate"> & {
    * @generated from field: repeated game.v1.GuildInvitation invitations = 7;
    */
   invitations: GuildInvitation[];
+
+  /**
+   * The guild's wars (T5.2): declared and not answered yet, and active ones. Ended wars
+   * are not listed (a system Message tells their result).
+   *
+   * @generated from field: repeated game.v1.GuildWar wars = 8;
+   */
+  wars: GuildWar[];
 };
 
 /**
@@ -1769,7 +1815,65 @@ export type GuildUpdate = Message$1<"game.v1.GuildUpdate"> & {
  * Use `create(GuildUpdateSchema)` to create a new message.
  */
 export const GuildUpdateSchema: GenMessage<GuildUpdate> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 47);
+  messageDesc(file_game_v1_server, 48);
+
+/**
+ * @generated from message game.v1.GuildWar
+ */
+export type GuildWar = Message$1<"game.v1.GuildWar"> & {
+  /**
+   * @generated from field: uint64 war_id = 1;
+   */
+  warId: bigint;
+
+  /**
+   * @generated from field: string enemy_name = 2;
+   */
+  enemyName: string;
+
+  /**
+   * @generated from field: game.v1.GuildWarState state = 3;
+   */
+  state: GuildWarState;
+
+  /**
+   * @generated from field: bool declared_by_us = 4;
+   */
+  declaredByUs: boolean;
+
+  /**
+   * Kills of each side since the war started (active only).
+   *
+   * @generated from field: uint32 our_kills = 5;
+   */
+  ourKills: number;
+
+  /**
+   * @generated from field: uint32 their_kills = 6;
+   */
+  theirKills: number;
+
+  /**
+   * The kills that win the war (balance pvp.war.kill_limit).
+   *
+   * @generated from field: uint32 kill_limit = 7;
+   */
+  killLimit: number;
+
+  /**
+   * Pending: how long until the declaration expires. Active: until the war ends.
+   *
+   * @generated from field: uint32 ends_ms = 8;
+   */
+  endsMs: number;
+};
+
+/**
+ * Describes the message game.v1.GuildWar.
+ * Use `create(GuildWarSchema)` to create a new message.
+ */
+export const GuildWarSchema: GenMessage<GuildWar> = /*@__PURE__*/
+  messageDesc(file_game_v1_server, 49);
 
 /**
  * @generated from message game.v1.GuildMember
@@ -1796,7 +1900,7 @@ export type GuildMember = Message$1<"game.v1.GuildMember"> & {
  * Use `create(GuildMemberSchema)` to create a new message.
  */
 export const GuildMemberSchema: GenMessage<GuildMember> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 48);
+  messageDesc(file_game_v1_server, 50);
 
 /**
  * @generated from message game.v1.GuildPendingInvite
@@ -1820,7 +1924,7 @@ export type GuildPendingInvite = Message$1<"game.v1.GuildPendingInvite"> & {
  * Use `create(GuildPendingInviteSchema)` to create a new message.
  */
 export const GuildPendingInviteSchema: GenMessage<GuildPendingInvite> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 49);
+  messageDesc(file_game_v1_server, 51);
 
 /**
  * @generated from message game.v1.GuildInvitation
@@ -1847,7 +1951,7 @@ export type GuildInvitation = Message$1<"game.v1.GuildInvitation"> & {
  * Use `create(GuildInvitationSchema)` to create a new message.
  */
 export const GuildInvitationSchema: GenMessage<GuildInvitation> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 50);
+  messageDesc(file_game_v1_server, 52);
 
 /**
  * CreatureGuild tells the clients that see player id that its guild changed (joined,
@@ -1872,7 +1976,7 @@ export type CreatureGuild = Message$1<"game.v1.CreatureGuild"> & {
  * Use `create(CreatureGuildSchema)` to create a new message.
  */
 export const CreatureGuildSchema: GenMessage<CreatureGuild> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 51);
+  messageDesc(file_game_v1_server, 53);
 
 /**
  * StationOpen answers a UseItem on a crafting station within reach (T3.4), and comes
@@ -1910,7 +2014,7 @@ export type StationOpen = Message$1<"game.v1.StationOpen"> & {
  * Use `create(StationOpenSchema)` to create a new message.
  */
 export const StationOpenSchema: GenMessage<StationOpen> = /*@__PURE__*/
-  messageDesc(file_game_v1_server, 52);
+  messageDesc(file_game_v1_server, 54);
 
 /**
  * TutorialState is where the character is in the tutorial (T4.2).
@@ -1983,6 +2087,49 @@ export const CreatureKindSchema: GenEnum<CreatureKind> = /*@__PURE__*/
   enumDesc(file_game_v1_server, 1);
 
 /**
+ * Skull is a player's PvP mark (T5.2, docs/02 "PvP"). Attacking a marked player is
+ * justified.
+ *
+ * @generated from enum game.v1.Skull
+ */
+export enum Skull {
+  /**
+   * No mark.
+   *
+   * @generated from enum value: SKULL_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Attacked a player without a mark: lasts balance pvp.aggressor_ms after the last
+   * unjustified attack.
+   *
+   * @generated from enum value: SKULL_AGGRESSOR = 1;
+   */
+  AGGRESSOR = 1,
+
+  /**
+   * Reached a murderer threshold of unjustified kills (balance pvp.murderer).
+   *
+   * @generated from enum value: SKULL_MURDERER = 2;
+   */
+  MURDERER = 2,
+
+  /**
+   * Reached an outlaw threshold (balance pvp.outlaw): the gravest mark.
+   *
+   * @generated from enum value: SKULL_OUTLAW = 3;
+   */
+  OUTLAW = 3,
+}
+
+/**
+ * Describes the enum game.v1.Skull.
+ */
+export const SkullSchema: GenEnum<Skull> = /*@__PURE__*/
+  enumDesc(file_game_v1_server, 2);
+
+/**
  * @generated from enum game.v1.FloatingTextKind
  */
 export enum FloatingTextKind {
@@ -2016,7 +2163,7 @@ export enum FloatingTextKind {
  * Describes the enum game.v1.FloatingTextKind.
  */
 export const FloatingTextKindSchema: GenEnum<FloatingTextKind> = /*@__PURE__*/
-  enumDesc(file_game_v1_server, 2);
+  enumDesc(file_game_v1_server, 3);
 
 /**
  * @generated from enum game.v1.MessageKind
@@ -2086,7 +2233,7 @@ export enum MessageKind {
  * Describes the enum game.v1.MessageKind.
  */
 export const MessageKindSchema: GenEnum<MessageKind> = /*@__PURE__*/
-  enumDesc(file_game_v1_server, 3);
+  enumDesc(file_game_v1_server, 4);
 
 /**
  * @generated from enum game.v1.TradeState
@@ -2124,7 +2271,7 @@ export enum TradeState {
  * Describes the enum game.v1.TradeState.
  */
 export const TradeStateSchema: GenEnum<TradeState> = /*@__PURE__*/
-  enumDesc(file_game_v1_server, 4);
+  enumDesc(file_game_v1_server, 5);
 
 /**
  * @generated from enum game.v1.DisconnectReason
@@ -2205,7 +2352,7 @@ export enum DisconnectReason {
  * Describes the enum game.v1.DisconnectReason.
  */
 export const DisconnectReasonSchema: GenEnum<DisconnectReason> = /*@__PURE__*/
-  enumDesc(file_game_v1_server, 5);
+  enumDesc(file_game_v1_server, 6);
 
 /**
  * SharedExperience is the state of a party's shared experience as its members see it.
@@ -2245,7 +2392,7 @@ export enum SharedExperience {
  * Describes the enum game.v1.SharedExperience.
  */
 export const SharedExperienceSchema: GenEnum<SharedExperience> = /*@__PURE__*/
-  enumDesc(file_game_v1_server, 6);
+  enumDesc(file_game_v1_server, 7);
 
 /**
  * GuildRank is a member's rank (T5.1).
@@ -2278,5 +2425,33 @@ export enum GuildRank {
  * Describes the enum game.v1.GuildRank.
  */
 export const GuildRankSchema: GenEnum<GuildRank> = /*@__PURE__*/
-  enumDesc(file_game_v1_server, 7);
+  enumDesc(file_game_v1_server, 8);
+
+/**
+ * @generated from enum game.v1.GuildWarState
+ */
+export enum GuildWarState {
+  /**
+   * @generated from enum value: GUILD_WAR_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Declared, waiting for the other leader. declared_by_us tells who declared it.
+   *
+   * @generated from enum value: GUILD_WAR_STATE_PENDING = 1;
+   */
+  PENDING = 1,
+
+  /**
+   * @generated from enum value: GUILD_WAR_STATE_ACTIVE = 2;
+   */
+  ACTIVE = 2,
+}
+
+/**
+ * Describes the enum game.v1.GuildWarState.
+ */
+export const GuildWarStateSchema: GenEnum<GuildWarState> = /*@__PURE__*/
+  enumDesc(file_game_v1_server, 9);
 

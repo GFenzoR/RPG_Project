@@ -88,6 +88,8 @@ for each tick (50 ms):
 | Mapa y contenido | Repo git (world/, data/) | Se despliegan con cada versión |
 | Roles, bans y log de auditoría (T2.6) | Postgres (`audit_log` append-only) | Asíncrono, goroutine de admin |
 | Gremios: `guilds`, `guild_members`, `guild_invites` (T5.1) | Postgres; el loop tiene todos en memoria | Se cargan una vez al arrancar; cada cambio, asíncrono y en orden por la goroutine de admin |
+| Guerras de gremios: `guild_wars` (T5.2) | Postgres; el loop tiene las abiertas en memoria | Como los gremios: se cargan con ellos y cada cambio va en orden por la goroutine de admin |
+| Marca PvP, contador y muertes injustificadas (T5.2): `characters.skull`, `skull_until`, `pvp_kills`, `pvp_unjust_kills` | Postgres | Con el snapshot del personaje (la misma transacción) |
 
 **Gremios (T5.1).** El game loop es el dueño de los gremios, como del resto del mundo:
 `app` lee todos (gremios, miembros e invitaciones vigentes) antes de arrancar el loop y se
@@ -103,6 +105,19 @@ outcome="rejected"}`); el próximo arranque carga lo que tiene la base. Costo en
 cada comando toca un solo gremio (a lo sumo `max_members` miembros y `max_invites`
 invitaciones) y los nombres se buscan en un mapa; entrar o salir del mundo marca el gremio
 para mandar un `GuildUpdate` a sus miembros conectados en el flush.
+
+**PvP (T5.2).** El loop es el único dueño del estado PvP (`session/pvp.go`,
+`session/guildwar.go`). La marca de cada jugador, su contador y sus muertes injustificadas
+viajan en el `Snapshot` y se escriben con el resto del personaje (las filas de
+`pvp_unjust_kills` se reemplazan enteras, como `quest_state`); un relogueo rápido las toma
+del snapshot sin guardar. Las guerras siguen el camino de los gremios: se cargan con
+`LoadGuilds` (solo las abiertas) y cada cambio (`GuildWarDeclare`, `GuildWarStart`,
+`GuildWarKills`, `GuildWarEnd`) sale como `AdminGuild`; su id también lo asigna el loop
+(`guild_id_high.war_high`). Los tiempos de las marcas y las guerras son del reloj
+inyectable (`ctx.Now`); los bloqueos, en ticks. Costo en el tick: cada chequeo lee unas
+pocas banderas de casilla y como mucho 8 atacantes recientes por víctima; un barrido por
+segundo recorre solo a los jugadores con marca y las guerras abiertas (como mucho
+`max_wars` por gremio), nunca a todos los jugadores.
 
 Transacciones: el trade entre jugadores se resuelve atómicamente en el loop (estado en
 memoria) y se persiste ambos personajes en una sola transacción de base de datos.

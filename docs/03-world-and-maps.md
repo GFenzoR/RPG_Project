@@ -20,7 +20,7 @@ world/
         z08/...
       spawns.yaml                puntos de aparición de monstruos
       npcs.yaml                  NPCs colocados (referencian data/npcs/)
-      zones.yaml                 zonas: protección, no-logout, pvp (futuro), community-plot
+      zones.yaml                 zonas: protección, no-logout, pvp, no_pvp, community-plot
       portals.yaml               teletransportes y conexiones especiales
       texts.yaml                 carteles y libros (claves i18n)
   prefabs/
@@ -128,6 +128,13 @@ level_hint: [1, 15]
   rects:
     - { x: 3200, y: 6380, w: 60, h: 45 }
 ```
+Zonas PvP (T5.2, reglas en `02-game-design.md` "PvP"): en `no_pvp` nadie ataca a jugadores
+(ni desde ni hacia la zona); en `pvp` (arena) se pelea sin marcas ni castigo si los dos
+están adentro; fuera de las dos rige el PvP abierto con marcas. Una casilla con
+`protection` sigue sin combate aunque además sea `pvp`. Hoy: toda la isla `puerto` es
+`no_pvp` (`puerto_no_pvp`, pisos 7 y 8: isla inicial y tutorial), la arena
+`bosque_arena` (6x5 de piedra, al suroeste de Raigal) y `testisle_no_pvp` (al oeste del
+templo, para el E2E). Una isla nueva cerca del inicio debería pensar si va `no_pvp`.
 
 `portals.yaml` (`kind`: `stairs` | `ladder` | `hole` | `rope_spot` | `teleport` | `boat`;
 una escalera necesita su pareja de vuelta, ver "Validación"):

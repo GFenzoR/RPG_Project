@@ -60,6 +60,41 @@ DELETE FROM guild_invites WHERE guild_id = sqlc.arg(guild_id) AND character_id =
 -- name: DeleteCharacterGuildInvites :exec
 DELETE FROM guild_invites WHERE character_id = sqlc.arg(character_id);
 
+-- Guild wars (T5.2).
+
+-- name: GuildWarHigh :one
+-- The highest war id ever issued (0 before the first declaration).
+SELECT war_high FROM guild_id_high;
+
+-- name: ListOpenGuildWars :many
+-- Declared and active wars (ended ones are history: the loop does not load them).
+SELECT id, guild_id, enemy_id, state, declared_at, started_at, expires_at, kill_limit,
+       guild_kills, enemy_kills
+FROM guild_wars
+WHERE state < 3
+ORDER BY id;
+
+-- name: InsertGuildWar :exec
+INSERT INTO guild_wars (id, guild_id, enemy_id, state, declared_at, expires_at, kill_limit)
+VALUES (sqlc.arg(id), sqlc.arg(guild_id), sqlc.arg(enemy_id), 1, sqlc.arg(declared_at), sqlc.arg(expires_at),
+        sqlc.arg(kill_limit));
+
+-- name: RaiseGuildWarHigh :exec
+UPDATE guild_id_high SET war_high = GREATEST(war_high, sqlc.arg(id)::bigint);
+
+-- name: StartGuildWar :execrows
+UPDATE guild_wars SET state = 2, started_at = sqlc.arg(started_at), expires_at = sqlc.arg(expires_at)
+WHERE id = sqlc.arg(id) AND state = 1;
+
+-- name: SetGuildWarKills :execrows
+UPDATE guild_wars SET guild_kills = sqlc.arg(guild_kills), enemy_kills = sqlc.arg(enemy_kills)
+WHERE id = sqlc.arg(id) AND state = 2;
+
+-- name: EndGuildWar :execrows
+UPDATE guild_wars SET state = 3, ended_at = sqlc.arg(ended_at), end_reason = sqlc.arg(end_reason),
+       winner_id = sqlc.narg(winner_id)
+WHERE id = sqlc.arg(id) AND state < 3;
+
 -- Public website (T5.1, /api/guilds): no private data, only names, ranks, vocation and
 -- level (as on the highscores).
 

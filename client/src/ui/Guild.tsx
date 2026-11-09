@@ -10,7 +10,14 @@ import { GuildAction, GuildRank } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
-import { guildPowers, hoursLeft, memberActions, rankKey } from "../state/guild.ts";
+import {
+  guildPowers,
+  hoursLeft,
+  memberActions,
+  rankKey,
+  warActions,
+  warLine,
+} from "../state/guild.ts";
 
 /** The text of the field `name` of the submitted form, trimmed. */
 function field(e: JSX.TargetedSubmitEvent<HTMLFormElement>, name: string): string {
@@ -169,6 +176,66 @@ export function GuildPanel(props: {
               </li>
             ))}
           </ul>
+        </>
+      )}
+      {(g.wars.length > 0 || g.rank === GuildRank.LEADER) && (
+        <>
+          <h3>{t("client.guild.wars")}</h3>
+          <ul class="guild-wars" data-testid="guild-wars">
+            {g.wars.map((w) => {
+              const line = warLine(w, props.now);
+              const a = warActions(g.rank, w);
+              const war = (action: GuildAction): void => props.game?.guildWar(action, "", w.id);
+              return (
+                <li key={String(w.id)} data-war={w.enemy} class={w.active ? "active" : "pending"}>
+                  <span>{t(line.key, line.params)}</span>
+                  {(a.accept || a.decline || a.surrender) && (
+                    <span class="actions">
+                      {a.accept && (
+                        <button type="button" onClick={() => war(GuildAction.WAR_ACCEPT)}>
+                          {t("client.guild.war_accept")}
+                        </button>
+                      )}
+                      {a.decline && (
+                        <button type="button" onClick={() => war(GuildAction.WAR_DECLINE)}>
+                          {t("client.guild.war_decline")}
+                        </button>
+                      )}
+                      {a.surrender && (
+                        <button
+                          type="button"
+                          class="danger"
+                          onClick={() => war(GuildAction.WAR_SURRENDER)}
+                        >
+                          {t("client.guild.war_surrender")}
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {g.rank === GuildRank.LEADER && (
+            <form
+              class="guild-row"
+              data-testid="guild-war-declare"
+              onSubmit={(e) => {
+                const name = field(e, "enemy");
+                if (name) props.game?.guildWar(GuildAction.WAR_DECLARE, name);
+                clear(e);
+              }}
+            >
+              <input
+                name="enemy"
+                maxLength={rules?.nameMax ?? 32}
+                placeholder={t("client.guild.war_declare_placeholder")}
+                aria-label={t("client.guild.war_declare_placeholder")}
+                autoComplete="off"
+              />
+              <button type="submit">{t("client.guild.war_declare")}</button>
+            </form>
+          )}
         </>
       )}
       <div class="guild-actions">

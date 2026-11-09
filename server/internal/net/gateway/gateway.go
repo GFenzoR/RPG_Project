@@ -343,6 +343,8 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 		Town:       pc.Town,
 		Role:       session.RoleFromString(pc.Role),
 		Storage:    pc.Storage,
+		PvP: session.PvPState{Skull: pc.PvP.Skull, SkullUntil: pc.PvP.SkullUntil, Kills: pc.PvP.Kills,
+			Unjust: pc.PvP.Unjust},
 	}
 	for _, s := range pc.Skills {
 		c.Skills = append(c.Skills, session.SkillState{ID: s.ID, Level: s.Level, Tries: s.Tries})

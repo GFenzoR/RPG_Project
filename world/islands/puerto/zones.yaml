@@ -29,3 +29,10 @@
   rects:
     - { x: 3200, y: 6296, w: 16, h: 12 }
   notes: "North shore beach east of the forest, open to community map patches (T2.4)."
+
+- id: puerto_no_pvp
+  type: no_pvp
+  floors: [7, 8]
+  rects:
+    - { x: 3072, y: 6272, w: 192, h: 192 }
+  notes: "The whole starting island: no player attacks a player here (T5.2, tutorial)."

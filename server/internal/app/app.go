@@ -402,7 +402,9 @@ func (a *App) writeSnapshot(ctx context.Context, s session.Snapshot) error {
 		Inventory:  storeItems(s.Inventory),
 		Storage:    s.Storage,
 		Conditions: storeConditions(s.Conditions),
-		SavedAt:    a.cfg.Clock.Now(),
+		PvP: store.PvPState{Skull: s.PvP.Skull, SkullUntil: s.PvP.SkullUntil, Kills: s.PvP.Kills,
+			Unjust: s.PvP.Unjust},
+		SavedAt: a.cfg.Clock.Now(),
 	})
 	switch {
 	case errors.Is(err, store.ErrNotFound):

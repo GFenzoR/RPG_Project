@@ -85,6 +85,9 @@ type GuildData struct {
 	// reused (audit log, public links).
 	IDHigh int64
 	Guilds []GuildRecord
+	// WarIDHigh is the highest war id ever issued and Wars the open wars (T5.2).
+	WarIDHigh int64
+	Wars      []GuildWarRecord
 }
 
 // GuildRecord is one stored guild.
@@ -127,6 +130,11 @@ const (
 	GuildTransfer
 	GuildInvite
 	GuildUninvite
+	// Guild wars (T5.2, guildwar.go).
+	GuildWarDeclare
+	GuildWarStart
+	GuildWarKills
+	GuildWarEnd
 )
 
 // GuildChange is one change for the database (AdminJob.Guild). For GuildTransfer,
@@ -142,6 +150,15 @@ type GuildChange struct {
 	Rank        guild.Rank
 	At          time.Time
 	Expires     time.Time
+	// Guild wars (T5.2): GuildID declared war WarID on EnemyID; Kills are GuildID's,
+	// EnemyKills its enemy's; Reason and WinnerID end it.
+	WarID      int64
+	EnemyID    int64
+	KillLimit  int
+	Kills      int
+	EnemyKills int
+	Reason     int
+	WinnerID   int64
 }
 
 type guildState struct {
@@ -153,6 +170,8 @@ type guildState struct {
 	invites []guildInvite
 	// queued: in World.guildDirty for this tick's flush.
 	queued bool
+	// wars: its open wars (T5.2), oldest first.
+	wars []*guildWar
 }
 
 type guildMember struct {
@@ -276,6 +295,12 @@ func (w *World) guildCommand(ctx *game.TickContext, p *Player, m *pb.GuildComman
 		w.guildDisband(ctx, p, name)
 	case pb.GuildAction_GUILD_ACTION_TRANSFER:
 		w.guildTransfer(ctx, p, name)
+	case pb.GuildAction_GUILD_ACTION_WAR_DECLARE:
+		w.warDeclare(ctx, p, name)
+	case pb.GuildAction_GUILD_ACTION_WAR_ACCEPT, pb.GuildAction_GUILD_ACTION_WAR_DECLINE:
+		w.warAnswer(ctx, p, int64(m.GetWarId()), m.GetAction() == pb.GuildAction_GUILD_ACTION_WAR_ACCEPT)
+	case pb.GuildAction_GUILD_ACTION_WAR_SURRENDER:
+		w.warSurrender(ctx, p, int64(m.GetWarId()))
 	}
 }
 
@@ -322,6 +347,11 @@ func (w *World) cmdGuild(ctx *game.TickContext, p *Player, args []string) {
 		m.Action = pb.GuildAction_GUILD_ACTION_DISBAND
 	case "transfer":
 		m.Action = pb.GuildAction_GUILD_ACTION_TRANSFER
+	case "war": // T5.2
+		if !w.cmdGuildWar(ctx, p, args[1:]) {
+			usage()
+		}
+		return
 	default:
 		usage()
 		return
@@ -767,6 +797,7 @@ func (w *World) removeMember(ctx *game.TickContext, m *guildMember) {
 
 // disband deletes g; every online member hears msg.
 func (w *World) disband(ctx *game.TickContext, g *guildState, msg *pb.ServerMessage) {
+	w.endWarsOf(ctx, g) // T5.2
 	w.guildMsg(g, msg)
 	for _, m := range g.members {
 		delete(w.guildMembers, m.charID)
@@ -914,6 +945,7 @@ func (w *World) guildUpdate(p *Player, now time.Time) *pb.GuildUpdate {
 		for i, m := range g.members {
 			u.Members[i] = &pb.GuildMember{Name: m.name, Rank: pb.GuildRank(m.rank), Online: w.byChar[m.charID] != nil}
 		}
+		u.Wars = w.guildWars(g, now) // T5.2
 		if gm.rank >= guild.Vice {
 			for _, inv := range g.invites {
 				u.Pending = append(u.Pending, &pb.GuildPendingInvite{Name: inv.name, ExpiresMs: expiresMs(inv.expires, now)})

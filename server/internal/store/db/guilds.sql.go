@@ -72,6 +72,32 @@ func (q *Queries) DeleteGuildMember(ctx context.Context, arg DeleteGuildMemberPa
 	return result.RowsAffected(), nil
 }
 
+const endGuildWar = `-- name: EndGuildWar :execrows
+UPDATE guild_wars SET state = 3, ended_at = $1, end_reason = $2,
+       winner_id = $3
+WHERE id = $4 AND state < 3
+`
+
+type EndGuildWarParams struct {
+	EndedAt   pgtype.Timestamptz
+	EndReason int16
+	WinnerID  pgtype.Int8
+	ID        int64
+}
+
+func (q *Queries) EndGuildWar(ctx context.Context, arg EndGuildWarParams) (int64, error) {
+	result, err := q.db.Exec(ctx, endGuildWar,
+		arg.EndedAt,
+		arg.EndReason,
+		arg.WinnerID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const guildIDHigh = `-- name: GuildIDHigh :one
 SELECT high FROM guild_id_high
 `
@@ -82,6 +108,20 @@ func (q *Queries) GuildIDHigh(ctx context.Context) (int64, error) {
 	var high int64
 	err := row.Scan(&high)
 	return high, err
+}
+
+const guildWarHigh = `-- name: GuildWarHigh :one
+
+SELECT war_high FROM guild_id_high
+`
+
+// Guild wars (T5.2).
+// The highest war id ever issued (0 before the first declaration).
+func (q *Queries) GuildWarHigh(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, guildWarHigh)
+	var war_high int64
+	err := row.Scan(&war_high)
+	return war_high, err
 }
 
 const insertGuild = `-- name: InsertGuild :exec
@@ -117,6 +157,33 @@ func (q *Queries) InsertGuildMember(ctx context.Context, arg InsertGuildMemberPa
 		arg.GuildID,
 		arg.Rank,
 		arg.JoinedAt,
+	)
+	return err
+}
+
+const insertGuildWar = `-- name: InsertGuildWar :exec
+INSERT INTO guild_wars (id, guild_id, enemy_id, state, declared_at, expires_at, kill_limit)
+VALUES ($1, $2, $3, 1, $4, $5,
+        $6)
+`
+
+type InsertGuildWarParams struct {
+	ID         int64
+	GuildID    int64
+	EnemyID    int64
+	DeclaredAt pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+	KillLimit  int32
+}
+
+func (q *Queries) InsertGuildWar(ctx context.Context, arg InsertGuildWarParams) error {
+	_, err := q.db.Exec(ctx, insertGuildWar,
+		arg.ID,
+		arg.GuildID,
+		arg.EnemyID,
+		arg.DeclaredAt,
+		arg.ExpiresAt,
+		arg.KillLimit,
 	)
 	return err
 }
@@ -225,6 +292,59 @@ func (q *Queries) ListGuilds(ctx context.Context) ([]Guild, error) {
 			&i.Name,
 			&i.Motd,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenGuildWars = `-- name: ListOpenGuildWars :many
+SELECT id, guild_id, enemy_id, state, declared_at, started_at, expires_at, kill_limit,
+       guild_kills, enemy_kills
+FROM guild_wars
+WHERE state < 3
+ORDER BY id
+`
+
+type ListOpenGuildWarsRow struct {
+	ID         int64
+	GuildID    int64
+	EnemyID    int64
+	State      int16
+	DeclaredAt pgtype.Timestamptz
+	StartedAt  pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+	KillLimit  int32
+	GuildKills int32
+	EnemyKills int32
+}
+
+// Declared and active wars (ended ones are history: the loop does not load them).
+func (q *Queries) ListOpenGuildWars(ctx context.Context) ([]ListOpenGuildWarsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenGuildWars)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenGuildWarsRow{}
+	for rows.Next() {
+		var i ListOpenGuildWarsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GuildID,
+			&i.EnemyID,
+			&i.State,
+			&i.DeclaredAt,
+			&i.StartedAt,
+			&i.ExpiresAt,
+			&i.KillLimit,
+			&i.GuildKills,
+			&i.EnemyKills,
 		); err != nil {
 			return nil, err
 		}
@@ -373,6 +493,15 @@ func (q *Queries) RaiseGuildIDHigh(ctx context.Context, id int64) error {
 	return err
 }
 
+const raiseGuildWarHigh = `-- name: RaiseGuildWarHigh :exec
+UPDATE guild_id_high SET war_high = GREATEST(war_high, $1::bigint)
+`
+
+func (q *Queries) RaiseGuildWarHigh(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, raiseGuildWarHigh, id)
+	return err
+}
+
 const renameGuild = `-- name: RenameGuild :execrows
 UPDATE guilds SET name = $1 WHERE id = $2
 `
@@ -420,6 +549,44 @@ type SetGuildMotdParams struct {
 
 func (q *Queries) SetGuildMotd(ctx context.Context, arg SetGuildMotdParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setGuildMotd, arg.Motd, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setGuildWarKills = `-- name: SetGuildWarKills :execrows
+UPDATE guild_wars SET guild_kills = $1, enemy_kills = $2
+WHERE id = $3 AND state = 2
+`
+
+type SetGuildWarKillsParams struct {
+	GuildKills int32
+	EnemyKills int32
+	ID         int64
+}
+
+func (q *Queries) SetGuildWarKills(ctx context.Context, arg SetGuildWarKillsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setGuildWarKills, arg.GuildKills, arg.EnemyKills, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const startGuildWar = `-- name: StartGuildWar :execrows
+UPDATE guild_wars SET state = 2, started_at = $1, expires_at = $2
+WHERE id = $3 AND state = 1
+`
+
+type StartGuildWarParams struct {
+	StartedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+	ID        int64
+}
+
+func (q *Queries) StartGuildWar(ctx context.Context, arg StartGuildWarParams) (int64, error) {
+	result, err := q.db.Exec(ctx, startGuildWar, arg.StartedAt, arg.ExpiresAt, arg.ID)
 	if err != nil {
 		return 0, err
 	}

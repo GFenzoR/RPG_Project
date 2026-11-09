@@ -33,10 +33,17 @@ func (w *World) Blessings(p *Player) int {
 // saved at once so a crash cannot undo the death.
 func (w *World) die(ctx *game.TickContext, p *Player) {
 	d := w.cfg.Balance.Death
-	blessings := w.Blessings(p)
-	pen := skills.DeathPenalty(d, blessings, p.level)
 	at := p.pos
 	p.recordEvent(ctx.Tick, eventDied, "", 0, 0)
+	// T5.2: the players that took part get the kill; a defeat in an arena costs nothing.
+	if w.pvpDeath(ctx, p) {
+		w.arenaDefeat(ctx, p)
+		return
+	}
+	blessings := w.Blessings(p)
+	pen := skills.DeathPenalty(d, blessings, p.level)
+	// T5.2: a murderer or an outlaw drops more, whatever its blessings.
+	pen.EquipmentDropPct, pen.BackpackDropPct = w.deathDrop(ctx.Now, p, pen.EquipmentDropPct, pen.BackpackDropPct)
 
 	// Corpse with the dropped items, in slot order (deterministic with the seeded rand).
 	if w.corpseItem != nil {
@@ -90,7 +97,19 @@ func (w *World) die(ctx *game.TickContext, p *Player) {
 		}
 	}
 
-	// Wake up at the temple.
+	w.wakeAtTemple(ctx, p)
+	w.sendInventory(p)
+	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
+	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
+	p.emit(systemMsg(msgDied,
+		&pb.TextParam{Name: "experience", Value: &pb.TextParam_Number{Number: lostXP}},
+		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}}))
+	w.save(w.snapshot(p, false))
+}
+
+// wakeAtTemple ends a death: full health and mana, no target, nobody attacking p, and p
+// at its residence temple.
+func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player) {
 	p.health, p.mana = p.maxHealth, p.maxMana
 	p.target = nil
 	for _, m := range w.monsters {
@@ -98,18 +117,24 @@ func (w *World) die(ctx *game.TickContext, p *Player) {
 			m.target = nil
 		}
 	}
+	w.pvpDied(ctx.Now, p)
 	temple := w.temple(p.town)
 	to, ok := w.freeNear(temple, 3)
 	if !ok {
 		to = temple
 	}
 	w.Teleport(p, to)
-	w.sendInventory(p)
+}
+
+// arenaDefeat is a death in a pvp zone at the hands of a player in it too (T5.2): no
+// corpse, no loss of experience, skills, items or blessings; the conditions end and p
+// wakes up at its temple.
+func (w *World) arenaDefeat(ctx *game.TickContext, p *Player) {
+	w.clearConditions(ctx, holder{p: p}, false)
+	w.refreshSpeed(holder{p: p})
+	w.wakeAtTemple(ctx, p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
-	p.emit(systemMsg(msgDied,
-		&pb.TextParam{Name: "experience", Value: &pb.TextParam_Number{Number: lostXP}},
-		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}}))
+	p.emit(systemMsg(msgPvPArenaDefeat))
 	w.save(w.snapshot(p, false))
 }
 

@@ -477,9 +477,10 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
 
 ### Combate cuerpo a cuerpo (T1.6, `server/internal/session/combat.go`)
 - `SetTarget{creature_id}` elige un monstruo que el cliente conoce, en su mismo piso, con
-  ninguno de los dos en zona de protección. Si no vale (también jugadores y NPCs, hasta
-  PvP), el servidor lo descarta y manda `Message` de sistema `combat.cannot_attack`; el
-  cliente suelta el objetivo al recibirlo. `0` deja de atacar. El objetivo se pierde
+  ninguno de los dos en zona de protección, o (T5.2, con PvP) un jugador que las reglas
+  dejan atacar ("PvP" abajo). Si no vale (NPCs, jugadores con PvP apagado), el servidor
+  lo descarta y manda `Message` de sistema `combat.cannot_attack` (o la clave `pvp.*` del
+  motivo); el cliente suelta el objetivo al recibirlo. `0` deja de atacar. El objetivo se pierde
   solo cuando sale de la vista o muere: el cliente lo suelta con su `CreatureDisappear`.
 - `SetFightMode{stance, chase}`: `stance` ofensivo/equilibrado/defensivo multiplica el
   golpe máximo y la defensa del escudo (`combat.modes` de `balance.yaml`); `UNSPECIFIED`
@@ -781,9 +782,41 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   `party.joined`, `party.left`, `party.kicked`, `party.new_leader` (todos con `name`),
   `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`.
 
+### PvP (T5.2, `server/internal/session/pvp.go` y `guildwar.go`)
+Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
+- **`SetSafeMode{enabled}`** (cliente → servidor): el modo seguro. Cada login empieza con
+  él activado; el cliente lo manda tras el `Welcome` si el jugador lo apagó, y cada vez
+  que cambia el interruptor. Responde `pvp.safe_on` / `pvp.safe_off`.
+- **Atacar a un jugador:** el mismo `SetTarget`. El servidor valida en cada ronda (zonas,
+  niveles, staff, modo seguro); si deja de valer, suelta el objetivo y manda el motivo.
+  `CastSpell` con objetivo (`creature_id`, casilla o el objetivo actual) también alcanza a
+  un jugador; las runas igual. Motivos de rechazo: `pvp.off`, `pvp.staff`,
+  `pvp.protected_staff`, `pvp.your_level` / `pvp.their_level` (`level`), `pvp.zone`,
+  `pvp.safe_mode`. El cliente suelta su objetivo al recibir cualquiera de ellos.
+- **`Creature.skull`** y **`CreatureSkull{id, skull}`** a quienes ven al jugador (él
+  incluido) cuando cambia. `Skull`: `UNSPECIFIED` (sin marca), `AGGRESSOR`, `MURDERER`,
+  `OUTLAW`.
+- **Mensajes de sistema:** `pvp.kill` / `pvp.kill_unjust` (`name` = la víctima) a cada
+  jugador que se llevó la muerte, `pvp.killed_by` (`name`) a la víctima,
+  `pvp.arena_defeat`, `pvp.skull_gained` (`skull` content_id: `aggressor`, `murderer`,
+  `outlaw`, que el cliente traduce como `client.skull.<id>`), `pvp.logout_locked` (un
+  `Logout` rechazado: la conexión sigue), `pvp.protection_locked` (con su
+  `WalkRejected`), `pvp.skull_removed_staff`, y para el staff `gm.skull_removed` (`name`).
+- **Guerras de gremios** dentro de `GuildCommand` (campo nuevo `war_id`):
+  `WAR_DECLARE` (`name` = el gremio enemigo), `WAR_ACCEPT` / `WAR_DECLINE` / `WAR_SURRENDER`
+  (`war_id`). Solo el líder. Por chat: `/guild war declare|accept|decline|surrender Gremio`.
+  `GuildUpdate.wars` = `GuildWar{war_id, enemy_name, state (PENDING|ACTIVE),
+  declared_by_us, our_kills, their_kills, kill_limit, ends_ms}`: las declaradas y las
+  activas; las terminadas no se listan. Mensajes (`guild` = el otro gremio): `guild.war_off`,
+  `guild.war_no_guild`, `guild.war_self`, `guild.war_exists`, `guild.war_too_many`
+  (`count`), `guild.war_enemy_busy`, `guild.war_declared`, `guild.war_declared_on_us`,
+  `guild.war_started` (`kills`), `guild.war_declined`, `guild.war_expired`,
+  `guild.war_won` / `guild.war_lost` / `guild.war_draw` (`our_kills`, `their_kills`),
+  `guild.war_surrendered`, `guild.war_disbanded`, `guild.war_not_found`.
+
 ### Gremios (T5.1, `server/internal/session/guild.go`)
 Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.
-- **`GuildCommand{action, name, text, guild_id}`**. Los miembros se nombran por nombre de
+- **`GuildCommand{action, name, text, guild_id, war_id}`** (`war_id`: T5.2). Los miembros se nombran por nombre de
   personaje (pueden estar desconectados). Cada comando cuenta para el anti-flood del chat.
   - `CREATE` (`name` = el gremio), `INVITE` / `REVOKE` (`name` = un personaje conectado),
     `ACCEPT` / `DECLINE` (`guild_id` de la invitación), `LEAVE`, `KICK`, `PROMOTE`,
@@ -792,7 +825,7 @@ Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.
   - El chat hace lo mismo: `/guild create|invite|revoke|accept|decline|leave|kick|promote|
     demote|motd|transfer|disband ...`; `accept`, `decline` y `disband` llevan el nombre del
     gremio. Sin argumentos o con una acción desconocida → `guild.usage`.
-- **`GuildUpdate{guild_id, name, motd, rank, members[], pending[], invitations[]}`**: el
+- **`GuildUpdate{guild_id, name, motd, rank, members[], pending[], invitations[], wars[]}`**: el
   estado completo, al entrar al mundo y cada vez que cambia (miembros, rangos, quién está
   en línea, mensaje del día, invitaciones), como mucho uno por tick. `guild_id` 0 = sin
   gremio. `members` = `GuildMember{name, rank, online}`, de mayor rango a menor y por

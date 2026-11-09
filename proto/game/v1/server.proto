@@ -54,6 +54,7 @@ message ServerMessage {
     TutorialStep tutorial_step = 35;
     GuildUpdate guild_update = 36;
     CreatureGuild creature_guild = 37;
+    CreatureSkull creature_skull = 38;
   }
 }
 
@@ -184,6 +185,29 @@ message Creature {
   uint32 speed = 9;
   // Players: the name of its guild, empty if none (T5.1). CreatureGuild changes it.
   string guild = 10;
+  // Players: its PvP mark (T5.2). CreatureSkull changes it.
+  Skull skull = 11;
+}
+
+// Skull is a player's PvP mark (T5.2, docs/02 "PvP"). Attacking a marked player is
+// justified.
+enum Skull {
+  // No mark.
+  SKULL_UNSPECIFIED = 0;
+  // Attacked a player without a mark: lasts balance pvp.aggressor_ms after the last
+  // unjustified attack.
+  SKULL_AGGRESSOR = 1;
+  // Reached a murderer threshold of unjustified kills (balance pvp.murderer).
+  SKULL_MURDERER = 2;
+  // Reached an outlaw threshold (balance pvp.outlaw): the gravest mark.
+  SKULL_OUTLAW = 3;
+}
+
+// CreatureSkull tells the clients that see player id (the player included) that its
+// skull changed.
+message CreatureSkull {
+  uint32 id = 1;
+  Skull skull = 2;
 }
 
 message CreatureAppear {
@@ -550,6 +574,30 @@ message GuildUpdate {
   // Invitations to the player, oldest first. Always empty for a guild member: a member
   // cannot be invited, and joining or founding a guild drops its invitations.
   repeated GuildInvitation invitations = 7;
+  // The guild's wars (T5.2): declared and not answered yet, and active ones. Ended wars
+  // are not listed (a system Message tells their result).
+  repeated GuildWar wars = 8;
+}
+
+enum GuildWarState {
+  GUILD_WAR_STATE_UNSPECIFIED = 0;
+  // Declared, waiting for the other leader. declared_by_us tells who declared it.
+  GUILD_WAR_STATE_PENDING = 1;
+  GUILD_WAR_STATE_ACTIVE = 2;
+}
+
+message GuildWar {
+  uint64 war_id = 1;
+  string enemy_name = 2;
+  GuildWarState state = 3;
+  bool declared_by_us = 4;
+  // Kills of each side since the war started (active only).
+  uint32 our_kills = 5;
+  uint32 their_kills = 6;
+  // The kills that win the war (balance pvp.war.kill_limit).
+  uint32 kill_limit = 7;
+  // Pending: how long until the declaration expires. Active: until the war ends.
+  uint32 ends_ms = 8;
 }
 
 message GuildMember {

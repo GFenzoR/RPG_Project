@@ -6,7 +6,7 @@
 // tile clicks (left: walk) and creature clicks (right: attack).
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, FloatingTextKind } from "@rpg/protocol";
+import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
 import type { AtlasIcon, Camera } from "@rpg/renderer";
 import { VIEW_TILES, followCamera, pixelScale } from "./viewport.ts";
@@ -15,6 +15,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import { delta } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
+import { skullColor } from "../state/pvp.ts";
 import {
   EFFECT_CONJURE,
   EFFECT_ELEMENT,
@@ -151,6 +152,20 @@ export interface GameCanvasOptions {
 /** Pointer travel (canvas pixels) that turns a press into a drag. */
 const DRAG_START_PX = 6;
 
+/** Radius of the skull placeholder (T5.2), in screen pixels. */
+const SKULL_R = 5;
+
+/** Draws a skull icon of the mark's colour (a round head, jaw and dark eyes); none = empty. */
+function drawSkull(g: Graphics, mark: Skull): void {
+  g.clear();
+  if (mark === Skull.UNSPECIFIED) return;
+  const fill = skullColor(mark);
+  g.circle(0, -1, SKULL_R).fill(fill).stroke({ color: 0x000000, width: 1 });
+  g.rect(-3, 2, 6, 3).fill(fill).stroke({ color: 0x000000, width: 1 });
+  g.circle(-2, -1, 1.3).fill(0x000000);
+  g.circle(2, -1, 1.3).fill(0x000000);
+}
+
 interface CreatureSprite {
   body: Container;
   shape: Graphics;
@@ -158,6 +173,9 @@ interface CreatureSprite {
   label: Text;
   /** The guild name, between the name and the health bar (T5.1); empty = hidden. */
   guild: Text;
+  /** The PvP mark left of the name (T5.2): a placeholder drawn with shapes. */
+  skull: Graphics;
+  drawnSkull: Skull;
   bar: Graphics;
   drawnDir: number;
   drawnHealth: number;
@@ -307,12 +325,16 @@ export async function createGameCanvas(
         roundPixels: true,
       });
       labels.addChild(guild);
+      const skull = new Graphics();
+      labels.addChild(skull);
       s = {
         body,
         shape,
         frame,
         label,
         guild,
+        skull,
+        drawnSkull: Skull.UNSPECIFIED,
         bar,
         drawnDir: -1,
         drawnHealth: -1,
@@ -325,6 +347,8 @@ export async function createGameCanvas(
     if (s.label.text !== name) s.label.text = name;
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
     s.guild.visible = c.guild !== "";
+    if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull);
+    s.drawnSkull = c.skull;
     if (s.drawnDir !== c.dir) drawShape(s, c);
     if (s.drawnHealth !== c.health) drawBar(s, c.health);
     const targeted = world.target === c.id;
@@ -339,6 +363,7 @@ export async function createGameCanvas(
     s.body.destroy({ children: true });
     s.label.destroy();
     s.guild.destroy();
+    s.skull.destroy();
     s.bar.destroy();
     sprites.delete(id);
   };
@@ -457,6 +482,12 @@ export async function createGameCanvas(
         s.label.position.set(Math.round(head.x), barTop - 1 - Math.round(s.guild.height));
       } else {
         s.label.position.set(Math.round(head.x), barTop - 1);
+      }
+      if (s.drawnSkull !== Skull.UNSPECIFIED) {
+        s.skull.position.set(
+          Math.round(s.label.x - s.label.width / 2 - SKULL_R - 2),
+          Math.round(s.label.y - s.label.height / 2),
+        );
       }
     }
     for (const id of [...sprites.keys()]) if (!seen.has(id)) dropSprite(id);

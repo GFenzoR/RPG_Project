@@ -135,9 +135,10 @@ func (w *World) markFight(ctx *game.TickContext, p *Player) {
 	}
 }
 
-// inCombat reports whether p fought within balance travel.combat_block_ms.
+// inCombat reports whether p fought within balance travel.combat_block_ms, or its PvP
+// lock lasts (T5.2: no sailing, idle kick or presence check in the middle of a fight).
 func (w *World) inCombat(now game.Tick, p *Player) bool {
-	return p.fightAt > 0 && now-p.fightAt < w.fightFor
+	return p.fightAt > 0 && now-p.fightAt < w.fightFor || w.pvpLocked(now, p)
 }
 
 // sail runs a route for p, who is talking to its captain (talk range was checked).

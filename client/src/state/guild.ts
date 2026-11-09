@@ -2,7 +2,7 @@
 // The server decides every permission; these helpers only choose which buttons to show,
 // with the same rules (docs/02, "Gremios"), so a button never offers something the
 // server would refuse for the rank.
-import { GuildRank } from "@rpg/protocol";
+import { GuildRank, GuildWarState } from "@rpg/protocol";
 import type { GuildUpdate } from "@rpg/protocol";
 
 export interface GuildMemberView {
@@ -26,6 +26,21 @@ export interface GuildView {
   members: GuildMemberView[];
   /** Only for vice leaders and the leader. */
   pending: PendingInviteView[];
+  /** Declared and active wars (T5.2). */
+  wars: WarView[];
+}
+
+/** A guild war as GuildUpdate lists it (T5.2). */
+export interface WarView {
+  id: bigint;
+  enemy: string;
+  active: boolean;
+  declaredByUs: boolean;
+  ours: number;
+  theirs: number;
+  limit: number;
+  /** When the declaration expires or the war ends (ms, the caller's clock). */
+  until: number;
 }
 
 export interface GuildInvitationView {
@@ -51,6 +66,16 @@ export class GuildState {
             rank: u.rank,
             members: u.members.map((m) => ({ name: m.name, rank: m.rank, online: m.online })),
             pending: this.pending,
+            wars: u.wars.map((w) => ({
+              id: w.warId,
+              enemy: w.enemyName,
+              active: w.state === GuildWarState.ACTIVE,
+              declaredByUs: w.declaredByUs,
+              ours: w.ourKills,
+              theirs: w.theirKills,
+              limit: w.killLimit,
+              until: now + w.endsMs,
+            })),
           };
     this.invites = u.invitations.map((i) => ({
       guildId: i.guildId,
@@ -126,4 +151,36 @@ export function memberActions(rank: GuildRank, m: GuildMemberView, self: boolean
 /** Hours (rounded up, at least 1) until `until`: how invitations show their expiry. */
 export function hoursLeft(until: number, now: number): number {
   return Math.max(1, Math.ceil((until - now) / 3_600_000));
+}
+
+/** What a guild war lets the player do (T5.2): only leaders act; the declared guild
+ * answers a declaration, and either side surrenders an active war. */
+export interface WarActions {
+  accept: boolean;
+  decline: boolean;
+  surrender: boolean;
+}
+
+export function warActions(rank: GuildRank, w: WarView): WarActions {
+  const leader = rank === GuildRank.LEADER;
+  const answer = leader && !w.active && !w.declaredByUs;
+  return { accept: answer, decline: answer, surrender: leader && w.active };
+}
+
+/** The i18n key and parameters of a war's line in the panel. */
+export function warLine(
+  w: WarView,
+  now: number,
+): { key: string; params: Record<string, string | number> } {
+  const hours = hoursLeft(w.until, now);
+  if (w.active) {
+    return {
+      key: "client.guild.war_active",
+      params: { guild: w.enemy, ours: w.ours, theirs: w.theirs, limit: w.limit, hours },
+    };
+  }
+  return {
+    key: w.declaredByUs ? "client.guild.war_pending_ours" : "client.guild.war_pending_theirs",
+    params: { guild: w.enemy, hours },
+  };
 }

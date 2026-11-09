@@ -20,6 +20,7 @@ export interface PresenceState {
 import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
 import type {
   Creature,
+  Skull,
   EquipmentSlot,
   ItemStack,
   MapArea,
@@ -46,6 +47,19 @@ export interface Walk {
   duration: number;
 }
 
+/** System messages that mean the server dropped (or refused) the player's target. */
+const TARGET_REFUSED = new Set([
+  "combat.cannot_attack",
+  // T5.2: an attack on a player the rules do not allow.
+  "pvp.off",
+  "pvp.staff",
+  "pvp.protected_staff",
+  "pvp.your_level",
+  "pvp.their_level",
+  "pvp.zone",
+  "pvp.safe_mode",
+]);
+
 export interface CreatureState {
   id: number;
   kind: CreatureKind;
@@ -60,6 +74,8 @@ export interface CreatureState {
   walk: Walk | undefined;
   /** A player's guild name (T5.1), "" for none. */
   guild: string;
+  /** A player's PvP mark (T5.2). */
+  skull: Skull;
 }
 
 /** A visual effect on a tile (Effect.effect_id, docs/05 "Combate"). */
@@ -455,6 +471,11 @@ export class WorldState implements TileSource {
         if (c) c.guild = msg.value.guild;
         break;
       }
+      case "creatureSkull": {
+        const c = this.creatures.get(msg.value.id);
+        if (c) c.skull = msg.value.skull;
+        break;
+      }
       case "tutorialStep":
         this.tutorial = tutorialFrom(msg.value);
         break;
@@ -555,7 +576,7 @@ export class WorldState implements TileSource {
         if (m.body.case !== "localized") break;
         const key = m.body.value.key;
         // The server refused the target: drop it like the server did.
-        if (key === "combat.cannot_attack") this.target = undefined;
+        if (TARGET_REFUSED.has(key)) this.target = undefined;
         if (key === "progress.level_up") {
           const p = m.body.value.params.find((x) => x.name === "level");
           if (p?.value.case === "number") this.levelUp = { level: Number(p.value.value), at: now };
@@ -722,6 +743,7 @@ export class WorldState implements TileSource {
       health: c.healthPercent,
       walk: undefined,
       guild: c.guild,
+      skull: c.skull,
     });
   }
 

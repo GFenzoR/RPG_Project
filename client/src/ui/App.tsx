@@ -9,6 +9,7 @@ import { Game } from "../game.ts";
 import type { GameUi } from "../game.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import { creatureName, formatMessage } from "../state/messages.ts";
+import { skullId } from "../state/pvp.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
@@ -375,6 +376,7 @@ function GameScreen(props: {
   const [entered, setEntered] = useState(false);
   const [ui, setUi] = useState<GameUi>({
     battle: [],
+    safeMode: true,
     target: undefined,
     stats: undefined,
     skills: [],
@@ -547,11 +549,20 @@ function GameScreen(props: {
                       class={ui.target === c.id ? "target" : ""}
                       data-creature={c.id}
                       aria-pressed={ui.target === c.id}
-                      disabled={c.kind !== CreatureKind.MONSTER}
                       title={t("client.battle.attack_hint")}
                       onClick={() => game.current?.attack(c.id)}
                     >
-                      <span class="cname">{creatureName(c, t)}</span>
+                      <span class="cname">
+                        {skullId(c.skull) && (
+                          <span
+                            class={`skull skull-${skullId(c.skull)}`}
+                            data-skull={skullId(c.skull)}
+                            title={t(`client.skull.${skullId(c.skull)}`)}
+                            aria-label={t(`client.skull.${skullId(c.skull)}`)}
+                          />
+                        )}
+                        {creatureName(c, t)}
+                      </span>
                       <span class="hp" aria-label={t("client.battle.health", { health: c.health })}>
                         <span style={{ width: `${c.health}%` }} />
                       </span>
@@ -632,6 +643,15 @@ function GameScreen(props: {
                 }}
               />
               {t("client.fight.chase")}
+            </label>
+            <label class="check" title={t("client.pvp.safe_mode_hint")}>
+              <input
+                type="checkbox"
+                data-testid="safe-mode"
+                checked={ui.safeMode}
+                onChange={(e) => game.current?.setSafeMode(e.currentTarget.checked)}
+              />
+              {t("client.pvp.safe_mode")}
             </label>
           </section>
           <InventoryPanel t={t} content={props.content} game={game.current} ui={ui} />
