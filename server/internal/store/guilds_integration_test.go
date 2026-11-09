@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ func TestGuilds(t *testing.T) {
 	ctx := context.Background()
 	const schema = "it_store_guilds"
 	st := storetest.Open(t, schema, true)
+	conn := storetest.Conn(t, schema)
 	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 
 	acc, err := st.CreateAccount(ctx, "guilds@example.org", "h")
@@ -57,7 +59,12 @@ func TestGuilds(t *testing.T) {
 	must(store.GuildChange{Op: store.GuildJoin, GuildID: 1, CharacterID: bea, Rank: store.GuildRankMember})
 	must(store.GuildChange{Op: store.GuildMotd, GuildID: 1, Text: "dock at dawn"})
 	must(store.GuildChange{Op: store.GuildRank, GuildID: 1, CharacterID: bea, Rank: store.GuildRankVice})
-	must(store.GuildChange{Op: store.GuildTransfer, GuildID: 1, CharacterID: ana, OtherID: bea, Rank: store.GuildRankVice})
+	must(store.GuildChange{Op: store.GuildTransfer, GuildID: 1, CharacterID: ana, OtherID: bea, Rank: store.GuildRankMember})
+	// The old leader keeps the rank the loop chose (member here: no room for a vice).
+	if err := apply(store.GuildChange{Op: store.GuildTransfer, GuildID: 1, CharacterID: bea, OtherID: ana}); !errors.Is(err, store.ErrGuildConflict) {
+		t.Fatalf("transfer without a rank for the old leader: %v", err)
+	}
+	must(store.GuildChange{Op: store.GuildRank, GuildID: 1, CharacterID: ana, Rank: store.GuildRankVice})
 
 	// Names are unique ignoring case; a character is in one guild at most.
 	if err := apply(store.GuildChange{Op: store.GuildCreate, GuildID: 2, CharacterID: dora, Name: "SALT LANTERNS"}); !errors.Is(err, store.ErrGuildConflict) {
@@ -75,6 +82,9 @@ func TestGuilds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if rows.IDHigh != 1 {
+		t.Fatalf("id high %d", rows.IDHigh)
+	}
 	if len(rows.Guilds) != 1 || rows.Guilds[0].Name != "Salt Lanterns" || rows.Guilds[0].Motd != "dock at dawn" {
 		t.Fatalf("guilds %+v", rows.Guilds)
 	}
@@ -87,15 +97,15 @@ func TestGuilds(t *testing.T) {
 		t.Fatalf("invites %+v", rows.Invites)
 	}
 
-	list, err := st.PublicGuilds(ctx, 10)
+	list, err := st.PublicGuilds(ctx, 10, now)
 	if err != nil || len(list) != 1 || list[0].Leader != "Bea" || list[0].Members != 2 {
 		t.Fatalf("PublicGuilds = %+v, %v", list, err)
 	}
-	page, err := st.PublicGuild(ctx, 1)
+	page, err := st.PublicGuild(ctx, 1, now)
 	if err != nil || len(page.Members) != 2 || page.Members[0].Name != "Bea" || page.Members[0].Rank != store.GuildRankLeader {
 		t.Fatalf("PublicGuild = %+v, %v", page, err)
 	}
-	if _, err := st.PublicGuild(ctx, 42); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.PublicGuild(ctx, 42, now); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("missing guild: %v", err)
 	}
 
@@ -148,9 +158,45 @@ func TestGuilds(t *testing.T) {
 			t.Fatalf("invitation of a disbanded guild %+v", i)
 		}
 	}
+	// The disbanded guild's id stays issued (the highest so far is 4).
+	if rows.IDHigh != 4 {
+		t.Fatalf("id high after disband %d", rows.IDHigh)
+	}
+	// The public pages leave out characters of staff accounts, like the highscores.
+	staff, err := st.CreateAccount(ctx, "guild-gm@example.org", "h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gmChar, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: staff, Name: "Warden", Vocation: "guardian", Health: 1}, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, "UPDATE accounts SET role = 'gm' WHERE id = $1", staff); err != nil {
+		t.Fatal(err)
+	}
+	countOf := func() int {
+		l, err := st.PublicGuilds(ctx, 10, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range l {
+			if g.ID == 1 {
+				return g.Members
+			}
+		}
+		return -1
+	}
+	before := countOf()
+	must(store.GuildChange{Op: store.GuildJoin, GuildID: 1, CharacterID: gmChar.ID, Rank: store.GuildRankMember})
+	if p, _ := st.PublicGuild(ctx, 1, now); slices.ContainsFunc(p.Members, func(m store.PublicGuildMember) bool { return m.Name == "Warden" }) {
+		t.Fatalf("a staff character on the public page: %+v", p.Members)
+	}
+	if n := countOf(); n != before {
+		t.Fatalf("staff counted: %d members, want %d", n, before)
+	}
 	// A renamed guild keeps its members.
 	must(store.GuildChange{Op: store.GuildRename, GuildID: 1, Name: "Fine Name"})
-	if p, _ := st.PublicGuild(ctx, 1); p.Name != "Fine Name" || len(p.Members) < 2 {
+	if p, _ := st.PublicGuild(ctx, 1, now); p.Name != "Fine Name" || len(p.Members) < 2 {
 		t.Fatalf("renamed %+v", p)
 	}
 }

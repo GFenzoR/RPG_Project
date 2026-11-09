@@ -38,8 +38,8 @@ const (
 	GuildRemove
 	// GuildRank sets the Rank of CharacterID in GuildID.
 	GuildRank
-	// GuildTransfer makes OtherID the leader of GuildID and CharacterID (the old leader)
-	// a vice leader.
+	// GuildTransfer makes OtherID the leader of GuildID and gives CharacterID (the old
+	// leader) Rank (vice, or member when the guild has no room for another vice).
 	GuildTransfer
 	// GuildInvite stores (or renews) the invitation of CharacterID to GuildID by
 	// InvitedBy until Expires.
@@ -100,6 +100,9 @@ func applyGuild(ctx context.Context, q *db.Queries, c GuildChange) error {
 		if err = q.InsertGuild(ctx, db.InsertGuildParams{ID: c.GuildID, Name: c.Name, CreatedAt: ts(c.At)}); err != nil {
 			return guildErr("insert guild", err)
 		}
+		if err = q.RaiseGuildIDHigh(ctx, c.GuildID); err != nil {
+			return guildErr("guild id", err)
+		}
 		err = q.InsertGuildMember(ctx, db.InsertGuildMemberParams{CharacterID: c.CharacterID, GuildID: c.GuildID,
 			Rank: GuildRankLeader, JoinedAt: ts(c.At)})
 		if err == nil {
@@ -123,9 +126,14 @@ func applyGuild(ctx context.Context, q *db.Queries, c GuildChange) error {
 		_, err = q.SetGuildMemberRank(ctx, db.SetGuildMemberRankParams{GuildID: c.GuildID, CharacterID: c.CharacterID,
 			Rank: int16(c.Rank)})
 	case GuildTransfer:
-		// Demote first: one leader per guild is a unique index checked per statement.
+		// Demote first: one leader per guild is a unique index checked per statement. The
+		// old leader's new rank is the loop's (a member when there is no room for a vice).
+		old := int16(c.Rank)
+		if old != GuildRankMember && old != GuildRankVice {
+			return fmt.Errorf("%w: transfer leaves the old leader with rank %d", ErrGuildConflict, c.Rank)
+		}
 		_, err = q.SetGuildMemberRank(ctx, db.SetGuildMemberRankParams{GuildID: c.GuildID, CharacterID: c.CharacterID,
-			Rank: GuildRankVice})
+			Rank: old})
 		if err == nil {
 			_, err = q.SetGuildMemberRank(ctx, db.SetGuildMemberRankParams{GuildID: c.GuildID, CharacterID: c.OtherID,
 				Rank: GuildRankLeader})
@@ -182,8 +190,10 @@ type GuildInviteRow struct {
 	Expires     time.Time
 }
 
-// GuildRows is every guild, member and pending invitation.
+// GuildRows is every guild, member and pending invitation, and the highest guild id
+// ever issued (a new guild must get a higher one).
 type GuildRows struct {
+	IDHigh  int64
 	Guilds  []GuildRow
 	Members []GuildMemberRow
 	Invites []GuildInviteRow
@@ -198,6 +208,11 @@ func (s *Store) LoadGuilds(ctx context.Context, now time.Time) (GuildRows, error
 		if err := q.DeleteExpiredGuildInvites(ctx, ts(now)); err != nil {
 			return err
 		}
+		high, err := q.GuildIDHigh(ctx)
+		if err != nil {
+			return err
+		}
+		out.IDHigh = high
 		gs, err := q.ListGuilds(ctx)
 		if err != nil {
 			return err
@@ -254,9 +269,10 @@ type PublicGuildDetail struct {
 	Members   []PublicGuildMember
 }
 
-// PublicGuilds returns up to n guilds by name, with their leader and member count.
-func (s *Store) PublicGuilds(ctx context.Context, n int) ([]PublicGuildSummary, error) {
-	rows, err := s.q.PublicGuilds(ctx, int32(min(max(n, 1), 10000)))
+// PublicGuilds returns up to n guilds by name, with their leader and member count. Like
+// the highscores, characters of staff, disabled or banned (at now) accounts are left out.
+func (s *Store) PublicGuilds(ctx context.Context, n int, now time.Time) ([]PublicGuildSummary, error) {
+	rows, err := s.q.PublicGuilds(ctx, db.PublicGuildsParams{Now: ts(now), MaxRows: int32(min(max(n, 1), 10000))})
 	if err != nil {
 		return nil, fmt.Errorf("public guilds: %w", err)
 	}
@@ -269,12 +285,12 @@ func (s *Store) PublicGuilds(ctx context.Context, n int) ([]PublicGuildSummary, 
 
 // PublicGuild returns a guild's public page, or ErrNotFound. The message of the day is
 // for the members only: it is not part of it.
-func (s *Store) PublicGuild(ctx context.Context, id int64) (PublicGuildDetail, error) {
+func (s *Store) PublicGuild(ctx context.Context, id int64, now time.Time) (PublicGuildDetail, error) {
 	g, err := s.q.PublicGuild(ctx, id)
 	if err != nil {
 		return PublicGuildDetail{}, notFound(err)
 	}
-	ms, err := s.q.PublicGuildMembers(ctx, id)
+	ms, err := s.q.PublicGuildMembers(ctx, db.PublicGuildMembersParams{GuildID: id, Now: ts(now)})
 	if err != nil {
 		return PublicGuildDetail{}, fmt.Errorf("public guild members: %w", err)
 	}

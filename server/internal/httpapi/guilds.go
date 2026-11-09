@@ -15,14 +15,14 @@ import (
 
 // Public guild pages (T5.1): GET /api/guilds lists every guild and GET /api/guilds/{id}
 // shows one with its members and ranks. Only public data: names, ranks, vocation and
-// level (as on the highscores); never the message of the day, online status or anything
-// of the accounts. Like the highscores they share the public rate limit, the query slots
+// level (as on the highscores, with the same exclusions: staff, disabled and banned
+// accounts); never the message of the day, online status or anything of the accounts. Like the highscores they share the public rate limit, the query slots
 // and a cache of DefaultHighscoreCacheTTL (a change shows up within that time).
 
 // PublicGuilds is the source of the public guild pages. *store.Store implements it.
 type PublicGuilds interface {
-	PublicGuilds(ctx context.Context, n int) ([]store.PublicGuildSummary, error)
-	PublicGuild(ctx context.Context, id int64) (store.PublicGuildDetail, error)
+	PublicGuilds(ctx context.Context, n int, now time.Time) ([]store.PublicGuildSummary, error)
+	PublicGuild(ctx context.Context, id int64, now time.Time) (store.PublicGuildDetail, error)
 }
 
 var _ PublicGuilds = (*store.Store)(nil)
@@ -63,7 +63,7 @@ type guildPageResponse struct {
 // guildList serves GET /api/guilds.
 func (a *api) guildList(w http.ResponseWriter, r *http.Request) {
 	a.cachedGuildJSON(w, r, "list", func(ctx context.Context) (any, error) {
-		gs, err := a.cfg.Guilds.PublicGuilds(ctx, MaxPublicGuilds)
+		gs, err := a.cfg.Guilds.PublicGuilds(ctx, MaxPublicGuilds, a.cfg.Clock.Now())
 		if err != nil {
 			return nil, err
 		}
@@ -83,7 +83,7 @@ func (a *api) guildPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.cachedGuildJSON(w, r, "g"+strconv.FormatInt(id, 10), func(ctx context.Context) (any, error) {
-		g, err := a.cfg.Guilds.PublicGuild(ctx, id)
+		g, err := a.cfg.Guilds.PublicGuild(ctx, id, a.cfg.Clock.Now())
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, nil // cached as a 404 too: random ids cannot reach the database
 		}

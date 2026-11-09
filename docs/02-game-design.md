@@ -648,8 +648,10 @@ son pocos y simples a propósito: lo que no está acá no existe.
   invitación sobrevive al logout y vence a las `invite_hours` (36 h) del reloj del juego.
   Un gremio tiene como mucho `max_invites` (15) pendientes. El invitado acepta o rechaza
   desde el panel (o `/guild accept Gremio`); al entrar a un gremio se borran sus otras
-  invitaciones. Invitar dice si alguien está conectado, igual que la lista de miembros:
-  se acepta, y cada intento cuenta para el anti-flood.
+  invitaciones. Invitar dice si alguien está conectado: se acepta, y cada intento cuenta
+  para el anti-flood. Un invisible que el que invita no ve cuenta como desconectado (como
+  en `/report`). La lista de miembros sí muestra en línea a un miembro invisible: sus
+  compañeros de gremio lo saben igual.
 - **Límite:** `max_members` (50) miembros contando al líder; lleno, nadie más acepta.
 - **Mensaje del día:** hasta `motd_max` (160) caracteres, limpiado como el chat. Solo lo
   ven los miembros (no la página pública).
@@ -664,7 +666,11 @@ son pocos y simples a propósito: lo que no está acá no existe.
   motd|transfer|disband ...` hacen lo mismo que el panel. Todo comando de gremio cuenta
   para el anti-flood del chat.
 - **Sitio público:** `/guilds` lista los gremios (nombre, líder, miembros, fundación) y
-  `/guilds/<id>` sus miembros con rango, vocación y nivel. Nada privado.
+  `/guilds/<id>` sus miembros con rango, vocación y nivel. Nada privado. Con las mismas
+  exclusiones que el ranking: los personajes de staff y de cuentas deshabilitadas o
+  baneadas no aparecen ni cuentan.
+- **Ids:** el id de un gremio disuelto no se vuelve a usar (`guild_id_high`), así el log
+  de auditoría y los enlaces públicos siempre nombran al mismo gremio.
 - **Guerras (T5.2):** la tabla `guild_wars` existe vacía; ninguna regla todavía.
 
 ## Moderación (T2.6)

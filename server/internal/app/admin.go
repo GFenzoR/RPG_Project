@@ -296,7 +296,7 @@ func guildChange(c session.GuildChange) store.GuildChange {
 
 // guildData converts what the store loaded to the World's start state.
 func guildData(r store.GuildRows) *session.GuildData {
-	out := &session.GuildData{Guilds: make([]session.GuildRecord, len(r.Guilds))}
+	out := &session.GuildData{IDHigh: r.IDHigh, Guilds: make([]session.GuildRecord, len(r.Guilds))}
 	idx := make(map[int64]int, len(r.Guilds))
 	for i, g := range r.Guilds {
 		out.Guilds[i] = session.GuildRecord{ID: g.ID, Name: g.Name, Motd: g.Motd, CreatedAt: g.CreatedAt}

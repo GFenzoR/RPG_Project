@@ -12,6 +12,14 @@ CREATE TABLE guilds (
 );
 -- Names are unique ignoring case.
 CREATE UNIQUE INDEX guilds_name_key ON guilds (lower(name));
+-- The highest guild id ever issued (one row; store.ApplyGuild raises it on every founding), so a
+-- disbanded guild's id is never reused after a restart: audit_log entries, public links
+-- and guild_wars (T5.2) keep pointing at one guild. Not an identity: the loop picks ids.
+CREATE TABLE guild_id_high (
+    one  BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (one),
+    high BIGINT  NOT NULL CHECK (high >= 0)
+);
+INSERT INTO guild_id_high (high) VALUES (0);
 
 -- rank: 1 member, 2 vice leader, 3 leader (guild.Rank). A character is in one guild at
 -- most (the primary key) and a guild has one leader at most (the partial index).
@@ -49,6 +57,7 @@ CREATE TABLE guild_wars (
 COMMENT ON TABLE guild_wars IS 'T5.2 (PvP): prepared by T5.1, not used yet';
 
 -- +goose Down
+DROP TABLE guild_id_high;
 DROP TABLE guild_wars;
 DROP TABLE guild_invites;
 DROP TABLE guild_members;

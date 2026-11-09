@@ -106,7 +106,8 @@ server/
   su `GuildOp` en `session` y en `store` (mismos valores) y su caso en `applyGuild`. Todo
   comando de gremio pasa por `chatAllowed`. Si un jugador recibe o pierde un gremio,
   llama a `announceGuild` (el nombre bajo el personaje) y `queueGuildSend`. Lo que sale
-  por `/api/guilds` es público: nunca el mensaje del día ni quién está en línea.
+  por `/api/guilds` es público: nunca el mensaje del día ni quién está en línea, y con las
+  exclusiones del ranking (staff, deshabilitadas, baneadas) en `queries/guilds.sql`.
 
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).

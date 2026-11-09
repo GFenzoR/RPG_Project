@@ -281,6 +281,18 @@ func TestGuildPermissions(t *testing.T) {
 	if m := members(lastGuild(cl)); !slices.Equal(m, []string{"Lia:leader+", "Vera:vice+"}) {
 		t.Fatalf("members %v", m)
 	}
+	// Milo comes back; Lia hands the lead to him. Vera holds the only vice slot, so Lia
+	// becomes a member, and that is the rank written to the database.
+	g.send(cl, gInvite, "Milo", "", 0)
+	g.send(cm, gAccept, "", "", gid)
+	g.jobs = nil
+	wantKeys(t, g.send(cl, gTransfer, "Milo", "", 0), "guild.new_leader")
+	if m := members(lastGuild(cl)); !slices.Equal(m, []string{"Milo:leader+", "Vera:vice+", "Lia:member+"}) {
+		t.Fatalf("after transfer %v", m)
+	}
+	if len(g.jobs) != 1 || g.jobs[0].Guild.Op != session.GuildTransfer || g.jobs[0].Guild.Rank != guild.Member {
+		t.Fatalf("transfer job %+v", g.jobs)
+	}
 }
 
 // Founding needs the level and the gold, and a valid free name (any case); a member
@@ -317,10 +329,18 @@ func TestGuildInvitations(t *testing.T) {
 	ca, _ := g.founder("Ana", 10, 5, 100)
 	cb, _ := g.founder("Bruno", 12, 1, 0)
 	cc, _ := g.founder("Cora", 14, 1, 0)
-	cd, _ := g.founder("Dino", 16, 1, 0)
+	cd, dp := g.founder("Dino", 16, 1, 0)
 	g.send(ca, gCreate, "Low Tide", "", 0)
 	wantKeys(t, g.send(ca, gInvite, "Ana", "", 0), "guild.self")
 	wantKeys(t, g.send(ca, gInvite, "Nadie", "", 0), "guild.player_offline")
+	// An invisible player the inviter does not see is offline for this (and gets nothing).
+	g.do(func(*game.TickContext) { g.w.SetInvisibleForTest(dp, true) })
+	cd.take()
+	wantKeys(t, g.send(ca, gInvite, "Dino", "", 0), "guild.player_offline")
+	if lastGuild(cd) != nil {
+		t.Fatal("an unseen invisible player got an invitation")
+	}
+	g.do(func(*game.TickContext) { g.w.SetInvisibleForTest(dp, false) })
 	g.send(ca, gInvite, "Bruno", "", 0)
 	wantKeys(t, g.send(ca, gInvite, "Bruno", "", 0), "guild.already_invited")
 	g.send(ca, gInvite, "Cora", "", 0)
@@ -361,7 +381,7 @@ func TestGuildLoadedOnlineAndLook(t *testing.T) {
 	leader, member, invited := nextChar+1, nextChar+2, nextChar+3
 	nextChar += 3
 	now := time.Unix(0, 0)
-	data := &session.GuildData{Guilds: []session.GuildRecord{{ID: 7, Name: "Old Harbor", Motd: "welcome",
+	data := &session.GuildData{IDHigh: 11, Guilds: []session.GuildRecord{{ID: 7, Name: "Old Harbor", Motd: "welcome",
 		Members: []session.GuildMemberRecord{
 			{CharacterID: member, Name: "Mara", Rank: guild.Member, JoinedAt: now.Add(time.Minute)},
 			{CharacterID: leader, Name: "Leo", Rank: guild.Leader, JoinedAt: now},
@@ -421,11 +441,12 @@ func TestGuildLoadedOnlineAndLook(t *testing.T) {
 	if u := lastGuild(cm); !slices.Equal(members(u), []string{"Leo:leader", "Mara:member+"}) {
 		t.Fatalf("after the leader's logout %v", members(u))
 	}
-	// A new guild gets the next id after the loaded ones.
+	// A new guild gets the next id after the highest ever issued (11: a disbanded guild's
+	// id is never reused).
 	cn, _ := g.founder("Nova", 20, 5, 100)
 	g.jobs = nil
 	g.send(cn, gCreate, "New Dawn", "", 0)
-	if len(g.jobs) != 1 || g.jobs[0].Guild.GuildID != 8 {
+	if len(g.jobs) != 1 || g.jobs[0].Guild.GuildID != 12 {
 		t.Fatalf("new guild job %+v", g.jobs)
 	}
 }

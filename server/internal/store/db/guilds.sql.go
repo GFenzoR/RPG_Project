@@ -72,6 +72,18 @@ func (q *Queries) DeleteGuildMember(ctx context.Context, arg DeleteGuildMemberPa
 	return result.RowsAffected(), nil
 }
 
+const guildIDHigh = `-- name: GuildIDHigh :one
+SELECT high FROM guild_id_high
+`
+
+// The highest guild id ever issued (0 before the first founding).
+func (q *Queries) GuildIDHigh(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, guildIDHigh)
+	var high int64
+	err := row.Scan(&high)
+	return high, err
+}
+
 const insertGuild = `-- name: InsertGuild :exec
 INSERT INTO guilds (id, name, created_at) VALUES ($1, $2, $3)
 `
@@ -245,9 +257,17 @@ const publicGuildMembers = `-- name: PublicGuildMembers :many
 SELECT c.name, c.vocation, c.level, m.rank
 FROM guild_members m
 JOIN characters c ON c.id = m.character_id
-WHERE m.guild_id = $1
+JOIN accounts a ON a.id = c.account_id
+WHERE m.guild_id = $1 AND a.role = 'player' AND a.disabled_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM account_bans b WHERE b.account_id = a.id AND b.lifted_at IS NULL
+                  AND (b.expires_at IS NULL OR b.expires_at > $2))
 ORDER BY m.rank DESC, m.joined_at, c.name
 `
+
+type PublicGuildMembersParams struct {
+	GuildID int64
+	Now     pgtype.Timestamptz
+}
 
 type PublicGuildMembersRow struct {
 	Name     string
@@ -256,8 +276,9 @@ type PublicGuildMembersRow struct {
 	Rank     int16
 }
 
-func (q *Queries) PublicGuildMembers(ctx context.Context, guildID int64) ([]PublicGuildMembersRow, error) {
-	rows, err := q.db.Query(ctx, publicGuildMembers, guildID)
+// The same exclusions as PublicGuilds.
+func (q *Queries) PublicGuildMembers(ctx context.Context, arg PublicGuildMembersParams) ([]PublicGuildMembersRow, error) {
+	rows, err := q.db.Query(ctx, publicGuildMembers, arg.GuildID, arg.Now)
 	if err != nil {
 		return nil, err
 	}
@@ -284,13 +305,25 @@ func (q *Queries) PublicGuildMembers(ctx context.Context, guildID int64) ([]Publ
 const publicGuilds = `-- name: PublicGuilds :many
 
 SELECT g.id, g.name, g.created_at,
-       (SELECT count(*) FROM guild_members m WHERE m.guild_id = g.id)::int AS members,
+       (SELECT count(*) FROM guild_members m JOIN characters c ON c.id = m.character_id
+        JOIN accounts a ON a.id = c.account_id
+        WHERE m.guild_id = g.id AND a.role = 'player' AND a.disabled_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM account_bans b WHERE b.account_id = a.id AND b.lifted_at IS NULL
+                          AND (b.expires_at IS NULL OR b.expires_at > $1)))::int AS members,
        COALESCE((SELECT c.name FROM guild_members m JOIN characters c ON c.id = m.character_id
-                 WHERE m.guild_id = g.id AND m.rank = 3), '')::text AS leader
+                 JOIN accounts a ON a.id = c.account_id
+                 WHERE m.guild_id = g.id AND m.rank = 3 AND a.role = 'player' AND a.disabled_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM account_bans b WHERE b.account_id = a.id AND b.lifted_at IS NULL
+                          AND (b.expires_at IS NULL OR b.expires_at > $1))), '')::text AS leader
 FROM guilds g
 ORDER BY lower(g.name)
-LIMIT $1
+LIMIT $2
 `
+
+type PublicGuildsParams struct {
+	Now     pgtype.Timestamptz
+	MaxRows int32
+}
 
 type PublicGuildsRow struct {
 	ID        int64
@@ -302,9 +335,11 @@ type PublicGuildsRow struct {
 
 // Public website (T5.1, /api/guilds): no private data, only names, ranks, vocation and
 // level (as on the highscores).
-// Every guild with its member count and leader, by name. Bounded by max_rows.
-func (q *Queries) PublicGuilds(ctx context.Context, maxRows int32) ([]PublicGuildsRow, error) {
-	rows, err := q.db.Query(ctx, publicGuilds, maxRows)
+// Every guild with its listed member count and leader, by name. Bounded by max_rows. Like
+// the highscores (T4.3), characters of staff, disabled or banned accounts are not shown:
+// they do not count and a hidden leader shows as "".
+func (q *Queries) PublicGuilds(ctx context.Context, arg PublicGuildsParams) ([]PublicGuildsRow, error) {
+	rows, err := q.db.Query(ctx, publicGuilds, arg.Now, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -327,6 +362,15 @@ func (q *Queries) PublicGuilds(ctx context.Context, maxRows int32) ([]PublicGuil
 		return nil, err
 	}
 	return items, nil
+}
+
+const raiseGuildIDHigh = `-- name: RaiseGuildIDHigh :exec
+UPDATE guild_id_high SET high = GREATEST(high, $1::bigint)
+`
+
+func (q *Queries) RaiseGuildIDHigh(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, raiseGuildIDHigh, id)
+	return err
 }
 
 const renameGuild = `-- name: RenameGuild :execrows

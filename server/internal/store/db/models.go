@@ -131,6 +131,11 @@ type Guild struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type GuildIDHigh struct {
+	One  bool
+	High int64
+}
+
 type GuildInvite struct {
 	GuildID     int64
 	CharacterID int64

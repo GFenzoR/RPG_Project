@@ -14,13 +14,13 @@ import (
 
 type fakeGuilds struct{ list, page atomic.Int32 }
 
-func (f *fakeGuilds) PublicGuilds(_ context.Context, n int) ([]store.PublicGuildSummary, error) {
+func (f *fakeGuilds) PublicGuilds(_ context.Context, n int, _ time.Time) ([]store.PublicGuildSummary, error) {
 	f.list.Add(1)
 	return []store.PublicGuildSummary{{ID: 3, Name: "Salt Lanterns", Leader: "Ana", Members: 2,
 		CreatedAt: time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)}}, nil
 }
 
-func (f *fakeGuilds) PublicGuild(_ context.Context, id int64) (store.PublicGuildDetail, error) {
+func (f *fakeGuilds) PublicGuild(_ context.Context, id int64, _ time.Time) (store.PublicGuildDetail, error) {
 	f.page.Add(1)
 	if id != 3 {
 		return store.PublicGuildDetail{}, store.ErrNotFound

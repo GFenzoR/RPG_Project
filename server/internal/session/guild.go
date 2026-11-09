@@ -81,6 +81,9 @@ const EconGuild = "guild"
 // GuildData is every guild, member and pending invitation, loaded from the database
 // before the loop starts (Config.Guilds).
 type GuildData struct {
+	// IDHigh is the highest guild id ever issued: ids of disbanded guilds are never
+	// reused (audit log, public links).
+	IDHigh int64
 	Guilds []GuildRecord
 }
 
@@ -177,6 +180,7 @@ func (w *World) initGuilds() {
 		return
 	}
 	w.guildOn = true
+	w.nextGuildID = w.cfg.Guilds.IDHigh
 	for _, r := range w.cfg.Guilds.Guilds {
 		g := &guildState{id: r.ID, name: r.Name, motd: r.Motd}
 		for _, m := range r.Members {
@@ -409,6 +413,9 @@ func (w *World) guildInvite(ctx *game.TickContext, p *Player, name string) {
 	g := gm.g
 	cfg := w.cfg.Balance.Guild
 	o := w.onlineByName(name)
+	if o != nil && o.invisible && !p.Knows(o.id) {
+		o = nil // like /report and /presence: an unseen invisible player is not online here
+	}
 	w.pruneInvites(g, ctx.Now)
 	switch {
 	case o == nil:

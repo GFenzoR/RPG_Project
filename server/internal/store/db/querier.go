@@ -83,6 +83,8 @@ type Querier interface {
 	GetOAuthPending(ctx context.Context, arg GetOAuthPendingParams) (GetOAuthPendingRow, error)
 	GetSubmission(ctx context.Context, id int64) (GetSubmissionRow, error)
 	GetSubmissionPatch(ctx context.Context, id int64) (GetSubmissionPatchRow, error)
+	// The highest guild id ever issued (0 before the first founding).
+	GuildIDHigh(ctx context.Context) (int64, error)
 	// Highscores (T4.3, GET /api/highscores). Only players' characters are ranked: staff
 	// (gm/admin), disabled accounts and accounts with an active ban are left out. Ties keep
 	// the older character first. A page is limit rows from offset; callers ask for one more
@@ -138,13 +140,17 @@ type Querier interface {
 	// Only verifies the address the link was sent to.
 	MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedParams) (int64, error)
 	PublicGuild(ctx context.Context, id int64) (PublicGuildRow, error)
-	PublicGuildMembers(ctx context.Context, guildID int64) ([]PublicGuildMembersRow, error)
+	// The same exclusions as PublicGuilds.
+	PublicGuildMembers(ctx context.Context, arg PublicGuildMembersParams) ([]PublicGuildMembersRow, error)
 	// Public website (T5.1, /api/guilds): no private data, only names, ranks, vocation and
 	// level (as on the highscores).
-	// Every guild with its member count and leader, by name. Bounded by max_rows.
-	PublicGuilds(ctx context.Context, maxRows int32) ([]PublicGuildsRow, error)
+	// Every guild with its listed member count and leader, by name. Bounded by max_rows. Like
+	// the highscores (T4.3), characters of staff, disabled or banned accounts are not shown:
+	// they do not count and a hidden leader shows as "".
+	PublicGuilds(ctx context.Context, arg PublicGuildsParams) ([]PublicGuildsRow, error)
 	// Drops the bytes of patches whose submission reached a final status before the cutoff.
 	PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	RaiseGuildIDHigh(ctx context.Context, id int64) error
 	RenameGuild(ctx context.Context, arg RenameGuildParams) (int64, error)
 	ReportExists(ctx context.Context, id int64) (bool, error)
 	// Approve or reject a pending submission. No row: it is not pending (or does not exist).

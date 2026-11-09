@@ -94,8 +94,9 @@ for each tick (50 ms):
 los pasa al `World` (`session.Config.Guilds`). Cada comando se valida y se aplica en
 memoria en el tick, y el cambio (`session.GuildChange`) se encola como trabajo de la
 goroutine de admin (`AdminGuild`), que lo escribe en orden con reintentos, igual que el
-log de auditoría; nada vuelve al loop. Por eso el id de un gremio lo asigna el servidor
-(el siguiente al mayor cargado). Las restricciones de la base (un personaje en un solo
+log de auditoría; nada vuelve al loop. Por eso el id de un gremio lo asigna el servidor:
+el siguiente al mayor emitido alguna vez (`guild_id_high`, que sube con cada fundación),
+para que el id de un gremio disuelto no se reuse. Las restricciones de la base (un personaje en un solo
 gremio, un líder por gremio, nombre único sin mayúsculas) son la red de seguridad: un
 cambio que las rompe es un bug y queda en el log (`persistence_errors_total{writer="audit",
 outcome="rejected"}`); el próximo arranque carga lo que tiene la base. Costo en el tick:

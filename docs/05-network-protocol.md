@@ -231,7 +231,9 @@ auth). Pasado el límite responden `429 rate_limited`.
   created_at, members: [{name, vocation, level, rank}]}` (`rank` = `leader`, `vice` o
   `member`, de mayor a menor); un id que no existe → `404 not_found`, uno inválido →
   `400 invalid_id`. Solo datos públicos: ni el mensaje del día, ni quién está en línea, ni
-  nada de las cuentas. Comparten el rate limit público, las 2 consultas a la vez y el plazo
+  nada de las cuentas. Excluye, como el ranking, a los personajes de staff y de cuentas
+  deshabilitadas o con un ban activo (no aparecen ni cuentan en `members`; un líder así
+  sale como `""`). Comparten el rate limit público, las 2 consultas a la vez y el plazo
   del ranking, y una cache propia de 60 s (también para los 404: ids al azar no llegan a
   Postgres). Un cambio del juego se ve como mucho 60 s después.
 
