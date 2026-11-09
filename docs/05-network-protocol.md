@@ -138,6 +138,48 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
   (portal de mapas o, con `-require-verified-email`, `POST /api/play`), `already_verified`,
   `email_disabled`.
 
+### OAuth con Google y Discord (T2.1, `httpapi/oauth.go`)
+| Método y ruta | Auth | Cuerpo | Respuesta OK |
+|---|---|---|---|
+| `GET /api/auth/config` | — | — | `{email, providers: ["discord","google"]}` (solo los que tienen claves; nunca secretos) |
+| `POST /api/auth/oauth/{provider}/start` | — | `{return?}` | `200 {url}` + cookie `rpg_oauth`; el navegador va a `url` |
+| `POST /api/auth/oauth/{provider}/link` | token | `{password?}` | igual que `start`, para vincular a la cuenta |
+| `GET /api/auth/oauth/{provider}/callback` | cookie `rpg_oauth` | — | `303` a una página fija del sitio (abajo) |
+| `GET /api/auth/oauth/pending` | cookie `rpg_oauth_pending` | — | `200 {provider, email}`; `410 pending_expired` |
+| `POST /api/auth/oauth/pending/confirm` | cookie pendiente | `{password}` | `200 {return}` + cookie de sesión |
+| `POST /api/auth/oauth/pending/create` | cookie pendiente | `{email}` | `200 {return}` + cookie de sesión |
+| `POST /api/account/unlink` | token | `{provider}` | `204`; `409 last_login_method`, `404 not_linked` |
+
+`GET /api/account` suma `has_password` e `identities: [{provider, email, linked_at}]`.
+
+- **Inicio:** un `POST` con JSON (ningún formulario de otro sitio puede iniciar un login en
+  el navegador de otro). El servidor guarda en `oauth_states` el SHA-256 del `state`, el
+  verificador PKCE, el `nonce` (Google), el modo (`login`/`link`), la ruta de vuelta y el
+  SHA-256 de un valor aleatorio que va en la cookie `rpg_oauth` (`HttpOnly`, `Secure` con
+  HTTPS, `SameSite=Lax` para volver en la redirección del proveedor, `Path=/api/auth/oauth`,
+  10 min). `redirect_uri` = `PUBLIC_URL/api/auth/oauth/{provider}/callback`, siempre de la
+  configuración, nunca del header `Host`.
+- **Callback:** consume el `state` primero (un solo uso aunque falle después), exige la
+  cookie del mismo navegador (comparación en tiempo constante) y el mismo proveedor, y
+  canjea el `code` con el verificador. Google: el `id_token` se verifica con las JWKS
+  (cache de 1 h, se vuelve a pedir ante un `kid` desconocido como mucho una vez por
+  minuto), `iss`, `aud` = client id, `exp`/`iat` (±2 min) y `nonce`. Discord:
+  `GET /users/@me` (`id`, `email`, `verified`).
+- **Destinos:** login → la ruta de vuelta si está en la lista cerrada (`/`, `/play/`,
+  `/account`, `/maps/submit`, `/maps/mine`; cualquier otra → `/play/`); vínculo →
+  `/account?linked=<proveedor>`; email de una cuenta existente → `/oauth/confirm` (cookie
+  `rpg_oauth_pending`, `SameSite=Strict`, 15 min); error → `/oauth/error?code=` con
+  `state`, `denied`, `provider`, `no_email`, `identity_taken`, `provider_linked`,
+  `unknown_provider`, `account_disabled`, `account_banned` o `internal`.
+- **Confirmar con contraseña:** mismos límites de login fallido por (email, IP) y por email
+  que `/api/auth/login`, y el mismo error `invalid_credentials`.
+- **Vincular** exige re-autenticarse: `password` si la cuenta tiene (`403 reauth_required`
+  si falta o no coincide), o una sesión creada hace menos de 10 min si no tiene.
+- Todas estas rutas gastan el límite por IP de registro y login, salvo `pending` y `unlink`.
+- Los secretos de cliente salen solo de variables de entorno y no se registran nunca; los
+  errores del proveedor se registran por su tipo (estado HTTP, chequeo fallido), nunca con
+  un `code` o un token.
+
 ### Endpoints públicos del sitio (T4.3, `httpapi/public.go`)
 Los usa la landing (`/`, `/highscores`). No piden cuenta, y comparten un rate limit por IP
 propio (`DefaultPublicRateLimit`: ráfaga de 30, uno cada 500 ms; `/64` en IPv6, como el de

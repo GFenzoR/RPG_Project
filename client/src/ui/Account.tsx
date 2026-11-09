@@ -4,7 +4,7 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
-import { ApiError, accountApi, emailEnabled } from "../net/api.ts";
+import { ApiError, accountApi, authConfig, emailEnabled, oauthApi } from "../net/api.ts";
 import type { Account } from "../net/api.ts";
 import { desktopServer, isDesktop } from "../net/desktop.ts";
 
@@ -84,6 +84,72 @@ export function VerifyNotice(props: { t: Translate; lang: string }): JSX.Element
           {t("client.verify.resend")}
         </button>
       )}
+      {error && (
+        <p class="error" role="alert">
+          {t(`error.${error}`) === `error.${error}` ? t("error.unknown") : t(`error.${error}`)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The OAuth providers of the server (T2.1); undefined while asking. */
+export function useProviders(): string[] | undefined {
+  const [list, setList] = useState<string[] | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void authConfig().then((c) => live && setList(c.providers));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return list;
+}
+
+/**
+ * "Sign in with Google / Discord". The browser leaves for the provider and comes back
+ * to `returnTo` (the server only accepts a few fixed pages). Not in the desktop app: it
+ * shows where to do it in a browser instead (the app cannot receive the provider's
+ * redirect; docs/05).
+ */
+export function OAuthButtons(props: { t: Translate; returnTo: string }): JSX.Element | null {
+  const { t } = props;
+  const providers = useProviders();
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  if (!providers || providers.length === 0) return null;
+  if (isDesktop()) {
+    const origin = desktopServer()?.origin;
+    return origin ? (
+      <p class="oauth-hint muted" data-testid="oauth-desktop">
+        {t("client.oauth.desktop", { url: origin })}
+      </p>
+    ) : null;
+  }
+  return (
+    <div class="oauth-buttons" data-testid="oauth-buttons">
+      {providers.map((p) => (
+        <button
+          key={p}
+          type="button"
+          class={`oauth-button oauth-${p}`}
+          data-testid={`oauth-${p}`}
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError(undefined);
+            oauthApi.start(p, props.returnTo).then(
+              (r) => location.assign(r.url),
+              (e: unknown) => {
+                setError(e instanceof ApiError ? e.code : "unknown");
+                setBusy(false);
+              },
+            );
+          }}
+        >
+          {t("client.oauth.continue", { provider: t(`client.oauth.provider.${p}`) })}
+        </button>
+      ))}
       {error && (
         <p class="error" role="alert">
           {t(`error.${error}`) === `error.${error}` ? t("error.unknown") : t(`error.${error}`)}

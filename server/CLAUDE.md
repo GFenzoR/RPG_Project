@@ -90,6 +90,13 @@ server/
   `forgot` contesta igual para cualquier email y trabaja en segundo plano: no agregues
   respuestas ni tiempos que dependan de la cuenta.
 
+- **OAuth (T2.1 2/2):** `internal/oauth` (protocolo: URL con PKCE, canje del code, `id_token`
+  de Google contra JWKS, `/users/@me` de Discord; `oauthtest` es el proveedor falso de los
+  tests y de `cmd/fakeoauth`) + `auth/oauth.go` (reglas de cuentas) + `httpapi/oauth.go` +
+  `store/oauth.go`. Nunca vincules una identidad por coincidencia de email; todo login
+  emite la sesión con `Service.loginAccount`; toda ruta de vuelta pasa por
+  `auth.SafeReturn`; el `redirect_uri` sale de `PUBLIC_URL`.
+
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).
 - Tests de integración con Postgres llevan build tag `integration` (`make test-integration`,

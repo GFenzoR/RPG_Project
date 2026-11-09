@@ -4,6 +4,7 @@ import {
   filtersToSearch,
   highscoresPath,
   linkToken,
+  oauthErrorKey,
   parseFilters,
   parseRoute,
 } from "./routes.ts";
@@ -80,5 +81,15 @@ describe("account links (T2.1)", () => {
     expect(linkToken("#token=short")).toBeUndefined();
     expect(linkToken(`#token=${t}<`)).toBeUndefined();
     expect(linkToken("")).toBeUndefined();
+  });
+});
+
+describe("oauth pages (T2.1 2/2)", () => {
+  it("routes them and maps error codes to fixed keys", () => {
+    expect(parseRoute("/account")).toEqual({ page: "account" });
+    expect(parseRoute("/oauth/confirm")).toEqual({ page: "oauth_confirm" });
+    expect(oauthErrorKey("?code=denied")).toBe("site.oauth.error.denied");
+    expect(oauthErrorKey("?code=<script>")).toBe("site.oauth.error.internal");
+    expect(oauthErrorKey("")).toBe("site.oauth.error.internal");
   });
 });

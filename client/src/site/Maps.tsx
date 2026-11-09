@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api, mapsApi } from "../net/api.ts";
 import type { Character, MapSubmission, MySubmissions } from "../net/api.ts";
-import { ForgotPasswordLink, VerifyNotice } from "../ui/Account.tsx";
+import { ForgotPasswordLink, OAuthButtons, VerifyNotice } from "../ui/Account.tsx";
 import {
   MAP_STATUSES,
   byteLength,
@@ -90,7 +90,7 @@ function StatusBadge(props: { t: Translate; status: string }): JSX.Element {
 }
 
 /** Login form of the website, shown when a portal page needs a session. */
-function SiteLogin(props: { t: Translate; onDone: () => void }): JSX.Element {
+export function SiteLogin(props: { t: Translate; onDone: () => void }): JSX.Element {
   const { t } = props;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -140,6 +140,7 @@ function SiteLogin(props: { t: Translate; onDone: () => void }): JSX.Element {
           {t("client.login.submit")}
         </button>
         <ForgotPasswordLink t={t} />
+        <OAuthButtons t={t} returnTo={location.pathname} />
       </form>
     </section>
   );

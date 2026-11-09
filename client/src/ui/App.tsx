@@ -21,7 +21,7 @@ import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
 import { ServerPicker } from "./ServerPicker.tsx";
-import { ForgotPasswordLink, VerifyNotice } from "./Account.tsx";
+import { ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -214,6 +214,7 @@ function AuthForm(props: {
           {t(mode === "login" ? "client.login.to_register" : "client.register.to_login")}
         </button>
         {mode === "login" && <ForgotPasswordLink t={t} />}
+        <OAuthButtons t={t} returnTo="/play/" />
       </form>
       {/* Outside the login form: its own form, so Enter saves the server and an invalid
           address there never blocks logging in. */}

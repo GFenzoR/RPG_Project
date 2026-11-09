@@ -23,6 +23,10 @@ const smtpPort = Number(process.env["CLIENT_E2E_SMTP_PORT"] ?? 18025);
 const smtpHttpPort = Number(process.env["CLIENT_E2E_SMTP_HTTP_PORT"] ?? 18026);
 export const mailClientURL = `http://localhost:${mailClientPort}`;
 export const smtpMessagesURL = `http://127.0.0.1:${smtpHttpPort}/messages`;
+// OAuth (T2.1 2/2): the same server logs in with a fake Google and Discord
+// (server/cmd/fakeoauth); POST <fakeOAuthURL>/test/next picks who logs in next.
+const fakeOAuthPort = Number(process.env["CLIENT_E2E_FAKE_OAUTH_PORT"] ?? 18027);
+export const fakeOAuthURL = `http://127.0.0.1:${fakeOAuthPort}`;
 
 export default defineConfig({
   testDir: "e2e",
@@ -88,6 +92,13 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
+      command: `go run ./cmd/fakeoauth -addr 127.0.0.1:${fakeOAuthPort}`,
+      cwd: `${import.meta.dirname}/../server`,
+      url: `${fakeOAuthURL}/`,
+      reuseExistingServer: false,
+      timeout: 240_000,
+    },
+    {
       command: `go run ./cmd/gameserver -http :${mailServerPort} -world "" -seed 1 -auth-rate-burst 1000 -metrics-addr ""`,
       cwd: `${import.meta.dirname}/../server`,
       url: `http://localhost:${mailServerPort}/healthz`,
@@ -100,6 +111,17 @@ export default defineConfig({
         SMTP_PORT: String(smtpPort),
         SMTP_SECURITY: "none",
         SMTP_FROM: "RPG Project <noreply@rpg.test>",
+        GOOGLE_CLIENT_ID: "fake-client-id",
+        GOOGLE_CLIENT_SECRET: "fake-client-secret",
+        GOOGLE_AUTH_URL: `${fakeOAuthURL}/google/authorize`,
+        GOOGLE_TOKEN_URL: `${fakeOAuthURL}/google/token`,
+        GOOGLE_JWKS_URL: `${fakeOAuthURL}/google/jwks`,
+        GOOGLE_ISSUER: `${fakeOAuthURL}/google`,
+        DISCORD_CLIENT_ID: "fake-client-id",
+        DISCORD_CLIENT_SECRET: "fake-client-secret",
+        DISCORD_AUTH_URL: `${fakeOAuthURL}/discord/authorize`,
+        DISCORD_TOKEN_URL: `${fakeOAuthURL}/discord/token`,
+        DISCORD_API_URL: `${fakeOAuthURL}/discord/api`,
       },
       stdout: "pipe",
     },

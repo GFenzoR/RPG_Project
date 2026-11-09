@@ -231,6 +231,47 @@ confirmar se puede jugar pero no enviar mapas ni pedir un reset por email; apare
 confirmado también para jugar. Las contraseñas SMTP solo viven en `deploy/.env.home`
 (ignorado por git) y nunca van a los logs.
 
+### 8c. Login con Google y Discord (T2.1)
+Apagado hasta que pongas las claves de **tus** apps (el proyecto no trae ninguna). Cada
+proveedor necesita una "redirect URI" exacta, que el servidor arma como
+`<PUBLIC_URL>/api/auth/oauth/<proveedor>/callback`:
+
+| Dónde juegan | `PUBLIC_URL` | Redirect URI de Google | Redirect URI de Discord |
+|---|---|---|---|
+| Tu PC | `http://localhost:8080` | `http://localhost:8080/api/auth/oauth/google/callback` | `http://localhost:8080/api/auth/oauth/discord/callback` |
+| Túnel de Cloudflare con dominio (paso 5) | `https://juego.tudominio.com` | `https://juego.tudominio.com/api/auth/oauth/google/callback` | `https://juego.tudominio.com/api/auth/oauth/discord/callback` |
+| AWS (docs/09) | `https://tudominio.com` | `https://tudominio.com/api/auth/oauth/google/callback` | `https://tudominio.com/api/auth/oauth/discord/callback` |
+
+Puedes registrar varias URIs en la misma app (por ejemplo localhost y el dominio).
+**El Quick Tunnel (`make home-tunnel`) no sirve para OAuth:** su URL
+`https://….trycloudflare.com` cambia cada vez que arranca, y los proveedores solo
+aceptan redirect URIs registradas de antemano y escritas exactas. Usa el túnel con
+dominio propio, o prueba solo en `http://localhost:8080`.
+
+**Google** (Google Cloud Console, console.cloud.google.com):
+1. Crea un proyecto (o elige uno) → "APIs y servicios" → "Pantalla de consentimiento de
+   OAuth" (o "Google Auth Platform" → "Branding"): tipo **Externo**, nombre de la app,
+   email de soporte. Permisos: `openid` y `email` (no hace falta verificar la app para
+   esos dos). Mientras esté en modo "Prueba", agrega los emails de quienes van a probar
+   en "Usuarios de prueba"; "Publicar" la abre a todos.
+2. "Credenciales" (o "Clients") → "Crear credenciales" → "ID de cliente de OAuth" → tipo
+   **Aplicación web**. En "URIs de redireccionamiento autorizados" pega las de la tabla.
+   (Los "orígenes de JavaScript" no hacen falta: el login no usa JS de Google.)
+3. Copia el ID y el secreto a `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+
+**Discord** (Discord Developer Portal, discord.com/developers/applications):
+1. "New Application" → nombre → acepta los términos.
+2. "OAuth2" → "Redirects" → "Add Redirect" con las URIs de la tabla → "Save Changes".
+3. En la misma página: "Client ID" y "Reset Secret" (se ve una sola vez) →
+   `DISCORD_CLIENT_ID` y `DISCORD_CLIENT_SECRET`. Permisos que pide el juego: `identify` y
+   `email` (no hace falta bot ni marcar la app como pública).
+
+Pon los cuatro valores en `deploy/.env.home` (y `PUBLIC_URL` si no es localhost) y
+`make home-up`. Aparecen los botones "Continuar con Google/Discord" en el login del juego
+y del sitio, y la página "Mi cuenta". Los secretos solo viven en `deploy/.env.home`, nunca
+en los logs ni en `/api/auth/config`. La app de escritorio no ofrece estos botones (dice
+que se use el sitio).
+
 ### 9. Actualizar después de un `git pull`
 ```bash
 git pull
@@ -269,6 +310,7 @@ Todas son opcionales salvo las dos contraseñas, que se generan solas.
 | `COMPOSE_PROFILES` | — | `map-pr` enciende el worker de PRs de mapas; `mail`, Mailpit (paso 8b) |
 | `PUBLIC_URL` | `http://localhost:8080` | Dirección de los enlaces de los emails (T2.1) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | — (sin emails), `587`, `starttls` | Servidor de correo (paso 8b) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | — (botón apagado) | Login con Google/Discord (paso 8c) |
 | `REQUIRE_VERIFIED_EMAIL` | `false` | `true`: solo cuentas con email confirmado pueden jugar |
 | `MAILPIT_UI_PORT` | `8025` | Puerto de Mailpit (perfil `mail`, solo `127.0.0.1`) |
 | `GITHUB_MAP_PR_TOKEN` | — | Token del bot del worker |

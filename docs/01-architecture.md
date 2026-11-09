@@ -108,7 +108,15 @@ memoria) y se persiste ambos personajes en una sola transacción de base de dato
   fuente `web`). Verificar escribe `email_verified`. Sin SMTP, el operador genera un enlace
   con `gameserver admin reset-link` (auditado como `reset_link_issued`, el enlace no se
   registra).
-- OAuth 2.0 con Google y Discord vinculados a la misma cuenta.
+- OAuth 2.0 con Google y Discord vinculados a la misma cuenta (T2.1, `server/internal/oauth`
+  + `auth/oauth.go` + `httpapi/oauth.go`): Authorization Code con PKCE S256, `state` de un
+  solo uso atado a una cookie corta del navegador que empezó, y en Google OpenID Connect
+  con `nonce` y el `id_token` verificado contra sus JWKS (firma RS256, `iss`, `aud`, `exp`).
+  Discord se valida con `GET /users/@me`. Las identidades viven en `account_identities`
+  (proveedor + id del sujeto + email informado). Un login por OAuth emite la misma sesión y
+  cookie que el de contraseña. Nunca se vincula una identidad a una cuenta existente solo
+  porque el email coincide (ver docs/02, "Cuentas"). Vincular y desvincular va a
+  `audit_log` (fuente `web`, solo el proveedor: nunca el email).
 - Una cuenta tiene varios personajes. Cosméticos pertenecen a la cuenta.
 - Tokens de sesión opacos en Postgres (fácil de revocar); cookie `HttpOnly` en web,
   almacenamiento seguro en Tauri: el llavero del SO desde Rust, la página nunca lo ve

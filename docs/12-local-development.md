@@ -74,6 +74,15 @@ antes); `DEV_MAIL=0 make dev` los apaga a propósito.
 - El E2E (`client/e2e/account.spec.ts`) usa un SMTP falso en Node (`e2e/fake-smtp.ts`) y un
   tercer servidor solo-HTTP con emails activados (`playwright.config.ts`).
 
+### Login con Google y Discord (T2.1)
+Sin claves los botones no aparecen. Para probar con apps reales: exporta
+`GOOGLE_CLIENT_ID/SECRET` o `DISCORD_CLIENT_ID/SECRET` y `PUBLIC_URL=http://localhost:5173`
+antes de `make run-server`, y registra `http://localhost:5173/api/auth/oauth/<proveedor>/callback`
+en la app del proveedor (Vite pasa `/api` al servidor; ver docs/13, paso 8c). Para
+desarrollo sin cuentas reales hay un proveedor falso: `cd server && go run ./cmd/fakeoauth`
+y las variables `GOOGLE_*_URL`, `GOOGLE_ISSUER` y `DISCORD_*_URL` que usa
+`client/playwright.config.ts` (solo tests; nunca en producción).
+
 ### Portal de mapas (T4.5)
 `http://localhost:5173/maps/submit`: sube un patch de `mapcli patch create` o del editor
 (Exportar patch) con una cuenta que tenga personaje. `make dev` y `make run-server` arrancan

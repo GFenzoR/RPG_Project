@@ -8,6 +8,7 @@ import type { NewsPost, SiteContent } from "../content-types.ts";
 import { Markdown } from "./Markdown.tsx";
 import { MinePage, ReviewPage, SubmitPage } from "./Maps.tsx";
 import { ForgotPage, ResetPage, VerifyPage } from "./Account.tsx";
+import { AccountPage, OAuthConfirmPage, OAuthErrorPage } from "./OAuth.tsx";
 import { excerpt } from "./markdown.ts";
 import {
   LEVEL,
@@ -192,6 +193,9 @@ export function Site(props: SiteProps): JSX.Element {
           <Link href="/maps/submit" current={section === "maps"}>
             {t("site.nav.maps")}
           </Link>
+          <Link href="/account" current={section === "account"}>
+            {t("site.nav.account")}
+          </Link>
         </nav>
         <div class="site-tools">
           {props.languagePicker}
@@ -225,6 +229,9 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       verify: t("site.account.verify.title"),
       forgot_password: t("site.account.forgot.title"),
       reset_password: t("site.account.reset.title"),
+      account: t("site.account.title"),
+      oauth_confirm: t("site.oauth.confirm.title"),
+      oauth_error: t("site.oauth.error.title"),
     };
     let title = titles[route.page];
     if (route.page === "post") {
@@ -262,6 +269,16 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       return <ForgotPage t={t} lang={props.lang} playHref={props.playHref} />;
     case "reset_password":
       return <ResetPage t={t} lang={props.lang} playHref={props.playHref} />;
+    case "account":
+      return (
+        <AccountPage t={t} lang={props.lang} playHref={props.playHref} search={props.search} />
+      );
+    case "oauth_confirm":
+      return <OAuthConfirmPage t={t} lang={props.lang} playHref={props.playHref} />;
+    case "oauth_error":
+      return (
+        <OAuthErrorPage t={t} lang={props.lang} playHref={props.playHref} search={props.search} />
+      );
     default:
       return (
         <section class="card" data-testid="not-found">
