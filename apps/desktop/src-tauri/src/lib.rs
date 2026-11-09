@@ -7,24 +7,74 @@ mod api;
 mod config;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use serde::Serialize;
 use serde_json::Value;
 use tauri::utils::config::{Csp, CspDirectiveSources};
 
-/// What the page needs to connect: the WebSocket URL of the chosen server.
+/// What the page needs to connect: the WebSocket URL of the chosen server, and whether the
+/// login screen may change it (not when RPG_SERVER_URL pins it for this run).
 #[derive(Serialize)]
 struct ServerInfo {
     origin: String,
     ws_url: String,
+    editable: bool,
+}
+
+/// Where the server came from and where the picker saves a new one.
+struct Settings {
+    source: config::Source,
+    config_path: Option<PathBuf>,
+}
+
+impl Settings {
+    fn editable(&self) -> bool {
+        self.source != config::Source::Env && self.config_path.is_some()
+    }
 }
 
 #[tauri::command]
-fn server_info(api: tauri::State<'_, api::Api>) -> ServerInfo {
+fn server_info(
+    api: tauri::State<'_, api::Api>,
+    settings: tauri::State<'_, Settings>,
+) -> ServerInfo {
     ServerInfo {
         origin: api.server.origin(),
         ws_url: api.server.ws_url(),
+        editable: settings.editable(),
     }
+}
+
+/// The login screen's server picker: validates the URL like config.json, saves it there and
+/// restarts the app, because the CSP that lets the WebSocket out is fixed at start. Errors
+/// are codes the page translates: `env_locked`, `invalid` or `save`.
+#[tauri::command]
+fn set_server(
+    app: tauri::AppHandle,
+    settings: tauri::State<'_, Settings>,
+    url: String,
+) -> Result<(), String> {
+    let Some(path) = settings
+        .config_path
+        .as_ref()
+        .filter(|_| settings.editable())
+    else {
+        return Err("env_locked".to_owned());
+    };
+    let server = config::Server::parse(&url).map_err(|e| {
+        eprintln!("[desktop] server picker: {e}");
+        "invalid".to_owned()
+    })?;
+    if let Err(e) = config::save_server_url(path, &server) {
+        eprintln!("[desktop] server picker: {e}");
+        return Err("save".to_owned());
+    }
+    eprintln!(
+        "[desktop] game server set to {}; restarting",
+        server.origin()
+    );
+    app.restart()
 }
 
 #[tauri::command]
@@ -65,8 +115,9 @@ pub fn run() {
     let identifier = context.config().identifier.clone();
 
     let env = std::env::var("RPG_SERVER_URL").ok();
-    let file = config::config_path(&identifier).and_then(|path| {
-        config::read_file_override(&path).unwrap_or_else(|e| {
+    let config_path = config::config_path(&identifier);
+    let file = config_path.as_deref().and_then(|path| {
+        config::read_file_override(path).unwrap_or_else(|e| {
             eprintln!("[desktop] ignoring {e}");
             None
         })
@@ -91,7 +142,11 @@ pub fn run() {
 
     if let Err(e) = tauri::Builder::default()
         .manage(state)
-        .invoke_handler(tauri::generate_handler![server_info, api])
+        .manage(Settings {
+            source,
+            config_path,
+        })
+        .invoke_handler(tauri::generate_handler![server_info, api, set_server])
         .run(context)
     {
         fatal(&identifier, &e.to_string());

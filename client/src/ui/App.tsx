@@ -20,6 +20,7 @@ import { CraftingWindow } from "./Crafting.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
+import { ServerPicker } from "./ServerPicker.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -204,6 +205,7 @@ function AuthForm(props: {
       <button type="button" class="link" onClick={props.onSwitch}>
         {t(mode === "login" ? "client.login.to_register" : "client.register.to_login")}
       </button>
+      <ServerPicker t={t} />
     </form>
   );
 }
@@ -452,6 +454,12 @@ function GameScreen(props: {
         )}
         <ConditionBar t={t} conditions={ui.conditions} />
         <span class="hint">{t("client.game.controls")}</span>
+        {/* Narrow windows (the desktop app's 960 px): the help folds into a button so the
+            header stays one line and the map keeps its height. CSS picks one of the two. */}
+        <details class="controls-help" data-testid="controls-help">
+          <summary>{t("client.game.controls_button")}</summary>
+          <p>{t("client.game.controls")}</p>
+        </details>
         {props.languagePicker}
         <button type="button" onClick={() => game.current?.logout()}>
           {t("client.game.logout")}

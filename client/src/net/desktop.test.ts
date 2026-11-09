@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CLIENT_VERSION } from "../version.ts";
-import { gameSocketUrl, isDesktop } from "./desktop.ts";
+import { gameSocketUrl, isDesktop, serverUrlError } from "./desktop.ts";
 
 describe("gameSocketUrl", () => {
   it("uses the page's host on the web", () => {
@@ -21,6 +21,41 @@ describe("gameSocketUrl", () => {
 
   it("is not the desktop app under Node", () => {
     expect(isDesktop()).toBe(false);
+  });
+});
+
+// Mirrors config.rs (Server::parse) tests: the picker explains before the app refuses.
+describe("serverUrlError", () => {
+  it("accepts https anywhere and http only on this machine or a private network", () => {
+    for (const ok of [
+      "https://juego.example.com",
+      " https://x.trycloudflare.com:8443/ ",
+      "http://localhost:8080",
+      "http://127.0.0.1:8080",
+      "http://192.168.1.20:8080",
+      "http://10.0.0.5",
+      "http://172.20.0.2",
+    ])
+      expect(serverUrlError(ok), ok).toBeUndefined();
+    for (const bad of ["http://juego.example.com", "http://8.8.8.8", "http://172.32.0.1"])
+      expect(serverUrlError(bad), bad).toBe("insecure");
+  });
+
+  it("refuses anything but a server origin", () => {
+    for (const bad of [
+      "",
+      "juego.example.com",
+      "ftp://juego.example.com",
+      "https://user:pw@juego.example.com",
+      "http://[::1]:8080",
+    ])
+      expect(serverUrlError(bad), bad).toBe("invalid");
+    for (const bad of [
+      "http://localhost:8080/play/",
+      "https://juego.example.com/?x=1",
+      "https://juego.example.com/#x",
+    ])
+      expect(serverUrlError(bad), bad).toBe("path");
   });
 });
 

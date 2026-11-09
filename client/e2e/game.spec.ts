@@ -1899,6 +1899,21 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     // At the desktop app's minimum width the shop reaches the top right corner: the panel
     // hides while it is open and comes back after.
     await page.setViewportSize({ width: 960, height: 700 });
+    // The header stays one line: the controls help folds into a button, which opens it
+    // over the map without pushing the map down.
+    const hud = page.locator("header.hud");
+    const help = page.getByTestId("controls-help");
+    await expect(hud.locator(".hint")).toBeHidden();
+    await expect(help.locator("summary")).toHaveText("Controles");
+    expect((await hud.boundingBox())?.height ?? 999).toBeLessThan(80);
+    const mapTop = (await page.getByTestId("game-canvas").boundingBox())?.y ?? -1;
+    await help.locator("summary").click();
+    await expect(help.locator("p")).toContainText("Camina con las flechas");
+    await shot(page, "44-controls-help-960");
+    expect((await hud.boundingBox())?.height ?? 999).toBeLessThan(80);
+    expect((await page.getByTestId("game-canvas").boundingBox())?.y).toBe(mapTop);
+    await help.locator("summary").click();
+    await expect(help.locator("p")).toBeHidden();
     let prov: { id: number; x: number; y: number } | undefined;
     await expect
       .poll(async () => {
@@ -1933,6 +1948,8 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     await expect(page.getByTestId("shop")).toBeHidden();
     await expect(panel).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(hud.locator(".hint")).toBeVisible();
+    await expect(help).toBeHidden();
 
     // Skipping ends it for good: the server confirms and the panel and highlight go away.
     await page.getByTestId("tutorial-skip").click();

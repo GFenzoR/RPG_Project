@@ -3,6 +3,19 @@
 Antes del deploy alpha en AWS (T1.18) conviene poder jugar con amigos usando tu propio
 PC como servidor. Esta guía define qué se puede hostear dónde y cómo lo arma la tarea T1.19.
 
+## Jugar en tu PC en 3 pasos
+1. Instala **Docker** (Docker Desktop en Windows/macOS) y, en Windows, abre la terminal de
+   **Ubuntu (WSL2)**. Detalle por sistema en el paso 1 de abajo.
+2. Clona y arranca:
+   ```bash
+   git clone https://github.com/GFenzoR/RPG_Project.git && cd RPG_Project
+   make home-up
+   ```
+3. Abre `http://localhost:8080`, crea tu cuenta con **Jugar** y hazte admin:
+   `make home-admin EMAIL=tu@email.com`.
+
+Para invitar amigos: `make home-tunnel` imprime un link `https://…` para compartir.
+
 ## ¿Sirve Vercel?
 | Pieza | ¿En Vercel? | Por qué |
 |---|---|---|
@@ -43,59 +56,86 @@ Internet ──HTTPS/WSS──▶ Cloudflare Tunnel (o Tailscale) ──▶ tu P
   1 Mbps de subida alcanza para ~25 jugadores con holgura.
 - Los datos viven en el volumen Docker de tu PC; `make home-backup` hace un `pg_dump` local.
 
-## Archivos (T1.19)
+## Archivos
 ```
 deploy/
   docker-compose.home.yml   override del compose de producción: sin backups a S3, Caddy en
                             HTTP en 127.0.0.1:8080, servicios cloudflared (Quick Tunnel y con dominio)
   Caddyfile.home            HTTP plano; confía solo en la red del túnel para CF-Connecting-IP
-  .env.home.example         variables; `make home-up` lo copia a deploy/.env.home (ignorado por git)
+  env.home.template         todas las variables comentadas; make home-up genera deploy/.env.home
+  home.sh                   la lógica de make home-* (Linux, macOS y WSL2 por igual)
   home-tunnel.sh            levanta el Quick Tunnel e imprime la URL (lo usa make home-tunnel)
   check-tunnel-ip.sh        comprueba la IP real detrás del túnel
   smoke.sh                  prueba del stack: salud, cliente, login, /ws y rate limit por IP
 ```
+`deploy/.env.home` es tu configuración local (git lo ignora). Lo crea `make home-up` desde
+`deploy/env.home.template` con contraseñas aleatorias (base de datos y Grafana). Las
+siguientes veces solo **agrega** las variables nuevas que traiga una actualización: nunca
+cambia las que ya tienes. Todo lo demás tiene valor por defecto en el compose, así que
+solo descomentas una línea para cambiarla. (Hasta T1.19 existía `deploy/.env.home.example`;
+lo reemplaza la plantilla, y un `deploy/.env.home` viejo sigue sirviendo tal cual.)
+
 | Comando | Qué hace |
 |---|---|
-| `make home-up` | Construye las imágenes desde tu checkout y levanta postgres + gameserver + caddy. Queda en `http://localhost:8080` |
+| `make home-up` | Genera lo que falte de `deploy/.env.home`, construye las imágenes desde tu checkout, levanta postgres + gameserver + caddy, espera a que estén sanos e imprime qué abrir. `BUILD=0` arranca sin reconstruir |
+| `make home-admin EMAIL=…` | Da rol `admin` a una cuenta ya registrada (`ROLE=gm` o `ROLE=player` para otros roles). Corre dentro del compose: no necesitas `psql` |
 | `make home-tunnel` | Quick Tunnel de Cloudflare (cloudflared en Docker); imprime `https://….trycloudflare.com` |
 | `make home-tunnel-domain` | Túnel con nombre y dominio propio (`CLOUDFLARE_TUNNEL_TOKEN`) |
+| `make home-monitoring-up` | Lo mismo que `home-up` más el monitoreo: Grafana en `http://localhost:3000/grafana/` |
 | `make home-logs` | Logs en vivo de todo el stack |
 | `make home-backup` | `pg_dump` a `deploy/backups/home-<fecha>.dump` |
-| `make home-monitoring-up` | Monitoreo opcional (T4.4): Grafana en `http://localhost:3000/grafana/`, ver "Monitoreo en casa" |
-| `make home-down` | Apaga todo, monitoreo incluido (los datos quedan en el volumen `rpg-home_pgdata`) |
+| `make home-restore FILE=…` | Reemplaza la base por ese backup (pregunta antes y guarda un backup del estado actual) |
+| `make home-down` | Apaga todo, túneles y monitoreo incluidos. **Los datos quedan** |
+| `make home-reset` | **Borra todos los datos** (cuentas, personajes, envíos de mapas, Grafana). Pide escribir `borrar`; `CONFIRM=yes` lo salta. Deja los backups y `deploy/.env.home` |
 
 ## Paso a paso
 
 ### 1. Instalar Docker y make
-Necesitas Docker con Compose **2.24 o más nuevo** (`docker compose version`), `make`, `git`
-y `openssl` (este último solo para generar la contraseña de la base).
+Necesitas Docker con Compose **2.24 o más nuevo** (`docker compose version`), `make` y `git`.
+No hace falta Go, Node ni `psql`: todo se compila y corre dentro de Docker.
 
 - **Windows (WSL2).** Instala [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
   con el backend WSL2 y activa tu distro en *Settings → Resources → WSL integration*. En
-  la terminal de Ubuntu: `sudo apt install make git openssl`. Clona el repo **dentro** de
-  WSL (`~/RPG_Project`, no en `/mnt/c/...`): el build es mucho más rápido. Para que el
-  juego siga online, desactiva la suspensión de Windows mientras juegan.
+  la terminal de Ubuntu: `sudo apt install make git`. Clona el repo **dentro** de WSL
+  (`cd ~` y luego `git clone ...`, no en `/mnt/c/...`): el build es mucho más rápido y no hay
+  problemas de permisos ni de fin de línea. `make home-up` avisa si el repo está en `/mnt/`.
+  El repo trae `.gitattributes` para que los scripts mantengan fin de línea LF aunque git
+  esté configurado con `core.autocrlf=true`. Para que el juego siga online, desactiva la
+  suspensión de Windows mientras juegan.
 - **macOS.** Instala Docker Desktop (o OrbStack/Colima, que también traen `docker compose`).
-  `make`, `git` y `openssl` vienen con `xcode-select --install`. El PC no debe dormirse:
+  `make` y `git` vienen con `xcode-select --install`. El PC no debe dormirse:
   *Ajustes → Batería/Energía* o `caffeinate -d` en una terminal mientras juegan.
 - **Linux.** Instala Docker Engine y el plugin Compose desde los repos oficiales de Docker
   (`docker-compose-plugin`), agrega tu usuario al grupo `docker` (`sudo usermod -aG docker $USER`,
-  cierra sesión y vuelve a entrar) y `sudo apt install make git openssl` (o el equivalente).
+  cierra sesión y vuelve a entrar) y `sudo apt install make git` (o el equivalente).
 
 ### 2. Levantar el juego
 ```bash
 git clone https://github.com/GFenzoR/RPG_Project.git && cd RPG_Project
 make home-up
 ```
-La primera vez crea `deploy/.env.home` con una contraseña aleatoria y compila las imágenes
-(varios minutos). Termina cuando todos los servicios están *healthy*. Abre
-`http://localhost:8080`, crea una cuenta y entra. Si el puerto 8080 está ocupado, cambia
-`HOME_HTTP_PORT` en `deploy/.env.home` y repite `make home-up`.
+La primera vez crea `deploy/.env.home` y compila las imágenes (varios minutos; las
+siguientes, segundos). Termina cuando todo está *healthy* e imprime:
+```
+    Website  http://localhost:8080/
+    Game     http://localhost:8080/play/
+```
+- `http://localhost:8080` es el **sitio**: portada, ranking (se actualiza cada minuto),
+  noticias y el portal de mapas. **Jugar** lleva al juego en `/play/`.
+- Crea una cuenta y un personaje: aparece en **Puerto** con el **tutorial** (panel arriba a la
+  derecha: caminar, hablar con la sacerdotisa, inventario, comprar...). Se puede saltar.
+- Si 8080 está ocupado, descomenta `HOME_HTTP_PORT` en `deploy/.env.home` y repite
+  `make home-up`.
 
-Para actualizar después de un `git pull`, vuelve a correr `make home-up`: reconstruye lo que
-cambió y el servidor aplica las migraciones al arrancar. Los datos no se pierden.
+### 3. Hacerte admin (o gm)
+Los roles nunca se dan desde el juego. Registra tu cuenta en el sitio y luego:
+```bash
+make home-admin EMAIL=tu@email.com            # admin
+make home-admin EMAIL=amigo@email.com ROLE=gm # moderador: revisa los mapas enviados
+```
+El rol nuevo vale desde el siguiente login del personaje. Queda en el registro de auditoría.
 
-### 3. Compartir el link (Quick Tunnel, sin cuenta)
+### 4. Compartir el link (Quick Tunnel, sin cuenta)
 ```bash
 make home-tunnel
 ```
@@ -103,27 +143,21 @@ Imprime algo como `https://palabras-al-azar.trycloudflare.com`. Ese link es el q
 a tus amigos: HTTPS, WebSocket incluido, sin abrir puertos del router. Cambia cada vez que
 el túnel arranca de nuevo. El túnel corre en Docker (`cloudflared-quick`), no hay que
 instalar nada más. Cloudflare limita los Quick Tunnels a pruebas: para algo estable usa el
-paso 4.
+paso 5.
 
-**Cliente de escritorio:** quien use la app de Tauri pone ese link en `config.json`
-(`{"server_url": "https://palabras-al-azar.trycloudflare.com"}`, ruta según el SO en
-`12-local-development.md`, "Cliente de escritorio") o lanza la app con
-`RPG_SERVER_URL=...`. El compose ya permite los orígenes de la app en `/ws`. Usa un
-nombre de host o una IPv4 (en LAN, `http://192.168.x.x:8080`): la app rechaza IPv6.
-
-### 4. Cloudflare Tunnel con dominio propio (URL fija)
+### 5. Cloudflare Tunnel con dominio propio (URL fija)
 1. Compra o mueve un dominio a Cloudflare (plan gratis) y entra al panel *Zero Trust*.
 2. *Networks → Tunnels → Create a tunnel* → tipo **Cloudflared** → ponle nombre.
 3. En la pantalla de instalación copia **solo el token** (la cadena larga después de
    `--token`); no instales el conector en tu PC: corre en Docker.
 4. *Public hostname*: subdominio `juego`, tu dominio, servicio **HTTP** con URL `caddy:80`.
-5. En `deploy/.env.home` pon `CLOUDFLARE_TUNNEL_TOKEN=<token>` y corre
+5. En `deploy/.env.home` descomenta `CLOUDFLARE_TUNNEL_TOKEN=<token>` y corre
    `make home-tunnel-domain`. Tu juego queda en `https://juego.tudominio.com`.
 
 WebSockets funcionan sin configurar nada. El token es un secreto: no lo subas al repo
 (`deploy/.env.home` está en `.gitignore`).
 
-### 5. Tailscale (alternativa privada)
+### 6. Tailscale (alternativa privada)
 Solo entran las personas invitadas a tu red de Tailscale; nada queda público.
 1. Instala Tailscale en tu PC y que cada amigo lo instale en el suyo; invítalos a tu
    tailnet (*Share* o *Invite users* en el panel).
@@ -132,11 +166,78 @@ Solo entran las personas invitadas a tu red de Tailscale; nada queda público.
    ambos). Tailscale te da `https://<tu-pc>.<tailnet>.ts.net` con certificado válido.
 3. Tus amigos abren esa URL. La cookie sigue `Secure` porque es HTTPS.
 
-Sin `tailscale serve` también funciona por la IP de Tailscale en HTTP plano: pon
-`HOME_BIND=0.0.0.0` (o tu IP `100.x.y.z`) y `COOKIE_SECURE=false` en `deploy/.env.home` y
+Sin `tailscale serve` también funciona por la IP de Tailscale (o de tu LAN) en HTTP plano:
+pon `HOME_BIND=0.0.0.0` (o tu IP `100.x.y.z`) y `COOKIE_SECURE=false` en `deploy/.env.home` y
 repite `make home-up`. Con Tailscale todos los jugadores llegan desde la misma IP vista por
 Caddy, así que comparten el cupo de logins por IP (10 seguidos, luego 1 cada 6 s): de sobra
 para un grupo de amigos.
+
+### 7. App de escritorio contra tu PC
+La app (Tauri, `apps/desktop`) es el mismo juego en una ventana propia. Para conseguirla:
+- **Instaladores:** cuando hay un release (`desktop-vX.Y.Z`, `09-deployment-aws.md`,
+  "Cliente de escritorio"), en la página *Releases* de GitHub: `.msi`/`.exe` (Windows),
+  `.dmg` (macOS), `.deb`/`.rpm`/`.AppImage` (Linux). Los instaladores no están firmados:
+  Windows SmartScreen pide *Más información → Ejecutar de todas formas* y macOS, clic
+  derecho → *Abrir* la primera vez.
+- **Compilarla tú:** dependencias de `12-local-development.md` ("Cliente de escritorio") y
+  `pnpm install && make desktop-build`. En Windows compílala en Windows nativo (no en WSL)
+  para obtener el `.msi`.
+
+En la pantalla de login de la app abre **"Servidor: …"**, escribe `http://localhost:8080`
+(o el link del túnel, o la IP de tu LAN como `http://192.168.1.20:8080`) y pulsa
+**Guardar y reiniciar**. El mismo instalador sirve para tu PC, el túnel y el servidor real.
+También puedes editar `config.json` a mano o lanzar la app con `RPG_SERVER_URL=...`
+(ruta y prioridades en `12-local-development.md`). El compose ya permite los orígenes de la
+app en `/ws` y la CSP de la app agrega el servidor elegido; la app no usa cookies (guarda
+el token en el llavero del SO), así que HTTP plano en `localhost` funciona. Usa un nombre
+de host o una IPv4: la app rechaza IPv6.
+
+### 8. Portal de mapas y worker de PRs
+El sitio tiene **Mapas** (`/maps/submit`): cualquier cuenta sube un *map patch* exportado
+del editor (`04-map-editor-and-ai.md`) y un gm o admin lo revisa en `/maps/review`. En casa
+una cuenta nueva puede enviar al instante (`MAP_SUBMIT_MIN_ACCOUNT_AGE=0s` en la plantilla;
+producción espera 24 h). Sin el worker, aprobar un envío muestra cómo aplicarlo a mano con
+`mapcli patch apply`. El worker opcional abre el PR solo: ver "Worker de PR de mapas".
+
+### 9. Actualizar después de un `git pull`
+```bash
+git pull
+make home-up
+```
+Reconstruye solo lo que cambió, agrega a `deploy/.env.home` las variables nuevas (sin tocar
+las tuyas) y el servidor aplica las migraciones de base al arrancar. Los datos no se
+pierden. Si quieres ir a la segura, corre `make home-backup` antes.
+
+### 10. Apagar, reiniciar y borrar
+- `make home-down` apaga todo; `make home-up` lo vuelve a levantar con los mismos datos.
+  Docker no reinicia el juego solo después de `home-down`; sí después de reiniciar el PC si
+  estaba corriendo (los servicios tienen `restart: unless-stopped`).
+- `make home-reset` borra **todos** los datos para empezar de cero (pide confirmación).
+
+## Variables (`deploy/.env.home`)
+Todas son opcionales salvo las dos contraseñas, que se generan solas.
+
+| Variable | Default | Para qué |
+|---|---|---|
+| `POSTGRES_PASSWORD` | generada | Contraseña de la base (no se publica fuera de Docker). No la cambies con datos dentro: Postgres guarda la primera |
+| `GRAFANA_ADMIN_PASSWORD` | generada | Login `admin` de Grafana |
+| `SITE_ADDRESS`, `ACME_EMAIL` | `localhost`, `home@example.com` | Las exige el compose de producción; en casa no se usan (Caddy va en HTTP) |
+| `MAP_SUBMIT_MIN_ACCOUNT_AGE` | `0s` (plantilla); `24h` en producción | Antigüedad mínima de la cuenta para enviar mapas |
+| `COOKIE_SECURE` | `true` | `false` solo si juegan por `http://<IP de LAN o Tailscale>` |
+| `HOME_HTTP_PORT` | `8080` | Puerto del sitio y el juego en tu PC |
+| `HOME_BIND` | `127.0.0.1` | `0.0.0.0` lo abre a tu LAN (o pon tu IP de Tailscale) |
+| `CLOUDFLARE_TUNNEL_TOKEN` | — | Token del túnel con dominio (paso 5) |
+| `CLOUDFLARED_VERSION` | `2025.2.0` | Imagen de cloudflared |
+| `TUNNEL_SUBNET` | `172.31.250.0/24` | Red entre cloudflared y Caddy; cámbiala si choca con una tuya |
+| `RPG_WS_ORIGINS` | orígenes de la app de escritorio | Orígenes extra permitidos en `/ws`; vacío = solo el sitio |
+| `GRAFANA_PORT`, `PROMETHEUS_PORT`, `ALERTMANAGER_PORT` | `3000`, `9090`, `9093` | Puertos del monitoreo (solo `127.0.0.1`) |
+| `ALERT_DISCORD_WEBHOOK_URL`, `ALERT_TELEGRAM_*`, `ALERT_EMAIL_TO`, `ALERT_SMTP_*`, `ALERT_WEBHOOK_URL` | — | Canales de alertas (`09-deployment-aws.md`, "Monitoreo") |
+| `PROMETHEUS_RETENTION`, `PROMETHEUS_RETENTION_SIZE` | `15d`, `1GB` | Cuánto guarda Prometheus |
+| `GRAFANA_PUBLIC` y `GRAFANA_*` de la ruta pública | `off` | No la actives en casa (ver "Monitoreo en casa") |
+| `COMPOSE_PROFILES` | — | `map-pr` enciende el worker de PRs de mapas |
+| `GITHUB_MAP_PR_TOKEN` | — | Token del bot del worker |
+| `MAP_PR_REPOSITORY`, `MAP_PR_BASE`, `MAP_PR_POLL_SECONDS` | `GFenzoR/RPG_Project`, `main`, `30` | Repo, rama y frecuencia del worker |
+| `POSTGRES_USER`, `POSTGRES_DB` | `rpg` | Usuario y base; déjalos así |
 
 ## IP real del jugador
 Los límites de login/registro por IP (T1.3) necesitan la IP del jugador, no la del túnel:
@@ -161,20 +262,19 @@ cada request trae un `X-Forwarded-For` distinto. El job `home-stack` de
 real, y bots que juegan por `wss://` a través del túnel.
 
 ## Backups y restauración
-`make home-backup` deja `deploy/backups/home-<fecha>.dump` (formato custom de `pg_dump`).
-Para restaurar:
 ```bash
-C="docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml --env-file deploy/.env.home"
-$C stop gameserver
-$C exec -T postgres sh -c 'pg_restore --clean --if-exists --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < deploy/backups/home-<fecha>.dump
-$C start gameserver
+make home-backup                                        # deploy/backups/home-<fecha>.dump
+make home-restore FILE=deploy/backups/home-<fecha>.dump # pregunta antes de reemplazar
 ```
-Para borrar todo y empezar de cero: `make home-down` y `docker volume rm rpg-home_pgdata`.
+`home-restore` primero guarda un backup del estado actual (`…-before-restore.dump`),
+detiene el juego, recrea la base desde el archivo y vuelve a levantar todo (con las
+migraciones nuevas, si el backup es más viejo que tu checkout). Los dumps son formato
+custom de `pg_dump`; cópialos fuera del PC si te importan.
 
 ## Monitoreo en casa (T4.4)
 El mismo profile `monitoring` de producción funciona en casa:
 ```
-make home-monitoring-up   # Prometheus, Alertmanager, Grafana y node-exporter sobre el stack de casa
+make home-monitoring-up   # el juego + Prometheus, Alertmanager, Grafana y node-exporter
 # Grafana: http://localhost:3000/grafana/  (admin / GRAFANA_ADMIN_PASSWORD de deploy/.env.home)
 ```
 - **Nada del monitoreo pasa por el túnel.** Grafana (3000), Prometheus (9090) y
@@ -184,6 +284,9 @@ make home-monitoring-up   # Prometheus, Alertmanager, Grafana y node-exporter so
 - **Gasta unos 300 MB más de RAM** (medido en `07-performance-budget.md`).
 - **Backups:** en casa no corre el servicio `backup` (los dumps son `make home-backup`).
   Por eso el panel de backups queda vacío y `BackupStale` no se dispara.
+- La contraseña de Grafana (`GRAFANA_ADMIN_PASSWORD`) la genera `make home-up` en
+  `deploy/.env.home` la primera vez; `make home-up` imprime la URL de Grafana mientras el
+  monitoreo esté corriendo.
 - **Notificaciones:** si quieres recibirlas (Discord o Telegram es lo más simple), pon
   las variables `ALERT_*` en `deploy/.env.home` (tabla en `09-deployment-aws.md`,
   "Monitoreo") y repite `make home-monitoring-up`.
@@ -206,8 +309,17 @@ como `MAP_PR_REPOSITORY`.
 ## Problemas comunes
 | Síntoma | Causa y solución |
 |---|---|
-| `make home-up` falla con `!override` | Compose < 2.24: actualiza Docker Desktop o el plugin |
-| `port is already allocated` | Otro programa usa 8080: cambia `HOME_HTTP_PORT` |
+| `docker not found` / `Docker is not running` | Abre Docker Desktop y espera a que diga *running*. En WSL2, revisa *Settings → Resources → WSL integration*. En Linux: `sudo systemctl start docker` |
+| `docker compose ... is too old` o falla con `!override` | Compose < 2.24: actualiza Docker Desktop o el plugin |
+| `port is already allocated` | Otro programa usa 8080 (o 3000 con monitoreo): cambia `HOME_HTTP_PORT` (o `GRAFANA_PORT`) en `deploy/.env.home`. Para ver quién lo usa: `sudo lsof -i :8080` (Linux/macOS) o `netstat -ano \| findstr 8080` (Windows) |
+| El build muere a mitad, `exit code 137` o `no space left on device` | Docker Desktop sin memoria o disco: *Settings → Resources*, dale al menos 4 GB de RAM y 20 GB de disco. Libera espacio con `docker system prune` (no borra volúmenes) |
+| `files have Windows line endings (CRLF)` o `$'\r': command not found` | El clon convirtió los fines de línea. Con este repo ya no pasa (`.gitattributes`); en un clon viejo: `git config core.autocrlf false && git rm -rq --cached . && git reset -q --hard` (descarta cambios sin commitear) |
+| En Windows el juego deja de responder al rato | WSL o Docker Desktop se durmieron, o Windows suspendió el PC. Desactiva la suspensión; en Docker Desktop desactiva *Resource Saver*. Vuelve con `make home-up` |
+| `make home-up` muy lento en Windows | El repo está en `/mnt/c/...` (el aviso de `home-up` lo dice): clónalo en `~` dentro de WSL |
+| Mis amigos no entran por la LAN | `HOME_BIND=0.0.0.0` y `COOKIE_SECURE=false` en `deploy/.env.home`, y permite el puerto en el firewall: Windows Defender Firewall (Docker Desktop lo pide la primera vez; acepta *Redes privadas*), `sudo ufw allow 8080/tcp` en Linux, macOS *Ajustes → Red → Firewall*. Por Internet usa el túnel: no necesita firewall ni router |
 | `Pool overlaps with other one on this address space` | `TUNNEL_SUBNET` choca con otra red: elige otra `/24` privada |
 | `make home-tunnel` no imprime URL | Sin salida a internet o Cloudflare limitó Quick Tunnels: mira `make home-logs` y reintenta |
 | El login no mantiene la sesión en `http://` | `COOKIE_SECURE=true` en HTTP plano no-localhost: ponlo en `false` (solo LAN/Tailscale sin serve) |
+| `no account with email` en `make home-admin` | La cuenta todavía no existe: regístrala primero en el sitio |
+| El ranking no muestra mi personaje nuevo | Se actualiza cada minuto |
+| `make bots URL=http://localhost:8080` avisa `no map` y `could not read …:9100/metrics` | Esperado con el home stack: los bots caminan al azar y las métricas del servidor no se publican (míralas en Grafana). `make bots` necesita Go instalado |
