@@ -2420,18 +2420,26 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await inventory.getByTestId("slot-backpack").locator("[data-item]").click({ button: "right" });
   const fish = inventory.locator('[data-container-item="backpack"] [data-item="raw_fish"]');
   await expect(fish).toBeVisible();
-  await fish.scrollIntoViewIfNeeded();
-  const from = await fish.boundingBox();
-  const to = await a.evaluate(() => window.__rpgClient?.tileToClient(3154, 6398));
-  if (!from || !to) throw new Error("no drag points");
-  await a.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await a.mouse.down();
-  await a.mouse.move(to.x, to.y, { steps: 8 });
-  await a.mouse.up();
   const fishId = await a.evaluate(() => window.__rpgClient?.itemNumber("raw_fish"));
-  await expect
-    .poll(() => a.evaluate(() => window.__rpgClient?.tile(3154, 6398, 7)?.at(-1)))
-    .toBe(fishId);
+  const fishOnFloor = (): Promise<number | undefined> =>
+    a.evaluate(() => window.__rpgClient?.tile(3154, 6398, 7)?.at(-1));
+  // The side panel can still change height (log lines, panels): measure right before each
+  // try, and try again if the drop did not land.
+  for (let attempt = 0; attempt < 3 && (await fishOnFloor()) !== fishId; attempt++) {
+    await fish.scrollIntoViewIfNeeded();
+    const from = await fish.boundingBox();
+    const to = await a.evaluate(() => window.__rpgClient?.tileToClient(3154, 6398));
+    if (!from || !to) throw new Error("no drag points");
+    await a.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await a.mouse.down();
+    await a.mouse.move(to.x, to.y, { steps: 8 });
+    await a.mouse.up();
+    await expect
+      .poll(fishOnFloor, { timeout: 2000 })
+      .toBe(fishId)
+      .catch(() => undefined);
+  }
+  expect(await fishOnFloor()).toBe(fishId);
   // Written with the owner's inventory, in one transfer.
   await expect
     .poll(() => psql(`SELECT count(*) FROM house_items WHERE house_id = '${house}'`))
