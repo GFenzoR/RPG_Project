@@ -224,9 +224,16 @@ secundaria.
     criaturas, panel y canal en el cliente, `/guilds` en el sitio. Pendiente: avisar a un
     jugador desconectado que lo expulsaron (hoy lo ve al entrar) y borrar de la base las
     invitaciones vencidas sin reiniciar.
-- [ ] **T5.2 PvP con skulls.** Zonas `pvp`/`no_pvp` del mapa, ataque entre jugadores,
+- [x] **T5.2 PvP con skulls.** Zonas `pvp`/`no_pvp` del mapa, ataque entre jugadores,
   skulls por asesinatos injustificados con su castigo, y guerras de gremios sobre lo que
   T5.1 dejó preparado. [T5.1]
+  - Hecha: `session/pvp.go` y `session/guildwar.go` (`balance.yaml pvp`), migración 00014
+    (`pvp_kills`, `pvp_unjust_kills`, `guild_wars` con estados y `war_high`),
+    `SetSafeMode`, `Creature.skull`/`CreatureSkull`, acciones de guerra en `GuildCommand`
+    y `GuildUpdate.wars`, `/unskull` auditado, toda Puerto `no_pvp`, arena en Raigal,
+    marca en el mapa y la lista de batalla, modo seguro y guerras en el panel del gremio.
+    Pendiente: que una condición recuerde a su autor tras un relogueo,
+    hechizos de condición a distancia contra jugadores y sprites de las marcas.
 - [ ] **T5.3 Mercado global.** Ofertas de compra y venta de items `tradeable` entre
   jugadores, con depósito y comisión en oro (sumidero), transaccional y con log de
   economía. [T4.1]

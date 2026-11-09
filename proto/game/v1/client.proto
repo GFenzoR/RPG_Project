@@ -42,6 +42,7 @@ message ClientMessage {
     PresenceAnswer presence_answer = 28;
     TutorialSkip tutorial_skip = 29;
     GuildCommand guild_command = 30;
+    SetSafeMode set_safe_mode = 31;
   }
 }
 
@@ -79,6 +80,14 @@ enum FightStance {
   FIGHT_STANCE_OFFENSIVE = 1;
   FIGHT_STANCE_BALANCED = 2;
   FIGHT_STANCE_DEFENSIVE = 3;
+}
+
+// SetSafeMode turns the safe mode on or off (T5.2, docs/02 "PvP"). With it on (the
+// default until the client says otherwise) the player cannot attack a player whom it
+// would be unjustified to attack, and its area spells skip those players. The client sends
+// it right after the Welcome and whenever the player flips the switch.
+message SetSafeMode {
+  bool enabled = 1;
 }
 
 message SetFightMode {
@@ -265,6 +274,13 @@ enum GuildAction {
   // Leader: member name becomes the leader; the old leader becomes a vice leader if there
   // is room (balance guild.max_vice_leaders), a member otherwise.
   GUILD_ACTION_TRANSFER = 12;
+  // Guild wars (T5.2). Leader: declare war on the guild called name; the other leader
+  // accepts or declines it (by war_id). A leader of a guild at war surrenders it (war_id):
+  // its enemy wins.
+  GUILD_ACTION_WAR_DECLARE = 13;
+  GUILD_ACTION_WAR_ACCEPT = 14;
+  GUILD_ACTION_WAR_DECLINE = 15;
+  GUILD_ACTION_WAR_SURRENDER = 16;
 }
 
 // GuildCommand is every guild intent (T5.1). The chat command "/guild ..." does the same.
@@ -274,6 +290,8 @@ message GuildCommand {
   string name = 2;
   string text = 3;
   uint64 guild_id = 4;
+  // The war of WAR_ACCEPT, WAR_DECLINE and WAR_SURRENDER (GuildWar.war_id).
+  uint64 war_id = 5;
 }
 
 // Craft attempts a recipe of data/recipes.yaml (T3.4) at the station item on the tile

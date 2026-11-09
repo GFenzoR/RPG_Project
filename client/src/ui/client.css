@@ -1189,3 +1189,33 @@ body.using-item canvas {
 .guild-invitations {
   bottom: 8rem;
 }
+
+/* PvP (T5.2): the skull before a player's name in the battle list (the canvas draws the
+   same colours with shapes). Placeholder until there is an icon sprite. */
+.battle .skull {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.3rem;
+  border: 1px solid #000;
+  border-radius: 50% 50% 35% 35%;
+  vertical-align: -0.05rem;
+}
+.battle .skull-aggressor {
+  background: #f2b233;
+}
+.battle .skull-murderer {
+  background: #d23a3a;
+}
+.battle .skull-outlaw {
+  background: #8e4fd6;
+}
+.guild-wars li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+.guild-wars li.active {
+  color: #ffb0a0;
+}

@@ -16,3 +16,4 @@ con esa carpeta y un archivo `LICENSE` dentro. Procedimiento completo: `assets/R
 | Archivos | Autor | Licencia | Fuente reproducible |
 |---|---|---|---|
 | `assets/sounds/**/*.ogg` (efectos, interfaz, música y ambiente) | RPG Project (generado proceduralmente) | CC0 1.0 | `tools/soundgen` (`make sounds`). Recetas y melodías propias, sin muestras externas |
+| Marcas PvP (T5.2): icono de skull del canvas y de la lista de batalla | RPG Project | CC0 1.0 | Dibujado con formas en el código, sin imagen (`client/src/render/game-canvas.ts` `drawSkull`, `client/src/ui/client.css` `.skull`). Placeholder hasta tener sprite |

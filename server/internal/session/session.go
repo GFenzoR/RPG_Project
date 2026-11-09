@@ -62,6 +62,8 @@ type Character struct {
 	Storage map[string]int64
 	// Conditions are the saved conditions that survive a logout (T3.2).
 	Conditions []ConditionState
+	// PvP is the saved skull, kill counter and recent unjustified kills (T5.2).
+	PvP PvPState
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -83,6 +85,8 @@ type Snapshot struct {
 	Storage map[string]int64
 	// Conditions are the active conditions that persist (T3.2), with their time left.
 	Conditions []ConditionState
+	// PvP is the skull, kill counter and unjustified kills in the windows (T5.2).
+	PvP PvPState
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -289,6 +293,25 @@ type World struct {
 	guildDirty   []*guildState
 	guildSend    []*Player
 
+	// PvP (T5.2, pvp.go): balance pvp (pvpOn = enabled), its times in ticks and
+	// durations, the players with a skull (expiry sweep), the next sweep, scratch lists,
+	// and the guild wars (guildwar.go) by id, open ones in id order, and the last war id.
+	pvpOn        bool
+	pvp          content.PvP
+	pvpLockFor   game.Tick
+	pvpKillLock  game.Tick
+	pvpCreditFor game.Tick
+	pvpAggrFor   game.Tick
+	aggrDur      time.Duration
+	unjustKeep   time.Duration
+	skulled      []*Player
+	linkDead     []*Player
+	pvpNext      game.Tick
+	pvpBuf       []*Player
+	wars         map[int64]*guildWar
+	warList      []*guildWar
+	nextWarID    int64
+
 	// Travel (T3.5): routes by captain NPC id, balance travel in ticks and tiles.
 	routes        map[string][]*route
 	fightFor      game.Tick
@@ -409,6 +432,7 @@ func New(cfg Config) (*World, error) {
 	w.initAntiBot()
 	w.initParty()
 	w.initGuilds()
+	w.initPvP()
 	if err := w.initConditions(); err != nil {
 		return nil, err
 	}

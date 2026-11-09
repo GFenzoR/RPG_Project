@@ -121,6 +121,30 @@ guild:                      # T5.1 (docs/02-game-design.md, "Gremios")
     hitler, nigger, faggot, maricon, retard]
   reserved_words: [gm, cm, god, mod, dev]
 
+pvp:                        # T5.2 (docs/02-game-design.md, "PvP"). Own numbers, see there why.
+  enabled: true             # false: no player can hurt another one (PvE only, as before T5.2)
+  min_level: 20             # below it: neither attacks players nor can be attacked by them
+  damage_pct: 60            # every player-on-player hit is scaled to this (no one-shots)
+  aggressor_ms: 420000      # aggressor skull: 7 min after the last unjustified attack
+  lock_ms: 40000            # attacker: no logout or protection zone; victim: no logout
+  kill_lock_ms: 540000      # 9 min after an unjustified kill
+  kill_credit_ms: 40000     # a death is a kill of everyone that hurt the victim this recently (<= lock_ms)
+  murderer:
+    hours: 60               # lasts since the last unjustified kill
+    windows: [{hours: 20, kills: 4}, {hours: 120, kills: 9}]
+    equipment_drop_pct: 40  # minimum drop when dying with it (blessings do not lower it)
+    backpack_drop_pct: 100
+  outlaw:
+    hours: 200
+    windows: [{hours: 20, kills: 7}, {hours: 120, kills: 14}]
+    equipment_drop_pct: 100
+    backpack_drop_pct: 100
+  war:
+    kill_limit: 30          # the first guild to reach it wins
+    hours: 96               # then the one with more kills wins (or a draw)
+    answer_hours: 24        # a declaration nobody answers expires
+    max_wars: 3             # pending + active wars of one guild
+
 travel:                     # boat routes (T3.5, docs/02-game-design.md "Viajes en barco")
   # No sailing while in combat: a monster attacked the player, the player took damage or
   # hit a monster within the last combat_block_ms.

@@ -42,7 +42,7 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		}
 		w.turn(p, d)
 	case *pb.ClientMessage_SetTarget:
-		w.setTarget(p, m.SetTarget.GetCreatureId())
+		w.setTarget(ctx, p, m.SetTarget.GetCreatureId())
 	case *pb.ClientMessage_SetFightMode:
 		w.setFightMode(p, m.SetFightMode.GetStance(), m.SetFightMode.GetChase())
 	case *pb.ClientMessage_Ping:
@@ -88,8 +88,15 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.reportPlayer(ctx, p, m.ReportPlayer.GetCreatureId(), m.ReportPlayer.GetReason())
 	case *pb.ClientMessage_TutorialSkip:
 		w.tutorialSkip(p)
+	case *pb.ClientMessage_SetSafeMode:
+		w.setSafeMode(p, m.SetSafeMode.GetEnabled())
 	case *pb.ClientMessage_Logout:
-		// No-logout zones and the combat lock arrive with death and PvP rules (T1.11).
+		// T5.2: no logout while the PvP lock lasts (attacked a player, or was attacked by
+		// one). Closing the connection still takes the character out (docs/02 "PvP").
+		if w.pvpLocked(ctx.Tick, p) {
+			p.emit(systemMsg(msgPvPLogoutLocked))
+			return
+		}
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
 	default:
 		// Hello after the handshake, and messages of later milestones: ignored.
@@ -199,6 +206,14 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		d = p.queue[p.qhead]
 		to, _ = p.pos.Step(d) // the new path starts on a free walkable tile
 	}
+	if ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos) {
+		// T5.2: an attacker cannot hide in a protection zone while its PvP lock lasts.
+		p.stopWalk()
+		w.reject(p, dirMsg(d))
+		p.emit(systemMsg(msgPvPProtLocked))
+		return
+	}
+
 	p.qhead++
 	if p.qhead == len(p.queue) {
 		p.stopWalk()
@@ -325,6 +340,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	}
 	w.checkRoles(ctx)
 	w.flushParties(ctx.Tick)
+	w.checkPvP(ctx) // T5.2: before the guilds, so an ended war is in this tick's update
 	w.flushGuilds(ctx.Now)
 	w.checkEconomy(ctx.Tick)
 	w.checkIdle(ctx)
@@ -349,6 +365,11 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 
 func (w *World) flushPlayer(tick game.Tick, p *Player) bool {
 	if len(p.out) == 0 {
+		return true
+	}
+	if p.linkDead {
+		clear(p.out)
+		p.out = p.out[:0] // no connection: nobody to tell (T5.2)
 		return true
 	}
 	b := &pb.ServerBatch{Tick: uint64(tick), Events: p.out}

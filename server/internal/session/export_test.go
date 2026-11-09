@@ -202,3 +202,11 @@ func (w *World) GainExperienceForTest(p *Player, xp int64) { w.gainExperience(p,
 
 // AntiBotEvalMsForTest is antibot.eval_every_ms (one evaluation round).
 func (w *World) AntiBotEvalMsForTest() int { return w.abCfg.EvalEveryMs }
+
+// PvPHitForTest lands a physical hit of dmg (before pvp.damage_pct) of a on v (T5.2).
+func (w *World) PvPHitForTest(ctx *game.TickContext, a, v *Player, dmg int) {
+	w.hurtPlayer(ctx, a, v, dmg, ElementPhysical, true)
+}
+
+// PvPStateForTest is what a snapshot would save of p's PvP state.
+func (w *World) PvPStateForTest(p *Player) PvPState { return w.pvpState(p) }

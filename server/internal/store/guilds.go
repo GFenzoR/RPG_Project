@@ -47,6 +47,27 @@ const (
 	// GuildUninvite deletes the invitation of CharacterID to GuildID (declined, revoked
 	// or expired).
 	GuildUninvite
+	// GuildWarDeclare inserts war WarID of GuildID on EnemyID, declared at At, that
+	// expires at Expires unless accepted, with KillLimit (T5.2).
+	GuildWarDeclare
+	// GuildWarStart makes the declared war WarID active from At until Expires.
+	GuildWarStart
+	// GuildWarKills sets the kills of the active war WarID: Kills for its GuildID (the
+	// declaring guild) and EnemyKills for its enemy.
+	GuildWarKills
+	// GuildWarEnd ends the open war WarID at At with Reason (WarEnd*) and WinnerID (0:
+	// none or a draw).
+	GuildWarEnd
+)
+
+// Guild war end reasons (guild_wars.end_reason).
+const (
+	WarEndDeclined = iota + 1
+	WarEndExpired
+	WarEndSurrender
+	WarEndKillLimit
+	WarEndTime
+	WarEndDisbanded
 )
 
 // Guild ranks as stored (guild.Rank).
@@ -68,6 +89,14 @@ type GuildChange struct {
 	Rank        int
 	At          time.Time
 	Expires     time.Time
+	// Guild wars (T5.2).
+	WarID      int64
+	EnemyID    int64
+	KillLimit  int
+	Kills      int
+	EnemyKills int
+	Reason     int
+	WinnerID   int64
 }
 
 // ErrGuildConflict means a change broke a guild constraint (the loop and the database
@@ -147,6 +176,27 @@ func applyGuild(ctx context.Context, q *db.Queries, c GuildChange) error {
 			InvitedBy: by, CreatedAt: ts(c.At), ExpiresAt: ts(c.Expires)})
 	case GuildUninvite:
 		err = q.DeleteGuildInvite(ctx, db.DeleteGuildInviteParams{GuildID: c.GuildID, CharacterID: c.CharacterID})
+	case GuildWarDeclare:
+		err = q.InsertGuildWar(ctx, db.InsertGuildWarParams{ID: c.WarID, GuildID: c.GuildID, EnemyID: c.EnemyID,
+			DeclaredAt: ts(c.At), ExpiresAt: ts(c.Expires), KillLimit: int32(c.KillLimit)})
+		if err == nil {
+			err = q.RaiseGuildWarHigh(ctx, c.WarID)
+		}
+	case GuildWarStart:
+		_, err = q.StartGuildWar(ctx, db.StartGuildWarParams{ID: c.WarID, StartedAt: ts(c.At), ExpiresAt: ts(c.Expires)})
+	case GuildWarKills:
+		_, err = q.SetGuildWarKills(ctx, db.SetGuildWarKillsParams{ID: c.WarID, GuildKills: int32(c.Kills),
+			EnemyKills: int32(c.EnemyKills)})
+	case GuildWarEnd:
+		var winner pgtype.Int8
+		if c.WinnerID != 0 {
+			winner = pgtype.Int8{Int64: c.WinnerID, Valid: true}
+		}
+		if c.Reason < WarEndDeclined || c.Reason > WarEndDisbanded {
+			return fmt.Errorf("%w: war end reason %d", ErrGuildConflict, c.Reason)
+		}
+		_, err = q.EndGuildWar(ctx, db.EndGuildWarParams{ID: c.WarID, EndedAt: ts(c.At), EndReason: int16(c.Reason),
+			WinnerID: winner})
 	default:
 		return fmt.Errorf("%w: unknown op %d", ErrGuildConflict, c.Op)
 	}
@@ -190,13 +240,29 @@ type GuildInviteRow struct {
 	Expires     time.Time
 }
 
-// GuildRows is every guild, member and pending invitation, and the highest guild id
-// ever issued (a new guild must get a higher one).
+// GuildWarRow is an open (declared or active) guild war (T5.2).
+type GuildWarRow struct {
+	ID         int64
+	GuildID    int64
+	EnemyID    int64
+	Active     bool
+	DeclaredAt time.Time
+	StartedAt  time.Time // zero while declared
+	Expires    time.Time
+	KillLimit  int
+	Kills      int
+	EnemyKills int
+}
+
+// GuildRows is every guild, member and pending invitation, the open wars, and the
+// highest guild and war ids ever issued (a new one must get a higher one).
 type GuildRows struct {
-	IDHigh  int64
-	Guilds  []GuildRow
-	Members []GuildMemberRow
-	Invites []GuildInviteRow
+	IDHigh    int64
+	WarIDHigh int64
+	Guilds    []GuildRow
+	Members   []GuildMemberRow
+	Invites   []GuildInviteRow
+	Wars      []GuildWarRow
 }
 
 // LoadGuilds deletes the invitations expired at now and reads every guild, member and
@@ -235,6 +301,18 @@ func (s *Store) LoadGuilds(ctx context.Context, now time.Time) (GuildRows, error
 		for _, i := range is {
 			out.Invites = append(out.Invites, GuildInviteRow{GuildID: i.GuildID, CharacterID: i.CharacterID, Name: i.Name,
 				Expires: i.ExpiresAt.Time})
+		}
+		if out.WarIDHigh, err = q.GuildWarHigh(ctx); err != nil {
+			return err
+		}
+		ws, err := q.ListOpenGuildWars(ctx)
+		if err != nil {
+			return err
+		}
+		for _, w := range ws {
+			out.Wars = append(out.Wars, GuildWarRow{ID: w.ID, GuildID: w.GuildID, EnemyID: w.EnemyID, Active: w.State == 2,
+				DeclaredAt: w.DeclaredAt.Time, StartedAt: w.StartedAt.Time, Expires: w.ExpiresAt.Time,
+				KillLimit: int(w.KillLimit), Kills: int(w.GuildKills), EnemyKills: int(w.EnemyKills)})
 		}
 		return nil
 	})

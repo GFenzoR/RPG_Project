@@ -109,6 +109,21 @@ server/
   por `/api/guilds` es público: nunca el mensaje del día ni quién está en línea, y con las
   exclusiones del ranking (staff, deshabilitadas, baneadas) en `queries/guilds.sql`.
 
+- **PvP (T5.2):** `session/pvp.go` (reglas, marcas, bloqueos, muertes) + `session/
+  guildwar.go` + `content.PvP` (`balance.yaml pvp`; sin bloque o `enabled: false` = todo
+  apagado, como antes). Todo daño de un jugador a otro pasa por `hurtPlayer` (que juzga la
+  agresión con `aggress` y escala con `damage_pct`) y ningún camino nuevo puede saltarse
+  `pvpPlace`/`canAttack`. El objetivo de un jugador es `Player.ptarget` (excluyente con
+  `target`, que sigue siendo `*Monster`); `foe` une ambos en el combate. Las marcas usan
+  `ctx.Now` (persisten en el snapshot) y los bloqueos ticks; `checkPvP` barre una vez por
+  segundo solo `World.skulled` y las guerras abiertas. Las guerras son cambios de gremio
+  (`GuildWar*` en `session` y `store`, mismos valores) y su id lo asigna el loop
+  (`war_high`). Pegarle a jugadores no entrena ni alimenta `abHurt` (anti-bot). Una
+  condición de un jugador pasa por `conditionMayHurt` (nunca empieza un ataque
+  injustificado). `Leave` con bloqueo deja al jugador link-dead (`linkDeadOnLeave`, sin
+  enviarle nada) hasta que `checkPvP` lo saca; un login nuevo lo retoma con `pvpCarry`.
+  `kill_credit_ms <= lock_ms` lo valida el balance: quien cobra una muerte sigue en el mundo.
+
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).
 - Tests de integración con Postgres llevan build tag `integration` (`make test-integration`,

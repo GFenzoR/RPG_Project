@@ -142,6 +142,16 @@ describe("combat state", () => {
     });
     w.apply(sys("combat.cannot_attack"), 0);
     expect(w.target).toBeUndefined();
+    // T5.2: a refused attack on a player drops the target too.
+    for (const key of ["pvp.zone", "pvp.safe_mode", "pvp.their_level"]) {
+      w.target = 9;
+      w.apply(sys(key), 0);
+      expect(w.target).toBeUndefined();
+    }
+    w.target = 9;
+    w.apply(sys("pvp.safe_off"), 0);
+    expect(w.target).toBe(9);
+    w.target = undefined;
     w.apply(
       sys("combat.loot", [
         create(TextParamSchema, { name: "monster", value: { case: "contentId", value: "wolf" } }),

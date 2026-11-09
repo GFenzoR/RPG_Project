@@ -16,7 +16,7 @@ RETURNING id, name, vocation, level;
 -- Loads what the game server needs to put a character in the world, with its account's
 -- role. A banned account's characters are not found (T2.6).
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
-       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, a.role
+       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
 WHERE c.id = sqlc.arg(id) AND c.account_id = sqlc.arg(account_id)
@@ -45,6 +45,9 @@ SET level        = sqlc.arg(level),
     pos_y        = sqlc.arg(pos_y),
     pos_z        = sqlc.arg(pos_z),
     conditions   = sqlc.arg(conditions),
+    skull        = sqlc.arg(skull),
+    skull_until  = sqlc.narg(skull_until),
+    pvp_kills    = sqlc.arg(pvp_kills),
     last_save_at = sqlc.arg(saved_at)
 WHERE id = sqlc.arg(id);
 
@@ -93,3 +96,17 @@ DELETE FROM quest_state WHERE character_id = sqlc.arg(character_id);
 -- name: SaveCharacterQuestState :exec
 INSERT INTO quest_state (character_id, key, value)
 SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(keys)::text[]), unnest(sqlc.arg(vals)::bigint[]);
+
+-- name: GetCharacterUnjustKills :many
+-- PvP (T5.2): the unjustified kills a character made since sqlc.arg(since).
+SELECT killed_at FROM pvp_unjust_kills
+WHERE character_id = sqlc.arg(character_id) AND killed_at > sqlc.arg(since)
+ORDER BY killed_at;
+
+-- name: DeleteCharacterUnjustKills :exec
+-- A snapshot replaces the unjustified kills in the same transaction as the character row.
+DELETE FROM pvp_unjust_kills WHERE character_id = sqlc.arg(character_id);
+
+-- name: SaveCharacterUnjustKills :exec
+INSERT INTO pvp_unjust_kills (character_id, killed_at)
+SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(killed_at)::timestamptz[]);

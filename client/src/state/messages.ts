@@ -55,7 +55,9 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
                     ? t(`vocation.${p.value.value}.name`)
                     : p.name === "rank"
                       ? t(`client.guild.rank.${p.value.value}`)
-                      : t(`monster.${p.value.value}.name`);
+                      : p.name === "skull"
+                        ? t(`client.skull.${p.value.value}`)
+                        : t(`monster.${p.value.value}.name`);
         break;
       case "item": {
         // By its own name too: one item is {item} (gather.got, shop.bought), a list of

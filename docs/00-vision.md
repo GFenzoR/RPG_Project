@@ -53,7 +53,7 @@ Nombre provisional: **RPG Project**.
 Estas piezas ya no están fuera del plan: forman el Hito 5 (`10-roadmap.md`). Hasta que
 llegue su tarea, siguen como estaban:
 - Gremios → T5.1.
-- PvP y sistema de skulls → T5.2; campos `pvp_flags`, `skull`, zonas `pvp` ya existen.
+- PvP y sistema de skulls → T5.2 (hecha: `02-game-design.md`, "PvP"); `pvp_flags` sigue sin uso.
 - Mercado global → T5.3; la tabla de items tiene `tradeable` y el inventario es
   transaccional.
 - Casas de jugadores → T5.4.

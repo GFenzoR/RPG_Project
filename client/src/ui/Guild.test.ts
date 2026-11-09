@@ -23,6 +23,8 @@ interface Sent {
 function fakeGame(sent: Sent[]): Game {
   return {
     guild: (action: GuildAction, name = "") => sent.push({ action, name }),
+    guildWar: (action: GuildAction, name = "", warId = 0n) =>
+      sent.push({ action, name: name || String(warId) }),
     guildAnswer: (id: bigint, accept: boolean) =>
       sent.push({ action: accept ? GuildAction.ACCEPT : GuildAction.DECLINE, name: String(id) }),
   } as unknown as Game;
@@ -79,6 +81,7 @@ const guild = (rank: GuildRank): GuildView => ({
     { name: "Milo", rank: GuildRank.MEMBER, online: true },
   ],
   pending: [{ name: "Ciro", until: 7_200_000 }],
+  wars: [],
 });
 
 describe("GuildPanel", () => {
@@ -157,6 +160,63 @@ describe("GuildPanel", () => {
     const labels = buttons(tree).map((b) => text(b.props.children));
     expect(labels).toContain("client.guild.invite");
     expect(labels).not.toContain("client.guild.disband");
+  });
+});
+
+describe("guild wars (T5.2)", () => {
+  const wars = [
+    {
+      id: 7n,
+      enemy: "Iron",
+      active: false,
+      declaredByUs: false,
+      ours: 0,
+      theirs: 0,
+      limit: 30,
+      until: 3_600_000,
+    },
+    {
+      id: 8n,
+      enemy: "Tide",
+      active: true,
+      declaredByUs: true,
+      ours: 4,
+      theirs: 2,
+      limit: 30,
+      until: 7_200_000,
+    },
+  ];
+
+  it("lets the leader answer, surrender and declare", () => {
+    const sent: Sent[] = [];
+    const g = { ...guild(GuildRank.LEADER), wars };
+    const tree = GuildPanel({ t, content, game: fakeGame(sent), ui: ui(g), now: 0 });
+    const all = text(tree);
+    expect(all).toContain('client.guild.war_pending_theirs{"guild":"Iron","hours":1}');
+    expect(all).toContain(
+      'client.guild.war_active{"guild":"Tide","ours":4,"theirs":2,"limit":30,"hours":2}',
+    );
+    for (const label of ["client.guild.war_accept", "client.guild.war_surrender"]) {
+      buttons(tree)
+        .find((b) => text(b.props.children) === label)
+        ?.props.onClick?.();
+    }
+    expect(sent).toEqual([
+      { action: GuildAction.WAR_ACCEPT, name: "7" },
+      { action: GuildAction.WAR_SURRENDER, name: "8" },
+    ]);
+    expect(
+      nodes(tree).some(
+        (v) => (v.props as Record<string, unknown>)["data-testid"] === "guild-war-declare",
+      ),
+    ).toBe(true);
+  });
+
+  it("shows a member the score without buttons", () => {
+    const g = { ...guild(GuildRank.MEMBER), pending: [], wars };
+    const tree = GuildPanel({ t, content, game: undefined, ui: ui(g), now: 0 });
+    expect(text(tree)).toContain("client.guild.war_active");
+    expect(buttons(tree).map((b) => text(b.props.children))).toEqual(["client.guild.leave"]);
   });
 });
 

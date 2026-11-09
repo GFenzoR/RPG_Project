@@ -99,9 +99,19 @@ func (q *Queries) DeleteCharacterQuestState(ctx context.Context, characterID int
 	return err
 }
 
+const deleteCharacterUnjustKills = `-- name: DeleteCharacterUnjustKills :exec
+DELETE FROM pvp_unjust_kills WHERE character_id = $1
+`
+
+// A snapshot replaces the unjustified kills in the same transaction as the character row.
+func (q *Queries) DeleteCharacterUnjustKills(ctx context.Context, characterID int64) error {
+	_, err := q.db.Exec(ctx, deleteCharacterUnjustKills, characterID)
+	return err
+}
+
 const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
-       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, a.role
+       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
 WHERE c.id = $1 AND c.account_id = $2
@@ -132,6 +142,9 @@ type GetCharacterForPlayRow struct {
 	PosZ       pgtype.Int2
 	Town       string
 	Conditions []byte
+	Skull      int16
+	SkullUntil pgtype.Timestamptz
+	PvpKills   int32
 	Role       string
 }
 
@@ -154,6 +167,9 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 		&i.PosZ,
 		&i.Town,
 		&i.Conditions,
+		&i.Skull,
+		&i.SkullUntil,
+		&i.PvpKills,
 		&i.Role,
 	)
 	return i, err
@@ -261,6 +277,38 @@ func (q *Queries) GetCharacterSkills(ctx context.Context, characterID int64) ([]
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCharacterUnjustKills = `-- name: GetCharacterUnjustKills :many
+SELECT killed_at FROM pvp_unjust_kills
+WHERE character_id = $1 AND killed_at > $2
+ORDER BY killed_at
+`
+
+type GetCharacterUnjustKillsParams struct {
+	CharacterID int64
+	Since       pgtype.Timestamptz
+}
+
+// PvP (T5.2): the unjustified kills a character made since sqlc.arg(since).
+func (q *Queries) GetCharacterUnjustKills(ctx context.Context, arg GetCharacterUnjustKillsParams) ([]pgtype.Timestamptz, error) {
+	rows, err := q.db.Query(ctx, getCharacterUnjustKills, arg.CharacterID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.Timestamptz{}
+	for rows.Next() {
+		var killed_at pgtype.Timestamptz
+		if err := rows.Scan(&killed_at); err != nil {
+			return nil, err
+		}
+		items = append(items, killed_at)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -386,8 +434,11 @@ SET level        = $1,
     pos_y        = $6,
     pos_z        = $7,
     conditions   = $8,
-    last_save_at = $9
-WHERE id = $10
+    skull        = $9,
+    skull_until  = $10,
+    pvp_kills    = $11,
+    last_save_at = $12
+WHERE id = $13
 `
 
 type SaveCharacterStateParams struct {
@@ -399,6 +450,9 @@ type SaveCharacterStateParams struct {
 	PosY       pgtype.Int4
 	PosZ       pgtype.Int2
 	Conditions []byte
+	Skull      int16
+	SkullUntil pgtype.Timestamptz
+	PvpKills   int32
 	SavedAt    pgtype.Timestamptz
 	ID         int64
 }
@@ -414,6 +468,9 @@ func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterState
 		arg.PosY,
 		arg.PosZ,
 		arg.Conditions,
+		arg.Skull,
+		arg.SkullUntil,
+		arg.PvpKills,
 		arg.SavedAt,
 		arg.ID,
 	)
@@ -421,6 +478,21 @@ func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterState
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const saveCharacterUnjustKills = `-- name: SaveCharacterUnjustKills :exec
+INSERT INTO pvp_unjust_kills (character_id, killed_at)
+SELECT $1::bigint, unnest($2::timestamptz[])
+`
+
+type SaveCharacterUnjustKillsParams struct {
+	CharacterID int64
+	KilledAt    []pgtype.Timestamptz
+}
+
+func (q *Queries) SaveCharacterUnjustKills(ctx context.Context, arg SaveCharacterUnjustKillsParams) error {
+	_, err := q.db.Exec(ctx, saveCharacterUnjustKills, arg.CharacterID, arg.KilledAt)
+	return err
 }
 
 const touchCharacterLogin = `-- name: TouchCharacterLogin :exec

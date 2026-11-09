@@ -39,7 +39,22 @@ type PlayCharacter struct {
 	Storage map[string]int64
 	// Conditions are the saved conditions (characters.conditions, T3.2).
 	Conditions []Condition
+	// PvP is the character's skull, kill counter and recent unjustified kills (T5.2).
+	PvP PvPState
 }
+
+// PvPState is the PvP state of a character (T5.2): characters.skull, skull_until and
+// pvp_kills, and its pvp_unjust_kills rows (oldest first).
+type PvPState struct {
+	Skull      int
+	SkullUntil time.Time // zero without a skull
+	Kills      int
+	Unjust     []time.Time
+}
+
+// unjustKillsHorizon bounds what a login reads of pvp_unjust_kills: the longest window
+// balance.yaml allows (pvp.*.windows hours <= 1440).
+const unjustKillsHorizon = 1440 * time.Hour
 
 // Condition is one saved condition of a character (T3.2): its time left (to the next hit
 // of a damage condition, or to its end) and, for damage, the hits left and their damage.
@@ -83,7 +98,9 @@ type CharacterState struct {
 	Storage map[string]int64
 	// Conditions replace the saved ones (T3.2).
 	Conditions []Condition
-	SavedAt    time.Time
+	// PvP replaces the skull, the kill counter and every pvp_unjust_kills row (T5.2).
+	PvP     PvPState
+	SavedAt time.Time
 }
 
 // CharacterBelongsTo reports whether characterID is a character of accountID.
@@ -146,7 +163,20 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	if err := json.Unmarshal(row.Conditions, &conds); err != nil {
 		return PlayCharacter{}, fmt.Errorf("character conditions: %w", err)
 	}
+	unjust, err := s.q.GetCharacterUnjustKills(ctx, db.GetCharacterUnjustKillsParams{CharacterID: id,
+		Since: ts(now.Add(-unjustKillsHorizon))})
+	if err != nil {
+		return PlayCharacter{}, fmt.Errorf("character unjust kills: %w", err)
+	}
+	pvp := PvPState{Skull: int(row.Skull), Kills: int(row.PvpKills), Unjust: make([]time.Time, len(unjust))}
+	if row.SkullUntil.Valid {
+		pvp.SkullUntil = row.SkullUntil.Time
+	}
+	for i, k := range unjust {
+		pvp.Unjust[i] = k.Time
+	}
 	return PlayCharacter{
+		PvP:        pvp,
 		Conditions: conds,
 		Storage:    storage,
 		Inventory:  inventoryTree(inv),
@@ -193,6 +223,9 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 		PosX:       pgtype.Int4{Int32: int32(c.X), Valid: true},
 		PosY:       pgtype.Int4{Int32: int32(c.Y), Valid: true},
 		PosZ:       pgtype.Int2{Int16: int16(c.Z), Valid: true},
+		Skull:      int16(c.PvP.Skull),
+		SkullUntil: tsOrNull(c.PvP.SkullUntil),
+		PvpKills:   int32(c.PvP.Kills),
 		SavedAt:    ts(c.SavedAt),
 	})
 	if err != nil {
@@ -218,6 +251,18 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 		}
 		if err := q.SaveCharacterQuestState(ctx, qp); err != nil {
 			return fmt.Errorf("save quest state of character %d: %w", c.ID, err)
+		}
+	}
+	if err := q.DeleteCharacterUnjustKills(ctx, c.ID); err != nil {
+		return fmt.Errorf("clear unjust kills of character %d: %w", c.ID, err)
+	}
+	if len(c.PvP.Unjust) > 0 {
+		kp := db.SaveCharacterUnjustKillsParams{CharacterID: c.ID, KilledAt: make([]pgtype.Timestamptz, len(c.PvP.Unjust))}
+		for i, t := range c.PvP.Unjust {
+			kp.KilledAt[i] = ts(t)
+		}
+		if err := q.SaveCharacterUnjustKills(ctx, kp); err != nil {
+			return fmt.Errorf("save unjust kills of character %d: %w", c.ID, err)
 		}
 	}
 	if len(c.Skills) == 0 {
@@ -273,4 +318,12 @@ func inventoryTree(rows []db.GetCharacterInventoryRow) []InventoryItem {
 		return out
 	}
 	return build(top, 0)
+}
+
+// tsOrNull is ts, or NULL for the zero time.
+func tsOrNull(t time.Time) pgtype.Timestamptz {
+	if t.IsZero() {
+		return pgtype.Timestamptz{}
+	}
+	return ts(t)
 }

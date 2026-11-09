@@ -232,7 +232,9 @@ func (a *adminWorker) abandon(job session.AdminJob) {
 	if job.Kind == session.AdminGuild && job.Guild != nil {
 		g := job.Guild
 		a.log.Error("admin: guild change abandoned at shutdown", "op", g.Op, "guild", g.GuildID, "character", g.CharacterID,
-			"other", g.OtherID, "name", g.Name, "text", g.Text, "rank", g.Rank, "at", g.At, "expires", g.Expires)
+			"other", g.OtherID, "name", g.Name, "text", g.Text, "rank", g.Rank, "at", g.At, "expires", g.Expires,
+			"war", g.WarID, "enemy", g.EnemyID, "kill_limit", g.KillLimit, "kills", g.Kills, "enemy_kills", g.EnemyKills,
+			"reason", g.Reason, "winner", g.WinnerID)
 		return
 	}
 	e := job.Audit
@@ -291,12 +293,18 @@ func (a *adminWorker) checkRoles(accounts []int64) {
 
 func guildChange(c session.GuildChange) store.GuildChange {
 	return store.GuildChange{Op: store.GuildOp(c.Op), GuildID: c.GuildID, CharacterID: c.CharacterID, OtherID: c.OtherID,
-		InvitedBy: c.InvitedBy, Name: c.Name, Text: c.Text, Rank: int(c.Rank), At: c.At, Expires: c.Expires}
+		InvitedBy: c.InvitedBy, Name: c.Name, Text: c.Text, Rank: int(c.Rank), At: c.At, Expires: c.Expires,
+		WarID: c.WarID, EnemyID: c.EnemyID, KillLimit: c.KillLimit, Kills: c.Kills, EnemyKills: c.EnemyKills,
+		Reason: c.Reason, WinnerID: c.WinnerID}
 }
 
 // guildData converts what the store loaded to the World's start state.
 func guildData(r store.GuildRows) *session.GuildData {
-	out := &session.GuildData{IDHigh: r.IDHigh, Guilds: make([]session.GuildRecord, len(r.Guilds))}
+	out := &session.GuildData{IDHigh: r.IDHigh, WarIDHigh: r.WarIDHigh, Guilds: make([]session.GuildRecord, len(r.Guilds))}
+	for _, v := range r.Wars {
+		out.Wars = append(out.Wars, session.GuildWarRecord{ID: v.ID, GuildID: v.GuildID, EnemyID: v.EnemyID, Active: v.Active,
+			DeclaredAt: v.DeclaredAt, Expires: v.Expires, KillLimit: v.KillLimit, Kills: v.Kills, EnemyKills: v.EnemyKills})
+	}
 	idx := make(map[int64]int, len(r.Guilds))
 	for i, g := range r.Guilds {
 		out.Guilds[i] = session.GuildRecord{ID: g.ID, Name: g.Name, Motd: g.Motd, CreatedAt: g.CreatedAt}

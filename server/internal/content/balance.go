@@ -23,8 +23,10 @@ type Balance struct {
 	Death      Death      `yaml:"death"`
 	Party      Party      `yaml:"party"`
 	Guild      Guild      `yaml:"guild"`
-	Travel     Travel     `yaml:"travel"`
-	Economy    Economy    `yaml:"economy"`
+	// PvP is player versus player (T5.2); absent or enabled: false turns it off.
+	PvP     PvP     `yaml:"pvp"`
+	Travel  Travel  `yaml:"travel"`
+	Economy Economy `yaml:"economy"`
 	// Reports and Idle are the player reports and the idle disconnect (T4.1).
 	Reports Reports `yaml:"reports"`
 	Idle    Idle    `yaml:"idle"`
@@ -169,6 +171,106 @@ func (g Guild) check() error {
 	}
 	if g.NameMin < 2 || g.NameMax < g.NameMin || g.NameMax > MaxGuildName || g.NameMaxWords < 1 || g.MotdMax < 1 || g.MotdMax > MaxChatLength {
 		return fmt.Errorf("guild: name_min >= 2, name_max in name_min..%d, name_max_words >= 1, motd_max in 1..%d", MaxGuildName, MaxChatLength)
+	}
+	return nil
+}
+
+// PvP holds the player versus player rules (T5.2, docs/02-game-design.md "PvP"). The
+// zero value (no pvp block) is PvP off: the game plays as PvE only.
+type PvP struct {
+	Enabled bool `yaml:"enabled"`
+	// MinLevel: below it a character neither attacks players nor is attacked by them.
+	MinLevel int `yaml:"min_level"`
+	// DamagePct scales every hit of a player on a player (melee, distance, spells,
+	// conditions).
+	DamagePct int `yaml:"damage_pct"`
+	// AggressorMs: the aggressor skull lasts this long after the last unjustified attack,
+	// and so does the right of its victims to defend themselves.
+	AggressorMs int `yaml:"aggressor_ms"`
+	// LockMs: after a player attacks a player it cannot log out or enter a protection
+	// zone this long; the victim cannot log out. KillLockMs replaces it after an
+	// unjustified kill.
+	LockMs     int `yaml:"lock_ms"`
+	KillLockMs int `yaml:"kill_lock_ms"`
+	// KillCreditMs: a death counts as a kill of every player that hurt the victim this
+	// long before it.
+	KillCreditMs int     `yaml:"kill_credit_ms"`
+	Murderer     PvPMark `yaml:"murderer"`
+	Outlaw       PvPMark `yaml:"outlaw"`
+	War          PvPWar  `yaml:"war"`
+}
+
+// PvPMark is a skull earned by unjustified kills: it is reached when any window holds
+// at least its kills, lasts Hours since the last unjustified kill, and dying with it
+// drops at least these percentages (blessings do not lower them).
+type PvPMark struct {
+	Hours            int         `yaml:"hours"`
+	Windows          []PvPWindow `yaml:"windows"`
+	EquipmentDropPct float64     `yaml:"equipment_drop_pct"`
+	BackpackDropPct  float64     `yaml:"backpack_drop_pct"`
+}
+
+// PvPWindow counts the unjustified kills of the last Hours.
+type PvPWindow struct {
+	Hours int `yaml:"hours"`
+	Kills int `yaml:"kills"`
+}
+
+// PvPWar holds the guild war rules.
+type PvPWar struct {
+	// KillLimit: the first side to reach it wins. Hours: an active war ends after this
+	// (most kills wins, or a draw). AnswerHours: a declaration nobody answers expires.
+	KillLimit   int `yaml:"kill_limit"`
+	Hours       int `yaml:"hours"`
+	AnswerHours int `yaml:"answer_hours"`
+	// MaxWars: pending and active wars a guild may have at once.
+	MaxWars int `yaml:"max_wars"`
+}
+
+// MaxUnjustKills is how many unjustified kills of a character the server keeps (the
+// newest): a window cannot ask for more.
+const MaxUnjustKills = 256
+
+// MaxWindowHours is the longest window of m.
+func (m PvPMark) MaxWindowHours() int {
+	h := 0
+	for _, w := range m.Windows {
+		h = max(h, w.Hours)
+	}
+	return h
+}
+
+func (m PvPMark) check(name string) error {
+	pct := func(v float64) bool { return v >= 0 && v <= 100 }
+	if m.Hours < 1 || m.Hours > 24*365 || len(m.Windows) == 0 || len(m.Windows) > 4 ||
+		!pct(m.EquipmentDropPct) || !pct(m.BackpackDropPct) {
+		return fmt.Errorf("pvp.%s: hours in 1..8760, 1..4 windows, drop percentages in 0..100", name)
+	}
+	for _, w := range m.Windows {
+		if w.Hours < 1 || w.Hours > 24*60 || w.Kills < 1 || w.Kills > MaxUnjustKills {
+			return fmt.Errorf("pvp.%s.windows: hours in 1..1440, kills in 1..%d", name, MaxUnjustKills)
+		}
+	}
+	return nil
+}
+
+func (p PvP) check() error {
+	if !p.Enabled {
+		return nil
+	}
+	if p.MinLevel < 1 || p.DamagePct < 1 || p.DamagePct > 100 || p.AggressorMs < 1000 || p.LockMs < 1000 ||
+		p.KillLockMs < p.LockMs || p.KillLockMs > 3_600_000 || p.KillCreditMs < 1000 || p.KillCreditMs > p.AggressorMs || p.KillCreditMs > p.LockMs {
+		return errors.New("pvp: min_level >= 1, damage_pct in 1..100, aggressor_ms and lock_ms >= 1000, kill_lock_ms in lock_ms..3600000, kill_credit_ms in 1000..min(aggressor_ms, lock_ms)")
+	}
+	if err := p.Murderer.check("murderer"); err != nil {
+		return err
+	}
+	if err := p.Outlaw.check("outlaw"); err != nil {
+		return err
+	}
+	if w := p.War; w.KillLimit < 1 || w.KillLimit > 10000 || w.Hours < 1 || w.Hours > 24*60 || w.AnswerHours < 1 ||
+		w.AnswerHours > 24*14 || w.MaxWars < 1 || w.MaxWars > 20 {
+		return errors.New("pvp.war: kill_limit in 1..10000, hours in 1..1440, answer_hours in 1..336, max_wars in 1..20")
 	}
 	return nil
 }
@@ -599,6 +701,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 		return Balance{}, err
 	}
 	if err := b.Guild.check(); err != nil {
+		return Balance{}, err
+	}
+	if err := b.PvP.check(); err != nil {
 		return Balance{}, err
 	}
 	if t := b.Travel; t.CombatBlockMs < 0 || t.CombatBlockMs > 600_000 || t.ArrivalRadius < 0 || t.ArrivalRadius > 5 {

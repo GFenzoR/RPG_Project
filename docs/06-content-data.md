@@ -420,6 +420,34 @@ guild:
   `i18n/*/client.yaml`; la página pública usa `site.guilds.*` (`i18n/*/site.yaml`). El
   rango de un miembro se traduce con `client.guild.rank.<leader|vice|member>`.
 
+## PvP (T5.2)
+`balance.yaml → pvp` (`balance.schema.json`; el bloque es obligatorio en los datos del
+juego, opcional para el servidor: sin él, PvP apagado). Qué hace cada valor y por qué esos
+números: `02-game-design.md`, "PvP". Los números son propios.
+```yaml
+pvp:
+  enabled: true             # false: nadie hiere a otro jugador (solo PvE)
+  min_level: 20             # por debajo, ni ataca ni lo atacan jugadores
+  damage_pct: 60            # 1..100: todo golpe entre jugadores se escala a esto
+  aggressor_ms: 420000      # marca de agresor y derecho a defensa propia
+  lock_ms: 40000            # bloqueo PvP (salir del juego; el atacante, zonas protegidas)
+  kill_lock_ms: 540000      # bloqueo tras una muerte injustificada (>= lock_ms, <= 1 h)
+  kill_credit_ms: 40000     # quién se lleva la muerte (<= aggressor_ms y <= lock_ms)
+  murderer:                 # y outlaw, con la misma forma
+    hours: 60               # duración desde la última muerte injustificada
+    windows: [{hours: 20, kills: 4}, {hours: 120, kills: 9}]   # 1..4 ventanas, hours <= 1440, kills <= 256
+    equipment_drop_pct: 40  # caída mínima al morir con la marca (ignora bendiciones)
+    backpack_drop_pct: 100
+  war:
+    kill_limit: 30
+    hours: 96
+    answer_hours: 24
+    max_wars: 3
+```
+- Textos: `pvp.*` y `guild.war_*` (servidor), `client.skull.*`, `client.pvp.*` y
+  `client.guild.war*` (cliente) en `i18n/*/client.yaml`.
+- Zonas `pvp` y `no_pvp` del mapa: `03-world-and-maps.md`.
+
 ## Receta de oficio
 ```yaml
 # data/recipes.yaml (T3.4)

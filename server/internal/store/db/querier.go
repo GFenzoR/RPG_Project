@@ -42,6 +42,8 @@ type Querier interface {
 	DeleteCharacterInventory(ctx context.Context, characterID int64) error
 	// A snapshot replaces every storage value in the same transaction as the character row.
 	DeleteCharacterQuestState(ctx context.Context, characterID int64) error
+	// A snapshot replaces the unjustified kills in the same transaction as the character row.
+	DeleteCharacterUnjustKills(ctx context.Context, characterID int64) error
 	DeleteExpiredAccountTokens(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteExpiredGuildInvites(ctx context.Context, now pgtype.Timestamptz) error
 	DeleteExpiredOAuth(ctx context.Context, now pgtype.Timestamptz) (int64, error)
@@ -55,6 +57,7 @@ type Querier interface {
 	// After a password reset (the mailbox owner is in control): identities that never proved
 	// the account's email go, so one linked by whoever squatted the address cannot stay.
 	DeleteUnprovenIdentities(ctx context.Context, arg DeleteUnprovenIdentitiesParams) (int64, error)
+	EndGuildWar(ctx context.Context, arg EndGuildWarParams) (int64, error)
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	GetAccountProfile(ctx context.Context, id int64) (GetAccountProfileRow, error)
 	GetAccountProfileByEmail(ctx context.Context, email string) (GetAccountProfileByEmailRow, error)
@@ -79,12 +82,17 @@ type Querier interface {
 	GetCharacterSkills(ctx context.Context, characterID int64) ([]GetCharacterSkillsRow, error)
 	// Resolves a character name (ignoring case) for a staff command.
 	GetCharacterTarget(ctx context.Context, name string) (GetCharacterTargetRow, error)
+	// PvP (T5.2): the unjustified kills a character made since sqlc.arg(since).
+	GetCharacterUnjustKills(ctx context.Context, arg GetCharacterUnjustKillsParams) ([]pgtype.Timestamptz, error)
 	GetIdentity(ctx context.Context, arg GetIdentityParams) (int64, error)
 	GetOAuthPending(ctx context.Context, arg GetOAuthPendingParams) (GetOAuthPendingRow, error)
 	GetSubmission(ctx context.Context, id int64) (GetSubmissionRow, error)
 	GetSubmissionPatch(ctx context.Context, id int64) (GetSubmissionPatchRow, error)
 	// The highest guild id ever issued (0 before the first founding).
 	GuildIDHigh(ctx context.Context) (int64, error)
+	// Guild wars (T5.2).
+	// The highest war id ever issued (0 before the first declaration).
+	GuildWarHigh(ctx context.Context) (int64, error)
 	// Highscores (T4.3, GET /api/highscores). Only players' characters are ranked: staff
 	// (gm/admin), disabled accounts and accounts with an active ban are left out. Ties keep
 	// the older character first. A page is limit rows from offset; callers ask for one more
@@ -104,6 +112,7 @@ type Querier interface {
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertGuild(ctx context.Context, arg InsertGuildParams) error
 	InsertGuildMember(ctx context.Context, arg InsertGuildMemberParams) error
+	InsertGuildWar(ctx context.Context, arg InsertGuildWarParams) error
 	InsertIdentity(ctx context.Context, arg InsertIdentityParams) error
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
 	InsertMapSubmission(ctx context.Context, arg InsertMapSubmissionParams) (int64, error)
@@ -122,6 +131,8 @@ type Querier interface {
 	// Guilds (T5.1). The game loop decides; these only load and apply its changes.
 	ListGuilds(ctx context.Context) ([]Guild, error)
 	ListIdentities(ctx context.Context, accountID int64) ([]ListIdentitiesRow, error)
+	// Declared and active wars (ended ones are history: the loop does not load them).
+	ListOpenGuildWars(ctx context.Context) ([]ListOpenGuildWarsRow, error)
 	// The oldest open reports first: the queue order.
 	ListOpenReports(ctx context.Context, maxRows int32) ([]ListOpenReportsRow, error)
 	// The moderation queue: oldest first (arrival order), a page after a cursor.
@@ -151,6 +162,7 @@ type Querier interface {
 	// Drops the bytes of patches whose submission reached a final status before the cutoff.
 	PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	RaiseGuildIDHigh(ctx context.Context, id int64) error
+	RaiseGuildWarHigh(ctx context.Context, id int64) error
 	RenameGuild(ctx context.Context, arg RenameGuildParams) (int64, error)
 	ReportExists(ctx context.Context, id int64) (bool, error)
 	// Approve or reject a pending submission. No row: it is not pending (or does not exist).
@@ -160,12 +172,15 @@ type Querier interface {
 	SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error
 	// Written by the persistence goroutine from an immutable snapshot of the game loop.
 	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
+	SaveCharacterUnjustKills(ctx context.Context, arg SaveCharacterUnjustKillsParams) error
 	SetAccountLocale(ctx context.Context, arg SetAccountLocaleParams) error
 	// Sets the role of the account with that (normalized) email and returns the old one.
 	SetAccountRole(ctx context.Context, arg SetAccountRoleParams) (SetAccountRoleRow, error)
 	SetGuildMemberRank(ctx context.Context, arg SetGuildMemberRankParams) (int64, error)
 	SetGuildMotd(ctx context.Context, arg SetGuildMotdParams) (int64, error)
+	SetGuildWarKills(ctx context.Context, arg SetGuildWarKillsParams) (int64, error)
 	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
+	StartGuildWar(ctx context.Context, arg StartGuildWarParams) (int64, error)
 	SubmissionAuthor(ctx context.Context, id int64) (int64, error)
 	// The same as LockSubmitter without the lock: a cheap check before reading an upload.
 	SubmitterStatus(ctx context.Context, arg SubmitterStatusParams) (SubmitterStatusRow, error)

@@ -22,6 +22,9 @@ func TestGuildOpsMatch(t *testing.T) {
 		session.GuildDisband: store.GuildDisband, session.GuildJoin: store.GuildJoin, session.GuildRemove: store.GuildRemove,
 		session.GuildRank: store.GuildRank, session.GuildTransfer: store.GuildTransfer, session.GuildInvite: store.GuildInvite,
 		session.GuildUninvite: store.GuildUninvite,
+		// T5.2: guild wars.
+		session.GuildWarDeclare: store.GuildWarDeclare, session.GuildWarStart: store.GuildWarStart,
+		session.GuildWarKills: store.GuildWarKills, session.GuildWarEnd: store.GuildWarEnd,
 	}
 	for s, st := range pairs {
 		if got := guildChange(session.GuildChange{Op: s}).Op; got != st {
@@ -30,6 +33,21 @@ func TestGuildOpsMatch(t *testing.T) {
 	}
 	if store.GuildRankLeader != int(guild.Leader) || store.GuildRankVice != int(guild.Vice) || store.GuildRankMember != int(guild.Member) {
 		t.Error("store ranks differ from guild.Rank")
+	}
+	ends := [][2]int{{session.WarEndDeclined, store.WarEndDeclined}, {session.WarEndExpired, store.WarEndExpired},
+		{session.WarEndSurrender, store.WarEndSurrender}, {session.WarEndKillLimit, store.WarEndKillLimit},
+		{session.WarEndTime, store.WarEndTime}, {session.WarEndDisbanded, store.WarEndDisbanded}}
+	for _, e := range ends {
+		if e[0] != e[1] {
+			t.Errorf("war end reason: session %d, store %d", e[0], e[1])
+		}
+	}
+	// The war fields reach the store.
+	c := guildChange(session.GuildChange{Op: session.GuildWarEnd, WarID: 3, EnemyID: 4, KillLimit: 5, Kills: 6,
+		EnemyKills: 7, Reason: session.WarEndTime, WinnerID: 8})
+	if c.WarID != 3 || c.EnemyID != 4 || c.KillLimit != 5 || c.Kills != 6 || c.EnemyKills != 7 ||
+		c.Reason != store.WarEndTime || c.WinnerID != 8 {
+		t.Errorf("guildChange = %+v", c)
 	}
 }
 

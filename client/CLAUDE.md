@@ -288,6 +288,24 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   con `psql`, funda, invita, habla por el canal, mira al otro y revisa el sitio
   (screenshots 45–48).
 
+## Notas de T5.2
+- `CreatureState.skull` (de `Creature.skull` y `CreatureSkull`): el canvas dibuja la marca a
+  la izquierda del nombre con formas (`drawSkull`, colores en `state/pvp.ts` `skullColor`)
+  y la lista de batalla un `.skull` del mismo color (`data-skull`). Placeholder hasta tener
+  sprite. La lista de batalla ya no deshabilita a los jugadores: un click = `SetTarget`
+  (el servidor decide); también click derecho en el canvas.
+- Modo seguro: `Game.safeMode`/`setSafeMode` (`localStorage` `rpg.safeMode`, activado por
+  defecto, `state/pvp.ts`); se manda tras el `Welcome` solo si está apagado (el servidor
+  empieza activado). Interruptor `data-testid="safe-mode"` en "Modo de combate".
+- `WorldState` suelta el objetivo con `combat.cannot_attack` y con los rechazos `pvp.*`
+  (`TARGET_REFUSED`). Un `content_id` llamado `skull` se traduce como `client.skull.<id>`.
+- Guerras: `GuildView.wars` (`state/guild.ts`, `warActions`/`warLine` puros y con tests),
+  sección "Guerras" del panel (`data-testid="guild-wars"`, `guild-war-declare` para el
+  líder), `Game.guildWar`. E2E "T5.2" de `e2e/game.spec.ts`: dos guardianes de nivel 25
+  sembrados con `psql` en `testisle_no_pvp` (rechazo), bajan 3 casillas, el ataque marca
+  al atacante y la víctima en modo seguro puede defenderse; el atacante no puede salir
+  (screenshots 49–51).
+
 ## Notas de T2.5
 - El mismo build corre en la app de escritorio (`apps/desktop`). `net/desktop.ts` detecta
   Tauri: la API va por el comando `api` (Rust guarda el token en el llavero; la página no
