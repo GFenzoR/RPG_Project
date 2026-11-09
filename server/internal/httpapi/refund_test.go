@@ -34,6 +34,16 @@ func (*fakeAccounts) CreateCharacter(context.Context, int64, string, string) (st
 	return store.Character{}, nil
 }
 
+func (*fakeAccounts) EmailEnabled() bool { return false }
+func (*fakeAccounts) Profile(context.Context, int64) (store.Profile, error) {
+	return store.Profile{}, nil
+}
+func (*fakeAccounts) RequireVerified(context.Context, int64) error               { return nil }
+func (*fakeAccounts) SendVerification(context.Context, int64, string) error      { return nil }
+func (*fakeAccounts) VerifyEmail(context.Context, string) error                  { return nil }
+func (*fakeAccounts) RequestPasswordReset(context.Context, string, string) error { return nil }
+func (*fakeAccounts) ResetPassword(context.Context, string, string) error        { return nil }
+
 func wrongPassword() (auth.Token, error) { return auth.Token{}, auth.ErrInvalidCredentials }
 
 // newRefundHarness: pair and email budgets of 1 that never refill during the test, and

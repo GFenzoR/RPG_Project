@@ -80,6 +80,12 @@ type Config struct {
 	MapSubmitLimits httpapi.MapSubmitLimits
 	// MapPRWorker: the map PR worker runs (httpapi.Config.MapPRWorker).
 	MapPRWorker bool
+	// Mail sends the account emails (T2.1); nil turns verification and reset off.
+	Mail auth.Emailer
+	// PublicURL is the website's base URL for the links of the emails (required with Mail).
+	PublicURL string
+	// RequireVerifiedEmail: only accounts with a verified email may play.
+	RequireVerifiedEmail bool
 	// ShutdownTimeout bounds the final saves and the closing of connections (default 10 s).
 	ShutdownTimeout time.Duration
 }
@@ -114,7 +120,10 @@ func New(cfg Config) (*App, error) {
 		cfg.ShutdownTimeout = 10 * time.Second
 	}
 	a := &App{cfg: cfg, log: cfg.Logger, loopDone: make(chan struct{})}
-	authSvc, err := auth.New(auth.Config{Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations})
+	authSvc, err := auth.New(auth.Config{
+		Repo: cfg.Store, Clock: cfg.Clock, Vocations: cfg.Vocations,
+		Mail: cfg.Mail, PublicURL: cfg.PublicURL, RequireVerifiedEmail: cfg.RequireVerifiedEmail,
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,8 @@
 // Package auth implements accounts, passwords (argon2id), session tokens and the
 // account's characters. It is used by the HTTP API, never by the game loop.
 //
-// OAuth (Google, Discord), email verification and password reset arrive in T2.1.
+// Email verification and password reset (T2.1) live in email.go; OAuth (Google,
+// Discord) arrives in the second half of T2.1.
 package auth
 
 import (
@@ -50,6 +51,14 @@ type Repo interface {
 	CharacterBelongsTo(ctx context.Context, accountID, characterID int64) (bool, error)
 	ConsumeSession(ctx context.Context, tokenHash []byte, kind store.SessionKind, now time.Time) (store.Session, error)
 	ActiveBan(ctx context.Context, accountID int64, now time.Time) (store.Ban, error)
+
+	// Email verification and password reset (T2.1).
+	AccountProfile(ctx context.Context, accountID int64) (store.Profile, error)
+	SetAccountLocale(ctx context.Context, accountID int64, locale string) error
+	ReplaceAccountToken(ctx context.Context, t store.AccountToken) error
+	VerifyEmail(ctx context.Context, tokenHash []byte, now time.Time) (int64, error)
+	ResetPassword(ctx context.Context, tokenHash []byte, passwordHash string, now time.Time) (int64, error)
+	DeleteExpiredAccountTokens(ctx context.Context, now time.Time) (int64, error)
 }
 
 // Config configures a Service. Zero durations and limits take the defaults below.
@@ -66,6 +75,18 @@ type Config struct {
 	MaxConcurrentHashes int // default 4
 	// How long a request waits for a hashing slot before failing with ErrBusy.
 	HashWait time.Duration // default 2 s
+
+	// Mail sends the verification and reset emails (T2.1). Nil turns the email flows
+	// off: nobody is asked to verify and password reset answers ErrEmailDisabled.
+	Mail Emailer
+	// PublicURL is the website's base URL the links point to (PUBLIC_URL); required with
+	// Mail. Never taken from a request's Host header.
+	PublicURL string
+	// RequireVerifiedEmail refuses play tokens to accounts without a verified email
+	// (-require-verified-email). Needs Mail.
+	RequireVerifiedEmail bool
+	VerifyTokenTTL       time.Duration // default DefaultVerifyTokenTTL
+	ResetTokenTTL        time.Duration // default DefaultResetTokenTTL
 }
 
 // Defaults for Config.
@@ -92,6 +113,12 @@ type Service struct {
 	// dummyHash is verified when the email does not exist, so a login takes the same
 	// time whether or not the account exists.
 	dummyHash string
+
+	mail            Emailer
+	publicURL       string
+	requireVerified bool
+	verifyTTL       time.Duration
+	resetTTL        time.Duration
 }
 
 // New validates cfg and builds a Service.
@@ -139,6 +166,24 @@ func New(cfg Config) (*Service, error) {
 	s.hashWait = cfg.HashWait
 	if s.hashWait <= 0 {
 		s.hashWait = DefaultHashWait
+	}
+	s.mail, s.requireVerified = cfg.Mail, cfg.RequireVerifiedEmail
+	if s.requireVerified && s.mail == nil {
+		return nil, errors.New("auth: requiring a verified email needs a mailer (SMTP)")
+	}
+	if s.mail != nil {
+		u, err := CheckPublicURL(cfg.PublicURL)
+		if err != nil {
+			return nil, err
+		}
+		s.publicURL = u
+	}
+	s.verifyTTL, s.resetTTL = cfg.VerifyTokenTTL, cfg.ResetTokenTTL
+	if s.verifyTTL <= 0 {
+		s.verifyTTL = DefaultVerifyTokenTTL
+	}
+	if s.resetTTL <= 0 {
+		s.resetTTL = DefaultResetTokenTTL
 	}
 	dummy, err := hashPassword("dummy password for timing", s.hash)
 	if err != nil {
@@ -295,13 +340,19 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
-// PurgeExpiredSessions deletes expired sessions and returns how many it removed.
+// PurgeExpiredSessions deletes expired sessions and emailed link tokens and returns
+// how many it removed.
 func (s *Service) PurgeExpiredSessions(ctx context.Context) (int64, error) {
-	n, err := s.repo.DeleteExpiredSessions(ctx, s.clock.Now())
+	now := s.clock.Now()
+	n, err := s.repo.DeleteExpiredSessions(ctx, now)
 	if err != nil {
 		return 0, fmt.Errorf("purge sessions: %w", err)
 	}
-	return n, nil
+	m, err := s.repo.DeleteExpiredAccountTokens(ctx, now)
+	if err != nil {
+		return n, fmt.Errorf("purge account tokens: %w", err)
+	}
+	return n + m, nil
 }
 
 // Characters lists the account's characters.
@@ -353,6 +404,11 @@ func (s *Service) IssuePlayToken(ctx context.Context, accountID, characterID int
 	}
 	if !ok {
 		return Token{}, ErrUnknownCharacter
+	}
+	if s.requireVerified {
+		if err := s.RequireVerified(ctx, accountID); err != nil {
+			return Token{}, err
+		}
 	}
 	token, hash, err := newToken()
 	if err != nil {

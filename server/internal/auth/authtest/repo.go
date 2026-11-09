@@ -21,6 +21,12 @@ type Repo struct {
 	characters map[int64][]store.Character
 	names      map[string]bool
 	bans       map[int64]store.Ban
+	verified   map[int64]bool
+	locales    map[int64]string
+	tokens     map[string]store.AccountToken
+	// Audit holds the audit entries the store would have written (VerifyEmail,
+	// ResetPassword).
+	Audit []store.AuditEntry
 }
 
 // NewRepo returns an empty Repo.
@@ -32,6 +38,9 @@ func NewRepo() *Repo {
 		characters: map[int64][]store.Character{},
 		names:      map[string]bool{},
 		bans:       map[int64]store.Ban{},
+		verified:   map[int64]bool{},
+		locales:    map[int64]string{},
+		tokens:     map[string]store.AccountToken{},
 	}
 }
 
@@ -185,4 +194,139 @@ func (r *Repo) ConsumeSession(_ context.Context, hash []byte, kind store.Session
 	}
 	delete(r.sessions, string(hash))
 	return s, nil
+}
+
+// AccountProfile implements auth.Repo.
+func (r *Repo) AccountProfile(_ context.Context, accountID int64) (store.Profile, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.profile(accountID)
+}
+
+func (r *Repo) profile(id int64) (store.Profile, error) {
+	a, ok := r.accounts[id]
+	if !ok {
+		return store.Profile{}, store.ErrNotFound
+	}
+	return store.Profile{
+		ID: a.ID, Email: a.Email, HasPassword: a.PasswordHash != "", EmailVerified: r.verified[id],
+		Locale: r.locales[id], Disabled: a.Disabled,
+	}, nil
+}
+
+// AccountProfileByEmail implements auth.ResetLinkRepo.
+func (r *Repo) AccountProfileByEmail(_ context.Context, email string) (store.Profile, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id, ok := r.byEmail[email]
+	if !ok {
+		return store.Profile{}, store.ErrNotFound
+	}
+	return r.profile(id)
+}
+
+// SetVerified marks an account's email as verified (test helper).
+func (r *Repo) SetVerified(accountID int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.verified[accountID] = true
+}
+
+// PasswordHash returns the stored password hash (test helper).
+func (r *Repo) PasswordHash(accountID int64) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.accounts[accountID].PasswordHash
+}
+
+// TokenCount returns how many emailed tokens are stored (test helper).
+func (r *Repo) TokenCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.tokens)
+}
+
+// SetAccountLocale implements auth.Repo.
+func (r *Repo) SetAccountLocale(_ context.Context, accountID int64, locale string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.locales[accountID] = locale
+	return nil
+}
+
+// ReplaceAccountToken implements auth.Repo.
+func (r *Repo) ReplaceAccountToken(_ context.Context, t store.AccountToken) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for k, old := range r.tokens {
+		if old.AccountID == t.AccountID && old.Purpose == t.Purpose {
+			delete(r.tokens, k)
+		}
+	}
+	r.tokens[string(t.TokenHash)] = t
+	return nil
+}
+
+// consume deletes and returns a valid token. Caller holds mu.
+func (r *Repo) consume(hash []byte, purpose store.TokenPurpose, now time.Time) (store.AccountToken, bool) {
+	t, ok := r.tokens[string(hash)]
+	if !ok || t.Purpose != purpose || !t.ExpiresAt.After(now) {
+		return store.AccountToken{}, false
+	}
+	delete(r.tokens, string(hash))
+	return t, true
+}
+
+// VerifyEmail implements auth.Repo.
+func (r *Repo) VerifyEmail(_ context.Context, hash []byte, now time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	t, ok := r.consume(hash, store.TokenVerifyEmail, now)
+	if !ok {
+		return 0, store.ErrNotFound
+	}
+	if a := r.accounts[t.AccountID]; a.Email == t.Email && !r.verified[a.ID] {
+		r.verified[a.ID] = true
+		r.Audit = append(r.Audit, store.AuditEntry{At: now, Source: store.AuditWeb, ActorAccountID: a.ID,
+			Action: store.AuditEmailVerified, TargetAccountID: a.ID, Result: store.ResultOK})
+	}
+	return t.AccountID, nil
+}
+
+// ResetPassword implements auth.Repo.
+func (r *Repo) ResetPassword(_ context.Context, hash []byte, passwordHash string, now time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	t, ok := r.consume(hash, store.TokenResetPassword, now)
+	if !ok {
+		return 0, store.ErrNotFound
+	}
+	r.accounts[t.AccountID].PasswordHash = passwordHash
+	for k, old := range r.tokens {
+		if old.AccountID == t.AccountID && old.Purpose == store.TokenResetPassword {
+			delete(r.tokens, k)
+		}
+	}
+	for k, s := range r.sessions {
+		if s.AccountID == t.AccountID {
+			delete(r.sessions, k)
+		}
+	}
+	r.Audit = append(r.Audit, store.AuditEntry{At: now, Source: store.AuditWeb, ActorAccountID: t.AccountID,
+		Action: store.AuditPasswordReset, TargetAccountID: t.AccountID, Result: store.ResultOK})
+	return t.AccountID, nil
+}
+
+// DeleteExpiredAccountTokens implements auth.Repo.
+func (r *Repo) DeleteExpiredAccountTokens(_ context.Context, now time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var n int64
+	for k, t := range r.tokens {
+		if !t.ExpiresAt.After(now) {
+			delete(r.tokens, k)
+			n++
+		}
+	}
+	return n, nil
 }

@@ -14,22 +14,30 @@ type Querier interface {
 	CharacterBelongsToAccount(ctx context.Context, arg CharacterBelongsToAccountParams) (bool, error)
 	CharacterOfAccount(ctx context.Context, arg CharacterOfAccountParams) (string, error)
 	CloseReport(ctx context.Context, arg CloseReportParams) (int64, error)
+	// Deletes a token and returns it if it was still valid: tokens are single-use.
+	ConsumeAccountToken(ctx context.Context, arg ConsumeAccountTokenParams) (ConsumeAccountTokenRow, error)
 	// Deletes a token and returns it if it was active: play tokens are single-use.
 	ConsumeSession(ctx context.Context, arg ConsumeSessionParams) (ConsumeSessionRow, error)
 	CountCharactersByAccount(ctx context.Context, accountID int64) (int64, error)
 	CountRecentSubmissions(ctx context.Context, arg CountRecentSubmissionsParams) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error)
+	CreateAccountToken(ctx context.Context, arg CreateAccountTokenParams) error
 	CreateCharacter(ctx context.Context, arg CreateCharacterParams) (CreateCharacterRow, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	// Revokes every token of an account (ban).
 	DeleteAccountSessions(ctx context.Context, accountID int64) (int64, error)
+	// Drops every token of one purpose of an account (a new link replaces the old ones).
+	DeleteAccountTokens(ctx context.Context, arg DeleteAccountTokensParams) error
 	// A snapshot replaces the whole inventory in the same transaction as the character row.
 	DeleteCharacterInventory(ctx context.Context, characterID int64) error
 	// A snapshot replaces every storage value in the same transaction as the character row.
 	DeleteCharacterQuestState(ctx context.Context, characterID int64) error
+	DeleteExpiredAccountTokens(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, now pgtype.Timestamptz) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash []byte) error
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
+	GetAccountProfile(ctx context.Context, id int64) (GetAccountProfileRow, error)
+	GetAccountProfileByEmail(ctx context.Context, email string) (GetAccountProfileByEmailRow, error)
 	// The actor's role now (not the one cached at login), for bans in the same transaction.
 	GetAccountRole(ctx context.Context, id int64) (string, error)
 	GetAccountRoleEmail(ctx context.Context, id int64) (GetAccountRoleEmailRow, error)
@@ -95,6 +103,8 @@ type Querier interface {
 	// The author's account, locked for the rest of the transaction so two uploads at once
 	// cannot both pass the daily limit.
 	LockSubmitter(ctx context.Context, arg LockSubmitterParams) (LockSubmitterRow, error)
+	// Only verifies the address the link was sent to.
+	MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedParams) (int64, error)
 	// Drops the bytes of patches whose submission reached a final status before the cutoff.
 	PurgeSubmissionPatches(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	ReportExists(ctx context.Context, id int64) (bool, error)
@@ -105,8 +115,10 @@ type Querier interface {
 	SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error
 	// Written by the persistence goroutine from an immutable snapshot of the game loop.
 	SaveCharacterState(ctx context.Context, arg SaveCharacterStateParams) (int64, error)
+	SetAccountLocale(ctx context.Context, arg SetAccountLocaleParams) error
 	// Sets the role of the account with that (normalized) email and returns the old one.
 	SetAccountRole(ctx context.Context, arg SetAccountRoleParams) (SetAccountRoleRow, error)
+	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
 	SubmissionAuthor(ctx context.Context, id int64) (int64, error)
 	// The same as LockSubmitter without the lock: a cheap check before reading an upload.
 	SubmitterStatus(ctx context.Context, arg SubmitterStatusParams) (SubmitterStatusRow, error)

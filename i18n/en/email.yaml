@@ -1,0 +1,15 @@
+# Account emails (T2.1): email verification and password change. Sent by the server
+# (server/internal/mail) as plain text and simple HTML. Same keys and {parameters} as
+# i18n/es/email.yaml.
+email.verify.subject: "Confirm your email on RPG Project"
+email.verify.intro: "Hi. Someone (most likely you) created an RPG Project account with this email."
+email.verify.action: "Confirm my email"
+email.verify.expires: "The link works once and expires in 24 hours."
+email.verify.ignore: "If it was not you, ignore this message: unconfirmed, nobody can use this email to recover the account."
+email.reset.subject: "Change your RPG Project password"
+email.reset.intro: "Hi. We got a request to change the password of the RPG Project account with this email."
+email.reset.action: "Choose a new password"
+email.reset.expires: "The link works once and expires in 1 hour. Changing it signs out every open session."
+email.reset.ignore: "If you did not ask for it, ignore this message: your password stays the same."
+email.footer: "This message was sent automatically by the RPG Project server. Do not reply to this address."
+email.link_hint: "If the button does not work, copy this link into your browser:"

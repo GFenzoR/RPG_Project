@@ -177,6 +177,11 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type")
 		return
 	}
+	// Policy (docs/02, "Cuentas"): with email on, only verified accounts send maps.
+	if err := a.cfg.Auth.RequireVerified(r.Context(), accountID); err != nil {
+		a.fail(w, r, err)
+		return
+	}
 	// An account that would be refused (new, banned, over its daily limit) is refused
 	// before a few MB of body are read; the transaction checks again.
 	if err := a.cfg.MapSubmissions.CheckSubmitter(r.Context(), accountID, a.cfg.Clock.Now(), lim.PerDay, lim.MinAccountAge); err != nil {

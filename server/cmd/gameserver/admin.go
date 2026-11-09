@@ -21,6 +21,8 @@ type adminStore interface {
 	SetRole(ctx context.Context, email, role string, audit store.AuditEntry) (int64, string, error)
 	ListAudit(ctx context.Context, n int) ([]store.AuditEntry, error)
 	OpenReports(ctx context.Context, n int) ([]store.Report, error)
+	auth.ResetLinkRepo
+	AppendAudit(ctx context.Context, e store.AuditEntry) error
 	Close()
 }
 
@@ -33,6 +35,11 @@ commands:
       higher role applies from the next login.
   audit [-n 50]
       Prints the newest audit log entries.
+  reset-link -email <email> [-public-url https://example.com]
+      Prints a single-use password reset link (valid 1 hour) for the account, for when
+      the server has no SMTP (T2.1). Hand it to the owner by a channel you trust: whoever
+      has it can take the account. The link is not logged; issuing it is audited.
+      -public-url defaults to $PUBLIC_URL (the website's address).
   reports [-n 20]
       Prints the oldest open player reports (T4.1) with the context the server attached
       (positions and the reported character's recent events). GMs close them in the
@@ -124,6 +131,41 @@ func adminCommand(ctx context.Context, args []string, open func() (adminStore, e
 		for _, e := range es {
 			fmt.Fprintf(out, "%s %-4s %-20s %-12s %-20s %-10s %v\n", e.At.UTC().Format(time.RFC3339),
 				e.Source, e.ActorName, e.Action, e.TargetName, e.Result, e.Args)
+		}
+		return nil
+	case "reset-link":
+		email := fs.String("email", "", "account email")
+		public := fs.String("public-url", os.Getenv("PUBLIC_URL"), "website base URL")
+		if err := fs.Parse(args[1:]); err != nil || fs.NArg() > 0 {
+			return errUsage
+		}
+		if _, ok := auth.NormalizeEmail(*email); !ok {
+			return fmt.Errorf("%w: -email is required", errUsage)
+		}
+		if _, err := auth.CheckPublicURL(*public); err != nil {
+			return fmt.Errorf("%w: set -public-url or PUBLIC_URL to the website's address (%w)", errUsage, err)
+		}
+		st, err := open()
+		if err != nil {
+			return err
+		}
+		defer st.Close()
+		link, p, err := auth.IssueResetLink(ctx, st, now(), *public, *email)
+		if errors.Is(err, store.ErrNotFound) {
+			return fmt.Errorf("no account with that email")
+		}
+		if err != nil {
+			return err
+		}
+		if err := st.AppendAudit(ctx, store.AuditEntry{
+			At: now(), Source: store.AuditCLI, ActorName: operator,
+			Action: store.AuditResetLinkIssue, TargetAccountID: p.ID, TargetName: p.Email, Result: store.ResultOK,
+		}); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "account %d (%s): password reset link, valid for 1 hour and one use:\n%s\n", p.ID, p.Email, link)
+		if !p.EmailVerified {
+			fmt.Fprintln(out, "note: this account has not verified its email")
 		}
 		return nil
 	case "reports":
