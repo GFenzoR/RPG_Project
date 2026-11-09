@@ -266,9 +266,10 @@ real, y bots que juegan por `wss://` a través del túnel.
 make home-backup                                        # deploy/backups/home-<fecha>.dump
 make home-restore FILE=deploy/backups/home-<fecha>.dump # pregunta antes de reemplazar
 ```
-`home-restore` primero guarda un backup del estado actual (`…-before-restore.dump`),
-detiene el juego, recrea la base desde el archivo y vuelve a levantar todo (con las
-migraciones nuevas, si el backup es más viejo que tu checkout). Los dumps son formato
+`home-restore` primero comprueba que el archivo sea un dump válido (si no, no toca nada),
+detiene el juego, guarda un backup del estado actual (`…-before-restore.dump`), recrea la base desde el archivo y vuelve a levantar todo (con las
+migraciones nuevas, si el backup es más viejo que tu checkout). Si algo falla a mitad,
+imprime el comando para volver al backup de seguridad. Los dumps son formato
 custom de `pg_dump`; cópialos fuera del PC si te importan.
 
 ## Monitoreo en casa (T4.4)
@@ -310,6 +311,7 @@ como `MAP_PR_REPOSITORY`.
 | Síntoma | Causa y solución |
 |---|---|
 | `docker not found` / `Docker is not running` | Abre Docker Desktop y espera a que diga *running*. En WSL2, revisa *Settings → Resources → WSL integration*. En Linux: `sudo systemctl start docker` |
+| `this user may not use Docker` (Linux: `permission denied` en `/var/run/docker.sock`) | Tu usuario no está en el grupo `docker`, o lo agregaste y no volviste a entrar: `sudo usermod -aG docker $USER`, cierra sesión y vuelve a entrar (o reinicia) |
 | `docker compose ... is too old` o falla con `!override` | Compose < 2.24: actualiza Docker Desktop o el plugin |
 | `port is already allocated` | Otro programa usa 8080 (o 3000 con monitoreo): cambia `HOME_HTTP_PORT` (o `GRAFANA_PORT`) en `deploy/.env.home`. Para ver quién lo usa: `sudo lsof -i :8080` (Linux/macOS) o `netstat -ano \| findstr 8080` (Windows) |
 | El build muere a mitad, `exit code 137` o `no space left on device` | Docker Desktop sin memoria o disco: *Settings → Resources*, dale al menos 4 GB de RAM y 20 GB de disco. Libera espacio con `docker system prune` (no borra volúmenes) |

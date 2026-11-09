@@ -88,6 +88,18 @@ export function serverUrlError(raw: string): ServerUrlError | undefined {
   return undefined;
 }
 
+/**
+ * What the picker saves for what was typed: the trimmed value, or `http://` + it when it
+ * has no scheme and that makes a local address (`192.168.1.20:8080`, `localhost:8080`).
+ * Anything else is returned as typed, so serverUrlError explains it.
+ */
+export function normalizeServerUrl(raw: string): string {
+  const typed = raw.trim();
+  if (typed.includes("://")) return typed;
+  const local = `http://${typed}`;
+  return typed !== "" && serverUrlError(local) === undefined ? local : typed;
+}
+
 /** Saves the server in the app's config.json and restarts the app (it does not return). */
 export function setDesktopServer(url: string): Promise<void> {
   return invoke("set_server", { url: url.trim() });

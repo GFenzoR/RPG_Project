@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CLIENT_VERSION } from "../version.ts";
-import { gameSocketUrl, isDesktop, serverUrlError } from "./desktop.ts";
+import { gameSocketUrl, isDesktop, normalizeServerUrl, serverUrlError } from "./desktop.ts";
 
 describe("gameSocketUrl", () => {
   it("uses the page's host on the web", () => {
@@ -56,6 +56,17 @@ describe("serverUrlError", () => {
       "https://juego.example.com/#x",
     ])
       expect(serverUrlError(bad), bad).toBe("path");
+  });
+});
+
+describe("normalizeServerUrl", () => {
+  it("adds http:// only to a bare local address", () => {
+    expect(normalizeServerUrl(" 192.168.1.20:8080 ")).toBe("http://192.168.1.20:8080");
+    expect(normalizeServerUrl("localhost:8080")).toBe("http://localhost:8080");
+    expect(normalizeServerUrl("https://x.trycloudflare.com")).toBe("https://x.trycloudflare.com");
+    // Not local: left as typed, so the picker explains instead of guessing a scheme.
+    expect(normalizeServerUrl("juego.example.com")).toBe("juego.example.com");
+    expect(normalizeServerUrl("")).toBe("");
   });
 });
 

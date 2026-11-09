@@ -4,7 +4,12 @@
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
-import { desktopServer, serverUrlError, setDesktopServer } from "../net/desktop.ts";
+import {
+  desktopServer,
+  normalizeServerUrl,
+  serverUrlError,
+  setDesktopServer,
+} from "../net/desktop.ts";
 
 // Literal keys, so `make validate` sees each one.
 const ERROR_KEYS: Record<string, string> = {
@@ -23,8 +28,12 @@ export function ServerPicker(props: { t: Translate }): JSX.Element | null {
   const [busy, setBusy] = useState(false);
   if (!server) return null;
 
-  const save = async (): Promise<void> => {
-    const problem = serverUrlError(url);
+  const save = async (e: Event): Promise<void> => {
+    e.preventDefault();
+    // A bare local address gets http:// (shown in the field before the app restarts).
+    const target = normalizeServerUrl(url);
+    setUrl(target);
+    const problem = serverUrlError(target);
     if (problem) {
       setError(t(ERROR_KEYS[problem] ?? "client.server.error.invalid"));
       return;
@@ -32,7 +41,7 @@ export function ServerPicker(props: { t: Translate }): JSX.Element | null {
     setBusy(true);
     setError(undefined);
     try {
-      await setDesktopServer(url); // restarts the app on success
+      await setDesktopServer(target); // restarts the app on success
     } catch (err) {
       // The app answers a code (lib.rs, set_server); anything else is a save error.
       const code = typeof err === "string" && err in ERROR_KEYS ? err : "save";
@@ -45,7 +54,7 @@ export function ServerPicker(props: { t: Translate }): JSX.Element | null {
     <details class="server-picker" data-testid="server-picker">
       <summary>{t("client.server.current", { origin: server.origin })}</summary>
       {server.editable ? (
-        <div class="server-picker-body">
+        <form class="server-picker-body" noValidate onSubmit={(e) => void save(e)}>
           <label>
             {t("client.server.input")}
             <input
@@ -64,10 +73,10 @@ export function ServerPicker(props: { t: Translate }): JSX.Element | null {
               {error}
             </p>
           )}
-          <button type="button" disabled={busy} onClick={() => void save()}>
+          <button type="submit" disabled={busy}>
             {t("client.server.save")}
           </button>
-        </div>
+        </form>
       ) : (
         <p class="server-picker-body">{t("client.server.error.env_locked")}</p>
       )}

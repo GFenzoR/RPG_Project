@@ -68,22 +68,34 @@ ensure_env() {
 		grep -qE "^$key=.+" "$ENV_FILE" && continue
 		[[ $value == __RANDOM__ ]] && value=$(random_secret)
 		# An empty "KEY=" line would win over the appended one only if it came later.
-		grep -vE "^$key=$" "$ENV_FILE" >"$ENV_FILE.tmp" || true
-		printf '%s=%s\n' "$key" "$value" >>"$ENV_FILE.tmp"
+		# umask 077: the rewrite must stay as private as the file it replaces.
+		(
+			umask 077
+			grep -vE "^$key=$" "$ENV_FILE" >"$ENV_FILE.tmp" || true
+			printf '%s=%s\n' "$key" "$value" >>"$ENV_FILE.tmp"
+		)
 		mv "$ENV_FILE.tmp" "$ENV_FILE"
 		added+=("$key")
 	done < <(grep -E '^[A-Z][A-Z0-9_]*=' "$TEMPLATE")
 	if ((${#added[@]})); then
 		say "added to $ENV_FILE: ${added[*]}"
 	fi
+	# Files made by the old `cp .env.home.example` flow were world-readable.
+	chmod 600 "$ENV_FILE"
 }
 
 # Problems a non-developer hits before Docker says anything useful.
 preflight() {
 	command -v docker >/dev/null 2>&1 ||
 		die "docker not found. Install Docker Desktop (Windows/macOS) or Docker Engine (Linux): docs/13, step 1"
-	docker info >/dev/null 2>&1 ||
-		die "Docker is not running. Open Docker Desktop (or: sudo systemctl start docker) and try again"
+	local info
+	if ! info=$(docker info 2>&1); then
+		case $info in
+		*"permission denied"*)
+			die "this user may not use Docker. Run: sudo usermod -aG docker \$USER, then log out and back in (docs/13, step 1)" ;;
+		*) die "Docker is not running. Open Docker Desktop (or: sudo systemctl start docker) and try again" ;;
+		esac
+	fi
 	local v
 	v=$(docker compose version --short 2>/dev/null | sed 's/^v//') ||
 		die "docker compose (v2) not found: update Docker Desktop or install docker-compose-plugin"
@@ -174,6 +186,7 @@ cmd_backup() {
 	# shellcheck disable=SC2016 # expanded by the shell inside the postgres container
 	compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$f.part"
 	mv "$f.part" "$f"
+	LAST_BACKUP=$f
 	say "wrote $f (restore it with: make home-restore FILE=$f)"
 }
 
@@ -193,15 +206,22 @@ cmd_restore() {
 	ensure_env
 	confirm restore "This REPLACES the whole game database with $file."
 	compose up -d --wait postgres
-	cmd_backup before-restore
+	# Check the archive before touching anything: a truncated file or a leftover .part
+	# must not leave an empty database behind.
+	compose exec -T postgres pg_restore -l <"$file" >/dev/null ||
+		die "$file is not a pg_dump custom archive (make home-backup writes one); nothing was changed"
+	# Stop the writers first, so the safety dump includes their last save on shutdown.
 	compose "${ALL_PROFILES[@]}" stop gameserver map-pr-worker
+	cmd_backup before-restore
+	local safety=$LAST_BACKUP
+	failed() { die "restore failed; your previous data is in $safety: make home-restore FILE=$safety"; }
 	# Drop and recreate instead of pg_restore --clean: tables added by newer migrations
 	# would survive --clean and clash with the restored goose version.
 	# shellcheck disable=SC2016 # expanded by the shell inside the postgres container
 	compose exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" --if-exists --force "$POSTGRES_DB" &&
-		createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+		createdb -U "$POSTGRES_USER" "$POSTGRES_DB"' || failed
 	# shellcheck disable=SC2016 # expanded by the shell inside the postgres container
-	compose exec -T postgres sh -c 'pg_restore --no-owner --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$file"
+	compose exec -T postgres sh -c 'pg_restore --no-owner --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$file" || failed
 	say "restored $file; starting the game (it applies newer migrations on start)..."
 	BUILD=0 cmd_up
 }
