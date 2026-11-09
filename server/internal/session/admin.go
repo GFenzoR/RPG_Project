@@ -575,6 +575,19 @@ func (w *World) checkRoles(ctx *game.TickContext) {
 	}
 }
 
+// KickAccount returns the command that disconnects every online character of the
+// account with PASSWORD_CHANGED (T2.1: a password reset revokes every session, live
+// connections included). Characters are saved as on any logout.
+func (w *World) KickAccount(accountID int64) game.Command {
+	return game.CommandFunc(func(ctx *game.TickContext) {
+		for _, o := range append([]*Player(nil), w.players...) {
+			if o.accountID == accountID {
+				w.remove(ctx, o, pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED, false)
+			}
+		}
+	})
+}
+
 // RolesChanged returns the command the admin goroutine enqueues with the current roles
 // of some accounts (a missing account is a player). Online characters of those accounts
 // only ever lose privileges here; a new role is granted at the next login.

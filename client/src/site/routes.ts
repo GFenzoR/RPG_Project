@@ -9,6 +9,9 @@ export type Route =
   | { page: "maps_submit" }
   | { page: "maps_mine" }
   | { page: "maps_review"; id?: number }
+  | { page: "verify" }
+  | { page: "forgot_password" }
+  | { page: "reset_password" }
   | { page: "not_found" };
 
 /** The website's route for a path. The game is /play/ (another page, not routed here). */
@@ -21,6 +24,9 @@ export function parseRoute(pathname: string): Route {
   if (m?.[1]) return { page: "post", slug: m[1] };
   if (path === "/maps" || path === "/maps/submit") return { page: "maps_submit" };
   if (path === "/maps/mine") return { page: "maps_mine" };
+  if (path === "/verify") return { page: "verify" };
+  if (path === "/forgot-password") return { page: "forgot_password" };
+  if (path === "/reset-password") return { page: "reset_password" };
   if (path === "/maps/review") return { page: "maps_review" };
   const r = /^\/maps\/review\/([1-9][0-9]{0,15})$/.exec(path);
   if (r?.[1]) return { page: "maps_review", id: Number(r[1]) };
@@ -77,4 +83,14 @@ export function highscoresPath(f: Filters): string {
 /** i18n key of a category's name. */
 export function categoryKey(category: string): string {
   return category === LEVEL ? "site.highscores.level" : `skill.${category}.name`;
+}
+
+/**
+ * The token of an emailed link (T2.1): it travels in the fragment (#token=…), which the
+ * browser never sends to a server, so it cannot end up in an access log. Only what a
+ * server token can look like (43 base64url characters) is accepted.
+ */
+export function linkToken(hash: string): string | undefined {
+  const token = new URLSearchParams(hash.replace(/^#/, "")).get("token") ?? "";
+  return /^[A-Za-z0-9_-]{43}$/.test(token) ? token : undefined;
 }

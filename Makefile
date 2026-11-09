@@ -107,6 +107,10 @@ test-parity: ## mapcompile vs packages/map-format walkability on every tile
 DEV_WS_ORIGINS ?= localhost:5173,localhost:4173
 # Local servers let a brand-new account submit maps (T4.5; production waits 24 h).
 DEV_SERVER_FLAGS ?= -map-submit-min-account-age 0
+# Account emails in development (T2.1): `make dev` starts Mailpit and points the server at
+# it, so verification and reset links are read at http://localhost:8025. DEV_MAIL=0 = off.
+DEV_MAIL ?= 1
+DEV_MAIL_ENV := SMTP_HOST=127.0.0.1 SMTP_PORT=1025 SMTP_SECURITY=none SMTP_FROM=noreply@rpg.localhost PUBLIC_URL=http://localhost:5173
 
 .PHONY: run-server
 run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL, RPG_WS_ORIGINS)
@@ -117,6 +121,19 @@ run-server: mapcompile ## Compile the map and run the game server on it (RPG_WOR
 .PHONY: set-role
 set-role: ## Set an account's role: make set-role EMAIL=... ROLE=player|gm|admin NOTE="why" (DATABASE_URL)
 	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin set-role -email "$(EMAIL)" -role "$(ROLE)" -note "$(NOTE)"
+
+.PHONY: reset-link
+reset-link: ## Print a one-use password reset link: make reset-link EMAIL=... [PUBLIC_URL=http://localhost:5173] (DATABASE_URL)
+	cd server && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver admin reset-link -email "$(EMAIL)" \
+		-public-url "$(or $(PUBLIC_URL),http://localhost:5173)"
+
+.PHONY: mail-up
+mail-up: ## Start Mailpit (email catcher, T2.1): UI http://localhost:8025, SMTP 127.0.0.1:1025
+	$(COMPOSE_DEV) --profile mail up -d --wait mailpit
+
+.PHONY: mail-down
+mail-down: ## Stop Mailpit
+	$(COMPOSE_DEV) --profile mail stop mailpit
 
 .PHONY: audit-log
 audit-log: ## Print the newest audit log entries: make audit-log [N=50] (DATABASE_URL)
@@ -172,10 +189,14 @@ fmt: ## Format Go and TS code
 ## ---- running -------------------------------------------------------------
 
 .PHONY: dev
-dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:5173) + map editor (:5174)
+dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:5173) + map editor (:5174) + Mailpit (:8025)
 	@echo "[dev] game client on http://localhost:5173, game server on :8080 (ws /ws), map editor on http://localhost:5174"
-	@trap 'kill 0' EXIT; \
-	(cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
+	@mail_env=""; \
+	if [ "$(DEV_MAIL)" = 1 ] && $(MAKE) -s mail-up >/dev/null 2>&1; then \
+		mail_env="$(DEV_MAIL_ENV)"; echo "[dev] account emails go to Mailpit: http://localhost:8025"; \
+	else echo "[dev] Mailpit not started (no Docker?): account emails are off (DEV_MAIL=0 skips it)"; fi; \
+	trap 'kill 0' EXIT; \
+	(cd server && env $$mail_env RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
 		go run ./cmd/gameserver -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)) & \
 	$(MAKE) client & \
 	$(MAKE) editor
@@ -329,7 +350,7 @@ HOME_SH := bash deploy/home.sh
 COMPOSE_HOME := docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.home.yml --env-file deploy/.env.home
 # Every optional profile: with --profile flags compose ignores COMPOSE_PROFILES, so down and
 # logs must name map-pr (T4.5) too or its worker would be left running.
-HOME_PROFILES := --profile quick-tunnel --profile tunnel --profile monitoring --profile map-pr
+HOME_PROFILES := --profile quick-tunnel --profile tunnel --profile monitoring --profile map-pr --profile mail
 
 # A clone with Windows line endings (CRLF) breaks the shell scripts and Caddyfiles in
 # confusing ways; .gitattributes prevents it, this catches clones made before it.
@@ -350,6 +371,10 @@ home-up: home-check-eol ## Build, start and check the game on this PC; prints wh
 .PHONY: home-admin
 home-admin: ## Give a registered account a role: make home-admin EMAIL=you@example.com [ROLE=admin|gm|player]
 	@$(HOME_SH) admin "$(EMAIL)" "$(or $(ROLE),admin)"
+
+.PHONY: home-reset-password
+home-reset-password: ## One-use password reset link when there is no SMTP: make home-reset-password EMAIL=you@example.com
+	@$(HOME_SH) reset-password "$(EMAIL)"
 
 .PHONY: home-tunnel
 home-tunnel: deploy/.env.home ## Cloudflare Quick Tunnel: prints a public https://….trycloudflare.com URL

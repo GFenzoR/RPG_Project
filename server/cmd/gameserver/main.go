@@ -72,6 +72,12 @@ type options struct {
 	mapPatchRetention time.Duration
 	// mapPRWorker: the map PR worker runs (only shown to moderators).
 	mapPRWorker bool
+	// Account emails (T2.1): -mail mode, -public-url for the links, -i18n for the
+	// templates and -require-verified-email.
+	mailMode             string
+	publicURL            string
+	i18nDir              string
+	requireVerifiedEmail bool
 }
 
 // sessionPurgeEvery is how often expired session tokens are deleted.
@@ -102,6 +108,10 @@ func main() {
 	flag.IntVar(&o.mapSubmit.PerDay, "map-submit-per-day", def.PerDay, "map submissions per account in 24 hours")
 	flag.DurationVar(&o.mapSubmit.MinAccountAge, "map-submit-min-account-age", def.MinAccountAge, "how old an account must be to submit maps (0 = no minimum)")
 	flag.DurationVar(&o.mapPatchRetention, "map-patch-retention", defaultMapPatchRetention, "drop the patch bytes of rejected, pr_opened and failed map submissions this long after their last change (0 = keep them)")
+	flag.StringVar(&o.mailMode, "mail", envOr("RPG_MAIL", mailAuto), "account emails (verification, password reset): auto (smtp if $SMTP_HOST is set, else off), smtp, log (development) or off; default $RPG_MAIL or auto")
+	flag.StringVar(&o.publicURL, "public-url", os.Getenv("PUBLIC_URL"), "public base URL of the website for the links in emails, e.g. https://example.com; default $PUBLIC_URL")
+	flag.StringVar(&o.i18nDir, "i18n", "", "directory of the i18n/ catalogs (email templates); default <data>/../i18n")
+	flag.BoolVar(&o.requireVerifiedEmail, "require-verified-email", os.Getenv("RPG_REQUIRE_VERIFIED_EMAIL") == "true", "only accounts with a verified email may play (needs email on); default $RPG_REQUIRE_VERIFIED_EMAIL == true")
 	flag.BoolVar(&o.mapPRWorker, "map-pr-worker", os.Getenv("RPG_MAP_PR_WORKER") == "on", "the map PR worker runs, so approved map submissions become pull requests on their own; default $RPG_MAP_PR_WORKER == on")
 	flag.Parse()
 	_, o.metricsExplicit = os.LookupEnv("RPG_METRICS_ADDR")
@@ -200,6 +210,28 @@ func run(logger *slog.Logger, o options) error {
 		}
 	}
 
+	ms, err := mailFromEnv(o.mailMode, os.Getenv, logger)
+	if err != nil {
+		return fmt.Errorf("mail: %w", err)
+	}
+	if o.requireVerifiedEmail && !ms.delivers {
+		return errors.New("-require-verified-email needs real email delivery (-mail smtp): nobody could verify")
+	}
+	var sender auth.Emailer
+	if ms.mailer != nil {
+		dir := o.i18nDir
+		if dir == "" {
+			dir = filepath.Join(o.dataDir, "..", "i18n")
+		}
+		s, q, err := newSender(ms.mailer, dir, clk, logger)
+		if err != nil {
+			return fmt.Errorf("mail: %w", err)
+		}
+		sender = s
+		go q.Run(ctx)
+	}
+	logger.Info("account emails", "mail", ms.what, "require_verified_email", o.requireVerifiedEmail)
+
 	var mets *metrics.Metrics
 	if o.metricsAddr != "" {
 		mets = metrics.New()
@@ -229,6 +261,10 @@ func run(logger *slog.Logger, o options) error {
 		StartTown:        o.startTown,
 		MapSubmitLimits:  o.mapSubmit,
 		MapPRWorker:      o.mapPRWorker,
+
+		Mail:                 sender,
+		PublicURL:            o.publicURL,
+		RequireVerifiedEmail: o.requireVerifiedEmail,
 	})
 	if err != nil {
 		return err

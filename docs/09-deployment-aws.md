@@ -119,6 +119,9 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 | `COMPOSE_PROFILES` | Perfiles opcionales separados por coma: `monitoring` (T4.4), `map-pr` (worker de PR de mapas, T4.5) |
 | `GITHUB_MAP_PR_TOKEN` | Token del worker de PR de mapas (sección "Worker de PR de mapas"). Vacío = el worker no corre |
 | `MAP_PR_REPOSITORY`, `MAP_PR_BASE` | Repo (`owner/repo`, por defecto `GFenzoR/RPG_Project`) y rama base (`main`) de esos PR |
+| `PUBLIC_URL` | Dirección de los enlaces de los emails (T2.1). Por defecto `https://$SITE_ADDRESS` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Emails de la cuenta (sección "Emails de la cuenta"). Sin `SMTP_HOST` no hay emails |
+| `REQUIRE_VERIFIED_EMAIL` | `true` = solo cuentas con email verificado juegan (necesita SMTP) |
 | `RPG_WS_ORIGINS` | Orígenes extra en `/ws`. Sin definir = los del cliente de escritorio (`tauri://localhost,http://tauri.localhost`); vacío = solo el sitio |
 
 ### Primer deploy (cuando haya cuenta AWS y dominio)
@@ -154,6 +157,29 @@ leen con `/app/gameserver admin reports -n 20` (en local `make reports`). Los GM
 cierran dentro del juego con `/closereport`. Las alertas de economía (posible duplicación,
 personajes muy por encima de lo normal) van al log estructurado (`economy:`) y a la métrica
 `economy_alerts_total{kind}`.
+
+### Emails de la cuenta (T2.1)
+Verificación de email y reset de contraseña necesitan SMTP; sin `SMTP_HOST` quedan
+apagados (no se pide verificar y el sitio no ofrece el reset). Opciones en AWS:
+- **Amazon SES** (recomendado en AWS): verifica el dominio en SES (registros DKIM en tu
+  DNS), pide salir del sandbox, crea credenciales SMTP (SES → SMTP settings → Create SMTP
+  credentials; no son tus claves de IAM) y usa `SMTP_HOST=email-smtp.<región>.amazonaws.com`,
+  `SMTP_PORT=587`, `SMTP_SECURITY=starttls`, `SMTP_FROM=RPG Project <noreply@tudominio>`.
+  EC2 bloquea el puerto 25 de salida: usa 587 (o 465 con `SMTP_SECURITY=tls`).
+- Cualquier proveedor transaccional con SMTP (Brevo, Mailjet, Postmark, Resend…), o Gmail
+  con contraseña de aplicación para pruebas (`13-hosting-de-pruebas.md`, paso 8b).
+
+Configura SPF, DKIM y DMARC del dominio remitente o los emails caen en spam. `PUBLIC_URL`
+debe ser la URL pública del sitio (`https://tudominio`): los enlaces apuntan ahí y el
+servidor nunca la saca del header `Host`. El servidor manda en STARTTLS obligatorio (no
+degrada a texto plano) y la contraseña SMTP no se registra nunca.
+
+Enlace de reset a mano (sin SMTP, o para una cuenta sin email verificado):
+```
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec gameserver \
+  /app/gameserver admin reset-link -email ana@example.org
+```
+Imprime un enlace de un solo uso (1 h); queda auditado como `reset_link_issued`.
 
 ### Backups y restauración
 - El servicio `backup` hace un `pg_dump` (formato custom, comprimido) al arrancar y luego

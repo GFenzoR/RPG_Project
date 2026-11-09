@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api, mapsApi } from "../net/api.ts";
 import type { Character, MapSubmission, MySubmissions } from "../net/api.ts";
+import { ForgotPasswordLink, VerifyNotice } from "../ui/Account.tsx";
 import {
   MAP_STATUSES,
   byteLength,
@@ -138,6 +139,7 @@ function SiteLogin(props: { t: Translate; onDone: () => void }): JSX.Element {
         <button type="submit" disabled={busy}>
           {t("client.login.submit")}
         </button>
+        <ForgotPasswordLink t={t} />
       </form>
     </section>
   );
@@ -216,6 +218,7 @@ function WithAccount(
         email={mine.data.email}
         onLogout={logout}
       />
+      <VerifyNotice t={t} lang={props.lang} />
       {props.children(mine.data, reload)}
     </>
   );

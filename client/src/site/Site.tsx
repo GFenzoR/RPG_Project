@@ -7,6 +7,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import type { NewsPost, SiteContent } from "../content-types.ts";
 import { Markdown } from "./Markdown.tsx";
 import { MinePage, ReviewPage, SubmitPage } from "./Maps.tsx";
+import { ForgotPage, ResetPage, VerifyPage } from "./Account.tsx";
 import { excerpt } from "./markdown.ts";
 import {
   LEVEL,
@@ -221,6 +222,9 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       maps_mine: t("site.maps.mine.title"),
       maps_review: t("site.maps.review.title"),
       not_found: t("site.not_found.title"),
+      verify: t("site.account.verify.title"),
+      forgot_password: t("site.account.forgot.title"),
+      reset_password: t("site.account.reset.title"),
     };
     let title = titles[route.page];
     if (route.page === "post") {
@@ -252,6 +256,12 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
           {...(route.id === undefined ? {} : { id: route.id })}
         />
       );
+    case "verify":
+      return <VerifyPage t={t} lang={props.lang} playHref={props.playHref} />;
+    case "forgot_password":
+      return <ForgotPage t={t} lang={props.lang} playHref={props.playHref} />;
+    case "reset_password":
+      return <ResetPage t={t} lang={props.lang} playHref={props.playHref} />;
     default:
       return (
         <section class="card" data-testid="not-found">

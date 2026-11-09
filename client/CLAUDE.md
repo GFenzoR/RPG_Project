@@ -276,3 +276,17 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la app de escritorio también. Súbela ahí y en ningún otro lado.
 - La CSP de la app no tiene `'unsafe-eval'` ni estilos inline en HTML: por eso `main.tsx`
   importa `pixi.js/unsafe-eval`. No uses `eval`/`new Function` ni `<style>` inline.
+
+## Notas de T2.1
+- `ui/Account.tsx` (compartido por juego y sitio): `ForgotPasswordLink` y `VerifyNotice`;
+  solo aparecen si `GET /api/auth/config` dice `email: true` (sin SMTP no se ofrece nada).
+  En la app de escritorio no hay enlace de reset (abriría el sitio dentro de la app): se
+  muestra la dirección `<servidor>/forgot-password` como texto para abrir en el navegador.
+- `api.register` manda `lang` solo si el servidor tiene emails (`emailEnabled`, una vez por
+  página): un servidor anterior a T2.1 rechaza campos desconocidos.
+- `Disconnect{PASSWORD_CHANGED}` (un reset de contraseña) → `client.disconnect.password_changed`.
+- `site/Account.tsx`: `/verify`, `/forgot-password`, `/reset-password`. El token llega en el
+  fragmento (`#token=`, `routes.ts` `linkToken`), se manda en el cuerpo del `POST` y se
+  borra de la URL con `history.replaceState`. Nunca lo pongas en una query.
+- E2E: `e2e/account.spec.ts` contra un tercer servidor (solo HTTP, emails activados) y un
+  SMTP falso (`e2e/fake-smtp.ts`, mensajes en `smtpMessagesURL`).

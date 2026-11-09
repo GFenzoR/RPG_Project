@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ type fakeAdminStore struct {
 	email, role string
 	audit       store.AuditEntry
 	closed      bool
+	token       store.AccountToken
 }
 
 func (f *fakeAdminStore) SetRole(_ context.Context, email, role string, a store.AuditEntry) (int64, string, error) {
@@ -34,6 +36,70 @@ func (f *fakeAdminStore) OpenReports(context.Context, int) ([]store.Report, erro
 }
 
 func (f *fakeAdminStore) Close() { f.closed = true }
+
+func (f *fakeAdminStore) AccountProfileByEmail(_ context.Context, email string) (store.Profile, error) {
+	if email != "gm@example.org" {
+		return store.Profile{}, store.ErrNotFound
+	}
+	return store.Profile{ID: 7, Email: email, Locale: "en"}, nil
+}
+
+func (f *fakeAdminStore) ReplaceAccountToken(_ context.Context, t store.AccountToken) error {
+	f.token = t
+	return nil
+}
+
+func (f *fakeAdminStore) AppendAudit(_ context.Context, e store.AuditEntry) error {
+	f.audit = e
+	return nil
+}
+
+func TestAdminResetLink(t *testing.T) {
+	var out bytes.Buffer
+	f := &fakeAdminStore{}
+	open := func() (adminStore, error) { return f, nil }
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	err := adminCommand(context.Background(), []string{"reset-link", "-email", "GM@example.org", "-public-url", "https://game.example/"},
+		open, &out, "cli:ops", func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := strings.TrimSpace(out.String())
+	const prefix = "https://game.example/reset-password?lang=en#token="
+	idx := strings.Index(line, prefix)
+	if idx < 0 {
+		t.Fatalf("no link in %q", line)
+	}
+	token := strings.Fields(line[idx+len(prefix):])[0]
+	if len(token) != 43 || f.token.Purpose != store.TokenResetPassword || f.token.AccountID != 7 ||
+		!f.token.ExpiresAt.Equal(now.Add(time.Hour)) {
+		t.Fatalf("token %q stored %+v", token, f.token)
+	}
+	if strings.Contains(string(f.token.TokenHash), token) || len(f.token.TokenHash) != 32 {
+		t.Fatal("the plain token was stored")
+	}
+	// The audit log is append-only: the email (personal data) never goes in it.
+	if f.audit.Action != store.AuditResetLinkIssue || f.audit.Source != store.AuditCLI || f.audit.TargetAccountID != 7 ||
+		f.audit.TargetName != "" || strings.Contains(fmt.Sprint(f.audit), "gm@example.org") {
+		t.Fatalf("audit %+v", f.audit)
+	}
+	if strings.Contains(fmt.Sprint(f.audit.Args), token) {
+		t.Fatal("token in the audit log")
+	}
+	for _, args := range [][]string{
+		{"reset-link", "-email", "gm@example.org", "-public-url", "ftp://x"},
+		{"reset-link", "-public-url", "https://x"},
+	} {
+		if err := adminCommand(context.Background(), args, open, &out, "cli:ops", func() time.Time { return now }); !errors.Is(err, errUsage) {
+			t.Errorf("%v: err %v, want usage", args, err)
+		}
+	}
+	err = adminCommand(context.Background(), []string{"reset-link", "-email", "nobody@example.org", "-public-url", "https://x.example"},
+		open, &out, "cli:ops", func() time.Time { return now })
+	if err == nil || !strings.Contains(err.Error(), "no account") {
+		t.Fatalf("unknown email: %v", err)
+	}
+}
 
 func TestAdminReports(t *testing.T) {
 	var out bytes.Buffer

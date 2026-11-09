@@ -46,6 +46,10 @@ type Config struct {
 	AuthRateLimit       RateLimit // per IP; default DefaultAuthRateLimit
 	LoginPairRateLimit  RateLimit // failed logins per (email, IP); default DefaultLoginPairRateLimit
 	LoginEmailRateLimit RateLimit // failed logins per email; default DefaultLoginEmailRateLimit
+	// Email flows (T2.1). VerifyResendRateLimit: verification emails per account;
+	// ResetEmailRateLimit: reset emails per address. Defaults in email.go.
+	VerifyResendRateLimit RateLimit
+	ResetEmailRateLimit   RateLimit
 
 	// Public website endpoints (T4.3). Without Highscores, /api/highscores answers 404.
 	Highscores Highscores
@@ -89,6 +93,15 @@ type Accounts interface {
 	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
 	CreateCharacter(ctx context.Context, accountID int64, name, vocation string) (store.Character, error)
 	IssuePlayToken(ctx context.Context, accountID, characterID int64) (auth.Token, error)
+
+	// Email verification and password reset (T2.1, email.go).
+	EmailEnabled() bool
+	Profile(ctx context.Context, accountID int64) (store.Profile, error)
+	RequireVerified(ctx context.Context, accountID int64) error
+	SendVerification(ctx context.Context, accountID int64, lang string) error
+	VerifyEmail(ctx context.Context, token string) error
+	RequestPasswordReset(ctx context.Context, email, lang string) error
+	ResetPassword(ctx context.Context, token, password string) error
 }
 
 var _ Accounts = (*auth.Service)(nil)
@@ -109,6 +122,10 @@ type api struct {
 	downloadLimiter *limiter
 	uploadSlots     chan struct{} // semaphore of uploads in flight (body read to answer)
 	downloadSlots   chan struct{} // semaphore of patch downloads
+
+	verifyLimiter *limiter
+	resetLimiter  *limiter
+	resetSlots    chan struct{} // reset requests handled in the background
 }
 
 func orDefault(rl, def RateLimit) RateLimit {
@@ -139,6 +156,8 @@ func newAPI(cfg Config) (*api, error) {
 	cfg.LoginPairRateLimit = orDefault(cfg.LoginPairRateLimit, DefaultLoginPairRateLimit)
 	cfg.LoginEmailRateLimit = orDefault(cfg.LoginEmailRateLimit, DefaultLoginEmailRateLimit)
 	cfg.PublicRateLimit = orDefault(cfg.PublicRateLimit, DefaultPublicRateLimit)
+	cfg.VerifyResendRateLimit = orDefault(cfg.VerifyResendRateLimit, DefaultVerifyResendRateLimit)
+	cfg.ResetEmailRateLimit = orDefault(cfg.ResetEmailRateLimit, DefaultResetEmailRateLimit)
 	if cfg.HighscoreCacheTTL <= 0 {
 		cfg.HighscoreCacheTTL = DefaultHighscoreCacheTTL
 	}
@@ -159,6 +178,7 @@ func newAPI(cfg Config) (*api, error) {
 		querySlots:    make(chan struct{}, maxHighscoreQueries),
 		uploadSlots:   make(chan struct{}, cfg.MapUploadSlots),
 		downloadSlots: make(chan struct{}, maxPatchDownloads),
+		resetSlots:    make(chan struct{}, maxPendingResets),
 	}
 	for _, v := range cfg.Vocations {
 		a.vocations[v] = true
@@ -174,6 +194,9 @@ func newAPI(cfg Config) (*api, error) {
 		{&a.publicLimiter, cfg.PublicRateLimit, failOpen},
 		{&a.submitLimiter, cfg.MapSubmitRateLimit, failOpen},
 		{&a.downloadLimiter, cfg.MapDownloadRateLimit, failOpen},
+		// Keys are account ids and addresses an attacker picks: failClosed, like login.
+		{&a.verifyLimiter, cfg.VerifyResendRateLimit, failClosed},
+		{&a.resetLimiter, cfg.ResetEmailRateLimit, failClosed},
 	} {
 		lim, err := newLimiter(l.rl, l.policy, cfg.Clock)
 		if err != nil {
@@ -195,6 +218,7 @@ func (a *api) routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/characters", a.authed(a.createCharacter))
 	mux.HandleFunc("POST /api/play", a.authed(a.play))
 	mux.HandleFunc("GET /api/status", a.publicLimited(a.status))
+	a.emailRoutes(mux)
 	if a.cfg.Highscores != nil {
 		mux.HandleFunc("GET /api/highscores", a.publicLimited(a.highscores))
 	}
@@ -212,6 +236,8 @@ func (a *api) routes() *http.ServeMux {
 type credentials struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// Lang is the language of the verification email (T2.1); optional.
+	Lang string `json:"lang,omitempty"`
 }
 
 func (a *api) register(w http.ResponseWriter, r *http.Request) {
@@ -224,6 +250,7 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, r, err)
 		return
 	}
+	a.sendVerificationAfterRegister(r.Context(), id, in.Lang)
 	writeJSON(w, http.StatusCreated, map[string]int64{"account_id": id})
 }
 
@@ -556,6 +583,10 @@ var errorStatus = []struct {
 	{auth.ErrCharacterLimit, http.StatusConflict, "character_limit"},
 	{auth.ErrUnknownCharacter, http.StatusNotFound, "character_not_found"},
 	{auth.ErrBusy, http.StatusServiceUnavailable, "busy"},
+	{auth.ErrInvalidToken, http.StatusBadRequest, "invalid_token"},
+	{auth.ErrEmailUnverified, http.StatusForbidden, "email_unverified"},
+	{auth.ErrAlreadyVerified, http.StatusConflict, "already_verified"},
+	{auth.ErrEmailDisabled, http.StatusNotFound, "email_disabled"},
 }
 
 func (a *api) fail(w http.ResponseWriter, r *http.Request, err error) {

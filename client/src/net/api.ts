@@ -73,9 +73,58 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return data as T;
 }
 
+/** The signed-in account (T2.1). */
+export interface Account {
+  email: string;
+  email_verified: boolean;
+  /** The server sends emails: verifying is possible and asked for. */
+  email_enabled: boolean;
+}
+
+let emailConfig: Promise<boolean> | undefined;
+
+/**
+ * Whether the server sends emails (T2.1), asked once per page. A server older than T2.1
+ * answers 404 (or fails), which counts as no.
+ */
+export function emailEnabled(): Promise<boolean> {
+  emailConfig ??= call<{ email?: unknown }>("GET", "/api/auth/config").then(
+    (c) => c.email === true,
+    () => false,
+  );
+  return emailConfig;
+}
+
+/** Tests: forget the cached answer of emailEnabled. */
+export function forgetEmailConfig(): void {
+  emailConfig = undefined;
+}
+
+/**
+ * Body of POST /api/auth/register. `lang` only goes to a server that sends emails:
+ * servers older than T2.1 reject unknown fields, and a desktop app may talk to one.
+ */
+export function registerBody(
+  email: string,
+  password: string,
+  lang: string | undefined,
+  emailOn: boolean,
+): { email: string; password: string; lang?: string } {
+  return lang && emailOn ? { email, password, lang } : { email, password };
+}
+
 export const api = {
-  register: (email: string, password: string): Promise<{ account_id: number }> =>
-    call("POST", "/api/auth/register", { email, password }),
+  /** `lang` is the language of the verification email (T2.1), when the server sends one. */
+  register: async (
+    email: string,
+    password: string,
+    lang?: string,
+  ): Promise<{ account_id: number }> =>
+    call(
+      "POST",
+      "/api/auth/register",
+      registerBody(email, password, lang, lang ? await emailEnabled() : false),
+    ),
   login: (email: string, password: string): Promise<{ expires_at: string }> =>
     call("POST", "/api/auth/login", { email, password }),
   logout: (): Promise<void> => call("POST", "/api/auth/logout"),
@@ -85,6 +134,18 @@ export const api = {
     (await call<{ character: Character }>("POST", "/api/characters", { name, vocation })).character,
   play: (characterId: number): Promise<{ session_token: string; expires_at: string }> =>
     call("POST", "/api/play", { character_id: characterId }),
+};
+
+/** Email verification and password reset (T2.1, docs/05). Tokens go in POST bodies. */
+export const accountApi = {
+  account: (): Promise<Account> => call("GET", "/api/account"),
+  verify: (token: string): Promise<void> => call("POST", "/api/auth/verify", { token }),
+  resend: (lang: string): Promise<void> => call("POST", "/api/auth/verify/resend", { lang }),
+  /** Answers the same whether or not the account exists. */
+  forgot: (email: string, lang: string): Promise<void> =>
+    call("POST", "/api/auth/password/forgot", { email, lang }),
+  reset: (token: string, password: string): Promise<void> =>
+    call("POST", "/api/auth/password/reset", { token, password }),
 };
 
 /** A map submission of the portal (T4.5, docs/05 "Envío de mapas"). */

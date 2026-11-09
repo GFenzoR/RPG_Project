@@ -17,6 +17,7 @@ type Account struct {
 	CreatedAt       pgtype.Timestamptz
 	LastLoginAt     pgtype.Timestamptz
 	Role            string
+	Locale          string
 }
 
 type AccountBan struct {
@@ -35,6 +36,15 @@ type AccountCosmetic struct {
 	CosmeticID string
 	Source     string
 	AcquiredAt pgtype.Timestamptz
+}
+
+type AccountToken struct {
+	TokenHash []byte
+	AccountID int64
+	Purpose   string
+	Email     string
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
 }
 
 type AuditLog struct {

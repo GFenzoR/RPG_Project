@@ -18,8 +18,9 @@ GLOBAL='^(\.github/workflows/ci\.yml|\.github/workflows/images\.yml|\.github/scr
 # Per job: paths (extended regex, anchored) that make it run. GLOBAL is added to all.
 declare -A RULES=(
 	# ci.yml
-	# The patch path fixture is shared with server/internal/mappatch (T4.5).
-	[go-server]='^(server|proto|data|world|packages/map-format/src/patch/testdata)/'
+	# The patch path fixture is shared with server/internal/mappatch (T4.5). The account
+	# emails' templates (T2.1) are i18n/<lang>/email.yaml, read by server/internal/mail.
+	[go-server]='^((server|proto|data|world|packages/map-format/src/patch/testdata)/|i18n/[a-z]+/email\.yaml$)'
 	[go-bots]='^(tools/bots|server|proto)/'
 	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/soundgen|data|world|i18n|assets|proto)/'
 	[validate]='^(data|world|i18n|assets|packages|tools/mapcli|server/internal/world|server/cmd/mapcompile)/'
@@ -95,6 +96,7 @@ self_test() {
 	# Texts: TS, validation, build and E2E, not the Go jobs.
 	for j in ts validate build e2e; do check "$j" true i18n/es/client.yaml; done
 	for j in go-server go-bots integration desktop; do check "$j" false i18n/es/client.yaml; done
+	check go-server true i18n/en/email.yaml
 	# The desktop app's Rust only runs its own job and the TS one (apps/desktop has TS).
 	check desktop true apps/desktop/src-tauri/src/api.rs
 	check e2e false apps/desktop/src-tauri/src/api.rs

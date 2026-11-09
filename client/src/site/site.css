@@ -473,3 +473,8 @@ figcaption {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* T2.1: pages of the account links (site/Account.tsx). */
+.account-page .play-button {
+  display: inline-block;
+  margin-top: 0.75rem;
+}

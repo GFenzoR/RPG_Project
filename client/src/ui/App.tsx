@@ -21,6 +21,7 @@ import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
 import { ServerPicker } from "./ServerPicker.tsx";
+import { ForgotPasswordLink, VerifyNotice } from "./Account.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -92,6 +93,7 @@ function Screens({ content, t, locale, languagePicker, audio }: AppProps): JSX.E
           <AuthForm
             t={t}
             mode="login"
+            lang={locale}
             notice={notice}
             onDone={() => {
               setNotice(undefined);
@@ -101,12 +103,15 @@ function Screens({ content, t, locale, languagePicker, audio }: AppProps): JSX.E
           />
         );
       case "register":
-        return <AuthForm t={t} mode="register" onDone={toCharacters} onSwitch={toLogin} />;
+        return (
+          <AuthForm t={t} mode="register" lang={locale} onDone={toCharacters} onSwitch={toLogin} />
+        );
       case "characters":
         return (
           <Characters
             t={t}
             content={content}
+            lang={locale}
             notice={notice}
             onPlay={(character, sessionToken) => {
               setNotice(undefined);
@@ -138,6 +143,8 @@ function Screens({ content, t, locale, languagePicker, audio }: AppProps): JSX.E
 function AuthForm(props: {
   t: Translate;
   mode: "login" | "register";
+  /** Language of the verification email sent on sign up. */
+  lang: string;
   /** Why the player is back at the login (e.g. a ban ended the game), if anything. */
   notice?: string | undefined;
   onDone(): void;
@@ -154,7 +161,7 @@ function AuthForm(props: {
     setBusy(true);
     setError(undefined);
     try {
-      if (mode === "register") await api.register(email, password);
+      if (mode === "register") await api.register(email, password, props.lang);
       await api.login(email, password);
       props.onDone();
     } catch (err) {
@@ -206,6 +213,7 @@ function AuthForm(props: {
         <button type="button" class="link" onClick={props.onSwitch}>
           {t(mode === "login" ? "client.login.to_register" : "client.register.to_login")}
         </button>
+        {mode === "login" && <ForgotPasswordLink t={t} />}
       </form>
       {/* Outside the login form: its own form, so Enter saves the server and an invalid
           address there never blocks logging in. */}
@@ -217,6 +225,7 @@ function AuthForm(props: {
 function Characters(props: {
   t: Translate;
   content: ClientContent;
+  lang: string;
   notice: string | undefined;
   onPlay(character: Character, sessionToken: string): void;
   onLoggedOut(): void;
@@ -275,6 +284,7 @@ function Characters(props: {
   return (
     <div class="panel wide" data-testid="characters">
       <h1>{t("client.characters.title")}</h1>
+      <VerifyNotice t={t} lang={props.lang} />
       {props.notice && (
         <p class="notice" role="status">
           {props.notice}

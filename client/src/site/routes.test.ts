@@ -3,6 +3,7 @@ import {
   categoryKey,
   filtersToSearch,
   highscoresPath,
+  linkToken,
   parseFilters,
   parseRoute,
 } from "./routes.ts";
@@ -63,5 +64,21 @@ describe("highscore filters", () => {
     );
     expect(categoryKey("level")).toBe("site.highscores.level");
     expect(categoryKey("sword")).toBe("skill.sword.name");
+  });
+});
+
+describe("account links (T2.1)", () => {
+  it("routes the pages of the emailed links", () => {
+    expect(parseRoute("/verify")).toEqual({ page: "verify" });
+    expect(parseRoute("/forgot-password/")).toEqual({ page: "forgot_password" });
+    expect(parseRoute("/reset-password")).toEqual({ page: "reset_password" });
+  });
+  it("reads the token from the fragment only when it is well formed", () => {
+    const t = "A".repeat(40) + "-_9";
+    expect(linkToken(`#token=${t}`)).toBe(t);
+    expect(linkToken(`token=${t}`)).toBe(t);
+    expect(linkToken("#token=short")).toBeUndefined();
+    expect(linkToken(`#token=${t}<`)).toBeUndefined();
+    expect(linkToken("")).toBeUndefined();
   });
 });
