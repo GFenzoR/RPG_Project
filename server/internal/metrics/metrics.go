@@ -8,6 +8,7 @@
 package metrics
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 )
 
@@ -218,4 +220,44 @@ func (m *Metrics) PlayersOnline(online func() int) error {
 	return m.reg.Register(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "players_online", Help: "Players in the world.",
 	}, func() float64 { return float64(online()) }))
+}
+
+// AntiBot registers the bot detection's metrics (T4.1), read from s at scrape time (the
+// loop writes it with atomics). No label names a character: the levels and results are
+// fixed sets. Call it at most once.
+//
+//	antibot_suspects{level}                 gauge: characters at log, notify, presence, suspend
+//	antibot_presence_checks_total{result}   counter: sent, passed, failed, expired
+//	antibot_suspensions_total               counter: automatic suspensions
+func (m *Metrics) AntiBot(s *antibot.Stats) error {
+	if m == nil || s == nil {
+		return nil
+	}
+	var cs []prometheus.Collector
+	for l := antibot.LevelLog; l <= antibot.LevelSuspend; l++ {
+		v := &s.Suspects[l]
+		cs = append(cs, prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "antibot_suspects", Help: "Tracked characters at each bot detection response level (recounted every evaluation round).",
+			ConstLabels: prometheus.Labels{"level": antibot.LevelNames[l]},
+		}, func() float64 { return float64(v.Load()) }))
+	}
+	for _, c := range []struct {
+		result string
+		v      *atomic.Int64
+	}{{"sent", &s.ChecksSent}, {"passed", &s.ChecksPassed}, {"failed", &s.ChecksFailed}, {"expired", &s.ChecksExpired}} {
+		v := c.v
+		cs = append(cs, prometheus.NewCounterFunc(prometheus.CounterOpts{
+			Name: "antibot_presence_checks_total", Help: "Presence checks: sent, passed (right answer), failed (wrong answer), expired (no answer in time).",
+			ConstLabels: prometheus.Labels{"result": c.result},
+		}, func() float64 { return float64(v.Load()) }))
+	}
+	cs = append(cs, prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "antibot_suspensions_total", Help: "Automatic suspensions of the bot detection.",
+	}, func() float64 { return float64(s.Suspensions.Load()) }))
+	for _, c := range cs {
+		if err := m.reg.Register(c); err != nil {
+			return fmt.Errorf("antibot metrics: %w", err)
+		}
+	}
+	return nil
 }

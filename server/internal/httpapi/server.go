@@ -70,7 +70,10 @@ type Config struct {
 	Observe RequestObserver
 
 	// Map submission portal (T4.5). Without MapSubmissions its routes answer 404.
-	MapSubmissions     MapSubmissions
+	MapSubmissions MapSubmissions
+	// MapSubmitted is told each stored submission (its id and cleaned title) to notify the
+	// online GMs (T4.5). It must not block. Optional.
+	MapSubmitted       func(id int64, title string)
 	MapSubmitLimits    MapSubmitLimits // zero sizes take DefaultMapSubmitLimits; zero MinAccountAge = none
 	MapSubmitRateLimit RateLimit       // per account; default DefaultMapSubmitRateLimit
 	// MapDownloadRateLimit: patch downloads per account; default DefaultMapDownloadRateLimit.

@@ -166,6 +166,7 @@ func New(cfg Config) (*App, error) {
 		Observe:       httpObserver(cfg.Metrics),
 
 		MapSubmissions:  submissions,
+		MapSubmitted:    a.mapSubmitted,
 		MapSubmitLimits: cfg.MapSubmitLimits,
 		MapPRWorker:     cfg.MapPRWorker,
 	})
@@ -219,6 +220,9 @@ func New(cfg Config) (*App, error) {
 		a.World = w
 		cfg.Metrics.EconomyAlertKinds(session.AlertMismatch, session.AlertGoldOutlier, session.AlertItemsOutlier, session.AlertLogDropped)
 		if err := cfg.Metrics.PlayersOnline(w.PublishedOnline); err != nil {
+			return nil, fmt.Errorf("metrics: %w", err)
+		}
+		if err := cfg.Metrics.AntiBot(w.AntiBotStats()); err != nil {
 			return nil, fmt.Errorf("metrics: %w", err)
 		}
 		mv, fight, flush := w.Systems()
@@ -428,6 +432,18 @@ func (a *App) sessionsRevoked(accountID int64) {
 		return
 	}
 	go a.enqueueRetry(a.World.KickAccount(accountID))
+}
+
+// mapSubmitted tells the online GMs about a new map submission (T4.5) through the loop:
+// the HTTP handler never touches the world. A full queue drops the notice (the
+// submission is in the moderation queue anyway) instead of making the upload wait.
+func (a *App) mapSubmitted(id int64, title string) {
+	if a.World == nil || a.Loop == nil {
+		return
+	}
+	if err := a.Loop.Enqueue(a.World.MapSubmitted(id, title)); err != nil {
+		a.log.Warn("map submission notice dropped", "id", id, "err", err)
+	}
 }
 
 // rolesChanged hands the current roles of online staff to the loop (a lowered role

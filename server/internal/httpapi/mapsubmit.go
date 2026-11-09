@@ -285,6 +285,9 @@ func (a *api) submitMap(w http.ResponseWriter, r *http.Request, accountID int64)
 		return
 	}
 	a.log.Info("map submission", "id", m.ID, "account", accountID, "files", len(files), "size", m.SizeBytes)
+	if a.cfg.MapSubmitted != nil {
+		a.cfg.MapSubmitted(m.ID, m.Title)
+	}
 	writeJSON(w, http.StatusCreated, map[string]submissionJSON{"submission": submissionOut(m)})
 }
 

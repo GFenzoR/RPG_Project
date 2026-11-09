@@ -23,16 +23,30 @@ const clockSkew = 2 * time.Minute
 const (
 	jwksMaxAge     = time.Hour
 	jwksMinRefetch = time.Minute
+	// jwksFetchTimeout bounds the shared fetch (it ignores the cancellation of the login
+	// that started it).
+	jwksFetchTimeout = 10 * time.Second
 )
 
 type jwks struct {
 	url    string
 	client *http.Client
 
+	// mu guards the fields below; it is never held during the HTTP fetch, so a slow
+	// provider does not block logins whose key is cached.
 	mu      sync.Mutex
 	keys    map[string]*rsa.PublicKey
 	fetched time.Time // last successful fetch
 	tried   time.Time // last attempt, failed or not
+	// call is the fetch in flight (nil = none): concurrent misses wait for it instead of
+	// starting their own.
+	call *jwksCall
+}
+
+// jwksCall is one fetch in flight; done is closed when err is set.
+type jwksCall struct {
+	done chan struct{}
+	err  error
 }
 
 type jwkSet struct {
@@ -49,40 +63,74 @@ type jwkSet struct {
 // key returns the RSA key kid, fetching the set when it is stale or lacks kid.
 func (j *jwks) key(ctx context.Context, kid string, now time.Time) (*rsa.PublicKey, error) {
 	j.mu.Lock()
-	defer j.mu.Unlock()
 	k, ok := j.keys[kid]
 	stale := j.keys == nil || now.Sub(j.fetched) > jwksMaxAge
 	if ok && !stale {
+		j.mu.Unlock()
 		return k, nil
 	}
-	if !j.tried.IsZero() && now.Sub(j.tried) < jwksMinRefetch {
+	c := j.call
+	switch {
+	case c != nil && ok: // stale but known, and someone is fetching: use it meanwhile
+		j.mu.Unlock()
+		return k, nil
+	case c != nil: // someone is fetching: wait for that fetch
+		j.mu.Unlock()
+		select {
+		case <-c.done:
+		case <-ctx.Done():
+			if ok {
+				return k, nil
+			}
+			return nil, fmt.Errorf("%w: jwks: %w", ErrProvider, ctx.Err())
+		}
+	case !j.tried.IsZero() && now.Sub(j.tried) < jwksMinRefetch:
+		j.mu.Unlock()
 		if ok { // stale but known: keep it until the next allowed fetch
 			return k, nil
 		}
 		return nil, fmt.Errorf("%w: unknown key", ErrInvalidToken)
+	default: // fetch without the lock
+		c = &jwksCall{done: make(chan struct{})}
+		j.tried, j.call = now, c
+		j.mu.Unlock()
+		// Shared by every waiter: the starter's cancellation must not fail them all, so
+		// the fetch has its own deadline instead.
+		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), jwksFetchTimeout)
+		keys, err := j.fetch(fctx)
+		cancel()
+		j.mu.Lock()
+		if err == nil {
+			j.keys, j.fetched = keys, now
+		}
+		c.err, j.call = err, nil
+		j.mu.Unlock()
+		close(c.done)
 	}
-	j.tried = now
-	if err := j.fetch(ctx, now); err != nil {
+	if c.err != nil {
 		if ok { // keep using a known key while the provider is unreachable
 			return k, nil
 		}
-		return nil, err
+		return nil, c.err
 	}
-	if k, ok = j.keys[kid]; !ok {
+	j.mu.Lock()
+	k, ok = j.keys[kid]
+	j.mu.Unlock()
+	if !ok {
 		return nil, fmt.Errorf("%w: unknown key", ErrInvalidToken)
 	}
 	return k, nil
 }
 
-func (j *jwks) fetch(ctx context.Context, now time.Time) error {
+func (j *jwks) fetch(ctx context.Context) (map[string]*rsa.PublicKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, j.url, nil)
 	if err != nil {
-		return fmt.Errorf("%w: jwks request", ErrProvider)
+		return nil, fmt.Errorf("%w: jwks request", ErrProvider)
 	}
 	var set jwkSet
 	p := &Provider{name: "jwks", cfg: Config{HTTP: j.client}}
 	if err := p.doJSON(req, &set); err != nil {
-		return fmt.Errorf("jwks: %w", err)
+		return nil, fmt.Errorf("jwks: %w", err)
 	}
 	keys := map[string]*rsa.PublicKey{}
 	for _, k := range set.Keys {
@@ -100,8 +148,7 @@ func (j *jwks) fetch(ctx context.Context, now time.Time) error {
 		}
 		keys[k.Kid] = pub
 	}
-	j.keys, j.fetched = keys, now
-	return nil
+	return keys, nil
 }
 
 type idClaims struct {

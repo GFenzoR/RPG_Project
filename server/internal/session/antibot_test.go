@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -135,6 +136,17 @@ func TestAntiBotGradedResponses(t *testing.T) {
 		js[0].ActorRole != session.RoleGM || js[0].Audit.ActorName != "system:antibot" ||
 		js[0].Until.Sub(a.sim.Now()) > 24*time.Hour {
 		t.Fatalf("suspension %+v", js)
+	}
+	// The aggregate numbers for /metrics (no character in them); the levels are
+	// recounted once per evaluation round.
+	st := a.w.AntiBotStats()
+	if st.ChecksSent.Load() != 1 || st.ChecksFailed.Load() != 1 || st.ChecksPassed.Load() != 0 ||
+		st.ChecksExpired.Load() != 0 || st.Suspensions.Load() != 1 {
+		t.Fatalf("stats sent=%d failed=%d suspensions=%d", st.ChecksSent.Load(), st.ChecksFailed.Load(), st.Suspensions.Load())
+	}
+	a.sim.RunFor(time.Duration(a.w.AntiBotEvalMsForTest()) * time.Millisecond)
+	if st.Suspects[antibot.LevelSuspend].Load() != 1 || st.Suspects[antibot.LevelLog].Load() != 0 {
+		t.Fatalf("suspects by level: suspend=%d", st.Suspects[antibot.LevelSuspend].Load())
 	}
 }
 

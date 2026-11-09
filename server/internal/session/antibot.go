@@ -310,6 +310,7 @@ func (w *World) presenceDue(ctx *game.TickContext, p *Player, s *suspect) {
 			Text: &pb.LocalizedText{Key: "presence.option." + color}})
 	}
 	s.check = c
+	w.abStats.ChecksSent.Add(1)
 	w.sendPresence(p, c)
 	w.antibotAudit(ctx, p, "presence_check", checkResult(c.random, "sent"), s)
 }
@@ -344,6 +345,7 @@ func (w *World) presenceAnswer(ctx *game.TickContext, p *Player, id, option uint
 		w.presenceFailed(ctx, p, c.random, "wrong")
 		return
 	}
+	w.abStats.ChecksPassed.Add(1)
 	// Passed: it is recorded, and nothing else changes. A script can answer a question
 	// too (the texts are public), so a right answer never clears the suspicion.
 	w.antibotAudit(ctx, p, "presence_check", checkResult(c.random, "passed"), s)
@@ -365,6 +367,11 @@ func (w *World) afterRandomCheck(ctx *game.TickContext, s *suspect) {
 // threshold by itself: only a score that was already there suspends.
 func (w *World) presenceFailed(ctx *game.TickContext, p *Player, random bool, why string) {
 	s := p.sus
+	if why == "timeout" {
+		w.abStats.ChecksExpired.Add(1)
+	} else {
+		w.abStats.ChecksFailed.Add(1)
+	}
 	if random {
 		w.antibotAudit(ctx, p, "presence_check", checkResult(true, "failed_"+why), s)
 		w.afterRandomCheck(ctx, s)
@@ -396,6 +403,7 @@ func (w *World) suspend(ctx *game.TickContext, p *Player) {
 			"signals": signalArgs(p.sus.signals), "check": suspendCause(p.sus)}}
 	w.jobs[job.ID] = pendingJob{kind: AdminBan, until: job.Until, system: true}
 	w.queueAdmin(job)
+	w.abStats.Suspensions.Add(1)
 	w.log.Warn("antibot: suspended", "character", p.charID, "name", p.name, "score", int(p.sus.score))
 }
 
@@ -549,12 +557,23 @@ func (w *World) incomeRatio(tick game.Tick, p *Player) float64 {
 }
 
 // pruneSuspects forgets offline characters whose score has decayed to nothing (and that
-// have no pending check), once per evaluation round.
+// have no pending check), once per evaluation round, and publishes how many of the rest
+// are at each response level (AntiBotStats).
 func (w *World) pruneSuspects(tick game.Tick) {
+	var levels [antibot.LevelSuspend + 1]int64
 	for id, s := range w.suspects {
 		if w.byChar[id] == nil && s.check == nil &&
 			s.score*antibot.Decay(tickMs(tick-s.lastEval), w.abCfg) < 1 {
 			delete(w.suspects, id)
+			continue
 		}
+		levels[s.level]++
+	}
+	for l := antibot.LevelLog; l <= antibot.LevelSuspend; l++ {
+		w.abStats.Suspects[l].Store(levels[l])
 	}
 }
+
+// AntiBotStats returns the bot detection's aggregate numbers. Safe from any goroutine
+// (the /metrics handler reads them).
+func (w *World) AntiBotStats() *antibot.Stats { return &w.abStats }

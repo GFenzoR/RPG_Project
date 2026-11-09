@@ -77,6 +77,21 @@ func TestOAuthStoreWithPostgres(t *testing.T) {
 	if p, err := st.OAuthPendingByToken(ctx, hash("p1"), now); err != nil || p.Identity.Subject != "d-9" || p.ReturnTo != "/account" {
 		t.Fatalf("%+v %v", p, err)
 	}
+	// Confirming a pending identity consumes it with the link, atomically: a failed link
+	// leaves it, a second confirmation finds nothing.
+	_ = st.CreateOAuthPending(ctx, hash("p2"), pend, now.Add(time.Minute))
+	if err := st.LinkPendingIdentity(ctx, hash("p2"), bob, g, now); !errors.Is(err, store.ErrIdentityTaken) {
+		t.Fatalf("taken identity: %v", err)
+	}
+	if _, err := st.OAuthPendingByToken(ctx, hash("p2"), now); err != nil {
+		t.Fatalf("a failed link consumed the pending identity: %v", err)
+	}
+	if err := st.LinkPendingIdentity(ctx, hash("p2"), ana, pend.Identity, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LinkPendingIdentity(ctx, hash("p2"), ana, pend.Identity, now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("second confirmation: %v", err)
+	}
 	_ = st.CreateOAuthState(ctx, store.OAuthState{StateHash: hash("s2"), BindingHash: hash("b"), Provider: "discord",
 		Verifier: "v", Mode: "link", AccountID: bob, SessionHash: hash("bob-session"), ReturnTo: "/account", ExpiresAt: now.Add(time.Minute)})
 	if n, err := st.DeleteExpiredOAuth(ctx, now.Add(time.Hour)); err != nil || n != 2 {
@@ -113,7 +128,9 @@ func TestOAuthStoreWithPostgres(t *testing.T) {
 		}
 	}
 	actions = actions[3:] // zed: reset, linked, linked
-	if len(actions) != 3 || actions[0] != store.AuditIdentityUnlinked || actions[2] != store.AuditOAuthAccount {
+	// ana's confirmed pending identity, then bob's discord: linked, unlinked; ana created.
+	if len(actions) != 4 || actions[0] != store.AuditIdentityLinked || actions[1] != store.AuditIdentityUnlinked ||
+		actions[3] != store.AuditOAuthAccount {
 		t.Fatalf("audit %v", actions)
 	}
 }

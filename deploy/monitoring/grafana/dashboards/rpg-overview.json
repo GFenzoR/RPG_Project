@@ -1381,13 +1381,13 @@
     },
     {
       "type": "timeseries",
-      "title": "Alertas de economía y anti-bot",
+      "title": "Alertas de economía",
       "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "economy_alerts_total por 15 min (T4.1). mismatch dispara la alerta EconomyMismatch. La detección de bots aún no publica métrica: su puntaje está en la base y en /reports.",
+      "description": "economy_alerts_total por 15 min (T4.1). mismatch dispara la alerta EconomyMismatch. La detección de bots tiene sus paneles abajo.",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -1622,6 +1622,148 @@
           "refId": "B",
           "range": true,
           "legendFormat": "5xx/s {{route}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Anti-bot: personajes por nivel de sospecha",
+      "id": 28,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "antibot_suspects{level} (T4.1): personajes seguidos (conectados o no) en cada respuesta escalonada: log, notify, presence, suspend. Se recuenta en cada ronda de evaluación. Sin datos de jugador: el detalle está en /reports y en audit_log.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (level) (antibot_suspects{job=\"gameserver\"})",
+          "refId": "A",
+          "range": true,
+          "legendFormat": "{{level}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Anti-bot: chequeos de presencia y suspensiones",
+      "id": 29,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Por hora: antibot_presence_checks_total{result} (sent, passed, failed = respuesta equivocada, expired = sin respuesta a tiempo; incluye los aleatorios y los pedidos por un GM) y antibot_suspensions_total (suspensiones automáticas).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (result) (increase(antibot_presence_checks_total{job=\"gameserver\"}[1h]))",
+          "refId": "A",
+          "range": true,
+          "legendFormat": "{{result}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(antibot_suspensions_total{job=\"gameserver\"}[1h])",
+          "refId": "B",
+          "range": true,
+          "legendFormat": "suspensiones"
         }
       ],
       "options": {

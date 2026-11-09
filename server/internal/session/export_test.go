@@ -199,3 +199,6 @@ func (w *World) IncomeRatioForTest(p *Player) float64 {
 
 // GainExperienceForTest gives p experience as a kill would.
 func (w *World) GainExperienceForTest(p *Player, xp int64) { w.gainExperience(p, xp) }
+
+// AntiBotEvalMsForTest is antibot.eval_every_ms (one evaluation round).
+func (w *World) AntiBotEvalMsForTest() int { return w.abCfg.EvalEveryMs }
