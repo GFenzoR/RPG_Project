@@ -14,8 +14,15 @@ dialog:
         - text: npc.volcan_keeper.opt_root
           if:
             - { flag_equals: { key: ember_root_found, value: 1 } }
+            - { has_item: { item: ember_root } }
             - { quest_not_started: ch3_embers }
           goto: ch3_offer
+        - text: npc.volcan_keeper.opt_root_missing
+          if:
+            - { flag_equals: { key: ember_root_found, value: 1 } }
+            - { lacks_item: { item: ember_root } }
+            - { quest_not_started: ch3_embers }
+          goto: ch3_root_missing
         - text: npc.volcan_keeper.opt_embers_help
           if: { quest_state: { quest: ch3_embers, state: in_progress } }
           goto: ch3_embers_help
@@ -110,7 +117,20 @@ dialog:
             - { has_item: { item: delver_chart } }
           action: { take_item: { item: delver_chart } }
           goto: ch3_chart_read
+        - text: npc.volcan_keeper.opt_gate_hint
+          if: { quest_state: { quest: ch3_gate, state: in_progress, step: open_gate } }
+          goto: ch3_gate_hint
         - { text: dialog.back, goto: greet }
+    ch3_gate_hint:
+      text: npc.volcan_keeper.ch3_gate_hint
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_root_missing:
+      text: npc.volcan_keeper.ch3_root_missing
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
     ch3_chart_read:
       text: npc.volcan_keeper.ch3_chart_read
       options:

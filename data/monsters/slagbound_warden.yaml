@@ -20,4 +20,4 @@ loot:
   - { item: slag_core, chance: 0.5, count: [1, 2] }
   - { item: wyrm_scale, chance: 0.2 }
 tags: [construct, boss, cave, volcan]
-notes: Chapter 3 boss (ch3_warden), alone in the ancient forge at the bottom of the mine, level 44 with care or a small group. Always drops the forge seal; long respawn on the map.
+notes: Chapter 3 boss (ch3_warden), alone in the ancient forge at the bottom of the mine, level 40 in a small group, 44 alone with healing. Always drops the forge seal; long respawn on the map.

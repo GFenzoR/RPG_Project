@@ -37,8 +37,8 @@ func chapterThreeHarness(t *testing.T) *harness {
 // Chapter 3 end to end: only whoever found the ember root in Chapter 2 hears the keeper
 // out, at level 30; clear the hounds (kill), bring scales (gather + deliver), ask the smith
 // (talk). At 35, thin the delvers (kill), bring a chart (gather + deliver) and open the
-// sealed gate with the root (go to a place + open), which the druid hands over one at a
-// time. At 40, defeat the warden (kill) and return its seal for the flag of Chapter 4.
+// sealed gate with the root (go to a place + open); the druid hands over the root, one at a
+// time, until then. At 40, defeat the warden (kill) and return its seal for the flag of Chapter 4.
 func TestChapterThreePlayable(t *testing.T) {
 	h := chapterThreeHarness(t)
 	c := session.Character{ID: 930, AccountID: 930, Name: "Stoker", Vocation: "guardian", Level: 29, Health: 1000, Mana: 100}
@@ -75,8 +75,20 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 	h.sim.Command(gameFunc(func() { p.SetStorageForTest("flag.ember_root_found", 1) }))
 	h.sim.Step()
+	// Without the root in hand the keeper sends you to the druid, who hands over one, and
+	// only one.
+	if hasOption(keeper, "npc.volcan_keeper.opt_root") || !hasOption(keeper, "npc.volcan_keeper.opt_root_missing") {
+		t.Fatal("the keeper takes the chapter without the root")
+	}
+	d := h.lastDialog(h.send(cl, talkMsg(druid.ID())))
+	if d = h.lastDialog(h.pick(cl, d, "npc.bosque_druid.opt_take_root")); d.Text.Key != "npc.bosque_druid.ch3_root_given" || h.w.CountItem(p, "ember_root") != 1 {
+		t.Fatalf("root: %s, %d roots", d.Text.Key, h.w.CountItem(p, "ember_root"))
+	}
+	if hasOption(druid, "npc.bosque_druid.opt_take_root") {
+		t.Fatal("the druid hands over a second root")
+	}
 	// Level 29: the offer shows but there is no accept.
-	d := h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
+	d = h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_root"))
 	for _, o := range d.Options {
 		if o.Text.Key == "dialog.accept" {
@@ -151,16 +163,13 @@ func TestChapterThreePlayable(t *testing.T) {
 	if s := step("ch3_gate"); s != "open_gate" {
 		t.Fatalf("after the chart the step is %q", s)
 	}
-	// Without the root the gate stays shut; the druid hands over one, and only one.
-	if hasOption(echo, "npc.volcan_forge_echo.opt_open") || !hasOption(echo, "npc.volcan_forge_echo.opt_no_root") {
-		t.Fatal("the gate opens without the root")
+	if !hasOption(echo, "npc.volcan_forge_echo.opt_open") || hasOption(echo, "npc.volcan_forge_echo.opt_no_root") {
+		t.Fatal("the gate does not take the root")
 	}
-	d = h.lastDialog(h.send(cl, talkMsg(druid.ID())))
-	if d = h.lastDialog(h.pick(cl, d, "npc.bosque_druid.opt_take_root")); d.Text.Key != "npc.bosque_druid.ch3_root_given" || h.w.CountItem(p, "ember_root") != 1 {
-		t.Fatalf("root: %s, %d roots", d.Text.Key, h.w.CountItem(p, "ember_root"))
-	}
-	if hasOption(druid, "npc.bosque_druid.opt_take_root") {
-		t.Fatal("the druid hands over a second root")
+	d = h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
+	d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_progress"))
+	if d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_gate_hint")); d.Text.Key != "npc.volcan_keeper.ch3_gate_hint" {
+		t.Fatalf("gate hint: %s", d.Text.Key)
 	}
 	money, xp = h.w.Money(p), p.Experience()
 	d = h.lastDialog(h.send(cl, talkMsg(echo.ID())))
@@ -172,8 +181,13 @@ func TestChapterThreePlayable(t *testing.T) {
 		t.Fatalf("part 2 rewards: root %d, +%d coins, +%d xp", h.w.CountItem(p, "ember_root"), h.w.Money(p)-money, p.Experience()-xp)
 	}
 
+	// Once the gate is open the root is spent and the druid keeps no more.
+	if hasOption(druid, "npc.bosque_druid.opt_take_root") {
+		t.Fatal("the druid hands over a root after the gate")
+	}
 	// Part 3 needs level 40, and the echo gives it.
-	d = h.lastDialog(h.pick(cl, h.lastDialog(evs), "npc.volcan_forge_echo.opt_warden"))
+	d = h.lastDialog(h.send(cl, talkMsg(echo.ID())))
+	d = h.lastDialog(h.pick(cl, d, "npc.volcan_forge_echo.opt_warden"))
 	for _, o := range d.Options {
 		if o.Text.Key == "dialog.accept" {
 			t.Fatal("level 35 can accept part 3")
@@ -185,9 +199,6 @@ func TestChapterThreePlayable(t *testing.T) {
 	h.pick(cl, d, "dialog.accept")
 	if s := step("ch3_warden"); s != "defeat_warden" {
 		t.Fatalf("part 3: %q", s)
-	}
-	if hasOption(druid, "npc.bosque_druid.opt_take_root") {
-		t.Fatal("the druid still hands over the root after the gate")
 	}
 	// The fight itself is TestVolcanBalance's: this fresh character has base sword skill,
 	// which barely scratches the warden's armour, so it starts nearly broken.

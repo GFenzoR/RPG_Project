@@ -5,7 +5,7 @@ notes: >-
   Keeper of the grove of Raigal and the quest giver of Chapter 2 (ch2_roots, then
   ch2_coffer). Chapter 1 must be done to hear her out; each part has its own level. With
   ember_root_found she hands over the ember root (Chapter 3 key, one at a time) until
-  ch3_warden starts.
+  the gate of ch3_gate is open.
 dialog:
   start: greet
   nodes:
@@ -38,7 +38,14 @@ dialog:
           if:
             - { flag_equals: { key: ember_root_found, value: 1 } }
             - { lacks_item: { item: ember_root } }
-            - { quest_not_started: ch3_warden }
+            - { quest_not_started: ch3_gate }
+          action: { give_item: ember_root }
+          goto: ch3_root_given
+        - text: npc.bosque_druid.opt_take_root
+          if:
+            - { flag_equals: { key: ember_root_found, value: 1 } }
+            - { lacks_item: { item: ember_root } }
+            - { quest_state: { quest: ch3_gate, state: in_progress } }
           action: { give_item: ember_root }
           goto: ch3_root_given
         - text: npc.bosque_druid.opt_grove

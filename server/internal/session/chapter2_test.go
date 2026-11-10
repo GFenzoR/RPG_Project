@@ -79,6 +79,12 @@ func TestChapterTwoPlayable(t *testing.T) {
 		t.Fatalf("accept: %v", messageKeys(evs))
 	}
 
+	// The step reminders live under one option of the greeting.
+	d = h.lastDialog(h.send(cl, talkMsg(druid.ID())))
+	d = h.lastDialog(h.pick(cl, d, "npc.bosque_druid.opt_roots_help"))
+	if d = h.lastDialog(h.pick(cl, d, "npc.bosque_druid.opt_toads")); d.Text.Key != "npc.bosque_druid.ch2_toads" {
+		t.Fatalf("toads reminder: %s", d.Text.Key)
+	}
 	// Part 1: toads, glowcaps, ferryman.
 	h.sim.Command(gameFunc(func() { arm(); h.w.Teleport(p, pos(37, 44)) }))
 	h.huntRested(cl, p, "mire_toad", 8)

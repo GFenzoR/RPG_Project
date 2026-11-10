@@ -663,8 +663,9 @@ a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
 **Capítulo 3 "Fuego bajo la piedra" (T5.5, Isla Volcánica).** Lo da Casia Hollín, la
 guardiana de los registros de Brasal, solo a quien tiene el flag `ember_root_found` del
 Capítulo 2. La raíz de piedra es un item (`ember_root`, no comerciable): Velia Musgo la
-entrega en Raigal a quien tiene el flag, una a la vez y hasta empezar `ch3_warden` (si se
-pierde, se pide otra). Tres quests encadenadas, todo en datos (`data/quests/ch3_*.yaml`,
+entrega en Raigal a quien tiene el flag, una a la vez y hasta abrir la puerta de `ch3_gate`
+(si se pierde, se pide otra). Casia y el herrero piden la raíz encima; sin ella, Casia
+manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/ch3_*.yaml`,
 `data/npcs/volcan_*.yaml`):
 1. `ch3_embers` (nivel 30): matar 10 sabuesos de ceniza, juntar 6 escamas de salamandra,
    entregarlas a Casia y mostrarle la raíz a Bram Tizón, el herrero, que reconoce la marca
@@ -674,7 +675,7 @@ pierde, se pide otra). Tres quests encadenadas, todo en datos (`data/quests/ch3_
    hondo de la mina, donde el eco de la forja toma la raíz y la abre (ir a un lugar y
    abrir = hablar con el eco con la raíz encima). 22 000 XP y 1100 monedas.
 3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo
-   en la forja antigua), tomar el sello de la forja de sus restos y llevárselo a Casia.
+   en la forja antigua; en grupo desde el 40, solo desde el 44 y curándose), tomar el sello de la forja de sus restos y llevárselo a Casia.
    36 000 XP, 2000 monedas y el flag `lost_expedition_lead`: el sello señala al norte, por
    donde salió la expedición perdida del Capítulo 4 ("Silencio blanco", Heladas; no
    implementado). El custodio deja un solo sello por muerte: en grupo, cada uno espera su
