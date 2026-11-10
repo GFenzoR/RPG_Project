@@ -381,14 +381,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   grande, `puerto_house_anchor` (3180–3188, 6408–6414), con puerta al norte.
   Muelle del capitán de puerto (`harbor_master`, 3201,6433): tablones 3200–3202,
   6429–6434; las rutas salen de 3201,6434 (`puerto_to_bosque`) y la vuelta desde el Bosque
-  llega a 3201,6432.
+  llega a 3201,6432 (la de la Isla Volcánica, `volcan_to_puerto`, a 3201,6431).
 - `bosque` (192x192 en 4096,6016; pisos 7–8; nivel 10–30; T3.6): forma base con
   `mapcli generate --recipe island --seed 23 --size 180` y luego una lista de ops
   (scatter con semillas 2301–2304, autoborder al final). Superficie: pueblo de **Raigal**
   al oeste (templo de piedra con el sacerdote en 4146–4154, 6100–6108, puerta al sur;
   plaza de tierra con fragua, yunque y fogón; curtiduría de madera al sur de la plaza),
   muelle de tablones al oeste (4115–4127, 6099–6101, con el barquero `bosque_ferryman` en
-  4122,6100), arboleda de olmos talables al este del pueblo con la druida, bosque de
+  4122,6100; la llegada desde Puerto cae en 4120,6100 y la desde la Volcánica en
+  4119,6101), arboleda de olmos talables al este del pueblo con la druida, bosque de
   ciervos al noroeste (10–13), ciénaga de sapos al sur (12–15), bosque profundo de
   espinosos al noreste (18–22) y el campamento de contrabandistas en la costa este
   (15–18), unidos por caminos de tierra. Piso 8: la cueva de los contrabandistas
@@ -399,6 +400,29 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Casas (T5.4): `bosque_house_moss` (prefab `house_wood_small` en 4156,6087) y
   `bosque_house_resin` (prefab `house_wood_medium` en 4165,6086), en la playa al norte del
   pueblo, con la puerta al sur.
+
+- `volcan` (192x192 en 3584,5696; pisos 7–8; nivel 25–60; T5.5): forma base con
+  `mapcli generate --recipe island --seed 55 --size 180` y una lista de ops (el pasto pasa a
+  tierra con `fill`; scatter con semillas 5501–5505, autoborder al final). Superficie:
+  pueblo de **Brasal** al oeste (plaza de piedra 3636–3667, 5782–5806; templo de piedra
+  3638–3646, 5784–5792 con la puerta al sur y la sacerdotisa; fragua, yunque y fogón con el
+  herrero; el archivo de madera de Casia 3658–3666, 5795–5801, puerta al norte), muelle de
+  tablones al oeste (3610–3635, 5794–5796) con la capitana `volcan_ferryman` en 3615,5794:
+  las rutas salen de 3612,5795 y las llegadas caen en 3617,5795. Llano de ceniza (tierra)
+  al norte con sabuesos (26–30), ladera de piedra al sureste con salamandras (29–33) y
+  algunas vetas de ascua, y el cráter (anillo de `rock_wall` con centro 3712,5760, abierto
+  al sur; el anillo es 4-conexo, sin esquinas diagonales abiertas, así que solo se entra por
+  el hueco) con dragoncillos (48+). Escalera de la mina en 3692,5796 (`stairs_down` /
+  `stairs_up`), al final del camino de piedra que sale de la plaza. Piso 8: la mina, con la
+  sala de entrada, la galería de los mineros de obsidiana al oeste (33–37) y la de los
+  gólems de escoria al este (39–44), ambas con vetas de ascua, y al sur la sala de la
+  puerta sellada (el eco `volcan_forge_echo` en 3692,5826) y la forja antigua con el
+  custodio de escoria (3692,5845, respawn 1200 s). Protección en el templo y la plaza;
+  `no_logout` en el muelle; el resto es PvP abierto. Casa (T5.4): `volcan_house_cinder`
+  (prefab `house_wood_small` en 3646,5797, puerta al sur). Sin carteles todavía: el
+  check de mapas lee el i18n de la rama base y las claves `text.volcan.*_sign` (templo,
+  muelle, mina y puerta) llegan con este cambio; los carteles van en un cambio de mapa
+  aparte.
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:

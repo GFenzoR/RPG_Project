@@ -1,0 +1,18 @@
+- id: volcan_temple
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 3638, y: 5784, w: 9, h: 9 }
+
+- id: volcan_town
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 3636, y: 5782, w: 32, h: 25 }
+  notes: "Stone plaza, smithy stations and the keeper's archive of Brasal."
+
+- id: volcan_dock
+  type: no_logout
+  floors: [7]
+  rects:
+    - { x: 3610, y: 5794, w: 26, h: 3 }

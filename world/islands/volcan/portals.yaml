@@ -1,0 +1,9 @@
+- id: volcan_mine_down
+  kind: stairs
+  from: { x: 3692, y: 5796, z: 7 }
+  to: { x: 3692, y: 5797, z: 8 }
+
+- id: volcan_mine_up
+  kind: stairs
+  from: { x: 3692, y: 5796, z: 8 }
+  to: { x: 3692, y: 5797, z: 7 }

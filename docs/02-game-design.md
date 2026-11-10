@@ -509,8 +509,8 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 
 - **Qué es una casa:** un área del mapa con nombre, pueblo (su isla), casillas por piso,
   una o más **puertas** (casillas de la casa donde se entra) y una **salida** afuera,
-  junto a una puerta. Hoy hay 5: tres en el Farol (Puerto) y dos en Raigal (Bosque), de
-  21 a 37 casillas y de 500 a 1000 monedas por semana. Las casas son **zona de
+  junto a una puerta. Hoy hay 6: tres en el Farol (Puerto), dos en Raigal (Bosque) y una
+  en Brasal (Volcánica, T5.5), de 21 a 37 casillas y de 500 a 1000 monedas por semana. Las casas son **zona de
   protección**: sin combate y sin PvP (T5.2), y salir del juego adentro es seguro.
 - **Alquilar:** se usa la puerta (click derecho) y se abre la ventana de la casa; mirar la
   puerta dice de quién es o que está libre, con su precio. Elegimos la puerta y no un NPC
@@ -707,6 +707,20 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   nivel 45). El ataque sigue el +4 por escalón de Puerto y Bosque (27–31), así que el PvP
   (escalado a `damage_pct`) no cambia de forma. Bram Tizón vende las primeras piezas de
   acero de ascua y compra los materiales de la isla a un tercio de su valor.
+- **En el mapa** (`world/islands/volcan`, T5.5 parte 2): Brasal al oeste (templo de la Llama
+  Quieta, plaza con fragua, yunque y fogón, el archivo de Casia y una casa), muelle al oeste
+  con Nerea Vado. Se llega desde Raigal (`bosque_to_volcan`, nivel 25, 150 monedas) y se
+  vuelve al Bosque (100) o al Puerto (140). Sabuesos en el llano de ceniza al norte,
+  salamandras en la ladera de piedra al sureste, dragoncillos en el cráter amurallado al
+  noreste; la mina (piso 8, escalera al este del pueblo) tiene la galería de los mineros al
+  oeste, la de los gólems al este (con vetas de ascua) y, al sur, la puerta sellada con el
+  eco y detrás la forja antigua con el custodio (respawn de 20 min). La puerta es
+  narrativa: el paso no se cierra (no hay puertas con llave todavía); el capítulo avanza
+  por el diálogo con el eco. La isla es PvP abierto (el default de T5.2) salvo el templo y
+  la plaza (protección); sin arena. Música y ambiente: placeholders (la de cueva y las olas)
+  hasta tener pistas propias. No hay suelos volcánicos (ceniza, lava) en `data/`: el mapa
+  usa tierra y piedra; agregarlos queda pendiente (el check de mapas valida con el `data/`
+  de la base, así que van en un PR de contenido antes).
 - **Monedas:** las recompensas y precios de este nivel (miles de cobre) se pagan en plata y
   oro (ver "Economía"), así que caben en una mochila normal.
 

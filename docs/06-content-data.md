@@ -543,7 +543,9 @@ trade:
 ```
 - `requires.item` no puede ser una moneda (el oro se cobra con `price`).
 - Rutas actuales (T3.6): `puerto_to_bosque` (Maren Holt, 80 monedas, nivel 10 y Capítulo 1
-  completo) y `bosque_to_puerto` (Tavin Rema, 60 monedas, sin requisitos). El texto de la
+  completo) y `bosque_to_puerto` (Tavin Rema, 60 monedas, sin requisitos); T5.5:
+  `bosque_to_volcan` (Tavin Rema, 150, nivel 25), `volcan_to_bosque` (Nerea Vado, 100) y
+  `volcan_to_puerto` (Nerea Vado, 140), sin requisitos de vuelta. El texto de la
   opción dice destino y precio (`npc.<capitán>.to_*`).
 - El NPC necesita un nodo con `boat_routes: true`: ahí el servidor agrega una opción por
   ruta (antes de las del nodo, `option_id` 101, 102…). Rutas + opciones del nodo ≤ 9.

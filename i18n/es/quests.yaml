@@ -28,7 +28,7 @@ quest.ch2_coffer.step_return_coffer: "Lleva el cofre sellado a Velia Musgo."
 
 # Chapter 3: Fuego bajo la piedra.
 quest.ch3_embers.name: "Capítulo 3: Fuego bajo la piedra"
-quest.ch3_embers.step_clear_hounds: "Los sabuesos de ceniza cortan el camino a las obras viejas de Brasal. Mata 10 sabuesos de ceniza."
+quest.ch3_embers.step_clear_hounds: "Los sabuesos de ceniza se adueñaron del llano al norte de Brasal. Mata 10 sabuesos de ceniza."
 quest.ch3_embers.step_gather_scales: "Casia necesita un farol que aguante el calor de la montaña. Consigue 6 escamas de salamandra."
 quest.ch3_embers.step_deliver_scales: "Lleva las 6 escamas de salamandra a Casia Hollín, en el archivo de Brasal."
 quest.ch3_embers.step_ask_smith: "Muéstrale la raíz de ascua a Bram Tizón, el herrero de Brasal: quizá reconozca sus marcas."

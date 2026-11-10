@@ -1,0 +1,10 @@
+- id: volcan_house_cinder
+  name: house.volcan_house_cinder.name
+  rent: 900
+  rects:
+    - { x: 3647, y: 5798, z: 7, w: 5, h: 4 }
+    - { x: 3649, y: 5802, z: 7, w: 1, h: 1 }
+  doors:
+    - { x: 3649, y: 5802, z: 7 }
+  exit: { x: 3649, y: 5803, z: 7 }
+  notes: "Small house on the plaza of Brasal, south of the temple (prefab house_wood_small, T5.4)."
