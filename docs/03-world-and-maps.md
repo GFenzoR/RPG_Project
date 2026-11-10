@@ -411,7 +411,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   las rutas salen de 3612,5795 y las llegadas caen en 3617,5795. Llano de ceniza (tierra)
   al norte con sabuesos (26–30), ladera de piedra al sureste con salamandras (29–33) y
   algunas vetas de ascua, y el cráter (anillo de `rock_wall` con centro 3712,5760, abierto
-  al sur) con dragoncillos (48+). Escalera de la mina en 3692,5796. Piso 8: la mina, con la
+  al sur; el anillo es 4-conexo, sin esquinas diagonales abiertas, así que solo se entra por
+  el hueco) con dragoncillos (48+). Escalera de la mina en 3692,5796 (`stairs_down` /
+  `stairs_up`), al final del camino de piedra que sale de la plaza. Piso 8: la mina, con la
   sala de entrada, la galería de los mineros de obsidiana al oeste (33–37) y la de los
   gólems de escoria al este (39–44), ambas con vetas de ascua, y al sur la sala de la
   puerta sellada (el eco `volcan_forge_echo` en 3692,5826) y la forja antigua con el

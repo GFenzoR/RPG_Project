@@ -259,7 +259,8 @@ secundaria.
   la mina del piso 8 con la puerta sellada y la forja antigua; 5 monstruos y un jefe,
   acero de ascua, Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`). Pendiente:
   suelos volcánicos propios, música de la isla (hoy placeholders) y los carteles de Brasal
-  (sus textos `text.volcan.*_sign` ya están en i18n).
+  (sus textos `text.volcan.*_sign` ya están en i18n), y puertas con llave (la puerta sellada
+  de la mina hoy es narrativa).
 - [ ] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
   en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
   nativas necesitan cuentas de las tiendas (Apple y Google) y su firma.

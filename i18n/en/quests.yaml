@@ -28,7 +28,7 @@ quest.ch2_coffer.step_return_coffer: "Bring the sealed coffer to Velia Moss."
 
 # Chapter 3: Fire under the stone.
 quest.ch3_embers.name: "Chapter 3: Fire under the stone"
-quest.ch3_embers.step_clear_hounds: "Ash hounds cut the road to the old works of Brasal. Kill 10 ash hounds."
+quest.ch3_embers.step_clear_hounds: "Ash hounds have taken over the flats north of Brasal. Kill 10 ash hounds."
 quest.ch3_embers.step_gather_scales: "Casia needs a lantern that can stand the mountain's heat. Get 6 salamander scales."
 quest.ch3_embers.step_deliver_scales: "Bring the 6 salamander scales to Casia Hollín, in the archive of Brasal."
 quest.ch3_embers.step_ask_smith: "Show the ember root to Bram Tizón, the smith of Brasal: he may know its marks."
