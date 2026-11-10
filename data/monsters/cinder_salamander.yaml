@@ -1,0 +1,21 @@
+id: cinder_salamander
+name: monster.cinder_salamander.name
+sprite: creatures/cinder_salamander
+health: 420
+experience: 285
+speed: 150
+armor: 13
+defense: 14
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 42, interval_ms: 2000 }
+  - { type: distance, element: fire, min: 12, max: 30, interval_ms: 2000, chance: 0.35, range: 3,
+      condition: { id: burning, chance: 0.4, ticks: 4, damage: 6 } }
+resistances: { fire: 100, earth: 10, ice: -25 }
+loot:
+  - { item: salamander_scale, chance: 0.3 }
+  - { item: copper_coin, chance: 0.85, count: [15, 65] }
+tags: [reptile, lava, volcan]
+notes: Lava pools on the slopes, levels 29-33. Spits burning slag at range (T3.2 burning); immune to fire, weak to ice.

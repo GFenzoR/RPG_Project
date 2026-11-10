@@ -366,6 +366,12 @@ func TestPuertoBalance(t *testing.T) {
 							if tl, ok := bosqueTargetLevel[m.ID]; ok {
 								source = min(source, tl)
 							}
+							if tl, ok := volcanTargetLevel[m.ID]; ok {
+								source = min(source, tl)
+							}
+							if tl, ok := volcanBoss[m.ID]; ok {
+								source = min(source, tl)
+							}
 						}
 					}
 				}

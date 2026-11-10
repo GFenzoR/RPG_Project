@@ -1,0 +1,23 @@
+id: obsidian_delver
+name: monster.obsidian_delver.name
+sprite: creatures/obsidian_delver
+health: 450
+experience: 300
+speed: 195
+armor: 17
+defense: 18
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 52, interval_ms: 2000 }
+  - { type: distance, min: 0, max: 34, interval_ms: 2000, chance: 0.3, range: 4 }
+resistances: { physical: 5, fire: 30, ice: -10 }
+loot:
+  - { item: copper_coin, chance: 0.9, count: [20, 80] }
+  - { item: ember_ore, chance: 0.3 }
+  - { item: delver_chart, chance: 0.12 }
+  - { item: pickaxe, chance: 0.03 }
+  - { item: embersteel_helm, chance: 0.015 }
+tags: [human, cave, volcan]
+notes: Renegade miners, too stubborn to run, digging toward the old forge (Chapter 3), the mine under the mountain, levels 33-37. Throw obsidian shards (physical) at range.

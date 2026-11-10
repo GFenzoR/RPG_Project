@@ -120,3 +120,49 @@
   armor: { slot: legs, armor: 2 }
   requires: { level: 12 }
   value: 140
+
+# Isla Volcánica gear (T5.5, levels 30-50): embersteel and wyrm scale from the anvil.
+# Our own numbers.
+- id: embersteel_helm
+  kind: armor
+  sprite: armor/embersteel_helm
+  name: item.embersteel_helm.name
+  description: item.embersteel_helm.desc
+  weight: 3200
+  tradeable: true
+  armor: { slot: head, armor: 3 }
+  requires: { level: 30 }
+  value: 900
+
+- id: embersteel_cuirass
+  kind: armor
+  sprite: armor/embersteel_cuirass
+  name: item.embersteel_cuirass.name
+  description: item.embersteel_cuirass.desc
+  weight: 10500
+  tradeable: true
+  armor: { slot: body, armor: 8 }
+  requires: { level: 34 }
+  value: 1700
+
+- id: embersteel_shield
+  kind: shield
+  sprite: shields/embersteel_shield
+  name: item.embersteel_shield.name
+  description: item.embersteel_shield.desc
+  weight: 6400
+  tradeable: true
+  shield: { defense: 22 }
+  requires: { level: 36 }
+  value: 1500
+
+- id: wyrmscale_mail
+  kind: armor
+  sprite: armor/wyrmscale_mail
+  name: item.wyrmscale_mail.name
+  description: item.wyrmscale_mail.desc
+  weight: 9000
+  tradeable: true
+  armor: { slot: body, armor: 10 }
+  requires: { level: 45 }
+  value: 3800

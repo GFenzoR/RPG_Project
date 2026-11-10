@@ -3,7 +3,9 @@ name: npc.bosque_druid.name
 sprite: npcs/druid_elder
 notes: >-
   Keeper of the grove of Raigal and the quest giver of Chapter 2 (ch2_roots, then
-  ch2_coffer). Chapter 1 must be done to hear her out; each part has its own level.
+  ch2_coffer). Chapter 1 must be done to hear her out; each part has its own level. With
+  ember_root_found she hands over the ember root (Chapter 3 key, one at a time) until
+  ch3_warden starts.
 dialog:
   start: greet
   nodes:
@@ -15,21 +17,15 @@ dialog:
             - { quest_state: { quest: ch1_shipwreck, state: completed } }
             - { quest_not_started: ch2_roots }
           goto: ch2_offer
-        - text: npc.bosque_druid.opt_toads
-          if: { quest_state: { quest: ch2_roots, state: in_progress, step: cull_toads } }
-          goto: ch2_toads
-        - text: npc.bosque_druid.opt_glowcaps
-          if: { quest_state: { quest: ch2_roots, state: in_progress, step: gather_glowcaps } }
-          goto: ch2_glowcaps
+        - text: npc.bosque_druid.opt_roots_help
+          if: { quest_state: { quest: ch2_roots, state: in_progress } }
+          goto: ch2_roots_help
         - text: npc.bosque_druid.opt_give_glowcaps
           if:
             - { quest_state: { quest: ch2_roots, state: in_progress, step: deliver_glowcaps } }
             - { has_item: { item: glowcap, count: 6 } }
           action: { take_item: { item: glowcap, count: 6 } }
           goto: ch2_lantern
-        - text: npc.bosque_druid.opt_ferryman
-          if: { quest_state: { quest: ch2_roots, state: in_progress, step: ask_ferryman } }
-          goto: ch2_go_ferryman
         - text: npc.bosque_druid.opt_camp
           if:
             - { quest_state: { quest: ch2_roots, state: completed } }
@@ -38,10 +34,30 @@ dialog:
         - text: npc.bosque_druid.opt_progress
           if: { quest_state: { quest: ch2_coffer, state: in_progress } }
           goto: ch2_progress
+        - text: npc.bosque_druid.opt_take_root
+          if:
+            - { flag_equals: { key: ember_root_found, value: 1 } }
+            - { lacks_item: { item: ember_root } }
+            - { quest_not_started: ch3_warden }
+          action: { give_item: ember_root }
+          goto: ch3_root_given
         - text: npc.bosque_druid.opt_grove
           goto: grove
         - text: dialog.bye
           action: close
+    ch2_roots_help:
+      text: npc.bosque_druid.ch2_roots_help
+      options:
+        - text: npc.bosque_druid.opt_toads
+          if: { quest_state: { quest: ch2_roots, state: in_progress, step: cull_toads } }
+          goto: ch2_toads
+        - text: npc.bosque_druid.opt_glowcaps
+          if: { quest_state: { quest: ch2_roots, state: in_progress, step: gather_glowcaps } }
+          goto: ch2_glowcaps
+        - text: npc.bosque_druid.opt_ferryman
+          if: { quest_state: { quest: ch2_roots, state: in_progress, step: ask_ferryman } }
+          goto: ch2_go_ferryman
+        - { text: dialog.back, goto: greet }
     ch2_offer:
       text: npc.bosque_druid.ch2_offer
       options:
@@ -118,6 +134,11 @@ dialog:
         - { text: dialog.bye, action: close }
     ch2_root:
       text: npc.bosque_druid.ch2_root
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_root_given:
+      text: npc.bosque_druid.ch3_root_given
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

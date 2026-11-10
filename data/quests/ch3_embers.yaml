@@ -1,0 +1,26 @@
+id: ch3_embers
+name: quest.ch3_embers.name
+chapter: 3
+min_level: 30
+notes: >-
+  Main line, Chapter 3 "Fuego bajo la piedra", part 1. Started by volcan_keeper in Brasal
+  once Chapter 2 set ember_root_found (bosque_druid hands over the ember root). The keeper
+  feels the old forge waking under the mountain: clear the ash hounds off the old works road
+  (levels 26-30), bring salamander scales for a heat-proof lantern (levels 29-33), then show
+  the root's marks to the smith, who knows the forge-sign. Continues in ch3_gate.
+steps:
+  - id: clear_hounds
+    description: quest.ch3_embers.step_clear_hounds
+    complete_when: { kill: { monster: ash_hound, count: 10 } }
+  - id: gather_scales
+    description: quest.ch3_embers.step_gather_scales
+    complete_when: { has_item: { item: salamander_scale, count: 6 } }
+  - id: deliver_scales
+    description: quest.ch3_embers.step_deliver_scales
+    complete_when: { dialog_action: { npc: volcan_keeper, node: ch3_lantern } }
+  - id: ask_smith
+    description: quest.ch3_embers.step_ask_smith
+    complete_when: { dialog_action: { npc: volcan_smith, node: ch3_marks } }
+rewards:
+  - { xp: 14000 }
+  - { gold: 800 }

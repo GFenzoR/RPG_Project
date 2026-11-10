@@ -308,7 +308,10 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del Capítulo 2
 (`ch2_roots` → `ch2_coffer`, T3.6: la segunda se ofrece con `quest_state` de la primera
 `completed` y su propio `level_at_least`; entregas con `has_item` + `take_item` con
-`count`) y las quests secundarias `foreman_ore` y `diver_locket`.
+`count`), la del Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`, T5.5: "ir a un
+lugar y abrir" es un `dialog_action` con un NPC puesto en ese lugar, el eco de la forja,
+que toma la llave con `take_item`) y las quests secundarias `foreman_ore` y
+`diver_locket`.
 
 ## Hechizo
 ```yaml

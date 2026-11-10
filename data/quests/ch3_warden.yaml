@@ -1,0 +1,23 @@
+id: ch3_warden
+name: quest.ch3_warden.name
+chapter: 3
+min_level: 40
+notes: >-
+  Main line, Chapter 3, part 3. Started by volcan_forge_echo once the gate is open. The
+  slagbound warden (level 44, alone or in a small group) still guards the ancient forge:
+  defeat it and bring its seal to the keeper in Brasal. The seal shows the forge sent its
+  last fire north: the flag lost_expedition_lead prepares Chapter 4 (Islas Heladas).
+steps:
+  - id: defeat_warden
+    description: quest.ch3_warden.step_defeat_warden
+    complete_when: { kill: { monster: slagbound_warden, count: 1 } }
+  - id: take_seal
+    description: quest.ch3_warden.step_take_seal
+    complete_when: { has_item: { item: forge_seal } }
+  - id: return_seal
+    description: quest.ch3_warden.step_return_seal
+    complete_when: { dialog_action: { npc: volcan_keeper, node: ch3_seal_read } }
+rewards:
+  - { xp: 36000 }
+  - { gold: 2000 }
+  - { set_flag: { key: lost_expedition_lead, value: 1 } }

@@ -1,0 +1,22 @@
+id: ember_wyrmling
+name: monster.ember_wyrmling.name
+sprite: creatures/ember_wyrmling
+health: 760
+experience: 420
+speed: 200
+armor: 21
+defense: 22
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 74, interval_ms: 2000 }
+  - { type: spell, element: fire, min: 22, max: 52, interval_ms: 2000, chance: 0.3, range: 4,
+      condition: { id: burning, chance: 0.3, ticks: 5, damage: 7 } }
+resistances: { fire: 100, earth: 20, physical: 5, ice: -25 }
+loot:
+  - { item: wyrm_scale, chance: 0.2 }
+  - { item: copper_coin, chance: 0.9, count: [30, 110] }
+  - { item: embersteel_sabre, chance: 0.02 }
+tags: [dragon, crater, volcan]
+notes: Young drakes nesting on the crater rim, levels 48-58. The top of the island; its breath can leave you burning.
