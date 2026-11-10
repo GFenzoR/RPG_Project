@@ -254,11 +254,12 @@ secundaria.
   `house_items`) escritos por transfers agrupados por tick, staff `/house*` y `/houses`.
 - [x] **T5.5 Isla Volcánica y Capítulo 3.** Tercera isla con su mapa, monstruos, NPCs,
   recetas y la continuación de la historia. 👤 arte si se quiere reemplazar placeholders.
-  [T3.6] (PR #73 contenido y monedas de plata y oro, PR B mapa y rutas)
+  [T3.6] (PR #73 contenido y monedas de plata y oro; el PR siguiente, mapa y rutas)
   Hecho: Brasal, muelle con rutas al Bosque y al Puerto, llano de ceniza, ladera, cráter y
   la mina del piso 8 con la puerta sellada y la forja antigua; 5 monstruos y un jefe,
   acero de ascua, Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`). Pendiente:
-  suelos volcánicos propios y música de la isla (hoy placeholders).
+  suelos volcánicos propios, música de la isla (hoy placeholders) y los carteles de Brasal
+  (sus textos `text.volcan.*_sign` ya están en i18n).
 - [ ] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
   en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
   nativas necesitan cuentas de las tiendas (Apple y Google) y su firma.

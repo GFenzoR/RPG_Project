@@ -2,7 +2,8 @@ id: bosque_ferryman
 name: npc.bosque_ferryman.name
 sprite: npcs/ferryman
 notes: >-
-  Captain of the Raigal dock (data/boat_routes.yaml: bosque_to_puerto). Chapter 2 part 1
+  Captain of the Raigal dock (data/boat_routes.yaml: bosque_to_puerto and, from level 25,
+  bosque_to_volcan). Chapter 2 part 1
   ends with him: he saw where the unflagged boat landed.
 dialog:
   start: greet

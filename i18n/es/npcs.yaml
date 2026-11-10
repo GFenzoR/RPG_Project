@@ -204,7 +204,7 @@ npc.volcan_priest.mountain: "Porque la montaña arde sin parar. Rezamos para que
 npc.volcan_ferryman.name: "Nerea Vado, capitana"
 npc.volcan_ferryman.greet: "Bienvenido a Brasal. No toques las piedras negras del muelle: queman. ¿Vienes o te vas?"
 npc.volcan_ferryman.opt_island: "¿Qué hay en esta isla?"
-npc.volcan_ferryman.island: "Ceniza, lava y una montaña que respira. Sabuesos en el llano, salamandras en los pozos, una mina al norte que ya nadie decente pisa. Y en el cráter anidan dragoncillos: ni se te ocurra subir sin experiencia."
+npc.volcan_ferryman.island: "Ceniza, lava y una montaña que respira. Sabuesos en el llano, salamandras en los pozos, una mina al este del pueblo que ya nadie decente pisa. Y en el cráter anidan dragoncillos: ni se te ocurra subir sin experiencia."
 npc.volcan_ferryman.travel: "Zarpo hacia las otras islas. Dime adónde."
 npc.bosque_druid.opt_roots_help: "Sobre el rastro del bote..."
 npc.bosque_druid.ch2_roots_help: "¿Qué necesitas saber?"

@@ -204,7 +204,7 @@ npc.volcan_priest.mountain: "Because the mountain never stops burning. We pray t
 npc.volcan_ferryman.name: "Nerea Vado, captain"
 npc.volcan_ferryman.greet: "Welcome to Brasal. Don't touch the black stones on the dock: they burn. Coming or going?"
 npc.volcan_ferryman.opt_island: "What is on this island?"
-npc.volcan_ferryman.island: "Ash, lava and a mountain that breathes. Hounds on the flats, salamanders in the pools, a mine to the north no decent soul sets foot in anymore. And wyrmlings nest in the crater: don't even think of climbing without experience."
+npc.volcan_ferryman.island: "Ash, lava and a mountain that breathes. Hounds on the flats, salamanders in the pools, a mine east of the town no decent soul sets foot in anymore. And wyrmlings nest in the crater: don't even think of climbing without experience."
 npc.volcan_ferryman.travel: "I sail to the other islands. Tell me where."
 npc.bosque_druid.opt_roots_help: "About the boat's trail..."
 npc.bosque_druid.ch2_roots_help: "What do you need to know?"

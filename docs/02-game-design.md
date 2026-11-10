@@ -509,8 +509,8 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 
 - **Qué es una casa:** un área del mapa con nombre, pueblo (su isla), casillas por piso,
   una o más **puertas** (casillas de la casa donde se entra) y una **salida** afuera,
-  junto a una puerta. Hoy hay 5: tres en el Farol (Puerto) y dos en Raigal (Bosque), de
-  21 a 37 casillas y de 500 a 1000 monedas por semana. Las casas son **zona de
+  junto a una puerta. Hoy hay 6: tres en el Farol (Puerto), dos en Raigal (Bosque) y una
+  en Brasal (Volcánica, T5.5), de 21 a 37 casillas y de 500 a 1000 monedas por semana. Las casas son **zona de
   protección**: sin combate y sin PvP (T5.2), y salir del juego adentro es seguro.
 - **Alquilar:** se usa la puerta (click derecho) y se abre la ventana de la casa; mirar la
   puerta dice de quién es o que está libre, con su precio. Elegimos la puerta y no un NPC
