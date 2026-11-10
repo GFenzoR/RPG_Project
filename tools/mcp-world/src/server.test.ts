@@ -121,7 +121,7 @@ describe("protocol", () => {
     const info = JSON.parse((lines[1]?.result as CallResult).content[0]?.text ?? "") as {
       islands: unknown[];
     };
-    expect(info.islands).toHaveLength(3);
+    expect(info.islands).toHaveLength(4);
   }, 20000);
 });
 

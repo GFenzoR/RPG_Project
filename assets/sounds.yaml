@@ -96,8 +96,10 @@ events:
 # (floors > 7). Changing zone crossfades over fade_ms.
 music:
   fade_ms: 2500
-  islands: { puerto: music_puerto, testisle: music_puerto, bosque: music_bosque }
+  # volcan (T5.5): placeholder, it reuses the cave music until it has its own track.
+  islands: { puerto: music_puerto, testisle: music_puerto, bosque: music_bosque, volcan: music_cueva }
   underground: music_cueva
 ambient:
   fade_ms: 2000
-  islands: { puerto: amb_olas, testisle: amb_olas, bosque: amb_bosque }
+  # volcan (T5.5): placeholder, the shore waves until it has its own ambience.
+  islands: { puerto: amb_olas, testisle: amb_olas, bosque: amb_bosque, volcan: amb_olas }

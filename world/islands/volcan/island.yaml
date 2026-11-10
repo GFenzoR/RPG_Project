@@ -1,0 +1,7 @@
+id: volcan
+name: island.volcan.name
+rect: { x: 3584, y: 5696, w: 192, h: 192 }
+floors: [7, 8]
+temple: { x: 3642, y: 5789, z: 7 }
+level_hint: [25, 60]
+notes: "Volcanic island (T5.5): town of Brasal, west dock, ash flats, lava slope, crater rim with the wyrmlings, and the mine under the mountain on floor 8 (delvers, slag golems, the sealed gate and the ancient forge). Chapter 3."

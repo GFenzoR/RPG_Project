@@ -9,7 +9,8 @@
   price: 30
   requires: { level: 1 }
 
-# The official Puerto <-> Bosque routes of data/boat_routes.yaml (T3.6), copied here
+# The official routes of data/boat_routes.yaml (Puerto <-> Bosque, T3.6, and the
+# Volcánica ones, T5.5), copied here
 # because this file replaces that one.
 - id: puerto_to_bosque
   captain: harbor_master
@@ -25,3 +26,25 @@
   from: { x: 4117, y: 6100, z: 7 }
   to: { x: 3201, y: 6432, z: 7 }
   price: 60
+
+- id: bosque_to_volcan
+  captain: bosque_ferryman
+  text: npc.bosque_ferryman.to_volcan
+  from: { x: 4117, y: 6100, z: 7 }
+  to: { x: 3617, y: 5795, z: 7 }
+  price: 150
+  requires: { level: 25 }
+
+- id: volcan_to_bosque
+  captain: volcan_ferryman
+  text: npc.volcan_ferryman.to_forest
+  from: { x: 3612, y: 5795, z: 7 }
+  to: { x: 4119, y: 6101, z: 7 }
+  price: 100
+
+- id: volcan_to_puerto
+  captain: volcan_ferryman
+  text: npc.volcan_ferryman.to_harbour
+  from: { x: 3612, y: 5795, z: 7 }
+  to: { x: 3201, y: 6431, z: 7 }
+  price: 140

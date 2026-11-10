@@ -1,0 +1,90 @@
+- id: volcan_hounds_west
+  center: { x: 3640, y: 5752, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: ash_hound, count: 3 }
+  respawn_seconds: 70
+
+- id: volcan_hounds_north
+  center: { x: 3656, y: 5740, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: ash_hound, count: 4 }
+  respawn_seconds: 70
+
+- id: volcan_hounds_flats
+  center: { x: 3672, y: 5764, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: ash_hound, count: 4 }
+  respawn_seconds: 70
+
+- id: volcan_salamanders_west
+  center: { x: 3680, y: 5836, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: cinder_salamander, count: 3 }
+  respawn_seconds: 75
+
+- id: volcan_salamanders_mid
+  center: { x: 3702, y: 5828, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: cinder_salamander, count: 4 }
+  respawn_seconds: 75
+
+- id: volcan_salamanders_east
+  center: { x: 3720, y: 5840, z: 7 }
+  radius: 5
+  monsters:
+    - { monster: cinder_salamander, count: 4 }
+  respawn_seconds: 75
+
+- id: volcan_wyrmlings_rim
+  center: { x: 3707, y: 5755, z: 7 }
+  radius: 4
+  monsters:
+    - { monster: ember_wyrmling, count: 3 }
+  respawn_seconds: 120
+
+- id: volcan_wyrmlings_nest
+  center: { x: 3718, y: 5764, z: 7 }
+  radius: 3
+  monsters:
+    - { monster: ember_wyrmling, count: 2 }
+  respawn_seconds: 120
+
+- id: volcan_delvers_north
+  center: { x: 3650, y: 5785, z: 8 }
+  radius: 4
+  monsters:
+    - { monster: obsidian_delver, count: 3 }
+  respawn_seconds: 75
+
+- id: volcan_delvers_south
+  center: { x: 3652, y: 5798, z: 8 }
+  radius: 4
+  monsters:
+    - { monster: obsidian_delver, count: 3 }
+  respawn_seconds: 75
+
+- id: volcan_golems_north
+  center: { x: 3720, y: 5789, z: 8 }
+  radius: 4
+  monsters:
+    - { monster: slag_golem, count: 3 }
+  respawn_seconds: 90
+
+- id: volcan_golems_south
+  center: { x: 3726, y: 5801, z: 8 }
+  radius: 4
+  monsters:
+    - { monster: slag_golem, count: 3 }
+  respawn_seconds: 90
+
+- id: volcan_warden
+  center: { x: 3692, y: 5845, z: 8 }
+  radius: 2
+  monsters:
+    - { monster: slagbound_warden, count: 1 }
+  respawn_seconds: 1200

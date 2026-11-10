@@ -2484,3 +2484,113 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   expect(errors).toEqual([]);
   for (const page of [a, b, c]) await page.close();
 });
+
+test("T5.5: sail from the Forest Isle to the Ember Isle and meet its captain", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const { email, password, name } = await newGuardian(playwright, "Ashsail");
+  // Level 25 (172800 XP) on Raigal's dock with 200 copper coins (8) in a backpack (48).
+  // The route asks for level 25 and costs 150.
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'bosque', level = 25, experience = 172800, pos_x = 4120, pos_y = 6100, pos_z = 7 WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, 0, 8, 100 FROM bp UNION ALL SELECT character_id, id, 1, 8, 100 FROM bp`,
+  ]);
+  await enterGame(page, email, password);
+  errors.length = 0;
+  await arrived(page, 4120, 6100);
+
+  const ferryman = await page.evaluate(() => window.__rpgClient?.tileToClient(4122, 6100));
+  if (!ferryman) throw new Error("no canvas");
+  await page.mouse.click(ferryman.x, ferryman.y, { button: "right" });
+  const dialog = page.getByTestId("dialog");
+  await dialog.getByRole("button", { name: "Quiero viajar." }).click();
+  await dialog.getByRole("button", { name: "A la Isla Volcánica (150 monedas)." }).click();
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla Volcánica");
+  await arrived(page, 3617, 5795);
+  await expect(page.getByTestId("game-log")).toContainText("Pagaste 150 monedas.");
+  await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
+  await shot(page, "63-volcan-dock");
+
+  // The captain of Brasal sells the way back to both islands.
+  const captain = await page.evaluate(() => window.__rpgClient?.tileToClient(3615, 5794));
+  if (!captain) throw new Error("no canvas");
+  await page.mouse.click(captain.x, captain.y, { button: "right" });
+  await expect(dialog).toContainText("Nerea Vado");
+  await dialog.getByRole("button", { name: "Quiero viajar." }).click();
+  await expect(
+    dialog.getByRole("button", { name: "A la Isla del Bosque (100 monedas)." }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "A la Isla del Puerto (140 monedas)." }),
+  ).toBeVisible();
+  await shot(page, "64-volcan-captain");
+  expect(errors).toEqual([]);
+});
+
+test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const { email, password, name } = await newGuardian(playwright, "Stoker");
+  // Resident of the Ember Isle at level 30 (302760 XP) who found the ember root in
+  // Chapter 2: the flag, and the root (132) in a backpack (48).
+  execFileSync("psql", [
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'volcan', level = 30, experience = 302760 WHERE name = '${name}';
+     INSERT INTO quest_state (character_id, key, value)
+     SELECT id, 'flag.ember_root_found', 1 FROM characters WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, 0, 132, 1 FROM bp`,
+  ]);
+  await enterGame(page, email, password);
+  await arrived(page, 3642, 5789);
+  await shot(page, "65-volcan-temple");
+  // Out of the temple door and east across the plaza into the keeper's archive, by clicks.
+  for (const [x, y] of [
+    [3642, 5793],
+    [3648, 5794],
+    [3655, 5794],
+    [3662, 5794],
+    [3662, 5796],
+  ] as const) {
+    const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {
+      tx: x,
+      ty: y,
+    });
+    if (!tile) throw new Error("no canvas");
+    await page.mouse.click(tile.x, tile.y);
+    await arrived(page, x, y);
+  }
+  const keeper = await page.evaluate(() => window.__rpgClient?.tileToClient(3662, 5798));
+  if (!keeper) throw new Error("no canvas");
+  await page.mouse.click(keeper.x, keeper.y, { button: "right" });
+  const dialog = page.getByTestId("dialog");
+  await expect(dialog).toContainText("Casia Hollín");
+  await dialog
+    .getByRole("button", { name: "Traigo una raíz de piedra tallada que está templada." })
+    .click();
+  await dialog.getByRole("button", { name: "Acepto." }).click();
+  await expect(page.getByTestId("game-log")).toContainText(
+    "Nueva misión: Capítulo 3: Fuego bajo la piedra.",
+  );
+  await shot(page, "66-volcan-keeper");
+  expect(errors).toEqual([]);
+});

@@ -476,7 +476,7 @@ describe("bootstrap", () => {
   it("sends the world, the palette and the editor texts", () => {
     const b = bootstrap(repo);
     expect(b.loadErrors).toEqual([]);
-    expect(b.world.islands.map((i) => i.meta.id)).toEqual(["puerto", "testisle", "bosque"]);
+    expect(b.world.islands.map((i) => i.meta.id)).toEqual(["puerto", "testisle", "bosque", "volcan"]);
     expect(b.items.find((i) => i.id === "grass")).toEqual({
       id: "grass",
       kind: "ground",
@@ -487,8 +487,8 @@ describe("bootstrap", () => {
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();
       expect(b.i18n[lang]?.["island.testisle.name"]).toBeTruthy();
     }
-    // testisle + puerto + bosque chunks, and their spawns/npcs/zones/portals.yaml (not texts.yaml).
-    expect(Object.keys(b.base).filter((f) => f.endsWith(".json"))).toHaveLength(6 + 43 + 40);
+    // testisle + puerto + bosque + volcan chunks, and their spawns/npcs/zones/portals.yaml (not texts.yaml).
+    expect(Object.keys(b.base).filter((f) => f.endsWith(".json"))).toHaveLength(6 + 43 + 40 + 46);
     expect(
       Object.keys(b.base)
         .filter((f) => f.endsWith(".yaml"))
@@ -497,6 +497,7 @@ describe("bootstrap", () => {
       ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/bosque/${f}.yaml`),
       ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/puerto/${f}.yaml`),
       ...["portals", "spawns", "zones"].map((f) => `world/islands/testisle/${f}.yaml`),
+      ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/volcan/${f}.yaml`),
     ]);
     expect(b.borders.map((r) => r.id)).toContain("grass_sand");
     expect(b.monsters).toContain("wolf");

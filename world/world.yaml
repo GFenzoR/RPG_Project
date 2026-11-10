@@ -9,3 +9,6 @@ islands:
   - id: bosque
     rect: { x: 4096, y: 6016, w: 192, h: 192 }
     level_hint: [10, 30]
+  - id: volcan
+    rect: { x: 3584, y: 5696, w: 192, h: 192 }
+    level_hint: [25, 60]

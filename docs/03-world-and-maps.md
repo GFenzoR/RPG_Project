@@ -400,6 +400,24 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   `bosque_house_resin` (prefab `house_wood_medium` en 4165,6086), en la playa al norte del
   pueblo, con la puerta al sur.
 
+- `volcan` (192x192 en 3584,5696; pisos 7–8; nivel 25–60; T5.5): forma base con
+  `mapcli generate --recipe island --seed 55 --size 180` y una lista de ops (el pasto pasa a
+  tierra con `fill`; scatter con semillas 5501–5505, autoborder al final). Superficie:
+  pueblo de **Brasal** al oeste (plaza de piedra 3636–3667, 5782–5806; templo de piedra
+  3638–3646, 5784–5792 con la puerta al sur y la sacerdotisa; fragua, yunque y fogón con el
+  herrero; el archivo de madera de Casia 3658–3666, 5795–5801, puerta al norte), muelle de
+  tablones al oeste (3610–3635, 5794–5796) con la capitana `volcan_ferryman` en 3615,5794:
+  las rutas salen de 3612,5795 y las llegadas caen en 3617,5795. Llano de ceniza (tierra)
+  al norte con sabuesos (26–30), ladera de piedra al sureste con salamandras (29–33) y
+  algunas vetas de ascua, y el cráter (anillo de `rock_wall` con centro 3712,5760, abierto
+  al sur) con dragoncillos (48+). Escalera de la mina en 3692,5796. Piso 8: la mina, con la
+  sala de entrada, la galería de los mineros de obsidiana al oeste (33–37) y la de los
+  gólems de escoria al este (39–44), ambas con vetas de ascua, y al sur la sala de la
+  puerta sellada (el eco `volcan_forge_echo` en 3692,5826) y la forja antigua con el
+  custodio de escoria (3692,5845, respawn 1200 s). Protección en el templo y la plaza;
+  `no_logout` en el muelle; el resto es PvP abierto. Casa (T5.4): `volcan_house_cinder`
+  (prefab `house_wood_small` en 3646,5797, puerta al sur).
+
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:
 

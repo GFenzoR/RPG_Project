@@ -1,0 +1,14 @@
+- npc: volcan_priest
+  pos: { x: 3642, y: 5786, z: 7 }
+
+- npc: volcan_smith
+  pos: { x: 3653, y: 5788, z: 7 }
+
+- npc: volcan_keeper
+  pos: { x: 3662, y: 5798, z: 7 }
+
+- npc: volcan_ferryman
+  pos: { x: 3615, y: 5794, z: 7 }
+
+- npc: volcan_forge_echo
+  pos: { x: 3692, y: 5826, z: 8 }
