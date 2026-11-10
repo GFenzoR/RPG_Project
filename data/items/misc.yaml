@@ -9,6 +9,32 @@
   currency: { worth: 1 }
   value: 1
 
+# Bigger coins (docs/02 "Economía": 100 copper = 1 silver, 100 silver = 1 gold). Money is
+# always paid in the fewest coins; paying breaks a bigger coin and gives the change back.
+- id: silver_coin
+  kind: currency
+  sprite: currency/silver_coin
+  name: item.silver_coin.name
+  description: item.silver_coin.desc
+  weight: 10
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  currency: { worth: 100 }
+  value: 100
+
+- id: gold_coin
+  kind: currency
+  sprite: currency/gold_coin
+  name: item.gold_coin.name
+  description: item.gold_coin.desc
+  weight: 10
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  currency: { worth: 10000 }
+  value: 10000
+
 - id: wolf_pelt
   kind: material
   sprite: materials/wolf_pelt

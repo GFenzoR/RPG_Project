@@ -422,7 +422,17 @@ Valores iniciales (balance.yaml):
   proscrito se pierde más ("PvP", "Castigo").
 
 ## Economía
-- Monedas de oro, plata, cobre (100:1).
+- Monedas de oro, plata, cobre (100:1): `gold_coin` vale 10 000 cobre y `silver_coin` 100
+  (T5.5; antes solo existía el cobre). Todo precio, recompensa y saldo se cuenta en cobre
+  (`currency.worth`). **Pagar** toma primero las monedas chicas y, si no alcanzan, rompe
+  una grande y devuelve el vuelto en la menor cantidad de monedas; **cobrar** (ventas,
+  recompensas, retirar del buzón del mercado) da siempre la menor cantidad de monedas.
+- **Vuelto:** un pago que rompe una moneda solo se hace si el vuelto entra en la mochila
+  (huecos y capacidad, sin contar los que libera el pago: conservador); si no, se rechaza
+  sin cambiar nada (`dialog.no_change_room`). Vale para tiendas (que además reservan lugar
+  para lo comprado), mercado, intercambio de casas, alquiler, fundar un gremio, viajes,
+  bendiciones y todo `take_gold` de un diálogo. El log de economía y la cuadratura de T4.1
+  cuentan cada moneda por su valor.
 - NPCs compran y venden con precios en `data/npcs/*.yaml`. Los NPCs compran barato
   para que el comercio entre jugadores tenga sentido.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
@@ -681,7 +691,7 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    implementado). El custodio deja un solo sello por muerte: en grupo, cada uno espera su
    respawn para el suyo.
 - **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
-  ceniza (27, rápido, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
+  ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de
   escoria (41, mucha armadura, inmune al fuego) y dragoncillo de ascua (50, cráter,
   aliento de fuego que deja ardiendo). Jefe: custodio de escoria (44, 2600 de vida, pelea
@@ -697,9 +707,8 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   nivel 45). El ataque sigue el +4 por escalón de Puerto y Bosque (27–31), así que el PvP
   (escalado a `damage_pct`) no cambia de forma. Bram Tizón vende las primeras piezas de
   acero de ascua y compra los materiales de la isla a un tercio de su valor.
-- **Pendiente:** solo existe la moneda de cobre, así que las recompensas y precios de este
-  nivel (miles de monedas) ocupan muchos huecos de mochila. Una moneda de plata (`worth:
-  100`; el motor ya da y cobra en varias monedas) queda propuesta para otro PR.
+- **Monedas:** las recompensas y precios de este nivel (miles de cobre) se pagan en plata y
+  oro (ver "Economía"), así que caben en una mochila normal.
 
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).
@@ -791,7 +800,7 @@ Números en `data/balance.yaml` (`guild`), nunca en código. Código:
 son pocos y simples a propósito: lo que no está acá no existe.
 
 - **Fundar:** un personaje sin gremio, de nivel `found_min_level` (18) o más, paga
-  `found_cost` (2000 monedas de cobre). Ese oro se destruye: es un sumidero de la economía
+  `found_cost` (2000 en cobre, o sea 20 de plata). Ese oro se destruye: es un sumidero de la economía
   (fuente `guild` del log de economía). El fundador es el líder.
 - **Nombre:** de `name_min` a `name_max` caracteres (3–24), de 1 a `name_max_words` (4)
   palabras de letras ASCII (al menos dos por palabra) separadas por un espacio; la primera

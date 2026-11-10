@@ -173,7 +173,7 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   con el próximo cambio de esa casa: antes de achicar una casa ocupada, libérala con
   `/houseevict`. `name` es una clave i18n de
   `i18n/*/world.yaml` (`house.<id>.name`). El pueblo de la casa es su isla.
-- `rent`: precio de un período (`balance.yaml houses.period_days`) en monedas de cobre.
+- `rent`: precio de un período (`balance.yaml houses.period_days`) en cobre (se paga con cualquier moneda, `02-game-design.md` "Economía").
 - `rects`: las casillas de la casa, cada rect en un piso (`z`), de 1 a 255 de lado, hasta
   16. Las paredes no van: solo lo caminable de adentro y las puertas. El tamaño de la casa
   es la cantidad de casillas.

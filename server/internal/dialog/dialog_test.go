@@ -11,14 +11,15 @@ import (
 
 // fake is a player for the engine: facts in fields, effects recorded.
 type fake struct {
-	level    int
-	vocation string
-	items    map[string]int
-	money    int64
-	blessed  map[string]bool
-	engine   *quest.Engine
-	log      *quest.Log
-	did      []string
+	level        int
+	vocation     string
+	items        map[string]int
+	money        int64
+	noChangeRoom bool
+	blessed      map[string]bool
+	engine       *quest.Engine
+	log          *quest.Log
+	did          []string
 }
 
 func (f *fake) Level() int                { return f.level }
@@ -27,6 +28,7 @@ func (f *fake) ItemCount(it string) int   { return f.items[it] }
 func (f *fake) Flag(k string) int64       { return f.log.Get(quest.FlagKey(k)) }
 func (f *fake) SkillLevel(string) int     { return 10 }
 func (f *fake) Money() int64              { return f.money }
+func (f *fake) CanPay(int64) bool         { return !f.noChangeRoom }
 func (f *fake) HasBlessing(b string) bool { return f.blessed[b] }
 func (f *fake) CanTeleport(content.Position) bool {
 	return true
@@ -114,7 +116,12 @@ func TestCostsAreAllOrNothing(t *testing.T) {
 	if r := Choose(priest, "blessings", 0, f); r.Refused != MsgNoMoney || len(f.blessed) != 0 {
 		t.Fatalf("blessing without money: %+v", r)
 	}
-	f.money = 400
+	// Enough money, but the change of a broken coin would not fit.
+	f.money, f.noChangeRoom = 400, true
+	if r := Choose(priest, "blessings", 0, f); r.Refused != MsgNoChangeRoom || len(f.blessed) != 0 {
+		t.Fatalf("blessing without room for the change: %+v", r)
+	}
+	f.noChangeRoom = false
 	if r := Choose(priest, "blessings", 0, f); r.Node != "blessed" || f.money != 200 {
 		t.Fatalf("blessing: %+v money %d", r, f.money)
 	}

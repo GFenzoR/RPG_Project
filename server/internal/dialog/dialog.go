@@ -15,6 +15,7 @@ import (
 // Refusal keys (i18n) of an option whose actions cannot run.
 const (
 	MsgNoMoney        = "dialog.no_money"
+	MsgNoChangeRoom   = "dialog.no_change_room"
 	MsgNoItem         = "dialog.no_item"
 	MsgAlreadyBlessed = "dialog.already_blessed"
 	MsgCannotTravel   = "dialog.cannot_travel"
@@ -32,6 +33,9 @@ type Facts interface {
 	SkillLevel(skill string) int
 	// Money is the carried money in the smallest coin.
 	Money() int64
+	// CanPay reports whether the change of paying amount (when a coin is broken) fits.
+	// Only asked when Money covers amount.
+	CanPay(amount int64) bool
 	HasBlessing(id string) bool
 	// CanTeleport reports whether the destination exists and is free.
 	CanTeleport(p content.Position) bool
@@ -131,6 +135,9 @@ func Check(as content.Actions, f Facts) string {
 	}
 	if gold > f.Money() {
 		return MsgNoMoney
+	}
+	if gold > 0 && !f.CanPay(gold) {
+		return MsgNoChangeRoom
 	}
 	for it, n := range items {
 		if f.ItemCount(it) < n {

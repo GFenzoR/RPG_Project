@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -43,6 +44,15 @@ func TestChapterThreePlayable(t *testing.T) {
 	h := chapterThreeHarness(t)
 	c := session.Character{ID: 930, AccountID: 930, Name: "Stoker", Vocation: "guardian", Level: 29, Health: 1000, Mana: 100}
 	cl, p := h.joinFresh(c, pos(20, 12))
+	// A realistic purse and pack: coins from hunting and a few tools and supplies.
+	h.sim.Command(gameFunc(func() {
+		h.w.GiveForTest(p, "copper_coin", 1450)
+		for _, id := range []string{"pickaxe", "rope", "smithing_hammer", "ship_biscuit"} {
+			h.w.GiveForTest(p, id, 1)
+		}
+	}))
+	h.sim.Step()
+	cl.take()
 	druid, keeper, smith, echo := h.npc("bosque_druid"), h.npc("volcan_keeper"), h.npc("volcan_smith"), h.npc("volcan_forge_echo")
 	items, err := content.LoadItems(filepath.Join("..", "..", "..", "data"))
 	if err != nil {
@@ -120,6 +130,19 @@ func TestChapterThreePlayable(t *testing.T) {
 	if d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_give_scales")); d.Text.Key != "npc.volcan_keeper.ch3_lantern" || h.w.CountItem(p, "salamander_scale") != 0 {
 		t.Fatalf("deliver: %s, %d scales left", d.Text.Key, h.w.CountItem(p, "salamander_scale"))
 	}
+	// Lose the root (a death, say): the smith cannot read it and sends you to the druid,
+	// who replaces it.
+	h.sim.Command(gameFunc(func() { h.w.TakeForTest(p, "ember_root", 1) }))
+	h.sim.Step()
+	d = h.lastDialog(h.send(cl, talkMsg(smith.ID())))
+	if d = h.lastDialog(h.pick(cl, d, "npc.volcan_smith.opt_ch3_marks")); d.Text.Key != "npc.volcan_smith.ch3_no_root" {
+		t.Fatalf("smith without the root: %s", d.Text.Key)
+	}
+	d = h.lastDialog(h.send(cl, talkMsg(druid.ID())))
+	h.pick(cl, d, "npc.bosque_druid.opt_take_root")
+	if h.w.CountItem(p, "ember_root") != 1 {
+		t.Fatal("the druid did not replace the root")
+	}
 	money, xp := h.w.Money(p), p.Experience()
 	d = h.lastDialog(h.send(cl, talkMsg(smith.ID())))
 	if evs := h.pick(cl, d, "npc.volcan_smith.opt_ch3_marks"); !messageKeys(evs)["dialog.quest_completed"] {
@@ -165,6 +188,17 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 	if !hasOption(echo, "npc.volcan_forge_echo.opt_open") || hasOption(echo, "npc.volcan_forge_echo.opt_no_root") {
 		t.Fatal("the gate does not take the root")
+	}
+	// Lose it again at the gate: it stays shut, and the druid replaces it while ch3_gate runs.
+	h.sim.Command(gameFunc(func() { h.w.TakeForTest(p, "ember_root", 1) }))
+	h.sim.Step()
+	if hasOption(echo, "npc.volcan_forge_echo.opt_open") || !hasOption(echo, "npc.volcan_forge_echo.opt_no_root") {
+		t.Fatal("the gate opens without the root")
+	}
+	d = h.lastDialog(h.send(cl, talkMsg(druid.ID())))
+	h.pick(cl, d, "npc.bosque_druid.opt_take_root")
+	if h.w.CountItem(p, "ember_root") != 1 || hasOption(druid, "npc.bosque_druid.opt_take_root") {
+		t.Fatal("the druid did not replace the root once")
 	}
 	d = h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_progress"))
@@ -216,13 +250,13 @@ func TestChapterThreePlayable(t *testing.T) {
 		t.Fatalf("after the warden the step is %q", s)
 	}
 	give("forge_seal", 1) // it lies in the warden's remains; taking it is looting
-	// Only copper coins exist: empty the purse so the 2000 of the reward fit the backpack.
-	h.sim.Command(gameFunc(func() { h.w.SpendForTest(p, h.w.Money(p)) }))
-	h.sim.Step()
 	money, xp = h.w.Money(p), p.Experience()
 	d = h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_warden"))
 	evs = h.pick(cl, d, "npc.volcan_keeper.opt_give_seal")
+	if messageKeys(evs)["dialog.item_on_floor"] {
+		t.Fatal("the reward fell on the floor")
+	}
 	if !messageKeys(evs)["dialog.quest_completed"] || h.lastDialog(evs).Text.Key != "npc.volcan_keeper.ch3_seal_read" {
 		t.Fatalf("seal: %v", messageKeys(evs))
 	}
@@ -234,18 +268,67 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 }
 
-// The Brasal smith buys the island's materials and the priest heals and blesses like the
-// other temples.
+// The Brasal smith sells every line of its shop to a normal pack (paying breaks the big
+// coins and the change fits) and buys the island's materials; the priest heals and
+// blesses like the other temples; the captain has a travel node.
 func TestBrasalNPCs(t *testing.T) {
 	h := chapterThreeHarness(t)
-	c := session.Character{ID: 931, AccountID: 931, Name: "Ashwalker", Vocation: "guardian", Level: 30, Health: 500, Mana: 100}
-	cl, _ := h.joinFresh(c, pos(20, 12))
-	d := h.lastDialog(h.send(cl, talkMsg(h.npc("volcan_priest").ID())))
+	c := session.Character{ID: 931, AccountID: 931, Name: "Ashwalker", Vocation: "guardian", Level: 45, Health: 500, Mana: 100}
+	cl, p := h.joinFresh(c, pos(20, 12))
+	h.sim.Command(gameFunc(func() {
+		h.w.GiveForTest(p, "gold_coin", 1)
+		h.w.GiveForTest(p, "copper_coin", 250)
+		h.w.GiveForTest(p, "ash_pelt", 3)
+		for _, id := range []string{"pickaxe", "rope", "ship_biscuit"} {
+			h.w.GiveForTest(p, id, 1)
+		}
+	}))
+	h.sim.Step()
+	cl.take()
+	smith := h.npc("volcan_smith")
+	d := h.lastDialog(h.send(cl, talkMsg(smith.ID())))
+	shops := find(h.pick(cl, d, "dialog.trade"), (*pb.ServerMessage).GetShopOpen)
+	if len(shops) != 1 {
+		t.Fatal("no shop")
+	}
+	money := h.w.Money(p)
+	for _, o := range shops[0].Offers {
+		if o.BuyPrice == 0 {
+			continue
+		}
+		evs := h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopBuy{ShopBuy: &pb.ShopBuy{DialogId: d.DialogId, ItemId: o.ItemId, Count: 1}}})
+		if !messageKeys(evs)["shop.bought"] || messageKeys(evs)["dialog.item_on_floor"] {
+			t.Fatalf("buying item %d for %d: %v", o.ItemId, o.BuyPrice, messageKeys(evs))
+		}
+		money -= int64(o.BuyPrice)
+		if h.w.Money(p) != money {
+			t.Fatalf("after item %d: money %d, want %d", o.ItemId, h.w.Money(p), money)
+		}
+	}
+	pelt := itemNum(t, h, p, "ash_pelt")
+	evs := h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_ShopSell{ShopSell: &pb.ShopSell{DialogId: d.DialogId, ItemId: pelt, Count: 3}}})
+	if !messageKeys(evs)["shop.sold"] || h.w.Money(p) != money+60 || h.w.CountItem(p, "ash_pelt") != 0 {
+		t.Fatalf("selling pelts: %v, money %d", messageKeys(evs), h.w.Money(p))
+	}
+
+	priest := h.npc("volcan_priest")
+	d = h.lastDialog(h.send(cl, talkMsg(priest.ID())))
 	if d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_heal")); d.Text.Key != "npc.volcan_priest.healed" {
 		t.Fatalf("priest: %s", d.Text.Key)
 	}
+	money = h.w.Money(p)
+	d = h.lastDialog(h.send(cl, talkMsg(priest.ID())))
+	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_blessings"))
+	if d = h.lastDialog(h.pick(cl, d, "npc.puerto_priest.bless_shore")); d.Text.Key != "npc.volcan_priest.blessed" || h.w.Money(p) != money-200 {
+		t.Fatalf("blessing: %s, money %d", d.Text.Key, h.w.Money(p))
+	}
+	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_more"))
+	if evs := h.pick(cl, d, "npc.puerto_priest.bless_shore"); !messageKeys(evs)["dialog.already_blessed"] || h.w.Money(p) != money-200 {
+		t.Fatalf("second blessing: %v", messageKeys(evs))
+	}
+
 	d = h.lastDialog(h.send(cl, talkMsg(h.npc("volcan_ferryman").ID())))
-	if d = h.lastDialog(h.pick(cl, d, "npc.volcan_ferryman.opt_island")); d.Text.Key != "npc.volcan_ferryman.island" {
+	if d = h.lastDialog(h.pick(cl, d, "dialog.ask_travel")); d.Text.Key != "npc.volcan_ferryman.travel" {
 		t.Fatalf("ferryman: %s", d.Text.Key)
 	}
 }

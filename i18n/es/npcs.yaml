@@ -214,4 +214,4 @@ npc.volcan_keeper.opt_root_missing: "Velia Musgo me habló de una raíz de piedr
 npc.volcan_keeper.ch3_root_missing: "¿La raíz de las marcas del imperio? Sin ella no hay nada que yo pueda leer. Si la guarda Velia, la druida de Raigal, en la Isla del Bosque, pídesela y vuelve con ella."
 npc.volcan_keeper.opt_gate_hint: "¿Dónde está la puerta?"
 npc.volcan_keeper.ch3_gate_hint: "En lo más hondo de la mina, al final de los túneles del plano. Lleva la raíz contigo; si la perdiste, Velia te dará otra en Raigal."
-npc.volcan_smith.ch3_no_root: "¿Marcas de qué? Sin la raíz en la mano no puedo leer nada. Tráela y la miro."
+npc.volcan_smith.ch3_no_root: "¿Marcas de qué? Sin la raíz en la mano no puedo leer nada. Si la perdiste, Velia, la druida de Raigal, te dará otra. Tráela y la miro."

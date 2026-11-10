@@ -3,7 +3,7 @@ name: monster.ash_hound.name
 sprite: creatures/ash_hound
 health: 320
 experience: 262
-speed: 225
+speed: 300
 armor: 12
 defense: 16
 behavior:

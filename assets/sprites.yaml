@@ -25,6 +25,8 @@ sprites:
   armor/patched_tunic: { placeholder: { label: PT, color: "#8c6d4f" } }
   shields/plank_shield: { placeholder: { label: PS, color: "#9a7444" } }
   currency/copper_coin: { placeholder: { label: CC, color: "#c07a3a" } }
+  currency/silver_coin: { placeholder: { label: SC, color: "#b8c0c8" } }
+  currency/gold_coin: { placeholder: { label: GC, color: "#e0b83a" } }
   materials/wolf_pelt: { placeholder: { label: WP, color: "#8e8478" } }
   food/raw_fish: { placeholder: { label: RF, color: "#7fb0b8" } }
   tools/fishing_rod: { placeholder: { label: FR, color: "#6d7f4a" } }

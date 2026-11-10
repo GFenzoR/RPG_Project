@@ -406,7 +406,7 @@ obligatorias). Qué hace cada una: `02-game-design.md`, "Gremios". El cliente ta
 `found_cost`, `found_min_level`, `name_max` y `motd_max` (panel e inputs).
 ```yaml
 guild:
-  found_cost: 2000          # monedas de cobre que se pagan y se destruyen (sumidero)
+  found_cost: 2000          # en cobre; se pagan (con vuelto) y se destruyen (sumidero)
   found_min_level: 18
   max_members: 50           # 2..500, el líder incluido
   max_vice_leaders: 4
@@ -480,7 +480,7 @@ juego, opcionales para el servidor: sin bloque o `enabled: false`, apagados). Re
 market:
   enabled: true
   fee_permille: 20          # comisión: milésimas de cantidad × precio, destruida (sumidero)
-  fee_min: 5                # y entre fee_min y fee_max monedas de cobre
+  fee_min: 5                # y entre fee_min y fee_max, en cobre
   fee_max: 4000
   max_offers: 15            # ofertas activas por personaje (1..100)
   max_amount: 2000          # unidades por oferta (1..100000)
