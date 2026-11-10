@@ -2,6 +2,7 @@
 island.testisle.name: "Isla de pruebas"
 island.puerto.name: "Isla del Puerto"
 island.bosque.name: "Isla del Bosque"
+island.volcan.name: "Isla Volcánica"
 text.testisle.temple_sign: "Templo de la isla de pruebas. Aquí nadie puede hacerte daño."
 text.puerto.temple_sign: "Templo del Farol. Dentro de sus muros nadie puede hacerte daño."
 text.puerto.harbour_sign: "Muelle del Farol. Los barcos zarpan cuando el capitán de puerto lo dice."

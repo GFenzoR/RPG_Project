@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/dialog"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
@@ -173,6 +174,10 @@ func (w *World) sail(ctx *game.TickContext, p *Player, r *route) {
 	}
 	if w.money(p) < r.def.Price {
 		p.emit(systemMsg(msgTravelNoGold))
+		return
+	}
+	if !w.canPay(p, r.def.Price) {
+		p.emit(systemMsg(dialog.MsgNoChangeRoom))
 		return
 	}
 	to, ok := w.freeNear(r.to, w.arrivalRadius)

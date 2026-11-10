@@ -9,6 +9,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/dialog"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -621,6 +622,10 @@ func (w *World) marketCreate(ctx *game.TickContext, p *Player, m *pb.MarketCreat
 		p.emit(systemMsg(msgMarketNoMoney, num("price", int(pay))))
 		return
 	}
+	if !w.canPay(p, pay) {
+		p.emit(systemMsg(dialog.MsgNoChangeRoom))
+		return
+	}
 	if sell && w.marketUnits(p, def) < amount {
 		p.emit(systemMsg(msgMarketNoItems))
 		return
@@ -719,7 +724,7 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 			p.emit(systemMsg(msgMarketNoMoney, num("price", int(total))))
 			return
 		}
-		if !w.canReceive(p, o.def, units, max(len(w.coins)-1, 0)) {
+		if !w.canBuy(p, o.def, units, total) {
 			p.emit(systemMsg(msgMarketNoRoom))
 			return
 		}

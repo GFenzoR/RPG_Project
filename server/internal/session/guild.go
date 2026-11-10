@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/dialog"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/guild"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -387,6 +388,10 @@ func (w *World) guildCreate(ctx *game.TickContext, p *Player, name string) {
 	}
 	if w.money(p) < cost {
 		p.emit(systemMsg(msgGuildCost, num("amount", int(cost))))
+		return
+	}
+	if !w.canPay(p, cost) {
+		p.emit(systemMsg(dialog.MsgNoChangeRoom))
 		return
 	}
 	if cost > 0 {

@@ -1,0 +1,28 @@
+id: volcan_ferryman
+name: npc.volcan_ferryman.name
+sprite: npcs/ferryman_volcanic
+notes: >-
+  Captain of the Brasal dock. Her routes (back to Puerto and Bosque) are in
+  data/boat_routes.yaml once the island is on the map (T5.5 part 2).
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.volcan_ferryman.greet
+      options:
+        - text: dialog.ask_travel
+          goto: travel
+        - text: npc.volcan_ferryman.opt_island
+          goto: island
+        - text: dialog.bye
+          action: close
+    island:
+      text: npc.volcan_ferryman.island
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    travel:
+      text: npc.volcan_ferryman.travel
+      boat_routes: true             # data/boat_routes.yaml: routes with captain volcan_ferryman
+      options:
+        - { text: dialog.back, goto: greet }

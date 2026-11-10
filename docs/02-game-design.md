@@ -422,7 +422,17 @@ Valores iniciales (balance.yaml):
   proscrito se pierde más ("PvP", "Castigo").
 
 ## Economía
-- Monedas de oro, plata, cobre (100:1).
+- Monedas de oro, plata, cobre (100:1): `gold_coin` vale 10 000 cobre y `silver_coin` 100
+  (T5.5; antes solo existía el cobre). Todo precio, recompensa y saldo se cuenta en cobre
+  (`currency.worth`). **Pagar** toma primero las monedas chicas y, si no alcanzan, rompe
+  una grande y devuelve el vuelto en la menor cantidad de monedas; **cobrar** (ventas,
+  recompensas, retirar del buzón del mercado) da siempre la menor cantidad de monedas.
+- **Vuelto:** un pago que rompe una moneda solo se hace si el vuelto entra en la mochila
+  (huecos y capacidad, sin contar los que libera el pago: conservador); si no, se rechaza
+  sin cambiar nada (`dialog.no_change_room`). Vale para tiendas (que además reservan lugar
+  para lo comprado), mercado, intercambio de casas, alquiler, fundar un gremio, viajes,
+  bendiciones y todo `take_gold` de un diálogo. El log de economía y la cuadratura de T4.1
+  cuentan cada moneda por su valor.
 - NPCs compran y venden con precios en `data/npcs/*.yaml`. Los NPCs compran barato
   para que el comercio entre jugadores tenga sentido.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
@@ -562,7 +572,7 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 |---|---|---|
 | Isla del Puerto (inicial) | 1–15 | Tutorial, primera ciudad, Capítulo 1 |
 | Isla del Bosque (T3.6) | 10–30 | Druidas, bestias, leñador (olmo), Capítulo 2 |
-| Isla Volcánica | 25–60 | Herrería avanzada, dragones jóvenes |
+| Isla Volcánica (T5.5) | 25–60 | Herrería avanzada (acero de ascua), dragones jóvenes, Capítulo 3; ciudad: Brasal |
 | Islas Heladas | 40–80 | Hielo, mazmorras profundas |
 | Isla Hundida | 70+ | Ruinas del imperio antiguo, final de la historia actual |
 
@@ -660,6 +670,46 @@ a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
   hongo lumbre en el fogón; la curtidora Gisla vende el equipo de cuero de ciervo y la hoja
   de espino.
 
+**Capítulo 3 "Fuego bajo la piedra" (T5.5, Isla Volcánica).** Lo da Casia Hollín, la
+guardiana de los registros de Brasal, solo a quien tiene el flag `ember_root_found` del
+Capítulo 2. La raíz de piedra es un item (`ember_root`, no comerciable): Velia Musgo la
+entrega en Raigal a quien tiene el flag, una a la vez y hasta abrir la puerta de `ch3_gate`
+(si se pierde, se pide otra). Casia y el herrero piden la raíz encima; sin ella, Casia
+manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/ch3_*.yaml`,
+`data/npcs/volcan_*.yaml`):
+1. `ch3_embers` (nivel 30): matar 10 sabuesos de ceniza, juntar 6 escamas de salamandra,
+   entregarlas a Casia y mostrarle la raíz a Bram Tizón, el herrero, que reconoce la marca
+   de la forja antigua. 14 000 XP y 800 monedas.
+2. `ch3_gate` (nivel 35): matar 10 mineros de obsidiana, conseguir un plano de galería
+   (botín de los mineros), entregarlo a Casia y bajar hasta la puerta sellada, en lo más
+   hondo de la mina, donde el eco de la forja toma la raíz y la abre (ir a un lugar y
+   abrir = hablar con el eco con la raíz encima). 22 000 XP y 1100 monedas.
+3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo
+   en la forja antigua; en grupo desde el 40, solo desde el 44 y curándose), tomar el sello de la forja de sus restos y llevárselo a Casia.
+   36 000 XP, 2000 monedas y el flag `lost_expedition_lead`: el sello señala al norte, por
+   donde salió la expedición perdida del Capítulo 4 ("Silencio blanco", Heladas; no
+   implementado). El custodio deja un solo sello por muerte: en grupo, cada uno espera su
+   respawn para el suyo.
+- **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
+  ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
+  ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de
+  escoria (41, mucha armadura, inmune al fuego) y dragoncillo de ascua (50, cráter,
+  aliento de fuego que deja ardiendo). Jefe: custodio de escoria (44, 2600 de vida, pelea
+  de 30–90 s que pide curarse o ir en grupo). El fuego es la norma: todos resisten fuego y
+  el hielo los daña más. Con el equipo de Brasal un guardián pasa de 25 a 30 en ~3,8 h, de
+  30 a 40 en ~10,4 h y de 40 a 50 en ~15,2 h (el test pide 0,4–1,2 veces el `pace`).
+- **Herrería avanzada:** la veta de ascua (`ember_vein`, minería, el mineral de ascua sale
+  desde minería 8) y el botín de mineros y gólems dan mineral de ascua. En la fragua, 3
+  minerales + 1 lingote de hierro + 1 tronco de olmo (del Bosque: las islas comercian) dan
+  un lingote de acero de ascua (herrería 10). En el yunque: yelmo (herrería 12, nivel 30),
+  sable (13, nivel 30), hacha (14, nivel 32), coraza (16, nivel 34), escudo (17, nivel 36),
+  cota de escamas de dragoncillo (20, nivel 45) y hoja de colmillo de dragoncillo (22,
+  nivel 45). El ataque sigue el +4 por escalón de Puerto y Bosque (27–31), así que el PvP
+  (escalado a `damage_pct`) no cambia de forma. Bram Tizón vende las primeras piezas de
+  acero de ascua y compra los materiales de la isla a un tercio de su valor.
+- **Monedas:** las recompensas y precios de este nivel (miles de cobre) se pagan en plata y
+  oro (ver "Economía"), así que caben en una mochila normal.
+
 ## Diálogos de NPC
 - Ventana con texto del NPC y opciones clickeables (también seleccionables con 1–9).
   Se habla con click derecho sobre el NPC, a 3 casillas como máximo; alejarse cierra el
@@ -750,7 +800,7 @@ Números en `data/balance.yaml` (`guild`), nunca en código. Código:
 son pocos y simples a propósito: lo que no está acá no existe.
 
 - **Fundar:** un personaje sin gremio, de nivel `found_min_level` (18) o más, paga
-  `found_cost` (2000 monedas de cobre). Ese oro se destruye: es un sumidero de la economía
+  `found_cost` (2000 en cobre, o sea 20 de plata). Ese oro se destruye: es un sumidero de la economía
   (fuente `guild` del log de economía). El fundador es el líder.
 - **Nombre:** de `name_min` a `name_max` caracteres (3–24), de 1 a `name_max_words` (4)
   palabras de letras ASCII (al menos dos por palabra) separadas por un espacio; la primera

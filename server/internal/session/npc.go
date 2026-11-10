@@ -329,9 +329,9 @@ func (w *World) shopBuy(p *Player, dialogID, itemID, count uint32) {
 		p.emit(systemMsg(msgShopNoMoney))
 		return
 	}
-	// Paying may break a coin: keep a slot free for each smaller coin of the change, so
-	// neither the change nor the purchase ends up on the floor.
-	if !w.canReceive(p, l.def, n, max(len(w.coins)-1, 0)) {
+	// Paying may break a coin: the change needs room too, so neither the change nor the
+	// purchase ends up on the floor.
+	if !w.canBuy(p, l.def, n, price) {
 		p.emit(systemMsg(msgShopNoRoom))
 		return
 	}
@@ -592,6 +592,71 @@ func (w *World) pay(p *Player, amount int64) {
 	}
 }
 
+// changeFor returns what pay(p, amount) would take from each coin and the change it
+// would give back (p must have amount).
+func (w *World) changeFor(p *Player, amount int64) (taken []int, change int64) {
+	taken = make([]int, len(w.coins))
+	for i := len(w.coins) - 1; i >= 0 && amount > 0; i-- {
+		worth := w.coins[i].Currency.Worth
+		have := int64(w.countItem(p, w.coins[i], true))
+		take := min(have, (amount+worth-1)/worth)
+		taken[i] = int(take)
+		amount -= take * worth
+	}
+	return taken, max(-amount, 0)
+}
+
+// changeNeeds is what paying amount does to p's top backpack and load: the new stacks
+// its change needs (after merging into the backpack's coin stacks) and the net weight
+// (change minus the coins taken; negative when paying lightens p). Conservative: the
+// slots that the paid coins free are not counted. p must carry amount.
+func (w *World) changeNeeds(p *Player, amount int64) (stacks, weight int) {
+	taken, change := w.changeFor(p, amount)
+	for i, n := range taken {
+		weight -= w.coins[i].Weight * n
+	}
+	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
+	for _, coin := range w.coins {
+		n := int(change / coin.Currency.Worth)
+		if n == 0 {
+			continue
+		}
+		change -= int64(n) * coin.Currency.Worth
+		weight += coin.Weight * n
+		if bp != nil {
+			for _, c := range bp.items {
+				if c.def == coin {
+					n -= min(n, coin.StackLimit()-c.count)
+				}
+			}
+		}
+		stacks += (n + coin.StackLimit() - 1) / coin.StackLimit()
+	}
+	return stacks, weight
+}
+
+// canPay reports whether p carries amount and its change fits (changeNeeds) in the top
+// backpack and in capacity.
+func (w *World) canPay(p *Player, amount int64) bool {
+	if w.money(p) < amount {
+		return false
+	}
+	stacks, weight := w.changeNeeds(p, amount)
+	if stacks == 0 {
+		return weight <= p.capacity-p.carried()
+	}
+	bp := p.equip[pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK]
+	return bp != nil && bp.def.Container != nil && len(bp.items)+stacks <= bp.def.Slots() &&
+		weight <= p.capacity-p.carried()
+}
+
+// canBuy reports whether p can pay price for n units of def: the money, and room and
+// capacity for both the units and the change.
+func (w *World) canBuy(p *Player, def *content.Item, n int, price int64) bool {
+	stacks, weight := w.changeNeeds(p, price)
+	return def.Weight*n+weight <= p.capacity-p.carried() && w.room(p, def, n, stacks)
+}
+
 // giveMoney gives amount in the fewest coins.
 func (w *World) giveMoney(p *Player, amount int64) {
 	for _, coin := range w.coins {
@@ -683,6 +748,7 @@ func (a *actor) QuestState(id string) (quest.State, string) { return a.w.QuestSt
 func (a *actor) Flag(key string) int64                      { return a.p.storage.Get(quest.FlagKey(key)) }
 func (a *actor) SkillLevel(skill string) int                { return a.w.skillLevel(a.p, skill) }
 func (a *actor) Money() int64                               { return a.w.money(a.p) }
+func (a *actor) CanPay(amount int64) bool                   { return a.w.canPay(a.p, amount) }
 func (a *actor) HasBlessing(id string) bool                 { return a.p.storage.Get(blessKey+id) != 0 }
 
 func (a *actor) CanTeleport(pos content.Position) bool {

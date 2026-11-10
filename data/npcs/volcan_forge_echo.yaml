@@ -1,0 +1,61 @@
+id: volcan_forge_echo
+name: npc.volcan_forge_echo.name
+sprite: npcs/forge_echo
+notes: >-
+  What is left of the forge's last smith, bound to the sealed gate at the bottom of the
+  mine (Chapter 3). Reaching it is the "go to a place" of ch3_gate; it takes the ember
+  root and the gate opens (open_gate), then it starts ch3_warden.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.volcan_forge_echo.greet
+      options:
+        - text: npc.volcan_forge_echo.opt_open
+          if:
+            - { quest_state: { quest: ch3_gate, state: in_progress, step: open_gate } }
+            - { has_item: { item: ember_root } }
+          action: { take_item: { item: ember_root } }
+          goto: ch3_gate_opened
+        - text: npc.volcan_forge_echo.opt_no_root
+          if:
+            - { quest_state: { quest: ch3_gate, state: in_progress, step: open_gate } }
+            - { lacks_item: { item: ember_root } }
+          goto: no_root
+        - text: npc.volcan_forge_echo.opt_warden
+          if:
+            - { quest_state: { quest: ch3_gate, state: completed } }
+            - { quest_not_started: ch3_warden }
+          goto: ch3_warden_offer
+        - text: npc.volcan_forge_echo.opt_who
+          goto: who
+        - text: dialog.bye
+          action: close
+    no_root:
+      text: npc.volcan_forge_echo.no_root
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_gate_opened:
+      text: npc.volcan_forge_echo.ch3_gate_opened
+      options:
+        - { text: npc.volcan_forge_echo.opt_warden, goto: ch3_warden_offer }
+        - { text: dialog.bye, action: close }
+    ch3_warden_offer:
+      text: npc.volcan_forge_echo.ch3_warden_offer
+      options:
+        - text: dialog.accept
+          if: { level_at_least: 40 }
+          action: { start_quest: ch3_warden }
+          goto: ch3_warden_accepted
+        - text: dialog.decline
+          goto: greet
+    ch3_warden_accepted:
+      text: npc.volcan_forge_echo.ch3_warden_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    who:
+      text: npc.volcan_forge_echo.who
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }

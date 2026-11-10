@@ -45,6 +45,12 @@ func (w *World) GiveForTest(p *Player, id string, n int) {
 	w.econItem(p, EconGM, "test", w.cfg.Items[id], n) // keeps the economy ledger right
 }
 
+// TakeForTest takes n units of item id from p, as a GM would (tests only, loop goroutine).
+func (w *World) TakeForTest(p *Player, id string, n int) {
+	w.takeItem(p, w.cfg.Items[id], n, true)
+	w.econItem(p, EconGM, "test", w.cfg.Items[id], -n) // keeps the economy ledger right
+}
+
 // HurtForTest makes p take dmg as if a monster hit it (tests only, loop goroutine).
 func (w *World) HurtForTest(ctx *game.TickContext, p *Player, dmg int) {
 	w.damagePlayer(ctx, p, dmg, "")

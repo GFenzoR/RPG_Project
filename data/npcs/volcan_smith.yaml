@@ -1,0 +1,69 @@
+id: volcan_smith
+name: npc.volcan_smith.name
+sprite: npcs/smith_volcanic
+notes: >-
+  Smith of Brasal: sells the first embersteel pieces (levels 30-34), smithing tools and elm
+  logs, and buys the island's materials at about a third of their value. Chapter 3 part 1
+  ends with him: he reads the forge-sign on the ember root.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.volcan_smith.greet
+      options:
+        - text: npc.volcan_smith.opt_ch3_marks
+          if:
+            - { quest_state: { quest: ch3_embers, state: in_progress, step: ask_smith } }
+            - { has_item: { item: ember_root } }
+          goto: ch3_marks
+        - text: npc.volcan_smith.opt_ch3_marks
+          if:
+            - { quest_state: { quest: ch3_embers, state: in_progress, step: ask_smith } }
+            - { lacks_item: { item: ember_root } }
+          goto: ch3_no_root
+        - text: dialog.trade
+          action: { open_shop: brasal_smithy }
+        - text: npc.volcan_smith.opt_embersteel
+          goto: embersteel
+        - text: dialog.bye
+          action: close
+    ch3_marks:
+      text: npc.volcan_smith.ch3_marks
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_no_root:
+      text: npc.volcan_smith.ch3_no_root
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    embersteel:
+      text: npc.volcan_smith.embersteel
+      options:
+        - text: dialog.trade
+          action: { open_shop: brasal_smithy }
+        - { text: dialog.back, goto: greet }
+shop:
+  id: brasal_smithy
+  sells:
+    - { item: embersteel_sabre, price: 2400 }
+    - { item: embersteel_axe, price: 2500 }
+    - { item: embersteel_helm, price: 1150 }
+    - { item: embersteel_cuirass, price: 2200 }
+    - { item: smithing_hammer, price: 105 }
+    - { item: pickaxe, price: 60 }
+    - { item: elm_log, price: 12 }
+  buys:
+    - { item: embersteel_sabre, price: 600 }
+    - { item: embersteel_axe, price: 620 }
+    - { item: embersteel_helm, price: 280 }
+    - { item: embersteel_cuirass, price: 540 }
+    - { item: embersteel_shield, price: 480 }
+    - { item: wyrmscale_mail, price: 1200 }
+    - { item: wyrmfang_blade, price: 1300 }
+    - { item: embersteel_ingot, price: 26 }
+    - { item: ember_ore, price: 7 }
+    - { item: ash_pelt, price: 20 }
+    - { item: salamander_scale, price: 16 }
+    - { item: slag_core, price: 36 }
+    - { item: wyrm_scale, price: 45 }

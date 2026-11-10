@@ -118,3 +118,108 @@
   success_per_level: 0.04
   max_success: 0.9
   xp: 3
+
+# ---- Isla Volcánica (T5.5): embersteel, advanced smithing -------------------------------
+# Ember ore needs elm from the forest to burn hot enough: the islands trade with each other.
+- id: smelt_embersteel_ingot
+  craft: smithing
+  station: smelting_forge
+  level: 10
+  time_ms: 4000
+  inputs: [{ item: ember_ore, count: 3 }, { item: iron_ingot, count: 1 }, { item: elm_log, count: 1 }]
+  output: { item: embersteel_ingot, count: 1 }
+  base_success: 0.5
+  success_per_level: 0.03
+  max_success: 0.9
+  xp: 3
+
+- id: smith_embersteel_helm
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 12
+  time_ms: 5000
+  inputs: [{ item: embersteel_ingot, count: 3 }]
+  output: { item: embersteel_helm, count: 1 }
+  base_success: 0.4
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 5
+
+- id: smith_embersteel_sabre
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 13
+  time_ms: 6000
+  inputs: [{ item: embersteel_ingot, count: 4 }, { item: elm_log, count: 1 }]
+  output: { item: embersteel_sabre, count: 1 }
+  base_success: 0.38
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 6
+
+- id: smith_embersteel_axe
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 14
+  time_ms: 6000
+  inputs: [{ item: embersteel_ingot, count: 4 }, { item: elm_log, count: 2 }]
+  output: { item: embersteel_axe, count: 1 }
+  base_success: 0.36
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 6
+
+- id: smith_embersteel_cuirass
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 16
+  time_ms: 7000
+  inputs: [{ item: embersteel_ingot, count: 6 }, { item: ash_pelt, count: 2 }]
+  output: { item: embersteel_cuirass, count: 1 }
+  base_success: 0.33
+  success_per_level: 0.04
+  max_success: 0.8
+  xp: 8
+
+- id: smith_embersteel_shield
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 17
+  time_ms: 7000
+  inputs: [{ item: embersteel_ingot, count: 5 }, { item: elm_log, count: 2 }, { item: salamander_scale, count: 2 }]
+  output: { item: embersteel_shield, count: 1 }
+  base_success: 0.32
+  success_per_level: 0.04
+  max_success: 0.8
+  xp: 8
+
+- id: smith_wyrmscale_mail
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 20
+  time_ms: 8000
+  inputs: [{ item: embersteel_ingot, count: 5 }, { item: wyrm_scale, count: 6 }, { item: slag_core, count: 1 }]
+  output: { item: wyrmscale_mail, count: 1 }
+  base_success: 0.28
+  success_per_level: 0.035
+  max_success: 0.75
+  xp: 10
+
+- id: smith_wyrmfang_blade
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 22
+  time_ms: 8000
+  inputs: [{ item: embersteel_ingot, count: 5 }, { item: wyrm_scale, count: 3 }, { item: slag_core, count: 2 }]
+  output: { item: wyrmfang_blade, count: 1 }
+  base_success: 0.26
+  success_per_level: 0.035
+  max_success: 0.75
+  xp: 10

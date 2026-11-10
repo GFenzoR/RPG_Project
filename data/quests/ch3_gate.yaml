@@ -1,0 +1,26 @@
+id: ch3_gate
+name: quest.ch3_gate.name
+chapter: 3
+min_level: 35
+notes: >-
+  Main line, Chapter 3, part 2. Started by volcan_keeper after ch3_embers. The obsidian
+  delvers (levels 33-37) are tunnelling toward the forge: thin them out and take one of
+  their charts, which the keeper reads to find the sealed gate. Down at the gate (mine,
+  lower floor), the forge echo takes the ember root and the gate opens. Continues in
+  ch3_warden.
+steps:
+  - id: thin_delvers
+    description: quest.ch3_gate.step_thin_delvers
+    complete_when: { kill: { monster: obsidian_delver, count: 10 } }
+  - id: find_chart
+    description: quest.ch3_gate.step_find_chart
+    complete_when: { has_item: { item: delver_chart } }
+  - id: deliver_chart
+    description: quest.ch3_gate.step_deliver_chart
+    complete_when: { dialog_action: { npc: volcan_keeper, node: ch3_chart_read } }
+  - id: open_gate
+    description: quest.ch3_gate.step_open_gate
+    complete_when: { dialog_action: { npc: volcan_forge_echo, node: ch3_gate_opened } }
+rewards:
+  - { xp: 22000 }
+  - { gold: 1100 }

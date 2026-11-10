@@ -1,0 +1,19 @@
+id: ash_hound
+name: monster.ash_hound.name
+sprite: creatures/ash_hound
+health: 320
+experience: 262
+speed: 300
+armor: 12
+defense: 16
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 50, interval_ms: 2000 }
+resistances: { fire: 70, earth: 10, ice: -20 }
+loot:
+  - { item: ash_pelt, chance: 0.22 }
+  - { item: copper_coin, chance: 0.85, count: [15, 60] }
+tags: [beast, ashland, volcan]
+notes: Ash flats around the town, levels 26-30. Fast pack hunter that never breaks off, so it cannot be outrun; its coat shrugs off fire, so ice and earth are the way in.

@@ -1,0 +1,21 @@
+id: slag_golem
+name: monster.slag_golem.name
+sprite: creatures/slag_golem
+health: 480
+experience: 345
+speed: 120
+armor: 23
+defense: 14
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 66, interval_ms: 2000 }
+  - { type: spell, element: fire, min: 18, max: 40, interval_ms: 2000, chance: 0.2, range: 3 }
+resistances: { physical: 15, fire: 100, earth: 30, ice: -30, energy: -10 }
+loot:
+  - { item: ember_ore, chance: 0.45, count: [1, 2] }
+  - { item: slag_core, chance: 0.15 }
+  - { item: copper_coin, chance: 0.8, count: [25, 90] }
+tags: [elemental, cave, volcan]
+notes: Cooled slag the old forge woke up, deep mine, levels 39-44. Slow and heavily armoured; immune to fire, ice cracks it.

@@ -303,3 +303,24 @@
       - { item: elm_log, weight: 8 }
       - { item: tree_resin, weight: 1, min_level: 4 }
   value: 4
+
+# Ore vein of the Isla Volcánica (T5.5): ember ore for embersteel. Harder than iron, so it
+# asks for some mining first. Our own numbers.
+- id: ember_vein
+  kind: decoration
+  sprite: decor/ember_vein
+  name: item.ember_vein.name
+  description: item.ember_vein.desc
+  pickupable: false
+  blocks_movement: true
+  resource:
+    tool: mining
+    skill: mining
+    charges: 3
+    regen_ms: 420000
+    chance: { base: 0.2, per_level: 0.02, max: 0.75 }
+    drops:
+      - { item: rough_stone, weight: 5, count: [1, 2] }
+      - { item: ember_ore, weight: 4, min_level: 8 }
+      - { item: iron_ore, weight: 2 }
+  value: 4

@@ -9,6 +9,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/dialog"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -868,6 +869,10 @@ func (w *World) houseRent(ctx *game.TickContext, p *Player, h *house) {
 		p.emit(systemMsg(msgHouseNoMoney, num("price", int(rent))))
 		return
 	}
+	if !w.canPay(p, rent) {
+		p.emit(systemMsg(dialog.MsgNoChangeRoom))
+		return
+	}
 	w.pay(p, rent)
 	w.econGold(p, EconHouse, "rent", -rent)
 	o := HouseOwner{HouseID: h.def.ID, CharacterID: p.charID, AccountID: p.accountID, Name: p.name,
@@ -889,6 +894,10 @@ func (w *World) houseExtend(ctx *game.TickContext, p *Player, h *house) {
 	rent := int64(h.def.Rent)
 	if w.money(p) < rent {
 		p.emit(systemMsg(msgHouseNoMoney, num("price", int(rent))))
+		return
+	}
+	if !w.canPay(p, rent) {
+		p.emit(systemMsg(dialog.MsgNoChangeRoom))
 		return
 	}
 	w.pay(p, rent)
@@ -959,6 +968,10 @@ func (w *World) houseAccept(ctx *game.TickContext, p *Player, h *house, id strin
 	}
 	if w.money(p) < o.price {
 		p.emit(systemMsg(msgHouseNoMoney, num("price", int(o.price))))
+		return
+	}
+	if !w.canPay(p, o.price) {
+		p.emit(systemMsg(dialog.MsgNoChangeRoom))
 		return
 	}
 	from, fromName := h.owner, h.ownerName

@@ -1,0 +1,164 @@
+id: volcan_keeper
+name: npc.volcan_keeper.name
+sprite: npcs/forge_keeper
+notes: >-
+  Keeper of the forge records of Brasal and the quest giver of Chapter 3 (ch3_embers, then
+  ch3_gate; ch3_warden is started by volcan_forge_echo and returned here). She only talks
+  about the forge to whoever found the ember root in Chapter 2 (ember_root_found).
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.volcan_keeper.greet
+      options:
+        - text: npc.volcan_keeper.opt_root
+          if:
+            - { flag_equals: { key: ember_root_found, value: 1 } }
+            - { has_item: { item: ember_root } }
+            - { quest_not_started: ch3_embers }
+          goto: ch3_offer
+        - text: npc.volcan_keeper.opt_root_missing
+          if:
+            - { flag_equals: { key: ember_root_found, value: 1 } }
+            - { lacks_item: { item: ember_root } }
+            - { quest_not_started: ch3_embers }
+          goto: ch3_root_missing
+        - text: npc.volcan_keeper.opt_embers_help
+          if: { quest_state: { quest: ch3_embers, state: in_progress } }
+          goto: ch3_embers_help
+        - text: npc.volcan_keeper.opt_give_scales
+          if:
+            - { quest_state: { quest: ch3_embers, state: in_progress, step: deliver_scales } }
+            - { has_item: { item: salamander_scale, count: 6 } }
+          action: { take_item: { item: salamander_scale, count: 6 } }
+          goto: ch3_lantern
+        - text: npc.volcan_keeper.opt_delvers
+          if:
+            - { quest_state: { quest: ch3_embers, state: completed } }
+            - { quest_not_started: ch3_gate }
+          goto: ch3_gate_offer
+        - text: npc.volcan_keeper.opt_progress
+          if: { quest_state: { quest: ch3_gate, state: in_progress } }
+          goto: ch3_progress
+        - text: npc.volcan_keeper.opt_warden
+          if: { quest_state: { quest: ch3_warden, state: in_progress } }
+          goto: ch3_warden
+        - text: npc.volcan_keeper.opt_forge
+          goto: forge
+        - text: dialog.bye
+          action: close
+    ch3_embers_help:
+      text: npc.volcan_keeper.ch3_embers_help
+      options:
+        - text: npc.volcan_keeper.opt_hounds
+          if: { quest_state: { quest: ch3_embers, state: in_progress, step: clear_hounds } }
+          goto: ch3_hounds
+        - text: npc.volcan_keeper.opt_scales
+          if: { quest_state: { quest: ch3_embers, state: in_progress, step: gather_scales } }
+          goto: ch3_scales
+        - text: npc.volcan_keeper.opt_smith
+          if: { quest_state: { quest: ch3_embers, state: in_progress, step: ask_smith } }
+          goto: ch3_go_smith
+        - { text: dialog.back, goto: greet }
+    ch3_offer:
+      text: npc.volcan_keeper.ch3_offer
+      options:
+        - text: dialog.accept
+          if: { level_at_least: 30 }
+          action: { start_quest: ch3_embers }
+          goto: ch3_accepted
+        - text: dialog.decline
+          goto: greet
+    ch3_accepted:
+      text: npc.volcan_keeper.ch3_accepted
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_hounds:
+      text: npc.volcan_keeper.ch3_hounds
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_scales:
+      text: npc.volcan_keeper.ch3_scales
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_lantern:
+      text: npc.volcan_keeper.ch3_lantern
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_go_smith:
+      text: npc.volcan_keeper.ch3_go_smith
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_gate_offer:
+      text: npc.volcan_keeper.ch3_gate_offer
+      options:
+        - text: dialog.accept
+          if: { level_at_least: 35 }
+          action: { start_quest: ch3_gate }
+          goto: ch3_gate_accepted
+        - text: dialog.decline
+          goto: greet
+    ch3_gate_accepted:
+      text: npc.volcan_keeper.ch3_gate_accepted
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_progress:
+      text: npc.volcan_keeper.ch3_progress
+      options:
+        - text: npc.volcan_keeper.opt_give_chart
+          if:
+            - { quest_state: { quest: ch3_gate, state: in_progress, step: deliver_chart } }
+            - { has_item: { item: delver_chart } }
+          action: { take_item: { item: delver_chart } }
+          goto: ch3_chart_read
+        - text: npc.volcan_keeper.opt_gate_hint
+          if: { quest_state: { quest: ch3_gate, state: in_progress, step: open_gate } }
+          goto: ch3_gate_hint
+        - { text: dialog.back, goto: greet }
+    ch3_gate_hint:
+      text: npc.volcan_keeper.ch3_gate_hint
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_root_missing:
+      text: npc.volcan_keeper.ch3_root_missing
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_chart_read:
+      text: npc.volcan_keeper.ch3_chart_read
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_warden:
+      text: npc.volcan_keeper.ch3_warden
+      options:
+        - text: npc.volcan_keeper.opt_give_seal
+          if:
+            - { quest_state: { quest: ch3_warden, state: in_progress, step: return_seal } }
+            - { has_item: { item: forge_seal } }
+          action: { take_item: { item: forge_seal } }
+          goto: ch3_seal_read
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    ch3_seal_read:
+      text: npc.volcan_keeper.ch3_seal_read
+      options:
+        - { text: npc.volcan_keeper.opt_north, goto: ch3_north }
+        - { text: dialog.bye, action: close }
+    ch3_north:
+      text: npc.volcan_keeper.ch3_north
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    forge:
+      text: npc.volcan_keeper.forge
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }

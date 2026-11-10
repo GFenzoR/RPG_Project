@@ -1,0 +1,23 @@
+id: slagbound_warden
+name: monster.slagbound_warden.name
+sprite: creatures/slagbound_warden
+health: 2600
+experience: 3200
+speed: 140
+armor: 25
+defense: 20
+behavior:
+  aggressive: true
+  target_distance: 1
+attacks:
+  - { type: melee, min: 0, max: 76, interval_ms: 2000 }
+  - { type: spell, element: fire, min: 25, max: 55, interval_ms: 2000, chance: 0.3, range: 4,
+      condition: { id: burning, chance: 0.5, ticks: 5, damage: 8 } }
+resistances: { physical: 10, fire: 100, earth: 30, ice: -20 }
+loot:
+  - { item: forge_seal, chance: 1 }
+  - { item: copper_coin, chance: 1, count: [200, 500] }
+  - { item: slag_core, chance: 0.5, count: [1, 2] }
+  - { item: wyrm_scale, chance: 0.2 }
+tags: [construct, boss, cave, volcan]
+notes: Chapter 3 boss (ch3_warden), alone in the ancient forge at the bottom of the mine, level 40 in a small group, 44 alone with healing. Always drops the forge seal; long respawn on the map.

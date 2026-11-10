@@ -162,3 +162,38 @@
   weapon: { type: sword, attack: 23, defense: 13, hands: 1 }
   requires: { level: 16 }
   value: 850
+
+# Isla Volcánica weapons (T5.5, levels 30-50): embersteel smithed at the anvil. Melee
+# attack keeps the ~+4 per tier of Puerto and Bosque. Our own numbers.
+- id: embersteel_sabre
+  kind: weapon
+  sprite: weapons/embersteel_sabre
+  name: item.embersteel_sabre.name
+  description: item.embersteel_sabre.desc
+  weight: 3500
+  tradeable: true
+  weapon: { type: sword, attack: 27, defense: 15, hands: 1 }
+  requires: { level: 30 }
+  value: 1900
+
+- id: embersteel_axe
+  kind: weapon
+  sprite: weapons/embersteel_axe
+  name: item.embersteel_axe.name
+  description: item.embersteel_axe.desc
+  weight: 5600
+  tradeable: true
+  weapon: { type: axe, attack: 28, defense: 11, hands: 1 }
+  requires: { level: 32 }
+  value: 2000
+
+- id: wyrmfang_blade
+  kind: weapon
+  sprite: weapons/wyrmfang_blade
+  name: item.wyrmfang_blade.name
+  description: item.wyrmfang_blade.desc
+  weight: 3700
+  tradeable: true
+  weapon: { type: sword, attack: 31, defense: 17, hands: 1 }
+  requires: { level: 45 }
+  value: 4200

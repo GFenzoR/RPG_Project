@@ -25,6 +25,8 @@ sprites:
   armor/patched_tunic: { placeholder: { label: PT, color: "#8c6d4f" } }
   shields/plank_shield: { placeholder: { label: PS, color: "#9a7444" } }
   currency/copper_coin: { placeholder: { label: CC, color: "#c07a3a" } }
+  currency/silver_coin: { placeholder: { label: SC, color: "#b8c0c8" } }
+  currency/gold_coin: { placeholder: { label: GC, color: "#e0b83a" } }
   materials/wolf_pelt: { placeholder: { label: WP, color: "#8e8478" } }
   food/raw_fish: { placeholder: { label: RF, color: "#7fb0b8" } }
   tools/fishing_rod: { placeholder: { label: FR, color: "#6d7f4a" } }
@@ -145,3 +147,34 @@ sprites:
   npcs/ferryman: { placeholder: { label: FM, color: "#3a6a8a" } }
   npcs/priest_forest: { placeholder: { label: PF, color: "#a8b878" } }
   npcs/tanner: { placeholder: { label: TA, color: "#8a5a3a" } }
+
+  # Isla Volcánica (T5.5)
+  materials/ash_pelt: { placeholder: { label: AP, color: "#7a7a72" } }
+  materials/salamander_scale: { placeholder: { label: SS, color: "#c8482a" } }
+  materials/slag_core: { placeholder: { label: SC, color: "#e0702a" } }
+  materials/wyrm_scale: { placeholder: { label: WS, color: "#a8321e" } }
+  materials/ember_ore: { placeholder: { label: EO, color: "#5a2a22" } }
+  materials/embersteel_ingot: { placeholder: { label: EI, color: "#8a3a2a" } }
+  quest/ember_root: { placeholder: { label: ER, color: "#9a5a3a" } }
+  quest/delver_chart: { placeholder: { label: DC, color: "#b8a888" } }
+  quest/forge_seal: { placeholder: { label: FS, color: "#3a2e2a" } }
+  decor/ember_vein: { placeholder: { label: "", color: "#4a2a26" } }
+  weapons/embersteel_sabre: { placeholder: { label: ES, color: "#9a4a3a" } }
+  weapons/embersteel_axe: { placeholder: { label: EA, color: "#8a4232" } }
+  weapons/wyrmfang_blade: { placeholder: { label: WF, color: "#c85a2a" } }
+  armor/embersteel_helm: { placeholder: { label: EH, color: "#7a3a2e" } }
+  armor/embersteel_cuirass: { placeholder: { label: EC, color: "#6e3428" } }
+  shields/embersteel_shield: { placeholder: { label: EZ, color: "#82402e" } }
+  armor/wyrmscale_mail: { placeholder: { label: WM, color: "#b0442a" } }
+
+  creatures/ash_hound: { placeholder: { label: AH, color: "#6a6a64" } }
+  creatures/cinder_salamander: { placeholder: { label: CS, color: "#d0502a" } }
+  creatures/obsidian_delver: { placeholder: { label: OD, color: "#2e2a34" } }
+  creatures/slag_golem: { placeholder: { label: SG, color: "#8a5a3a" } }
+  creatures/ember_wyrmling: { placeholder: { label: EW, color: "#b8321e" } }
+  creatures/slagbound_warden: { placeholder: { label: SW, color: "#4a2a1e" } }
+  npcs/forge_keeper: { placeholder: { label: FK, color: "#8a6a4a" } }
+  npcs/forge_echo: { placeholder: { label: FE, color: "#d89a5a" } }
+  npcs/smith_volcanic: { placeholder: { label: SM, color: "#5a3a2a" } }
+  npcs/priest_volcanic: { placeholder: { label: PV, color: "#c8a888" } }
+  npcs/ferryman_volcanic: { placeholder: { label: FV, color: "#3a5a7a" } }

@@ -9,6 +9,32 @@
   currency: { worth: 1 }
   value: 1
 
+# Bigger coins (docs/02 "Economía": 100 copper = 1 silver, 100 silver = 1 gold). Money is
+# always paid in the fewest coins; paying breaks a bigger coin and gives the change back.
+- id: silver_coin
+  kind: currency
+  sprite: currency/silver_coin
+  name: item.silver_coin.name
+  description: item.silver_coin.desc
+  weight: 10
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  currency: { worth: 100 }
+  value: 100
+
+- id: gold_coin
+  kind: currency
+  sprite: currency/gold_coin
+  name: item.gold_coin.name
+  description: item.gold_coin.desc
+  weight: 10
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  currency: { worth: 10000 }
+  value: 10000
+
 - id: wolf_pelt
   kind: material
   sprite: materials/wolf_pelt
@@ -348,3 +374,98 @@
   weight: 2500
   tradeable: false
   notes: Chapter 2 quest item (ch2_coffer), the coffer stolen from the wreck of Chapter 1. Dropped by hollow crawlers in the smugglers' cave; taken by bosque_druid. No value, so no NPC buys it.
+
+# Isla Volcánica (T5.5): loot of its monsters, embersteel and the Chapter 3 items.
+# Our own numbers.
+- id: ash_pelt
+  kind: material
+  sprite: materials/ash_pelt
+  name: item.ash_pelt.name
+  description: item.ash_pelt.desc
+  weight: 1300
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 60
+
+- id: salamander_scale
+  kind: material
+  sprite: materials/salamander_scale
+  name: item.salamander_scale.name
+  description: item.salamander_scale.desc
+  weight: 150
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 48
+
+- id: slag_core
+  kind: material
+  sprite: materials/slag_core
+  name: item.slag_core.name
+  description: item.slag_core.desc
+  weight: 1800
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 110
+
+- id: wyrm_scale
+  kind: material
+  sprite: materials/wyrm_scale
+  name: item.wyrm_scale.name
+  description: item.wyrm_scale.desc
+  weight: 400
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 140
+
+- id: ember_ore
+  kind: material
+  sprite: materials/ember_ore
+  name: item.ember_ore.name
+  description: item.ember_ore.desc
+  weight: 1600
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 22
+
+- id: embersteel_ingot
+  kind: material
+  sprite: materials/embersteel_ingot
+  name: item.embersteel_ingot.name
+  description: item.embersteel_ingot.desc
+  weight: 1400
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  value: 85
+
+- id: ember_root
+  kind: material
+  sprite: quest/ember_root
+  name: item.ember_root.name
+  description: item.ember_root.desc
+  weight: 600
+  tradeable: false
+  notes: Chapter 3 key (ch3_gate). bosque_druid hands it over to whoever set ember_root_found in Chapter 2; volcan_forge_echo takes it to open the sealed gate. No value, so no NPC buys it.
+
+- id: delver_chart
+  kind: material
+  sprite: quest/delver_chart
+  name: item.delver_chart.name
+  description: item.delver_chart.desc
+  weight: 90
+  tradeable: false
+  notes: Chapter 3 quest item (ch3_gate). Obsidian delvers drop it; volcan_keeper takes one.
+
+- id: forge_seal
+  kind: material
+  sprite: quest/forge_seal
+  name: item.forge_seal.name
+  description: item.forge_seal.desc
+  weight: 2200
+  tradeable: false
+  notes: Chapter 3 quest item (ch3_warden). Always dropped by the slagbound warden; volcan_keeper takes it.
