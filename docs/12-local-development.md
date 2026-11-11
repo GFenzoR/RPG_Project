@@ -4,6 +4,9 @@ Desde el 5 de noviembre el trabajo sigue con Claude Code en tu computador. El re
 docs, las skills y el roadmap son los mismos; cambia el entorno y que ahora puedes probar
 el juego tú mismo mientras Claude trabaja.
 
+El estado al pasar de la nube a tu PC (noviembre 2026), lo pendiente y los briefs de las
+próximas tareas están en `14-continuar-en-tu-pc.md`.
+
 ## Sistema recomendado
 | Tu equipo | Recomendación |
 |---|---|
