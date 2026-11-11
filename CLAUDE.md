@@ -54,6 +54,7 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
 - Deploy AWS → `docs/09-deployment-aws.md`
 - Hosting de pruebas en casa → `docs/13-hosting-de-pruebas.md`
 - Entorno local → `docs/12-local-development.md`
+- Retomar en tu PC (estado, pendientes, briefs de T5.6 y T5.7, sprites) → `docs/14-continuar-en-tu-pc.md`
 - Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md`
 
 ## Principios de arquitectura
