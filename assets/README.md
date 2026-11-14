@@ -52,6 +52,28 @@ la resuelve en este orden:
 
 Una ruta no puede estar a la vez en `sprites/` y en `sprites.yaml`.
 
+## Arte propio (spritegen)
+Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
+sprite píxel a píxel (`tools/spritegen/src/recipes/`). Son obra propia (CC0, ver
+`CREDITS.md`) y se commitean; `make spritegen` los regenera (`ONLY=decor/` para un prefijo)
+y después `make sprites` rearma el atlas. Al pasar una ruta a spritegen hay que borrar su
+entrada de `sprites.yaml` (la regla de arriba). El test de spritegen falla si un PNG
+commiteado no coincide con su receta.
+
+Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concreto):
+- 32x32, vista cenital oblicua 3/4: se ve la cara de arriba y la frontal (sur).
+- Contorno de 1 px en un tono oscuro del color local (no negro puro), luz desde arriba a la
+  izquierda, 3-4 tonos por material, poco o nada de tramado, alfa solo 0 o 255.
+- Paleta apagada y algo oscura que combine con Dungeon Crawl (`tools/spritegen/src/palette.ts`).
+- Objetos más altos que una casilla (árboles, carteles) pueden medir 64x64 o 32x64: el
+  renderer los ancla en la esquina inferior derecha de su casilla y crecen hacia arriba y a
+  la izquierda. Items de inventario: 32x32 centrados con fondo transparente.
+- Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
+- Todo determinista: ruido con semilla, nunca `Math.random`.
+
+Para revisar: `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out
+shot.png --scale 4 [--only ground/]` (suelos y muros repetidos 3x3, el resto sobre pasto).
+
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:
 - `atlas.json`: índice para cliente y editor: `tileSize`, lista de páginas y, por sprite,

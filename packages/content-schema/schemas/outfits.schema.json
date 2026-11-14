@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/outfits.schema.json",
+  "title": "Player outfits (data/outfits.yaml)",
+  "description": "T0.5: the looks a player character is drawn with. The client draws the atlas sprite <sprite>/<dir>_<frame> (dir n, e, s or w; frame 0 standing, the others the walking steps).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "sprite", "frames"],
+    "properties": {
+      "id": { "$ref": "common.schema.json#/$defs/id" },
+      "sprite": {
+        "description": "Sprite folder of the frames (outfits/citizen).",
+        "$ref": "common.schema.json#/$defs/sprite"
+      },
+      "frames": {
+        "description": "Frames per facing: 1 = standing only, 3 = standing and two walking steps.",
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3
+      },
+      "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    }
+  }
+}

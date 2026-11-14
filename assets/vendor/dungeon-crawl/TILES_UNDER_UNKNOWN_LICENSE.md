@@ -1,0 +1,1334 @@
+The following tiles (as of 2010) had unclear ownership and/or the original author was unable to be reached. They will be excluded from any release.
+
+- active_ballistomycete.png
+- arrow1.png
+- arrow2.png
+- ballistomycete.png
+- berserk.png
+- bush.png
+- bush_burning.png
+- crossbow_bolt1.png
+- crossbow_bolt2.png
+- dart-p.png
+- dart1.png
+- dart2.png
+- demonblade.png
+- dngn_altar_fedhas.png
+- dngn_altar_fedhas2.png
+- dowan.png
+- duvessa.png
+- flaming_corpse.png
+- fungus.png
+- gravestone_blank.png
+- gravestone_ornate.png
+- gravestone_writing1.png
+- gravestone_writing2.png
+- i-agility.png
+- i-brilliance.png
+- i-silence.png
+- i-sleep.png
+- stealth.png
+- ice_cave_portal.png
+- indicator_1.png
+- indicator_2.png
+- indicator_3.png
+- indicator_4.png
+- indicator_5.png
+- indicator_6.png
+- indicator_7.png
+- indicator_8.png
+- javelin1.png
+- javelin2.png
+- kenku.png
+- khufu.png
+- mold_small1.png
+- mold_small2.png
+- mold_small3.png
+- mold_small4.png
+- needle-p.png
+- needle1.png
+- needle2.png
+- nikola.png
+- pikel.png
+- reaping-2.png
+- reaping-3.png
+- rune_snake.png
+- sewer_portal.png
+- silver_arrow1.png
+- silver_arrow2.png
+- silver_crossbow_bolt1.png
+- silver_crossbow_bolt2.png
+- silver_dart1.png
+- silver_dart2.png
+- silver_javelin1.png
+- silver_javelin2.png
+- silver_sling_bullet1.png
+- silver_sling_bullet2.png
+- slave.png
+- slime_creature.png
+- slime_creature2.png
+- slime_creature3.png
+- slime_creature4.png
+- slime_creature5.png
+- steel_arrow1.png
+- steel_arrow2.png
+- steel_crossbow_bolt1.png
+- steel_crossbow_bolt2.png
+- steel_dart1.png
+- steel_dart2.png
+- steel_javelin1.png
+- steel_javelin2.png
+- steel_sling_bullet1.png
+- steel_sling_bullet2.png
+- silver_sling_bullet_runed0.png
+- silver_sling_bullet0.png
+- sling_bullet_runed0.png
+- steel_sling_bullet_runed0.png
+- steel_sling_bullet0.png
+- toadstool_left.png
+- toadstool_right.png
+- transparent_flesh1.png
+- transparent_flesh2.png
+- transparent_flesh3.png
+- transparent_flesh4.png
+- transparent_flesh5.png
+- transparent_flesh6.png
+- tree1.png
+- tree1_dead.png
+- tree2.png
+- tree2_dead.png
+- vine-covered_golem.png
+- volcano_portal.png
+- wizlab_portal0.png
+- wizlab_portal1.png
+- wizlab_portal2.png
+- wizlab_portal3.png
+- wizlab_portal4.png
+- wizlab_portal5.png
+- wizlab_portal6.png
+- wizlab_portal7.png
+- wizlab_portal8.png
+- zombie_bat.png
+- zombie_bee.png
+- zombie_bug.png
+- zombie_centaur.png
+- zombie_dragon.png
+- zombie_fish.png
+- zombie_hydra1.png
+- zombie_hydra2.png
+- zombie_hydra3.png
+- zombie_hydra4.png
+- zombie_hydra5.png
+- zombie_large.png
+- zombie_naga.png
+- zombie_quadruped_large.png
+- zombie_quadruped_small.png
+- zombie_small.png
+- zombie_snake.png
+- zombie_spider.png
+- zombie_worm.png
+
+# These are all stolen from nethack, and the nethack license appears to apply. So no public domain for you.
+- crawl-ref/source/rltiles/player/felids/cat1.png
+- crawl-ref/source/rltiles/player/felids/cat2.png
+- crawl-ref/source/rltiles/player/felids/cat3.png
+- crawl-ref/source/rltiles/player/felids/cat4.png
+- crawl-ref/source/rltiles/player/felids/cat5.png
+
+# These are considered excluded until/if we hear back
+- Doesnt and hyperactiveChipmunk
+	- rltiles/mon/undead/zombies/zombie_juggernaut.png
+
+- Ironfoot
+	- rltiles/mon/demons/ice_fiend.png
+	- rltiles/mon/unique/antaeus.png
+
+- Lantier
+	- rltiles/dc-mon/undead/zombies/zombie_draconian.png
+	- rltiles/dc-mon/undead/zombies/zombie_griffon.png
+	- rltiles/dc-mon/undead/zombies/zombie_harpy.png
+	- rltiles/dc-mon/undead/zombies/zombie_quadruped_winged.png
+	- rltiles/dc-mon/undead/zombies/zombie_troll.png
+
+
+- Robsoie
+	- rltiles/dc-mon/undead/skeletons/skeleton_toad.png
+	- rltiles/dc-mon/undead/spectrals/spectral_toad.png
+
+- Tapsu
+	- rltiles/mon/animals/bennu.png
+
+- Team Impy
+	- rltiles/mon/minotaur.png
+	- rltiles/player/base/djinni.png
+	- rltiles/player/base/djinni_f.png
+	- rltiles/player/base/djinni_m.png
+	- rltiles/player/base/human2_f.png
+	- rltiles/player/base/human2_m.png
+	- rltiles/player/base/human3_f.png
+	- rltiles/player/base/human3_m.png
+	- rltiles/player/base/human_dark_f.png
+	- rltiles/player/base/human_dark_m.png
+	- rltiles/player/base/merfolk_f.png
+	- rltiles/player/base/merfolk_m.png
+	- rltiles/player/base/merfolk_water_f.png
+	- rltiles/player/base/merfolk_water_m.png
+	- rltiles/player/base/minotaur_f.png
+	- rltiles/player/base/minotaur_m.png
+	- rltiles/player/base/ogre_f.png
+	- rltiles/player/base/ogre_m.png
+	- rltiles/player/base/orc_f.png
+	- rltiles/player/base/orc_m.png
+	- rltiles/player/base/troll_f.png
+	- rltiles/player/base/troll_m.png
+	- rltiles/player/beard/bushy_green.png
+	- rltiles/player/beard/muttonchops_green.png
+	- rltiles/player/beard/wizard.png
+	- rltiles/player/hair/chopsticks.png
+	- rltiles/player/hair/curly_yellow.png
+	- rltiles/player/hair/elf_brown.png
+	- rltiles/player/hair/elf_red.png
+	- rltiles/player/hair/elf_white.png
+	- rltiles/player/hair/elf_yellow.png
+	- rltiles/player/hair/full_brown.png
+	- rltiles/player/hair/headband.png
+	- rltiles/player/hair/hightail.png
+	- rltiles/player/hair/hightails_brown.png
+	- rltiles/player/hair/mountain_man.png
+	- rltiles/player/hair/part2_red.png
+	- rltiles/player/hair/part_blue.png
+	- rltiles/player/hair/pigtails_green.png
+	- rltiles/player/hair/queue.png
+	- rltiles/player/hair/ribbons_black.png
+	- rltiles/player/hair/short_brown.png
+	- rltiles/player/hair/spriggan1.png
+	- rltiles/player/hair/spriggan2.png
+	- rltiles/player/hair/spriggan3.png
+	- rltiles/player/hair/sweep.png
+	- rltiles/player/hair/topknot.png
+	- rltiles/player/hair/topknot2.png
+	- rltiles/player/hair/troll.png
+
+- Thrall
+	- rltiles/mon/orc_warlord.png
+
+- dd
+	- rltiles/dngn/floor/lava0.png
+	- rltiles/dngn/floor/lava00.png
+	- rltiles/dngn/floor/lava01.png
+	- rltiles/dngn/floor/lava02.png
+	- rltiles/dngn/floor/lava03.png
+	- rltiles/dngn/floor/lava04.png
+	- rltiles/dngn/floor/lava05.png
+	- rltiles/dngn/floor/lava06.png
+	- rltiles/dngn/floor/lava07.png
+	- rltiles/dngn/floor/lava08.png
+	- rltiles/dngn/floor/lava09.png
+	- rltiles/dngn/floor/lava1.png
+	- rltiles/dngn/floor/lava10.png
+	- rltiles/dngn/floor/lava11.png
+	- rltiles/dngn/floor/lava2.png
+	- rltiles/dngn/floor/lava3.png
+	- rltiles/gui/abilities/bat_form.png
+	- rltiles/gui/abilities/blink.png
+	- rltiles/gui/abilities/bottle_blood.png
+	- rltiles/gui/abilities/breathe_energy.png
+	- rltiles/gui/abilities/breathe_fire.png
+	- rltiles/gui/abilities/breathe_frost.png
+	- rltiles/gui/abilities/breathe_lightning.png
+	- rltiles/gui/abilities/breathe_mephitic.png
+	- rltiles/gui/abilities/breathe_poison.png
+	- rltiles/gui/abilities/breathe_steam.png
+	- rltiles/gui/abilities/breathe_sticky_flame.png
+	- rltiles/gui/abilities/delayed_fireball.png
+	- rltiles/gui/abilities/end_transformation.png
+	- rltiles/gui/abilities/evoke_berserk.png
+	- rltiles/gui/abilities/evoke_blink.png
+	- rltiles/gui/abilities/evoke_invisibility.png
+	- rltiles/gui/abilities/evoke_invisibility_end.png
+	- rltiles/gui/abilities/evoke_levitate.png
+	- rltiles/gui/abilities/evoke_levitate_end.png
+	- rltiles/gui/abilities/evoke_teleport.png
+	- rltiles/gui/abilities/flight.png
+	- rltiles/gui/abilities/flight_end.png
+	- rltiles/gui/abilities/hellfire.png
+	- rltiles/gui/abilities/mummy_restoration.png
+	- rltiles/gui/abilities/recharge.png
+	- rltiles/gui/abilities/spit_acid.png
+	- rltiles/gui/abilities/spit_poison.png
+	- rltiles/gui/commands/ability.png
+	- rltiles/gui/commands/autofight.png
+	- rltiles/gui/commands/butcher.png
+	- rltiles/gui/commands/cast_spell.png
+	- rltiles/gui/commands/chardump.png
+	- rltiles/gui/commands/doll_editor.png
+	- rltiles/gui/commands/drop.png
+	- rltiles/gui/commands/droplast.png
+	- rltiles/gui/commands/explore.png
+	- rltiles/gui/commands/help.png
+	- rltiles/gui/commands/inventory.png
+	- rltiles/gui/commands/known_items.png
+	- rltiles/gui/commands/memorise.png
+	- rltiles/gui/commands/message_history.png
+	- rltiles/gui/commands/mutations.png
+	- rltiles/gui/commands/overmap.png
+	- rltiles/gui/commands/overview.png
+	- rltiles/gui/commands/pray.png
+	- rltiles/gui/commands/quicksave.png
+	- rltiles/gui/commands/religion.png
+	- rltiles/gui/commands/resting.png
+	- rltiles/gui/commands/skills.png
+	- rltiles/gui/commands/stash_search.png
+	- rltiles/gui/commands/status.png
+	- rltiles/gui/commands/travel.png
+	- rltiles/gui/commands/waiting.png
+	- rltiles/gui/invocations/ashenzari_scry.png
+	- rltiles/gui/invocations/ashenzari_transfer_knowledge.png
+	- rltiles/gui/invocations/ashenzari_transfer_knowledge_end.png
+	- rltiles/gui/invocations/beogh_recall.png
+	- rltiles/gui/invocations/beogh_smite.png
+	- rltiles/gui/invocations/cheibriados_bend_time.png
+	- rltiles/gui/invocations/cheibriados_slouch.png
+	- rltiles/gui/invocations/cheibriados_temporal_distortion.png
+	- rltiles/gui/invocations/cheibriados_time_step.png
+	- rltiles/gui/invocations/elyvilon_divine_protection.png
+	- rltiles/gui/invocations/elyvilon_divine_vigour.png
+	- rltiles/gui/invocations/elyvilon_greater_healing.png
+	- rltiles/gui/invocations/elyvilon_greater_self_healing.png
+	- rltiles/gui/invocations/elyvilon_lesser_healing.png
+	- rltiles/gui/invocations/elyvilon_lesser_self_healing.png
+	- rltiles/gui/invocations/elyvilon_purification.png
+	- rltiles/gui/invocations/fedhas_evolution.png
+	- rltiles/gui/invocations/fedhas_plant_ring.png
+	- rltiles/gui/invocations/fedhas_rain.png
+	- rltiles/gui/invocations/fedhas_spawn_spores.png
+	- rltiles/gui/invocations/fedhas_sunlight.png
+	- rltiles/gui/invocations/jiyva_cure_bad_mutations.png
+	- rltiles/gui/invocations/jiyva_paralyse_jelly.png
+	- rltiles/gui/invocations/jiyva_request_jelly.png
+	- rltiles/gui/invocations/jiyva_slimify.png
+	- rltiles/gui/invocations/kiku_receive_corpses.png
+	- rltiles/gui/invocations/kiku_torment.png
+	- rltiles/gui/invocations/lugonu_banish.png
+	- rltiles/gui/invocations/lugonu_bend_space.png
+	- rltiles/gui/invocations/lugonu_corrupt.png
+	- rltiles/gui/invocations/lugonu_enter_abyss.png
+	- rltiles/gui/invocations/lugonu_exit_abyss.png
+	- rltiles/gui/invocations/makhleb_greater_servant.png
+	- rltiles/gui/invocations/makhleb_lesser_servant.png
+	- rltiles/gui/invocations/makhleb_major_destruction.png
+	- rltiles/gui/invocations/makhleb_minor_destruction.png
+	- rltiles/gui/invocations/nemelex_deal_four.png
+	- rltiles/gui/invocations/nemelex_draw_one.png
+	- rltiles/gui/invocations/nemelex_peek_at_two.png
+	- rltiles/gui/invocations/nemelex_stack_five.png
+	- rltiles/gui/invocations/nemelex_triple_draw.png
+	- rltiles/gui/invocations/okawaru_finesse.png
+	- rltiles/gui/invocations/okawaru_heroism.png
+	- rltiles/gui/invocations/renounce.png
+	- rltiles/gui/invocations/sif_muna_amnesia.png
+	- rltiles/gui/invocations/sif_muna_channel.png
+	- rltiles/gui/invocations/trog_berserk.png
+	- rltiles/gui/invocations/trog_brothers_in_arms.png
+	- rltiles/gui/invocations/trog_burn_spellbooks.png
+	- rltiles/gui/invocations/trog_hand.png
+	- rltiles/gui/invocations/tso_cleansing_flame.png
+	- rltiles/gui/invocations/tso_divine_shield.png
+	- rltiles/gui/invocations/tso_divine_warrior.png
+	- rltiles/gui/invocations/yred_animate_dead.png
+	- rltiles/gui/invocations/yred_animate_remains.png
+	- rltiles/gui/invocations/yred_drain_life.png
+	- rltiles/gui/invocations/yred_enslave_soul.png
+	- rltiles/gui/invocations/yred_injury_mirror.png
+	- rltiles/gui/invocations/yred_recall.png
+	- rltiles/gui/invocations/zin_cure_mutations.png
+	- rltiles/gui/invocations/zin_imprison.png
+	- rltiles/gui/invocations/zin_recite.png
+	- rltiles/gui/invocations/zin_sanctuary.png
+	- rltiles/gui/invocations/zin_vitalisation.png
+	- rltiles/gui/tab_label_ability.png
+	- rltiles/gui/tab_label_command.png
+	- rltiles/gui/tab_label_item.png
+	- rltiles/gui/tab_label_memorise.png
+	- rltiles/gui/tab_label_monster.png
+	- rltiles/gui/tab_label_navigation.png
+	- rltiles/gui/tab_label_other.png
+	- rltiles/gui/tab_label_skill.png
+	- rltiles/gui/tab_label_spell.png
+	- rltiles/gui/tab_mouseover.png
+	- rltiles/gui/tab_selected.png
+	- rltiles/gui/tab_unselected.png
+	- rltiles/gui/zotdef/acquirement.png
+	- rltiles/gui/zotdef/alarm_trap.png
+	- rltiles/gui/zotdef/altar.png
+	- rltiles/gui/zotdef/arrow_trap.png
+	- rltiles/gui/zotdef/bazaar.png
+	- rltiles/gui/zotdef/blade_trap.png
+	- rltiles/gui/zotdef/bolt_trap.png
+	- rltiles/gui/zotdef/burning_bush.png
+	- rltiles/gui/zotdef/curse_skull.png
+	- rltiles/gui/zotdef/dart_trap.png
+	- rltiles/gui/zotdef/fungus.png
+	- rltiles/gui/zotdef/gold.png
+	- rltiles/gui/zotdef/ice_statue.png
+	- rltiles/gui/zotdef/lightning_spire.png
+	- rltiles/gui/zotdef/needle_trap.png
+	- rltiles/gui/zotdef/net_trap.png
+	- rltiles/gui/zotdef/ocs.png
+	- rltiles/gui/zotdef/oklob_circle.png
+	- rltiles/gui/zotdef/oklob_plant.png
+	- rltiles/gui/zotdef/oklob_sapling.png
+	- rltiles/gui/zotdef/plant.png
+	- rltiles/gui/zotdef/remove_curse.png
+	- rltiles/gui/zotdef/sage.png
+	- rltiles/gui/zotdef/silver_statue.png
+	- rltiles/gui/zotdef/spear_trap.png
+	- rltiles/gui/zotdef/spore.png
+	- rltiles/gui/zotdef/teleport.png
+	- rltiles/gui/zotdef/teleport_trap.png
+	- rltiles/gui/zotdef/water.png
+	- rltiles/item/armour/crystal_plate.png
+	- rltiles/item/armour/crystal_plate2.png
+	- rltiles/item/armour/crystal_plate3.png
+	- rltiles/item/armour/crystal_plate4.png
+	- rltiles/item/weapon/artefact/spwpn_demon_axe.png
+	- rltiles/item/weapon/bardiche1.png
+	- rltiles/item/weapon/bardiche2.png
+	- rltiles/item/weapon/bardiche3.png
+	- rltiles/item/weapon/battle_axe1.png
+	- rltiles/item/weapon/battle_axe2.png
+	- rltiles/item/weapon/battle_axe3.png
+	- rltiles/item/weapon/broad_axe1.png
+	- rltiles/item/weapon/broad_axe2.png
+	- rltiles/item/weapon/broad_axe3.png
+	- rltiles/item/weapon/demon_trident.png
+	- rltiles/item/weapon/dwarven_battle_axe1.png
+	- rltiles/item/weapon/dwarven_battle_axe2.png
+	- rltiles/item/weapon/dwarven_broad_axe1.png
+	- rltiles/item/weapon/dwarven_broad_axe2.png
+	- rltiles/item/weapon/dwarven_executioner_axe1.png
+	- rltiles/item/weapon/dwarven_executioner_axe2.png
+	- rltiles/item/weapon/dwarven_sabre1.png
+	- rltiles/item/weapon/dwarven_sabre2.png
+	- rltiles/item/weapon/elven_sabre1.png
+	- rltiles/item/weapon/elven_sabre2.png
+	- rltiles/item/weapon/executioner_axe1.png
+	- rltiles/item/weapon/executioner_axe2.png
+	- rltiles/item/weapon/executioner_axe3.png
+	- rltiles/item/weapon/glaive1.png
+	- rltiles/item/weapon/glaive2.png
+	- rltiles/item/weapon/glaive3.png
+	- rltiles/item/weapon/halberd1.png
+	- rltiles/item/weapon/halberd2.png
+	- rltiles/item/weapon/halberd3.png
+	- rltiles/item/weapon/lajatang1.png
+	- rltiles/item/weapon/lajatang2.png
+	- rltiles/item/weapon/lajatang3.png
+	- rltiles/item/weapon/orcish_bardiche.png
+	- rltiles/item/weapon/orcish_bardiche2.png
+	- rltiles/item/weapon/orcish_battle_axe1.png
+	- rltiles/item/weapon/orcish_battle_axe2.png
+	- rltiles/item/weapon/orcish_broad_axe1.png
+	- rltiles/item/weapon/orcish_broad_axe2.png
+	- rltiles/item/weapon/orcish_executioner_axe1.png
+	- rltiles/item/weapon/orcish_executioner_axe2.png
+	- rltiles/item/weapon/orcish_halberd1.png
+	- rltiles/item/weapon/orcish_halberd2.png
+	- rltiles/item/weapon/orcish_sabre1.png
+	- rltiles/item/weapon/orcish_sabre2.png
+	- rltiles/item/weapon/orcish_trident1.png
+	- rltiles/item/weapon/orcish_trident2.png
+	- rltiles/item/weapon/quickblade.png
+	- rltiles/item/weapon/quickblade1.png
+	- rltiles/item/weapon/quickblade2.png
+	- rltiles/item/weapon/quickblade3.png
+	- rltiles/item/weapon/sabre1.png
+	- rltiles/item/weapon/sabre1_silver.png
+	- rltiles/item/weapon/sabre2.png
+	- rltiles/item/weapon/sabre3.png
+	- rltiles/item/weapon/staff.png
+	- rltiles/item/weapon/trident1.png
+	- rltiles/item/weapon/trident2.png
+	- rltiles/item/weapon/trident3.png
+	- rltiles/item/weapon/trishula.png
+	- rltiles/item/weapon/war_axe1.png
+	- rltiles/item/weapon/war_axe2.png
+	- rltiles/item/weapon/war_axe3.png
+	- rltiles/misc/slot.png
+	- rltiles/misc/slot_eq.png
+	- rltiles/misc/slot_eq_cursed.png
+	- rltiles/mon/fungi_plants/active_ballistomycete.png
+	- rltiles/mon/fungi_plants/ballistomycete.png
+	- rltiles/mon/fungi_plants/fungus.png
+	- rltiles/mon/fungi_plants/fungus1.png
+	- rltiles/mon/fungi_plants/fungus2.png
+	- rltiles/mon/fungi_plants/fungus3.png
+	- rltiles/mon/fungi_plants/fungus4.png
+	- rltiles/mon/fungi_plants/fungus5.png
+	- rltiles/mon/fungi_plants/fungus6.png
+	- rltiles/mon/fungi_plants/fungus7.png
+	- rltiles/mon/fungi_plants/fungus8.png
+	- rltiles/mon/fungi_plants/fungus9.png
+	- rltiles/mon/fungi_plants/hyperactive_ballistomycete.png
+	- rltiles/mon/fungi_plants/toadstool_left.png
+	- rltiles/mon/fungi_plants/toadstool_right.png
+	- rltiles/mon/undead/greater_mummy.png
+	- rltiles/mon/undead/guardian_mummy.png
+	- rltiles/mon/undead/mummy.png
+	- rltiles/mon/undead/mummy_priest.png
+	- rltiles/mon/unique/khufu.png
+	- rltiles/mon/unique/menkaure.png
+	- rltiles/player/body/crystal_plate.png
+	- rltiles/player/body/crystal_plate2.png
+	- rltiles/player/body/crystal_plate3.png
+	- rltiles/player/hand1/artefact/dire_lajatang.png
+	- rltiles/player/hand1/lajatang1.png
+	- rltiles/player/hand1/lajatang2.png
+	- rltiles/player/hand1/lajatang3.png
+
+- Un67
+	- rltiles/item/weapon/staff.png
+
+- dtsund
+	- rltiles/effect/halo_range.png
+
+- lingerstink
+	- rltiles/mon/unique/asterion.png
+
+- psyshvl
+	- rltiles/dc-mon/animals/tentacles/ends/kraken_tentacle_E.png
+	- rltiles/dc-mon/animals/tentacles/ends/kraken_tentacle_N.png
+	- rltiles/dc-mon/animals/tentacles/ends/kraken_tentacle_NE.png
+	- rltiles/dc-mon/animals/tentacles/ends/kraken_tentacle_NW.png
+	- rltiles/dc-mon/animals/tentacles/ends/kraken_tentacle_S.png
+	- rltiles/dc-mon/animals/tentacles/ends/kraken_tentacle_SE.png
+	- rltiles/dc-mon/animals/tentacles/ends/kraken_tentacle_SW.png
+	- rltiles/dc-mon/animals/tentacles/ends/kraken_tentacle_W.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_E.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_N.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_NE.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_NW.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_S.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_SE.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_SW.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_W.png
+	- rltiles/dc-mon/animals/tentacles/segments/kraken_tentacle_segment_water_water.png
+	- rltiles/dc-mon/demigod.png
+	- rltiles/dc-mon/draco/draco-base-grey.png
+	- rltiles/dc-mon/fungi_plants/oklob_sapling.png
+	- rltiles/dc-mon/holy/spirit.png
+	- rltiles/dc-mon/kraken/corner_piece_NE.png
+	- rltiles/dc-mon/kraken/corner_piece_NW.png
+	- rltiles/dc-mon/kraken/corner_piece_SE.png
+	- rltiles/dc-mon/kraken/corner_piece_SW.png
+	- rltiles/dc-mon/kraken/eldritch_ends/eldritch_tentacle_E.png
+	- rltiles/dc-mon/kraken/eldritch_ends/eldritch_tentacle_N.png
+	- rltiles/dc-mon/kraken/eldritch_ends/eldritch_tentacle_NE.png
+	- rltiles/dc-mon/kraken/eldritch_ends/eldritch_tentacle_NW.png
+	- rltiles/dc-mon/kraken/eldritch_ends/eldritch_tentacle_S.png
+	- rltiles/dc-mon/kraken/eldritch_ends/eldritch_tentacle_SE.png
+	- rltiles/dc-mon/kraken/eldritch_ends/eldritch_tentacle_SW.png
+	- rltiles/dc-mon/kraken/eldritch_ends/eldritch_tentacle_W.png
+	- rltiles/dc-mon/kraken/eldritch_portal/eldritch_tentacle_portal_E.png
+	- rltiles/dc-mon/kraken/eldritch_portal/eldritch_tentacle_portal_N.png
+	- rltiles/dc-mon/kraken/eldritch_portal/eldritch_tentacle_portal_NE.png
+	- rltiles/dc-mon/kraken/eldritch_portal/eldritch_tentacle_portal_NW.png
+	- rltiles/dc-mon/kraken/eldritch_portal/eldritch_tentacle_portal_S.png
+	- rltiles/dc-mon/kraken/eldritch_portal/eldritch_tentacle_portal_SE.png
+	- rltiles/dc-mon/kraken/eldritch_portal/eldritch_tentacle_portal_SW.png
+	- rltiles/dc-mon/kraken/eldritch_portal/eldritch_tentacle_portal_W.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_E_N.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_E_NW.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_E_S.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_E_SW.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_E_W.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_NE_NW.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_NE_SE.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_NE_SW.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_NW_SE.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_NW_SW.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_N_S.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_N_SE.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_N_SW.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_N_W.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_SE_SW.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_S_NE.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_S_NW.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_S_W.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_W_NE.png
+	- rltiles/dc-mon/kraken/eldritch_segments/eldritch_tentacle_segment_W_SE.png
+	- rltiles/dc-mon/kraken/segments/kraken_tentacle_segment_E_N.png
+	- rltiles/dc-mon/kraken/segments/kraken_tentacle_segment_E_S.png
+	- rltiles/dc-mon/kraken/segments/kraken_tentacle_segment_E_W.png
+	- rltiles/dc-mon/kraken/segments/kraken_tentacle_segment_NE_SW.png
+	- rltiles/dc-mon/kraken/segments/kraken_tentacle_segment_NW_SE.png
+	- rltiles/dc-mon/kraken/segments/kraken_tentacle_segment_N_S.png
+	- rltiles/dc-mon/kraken/segments/kraken_tentacle_segment_N_W.png
+	- rltiles/dc-mon/kraken/segments/kraken_tentacle_segment_S_W.png
+	- rltiles/dc-mon/sky_beast.png
+	- rltiles/dc-mon/spriggan/spriggan_assassin.png
+	- rltiles/player/transform/lich_form.png
+	- rltiles/player/transform/lich_form_centaur.png
+	- rltiles/player/transform/lich_form_humanoid.png
+	- rltiles/player/transform/lich_form_naga.png
+	- rltiles/spells/summoning/malign_gateway.png
+
+- wad
+	- rltiles/UNUSED/monsters/plants/bloom_plant_01.png
+	- rltiles/UNUSED/monsters/plants/bloom_plant_02.png
+	- rltiles/UNUSED/monsters/plants/flytrap_plant_digest_morph.png
+	- rltiles/UNUSED/monsters/plants/flytrap_plant_digest_morph_mellow.png
+	- rltiles/UNUSED/monsters/plants/flytrap_plant_open_morph.png
+	- rltiles/UNUSED/monsters/plants/flytrap_plant_open_morph_mellow.png
+	- rltiles/UNUSED/monsters/plants/fruit_plant_01.png
+	- rltiles/UNUSED/monsters/plants/fruit_plant_02.png
+	- rltiles/UNUSED/monsters/plants/magic_mushroom_01.png
+	- rltiles/UNUSED/monsters/plants/magic_mushroom_02.png
+	- rltiles/UNUSED/monsters/plants/magic_mushroom_03.png
+	- rltiles/UNUSED/monsters/plants/magic_mushroom_04.png
+	- rltiles/UNUSED/monsters/plants/magic_mushroom_05.png
+	- rltiles/UNUSED/monsters/plants/poison_pollen.png
+	- rltiles/dc-dngn/floor/woodground01.png
+	- rltiles/dc-dngn/floor/woodground02.png
+	- rltiles/dc-dngn/floor/woodground03.png
+	- rltiles/dc-dngn/floor/woodground04.png
+	- rltiles/dc-dngn/floor/woodground05.png
+	- rltiles/dc-dngn/floor/woodground06.png
+	- rltiles/dc-dngn/floor/woodground07.png
+	- rltiles/dc-dngn/floor/woodground08.png
+	- rltiles/dc-dngn/floor/woodground09.png
+	- rltiles/dc-dngn/vaults/brick_dark_leak.png
+	- rltiles/dc-mon/fungi_plants/plant.png
+	- rltiles/dc-mon/fungi_plants/plant_01.png
+	- rltiles/dc-mon/fungi_plants/plant_02.png
+	- rltiles/dc-mon/fungi_plants/plant_03.png
+	- rltiles/dc-mon/fungi_plants/plant_04.png
+	- rltiles/dc-mon/fungi_plants/plant_05.png
+	- rltiles/dc-mon/fungi_plants/plant_06.png
+	- rltiles/dc-mon/fungi_plants/plant_07.png
+	- rltiles/dc-mon/fungi_plants/plant_08.png
+	- rltiles/dc-mon/fungi_plants/plant_09.png
+	- rltiles/dc-mon/fungi_plants/plant_10.png
+	- rltiles/dc-mon/fungi_plants/plant_11.png
+	- rltiles/dngn/trees/tree10.png
+	- rltiles/dngn/trees/tree10_red.png
+	- rltiles/dngn/trees/tree11.png
+	- rltiles/dngn/trees/tree12.png
+	- rltiles/dngn/trees/tree13.png
+	- rltiles/dngn/trees/tree14.png
+	- rltiles/dngn/trees/tree14a.png
+	- rltiles/dngn/trees/tree14b.png
+	- rltiles/dngn/trees/tree14c.png
+	- rltiles/dngn/trees/tree15.png
+	- rltiles/dngn/trees/tree15a.png
+	- rltiles/dngn/trees/tree16.png
+	- rltiles/dngn/trees/tree3.png
+	- rltiles/dngn/trees/tree4.png
+	- rltiles/dngn/trees/tree5.png
+	- rltiles/dngn/trees/tree6.png
+	- rltiles/dngn/trees/tree6_bright.png
+	- rltiles/dngn/trees/tree6_yellow.png
+	- rltiles/dngn/trees/tree7.png
+	- rltiles/dngn/trees/tree7_red.png
+	- rltiles/dngn/trees/tree8.png
+	- rltiles/dngn/trees/tree9.png
+
+- Bloax
+	- rltiles/UNUSED/monsters/cacodemon.png
+	- rltiles/UNUSED/worn/lears_chain_mail.png
+	- rltiles/dngn/altars/beogh.png
+	- rltiles/dngn/altars/dithmengos.png
+	- rltiles/dngn/altars/dithmengos2.png
+	- rltiles/dngn/altars/dithmengos3.png
+	- rltiles/dngn/wall/ice_block0.png
+	- rltiles/dngn/wall/ice_block1.png
+	- rltiles/dngn/wall/ice_block2.png
+	- rltiles/dngn/wall/ice_block3.png
+	- rltiles/dngn/wall/ice_block4.png
+	- rltiles/dngn/wall/ice_wall0.png
+	- rltiles/dngn/wall/ice_wall1.png
+	- rltiles/dngn/wall/ice_wall2.png
+	- rltiles/dngn/wall/ice_wall3.png
+	- rltiles/dngn/wall/ice_wall4.png
+	- rltiles/dngn/wall/icy_stone0.png
+	- rltiles/dngn/wall/icy_stone1.png
+	- rltiles/dngn/wall/icy_stone2.png
+	- rltiles/dngn/wall/icy_stone3.png
+	- rltiles/dngn/wall/icy_stone4.png
+	- rltiles/dngn/wall/metal_wall0.png
+	- rltiles/dngn/wall/metal_wall1.png
+	- rltiles/dngn/wall/metal_wall2.png
+	- rltiles/dngn/wall/metal_wall3.png
+	- rltiles/dngn/wall/metal_wall4.png
+	- rltiles/dngn/wall/metal_wall5.png
+	- rltiles/dngn/wall/metal_wall6.png
+	- rltiles/dngn/wall/metal_wall7.png
+	- rltiles/dngn/wall/metal_wall8.png
+	- rltiles/dngn/wall/metal_wall_brown.png
+	- rltiles/dngn/wall/metal_wall_red0.png
+	- rltiles/dngn/wall/metal_wall_red1.png
+	- rltiles/dngn/wall/metal_wall_red2.png
+	- rltiles/dngn/wall/metal_wall_red3.png
+	- rltiles/dngn/wall/metal_wall_red4.png
+	- rltiles/dngn/wall/metal_wall_red5.png
+	- rltiles/dngn/wall/metal_wall_red6.png
+	- rltiles/dngn/wall/metal_wall_red7.png
+	- rltiles/dngn/wall/metal_wall_red8.png
+	- rltiles/dngn/wall/spider00.png
+	- rltiles/dngn/wall/spider01.png
+	- rltiles/dngn/wall/spider02.png
+	- rltiles/dngn/wall/spider03.png
+	- rltiles/dngn/wall/spider04.png
+	- rltiles/dngn/wall/spider05.png
+	- rltiles/dngn/wall/spider06.png
+	- rltiles/dngn/wall/spider07.png
+	- rltiles/dngn/wall/spider08.png
+	- rltiles/dngn/wall/spider09.png
+	- rltiles/dngn/wall/spider10.png
+	- rltiles/dngn/wall/spider11.png
+	- rltiles/dngn/wall/spider12.png
+	- rltiles/dngn/wall/spider13.png
+	- rltiles/dngn/wall/spider14.png
+	- rltiles/dngn/wall/spider15.png
+	- rltiles/dngn/wall/vault_stone00.png
+	- rltiles/dngn/wall/vault_stone01.png
+	- rltiles/dngn/wall/vault_stone02.png
+	- rltiles/dngn/wall/vault_stone03.png
+	- rltiles/dngn/wall/vault_stone04.png
+	- rltiles/dngn/wall/vault_stone05.png
+	- rltiles/dngn/wall/vault_stone06.png
+	- rltiles/dngn/wall/vault_stone07.png
+	- rltiles/dngn/wall/vault_stone08.png
+	- rltiles/dngn/wall/vault_stone09.png
+	- rltiles/dngn/wall/vault_stone10.png
+	- rltiles/dngn/wall/vault_stone11.png
+	- rltiles/dngn/wall/vault_stone12.png
+	- rltiles/dngn/wall/vault_stone13.png
+	- rltiles/dngn/wall/vault_stone14.png
+	- rltiles/dngn/wall/vault_stone15.png
+	- rltiles/effect/hellfire.png
+	- rltiles/gui/invocations/nemelex_deal_four.png
+	- rltiles/gui/invocations/nemelex_draw_one.png
+	- rltiles/gui/invocations/nemelex_peek_at_two.png
+	- rltiles/gui/invocations/nemelex_stack_five.png
+	- rltiles/gui/invocations/nemelex_triple_draw.png
+	- rltiles/gui/spells/enchantment/corona.png
+	- rltiles/gui/spells/summoning/summon_horrible_things.png
+	- rltiles/item/armour/artefact/urand_gong.png
+	- rltiles/item/armour/artefact/urand_moon_troll_leather_armour.png
+	- rltiles/item/armour/artefact/urand_spider.png
+	- rltiles/item/armour/chain_mail1.png
+	- rltiles/item/armour/chain_mail2.png
+	- rltiles/item/armour/chain_mail3.png
+	- rltiles/item/armour/green_dragon_scale_mail.png
+	- rltiles/item/armour/green_dragon_scales.png
+	- rltiles/item/armour/red_dragon_scale_mail.png
+	- rltiles/item/armour/red_dragon_scales.png
+	- rltiles/item/armour/troll_hide.png
+	- rltiles/item/armour/troll_leather_armour.png
+	- rltiles/item/misc/misc_sack.png
+	- rltiles/item/weapon/artefact/spwpn_demon_axe.png
+	- rltiles/item/weapon/artefact/spwpn_singing_sword.png
+	- rltiles/item/weapon/artefact/urand_dark_maul.png
+	- rltiles/item/weapon/artefact/urand_leech.png
+	- rltiles/item/weapon/artefact/urand_spellbinder.png
+	- rltiles/item/weapon/blessed_blade.png
+	- rltiles/item/weapon/cutlass2.png
+	- rltiles/item/weapon/dagger2.png
+	- rltiles/item/weapon/demon_blade.png
+	- rltiles/item/weapon/demon_blade2.png
+	- rltiles/item/weapon/demon_blade3.png
+	- rltiles/item/weapon/demon_trident.png
+	- rltiles/item/weapon/demon_trident2.png
+	- rltiles/item/weapon/demon_trident3.png
+	- rltiles/item/weapon/demon_whip.png
+	- rltiles/item/weapon/demon_whip2.png
+	- rltiles/item/weapon/demon_whip3.png
+	- rltiles/item/weapon/greatsword2.png
+	- rltiles/item/weapon/long_sword2.png
+	- rltiles/item/weapon/ranged/triple_crossbow.png
+	- rltiles/item/weapon/ranged/triple_crossbow2.png
+	- rltiles/item/weapon/sacred_scourge.png
+	- rltiles/item/weapon/scimitar2.png
+	- rltiles/item/weapon/trishula.png
+	- rltiles/mon/abyss/thrashing_horror.png
+	- rltiles/mon/amorphous/acid_blob.png
+	- rltiles/mon/animals/butterfly2.png
+	- rltiles/mon/animals/butterfly5.png
+	- rltiles/mon/animals/ghost_crab.png
+	- rltiles/mon/animals/goliath_beetle.png
+	- rltiles/mon/animals/green_rat.png
+	- rltiles/mon/animals/grey_rat.png
+	- rltiles/mon/animals/komodo_dragon.png
+	- rltiles/mon/animals/orange_rat.png
+	- rltiles/mon/animals/rat.png
+	- rltiles/mon/animals/shard_shrike.png
+	- rltiles/mon/animals/torpor_snail.png
+	- rltiles/mon/aquatic/octopode.png
+	- rltiles/mon/aquatic/octopode_crusher.png
+	- rltiles/mon/centaur-melee.png
+	- rltiles/mon/centaur.png
+	- rltiles/mon/centaur_warrior-melee.png
+	- rltiles/mon/centaur_warrior.png
+	- rltiles/mon/demons/lemure.png
+	- rltiles/mon/demons/shadow_demon.png
+	- rltiles/mon/demons/tentacled_monstrosity.png
+	- rltiles/mon/demons/ugly_thing.png
+	- rltiles/mon/demons/ugly_thing1.png
+	- rltiles/mon/demons/ugly_thing2.png
+	- rltiles/mon/demons/ugly_thing3.png
+	- rltiles/mon/demons/ugly_thing4.png
+	- rltiles/mon/demons/ugly_thing5.png
+	- rltiles/mon/demons/very_ugly_thing.png
+	- rltiles/mon/demons/very_ugly_thing1.png
+	- rltiles/mon/demons/very_ugly_thing2.png
+	- rltiles/mon/demons/very_ugly_thing3.png
+	- rltiles/mon/demons/very_ugly_thing4.png
+	- rltiles/mon/demons/very_ugly_thing5.png
+	- rltiles/mon/dragons/death_drake.png
+	- rltiles/mon/dragons/fire_dragon.png
+	- rltiles/mon/dragons/fire_drake.png
+	- rltiles/mon/dragons/iron_dragon.png
+	- rltiles/mon/dragons/lindwurm.png
+	- rltiles/mon/dragons/mottled_dragon.png
+	- rltiles/mon/dragons/steam_dragon.png
+	- rltiles/mon/dragons/swamp_drake.png
+	- rltiles/mon/dragons/wind_drake.png
+	- rltiles/mon/fungi_plants/giant_spore.png
+	- rltiles/mon/giant_orange_brain.png
+	- rltiles/mon/holy/pearl_dragon.png
+	- rltiles/mon/nonliving/gargoyle.png
+	- rltiles/mon/nonliving/molten_gargoyle.png
+	- rltiles/mon/nonliving/orb_of_destruction1.png
+	- rltiles/mon/nonliving/orb_of_destruction2.png
+	- rltiles/mon/nonliving/orb_of_destruction3.png
+	- rltiles/mon/nonliving/war_gargoyle.png
+	- rltiles/mon/sprint/meatlord.png
+	- rltiles/mon/statues/obsidian_statue.png
+	- rltiles/mon/undead/death_scarab.png
+	- rltiles/mon/undead/freezing_wraith.png
+	- rltiles/mon/undead/wraith.png
+	- rltiles/mon/undead/zombies/crab.png
+	- rltiles/mon/undead/zombies/spiked_turtle.png
+	- rltiles/mon/undead/zombies/turtle.png
+	- rltiles/mon/unique/dowan.png
+	- rltiles/mon/unique/dowan2.png
+	- rltiles/mon/unique/duvessa.png
+	- rltiles/mon/unique/duvessa2.png
+	- rltiles/mon/unique/frances.png
+	- rltiles/mon/unique/louise.png
+	- rltiles/player/body/chainmail.png
+	- rltiles/player/body/chainmail2.png
+	- rltiles/player/body/chainmail3.png
+	- rltiles/player/body/crystal_plate.png
+	- rltiles/player/body/crystal_plate2.png
+	- rltiles/player/body/crystal_plate3.png
+	- rltiles/player/body/dragonarm_green.png
+	- rltiles/player/body/dragonarm_red.png
+	- rltiles/player/body/dragonsc_green.png
+	- rltiles/player/body/dragonsc_red.png
+	- rltiles/player/body/lears_chain_mail.png
+	- rltiles/player/body/lears_hauberk.png
+	- rltiles/player/body/leather_armour.png
+	- rltiles/player/body/leather_armour2.png
+	- rltiles/player/body/leather_armour3.png
+	- rltiles/player/body/moon_troll_leather_armour.png
+	- rltiles/player/body/plate.png
+	- rltiles/player/body/plate2.png
+	- rltiles/player/body/plate3.png
+	- rltiles/player/body/ringmail.png
+	- rltiles/player/body/ringmail2.png
+	- rltiles/player/body/ringmail3.png
+	- rltiles/player/body/scalemail.png
+	- rltiles/player/body/scalemail2.png
+	- rltiles/player/body/scalemail3.png
+	- rltiles/player/body/scalemail_light.png
+	- rltiles/player/body/troll_hide.png
+	- rltiles/player/body/troll_leather.png
+	- rltiles/player/hand1/artefact/capt_cutlass.png
+	- rltiles/player/hand1/artefact/dark_maul.png
+	- rltiles/player/hand1/artefact/demon_axe.png
+	- rltiles/player/hand1/artefact/leech.png
+	- rltiles/player/hand1/artefact/singing_sword.png
+	- rltiles/player/hand1/artefact/spellbinder.png
+	- rltiles/player/hand2/shield_gong.png
+	- rltiles/player/head/pumpkin.png
+	- rltiles/player/transform/lich_form_felid.png
+	- rltiles/player/transform/spider_form.png
+	- rltiles/player/transform/statue_form_octopode.png
+
+- white_noise
+	- dat/tiles/title_white_noise_grabbing_the_orb.png
+	- rltiles/dngn/closed_door_crypt.png
+	- rltiles/dngn/floor/crypt0.png
+	- rltiles/dngn/floor/crypt1.png
+	- rltiles/dngn/floor/crypt2.png
+	- rltiles/dngn/floor/crypt3.png
+	- rltiles/dngn/floor/crypt4.png
+	- rltiles/dngn/floor/crypt5.png
+	- rltiles/dngn/floor/crypt6.png
+	- rltiles/dngn/floor/crypt7.png
+	- rltiles/dngn/gate_closed_left_crypt.png
+	- rltiles/dngn/gate_closed_middle_crypt.png
+	- rltiles/dngn/gate_closed_right_crypt.png
+	- rltiles/dngn/gate_open_left_crypt.png
+	- rltiles/dngn/gate_open_middle_crypt.png
+	- rltiles/dngn/gate_open_right_crypt.png
+	- rltiles/dngn/gateways/enter.png
+	- rltiles/dngn/gateways/enter_elf.png
+	- rltiles/dngn/gateways/enter_shoals.png
+	- rltiles/dngn/gateways/enter_slime.png
+	- rltiles/dngn/gateways/enter_swamp.png
+	- rltiles/dngn/gateways/enter_temple.png
+	- rltiles/dngn/gateways/escape_hatch_down.png
+	- rltiles/dngn/gateways/escape_hatch_up.png
+	- rltiles/dngn/gateways/exit_crypt.png
+	- rltiles/dngn/gateways/exit_dungeon.png
+	- rltiles/dngn/gateways/exit_elf.png
+	- rltiles/dngn/gateways/exit_lair.png
+	- rltiles/dngn/gateways/exit_orc.png
+	- rltiles/dngn/gateways/exit_shoals.png
+	- rltiles/dngn/gateways/exit_slime.png
+	- rltiles/dngn/gateways/exit_snake.png
+	- rltiles/dngn/gateways/exit_spider.png
+	- rltiles/dngn/gateways/exit_swamp.png
+	- rltiles/dngn/gateways/exit_temple.png
+	- rltiles/dngn/gateways/exit_tomb.png
+	- rltiles/dngn/gateways/exit_vaults.png
+	- rltiles/dngn/gateways/return.png
+	- rltiles/dngn/gateways/sewer_portal.png
+	- rltiles/dngn/gateways/sewer_portal_rusted.png
+	- rltiles/dngn/gateways/shoals_stairs_down.png
+	- rltiles/dngn/gateways/shoals_stairs_up.png
+	- rltiles/dngn/gateways/stone_stairs_down.png
+	- rltiles/dngn/gateways/stone_stairs_up.png
+	- rltiles/dngn/grate.png
+	- rltiles/dngn/open_door_crypt.png
+	- rltiles/dngn/shops/abandoned_shop.png
+	- rltiles/dngn/shops/enter_shop.png
+	- rltiles/dngn/shops/shop_armour.png
+	- rltiles/dngn/shops/shop_books.png
+	- rltiles/dngn/shops/shop_food.png
+	- rltiles/dngn/shops/shop_general.png
+	- rltiles/dngn/shops/shop_jewellery.png
+	- rltiles/dngn/shops/shop_potions.png
+	- rltiles/dngn/shops/shop_scrolls.png
+	- rltiles/dngn/shops/shop_wands.png
+	- rltiles/dngn/shops/shop_weapon.png
+	- rltiles/dngn/vgate_closed_down_crypt.png
+	- rltiles/dngn/vgate_closed_middle_crypt.png
+	- rltiles/dngn/vgate_closed_up_crypt.png
+	- rltiles/dngn/vgate_open_down_crypt.png
+	- rltiles/dngn/vgate_open_middle_crypt.png
+	- rltiles/dngn/vgate_open_up_crypt.png
+	- rltiles/dngn/wall/banners/banner1.png
+	- rltiles/dngn/wall/brick_dark0.png
+	- rltiles/dngn/wall/brick_dark1.png
+	- rltiles/dngn/wall/brick_dark2.png
+	- rltiles/dngn/wall/brick_dark3.png
+	- rltiles/dngn/wall/brick_dark4.png
+	- rltiles/dngn/wall/brick_dark5.png
+	- rltiles/dngn/wall/brick_dark6.png
+	- rltiles/dngn/wall/brick_dark_1_0.png
+	- rltiles/dngn/wall/brick_dark_1_1.png
+	- rltiles/dngn/wall/brick_dark_1_10.png
+	- rltiles/dngn/wall/brick_dark_1_11.png
+	- rltiles/dngn/wall/brick_dark_1_2.png
+	- rltiles/dngn/wall/brick_dark_1_3.png
+	- rltiles/dngn/wall/brick_dark_1_4.png
+	- rltiles/dngn/wall/brick_dark_1_5.png
+	- rltiles/dngn/wall/brick_dark_1_6.png
+	- rltiles/dngn/wall/brick_dark_1_7.png
+	- rltiles/dngn/wall/brick_dark_1_8.png
+	- rltiles/dngn/wall/brick_dark_1_9.png
+	- rltiles/dngn/wall/brick_dark_2_0.png
+	- rltiles/dngn/wall/brick_dark_2_1.png
+	- rltiles/dngn/wall/brick_dark_2_10.png
+	- rltiles/dngn/wall/brick_dark_2_11.png
+	- rltiles/dngn/wall/brick_dark_2_2.png
+	- rltiles/dngn/wall/brick_dark_2_3.png
+	- rltiles/dngn/wall/brick_dark_2_4.png
+	- rltiles/dngn/wall/brick_dark_2_5.png
+	- rltiles/dngn/wall/brick_dark_2_6.png
+	- rltiles/dngn/wall/brick_dark_2_7.png
+	- rltiles/dngn/wall/brick_dark_2_8.png
+	- rltiles/dngn/wall/brick_dark_2_9.png
+	- rltiles/dngn/wall/brick_dark_3_0.png
+	- rltiles/dngn/wall/brick_dark_3_1.png
+	- rltiles/dngn/wall/brick_dark_3_10.png
+	- rltiles/dngn/wall/brick_dark_3_11.png
+	- rltiles/dngn/wall/brick_dark_3_12.png
+	- rltiles/dngn/wall/brick_dark_3_13.png
+	- rltiles/dngn/wall/brick_dark_3_14.png
+	- rltiles/dngn/wall/brick_dark_3_15.png
+	- rltiles/dngn/wall/brick_dark_3_2.png
+	- rltiles/dngn/wall/brick_dark_3_3.png
+	- rltiles/dngn/wall/brick_dark_3_4.png
+	- rltiles/dngn/wall/brick_dark_3_5.png
+	- rltiles/dngn/wall/brick_dark_3_6.png
+	- rltiles/dngn/wall/brick_dark_3_7.png
+	- rltiles/dngn/wall/brick_dark_3_8.png
+	- rltiles/dngn/wall/brick_dark_3_9.png
+	- rltiles/dngn/wall/brick_dark_4_0.png
+	- rltiles/dngn/wall/brick_dark_4_1.png
+	- rltiles/dngn/wall/brick_dark_4_10.png
+	- rltiles/dngn/wall/brick_dark_4_11.png
+	- rltiles/dngn/wall/brick_dark_4_12.png
+	- rltiles/dngn/wall/brick_dark_4_13.png
+	- rltiles/dngn/wall/brick_dark_4_14.png
+	- rltiles/dngn/wall/brick_dark_4_15.png
+	- rltiles/dngn/wall/brick_dark_4_2.png
+	- rltiles/dngn/wall/brick_dark_4_3.png
+	- rltiles/dngn/wall/brick_dark_4_4.png
+	- rltiles/dngn/wall/brick_dark_4_5.png
+	- rltiles/dngn/wall/brick_dark_4_6.png
+	- rltiles/dngn/wall/brick_dark_4_7.png
+	- rltiles/dngn/wall/brick_dark_4_8.png
+	- rltiles/dngn/wall/brick_dark_4_9.png
+	- rltiles/dngn/wall/brick_dark_5_0.png
+	- rltiles/dngn/wall/brick_dark_5_1.png
+	- rltiles/dngn/wall/brick_dark_5_10.png
+	- rltiles/dngn/wall/brick_dark_5_11.png
+	- rltiles/dngn/wall/brick_dark_5_12.png
+	- rltiles/dngn/wall/brick_dark_5_13.png
+	- rltiles/dngn/wall/brick_dark_5_14.png
+	- rltiles/dngn/wall/brick_dark_5_15.png
+	- rltiles/dngn/wall/brick_dark_5_16.png
+	- rltiles/dngn/wall/brick_dark_5_17.png
+	- rltiles/dngn/wall/brick_dark_5_18.png
+	- rltiles/dngn/wall/brick_dark_5_19.png
+	- rltiles/dngn/wall/brick_dark_5_2.png
+	- rltiles/dngn/wall/brick_dark_5_3.png
+	- rltiles/dngn/wall/brick_dark_5_4.png
+	- rltiles/dngn/wall/brick_dark_5_5.png
+	- rltiles/dngn/wall/brick_dark_5_6.png
+	- rltiles/dngn/wall/brick_dark_5_7.png
+	- rltiles/dngn/wall/brick_dark_5_8.png
+	- rltiles/dngn/wall/brick_dark_5_9.png
+	- rltiles/dngn/wall/brick_dark_6_0.png
+	- rltiles/dngn/wall/brick_dark_6_1.png
+	- rltiles/dngn/wall/brick_dark_6_10.png
+	- rltiles/dngn/wall/brick_dark_6_11.png
+	- rltiles/dngn/wall/brick_dark_6_12.png
+	- rltiles/dngn/wall/brick_dark_6_13.png
+	- rltiles/dngn/wall/brick_dark_6_14.png
+	- rltiles/dngn/wall/brick_dark_6_15.png
+	- rltiles/dngn/wall/brick_dark_6_16.png
+	- rltiles/dngn/wall/brick_dark_6_17.png
+	- rltiles/dngn/wall/brick_dark_6_18.png
+	- rltiles/dngn/wall/brick_dark_6_19.png
+	- rltiles/dngn/wall/brick_dark_6_2.png
+	- rltiles/dngn/wall/brick_dark_6_3.png
+	- rltiles/dngn/wall/brick_dark_6_4.png
+	- rltiles/dngn/wall/brick_dark_6_5.png
+	- rltiles/dngn/wall/brick_dark_6_6.png
+	- rltiles/dngn/wall/brick_dark_6_7.png
+	- rltiles/dngn/wall/brick_dark_6_8.png
+	- rltiles/dngn/wall/brick_dark_6_9.png
+	- rltiles/dngn/wall/crypt-metal0.png
+	- rltiles/dngn/wall/crypt-metal1.png
+	- rltiles/dngn/wall/crypt-metal2.png
+	- rltiles/dngn/wall/crypt-metal3.png
+	- rltiles/dngn/wall/crypt-metal4.png
+	- rltiles/dngn/wall/crypt0.png
+	- rltiles/dngn/wall/crypt1.png
+	- rltiles/dngn/wall/crypt2.png
+	- rltiles/dngn/wall/crypt3.png
+	- rltiles/dngn/wall/crypt4.png
+	- rltiles/dngn/wall/crypt5.png
+	- rltiles/dngn/wall/crypt6.png
+	- rltiles/dngn/wall/crypt7.png
+	- rltiles/dngn/wall/crypt8.png
+	- rltiles/dngn/wall/crypt9.png
+	- rltiles/dngn/wall/stone_brick1.png
+	- rltiles/dngn/wall/stone_brick10.png
+	- rltiles/dngn/wall/stone_brick11.png
+	- rltiles/dngn/wall/stone_brick12.png
+	- rltiles/dngn/wall/stone_brick2.png
+	- rltiles/dngn/wall/stone_brick3.png
+	- rltiles/dngn/wall/stone_brick4.png
+	- rltiles/dngn/wall/stone_brick5.png
+	- rltiles/dngn/wall/stone_brick6.png
+	- rltiles/dngn/wall/stone_brick7.png
+	- rltiles/dngn/wall/stone_brick8.png
+	- rltiles/dngn/wall/stone_brick9.png
+	- rltiles/dngn/wall/stone_smooth0.png
+	- rltiles/dngn/wall/stone_smooth1.png
+	- rltiles/dngn/wall/stone_smooth2.png
+	- rltiles/dngn/wall/stone_smooth3.png
+	- rltiles/dngn/wall/torches/torch0.png
+	- rltiles/dngn/wall/torches/torch1.png
+	- rltiles/dngn/wall/torches/torch2.png
+	- rltiles/dngn/wall/torches/torch3.png
+	- rltiles/dngn/wall/torches/torch4.png
+	- rltiles/dngn/water/deep_water_murky.png
+	- rltiles/dngn/water/deep_water_murky2.png
+	- rltiles/dngn/water/murky_bord_bl.png
+	- rltiles/dngn/water/murky_bord_br.png
+	- rltiles/dngn/water/murky_bord_btm.png
+	- rltiles/dngn/water/murky_bord_lft.png
+	- rltiles/dngn/water/murky_bord_rgt.png
+	- rltiles/dngn/water/murky_bord_tl.png
+	- rltiles/dngn/water/murky_bord_top.png
+	- rltiles/dngn/water/murky_bord_tr.png
+	- rltiles/dngn/water/open_sea.png
+	- rltiles/dngn/water/open_sea2.png
+	- rltiles/dngn/water/shallow_water_murky.png
+	- rltiles/dngn/water/shallow_water_murky2.png
+	- rltiles/dngn/water/shallow_water_murky_disturbance.png
+	- rltiles/dngn/water/shallow_water_murky_disturbance2.png
+	- rltiles/effect/silenced.png
+	- rltiles/item/food/bone.png
+	- rltiles/item/food/bone1.png
+	- rltiles/item/food/bone2.png
+	- rltiles/item/food/bone3.png
+	- rltiles/item/food/bone4.png
+	- rltiles/item/food/bone_humanoid1.png
+	- rltiles/item/food/bone_humanoid2.png
+	- rltiles/item/food/bone_humanoid3.png
+	- rltiles/item/food/bone_humanoid4.png
+	- rltiles/item/misc/misc_bottle.png
+	- rltiles/item/ring/agate.png
+	- rltiles/item/ring/artefact/urand_mage.png
+	- rltiles/item/ring/artefact/urand_robustness.png
+	- rltiles/item/ring/artefact/urand_shaolin.png
+	- rltiles/item/ring/brass.png
+	- rltiles/item/ring/bronze.png
+	- rltiles/item/ring/clay.png
+	- rltiles/item/ring/copper.png
+	- rltiles/item/ring/coral.png
+	- rltiles/item/ring/diamond.png
+	- rltiles/item/ring/emerald.png
+	- rltiles/item/ring/glass.png
+	- rltiles/item/ring/gold.png
+	- rltiles/item/ring/gold_blue.png
+	- rltiles/item/ring/gold_green.png
+	- rltiles/item/ring/gold_red.png
+	- rltiles/item/ring/granite.png
+	- rltiles/item/ring/iron.png
+	- rltiles/item/ring/ivory.png
+	- rltiles/item/ring/jade.png
+	- rltiles/item/ring/moonstone.png
+	- rltiles/item/ring/opal.png
+	- rltiles/item/ring/pearl.png
+	- rltiles/item/ring/plain_black.png
+	- rltiles/item/ring/plain_red.png
+	- rltiles/item/ring/plain_yellow.png
+	- rltiles/item/ring/randarts/anvil.png
+	- rltiles/item/ring/randarts/blood.png
+	- rltiles/item/ring/randarts/bronze-flower.png
+	- rltiles/item/ring/randarts/dark.png
+	- rltiles/item/ring/randarts/double.png
+	- rltiles/item/ring/randarts/eye.png
+	- rltiles/item/ring/randarts/fire.png
+	- rltiles/item/ring/randarts/flower.png
+	- rltiles/item/ring/randarts/four-colour.png
+	- rltiles/item/ring/randarts/green.png
+	- rltiles/item/ring/randarts/ice.png
+	- rltiles/item/ring/randarts/pink.png
+	- rltiles/item/ring/randarts/red-blue.png
+	- rltiles/item/ring/randarts/snake.png
+	- rltiles/item/ring/randarts/zircon.png
+	- rltiles/item/ring/silver.png
+	- rltiles/item/ring/steel.png
+	- rltiles/item/ring/tiger_eye.png
+	- rltiles/item/ring/wooden.png
+	- rltiles/mon/animals/alligator.png
+	- rltiles/mon/animals/crocodile.png
+	- rltiles/mon/animals/giant_gecko.png
+	- rltiles/mon/animals/vampire_bat.png
+	- rltiles/mon/animals/warg.png
+	- rltiles/mon/fungi_plants/active_ballistomycete.png
+	- rltiles/mon/fungi_plants/ballistomycete.png
+	- rltiles/mon/fungi_plants/fungus.png
+	- rltiles/mon/fungi_plants/fungus1.png
+	- rltiles/mon/fungi_plants/fungus2.png
+	- rltiles/mon/fungi_plants/fungus3.png
+	- rltiles/mon/fungi_plants/fungus4.png
+	- rltiles/mon/fungi_plants/fungus5.png
+	- rltiles/mon/fungi_plants/fungus6.png
+	- rltiles/mon/fungi_plants/fungus7.png
+	- rltiles/mon/fungi_plants/fungus8.png
+	- rltiles/mon/fungi_plants/fungus9.png
+	- rltiles/mon/fungi_plants/hyperactive_ballistomycete.png
+	- rltiles/mon/fungi_plants/toadstool_left.png
+	- rltiles/mon/fungi_plants/toadstool_right.png
+	- rltiles/mon/undead/curse_toe.png
+	- rltiles/mon/undead/greater_mummy.png
+	- rltiles/mon/undead/guardian_mummy.png
+	- rltiles/mon/undead/mummy.png
+	- rltiles/mon/undead/mummy_priest.png
+	- rltiles/mon/unique/arachne.png
+	- rltiles/mon/unique/arachne_staveless.png
+	- rltiles/mon/unique/khufu.png
+	- rltiles/mon/unique/menkaure.png
+
+- Aygtets
+	- rltiles/mon/undead/skeletons/skeleton_drake.png
+	- rltiles/mon/undead/skeletons/skeleton_lizard.png
+	- rltiles/mon/undead/skeletons/skeleton_quadruped_winged.png
+	- rltiles/mon/undead/skeletons/skeleton_turtle.png
+
+- Pingas 
+	- rltiles/player/hand1/misc/tentacle.png
+	- rltiles/player/hand2/misc/tentacle.png
+	- rltiles/item/armour/headgear/helmet_horned.png
+	- rltiles/item/armour/headgear/helmet_plumed.png
+	- rltiles/item/armour/headgear/helmet_spiked.png
+	- rltiles/item/armour/headgear/helmet_winged.png
+
+- Xion350
+	- rltiles/player/base/gargoyle_brown_f.png
+	- rltiles/player/base/gargoyle_brown_m.png
+	- rltiles/player/base/gargoyle_red_f.png
+	- rltiles/player/base/gargoyle_red_m.png
+
+- benhanson
+	- rltiles/mon/undead/zombies/zombie_beetle.png
+
+- Varsovie
+	- rltiles/dc-mon/vault/ancient_champion.png
+	- rltiles/dc-mon/vault/cloud_mage.png
+	- rltiles/dc-mon/vault/deep_elf_elementalist.png
+	- rltiles/dc-mon/vault/master_elementalist.png
+
+- LordBistian
+	- rltiles/gui/spells/earth/leda's_liquefaction.png
+
+- Terence Reeves
+	- rltiles/player/beard/full_black.png
+	- rltiles/player/beard/full_blonde.png
+	- rltiles/player/beard/full_brown.png
+	- rltiles/player/beard/full_green.png
+	- rltiles/player/beard/full_red.png
+	- rltiles/player/beard/full_white.png
+	- rltiles/player/beard/garibaldi_black.png
+	- rltiles/player/beard/garibaldi_blonde.png
+	- rltiles/player/beard/garibaldi_brown.png
+	- rltiles/player/beard/garibaldi_green.png
+	- rltiles/player/beard/garibaldi_red.png
+	- rltiles/player/beard/garibaldi_white.png
+	- rltiles/player/beard/long_black.png
+	- rltiles/player/beard/long_green.png
+	- rltiles/player/beard/long_red.png
+	- rltiles/player/beard/long_white.png
+	- rltiles/player/beard/long_yellow.png
+	- rltiles/player/beard/medium_black.png
+	- rltiles/player/beard/medium_blonde.png
+	- rltiles/player/beard/medium_brown.png
+	- rltiles/player/beard/medium_green.png
+	- rltiles/player/beard/medium_red.png
+	- rltiles/player/beard/medium_white.png
+	- rltiles/player/beard/scarf.png
+	- rltiles/player/beard/short_black.png
+	- rltiles/player/beard/short_blonde.png
+	- rltiles/player/beard/short_brown.png
+	- rltiles/player/beard/short_green.png
+	- rltiles/player/beard/short_red.png
+	- rltiles/player/beard/short_white.png
+	- rltiles/player/beard/short_yellow.png
+	- rltiles/player/beard/stubble_black.png
+	- rltiles/player/beard/stubble_blonde.png
+	- rltiles/player/beard/stubble_brown.png
+	- rltiles/player/beard/stubble_green.png
+	- rltiles/player/beard/stubble_red.png
+	- rltiles/player/beard/stubble_white.png
+
+- chilie
+	- rltiles/player/hand1/ankus.png
+
+- Peileppe 
+	- crawl-ref/source/dat/tiles/title_peileppe_bloax_eye.png
+
+- Psiweapon
+	- crawl-ref/source/dat/tiles/title_psiweapon_roxanne.png
+	- crawl-ref/source/dat/tiles/title_psiweapon_kiku.png
+
+- ShadyAmish
+	- crawl-ref/source/dat/tiles/title_shadyamish_octm.png
+
+- Malwyn
+	- rltiles/dc-mon/animals/firecrab.png
+	- rltiles/dc-mon/animals/porcupine.png
+
+- pete@downplay.co.uk
+	- rltiles/dc-dngn/traps/cobweb_E.png
+	- rltiles/dc-dngn/traps/cobweb_ES.png
+	- rltiles/dc-dngn/traps/cobweb_ESW.png
+	- rltiles/dc-dngn/traps/cobweb_EW.png
+	- rltiles/dc-dngn/traps/cobweb_N.png
+	- rltiles/dc-dngn/traps/cobweb_NE.png
+	- rltiles/dc-dngn/traps/cobweb_NES.png
+	- rltiles/dc-dngn/traps/cobweb_NESW.png
+	- rltiles/dc-dngn/traps/cobweb_NEW.png
+	- rltiles/dc-dngn/traps/cobweb_NS.png
+	- rltiles/dc-dngn/traps/cobweb_NSW.png
+	- rltiles/dc-dngn/traps/cobweb_NW.png
+	- rltiles/dc-dngn/traps/cobweb_S.png
+	- rltiles/dc-dngn/traps/cobweb_SW.png
+	- rltiles/dc-dngn/traps/cobweb_W.png
+	- rltiles/dc-dngn/traps/cobweb_none.png
+	- rltiles/dc-dngn/traps/cobweb_none_0.png
+	- rltiles/dc-dngn/traps/cobweb_none_1.png
+	- rltiles/dc-dngn/traps/cobweb_none_2.png
+	- rltiles/dc-dngn/traps/cobweb_none_3.png
+	- rltiles/dc-dngn/traps/cobweb_none_4.png
+	- rltiles/dc-mon/animals/boulder_beetle_rolling0.png
+	- rltiles/dc-mon/animals/boulder_beetle_rolling1.png
+	- rltiles/dc-mon/animals/boulder_beetle_rolling2.png
+	- rltiles/dc-mon/animals/boulder_beetle_rolling3.png
+	- rltiles/effect/cloud_dust_trail0.png
+	- rltiles/effect/cloud_dust_trail1.png
+	- rltiles/effect/cloud_dust_trail2.png
+	- rltiles/effect/cloud_dust_trail3.png
+
+- evilmike - evilmike@gmail.com
+	- rltiles/dc-dngn/floor/iron0.png
+	- rltiles/dc-dngn/floor/iron1.png
+	- rltiles/dc-dngn/floor/iron2.png
+	- rltiles/dc-dngn/floor/iron3.png
+	- rltiles/dc-dngn/floor/iron4.png
+	- rltiles/dc-dngn/floor/iron5.png
+	- rltiles/dc-dngn/wall/dngn_metal_wall_cracked.png
+	- rltiles/dc-dngn/wall/iron0-0.png
+	- rltiles/dc-dngn/wall/iron0-2.png
+	- rltiles/dc-dngn/wall/iron0-4.png
+	- rltiles/dc-dngn/wall/iron1-1.png
+	- rltiles/dc-dngn/wall/iron1-2.png
+	- rltiles/dc-dngn/wall/iron1-3.png
+	- rltiles/dc-dngn/wall/iron1-4.png
+	- rltiles/dc-dngn/wall/iron2-0.png
+	- rltiles/dc-dngn/wall/iron2-1.png
+	- rltiles/dc-dngn/wall/iron2-2.png
+	- rltiles/dc-dngn/wall/iron2-3.png
+	- rltiles/dc-dngn/wall/iron2-4.png
+	- rltiles/dc-dngn/wall/iron3-0.png
+	- rltiles/dc-dngn/wall/iron3-1.png
+	- rltiles/dc-dngn/wall/iron3-2.png
+	- rltiles/dc-dngn/wall/iron3-3.png
+	- rltiles/dc-dngn/wall/iron4-0.png
+	- rltiles/dc-dngn/wall/iron4-2.png
+	- rltiles/dc-dngn/wall/iron4-3.png
+	- rltiles/dc-dngn/wall/iron5-0.png
+	- rltiles/dc-dngn/wall/iron5-2.png
+	- rltiles/effect/silenced.png
+	- rltiles/dc-dngn/floor/rough_red0.png
+	- rltiles/dc-dngn/floor/rough_red1.png
+	- rltiles/dc-dngn/floor/rough_red2.png
+	- rltiles/dc-dngn/floor/rough_red3.png
+
+- Sage - SageBasilMint@gmail.com
+	- rltiles/gui/spells/translocation/singularity.png
+	- rltiles/mon/nonliving/singularity1.png
+	- rltiles/mon/nonliving/singularity2.png
+	- rltiles/mon/nonliving/singularity3.png
+	- rltiles/mon/nonliving/singularity4.png
+	- rltiles/player/base/vine_stalker_f.png
+	- rltiles/player/base/vine_stalker_m.png
+
+- Jon Knapp thann@linux.com
+	- rltiles/misc/icons/glowing.png
+	- rltiles/misc/icons/slowed.png
+
+- Thomas Holmes thomas@devminded.com
+	- rltiles/gui/startup/high_scores.png

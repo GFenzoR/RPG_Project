@@ -24,6 +24,7 @@ export type SchemaName =
   | "tutorial"
   | "news"
   | "borders"
+  | "outfits"
   | "sounds"
   | "i18n"
   | "ids-lock";

@@ -15,8 +15,23 @@ export function createImage(width: number, height: number): Image {
 }
 
 export function decodePng(buf: Buffer): Image {
-  const png = PNG.sync.read(buf);
+  const png = PNG.sync.read(untilIend(buf));
   return { width: png.width, height: png.height, data: new Uint8Array(png.data) };
+}
+
+/**
+ * The PNG up to the end of its first IEND chunk. Some files in the wild (16 tiles of the
+ * Dungeon Crawl pack) repeat IEND or carry bytes after it; browsers ignore them, pngjs fails.
+ */
+export function untilIend(buf: Buffer): Buffer {
+  let at = 8; // signature
+  while (at + 12 <= buf.length) {
+    const length = buf.readUInt32BE(at);
+    const end = at + 12 + length; // length + type + data + CRC
+    if (buf.toString("latin1", at + 4, at + 8) === "IEND") return buf.subarray(0, end);
+    at = end;
+  }
+  return buf; // malformed: let pngjs report it
 }
 
 /** Encodes deterministically: same pixels, same bytes. */

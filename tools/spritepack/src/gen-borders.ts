@@ -1,15 +1,17 @@
 // Generates the original placeholder art for the autoborder pieces of data/borders.yaml:
-// assets/sprites/borders/<rule>_<piece>.png. Each piece is the colour of the `from` ground
-// over a transparent tile, shaped by where the `from` ground is, with a slightly wavy edge
-// and a darker rim so map renders read clearly. Deterministic: same input, same bytes.
+// assets/sprites/borders/<rule>_<piece>.png. Each piece is the `from` ground (its pack texture,
+// or its placeholder colour) over a transparent tile, shaped by where the `from` ground is,
+// with a slightly wavy edge and a darker rim so map renders read clearly. Deterministic: same
+// input, same bytes. Re-run it when a ground's sprite in assets/sprites.yaml changes.
 //   node --experimental-strip-types tools/spritepack/src/gen-borders.ts [--root DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { parse } from "yaml";
-import { createImage, encodePng } from "./image.ts";
+import { createImage, decodePng, encodePng } from "./image.ts";
 import type { Image, Rgba } from "./image.ts";
 import { parseManifest } from "./manifest.ts";
+import type { SpriteEntry } from "./manifest.ts";
 
 const T = 32;
 const DEPTH = 9; // how far the `from` ground reaches into the tile, in pixels
@@ -39,14 +41,11 @@ export function covered(piece: Piece, x: number, y: number): boolean {
   return Math.hypot(x - cx, y - cy) < DEPTH + 2;
 }
 
-export function borderSprite(piece: Piece, color: Rgba): Image {
+/** The colour of the ground at pixel (x, y) of a tile. */
+export type Fill = (x: number, y: number) => Rgba;
+
+export function borderSprite(piece: Piece, fill: Fill): Image {
   const img = createImage(T, T);
-  const rim: Rgba = [
-    Math.round(color[0] * 0.7),
-    Math.round(color[1] * 0.7),
-    Math.round(color[2] * 0.7),
-    255,
-  ];
   for (let y = 0; y < T; y++)
     for (let x = 0; x < T; x++) {
       if (!covered(piece, x, y)) continue;
@@ -60,7 +59,12 @@ export function borderSprite(piece: Piece, color: Rgba): Image {
         const ny = y + (dy as number);
         return nx >= 0 && ny >= 0 && nx < T && ny < T && !covered(piece, nx, ny);
       });
-      img.data.set(edge ? rim : color, (y * T + x) * 4);
+      const c = fill(x, y);
+      const k = edge ? 0.7 : 1;
+      img.data.set(
+        [Math.round(c[0] * k), Math.round(c[1] * k), Math.round(c[2] * k), 255],
+        (y * T + x) * 4,
+      );
     }
   return img;
 }
@@ -87,15 +91,30 @@ export function borderSprites(root: string): Map<string, Buffer> {
   for (const rule of rules) {
     const groundSprite = items.get(rule.from);
     const entry = groundSprite ? manifest.sprites.get(groundSprite) : undefined;
-    const color: Rgba =
-      entry?.kind === "placeholder" && entry.color ? entry.color : [128, 128, 128, 255];
+    const fill = groundFill(root, entry);
     for (const [piece, item] of Object.entries(rule.pieces)) {
       const sprite = items.get(item);
       if (!sprite) throw new Error(`border piece "${item}" is not in data/items`);
-      out.set(sprite, encodePng(borderSprite(piece as Piece, color)));
+      out.set(sprite, encodePng(borderSprite(piece as Piece, fill)));
     }
   }
   return out;
+}
+
+/** The pixels of a ground: the top-left tile of its pack image, or its placeholder colour. */
+function groundFill(root: string, entry: SpriteEntry | undefined): Fill {
+  if (entry?.kind === "source") {
+    const src = decodePng(readFileSync(join(root, "assets", entry.source)));
+    const ox = entry.rect?.x ?? 0;
+    const oy = entry.rect?.y ?? 0;
+    return (x, y) => {
+      const i = ((oy + y) * src.width + ox + x) * 4;
+      return [src.data[i] ?? 0, src.data[i + 1] ?? 0, src.data[i + 2] ?? 0, 255];
+    };
+  }
+  const color: Rgba =
+    entry?.kind === "placeholder" && entry.color ? entry.color : [128, 128, 128, 255];
+  return () => color;
 }
 
 function main(): void {

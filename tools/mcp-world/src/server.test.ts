@@ -8,6 +8,13 @@ import { MAX_OPS, McpServer } from "./server.ts";
 import type { Response } from "./server.ts";
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
+// Sandboxes leave out the vendor PNGs that assets/sprites.yaml does not use: a pack has
+// thousands of files, and copying them all makes every sandbox seconds slower.
+const spriteManifest = readFileSync(join(repo, "assets/sprites.yaml"), "utf8");
+const usedFiles = (src: string): boolean => {
+  const rel = src.slice(repo.length).replaceAll("\\", "/");
+  return !/^assets\/vendor\/.+\.png$/.test(rel) || spriteManifest.includes(rel.slice(7));
+};
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -17,7 +24,7 @@ function sandbox(): string {
   const root = mkdtempSync(join(tmpdir(), "mcp-world-"));
   dirs.push(root);
   for (const d of ["world", "data", "i18n", "assets"])
-    cpSync(join(repo, d), join(root, d), { recursive: true });
+    cpSync(join(repo, d), join(root, d), { recursive: true, filter: usedFiles });
   const git = (...a: string[]) => execFileSync("git", a, { cwd: root, stdio: "pipe" });
   git("init", "-q");
   git("add", "-A");

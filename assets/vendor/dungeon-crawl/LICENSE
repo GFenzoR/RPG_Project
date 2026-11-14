@@ -1,0 +1,13 @@
+Dungeon Crawl Stone Soup tiles (release Nov-2015 of https://github.com/crawl/tiles)
+
+License: CC0 1.0 Universal (Public Domain Dedication)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The artists listed in ARTISTS.md approved releasing their Dungeon Crawl Stone Soup artwork
+under CC0. Tiles with unclear ownership (TILES_UNDER_UNKNOWN_LICENSE.md) are excluded from
+this release by its maintainer. The same set is published on OpenGameArt as
+"Dungeon Crawl 32x32 tiles" (https://opengameart.org/content/dungeon-crawl-32x32-tiles),
+license CC0. Attribution is not required; RPG Project credits it in assets/CREDITS.md.
+
+Files are copied unmodified from releases/Nov-2015/ of crawl/tiles (commit a6ea165).
+README.md, ARTISTS.md and TILES_UNDER_UNKNOWN_LICENSE.md come from the same repository.
