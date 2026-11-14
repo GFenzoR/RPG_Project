@@ -730,7 +730,8 @@ describe("review fixes, round 2", () => {
     expect(m.join("\n")).not.toContain("expected a");
   });
 
-  it.skipIf(process.getuid?.() === 0)(
+  // Skipped as root (bypasses permissions) and on Windows (chmod only toggles read-only, never denies reads).
+  it.skipIf(process.getuid?.() === 0 || process.platform === "win32")(
     "reports unreadable directories and files (needs non-root)",
     () => {
       const { root } = check(mini());

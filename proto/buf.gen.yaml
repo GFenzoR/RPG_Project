@@ -1,13 +1,16 @@
 # Code generation for proto/. Plugins run locally (no buf.build remote plugins) and are
 # pinned by server/go.mod (protoc-gen-go) and packages/protocol/package.json (protoc-gen-es).
-# Paths are relative to the repo root, where `make gen` runs buf.
+# `make gen-proto` puts server/bin and packages/protocol/node_modules/.bin first in PATH, so
+# the plugins are found by name (on Windows that resolves protoc-gen-go.exe and
+# protoc-gen-es.cmd). Run buf through `make gen-proto`: by hand it would take whatever
+# unpinned plugin comes first in PATH. Output paths are relative to the repo root.
 version: v2
 clean: true
 plugins:
-  - local: server/bin/protoc-gen-go
+  - local: protoc-gen-go
     out: server/internal/net/pb
     opt: paths=source_relative
-  - local: packages/protocol/node_modules/.bin/protoc-gen-es
+  - local: protoc-gen-es
     out: packages/protocol/src/gen
     opt:
       - target=ts

@@ -10,12 +10,13 @@ próximas tareas están en `14-continuar-en-tu-pc.md`.
 ## Sistema recomendado
 | Tu equipo | Recomendación |
 |---|---|
-| Windows | **WSL2 con Ubuntu 24.04** y el repo dentro de WSL (`~/rpg-project`, no en `C:\`). Así los scripts, el Makefile y las rutas son idénticos a los de las sesiones cloud. Docker Desktop con integración WSL activada. |
+| Windows | **WSL2 con Ubuntu 24.04** y el repo dentro de WSL (`~/rpg-project`, no en `C:\`). Así los scripts, el Makefile y las rutas son idénticos a los de las sesiones cloud. Docker Desktop con integración WSL activada. También funciona **nativo** (repo en `C:\`, Git Bash): ver "Windows nativo" abajo. |
 | macOS | Nativo, con Homebrew. Docker Desktop u OrbStack. |
 | Linux | Nativo. |
 
 ## Instalar una vez
-1. Git, Go (la versión de `server/go.mod`), Node 22 y pnpm (`corepack enable`).
+1. Git, Go (la versión de `server/go.mod`), Node 22 o más nuevo y pnpm (`corepack enable`;
+   en Node 25+, `npm i -g pnpm@10.28.0`).
 2. Docker (para Postgres en local; no hace falta instalar Postgres a mano).
 3. Claude Code (CLI o app de escritorio) con tu cuenta.
 4. Clona el repo y corre:
@@ -25,6 +26,50 @@ próximas tareas están en `14-continuar-en-tu-pc.md`.
    make dev          # servidor + cliente + editor
    ```
    `make setup` usa `scripts/local-setup.sh`, que crea la tarea T0.1.
+
+### Windows nativo (sin WSL para el repo)
+El repo vive en una carpeta de Windows (por ejemplo `C:\ProyectosVSCode\RPG_Project`) y los
+comandos `make` se corren desde **Git Bash** (o desde PowerShell, si `C:\Program Files\Git\usr\bin`
+está en el PATH, porque el Makefile usa `bash`). Docker Desktop sigue necesitando el kernel de
+WSL2 por debajo, pero no hace falta una distro de Linux.
+
+**Instalar una vez** (PowerShell; lo marcado como admin necesita "Ejecutar como administrador"):
+```powershell
+winget install Git.Git GoLang.Go OpenJS.NodeJS.LTS ezwinports.make Docker.DockerDesktop
+npm install -g pnpm@10.28.0          # Node 25+ ya no trae corepack
+wsl --install --no-distribution      # admin; reinicia después. Docker Desktop lo necesita
+```
+Después abre Docker Desktop una vez y espera "Engine running". Abre una terminal **nueva**
+para que tome el PATH (Go en `C:\Program Files\Go\bin`, las herramientas de `make setup` en
+`%USERPROFILE%\go\bin`; si esta última no está en el PATH del usuario, agrégala).
+
+**Finales de línea.** Git para Windows trae `core.autocrlf=true`; `.gitattributes` fuerza LF
+en todo el árbol (`* text=auto eol=lf`), así que un clon nuevo sale bien. Para un clon hecho
+antes de ese cambio, o por si acaso:
+```bash
+git config core.autocrlf false
+git rm -rq --cached . && git reset -q --hard   # vuelve a escribir el árbol en LF (sin cambios locales)
+```
+Con CRLF fallan `bash`, `make`, Prettier y los tests que comparan texto.
+
+**Luego, igual que en Linux:** `make setup`, `make db-up`, `make dev`,
+`make lint test validate` y `make e2e`. Lo que cambia por debajo en Windows:
+- `make setup` compila sqlc sin cgo (no hace falta un compilador de C) e instala pnpm con
+  npm si no hay corepack.
+- `make gen` encuentra los plugins de buf por PATH (`protoc-gen-go.exe`, `protoc-gen-es.cmd`).
+- Los E2E siembran la base con `psql`; si no está instalado, lo corren dentro del
+  contenedor de Postgres (`client/e2e/psql.ts`). No hace falta instalar PostgreSQL.
+- Tests que no se pueden reproducir en Windows y se saltan ahí (con un comentario en el
+  test): permisos `chmod` (map-format), el paso de `map-pr-pending` sin un `jq` que
+  imprima LF (mapcli) y la salida limpia con SIGTERM del worker de mapas, que en Windows
+  solo comprueba que el proceso termina.
+- Los E2E lanzan Chromium con la GPU (ANGLE/D3D11): en Windows, sin eso, dibuja WebGL por
+  software y los tests con varias páginas PixiJS pasan su límite de tiempo. En Linux y CI
+  no cambia nada.
+- `make dev` se corta con Ctrl+C en la terminal. Si lo matas de otra forma (cerrando la
+  pestaña, desde otra herramienta), el `gameserver` puede quedar vivo ocupando `:8080`:
+  ciérralo en el Administrador de tareas o con `taskkill /IM gameserver.exe /F`.
+- `make desktop-smoke`, `make home-*` y `make monitoring-*` siguen pensados para Linux/WSL2.
 
 ### Base de datos y servidor solo
 ```

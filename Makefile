@@ -8,6 +8,22 @@ GO_MODULES := server tools/bots
 COMPOSE_DEV := docker compose -f deploy/docker-compose.dev.yml
 # Cloud sessions run Postgres as a VM service; local machines use Docker.
 IS_CLOUD := $(filter true,$(CLAUDE_CODE_REMOTE))
+# Native Windows (Git Bash + GNU make, docs/12 "Windows nativo"): binaries need .exe, and
+# CURDIR is C:/..., whose colon would split a PATH entry, so PATH gets the /c/... form.
+ifeq ($(OS),Windows_NT)
+EXE := .exe
+POSIX_CURDIR := $(shell cygpath -u '$(CURDIR)' 2>/dev/null)
+ifeq ($(POSIX_CURDIR),)
+$(error cygpath not found: run make from Git Bash (docs/12, "Windows nativo"))
+endif
+# Tests that copy world/ or start mapcli and git processes pass the default 5 s there:
+# process start and file I/O in %TEMP% are several times slower than on Linux.
+VITEST_ARGS := --testTimeout=30000
+else
+EXE :=
+POSIX_CURDIR := $(CURDIR)
+VITEST_ARGS :=
+endif
 
 define pending
 	@echo "[$@] pending: arrives in $(1). Nothing to do yet."
@@ -33,11 +49,13 @@ gen-sqlc: ## sqlc generate: server/queries -> server/internal/store/db
 	cd server && sqlc generate
 
 # Protobuf plugins run locally, pinned by server/go.mod and packages/protocol/package.json.
+# buf finds them by name in PATH (proto/buf.gen.yaml).
 .PHONY: gen-proto
 gen-proto: ## buf generate: Go (server/internal/net/pb) and TS (packages/protocol/src/gen)
-	cd server && go build -o bin/protoc-gen-go google.golang.org/protobuf/cmd/protoc-gen-go
+	cd server && go build -o bin/protoc-gen-go$(EXE) google.golang.org/protobuf/cmd/protoc-gen-go
 	test -x packages/protocol/node_modules/.bin/protoc-gen-es || pnpm install --frozen-lockfile
-	buf generate --template proto/buf.gen.yaml
+	PATH="$(POSIX_CURDIR)/server/bin:$(POSIX_CURDIR)/packages/protocol/node_modules/.bin:$$PATH" \
+		buf generate --template proto/buf.gen.yaml
 
 .PHONY: proto-lint
 proto-lint: ## buf lint + buf format check on proto/
@@ -59,7 +77,7 @@ test-go:
 
 .PHONY: test-ts
 test-ts:
-	pnpm test
+	pnpm test $(VITEST_ARGS)
 
 .PHONY: lint
 lint: lint-go lint-ts validate ## golangci-lint + eslint/prettier/tsc + content validation

@@ -1,11 +1,11 @@
 // E2E of the public website (T4.3): the landing in Spanish and English (desktop and phone
 // widths), the highscores with a character created here, a news post, and "Play" leading
 // to the login and into the game at /play/.
-import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { psql } from "./psql.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -60,7 +60,7 @@ test.describe.serial("public website", () => {
     });
     expect(created.status()).toBe(201);
     await api.dispose();
-    execFileSync("psql", [
+    psql([
       databaseUrl,
       "-c",
       `UPDATE characters SET level = 500, experience = ${Date.now()} WHERE name = '${name}'`,
@@ -70,7 +70,7 @@ test.describe.serial("public website", () => {
       { length: 21 },
       (_, i) => `('Scout ${randomLetters(6)}${"abcdefghijklmnopqrstu"[i]}')`,
     ).join(",");
-    execFileSync("psql", [
+    psql([
       databaseUrl,
       "-c",
       `WITH a AS (INSERT INTO accounts (email) VALUES ('scouts-${Date.now()}-${randomLetters(6)}@example.com') RETURNING id)

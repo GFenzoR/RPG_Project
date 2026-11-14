@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
+import { psql as runPsql } from "./psql.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 import { startFakeGitHub } from "../../tools/map-pr-worker/test/fake-github.ts";
 
@@ -42,7 +43,7 @@ const grassTitle = `Pasto en la playa norte ${tag}`;
 const pathTitle = `Sendero-al-faro-por-la-playa-norte-de-la-parcela-comunitaria-${tag}`;
 
 const psql = (sql: string): string =>
-  execFileSync("psql", [databaseUrl, "-At", "-c", sql], { encoding: "utf8" }).trim();
+  runPsql([databaseUrl, "-At", "-c", sql], { encoding: "utf8" }).trim();
 
 /**
  * A real map patch: paints a few tiles of Puerto's community plot (zones.yaml,

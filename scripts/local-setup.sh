@@ -27,15 +27,25 @@ have node || fail "Node 22 is not installed (https://nodejs.org or nvm)"
 node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 13) ? 0 : 1)' \
   || fail "Node >= 22.13 required, found $(node --version)"
 if ! have pnpm; then
-  log "pnpm not found; enabling it with corepack"
-  corepack enable || true
-  have pnpm || fail "pnpm is still missing; run 'corepack enable' (may need sudo) or 'npm i -g pnpm'"
+  # Node 25+ no longer ships corepack: fall back to npm with the pinned packageManager.
+  pnpm_spec=$(node -p 'require("./package.json").packageManager.split("+")[0]')
+  if have corepack; then
+    log "pnpm not found; enabling it with corepack"
+    corepack enable || true
+  fi
+  if ! have pnpm; then
+    log "pnpm not found; installing $pnpm_spec with npm"
+    npm install -g "$pnpm_spec" || true
+  fi
+  have pnpm || fail "pnpm is still missing; run 'npm i -g $pnpm_spec' (may need sudo)"
 fi
 have docker || log "WARNING: Docker not found. 'make db-up' needs it for local Postgres."
 
 # 2. Go tools (installed into GOBIN or GOPATH/bin)
 gobin=$(go env GOBIN)
 [ -n "$gobin" ] || gobin="$(go env GOPATH)/bin"
+# Git Bash on Windows: Go prints C:\... paths, PATH uses /c/...
+have cygpath && gobin=$(cygpath -u "$gobin")
 case ":$PATH:" in
   *":$gobin:"*) ;;
   *) log "WARNING: $gobin is not in PATH; add it so the Go tools are found" ;;
@@ -61,8 +71,15 @@ install_go_tool buf "github.com/bufbuild/buf/cmd/buf@$BUF_VERSION"
 install_go_tool goose "github.com/pressly/goose/v3/cmd/goose@$GOOSE_VERSION"
 install_go_tool staticcheck "honnef.co/go/tools/cmd/staticcheck@$STATICCHECK_VERSION"
 install_go_tool golangci-lint "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$GOLANGCI_LINT_VERSION"
-# sqlc needs cgo (a C compiler: build-essential on Linux/WSL, Xcode CLT on macOS).
-CGO_ENABLED=1 install_go_tool sqlc "github.com/sqlc-dev/sqlc/cmd/sqlc@$SQLC_VERSION"
+# sqlc uses cgo when there is a C compiler (build-essential on Linux/WSL, Xcode CLT on
+# macOS). Without one (native Windows) it builds with its WebAssembly Postgres parser.
+sqlc_cgo=1
+cc=$(go env CC)
+if [ "$(go env GOOS)" = windows ] && ! have "${cc%% *}"; then
+  sqlc_cgo=0
+  log "no C compiler: building sqlc without cgo"
+fi
+CGO_ENABLED=$sqlc_cgo install_go_tool sqlc "github.com/sqlc-dev/sqlc/cmd/sqlc@$SQLC_VERSION"
 
 # 3. Go module dependencies
 for m in server tools/bots; do

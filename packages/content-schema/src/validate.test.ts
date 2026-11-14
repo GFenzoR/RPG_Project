@@ -9,11 +9,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { formatDiagnostic, SchemaSet, validateContent } from "./index.ts";
 import type { SchemaName } from "./index.ts";
 
-const REPO = new URL("../../../", import.meta.url).pathname;
+const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 
 function messages(root: string): string[] {
   const out = validateContent(root).diagnostics.map(formatDiagnostic);

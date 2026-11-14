@@ -1,6 +1,8 @@
 # Line endings: a clone on Windows (core.autocrlf=true) must not turn these into CRLF, or
 # bash, make, Caddy and the container entrypoints break (docs/13, "Problemas comunes").
-* text=auto
+# Every text file is LF in the working tree too: Prettier, the golden files and the map
+# chunks expect LF, and native Windows development reads the files as they are (docs/12).
+* text=auto eol=lf
 *.sh text eol=lf
 Makefile text eol=lf
 *.mk text eol=lf

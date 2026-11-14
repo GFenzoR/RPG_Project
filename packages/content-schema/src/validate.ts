@@ -1,7 +1,7 @@
 // Validates data/ and i18n/ against the JSON Schemas plus the rules a schema cannot
 // express: unique IDs, cross references, dialog graphs, translations and ids.lock.yaml.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
 import { checkIdsLock } from "./ids.ts";
 import { SchemaSet } from "./schemas.ts";
@@ -799,7 +799,8 @@ class Validator {
     const literal = /["'`]([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)["'`]/g;
     for (const { dir, ext } of CODE_DIRS) {
       for (const file of codeFiles(join(this.root, dir), ext)) {
-        const rel = file.slice(this.root.length + 1);
+        // Diagnostics use "/" on every platform.
+        const rel = relative(this.root, file).split(sep).join("/");
         const lines = readFileSync(file, "utf8").split("\n");
         lines.forEach((line, i) => {
           for (const m of line.matchAll(literal)) {

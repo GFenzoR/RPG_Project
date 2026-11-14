@@ -616,12 +616,14 @@ func readHouses(root, dir string) ([]world.House, error) {
 }
 
 func readYAML(path string, out any) error {
+	// Report paths with forward slashes so messages read the same on every OS.
+	shown := filepath.ToSlash(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
+		return fmt.Errorf("read %s: %w", shown, err)
 	}
 	if err := yaml.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
+		return fmt.Errorf("%s: %w", shown, err)
 	}
 	return nil
 }

@@ -6,7 +6,11 @@ import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const repo = fileURLToPath(new URL("../../", import.meta.url));
+// Vite's /@fs/ URLs take a forward-slash absolute path: the repo's file URL pathname is
+// exactly that (/home/me/repo/ on POSIX, /C:/me/repo/ on Windows, where a native path
+// would give /@fsC:\... and never reach /@fs/ at all).
+const repo = new URL("../../", import.meta.url).pathname;
+const fsUrl = (rel: string): string => `${base}/@fs${repo}${rel}`;
 let server: ViteDevServer;
 let base = "";
 
@@ -42,7 +46,7 @@ describe("editor dev server", () => {
   });
 
   it("does not let another origin read files through /@fs/", async () => {
-    const res = await fetch(`${base}/@fs${repo}editor/package.json`, {
+    const res = await fetch(fsUrl("editor/package.json"), {
       headers: { origin: foreign },
     });
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
@@ -50,7 +54,11 @@ describe("editor dev server", () => {
 
   it("serves the editor but nothing outside it through /@fs/, even to itself", async () => {
     expect((await fetch(`${base}/`)).status).toBe(200);
-    expect((await fetch(`${base}/@fs${repo}world/world.yaml`)).status).toBe(403);
-    expect((await fetch(`${base}/@fs${repo}package.json`)).status).toBe(403);
+    // Control: the URL really reaches /@fs/ (the SPA fallback would answer 200 text/html).
+    const own = await fetch(fsUrl("editor/package.json"));
+    expect(own.status).toBe(200);
+    expect(((await own.json()) as { name?: string }).name).toBe("@rpg/editor");
+    expect((await fetch(fsUrl("world/world.yaml"))).status).toBe(403);
+    expect((await fetch(fsUrl("package.json"))).status).toBe(403);
   });
 });
