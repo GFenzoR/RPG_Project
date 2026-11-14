@@ -17,8 +17,10 @@ seguir con Claude Code en tu computador. El entorno local está en
   - casas;
   - Isla Volcánica, con el Capítulo 3 y las monedas de plata y oro.
 - **Faltan** T5.6 (controles táctiles y móvil) y T5.7 (tienda cosmética).
-- Las 175 rutas de sprite del juego son placeholders (cuadros de color con sigla), y el
-  cuerpo del jugador es un rectángulo de color.
+- 106 de las 151 rutas de sprite de `assets/sprites.yaml` usan el pack Dungeon Crawl (CC0,
+  `assets/vendor/dungeon-crawl/`); las otras 45 (madera, muelle, varios materiales, comida y
+  algunos monstruos y NPCs) siguen como placeholder, y el cuerpo del jugador es un
+  rectángulo de color.
 
 ## Primer arranque en tu PC
 1. Sigue "Instalar una vez" de `12-local-development.md`. En Windows, usa WSL2 con el repo

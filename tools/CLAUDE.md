@@ -76,6 +76,7 @@ Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y
 placeholders (cuadros de color con la sigla del item) cuando falta un sprite.
 Los PNG de bordes de `assets/sprites/borders/` salen de
 `node --experimental-strip-types tools/spritepack/src/gen-borders.ts` (regenéralos si
-cambia `data/borders.yaml` o el color de un suelo). Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
+cambia `data/borders.yaml` o el sprite de un suelo: cada pieza recorta la textura del suelo
+de origen, o su color si es placeholder). Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
 `assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
 terceros: `assets/README.md`.

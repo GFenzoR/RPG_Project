@@ -8,89 +8,90 @@
 # A file at assets/sprites/<path>.png (original art) wins over nothing: it must NOT also be
 # listed here. Sprites used in data/ with no entry get an automatic placeholder (warning).
 #
-# Everything below is a placeholder until the user's packs land in assets/vendor/ (T0.5).
+# Pack art: Dungeon Crawl Stone Soup tiles (CC0, vendor/dungeon-crawl). Placeholders mark what the
+# pack does not cover: those get original art later (T0.5).
 sprites:
   # Ground: plain colour, no label, so map renders stay readable.
-  ground/grass: { placeholder: { label: "", color: "#4f8a3c" } }
-  ground/sand: { placeholder: { label: "", color: "#d8c27a" } }
-  ground/dirt: { placeholder: { label: "", color: "#7a5a3a" } }
-  ground/stone_floor: { placeholder: { label: "", color: "#8a8a86" } }
-  ground/water_shallow: { placeholder: { label: "", color: "#3f7fb5" } }
-  ground/water_shoal: { placeholder: { label: "", color: "#3a8fb0" } }
-  ground/wet_sand: { placeholder: { label: "", color: "#a8935a" } }
+  ground/grass: { source: vendor/dungeon-crawl/dngn/floor/grass/grass0.png }
+  ground/sand: { source: vendor/dungeon-crawl/dngn/floor/sand1.png }
+  ground/dirt: { source: vendor/dungeon-crawl/dngn/floor/dirt0.png }
+  ground/stone_floor: { source: vendor/dungeon-crawl/dngn/floor/cobble_blood1.png }
+  ground/water_shallow: { source: vendor/dungeon-crawl/dngn/water/shallow_water.png }
+  ground/water_shoal: { source: vendor/dungeon-crawl/dngn/water/shallow_water_disturbance.png }
+  ground/wet_sand: { source: vendor/dungeon-crawl/dngn/floor/grass/grass_full.png }
   ground/dock_planks: { placeholder: { label: "", color: "#7b5b3c" } }
   ground/wooden_floor: { placeholder: { label: "", color: "#9c7650" } }
 
   # Items
-  armor/patched_tunic: { placeholder: { label: PT, color: "#8c6d4f" } }
-  shields/plank_shield: { placeholder: { label: PS, color: "#9a7444" } }
+  armor/patched_tunic: { source: vendor/dungeon-crawl/item/armour/robe1.png }
+  shields/plank_shield: { source: vendor/dungeon-crawl/UNUSED/armour/elven_buckler1.png }
   currency/copper_coin: { placeholder: { label: CC, color: "#c07a3a" } }
   currency/silver_coin: { placeholder: { label: SC, color: "#b8c0c8" } }
-  currency/gold_coin: { placeholder: { label: GC, color: "#e0b83a" } }
-  materials/wolf_pelt: { placeholder: { label: WP, color: "#8e8478" } }
+  currency/gold_coin: { source: vendor/dungeon-crawl/item/gold/03.png }
+  materials/wolf_pelt: { source: vendor/dungeon-crawl/item/armour/animal_skin1.png }
   food/raw_fish: { placeholder: { label: RF, color: "#7fb0b8" } }
   tools/fishing_rod: { placeholder: { label: FR, color: "#6d7f4a" } }
   tools/rope: { placeholder: { label: RO, color: "#b49a64" } }
   containers/backpack: { placeholder: { label: BK, color: "#8a5a32" } }
-  weapons/iron_sword: { placeholder: { label: IS, color: "#7d8794" } }
-  weapons/hatchet: { placeholder: { label: HA, color: "#6f7a86" } }
-  weapons/driftwood_club: { placeholder: { label: DC, color: "#8a7458" } }
+  weapons/iron_sword: { source: vendor/dungeon-crawl/item/weapon/long_sword1.png }
+  weapons/hatchet: { source: vendor/dungeon-crawl/item/weapon/hand_axe1.png }
+  weapons/driftwood_club: { source: vendor/dungeon-crawl/item/weapon/giant_club.png }
 
   # Items: Isla del Puerto
-  weapons/rusty_cutlass: { placeholder: { label: RC, color: "#8a6a52" } }
-  weapons/boarding_saber: { placeholder: { label: BS, color: "#9aa3ad" } }
-  weapons/bearded_axe: { placeholder: { label: BA, color: "#707b88" } }
-  weapons/belaying_pin: { placeholder: { label: BP, color: "#a07a50" } }
-  weapons/spiked_cudgel: { placeholder: { label: SK, color: "#6e5a44" } }
-  weapons/coral_wand: { placeholder: { label: CW, color: "#e4d8cc" } }
-  runes/arc_rune: { placeholder: { label: AR, color: "#6fb7e8" } }
+  weapons/rusty_cutlass: { source: vendor/dungeon-crawl/item/weapon/falchion1.png }
+  weapons/boarding_saber: { source: vendor/dungeon-crawl/item/weapon/scimitar1.png }
+  weapons/bearded_axe: { source: vendor/dungeon-crawl/item/weapon/hand_axe2.png }
+  weapons/belaying_pin: { source: vendor/dungeon-crawl/item/weapon/club.png }
+  weapons/spiked_cudgel: { source: vendor/dungeon-crawl/item/weapon/giant_spiked_club.png }
+  weapons/coral_wand: { source: vendor/dungeon-crawl/item/wand/gem_ivory.png }
+  runes/arc_rune: { source: vendor/dungeon-crawl/item/misc/runes/generic.png }
   # Items: ranger and druid (T3.1)
-  weapons/short_bow: { placeholder: { label: SB, color: "#9a7448" } }
-  weapons/yew_longbow: { placeholder: { label: YL, color: "#6e4a2a" } }
-  weapons/sapling_staff: { placeholder: { label: SS, color: "#6f9a4a" } }
-  weapons/rimewood_staff: { placeholder: { label: RS, color: "#cfe4ee" } }
-  ammo/arrow: { placeholder: { label: AW, color: "#b0a48a" } }
-  armor/hide_vest: { placeholder: { label: HV, color: "#a07850" } }
-  armor/sailcloth_cap: { placeholder: { label: SC, color: "#c9bfa6" } }
-  armor/leather_jerkin: { placeholder: { label: LJ, color: "#8a5a32" } }
+  weapons/short_bow: { source: vendor/dungeon-crawl/item/weapon/ranged/shortbow1.png }
+  weapons/yew_longbow: { source: vendor/dungeon-crawl/item/weapon/ranged/longbow1.png }
+  weapons/sapling_staff: { source: vendor/dungeon-crawl/item/staff/staff05.png }
+  weapons/rimewood_staff: { source: vendor/dungeon-crawl/item/wand/gem_glass.png }
+  ammo/arrow: { source: vendor/dungeon-crawl/effect/arrow3.png }
+  armor/hide_vest: { source: vendor/dungeon-crawl/item/armour/animal_skin2.png }
+  armor/sailcloth_cap: { source: vendor/dungeon-crawl/UNUSED/armour/cap1.png }
+  armor/leather_jerkin: { source: vendor/dungeon-crawl/item/armour/leather_armour1.png }
   armor/canvas_trousers: { placeholder: { label: CT, color: "#b2a684" } }
-  armor/tarred_boots: { placeholder: { label: TB, color: "#3a3430" } }
-  shields/barrel_lid_shield: { placeholder: { label: BL, color: "#8e6a40" } }
-  shields/riveted_round_shield: { placeholder: { label: RR, color: "#7e8690" } }
+  armor/tarred_boots: { source: vendor/dungeon-crawl/item/armour/boots1_brown.png }
+  shields/barrel_lid_shield: { source: vendor/dungeon-crawl/item/armour/shields/buckler1.png }
+  shields/riveted_round_shield: { source: vendor/dungeon-crawl/UNUSED/armour/dwarven_buckler1.png }
   tools/pickaxe: { placeholder: { label: PA, color: "#6a6e74" } }
   tools/shovel: { placeholder: { label: SH, color: "#7a7060" } }
-  food/ship_biscuit: { placeholder: { label: SB, color: "#d2b67c" } }
-  food/boar_meat: { placeholder: { label: BM, color: "#a8483c" } }
+  food/ship_biscuit: { source: vendor/dungeon-crawl/item/food/bread_ration.png }
+  food/boar_meat: { source: vendor/dungeon-crawl/item/food/chunk.png }
   food/seaweed_poultice: { placeholder: { label: SP, color: "#4c7a48" } }
   materials/gull_feather: { placeholder: { label: GF, color: "#e8e8e2" } }
   materials/crab_claw: { placeholder: { label: CL, color: "#c4553c" } }
   materials/bat_wing: { placeholder: { label: BW, color: "#3c3442" } }
   materials/boar_tusk: { placeholder: { label: BT, color: "#e6dcc0" } }
-  materials/spider_silk: { placeholder: { label: SS, color: "#b8c8a8" } }
+  materials/spider_silk: { source: vendor/dungeon-crawl/item/weapon/ranged/throwing_net.png }
   materials/beetle_carapace: { placeholder: { label: BC, color: "#3e5248" } }
-  materials/iron_ore: { placeholder: { label: IO, color: "#8a4e3a" } }
-  materials/rough_stone: { placeholder: { label: RS, color: "#7d7a72" } }
+  materials/iron_ore: { source: vendor/dungeon-crawl/item/weapon/ranged/rock.png }
+  materials/rough_stone: { source: vendor/dungeon-crawl/item/misc/misc_stone_inert.png }
   materials/quartz_crystal: { placeholder: { label: QC, color: "#cfe3ea" } }
-  decor/iron_vein: { placeholder: { label: IV, color: "#6b4a3c" } }
-  materials/tarnished_locket: { placeholder: { label: TL, color: "#7c7448" } }
-  quest/bosun_logbook: { placeholder: { label: BL, color: "#6e5a3a" } }
+  decor/iron_vein: { source: vendor/dungeon-crawl/dngn/wall/orc5.png }
+  materials/tarnished_locket: { source: vendor/dungeon-crawl/item/amulet/bone_gray.png }
+  quest/bosun_logbook: { source: vendor/dungeon-crawl/item/book/dark_brown.png }
   decor/mooring_post: { placeholder: { label: MP, color: "#5a4632" } }
   decor/cargo_crate: { placeholder: { label: CR, color: "#9a7a4e" } }
 
   # Items: trades (T3.4)
-  tools/felling_axe: { placeholder: { label: FA, color: "#7a6a58" } }
-  tools/smithing_hammer: { placeholder: { label: SH, color: "#5e6570" } }
+  tools/felling_axe: { source: vendor/dungeon-crawl/item/weapon/hand_axe2.png }
+  tools/smithing_hammer: { source: vendor/dungeon-crawl/UNUSED/weapons/hammer1.png }
   materials/birch_log: { placeholder: { label: BL, color: "#cdbf9e" } }
-  materials/tree_resin: { placeholder: { label: TR, color: "#c98a2a" } }
+  materials/tree_resin: { source: vendor/dungeon-crawl/item/food/lump_of_royal_jelly.png }
   materials/iron_ingot: { placeholder: { label: II, color: "#8b939c" } }
   food/grilled_fish: { placeholder: { label: GF, color: "#c48a4a" } }
-  food/roast_boar: { placeholder: { label: RB, color: "#8a4a2a" } }
+  food/roast_boar: { source: vendor/dungeon-crawl/item/food/meat_ration.png }
   food/harbour_stew: { placeholder: { label: HS, color: "#9a6a3a" } }
-  weapons/forged_shortsword: { placeholder: { label: FS, color: "#a0a8b2" } }
-  decor/birch_tree: { placeholder: { label: "", color: "#9ab88a" } }
-  decor/smelting_forge: { placeholder: { label: FG, color: "#b04a22" } }
+  weapons/forged_shortsword: { source: vendor/dungeon-crawl/item/weapon/short_sword1.png }
+  decor/birch_tree: { source: vendor/dungeon-crawl/dngn/trees/tree2_yellow.png }
+  decor/smelting_forge: { source: vendor/dungeon-crawl/dngn/altars/makhleb_flame1.png }
   decor/anvil: { placeholder: { label: AN, color: "#45484e" } }
-  decor/cooking_hearth: { placeholder: { label: HE, color: "#7a3a1e" } }
+  decor/cooking_hearth: { source: vendor/dungeon-crawl/dngn/gateways/return_vestibule.png }
   decor/market_board: { placeholder: { label: MK, color: "#b8862e" } }
 
   # Items: Isla del Bosque (T3.6)
@@ -102,79 +103,79 @@ sprites:
   materials/elm_log: { placeholder: { label: EL, color: "#8a7a5e" } }
   food/glowcap_broth: { placeholder: { label: GB, color: "#b8a84a" } }
   quest/smuggler_tally: { placeholder: { label: ST, color: "#6a4a2a" } }
-  quest/sealed_coffer: { placeholder: { label: SC, color: "#7a3a2a" } }
-  decor/elm_tree: { placeholder: { label: "", color: "#5e7a52" } }
-  shields/elmwood_shield: { placeholder: { label: ES, color: "#8a6e46" } }
-  armor/stagleather_coat: { placeholder: { label: SK, color: "#7a5a3a" } }
+  quest/sealed_coffer: { source: vendor/dungeon-crawl/item/misc/misc_box.png }
+  decor/elm_tree: { source: vendor/dungeon-crawl/dngn/trees/mangrove3.png }
+  shields/elmwood_shield: { source: vendor/dungeon-crawl/item/armour/shields/large_shield1.png }
+  armor/stagleather_coat: { source: vendor/dungeon-crawl/item/armour/cloak1_leather.png }
   armor/stagleather_leggings: { placeholder: { label: SL, color: "#6e5236" } }
-  weapons/thornwood_blade: { placeholder: { label: TB, color: "#6a8a5a" } }
+  weapons/thornwood_blade: { source: vendor/dungeon-crawl/item/weapon/artefact/urand_wyrmbane.png }
 
   # Creatures
-  decor/oak_tree: { placeholder: { label: "", color: "#2f5a26" } }
+  decor/oak_tree: { source: vendor/dungeon-crawl/dngn/trees/mangrove1.png }
   decor/pine_tree: { placeholder: { label: "", color: "#1f4a2e" } }
-  decor/bush: { placeholder: { label: "", color: "#5f9a40" } }
+  decor/bush: { source: vendor/dungeon-crawl/mon/fungi_plants/bush2.png }
   decor/boulder: { placeholder: { label: "", color: "#6e6a62" } }
-  decor/stairs_down: { placeholder: { label: "DN", color: "#4a3a2a" } }
-  decor/stairs_up: { placeholder: { label: "UP", color: "#b09a7a" } }
-  walls/stone_wall: { placeholder: { label: "", color: "#5c5a57" } }
+  decor/stairs_down: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_down.png }
+  decor/stairs_up: { source: vendor/dungeon-crawl/UNUSED/features/rock_stairs_up.png }
+  walls/stone_wall: { source: vendor/dungeon-crawl/dngn/wall/brick_gray0.png }
   walls/wooden_wall: { placeholder: { label: "", color: "#6a4a2c" } }
-  walls/rock_wall: { placeholder: { label: "", color: "#3b342e" } }
-  decor/creature_remains: { placeholder: { label: "", color: "#6b2a24", size: [32, 32] } }
-  creatures/bilge_rat: { placeholder: { label: BR, color: "#5e534c" } }
-  creatures/tide_crab: { placeholder: { label: TC, color: "#c4553c" } }
-  creatures/wolf: { placeholder: { label: WO, color: "#5c5f66" } }
+  walls/rock_wall: { source: vendor/dungeon-crawl/dngn/wall/lab-rock0.png }
+  decor/creature_remains: { source: vendor/dungeon-crawl/mon/undead/crawling_corpse.png }
+  creatures/bilge_rat: { source: vendor/dungeon-crawl/mon/undead/zombies/zombie_rat.png }
+  creatures/tide_crab: { source: vendor/dungeon-crawl/mon/animals/fire_crab.png }
+  creatures/wolf: { source: vendor/dungeon-crawl/mon/animals/wolf.png }
   creatures/thieving_gull: { placeholder: { label: TG, color: "#d8d8d0" } }
-  creatures/gloom_bat: { placeholder: { label: GB, color: "#3a3046" } }
+  creatures/gloom_bat: { source: vendor/dungeon-crawl/mon/animals/bat.png }
   creatures/bristleback_boar: { placeholder: { label: BB, color: "#6a4e3a" } }
-  creatures/moss_spider: { placeholder: { label: MS, color: "#4e6a3a" } }
-  creatures/wreck_looter: { placeholder: { label: WL, color: "#8a6a4a" } }
-  creatures/ore_beetle: { placeholder: { label: OB, color: "#5a3e34" } }
-  creatures/drowned_miner: { placeholder: { label: DM, color: "#4a6a6e" } }
+  creatures/moss_spider: { source: vendor/dungeon-crawl/mon/animals/jumping_spider.png }
+  creatures/wreck_looter: { source: vendor/dungeon-crawl/mon/human.png }
+  creatures/ore_beetle: { source: vendor/dungeon-crawl/mon/animals/boulder_beetle.png }
+  creatures/drowned_miner: { source: vendor/dungeon-crawl/mon/undead/ghoul.png }
   creatures/bramble_stag: { placeholder: { label: BS, color: "#8a6a3a" } }
-  creatures/mire_toad: { placeholder: { label: MT, color: "#5a7a2a" } }
-  creatures/coffer_smuggler: { placeholder: { label: CS, color: "#5a4a5e" } }
-  creatures/thornling: { placeholder: { label: TN, color: "#3a5a2a" } }
-  creatures/hollow_crawler: { placeholder: { label: HC, color: "#c8c0aa" } }
+  creatures/mire_toad: { source: vendor/dungeon-crawl/mon/animals/giant_frog.png }
+  creatures/coffer_smuggler: { source: vendor/dungeon-crawl/mon/ironheart_preserver.png }
+  creatures/thornling: { source: vendor/dungeon-crawl/mon/fungi_plants/thorn_hunter.png }
+  creatures/hollow_crawler: { source: vendor/dungeon-crawl/UNUSED/monsters/giant_centipede.png }
 
   # NPCs
-  npcs/sailor_old: { placeholder: { label: SO, color: "#2f5d8a" } }
-  npcs/armorer: { placeholder: { label: AR, color: "#7a3e2a" } }
-  npcs/merchant: { placeholder: { label: ME, color: "#8a7a2a" } }
-  npcs/priestess: { placeholder: { label: PR, color: "#d8c890" } }
-  npcs/miner_old: { placeholder: { label: MO, color: "#5a4a3a" } }
-  npcs/diver_old: { placeholder: { label: DV, color: "#2a6a6e" } }
-  npcs/druid_elder: { placeholder: { label: DR, color: "#4a7a4a" } }
+  npcs/sailor_old: { source: vendor/dungeon-crawl/mon/unique/donald.png }
+  npcs/armorer: { source: vendor/dungeon-crawl/mon/dwarf.png }
+  npcs/merchant: { source: vendor/dungeon-crawl/mon/halfling.png }
+  npcs/priestess: { source: vendor/dungeon-crawl/mon/unique/kirke.png }
+  npcs/miner_old: { source: vendor/dungeon-crawl/mon/unique/jorgrun.png }
+  npcs/diver_old: { source: vendor/dungeon-crawl/mon/unique/joseph.png }
+  npcs/druid_elder: { source: vendor/dungeon-crawl/mon/siren.png }
   npcs/ferryman: { placeholder: { label: FM, color: "#3a6a8a" } }
-  npcs/priest_forest: { placeholder: { label: PF, color: "#a8b878" } }
-  npcs/tanner: { placeholder: { label: TA, color: "#8a5a3a" } }
+  npcs/priest_forest: { source: vendor/dungeon-crawl/UNUSED/monsters/michael.png }
+  npcs/tanner: { source: vendor/dungeon-crawl/mon/elf.png }
 
   # Isla Volcánica (T5.5)
-  materials/ash_pelt: { placeholder: { label: AP, color: "#7a7a72" } }
-  materials/salamander_scale: { placeholder: { label: SS, color: "#c8482a" } }
+  materials/ash_pelt: { source: vendor/dungeon-crawl/item/armour/silver_dragon_scales.png }
+  materials/salamander_scale: { source: vendor/dungeon-crawl/item/armour/gold_dragon_hide.png }
   materials/slag_core: { placeholder: { label: SC, color: "#e0702a" } }
-  materials/wyrm_scale: { placeholder: { label: WS, color: "#a8321e" } }
+  materials/wyrm_scale: { source: vendor/dungeon-crawl/item/armour/shadow_dragon_scales.png }
   materials/ember_ore: { placeholder: { label: EO, color: "#5a2a22" } }
   materials/embersteel_ingot: { placeholder: { label: EI, color: "#8a3a2a" } }
-  quest/ember_root: { placeholder: { label: ER, color: "#9a5a3a" } }
-  quest/delver_chart: { placeholder: { label: DC, color: "#b8a888" } }
-  quest/forge_seal: { placeholder: { label: FS, color: "#3a2e2a" } }
-  decor/ember_vein: { placeholder: { label: "", color: "#4a2a26" } }
-  weapons/embersteel_sabre: { placeholder: { label: ES, color: "#9a4a3a" } }
-  weapons/embersteel_axe: { placeholder: { label: EA, color: "#8a4232" } }
-  weapons/wyrmfang_blade: { placeholder: { label: WF, color: "#c85a2a" } }
-  armor/embersteel_helm: { placeholder: { label: EH, color: "#7a3a2e" } }
-  armor/embersteel_cuirass: { placeholder: { label: EC, color: "#6e3428" } }
-  shields/embersteel_shield: { placeholder: { label: EZ, color: "#82402e" } }
-  armor/wyrmscale_mail: { placeholder: { label: WM, color: "#b0442a" } }
+  quest/ember_root: { source: vendor/dungeon-crawl/item/misc/runes/rune_gehenna.png }
+  quest/delver_chart: { source: vendor/dungeon-crawl/item/scroll/scroll-brown.png }
+  quest/forge_seal: { source: vendor/dungeon-crawl/item/misc/misc_disc.png }
+  decor/ember_vein: { source: vendor/dungeon-crawl/dngn/wall/hell05.png }
+  weapons/embersteel_sabre: { source: vendor/dungeon-crawl/item/weapon/falchion3.png }
+  weapons/embersteel_axe: { source: vendor/dungeon-crawl/item/weapon/artefact/spwpn_wrath_of_trog.png }
+  weapons/wyrmfang_blade: { source: vendor/dungeon-crawl/item/weapon/artefact/spwpn_sword_of_cerebov.png }
+  armor/embersteel_helm: { source: vendor/dungeon-crawl/item/armour/headgear/helmet5.png }
+  armor/embersteel_cuirass: { source: vendor/dungeon-crawl/item/armour/plate1.png }
+  shields/embersteel_shield: { source: vendor/dungeon-crawl/item/armour/shields/lshield_dd_dk.png }
+  armor/wyrmscale_mail: { source: vendor/dungeon-crawl/item/armour/artefact/urand_salamander.png }
 
-  creatures/ash_hound: { placeholder: { label: AH, color: "#6a6a64" } }
-  creatures/cinder_salamander: { placeholder: { label: CS, color: "#d0502a" } }
-  creatures/obsidian_delver: { placeholder: { label: OD, color: "#2e2a34" } }
-  creatures/slag_golem: { placeholder: { label: SG, color: "#8a5a3a" } }
-  creatures/ember_wyrmling: { placeholder: { label: EW, color: "#b8321e" } }
-  creatures/slagbound_warden: { placeholder: { label: SW, color: "#4a2a1e" } }
-  npcs/forge_keeper: { placeholder: { label: FK, color: "#8a6a4a" } }
-  npcs/forge_echo: { placeholder: { label: FE, color: "#d89a5a" } }
-  npcs/smith_volcanic: { placeholder: { label: SM, color: "#5a3a2a" } }
-  npcs/priest_volcanic: { placeholder: { label: PV, color: "#c8a888" } }
-  npcs/ferryman_volcanic: { placeholder: { label: FV, color: "#3a5a7a" } }
+  creatures/ash_hound: { source: vendor/dungeon-crawl/UNUSED/monsters/war_dog.png }
+  creatures/cinder_salamander: { source: vendor/dungeon-crawl/mon/salamander.png }
+  creatures/obsidian_delver: { source: vendor/dungeon-crawl/mon/deep_dwarf.png }
+  creatures/slag_golem: { source: vendor/dungeon-crawl/mon/nonliving/earth_elemental.png }
+  creatures/ember_wyrmling: { source: vendor/dungeon-crawl/UNUSED/monsters/eastern_dragon.png }
+  creatures/slagbound_warden: { source: vendor/dungeon-crawl/mon/nonliving/iron_elemental.png }
+  npcs/forge_keeper: { source: vendor/dungeon-crawl/mon/unique/jessica.png }
+  npcs/forge_echo: { source: vendor/dungeon-crawl/mon/nonliving/fire_elemental.png }
+  npcs/smith_volcanic: { source: vendor/dungeon-crawl/UNUSED/monsters/deep_dwarf_artificer.png }
+  npcs/priest_volcanic: { source: vendor/dungeon-crawl/mon/unique/josephine.png }
+  npcs/ferryman_volcanic: { source: vendor/dungeon-crawl/mon/unique/margery.png }

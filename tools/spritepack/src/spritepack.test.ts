@@ -299,3 +299,16 @@ describe("repository content", () => {
     for (const sprite of used) expect(r.atlas?.index.sprites[sprite]).toBeDefined();
   });
 });
+
+describe("decodePng", () => {
+  it("ignores a repeated IEND and bytes after the first one", () => {
+    const img = createImage(2, 1);
+    fillRect(img, 0, 0, 1, 1, [255, 0, 0, 255]);
+    const png = encodePng(img);
+    const iend = png.subarray(png.length - 12); // length 0 + "IEND" + CRC
+    expect(iend.toString("latin1", 4, 8)).toBe("IEND");
+    for (const tail of [iend, Buffer.from("junk")]) {
+      expect(decodePng(Buffer.concat([png, tail]))).toEqual(img);
+    }
+  });
+});

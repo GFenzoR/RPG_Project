@@ -9,7 +9,7 @@ con esa carpeta y un archivo `LICENSE` dentro. Procedimiento completo: `assets/R
 
 | Pack / archivo | Autor | Licencia | Fuente (URL) | Carpeta | Atribución requerida |
 |---|---|---|---|---|---|
-| | | | | `assets/vendor/...` | |
+| Dungeon Crawl Stone Soup tiles (release Nov-2015) | Artistas de Dungeon Crawl Stone Soup (lista en `ARTISTS.md` del pack) | CC0 1.0 | https://github.com/crawl/tiles (también https://opengameart.org/content/dungeon-crawl-32x32-tiles) | `assets/vendor/dungeon-crawl/` | No (se acredita igual) |
 
 ## Obra propia
 

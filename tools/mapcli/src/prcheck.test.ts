@@ -31,6 +31,13 @@ import {
 } from "./prcomment.ts";
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
+// Sandboxes leave out the vendor PNGs that assets/sprites.yaml does not use: a pack has
+// thousands of files, and copying them all makes every sandbox seconds slower.
+const spriteManifest = readFileSync(join(repo, "assets/sprites.yaml"), "utf8");
+const usedFiles = (src: string): boolean => {
+  const rel = src.slice(repo.length).replaceAll("\\", "/");
+  return !/^assets\/vendor\/.+\.png$/.test(rel) || spriteManifest.includes(rel.slice(7));
+};
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -50,7 +57,7 @@ function sandbox(): {
 } {
   const root = tmp("mapcli-pr-");
   for (const d of ["world", "data", "i18n", "assets"])
-    cpSync(join(repo, d), join(root, d), { recursive: true });
+    cpSync(join(repo, d), join(root, d), { recursive: true, filter: usedFiles });
   mkdirSync(join(root, ".github"));
   writeFileSync(join(root, ".github/MAINTAINERS"), "# maintainers\n@Boss\n");
   const git = (...a: string[]): string =>
