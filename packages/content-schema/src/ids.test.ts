@@ -1,10 +1,11 @@
 import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { formatDiagnostic, generateIdsLock, validateContent } from "./index.ts";
 
-const REPO = new URL("../../../", import.meta.url).pathname;
+const REPO = fileURLToPath(new URL("../../../", import.meta.url));
 
 describe("ids.lock.yaml", () => {
   let root: string;

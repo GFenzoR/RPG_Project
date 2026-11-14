@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatYaml, parseYamlText } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
@@ -635,6 +635,8 @@ describe("map-pr-pending workflow (R5)", () => {
   /** Runs the step's script with a fake `gh` (F2): returns its exit code and the PATCH body. */
   function runPending(fake: { list: string; listFails?: boolean; patchFails?: boolean }) {
     const dir = tmp("pending-");
+    // Forward slashes so the path survives inside the bash fake on Windows (Git Bash).
+    const shDir = dir.replaceAll("\\", "/");
     const script = (yml.split("run: |\n")[1] ?? "")
       .split("\n")
       .map((l) => l.replace(/^ {10}/, ""))
@@ -645,9 +647,9 @@ describe("map-pr-pending workflow (R5)", () => {
       join(dir, "gh"),
       `#!/usr/bin/env bash
 if [ "$1 $2" = "api -X" ]; then
-  ${fake.patchFails ? "exit 1" : `printf '%s' "$@" > "${dir}/patched"; exit 0`}
+  ${fake.patchFails ? "exit 1" : `printf '%s' "$@" > "${shDir}/patched"; exit 0`}
 fi
-${fake.listFails ? 'echo "HTTP 403: rate limit" >&2; exit 1' : `cat "${dir}/list.json"`}
+${fake.listFails ? 'echo "HTTP 403: rate limit" >&2; exit 1' : `cat "${shDir}/list.json"`}
 `,
       { mode: 0o755 },
     );
@@ -655,7 +657,7 @@ ${fake.listFails ? 'echo "HTTP 403: rate limit" >&2; exit 1' : `cat "${dir}/list
     try {
       execFileSync("bash", [join(dir, "step.sh")], {
         env: {
-          PATH: `${dir}:${process.env.PATH ?? ""}`,
+          PATH: `${dir}${delimiter}${process.env.PATH ?? ""}`,
           RUNNER_TEMP: dir,
           GH_TOKEN: "x",
           REPO: "o/r",
@@ -675,7 +677,20 @@ ${fake.listFails ? 'echo "HTTP 403: rate limit" >&2; exit 1' : `cat "${dir}/list
 
   const bot = (id: number, body: string) => ({ id, user: { login: "github-actions[bot]" }, body });
 
-  it("marks the bot's marked comment pending, across pages (F2)", () => {
+  // The step needs jq (preinstalled on GitHub runners). Native Windows rarely has it, so
+  // skip there when missing; elsewhere a missing jq still fails loudly.
+  // A native Windows jq.exe prints CRLF (the step's `[[ $id =~ ^[0-9]+$ ]]` would fail), so
+  // on Windows only an LF-printing jq (e.g. MSYS2's) counts.
+  const hasJq = (() => {
+    try {
+      return execFileSync("jq", ["-n", "1"], { encoding: "utf8" }) === "1\n";
+    } catch {
+      return false;
+    }
+  })();
+  const itPending = it.skipIf(process.platform === "win32" && !hasJq);
+
+  itPending("marks the bot's marked comment pending, across pages (F2)", () => {
     // `gh api --paginate` prints one JSON array per page.
     const list = `${JSON.stringify([bot(1, "hello"), { id: 2, user: { login: "u" }, body: MARKER }])}\n${JSON.stringify([bot(3, `${MARKER}\nold ✅`)])}`;
     const r = runPending({ list });
@@ -684,7 +699,7 @@ ${fake.listFails ? 'echo "HTTP 403: rate limit" >&2; exit 1' : `cat "${dir}/list
     expect(r.patched).toContain("Pendiente:** revisando el commit `aaaaaaaaaaaa`");
   });
 
-  it("exits 0 without a comment, and fails when the API fails (F2)", () => {
+  itPending("exits 0 without a comment, and fails when the API fails (F2)", () => {
     expect(runPending({ list: JSON.stringify([bot(1, "hi")]) })).toEqual({
       code: 0,
       patched: null,

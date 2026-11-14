@@ -13,7 +13,8 @@ if (!process.env["EDITOR_E2E_ROOT"]) {
   for (const dir of ["world", "data", "i18n", "assets"])
     cpSync(join(repo, dir), join(root, dir), {
       recursive: true,
-      filter: (src) => !src.includes("/assets/atlas"),
+      // Windows paths use backslashes.
+      filter: (src) => !src.replaceAll("\\", "/").includes("/assets/atlas"),
     });
   process.env["EDITOR_E2E_ROOT"] = root;
 }
@@ -32,6 +33,11 @@ export default defineConfig({
     baseURL: `http://localhost:${port}`,
     viewport: { width: 1400, height: 860 },
     trace: "retain-on-failure",
+    // Headless Chromium on Windows draws WebGL in software (SwiftShader), which makes PixiJS
+    // pages several times slower than on Linux: use the GPU through ANGLE/D3D11 there.
+    ...(process.platform === "win32" && {
+      launchOptions: { args: ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"] },
+    }),
   },
   webServer: {
     command: `pnpm exec vite --port ${port} --strictPort`,

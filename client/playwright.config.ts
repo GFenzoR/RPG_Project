@@ -40,6 +40,11 @@ export default defineConfig({
     baseURL: `http://localhost:${clientPort}`,
     viewport: { width: 1280, height: 800 },
     trace: "retain-on-failure",
+    // Headless Chromium on Windows draws WebGL in software (SwiftShader), which makes PixiJS
+    // pages several times slower than on Linux: use the GPU through ANGLE/D3D11 there.
+    ...(process.platform === "win32" && {
+      launchOptions: { args: ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"] },
+    }),
   },
   webServer: [
     {

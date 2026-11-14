@@ -11,7 +11,7 @@
 //   - map_apply_ops takes at most MAX_OPS ops per call.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import {
   MAX_VIEW_SIZE,
   formatDiagnostic,
@@ -419,7 +419,8 @@ export function createTools(o: ServerOptions): Tool[] {
         const file = inside(dir, `${name}.rpgpatch.json`);
         writeFileSync(file, `${JSON.stringify(patch, null, 2)}\n`);
         return text({
-          path: file.slice(root.length + 1),
+          // Repo-relative path with "/" separators on every OS.
+          path: relative(root, file).split(sep).join("/"),
           base_ref: patch.base_ref,
           files: patch.files.map((f) => ({
             path: f.path,

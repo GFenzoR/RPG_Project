@@ -22,7 +22,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 
 ## Primer arranque en tu PC
 1. Sigue "Instalar una vez" de `12-local-development.md`. En Windows, usa WSL2 con el repo
-   dentro de WSL.
+   dentro de WSL, o la vía "Windows nativo" del mismo doc (repo en `C:\`, Git Bash).
 2. Corre `make setup`, `make db-up` y `make dev`, y abre `http://localhost:5173/` (sitio) y
    `http://localhost:5173/play/` (juego).
 3. Para que otros entren desde tu red o desde internet, usa `make home-up` (`13-hosting-de-pruebas.md`).

@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
+import { psql } from "./psql.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -537,7 +538,7 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   await apiCtx.dispose();
   // The ranger: a backpack (48), a short bow (89) in the right hand and 30 arrows (87) in
   // the ammo slot (slots 3, 5 and 10; data/ids.lock.yaml).
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `INSERT INTO inventory_items (character_id, slot, item_id, count)
@@ -644,11 +645,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await apiCtx.dispose();
   // Puerto's NPCs live on Isla del Puerto (T1.16): this character's residence is Farol, so
   // it wakes up at that temple, next to the priestess and the provisioner.
-  execFileSync("psql", [
-    databaseUrl,
-    "-c",
-    `UPDATE characters SET town = 'puerto' WHERE name = '${name}'`,
-  ]);
+  psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${name}'`]);
 
   await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
@@ -760,11 +757,7 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
   ).toBe(201);
   await apiCtx.dispose();
   // One hit point left, so the first wolf bite is deadly (the name is letters and a space).
-  execFileSync("psql", [
-    databaseUrl,
-    "-c",
-    `UPDATE characters SET health = 1 WHERE name = '${name}'`,
-  ]);
+  psql([databaseUrl, "-c", `UPDATE characters SET health = 1 WHERE name = '${name}'`]);
 
   await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
@@ -851,7 +844,7 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
   ).toBe(201);
   await apiCtx.dispose();
   // A backpack (48) and a pickaxe (38) in the right hand (data/ids.lock.yaml slots 3 and 5).
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `INSERT INTO inventory_items (character_id, slot, item_id)
@@ -862,7 +855,7 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
   // 0.85, data/items/decoration.yaml). At 0.3 a run of bad swings (each 1.5 s apart, ~3 s
   // on a loaded single core) could take longer than the test, and a wolf wandering in
   // from earlier tests gets that much longer to kill a level-1 miner.
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `INSERT INTO character_skills (character_id, skill, level)
@@ -1202,7 +1195,7 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
   await apiCtx.dispose();
   // Haste (swift_stride) needs level 8: 4704 experience on balance.yaml's curve, and the
   // guardian's 48 mana at that level.
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `UPDATE characters SET level = 8, experience = 4704, mana = 48 WHERE name = '${name}'`,
@@ -1418,7 +1411,7 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
   // Stand just south of Farol's cooking hearth (3172, 6366: world/islands/puerto), with a
   // backpack (48) holding 3 raw fish (10), and cooking 30 so the grilled fish is at its
   // 97% cap (data/recipes.yaml).
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `UPDATE characters SET town = 'puerto', pos_x = 3172, pos_y = 6367, pos_z = 7 WHERE name = '${name}';
@@ -1504,7 +1497,7 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
   await apiCtx.dispose();
   // On the dock next to the harbor master (3201, 6433), with a backpack (48) holding 50
   // copper coins (8). The route is client/e2e/fixtures/boat_routes.yaml (30 coins).
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `UPDATE characters SET town = 'puerto', pos_x = 3201, pos_y = 6431, pos_z = 7 WHERE name = '${name}';
@@ -1599,7 +1592,7 @@ test("T3.6: sail to the Forest Isle after Chapter 1 and meet its ferryman", asyn
   const { email, password, name } = await newGuardian(playwright, "Rover");
   // Level 10 (9720 XP), Chapter 1 completed, on Puerto's dock with 100 copper coins (8)
   // in a backpack (48). The route asks for both and costs 80.
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `UPDATE characters SET town = 'puerto', level = 10, experience = 9720, pos_x = 3201, pos_y = 6431, pos_z = 7 WHERE name = '${name}';
@@ -1648,7 +1641,7 @@ test("T3.6: wake up at the temple of Raigal and talk to the druid", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   const { email, password, name } = await newGuardian(playwright, "Rooted");
   // Resident of the Forest Isle with no saved position: wakes up at its temple.
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `UPDATE characters SET town = 'bosque', level = 15, experience = 35280 WHERE name = '${name}';
@@ -1977,7 +1970,7 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   const mate = await newGuardian(playwright, "Fellow");
   // The founder needs level 18 (62424 XP) and the founding cost (2000 copper coins, 8) in
   // a backpack (48): data/balance.yaml guild.
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `UPDATE characters SET level = 18, experience = 62424 WHERE name = '${founder.name}';
@@ -2062,7 +2055,7 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   // The public site lists it once the database has the change (written off the loop).
   await expect
     .poll(() =>
-      execFileSync("psql", [
+      psql([
         databaseUrl,
         "-tAc",
         `SELECT count(*) FROM guild_members m JOIN guilds g ON g.id = m.guild_id WHERE g.name = '${guildName}'`,
@@ -2101,7 +2094,7 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
     [hunter, 1048],
     [prey, 1049],
   ] as const) {
-    execFileSync("psql", [
+    psql([
       databaseUrl,
       "-c",
       `UPDATE characters SET level = 25, experience = 172800, health = 400,
@@ -2192,7 +2185,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
        SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
      INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
      SELECT character_id, id, s, i, c FROM bp, (VALUES ${items}) AS v(s, i, c);`;
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     seed(seller.name, 3167, 6382, "(0, 10, 20)") +
@@ -2289,7 +2282,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   // The database has it: the offer with 5 left, written with the snapshots.
   await expect
     .poll(() =>
-      execFileSync("psql", [
+      psql([
         databaseUrl,
         "-tAc",
         `SELECT o.amount FROM market_offers o JOIN characters c ON c.id = o.character_id WHERE c.name = '${buyer.name}'`,
@@ -2301,7 +2294,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   // ...and the withdrawal too: the mailbox's gold is 0 in the database.
   await expect
     .poll(() =>
-      execFileSync("psql", [
+      psql([
         databaseUrl,
         "-tAc",
         `SELECT g.gold FROM market_mail_gold g JOIN characters c ON c.id = g.character_id WHERE c.name = '${buyer.name}'`,
@@ -2323,13 +2316,12 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   const guest = await newGuardian(playwright, "Visita");
   const stranger = await newGuardian(playwright, "Extrano");
   const house = "puerto_house_net"; // world/islands/puerto/houses.yaml: door 3153,6401
-  const psql = (sql: string): string =>
-    execFileSync("psql", [databaseUrl, "-tAc", sql]).toString().trim();
+  const query = (sql: string): string => psql([databaseUrl, "-tAc", sql]).toString().trim();
   // An earlier run against the same database may have left the house rented: a gm frees it
   // (the server owns the houses in memory, so it goes through the game, audited).
-  if (psql(`SELECT count(*) FROM house_owners WHERE house_id = '${house}'`) !== "0") {
+  if (query(`SELECT count(*) FROM house_owners WHERE house_id = '${house}'`) !== "0") {
     const gm = await newGuardian(playwright, "Guardia");
-    psql(`UPDATE accounts SET role = 'gm' WHERE email = lower('${gm.email}')`);
+    query(`UPDATE accounts SET role = 'gm' WHERE email = lower('${gm.email}')`);
     const page = await browser.newPage();
     await enterGame(page, gm.email, gm.password);
     const say = page.getByTestId("say").getByRole("textbox");
@@ -2348,7 +2340,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
        SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
      INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
      SELECT character_id, id, s, i, c FROM bp, (VALUES ${items}) AS v(s, i, c);`;
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     seed(
@@ -2440,7 +2432,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await expect(slot.locator("[data-item]")).toHaveCount(0);
   // Written with the owner's inventory, in one transfer.
   await expect
-    .poll(() => psql(`SELECT count(*) FROM house_items WHERE house_id = '${house}'`))
+    .poll(() => query(`SELECT count(*) FROM house_items WHERE house_id = '${house}'`))
     .toBe("1");
   await shot(a, "58-house-item-inside");
 
@@ -2497,7 +2489,7 @@ test("T5.5: sail from the Forest Isle to the Ember Isle and meet its captain", a
   const { email, password, name } = await newGuardian(playwright, "Ashsail");
   // Level 25 (172800 XP) on Raigal's dock with 200 copper coins (8) in a backpack (48).
   // The route asks for level 25 and costs 150.
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `UPDATE characters SET town = 'bosque', level = 25, experience = 172800, pos_x = 4120, pos_y = 6100, pos_z = 7 WHERE name = '${name}';
@@ -2548,7 +2540,7 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
   const { email, password, name } = await newGuardian(playwright, "Stoker");
   // Resident of the Ember Isle at level 30 (302760 XP) who found the ember root in
   // Chapter 2: the flag, and the root (132) in a backpack (48).
-  execFileSync("psql", [
+  psql([
     databaseUrl,
     "-c",
     `UPDATE characters SET town = 'volcan', level = 30, experience = 302760 WHERE name = '${name}';

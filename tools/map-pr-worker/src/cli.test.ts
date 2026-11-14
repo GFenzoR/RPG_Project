@@ -32,6 +32,13 @@ function start(
   return { out: () => out, exit: new Promise((r) => c.on("exit", (code) => r(code))) };
 }
 
+// Windows has no SIGTERM: kill("SIGTERM") terminates the child outright (exit code null),
+// so the graceful-stop handler cannot be exercised there; it must just be gone.
+const stoppedBySigterm = (code: number | null): void => {
+  if (process.platform === "win32") expect(code).toBeNull();
+  else expect(code).toBe(0);
+};
+
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const alive = (c: ChildProcess | undefined): boolean =>
   c !== undefined && c.exitCode === null && c.signalCode === null;
@@ -51,7 +58,7 @@ describe("map PR worker process", () => {
     expect(p.out()).not.toContain('"t"'); // the token never appears
     const t0 = Date.now();
     child?.kill("SIGTERM");
-    expect(await p.exit).toBe(0);
+    stoppedBySigterm(await p.exit);
     expect(Date.now() - t0).toBeLessThan(5_000);
   }, 30_000);
 
@@ -61,7 +68,7 @@ describe("map PR worker process", () => {
     expect(alive(child)).toBe(true);
     expect(p.out()).toContain("GITHUB_MAP_PR_TOKEN is not set");
     child?.kill("SIGTERM");
-    expect(await p.exit).toBe(0);
+    stoppedBySigterm(await p.exit);
     expect(await start({}, ["--once"]).exit).toBe(0);
   }, 20_000);
 
@@ -87,6 +94,6 @@ describe("map PR worker process", () => {
     await sleep(1_500);
     expect(alive(child)).toBe(true);
     child?.kill("SIGTERM");
-    expect(await p.exit).toBe(0);
+    stoppedBySigterm(await p.exit);
   }, 20_000);
 });
