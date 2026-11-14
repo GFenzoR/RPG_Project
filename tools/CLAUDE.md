@@ -71,6 +71,19 @@ el humano varía, hace pausas y contesta los chequeos de presencia; el mecánico
 `ONLY=sfx/hit`). `cli.ts check` solo revisa el presupuesto de tamaño. Los `.ogg` se
 commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 
+## spritegen
+`tools/spritegen` (T0.5) dibuja el pixel art propio en `assets/sprites/<ruta>.png` a partir
+de recetas en código: `src/recipes/{terrain,items,creatures}.ts`, con la paleta de
+materiales de `src/palette.ts` (4 tonos + contorno) y las primitivas de `src/draw.ts`
+(rect, line, disc, polygon, box en 3/4, contorno automático, luz desde arriba a la
+izquierda, ruido con semilla que hace mosaico). Determinista: la semilla sale de la ruta.
+Uso: `make spritegen` (o `ONLY=decor/`) y luego `make sprites`; para mirar el resultado,
+`node --experimental-strip-types tools/spritegen/src/cli.ts preview --out shot.png --scale 4
+[--only decor/]` y revisa la imagen con Read (suelos en 3x3, objetos sobre pasto). `check`
+exige que cada receta sea una ruta usada en `data/` (o un frame de outfit
+`outfits/<id>/<dir>_<frame>`). Los PNG se commitean y el test exige que coincidan con las
+recetas. Estilo y reglas: `assets/README.md`, "Arte propio (spritegen)".
+
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera
 placeholders (cuadros de color con la sigla del item) cuando falta un sprite.

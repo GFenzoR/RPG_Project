@@ -18,6 +18,7 @@ data/
   spells.yaml
   recipes.yaml          oficios
   boat_routes.yaml      rutas de barco (T3.5)
+  outfits.yaml          outfits del personaje (T0.5)
   effects.yaml          efectos visuales y proyectiles
   cosmetics.yaml        outfits y monturas (futuro)
 i18n/
@@ -27,7 +28,7 @@ i18n/
 ## Esquemas y validador
 - Esquemas (JSON Schema 2020-12) en `packages/content-schema/schemas/`: `balance`,
   `vocations`, `items`, `monster`, `npc`, `quest`, `spells`, `recipes`, `boat_routes`,
-  `borders`, `i18n`,
+  `borders`, `outfits`, `i18n`,
   `ids-lock`, más `common` con las definiciones compartidas (IDs, claves i18n, condiciones,
   acciones, elementos, skills). Son la fuente de verdad del formato; este doc da ejemplos.
 - Dos keywords propios: `x-ref: <tipo>` marca un ID que debe existir (`item`, `monster`,
@@ -614,6 +615,21 @@ lados). Las piezas son items `kind: decoration`, `pickupable: false`, sin bloque
 reglas `grass_sand` y `sand_water`; su arte placeholder propio lo genera
 `tools/spritepack/src/gen-borders.ts` en `assets/sprites/borders/` (un test verifica que
 los PNG commiteados son los que produce).
+
+## Outfits (T0.5)
+`data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador.
+```yaml
+- id: citizen
+  sprite: outfits/citizen   # carpeta: un PNG de 32x32 por dirección y frame
+  frames: 3                 # 0 = parado, 1 y 2 = los dos pasos (máximo 3)
+```
+- El `sprite` de un outfit es una carpeta: el atlas tiene `<sprite>/<dir>_<frame>`
+  (`assets/sprites/outfits/citizen/s_0.png`), con `dir` en `n`, `e`, `s`, `w`.
+  spritepack cuenta cada frame como un sprite usado por `data/` (un frame sin arte recibe
+  el placeholder automático, como cualquier sprite).
+- Todos los jugadores usan `citizen` hasta que `Outfit.look_id` elija otro. El cliente
+  elige el frame según la dirección y el avance del paso (`client/CLAUDE.md`, T0.5).
+- IDs únicos; el validador no exige que los PNG existan (eso lo revisa spritepack).
 
 ## Noticias (T4.3)
 Una noticia es un archivo `data/news/<YYYY-MM-DD>-<slug>.yaml` (slug: `a-z`, `0-9` y `-`).

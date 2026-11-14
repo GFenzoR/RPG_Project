@@ -16,5 +16,6 @@ con esa carpeta y un archivo `LICENSE` dentro. Procedimiento completo: `assets/R
 | Archivos | Autor | Licencia | Fuente reproducible |
 |---|---|---|---|
 | `assets/sounds/**/*.ogg` (efectos, interfaz, música y ambiente) | RPG Project (generado proceduralmente) | CC0 1.0 | `tools/soundgen` (`make sounds`). Recetas y melodías propias, sin muestras externas |
+| `assets/sprites/**/*.png` dibujados por recetas (suelos, muros, decoración, items y criaturas listados en `tools/spritegen/src/recipes/`) | RPG Project (pixel art generado por código) | CC0 1.0 | `tools/spritegen` (`make spritegen`). Recetas propias, sin calcar ni copiar sprites de terceros |
 | Marcas PvP (T5.2): icono de skull del canvas y de la lista de batalla | RPG Project | CC0 1.0 | Dibujado con formas en el código, sin imagen (`client/src/render/game-canvas.ts` `drawSkull`, `client/src/ui/client.css` `.skull`). Placeholder hasta tener sprite |
-| Isla Volcánica (T5.5): sprites de sus monstruos, NPCs, items y la veta de ascua; monedas de plata y oro | RPG Project | CC0 1.0 | Placeholders generados por `tools/spritepack` desde `assets/sprites.yaml` (`placeholder`: cuadro de color con sigla). Arte real pendiente del dueño. Música y ambiente de la isla: placeholders que reutilizan `music_cueva` y `amb_olas` (`assets/sounds.yaml`) |
+| Isla Volcánica (T5.5): música y ambiente | RPG Project | CC0 1.0 | Placeholders que reutilizan `music_cueva` y `amb_olas` (`assets/sounds.yaml`). Sus sprites salen del pack Dungeon Crawl o de `tools/spritegen` |

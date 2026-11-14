@@ -40,8 +40,8 @@ client/
   origin, como detrás de Caddy, así la cookie `rpg_session` funciona sin pedir el token.
 - Las criaturas se dibujan dentro de la capa de items de `MapView` (`placeEntity`), por
   casilla: sobre los items de su casilla y bajo los de las casillas siguientes.
-- Mientras no haya outfits ni sprites de jugador, las criaturas son un bloque de color con
-  una marca hacia donde miran. Solo se dibuja el piso del jugador.
+- Una criatura sin sprite es un bloque de color con una marca hacia donde mira (ver
+  T0.5). Solo se dibuja el piso del jugador.
 - Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).
 
 ## Notas de T1.6
@@ -374,3 +374,18 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   que la cuenta tiene vinculado (`routes.ts` `linkedProvider`).
 - E2E: `e2e/account.spec.ts` contra un tercer servidor (solo HTTP, emails activados) y un
   SMTP falso (`e2e/fake-smtp.ts`, mensajes en `smtpMessagesURL`).
+
+## Notas de T0.5
+- Los NPCs usan su sprite del atlas como los monstruos (`content.npcSprites`, de
+  `data/npcs`); sin textura, el bloque de color de siempre.
+- Jugadores (propio y ajenos): outfit `citizen` de `content.outfits` (`data/outfits.yaml`).
+  Frames en el atlas: `<sprite>/<dir>_<frame>` (`outfits/citizen/s_0`). `render/outfit.ts`
+  (puro, con tests): `outfitDir` lleva las 8 direcciones a n/e/s/w (las diagonales usan
+  la horizontal: noreste mira al este); `outfitFrame` da 0 parado y, mientras interpola
+  un paso, reparte los frames de caminar por el avance (con 3 frames: 1 la primera
+  mitad, 2 la segunda), así pasos seguidos alternan 1, 2, 1, 2.
+- El canvas usa el outfit solo si el atlas tiene arte real para todos sus frames (origen
+  distinto de `auto` y `placeholder`); si no, el bloque. Los sprites de criatura van
+  anclados abajo a la derecha de su casilla, como en `MapView` (uno de 64x64 crece hacia
+  arriba y a la izquierda). Alpha de invisible, nombre, barras, calavera y marco de
+  objetivo no cambian.

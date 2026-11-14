@@ -1,7 +1,8 @@
 // Vite plugin: the game content the client needs, read from the repository at build time.
 //
 //   virtual:rpg-content  items by numeric ID (data/items + data/ids.lock.yaml), movement
-//                        constants (data/balance.yaml) and the client's i18n catalogs
+//                        constants (data/balance.yaml), monster/NPC sprites, outfits
+//                        (data/outfits.yaml) and the client's i18n catalogs
 //   /audio/<file>        sound files of assets/sounds.yaml (T3.7), served as they are;
 //                        `vite build` emits them under audio/
 //   virtual:rpg-site     the public website (T4.3): its i18n catalogs, vocations, skill ids
@@ -22,6 +23,7 @@ import type {
   IslandRect,
   ItemDef,
   NewsPost,
+  OutfitDef,
   SiteContent,
   LoopRules,
   RecipeDef,
@@ -119,6 +121,28 @@ export function loadClientContent(root: string): ClientContent {
     if (isObj(m) && typeof m["id"] === "string" && typeof m["sprite"] === "string")
       monsters[m["id"]] = m["sprite"];
   }
+  const npcs: Record<string, string> = {};
+  const ndir = join(root, "data", "npcs");
+  for (const file of readdirSync(ndir)
+    .filter((f) => f.endsWith(".yaml"))
+    .sort()) {
+    const n = readYaml(join(ndir, file));
+    if (isObj(n) && typeof n["id"] === "string" && typeof n["sprite"] === "string")
+      npcs[n["id"]] = n["sprite"];
+  }
+  let rawOutfits: unknown;
+  try {
+    rawOutfits = readYaml(join(root, "data", "outfits.yaml"));
+  } catch {
+    rawOutfits = []; // no outfits yet
+  }
+  const outfits: OutfitDef[] = Array.isArray(rawOutfits)
+    ? rawOutfits.flatMap((o) =>
+        isObj(o) && typeof o["id"] === "string" && typeof o["sprite"] === "string"
+          ? [{ id: o["id"], sprite: o["sprite"], frames: num(o["frames"], 1) }]
+          : [],
+      )
+    : [];
   const vocs = readYaml(join(root, "data", "vocations.yaml"));
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
@@ -190,6 +214,8 @@ export function loadClientContent(root: string): ClientContent {
   return {
     items,
     monsterSprites: monsters,
+    npcSprites: npcs,
+    outfits,
     vocations,
     spells,
     recipes,

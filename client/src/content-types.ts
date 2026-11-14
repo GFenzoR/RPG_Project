@@ -27,6 +27,15 @@ export interface ItemDef {
   toolUse?: string;
 }
 
+/** A player outfit of data/outfits.yaml (T0.5). */
+export interface OutfitDef {
+  id: string;
+  /** Sprite folder: its frames are "<sprite>/<n|e|s|w>_<frame>" in the atlas. */
+  sprite: string;
+  /** Frames per facing: 0 = standing, the rest are the walking steps. */
+  frames: number;
+}
+
 /** A spell of data/spells.yaml, for the hotkey bar (the server validates every cast). */
 export interface SpellDef {
   id: string;
@@ -103,6 +112,13 @@ export interface ClientContent {
   items: Record<number, ItemDef>;
   /** Atlas sprite path of each monster (data/monsters id → "creatures/wolf"). */
   monsterSprites: Record<string, string>;
+  /**
+   * Atlas sprite path of each NPC (data/npcs id → "npcs/ferryman", T0.5). Optional so
+   * fixtures can leave it out.
+   */
+  npcSprites?: Record<string, string>;
+  /** data/outfits.yaml in file order (T0.5). Optional so fixtures can leave it out. */
+  outfits?: OutfitDef[];
   /** Vocation IDs a new character can pick (data/vocations.yaml, in file order). */
   vocations: string[];
   /** data/spells.yaml in file order. */

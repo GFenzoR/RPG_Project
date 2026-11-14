@@ -43,6 +43,7 @@ describe("repository content", () => {
       "tutorial",
       "news",
       "borders",
+      "outfits",
       "sounds",
       "i18n",
       "ids-lock",
@@ -86,6 +87,22 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('unknown quest "no_such_quest"'))).toBe(true);
     expect(out.some((m) => m.includes("consume") && m.includes("boolean"))).toBe(true);
     expect(out.some((m) => m.includes('unknown field "speed"'))).toBe(true);
+  });
+
+  it("checks outfits: ids, sprite folder and frame count (T0.5)", () => {
+    writeFileSync(
+      file("data/outfits.yaml"),
+      [
+        "- { id: citizen, sprite: outfits/citizen, frames: 3 }",
+        "- { id: citizen, sprite: outfits/other, frames: 4 }",
+        "- { id: sailor, sprite: Outfits/Sailor, frames: 2, colour: blue }",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root);
+    expect(out.some((m) => m.includes('duplicate id "citizen"'))).toBe(true);
+    expect(out.some((m) => m.includes("[1].frames: must be <= 3"))).toBe(true);
+    expect(out.some((m) => m.includes("[2].sprite: must match"))).toBe(true);
+    expect(out.some((m) => m.includes('unknown field "colour"'))).toBe(true);
   });
 
   it("checks the tutorial: events, refs by event, recipes, islands and rewards (T4.2)", () => {

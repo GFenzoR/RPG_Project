@@ -176,6 +176,12 @@ sprites: ## Pack assets/sprites + assets/sprites.yaml into assets/atlas/ (placeh
 sounds: ## Render assets/sounds/** (needs ffmpeg with libopus) and check the size budget
 	node --experimental-strip-types tools/soundgen/src/cli.ts build $(if $(ONLY),--only $(ONLY))
 
+# spritegen draws our own pixel art from code recipes into assets/sprites/ (committed, like
+# the sounds). Run `make sprites` afterwards to repack the atlas. assets/README.md.
+.PHONY: spritegen
+spritegen: ## Draw assets/sprites/** from tools/spritegen recipes (ONLY=decor/ for a path prefix)
+	node --experimental-strip-types tools/spritegen/src/cli.ts build $(if $(ONLY),--only $(ONLY))
+
 .PHONY: assets
 assets: sprites sounds ## make sprites + make sounds
 

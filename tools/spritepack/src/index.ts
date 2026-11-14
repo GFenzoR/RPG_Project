@@ -8,7 +8,7 @@ export type {
   Diagnostic,
   Origin,
 } from "./build.ts";
-export { collectSpriteRefs } from "./content.ts";
+export { collectSpriteRefs, outfitFrames } from "./content.ts";
 export type { SpriteRef } from "./content.ts";
 export { registeredPacks } from "./credits.ts";
 export { parseManifest } from "./manifest.ts";

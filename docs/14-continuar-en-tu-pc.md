@@ -7,9 +7,8 @@ seguir con Claude Code en tu computador. El entorno local está en
 `12-local-development.md`, y el hosting de pruebas en casa, en `13-hosting-de-pruebas.md`.
 
 ## Dónde quedó
-- **Hitos 0 a 4:** completos, salvo las dos tareas que son tuyas:
-  - T0.5, sprites;
-  - T1.18, deploy en AWS.
+- **Hitos 0 a 4:** completos, salvo T1.18 (deploy en AWS), que es tuya. T0.5 (sprites)
+  quedó hecha en local (PR #77).
 - **Hito 5:** hechas T5.1 a T5.5 (PRs #69 a #74):
   - gremios;
   - PvP con skulls y guerras de gremios;
@@ -17,10 +16,9 @@ seguir con Claude Code en tu computador. El entorno local está en
   - casas;
   - Isla Volcánica, con el Capítulo 3 y las monedas de plata y oro.
 - **Faltan** T5.6 (controles táctiles y móvil) y T5.7 (tienda cosmética).
-- 106 de las 151 rutas de sprite de `assets/sprites.yaml` usan el pack Dungeon Crawl (CC0,
-  `assets/vendor/dungeon-crawl/`); las otras 45 (madera, muelle, varios materiales, comida y
-  algunos monstruos y NPCs) siguen como placeholder, y el cuerpo del jugador es un
-  rectángulo de color.
+- Sin placeholders de sprites: 106 salen del pack Dungeon Crawl (CC0,
+  `assets/vendor/dungeon-crawl/`) y el resto es arte propio de `tools/spritegen`
+  (`make spritegen`), incluido el jugador (outfit `citizen`, 4 direcciones con caminata).
 
 ## Primer arranque en tu PC
 1. Sigue "Instalar una vez" de `12-local-development.md`. En Windows, usa WSL2 con el repo
@@ -33,7 +31,6 @@ seguir con Claude Code en tu computador. El entorno local está en
 ## Lo que es tuyo 👤
 | Qué | Para qué | Dónde está explicado |
 |---|---|---|
-| Elegir y subir 1–2 packs de sprites 32x32 (CC0, CC-BY u OGA-BY) | T0.5: arte real | "Sprites" más abajo, `assets/README.md` |
 | Confirmar CC BY 4.0 para los mapas que manda la comunidad | Portal de mapas (T4.5) | `04-map-editor-and-ai.md` |
 | Cuenta de AWS y dominio | T1.18: servidor público | `09-deployment-aws.md` |
 | Apps OAuth de Google y Discord, y SMTP | Login social y emails (T2.1) | `12-local-development.md` |
@@ -44,13 +41,9 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 
 ## Orden sugerido
-1. **T0.5, integración de sprites**, en cuanto subas los packs. Prompt para la sesión:
-   "Integra los packs de `assets/vendor/` siguiendo `assets/README.md`, mapea en
-   `assets/sprites.yaml` todo lo que cubran, deja placeholder lo que no y revisa los
-   screenshots y el atlas con Read". La tienda cosmética necesita el arte del jugador, así
-   que conviene que esto vaya antes de T5.7.
-2. **T5.6**, con el brief de abajo.
-3. **T5.7**, con el brief de abajo.
+1. **T5.6**, con el brief de abajo.
+2. **T5.7**, con el brief de abajo. Ya hay arte del jugador (outfit `citizen`, T0.5) sobre el
+   que montar los cosméticos.
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
 - **Una tarea, una sesión, un PR.** Usa `/roadmap-task T5.6` o pega el brief. Pide un plan
@@ -221,237 +214,18 @@ y el modelo ya prevé las tablas `cosmetics` y `account_cosmetics`.
 - **Docs:** docs/01, 02, 05, 06 y 09 (variables del proveedor y webhook en Caddy), y el
   roadmap.
 
-## Sprites: qué cubrir
-Las rutas lógicas de `assets/sprites.yaml` y `data/`, con el nombre en español de lo que
-las usa. Un pack no tiene que cubrir todo: lo que falte queda como placeholder.
+## Sprites: de dónde sale cada uno
+T0.5 quedó hecha (PR #77) y ya no hay placeholders:
+- **Pack Dungeon Crawl** (CC0, `assets/vendor/dungeon-crawl/`): suelos de pasto, arena,
+  tierra, piedra y agua, muros de piedra y roca, árboles, casi todos los monstruos y NPCs,
+  armas, armaduras e items de misión. El mapeo está en `assets/sprites.yaml`.
+- **Arte propio** (`tools/spritegen`, CC0): lo que el pack no tenía (madera, muelle,
+  yunque, cajón, bolardo, tablero, pino, peñasco, gaviota, jabalí, ciervo, el barquero,
+  materiales, comida, herramientas, monedas de cobre y plata, mochila) y el jugador:
+  outfit `citizen` en `assets/sprites/outfits/citizen/<n|e|s|w>_<0|1|2>.png`.
+- **Bordes** (`assets/sprites/borders/`): `gen-borders.ts` recorta la textura del suelo de
+  origen.
 
-**Jugadores:** un set de personaje humano con 4 direcciones e, idealmente, animación de
-caminar. Hoy no tiene ruta propia: el cliente dibuja un rectángulo. Los NPCs de abajo
-pueden salir del mismo set.
-
-**Suelos** (9)
-
-- `ground/dirt`: tierra
-- `ground/dock_planks`: tablones de muelle
-- `ground/grass`: pasto
-- `ground/sand`: arena
-- `ground/stone_floor`: suelo de piedra
-- `ground/water_shallow`: agua poco profunda
-- `ground/water_shoal`: agua con peces
-- `ground/wet_sand`: arena mojada
-- `ground/wooden_floor`: suelo de madera
-
-**Muros** (3)
-
-- `walls/rock_wall`: pared de roca
-- `walls/stone_wall`: muro de piedra
-- `walls/wooden_wall`: muro de madera
-
-**Decoración y estaciones** (17)
-
-- `decor/anvil`: yunque
-- `decor/birch_tree`: abedul
-- `decor/boulder`: peñasco
-- `decor/bush`: arbusto
-- `decor/cargo_crate`: cajón de carga
-- `decor/cooking_hearth`: fogón
-- `decor/creature_remains`: restos de criatura
-- `decor/elm_tree`: olmo
-- `decor/ember_vein`: veta de ascua
-- `decor/iron_vein`: veta de hierro
-- `decor/market_board`: tablero del mercado
-- `decor/mooring_post`: bolardo de amarre
-- `decor/oak_tree`: roble
-- `decor/pine_tree`: pino
-- `decor/smelting_forge`: fragua
-- `decor/stairs_down`: escalera hacia abajo
-- `decor/stairs_up`: escalera hacia arriba
-
-**Criaturas** (21)
-
-- `creatures/ash_hound`: sabueso de ceniza
-- `creatures/bilge_rat`: rata de sentina
-- `creatures/bramble_stag`: ciervo de zarza
-- `creatures/bristleback_boar`: jabalí cerdoso
-- `creatures/cinder_salamander`: salamandra de brasa
-- `creatures/coffer_smuggler`: contrabandista del cofre
-- `creatures/drowned_miner`: minero ahogado
-- `creatures/ember_wyrmling`: dragoncillo de ascua
-- `creatures/gloom_bat`: murciélago lóbrego
-- `creatures/hollow_crawler`: reptante hueco
-- `creatures/mire_toad`: sapo de ciénaga
-- `creatures/moss_spider`: araña de musgo
-- `creatures/obsidian_delver`: minero de obsidiana
-- `creatures/ore_beetle`: escarabajo de mena
-- `creatures/slag_golem`: gólem de escoria
-- `creatures/slagbound_warden`: custodio de escoria
-- `creatures/thieving_gull`: gaviota ladrona
-- `creatures/thornling`: espinoso
-- `creatures/tide_crab`: cangrejo de marea
-- `creatures/wolf`: lobo
-- `creatures/wreck_looter`: saqueador de naufragios
-
-**NPCs (personajes humanos)** (15)
-
-- `npcs/armorer`: Bastian Roe, armero
-- `npcs/diver_old`: Corvo, el buzo
-- `npcs/druid_elder`: Velia Musgo, druida del bosque
-- `npcs/ferryman`: Tavin Rema, barquero
-- `npcs/ferryman_volcanic`: Nerea Vado, capitana
-- `npcs/forge_echo`: eco de la forja
-- `npcs/forge_keeper`: Casia Hollín, guardiana de los registros
-- `npcs/merchant`: Tilde Varga, provisiones
-- `npcs/miner_old`: Doran Pike, capataz
-- `npcs/priest_forest`: hermano Olmar
-- `npcs/priest_volcanic`: madre Oriela
-- `npcs/priestess`: Hermana Liora
-- `npcs/sailor_old`: Maren Holt, jefa del puerto
-- `npcs/smith_volcanic`: Bram Tizón, herrero
-- `npcs/tanner`: Gisla, la curtidora
-
-**Armas** (18)
-
-- `weapons/bearded_axe`: hacha barbada
-- `weapons/belaying_pin`: cabilla
-- `weapons/boarding_saber`: sable de abordaje
-- `weapons/coral_wand`: varita de coral
-- `weapons/driftwood_club`: garrote de madera de deriva
-- `weapons/embersteel_axe`: hacha de acero de ascua
-- `weapons/embersteel_sabre`: sable de acero de ascua
-- `weapons/forged_shortsword`: espada corta forjada
-- `weapons/hatchet`: hacha de mano
-- `weapons/iron_sword`: espada de hierro
-- `weapons/rimewood_staff`: vara de escarcha
-- `weapons/rusty_cutlass`: alfanje oxidado
-- `weapons/sapling_staff`: vara de retoño
-- `weapons/short_bow`: arco corto
-- `weapons/spiked_cudgel`: porra claveteada
-- `weapons/thornwood_blade`: hoja de espino
-- `weapons/wyrmfang_blade`: hoja de colmillo de dragoncillo
-- `weapons/yew_longbow`: arco largo de tejo
-
-**Armaduras** (11)
-
-- `armor/canvas_trousers`: pantalones de lona
-- `armor/embersteel_cuirass`: coraza de acero de ascua
-- `armor/embersteel_helm`: yelmo de acero de ascua
-- `armor/hide_vest`: chaleco de piel
-- `armor/leather_jerkin`: jubón de cuero
-- `armor/patched_tunic`: túnica remendada
-- `armor/sailcloth_cap`: gorro de lona
-- `armor/stagleather_coat`: abrigo de cuero de ciervo
-- `armor/stagleather_leggings`: perneras de cuero de ciervo
-- `armor/tarred_boots`: botas alquitranadas
-- `armor/wyrmscale_mail`: cota de escamas de dragoncillo
-
-**Escudos** (5)
-
-- `shields/barrel_lid_shield`: tapa de barril
-- `shields/elmwood_shield`: escudo de olmo
-- `shields/embersteel_shield`: escudo de acero de ascua
-- `shields/plank_shield`: escudo de tablones
-- `shields/riveted_round_shield`: rodela remachada
-
-**Munición** (1)
-
-- `ammo/arrow`: flecha
-
-**Runas** (1)
-
-- `runes/arc_rune`: runa de arco
-
-**Herramientas** (6)
-
-- `tools/felling_axe`: hacha de leñador
-- `tools/fishing_rod`: caña de pescar
-- `tools/pickaxe`: pico
-- `tools/rope`: cuerda
-- `tools/shovel`: pala
-- `tools/smithing_hammer`: martillo de herrero
-
-**Contenedores** (1)
-
-- `containers/backpack`: mochila
-
-**Monedas** (3)
-
-- `currency/copper_coin`: moneda de cobre
-- `currency/gold_coin`: moneda de oro
-- `currency/silver_coin`: moneda de plata
-
-**Comida** (8)
-
-- `food/boar_meat`: carne de jabalí
-- `food/glowcap_broth`: caldo de hongo lumbre
-- `food/grilled_fish`: pescado a la brasa
-- `food/harbour_stew`: guiso del puerto
-- `food/raw_fish`: pescado crudo
-- `food/roast_boar`: jabalí asado
-- `food/seaweed_poultice`: cataplasma de algas
-- `food/ship_biscuit`: galleta de barco
-
-**Materiales** (26)
-
-- `materials/ash_pelt`: piel de sabueso de ceniza
-- `materials/bat_wing`: ala de murciélago
-- `materials/beetle_carapace`: caparazón de escarabajo
-- `materials/birch_log`: tronco de abedul
-- `materials/boar_tusk`: colmillo de jabalí
-- `materials/crab_claw`: pinza de cangrejo
-- `materials/crawler_chitin`: quitina de reptante
-- `materials/elm_log`: tronco de olmo
-- `materials/ember_ore`: mineral de ascua
-- `materials/embersteel_ingot`: lingote de acero de ascua
-- `materials/glowcap`: hongo lumbre
-- `materials/gull_feather`: pluma de gaviota
-- `materials/iron_ingot`: lingote de hierro
-- `materials/iron_ore`: mineral de hierro
-- `materials/quartz_crystal`: cristal de cuarzo
-- `materials/rough_stone`: piedra tosca
-- `materials/salamander_scale`: escama de salamandra
-- `materials/slag_core`: núcleo de escoria
-- `materials/spider_silk`: seda de araña
-- `materials/stag_antler`: asta de ciervo
-- `materials/tarnished_locket`: relicario ennegrecido
-- `materials/thorn_heartwood`: corazón de espino
-- `materials/toad_gland`: glándula de sapo
-- `materials/tree_resin`: resina
-- `materials/wolf_pelt`: piel de lobo
-- `materials/wyrm_scale`: escama de dragoncillo
-
-**Objetos de misión** (6)
-
-- `quest/bosun_logbook`: bitácora del contramaestre
-- `quest/delver_chart`: plano de galería
-- `quest/ember_root`: raíz de ascua
-- `quest/forge_seal`: sello de la forja
-- `quest/sealed_coffer`: cofre sellado
-- `quest/smuggler_tally`: tarja de contrabandista
-
-**borders** (24)
-
-- `borders/grass_sand_e`: borde de pasto
-- `borders/grass_sand_inner_ne`: borde de pasto
-- `borders/grass_sand_inner_nw`: borde de pasto
-- `borders/grass_sand_inner_se`: borde de pasto
-- `borders/grass_sand_inner_sw`: borde de pasto
-- `borders/grass_sand_n`: borde de pasto
-- `borders/grass_sand_ne`: borde de pasto
-- `borders/grass_sand_nw`: borde de pasto
-- `borders/grass_sand_s`: borde de pasto
-- `borders/grass_sand_se`: borde de pasto
-- `borders/grass_sand_sw`: borde de pasto
-- `borders/grass_sand_w`: borde de pasto
-- `borders/sand_water_e`: orilla de arena
-- `borders/sand_water_inner_ne`: orilla de arena
-- `borders/sand_water_inner_nw`: orilla de arena
-- `borders/sand_water_inner_se`: orilla de arena
-- `borders/sand_water_inner_sw`: orilla de arena
-- `borders/sand_water_n`: orilla de arena
-- `borders/sand_water_ne`: orilla de arena
-- `borders/sand_water_nw`: orilla de arena
-- `borders/sand_water_s`: orilla de arena
-- `borders/sand_water_se`: orilla de arena
-- `borders/sand_water_sw`: orilla de arena
-- `borders/sand_water_w`: orilla de arena
-
+Para cambiar un sprite: otro tile del pack en `sprites.yaml`, o una receta nueva en
+`tools/spritegen/src/recipes/` y `make spritegen ONLY=<ruta>` (estilo y reglas en
+`assets/README.md`, "Arte propio"). Después, `make sprites` y revisar con Read.

@@ -231,6 +231,7 @@ class Validator {
       ["recipes.yaml", "recipes"],
       ["boat_routes.yaml", "boat_routes"],
       ["borders.yaml", "borders"],
+      ["outfits.yaml", "outfits"],
     ] as const) {
       const src = single(file, schema, false);
       if (!src) continue;

@@ -17,6 +17,14 @@ import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
 import { skullColor } from "../state/pvp.ts";
 import {
+  DEFAULT_OUTFIT,
+  outfitDir,
+  outfitFrame,
+  outfitKey,
+  outfitKeys,
+  stepProgress,
+} from "./outfit.ts";
+import {
   EFFECT_CONJURE,
   EFFECT_ELEMENT,
   EFFECT_GATHER,
@@ -176,6 +184,8 @@ interface CreatureSprite {
   /** The PvP mark left of the name (T5.2): a placeholder drawn with shapes. */
   skull: Graphics;
   drawnSkull: Skull;
+  /** A player's outfit sprite (T0.5); its texture follows the facing and the step. */
+  outfit: Sprite | undefined;
   bar: Graphics;
   drawnDir: number;
   drawnHealth: number;
@@ -249,14 +259,47 @@ export async function createGameCanvas(
           ? COLORS.npc
           : COLORS.player;
   const nameOf = (c: CreatureState): string => creatureName(c, t);
-  const monsterTexture = (c: CreatureState): Texture | undefined => {
-    if (c.kind !== CreatureKind.MONSTER) return undefined;
-    const path = content.monsterSprites[c.contentId];
+  // Monsters and NPCs: their atlas sprite (data/monsters, data/npcs), when there is one.
+  const creatureTexture = (c: CreatureState): Texture | undefined => {
+    const path =
+      c.kind === CreatureKind.MONSTER
+        ? content.monsterSprites[c.contentId]
+        : c.kind === CreatureKind.NPC
+          ? content.npcSprites?.[c.contentId]
+          : undefined;
     return path ? atlas.texture(path) : undefined;
   };
+  // Players: the outfit's frames (T0.5), only when the atlas has real art for every one of
+  // them (an automatic placeholder per frame would look worse than the block).
+  const outfit = content.outfits?.find((o) => o.id === DEFAULT_OUTFIT);
+  const outfitReady =
+    outfit !== undefined &&
+    outfitKeys(outfit).every((k) => {
+      const origin = atlas.index.sprites[k]?.origin;
+      return atlas.has(k) && origin !== "auto" && origin !== "placeholder";
+    });
+  const outfitTexture = (c: CreatureState, now: number): Texture | undefined =>
+    outfit && outfitReady
+      ? atlas.texture(
+          outfitKey(
+            outfit.sprite,
+            outfitDir(c.dir),
+            outfitFrame(
+              world.walking(c, now) ? stepProgress(c.walk, now) : undefined,
+              outfit.frames,
+            ),
+          ),
+        )
+      : undefined;
+  // Sprites bigger than a tile extend up and left from its bottom-right corner, as in
+  // MapView.
+  const bodySprite = (tex: Texture): Sprite => {
+    const sp = new Sprite({ texture: tex, anchor: 1 });
+    sp.position.set(T, T);
+    return sp;
+  };
 
-  // Placeholder body until outfits land: a coloured block with a mark on the side it
-  // faces (monsters use their atlas sprite when there is one).
+  // Fallback body without a sprite: a coloured block with a mark on the side it faces.
   const drawShape = (s: CreatureSprite, c: CreatureState): void => {
     const [dx, dy] = delta(c.dir);
     s.drawnDir = c.dir;
@@ -288,15 +331,18 @@ export async function createGameCanvas(
     s.drawnTarget = on;
   };
 
-  const spriteOf = (c: CreatureState): CreatureSprite => {
+  const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
     let s = sprites.get(c.id);
     if (!s) {
       const shape = new Graphics();
       const frame = new Graphics();
       const body = new Container({ label: `creature ${c.id}` });
       body.addChild(shape);
-      const tex = monsterTexture(c);
-      if (tex) body.addChild(new Sprite(tex));
+      const tex = creatureTexture(c);
+      if (tex) body.addChild(bodySprite(tex));
+      const look = c.kind === CreatureKind.PLAYER ? outfitTexture(c, now) : undefined;
+      const outfitSprite = look ? bodySprite(look) : undefined;
+      if (outfitSprite) body.addChild(outfitSprite);
       body.addChild(frame); // the target frame goes over the body
       const bar = new Graphics();
       labels.addChild(bar);
@@ -335,6 +381,7 @@ export async function createGameCanvas(
         guild,
         skull,
         drawnSkull: Skull.UNSPECIFIED,
+        outfit: outfitSprite,
         bar,
         drawnDir: -1,
         drawnHealth: -1,
@@ -350,6 +397,10 @@ export async function createGameCanvas(
     if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull);
     s.drawnSkull = c.skull;
     if (s.drawnDir !== c.dir) drawShape(s, c);
+    if (s.outfit) {
+      const look = outfitTexture(c, now);
+      if (look && s.outfit.texture !== look) s.outfit.texture = look;
+    }
     if (s.drawnHealth !== c.health) drawBar(s, c.health);
     const targeted = world.target === c.id;
     if (s.drawnTarget !== targeted) drawFrame(s, targeted);
@@ -461,7 +512,7 @@ export async function createGameCanvas(
     for (const c of world.creatures.values()) {
       if (c.pos.z !== self.pos.z) continue;
       seen.add(c.id);
-      const s = spriteOf(c);
+      const s = spriteOf(c, now);
       const p = world.drawPos(c, now);
       s.body.position.set(Math.round(p.x * T), Math.round(p.y * T));
       // Only the invisible player itself is sent its creature: see-through (T3.2).

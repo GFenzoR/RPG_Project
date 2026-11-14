@@ -214,6 +214,36 @@ describe("buildAtlas", () => {
     expect(page.json.meta).toMatchObject({ image: "atlas-0.png", related_multi_packs: [] });
   });
 
+  it("treats an outfit's sprite as a folder of frames (T0.5)", () => {
+    put(
+      "data/outfits.yaml",
+      "- id: citizen\n  sprite: outfits/citizen\n  frames: 3\n- id: still\n  sprite: outfits/still\n  frames: 1\n",
+    );
+    for (const dir of ["n", "e", "s", "w"])
+      for (const f of [0, 1, 2])
+        put(`assets/sprites/outfits/citizen/${dir}_${f}.png`, encodePng(solid(32, 32, [9, 9, 9])));
+    const refs = collectSpriteRefs(root);
+    expect(refs.map((r) => r.sprite)).toEqual([
+      ...["n", "e", "s", "w"].flatMap((d) => [0, 1, 2].map((f) => `outfits/citizen/${d}_${f}`)),
+      "outfits/still/n_0",
+      "outfits/still/e_0",
+      "outfits/still/s_0",
+      "outfits/still/w_0",
+    ]);
+    expect(refs[0]).toEqual({
+      sprite: "outfits/citizen/n_0",
+      file: "data/outfits.yaml",
+      id: "citizen",
+    });
+    // The folder itself is never a sprite; frames without art get the usual placeholder.
+    const r = buildAtlas(root);
+    expect(errors(r)).toEqual([]);
+    expect(r.atlas?.index.sprites["outfits/citizen"]).toBeUndefined();
+    expect(r.atlas?.index.sprites["outfits/citizen/w_2"]).toMatchObject({ origin: "file" });
+    expect(r.atlas?.index.sprites["outfits/still/s_0"]).toMatchObject({ origin: "auto" });
+    expect(r.diagnostics.filter((d) => d.severity === "warning")).toHaveLength(4);
+  });
+
   it("strict mode turns automatic placeholders into errors", () => {
     put("data/monsters/wolf.yaml", "id: wolf\nsprite: creatures/wolf\n");
     const r = buildAtlas(root, { strict: true });
