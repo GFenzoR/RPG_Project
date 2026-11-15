@@ -3,7 +3,7 @@
 apiVersion: 1
 providers:
   - name: rpg
-    folder: RPG Project
+    folder: Neque's Realm
     type: file
     disableDeletion: true
     allowUiUpdates: false

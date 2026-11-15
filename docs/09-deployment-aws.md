@@ -175,7 +175,7 @@ apagados (no se pide verificar y el sitio no ofrece el reset). Opciones en AWS:
 - **Amazon SES** (recomendado en AWS): verifica el dominio en SES (registros DKIM en tu
   DNS), pide salir del sandbox, crea credenciales SMTP (SES → SMTP settings → Create SMTP
   credentials; no son tus claves de IAM) y usa `SMTP_HOST=email-smtp.<región>.amazonaws.com`,
-  `SMTP_PORT=587`, `SMTP_SECURITY=starttls`, `SMTP_FROM=RPG Project <noreply@tudominio>`.
+  `SMTP_PORT=587`, `SMTP_SECURITY=starttls`, `SMTP_FROM=Neque's Realm <noreply@tudominio>`.
   EC2 bloquea el puerto 25 de salida: usa 587 (o 465 con `SMTP_SECURITY=tls`).
 - Cualquier proveedor transaccional con SMTP (Brevo, Mailjet, Postmark, Resend…), o Gmail
   con contraseña de aplicación para pruebas (`13-hosting-de-pruebas.md`, paso 8b).
@@ -304,7 +304,7 @@ Activarlo en el servidor:
    # Grafana:      http://localhost:3000/grafana/   (usuario admin)
    # Prometheus:   http://localhost:9090            Alertmanager: http://localhost:9093
    ```
-   El dashboard "RPG Project — servidor" es la página de inicio de Grafana.
+   El dashboard "Neque's Realm — servidor" es la página de inicio de Grafana.
 5. Si cambias reglas o el dashboard: `make monitoring-check`, copia los archivos y
    recarga. Prometheus se recarga con `curl -X POST localhost:9090/-/reload` desde el
    túnel. Grafana relee los dashboards cada minuto.
@@ -531,7 +531,7 @@ git tag desktop-v0.2.0 && git push origin desktop-v0.2.0
   Trusted Signing) y reputación acumulada.
 - **macOS:** Gatekeeper dice que la app "no se puede abrir" o "está dañada". Clic derecho →
   Abrir (o Ajustes → Privacidad y seguridad → "Abrir igualmente"); si dice dañada:
-  `xattr -dr com.apple.quarantine "/Applications/RPG Project.app"`.
+  `xattr -dr com.apple.quarantine "/Applications/Neque's Realm.app"`.
 - **Linux:** sin avisos; el `.AppImage` necesita `chmod +x`. Requiere webkit2gtk 4.1
   (Ubuntu 22.04+, Debian 12+, Fedora 37+).
 

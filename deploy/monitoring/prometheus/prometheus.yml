@@ -1,4 +1,4 @@
-# Prometheus for the RPG Project (docs/01-architecture.md, "Observabilidad"). Started by the
+# Prometheus for Neque's Realm (docs/01-architecture.md, "Observabilidad"). Started by the
 # `monitoring` compose profile; scrapes only containers on the `monitoring` network.
 global:
   scrape_interval: 15s

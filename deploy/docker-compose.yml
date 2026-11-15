@@ -1,4 +1,4 @@
-# RPG Project — production stack (docs/09-deployment-aws.md). Also the base for the home
+# Neque's Realm — production stack (docs/09-deployment-aws.md). Also the base for the home
 # hosting override in T1.19 (docs/13-hosting-de-pruebas.md).
 #
 #   cp deploy/.env.example deploy/.env   # fill it in

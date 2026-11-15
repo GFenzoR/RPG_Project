@@ -1,4 +1,4 @@
-# Basic alerts of the RPG Project (T4.4). Every threshold is in this file; docs/01
+# Basic alerts of Neque's Realm (T4.4). Every threshold is in this file; docs/01
 # ("Observabilidad", table of alerts) explains each one. Change a number here, run
 # `make monitoring-check`, and reload: `docker compose ... kill -s SIGHUP prometheus`.
 #

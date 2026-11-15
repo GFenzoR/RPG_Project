@@ -115,7 +115,7 @@ export default defineConfig({
         SMTP_HOST: "127.0.0.1",
         SMTP_PORT: String(smtpPort),
         SMTP_SECURITY: "none",
-        SMTP_FROM: "RPG Project <noreply@rpg.test>",
+        SMTP_FROM: "Neque's Realm <noreply@rpg.test>",
         GOOGLE_CLIENT_ID: "fake-client-id",
         GOOGLE_CLIENT_SECRET: "fake-client-secret",
         GOOGLE_AUTH_URL: `${fakeOAuthURL}/google/authorize`,

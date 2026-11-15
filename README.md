@@ -1,4 +1,4 @@
-# RPG Project (nombre provisional)
+# Neque's Realm
 
 MMORPG 2D de vista cenital inspirado en las mecánicas de los MMORPG clásicos de casillas:
 mundo abierto de islas, skills que suben con el uso, grinding y quests por nivel.

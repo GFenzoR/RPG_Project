@@ -53,7 +53,7 @@ site.highscores.next: "Next"
 site.highscores.page: "Page {page}"
 site.highscores.pagination: "Highscore pages"
 site.highscores.refresh: "Refreshed every minute."
-site.footer: "RPG Project is a community project in development. Working title."
+site.footer: "Neque's Realm is a community project in development."
 # Map submission portal (T4.5).
 site.nav.maps: "Maps"
 site.maps.nav.label: "Map sections"

@@ -1,8 +1,8 @@
 # News post (T4.3, docs/06-content-data.md "Noticias"). Body: minimal Markdown subset.
 date: "2026-11-01"
 title:
-  es: "Bienvenidos a RPG Project"
-  en: "Welcome to RPG Project"
+  es: "Bienvenidos a Neque's Realm"
+  en: "Welcome to Neque's Realm"
 body:
   es: |
     Abrimos las puertas del mundo de pruebas. Es un juego de rol en línea de vista cenital:

@@ -7,7 +7,7 @@ grinding que da sentido a llegar al nivel de cada quest. Se juega en el navegado
 instalado en PC, y la comunidad puede crear mapas con un editor web que también puede
 usar una IA.
 
-Nombre provisional: **RPG Project**.
+Nombre: **Neque's Realm** (hasta noviembre de 2026 se llamó "RPG Project", nombre provisional). Los identificadores internos (`rpg-*`, cookie `rpg_session`, base `rpg`) no cambian.
 
 ## Pilares
 1. **Sensación Tibia.** Ritmo, lectura del mapa y progresión deben sentirse familiares

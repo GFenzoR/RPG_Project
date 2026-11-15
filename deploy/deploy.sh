@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rolls out a new version of the RPG Project stack on the server (docs/09-deployment-aws.md).
+# Rolls out a new version of Neque's Realm stack on the server (docs/09-deployment-aws.md).
 #
 #   ./deploy.sh              pull IMAGE_TAG from .env and restart
 #   ./deploy.sh v0.2.0       pin IMAGE_TAG=v0.2.0 in .env, pull and restart

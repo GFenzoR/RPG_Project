@@ -1,7 +1,7 @@
-# RPG Project — guía para Claude Code
+# Neque's Realm — guía para Claude Code
 
 MMORPG 2D de vista cenital, inspirado en las mecánicas de Tibia (movimiento por casillas,
-skills que suben con el uso, grinding, mundo abierto). Nombre provisional: "RPG Project".
+skills que suben con el uso, grinding, mundo abierto). Nombre: "Neque's Realm" (los identificadores internos `rpg-*` se mantienen).
 Toda la visión y las decisiones cerradas están en `docs/00-vision.md`. No reabras decisiones
 de esa tabla sin que el usuario lo pida; si algo te parece un error, propónlo en el PR.
 

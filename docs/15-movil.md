@@ -13,7 +13,7 @@ Lo marcado con 👤 necesita cuentas, pagos o máquinas del dueño: Claude no pu
 ## PWA (lo que ya funciona)
 
 ### Qué se instala
-- `client/public/manifest.webmanifest`: nombre "RPG Project", `display: standalone`,
+- `client/public/manifest.webmanifest`: nombre "Neque's Realm", `display: standalone`,
   `orientation: any` (vertical y horizontal), `start_url` y `id` `/play/` (abre el juego,
   no la landing), color de fondo y de tema `#12151b` (el `--bg` del cliente).
 - Íconos placeholder en `client/public/icons/`: 192, 512, 512 *maskable* (con el margen que

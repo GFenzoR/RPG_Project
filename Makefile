@@ -1,4 +1,4 @@
-# RPG Project — task runner. Works the same in cloud sessions and locally
+# Neque's Realm — task runner. Works the same in cloud sessions and locally
 # (WSL2/macOS/Linux). Targets marked "pending" print the roadmap task that builds them.
 
 SHELL := /bin/bash

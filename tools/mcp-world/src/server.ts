@@ -449,7 +449,7 @@ export interface Response {
 }
 
 export const INSTRUCTIONS =
-  "Map tools for the RPG Project world (docs/04-map-editor-and-ai.md). Flow: map_info and content_search to see what exists; map_apply_ops to edit (atomic, reversible ops; paint, autoborder, scatter, stamp prefabs, spawns, NPCs, zones, portals); map_validate until there are no errors; map_render each touched area and look at the image; map_patch_create to package the change. Writes only world/; never data/.";
+  "Map tools for Neque's Realm world (docs/04-map-editor-and-ai.md). Flow: map_info and content_search to see what exists; map_apply_ops to edit (atomic, reversible ops; paint, autoborder, scatter, stamp prefabs, spawns, NPCs, zones, portals); map_validate until there are no errors; map_render each touched area and look at the image; map_patch_create to package the change. Writes only world/; never data/.";
 
 export class McpServer {
   private readonly tools: Map<string, Tool>;

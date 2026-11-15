@@ -1,4 +1,4 @@
-# RPG Project — home hosting override (docs/13-hosting-de-pruebas.md). Applied on top of
+# Neque's Realm — home hosting override (docs/13-hosting-de-pruebas.md). Applied on top of
 # docker-compose.yml:
 #
 #   make home-up       # = docker compose -f deploy/docker-compose.yml \

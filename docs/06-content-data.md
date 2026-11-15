@@ -642,8 +642,8 @@ que `date` coincida con el nombre del archivo.
 ```yaml
 date: "2026-11-01"           # igual al prefijo del nombre del archivo
 title:                       # una línea, máx. 120 caracteres, sin < >
-  es: "Bienvenidos a RPG Project"
-  en: "Welcome to RPG Project"
+  es: "Bienvenidos a Neque's Realm"
+  en: "Welcome to Neque's Realm"
 body:                        # obligatorios es y en
   es: |
     Primer párrafo. Un salto de línea simple se une con un espacio.

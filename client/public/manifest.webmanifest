@@ -1,7 +1,7 @@
 {
   "id": "/play/",
-  "name": "RPG Project",
-  "short_name": "RPG Project",
+  "name": "Neque's Realm",
+  "short_name": "Neque's Realm",
   "start_url": "/play/",
   "scope": "/",
   "display": "standalone",
