@@ -20,7 +20,7 @@ data/
   boat_routes.yaml      rutas de barco (T3.5)
   outfits.yaml          outfits del personaje (T0.5)
   effects.yaml          efectos visuales y proyectiles
-  cosmetics.yaml        outfits y monturas (futuro)
+  cosmetics.yaml        tienda cosmética: moneda premium, paquetes y cosméticos (T5.7)
 i18n/
   es/*.yaml  en/*.yaml  mismas claves en ambos (la CI lo verifica)
 ```
@@ -28,7 +28,7 @@ i18n/
 ## Esquemas y validador
 - Esquemas (JSON Schema 2020-12) en `packages/content-schema/schemas/`: `balance`,
   `vocations`, `items`, `monster`, `npc`, `quest`, `spells`, `recipes`, `boat_routes`,
-  `borders`, `outfits`, `i18n`,
+  `borders`, `outfits`, `cosmetics`, `i18n`,
   `ids-lock`, más `common` con las definiciones compartidas (IDs, claves i18n, condiciones,
   acciones, elementos, skills). Son la fuente de verdad del formato; este doc da ejemplos.
 - Dos keywords propios: `x-ref: <tipo>` marca un ID que debe existir (`item`, `monster`,
@@ -56,7 +56,7 @@ i18n/
     en `server/internal/**/*.go`, `client/src` y `editor/src` (sin tests ni código generado)
     cuyo primer segmento sea un espacio de nombres de los catálogos debe existir en todos los
     idiomas. Las claves armadas en tiempo de ejecución (`skill.${id}.name`) no se revisan.
-  - Archivos en `data/` sin esquema (p. ej. `effects.yaml`, `cosmetics.yaml`) fallan hasta
+  - Archivos en `data/` sin esquema (p. ej. `effects.yaml`) fallan hasta
     que su tarea agregue el esquema.
   - `ids.lock.yaml` (ver abajo).
 - Formato de mensajes: `error data/monsters/wolf.yaml:17:7 loot[0].item: unknown item
@@ -630,6 +630,47 @@ los PNG commiteados son los que produce).
 - Todos los jugadores usan `citizen` hasta que `Outfit.look_id` elija otro. El cliente
   elige el frame según la dirección y el avance del paso (`client/CLAUDE.md`, T0.5).
 - IDs únicos; el validador no exige que los PNG existan (eso lo revisa spritepack).
+
+## Tienda cosmética (T5.7)
+`data/cosmetics.yaml` (esquema `cosmetics`; reglas de juego en `02-game-design.md`, "Tienda
+cosmética"). Solo apariencia: el esquema no tiene ningún campo que pueda tocar el juego.
+```yaml
+currency:
+  id: premium                 # la única moneda premium (nácar); siempre "premium"
+limits:                       # obligatorio (reglas en 02-game-design.md, "Límites por cuenta")
+  daily_premium: 5000         # nácar comprable con dinero por cuenta en 24 h (1..1 000 000)
+  equip_burst: 5              # anti-flood de equipar: cambios de golpe (1..100)
+  equip_refill_ms: 500        # ... y uno más cada tantos ms (50..60 000)
+  max_premium_grant: 100000   # tope de un /premium del staff (1..1 000 000)
+packs:                        # nácar que se vende por dinero real (checkout del proveedor)
+  - { id: pack_small, amount: 100, price: 1990, currency: CLP }
+cosmetics:
+  - { id: outfit_sailor, kind: outfit, price: 300, outfit: sailor }          # un look de outfits.yaml
+  - { id: color_tide, kind: outfit_color, price: 120, tint: "#7fa8d8" }      # tinte multiplicativo
+  - { id: name_gilded, kind: name_effect, price: 200, style: gold }          # gold | ember | frost
+```
+- `packs[].price` es un entero en la **unidad menor** de `currency` (código ISO 4217, en
+  mayúsculas), como lo pide el `unit_price` de Mercado Pago: el CLP no tiene decimales, así
+  que `1990` son $1.990; en USD `499` serían $4,99. `amount` es el nácar que se acredita, y
+  nunca puede pasar `limits.daily_premium` (ese paquete no se podría comprar nunca).
+- `cosmetics[].kind`: `outfit`, `outfit_color` o `name_effect` (los valores del `CHECK` de
+  `cosmetics.kind`; `mount` queda reservado). Cada tipo lleva solo su campo: `outfit` (id de
+  `data/outfits.yaml`), `tint` (`#rrggbb` en minúsculas) o `style`. `price` es en nácar.
+- Un atuendo nuevo: su receta en `tools/spritegen` (los mismos frames que `citizen`), su
+  entrada en `data/outfits.yaml` y después el cosmético que lo vende.
+- Textos en `i18n/<idioma>/cosmetics.yaml`, con claves que salen del id (no se escriben en
+  el YAML): `cosmetic.<id>.name` y `cosmetic.<id>.desc`, `cosmetic_pack.<id>.name`, y
+  `premium.name` / `premium.amount` (`{count}`) para la moneda. El servidor lee
+  `cosmetic_pack.<id>.name` (`content.CosmeticShop.LoadTexts`) para el título del ítem en
+  la página del proveedor, en el idioma del sitio; si falta en `es`, no arranca.
+- `make validate` revisa además: ids únicos (paquetes y cosméticos por separado), que
+  ningún paquete pase `limits.daily_premium`, que el `outfit` exista en `outfits.yaml` y no
+  sea `citizen` (gratis para todos; el servidor lo vuelve a revisar al cargar), que dos colores
+  no usen el mismo tinte, que cada campo vaya con su tipo y que existan todos los textos en
+  todos los idiomas (y avisa de claves `cosmetic.*` que nadie usa).
+- El servidor sincroniza el catálogo con la tabla `cosmetics` al arrancar; el cliente lo
+  recibe en `content.cosmetics` (`client/vite/content.ts`) y lo dibuja con
+  `client/src/render/cosmetics.ts`.
 
 ## Noticias (T4.3)
 Una noticia es un archivo `data/news/<YYYY-MM-DD>-<slug>.yaml` (slug: `a-z`, `0-9` y `-`).

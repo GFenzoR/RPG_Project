@@ -977,11 +977,117 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   casilla donde el jugador la usó. La cosecha de otros jugadores y el efecto de una
   estación al fabricar suenan como recolección genérica.
 
-## Cosméticos (monetización futura)
-- Outfits, colores de outfit, monturas (solo visual y velocidad igual para todos),
-  efectos de nombre. Se compran con una moneda premium (cuando exista la tienda) y
-  algunos se ganan en el juego.
-- Regla: **ningún cosmético da ventaja de juego**.
+## Tienda cosmética (T5.7)
+Monetización solo cosmética (`00-vision.md`): lo que se compra cambia cómo te ven, nunca
+lo que puedes hacer. Contenido en `data/cosmetics.yaml` (formato en `06-content-data.md`),
+textos en `i18n/<idioma>/cosmetics.yaml`.
+
+### La moneda: nácar
+- **Nácar** (`premium`; en inglés *nacre*) es la moneda premium, nombre propio del juego.
+  Es incontable como el oro: "300 de nácar" (`premium.amount`).
+- Solo se consigue con dinero real (paquetes) o porque el staff la da (`/premium`,
+  auditado). Nunca cae de monstruos, quests ni NPCs.
+- **No se intercambia** (ni en el intercambio directo ni por correo), **no pasa por el
+  mercado** y **nunca se convierte en oro** ni en items. No hay ningún camino de vuelta al
+  juego: así no compra ventaja por la puerta de atrás.
+- El saldo es de la **cuenta**, no del personaje. No vence.
+
+### Paquetes
+Se pagan en el checkout alojado del proveedor (el servidor nunca toca datos de tarjeta) y
+se acreditan cuando el webhook firmado confirma el pago. Precios en pesos chilenos (la
+moneda de la pasarela en modo prueba); los paquetes grandes rinden un poco más por peso,
+nunca un bonus de juego.
+
+| Paquete | Nácar | Precio |
+|---|---|---|
+| `pack_small` "Puñado de nácar" | 100 | $1.990 CLP |
+| `pack_medium` "Concha de nácar" | 550 | $9.990 CLP |
+| `pack_large` "Cofre de nácar" | 1200 | $19.990 CLP |
+
+### Catálogo
+Tres tipos (los mismos del `CHECK` de `cosmetics.kind`; `mount` queda reservado):
+
+| Tipo | Qué cambia | Cosméticos (precio en nácar) |
+|---|---|---|
+| `outfit` | El atuendo del personaje (otro sprite con los mismos frames y paso que `citizen`) | Marinero (300), Batidor (400), Noble (600) |
+| `outfit_color` | Un tinte que multiplica los colores del atuendo puesto | Marea, Brasa, Musgo (120 cada uno), Ocaso (150) |
+| `name_effect` | Cómo se dibuja el nombre sobre el personaje (color, borde y brillo) | Nombre dorado (200), Nombre escarcha (250) |
+
+- `citizen` es el atuendo gratis de todos y no se vende.
+- Los diseños son propios (spritegen, CC0): no copian atuendos de ningún juego.
+
+### Reglas que no se negocian
+- **Nada cambia stats, velocidad, experiencia, botín, capacidad, regeneración ni
+  tiempos.** Ningún sistema del servidor lee los cosméticos equipados: solo viajan en
+  `Creature.cosmetics` para que los clientes dibujen. Un test de simulación lo verifica
+  (el mismo combate con y sin cosméticos da el mismo resultado).
+- **Sin cajas de botín ni azar:** cada compra es exactamente lo que se ve, con su precio
+  fijo. Nada de ruletas, sobres, "compra 10 y gana 1 sorpresa" ni ofertas por tiempo que
+  presionen.
+- **Sin ventaja de información:** un nombre con efecto se ve igual de legible que uno
+  normal; ningún tinte vuelve al personaje más difícil de ver (los tonos son claros, y la
+  invisibilidad y las marcas de PvP se dibujan encima, como siempre).
+- Los cosméticos no se pueden regalar ni transferir entre cuentas (no son items).
+
+### Propiedad: de la cuenta, equipado por personaje
+- Lo comprado es de la cuenta (`account_cosmetics`, `source = 'shop'`) y lo pueden usar
+  todos sus personajes.
+- Cada personaje equipa como máximo uno de cada tipo (`Cosmetics {outfit, color,
+  name_effect}`), desde el panel **Apariencia** del juego. Vacío = el aspecto por
+  defecto de ese tipo. Equipar y quitar es inmediato, gratis y lo ven los demás jugadores
+  cercanos (`CreatureCosmetics`). Hay anti-flood (el servidor descarta cambios en ráfaga).
+- Se compra en el sitio (`/shop`, con sesión): primero nácar con un paquete, después el
+  cosmético con nácar. Si un personaje de la cuenta está en línea, el juego recibe el
+  saldo y lo comprado al instante (`CosmeticsState`).
+- Si un cosmético sale del catálogo, quien lo tiene lo conserva; el cliente que no lo
+  conoce dibuja el aspecto por defecto.
+
+### Límites por cuenta
+En el bloque `limits` de `data/cosmetics.yaml` (formato en docs/06). Cambiarlos es una
+decisión de negocio: pasa por revisión como cualquier cambio de contenido.
+- `daily_premium` = **5000 de nácar** comprados con dinero en cualquier ventana de 24
+  horas (`payments.LimitWindow`). Un checkout que lo superaría se rechaza antes de pagar
+  (`site.shop.error.limit`); un pago que llega igual (dos checkouts pagados juntos) se
+  acredita, porque el dinero ya se cobró. Ningún paquete puede valer más que este límite
+  (la validación lo rechaza: no se podría comprar nunca).
+- `equip_burst` = 5 y `equip_refill_ms` = 500: el anti-flood de equipar en el juego
+  (5 cambios de golpe, después uno cada medio segundo).
+- `max_premium_grant` = 100 000: el máximo de una corrección de staff con `/premium`.
+- Comprar un cosmético que ya se tiene o sin saldo suficiente responde 409 y no descuenta
+  nada; dos compras simultáneas nunca dejan el saldo negativo.
+
+### Reembolsos, contracargos y cuentas suspendidas
+- **Reembolso** (lo pide el jugador al soporte dentro de 14 días, solo si el nácar de ese
+  paquete no se gastó) y **contracargo** (el banco revierte el pago): el webhook del
+  proveedor descuenta del saldo el nácar de ese paquete. Si el saldo no alcanza (ya se
+  gastó), se descuenta lo que haya, se registra el faltante y la **cuenta queda marcada**:
+  no puede comprar paquetes ni cosméticos (`site.shop.error.suspended`) hasta que el
+  staff lo revise. Los cosméticos ya comprados no se quitan solos; el staff decide.
+- **Reembolso parcial** (el proveedor devuelve solo parte del pago): se descuenta la parte
+  proporcional del nácar del paquete, redondeada hacia abajo:
+  `floor(nácar del paquete × monto reembolsado / monto pagado)` en total. Cada nuevo monto
+  reembolsado descuenta solo la diferencia con lo ya descontado (repetir el aviso no
+  descuenta dos veces) y un reembolso total posterior descuenta el resto. Si el saldo no
+  alcanza, igual que arriba: faltante registrado y cuenta marcada.
+- **Disputa abierta** (`in_mediation`: el jugador reclamó y el proveedor aún no decide): la
+  cuenta queda marcada para el staff y **no se descuenta nada** hasta que haya resolución.
+  Si la disputa termina en contracargo, se descuenta como cualquier contracargo.
+- **Contracargo ganado** (el banco devuelve el dinero al juego después de un contracargo):
+  el nácar descontado **no se vuelve a acreditar solo**. El staff lo revisa y, si
+  corresponde, lo devuelve con `/premium Nombre +N nota` (y limpia la marca con
+  `/premium Nombre +0 clear nota`). Así un error del proveedor nunca crea moneda.
+- **Pago que no se puede acreditar** (la referencia no verifica, la moneda o el paquete no
+  existen, el monto no es el del paquete o la cuenta se borró): no se acredita nada, queda registrado como
+  "unmatched" para que el staff lo concilie y acredite a mano si el pago es legítimo.
+- Todo movimiento (paquete, compra, reembolso, contracargo, regalo de staff) queda en un
+  registro auditable de solo agregar, y el jugador ve su historial en `/shop`.
+- **Cuenta suspendida o baneada:** no puede comprar ni pagar (el checkout se rechaza), y
+  conserva su saldo y sus cosméticos. Un ban por fraude de pagos (tarjetas robadas,
+  contracargos en serie) no da derecho a reembolso del nácar ya gastado.
+- **Cuenta borrada:** el saldo y los cosméticos se pierden con ella (se avisa antes).
+- Sin proveedor configurado (`PAYMENTS_PROVIDER` vacío) la tienda está apagada: la API
+  responde `enabled: false`, el sitio muestra `site.shop.disabled` y el panel Apariencia
+  sigue funcionando con lo que ya se tiene.
 
 ## PvP (T5.2)
 Números en `data/balance.yaml` (`pvp`), nunca en código. Código:

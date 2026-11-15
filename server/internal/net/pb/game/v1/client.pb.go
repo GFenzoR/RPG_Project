@@ -354,6 +354,8 @@ type ClientMessage struct {
 	//	*ClientMessage_SetSafeMode
 	//	*ClientMessage_MarketCommand
 	//	*ClientMessage_HouseCommand
+	//	*ClientMessage_EquipCosmetic
+	//	*ClientMessage_UnequipCosmetic
 	Message       isClientMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -693,6 +695,24 @@ func (x *ClientMessage) GetHouseCommand() *HouseCommand {
 	return nil
 }
 
+func (x *ClientMessage) GetEquipCosmetic() *EquipCosmetic {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_EquipCosmetic); ok {
+			return x.EquipCosmetic
+		}
+	}
+	return nil
+}
+
+func (x *ClientMessage) GetUnequipCosmetic() *UnequipCosmetic {
+	if x != nil {
+		if x, ok := x.Message.(*ClientMessage_UnequipCosmetic); ok {
+			return x.UnequipCosmetic
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Message interface {
 	isClientMessage_Message()
 }
@@ -829,6 +849,14 @@ type ClientMessage_HouseCommand struct {
 	HouseCommand *HouseCommand `protobuf:"bytes,33,opt,name=house_command,json=houseCommand,proto3,oneof"`
 }
 
+type ClientMessage_EquipCosmetic struct {
+	EquipCosmetic *EquipCosmetic `protobuf:"bytes,34,opt,name=equip_cosmetic,json=equipCosmetic,proto3,oneof"`
+}
+
+type ClientMessage_UnequipCosmetic struct {
+	UnequipCosmetic *UnequipCosmetic `protobuf:"bytes,35,opt,name=unequip_cosmetic,json=unequipCosmetic,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Message() {}
 
 func (*ClientMessage_Walk) isClientMessage_Message() {}
@@ -894,6 +922,10 @@ func (*ClientMessage_SetSafeMode) isClientMessage_Message() {}
 func (*ClientMessage_MarketCommand) isClientMessage_Message() {}
 
 func (*ClientMessage_HouseCommand) isClientMessage_Message() {}
+
+func (*ClientMessage_EquipCosmetic) isClientMessage_Message() {}
+
+func (*ClientMessage_UnequipCosmetic) isClientMessage_Message() {}
 
 // Hello is the first message on a new WebSocket. session_token comes from
 // POST /api/play and lives 60 s.
@@ -3807,11 +3839,107 @@ func (*TutorialSkip) Descriptor() ([]byte, []int) {
 	return file_game_v1_client_proto_rawDescGZIP(), []int{51}
 }
 
+// EquipCosmetic puts on a cosmetic the account owns (T5.7, docs/02 "Tienda cosmética").
+// cosmetic_id is a content id of data/cosmetics.yaml; its kind says which slot it takes
+// (outfit, outfit_color or name_effect). Cosmetics never change any game rule.
+// The server answers with CosmeticsState (and CreatureCosmetics to everyone who sees the
+// player); an id the account does not own, or an unknown one, gets the system message
+// cosmetic.not_owned and changes nothing.
+type EquipCosmetic struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CosmeticId    string                 `protobuf:"bytes,1,opt,name=cosmetic_id,json=cosmeticId,proto3" json:"cosmetic_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipCosmetic) Reset() {
+	*x = EquipCosmetic{}
+	mi := &file_game_v1_client_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipCosmetic) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipCosmetic) ProtoMessage() {}
+
+func (x *EquipCosmetic) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipCosmetic.ProtoReflect.Descriptor instead.
+func (*EquipCosmetic) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *EquipCosmetic) GetCosmeticId() string {
+	if x != nil {
+		return x.CosmeticId
+	}
+	return ""
+}
+
+// UnequipCosmetic goes back to the default look of one slot: kind is outfit,
+// outfit_color or name_effect.
+type UnequipCosmetic struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnequipCosmetic) Reset() {
+	*x = UnequipCosmetic{}
+	mi := &file_game_v1_client_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnequipCosmetic) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnequipCosmetic) ProtoMessage() {}
+
+func (x *UnequipCosmetic) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_client_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnequipCosmetic.ProtoReflect.Descriptor instead.
+func (*UnequipCosmetic) Descriptor() ([]byte, []int) {
+	return file_game_v1_client_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *UnequipCosmetic) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
 var File_game_v1_client_proto protoreflect.FileDescriptor
 
 const file_game_v1_client_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xeb\r\n" +
+	"\x14game/v1/client.proto\x12\agame.v1\x1a\x14game/v1/common.proto\"\xf3\x0e\n" +
 	"\rClientMessage\x12&\n" +
 	"\x05hello\x18\x01 \x01(\v2\x0e.game.v1.HelloH\x00R\x05hello\x12#\n" +
 	"\x04walk\x18\x02 \x01(\v2\r.game.v1.WalkH\x00R\x04walk\x120\n" +
@@ -3849,7 +3977,9 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\rguild_command\x18\x1e \x01(\v2\x15.game.v1.GuildCommandH\x00R\fguildCommand\x12:\n" +
 	"\rset_safe_mode\x18\x1f \x01(\v2\x14.game.v1.SetSafeModeH\x00R\vsetSafeMode\x12?\n" +
 	"\x0emarket_command\x18  \x01(\v2\x16.game.v1.MarketCommandH\x00R\rmarketCommand\x12<\n" +
-	"\rhouse_command\x18! \x01(\v2\x15.game.v1.HouseCommandH\x00R\fhouseCommandB\t\n" +
+	"\rhouse_command\x18! \x01(\v2\x15.game.v1.HouseCommandH\x00R\fhouseCommand\x12?\n" +
+	"\x0eequip_cosmetic\x18\" \x01(\v2\x16.game.v1.EquipCosmeticH\x00R\requipCosmetic\x12E\n" +
+	"\x10unequip_cosmetic\x18# \x01(\v2\x18.game.v1.UnequipCosmeticH\x00R\x0funequipCosmeticB\t\n" +
 	"\amessage\"k\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
@@ -4021,7 +4151,12 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x0ePresenceAnswer\x12\x19\n" +
 	"\bcheck_id\x18\x01 \x01(\rR\acheckId\x12\x1b\n" +
 	"\toption_id\x18\x02 \x01(\rR\boptionId\"\x0e\n" +
-	"\fTutorialSkip*~\n" +
+	"\fTutorialSkip\"0\n" +
+	"\rEquipCosmetic\x12\x1f\n" +
+	"\vcosmetic_id\x18\x01 \x01(\tR\n" +
+	"cosmeticId\"%\n" +
+	"\x0fUnequipCosmetic\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind*~\n" +
 	"\vFightStance\x12\x1c\n" +
 	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
@@ -4078,7 +4213,7 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
 var file_game_v1_client_proto_goTypes = []any{
 	(FightStance)(0),            // 0: game.v1.FightStance
 	(ChatChannel)(0),            // 1: game.v1.ChatChannel
@@ -4136,11 +4271,13 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*ReportPlayer)(nil),        // 53: game.v1.ReportPlayer
 	(*PresenceAnswer)(nil),      // 54: game.v1.PresenceAnswer
 	(*TutorialSkip)(nil),        // 55: game.v1.TutorialSkip
-	(Direction)(0),              // 56: game.v1.Direction
-	(*ActionTarget)(nil),        // 57: game.v1.ActionTarget
-	(*ItemLocation)(nil),        // 58: game.v1.ItemLocation
-	(MarketSide)(0),             // 59: game.v1.MarketSide
-	(*Position)(nil),            // 60: game.v1.Position
+	(*EquipCosmetic)(nil),       // 56: game.v1.EquipCosmetic
+	(*UnequipCosmetic)(nil),     // 57: game.v1.UnequipCosmetic
+	(Direction)(0),              // 58: game.v1.Direction
+	(*ActionTarget)(nil),        // 59: game.v1.ActionTarget
+	(*ItemLocation)(nil),        // 60: game.v1.ItemLocation
+	(MarketSide)(0),             // 61: game.v1.MarketSide
+	(*Position)(nil),            // 62: game.v1.Position
 }
 var file_game_v1_client_proto_depIdxs = []int32{
 	5,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
@@ -4176,47 +4313,49 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	11, // 30: game.v1.ClientMessage.set_safe_mode:type_name -> game.v1.SetSafeMode
 	24, // 31: game.v1.ClientMessage.market_command:type_name -> game.v1.MarketCommand
 	31, // 32: game.v1.ClientMessage.house_command:type_name -> game.v1.HouseCommand
-	56, // 33: game.v1.Walk.dir:type_name -> game.v1.Direction
-	56, // 34: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	56, // 35: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 36: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
-	57, // 37: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
-	58, // 38: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
-	58, // 39: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
-	57, // 40: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
-	58, // 41: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
-	58, // 42: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
-	58, // 43: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 44: game.v1.Say.channel:type_name -> game.v1.ChatChannel
-	58, // 45: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
-	58, // 46: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	25, // 47: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
-	26, // 48: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
-	27, // 49: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
-	28, // 50: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
-	29, // 51: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
-	30, // 52: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
-	59, // 53: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
-	32, // 54: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
-	33, // 55: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
-	34, // 56: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
-	35, // 57: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
-	36, // 58: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
-	37, // 59: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
-	38, // 60: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
-	39, // 61: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
-	40, // 62: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
-	43, // 63: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
-	41, // 64: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
-	42, // 65: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
-	2,  // 66: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	3,  // 67: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
-	60, // 68: game.v1.Craft.station:type_name -> game.v1.Position
-	69, // [69:69] is the sub-list for method output_type
-	69, // [69:69] is the sub-list for method input_type
-	69, // [69:69] is the sub-list for extension type_name
-	69, // [69:69] is the sub-list for extension extendee
-	0,  // [0:69] is the sub-list for field type_name
+	56, // 33: game.v1.ClientMessage.equip_cosmetic:type_name -> game.v1.EquipCosmetic
+	57, // 34: game.v1.ClientMessage.unequip_cosmetic:type_name -> game.v1.UnequipCosmetic
+	58, // 35: game.v1.Walk.dir:type_name -> game.v1.Direction
+	58, // 36: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	58, // 37: game.v1.Turn.dir:type_name -> game.v1.Direction
+	0,  // 38: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	59, // 39: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
+	60, // 40: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
+	60, // 41: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
+	59, // 42: game.v1.UseItemOn.to:type_name -> game.v1.ActionTarget
+	60, // 43: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
+	60, // 44: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
+	60, // 45: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
+	1,  // 46: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	60, // 47: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
+	60, // 48: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
+	25, // 49: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
+	26, // 50: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
+	27, // 51: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
+	28, // 52: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
+	29, // 53: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
+	30, // 54: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
+	61, // 55: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
+	32, // 56: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
+	33, // 57: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
+	34, // 58: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
+	35, // 59: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
+	36, // 60: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
+	37, // 61: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
+	38, // 62: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
+	39, // 63: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
+	40, // 64: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
+	43, // 65: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
+	41, // 66: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
+	42, // 67: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
+	2,  // 68: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	3,  // 69: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
+	62, // 70: game.v1.Craft.station:type_name -> game.v1.Position
+	71, // [71:71] is the sub-list for method output_type
+	71, // [71:71] is the sub-list for method input_type
+	71, // [71:71] is the sub-list for extension type_name
+	71, // [71:71] is the sub-list for extension extendee
+	0,  // [0:71] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_client_proto_init() }
@@ -4259,6 +4398,8 @@ func file_game_v1_client_proto_init() {
 		(*ClientMessage_SetSafeMode)(nil),
 		(*ClientMessage_MarketCommand)(nil),
 		(*ClientMessage_HouseCommand)(nil),
+		(*ClientMessage_EquipCosmetic)(nil),
+		(*ClientMessage_UnequipCosmetic)(nil),
 	}
 	file_game_v1_client_proto_msgTypes[9].OneofWrappers = []any{
 		(*CastSpell_SpellId)(nil),
@@ -4292,7 +4433,7 @@ func file_game_v1_client_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   52,
+			NumMessages:   54,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

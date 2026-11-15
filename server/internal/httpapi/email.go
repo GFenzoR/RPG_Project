@@ -83,7 +83,9 @@ func (a *api) authConfig(w http.ResponseWriter, _ *http.Request) {
 		Email     bool     `json:"email"`
 		Providers []string `json:"providers"`
 		PublicURL string   `json:"public_url,omitempty"`
-	}{a.cfg.Auth.EmailEnabled(), providers, a.cfg.Auth.PublicURL()})
+		// Shop: the cosmetic shop takes payments (T5.7); the website shows its link.
+		Shop bool `json:"shop,omitempty"`
+	}{a.cfg.Auth.EmailEnabled(), providers, a.cfg.Auth.PublicURL(), a.shopEnabled()})
 }
 
 func (a *api) account(w http.ResponseWriter, r *http.Request, accountID int64) {

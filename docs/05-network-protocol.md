@@ -141,7 +141,7 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
 ### OAuth con Google y Discord (T2.1, `httpapi/oauth.go`)
 | Método y ruta | Auth | Cuerpo | Respuesta OK |
 |---|---|---|---|
-| `GET /api/auth/config` | — | — | `{email, providers: ["discord","google"], public_url}` (solo los que tienen claves; nunca secretos). En otra dirección que `public_url` el cliente esconde los botones |
+| `GET /api/auth/config` | — | — | `{email, providers: ["discord","google"], public_url, shop?}` (solo los que tienen claves; nunca secretos). En otra dirección que `public_url` el cliente esconde los botones. `shop: true` (T5.7) solo si la tienda tiene proveedor de pagos: el sitio enlaza `/shop` |
 | `POST /api/auth/oauth/{provider}/start` | — | `{return?}` | `200 {url}` + cookie `rpg_oauth`; el navegador va a `url` |
 | `POST /api/auth/oauth/{provider}/link` | token | `{password?}` | igual que `start`, para vincular a la cuenta |
 | `GET /api/auth/oauth/{provider}/callback` | cookie `rpg_oauth` | — | `303` a una página fija del sitio (abajo) |
@@ -418,6 +418,36 @@ pierde (el envío sigue en la cola de moderación).
 | `own_submission` | 403 | Un moderador revisando su propio envío (lo decide otro) |
 | `unauthorized` | 401 | Además de lo habitual: la sesión sobrevivió a su cuenta |
 
+### Tienda cosmética (T5.7, `httpapi/shop.go`)
+Diseño en `01-architecture.md` ("Pagos y tienda cosmética"); reglas en `02-game-design.md`.
+Todas con la sesión de la cuenta (cookie o `Bearer`), menos el webhook. Los `POST` piden `Content-Type: application/json` (como el resto: bloquea los
+formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas no existen
+(404). Sin `PAYMENTS_PROVIDER`, `GET` contesta con `enabled: false` (sin paquetes) y todo
+`POST` con `503 shop_disabled`; el webhook, 404.
+
+| Ruta | Respuesta |
+|---|---|
+| `GET /api/shop` | `{enabled, balance, blocked, daily_limit, bought_today, packs: [{id, amount, price, currency}], cosmetics: [{id, kind, price, owned}], history: [{at, kind, amount, cosmetic_id?, pack_id?, shortfall?}]}` |
+| `POST /api/shop/checkout` `{pack_id, lang?}` | `{url}`: la página de pago del proveedor, que nombra el paquete con `cosmetic_pack.<id>.name` en `lang` (o `Accept-Language`; español si no hay). El navegador va ahí con `location.assign`. Con el proveedor falso es `/api/shop/fake-checkout/<sesión>` (relativa al sitio): el sitio la postea y va a `/shop?checkout=success` |
+| `POST /api/shop/buy` `{cosmetic_id}` | `{balance, owned}` (gasta moneda premium; ids ordenados) |
+| `POST /api/payments/webhook/<proveedor>` | Lo llama el proveedor. `200 {status}` con `credited`, `debited`, `duplicate`, `ignored`, `flagged` (disputa), `pending_reversal` (reembolso antes del pago) o `unmatched` (pago aprobado que no se puede acreditar: queda para el staff); `401 invalid_signature`; `502`/`503` para que reintente |
+| `POST /api/shop/fake-checkout/<sesión>` | Solo con `PAYMENTS_PROVIDER=fake` (nunca en producción ni en un servidor que alcance otra gente) y solo con la sesión de la cuenta que inició ese checkout (otra cuenta o una sesión inválida: `404 unknown_session`; un `GET` no paga). Paga en el acto mandando al webhook una notificación firmada y contesta `{status}`. `?status=refunded` o `chargeback` la revierte (tests) |
+
+- `price` de un paquete es un entero en la unidad menor de su moneda (ISO 4217): en CLP no
+  hay decimales, así que `1990` = $1.990. `amount` es la moneda premium que acredita.
+- `history` trae los 50 movimientos más nuevos (`kind`: `pack`, `purchase`, `refund`,
+  `chargeback` o `grant`; `amount` con signo). `blocked` = la cuenta no puede comprar
+  (deshabilitada, baneada o marcada tras un reembolso que no alcanzó a descontarse).
+- Errores: `unknown_pack` (404), `unknown_cosmetic` (404), `insufficient_balance` (409),
+  `already_owned` (409), `daily_limit` (409: el paquete pasaría `limits.daily_premium`
+  de `data/cosmetics.yaml` en 24 h), `shop_blocked` (403), `provider_error` (502),
+  `rate_limited` (429: 10 checkouts o compras por cuenta, luego 1 cada 6 s).
+- Tras una compra, un pago, un reembolso o un `/premium`, los personajes en línea de la
+  cuenta reciben `CosmeticsState` (unos milisegundos después: lo empuja el `app`).
+- E2E con el proveedor falso: el servidor con `RPG_ENV=development` y
+  `PAYMENTS_PROVIDER=fake`; `POST /api/shop/checkout` y luego `POST` a la `url` con la
+  misma sesión.
+
 ## Mensajes cliente → servidor (intenciones)
 | Mensaje | Campos |
 |---|---|
@@ -646,6 +676,36 @@ Reglas y lista en `02-game-design.md` ("Moderación"); diseño en `01-architectu
   (`client.chat.line.broadcast`).
 - Expulsado → `Disconnect{KICKED}`. Baneado → `Disconnect{BANNED}`; sus tokens quedan
   revocados, así que el cliente vuelve al login y muestra el motivo ahí.
+
+- Tienda (T5.7, `session/cosmetics.go`): `/premium Nombre +100 nota` o `-100 nota` (solo
+  admin; de −100000 a 100000; la nota es obligatoria; `+0 clear nota` limpia la marca de
+  la cuenta) y `/purchases Nombre` (gm: saldo y los 10 movimientos más nuevos). Funcionan
+  con el personaje desconectado; los escribe la base en una transacción con su fila en
+  `premium_ledger` y en `audit_log`. Respuestas: `gm.premium_amount` (`max`),
+  `gm.premium_insufficient` (`name`, `balance`), `gm.premium_done` (`name`, `balance`),
+  `gm.purchases` (`name`, `balance`, `count`) seguido de un `gm.purchase_line` (`at`,
+  `reason`, `amount`, `ref`; texto sin traducir) por movimiento, `gm.player_not_found` y
+  `gm.failed`.
+
+### Cosméticos (T5.7, `server/internal/session/cosmetics.go`)
+Lo comprado es de la cuenta y se equipa por personaje. Solo cambia lo que se dibuja:
+ninguna regla del juego lee los cosméticos.
+- `EquipCosmetic{cosmetic_id}`: un id de `data/cosmetics.yaml` que la cuenta tiene; su
+  `kind` dice qué ranura ocupa (`outfit`, `outfit_color` o `name_effect`). Uno que no tiene
+  o desconocido → `Message` de sistema `shop.not_owned` y un `CosmeticsState` sin cambios.
+- `UnequipCosmetic{kind}`: esa ranura vuelve al aspecto por defecto. Otro `kind` se ignora.
+- Sin catálogo en el servidor → `shop.unavailable`. Anti-flood: ráfaga de 5 cambios, luego
+  1 cada 500 ms; lo que pasa se descarta sin aviso.
+- Un cambio llega a quienes ven al jugador (él incluido) como
+  `CreatureCosmetics{id, cosmetics}`, y al jugador además `CosmeticsState`.
+- `Creature.cosmetics` (campo 12) trae lo equipado en cada `Creature` (`FullMapView`,
+  `MapSlice`, `CreatureAppear`); vacío = aspecto por defecto.
+- `CosmeticsState{owned, balance, equipped}`: al entrar (después de `PlayerSkills`), tras
+  cada `EquipCosmetic`/`UnequipCosmetic` y cuando cambia el saldo o lo comprado fuera del
+  juego. Comprar se hace por HTTP (sitio), nunca por el socket.
+- Lo equipado se guarda con el personaje (`characters.outfit`, `outfit_color`,
+  `name_effect`) en el siguiente guardado, como todo lo demás; al entrar, lo que la cuenta
+  ya no tiene o que salió del catálogo se descarta.
 
 ### Reportes de jugadores (T4.1, `server/internal/session/report.go`)
 Reglas en `02-game-design.md` ("Moderación"); diseño en `01-architecture.md`.
@@ -1003,6 +1063,8 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `TradeUpdate` | Estado de la ventana de intercambio (T5.3) |
 | `MarketUpdate` | La ventana del mercado, o su cierre (T5.3) |
 | `HouseUpdate` | La ventana de una casa, o su cierre (T5.4) |
+| `CreatureCosmetics` | Cambiaron los cosméticos equipados de un jugador visible (T5.7) |
+| `CosmeticsState` | Cosméticos de la cuenta, saldo premium y lo equipado (T5.7) |
 | `WalkRejected` | El cliente corrige su predicción |
 | `Pong`, `Disconnect` | |
 

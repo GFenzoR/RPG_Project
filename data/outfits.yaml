@@ -6,3 +6,18 @@
   sprite: outfits/citizen
   frames: 3
   notes: Plain tunic and trousers; the default look of every new character.
+
+# Shop outfits (T5.7): sold for premium currency in data/cosmetics.yaml, looks only. The same
+# body, frames and walk cycle as citizen, drawn by tools/spritegen (recipes/creatures.ts).
+- id: sailor
+  sprite: outfits/sailor
+  frames: 3
+  notes: Striped deck shirt, blue sailor trousers and a knotted neckerchief; bare-headed.
+- id: ranger
+  sprite: outfits/ranger
+  frames: 3
+  notes: Hooded green cloak over a leather jerkin, a quiver strap and tall boots.
+- id: noble
+  sprite: outfits/noble
+  frames: 3
+  notes: Burgundy doublet with gold trim, cream sash, dark hose and a small black cap.

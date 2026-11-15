@@ -1,0 +1,27 @@
+# T5.7: cosmetic shop content (data/cosmetics.yaml). Looks only, never a gameplay advantage.
+# Premium currency: "nácar", uncountable like "oro" ("300 de nácar").
+premium.name: "Nácar"
+premium.amount: "{count} de nácar"
+
+cosmetic_pack.pack_small.name: "Puñado de nácar"
+cosmetic_pack.pack_medium.name: "Concha de nácar"
+cosmetic_pack.pack_large.name: "Cofre de nácar"
+
+cosmetic.outfit_sailor.name: "Marinero"
+cosmetic.outfit_sailor.desc: "Camisa a rayas de cubierta, pantalón azul y pañuelo anudado al cuello."
+cosmetic.outfit_ranger.name: "Batidor"
+cosmetic.outfit_ranger.desc: "Capa verde con capucha sobre un jubón de cuero, correa de carcaj y botas altas."
+cosmetic.outfit_noble.name: "Noble"
+cosmetic.outfit_noble.desc: "Jubón granate con ribetes dorados, fajín crema y un gorro negro."
+cosmetic.color_tide.name: "Tono marea"
+cosmetic.color_tide.desc: "Tiñe tu atuendo de azul mar."
+cosmetic.color_ember.name: "Tono brasa"
+cosmetic.color_ember.desc: "Tiñe tu atuendo de rojo brasa."
+cosmetic.color_moss.name: "Tono musgo"
+cosmetic.color_moss.desc: "Tiñe tu atuendo de verde musgo."
+cosmetic.color_dusk.name: "Tono ocaso"
+cosmetic.color_dusk.desc: "Tiñe tu atuendo de violeta ocaso."
+cosmetic.name_gilded.name: "Nombre dorado"
+cosmetic.name_gilded.desc: "Tu nombre brilla en oro sobre tu personaje."
+cosmetic.name_frost.name: "Nombre escarcha"
+cosmetic.name_frost.desc: "Tu nombre se ve azul hielo, con un borde de escarcha."

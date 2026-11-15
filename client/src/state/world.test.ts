@@ -415,3 +415,58 @@ describe("tutorial (T4.2)", () => {
     expect(w.tutorial).toBeUndefined();
   });
 });
+
+describe("cosmetics (T5.7)", () => {
+  it("keeps each player's equipped cosmetics and the own shop state", () => {
+    const w = entered();
+    expect(w.creatures.get(9)?.cosmetics).toEqual({ outfit: "", color: "", nameEffect: "" });
+    expect(w.cosmetics).toBeUndefined();
+    w.apply(
+      {
+        case: "creatureCosmetics",
+        value: { id: 9, cosmetics: { outfit: "outfit_sailor", nameEffect: "name_frost" } } as never,
+      },
+      0,
+    );
+    expect(w.creatures.get(9)?.cosmetics).toEqual({
+      outfit: "outfit_sailor",
+      color: "",
+      nameEffect: "name_frost",
+    });
+    w.apply(
+      {
+        case: "cosmeticsState",
+        value: {
+          owned: ["color_tide", "outfit_noble"],
+          balance: 250n,
+          equipped: { outfit: "outfit_noble", color: "color_tide", nameEffect: "" },
+        } as never,
+      },
+      0,
+    );
+    expect(w.cosmetics).toEqual({
+      owned: ["color_tide", "outfit_noble"],
+      balance: 250,
+      equipped: { outfit: "outfit_noble", color: "color_tide", nameEffect: "" },
+    });
+    // The own creature wears what CosmeticsState says.
+    expect(w.self?.cosmetics.outfit).toBe("outfit_noble");
+    // A creature that appears brings its look.
+    w.apply(
+      {
+        case: "creatureAppear",
+        value: {
+          creature: create(CreatureSchema, {
+            id: 11,
+            kind: CreatureKind.PLAYER,
+            name: "Ana",
+            pos: { x: 101, y: 200, z: 7 },
+            cosmetics: { color: "color_moss" },
+          }),
+        } as never,
+      },
+      0,
+    );
+    expect(w.creatures.get(11)?.cosmetics.color).toBe("color_moss");
+  });
+});

@@ -57,6 +57,8 @@ import type {
   ShopState,
   SkillState,
   ConditionView,
+  CosmeticsStateView,
+  CosmeticsView,
 } from "./state/world.ts";
 
 /** What the DOM UI shows next to the canvas, refreshed after every server batch. */
@@ -106,6 +108,8 @@ export interface GameUi {
   picked?: ItemRef | undefined;
   /** T5.6: the contextual menu of a long press, or undefined. */
   menu?: ActionMenuView | undefined;
+  /** T5.7: owned cosmetics, premium balance and what is equipped (undefined until sent). */
+  cosmetics?: CosmeticsStateView | undefined;
 }
 
 /** The contextual menu of a long press (T5.6): where it was pressed and its buttons. */
@@ -154,6 +158,10 @@ export interface ClientTestHooks {
   monsters(): { id: number; contentId: string; x: number; y: number; z: number }[];
   dialog(): DialogState | undefined;
   shop(): ShopState | undefined;
+  /** T5.7: the own shop state (CosmeticsState). */
+  cosmetics(): CosmeticsStateView | undefined;
+  /** T5.7: players the client sees with their equipped cosmetics. */
+  players(): { id: number; name: string; cosmetics: CosmeticsView }[];
 }
 
 /** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */
@@ -491,6 +499,16 @@ export class Game {
   /** Invites a player the client sees (battle list). */
   partyInvite(id: number): void {
     this.party(PartyAction.INVITE, id);
+  }
+
+  /** Puts on an owned cosmetic (T5.7); the server answers with CosmeticsState. */
+  equipCosmetic(cosmeticId: string): void {
+    this.conn.send({ case: "equipCosmetic", value: { cosmeticId } });
+  }
+
+  /** Goes back to the default look of one kind (outfit, outfit_color, name_effect). */
+  unequipCosmetic(kind: string): void {
+    this.conn.send({ case: "unequipCosmetic", value: { kind } });
   }
 
   /** Asks the server to end the tutorial (T4.2); the panel closes when it says so. */
@@ -1074,6 +1092,7 @@ export class Game {
       selfId: w.selfId,
       picked: this.picker.picked,
       menu: this.menu?.view,
+      cosmetics: w.cosmetics,
     });
     this.armPresenceTimer();
   }
@@ -1190,6 +1209,11 @@ export class Game {
           .map((c) => ({ id: c.id, contentId: c.contentId, ...c.pos })),
       dialog: () => world.dialog,
       shop: () => world.shop,
+      cosmetics: () => world.cosmetics,
+      players: () =>
+        [...world.creatures.values()]
+          .filter((c) => c.kind === CreatureKind.PLAYER)
+          .map((c) => ({ id: c.id, name: c.name, cosmetics: { ...c.cosmetics } })),
       itemNumber: (id) => {
         const found = Object.entries(this.opts.content.items).find(([, d]) => d.id === id);
         return found ? Number(found[0]) : undefined;

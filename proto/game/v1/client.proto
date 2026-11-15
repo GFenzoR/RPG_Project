@@ -45,6 +45,8 @@ message ClientMessage {
     SetSafeMode set_safe_mode = 31;
     MarketCommand market_command = 32;
     HouseCommand house_command = 33;
+    EquipCosmetic equip_cosmetic = 34;
+    UnequipCosmetic unequip_cosmetic = 35;
   }
 }
 
@@ -453,3 +455,19 @@ message PresenceAnswer {
 // TutorialSkip ends the tutorial for good (T4.2). There is no message to complete a step:
 // the server advances the tutorial with its own events.
 message TutorialSkip {}
+
+// EquipCosmetic puts on a cosmetic the account owns (T5.7, docs/02 "Tienda cosmética").
+// cosmetic_id is a content id of data/cosmetics.yaml; its kind says which slot it takes
+// (outfit, outfit_color or name_effect). Cosmetics never change any game rule.
+// The server answers with CosmeticsState (and CreatureCosmetics to everyone who sees the
+// player); an id the account does not own, or an unknown one, gets the system message
+// cosmetic.not_owned and changes nothing.
+message EquipCosmetic {
+  string cosmetic_id = 1;
+}
+
+// UnequipCosmetic goes back to the default look of one slot: kind is outfit,
+// outfit_color or name_effect.
+message UnequipCosmetic {
+  string kind = 1;
+}

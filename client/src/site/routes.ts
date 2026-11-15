@@ -16,6 +16,7 @@ export type Route =
   | { page: "forgot_password" }
   | { page: "reset_password" }
   | { page: "account" }
+  | { page: "shop" }
   | { page: "oauth_confirm" }
   | { page: "oauth_error" }
   | { page: "not_found" };
@@ -38,6 +39,7 @@ export function parseRoute(pathname: string): Route {
   if (path === "/forgot-password") return { page: "forgot_password" };
   if (path === "/reset-password") return { page: "reset_password" };
   if (path === "/account") return { page: "account" };
+  if (path === "/shop") return { page: "shop" };
   if (path === "/oauth/confirm") return { page: "oauth_confirm" };
   if (path === "/oauth/error") return { page: "oauth_error" };
   if (path === "/maps/review") return { page: "maps_review" };

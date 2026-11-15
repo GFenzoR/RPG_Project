@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/cosmetics.schema.json",
+  "title": "Cosmetic shop (data/cosmetics.yaml)",
+  "description": "T5.7: the premium currency, the packs sold for real money and the cosmetics bought with the currency. Looks only: nothing here changes stats, speed, experience, loot, capacity or timings (docs/02-game-design.md, \"Tienda cosmética\"). Texts: premium.* (currency), cosmetic_pack.<id>.name and cosmetic.<id>.name / .desc, in i18n/<lang>/cosmetics.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["currency", "limits", "packs", "cosmetics"],
+  "properties": {
+    "currency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "const": "premium", "description": "The one premium currency." },
+        "notes": { "$ref": "common.schema.json#/$defs/notes" }
+      }
+    },
+    "limits": {
+      "description": "Bounds of the shop. No pack amount may exceed daily_premium (checked by the validator).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["daily_premium", "equip_burst", "equip_refill_ms", "max_premium_grant"],
+      "properties": {
+        "daily_premium": {
+          "description": "Most premium currency one account may buy with money in any 24 hours (a checkout over it is refused before paying).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "equip_burst": {
+          "description": "Equip anti-flood: changes allowed at once.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "equip_refill_ms": {
+          "description": "Equip anti-flood: one more change every this many milliseconds.",
+          "type": "integer",
+          "minimum": 50,
+          "maximum": 60000
+        },
+        "max_premium_grant": {
+          "description": "Largest single staff /premium correction (either sign).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        }
+      }
+    },
+    "packs": {
+      "description": "Premium currency packs sold through the payment provider's hosted checkout.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "amount", "price", "currency"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "amount": {
+            "description": "Premium currency credited when the payment is confirmed.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "price": {
+            "description": "Real-money price as an integer in the currency's minor unit (ISO 4217 exponent): CLP has none, so 1990 = $1.990 CLP (Mercado Pago unit_price); USD 499 = $4.99.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "currency": {
+            "description": "ISO 4217 code of the real currency.",
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "notes": { "$ref": "common.schema.json#/$defs/notes" }
+        }
+      }
+    },
+    "cosmetics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "price"],
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "kind": {
+            "description": "Same values as the cosmetics.kind CHECK of migration 00004 ('mount' is reserved and not sold yet).",
+            "enum": ["outfit", "outfit_color", "name_effect"]
+          },
+          "price": {
+            "description": "Price in premium currency.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "outfit": {
+            "description": "kind outfit: id of the look in data/outfits.yaml (its sprite folder and frames).",
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "tint": {
+            "description": "kind outfit_color: multiply tint applied to the player's outfit.",
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "style": {
+            "description": "kind name_effect: how the client draws the name label (client/src/render/cosmetics.ts).",
+            "enum": ["gold", "ember", "frost"]
+          },
+          "notes": { "$ref": "common.schema.json#/$defs/notes" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "const": "outfit" } } },
+            "then": { "required": ["outfit"] }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "outfit_color" } } },
+            "then": { "required": ["tint"] }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "name_effect" } } },
+            "then": { "required": ["style"] }
+          }
+        ]
+      }
+    }
+  }
+}

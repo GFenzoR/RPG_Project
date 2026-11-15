@@ -99,6 +99,8 @@ export interface AuthConfig {
   providers: string[];
   /** Origin of PUBLIC_URL ("" if unknown): OAuth only works from exactly there. */
   publicOrigin: string;
+  /** The cosmetic shop takes payments (T5.7): the website links /shop. */
+  shop: boolean;
 }
 
 /** The origin of an http(s) URL, or "" for anything else. */
@@ -120,18 +122,21 @@ let authConfigCache: Promise<AuthConfig> | undefined;
  * 404 (or fails), which means none.
  */
 export function authConfig(): Promise<AuthConfig> {
-  authConfigCache ??= call<{ email?: unknown; providers?: unknown; public_url?: unknown }>(
-    "GET",
-    "/api/auth/config",
-  ).then(
+  authConfigCache ??= call<{
+    email?: unknown;
+    providers?: unknown;
+    public_url?: unknown;
+    shop?: unknown;
+  }>("GET", "/api/auth/config").then(
     (c) => ({
       email: c.email === true,
       providers: Array.isArray(c.providers)
         ? KNOWN_PROVIDERS.filter((p) => (c.providers as unknown[]).includes(p))
         : [],
       publicOrigin: originOf(c.public_url),
+      shop: c.shop === true,
     }),
-    () => ({ email: false, providers: [], publicOrigin: "" }),
+    () => ({ email: false, providers: [], publicOrigin: "", shop: false }),
   );
   return authConfigCache;
 }
@@ -285,4 +290,62 @@ export const mapsApi = {
         reason,
       })
     ).submission,
+};
+
+/** A premium currency pack (T5.7); price is in the currency's minor unit (CLP has none). */
+export interface ShopPack {
+  id: string;
+  amount: number;
+  price: number;
+  currency: string;
+}
+
+export interface ShopCosmetic {
+  id: string;
+  kind: string;
+  /** In premium currency. */
+  price: number;
+  owned: boolean;
+}
+
+/** One premium ledger entry; amount is signed (a purchase is negative). */
+export interface ShopHistoryEntry {
+  at: string;
+  kind: "purchase" | "pack" | "refund" | "chargeback" | "grant";
+  amount: number;
+  cosmetic_id?: string;
+  pack_id?: string;
+  shortfall?: number;
+}
+
+/** GET /api/shop (T5.7, docs/05 "Tienda"). */
+export interface ShopState {
+  enabled: boolean;
+  balance: number;
+  /** The account cannot buy (suspended, or flagged after a refund). */
+  blocked: boolean;
+  daily_limit: number;
+  bought_today: number;
+  packs: ShopPack[];
+  cosmetics: ShopCosmetic[];
+  history: ShopHistoryEntry[];
+}
+
+/** Cosmetic shop (T5.7): currency packs go through the provider's hosted checkout. */
+export const shopApi = {
+  state: (): Promise<ShopState> => call("GET", "/api/shop"),
+  /**
+   * The provider's checkout page for a pack (the browser goes there). lang names the pack
+   * on the provider's page.
+   */
+  checkout: (packId: string, lang?: string): Promise<{ url: string }> =>
+    call("POST", "/api/shop/checkout", lang ? { pack_id: packId, lang } : { pack_id: packId }),
+  /**
+   * Pays a checkout of the fake provider (development and tests only): its URL is this
+   * site's, and only a POST with the session of the account that started it pays.
+   */
+  payLocal: (url: string): Promise<{ status: string }> => call("POST", url),
+  /** Spends premium currency on a cosmetic. */
+  buy: (cosmeticId: string): Promise<{ balance: number; owned: string[] }> =>
+    call("POST", "/api/shop/buy", { cosmetic_id: cosmeticId }),
 };

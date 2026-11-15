@@ -147,6 +147,27 @@ cambio táctil altera el mouse ni el teclado. La PWA no entra en el E2E (Vite de
 no registra el service worker); su lógica se prueba con Vitest (`client/src/pwa.test.ts`,
 `client/src/sw/policy.test.ts`).
 
+### E2E de la tienda (T5.7)
+`client/e2e/shop.spec.ts` usa el servidor principal del E2E, que corre con
+`RPG_ENV=development` y `PAYMENTS_PROVIDER=fake` (`playwright.config.ts`). Patrón nuevo:
+el **proveedor de pagos falso**. El checkout devuelve una URL local
+(`/api/shop/fake-checkout/<sesión>`); el sitio le hace `POST` con la sesión del comprador
+(solo esa cuenta puede pagarla; un `GET` no paga), lo que paga por el mismo camino del
+webhook, con firma válida, y después va a `/shop?checkout=success`. Así el test pasa por
+la vuelta completa, como con un proveedor real, sin red externa. El test comprueba
+también que un `GET` del enlace y otra cuenta no cambian nada.
+- Cada jugador usa su propio `browser.newContext()` (cookies separadas): el comprador en
+  el sitio, el comprador en el juego y un segundo jugador que mira.
+- El test inicia sesión en `/shop` y compra un paquete con el checkout falso. Después
+  compra un atuendo (con el `confirm` del navegador aceptado y otro rechazado) y prueba un
+  saldo insuficiente (409, el único error de consola esperado). Compara la página con
+  `GET /api/shop`.
+- Con el comprador en el juego, una compra en el sitio llega como `CosmeticsState`
+  (push). Equipa desde el panel Apariencia y el segundo jugador ve los cosméticos en
+  `__rpgClient.players()`. Al volver al atuendo por defecto, el otro también lo ve.
+- Screenshots `63-shop-desktop`, `64-shop-phone` (375 px, sin scroll horizontal),
+  `65-appearance-panel`, `66-shop-buyer` y `67-shop-watcher`.
+
 ### Audio (T3.7)
 - **Unitarias** (`client/src/audio/*.test.ts`): el motor corre sobre un `AudioContext`
   falso que registra ganancias, fuentes y rampas. Se prueban los canales y sus volúmenes,

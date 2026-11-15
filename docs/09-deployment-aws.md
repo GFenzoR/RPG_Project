@@ -133,6 +133,7 @@ cambia `HTTP_PORT`/`HTTPS_PORT` en `deploy/.env` (entra por `https://localhost:<
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Emails de la cuenta (sección "Emails de la cuenta"). Sin `SMTP_HOST` no hay emails |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Login con Google/Discord ("Login con Google y Discord"). Sin ninguno de los dos, ese proveedor queda apagado; con uno solo, el servidor no arranca y el log nombra la variable que falta |
 | `REQUIRE_VERIFIED_EMAIL` | `true` = solo cuentas con email verificado juegan (necesita SMTP) |
+| `RPG_ENV`, `PAYMENTS_PROVIDER`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAYMENTS_REF_SECRET` (+ `PAYMENTS_REF_SECRET_PREVIOUS`) | Tienda cosmética (sección "Tienda y pagos"). Sin `PAYMENTS_PROVIDER` no se puede comprar |
 | `RPG_WS_ORIGINS` | Orígenes extra en `/ws`. Sin definir = los del cliente de escritorio (`tauri://localhost,http://tauri.localhost`); vacío = solo el sitio |
 
 ### Primer deploy (cuando haya cuenta AWS y dominio)
@@ -240,6 +241,58 @@ En AWS, `PUBLIC_URL` es `https://tudominio.com` (el default es `https://$SITE_AD
 Para el paso a paso en Google Cloud y Discord ver `13-hosting-de-pruebas.md` (paso 8c): es
 igual, con la URI del dominio. Con la app de Google en modo "Prueba" solo entran los
 usuarios de prueba: publícala antes de abrir el juego.
+
+### Tienda y pagos (T5.7)
+Apagada hasta que elijas proveedor: sin `PAYMENTS_PROVIDER`, `/shop` muestra el catálogo
+pero no se puede comprar. Las claves van solo en `deploy/.env` (nunca en el repo).
+
+> **Advertencia: nunca uses `PAYMENTS_PROVIDER=fake` (ni `RPG_ENV=development`) en un
+> servidor que alcance otra gente**, sea esta instancia o el servidor de casa con túneles
+> (docs/13). El proveedor falso regala moneda premium sin cobrar nada: es solo para
+> `make dev` y los tests E2E.
+
+| Variable | Valor |
+|---|---|
+| `RPG_ENV` | `production` (por defecto, también si está vacía). `development` o `test` solo en tu PC: es lo único que permite el proveedor falso. Nunca en un servidor público |
+| `PAYMENTS_PROVIDER` | vacío (apagada), `fake` (solo `make dev`/E2E: el pago es instantáneo y gratis; el servidor no arranca con `RPG_ENV=production`) o `mercadopago` |
+| `MP_ACCESS_TOKEN` | Access token de tu aplicación de Mercado Pago. En modo prueba empieza con `TEST-` |
+| `MP_WEBHOOK_SECRET` | "Clave secreta" del webhook de esa aplicación. Solo verifica las notificaciones (`x-signature`) |
+| `PAYMENTS_REF_SECRET` | Secreto propio (`openssl rand -hex 32`) que firma la referencia de cada checkout (cuenta + paquete). Va aparte del del webhook: rotar la clave del webhook en el panel no hace perder pagos |
+| `PAYMENTS_REF_SECRET_PREVIOUS` | Opcional: el valor anterior de `PAYMENTS_REF_SECRET` mientras lo rotas (déjalo uno o dos días, hasta que se paguen o abandonen los checkouts firmados con él, y bórralo) |
+| `PUBLIC_URL` | La dirección **https** pública (con `RPG_ENV=production` el servidor no arranca con http): de ahí cuelgan `notification_url` y las vueltas a `/shop` |
+
+**Mercado Pago en modo prueba** (mercadopago.cl/developers → "Tus integraciones"):
+1. Crea una aplicación (Checkout Pro). En "Credenciales de prueba" copia el access token
+   a `MP_ACCESS_TOKEN`.
+2. "Webhooks" → "Configurar notificaciones": URL de prueba
+   `<PUBLIC_URL>/api/payments/webhook/mercadopago`, evento **Pagos**. Guarda y copia la
+   "clave secreta" a `MP_WEBHOOK_SECRET`.
+3. Genera `PAYMENTS_REF_SECRET` (`openssl rand -hex 32`), `PAYMENTS_PROVIDER=mercadopago`
+   y vuelve a levantar el stack. El log de arranque dice
+   `cosmetic shop … payments=mercadopago`.
+4. Prueba con un usuario comprador de prueba y una tarjeta de prueba de la documentación
+   de Mercado Pago. Tras pagar, el webhook acredita (log `payments: webhook …
+   result=credited`); un reembolso desde el panel descuenta (uno parcial, la parte
+   proporcional). Para pasar a producción se cambian el access token y la clave del webhook
+   por las de producción, nada más.
+5. Conciliación: un pago aprobado que no se pudo acreditar sale en el log con nivel error
+   (`approved payment not credited`, con el id del pago) y queda en la base:
+   `SELECT received_at, payment_id, account_id, pack_id, amount_minor, currency, note FROM
+   payment_events WHERE result = 'unmatched' ORDER BY received_at;`. Revísalo en el panel
+   de Mercado Pago y, si es legítimo, acredita con `/premium Nombre +N nota`.
+
+**Rotar secretos.** La clave del webhook: genera una nueva en el panel y cámbiala en
+`MP_WEBHOOK_SECRET` (las notificaciones que lleguen con la vieja durante el cambio fallan
+con 401 y Mercado Pago las reintenta). `PAYMENTS_REF_SECRET`: pasa el valor actual a
+`PAYMENTS_REF_SECRET_PREVIOUS`, pon uno nuevo, levanta el stack y borra el anterior un par
+de días después.
+
+Caddy no necesita nada aparte: `/api/payments/webhook/*` es público y va al gameserver como
+el resto de `/api/*` (cuerpo máximo 64 KB). El webhook tiene que ser alcanzable desde
+internet (en casa, el túnel con dominio; el Quick Tunnel cambia de URL y Mercado Pago no
+podría llamarlo). Ver los movimientos de una cuenta: `/purchases Nombre` en el juego (gm);
+dar o quitar moneda, y limpiar la marca de una cuenta tras un contracargo: `/premium`
+(admin; docs/05, "Comandos de staff").
 
 ### Backups y restauración
 - El servicio `backup` hace un `pg_dump` (formato custom, comprimido) al arrancar y luego

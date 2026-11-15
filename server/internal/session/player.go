@@ -194,6 +194,15 @@ type Player struct {
 	tut       int
 	tutKillAt game.Tick
 	tutKill   string
+
+	// Cosmetic shop (T5.7, cosmetics.go): the equipped cosmetics (a look only: no game
+	// rule reads them), the account's cosmetics (sorted) and premium balance with the
+	// ledger seq they come from, and the equip anti-flood (GCRA).
+	cos     Cosmetics
+	owned   []string
+	premium int64
+	premSeq int64
+	cosTAT  game.Tick
 }
 
 // Invisible reports whether p is invisible (T3.2).
@@ -289,6 +298,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		Storage:     p.storage.Values(),
 		Conditions:  w.conditionStates(p),
 		PvP:         w.pvpState(p),
+		Cosmetics:   p.cos,
 		Final:       final,
 	}
 }
@@ -385,6 +395,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Storage = s.Storage
 		c.Conditions = s.Conditions
 		c.PvP = s.PvP
+		c.Cosmetics = s.Cosmetics
 		seq = s.Seq
 	}
 
@@ -427,6 +438,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	if w.guildOn {
 		p.gm = w.guildMembers[p.charID] // before anyone is told about p (Creature.guild)
 	}
+	w.loadCosmetics(p, c)          // before anyone is told about p (Creature.cosmetics)
 	p.pos = w.houseLogin(p, p.pos) // T5.4: a house it may no longer enter (after the guild)
 
 	w.players = append(w.players, p) // ids grow, so the slice stays ordered
@@ -447,6 +459,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
+	w.sendCosmetics(p) // T5.7
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
 	w.antibotJoin(ctx.Tick, p)
@@ -470,6 +483,10 @@ func (w *World) state(p *Player, c Character) Character {
 	c.Conditions = w.conditionStates(p)
 	c.PvP = w.pvpState(p)
 	c.Pos, c.HasPos = p.pos, true
+	c.Cosmetics = p.cos
+	if p.premSeq > c.PremiumSeq { // the online player heard of a newer shop change
+		c.Owned, c.Premium, c.PremiumSeq = p.owned, p.premium, p.premSeq
+	}
 	return c
 }
 
@@ -679,6 +696,7 @@ func (w *World) creatureMsg(p *Player) *pb.Creature {
 		Speed:         uint32(p.speed),
 		Guild:         guildName(p),
 		Skull:         p.skull,
+		Cosmetics:     cosmeticsMsg(p.cos),
 	}
 }
 

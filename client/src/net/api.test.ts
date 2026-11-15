@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, authConfig, forgetEmailConfig, originOf, registerBody } from "./api.ts";
+import { api, authConfig, forgetEmailConfig, originOf, registerBody, shopApi } from "./api.ts";
 
 describe("register body (T2.1)", () => {
   it("sends lang only to a server that sends emails", () => {
@@ -54,11 +54,40 @@ describe("authConfig", () => {
       email: true,
       providers: ["google", "discord"],
       publicOrigin: "",
+      shop: false,
     });
   });
   it("keeps only an http(s) public origin", () => {
     expect(originOf("https://game.example/x")).toBe("https://game.example");
     expect(originOf("javascript:alert(1)")).toBe("");
     expect(originOf(7)).toBe("");
+  });
+});
+
+describe("shop checkout (T5.7)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("sends the site language and posts the fake checkout", async () => {
+    const calls: { path: string; method: string | undefined; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((path: string, init?: { method?: string; body?: string }) => {
+        calls.push({
+          path,
+          method: init?.method,
+          body: init?.body ? JSON.parse(init.body) : undefined,
+        });
+        return Promise.resolve(
+          new Response('{"url":"/api/shop/fake-checkout/x"}', { status: 200 }),
+        );
+      }),
+    );
+    await shopApi.checkout("pack_small", "en");
+    await shopApi.checkout("pack_small");
+    await shopApi.payLocal("/api/shop/fake-checkout/x");
+    expect(calls).toEqual([
+      { path: "/api/shop/checkout", method: "POST", body: { pack_id: "pack_small", lang: "en" } },
+      { path: "/api/shop/checkout", method: "POST", body: { pack_id: "pack_small" } },
+      { path: "/api/shop/fake-checkout/x", method: "POST", body: undefined },
+    ]);
   });
 });

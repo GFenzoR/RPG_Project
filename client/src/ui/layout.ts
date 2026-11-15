@@ -91,7 +91,15 @@ export function layoutFor(
 }
 
 /** The sections of the side panel, in tab order. */
-export const PANEL_TABS = ["battle", "party", "guild", "inventory", "skills", "chat"] as const;
+export const PANEL_TABS = [
+  "battle",
+  "party",
+  "guild",
+  "inventory",
+  "skills",
+  "appearance",
+  "chat",
+] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
 
 /** Title key of each tab (the same title its section shows on desktop). */
@@ -101,6 +109,7 @@ export const TAB_TITLE: Record<PanelTab, string> = {
   guild: "client.guild.title",
   inventory: "client.inventory.title",
   skills: "client.skills.title",
+  appearance: "client.appearance.title",
   chat: "client.chat.title",
 };
 

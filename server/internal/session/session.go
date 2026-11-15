@@ -64,6 +64,12 @@ type Character struct {
 	Conditions []ConditionState
 	// PvP is the saved skull, kill counter and recent unjustified kills (T5.2).
 	PvP PvPState
+	// Cosmetics are the equipped cosmetics (T5.7); Owned (any order), Premium and
+	// PremiumSeq the account's cosmetics, balance and newest premium_ledger id.
+	Cosmetics  Cosmetics
+	Owned      []string
+	Premium    int64
+	PremiumSeq int64
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -87,6 +93,8 @@ type Snapshot struct {
 	Conditions []ConditionState
 	// PvP is the skull, kill counter and unjustified kills in the windows (T5.2).
 	PvP PvPState
+	// Cosmetics are the equipped cosmetics (T5.7).
+	Cosmetics Cosmetics
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -135,6 +143,9 @@ type Config struct {
 	// Tutorial comes from data/tutorial.yaml (T4.2): its island must be on the map and
 	// what its steps reference must exist. Nil means no tutorial.
 	Tutorial *content.Tutorial
+	// Cosmetics is the catalog of data/cosmetics.yaml (T5.7). Nil: nothing can be
+	// equipped (EquipCosmetic answers shop.unavailable) and no CosmeticsState is sent.
+	Cosmetics *content.CosmeticShop
 	// Balance.Conditions (T3.2) must hold every condition the spells and monsters apply.
 	// Save submits a snapshot to the persistence goroutine without blocking. It returns
 	// false if its queue is full; the World retries on the next ticks. Required.
@@ -424,6 +435,11 @@ type World struct {
 	idleWarnFor game.Tick
 	idleBuf     []*Player
 
+	// Cosmetic shop (T5.7, cosmetics.go): shop updates for accounts with nobody online
+	// (for a login in flight) and the tick of their next prune.
+	shopPending map[int64]pendingShop
+	shopPrune   game.Tick
+
 	// sched is the loop's scheduler, kept at the first join to know the current tick
 	// outside a TickContext (condition times in snapshots and at flush, T3.2).
 	sched *game.Scheduler
@@ -460,20 +476,21 @@ func New(cfg Config) (*World, error) {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
 	w := &World{
-		cfg:      cfg,
-		m:        cfg.Map,
-		mv:       mv,
-		diag:     int64(mv.DiagonalCost*1000 + 0.5),
-		log:      cfg.Logger,
-		byClient: map[Client]*Player{},
-		byChar:   map[int64]*Player{},
-		sectors:  map[uint64][]*Player{},
-		unsaved:  map[int64]Snapshot{},
-		loading:  map[int64]int{},
-		jobs:     map[uint64]pendingJob{},
-		banned:   map[int64]time.Time{},
-		locked:   map[int64]bool{},
-		pf:       world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
+		cfg:         cfg,
+		m:           cfg.Map,
+		mv:          mv,
+		diag:        int64(mv.DiagonalCost*1000 + 0.5),
+		log:         cfg.Logger,
+		byClient:    map[Client]*Player{},
+		byChar:      map[int64]*Player{},
+		sectors:     map[uint64][]*Player{},
+		unsaved:     map[int64]Snapshot{},
+		loading:     map[int64]int{},
+		jobs:        map[uint64]pendingJob{},
+		banned:      map[int64]time.Time{},
+		locked:      map[int64]bool{},
+		shopPending: map[int64]pendingShop{},
+		pf:          world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
 	}
 	if err := w.initCombat(); err != nil {
 		return nil, err

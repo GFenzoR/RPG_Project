@@ -36,6 +36,26 @@ export interface OutfitDef {
   frames: number;
 }
 
+/** Kinds of data/cosmetics.yaml (T5.7); "mount" is reserved and not sold yet. */
+export type CosmeticKind = "outfit" | "outfit_color" | "name_effect";
+
+/** How a name_effect cosmetic draws the name label (render/cosmetics.ts NAME_EFFECTS). */
+export type NameEffectStyle = "gold" | "ember" | "frost";
+
+/** A cosmetic of data/cosmetics.yaml (T5.7). Looks only: no game rule reads it. */
+export interface CosmeticDef {
+  id: string;
+  kind: CosmeticKind;
+  /** Price in premium currency (the server decides; this is for display). */
+  price: number;
+  /** kind outfit: id of the look in data/outfits.yaml. */
+  outfit?: string;
+  /** kind outfit_color: "#rrggbb" multiply tint over the outfit. */
+  tint?: string;
+  /** kind name_effect. */
+  style?: NameEffectStyle;
+}
+
 /** A spell of data/spells.yaml, for the hotkey bar (the server validates every cast). */
 export interface SpellDef {
   id: string;
@@ -119,6 +139,11 @@ export interface ClientContent {
   npcSprites?: Record<string, string>;
   /** data/outfits.yaml in file order (T0.5). Optional so fixtures can leave it out. */
   outfits?: OutfitDef[];
+  /**
+   * data/cosmetics.yaml cosmetics in file order (T5.7). Optional so fixtures can leave it
+   * out (then every player wears the default look).
+   */
+  cosmetics?: CosmeticDef[];
   /** Vocation IDs a new character can pick (data/vocations.yaml, in file order). */
   vocations: string[];
   /** data/spells.yaml in file order. */
@@ -157,11 +182,15 @@ export interface NewsPost {
 
 /** Shape of the `virtual:rpg-site` module (the public website, T4.3). */
 export interface SiteContent {
-  /** client.yaml, vocations.yaml and site.yaml per language. */
+  /** client.yaml, vocations.yaml, site.yaml, world.yaml and cosmetics.yaml per language. */
   i18n: Record<string, Record<string, string>>;
   vocations: string[];
   /** Skill ids of data/balance.yaml, in their order: the highscore categories. */
   skills: string[];
   /** Newest first. */
   news: NewsPost[];
+  /** data/cosmetics.yaml cosmetics in file order (T5.7): kind, look and tint for the shop. */
+  cosmetics?: CosmeticDef[];
+  /** data/outfits.yaml (T5.7): the shop previews an outfit with its south-facing frame. */
+  outfits?: OutfitDef[];
 }

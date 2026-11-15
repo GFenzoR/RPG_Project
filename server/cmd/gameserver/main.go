@@ -36,6 +36,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
+	"github.com/GFenzoR/RPG_Project/server/internal/payments"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
@@ -110,7 +111,7 @@ func main() {
 	flag.DurationVar(&o.mapPatchRetention, "map-patch-retention", defaultMapPatchRetention, "drop the patch bytes of rejected, pr_opened and failed map submissions this long after their last change (0 = keep them)")
 	flag.StringVar(&o.mailMode, "mail", envOr("RPG_MAIL", mailAuto), "account emails (verification, password reset): auto (smtp if $SMTP_HOST is set, else off), smtp, log (development) or off; default $RPG_MAIL or auto")
 	flag.StringVar(&o.publicURL, "public-url", os.Getenv("PUBLIC_URL"), "public base URL of the website for the links in emails, e.g. https://example.com; default $PUBLIC_URL")
-	flag.StringVar(&o.i18nDir, "i18n", "", "directory of the i18n/ catalogs (email templates); default <data>/../i18n")
+	flag.StringVar(&o.i18nDir, "i18n", "", "directory of the i18n/ catalogs (email templates, shop pack names); default <data>/../i18n")
 	flag.BoolVar(&o.requireVerifiedEmail, "require-verified-email", os.Getenv("RPG_REQUIRE_VERIFIED_EMAIL") == "true", "only accounts with a verified email may play (needs email on); default $RPG_REQUIRE_VERIFIED_EMAIL == true")
 	flag.BoolVar(&o.mapPRWorker, "map-pr-worker", os.Getenv("RPG_MAP_PR_WORKER") == "on", "the map PR worker runs, so approved map submissions become pull requests on their own; default $RPG_MAP_PR_WORKER == on")
 	flag.Parse()
@@ -194,6 +195,31 @@ func run(logger *slog.Logger, o options) error {
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
 	}
+	cosmetics, err := content.LoadCosmetics(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
+	if cosmetics != nil {
+		// The pack names shown on the provider's checkout page.
+		if err := cosmetics.LoadTexts(i18nDir(o)); err != nil {
+			return fmt.Errorf("content: %w", err)
+		}
+	}
+	// T5.7: RPG_ENV says whether this is production (the default); the fake payment
+	// provider refuses to start there.
+	env := payments.ParseEnv(os.Getenv("RPG_ENV"))
+	pay, err := payments.FromEnv(os.Getenv, env, o.publicURL, nil, clk)
+	if err != nil {
+		return err
+	}
+	if pay != nil && cosmetics == nil {
+		return errors.New("PAYMENTS_PROVIDER is set but data/cosmetics.yaml is missing")
+	}
+	provider := ""
+	if pay != nil {
+		provider = pay.Name()
+	}
+	logger.Info("cosmetic shop", "env", string(env), "payments", provider, "catalog", cosmetics != nil)
 	m, err := loadWorld(logger, o.worldPath)
 	if err != nil {
 		return err
@@ -219,11 +245,7 @@ func run(logger *slog.Logger, o options) error {
 	}
 	var sender auth.Emailer
 	if ms.mailer != nil {
-		dir := o.i18nDir
-		if dir == "" {
-			dir = filepath.Join(o.dataDir, "..", "i18n")
-		}
-		s, q, err := newSender(ms.mailer, dir, clk, logger)
+		s, q, err := newSender(ms.mailer, i18nDir(o), clk, logger)
 		if err != nil {
 			return fmt.Errorf("mail: %w", err)
 		}
@@ -271,6 +293,9 @@ func run(logger *slog.Logger, o options) error {
 		PublicURL:            o.publicURL,
 		RequireVerifiedEmail: o.requireVerifiedEmail,
 		Providers:            providers,
+
+		Cosmetics: cosmetics,
+		Payments:  pay,
 	})
 	if err != nil {
 		return err
@@ -504,6 +529,14 @@ func purgeMapPatches(ctx context.Context, logger *slog.Logger, clk clock.Clock, 
 // authRateLimit returns the per-IP auth limit for a -auth-rate-burst value: the zero
 // RateLimit (httpapi's default) when burst <= 0, otherwise the default refill with a
 // larger burst.
+// i18nDir is -i18n, or <data>/../i18n.
+func i18nDir(o options) string {
+	if o.i18nDir != "" {
+		return o.i18nDir
+	}
+	return filepath.Join(o.dataDir, "..", "i18n")
+}
+
 func authRateLimit(burst int) httpapi.RateLimit {
 	if burst <= 0 {
 		return httpapi.RateLimit{}

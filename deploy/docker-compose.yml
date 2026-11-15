@@ -81,6 +81,18 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      # Cosmetic shop (T5.7; docs/09 "Tienda y pagos"). RPG_ENV=production refuses the fake
+      # provider. Without PAYMENTS_PROVIDER the shop is off (nothing can be bought). With
+      # mercadopago, the webhook to register in its panel is
+      # ${PUBLIC_URL}/api/payments/webhook/mercadopago.
+      RPG_ENV: ${RPG_ENV:-production}
+      PAYMENTS_PROVIDER: ${PAYMENTS_PROVIDER:-}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-}
+      # Signs the checkout references (apart from the webhook secret, so rotating that one
+      # in the panel never drops paid payments); _PREVIOUS only while rotating it.
+      PAYMENTS_REF_SECRET: ${PAYMENTS_REF_SECRET:-}
+      PAYMENTS_REF_SECRET_PREVIOUS: ${PAYMENTS_REF_SECRET_PREVIOUS:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-rpg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/${POSTGRES_DB:-rpg}?sslmode=disable
     # Pending migrations (embedded in the binary) are applied on start (-migrate, default
     # true); the healthcheck only passes once the HTTP API is up, after migrating.

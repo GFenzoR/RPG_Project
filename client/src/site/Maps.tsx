@@ -90,7 +90,12 @@ function StatusBadge(props: { t: Translate; status: string }): JSX.Element {
 }
 
 /** Login form of the website, shown when a portal page needs a session. */
-export function SiteLogin(props: { t: Translate; onDone: () => void }): JSX.Element {
+export function SiteLogin(props: {
+  t: Translate;
+  onDone: () => void;
+  /** What the login is for; default: the map portal's hint. */
+  hint?: string;
+}): JSX.Element {
   const { t } = props;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -99,7 +104,7 @@ export function SiteLogin(props: { t: Translate; onDone: () => void }): JSX.Elem
   return (
     <section class="card maps-login" aria-labelledby="maps-login-title">
       <h2 id="maps-login-title">{t("site.maps.login.title")}</h2>
-      <p class="muted">{t("site.maps.login.hint")}</p>
+      <p class="muted">{props.hint ?? t("site.maps.login.hint")}</p>
       <form
         class="maps-form"
         onSubmit={(e) => {

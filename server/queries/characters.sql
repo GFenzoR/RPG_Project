@@ -16,7 +16,9 @@ RETURNING id, name, vocation, level;
 -- Loads what the game server needs to put a character in the world, with its account's
 -- role. A banned account's characters are not found (T2.6).
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
-       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role
+       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
+       c.outfit, c.outfit_color, c.name_effect, a.premium_balance,
+       (SELECT COALESCE(max(l.id), 0) FROM premium_ledger l WHERE l.account_id = a.id)::bigint AS premium_seq
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
 WHERE c.id = sqlc.arg(id) AND c.account_id = sqlc.arg(account_id)
@@ -48,6 +50,9 @@ SET level        = sqlc.arg(level),
     skull        = sqlc.arg(skull),
     skull_until  = sqlc.narg(skull_until),
     pvp_kills    = sqlc.arg(pvp_kills),
+    outfit       = sqlc.arg(outfit),
+    outfit_color = sqlc.arg(outfit_color),
+    name_effect  = sqlc.arg(name_effect),
     last_save_at = sqlc.arg(saved_at)
 WHERE id = sqlc.arg(id);
 

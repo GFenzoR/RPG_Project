@@ -9,6 +9,8 @@ import { Markdown } from "./Markdown.tsx";
 import { MinePage, ReviewPage, SubmitPage } from "./Maps.tsx";
 import { ForgotPage, ResetPage, VerifyPage } from "./Account.tsx";
 import { AccountPage, OAuthConfirmPage, OAuthErrorPage } from "./OAuth.tsx";
+import { ShopPage } from "./Shop.tsx";
+import { authConfig } from "../net/api.ts";
 import { excerpt } from "./markdown.ts";
 import {
   LEVEL,
@@ -159,6 +161,15 @@ export function Site(props: SiteProps): JSX.Element {
   // No ?lang=: both pages share the stored choice (i18n LANGUAGE_STORAGE_KEY), and a
   // ?lang= in the game's URL would win over a language picked there after a reload.
   const playHref = "/play/";
+  // T5.7: the shop link only when the server takes payments (GET /api/auth/config).
+  const [shopOn, setShopOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void authConfig().then((c) => live && setShopOn(c.shop));
+    return () => {
+      live = false;
+    };
+  }, []);
   // Client-side navigation: move focus to the new page's content so keyboard and screen
   // reader users land on it (not on the link, which may be gone). Filters change only the
   // query, so a select keeps its focus.
@@ -206,6 +217,11 @@ export function Site(props: SiteProps): JSX.Element {
           <Link href="/maps/submit" current={section === "maps"}>
             {t("site.nav.maps")}
           </Link>
+          {shopOn && (
+            <Link href="/shop" current={section === "shop"}>
+              {t("site.nav.shop")}
+            </Link>
+          )}
           <Link href="/account" current={section === "account"}>
             {t("site.nav.account")}
           </Link>
@@ -246,6 +262,7 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       forgot_password: t("site.account.forgot.title"),
       reset_password: t("site.account.reset.title"),
       account: t("site.account.title"),
+      shop: t("site.shop.title"),
       oauth_confirm: t("site.oauth.confirm.title"),
       oauth_error: t("site.oauth.error.title"),
     };
@@ -295,6 +312,8 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       return (
         <AccountPage t={t} lang={props.lang} playHref={props.playHref} search={props.search} />
       );
+    case "shop":
+      return <ShopPage t={t} lang={props.lang} site={props.site} search={props.search} />;
     case "oauth_confirm":
       return <OAuthConfirmPage t={t} lang={props.lang} playHref={props.playHref} />;
     case "oauth_error":

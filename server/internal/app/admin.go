@@ -45,9 +45,13 @@ type adminWorker struct {
 	store AdminStore
 	// guilds writes the guild changes (AdminGuild); nil when guilds are off.
 	guilds GuildStore
-	clock  clock.Clock
-	log    *slog.Logger
-	done   func(session.AdminResult)
+	// shop runs the premium staff commands (AdminPremium, AdminPurchases, T5.7); nil
+	// answers them as failed. shopChanged is told an account whose balance changed.
+	shop        ShopStore
+	shopChanged func(accountID int64)
+	clock       clock.Clock
+	log         *slog.Logger
+	done        func(session.AdminResult)
 	// roles receives the current roles of accounts (World.RolesChanged).
 	roles func(map[int64]session.Role)
 	// metrics counts failed writes (persistence_errors_total{writer="audit"}); nil is fine.
@@ -186,10 +190,53 @@ func (a *adminWorker) write(ctx context.Context, job session.AdminJob) (session.
 			return res, nil
 		}
 		err = a.guilds.ApplyGuild(ctx, guildChange(*job.Guild), nil)
+	case session.AdminPremium, session.AdminPurchases:
+		if a.shop == nil {
+			res.Result = session.AdminFailed
+			return res, a.store.AppendAudit(ctx, withResult(auditEntry(job.Audit), session.AdminFailed))
+		}
+		return a.premium(ctx, job)
 	default:
 		err = a.store.AppendAudit(ctx, auditEntry(job.Audit))
 	}
 	return res, err
+}
+
+// purchasesListed is how many ledger rows a GM's /purchases shows.
+const purchasesListed = 10
+
+// premium runs an AdminPremium or AdminPurchases job (T5.7).
+func (a *adminWorker) premium(ctx context.Context, job session.AdminJob) (session.AdminResult, error) {
+	res := session.AdminResult{ID: job.ID}
+	if job.Kind == session.AdminPremium {
+		g, err := a.shop.GrantPremium(ctx, store.PremiumGrant{Audit: auditEntry(job.Audit), TargetName: job.TargetName,
+			Delta: job.Delta, Note: job.Reason, ClearFlag: job.ClearFlag})
+		if err != nil {
+			return res, err
+		}
+		res.Result, res.AccountID, res.Name, res.Balance = g.Result, g.AccountID, g.Name, g.Balance
+		if g.Result == store.ResultOK && a.shopChanged != nil {
+			a.shopChanged(g.AccountID)
+		}
+		return res, nil
+	}
+	audit := withResult(auditEntry(job.Audit), store.ResultOK)
+	g, rows, err := a.shop.PremiumHistory(ctx, job.TargetName, purchasesListed, audit)
+	if err != nil {
+		return res, err
+	}
+	res.Result, res.AccountID, res.Name, res.Balance = g.Result, g.AccountID, g.Name, g.Balance
+	for _, r := range rows {
+		ref := r.CosmeticID
+		if ref == "" {
+			ref = r.PackID
+		}
+		if ref == "" {
+			ref = r.ActorName + ": " + r.Note
+		}
+		res.Premium = append(res.Premium, session.PremiumEntry{At: r.At, Reason: r.Reason, Delta: r.Delta, Ref: ref})
+	}
+	return res, nil
 }
 
 // reportsListed is how many open reports a GM's /reports shows.

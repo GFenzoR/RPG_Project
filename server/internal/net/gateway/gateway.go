@@ -345,6 +345,10 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 		Storage:    pc.Storage,
 		PvP: session.PvPState{Skull: pc.PvP.Skull, SkullUntil: pc.PvP.SkullUntil, Kills: pc.PvP.Kills,
 			Unjust: pc.PvP.Unjust},
+		Cosmetics:  session.Cosmetics{Outfit: pc.Cosmetics.Outfit, Color: pc.Cosmetics.Color, NameEffect: pc.Cosmetics.NameEffect},
+		Owned:      pc.Owned,
+		Premium:    pc.Premium,
+		PremiumSeq: pc.PremiumSeq,
 	}
 	for _, s := range pc.Skills {
 		c.Skills = append(c.Skills, session.SkillState{ID: s.ID, Level: s.Level, Tries: s.Tries})

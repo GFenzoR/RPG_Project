@@ -40,6 +40,9 @@ function codeFiles(dir: string, ext: readonly string[]): string[] {
   return out;
 }
 
+/** The look of every new character (data/outfits.yaml); free, so never sold. */
+const DEFAULT_OUTFIT = "citizen";
+
 const SKILLS = {
   combat: ["fist", "sword", "axe", "club", "distance", "shield", "magic", "fishing"],
   craft: ["mining", "woodcutting", "smithing", "cooking", "alchemy"],
@@ -227,6 +230,7 @@ class Validator {
       }
     }
 
+    let outfits: SourceFile | undefined;
     for (const [file, schema] of [
       ["recipes.yaml", "recipes"],
       ["boat_routes.yaml", "boat_routes"],
@@ -237,7 +241,11 @@ class Validator {
       if (!src) continue;
       this.checkUniqueIds(src);
       if (schema === "borders") this.checkBorders(src);
+      if (schema === "outfits") outfits = src;
     }
+
+    const cosmetics = single("cosmetics.yaml", "cosmetics", false);
+    if (cosmetics) this.checkCosmetics(cosmetics, outfits);
 
     const tutorial = single("tutorial.yaml", "tutorial", false);
     if (tutorial) this.checkTutorial(tutorial, dataDir);
@@ -325,6 +333,85 @@ class Validator {
   }
 
   // ---- per-type rules --------------------------------------------------------
+
+  /**
+   * data/cosmetics.yaml (T5.7): unique ids (packs and cosmetics apart), each cosmetic only
+   * carries the field of its kind, an outfit names a look of data/outfits.yaml other than
+   * the free default, no two colours share a tint, and the texts exist: cosmetic.<id>.name
+   * and .desc, cosmetic_pack.<id>.name and premium.name / premium.amount. No pack is worth
+   * more than limits.daily_premium (it could never be bought).
+   */
+  private checkCosmetics(src: SourceFile, outfits: SourceFile | undefined): void {
+    if (!isObj(src.data)) return;
+    const key = (value: string, path: PathSegment[]): void => {
+      this.index.i18nKeys.push({ value, path, src });
+    };
+    key("premium.name", ["currency"]);
+    key("premium.amount", ["currency"]);
+    const packs = asList(src.data["packs"]);
+    this.checkUniqueIdsOf(src, packs, ["packs"]);
+    const limits = src.data["limits"];
+    const daily = isObj(limits) ? limits["daily_premium"] : undefined;
+    for (const [i, pack] of packs.entries()) {
+      const id = idOf(pack);
+      if (id !== undefined) key(`cosmetic_pack.${id}.name`, ["packs", i, "id"]);
+      const amount = isObj(pack) ? pack["amount"] : undefined;
+      if (typeof daily === "number" && typeof amount === "number" && amount > daily)
+        this.error(
+          src,
+          ["packs", i, "amount"],
+          `amount ${amount} is over limits.daily_premium ${daily}: the pack could never be bought`,
+        );
+    }
+    const list = asList(src.data["cosmetics"]);
+    this.checkUniqueIdsOf(src, list, ["cosmetics"]);
+    const looks = new Set(
+      (outfits ? asList(outfits.data) : []).map(idOf).filter((id) => id !== undefined),
+    );
+    const fieldOf: Record<string, string> = {
+      outfit: "outfit",
+      outfit_color: "tint",
+      name_effect: "style",
+    };
+    const tints = new Map<string, string>();
+    for (const [i, c] of list.entries()) {
+      if (!isObj(c)) continue;
+      const id = idOf(c);
+      if (id !== undefined) {
+        key(`cosmetic.${id}.name`, ["cosmetics", i, "id"]);
+        key(`cosmetic.${id}.desc`, ["cosmetics", i, "id"]);
+      }
+      const kind = typeof c["kind"] === "string" ? c["kind"] : "";
+      for (const [k, field] of Object.entries(fieldOf)) {
+        if (field in c && kind !== k)
+          this.error(src, ["cosmetics", i, field], `"${field}" is only allowed with kind: ${k}`);
+      }
+      const look = c["outfit"];
+      if (kind === "outfit" && typeof look === "string") {
+        if (look === DEFAULT_OUTFIT)
+          this.error(
+            src,
+            ["cosmetics", i, "outfit"],
+            `"${DEFAULT_OUTFIT}" is every player's free look and cannot be sold`,
+          );
+        else if (!looks.has(look)) {
+          const hint = suggest(look, looks);
+          this.error(
+            src,
+            ["cosmetics", i, "outfit"],
+            `unknown outfit "${look}" in data/outfits.yaml${hint ? ` (did you mean "${hint}"?)` : ""}`,
+          );
+        }
+      }
+      const tint = c["tint"];
+      if (kind === "outfit_color" && typeof tint === "string") {
+        const prev = tints.get(tint);
+        if (prev !== undefined)
+          this.error(src, ["cosmetics", i, "tint"], `tint ${tint} is already sold as "${prev}"`);
+        else tints.set(tint, id ?? "?");
+      }
+    }
+  }
 
   private checkBalance(src: SourceFile): void {
     const skills =
@@ -777,7 +864,16 @@ class Validator {
     }
     this.checkCodeKeys(catalogs);
     // Shared UI keys (dialog.*, ui.*) are used by code, not data; only data-owned prefixes are checked.
-    const dataPrefixes = ["item.", "monster.", "npc.", "quest.", "spell.", "vocation."];
+    const dataPrefixes = [
+      "item.",
+      "monster.",
+      "npc.",
+      "quest.",
+      "spell.",
+      "vocation.",
+      "cosmetic.",
+      "cosmetic_pack.",
+    ];
     for (const [key, entry] of reference) {
       if (!used.has(key) && dataPrefixes.some((p) => key.startsWith(p))) {
         this.warn(entry.src, [key], `i18n key "${key}" is not used by any file in data/`);

@@ -60,6 +60,7 @@ func newHarnessRepo(t *testing.T, repo auth.Repo, mutate func(*httpapi.Config)) 
 type req struct {
 	method, path, body, token, cookie, contentType, remote, xff string
 	authorization                                               string // raw header, overrides token
+	header                                                      map[string]string
 }
 
 func (h *harness) do(r req) *httptest.ResponseRecorder {
@@ -86,6 +87,11 @@ func (h *harness) do(r req) *httptest.ResponseRecorder {
 	}
 	if r.xff != "" {
 		hr.Header.Set("X-Forwarded-For", r.xff)
+	}
+	for k, v := range r.header {
+		if v != "" {
+			hr.Header.Set(k, v)
+		}
 	}
 	w := httptest.NewRecorder()
 	h.h.ServeHTTP(w, hr)
