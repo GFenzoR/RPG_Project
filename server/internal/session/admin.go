@@ -72,6 +72,12 @@ const (
 	// AdminGuild writes the guild change Guild (T5.1). Nothing is reported back: the
 	// loop already applied it.
 	AdminGuild
+	// AdminPremium changes the premium balance of the account of TargetName by Delta
+	// (T5.7), with its ledger row and Audit, in one transaction; World.AdminDone answers.
+	AdminPremium
+	// AdminPurchases reads the newest premium ledger rows of the account of TargetName
+	// and writes Audit; World.AdminDone answers with them.
+	AdminPurchases
 )
 
 // AdminJob is work for the admin goroutine (the audit log and bans, docs/01).
@@ -91,6 +97,9 @@ type AdminJob struct {
 	ReportID int64
 	// Guild is the change of an AdminGuild job.
 	Guild *GuildChange
+	// Delta and ClearFlag are the change of an AdminPremium job (Reason is its note).
+	Delta     int64
+	ClearFlag bool
 }
 
 // Results of an AdminBan or AdminUnban (AdminResult.Result).
@@ -100,6 +109,8 @@ const (
 	AdminProtected = "protected"
 	AdminNotBanned = "not_banned"
 	AdminFailed    = "error"
+	// AdminInsufficient: a premium removal larger than the balance (T5.7).
+	AdminInsufficient = "insufficient"
 )
 
 // AdminResult is the outcome of an AdminBan or AdminUnban job.
@@ -112,6 +123,10 @@ type AdminResult struct {
 	// AdminCloseReport.
 	Reports  []ReportSummary
 	ReportID int64
+	// Balance and Premium are the premium balance and ledger rows of an AdminPremium or
+	// AdminPurchases job (T5.7).
+	Balance int64
+	Premium []PremiumEntry
 }
 
 // Limits of the commands.
@@ -153,6 +168,12 @@ const (
 	msgGMUnbanned     = "gm.unbanned"
 	msgGMNotBanned    = "gm.not_banned"
 	msgGMFailed       = "gm.failed"
+	// Shop (T5.7).
+	msgGMPremiumAmount = "gm.premium_amount"
+	msgGMPremiumLow    = "gm.premium_insufficient"
+	msgGMPremiumDone   = "gm.premium_done"
+	msgGMPurchases     = "gm.purchases"
+	msgGMPurchaseLine  = "gm.purchase_line"
 )
 
 // Audit results written by the loop (the database writes the ban results).
@@ -194,6 +215,9 @@ var gmCommands = map[string]gmCommand{
 	"house":      {RoleGM, "house_info", "/house id", (*World).cmdHouse},
 	"houseevict": {RoleGM, "house_evict", "/houseevict id", (*World).cmdHouseEvict},
 	"housemove":  {RoleGM, "house_move", "/housemove id Name", (*World).cmdHouseMove},
+	// Cosmetic shop (T5.7). Only admins create or remove premium currency.
+	"premium":   {RoleAdmin, "premium_grant", "/premium Name +100|-100 note | /premium Name +0 clear note", (*World).cmdPremium},
+	"purchases": {RoleGM, "premium_history", "/purchases Name", (*World).cmdPurchases},
 }
 
 // command runs a chat line that starts with "/". An unknown command and one the
@@ -524,6 +548,12 @@ func (w *World) AdminDone(r AdminResult) game.Command {
 		if job.kind == AdminListReports || job.kind == AdminCloseReport {
 			if gm := w.byChar[job.charID]; gm != nil {
 				w.reportsDone(ctx, gm, job.kind, r)
+			}
+			return
+		}
+		if job.kind == AdminPremium || job.kind == AdminPurchases {
+			if gm := w.byChar[job.charID]; gm != nil {
+				w.premiumDone(gm, job.kind, r)
 			}
 			return
 		}

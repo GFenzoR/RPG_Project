@@ -40,3 +40,7 @@ deploy/backups/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Worktrees of parallel agents (Claude Code)
+.claude/worktrees/
+.wt/

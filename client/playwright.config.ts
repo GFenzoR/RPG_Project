@@ -8,12 +8,14 @@ const serverPort = Number(process.env["CLIENT_E2E_SERVER_PORT"] ?? 18080);
 const clientPort = Number(process.env["CLIENT_E2E_PORT"] ?? 5176);
 export const databaseUrl =
   process.env["DATABASE_URL"] ?? "postgres://postgres:postgres@localhost:5432/rpg";
-export const serverURL = `http://localhost:${serverPort}`;
+// Go servers listen on loopback only (-http 127.0.0.1:PORT): a server on every interface
+// makes the Windows firewall ask again after each `go run`, which builds a new exe path.
+export const serverURL = `http://127.0.0.1:${serverPort}`;
 // A second server whose start island is Puerto, like production (T4.2: a new character
 // starts there with no town and gets the tutorial), with its own Vite.
 const puertoServerPort = Number(process.env["CLIENT_E2E_PUERTO_SERVER_PORT"] ?? 18081);
 const puertoClientPort = Number(process.env["CLIENT_E2E_PUERTO_PORT"] ?? 5177);
-export const puertoServerURL = `http://localhost:${puertoServerPort}`;
+export const puertoServerURL = `http://127.0.0.1:${puertoServerPort}`;
 export const puertoClientURL = `http://localhost:${puertoClientPort}`;
 // Account emails (T2.1): a server with email on (HTTP API only, no world), its own Vite
 // and a fake SMTP server (e2e/fake-smtp.ts) whose messages are read over HTTP.
@@ -53,12 +55,13 @@ export default defineConfig({
         "go run ./cmd/mapcompile -root .. -out ../build/world.bin && " +
         // Every test registers and logs in from 127.0.0.1: raise the per-IP auth burst so the
         // suite does not depend on how fast it runs (production keeps the default).
-        `go run ./cmd/gameserver -http :${serverPort} -world ../build/world.bin -seed 1 -auth-rate-burst 1000 -start-town testisle -boat-routes ../client/e2e/fixtures/boat_routes.yaml`,
+        `go run ./cmd/gameserver -http 127.0.0.1:${serverPort} -world ../build/world.bin -seed 1 -auth-rate-burst 1000 -start-town testisle -boat-routes ../client/e2e/fixtures/boat_routes.yaml`,
       cwd: `${import.meta.dirname}/../server`,
       url: `${serverURL}/healthz`,
       reuseExistingServer: false,
       timeout: 240_000,
-      env: { DATABASE_URL: databaseUrl },
+      // T5.7: the cosmetic shop with the fake payment provider (refused in production).
+      env: { DATABASE_URL: databaseUrl, RPG_ENV: "development", PAYMENTS_PROVIDER: "fake" },
       stdout: "pipe",
     },
     {
@@ -73,7 +76,7 @@ export default defineConfig({
       // Its own world.bin: both servers compile the map at the same time.
       command:
         "go run ./cmd/mapcompile -root .. -out ../build/world-puerto.bin && " +
-        `go run ./cmd/gameserver -http :${puertoServerPort} -world ../build/world-puerto.bin -seed 1 -auth-rate-burst 1000 -start-town puerto -metrics-addr ""`,
+        `go run ./cmd/gameserver -http 127.0.0.1:${puertoServerPort} -world ../build/world-puerto.bin -seed 1 -auth-rate-burst 1000 -start-town puerto -metrics-addr ""`,
       cwd: `${import.meta.dirname}/../server`,
       url: `${puertoServerURL}/healthz`,
       reuseExistingServer: false,
@@ -104,9 +107,9 @@ export default defineConfig({
       timeout: 240_000,
     },
     {
-      command: `go run ./cmd/gameserver -http :${mailServerPort} -world "" -seed 1 -auth-rate-burst 1000 -metrics-addr ""`,
+      command: `go run ./cmd/gameserver -http 127.0.0.1:${mailServerPort} -world "" -seed 1 -auth-rate-burst 1000 -metrics-addr ""`,
       cwd: `${import.meta.dirname}/../server`,
-      url: `http://localhost:${mailServerPort}/healthz`,
+      url: `http://127.0.0.1:${mailServerPort}/healthz`,
       reuseExistingServer: false,
       timeout: 240_000,
       env: {
@@ -136,7 +139,7 @@ export default defineConfig({
       url: `${mailClientURL}/`,
       reuseExistingServer: false,
       timeout: 60_000,
-      env: { RPG_SERVER: `http://localhost:${mailServerPort}` },
+      env: { RPG_SERVER: `http://127.0.0.1:${mailServerPort}` },
     },
   ],
 });

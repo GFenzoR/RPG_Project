@@ -20,6 +20,8 @@ import { delta } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
 import { skullColor } from "../state/pvp.ts";
+import { lookKey, playerLook } from "./cosmetics.ts";
+import type { OutfitDef } from "../content-types.ts";
 import {
   DEFAULT_OUTFIT,
   outfitDir,
@@ -199,6 +201,10 @@ interface CreatureSprite {
   drawnSkull: Skull;
   /** A player's outfit sprite (T0.5); its texture follows the facing and the step. */
   outfit: Sprite | undefined;
+  /** The outfit drawn (T5.7: the equipped outfit cosmetic, else citizen). */
+  outfitDef: OutfitDef | undefined;
+  /** lookKey of the cosmetics the sprites were built with (T5.7): a change rebuilds them. */
+  drawnLook: string;
   bar: Graphics;
   drawnDir: number;
   drawnHealth: number;
@@ -283,16 +289,29 @@ export async function createGameCanvas(
     return path ? atlas.texture(path) : undefined;
   };
   // Players: the outfit's frames (T0.5), only when the atlas has real art for every one of
-  // them (an automatic placeholder per frame would look worse than the block).
-  const outfit = content.outfits?.find((o) => o.id === DEFAULT_OUTFIT);
-  const outfitReady =
-    outfit !== undefined &&
-    outfitKeys(outfit).every((k) => {
-      const origin = atlas.index.sprites[k]?.origin;
-      return atlas.has(k) && origin !== "auto" && origin !== "placeholder";
-    });
-  const outfitTexture = (c: CreatureState, now: number): Texture | undefined =>
-    outfit && outfitReady
+  // them (an automatic placeholder per frame would look worse than the block). T5.7: the
+  // outfit is the player's equipped outfit cosmetic; one without art falls back to citizen.
+  const readyOutfits = new Map<string, boolean>();
+  const outfitReady = (o: OutfitDef): boolean => {
+    let ready = readyOutfits.get(o.id);
+    if (ready === undefined) {
+      ready = outfitKeys(o).every((k) => {
+        const origin = atlas.index.sprites[k]?.origin;
+        return atlas.has(k) && origin !== "auto" && origin !== "placeholder";
+      });
+      readyOutfits.set(o.id, ready);
+    }
+    return ready;
+  };
+  const citizen = content.outfits?.find((o) => o.id === DEFAULT_OUTFIT);
+  const drawableOutfit = (o: OutfitDef | undefined): OutfitDef | undefined =>
+    o && outfitReady(o) ? o : citizen && outfitReady(citizen) ? citizen : undefined;
+  const outfitTexture = (
+    outfit: OutfitDef | undefined,
+    c: CreatureState,
+    now: number,
+  ): Texture | undefined =>
+    outfit
       ? atlas.texture(
           outfitKey(
             outfit.sprite,
@@ -346,15 +365,25 @@ export async function createGameCanvas(
 
   const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
     let s = sprites.get(c.id);
+    const isPlayer = c.kind === CreatureKind.PLAYER;
+    const lk = isPlayer ? lookKey(c.cosmetics) : "";
+    // T5.7: equipped cosmetics changed (CreatureCosmetics): build the sprites again.
+    if (s && s.drawnLook !== lk) {
+      dropSprite(c.id);
+      s = undefined;
+    }
     if (!s) {
+      const look = isPlayer ? playerLook(c.cosmetics, content, colorOf(c)) : undefined;
       const shape = new Graphics();
       const frame = new Graphics();
       const body = new Container({ label: `creature ${c.id}` });
       body.addChild(shape);
       const tex = creatureTexture(c);
       if (tex) body.addChild(bodySprite(tex));
-      const look = c.kind === CreatureKind.PLAYER ? outfitTexture(c, now) : undefined;
-      const outfitSprite = look ? bodySprite(look) : undefined;
+      const outfitDef = look ? drawableOutfit(look.outfit) : undefined;
+      const outfitTex = outfitTexture(outfitDef, c, now);
+      const outfitSprite = outfitTex ? bodySprite(outfitTex) : undefined;
+      if (outfitSprite && look) outfitSprite.tint = look.tint;
       if (outfitSprite) body.addChild(outfitSprite);
       body.addChild(frame); // the target frame goes over the body
       const bar = new Graphics();
@@ -367,6 +396,7 @@ export async function createGameCanvas(
           fontWeight: "bold",
           fill: colorOf(c),
           stroke: { color: 0x000000, width: 3 },
+          ...look?.name,
         },
         anchor: { x: 0.5, y: 1 },
         roundPixels: true,
@@ -395,6 +425,8 @@ export async function createGameCanvas(
         skull,
         drawnSkull: Skull.UNSPECIFIED,
         outfit: outfitSprite,
+        outfitDef,
+        drawnLook: lk,
         bar,
         drawnDir: -1,
         drawnHealth: -1,
@@ -411,8 +443,8 @@ export async function createGameCanvas(
     s.drawnSkull = c.skull;
     if (s.drawnDir !== c.dir) drawShape(s, c);
     if (s.outfit) {
-      const look = outfitTexture(c, now);
-      if (look && s.outfit.texture !== look) s.outfit.texture = look;
+      const tex = outfitTexture(s.outfitDef, c, now);
+      if (tex && s.outfit.texture !== tex) s.outfit.texture = tex;
     }
     if (s.drawnHealth !== c.health) drawBar(s, c.health);
     const targeted = world.target === c.id;

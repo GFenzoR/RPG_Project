@@ -19,7 +19,7 @@ Caddy (`deploy/caddy-routes.caddy`) reparte una sola origin:
 
 | Ruta | Destino |
 |---|---|
-| `/api/*`, `/ws`, `/healthz` | gameserver: API HTTP (cuentas, personajes, `play`, y los públicos `status`, `highscores`, `guilds` y `houses`; docs/05), WebSocket del juego y health |
+| `/api/*`, `/ws`, `/healthz` | gameserver: API HTTP (cuentas, personajes, `play`, la tienda `shop` y el webhook `payments/webhook/<proveedor>` (T5.7), y los públicos `status`, `highscores`, `guilds` y `houses`; docs/05), WebSocket del juego y health |
 | `/play`, `/play/*` | página del juego del build del cliente (`client/play/index.html`) |
 | todo lo demás | sitio público (`client/index.html`): landing en `/`, `/highscores`, `/guilds[/<id>]` (T5.1), `/houses` (T5.4), `/news` y `/news/<fecha>-<slug>`; primero los archivos estáticos del build (`/assets`, `/atlas`, `/audio`) |
 
@@ -373,6 +373,98 @@ microsegundos antes de que el proceso termine, y el proceso siguiente empieza la
 abandonado. Por eso el compose le da `stop_grace_period: 90s`. Aun así es best effort:
 la fuente de verdad son los logs `save abandoned at shutdown`, `job abandoned at
 shutdown` y `batch abandoned at shutdown`, que llevan el contenido completo.
+
+## Pagos y tienda cosmética (T5.7)
+La monetización es solo cosmética (`00-vision.md`): la moneda premium se compra con
+dinero real, se gasta en cosméticos y nada más. Piezas:
+
+- `internal/payments`: la interfaz `Provider` (`CreateCheckout`, `ParseWebhook`) con dos
+  implementaciones. `Fake` (tests, e2e y desarrollo) no tiene red: su "checkout" es una
+  ruta del propio servidor (`POST /api/shop/fake-checkout/<sesión>`, solo con la sesión de
+  la cuenta que lo inició; el sitio la postea y vuelve a `/shop?checkout=success`) que paga
+  mandándose un webhook firmado con HMAC; **se niega a arrancar si `RPG_ENV` no es
+  `development` o `test`** (vacío = producción). Nunca se usa en un servidor que alcance
+  otra gente (tampoco el de casa con túneles): regala moneda premium.
+  `MercadoPago` es Checkout Pro en modo prueba: crea una preferencia
+  (`POST /checkout/preferences`, `X-Idempotency-Key`) con `external_reference` firmada
+  (cuenta + paquete + nonce, HMAC con `PAYMENTS_REF_SECRET`, un secreto nuestro aparte del
+  del webhook: rotar el secreto del webhook en el panel no invalida los checkouts ya
+  pagados; `PAYMENTS_REF_SECRET_PREVIOUS` sigue verificando mientras se rota el propio),
+  `notification_url` y `back_urls` (con `RPG_ENV=production`, `PUBLIC_URL` tiene que ser
+  https); el título del ítem es `cosmetic_pack.<id>.name` de `i18n/<idioma>/cosmetics.yaml`
+  en el idioma del sitio (español si no hay). El jugador paga en la página de Mercado Pago
+  (el servidor nunca ve datos de tarjeta). Todo el HTTP pasa por un `*http.Client`
+  inyectable.
+- Webhook (`POST /api/payments/webhook/<proveedor>`): Mercado Pago firma `x-signature`
+  (`ts=…,v1=…`) sobre `id:<data.id>;request-id:<x-request-id>;ts:<ts>;` con HMAC-SHA256;
+  se compara en tiempo constante y se rechaza un `ts` de más de 10 minutos
+  (`payments.MaxWebhookAge`). Después se lee el pago con `MP_ACCESS_TOKEN`
+  (`GET /v1/payments/<id>`) y solo cuenta ese estado: `approved` = pagado (con
+  `transaction_amount_refunded > 0`, reembolso parcial), `refunded`, `charged_back` =
+  contracargo, `in_mediation` = disputa; el resto se ignora. Un 404 o 400 de esa lectura
+  se ignora con un warning (reintentar no lo arregla: se contesta 200); cualquier otra
+  respuesta (5xx, 429, y también 401/403, que indican un access token mal configurado o
+  revocado) o la red caída contestan 502 con un log de nivel error para que Mercado Pago
+  reintente: un error de configuración nunca descarta pagos. El monto y la moneda tienen
+  que ser los del paquete en `data/cosmetics.yaml`; la moneda premium que vale un paquete
+  la decide el servidor, nunca el proveedor.
+- Pagos que no se pueden acreditar: un pago `approved` con referencia que no verifica,
+  moneda desconocida, paquete que ya no existe, monto distinto del precio o cuenta borrada
+  se registra con nivel error (con el id del pago) y se guarda en `payment_events` con
+  `result = 'unmatched'` y el motivo en `note` (`bad_reference`, `unknown_currency`,
+  `unknown_pack`, `amount_mismatch`, `account_gone`; id de evento `<pago>:unmatched` para
+  los dos primeros, el del propio evento para el resto). Solo se exige el paquete donde se
+  acreditaría: un reembolso o contracargo siempre llega al store y descuenta lo que el
+  ledger dice que se acreditó, aunque el paquete haya salido del catálogo o cambiado de
+  precio. El staff los
+  concilia a mano (`SELECT … WHERE result = 'unmatched'`, índice parcial) y acredita con
+  `/premium` si corresponde. Nunca se descarta dinero real en silencio.
+- Idempotencia: el id de evento es `<id del pago>:<estado>` (un reembolso parcial agrega
+  el total reembolsado: `<pago>:refunded:<monto>`) y `payment_events` tiene
+  `UNIQUE (provider, event_id)`; un webhook repetido no hace nada. Además un pago acredita
+  una sola vez y sus reversiones nunca descuentan más de lo que acreditó (se suma en
+  `premium_ledger`).
+- Orden y carreras: `ApplyPayment` **bloquea primero la fila de la cuenta** (la cuenta va
+  firmada en la referencia, así que todos los eventos de un pago tienen la misma), después
+  inserta el evento y recién entonces lee el crédito y las reversiones del pago. Un pagado
+  y un reembolso del mismo pago que llegan juntos corren uno después del otro. Si el
+  reembolso o el contracargo llega **antes** que el pagado (o le gana la carrera), no se
+  descarta: queda en `payment_events` como `pending_reversal`, y el crédito, cuando llega,
+  se revierte en la misma transacción (el evento pasa a `debited`), venga ese crédito de un
+  pagado o de un reembolso parcial. Elegimos esto y no
+  "no consumir el id y devolver un error reintentable" porque no depende de que el
+  proveedor reintente a tiempo (Mercado Pago deja de reintentar, y el pagado puede no
+  volver a llegar nunca): el reembolso queda guardado y se aplica con el crédito.
+- Saldo: `accounts.premium_balance` (nunca negativo). Todo cambio es **una transacción**
+  que bloquea la fila de la cuenta (`SELECT … FOR UPDATE`), cambia el saldo y agrega su
+  fila en `premium_ledger` (append-only con triggers, como `economy_log`): acreditar un
+  paquete, comprar un cosmético (`account_cosmetics`), revertir un pago y los `/premium`
+  del staff (estos además en `audit_log`). Dos compras simultáneas de una cuenta corren una
+  después de la otra.
+- Reembolso o contracargo: se descuenta lo que el pago acreditó (un reembolso parcial,
+  `floor(crédito × reembolsado / monto)` en total, una vez por cada nuevo monto
+  reembolsado; un reembolso parcial de un pago que nunca se acreditó acredita primero, porque
+  el resto del pago sigue en pie). Una disputa (`in_mediation`) marca la cuenta y no
+  descuenta nada; como su id es `<pago>:dispute`, una segunda mediación del mismo pago no
+  vuelve a marcar la cuenta si el staff ya la limpió (raro; el staff revisa el pago en el
+  panel). Si el saldo ya no alcanza, se descuenta lo que hay (queda en 0), la fila guarda el faltante (`shortfall`) y
+  la cuenta queda marcada (`accounts.shop_flagged_at`): no puede iniciar pagos ni comprar
+  hasta que el staff la limpie (`/premium Nombre +0 clear nota`). Lo ya comprado no se
+  quita. Las cuentas deshabilitadas o baneadas tampoco compran.
+- Límite: `limits.daily_premium` de `data/cosmetics.yaml` (5000) de moneda comprada por
+  cuenta en 24 h; se revisa al iniciar el checkout, antes de pagar. Un pago que llega igual (dos checkouts
+  pagados juntos) se acredita: el jugador ya pagó.
+- El juego: el catálogo (`data/cosmetics.yaml`, `content.LoadCosmetics`) se sincroniza a
+  la tabla `cosmetics` al arrancar (upsert; lo que sale del archivo queda `on_sale =
+  false`). Lo que la cuenta tiene y su saldo se cargan con el login (`PlayCharacter`) y el
+  loop no lee la base. Tras un cambio por HTTP, el `app` relee el estado de la cuenta en su
+  propia goroutine y encola `World.CosmeticsChanged` (con el id de la última fila del
+  ledger, para descartar una actualización vieja que llegue tarde; si la cuenta no está en
+  línea, se guarda 2 minutos por si un login leyó la base justo antes). Lo equipado viaja
+  en `Creature.cosmetics` y se guarda con el snapshot del personaje.
+- Variables: `RPG_ENV`, `PAYMENTS_PROVIDER` (`fake` | `mercadopago`), `MP_ACCESS_TOKEN`,
+  `MP_WEBHOOK_SECRET`, `PAYMENTS_REF_SECRET` (+ `PAYMENTS_REF_SECRET_PREVIOUS` al rotarlo),
+  `PUBLIC_URL`, `PAYMENTS_FAKE_SECRET` (opcional; si falta, uno al azar por proceso). Paso a paso en `09-deployment-aws.md` ("Tienda y pagos").
 
 ## Seguridad básica
 - Rate limit por IP en login y por conexión en comandos.

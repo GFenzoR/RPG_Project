@@ -19,6 +19,7 @@ export interface PresenceState {
 }
 import { CreatureKind, Direction, MessageKind } from "@rpg/protocol";
 import type {
+  Cosmetics,
   Creature,
   Skull,
   EquipmentSlot,
@@ -80,7 +81,29 @@ export interface CreatureState {
   guild: string;
   /** A player's PvP mark (T5.2). */
   skull: Skull;
+  /** A player's equipped cosmetics (T5.7): content ids, "" = default look. Looks only. */
+  cosmetics: CosmeticsView;
 }
+
+/** Equipped cosmetics by slot (protocol Cosmetics); "" = the default look of that kind. */
+export interface CosmeticsView {
+  outfit: string;
+  color: string;
+  nameEffect: string;
+}
+
+/** The player's own shop state (CosmeticsState, T5.7). */
+export interface CosmeticsStateView {
+  owned: string[];
+  balance: number;
+  equipped: CosmeticsView;
+}
+
+const cosmeticsView = (c: Cosmetics | undefined): CosmeticsView => ({
+  outfit: c?.outfit ?? "",
+  color: c?.color ?? "",
+  nameEffect: c?.nameEffect ?? "",
+});
 
 /** A visual effect on a tile (Effect.effect_id, docs/05 "Combate"). */
 export interface EffectState {
@@ -324,6 +347,8 @@ export class WorldState implements TileSource {
   readonly party = new PartyState();
   /** The guild and the invitations to one (T5.1). */
   readonly guild = new GuildState();
+  /** Owned cosmetics, premium balance and what is equipped (T5.7); undefined until sent. */
+  cosmetics: CosmeticsStateView | undefined;
   private readonly chunks = new Map<string, ChunkTiles>();
   private readonly content: ClientContent;
 
@@ -484,6 +509,22 @@ export class WorldState implements TileSource {
       case "creatureSkull": {
         const c = this.creatures.get(msg.value.id);
         if (c) c.skull = msg.value.skull;
+        break;
+      }
+      case "creatureCosmetics": {
+        const c = this.creatures.get(msg.value.id);
+        if (c) c.cosmetics = cosmeticsView(msg.value.cosmetics);
+        break;
+      }
+      case "cosmeticsState": {
+        const equipped = cosmeticsView(msg.value.equipped);
+        this.cosmetics = {
+          owned: [...msg.value.owned],
+          balance: Number(msg.value.balance),
+          equipped,
+        };
+        const s = this.self;
+        if (s) s.cosmetics = { ...equipped };
         break;
       }
       case "tutorialStep":
@@ -769,6 +810,7 @@ export class WorldState implements TileSource {
       walk: undefined,
       guild: c.guild,
       skull: c.skull,
+      cosmetics: cosmeticsView(c.cosmetics),
     });
   }
 

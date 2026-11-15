@@ -453,3 +453,38 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `pick-cancel`, `touch-pad-toggle`, `panel-tabs` `[data-tab=…]`, `panel-toggle`,
   `hud-menu`, `notices`. Hook `__rpgClient.monsters()` para tocar un monstruo.
 - Un diálogo de NPC pasa `{name}` (el nombre del jugador) a su texto.
+
+## Notas de T5.7
+- `CreatureState.cosmetics` (de `Creature.cosmetics` y `CreatureCosmetics`, con `""` = el
+  aspecto por defecto) y `WorldState.cosmetics` (de `CosmeticsState`: `owned`, `balance`
+  y `equipped`; también fija los cosméticos de la criatura propia). `GameUi.cosmetics` los
+  publica. Hooks E2E: `__rpgClient.cosmetics()` y `players()`.
+- Canvas: `render/cosmetics.ts` (puro, con tests) decide el atuendo (`outfitFor`, con
+  citizen si no hay), el tinte multiplicado del sprite (`tintFor`) y el estilo del nombre
+  (`nameStyleFor`, se mezcla en el `TextStyle`). `outfitReady` se calcula y guarda por
+  atuendo: uno sin arte real cae a citizen y después al bloque. Cuando cambia el `lookKey`
+  de un jugador, se tiran sus sprites y se arman de nuevo.
+- Panel `ui/Appearance.tsx`, sin hooks (`ui/Appearance.test.ts` recorre su árbol). Va en la
+  columna lateral y es una pestaña más (`appearance` en `PANEL_TABS`). Muestra por tipo lo
+  que la cuenta tiene, con la opción por defecto primero (manda `UnequipCosmetic`) y
+  botones de 44 px con `aria-pressed`; tocar lo que ya se lleva no manda nada.
+  El enlace a `/shop` se abre en otra pestaña; en la app de escritorio se muestra la
+  dirección como texto (`client.appearance.shop_desktop`). Nada se compra por el socket
+  del juego.
+- Sitio `/shop` (`site/Shop.tsx`, helpers puros en `site/shop.ts` con tests):
+  - Sin sesión muestra `SiteLogin`, que ahora acepta `hint`.
+  - Un paquete hace `POST /api/shop/checkout` (con `lang`, para el nombre del paquete en
+    la página del proveedor) y luego `location.assign(url)`. Con el proveedor falso
+    (`isLocalCheckout`: la ruta propia `/api/shop/fake-checkout/`) el sitio hace `POST` a
+    esa URL con su sesión y va a `/shop?checkout=success`: un `GET` no paga. La vuelta
+    `?checkout=success|pending|failure` muestra su aviso una vez y se borra de la URL.
+  - Un cosmético se compra con `confirm` y `POST /api/shop/buy`.
+  - Cada código de error tiene su clave en `shopErrorKey`.
+  - Los precios están en la unidad menor de la moneda: `formatPrice` divide según los
+    decimales de `Intl` (CLP no tiene) y agrupa siempre.
+  - La vista previa de un atuendo es su frame `s_0`, leído del atlas `/atlas/` como fondo
+    CSS a 2x (`loadIcons`). `SiteContent.outfits` sale de `data/outfits.yaml`.
+- El enlace "Tienda" del menú del sitio aparece solo si `GET /api/auth/config` dice
+  `shop: true` (servidor con proveedor de pagos).
+- E2E: `e2e/shop.spec.ts`; el servidor principal corre con `PAYMENTS_PROVIDER=fake`
+  (docs/08 "E2E de la tienda").

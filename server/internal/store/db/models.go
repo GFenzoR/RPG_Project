@@ -18,6 +18,8 @@ type Account struct {
 	LastLoginAt     pgtype.Timestamptz
 	Role            string
 	Locale          string
+	PremiumBalance  int64
+	ShopFlaggedAt   pgtype.Timestamptz
 }
 
 type AccountBan struct {
@@ -95,6 +97,8 @@ type Character struct {
 	LastSaveAt   pgtype.Timestamptz
 	Conditions   []byte
 	PvpKills     int32
+	OutfitColor  string
+	NameEffect   string
 }
 
 type CharacterSkill struct {
@@ -109,6 +113,7 @@ type Cosmetic struct {
 	Kind         string
 	PricePremium pgtype.Int4
 	CreatedAt    pgtype.Timestamptz
+	OnSale       bool
 }
 
 type EconomyLog struct {
@@ -297,6 +302,23 @@ type OauthState struct {
 	ExpiresAt   pgtype.Timestamptz
 }
 
+type PaymentEvent struct {
+	ID            int64
+	Provider      string
+	EventID       string
+	Type          string
+	PaymentID     string
+	AccountID     int64
+	PackID        string
+	AmountMinor   int64
+	Currency      string
+	RefundedMinor int64
+	Result        string
+	Note          string
+	ReceivedAt    pgtype.Timestamptz
+	ProcessedAt   pgtype.Timestamptz
+}
+
 type PlayerReport struct {
 	ID                  int64
 	CreatedAt           pgtype.Timestamptz
@@ -313,6 +335,23 @@ type PlayerReport struct {
 	ClosedBy            pgtype.Int8
 	ClosedByName        pgtype.Text
 	Resolution          pgtype.Text
+}
+
+type PremiumLedger struct {
+	ID             int64
+	At             pgtype.Timestamptz
+	AccountID      int64
+	Reason         string
+	Delta          int64
+	BalanceAfter   int64
+	Shortfall      int64
+	CosmeticID     pgtype.Text
+	PackID         pgtype.Text
+	Provider       pgtype.Text
+	PaymentID      pgtype.Text
+	ActorAccountID pgtype.Int8
+	ActorName      pgtype.Text
+	Note           string
 }
 
 type PvpUnjustKill struct {

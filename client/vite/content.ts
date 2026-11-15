@@ -2,7 +2,8 @@
 //
 //   virtual:rpg-content  items by numeric ID (data/items + data/ids.lock.yaml), movement
 //                        constants (data/balance.yaml), monster/NPC sprites, outfits
-//                        (data/outfits.yaml) and the client's i18n catalogs
+//                        (data/outfits.yaml), cosmetics (data/cosmetics.yaml) and the
+//                        client's i18n catalogs
 //   /audio/<file>        sound files of assets/sounds.yaml (T3.7), served as they are;
 //                        `vite build` emits them under audio/
 //   virtual:rpg-site     the public website (T4.3): its i18n catalogs, vocations, skill ids
@@ -20,6 +21,8 @@ import type { Plugin } from "vite";
 import { parse } from "yaml";
 import type {
   ClientContent,
+  CosmeticDef,
+  NameEffectStyle,
   IslandRect,
   ItemDef,
   NewsPost,
@@ -37,11 +40,24 @@ const RESOLVED_ID = "\0" + VIRTUAL_ID;
 const SITE_ID = "virtual:rpg-site";
 const RESOLVED_SITE_ID = "\0" + SITE_ID;
 /** i18n catalogs of the website (all keys). */
-const SITE_CATALOGS = ["client.yaml", "vocations.yaml", "site.yaml", "world.yaml"];
+const SITE_CATALOGS = [
+  "client.yaml",
+  "vocations.yaml",
+  "site.yaml",
+  "world.yaml",
+  "cosmetics.yaml",
+];
 const NEWS_FILE = /^(\d{4}-\d{2}-\d{2})-[a-z0-9-]+\.yaml$/;
 const LANGUAGES = ["es", "en"];
 /** i18n catalogs the client uses (all keys), and those it only takes names from. */
-const CATALOGS = ["client.yaml", "vocations.yaml", "dialog.yaml", "npcs.yaml", "tutorial.yaml"];
+const CATALOGS = [
+  "client.yaml",
+  "vocations.yaml",
+  "dialog.yaml",
+  "npcs.yaml",
+  "tutorial.yaml",
+  "cosmetics.yaml",
+];
 const NAME_CATALOGS = ["monsters.yaml", "items.yaml", "spells.yaml", "quests.yaml", "world.yaml"];
 const ATLAS_FILE = /^atlas(-\d+)?\.(png|json)$/;
 
@@ -130,19 +146,7 @@ export function loadClientContent(root: string): ClientContent {
     if (isObj(n) && typeof n["id"] === "string" && typeof n["sprite"] === "string")
       npcs[n["id"]] = n["sprite"];
   }
-  let rawOutfits: unknown;
-  try {
-    rawOutfits = readYaml(join(root, "data", "outfits.yaml"));
-  } catch {
-    rawOutfits = []; // no outfits yet
-  }
-  const outfits: OutfitDef[] = Array.isArray(rawOutfits)
-    ? rawOutfits.flatMap((o) =>
-        isObj(o) && typeof o["id"] === "string" && typeof o["sprite"] === "string"
-          ? [{ id: o["id"], sprite: o["sprite"], frames: num(o["frames"], 1) }]
-          : [],
-      )
-    : [];
+  const outfits = loadOutfits(root);
   const vocs = readYaml(join(root, "data", "vocations.yaml"));
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
@@ -216,6 +220,7 @@ export function loadClientContent(root: string): ClientContent {
     monsterSprites: monsters,
     npcSprites: npcs,
     outfits,
+    cosmetics: loadCosmetics(root),
     vocations,
     spells,
     recipes,
@@ -286,7 +291,69 @@ export function loadSiteContent(root: string): SiteContent {
     });
   }
   news.sort((a, b) => (a.slug < b.slug ? 1 : a.slug > b.slug ? -1 : 0));
-  return { i18n, vocations, skills: Object.keys(base), news };
+  return {
+    i18n,
+    vocations,
+    skills: Object.keys(base),
+    news,
+    cosmetics: loadCosmetics(root),
+    outfits: loadOutfits(root),
+  };
+}
+
+/** data/outfits.yaml (T0.5); [] without the file. The site shop previews them (T5.7). */
+export function loadOutfits(root: string): OutfitDef[] {
+  let rawOutfits: unknown;
+  try {
+    rawOutfits = readYaml(join(root, "data", "outfits.yaml"));
+  } catch {
+    rawOutfits = []; // no outfits yet
+  }
+  return Array.isArray(rawOutfits)
+    ? rawOutfits.flatMap((o) =>
+        isObj(o) && typeof o["id"] === "string" && typeof o["sprite"] === "string"
+          ? [
+              {
+                id: o["id"],
+                sprite: o["sprite"],
+                frames: typeof o["frames"] === "number" ? o["frames"] : 1,
+              },
+            ]
+          : [],
+      )
+    : [];
+}
+
+const COSMETIC_KINDS = new Set(["outfit", "outfit_color", "name_effect"]);
+const NAME_STYLES = new Set(["gold", "ember", "frost"]);
+
+/**
+ * The cosmetics of data/cosmetics.yaml (T5.7) in file order; [] without the file. Only the
+ * fields of each kind; make validate checks the file against its schema.
+ */
+export function loadCosmetics(root: string): CosmeticDef[] {
+  let raw: unknown;
+  try {
+    raw = readYaml(join(root, "data", "cosmetics.yaml"));
+  } catch {
+    return []; // no shop content
+  }
+  const list = isObj(raw) && Array.isArray(raw["cosmetics"]) ? raw["cosmetics"] : [];
+  return list.flatMap((c): CosmeticDef[] => {
+    if (!isObj(c) || typeof c["id"] !== "string" || typeof c["kind"] !== "string") return [];
+    const kind = c["kind"];
+    if (!COSMETIC_KINDS.has(kind)) return [];
+    const def: CosmeticDef = {
+      id: c["id"],
+      kind: kind as CosmeticDef["kind"],
+      price: typeof c["price"] === "number" ? c["price"] : 0,
+    };
+    if (kind === "outfit" && typeof c["outfit"] === "string") def.outfit = c["outfit"];
+    if (kind === "outfit_color" && typeof c["tint"] === "string") def.tint = c["tint"];
+    if (kind === "name_effect" && typeof c["style"] === "string" && NAME_STYLES.has(c["style"]))
+      def.style = c["style"] as NameEffectStyle;
+    return [def];
+  });
 }
 
 /** Where the sound files are served: /audio/<path under assets/>. */

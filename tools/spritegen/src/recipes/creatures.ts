@@ -2,7 +2,7 @@
 // lit from the top-left. Monsters face south-west like the Dungeon Crawl animals; people
 // face the viewer. Each body part is a flat-shaded region of one material, so outfits can
 // later be recoloured per part (hair, head, body, legs, feet).
-import type { Image } from "@rpg/spritepack";
+import type { Image, Rgba } from "@rpg/spritepack";
 import {
   canvas,
   composite,
@@ -10,6 +10,7 @@ import {
   domeLight,
   eachInEllipse,
   eachInPolygon,
+  get,
   hash2,
   line,
   outline,
@@ -385,36 +386,96 @@ function ferryman(img: Image): void {
   outline(img, { amount: 0.55 });
 }
 
-// ---- the player outfit -------------------------------------------------------------------
+// ---- the player outfits ------------------------------------------------------------------
+//
+// Every outfit is the same body, frames and walk cycle (citizen's); a Look swaps the
+// materials of each part and adds its details in hooks, so a new outfit walks exactly like
+// the others. The shop outfits (T5.7, data/cosmetics.yaml) are original designs.
 
 type Dir = "n" | "e" | "s" | "w";
+type View = { kind: "front"; dir: "n" | "s" } | { kind: "side"; f: number; cx: number };
+
+interface Look {
+  hair: Material;
+  /** Torso. */
+  top: Material;
+  /** Arms (sleeves). */
+  sleeve: Material;
+  legs: Material;
+  boot: Material;
+  /** The belt row (y 20). */
+  belt: (top: Material) => Rgba;
+  /** First row of the boots: 27 = ankle boots, lower = taller. */
+  bootTop: number;
+  /** Replaces the hair cap of the front views (a hood). */
+  hairFront?: (dir: "n" | "s", y: number, nx: number) => boolean;
+  /** Replaces the hair of the profile; back > 0 is the face side. */
+  hairSide?: (y: number, back: number) => boolean;
+  /** Front views, after the torso and before the head. */
+  torso?: (img: Image, dir: "n" | "s", frame: number) => void;
+  /** Last details, before the outline (the whole figure is drawn). */
+  finish?: (img: Image, view: View, frame: number) => void;
+}
+
+const CITIZEN: Look = {
+  hair,
+  top: tunic,
+  sleeve: tunic,
+  legs: trousers,
+  boot,
+  belt: (top) => top.deep,
+  bootTop: 27,
+};
+
+/** Recolours the pixels drawn in one material's shades into another's, shade for shade. */
+function recolor(
+  img: Image,
+  from: Material,
+  to: Material,
+  keep: (x: number, y: number) => boolean = () => true,
+): void {
+  const pairs: [Rgba, Rgba][] = [
+    [from.light, to.light],
+    [from.base, to.base],
+    [from.shadow, to.shadow],
+    [from.deep, to.deep],
+  ];
+  for (let y = 0; y < img.height; y++)
+    for (let x = 0; x < img.width; x++) {
+      const c = get(img, x, y);
+      if (!c || c[3] === 0 || !keep(x, y)) continue;
+      const hit = pairs.find(([a]) => a[0] === c[0] && a[1] === c[1] && a[2] === c[2]);
+      if (hit) px(img, x, y, hit[1]);
+    }
+}
 
 /**
- * The plain commoner every new character wears: hair, head, tunic (body and sleeves),
- * trousers and boots. frame 0 stands; frames 1 and 2 are the two walking steps.
+ * One frame of an outfit. frame 0 stands; frames 1 and 2 are the two walking steps.
  */
-function citizen(dir: Dir, frame: number): (img: Image) => void {
+function person(look: Look, dir: Dir, frame: number): (img: Image) => void {
   return (img) =>
-    dir === "e" || dir === "w" ? citizenSide(img, dir, frame) : citizenFront(img, dir, frame);
+    dir === "e" || dir === "w"
+      ? personSide(img, look, dir, frame)
+      : personFront(img, look, dir, frame);
 }
 
 const BLACK_EYE: [number, number, number, 255] = [36, 26, 20, 255];
 
 /** Facing the viewer (s) or away (n). A step lifts one foot and swings the opposite arm. */
-function citizenFront(img: Image, dir: "n" | "s", frame: number): void {
+function personFront(img: Image, look: Look, dir: "n" | "s", frame: number): void {
   // Which leg steps forward (screen left = 1, right = 2). Facing north, screen left is the
   // character's left, so the same frames alternate the same way.
   const lift = (side: 1 | 2): number => (frame === 0 ? 0 : frame === side ? 0 : 2);
   const reach = (side: 1 | 2): number => (frame === 0 ? 0 : frame === side ? -1 : 1);
-  // Legs (trousers) and boots: the lifted leg is shorter.
+  // Legs and boots: the lifted leg is shorter.
   const legs: [number, 1 | 2][] = [
     [12, 1],
     [16, 2],
   ];
   for (const [x, side] of legs) {
     const up = lift(side);
-    limb(img, x, 22, 4, 5 - up, trousers, side === 2 ? -0.1 : 0);
-    limb(img, x, 27 - up, 4, 3, boot, side === 2 ? -0.1 : 0);
+    limb(img, x, 22, 4, look.bootTop - 22 - up, look.legs, side === 2 ? -0.1 : 0);
+    limb(img, x, look.bootTop - up, 4, 30 - look.bootTop, look.boot, side === 2 ? -0.1 : 0);
   }
   // Arms: the arm opposite the forward leg swings forward (hand lower).
   const arms: [number, 1 | 2][] = [
@@ -423,10 +484,10 @@ function citizenFront(img: Image, dir: "n" | "s", frame: number): void {
   ];
   for (const [x, side] of arms) {
     const d = reach(side);
-    limb(img, x, 14, 2, 6 + d, tunic, x > 16 ? -0.15 : 0.05);
+    limb(img, x, 14, 2, 6 + d, look.sleeve, x > 16 ? -0.15 : 0.05);
     rect(img, x, 20 + d, 2, 2, x > 16 ? skin.shadow : skin.base);
   }
-  // Tunic: torso with rounded shoulders, flaring a little at the hem, and a belt.
+  // Torso with rounded shoulders, flaring a little at the hem, and a belt.
   shape(
     img,
     [
@@ -437,47 +498,61 @@ function citizenFront(img: Image, dir: "n" | "s", frame: number): void {
       [12, 22],
       [12, 14],
     ],
-    tunic,
+    look.top,
     (x) => cylinderLight(((x - 11.5) / 8.5) * 2 - 1) + 0.05,
   );
-  rect(img, 12, 20, 8, 1, tunic.deep);
-  if (dir === "s") line(img, 16, 14, 16, 16, tunic.shadow); // collar slit
+  rect(img, 12, 20, 8, 1, look.belt(look.top));
+  if (dir === "s") line(img, 16, 14, 16, 16, look.top.shadow); // collar slit
+  look.torso?.(img, dir, frame);
   // Head.
   rect(img, 15, 13, 2, 1, skin.shadow); // neck
   ball(img, 16, 9, 4.3, 4.4, skin, 0.08);
   // Hair: a cap on top (south) or the whole back of the head (north).
   eachInEllipse(16, 9, 4.3, 4.4, (x, y, nx, ny) => {
-    const isHair =
-      dir === "n" ? y <= 11 || Math.abs(nx) > 0.75 : y <= 6 || (Math.abs(nx) > 0.72 && y <= 10);
-    if (isHair) px(img, x, y, shadeOf(hair, domeLight(nx, ny) + 0.1));
+    const isHair = look.hairFront
+      ? look.hairFront(dir, y, nx)
+      : dir === "n"
+        ? y <= 11 || Math.abs(nx) > 0.75
+        : y <= 6 || (Math.abs(nx) > 0.72 && y <= 10);
+    if (isHair) px(img, x, y, shadeOf(look.hair, domeLight(nx, ny) + 0.1));
   });
   if (dir === "s") {
     px(img, 14, 9, BLACK_EYE);
     px(img, 17, 9, BLACK_EYE);
-    px(img, 15, 7, hair.base); // fringe
-    px(img, 16, 7, hair.shadow);
-  } else {
+    if (!look.hairFront) {
+      px(img, 15, 7, look.hair.base); // fringe
+      px(img, 16, 7, look.hair.shadow);
+    }
+  } else if (!look.hairFront) {
     rect(img, 14, 12, 4, 1, skin.shadow); // nape below the hair
   }
+  look.finish?.(img, { kind: "front", dir }, frame);
   outline(img, { amount: 0.55 });
 }
 
 /** Profile, facing east or west. A step scissors the legs and swings the arms. */
-function citizenSide(img: Image, dir: "e" | "w", frame: number): void {
+function personSide(img: Image, look: Look, dir: "e" | "w", frame: number): void {
   const f = dir === "e" ? 1 : -1;
   const cx = 16;
   // Leg swing: frame 1 near leg forward, frame 2 near leg back.
   const swing = frame === 0 ? 0 : frame === 1 ? 2 : -2;
   const layer = canvas(img.width, img.height);
   // Far arm (behind the body, darker).
-  slantLimb(layer, cx - 0.5, 14, cx - 0.5 + swing * f, 19, 2, tunic, -0.35);
+  slantLimb(layer, cx - 0.5, 14, cx - 0.5 + swing * f, 19, 2, look.sleeve, -0.35);
   rect(layer, Math.round(cx - 1.5 + swing * f), 20, 2, 1, skin.shadow);
-  // Far leg.
-  slantLimb(layer, cx, 22, cx - swing * f, 26, 4, trousers, -0.3);
-  footSide(layer, cx - swing * f, f, -0.3);
-  // Near leg.
-  slantLimb(layer, cx, 22, cx + swing * f, 26, 4, trousers, 0);
-  footSide(layer, cx + swing * f, f, 0);
+  // Far leg, then the near leg.
+  for (const [s, bias] of [
+    [-swing, -0.3],
+    [swing, 0],
+  ] as const) {
+    slantLimb(layer, cx, 22, cx + s * f, 26, 4, look.legs, bias);
+    if (look.bootTop < 27) {
+      // A tall boot covers the shin: the same slant, from bootTop down.
+      const at = (y: number): number => cx + (s * f * (y - 22)) / 4;
+      slantLimb(layer, at(look.bootTop), look.bootTop, at(26), 26, 4, look.boot, bias);
+    }
+    footSide(layer, cx + s * f, f, bias, look.boot);
+  }
   // Torso.
   shape(
     layer,
@@ -489,41 +564,184 @@ function citizenSide(img: Image, dir: "e" | "w", frame: number): void {
       [cx - 3.5, 22],
       [cx - 3.5, 14],
     ],
-    tunic,
+    look.top,
     (x) => cylinderLight(((x - (cx - 4)) / 7) * 2 - 1) + 0.1,
   );
-  rect(layer, cx - 3, 20, 7, 1, tunic.deep);
+  rect(layer, cx - 3, 20, 7, 1, look.belt(look.top));
   // Head: face to the front side, hair to the back and top.
   ball(layer, cx + 0.5 * f, 9, 3.9, 4.4, skin, 0.08);
   eachInEllipse(cx + 0.5 * f, 9, 3.9, 4.4, (x, y, nx, ny) => {
     const back = nx * f;
-    if (y <= 6 || (back < 0.1 && y <= 11) || (back < -0.5 && y <= 12))
-      px(layer, x, y, shadeOf(hair, domeLight(nx, ny) + 0.1));
+    const isHair = look.hairSide
+      ? look.hairSide(y, back)
+      : y <= 6 || (back < 0.1 && y <= 11) || (back < -0.5 && y <= 12);
+    if (isHair) px(layer, x, y, shadeOf(look.hair, domeLight(nx, ny) + 0.1));
   });
   px(layer, cx + 4 * f + (f < 0 ? 1 : 0), 10, skin.base); // nose
   px(layer, cx + 2 * f + (f < 0 ? 1 : 0), 9, BLACK_EYE);
   rect(layer, cx - 1 + (f > 0 ? 0 : 1), 13, 2, 1, skin.shadow); // neck
   // Near arm, in front of the torso, swinging against the near leg.
-  slantLimb(layer, cx + 0.5, 14, cx + 0.5 - swing * f, 19, 2, tunic, 0.05);
+  slantLimb(layer, cx + 0.5, 14, cx + 0.5 - swing * f, 19, 2, look.sleeve, 0.05);
   rect(layer, Math.round(cx - 0.5 - swing * f), 20, 2, 1, skin.base);
+  look.finish?.(layer, { kind: "side", f, cx }, frame);
   outline(layer, { amount: 0.55 });
   composite(img, layer);
 }
 
 /** A boot seen from the side at ankle centre x, toe pointing toward f. */
-function footSide(img: Image, x: number, f: number, bias: number): void {
+function footSide(img: Image, x: number, f: number, bias: number, m: Material): void {
   const left = Math.round(x - 2);
-  limb(img, left, 27, 4, 3, boot, bias);
-  px(img, f > 0 ? left + 4 : left - 1, 28, shadeOf(boot, 0.6 + bias));
-  px(img, f > 0 ? left + 4 : left - 1, 29, shadeOf(boot, 0.3 + bias));
+  limb(img, left, 27, 4, 3, m, bias);
+  px(img, f > 0 ? left + 4 : left - 1, 28, shadeOf(m, 0.6 + bias));
+  px(img, f > 0 ? left + 4 : left - 1, 29, shadeOf(m, 0.3 + bias));
 }
 
+// ---- shop outfits (T5.7) -------------------------------------------------------------------
+
+const deckShirt = material("#ece8dc", "#cfcabb", "#a7a294", "#79756a");
+const navy = material("#4a628c", "#33496d", "#243552", "#172339");
+const neckerchief = material("#d0614f", "#a8443a", "#7a2f29", "#4f1d1a");
+const blackHair = material("#5a4f48", "#3e3530", "#2b2420", "#1c1714");
+
+/**
+ * The sailor: a striped deck shirt (stripes on the torso and sleeves), navy trousers, a red
+ * neckerchief knotted under the chin, dark hair.
+ */
+const SAILOR: Look = {
+  hair: blackHair,
+  top: deckShirt,
+  sleeve: deckShirt,
+  legs: navy,
+  boot: PALETTE.darkWood,
+  belt: () => navy.deep,
+  bootTop: 27,
+  finish: (img, view) => {
+    // Navy stripes every other row of the shirt.
+    recolor(img, deckShirt, navy, (_x, y) => y === 15 || y === 17 || y === 19);
+    if (view.kind === "front") {
+      if (view.dir === "s") {
+        rect(img, 14, 13, 4, 1, neckerchief.base);
+        px(img, 14, 13, neckerchief.light);
+        rect(img, 15, 14, 2, 1, neckerchief.shadow);
+        px(img, 16, 15, neckerchief.deep); // the knot's tail
+      } else {
+        rect(img, 14, 13, 4, 1, neckerchief.shadow);
+      }
+    } else {
+      const { f, cx } = view;
+      rect(img, cx - 2 + (f > 0 ? 0 : 1), 13, 3, 1, neckerchief.base);
+      px(img, cx + 2 * f, 14, neckerchief.shadow);
+    }
+  },
+};
+
+const cloak = material("#6f9a4c", "#4f7a36", "#385a27", "#253d1a");
+const jerkin = PALETTE.leather;
+const strap = material("#7a5a3a", "#5c4129", "#43301e", "#2d2014");
+const fletch = PALETTE.feather;
+
+/**
+ * The ranger: a hooded green cloak (hood framing the face, capelet on the shoulders, the
+ * whole back seen from behind), a leather jerkin crossed by a quiver strap, tall boots.
+ */
+const RANGER: Look = {
+  hair: cloak,
+  top: jerkin,
+  sleeve: cloak,
+  legs: material("#7d7056", "#5e533e", "#453c2c", "#2e281d"),
+  boot: material("#8a6446", "#6a4a32", "#4d3523", "#332216"),
+  belt: () => strap.deep,
+  bootTop: 25,
+  hairFront: (dir, y, nx) => dir === "n" || y <= 7 || Math.abs(nx) > 0.55,
+  hairSide: (y, back) => y <= 6 || back < 0.25,
+  torso: (img, dir) => {
+    if (dir === "n") {
+      // From behind the cloak covers the back; the quiver sits on it.
+      recolor(img, jerkin, cloak, (_x, y) => y <= 21);
+      rect(img, 17, 12, 2, 7, strap.base);
+      px(img, 17, 12, strap.light);
+      for (const x of [17, 18]) px(img, x, 11, fletch.base);
+      px(img, 18, 10, fletch.light);
+    } else {
+      line(img, 13, 14, 19, 20, strap.base); // quiver strap
+      px(img, 13, 14, strap.light);
+    }
+    // The capelet over the shoulders.
+    recolor(img, jerkin, cloak, (_x, y) => y <= 14);
+  },
+  finish: (img, view) => {
+    if (view.kind === "front") {
+      if (view.dir === "n") rect(img, 15, 13, 2, 1, cloak.shadow); // the hood hides the nape
+      return;
+    }
+    const { f, cx } = view;
+    // Capelet, and the quiver on the back with its fletching.
+    recolor(img, jerkin, cloak, (_x, y) => y <= 14);
+    const qx = f > 0 ? cx - 5 : cx + 4;
+    rect(img, qx, 12, 2, 7, strap.base);
+    px(img, qx, 12, strap.light);
+    px(img, qx, 11, fletch.base);
+    px(img, qx + 1, 10, fletch.light);
+  },
+};
+
+const wine = material("#a8475a", "#813345", "#5e2433", "#3e1722");
+const { gold } = PALETTE;
+const capCloth = material("#4c4650", "#353038", "#252128", "#18151a");
+const auburn = material("#b06a3c", "#8a4d29", "#65371d", "#432412");
+
+/**
+ * The noble: a burgundy doublet with a gold hem and buttons, a cream sash for a belt, dark
+ * hose and a small black cap with a white feather.
+ */
+const NOBLE: Look = {
+  hair: auburn,
+  top: wine,
+  sleeve: wine,
+  legs: darkCloth,
+  boot: material("#4f4642", "#37302d", "#26211f", "#191614"),
+  belt: () => PALETTE.cloth.light,
+  bootTop: 27,
+  torso: (img, dir) => {
+    recolor(img, wine, gold, (_x, y) => y === 21); // gold hem
+    if (dir === "s") {
+      px(img, 16, 17, gold.light);
+      px(img, 16, 19, gold.base);
+    }
+  },
+  finish: (img, view) => {
+    if (view.kind === "front") {
+      ball(img, 16, 5, 4.2, 1.7, capCloth, 0.1);
+      px(img, 13, 5, capCloth.light);
+      // A white feather tucked on the side of the cap.
+      const fx = view.dir === "s" ? 19 : 13;
+      px(img, fx, 3, PALETTE.feather.light);
+      px(img, fx + (view.dir === "s" ? 1 : -1), 2, PALETTE.feather.base);
+    } else {
+      const { f, cx } = view;
+      recolor(img, wine, gold, (_x, y) => y === 21);
+      ball(img, cx + 0.5 * f, 5, 3.9, 1.7, capCloth, 0.1);
+      px(img, cx - 3 * f, 3, PALETTE.feather.light);
+      px(img, cx - 4 * f, 2, PALETTE.feather.base);
+    }
+  },
+};
+
+const LOOKS: Record<string, Look> = {
+  citizen: CITIZEN,
+  sailor: SAILOR,
+  ranger: RANGER,
+  noble: NOBLE,
+};
+
 const outfitFrames: RecipeBook = {};
-for (const dir of ["n", "e", "s", "w"] as const) {
-  for (const frame of [0, 1, 2]) {
-    const draw = citizen(dir, frame);
-    const recipe: Recipe = { kind: "creature", draw: (img: Image) => draw(img) };
-    outfitFrames[`outfits/citizen/${dir}_${frame}`] = recipe;
+for (const [id, look] of Object.entries(LOOKS)) {
+  for (const dir of ["n", "e", "s", "w"] as const) {
+    for (const frame of [0, 1, 2]) {
+      const draw = person(look, dir, frame);
+      const recipe: Recipe = { kind: "creature", draw: (img: Image) => draw(img) };
+      outfitFrames[`outfits/${id}/${dir}_${frame}`] = recipe;
+    }
   }
 }
 

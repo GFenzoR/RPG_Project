@@ -295,6 +295,21 @@ que se use el sitio). Una cuenta creada con Google o Discord no tiene contraseñ
 entrar desde la app de escritorio, su dueño le pone una con "¿Olvidaste tu contraseña?",
 que **necesita SMTP** (paso 8b) y el email confirmado; sin SMTP, `make home-reset-password`.
 
+### 8d. Tienda cosmética (T5.7)
+Apagada por defecto (sin `PAYMENTS_PROVIDER`): `/shop` muestra el catálogo y nadie puede
+comprar.
+
+> **Advertencia: nunca pongas `PAYMENTS_PROVIDER=fake` ni `RPG_ENV=development` en
+> `deploy/.env.home`.** El servidor de casa es alcanzable desde internet por los túneles, y
+> el proveedor falso regala moneda premium sin cobrar nada a cualquiera que tenga cuenta.
+> La tienda con el proveedor falso se prueba solo con `make dev` o los tests E2E.
+
+Para probarla en casa con dinero de mentira usa **Mercado Pago en modo prueba**
+(`PAYMENTS_PROVIDER=mercadopago`, el access token `TEST-…`, la clave del webhook, un
+`PAYMENTS_REF_SECRET` propio y `PUBLIC_URL` con el dominio https fijo del túnel del paso 5):
+el paso a paso está en `09-deployment-aws.md`, "Tienda y pagos". Con un Quick Tunnel no
+funciona (cambia de URL y Mercado Pago no podría llamar al webhook).
+
 ### 9. Actualizar después de un `git pull`
 ```bash
 git pull
@@ -335,6 +350,9 @@ Todas son opcionales salvo las dos contraseñas, que se generan solas.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | — (sin emails), `587`, `starttls` | Servidor de correo (paso 8b) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | — (botón apagado) | Login con Google/Discord (paso 8c) |
 | `REQUIRE_VERIFIED_EMAIL` | `false` | `true`: solo cuentas con email confirmado pueden jugar |
+| `RPG_ENV` | `production` | Déjala así en casa: `development` permitiría el proveedor de pagos falso (paso 8d) |
+| `PAYMENTS_PROVIDER` | — (tienda apagada) | `mercadopago` en modo prueba; **nunca `fake`** en casa (paso 8d) |
+| `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAYMENTS_REF_SECRET`, `PAYMENTS_REF_SECRET_PREVIOUS` | — | Claves de Mercado Pago y secreto de las referencias (`09-deployment-aws.md`, "Tienda y pagos") |
 | `MAILPIT_UI_PORT` | `8025` | Puerto de Mailpit (perfil `mail`, solo `127.0.0.1`) |
 | `GITHUB_MAP_PR_TOKEN` | — | Token del bot del worker |
 | `MAP_PR_REPOSITORY`, `MAP_PR_BASE`, `MAP_PR_POLL_SECONDS` | `GFenzoR/RPG_Project`, `main`, `30` | Repo, rama y frecuencia del worker |

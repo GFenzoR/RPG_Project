@@ -14,6 +14,8 @@ export default tseslint.config(
       "packages/protocol/src/gen/**",
       "playwright-report/**",
       "test-results/**",
+      ".claude/worktrees/**",
+      ".wt/**",
     ],
   },
   js.configs.recommended,

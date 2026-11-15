@@ -18,7 +18,11 @@ seguir con Claude Code en tu computador. El entorno local está en
 - **T5.6** (controles táctiles, layout para pantallas chicas, PWA y Tauri mobile
   preparado) está en el PR #78. Lo 👤: cuentas de las tiendas, firma y
   compilar el APK/IPA (`docs/15-movil.md`).
-- **Falta** T5.7 (tienda cosmética).
+- **T5.7** (tienda cosmética con pagos) está hecha en la rama `feat/t5.7-cosmetic-shop`
+  (PR #80): moneda "nácar", catálogo, proveedor falso y Mercado Pago, panel
+  "Apariencia" en el juego y `/shop` en el sitio. Lo 👤: elegir el proveedor de
+  producción y sus claves, y una compra real en el modo prueba del proveedor.
+- **El roadmap está completo** salvo lo que es tuyo (tabla de abajo).
 - Sin placeholders de sprites: 106 salen del pack Dungeon Crawl (CC0,
   `assets/vendor/dungeon-crawl/`) y el resto es arte propio de `tools/spritegen`
   (`make spritegen`), incluido el jugador (outfit `citizen`, 4 direcciones con caminata).
@@ -44,8 +48,15 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 
 ## Orden sugerido
-1. **T5.7**, con el brief de abajo. Ya hay arte del jugador (outfit `citizen`, T0.5) sobre el
-   que montar los cosméticos.
+No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
+1. Elegir el proveedor de pagos y cargar sus claves (T5.7, `09-deployment-aws.md`
+   "Tienda y pagos"); probar una compra en su modo prueba con el webhook expuesto.
+2. T1.18: cuenta de AWS, dominio y deploy.
+3. Copiar a `deploy/.env.example` las variables nuevas de docs/09 (`RPG_ENV`,
+   `PAYMENTS_PROVIDER`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAYMENTS_REF_SECRET` y
+   `PAYMENTS_REF_SECRET_PREVIOUS`, comentadas): los permisos de la IA no le dejan editar
+   ese archivo.
+4. Jugar y anotar lo que se siente mal; de ahí salen las próximas tareas.
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
 - **Una tarea, una sesión, un PR.** Usa `/roadmap-task T5.6` o pega el brief. Pide un plan
@@ -169,7 +180,7 @@ Y en general:
    - si cambias rutas que filtra la CI, revisa `.github/scripts/ci-changes.sh` y su `self_test`.
 4. Título del PR en inglés, estilo Conventional Commits (por ejemplo `feat(client): touch controls and small-screen layout (T5.6)`); la descripción, en español.
 
-## T5.7: brief
+## T5.7: brief (hecha, se deja como referencia)
 Implementa **T5.7 Tienda cosmética con pasarela de pago** de `10-roadmap.md`. Decisiones
 cerradas (`00-vision.md`): la monetización es solo cosmética, nunca da ventaja de juego,
 y el modelo ya prevé las tablas `cosmetics` y `account_cosmetics`.

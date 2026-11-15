@@ -165,6 +165,23 @@ server/
   aplanados (`mailFlat`) al buzón del mercado en el mismo transfer. `/api/houses` es público: solo el
   nombre del dueño, con las exclusiones del ranking (`queries/houses.sql`).
 
+- **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
+  `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +
+  `store/shop.go` + `httpapi/shop.go` + `app/shop.go` + `session/cosmetics.go`. Todo cambio
+  de saldo es **una** transacción que bloquea la cuenta y escribe su fila en
+  `premium_ledger` (append-only); el saldo nunca es negativo. Un webhook se aplica una vez
+  (`payment_events`, `UNIQUE (provider, event_id)`); `ApplyPayment` bloquea la cuenta
+  **antes** de insertar el evento y de leer crédito y reversiones del pago (todos sus eventos
+  traen la misma cuenta firmada). Un reembolso que llega antes del pago queda
+  `pending_reversal` y lo revierte el crédito. Un pago aprobado que no se puede acreditar se
+  registra con nivel error y queda `unmatched` (nunca se descarta en silencio). La referencia
+  se firma con `PAYMENTS_REF_SECRET`, no con el secreto del webhook. Los límites (diario,
+  anti-flood de equipar, tope de `/premium`) son `limits` de `data/cosmetics.yaml`. La moneda que vale
+  un paquete sale de `data/cosmetics.yaml`, nunca del proveedor. El loop nunca lee la
+  tienda: el login trae lo comprado y el saldo, y el `app` empuja los cambios con
+  `World.CosmeticsChanged` (con `Seq` = id del ledger). Ninguna regla del juego puede leer
+  `Player.cos` (lo vigila `TestCosmeticsDoNotChangeCombat`).
+
 ## Tests
 - `go test ./...` debe correr sin red ni Postgres (usa fakes).
 - Tests de integración con Postgres llevan build tag `integration` (`make test-integration`,

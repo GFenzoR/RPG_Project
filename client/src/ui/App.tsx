@@ -23,6 +23,7 @@ import { HouseWindow } from "./House.tsx";
 import { MarketWindow } from "./Market.tsx";
 import { PartyInvitations, PartyPanel } from "./Party.tsx";
 import { GuildInvitations, GuildPanel } from "./Guild.tsx";
+import { AppearancePanel } from "./Appearance.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
 import { ServerPicker } from "./ServerPicker.tsx";
@@ -843,6 +844,9 @@ function GameScreen(props: {
           </div>
           <div {...pane("skills", true)}>
             <SkillsPanel t={t} skills={ui.skills} />
+          </div>
+          <div {...pane("appearance", true)}>
+            <AppearancePanel t={t} content={props.content} game={game.current} ui={ui} />
           </div>
           <div {...pane("chat", true)}>
             <ul class="log" data-testid="game-log" aria-live="polite">

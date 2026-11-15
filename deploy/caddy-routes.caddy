@@ -18,6 +18,12 @@ handle @backend {
 	request_body /api/maps/* {
 		max_size 5MB
 	}
+	# Payment provider notifications (T5.7): POST /api/payments/webhook/<provider>, public by
+	# design (the provider calls it; the gameserver verifies the signature and caps the body
+	# at 16 KiB). Nothing else to route: it is under /api/ like the rest.
+	request_body /api/payments/webhook/* {
+		max_size 64KB
+	}
 	reverse_proxy gameserver:8080 {
 		flush_interval -1
 		# Long-lived WebSockets must survive a Caddy config reload.

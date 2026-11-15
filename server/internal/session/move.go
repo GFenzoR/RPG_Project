@@ -110,6 +110,10 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.marketCommand(ctx, p, m.MarketCommand)
 	case *pb.ClientMessage_HouseCommand:
 		w.houseCommand(ctx, p, m.HouseCommand)
+	case *pb.ClientMessage_EquipCosmetic:
+		w.equipCosmetic(ctx, p, m.EquipCosmetic.GetCosmeticId())
+	case *pb.ClientMessage_UnequipCosmetic:
+		w.unequipCosmetic(ctx, p, m.UnequipCosmetic.GetKind())
 	case *pb.ClientMessage_Logout:
 		// T5.2: no logout while the PvP lock lasts (attacked a player, or was attacked by
 		// one). Closing the connection still takes the character out (docs/02 "PvP").
@@ -383,6 +387,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.checkIdle(ctx)
 	w.checkAntiBot(ctx)
 	w.flushMapNotices(ctx.Tick)
+	w.pruneShopPending(ctx.Tick)
 	w.flushEconomy(ctx)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {

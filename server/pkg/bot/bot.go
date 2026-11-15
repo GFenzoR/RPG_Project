@@ -85,6 +85,17 @@ type Creature struct {
 	Kind      CreatureKind
 	ContentID string
 	Pos       Pos
+	// Cosmetics are a player's equipped cosmetics (T5.7: outfit, color, name effect ids).
+	Cosmetics [3]string
+}
+
+// Shop is the bot's own cosmetic shop state (CosmeticsState, T5.7).
+type Shop struct {
+	Owned    []string
+	Balance  int64
+	Equipped [3]string
+	// Updates counts the CosmeticsState messages received.
+	Updates int
 }
 
 // Dialog is the NPC dialog the bot has open.
@@ -123,6 +134,7 @@ type Bot struct {
 	pingSeq    uint64
 	pings      map[uint64]time.Time
 	latencies  []time.Duration
+	shop       Shop
 }
 
 // New returns a bot for the server at baseURL (e.g. "http://localhost:8080").
@@ -392,6 +404,14 @@ func (b *Bot) apply(e *pb.ServerMessage) {
 		}
 	case *pb.ServerMessage_MapSlice:
 		b.stats.Slices++
+	case *pb.ServerMessage_CosmeticsState:
+		s := m.CosmeticsState
+		b.shop = Shop{Owned: append([]string(nil), s.GetOwned()...), Balance: s.GetBalance(),
+			Equipped: cosmetics(s.GetEquipped()), Updates: b.shop.Updates + 1}
+	case *pb.ServerMessage_CreatureCosmetics:
+		if c := b.creatures[m.CreatureCosmetics.GetId()]; c != nil {
+			c.Cosmetics = cosmetics(m.CreatureCosmetics.GetCosmetics())
+		}
 	case *pb.ServerMessage_Disconnect:
 		b.disconnect = strings.TrimPrefix(m.Disconnect.GetReason().String(), "DISCONNECT_REASON_")
 	}
@@ -403,7 +423,32 @@ func (b *Bot) see(c *pb.Creature) {
 	}
 	b.creatures[c.GetId()] = &Creature{
 		ID: c.GetId(), Kind: CreatureKind(c.GetKind()), ContentID: c.GetContentId(), Pos: toPos(c.GetPos()),
+		Cosmetics: cosmetics(c.GetCosmetics()),
 	}
+}
+
+func cosmetics(c *pb.Cosmetics) [3]string {
+	return [3]string{c.GetOutfit(), c.GetColor(), c.GetNameEffect()}
+}
+
+// Shop returns the last CosmeticsState the bot got (T5.7).
+func (b *Bot) Shop() Shop {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	s := b.shop
+	s.Owned = append([]string(nil), s.Owned...)
+	return s
+}
+
+// EquipCosmetic sends EquipCosmetic (T5.7).
+func (b *Bot) EquipCosmetic(ctx context.Context, id string) error {
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_EquipCosmetic{EquipCosmetic: &pb.EquipCosmetic{CosmeticId: id}}})
+}
+
+// API calls the HTTP API with an account token (empty: none) and decodes the JSON answer
+// into out (nil: ignored). A non-2xx answer is an *APIError.
+func (b *Bot) API(ctx context.Context, method, path, token string, in, out any) error {
+	return b.call(ctx, method, path, token, in, out)
 }
 
 // Wait blocks until cond (called with the bot's state locked) holds, the connection

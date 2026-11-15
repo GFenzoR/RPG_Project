@@ -91,6 +91,9 @@ type Config struct {
 	// (T4.5 2/2). Only informative: without it the website tells moderators to open
 	// approved submissions by hand.
 	MapPRWorker bool
+
+	// Shop is the cosmetic shop (T5.7, shop.go). Nil: its routes answer 404.
+	Shop *Shop
 }
 
 // Accounts is the account service the API calls. *auth.Service implements it; tests
@@ -157,6 +160,8 @@ type api struct {
 	verifyLimiter *limiter
 	resetLimiter  *limiter
 	resetSlots    chan struct{} // reset requests handled in the background
+
+	shopLimiter *limiter // T5.7: checkouts and purchases per account
 }
 
 func orDefault(rl, def RateLimit) RateLimit {
@@ -201,6 +206,12 @@ func newAPI(cfg Config) (*api, error) {
 		cfg.MapUploadSlots = DefaultMapUploadSlots
 	}
 	cfg.MapSubmitLimits = mapLimitsOrDefault(cfg.MapSubmitLimits)
+	shopRate := DefaultShopRateLimit
+	if cfg.Shop != nil {
+		sh := *cfg.Shop // a copy: the caller's Config is not changed
+		sh.RateLimit = orDefault(sh.RateLimit, DefaultShopRateLimit)
+		cfg.Shop, shopRate = &sh, sh.RateLimit
+	}
 	// One entry per valid key at most: (level + skills) × (all + vocations) × pages.
 	keys := (len(cfg.Skills) + 1) * (len(cfg.Vocations) + 1) * HighscoreMaxPages
 	a := &api{
@@ -233,6 +244,7 @@ func newAPI(cfg Config) (*api, error) {
 		// Keys are account ids and addresses an attacker picks: failClosed, like login.
 		{&a.verifyLimiter, cfg.VerifyResendRateLimit, failClosed},
 		{&a.resetLimiter, cfg.ResetEmailRateLimit, failClosed},
+		{&a.shopLimiter, shopRate, failOpen},
 	} {
 		lim, err := newLimiter(l.rl, l.policy, cfg.Clock)
 		if err != nil {
@@ -269,6 +281,7 @@ func (a *api) routes() *http.ServeMux {
 	if a.cfg.MapSubmissions != nil {
 		a.mapRoutes(mux)
 	}
+	a.shopRoutes(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})

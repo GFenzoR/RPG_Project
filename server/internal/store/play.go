@@ -41,6 +41,18 @@ type PlayCharacter struct {
 	Conditions []Condition
 	// PvP is the character's skull, kill counter and recent unjustified kills (T5.2).
 	PvP PvPState
+	// Cosmetics are the equipped cosmetics and the account's shop state (T5.7).
+	Cosmetics Cosmetics
+	Owned     []string
+	Premium   int64
+	// PremiumSeq is the id of the account's newest premium_ledger row (0 = none).
+	PremiumSeq int64
+}
+
+// Cosmetics are the equipped cosmetics of a character (characters.outfit, outfit_color,
+// name_effect; content ids of data/cosmetics.yaml, "" = default look).
+type Cosmetics struct {
+	Outfit, Color, NameEffect string
 }
 
 // PvPState is the PvP state of a character (T5.2): characters.skull, skull_until and
@@ -99,8 +111,10 @@ type CharacterState struct {
 	// Conditions replace the saved ones (T3.2).
 	Conditions []Condition
 	// PvP replaces the skull, the kill counter and every pvp_unjust_kills row (T5.2).
-	PvP     PvPState
-	SavedAt time.Time
+	PvP PvPState
+	// Cosmetics are the equipped cosmetics (T5.7).
+	Cosmetics Cosmetics
+	SavedAt   time.Time
 }
 
 // CharacterBelongsTo reports whether characterID is a character of accountID.
@@ -175,7 +189,15 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	for i, k := range unjust {
 		pvp.Unjust[i] = k.Time
 	}
+	owned, err := s.q.ListAccountCosmetics(ctx, accountID)
+	if err != nil {
+		return PlayCharacter{}, fmt.Errorf("account cosmetics: %w", err)
+	}
 	return PlayCharacter{
+		Cosmetics:  Cosmetics{Outfit: row.Outfit, Color: row.OutfitColor, NameEffect: row.NameEffect},
+		Owned:      owned,
+		Premium:    row.PremiumBalance,
+		PremiumSeq: row.PremiumSeq,
 		PvP:        pvp,
 		Conditions: conds,
 		Storage:    storage,
@@ -214,19 +236,22 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 		return fmt.Errorf("encode conditions of character %d: %w", c.ID, err)
 	}
 	n, err := q.SaveCharacterState(ctx, db.SaveCharacterStateParams{
-		Conditions: rawConds,
-		ID:         c.ID,
-		Level:      int32(c.Level),
-		Experience: c.Experience,
-		Health:     int32(c.Health),
-		Mana:       int32(c.Mana),
-		PosX:       pgtype.Int4{Int32: int32(c.X), Valid: true},
-		PosY:       pgtype.Int4{Int32: int32(c.Y), Valid: true},
-		PosZ:       pgtype.Int2{Int16: int16(c.Z), Valid: true},
-		Skull:      int16(c.PvP.Skull),
-		SkullUntil: tsOrNull(c.PvP.SkullUntil),
-		PvpKills:   int32(c.PvP.Kills),
-		SavedAt:    ts(c.SavedAt),
+		Conditions:  rawConds,
+		ID:          c.ID,
+		Level:       int32(c.Level),
+		Experience:  c.Experience,
+		Health:      int32(c.Health),
+		Mana:        int32(c.Mana),
+		PosX:        pgtype.Int4{Int32: int32(c.X), Valid: true},
+		PosY:        pgtype.Int4{Int32: int32(c.Y), Valid: true},
+		PosZ:        pgtype.Int2{Int16: int16(c.Z), Valid: true},
+		Skull:       int16(c.PvP.Skull),
+		SkullUntil:  tsOrNull(c.PvP.SkullUntil),
+		PvpKills:    int32(c.PvP.Kills),
+		Outfit:      c.Cosmetics.Outfit,
+		OutfitColor: c.Cosmetics.Color,
+		NameEffect:  c.Cosmetics.NameEffect,
+		SavedAt:     ts(c.SavedAt),
 	})
 	if err != nil {
 		return fmt.Errorf("save character %d: %w", c.ID, err)

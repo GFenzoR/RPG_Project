@@ -279,7 +279,27 @@ secundaria.
   `client/e2e/mobile.spec.ts` con Pixel 7 (vertical y horizontal) e iPad Mini.
   👤 Pendiente: cuentas de Google Play y Apple Developer, firma (keystore, Team ID), y
   compilar y probar el APK/IPA en un dispositivo real (este PC no tiene Rust ni NDK).
-- [ ] **T5.7 Tienda cosmética con pasarela de pago.** Moneda premium, catálogo de
+- [x] **T5.7 Tienda cosmética con pasarela de pago.** Moneda premium, catálogo de
   `cosmetics` y compras en `account_cosmetics`, siempre sin ventaja de juego. Se arma
   contra el modo prueba del proveedor. 👤 elegir el proveedor de pagos y darle las claves
-  de producción.
+  de producción. (PR #80)
+  Hecho: moneda premium "nácar" de la cuenta (no se intercambia, no pasa por el mercado ni
+  se convierte en oro); `data/cosmetics.yaml` con 3 atuendos originales (marinero,
+  batidor, noble), 4 colores y 2 efectos de nombre, y 3 paquetes en CLP, con esquema e
+  i18n. `server/internal/payments`: proveedor falso (rechazado en producción) y Mercado
+  Pago (checkout alojado, webhook con firma `x-signature`, consulta del pago);
+  acreditación, compra, reembolso y contracargo en una transacción con
+  `premium_ledger` append-only, idempotencia por `(provider, event_id)`, cuenta marcada si
+  un reverso no alcanza, límite diario por cuenta. Protocolo: `Creature.cosmetics`,
+  `CreatureCosmetics`, `CosmeticsState`, `EquipCosmetic`/`UnequipCosmetic`; staff
+  `/premium` y `/purchases` auditados. Cliente: el canvas dibuja atuendo, tinte y efecto de
+  nombre; panel "Apariencia" (también en las pestañas del teléfono); sitio `/shop` (saldo,
+  paquetes, catálogo con vista previa, historial) enlazado solo si hay proveedor. Test de
+  simulación que prueba que los cosméticos no cambian el combate; integración con Postgres
+  (webhooks duplicados y compras concurrentes); E2E `client/e2e/shop.spec.ts` con el
+  proveedor falso y un segundo jugador que ve el atuendo.
+  👤 Pendiente: elegir el proveedor de producción y cargar sus claves (`PAYMENTS_PROVIDER`,
+  `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAYMENTS_REF_SECRET`, `PUBLIC_URL`; docs/09). El adaptador de Mercado
+  Pago solo se probó contra servidores falsos (httptest): falta una compra real en su
+  modo prueba (sandbox) con un webhook que llegue desde internet. Copiar las variables
+  nuevas a `deploy/.env.example` (la sesión no tenía permiso para editarlo).

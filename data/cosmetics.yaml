@@ -1,0 +1,45 @@
+# Cosmetic shop (T5.7, docs/02-game-design.md "Tienda cosmética", format in docs/06).
+# Looks only: nothing here changes stats, speed, experience, loot, capacity or timings.
+# Texts in i18n/<lang>/cosmetics.yaml: premium.name / premium.amount, cosmetic_pack.<id>.name,
+# cosmetic.<id>.name and cosmetic.<id>.desc.
+currency:
+  id: premium
+  notes: Nacre. Bought with real money only; never traded, sold on the market or turned into gold.
+
+# Bounds of the shop (docs/02 "Tienda cosmética"). No pack may be worth more than
+# daily_premium (it could never be bought).
+limits:
+  # Most premium currency one account may buy with money in any 24 hours: a checkout that
+  # would go over it is refused before paying (a payment that arrives anyway is credited).
+  daily_premium: 5000
+  # Equip anti-flood in the game (every change is broadcast to the watchers): a burst of
+  # equip_burst changes, then one every equip_refill_ms.
+  equip_burst: 5
+  equip_refill_ms: 500
+  # Largest single staff /premium correction (either sign).
+  max_premium_grant: 100000
+
+# Packs of premium currency sold through the provider's hosted checkout. price is an integer
+# in the currency's minor unit (ISO 4217): CLP has none, so 1990 = $1.990 (Mercado Pago
+# unit_price). Bigger packs give a little more per peso; never a gameplay bonus.
+packs:
+  - { id: pack_small, amount: 100, price: 1990, currency: CLP }
+  - { id: pack_medium, amount: 550, price: 9990, currency: CLP }
+  - { id: pack_large, amount: 1200, price: 19990, currency: CLP }
+
+# Bought with premium currency; owned by the account, equipped per character.
+cosmetics:
+  # Outfits: a look of data/outfits.yaml (never citizen, the free default).
+  - { id: outfit_sailor, kind: outfit, price: 300, outfit: sailor }
+  - { id: outfit_ranger, kind: outfit, price: 400, outfit: ranger }
+  - { id: outfit_noble, kind: outfit, price: 600, outfit: noble }
+
+  # Outfit colours: a multiply tint over whatever outfit the character wears.
+  - { id: color_tide, kind: outfit_color, price: 120, tint: "#7fa8d8" }
+  - { id: color_ember, kind: outfit_color, price: 120, tint: "#e0927a" }
+  - { id: color_moss, kind: outfit_color, price: 120, tint: "#a8c890" }
+  - { id: color_dusk, kind: outfit_color, price: 150, tint: "#b8a0d8" }
+
+  # Name effects: how the name label above the character is drawn.
+  - { id: name_gilded, kind: name_effect, price: 200, style: gold }
+  - { id: name_frost, kind: name_effect, price: 250, style: frost }

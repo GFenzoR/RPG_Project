@@ -57,6 +57,8 @@ message ServerMessage {
     CreatureSkull creature_skull = 38;
     MarketUpdate market_update = 39;
     HouseUpdate house_update = 40;
+    CreatureCosmetics creature_cosmetics = 41;
+    CosmeticsState cosmetics_state = 42;
   }
 }
 
@@ -189,6 +191,41 @@ message Creature {
   string guild = 10;
   // Players: its PvP mark (T5.2). CreatureSkull changes it.
   Skull skull = 11;
+  // Players: the equipped cosmetics (T5.7); unset or empty fields = default look.
+  // CreatureCosmetics changes them.
+  Cosmetics cosmetics = 12;
+}
+
+// Cosmetics are the equipped cosmetics of a player (T5.7): content ids of
+// data/cosmetics.yaml, one per kind. Empty = the default look of that kind. Purely
+// visual: no game rule ever reads them.
+message Cosmetics {
+  // kind outfit: replaces the default outfit sprite.
+  string outfit = 1;
+  // kind outfit_color: a tint drawn over the outfit.
+  string color = 2;
+  // kind name_effect: a style drawn around the name label.
+  string name_effect = 3;
+}
+
+// CreatureCosmetics tells the clients that see player id (the player included) that its
+// equipped cosmetics changed.
+message CreatureCosmetics {
+  uint32 id = 1;
+  Cosmetics cosmetics = 2;
+}
+
+// CosmeticsState is the player's own shop state (T5.7): sent on login (after
+// PlayerSkills), after every EquipCosmetic/UnequipCosmetic, and whenever the account's
+// balance or cosmetics change outside the game (a purchase on the website, a payment, a
+// refund or a staff grant) while one of its characters is online.
+message CosmeticsState {
+  // Cosmetic ids the account owns (sorted).
+  repeated string owned = 1;
+  // Premium currency balance of the account.
+  int64 balance = 2;
+  // What this character has equipped (same as its Creature.cosmetics).
+  Cosmetics equipped = 3;
 }
 
 // Skull is a player's PvP mark (T5.2, docs/02 "PvP"). Attacking a marked player is

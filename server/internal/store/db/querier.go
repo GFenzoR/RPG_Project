@@ -20,6 +20,7 @@ type Querier interface {
 	CharacterOfAccount(ctx context.Context, arg CharacterOfAccountParams) (string, error)
 	// Takes transfer id: no row when a transfer with this id (or a later one) was written.
 	ClaimTransfer(ctx context.Context, id int64) (int64, error)
+	ClearShopFlag(ctx context.Context, id int64) error
 	CloseReport(ctx context.Context, arg CloseReportParams) (int64, error)
 	// Deletes a token and returns it if it was still valid: tokens are single-use.
 	ConsumeAccountToken(ctx context.Context, arg ConsumeAccountTokenParams) (ConsumeAccountTokenRow, error)
@@ -77,6 +78,7 @@ type Querier interface {
 	// Takes units from an offer that keeps some; no row when the offer is gone or does not
 	// have more than units left (then DeleteFilledMarketOffer takes the last ones).
 	FillMarketOffer(ctx context.Context, arg FillMarketOfferParams) (int32, error)
+	FlagShopAccount(ctx context.Context, arg FlagShopAccountParams) error
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
 	GetAccountProfile(ctx context.Context, id int64) (GetAccountProfileRow, error)
 	GetAccountProfileByEmail(ctx context.Context, email string) (GetAccountProfileByEmailRow, error)
@@ -103,8 +105,11 @@ type Querier interface {
 	GetCharacterTarget(ctx context.Context, name string) (GetCharacterTargetRow, error)
 	// PvP (T5.2): the unjustified kills a character made since sqlc.arg(since).
 	GetCharacterUnjustKills(ctx context.Context, arg GetCharacterUnjustKillsParams) ([]pgtype.Timestamptz, error)
+	GetCosmeticForSale(ctx context.Context, id string) (GetCosmeticForSaleRow, error)
 	GetIdentity(ctx context.Context, arg GetIdentityParams) (int64, error)
 	GetOAuthPending(ctx context.Context, arg GetOAuthPendingParams) (GetOAuthPendingRow, error)
+	// The shop state of an account. blocked: disabled or with an active ban.
+	GetShopAccount(ctx context.Context, arg GetShopAccountParams) (GetShopAccountRow, error)
 	GetSubmission(ctx context.Context, id int64) (GetSubmissionRow, error)
 	GetSubmissionPatch(ctx context.Context, id int64) (GetSubmissionPatchRow, error)
 	// The highest guild id ever issued (0 before the first founding).
@@ -127,6 +132,7 @@ type Querier interface {
 	// least as high as one without (a row at exactly the base level with 0 tries ties with
 	// them and is listed first). Neither query sorts every character.
 	HighscoresBySkillRows(ctx context.Context, arg HighscoresBySkillRowsParams) ([]HighscoresBySkillRowsRow, error)
+	InsertAccountCosmetic(ctx context.Context, arg InsertAccountCosmeticParams) (int64, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	InsertBan(ctx context.Context, arg InsertBanParams) (int64, error)
 	InsertGuild(ctx context.Context, arg InsertGuildParams) error
@@ -142,9 +148,16 @@ type Querier interface {
 	InsertMarketHistory(ctx context.Context, arg InsertMarketHistoryParams) error
 	InsertMarketMailItem(ctx context.Context, arg InsertMarketMailItemParams) error
 	InsertMarketOffer(ctx context.Context, arg InsertMarketOfferParams) error
+	// The idempotency key of a webhook: a duplicate (provider, event_id) inserts nothing
+	// (no row). ApplyPayment runs it after locking the account, so two events of one payment
+	// never race here; a duplicate of another account's event id still waits on the unique
+	// index for the first one's transaction and then inserts nothing either.
+	InsertPaymentEvent(ctx context.Context, arg InsertPaymentEventParams) (int64, error)
+	InsertPremiumLedger(ctx context.Context, arg InsertPremiumLedgerParams) (int64, error)
 	InsertReport(ctx context.Context, arg InsertReportParams) (int64, error)
 	// Lifts every active ban of the account.
 	LiftBans(ctx context.Context, arg LiftBansParams) (int64, error)
+	ListAccountCosmetics(ctx context.Context, accountID int64) ([]string, error)
 	// An author's submissions, newest first.
 	ListAccountSubmissions(ctx context.Context, arg ListAccountSubmissionsParams) ([]ListAccountSubmissionsRow, error)
 	// Newest entries first (operator tool and tests).
@@ -163,6 +176,8 @@ type Querier interface {
 	ListOpenReports(ctx context.Context, maxRows int32) ([]ListOpenReportsRow, error)
 	// The moderation queue: oldest first (arrival order), a page after a cursor.
 	ListPendingSubmissions(ctx context.Context, arg ListPendingSubmissionsParams) ([]ListPendingSubmissionsRow, error)
+	// The newest balance changes of an account.
+	ListPremiumLedger(ctx context.Context, arg ListPremiumLedgerParams) ([]ListPremiumLedgerRow, error)
 	// Decided submissions of one status: the most recently changed first, a page before a
 	// cursor (map_submissions_history_idx).
 	ListSubmissionHistory(ctx context.Context, arg ListSubmissionHistoryParams) ([]ListSubmissionHistoryRow, error)
@@ -188,12 +203,24 @@ type Querier interface {
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
 	// Serializes changes to an account's login methods (unlinking the last one).
 	LockAccountForIdentities(ctx context.Context, id int64) (LockAccountForIdentitiesRow, error)
+	// Same as GetShopAccount, locking the account row: every balance change of an account
+	// runs after this in its transaction, so concurrent purchases are serialized.
+	LockShopAccount(ctx context.Context, arg LockShopAccountParams) (LockShopAccountRow, error)
 	// Map submissions (T4.5). Lists never read the patch bytes.
 	// The author's account, locked for the rest of the transaction so two uploads at once
 	// cannot both pass the daily limit.
 	LockSubmitter(ctx context.Context, arg LockSubmitterParams) (LockSubmitterRow, error)
 	// Only verifies the address the link was sent to.
 	MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedParams) (int64, error)
+	// The pack credit of a payment (none: no row).
+	PaymentCredit(ctx context.Context, arg PaymentCreditParams) (PaymentCreditRow, error)
+	// How much of the payment's credit refunds and chargebacks already took back (what was
+	// debited plus what could not be: the shortfall is owed too).
+	PaymentReversedTotal(ctx context.Context, arg PaymentReversedTotalParams) (int64, error)
+	// Refunds and chargebacks that arrived before the payment was credited, oldest first.
+	PendingReversals(ctx context.Context, arg PendingReversalsParams) ([]PendingReversalsRow, error)
+	// Premium credited from packs since a time (the daily purchase limit).
+	PremiumBoughtSince(ctx context.Context, arg PremiumBoughtSinceParams) (int64, error)
 	PublicGuild(ctx context.Context, id int64) (PublicGuildRow, error)
 	// The same exclusions as PublicGuilds.
 	PublicGuildMembers(ctx context.Context, arg PublicGuildMembersParams) ([]PublicGuildMembersRow, error)
@@ -212,6 +239,8 @@ type Querier interface {
 	RaiseGuildWarHigh(ctx context.Context, id int64) error
 	RenameGuild(ctx context.Context, arg RenameGuildParams) (int64, error)
 	ReportExists(ctx context.Context, id int64) (bool, error)
+	// Cosmetics no longer in data/cosmetics.yaml stay (accounts may own them) but are not sold.
+	RetireCosmetics(ctx context.Context, ids []string) error
 	// Approve or reject a pending submission. No row: it is not pending (or does not exist).
 	ReviewSubmission(ctx context.Context, arg ReviewSubmissionParams) (ReviewSubmissionRow, error)
 	SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error
@@ -229,6 +258,8 @@ type Querier interface {
 	SetHouseGuildAccess(ctx context.Context, arg SetHouseGuildAccessParams) (int64, error)
 	SetHousePaid(ctx context.Context, arg SetHousePaidParams) (int64, error)
 	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error
+	SetPaymentEventResult(ctx context.Context, arg SetPaymentEventResultParams) error
+	SetPremiumBalance(ctx context.Context, arg SetPremiumBalanceParams) error
 	StartGuildWar(ctx context.Context, arg StartGuildWarParams) (int64, error)
 	SubmissionAuthor(ctx context.Context, id int64) (int64, error)
 	// The same as LockSubmitter without the lock: a cheap check before reading an upload.
@@ -238,6 +269,9 @@ type Querier interface {
 	TakeMarketMailGold(ctx context.Context, arg TakeMarketMailGoldParams) (int64, error)
 	TouchAccountLogin(ctx context.Context, arg TouchAccountLoginParams) error
 	TouchCharacterLogin(ctx context.Context, arg TouchCharacterLoginParams) error
+	// Cosmetic shop and premium currency (T5.7, migration 00017).
+	// Syncs one entry of data/cosmetics.yaml at startup.
+	UpsertCosmetic(ctx context.Context, arg UpsertCosmeticParams) error
 	UpsertGuildInvite(ctx context.Context, arg UpsertGuildInviteParams) error
 }
 

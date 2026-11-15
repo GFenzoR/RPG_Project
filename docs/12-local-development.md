@@ -69,6 +69,12 @@ Con CRLF fallan `bash`, `make`, Prettier y los tests que comparan texto.
 - `make dev` se corta con Ctrl+C en la terminal. Si lo matas de otra forma (cerrando la
   pestaña, desde otra herramienta), el `gameserver` puede quedar vivo ocupando `:8080`:
   ciérralo en el Administrador de tareas o con `taskkill /IM gameserver.exe /F`.
+- El servidor de juego de `make dev`, `make run-server`, los E2E y `make bots` escucha solo
+  en `127.0.0.1`. `go run` compila el `.exe` en una carpeta temporal nueva cada vez, y si
+  escuchara en todas las interfaces, el Firewall de Windows preguntaría "¿Permitir?" en
+  cada arranque. Para probar desde otro equipo de tu red usa `make home-up`
+  (`13-hosting-de-pruebas.md`) o `make dev DEV_HTTP_ADDR=:8080`; con este último, Windows
+  vuelve a preguntar en cada compilación.
 - `make desktop-smoke`, `make home-*` y `make monitoring-*` siguen pensados para Linux/WSL2.
 
 ### Base de datos y servidor solo

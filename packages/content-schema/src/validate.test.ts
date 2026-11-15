@@ -44,6 +44,7 @@ describe("repository content", () => {
       "news",
       "borders",
       "outfits",
+      "cosmetics",
       "sounds",
       "i18n",
       "ids-lock",
@@ -103,6 +104,78 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes("[1].frames: must be <= 3"))).toBe(true);
     expect(out.some((m) => m.includes("[2].sprite: must match"))).toBe(true);
     expect(out.some((m) => m.includes('unknown field "colour"'))).toBe(true);
+  });
+
+  it("checks the cosmetic shop: kinds, fields, outfits, tints and texts (T5.7)", () => {
+    writeFileSync(
+      file("data/cosmetics.yaml"),
+      [
+        "currency: { id: gems }",
+        "limits: { daily_premium: 1000, equip_burst: 5, equip_refill_ms: 500, max_premium_grant: 100000 }",
+        "packs:",
+        "  - { id: pack_small, amount: 100, price: 1990, currency: CLP }",
+        "  - { id: pack_whale, amount: 5000, price: 99990, currency: CLP }",
+        "  - { id: pack_small, amount: 0, price: 19.9, currency: clp }",
+        "  - { id: pack_unnamed, amount: 10, price: 100, currency: USD }",
+        "cosmetics:",
+        "  - { id: outfit_sailor, kind: outfit, price: 300, outfit: sailer }",
+        "  - { id: outfit_citizen, kind: outfit, price: 10, outfit: citizen }",
+        "  - { id: outfit_bare, kind: outfit, price: 10 }",
+        "  - { id: color_tide, kind: outfit_color, price: 120, tint: '#7fa8d8', style: gold }",
+        "  - { id: color_ember, kind: outfit_color, price: 120, tint: '#7fa8d8' }",
+        "  - { id: color_moss, kind: outfit_color, price: 120, tint: 'green' }",
+        "  - { id: name_gilded, kind: name_effect, price: 200, style: rainbow }",
+        "  - { id: mount_horse, kind: mount, price: 900 }",
+        "  - { id: speed_boots, kind: outfit, price: 50, outfit: sailor, speed: 20 }",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root);
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('currency.id: must be "premium"')).toBe(true);
+    expect(has('duplicate id "pack_small"')).toBe(true);
+    expect(has("packs[1].amount: amount 5000 is over limits.daily_premium 1000")).toBe(true);
+    expect(has("packs[2].amount: must be >= 1")).toBe(true);
+    expect(has("packs[2].price: must be integer")).toBe(true);
+    expect(has("packs[2].currency: must match")).toBe(true);
+    expect(has('i18n key "cosmetic_pack.pack_unnamed.name" is missing')).toBe(true);
+    expect(has('unknown outfit "sailer" in data/outfits.yaml (did you mean "sailor"?)')).toBe(true);
+    expect(has(`"citizen" is every player's free look`)).toBe(true);
+    expect(has('cosmetics[2]: missing required field "outfit"')).toBe(true);
+    expect(has('cosmetics[3].style: "style" is only allowed with kind: name_effect')).toBe(true);
+    expect(has('tint #7fa8d8 is already sold as "color_tide"')).toBe(true);
+    expect(has("cosmetics[5].tint: must match")).toBe(true);
+    expect(has("cosmetics[6].style: must be one of")).toBe(true);
+    expect(has("cosmetics[7].kind: must be one of")).toBe(true);
+    expect(has('cosmetics[8].speed: unknown field "speed"')).toBe(true);
+    expect(has('i18n key "cosmetic.outfit_citizen.desc" is missing')).toBe(true);
+  });
+
+  it("requires the cosmetic shop limits (T5.7)", () => {
+    writeFileSync(
+      file("data/cosmetics.yaml"),
+      [
+        "currency: { id: premium }",
+        "limits: { daily_premium: 0, equip_burst: 5, equip_refill_ms: 10 }",
+        "packs:",
+        "  - { id: pack_small, amount: 100, price: 1990, currency: CLP }",
+        "cosmetics:",
+        "  - { id: name_gilded, kind: name_effect, price: 200, style: gold }",
+      ].join("\n") + "\n",
+    );
+    const out = messages(root);
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('limits: missing required field "max_premium_grant"')).toBe(true);
+    expect(has("limits.daily_premium: must be >= 1")).toBe(true);
+    expect(has("limits.equip_refill_ms: must be >= 50")).toBe(true);
+  });
+
+  it("warns about cosmetic texts no cosmetic uses (T5.7)", () => {
+    appendFileSync(file("i18n/es/cosmetics.yaml"), 'cosmetic.gone.name: "x"\n');
+    appendFileSync(file("i18n/en/cosmetics.yaml"), 'cosmetic.gone.name: "x"\n');
+    const out = messages(root);
+    expect(out.some((m) => m.startsWith("warning") && m.includes('"cosmetic.gone.name"'))).toBe(
+      true,
+    );
   });
 
   it("checks the tutorial: events, refs by event, recipes, islands and rewards (T4.2)", () => {

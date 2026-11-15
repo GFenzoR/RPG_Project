@@ -111,7 +111,9 @@ func (q *Queries) DeleteCharacterUnjustKills(ctx context.Context, characterID in
 
 const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
-       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role
+       c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
+       c.outfit, c.outfit_color, c.name_effect, a.premium_balance,
+       (SELECT COALESCE(max(l.id), 0) FROM premium_ledger l WHERE l.account_id = a.id)::bigint AS premium_seq
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
 WHERE c.id = $1 AND c.account_id = $2
@@ -129,23 +131,28 @@ type GetCharacterForPlayParams struct {
 }
 
 type GetCharacterForPlayRow struct {
-	ID         int64
-	AccountID  int64
-	Name       string
-	Vocation   string
-	Level      int32
-	Experience int64
-	Health     int32
-	Mana       int32
-	PosX       pgtype.Int4
-	PosY       pgtype.Int4
-	PosZ       pgtype.Int2
-	Town       string
-	Conditions []byte
-	Skull      int16
-	SkullUntil pgtype.Timestamptz
-	PvpKills   int32
-	Role       string
+	ID             int64
+	AccountID      int64
+	Name           string
+	Vocation       string
+	Level          int32
+	Experience     int64
+	Health         int32
+	Mana           int32
+	PosX           pgtype.Int4
+	PosY           pgtype.Int4
+	PosZ           pgtype.Int2
+	Town           string
+	Conditions     []byte
+	Skull          int16
+	SkullUntil     pgtype.Timestamptz
+	PvpKills       int32
+	Role           string
+	Outfit         string
+	OutfitColor    string
+	NameEffect     string
+	PremiumBalance int64
+	PremiumSeq     int64
 }
 
 // Loads what the game server needs to put a character in the world, with its account's
@@ -171,6 +178,11 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 		&i.SkullUntil,
 		&i.PvpKills,
 		&i.Role,
+		&i.Outfit,
+		&i.OutfitColor,
+		&i.NameEffect,
+		&i.PremiumBalance,
+		&i.PremiumSeq,
 	)
 	return i, err
 }
@@ -437,24 +449,30 @@ SET level        = $1,
     skull        = $9,
     skull_until  = $10,
     pvp_kills    = $11,
-    last_save_at = $12
-WHERE id = $13
+    outfit       = $12,
+    outfit_color = $13,
+    name_effect  = $14,
+    last_save_at = $15
+WHERE id = $16
 `
 
 type SaveCharacterStateParams struct {
-	Level      int32
-	Experience int64
-	Health     int32
-	Mana       int32
-	PosX       pgtype.Int4
-	PosY       pgtype.Int4
-	PosZ       pgtype.Int2
-	Conditions []byte
-	Skull      int16
-	SkullUntil pgtype.Timestamptz
-	PvpKills   int32
-	SavedAt    pgtype.Timestamptz
-	ID         int64
+	Level       int32
+	Experience  int64
+	Health      int32
+	Mana        int32
+	PosX        pgtype.Int4
+	PosY        pgtype.Int4
+	PosZ        pgtype.Int2
+	Conditions  []byte
+	Skull       int16
+	SkullUntil  pgtype.Timestamptz
+	PvpKills    int32
+	Outfit      string
+	OutfitColor string
+	NameEffect  string
+	SavedAt     pgtype.Timestamptz
+	ID          int64
 }
 
 // Written by the persistence goroutine from an immutable snapshot of the game loop.
@@ -471,6 +489,9 @@ func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterState
 		arg.Skull,
 		arg.SkullUntil,
 		arg.PvpKills,
+		arg.Outfit,
+		arg.OutfitColor,
+		arg.NameEffect,
 		arg.SavedAt,
 		arg.ID,
 	)

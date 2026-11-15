@@ -1,0 +1,27 @@
+# T5.7: cosmetic shop content (data/cosmetics.yaml). Looks only, never a gameplay advantage.
+# Premium currency: "nacre", uncountable like "gold" ("300 nacre").
+premium.name: "Nacre"
+premium.amount: "{count} nacre"
+
+cosmetic_pack.pack_small.name: "Handful of nacre"
+cosmetic_pack.pack_medium.name: "Shell of nacre"
+cosmetic_pack.pack_large.name: "Chest of nacre"
+
+cosmetic.outfit_sailor.name: "Sailor"
+cosmetic.outfit_sailor.desc: "A striped deck shirt, blue trousers and a neckerchief tied at the throat."
+cosmetic.outfit_ranger.name: "Ranger"
+cosmetic.outfit_ranger.desc: "A hooded green cloak over a leather jerkin, a quiver strap and tall boots."
+cosmetic.outfit_noble.name: "Noble"
+cosmetic.outfit_noble.desc: "A burgundy doublet with gold trim, a cream sash and a black cap."
+cosmetic.color_tide.name: "Tide tone"
+cosmetic.color_tide.desc: "Dyes your outfit sea blue."
+cosmetic.color_ember.name: "Ember tone"
+cosmetic.color_ember.desc: "Dyes your outfit ember red."
+cosmetic.color_moss.name: "Moss tone"
+cosmetic.color_moss.desc: "Dyes your outfit moss green."
+cosmetic.color_dusk.name: "Dusk tone"
+cosmetic.color_dusk.desc: "Dyes your outfit dusk violet."
+cosmetic.name_gilded.name: "Gilded name"
+cosmetic.name_gilded.desc: "Your name shines in gold above your character."
+cosmetic.name_frost.name: "Frost name"
+cosmetic.name_frost.desc: "Your name shows ice blue, with a rim of frost."

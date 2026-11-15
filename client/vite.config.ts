@@ -5,7 +5,8 @@ import { rpgContent } from "./vite/content.ts";
 const dir = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url));
 // The game server (HTTP API + /ws). The dev server proxies both, so the page, the API
 // cookie and the WebSocket share one origin, as behind Caddy in production.
-const server = process.env["RPG_SERVER"] ?? "http://localhost:8080";
+// 127.0.0.1, not localhost: the dev server listens on loopback IPv4 only (Makefile DEV_HTTP_ADDR).
+const server = process.env["RPG_SERVER"] ?? "http://127.0.0.1:8080";
 // Service worker (PWA, T5.6): a new version per build, so each deploy installs a new worker
 // that drops the previous caches (src/sw.ts). RPG_BUILD_ID pins it for reproducible builds.
 const swVersion = process.env["RPG_BUILD_ID"] ?? Date.now().toString(36);

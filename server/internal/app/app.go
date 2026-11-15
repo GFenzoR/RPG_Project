@@ -22,6 +22,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/gateway"
 	"github.com/GFenzoR/RPG_Project/server/internal/oauth"
+	"github.com/GFenzoR/RPG_Project/server/internal/payments"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -92,6 +93,13 @@ type Config struct {
 	RequireVerifiedEmail bool
 	// ShutdownTimeout bounds the final saves and the closing of connections (default 10 s).
 	ShutdownTimeout time.Duration
+	// Cosmetics is data/cosmetics.yaml (T5.7); nil turns the shop off. With a Store that
+	// implements ShopStore (Postgres) the catalog is synced to the cosmetics table at
+	// start and /api/shop is served.
+	Cosmetics *content.CosmeticShop
+	// Payments is the payment provider (payments.FromEnv); nil: GET /api/shop says
+	// enabled: false and nothing can be bought.
+	Payments payments.Provider
 }
 
 // guildLoadTimeout bounds the read of every guild at start.
@@ -160,6 +168,10 @@ func New(cfg Config) (*App, error) {
 	if !cfg.Balance.Houses.Enabled || len(houses) == 0 {
 		houseOwners = nil
 	}
+	shop, err := a.shopConfig()
+	if err != nil {
+		return nil, err
+	}
 	skills := make(map[string]int, len(cfg.Balance.Skills.Base))
 	for id, b := range cfg.Balance.Skills.Base {
 		skills[id] = b.StartLevel
@@ -191,6 +203,8 @@ func New(cfg Config) (*App, error) {
 		MapSubmitted:    a.mapSubmitted,
 		MapSubmitLimits: cfg.MapSubmitLimits,
 		MapPRWorker:     cfg.MapPRWorker,
+
+		Shop: shop,
 	})
 	if err != nil {
 		return nil, err
@@ -220,6 +234,8 @@ func New(cfg Config) (*App, error) {
 		}
 		a.saver = saver
 		a.admin = newAdminWorker(cfg.Store, cfg.Clock, cfg.Logger, a.adminDone, a.rolesChanged)
+		a.admin.shop, _ = cfg.Store.(ShopStore)
+		a.admin.shopChanged = a.shopChanged
 		el := cfg.Balance.Economy.Log
 		a.economy = newEconomyWriter(cfg.Store, cfg.Clock, cfg.Logger, time.Duration(el.FlushMs)*time.Millisecond, el.BatchSize)
 		a.admin.metrics, a.economy.metrics = cfg.Metrics, cfg.Metrics
@@ -268,6 +284,7 @@ func New(cfg Config) (*App, error) {
 			Recipes:       cfg.Recipes,
 			BoatRoutes:    cfg.BoatRoutes,
 			Tutorial:      cfg.Tutorial,
+			Cosmetics:     cfg.Cosmetics,
 			NPCs:          cfg.NPCs,
 			Quests:        cfg.Quests,
 			Save:          saver.Submit,
@@ -458,7 +475,8 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 		Conditions: storeConditions(s.Conditions),
 		PvP: store.PvPState{Skull: s.PvP.Skull, SkullUntil: s.PvP.SkullUntil, Kills: s.PvP.Kills,
 			Unjust: s.PvP.Unjust},
-		SavedAt: a.cfg.Clock.Now(),
+		Cosmetics: store.Cosmetics{Outfit: s.Cosmetics.Outfit, Color: s.Cosmetics.Color, NameEffect: s.Cosmetics.NameEffect},
+		SavedAt:   a.cfg.Clock.Now(),
 	}
 }
 

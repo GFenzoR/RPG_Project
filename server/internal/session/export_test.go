@@ -283,3 +283,6 @@ func (w *World) MailForTest(charID int64) []ItemState {
 
 // ItemForTest is an item definition by content id.
 func (w *World) ItemForTest(id string) *content.Item { return w.cfg.Items[id] }
+
+// CosmeticsForTest returns what p has equipped (T5.7).
+func (p *Player) CosmeticsForTest() Cosmetics { return p.cos }
