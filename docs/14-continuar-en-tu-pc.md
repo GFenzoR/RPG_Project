@@ -16,7 +16,7 @@ seguir con Claude Code en tu computador. El entorno local está en
   - casas;
   - Isla Volcánica, con el Capítulo 3 y las monedas de plata y oro.
 - **T5.6** (controles táctiles, layout para pantallas chicas, PWA y Tauri mobile
-  preparado) quedó hecha en local (PR pendiente). Lo 👤: cuentas de las tiendas, firma y
+  preparado) está en el PR #78. Lo 👤: cuentas de las tiendas, firma y
   compilar el APK/IPA (`docs/15-movil.md`).
 - **Falta** T5.7 (tienda cosmética).
 - Sin placeholders de sprites: 106 salen del pack Dungeon Crawl (CC0,
