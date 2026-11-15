@@ -53,7 +53,7 @@ site.highscores.next: "Siguiente"
 site.highscores.page: "Página {page}"
 site.highscores.pagination: "Páginas del ranking"
 site.highscores.refresh: "Se actualiza cada minuto."
-site.footer: "RPG Project es un proyecto comunitario en desarrollo. Nombre provisional."
+site.footer: "Neque's Realm es un proyecto comunitario en desarrollo."
 # Portal de envío de mapas (T4.5).
 site.nav.maps: "Mapas"
 site.maps.nav.label: "Secciones de mapas"

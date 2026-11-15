@@ -1,6 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "RPG Project",
+  "productName": "Neque's Realm",
+  "mainBinaryName": "rpg-desktop",
   "version": "../../../client/package.json",
   "identifier": "dev.rpgproject.client",
   "build": {
@@ -18,7 +19,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "RPG Project",
+        "title": "Neque's Realm",
         "url": "play/index.html",
         "width": 1280,
         "height": 800,
@@ -49,9 +50,9 @@
     "active": true,
     "targets": "all",
     "category": "RolePlayingGame",
-    "shortDescription": "RPG Project",
-    "longDescription": "RPG Project: a 2D top-down online RPG.",
-    "copyright": "RPG Project contributors",
+    "shortDescription": "Neque's Realm",
+    "longDescription": "Neque's Realm: a 2D top-down online RPG.",
+    "copyright": "Neque's Realm contributors",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

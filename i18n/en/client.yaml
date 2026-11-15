@@ -1,5 +1,5 @@
 # Game client texts (client/). Same keys and {parameters} as i18n/es/client.yaml.
-client.title: "RPG Project"
+client.title: "Neque's Realm"
 client.loading: "Loading…"
 client.login.title: "Log in"
 client.login.email: "Email"

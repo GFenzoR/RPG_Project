@@ -1,4 +1,4 @@
-//! RPG Project desktop client (T2.5): the web client (`client/`, built into
+//! Neque's Realm desktop client (T2.5): the web client (`client/`, built into
 //! `build/client`) in a Tauri 2 webview. The Rust side only adds what a webview served from
 //! `tauri://localhost` cannot do safely on its own: pick the game server (config.rs) and
 //! call its HTTP API with the account token kept in the OS keyring (api.rs).

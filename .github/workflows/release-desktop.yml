@@ -122,7 +122,7 @@ jobs:
           tauriScript: pnpm tauri
           args: ${{ matrix.args }}
           tagName: ${{ github.ref_name }}
-          releaseName: RPG Project desktop ${{ github.ref_name }}
+          releaseName: Neque's Realm desktop ${{ github.ref_name }}
           releaseBody: |
             Unsigned builds: Windows SmartScreen and macOS Gatekeeper will warn on first run
             (docs/09-deployment-aws.md, "Cliente de escritorio"). Linux needs webkit2gtk 4.1.

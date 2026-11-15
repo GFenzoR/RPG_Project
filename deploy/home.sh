@@ -128,7 +128,7 @@ banner() {
 	base="http://localhost:$p"
 	cat <<MSG
 
-  RPG Project is running on this PC.
+  Neque's Realm is running on this PC.
 
     Website  $base/
     Game     $base/play/

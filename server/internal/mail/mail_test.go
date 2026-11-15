@@ -148,7 +148,7 @@ func TestSMTPSendsMultipartMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	subject, _ := new(mime.WordDecoder).DecodeHeader(parsed.Header.Get("Subject"))
-	if subject != "Confirm your email on RPG Project" {
+	if subject != "Confirm your email on Neque's Realm" {
 		t.Fatalf("subject %q", subject)
 	}
 	_, params, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))

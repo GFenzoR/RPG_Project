@@ -87,13 +87,13 @@ test.describe.serial("public website", () => {
     );
     // ?lang= is read once, stored and dropped from the URL.
     await expect(page).toHaveURL(/:\d+\/$/);
-    await expect(page).toHaveTitle("RPG Project");
+    await expect(page).toHaveTitle("Neque's Realm");
     const status = page.getByTestId("status");
     await expect(status.locator("[data-state]")).toHaveText("En línea");
     await expect(status).toContainText(/jugador(es)? conectados?|Nadie conectado/);
     await expect(page.getByRole("heading", { name: "Guardián" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Druida" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Bienvenidos a RPG Project" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Bienvenidos a Neque's Realm" })).toBeVisible();
     const top = page.getByTestId("top5");
     // At most 5 rows (fewer on a fresh E2E database).
     await expect(top.locator("tbody tr").first()).toBeVisible();
@@ -115,7 +115,7 @@ test.describe.serial("public website", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("An open world, tile by tile");
     await expect(status.locator("[data-state]")).toHaveText("Online");
     await expect(page.getByRole("heading", { name: "Vocations" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Welcome to RPG Project" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Welcome to Neque's Realm" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Play" }).first()).toHaveAttribute(
       "href",
       "/play/",
@@ -142,7 +142,7 @@ test.describe.serial("public website", () => {
       .getByRole("link", { name: "Ranking" })
       .click();
     await expect(page).toHaveURL(/\/highscores$/);
-    await expect(page).toHaveTitle("Ranking · RPG Project");
+    await expect(page).toHaveTitle("Ranking · Neque's Realm");
     // Client-side navigation moves focus to the new page's content.
     await expect(page.locator("#main")).toBeFocused();
     const table = page.getByTestId("highscores");
@@ -188,12 +188,12 @@ test.describe.serial("public website", () => {
     const errors = watchErrors(page);
     await page.goto("/news?lang=es");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Noticias");
-    await page.getByRole("link", { name: "Bienvenidos a RPG Project" }).click();
+    await page.getByRole("link", { name: "Bienvenidos a Neque's Realm" }).click();
     await expect(page).toHaveURL(/\/news\/2026-11-01-bienvenida$/);
     // The clicked link is gone: focus goes to the content, not to <body>.
     await expect(page.locator("#main")).toBeFocused();
     const post = page.locator("article.post");
-    await expect(post.getByRole("heading", { level: 1 })).toHaveText("Bienvenidos a RPG Project");
+    await expect(post.getByRole("heading", { level: 1 })).toHaveText("Bienvenidos a Neque's Realm");
     await expect(post.locator("li")).toHaveCount(3);
     await expect(post.locator("strong").first()).toHaveText("vocaciones");
     await shot(page, "site-07-news-post-es");
@@ -209,7 +209,7 @@ test.describe.serial("public website", () => {
     await expect(page.getByTestId("not-found").getByRole("heading", { level: 1 })).toHaveText(
       "Page not found",
     );
-    await expect(page).toHaveTitle("Page not found · RPG Project");
+    await expect(page).toHaveTitle("Page not found · Neque's Realm");
     expect(errors).toEqual([]);
   });
 

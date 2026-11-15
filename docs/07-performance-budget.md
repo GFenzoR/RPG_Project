@@ -148,7 +148,7 @@ está dominada por la espera al siguiente tick, no por el servidor. Pendientes:
 
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en
-producción), el dashboard "RPG Project — servidor" de Grafana muestra en vivo los mismos
+producción), el dashboard "Neque's Realm — servidor" de Grafana muestra en vivo los mismos
 números de esta tabla:
 - **Tick:** p50/p95/p99 con ventana de 1 min y una línea roja en 10 ms. El tile de arriba
   es el p99 de 5 min, el mismo que usa la alerta `TickP99OverBudget`. Los ticks de más de

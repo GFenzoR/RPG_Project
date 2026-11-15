@@ -231,7 +231,7 @@ el túnel con dominio, pon `PUBLIC_URL=https://juego.tudominio.com` en `deploy/.
   (myaccount.google.com → Seguridad → Contraseñas de aplicaciones) y pon
   `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURITY=starttls`,
   `SMTP_USERNAME=tu@gmail.com`, `SMTP_PASSWORD=<la contraseña de aplicación>`,
-  `SMTP_FROM=RPG Project <tu@gmail.com>`.
+  `SMTP_FROM=Neque's Realm <tu@gmail.com>`.
 - *Proveedor transaccional* (Brevo, Mailjet, Resend, Postmark, Amazon SES…): te da host,
   puerto, usuario y clave SMTP; verifica tu dominio (SPF/DKIM) para no caer en spam.
 

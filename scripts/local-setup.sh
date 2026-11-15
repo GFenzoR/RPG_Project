@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs the tools and dependencies needed to develop RPG Project.
+# Installs the tools and dependencies needed to develop Neque's Realm.
 # Called by `make setup`. Idempotent: re-running it only installs what is missing.
 # Works on Linux, WSL2 and macOS (bash 3.2 compatible). Also safe in cloud sessions,
 # where scripts/cloud-setup.sh already installed most tools.

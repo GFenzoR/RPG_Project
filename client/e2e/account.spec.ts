@@ -61,7 +61,7 @@ test("sign up, confirm the email, reset the password", async ({ page, browser })
   await shot(page, "account-01-verify-notice");
 
   const verify = await linkOf(email, 1, /\/verify/);
-  expect(verify.mail.subject).toBe("Confirma tu email en RPG Project");
+  expect(verify.mail.subject).toBe("Confirma tu email en Neque's Realm");
   expect(verify.mail.text).toContain("vence en 24 horas");
 
   // The website's /verify page redeems it and drops the token from the address bar.
@@ -89,7 +89,7 @@ test("sign up, confirm the email, reset the password", async ({ page, browser })
   await shot(p2, "account-03-forgot-sent");
 
   const reset = await linkOf(email, 2, /\/reset-password/);
-  expect(reset.mail.subject).toBe("Cambia tu contraseña de RPG Project");
+  expect(reset.mail.subject).toBe("Cambia tu contraseña de Neque's Realm");
   await p2.goto(reset.link);
   await p2.getByLabel("Contraseña nueva").fill(newPassword);
   await p2.getByLabel("Repite la contraseña").fill("something-else");

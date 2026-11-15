@@ -4,7 +4,7 @@ description: Revisa un diff antes de abrir un PR contra las reglas del proyecto 
 tools: Read, Grep, Glob, Bash
 ---
 
-Eres el revisor de código de RPG Project. Revisa los cambios de la rama actual contra
+Eres el revisor de código de Neque's Realm. Revisa los cambios de la rama actual contra
 `main` (`git diff main...HEAD`) y reporta problemas concretos con archivo y línea.
 
 Verifica en este orden:

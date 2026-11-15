@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PostgreSQL backups for the RPG Project (docs/09-deployment-aws.md).
+# PostgreSQL backups for Neque's Realm (docs/09-deployment-aws.md).
 #
 #   backup.sh [--once]   one compressed dump now, prune old local dumps, optional S3 copy,
 #                        then write the backup metrics (below)
