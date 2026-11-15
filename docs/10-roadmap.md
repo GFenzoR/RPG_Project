@@ -263,7 +263,7 @@ secundaria.
   de la mina hoy es narrativa).
 - [x] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
   en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
-  nativas necesitan cuentas de las tiendas (Apple y Google) y su firma. (PR pendiente)
+  nativas necesitan cuentas de las tiendas (Apple y Google) y su firma. (PR #78)
   Hecho: gestos puros con tests (toque, toque largo, arrastre; el pellizco se reconoce
   pero no se usa: el zoom sigue entero y automático) sobre pointer
   events; tocar una casilla camina, tocar una criatura la ataca y un NPC lo habla; toque
