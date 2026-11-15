@@ -9,6 +9,8 @@ import { LanguagePicker } from "../ui/LanguagePicker.tsx";
 import { Site } from "./Site.tsx";
 import "../ui/client.css";
 import "./site.css";
+// Installable (T5.6): the landing page registers the same service worker as the game.
+import "../pwa.ts";
 
 const languages = Object.keys(site.i18n);
 

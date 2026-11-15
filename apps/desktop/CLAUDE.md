@@ -15,3 +15,10 @@ Lee `docs/12-local-development.md` ("Cliente de escritorio") y `docs/09-deployme
 - Versión: `tauri.conf.json` apunta a `client/package.json`; no pongas otra.
 - Verificación: `make desktop-test`; si tocas el webview o el flujo de login,
   `make desktop-smoke` (Linux) y revisa `e2e/screenshots/` con Read.
+
+## Notas de T5.6 (móvil)
+- El mismo crate apunta también a Android e iOS (`tauri android init` / `tauri ios init`,
+  pasos 👤 en `docs/15-movil.md`). `gen/android` y `gen/apple` se commitean cuando el
+  dueño corre `init`. En Android `config.rs` guarda el `config.json` del selector de
+  servidor en el almacenamiento interno de la app (`android_files_dir`), porque `dirs` no
+  tiene carpeta de configuración ahí.

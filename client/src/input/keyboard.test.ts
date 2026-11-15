@@ -1,6 +1,6 @@
 import { Direction } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
-import { MovementKeys } from "./keyboard.ts";
+import { MovementKeys, isTextField } from "./keyboard.ts";
 
 describe("MovementKeys", () => {
   it("maps arrows and WASD, the last held key wins", () => {
@@ -22,5 +22,12 @@ describe("MovementKeys", () => {
     k.up("KeyS");
     expect(k.take()).toBe(Direction.SOUTH);
     expect(k.take()).toBeUndefined();
+  });
+});
+
+describe("isTextField", () => {
+  it("is false for anything that is not an element (no DOM, the window, null)", () => {
+    expect(isTextField(null)).toBe(false);
+    expect(isTextField({} as EventTarget)).toBe(false);
   });
 });

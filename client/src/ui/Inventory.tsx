@@ -7,6 +7,7 @@ import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
+import { sameRef } from "../input/actions.ts";
 import { formatOz } from "../state/items.ts";
 import type { ItemRef } from "../state/items.ts";
 import type { ItemView } from "../state/world.ts";
@@ -74,6 +75,7 @@ export function InventoryPanel({ t, content, game, ui }: Props): JSX.Element {
                 content={content}
                 game={game}
                 item={ui.inventory.get(slot)}
+                picked={ui.picked}
                 itemRef={(it) => ({
                   loc: { kind: "slot", slot },
                   itemId: it.itemId,
@@ -119,6 +121,7 @@ export function InventoryPanel({ t, content, game, ui }: Props): JSX.Element {
                   content={content}
                   game={game}
                   item={c.items[i]}
+                  picked={ui.picked}
                   itemRef={(it) => ({
                     loc: { kind: "container", id: c.id, index: i },
                     itemId: it.itemId,
@@ -145,11 +148,14 @@ function ItemCell(props: {
   content: ClientContent;
   game: Game | undefined;
   item: ItemView | undefined;
+  picked: ItemRef | undefined;
   itemRef(it: ItemView): ItemRef;
 }): JSX.Element | null {
   const { item, game } = props;
   if (!item) return null;
   const ref = props.itemRef(item);
+  // T5.6: the item picked by a tap (waiting for its destination) is outlined.
+  const picked = props.picked !== undefined && sameRef(props.picked, ref);
   const name = itemName(props.content, props.t, item.itemId);
   const icon = game?.itemIcon(item.itemId);
   const style: JSX.CSSProperties = icon
@@ -162,7 +168,8 @@ function ItemCell(props: {
     : {};
   return (
     <span
-      class={icon ? "item" : "item missing"}
+      class={(icon ? "item" : "item missing") + (picked ? " picked" : "")}
+      data-picked={picked ? "" : undefined}
       style={style}
       title={name}
       aria-label={
@@ -177,6 +184,8 @@ function ItemCell(props: {
       }}
       onContextMenu={(e) => {
         e.preventDefault();
+        // T5.6: a finger's long press also fires contextmenu; it opens the menu instead.
+        if (game?.touchContextMenu(ref, e.clientX, e.clientY)) return;
         game?.useItem(ref);
       }}
     >

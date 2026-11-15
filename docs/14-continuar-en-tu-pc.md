@@ -15,7 +15,10 @@ seguir con Claude Code en tu computador. El entorno local está en
   - mercado global e intercambio directo;
   - casas;
   - Isla Volcánica, con el Capítulo 3 y las monedas de plata y oro.
-- **Faltan** T5.6 (controles táctiles y móvil) y T5.7 (tienda cosmética).
+- **T5.6** (controles táctiles, layout para pantallas chicas, PWA y Tauri mobile
+  preparado) quedó hecha en local (PR pendiente). Lo 👤: cuentas de las tiendas, firma y
+  compilar el APK/IPA (`docs/15-movil.md`).
+- **Falta** T5.7 (tienda cosmética).
 - Sin placeholders de sprites: 106 salen del pack Dungeon Crawl (CC0,
   `assets/vendor/dungeon-crawl/`) y el resto es arte propio de `tools/spritegen`
   (`make spritegen`), incluido el jugador (outfit `citizen`, 4 direcciones con caminata).
@@ -37,12 +40,11 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuenta bot de GitHub (token classic con `public_repo`, fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
 | Protección de la rama `main` y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `09-deployment-aws.md` |
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
-| Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | brief de T5.6 |
+| Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 
 ## Orden sugerido
-1. **T5.6**, con el brief de abajo.
-2. **T5.7**, con el brief de abajo. Ya hay arte del jugador (outfit `citizen`, T0.5) sobre el
+1. **T5.7**, con el brief de abajo. Ya hay arte del jugador (outfit `citizen`, T0.5) sobre el
    que montar los cosméticos.
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
@@ -68,10 +70,9 @@ seguir con Claude Code en tu computador. El entorno local está en
 - **Si la CI falla sin crear jobs**, es un problema de GitHub Actions: relánzala.
 
 ## Pendientes conocidos (no bloquean)
-- **Interfaz** (entran en T5.6):
-  - el mapa baja a zoom 1x cuando la ayuda del encabezado ocupa muchas líneas;
-  - los mensajes del servidor quedan fuera de vista;
-  - los nombres se pisan a 1x.
+- **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
+  (hay que entrar de nuevo en cada arranque), el selector de servidor reinicia la app, y
+  el pellizco se reconoce pero no hace zoom. Detalle en `15-movil.md`.
 - **Mundo:**
   - puertas con llave (la puerta sellada de la mina es narrativa);
   - suelos volcánicos y carteles de Brasal;
@@ -87,7 +88,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 - **Tests:** "Play leads to the login and into the game" (`site.spec.ts`) falló una vez
   por un timeout de 5 s al final de un e2e completo. Si se repite, súbele el timeout.
 
-## T5.6: brief
+## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).
 
 ### Alcance (rama `feat/t5.6-touch`, desde main)

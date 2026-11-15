@@ -14,9 +14,15 @@ import {
   PartyAction,
 } from "@rpg/protocol";
 import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
+import { ItemPicker, itemActions, tileActions } from "./input/actions.ts";
+import type { ActionKind } from "./input/actions.ts";
+import { HeldDirection } from "./input/dpad.ts";
+import { DEFAULT_GESTURES, GestureRecognizer, isTouchPointer } from "./input/gestures.ts";
+import type { Gesture } from "./input/gestures.ts";
+import { creatureName } from "./state/messages.ts";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
-import { MovementKeys, typingInField } from "./input/keyboard.ts";
+import { MovementKeys, isTextField, typingInField } from "./input/keyboard.ts";
 import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { Connection } from "./net/connection.ts";
@@ -96,7 +102,26 @@ export interface GameUi {
   /** The player's own name (to tell itself apart in the guild's member list). */
   selfName: string;
   selfId: number;
+  /** T5.6: the item picked by a tap, waiting for a tap on its destination. */
+  picked?: ItemRef | undefined;
+  /** T5.6: the contextual menu of a long press, or undefined. */
+  menu?: ActionMenuView | undefined;
 }
+
+/** The contextual menu of a long press (T5.6): where it was pressed and its buttons. */
+export interface ActionMenuView {
+  /** Page coordinates of the press (the menu opens next to it). */
+  x: number;
+  y: number;
+  /** What was pressed: a creature's or an item's name ("" = a bare tile). */
+  title: string;
+  actions: ActionKind[];
+  /** performance.now() when it opened (its buttons ignore the lifting finger's click). */
+  at?: number;
+}
+
+/** What a menu acts on: a map tile (resolved again when a button is chosen) or a DOM item. */
+type MenuTarget = { tile: Pos; creature: number | undefined } | { ref: ItemRef };
 
 /** Read-only hooks for the E2E tests (client/e2e). */
 export interface ClientTestHooks {
@@ -125,12 +150,17 @@ export interface ClientTestHooks {
   magic(ms: number): { projectiles: number; effects: number[] };
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
+  /** T5.6: monsters the client knows, as [id, contentId, x, y, z] (to tap one). */
+  monsters(): { id: number; contentId: string; x: number; y: number; z: number }[];
   dialog(): DialogState | undefined;
   shop(): ShopState | undefined;
 }
 
 /** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */
 const DRAG_START_PX = 4;
+
+/** How long after a touch press a contextmenu event is taken as the finger's, ms. */
+const TOUCH_CONTEXTMENU_MS = 1500;
 
 declare global {
   interface Window {
@@ -178,6 +208,20 @@ export class Game {
   private toolAt: { use: string; pos: Pos } | undefined;
   /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
   private safe = true;
+  /** T5.6: the direction held on the on-screen pad (read like the movement keys). */
+  private readonly pad = new HeldDirection();
+  /** T5.6: tap an item, then tap where it goes. */
+  private readonly picker = new ItemPicker();
+  /** T5.6: the open contextual menu and what it acts on. */
+  private menu: { view: ActionMenuView; target: MenuTarget } | undefined;
+  /** The pointerup that placed the picked item (the item's own tap must not pick again). */
+  private placedBy: Event | undefined;
+  /** Where the last pointer went down while an item is picked (a drag is not a tap). */
+  private pickDown: { x: number; y: number } | undefined;
+  /** performance.now() of the last touch press: a contextmenu right after it is a finger's. */
+  private touchAt = Number.NEGATIVE_INFINITY;
+  /** The last finger press on a DOM item already opened its menu. */
+  private itemMenuOpened = false;
 
   constructor(opts: GameOptions) {
     this.opts = opts;
@@ -187,6 +231,7 @@ export class Game {
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
+    window.addEventListener("focusin", this.onFocusIn);
     this.conn = new Connection(opts.sessionToken, opts.locale, {
       batch: (batch) => {
         const now = performance.now();
@@ -598,6 +643,30 @@ export class Game {
     });
   }
 
+  /** Uses the top item of a tile; a bare house door uses its ground (T5.4). */
+  private useTop(x: number, y: number, z: number): void {
+    const ref =
+      topItem(this.world, x, y, z, false) ??
+      // T5.4: a bare door tile opens the house window (UseItem on its ground).
+      (this.opts.content.houseDoors?.includes(doorKey(x, y, z))
+        ? topItem(this.world, x, y, z, true)
+        : undefined);
+    if (ref) this.useItem(ref);
+  }
+
+  /** Looks at the creature on a tile, or else at its top item (the ground counts). */
+  private lookTileAt(x: number, y: number, z: number): void {
+    const c = [...this.world.creatures.values()].find(
+      (o) => o.pos.x === x && o.pos.y === y && o.pos.z === z,
+    );
+    if (c) {
+      this.lookCreature(c.id);
+      return;
+    }
+    const ref = topItem(this.world, x, y, z, true);
+    if (ref) this.lookAt(ref);
+  }
+
   /** Leaves "use with" mode; reports whether it was on. */
   private cancelUse(): boolean {
     if (!this.pending) return false;
@@ -665,6 +734,10 @@ export class Game {
    * pointer travels a few pixels, and the item moves where it is released.
    */
   pressItem(ref: ItemRef, e: PointerEvent): void {
+    if (isTouchPointer(e.pointerType)) {
+      this.pressItemTouch(ref, e);
+      return;
+    }
     const x0 = e.clientX;
     const y0 = e.clientY;
     const move = (ev: PointerEvent): void => {
@@ -708,6 +781,244 @@ export class Game {
       if (pos) return { kind: "pos", pos };
     }
     return undefined;
+  }
+
+  // ---- touch (T5.6): the same intents as the mouse, from taps, long presses and the pad --
+
+  /**
+   * A finger on a DOM item: a tap picks it (or places the picked one there), a long press
+   * opens its menu, a drag moves it like the mouse.
+   */
+  private pressItemTouch(ref: ItemRef, e: PointerEvent): void {
+    this.touchAt = performance.now();
+    this.itemMenuOpened = false;
+    const id = e.pointerId;
+    const g = new GestureRecognizer();
+    // Pointer event times share performance.now()'s clock.
+    g.down(id, e.clientX, e.clientY, e.timeStamp);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const handle = (gs: Gesture[], ev: PointerEvent | undefined): void => {
+      for (const x of gs) {
+        if (x.kind === "tap" && ev) this.tapItem(ref, ev);
+        else if (x.kind === "longPress" && !this.itemMenuOpened) {
+          this.itemMenuOpened = true;
+          this.openItemMenu(ref, x.x, x.y);
+        } else if (x.kind === "dragStart") this.startDrag(ref);
+      }
+      if (!g.active || g.deadline() === undefined) clearTimeout(timer);
+      if (!g.active) stop();
+    };
+    const move = (ev: PointerEvent): void => {
+      if (ev.pointerId === id) handle(g.move(id, ev.clientX, ev.clientY, ev.timeStamp), ev);
+    };
+    const up = (ev: PointerEvent): void => {
+      if (ev.pointerId === id) handle(g.up(id, ev.clientX, ev.clientY, ev.timeStamp), ev);
+    };
+    const cancel = (ev: PointerEvent): void => {
+      if (ev.pointerId === id) handle(g.cancel(id), ev);
+    };
+    const stop = (): void => {
+      clearTimeout(timer);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    const due = g.deadline();
+    if (due !== undefined) {
+      timer = setTimeout(
+        () => handle(g.tick(performance.now()), undefined),
+        Math.max(0, due - performance.now()),
+      );
+    }
+  }
+
+  /** A tap on a DOM item: places the picked item there, or picks this one. */
+  private tapItem(ref: ItemRef, ev: PointerEvent): void {
+    if (ev === this.placedBy) return; // the pick listener already placed the picked item
+    if (this.picker.picked) {
+      const to = this.dropTarget(ev.clientX, ev.clientY);
+      if (to) this.placePicked(to);
+      return;
+    }
+    this.pickItem(ref);
+  }
+
+  /** Picks ref to move it with the next tap on a slot, a container cell or a map tile;
+   * the picked item again drops the pick. */
+  pickItem(ref: ItemRef): void {
+    this.closeMenuQuietly();
+    this.watchPick(this.picker.pick(ref) !== undefined);
+    this.publish();
+  }
+
+  /** Drops the picked item without moving it; reports whether there was one. */
+  cancelPick(): boolean {
+    if (!this.picker.cancel()) return false;
+    this.watchPick(false);
+    this.publish();
+    return true;
+  }
+
+  /** The item waiting for its destination (T5.6), if any. */
+  get picked(): ItemRef | undefined {
+    return this.picker.picked;
+  }
+
+  /** Moves the picked item to `to` (MoveItem; the server validates it like a drop). */
+  private placePicked(to: ItemLoc): void {
+    const move = this.picker.place(to);
+    this.watchPick(false);
+    if (move) this.moveItem(move.ref, move.to);
+    this.publish();
+  }
+
+  private watchPick(on: boolean): void {
+    document.body.classList.toggle("picking-item", on);
+    window.removeEventListener("pointerdown", this.onPickDown, true);
+    window.removeEventListener("pointerup", this.onPickUp, true);
+    this.pickDown = undefined;
+    if (!on) return;
+    window.addEventListener("pointerdown", this.onPickDown, true);
+    window.addEventListener("pointerup", this.onPickUp, true);
+  }
+
+  private readonly onPickDown = (e: PointerEvent): void => {
+    this.pickDown = { x: e.clientX, y: e.clientY };
+  };
+
+  /**
+   * While an item is picked, a tap on a DOM drop target (an equipment slot or a container
+   * cell, empty or not) places it there. Taps on the map arrive through the canvas.
+   */
+  private readonly onPickUp = (e: PointerEvent): void => {
+    const d = this.pickDown;
+    this.pickDown = undefined;
+    if (!this.picker.picked || !d) return;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) >= DEFAULT_GESTURES.slopPx) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el?.closest("[data-drop]")) return;
+    const to = this.dropTarget(e.clientX, e.clientY);
+    if (!to) return;
+    this.placedBy = e;
+    this.placePicked(to);
+  };
+
+  /** A finger tapped a map tile: place the picked item, aim, attack, talk or walk. */
+  private tapTile(pos: Pos): void {
+    if (this.closeMenuQuietly()) {
+      this.publish(); // a tap beside the open menu only closes it
+      return;
+    }
+    if (this.picker.picked) {
+      this.placePicked({ kind: "pos", pos });
+      return;
+    }
+    const c = this.world.creatureAt(pos.x, pos.y, pos.z);
+    // A "use with" tool goes on the tile even with a creature there; else the creature is
+    // what the finger meant (the mouse's right click: attack it, or talk to an NPC).
+    if (c && c.id !== this.world.selfId && this.pending?.kind !== "item")
+      this.click({ creature: c.id });
+    else this.click({ pos });
+  }
+
+  /** A long press on a map tile: the menu of what can be done there. */
+  private longPressTile(pos: Pos, x: number, y: number): void {
+    const { x: tx, y: ty, z } = pos;
+    const c = this.world.creatureAt(tx, ty, z);
+    const top = topItem(this.world, tx, ty, z, false);
+    const actions = tileActions({
+      creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
+      item: top && { container: (this.opts.content.items[top.itemId]?.slots ?? 0) > 0 },
+      door: this.opts.content.houseDoors?.includes(doorKey(tx, ty, z)) ?? false,
+      known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
+    });
+    if (actions.length === 0) return;
+    const title = c ? creatureName(c, this.opts.t) : top ? this.itemTitle(top.itemId) : "";
+    this.openMenu({ x, y, title, actions }, { tile: { ...pos }, creature: c?.id });
+  }
+
+  /** A long press on a DOM item: use or open, look, move. */
+  private openItemMenu(ref: ItemRef, x: number, y: number): void {
+    const container = (this.opts.content.items[ref.itemId]?.slots ?? 0) > 0;
+    const actions = itemActions(container);
+    this.openMenu({ x, y, title: this.itemTitle(ref.itemId), actions }, { ref });
+  }
+
+  private itemTitle(itemId: number): string {
+    const def = this.opts.content.items[itemId];
+    return def ? this.opts.t(`item.${def.id}.name`) : "";
+  }
+
+  private openMenu(view: ActionMenuView, target: MenuTarget): void {
+    this.menu = { view: { ...view, at: performance.now() }, target };
+    this.publish();
+  }
+
+  /** Closes the contextual menu without doing anything. */
+  closeMenu(): void {
+    if (this.closeMenuQuietly()) this.publish();
+  }
+
+  private closeMenuQuietly(): boolean {
+    if (!this.menu) return false;
+    this.menu = undefined;
+    return true;
+  }
+
+  /** A button of the contextual menu: the same intent the mouse sends for it. */
+  menuChoose(kind: ActionKind): void {
+    const m = this.menu;
+    this.menu = undefined;
+    if (!m) return;
+    const t = m.target;
+    if ("ref" in t) {
+      if (kind === "use" || kind === "open") this.useItem(t.ref);
+      else if (kind === "look") this.lookAt(t.ref);
+      else if (kind === "move") this.pickItem(t.ref);
+    } else {
+      const { x, y, z } = t.tile;
+      if ((kind === "attack" || kind === "talk") && t.creature !== undefined)
+        this.attack(t.creature);
+      else if (kind === "use" || kind === "open") this.useTop(x, y, z);
+      else if (kind === "look") this.lookTileAt(x, y, z);
+      else if (kind === "move") {
+        const ref = topItem(this.world, x, y, z, false);
+        if (ref) this.pickItem(ref);
+      }
+    }
+    this.publish();
+  }
+
+  /** The on-screen pad (T5.6): a finger holds a direction; holding keeps walking. */
+  padPress(dir: Direction): void {
+    this.pad.press(dir);
+  }
+
+  padRelease(): void {
+    this.pad.release();
+  }
+
+  /** One step (a pad button activated from the keyboard). */
+  padStep(dir: Direction): void {
+    this.pad.tap(dir);
+  }
+
+  /**
+   * True when a contextmenu event comes from a finger's long press (mobile browsers send
+   * one): the DOM item handler does not use the item then. Given the item and where the
+   * event happened, it opens the item's menu if the finger's long press has not yet (the
+   * browser may cancel the pointer for its own long press before our timer fires).
+   */
+  touchContextMenu(ref?: ItemRef, x?: number, y?: number): boolean {
+    if (performance.now() - this.touchAt >= TOUCH_CONTEXTMENU_MS) return false;
+    if (ref && x !== undefined && y !== undefined && !this.itemMenuOpened) {
+      this.itemMenuOpened = true;
+      this.openItemMenu(ref, x, y);
+    }
+    return true;
   }
 
   /** Atlas rectangle of an item's sprite, for DOM icons (undefined until the canvas is up). */
@@ -761,6 +1072,8 @@ export class Game {
       guildInvitations: [...w.guild.invitations(performance.now())],
       selfName: w.self?.name ?? "",
       selfId: w.selfId,
+      picked: this.picker.picked,
+      menu: this.menu?.view,
     });
     this.armPresenceTimer();
   }
@@ -793,9 +1106,13 @@ export class Game {
     clearTimeout(this.presenceTimer);
     this.opts.audio?.setLoops(undefined, undefined);
     this.cancelUse();
+    this.picker.cancel();
+    this.watchPick(false);
+    this.pad.clear();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
+    window.removeEventListener("focusin", this.onFocusIn);
     this.conn.close();
     this.canvas?.destroy();
     this.canvas = undefined;
@@ -813,28 +1130,17 @@ export class Game {
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z) => {
         if (this.cancelUse()) return;
-        const ref =
-          topItem(this.world, x, y, z, false) ??
-          // T5.4: a bare door tile opens the house window (UseItem on its ground).
-          (this.opts.content.houseDoors?.includes(doorKey(x, y, z))
-            ? topItem(this.world, x, y, z, true)
-            : undefined);
-        if (ref) this.useItem(ref);
+        this.useTop(x, y, z);
       },
-      lookTile: (x, y, z) => {
-        const c = [...this.world.creatures.values()].find(
-          (o) => o.pos.x === x && o.pos.y === y && o.pos.z === z,
-        );
-        if (c) {
-          this.lookCreature(c.id);
-          return;
-        }
-        const ref = topItem(this.world, x, y, z, true);
-        if (ref) this.lookAt(ref);
-      },
+      lookTile: (x, y, z) => this.lookTileAt(x, y, z),
       dragTile: (x, y, z) => {
         const ref = topItem(this.world, x, y, z, false);
         if (ref) this.startDrag(ref);
+      },
+      tapTile: (x, y, z) => this.tapTile({ x, y, z }),
+      longPressTile: (x, y, z, cx, cy) => this.longPressTile({ x, y, z }, cx, cy),
+      touched: () => {
+        this.touchAt = performance.now();
       },
     });
     if (this.destroyed) {
@@ -878,6 +1184,10 @@ export class Game {
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.NPC)
           .map((c) => ({ id: c.id, contentId: c.contentId, ...c.pos })),
+      monsters: () =>
+        [...world.creatures.values()]
+          .filter((c) => c.kind === CreatureKind.MONSTER)
+          .map((c) => ({ id: c.id, contentId: c.contentId, ...c.pos })),
       dialog: () => world.dialog,
       shop: () => world.shop,
       itemNumber: (id) => {
@@ -903,7 +1213,7 @@ export class Game {
       return;
     }
     if (!this.world.canStep(now)) return;
-    const dir = this.keys.take();
+    const dir = this.keys.take() ?? this.pad.take();
     if (dir === undefined) return;
     const before = self.dir;
     if (this.world.predictStep(dir, now)) this.conn.send({ case: "walk", value: { dir } });
@@ -920,6 +1230,16 @@ export class Game {
       return;
     }
     if (typingInField(e)) return;
+    // T5.6: Escape closes the long-press menu, then drops a picked item.
+    if (e.code === "Escape" && this.menu) {
+      this.closeMenu();
+      e.preventDefault();
+      return;
+    }
+    if (e.code === "Escape" && this.cancelPick()) {
+      e.preventDefault();
+      return;
+    }
     if (e.code === "Escape" && this.world.station && !this.world.dialog) {
       this.closeStation();
       e.preventDefault();
@@ -954,5 +1274,11 @@ export class Game {
 
   private readonly onBlur = (): void => {
     this.keys.clear();
+    this.pad.clear();
+  };
+
+  /** A text field took the focus (the chat): a movement key held until now stops walking. */
+  private readonly onFocusIn = (e: FocusEvent): void => {
+    if (isTextField(e.target)) this.keys.clear();
   };
 }

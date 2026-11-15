@@ -192,6 +192,16 @@ app en `/ws` y la CSP de la app agrega el servidor elegido; la app no usa cookie
 el token en el llavero del SO), así que HTTP plano en `localhost` funciona. Usa un nombre
 de host o una IPv4: la app rechaza IPv6.
 
+### 7b. En el teléfono: instalar el juego (PWA)
+Con el link HTTPS del túnel (paso 4 o 5) el juego se instala desde el navegador del
+teléfono, sin tiendas: Android/Chrome → menú ⋮ → **Instalar app**; iPhone/Safari →
+Compartir → **Agregar a inicio**. Abre directo en `/play/` a pantalla completa. Caddy
+(`caddy-routes.caddy`, el mismo de producción) ya sirve `/manifest.webmanifest` como
+`application/manifest+json` y `/sw.js` sin caché, así que después de un `git pull` y
+`make home-up` el teléfono toma la versión nueva al reabrir. Por `http://` en la LAN
+(`http://192.168.1.20`) se juega pero **no** se instala: el navegador exige HTTPS (o
+`localhost`). Detalles y problemas comunes: `15-movil.md`.
+
 ### 8. Portal de mapas y worker de PRs
 El sitio tiene **Mapas** (`/maps/submit`): cualquier cuenta sube un *map patch* exportado
 del editor (`04-map-editor-and-ai.md`) y un gm o admin lo revisa en `/maps/review`. En casa

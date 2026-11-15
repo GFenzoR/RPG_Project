@@ -11,9 +11,13 @@ import { LANGUAGE_STORAGE_KEY, pickLanguage, takeLangParam, translator } from ".
 import { App } from "./ui/App.tsx";
 import { LanguagePicker } from "./ui/LanguagePicker.tsx";
 import { AudioOptions } from "./ui/AudioOptions.tsx";
+import { TouchPadToggle } from "./ui/TouchPad.tsx";
+import { coarsePointer, loadTouchPad, saveTouchPad } from "./state/touch-prefs.ts";
 import { AudioEngine, browserPorts } from "./audio/engine.ts";
 import { loadPrefs } from "./audio/prefs.ts";
 import "./ui/client.css";
+// Installable web client (T5.6): registers the service worker on import (production only).
+import "./pwa.ts";
 
 const languages = Object.keys(content.i18n);
 
@@ -84,6 +88,8 @@ function Root(): JSX.Element {
     pickLanguage(languages, urlLang.lang, navigator.language, readStored()),
   );
   const t = useMemo(() => translator(content.i18n[lang] ?? {}, lang), [lang]);
+  // T5.6: the on-screen direction pad, switched in Options (on by default on touch screens).
+  const [touchPad, setTouchPad] = useState(() => loadTouchPad(storage, coarsePointer()));
   useEffect(() => {
     document.documentElement.lang = lang;
     document.title = t("client.title");
@@ -99,10 +105,28 @@ function Root(): JSX.Element {
           setLang(l);
         }}
       />
-      <AudioOptions t={t} audio={audio} storage={storage} />
+      <AudioOptions t={t} audio={audio} storage={storage}>
+        <TouchPadToggle
+          t={t}
+          on={touchPad}
+          onChange={(on) => {
+            saveTouchPad(on, storage);
+            setTouchPad(on);
+          }}
+        />
+      </AudioOptions>
     </>
   );
-  return <App content={content} t={t} locale={lang} languagePicker={picker} audio={audio} />;
+  return (
+    <App
+      content={content}
+      t={t}
+      locale={lang}
+      languagePicker={picker}
+      audio={audio}
+      touchPad={touchPad}
+    />
+  );
 }
 
 const root = document.getElementById("app");

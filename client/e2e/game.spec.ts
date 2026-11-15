@@ -1740,7 +1740,10 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   // Options: lower the music, mute the effects.
   await page.locator(".hud").getByTestId("options-button").click();
   const options = page.getByTestId("options");
-  await expect(options.getByRole("heading")).toHaveText("Sonido");
+  await expect(options.getByRole("heading").first()).toHaveText("Sonido");
+  // T5.6: the controls section follows with the on-screen pad switch (off with a mouse).
+  await expect(options.getByRole("heading").nth(1)).toHaveText("Controles");
+  await expect(options.getByTestId("touch-pad-toggle")).not.toBeChecked();
   await options.getByTestId("volume-music").fill("20");
   await options.getByTestId("mute-sfx").check();
   await expect(options.locator(".channel").nth(1)).toContainText("Música");
