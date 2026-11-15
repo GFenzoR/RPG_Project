@@ -43,3 +43,4 @@ deploy/backups/
 
 # Worktrees of parallel agents (Claude Code)
 .claude/worktrees/
+.wt/

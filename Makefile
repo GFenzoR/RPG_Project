@@ -125,6 +125,10 @@ test-parity: ## mapcompile vs packages/map-format walkability on every tile
 DEV_WS_ORIGINS ?= localhost:5173,localhost:4173
 # Local servers let a brand-new account submit maps (T4.5; production waits 24 h).
 DEV_SERVER_FLAGS ?= -map-submit-min-account-age 0
+# The dev game server listens on loopback only: Vite proxies /api and /ws to it, and a
+# server on every interface makes the Windows firewall ask again after each `go run` (a new
+# exe path per build). DEV_HTTP_ADDR=:8080 exposes it on the LAN (docs/12).
+DEV_HTTP_ADDR ?= 127.0.0.1:8080
 # Account emails in development (T2.1): `make dev` starts Mailpit and points the server at
 # it, so verification and reset links are read at http://localhost:8025. DEV_MAIL=0 = off.
 DEV_MAIL ?= 1
@@ -133,7 +137,7 @@ DEV_MAIL_ENV := SMTP_HOST=127.0.0.1 SMTP_PORT=1025 SMTP_SECURITY=none SMTP_FROM=
 .PHONY: run-server
 run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL, RPG_WS_ORIGINS)
 	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver \
-		-ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)
+		-http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)
 
 # Operator tools (T2.6): roles are never granted from the game. Recorded in the audit log.
 .PHONY: set-role
@@ -218,14 +222,14 @@ fmt: ## Format Go and TS code
 
 .PHONY: dev
 dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:5173) + map editor (:5174) + Mailpit (:8025)
-	@echo "[dev] game client on http://localhost:5173, game server on :8080 (ws /ws), map editor on http://localhost:5174"
+	@echo "[dev] game client on http://localhost:5173, game server on $(DEV_HTTP_ADDR) (ws /ws), map editor on http://localhost:5174"
 	@mail_env=""; \
 	if [ "$(DEV_MAIL)" = 1 ] && $(MAKE) -s mail-up >/dev/null 2>&1; then \
 		mail_env="$(DEV_MAIL_ENV)"; echo "[dev] account emails go to Mailpit: http://localhost:8025"; \
 	else echo "[dev] Mailpit not started (no Docker?): account emails are off (DEV_MAIL=0 skips it)"; fi; \
 	trap 'kill 0' EXIT; \
 	(cd server && env $$mail_env RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
-		go run ./cmd/gameserver -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)) & \
+		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)) & \
 	$(MAKE) client & \
 	$(MAKE) editor
 
