@@ -19,7 +19,7 @@ seguir con Claude Code en tu computador. El entorno local está en
   preparado) está en el PR #78. Lo 👤: cuentas de las tiendas, firma y
   compilar el APK/IPA (`docs/15-movil.md`).
 - **T5.7** (tienda cosmética con pagos) está hecha en la rama `feat/t5.7-cosmetic-shop`
-  (PR pendiente): moneda "nácar", catálogo, proveedor falso y Mercado Pago, panel
+  (PR #80): moneda "nácar", catálogo, proveedor falso y Mercado Pago, panel
   "Apariencia" en el juego y `/shop` en el sitio. Lo 👤: elegir el proveedor de
   producción y sus claves, y una compra real en el modo prueba del proveedor.
 - **El roadmap está completo** salvo lo que es tuyo (tabla de abajo).

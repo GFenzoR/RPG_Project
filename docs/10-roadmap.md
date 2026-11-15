@@ -282,7 +282,7 @@ secundaria.
 - [x] **T5.7 Tienda cosmética con pasarela de pago.** Moneda premium, catálogo de
   `cosmetics` y compras en `account_cosmetics`, siempre sin ventaja de juego. Se arma
   contra el modo prueba del proveedor. 👤 elegir el proveedor de pagos y darle las claves
-  de producción. (PR pendiente)
+  de producción. (PR #80)
   Hecho: moneda premium "nácar" de la cuenta (no se intercambia, no pasa por el mercado ni
   se convierte en oro); `data/cosmetics.yaml` con 3 atuendos originales (marinero,
   batidor, noble), 4 colores y 2 efectos de nombre, y 3 paquetes en CLP, con esquema e
