@@ -18,6 +18,12 @@ const CHANNELS: { channel: ChatChannel; key: string }[] = [
   { channel: ChatChannel.GUILD, key: "client.chat.channel.guild" },
 ];
 
+/**
+ * How long a phone's virtual keyboard takes to slide in (ms): after that the chat line is
+ * scrolled into the space left above it (App.tsx sizes the game to the visual viewport).
+ */
+const KEYBOARD_SETTLE_MS = 300;
+
 const KIND_CLASS: Partial<Record<MessageKind, string>> = {
   [MessageKind.SAY]: "say",
   [MessageKind.YELL]: "yell",
@@ -81,7 +87,13 @@ export function ChatPanel(props: {
           maxLength={props.content.chat.maxLength}
           value={text}
           placeholder={t("client.say.placeholder")}
+          enterKeyHint="send"
+          autoComplete="off"
           onInput={(e) => setText(e.currentTarget.value)}
+          onFocus={(e) => {
+            const el = e.currentTarget;
+            setTimeout(() => el.scrollIntoView({ block: "nearest" }), KEYBOARD_SETTLE_MS);
+          }}
         />
       </form>
     </section>

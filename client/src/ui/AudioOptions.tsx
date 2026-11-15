@@ -1,7 +1,7 @@
 // Options button and sound panel (T3.7): a slider and a mute box per channel. Every change
 // applies at once and is saved (audio/prefs.ts), so it survives a reload.
 import { useState } from "preact/hooks";
-import type { JSX } from "preact";
+import type { ComponentChildren, JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import { ALL_CHANNELS, savePrefs, withMuted, withVolume } from "../audio/prefs.ts";
@@ -11,6 +11,8 @@ export function AudioOptions(props: {
   t: Translate;
   audio: AudioEngine;
   storage: Storage | undefined;
+  /** More options under the sound (T5.6: the direction pad switch). */
+  children?: ComponentChildren;
 }): JSX.Element {
   const { t, audio } = props;
   const [open, setOpen] = useState(false);
@@ -65,6 +67,12 @@ export function AudioOptions(props: {
               </label>
             </div>
           ))}
+          {props.children !== undefined && (
+            <>
+              <h3>{t("client.options.controls")}</h3>
+              {props.children}
+            </>
+          )}
           <button type="button" onClick={() => setOpen(false)}>
             {t("client.options.close")}
           </button>

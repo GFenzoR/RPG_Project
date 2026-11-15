@@ -12,7 +12,7 @@ client/
   src/net/               WebSocket, mensajes protobuf (de packages/protocol), reconexión
   src/state/             estado local del juego reconstruido desde eventos del servidor
   src/render/            capa de juego sobre packages/renderer (tiles, criaturas, efectos)
-  src/input/             teclado (flechas/WASD, hotkeys), mouse, y luego táctil
+  src/input/             teclado (flechas/WASD, hotkeys), mouse y táctil (T5.6)
   src/ui/                Preact: inventario, chat, diálogos de NPC, skills, login
   src/i18n/              carga de textos desde i18n/
   e2e/                   Playwright: tests y screenshots
@@ -389,3 +389,67 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   anclados abajo a la derecha de su casilla, como en `MapView` (uno de 64x64 crece hacia
   arriba y a la izquierda). Alpha de invisible, nombre, barras, calavera y marco de
   objetivo no cambian.
+
+## Notas de T5.6
+- **Input táctil** (`input/gestures.ts`, `dpad.ts`, `actions.ts`, puros y con tests). Los
+  listeners de puntero del canvas y de los items del DOM separan por `pointerType`
+  (`isTouchPointer`: `touch` y `pen` van al reconocedor de gestos, el mouse sigue con su
+  código de siempre). Nada de APIs viejas de touch. Los gestos mandan las mismas
+  intenciones que el mouse: el servidor no sabe si fue un dedo.
+  - Tocar una casilla = click izquierdo (caminar, o colocar el item elegido); tocar una
+    criatura = click derecho (objetivo, o hablar si es NPC). Una herramienta "usar con"
+    apunta a la casilla aunque haya criatura.
+  - Toque largo (500 ms) = menú contextual (`ui/ActionMenu.tsx`, `GameUi.menu`): atacar,
+    hablar, usar, abrir, mirar, mover. Los navegadores móviles mandan además
+    `contextmenu` (y a veces cancelan el puntero antes): el canvas y `Game.touchContextMenu`
+    lo toman como ese mismo toque largo, sin usar el item. El fondo del menú se cierra en
+    `pointerdown`, no en `click`: al levantar el dedo el navegador puede mandar un click.
+    Por lo mismo sus botones ignoran clicks los primeros `MENU_ARM_MS` (350 ms): en una
+    pantalla baja (teléfono horizontal) el menú ocupa el alto y puede quedar bajo el dedo
+    (`menuPlacement` con `menuHeight`).
+  - Mover items sin arrastre: tocar el item (`Game.pickItem`, `GameUi.picked`, banner
+    `PickBanner`, clase `picking-item` en `body`) y luego el destino: una casilla del mapa
+    o cualquier `[data-drop]` (slot vacío o celda de contenedor), con un listener de
+    captura en `window`. Arrastrar con el dedo sigue funcionando como con el mouse.
+  - Pad direccional (`ui/TouchPad.tsx`, `HeldDirection`): se lee en `frame` como las
+    teclas (`keys.take() ?? pad.take()`); un toque es un paso y mantenerlo repite al ritmo
+    de caminar. Interruptor en Opciones (`AudioOptions` tiene un hueco `children`; el
+    estado vive en `main.tsx`), guardado en `localStorage` `rpg.touchPad`; sin elegir, se
+    muestra con puntero grueso (pantalla táctil). Con pad, `.game[data-pad]`: la hotbar
+    empieza después (`PAD_RESERVE_PX`) y en vertical el mapa sube y el pad va debajo.
+  - Escape cierra primero el menú, después suelta el item elegido. Si un campo de texto
+    toma el foco (`focusin`), se sueltan las teclas de movimiento.
+- **Layout** (`ui/layout.ts`, breakpoints como datos): `.game` lleva `data-layout`
+  (`desktop`, `tablet`, `phone-portrait`, `phone-landscape`), `data-panel` (`sidebar`,
+  `tabs`, `drawer`) y `data-flow` (`row`, `column`); `client.css` cuelga sus reglas de
+  esos atributos. Las pestañas son un `tablist` ARIA; el cajón está `inert` cerrado y
+  recortado (`overflow: hidden`) para que el teléfono no ensanche la página. Un resaltado
+  del tutorial cambia a su pestaña. El encabezado es siempre una línea: la ayuda de
+  controles se corta con "…" y se abre al tocarla; en teléfonos y tablets en vertical, un
+  menú ☰ guarda experiencia, ayuda, idioma, opciones y salir.
+- Mientras un campo de texto tiene el foco y solo cambió la altura (teclado virtual), el
+  layout no cambia; `--game-height` sigue al `visualViewport` (iOS). El chat hace
+  `scrollIntoView` del input y no le llegan teclas al juego.
+- Avisos del servidor sobre el mapa (`ui/notices.ts`, `data-testid="notices"`): en
+  escritorio los importantes (no `look.*` ni el botín); con pestañas o cajón, todos. Los 3
+  más nuevos, 6 s, sin tomar clicks.
+- Nombres a zoom 1x (`render/labels.ts`): prioridad propio → objetivo → más cercano; si
+  se pisa, pierde la línea del gremio, sube una línea o se oculta (salvo propio, objetivo o
+  a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde zoom 2 no cambia
+  nada.
+- Hotbar: con poco ancho muestra los slots enteros que entran, con flechas ‹ › de 44 px y
+  deslizamiento nativo; F1–F12 siguen en el DOM. El tutorial se pliega con "×" sin
+  saltarse.
+- **PWA:** `public/manifest.webmanifest`, íconos placeholder (`make pwa-icons`,
+  `tools/spritegen/src/pwa-icons.ts`), `src/sw.ts` (emitido como `/sw.js` por
+  `vite.config.ts`) con la política pura de `sw/policy.ts`: nunca `/api`, `/ws`,
+  `/healthz` ni otros orígenes; páginas network-first, `/assets/*` cache-first.
+  `pwa.ts` lo registra solo en un build de producción, en contexto seguro y fuera de
+  Tauri (lo importan `main.tsx` y `site/main.tsx`). Instalación y Tauri mobile:
+  `docs/15-movil.md`.
+- E2E: `e2e/mobile.spec.ts` (Pixel 7 vertical y horizontal, iPad Mini, sobre Chromium;
+  toques con `page.touchscreen` y toques largos con eventos táctiles de CDP). Test ids:
+  `touch-pad`, `[data-dir=north]`, `action-menu`, `[data-action=…]`, `pick-banner`,
+  `pick-cancel`, `touch-pad-toggle`, `panel-tabs` `[data-tab=…]`, `panel-toggle`,
+  `hud-menu`, `notices`. Hook `__rpgClient.monsters()` para tocar un monstruo.
+- Un diálogo de NPC pasa `{name}` (el nombre del jugador) a su texto.

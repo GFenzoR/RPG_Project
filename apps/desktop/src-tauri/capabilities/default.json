@@ -1,8 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The game window: only the three app commands (server info, the HTTP API proxy and the login screen's server picker). No core plugins, no shell, no file system.",
+  "description": "The game window: only the three app commands (server info, the HTTP API proxy and the login screen's server picker). No core plugins, no shell, no file system. The same on desktop and mobile (T5.6).",
   "windows": ["main"],
+  "platforms": ["linux", "macOS", "windows", "android", "iOS"],
   "local": true,
   "permissions": ["allow-server-info", "allow-api", "allow-set-server"]
 }

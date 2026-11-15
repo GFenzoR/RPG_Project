@@ -1,0 +1,203 @@
+/* T5.6 touch widgets: the direction pad, the long-press menu and the picked-item banner.
+   Every touch target is at least 44 px. Colours come from client.css (:root). */
+
+/* Fingers on items and the map must not scroll, zoom or open the system callout. */
+.item[data-item],
+[data-testid="game-canvas"] {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The item waiting for its destination, and the drop targets that take it. */
+body.picking-item [data-drop] {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+.item.picked {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* ---- direction pad ---- */
+.touch-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  grid-template-rows: repeat(3, 44px);
+  gap: 3px;
+  padding: 4px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 35%);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.touch-pad-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 10px;
+  background: rgb(29 34 43 / 80%);
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  touch-action: none;
+}
+
+.touch-pad-button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.touch-pad[data-held="north"] [data-dir="north"],
+.touch-pad[data-held="north_east"] [data-dir="north_east"],
+.touch-pad[data-held="east"] [data-dir="east"],
+.touch-pad[data-held="south_east"] [data-dir="south_east"],
+.touch-pad[data-held="south"] [data-dir="south"],
+.touch-pad[data-held="south_west"] [data-dir="south_west"],
+.touch-pad[data-held="west"] [data-dir="west"],
+.touch-pad[data-held="north_west"] [data-dir="north_west"] {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.touch-pad-centre {
+  border-radius: 50%;
+  background: rgb(255 255 255 / 8%);
+}
+
+/* ---- long-press menu ---- */
+.touch-menu-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.touch-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 25%);
+}
+
+.touch-menu {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 224px; /* MENU_WIDTH in ActionMenu.tsx */
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 50%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.touch-menu-title {
+  padding: 2px 4px 4px;
+  color: var(--accent);
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.touch-menu-action {
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  text-align: left;
+}
+
+.touch-menu-action:focus-visible,
+.pick-banner-cancel:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.touch-menu-cancel {
+  color: var(--muted);
+}
+
+/* ---- picked item banner ---- */
+.pick-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: rgb(29 34 43 / 92%);
+  color: var(--text);
+}
+
+.pick-banner-item {
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.pick-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pick-banner-cancel {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+}
+
+/* ---- placement over the map (App.tsx mounts these inside .viewport) ----
+   The pad docks bottom-left; the hotbar starts after it (PAD_RESERVE_PX in TouchPad.tsx).
+   In portrait the map sits at the top of a taller viewport and both go in the strip under
+   it, so the pad never covers the map. */
+.game[data-pad] .hotbar {
+  left: calc(162px + env(safe-area-inset-left, 0px));
+  transform: none;
+  max-width: calc(100% - 170px - env(safe-area-inset-left, 0px));
+}
+.game[data-flow="column"][data-pad] .viewport {
+  align-items: flex-start;
+  height: min(calc(100vw * 11 / 15 + 154px), 72%);
+}
+.touch-pad-dock {
+  position: absolute;
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+}
+
+.viewport > .pick-banner {
+  position: absolute;
+  top: 8px;
+  /* Top-left, narrow: an open landscape drawer covers the right part of the map and would
+     hide the cancel button of a centred banner. */
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  /* Over the map, under the phone drawer (z-index 8 in client.css) and the windows. */
+  z-index: 7;
+  max-width: min(calc(100% - 16px), 440px);
+}
+
+/* Portrait with the pad: the banner goes in the strip under the map, above the hotbar, so
+   it never covers the tiles a finger may tap as the destination. */
+.game[data-flow="column"][data-pad] .viewport > .pick-banner {
+  top: auto;
+  bottom: 4.5rem;
+  left: calc(162px + env(safe-area-inset-left, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  transform: none;
+  max-width: none;
+}

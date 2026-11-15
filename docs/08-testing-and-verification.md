@@ -122,6 +122,31 @@ consola o excepción no capturada hace fallar el test. Screenshots en
 `client/e2e/screenshots/actual/` (`01-register` … `06-walked-click`); el job `e2e` los sube
 junto con los del editor.
 
+### E2E móvil (T5.6)
+`client/e2e/mobile.spec.ts` corre el juego en dispositivos emulados de Playwright, con el
+mismo servidor y Vite del E2E de escritorio y sobre Chromium (de `devices[...]` se toman
+tamaño, densidad, `isMobile` y `hasTouch`, no el navegador): `Pixel 7` (vertical),
+`Pixel 7 landscape` y `iPad Mini` (vertical). Todo con toques: `page.touchscreen.tap`
+y, para el toque largo y el pad mantenido, eventos táctiles de CDP
+(`Input.dispatchTouchEvent`), que llegan como `pointerType: "touch"`.
+- En cada dispositivo: layout esperado (`data-layout`) y nada que ensanche la página;
+  caminar tocando una casilla y con el pad (un toque = un paso, mantener = varios); mover
+  la mochila al suelo con "tocar item → tocar destino" y devolverla con el toque largo
+  ("Mover" → slot vacío), comprobando la casilla y el slot que manda el servidor; escribir
+  en la pestaña del chat y ver el eco del servidor.
+- Pixel 7 vertical además marca un lobo con un toque y espera golpes (vida que baja).
+- En cada dispositivo, un toque sobre la sacerdotisa de Puerto abre su diálogo (estado
+  del cliente y ventana), que entra en pantalla y se cierra con un botón de 44 px.
+- A 1280x800 (escritorio), un nombre de 20 caracteres con experiencia deja el encabezado
+  en una línea y el mapa en 2x (`__rpgClient.scale()`).
+
+Screenshots `client/e2e/screenshots/actual/mobile-<dispositivo>-NN-*.png` y
+`mobile-desktop-1280-long-name.png`; se revisan con Read como los de escritorio. Corre
+dentro de `make e2e`. Los E2E de escritorio siguen igual y deben quedar en verde: ningún
+cambio táctil altera el mouse ni el teclado. La PWA no entra en el E2E (Vite de desarrollo
+no registra el service worker); su lógica se prueba con Vitest (`client/src/pwa.test.ts`,
+`client/src/sw/policy.test.ts`).
+
 ### Audio (T3.7)
 - **Unitarias** (`client/src/audio/*.test.ts`): el motor corre sobre un `AudioContext`
   falso que registra ganancias, fuentes y rampas. Se prueban los canales y sus volúmenes,

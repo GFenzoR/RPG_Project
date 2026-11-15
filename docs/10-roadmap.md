@@ -261,9 +261,24 @@ secundaria.
   suelos volcánicos propios, música de la isla (hoy placeholders) y los carteles de Brasal
   (sus textos `text.volcan.*_sign` ya están en i18n), y puertas con llave (la puerta sellada
   de la mina hoy es narrativa).
-- [ ] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
+- [x] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
   en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
-  nativas necesitan cuentas de las tiendas (Apple y Google) y su firma.
+  nativas necesitan cuentas de las tiendas (Apple y Google) y su firma. (PR #78)
+  Hecho: gestos puros con tests (toque, toque largo, arrastre; el pellizco se reconoce
+  pero no se usa: el zoom sigue entero y automático) sobre pointer
+  events; tocar una casilla camina, tocar una criatura la ataca y un NPC lo habla; toque
+  largo = menú contextual (usar, abrir, mirar, mover, atacar, hablar); items con "tocar el
+  item → tocar el destino" además del arrastre; pad direccional opcional en Opciones
+  (mantener repite el paso). Layout por breakpoints como datos (`ui/layout.ts`):
+  teléfono vertical con pestañas bajo el mapa, horizontal con cajón, tablet; encabezado de
+  una línea (el mapa queda en 2x a 1280x800 con un nombre largo), avisos del servidor sobre
+  el mapa, nombres que no se pisan a zoom 1x, hotbar con deslizador, ventanas como hojas
+  con botón de cierre grande, objetivos de 44 px y foco visible. PWA instalable (manifest,
+  íconos placeholder, service worker solo para el shell estático) y `apps/desktop`
+  preparado para `tauri android/ios init` (`docs/15-movil.md`). E2E
+  `client/e2e/mobile.spec.ts` con Pixel 7 (vertical y horizontal) e iPad Mini.
+  👤 Pendiente: cuentas de Google Play y Apple Developer, firma (keystore, Team ID), y
+  compilar y probar el APK/IPA en un dispositivo real (este PC no tiene Rust ni NDK).
 - [ ] **T5.7 Tienda cosmética con pasarela de pago.** Moneda premium, catálogo de
   `cosmetics` y compras en `account_cosmetics`, siempre sin ventaja de juego. Se arma
   contra el modo prueba del proveedor. 👤 elegir el proveedor de pagos y darle las claves

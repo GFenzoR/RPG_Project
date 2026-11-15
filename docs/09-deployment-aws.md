@@ -66,6 +66,16 @@ Las publica `.github/workflows/images.yml` en GitHub Container Registry, para
   sonidos llevan `Cache-Control: no-cache` (revalidan con ETag), así un deploy se ve en la
   siguiente carga. `deploy/smoke.sh` revisa las dos páginas, `/api/status` y
   `/api/highscores`.
+- PWA (T5.6, `15-movil.md`): el build trae `/manifest.webmanifest`, `/icons/*.png` y el
+  service worker `/sw.js`. `caddy-routes.caddy` sirve el manifest con
+  `Content-Type: application/manifest+json` y el worker con
+  `Cache-Control: no-cache, max-age=0` y `Service-Worker-Allowed: /`, así cada deploy
+  instala un worker nuevo (su caché lleva la versión del build) que borra la caché vieja.
+  El worker solo guarda el shell estático: nunca `/api`, `/ws`, `/healthz`, `/grafana` ni
+  otros orígenes. Para instalarla el sitio necesita HTTPS (el dominio con certificado).
+  Comprobar después de un deploy:
+  `curl -sI https://<dominio>/manifest.webmanifest | grep -i content-type` y
+  `curl -sI https://<dominio>/sw.js | grep -i -e cache-control -e service-worker-allowed`.
 - En los PR que tocan algo que entra en una imagen, el workflow solo **construye** (sin
   push), así un Dockerfile roto falla en el PR.
 

@@ -5,6 +5,7 @@
 #   /play, /play/*          → the game page of the client build (/srv/client/play/index.html)
 #   everything else         → the public website (/srv/client/index.html: landing,
 #                             /highscores, /news; T4.3), static files of the build first
+#                             (including /manifest.webmanifest and /sw.js of the PWA, T5.6)
 
 encode zstd gzip
 
@@ -58,6 +59,17 @@ handle {
 	header @hashed Cache-Control "public, max-age=31536000, immutable"
 	@revalidate not path /assets/*
 	header @revalidate Cache-Control "no-cache"
+	# Installable web client (PWA, T5.6). The manifest with its registered type (file_server
+	# keeps a Content-Type that is already set). The service worker is revalidated on every
+	# check (no-cache above; browsers also cap it at 24 h) so a deploy replaces it, and it may
+	# control the whole origin: / (website) and /play/ (game). It never caches /api or /ws.
+	@manifest path /manifest.webmanifest
+	header @manifest Content-Type "application/manifest+json"
+	@serviceworker path /sw.js
+	header @serviceworker {
+		Cache-Control "no-cache, max-age=0"
+		Service-Worker-Allowed "/"
+	}
 	# SPA fallback: /highscores and /news/<slug> are routes of the website page.
 	try_files {path} /index.html
 	file_server

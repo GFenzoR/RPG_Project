@@ -109,22 +109,68 @@ button.link {
 .game {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* --game-height: the visual viewport while a phone's keyboard is up (App.tsx). */
+  height: var(--game-height, 100%);
+  /* T5.6: the pages ask for viewport-fit=cover (a phone status bar is see-through): keep
+     the game out of the notch and the rounded corners. 0 on any other screen. */
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
+/* The header is always one line (T5.6): a wrapped header pushed the map down a zoom step. */
 .hud {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.4rem 0.75rem;
   background: var(--panel);
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  min-width: 0;
+}
+.hud > * {
+  flex-shrink: 0;
 }
 .hud .name {
   font-weight: 600;
+  flex-shrink: 1;
+  min-width: 3rem;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+/* Controls help on wide windows: one line cut with an ellipsis; it opens the whole text. */
 .hud .hint {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 4rem;
   color: var(--muted);
   font-size: 0.85rem;
+}
+.hud .hint summary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+.hud .hint summary::-webkit-details-marker {
+  display: none;
+}
+.hud .hint p {
+  position: absolute;
+  top: 100%;
+  left: 0.75rem;
+  z-index: 30;
+  max-width: 32rem;
+  margin: 0.25rem 0 0;
+  padding: 0.6rem 0.75rem;
+  white-space: normal;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  border-radius: 0.4rem;
+  line-height: 1.4;
 }
 /* Controls help as a button under 1200 px (wide windows show .hint inline). */
 .hud {
@@ -180,6 +226,9 @@ button.link {
 .hud .conditions {
   display: flex;
   gap: 0.3rem;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 .hud .condition {
   padding: 0.05rem 0.4rem;
@@ -434,7 +483,8 @@ body.using-item canvas {
   cursor: crosshair !important;
 }
 
-/* Spell hotkeys F1–F12 (T1.9): a bar along the bottom of the viewport. */
+/* Spell hotkeys F1–F12 (T1.9): a bar along the bottom of the viewport. With the slider
+   (T5.6) the list shows only whole slots and scrolls, snapping to a slot. */
 .hotbar {
   position: absolute;
   bottom: 0.5rem;
@@ -452,6 +502,30 @@ body.using-item canvas {
   display: flex;
   gap: 0.2rem;
   overflow-x: auto;
+}
+.hotbar.slider ol {
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.hotbar.slider ol::-webkit-scrollbar {
+  display: none;
+}
+.hotbar.slider li {
+  scroll-snap-align: start;
+}
+.hotbar .page {
+  width: 44px;
+  flex: none;
+  padding: 0;
+  font-size: 1.3rem;
+  color: #eee;
+  background: rgba(20, 20, 30, 0.82);
+  border: 1px solid #555;
+  border-radius: 3px;
+}
+.hotbar .page:disabled {
+  opacity: 0.35;
 }
 .hotbar li button,
 .hotbar li select {
@@ -1431,4 +1505,399 @@ body.using-item canvas {
   color: #ffd0c8;
   background: rgba(160, 40, 30, 0.35);
   border-radius: 3px;
+}
+
+/* ---- Small screens and touch (T5.6) ---------------------------------------------------
+   App.tsx sets data-layout / data-panel / data-flow on .game from ui/layout.ts (the
+   breakpoints live there as data, not here). Desktop (data-panel="sidebar") keeps the
+   look it had: the panes are display: contents, so the side column is unchanged. */
+
+/* Visible focus everywhere, for keyboard and switch users (the site has its own). */
+.game :focus-visible,
+.panel :focus-visible {
+  outline: 3px solid #8fc7ff;
+  outline-offset: 2px;
+}
+
+.game-body {
+  position: relative;
+}
+.pane {
+  display: contents;
+}
+.pane[hidden] {
+  display: none;
+}
+
+/* Server notices over the map: above the hotbar, under the bottom edge of the windows. */
+.notices {
+  position: absolute;
+  bottom: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  width: max-content;
+  max-width: min(32rem, calc(100% - 1rem));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  pointer-events: none;
+}
+.notices.raised {
+  bottom: 12rem;
+}
+.notices:empty {
+  display: none;
+}
+.notice-line {
+  margin: 0;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  text-align: center;
+  color: #f4ecd8;
+  background: rgba(10, 10, 16, 0.82);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  animation: notice-in 160ms ease-out;
+}
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notice-line {
+    animation: none;
+  }
+}
+
+/* The tutorial folded into a small button (Tutorial.tsx). */
+.tutorial-show {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 5;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid #6fb3e0;
+  font-weight: normal;
+  font-size: 0.85rem;
+}
+.tutorial header .close {
+  align-self: center;
+  padding: 0 0.45rem;
+  margin-left: auto;
+}
+
+/* Tabs of the side panel. */
+.panel-tabs {
+  display: flex;
+  gap: 0.2rem;
+  overflow-x: auto;
+  flex: none;
+  scrollbar-width: thin;
+}
+.panel-tabs [role="tab"] {
+  flex: 1 0 auto;
+  min-height: 44px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: #11141a;
+  border: 1px solid #3a414d;
+  border-bottom-width: 3px;
+}
+.panel-tabs [role="tab"][aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.game:not([data-panel="sidebar"]) .side {
+  gap: 0.5rem;
+}
+.game:not([data-panel="sidebar"]) .pane:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+/* In a tab the chat fills the pane: the log on top, the lines, then the line to type. */
+.game:not([data-panel="sidebar"]) .pane[data-pane="chat"] {
+  flex: 1;
+  min-height: 0;
+}
+.game:not([data-panel="sidebar"]) .pane[data-pane="chat"] .log {
+  margin-top: 0;
+}
+.game:not([data-panel="sidebar"]) .pane[data-pane="chat"] .chat {
+  position: static;
+  flex: 1;
+  min-height: 0;
+}
+.game:not([data-panel="sidebar"]) .pane[data-pane="chat"] .chat-lines {
+  flex: 1;
+  min-height: 5rem;
+  height: auto;
+}
+
+/* Tablets and small windows with the panel beside the map: a wider column with tabs. */
+.game[data-panel="tabs"][data-flow="row"] .side {
+  width: 17rem;
+}
+/* Portrait (phones, tablets): the map on top at its own aspect, the panel below it. */
+.game[data-flow="column"] .game-body {
+  flex-direction: column;
+}
+.game[data-flow="column"] .viewport {
+  flex: none;
+  height: min(calc(100vw * 11 / 15), 58%);
+}
+.game[data-flow="column"] .side {
+  flex: 1;
+  width: auto;
+  min-height: 0;
+}
+
+/* Phone on its side: the map takes the whole body; the panel is a drawer over its right
+   side, closed until the button in the header opens it. */
+/* The closed drawer waits off the right edge: clip it, or a phone browser widens the page
+   to show it and zooms everything out. */
+.game[data-panel="drawer"] .game-body {
+  overflow: hidden;
+}
+.game[data-panel="drawer"] .side {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 8;
+  width: min(22rem, 62vw);
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.5);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition:
+    transform 180ms ease-out,
+    visibility 0s linear 180ms;
+}
+.game[data-panel="drawer"] .side[data-open] {
+  transform: none;
+  visibility: visible;
+  transition: transform 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .game[data-panel="drawer"] .side,
+  .game[data-panel="drawer"] .side[data-open] {
+    transition: none;
+  }
+}
+.hud .panel-toggle {
+  min-height: 2.25rem;
+  font-size: 0.8rem;
+}
+
+/* Compact header (phones): name and bars; the rest goes in the menu. */
+.hud.compact {
+  gap: 0.6rem;
+  padding: 0.3rem 0.5rem;
+}
+.hud.compact .name {
+  max-width: 7rem;
+}
+.hud.compact .stat {
+  font-size: 0.8rem;
+}
+.hud .spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.hud-menu summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  font-size: 1.2rem;
+  cursor: pointer;
+  list-style: none;
+  border: 1px solid var(--muted);
+  border-radius: 0.3rem;
+}
+.hud-menu summary::-webkit-details-marker {
+  display: none;
+}
+.hud-menu-body {
+  position: absolute;
+  top: 100%;
+  right: 0.5rem;
+  z-index: 30;
+  width: min(22rem, calc(100vw - 1rem));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+  padding: 0.75rem;
+  white-space: normal;
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  border-radius: 0.4rem;
+}
+.hud-menu-body .controls-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+/* The sound panel opens inside the menu, not off its edge. */
+.hud-menu-body .options-panel {
+  position: static;
+  width: auto;
+  max-width: 100%;
+}
+
+/* Hotbar slots on phones: narrower, still more than 44 px tall. */
+.game[data-layout^="phone"] .hotbar li button,
+.game[data-layout^="phone"] .hotbar li select {
+  width: 3.6rem;
+  height: 2.9rem;
+}
+.game[data-layout^="phone"] .hotbar {
+  bottom: 0.25rem;
+}
+
+/* Windows over the map on phones and tablets: a sheet that fits the screen, scrolls
+   inside and has a large close button. Portrait: over the bottom (the map stays visible
+   above); landscape: over the right side. */
+.game:not([data-layout="desktop"]) .npc-windows,
+.game:not([data-layout="desktop"]) .crafting,
+.game:not([data-layout="desktop"]) .market,
+.game:not([data-layout="desktop"]) .house,
+.game:not([data-layout="desktop"]) .trade {
+  position: fixed;
+  z-index: 12;
+  box-sizing: border-box;
+  max-width: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.game[data-flow="column"] .npc-windows,
+.game[data-flow="column"] .crafting,
+.game[data-flow="column"] .market,
+.game[data-flow="column"] .house,
+.game[data-flow="column"] .trade {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  max-height: 62%;
+}
+.game[data-flow="row"]:not([data-layout="desktop"]) .npc-windows,
+.game[data-flow="row"]:not([data-layout="desktop"]) .crafting,
+.game[data-flow="row"]:not([data-layout="desktop"]) .market,
+.game[data-flow="row"]:not([data-layout="desktop"]) .house,
+.game[data-flow="row"]:not([data-layout="desktop"]) .trade {
+  top: 0;
+  left: auto;
+  right: 0;
+  bottom: 0;
+  width: min(28rem, 64vw);
+  max-height: none;
+}
+/* The dialog and its shop one under the other, each full width. */
+.game:not([data-layout="desktop"]) .npc-windows {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: rgba(10, 10, 16, 0.9);
+}
+.game:not([data-layout="desktop"]) .dialog,
+.game:not([data-layout="desktop"]) .shop {
+  width: auto;
+  max-height: none;
+  overflow: visible;
+}
+.game:not([data-layout="desktop"]) .trade .columns {
+  grid-template-columns: 1fr;
+}
+.game:not([data-layout="desktop"]) .tutorial,
+.game:not([data-layout="desktop"]) .presence {
+  max-width: calc(100% - 1.5rem);
+  max-height: calc(100% - 5rem);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+.game:not([data-layout="desktop"]) .death {
+  min-width: 0;
+  width: min(20rem, calc(100% - 1rem));
+  box-sizing: border-box;
+}
+.game:not([data-layout="desktop"]) .invitation {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 1rem);
+  box-sizing: border-box;
+}
+/* The large close button of every window. */
+.game:not([data-layout="desktop"]) .close,
+.game:not([data-layout="desktop"]) .inventory .container header button {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+/* Touch screens (any layout): 44 px targets for what a finger presses. */
+@media (pointer: coarse) {
+  .game button,
+  .game select,
+  .game input:not([type="checkbox"]):not([type="radio"]),
+  .game summary,
+  .panel button,
+  .panel input,
+  .panel select {
+    min-height: 44px;
+  }
+  .game input[type="checkbox"],
+  .game input[type="radio"] {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+  .fight .check,
+  .house label.guild {
+    min-height: 44px;
+  }
+  .battle button.invite,
+  .battle button.trade-with,
+  .battle button.report {
+    min-width: 44px;
+  }
+  .hud .controls-help summary,
+  .hud .hint summary {
+    display: flex;
+    align-items: center;
+  }
+  .inventory .equipment {
+    grid-template-columns: repeat(3, 44px);
+  }
+  .inventory .cells {
+    grid-template-columns: repeat(auto-fill, 44px);
+  }
+  .inventory .slot {
+    width: 44px;
+    height: 44px;
+  }
+  .guild button {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.85rem;
+  }
+}
+@media (max-width: 1199px) {
+  .hud {
+    gap: 0.6rem;
+  }
 }

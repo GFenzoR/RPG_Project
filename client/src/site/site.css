@@ -515,3 +515,51 @@ figcaption {
 .houses-table td {
   overflow-wrap: anywhere;
 }
+
+/* ---- Phones (T5.6) ---- */
+@media (max-width: 480px) {
+  #main {
+    padding: 1rem 0.75rem 2rem;
+    gap: 1.5rem;
+  }
+  .card {
+    padding: 0.75rem 0.85rem;
+  }
+  /* Tables of names and numbers: tighter cells; a long name breaks instead of widening
+     the page. */
+  .highscores th,
+  .highscores td {
+    padding: 0.35rem 0.3rem;
+    overflow-wrap: anywhere;
+  }
+  .site-header {
+    padding: 0.5rem 0.75rem;
+  }
+}
+/* Touch screens: 44 px targets for the links and controls a finger presses. */
+@media (pointer: coarse) {
+  .site-header nav a,
+  .maps-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  #site button,
+  #site select,
+  #site input:not([type="checkbox"]):not([type="radio"]),
+  #site .play-button {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  #site .play-button {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* T5.6: viewport-fit=cover (index.html): the site stays out of a phone notch. */
+body {
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}

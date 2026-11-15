@@ -110,6 +110,10 @@ fn fatal(identifier: &str, msg: &str) -> ! {
     std::process::exit(1);
 }
 
+/// Entry point. Desktop: called by `main.rs`. Android and iOS (`tauri android|ios init`,
+/// docs/15-movil.md): the mobile macro exports it for the native shell, which loads this
+/// crate as a library (`crate-type` staticlib/cdylib in Cargo.toml).
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut context = tauri::generate_context!();
     let identifier = context.config().identifier.clone();

@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 
@@ -8,6 +8,8 @@ import type { Translate } from "../i18n/i18n.ts";
  * and a button to skip the tutorial. It never blocks the game (no key, no overlay) and
  * hides while an NPC dialog, shop or station window is open. The step's UI element (its
  * `data-tutorial` attribute) gets `data-tutorial-active`, which client.css highlights.
+ * T5.6: on a small screen it covers part of the map, so "×" folds it into a small button
+ * until the next step (the highlight stays).
  */
 export function TutorialPanel(props: {
   t: Translate;
@@ -17,6 +19,7 @@ export function TutorialPanel(props: {
   const { t } = props;
   const s = props.ui.tutorial;
   const focus = s?.highlight;
+  const [hiddenStep, setHiddenStep] = useState<string | undefined>(undefined);
   // After every render (an element may mount later): mark the step's element.
   useEffect(() => {
     if (!focus) return undefined;
@@ -37,6 +40,19 @@ export function TutorialPanel(props: {
     props.ui.trade
   )
     return null;
+  if (hiddenStep === s.stepId) {
+    return (
+      <button
+        type="button"
+        class="tutorial-show"
+        data-testid="tutorial-show"
+        aria-label={t("client.tutorial.show")}
+        onClick={() => setHiddenStep(undefined)}
+      >
+        {t("client.tutorial.title")}
+      </button>
+    );
+  }
   return (
     <section
       class="tutorial"
@@ -48,6 +64,16 @@ export function TutorialPanel(props: {
       <header>
         <h2>{t("client.tutorial.title")}</h2>
         <span class="step">{t("client.tutorial.step", { step: s.step, total: s.total })}</span>
+        <button
+          type="button"
+          class="close"
+          data-testid="tutorial-hide"
+          aria-label={t("client.tutorial.hide")}
+          title={t("client.tutorial.hide")}
+          onClick={() => setHiddenStep(s.stepId)}
+        >
+          ×
+        </button>
       </header>
       <p>{t(s.text, { count: s.count })}</p>
       {s.count > 1 && (

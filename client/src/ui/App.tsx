@@ -27,6 +27,11 @@ import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
 import { ServerPicker } from "./ServerPicker.tsx";
 import { ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
+import { PANEL_TABS, TAB_TITLE, layoutFor, tabForHighlight } from "./layout.ts";
+import type { Layout, PanelTab } from "./layout.ts";
+import { activeNotices, nextExpiry } from "./notices.ts";
+import { ActionMenu, PickBanner } from "./ActionMenu.tsx";
+import { PAD_RESERVE_PX, TouchPad } from "./TouchPad.tsx";
 
 type Screen =
   | { name: "loading" }
@@ -43,6 +48,8 @@ export interface AppProps {
   languagePicker?: JSX.Element;
   /** Sound (T3.7); undefined = silent. */
   audio?: AudioEngine | undefined;
+  /** T5.6: show the on-screen direction pad (switched in Options, state/touch-prefs.ts). */
+  touchPad?: boolean | undefined;
 }
 
 /** Translated text of an API error code (error.<code>), or a generic message. */
@@ -63,7 +70,7 @@ export function App(props: AppProps): JSX.Element {
   return <Screens {...props} />;
 }
 
-function Screens({ content, t, locale, languagePicker, audio }: AppProps): JSX.Element {
+function Screens({ content, t, locale, languagePicker, audio, touchPad }: AppProps): JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
   const [notice, setNotice] = useState<string | undefined>(undefined);
 
@@ -133,6 +140,7 @@ function Screens({ content, t, locale, languagePicker, audio }: AppProps): JSX.E
             locale={locale}
             languagePicker={languagePicker}
             audio={audio}
+            touchPad={touchPad ?? false}
             character={screen.character}
             sessionToken={screen.sessionToken}
             onEnd={(reason) => {
@@ -366,6 +374,7 @@ function GameScreen(props: {
   locale: string;
   languagePicker: JSX.Element | undefined;
   audio: AudioEngine | undefined;
+  touchPad: boolean;
   character: Character;
   sessionToken: string;
   onEnd(reason: DisconnectReason | undefined): void;
@@ -416,6 +425,31 @@ function GameScreen(props: {
   // T4.1: the player being reported from the battle list (the reason form is open).
   const [reporting, setReporting] = useState<{ id: number; name: string } | undefined>(undefined);
   const [chase, setChase] = useState(false);
+  // T5.6: small screens. The layout follows the window; the side panel becomes tabs (or a
+  // drawer over the map) and the important server messages float over the map.
+  const layout = useLayout();
+  useKeyboardViewport();
+  const [tab, setTab] = useState<PanelTab>("battle");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [, setNoticeTick] = useState(0);
+  const tabbed = layout.panel !== "sidebar";
+  // With the log out of view (tabs, drawer) every message floats, not only the important.
+  const notices = activeNotices(ui.log, performance.now(), { all: tabbed });
+  const noticesExpire = nextExpiry(notices);
+  // Re-render when the oldest notice is due to go (nothing else may update the UI).
+  useEffect(() => {
+    if (noticesExpire === undefined) return undefined;
+    const timer = setTimeout(
+      () => setNoticeTick((n) => n + 1),
+      Math.max(0, noticesExpire - performance.now()) + NOTICE_SLACK_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [noticesExpire]);
+  // A tutorial step that highlights a panel section brings its tab to the front.
+  const highlightTab = tabForHighlight(ui.tutorial?.highlight);
+  useEffect(() => {
+    if (highlightTab) setTab(highlightTab);
+  }, [highlightTab]);
 
   useEffect(() => {
     if (!host.current) return undefined;
@@ -455,42 +489,113 @@ function GameScreen(props: {
     return () => clearTimeout(timer);
   }, [voyageAt]);
 
+  const pane = (
+    name: PanelTab,
+    first: boolean,
+  ): JSX.HTMLAttributes<HTMLDivElement> & { "data-pane": PanelTab } =>
+    tabbed
+      ? {
+          class: "pane",
+          "data-pane": name,
+          role: "tabpanel",
+          ...(first
+            ? { id: `pane-${name}`, "aria-labelledby": `tab-${name}` }
+            : { "aria-label": t(TAB_TITLE[name]) }),
+          hidden: tab !== name,
+        }
+      : { class: "pane", "data-pane": name };
+  const stats = ui.stats;
+  const experience = stats && (
+    <span class="stat" data-testid="experience">
+      {t("client.game.experience", { experience: stats.experience })}
+    </span>
+  );
+  const logout = (
+    <button type="button" onClick={() => game.current?.logout()}>
+      {t("client.game.logout")}
+    </button>
+  );
+  const panelToggle = layout.panel === "drawer" && (
+    <button
+      type="button"
+      class="panel-toggle"
+      data-testid="panel-toggle"
+      aria-expanded={drawerOpen}
+      aria-controls="side-panel"
+      onClick={() => setDrawerOpen(!drawerOpen)}
+    >
+      {t(drawerOpen ? "client.panel.close" : "client.panel.open")}
+    </button>
+  );
+
   return (
-    <div class="game" data-testid="game">
-      <header class="hud" data-tutorial="stats">
-        <span class="name">{props.character.name}</span>
-        {ui.stats && (
+    <div
+      class="game"
+      data-testid="game"
+      data-layout={layout.id}
+      data-panel={layout.panel}
+      data-flow={layout.flow}
+      data-pad={props.touchPad ? "" : undefined}
+    >
+      <header class={layout.compactHeader ? "hud compact" : "hud"} data-tutorial="stats">
+        <span class="name" title={props.character.name}>
+          {props.character.name}
+        </span>
+        {stats && (
           <span class="stat" data-testid="health">
-            {t("client.game.health", { health: ui.stats.health, max: ui.stats.maxHealth })}
+            {t("client.game.health", { health: stats.health, max: stats.maxHealth })}
           </span>
         )}
-        {ui.stats && (
+        {stats && (
           <span class="stat" data-testid="mana">
-            {t("client.game.mana", { mana: ui.stats.mana, max: ui.stats.maxMana })}
+            {t("client.game.mana", { mana: stats.mana, max: stats.maxMana })}
           </span>
         )}
-        {ui.stats && (
+        {stats && (
           <span class="stat" data-testid="level">
-            {t("client.game.level", { level: ui.stats.level, percent: ui.stats.levelPercent })}
+            {t("client.game.level", { level: stats.level, percent: stats.levelPercent })}
           </span>
         )}
-        {ui.stats && (
-          <span class="stat" data-testid="experience">
-            {t("client.game.experience", { experience: ui.stats.experience })}
-          </span>
-        )}
+        {!layout.compactHeader && experience}
         <ConditionBar t={t} conditions={ui.conditions} />
-        <span class="hint">{t("client.game.controls")}</span>
-        {/* Narrow windows (the desktop app's 960 px): the help folds into a button so the
-            header stays one line and the map keeps its height. CSS picks one of the two. */}
-        <details class="controls-help" data-testid="controls-help">
-          <summary>{t("client.game.controls_button")}</summary>
-          <p>{t("client.game.controls")}</p>
-        </details>
-        {props.languagePicker}
-        <button type="button" onClick={() => game.current?.logout()}>
-          {t("client.game.logout")}
-        </button>
+        {layout.compactHeader ? (
+          <>
+            <span class="spacer" />
+            {panelToggle}
+            {/* Phones: experience, the controls help, language, sound and logout fold into
+                one menu so the header stays one line. */}
+            <details class="hud-menu" data-testid="hud-menu">
+              <summary aria-label={t("client.hud.menu")} title={t("client.hud.menu")}>
+                ☰
+              </summary>
+              <div class="hud-menu-body">
+                {experience}
+                <p class="controls-text">{t("client.game.controls")}</p>
+                {props.languagePicker}
+                {logout}
+              </div>
+            </details>
+          </>
+        ) : (
+          <>
+            {/* Wide windows: the help is one line cut with an ellipsis that opens the whole
+                text, so a long name and experience never wrap the header (that pushed the
+                map down a zoom step at 1280x800). */}
+            <details class="hint" data-testid="controls-hint">
+              <summary>{t("client.game.controls")}</summary>
+              <p>{t("client.game.controls")}</p>
+            </details>
+            {/* Narrow windows (the desktop app's 960 px): the help folds into a button so the
+                header stays one line and the map keeps its height. CSS picks one of the two. */}
+            <details class="controls-help" data-testid="controls-help">
+              <summary>{t("client.game.controls_button")}</summary>
+              <p>{t("client.game.controls")}</p>
+            </details>
+            {panelToggle}
+            {props.languagePicker}
+            {logout}
+          </>
+        )}
       </header>
       <div class="game-body">
         <div class="viewport" ref={host}>
@@ -506,6 +611,25 @@ function GameScreen(props: {
               <span>{t("client.characters.level", { level: levelNotice })}</span>
             </div>
           )}
+          {/* Server notices over the map (T5.6): the newest important messages, also in
+              the log. They never take a click (pointer-events: none in client.css). On
+              desktop the log next to the map already announces them. */}
+          <div
+            class={
+              ui.invitations.length > 0 || ui.guildInvitations.length > 0
+                ? "notices raised"
+                : "notices"
+            }
+            data-testid="notices"
+            aria-label={t("client.notices.title")}
+            aria-live={tabbed ? "polite" : "off"}
+          >
+            {notices.map((m) => (
+              <p key={`${m.at}-${m.key}`} class="notice-line" data-key={m.key}>
+                {formatMessage(m, props.content, t)}
+              </p>
+            ))}
+          </div>
           {death && (
             <div
               class="death"
@@ -526,7 +650,25 @@ function GameScreen(props: {
               </button>
             </div>
           )}
-          {entered && <Hotbar t={t} content={props.content} game={game.current} ui={ui} />}
+          {entered && (
+            <Hotbar
+              t={t}
+              content={props.content}
+              game={game.current}
+              ui={ui}
+              reserve={props.touchPad ? PAD_RESERVE_PX : 0}
+            />
+          )}
+          {/* T5.6 touch controls, over the map and under the windows: the direction pad
+              (Options), the banner of an item picked by a tap and the long-press menu. */}
+          {entered && props.touchPad && (
+            <div class="touch-pad-dock">
+              <TouchPad t={t} game={game.current} />
+            </div>
+          )}
+          {entered && ui.picked && (
+            <PickBanner t={t} content={props.content} picked={ui.picked} game={game.current} />
+          )}
           {entered && <DialogWindow t={t} content={props.content} game={game.current} ui={ui} />}
           {entered && !ui.dialog && (
             <CraftingWindow t={t} content={props.content} game={game.current} ui={ui} />
@@ -541,155 +683,323 @@ function GameScreen(props: {
           {entered && <PresenceCheck t={t} game={game.current} ui={ui} />}
           {entered && <TutorialPanel t={t} game={game.current} ui={ui} />}
         </div>
-        <aside class="side">
-          <section
-            class="battle"
-            data-testid="battle-list"
-            data-tutorial="battle"
-            aria-label={t("client.battle.title")}
-          >
-            <h2>{t("client.battle.title")}</h2>
-            {ui.battle.length === 0 ? (
-              <p class="empty">{t("client.battle.empty")}</p>
-            ) : (
-              <ul>
-                {ui.battle.map((c) => (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      class={ui.target === c.id ? "target" : ""}
-                      data-creature={c.id}
-                      aria-pressed={ui.target === c.id}
-                      title={t("client.battle.attack_hint")}
-                      onClick={() => game.current?.attack(c.id)}
-                    >
-                      <span class="cname">
-                        {skullId(c.skull) && (
-                          <span
-                            class={`skull skull-${skullId(c.skull)}`}
-                            data-skull={skullId(c.skull)}
-                            title={t(`client.skull.${skullId(c.skull)}`)}
-                            aria-label={t(`client.skull.${skullId(c.skull)}`)}
-                          />
-                        )}
-                        {creatureName(c, t)}
-                      </span>
-                      <span class="hp" aria-label={t("client.battle.health", { health: c.health })}>
-                        <span style={{ width: `${c.health}%` }} />
-                      </span>
-                    </button>
-                    {c.kind === CreatureKind.PLAYER && canInvite(ui, c.id) && (
+        <aside
+          class="side"
+          id="side-panel"
+          data-open={layout.panel === "drawer" && drawerOpen ? "" : undefined}
+          inert={layout.panel === "drawer" && !drawerOpen ? true : undefined}
+        >
+          {tabbed && <PanelTabs t={t} tab={tab} onTab={setTab} />}
+          <div {...pane("battle", true)}>
+            <section
+              class="battle"
+              data-testid="battle-list"
+              data-tutorial="battle"
+              aria-label={t("client.battle.title")}
+            >
+              <h2>{t("client.battle.title")}</h2>
+              {ui.battle.length === 0 ? (
+                <p class="empty">{t("client.battle.empty")}</p>
+              ) : (
+                <ul>
+                  {ui.battle.map((c) => (
+                    <li key={c.id}>
                       <button
                         type="button"
-                        class="invite"
-                        data-invite={c.id}
-                        title={t("client.battle.invite")}
-                        aria-label={t("client.battle.invite")}
-                        onClick={() => game.current?.partyInvite(c.id)}
+                        class={ui.target === c.id ? "target" : ""}
+                        data-creature={c.id}
+                        aria-pressed={ui.target === c.id}
+                        title={t("client.battle.attack_hint")}
+                        onClick={() => game.current?.attack(c.id)}
                       >
-                        +
+                        <span class="cname">
+                          {skullId(c.skull) && (
+                            <span
+                              class={`skull skull-${skullId(c.skull)}`}
+                              data-skull={skullId(c.skull)}
+                              title={t(`client.skull.${skullId(c.skull)}`)}
+                              aria-label={t(`client.skull.${skullId(c.skull)}`)}
+                            />
+                          )}
+                          {creatureName(c, t)}
+                        </span>
+                        <span
+                          class="hp"
+                          aria-label={t("client.battle.health", { health: c.health })}
+                        >
+                          <span style={{ width: `${c.health}%` }} />
+                        </span>
                       </button>
-                    )}
-                    {c.kind === CreatureKind.PLAYER && !ui.trade && (
-                      <button
-                        type="button"
-                        class="trade-with"
-                        data-trade={c.id}
-                        title={t("client.battle.trade")}
-                        aria-label={t("client.battle.trade")}
-                        onClick={() => game.current?.tradeRequest(c.id)}
-                      >
-                        ⇄
-                      </button>
-                    )}
-                    {c.kind === CreatureKind.PLAYER && (
-                      <button
-                        type="button"
-                        class="report"
-                        data-report={c.id}
-                        title={t("client.battle.report")}
-                        aria-label={t("client.battle.report")}
-                        onClick={() => setReporting({ id: c.id, name: creatureName(c, t) })}
-                      >
-                        !
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {reporting && (
-              <ReportForm
-                key={reporting.id}
-                t={t}
-                target={reporting}
-                onSend={(reason) => {
-                  game.current?.reportPlayer(reporting.id, reason);
-                  setReporting(undefined);
-                }}
-                onCancel={() => setReporting(undefined)}
-              />
-            )}
-          </section>
-          <PartyPanel t={t} game={game.current} ui={ui} />
-          <GuildPanel
-            t={t}
-            content={props.content}
-            game={game.current}
-            ui={ui}
-            now={performance.now()}
-          />
-          <section class="fight">
-            <label>
-              {t("client.fight.stance")}
-              <select
-                value={stance}
-                onChange={(e) => {
-                  const s = Number(e.currentTarget.value) as FightStance;
-                  setStance(s);
-                  game.current?.setFightMode(s, chase);
-                }}
-              >
-                <option value={FightStance.OFFENSIVE}>{t("client.fight.offensive")}</option>
-                <option value={FightStance.BALANCED}>{t("client.fight.balanced")}</option>
-                <option value={FightStance.DEFENSIVE}>{t("client.fight.defensive")}</option>
-              </select>
-            </label>
-            <label class="check">
-              <input
-                type="checkbox"
-                checked={chase}
-                onChange={(e) => {
-                  const c = e.currentTarget.checked;
-                  setChase(c);
-                  game.current?.setFightMode(stance, c);
-                }}
-              />
-              {t("client.fight.chase")}
-            </label>
-            <label class="check" title={t("client.pvp.safe_mode_hint")}>
-              <input
-                type="checkbox"
-                data-testid="safe-mode"
-                checked={ui.safeMode}
-                onChange={(e) => game.current?.setSafeMode(e.currentTarget.checked)}
-              />
-              {t("client.pvp.safe_mode")}
-            </label>
-          </section>
-          <InventoryPanel t={t} content={props.content} game={game.current} ui={ui} />
-          <SkillsPanel t={t} skills={ui.skills} />
-          <ul class="log" data-testid="game-log" aria-live="polite">
-            {ui.log.map((m, i) => (
-              <li key={`${m.at}-${i}`}>{formatMessage(m, props.content, t)}</li>
-            ))}
-          </ul>
-          <ChatPanel t={t} content={props.content} game={game.current} ui={ui} />
+                      {c.kind === CreatureKind.PLAYER && canInvite(ui, c.id) && (
+                        <button
+                          type="button"
+                          class="invite"
+                          data-invite={c.id}
+                          title={t("client.battle.invite")}
+                          aria-label={t("client.battle.invite")}
+                          onClick={() => game.current?.partyInvite(c.id)}
+                        >
+                          +
+                        </button>
+                      )}
+                      {c.kind === CreatureKind.PLAYER && !ui.trade && (
+                        <button
+                          type="button"
+                          class="trade-with"
+                          data-trade={c.id}
+                          title={t("client.battle.trade")}
+                          aria-label={t("client.battle.trade")}
+                          onClick={() => game.current?.tradeRequest(c.id)}
+                        >
+                          ⇄
+                        </button>
+                      )}
+                      {c.kind === CreatureKind.PLAYER && (
+                        <button
+                          type="button"
+                          class="report"
+                          data-report={c.id}
+                          title={t("client.battle.report")}
+                          aria-label={t("client.battle.report")}
+                          onClick={() => setReporting({ id: c.id, name: creatureName(c, t) })}
+                        >
+                          !
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {reporting && (
+                <ReportForm
+                  key={reporting.id}
+                  t={t}
+                  target={reporting}
+                  onSend={(reason) => {
+                    game.current?.reportPlayer(reporting.id, reason);
+                    setReporting(undefined);
+                  }}
+                  onCancel={() => setReporting(undefined)}
+                />
+              )}
+            </section>
+          </div>
+          <div {...pane("party", true)}>
+            <PartyPanel t={t} game={game.current} ui={ui} />
+          </div>
+          <div {...pane("guild", true)}>
+            <GuildPanel
+              t={t}
+              content={props.content}
+              game={game.current}
+              ui={ui}
+              now={performance.now()}
+            />
+          </div>
+          {/* The fight mode sits after the guild on desktop, as before; in tabs it goes
+              with the battle list. */}
+          <div {...pane("battle", false)}>
+            <section class="fight">
+              <label>
+                {t("client.fight.stance")}
+                <select
+                  value={stance}
+                  onChange={(e) => {
+                    const s = Number(e.currentTarget.value) as FightStance;
+                    setStance(s);
+                    game.current?.setFightMode(s, chase);
+                  }}
+                >
+                  <option value={FightStance.OFFENSIVE}>{t("client.fight.offensive")}</option>
+                  <option value={FightStance.BALANCED}>{t("client.fight.balanced")}</option>
+                  <option value={FightStance.DEFENSIVE}>{t("client.fight.defensive")}</option>
+                </select>
+              </label>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  checked={chase}
+                  onChange={(e) => {
+                    const c = e.currentTarget.checked;
+                    setChase(c);
+                    game.current?.setFightMode(stance, c);
+                  }}
+                />
+                {t("client.fight.chase")}
+              </label>
+              <label class="check" title={t("client.pvp.safe_mode_hint")}>
+                <input
+                  type="checkbox"
+                  data-testid="safe-mode"
+                  checked={ui.safeMode}
+                  onChange={(e) => game.current?.setSafeMode(e.currentTarget.checked)}
+                />
+                {t("client.pvp.safe_mode")}
+              </label>
+            </section>
+          </div>
+          <div {...pane("inventory", true)}>
+            <InventoryPanel t={t} content={props.content} game={game.current} ui={ui} />
+          </div>
+          <div {...pane("skills", true)}>
+            <SkillsPanel t={t} skills={ui.skills} />
+          </div>
+          <div {...pane("chat", true)}>
+            <ul class="log" data-testid="game-log" aria-live="polite">
+              {ui.log.map((m, i) => (
+                <li key={`${m.at}-${i}`}>{formatMessage(m, props.content, t)}</li>
+              ))}
+            </ul>
+            <ChatPanel t={t} content={props.content} game={game.current} ui={ui} />
+          </div>
         </aside>
       </div>
+      {entered && ui.menu && (
+        <ActionMenu
+          t={t}
+          menu={ui.menu}
+          game={game.current}
+          viewport={{ width: window.innerWidth, height: window.innerHeight }}
+        />
+      )}
     </div>
   );
 }
+
+/**
+ * The tab bar of the side panel on small screens (T5.6): an ARIA tablist; the arrow keys,
+ * Home and End move between tabs.
+ */
+function PanelTabs(props: {
+  t: Translate;
+  tab: PanelTab;
+  onTab(tab: PanelTab): void;
+}): JSX.Element {
+  const { t } = props;
+  const move = (e: KeyboardEvent): void => {
+    const i = PANEL_TABS.indexOf(props.tab);
+    const n = PANEL_TABS.length;
+    const to =
+      e.key === "ArrowRight"
+        ? (i + 1) % n
+        : e.key === "ArrowLeft"
+          ? (i - 1 + n) % n
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? n - 1
+              : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    const next = PANEL_TABS[to] ?? props.tab;
+    props.onTab(next);
+    document.getElementById(`tab-${next}`)?.focus();
+  };
+  return (
+    <div
+      class="panel-tabs"
+      role="tablist"
+      aria-label={t("client.panel.tabs")}
+      data-testid="panel-tabs"
+      onKeyDown={move}
+    >
+      {PANEL_TABS.map((name) => (
+        <button
+          key={name}
+          type="button"
+          role="tab"
+          id={`tab-${name}`}
+          data-tab={name}
+          aria-controls={`pane-${name}`}
+          aria-selected={props.tab === name}
+          tabIndex={props.tab === name ? 0 : -1}
+          onClick={() => props.onTab(name)}
+        >
+          {t(TAB_TITLE[name])}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Extra wait after a notice's end before re-rendering, ms (timers may fire early). */
+const NOTICE_SLACK_MS = 30;
+
+/** True while a text field has the focus (a virtual keyboard may be up). */
+function typingFocused(): boolean {
+  const el = document.activeElement;
+  return (
+    el instanceof HTMLElement &&
+    (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))
+  );
+}
+
+/**
+ * The layout of the window (layout.ts), again on every resize or rotation. While a text
+ * field has the focus and only the height changed, it keeps the layout: that is a phone's
+ * virtual keyboard, and switching layouts would hide the field being typed in.
+ */
+function useLayout(): Layout {
+  const [state, setState] = useState(() => ({
+    width: window.innerWidth,
+    layout: layoutFor(window.innerWidth, window.innerHeight),
+  }));
+  useEffect(() => {
+    const update = (): void =>
+      setState((s) => {
+        const width = window.innerWidth;
+        if (width === s.width && typingFocused()) return s;
+        const next = layoutFor(width, window.innerHeight);
+        const same =
+          next.id === s.layout.id &&
+          next.panel === s.layout.panel &&
+          next.flow === s.layout.flow &&
+          next.compactHeader === s.layout.compactHeader;
+        if (same && width === s.width) return s;
+        return { width, layout: same ? s.layout : next };
+      });
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, []);
+  return state.layout;
+}
+
+/**
+ * Keeps the chat line above a phone's virtual keyboard. Browsers that resize the page for
+ * the keyboard (interactive-widget=resizes-content, Chrome on Android) need nothing more;
+ * the others (Safari on iOS) only shrink the visual viewport, so while a text field has
+ * the focus the game takes the visual viewport's height (--game-height in client.css).
+ */
+function useKeyboardViewport(): void {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const root = document.documentElement;
+    const update = (): void => {
+      if (typingFocused() && vv.height < window.innerHeight - KEYBOARD_MIN_PX) {
+        root.style.setProperty("--game-height", `${Math.round(vv.height)}px`);
+        // Safari scrolls the page up under the keyboard: keep the header in view.
+        window.scrollTo(0, 0);
+      } else {
+        root.style.removeProperty("--game-height");
+      }
+    };
+    vv.addEventListener("resize", update);
+    window.addEventListener("focusout", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      window.removeEventListener("focusout", update);
+      root.style.removeProperty("--game-height");
+    };
+  }, []);
+}
+
+/** Smallest drop of the visual viewport that is a virtual keyboard, CSS px. */
+const KEYBOARD_MIN_PX = 120;
 
 /** Longest report reason (balance.yaml reports.max_reason; the server checks it). */
 const REPORT_REASON_MAX = 200;

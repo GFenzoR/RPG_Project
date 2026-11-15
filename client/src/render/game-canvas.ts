@@ -10,6 +10,10 @@ import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
 import type { AtlasIcon, Camera } from "@rpg/renderer";
 import { VIEW_TILES, followCamera, pixelScale } from "./viewport.ts";
+import { labelText, placeLabels } from "./labels.ts";
+import type { LabelBox } from "./labels.ts";
+import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
+import type { Gesture } from "../input/gestures.ts";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { delta } from "../state/geometry.ts";
@@ -155,7 +159,16 @@ export interface GameCanvasOptions {
   lookTile(x: number, y: number, z: number): void;
   /** The left button was pressed on a tile and dragged (move its top item). */
   dragTile(x: number, y: number, z: number, e: PointerEvent): void;
+  /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
+  tapTile(x: number, y: number, z: number): void;
+  /** T5.6: a finger held a tile still (the contextual menu), at page coordinates (cx, cy). */
+  longPressTile(x: number, y: number, z: number, cx: number, cy: number): void;
+  /** T5.6: a finger went down on the canvas. */
+  touched(): void;
 }
+
+/** How long after a finger press a contextmenu event is that finger's long press, ms. */
+const TOUCH_MENU_MS = 1500;
 
 /** Pointer travel (canvas pixels) that turns a press into a drag. */
 const DRAG_START_PX = 6;
@@ -390,10 +403,10 @@ export async function createGameCanvas(
       sprites.set(c.id, s);
     }
     // The language can change during the game (T1.13).
-    const name = nameOf(c);
+    // Shortened at small zoom (T5.6, render/labels.ts); the zoom follows the window size.
+    const name = labelText(nameOf(c), scale);
     if (s.label.text !== name) s.label.text = name;
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
-    s.guild.visible = c.guild !== "";
     if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull);
     s.drawnSkull = c.skull;
     if (s.drawnDir !== c.dir) drawShape(s, c);
@@ -509,6 +522,7 @@ export async function createGameCanvas(
     view.render(cam, { width: app.screen.width, height: app.screen.height });
 
     const seen = new Set<number>();
+    const boxes: LabelBox[] = [];
     for (const c of world.creatures.values()) {
       if (c.pos.z !== self.pos.z) continue;
       seen.add(c.id);
@@ -527,12 +541,38 @@ export async function createGameCanvas(
       const barTop = Math.round(head.y) - BAR_H * scale;
       s.bar.position.set(Math.round(head.x), barTop);
       s.bar.scale.set(scale);
+      const hasGuild = c.guild !== "";
+      const hasSkull = s.drawnSkull !== Skull.UNSPECIFIED;
+      boxes.push({
+        id: c.id,
+        x: Math.round(head.x),
+        y: barTop - 1,
+        width:
+          Math.max(s.label.width, hasGuild ? s.guild.width : 0) + (hasSkull ? 2 * SKULL_R + 2 : 0),
+        nameHeight: s.label.height,
+        guildHeight: hasGuild ? s.guild.height : 0,
+        self: c.id === world.selfId,
+        target: c.id === world.target,
+        distance: Math.max(Math.abs(c.pos.x - self.pos.x), Math.abs(c.pos.y - self.pos.y)),
+      });
+    }
+    // Names, guild lines and skulls (T5.6): at small zoom neighbours would overlap, so
+    // render/labels.ts drops guild lines and lifts or hides the labels of far creatures.
+    const placements = placeLabels(boxes, scale);
+    for (const b of boxes) {
+      const s = sprites.get(b.id);
+      const at = placements.get(b.id);
+      if (!s || !at) continue;
+      s.label.visible = at.show;
+      s.guild.visible = at.show && at.guild;
+      s.skull.visible = at.show;
+      const bottom = b.y - at.lift;
       if (s.guild.visible) {
         // The guild name goes right above the bar and the player's name above it.
-        s.guild.position.set(Math.round(head.x), barTop - 1);
-        s.label.position.set(Math.round(head.x), barTop - 1 - Math.round(s.guild.height));
+        s.guild.position.set(b.x, bottom);
+        s.label.position.set(b.x, bottom - Math.round(s.guild.height));
       } else {
-        s.label.position.set(Math.round(head.x), barTop - 1);
+        s.label.position.set(b.x, bottom);
       }
       if (s.drawnSkull !== Skull.UNSPECIFIED) {
         s.skull.position.set(
@@ -560,10 +600,80 @@ export async function createGameCanvas(
     };
   };
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  // T5.6, fingers and pens (pointerType touch/pen; the mouse below is unchanged): a tap
+  // walks or targets the creature (talks to an NPC), a long press opens the contextual
+  // menu, a drag moves the top item. The page must not pan or zoom under the map.
+  canvas.style.touchAction = "none";
+  const gestures = new GestureRecognizer();
+  let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The tile under the finger that went down (a drag moves its item). */
+  let touchTile: Pos | undefined;
+  /** The last finger press on the canvas: when, and whether it already opened the menu. */
+  let touchPress = { at: Number.NEGATIVE_INFINITY, menu: false };
+  const tileUnder = (clientX: number, clientY: number): Pos | undefined => {
+    const self = world.self;
+    if (!self) return undefined;
+    const p = toCanvas(clientX, clientY);
+    const tile = screenToTile(cam, p.x, p.y, T);
+    return { x: tile.x, y: tile.y, z: self.pos.z };
+  };
+  const onGestures = (gs: Gesture[], e: PointerEvent | undefined): void => {
+    for (const g of gs) {
+      if (g.kind === "tap") {
+        const at = tileUnder(g.x, g.y);
+        if (at) opts.tapTile(at.x, at.y, at.z);
+      } else if (g.kind === "longPress") {
+        const at = touchTile;
+        touchPress.menu = true;
+        if (at) opts.longPressTile(at.x, at.y, at.z, g.x, g.y);
+      } else if (g.kind === "dragStart" && e) {
+        const at = touchTile;
+        if (at) opts.dragTile(at.x, at.y, at.z, e);
+      }
+    }
+    clearTimeout(longPressTimer);
+    longPressTimer = undefined;
+    const due = gestures.deadline();
+    if (due !== undefined) {
+      longPressTimer = setTimeout(
+        () => onGestures(gestures.tick(performance.now()), undefined),
+        Math.max(0, due - performance.now()),
+      );
+    }
+  };
+  const touchDown = (e: PointerEvent): void => {
+    opts.touched();
+    if (!gestures.active) {
+      touchTile = tileUnder(e.clientX, e.clientY);
+      touchPress = { at: performance.now(), menu: false };
+    }
+    // Pointer event times share performance.now()'s clock.
+    onGestures(gestures.down(e.pointerId, e.clientX, e.clientY, e.timeStamp), e);
+  };
+  canvas.addEventListener("pointercancel", (e) => {
+    if (isTouchPointer(e.pointerType)) onGestures(gestures.cancel(e.pointerId), e);
+  });
+  // Mobile browsers announce their own long press with a contextmenu event, and may cancel
+  // the pointer for it before our timer fires: take it as the long press of that finger.
+  canvas.addEventListener("contextmenu", (e) => {
+    const recent = performance.now() - touchPress.at < TOUCH_MENU_MS;
+    if (!recent || touchPress.menu || !touchTile) return;
+    touchPress.menu = true;
+    gestures.reset();
+    clearTimeout(longPressTimer);
+    longPressTimer = undefined;
+    opts.longPressTile(touchTile.x, touchTile.y, touchTile.z, e.clientX, e.clientY);
+  });
+
   // Left: a click walks, shift+click looks, a drag moves the top item. Right: attack the
   // creature on the tile, or use the tile's top item.
   let press: { x: number; y: number; z: number; px: number; py: number } | undefined;
   canvas.addEventListener("pointerdown", (e) => {
+    if (isTouchPointer(e.pointerType)) {
+      touchDown(e);
+      return;
+    }
     if (e.button !== 0 && e.button !== 2) return;
     const self = world.self;
     if (!self) return;
@@ -583,6 +693,10 @@ export async function createGameCanvas(
     press = { x: tile.x, y: tile.y, z, px: p.x, py: p.y };
   });
   canvas.addEventListener("pointermove", (e) => {
+    if (isTouchPointer(e.pointerType)) {
+      onGestures(gestures.move(e.pointerId, e.clientX, e.clientY, e.timeStamp), e);
+      return;
+    }
     if (!press) return;
     const p = toCanvas(e.clientX, e.clientY);
     if (Math.hypot(p.x - press.px, p.y - press.py) < DRAG_START_PX) return;
@@ -591,6 +705,10 @@ export async function createGameCanvas(
     opts.dragTile(from.x, from.y, from.z, e);
   });
   canvas.addEventListener("pointerup", (e) => {
+    if (isTouchPointer(e.pointerType)) {
+      onGestures(gestures.up(e.pointerId, e.clientX, e.clientY, e.timeStamp), e);
+      return;
+    }
     if (!press || e.button !== 0) return;
     const from = press;
     press = undefined;
@@ -627,6 +745,8 @@ export async function createGameCanvas(
       };
     },
     destroy() {
+      clearTimeout(longPressTimer);
+      gestures.reset();
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);

@@ -39,7 +39,8 @@ export function DialogWindow({ t, content, game, ui }: Props): JSX.Element | nul
             ×
           </button>
         </header>
-        <p class="npc-text">{t(d.text)}</p>
+        {/* Greetings say the player's name ({name} in the npcs.yaml catalogs). */}
+        <p class="npc-text">{t(d.text, { name: ui.selfName })}</p>
         <ol class="options">
           {d.options.map((o, i) => (
             <li key={o.id}>

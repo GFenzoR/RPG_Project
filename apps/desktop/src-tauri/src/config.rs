@@ -149,12 +149,28 @@ pub fn compiled_default() -> &'static str {
 /// `<config dir>/<identifier>/config.json`, the same directory as Tauri's
 /// `app_config_dir()` (it is needed before the app exists, to set the CSP).
 pub fn config_path(identifier: &str) -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join(identifier).join(CONFIG_FILE))
+    app_dir(identifier).map(|d| d.join(CONFIG_FILE))
 }
 
 /// Where a fatal start-up error is written (next to `config.json`).
 pub fn startup_log_path(identifier: &str) -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join(identifier).join("startup-error.log"))
+    app_dir(identifier).map(|d| d.join("startup-error.log"))
+}
+
+/// The app's own config directory. Desktop and iOS: `<config dir>/<identifier>` (on iOS
+/// `dirs` answers the sandbox's `Library/Application Support`). Android has no config dir
+/// for `dirs` (no HOME), so the app's private internal storage is used (T5.6).
+fn app_dir(identifier: &str) -> Option<PathBuf> {
+    if cfg!(target_os = "android") {
+        return Some(android_files_dir(identifier));
+    }
+    dirs::config_dir().map(|d| d.join(identifier))
+}
+
+/// Android's internal storage of the app (`Context.getFilesDir()` of the primary user): only
+/// this app can read or write it. The package name is the bundle identifier.
+pub fn android_files_dir(identifier: &str) -> PathBuf {
+    PathBuf::from("/data/data").join(identifier).join("files")
 }
 
 /// Reads the override file, if any. A missing file is not an error.
@@ -194,6 +210,16 @@ pub fn save_server_url(path: &Path, server: &Server) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn android_keeps_the_config_in_the_app_storage() {
+        let dir = android_files_dir("dev.rpgproject.client");
+        assert_eq!(dir, PathBuf::from("/data/data/dev.rpgproject.client/files"));
+        if !cfg!(target_os = "android") {
+            let expected = dirs::config_dir().map(|d| d.join("x.y").join(CONFIG_FILE));
+            assert_eq!(config_path("x.y"), expected);
+        }
+    }
 
     #[test]
     fn parses_https_and_derives_urls() {

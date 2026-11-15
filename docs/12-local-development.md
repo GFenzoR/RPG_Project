@@ -92,6 +92,16 @@ que muestra "Página no encontrada": es una SPA, en Vite y detrás de Caddy. El 
 comparte entre las dos páginas (`localStorage` `rpg.lang`): un `?lang=` se lee una vez, se
 guarda y se quita de la URL, y "Jugar" lleva a `/play/` sin `?lang=`.
 
+PWA (T5.6, `15-movil.md`): los archivos estáticos de `client/public/` (manifest e íconos)
+se sirven igual en Vite, pero el service worker **no se registra en `make dev`** (solo en un
+build de producción: `client/src/pwa.ts`), así que en desarrollo nada queda en caché. Para
+probarlo en local: `make docker-up` y abre `https://localhost` (Caddy sirve el manifest y
+`/sw.js` con las cabeceras de producción, `caddy-routes.caddy`), o
+`pnpm --filter @rpg/client build` y `pnpm --filter @rpg/client exec vite preview --outDir
+../build/client` (sin proxy de `/api`: solo para ver el manifest y el worker en
+DevTools → Application). Los íconos placeholder salen de
+`node --experimental-strip-types tools/spritegen/src/pwa-icons.ts`.
+
 Vite hace de proxy de `/api` y `/ws` al servidor (`RPG_SERVER`, por defecto `:8080`): el
 estado del servidor y el ranking de la landing necesitan el servidor en marcha. Una noticia
 nueva en `data/news/` se ve al reiniciar Vite. El ranking se cachea 60 s en el servidor: un
@@ -285,6 +295,13 @@ no tiene consola donde verlo.
   permitirlos en `-ws-origins`/`RPG_WS_ORIGINS` (el compose de producción ya lo hace).
 - La versión de la app es la de `client/package.json` (`tauri.conf.json` apunta a ese
   archivo) y viaja en el `Hello`: subir `-min-client-version` deja fuera a las apps viejas.
+
+### Android e iOS (Tauri mobile, T5.6)
+El mismo proyecto `apps/desktop` compila para Android e iOS (no hay `apps/mobile`): mismo
+Rust, mismos comandos y mismo selector de servidor. Los SDKs, `tauri android init` /
+`tauri ios init`, firmas y tiendas están en `15-movil.md`. En `tauri android dev` el
+teléfono carga el Vite de tu PC por la LAN: Tauri define `TAURI_DEV_HOST` y
+`client/vite.config.ts` escucha en esa dirección.
 
 ## Diferencias con las sesiones cloud
 | | Cloud (hasta 4 nov) | Local (desde 5 nov) |

@@ -54,8 +54,13 @@ export class MovementKeys {
 
 /** True when the event target is a text field, so typing never moves the character. */
 export function typingInField(e: KeyboardEvent): boolean {
-  const el = e.target;
+  return isTextField(e.target);
+}
+
+/** True for an element that takes typed text (an input, a text area, a select, editable). */
+export function isTextField(el: EventTarget | null): boolean {
   return (
+    typeof HTMLElement !== "undefined" &&
     el instanceof HTMLElement &&
     (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))
   );

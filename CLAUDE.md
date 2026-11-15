@@ -55,6 +55,7 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
 - Hosting de pruebas en casa → `docs/13-hosting-de-pruebas.md`
 - Entorno local → `docs/12-local-development.md`
 - Retomar en tu PC (estado, pendientes, briefs de T5.6 y T5.7, sprites) → `docs/14-continuar-en-tu-pc.md`
+- Móvil: PWA instalable, Tauri Android/iOS, firmas y tiendas → `docs/15-movil.md`
 - Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md`
 
 ## Principios de arquitectura

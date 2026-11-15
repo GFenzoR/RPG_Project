@@ -182,6 +182,10 @@ sounds: ## Render assets/sounds/** (needs ffmpeg with libopus) and check the siz
 spritegen: ## Draw assets/sprites/** from tools/spritegen recipes (ONLY=decor/ for a path prefix)
 	node --experimental-strip-types tools/spritegen/src/cli.ts build $(if $(ONLY),--only $(ONLY))
 
+.PHONY: pwa-icons
+pwa-icons: ## Draw the PWA placeholder icons into client/public/icons/ (T5.6)
+	node --experimental-strip-types tools/spritegen/src/pwa-icons.ts
+
 .PHONY: assets
 assets: sprites sounds ## make sprites + make sounds
 
