@@ -162,13 +162,12 @@ func (w *World) streetFrom(p world.Pos, s *searchFrom) {
 		s.add(a)
 		return
 	}
-	d := w.doors[p]
-	locked := d != nil && d.lock != ""
+	locked := w.lockedDoor(p)
 	if !locked && !w.m.MovesOnStep(p) {
 		return
 	}
 	for e := world.North; e <= world.NorthWest; e++ {
-		if q, ok := p.Step(e); ok && (!locked || !d.inRoom(w.roomOf[q])) {
+		if q, ok := p.Step(e); ok && (!locked || !w.doors[p].inRoom(w.roomOf[q])) {
 			s.add(w.areaOf(q))
 		}
 	}

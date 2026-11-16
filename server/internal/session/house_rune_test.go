@@ -109,7 +109,7 @@ func TestHouseRuneKillsAQuestMonsterFromTheStreet(t *testing.T) {
 	}
 
 	// The pickaxe stays Ana's until the house write's ack, whatever older ack comes first.
-	cp := openBackpack(t, h, cc, backpack)
+	cp := openBackpack(t, h, cc, backpack, uint32(items["backpack"].Container.Slots))
 	take := moveItem(onTile(street), uint32(pickaxe), 1, inContainer(cp, 0), 1)
 	h.sim.Command(h.w.Saved(ana, house.Seq-1))
 	h.sim.Step()
@@ -121,16 +121,4 @@ func TestHouseRuneKillsAQuestMonsterFromTheStreet(t *testing.T) {
 	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "pickaxe") != 1 {
 		t.Fatalf("pick the pickaxe up after the house write's ack: %v", systemKeys(evs))
 	}
-}
-
-// openBackpack opens cl's backpack (item id pack) and returns its window id.
-func openBackpack(t *testing.T, h *harness, cl *fakeClient, pack uint16) uint32 {
-	t.Helper()
-	h.input(cl, useItem(inSlot(slotBackpack), uint32(pack), 0))
-	h.sim.Step()
-	opens := find(cl.take(), (*pb.ServerMessage).GetContainerOpen)
-	if len(opens) != 1 {
-		t.Fatalf("ContainerOpen = %v", opens)
-	}
-	return opens[0].GetContainerId()
 }

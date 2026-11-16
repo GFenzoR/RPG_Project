@@ -225,8 +225,9 @@ func arrivalHarness(t *testing.T, kind world.PortalKind) *harness {
 // free and walkable; the player lands on (6,1), the next free tile of the street. Down
 // stairs (stepped onto) and down a ladder (used) alike. Both lie outside the area of the
 // destination (area.go: a house tile is a wall of the areas), which is what skips them
-// here; freeAround's noHouse is a second guard for a destination in no area (a portal
-// end never lies in a house: world.NewMap), which TestArrivalsSkipHouses pins.
+// here and in TestArrivalsSkipHouses. freeAround's noHouse is only a second guard: no
+// search of an arrival starts on a house tile (world.NewMap, checkArrivals), so no test
+// can tell it from the areas.
 func TestPortalArrivalSkipsHousesAndRooms(t *testing.T) {
 	for _, kind := range []world.PortalKind{world.PortalStairs, world.PortalLadder} {
 		t.Run(kind.String(), func(t *testing.T) {
