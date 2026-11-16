@@ -274,6 +274,11 @@ islands:
     rect: { x: 3072, y: 6272, w: 512, h: 512 }
     level_hint: [1, 15]
 ```
+`dev_only: true` (opcional) marca una isla de desarrollo, hoy solo `pruebas` (la Isla de
+Pruebas, `16-probar-el-juego.md`): `mapcompile` la deja afuera salvo con `-dev`, así que la
+imagen de producción no la tiene (ver "Compilación" y "Validación"). La primera isla de la
+lista no puede serlo.
+
 Las rutas de barco no van aquí: desde T3.5 viven en `data/boat_routes.yaml` (las vende un
 NPC, con precio y requisitos, como el resto del contenido; formato en
 `06-content-data.md`). El campo `boat_routes` de este archivo quedó obsoleto en T3.5 y se
@@ -287,7 +292,9 @@ para cambiarla; el E2E usa `-start-town testisle` porque sus pruebas dependen de
 ## Compilación
 `server/cmd/mapcompile` (`make mapcompile`) lee `world/` + `data/items/` +
 `data/ids.lock.yaml`, valida lo necesario para compilar, resuelve IDs y escribe
-`build/world.bin` (binario compacto: tiles por sector, flags precomputados). El servidor
+`build/world.bin` (binario compacto: tiles por sector, flags precomputados), sin las islas
+`dev_only` de `world.yaml` salvo con `-dev` (`make mapcompile` lo pasa, igual que el E2E; la
+imagen de producción, `deploy/Dockerfile.gameserver`, no). El servidor
 solo carga `world.bin` (`-world`, por defecto `$RPG_WORLD` o `../build/world.bin` desde
 `server/`). El editor y `mapcli` trabajan siempre con el JSON.
 
@@ -513,6 +520,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (`checkArrivals` en `session/travel.go`, que corre en cuanto `initDoors` encuentra las
   puertas, antes del chequeo de escape), y los dos lados leen los casos de
   `packages/map-format/src/testdata/arrivals.json`.
+- **Islas `dev_only`**: como la imagen de producción no las tiene, nada de lo que el
+  servidor revisa contra su mapa puede necesitarlas: ninguna ruta de barco sale de una,
+  llega a una ni tiene ahí a su capitán, ningún teleport de un diálogo llega a una (el
+  servidor no arrancaría) y ningún portal de otra isla lleva a una (`mapcompile` rechazaría
+  el mapa). La primera isla de `world.yaml` no puede ser `dev_only`.
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).
 
@@ -614,10 +626,10 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   caminables hacia muros y vetas, una hacia rocas, y ningún hueco encerrado.
 - `pruebas` (96x96 en 2048,2048; pisos 7–8; nivel 1–60): **Isla de Pruebas**, el sandbox
   para probar el juego a mano (`16-probar-el-juego.md`, `make play`). Fuera del juego normal
-  a propósito: ninguna ruta de barco, portal ni diálogo de otra isla llega a ella (lo
-  comprueban `tools/mapcli/src/world.test.ts` y `TestCompilePruebas`); solo se entra con
-  `-start-town pruebas` o con un `/tp` del personal, y sus barcos (`pruebas_to_*`) son de
-  ida. Forma base con `mapcli generate --recipe island --seed 11 --size 90` y luego una lista
+  a propósito: es `dev_only` (la imagen de producción no la tiene) y ninguna ruta de barco,
+  portal ni diálogo de otra isla llega a ella (lo comprueban `tools/mapcli/src/world.test.ts`
+  y `TestCompilePruebas`); en local se entra con `-start-town pruebas` o con un `/tp` del
+  personal. Su barquero lleva de ida con teleports de diálogo, no con rutas de barco. Forma base con `mapcli generate --recipe island --seed 11 --size 90` y luego una lista
   de ops (el parche de arena del centro pasa a pasto; scatter con semillas 1601–1608 en
   bosquecillos; `autoborder` al final). Superficie: templo de piedra (2090–2100 ×
   2083–2091, puerta al sur; despertar en 2095,2086) con la instructora `pruebas_trainer`
@@ -632,7 +644,8 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   de la puerta de práctica (`pruebas_gate` en 2117,2101, llave `pruebas_key`). Al sur, la
   casa `pruebas_house` (prefab `house_wood_medium` en 2085,2108), la arena `pruebas_arena`
   (zona `pvp`, 2102–2112 × 2111–2119, entrada por el oeste) y el muelle (prefab
-  `small_dock` en 2093,2133) con el barquero `pruebas_ferryman` (2097,2133). Piso 8: cueva
+  `small_dock` en 2093,2133) con el barquero `pruebas_ferryman` (2097,2133), que por 20
+  monedas deja donde llegan los barcos de Puerto, el Bosque y la Isla Volcánica. Piso 8: cueva
   de tierra y `rock_wall` bajo el patio con la escalera de vuelta, la escalera de mano, el
   pozo bajo el agujero con su `rope_spot` (2119,2094), murciélagos y un teletransporte
   (2113,2104) que vuelve a la plaza (2095,2094). Carteles: uno por sector

@@ -676,6 +676,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   73–75: la escalera en la superficie, la mina en el piso 8 y de vuelta arriba).
 
 ## Notas de la Isla de Pruebas (`make play`, docs/16)
+- La isla es `dev_only`: el servidor principal del E2E compila el mapa con
+  `mapcompile -dev` (`playwright.config.ts`); el de Puerto no la necesita.
 - E2E `e2e/sandbox.spec.ts`: corre en el servidor principal (inicio `testisle`). Un guardián
   con `town = 'pruebas'` y cuenta `gm` (sembrado con `psql`) despierta en el templo de la
   isla (2095,2086) junto a `pruebas_trainer`, y con `/tp` va a los corrales, al patio de

@@ -111,8 +111,10 @@ map-pr: ## Map PR check of HEAD=<ref> against BASE=<ref> (default main) into bui
 	  code=$$?; node --experimental-strip-types tools/mapcli/src/prcomment.ts --dry-run build/map-pr/report.json; exit $$code
 
 .PHONY: mapcompile
-mapcompile: ## Compile world/ + data/items into build/world.bin (server map)
-	cd server && go run ./cmd/mapcompile -root .. -out ../build/world.bin
+# -dev keeps the dev-only islands of world.yaml (the sandbox island, docs/16): every local
+# build has them; the production image (deploy/Dockerfile.gameserver) leaves them out.
+mapcompile: ## Compile world/ + data/items into build/world.bin (server map, with the dev-only islands)
+	cd server && go run ./cmd/mapcompile -root .. -out ../build/world.bin -dev
 
 # Needs node and the pnpm workspace (pnpm install): compares mapcompile's walkability with
 # packages/map-format on every tile of world/ and of the server's test fixture.
@@ -234,27 +236,36 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 	$(MAKE) editor
 
 # The game on the sandbox island (docs/16-probar-el-juego.md): Postgres, the map, the game
-# server on loopback with -start-town (new characters wake up on the Isla de Pruebas) and the
-# client, then the URL to open once both answer. The cosmetic shop runs on the fake payment
-# provider (RPG_ENV=development: only for a server nobody else reaches). Ctrl+C stops it all.
-# PLAY_START_TOWN=puerto plays the normal start instead.
+# server with -start-town (new characters wake up on the Isla de Pruebas) and the client,
+# then the URL to open once both answer. The cosmetic shop runs on the fake payment provider
+# (RPG_ENV=development) only with the server on loopback and a local database: never where
+# someone else reaches it. Ctrl+C stops it all. PLAY_START_TOWN=puerto plays the normal start.
 PLAY_START_TOWN ?= pruebas
-PLAY_URL := http://localhost:5173/play/
-PLAY_HEALTH := http://127.0.0.1:$(lastword $(subst :, ,$(DEV_HTTP_ADDR)))/healthz
+PLAY_HEALTH = http://127.0.0.1:$(lastword $(subst :, ,$(DEV_HTTP_ADDR)))/healthz
 
 .PHONY: play
 play: db-up mapcompile ## Play on the sandbox island (docs/16): Postgres + map + game server + client; prints the URL to open
-	@echo "[play] starting the game server (new characters wake up on '$(PLAY_START_TOWN)') and the client..."
-	@trap 'kill 0' EXIT; \
-	(cd server && RPG_ENV=development PAYMENTS_PROVIDER=fake RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
+	@if curl -sf "$(PLAY_HEALTH)" >/dev/null 2>&1; then \
+		echo "[play] a game server already answers on $(PLAY_HEALTH) (make dev? one left running?"; \
+		echo "       on Windows: taskkill //IM gameserver.exe //F). Stop it first."; exit 1; fi
+	@url="http://localhost:$${CLIENT_PORT:-5173}/play/"; shop_env=""; \
+	case "$(DEV_HTTP_ADDR)" in 127.0.0.1:*|localhost:*) loopback=1;; *) loopback=0;; esac; \
+	case "$(DATABASE_URL)" in *@localhost:*|*@localhost/*|*@127.0.0.1:*|*@127.0.0.1/*) localdb=1;; *) localdb=0;; esac; \
+	if [ $$loopback = 1 ] && [ $$localdb = 1 ]; then shop_env="RPG_ENV=development PAYMENTS_PROVIDER=fake"; \
+	else echo "[play] the server is not on loopback or the database is not local: no fake payments, the cosmetic shop stays off"; fi; \
+	echo "[play] starting the game server (new characters wake up on '$(PLAY_START_TOWN)') and the client..."; \
+	trap 'kill 0' EXIT; \
+	(cd server && env $$shop_env RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
 		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" \
-		-start-town "$(PLAY_START_TOWN)" $(DEV_SERVER_FLAGS)) & \
+		-start-town "$(PLAY_START_TOWN)" $(DEV_SERVER_FLAGS)) & srv=$$!; \
 	$(MAKE) client & \
 	ready=0; for i in $$(seq 1 300); do \
-		if curl -sf "$(PLAY_HEALTH)" >/dev/null 2>&1 && curl -sf "$(PLAY_URL)" >/dev/null 2>&1; then ready=1; break; fi; \
+		kill -0 $$srv 2>/dev/null || break; \
+		if curl -sf "$(PLAY_HEALTH)" >/dev/null 2>&1 && curl -sf "$$url" >/dev/null 2>&1; then ready=1; break; fi; \
 		sleep 1; \
 	done; \
-	if [ $$ready = 1 ]; then echo ""; echo "[play] ready: open $(PLAY_URL)  (Ctrl+C stops everything; guide: docs/16-probar-el-juego.md)"; \
+	if [ $$ready = 1 ]; then echo ""; echo "[play] ready: open $$url  (Ctrl+C stops everything; guide: docs/16-probar-el-juego.md)"; \
+	elif ! kill -0 $$srv 2>/dev/null; then echo "[play] the game server stopped: look at its log above"; exit 1; \
 	else echo "[play] the server or the client did not answer in 5 minutes: look at the log above"; fi; \
 	wait
 

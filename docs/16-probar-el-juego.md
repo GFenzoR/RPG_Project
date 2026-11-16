@@ -21,12 +21,15 @@ y el cliente (Vite, puerto 5173). Cuando los dos contestan imprime:
 [play] ready: open http://localhost:5173/play/
 ```
 
-Abre esa URL. El primer arranque tarda (compila el servidor y Vite prepara los módulos).
+Abre esa URL. El primer arranque tarda (compila el servidor y Vite prepara los módulos). Si
+algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó vivo),
+`make play` no arranca y lo dice; si el servidor se cae al arrancar, también.
 
 - `make play` corre además la tienda cosmética con el **proveedor de pagos falso**
   (`RPG_ENV=development`, `PAYMENTS_PROVIDER=fake`): se compra nácar sin dinero real en
-  `http://localhost:5173/shop`. Solo sirve porque el servidor escucha en `127.0.0.1`;
-  nunca lo uses en un servidor al que entra otra gente.
+  `http://localhost:5173/shop`. Solo lo activa con el servidor en `127.0.0.1` y la base en
+  `localhost`; con `DEV_HTTP_ADDR=:8080` (la red de casa) o una `DATABASE_URL` remota, la
+  tienda queda apagada.
 - `PLAY_START_TOWN=puerto make play` juega el inicio normal (Puerto, con tutorial).
 - Con `make dev` (que también levanta el editor y Mailpit) los personajes nuevos despiertan
   en Puerto; `RPG_START_TOWN=pruebas make dev` los manda a la Isla de Pruebas.
@@ -56,7 +59,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 | Sótano (piso 8) | 2110–2127 × 2088–2106 | Sala de la escalera, sala de la escalera de mano, pozo bajo el agujero con el punto de luz para subir con cuerda (2119,2094,8), cueva de murciélagos al este y el teletransporte (2113,2104,8) que vuelve a la plaza (2095,2094). Cartel en 2124,2088,8 |
 | Casa (sur) | Casa de Prueba, 2086–2091 × 2109–2113 | Puerta en 2088–2089,2114; salida en 2088,2115. Alquiler: 200 de cobre por 7 días |
 | Arena (sureste) | 2102–2112 × 2111–2119 | Zona `pvp`, entrada por el oeste (2101,2114–2116). Cartel en 2099,2113 |
-| Muelle (sur) | 2094–2096 × 2133–2138 | **Remo Vaivén**, barquero (2097,2133): barcos de ida a Puerto, al Bosque y a la Isla Volcánica (20 monedas). Cartel en 2093,2132 |
+| Muelle (sur) | 2094–2096 × 2133–2138 | **Remo Vaivén**, barquero (2097,2133): viajes de ida a Puerto, al Bosque y a la Isla Volcánica (20 monedas), donde llegan los barcos de verdad. Cartel en 2093,2132 |
 
 ## 4. Qué probar, en orden
 1. **Instructora (templo).** Habla con Irene Ensayo (click derecho sobre ella; con el
@@ -92,8 +95,10 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    una cuerda y úsala sobre el punto de luz para subir. Al fondo, el teletransporte te deja
    en la plaza.
 9. **Arena (sureste) y PvP.** Ver la sección 6.
-10. **Barco (muelle).** "Quiero viajar" con Remo Vaivén. Es de ida: para volver, `/tp` o
-    morir (despiertas en este templo con `make play`).
+10. **Barco (muelle).** "Quiero viajar" con Remo Vaivén (20 monedas). Es de ida: para volver,
+    `/tp` o morir (despiertas en este templo con `make play`). Es un teleport de diálogo, no una
+    ruta de barco: las rutas de verdad (con su viaje y su bloqueo de combate) se prueban con los
+    barqueros del Bosque y de la Isla Volcánica, que no piden nada para volver a Puerto.
 11. **Tienda cosmética.** En `http://localhost:5173/shop`, entra con tu cuenta, compra un
     paquete de nácar (proveedor falso) y un cosmético; en el juego, panel "Apariencia".
 
@@ -142,15 +147,19 @@ cuentas sin rol.
 
 ## Por qué la isla queda fuera del juego
 Decisión: la Isla de Pruebas es una herramienta de desarrollo, no contenido.
-- **Ningún barco ni portal llega a ella**: sus rutas (`pruebas_to_*` en
-  `data/boat_routes.yaml`) son de ida, y ningún portal ni diálogo de otra isla lleva ahí. Solo
-  se llega con `-start-town pruebas` (`make play`) o con un `/tp` del personal. Lo
-  comprueban `tools/mapcli/src/world.test.ts` ("the sandbox island") y
-  `server/internal/world/compile` (`TestCompilePruebas`).
-- La instructora regala experiencia y dinero, y la tienda vende todo a precios normales: no
-  sirve fuera de una prueba, y nadie la alcanza jugando.
-- Como cualquier isla de `world.yaml`, va dentro de `world.bin` también en producción. Un
-  `/tp` del personal la alcanza ahí (queda en el log de auditoría), y su casa sale en la
-  lista pública de casas (`/api/houses`). Si molesta, el siguiente paso es sacarla del build
-  de producción (pendiente).
+- **Es `dev_only`** (`world/world.yaml`): `mapcompile` la deja afuera salvo con `-dev`.
+  `make mapcompile` (y con él `make dev`, `make play`, `make run-server` y los bots) y el E2E
+  la incluyen; la imagen de producción (`deploy/Dockerfile.gameserver`, también la de
+  `make home-up`) no. Ahí no existe: ni un `/tp` del personal llega, `-start-town pruebas`
+  no arranca y su casa no sale en la lista pública de casas.
+- **Nada del juego normal lleva a ella**: ningún barco, portal ni diálogo de otra isla. Su
+  barquero no usa rutas de `data/boat_routes.yaml` sino teleports de diálogo con pasaje: el
+  servidor de producción revisa cada ruta contra su mapa, capitán incluido, y sin la isla no
+  arrancaría. `make validate` lo exige para toda isla `dev_only` (`03-world-and-maps.md`,
+  "Validación"), y lo comprueban `tools/mapcli/src/world.test.ts` ("the sandbox island") y
+  `TestCompilePruebas` (`server/internal/world/compile`).
+- Por eso la instructora puede regalar experiencia y dinero: fuera de un servidor local no
+  hay forma de hablarle.
+- Los personajes de `make play` y de `make dev` comparten la base `rpg`: uno que quedó en
+  la isla y entra con `make dev` sigue ahí (su isla está en el mapa local).
 - No toca `testisle`, que sigue siendo la isla de los tests y del E2E.

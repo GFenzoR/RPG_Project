@@ -117,7 +117,8 @@ export default defineConfig({
     {
       // mapcompile first, so `pnpm --filter @rpg/client e2e` works on its own too.
       command:
-        "go run ./cmd/mapcompile -root .. -out ../build/world.bin && " +
+        // -dev: the sandbox island (dev-only) is in the map, for e2e/sandbox.spec.ts.
+        "go run ./cmd/mapcompile -root .. -out ../build/world.bin -dev && " +
         // Every test registers and logs in from 127.0.0.1: raise the per-IP auth burst so the
         // suite does not depend on how fast it runs (production keeps the default).
         // -cookie-secure=false: Playwright's WebKit drops a Secure cookie on http://localhost

@@ -555,11 +555,12 @@ describe("validator diagnostics", () => {
       "{ item: driftwood_club, price: 9 }",
     );
     const out = messages(root);
-    // The cheapest seller is named (more than one shop sells rope for 45: the provisioner
-    // and the sandbox island's, whichever file comes first).
+    // The cheapest seller is named: the first file, pruebas_merchant.yaml before
+    // puerto_provisioner.yaml, when both sell rope for 45. Buy prices on the real islands
+    // stay below the sandbox shop's too (its ferry takes players there).
     expect(out).toContainEqual(
       expect.stringMatching(
-        /^error data\/npcs\/puerto_provisioner\.yaml:44:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "[a-z_]+" sells it for 45: buy prices must be lower than every sell price$/,
+        /^error data\/npcs\/puerto_provisioner\.yaml:44:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
       ),
     );
     expect(

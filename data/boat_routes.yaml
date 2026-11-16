@@ -44,27 +44,3 @@
   from: { x: 3612, y: 5795, z: 7 }
   to: { x: 3201, y: 6431, z: 7 }
   price: 140
-
-# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): one-way routes to the real
-# islands, landing where their own routes land. No route goes to the sandbox island, so
-# normal play never reaches it (only -start-town pruebas or a staff /tp does).
-- id: pruebas_to_puerto
-  captain: pruebas_ferryman
-  text: npc.pruebas_ferryman.to_harbour
-  from: { x: 2095, y: 2137, z: 7 }
-  to: { x: 3201, y: 6432, z: 7 }
-  price: 20
-
-- id: pruebas_to_bosque
-  captain: pruebas_ferryman
-  text: npc.pruebas_ferryman.to_forest
-  from: { x: 2095, y: 2137, z: 7 }
-  to: { x: 4120, y: 6100, z: 7 }
-  price: 20
-
-- id: pruebas_to_volcan
-  captain: pruebas_ferryman
-  text: npc.pruebas_ferryman.to_volcan
-  from: { x: 2095, y: 2137, z: 7 }
-  to: { x: 3617, y: 5795, z: 7 }
-  price: 20

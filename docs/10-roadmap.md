@@ -333,5 +333,6 @@ secundaria.
   vocación y la llave de la puerta de práctica, cinco corrales de caza de débil a fuerte,
   recolección y oficios, mercado, casa, puerta con llave, patio de portales con sótano (un
   portal de cada tipo), arena PvP y barquero de ida a las tres islas. Fuera del juego normal:
-  solo `-start-town pruebas` o un `/tp` del personal. Ops `add_text`/`remove_text` para
-  `texts.yaml`. Guía: `16-probar-el-juego.md`.
+  `dev_only` en `world.yaml` (la imagen de producción no la compila; `mapcompile -dev` sí) y
+  nada de las otras islas lleva a ella. Ops `add_text`/`remove_text` para `texts.yaml`.
+  Guía: `16-probar-el-juego.md`.

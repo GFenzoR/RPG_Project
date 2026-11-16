@@ -451,8 +451,14 @@ describe("entity ops", () => {
       text: "text.testisle.temple_sign",
       notes: "a book on the beach",
     });
-    // Removing the first sign and undoing puts it back in its place, byte for byte.
+    // Removing a sign and undoing puts it back in its place, byte for byte: the only one of
+    // testisle and one from the middle of Puerto's list.
     roundTrip(testisle(), [{ op: "remove_text", id: "testisle_temple_sign" }]);
+    const harbour = roundTrip(testisle(), [{ op: "remove_text", id: "puerto_harbour_sign" }]);
+    expect(harbour.islands.get("puerto")?.texts.map((t) => t.id)).toEqual([
+      "puerto_temple_sign",
+      "puerto_mine_sign",
+    ]);
     const r = applyOps(testisle(), [{ op: "remove_text", id: "testisle_temple_sign" }], opts);
     expect(r.touchedAux).toEqual([{ island: "testisle", file: "texts" }]);
     const sign = (over: object): MapOp =>

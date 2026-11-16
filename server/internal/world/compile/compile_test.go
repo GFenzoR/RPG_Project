@@ -89,7 +89,11 @@ func TestWalkableParityWithMapFormat(t *testing.T) {
 			if err := json.Unmarshal(out, &dumps); err != nil {
 				t.Fatalf("parse map-format dump: %v", err)
 			}
-			m := mustCompile(t, abs)
+			// map-format reads every island of world.yaml, the dev-only ones too.
+			m, err := Build(abs, Options{DevIslands: true})
+			if err != nil {
+				t.Fatalf("Build(%s): %v", abs, err)
+			}
 			if len(dumps) == 0 {
 				t.Fatal("map-format reported no floors")
 			}
@@ -237,7 +241,7 @@ func TestCompilePortals(t *testing.T) {
 	if up == nil || up.ID != "volcan_mine_up" || up.Kind != world.PortalStairs || up.To != p(3692, 5797, 7) {
 		t.Fatalf("volcanic mine stairs up = %+v", up)
 	}
-	for _, id := range []string{"puerto", "bosque", "volcan", "testisle", "pruebas"} {
+	for _, id := range []string{"puerto", "bosque", "volcan", "testisle"} {
 		if is := m.Island(id); is == nil || len(is.Portals) == 0 {
 			t.Errorf("island %s has no portals", id)
 		}
@@ -273,10 +277,17 @@ func TestCompileTestisle(t *testing.T) {
 // temple in a protection zone, one portal of each kind, an arena where PvP needs no skulls
 // and a house, and the temple reaches the floor 7 portals on foot.
 func TestCompilePruebas(t *testing.T) {
-	m := mustCompile(t, repoRoot(t))
+	// A dev-only island: left out of a plain compile (the production image).
+	if mustCompile(t, repoRoot(t)).Island("pruebas") != nil {
+		t.Fatal("pruebas compiled without DevIslands")
+	}
+	m, err := Build(repoRoot(t), Options{DevIslands: true})
+	if err != nil {
+		t.Fatalf("Build(DevIslands): %v", err)
+	}
 	is := m.Island("pruebas")
 	if is == nil {
-		t.Fatal("pruebas missing")
+		t.Fatal("pruebas missing with DevIslands")
 	}
 	if !m.Walkable(is.Temple) || m.Flags(is.Temple)&world.FlagProtection == 0 {
 		t.Errorf("temple %v: walkable %v, flags %b", is.Temple, m.Walkable(is.Temple), m.Flags(is.Temple))

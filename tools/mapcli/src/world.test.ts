@@ -231,13 +231,17 @@ describe("the sandbox island", () => {
     expect(npc.shop.sells.map((o) => o.item)).toContain("pruebas_key");
   });
 
-  it("cannot be reached from the real islands", () => {
-    // Its own ferry leaves from it; no boat lands on it.
+  it("is dev-only and cannot be reached from the real islands", () => {
+    // mapcompile leaves it out of the production image (world.yaml dev_only).
+    expect(world.meta.islands.find((e) => e.id === "pruebas")?.dev_only).toBe(true);
+    // No boat route touches it: its ferryman travels by dialog teleports.
     for (const r of content.routes) {
+      expect(inside(r.from), `route ${r.id} leaves from the sandbox island`).toBe(false);
       expect(inside(r.to), `route ${r.id} lands on the sandbox island`).toBe(false);
-      if (r.captain === "pruebas_ferryman") expect(inside(r.from), r.id).toBe(true);
     }
-    expect(content.routes.filter((r) => r.captain === "pruebas_ferryman")).toHaveLength(3);
+    const ferry = (content.teleports ?? []).filter((t) => t.npc === "pruebas_ferryman");
+    expect(ferry).toHaveLength(3);
+    for (const t of ferry) expect(inside(t.to), t.node).toBe(false);
     // No portal of another island and no NPC dialog teleport leads there.
     for (const other of world.islands.values()) {
       if (other.meta.id === "pruebas") continue;

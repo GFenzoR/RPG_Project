@@ -44,6 +44,31 @@ func dataHarnessWith(t *testing.T, edit func(*session.Config), spawns ...world.S
 	return h
 }
 
+// dropDialogTeleports takes the teleport actions out of the dialogs of data/ (the sandbox
+// ferryman's, docs/16): they point at the real islands, not at the 64x64 test maps, where
+// session.New would refuse them (checkArrivals). The real boat routes stay out the same way:
+// dataConfig takes the routes of each test.
+func dropDialogTeleports(npcs content.NPCs) {
+	for _, n := range npcs {
+		for _, node := range n.Dialog.Nodes {
+			for i, o := range node.Options {
+				var kept content.Actions
+				dropped := false
+				for _, a := range o.Action {
+					if a.Teleport != nil {
+						dropped = true
+						continue
+					}
+					kept = append(kept, a)
+				}
+				if dropped {
+					node.Options[i].Action = kept
+				}
+			}
+		}
+	}
+}
+
 // dataConfig is the config of dataHarness, with routes as its boat routes.
 func dataConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) session.Config {
 	t.Helper()
@@ -64,6 +89,7 @@ func dataConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) 
 	must(err)
 	npcs, err := content.LoadNPCs(dir)
 	must(err)
+	dropDialogTeleports(npcs)
 	quests, err := content.LoadQuests(dir)
 	must(err)
 	m := worldtest.Open(t, 0, 0, 64, 64)

@@ -36,6 +36,7 @@ const KEY_ORDER = [
   "doors",
   "exit",
   "level_hint",
+  "dev_only",
   "price",
   "requires",
   "level",

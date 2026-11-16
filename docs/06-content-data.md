@@ -641,10 +641,11 @@ trade:
 - Rutas actuales (T3.6): `puerto_to_bosque` (Maren Holt, 80 monedas, nivel 10 y Capítulo 1
   completo) y `bosque_to_puerto` (Tavin Rema, 60 monedas, sin requisitos); T5.5:
   `bosque_to_volcan` (Tavin Rema, 150, nivel 25), `volcan_to_bosque` (Nerea Vado, 100) y
-  `volcan_to_puerto` (Nerea Vado, 140), sin requisitos de vuelta. Desde la Isla de Pruebas
-  (`16-probar-el-juego.md`), `pruebas_to_puerto`, `pruebas_to_bosque` y `pruebas_to_volcan`
-  (Remo Vaivén, 20 cada una), de ida: ninguna ruta llega a ella. El texto de la
+  `volcan_to_puerto` (Nerea Vado, 140), sin requisitos de vuelta. El texto de la
   opción dice destino y precio (`npc.<capitán>.to_*`).
+- Una isla `dev_only` (la Isla de Pruebas, docs/03) no puede tener rutas: el servidor de
+  producción las revisa contra un mapa sin ella. Su barquero (`pruebas_ferryman`) usa
+  opciones con `take_gold` y `teleport` a las llegadas de las rutas de verdad.
 - El NPC necesita un nodo con `boat_routes: true`: ahí el servidor agrega una opción por
   ruta (antes de las del nodo, `option_id` 101, 102…). Rutas + opciones del nodo ≤ 9.
   Todas las rutas se muestran; un requisito que falla se explica al elegirla.

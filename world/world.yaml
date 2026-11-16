@@ -15,3 +15,4 @@ islands:
   - id: pruebas
     rect: { x: 2048, y: 2048, w: 96, h: 96 }
     level_hint: [1, 60]
+    dev_only: true

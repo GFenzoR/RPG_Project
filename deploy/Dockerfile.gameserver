@@ -40,7 +40,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 # ---- world: compile world/ + data/ into world.bin (runs natively on the build platform) ---
 # world.bin is architecture-independent, so it is built once, never under QEMU. A map or
-# content error fails the build: an image never ships without a valid world.
+# content error fails the build: an image never ships without a valid world. No -dev: the
+# dev-only islands of world.yaml (the sandbox island, docs/16) stay out of the image.
 FROM --platform=$BUILDPLATFORM build AS world
 COPY world/ /src/world/
 COPY data/ /src/data/

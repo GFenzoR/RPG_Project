@@ -28,9 +28,9 @@ function must<T>(v: T | undefined): T {
 }
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
-// The real routes of data/ point at the real islands, not at these mini worlds: each test
-// that checks routes brings its own.
-const content = { ...loadContent(repo), routes: [] };
+// The real routes and dialog teleports of data/ point at the real islands, not at these
+// mini worlds: each test that checks them brings its own.
+const content = { ...loadContent(repo), routes: [], teleports: [] };
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -1259,6 +1259,116 @@ describe("review fixes", () => {
     expect(
       m.some((l) => l.includes("[4].to:") && l.includes("arrival is not a walkable tile")),
     ).toBe(true);
+  });
+
+  it("keeps everything the server checks against the map off a dev-only island", () => {
+    // mini_two is dev_only: a build without -dev (the production image) leaves it out.
+    const a = mini();
+    const grass = emptyChunk(1, 0, 7);
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) setGround(grass, x, y, "grass");
+    const b: Island = {
+      meta: {
+        id: "mini_two",
+        name: "island.testisle.name",
+        rect: { x: 32, y: 0, w: 32, h: 32 },
+        floors: [7],
+        temple: { x: 48, y: 16, z: 7 },
+        level_hint: [1, 5],
+      },
+      chunks: new Map([[chunkKey(7, 1, 0), grass]]),
+      spawns: [],
+      npcs: [{ npc: "bosque_ferryman", pos: { x: 40, y: 20, z: 7 } }],
+      zones: [
+        {
+          id: "two_temple",
+          type: "protection",
+          floors: [7],
+          rects: [{ x: 47, y: 15, w: 3, h: 3 }],
+        },
+      ],
+      portals: [
+        // Out of the dev island is fine: it never runs without the rest.
+        {
+          id: "two_out",
+          from: { x: 44, y: 10, z: 7 },
+          to: { x: 12, y: 12, z: 7 },
+          kind: "teleport",
+        },
+      ],
+      texts: [],
+      houses: [],
+    };
+    const meta = worldOf(a, b);
+    const two = meta.islands[1];
+    if (!two) throw new Error("no second island");
+    two.dev_only = true;
+    const ok = check(a, meta, [b]);
+    expect(messages(ok)).toEqual([]);
+    expect(readFileSync(join(ok.root, "world", "world.yaml"), "utf8")).toContain(
+      "level_hint: [1, 5]\n    dev_only: true",
+    );
+
+    a.portals.push({
+      id: "mini_in",
+      from: { x: 12, y: 12, z: 7 },
+      to: { x: 40, y: 10, z: 7 },
+      kind: "teleport",
+    });
+    const { root } = check(a, meta, [b]);
+    const route = (index: number, captain: string, from: Position, to: Position) => ({
+      index,
+      id: `r${index}`,
+      captain,
+      from,
+      to,
+    });
+    const r = validateWorld(root, {
+      content: {
+        ...content,
+        routes: [
+          route(0, "harbor_master", { x: 20, y: 21, z: 7 }, { x: 40, y: 22, z: 7 }),
+          route(1, "bosque_ferryman", { x: 40, y: 21, z: 7 }, { x: 16, y: 17, z: 7 }),
+        ],
+        teleports: [
+          {
+            npc: "puerto_priest",
+            file: "data/npcs/puerto_priest.yaml",
+            node: "greet",
+            to: { x: 45, y: 25, z: 7 },
+          },
+        ],
+      },
+    });
+    const m = messages(r);
+    const has = (...parts: string[]): boolean => m.some((l) => parts.every((p) => l.includes(p)));
+    expect(
+      has("portals.yaml", "[2].to:", 'portal "mini_in" leads into dev-only island "mini_two"'),
+    ).toBe(true);
+    expect(
+      has("boat_routes.yaml", "[0].to:", 'boat route "r0" lands on dev-only island "mini_two"'),
+    ).toBe(true);
+    expect(
+      has("boat_routes.yaml", "[1].from:", 'boat route "r1" leaves from dev-only island'),
+    ).toBe(true);
+    expect(
+      has("[1].captain:", 'captain "bosque_ferryman" of boat route "r1" stands on dev-only island'),
+    ).toBe(true);
+    expect(
+      has(
+        "puerto_priest.yaml",
+        'teleport of NPC "puerto_priest" (node "greet") lands on dev-only island',
+      ),
+    ).toBe(true);
+    expect(m.join("\n")).not.toContain("two_out");
+
+    // The first island is where characters with no town start: never a dev-only one.
+    const first = worldOf(b, a);
+    const head = first.islands[0];
+    if (!head) throw new Error("no first island");
+    head.dev_only = true;
+    expect(messages(check(a, first, [b]))).toContainEqual(
+      expect.stringContaining('"mini_two" cannot be dev-only'),
+    );
   });
 
   it("ignores dotfiles and reports wrong entry types without throwing", () => {

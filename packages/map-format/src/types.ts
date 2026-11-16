@@ -151,6 +151,11 @@ export interface WorldIslandEntry {
   id: string;
   rect: Rect;
   level_hint: [number, number];
+  /**
+   * A development island (the sandbox island, docs/16): mapcompile leaves it out unless run
+   * with -dev, so nothing the server checks against the map may need it (validate.ts).
+   */
+  dev_only?: boolean;
 }
 
 export interface WorldMeta {

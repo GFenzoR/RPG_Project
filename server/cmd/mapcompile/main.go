@@ -2,7 +2,10 @@
 // data/ into world.bin, the binary map the game server loads at startup
 // (docs/03-world-and-maps.md). The same sources always produce the same bytes.
 //
-//	mapcompile -root . -out build/world.bin
+//	mapcompile -root . -out build/world.bin [-dev]
+//
+// -dev keeps the islands world.yaml marks dev_only (the sandbox island): make mapcompile
+// passes it, the production image (deploy/Dockerfile.gameserver) does not.
 package main
 
 import (
@@ -19,15 +22,16 @@ import (
 func main() {
 	root := flag.String("root", ".", "repository root (contains world/ and data/)")
 	out := flag.String("out", "build/world.bin", "output file")
+	dev := flag.Bool("dev", false, "keep the dev-only islands of world.yaml (the sandbox island); production leaves them out")
 	flag.Parse()
-	if err := run(*root, *out); err != nil {
+	if err := run(*root, *out, compile.Options{DevIslands: *dev}); err != nil {
 		fmt.Fprintln(os.Stderr, "mapcompile:", err)
 		os.Exit(1)
 	}
 }
 
-func run(root, out string) error {
-	m, err := compile.Compile(root)
+func run(root, out string, opts compile.Options) error {
+	m, err := compile.Build(root, opts)
 	if err != nil {
 		return err
 	}
