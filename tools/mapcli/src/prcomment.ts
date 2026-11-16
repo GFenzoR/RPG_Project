@@ -18,9 +18,11 @@
 //     only on the commit, so only a PR into the default branch sets it, and only while no
 //     other open PR into that branch has the same commit from another head repo or author
 //     (another PR of the same commit into an old branch, or a copy of a maintainer's PR
-//     opened by someone else, must not reach main's merge box), and only from a report
-//     computed against that branch's tip now (defaultTip: a run of a PR whose base changed
-//     since, or one main moved past, is no verdict for it).
+//     opened by someone else, must not reach main's merge box). For a PR that changes
+//     world/, only a report computed against that branch's tip now is a verdict
+//     (defaultTip: a run of a PR whose base changed since, or one main moved past, gives
+//     failure); and nothing is written if the PR's base, head or file count changed while
+//     the verdict was computed.
 //
 //   node --experimental-strip-types tools/mapcli/src/prcomment.ts            (in CI, env below)
 //   node --experimental-strip-types tools/mapcli/src/prcomment.ts --pending  (map-pr started)
@@ -810,9 +812,10 @@ export type Gh = (method: string, path: string, body?: unknown) => Promise<unkno
 const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/(?!\.\.?$)[A-Za-z0-9_.-]{1,100}$/;
 /**
  * A plain branch name: compared with the API's base.ref and put in the path of its git ref
- * (defaultTip), so no "..", "//", trailing "/", spaces, "?", "#" or "%".
+ * (defaultTip), so no "..", "//", trailing "/", component starting with "." (a URL would
+ * fold "a/./b"; git refuses it too), spaces, "?", "#" or "%".
  */
-const BRANCH = /^(?!.*\.\.)(?!.*\/\/)(?!.*\/$)[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}$/;
+const BRANCH = /^(?!.*\.\.)(?!.*\/\/)(?!.*\/$)(?!(?:.*\/)?\.)[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}$/;
 
 /** Reads and checks the workflow's environment; throws on anything unexpected. */
 export function readEnv(ev: Record<string, string | undefined>): Env {
@@ -1004,9 +1007,11 @@ const runUrlOf = (env: Env): string => `${env.server}/${env.repo}/actions/runs/$
  * stamp cannot tell (no comment yet, or a PR that does not change world/). With other open
  * PRs of that head from that repo, a newer run may be theirs and is no reason to hold this
  * one back; a verdict computed against another base never sets the status (defaultTip).
- * The listing is newest first: it is read page by page until a run as old as this one (or
- * its end). Fail closed: an answer without the list, or more than MAX_RUN_PAGES pages of
- * newer runs (GitHub lists no further), turns the job red before anything is written.
+ * Only map-pr.yml's runs count: a PR that renames the workflow (keeping `name: map-pr`)
+ * changes .github/, which never gets a success but from a maintainer. Every page is read
+ * up to a short one (GitHub does not document the order, so none is assumed). Fail
+ * closed: an answer without the list, or MAX_RUN_PAGES full pages (GitHub lists no more),
+ * turns the job red before anything is written.
  */
 async function newerRunOfCommit(env: Env, gh: Gh): Promise<string | undefined> {
   const mine = BigInt(env.runId);
@@ -1020,18 +1025,16 @@ async function newerRunOfCommit(env: Env, gh: Gh): Promise<string | undefined> {
       id?: unknown;
       head_repository?: { full_name?: unknown } | null;
     }[];
-    let reachedMine = false;
     for (const r of runs) {
       if (typeof r.id !== "number" || !Number.isSafeInteger(r.id)) continue;
       const id = BigInt(r.id);
-      if (id <= mine) reachedMine = true;
-      else if (r.head_repository?.full_name === env.headRepo)
+      if (id > mine && r.head_repository?.full_name === env.headRepo)
         return `run ${id} of map-pr is newer than ${env.runId} for this commit; nothing to do`;
     }
-    if (reachedMine || runs.length < 100) return undefined;
+    if (runs.length < 100) return undefined;
   }
   throw new Error(
-    `actions/runs: more than ${MAX_RUN_PAGES * 100} runs of the commit newer than ${env.runId}`,
+    `actions/runs: ${MAX_RUN_PAGES * 100} or more runs of the commit, GitHub lists no more`,
   );
 }
 
@@ -1146,11 +1149,12 @@ export async function markPending(env: Env, gh: Gh): Promise<string> {
 
 /**
  * A map-pr run finished (workflow_run `completed`): the comment gets the verdict and the
- * head commit its final status (when currentPull allows it). A report computed against
- * anything but the default branch's tip now is no verdict for a PR into it (other_base:
- * a failure, never a success of another base). The comment is written first; if the
- * status call fails the job is red and the commit keeps the status it had: `pending` when
- * the pending job marked this run, none for a new commit.
+ * head commit its final status (when currentPull allows it). For a PR into the default
+ * branch that changes world/, a report computed against anything but that branch's tip
+ * now is no verdict (other_base: a failure, never a success of another base). If the PR
+ * changed while this ran (base, head, file count), nothing is written. The comment is
+ * written first; if the status call fails the job is red and the commit keeps the status
+ * it had: `pending` when the pending job marked this run, none for a new commit.
  */
 export async function postVerdict(env: Env, gh: Gh): Promise<string> {
   if (NO_VERDICT.includes(env.conclusion))
@@ -1207,6 +1211,18 @@ export async function postVerdict(env: Env, gh: Gh): Promise<string> {
     if (art) ctx.artifactUrl = `${runUrl}/artifacts/${art.id}`;
     body = buildComment(report, ctx, t, error);
   }
+  // The PR right before writing: the base, head and file count the files and the verdict
+  // were read for. A base changed meanwhile (an `edited`, whose own run follows) must not
+  // get a verdict, nor a "no map" success, of the base it had.
+  const now = (await gh("GET", `/repos/${env.repo}/pulls/${pull.number}`)) as Pull & {
+    changed_files?: number;
+  };
+  if (
+    now.base.ref !== pull.base.ref ||
+    now.head.sha !== pull.head.sha ||
+    now.changed_files !== cur.changedFiles
+  )
+    return `PR #${pull.number} changed while its verdict was computed (into ${now.base.ref} at ${now.head.sha}); nothing to do`;
   const done: string[] = [];
   if (body !== undefined && existing !== undefined) {
     await gh("PATCH", `/repos/${env.repo}/issues/comments/${existing.id}`, {

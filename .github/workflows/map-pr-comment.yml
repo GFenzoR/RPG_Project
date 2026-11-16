@@ -11,9 +11,11 @@ name: map-pr-comment
 # branch protection of main requires that status, so an old pass never covers a new
 # commit. The verdict depends on the base and on the author and head repo (maintainer),
 # the status only on the commit: only a PR into the default branch writes it, not while
-# another open PR into it has the same commit from another head repo or author, and only
-# from a report computed against the default branch's tip at that moment (a run of a PR
-# whose base changed to main since, or that main moved past, gives failure). A late event
+# another open PR into it has the same commit from another head repo or author, and not
+# if the PR's base, head or file count changed while the verdict was computed. For a PR
+# that changes world/, only a report computed against the default branch's tip at that
+# moment is a verdict (a run of a PR whose base changed to main since, or that main moved
+# past, gives failure); a PR that changes no world/ file has no map to judge. A late event
 # (an older run of the same PR) writes nothing when the comment's run stamp tells, or the
 # newer runs of the commit when its PR is the only open one with that head from that
 # repo. This replaced map-pr-pending.yml (pull_request_target), which GitHub blocks by

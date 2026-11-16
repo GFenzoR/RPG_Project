@@ -125,10 +125,14 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     `map-pr` (editar el título, cerrar y reabrir, o empujar: relanzar una vieja no
     escribe si hay una más nueva). No está verificado en GitHub que un job saltado por su
     `if` no ocupe lugar en el grupo;
-  - un PR que se calculó hacia otra rama y después se pasó a `main` ya no puede dejar un
-    `success` de la otra rama: el veredicto solo vale como status si la base del reporte
-    es la punta actual de `main` (si no, `failure` y el comentario pide una corrida
-    nueva). Lo mismo si `main` avanzó mientras corría el check;
+  - un PR que cambia `world/`, se calculó hacia otra rama y después se pasó a `main` ya
+    no puede dejar un `success` de la otra rama: el veredicto solo vale como status si la
+    base del reporte es la punta actual de `main` (si no, `failure` y el comentario pide
+    una corrida nueva). Lo mismo si `main` avanzó mientras corría el check. Y si el PR
+    cambia de base, head o archivos mientras se calcula el veredicto, no se escribe nada.
+    Sin verificar en GitHub: si la API de archivos de un PR tarda en recalcular después
+    de un cambio de base (un PR que no toca `world/` contra la rama vieja podría llevarse
+    un `success` "sin mapa" en ese hueco);
   - una copia de un PR (otro PR hacia `main` con el mismo commit, de otro autor u otro
     repo de origen: un fork con ese commit u otra rama con la misma punta, porque GitHub
     no deja dos PR abiertos desde la misma rama hacia la misma base) congela el status

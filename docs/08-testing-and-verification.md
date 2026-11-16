@@ -102,8 +102,8 @@ CI"): `map-pr.yml` (`pull_request`, solo lectura; su YAML sale del PR, pero tal 
 artefactos `map-pr-report` y `map-pr-renders`; `map-pr-comment.yml` (`workflow_run`
 `requested` y `completed`, desde la rama por defecto) publica o actualiza un único
 comentario en el PR y, si el PR va hacia la rama por defecto (y no hay otro PR abierto hacia ella con el mismo commit desde otro repo o autor), pone el status de commit
-`map-pr/verdict` (pendiente mientras `map-pr` corre, después éxito o falla; un reporte calculado
-contra otra base que la punta actual de esa rama da falla). Ningún workflow usa `pull_request_target` (GitHub
+`map-pr/verdict` (pendiente mientras `map-pr` corre, después éxito o falla; en un PR que cambia
+`world/`, un reporte calculado contra otra base que la punta actual de esa rama da falla). Ningún workflow usa `pull_request_target` (GitHub
 lo bloquea por defecto en repos públicos desde el 2026-12-02); las reglas de seguridad de
 todos los workflows las comprueba `tools/mapcli/src/workflows.test.ts`, que corre en el
 job `ts` también cuando el cambio solo toca `.github/workflows/`. Para probarlo en local sin GitHub:

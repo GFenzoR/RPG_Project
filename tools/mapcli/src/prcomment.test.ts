@@ -77,6 +77,8 @@ interface Pull {
   unlisted?: boolean;
   /** The head the single-PR endpoint gives: a push landed after the listing was read. */
   headNow?: string;
+  /** What the single-PR endpoint gives from its second read on: the PR changed meanwhile. */
+  later?: Partial<Pull>;
 }
 
 /** A workflow run of commit B (of map-pr.yml, from someone/r, unless it says otherwise). */
@@ -96,6 +98,8 @@ interface Fake {
   commitRuns?: CommitRun[] | null;
   /** The tip of main (default A, the base of report(); null: an answer without a sha). */
   mainTip?: string | null;
+  /** The runs listing oldest first (GitHub does not document its order). */
+  runsOldestFirst?: boolean;
   /** Check runs of the head commit named map-pr/verdict (null: an answer without a count). */
   impostors?: number | null;
   /** Fails the first call whose "METHOD path" starts with this. */
@@ -106,6 +110,7 @@ interface Fake {
 function fakeGitHub(f: Fake) {
   const writes: { method: string; path: string; body: Record<string, unknown> }[] = [];
   const reads: string[] = [];
+  const pullReads: Record<number, number> = {};
   const gh: Gh = async (method, path, body) => {
     if (f.failOn && `${method} ${path}`.startsWith(f.failOn)) throw new Error("HTTP 502");
     let m: RegExpMatchArray | null;
@@ -119,7 +124,9 @@ function fakeGitHub(f: Fake) {
     if ((m = path.match(/^\/repos\/o\/r\/pulls\/(\d+)$/))) {
       const p = f.pulls.find((x) => x.number === Number(m?.[1]));
       if (!p) throw new Error("HTTP 404");
-      return p.headNow === undefined ? p : { ...p, head: { ...p.head, sha: p.headNow } };
+      const n = (pullReads[p.number] = (pullReads[p.number] ?? 0) + 1);
+      const q = n > 1 && p.later ? { ...p, ...p.later } : p;
+      return q.headNow === undefined ? q : { ...q, head: { ...q.head, sha: q.headNow } };
     }
     const runsOfB = `/repos/o/r/actions/workflows/map-pr.yml/runs?head_sha=${B}&event=pull_request&per_page=100&page=`;
     if (path.startsWith(runsOfB) && /^\d+$/.test(path.slice(runsOfB.length))) {
@@ -127,7 +134,7 @@ function fakeGitHub(f: Fake) {
       // GitHub's order: newest first.
       const runs = (f.commitRuns ?? [])
         .filter((r) => (r.workflow ?? "map-pr.yml") === "map-pr.yml")
-        .sort((x, y) => y.id - x.id);
+        .sort((x, y) => (f.runsOldestFirst === true ? x.id - y.id : y.id - x.id));
       const page = Number(path.slice(runsOfB.length));
       return {
         total_count: runs.length,
@@ -714,7 +721,7 @@ describe("copies of a PR and late runs of the same commit", () => {
     expect(n.writes).toEqual([]);
   });
 
-  it("reads the commit's runs page by page down to its own", async () => {
+  it("reads every page of the commit's runs, in whatever order GitHub lists them", async () => {
     // 100 newer runs from other forks fill the first page; PR 5's newer run 50 is on the
     // second.
     const forks: CommitRun[] = Array.from({ length: 100 }, (_, i) => ({
@@ -726,15 +733,20 @@ describe("copies of a PR and late runs of the same commit", () => {
       "run 50 of map-pr is newer than 42 for this commit",
     );
     expect(f.writes).toEqual([]);
-    // Without a newer run of its own repo it writes; a page that reaches the run itself
-    // is the last one read.
+    // Without a newer run of its own repo it writes, after reading up to a short page.
     const old: CommitRun[] = Array.from({ length: 41 }, (_, i) => ({ id: 41 - i }));
     const g = fakeGitHub(base({ commitRuns: [...forks, { id: 42 }, ...old] }));
     expect(await postVerdict(withReport(env(), report()), g.gh)).toContain("status success");
     expect(g.reads.filter((r) => r.includes("/actions/workflows/"))).toHaveLength(2);
-    const h = fakeGitHub(base({ commitRuns: [...forks.slice(1), { id: 42 }, ...old] }));
-    expect(await postVerdict(withReport(env(), report()), h.gh)).toContain("status success");
-    expect(h.reads.filter((r) => r.includes("/actions/workflows/"))).toHaveLength(1);
+    // No order is assumed: oldest first, the run itself on page 1 does not end the reading
+    // and the newer run 250 on page 2 still holds it back.
+    const h = fakeGitHub(
+      base({ commitRuns: [...old, { id: 42 }, ...forks, { id: 250 }], runsOldestFirst: true }),
+    );
+    expect(await postVerdict(withReport(env(), report()), h.gh)).toContain(
+      "run 250 of map-pr is newer than 42",
+    );
+    expect(h.writes).toEqual([]);
     // More newer runs than GitHub lists (10 pages): the job turns red before writing.
     const many: CommitRun[] = Array.from({ length: 1000 }, (_, i) => ({
       id: 1000 + i,
@@ -742,9 +754,54 @@ describe("copies of a PR and late runs of the same commit", () => {
     }));
     const k = fakeGitHub(base({ commitRuns: many }));
     await expect(postVerdict(withReport(env(), report()), k.gh)).rejects.toThrow(
-      "more than 1000 runs",
+      "1000 or more runs",
     );
     expect(k.writes).toEqual([]);
+  });
+
+  it("writes nothing when the PR changes while its verdict is computed", async () => {
+    // Commit B changes no world/ file against the old branch: no report, success there.
+    // Its base is set to main, the job reads it into main, and it is set back before the
+    // files are read: the "no map" success must not land on B.
+    const noMap = { 5: [{ filename: "client/a.ts" }] };
+    const flips: Partial<Pull>[] = [
+      { base: { ref: OLD } },
+      { head: { sha: C, repo: { full_name: "someone/r" } } },
+      { changed_files: 3 },
+    ];
+    for (const later of flips) {
+      const f = fakeGitHub(base({ files: noMap, pulls: [pull({ later })] }));
+      expect(await postVerdict(env(), f.gh)).toContain("PR #5 changed while its verdict");
+      expect(f.writes).toEqual([]);
+      // The same for a map PR, after its comment and verdict were built.
+      const g = fakeGitHub(base({ comments: { 5: [bot(7, MARKER)] }, pulls: [pull({ later })] }));
+      expect(await postVerdict(withReport(env(), report()), g.gh)).toContain("changed while");
+      expect(g.writes).toEqual([]);
+    }
+  });
+
+  it("ties only a verdict on world/ to main's tip", async () => {
+    // A PR that changes no world/ file gets its success whatever base its report names
+    // (there is no map to judge; the files come from the API, against the PR's base now).
+    const noMap = { 5: [{ filename: "client/a.ts" }] };
+    const f = fakeGitHub(base({ files: noMap, mainTip: null }));
+    const quiet = report({ base: D, map_changes: false, files: [] });
+    expect(await postVerdict(withReport(env(), quiet), f.gh)).toContain("status success");
+    // A report that says the map changes, of another base, is no verdict even with no
+    // world/ file in the API's list.
+    const g = fakeGitHub(base({ files: noMap }));
+    expect(await postVerdict(withReport(env(), report({ base: D })), g.gh)).toContain(
+      "status failure",
+    );
+    expect(String(g.writes[0]?.body.body)).toContain(REPORT_ERRORS.other_base);
+    // With a copy open into main, the comment says it and no status is written.
+    const copy = pull({ number: 6, user: { login: "other" } });
+    const h = fakeGitHub(base({ pulls: [copy, pull()] }));
+    expect(await postVerdict(withReport(env(), report({ base: D })), h.gh)).toContain(
+      "no status (#6 into main has the same commit from another repo or author; would be failure)",
+    );
+    expect(String(h.writes[0]?.body.body)).toContain(REPORT_ERRORS.other_base);
+    expect(statusOf(h.writes)).toEqual([]);
   });
 
   it("fails (red job) on a runs listing without the list, before writing", async () => {
@@ -821,7 +878,23 @@ describe("readEnv", () => {
     expect(() => readEnv({ ...ok, HEAD_REPO: "../x" })).toThrow();
     expect(() => readEnv({ ...ok, PR_HINT: "1/../2" })).toThrow();
     // The default branch comes from the event's repository; still checked.
-    for (const bad of [undefined, "", "a..b", "-x", "/x", "x/", "a//b", "a b", "a\nb"])
+    for (const bad of [
+      undefined,
+      "",
+      "a..b",
+      "-x",
+      "/x",
+      "x/",
+      "a//b",
+      "a b",
+      "a\nb",
+      "a/./b",
+      "a/.",
+      "a/.x",
+      "a?b",
+      "a#b",
+      "a%2e",
+    ])
       expect(() => readEnv({ ...ok, DEFAULT_BRANCH: bad }), String(bad)).toThrow();
     expect(readEnv({ ...ok, DEFAULT_BRANCH: "release/v1.2_x" }).defaultBranch).toBe(
       "release/v1.2_x",

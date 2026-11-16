@@ -244,8 +244,10 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
    desde dónde (maintainer), pero el status es del commit. Por eso el status lo escribe
    **solo un PR hacia la rama por defecto** (`DEFAULT_BRANCH`, del `repository` del
    evento), solo si **ningún otro PR abierto hacia esa rama tiene el mismo commit desde
-   otro repo o con otro autor**, y solo con un veredicto **calculado contra la punta actual
-   de esa rama**:
+   otro repo o con otro autor**. Si el PR cambia `world/`, además, solo con un veredicto
+   **calculado contra la punta actual de esa rama** (uno que no cambia `world/` no tiene
+   mapa que juzgar: su `success` no depende de la base). Y no escribe nada si el PR
+   cambió (base, head o cantidad de archivos) mientras se calculaba el veredicto:
    - el mismo commit puede ser el head de otro PR hacia una rama vieja del repo (con otras
      parcelas o un `prcheck` viejo) cuyo `success` aparecería en el PR hacia `main`. Un
      PR hacia otra rama recibe su comentario y nada más;
@@ -259,15 +261,23 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
      solo un bloqueo: nunca da un `success` falso, porque el mismo commit hacia la misma
      base es el mismo merge;
    - el reporte dice contra qué commit de la base se calculó (`base`: la punta de
-     `base.ref` cuando la corrida hizo checkout). Para un PR hacia la rama por defecto,
-     `comment` lo compara con la punta actual de esa rama (`GET /git/ref/heads/<rama>`,
-     con `contents: read`). Si no coincide, el reporte no vale (`other_base`): el
-     comentario lo dice y el status queda en `failure`. Cierra el caso de un PR que se
+     `base.ref` cuando la corrida hizo checkout). Para un PR hacia la rama por defecto que
+     cambia `world/`, `comment` lo compara con la punta actual de esa rama
+     (`GET /git/ref/heads/<rama>`, con `contents: read`). Si no coincide, el reporte no
+     vale (`other_base`): el comentario lo dice y el status, si este PR lo escribe (no con
+     una copia abierta), queda en `failure`. Cierra el caso de un PR que se
      calculó hacia una rama vieja y después se pasó a `main`: el `completed` de esa
      corrida vieja no escribe un `success` de la rama vieja, por tarde que llegue y aunque
      otros PR compartan el commit. También cae ahí una corrida que `main` dejó atrás
      mientras corría (con "Require branches to be up to date" ese PR igual necesita
-     actualizarse).
+     actualizarse). El comentario no muestra el detalle de ese reporte; el resumen de la
+     corrida de `map-pr` sí (la vista previa);
+   - justo antes de escribir, `comment` vuelve a leer el PR: si su base, su head o su
+     cantidad de archivos cambiaron desde que leyó los archivos, no escribe nada (la
+     corrida del `edited` o del push que lo cambió escribe la suya). Así un PR que no
+     cambia `world/` contra una rama vieja no se lleva su `success` "sin mapa" al pasar
+     a `main` y volver. Si la API de archivos tarda en recalcular tras un cambio de base
+     (no verificado en GitHub), esta lectura no lo ve.
 
    Tiene dos jobs, que corren de a uno por rama del PR (un grupo de `concurrency` a nivel
    de job, compartido):
@@ -309,15 +319,17 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
    - hay una corrida de `map-pr.yml` más nueva del mismo commit y del mismo repo de
      origen (`GET /actions/workflows/map-pr.yml/runs?head_sha=…&event=pull_request`, con
      `actions: read`), cuando el PR es el único abierto con ese head desde ese repo:
-     entonces toda corrida así es de este PR, de uno cerrado o de uno abierto que ya
-     avanzó a otro commit. Cubre lo que el sello del comentario no ve: un PR que todavía
-     no tiene comentario o que no cambia `world/`. La lista viene de la más nueva a la
-     más vieja y se lee por páginas hasta la corrida misma (o el final). Con varios PR del
-     mismo commit desde el mismo repo no se pregunta (la corrida más nueva puede ser del
-     otro PR) y quedan el sello del comentario y la base del reporte (arriba): un
-     veredicto calculado contra otra base nunca da `success`. Si la respuesta de la API
-     no trae la lista, o hay más de 1000 corridas más nuevas (GitHub no lista más), el
-     job falla sin escribir;
+     entonces toda corrida de `map-pr.yml` así es de este PR, de uno cerrado o de uno
+     abierto que ya avanzó a otro commit. Solo cuentan las de ese archivo: un PR que
+     renombra el workflow (con el mismo `name: map-pr`) toca `.github/`, y eso nunca da
+     `success` salvo a un maintainer. Cubre lo que el sello del comentario no ve: un PR
+     que todavía no tiene comentario o que no cambia `world/`. Se leen todas las páginas
+     hasta una incompleta: GitHub no documenta el orden de la lista, así que no se supone
+     ninguno. Con varios PR del mismo commit desde el mismo repo no se pregunta (la
+     corrida más nueva puede ser del otro PR) y quedan el sello del comentario y la base
+     del reporte (arriba): un veredicto de `world/` calculado contra otra base nunca da
+     `success`. Si la respuesta de la API no trae la lista, o hay 1000 corridas o más del
+     commit (GitHub no lista más), el job falla sin escribir;
    - hay varios PR abiertos con ese commit (y ese repo de origen) hacia ramas distintas y
      la corrida no dice para cuál es. El número de PR del reporte elige entre ellos: no
      es de confianza, pero solo puede nombrar otro PR con el mismo commit, cuyos datos de
