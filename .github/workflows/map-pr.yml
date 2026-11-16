@@ -43,13 +43,18 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0 # merge-base of base and head
+          # The token is not left in .git/config for later steps (pnpm install, mapcli).
+          persist-credentials: false
       - name: fetch the PR head as data
         id: refs
         env:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Only this step gets it (read-only): a public repo needs none, a private one does.
+          TOKEN: ${{ github.token }}
         run: |
-          git fetch --no-tags --quiet origin "refs/pull/${PR}/head"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$auth" fetch --no-tags --quiet origin "refs/pull/${PR}/head"
           if [ "$(git rev-parse FETCH_HEAD)" != "$HEAD_SHA" ]; then
             echo "::error::the PR head moved while this run started; the newer run checks it"
             exit 1
