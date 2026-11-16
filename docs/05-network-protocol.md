@@ -973,6 +973,23 @@ Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
   cuentas deshabilitadas o suspendidas, como el ranking). Cache de
   60 s, límite por IP y cupos de consulta compartidos con `/api/guilds`.
 
+### Puertas (`server/internal/session/door.go`)
+Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/doors.yaml`.
+- **Usar:** `UseItem{from: pos, item_id, stack_index}` sobre el item de la puerta (índice
+  ≥ 1 de la pila), en el mismo piso, a la vista y a `inventory.reach` (si no, `too_far`).
+  Un `item_id` que no es el de la casilla (una vista vieja), otro piso o una casilla fuera
+  de la vista no son un uso de puerta: siguen como cualquier `UseItem`. No hay mensajes
+  nuevos en el protocolo.
+- **Respuesta:** la puerta cambia por su par y quien ve la casilla recibe su
+  `TileUpdate`; el cliente decide qué se camina por el item, así que no necesita más. Al
+  que la usó, si tiene llave: `door.unlocked` / `door.relocked` (`item`: la llave); si la
+  abre sin llave desde la sala de atrás: `door.unbarred`. Una puerta sin llave no manda
+  mensaje.
+- **Rechazos** (la puerta queda como estaba): `door.locked` (trabada y sin llave desde
+  afuera), `door.no_key` (cerrarla con llave sin la llave), `door.blocked` (una criatura o
+  un item en su casilla), `door.shut_in` (un jugador sin la llave en la sala) y
+  `door.not_ready` (abrió o cerró una puerta hace menos de 500 ms).
+
 ### Gremios (T5.1, `server/internal/session/guild.go`)
 Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.
 - **`GuildCommand{action, name, text, guild_id, war_id}`** (`war_id`: T5.2). Los miembros se nombran por nombre de

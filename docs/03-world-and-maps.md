@@ -183,7 +183,8 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
 - Validación (`mapcli validate`, editor y CI): rects dentro de la isla y en sus pisos,
   todas sus casillas con suelo, ninguna casilla en dos casas ni en dos rects de la misma, puertas caminables dentro de
   la casa y en su borde (junto a una casilla de afuera; advertencia si las casillas de un
-  piso no forman un solo bloque), salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
+  piso no forman un solo bloque) y sin un item de puerta (bloque `door`: usarlo abriría la
+  puerta, nunca la ventana de la casa), salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
   el templo, nombre con texto en todos los idiomas, id único en el mundo. Adentro de una
   casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y
   ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro).

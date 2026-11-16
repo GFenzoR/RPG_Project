@@ -36,6 +36,13 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   personaje por minuto, escalonada, y las medianas de ingreso se calculan una vez por ronda.
   No está medida con `make bench-tick` (sus benchmarks la tienen apagada); los tests de
   simulación juegan entre 6 y 8 h de juego de un personaje en menos de un segundo cada uno.
+- Puertas con llave (`session/door.go`): la sala detrás de cada puerta se calcula una vez
+  al arrancar (un recorrido de hasta 4096 casillas por lado); en el tick, cerrar con llave
+  mira una entrada de un mapa por jugador y abrir desde adentro una sola. Un jugador mueve
+  una puerta como mucho cada 500 ms, así que una puerta no puede mandar su casilla 30
+  veces por segundo. `BenchmarkDoorLockRefused` (un intento de cerrar con alguien sin llave
+  en una sala de 3968 casillas, con 100 jugadores, en cada tick): ~2 µs y 10 asignaciones
+  (los mensajes); recorrer la sala en cada intento costaba ~0,54 ms y 163 KB.
 - Ranking público (T4.3, `queries/highscores.sql`): fuera del tick, pero comparte el pool de
   Postgres con los guardados. Hay como mucho 2 consultas a la vez, con 5 s de presupuesto;
   cada página se cachea 60 s por clave. Ninguna consulta ordena todos los personajes:

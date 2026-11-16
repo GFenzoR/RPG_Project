@@ -648,30 +648,51 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   cualquier item con `key: <id>`; varios items pueden compartir un id (por ejemplo, la
   copia que da un NPC). **Decisión:** se abre *usando la puerta con la llave encima*
   (equipada o en cualquier contenedor; no se gasta), no usando la llave sobre la puerta:
-  es un click en vez de dos y no obliga a buscar la llave en la mochila. Sin ella: "Está
-  cerrada con llave". La llave abre de los dos lados.
+  es un click en vez de dos y no obliga a buscar la llave en la mochila. Sin ella, desde
+  afuera: "Está cerrada con llave". La llave abre de los dos lados.
 - **Abierta, pasa cualquiera:** así un grupo entra detrás de quien tiene la llave.
   **Cerrarla con llave** también pide la llave; sin ella la puerta queda abierta. Nadie
   sin llave puede dejar a otros afuera ni adentro.
 - **No cierra sobre algo:** ni con una criatura ni con items en su casilla.
-- **Nadie queda encerrado:** antes de cerrar con llave, el servidor recorre a pie (8
-  direcciones, mismo piso, sin cruzar la puerta) cada lado de la puerta, hasta 4096
-  casillas por lado. Un lado que no termina es terreno abierto; si todos terminan, el más
-  grande es el de afuera. Los demás son salas detrás de la puerta: si en una hay un
-  jugador sin la llave, la puerta no se cierra ("Alguien sin la llave quedaría
-  encerrado"). Una puerta en campo abierto (se la puede rodear) no encierra a nadie.
+- **La sala de atrás:** al arrancar, el servidor recorre a pie cada lado de cada puerta
+  con llave (8 direcciones, mismo piso, sin cruzar esa puerta y con las demás puertas
+  abiertas), hasta 4096 casillas por lado. Un lado que no termina es terreno abierto; si
+  todos terminan, el más grande es el de afuera. Los demás son la **sala** de la puerta.
+  Una puerta en campo abierto (se la puede rodear) no tiene sala. Como los muros no
+  cambian y el recorrido cuenta las puertas como abiertas, la sala se calcula una vez; usar
+  la puerta cuesta una búsqueda en un mapa por jugador, no un recorrido.
+- **Nadie queda encerrado:** desde la sala, una puerta trabada se abre siempre, con o sin
+  llave ("Descorres el cerrojo desde adentro"). Así sale quien volvió a entrar al juego
+  adentro con la puerta trabada (otro la cerró mientras no estaba, o hubo un reinicio) y
+  quien perdió la llave adentro. Desde afuera sigue haciendo falta la llave. Además, la
+  puerta no se cierra con llave mientras haya en la sala un jugador conectado sin la llave
+  ("Alguien sin la llave quedaría encerrado"): encerrar a alguien no es una jugada que
+  tenga quien lleva la llave.
+- **Ritmo:** un jugador abre o cierra una puerta como mucho cada 500 ms ("Espera un
+  momento"); los intentos rechazados no cuentan. Otros jugadores la pueden usar mientras.
 - **Estado:** vive solo en el mapa en memoria. Un reinicio cierra y traba todas las
   puertas otra vez. Los monstruos no abren puertas, pero pasan por una abierta.
-- **Límite conocido:** un jugador desconectado no cuenta para "nadie queda encerrado". Si
-  salió adentro sin llave y vuelve con la puerta trabada (otro la cerró, o hubo un
-  reinicio), espera a alguien con llave o muere (vuelve al templo).
+- **Límites conocidos:**
+  - el cálculo de la sala no conoce escaleras ni portales (hoy no existen en el
+    servidor): una puerta futura cuyo acceso sea un pasillo chico con una escalera que
+    lleva a otro lado podría tomar ese pasillo por la sala. Al poner una puerta así hay
+    que revisarlo (`TestForgeGateOnTheMap` muestra cómo);
+  - al entrar al juego sobre una casilla ocupada, el servidor busca la libre más cercana
+    por anillos alrededor, no a pie: cerca de una puerta podría dejar a alguien del otro
+    lado. Si queda en la sala, sale abriéndola desde adentro;
+  - la llave se puede repetir: quien terminó `ch3_gate` y no la lleva encima pide otra al
+    eco, así que tirarla al piso y pedir otra da llaves de más, y una llave tirada la puede
+    levantar cualquiera. Lo aceptamos: quien tiene la llave ya puede abrirle la puerta a
+    quien quiera, y la llave no se vende ni se comercia (`tradeable: false`).
 - **Mapa:** una puerta se coloca como cualquier item (`place_item`, la paleta del editor,
   que muestra de cada puerta y de cada llave su id de llave). La llave es del tipo de
   item, no de la casilla: el formato de chunks no tiene atributos
   por casilla (`03-world-and-maps.md`), así que una puerta con otra llave es otro par de
   items. Elegimos esto frente a un id por casilla (como hace Tibia) porque mantiene el
   contenido como datos y no cambia el formato de mapas ni `world.bin`. El
-  validador de mapas cuenta las puertas como abiertas al medir el alcance desde el templo.
+  validador de mapas cuenta las puertas como abiertas al medir el alcance desde el templo,
+  y no deja poner un item de puerta en una casilla de puerta de una casa (usarlo abriría
+  la puerta y nunca la ventana de la casa; el servidor tampoco arranca con eso).
 - **Hoy:** la puerta de la forja (`forge_gate` / `forge_gate_open`, piso 8 de la Isla
   Volcánica, 3692,5832) se abre con la llave de ascua (`ember_key`) del Capítulo 3.
 
