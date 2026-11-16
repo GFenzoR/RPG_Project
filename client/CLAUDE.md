@@ -491,7 +491,15 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la página, ni un script o un campo con foco desplace el mapa de lado. Un resaltado
   del tutorial cambia a su pestaña. El encabezado es siempre una línea: la ayuda de
   controles se corta con "…" y se abre al tocarla; en teléfonos y tablets en vertical, un
-  menú ☰ guarda experiencia, ayuda, idioma, opciones y salir.
+  menú ☰ guarda experiencia, ayuda, idioma, opciones y salir. Ese encabezado compacto no
+  ensancha la página con una fuente ancha (Linux dibuja `system-ui` con DejaVu Sans: en la
+  CI se salía ~20 px a 390 px), en inglés o con números más grandes: sin lugar, cede
+  primero el nombre (hasta sus 3rem) y después el nivel (`.stat.level`), con "…"; vida y
+  maná quedan enteros (solo ellos y el ☰ tienen que entrar). El `flex-shrink` enorme del
+  nombre hace que el nivel espere (flex reparte por factor × ancho, y quitarle un pelo al
+  nivel ya muestra su "…"). La barra de condiciones vacía no ocupa lugar (`:empty`) y el
+  ☰ (y "Abrir panel") van a la derecha con margen `auto`, sin un ítem espaciador que
+  costaba otro `gap`.
 - Mientras un campo de texto tiene el foco y solo cambió la altura (teclado virtual), el
   layout no cambia; `--game-height` sigue al `visualViewport` (iOS). El chat hace
   `scrollIntoView` del input y no le llegan teclas al juego.
@@ -540,6 +548,12 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   caja del mapa en píxeles de sprite enteros (`viewPixels`). `followCamera` centra en el
   jugador una vista de casillas fraccionarias. El servidor sigue mandando las 15x11 (+1):
   el zoom es solo de dibujo.
+- La cámara (`follow` en `game-canvas.ts`) se fija en cada frame y también en cada
+  `resize`, incluido el de la creación: cuando el juego publica `__rpgClient` con
+  `ready`, `tileToClient` y los clicks ya apuntan al mapa. Antes solo la fijaba el primer
+  frame, que el ticker de Pixi se salta si su hora es anterior a su arranque (página
+  ocupada): en la CI un Mayús+click justo después de `ready` cayó a 100.000 px, fuera del
+  canvas. "talk to NPCs" lo comprueba en el instante en que se publican los hooks.
 - Entradas: pellizco (`pinch` del reconocedor de gestos, escala inicial × separación,
   redondeada); botones +/− (`ui/ZoomButtons.tsx`, sin hooks, solo con puntero grueso,
   ocultos si la pantalla admite una sola escala); Ctrl+rueda sobre el canvas

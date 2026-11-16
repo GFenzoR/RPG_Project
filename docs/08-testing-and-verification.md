@@ -149,8 +149,10 @@ mantenido y el pellizco usan, en Chromium, eventos táctiles de CDP
 CDP y Playwright solo toca: ahí son `PointerEvent` sintéticos de tipo `touch` sobre el
 elemento bajo cada dedo. El primer dedo usa el id 1, el único que `setPointerCapture`
 acepta en un evento sintético; el pad captura su dedo.
-- En cada dispositivo: layout esperado (`data-layout`) y nada que ensanche la página;
-  caminar tocando una casilla y con el pad (un toque = un paso, mantener = varios); mover
+- En cada dispositivo: layout esperado (`data-layout`) y nada que ensanche la página,
+  también con el encabezado en una fuente ancha (`"DejaVu Sans", Verdana`: la de Linux, y
+  Verdana, igual de ancha, lo reproduce en Windows y macOS): el ☰ queda en pantalla y vida
+  y maná enteros (`headerFit`, screenshot `mobile-*-00-wide-font`); caminar tocando una casilla y con el pad (un toque = un paso, mantener = varios); mover
   la mochila al suelo con "tocar item → tocar destino" y devolverla con el toque largo
   ("Mover" → slot vacío), comprobando la casilla y el slot que manda el servidor; escribir
   en la pestaña del chat y ver el eco del servidor. La casilla se compara entera (la pila
@@ -221,6 +223,19 @@ siempre es una espera que dependía de la velocidad.
   servidor por `__rpgClient`, un request, `mapDrawn` antes de un screenshot). No suponer
   que el mapa está limpio: otro test pudo dejar items en el mismo lugar. Un gesto táctil
   de CDP manda un click al levantar el dedo sobre lo que haya debajo.
+- **Fuentes:** el runner dibuja `system-ui` con DejaVu Sans, mucho más ancha que Segoe UI
+  (Windows) o San Francisco (iOS). Un texto que "entra" en local puede salirse en la CI: el
+  encabezado del iPhone 13 (390 px, WebKit) se salía ~20 px y `scrollWidth <=
+  clientWidth` fallaba en #81 y en los dos intentos de #82. Para probar un layout de texto
+  angosto en local, forzar `"DejaVu Sans", Verdana` (como hace `mobile.spec.ts`).
+- **`ready` antes del primer frame:** el ticker de Pixi se salta un primer frame cuya hora
+  es anterior a su arranque (página ocupada, lo normal en la CI), así que el primer dibujo
+  puede llegar uno o más frames después de `__rpgClient.ready`. Antes la cámara recién se
+  fijaba en ese dibujo: un `tileToClient` justo después de `ready` daba un punto a 100.000
+  px, fuera del canvas, y el Mayús+click al cartel del Farol ("talk to NPCs", flaky en
+  #82) no leía nada (y seleccionaba el nombre del encabezado). Ahora la cámara se fija al
+  crear el canvas, y ese test comprueba, en el instante en que se publican los hooks, que
+  la casilla propia cae dentro del canvas.
 - **Ruido conocido:** líneas `[WebServer] [vite] ws proxy error: read ECONNRESET` (y
   `ws proxy socket error`). Las escribe el proxy de Vite cuando una página se cierra con
   su WebSocket abierto: el fin de un test, o el cierre de uno que se pasó de tiempo (en
