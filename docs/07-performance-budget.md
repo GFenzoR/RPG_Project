@@ -85,7 +85,7 @@ El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez q
 
 | Métrica | Presupuesto | Hoy |
 |---|---|---|
-| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~526 KiB (32 archivos) |
+| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~645 KiB (34 archivos) |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
 | Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~154 KiB / ~29 KiB |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |

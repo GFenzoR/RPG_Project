@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import { BUDGET, checkBudget, GENERATED, manifestFiles, render } from "./index.ts";
 import { RATE, encodeWav, note, rng } from "./synth.ts";
 
@@ -53,6 +54,27 @@ describe("generated sounds", () => {
   it("music loops last a whole number of bars", () => {
     // puerto: 16 bars of 4 beats at 96 bpm = 40 s.
     expect(render({ path: "music/puerto", kind: "music" }).length).toBe(40 * RATE);
+    // volcan (T5.5): 8 bars of 4 beats at 66 bpm.
+    expect(render({ path: "music/volcan", kind: "music" }).length).toBe(
+      Math.round(((8 * 4 * 60) / 66) * RATE),
+    );
+  }, 30_000);
+
+  it("the Isla Volcánica plays its own loops, not the cave's and the shore's (T5.5)", () => {
+    const raw = parse(readFileSync(join(root, "assets", "sounds.yaml"), "utf8")) as {
+      music: { islands: Record<string, string> };
+      ambient: { islands: Record<string, string> };
+    };
+    expect(raw.music.islands["volcan"]).toBe("music_volcan");
+    expect(raw.ambient.islands["volcan"]).toBe("amb_volcan");
+    const files = new Map(manifestFiles(root).map((f) => [f.id, f.file]));
+    expect(files.get("music_volcan")).toBe("sounds/music/volcan.ogg");
+    expect(files.get("amb_volcan")).toBe("sounds/ambient/volcan.ogg");
+  });
+
+  it("the volcanic ambience loops without a click", () => {
+    const a = render({ path: "ambient/volcan", kind: "ambient" });
+    expect(Math.abs((a[0] ?? 0) - (a[a.length - 1] ?? 0))).toBeLessThan(0.05);
   }, 30_000);
 
   it("sounds.yaml uses every generated file and every own file exists", () => {
