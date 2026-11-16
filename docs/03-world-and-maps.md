@@ -473,6 +473,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   algún `npcs.yaml` a ≤ 8 casillas (Chebyshev, mismo piso) del muelle `from`, y `from` y
   `to` son casillas caminables de una isla. Los errores llevan la posición; con
   `--island` se muestran los de rutas cuyo muelle o llegada cae en esa isla.
+- **Llegadas de barco y teleports de diálogo**: ni la llegada `to` de una ruta ni el
+  destino de un `teleport` de un diálogo de NPC (`data/npcs`) caen en una casilla de casa
+  (una llegada no deja a nadie adentro de una casa) ni sobre una puerta con llave colocada
+  abierta (una puerta no es lugar para llegar: el que llega quedaría en el umbral). El
+  destino de un `teleport` es además una casilla caminable de una isla, como la llegada de
+  un barco (una puerta con llave cerrada no lo es). El error nombra la isla y la casilla.
+  Lo mismo que los extremos de portal en una casa (`world.NewMap`): el servidor no arranca
+  con eso (`checkArrivals` en `session/travel.go`), y los dos lados leen los casos de
+  `packages/map-format/src/testdata/arrivals.json`.
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).
 

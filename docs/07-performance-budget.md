@@ -52,8 +52,11 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   índice casilla → sala (`roomOf`). También al arrancar se numeran las **áreas** del mapa
   (un recorrido de cada casilla caminable, una vez) para el chequeo de escape y las
   búsquedas de casilla libre: un `[1024]int32` (4 KiB) por sector que tiene alguna
-  casilla de un área. En el mundo real (135 sectores, 4 islas de 2 pisos): 12 áreas en 105
-  sectores, unos 420 KiB, y `initAreas` tarda ~7 ms (`session.New` entero, ~8 ms); el
+  casilla de un área. Las **áreas de casa** (las casillas de cada casa unidas a pie, para
+  las búsquedas que empiezan en una casa) van en los mismos arreglos con id negativo: no
+  suman memoria salvo un sector que solo tenga casillas de casa. En el mundo real (135
+  sectores, 4 islas de 2 pisos): 12 áreas y 6 áreas de casa en 105 sectores, unos 420 KiB,
+  y `initAreas` tarda ~7 ms (`session.New` entero, ~8 ms); el
   chequeo de escape es un recorrido de un grafo de áreas (una por puerta y portal) y no se
   nota. Crece con los sectores del mundo, no con los jugadores: un mundo 10 veces más
   grande serían ~4 MiB y ~70 ms al arrancar. `make validate` hace lo mismo en TS solo con

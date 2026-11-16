@@ -149,17 +149,17 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     `portalSources`), con casos nuevos en `door-rooms.json`. El chequeo de llaves es
     conservador (supone a un jugador en cualquier área fuera de las salas y en cualquier
     casa), y una escalera de mano cuenta solo desde el área de su casilla;
-  - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) solo acepta
-    casillas del área del origen (desde una escalera, un agujero o un teletransporte, las
-    áreas de al lado), pero si el origen no está en ningún área por otra razón (entrar al
-    juego sobre una casilla de casa o de una puerta con llave, un `/tp` del personal) solo
-    descarta las salas (`searchFrom` y `areaAllows` en `server/internal/session/area.go`):
-    todavía puede dejar a alguien en un bolsillo cerrado por paredes o del otro lado de una
-    pared. Arreglo posible: que un origen en una casa use el área de la salida de la casa.
-    Ningún portal puede salir de una puerta con llave ni llegar a ella, pero una llegada de
-    barco o un teleport de diálogo sobre una puerta con llave colocada abierta todavía se
-    acepta (`checkRooms` solo mira las salas): quien llega queda en la puerta, como quien
-    la cruza abierta; si hace falta, rechazarlos igual que los extremos de portal.
+  - la búsqueda de casilla libre por anillos (`searchFrom` en `session/area.go`) ya tiene
+    regla para cada origen fuera de las áreas (casa: su área de casa y la calle de la
+    salida; puerta con llave: su afuera; escalera: las áreas de al lado; cualquier otro:
+    ninguna, `02-game-design.md` "Nadie aparece adentro sin pasar la puerta"). Queda: una
+    **salida de casa** sobre una puerta con llave colocada abierta no se rechaza al cargar
+    (la búsqueda desde la salida usa el afuera de la puerta, así que no deja a nadie en la
+    sala, pero con todo lleno `houseExit` deja al jugador en la salida misma: el umbral).
+    Hoy no hay ninguna; si se quiere, sumarla a `checkArrivals` (Go y `validate.ts`) con un
+    caso en `testdata/arrivals.json` (el fixture necesitaría casas por caso). Y quien sale
+    del juego en el umbral de una puerta abierta vuelve afuera aunque hubiera entrado con
+    la llave: no sabemos de qué lado venía;
   - **Para que lo decida el dueño (revisión del lote 3):**
     - portales de la comunidad entre islas: hoy el chequeo de parcelas los rechaza
       (`cross_island`, `packages/map-format/src/patch/plots.ts`), la opción segura, porque
@@ -187,13 +187,10 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     y ningún `MoveItem` cambia además una casa): es una guarda;
   - el caso real que justificó reservar lo soltado con la escritura de la casa (una runa
     del suelo de la casa usada desde la calle que mata a un monstruo de una quest de
-    muertes cuya recompensa no entra) se prueba con `InputAndGiftForTest`, que lo simula;
-    falta un test de simulación con la runa, el monstruo y la quest de verdad;
-  - una llegada de barco o un `teleport` de diálogo cuyo destino es una casilla de casa
-    ahora deja al jugador fuera de la casa (o el teleport no se ofrece si no hay lugar a 1
-    casilla), pero el servidor no lo rechaza al cargar, como sí rechaza un extremo de
-    portal en una casa (`world.NewMap`). Conviene rechazarlo igual en `session.New` y en
-    `make validate`.
+    muertes cuya recompensa no entra) lo juega `TestHouseRuneKillsAQuestMonsterFromTheStreet`
+    con la runa, el monstruo y la recompensa de `data/`; la quest es del test porque
+    ninguna quest de `data/` termina en una muerte (todas cierran hablando con un NPC). Si
+    alguna llega a terminar en una muerte, conviene pasar el test a ella.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

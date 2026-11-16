@@ -100,7 +100,7 @@ Tibia:
   una casa comparten la casilla de destino como último recurso: el templo o la salida, que
   nunca están sobre una escalera, un agujero o un teletransporte (lo rechazan el servidor y
   `make validate`). Quien entra al juego con todo lleno y tenía guardada la posición sobre
-  una escalera (de antes de los portales) va al templo.
+  una escalera (de antes de los portales) o sobre una puerta con llave va al templo.
 - **Lo que el cliente ve:** lo mismo que un teletransporte del personal (`FullMapView` del
   piso nuevo, docs/05). Solo se dibuja el piso del jugador.
 
@@ -626,7 +626,10 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   entran (el paso a cualquier casilla de la casa se valida en el servidor), y quien queda
   adentro sin permiso (lo sacaron de la lista, dejó el gremio, la casa cambió de dueño o
   se liberó) sale por la puerta a la salida en el acto o, a lo sumo, en un segundo. Quien
-  entra al juego dentro de una casa a la que ya no tiene acceso aparece en la salida. El
+  entra al juego dentro de una casa a la que ya no tiene acceso aparece en la salida; con
+  acceso, en su casilla o, si está ocupada, en otra de esa casa unida a pie con ella o en
+  la calle de la salida (nunca en otra casa ni del otro lado de una pared, ver "Puertas con
+  llave", "Nadie aparece adentro sin pasar la puerta"). El
   personal del juego entra a cualquier casa. Desde la ventana de la casa (que se abre a
   hasta 3 casillas de una puerta) quien tiene acceso puede **entrar** (lo lleva a una
   casilla libre adentro, junto a la puerta) y quien está adentro, **salir** (a la salida):
@@ -717,7 +720,10 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
 - **Llegada:** la casilla `to` de la ruta; si está ocupada, la libre y caminable más
   cercana a ≤ `arrival_radius` (2) casillas, nunca una casilla de casa (como la llegada por
   un portal; un teleport de diálogo tampoco deja a nadie en una casa). Si no hay ninguna,
-  se rechaza (`travel.no_room`) sin cobrar.
+  se rechaza (`travel.no_room`) sin cobrar. La casilla `to` misma (y el destino de un
+  teleport de diálogo) nunca es de una casa ni una puerta con llave colocada abierta: ni el
+  servidor arranca ni pasa `make validate` (docs/03 "Validación"), igual que un extremo de
+  portal en una casa.
 - **Cobro atómico:** todo se comprueba antes; luego el jugador se mueve, se consume el
   pasaje (si `consume: true`) y se paga el precio. El vuelto de una moneda grande cae en
   la mochila o, si no cabe, a los pies del jugador en el destino.
@@ -846,11 +852,30 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   ocupadas junto al portón (en la forja bastaban unas 11), quien guardó su posición afuera
   aparecía adentro y, como desde adentro se abre sin llave, le abría a todos; y un templo
   lleno podía dejar a alguien en un bolsillo cerrado por paredes o del otro lado de una
-  escalera. Si el punto es la entrada de una escalera, un agujero o un teletransporte (que
-  no está en ningún área), acepta solo casillas de las áreas de al lado, las únicas a las
-  que se llega caminando desde ahí. Si el punto no está en ningún área por otra razón
-  (una casilla de casa, la de una puerta con llave), descarta solo las casillas de las
-  salas.
+  escalera. Si el punto no está en ningún área, la búsqueda queda donde podría caminar un
+  jugador parado ahí:
+  - **la entrada de una escalera, un agujero o un teletransporte:** solo las áreas de al
+    lado, las únicas a las que se llega caminando desde ahí;
+  - **una casilla de casa** (entrar al juego donde se salió, un `/tp` del personal): las
+    casillas de esa casa unidas a pie con el punto (su **área de casa**: las casillas de
+    una casa con sus paredes y puertas, numeradas aparte; no son áreas del chequeo de
+    escape, donde una casa sigue siendo muro) y el área de la salida de la casa (la calle
+    a la que sale quien está adentro). Nunca otra casa, otra parte de la misma casa
+    separada por una pared ni un bolsillo cerrado del otro lado de la pared;
+  - **una puerta con llave** (abierta o cerrada; quien salió del juego parado en el umbral
+    abierto, un `/tp` del personal): solo su lado de **afuera**, las áreas de al lado que
+    no son su sala. Nunca el umbral (taparía la puerta abierta) ni la sala: quien estaba
+    ahí venía de afuera o de la sala, que desde adentro se abre sin llave hacia afuera;
+    entrar a la sala pide la llave, así que la búsqueda nunca termina adentro. Quien
+    guardó la posición en el umbral entra al juego junto a la puerta, afuera, aunque la
+    puerta se haya cerrado después (antes iba al templo);
+  - **cualquier otra casilla** (un muro, ninguna casilla): ninguna. La búsqueda no
+    encuentra lugar y vale el último recurso de quien la pidió (el templo, la salida de la
+    casa, el rechazo del `/tp` o del teleport) en vez de adivinar.
+  - **Por qué así y no "el área alcanzable más cercana":** no adivina. Cada punto fuera de
+    las áreas que el juego puede pedir (una casa, una puerta, un portal) tiene su regla, y
+    el resto no deja a nadie en ningún lado. Un `/tp` a una casilla caminable cae siempre
+    en una de las tres primeras (toda otra casilla caminable está en un área).
 - **Ritmo:** un jugador usa una puerta como mucho cada `inventory.door_cooldown_ms`
   (500 ms, "Espera un momento"), la abra, la cierre o se lo rechacen: un rechazo también
   cuenta, así sus chequeos (la llave, la sala) corren a ese ritmo y no al del gateway.

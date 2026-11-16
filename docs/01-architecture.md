@@ -379,7 +379,10 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       ahí no se guarda ese snapshot: lo que soltó a la calle queda **reservado** al
       personaje como lo que sale de una casa (`reserveGiven`, con el `Seq` de su snapshot
       en esa escritura, `numberLeft`). Si la escritura se descarta, vuelve a su guardado de
-      antes del comando y la reserva no se libera nunca (nadie más lo levanta). Si lo
+      antes del comando y la reserva no se libera nunca (nadie más lo levanta). Lo prueba
+      con la runa (`arc_rune`), el monstruo (`bilge_rat`) y la recompensa de `data/` el
+      test de simulación `TestHouseRuneKillsAQuestMonsterFromTheStreet` (la quest es del
+      test: ninguna de `data/` termina en una muerte). Si lo
       soltara en algo que no se le puede reservar (una pila o bolsa de la calle que no le
       está reservada, aunque sea suya) se tomaría el snapshot como antes y `settleGave` lo
       registraría con nivel error; solo un `MoveItem` suelta así y ningún `MoveItem` cambia

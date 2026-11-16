@@ -303,7 +303,10 @@ Semántica del motor (T1.10):
 - `teleport` deja al jugador en su destino o, si está ocupado, en la casilla libre más
   cercana a 1 de distancia, solo en el área del destino y nunca en una casilla de casa
   (como la llegada de un barco o de un portal). Si no hay ninguna, el destino cuenta como
-  inexistente.
+  inexistente. El destino tiene que ser una casilla caminable de una isla, fuera de las
+  casas y no sobre una puerta con llave colocada abierta: si no, ni el servidor arranca ni
+  pasa `make validate` (docs/03 "Validación"; lo mismo vale para la llegada `to` de una
+  ruta de barco).
 - `has_item`/`lacks_item` cuentan todo el inventario (equipo y contenedores anidados).
   Un contenedor con algo adentro no cuenta ni se puede quitar o vender (se perdería su
   contenido).
