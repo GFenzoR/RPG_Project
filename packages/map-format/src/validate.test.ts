@@ -334,6 +334,40 @@ describe("validateWorld", () => {
     );
   });
 
+  it("allows one portal per tile, never to its own tile", () => {
+    const i = mini();
+    i.portals.push({
+      id: "mini_twin",
+      from: { x: 10, y: 10, z: 7 },
+      to: { x: 12, y: 12, z: 7 },
+      kind: "teleport",
+    });
+    i.portals.push({
+      id: "mini_loop",
+      from: { x: 12, y: 12, z: 7 },
+      to: { x: 12, y: 12, z: 7 },
+      kind: "teleport",
+    });
+    const m = messages(check(i));
+    expect(m).toContainEqual(
+      expect.stringContaining('portals "mini_down" and "mini_twin" leave from the same tile'),
+    );
+    expect(m).toContainEqual(expect.stringContaining("portal leads to its own tile"));
+  });
+
+  it("warns that a boat portal moves nobody", () => {
+    const i = mini();
+    i.portals.push({
+      id: "mini_ferry",
+      from: { x: 12, y: 12, z: 7 },
+      to: { x: 13, y: 13, z: 7 },
+      kind: "boat",
+    });
+    const r = check(i);
+    expect(r.diagnostics.filter((x) => x.severity === "error")).toEqual([]);
+    expect(messages(r)).toContainEqual(expect.stringContaining("a boat portal moves nobody"));
+  });
+
   it("rejects portals into the void and holes that go up", () => {
     const i = mini();
     i.portals.push({

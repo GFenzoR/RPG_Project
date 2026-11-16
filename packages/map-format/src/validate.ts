@@ -279,8 +279,29 @@ class WorldValidator {
       this.err(file, ["temple"], "temple is not covered by a protection zone", meta.temple);
 
     const portalsFile = `${dir}/portals.yaml`;
+    // The server (world.NewMap) indexes portals by their entrance: one per tile.
+    const entrances = new Map<string, string>();
     for (const [i, p] of island.portals.entries()) {
       needWalkable(portalsFile, [i, "from"], p.from, "portal entrance");
+      const other = entrances.get(formatPos(p.from));
+      if (other !== undefined)
+        this.err(
+          portalsFile,
+          [i, "from"],
+          `portals "${other}" and "${p.id}" leave from the same tile`,
+          p.from,
+        );
+      else entrances.set(formatPos(p.from), p.id);
+      if (formatPos(p.from) === formatPos(p.to))
+        this.err(portalsFile, [i, "to"], "portal leads to its own tile", p.from);
+      if (p.kind === "boat")
+        // docs/02 "Cambiar de piso": the server moves nobody through it.
+        this.warn(
+          portalsFile,
+          [i, "kind"],
+          "a boat portal moves nobody in the game: boat travel is a route of data/boat_routes.yaml",
+          p.from,
+        );
       if (!isWalkable(this.tiles.tileAt(p.to), this.content))
         this.err(
           portalsFile,
