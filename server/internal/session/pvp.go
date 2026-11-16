@@ -491,12 +491,13 @@ func (w *World) pvpSource(c *condition, v *Player) (a *Player, pvp bool) {
 // ---- deaths -----------------------------------------------------------------------
 
 // pvpDeath settles the death of v if players took part in it. killer is the player whose
-// hit killed v (nil: a monster, the world or a condition of nobody online). It is an arena
-// defeat (no penalty, reported) only if v died on a pvp tile by a killer standing on one
-// too. Every player that hurt v within balance pvp.kill_credit_ms gets the kill (its
-// counter, and an unjustified kill if any of its hits was) — arena hits only in an arena
-// defeat —, each war it was fought in scores once, both sides are told, and the kill is
-// logged.
+// hit killed v (for a hit of another player's condition, its author, who is in the world:
+// an author out of it does not hurt); nil for a monster, the world or a condition without
+// an author. It is an arena defeat (no penalty, reported) only if v died on a pvp tile by
+// a killer standing on one too. Every player that hurt v within balance
+// pvp.kill_credit_ms gets the kill (its counter, and an unjustified kill if any of its
+// hits was) — arena hits only in an arena defeat —, each war it was fought in scores once,
+// both sides are told, and the kill is logged.
 func (w *World) pvpDeath(ctx *game.TickContext, v, killer *Player) (arena bool) {
 	if !w.pvpOn || len(v.hitBy) == 0 {
 		return false
