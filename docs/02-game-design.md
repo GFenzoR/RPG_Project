@@ -509,11 +509,13 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   venta, retiro del buzón o cambio en una casa el personaje queda **en espera** hasta que
   la base confirma ese guardado (normalmente uno o dos ticks): no puede soltar nada en el
   suelo fuera de una casa (aviso "Espera un momento…", `inventory.saving`), y si muere,
-  nadie más saca nada de su cadáver mientras tanto (ni después, si el guardado falló). El
-  suelo de las casas lo cuida el guardado: lo que se movió ahí no llega a la base por
-  otro. Límite que queda: lo que el servidor le crea en ese instante y cae a sus pies
-  porque no le entra (una compra a un NPC, una fabricación); las alertas de economía
-  (T4.1) son la red (docs/01, "Transacciones").
+  nadie más saca nada de su cadáver mientras tanto (ni después, si el guardado falló).
+  Lo que en ese instante cae a sus pies porque no le entra (una fabricación, una
+  recompensa, las monedas de una venta a un NPC, el equipo que no cupo en su cadáver)
+  queda reservado para él de la misma forma: otro jugador recibe "Eso es de otro jugador
+  por ahora." (`inventory.not_yours`). El suelo de las casas lo cuida el guardado: lo
+  que se movió ahí no llega a la base por otro. Las alertas de economía (T4.1) siguen
+  como red (docs/01, "Transacciones").
 - Una oferta de un item retirado del juego se cierra al arrancar: el oro de una de
   compra vuelve al buzón.
 - **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).

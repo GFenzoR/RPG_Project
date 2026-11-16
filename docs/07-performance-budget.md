@@ -271,6 +271,9 @@ fallaron.
 Cada snapshot guardado (también los autoguardados) vuelve al loop como un comando
 `World.Saved` (la espera de la falla segura, docs/01 "Transacciones"): N / 300 por
 segundo más uno por personaje de cada transfer, cada uno un par de búsquedas en un mapa.
+El que termina una espera recorre además `World.heldGround` (lo que el servidor dejó a
+los pies de un personaje en espera), que casi siempre está vacío; tomar o usar algo del
+suelo mira ese mapa solo si no lo está.
 
 **Ventanas del mercado en vivo.** Cada acción del mercado encola a quienes miran ese
 libro; `flushMarket` les manda una `MarketUpdate` completa (lo que cuesta una respuesta

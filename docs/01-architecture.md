@@ -241,12 +241,23 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       (cola del loop llena, se descarta) la alarga hasta el próximo guardado escrito del
       personaje (autoguardado o salida); un relogueo la conserva (es del personaje, no
       de la conexión).
-    - **Límite que queda:** lo que el servidor crea para el personaje en ese instante y
-      cae a sus pies porque no le entra (una compra a un NPC, una fabricación, el
-      cambio de una venta) no pasa por `MoveItem`. Es valor derivado de lo recibido, en
-      una ventana de uno o dos ticks y solo tras un rechazo permanente (ya un bug); la red
-      siguen siendo la alerta y la cuadratura del log de economía (T4.1). Cerrarlo del
-      todo pediría atar cada instancia al acuse de su transfer.
+    - Lo que el **servidor** deja a sus pies porque no le entra no pasa por `MoveItem`
+      (`giveItem`: una fabricación, una recolección o una recompensa, las monedas de una
+      venta a un NPC; y el equipo que no cabe en su cadáver al morir). Si cae fuera de
+      una casa queda **reservado** para él (`World.heldGround`, `holdGround`) mientras
+      espera: nadie más lo levanta ni lo usa (`inventory.not_yours`), lo que otro suelta
+      encima no se suma a esa pila (queda en una propia) y él solo puede volver a
+      tomarlo (llevarlo a otra casilla pública también es `inventory.saving`).
+      La reserva termina con la espera (`endHold`); si el transfer quedó marcado, dura
+      hasta reiniciar, como el cadáver. Las compras del mercado, el retiro del buzón y
+      las compras a un NPC ya exigen que todo entre, así que nunca caen al suelo.
+    - **Qué no cubre, y por qué no duplica:** lo que el personaje gasta en ese instante
+      (comer, cargas de una runa, materiales de una fabricación) desaparece igual en la
+      base, y lo que gana jugando (botín de un monstruo, experiencia) es juego nuevo que
+      el relogueo al último guardado pierde, como en cualquier caída. Fuera de eso, los
+      caminos de hoy por los que algo suyo llega a otro personaje (intercambio, mercado,
+      casas, suelo, cadáver) están cubiertos; uno nuevo tiene que respetar la espera
+      (server/CLAUDE.md), y las alertas de economía (T4.1) siguen como red.
 - Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
   oferta y, si era de compra, devolver el oro al buzón).
 - **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un

@@ -560,7 +560,8 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `inventory.not_possible` y nada cambia. Otros rechazos: `inventory.too_far`,
   `cannot_move` (`pickupable: false`), `wrong_slot`, `level_required` (`level`),
   `vocation_cannot`, `hands_full`, `slot_occupied`, `container_full`, `too_heavy`,
-  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`.
+  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`, `saving` y
+  `not_yours` (la espera de la falla segura del comercio, ver "Falla segura" en T5.3).
 - **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
   Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
   contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor
@@ -938,8 +939,11 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   guardar, sus personajes reciben `Disconnect{SAVE_FAILED}` y sus logins
   `Disconnect{CHARACTER_LOCKED}` hasta que el servidor reinicie. Mientras la base no
   confirma un cambio de comercio o de casa de un personaje, un `MoveItem` suyo hacia el
-  suelo fuera de una casa (desde lo que lleva o desde su propio cadáver) se rechaza con
-  `inventory.saving`, y su cadáver sigue reservado para él (`death.corpse_not_owner`).
+  suelo fuera de una casa (desde lo que lleva, desde su propio cadáver o desde lo que el
+  servidor dejó a sus pies) se rechaza con `inventory.saving`, y su cadáver sigue
+  reservado para él (`death.corpse_not_owner`). Lo que el servidor le deja a sus pies
+  fuera de una casa en ese tiempo (no le entraba) también: el `MoveItem`, `UseItem` o
+  `UseItemOn` de otro sobre eso responde `inventory.not_yours`.
 
 ### Casas (T5.4, `server/internal/session/house.go`)
 Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
