@@ -327,7 +327,7 @@ type twoGuilds struct {
 	a, b, c, d     *session.Player
 }
 
-func newTwoGuilds(t *testing.T) *twoGuilds {
+func newTwoGuilds(t *testing.T, opts ...option) *twoGuilds {
 	t.Helper()
 	ids := []int64{6_000_001, 6_000_002, 6_000_003, 6_000_004}
 	for i := range ids {
@@ -339,7 +339,7 @@ func newTwoGuilds(t *testing.T) *twoGuilds {
 		{ID: 2, Name: "Beta", Members: []session.GuildMemberRecord{
 			{CharacterID: ids[2], Name: "Cid", Rank: guild.Leader}, {CharacterID: ids[3], Name: "Dan", Rank: guild.Member}}},
 	}}
-	tg := &twoGuilds{pvpWorld: newPvP(t, data)}
+	tg := &twoGuilds{pvpWorld: newPvP(t, data, opts...)}
 	tg.ca, tg.a = tg.fighter("Ana", ids[0], 10, 10, 30, 0)
 	tg.cb, tg.b = tg.fighter("Bea", ids[1], 11, 10, 30, 0)
 	tg.cc, tg.c = tg.fighter("Cid", ids[2], 12, 12, 30, 0)

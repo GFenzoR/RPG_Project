@@ -207,7 +207,7 @@
   cooldown_ms: 6000
   group_cooldown_ms: 2000
   effect: { condition: { id: slowed, range: 4, duration_ms: 7000 } }
-  notes: Roots slow down a monster at up to 4 tiles in line of sight.
+  notes: Roots slow down a monster (or, with PvP, a player) at up to 4 tiles in line of sight.
 
 - id: shroud
   name: spell.shroud.name
