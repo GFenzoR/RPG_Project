@@ -12,3 +12,6 @@ islands:
   - id: volcan
     rect: { x: 3584, y: 5696, w: 192, h: 192 }
     level_hint: [25, 60]
+  - id: pruebas
+    rect: { x: 2048, y: 2048, w: 96, h: 96 }
+    level_hint: [1, 60]

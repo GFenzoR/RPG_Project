@@ -1,0 +1,7 @@
+id: pruebas
+name: island.pruebas.name
+rect: { x: 2048, y: 2048, w: 96, h: 96 }
+floors: [7, 8]
+temple: { x: 2095, y: 2086, z: 7 }
+level_hint: [1, 60]
+notes: "Sandbox island to try every system by hand in a few minutes. Not part of normal play: no boat route from the real islands reaches it; only -start-town pruebas or a staff /tp does (docs/16-probar-el-juego.md)."

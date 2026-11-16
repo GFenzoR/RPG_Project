@@ -237,7 +237,7 @@ func TestCompilePortals(t *testing.T) {
 	if up == nil || up.ID != "volcan_mine_up" || up.Kind != world.PortalStairs || up.To != p(3692, 5797, 7) {
 		t.Fatalf("volcanic mine stairs up = %+v", up)
 	}
-	for _, id := range []string{"puerto", "bosque", "volcan", "testisle"} {
+	for _, id := range []string{"puerto", "bosque", "volcan", "testisle", "pruebas"} {
 		if is := m.Island(id); is == nil || len(is.Portals) == 0 {
 			t.Errorf("island %s has no portals", id)
 		}
@@ -266,6 +266,45 @@ func TestCompileTestisle(t *testing.T) {
 	path, ok := pf.Find(is.Temple, p(1068, 1056, 7), nil)
 	if !ok || len(path) == 0 {
 		t.Fatalf("no path from the temple to the cave stairs")
+	}
+}
+
+// TestCompilePruebas: the sandbox island (docs/16-probar-el-juego.md) compiles with its
+// temple in a protection zone, one portal of each kind, an arena where PvP needs no skulls
+// and a house, and the temple reaches the floor 7 portals on foot.
+func TestCompilePruebas(t *testing.T) {
+	m := mustCompile(t, repoRoot(t))
+	is := m.Island("pruebas")
+	if is == nil {
+		t.Fatal("pruebas missing")
+	}
+	if !m.Walkable(is.Temple) || m.Flags(is.Temple)&world.FlagProtection == 0 {
+		t.Errorf("temple %v: walkable %v, flags %b", is.Temple, m.Walkable(is.Temple), m.Flags(is.Temple))
+	}
+	kinds := map[world.PortalKind]int{}
+	for _, pt := range is.Portals {
+		kinds[pt.Kind]++
+	}
+	want := map[world.PortalKind]int{world.PortalStairs: 2, world.PortalLadder: 2, world.PortalHole: 1,
+		world.PortalRopeSpot: 1, world.PortalTeleport: 1}
+	for k, n := range want {
+		if kinds[k] != n {
+			t.Errorf("%d portals of kind %v, want %d", kinds[k], k, n)
+		}
+	}
+	// The arena (2102..2112, 2111..2119) is a pvp zone without protection.
+	if f := m.Flags(p(2107, 2115, 7)); f&world.FlagPvP == 0 || f&world.FlagProtection != 0 {
+		t.Errorf("arena flags = %b, want pvp and no protection", f)
+	}
+	if f := m.Flags(p(2088, 2111, 7)); f&world.FlagHouse == 0 {
+		t.Errorf("house tile flags = %b, want house", f)
+	}
+	// On foot from the temple to beside the stairs down, the trapdoor and the hole.
+	pf := world.NewPathfinder(m, 0)
+	for _, to := range []world.Pos{p(2121, 2091, 7), p(2116, 2091, 7), p(2119, 2095, 7)} {
+		if path, ok := pf.Find(is.Temple, to, nil); !ok || len(path) == 0 {
+			t.Errorf("no path from the temple to %v", to)
+		}
 	}
 }
 

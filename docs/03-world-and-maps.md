@@ -110,11 +110,13 @@ level_hint: [1, 15]
   pos: { x: 3230, y: 6402, z: 7 }
   text: text.puerto.temple_sign
 ```
-El servidor no carga `texts.yaml` (lo usan el editor, `mapcli` y el validador). Para que
-un cartel se vea y se lea en el juego, la misma casilla lleva un item fijo cuya
-`description` es esa clave (T5.5: `brasal_temple_sign`, ver `06-content-data.md`); mirarlo
-muestra el texto. Todos los carteles de Puerto, el Bosque y la Isla Volcánica lo tienen
-(en Puerto y el Bosque el item se llama como su entrada de `texts.yaml`, p. ej.
+Se edita con las ops `add_text`/`remove_text` (`04-map-editor-and-ai.md`; el editor todavía
+no tiene panel de textos). El servidor no carga `texts.yaml` (lo usan el editor, `mapcli`
+y el validador). Para que un cartel se vea y se lea en el juego, la misma casilla lleva un
+item fijo cuya `description` es esa clave (T5.5: `brasal_temple_sign`, ver
+`06-content-data.md`); mirarlo muestra el texto. Todos los carteles de Puerto, el Bosque,
+la Isla Volcánica y la Isla de Pruebas lo tienen (en Puerto, el Bosque y la Isla de
+Pruebas el item se llama como su entrada de `texts.yaml`, p. ej.
 `puerto_temple_sign`); solo el del templo de `testisle` queda sin item. El
 validador los mantiene de acuerdo: un item de cartel (un item cuya `description` es una
 clave `text.*`) tiene que estar en una casilla con un `kind: sign` de `texts.yaml` con ese
@@ -279,7 +281,8 @@ quitó en T3.6 (el esquema todavía lo acepta, opcional y vacío, para no romper
 **Isla inicial:** un personaje sin ciudad de residencia (`characters.town` vacío, como uno
 recién creado) despierta en el templo de la **primera isla de `world.yaml`** (hoy `puerto`,
 la isla inicial de `docs/02`). El servidor acepta `-start-town <isla>` (o `RPG_START_TOWN`)
-para cambiarla; el E2E usa `-start-town testisle` porque sus pruebas dependen de esa isla.
+para cambiarla; el E2E usa `-start-town testisle` porque sus pruebas dependen de esa isla, y
+`make play` usa `-start-town pruebas` (la Isla de Pruebas, `16-probar-el-juego.md`).
 
 ## Compilación
 `server/cmd/mapcompile` (`make mapcompile`) lee `world/` + `data/items/` +
@@ -609,6 +612,31 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   en algún bloque de 2x2 de lava (sin tiras de una casilla, donde la costra pellizcaría) y
   ninguna cae en el cuadrado de un spawn. Al dibujarlos se dejaron además dos casillas
   caminables hacia muros y vetas, una hacia rocas, y ningún hueco encerrado.
+- `pruebas` (96x96 en 2048,2048; pisos 7–8; nivel 1–60): **Isla de Pruebas**, el sandbox
+  para probar el juego a mano (`16-probar-el-juego.md`, `make play`). Fuera del juego normal
+  a propósito: ninguna ruta de barco, portal ni diálogo de otra isla llega a ella (lo
+  comprueban `tools/mapcli/src/world.test.ts` y `TestCompilePruebas`); solo se entra con
+  `-start-town pruebas` o con un `/tp` del personal, y sus barcos (`pruebas_to_*`) son de
+  ida. Forma base con `mapcli generate --recipe island --seed 11 --size 90` y luego una lista
+  de ops (el parche de arena del centro pasa a pasto; scatter con semillas 1601–1608 en
+  bosquecillos; `autoborder` al final). Superficie: templo de piedra (2090–2100 ×
+  2083–2091, puerta al sur; despertar en 2095,2086) con la instructora `pruebas_trainer`
+  (experiencia, dinero, curación y la misión `pruebas_rats`), plaza de piedra (2083–2107 ×
+  2092–2103) con el proveedor `pruebas_merchant` (2086,2100) y el tablero del mercado
+  (2091,2103); protección `pruebas_town` en 2081–2109 × 2083–2104. Al norte, cinco corrales
+  de troncos (2076–2119 × 2073–2079, abiertos al sendero de y 2080–2081) de débil a fuerte:
+  ratas, lobos, jabalíes con una araña, espinosos y un dragoncillo. Al oeste, cantera de
+  vetas de hierro, abedules, taller con fragua, yunque y fogón, y un muelle de pesca con
+  agua con peces (nunca junto a la arena: los bordes quedan enteros). Al este, el patio de
+  portales (2113–2124 × 2088–2100: escalera, trampilla `ladder_down` y agujero) y la bóveda
+  de la puerta de práctica (`pruebas_gate` en 2117,2101, llave `pruebas_key`). Al sur, la
+  casa `pruebas_house` (prefab `house_wood_medium` en 2085,2108), la arena `pruebas_arena`
+  (zona `pvp`, 2102–2112 × 2111–2119, entrada por el oeste) y el muelle (prefab
+  `small_dock` en 2093,2133) con el barquero `pruebas_ferryman` (2097,2133). Piso 8: cueva
+  de tierra y `rock_wall` bajo el patio con la escalera de vuelta, la escalera de mano, el
+  pozo bajo el agujero con su `rope_spot` (2119,2094), murciélagos y un teletransporte
+  (2113,2104) que vuelve a la plaza (2095,2094). Carteles: uno por sector
+  (`pruebas_*_sign`, mismo id en `texts.yaml`).
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:

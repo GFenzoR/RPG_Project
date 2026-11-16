@@ -1,0 +1,41 @@
+- id: pruebas_stairs_down
+  kind: stairs
+  from: { x: 2121, y: 2090, z: 7 }
+  to: { x: 2121, y: 2091, z: 8 }
+  notes: "Yard of portals: stairs down to the cave."
+
+- id: pruebas_stairs_up
+  kind: stairs
+  from: { x: 2121, y: 2090, z: 8 }
+  to: { x: 2121, y: 2091, z: 7 }
+  notes: "Cave: stairs back up to the yard."
+
+- id: pruebas_ladder_down
+  kind: ladder
+  from: { x: 2116, y: 2090, z: 7 }
+  to: { x: 2116, y: 2091, z: 8 }
+  notes: "Yard: the trapdoor, used to climb down."
+
+- id: pruebas_ladder_up
+  kind: ladder
+  from: { x: 2116, y: 2090, z: 8 }
+  to: { x: 2116, y: 2091, z: 7 }
+  notes: "Cave: the ladder, used to climb up."
+
+- id: pruebas_hole
+  kind: hole
+  from: { x: 2119, y: 2094, z: 7 }
+  to: { x: 2119, y: 2095, z: 8 }
+  notes: "Yard: a hole into the pit; the pit opens on the cave."
+
+- id: pruebas_rope_up
+  kind: rope_spot
+  from: { x: 2119, y: 2094, z: 8 }
+  to: { x: 2119, y: 2095, z: 7 }
+  notes: "Pit: light under the hole, climbed with a rope."
+
+- id: pruebas_teleport
+  kind: teleport
+  from: { x: 2113, y: 2104, z: 8 }
+  to: { x: 2095, y: 2094, z: 7 }
+  notes: "Back of the cave: back to the square, in front of the temple."

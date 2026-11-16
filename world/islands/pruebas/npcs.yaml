@@ -1,0 +1,11 @@
+- npc: pruebas_trainer
+  pos: { x: 2093, y: 2085, z: 7 }
+  notes: "In the temple, by the spot where characters wake up."
+
+- npc: pruebas_merchant
+  pos: { x: 2086, y: 2100, z: 7 }
+  notes: "At the stall on the west of the square."
+
+- npc: pruebas_ferryman
+  pos: { x: 2097, y: 2133, z: 7 }
+  notes: "On the beach by the dock; his routes leave from 2095,2137."

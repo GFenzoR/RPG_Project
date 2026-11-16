@@ -90,6 +90,7 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
     "Isla de pruebas (testisle)",
     "Isla del Bosque (bosque)",
     "Isla Volcánica (volcan)",
+    "Isla de Pruebas (pruebas)",
   ]);
   await expect(page.getByTestId("floor")).toHaveText("Piso 7");
   await shot(page, "01-open");

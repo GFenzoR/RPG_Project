@@ -1,0 +1,13 @@
+- id: pruebas_town
+  type: protection
+  floors: [7]
+  rects:
+    - { x: 2081, y: 2083, w: 29, h: 22 }
+  notes: "Temple, its gardens and the square."
+
+- id: pruebas_arena
+  type: pvp
+  floors: [7]
+  rects:
+    - { x: 2102, y: 2111, w: 11, h: 9 }
+  notes: "Arena: duels with no skulls and no punishment when both fighters are inside."

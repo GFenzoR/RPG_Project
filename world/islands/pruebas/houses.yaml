@@ -1,0 +1,11 @@
+- id: pruebas_house
+  name: house.pruebas_house.name
+  rent: 200
+  rects:
+    - { x: 2086, y: 2109, z: 7, w: 6, h: 5 }
+    - { x: 2088, y: 2114, z: 7, w: 2, h: 1 }
+  doors:
+    - { x: 2088, y: 2114, z: 7 }
+    - { x: 2089, y: 2114, z: 7 }
+  exit: { x: 2088, y: 2115, z: 7 }
+  notes: "House to try renting, south-west of the square (prefab house_wood_medium)."
