@@ -6,7 +6,7 @@
 // tile clicks (left: walk) and creature clicks (right: attack).
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
+import { CreatureKind, Skull } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
 import type { AtlasIcon, Camera } from "@rpg/renderer";
 import { VIEW_TILES, followCamera, pixelScale } from "./viewport.ts";
@@ -30,27 +30,8 @@ import {
   outfitKeys,
   stepProgress,
 } from "./outfit.ts";
-import {
-  EFFECT_CONJURE,
-  EFFECT_ELEMENT,
-  EFFECT_GATHER,
-  EFFECT_GATHER_MISS,
-  EFFECT_BUFF,
-  EFFECT_HEAL,
-  EFFECT_HIT,
-  EFFECT_MS,
-  ELEMENTS,
-  FLOATING_TEXT_MS,
-  PROJECTILE_ELEMENT,
-  PROJECTILE_MS,
-} from "../state/world.ts";
-import type {
-  CreatureState,
-  EffectState,
-  FloatingTextState,
-  ProjectileState,
-  WorldState,
-} from "../state/world.ts";
+import { EffectLayer } from "./effect-layer.ts";
+import type { CreatureState, WorldState } from "../state/world.ts";
 
 const COLORS = {
   background: 0x000000,
@@ -66,12 +47,6 @@ const COLORS = {
   barHigh: 0x30c030,
   barMid: 0xe0c020,
   barLow: 0xd03020,
-  hit: 0xc01818,
-  block: 0x9ab4d8,
-  damage: 0xff4040,
-  heal: 0x60e060,
-  mana: 0x6090ff,
-  experience: 0xffffff,
 };
 
 /** Health bar size in sprite pixels. */
@@ -80,56 +55,6 @@ const BAR_H = 4;
 
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
-
-/** Colour of each element (state/world.ts ELEMENTS order), for magic effects and projectiles. */
-const ELEMENT_COLORS = [0xd8d0c0, 0xff7a1a, 0x8fd8ff, 0xc890ff, 0x7fc94a, 0xfff2a0, 0x5a3a6a];
-const elementColor = (i: number): number => ELEMENT_COLORS[i] ?? ELEMENT_COLORS[0] ?? 0xffffff;
-
-/** Procedural drawing of an Effect (until data/effects.yaml brings sprites). */
-function drawEffect(g: Graphics, id: number): void {
-  if (id === EFFECT_HIT)
-    g.circle(16, 16, 7)
-      .fill(COLORS.hit)
-      .circle(9, 11, 3)
-      .fill(COLORS.hit)
-      .circle(23, 21, 3)
-      .fill(COLORS.hit);
-  else if (id === EFFECT_HEAL)
-    g.circle(16, 16, 10)
-      .stroke({ width: 2, color: COLORS.heal })
-      .circle(10, 9, 2)
-      .fill(COLORS.heal)
-      .circle(22, 12, 2)
-      .fill(COLORS.heal)
-      .circle(16, 24, 2)
-      .fill(COLORS.heal);
-  else if (id === EFFECT_CONJURE) g.star(16, 16, 5, 11, 5).fill({ color: 0xb08cff, alpha: 0.85 });
-  else if (id === EFFECT_GATHER)
-    g.circle(16, 16, 11).stroke({ width: 2, color: 0xfff2a0 }).star(16, 16, 4, 7, 3).fill(0xfff2a0);
-  else if (id === EFFECT_BUFF)
-    g.circle(16, 16, 12)
-      .stroke({ width: 2, color: 0x9ff0c8, alpha: 0.9 })
-      .star(16, 16, 4, 8, 3)
-      .fill({ color: 0x9ff0c8, alpha: 0.8 });
-  else if (id === EFFECT_GATHER_MISS)
-    g.circle(16, 16, 6)
-      .stroke({ width: 2, color: 0xe8eef2, alpha: 0.8 })
-      .circle(16, 16, 11)
-      .stroke({ width: 1, color: 0xe8eef2, alpha: 0.5 });
-  else if (id >= EFFECT_ELEMENT && id < EFFECT_ELEMENT + ELEMENTS.length) {
-    const c = elementColor(id - EFFECT_ELEMENT);
-    g.rect(2, 2, 28, 28).fill({ color: c, alpha: 0.35 }).star(16, 16, 6, 12, 6).fill(c);
-  } else g.circle(16, 16, 9).stroke({ width: 3, color: COLORS.block });
-}
-
-const textColor = (k: FloatingTextKind): number =>
-  k === FloatingTextKind.HEAL
-    ? COLORS.heal
-    : k === FloatingTextKind.MANA
-      ? COLORS.mana
-      : k === FloatingTextKind.EXPERIENCE
-        ? COLORS.experience
-        : COLORS.damage;
 
 export interface GameCanvas {
   /** Page coordinates of the centre of tile (x, y) on the current floor (tests, tooling). */
@@ -464,86 +389,9 @@ export async function createGameCanvas(
     sprites.delete(id);
   };
 
-  // Effects and floating texts: drawn while the world state keeps them (it expires them).
-  const effectGfx = new Map<EffectState, Graphics>();
-  const textObjs = new Map<FloatingTextState, Text>();
-  const projectileGfx = new Map<ProjectileState, Graphics>();
-  const drawEffects = (now: number, floor: number): void => {
-    const live = new Set(world.effects);
-    for (const [e, g] of effectGfx)
-      if (!live.has(e)) {
-        g.destroy();
-        effectGfx.delete(e);
-      }
-    for (const e of world.effects) {
-      if (e.pos.z !== floor) continue;
-      let g = effectGfx.get(e);
-      if (!g) {
-        g = new Graphics();
-        drawEffect(g, e.effectId);
-        effectLayer.addChild(g);
-        effectGfx.set(e, g);
-      }
-      const p = tileToScreen(cam, e.pos.x, e.pos.y, T);
-      g.position.set(Math.round(p.x), Math.round(p.y));
-      g.scale.set(scale);
-      g.alpha = 1 - Math.min(1, (now - e.start) / EFFECT_MS) * 0.6;
-    }
-    const liveShots = new Set(world.projectiles);
-    for (const [pr, g] of projectileGfx)
-      if (!liveShots.has(pr)) {
-        g.destroy();
-        projectileGfx.delete(pr);
-      }
-    for (const pr of world.projectiles) {
-      if (pr.from.z !== floor) continue;
-      let g = projectileGfx.get(pr);
-      if (!g) {
-        const c = elementColor(pr.projectileId - PROJECTILE_ELEMENT);
-        g = new Graphics().circle(0, 0, 5).fill(c).circle(0, 0, 8).fill({ color: c, alpha: 0.35 });
-        effectLayer.addChild(g);
-        projectileGfx.set(pr, g);
-      }
-      const k = Math.min(1, (now - pr.start) / PROJECTILE_MS);
-      const p = tileToScreen(
-        cam,
-        pr.from.x + 0.5 + (pr.to.x - pr.from.x) * k,
-        pr.from.y + 0.5 + (pr.to.y - pr.from.y) * k,
-        T,
-      );
-      g.position.set(Math.round(p.x), Math.round(p.y));
-      g.scale.set(scale);
-    }
-    const liveTexts = new Set(world.floatingTexts);
-    for (const [f, o] of textObjs)
-      if (!liveTexts.has(f)) {
-        o.destroy();
-        textObjs.delete(f);
-      }
-    for (const f of world.floatingTexts) {
-      if (f.pos.z !== floor) continue;
-      let o = textObjs.get(f);
-      if (!o) {
-        o = new Text({
-          text: String(f.amount),
-          style: {
-            fontFamily: "sans-serif",
-            fontSize: 13,
-            fontWeight: "bold",
-            fill: textColor(f.kind),
-            stroke: { color: 0x000000, width: 3 },
-          },
-          anchor: { x: 0.5, y: 1 },
-          roundPixels: true,
-        });
-        textLayer.addChild(o);
-        textObjs.set(f, o);
-      }
-      const k = Math.min(1, (now - f.start) / FLOATING_TEXT_MS);
-      const p = tileToScreen(cam, f.pos.x + 0.5, f.pos.y + 0.6 - k * 0.9, T);
-      o.position.set(Math.round(p.x), Math.round(p.y));
-    }
-  };
+  // Effects, projectiles and floating numbers (render/effect-layer.ts): pooled, and the
+  // effects play their atlas frames; drawn while the world state keeps them (it expires them).
+  const effects = new EffectLayer({ world, atlas, effects: effectLayer, texts: textLayer });
 
   const draw = (now: number): void => {
     const self = world.self;
@@ -615,7 +463,7 @@ export async function createGameCanvas(
     }
     for (const id of [...sprites.keys()]) if (!seen.has(id)) dropSprite(id);
     world.expire(now);
-    drawEffects(now, self.pos.z);
+    effects.draw(now, self.pos.z, cam, scale);
   };
 
   app.ticker.add(() => {
@@ -782,9 +630,7 @@ export async function createGameCanvas(
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);
-      for (const g of effectGfx.values()) g.destroy();
-      for (const g of projectileGfx.values()) g.destroy();
-      for (const o of textObjs.values()) o.destroy();
+      effects.destroy();
       view.destroy();
       app.destroy(true, { children: true });
     },
