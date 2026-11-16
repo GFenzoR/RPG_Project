@@ -186,6 +186,68 @@ func TestStairsArrivalTaken(t *testing.T) {
 	}
 }
 
+// arrivalRows are floor 8 of the arrival tests: a room (1..4, 1..2) behind a locked gate
+// on (5,2), a house of one tile on (6,2) (exit (6,1)), and the street east of them, where
+// the way down lands on (6,3) and the stairs up leave from (7,3).
+var arrivalRows = []string{
+	"############",
+	"#....#.....#",
+	"#....D.....#",
+	"######..####",
+	"############",
+}
+
+// arrivalHarness runs arrivalRows under an open floor 7 (temple on (0,0)) whose way down,
+// a portal of kind from (6,2,7), lands on (6,3,8), with arrivals within 2 tiles.
+func arrivalHarness(t *testing.T, kind world.PortalKind) *harness {
+	t.Helper()
+	field := make([]string, len(arrivalRows))
+	for i := range field {
+		field[i] = "............"
+	}
+	field[0] = "T..........."
+	m := worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 7, Rows: field}, worldtest.Layer{Z: 8, Rows: arrivalRows})
+	m = worldtest.WithHouses(t, m, world.House{ID: "nook", Name: "house.nook.name", Rent: 10,
+		Rects: []world.HouseRect{{X: 6, Y: 2, Z: 8, W: 1, H: 1}}, Doors: []world.Pos{at3(6, 2, 8)}, Exit: at3(6, 1, 8)})
+	m = worldtest.WithPortals(t, m,
+		world.Portal{ID: "down", Kind: kind, From: at3(6, 2, 7), To: at3(6, 3, 8)},
+		world.Portal{ID: "up", Kind: world.PortalStairs, From: at3(7, 3, 8), To: at3(7, 2, 7)})
+	return newHarness(t, m, func(c *session.Config) {
+		c.Items = doorTestItems(true)
+		c.Balance.Travel.ArrivalRadius = 2
+	})
+}
+
+// A taken destination never puts the player in a house or in the room behind a locked
+// door, whatever the order of the rings: from (6,3,8), with the destination and (7,2)
+// taken, ring 1 offers the house tile (6,2) first and ring 2 the room tile (4,1), both
+// free and walkable; the player lands on (6,1), the next free tile of the street. Down
+// stairs (stepped onto) and down a ladder (used) alike.
+func TestPortalArrivalSkipsHousesAndRooms(t *testing.T) {
+	for _, kind := range []world.PortalKind{world.PortalStairs, world.PortalLadder} {
+		t.Run(kind.String(), func(t *testing.T) {
+			h := arrivalHarness(t, kind)
+			house, room, street := at3(6, 2, 8), at3(4, 1, 8), at3(6, 1, 8)
+			if !h.w.InDoorRoom(at3(5, 2, 8), room) || h.w.AreaOf(house) != 0 || h.w.AreaOf(street) != h.w.AreaOf(at3(6, 3, 8)) {
+				t.Fatalf("the map: room %v behind the gate %v, house in area %d", room, h.w.InDoorRoom(at3(5, 2, 8), room), h.w.AreaOf(house))
+			}
+			h.join("Blocker", ptr(at3(6, 3, 8)))
+			h.join("Blocker Two", ptr(at3(7, 2, 8)))
+			cl, p := h.join("Delver", ptr(at3(6, 1, 7)))
+			var evs []*pb.ServerMessage
+			if kind == world.PortalStairs {
+				evs = h.step(cl, S)
+			} else {
+				h.sim.RunFor(time.Second)
+				cl.take()
+				evs = h.send(cl, useItem(onTile(at3(6, 2, 7)), worldtest.Grass, 0))
+			}
+			landed(t, p, evs, street)
+			h.checkInvariants()
+		})
+	}
+}
+
 // A hole leads down: a step onto it from any side (a diagonal here) drops the player to
 // the floor below, beside whoever stands under it; those above see it step onto the hole
 // and vanish. That nothing leads back up is the map's rule (world.NewMap refuses a hole
