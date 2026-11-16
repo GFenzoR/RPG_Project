@@ -146,6 +146,39 @@ items:
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
   atravesable (arco, cortina) declara `blocks_movement: false`. El suelo decide con
   `ground.walkable`.
+- **Puertas y llaves** (reglas en `02-game-design.md` "Puertas con llave"): una puerta es
+  un par de items fijos con bloque `door`; la cerrada nombra la abierta (`open`) y puede
+  llevar `key` (id de llave, mismo formato que un id); la abierta nombra la cerrada
+  (`closed`). Una llave es cualquier item con `key` en la raíz: el id de las puertas que
+  abre. Ejemplo (`data/items/doors.yaml` y la llave en `misc.yaml`):
+  ```yaml
+  - id: forge_gate
+    kind: decoration
+    sprite: doors/forge_gate
+    name: item.forge_gate.name
+    pickupable: false
+    blocks_movement: true
+    blocks_sight: true
+    door: { key: forge_gate, open: forge_gate_open }
+  - id: forge_gate_open
+    kind: decoration
+    sprite: doors/forge_gate_open
+    name: item.forge_gate_open.name
+    pickupable: false
+    door: { closed: forge_gate }
+  - id: ember_key
+    kind: material
+    sprite: quest/ember_key
+    name: item.ember_key.name
+    tradeable: false
+    key: forge_gate
+  ```
+  El validador (y `content.CheckDoors` al arrancar el servidor) exige: exactamente uno de
+  `open` y `closed`; que el par se nombre de vuelta; `pickupable: false` en los dos; la
+  cerrada bloquea el paso y la abierta no; `key` solo en la cerrada y con al menos un
+  item llave que lo tenga; y que ninguna puerta sea llave. Agregar otra puerta con llave
+  es solo datos: un par nuevo, su llave, textos y sprites; el mapa la coloca como
+  cualquier item.
 
 ## Monstruo
 ```yaml

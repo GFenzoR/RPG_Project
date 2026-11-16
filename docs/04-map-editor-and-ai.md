@@ -115,7 +115,7 @@ Leer JSON de chunks es caro y poco legible. Hay dos vistas pensadas para IA:
 | `map_apply_ops` | Aplica una lista de operaciones (atómica) |
 | `map_validate` | Valida isla o mundo; devuelve errores con posición |
 | `map_find` | Busca items, spawns, NPCs o zonas por tipo/área |
-| `content_search` | Busca en `data/` (items, monstruos, NPCs) por texto o etiqueta |
+| `content_search` | Busca en `data/` (items, monstruos, NPCs) por texto o etiqueta; una puerta trae su par y la llave que la abre, una llave su id (`02` "Puertas con llave") |
 | `map_patch_create` | Genera un `.rpgpatch.json` (formato 2) con los cambios actuales |
 
 Límites de seguridad del MCP: solo escribe dentro de `world/` del repo, nunca hace push

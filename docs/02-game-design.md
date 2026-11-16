@@ -635,6 +635,45 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
   Viajar todos juntos cuando zarpa el líder queda pendiente: necesita que cada miembro
   acepte el cobro, no es solo una regla.
 
+### Puertas con llave
+Servidor en `server/internal/session/door.go`; las puertas y llaves son items
+(`data/items/doors.yaml`, formato en `06-content-data.md`).
+- **Puertas:** una puerta es un par de items del mapa con bloque `door`. La cerrada
+  (`door.open`: el item en que se convierte) bloquea el paso y la vista; la abierta
+  (`door.closed`) no bloquea nada. Se usa con click derecho, a `inventory.reach` (1)
+  casilla y en el mismo piso: la cerrada se abre y la abierta se cierra, para todos (el
+  servidor cambia el item del mapa y manda la casilla a quien la ve; caminar, el
+  pathfinding y la línea de visión lo ven en el acto). No se levantan ni se mueven.
+- **Con llave:** la cerrada puede llevar `door.key`, un id de llave. Una llave es
+  cualquier item con `key: <id>`; varios items pueden compartir un id (por ejemplo, la
+  copia que da un NPC). **Decisión:** se abre *usando la puerta con la llave encima*
+  (equipada o en cualquier contenedor; no se gasta), no usando la llave sobre la puerta:
+  es un click en vez de dos y no obliga a buscar la llave en la mochila. Sin ella: "Está
+  cerrada con llave". La llave abre de los dos lados.
+- **Abierta, pasa cualquiera:** así un grupo entra detrás de quien tiene la llave.
+  **Cerrarla con llave** también pide la llave; sin ella la puerta queda abierta. Nadie
+  sin llave puede dejar a otros afuera ni adentro.
+- **No cierra sobre algo:** ni con una criatura ni con items en su casilla.
+- **Nadie queda encerrado:** antes de cerrar con llave, el servidor recorre a pie (8
+  direcciones, mismo piso, sin cruzar la puerta) cada lado de la puerta, hasta 4096
+  casillas por lado. Un lado que no termina es terreno abierto; si todos terminan, el más
+  grande es el de afuera. Los demás son salas detrás de la puerta: si en una hay un
+  jugador sin la llave, la puerta no se cierra ("Alguien sin la llave quedaría
+  encerrado"). Una puerta en campo abierto (se la puede rodear) no encierra a nadie.
+- **Estado:** vive solo en el mapa en memoria. Un reinicio cierra y traba todas las
+  puertas otra vez. Los monstruos no abren puertas, pero pasan por una abierta.
+- **Límite conocido:** un jugador desconectado no cuenta para "nadie queda encerrado". Si
+  salió adentro sin llave y vuelve con la puerta trabada (otro la cerró, o hubo un
+  reinicio), espera a alguien con llave o muere (vuelve al templo).
+- **Mapa:** una puerta se coloca como cualquier item (`place_item`, la paleta del editor).
+  La llave es del tipo de item, no de la casilla: el formato de chunks no tiene atributos
+  por casilla (`03-world-and-maps.md`), así que una puerta con otra llave es otro par de
+  items. Elegimos esto frente a un id por casilla (como hace Tibia) porque mantiene el
+  contenido como datos y no cambia el formato de mapas, el editor ni `world.bin`. El
+  validador de mapas cuenta las puertas como abiertas al medir el alcance desde el templo.
+- **Hoy:** la puerta de la forja (`forge_gate` / `forge_gate_open`, piso 8 de la Isla
+  Volcánica, 3692,5832) se abre con la llave de ascua (`ember_key`) del Capítulo 3.
+
 ## Historia (esqueleto)
 Un imperio antiguo se hundió en el mar y dejó un archipiélago. Las islas guardan los
 fragmentos de lo que pasó. La línea principal tiene capítulos, cada uno con **nivel
@@ -683,10 +722,15 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    de la forja antigua. 14 000 XP y 800 monedas.
 2. `ch3_gate` (nivel 35): matar 10 mineros de obsidiana, conseguir un plano de galería
    (botín de los mineros), entregarlo a Casia y bajar hasta la puerta sellada, en lo más
-   hondo de la mina, donde el eco de la forja toma la raíz y la abre (ir a un lugar y
-   abrir = hablar con el eco con la raíz encima). 22 000 XP y 1100 monedas.
+   hondo de la mina, donde el eco de la forja toma la raíz y le devuelve su forma: la
+   **llave de ascua** (`ember_key`, no comerciable), que abre la puerta (ir a un lugar y
+   abrir = hablar con el eco con la raíz encima). 22 000 XP y 1100 monedas. Quien terminó
+   `ch3_gate` y no tiene la llave (la perdió, o terminó antes de que existiera) le pide
+   otra al eco, una a la vez.
 3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo
-   en la forja antigua; en grupo desde el 40, solo desde el 44 y curándose), tomar el sello de la forja de sus restos y llevárselo a Casia.
+   en la forja antigua, detrás de la puerta sellada: se entra abriéndola con la llave de
+   ascua, ver "Puertas con llave"; en grupo desde el 40, solo desde el 44 y curándose),
+   tomar el sello de la forja de sus restos y llevárselo a Casia.
    36 000 XP, 2000 monedas y el flag `lost_expedition_lead`: el sello señala al norte, por
    donde salió la expedición perdida del Capítulo 4 ("Silencio blanco", Heladas; no
    implementado). El custodio deja un solo sello por muerte: en grupo, cada uno espera su
@@ -715,9 +759,9 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   salamandras en la ladera de piedra al sureste, dragoncillos en el cráter amurallado al
   noreste; la mina (piso 8, escalera al este del pueblo) tiene la galería de los mineros al
   oeste, la de los gólems al este (con vetas de ascua) y, al sur, la puerta sellada con el
-  eco y detrás la forja antigua con el custodio (respawn de 20 min). La puerta es
-  narrativa: el paso no se cierra (no hay puertas con llave todavía); el capítulo avanza
-  por el diálogo con el eco. La isla es PvP abierto (el default de T5.2) salvo el templo y
+  eco y detrás la forja antigua con el custodio (respawn de 20 min). La puerta sellada
+  (`forge_gate`, 3692,5832) cierra el pasillo de la forja y se abre con la llave de ascua
+  que da el eco (ver "Puertas con llave"). La isla es PvP abierto (el default de T5.2) salvo el templo y
   la plaza (protección); sin arena. Música y ambiente: placeholders (la de cueva y las olas)
   hasta tener pistas propias. No hay suelos volcánicos (ceniza, lava) en `data/`: el mapa
   usa tierra y piedra; agregarlos queda pendiente (el check de mapas valida con el `data/`

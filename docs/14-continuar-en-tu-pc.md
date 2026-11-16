@@ -89,8 +89,10 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   inicio o muesca, en horizontal, el margen se cuenta dos veces (la emulación no lo ve:
   ahí el inset es 0).
 - **Mundo:**
-  - puertas con llave (la puerta sellada de la mina es narrativa);
-  - suelos volcánicos y carteles de Brasal.
+  - suelos volcánicos y carteles de Brasal;
+  - las escaleras y portales de `portals.yaml` no existen en el servidor (ni en
+    `world.bin`): a los pisos 8 (minas de Puerto y Bosque, la mina y la forja de la Isla
+    Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff.
 - **Mercado:**
   - la ventana de quien mira un libro no se refresca con la acción de otro;
   - la falla segura tiene un límite documentado (lo que sale por el suelo antes de que

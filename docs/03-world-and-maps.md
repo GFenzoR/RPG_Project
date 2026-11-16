@@ -347,7 +347,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   salen del mundo; chunks o tiles fuera del rectángulo de
   su isla, o en un piso no listado = error.
 - Conectividad: desde el templo se puede llegar caminando a todo spawn y NPC de la
-  isla (BFS en 8 direcciones por tiles caminables y portales). Zonas sin ningún tile
+  isla (BFS en 8 direcciones por tiles caminables y portales; una **puerta**, item con
+  bloque `door`, cuenta como abierta aunque esté cerrada o con llave: en el juego se abre,
+  ver `02-game-design.md` "Puertas con llave"). Zonas sin ningún tile
   alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir).
   Advertencia (T3.6): un área caminable conexa (8 direcciones, un piso) de 10 casillas o
   más a la que no se llega desde el templo, fuera de parcelas `community_plot` (un muelle
@@ -420,7 +422,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   sala de entrada, la galería de los mineros de obsidiana al oeste (33–37) y la de los
   gólems de escoria al este (39–44), ambas con vetas de ascua, y al sur la sala de la
   puerta sellada (el eco `volcan_forge_echo` en 3692,5826) y la forja antigua con el
-  custodio de escoria (3692,5845, respawn 1200 s). Protección en el templo y la plaza;
+  custodio de escoria (3692,5845, respawn 1200 s). Entre las dos, el pasillo se angosta a
+  una casilla (`rock_wall` en 3691,5832) con la puerta con llave `forge_gate` en
+  3692,5832: se abre con la llave de ascua del Capítulo 3. Protección en el templo y la plaza;
   `no_logout` en el muelle; el resto es PvP abierto. Casa (T5.4): `volcan_house_cinder`
   (prefab `house_wood_small` en 3646,5797, puerta al sur). Sin carteles todavía: el
   check de mapas lee el i18n de la rama base y las claves `text.volcan.*_sign` (templo,
