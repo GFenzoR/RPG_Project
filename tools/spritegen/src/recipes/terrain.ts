@@ -245,53 +245,45 @@ function cooledLava(img: Image, _rand: Rng, seed: number): void {
 }
 
 /**
- * Molten lava: a glowing flow in small swirls (fine detail hides the 32 px repeat), a
- * darker cooling skin on its crests and two small drifting plates of black crust, each with
- * a red-hot rim.
+ * Molten lava: a red-orange flow marbled into bands that meander (a warped noise read as
+ * contour lines), a glowing yellow crest on each band and a darker skin in its troughs,
+ * with a few small flecks of black crust. The bands are fine and evenly lit across the
+ * tile, so the 32 px repeat does not read as a grid of blobs.
  */
 function moltenLava(img: Image, _rand: Rng, seed: number): void {
   const { ember } = PALETTE;
   const crust = PALETTE.lavaRock;
-  const flowAt = (x: number, y: number): number =>
-    tileNoise(x, y, 8, 8, seed) * 0.5 +
-    tileNoise(x, y, 16, 8, seed + 1) * 0.3 +
-    tileNoise(x, y, 4, 4, seed + 2) * 0.2;
-  // Thresholds by share of the tile, not by value: the mix of noises bunches up round 0.5.
-  const sorted: number[] = [];
-  eachInRect(0, 0, 32, 32, (x, y) => sorted.push(flowAt(x, y)));
-  sorted.sort((a, b) => a - b);
-  const q = (share: number): number => sorted[Math.floor(share * (sorted.length - 1))] ?? 0.5;
-  const [hot, warm, cooling, skin] = [q(0.3), q(0.48), q(0.72), q(0.88)];
+  const flowAt = (x: number, y: number): number => {
+    // The warp is periodic too, so the bent field still tiles.
+    const wx = x + (tileNoise(x, y, 8, 8, seed + 5) - 0.5) * 10;
+    const wy = y + (tileNoise(x, y, 8, 8, seed + 6) - 0.5) * 10;
+    return tileNoise(wx, wy, 16, 16, seed) * 0.5 + tileNoise(wx, wy, 8, 8, seed + 1) * 0.5;
+  };
   eachInRect(0, 0, 32, 32, (x, y) => {
-    const flow = flowAt(x, y);
+    const band = (flowAt(x, y) * 5 + 0.5) % 1;
     let c: Rgba;
-    if (flow > skin)
-      c = ember.deep; // the cooling skin on the crests
-    else if (flow > cooling) c = ember.shadow;
-    else if (flow > warm) c = ember.base;
-    else if (flow > hot) c = mix(ember.base, ember.light, 0.5);
-    else c = ember.light;
+    if (band < 0.1)
+      c = ember.light; // the hot crest of a band
+    else if (band < 0.26) c = mix(ember.light, ember.base, 0.6);
+    else if (band < 0.5) c = ember.base;
+    else if (band < 0.8) c = ember.shadow;
+    else c = mix(ember.shadow, ember.deep, 0.6); // the skin cooling in the trough
     px(img, x, y, c);
   });
-  // Crust plates: two of the four 16 px cells, ragged at the edge.
-  const plates = [0, 1, 2, 3].sort((a, b) => hash2(a, 6, seed) - hash2(b, 6, seed)).slice(0, 2);
+  // Crust flecks: one per 8 px cell of a jittered lattice, about one in eight drawn.
   eachInRect(0, 0, 32, 32, (x, y) => {
-    const cell = lattice(x, y, 16, 16, seed + 4, { jitter: 0.7 });
-    if (!plates.includes(cell.id)) return;
-    const size = 2 + hash2(cell.id, 7, seed) * 1.4;
-    const r = Math.hypot(cell.dx, cell.dy * 1.25) + (tileNoise(x, y, 4, 4, seed + 8) - 0.5) * 2.4;
-    if (r > size + 1) return;
-    if (r > size) {
-      px(img, x, y, ember.shadow); // the cooler halo round a plate
-      return;
-    }
-    const lit = cell.dx + cell.dy < -1.2;
-    const dark = cell.dx + cell.dy > 1.2;
-    px(img, x, y, r > size - 1 ? ember.deep : lit ? crust.light : dark ? crust.deep : crust.base);
+    const f = lattice(x, y, 8, 8, seed + 4, { jitter: 0.7 });
+    if (hash2(f.id, 7, seed) > 0.13) return;
+    const r = Math.hypot(f.dx, f.dy * 1.3);
+    const size = 1.2 + hash2(f.id, 8, seed) * 0.8;
+    if (r > size + 0.8) return;
+    if (r > size)
+      px(img, x, y, ember.deep); // the red-hot rim
+    else px(img, x, y, f.dx + f.dy < -0.4 ? crust.light : crust.base);
   });
-  // White-hot sparks in the brightest flow.
+  // White-hot sparks on the crests.
   eachInRect(0, 0, 32, 32, (x, y) => {
-    if (hash2(x, y, seed + 3) < 0.03 && img.data[(y * 32 + x) * 4 + 2] === ember.light[2])
+    if (hash2(x, y, seed + 3) < 0.06 && img.data[(y * 32 + x) * 4 + 2] === ember.light[2])
       px(img, x, y, lighten(ember.light, 0.5));
   });
 }
