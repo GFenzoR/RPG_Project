@@ -511,7 +511,8 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   o con la base caída al apagar (docs/01), ese guardado no es anterior a lo que soltaron
   al suelo fuera de una casa: si un personaje tiró algo a la calle (o el servidor se lo
   dejó a los pies) desde su último guardado, su estado del final de esa acción se guarda
-  antes de su próximo intercambio, compra, venta o cambio en una casa, sin que se note.
+  antes de su próximo intercambio, compra, venta, retiro del buzón o cambio en una casa,
+  sin que se note.
   Para que nada de lo que recibieron llegue a otro antes del aviso, después de cada
   intercambio, compra, venta, retiro del buzón o cambio en una casa el personaje queda
   **en espera** hasta que la base confirma ese guardado (normalmente uno o dos ticks):

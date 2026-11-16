@@ -293,7 +293,9 @@ items: ≈ 3 µs y ≈ 8 KB más por tirada, 11 asignaciones). Con el rate limit
 comandos por segundo son a lo sumo ≈ 0,1 ms por segundo por jugador que no hace otra cosa
 que tirar items, y la memoria es un snapshot por jugador (el último), hasta su próximo
 guardado. Marcar a quien soltó algo es un bool y una lista que casi siempre está vacía
-(`World.givers`), que se mira al final de cada comando y de cada tick.
+(`World.givers`), que se mira al principio y al final de cada comando de un jugador y al
+final de cada tick. Lo que alguien saca de una casa a la calle guarda además un puntero
+por pila hasta la escritura de la casa, al final del mismo comando (`Player.left`).
 
 Cada snapshot guardado (también los autoguardados) vuelve al loop como un comando
 `World.Saved` (la espera de la falla segura, docs/01 "Transacciones"): N / 300 por

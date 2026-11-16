@@ -335,10 +335,13 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     (`Player.pre`). Ahí su estado está entero: las demás acciones del diálogo, el paso de
     quest que completa al llegar al nodo siguiente, las demás pilas del mismo regalo (si
     se tomara cuando cae la primera pila, un marcado podría volver a un estado con la
-    quest sin terminar y cobrar dos veces la misma recompensa). Su **próximo transfer** lo
-    encola primero (`transferSnapshot`, delante del trabajo del transfer): el Saver lo
-    escribe antes, así un transfer descartado o saltado no lo devuelve a un guardado
-    anterior a lo que dio.
+    quest sin terminar y cobrar dos veces la misma recompensa). Lo que soltó un comando
+    que no es un `Input` (la recompensa del tutorial en un `Join`) y sigue pendiente se
+    asienta también **al principio** del próximo `Input` (`playerCommand`), antes de que
+    ese comando cambie una casa: así ese snapshot nunca lleva lo que el comando saca de
+    una casa. Su **próximo transfer** lo encola primero (`transferSnapshot`, delante del
+    trabajo del transfer): el Saver lo escribe antes, así un transfer descartado o
+    saltado no lo devuelve a un guardado anterior a lo que dio.
     - Si el transfer se descarta o se salta (también el intercambio de un compañero
       marcado, por el punto fijo), el personaje vuelve a ese estado: sin lo que dio y sin
       el transfer. Si ya estaba marcado de antes, ese snapshot se salta como cualquier
@@ -348,15 +351,21 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       entra en la cola detrás de lo que dio. Un relogueo, el link-dead y el reinicio no
       cambian nada: el snapshot final lo reemplaza y el login nuevo arranca sin él.
     - Se numera al tomarlo, no al encolarlo: su acuse vale solo por lo anterior. No
-      termina la espera del transfer que va detrás ni libera lo que se reservó en un
-      comando posterior (lo que después sacó de una casa a la calle sigue reservado hasta
-      el acuse de la escritura de la casa, `leftHouse`).
+      termina la espera del transfer que va detrás ni libera lo que sacó de una casa a la
+      calle: esa reserva (`leftHouse`) toma el `Seq` del snapshot del personaje en la
+      escritura de la casa misma (`numberLeft`, en `transferSnapshot`), no el del próximo
+      snapshot, así que sigue hasta el acuse de esa escritura aunque el guardado de antes
+      se numere entre el movimiento y la escritura.
     - Ningún transfer deja nada en el suelo público en su propio comando: comprueba antes
       que todo entra (`canBuy`, `canReceive`, `moneyThatFits`). Si lo hiciera, el
       snapshot (que `transferSnapshot` tomaría en el acto) llevaría medio transfer y se
-      escribiría fuera de su transacción. Si un mismo comando soltara algo a la calle y
-      cambiara una casa (hoy ninguno), el snapshot sale con la escritura de la casa: si
-      esta se descarta, lo dejado en la casa se pierde, pero nada se duplica.
+      escribiría fuera de su transacción. Tampoco un mismo comando puede soltar algo a la
+      calle y cambiar una casa: el snapshot saldría con la escritura de la casa y, si esta
+      se descarta, lo que dejó en la casa se pierde y lo que sacó de ella queda en dos
+      filas (la de la casa y la del personaje). `settleGave` lo registra con nivel error.
+      Hoy solo podría hacerlo el último paso del tutorial si fuera levantar, equipar o usar
+      un item del suelo de su propia casa desde afuera con una recompensa que no entra; no
+      lo es (`data/tutorial.yaml`) y una casa pide nivel 12.
     - En el suelo de una casa no hace falta: lo que se deja ahí se escribe con el
       snapshot de quien lo movió (`flushHouses`, un transfer que también encola antes el
       snapshot pendiente de ese personaje).
