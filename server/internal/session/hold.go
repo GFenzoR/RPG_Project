@@ -35,6 +35,18 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 // lasts a tick or two; while the database is down it lasts until the transfer is written,
 // and a dropped transfer turns it into the lock of Tainted (the reservations it covers
 // are never acked: they stay until a restart, or until the corpse decays).
+//
+// The hold covers what happens while a transfer waits; a dropped transfer takes its
+// characters back to their last written save, which may be older. What a character gave
+// away to the public ground before the transfer (thrown on the street or into a container
+// there, or made for it by the server and fallen at its feet: the coins of an NPC sale,
+// a craft or a reward that did not fit) would then be in that save and in the save of
+// whoever picked it up. So every such give-away keeps the character's snapshot of that
+// moment (gaveAway, Player.pre) and its next transfer submits it first (transferSnapshot):
+// the Saver writes it before the transfer, so the last written save is never older than
+// the give-away. It costs a write only for a transfer that follows a give-away, and only
+// once: any later snapshot of the character (an autosave, the final one, a transfer's)
+// replaces it. Numbered when taken, its ack frees nothing reserved after it (leftHouse).
 
 // groundHold is a reservation of World.heldGround: the character the ground item (or the
 // pile, container or corpse it lies in) is reserved to, and the seq of that character's
@@ -47,11 +59,26 @@ type groundHold struct {
 }
 
 // transferSnapshot is p's snapshot for a transfer; p is held until the database confirms
-// it.
+// it. If p gave something away since its last snapshot, p's snapshot of that moment is
+// submitted first, before the transfer job (its caller submits it after every snapshot
+// of it): a dropped transfer then takes p back to a save without what it gave away.
 func (w *World) transferSnapshot(p *Player) Snapshot {
+	if p.pre != nil {
+		w.save(*p.pre)
+	}
 	s := w.snapshot(p, false)
 	w.inFlight[p.charID] = s.Seq
 	return s
+}
+
+// gaveAway is called right after something of p's (carried by p, or made for p by the
+// server) landed on the public ground, where no save has it: whoever picks it up writes it
+// in their own save. p's snapshot of this moment waits in p.pre for p's next transfer
+// (transferSnapshot); a later snapshot of p replaces it. It is numbered now, before any
+// reservation made after it (leftHouse), so its ack frees none of those.
+func (w *World) gaveAway(p *Player) {
+	s := w.snapshot(p, false)
+	p.pre = &s
 }
 
 // confirmed is the ack of character id's snapshot seq (World.Saved): the database has it
@@ -96,18 +123,21 @@ func (w *World) publicGround(to place) bool {
 // house floor it is written with p's snapshot, behind p's transfers (the Saver skips the
 // write and taints the house if one of them was dropped), also when the drop comes from
 // an event and not from p's command. Elsewhere it is reserved to p until the database
-// has p's transfers so far.
+// has p's transfers so far, and it is a give-away (gaveAway): p's next transfer writes
+// p's state without it first.
 //
 // In read-only mode (Tainted) nothing about houses is written (flushHouses): what falls
 // on a house floor then stays in memory only, neither reserved nor saved (docs/01).
 func (w *World) holdGround(p *Player, it *Item) {
-	h := w.inFlight[p.charID]
 	switch {
 	case !it.onGround:
 	case w.savedHouse(it.pos):
 		w.houseActor(p)
-	case h != 0:
-		w.heldGround[it] = groundHold{char: p.charID, seq: h}
+	default:
+		if h := w.inFlight[p.charID]; h != 0 {
+			w.heldGround[it] = groundHold{char: p.charID, seq: h}
+		}
+		w.gaveAway(p)
 	}
 }
 

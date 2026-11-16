@@ -616,6 +616,8 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	}
 
 	pickedUp := toOwner == p && it.carriedBy() != p
+	// T5.3 fail-safe: something p carries goes where no save has it (hold.go gaveAway).
+	gave := it.carriedBy() == p && w.publicGround(to)
 
 	// Run it: take the units out of their place and put them in the new one.
 	before := p.carried()
@@ -645,6 +647,9 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	}
 	if from.kind == locSlot || to.kind == locSlot {
 		w.equipmentChanged(p)
+	}
+	if gave {
+		w.gaveAway(p)
 	}
 	// KindOther, not KindItem: a move has no cooldown, and must not clear a refused use,
 	// gathering or crafting try (earlyTry).

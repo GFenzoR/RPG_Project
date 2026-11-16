@@ -134,6 +134,11 @@ type Player struct {
 	trade *trade
 	// tradeTAT is the trade anti-flood's theoretical arrival tick (GCRA).
 	tradeTAT game.Tick
+	// pre is p's snapshot from right after it last gave something away to the public
+	// ground (T5.3 fail-safe, hold.go gaveAway). p's next transfer writes it first, so a
+	// dropped transfer never takes p back to a save that still has it. Nil once a later
+	// snapshot of p was submitted (snapshot clears it).
+	pre *Snapshot
 
 	// Guilds (T5.1): p's membership (nil: none) and whether a GuildUpdate is queued.
 	gm          *guildMember
@@ -288,6 +293,9 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 	// numbers a transfer flushes before numbering; inside the flush this is a no-op.
 	w.flushHouses()
 	w.saveSeq++
+	// T5.3: every snapshot is submitted (a save or a transfer's), behind whatever p gave
+	// away so far: the one kept for p's next transfer (gaveAway) is not needed any more.
+	p.pre = nil
 	return Snapshot{
 		CharacterID: p.charID,
 		Seq:         w.saveSeq,
