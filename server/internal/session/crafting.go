@@ -69,10 +69,13 @@ func (w *World) staticAt(pos world.Pos, i int) uint16 {
 }
 
 // useStation answers a UseItem on a static map item: StationOpen if it is a crafting
-// station within reach. It reports whether the UseItem was about a static item.
+// station within reach. It reports whether the UseItem was about a static item p sees.
+// Like itemAt, a tile of another floor or out of view is no static item: the answer
+// (too far, cannot use, not possible) would tell what lies there, an open or a closed
+// door among them.
 func (w *World) useStation(p *Player, m *pb.UseItem) bool {
 	pos, ok := posFromMsg(m.GetFrom().GetPos())
-	if !ok || int(m.GetStackIndex()) >= w.staticCount(pos) {
+	if !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) || int(m.GetStackIndex()) >= w.staticCount(pos) {
 		return false
 	}
 	id := w.staticAt(pos, int(m.GetStackIndex()))

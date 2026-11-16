@@ -67,7 +67,7 @@ func TestForgeGateOnTheMap(t *testing.T) {
 		t.Fatalf("lock with a keyless player in the forge: %v", systemKeys(evs))
 	}
 	h.sim.Command(gameFunc(func() { h.w.Teleport(b, mine) }))
-	h.sim.Step()
+	h.waitDoor()
 	clA.take()
 	if evs := h.send(clA, useItem(onTile(gate), uint32(open.Numeric), 1)); !hasKey(evs, "door.relocked") || m.Walkable(gate) {
 		t.Fatalf("lock with the keyless player in the mine: %v", systemKeys(evs))

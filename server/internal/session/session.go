@@ -259,8 +259,13 @@ type World struct {
 	reach          int
 	maxOpen        int
 
-	// Doors (door.go): every tile of the map with a door item, worked out at start.
-	doors map[world.Pos]*door
+	// Doors (door.go): every tile of the map with a door item, the rooms behind locked
+	// doors and the room of each of their tiles (ids of rooms, 1-based), all worked out at
+	// start, and the wait between two door uses of a player.
+	doors   map[world.Pos]*door
+	rooms   []room
+	roomOf  map[world.Pos]int32
+	doorFor game.Tick
 
 	// Magic (T1.9): spells by normalized words, and the index of the magic skill.
 	spellWords map[string]*content.Spell

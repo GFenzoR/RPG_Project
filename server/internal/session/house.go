@@ -309,9 +309,11 @@ func (w *World) mayEnter(p *Player, to world.Pos) bool {
 }
 
 // houseExit is where a player that may not stay in h goes: its exit, or the closest
-// free tile around it outside every house.
+// free tile around it outside every house and outside the rooms behind locked doors the
+// exit is not in (roomAllows).
 func (w *World) houseExit(h *house) world.Pos {
 	e := h.def.Exit
+	from := w.roomOf[e]
 	for r := 0; r <= 3; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -323,7 +325,7 @@ func (w *World) houseExit(h *house) world.Pos {
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: e.Z}
-				if w.m.Walkable(q) && w.m.Flags(q)&world.FlagHouse == 0 && !w.occupied(q) {
+				if w.m.Walkable(q) && w.m.Flags(q)&world.FlagHouse == 0 && !w.occupied(q) && w.roomAllows(from, q) {
 					return q
 				}
 			}

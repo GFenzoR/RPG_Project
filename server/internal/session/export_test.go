@@ -307,12 +307,31 @@ func (w *World) LineOfSight(a, b world.Pos) bool { return w.m.LineOfSight(a, b) 
 // only; false for no door, or a door with no room).
 func (w *World) InDoorRoom(door, p world.Pos) bool {
 	d := w.doors[door]
-	if d == nil {
-		return false
-	}
-	_, in := d.room[p]
-	return in
+	return d != nil && d.inRoom(w.roomOf[p])
 }
+
+// DoorRoomSize returns how many tiles lie in the room behind the locked door at door
+// (tests only; 0 for no door, or a door with no room).
+func (w *World) DoorRoomSize(door world.Pos) int {
+	d := w.doors[door]
+	if d == nil {
+		return 0
+	}
+	n := 0
+	for _, r := range w.roomOf {
+		if d.inRoom(r) {
+			n++
+		}
+	}
+	return n
+}
+
+// Why a locked door has no room (doorRoom), for errors.Is in tests.
+var (
+	ErrDoorInTheOpen = errDoorInTheOpen
+	ErrDoorTruncated = errDoorTruncated
+	ErrDoorTie       = errDoorTie
+)
 
 // MarketViewers returns how many open market windows show item's book (mkWatch).
 func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }

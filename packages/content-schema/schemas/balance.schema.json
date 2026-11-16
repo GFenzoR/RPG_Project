@@ -452,7 +452,13 @@
     "inventory": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["start_container", "max_open_containers", "use_cooldown_ms", "reach"],
+      "required": [
+        "start_container",
+        "max_open_containers",
+        "use_cooldown_ms",
+        "door_cooldown_ms",
+        "reach"
+      ],
       "properties": {
         "start_container": {
           "description": "Container item equipped in the backpack slot of a character that never played.",
@@ -463,6 +469,10 @@
         },
         "use_cooldown_ms": {
           "$ref": "common.schema.json#/$defs/durationMs"
+        },
+        "door_cooldown_ms": {
+          "description": "Wait between two uses of a map door by one player, refused or not (docs/02 \"Puertas con llave\").",
+          "$ref": "common.schema.json#/$defs/positiveInt"
         },
         "reach": {
           "description": "Chebyshev distance (same floor) for actions on ground items.",

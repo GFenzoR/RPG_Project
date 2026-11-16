@@ -1,0 +1,134 @@
+{
+  "_comment": "Rooms behind locked doors (docs/02-game-design.md \"Puertas con llave\"), drawn on floor 7 from (0,0). Read by doors.test.ts here and by server/internal/session (TestDoorRoomsFixture), so make validate and the server agree on every room and on every door whose room cannot be worked out. Tiles: . grass; T grass and the island temple (the server wants it outside every room); # wall; D locked door, closed; d locked door, placed open; P plain door, closed; X plain door on a tile that a wall blocks too; space: no tile. {\"repeat\": n, \"row\": r} stands for n rows r. rooms: tiles behind each locked door by \"x,y\"; error: why the first locked door has no room (open: one side; truncated: two sides or more bigger than 4096 tiles; tie: the two biggest sides have the same size).",
+  "cases": [
+    {
+      "name": "a room behind a gate",
+      "rows": ["###########", "#...#..T..#", "#...D.....#", "#...#.....#", "###########"],
+      "rooms": {
+        "4,2": 9
+      }
+    },
+    {
+      "name": "a double gate shares its room",
+      "rows": [
+        "###########",
+        "#...#..T..#",
+        "#...D.....#",
+        "#...D.....#",
+        "#...#.....#",
+        "###########"
+      ],
+      "rooms": {
+        "4,2": 12,
+        "4,3": 12
+      }
+    },
+    {
+      "name": "a double gate placed half open",
+      "rows": [
+        "###########",
+        "#...#..T..#",
+        "#...D.....#",
+        "#...d.....#",
+        "#...#.....#",
+        "###########"
+      ],
+      "rooms": {
+        "4,2": 12,
+        "4,3": 12
+      }
+    },
+    {
+      "name": "a plain door beside the gate lets anyone round it",
+      "rows": [
+        "###########",
+        "#...#..T..#",
+        "#...D.....#",
+        "#...P.....#",
+        "#...#.....#",
+        "###########"
+      ],
+      "error": "open"
+    },
+    {
+      "name": "a plain door on a walled tile is a wall",
+      "rows": [
+        "###########",
+        "#...#..T..#",
+        "#...D.....#",
+        "#...X.....#",
+        "#...#.....#",
+        "###########"
+      ],
+      "rooms": {
+        "4,2": 12
+      }
+    },
+    {
+      "name": "a gate in the open",
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "...#D#...",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ],
+      "error": "open"
+    },
+    {
+      "name": "two sides of the same size",
+      "rows": ["#########", "#...#...#", "#.T.D...#", "#...#...#", "#########"],
+      "error": "tie"
+    },
+    {
+      "name": "a vault behind a room behind a gate",
+      "rows": [
+        "##############",
+        "#..T..#...#..#",
+        "#.....D...D..#",
+        "#.....#...#..#",
+        "##############"
+      ],
+      "rooms": {
+        "6,2": 9,
+        "10,2": 6
+      }
+    },
+    {
+      "name": "a strip behind a wall across a big field",
+      "rows": [
+        {
+          "repeat": 66,
+          "row": "......................................................................"
+        },
+        "###################################D##################################",
+        {
+          "repeat": 3,
+          "row": "......................................................................"
+        }
+      ],
+      "rooms": {
+        "35,66": 210
+      }
+    },
+    {
+      "name": "two sides too big to walk",
+      "rows": [
+        {
+          "repeat": 65,
+          "row": "......................................................................"
+        },
+        "###################################D##################################",
+        {
+          "repeat": 65,
+          "row": "......................................................................"
+        }
+      ],
+      "error": "truncated"
+    }
+  ]
+}

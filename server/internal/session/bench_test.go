@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -226,14 +228,25 @@ func BenchmarkTickConditions(b *testing.B) {
 }
 
 // BenchmarkDoorLockRefused measures one tick in which a key holder tries to lock a gate
-// with a player without the key in the room behind it, among 100 players: the worst try a
-// player can repeat at the gateway's rate (docs/02 "Puertas con llave"). The room (3968
-// tiles, near the 4096 a room may have) is worked out once at start, so a try is one map
-// lookup per player. Budget: a small fraction of the 10 ms tick (docs/07).
+// with a player without the key in the room behind it: the worst try (docs/02 "Puertas
+// con llave", docs/07). The room (3968 tiles, near the 4096 a room may have) is worked out
+// once at start; a try looks at the players of the room's sectors only. Here every one
+// of them is in the room: 150 carry the key at the bottom of a 40-item chest (each costs a
+// walk of its bags), and the one without it is the last one looked at. 50 more players
+// stand outside. door_cooldown_ms is one tick here, so every tick runs the whole check (a
+// player tries at most twice a second in the game). Budget: a small fraction of the 10 ms
+// tick.
 func BenchmarkDoorLockRefused(b *testing.B) {
 	m := field(b, 128, 128, 96, 0, 127, 64)
+	items := doorTestItems(true)
+	var chest content.Item
+	_ = yaml.Unmarshal([]byte("{id: bench_chest, kind: container, weight: 100, container: {slots: 40}}"), &chest)
+	chest.Numeric = 170
+	items[chest.ID] = &chest
+	bal := testBalance()
+	bal.Inventory.DoorCooldownMs = 1
 	w, err := session.New(session.Config{
-		Map: m, Balance: testBalance(), Vocations: testVocations, Items: doorTestItems(true),
+		Map: m, Balance: bal, Vocations: testVocations, Items: items,
 		Save: func(session.Snapshot) bool { return true },
 	})
 	if err != nil {
@@ -245,20 +258,38 @@ func BenchmarkDoorLockRefused(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+	// keyAtTheBottom is a character at p with a chest of 39 swords and the gate key last.
+	keyAtTheBottom := func(id int64, p world.Pos) session.Character {
+		c := withPack(id, p)
+		in := make([]session.ItemState, 0, 40)
+		for i := range 39 {
+			in = append(in, session.ItemState{ItemID: swordID, Count: 1, Slot: i})
+		}
+		in = append(in, session.ItemState{ItemID: gateKeyID, Count: 1, Slot: 39})
+		c.Inventory = []session.ItemState{{ItemID: chest.Numeric, Count: 1, Slot: int(slotBackpack), Items: in}}
+		return c
+	}
 	gate := pos(64, 96)
 	holder := &discardClient{}
-	_ = loop.Enqueue(w.Join(withPack(1, pos(64, 95), session.ItemState{ItemID: gateKeyID, Count: 1}), holder))
-	_ = loop.Enqueue(w.Join(withPack(2, pos(64, 120)), &discardClient{})) // in the room, without the key
-	for i := range 98 {
-		_ = loop.Enqueue(w.Join(withPack(int64(i+3), pos(r.IntN(128), r.IntN(90))), &discardClient{}))
+	_ = loop.Enqueue(w.Join(keyAtTheBottom(1, pos(64, 95)), holder))
+	for i := range 50 {
+		_ = loop.Enqueue(w.Join(withPack(int64(i+2), pos(r.IntN(128), r.IntN(90))), &discardClient{}))
 	}
+	for i := range 150 { // in the room, rows 98..127, every tile its own
+		_ = loop.Enqueue(w.Join(keyAtTheBottom(int64(i+100), pos(i%120, 98+i/120*2)), &discardClient{}))
+	}
+	_ = loop.Enqueue(w.Join(withPack(999, pos(127, 127)), &discardClient{})) // without the key, looked at last
 	loop.Step()
+	if n := len(w.Players()); n != 202 {
+		b.Fatalf("%d players", n)
+	}
 	_ = loop.Enqueue(w.Input(holder, useItem(onTile(gate), worldtest.Door, 1)))
 	loop.Step()
 	if !w.Walkable(gate) {
 		b.Fatal("the gate did not open")
 	}
 	lock := useItem(onTile(gate), worldtest.OpenDoor, 1)
+	loop.Step()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
@@ -268,5 +299,8 @@ func BenchmarkDoorLockRefused(b *testing.B) {
 	b.StopTimer()
 	if !w.Walkable(gate) {
 		b.Fatal("the gate locked on a player without the key")
+	}
+	if holder.events < b.N {
+		b.Fatalf("%d answers to %d tries", holder.events, b.N)
 	}
 }

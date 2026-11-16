@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"maps"
 	"strings"
 	"testing"
 	"time"
@@ -15,29 +16,39 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
-// Numeric ids of the keys: no other test item has them (testItemDefs grows in init of
-// other files: magic_test.go has 71, ranged_test.go 72).
+// Numeric ids of the keys and of a plain door pair: no other test item has them
+// (testItemDefs grows in init of other files: magic_test.go has 71, ranged_test.go 72).
 const (
-	gateKeyID  = 160
-	otherKeyID = 161
+	gateKeyID   = 160
+	otherKeyID  = 161
+	plainDoorID = 162
+	plainOpenID = 163
 )
 
 const sw = pb.Direction_DIRECTION_SOUTH_WEST
 
-// doorTestItems are testItems plus a walkable grass, a gate (the D and d of the
-// drawings, locked with gate_lock when locked) and its key.
+// doorTestItems are testItems plus a walkable grass, the wall of the drawings, a gate
+// (the D and d of the drawings, locked with gate_lock when locked), its key and a plain
+// door pair (never locked, for SetTile).
 func doorTestItems(locked bool) content.Items {
+	return withDoorItems(testItems(), locked)
+}
+
+// withDoorItems adds the items of doorTestItems to items.
+func withDoorItems(items content.Items, locked bool) content.Items {
 	lock := ""
 	if locked {
 		lock = ", key: gate_lock"
 	}
-	items := testItems()
 	for n, src := range map[uint16]string{
 		grassID:            "{id: grass, kind: ground, ground: {walkable: true}}",
+		worldtest.Wall:     "{id: test_wall, kind: wall, pickupable: false}",
 		worldtest.Door:     "{id: test_gate, kind: decoration, pickupable: false, blocks_movement: true, blocks_sight: true, door: {open: test_gate_open" + lock + "}}",
 		worldtest.OpenDoor: "{id: test_gate_open, kind: decoration, pickupable: false, door: {closed: test_gate}}",
 		gateKeyID:          "{id: gate_key, kind: material, weight: 100, key: gate_lock}",
 		otherKeyID:         "{id: other_key, kind: material, weight: 100, key: other_lock}",
+		plainDoorID:        "{id: plain_door, kind: decoration, pickupable: false, blocks_movement: true, blocks_sight: true, door: {open: plain_door_open}}",
+		plainOpenID:        "{id: plain_door_open, kind: decoration, pickupable: false, door: {closed: plain_door}}",
 	} {
 		var it content.Item
 		_ = yaml.Unmarshal([]byte(src), &it)
@@ -47,20 +58,24 @@ func doorTestItems(locked bool) content.Items {
 	return items
 }
 
-// doorMap is a small room (west) behind a gate at (4, 2), and a bigger hall (east).
-func doorMap(t *testing.T) *world.Map {
-	return worldtest.Map(t, 0, 0, 7,
-		"###########",
-		"#...#.....#",
-		"#...D.....#",
-		"#...#.....#",
-		"###########",
-	)
+// doorRows are a small room (west) behind a gate at (4, 2), and a bigger hall (east) with
+// the temple.
+var doorRows = []string{
+	"###########",
+	"#...#..T..#",
+	"#...D.....#",
+	"#...#.....#",
+	"###########",
 }
+
+func doorMap(t *testing.T) *world.Map { return worldtest.Map(t, 0, 0, 7, doorRows...) }
 
 var gate = pos(4, 2)
 
 func useGate(id uint32) *pb.ClientMessage { return useItem(onTile(gate), id, 1) }
+
+// waitDoor lets the wait between two door uses of a player go by.
+func (h *harness) waitDoor() { h.sim.RunFor(doorWait * time.Millisecond) }
 
 // tileOf returns the item ids of the last TileUpdate of pos in evs (nil if none).
 func tileOf(evs []*pb.ServerMessage, p world.Pos) []uint32 {
@@ -79,7 +94,8 @@ func tileOf(evs []*pb.ServerMessage, p world.Pos) []uint32 {
 // A locked gate (docs/02 "Puertas con llave"): it blocks walking and sight; without the
 // key it stays shut; with the key anywhere on the player it opens for everyone, and only
 // a key holder locks it again: never on a creature or an item, and never with a player
-// without the key in the room behind it.
+// without the key in the room behind it. Every use next to it, refused or not, starts the
+// player's wait.
 func TestLockedDoor(t *testing.T) {
 	h := newHarness(t, doorMap(t), func(c *session.Config) { c.Items = doorTestItems(true) })
 	clA, a := h.joinChar(withPack(9101, pos(6, 2)))
@@ -107,9 +123,13 @@ func TestLockedDoor(t *testing.T) {
 	if evs := h.send(clA, useGate(worldtest.Door)); !hasKey(evs, "door.locked") || tileOf(evs, gate) != nil {
 		t.Fatalf("use without key: %v", systemKeys(evs))
 	}
+	// A refusal starts the wait too: trying again at once is answered with the wait.
+	if evs := h.send(clA, useGate(worldtest.Door)); !maps.Equal(systemKeys(evs), map[string]int{"door.not_ready": 1}) {
+		t.Fatalf("second try right after a refusal: %v", systemKeys(evs))
+	}
 	// Another key does not fit.
 	h.sim.Command(gameFunc(func() { h.w.GiveForTest(a, "other_key", 1) }))
-	h.sim.Step()
+	h.waitDoor()
 	if evs := h.send(clA, useGate(worldtest.Door)); !hasKey(evs, "door.locked") {
 		t.Fatalf("use with the wrong key: %v", systemKeys(evs))
 	}
@@ -120,7 +140,8 @@ func TestLockedDoor(t *testing.T) {
 
 	// With the key in the backpack the gate opens: every client that sees it hears.
 	h.sim.Command(gameFunc(func() { h.w.GiveForTest(a, "gate_key", 1) }))
-	h.sim.Step()
+	h.waitDoor()
+	clA.take()
 	clB.take()
 	evs := h.send(clA, useGate(worldtest.Door))
 	if !hasKey(evs, "door.unlocked") {
@@ -165,7 +186,7 @@ func TestLockedDoor(t *testing.T) {
 		t.Fatalf("close on an item: %v", systemKeys(evs))
 	}
 	h.input(clA, moveItem(onTile(gate), swordID, 2, onTile(pos(5, 1)), 1))
-	h.sim.Step()
+	h.waitDoor()
 	clA.take()
 	// The tagalong has no key and stands in the room behind the gate: locking it would
 	// shut it in.
@@ -193,7 +214,7 @@ func TestLockedDoor(t *testing.T) {
 
 	// With a key of its own the tagalong goes in, may be locked in, and lets itself out.
 	h.sim.Command(gameFunc(func() { h.w.GiveForTest(b, "gate_key", 1) }))
-	h.sim.Step()
+	h.waitDoor()
 	if evs := h.send(clB, useGate(worldtest.Door)); !hasKey(evs, "door.unlocked") {
 		t.Fatalf("tagalong with a key: %v", systemKeys(evs))
 	}
@@ -229,28 +250,24 @@ func field(t testing.TB, w, h, wy, x0, x1, gx int) *world.Map {
 	return worldtest.Map(t, 0, 0, 7, rows...)
 }
 
-// Who would be shut in depends on what the gate keeps apart: a gate in the open, or
-// between two sides too big to walk, shuts nobody in; behind a wall across a field, the
-// smaller side is the room.
+// Who would be shut in depends on what the gate keeps apart: behind a wall across a
+// field, the strip too small to be open ground is the room, and the field before it is
+// not. (A gate whose room cannot be worked out does not let the world start: see
+// door-rooms.json.)
 func TestLockShutsNobodyIn(t *testing.T) {
 	for _, c := range []struct {
-		name       string
-		w, h, wy   int
-		x0, x1, gx int
-		keyless    world.Pos
-		wantLock   bool
+		name     string
+		keyless  world.Pos
+		wantLock bool
 	}{
-		{"in the open", 9, 9, 4, 3, 5, 4, pos(4, 7), true},
-		{"short wall in a big field", 70, 70, 35, 33, 37, 35, pos(35, 40), true},
-		{"two halves too big to walk", 70, 130, 65, 0, 69, 35, pos(35, 70), true},
-		{"strip behind a wall", 70, 70, 66, 0, 69, 35, pos(35, 68), false},
-		{"field before a wall", 70, 70, 66, 0, 69, 35, pos(35, 60), true},
+		{"strip behind a wall", pos(35, 68), false},
+		{"field before a wall", pos(35, 60), true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			m := field(t, c.w, c.h, c.wy, c.x0, c.x1, c.gx)
+			m := field(t, 70, 70, 66, 0, 69, 35)
 			h := newHarness(t, m, func(cfg *session.Config) { cfg.Items = doorTestItems(true) })
-			g := pos(c.gx, c.wy)
-			holder := withPack(9201, pos(c.gx, c.wy-1))
+			g := pos(35, 66)
+			holder := withPack(9201, pos(35, 65))
 			holder.Name = "Keyholder"
 			clA, a := h.joinChar(holder)
 			keyless := c.keyless
@@ -273,8 +290,65 @@ func TestLockShutsNobodyIn(t *testing.T) {
 	}
 }
 
+// doubleGateRows are doorRows with a second gate under the first: a double door.
+var doubleGateRows = []string{
+	"###########",
+	"#...#..T..#",
+	"#...D.....#",
+	"#...D.....#",
+	"#...#.....#",
+	"###########",
+}
+
+// A double gate (two locked doors side by side in one wall) shares one room: each door
+// counts the other as a wall, not as a way round it. From inside, a player without the
+// key opens either one; with a player without the key inside, neither locks.
+func TestDoubleGateSharesItsRoom(t *testing.T) {
+	gates := []world.Pos{pos(4, 2), pos(4, 3)}
+	keyed := func(c *session.Config) { c.Items = doorTestItems(true) }
+
+	h := newHarness(t, worldtest.Map(t, 0, 0, 7, doubleGateRows...), keyed)
+	for _, g := range gates {
+		if n := h.w.DoorRoomSize(g); n != 12 || !h.w.InDoorRoom(g, pos(1, 4)) || h.w.InDoorRoom(g, pos(5, 2)) {
+			t.Fatalf("room of %v: %d tiles", g, n)
+		}
+	}
+	// A player without the key wakes up inside with both gates locked and lets itself out
+	// through either.
+	for i, g := range gates {
+		cl, _ := h.joinChar(withPack(int64(9501+i), pos(3, 2+i)))
+		cl.take()
+		if evs := h.send(cl, useItem(onTile(g), worldtest.Door, 1)); !hasKey(evs, "door.unbarred") || !h.w.Walkable(g) {
+			t.Fatalf("open %v from inside: %v", g, systemKeys(evs))
+		}
+	}
+
+	// A key holder outside does not lock either gate on a stray inside.
+	h = newHarness(t, worldtest.Map(t, 0, 0, 7, doubleGateRows...), keyed)
+	clA, a := h.joinChar(withPack(9511, pos(5, 2)))
+	stray := withPack(9512, pos(2, 2))
+	stray.Name = "Stray"
+	h.joinChar(stray)
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(a, "gate_key", 1) }))
+	h.sim.Step()
+	for _, g := range gates {
+		clA.take()
+		if evs := h.send(clA, useItem(onTile(g), worldtest.Door, 1)); !hasKey(evs, "door.unlocked") {
+			t.Fatalf("open %v: %v", g, systemKeys(evs))
+		}
+		h.waitDoor()
+	}
+	for _, g := range gates {
+		clA.take()
+		if evs := h.send(clA, useItem(onTile(g), worldtest.OpenDoor, 1)); !hasKey(evs, "door.shut_in") || !h.w.Walkable(g) {
+			t.Fatalf("lock %v with the stray inside: %v", g, systemKeys(evs))
+		}
+		h.waitDoor()
+	}
+}
+
 // A door with no lock opens and closes for anyone, without messages, and has no room. A
-// player opens or closes a door at most once every half second; others may meanwhile.
+// player uses a door at most once every inventory.door_cooldown_ms; others may meanwhile.
 func TestPlainDoor(t *testing.T) {
 	h := newHarness(t, doorMap(t), func(c *session.Config) { c.Items = doorTestItems(false) })
 	cl, _ := h.join("Walker", at(3, 2))
@@ -296,7 +370,7 @@ func TestPlainDoor(t *testing.T) {
 	if evs = h.send(other, useGate(worldtest.OpenDoor)); len(systemKeys(evs)) != 0 || h.w.Walkable(gate) {
 		t.Fatalf("another player closes: %v", systemKeys(evs))
 	}
-	h.sim.RunFor(500 * time.Millisecond)
+	h.waitDoor()
 	cl.take()
 	evs = h.send(cl, useGate(worldtest.Door))
 	if len(systemKeys(evs)) != 0 || !h.w.Walkable(gate) {
@@ -368,7 +442,7 @@ func TestLockedDoorOpensFromInside(t *testing.T) {
 			t.Fatalf("lock with the stray inside: %v", systemKeys(evs))
 		}
 		h.sim.Command(h.w.Leave(clB))
-		h.sim.Step()
+		h.waitDoor()
 		clA.take()
 		if evs := h.send(clA, useGate(worldtest.OpenDoor)); !hasKey(evs, "door.relocked") || h.w.Walkable(gate) {
 			t.Fatalf("lock with the stray logged out: %v", systemKeys(evs))
@@ -429,54 +503,56 @@ func doorRoomOf(t *testing.T, opt option) bool {
 	return !h.w.InDoorRoom(gate, pos(5, 2)) && !h.w.InDoorRoom(gate, pos(9, 3)) && !h.w.InDoorRoom(gate, gate)
 }
 
+// notPossible is the answer to a use of a tile p does not see: the same for any tile, so
+// it tells nothing of what lies there.
+var notPossible = map[string]int{"inventory.not_possible": 1}
+
 // A UseItem on a door of another floor, or out of view, is no door use: it goes on to
-// the other uses of map items and leaves the door as it was.
+// the other uses of map items, which do not look at that tile either, and leaves the
+// door as it was. The answer is the same whether the door is open or closed.
 func TestDoorUseElsewhere(t *testing.T) {
-	rows := []string{
-		"###########",
-		"#...#.....#",
-		"#...D.....#",
-		"#...#.....#",
-		"###########",
-	}
-	m := worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 6, Rows: rows}, worldtest.Layer{Z: 7, Rows: rows})
+	m := worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 6, Rows: doorRows}, worldtest.Layer{Z: 7, Rows: doorRows})
 	h := newHarness(t, m, func(c *session.Config) { c.Items = doorTestItems(false) })
 	cl, _ := h.join("Below", at(3, 2))
 	h.sim.Step()
 	cl.take()
 	above := world.Pos{X: gate.X, Y: gate.Y, Z: 6}
-	evs := h.send(cl, useItem(onTile(above), worldtest.Door, 1))
-	if doorKeys(evs) || tileOf(evs, gate) != nil || h.w.Walkable(above) || h.w.Walkable(gate) {
-		t.Fatalf("use of the door above: %v", systemKeys(evs))
-	}
-
-	far := field(t, 70, 70, 66, 0, 69, 35)
-	h = newHarness(t, far, func(c *session.Config) { c.Items = doorTestItems(false) })
-	cl, _ = h.join("Faraway", at(35, 50))
-	h.sim.Step()
-	cl.take()
-	g := pos(35, 66)
-	evs = h.send(cl, useItem(onTile(g), worldtest.Door, 1))
-	if doorKeys(evs) || h.w.Walkable(g) {
-		t.Fatalf("use of a door out of view: %v", systemKeys(evs))
-	}
-}
-
-// doorKeys reports whether evs hold a door message.
-func doorKeys(evs []*pb.ServerMessage) bool {
-	for k := range systemKeys(evs) {
-		if strings.HasPrefix(k, "door.") {
-			return true
+	for _, id := range []uint32{worldtest.Door, worldtest.OpenDoor} {
+		evs := h.send(cl, useItem(onTile(above), id, 1))
+		if !maps.Equal(systemKeys(evs), notPossible) || tileOf(evs, gate) != nil || h.w.Walkable(above) || h.w.Walkable(gate) {
+			t.Fatalf("use of the door above (item %d): %v", id, systemKeys(evs))
 		}
 	}
-	return false
+
+	for _, open := range []bool{false, true} {
+		far := field(t, 70, 70, 66, 0, 69, 35)
+		h = newHarness(t, far, func(c *session.Config) { c.Items = doorTestItems(true) })
+		g := pos(35, 66)
+		if open {
+			holder := withPack(9431, pos(35, 65), session.ItemState{ItemID: gateKeyID, Count: 1})
+			holder.Name = "Opener"
+			clO, _ := h.joinChar(holder)
+			if evs := h.send(clO, useItem(onTile(g), worldtest.Door, 1)); !hasKey(evs, "door.unlocked") {
+				t.Fatalf("open: %v", systemKeys(evs))
+			}
+		}
+		cl, _ = h.join("Faraway", at(35, 30))
+		h.sim.Step()
+		cl.take()
+		for _, id := range []uint32{worldtest.Door, worldtest.OpenDoor} {
+			evs := h.send(cl, useItem(onTile(g), id, 1))
+			if !maps.Equal(systemKeys(evs), notPossible) || h.w.Walkable(g) != open {
+				t.Fatalf("use of a door out of view (open %v, item %d): %v", open, id, systemKeys(evs))
+			}
+		}
+	}
 }
 
 // An open door does not close on a monster, nor on the remains it leaves.
 func TestDoorBlockedByMonster(t *testing.T) {
 	m := worldtest.Map(t, 0, 0, 7,
 		"###########",
-		"#...#.....#",
+		"#...#..T..#",
 		"#...d.....#",
 		"#...#.....#",
 		"###########",
@@ -502,6 +578,7 @@ func TestDoorBlockedByMonster(t *testing.T) {
 	if len(h.w.GroundAt(gate)) == 0 {
 		t.Fatal("the dummy left no remains in the gate")
 	}
+	h.waitDoor()
 	cl.take()
 	if evs := h.send(cl, useGate(worldtest.OpenDoor)); !hasKey(evs, "door.blocked") || !h.w.Walkable(gate) {
 		t.Fatalf("close on remains: %v", systemKeys(evs))
@@ -518,5 +595,17 @@ func TestDoorOnHouseDoorRefused(t *testing.T) {
 		Items: doorTestItems(false), Save: func(session.Snapshot) bool { return true }})
 	if err == nil || !strings.Contains(err.Error(), "test_house") {
 		t.Fatalf("a door on a house door: %v", err)
+	}
+}
+
+// Two door items on one tile would each claim its use and its lock: the world refuses to
+// start (make validate refuses it first).
+func TestTwoDoorsOnATileRefused(t *testing.T) {
+	m := doorMap(t)
+	worldtest.SetTile(t, m, gate, worldtest.Grass, world.FlagBlocksMovement|world.FlagBlocksSight, worldtest.Door, plainDoorID)
+	_, err := session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations,
+		Items: doorTestItems(true), Save: func(session.Snapshot) bool { return true }})
+	if err == nil || !strings.Contains(err.Error(), "same tile") {
+		t.Fatalf("two doors on a tile: %v", err)
 	}
 }

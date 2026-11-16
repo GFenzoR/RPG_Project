@@ -652,8 +652,12 @@ func (w *World) homeIsland(town string) string {
 	return ""
 }
 
-// freeNear returns the walkable, unoccupied tile closest to p (by rings) within radius.
+// freeNear returns the walkable, unoccupied tile closest to p (by rings) within radius,
+// never one in the room behind a locked door (door.go) unless p is in that same room: the
+// rings do not follow walls, so a crowded tile next to a locked gate must not put anyone
+// on its other side.
 func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
+	from := w.roomOf[p]
 	for r := 0; r <= radius; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -665,7 +669,7 @@ func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: p.Z}
-				if w.m.Walkable(q) && !w.occupied(q) {
+				if w.m.Walkable(q) && !w.occupied(q) && w.roomAllows(from, q) {
 					return q, true
 				}
 			}
