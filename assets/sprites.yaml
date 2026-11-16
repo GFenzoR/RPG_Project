@@ -125,6 +125,10 @@ sprites:
   shields/embersteel_shield: { source: vendor/dungeon-crawl/item/armour/shields/lshield_dd_dk.png }
   armor/wyrmscale_mail: { source: vendor/dungeon-crawl/item/armour/artefact/urand_salamander.png }
 
+  # Doors (docs/02 "Puertas con llave"): the forge gate of the volcanic mine, shut and open.
+  doors/forge_gate: { source: vendor/dungeon-crawl/dngn/doors/runed_door.png }
+  doors/forge_gate_open: { source: vendor/dungeon-crawl/dngn/doors/open_door.png }
+
   creatures/ash_hound: { source: vendor/dungeon-crawl/UNUSED/monsters/war_dog.png }
   creatures/cinder_salamander: { source: vendor/dungeon-crawl/mon/salamander.png }
   creatures/obsidian_delver: { source: vendor/dungeon-crawl/mon/deep_dwarf.png }

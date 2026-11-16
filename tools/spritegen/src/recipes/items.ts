@@ -1151,6 +1151,40 @@ function smugglerTally(img: Image, _rand: Rng, seed: number): void {
   outline(img, { amount: 0.5 });
 }
 
+/**
+ * The ember key (docs/02 "Puertas con llave"): the ember root shaped into a key of dark
+ * stone that never cools. It lies on the diagonal, the ring bow up right and the two-toothed
+ * bit down left, with ember glowing in a crack along the shaft and inside the bow.
+ */
+function emberKey(img: Image, _rand: Rng, seed: number): void {
+  const { ember } = PALETTE;
+  const grain = (x: number, y: number): number => (tileNoise(x, y, 4, 2, seed) - 0.5) * 0.25;
+  // The bit: two teeth hanging off the shaft toward the bottom right.
+  rod(img, [7, 24], [11, 28], 1.8, 1.6, SLAG, 0.1);
+  rod(img, [10.5, 20.5], [14.5, 24.5], 1.8, 1.6, SLAG, 0.1);
+  // The shaft, from the bit up to the bow.
+  eachInCapsule(5, 26, 18, 13, 2.1, 2.1, (x, y, u) =>
+    px(img, x, y, shadeOf(SLAG, cylinderLight(u) + 0.12 + grain(x, y))),
+  );
+  // The bow: a thick ring, lit on its top-left, with a hole through it.
+  eachInEllipse(22, 9.5, 7.2, 7.2, (x, y, nx, ny) => {
+    const d = nx * nx + ny * ny;
+    if (d < 0.17) return; // the hole
+    const rim = d < 0.36 ? -0.2 : 0; // the inner face sits in shadow
+    px(img, x, y, shadeOf(SLAG, domeLight(nx, ny) + 0.15 + rim + grain(x, y)));
+  });
+  // Ember in the crack of the shaft and around the inside of the bow.
+  line(img, 7, 24, 17, 14, ember.shadow);
+  line(img, 10, 21, 15, 16, ember.base);
+  eachInEllipse(22, 9.5, 3.8, 3.8, (x, y, nx, ny) => {
+    const d = nx * nx + ny * ny;
+    if (d >= 0.55 && d < 1) px(img, x, y, nx + ny > 0 ? ember.base : ember.shadow);
+  });
+  px(img, 12, 19, ember.light);
+  px(img, 24, 12, ember.light);
+  outline(img, { amount: 0.45 });
+}
+
 export const ITEMS: RecipeBook = {
   "currency/copper_coin": { kind: "item", draw: coinPile(COIN_COPPER) },
   "currency/silver_coin": { kind: "item", draw: coinPile(silver) },
@@ -1184,4 +1218,5 @@ export const ITEMS: RecipeBook = {
   "armor/canvas_trousers": { kind: "item", draw: canvasTrousers },
   "armor/stagleather_leggings": { kind: "item", draw: stagleatherLeggings },
   "quest/smuggler_tally": { kind: "item", draw: smugglerTally },
+  "quest/ember_key": { kind: "item", draw: emberKey },
 };

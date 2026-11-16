@@ -117,6 +117,8 @@ class Validator {
   private readonly npcs: SourceFile[] = [];
   private readonly monsters: SourceFile[] = [];
   private readonly quests: SourceFile[] = [];
+  /** Every item with where it is defined, for the rules across items (checkDoors). */
+  private readonly items: (Owned & { item: Obj })[] = [];
   private balance: SourceFile | undefined;
 
   private readonly root: string;
@@ -133,6 +135,7 @@ class Validator {
     }
     this.loadData(dataDir);
     this.checkRefs();
+    this.checkDoors();
     this.checkDialogs();
     this.checkQuestSteps();
     this.checkNpcActions();
@@ -188,6 +191,7 @@ class Validator {
       for (const [i, item] of asList(src.data).entries()) {
         this.register("item", item, src, [i]);
         this.checkItem(item, src, [i]);
+        if (isObj(item)) this.items.push({ item, src, path: [i] });
       }
     }
 
@@ -531,6 +535,65 @@ class Validator {
         ref.path,
         `unknown ${ref.kind} "${ref.value}"${hint ? ` (did you mean "${hint}"?)` : ""}`,
       );
+    }
+  }
+
+  /**
+   * Doors and keys (docs/02 "Puertas con llave", same rules as content.CheckDoors in Go):
+   * a door pairs with another door that points back, the closed one blocks movement and the
+   * open one does not, neither can be picked up, only the closed one is locked, every lock
+   * has a key and no door is a key. Unknown pairs are checkRefs' to report.
+   */
+  private checkDoors(): void {
+    const byId = new Map<string, Obj>();
+    const keys = new Set<string>();
+    for (const { item } of this.items) {
+      const id = idOf(item);
+      if (id !== undefined && !byId.has(id)) byId.set(id, item);
+      if (typeof item["key"] === "string") keys.add(item["key"]);
+    }
+    const blocks = (it: Obj): boolean =>
+      it["blocks_movement"] === true || (it["kind"] === "wall" && it["blocks_movement"] !== false);
+    for (const { item, src, path } of this.items) {
+      const door = item["door"];
+      if (!isObj(door)) continue;
+      const id = idOf(item) ?? "";
+      if ("key" in item) this.error(src, [...path, "key"], "a door cannot be a key");
+      if (item["pickupable"] !== false)
+        this.error(src, [...path, "door"], "a door needs pickupable: false");
+      const lock = door["key"];
+      const open = door["open"];
+      const closed = door["closed"];
+      if (typeof closed === "string") {
+        const pair = byId.get(closed);
+        const back = pair && isObj(pair["door"]) ? pair["door"]["open"] : undefined;
+        if (lock !== undefined)
+          this.error(src, [...path, "door", "key"], "only the closed door of a pair has a key");
+        if (pair && back !== id)
+          this.error(
+            src,
+            [...path, "door", "closed"],
+            `"${closed}" is not a closed door that opens into "${id}"`,
+          );
+        if (blocks(item)) this.error(src, [...path, "door"], "an open door cannot block movement");
+      } else if (typeof open === "string") {
+        const pair = byId.get(open);
+        const back = pair && isObj(pair["door"]) ? pair["door"]["closed"] : undefined;
+        if (pair && back !== id)
+          this.error(
+            src,
+            [...path, "door", "open"],
+            `"${open}" is not an open door that closes into "${id}"`,
+          );
+        if (!blocks(item))
+          this.error(src, [...path, "door"], "a closed door needs blocks_movement: true");
+        if (typeof lock === "string" && !keys.has(lock))
+          this.error(
+            src,
+            [...path, "door", "key"],
+            `no item has key "${lock}", so nothing opens this door`,
+          );
+      }
     }
   }
 

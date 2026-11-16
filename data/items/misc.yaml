@@ -450,7 +450,7 @@
   description: item.ember_root.desc
   weight: 600
   tradeable: false
-  notes: Chapter 3 key (ch3_gate). bosque_druid hands it over to whoever set ember_root_found in Chapter 2; volcan_forge_echo takes it to open the sealed gate. No value, so no NPC buys it.
+  notes: Chapter 3 key (ch3_gate). bosque_druid hands it over to whoever set ember_root_found in Chapter 2; volcan_forge_echo takes it and shapes the ember key that opens the sealed gate. No value, so no NPC buys it.
 
 - id: delver_chart
   kind: material
@@ -469,3 +469,13 @@
   weight: 2200
   tradeable: false
   notes: Chapter 3 quest item (ch3_warden). Always dropped by the slagbound warden; volcan_keeper takes it.
+
+- id: ember_key
+  kind: material
+  sprite: quest/ember_key
+  name: item.ember_key.name
+  description: item.ember_key.desc
+  weight: 300
+  tradeable: false
+  key: forge_gate
+  notes: Opens and locks the forge gate (door key forge_gate, data/items/doors.yaml). volcan_forge_echo shapes it from the ember root in ch3_gate, and shapes another for whoever finished ch3_gate and lacks one. No value, so no NPC buys it.
