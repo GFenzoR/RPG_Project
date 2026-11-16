@@ -9,7 +9,14 @@ import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
 import { TileMap, isPassable, isWalkable } from "./tiles.ts";
-import { DOOR_ROOM_ERRORS, ON_STEP_KINDS, doorRooms, doorsOn, templeReach } from "./doors.ts";
+import {
+  DOOR_ROOM_ERRORS,
+  ON_STEP_KINDS,
+  doorRooms,
+  doorsOn,
+  hasLockedDoor,
+  templeReach,
+} from "./doors.ts";
 import type { DoorWorld, TempleReach } from "./doors.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
@@ -162,6 +169,7 @@ class WorldValidator {
     this.checkPortalExits();
     this.checkBoatRoutes();
     this.checkDoors();
+    this.checkArrivals();
     this.checkPrefabs();
   }
 
@@ -925,10 +933,65 @@ class WorldValidator {
     }
   }
 
+  /**
+   * Boat arrivals and dialog teleports (docs/03 "Validación"; the server's checkArrivals
+   * refuses the same, with the cases of testdata/arrivals.json): none on a house tile (an
+   * arrival puts nobody inside a house) nor on a locked door placed open (a door is no
+   * place to land: its doorway). A dialog teleport also needs a walkable tile of an island,
+   * as a boat arrival does (checkRouteTile).
+   */
+  private checkArrivals(): void {
+    const owner = new Map<string, string>(); // house tile → house id, every island
+    for (const island of this.world.islands.values())
+      for (const h of island.houses)
+        for (const r of h.rects)
+          for (const [x, y] of tilesOf(r)) owner.set(formatPos({ x, y, z: r.z }), h.id);
+    const land = (
+      file: string,
+      path: PathSegment[],
+      what: string,
+      p: Position,
+      own: boolean,
+    ): void => {
+      const island = this.islandAt(p);
+      const tile = this.tiles.tileAt(p);
+      if (!island || !isWalkable(tile, this.content)) {
+        // A boat arrival's own check (checkRouteTile) says it already.
+        if (own)
+          this.err(file, path, `${what} at ${formatPos(p)} is not a walkable tile of an island`, p);
+        return;
+      }
+      const where = `${what} at ${formatPos(p)} (island "${island.meta.id}")`;
+      const house = owner.get(formatPos(p));
+      if (house !== undefined)
+        this.err(
+          file,
+          path,
+          `${where} lies in house "${house}": an arrival puts nobody inside a house`,
+          p,
+        );
+      else if (hasLockedDoor(tile, this.content))
+        this.err(file, path, `${where} lies on a locked door: a door is no place to land`, p);
+    };
+    for (const r of this.content.routes)
+      land(routesFile, [r.index, "to"], `arrival of boat route "${r.id}"`, r.to, false);
+    for (const t of this.content.teleports ?? [])
+      land(
+        t.file,
+        ["dialog", "nodes", t.node],
+        `teleport of NPC "${t.npc}" (node "${t.node}")`,
+        t.to,
+        true,
+      );
+  }
+
+  /** The island whose rect holds p, or undefined. */
+  private islandAt(p: Position): Island | undefined {
+    return [...this.world.islands.values()].find((i) => rectContains(i.meta.rect, p.x, p.y));
+  }
+
   private checkRouteTile(index: number, path: PathSegment[], p: Position, what: string): void {
-    const island = [...this.world.islands.values()].find((i) =>
-      rectContains(i.meta.rect, p.x, p.y),
-    );
+    const island = this.islandAt(p);
     if (!island) this.err(routesFile, [index, ...path], `${what} is outside every island`, p);
     else if (!isWalkable(this.tiles.tileAt(p), this.content))
       this.err(routesFile, [index, ...path], `${what} is not a walkable tile`, p);

@@ -270,18 +270,20 @@ func absT(v int) int {
 }
 
 // A boat and a dialog teleport never put anyone inside a house, like a portal (docs/02
-// "Cambiar de piso", "Llegada"): with the arrival on the one tile of a hut, the traveller
-// lands on the first tile around it, outside the hut.
+// "Cambiar de piso", "Llegada"): with the arrival taken and the one tile of a hut first in
+// the ring around it, the traveller lands on the next tile, outside the hut. An arrival
+// on the hut itself does not even start the world (TestArrivalsFixture).
 func TestArrivalsSkipHouses(t *testing.T) {
 	hut := func(c *session.Config) {
 		c.Map = worldtest.WithHouses(t, c.Map, world.House{ID: "hut", Name: "house.hut.name", Rent: 10,
-			Rects: []world.HouseRect{{X: 50, Y: 50, Z: 7, W: 1, H: 1}}, Doors: []world.Pos{arrival}, Exit: pos(50, 51)})
+			Rects: []world.HouseRect{{X: 49, Y: 49, Z: 7, W: 1, H: 1}}, Doors: []world.Pos{pos(49, 49)}, Exit: pos(48, 49)})
 	}
 	h := travelHarness(t, hut)
+	h.traveller("Blocker", arrival, 0)
 	cl, p := h.traveller("Sailor", pos(8, 12), 100)
 	h.pick(cl, h.travelWindow(cl), "route.cheap")
-	if p.Pos() != pos(49, 49) {
-		t.Fatalf("the boat landed on %v, want 49,49 outside the hut on %v", p.Pos(), arrival)
+	if p.Pos() != pos(50, 49) {
+		t.Fatalf("the boat landed on %v, want 50,49 past the hut on 49,49", p.Pos())
 	}
 
 	h = dataHarnessWith(t, func(c *session.Config) {
@@ -292,9 +294,10 @@ func TestArrivalsSkipHouses(t *testing.T) {
 		n.Options = append(n.Options[:len(n.Options):len(n.Options)],
 			content.DialogOption{Text: "dialog.test_teleport", Action: content.Actions{{Teleport: &to}}})
 	})
+	h.traveller("Blocker", arrival, 0)
 	cl, p = h.traveller("Pilgrim", pos(12, 15), 0)
 	h.pick(cl, h.lastDialog(h.send(cl, talkMsg(h.npc("puerto_priest").ID()))), "dialog.test_teleport")
-	if p.Pos() != pos(49, 49) {
-		t.Fatalf("the dialog teleported to %v, want 49,49 outside the hut on %v", p.Pos(), arrival)
+	if p.Pos() != pos(50, 49) {
+		t.Fatalf("the dialog teleported to %v, want 50,49 past the hut on 49,49", p.Pos())
 	}
 }

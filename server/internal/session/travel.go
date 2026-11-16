@@ -69,12 +69,7 @@ func (w *World) initTravel() error {
 		case !okTo || !w.m.Walkable(to):
 			return fmt.Errorf("session: boat route %q: the arrival is not a walkable tile", r.ID)
 		}
-		rt := &route{def: r, from: from, to: to}
-		for _, is := range w.m.Islands() {
-			if is.Rect.Contains(int(to.X), int(to.Y)) {
-				rt.island = is.ID
-			}
-		}
+		rt := &route{def: r, from: from, to: to, island: w.islandAt(to)}
 		if rt.island == "" {
 			return fmt.Errorf("session: boat route %q: the arrival is outside every island", r.ID)
 		}
@@ -106,6 +101,58 @@ func worldPos(p content.Position) (world.Pos, bool) {
 		return world.Pos{}, false
 	}
 	return world.Pos{X: uint16(p.X), Y: uint16(p.Y), Z: uint8(p.Z)}, true
+}
+
+// checkArrivals refuses an arrival that would put a player where nobody may be put
+// (docs/03 "Validación"; make validate refuses the same, packages/map-format
+// validate.ts checkArrivals, with the cases of testdata/arrivals.json): a boat arrival
+// or the destination of a dialog teleport on a house tile (an arrival puts nobody inside
+// a house: the search would skip the house, but the destination itself is wrong) or on a
+// locked door placed open (a door is no place to land: the destination would be its
+// doorway, and the search could only put the player on its outside). A dialog teleport
+// must also lead to a walkable tile of an island, as a boat arrival must (initTravel).
+// world.NewMap refuses the same for the ends of portals. New runs it after initDoors,
+// which finds the locked doors.
+func (w *World) checkArrivals() error {
+	for _, r := range w.cfg.BoatRoutes {
+		if to, ok := worldPos(r.To); ok {
+			if why := w.badArrival(to); why != "" {
+				return fmt.Errorf("session: boat route %q arrives on %v (island %q), %s", r.ID, to, w.islandAt(to), why)
+			}
+		}
+	}
+	for _, id := range sortedKeys(w.cfg.NPCs) {
+		nodes := w.cfg.NPCs[id].Dialog.Nodes
+		for _, node := range sortedKeys(nodes) {
+			for _, o := range nodes[node].Options {
+				for _, a := range o.Action {
+					if a.Teleport == nil {
+						continue
+					}
+					to, ok := worldPos(*a.Teleport)
+					if !ok || w.islandAt(to) == "" || !w.m.Walkable(to) {
+						t := a.Teleport
+						return fmt.Errorf("session: npc %q node %q teleports to %d,%d,%d: not a walkable tile of an island", id, node, t.X, t.Y, t.Z)
+					}
+					if why := w.badArrival(to); why != "" {
+						return fmt.Errorf("session: npc %q node %q teleports to %v (island %q), %s", id, node, to, w.islandAt(to), why)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// badArrival says why nobody may arrive on the walkable tile p (checkArrivals), or "".
+func (w *World) badArrival(p world.Pos) string {
+	if h := w.m.HouseAt(p); h != nil {
+		return fmt.Sprintf("in house %q: an arrival puts nobody inside a house", h.ID)
+	}
+	if w.lockedDoor(p) {
+		return "on a locked door: a door is no place to land"
+	}
+	return ""
 }
 
 // routeOptions returns the dialog options of the routes n sells (all of them: a route
