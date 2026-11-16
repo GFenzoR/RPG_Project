@@ -3,13 +3,15 @@ package session
 import "github.com/GFenzoR/RPG_Project/server/internal/world"
 
 // Areas (docs/02-game-design.md "Puertas con llave"): the tiles of the map joined on foot
-// (8 directions, one floor) with every locked door and every house tile as a wall and
-// every other door open when its tile lets creatures through (roomPassable). initAreas
-// numbers them once at start: the walls never change, and doors only open and close. A
-// room behind a locked door is one area (checkRooms keeps houses out of rooms). The escape
-// check of the locked doors (checkEscapes) works on areas, and every search for a free
-// tile by rings stays in the area it starts in (areaAllows). Nothing walks the map in the
-// tick: areaOf is one map lookup.
+// (8 directions, one floor) with every locked door, every house tile and every entrance of
+// stairs, a hole or a teleport as a wall (nobody stands on one: stepping onto it moves the
+// player, so it joins nothing on foot), and every other door open when its tile lets
+// creatures through (roomPassable). initAreas numbers them once at start: the walls never
+// change, and doors only open and close. A room behind a locked door is one area
+// (checkRooms keeps houses and portal ends out of rooms). The escape check of the locked
+// doors (checkEscapes) works on areas, and every search for a free tile by rings stays in
+// the area it starts in (areaAllows). Nothing walks the map in the tick: areaOf is one map
+// lookup.
 
 // areaTiles is the area of each tile of one sector (0: none), indexed like world.Sector.
 type areaTiles [world.SectorTiles]int32
@@ -51,13 +53,15 @@ func (w *World) initAreas() {
 }
 
 // areaPassable reports whether p belongs to an area: the walks of the rooms go through it
-// (roomPassable) and it is no house tile (a house is no street).
+// (roomPassable), it is no house tile (a house is no street) and no entrance of stairs, a
+// hole or a teleport (Map.MovesOnStep: whoever steps onto it is moved, so checkEscapes
+// takes it for an edge, not for ground).
 func (w *World) areaPassable(p world.Pos) bool {
-	return w.roomPassable(p) && w.m.Flags(p)&world.FlagHouse == 0
+	return w.roomPassable(p) && w.m.Flags(p)&world.FlagHouse == 0 && !w.m.MovesOnStep(p)
 }
 
 // areaOf returns the area of p (initAreas), 0 when p lies in none: a wall, a locked door,
-// a house tile, no tile.
+// a house tile, the entrance of stairs, a hole or a teleport, no tile.
 func (w *World) areaOf(p world.Pos) int32 {
 	if a := w.areas[sectorKey(int(p.X), int(p.Y), p.Z)]; a != nil {
 		return a[int(p.Y)%world.SectorSize*world.SectorSize+int(p.X)%world.SectorSize]
@@ -77,11 +81,12 @@ func (w *World) setArea(p world.Pos, id int32) {
 }
 
 // areaAllows reports whether a search for a free tile by rings that started on a tile of
-// area from (areaOf, 0 when it started on none: a house tile, a locked door, a tile
-// nobody stands on) may put a creature on q: a tile of that same area or, from no area, a
-// tile in no room behind a locked door. The rings do not follow walls: without this, a
-// crowd next to a locked door would put someone in the room behind it (where it opens the
-// door without the key), and a crowded temple someone in a pocket sealed by walls.
+// area from (areaOf, 0 when it started on none: a house tile, a locked door, the entrance
+// of stairs, a hole or a teleport) may put a creature on q: a tile of that same area or,
+// from no area, a tile in no room behind a locked door. The rings do not follow walls:
+// without this, a crowd next to a locked door would put someone in the room behind it
+// (where it opens the door without the key), and a crowded temple someone in a pocket
+// sealed by walls or on the other side of stairs.
 func (w *World) areaAllows(from int32, q world.Pos) bool {
 	if from != 0 {
 		return w.areaOf(q) == from

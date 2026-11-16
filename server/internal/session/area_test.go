@@ -47,6 +47,43 @@ func TestFreeTileStaysInItsArea(t *testing.T) {
 	}
 }
 
+// The entrance of a teleport (stairs, a hole) lies in no area: nobody stands on it, and a
+// step onto it moves the player, so the areas go round it, not across it. A search for a
+// free tile from it (a character saved on it) starts in no area, and from no area it still
+// skips the rooms behind locked doors: a crowd round the teleport next to a gate does not
+// put anyone in the room behind it, the first free tile of the second ring, but on the
+// next one outside.
+func TestFreeTileFromNoAreaSkipsRooms(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7,
+		"#########",
+		"#..#....#",
+		"#..D...T#",
+		"#..#....#",
+		"#########",
+	)
+	tp, room := pos(4, 2), pos(2, 1)
+	m = worldtest.WithPortals(t, m, world.Portal{ID: "tp", Kind: world.PortalTeleport, From: tp, To: pos(7, 3)})
+	h := newHarness(t, m, func(c *session.Config) { c.Items = doorTestItems(true) })
+	if h.w.DoorRoomSize(pos(3, 2)) != 6 || !h.w.InDoorRoom(pos(3, 2), room) {
+		t.Fatalf("room behind the gate: %d tiles", h.w.DoorRoomSize(pos(3, 2)))
+	}
+	if a := h.w.AreaOf(pos(4, 1)); a == 0 || h.w.AreaOf(tp) != 0 || h.w.AreaOf(pos(4, 3)) != a || h.w.AreaOf(room) == a {
+		t.Fatalf("areas: teleport %d, beside it %d and %d, room %d", h.w.AreaOf(tp), a, h.w.AreaOf(pos(4, 3)), h.w.AreaOf(room))
+	}
+	for i, p := range []world.Pos{pos(4, 1), pos(5, 1), pos(5, 2), pos(4, 3), pos(5, 3)} {
+		c := withPack(int64(9721+i), p)
+		c.Name = fmt.Sprintf("Crowd%d", i)
+		if _, b := h.joinChar(c); b.Pos() != p {
+			t.Fatalf("crowd at %v, want %v", b.Pos(), p)
+		}
+	}
+	late := withPack(9730, tp)
+	late.Name = "Late"
+	if _, p := h.joinChar(late); p.Pos() != pos(6, 1) {
+		t.Fatalf("late logged in at %v, want (6,1) outside the room %v", p.Pos(), room)
+	}
+}
+
 // The areas take every locked door and every house tile for a wall, and a plain door for
 // open ground: a room behind a gate is an area of its own, and the tiles of a house and a
 // locked door lie in none.
@@ -110,8 +147,8 @@ func TestEscapeReachesTemplesByPortals(t *testing.T) {
 				}
 			}
 		}
-		for _, g := range []world.Pos{pos(30, 41), pos(34, 41)} {
-			worldtest.SetTile(t, cfg.Map, g, ground, blocks, cfg.Items["forge_gate"].Numeric)
+		for _, g := range []world.Pos{pos(30, 41), pos(34, 41)} { // on real grass (roomConfig)
+			worldtest.SetTile(t, cfg.Map, g, cfg.Items["grass"].Numeric, blocks, cfg.Items["forge_gate"].Numeric)
 		}
 		if len(portals) > 0 {
 			cfg.Map = worldtest.WithPortals(t, cfg.Map, portals...)

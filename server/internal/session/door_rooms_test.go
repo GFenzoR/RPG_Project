@@ -21,6 +21,7 @@ type doorRoomCase struct {
 	Name    string            `json:"name"`
 	Rows    []json.RawMessage `json:"rows"`
 	Portals []struct {
+		Kind string `json:"kind"`
 		From string `json:"from"`
 		To   string `json:"to"`
 	} `json:"portals"`
@@ -65,7 +66,7 @@ func (c doorRoomCase) rows(t *testing.T) []string {
 }
 
 // doorRoomCases is how many cases door-rooms.json has (doors.test.ts checks the same).
-const doorRoomCases = 28
+const doorRoomCases = 33
 
 // The rooms behind locked doors, and the doors that have none, are the same for the
 // server and for make validate: both read door-rooms.json (docs/02 "Puertas con llave").
@@ -84,14 +85,14 @@ func TestDoorRoomsFixture(t *testing.T) {
 	if len(doc.Cases) < doorRoomCases {
 		t.Fatalf("only %d cases", len(doc.Cases))
 	}
-	errs := map[string]error{"walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen,
+	errs := map[string]error{"blocked": session.ErrDoorBlocked, "walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen,
 		"truncated": session.ErrDoorTruncated, "tie": session.ErrDoorTie, "key": session.ErrDoorOtherKey,
 		"escape": session.ErrDoorNoEscape, "bypass": session.ErrDoorBypassed}
 	for _, c := range doc.Cases {
 		t.Run(c.Name, func(t *testing.T) {
 			rows := c.rows(t)
 			// worldtest draws the gate pair (D, d); the other doors go on after.
-			var plain, walled, other []world.Pos
+			var plain, walled, other, blocked []world.Pos
 			for y, r := range rows {
 				b := []byte(r)
 				for x, ch := range b {
@@ -102,6 +103,8 @@ func TestDoorRoomsFixture(t *testing.T) {
 						walled, b[x] = append(walled, pos(x, y)), '#'
 					case 'K':
 						other, b[x] = append(other, pos(x, y)), '.'
+					case 'B':
+						blocked, b[x] = append(blocked, pos(x, y)), '#'
 					}
 				}
 				rows[y] = string(b)
@@ -117,10 +120,17 @@ func TestDoorRoomsFixture(t *testing.T) {
 			for _, p := range other {
 				worldtest.SetTile(t, m, p, worldtest.Grass, blocks, otherGateID)
 			}
+			for _, p := range blocked {
+				worldtest.SetTile(t, m, p, worldtest.Grass, blocks, worldtest.Wall, worldtest.Door)
+			}
 			if len(c.Portals) > 0 {
 				var portals []world.Portal
 				for i, pt := range c.Portals {
-					portals = append(portals, world.Portal{ID: fmt.Sprintf("p%d", i), Kind: world.PortalTeleport,
+					kind, ok := world.ParsePortalKind(pt.Kind)
+					if !ok {
+						t.Fatalf("bad portal kind %q", pt.Kind)
+					}
+					portals = append(portals, world.Portal{ID: fmt.Sprintf("p%d", i), Kind: kind,
 						From: fixturePos(t, pt.From), To: fixturePos(t, pt.To)})
 				}
 				m = worldtest.WithPortals(t, m, portals...)
@@ -279,8 +289,10 @@ func roomConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) 
 			}
 		}
 	}
+	// The gate stands on real grass: worldtest's ground numbers are no items of data/, and
+	// a locked door on a tile nobody walks on is refused (errDoorBlocked).
 	g := pos(43, 41)
-	worldtest.SetTile(t, cfg.Map, g, ground, blocks, cfg.Items["forge_gate"].Numeric)
+	worldtest.SetTile(t, cfg.Map, g, cfg.Items["grass"].Numeric, blocks, cfg.Items["forge_gate"].Numeric)
 	return cfg, g
 }
 

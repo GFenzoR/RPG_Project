@@ -42,11 +42,15 @@ const (
 const doorRoomSearch = 4096
 
 // Why the room behind a locked door cannot be worked out (doorRoom), or cannot be trusted
-// (initDoors: a room shared with a locked door of another key; checkEscapes: a side that
-// leads nowhere, a room a player without its key gets into). The world does not start
-// with such a door, and make validate refuses it first (same rules, same fixture:
-// packages/map-format/src/testdata/door-rooms.json).
+// (initDoors: a door nobody gets through, a room shared with a locked door of another key;
+// checkEscapes: a side that leads nowhere, a room a player without its key gets into).
+// The world does not start with such a door, and make validate refuses it first (same
+// rules, same fixture: packages/map-format/src/testdata/door-rooms.json).
 var (
+	// errDoorBlocked: something on the door's tile besides the door blocks the way, so
+	// nobody gets through it even open: its room could only be left by a way the escape
+	// check does not see.
+	errDoorBlocked = errors.New("it lets nobody through, even open: something on its tile besides the door blocks the way")
 	// errDoorWalled: no tile around the door lets anyone through.
 	errDoorWalled = errors.New("it leads nowhere: no tile around it lets anyone through")
 	// errDoorInTheOpen: every tile around the door is one side, so it keeps nothing apart.
@@ -64,7 +68,8 @@ var (
 	// tools always has (checkEscapes: on foot, out of a room through its locked doors, by
 	// stairs, ladders, holes and teleports), so whoever stands there could be locked in: a
 	// vault no door guards (bigger than the room before it, so its door takes it for the
-	// outside), or a side joined to the world only through a house, a boat or a rope spot.
+	// outside), or a side joined to the world only through a house, a boat, a rope spot or
+	// across the tile of stairs or a teleport that leads elsewhere.
 	errDoorNoEscape = errors.New("a side of it reaches no temple without keys (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in")
 	// errDoorBypassed: a player without its key gets into its room (checkEscapes): a
 	// locked door of another key opens from its own room, which such a player reaches,
@@ -107,9 +112,10 @@ type room struct {
 // of the map, works out the room behind each locked one and numbers the areas of the map
 // (initAreas). The walls of the map never change, and the walks count every locked door
 // as a wall and every other door as open, so the rooms and areas hold for good. A locked
-// door whose room cannot be worked out, whose room it shares with a locked door of another
-// key, whose room holds what belongs outside (checkRooms) or that fails the escape check
-// (checkEscapes) stops the world from starting.
+// door nobody gets through even open, whose room cannot be worked out, whose room it
+// shares with a locked door of another key, whose room holds what belongs outside
+// (checkRooms) or that fails the escape check (checkEscapes) stops the world from
+// starting.
 func (w *World) initDoors() error {
 	if err := content.CheckDoors(w.cfg.Items); err != nil {
 		return fmt.Errorf("session: %w", err)
@@ -160,11 +166,14 @@ func (w *World) initDoors() error {
 		}
 	}
 	for _, p := range locked {
+		d := w.doors[p]
+		if !d.through {
+			return fmt.Errorf("session: locked door on %v: %w", p, errDoorBlocked)
+		}
 		sides, err := w.doorRoom(p)
 		if err != nil {
 			return fmt.Errorf("session: locked door on %v: %w", p, err)
 		}
-		d := w.doors[p]
 		for _, side := range sides {
 			// A finite side is a whole area of the map with every locked door as a wall,
 			// so two doors that share one tile of it share all of it (a double door).
@@ -204,18 +213,18 @@ type doorSide struct {
 // map (docs/02 "Puertas con llave", "Chequeo de escape"). A player without keys goes from
 // the room behind a locked door to every side of it (the door opens from inside) and, by
 // a portal it needs nothing for (escapeWay: stairs, ladders, holes and teleports), from
-// the area of its entrance to the area of its destination. The world is the areas of the
-// temples: a boat arrival is a way in, not out (leaving by boat takes a captain and
-// whatever the route asks). It fails with errDoorNoEscape when a side of a door does not
-// reach the world that way (whoever is there could be locked in: a vault no door guards),
-// and with errDoorBypassed when a player with every key but one gets into a room of that
-// key: a locked door of another key opens onto that room (it is that door's outside) from
-// its own room, which the player reaches. Such a player starts anywhere outside the rooms,
-// in an area or in a house (an owner or a guest), and crosses with its keys every locked
-// door of another key from any side, or from a house next to it, into its room. Rooms in
-// a cycle of doors of one key pass (a building with a back door to a yard with its own
-// gate); a room inside another passes whatever its key, since its door opens only onto the
-// room around it.
+// the areas it takes the portal from (portalSources) to the area of its destination. The
+// world is the areas of the temples: a boat arrival is a way in, not out (leaving by boat
+// takes a captain and whatever the route asks). It fails with errDoorNoEscape when a side
+// of a door does not reach the world that way (whoever is there could be locked in: a
+// vault no door guards), and with errDoorBypassed when a player with every key but one
+// gets into a room of that key: a locked door of another key opens onto that room (it is
+// that door's outside) from its own room, which the player reaches. Such a player starts
+// anywhere outside the rooms, in an area or in a house (an owner or a guest), and crosses
+// with its keys every locked door of another key from any side, or from a house next to
+// it, into its room. Rooms in a cycle of doors of one key pass (a building with a back
+// door to a yard with its own gate); a room inside another passes whatever its key, since
+// its door opens only onto the room around it.
 func (w *World) checkEscapes(locked []world.Pos) error {
 	if len(locked) == 0 {
 		return nil
@@ -259,9 +268,14 @@ func (w *World) checkEscapes(locked []world.Pos) error {
 		}
 	}
 	for _, pt := range w.m.Portals() {
-		from, to := w.areaOf(pt.From), w.areaOf(pt.To)
-		if escapeWay(pt.Kind) && from != 0 && to != 0 && from != to {
-			back[to] = append(back[to], from)
+		to := w.areaOf(pt.To)
+		if !escapeWay(pt.Kind) || to == 0 {
+			continue
+		}
+		for _, from := range w.portalSources(pt, roomArea) {
+			if from != to {
+				back[to] = append(back[to], from)
+			}
 		}
 	}
 	escapes := map[int32]bool{}
@@ -366,6 +380,40 @@ func escapeWay(k world.PortalKind) bool {
 		return true
 	}
 	return false
+}
+
+// portalSources returns the areas a player takes the portal pt from (checkEscapes): for a
+// ladder, the area of its tile (the player stands there to climb); for stairs, a hole or a
+// teleport, whose tile lies in no area (stepping onto it moves the player), the areas of
+// the tiles next to it and the rooms of a locked door next to it (a player in its room
+// opens it without the key and steps on from the door's tile; initDoors refused every
+// locked door nobody gets through). roomArea is checkEscapes' room id - 1 → area.
+func (w *World) portalSources(pt *world.Portal, roomArea []int32) []int32 {
+	if !pt.Kind.OnStep() {
+		if a := w.areaOf(pt.From); a != 0 {
+			return []int32{a}
+		}
+		return nil
+	}
+	var out []int32
+	add := func(a int32) {
+		if a != 0 && !slices.Contains(out, a) {
+			out = append(out, a)
+		}
+	}
+	for e := world.North; e <= world.NorthWest; e++ {
+		q, ok := pt.From.Step(e)
+		if !ok {
+			continue
+		}
+		add(w.areaOf(q))
+		if d := w.doors[q]; d != nil && d.lock != "" {
+			for _, r := range d.room {
+				add(roomArea[r-1])
+			}
+		}
+	}
+	return out
 }
 
 // newRoom indexes the tiles of a new room behind the locked door at p and returns its id.
@@ -653,10 +701,11 @@ func (w *World) swapDoor(p *Player, pos world.Pos, i int, to *content.Item) bool
 // one slice of tiles per side that is not the outside (in no order). It walks the map
 // from each passable tile next to the door (8 directions, same floor, roomPassable: never
 // through a locked door, every other door open when its tile lets creatures through) to
-// find the sides the door keeps apart, up to doorRoomSearch tiles each. A side the walk cannot finish is open ground: the
-// outside. When every side finishes, the biggest one is the outside. It fails with
-// errDoorWalled (no side), errDoorInTheOpen (one side), errDoorTruncated (two sides or
-// more too big to walk) or errDoorTie (the two biggest closed sides have the same size).
+// find the sides the door keeps apart, up to doorRoomSearch tiles each. A side the walk
+// cannot finish is open ground: the outside. When every side finishes, the biggest one
+// is the outside. It fails with errDoorWalled (no side), errDoorInTheOpen (one side),
+// errDoorTruncated (two sides or more too big to walk) or errDoorTie (the two biggest
+// closed sides have the same size).
 func (w *World) doorRoom(pos world.Pos) ([][]world.Pos, error) {
 	passable := w.roomPassable
 	side := map[world.Pos]int{} // walked tile → the walk that reached it first

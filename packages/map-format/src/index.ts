@@ -20,6 +20,7 @@ export {
   DOOR_ROOM_ERRORS,
   DOOR_ROOM_SEARCH,
   ESCAPE_WAYS,
+  ON_STEP_KINDS,
   doorRoom,
   doorRooms,
   doorsOn,

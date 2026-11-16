@@ -15,7 +15,7 @@ type Row = string | { repeat: number; row?: string; rows?: string[] };
 interface Case {
   name: string;
   rows: Row[];
-  portals?: { from: string; to: string }[];
+  portals?: { kind: string; from: string; to: string }[];
   houses?: { rect: string; door: string; exit: string }[];
   rooms?: Record<string, number>;
   error?: DoorRoomError;
@@ -57,6 +57,7 @@ const STACKS: Record<string, string[]> = {
   K: ["other_gate"],
   P: ["plain"],
   X: ["wall", "plain"],
+  B: ["wall", "gate"],
 };
 
 /** The rows of a drawing, its repeats expanded. */
@@ -78,7 +79,7 @@ function at(xy: string): Position {
  * The tiles of a drawing on floor 7 from (0,0), its locked doors in map order (chunk by
  * chunk, row by row: the server's order) and what the escape check needs: the temple (its
  * T, else the first tile of . T d P K row by row, as server worldtest draws it), the
- * portals (teleports) and the house tiles.
+ * portals and the house tiles.
  */
 function draw(c: Case): {
   tiles: TileMap;
@@ -126,14 +127,14 @@ function draw(c: Case): {
   }
   const world: DoorWorld = {
     temples: start ? [start] : [],
-    portals: (c.portals ?? []).map((p) => ({ kind: "teleport", from: at(p.from), to: at(p.to) })),
+    portals: (c.portals ?? []).map((p) => ({ kind: p.kind, from: at(p.from), to: at(p.to) })),
     houses,
   };
   return { tiles: new TileMap([island]), locked, world };
 }
 
 /** How many cases door-rooms.json has (TestDoorRoomsFixture checks the same). */
-const DOOR_ROOM_CASES = 28;
+const DOOR_ROOM_CASES = 33;
 
 describe("doorRooms", () => {
   it("reads the shared cases", () =>

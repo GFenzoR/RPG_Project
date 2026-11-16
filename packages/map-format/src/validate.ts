@@ -9,7 +9,7 @@ import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
 import { TileMap, isPassable, isWalkable } from "./tiles.ts";
-import { DOOR_ROOM_ERRORS, doorRooms, doorsOn } from "./doors.ts";
+import { DOOR_ROOM_ERRORS, ON_STEP_KINDS, doorRooms, doorsOn } from "./doors.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
 import type { Chunk, Island, Position, Rect, World } from "./types.ts";
@@ -35,12 +35,6 @@ export const MAX_DOCK_DISTANCE = 8;
 
 /** Stairs and ladders that need a way back, with the kinds that can serve as it. */
 const PAIRED_KINDS = new Set(["stairs", "ladder"]);
-
-/**
- * Portals that move whoever steps onto their tile (docs/02 "Cambiar de piso"): nobody walks
- * across them (a step there lands on `to`), nobody stands on them.
- */
-const ON_STEP_KINDS = new Set(["stairs", "hole", "teleport"]);
 
 /**
  * The most travel.arrival_radius may be (the balance schema's maximum): the radius of the
@@ -666,8 +660,9 @@ class WorldValidator {
     }
     // The escape check: a house is no street (its tiles are walls of the areas, and its
     // owner or a guest stands in it), the world is the temples (a boat arrival is a way in,
-    // not out), and doorRooms keeps the portals a player takes without anything (stairs,
-    // ladders, holes, teleports; not a rope spot or a boat).
+    // not out), and doorRooms takes the entrances of stairs, holes and teleports for walls
+    // of the areas and keeps the portals a player takes without anything (stairs, ladders,
+    // holes, teleports; not a rope spot or a boat) as ways between them.
     const houses = new Set<string>();
     const temples: Position[] = [];
     const portals: { kind: string; from: Position; to: Position }[] = [];

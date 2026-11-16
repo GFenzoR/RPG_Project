@@ -1,5 +1,5 @@
 {
-  "_comment": "Rooms behind locked doors (docs/02-game-design.md \"Puertas con llave\"), drawn on floor 7 from (0,0). Read by doors.test.ts here and by server/internal/session (TestDoorRoomsFixture), so make validate and the server agree on every room and on every locked door they refuse. Tiles: . grass; T grass and the island temple (the world of the escape check; without a T the temple is the first tile of . T d P K, row by row, as server worldtest draws it); # wall; D locked door, closed; d locked door, placed open; K locked door of another key, closed; P plain door, closed; X plain door on a tile that a wall blocks too; space: no tile. {\"repeat\": n, \"row\": r} stands for n rows r, and {\"repeat\": n, \"rows\": [r1, r2, ...]} for those rows n times. portals: teleports on floor 7 by \"x,y\" (an edge of the escape check from the area of from to the area of to). houses: houses by \"x,y,w,h\" (their rect on floor 7), with a door and an exit by \"x,y\": their tiles are walls of the areas, and a player stands in them (an owner or a guest). rooms: tiles behind each locked door by \"x,y\"; error: why the first refused locked door is refused, and door: that door by \"x,y\" (for bypass, the first door of the room a player gets into without its key). First each door in map order (chunk by chunk, row by row): walled (no side), open (one side), truncated (two sides or more bigger than 4096 tiles), tie (the two biggest sides have the same size) or key (it shares its room with a locked door of another key). Then, with every room worked out, the escape check: escape (a side of a door reaches no temple without keys, on foot, out of rooms through their doors and by portals: a vault no door guards) and then bypass (a player with every key but the door's, anywhere outside the rooms or in a house, gets into its room: a locked door of another key opens onto it from its own room).",
+  "_comment": "Rooms behind locked doors (docs/02-game-design.md \"Puertas con llave\"), drawn on floor 7 from (0,0). Read by doors.test.ts here and by server/internal/session (TestDoorRoomsFixture), so make validate and the server agree on every room and on every locked door they refuse. Tiles: . grass; T grass and the island temple (the world of the escape check; without a T the temple is the first tile of . T d P K, row by row, as server worldtest draws it); # wall; D locked door, closed; d locked door, placed open; K locked door of another key, closed; P plain door, closed; X plain door on a tile that a wall blocks too; B locked door on a tile that a wall blocks too; space: no tile. {\"repeat\": n, \"row\": r} stands for n rows r, and {\"repeat\": n, \"rows\": [r1, r2, ...]} for those rows n times. portals: portals on floor 7, their kind (teleport or boat: the others change floor) and their ends by \"x,y\". The entrance of a teleport is a wall of the areas (stepping onto it moves the player); a teleport leads from the areas next to its entrance, and from the rooms of a locked door next to it, to the area of to; a boat portal moves nobody. houses: houses by \"x,y,w,h\" (their rect on floor 7), with a door and an exit by \"x,y\": their tiles are walls of the areas, and a player stands in them (an owner or a guest). rooms: tiles behind each locked door by \"x,y\"; error: why the first refused locked door is refused, and door: that door by \"x,y\" (for bypass, the first door of the room a player gets into without its key). First each door in map order (chunk by chunk, row by row): blocked (something on its tile besides the door blocks the way), walled (no side), open (one side), truncated (two sides or more bigger than 4096 tiles), tie (the two biggest sides have the same size) or key (it shares its room with a locked door of another key). Then, with every room worked out, the escape check: escape (a side of a door reaches no temple without keys, on foot, out of rooms through their doors and by portals: a vault no door guards) and then bypass (a player with every key but the door's, anywhere outside the rooms or in a house, gets into its room: a locked door of another key opens onto it from its own room).",
   "cases": [
     {
       "name": "a room behind a gate",
@@ -388,6 +388,7 @@
       ],
       "portals": [
         {
+          "kind": "teleport",
           "from": "15,2",
           "to": "2,2"
         }
@@ -408,6 +409,7 @@
       ],
       "portals": [
         {
+          "kind": "teleport",
           "from": "2,1",
           "to": "15,2"
         }
@@ -453,6 +455,91 @@
       ],
       "error": "bypass",
       "door": "6,4"
+    },
+    {
+      "name": "a gate on a tile a wall blocks too",
+      "rows": ["###########", "#...#..T..#", "#...B.....#", "#...#.....#", "###########"],
+      "error": "blocked",
+      "door": "4,2"
+    },
+    {
+      "name": "a vault bigger than the room before it, with a boat portal out of it",
+      "rows": [
+        "#################",
+        "#..T..#...#.....#",
+        "#.....D...D.....#",
+        "#.....#...#.....#",
+        "#################"
+      ],
+      "portals": [
+        {
+          "kind": "boat",
+          "from": "15,2",
+          "to": "2,2"
+        }
+      ],
+      "error": "escape",
+      "door": "10,2"
+    },
+    {
+      "name": "a vault joined to the field only across a teleport to a sealed pocket",
+      "rows": [
+        "#################",
+        "#..T..#...#.....#",
+        "#.....D...D.....#",
+        "#.....#...#.....#",
+        "#.#############.#",
+        "#...............#",
+        "#################",
+        "#.###############",
+        "#################"
+      ],
+      "portals": [
+        {
+          "kind": "teleport",
+          "from": "8,5",
+          "to": "1,7"
+        }
+      ],
+      "error": "escape",
+      "door": "10,2"
+    },
+    {
+      "name": "a room whose gate opens only onto a teleport to the field",
+      "rows": ["############", "#...##.....#", "#...D...T..#", "#...##.....#", "############"],
+      "portals": [
+        {
+          "kind": "teleport",
+          "from": "5,2",
+          "to": "10,1"
+        }
+      ],
+      "rooms": {
+        "4,2": 9
+      }
+    },
+    {
+      "name": "a vault of another key behind a room behind a gate, a house wall next to its gate",
+      "rows": [
+        "##############",
+        "#..T..#...#..#",
+        "#.....D...K..#",
+        "#.....#...#..#",
+        "#.....########",
+        "#............#",
+        "##############"
+      ],
+      "houses": [
+        {
+          "rect": "10,3,1,3",
+          "door": "10,5",
+          "exit": "9,5"
+        }
+      ],
+      "rooms": {
+        "6,2": 9,
+        "10,2": 6
+      }
     }
   ]
 }
