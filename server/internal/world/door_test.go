@@ -3,8 +3,8 @@ package world
 import "testing"
 
 // A door swaps its item and its blocking flags in place (docs/02 "Puertas con llave"):
-// walking, pathfinding and line of sight see the change at once, zone flags stay, and a
-// copy of the sector keeps its own stack.
+// walking, pathfinding and line of sight see the change at once, zone flags stay, and the
+// stack changes in place, without allocating.
 func TestReplaceItem(t *testing.T) {
 	m := asciiMap(t, 0, 0, 7,
 		"..#..",
@@ -16,7 +16,6 @@ func TestReplaceItem(t *testing.T) {
 	idx := uint16(1*SectorSize + 2)
 	s.Stacks = []TileStack{{Index: idx - 1, Items: []uint16{7}}, {Index: idx, Items: []uint16{9, 20}}}
 	s.Flags[idx] |= FlagProtection
-	copied := *s
 	pf := NewPathfinder(m, 0)
 	if _, ok := pf.Find(pt(0, 1), pt(4, 1), nil); ok || m.LineOfSight(pt(0, 1), pt(4, 1)) {
 		t.Fatal("the closed door lets through")
@@ -34,8 +33,8 @@ func TestReplaceItem(t *testing.T) {
 	if path, ok := pf.Find(pt(0, 1), pt(4, 1), nil); !ok || len(path) != 4 || !m.LineOfSight(pt(0, 1), pt(4, 1)) {
 		t.Fatalf("through the open door: path %v %v", path, ok)
 	}
-	if got := copied.Stack(2, 1); got[1] != 20 {
-		t.Fatalf("the copied sector changed: %v", got)
+	if n := testing.AllocsPerRun(10, func() { m.ReplaceItem(door, 1, 21, 0) }); n != 0 {
+		t.Fatalf("ReplaceItem allocates %v times", n)
 	}
 
 	if !m.ReplaceItem(door, 1, 20, FlagBlocksMovement|FlagBlocksSight|FlagNoLogout) {

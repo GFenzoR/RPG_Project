@@ -3,6 +3,7 @@
 package worldtest
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -186,8 +187,8 @@ func Join(t testing.TB, ids []string, maps ...*world.Map) *world.Map {
 	return m
 }
 
-// WithHouses returns m (one island, built by this package) with houses on its island
-// (T5.4): world.NewMap marks their tiles with FlagHouse and FlagProtection.
+// WithHouses returns a copy of m (one island, built by this package) with houses on its
+// island (T5.4): world.NewMap marks their tiles with FlagHouse and FlagProtection.
 func WithHouses(t testing.TB, m *world.Map, houses ...world.House) *world.Map {
 	t.Helper()
 	src := m.Islands()[0]
@@ -200,6 +201,12 @@ func WithHouses(t testing.TB, m *world.Map, houses ...world.House) *world.Map {
 			for x := r.X; x < r.X+r.W; x += world.SectorSize {
 				if s := m.SectorAt(world.Pos{X: uint16(x), Y: uint16(y), Z: z}); s != nil {
 					c := *s
+					// Its own stacks: a door opened in the copy (Map.ReplaceItem writes in
+					// place) must not reach m.
+					c.Stacks = make([]world.TileStack, len(s.Stacks))
+					for i, st := range s.Stacks {
+						c.Stacks[i] = world.TileStack{Index: st.Index, Items: slices.Clone(st.Items)}
+					}
 					list = append(list, &c)
 				}
 			}

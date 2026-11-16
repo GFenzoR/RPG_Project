@@ -8,10 +8,7 @@
 // (Map.ReplaceItem, docs/02-game-design.md "Puertas con llave").
 package world
 
-import (
-	"fmt"
-	"slices"
-)
+import "fmt"
 
 // SectorSize is the side of a sector in tiles. It equals the chunk size of world/ JSON.
 const SectorSize = 32
@@ -570,9 +567,10 @@ const BlockFlags = FlagBlocksMovement | FlagBlocksSight
 
 // ReplaceItem puts item id at index i of p's stack (0 = the bottom item above the
 // ground) and sets the tile's BlockFlags to those of block; its other flags stay. It is
-// the one change a Map takes after loading: a door opening or closing (rare, so the
-// stacks are copied rather than written in place: a copy of the sector, as tests make,
-// keeps its own items). It reports whether p has an item at index i.
+// the one change a Map takes after loading: a door opening or closing. It writes the
+// stack in place (no allocation): a Map shares its stacks with nothing (a test that
+// copies a sector copies its stacks too, see worldtest.WithHouses). It reports whether p
+// has an item at index i.
 func (m *Map) ReplaceItem(p Pos, i int, id uint16, block Flags) bool {
 	s, t := m.sectorAt(int(p.X), int(p.Y), int(p.Z))
 	if s == nil || s.Ground[t] == 0 {
@@ -582,10 +580,7 @@ func (m *Map) ReplaceItem(p Pos, i int, id uint16, block Flags) bool {
 	if k < 0 || i < 0 || i >= len(s.Stacks[k].Items) {
 		return false
 	}
-	items := slices.Clone(s.Stacks[k].Items)
-	items[i] = id
-	s.Stacks = slices.Clone(s.Stacks)
-	s.Stacks[k].Items = items
+	s.Stacks[k].Items[i] = id
 	s.Flags[t] = s.Flags[t]&^BlockFlags | block&BlockFlags
 	return true
 }
