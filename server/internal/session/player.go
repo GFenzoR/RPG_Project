@@ -713,11 +713,21 @@ func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 // (searchFrom: a house area is negative, and the areas next to an entrance are clipped to
 // street ones by areaOf). It keeps a caller that starts elsewhere out of every house.
 func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bool) {
-	from := w.searchFrom(p)
 	skip := world.FlagBlocksMovement | world.FlagPortalStep
 	if noHouse {
 		skip |= world.FlagHouse
 	}
+	return w.searchRings(p, radius, skip, w.free)
+}
+
+// free reports whether no creature stands on q (freeAround's test).
+func (w *World) free(q world.Pos) bool { return !w.occupied(q) }
+
+// searchRings returns the tile closest to p (by rings) within radius whose flags have
+// none of skip, that ok accepts, and that lies in the area of p (searchFrom, areaAllows:
+// every search by rings goes through them, see freeNear).
+func (w *World) searchRings(p world.Pos, radius int, skip world.Flags, ok func(world.Pos) bool) (world.Pos, bool) {
+	from := w.searchFrom(p)
 	for r := 0; r <= radius; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -729,9 +739,9 @@ func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bo
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: p.Z}
-				// One read of the tile's flags: walkable, no stairs, hole or teleport
-				// (MovesOnStep) and, if noHouse, no house tile.
-				if w.m.Flags(q)&skip == 0 && !w.occupied(q) && w.areaAllows(from, q) {
+				// One read of the tile's flags (freeAround: walkable, no stairs, hole or
+				// teleport, MovesOnStep, and if noHouse no house tile).
+				if w.m.Flags(q)&skip == 0 && ok(q) && w.areaAllows(from, q) {
 					return q, true
 				}
 			}

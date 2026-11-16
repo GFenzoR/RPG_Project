@@ -29,12 +29,71 @@ import (
 // the tile it takes the portal on (the stairs it steps onto, or where it stands to climb
 // a ladder or a rope).
 
+//
+// What is dropped (MoveItem) onto stairs, a hole or a teleport falls through to the other
+// end (fallTo): it lands on the destination or, if that has no room for it, on the closest
+// tile around it with room, by the rules of a player's arrival (its area, no house tile,
+// no entrance of stairs, a hole or a teleport). Everything else about the move is a drop
+// on that tile: the hold of a transfer (heldDrop), the reservations of hold.go, what
+// leaves a house (leftHouse), the economy ledger.
+//
+// Every portal (but a boat) should stand under an item that shows it (content.PortalLook,
+// docs/03): make validate refuses a map without it, the server only warns (initPortals).
+
 // i18n keys of the portal messages (i18n/*/client.yaml).
 const (
 	msgPortalBlocked  = "portal.blocked"
 	msgPortalNotReady = "portal.not_ready"
 	msgPortalNeedRope = "portal.need_rope"
+	msgPortalNoRoom   = "portal.no_room"
 )
+
+// initPortals warns about every portal (but a boat) whose entrance holds no item that
+// shows it (content.PortalLook). make validate refuses such a map; world.NewMap cannot
+// check it (world.bin keeps item numbers, not what they are), and a portal without its
+// item still works: it only looks like plain ground (the client keeps its paths off it
+// all the same, from portals.yaml).
+func (w *World) initPortals() {
+	for _, pt := range w.m.Portals() {
+		if pt.Kind != world.PortalBoat && !w.portalShown(pt) {
+			w.log.Warn("session: portal without the item that shows it on its entrance",
+				"portal", pt.ID, "kind", pt.Kind.String(), "pos", pt.From)
+		}
+	}
+}
+
+// portalShown reports whether the entrance of pt holds an item whose portal block shows
+// it: its kind and, if the item says one, the way it leads.
+func (w *World) portalShown(pt *world.Portal) bool {
+	shows := func(id uint16) bool {
+		def := w.byNum[id]
+		return def != nil && def.Portal.Shows(pt.Kind.String(), pt.From.Z, pt.To.Z)
+	}
+	ground, _, _ := w.m.Tile(pt.From)
+	if shows(ground) {
+		return true
+	}
+	for _, id := range w.m.Stack(pt.From) {
+		if shows(id) {
+			return true
+		}
+	}
+	return false
+}
+
+// fallTo returns where count units of it, dropped by p onto the stairs, hole or teleport
+// pt, land: its destination or, if that has no room for them, the closest tile within
+// travel.arrival_radius in the area of the destination (searchRings: never a room behind
+// a locked door nor a pocket sealed by walls) that is walkable, no house tile and no
+// entrance of stairs, a hole or a teleport (nothing lands where it would fall again), with
+// room for them: a pile they join (groundMerge, with leaving as in moveItem) or fewer than
+// maxGroundItems items. Creatures do not matter: an item lies under them.
+func (w *World) fallTo(p *Player, it *Item, count int, pt *world.Portal, leaving bool) (world.Pos, bool) {
+	skip := world.FlagBlocksMovement | world.FlagPortalStep | world.FlagHouse
+	return w.searchRings(pt.To, w.arrivalRadius, skip, func(q world.Pos) bool {
+		return len(w.ground[q]) < maxGroundItems || w.groundMerge(p, it, count, q, leaving) != nil
+	})
+}
 
 // ropeUse is the tool.use of a rope (data/items/tools.yaml): the tool that climbs a rope
 // spot.

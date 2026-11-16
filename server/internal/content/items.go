@@ -35,8 +35,11 @@ type Item struct {
 	// Key is the key id this item opens (keys): the door.key of the doors it unlocks.
 	Key string `yaml:"key"`
 	// Door makes a map item a door that opens and closes (docs/02 "Puertas con llave").
-	Door   *Door `yaml:"door"`
-	Value  int   `yaml:"value"`
+	Door *Door `yaml:"door"`
+	// Portal makes a map item the look of a portal of portals.yaml (docs/03): the item
+	// moves nobody, but every portal (but a boat) should stand under one that shows it.
+	Portal *PortalLook `yaml:"portal"`
+	Value  int         `yaml:"value"`
 	Weapon *struct {
 		// Type is the skill the weapon trains and uses (sword, axe, club...).
 		Type    string `yaml:"type"`
@@ -92,6 +95,27 @@ type Item struct {
 	} `yaml:"requires"`
 	// Numeric is the stable numeric id from data/ids.lock.yaml.
 	Numeric uint16 `yaml:"-"`
+}
+
+// PortalLook is the portal block of an item: the kind of portals.yaml it shows and, if
+// set, the way it leads ("up" or "down" a floor).
+type PortalLook struct {
+	Kind  string `yaml:"kind"`
+	Leads string `yaml:"leads"`
+}
+
+// Shows reports whether the look fits a portal of kind leading from floor fromZ to floor
+// toZ (z grows going down): the same kind and, if the look says one, the same way.
+func (l *PortalLook) Shows(kind string, fromZ, toZ uint8) bool {
+	switch {
+	case l == nil || l.Kind != kind:
+		return false
+	case l.Leads == "down":
+		return toZ > fromZ
+	case l.Leads == "up":
+		return toZ < fromZ
+	}
+	return true
 }
 
 // CanPickUp reports whether the item can be moved off its tile.

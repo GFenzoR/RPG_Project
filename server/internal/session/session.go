@@ -539,6 +539,7 @@ func New(cfg Config) (*World, error) {
 	if err := w.initItems(); err != nil {
 		return nil, err
 	}
+	w.initPortals()
 	if err := w.initMagic(); err != nil {
 		return nil, err
 	}

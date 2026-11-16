@@ -413,3 +413,16 @@ func (w *World) UnlistForTest(p *Player) { delete(w.byClient, p.client) }
 
 // RelistForTest undoes UnlistForTest.
 func (w *World) RelistForTest(p *Player) { w.byClient[p.client] = p }
+
+// HoldForTest holds p as if a transfer of it waited for the ack of its snapshot seq
+// (hold.go inFlight; tests only).
+func (w *World) HoldForTest(p *Player, seq uint64) { w.inFlight[p.charID] = seq }
+
+// ReserveForTest reserves the ground item it to p until the ack of p's snapshot seq
+// (hold.go heldGround; tests only).
+func (w *World) ReserveForTest(it *Item, p *Player, seq uint64) {
+	w.heldGround[it] = groundHold{char: p.charID, seq: seq}
+}
+
+// ReservedTo returns the character the ground item it is reserved to, or 0 (tests only).
+func (w *World) ReservedTo(it *Item) int64 { return w.heldGround[it].char }
