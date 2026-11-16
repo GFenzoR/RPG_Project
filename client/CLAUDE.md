@@ -598,9 +598,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   casilla de entrada `"x,y,z"` → `kind`. `state/portals.ts` (puro, con tests):
   `pathPassable` hace que un camino por click rodee escaleras, agujeros y teletransportes
   salvo que sean el destino; `usedBare` hace que el click derecho (o "Usar" del toque
-  largo) sobre una escalera de mano o un punto de soga sin items mande `UseItem` con el
-  suelo, como la puerta de una casa. La soga es una herramienta "usar con" como el pico.
-  El teclado sí pisa una escalera: es la forma de bajar.
+  largo) sobre un punto de soga sin items mande `UseItem` con el suelo, como la puerta de
+  una casa; `climbable` hace que el click derecho sobre una escalera de mano mande
+  siempre el suelo, aunque tenga algo encima (`state/items.ts` `tileUse`, modo
+  `"first"`): un cadáver o una moneda no la tapan. El toque largo sobre una escalera de
+  mano muestra "Trepar" (`client.touch.action.climb`) y, si hay un item encima, también
+  sus botones ("Abrir"/"Usar" usan ese item, no trepan). La soga es una herramienta
+  "usar con" como el pico. El teclado sí pisa una escalera: es la forma de bajar.
 - E2E "portals" de `e2e/game.spec.ts`: un guardián de nivel 30 de la Isla Volcánica
   sembrado con `psql` en 3690,5796,7 hace click en 3693,5796 (el camino rodea la escalera
   de 3692,5796), baja con la flecha izquierda a 3692,5797,8 (el cliente tiene la

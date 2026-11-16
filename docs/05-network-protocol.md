@@ -1044,13 +1044,18 @@ No hay mensajes nuevos en el protocolo: un portal es un teletransporte.
   jugador. Si lo recibe, el batch de ese tick trae primero el `CreatureMove` del paso
   (también a quienes lo ven) y después, como un `/tp`: `CreatureDisappear` de lo que el
   cliente conocía y `FullMapView` del destino (con el piso nuevo); los observadores del
-  origen reciben `CreatureDisappear` y los del destino `CreatureAppear`. El paso pendiente
-  del cliente queda resuelto por el `FullMapView`, y la cola de pasos se vacía.
-- **Escalera de mano:** `UseItem{from: pos, item_id, stack_index}` sobre la casilla (el
-  suelo, índice 0, si no tiene nada encima; o un item fijo de su pila), en el mismo piso,
-  a la vista y a `inventory.reach` (si no, `too_far`). Un `item_id` que no es el de la
-  casilla → `inventory.not_possible`. Un item del suelo que alguien dejó encima se usa como
-  cualquier item. Respuesta: `FullMapView` como arriba.
+  origen reciben `CreatureDisappear` y los del destino `CreatureAppear`. Sin `MapSlice`
+  del piso de origen: el `FullMapView` reemplaza la vista. El paso pendiente del cliente
+  queda resuelto por el `FullMapView`, y la cola de pasos se vacía. Subir y bajar sin
+  parar cuesta un `FullMapView` por paso: en la mina volcánica, 471 bytes arriba y 308
+  abajo, unos 950 B/s al ritmo de un nivel 30 (docs/07; lo mide
+  `TestVolcanicMineStairsOnTheMap`).
+- **Escalera de mano:** `UseItem{from: pos, item_id, stack_index}` sobre la casilla con el
+  suelo (índice 0) o un item fijo de su pila, en el mismo piso, a la vista y a
+  `inventory.reach` (si no, `too_far`). Un `item_id` que no es el de la casilla →
+  `inventory.not_possible`. El cliente manda siempre el suelo, aunque haya items encima
+  (un cadáver, monedas): lo de encima no tapa la escalera. Un `UseItem` con el índice de
+  un item tirado encima usa ese item, no trepa. Respuesta: `FullMapView` como arriba.
 - **Punto de soga:** `UseItemOn{from: <la soga>, to: {pos}}` con un item cuyo `tool.use` es
   `rope`, llevado por el jugador, al mismo alcance. Un `UseItem` sobre la casilla responde
   `portal.need_rope`; otra herramienta sigue como recolección (`gather.nothing`).

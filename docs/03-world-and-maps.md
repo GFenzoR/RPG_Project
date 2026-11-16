@@ -166,6 +166,8 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   pide una soga y `boat` no mueve a nadie (los barcos son `data/boat_routes.yaml`). El
   portal es la casilla, no un item: la escalera se ve por el item que la decora
   (`stairs_down` / `stairs_up`), pero el servidor no lo mira.
+- Nadie se para sobre la entrada de un `stairs`, `hole` o `teleport`: ningún NPC ahí y
+  ningún spawn de radio 0 centrado ahí (los monstruos no la pisan, quedaría vacío).
 - Un portal por casilla de entrada, y nunca hacia su propia casilla. `to` no debería ser
   la casilla de otro portal que se pisa: el servidor deja al jugador en la libre más
   cercana (nadie se queda parado sobre una escalera).
@@ -208,8 +210,9 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   puerta, nunca la ventana de la casa), salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
   el templo, nombre con texto en todos los idiomas, id único en el mundo. Adentro de una
   casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y
-  ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro). El
-  servidor rechaza también un portal que llega a una casa de otra isla.
+  ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro). Un
+  portal de otra isla tampoco puede llegar a una casa (lo rechazan el servidor y
+  `make validate`).
 - **Solo maintainers:** `houses.yaml` no es parte de los map patches (docs/04): un PR que
   lo cambia queda fuera de las parcelas de comunidad. Se edita con el panel de casas del
   editor (dibuja casillas, puertas y salida, y escribe también los nombres en
@@ -336,11 +339,13 @@ crc32        u32 (IEEE) de todos los bytes anteriores
   no es una casilla caminable de su isla en un piso que lista, un destino que no es una
   casilla caminable de alguna isla, un portal hacia su propia casilla, una escalera,
   escalera de mano, agujero o soga que no cambia de piso, un agujero que sube, una soga
-  que baja, dos portales en una casilla y un extremo en una casa, y los indexa por su
-  entrada (`Map.PortalAt`, `Map.MovesOnStep`). La pareja de vuelta de escaleras y
-  escaleras de mano la exige solo `make validate`. La prueba de paridad
-  (`make test-parity`) compara también los portales que leen `mapcompile` y
-  `packages/map-format`.
+  que baja, dos portales en una casilla, un extremo en una casa (de cualquier isla), un
+  NPC sobre la entrada de un `stairs`/`hole`/`teleport` y un spawn de radio 0 centrado
+  en una; los indexa por su entrada (`Map.PortalAt`) y marca esas entradas con el bit 7
+  (`portal_step`) de `flags` (`Map.MovesOnStep`). La pareja de vuelta de escaleras y
+  escaleras de mano y el alcance a pie desde el templo los mira solo `make validate`. La
+  prueba de paridad (`make test-parity`) compara también los portales que leen
+  `mapcompile` y `packages/map-format`.
 - La versión 4 (T5.4) agregó `houses` por isla y el bit 6 (`house`) de
   `flags`: `NewMap` rechaza ids repetidos en el mundo, rects fuera de la isla o en pisos
   que no lista, casillas en dos casas, puertas fuera de su casa y salidas dentro de una
@@ -380,8 +385,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   isla. `stairs`/`ladder` cambian de piso y tienen pareja: otro portal
   `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del
   origen. `hole` baja, `rope_spot` sube. Un portal por casilla y ninguno hacia su propia
-  casilla (el servidor los indexa por la entrada). Advertencia: un portal `boat` no mueve
-  a nadie en el juego.
+  casilla (el servidor los indexa por la entrada). Ningún NPC sobre la entrada de un
+  `stairs`/`hole`/`teleport` ni spawn de radio 0 centrado en una. Advertencia: un portal
+  `boat` no mueve a nadie en el juego.
+- Alcance a pie desde el templo (spawns, NPCs, salidas de casa, zonas y el aviso de áreas
+  inalcanzables): se recorre como el servidor mueve. Una casilla de `stairs`, `hole` o
+  `teleport` lleva solo a su destino (nadie la cruza caminando: una escalera en un túnel
+  de una casilla corta el paso a pie y deja aparte lo de atrás), una `ladder` o un
+  `rope_spot` es una casilla más que además lleva a su destino, y un `boat` no lleva a
+  ningún lado.
 - Zonas de protección cubren el templo. (Depósitos: cuando exista el item, hito 1.)
 - Carteles (T5.5): un item de cartel (`description` = clave `text.*`) está sobre un
   `kind: sign` de `texts.yaml` con ese texto, y un cartel con item de cartel en su casilla
