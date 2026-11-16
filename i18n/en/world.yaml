@@ -13,7 +13,7 @@ text.bosque.cave_sign: "Someone crossed out the word \"danger\" and wrote above 
 text.volcan.temple_sign: "Temple of the Still Flame, in Brasal. Not even the mountain can hurt you here."
 text.volcan.dock_sign: "Dock of Brasal. Nerea Vado takes passengers to the Forest and the Harbour. Do not touch the black stones."
 text.volcan.mine_sign: "Mountain Mine. Closed by order of the archive. Someone scratched over it: \"there is fire below\"."
-text.volcan.gate_sign: "A stone door with no lock. In the middle, the forge's mark and a hollow shaped like a root."
+text.volcan.gate_sign: "Ancient forge. Only those who carry its key may pass. Below, chiselled: \"the root is the key\"."
 # Player houses (T5.4, world/islands/<id>/houses.yaml).
 house.puerto_house_net.name: "Hanging Net House"
 house.puerto_house_oar.name: "Old Oar House"

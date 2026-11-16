@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 99, "cy": 197, "z": 7 },
-  "palette": ["sand", "grass", "dirt", "border_grass_sand_s", "border_grass_sand_inner_se", "border_grass_sand_inner_sw", "oak_tree", "bush", "boulder", "stairs_down", "border_grass_sand_inner_nw", "border_grass_sand_w"],
+  "palette": ["sand", "grass", "dirt", "border_grass_sand_s", "border_grass_sand_inner_se", "border_grass_sand_inner_sw", "oak_tree", "bush", "boulder", "stairs_down", "border_grass_sand_inner_nw", "border_grass_sand_w", "puerto_mine_sign"],
   "ground": [
     [0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
@@ -104,6 +104,7 @@
     { "x": 31, "y": 19, "stack": [11] },
     { "x": 5, "y": 20, "stack": [8] },
     { "x": 23, "y": 20, "stack": [8] },
-    { "x": 31, "y": 20, "stack": [5] }
+    { "x": 31, "y": 20, "stack": [5] },
+    { "x": 7, "y": 24, "stack": [12] }
   ]
 }

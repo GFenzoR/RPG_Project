@@ -714,3 +714,61 @@
   description: text.volcan.mine_sign
   pickupable: false
   blocks_movement: true
+
+# The sign by the forge gate (Isla Volcánica, mine, floor 8), same scheme as Brasal's.
+- id: volcan_gate_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.volcan.gate_sign
+  pickupable: false
+  blocks_movement: true
+
+# Signs of Puerto and Bosque: the id is the one of the sign in the island's texts.yaml.
+- id: puerto_temple_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.puerto.temple_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: puerto_harbour_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.puerto.harbour_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: puerto_mine_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.puerto.mine_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: bosque_temple_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.bosque.temple_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: bosque_dock_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.bosque.dock_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: bosque_cave_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.bosque.cave_sign
+  pickupable: false
+  blocks_movement: true
