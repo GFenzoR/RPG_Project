@@ -97,6 +97,12 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   8 px del borde de la pantalla, no del área segura). En un iPhone horizontal pueden
   quedar un poco bajo la muesca o la barra de inicio; se ve solo en un dispositivo real
   o con el override de CDP.
+- **Atlas sin reintento:** si el `fetch` de `/atlas/atlas.json` falla una vez
+  (`Atlas.load` en `packages/renderer`, llamado por `createGameCanvas`), el canvas no se
+  crea y el juego queda en "Conectando…" para siempre, con la sesión abierta. Se vio una
+  vez en `make e2e` local (Windows: `ERR_CONNECTION_REFUSED` contra el Vite de desarrollo
+  en "T5.1"; la corrida siguiente pasó entera). En una red móvil puede pasarle a un
+  jugador: un par de reintentos con espera, o un aviso con "Reintentar", lo resolvería.
 - **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
