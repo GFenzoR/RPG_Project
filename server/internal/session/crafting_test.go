@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"maps"
 	"testing"
 	"time"
 
@@ -357,5 +358,23 @@ func TestToolOnStationOpensIt(t *testing.T) {
 	evs := h.try(cl, hammerID, pos(0, 0))
 	if opens := find(evs, (*pb.ServerMessage).GetStationOpen); len(opens) != 1 || hasKey(evs, "gather.nothing") {
 		t.Fatalf("hammer on the forge: StationOpen %v, messages %v", opens, systemKeys(evs))
+	}
+}
+
+// A Craft at a station of another floor, or out of view, hears what any such tile
+// answers (inventory.not_possible): nothing about whether a station stands there.
+func TestCraftOutOfViewSaysNothing(t *testing.T) {
+	far := craftHarness(t, worldtest.Map(t, 0, 0, 7, "v....................T"))
+	cl, _ := crafter(far, pos(21, 0), stack(oreID, 2, 0), stack(logID, 1, 1))
+	for _, at := range []world.Pos{pos(0, 0), pos(1, 0)} { // the forge, and grass
+		if evs := far.craft(cl, "ingot", at); !maps.Equal(systemKeys(evs), notPossible) {
+			t.Fatalf("craft at %v out of view: %v", at, systemKeys(evs))
+		}
+	}
+	above := craftHarness(t, worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 6, Rows: []string{"T..."}},
+		worldtest.Layer{Z: 7, Rows: forgeMap}))
+	cl, _ = crafter(above, world.Pos{X: 0, Y: 0, Z: 6}, stack(oreID, 2, 0), stack(logID, 1, 1))
+	if evs := above.craft(cl, "ingot", pos(0, 0)); !maps.Equal(systemKeys(evs), notPossible) {
+		t.Fatalf("craft at the forge below: %v", systemKeys(evs))
 	}
 }

@@ -136,7 +136,9 @@ func (w *World) carriesTool(p *Player, use string) bool {
 func (w *World) craft(ctx *game.TickContext, p *Player, m *pb.Craft) {
 	r := w.cfg.Recipes[m.GetRecipeId()]
 	pos, ok := posFromMsg(m.GetStation())
-	if r == nil || !ok {
+	// A station of another floor or out of view answers like any tile (itemAt): nothing
+	// about what lies there.
+	if r == nil || !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) {
 		p.emit(systemMsg(msgNotPossible))
 		return
 	}

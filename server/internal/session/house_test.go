@@ -857,4 +857,28 @@ func TestFarHouseDoorAndBoardSayNothing(t *testing.T) {
 	if evs := h.send(near, useItem(onTile(shedDoor), worldtest.Grass, 0)); !hasKey(evs, "inventory.too_far") {
 		t.Fatalf("house door in view: %v", systemKeys(evs))
 	}
+
+	// From the floor above, right over them: the surface floors see each other, so only
+	// the floor tells the door and the board apart from a tile of p's own floor.
+	sky := make([]string, len(houseMap))
+	for i, r := range houseMap {
+		sky[i] = strings.Repeat(".", len(r))
+	}
+	h = newHouseHarness(t, func(c *session.Config) {
+		c.Map = worldtest.WithHouses(t, worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 6, Rows: sky},
+			worldtest.Layer{Z: 7, Rows: houseMap}), testHouses()...)
+	})
+	above := world.Pos{X: 8, Y: 4, Z: 6}
+	if !session.Sees(above, shedDoor) || !session.Sees(above, houseBoard) {
+		t.Fatal("the floor above does not see the floor below")
+	}
+	cl, _ = h.tenant("Above", 0, above)
+	for name, m := range map[string]*pb.ClientMessage{
+		"house door": useItem(onTile(shedDoor), worldtest.Grass, 0),
+		"board":      useItem(onTile(houseBoard), boardID, 1),
+	} {
+		if evs := h.send(cl, m); !maps.Equal(systemKeys(evs), notPossible) || lastHouse(evs) != nil {
+			t.Fatalf("%s from the floor above: %v", name, systemKeys(evs))
+		}
+	}
 }

@@ -89,7 +89,9 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 		return
 	}
 	pos, ok := posFromMsg(tp.Pos)
-	if !ok {
+	// A tile of another floor or out of view answers like any (itemAt): nothing about
+	// what lies there.
+	if !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) {
 		p.emit(systemMsg(msgNotPossible))
 		return
 	}
