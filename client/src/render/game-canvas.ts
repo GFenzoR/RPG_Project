@@ -26,6 +26,7 @@ import { labelText, placeLabels } from "./labels.ts";
 import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
 import type { Gesture } from "../input/gestures.ts";
+import { mapPress } from "../input/mouse.ts";
 import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { delta } from "../state/geometry.ts";
@@ -661,7 +662,7 @@ export async function createGameCanvas(
 
   // Left: a click walks, shift+click looks, a drag moves the top item. Right: attack the
   // creature on the tile, or use the tile (a ladder climbs); Ctrl+right uses its top item
-  // even on a ladder.
+  // even on a ladder. The rule is input/mouse.ts mapPress.
   let press: { x: number; y: number; z: number; px: number; py: number } | undefined;
   canvas.addEventListener("pointerdown", (e) => {
     if (isTouchPointer(e.pointerType)) {
@@ -674,17 +675,12 @@ export async function createGameCanvas(
     const p = toCanvas(e.clientX, e.clientY);
     const tile = screenToTile(cam, p.x, p.y, T);
     const z = self.pos.z;
-    if (e.button === 2) {
-      const c = world.creatureAt(tile.x, tile.y, z);
-      if (c && c.id !== world.selfId) opts.clickCreature(c.id);
-      else opts.useTile(tile.x, tile.y, z, e.ctrlKey);
-      return;
-    }
-    if (e.shiftKey) {
-      opts.lookTile(tile.x, tile.y, z);
-      return;
-    }
-    press = { x: tile.x, y: tile.y, z, px: p.x, py: p.y };
+    const c = e.button === 2 ? world.creatureAt(tile.x, tile.y, z) : undefined;
+    const act = mapPress(e.button, e, c && c.id !== world.selfId ? c.id : undefined);
+    if (act.kind === "attack") opts.clickCreature(act.creature);
+    else if (act.kind === "use") opts.useTile(tile.x, tile.y, z, act.top);
+    else if (act.kind === "look") opts.lookTile(tile.x, tile.y, z);
+    else if (act.kind === "press") press = { x: tile.x, y: tile.y, z, px: p.x, py: p.y };
   });
   canvas.addEventListener("pointermove", (e) => {
     if (isTouchPointer(e.pointerType)) {
