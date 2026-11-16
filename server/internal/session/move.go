@@ -263,7 +263,7 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	pt := w.stepPortal(to)
 	if pt != nil {
 		var refuse string
-		if dest, refuse = w.portalArrival(ctx, p, pt); refuse != "" {
+		if dest, refuse = w.portalArrival(ctx, p, pt, to); refuse != "" {
 			p.stopWalk()
 			w.reject(p, dirMsg(d))
 			p.emit(systemMsg(refuse))

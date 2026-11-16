@@ -300,6 +300,10 @@ Semántica del motor (T1.10):
   inexistente): si alguno falla no ejecuta ninguna acción. Si pasan, ejecuta
   las acciones en orden y luego sigue el `goto`. Una opción sin `goto` deja el diálogo en
   el mismo nodo (por ejemplo `open_shop`); `close` y `teleport` lo cierran.
+- `teleport` deja al jugador en su destino o, si está ocupado, en la casilla libre más
+  cercana a 1 de distancia, solo en el área del destino y nunca en una casilla de casa
+  (como la llegada de un barco o de un portal). Si no hay ninguna, el destino cuenta como
+  inexistente.
 - `has_item`/`lacks_item` cuentan todo el inventario (equipo y contenedores anidados).
   Un contenedor con algo adentro no cuenta ni se puede quitar o vender (se perdería su
   contenido).

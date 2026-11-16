@@ -133,7 +133,8 @@ func landed(t *testing.T, p *session.Player, evs []*pb.ServerMessage, to world.P
 }
 
 // Stairs: a step onto them takes the player to the other floor, next to the stairs back,
-// and those who watched see it walk onto the stairs and vanish; those below see it come.
+// and those who watched get its step onto the stairs and then its CreatureDisappear (the
+// client drops it at once, without drawing the step); those below see it come.
 func TestStairsDownAndUp(t *testing.T) {
 	h := portalHarness(t, 2)
 	cl, p := h.join("Delver", at(5, 1))
@@ -249,8 +250,8 @@ func TestPortalArrivalSkipsHousesAndRooms(t *testing.T) {
 }
 
 // A hole leads down: a step onto it from any side (a diagonal here) drops the player to
-// the floor below, beside whoever stands under it; those above see it step onto the hole
-// and vanish. That nothing leads back up is the map's rule (world.NewMap refuses a hole
+// the floor below, beside whoever stands under it; those above get its step onto the hole
+// and then its CreatureDisappear. That nothing leads back up is the map's rule (world.NewMap refuses a hole
 // that goes up, the "hole up" case of world/portal_test.go), not the session's.
 func TestHoleDropsBesideWhoeverIsUnder(t *testing.T) {
 	h := portalHarness(t, 2)
@@ -385,6 +386,17 @@ func TestPortalKeepsLockedAttackersOutOfProtection(t *testing.T) {
 	}
 	lock(p, false)
 	landed(t, p, h.step(cl, S), at3(5, 3, 8))
+
+	// From a protection zone onto stairs outside it: that step leaves the zone, so landing
+	// in the zone below enters one, as stepping off and back on foot would.
+	m := protectedFloor(portalMap(t), 8)
+	worldtest.SetTile(t, m, at3(5, 1, 7), worldtest.Grass, world.FlagProtection)
+	h = portalHarnessOn(t, m, 2)
+	cl, p = h.join("Sheltered Raider", at(5, 1))
+	lock(p, true)
+	if evs := h.step(cl, S); p.Pos() != pos(5, 1) || !hasKey(evs, "pvp.protection_locked") {
+		t.Fatalf("a locked attacker from a protection zone down stairs outside it: at %v, %v", p.Pos(), systemKeys(evs))
+	}
 
 	// Up: floor 7 is the protection zone now.
 	h = portalHarnessOn(t, protectedFloor(portalMap(t), 7), 2)

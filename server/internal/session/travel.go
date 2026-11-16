@@ -180,7 +180,7 @@ func (w *World) sail(ctx *game.TickContext, p *Player, r *route) {
 		p.emit(systemMsg(dialog.MsgNoChangeRoom))
 		return
 	}
-	to, ok := w.freeNear(r.to, w.arrivalRadius)
+	to, ok := w.freeAround(r.to, w.arrivalRadius, true) // never into a house, like a portal
 	if !ok {
 		p.emit(systemMsg(msgArrivalFull))
 		return

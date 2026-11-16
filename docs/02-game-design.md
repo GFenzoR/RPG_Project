@@ -51,9 +51,10 @@ Los portales son datos del mapa (`world/islands/<id>/portals.yaml`, formato en
 (`server/internal/session/portal.go`) mueve al jugador. Reglas propias, a la manera de
 Tibia:
 - **Escalera (`stairs`), agujero (`hole`) y teletransporte (`teleport`): se pisan.** Al dar
-  el paso sobre su casilla, el jugador aparece en el otro extremo. El paso ocurre (quienes lo
-  veían lo ven subir a la escalera y desaparecer) y en el mismo tick llega al destino, con el
-  mapa del otro piso. Cuesta lo que un paso. Un agujero solo baja y no tiene vuelta; una
+  el paso sobre su casilla, el jugador aparece en el otro extremo. El paso ocurre y en el
+  mismo tick llega al destino, con el mapa del otro piso. Quienes lo veían reciben el paso y
+  enseguida su desaparición: el cliente lo borra en el acto, sin dibujar el paso, así que lo
+  ven desaparecer de la casilla donde estaba. Cuesta lo que un paso. Un agujero solo baja y no tiene vuelta; una
   escalera tiene su pareja (otra escalera que sale junto al destino y llega junto al origen),
   así que nunca se aparece sobre la escalera de vuelta. Un teletransporte puede quedar en el
   mismo piso o llevar a otra isla.
@@ -80,7 +81,11 @@ Tibia:
   Esa búsqueda va por anillos, no a pie: `make validate` exige que toda casilla del radio
   donde podría caer se conecte a pie con el destino (nadie cae del otro lado de un muro).
 - **PvP:** quien atacó a un jugador y tiene el bloqueo no puede entrar a una zona protegida
-  por un portal si no está ya en una, igual que a pie.
+  por un portal si no está ya en una, igual que a pie. Cuenta la casilla desde donde toma
+  el portal: en una escalera, un agujero o un teletransporte, la casilla del portal que
+  pisa (bajar de una zona protegida a una escalera fuera de ella es salir de la zona, y
+  aparecer en otra zona protegida es entrar); en una escalera de mano o una soga, donde
+  está parado.
 - **Barco (`boat`):** el formato lo acepta pero no mueve a nadie: los viajes en barco son
   del capitán (`data/boat_routes.yaml`, "Viajes en barco"). `make validate` lo advierte.
 - **Monstruos:** no usan portales. Nunca pisan la casilla de una escalera, un agujero o un
@@ -710,8 +715,9 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
   La marca no se guarda: hoy salir y volver a entrar la borra, porque todavía no hay
   bloqueo de logout en combate. Cuando llegue, cierra también este hueco.
 - **Llegada:** la casilla `to` de la ruta; si está ocupada, la libre y caminable más
-  cercana a ≤ `arrival_radius` (2) casillas. Si no hay ninguna, se rechaza
-  (`travel.no_room`) sin cobrar.
+  cercana a ≤ `arrival_radius` (2) casillas, nunca una casilla de casa (como la llegada por
+  un portal; un teleport de diálogo tampoco deja a nadie en una casa). Si no hay ninguna,
+  se rechaza (`travel.no_room`) sin cobrar.
 - **Cobro atómico:** todo se comprueba antes; luego el jugador se mueve, se consume el
   pasaje (si `consume: true`) y se paga el precio. El vuelto de una moneda grande cae en
   la mochila o, si no cabe, a los pies del jugador en el destino.

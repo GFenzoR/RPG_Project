@@ -12,8 +12,8 @@ import (
 // world.bin (world.Map.PortalAt). The server moves the player; the client only sees a
 // teleport (FullMapView), as with a boat or a staff /tp.
 //   - Stairs, holes and teleports move whoever steps onto their tile: the step happens
-//     (the ones who see it watch the player walk onto the stairs) and the player lands on
-//     the other end. Only players: monsters never step onto such a tile (monsterCanEnter),
+//     (the ones who see it get the step, then the CreatureDisappear: their client drops
+//     the player at once, without drawing the step) and the player lands on the other end. Only players: monsters never step onto such a tile (monsterCanEnter),
 //     and a walk path or a search for a free tile goes around it.
 //   - A ladder is used: UseItem on its tile, from at most inventory.reach tiles away and
 //     in line of sight (like gathering: no ladder across a wall when the reach is above 1).
@@ -24,7 +24,9 @@ import (
 // tile within travel.arrival_radius (freeAround: only in the area of the destination, never
 // on a tile a portal leaves from on step) that is no house tile. With no free tile the
 // move is refused (portal.blocked) and nothing changes. An attacker under its PvP lock
-// cannot reach a protection zone through a portal from outside one, like on foot.
+// cannot reach a protection zone through a portal from outside one, like on foot: from
+// the tile it takes the portal on (the stairs it steps onto, or where it stands to climb
+// a ladder or a rope).
 
 // i18n keys of the portal messages (i18n/*/client.yaml).
 const (
@@ -49,15 +51,17 @@ func (w *World) stepPortal(to world.Pos) *world.Portal {
 	return nil
 }
 
-// portalArrival returns where p lands through pt, or the message that refuses the move:
-// no free tile around its destination, or an attacker under its PvP lock that would go
-// from outside a protection zone into one.
-func (w *World) portalArrival(ctx *game.TickContext, p *Player, pt *world.Portal) (world.Pos, string) {
+// portalArrival returns where p lands through pt, taken on the tile from, or the message
+// that refuses the move: no free tile around its destination, or an attacker under its
+// PvP lock that would go from outside a protection zone into one. from is the tile of
+// stairs, a hole or a teleport p steps onto (a step off a protection zone onto stairs
+// outside it leaves the zone, as on foot), or p's own tile for a ladder or a rope spot.
+func (w *World) portalArrival(ctx *game.TickContext, p *Player, pt *world.Portal, from world.Pos) (world.Pos, string) {
 	to, ok := w.freeAround(pt.To, w.arrivalRadius, true)
 	switch {
 	case !ok:
 		return world.Pos{}, msgPortalBlocked
-	case ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(p.pos):
+	case ctx.Tick < p.lockUntil && w.inProtection(to) && !w.inProtection(from):
 		return world.Pos{}, msgPvPProtLocked
 	}
 	return to, ""
@@ -125,7 +129,7 @@ func (w *World) climb(ctx *game.TickContext, p *Player, pt *world.Portal) {
 		p.emit(systemMsg(msgPortalNotReady))
 		return
 	}
-	to, refuse := w.portalArrival(ctx, p, pt)
+	to, refuse := w.portalArrival(ctx, p, pt, p.pos)
 	if refuse != "" {
 		p.emit(systemMsg(refuse))
 		return
