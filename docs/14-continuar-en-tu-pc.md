@@ -89,7 +89,11 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   inicio o muesca, en horizontal, el margen se cuenta dos veces (la emulación no lo ve:
   ahí el inset es 0).
 - **Mundo:**
-  - suelos volcánicos y carteles de Brasal;
+  - el cartel de la puerta sellada (`text.volcan.gate_sign`, piso 8) no tiene item todavía,
+    y su texto dice que la puerta no tiene cerradura: hay que reescribirlo para la puerta
+    con llave antes de ponerlo;
+  - los carteles de Puerto y del Bosque están solo en `texts.yaml`: falta su item
+    `*_sign` para que se vean y se lean (como los de Brasal);
   - las escaleras y portales de `portals.yaml` no existen en el servidor (ni en
     `world.bin`): a los pisos 8 (minas de Puerto y Bosque, la mina y la forja de la Isla
     Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff.

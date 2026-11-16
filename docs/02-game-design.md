@@ -784,10 +784,15 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   eco y detrás la forja antigua con el custodio (respawn de 20 min). La puerta sellada
   (`forge_gate`, 3692,5832) cierra el pasillo de la forja y se abre con la llave de ascua
   que da el eco (ver "Puertas con llave"). La isla es PvP abierto (el default de T5.2) salvo el templo y
-  la plaza (protección); sin arena. Música y ambiente: placeholders (la de cueva y las olas)
-  hasta tener pistas propias. No hay suelos volcánicos (ceniza, lava) en `data/`: el mapa
-  usa tierra y piedra; agregarlos queda pendiente (el check de mapas valida con el `data/`
-  de la base, así que van en un PR de contenido antes).
+  la plaza (protección); sin arena. Música y ambiente propios (`music_volcan`: un tambor
+  lento, un yunque lejano y una melodía en re frigio dominante; `amb_volcan`: retumbo,
+  burbujas de lava, crujidos y vapor). Suelos propios: llano de ceniza, losas de basalto
+  en la plaza, caminos de escoria, ladera y cráter de lava enfriada con pozos de lava
+  fundida que no se pisan, y tres carteles (templo, muelle y mina) que se leen mirándolos.
+  Los suelos nuevos se caminan como los que reemplazaron, así que el ritmo con que se
+  balanceó la caza no cambia: la ceniza (140) como la tierra del llano, la lava enfriada
+  (100) como la piedra de la ladera y el cráter, el basalto (100) como piedra; solo los
+  caminos de escoria (110) son más rápidos que la ceniza que cruzan.
 - **Monedas:** las recompensas y precios de este nivel (miles de cobre) se pagan en plata y
   oro (ver "Economía"), así que caben en una mochila normal.
 
@@ -1035,8 +1040,8 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   mensajes, UI) no son posicionales.
 - **Música y ambiente**: un loop por isla (`world/world.yaml`) y otro para los pisos
   subterráneos (z > 7). Al cambiar de isla o de zona hay un fundido cruzado (`fade_ms`).
-  Hoy hay tres loops: Puerto, Bosque y Cueva. El ambiente son olas en Puerto y bosque en
-  Bosque; bajo tierra no hay ambiente.
+  Hoy hay cuatro loops: Puerto, Bosque, Volcán y Cueva. El ambiente son olas en Puerto,
+  bosque en Bosque y el volcán en la Isla Volcánica; bajo tierra no hay ambiente.
 - **Autoplay**: nada suena hasta el primer gesto (click, toque o tecla). Así lo exigen los
   navegadores y los webviews de la app de escritorio. Mientras el audio esté suspendido,
   los efectos se descartan, para que no suenen todos juntos al reanudarse.
