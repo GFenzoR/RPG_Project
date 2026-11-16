@@ -75,6 +75,8 @@ type pvpHit struct {
 	unjust bool
 	// arena: every hit of the entry was an arena hit (both in a pvp zone).
 	arena bool
+	// when is at on the clock: what a condition of char saves with p (ConditionState).
+	when time.Time
 }
 
 func (w *World) initPvP() {
@@ -400,7 +402,7 @@ func (w *World) hurtPlayer(ctx *game.TickContext, a, v *Player, dmg int, element
 func (w *World) aggress(ctx *game.TickContext, a, v *Player) {
 	arena := w.arena(a, v)
 	unjust := !arena && !w.justified(ctx.Tick, a, v)
-	w.rememberHit(ctx.Tick, v, a.charID, unjust, arena)
+	w.rememberHit(ctx.Tick, ctx.Now, v, a.charID, unjust, arena)
 	if arena {
 		return
 	}
@@ -412,9 +414,10 @@ func (w *World) aggress(ctx *game.TickContext, a, v *Player) {
 	}
 }
 
-// rememberHit records on v a hit by character char. An entry older than the aggressor
-// time starts afresh; with maxHitBy entries the oldest is replaced.
-func (w *World) rememberHit(tick game.Tick, v *Player, char int64, unjust, arena bool) {
+// rememberHit records on v a hit by character char at tick (now on the clock). An entry
+// older than the aggressor time starts afresh; with maxHitBy entries the oldest is
+// replaced.
+func (w *World) rememberHit(tick game.Tick, now time.Time, v *Player, char int64, unjust, arena bool) {
 	oldest := -1
 	for i := range v.hitBy {
 		h := &v.hitBy[i]
@@ -422,27 +425,67 @@ func (w *World) rememberHit(tick game.Tick, v *Player, char int64, unjust, arena
 			if tick-h.at >= w.pvpAggrFor {
 				h.unjust, h.arena = false, true
 			}
-			h.at, h.unjust, h.arena = tick, h.unjust || unjust, h.arena && arena
+			h.at, h.when, h.unjust, h.arena = tick, now, h.unjust || unjust, h.arena && arena
 			return
 		}
 		if oldest < 0 || h.at < v.hitBy[oldest].at {
 			oldest = i
 		}
 	}
+	hit := pvpHit{char: char, at: tick, when: now, unjust: unjust, arena: arena}
 	if len(v.hitBy) < maxHitBy {
-		v.hitBy = append(v.hitBy, pvpHit{char: char, at: tick, unjust: unjust, arena: arena})
+		v.hitBy = append(v.hitBy, hit)
 		return
 	}
-	v.hitBy[oldest] = pvpHit{char: char, at: tick, unjust: unjust, arena: arena}
+	v.hitBy[oldest] = hit
 }
 
-// pvpSource returns the online player that applied a condition to v, if it was another
-// player (c.source is a creature id; monsters and players share the id space).
-func (w *World) pvpSource(source uint32, v *Player) *Player {
-	if !w.pvpOn || source == 0 || source == v.id {
+// hitFrom returns v's entry for the hits of character char, or nil.
+func hitFrom(v *Player, char int64) *pvpHit {
+	if char == 0 {
 		return nil
 	}
-	return w.playerByID(source)
+	for i := range v.hitBy {
+		if v.hitBy[i].char == char {
+			return &v.hitBy[i]
+		}
+	}
+	return nil
+}
+
+// recallHit gives a joining v back what it remembered of char's attack when it left (a
+// condition of char saves it, conditionStates): a hit outside an arena at when, unjustified
+// or not. Only while it is still within the aggressor time on the clock, so a relog changes
+// neither self-defense nor what char's condition may continue. An entry v already has
+// (carried over by a login that took the character over) stays.
+func (w *World) recallHit(ctx *game.TickContext, v *Player, char int64, when time.Time, unjust bool) {
+	if !w.pvpOn || hitFrom(v, char) != nil || len(v.hitBy) >= maxHitBy {
+		return
+	}
+	age := ctx.Now.Sub(when)
+	if age < 0 || age >= w.aggrDur {
+		return
+	}
+	// Rounded up: never younger than it is. A hit older than this server's first tick (a
+	// restart since) cannot be placed on the tick line and is forgotten.
+	ago := game.TicksFor(age)
+	if ago > ctx.Tick {
+		return
+	}
+	v.hitBy = append(v.hitBy, pvpHit{char: char, at: ctx.Tick - ago, when: when, unjust: unjust})
+}
+
+// pvpSource tells whether condition c on v is another player's (pvp) and returns that
+// player if it is in the world (link-dead too) and PvP is on: c.author is a character, so
+// it is found after a relog of either side.
+func (w *World) pvpSource(c *condition, v *Player) (a *Player, pvp bool) {
+	if c.author == 0 || c.author == v.charID {
+		return nil, false
+	}
+	if !w.pvpOn {
+		return nil, true // nobody hurts another player with PvP off (a condition saved before)
+	}
+	return w.byChar[c.author], true
 }
 
 // ---- deaths -----------------------------------------------------------------------

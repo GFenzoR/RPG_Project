@@ -483,7 +483,8 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 func storeConditions(in []session.ConditionState) []store.Condition {
 	out := make([]store.Condition, len(in))
 	for i, c := range in {
-		out[i] = store.Condition{ID: c.ID, LeftMs: c.LeftMs, Ticks: c.Ticks, Damage: c.Damage}
+		out[i] = store.Condition{ID: c.ID, LeftMs: c.LeftMs, Ticks: c.Ticks, Damage: c.Damage,
+			Author: c.Author, AuthorHit: c.AuthorHit, AuthorUnjust: c.AuthorUnjust}
 	}
 	return out
 }
