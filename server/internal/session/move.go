@@ -278,7 +278,7 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	ground, _, _ := w.m.Tile(to)
 	ticks := w.StepTicks(ground, p.speed, d.Diagonal())
 	p.readyAt = ctx.Tick + ticks
-	w.move(p, to, d, ticks)
+	w.move(p, to, d, ticks, pt != nil)
 	// A step resets the idle time but is not a timed action for the bot detection: its
 	// pace is the server's (a held key walks as evenly as a script).
 	p.lastAction, p.idleWarned = ctx.Tick, false
@@ -311,8 +311,11 @@ func (w *World) reroute(p *Player) bool {
 }
 
 // move takes p one step from its position to `to` (adjacent, same floor) and tells
-// every client that sees either end.
-func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick) {
+// every client that sees either end. With through (a step onto stairs, a hole or a
+// teleport, which Teleport follows in the same tick) p's own client gets only the step:
+// the FullMapView of the other end replaces its view, so the edge of this floor and the
+// creatures that leave it would be bytes it throws away.
+func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick, through bool) {
 	from := p.pos
 	durMs := uint32(ticks.Duration().Milliseconds())
 	w.unindex(p)
@@ -328,8 +331,15 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	w.checkDialog(p)
 	w.checkMarket(p)
 	w.checkHouseView(p)
+	if !through {
+		w.stepView(p, to, d)
+	}
+	w.tutorialEvent(p, content.TriggerWalk, "")
+}
 
-	// The mover's own client: creatures out of view disappear, the new edge arrives.
+// stepView tells p's own client what its step to `to` in d changed: creatures out of view
+// disappear, the new edge arrives.
+func (w *World) stepView(p *Player, to world.Pos, d world.Direction) {
 	kept := p.known[:0]
 	for _, id := range p.known {
 		if c, ok := w.creaturePos(id); !ok || id == p.id || Sees(to, c) {
@@ -357,7 +367,6 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 		}
 		w.sendSlice(p, x0, int(to.Y)+dy*ViewHalfH, wd, 1)
 	}
-	w.tutorialEvent(p, content.TriggerWalk, "")
 }
 
 // Teleport moves p anywhere (another floor included). Loop goroutine only. It does not

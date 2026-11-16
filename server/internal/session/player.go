@@ -643,6 +643,11 @@ func (w *World) placement(c Character) world.Pos {
 	if p, ok := w.freeNear(temple, 3); ok {
 		return p
 	}
+	if w.m.MovesOnStep(want) {
+		// A position saved on stairs (before the server loaded portals, or by a GM): the
+		// temple rather than a tile nobody stands on.
+		return temple
+	}
 	return want // crowded: share the tile rather than refuse the login
 }
 
