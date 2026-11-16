@@ -214,40 +214,68 @@ test.describe.serial("public website", () => {
   });
 
   test("Play leads to the login and into the game", async ({ page }) => {
+    // Run last in a full E2E: the game page is a cold load of every module of /play/ from
+    // Vite's dev server (pixi.js and the whole client) in a new browser context, and the
+    // server and the machine are at their busiest. It once missed the 5 s default of an
+    // `expect` waiting for the login form, so the steps that wait for a page load or a
+    // login wait for that request and get a longer timeout; the rest keeps the default.
+    test.setTimeout(120_000);
+    const load = { timeout: 30_000 };
     const errors = watchErrors(page);
     await page.goto("/?lang=es");
     await page.getByTestId("play").click();
-    await expect(page).toHaveURL(/\/play\/$/);
+    await expect(page).toHaveURL(/\/play\/$/, load);
     const loginForm = page.getByTestId("login-form");
-    await expect(loginForm).toBeVisible();
+    await expect(loginForm).toBeVisible(load);
     await expect(page.getByTestId("language")).toHaveValue("es");
     // A language picked in the game survives a reload (no ?lang= in the URL wins over it).
     await page.getByTestId("language").selectOption("en");
-    await page.reload();
-    await expect(page.getByTestId("language")).toHaveValue("en");
-    await expect(loginForm.getByLabel("Password")).toBeVisible();
+    await page.reload({ waitUntil: "load" });
+    await expect(page.getByTestId("language")).toHaveValue("en", load);
+    await expect(loginForm.getByLabel("Password")).toBeVisible(load);
     await page.getByTestId("language").selectOption("es");
     // Without a session the game's first /api/characters answers 401 (logged by the browser).
     errors.length = 0;
     await loginForm.getByLabel("Email").fill(email);
     await loginForm.getByLabel("Contraseña").fill(password);
+    const listed = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === "/api/characters" && r.request().method() === "GET",
+      load,
+    );
     await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+    expect((await listed).status()).toBe(200);
     const list = page.getByTestId("characters");
-    await expect(list.getByText(name)).toBeVisible();
+    await expect(list.getByText(name)).toBeVisible(load);
     await list.getByRole("button", { name: "Jugar" }).click();
-    await page.waitForFunction(() => window.__rpgClient?.ready === true);
+    await page.waitForFunction(() => window.__rpgClient?.ready === true, undefined, load);
     await expect(page.getByTestId("game-canvas")).toBeVisible();
-    await page.waitForTimeout(300); // atlas textures (served from the site root, not /play/)
+    // The atlas is loaded before `ready`: once the own tile is known, two drawn frames
+    // upload the textures (the atlas is served from the site root, not /play/).
+    await page.waitForFunction(
+      () => {
+        const me = window.__rpgClient?.self();
+        return me !== undefined && window.__rpgClient?.tile(me.x, me.y, me.z) !== undefined;
+      },
+      undefined,
+      load,
+    );
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => done())),
+        ),
+    );
     await shot(page, "site-08-play", false);
 
     // An old link to / shows the website even with a session; Play goes back to the game.
     await page.goto("/?lang=es");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       "Un mundo abierto, casilla por casilla",
+      load,
     );
     await page.goto("/play");
     await expect(page).toHaveURL(/\/play$/);
-    await expect(page.getByTestId("characters").getByText(name)).toBeVisible();
+    await expect(page.getByTestId("characters").getByText(name)).toBeVisible(load);
     expect(errors).toEqual([]);
   });
 });

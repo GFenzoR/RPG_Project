@@ -1,19 +1,27 @@
 // T5.7: the cosmetic shop end to end against the fake payment provider (the main E2E
 // server runs with RPG_ENV=development and PAYMENTS_PROVIDER=fake, playwright.config.ts).
 // A player signs in on /shop, buys a pack through the fake checkout (a POST with the
-// buyer's own session), buys an outfit, enters the game, buys a name effect on the site while online (the game pushes the new
-// state), equips both in the Appearance panel, and a second player in another browser
-// context sees them on the first player's creature.
+// buyer's own session), buys an outfit, enters the game, buys a name effect on the site
+// while online (the game pushes the new state), equips both in the Appearance panel, and a
+// second player in another browser context sees them on the first player's creature.
+//
+// No fixed sleeps: every step waits for the request it starts (a purchase, the shop's
+// refetch) or for the state the server pushes, and the steps that load a page or cross to
+// another browser get a longer timeout than the 5 s default (it runs late in a full E2E,
+// with three browser contexts and two game sessions).
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
+import type { APIRequestContext, BrowserContext, Page, Response } from "@playwright/test";
 import { serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
 const shot = (page: Page, name: string): Promise<Buffer> =>
   page.screenshot({ path: join(shots, `${name}.png`), fullPage: true });
+
+/** A page load (Vite serves every module) or a push through the game server. */
+const SLOW = { timeout: 30_000 };
 
 function randomLetters(n: number): string {
   const pool = "bcdfghjklmnpqrstvwxz";
@@ -47,15 +55,28 @@ async function newGuardian(
   return { email, password, name };
 }
 
-async function enterGame(page: Page, email: string, password: string): Promise<void> {
+async function enterGame(
+  page: Page,
+  who: { email: string; password: string; name: string },
+): Promise<void> {
   await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
-  await loginForm.getByLabel("Email").fill(email);
-  await loginForm.getByLabel("Contraseña").fill(password);
+  await expect(loginForm).toBeVisible(SLOW);
+  await loginForm.getByLabel("Email").fill(who.email);
+  await loginForm.getByLabel("Contraseña").fill(who.password);
   await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
-  await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
-  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  const list = page.getByTestId("characters");
+  await expect(list.getByText(who.name)).toBeVisible(SLOW);
+  await list.getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true, undefined, SLOW);
 }
+
+/** The answer to the shop request `method path` (path without the query). */
+const shopCall = (page: Page, method: string, path: string): Promise<Response> =>
+  page.waitForResponse(
+    (r) => r.request().method() === method && new URL(r.url()).pathname === path,
+    SLOW,
+  );
 
 interface ShopJSON {
   enabled: boolean;
@@ -68,6 +89,7 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
   browser,
   playwright,
 }) => {
+  test.setTimeout(180_000);
   const buyer = await newGuardian(playwright, "Buyer");
   const watcher = await newGuardian(playwright, "Watcher");
   const errors: string[] = [];
@@ -88,27 +110,49 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
   // ---- The site: sign in on /shop (the nav links it: the server takes payments). ----
   const site = await (await context()).newPage();
   await site.goto("/shop?lang=es");
-  await expect(site.getByRole("link", { name: "Tienda" })).toBeVisible();
+  await expect(site.getByRole("link", { name: "Tienda" })).toBeVisible(SLOW);
   const login = site.locator(".maps-login");
-  await expect(login).toContainText("Entra con tu cuenta para ver la tienda.");
+  await expect(login).toContainText("Entra con tu cuenta para ver la tienda.", SLOW);
   await login.getByLabel("Email").fill(buyer.email);
   await login.getByLabel("Contraseña").fill(buyer.password);
+  const signedIn = shopCall(site, "GET", "/api/shop");
   await login.getByRole("button", { name: "Entrar", exact: true }).click();
+  expect((await signedIn).status()).toBe(200);
   watch(site); // after the sign-in check's expected 401
   await expect(site.getByTestId("shop-page")).toBeVisible();
   await expect(site.getByTestId("shop-balance")).toHaveText("0 de nácar");
   await expect(site.getByTestId("shop-history")).toHaveCount(0);
+  // Every purchase POST the page makes (a declined confirmation must make none).
+  const buys: string[] = [];
+  site.on("request", (r) => {
+    if (r.method() === "POST" && new URL(r.url()).pathname === "/api/shop/buy") buys.push(r.url());
+  });
+  // Answers the next confirmation; its text is checked after the click, not inside the
+  // handler (a failed expect there would leave the dialog open and hang the click).
+  const confirms: string[] = [];
+  const answerNext = (accept: boolean): void => {
+    site.once("dialog", (d) => {
+      confirms.push(d.message());
+      void (accept ? d.accept() : d.dismiss());
+    });
+  };
 
   // A pack through the fake checkout: the page posts it with the buyer's session (a GET or
   // another account pays nothing) and comes back paid, like from a real provider.
   const checkoutPost = site.waitForRequest(
     (r) => r.url().includes("/api/shop/fake-checkout/") && r.method() === "POST",
   );
+  const paid = site.waitForResponse(
+    (r) => r.url().includes("/api/shop/fake-checkout/") && r.request().method() === "POST",
+    SLOW,
+  );
   await site.getByTestId("buy-pack-pack_medium").click();
   const fakeCheckout = new URL((await checkoutPost).url()).pathname;
-  await expect(site.getByTestId("shop-return")).toHaveAttribute("data-checkout", "success");
+  expect((await paid).status()).toBe(200);
+  // The way back is a new page load of /shop?checkout=success.
+  await expect(site.getByTestId("shop-return")).toHaveAttribute("data-checkout", "success", SLOW);
   await expect(site.getByTestId("shop-return")).toContainText("Pago recibido.");
-  await expect(site.getByTestId("shop-balance")).toHaveText("550 de nácar");
+  await expect(site.getByTestId("shop-balance")).toHaveText("550 de nácar", SLOW);
   // Following the checkout link (a GET) pays nothing, and the watcher cannot use it.
   await site.request.get(fakeCheckout);
   const stranger = await playwright.request.newContext({ baseURL: serverURL });
@@ -121,25 +165,35 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
   });
   expect(stolen.status()).toBe(404);
   await stranger.dispose();
+  const reloaded = shopCall(site, "GET", "/api/shop");
   await site.reload();
+  expect((await reloaded).status()).toBe(200);
   await expect(site.getByTestId("shop-balance")).toHaveText("550 de nácar");
 
-  // The sailor outfit for 300.
-  site.once("dialog", (d) => {
-    expect(d.message()).toBe("¿Comprar Marinero por 300 de nácar?");
-    void d.accept();
-  });
+  // The sailor outfit for 300: the purchase, then the shop's refetch.
+  answerNext(true);
+  let bought = shopCall(site, "POST", "/api/shop/buy");
+  let refetched = shopCall(site, "GET", "/api/shop");
   await site.getByTestId("buy-outfit_sailor").click();
+  expect((await bought).status()).toBe(200);
+  expect((await refetched).status()).toBe(200);
+  expect(confirms).toEqual(["¿Comprar Marinero por 300 de nácar?"]);
   await expect(site.getByTestId("shop-done")).toContainText("Marinero ya es tuyo");
   await expect(site.locator('[data-cosmetic="outfit_sailor"]')).toHaveAttribute("data-owned", "");
   await expect(site.getByTestId("shop-balance")).toHaveText("250 de nácar");
+  expect(buys).toHaveLength(1);
   // Declining the confirmation buys nothing.
-  site.once("dialog", (d) => void d.dismiss());
+  answerNext(false);
   await site.getByTestId("buy-outfit_noble").click();
+  await expect.poll(() => confirms.length).toBe(2);
   await expect(site.getByTestId("shop-balance")).toHaveText("250 de nácar");
-  // The noble outfit (600) is more than the balance: the server refuses it.
-  site.once("dialog", (d) => void d.accept());
+  // The noble outfit (600) is more than the balance: the server refuses it (the only
+  // POST since the sailor: the declined one sent none).
+  answerNext(true);
+  bought = shopCall(site, "POST", "/api/shop/buy");
   await site.getByTestId("buy-outfit_noble").click();
+  expect((await bought).status()).toBe(409);
+  expect(buys).toHaveLength(2);
   await expect(site.getByTestId("shop-error")).toHaveText(
     "No te alcanza el nácar. Compra un paquete primero.",
   );
@@ -153,17 +207,28 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
 
   // ---- The game: the watcher first, then the buyer next to them (same start temple). ----
   const other = await (await context()).newPage();
-  await enterGame(other, watcher.email, watcher.password);
+  await enterGame(other, watcher);
   watch(other);
   const game = await (await context()).newPage();
-  await enterGame(game, buyer.email, buyer.password);
+  await enterGame(game, buyer);
   watch(game);
-  await game.waitForFunction(() => window.__rpgClient?.cosmetics() !== undefined);
+  await game.waitForFunction(() => window.__rpgClient?.cosmetics() !== undefined, undefined, SLOW);
   expect(await game.evaluate(() => window.__rpgClient?.cosmetics())).toEqual({
     owned: ["outfit_sailor"],
     balance: 250,
     equipped: { outfit: "", color: "", nameEffect: "" },
   });
+  // Both stand in the same temple: the watcher knows the buyer before anything changes.
+  await expect
+    .poll(
+      () =>
+        other.evaluate(
+          (name) => window.__rpgClient?.players().some((p) => p.name === name) ?? false,
+          buyer.name,
+        ),
+      SLOW,
+    )
+    .toBe(true);
   const panel = game.getByTestId("appearance-panel");
   await expect(panel.getByTestId("appearance-balance")).toHaveText("Saldo: 250 de nácar");
   await expect(panel.locator('[data-cosmetic="default-outfit"]')).toHaveAttribute(
@@ -172,11 +237,15 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
   );
 
   // A purchase on the site while the buyer plays reaches the game (CosmeticsState push).
-  site.once("dialog", (d) => void d.accept());
+  answerNext(true);
+  bought = shopCall(site, "POST", "/api/shop/buy");
+  refetched = shopCall(site, "GET", "/api/shop");
   await site.getByTestId("buy-name_frost").click();
+  expect((await bought).status()).toBe(200);
+  expect((await refetched).status()).toBe(200);
   await expect(site.getByTestId("shop-balance")).toHaveText("0 de nácar");
-  await expect(panel.locator('[data-cosmetic="name_frost"]')).toBeVisible();
-  await expect(panel.getByTestId("appearance-balance")).toHaveText("Saldo: 0 de nácar");
+  await expect(panel.locator('[data-cosmetic="name_frost"]')).toBeVisible(SLOW);
+  await expect(panel.getByTestId("appearance-balance")).toHaveText("Saldo: 0 de nácar", SLOW);
 
   // The API agrees with the page.
   const state = (await (await site.request.get("/api/shop")).json()) as ShopJSON;
@@ -192,32 +261,40 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
     ["pack", 550],
   ]);
 
-  // Equip both from the Appearance panel.
+  // Equip both from the Appearance panel, one at a time: each waits for the server's answer.
   await panel.locator('[data-cosmetic="outfit_sailor"]').click();
+  await expect(panel.locator('[data-cosmetic="outfit_sailor"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+    SLOW,
+  );
   await panel.locator('[data-cosmetic="name_frost"]').click();
+  await expect(panel.locator('[data-cosmetic="name_frost"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+    SLOW,
+  );
   await expect(panel.locator('[data-cosmetic="outfit_sailor"]')).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await expect(panel.locator('[data-cosmetic="name_frost"]')).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
   await expect
-    .poll(() => game.evaluate(() => window.__rpgClient?.cosmetics()?.equipped))
+    .poll(() => game.evaluate(() => window.__rpgClient?.cosmetics()?.equipped), SLOW)
     .toEqual({ outfit: "outfit_sailor", color: "", nameEffect: "name_frost" });
-  // The chat stays at the bottom of the side column: bring the whole panel above it.
+  // The side column scrolls under the chat: bring the whole panel into view for its shot.
   await panel.evaluate((e) => e.scrollIntoView({ block: "start" }));
   await expect(panel.getByTestId("appearance-shop")).toHaveAttribute("href", "/shop");
   await panel.screenshot({ path: join(shots, "65-appearance-panel.png") });
 
   // The watcher sees the buyer's new look on its creature.
   await expect
-    .poll(() =>
-      other.evaluate(
-        (name) => window.__rpgClient?.players().find((p) => p.name === name)?.cosmetics,
-        buyer.name,
-      ),
+    .poll(
+      () =>
+        other.evaluate(
+          (name) => window.__rpgClient?.players().find((p) => p.name === name)?.cosmetics,
+          buyer.name,
+        ),
+      SLOW,
     )
     .toEqual({ outfit: "outfit_sailor", color: "", nameEffect: "name_frost" });
   await game.screenshot({ path: join(shots, "66-shop-buyer.png") });
@@ -226,16 +303,19 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
   // Back to the default outfit: the watcher sees that too.
   await panel.locator('[data-cosmetic="default-outfit"]').click();
   await expect
-    .poll(() =>
-      other.evaluate(
-        (name) => window.__rpgClient?.players().find((p) => p.name === name)?.cosmetics.outfit,
-        buyer.name,
-      ),
+    .poll(
+      () =>
+        other.evaluate(
+          (name) => window.__rpgClient?.players().find((p) => p.name === name)?.cosmetics.outfit,
+          buyer.name,
+        ),
+      SLOW,
     )
     .toBe("");
 
   // On a phone the panel is one more tab under the map (T5.6 layout).
   await game.setViewportSize({ width: 412, height: 915 });
+  await expect(game.getByTestId("game")).toHaveAttribute("data-layout", "phone-portrait");
   const tab = game.getByTestId("panel-tabs").locator('[data-tab="appearance"]');
   await tab.click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
