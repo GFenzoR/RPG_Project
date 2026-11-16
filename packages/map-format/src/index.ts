@@ -15,7 +15,9 @@ export {
   stackAt,
 } from "./chunk.ts";
 export { loadContent } from "./content.ts";
-export type { ContentIndex, ItemInfo } from "./content.ts";
+export type { ContentIndex, ItemInfo, TeleportInfo } from "./content.ts";
+export { DOOR_ROOM_ERRORS, DOOR_ROOM_SEARCH, doorRoom, doorsOn, hasLockedDoor } from "./doors.ts";
+export type { DoorRoom, DoorRoomError } from "./doors.ts";
 export { Reporter, formatDiagnostic, formatPath } from "./diagnostics.ts";
 export type { Diagnostic, PathSegment } from "./diagnostics.ts";
 export * from "./houses.ts";

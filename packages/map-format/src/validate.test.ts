@@ -18,7 +18,8 @@ import { loadContent } from "./content.ts";
 import { formatDiagnostic } from "./diagnostics.ts";
 import { writeIsland, writeWorldMeta } from "./io.ts";
 import { chunkKey, emptyChunk } from "./types.ts";
-import type { Island, Position, WorldMeta } from "./types.ts";
+import type { ContentIndex } from "./content.ts";
+import type { Chunk, Island, Position, WorldMeta } from "./types.ts";
 import { validateWorld } from "./validate.ts";
 
 function must<T>(v: T | undefined): T {
@@ -392,6 +393,108 @@ describe("validateWorld", () => {
     expect(messages(check(i))).toContainEqual(
       expect.stringContaining("NPC cannot be reached on foot from the temple"),
     );
+  });
+
+  /** mini() with its south-east corner (19..29, 19..29) walled off by water and the forge gate at (18,20). */
+  function gated(): { island: Island; chunk: Chunk } {
+    const island = mini();
+    const chunk = must(island.chunks.get(chunkKey(7, 0, 0)));
+    for (let k = 2; k < 30; k++) {
+      setGround(chunk, 18, k, k < 18 ? "grass" : "water_shallow");
+      setGround(chunk, k, 18, k < 18 ? "grass" : "water_shallow");
+    }
+    setGround(chunk, 18, 20, "dirt");
+    pushItem(chunk, 18, 20, "forge_gate");
+    island.npcs = [{ npc: "harbor_master", pos: { x: 8, y: 20, z: 7 } }];
+    return { island, chunk };
+  }
+
+  it("refuses what belongs outside in the room behind a locked door (docs/02)", () => {
+    const behind = "lies in the room behind the locked door at 18,20,7";
+    const ok = gated();
+    // A guarded vault: a spawn may live in the room.
+    ok.island.spawns[0] = { ...must(ok.island.spawns[0]), center: { x: 24, y: 24, z: 7 } };
+    expect(messages(check(ok.island))).toEqual([]);
+
+    const room = { x: 21, y: 21, z: 7 };
+    const cases: [string, string, (i: Island) => ContentIndex | undefined][] = [
+      ["npcs.yaml", "[0].pos", (i) => void (i.npcs = [{ npc: "harbor_master", pos: room }])],
+      ["island.yaml", "temple", (i) => void (i.meta.temple = room)],
+      ["portals.yaml", "[1].to", (i) => void (must(i.portals[1]).to = room)],
+      [
+        "houses.yaml",
+        "[0].exit",
+        (i) =>
+          void (i.houses = [
+            {
+              id: "puerto_house_net",
+              name: "house.puerto_house_net.name",
+              rent: 100,
+              rects: [{ x: 22, y: 22, z: 7, w: 2, h: 2 }],
+              doors: [{ x: 22, y: 23, z: 7 }],
+              exit: { x: 22, y: 24, z: 7 },
+            },
+          ]),
+      ],
+      [
+        "boat_routes.yaml",
+        "[0].to",
+        () => ({
+          ...content,
+          routes: [
+            { index: 0, id: "r", captain: "harbor_master", from: { x: 8, y: 21, z: 7 }, to: room },
+          ],
+        }),
+      ],
+      [
+        "data/npcs/harbor_master.yaml",
+        "dialog.nodes.start",
+        () => ({ ...content, teleports: [{ npc: "harbor_master", node: "start", to: room }] }),
+      ],
+    ];
+    for (const [file, path, edit] of cases) {
+      const where = `${file} ${path}`;
+      const { island } = gated();
+      const c = edit(island);
+      const root = mkdtempSync(join(tmpdir(), "map-format-"));
+      dirs.push(root);
+      writeWorldMeta(root, worldOf(island));
+      writeIsland(root, island);
+      const found = messages(validateWorld(root, { content: c ?? content })).filter((m) =>
+        m.includes(behind),
+      );
+      expect(found, where).toHaveLength(1);
+      expect(found[0], where).toContain(file);
+      expect(found[0], where).toContain(` ${path}:`);
+    }
+  });
+
+  it("refuses a locked door without a room and two doors on a tile; warns of an open one", () => {
+    const shut = gated();
+    // In the middle of the grass the gate keeps nothing apart.
+    shut.chunk.items = shut.chunk.items.filter((s) => !(s.x === 18 && s.y === 20));
+    pushItem(shut.chunk, 10, 22, "forge_gate");
+    expect(messages(check(shut.island))).toContainEqual(
+      expect.stringContaining(
+        'locked door "forge_gate" at 10,22,7: it keeps nothing apart: every tile around it is one side',
+      ),
+    );
+
+    const two = gated();
+    pushItem(two.chunk, 18, 20, "forge_gate_open");
+    expect(messages(check(two.island))).toContainEqual(
+      expect.stringContaining(
+        'doors "forge_gate" and "forge_gate_open" on the same tile 18,20,7: one door per tile',
+      ),
+    );
+
+    const ajar = gated();
+    must(ajar.chunk.items.find((s) => s.x === 18 && s.y === 20)).stack = ["forge_gate_open"];
+    const r = check(ajar.island);
+    expect(r.errors).toBe(0);
+    expect(messages(r)).toEqual([
+      expect.stringContaining('door "forge_gate_open" is placed open at 18,20,7'),
+    ]);
   });
 
   it("rejects chunks and tiles outside the island rectangle", () => {

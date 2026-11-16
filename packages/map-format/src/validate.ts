@@ -1,5 +1,6 @@
 // World validation (docs/03-world-and-maps.md, "Validación"). The editor, mapcli, the MCP
 // server and `make validate` all call validateWorld, so they agree on what is an error.
+import { chunkFileName, floorDir } from "./chunk.ts";
 import { isSignItem, loadContent, routesFile } from "./content.ts";
 import type { ContentIndex } from "./content.ts";
 import { Reporter } from "./diagnostics.ts";
@@ -8,9 +9,10 @@ import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
 import { TileMap, isPassable, isWalkable } from "./tiles.ts";
+import { DOOR_ROOM_ERRORS, doorRoom, doorsOn } from "./doors.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
-import type { Island, Position, Rect, World } from "./types.ts";
+import type { Chunk, Island, Position, Rect, World } from "./types.ts";
 
 export interface MapReport {
   diagnostics: Diagnostic[];
@@ -144,6 +146,7 @@ class WorldValidator {
     for (const island of this.world.islands.values()) this.checkIsland(island);
     this.checkUniqueAcrossWorld();
     this.checkBoatRoutes();
+    this.checkDoors();
     this.checkPrefabs();
   }
 
@@ -462,7 +465,7 @@ class WorldValidator {
       signText.set(key, [...(signText.get(key) ?? []), t.text]);
     }
     for (const c of island.chunks.values()) {
-      const file = `${dir}/chunks/z${String(c.z).padStart(2, "0")}/c${String(c.cx).padStart(4, "0")}_${String(c.cy).padStart(4, "0")}.json`;
+      const file = chunkFile(dir, c);
       const ox = c.cx * CHUNK_SIZE;
       const oy = c.cy * CHUNK_SIZE;
       if (!floors.has(c.z))
@@ -526,6 +529,105 @@ class WorldValidator {
         }
       }
     }
+  }
+
+  // ---- doors --------------------------------------------------------------------
+
+  /**
+   * Doors (docs/02 "Puertas con llave"; the server's initDoors refuses the same): one door
+   * item per tile; a warning for a door placed open (it is open again after every
+   * restart); a room behind every locked door (doorRoom, the server's walk); and nothing of
+   * the outside in a room: no temple (where players wake up), NPC, house, portal end, boat
+   * arrival or dialog teleport. Either the outside was taken for the room, or a player
+   * would land behind the door. Spawns may live in a room (a guarded vault).
+   */
+  private checkDoors(): void {
+    const behind = new Map<string, Position>(); // room tile → the locked door it is behind
+    for (const island of this.world.islands.values()) {
+      const dir = this.dirOf(island);
+      const chunks = [...island.chunks.values()].sort(
+        (a, b) => a.z - b.z || a.cy - b.cy || a.cx - b.cx,
+      );
+      for (const c of chunks) {
+        const file = chunkFile(dir, c);
+        for (const s of c.items) {
+          const doors = doorsOn(s, this.content);
+          const id = doors[0];
+          if (id === undefined) continue;
+          const pos = { x: c.cx * CHUNK_SIZE + s.x, y: c.cy * CHUNK_SIZE + s.y, z: c.z };
+          if (doors.length > 1) {
+            this.err(
+              file,
+              ["items"],
+              `doors ${doors.map((d) => `"${d}"`).join(" and ")} on the same tile ${formatPos(pos)}: one door per tile`,
+              pos,
+            );
+            continue;
+          }
+          const info = this.content.items.get(id);
+          if (info?.doorOpen === true)
+            this.warn(
+              file,
+              ["items"],
+              `door "${id}" is placed open at ${formatPos(pos)}: it is open again after every restart`,
+              pos,
+            );
+          if (info?.lock === undefined) continue;
+          const r = doorRoom(this.tiles, this.content, pos);
+          if ("error" in r) {
+            this.err(
+              file,
+              ["items"],
+              `locked door "${id}" at ${formatPos(pos)}: ${DOOR_ROOM_ERRORS[r.error]}`,
+              pos,
+            );
+            continue;
+          }
+          for (const t of r.rooms.flat()) {
+            const k = formatPos(t);
+            if (!behind.has(k)) behind.set(k, pos);
+          }
+        }
+      }
+    }
+    if (behind.size === 0) return;
+    const inRoom = (file: string, path: PathSegment[], what: string, p: Position): boolean => {
+      const door = behind.get(formatPos(p));
+      if (door)
+        this.err(
+          file,
+          path,
+          `${what} lies in the room behind the locked door at ${formatPos(door)}`,
+          p,
+        );
+      return door !== undefined;
+    };
+    for (const island of this.world.islands.values()) {
+      const dir = this.dirOf(island);
+      inRoom(`${dir}/island.yaml`, ["temple"], "temple", island.meta.temple);
+      for (const [i, n] of island.npcs.entries())
+        inRoom(`${dir}/npcs.yaml`, [i, "pos"], `NPC "${n.npc}"`, n.pos);
+      for (const [i, p] of island.portals.entries()) {
+        inRoom(`${dir}/portals.yaml`, [i, "from"], `portal entrance "${p.id}"`, p.from);
+        inRoom(`${dir}/portals.yaml`, [i, "to"], `portal destination "${p.id}"`, p.to);
+      }
+      for (const [i, h] of island.houses.entries()) {
+        if (inRoom(`${dir}/houses.yaml`, [i, "exit"], `exit of house "${h.id}"`, h.exit)) continue;
+        const tile = h.rects
+          .flatMap((r) => tilesOf(r).map(([x, y]) => ({ x, y, z: r.z })))
+          .find((t) => behind.has(formatPos(t)));
+        if (tile) inRoom(`${dir}/houses.yaml`, [i, "rects"], `house "${h.id}"`, tile);
+      }
+    }
+    for (const r of this.content.routes)
+      inRoom(routesFile, [r.index, "to"], `arrival of boat route "${r.id}"`, r.to);
+    for (const t of this.content.teleports ?? [])
+      inRoom(
+        `data/npcs/${t.npc}.yaml`,
+        ["dialog", "nodes", t.node],
+        `teleport of NPC "${t.npc}" (node "${t.node}")`,
+        t.to,
+      );
   }
 
   // ---- references across the world -------------------------------------------
@@ -748,6 +850,18 @@ class WorldValidator {
         }
     }
   }
+}
+
+/** The file of chunk c of the island in directory dir. */
+function chunkFile(dir: string, c: Chunk): string {
+  return `${dir}/chunks/${floorDir(c.z)}/${chunkFileName(c.cx, c.cy)}`;
+}
+
+/** The [x, y] of every tile of a rect. */
+function tilesOf(r: { x: number; y: number; w: number; h: number }): [number, number][] {
+  const out: [number, number][] = [];
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) out.push([x, y]);
+  return out;
 }
 
 /** Walkable areas of at least this many tiles that cannot be reached warn (T3.6). */
