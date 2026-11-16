@@ -29,7 +29,7 @@ dependencias de Node para que el editor la use en el navegador).
 - `touched` lista cada chunk modificado con su isla (`{ island, z, cx, cy }`): los chunks
   son por isla, así que dos islas que compartieran un chunk nunca se mezclan.
   `touchedAux` lista las listas auxiliares cambiadas (`{ island, file }`, con `file` =
-  `spawns`/`zones`/`portals`/`npcs`/`houses`). `saveApplied(root, world, result)` escribe solo esos
+  `spawns`/`zones`/`portals`/`npcs`/`texts`/`houses`). `saveApplied(root, world, result)` escribe solo esos
   archivos (temporal + rename) y borra los que quedaron vacíos.
 - `OpOptions` inyecta lo que vive en disco, para que el módulo siga sin Node: `itemKind`,
   `monsterKnown`, `npcKnown`, `borders` (reglas de `data/borders.yaml`, las necesita
@@ -47,6 +47,7 @@ dependencias de Node para que el editor la use en el navegador).
 | `add_spawn` / `remove_spawn` | campos de spawns.yaml | |
 | `add_zone` / `remove_zone` | campos de zones.yaml | |
 | `place_npc` / `remove_npc` | `pos`, `npc` | |
+| `add_text` / `remove_text` | campos de texts.yaml (`id`, `kind` `sign`/`book`, `pos`, `text`, `notes?`) | Un cartel o libro. No coloca el item del cartel: va aparte con `place_item` (`03-world-and-maps.md`, `texts.yaml`) |
 | `add_portal` / `remove_portal` | campos de portals.yaml | No coloca el item que lo muestra: un `place_item` en su `from` (`stairs_down`, `ladder_up`, `hole`…, los items con bloque `portal`); sin él `make validate` y `make mapcompile` fallan (`03-world-and-maps.md`, "Validación") |
 | `stamp` | `pos`, `prefab` | Coloca un prefab (casa, muelle, templo) de `world/prefabs/` |
 | `add_house` | `id`, `rent`, `rects[]`, `doors[]`, `exit`, `notes?`, `name?`, `index?` | Agrega una casa a `houses.yaml` (T5.4) |

@@ -15,8 +15,8 @@ export interface TouchedChunk {
 /** Auxiliary lists of entities (spawns, zones, portals, NPCs): one YAML file each. */
 export type EntityList = "spawns" | "zones" | "portals" | "npcs";
 
-/** Every auxiliary list ops can edit: the entity lists and houses.yaml (T5.4). */
-export type AuxList = EntityList | "houses";
+/** Every auxiliary list ops can edit: the entity lists, houses.yaml (T5.4) and texts.yaml. */
+export type AuxList = EntityList | "houses" | "texts";
 
 /** An auxiliary file an op list changed. */
 export interface TouchedAux {
