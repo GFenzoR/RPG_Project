@@ -62,8 +62,10 @@ Tibia:
   su casilla, desde ella o a `inventory.reach` (1) casilla, en el mismo piso y con línea de
   visión (como al recolectar: con un alcance mayor, nunca a través de un muro). Pisarla no
   hace nada. Lo que haya encima (un cadáver, monedas que alguien tiró) no la tapa: el
-  click derecho trepa igual. Ese item se abre o se usa desde el toque largo ("Abrir" o
-  "Usar", al lado de "Trepar") o se arrastra fuera.
+  click derecho trepa igual. Ese item se abre o se usa con **Ctrl+click derecho** (en
+  escritorio) o desde el toque largo ("Abrir" o "Usar", al lado de "Trepar"), o se
+  arrastra fuera. Sobre una escalera de mano sin nada encima, Ctrl+click derecho trepa
+  igual: no hay otra cosa que usar.
 - **Punto de soga (`rope_spot`): hace falta una soga.** Se usa una herramienta con
   `tool.use: rope` (la soga, `data/items/tools.yaml`) sobre su casilla, al mismo alcance y
   con línea de visión.
@@ -107,6 +109,29 @@ Tibia:
   templo.
 - **Lo que el cliente ve:** lo mismo que un teletransporte del personal (`FullMapView` del
   piso nuevo, docs/05). Solo se dibuja el piso del jugador.
+- **Cómo se ve un portal:** la casilla es el portal, pero el jugador ve un item que lo
+  muestra (bloque `portal` de `data/items`, `06-content-data.md`): `stairs_down` /
+  `stairs_up` (escaleras, del pack Dungeon Crawl), `ladder_up` (la escalera de mano vista
+  desde abajo) / `ladder_down` (la trampilla abierta de arriba), `hole` (agujero),
+  `rope_spot` (la luz que entra por un hueco del techo) y `teleport` (un anillo de piedras
+  grabadas alrededor de un remolino de luz). Arte propio de `tools/spritegen`, estático: el
+  atlas no anima items. `make validate` exige el item en la entrada de cada portal (salvo
+  un `boat`) y el servidor avisa en el log al arrancar si falta (`03-world-and-maps.md`,
+  "Validación"). El item no mueve a nadie: lo hace `portals.yaml`.
+- **Items que caen:** lo que se tira (`MoveItem`) sobre una escalera, un agujero o un
+  teletransporte cae al otro extremo, como en Tibia: queda en el destino del portal o, si
+  ahí no entra (`maxGroundItems` items distintos y ninguna pila a la que sumarse), en la
+  casilla más cercana con lugar a `travel.arrival_radius` con las reglas de la llegada de
+  un jugador: solo en el área del destino (nunca en la sala de una puerta con llave ni en
+  un bolsillo cerrado por paredes), nunca en una casilla de casa y nunca sobre otra
+  escalera, agujero o teletransporte (no cae dos veces). Las criaturas no importan: un item
+  queda debajo de ellas. Sin lugar se rechaza ("Del otro lado no hay lugar donde caiga.",
+  `portal.no_room`) y nada cambia. Fuera de eso es un tirar al suelo en esa casilla: un
+  personaje en espera de un intercambio no tira nada (`inventory.saving`), lo que cae
+  nunca se suma a una pila reservada a otro, y lo que el dueño saca de su casa por una
+  escalera junto a la puerta queda reservado a él donde cae ("Falla segura", T5.3). Quien
+  ve la casilla de donde salió lo ve irse y quien ve el destino lo ve caer. Sobre una
+  escalera de mano o un punto de soga lo que se tira queda ahí (se usan a mano).
 
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |

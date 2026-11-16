@@ -47,7 +47,7 @@ dependencias de Node para que el editor la use en el navegador).
 | `add_spawn` / `remove_spawn` | campos de spawns.yaml | |
 | `add_zone` / `remove_zone` | campos de zones.yaml | |
 | `place_npc` / `remove_npc` | `pos`, `npc` | |
-| `add_portal` / `remove_portal` | campos de portals.yaml | |
+| `add_portal` / `remove_portal` | campos de portals.yaml | No coloca el item que lo muestra: un `place_item` en su `from` (`stairs_down`, `ladder_up`, `hole`…, los items con bloque `portal`); sin él `make validate` falla (`03-world-and-maps.md`, "Validación") |
 | `stamp` | `pos`, `prefab` | Coloca un prefab (casa, muelle, templo) de `world/prefabs/` |
 | `add_house` | `id`, `rent`, `rects[]`, `doors[]`, `exit`, `notes?`, `name?`, `index?` | Agrega una casa a `houses.yaml` (T5.4) |
 | `set_house` | `id` y los campos que cambian (`rent`, `rects`, `doors`, `exit`, `notes`; `notes: null` las quita) | Cambia una casa en su lugar; el `id` nunca cambia |
@@ -590,7 +590,7 @@ La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y `r
    a mano con `paint_ground` en rectángulos.
 3. `autoborder`, luego `scatter` para vegetación y rocas.
 4. Colocar estructuras con `stamp` y prefabs.
-5. Spawns, NPCs, zonas, portales.
+5. Spawns, NPCs, zonas, portales (cada uno con el item que lo muestra en su entrada).
 6. `map_validate` hasta que no haya errores, y lee las advertencias: p. ej. desde el
    destino de un `hole` o un `teleport` no se llega a ningún templo sin soga (bien para un
    pozo, un error si fue sin querer; `03-world-and-maps.md`, "Validación").

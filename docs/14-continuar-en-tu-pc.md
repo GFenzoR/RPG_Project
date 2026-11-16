@@ -121,19 +121,23 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     Volcánica, incluido el de la puerta con llave del piso 8, tienen su `*_sign`; solo el
     del templo de `testisle` no). A futuro `mapcompile` podría llevar `texts.yaml` a
     `world.bin` y el servidor leerlo, sin items por cartel;
-  - portales (`02-game-design.md` "Cambiar de piso"): el servidor ya mueve por escaleras,
-    escaleras de mano, agujeros, sogas y teletransportes, pero el mundo solo usa
-    escaleras. Para poner los otros falta su item con arte propio (`add-item` +
-    `tools/spritegen`): hoy solo existen `stairs_down` / `stairs_up`, y un portal sin item
-    es una casilla de suelo cualquiera a la vista (el cliente igual usa una escalera de
-    mano o una soga sin item con click derecho). Tampoco caen por una escalera, un agujero
-    o un teletransporte los items que se tiran sobre su casilla (en Tibia caen): quedan
-    ahí, a la vista, y nadie pisa esa casilla sin moverse. Cada paso por un portal manda
-    un `FullMapView` (hoy unos 950 B/s subiendo y bajando sin parar, docs/07): una isla
-    con pisos sobre el 7 lo haría más pesado, conviene medirlo de nuevo cuando exista. En
-    escritorio el click derecho sobre una escalera de mano siempre trepa: un cadáver
-    encima que no se puede mover solo se abre con el toque largo (hoy no hay escaleras de
-    mano en el mundo; una salida sería que Ctrl+click derecho use el item de arriba);
+  - portales (`02-game-design.md` "Cambiar de piso"): el servidor mueve por escaleras,
+    escaleras de mano, agujeros, sogas y teletransportes, y todos tienen su item con arte
+    propio (`ladder_up`/`ladder_down`, `hole`, `rope_spot`, `teleport`; las escaleras son
+    del pack), pero el mundo solo usa escaleras: poner los otros es diseño de mapa
+    (`build-map-area`; `make validate` exige el item en cada entrada). Sin una escalera de
+    mano en el mundo, Ctrl+click derecho sobre una (usa el item de arriba en vez de trepar)
+    solo tiene tests unitarios (`state/portals.ts` `useMode`), no E2E. El teletransporte es
+    estático: el atlas y el renderer no animan items (haría falta una tira de frames por
+    item, como los efectos). El servidor solo **avisa** en el log de un portal sin su item
+    (`initPortals`; `make validate` sí lo rechaza): `world.NewMap` no conoce los items y
+    los mapas de los tests ponen portales en casillas sin nada. `add_portal` (mapcli, MCP,
+    panel del editor) no coloca el item: el editor podría ponerlo solo. Los items tirados
+    sobre una escalera, un agujero o un teletransporte caen al otro extremo (solo por
+    `MoveItem`: el servidor nunca suelta nada en esas casillas, nadie se para ahí), sin
+    efecto visual ni sonido propio. Cada paso por un portal manda un `FullMapView` (hoy unos
+    950 B/s subiendo y bajando sin parar, docs/07): una isla con pisos sobre el 7 lo haría
+    más pesado, conviene medirlo de nuevo cuando exista;
   - chequeo de escape de las puertas con llave (`02-game-design.md`, "Chequeo de
     escape"): cuenta como salida de un área solo la puerta de una sala desde adentro y los
     portales que no piden nada (escalera, escalera de mano, agujero, teletransporte); las

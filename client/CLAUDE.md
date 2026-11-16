@@ -638,10 +638,20 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   largo) sobre un punto de soga sin items mande `UseItem` con el suelo, como la puerta de
   una casa; `climbable` hace que el click derecho sobre una escalera de mano mande
   siempre el suelo, aunque tenga algo encima (`state/items.ts` `tileUse`, modo
-  `"first"`): un cadáver o una moneda no la tapan. El toque largo sobre una escalera de
-  mano muestra "Trepar" (`client.touch.action.climb`) y, si hay un item encima, también
-  sus botones ("Abrir"/"Usar" usan ese item, no trepan). La soga es una herramienta
-  "usar con" como el pico. El teclado sí pisa una escalera: es la forma de bajar.
+  `"first"`): un cadáver o una moneda no la tapan. **Ctrl+click derecho** (escritorio:
+  `useTile(x, y, z, top)` del canvas con `e.ctrlKey`) usa el item de arriba aunque sea una
+  escalera de mano; sin nada encima trepa igual. Lo decide `useMode` (`state/portals.ts`,
+  puro y con tests): `"first"` en una escalera de mano salvo con `top`, `"bare"` si la
+  casilla se usa por el suelo (`Game.usesGround`), `"never"` en el resto. El toque largo
+  sobre una escalera de mano muestra "Trepar" (`client.touch.action.climb`) y, si hay un
+  item encima, también sus botones ("Abrir"/"Usar" usan ese item, no trepan: pasan `top`
+  como Ctrl). La soga es una herramienta "usar con" como el pico. El teclado sí pisa una
+  escalera: es la forma de bajar.
+- Los items de los portales (`ladder_up`, `ladder_down`, `hole`, `rope_spot`, `teleport`,
+  `stairs_*`) son items de mapa comunes: se dibujan del atlas como cualquier otro. Tirar
+  un item sobre una escalera, un agujero o un teletransporte es un `MoveItem` normal: el
+  servidor lo deja del otro lado y manda el `TileUpdate` de donde cae (el cliente no
+  predice nada).
 - Un paso predicho que el servidor rechaza (`WalkRejected` desde donde empezó y en esa
   dirección: sin lugar del otro lado de la escalera, `portal.blocked`, o la puerta de una
   casa sin acceso, `house.no_access`) queda en `WorldState` (`refused`): `predictStep` no

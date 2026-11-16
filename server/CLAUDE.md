@@ -237,9 +237,10 @@ server/
   recorre el mapa en el tick: `World.roomOf` (casilla → sala), los sectores de cada sala
   y `World.areas` (por sector, `areaOf`; las casillas de casa llevan ahí su **área de
   casa** con id negativo, `tileArea`, que el chequeo de escape no ve). **Toda búsqueda de
-  casilla libre por anillos** (`freeNear`, `houseExit` o una nueva) pasa por
-  `searchFrom` + `areaAllows`: solo donde caminaría un jugador parado en el origen (nunca
-  una sala ajena ni un bolsillo cerrado por paredes): su área; desde una casilla de casa,
+  casilla libre por anillos** (`freeNear`, `houseExit`, `fallTo` de los items que caen por
+  un portal o una nueva: `searchRings`) pasa por `searchFrom` + `areaAllows`: solo donde
+  caminaría un jugador parado en el origen (nunca una sala ajena ni un bolsillo cerrado
+  por paredes): su área; desde una casilla de casa,
   su área de casa y el área de la salida de la casa; desde la entrada de una escalera, un
   agujero o un teletransporte, las áreas de al lado; desde una puerta con llave, su
   afuera (las áreas de al lado menos su sala); desde cualquier otra casilla, **ninguna**
@@ -279,6 +280,14 @@ server/
   deja: el `FullMapView` lo reemplaza. `checkRooms` rechaza un extremo de portal en una
   sala. Un portal nuevo que se use a mano entra por `usePortal`/`useRope`; uno que se
   pise tiene que ser un `kind` con `OnStep`. `Flags` (un byte) ya no tiene bits libres.
+  Un `MoveItem` a la entrada de un portal que se pisa deja el item del otro lado
+  (`fallTo`: el destino o la casilla con lugar más cercana por `searchRings`, sin casas
+  ni entradas de portales que se pisan, a `travel.arrival_radius`) y desde ahí sigue como
+  un tirar a esa casilla (`groundMerge`, `heldDrop`, `leftHouse`, `gaveAway`). Toda
+  búsqueda nueva por anillos usa `searchRings` (que aplica `searchFrom` + `areaAllows`)
+  con su propia prueba de la casilla. `initPortals` avisa (log) de un portal sin el item
+  que lo muestra (`content.PortalLook`, bloque `portal` de `data/items`); `make validate`
+  lo rechaza.
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +
