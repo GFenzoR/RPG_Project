@@ -3,6 +3,7 @@ package session_test
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -12,7 +13,8 @@ import (
 // The forge gate on the real map (world/islands/volcan, floor 8; docs/02 "Puertas con
 // llave"): it shuts the forge room off the mine until the ember key opens it, and it does
 // not lock again on a player without the key in the forge, while one in the mine does not
-// count.
+// count. The forge is the room behind it, not the mine: from the forge it opens without
+// the key, from the mine it does not.
 func TestForgeGateOnTheMap(t *testing.T) {
 	m, err := compile.Compile(filepath.Join("..", "..", ".."))
 	if err != nil {
@@ -30,16 +32,37 @@ func TestForgeGateOnTheMap(t *testing.T) {
 	if st := m.Stack(gate); len(st) != 1 || st[0] != shut.Numeric || m.Walkable(gate) || m.LineOfSight(at8(3692, 5830), at8(3692, 5834)) {
 		t.Fatalf("the forge gate is not shut at %v: stack %v", gate, st)
 	}
+	inside, outside := at8(3692, 5833), at8(3692, 5831)
+	for _, p := range []world.Pos{inside, at8(3691, 5833), forge, at8(3704, 5848)} {
+		if !h.w.InDoorRoom(gate, p) {
+			t.Fatalf("%v of the forge is not behind the gate", p)
+		}
+	}
+	for _, p := range []world.Pos{outside, at8(3691, 5831), mine, at8(3692, 5826), gate} {
+		if h.w.InDoorRoom(gate, p) {
+			t.Fatalf("%v of the mine is behind the gate", p)
+		}
+	}
 
-	clA, a := h.joinFresh(session.Character{ID: 9301, AccountID: 9301, Name: "Keyholder", Vocation: "guardian", Level: 40, Health: 1000, Mana: 100}, at8(3692, 5831))
-	_, b := h.joinFresh(session.Character{ID: 9302, AccountID: 9302, Name: "Stray", Vocation: "guardian", Level: 40, Health: 1000, Mana: 100}, forge)
+	clA, a := h.joinFresh(session.Character{ID: 9301, AccountID: 9301, Name: "Keyholder", Vocation: "guardian", Level: 40, Health: 1000, Mana: 100}, outside)
 	h.sim.Command(gameFunc(func() { h.w.GiveForTest(a, "ember_key", 1) }))
+	h.sim.Step()
+	clA.take()
+
+	// Without the key, from the mine, it stays shut.
+	clB, b := h.joinFresh(session.Character{ID: 9302, AccountID: 9302, Name: "Stray", Vocation: "guardian", Level: 40, Health: 1000, Mana: 100}, at8(3691, 5831))
+	if evs := h.send(clB, useItem(onTile(gate), uint32(shut.Numeric), 1)); !hasKey(evs, "door.locked") || m.Walkable(gate) {
+		t.Fatalf("open from the mine without the key: %v", systemKeys(evs))
+	}
+	h.sim.Command(gameFunc(func() { h.w.Teleport(b, forge) }))
 	h.sim.Step()
 	clA.take()
 
 	if evs := h.send(clA, useItem(onTile(gate), uint32(shut.Numeric), 1)); !hasKey(evs, "door.unlocked") || !m.Walkable(gate) {
 		t.Fatalf("open with the ember key: %v", systemKeys(evs))
 	}
+	h.sim.RunFor(time.Second)
+	clA.take()
 	if evs := h.send(clA, useItem(onTile(gate), uint32(open.Numeric), 1)); !hasKey(evs, "door.shut_in") || !m.Walkable(gate) {
 		t.Fatalf("lock with a keyless player in the forge: %v", systemKeys(evs))
 	}
@@ -48,5 +71,14 @@ func TestForgeGateOnTheMap(t *testing.T) {
 	clA.take()
 	if evs := h.send(clA, useItem(onTile(gate), uint32(open.Numeric), 1)); !hasKey(evs, "door.relocked") || m.Walkable(gate) {
 		t.Fatalf("lock with the keyless player in the mine: %v", systemKeys(evs))
+	}
+
+	// Locked in the forge without the key (a relog, a restart, a lost key), the stray
+	// lets itself out.
+	h.sim.Command(gameFunc(func() { h.w.Teleport(b, inside) }))
+	h.sim.Step()
+	clB.take()
+	if evs := h.send(clB, useItem(onTile(gate), uint32(shut.Numeric), 1)); !hasKey(evs, "door.unbarred") || !m.Walkable(gate) {
+		t.Fatalf("open from the forge without the key: %v", systemKeys(evs))
 	}
 }

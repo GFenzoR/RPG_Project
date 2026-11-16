@@ -257,6 +257,9 @@ type World struct {
 	reach          int
 	maxOpen        int
 
+	// Doors (door.go): every tile of the map with a door item, worked out at start.
+	doors map[world.Pos]*door
+
 	// Magic (T1.9): spells by normalized words, and the index of the magic skill.
 	spellWords map[string]*content.Spell
 	magicIdx   int

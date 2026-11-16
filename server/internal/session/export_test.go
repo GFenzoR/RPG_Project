@@ -302,3 +302,14 @@ func (w *World) Walkable(p world.Pos) bool { return w.m.Walkable(p) }
 
 // LineOfSight reports whether the map has line of sight from a to b (tests only).
 func (w *World) LineOfSight(a, b world.Pos) bool { return w.m.LineOfSight(a, b) }
+
+// InDoorRoom reports whether p lies in the room behind the locked door at door (tests
+// only; false for no door, or a door with no room).
+func (w *World) InDoorRoom(door, p world.Pos) bool {
+	d := w.doors[door]
+	if d == nil {
+		return false
+	}
+	_, in := d.room[p]
+	return in
+}

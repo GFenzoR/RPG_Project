@@ -77,13 +77,14 @@ type Player struct {
 	regen       game.EventID
 
 	// Items (T1.8): equipment by pb.EquipmentSlot, the armor it adds up to, the open
-	// container windows (oldest first), the last window id and the first tick a
-	// consumable can be used again.
+	// container windows (oldest first), the last window id, the first tick a
+	// consumable can be used again and the first tick p may open or close a door again.
 	equip         [equipSlots]*Item
 	armor         int
 	open          []openContainer
 	nextContainer uint32
 	nextUse       game.Tick
+	nextDoor      game.Tick
 
 	// Chat (T1.13): the anti-flood theoretical arrival tick (GCRA), the tick a flood
 	// mute ends and the first tick p may speak on the global channel again.

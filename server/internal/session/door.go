@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -12,32 +13,84 @@ import (
 
 // Doors (docs/02-game-design.md, "Puertas con llave"): a door is an item of world.bin with
 // a door block. Using it (UseItem, next to it) swaps it for its pair: a closed door opens
-// and an open one closes. A locked door (door.key) opens and closes only for a player
-// that carries a key with that key id, anywhere in its equipment or containers; the key
-// is not spent. A door does not close on a creature or an item, and a locked door does
-// not lock while that would shut in a player without its key (shutsIn). What a door blocks comes
-// from its item, so walking, pathfinding, line of sight and every client see the change
-// at once (Map.ReplaceItem + tileChanged). The state lives in the map only: a restart
-// closes and locks every door again.
+// and an open one closes. A locked door (door.key) opens and closes for a player that
+// carries a key with that key id, anywhere in its equipment or containers; the key is not
+// spent. From the room behind it (door.room) a locked door always opens, key or not: nobody
+// is ever locked in, whatever brought them there (a relog or a restart with the door
+// locked, a key lost inside). A door does not close on a creature or an item, and a locked
+// door does not lock while a player without its key is in the room behind it. What a door
+// blocks comes from its item, so walking, pathfinding, line of sight and every client see
+// the change at once (Map.ReplaceItem + tileChanged). The state lives in the map only: a
+// restart closes and locks every door again.
 
 // i18n keys of the door messages (i18n/*/client.yaml).
 const (
 	msgDoorLocked   = "door.locked"
 	msgDoorUnlocked = "door.unlocked"
+	msgDoorUnbarred = "door.unbarred"
 	msgDoorRelocked = "door.relocked"
 	msgDoorNoKey    = "door.no_key"
 	msgDoorBlocked  = "door.blocked"
 	msgDoorShutIn   = "door.shut_in"
+	msgDoorNotReady = "door.not_ready"
 )
 
-// shutInSearch bounds the walk shutsIn makes from a door, in tiles per side: a side
+// doorRoomSearch bounds the walk doorRoom makes from a door, in tiles per side: a side
 // bigger than this is open ground that leads elsewhere, not a room behind the door.
-const shutInSearch = 4096
+const doorRoomSearch = 4096
 
-// initDoors checks the doors and keys of the items (content.CheckDoors).
+// doorEvery is how long a player waits between two doors it opens or closes: a player
+// toggling a door as fast as the gateway lets it would send the tile to everyone around
+// 30 times a second.
+const doorEvery = 500 // ms
+
+// door is a tile of the map with a door item (initDoors).
+type door struct {
+	// lock is the key id of its closed item, "" for a door anyone opens.
+	lock string
+	// room holds the tiles behind a locked door (doorRoom): from them a player opens it
+	// without the key, and a player without the key on them keeps it from locking.
+	room map[world.Pos]struct{}
+}
+
+// initDoors checks the doors and keys of the items (content.CheckDoors), finds the doors
+// of the map and works out the room behind each locked one. The walls of the map never
+// change, and a walk through a room counts every door as open, so the rooms hold for good.
 func (w *World) initDoors() error {
 	if err := content.CheckDoors(w.cfg.Items); err != nil {
 		return fmt.Errorf("session: %w", err)
+	}
+	w.doors = map[world.Pos]*door{}
+	for _, is := range w.m.Islands() {
+		for _, s := range is.Sectors() {
+			for _, st := range s.Stacks {
+				p := world.Pos{
+					X: s.CX*world.SectorSize + st.Index%world.SectorSize,
+					Y: s.CY*world.SectorSize + st.Index/world.SectorSize,
+					Z: s.Z,
+				}
+				for _, n := range st.Items {
+					def := w.byNum[n]
+					if def == nil || def.Door == nil {
+						continue
+					}
+					if h := w.m.HouseAt(p); h != nil && slices.Contains(h.Doors, p) {
+						// Using it would open the door, never the house window (useItem).
+						return fmt.Errorf("session: door %q on %v, a door of house %q", def.ID, p, h.ID)
+					}
+					lock := def.Door.Key
+					if def.Door.Closed != "" {
+						lock = w.cfg.Items[def.Door.Closed].Door.Key // CheckDoors: the pair exists
+					}
+					w.doors[p] = &door{lock: lock}
+				}
+			}
+		}
+	}
+	for p, d := range w.doors { // any order: a room depends on the map alone
+		if d.lock != "" {
+			d.room = w.doorRoom(p)
+		}
 	}
 	return nil
 }
@@ -46,8 +99,9 @@ func (w *World) initDoors() error {
 // about a door p sees; anything else goes on to the other uses of map items.
 func (w *World) useDoor(ctx *game.TickContext, p *Player, m *pb.UseItem) bool {
 	pos, ok := posFromMsg(m.GetFrom().GetPos())
+	d := w.doors[pos]
 	i := int(m.GetStackIndex())
-	if !ok || i < 1 || i >= w.staticCount(pos) || pos.Z != p.pos.Z || !Sees(p.pos, pos) {
+	if !ok || d == nil || i < 1 || i >= w.staticCount(pos) || pos.Z != p.pos.Z || !Sees(p.pos, pos) {
 		return false
 	}
 	id := w.staticAt(pos, i)
@@ -60,53 +114,76 @@ func (w *World) useDoor(ctx *game.TickContext, p *Player, m *pb.UseItem) bool {
 		return true
 	}
 	if def.Door.Open != "" {
-		w.openDoor(ctx, p, pos, i-1, def)
+		w.openDoor(ctx, p, pos, i-1, def, d)
 	} else {
-		w.closeDoor(ctx, p, pos, i-1, def)
+		w.closeDoor(ctx, p, pos, i-1, def, d)
 	}
 	return true
 }
 
-// openDoor opens the closed door def at stack index i of pos, with a key if it is locked.
-func (w *World) openDoor(ctx *game.TickContext, p *Player, pos world.Pos, i int, def *content.Item) {
+// openDoor opens the closed door def at stack index i of pos: a locked one with a key,
+// or from the room behind it.
+func (w *World) openDoor(ctx *game.TickContext, p *Player, pos world.Pos, i int, def *content.Item, d *door) {
 	var key *Item
-	if lock := def.Door.Key; lock != "" {
-		if key = w.keyFor(p, lock); key == nil {
-			p.emit(systemMsg(msgDoorLocked))
-			return
+	inside := false
+	if d.lock != "" {
+		if key = w.keyFor(p, d.lock); key == nil {
+			if _, inside = d.room[p.pos]; !inside {
+				p.emit(systemMsg(msgDoorLocked))
+				return
+			}
 		}
 	}
-	p.active(ctx.Tick, antibot.KindOther)
+	if !w.doorReady(ctx, p) {
+		return
+	}
 	w.swapDoor(pos, i, w.cfg.Items[def.Door.Open])
-	if key != nil {
+	switch {
+	case key != nil:
 		p.emit(systemMsg(msgDoorUnlocked, itemParam(key.def, 1)))
+	case inside:
+		p.emit(systemMsg(msgDoorUnbarred))
 	}
 }
 
 // closeDoor closes the open door def at stack index i of pos: the tile must be free, and
-// a locked door locks again only with its key.
-func (w *World) closeDoor(ctx *game.TickContext, p *Player, pos world.Pos, i int, def *content.Item) {
-	closed := w.cfg.Items[def.Door.Closed]
+// a locked door locks again only with its key and with no player without it in its room.
+func (w *World) closeDoor(ctx *game.TickContext, p *Player, pos world.Pos, i int, def *content.Item, d *door) {
 	if w.occupied(pos) || len(w.ground[pos]) > 0 {
 		p.emit(systemMsg(msgDoorBlocked))
 		return
 	}
 	var key *Item
-	if lock := closed.Door.Key; lock != "" {
-		if key = w.keyFor(p, lock); key == nil {
+	if d.lock != "" {
+		if key = w.keyFor(p, d.lock); key == nil {
 			p.emit(systemMsg(msgDoorNoKey))
 			return
 		}
-		if w.shutsIn(pos, lock) {
+		if w.shutsIn(d) {
 			p.emit(systemMsg(msgDoorShutIn))
 			return
 		}
 	}
-	p.active(ctx.Tick, antibot.KindOther)
-	w.swapDoor(pos, i, closed)
+	if !w.doorReady(ctx, p) {
+		return
+	}
+	w.swapDoor(pos, i, w.cfg.Items[def.Door.Closed])
 	if key != nil {
 		p.emit(systemMsg(msgDoorRelocked, itemParam(key.def, 1)))
 	}
+}
+
+// doorReady reports whether p may open or close a door now (doorEvery), telling it when
+// not, and starts its wait when it may.
+func (w *World) doorReady(ctx *game.TickContext, p *Player) bool {
+	if ctx.Tick < p.nextDoor {
+		p.tooEarly(ctx.Tick, antibot.KindOther)
+		p.emit(systemMsg(msgDoorNotReady))
+		return false
+	}
+	p.activePaced(ctx.Tick, antibot.KindOther, p.nextDoor)
+	p.nextDoor = ctx.Tick + ticksFor(doorEvery)
+	return true
 }
 
 // keyFor returns an item p carries (equipped or in a container) that opens lock, or nil.
@@ -118,6 +195,18 @@ func (w *World) keyFor(p *Player, lock string) *Item {
 		}
 	})
 	return key
+}
+
+// shutsIn reports whether a player without the key of the locked door d stands in its
+// room: locking d would shut it in (it could still open d from inside, but locking a
+// player in is no move a key holder gets to make). One map lookup per player.
+func (w *World) shutsIn(d *door) bool {
+	for _, o := range w.players {
+		if _, in := d.room[o.pos]; in && w.keyFor(o, d.lock) == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // swapDoor puts to at stack index i of pos, recomputes what the tile blocks with the
@@ -148,14 +237,14 @@ func (w *World) swapDoor(pos world.Pos, i int, to *content.Item) {
 	w.tileChanged(pos)
 }
 
-// shutsIn reports whether locking the door at pos would shut in a player who has no key
-// for lock (docs/02 "Puertas con llave": nobody is ever locked in). It walks the map from
-// each walkable tile next to the door (8 directions, same floor, never through the door)
-// to find the sides the door keeps apart, up to shutInSearch tiles each. A side the walk
-// cannot finish is open ground; when every side finishes, the biggest one is the outside.
-// The other sides are rooms behind the door, and a player without the key in one of them
-// would have no way out.
-func (w *World) shutsIn(pos world.Pos, lock string) bool {
+// doorRoom returns the room behind the locked door at pos (docs/02 "Puertas con llave"):
+// it walks the map from each passable tile next to the door (8 directions, same floor,
+// never through the door, every other door open) to find the sides the door keeps apart,
+// up to doorRoomSearch tiles each. A side the walk cannot finish is open ground; when
+// every side finishes, the biggest one is the outside. The other sides are the room. A
+// door with one side (it stands in the open) or with every side open has no room.
+func (w *World) doorRoom(pos world.Pos) map[world.Pos]struct{} {
+	passable := func(q world.Pos) bool { return w.m.Walkable(q) || w.doors[q] != nil }
 	side := map[world.Pos]int{} // walked tile → the walk that reached it first
 	var size []int              // tiles of each walk; -1 when it could not finish
 	var parent []int            // union-find over walks that met (the same side)
@@ -168,14 +257,14 @@ func (w *World) shutsIn(pos world.Pos, lock string) bool {
 	}
 	for d := world.North; d <= world.NorthWest; d++ {
 		start, ok := pos.Step(d)
-		if _, seen := side[start]; !ok || seen || !w.m.Walkable(start) {
+		if _, seen := side[start]; !ok || seen || !passable(start) {
 			continue
 		}
 		id := len(size)
 		parent = append(parent, id)
 		side[start] = id
 		n, queue := 0, []world.Pos{start}
-		for len(queue) > 0 && n < shutInSearch {
+		for len(queue) > 0 && n < doorRoomSearch {
 			t := queue[len(queue)-1]
 			queue = queue[:len(queue)-1]
 			n++
@@ -190,7 +279,7 @@ func (w *World) shutsIn(pos world.Pos, lock string) bool {
 					}
 					continue
 				}
-				if w.m.Walkable(q) {
+				if passable(q) {
 					side[q] = id
 					queue = append(queue, q)
 				}
@@ -217,7 +306,7 @@ func (w *World) shutsIn(pos world.Pos, lock string) bool {
 		}
 	}
 	if len(sides) < 2 {
-		return false // nothing to be shut in: the door stands in the open
+		return nil // nothing behind the door: it stands in the open
 	}
 	outside := map[int]bool{}
 	biggest := sides[0]
@@ -231,13 +320,11 @@ func (w *World) shutsIn(pos world.Pos, lock string) bool {
 	if len(outside) == 0 {
 		outside[biggest] = true
 	}
-	for _, o := range w.players {
-		if o.pos.Z != pos.Z {
-			continue
-		}
-		if s, ok := side[o.pos]; ok && !outside[root(s)] && w.keyFor(o, lock) == nil {
-			return true
+	room := map[world.Pos]struct{}{}
+	for t, s := range side {
+		if !outside[root(s)] {
+			room[t] = struct{}{}
 		}
 	}
-	return false
+	return room
 }

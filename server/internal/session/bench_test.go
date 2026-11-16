@@ -224,3 +224,49 @@ func BenchmarkTickConditions(b *testing.B) {
 	b.StopTimer()
 	b.ReportMetric(float64(2*(len(w.Monsters())+len(w.Players()))), "conditions")
 }
+
+// BenchmarkDoorLockRefused measures one tick in which a key holder tries to lock a gate
+// with a player without the key in the room behind it, among 100 players: the worst try a
+// player can repeat at the gateway's rate (docs/02 "Puertas con llave"). The room (3968
+// tiles, near the 4096 a room may have) is worked out once at start, so a try is one map
+// lookup per player. Budget: a small fraction of the 10 ms tick (docs/07).
+func BenchmarkDoorLockRefused(b *testing.B) {
+	m := field(b, 128, 128, 96, 0, 127, 64)
+	w, err := session.New(session.Config{
+		Map: m, Balance: testBalance(), Vocations: testVocations, Items: doorTestItems(true),
+		Save: func(session.Snapshot) bool { return true },
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	mv, fight, flush := w.Systems()
+	r := rand.New(rand.NewPCG(1, 2))
+	loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: r, Systems: []game.System{mv, fight, flush}})
+	if err != nil {
+		b.Fatal(err)
+	}
+	gate := pos(64, 96)
+	holder := &discardClient{}
+	_ = loop.Enqueue(w.Join(withPack(1, pos(64, 95), session.ItemState{ItemID: gateKeyID, Count: 1}), holder))
+	_ = loop.Enqueue(w.Join(withPack(2, pos(64, 120)), &discardClient{})) // in the room, without the key
+	for i := range 98 {
+		_ = loop.Enqueue(w.Join(withPack(int64(i+3), pos(r.IntN(128), r.IntN(90))), &discardClient{}))
+	}
+	loop.Step()
+	_ = loop.Enqueue(w.Input(holder, useItem(onTile(gate), worldtest.Door, 1)))
+	loop.Step()
+	if !w.Walkable(gate) {
+		b.Fatal("the gate did not open")
+	}
+	lock := useItem(onTile(gate), worldtest.OpenDoor, 1)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = loop.Enqueue(w.Input(holder, lock))
+		loop.Step()
+	}
+	b.StopTimer()
+	if !w.Walkable(gate) {
+		b.Fatal("the gate locked on a player without the key")
+	}
+}
