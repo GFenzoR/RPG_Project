@@ -365,6 +365,10 @@ type World struct {
 	// is ahead of the database: out of the world and refused at login until a restart.
 	readOnly bool
 	locked   map[int64]bool
+	// inFlight are the characters with a transfer the database has not confirmed: the
+	// seq of their snapshot in the last one (World.Saved forgets it). Until then they
+	// drop nothing outside a house (heldDrop, docs/01 "Transacciones").
+	inFlight map[int64]uint64
 	// Trade window (T5.3, trade.go): balance trade (tradeOn = enabled with
 	// Config.Transfer), the open trades and invitations in creation order.
 	tradeOn  bool
@@ -496,6 +500,7 @@ func New(cfg Config) (*World, error) {
 		jobs:        map[uint64]pendingJob{},
 		banned:      map[int64]time.Time{},
 		locked:      map[int64]bool{},
+		inFlight:    map[int64]uint64{},
 		shopPending: map[int64]pendingShop{},
 		pf:          world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
 	}

@@ -35,6 +35,7 @@ const (
 	msgIntoItself     = "inventory.into_itself"
 	msgTooDeep        = "inventory.too_deep"
 	msgTileFull       = "inventory.tile_full"
+	msgSaving         = "inventory.saving"
 	msgNotReady       = "inventory.not_ready"
 	msgAte            = "inventory.ate"
 	msgLookItem       = "look.item"
@@ -549,6 +550,12 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 
 	// T5.4: houses (access, only the owner takes items out, item limit, anti-flood).
 	if !w.checkHouseMove(ctx, p, it, to, merge, count < it.count) {
+		return
+	}
+	// T5.3 fail-safe: nothing p carries goes to the floor while a transfer of p is not
+	// in the database yet (normally a tick or two).
+	if w.heldDrop(p, it, to) {
+		p.emit(systemMsg(msgSaving))
 		return
 	}
 

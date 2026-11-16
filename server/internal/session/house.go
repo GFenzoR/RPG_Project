@@ -585,7 +585,7 @@ func (w *World) houseTransfer(players []*Player, ops []HouseOp, market ...Market
 	w.nextTransfer++
 	t := Transfer{ID: w.nextTransfer, Houses: ops, Market: market, OfferHigh: w.nextOffer, MailHigh: w.nextMail}
 	for _, p := range players {
-		t.Snapshots = append(t.Snapshots, w.snapshot(p, false))
+		t.Snapshots = append(t.Snapshots, w.transferSnapshot(p))
 	}
 	w.submitJob(Job{Transfer: &t})
 }

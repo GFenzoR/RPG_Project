@@ -325,11 +325,17 @@ func (w *World) Leave(client Client) game.Command {
 
 // Saved returns the command the persistence goroutine enqueues after writing a
 // snapshot: the final snapshot of a character is forgotten once it is in the database,
-// unless a login of that character is reading the database right now.
+// unless a login of that character is reading the database right now. Any snapshot at
+// or after the one of the character's last transfer ends its hold (T5.3): the Saver
+// writes in order and skips everything of a character after a transfer it dropped, so
+// that transfer is in the database too. A lost ack keeps the hold until the next save.
 func (w *World) Saved(characterID int64, seq uint64) game.Command {
 	return game.CommandFunc(func(*game.TickContext) {
 		if s, ok := w.unsaved[characterID]; ok && s.Seq == seq && w.loading[characterID] == 0 {
 			delete(w.unsaved, characterID)
+		}
+		if h, ok := w.inFlight[characterID]; ok && seq >= h {
+			delete(w.inFlight, characterID)
 		}
 	})
 }

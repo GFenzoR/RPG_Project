@@ -316,3 +316,7 @@ func (w *World) InDoorRoom(door, p world.Pos) bool {
 
 // MarketViewers returns how many open market windows show item's book (mkWatch).
 func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }
+
+// InFlightForTest reports whether a transfer of charID waits for the database (its
+// drops outside houses are held).
+func (w *World) InFlightForTest(charID int64) bool { return w.inFlight[charID] != 0 }

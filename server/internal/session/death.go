@@ -143,7 +143,9 @@ func (w *World) arenaDefeat(ctx *game.TickContext, p *Player) {
 }
 
 // reserved reports whether it lies in another player's corpse that is still reserved
-// for its owner, so p cannot take it out (or use it).
+// for its owner, so p cannot take it out (or use it). A corpse stays reserved while its
+// owner is held (hold.go): until the database confirms the owner's last transfer, and
+// for good if it was not stored (the owner is locked out until a restart).
 func (w *World) reserved(tick game.Tick, p *Player, it *Item) bool {
 	r := it.root()
 	if !r.onGround {
@@ -151,7 +153,7 @@ func (w *World) reserved(tick game.Tick, p *Player, it *Item) bool {
 	}
 	for _, c := range w.corpses[r.pos] {
 		if c.Item == r {
-			return c.Owner != 0 && c.Owner != p.charID && tick < c.OwnerUntil
+			return c.Owner != 0 && c.Owner != p.charID && (tick < c.OwnerUntil || w.onHold(c.Owner))
 		}
 	}
 	return false

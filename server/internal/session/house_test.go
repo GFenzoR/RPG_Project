@@ -401,12 +401,17 @@ func TestHouseItemsWrittenWithTheMover(t *testing.T) {
 // The item limit: 1 instance per tile, 7 tiles.
 func TestHouseItemLimit(t *testing.T) {
 	h := newHouseHarness(t)
-	cl, _ := h.tenant("Ana", 0, cottageExit, stack(salveID, 20, 0), stack(swordID, 1, 1), stack(coinID, 100, 2),
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(salveID, 20, 0), stack(swordID, 1, 1), stack(coinID, 100, 2),
 		stack(coinID, 100, 3))
 	h.rent(cl)
 	h.step(cl, N)
 	h.step(cl, N) // (3,3): every tile of the house within reach
 	pack := openPack(t, h.harness, cl)
+	// Renting was a transfer nobody acked (T5.3 hold): a house tile is still allowed, it
+	// is written with the move itself.
+	if !h.w.InFlightForTest(a.CharacterID()) {
+		t.Fatal("renting did not hold its payer")
+	}
 	for _, tile := range []world.Pos{pos(2, 2), pos(3, 2), pos(4, 2), pos(2, 3), pos(3, 3), pos(4, 3), cottageDoor} {
 		if evs := h.send(cl, moveItem(inContainer(pack, 0), salveID, 0, onTile(tile), 1)); len(systemKeys(evs)) != 0 {
 			t.Fatalf("drop on %v: %v", tile, systemKeys(evs))

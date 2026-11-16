@@ -983,7 +983,7 @@ func (w *World) transfer(players []*Player, ops ...MarketOp) {
 	w.nextTransfer++
 	t := Transfer{ID: w.nextTransfer, Market: ops, OfferHigh: w.nextOffer, MailHigh: w.nextMail}
 	for _, p := range players {
-		t.Snapshots = append(t.Snapshots, w.snapshot(p, false))
+		t.Snapshots = append(t.Snapshots, w.transferSnapshot(p))
 	}
 	w.submitJob(Job{Transfer: &t})
 }
@@ -1161,8 +1161,10 @@ func sideName(sell bool) string {
 // for them, and anything else built on it would be saved by halves. So the failure is
 // made safe until a restart: those characters leave the world (SAVE_FAILED), their
 // unsaved state is dropped and their logins are refused (CHARACTER_LOCKED); the market
-// becomes read-only (browse only, no expiry) and every open trade is cancelled. The
-// operator sees the error log, persistence_errors_total{outcome="skipped"} and its alert.
+// becomes read-only (browse only, no expiry) and every open trade is cancelled. Their
+// corpses stay reserved to them (locked out, World.reserved) until they decay: the items
+// in them come from the dropped state. The operator sees the error log,
+// persistence_errors_total{outcome="skipped"} and its alert.
 func (w *World) Tainted(ids []int64) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		if !w.readOnly {
@@ -1178,6 +1180,7 @@ func (w *World) Tainted(ids []int64) game.Command {
 				w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_SAVE_FAILED, false)
 			}
 			delete(w.unsaved, id)
+			delete(w.inFlight, id)
 			w.log.Error("session: character locked until a restart, a transfer of it was not stored", "character", id)
 		}
 		for _, p := range w.players {

@@ -557,8 +557,9 @@ func (a *App) charactersTainted(ids []int64) {
 	go a.enqueueRetry(a.World.Tainted(ids))
 }
 
+// snapshotSaved acks every stored snapshot to the loop: a final one lets it forget the
+// unsaved state, and any one ends the character's transfer hold (T5.3, World.Saved). A
+// lost ack (queue full) is harmless: the state stays until the next ack of the character.
 func (a *App) snapshotSaved(s session.Snapshot) {
-	if s.Final {
-		_ = a.Loop.Enqueue(a.World.Saved(s.CharacterID, s.Seq)) // lost ack: harmless
-	}
+	_ = a.Loop.Enqueue(a.World.Saved(s.CharacterID, s.Seq))
 }
