@@ -834,10 +834,11 @@ body.using-item canvas {
   flex: 1;
   min-width: 0;
 }
+/* Fixed to the screen (outside .game): the safe area's insets count here, once. */
 .corner {
   position: fixed;
-  top: 0.5rem;
-  right: 0.75rem;
+  top: calc(0.5rem + env(safe-area-inset-top, 0px));
+  right: calc(0.75rem + env(safe-area-inset-right, 0px));
   z-index: 20;
 }
 .language {
@@ -1860,7 +1861,10 @@ body.using-item canvas {
 
 /* Windows over the map on phones and tablets: a sheet that fits the screen, scrolls
    inside and has a large close button. Portrait: over the bottom (the map stays visible
-   above); landscape: over the right side. */
+   above); landscape: over the right side.
+   Safe area: these are fixed to the screen, outside the padding of .game that keeps the
+   rest of the game out of the notch, the rounded corners and the home indicator, so
+   their edges take env(safe-area-inset-*) themselves, once (0 on any other screen). */
 .game:not([data-layout="desktop"]) .npc-windows,
 .game:not([data-layout="desktop"]) .crafting,
 .game:not([data-layout="desktop"]) .market,
@@ -1879,9 +1883,9 @@ body.using-item canvas {
 .game[data-flow="column"] .house,
 .game[data-flow="column"] .trade {
   top: auto;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
   width: auto;
   max-height: 62%;
 }
@@ -1890,10 +1894,10 @@ body.using-item canvas {
 .game[data-flow="row"]:not([data-layout="desktop"]) .market,
 .game[data-flow="row"]:not([data-layout="desktop"]) .house,
 .game[data-flow="row"]:not([data-layout="desktop"]) .trade {
-  top: 0;
+  top: env(safe-area-inset-top, 0px);
   left: auto;
-  right: 0;
-  bottom: 0;
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
   width: min(28rem, 64vw);
   max-height: none;
 }

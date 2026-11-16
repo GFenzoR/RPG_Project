@@ -32,7 +32,7 @@ import { ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
 import { PANEL_TABS, TAB_TITLE, layoutFor, tabForHighlight } from "./layout.ts";
 import type { Layout, PanelTab } from "./layout.ts";
 import { activeNotices, nextExpiry } from "./notices.ts";
-import { ActionMenu, PickBanner } from "./ActionMenu.tsx";
+import { ActionMenu, PickBanner, paddingInsets } from "./ActionMenu.tsx";
 import { LoadStatus } from "./LoadStatus.tsx";
 import { PAD_RESERVE_PX, TouchPad } from "./TouchPad.tsx";
 import { ZoomButtons } from "./ZoomButtons.tsx";
@@ -386,6 +386,9 @@ function GameScreen(props: {
 }): JSX.Element {
   const { t } = props;
   const host = useRef<HTMLDivElement>(null);
+  // .game: its padding is the safe area (client.css), which the long-press menu, fixed to
+  // the screen, takes once too.
+  const gameBox = useRef<HTMLDivElement>(null);
   const game = useRef<Game | undefined>(undefined);
   // The Game lives as long as the session; a language change reaches it through here.
   const tRef = useRef(t);
@@ -550,6 +553,7 @@ function GameScreen(props: {
 
   return (
     <div
+      ref={gameBox}
       class="game"
       data-testid="game"
       data-layout={layout.id}
@@ -900,6 +904,7 @@ function GameScreen(props: {
           menu={ui.menu}
           game={game.current}
           viewport={{ width: window.innerWidth, height: window.innerHeight }}
+          insets={gameBox.current ? paddingInsets(getComputedStyle(gameBox.current)) : undefined}
         />
       )}
     </div>

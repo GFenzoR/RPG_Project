@@ -12,8 +12,42 @@ import "./touch.css";
 
 /** Gap between the finger and the menu, CSS pixels. */
 const MENU_GAP = 16;
-/** Kept clear of the screen edges, CSS pixels. */
+/** Kept clear of the safe area's edges, CSS pixels. */
 const MENU_MARGIN = 8;
+
+/**
+ * The safe area's insets (the notch, the rounded corners, the home indicator), CSS pixels:
+ * what env(safe-area-inset-*) gives, which the game already takes as the padding of .game
+ * (client.css, read by `paddingInsets`). 0 on any screen without them.
+ */
+export interface Insets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/**
+ * The insets from an element's computed padding (getComputedStyle of .game, whose padding
+ * is env(safe-area-inset-*)): the menu is fixed to the screen, outside that padding, so it
+ * takes the same insets once. Unreadable values count as 0.
+ */
+export function paddingInsets(
+  style: Pick<CSSStyleDeclaration, "paddingTop" | "paddingRight" | "paddingBottom" | "paddingLeft">,
+): Insets {
+  const px = (v: string): number => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  return {
+    top: px(style.paddingTop),
+    right: px(style.paddingRight),
+    bottom: px(style.paddingBottom),
+    left: px(style.paddingLeft),
+  };
+}
 
 /**
  * Whether a click on a button of the open menu acts. Lifting the long-press finger makes
@@ -37,10 +71,12 @@ export function menuHeight(buttons: number, title: boolean): number {
 
 /**
  * Where the menu goes for a press at (x, y) on a vw x vh screen: centred on the finger and
- * kept on screen, below it in the top half and above it in the bottom half (never under
- * the finger, which would hide it). Given the menu's height, on a screen too short for it
- * on that side (a phone on its side) the menu takes the screen's height instead, scrolling
- * inside if it must. The side chosen is the roomier one, so the other never fits better.
+ * kept inside the safe area (`insets`, with a margin), below the finger in the top half
+ * of that area and above it in the bottom half (never under the finger, which would hide
+ * it). Given the menu's height, on a screen too short for it on that side (a phone on its
+ * side) the menu takes the safe area's height instead, scrolling inside if it must. The
+ * side chosen is the roomier one, so the other never fits better. The result is relative
+ * to the whole screen (the menu's layer is fixed to it, outside the padding of .game).
  */
 export function menuPlacement(
   x: number,
@@ -48,18 +84,28 @@ export function menuPlacement(
   vw: number,
   vh: number,
   height = 0,
+  insets: Insets = NO_INSETS,
 ): { left: number; top?: number; bottom?: number; maxHeight?: number } {
-  const maxLeft = Math.max(MENU_MARGIN, vw - MENU_WIDTH - MENU_MARGIN);
-  const left = Math.round(Math.min(maxLeft, Math.max(MENU_MARGIN, x - MENU_WIDTH / 2)));
-  if (y < vh / 2) {
-    if (y + MENU_GAP + height + MENU_MARGIN <= vh) return { left, top: Math.round(y + MENU_GAP) };
-  } else if (y - MENU_GAP - height - MENU_MARGIN >= 0) {
-    return { left, bottom: Math.round(Math.max(MENU_MARGIN, vh - y + MENU_GAP)) };
+  const minLeft = insets.left + MENU_MARGIN;
+  const maxLeft = Math.max(minLeft, vw - insets.right - MENU_WIDTH - MENU_MARGIN);
+  const left = Math.round(Math.min(maxLeft, Math.max(minLeft, x - MENU_WIDTH / 2)));
+  // The safe area's top and bottom edges, as distances from the screen's top.
+  const top = insets.top;
+  const bottom = vh - insets.bottom;
+  if (y < (top + bottom) / 2) {
+    if (y + MENU_GAP + height + MENU_MARGIN <= bottom)
+      return { left, top: Math.round(Math.max(top + MENU_MARGIN, y + MENU_GAP)) };
+  } else if (y - MENU_GAP - height - MENU_MARGIN >= top) {
+    return {
+      left,
+      bottom: Math.round(Math.max(insets.bottom + MENU_MARGIN, vh - y + MENU_GAP)),
+    };
   }
+  const room = bottom - top;
   return {
     left,
-    top: Math.round(Math.max(MENU_MARGIN, (vh - height) / 2)),
-    maxHeight: vh - 2 * MENU_MARGIN,
+    top: Math.round(top + Math.max(MENU_MARGIN, (room - height) / 2)),
+    maxHeight: room - 2 * MENU_MARGIN,
   };
 }
 
@@ -69,6 +115,8 @@ export function ActionMenu(props: {
   game: Pick<Game, "menuChoose" | "closeMenu" | "menuPress" | "menuPressed"> | undefined;
   /** The screen size (window.innerWidth/innerHeight; fixed values in tests). */
   viewport: { width: number; height: number };
+  /** The safe area's insets (paddingInsets of .game); none by default. */
+  insets?: Insets | undefined;
 }): JSX.Element {
   const { t, menu, game } = props;
   const at = menuPlacement(
@@ -77,6 +125,7 @@ export function ActionMenu(props: {
     props.viewport.width,
     props.viewport.height,
     menuHeight(menu.actions.length + 1, menu.title !== ""),
+    props.insets ?? NO_INSETS,
   );
   const style: JSX.CSSProperties = { left: `${at.left}px` };
   if (at.top !== undefined) style.top = `${at.top}px`;

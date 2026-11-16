@@ -9,9 +9,11 @@ import {
   ActionMenu,
   MENU_WIDTH,
   PickBanner,
+  NO_INSETS,
   menuClickCounts,
   menuHeight,
   menuPlacement,
+  paddingInsets,
 } from "./ActionMenu.tsx";
 import { TouchPad, TouchPadToggle } from "./TouchPad.tsx";
 
@@ -64,6 +66,80 @@ describe("menuPlacement", () => {
     expect(menuPlacement(5, 100, 800, 600).left).toBe(8);
     expect(menuPlacement(795, 100, 800, 600).left).toBe(800 - MENU_WIDTH - 8);
     expect(menuPlacement(100, 100, 200, 600).left).toBe(8);
+  });
+});
+
+describe("menuPlacement on a notched phone (safe area)", () => {
+  // An iPhone on its side: the notch on the left, the home indicator below.
+  const side = { top: 0, right: 47, bottom: 21, left: 47 };
+  // Upright: the notch above, the home indicator below.
+  const upright = { top: 47, right: 0, bottom: 34, left: 0 };
+
+  it("keeps the margin from the safe area's edges, not from the screen's", () => {
+    // Pressed by the notch: 8 px right of the inset, not 8 px from the screen edge.
+    expect(menuPlacement(20, 100, 844, 390, 0, side).left).toBe(47 + 8);
+    expect(menuPlacement(840, 100, 844, 390, 0, side).left).toBe(844 - 47 - MENU_WIDTH - 8);
+    // Without insets, as before.
+    expect(menuPlacement(20, 100, 844, 390, 0, NO_INSETS).left).toBe(8);
+    expect(menuPlacement(20, 100, 844, 390).left).toBe(8);
+  });
+
+  it("takes the safe area's height when neither side has room", () => {
+    const h = menuHeight(4, true);
+    const at = menuPlacement(400, 200, 844, 390, h, side);
+    const room = 390 - 21;
+    expect(at).toEqual({
+      left: 400 - MENU_WIDTH / 2,
+      top: Math.round(Math.max(8, (room - h) / 2)),
+      maxHeight: room - 16,
+    });
+    // The whole menu ends above the home indicator, also cut to its largest height.
+    expect((at.top ?? 0) + Math.min(h, at.maxHeight ?? 0)).toBeLessThanOrEqual(390 - 21 - 8);
+    expect(8 + (at.maxHeight ?? 0)).toBeLessThanOrEqual(390 - 21 - 8);
+  });
+
+  it("measures the halves and the room on each side within the safe area", () => {
+    const h = menuHeight(3, true);
+    // Upright, near the bottom: above the finger, never into the home indicator (a press
+    // over the indicator itself would put it 30 px from the screen's edge).
+    expect(menuPlacement(200, 700, 390, 844, h, upright).bottom).toBe(844 - 700 + 16);
+    expect(menuPlacement(200, 830, 390, 844, h, upright).bottom).toBe(34 + 8);
+    // Right under the notch: below the finger, never under the notch.
+    expect(menuPlacement(200, 20, 390, 844, h, upright).top).toBe(47 + 8);
+    // A menu that would end in the home indicator below the finger (it fitted above the
+    // screen's margin) takes the safe area's height instead, clear of the indicator.
+    const tall = menuHeight(6, true);
+    const y = 844 - 34 - 8 - tall - 16 + 1; // one pixel short of room below
+    expect(y).toBeLessThan((47 + 844 - 34) / 2);
+    expect(menuPlacement(200, y, 390, 844, tall)).toEqual({
+      left: 200 - MENU_WIDTH / 2,
+      top: y + 16,
+    });
+    const at = menuPlacement(200, y, 390, 844, tall, upright);
+    expect(at.maxHeight).toBe(844 - 47 - 34 - 16);
+    expect((at.top ?? 0) + tall).toBeLessThanOrEqual(844 - 34 - 8);
+    expect(at.top ?? 0).toBeGreaterThanOrEqual(47 + 8);
+  });
+});
+
+describe("paddingInsets", () => {
+  it("reads the insets from the computed padding of .game", () => {
+    expect(
+      paddingInsets({
+        paddingTop: "47px",
+        paddingRight: "0px",
+        paddingBottom: "34px",
+        paddingLeft: "0px",
+      }),
+    ).toEqual({ top: 47, right: 0, bottom: 34, left: 0 });
+    expect(
+      paddingInsets({
+        paddingTop: "",
+        paddingRight: "auto",
+        paddingBottom: "-3px",
+        paddingLeft: "2.5px",
+      }),
+    ).toEqual({ top: 0, right: 0, bottom: 0, left: 2.5 });
   });
 });
 
