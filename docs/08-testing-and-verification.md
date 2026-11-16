@@ -167,7 +167,9 @@ acepta en un evento sintético; el pad captura su dedo.
   en la CI el dedo se levantó más tarde: el click eligió "Mirar" y el menú se cerró.
 - En `Pixel 7` vertical y horizontal (Chromium), con un área segura de iPhone 13 puesta
   por CDP (`Emulation.setSafeAreaInsetsOverride`; la emulación de dispositivos no tiene
-  insets): `.game` toma los insets como padding, la caja del mapa queda dentro y el pad,
+  insets): `.game` toma los insets como padding, el encabezado empieza en el inset de
+  arriba, el cuerpo (el mapa y, en vertical, el panel de abajo) termina en el de abajo,
+  la caja del mapa queda dentro y el pad,
   la hotbar, los botones de zoom y el banner del item elegido guardan su margen desde los
   bordes del mapa, sin sumar el inset otra vez (antes, 47 px de más en horizontal).
   Screenshot `mobile-pixel7-*-09-safe-area`.

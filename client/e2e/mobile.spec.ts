@@ -745,7 +745,16 @@ for (const { prefix, device, column, insets } of NOTCHED) {
         );
       const vp = page.viewportSize();
       if (!vp) throw new Error("no viewport size");
-      // The map's box (the pad's strip included in portrait) is inside the safe area.
+      // What the game draws starts and ends where the safe area does: the header at its
+      // top, the body (the map, and in portrait the panel under it) at its bottom.
+      const hud = await page.locator(".game > .hud").boundingBox();
+      if (!hud) throw new Error("no header");
+      near("header top", hud.y, insets.top);
+      const body = await page.locator(".game-body").boundingBox();
+      if (!body) throw new Error("no game body");
+      near("body bottom", vp.height - (body.y + body.height), insets.bottom);
+      // The map's box (the pad's strip included in portrait) is inside the safe area: on its
+      // side the map reaches the bottom one, in portrait the panel lies under it.
       const mapBox = await page.locator(".viewport").boundingBox();
       if (!mapBox) throw new Error("no map box");
       const map = {
@@ -756,7 +765,7 @@ for (const { prefix, device, column, insets } of NOTCHED) {
       };
       near("map left", map.l, insets.left);
       near("map right", vp.width - map.r, insets.right);
-      near("map bottom", vp.height - map.b, insets.bottom);
+      if (!column) near("map bottom", vp.height - map.b, insets.bottom);
       // The widgets over it keep 8 px from its edges, not 8 px plus the inset again.
       const pad = await box("touch-pad");
       near("pad left", pad.l - map.l, 8);
