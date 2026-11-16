@@ -943,7 +943,11 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   servidor dejó a sus pies) se rechaza con `inventory.saving`, y su cadáver sigue
   reservado para él (`death.corpse_not_owner`). Lo que el servidor le deja a sus pies
   fuera de una casa en ese tiempo (no le entraba) también: el `MoveItem`, `UseItem` o
-  `UseItemOn` de otro sobre eso responde `inventory.not_yours`.
+  `UseItemOn` de otro sobre eso responde `inventory.not_yours`. Lo mismo vale para lo
+  que alguien saca del suelo de una casa al suelo público (directo, a una pila o a un
+  contenedor apoyado ahí): queda reservado para quien lo sacó hasta que la base confirma
+  esa escritura de la casa, y meter algo en un contenedor del suelo reservado a otro
+  también responde `inventory.not_yours`.
 
 ### Casas (T5.4, `server/internal/session/house.go`)
 Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.

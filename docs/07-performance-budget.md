@@ -272,8 +272,11 @@ Cada snapshot guardado (también los autoguardados) vuelve al loop como un coman
 `World.Saved` (la espera de la falla segura, docs/01 "Transacciones"): N / 300 por
 segundo más uno por personaje de cada transfer, cada uno un par de búsquedas en un mapa.
 El que termina una espera recorre además `World.heldGround` (lo que el servidor dejó a
-los pies de un personaje en espera), que casi siempre está vacío; tomar o usar algo del
-suelo mira ese mapa solo si no lo está.
+los pies de un personaje en espera y lo que alguien sacó de una casa a la calle hasta
+que se confirma), que casi siempre está vacío o casi: una entrada se borra también
+cuando su item deja el suelo. Tomar o usar algo del suelo mira ese mapa solo si no está
+vacío. Un acuse que no entra en la cola del loop (llena) se reintenta en una goroutine
+propia, una por acuse rechazado, que vuelve a probar cada tick.
 
 **Ventanas del mercado en vivo.** Cada acción del mercado encola a quienes miran ese
 libro; `flushMarket` les manda una `MarketUpdate` completa (lo que cuesta una respuesta

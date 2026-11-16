@@ -514,8 +514,11 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   recompensa, las monedas de una venta a un NPC, el equipo que no cupo en su cadáver)
   queda reservado para él de la misma forma: otro jugador recibe "Eso es de otro jugador
   por ahora." (`inventory.not_yours`). El suelo de las casas lo cuida el guardado: lo
-  que se movió ahí no llega a la base por otro. Las alertas de economía (T4.1) siguen
-  como red (docs/01, "Transacciones").
+  que se movió ahí no llega a la base por otro. Lo que alguien saca de una casa a la
+  calle (o a un contenedor que está en la calle) queda reservado para él de la misma
+  forma hasta que la base confirma ese cambio de la casa, un momento: solo él puede
+  volver a tomarlo o devolverlo a la casa. Las alertas de economía (T4.1) siguen como
+  red (docs/01, "Transacciones").
 - Una oferta de un item retirado del juego se cierra al arrancar: el oro de una de
   compra vuelve al buzón.
 - **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).

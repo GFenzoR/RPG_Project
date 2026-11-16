@@ -151,9 +151,12 @@ server/
   mide la cola del Saver más `World.PendingJobs`. Todo snapshot de un transfer sale por
   `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`):
   un camino nuevo que lleve algo de un personaje al suelo público tiene que respetar
-  `heldDrop`, uno en que el servidor le deje algo a sus pies llama a `holdGround`, uno
-  que tome o use algo del suelo mira `groundHeld`, y uno que reemplace los items de una
-  casa va como `HouseItems` (el Saver marca la casa si se descarta). Una acción que
+  `heldDrop`, uno que saque algo del suelo de una casa al suelo público llama a
+  `leftHouse`, uno en que el servidor le deje algo a sus pies llama a `holdGround`, uno
+  que tome o use algo del suelo (o meta algo en un contenedor del suelo) mira
+  `groundHeld`, y uno que reemplace los items de una casa va como `HouseItems` (el Saver
+  marca la casa si se descarta). Los `Seq` de los snapshots son del `World` (crecen
+  entre sesiones del personaje): no los reinicies por jugador. Una acción que
   cambie lo que muestra la ventana del mercado de otro llama a `bookChanged` /
   `marketOwnerChanged` / `queueMarket` (refresco en vivo, `flushMarket`).
 

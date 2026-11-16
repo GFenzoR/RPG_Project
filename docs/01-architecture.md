@@ -235,22 +235,44 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       posterior escribe los items de una casa marcada (lo salta y marca a sus
       personajes, como en el punto fijo). Así lo que un marcado dejó en su casa no llega
       a la base por el invitado que lo levanta. Los demás cambios de esa casa (alquiler,
-      dueño) se siguen escribiendo: tienen su propia guarda.
+      dueño) se siguen escribiendo: tienen su propia guarda. Con las casas apagadas
+      (`houses.enabled: false`) nada de eso se escribe, y una casilla de casa cuenta
+      como suelo público.
+    - Lo que **sale de una casa al suelo público** (directo, sumado a una pila o dentro
+      de un contenedor apoyado ahí) queda **reservado** para quien lo sacó
+      (`leftHouse`, en `World.heldGround`, sobre lo que lo contiene en el suelo) hasta
+      que la base confirma la escritura de la casa que lo sacó. Esa escritura lleva el
+      snapshot de quien lo movió (`flushHouses` al final de su comando), así que es su
+      espera; y el Saver solo la escribe si entraron todas las anteriores de esa casa
+      (una descartada la marca). Sin esto, algo que un transfer descartado dejó en una
+      casa (lo que trajo un invitado en espera y el dueño sacó a la calle), o algo que la
+      base todavía tiene en la casa porque se descartó la escritura que lo sacó (el dueño
+      en espera lo tira a la calle), llegaría al guardado de otro desde la calle:
+      duplicado. Mientras dura, nadie más lo levanta ni lo usa (`inventory.not_yours`) y
+      quien lo sacó solo puede volver a tomarlo o devolverlo a la casa (llevarlo a otra
+      casilla pública es `inventory.saving`). Nadie mete nada en un contenedor del suelo
+      reservado a otro (`inventory.not_yours`): quedaría atrapado con él.
     - Normalmente la espera dura uno o dos ticks y no se nota. Con la base caída dura
-      hasta que el transfer se escribe (correcto: no está guardado). Un acuse perdido
-      (cola del loop llena, se descarta) la alarga hasta el próximo guardado escrito del
-      personaje (autoguardado o salida); un relogueo la conserva (es del personaje, no
-      de la conexión).
+      hasta que el transfer se escribe (correcto: no está guardado). Con la cola del loop
+      llena, el `app` reintenta el acuse en su propia goroutine (`enqueueRetry`, como el
+      aviso de `Tainted`): no se pierde, y uno que llega tarde no hace daño (`Saved`
+      compara números de secuencia). Un relogueo conserva la espera (es del personaje,
+      no de la conexión).
     - Lo que el **servidor** deja a sus pies porque no le entra no pasa por `MoveItem`
       (`giveItem`: una fabricación, una recolección o una recompensa, las monedas de una
       venta a un NPC; y el equipo que no cabe en su cadáver al morir). Si cae fuera de
       una casa queda **reservado** para él (`World.heldGround`, `holdGround`) mientras
       espera: nadie más lo levanta ni lo usa (`inventory.not_yours`), lo que otro suelta
       encima no se suma a esa pila (queda en una propia) y él solo puede volver a
-      tomarlo (llevarlo a otra casilla pública también es `inventory.saving`).
-      La reserva termina con la espera (`endHold`); si el transfer quedó marcado, dura
-      hasta reiniciar, como el cadáver. Las compras del mercado, el retiro del buzón y
-      las compras a un NPC ya exigen que todo entre, así que nunca caen al suelo.
+      tomarlo (llevarlo a otra casilla pública también es `inventory.saving`). Si cae en
+      una casa, se escribe con su snapshot (`houseActor`) aunque no lo haya puesto un
+      comando suyo (una recompensa que llega por un evento): si un transfer suyo se
+      descartó, el Saver salta esa escritura y marca la casa en vez de guardar ahí lo
+      que salió del estado descartado.
+      Una reserva termina con la espera (`endHold`) o cuando el item deja el suelo
+      (`detach`); si el transfer quedó marcado, dura hasta reiniciar, como el cadáver.
+      Las compras del mercado, el retiro del buzón y las compras a un NPC ya exigen que
+      todo entre, así que nunca caen al suelo.
     - **Qué no cubre, y por qué no duplica:** lo que el personaje gasta en ese instante
       (comer, cargas de una runa, materiales de una fabricación) desaparece igual en la
       base, y lo que gana jugando (botín de un monstruo, experiencia) es juego nuevo que
