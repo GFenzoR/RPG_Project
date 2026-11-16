@@ -198,6 +198,12 @@ export interface GameOptions {
   storage?: Storage | undefined;
   /** The world is on screen. */
   entered(): void;
+  /**
+   * The canvas could not be made (its atlas did not load after the retries of
+   * @rpg/renderer's retry.ts): show the error with a button that calls `retryCanvas`. The
+   * session stays open meanwhile.
+   */
+  loadFailed?(): void;
   /** The session ended (Disconnect or lost connection). */
   ended(reason: DisconnectReason | undefined): void;
   /** New state for the DOM UI (battle list, health, log). */
@@ -210,6 +216,8 @@ export class Game {
   private readonly keys = new MovementKeys();
   private canvas: GameCanvas | undefined;
   private starting = false;
+  /** The canvas failed to start: it waits for `retryCanvas` (the "Retry" button). */
+  private canvasFailed = false;
   private destroyed = false;
   /** A click that arrived while a predicted step was unconfirmed. */
   private clickTarget: Pos | undefined;
@@ -268,7 +276,8 @@ export class Game {
           }
         }
         this.sound(cues);
-        if (this.world.self && !this.canvas && !this.starting) void this.startCanvas();
+        if (this.world.self && !this.canvas && !this.starting && !this.canvasFailed)
+          void this.startCanvas();
         this.publish();
       },
       closed: (reason) => {
@@ -1195,9 +1204,45 @@ export class Game {
     delete window.__rpgClient;
   }
 
+  /**
+   * Starts the canvas again after it failed (the "Retry" button of the error): the atlas is
+   * fetched again with its retries, and the session, still open, goes on as if nothing
+   * happened. Does nothing unless it failed.
+   */
+  retryCanvas(): void {
+    if (!this.canvasFailed || this.destroyed || this.canvas || this.starting) return;
+    this.canvasFailed = false;
+    void this.startCanvas();
+  }
+
   private async startCanvas(): Promise<void> {
     this.starting = true;
-    const canvas = await createGameCanvas(this.opts.host, {
+    let canvas: GameCanvas;
+    try {
+      canvas = await this.makeCanvas();
+    } catch (e) {
+      this.starting = false;
+      if (this.destroyed) return;
+      // Not again on the next batch: the player retries with the button (a server batch
+      // arrives every few ticks, which would hammer a server that is down).
+      this.canvasFailed = true;
+      console.warn("game canvas failed to start", e);
+      this.opts.loadFailed?.();
+      return;
+    }
+    this.starting = false;
+    if (this.destroyed) {
+      canvas.destroy();
+      return;
+    }
+    this.canvas = canvas;
+    this.publishHooks(canvas);
+    this.publish(); // icons are available now
+    this.opts.entered();
+  }
+
+  private makeCanvas(): Promise<GameCanvas> {
+    return createGameCanvas(this.opts.host, {
       world: this.world,
       content: this.opts.content,
       t: this.opts.t,
@@ -1229,11 +1274,10 @@ export class Game {
         if (this.canvas) this.publish();
       },
     });
-    if (this.destroyed) {
-      canvas.destroy();
-      return;
-    }
-    this.canvas = canvas;
+  }
+
+  /** The read-only E2E hooks, once the canvas is up (`ready`). */
+  private publishHooks(canvas: GameCanvas): void {
     const world = this.world;
     window.__rpgClient = {
       ready: true,
@@ -1287,8 +1331,6 @@ export class Game {
         return found ? Number(found[0]) : undefined;
       },
     };
-    this.publish(); // icons are available now
-    this.opts.entered();
   }
 
   private frame(now: number): void {

@@ -334,6 +334,29 @@ button.link {
 .connecting {
   color: var(--muted);
 }
+/* The atlas did not load after its retries (ui/LoadStatus.tsx): the error over the empty
+   map, with a large "Retry" button. */
+.load-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(24rem, calc(100% - 2rem));
+  box-sizing: border-box;
+  padding: 1rem 1.25rem;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  border-radius: 0.4rem;
+}
+.load-failed p {
+  margin: 0;
+}
+.load-failed button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 1.25rem;
+}
 .skills ul {
   list-style: none;
   padding: 0;

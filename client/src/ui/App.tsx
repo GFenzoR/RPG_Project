@@ -33,6 +33,7 @@ import { PANEL_TABS, TAB_TITLE, layoutFor, tabForHighlight } from "./layout.ts";
 import type { Layout, PanelTab } from "./layout.ts";
 import { activeNotices, nextExpiry } from "./notices.ts";
 import { ActionMenu, PickBanner } from "./ActionMenu.tsx";
+import { LoadStatus } from "./LoadStatus.tsx";
 import { PAD_RESERVE_PX, TouchPad } from "./TouchPad.tsx";
 import { ZoomButtons } from "./ZoomButtons.tsx";
 import { coarsePointer } from "../state/touch-prefs.ts";
@@ -390,6 +391,8 @@ function GameScreen(props: {
   const tRef = useRef(t);
   tRef.current = t;
   const [entered, setEntered] = useState(false);
+  // The atlas did not load after its retries: the error and its "Retry" button show.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [ui, setUi] = useState<GameUi>({
     battle: [],
     safeMode: true,
@@ -471,6 +474,7 @@ function GameScreen(props: {
       storage: safeStorage(),
       audio: props.audio,
       entered: () => setEntered(true),
+      loadFailed: () => setLoadFailed(true),
       ended: (reason) => props.onEnd(reason),
       update: setUi,
     });
@@ -615,7 +619,16 @@ function GameScreen(props: {
       </header>
       <div class="game-body">
         <div class="viewport" ref={host}>
-          {!entered && <p class="connecting">{t("client.game.connecting")}</p>}
+          {!entered && (
+            <LoadStatus
+              t={t}
+              failed={loadFailed}
+              retry={() => {
+                setLoadFailed(false);
+                game.current?.retryCanvas();
+              }}
+            />
+          )}
           {voyage !== undefined && (
             <div class="voyage" role="status" data-testid="voyage">
               <span>{t("client.voyage.sailed", { island: t(`island.${voyage}.name`) })}</span>
