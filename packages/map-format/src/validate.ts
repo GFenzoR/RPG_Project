@@ -9,7 +9,7 @@ import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
 import { TileMap, isPassable, isWalkable } from "./tiles.ts";
-import { DOOR_ROOM_ERRORS, doorRoom, doorsOn } from "./doors.ts";
+import { DOOR_ROOM_ERRORS, doorRooms, doorsOn } from "./doors.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
 import type { Chunk, Island, Position, Rect, World } from "./types.ts";
@@ -536,13 +536,14 @@ class WorldValidator {
   /**
    * Doors (docs/02 "Puertas con llave"; the server's initDoors refuses the same): one door
    * item per tile; a warning for a door placed open (it is open again after every
-   * restart); a room behind every locked door (doorRoom, the server's walk); and nothing of
-   * the outside in a room: no temple (where players wake up), NPC, house, portal end, boat
-   * arrival or dialog teleport. Either the outside was taken for the room, or a player
-   * would land behind the door. Spawns may live in a room (a guarded vault).
+   * restart); a room behind every locked door (doorRooms, the server's walks), shared only
+   * by locked doors of the same key and the same outside; and nothing of the outside in a
+   * room: no temple (where players wake up), NPC, house, portal end, boat arrival or
+   * dialog teleport. Either the outside was taken for the room, or a player would land
+   * behind the door. Spawns may live in a room (a guarded vault).
    */
   private checkDoors(): void {
-    const behind = new Map<string, Position>(); // room tile → the locked door it is behind
+    const locked: { pos: Position; lock: string; id: string; file: string }[] = [];
     for (const island of this.world.islands.values()) {
       const dir = this.dirOf(island);
       const chunks = [...island.chunks.values()].sort(
@@ -572,23 +573,21 @@ class WorldValidator {
               `door "${id}" is placed open at ${formatPos(pos)}: it is open again after every restart`,
               pos,
             );
-          if (info?.lock === undefined) continue;
-          const r = doorRoom(this.tiles, this.content, pos);
-          if ("error" in r) {
-            this.err(
-              file,
-              ["items"],
-              `locked door "${id}" at ${formatPos(pos)}: ${DOOR_ROOM_ERRORS[r.error]}`,
-              pos,
-            );
-            continue;
-          }
-          for (const t of r.rooms.flat()) {
-            const k = formatPos(t);
-            if (!behind.has(k)) behind.set(k, pos);
-          }
+          if (info?.lock !== undefined) locked.push({ pos, lock: info.lock, id, file });
         }
       }
+    }
+    const { behind, findings } = doorRooms(this.tiles, this.content, locked);
+    for (const f of findings) {
+      const d = locked.find((l) => formatPos(l.pos) === formatPos(f.door));
+      if (!d) continue;
+      const other = f.other ? ` (the door at ${formatPos(f.other)})` : "";
+      this.err(
+        d.file,
+        ["items"],
+        `locked door "${d.id}" at ${formatPos(f.door)}: ${DOOR_ROOM_ERRORS[f.error]}${other}`,
+        f.door,
+      );
     }
     if (behind.size === 0) return;
     const inRoom = (file: string, path: PathSegment[], what: string, p: Position): boolean => {
@@ -623,7 +622,7 @@ class WorldValidator {
       inRoom(routesFile, [r.index, "to"], `arrival of boat route "${r.id}"`, r.to);
     for (const t of this.content.teleports ?? [])
       inRoom(
-        `data/npcs/${t.npc}.yaml`,
+        t.file,
         ["dialog", "nodes", t.node],
         `teleport of NPC "${t.npc}" (node "${t.node}")`,
         t.to,

@@ -54,9 +54,13 @@ export interface ContentIndex {
   teleports?: TeleportInfo[];
 }
 
-/** A `teleport` action of an NPC dialog: the NPC, the dialog node and the destination. */
+/**
+ * A `teleport` action of an NPC dialog: the NPC, its file (relative to the repository
+ * root, for diagnostics), the dialog node and the destination.
+ */
 export interface TeleportInfo {
   npc: string;
+  file: string;
   node: string;
   to: { x: number; y: number; z: number };
 }
@@ -198,6 +202,7 @@ export function loadContent(root: string): ContentIndex {
 function loadTeleports(root: string): TeleportInfo[] {
   const out: TeleportInfo[] = [];
   for (const file of yamlFiles(join(root, "data", "npcs"))) {
+    const rel = `data/npcs/${file.replace(/^.*[\\/]/, "")}`;
     const npc = readYaml(file);
     const id = isObj(npc) ? npc["id"] : undefined;
     if (!isObj(npc) || typeof id !== "string") continue;
@@ -212,7 +217,7 @@ function loadTeleports(root: string): TeleportInfo[] {
         const action = isObj(o) ? o["action"] : undefined;
         for (const a of Array.isArray(action) ? action : [action]) {
           const to = isObj(a) ? a["teleport"] : undefined;
-          if (isPos(to)) out.push({ npc: id, node, to });
+          if (isPos(to)) out.push({ npc: id, file: rel, node, to });
         }
       }
     }

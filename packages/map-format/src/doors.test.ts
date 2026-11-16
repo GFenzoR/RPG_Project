@@ -3,17 +3,18 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { pushItem, setGround } from "./chunk.ts";
 import type { ContentIndex, ItemInfo } from "./content.ts";
-import { doorRoom } from "./doors.ts";
+import { doorRoom, doorRooms } from "./doors.ts";
 import type { DoorRoomError } from "./doors.ts";
 import { TileMap } from "./tiles.ts";
 import { CHUNK_SIZE, chunkKey, emptyChunk } from "./types.ts";
 import type { Chunk, Island, Position } from "./types.ts";
 
 // The cases the server reads too (server/internal/session, TestDoorRoomsFixture): both
-// sides agree on every room and on every locked door without one.
+// sides agree on every room and on every locked door they refuse.
+type Row = string | { repeat: number; row?: string; rows?: string[] };
 interface Case {
   name: string;
-  rows: (string | { repeat: number; row: string })[];
+  rows: Row[];
   rooms?: Record<string, number>;
   error?: DoorRoomError;
 }
@@ -26,13 +27,14 @@ const item = (id: string, info: Partial<ItemInfo>): [string, ItemInfo] => [
   { id, kind: "decoration", blocksMovement: false, ...info },
 ];
 
-/** The drawings' items: what the walk looks at (ground, blockers, doors and locks). */
+/** The drawings' items: what the walks look at (ground, blockers, doors and locks). */
 const content: ContentIndex = {
   items: new Map([
     item("grass", { kind: "ground", walkable: true }),
     item("wall", { kind: "wall", blocksMovement: true }),
     item("gate", { blocksMovement: true, door: true, lock: "gate" }),
     item("gate_open", { door: true, lock: "gate", doorOpen: true }),
+    item("other_gate", { blocksMovement: true, door: true, lock: "other" }),
     item("plain", { blocksMovement: true, door: true }),
     item("plain_open", { door: true, doorOpen: true }),
   ]),
@@ -49,18 +51,27 @@ const STACKS: Record<string, string[]> = {
   "#": ["wall"],
   D: ["gate"],
   d: ["gate_open"],
+  K: ["other_gate"],
   P: ["plain"],
   X: ["wall", "plain"],
 };
 
-/** The tiles of a drawing on floor 7 from (0,0), and its locked doors in map order. */
-function draw(c: Case): { tiles: TileMap; locked: Position[] } {
-  const rows = c.rows.flatMap((r) =>
-    typeof r === "string" ? [r] : Array.from({ length: r.repeat }, () => r.row),
+/** The rows of a drawing, its repeats expanded. */
+const expand = (rows: Row[]): string[] =>
+  rows.flatMap((r) =>
+    typeof r === "string"
+      ? [r]
+      : Array.from({ length: r.repeat }, () => r.rows ?? [r.row ?? ""]).flat(),
   );
+
+/**
+ * The tiles of a drawing on floor 7 from (0,0), and its locked doors in map order (chunk
+ * by chunk, row by row: the server's order).
+ */
+function draw(c: Case): { tiles: TileMap; locked: { pos: Position; lock: string }[] } {
   const chunks = new Map<string, Chunk>();
-  const locked: Position[] = [];
-  for (const [y, row] of rows.entries())
+  const locked: { pos: Position; lock: string }[] = [];
+  for (const [y, row] of expand(c.rows).entries())
     for (const [x, ch] of [...row].entries()) {
       if (ch === " ") continue;
       const stack = STACKS[ch];
@@ -71,40 +82,60 @@ function draw(c: Case): { tiles: TileMap; locked: Position[] } {
       chunks.set(k, chunk);
       setGround(chunk, x % CHUNK_SIZE, y % CHUNK_SIZE, "grass");
       for (const id of stack) pushItem(chunk, x % CHUNK_SIZE, y % CHUNK_SIZE, id);
-      if (ch === "D" || ch === "d") locked.push({ x, y, z: 7 });
+      const lock = content.items.get(stack.at(-1) ?? "")?.lock;
+      if (lock !== undefined) locked.push({ pos: { x, y, z: 7 }, lock });
     }
+  const chunkOf = (p: Position): number[] => [
+    Math.floor(p.y / CHUNK_SIZE),
+    Math.floor(p.x / CHUNK_SIZE),
+    p.y,
+    p.x,
+  ];
+  locked.sort((a, b) => {
+    const [ka, kb] = [chunkOf(a.pos), chunkOf(b.pos)];
+    return ka.reduce((d, v, i) => d || v - (kb[i] ?? 0), 0);
+  });
   const island = { chunks } as unknown as Island;
   return { tiles: new TileMap([island]), locked };
 }
 
-describe("doorRoom", () => {
-  it("reads the shared cases", () => expect(fixture.cases.length).toBeGreaterThanOrEqual(8));
+describe("doorRooms", () => {
+  it("reads the shared cases", () => expect(fixture.cases.length).toBeGreaterThanOrEqual(18));
 
   it.each(fixture.cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
     const { tiles, locked } = draw(c);
+    const r = doorRooms(tiles, content, locked);
     if (c.error !== undefined) {
-      expect(locked).toHaveLength(1); // the server reports the first one it meets
-      expect(doorRoom(tiles, content, locked[0] as Position)).toEqual({ error: c.error });
+      // The server stops at the first refused door, in the same order.
+      expect(r.findings[0]?.error).toBe(c.error);
       return;
     }
+    expect(r.findings).toEqual([]);
     const got: Record<string, number> = {};
-    for (const p of locked) {
-      const r = doorRoom(tiles, content, p);
-      if ("error" in r) throw new Error(`${p.x},${p.y}: ${r.error}`);
-      got[`${p.x},${p.y}`] = r.rooms.flat().length;
-    }
+    for (const [k, n] of r.sizes) got[k.replace(/,7$/, "")] = n;
     expect(got).toEqual(c.rooms);
   });
 
-  it("gives the tiles of the room, never the door's", () => {
+  it("gives the tiles of the room, never the door's, and the outside next to it", () => {
     const { tiles, locked } = draw(must(fixture.cases[0]));
-    const r = doorRoom(tiles, content, locked[0] as Position);
+    const r = doorRoom(tiles, content, must(locked[0]).pos);
     if ("error" in r) throw new Error(r.error);
     const keys = r.rooms.flat().map((p) => `${p.x},${p.y},${p.z}`);
     expect(keys).toContain("1,1,7");
     expect(keys).toContain("3,3,7");
     expect(keys).not.toContain("4,2,7");
     expect(keys).not.toContain("5,2,7");
+    expect(r.outside.map((p) => `${p.x},${p.y}`)).toEqual(["5,1", "5,2", "5,3"]);
+  });
+
+  it("names the earlier door a refused one shares its room with", () => {
+    const vault = must(
+      fixture.cases.find((c) => c.name === "a vault bigger than the room before it"),
+    );
+    const { tiles, locked } = draw(vault);
+    expect(doorRooms(tiles, content, locked).findings).toEqual([
+      { door: { x: 10, y: 2, z: 7 }, error: "outside", other: { x: 6, y: 2, z: 7 } },
+    ]);
   });
 });
 

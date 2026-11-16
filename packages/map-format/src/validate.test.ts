@@ -437,6 +437,22 @@ describe("validateWorld", () => {
           ]),
       ],
       [
+        // Its exit outside the room, a tile of the house inside it (across the water).
+        "houses.yaml",
+        "[0].rects",
+        (i) =>
+          void (i.houses = [
+            {
+              id: "puerto_house_net",
+              name: "house.puerto_house_net.name",
+              rent: 100,
+              rects: [{ x: 17, y: 22, z: 7, w: 3, h: 1 }],
+              doors: [{ x: 17, y: 22, z: 7 }],
+              exit: { x: 16, y: 22, z: 7 },
+            },
+          ]),
+      ],
+      [
         "boat_routes.yaml",
         "[0].to",
         () => ({
@@ -449,7 +465,12 @@ describe("validateWorld", () => {
       [
         "data/npcs/harbor_master.yaml",
         "dialog.nodes.start",
-        () => ({ ...content, teleports: [{ npc: "harbor_master", node: "start", to: room }] }),
+        () => ({
+          ...content,
+          teleports: [
+            { npc: "harbor_master", file: "data/npcs/harbor_master.yaml", node: "start", to: room },
+          ],
+        }),
       ],
     ];
     for (const [file, path, edit] of cases) {
@@ -495,6 +516,19 @@ describe("validateWorld", () => {
     expect(messages(r)).toEqual([
       expect.stringContaining('door "forge_gate_open" is placed open at 18,20,7'),
     ]);
+
+    // A second gate splits the corner: the vault behind it (24..29) is bigger than the
+    // room before it (19..22), so both gates take the small room, each with its own
+    // outside. Refused: the vault would be guarded by no door.
+    const vault = gated();
+    for (let y = 19; y < 30; y++) setGround(vault.chunk, 23, y, "water_shallow");
+    setGround(vault.chunk, 23, 24, "dirt");
+    pushItem(vault.chunk, 23, 24, "forge_gate");
+    expect(messages(check(vault.island))).toContainEqual(
+      expect.stringContaining(
+        'locked door "forge_gate" at 23,24,7: it shares its room with a locked door whose outside is not its own (no way between them within 16384 tiles) (the door at 18,20,7)',
+      ),
+    );
   });
 
   it("rejects chunks and tiles outside the island rectangle", () => {

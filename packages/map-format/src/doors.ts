@@ -1,7 +1,7 @@
-// Rooms behind locked doors (docs/02-game-design.md "Puertas con llave"). The walk is the
-// server's (server/internal/session/door.go, doorRoom), step for step, so make validate
-// refuses every locked door the server would not start with and both agree on every room:
-// their tests share testdata/door-rooms.json.
+// Rooms behind locked doors (docs/02-game-design.md "Puertas con llave"). The walks are the
+// server's (server/internal/session/door.go: doorRoom, sameOutside and initDoors), step
+// for step, so make validate refuses every locked door the server would not start with
+// and both agree on every room: their tests share testdata/door-rooms.json.
 import type { ContentIndex } from "./content.ts";
 import { isPassable } from "./tiles.ts";
 import type { Tile, TileMap } from "./tiles.ts";
@@ -10,21 +10,32 @@ import type { Position } from "./types.ts";
 /** Tiles a walk from a door takes per side before it calls that side open ground. */
 export const DOOR_ROOM_SEARCH = 4096;
 
+/** Tiles the walk between the outsides of two doors that share a room takes at most. */
+export const SAME_OUTSIDE_SEARCH = 4 * DOOR_ROOM_SEARCH;
+
 /**
- * Why a locked door has no room: open (every tile around it is one side), truncated (two
- * sides or more are bigger than DOOR_ROOM_SEARCH) or tie (every side is closed and the two
- * biggest have the same size, so neither is clearly the outside).
+ * Why a locked door is refused. Its own room: walled (no tile around it lets anyone
+ * through), open (every tile around it is one side), truncated (two sides or more are
+ * bigger than DOOR_ROOM_SEARCH) or tie (every side is closed and the two biggest have the
+ * same size). A room it shares with an earlier locked door: key (that door has another
+ * key) or outside (no way between their outsides within SAME_OUTSIDE_SEARCH tiles).
  */
-export type DoorRoomError = "open" | "truncated" | "tie";
+export type DoorRoomError = "walled" | "open" | "truncated" | "tie" | "key" | "outside";
 
-/** The room behind a locked door, one list of tiles per side that is not the outside. */
-export type DoorRoom = { rooms: Position[][] } | { error: DoorRoomError };
+/**
+ * The room behind a locked door, one list of tiles per side that is not the outside, and
+ * the tiles next to the door on its outside (in the server's direction order).
+ */
+export type DoorRoom = { rooms: Position[][]; outside: Position[] } | { error: DoorRoomError };
 
-/** What each DoorRoomError means, for diagnostics. */
+/** What each DoorRoomError means, for diagnostics (the server's words). */
 export const DOOR_ROOM_ERRORS: Record<DoorRoomError, string> = {
+  walled: "it leads nowhere: no tile around it lets anyone through",
   open: "it keeps nothing apart: every tile around it is one side",
   truncated: `more than one side is bigger than ${DOOR_ROOM_SEARCH} tiles: no room behind it`,
   tie: "its two biggest sides have the same size: which one is the outside is unclear",
+  key: "it shares its room with a locked door of another key",
+  outside: `it shares its room with a locked door whose outside is not its own (no way between them within ${SAME_OUTSIDE_SEARCH} tiles)`,
 };
 
 /** The 8 steps in the server's order (world.North, clockwise; y grows southwards). */
@@ -54,21 +65,27 @@ export function hasLockedDoor(
 
 const MAX = 0xffff;
 const key = (x: number, y: number, z: number): number => (z * 65536 + y) * 65536 + x;
+const keyOf = (p: Position): number => key(p.x, p.y, p.z);
+
+/**
+ * Whether the walks of the rooms go through tile (x, y, z): never through a locked door;
+ * any other door is open if its tile lets creatures through (isPassable).
+ */
+function roomPassable(tiles: TileMap, content: ContentIndex, x: number, y: number, z: number) {
+  const t = tiles.tile(x, y, z);
+  return !hasLockedDoor(t, content) && isPassable(t, content);
+}
 
 /**
  * The room behind the locked door at door: it walks the map from each passable tile next
- * to it (8 directions, same floor, never through a locked door, every other door open when
- * its tile lets creatures through: isPassable) to find the sides the door keeps apart, up
+ * to it (8 directions, same floor, roomPassable) to find the sides the door keeps apart, up
  * to DOOR_ROOM_SEARCH tiles each. A side the walk cannot finish is open ground, the
  * outside; when every side finishes, the biggest one is. The other sides are the room.
  */
 export function doorRoom(tiles: TileMap, content: ContentIndex, door: Position): DoorRoom {
   const z = door.z;
-  const passable = (x: number, y: number): boolean => {
-    const t = tiles.tile(x, y, z);
-    return !hasLockedDoor(t, content) && isPassable(t, content);
-  };
-  const doorKey = key(door.x, door.y, z);
+  const passable = (x: number, y: number): boolean => roomPassable(tiles, content, x, y, z);
+  const doorKey = keyOf(door);
   const side = new Map<number, number>(); // walked tile → the walk that reached it first
   const size: number[] = []; // tiles of each walk; -1 when it could not finish
   const parent: number[] = []; // union-find over walks that met (the same side)
@@ -128,7 +145,8 @@ export function doorRoom(tiles: TileMap, content: ContentIndex, door: Position):
     total.set(r, n < 0 || (t ?? 0) < 0 ? -1 : (t ?? 0) + n);
   }
   const tilesOf = (r: number): number => total.get(r) ?? 0;
-  if (sides.length < 2) return { error: "open" };
+  if (sides.length === 0) return { error: "walled" };
+  if (sides.length === 1) return { error: "open" };
   let outside = -1;
   let open = 0;
   for (const r of sides)
@@ -149,5 +167,119 @@ export function doorRoom(tiles: TileMap, content: ContentIndex, door: Position):
     const list = index.get(root(s));
     if (list) list.push({ x: k % 65536, y: Math.floor(k / 65536) % 65536, z });
   }
-  return { rooms: [...index.values()] };
+  const out: Position[] = [];
+  for (const [dx, dy] of STEPS) {
+    const x = door.x + dx;
+    const y = door.y + dy;
+    if (x < 0 || y < 0 || x > MAX || y > MAX) continue;
+    const s = side.get(key(x, y, z));
+    if (s !== undefined && root(s) === outside) out.push({ x, y, z });
+  }
+  return { rooms: [...index.values()], outside: out };
+}
+
+/**
+ * Whether the outsides of two locked doors that share a room are one area: a walk from
+ * the tiles next to the first door on its outside (a; breadth first, 8 directions,
+ * roomPassable) reaches one next to the second door on its outside (b) within
+ * SAME_OUTSIDE_SEARCH tiles.
+ */
+export function sameOutside(
+  tiles: TileMap,
+  content: ContentIndex,
+  a: Position[],
+  b: Position[],
+): boolean {
+  const seen = new Set(a.map(keyOf));
+  const targets = new Set(b.map(keyOf));
+  for (const t of targets) if (seen.has(t)) return true;
+  const queue = [...a];
+  for (let i = 0; i < queue.length && i < SAME_OUTSIDE_SEARCH; i++) {
+    const t = queue[i] as Position;
+    for (const [dx, dy] of STEPS) {
+      const x = t.x + dx;
+      const y = t.y + dy;
+      if (x < 0 || y < 0 || x > MAX || y > MAX) continue;
+      const q = key(x, y, t.z);
+      if (seen.has(q) || !roomPassable(tiles, content, x, y, t.z)) continue;
+      if (targets.has(q)) return true;
+      seen.add(q);
+      queue.push({ x, y, z: t.z });
+    }
+  }
+  return false;
+}
+
+/** A locked door refused by doorRooms, and the earlier door whose room it shares. */
+export interface DoorRoomFinding {
+  door: Position;
+  error: DoorRoomError;
+  other?: Position;
+}
+
+/** The rooms behind a list of locked doors (doorRooms). */
+export interface DoorRooms {
+  /** Room tile (x,y,z) → the first locked door, in the given order, the room is behind. */
+  behind: Map<string, Position>;
+  /** Tiles behind each accepted door, by its x,y,z. */
+  sizes: Map<string, number>;
+  /** The refused doors, in the given order: one finding each. */
+  findings: DoorRoomFinding[];
+}
+
+const posKey = (p: Position): string => `${p.x},${p.y},${p.z}`;
+
+/**
+ * The rooms behind the locked doors given in map order (chunk by chunk, row by row, like
+ * the server): doorRoom for each, and a room shared with an earlier door is refused when
+ * that door has another lock or another outside (sameOutside). The server stops at its
+ * first refused door; this goes on and reports every one.
+ */
+export function doorRooms(
+  tiles: TileMap,
+  content: ContentIndex,
+  doors: { pos: Position; lock: string }[],
+): DoorRooms {
+  const roomOf = new Map<number, number>(); // tile → room id
+  const rooms: { door: Position; lock: string }[] = [];
+  const outsides = new Map<string, Position[]>();
+  const out: DoorRooms = { behind: new Map(), sizes: new Map(), findings: [] };
+  for (const { pos, lock } of doors) {
+    const r = doorRoom(tiles, content, pos);
+    if ("error" in r) {
+      out.findings.push({ door: pos, error: r.error });
+      continue;
+    }
+    outsides.set(posKey(pos), r.outside);
+    let size = 0;
+    let refused = false;
+    for (const tilesOfSide of r.rooms) {
+      const first = tilesOfSide[0];
+      const id = first ? roomOf.get(keyOf(first)) : undefined;
+      if (id === undefined) {
+        const room = rooms.length;
+        rooms.push({ door: pos, lock });
+        for (const t of tilesOfSide) {
+          roomOf.set(keyOf(t), room);
+          out.behind.set(posKey(t), pos);
+        }
+      } else {
+        const owner = rooms[id] as { door: Position; lock: string };
+        const error =
+          owner.lock !== lock
+            ? "key"
+            : !sameOutside(tiles, content, outsides.get(posKey(owner.door)) ?? [], r.outside)
+              ? "outside"
+              : undefined;
+        if (error) {
+          out.findings.push({ door: pos, error, other: owner.door });
+          refused = true;
+          break;
+        }
+      }
+      size += tilesOfSide.length;
+    }
+    if (!refused) out.sizes.set(posKey(pos), size);
+  }
+  return out;
 }
