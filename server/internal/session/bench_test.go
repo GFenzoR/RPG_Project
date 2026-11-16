@@ -304,3 +304,55 @@ func BenchmarkDoorLockRefused(b *testing.B) {
 		b.Fatalf("%d answers to %d tries", holder.events, b.N)
 	}
 }
+
+// BenchmarkThrowAway measures one tick in which a player throws one coin on the street and
+// picks it back up (two commands). Throwing something away keeps the player's snapshot of
+// that moment for its next transfer (T5.3 fail-safe, hold.go gaveAway): its cost is one
+// snapshot of a player carrying a 40-item chest, taken in the loop (no write until a
+// transfer follows). Budget: a small fraction of the 10 ms tick (docs/07).
+func BenchmarkThrowAway(b *testing.B) {
+	items := testItems()
+	var chest content.Item
+	_ = yaml.Unmarshal([]byte("{id: bench_chest, kind: container, weight: 100, container: {slots: 40}}"), &chest)
+	chest.Numeric = 170
+	items[chest.ID] = &chest
+	w, err := session.New(session.Config{
+		Map: worldtest.Open(b, 0, 0, 32, 32), Balance: testBalance(), Vocations: testVocations, Items: items,
+		Save: func(session.Snapshot) bool { return true },
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	mv, fight, flush := w.Systems()
+	loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: rand.New(rand.NewPCG(1, 2)),
+		Systems: []game.System{mv, fight, flush}})
+	if err != nil {
+		b.Fatal(err)
+	}
+	c := withPack(1, pos(10, 10))
+	in := make([]session.ItemState, 0, 40)
+	in = append(in, session.ItemState{ItemID: coinID, Count: 50, Slot: 0})
+	for i := range 39 {
+		in = append(in, session.ItemState{ItemID: swordID, Count: 1, Slot: i + 1})
+	}
+	c.Inventory = []session.ItemState{{ItemID: chest.Numeric, Count: 1, Slot: int(slotBackpack), Items: in}}
+	cl := &discardClient{}
+	_ = loop.Enqueue(w.Join(c, cl))
+	loop.Step()
+	_ = loop.Enqueue(w.Input(cl, useItem(inSlot(slotBackpack), uint32(chest.Numeric), 0)))
+	loop.Step()
+	const window = 1 // the first container p opens
+	throw := moveItem(inContainer(window, 0), coinID, 0, onTile(pos(11, 10)), 1)
+	back := moveItem(onTile(pos(11, 10)), coinID, 1, inContainer(window, 0), 1)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = loop.Enqueue(w.Input(cl, throw))
+		_ = loop.Enqueue(w.Input(cl, back))
+		loop.Step()
+	}
+	b.StopTimer()
+	if p := w.PlayerByCharacter(1); p == nil || w.CountItem(p, "copper_coin") != 50 {
+		b.Fatal("the coin did not come back")
+	}
+}
