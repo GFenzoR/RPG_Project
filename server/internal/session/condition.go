@@ -505,9 +505,10 @@ func (w *World) loadConditions(ctx *game.TickContext, p *Player, saved []Conditi
 }
 
 // authorOf is the author of a condition that creature source gives h: the character of
-// source if it is another player in the world, else 0 (a monster, nobody, or h itself).
+// source if h is a player and source another player in the world, else 0 (a monster's
+// condition, nobody's, h's own, or one on a monster: its share is source).
 func (w *World) authorOf(h holder, source uint32) int64 {
-	if source == 0 || h.p != nil && h.p.id == source {
+	if h.p == nil || source == 0 || h.p.id == source {
 		return 0
 	}
 	if a := w.playerByID(source); a != nil {
