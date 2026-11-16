@@ -577,7 +577,13 @@ class WorldValidator {
         }
       }
     }
-    const { behind, findings } = doorRooms(this.tiles, this.content, locked);
+    // A house is no street: the walk between the outsides of two doors does not cross one.
+    const houses = new Set<string>();
+    for (const island of this.world.islands.values())
+      for (const h of island.houses)
+        for (const r of h.rects)
+          for (const [x, y] of tilesOf(r)) houses.add(formatPos({ x, y, z: r.z }));
+    const { behind, findings } = doorRooms(this.tiles, this.content, locked, houses);
     for (const f of findings) {
       const d = locked.find((l) => formatPos(l.pos) === formatPos(f.door));
       if (!d) continue;

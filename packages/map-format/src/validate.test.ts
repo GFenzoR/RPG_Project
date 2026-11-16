@@ -526,7 +526,7 @@ describe("validateWorld", () => {
     pushItem(vault.chunk, 23, 24, "forge_gate");
     expect(messages(check(vault.island))).toContainEqual(
       expect.stringContaining(
-        'locked door "forge_gate" at 23,24,7: it shares its room with a locked door whose outside is not its own (no way between them within 16384 tiles) (the door at 18,20,7)',
+        'locked door "forge_gate" at 23,24,7: it shares its room with a locked door whose outside meets its own only through another locked door, if at all (a vault no door guards, or a cycle of locked doors, refused for now) (the door at 18,20,7)',
       ),
     );
   });

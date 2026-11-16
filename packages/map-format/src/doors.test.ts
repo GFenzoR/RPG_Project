@@ -99,8 +99,12 @@ function draw(c: Case): { tiles: TileMap; locked: { pos: Position; lock: string 
   return { tiles: new TileMap([island]), locked };
 }
 
+/** How many cases door-rooms.json has (TestDoorRoomsFixture checks the same). */
+const DOOR_ROOM_CASES = 21;
+
 describe("doorRooms", () => {
-  it("reads the shared cases", () => expect(fixture.cases.length).toBeGreaterThanOrEqual(18));
+  it("reads the shared cases", () =>
+    expect(fixture.cases.length).toBeGreaterThanOrEqual(DOOR_ROOM_CASES));
 
   it.each(fixture.cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
     const { tiles, locked } = draw(c);
@@ -136,6 +140,52 @@ describe("doorRooms", () => {
     expect(doorRooms(tiles, content, locked).findings).toEqual([
       { door: { x: 10, y: 2, z: 7 }, error: "outside", other: { x: 6, y: 2, z: 7 } },
     ]);
+  });
+
+  // Two gates of one hall whose outsides meet only through a house (the server's
+  // TestSharedRoomOutsidesDoNotCrossHouses): a house is no street.
+  it("does not walk through houses between the outsides of two doors", () => {
+    const { tiles, locked } = draw({
+      name: "a hall over a street",
+      rows: [
+        "#############",
+        "#...#...#...#",
+        "#.T.D...D...#",
+        "#...#...#...#",
+        "#...#####...#",
+        "#...........#",
+        "#############",
+      ],
+    });
+    expect(doorRooms(tiles, content, locked).findings).toEqual([]);
+    expect(doorRooms(tiles, content, locked, new Set(["6,5,7"])).findings).toEqual([
+      { door: { x: 8, y: 2, z: 7 }, error: "outside", other: { x: 4, y: 2, z: 7 } },
+    ]);
+  });
+
+  // A door refused on a later side leaves the new room of an earlier side unindexed: the
+  // server stops at that door, so the room must not refuse a later door either. In this
+  // order the gate of another key comes first; the gate's south-east room is new, its
+  // south-west room is the other gate's.
+  it("indexes the rooms of a door only when all its sides pass", () => {
+    const { tiles, locked } = draw({
+      name: "a gate with two rooms, one behind a gate of another key",
+      rows: [
+        "###########",
+        "#....T....#",
+        "#.........#",
+        "######D####",
+        "#..##.#.###",
+        "#..K..#..##",
+        "###########",
+      ],
+    });
+    const r = doorRooms(tiles, content, [...locked].reverse());
+    expect(r.findings).toEqual([
+      { door: { x: 6, y: 3, z: 7 }, error: "key", other: { x: 3, y: 5, z: 7 } },
+    ]);
+    expect(r.behind.has("5,4,7")).toBe(true);
+    expect(r.behind.has("7,4,7")).toBe(false);
   });
 });
 
