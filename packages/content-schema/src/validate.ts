@@ -542,7 +542,8 @@ class Validator {
    * Doors and keys (docs/02 "Puertas con llave", same rules as content.CheckDoors in Go):
    * a door pairs with another door that points back, the closed one blocks movement and the
    * open one does not, neither can be picked up, only the closed one is locked, every lock
-   * has a key and no door is a key. Unknown pairs are checkRefs' to report.
+   * has a key, every key can be picked up (a player carries it) and no door is a key.
+   * Unknown pairs are checkRefs' to report. Where doors stand is map-format's.
    */
   private checkDoors(): void {
     const byId = new Map<string, Obj>();
@@ -555,6 +556,8 @@ class Validator {
     const blocks = (it: Obj): boolean =>
       it["blocks_movement"] === true || (it["kind"] === "wall" && it["blocks_movement"] !== false);
     for (const { item, src, path } of this.items) {
+      if (typeof item["key"] === "string" && item["pickupable"] === false)
+        this.error(src, [...path, "key"], "a key needs to be pickupable (a player carries it)");
       const door = item["door"];
       if (!isObj(door)) continue;
       const id = idOf(item) ?? "";

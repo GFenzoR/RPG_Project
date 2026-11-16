@@ -68,6 +68,10 @@ func TestCheckDoors(t *testing.T) {
 		"lock without key": `
 - {id: gate, kind: decoration, pickupable: false, blocks_movement: true, door: {key: lock, open: gate_open}}
 - {id: gate_open, kind: decoration, pickupable: false, door: {closed: gate}}`,
+		"key nobody can carry": `
+- {id: gate, kind: decoration, pickupable: false, blocks_movement: true, door: {key: lock, open: gate_open}}
+- {id: gate_open, kind: decoration, pickupable: false, door: {closed: gate}}
+- {id: lock_key, kind: decoration, pickupable: false, key: lock}`,
 		"door is a key": `
 - {id: gate, kind: decoration, pickupable: false, blocks_movement: true, key: lock, door: {key: lock, open: gate_open}}
 - {id: gate_open, kind: decoration, pickupable: false, door: {closed: gate}}`,

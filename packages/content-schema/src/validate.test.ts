@@ -406,6 +406,8 @@ describe("validator diagnostics", () => {
         "    door: { closed: forge_gate } }",
         "- { id: two_way, kind: decoration, sprite: doors/forge_gate, name: item.forge_gate.name,",
         "    pickupable: false, blocks_movement: true, door: { open: bad_gate_open, closed: bad_gate } }",
+        "- { id: fixed_key, kind: material, sprite: quest/ember_key, name: item.ember_key.name,",
+        "    pickupable: false, key: forge_gate }",
         "",
       ].join("\n"),
     );
@@ -418,6 +420,7 @@ describe("validator diagnostics", () => {
       "a door needs pickupable: false",
       '"forge_gate" is not a closed door that opens into "bad_gate_open"',
       "an open door cannot block movement",
+      "a key needs to be pickupable (a player carries it)",
     ])
       expect(out.some((m) => m.includes(want))).toBe(true);
     // Exactly one of open and closed (the schema).

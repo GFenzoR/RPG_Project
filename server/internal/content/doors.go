@@ -39,7 +39,8 @@ func (it *Item) Walkable() bool { return it.Ground != nil && it.Ground.Walkable 
 // CheckDoors checks the doors and keys of items: each door pairs with exactly one other
 // door that points back, the closed one blocks movement and the open one does not,
 // neither can be picked up, only the closed one is locked, a lock has at least one key
-// that opens it, and no door is a key. Errors name items in id order.
+// that opens it, every key can be picked up (a player carries it), and no door is a key.
+// Errors name items in id order. Where doors stand on the map is session.initDoors'.
 func CheckDoors(items Items) error {
 	ids := make([]string, 0, len(items))
 	keys := map[string]bool{}
@@ -54,6 +55,9 @@ func CheckDoors(items Items) error {
 		it := items[id]
 		if it.Key != "" && it.Door != nil {
 			return fmt.Errorf("item %q: a door cannot be a key", id)
+		}
+		if it.Key != "" && !it.CanPickUp() {
+			return fmt.Errorf("item %q: a key needs to be pickupable (a player carries it)", id)
 		}
 		d := it.Door
 		if d == nil {
