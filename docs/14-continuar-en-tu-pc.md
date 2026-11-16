@@ -42,7 +42,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuenta de AWS y dominio | T1.18: servidor público | `09-deployment-aws.md` |
 | Apps OAuth de Google y Discord, y SMTP | Login social y emails (T2.1) | `12-local-development.md` |
 | Cuenta bot de GitHub (token classic con `public_repo`, fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
-| Protección de la rama `main` y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `09-deployment-aws.md` |
+| Protección de la rama `main` (check requerido: el status `map-pr/verdict`, fuente GitHub Actions) y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `04-map-editor-and-ai.md` "PR de mapas en CI", `09-deployment-aws.md` |
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
@@ -86,6 +86,20 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **CI de PR de mapas sin `pull_request_target`** (GitHub lo bloquea por defecto en repos
+  públicos desde el 2026-12-02): `map-pr-pending.yml` ya no existe. El aviso de
+  "pendiente" sale ahora del `workflow_run` `requested` de `map-pr`, y el status de commit
+  `map-pr/verdict` cierra el caso del push sin corrida (docs/04, "PR de mapas en CI"). Falta:
+  - 👤 después de mezclar esto en `main`, marcar `map-pr/verdict` como check requerido
+    (fuente GitHub Actions). Hasta entonces, un push que borra o renombra `map-pr.yml`
+    deja el comentario anterior a la vista, aunque nombra su commit y su pie avisa;
+  - mirar en el primer PR real que el comentario pase a ⏳ al empujar y que el status
+    aparezca en el commit (`pending`, y después `success` o `failure`). Los tests usan un
+    GitHub en memoria. Sin verificar en GitHub: si `requested` llega también para la
+    corrida de un contribuidor nuevo que espera aprobación (si no llega, el status falta
+    hasta que se apruebe, que también bloquea);
+  - una merge queue necesitaría que `map-pr` corra en `merge_group` y ponga el status
+    sobre ese commit; hoy se usa "Require branches to be up to date".
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
   (hay que entrar de nuevo en cada arranque) y el selector de servidor reinicia la app.
   Detalle en `15-movil.md`. El área segura (muesca, esquinas, barra de inicio) se cuenta

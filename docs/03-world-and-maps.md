@@ -650,8 +650,8 @@ Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable
    `04-map-editor-and-ai.md`, "Map patches".
 3. **Revisión.** Hito 2: el patch se envía como pull request de GitHub (a mano o por la
    herramienta). La CI valida y publica imágenes antes/después del área (T2.4: un
-   comentario en el PR que se actualiza en cada push, ver `04-map-editor-and-ai.md`,
-   "PR de mapas en CI"). Hito 5: portal web con cola
+   comentario en el PR que se actualiza en cada push y un status `map-pr/verdict` por
+   commit, ver `04-map-editor-and-ai.md`, "PR de mapas en CI"). Hito 5: portal web con cola
    de moderación que crea el PR automáticamente al aprobar.
 4. **Contenido nuevo** (monstruos, items) no entra por patch de mapa: va en un PR de
    `data/` revisado por maintainers, porque afecta el balance.

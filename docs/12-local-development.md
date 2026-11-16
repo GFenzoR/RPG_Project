@@ -60,9 +60,8 @@ Con CRLF fallan `bash`, `make`, Prettier y los tests que comparan texto.
 - Los E2E siembran la base con `psql`; si no está instalado, lo corren dentro del
   contenedor de Postgres (`client/e2e/psql.ts`). No hace falta instalar PostgreSQL.
 - Tests que no se pueden reproducir en Windows y se saltan ahí (con un comentario en el
-  test): permisos `chmod` (map-format), el paso de `map-pr-pending` sin un `jq` que
-  imprima LF (mapcli) y la salida limpia con SIGTERM del worker de mapas, que en Windows
-  solo comprueba que el proceso termina.
+  test): permisos `chmod` (map-format) y la salida limpia con SIGTERM del worker de
+  mapas, que en Windows solo comprueba que el proceso termina.
 - Los E2E lanzan Chromium con la GPU (ANGLE/D3D11): en Windows, sin eso, dibuja WebGL por
   software y los tests con varias páginas PixiJS pasan su límite de tiempo. En Linux y CI
   no cambia nada.
