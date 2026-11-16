@@ -171,7 +171,7 @@ function ashGround(img: Image, _rand: Rng, seed: number): void {
 function basaltPaving(img: Image, _rand: Rng, seed: number): void {
   const m = PALETTE.basalt;
   const cellOf = (x: number, y: number): number =>
-    lattice(wrap(x), wrap(y), 16, 8, seed, { jitter: 0, squash: 1.7, stagger: true }).id;
+    lattice(wrap(x + 8), wrap(y), 16, 16, seed, { jitter: 0, squash: 1.2, stagger: true }).id;
   eachInRect(0, 0, 32, 32, (x, y) => {
     const id = cellOf(x, y);
     const tone = (hash2(id, 5, seed) - 0.5) * 0.36;

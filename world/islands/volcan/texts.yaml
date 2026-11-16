@@ -1,0 +1,14 @@
+- id: volcan_temple_sign
+  kind: sign
+  pos: { x: 3641, y: 5793, z: 7 }
+  text: text.volcan.temple_sign
+
+- id: volcan_dock_sign
+  kind: sign
+  pos: { x: 3635, y: 5793, z: 7 }
+  text: text.volcan.dock_sign
+
+- id: volcan_mine_sign
+  kind: sign
+  pos: { x: 3691, y: 5794, z: 7 }
+  text: text.volcan.mine_sign

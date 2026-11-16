@@ -2561,8 +2561,22 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
   await arrived(page, 3642, 5789);
   await shot(page, "65-volcan-temple");
   // Out of the temple door and east across the plaza into the keeper's archive, by clicks.
+  // Outside the door, the sign of the temple (T5.5) is read with Shift+click.
+  const door = await page.evaluate(() => window.__rpgClient?.tileToClient(3642, 5793));
+  if (!door) throw new Error("no canvas");
+  await page.mouse.click(door.x, door.y);
+  await arrived(page, 3642, 5793);
+  const sign = await page.evaluate(() => window.__rpgClient?.tileToClient(3641, 5793));
+  if (!sign) throw new Error("no canvas");
+  await page.mouse.move(sign.x, sign.y);
+  await page.keyboard.down("Shift");
+  await page.mouse.click(sign.x, sign.y);
+  await page.keyboard.up("Shift");
+  await expect(page.getByTestId("game-log")).toContainText(
+    "Ves cartel. Templo de la Llama Quieta, en Brasal.",
+  );
+  await shot(page, "65b-volcan-temple-sign");
   for (const [x, y] of [
-    [3642, 5793],
     [3648, 5794],
     [3655, 5794],
     [3662, 5794],

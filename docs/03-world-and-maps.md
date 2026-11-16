@@ -110,6 +110,10 @@ level_hint: [1, 15]
   pos: { x: 3230, y: 6402, z: 7 }
   text: text.puerto.temple_sign
 ```
+El servidor no carga `texts.yaml` (lo usan el editor, `mapcli` y el validador). Para que
+un cartel se vea y se lea en el juego, la misma casilla lleva un item fijo cuya
+`description` es esa clave (T5.5: `brasal_temple_sign`, ver `06-content-data.md`); mirarlo
+muestra el texto. Los carteles de Puerto y del Bosque todavía no tienen ese item.
 
 `spawns.yaml`:
 ```yaml
@@ -414,8 +418,8 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   3638–3646, 5784–5792 con la puerta al sur y la sacerdotisa; fragua, yunque y fogón con el
   herrero; el archivo de madera de Casia 3658–3666, 5795–5801, puerta al norte), muelle de
   tablones al oeste (3610–3635, 5794–5796) con la capitana `volcan_ferryman` en 3615,5794:
-  las rutas salen de 3612,5795 y las llegadas caen en 3617,5795. Llano de ceniza (tierra)
-  al norte con sabuesos (26–30), ladera de piedra al sureste con salamandras (29–33) y
+  las rutas salen de 3612,5795 y las llegadas caen en 3617,5795. Llano de ceniza
+  al norte con sabuesos (26–30), ladera de lava enfriada al sureste con salamandras (29–33) y
   algunas vetas de ascua, y el cráter (anillo de `rock_wall` con centro 3712,5760, abierto
   al sur; el anillo es 4-conexo, sin esquinas diagonales abiertas, así que solo se entra por
   el hueco) con dragoncillos (48+). Escalera de la mina en 3692,5796 (`stairs_down` /
@@ -427,10 +431,22 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   una casilla (`rock_wall` en 3691,5832) con la puerta con llave `forge_gate` en
   3692,5832: se abre con la llave de ascua del Capítulo 3. Protección en el templo y la plaza;
   `no_logout` en el muelle; el resto es PvP abierto. Casa (T5.4): `volcan_house_cinder`
-  (prefab `house_wood_small` en 3646,5797, puerta al sur). Sin carteles todavía: el
-  check de mapas lee el i18n de la rama base y las claves `text.volcan.*_sign` (templo,
-  muelle, mina y puerta) llegan con este cambio; los carteles van en un cambio de mapa
-  aparte.
+  (prefab `house_wood_small` en 3646,5797, puerta al sur).
+  Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
+  (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
+  en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la
+  plaza al llano del norte, del camino a la boca del cráter y del camino a la ladera), y manchas de
+  escoria donde el generador había dejado arena tierra adentro; la ladera y el cráter
+  son de lava enfriada (`cooled_lava`) con seis pozos de lava fundida (`lava`, no
+  caminable) siempre rodeados de costra, fuera de los spawns y sin tapar vetas de ascua.
+  La playa sigue siendo arena (`ash_sand`, `cooled_lava_sand`). Se pintó con un script de
+  ops (`paint_ground` por celdas, `remove_item` de tres rocas bajo la lava, `place_item`
+  de los carteles y `autoborder` de toda la isla) sobre el mapa anterior, sin mover
+  spawns, NPCs, portales, zonas ni la casa. Carteles (`texts.yaml` y un item
+  `brasal_*_sign` en la misma casilla, que bloquea): templo en 3641,5793 (junto a la
+  puerta), muelle en 3635,5793 (al final de los tablones) y mina en 3691,5794 (junto a la
+  escalera). El de la puerta sellada (`text.volcan.gate_sign`, piso 8) queda para el
+  cambio de las puertas con llave.
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:
