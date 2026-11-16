@@ -39,6 +39,9 @@ const ropeUse = "rope"
 // stepPortal returns the portal that moves whoever steps onto to (stairs, hole,
 // teleport), or nil.
 func (w *World) stepPortal(to world.Pos) *world.Portal {
+	if !w.m.MovesOnStep(to) { // the tile's flag: no index lookup on a plain step
+		return nil
+	}
 	if pt := w.m.PortalAt(to); pt != nil && pt.Kind.OnStep() {
 		return pt
 	}

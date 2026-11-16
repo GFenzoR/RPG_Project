@@ -166,7 +166,7 @@ func TestPortalStepFlag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m2.MovesOnStep(at(33, 31, 7)) {
+	if m2.MovesOnStep(at(33, 31, 7)) || m2.Flags(at(33, 31, 7))&FlagPortalStep != 0 {
 		t.Fatal("the bit of a portal that is gone stayed")
 	}
 }

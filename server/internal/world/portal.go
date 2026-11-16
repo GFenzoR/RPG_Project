@@ -165,9 +165,9 @@ func (m *Map) PortalAt(p Pos) *Portal {
 
 // MovesOnStep reports whether stepping onto p moves a player elsewhere (a stairs, hole
 // or teleport portal leaves from p). It reads FlagPortalStep: path searches call it for
-// every tile they expand.
+// every tile they expand. A map without portals answers without looking at the tile.
 func (m *Map) MovesOnStep(p Pos) bool {
-	return m.Flags(p)&FlagPortalStep != 0
+	return len(m.portals) > 0 && m.Flags(p)&FlagPortalStep != 0
 }
 
 // Portals returns every portal of the map, island by island in file order.
