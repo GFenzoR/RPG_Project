@@ -174,7 +174,14 @@ acepta en un evento sintético; el pad captura su dedo.
   la caja del mapa queda dentro y el pad,
   la hotbar, los botones de zoom y el banner del item elegido guardan su margen desde los
   bordes del mapa, sin sumar el inset otra vez (antes, 47 px de más en horizontal).
-  Screenshot `mobile-pixel7-*-09-safe-area`.
+  Screenshot `mobile-pixel7-*-09-safe-area`. Lo que va fijo a la pantalla
+  (`position: fixed`, fuera de ese padding) toma los insets una vez: el personaje despierta
+  en Puerto (`psql`), habla con la sacerdotisa y la hoja del diálogo termina en los bordes
+  del área segura (abajo, derecha y, en vertical, izquierda; en horizontal, arriba), con
+  su "Cerrar" adentro (screenshot `10-safe-dialog`). Después acerca el mapa al máximo y
+  mantiene el dedo en la primera columna del mapa: el menú del toque largo queda entero
+  dentro del área segura, a 8 px de su borde izquierdo y no del de la pantalla (en
+  horizontal, antes quedaba bajo la muesca; screenshot `11-safe-menu`).
 - En vertical, la hotbar muestra al menos 4 slots enteros a la derecha del pad, bajo el
   mapa y sin nada encima.
 - En cada dispositivo, el zoom del mapa: `+` sube una escala entera y se recuerda
@@ -199,6 +206,25 @@ dentro de `make e2e`. Los E2E de escritorio siguen igual y deben quedar en verde
 cambio táctil altera el mouse ni el teclado. La PWA no entra en el E2E (Vite de desarrollo
 no registra el service worker); su lógica se prueba con Vitest (`client/src/pwa.test.ts`,
 `client/src/sw/policy.test.ts`).
+
+### E2E del atlas que falla (`client/e2e/atlas.spec.ts`)
+Cada request del atlas (`atlas.json`, el JSON de cada página y su imagen) se reintenta
+sola con la política de `packages/renderer/src/retry.ts` (4 intentos, esperas de 0,5, 1 y
+2 s). Dos tests de escritorio en Chromium con rutas de Playwright:
+- **Falla una vez:** la primera request de cada archivo del atlas se aborta
+  (`connectionrefused`) y la segunda pasa: el juego arranca igual (`ready`, mapa
+  dibujado, sin el aviso de error). La imagen de la página solo cuenta si la ruta ve el
+  `fetch` de PixiJS (puede venir de un worker); el fondo CSS de un icono nunca se aborta
+  (el navegador no lo reintenta). Screenshot `atlas-00-flaky`.
+- **Sigue fallando:** `atlas.json` falla siempre; tras los 4 intentos aparece el aviso
+  (`load-failed`) con "Reintentar" (`load-retry`), sin canvas ni `__rpgClient`, y la sesión
+  sigue abierta (vida en el encabezado, ningún batch del servidor vuelve a pedir el
+  atlas). Con la red de vuelta, el botón arranca el canvas en la misma página (sin
+  recargar ni volver a entrar). Screenshots `atlas-01-failed` y `atlas-02-retried`.
+
+El editor tiene su versión en `editor/e2e/editor.spec.ts` ("the atlas does not load"): el
+error con "Reintentar" y el mapa de vuelta sin recargar (screenshots `52-atlas-failed` y
+`53-atlas-retried`).
 
 ### E2E en la CI
 El job `e2e` corre en `ubuntu-latest`: 2 CPU y sin GPU, así que cada página dibuja WebGL

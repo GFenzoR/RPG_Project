@@ -88,20 +88,18 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
 ## Pendientes conocidos (no bloquean)
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
   (hay que entrar de nuevo en cada arranque) y el selector de servidor reinicia la app.
-  Detalle en `15-movil.md`. El área segura (muesca, esquinas, barra de inicio) ya se
-  cuenta una sola vez para el pad, la hotbar, los botones de zoom y el banner del item
-  elegido (los mide un E2E con insets de CDP). Falta para lo que se posiciona contra la
-  pantalla entera (`position: fixed`): las ventanas sobre el mapa en teléfono (diálogo,
-  crafteo, mercado, casa, intercambio) y el menú del toque largo (`menuPlacement` deja
-  8 px del borde de la pantalla, no del área segura). En un iPhone horizontal pueden
-  quedar un poco bajo la muesca o la barra de inicio; se ve solo en un dispositivo real
-  o con el override de CDP.
-- **Atlas sin reintento:** si el `fetch` de `/atlas/atlas.json` falla una vez
-  (`Atlas.load` en `packages/renderer`, llamado por `createGameCanvas`), el canvas no se
-  crea y el juego queda en "Conectando…" para siempre, con la sesión abierta. Se vio una
-  vez en `make e2e` local (Windows: `ERR_CONNECTION_REFUSED` contra el Vite de desarrollo
-  en "T5.1"; la corrida siguiente pasó entera). En una red móvil puede pasarle a un
-  jugador: un par de reintentos con espera, o un aviso con "Reintentar", lo resolvería.
+  Detalle en `15-movil.md`. El área segura (muesca, esquinas, barra de inicio) se cuenta
+  una sola vez en todo el juego: el padding de `.game` para lo que cuelga del mapa, y
+  `env(safe-area-inset-*)` en los bordes de lo que va fijo a la pantalla (las ventanas en
+  teléfono y tablet, el selector de idioma fuera del juego) y en `menuPlacement` para el
+  menú del toque largo. Un E2E con insets de CDP mide el pad, la hotbar, el zoom, el
+  banner, el diálogo de un NPC y el menú; crafteo, mercado, casa e intercambio comparten
+  la regla CSS del diálogo pero no tienen su propia medición. Falta verlo en un iPhone y
+  un Android con muesca de verdad (el override de CDP solo existe en Chromium).
+- **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
+  `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
+  (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace
+  falta, los sonidos podrían usar la misma política.
 - **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un

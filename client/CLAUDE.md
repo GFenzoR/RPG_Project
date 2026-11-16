@@ -45,6 +45,20 @@ client/
   T0.5). Solo se dibuja el piso del jugador.
 - Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).
 
+## Atlas: reintentos y "Reintentar"
+- `Atlas.load` (`packages/renderer`) reintenta cada request por su cuenta (`atlas.json`, el
+  JSON de cada página y su imagen) con `ASSET_RETRY` de `packages/renderer/src/retry.ts`
+  (puro, con tests: 4 intentos, esperas de 0,5, 1 y 2 s; un estado HTTP de error cuenta
+  como fallo). Lo ya bajado no se pide de nuevo. Sin PixiJS: el sitio lo importa como
+  `@rpg/renderer/retry` (`loadIcons` de la tienda).
+- Si se agotan los intentos, `Game.startCanvas` no lo vuelve a intentar solo (cada batch
+  del servidor lo haría): avisa `GameOptions.loadFailed` y `ui/LoadStatus.tsx` (sin hooks,
+  con test) cambia "Conectando…" por el error y "Reintentar" (`load-failed`,
+  `load-retry`), que llama a `Game.retryCanvas`. La sesión sigue abierta todo el tiempo:
+  no se recarga la página ni se vuelve a entrar. E2E: `e2e/atlas.spec.ts` (docs/08).
+- El editor usa el mismo `Atlas.load`: su error de carga trae "Reintentar"
+  (`canvas-retry`), que vuelve a crear el canvas sin recargar.
+
 ## Notas de T1.6
 - Combate: `WorldState` guarda vida (%) por criatura, objetivo, efectos, textos flotantes
   y un log corto de mensajes de sistema; `Game` publica un `GameUi` tras cada batch y
@@ -480,9 +494,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `.game` (`client.css`). Lo que va sobre el mapa (pad, hotbar, botones de zoom, banner
   del item elegido, en `touch.css`) cuelga de `.viewport`, que ya está dentro de ese
   padding: sus márgenes son desde los bordes del mapa y no suman `env()` otra vez. Lo
-  que usa `position: fixed` (ventanas en teléfono, menú del toque largo) se mide contra
-  la pantalla y todavía no respeta el área segura (docs/14). E2E con insets de CDP en
-  `mobile.spec.ts`.
+  que usa `position: fixed` se mide contra la pantalla, fuera de ese padding, y toma los
+  insets una vez en sus propios bordes: las ventanas en teléfono y tablet (diálogo,
+  crafteo, mercado, casa, intercambio: `left/right/top/bottom: env(...)` en `client.css`),
+  el selector de idioma fuera del juego (`.corner`) y el menú del toque largo, que lee
+  los insets del padding de `.game` (`paddingInsets`, `ui/ActionMenu.tsx`) y deja sus
+  8 px desde el borde del área segura (`menuPlacement`, puro y con tests). Algo nuevo con
+  `position: fixed` hace lo mismo; algo nuevo dentro de `.viewport`, nunca. E2E con
+  insets de CDP en `mobile.spec.ts` (también el diálogo de un NPC y el menú).
 - **Layout** (`ui/layout.ts`, breakpoints como datos): `.game` lleva `data-layout`
   (`desktop`, `tablet`, `phone-portrait`, `phone-landscape`), `data-panel` (`sidebar`,
   `tabs`, `drawer`) y `data-flow` (`row`, `column`); `client.css` cuelga sus reglas de
