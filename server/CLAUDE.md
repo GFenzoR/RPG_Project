@@ -196,10 +196,19 @@ server/
 
 - **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
   es un par de items del mapa; abrir o cerrar es `Map.ReplaceItem` (el único cambio que
-  acepta un `world.Map` después de cargar, en el lugar) + `tileChanged`. La sala detrás de
-  cada puerta con llave se calcula en `initDoors` (los muros no cambian): nada recorre el
-  mapa en el tick. Desde la sala una puerta trabada se abre sin llave (nadie queda
-  encerrado, tampoco tras un relogueo o un reinicio). Su estado no se guarda.
+  acepta un `world.Map` después de cargar, en el lugar; si lo rechaza no se manda nada) +
+  `tileChanged`. La sala detrás de cada puerta con llave se calcula en `initDoors` (los
+  muros no cambian; las demás puertas con llave son muro, así una puerta doble comparte
+  sala) con el mismo recorrido que `packages/map-format/src/doors.ts`: si cambias uno,
+  cambia el otro y `testdata/door-rooms.json` (lo leen los tests de los dos). Una sala
+  que no se puede determinar o que tiene algo de afuera (`checkRooms`: templo, NPC, casa,
+  llegada de barco, teleport de diálogo) no deja arrancar. Nada recorre el mapa en el
+  tick: `World.roomOf` (casilla → sala) y los sectores de cada sala. **Toda búsqueda de
+  casilla libre por anillos** (`freeNear`, `houseExit` o una nueva) pasa por
+  `roomAllows`: nunca deja a nadie en una sala si no empezó en ella. Desde la sala una
+  puerta trabada se abre sin llave (nadie queda encerrado, tampoco tras un relogueo o un
+  reinicio). Todo uso junto a una puerta, también un rechazo, pasa por `doorReady`
+  (`inventory.door_cooldown_ms`). Su estado no se guarda.
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

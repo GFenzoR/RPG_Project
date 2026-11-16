@@ -363,6 +363,19 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   bloque `door`, cuenta como abierta aunque esté cerrada o con llave: en el juego se abre,
   ver `02-game-design.md` "Puertas con llave"). Zonas sin ningún tile
   alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir).
+- **Puertas** (`02-game-design.md` "Puertas con llave"; el servidor no arranca con lo que
+  aquí es error): un solo item de puerta (bloque `door`) por casilla; advertencia si una
+  puerta está colocada abierta (vuelve a estar abierta tras cada reinicio). Cada puerta
+  con llave (cerrada o abierta) necesita una **sala** determinable: se recorre a pie cada
+  lado (8 direcciones, mismo piso, hasta 4096 casillas por lado, las demás puertas con
+  llave como muro y las sin llave como abiertas si su casilla deja pasar, regla
+  `isPassable`); un lado sin terminar es el de afuera y, si todos terminan, el más grande.
+  Es error una puerta con un solo lado, con más de un lado sin terminar o con los dos
+  lados más grandes del mismo tamaño. La sala no puede tener el templo, NPCs, casas
+  (casillas o salida), extremos de portales, llegadas de rutas de barco ni destinos de un
+  `teleport` de un diálogo de NPC; los spawns sí. El recorrido es el mismo que el del
+  servidor (`packages/map-format/src/doors.ts` y `session/door.go`), y los dos leen los
+  casos de `packages/map-format/src/testdata/door-rooms.json`.
   Advertencia (T3.6): un área caminable conexa (8 direcciones, un piso) de 10 casillas o
   más a la que no se llega desde el templo, fuera de parcelas `community_plot` (un muelle
   suelto, un banco de arena del generador, una sala sin escalera). Una por área, con una

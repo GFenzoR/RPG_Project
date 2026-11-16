@@ -681,35 +681,66 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   sin llave puede dejar a otros afuera ni adentro.
 - **No cierra sobre algo:** ni con una criatura ni con items en su casilla.
 - **La sala de atrás:** al arrancar, el servidor recorre a pie cada lado de cada puerta
-  con llave (8 direcciones, mismo piso, sin cruzar esa puerta y con las demás puertas
-  abiertas), hasta 4096 casillas por lado. Un lado que no termina es terreno abierto; si
-  todos terminan, el más grande es el de afuera. Los demás son la **sala** de la puerta.
-  Una puerta en campo abierto (se la puede rodear) no tiene sala. Como los muros no
-  cambian y el recorrido cuenta las puertas como abiertas, la sala se calcula una vez; usar
-  la puerta cuesta una búsqueda en un mapa por jugador, no un recorrido.
+  con llave (8 direcciones, mismo piso, sin cruzar esa puerta), hasta 4096 casillas por
+  lado. Las **demás puertas con llave cuentan como muro** (aunque estén abiertas en el
+  mapa) y las puertas sin llave como abiertas, si su casilla deja pasar (suelo caminable y
+  nada más que bloquee el paso salvo puertas). Un lado que no termina es terreno abierto:
+  el de afuera. Si todos terminan, el más grande es el de afuera. Los demás son la
+  **sala** de la puerta. Así una **puerta doble** (dos puertas con llave juntas en la
+  misma pared) comparte una sala: cada una toma a la otra como muro. Como los muros no
+  cambian, la sala se calcula una vez; el servidor guarda de cada casilla de una sala a
+  qué sala pertenece, así que usar la puerta cuesta una búsqueda en un mapa, no un
+  recorrido.
+- **Sala que no se puede determinar = error:** el servidor no arranca, y `make validate`
+  lo rechaza antes (misma regla, mismo recorrido; los dos leen los casos de
+  `packages/map-format/src/testdata/door-rooms.json`), con una puerta con llave que
+  tiene un solo lado (está en campo abierto: se la rodea), más de un lado sin terminar
+  (la sala sería más grande que 4096 casillas) o, si todos terminan, los dos lados más
+  grandes del mismo tamaño (no está claro cuál es el de afuera).
+- **La sala no guarda nada de afuera:** ni el templo (donde se despierta), ni NPCs, ni
+  casas (casillas o salida), ni llegadas de barco, ni destinos de un teleport de diálogo;
+  `make validate` mira además los extremos de los portales (el servidor no los carga).
+  Si una sala tiene algo de eso, o se tomó el lado de afuera por la sala, o alguien
+  llegaría detrás de la puerta: ni el servidor arranca ni pasa `make validate`. Los
+  spawns sí pueden estar en una sala: la forja guarda a su custodio detrás del portón.
 - **Nadie queda encerrado:** desde la sala, una puerta trabada se abre siempre, con o sin
   llave ("Descorres el cerrojo desde adentro"). Así sale quien volvió a entrar al juego
   adentro con la puerta trabada (otro la cerró mientras no estaba, o hubo un reinicio) y
   quien perdió la llave adentro. Desde afuera sigue haciendo falta la llave. Además, la
   puerta no se cierra con llave mientras haya en la sala un jugador conectado sin la llave
   ("Alguien sin la llave quedaría encerrado"): encerrar a alguien no es una jugada que
-  tenga quien lleva la llave.
-- **Ritmo:** un jugador abre o cierra una puerta como mucho cada 500 ms ("Espera un
-  momento"); los intentos rechazados no cuentan. Otros jugadores la pueden usar mientras.
-- **Estado:** vive solo en el mapa en memoria. Un reinicio cierra y traba todas las
-  puertas otra vez. Los monstruos no abren puertas, pero pasan por una abierta.
+  tenga quien lleva la llave. Para eso el servidor mira solo a los jugadores de los
+  sectores de la sala y corta la búsqueda de la llave en cuanto la encuentra.
+- **Nadie aparece adentro sin pasar la puerta:** cuando el servidor busca una casilla
+  libre por anillos alrededor de un punto (entrar al juego sobre una casilla ocupada,
+  despertar en el templo, la llegada de un barco, un teleport de diálogo o del personal,
+  salir de una casa), descarta las casillas de una sala si el punto no está en esa misma
+  sala. Los anillos no siguen las paredes: sin esto, con unas pocas casillas ocupadas
+  junto al portón (en la forja bastaban unas 11), quien guardó su posición afuera
+  aparecía adentro y, como desde adentro se abre sin llave, le abría a todos.
+- **Ritmo:** un jugador usa una puerta como mucho cada `inventory.door_cooldown_ms`
+  (500 ms, "Espera un momento"), la abra, la cierre o se lo rechacen: un rechazo también
+  cuenta, así sus chequeos (la llave, la sala) corren a ese ritmo y no al del gateway.
+  Otros jugadores la pueden usar mientras.
+- **Estado:** vive solo en el mapa en memoria. Un reinicio deja todas las puertas como
+  están en el mapa: cerradas y trabadas (una puerta colocada abierta queda abierta otra
+  vez; `make validate` lo advierte). Los monstruos no abren puertas, pero pasan por una
+  abierta.
 - **Límites conocidos:**
   - el cálculo de la sala no conoce escaleras ni portales (hoy no existen en el
-    servidor): una puerta futura cuyo acceso sea un pasillo chico con una escalera que
-    lleva a otro lado podría tomar ese pasillo por la sala. Al poner una puerta así hay
-    que revisarlo (`TestForgeGateOnTheMap` muestra cómo);
-  - al entrar al juego sobre una casilla ocupada, el servidor busca la libre más cercana
-    por anillos alrededor, no a pie: cerca de una puerta podría dejar a alguien del otro
-    lado. Si queda en la sala, sale abriéndola desde adentro;
+    servidor). Una puerta cuyo lado de afuera sea un pasillo chico con una escalera
+    podría tomar ese pasillo por la sala: `make validate` lo rechaza porque la sala
+    tendría un extremo de portal. Igual conviene revisar una puerta nueva con un test
+    como `TestForgeGateOnTheMap`;
+  - una sala dentro de otra (una puerta con llave en la sala de otra): cada puerta toma a
+    la otra como muro, así que la sala de adentro tiene que ser más chica que la del
+    medio; si no, la del medio pasa por la sala de la puerta de adentro. Hoy no hay
+    ninguna; marcar el lado de adentro en los datos quedaría para cuando haga falta;
   - la llave se puede repetir: quien terminó `ch3_gate` y no la lleva encima pide otra al
     eco, así que tirarla al piso y pedir otra da llaves de más, y una llave tirada la puede
     levantar cualquiera. Lo aceptamos: quien tiene la llave ya puede abrirle la puerta a
-    quien quiera, y la llave no se vende ni se comercia (`tradeable: false`).
+    quien quiera, y la llave no se vende ni se comercia (`tradeable: false`). Una llave
+    tiene que poder levantarse (el validador lo exige).
 - **Mapa:** una puerta se coloca como cualquier item (`place_item`, la paleta del editor,
   que muestra de cada puerta y de cada llave su id de llave). La llave es del tipo de
   item, no de la casilla: el formato de chunks no tiene atributos
@@ -717,8 +748,9 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   items. Elegimos esto frente a un id por casilla (como hace Tibia) porque mantiene el
   contenido como datos y no cambia el formato de mapas ni `world.bin`. El
   validador de mapas cuenta las puertas como abiertas al medir el alcance desde el templo,
-  y no deja poner un item de puerta en una casilla de puerta de una casa (usarlo abriría
-  la puerta y nunca la ventana de la casa; el servidor tampoco arranca con eso).
+  no deja poner un item de puerta en una casilla de puerta de una casa (usarlo abriría
+  la puerta y nunca la ventana de la casa) ni dos items de puerta en una casilla (cada
+  uno reclamaría el uso y la llave); el servidor tampoco arranca con eso.
 - **Hoy:** la puerta de la forja (`forge_gate` / `forge_gate_open`, piso 8 de la Isla
   Volcánica, 3692,5832) se abre con la llave de ascua (`ember_key`) del Capítulo 3.
 

@@ -134,7 +134,9 @@ items:
   (`level`, `vocations`) y `vocations.yaml → weapons` limitan quién lo equipa.
 - **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
-  un personaje nuevo), `max_open_containers`, `use_cooldown_ms` y `reach`.
+  un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
+  entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
+  `reach`.
 - **Recursos** (T1.12): cualquier item del mapa (suelo o pila) puede ser un lugar de
   recolección con un bloque `resource`:
   ```yaml
@@ -186,9 +188,13 @@ items:
   El validador (y `content.CheckDoors` al arrancar el servidor) exige: exactamente uno de
   `open` y `closed`; que el par se nombre de vuelta; `pickupable: false` en los dos; la
   cerrada bloquea el paso y la abierta no; `key` solo en la cerrada y con al menos un
-  item llave que lo tenga; y que ninguna puerta sea llave. Agregar otra puerta con llave
+  item llave que lo tenga; que toda llave se pueda levantar (sin `pickupable: false`: un
+  jugador la lleva encima); y que ninguna puerta sea llave. Agregar otra puerta con llave
   es solo datos: un par nuevo, su llave, textos y sprites; el mapa la coloca como
-  cualquier item.
+  cualquier item. Dónde se coloca lo valida el mapa (`03-world-and-maps.md`,
+  "Validación"): un item de puerta por casilla, una sala determinable detrás de cada
+  puerta con llave y nada de afuera en ella (tampoco el destino de un `teleport` de un
+  diálogo de `data/npcs`).
 
 ## Monstruo
 ```yaml

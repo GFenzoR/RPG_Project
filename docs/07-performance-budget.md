@@ -37,12 +37,20 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   No está medida con `make bench-tick` (sus benchmarks la tienen apagada); los tests de
   simulación juegan entre 6 y 8 h de juego de un personaje en menos de un segundo cada uno.
 - Puertas con llave (`session/door.go`): la sala detrás de cada puerta se calcula una vez
-  al arrancar (un recorrido de hasta 4096 casillas por lado); en el tick, cerrar con llave
-  mira una entrada de un mapa por jugador y abrir desde adentro una sola. Un jugador mueve
-  una puerta como mucho cada 500 ms, así que una puerta no puede mandar su casilla 30
-  veces por segundo. `BenchmarkDoorLockRefused` (un intento de cerrar con alguien sin llave
-  en una sala de 3968 casillas, con 100 jugadores, en cada tick): ~2 µs y 10 asignaciones
-  (los mensajes); recorrer la sala en cada intento costaba ~0,54 ms y 163 KB.
+  al arrancar (un recorrido de hasta 4096 casillas por lado) y queda un índice casilla →
+  sala (`roomOf`). En el tick, abrir desde adentro es una búsqueda en ese mapa; cerrar con
+  llave mira solo a los jugadores de los sectores de la sala (una búsqueda cada uno) y, de
+  los que están adentro, busca la llave en sus bolsas cortando al encontrarla. Toda
+  búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) suma una búsqueda en
+  `roomOf` por casilla, sin asignar. Un jugador usa una puerta como mucho cada
+  `inventory.door_cooldown_ms` (500 ms), **también cuando se lo rechazan**, así que ni la
+  casilla ni los chequeos corren al ritmo del gateway. `BenchmarkDoorLockRefused` (el peor
+  intento: 202 jugadores, 151 en una sala de 3968 casillas, 150 con la llave al fondo de
+  un cofre de 40 items y el que no la tiene mirado último; la espera bajada a un tick para
+  intentar en cada uno): ~39 µs y 10 asignaciones por tick, contra ~19 µs y 2
+  asignaciones del mismo tick sin el intento, o sea ~20 µs y 8 asignaciones (los mensajes)
+  por intento, una vez cada 500 ms por jugador. Antes (jugador sin llave segundo, mochilas
+  vacías, 100 jugadores) medía ~2 µs: no era el peor caso.
 - Ranking público (T4.3, `queries/highscores.sql`): fuera del tick, pero comparte el pool de
   Postgres con los guardados. Hay como mucho 2 consultas a la vez, con 5 s de presupuesto;
   cada página se cachea 60 s por clave. Ninguna consulta ordena todos los personajes:
