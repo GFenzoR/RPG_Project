@@ -313,3 +313,6 @@ func (w *World) InDoorRoom(door, p world.Pos) bool {
 	_, in := d.room[p]
 	return in
 }
+
+// MarketViewers returns how many open market windows show item's book (mkWatch).
+func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }

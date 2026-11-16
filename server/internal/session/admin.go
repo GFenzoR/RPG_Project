@@ -561,6 +561,7 @@ func (w *World) AdminDone(r AdminResult) game.Command {
 			switch job.kind {
 			case AdminBan:
 				w.banned[r.AccountID] = job.until
+				w.marketAccountChanged(r.AccountID) // its offers are hidden now
 				for _, o := range append([]*Player(nil), w.players...) {
 					if o.accountID == r.AccountID {
 						w.remove(ctx, o, pb.DisconnectReason_DISCONNECT_REASON_BANNED, false)
@@ -568,6 +569,7 @@ func (w *World) AdminDone(r AdminResult) game.Command {
 				}
 			case AdminUnban:
 				delete(w.banned, r.AccountID)
+				w.marketAccountChanged(r.AccountID)
 			}
 		}
 		gm := w.byChar[job.charID]

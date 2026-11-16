@@ -1003,6 +1003,7 @@ func (w *World) changeOwner(now time.Time, h *house, to, acc int64, name string,
 	ops = append(ops, HouseOp{Kind: HouseOwnerChange, House: h.def.ID, CharacterID: from, Owner: o})
 	w.houseTransfer(players, ops, append(market, mail...)...)
 	w.mailedNotice(h, from, len(mail))
+	w.marketOwnerChanged(from) // T5.3: its open market window shows the mailbox
 	w.expelIntruders(h)
 }
 
@@ -1016,6 +1017,7 @@ func (w *World) releaseHouse(now time.Time, h *house, players []*Player, market 
 	w.clearOwner(h)
 	w.houseTransfer(players, ops, append(market, mail...)...)
 	w.mailedNotice(h, from, len(mail))
+	w.marketOwnerChanged(from) // T5.3: its open market window shows the mailbox
 	w.expelIntruders(h)
 }
 
@@ -1120,6 +1122,7 @@ func (w *World) renewHouse(now time.Time, h *house) {
 		w.econRecord(nil, EconomyEntry{Kind: EconHouse, CharacterID: owner, Amount: -rent, Ref: "rent"})
 		w.houseTransfer(nil, []HouseOp{{Kind: HousePaid, House: h.def.ID, CharacterID: owner, PaidUntil: h.paidUntil}},
 			MarketOp{Kind: MarketGoldAdd, CharacterID: owner, Gold: -rent})
+		w.marketOwnerChanged(owner) // T5.3: the rent left its mailbox
 		if o := w.byChar[owner]; o != nil {
 			o.emit(systemMsg(msgHouseRenewed, houseParam(h), num("price", int(rent))))
 		}

@@ -515,7 +515,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.partyLeftWorld(p)               // T3.3: leaving the world leaves the party
 	w.guildLeftWorld(p)               // T5.1: the guild sees it offline
 	w.cancelTrade(p, tradeCancelLeft) // T5.3
-	p.market = nil
+	w.dropMarket(p)
 	p.house = nil
 	w.unindex(p)
 	delete(w.byClient, p.client)

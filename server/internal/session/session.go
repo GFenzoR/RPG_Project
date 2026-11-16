@@ -356,6 +356,10 @@ type World struct {
 	nextMail     int64
 	nextTransfer uint64
 	mkNext       game.Tick
+	// mkWatch are the open windows by browsed item, in the order they started showing it;
+	// mkPush the windows to refresh at the end of the tick (flushMarket).
+	mkWatch map[uint16][]*Player
+	mkPush  []*Player
 	// readOnly: a transfer could not be stored (Tainted): until a restart the market can
 	// only be browsed and nobody trades. locked are the characters whose state in memory
 	// is ahead of the database: out of the world and refused at login until a restart.

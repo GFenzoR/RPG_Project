@@ -382,6 +382,7 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.checkTrades(ctx)
 	w.checkMarketExpiry(ctx)
 	w.checkHouses(ctx) // T5.4: also flushes this tick's house item changes
+	w.flushMarket(ctx) // after everything above that changes offers or mailboxes
 	w.flushGuilds(ctx.Now)
 	w.checkEconomy(ctx.Tick)
 	w.checkIdle(ctx)
