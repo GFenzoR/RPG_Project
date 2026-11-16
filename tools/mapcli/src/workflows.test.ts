@@ -50,20 +50,22 @@ const workflows: Workflow[] = readdirSync(dir)
     if (!parsed) throw new Error(`${file}: invalid YAML`);
     return { ...(parsed.data as Omit<Workflow, "file" | "text">), file, text };
   });
-const actions: Action[] = existsSync(actionsDir)
-  ? readdirSync(actionsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .flatMap((d) =>
-        ["action.yml", "action.yaml"]
-          .map((f) => join(actionsDir, d.name, f))
-          .filter((f) => existsSync(f)),
+/** Every action.yml / action.yaml under dir, at any depth. */
+const actionFiles = (dir: string): string[] =>
+  existsSync(dir)
+    ? readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
+        d.isDirectory()
+          ? actionFiles(join(dir, d.name))
+          : /^action\.ya?ml$/.test(d.name)
+            ? [join(dir, d.name)]
+            : [],
       )
-      .map((file) => {
-        const parsed = parseYamlText(readFileSync(file, "utf8"), file, []);
-        if (!parsed) throw new Error(`${file}: invalid YAML`);
-        return { ...(parsed.data as Omit<Action, "file">), file };
-      })
-  : [];
+    : [];
+const actions: Action[] = actionFiles(actionsDir).map((file) => {
+  const parsed = parseYamlText(readFileSync(file, "utf8"), file, []);
+  if (!parsed) throw new Error(`${file}: invalid YAML`);
+  return { ...(parsed.data as Omit<Action, "file">), file };
+});
 const byFile = (f: string): Workflow => {
   const w = workflows.find((x) => x.file === f);
   if (!w) throw new Error(`no ${f}`);
@@ -96,7 +98,8 @@ const runExpressions = (run: string): string[] =>
  */
 const scripts = (s: Step): string[] => [
   ...(s.run === undefined ? [] : [s.run]),
-  ...(s.uses?.startsWith("actions/github-script@") === true && s.with?.script !== undefined
+  ...(s.uses?.toLowerCase().startsWith("actions/github-script@") === true &&
+  s.with?.script !== undefined
     ? [String(s.with.script)]
     : []),
 ];
@@ -142,11 +145,22 @@ describe("workflows", () => {
     };
     expect(scripts(gs).flatMap(runExpressions)).toEqual(["github.head_ref"]);
     expect(scripts({ uses: "actions/checkout@v4", with: { script: "${{ x }}" } })).toEqual([]);
+    // GitHub does not mind the case of an action's name.
+    expect(
+      scripts({ uses: "Actions/GitHub-Script@v7", with: { script: "${{ x }}" } }).flatMap(
+        runExpressions,
+      ),
+    ).toEqual(["x"]);
     expect(scripts({ run: "echo ${{ matrix.os }}" }).flatMap(runExpressions)).toEqual([
       "matrix.os",
     ]);
-    // Every action found there is a composite one (its steps are the ones checked above).
+    // Every action found there is a composite one (its steps are the ones checked above),
+    // and a step can only use a local action from there (one elsewhere would go unread).
     for (const a of actions) expect(a.runs?.using, a.file).toBe("composite");
+    const local = [...workflows.flatMap(steps), ...actions.flatMap((a) => a.runs?.steps ?? [])]
+      .map((s) => s.uses ?? "")
+      .filter((u) => u.startsWith("./"));
+    for (const u of local) expect(u).toMatch(/^\.\/\.github\/actions\/[\w./-]+$/);
   });
 
   it("see every expression of a script", () => {
@@ -300,7 +314,8 @@ describe("map pull request workflows", () => {
   it("map-pr-comment follows the start and the end of every map-pr run", () => {
     const on = (comment.on as Obj).workflow_run as Obj;
     expect(on.workflows).toEqual([check.name]);
-    // prcomment.ts tells map-pr's runs apart from other workflows' by this name.
+    // workflow_run follows map-pr by this name; prcomment.ts lists its runs by file
+    // (CHECK_WORKFLOW_FILE, the file of `check`).
     expect(check.name).toBe(CHECK_WORKFLOW);
     expect(on.types).toEqual(["requested", "completed"]);
     const { pending, comment: verdict } = comment.jobs;
