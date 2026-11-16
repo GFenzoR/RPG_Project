@@ -2757,6 +2757,7 @@ test("portals: a path goes round the volcanic mine stairs; down them to floor 8 
        pos_x = 3690, pos_y = 5796, pos_z = 7 WHERE name = '${name}';`,
   ]);
   await enterGame(page, email, password);
+  errors.length = 0; // the 401 of opening the page without a session cookie
   const standsOn = async (x: number, y: number, z: number): Promise<void> => {
     await expect
       .poll(
