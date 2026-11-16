@@ -162,6 +162,31 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     barco o un teleport de diálogo sobre una puerta con llave colocada abierta todavía se
     acepta (`checkRooms` solo mira las salas): quien llega queda en la puerta, como quien
     la cruza abierta; si hace falta, rechazarlos igual que los extremos de portal.
+  - **Para que lo decida el dueño (revisión del lote 3):**
+    - portales de la comunidad entre islas: hoy el chequeo de parcelas los rechaza
+      (`cross_island`, `packages/map-format/src/patch/plots.ts`), la opción segura, porque
+      un teletransporte entre islas se saltea el barco, su precio y sus requisitos y
+      `travel.combat_block_ms`. Si se quieren, hace falta una regla de viaje para ellos
+      (como mínimo el bloqueo de combate del barco en el servidor) antes de aflojar el
+      chequeo. En "Mis envíos" el rechazo se ve como el genérico de fuera de parcelas
+      (`outside_plot`): un código propio necesita i18n, cliente y servidor;
+    - agujeros y teletransportes sin salida: `make validate` solo **advierte** cuando desde
+      su destino no se llega a un templo sin llaves ni herramientas (un pozo del que se
+      sale con soga es un diseño válido, a la manera de Tibia). Si se prefiere que sea
+      error, o exigir siempre una salida sin soga, es cambiar la advertencia de
+      `checkPortalExits` (`validate.ts`) por un error;
+    - quien veía a un jugador tomar una escalera recibe el paso y enseguida su
+      desaparición, y el cliente lo borra en el acto: no ve el paso sobre la escalera. Se
+      podría diferir el borrado hasta que termine la animación (solo para dibujar, sin que
+      siga en la lista de batalla ni se pueda atacar);
+    - con una tecla de movimiento mantenida, un paso rechazado no se reintenta hasta volver
+      a pulsarla (así no se repite el aviso de la escalera o de la puerta de una casa).
+      Eso incluye un paso rechazado porque alguien estaba en la casilla y después se fue.
+  - un comando que suelta algo a la calle **dentro** de una pila o bolsa ajena y además
+    cambia una casa todavía guarda el snapshot aparte, antes de la escritura de la casa,
+    y lo registra con nivel error (`settleGave`): no se le puede reservar lo ajeno. Hoy
+    ningún comando lo hace (solo un `MoveItem` suelta en algo ajeno, y no cambia una casa
+    salvo por la recompensa del tutorial).
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).
