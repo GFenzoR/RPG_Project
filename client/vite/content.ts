@@ -12,7 +12,7 @@
 //                        `vite build` emits the same files under atlas/
 //
 // The client never reads world/: the map arrives from the server (FullMapView, MapSlice).
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -462,25 +462,22 @@ function loadHouseDoors(root: string): string[] {
 const num0 = (v: unknown): number => (typeof v === "number" ? v : 0);
 
 /**
- * Entrance tile ("x,y,z") → kind of every portal of world/islands/<id>/portals.yaml: the
- * client keeps its paths off stairs, holes and teleports and uses a bare ladder's ground
- * (state/portals.ts). make validate checks the files.
+ * Entrance tile ("x,y,z") → kind of every portal of the islands world.yaml lists
+ * (world/islands/<id>/portals.yaml, like mapcompile): the client keeps its paths off
+ * stairs, holes and teleports and uses a bare ladder's ground (state/portals.ts). An island
+ * without the file has no portals; a file that does not parse fails the build (make
+ * validate names the error), rather than ship a client that walks onto stairs.
  */
-function loadPortals(root: string): Record<string, string> {
-  const dir = join(root, "world", "islands");
-  let islands: string[];
-  try {
-    islands = readdirSync(dir);
-  } catch {
-    return {};
-  }
+export function loadPortals(root: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const id of islands.sort()) {
+  for (const { id } of loadIslands(root)) {
+    const file = join(root, "world", "islands", id, "portals.yaml");
+    if (!existsSync(file)) continue;
     let raw: unknown;
     try {
-      raw = readYaml(join(dir, id, "portals.yaml"));
-    } catch {
-      continue; // no portals on this island
+      raw = readYaml(file);
+    } catch (e) {
+      throw new Error(`${file}: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
     }
     if (!Array.isArray(raw)) continue;
     for (const p of raw)
