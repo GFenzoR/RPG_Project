@@ -213,12 +213,14 @@ server/
   cambia el otro y `testdata/door-rooms.json` (lo leen los tests de los dos). Una sala
   que no se puede determinar, compartida por puertas de otra llave o que tiene algo de
   afuera (`checkRooms`: templo, NPC, casa, extremo de portal, llegada de barco, teleport
-  de diálogo) no deja arrancar, y tampoco una puerta que no pasa el **chequeo de escape**
+  de diálogo) no deja arrancar, y tampoco una puerta que abierta no deja pasar a nadie
+  (`errDoorBlocked`) ni una que no pasa el **chequeo de escape**
   (`checkEscapes`, igual en `doors.ts`): sobre las **áreas** de `session/area.go`
-  (casillas unidas a pie con puertas con llave y casas como muro; una sala es un área),
-  cada lado de cada puerta con llave llega a un templo (el mundo; una llegada de barco no
-  lo es) yendo de una sala a los lados de sus puertas y por los portales de `escapeWay`
-  (escalera, escalera de mano, agujero, teletransporte; no `rope_spot` ni `boat`), y
+  (casillas unidas a pie con puertas con llave, casas y entradas de escalera, agujero y
+  teletransporte como muro; una sala es un área), cada lado de cada puerta con llave
+  llega a un templo (el mundo; una llegada de barco no lo es) yendo de una sala a los
+  lados de sus puertas y por los portales de `escapeWay` (escalera, escalera de mano,
+  agujero, teletransporte; no `rope_spot` ni `boat`), tomados desde `portalSources`, y
   nadie con todas las llaves menos una, parado fuera de las salas o en una casa, entra a
   una sala de esa llave. Si sumas una forma de moverse entre áreas que un jugador sin
   llaves ni herramientas tiene siempre, súmala como arista en los dos lados (`escapeWay`

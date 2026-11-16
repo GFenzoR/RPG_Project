@@ -57,8 +57,8 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   chequeo de escape es un recorrido de un grafo de áreas (una por puerta y portal) y no se
   nota. Crece con los sectores del mundo, no con los jugadores: un mundo 10 veces más
   grande serían ~4 MiB y ~70 ms al arrancar. `make validate` hace lo mismo en TS solo con
-  las áreas que toca (las de los lados de las puertas, los portales, los templos y las
-  llegadas): ~35 ms sobre el mundo real. En el tick, abrir desde adentro es una búsqueda
+  las áreas que toca (las de los lados de las puertas, las de los portales y las de los
+  templos): ~35 ms sobre el mundo real. En el tick, abrir desde adentro es una búsqueda
   en `roomOf`; cerrar con llave mira solo a los jugadores de los sectores de la sala (una
   búsqueda cada uno) y, de los que están adentro, busca la llave en sus bolsas cortando al
   encontrarla. Toda búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) suma
