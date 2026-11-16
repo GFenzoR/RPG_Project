@@ -13,11 +13,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { pushItem, setGround } from "./chunk.ts";
-import { loadContent } from "./content.ts";
+import { groundAt, pushItem, setGround, stackAt } from "./chunk.ts";
+import { loadContent, showsPortal } from "./content.ts";
 import { formatDiagnostic } from "./diagnostics.ts";
 import { writeIsland, writeWorldMeta } from "./io.ts";
-import { chunkKey, emptyChunk } from "./types.ts";
+import { CHUNK_SIZE, chunkKey, emptyChunk } from "./types.ts";
 import type { ContentIndex } from "./content.ts";
 import type { Chunk, Island, Position, WorldMeta } from "./types.ts";
 import { validateWorld } from "./validate.ts";
@@ -93,11 +93,33 @@ function worldOf(...islands: Island[]): WorldMeta {
   };
 }
 
+/**
+ * A copy of island with an item that shows each portal (but a boat) on its entrance, as
+ * make validate wants (docs/03): the fixtures put portals anywhere. A tile without ground,
+ * or one that already holds a portal item, is left as it is.
+ */
+function shown(island: Island): Island {
+  const out = structuredClone(island);
+  for (const p of out.portals) {
+    if (p.kind === "boat") continue;
+    const c = out.chunks.get(
+      chunkKey(p.from.z, Math.floor(p.from.x / CHUNK_SIZE), Math.floor(p.from.y / CHUNK_SIZE)),
+    );
+    const lx = p.from.x % CHUNK_SIZE;
+    const ly = p.from.y % CHUNK_SIZE;
+    if (!c || groundAt(c, lx, ly) === null) continue;
+    if (stackAt(c, lx, ly).some((id) => content.items.get(id)?.portal)) continue;
+    const look = [...content.items.values()].find((i) => showsPortal(i, p.kind, p.from, p.to));
+    if (look) pushItem(c, lx, ly, look.id);
+  }
+  return out;
+}
+
 function check(island: Island, meta: WorldMeta = worldOf(island), extra: Island[] = []) {
   const root = mkdtempSync(join(tmpdir(), "map-format-"));
   dirs.push(root);
   writeWorldMeta(root, meta);
-  for (const i of [island, ...extra]) writeIsland(root, i);
+  for (const i of [island, ...extra]) writeIsland(root, shown(i));
   return { root, ...validateWorld(root, { content }) };
 }
 
@@ -366,6 +388,49 @@ describe("validateWorld", () => {
     const r = check(i);
     expect(r.diagnostics.filter((x) => x.severity === "error")).toEqual([]);
     expect(messages(r)).toContainEqual(expect.stringContaining("a boat portal moves nobody"));
+  });
+
+  it("wants the item that shows each portal on its entrance; warns of one with no portal", () => {
+    // Bare: the stairs of mini() without their items.
+    const root = mkdtempSync(join(tmpdir(), "map-format-"));
+    dirs.push(root);
+    const bare = mini();
+    writeWorldMeta(root, worldOf(bare));
+    writeIsland(root, bare);
+    expect(messages(validateWorld(root, { content }))).toEqual([
+      'error world/islands/mini/portals.yaml:3 [0].from: (10,10,7) stairs "mini_down" has no item that shows it on its entrance (one with portal: { kind: stairs, leads: down }, e.g. stairs_down)',
+      'error world/islands/mini/portals.yaml:8 [1].from: (10,10,8) stairs "mini_up" has no item that shows it on its entrance (one with portal: { kind: stairs, leads: up }, e.g. stairs_up)',
+    ]);
+
+    // A ladder pair whose foot wears the hatch of a ladder going down (the wrong way), a
+    // teleport on its floor with its item (check adds the rest) and a hole item lying
+    // where no hole leads anywhere.
+    const i = mini();
+    const top = must(i.chunks.get(chunkKey(7, 0, 0)));
+    const cave = must(i.chunks.get(chunkKey(8, 0, 0)));
+    i.portals.push(
+      {
+        id: "mini_ladder",
+        kind: "ladder",
+        from: { x: 12, y: 12, z: 8 },
+        to: { x: 12, y: 13, z: 7 },
+      },
+      {
+        id: "mini_hatch",
+        kind: "ladder",
+        from: { x: 13, y: 13, z: 7 },
+        to: { x: 13, y: 12, z: 8 },
+      },
+      { id: "mini_gate", kind: "teleport", from: { x: 24, y: 8, z: 7 }, to: { x: 6, y: 20, z: 7 } },
+    );
+    pushItem(cave, 12, 12, "ladder_down");
+    pushItem(top, 22, 10, "hole");
+    const m = messages(check(i));
+    expect(m).toEqual([
+      'warning world/islands/mini/chunks/z07/c0000_0000.json items: (22,10,7) "hole" shows a hole, but no such portal of world/islands/mini/portals.yaml leaves from this tile',
+      'warning world/islands/mini/chunks/z08/c0000_0000.json items: (12,12,8) "ladder_down" shows a ladder leading down, but no such portal of world/islands/mini/portals.yaml leaves from this tile',
+      'error world/islands/mini/portals.yaml:13 [2].from: (12,12,8) ladder "mini_ladder" has no item that shows it on its entrance (one with portal: { kind: ladder, leads: up }, e.g. ladder_up)',
+    ]);
   });
 
   it("warns of a hole or a teleport into a place with no way to a temple", () => {

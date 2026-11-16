@@ -448,6 +448,8 @@ class Validator {
     if ("max_stack" in item && item["stackable"] !== true) {
       this.error(src, [...path, "max_stack"], "max_stack requires stackable: true");
     }
+    const portal = item["portal"];
+    if (isObj(portal)) this.checkPortalItem(item, portal, src, [...path, "portal"]);
     const res = item["resource"];
     if (isObj(res)) {
       const chance = res["chance"];
@@ -466,6 +468,30 @@ class Validator {
         }
       }
     }
+  }
+
+  /**
+   * The look of a portal (docs/03 "Validación", same rules as the server reads it): a map
+   * item nobody carries off, standing on a tile a player can step onto (every portal
+   * entrance is walkable), and a way that fits its kind (a hole only leads down, a rope
+   * spot only up).
+   */
+  private checkPortalItem(item: Obj, portal: Obj, src: SourceFile, path: PathSegment[]): void {
+    if (item["pickupable"] !== false)
+      this.error(src, path, "a portal item needs pickupable: false (it marks a map tile)");
+    if (
+      item["blocks_movement"] === true ||
+      (item["kind"] === "wall" && item["blocks_movement"] !== false)
+    )
+      this.error(src, path, "a portal item cannot block movement (a portal entrance is walkable)");
+    const kind = portal["kind"];
+    const leads = portal["leads"];
+    if ((kind === "hole" && leads === "up") || (kind === "rope_spot" && leads === "down"))
+      this.error(
+        src,
+        [...path, "leads"],
+        kind === "hole" ? "a hole only leads down" : "a rope spot only leads up",
+      );
   }
 
   private checkMonster(src: SourceFile): void {

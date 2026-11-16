@@ -1,8 +1,8 @@
 // World validation (docs/03-world-and-maps.md, "Validación"). The editor, mapcli, the MCP
 // server and `make validate` all call validateWorld, so they agree on what is an error.
 import { chunkFileName, floorDir } from "./chunk.ts";
-import { isSignItem, loadContent, routesFile } from "./content.ts";
-import type { ContentIndex } from "./content.ts";
+import { isSignItem, loadContent, routesFile, showsPortal } from "./content.ts";
+import type { ContentIndex, ItemInfo } from "./content.ts";
 import { Reporter } from "./diagnostics.ts";
 import type { Diagnostic, PathSegment } from "./diagnostics.ts";
 import { islandDir, loadWorld, worldFile } from "./io.ts";
@@ -20,7 +20,7 @@ import {
 import type { DoorWorld, TempleReach } from "./doors.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
-import type { Chunk, Island, Position, Rect, World } from "./types.ts";
+import type { Chunk, Island, Portal, Position, Rect, World } from "./types.ts";
 
 export interface MapReport {
   diagnostics: Diagnostic[];
@@ -49,6 +49,12 @@ const PAIRED_KINDS = new Set(["stairs", "ladder"]);
  * warning when no temple is reached from where they lead (checkPortalExits).
  */
 const ONE_WAY_KINDS = new Set(["hole", "teleport"]);
+
+/** The `portal` block an item needs to show the portal of kind from `from` to `to`. */
+function portalLookHint(kind: string, from: Position, to: Position): string {
+  if (kind === "hole" || kind === "rope_spot" || kind === "teleport") return `{ kind: ${kind} }`;
+  return `{ kind: ${kind}, leads: ${to.z > from.z ? "down" : "up"} }`;
+}
 
 /**
  * The most travel.arrival_radius may be (the balance schema's maximum): the radius of the
@@ -346,6 +352,15 @@ class WorldValidator {
             : "a rope spot leads up (to.z < from.z)",
           p.from,
         );
+      // The tile is the portal, but players only see an item: the one that shows it
+      // (its `portal` block), never a bare tile that moves whoever steps on it.
+      if (p.kind !== "boat" && !this.portalShown(p.kind, p.from, p.to))
+        this.err(
+          portalsFile,
+          [i, "from"],
+          `${p.kind} "${p.id}" has no item that shows it on its entrance (one with portal: ${portalLookHint(p.kind, p.from, p.to)}, ${this.portalItemsHint(p.kind, p.from, p.to)})`,
+          p.from,
+        );
       if (PAIRED_KINDS.has(p.kind) && !this.hasPair(p.from, p.to))
         this.err(
           portalsFile,
@@ -558,6 +573,8 @@ class WorldValidator {
       const key = formatPos(t.pos);
       signText.set(key, [...(signText.get(key) ?? []), t.text]);
     }
+    // Portal items by tile: each must stand on the entrance of a portal it shows.
+    const portalAt = new Map(island.portals.map((p) => [formatPos(p.from), p]));
     for (const c of island.chunks.values()) {
       const file = chunkFile(dir, c);
       const ox = c.cx * CHUNK_SIZE;
@@ -610,6 +627,19 @@ class WorldValidator {
                 pos,
               );
             else if (
+              info.portal &&
+              !reported.has(`portal:${lx},${ly}`) &&
+              !this.portalItemFits(info, portalAt.get(formatPos(pos)))
+            ) {
+              // A warning: it moves nobody, but players will take it for a way through.
+              reported.add(`portal:${lx},${ly}`);
+              this.warn(
+                file,
+                ["items"],
+                `"${id}" shows a ${info.portal.kind}${info.portal.leads ? ` leading ${info.portal.leads}` : ""}, but no such portal of ${dir}/portals.yaml leaves from this tile`,
+                pos,
+              );
+            } else if (
               isSignItem(info) &&
               !(signText.get(formatPos(pos)) ?? []).includes(info.description ?? "")
             )
@@ -1052,6 +1082,29 @@ class WorldValidator {
       for (const p of island.portals)
         if (PAIRED_KINDS.has(p.kind) && near(p.from, to) && near(p.to, from)) return true;
     return false;
+  }
+
+  /** Whether a portal item stands on the entrance of a portal it shows. */
+  private portalItemFits(info: ItemInfo, p: Portal | undefined): boolean {
+    return p !== undefined && showsPortal(info, p.kind, p.from, p.to);
+  }
+
+  /** Whether the tile `from` holds an item that shows the portal of kind to `to`. */
+  private portalShown(kind: string, from: Position, to: Position): boolean {
+    const tile = this.tiles.tileAt(from);
+    if (!tile) return false;
+    return [tile.ground, ...tile.stack].some(
+      (id) => id !== null && showsPortal(this.content.items.get(id), kind, from, to),
+    );
+  }
+
+  /** "e.g. stairs_down" with the items of data/ that show such a portal, or a hint to add one. */
+  private portalItemsHint(kind: string, from: Position, to: Position): string {
+    const ids = [...this.content.items.values()]
+      .filter((info) => showsPortal(info, kind, from, to))
+      .map((info) => info.id)
+      .sort();
+    return ids.length > 0 ? `e.g. ${ids.join(" or ")}` : "none in data/items yet";
   }
 
   private walkableAround(c: Position, radius: number): number {
