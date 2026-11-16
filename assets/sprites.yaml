@@ -10,7 +10,8 @@
 #
 # Pack art: Dungeon Crawl Stone Soup tiles (CC0, vendor/dungeon-crawl). What the pack does not
 # cover is original art drawn by tools/spritegen into assets/sprites/ (make spritegen), so it is
-# not listed here.
+# not listed here. That includes the frames no data/ file names: outfit frames
+# (outfits/<id>/<dir>_<n>) and the combat and spell effect strips (effects/<name>/<n>).
 sprites:
   # Ground
   ground/grass: { source: vendor/dungeon-crawl/dngn/floor/grass/grass0.png }

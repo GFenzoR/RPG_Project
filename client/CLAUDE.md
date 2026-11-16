@@ -51,8 +51,8 @@ client/
 - Click derecho sobre una criatura o click en la lista de batalla = `SetTarget` (otra vez
   la misma = dejar de atacar). Los monstruos usan su sprite del atlas
   (`monsterSprites`, de `data/monsters`).
-- Efectos y números flotantes son formas Pixi procedurales hasta tener sprites de efectos.
-  Capas: mapa+criaturas → efectos → nombres y barras → números.
+- Los efectos son tiras de frames del atlas (ver "Sprites de efectos"); los números
+  flotantes son `Text` de Pixi. Capas: mapa+criaturas → efectos → nombres y barras → números.
 - Los mensajes (`state/messages.ts`) se traducen con su clave y parámetros; los `item`
   repetidos forman `{items}`.
 
@@ -81,8 +81,8 @@ client/
   slot es lo que falta del cooldown propio o de grupo (`SpellCooldown`).
 - La línea "Decir" manda `Say` en el canal local: si son palabras mágicas, el servidor
   lanza el hechizo (el chat completo está en T1.13).
-- `WorldState.projectiles` guarda los `Projectile` 250 ms; efectos y proyectiles mágicos
-  son formas Pixi coloreadas por elemento (`ELEMENTS`).
+- `WorldState.projectiles` guarda los `Projectile` 250 ms; los proyectiles son formas Pixi
+  coloreadas por elemento (`ELEMENTS`) y los efectos mágicos, la tira de su elemento.
 
 ## Notas de T1.10
 - `WorldState.dialog` / `shop` (de `DialogOpen`, `DialogClose`, `ShopOpen`): la tienda se
@@ -105,7 +105,7 @@ client/
   deja `Game.usingItem` y la clase `using-item` en `body` (cursor en cruz); el siguiente
   click en el mapa manda `UseItemOn` a esa casilla. Escape, click derecho o click sobre una
   criatura lo cancelan.
-- Efectos 5 (cosecha) y 6 (intento fallido) son formas Pixi en `drawEffect`.
+- Efectos 5 (cosecha) y 6 (intento fallido): tiras `effects/gather` y `effects/gather_miss`.
 
 ## Notas de T1.13
 - `WorldState.chat` (últimas `CHAT_SIZE` líneas de `Message` no de sistema) aparte del log de
@@ -389,6 +389,31 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   anclados abajo a la derecha de su casilla, como en `MapView` (uno de 64x64 crece hacia
   arriba y a la izquierda). Alpha de invisible, nombre, barras, calavera y marco de
   objetivo no cambian.
+
+## Sprites de efectos
+- Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames
+  en el atlas: `effects/<nombre>/<n>` (`n` = 0, 1, …), 32x32, arte propio de
+  `tools/spritegen` (`recipes/effects.ts`, 6 frames por tira). Nombres: `hit`, `block`,
+  `heal`, `conjure`, `gather`, `gather_miss`, `buff` y los 7 elementos de `ELEMENTS`
+  (`physical` … `death`, ids 10 + índice).
+- `render/effects.ts` (puro, con tests): `effectFolder(id)` da la carpeta de un id;
+  `effectFrames(id, hasArt)` lista los frames con arte real hasta el primero que falte
+  (máximo `MAX_EFFECT_FRAMES`); `effectFrame(elapsed, frames)` reparte los frames en
+  partes iguales sobre `EFFECT_MS` (600 ms, lo que el mundo guarda un efecto): el primero
+  antes de empezar, el último desde el final. Se juega una vez, sin bucle.
+- `render/effect-layer.ts` (`EffectLayer`, con tests sobre contenedores de Pixi sin
+  render) dibuja efectos, proyectiles y números. Un id sin frames con arte real (id
+  desconocido, o atlas con `auto`/`placeholder`) cae en la forma Pixi procedural de
+  siempre, que se desvanece. Los sprites van anclados abajo a la derecha de su casilla,
+  como los de criatura.
+- Presupuesto (docs/07): todo sale de pools y se reutiliza; las formas procedurales
+  comparten un `GraphicsContext` por id; un frame no asigna nada (los sprites y formas se
+  toman por orden y los sobrantes se ocultan; un número conserva su `Text` mientras el
+  mundo lo guarde y vuelve a una reserva al terminar). `WorldState.expire` filtra las
+  listas en el lugar (`dropFinished`), sin un array nuevo por frame.
+- Para cambiar un efecto: su receta en `tools/spritegen/src/recipes/effects.ts`,
+  `make spritegen ONLY=effects/<nombre>/` y `make sprites`. Para un efecto nuevo del
+  servidor: su carpeta en `FOLDERS` de `render/effects.ts` y su tira en la receta.
 
 ## Notas de T5.6
 - **Input táctil** (`input/gestures.ts`, `dpad.ts`, `actions.ts`, puros y con tests). Los

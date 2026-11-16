@@ -70,9 +70,15 @@ Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concr
   la izquierda. Items de inventario: 32x32 centrados con fondo transparente.
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
 - Todo determinista: ruido con semilla, nunca `Math.random`.
+- Efectos de casilla (`sprites/effects/<nombre>/<n>.png`, `recipes/effects.ts`): tiras de 6
+  frames de 32x32 con fondo transparente, una por `effect_id` del servidor; el cliente las
+  reparte en partes iguales sobre 600 ms (`client/CLAUDE.md`, "Sprites de efectos"). Los
+  frames de una tira comparten semilla, así cada partícula sigue su trayectoria; el último
+  frame ya casi vacío, para que el efecto no se corte de golpe. Ningún `data/` los nombra.
 
 Para revisar: `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out
-shot.png --scale 4 [--only ground/]` (suelos y muros repetidos 3x3, el resto sobre pasto).
+shot.png --scale 4 [--only ground/]` (suelos y muros repetidos 3x3, el resto sobre pasto;
+con `--only effects/`, cada tira en su fila sobre un jugador parado).
 
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:

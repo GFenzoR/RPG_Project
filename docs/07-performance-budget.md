@@ -67,6 +67,11 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 | Descarga inicial (web) | < 5 MB sin contar sprites; atlas cargados por demanda |
 | Memoria | < 300 MB |
 
+- Efectos, proyectiles y números flotantes (`client/src/render/effect-layer.ts`): los
+  objetos de Pixi salen de pools y se reutilizan; dibujar un frame no crea objetos ni
+  arrays (solo aparece algo nuevo con un efecto o un número nuevo, si el pool no alcanza).
+  Los frames de los efectos salen del atlas (hoy una sola página, junto con el mapa).
+
 ### Audio (T3.7)
 El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez que suena
 (carga perezosa) y queda decodificado en memoria.

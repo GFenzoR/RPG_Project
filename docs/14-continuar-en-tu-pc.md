@@ -235,6 +235,11 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
   yunque, cajón, bolardo, tablero, pino, peñasco, gaviota, jabalí, ciervo, el barquero,
   materiales, comida, herramientas, monedas de cobre y plata, mochila) y el jugador:
   outfit `citizen` en `assets/sprites/outfits/citizen/<n|e|s|w>_<0|1|2>.png`.
+- **Efectos de combate y magia** (arte propio, `tools/spritegen/src/recipes/effects.ts`):
+  una tira animada de 6 frames por cada `effect_id` del servidor, en
+  `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms
+  (`client/CLAUDE.md`, "Sprites de efectos"); sin arte, la forma Pixi de antes. Los
+  proyectiles y los números flotantes siguen siendo formas y texto de Pixi.
 - **Bordes** (`assets/sprites/borders/`): `gen-borders.ts` recorta la textura del suelo de
   origen.
 
