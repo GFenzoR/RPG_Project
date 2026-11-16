@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,30 +15,36 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
+// fixtureHouse is a house of arrivals.json: its rect and door ("x,y,w,h", "x,y" on
+// floor 7) and its exit (or the case's tile).
+type fixtureHouse struct {
+	Rect string `json:"rect"`
+	Door string `json:"door"`
+	Exit string `json:"exit"`
+}
+
 // arrivalsFixture is packages/map-format/src/testdata/arrivals.json.
 type arrivalsFixture struct {
-	Origin string   `json:"origin"`
-	Rows   []string `json:"rows"`
-	Houses []struct {
-		Rect string `json:"rect"`
-		Door string `json:"door"`
-		Exit string `json:"exit"`
-	} `json:"houses"`
-	Cases []struct {
-		Name  string `json:"name"`
-		By    string `json:"by"`
-		To    string `json:"to"`
-		Error string `json:"error"`
+	Origin string         `json:"origin"`
+	Rows   []string       `json:"rows"`
+	Houses []fixtureHouse `json:"houses"`
+	Cases  []struct {
+		Name  string        `json:"name"`
+		By    string        `json:"by"`
+		To    string        `json:"to"`
+		House *fixtureHouse `json:"house"`
+		Error string        `json:"error"`
 	} `json:"cases"`
 }
 
 // arrivalCases is how many cases arrivals.json has (arrivals.test.ts checks the same).
-const arrivalCases = 13
+const arrivalCases = 17
 
 // A boat arrival or a dialog teleport on a house tile, on a locked door placed open or
-// (a dialog teleport) on no walkable tile of an island stops the world from starting, with
-// the island and the tile; make validate refuses the same (docs/03 "Validación"): both
-// read arrivals.json.
+// (a dialog teleport) on no walkable tile of an island, and a house exit on a locked door
+// (open or closed) or on no walkable tile, stops the world from starting, with the island
+// and the tile; make validate refuses the same (docs/03 "Validación"): both read
+// arrivals.json.
 func TestArrivalsFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "packages", "map-format", "src", "testdata", "arrivals.json"))
 	if err != nil {
@@ -53,7 +60,11 @@ func TestArrivalsFixture(t *testing.T) {
 	why := map[string]string{"house": `in house "h0"`, "door": "on a locked door", "walkable": "not a walkable tile"}
 	for _, c := range fx.Cases {
 		t.Run(c.Name, func(t *testing.T) {
-			cfg := arrivalsConfig(t, fx)
+			var more []fixtureHouse
+			if c.House != nil {
+				more = append(more, fixtureHouse{Rect: c.House.Rect, Door: c.House.Door, Exit: c.To})
+			}
+			cfg := arrivalsConfig(t, fx, more...)
 			to := fixturePos(t, c.To)
 			at := content.Position{X: int(to.X), Y: int(to.Y), Z: 7}
 			switch c.By {
@@ -65,6 +76,10 @@ func TestArrivalsFixture(t *testing.T) {
 				n := d.Nodes[d.Start]
 				n.Options = append(n.Options[:len(n.Options):len(n.Options)],
 					content.DialogOption{Text: n.Options[0].Text, Action: content.Actions{{Teleport: &at}}})
+			case "exit":
+				if c.House == nil {
+					t.Fatal("an exit case without its house")
+				}
 			default:
 				t.Fatalf("bad arrival kind %q", c.By)
 			}
@@ -78,6 +93,14 @@ func TestArrivalsFixture(t *testing.T) {
 			want, ok := why[c.Error]
 			if !ok {
 				t.Fatalf("unknown error %q", c.Error)
+			}
+			if c.By == "exit" {
+				want = `house "h1"`
+				if c.Error == "walkable" {
+					want += ": exit " + to.String() + ` (island "test") is not on a walkable tile`
+				} else {
+					want += ": exit " + to.String() + ` (island "test") lies ` + why[c.Error]
+				}
 			}
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("got %v, want an error with %q", err, want)
@@ -97,8 +120,8 @@ func TestArrivalsFixture(t *testing.T) {
 }
 
 // arrivalsConfig is the data harness config (a 64x64 field of real grass with the captain
-// harbor_master) with the drawing and the houses of fx.
-func arrivalsConfig(t *testing.T, fx arrivalsFixture) session.Config {
+// harbor_master) with the drawing and the houses of fx, then the more ones.
+func arrivalsConfig(t *testing.T, fx arrivalsFixture, more ...fixtureHouse) session.Config {
 	t.Helper()
 	cfg := dataConfig(t, nil)
 	var ox, oy int
@@ -125,7 +148,7 @@ func arrivalsConfig(t *testing.T, fx arrivalsFixture) session.Config {
 		}
 	}
 	var houses []world.House
-	for i, h := range fx.Houses {
+	for i, h := range append(slices.Clip(fx.Houses), more...) {
 		var x, y uint16
 		var wd, ht uint8
 		if _, err := fmt.Sscanf(h.Rect, "%d,%d,%d,%d", &x, &y, &wd, &ht); err != nil {

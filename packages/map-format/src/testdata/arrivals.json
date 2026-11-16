@@ -1,5 +1,5 @@
 {
-  "_comment": "Where a boat route may arrive and a dialog teleport may lead (docs/03-world-and-maps.md \"Validación\"). Read by arrivals.test.ts here (make validate) and by server/internal/session (TestArrivalsFixture, session.New), so both refuse the same arrivals. The field: island \"test\", 64x64 grass on floor 7 from (0,0), its temple at (0,0) and the captain harbor_master at (8,10) with its dock at (8,11). rows are drawn over it from origin: . grass; # stone_wall; D forge_gate, closed; d forge_gate, placed open (a double gate of one room). houses: by \"x,y,w,h\" (rect on floor 7), with a door and an exit by \"x,y\"; the house of index i is h<i>. Each case is one arrival: by a boat route or a dialog teleport (of the NPC puerto_priest), to \"x,y\" on floor 7; error: why it is refused (house: on a house tile; door: on a locked door placed open; walkable: on no walkable tile), none when it is fine.",
+  "_comment": "Where a boat route may arrive and a dialog teleport may lead (docs/03-world-and-maps.md \"Validación\"). Read by arrivals.test.ts here (make validate) and by server/internal/session (TestArrivalsFixture, session.New), so both refuse the same arrivals. The field: island \"test\", 64x64 grass on floor 7 from (0,0), its temple at (0,0) and the captain harbor_master at (8,10) with its dock at (8,11). rows are drawn over it from origin: . grass; # stone_wall; D forge_gate, closed; d forge_gate, placed open (a double gate of one room). houses: by \"x,y,w,h\" (rect on floor 7), with a door and an exit by \"x,y\"; the house of index i is h<i>. Each case is one arrival: by a boat route or a dialog teleport (of the NPC puerto_priest), or the exit of one more house (by exit: house h1, of rect and door by \"x,y\" as above), to \"x,y\" on floor 7; error: why it is refused (house: on a house tile; door: on a locked door, placed open for an arrival, open or closed for a house exit; walkable: on no walkable tile), none when it is fine.",
   "origin": "30,30",
   "rows": ["#####....", "#...#....", "#...d....", "#...D....", "#####...."],
   "houses": [{ "rect": "36,30,2,2", "door": "36,31", "exit": "36,32" }],
@@ -45,6 +45,33 @@
       "name": "a dialog teleports off every island",
       "by": "dialog",
       "to": "100,100",
+      "error": "walkable"
+    },
+    {
+      "name": "a house exit on the field",
+      "by": "exit",
+      "to": "41,40",
+      "house": { "rect": "40,40,1,1", "door": "40,40" }
+    },
+    {
+      "name": "a house exit on a gate placed open",
+      "by": "exit",
+      "to": "34,32",
+      "house": { "rect": "35,32,1,1", "door": "35,32" },
+      "error": "door"
+    },
+    {
+      "name": "a house exit on a closed gate",
+      "by": "exit",
+      "to": "34,33",
+      "house": { "rect": "35,33,1,1", "door": "35,33" },
+      "error": "door"
+    },
+    {
+      "name": "a house exit in a wall",
+      "by": "exit",
+      "to": "30,32",
+      "house": { "rect": "29,32,1,1", "door": "29,32" },
       "error": "walkable"
     }
   ]

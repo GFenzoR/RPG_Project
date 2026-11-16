@@ -103,7 +103,7 @@ func worldPos(p content.Position) (world.Pos, bool) {
 	return world.Pos{X: uint16(p.X), Y: uint16(p.Y), Z: uint8(p.Z)}, true
 }
 
-// checkArrivals refuses an arrival that would put a player where nobody may be put
+// checkArrivals refuses an arrival or a house exit that would put a player where nobody may be put
 // (docs/03 "Validación"; make validate refuses the same, packages/map-format
 // validate.ts checkArrivals, with the cases of testdata/arrivals.json): a boat arrival
 // or the destination of a dialog teleport on a house tile (an arrival puts nobody inside
@@ -111,9 +111,20 @@ func worldPos(p content.Position) (world.Pos, bool) {
 // locked door placed open (a door is no place to land: the destination would be its
 // doorway, and the search could only put the player on its outside). A dialog teleport
 // must also lead to a walkable tile of an island, as a boat arrival must (initTravel).
-// world.NewMap refuses the same for the ends of portals. New runs it after initDoors,
-// which finds the locked doors.
+// world.NewMap refuses the same for the ends of portals. The exit of a house is the last
+// resort of putting someone out of it (houseExit: with every tile around taken, the exit
+// itself), so it must be a walkable tile and no locked door, open or closed: whoever is
+// put there would stand in the doorway, one step from its room without the key (a step
+// checks only where it goes). New runs it after initDoors, which finds the locked doors.
 func (w *World) checkArrivals() error {
+	for _, hd := range w.m.Houses() {
+		switch {
+		case w.lockedDoor(hd.Exit):
+			return fmt.Errorf("session: house %q: exit %v (island %q) lies on a locked door: whoever is put out with every tile around taken would stand in its doorway", hd.ID, hd.Exit, hd.Island)
+		case !w.m.Walkable(hd.Exit):
+			return fmt.Errorf("session: house %q: exit %v (island %q) is not on a walkable tile", hd.ID, hd.Exit, hd.Island)
+		}
+	}
 	for _, r := range w.cfg.BoatRoutes {
 		if to, ok := worldPos(r.To); ok {
 			if why := w.badArrival(to); why != "" {

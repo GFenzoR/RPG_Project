@@ -934,18 +934,29 @@ class WorldValidator {
   }
 
   /**
-   * Boat arrivals and dialog teleports (docs/03 "Validación"; the server's checkArrivals
-   * refuses the same, with the cases of testdata/arrivals.json): none on a house tile (an
-   * arrival puts nobody inside a house) nor on a locked door placed open (a door is no
-   * place to land: its doorway). A dialog teleport also needs a walkable tile of an island,
-   * as a boat arrival does (checkRouteTile).
+   * Boat arrivals, dialog teleports and house exits (docs/03 "Validación"; the server's
+   * checkArrivals refuses the same, with the cases of testdata/arrivals.json): no arrival
+   * on a house tile (an arrival puts nobody inside a house) nor on a locked door placed
+   * open (a door is no place to land: its doorway). A dialog teleport also needs a walkable
+   * tile of an island, as a boat arrival does (checkRouteTile). A house exit, the last
+   * resort of putting someone out of the house, lies on no locked door, open or closed:
+   * whoever is put there would stand in its doorway, a step from its room (that it is
+   * walkable, checkHouses says).
    */
   private checkArrivals(): void {
     const owner = new Map<string, string>(); // house tile → house id, every island
     for (const island of this.world.islands.values())
-      for (const h of island.houses)
+      for (const [i, h] of island.houses.entries()) {
         for (const r of h.rects)
           for (const [x, y] of tilesOf(r)) owner.set(formatPos({ x, y, z: r.z }), h.id);
+        if (hasLockedDoor(this.tiles.tileAt(h.exit), this.content))
+          this.err(
+            `${this.dirOf(island)}/houses.yaml`,
+            [i, "exit"],
+            `exit of house "${h.id}" at ${formatPos(h.exit)} (island "${island.meta.id}") lies on a locked door: whoever is put out with every tile around taken would stand in its doorway`,
+            h.exit,
+          );
+      }
     const land = (
       file: string,
       path: PathSegment[],
