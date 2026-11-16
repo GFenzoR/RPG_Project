@@ -72,9 +72,10 @@ Tibia:
   destino y no se puede en medio de un paso ("Termina de dar el paso antes de subir o
   bajar."). Así nadie sube y baja más rápido de lo que camina.
 - **Llegada:** la casilla de destino; si está ocupada, la libre más cercana a
-  `travel.arrival_radius` (2) casillas, como la llegada de un barco: nunca en la sala de
-  una puerta con llave, nunca en una casilla de casa y nunca sobre otra escalera, agujero
-  o teletransporte. Sin casilla libre, el paso o el uso se rechaza ("Hay algo del otro lado:
+  `travel.arrival_radius` (2) casillas, como la llegada de un barco: solo en el área del
+  destino (nunca en la sala de una puerta con llave ni en un bolsillo cerrado por paredes,
+  ver "Puertas con llave"), nunca en una casilla de casa y nunca sobre otra escalera,
+  agujero o teletransporte. Sin casilla libre, el paso o el uso se rechaza ("Hay algo del otro lado:
   no hay lugar para pasar.") y no cambia nada: el jugador ni siquiera pisa la escalera.
   Esa búsqueda va por anillos, no a pie: `make validate` exige que toda casilla del radio
   donde podría caer se conecte a pie con el destino (nadie cae del otro lado de un muro).
@@ -759,26 +760,42 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   4096 casillas) o, si todos terminan, con los dos lados más grandes del mismo tamaño (no
   está claro cuál es el de afuera).
 - **Sala compartida:** varias puertas con llave pueden dar a la misma sala (una puerta
-  doble, o un edificio con puerta delantera y trasera a la misma calle), pero solo si
-  tienen **la misma llave** y **el mismo afuera**. Para el afuera, el servidor camina (a
-  lo ancho, sin cruzar puertas con llave ni casas: una casa no es calle; tampoco dos
-  afueras que quedan dentro de una misma casa sin tocarse) desde las
-  casillas de afuera junto a la primera puerta hasta las de la otra, y explora como mucho
-  4 × 4096 = 16384 casillas: en campo abierto eso alcanza para unas 60 a 90 casillas de
-  distancia, no 16384. Si no llega, rechaza la puerta (y `make validate` también), con
-  uno de dos mensajes: los afueras solo se unen a través de otra puerta con llave (o no se
-  unen), o el recorrido llegó a su cota. **Hoy se rechazan los ciclos de puertas con
-  llave**, aunque sean seguros: un edificio con la puerta delantera al campo y la trasera
-  a un patio que tiene su propio portón al campo, o un hall entre el campo y una bóveda
-  con su propio portón al campo. Es la dirección segura; aceptarlos necesita otro chequeo
-  (`14-continuar-en-tu-pc.md`, pendientes). Así se rechaza, por ejemplo, una bóveda más
-  grande que la sala que tiene delante: la puerta de la bóveda tomaría la bóveda por su
-  afuera y las dos puertas compartirían la sala del medio, con lo que desde el medio se
-  abriría la bóveda sin llave, la bóveda no estaría en ninguna sala y a quien está adentro
-  lo podrían trabar. Lo mismo con una antesala entre el mundo y una bóveda de más de 4096
-  casillas, o con dos puertas de distinta llave en la misma sala (la llave de una abriría
-  las dos desde adentro). Una sala dentro de otra vale cuando la de adentro es más chica
-  que la del medio: cada puerta tiene su sala.
+  doble, o un edificio con puerta delantera y trasera), pero solo si tienen **la misma
+  llave**: la llave de una abriría las dos desde adentro. Si no, el servidor no arranca y
+  `make validate` lo rechaza. Una sala dentro de otra vale cuando la de adentro es más
+  chica que la del medio: cada puerta tiene su sala, y sus llaves pueden ser distintas.
+- **Chequeo de escape:** con todas las salas calculadas, el servidor (y `make validate`,
+  con el mismo cálculo y los mismos casos de `door-rooms.json`) numera las **áreas** del
+  mapa: las casillas unidas a pie (8 direcciones, un piso) con las puertas con llave y las
+  casas como muro (una casa no es calle) y las demás puertas abiertas si su casilla deja
+  pasar. Cada sala es un área. Un jugador **sin llaves** va de la sala de una puerta a
+  cada lado de esa puerta (se abre desde adentro) y, por un portal que mueve jugadores
+  (escalera, escalera de mano, agujero, soga, teletransporte; no un `boat`), del área de
+  su entrada a la de su destino. El **mundo** son las áreas de los templos y de las
+  llegadas de barco. Se exige:
+  - **que cada lado de cada puerta con llave llegue al mundo** así. Si no, quien esté ahí
+    podría quedar encerrado. Es el caso de una bóveda más grande que la sala que tiene
+    delante: la puerta de la bóveda la toma por su afuera, las dos puertas comparten la
+    sala del medio (desde el medio se abriría la bóveda sin llave) y la bóveda no está en
+    ninguna sala, así que a quien está adentro lo podrían trabar. Lo mismo con una antesala
+    entre el mundo y una bóveda de más de 4096 casillas, o con un afuera que solo se une al
+    mundo a través de una casa. Un teletransporte que sale de la bóveda, una llegada de
+    barco en ella o un portón propio de la bóveda al campo la arreglan;
+  - **que nadie entre a una sala sin su llave.** Un jugador con todas las llaves menos la
+    de una sala, que puede estar en cualquier lugar fuera de las salas (un relogueo lo deja
+    donde guardó) y cruza con sus llaves las puertas de otra llave hacia su sala, no tiene
+    que llegar a esa sala. Llegaría si una puerta de otra llave da a ella (es su afuera)
+    desde su propia sala y a esa sala se llega: un ciclo de puertas de llaves distintas.
+    Por ejemplo, un edificio con la puerta delantera al campo y la trasera a un patio con
+    su propio portón al campo, el portón con otra llave: con la llave del edificio se
+    entra, se abre la trasera desde adentro y se sale al patio, que es la sala del portón,
+    y el portón se abre sin su llave.
+
+  Así **los ciclos de puertas de una misma llave valen** (ese edificio con su patio; un
+  hall entre el campo y una bóveda con su propio portón al campo) y la cadena sala–puerta–
+  hall–puerta–bóveda, con la bóveda más grande que el hall, se sigue rechazando. Las áreas
+  cubren el mapa entero, así que no hay cota de distancia entre los afueras de dos puertas
+  que comparten sala. Cuesta poco: las áreas se numeran una vez al arrancar (`07`).
 - **La sala no guarda nada de afuera:** ni el templo (donde se despierta), ni NPCs, ni
   casas (casillas o salida), ni extremos de portales (escaleras, agujeros...: se llegaría
   detrás de la puerta, o se saldría por un camino que la sala no conoce), ni llegadas de
@@ -797,10 +814,13 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
 - **Nadie aparece adentro sin pasar la puerta:** cuando el servidor busca una casilla
   libre por anillos alrededor de un punto (entrar al juego sobre una casilla ocupada,
   despertar en el templo, la llegada de un barco o de un portal, un teleport de diálogo o
-  del personal, salir de una casa), descarta las casillas de una sala si el punto no está
-  en esa misma sala. Los anillos no siguen las paredes: sin esto, con unas pocas casillas ocupadas
-  junto al portón (en la forja bastaban unas 11), quien guardó su posición afuera
-  aparecía adentro y, como desde adentro se abre sin llave, le abría a todos.
+  del personal, salir de una casa), solo acepta casillas del **área** del punto (la del
+  chequeo de escape). Los anillos no siguen las paredes: sin esto, con unas pocas casillas
+  ocupadas junto al portón (en la forja bastaban unas 11), quien guardó su posición afuera
+  aparecía adentro y, como desde adentro se abre sin llave, le abría a todos; y un templo
+  lleno podía dejar a alguien en un bolsillo cerrado por paredes. Si el punto no está en
+  ningún área (una casilla de casa, la de una puerta con llave), descarta solo las
+  casillas de las salas.
 - **Ritmo:** un jugador usa una puerta como mucho cada `inventory.door_cooldown_ms`
   (500 ms, "Espera un momento"), la abra, la cierre o se lo rechacen: un rechazo también
   cuenta, así sus chequeos (la llave, la sala) corren a ese ritmo y no al del gateway.
@@ -810,24 +830,22 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   vez; `make validate` lo advierte). Los monstruos no abren puertas, pero pasan por una
   abierta.
 - **Límites conocidos:**
-  - el cálculo de la sala no sigue escaleras ni portales: recorre un solo piso. Una puerta
-    cuyo lado de afuera sea un pasillo chico con una escalera podría tomar ese pasillo
-    por la sala: el servidor no arranca y `make validate` lo rechaza porque la sala
-    tendría un extremo de portal. Igual conviene revisar una puerta nueva con un test
-    como `TestForgeGateOnTheMap`;
+  - el cálculo de la sala no sigue escaleras ni portales: recorre un solo piso (el chequeo
+    de escape sí los sigue). Una puerta cuyo lado de afuera sea un pasillo chico con una
+    escalera podría tomar ese pasillo por la sala: el servidor no arranca y `make validate`
+    lo rechaza porque la sala tendría un extremo de portal. Igual conviene revisar una
+    puerta nueva con un test como `TestForgeGateOnTheMap`;
   - una puerta **sola** con una sala de más de 4096 casillas detrás y un afuera que
     termina antes (más chico) toma el afuera por la sala. Si ese afuera tiene templo,
     NPCs, casas, portales o llegadas, el servidor no arranca y `make validate` falla (la
-    sala no guarda nada de afuera); si no tiene nada de eso, no se nota. Con una segunda
-    puerta a esa sala lo frena la regla de la sala compartida. Hoy no pasa (la forja
-    tiene 463 casillas y la mina 1729). Marcar el lado de adentro en los datos quedaría
-    para cuando haga falta;
-  - dos puertas a la misma sala se rechazan aunque den al mismo mundo si un recorrido que
-    explora hasta 16384 casillas no une sus afueras: en campo abierto son unas 60 a 90
-    casillas de distancia (en un pasillo angosto, mucho más). Hay que acercarlas o
-    darles salas propias;
-  - los ciclos de puertas con llave (la sala compartida de arriba) se rechazan aunque
-    sean seguros;
+    sala no guarda nada de afuera); si no, casi siempre lo frena el chequeo de escape: la
+    sala de verdad, tomada por afuera, no llega al mundo salvo que tenga un portal de
+    salida, una llegada de barco o un templo. Hoy no pasa (la forja tiene 463 casillas y
+    la mina 1729). Marcar el lado de adentro en los datos quedaría para cuando haga falta;
+  - el chequeo de llaves supone que un jugador puede estar en cualquier área fuera de las
+    salas, también en una bóveda a la que solo se llega por una sala: es conservador y
+    podría rechazar algún diseño seguro rebuscado (puertas de otra llave dentro de esa
+    bóveda que den a otra sala);
   - la llave se puede repetir: quien terminó `ch3_gate` y no la lleva encima pide otra al
     eco, así que tirarla al piso y pedir otra da llaves de más, y una llave tirada la puede
     levantar cualquiera. Lo aceptamos: quien tiene la llave ya puede abrirle la puerta a

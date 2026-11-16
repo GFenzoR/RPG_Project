@@ -431,16 +431,20 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   `isPassable`); un lado sin terminar es el de afuera y, si todos terminan, el más grande.
   Es error una puerta amurallada (sin lados), con un solo lado, con más de un lado sin
   terminar o con los dos lados más grandes del mismo tamaño. Varias puertas pueden
-  compartir una sala solo con la misma llave y el mismo afuera: un recorrido a lo ancho
-  que explora hasta 4 × 4096 = 16384 casillas (en campo abierto, unas 60 a 90 casillas de
-  distancia), sin cruzar puertas con llave ni casas, tiene que unir los afueras de las
-  dos. Si no, es error, y el mensaje dice si los afueras solo se unen a través de otra
-  puerta con llave (hoy se rechazan así los ciclos de puertas con llave, aunque sean
-  seguros) o si el recorrido llegó a su cota. La sala no puede tener el templo, NPCs, casas
+  compartir una sala solo con la misma llave. La sala no puede tener el templo, NPCs, casas
   (casillas o salida), extremos de portales, llegadas de rutas de barco ni destinos de un
-  `teleport` de un diálogo de NPC; los spawns sí. El recorrido es el mismo que el del
-  servidor (`packages/map-format/src/doors.ts` y `session/door.go`), y los dos leen los
-  casos de `packages/map-format/src/testdata/door-rooms.json`.
+  `teleport` de un diálogo de NPC; los spawns sí. Después, el **chequeo de escape** sobre
+  las áreas del mapa (casillas unidas a pie, 8 direcciones, un piso, con las puertas con
+  llave y las casas como muro): sin llaves se va de la sala de una puerta a cada lado de
+  ella y por los portales que mueven jugadores (no `boat`) de un área a otra, y el mundo
+  son las áreas de los templos y de las llegadas de `data/boat_routes.yaml`. Es error un
+  lado de una puerta que no llega al mundo así (una bóveda que ninguna puerta guarda: el
+  mensaje da la casilla de ese lado) y una sala a la que entra sin su llave un jugador con
+  todas las demás (un ciclo de puertas de llaves distintas: el mensaje nombra la puerta de
+  otra llave que da a esa sala desde la suya). Los ciclos de puertas de una misma llave
+  valen. El recorrido y el chequeo son los del servidor
+  (`packages/map-format/src/doors.ts`, `session/door.go` y `session/area.go`), y los
+  dos leen los casos de `packages/map-format/src/testdata/door-rooms.json`.
   Advertencia (T3.6): un área caminable conexa (8 direcciones, un piso) de 10 casillas o
   más a la que no se llega desde el templo, fuera de parcelas `community_plot` (un muelle
   suelto, un banco de arena del generador, una sala sin escalera). Una por área, con una

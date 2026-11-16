@@ -47,14 +47,23 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   unos 950 B/s con un nivel 30, dentro de los 4 KB/s (`TestVolcanicMineStairsOnTheMap` lo
   mide y falla por encima). Hoy todas las islas tienen solo los pisos 7 y 8, así que la vista de la
   superficie lleva un piso; una isla con pisos altos pesaría más por paso.
-- Puertas con llave (`session/door.go`): la sala detrás de cada puerta se calcula una vez
-  al arrancar (un recorrido de hasta 4096 casillas por lado, y uno de hasta 4 × 4096
-  entre los afueras de dos puertas que comparten sala) y queda un índice casilla → sala
-  (`roomOf`). En el tick, abrir desde adentro es una búsqueda en ese mapa; cerrar con
-  llave mira solo a los jugadores de los sectores de la sala (una búsqueda cada uno) y, de
-  los que están adentro, busca la llave en sus bolsas cortando al encontrarla. Toda
-  búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) suma una búsqueda en
-  `roomOf` por casilla, sin asignar. Un jugador usa una puerta como mucho cada
+- Puertas con llave (`session/door.go`, `session/area.go`): la sala detrás de cada puerta
+  se calcula una vez al arrancar (un recorrido de hasta 4096 casillas por lado) y queda un
+  índice casilla → sala (`roomOf`). También al arrancar se numeran las **áreas** del mapa
+  (un recorrido de cada casilla caminable, una vez) para el chequeo de escape y las
+  búsquedas de casilla libre: un `[1024]int32` (4 KiB) por sector que tiene alguna
+  casilla de un área. En el mundo real (135 sectores, 4 islas de 2 pisos): 12 áreas en 105
+  sectores, unos 420 KiB, y `initAreas` tarda ~7 ms (`session.New` entero, ~8 ms); el
+  chequeo de escape es un recorrido de un grafo de áreas (una por puerta y portal) y no se
+  nota. Crece con los sectores del mundo, no con los jugadores: un mundo 10 veces más
+  grande serían ~4 MiB y ~70 ms al arrancar. `make validate` hace lo mismo en TS solo con
+  las áreas que toca (las de los lados de las puertas, los portales, los templos y las
+  llegadas): ~35 ms sobre el mundo real. En el tick, abrir desde adentro es una búsqueda
+  en `roomOf`; cerrar con llave mira solo a los jugadores de los sectores de la sala (una
+  búsqueda cada uno) y, de los que están adentro, busca la llave en sus bolsas cortando al
+  encontrarla. Toda búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) suma
+  una búsqueda en el índice de áreas por casilla (un mapa por sector, como antes
+  `roomOf`), sin asignar. Un jugador usa una puerta como mucho cada
   `inventory.door_cooldown_ms` (500 ms), **también cuando se lo rechazan**, así que ni la
   casilla ni los chequeos corren al ritmo del gateway. `BenchmarkDoorLockRefused` (el peor
   intento: 202 jugadores, 151 en una sala de 3968 casillas, 150 con la llave al fondo de

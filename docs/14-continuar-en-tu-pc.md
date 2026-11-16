@@ -137,31 +137,14 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     escritorio el click derecho sobre una escalera de mano siempre trepa: un cadáver
     encima que no se puede mover solo se abre con el toque largo (hoy no hay escaleras de
     mano en el mundo; una salida sería que Ctrl+click derecho use el item de arriba);
-  - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit` en
-    `server/internal/session`) ya no entra a la sala de una puerta con llave, pero sí
-    puede dejar a alguien en un bolsillo sellado sin puerta (menos de 10 casillas, que el
-    validador no avisa) si es la casilla libre más cercana. Arreglo posible: un índice de
-    área conexa por casilla armado al arrancar (como `roomOf`), y que la búsqueda solo
-    acepte casillas del área del origen. No se hizo con las puertas porque cuesta memoria
-    por casilla caminable de todo el mundo y hoy no hay bolsillos así junto a templos,
-    llegadas o casas;
-  - **puertas con llave en ciclo** (`02-game-design.md`, "Sala compartida"): hoy se
-    rechazan aunque sean seguras (un edificio con puerta trasera a un patio que tiene su
-    propio portón al campo; un hall entre el campo y una bóveda con su propio portón),
-    porque `sameOutside` exige unir los afueras sin cruzar puertas con llave. Mejora
-    futura, igual en `session/door.go` y `packages/map-format/src/doors.ts`, con casos
-    nuevos en `door-rooms.json`: un **chequeo de escape**. Los nodos son las componentes
-    del mapa con las puertas con llave como muro; de la sala de cada puerta `d` hay una
-    arista a todos los lados de `d`; el "mundo" es la componente del templo o de las
-    llegadas. Se exige que cada lado de cada puerta con llave alcance el mundo, más el
-    chequeo de llave entre una sala y el afuera de otra puerta. La cadena R–B–X–E–Y (sala
-    R, puerta B, sala X, puerta E, Y una bóveda más grande que X) se tiene que seguir
-    rechazando;
-  - `resource.reach` e `inventory.reach` no tienen tope en los esquemas
-    (`items.schema.json`, `content/resources.go`, `content/balance.go`). Como recolección y
-    crafteo ya no miran fuera de la vista (±8 x, ±6 y), un alcance de 7 o más respondería
-    `not_possible` sin aviso: falta `maximum: 6` y su chequeo en Go. De paso, sacar las
-    comprobaciones de piso que sobran en `gathering.go` (la guarda de vista ya las cubre).
+  - chequeo de escape de las puertas con llave (`02-game-design.md`, "Chequeo de
+    escape"): cuenta como salida de un área solo los portales que mueven jugadores y la
+    puerta de una sala desde adentro; las casas son muro, y los teleports de diálogo y los
+    viajes en barco no son aristas (las llegadas de barco sí son mundo). Un diseño que solo
+    deje salir por ahí se rechaza aunque sea seguro. Si hace falta, sumarlos como aristas,
+    igual en `session/door.go` y `packages/map-format/src/doors.ts`, con casos nuevos en
+    `door-rooms.json`. El chequeo de llaves es conservador (supone a un jugador en
+    cualquier área fuera de las salas).
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

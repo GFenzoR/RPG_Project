@@ -211,13 +211,19 @@ server/
   muros no cambian; las demás puertas con llave son muro, así una puerta doble comparte
   sala) con el mismo recorrido que `packages/map-format/src/doors.ts`: si cambias uno,
   cambia el otro y `testdata/door-rooms.json` (lo leen los tests de los dos). Una sala
-  que no se puede determinar, compartida por puertas de otra llave o de otro afuera
-  (`sameOutside`, que no cruza puertas con llave ni casas: hoy rechaza los ciclos de
-  puertas con llave) o que tiene algo de afuera (`checkRooms`: templo, NPC, casa, extremo
-  de portal, llegada de barco, teleport de diálogo) no deja arrancar. Nada recorre el mapa
-  en el tick: `World.roomOf` (casilla → sala) y los sectores de cada sala. **Toda búsqueda
-  de casilla libre por anillos** (`freeNear`, `houseExit` o una nueva) pasa por
-  `roomAllows`: nunca deja a nadie en una sala si no empezó en ella; y por
+  que no se puede determinar, compartida por puertas de otra llave o que tiene algo de
+  afuera (`checkRooms`: templo, NPC, casa, extremo de portal, llegada de barco, teleport
+  de diálogo) no deja arrancar, y tampoco una puerta que no pasa el **chequeo de escape**
+  (`checkEscapes`, igual en `doors.ts`): sobre las **áreas** de `session/area.go`
+  (casillas unidas a pie con puertas con llave y casas como muro; una sala es un área),
+  cada lado de cada puerta con llave llega a un templo o a una llegada de barco yendo de
+  una sala a los lados de sus puertas y por portales (no `boat`), y nadie con todas las
+  llaves menos una entra a una sala de esa llave. Si sumas una forma de moverse entre
+  áreas que un jugador sin llaves tiene siempre, súmala como arista en los dos lados. Nada
+  recorre el mapa en el tick: `World.roomOf` (casilla → sala), los sectores de cada sala
+  y `World.areas` (por sector, `areaOf`). **Toda búsqueda de casilla libre por anillos**
+  (`freeNear`, `houseExit` o una nueva) pasa por `areaAllows`: solo casillas del área de
+  donde empezó (nunca una sala ajena ni un bolsillo cerrado por paredes); y por
   `!Map.MovesOnStep`: nunca deja a nadie sobre una escalera, un agujero o un
   teletransporte. `houseEnter` no lo necesita: solo pone al jugador en casillas de la
   casa, y `checkRooms` no deja ninguna casa (ni portal) en una sala.
