@@ -18,6 +18,9 @@ type ackRetry struct {
 	mu      sync.Mutex
 	pending map[int64]uint64
 	running bool
+	// after is the last character a round delivered: the next round starts past it and
+	// wraps around, so a queue that stays nearly full serves every character in turn.
+	after int64
 	// idle is closed when the delivering goroutine stops: everything was delivered, or
 	// the loop stopped (tests wait on it).
 	idle chan struct{}
@@ -63,18 +66,21 @@ func (a *App) retryAcks(idle chan struct{}) {
 	}
 }
 
-// deliverAcks enqueues the pending acks, lowest character id first, until the queue is
-// full again. It reports whether none is left; then the goroutine stops, and the next
-// refused ack starts another.
+// deliverAcks enqueues the pending acks in character id order, starting past the last
+// one delivered (wrapping around), until the queue is full again. It reports whether none
+// is left; then the goroutine stops, and the next refused ack starts another.
 func (a *App) deliverAcks() bool {
 	r := &a.acks
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, id := range slices.Sorted(maps.Keys(r.pending)) {
+	ids := slices.Sorted(maps.Keys(r.pending))
+	start, _ := slices.BinarySearch(ids, r.after+1)
+	for _, id := range slices.Concat(ids[start:], ids[:start]) {
 		if a.Loop.Enqueue(a.World.Saved(id, r.pending[id])) != nil {
 			return false
 		}
 		delete(r.pending, id)
+		r.after = id
 	}
 	r.running = false
 	return true

@@ -114,8 +114,11 @@ func (w *World) holdGround(p *Player, it *Item) {
 // holdCorpse reserves the corpse p just left to p while p is held: its items come from
 // p's state, which may rest on a transfer the database does not have yet. A corpse left
 // while p is not held is only the owner's for corpse_owner_only_ms, even if a later
-// transfer of p is dropped (its items come from a state the database has).
+// transfer of p is dropped (its items come from a state the database has). The dirty
+// houses are written first: a house change of p not written yet (it took something off a
+// house floor this tick) holds p through that write too.
 func (w *World) holdCorpse(p *Player, corpse *Item) {
+	w.flushHouses()
 	if h := w.inFlight[p.charID]; h != 0 && corpse.onGround {
 		w.heldGround[corpse] = groundHold{char: p.charID, seq: h}
 	}

@@ -274,12 +274,15 @@ segundo más uno por personaje de cada transfer, cada uno un par de búsquedas e
 Cada acuse recorre además `World.heldGround` si no está vacío (cada reserva se libera con
 el acuse que la cubre: el cadáver que dejó un personaje en espera, lo que el servidor dejó
 a sus pies y lo que alguien sacó de una casa a la calle hasta que se confirma), que casi
-siempre está vacío o casi: una entrada se borra también cuando su item deja el suelo.
-Tomar, usar o meter algo en el suelo mira ese mapa solo si no está vacío. Un acuse que no
-entra en la cola del loop (llena) queda en el reintento del `app` (`app/acks.go`): una
-sola goroutine mientras haya pendientes y una entrada por personaje (el `Seq` más alto,
-que vale por los anteriores), que vuelve a probar cada tick. Con la cola llena por mucho
-tiempo cuesta lo que tenga ese mapa, no una goroutine por acuse.
+siempre está vacío o casi: una entrada se borra también cuando su item deja el suelo (las
+de un personaje marcado quedan hasta reiniciar o hasta que el cadáver se pudre; son
+pocas, porque un transfer descartado es un error raro). Tomar, usar o meter algo en el
+suelo mira ese mapa solo si no está vacío. Un acuse que no entra en la cola del loop
+(llena) queda en el reintento del `app` (`app/acks.go`): una sola goroutine mientras haya
+pendientes y una entrada por personaje (el `Seq` más alto, que vale por los anteriores),
+que vuelve a probar cada tick por turnos (cada vuelta empieza después del último
+personaje que entregó). Con la cola llena por mucho tiempo cuesta lo que tenga ese mapa,
+no una goroutine por acuse.
 
 **Ventanas del mercado en vivo.** Cada acción del mercado encola a quienes miran ese
 libro; `flushMarket` les manda una `MarketUpdate` completa (lo que cuesta una respuesta

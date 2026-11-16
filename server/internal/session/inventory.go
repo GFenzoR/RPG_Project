@@ -517,10 +517,11 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 			return // dropped where it already is
 		}
 		g := w.ground[to.pos]
-		merge = mergeTarget(g, it, count)
-		if merge != nil && (w.groundHeld(p, merge) || leaving && !w.heldFor(p, merge)) {
-			merge = nil // T5.3: never into a stack reserved to another player (hold.go)
-		}
+		// T5.3: never into a stack reserved to another player, and what leaves a house
+		// only into one already reserved to p (hold.go); else it lands as a new pile.
+		merge = mergeTargetIf(g, it, count, func(c *Item) bool {
+			return !w.groundHeld(p, c) && (!leaving || w.heldFor(p, c))
+		})
 		if merge == nil && len(g) >= maxGroundItems {
 			p.emit(systemMsg(msgTileFull))
 			return
@@ -661,11 +662,16 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 
 // mergeTarget returns the stack among list that count units of it can join, or nil.
 func mergeTarget(list []*Item, it *Item, count int) *Item {
+	return mergeTargetIf(list, it, count, nil)
+}
+
+// mergeTargetIf is mergeTarget among the stacks ok accepts (nil: any).
+func mergeTargetIf(list []*Item, it *Item, count int, ok func(*Item) bool) *Item {
 	if !it.def.Stackable {
 		return nil
 	}
 	for _, c := range list {
-		if c != it && c.def.Numeric == it.def.Numeric && c.count+count <= it.def.StackLimit() {
+		if c != it && c.def.Numeric == it.def.Numeric && c.count+count <= it.def.StackLimit() && (ok == nil || ok(c)) {
 			return c
 		}
 	}

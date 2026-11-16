@@ -218,6 +218,36 @@ func TestRetriedAckEndsTheHold(t *testing.T) {
 	}
 }
 
+// With the queue nearly full, each retry round starts past the last character it
+// delivered: no character waits behind others that keep acking.
+func TestAckRetryTakesTurns(t *testing.T) {
+	r := newAckRig(t)
+	r.a.acks.pending = map[int64]uint64{1: 5, 2: 5, 3: 5}
+	r.a.acks.after = 1
+	noop := game.CommandFunc(func(*game.TickContext) {})
+	for range 3 { // one free slot of four
+		if err := r.loop.Enqueue(noop); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r.a.deliverAcks() || r.a.acks.after != 2 || len(r.a.acks.pending) != 2 {
+		t.Fatalf("first round: after %d, pending %v", r.a.acks.after, r.a.acks.pending)
+	}
+	r.loop.Step()
+	for range 3 {
+		if err := r.loop.Enqueue(noop); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r.a.deliverAcks() || r.a.acks.after != 3 || r.a.acks.pending[1] != 5 {
+		t.Fatalf("second round: after %d, pending %v", r.a.acks.after, r.a.acks.pending)
+	}
+	r.loop.Step()
+	if !r.a.deliverAcks() || r.a.acks.after != 1 || len(r.a.acks.pending) != 0 {
+		t.Fatalf("third round: after %d, pending %v", r.a.acks.after, r.a.acks.pending)
+	}
+}
+
 // An ack the queue takes at once needs no retry.
 func TestSnapshotSavedAcksAtOnce(t *testing.T) {
 	r := newAckRig(t)

@@ -526,6 +526,13 @@ func TestHouseItemLeavingIsReservedToTheMover(t *testing.T) {
 	if !hasKey(h.send(cc, take), "inventory.not_yours") {
 		t.Fatal("another player picked it up before the owner's write was confirmed")
 	}
+	// Ana was not held before the move: a late ack of any snapshot of hers below the write
+	// that took the sword out (a retried one) frees nothing.
+	h.sim.Command(h.w.Saved(a.CharacterID(), out.Seq-1))
+	h.sim.Step()
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("an ack below the owner's house write freed what she took out")
+	}
 	h.sim.Command(h.w.Saved(b.CharacterID(), brought.Seq))
 	h.sim.Step()
 	if !hasKey(h.send(cc, take), "inventory.not_yours") {
@@ -562,20 +569,21 @@ func TestHouseItemLeavingJoinsNoStrangersPile(t *testing.T) {
 	if len(g) != 2 || g[0].Count() != 3 || g[1].Count() != 2 {
 		t.Fatalf("street %v: the salves joined Cid's pile", g)
 	}
+	// A pile already reserved to Ana takes more of what she throws out, also with Cid's
+	// pile first on the tile.
+	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), salveID, 1, onTile(pos(2, 5)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("throwing one more out: %v", systemKeys(evs))
+	}
+	if g := h.w.GroundAt(pos(2, 5)); len(g) != 2 || g[0].Count() != 3 || g[1].Count() != 3 {
+		t.Fatalf("street %v, want Cid's pile of 3 and Ana's of 3", g)
+	}
 	// Cid's pile is still his to take; Ana's is reserved to her.
 	if evs := h.send(cc, moveItem(onTile(pos(2, 5)), salveID, 1, inContainer(cp, 0), 3)); len(systemKeys(evs)) != 0 ||
 		h.w.CountItem(c, "test_salve") != 3 {
 		t.Fatalf("Cid takes his salves back: %v", systemKeys(evs))
 	}
-	if !hasKey(h.send(cc, moveItem(onTile(pos(2, 5)), salveID, 1, inContainer(cp, 0), 2)), "inventory.not_yours") {
+	if !hasKey(h.send(cc, moveItem(onTile(pos(2, 5)), salveID, 1, inContainer(cp, 0), 3)), "inventory.not_yours") {
 		t.Fatal("Cid took what left the house before the ack")
-	}
-	// A pile already reserved to Ana takes more of what she throws out.
-	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), salveID, 1, onTile(pos(2, 5)), 1)); len(systemKeys(evs)) != 0 {
-		t.Fatalf("throwing one more out: %v", systemKeys(evs))
-	}
-	if g := h.w.GroundAt(pos(2, 5)); len(g) != 1 || g[0].Count() != 3 {
-		t.Fatalf("street %v, want Ana's pile of 3", g)
 	}
 	h.sim.Command(h.w.Saved(a.CharacterID(), lastSnapshot(t, h.transfers, a.CharacterID()).Seq))
 	h.sim.Step()
