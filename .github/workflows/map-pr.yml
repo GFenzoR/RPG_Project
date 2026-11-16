@@ -50,7 +50,9 @@ jobs:
         env:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # Only this step gets it (read-only): a public repo needs none, a private one does.
+          # Read-only, as a header of this one git command, so it is not in .git/config for
+          # the steps after it (a public repo needs none; actions such as setup-node still get
+          # github.token on their own).
           TOKEN: ${{ github.token }}
         run: |
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"

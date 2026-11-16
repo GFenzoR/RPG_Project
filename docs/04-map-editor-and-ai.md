@@ -229,8 +229,9 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
    `contents: read`, sin secretos). Hace checkout de la **rama base tal como está ahora**
    (`base.ref`, no el `base.sha` congelado del evento) con `persist-credentials: false`, y
    trae el head del PR solo como dato (`git fetch refs/pull/N/head`). El token (de solo
-   lectura) llega solo a ese `fetch`, como cabecera, y no queda en `.git/config` para los
-   pasos siguientes. Si el PR no cambia `world/`, termina ahí, antes de
+   lectura) va como cabecera de ese comando y no queda en `.git/config`, así que `pnpm
+   install` y `mapcli` no lo leen de ahí (acciones como `setup-node` igual reciben
+   `github.token` por su cuenta). Si el PR no cambia `world/`, termina ahí, antes de
    `pnpm install`. Si lo cambia, instala las dependencias **de la base** y corre
    `mapcli pr-check --base <sha base> --head <sha head> --author <login> --association <rel> --head-repo <o/r> --repo <o/r> --pr <n> --out map-pr`.
    Sube dos artefactos, `map-pr-report` (`report.json`) y `map-pr-renders` (PNG), y falla
