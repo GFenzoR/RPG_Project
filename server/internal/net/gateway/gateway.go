@@ -355,7 +355,7 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 	}
 	for _, k := range pc.Conditions {
 		c.Conditions = append(c.Conditions, session.ConditionState{ID: k.ID, LeftMs: k.LeftMs, Ticks: k.Ticks, Damage: k.Damage,
-			Author: k.Author, AuthorHit: k.AuthorHit, AuthorUnjust: k.AuthorUnjust})
+			Author: k.Author, AuthorHit: k.AuthorHit, AuthorUnjust: k.AuthorUnjust, SavedAt: k.SavedAt})
 	}
 	c.Inventory = itemStates(pc.Inventory)
 	if pc.HasPos && pc.X >= 0 && pc.X <= 0xFFFF && pc.Y >= 0 && pc.Y <= 0xFFFF && pc.Z >= 0 && pc.Z <= world.MaxFloor {

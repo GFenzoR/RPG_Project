@@ -484,7 +484,7 @@ func storeConditions(in []session.ConditionState) []store.Condition {
 	out := make([]store.Condition, len(in))
 	for i, c := range in {
 		out[i] = store.Condition{ID: c.ID, LeftMs: c.LeftMs, Ticks: c.Ticks, Damage: c.Damage,
-			Author: c.Author, AuthorHit: c.AuthorHit, AuthorUnjust: c.AuthorUnjust}
+			Author: c.Author, AuthorHit: c.AuthorHit, AuthorUnjust: c.AuthorUnjust, SavedAt: c.SavedAt}
 	}
 	return out
 }

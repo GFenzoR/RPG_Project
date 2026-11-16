@@ -154,6 +154,7 @@ func (l *Loop) Step() TickStats {
 	start := l.clock.Now()
 	l.tick++
 	l.sched.now = l.tick // commands may schedule events; they must land after this tick
+	l.sched.time = start
 	l.ctx = TickContext{Tick: l.tick, Now: start, Rand: l.rand, Sched: l.sched}
 
 	l.panics = 0

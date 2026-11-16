@@ -1,5 +1,7 @@
 package game
 
+import "time"
+
 // EventID identifies a scheduled event so it can be cancelled. IDs are never reused.
 type EventID uint64
 
@@ -19,7 +21,9 @@ type scheduledEvent struct {
 // An event never runs in the tick it was scheduled in: a due tick at or before the current
 // one is moved to the next tick. This keeps every tick bounded.
 type Scheduler struct {
-	now    Tick
+	now Tick
+	// time is the clock time of the tick being processed (TickContext.Now), set by the loop.
+	time   time.Time
 	nextID EventID
 	heap   []scheduledEvent
 	pos    map[EventID]int // heap index of each pending event
@@ -32,6 +36,11 @@ func NewScheduler() *Scheduler {
 
 // Now returns the tick the scheduler is positioned at.
 func (s *Scheduler) Now() Tick { return s.now }
+
+// Time returns the clock time at which the loop started the tick being processed, or the
+// last one (TickContext.Now of that tick): for code that runs on the loop goroutine without
+// a TickContext. Zero before the first tick, and on a scheduler not driven by a Loop.
+func (s *Scheduler) Time() time.Time { return s.time }
 
 // Len returns the number of pending events.
 func (s *Scheduler) Len() int { return len(s.heap) }

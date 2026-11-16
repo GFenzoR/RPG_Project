@@ -13,7 +13,9 @@ import (
 
 // Conditions between players (T5.2): a condition of another player keeps its author
 // across relogs of either side (saved by character, with what its holder remembers of
-// that author's attack); ranged condition spells are in pvp_condition_spell_test.go.
+// that author's attack), and its time runs on while its holder is away; ranged condition
+// spells are in pvp_condition_spell_test.go, server-side disconnects in
+// pvp_linkdead_test.go.
 // Test numbers: pvp.damage_pct 50, so a poison hit of 20 hurts 10; every damage
 // condition hits once a second; the PvP lock is 10 s and the aggressor time 60 s.
 
@@ -124,17 +126,20 @@ func TestPvPConditionSurvivesVictimRelog(t *testing.T) {
 		t.Fatalf("saved conditions %+v", s.Conditions)
 	}
 	if c := s.Conditions[0]; c.ID != "poison" || c.Author != a.CharacterID() || !c.AuthorUnjust ||
-		c.AuthorHit.IsZero() || c.AuthorHit.After(g.sim.Now()) {
+		c.AuthorHit.IsZero() || c.AuthorHit.After(g.sim.Now()) || c.SavedAt.IsZero() || c.SavedAt.After(g.sim.Now()) {
 		t.Fatalf("saved poison %+v", c)
 	}
 
+	// Ana's skull is still the one of her hit by hand (the poison did not hurt in the
+	// protection zone): each hit after the relog renews it.
+	until := g.w.PvPStateForTest(a).SkullUntil
 	cb, b := g.rejoin(bea, s, 1000)
 	g.sim.RunFor(2 * time.Second)
 	if hits := damageTexts(cb.take()); !allTen(hits) {
 		t.Fatalf("hits after the relog %v, want Ana's scaled hits (10)", hits)
 	}
-	if a.Skull() != pb.Skull_SKULL_AGGRESSOR {
-		t.Fatalf("Ana's skull %v", a.Skull())
+	if st := g.w.PvPStateForTest(a); a.Skull() != pb.Skull_SKULL_AGGRESSOR || !st.SkullUntil.After(until) {
+		t.Fatalf("Ana's skull %v until %v, was until %v", a.Skull(), st.SkullUntil, until)
 	}
 	ca.take()
 	g.input(ca, logout())
@@ -154,16 +159,122 @@ func TestPvPConditionSurvivesVictimRelog(t *testing.T) {
 	}
 }
 
-// A relog does not stretch an attack either: back after the aggressor time, the poison
-// resumes but its unjustified attack is over, so it hurts nobody and marks nobody.
+// A relog does not stretch an attack either: back after the aggressor time, the poison ran
+// out while she was away and Ana's unjustified attack is over: nothing hurts or marks.
 func TestPvPConditionRelogAfterAggressorTime(t *testing.T) {
 	g := newPvPCond(t, nil)
 	_, a, bea, s := g.unjustPoison()
 	g.sim.RunFor(61 * time.Second)
-	cb, _ := g.rejoin(bea, s, 1000)
+	cb, b := g.rejoin(bea, s, 1000)
 	g.sim.RunFor(3 * time.Second)
 	if hits := damageTexts(cb.take()); len(hits) != 0 || a.Skull() != pb.Skull_SKULL_UNSPECIFIED {
 		t.Fatalf("hits %v, Ana %v", hits, a.Skull())
+	}
+	if left := g.w.ConditionsForTest(b)["poison"]; left != 0 {
+		t.Fatalf("poison hits left %d", left)
+	}
+}
+
+// Nor can the victim hold the attack back to land it later. Bea waits out Ana's lock in a
+// protection zone and logs out; back late, but within the aggressor time of Ana's hit by
+// hand and with little health, the hits that would have fallen while she was away passed
+// as in the protection zone: none lands now, so Ana's skull ends 60 s after her own hit and
+// the poison cannot hand her a kill. (Before, the frozen poison resumed: every hit renewed
+// her skull and lock, and Bea chose when it killed her.)
+func TestPvPConditionRunsWhileVictimAway(t *testing.T) {
+	g := newPvPCond(t, nil)
+	ca, a, bea, s := g.unjustPoison() // t = 11 s, Ana's own hit at t = 0
+	until := g.w.PvPStateForTest(a).SkullUntil
+	g.sim.RunFor(44 * time.Second) // t = 55 s
+	if a.Skull() != pb.Skull_SKULL_AGGRESSOR {
+		t.Fatalf("Ana's skull %v before the relog", a.Skull())
+	}
+	cb, b := g.rejoin(bea, s, 5)
+	if left := g.w.ConditionsForTest(b)["poison"]; left != 0 {
+		t.Fatalf("poison hits left %d after 44 s away", left)
+	}
+	g.sim.RunFor(7 * time.Second) // t = 62 s
+	if hits := damageTexts(cb.take()); len(hits) != 0 {
+		t.Fatalf("hits after the late relog %v", hits)
+	}
+	if st := g.w.PvPStateForTest(a); a.Skull() != pb.Skull_SKULL_UNSPECIFIED || st.SkullUntil.After(until) || st.Kills != 0 {
+		t.Fatalf("Ana %v %+v, skull was until %v", a.Skull(), st, until)
+	}
+	g.input(ca, logout()) // her lock of t = 0 is long over
+	g.sim.Step()
+	if !ca.closed {
+		t.Fatalf("Ana could not log out: %v", sysKeys(ca.take()))
+	}
+}
+
+// Away for a while: another player's conditions ran meanwhile and the rest goes on, on the
+// beat it would have had; a monster's condition waited frozen (logging out does not cure).
+// Bea joins 3 s (60 ticks) after her save: Ana's poison, due 10 ticks after it every 20,
+// lost 3 of its 10 hits and is due in 10 ticks again; Ana's slow lost 3 of its 5 s; the
+// monster's burning still has its 3 hits.
+func TestPvPConditionTimeRunsWhileAway(t *testing.T) {
+	g := newPvPCond(t, nil)
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	g.unsafe(ca)
+	g.sim.RunFor(5 * time.Second) // the server is older than the absence
+	saved := g.sim.Now().Add(-3 * time.Second)
+	cb, b := g.fighter("Bea", 0, 11, 10, 30, 0, func(c *session.Character) {
+		c.Conditions = []session.ConditionState{
+			{ID: "poison", LeftMs: 500, Ticks: 10, Damage: 20, Author: a.CharacterID(), AuthorHit: saved, AuthorUnjust: true,
+				SavedAt: saved},
+			{ID: "slowed", LeftMs: 5000, Author: a.CharacterID(), SavedAt: saved},
+			{ID: "burning", LeftMs: 500, Ticks: 3, Damage: 20},
+		}
+	})
+	got := g.w.ConditionsForTest(b)
+	if got["poison"] != 7 || got["slowed"] != 2000 || got["burning"] != 3 {
+		t.Fatalf("conditions after 3 s away %v, want poison 7 hits, slowed 2000 ms, burning 3 hits", got)
+	}
+	g.sim.RunTicks(9)
+	if hits := damageTexts(cb.take()); slices.Contains(hits, 10) {
+		t.Fatalf("Ana's poison hit before its beat: %v", hits)
+	}
+	g.sim.Step()
+	if hits := damageTexts(cb.take()); !slices.Contains(hits, 10) || g.w.ConditionsForTest(b)["poison"] != 6 {
+		t.Fatalf("Ana's poison on its beat: hits %v, conditions %v", hits, g.w.ConditionsForTest(b))
+	}
+	if a.Skull() != pb.Skull_SKULL_AGGRESSOR {
+		t.Fatalf("the rest is still Ana's attack: skull %v", a.Skull())
+	}
+}
+
+// A save whose time cannot be placed on this server's clock ends another player's
+// condition (its holder takes no hit that may have fallen long ago, its author no mark or
+// lock from an attack nobody can time): a row from before the save time was kept, a save
+// from before this server started, or one from a clock ahead of this one. A monster's
+// condition saved with it waits as always.
+func TestPvPConditionSavedBeforeRestart(t *testing.T) {
+	g := newPvPCond(t, nil)
+	cc, c := g.fighter("Cid", 0, 20, 20, 30, 0)
+	g.unsafe(cc)
+	g.sim.RunFor(2 * time.Second)
+	up := g.sim.Elapsed() // the joins below run one tick later
+	cases := []struct {
+		name  string
+		saved time.Time
+		kept  bool
+	}{
+		{"Gus", time.Time{}, false},                               // an old row: no saved_at
+		{"Hal", g.sim.Now().Add(-up - 10*time.Second), false},     // before this server's first tick
+		{"Ivy", g.sim.Now().Add(30 * time.Second), false},         // a clock ahead of this one
+		{"Jon", g.sim.Now().Add(-up + 2*game.TickDuration), true}, // within this server's time
+	}
+	for i, tc := range cases {
+		_, v := g.fighter(tc.name, 0, 21+i, 20, 30, 0, func(ch *session.Character) {
+			ch.Conditions = []session.ConditionState{
+				{ID: "poison", LeftMs: 900, Ticks: 30, Damage: 20, Author: c.CharacterID(), AuthorUnjust: true, SavedAt: tc.saved},
+				{ID: "burning", LeftMs: 500, Ticks: 3, Damage: 20},
+			}
+		})
+		got := g.w.ConditionsForTest(v)
+		if (got["poison"] > 0) != tc.kept || got["burning"] != 3 {
+			t.Fatalf("%s: conditions %v, want Cid's poison %v and the monster's burning", tc.name, got, tc.kept)
+		}
 	}
 }
 
@@ -271,7 +382,7 @@ func TestPvPConditionSavedWithPvPOff(t *testing.T) {
 	g.sim.RunFor(2 * time.Second) // the server is older than the saved hit: it could be placed
 	cb, b := g.fighter("Bea", 0, 11, 10, 30, 0, func(c *session.Character) {
 		c.Conditions = []session.ConditionState{{ID: "poison", LeftMs: 500, Ticks: 5, Damage: 20, Author: a.CharacterID(),
-			AuthorHit: g.sim.Now().Add(-time.Second), AuthorUnjust: true}}
+			AuthorHit: g.sim.Now().Add(-time.Second), AuthorUnjust: true, SavedAt: g.sim.Now()}}
 	})
 	if hit := g.w.HitByForTest(b); len(hit) != 0 {
 		t.Fatalf("Bea remembers hits from %v with PvP off", hit)
@@ -297,7 +408,8 @@ func TestPvPConditionSavedMemory(t *testing.T) {
 	g.sim.Command(g.w.ForceSaveForTest(cb))
 	g.sim.Step()
 	s := g.saves[len(g.saves)-1]
-	if len(s.Conditions) != 1 || s.Conditions[0].Author != a.CharacterID() || !s.Conditions[0].AuthorHit.IsZero() {
+	if len(s.Conditions) != 1 || s.Conditions[0].Author != a.CharacterID() || !s.Conditions[0].AuthorHit.IsZero() ||
+		s.Conditions[0].SavedAt.IsZero() {
 		t.Fatalf("arena poison saved %+v", s.Conditions)
 	}
 
@@ -309,15 +421,18 @@ func TestPvPConditionSavedMemory(t *testing.T) {
 	if g.sim.Tick()+1 >= 600 {
 		t.Fatalf("tick %d: the server is not young", g.sim.Tick())
 	}
-	cd, _ := g.fighter("Dan", 0, 21, 20, 30, 0, func(ch *session.Character) {
+	cd, d := g.fighter("Dan", 0, 21, 20, 30, 0, func(ch *session.Character) {
 		ch.Conditions = []session.ConditionState{{ID: "poison", LeftMs: 500, Ticks: 5, Damage: 20, Author: c.CharacterID(),
-			AuthorHit: g.sim.Now().Add(-30 * time.Second), AuthorUnjust: true}}
+			AuthorHit: g.sim.Now().Add(-30 * time.Second), AuthorUnjust: true, SavedAt: g.sim.Now()}}
 	})
 	// Fay's, by a clock that was ahead of this server's: a hit in the future is forgotten.
-	cf, _ := g.fighter("Fay", 0, 20, 21, 30, 0, func(ch *session.Character) {
+	cf, f := g.fighter("Fay", 0, 20, 21, 30, 0, func(ch *session.Character) {
 		ch.Conditions = []session.ConditionState{{ID: "poison", LeftMs: 500, Ticks: 5, Damage: 20, Author: c.CharacterID(),
-			AuthorHit: g.sim.Now().Add(30 * time.Second), AuthorUnjust: true}}
+			AuthorHit: g.sim.Now().Add(30 * time.Second), AuthorUnjust: true, SavedAt: g.sim.Now()}}
 	})
+	if g.w.ConditionsForTest(d)["poison"] == 0 || g.w.ConditionsForTest(f)["poison"] == 0 {
+		t.Fatal("a poison saved just now was dropped: this tests the memory saved with it")
+	}
 	g.sim.RunFor(2 * time.Second)
 	if hits := damageTexts(cd.take()); len(hits) != 0 || c.Skull() != pb.Skull_SKULL_UNSPECIFIED {
 		t.Fatalf("hits %v, Cid %v", hits, c.Skull())
@@ -350,9 +465,11 @@ func TestPvPConditionVictimTakesOverLinkDead(t *testing.T) {
 	if got := g.w.HitByForTest(b2); !slices.Equal(got, []int64{a.CharacterID()}) {
 		t.Fatalf("Bea remembers hits from %v, want only Ana's (%d)", got, a.CharacterID())
 	}
+	until := g.w.PvPStateForTest(a).SkullUntil
 	g.sim.RunFor(2 * time.Second)
-	if hits := damageTexts(cb2.take()); !allTen(hits) || a.Skull() != pb.Skull_SKULL_AGGRESSOR {
-		t.Fatalf("hits after the takeover %v, Ana %v", hits, a.Skull())
+	if hits := damageTexts(cb2.take()); !allTen(hits) || !g.w.PvPStateForTest(a).SkullUntil.After(until) {
+		t.Fatalf("hits after the takeover %v, Ana's skull until %v, was until %v", hits,
+			g.w.PvPStateForTest(a).SkullUntil, until)
 	}
 }
 

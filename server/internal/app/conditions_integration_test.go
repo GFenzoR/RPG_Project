@@ -14,8 +14,8 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
-// T5.2: the saver writes a snapshot's conditions with their authors and the holder's
-// memory of each author's attack, and the next login reads them back from Postgres (the
+// T5.2: the saver writes a snapshot's conditions with their authors, the holder's memory
+// of each author's attack and when an authored one was saved, and the next login reads them back from Postgres (the
 // gateway turns them into session.ConditionState field by field, gateway's unit test).
 func TestSnapshotConditionAuthorPersists(t *testing.T) {
 	ctx := context.Background()
@@ -36,10 +36,10 @@ func TestSnapshotConditionAuthorPersists(t *testing.T) {
 	ana, bea := char("Ana"), char("Bea")
 	a := &App{cfg: Config{Store: st, Clock: clock.NewFake(now)}}
 
-	hit := now.Add(-15 * time.Second)
+	hit, at := now.Add(-15*time.Second), now.Add(-time.Second)
 	saved := []session.ConditionState{
-		{ID: "poison", LeftMs: 700, Ticks: 9, Damage: 20, Author: ana, AuthorHit: hit, AuthorUnjust: true},
-		{ID: "slowed", LeftMs: 3000, Author: ana},
+		{ID: "poison", LeftMs: 700, Ticks: 9, Damage: 20, Author: ana, AuthorHit: hit, AuthorUnjust: true, SavedAt: at},
+		{ID: "slowed", LeftMs: 3000, Author: ana, SavedAt: at},
 		{ID: "burning", LeftMs: 200, Ticks: 2, Damage: 6},
 	}
 	if err := a.writeSnapshot(ctx, session.Snapshot{CharacterID: bea, Seq: 1, Level: 30, Health: 1,
@@ -56,7 +56,8 @@ func TestSnapshotConditionAuthorPersists(t *testing.T) {
 	for i, got := range pc.Conditions {
 		w := saved[i]
 		if got.ID != w.ID || got.LeftMs != w.LeftMs || got.Ticks != w.Ticks || got.Damage != w.Damage ||
-			got.Author != w.Author || !got.AuthorHit.Equal(w.AuthorHit) || got.AuthorUnjust != w.AuthorUnjust {
+			got.Author != w.Author || !got.AuthorHit.Equal(w.AuthorHit) || got.AuthorUnjust != w.AuthorUnjust ||
+			!got.SavedAt.Equal(w.SavedAt) {
 			t.Fatalf("condition %d: loaded %+v, saved %+v", i, got, w)
 		}
 	}
