@@ -46,7 +46,7 @@
         "damage": { "$ref": "#/$defs/positiveInt" },
         "duration_ms": { "$ref": "#/$defs/durationMs" },
         "range": {
-          "description": "Spells only: aims at a monster at up to range tiles in line of sight instead of the caster.",
+          "description": "Spells only: aims at a monster or, with PvP, a player (by the rules of a direct attack, T5.2) at up to range tiles in line of sight instead of the caster. Only for a harmful condition (kind damage, or speed with a negative speed_pct): the server rejects it on a beneficial one.",
           "$ref": "#/$defs/positiveInt"
         }
       },

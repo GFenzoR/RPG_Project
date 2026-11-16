@@ -341,8 +341,11 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   per_skill`. Los hechizos del montaraz escalan así con la distancia. `light` está en el
   esquema para un hito futuro y el servidor lo rechaza todavía.
 - T3.2: dos efectos más. `condition: { id, duration_ms | ticks + damage, chance, range }`
-  pone una condición al que lanza o, con `range`, a un monstruo a esa distancia con línea
-  de visión (los chequeos de un hechizo de un objetivo). `cure: [ids]` quita esas
+  pone una condición al que lanza o, con `range`, a un monstruo o, con PvP (T5.2), a un
+  jugador, a esa distancia con línea de visión (los chequeos de un hechizo de un objetivo;
+  contra un jugador, además, las reglas de un ataque directo). `range` solo vale en una
+  condición dañina (`kind: damage`, o `speed` con `speed_pct` negativo): el validador lo
+  rechaza en una beneficiosa, que contra un jugador contaría como un ataque. `cure: [ids]` quita esas
   condiciones al que lanza; si no tiene ninguna, falla sin gastar maná. Un `damage` acepta
   también `condition`: se aplica, con su `chance`, a cada monstruo al que el golpe le hizo
   daño. Ver "Condiciones".

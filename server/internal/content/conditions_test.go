@@ -70,3 +70,37 @@ func TestConditionDefsCheck(t *testing.T) {
 		}
 	}
 }
+
+// Range aims a condition at someone else, which against a player is an attack (T5.2):
+// only a harmful condition (damage or a slow) may have it.
+func TestConditionApplyRangeOnlyHarmful(t *testing.T) {
+	cs := ConditionDefs{
+		"poison":    {Kind: ConditionDamage, Element: "earth", Stacking: StackAdd, IntervalMs: 1000, MaxTicks: 3},
+		"slowed":    {Kind: ConditionSpeed, SpeedPct: -40, MaxMs: 1000, Stacking: StackRefresh},
+		"hasted":    {Kind: ConditionSpeed, SpeedPct: 30, MaxMs: 1000, Stacking: StackRefresh},
+		"keen_eye":  {Kind: ConditionSkill, Skill: "distance", Amount: 2, MaxMs: 1000, Stacking: StackRefresh},
+		"invisible": {Kind: ConditionInvisible, MaxMs: 1000, Stacking: StackRefresh},
+	}
+	if err := cs.check(); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []*ConditionApply{
+		{ID: "poison", Ticks: 1, Damage: 1, Range: 3},
+		{ID: "slowed", DurationMs: 500, Range: 3},
+		{ID: "hasted", DurationMs: 500}, // on the caster
+	} {
+		if err := a.Check(cs); err != nil {
+			t.Errorf("%+v: %v", a, err)
+		}
+	}
+	for _, a := range []*ConditionApply{
+		{ID: "hasted", DurationMs: 500, Range: 3},
+		{ID: "keen_eye", DurationMs: 500, Range: 3},
+		{ID: "invisible", DurationMs: 500, Range: 3},
+		{ID: "slowed", DurationMs: 500, Range: -1},
+	} {
+		if err := a.Check(cs); err == nil {
+			t.Errorf("%+v accepted", a)
+		}
+	}
+}

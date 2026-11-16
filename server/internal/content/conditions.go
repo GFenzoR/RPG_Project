@@ -52,6 +52,13 @@ type ConditionDef struct {
 	Persists bool `yaml:"persists"`
 }
 
+// Harmful reports whether the condition hurts its holder: a damage condition or a slow.
+// Only a harmful condition may be aimed at someone else (ConditionApply.Range): against
+// a player that is an attack (T5.2).
+func (c *ConditionDef) Harmful() bool {
+	return c.Kind == ConditionDamage || c.Kind == ConditionSpeed && c.SpeedPct < 0
+}
+
 // ConditionDefs maps condition id to its definition.
 type ConditionDefs map[string]*ConditionDef
 
@@ -103,8 +110,9 @@ func (cs ConditionDefs) check() error {
 
 // ConditionApply is a source of a condition (a spell, a monster attack): which one and
 // how much. A damage condition takes Ticks hits of Damage; the others last DurationMs.
-// Chance 0 means always. Range (spells only) aims the condition at a monster at up to
-// Range tiles in line of sight instead of the caster.
+// Chance 0 means always. Range (spells only) aims the condition at a monster or, with
+// PvP, a player (by the rules of a direct attack: T5.2) at up to Range tiles in line of
+// sight instead of the caster; only a harmful condition may have it.
 type ConditionApply struct {
 	ID         string  `yaml:"id"`
 	Chance     float64 `yaml:"chance"`
@@ -129,6 +137,10 @@ func (a *ConditionApply) Check(cs ConditionDefs) error {
 		return fmt.Errorf("condition %s needs ticks and damage > 0", a.ID)
 	case def.Kind != ConditionDamage && a.DurationMs <= 0:
 		return fmt.Errorf("condition %s needs duration_ms > 0", a.ID)
+	case a.Range < 0:
+		return fmt.Errorf("condition %s: range must be >= 0", a.ID)
+	case a.Range > 0 && !def.Harmful():
+		return fmt.Errorf("condition %s: only a harmful condition (damage or a slow) may have range", a.ID)
 	}
 	return nil
 }
