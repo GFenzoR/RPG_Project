@@ -140,10 +140,13 @@ func TestItemFallFindsRoom(t *testing.T) {
 	h := portalHarness(t, 2)
 	cl, _, pack := h.thrower("Thrower", 9521, pos(5, 1), stack(coinID, 10, 0))
 	h.fill(landing, 20)
+	h.fill(at3(4, 2, 8), 20)
 	h.send(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(stairsDown), 4))
-	// Ring 1 from 5,3,8 in scan order: 4,2 first (5,2 is the stairs up).
-	if got := h.counts(at3(4, 2, 8)); !slices.Equal(got, [][2]int{{coinID, 4}}) || len(h.w.GroundAt(stairsUp)) != 0 || len(h.w.GroundAt(landing)) != 20 {
-		t.Fatalf("a full destination: on 4,2,8 %v", got)
+	// Ring 1 from 5,3,8 in scan order: 4,2 (full), then 5,2, the stairs up (never: it
+	// would fall again), then 6,2.
+	if got := h.counts(at3(6, 2, 8)); !slices.Equal(got, [][2]int{{coinID, 4}}) || len(h.w.GroundAt(stairsUp)) != 0 ||
+		len(h.w.GroundAt(landing)) != 20 || len(h.w.GroundAt(at3(4, 2, 8))) != 20 {
+		t.Fatalf("a full destination: on 6,2,8 %v, on the stairs up %d", got, len(h.w.GroundAt(stairsUp)))
 	}
 
 	h = portalHarness(t, 0)
@@ -218,6 +221,39 @@ func TestItemFallKeepsTheHold(t *testing.T) {
 	if len(systemKeys(evs)) != 0 || !slices.Equal(h.counts(landing), [][2]int{{coinID, 5}, {coinID, 4}}) ||
 		h.w.ReservedTo(g[0]) != other.CharacterID() || h.w.ReservedTo(g[1]) != 0 {
 		t.Fatalf("after the ack: %v, below %v", systemKeys(evs), h.counts(landing))
+	}
+	h.checkInvariants()
+}
+
+// A bag with its window open, dropped down the stairs from the backpack: it lands below
+// with what it holds, its window closes (it is on another floor now: closeUnreachable),
+// and that window moves nothing more out of it.
+func TestBagFallsWithItsWindowClosed(t *testing.T) {
+	landing := at3(5, 3, 8)
+	h := portalHarness(t, 2)
+	bag := session.ItemState{ItemID: bagID, Count: 1, Items: []session.ItemState{stack(coinID, 5, 0)}}
+	cl, p, pack := h.thrower("Thrower", 9551, pos(5, 1), bag)
+	h.input(cl, useItem(inContainer(pack, 0), bagID, 0))
+	h.sim.Step()
+	opens := find(cl.take(), (*pb.ServerMessage).GetContainerOpen)
+	if len(opens) != 1 || opens[0].GetItemId() != bagID {
+		t.Fatalf("opening the bag: %v", opens)
+	}
+	window := opens[0].GetContainerId()
+
+	evs := h.send(cl, moveItem(inContainer(pack, 0), bagID, 0, onTile(stairsDown), 1))
+	g := h.w.GroundAt(landing)
+	if len(systemKeys(evs)) != 0 || len(g) != 1 || g[0].Def().Numeric != bagID || len(g[0].Items()) != 1 ||
+		g[0].Items()[0].Count() != 5 || g[0].Viewers() != 0 {
+		t.Fatalf("the bag down the stairs: %v, below %v", systemKeys(evs), h.counts(landing))
+	}
+	closes := find(evs, (*pb.ServerMessage).GetContainerClose)
+	if len(closes) != 1 || closes[0].GetContainerId() != window {
+		t.Fatalf("the bag's window: closes %v (%v)", closes, kinds(evs))
+	}
+	evs = h.send(cl, moveItem(inContainer(window, 0), coinID, 0, inContainer(pack, 0), 5))
+	if !hasKey(evs, "inventory.not_possible") || h.w.CountItem(p, "copper_coin") != 0 || g[0].Items()[0].Count() != 5 {
+		t.Fatalf("coins out of the closed window: %v, carried %d", systemKeys(evs), h.w.CountItem(p, "copper_coin"))
 	}
 	h.checkInvariants()
 }
