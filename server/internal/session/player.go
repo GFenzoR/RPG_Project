@@ -687,6 +687,10 @@ func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 // freeAround is freeNear, also without house tiles if noHouse.
 func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bool) {
 	from := w.searchFrom(p)
+	skip := world.FlagBlocksMovement | world.FlagPortalStep
+	if noHouse {
+		skip |= world.FlagHouse
+	}
 	for r := 0; r <= radius; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -698,8 +702,9 @@ func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bo
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: p.Z}
-				if w.m.Walkable(q) && !w.occupied(q) && w.areaAllows(from, q) && !w.m.MovesOnStep(q) &&
-					(!noHouse || w.m.Flags(q)&world.FlagHouse == 0) {
+				// One read of the tile's flags: walkable, no stairs, hole or teleport
+				// (MovesOnStep) and, if noHouse, no house tile.
+				if w.m.Flags(q)&skip == 0 && !w.occupied(q) && w.areaAllows(from, q) {
 					return q, true
 				}
 			}
