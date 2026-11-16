@@ -90,9 +90,12 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   públicos desde el 2026-12-02): `map-pr-pending.yml` ya no existe. El aviso de
   "pendiente" sale ahora del `workflow_run` `requested` de `map-pr`, y el status de commit
   `map-pr/verdict` cierra el caso del push sin corrida (docs/04, "PR de mapas en CI"). Falta:
-  - 👤 después de mezclar esto en `main`, marcar `map-pr/verdict` como check requerido
-    (fuente GitHub Actions). Hasta entonces, un push que borra o renombra `map-pr.yml`
-    deja el comentario anterior a la vista, aunque nombra su commit y su pie avisa;
+  - 👤 **apenas** se mezcle esto en `main`, marcar `map-pr/verdict` como check requerido
+    (fuente GitHub Actions; en un ruleset se puede escribir el nombre sin esperar a la
+    primera corrida). Hasta entonces, un push que borra o renombra `map-pr.yml` deja el
+    ✅ anterior a la vista, solo con el aviso del pie (nombra su commit). Antes del
+    2026-12-02 `map-pr-pending` lo habría marcado como pendiente (salvo en los cortes de
+    prueba); después, ya no;
   - 👤 el status **no es a prueba de falsificación**: un PR (también de un fork) puede
     agregar un workflow con un job `name: map-pr/verdict`, cuyo check run satisface la
     regla con el mismo nombre, y cualquiera con permiso Write puede poner el status. El
@@ -106,13 +109,29 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     aparezca en el commit (`pending`, y después `success` o `failure`). Los tests usan un
     GitHub en memoria. Sin verificar en GitHub: si `requested` llega también para la
     corrida de un contribuidor nuevo que espera aprobación (si no llega, el status falta
-    hasta que se apruebe, que también bloquea). Tampoco se verificó que el anuncio del
+    hasta que se apruebe, que también bloquea); un `completed` con `action_required`
+    se ignora, para no escribir `failure` antes de que `map-pr` corra. Tampoco se verificó que el anuncio del
     2026-12-02 deje fuera a `workflow_run`: por lo que se sabe solo cambia
     `pull_request_target`, pero vale leerlo antes de esa fecha;
   - un mismo commit como head de un PR hacia `main` y de otro hacia otra rama: el status
     lo escribe solo el de `main`, y una corrida que no dice para cuál PR es (el job
     `pending`, o sin reporte) no escribe nada. Raro, pero el comentario del PR hacia
-    `main` puede quedar sin "pendiente" en ese caso;
+    `main` puede quedar sin "pendiente" en ese caso. Si los dos salen de la misma rama,
+    sus cuatro eventos comparten el grupo de `concurrency`, que deja uno corriendo y uno
+    esperando (uno nuevo cancela al que espera, aunque `cancel-in-progress` sea `false`):
+    el veredicto del PR hacia `main` se puede perder y su status queda en `pending`.
+    Falla cerrado; se relanza su `map-pr`. No está verificado en GitHub que un job
+    saltado por su `if` no ocupe lugar en el grupo;
+  - una copia de un PR (alguien abre otro PR desde la misma rama o el mismo commit, hacia
+    `main`, con otro autor u otro repo de origen) congela el status del commit: ninguna
+    corrida lo escribe mientras la copia esté abierta. Antes la copia podía pasarlo a
+    `failure` con cada `edited`. Se cierra la copia y se relanza `map-pr` del PR bueno.
+    Abrir y cerrar copias sigue sirviendo para trabar un PR (nunca para pasarlo);
+  - 👤 opcional, ya existía: `release-desktop.yml` (`contents: write`) e `images.yml`
+    (`packages: write` al publicar) usan tags mayores flotantes (`actions/checkout@v4`,
+    `pnpm/action-setup@v4`, `docker/*@v3`...). Fijarlas por SHA, como `map-pr-comment`,
+    reduce el riesgo de cadena de suministro, pero sin Dependabot (no hay
+    `.github/dependabot.yml`) nadie las actualiza;
   - una merge queue necesitaría que `map-pr` corra en `merge_group` y ponga el status
     sobre ese commit; hoy se usa "Require branches to be up to date".
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero

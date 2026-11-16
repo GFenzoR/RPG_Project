@@ -98,10 +98,10 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 | `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
 
 Además, dos workflows para los PR de mapas (T2.4, detalle en `04`, "PR de mapas en
-CI"): `map-pr.yml` (`pull_request`, solo lectura, con el código de la rama base) corre `mapcli pr-check` y sube los
+CI"): `map-pr.yml` (`pull_request`, solo lectura; su YAML sale del PR, pero tal como está en la base corre el código de la rama base) corre `mapcli pr-check` y sube los
 artefactos `map-pr-report` y `map-pr-renders`; `map-pr-comment.yml` (`workflow_run`
 `requested` y `completed`, desde la rama por defecto) publica o actualiza un único
-comentario en el PR y, si el PR va hacia la rama por defecto, pone el status de commit
+comentario en el PR y, si el PR va hacia la rama por defecto (y no hay otro PR abierto hacia ella con el mismo commit desde otro repo o autor), pone el status de commit
 `map-pr/verdict` (pendiente mientras `map-pr` corre, después éxito o falla). Ningún workflow usa `pull_request_target` (GitHub
 lo bloquea por defecto en repos públicos desde el 2026-12-02); las reglas de seguridad de
 todos los workflows las comprueba `tools/mapcli/src/workflows.test.ts`, que corre en el
