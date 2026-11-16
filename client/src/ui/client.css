@@ -758,10 +758,7 @@ body.using-item canvas {
 
 /* ---- chat and language (T1.13) ---------------------------------------------------- */
 .chat {
-  /* stays in view at the bottom of the side panel while it scrolls */
-  position: sticky;
-  bottom: -0.5rem;
-  padding-bottom: 0.5rem;
+  /* On desktop it sits under the scrolling column of the side panel (.side-scroll). */
   background: var(--panel);
   display: flex;
   flex-direction: column;
@@ -1527,6 +1524,38 @@ body.using-item canvas {
 }
 .pane[hidden] {
   display: none;
+}
+
+/* Desktop side column: every section but the chat scrolls in .side-scroll, and the chat
+   keeps its own place under it (it used to be sticky over the column and covered the end
+   of the inventory and the appearance panel at 1280x800). With tabs or the drawer the
+   wrapper is transparent and the panes behave as before. */
+.side-scroll {
+  display: contents;
+}
+.game[data-panel="sidebar"] .side {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.game[data-panel="sidebar"] .side-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* The sections keep their height and the column scrolls (the panes are display: contents). */
+.game[data-panel="sidebar"] .side-scroll > .pane > * {
+  flex-shrink: 0;
+}
+.game[data-panel="sidebar"] .chat {
+  flex: none;
+  padding: 0.5rem;
+  border-top: 1px solid #2c323c;
 }
 
 /* Server notices over the map: above the hotbar, under the bottom edge of the windows. */

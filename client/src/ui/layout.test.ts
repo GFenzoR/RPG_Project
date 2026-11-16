@@ -4,6 +4,7 @@ import {
   PANEL_TABS,
   TAB_TITLE,
   hotbarFit,
+  hotbarRoom,
   layoutFor,
   sliderEnds,
   slotsWidth,
@@ -94,6 +95,33 @@ describe("hotbarFit", () => {
       visible: 1,
       slider: false,
     });
+  });
+
+  it("shows four slots right of the pad on a 412 px phone in portrait", () => {
+    // Stacked (touch.css): 3.2rem slots, the arrows and the edit button on their own line.
+    const room = hotbarRoom(412, 162, 8);
+    expect(room).toBe(242);
+    const fit = hotbarFit({
+      slot: 51.2,
+      gap: 3.2,
+      total: 12,
+      fixed: 0,
+      arrows: 0,
+      available: room,
+    });
+    expect(fit).toEqual({ visible: 4, slider: true });
+    // The old single line (arrows and edit beside the slots) fitted one slot there.
+    expect(hotbarFit({ ...base, slot: 57.6, gap: 3.2, available: room }).visible).toBe(1);
+    // A 390 px phone (iPhone 13) still shows four.
+    expect(
+      hotbarFit({ slot: 51.2, gap: 3.2, total: 12, fixed: 0, arrows: 0, available: 220 }).visible,
+    ).toBe(4);
+  });
+
+  it("knows the room beside the pad and on a centred bar", () => {
+    expect(hotbarRoom(1000, 0, 8)).toBe(984);
+    expect(hotbarRoom(1000, 162, 8)).toBe(830);
+    expect(hotbarRoom(100, 162, 8)).toBe(0);
   });
 
   it("measures rows of slots", () => {
