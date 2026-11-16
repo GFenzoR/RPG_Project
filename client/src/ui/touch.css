@@ -163,11 +163,15 @@ body.picking-item [data-drop] {
 /* ---- placement over the map (App.tsx mounts these inside .viewport) ----
    The pad docks bottom-left; the hotbar starts after it (PAD_RESERVE_PX in TouchPad.tsx).
    In portrait the map sits at the top of a taller viewport and both go in the strip under
-   it, so the pad never covers the map. */
+   it, so the pad never covers the map.
+   Safe area: .viewport lies inside the padding of .game, which already keeps the game out
+   of the notch, the rounded corners and the home indicator (client.css). The offsets here
+   are from the viewport's edges and never add env(safe-area-inset-*) again: that counted
+   the inset twice on a notched phone on its side. */
 .game[data-pad] .hotbar {
-  left: calc(162px + env(safe-area-inset-left, 0px));
+  left: 162px;
   transform: none;
-  max-width: calc(100% - 170px - env(safe-area-inset-left, 0px));
+  max-width: calc(100% - 170px);
 }
 /* The strip is the viewport's bottom padding: game-canvas.ts sizes the map to the content
    box, so a zoomed-in map is cut above the strip and never slides under the pad. */
@@ -201,8 +205,8 @@ body.picking-item [data-drop] {
 }
 .touch-pad-dock {
   position: absolute;
-  left: calc(8px + env(safe-area-inset-left, 0px));
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  left: 8px;
+  bottom: 8px;
   z-index: 20;
 }
 
@@ -211,7 +215,7 @@ body.picking-item [data-drop] {
   top: 8px;
   /* Top-left, narrow: an open landscape drawer covers the right part of the map and would
      hide the cancel button of a centred banner. */
-  left: calc(8px + env(safe-area-inset-left, 0px));
+  left: 8px;
   /* Over the map, under the phone drawer (z-index 8 in client.css) and the windows. */
   z-index: 7;
   max-width: min(calc(100% - 16px), 440px);
@@ -223,8 +227,8 @@ body.picking-item [data-drop] {
 .game[data-flow="column"][data-pad] .viewport > .pick-banner {
   top: auto;
   bottom: 3.4rem;
-  left: calc(162px + env(safe-area-inset-left, 0px));
-  right: calc(8px + env(safe-area-inset-right, 0px));
+  left: 162px;
+  right: 8px;
   transform: none;
   max-width: none;
   /* Opaque here: the hotbar's arrows under it would show through. */
@@ -236,7 +240,7 @@ body.picking-item [data-drop] {
    the drawer (z-index 8) and the picked-item banner (7). */
 .zoom-buttons {
   position: absolute;
-  right: calc(8px + env(safe-area-inset-right, 0px));
+  right: 8px;
   bottom: 3.75rem;
   z-index: 6;
   display: flex;
