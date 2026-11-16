@@ -19,7 +19,7 @@ import { run } from "@rpg/mapcli";
 import { afterEach, describe, expect, it } from "vitest";
 import { History } from "../src/history/history.ts";
 import { auxFile, chunkFile, fromWire } from "../src/io/wire.ts";
-import type { FileChange } from "../src/io/wire.ts";
+import type { FileChange, NameText } from "../src/io/wire.ts";
 import {
   BadRequest,
   PartialSave,
@@ -30,7 +30,9 @@ import {
   nodeIo,
   parseEditorPatch,
   saveChanges,
+  upsertText,
   validateInMemory,
+  withPendingKeys,
 } from "./store.ts";
 import type { SaveIo } from "./store.ts";
 
@@ -399,6 +401,138 @@ describe("saveChanges of auxiliary lists (spawns, npcs, zones, portals)", () => 
   });
 });
 
+describe("saveChanges of houses.yaml and house names (house panel)", () => {
+  const HOUSES = "world/islands/testisle/houses.yaml";
+  const ES = "i18n/es/world.yaml";
+  const EN = "i18n/en/world.yaml";
+  const KEY = "house.testisle_house_test.name";
+  const ADD: MapOp = {
+    op: "add_house",
+    id: "testisle_house_test",
+    rent: 600,
+    rects: [
+      { x: 1068, y: 1044, z: 7, w: 4, h: 3 },
+      { x: 1069, y: 1047, z: 7, w: 1, h: 1 },
+    ],
+    doors: [{ x: 1069, y: 1047, z: 7 }],
+    exit: { x: 1069, y: 1048, z: 7 },
+  };
+  const NAMES: NameText[] = [
+    { lang: "es", key: KEY, text: "Casa de Prueba", base: null },
+    { lang: "en", key: KEY, text: "Test House", base: null },
+  ];
+
+  it("writes houses.yaml as mapcli does and adds the names after the other house names", () => {
+    const root = scratch();
+    const es = readFileSync(join(root, ES), "utf8");
+    const { world, changes } = edit(root, [ADD]);
+    expect(changes).toEqual([{ file: HOUSES, base: null }]);
+    // Before saving, the validator takes the pending names as present.
+    const missing = validateInMemory(root, world, loadContent(root));
+    expect(missing.diagnostics.map((d) => d.message)).toContainEqual(
+      expect.stringMatching(`^i18n key "${KEY}" is missing in: `),
+    );
+    const pending = withPendingKeys(loadContent(root), NAMES);
+    expect(validateInMemory(root, world, pending).errors).toBe(0);
+
+    const r = saveChanges(root, world, changes, nodeIo, NAMES);
+    expect(r.written).toEqual([EN, ES, HOUSES]);
+    expect(r.base[HOUSES]).toBe(hashText(readFileSync(join(root, HOUSES), "utf8")));
+    expect(fmtCheck(root)).toEqual({ code: 0, changed: [] });
+    expect(readFileSync(join(root, ES), "utf8")).toBe(`${es}${KEY}: "Casa de Prueba"\n`);
+    expect(readFileSync(join(root, HOUSES), "utf8")).toContain("- id: testisle_house_test");
+    const saved = loadWorld(root).world;
+    expect(validateInMemory(root, saved, loadContent(root)).errors).toBe(0);
+    expect(saved.islands.get("testisle")?.houses).toEqual(world.islands.get("testisle")?.houses);
+
+    // Removing the island's only house removes the file; the names stay in world.yaml.
+    const removed = applyOps(saved, [{ op: "remove_house", id: "testisle_house_test" }]).world;
+    const again = saveChanges(root, removed, [{ file: HOUSES, base: r.base[HOUSES] ?? null }]);
+    expect(again.removed).toEqual([HOUSES]);
+    expect(existsSync(join(root, HOUSES))).toBe(false);
+    expect(readFileSync(join(root, ES), "utf8")).toContain(KEY);
+  });
+
+  it("renames a house in place and refuses a name changed on disk since it was loaded", () => {
+    const root = scratch();
+    const world = loadWorld(root).world;
+    const es = readFileSync(join(root, ES), "utf8");
+    const key = "house.puerto_house_net.name";
+    const rename = (base: string | null): NameText[] => [
+      { lang: "es", key, text: "Casa de la Red Nueva", base },
+    ];
+    // Someone else changed the name: conflict, nothing written (not even the other files).
+    const { world: edited, changes } = edit(root, [ADD]);
+    expect(() =>
+      saveChanges(root, edited, changes, nodeIo, rename("Casa de la Red Rota")),
+    ).toThrow(SaveConflict);
+    expect(readFileSync(join(root, ES), "utf8")).toBe(es);
+    expect(existsSync(join(root, HOUSES))).toBe(false);
+
+    const r = saveChanges(root, world, [], nodeIo, rename("Casa de la Red Tendida"));
+    expect(r.written).toEqual([ES]);
+    expect(readFileSync(join(root, ES), "utf8")).toBe(
+      es.replace(`${key}: "Casa de la Red Tendida"`, `${key}: "Casa de la Red Nueva"`),
+    );
+    // Saving the same name again (another tab) is not a conflict and writes nothing.
+    expect(saveChanges(root, world, [], nodeIo, rename("Casa de la Red Tendida")).written).toEqual(
+      [],
+    );
+  });
+
+  it.each<[string, unknown]>([
+    ["texts that are not a list", { lang: "es", key: KEY, text: "x", base: null }],
+    [
+      "a key that is not a house name",
+      [{ lang: "es", key: "island.puerto.name", text: "x", base: null }],
+    ],
+    ["an unknown language", [{ lang: "fr", key: KEY, text: "Maison", base: null }]],
+    ["an i18n placeholder", [{ lang: "es", key: KEY, text: "Casa {name}", base: null }]],
+    ["a second line", [{ lang: "es", key: KEY, text: "Casa\nevil: 1", base: null }]],
+    ["surrounding spaces", [{ lang: "es", key: KEY, text: " Casa", base: null }]],
+    ["an empty name", [{ lang: "es", key: KEY, text: "", base: null }]],
+    ["a name listed twice", [NAMES[0], NAMES[0]]],
+    ["a bad base", [{ lang: "es", key: KEY, text: "Casa", base: 3 }]],
+  ])("refuses %s", (_what, texts) => {
+    const root = scratch();
+    const before = tree(join(root, "i18n"));
+    expect(() => saveChanges(root, loadWorld(root).world, [], nodeIo, texts)).toThrow(BadRequest);
+    expect(tree(join(root, "i18n"))).toEqual(before);
+  });
+
+  it("upsertText replaces a key's line or adds it after the last house name", () => {
+    const text = '# c\na: "1"\nhouse.x.name: "X"\nb: "2"\n';
+    expect(upsertText(text, "house.x.name", "Y")).toBe('# c\na: "1"\nhouse.x.name: "Y"\nb: "2"\n');
+    expect(upsertText(text, "house.y.name", 'Q "q"')).toBe(
+      '# c\na: "1"\nhouse.x.name: "X"\nhouse.y.name: "Q \\"q\\""\nb: "2"\n',
+    );
+    expect(upsertText('a: "1"\n', "house.y.name", "Y")).toBe('a: "1"\nhouse.y.name: "Y"\n');
+    expect(upsertText('a: "1"', "house.y.name", "Y")).toBe('a: "1"\nhouse.y.name: "Y"\n');
+  });
+
+  it("withPendingKeys only adds house names, to a copy of the index", () => {
+    const base = loadContent(repo);
+    const out = withPendingKeys(base, [
+      { lang: "es", key: KEY },
+      { lang: "es", key: "editor.title.fake" },
+      { lang: "xx", key: KEY },
+    ]);
+    expect(out.i18n.get("es")?.has(KEY)).toBe(true);
+    expect(out.i18n.get("es")?.has("editor.title.fake")).toBe(false);
+    expect(base.i18n.get("es")?.has(KEY)).toBe(false);
+    expect(withPendingKeys(base, undefined)).toBe(base);
+    expect(() => withPendingKeys(base, "nope")).toThrow(BadRequest);
+    expect(() => withPendingKeys(base, [{ lang: "es" }])).toThrow(BadRequest);
+  });
+
+  it("never exports houses.yaml in a map patch", () => {
+    const root = scratch();
+    const before = loadWorld(root).world;
+    const after = applyOps(before, [ADD]).world;
+    expect(() => exportPatch(root, before, after, [HOUSES])).toThrow(/cannot go in a map patch/);
+  });
+});
+
 describe("saveChanges when the disk fails", () => {
   /** Node io that throws on the nth call of one operation. */
   function failing(op: keyof SaveIo, nth: number): SaveIo {
@@ -487,17 +621,19 @@ describe("bootstrap", () => {
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();
       expect(b.i18n[lang]?.["island.testisle.name"]).toBeTruthy();
     }
-    // testisle + puerto + bosque + volcan chunks, and their spawns/npcs/zones/portals.yaml (not texts.yaml).
+    // testisle + puerto + bosque + volcan chunks, and their spawns/npcs/zones/portals.yaml and
+    // houses.yaml (not texts.yaml).
     expect(Object.keys(b.base).filter((f) => f.endsWith(".json"))).toHaveLength(6 + 43 + 40 + 46);
+    const lists = ["houses", "npcs", "portals", "spawns", "zones"];
     expect(
       Object.keys(b.base)
         .filter((f) => f.endsWith(".yaml"))
         .sort(),
     ).toEqual([
-      ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/bosque/${f}.yaml`),
-      ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/puerto/${f}.yaml`),
+      ...lists.map((f) => `world/islands/bosque/${f}.yaml`),
+      ...lists.map((f) => `world/islands/puerto/${f}.yaml`),
       ...["portals", "spawns", "zones"].map((f) => `world/islands/testisle/${f}.yaml`),
-      ...["npcs", "portals", "spawns", "zones"].map((f) => `world/islands/volcan/${f}.yaml`),
+      ...lists.map((f) => `world/islands/volcan/${f}.yaml`),
     ]);
     expect(b.borders.map((r) => r.id)).toContain("grass_sand");
     expect(b.monsters).toContain("wolf");
@@ -557,6 +693,7 @@ describe("map patches", () => {
       "world/world.yaml", // valid patch path, but not something the editor applies
       "world/islands/testisle/island.yaml",
       "world/islands/testisle/texts.yaml",
+      "world/islands/puerto/houses.yaml", // houses never go in a patch (maintainers only)
       "world/islands/nowhere/chunks/z07/c0032_0032.json",
     ])
       expect(() => parseEditorPatch(root, patch([{ path, base: null, content: chunk }]))).toThrow(

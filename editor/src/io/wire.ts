@@ -2,6 +2,7 @@
 // versions of the map-format model (Maps become arrays), plus the content the UI needs.
 import { chunkKey } from "@rpg/map-format/ops";
 import type {
+  AuxList,
   BorderRule,
   Chunk,
   EntityList,
@@ -25,7 +26,7 @@ export interface WireIsland {
   zones: Zone[];
   portals: Portal[];
   texts: MapText[];
-  /** T5.4: shown and validated, edited only in houses.yaml. */
+  /** T5.4: player houses, edited in the house panel (house ops). */
   houses: House[];
 }
 
@@ -62,7 +63,7 @@ export interface Bootstrap {
   /** Problems found while loading world/ (files that did not parse are not editable). */
   loadErrors: WireDiagnostic[];
   /**
-   * Hash of each chunk file and auxiliary list (spawns/npcs/zones/portals.yaml) as loaded
+   * Hash of each chunk file and auxiliary list (spawns/npcs/zones/portals/houses.yaml) as loaded
    * (see hashText); the base saves are checked against.
    */
   base: Record<string, string>;
@@ -82,6 +83,41 @@ export interface FileChange {
 export interface SaveRequest {
   world: WireWorld;
   changes: FileChange[];
+  /** House names to write in i18n/<lang>/world.yaml (T5.4). */
+  texts?: NameText[];
+}
+
+/**
+ * A house name the editor changed (docs/03 "Casas": house.<id>.name in
+ * i18n/<lang>/world.yaml). `base` is the text it had when the editor loaded it (null: no
+ * text); if the file says something else now, the save is a conflict.
+ */
+export interface NameText {
+  lang: string;
+  key: string;
+  text: string;
+  base: string | null;
+}
+
+/** POST /api/validate: the world, plus the i18n keys of names not saved yet. */
+export type ValidateRequest = WireWorld & { pendingKeys?: { lang: string; key: string }[] };
+
+/** Longest house name, in characters. */
+export const MAX_NAME_LENGTH = 80;
+
+/**
+ * Whether `text` can be a house name: 1..MAX_NAME_LENGTH characters on one line, no
+ * surrounding spaces, no control characters and no braces (i18n placeholders).
+ */
+export function isHouseName(text: unknown): text is string {
+  return (
+    typeof text === "string" &&
+    text.length > 0 &&
+    text.length <= MAX_NAME_LENGTH &&
+    text.trim() === text &&
+    // eslint-disable-next-line no-control-regex
+    !/[\u0000-\u001f\u007f\u2028\u2029{}]/.test(text)
+  );
 }
 
 export interface SaveResult {
@@ -110,11 +146,14 @@ export function chunkFile(island: string, z: number, cx: number, cy: number): st
   return `world/islands/${island}/chunks/z${p(z, 2)}/c${p(cx, 4)}_${p(cy, 4)}.json`;
 }
 
-/** Auxiliary lists the editor's panels edit (texts.yaml is not edited yet). */
+/** Auxiliary lists the editor's entity panels edit (texts.yaml is not edited yet). */
 export const EDITABLE_AUX: readonly EntityList[] = ["spawns", "npcs", "zones", "portals"];
 
+/** Auxiliary files the editor saves: the entity lists and houses.yaml (house panel). */
+export const SAVED_AUX: readonly AuxList[] = [...EDITABLE_AUX, "houses"];
+
 /** Repository path of an island's auxiliary list. */
-export function auxFile(island: string, file: EntityList): string {
+export function auxFile(island: string, file: AuxList): string {
   return `world/islands/${island}/${file}.yaml`;
 }
 

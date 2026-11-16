@@ -21,6 +21,8 @@ export interface EditorTestHooks {
     zoom: number;
     dirty: boolean;
     validating: boolean;
+    tool: string;
+    houseSel: string | undefined;
   };
 }
 
@@ -28,6 +30,16 @@ declare global {
   interface Window {
     __rpgEditor?: EditorTestHooks;
   }
+}
+
+/** House names of every language (house.<id>.name), for the house panel. */
+function houseNames(i18n: Bootstrap["i18n"]): Record<string, Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries(i18n).map(([lang, texts]) => [
+      lang,
+      Object.fromEntries(Object.entries(texts).filter(([k]) => /^house\.[^.]+\.name$/.test(k))),
+    ]),
+  );
 }
 
 async function start(): Promise<void> {
@@ -52,6 +64,7 @@ async function start(): Promise<void> {
     borders: boot.borders,
     monsters: boot.monsters,
     npcs: boot.npcs,
+    houseNames: houseNames(boot.i18n),
     island: new URLSearchParams(location.search).get("island"),
   });
   // Unsaved changes: the browser asks before closing or reloading the page.
@@ -72,6 +85,8 @@ async function start(): Promise<void> {
         zoom: ctl.state.camera.zoom,
         dirty: ctl.state.dirty,
         validating: ctl.state.validating,
+        tool: ctl.state.tool,
+        houseSel: ctl.state.houseSel,
       }),
     };
   };

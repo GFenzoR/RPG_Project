@@ -126,27 +126,30 @@ export function disconnectedFloors(rects: readonly HouseRect[]): number[] {
 /** A house as a form or a tool builds it: the exit may still be missing. */
 export type HouseInput = Omit<House, "exit"> & { exit?: Position | undefined };
 
-export type HouseIssueCode =
-  | "id"
-  | "duplicate"
-  | "rent"
-  | "no_tiles"
-  | "too_many_rects"
-  | "rect_too_big"
-  | "rects_overlap"
-  | "outside_island"
-  | "two_islands"
-  | "overlap"
-  | "no_doors"
-  | "too_many_doors"
-  | "door_outside"
-  | "door_not_on_edge"
-  | "no_exit"
-  | "exit_outside_island"
-  | "exit_in_house"
-  | "exit_far"
-  | "not_contiguous"
-  | "no_ground";
+/** Every problem houseIssues reports (the editor has a text for each). */
+export const HOUSE_ISSUE_CODES = [
+  "id",
+  "duplicate",
+  "rent",
+  "no_tiles",
+  "too_many_rects",
+  "rect_too_big",
+  "rects_overlap",
+  "outside_island",
+  "two_islands",
+  "overlap",
+  "no_doors",
+  "too_many_doors",
+  "door_outside",
+  "door_not_on_edge",
+  "no_exit",
+  "exit_outside_island",
+  "exit_in_house",
+  "exit_far",
+  "not_contiguous",
+  "no_ground",
+] as const;
+export type HouseIssueCode = (typeof HOUSE_ISSUE_CODES)[number];
 
 /** Blocking problems; the rest are warnings (the house works, but looks like a mistake). */
 const WARNINGS: ReadonlySet<HouseIssueCode> = new Set(["not_contiguous", "no_ground"]);

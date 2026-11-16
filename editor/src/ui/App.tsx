@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { formatDiagnosticShort } from "./format.ts";
 import { Palette } from "../palette/Palette.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
+import { HousePanel } from "./HousePanel.tsx";
 import { ReviewPanel } from "../review/ReviewPanel.tsx";
 import { createMapCanvas } from "../canvas/map-canvas.ts";
 import type { MapCanvas } from "../canvas/map-canvas.ts";
@@ -251,6 +252,11 @@ export function App({
           />
         )}
         <EntityPanel
+          ctl={ctl}
+          s={s}
+          onJump={(p) => canvas && ctl.centerTile(p.x, p.y, p.z, canvas.atlas.tileSize)}
+        />
+        <HousePanel
           ctl={ctl}
           s={s}
           onJump={(p) => canvas && ctl.centerTile(p.x, p.y, p.z, canvas.atlas.tileSize)}

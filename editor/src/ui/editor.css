@@ -315,3 +315,28 @@ button.primary {
   font-size: 11px;
   margin: 0;
 }
+
+/* House panel (houses.yaml, T5.4) */
+.houses .tabs,
+.houses .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.houses .hint,
+.houses .summary {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0 0 4px;
+}
+.houses .good {
+  color: var(--ok);
+  margin: 4px 0;
+}
+.houses .diags {
+  margin: 4px 0;
+}
+.houses input[type="number"] {
+  width: 100px;
+}

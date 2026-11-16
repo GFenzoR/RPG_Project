@@ -5,6 +5,7 @@ export { applyOps } from "./apply.ts";
 export type { ApplyResult, TouchedAux, TouchedChunk } from "./apply.ts";
 export type { AuxList, EntityList } from "./draft.ts";
 export {
+  HOUSE_ISSUE_CODES,
   MAX_HOUSE_RENT,
   disconnectedFloors,
   houseIssues,

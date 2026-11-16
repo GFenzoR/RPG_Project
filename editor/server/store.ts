@@ -1,6 +1,7 @@
 // Node side of the editor: reads world/ and data/ with @rpg/map-format, saves the chunks and
-// auxiliary lists (spawns/npcs/zones/portals.yaml) the editor changed in the canonical layout
-// (the same bytes `mapcli fmt` writes) and runs the shared validator on the in-memory world.
+// auxiliary lists (spawns/npcs/zones/portals/houses.yaml) the editor changed in the canonical
+// layout (the same bytes `mapcli fmt` writes), the house names it changed in
+// i18n/<lang>/world.yaml, and runs the shared validator on the in-memory world.
 //
 // Saving is checked against what the editor loaded: every changed file carries the hash it
 // had then, and if the file on disk is different now (git pull, mapcli, another tab) the
@@ -37,18 +38,19 @@ import {
 } from "@rpg/map-format";
 import type { MapPatch, PatchFile } from "@rpg/map-format";
 import type { ContentIndex, Diagnostic, World } from "@rpg/map-format";
-import type { EntityList } from "@rpg/map-format/ops";
+import type { AuxList, EntityList } from "@rpg/map-format/ops";
 import { parse } from "yaml";
 import type {
   Bootstrap,
   FileChange,
+  NameText,
   PaletteItem,
   ParsedPatch,
   ParsedPatchFile,
   SaveResult,
   ValidateResult,
 } from "../src/io/wire.ts";
-import { EDITABLE_AUX, toWire } from "../src/io/wire.ts";
+import { SAVED_AUX, isHouseName, toWire } from "../src/io/wire.ts";
 
 export const LANGUAGES = ["es", "en"] as const;
 
@@ -95,8 +97,10 @@ export const hashText = (text: string): string =>
 
 const ID = /^[a-z][a-z0-9_]*$/;
 const CHUNK_PATH = /^world\/islands\/([a-z][a-z0-9_]*)\/chunks\/z(\d{2})\/c(\d{4})_(\d{4})\.json$/;
-/** Auxiliary lists the editor may write (EDITABLE_AUX); texts.yaml and island.yaml are not. */
-const AUX_PATH = new RegExp(`^world/islands/([a-z][a-z0-9_]*)/(${EDITABLE_AUX.join("|")})\\.yaml$`);
+/** Auxiliary lists the editor may write (SAVED_AUX); texts.yaml and island.yaml are not. */
+const AUX_PATH = new RegExp(`^world/islands/([a-z][a-z0-9_]*)/(${SAVED_AUX.join("|")})\\.yaml$`);
+/** The only i18n keys the editor writes: house names (docs/03 "Casas"). */
+const NAME_KEY = /^house\.[a-z][a-z0-9_]*\.name$/;
 
 function readIfExists(abs: string): string | null {
   return existsSync(abs) ? readFileSync(abs, "utf8") : null;
@@ -126,7 +130,7 @@ function plan(root: string, world: World, islands: Set<string>, change: FileChan
   )
     throw new BadRequest(`${change.file}: invalid base hash`);
   const aux = AUX_PATH.exec(change.file);
-  if (aux) return planAux(root, world, islands, change.file, aux[1] ?? "", aux[2] as EntityList);
+  if (aux) return planAux(root, world, islands, change.file, aux[1] ?? "", aux[2] as AuxList);
   const m = CHUNK_PATH.exec(change.file);
   if (!m) throw new BadRequest(`${change.file} is not a chunk or auxiliary file path`);
   const [, id = "", zs, cxs, cys] = m;
@@ -162,9 +166,9 @@ function plan(root: string, world: World, islands: Set<string>, change: FileChan
 }
 
 /**
- * An auxiliary list (spawns/npcs/zones/portals.yaml): written as `formatYaml(list)`, the
- * canonical text `mapcli fmt` writes; removed when the list is empty (as saveApplied does).
- * The text must parse back and pass the file's schema before anything is written.
+ * An auxiliary list (spawns/npcs/zones/portals/houses.yaml): written as `formatYaml(list)`,
+ * the canonical text `mapcli fmt` writes; removed when the list is empty (as saveApplied
+ * does). The text must parse back and pass the file's schema before anything is written.
  */
 function planAux(
   root: string,
@@ -172,7 +176,7 @@ function planAux(
   islands: Set<string>,
   file: string,
   id: string,
-  list: EntityList,
+  list: AuxList,
 ): PlannedWrite {
   if (!islands.has(id)) throw new BadRequest(`island "${id}" is not in world/world.yaml`);
   const abs = inside(root, file, `world/islands/${id}`);
@@ -208,15 +212,112 @@ function planAux(
 }
 
 /**
- * Saves the chunk and auxiliary files in `changes` from `world`. All changes are checked first (paths,
- * islands listed in world.yaml on disk, chunk contents, conflicts with disk); only then is
- * anything written, so a refused save changes nothing.
+ * Replaces the line of `key` in an i18n catalog's text with `key: "value"`, or adds it
+ * after the last house name (at the end when there is none). Comments and every other
+ * line stay as they are, so the file keeps its hand-written layout.
+ */
+export function upsertText(text: string, key: string, value: string): string {
+  const line = `${key}: ${JSON.stringify(value)}`;
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => l.startsWith(`${key}:`));
+  if (at >= 0) {
+    lines[at] = line;
+    return lines.join("\n");
+  }
+  let last = -1;
+  lines.forEach((l, i) => {
+    if (l.startsWith("house.")) last = i;
+  });
+  if (last >= 0) lines.splice(last + 1, 0, line);
+  else if (lines.at(-1) === "") lines.splice(lines.length - 1, 0, line);
+  else lines.push(line, "");
+  return lines.join("\n");
+}
+
+/**
+ * House names to write in i18n/<lang>/world.yaml (texts of the house panel). Each name
+ * carries the text the editor loaded (`base`): a name changed on disk since then is a
+ * conflict, like a file. Only house.<id>.name keys of configured languages are accepted,
+ * and the new text must read back with every other key unchanged.
+ */
+function planNames(root: string, texts: unknown): { planned: PlannedWrite[]; conflicts: string[] } {
+  const planned: PlannedWrite[] = [];
+  const conflicts: string[] = [];
+  if (texts === undefined) return { planned, conflicts };
+  if (!Array.isArray(texts)) throw new BadRequest("texts must be a list");
+  const byLang = new Map<string, NameText[]>();
+  const seen = new Set<string>();
+  for (const raw of texts as unknown[]) {
+    if (!isObj(raw)) throw new BadRequest("each text needs lang, key, text and base");
+    const { lang, key, text, base } = raw;
+    if (typeof lang !== "string" || !(LANGUAGES as readonly string[]).includes(lang))
+      throw new BadRequest(`unknown language ${JSON.stringify(lang)}`);
+    if (typeof key !== "string" || key.length > 100 || !NAME_KEY.test(key))
+      throw new BadRequest(`${JSON.stringify(key)}: the editor only writes house.<id>.name`);
+    if (!isHouseName(text)) throw new BadRequest(`${lang} ${key}: invalid name`);
+    if (base !== null && typeof base !== "string") throw new BadRequest(`${key}: invalid base`);
+    if (seen.has(`${lang}:${key}`)) throw new BadRequest(`${lang} ${key} is listed twice`);
+    seen.add(`${lang}:${key}`);
+    const list = byLang.get(lang) ?? [];
+    list.push({ lang, key, text, base });
+    byLang.set(lang, list);
+  }
+  for (const [lang, names] of byLang) {
+    const file = `i18n/${lang}/world.yaml`;
+    const abs = inside(root, file, "i18n");
+    const disk = readIfExists(abs);
+    if (disk === null) throw new BadRequest(`${file} does not exist`);
+    const catalog = readCatalog(disk);
+    if (!catalog) throw new BadRequest(`${file} is not a map of texts`);
+    let text = disk;
+    const want = new Map<string, string>();
+    for (const n of names) {
+      const now = typeof catalog[n.key] === "string" ? catalog[n.key] : null;
+      if (now === n.text) continue; // already as wanted
+      if (now !== n.base) {
+        conflicts.push(`${file} (${n.key})`);
+        continue;
+      }
+      text = upsertText(text, n.key, n.text);
+      want.set(n.key, n.text);
+    }
+    if (want.size === 0) continue;
+    // Whatever the file looked like, the result must read back as before plus the names.
+    const after = readCatalog(text);
+    const expected = { ...catalog, ...Object.fromEntries(want) };
+    if (
+      !after ||
+      Object.keys(after).length !== Object.keys(expected).length ||
+      Object.entries(expected).some(([k, v]) => after[k] !== v)
+    )
+      throw new BadRequest(`${file}: the names cannot be written without touching other texts`);
+    planned.push({ file, abs, text });
+  }
+  return { planned, conflicts };
+}
+
+/** A YAML text as a flat map, or undefined if it does not parse to one. */
+function readCatalog(text: string): Record<string, unknown> | undefined {
+  try {
+    const data = parse(text, { uniqueKeys: true }) as unknown;
+    return isObj(data) ? data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Saves the chunk and auxiliary files in `changes` from `world`, and the house names in
+ * `texts` (NameText[]). All changes are checked first (paths, islands listed in world.yaml
+ * on disk, chunk contents, conflicts with disk); only then is anything written, so a
+ * refused save changes nothing.
  */
 export function saveChanges(
   root: string,
   world: World,
   changes: FileChange[],
   io: SaveIo = nodeIo,
+  texts?: unknown,
 ): SaveResult {
   if (!Array.isArray(changes)) throw new BadRequest("changes must be a list");
   const islands = worldIslands(root);
@@ -236,6 +337,9 @@ export function saveChanges(
     if (now !== c.base) conflicts.push(p.file);
     planned.push(p);
   }
+  const names = planNames(root, texts);
+  planned.push(...names.planned);
+  conflicts.push(...names.conflicts);
   if (conflicts.length > 0) throw new SaveConflict(conflicts);
 
   // 1. Stage every new text next to its target. If any write fails, remove what was
@@ -302,6 +406,22 @@ export function validateInMemory(
   content: ContentIndex,
 ): ValidateResult {
   return validateLoaded(world, content, { lines: loadWorld(root).lines });
+}
+
+/**
+ * `content` plus the house names the editor has not saved yet (ValidateRequest.pendingKeys),
+ * so a new house's name is not reported missing before the first save.
+ */
+export function withPendingKeys(content: ContentIndex, pending: unknown): ContentIndex {
+  if (pending === undefined) return content;
+  if (!Array.isArray(pending)) throw new BadRequest("pendingKeys must be a list");
+  const i18n = new Map([...content.i18n].map(([lang, keys]) => [lang, new Set(keys)]));
+  for (const p of pending as unknown[]) {
+    if (!isObj(p) || typeof p["lang"] !== "string" || typeof p["key"] !== "string")
+      throw new BadRequest("each pending key needs lang and key");
+    if (NAME_KEY.test(p["key"])) i18n.get(p["lang"])?.add(p["key"]);
+  }
+  return { ...content, i18n };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -396,6 +516,8 @@ export function exportPatch(root: string, before: World, after: World, files: un
   const islands = worldIslands(root);
   const out: PatchFile[] = [];
   for (const file of [...new Set(files as string[])].sort()) {
+    // houses.yaml is saved by the editor but never part of a patch (maintainers only).
+    if (!patchPath(file)) throw new BadRequest(`${file} cannot go in a map patch`);
     const base = plan(root, before, islands, { file, base: null }).text;
     const content = plan(root, after, islands, { file, base: null }).text;
     if (base === content) continue;

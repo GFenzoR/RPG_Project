@@ -4,16 +4,17 @@ import { describe, expect, it } from "vitest";
 import { screenToTile } from "@rpg/renderer/camera";
 import type {
   FileChange,
+  NameText,
   PaletteItem,
   ParsedPatch,
   PatchExportRequest,
   SaveResult,
   ValidateResult,
 } from "../io/wire.ts";
-import type { BorderRule } from "@rpg/map-format/ops";
+import type { BorderRule, House } from "@rpg/map-format/ops";
 import { tileAt } from "../tools/tools.ts";
 import { ConflictError, EditorController, PartialSaveError, entityProblem } from "./editor.ts";
-import type { Backend } from "./editor.ts";
+import type { Backend, PendingKey } from "./editor.ts";
 
 const T = 32;
 const t = (key: string, params?: Record<string, string | number>): string =>
@@ -83,12 +84,18 @@ const borders: BorderRule[] = [
 
 class FakeBackend implements Backend {
   saves: FileChange[][] = [];
+  /** House names sent with each save. */
+  texts: NameText[][] = [];
+  /** Pending keys sent with each validation. */
+  pending: PendingKey[][] = [];
   conflict = false;
-  async validate(): Promise<ValidateResult> {
+  async validate(_world: World, pendingKeys: PendingKey[] = []): Promise<ValidateResult> {
+    this.pending.push(pendingKeys);
     return { diagnostics: [], errors: 0, warnings: 0 };
   }
-  async save(_world: World, changes: FileChange[]): Promise<SaveResult> {
+  async save(_world: World, changes: FileChange[], texts: NameText[] = []): Promise<SaveResult> {
     this.saves.push(changes);
+    this.texts.push(texts);
     if (this.conflict) throw new ConflictError(changes.map((c) => c.file));
     return {
       written: changes.map((c) => c.file),
@@ -774,5 +781,185 @@ describe("map patches", () => {
     expect(e.state.world).toBe(w);
     expect(e.state.status).toBe("editor.review.before_readonly");
     expect(e.viewWorld()).toBe(e.baseline);
+  });
+});
+
+describe("house panel", () => {
+  const H = "world/islands/a/houses.yaml";
+  const OLD: House = {
+    id: "a_old",
+    name: "house.a_old.name",
+    rent: 700,
+    rects: [{ x: 20, y: 20, z: 7, w: 3, h: 3 }],
+    doors: [{ x: 21, y: 22, z: 7 }],
+    exit: { x: 21, y: 23, z: 7 },
+  };
+  function houses(withOld = false): { e: EditorController; backend: FakeBackend } {
+    const backend = new FakeBackend();
+    const w = world();
+    if (withOld) (w.islands.get("a") as Island).houses.push(OLD);
+    const e = new EditorController({
+      world: w,
+      items,
+      t,
+      loadErrors: [],
+      base: withOld ? { [H]: "c".repeat(64) } : {},
+      houseNames: {
+        es: withOld ? { "house.a_old.name": "Casa Vieja" } : {},
+        en: withOld ? { "house.a_old.name": "Old House" } : {},
+      },
+      backend,
+    });
+    return { e, backend };
+  }
+  const click = (e: EditorController, x: number, y: number, secondary = false): void => {
+    e.strokeStart(x, y, secondary);
+    e.strokeEnd();
+  };
+  const codes = (e: EditorController): string[] => e.houseIssues().map((i) => i.code);
+
+  it("draws a new house on the map, lists its problems and applies it as one undoable step", async () => {
+    const { e, backend } = houses();
+    e.newHouse();
+    expect(e.state.tool).toBe("house");
+    expect(e.state.houseDraft?.id).toBe("a_house_1");
+    expect(e.applyHouse()).toBe(false);
+    expect(e.state.status).toMatch(/^editor\.house\.cant_apply .*no_tiles/);
+    expect(e.state.world.islands.get("a")?.houses).toEqual([]);
+
+    // Tiles: a dragged 4x3 room, a doorway, and a stray tile taken away again.
+    e.strokeStart(2, 2, false);
+    e.strokeMove(5, 4);
+    expect(e.state.drag).toEqual({ x: 2, y: 2, w: 4, h: 3 });
+    e.strokeEnd();
+    click(e, 3, 5);
+    click(e, 9, 9);
+    click(e, 9, 9, true);
+    expect(e.state.houseDraft?.tiles).toHaveLength(13);
+    // Doors: inside the room is refused by the checks; right-click takes it away.
+    e.setHouseMode("doors");
+    click(e, 3, 3);
+    expect(codes(e)).toContain("door_not_on_edge");
+    click(e, 3, 3, true);
+    click(e, 3, 5);
+    e.setHouseMode("exit");
+    click(e, 3, 6);
+    e.editHouse({ rent: 650, names: { es: "Casa del Faro", en: "Lighthouse House" } });
+    // Only warnings left (the test world has no ground): it can be applied.
+    expect(codes(e)).toEqual(["no_ground"]);
+    expect(e.state.world).toBe(e.baseline);
+
+    expect(e.applyHouse()).toBe(true);
+    expect(e.state.world.islands.get("a")?.houses).toEqual([
+      {
+        id: "a_house_1",
+        name: "house.a_house_1.name",
+        rent: 650,
+        rects: [
+          { x: 2, y: 2, z: 7, w: 4, h: 3 },
+          { x: 3, y: 5, z: 7, w: 1, h: 1 },
+        ],
+        doors: [{ x: 3, y: 5, z: 7 }],
+        exit: { x: 3, y: 6, z: 7 },
+      },
+    ]);
+    expect(e.state.houseSel).toBe("a_house_1");
+    expect(e.state.houseDraft?.key).toBe("a_house_1");
+    expect(e.changes()).toEqual([{ file: H, base: null }]);
+    expect(e.houseName("a_house_1", "es")).toBe("Casa del Faro");
+    // The validator is told about the names that are not on disk yet.
+    await e.validateNow();
+    expect(backend.pending.at(-1)).toEqual([
+      { lang: "en", key: "house.a_house_1.name" },
+      { lang: "es", key: "house.a_house_1.name" },
+    ]);
+
+    // Undo takes the house away (and closes it); redo brings it back.
+    e.undo();
+    expect(e.state.world.islands.get("a")?.houses).toEqual([]);
+    expect(e.state.houseDraft).toBeUndefined();
+    e.redo();
+    expect(e.houses().map((h) => h.id)).toEqual(["a_house_1"]);
+
+    await e.save();
+    expect(backend.saves).toEqual([[{ file: H, base: null }]]);
+    expect(backend.texts).toEqual([
+      [
+        { lang: "en", key: "house.a_house_1.name", text: "Lighthouse House", base: null },
+        { lang: "es", key: "house.a_house_1.name", text: "Casa del Faro", base: null },
+      ],
+    ]);
+    expect(e.state.dirty).toBe(false);
+  });
+
+  it("edits a house in place: fixed id, set_house for the fields, a rename alone is saved too", async () => {
+    const { e, backend } = houses(true);
+    e.setTool("house");
+    click(e, 21, 21); // the house tool opens the house under the cursor
+    expect(e.state.houseSel).toBe("a_old");
+    expect(e.state.houseDraft?.names).toEqual({ es: "Casa Vieja", en: "Old House" });
+    expect(codes(e)).toEqual(["no_ground"]); // its own tiles and id are not taken
+    e.editHouse({ id: "renamed", names: { es: "Casa Nueva" } });
+    expect(e.state.houseDraft?.id).toBe("a_old");
+
+    // Only the name changed: no op, no file, but the name is pending and saved.
+    expect(e.applyHouse()).toBe(true);
+    expect(e.state.canUndo).toBe(false);
+    expect(e.changes()).toEqual([]);
+    expect(e.state.dirty).toBe(true);
+    await e.save();
+    expect(backend.texts[0]).toEqual([
+      { lang: "es", key: "house.a_old.name", text: "Casa Nueva", base: "Casa Vieja" },
+    ]);
+    expect(e.state.dirty).toBe(false);
+    expect(e.applyHouse()).toBe(true);
+    expect(e.state.status).toBe("editor.house.unchanged");
+
+    e.editHouse({ rent: 900 });
+    expect(e.applyHouse()).toBe(true);
+    expect(e.houses()[0]?.rent).toBe(900);
+    expect(e.changes()).toEqual([{ file: H, base: "c".repeat(64) }]);
+    e.undo();
+    expect(e.houses()[0]?.rent).toBe(700);
+    expect(e.state.houseDraft?.rent).toBe(700); // the open house follows the world
+
+    expect(e.removeHouse("a_old")).toBe(true);
+    expect(e.houses()).toEqual([]);
+    expect(e.state.houseDraft).toBeUndefined();
+    e.undo();
+    expect(e.houses()[0]).toEqual(OLD);
+  });
+
+  it("refuses a house over another one, outside the island or with its exit inside", () => {
+    const { e } = houses(true);
+    e.newHouse();
+    e.strokeStart(18, 18, false);
+    e.strokeMove(20, 20); // one tile of a_old
+    e.strokeEnd();
+    e.setHouseMode("doors");
+    click(e, 18, 18);
+    e.setHouseMode("exit");
+    click(e, 19, 19); // inside the new house (next to the door, so not "far")
+    e.editHouse({ names: { es: "Casa", en: "House" } });
+    expect(codes(e)).toEqual(["overlap", "exit_in_house", "no_ground"]);
+    expect(e.applyHouse()).toBe(false);
+    expect(e.state.status).toMatch(/^editor\.house\.cant_apply .*overlap/);
+    // Tiles off every island are not added at all.
+    e.setHouseMode("tiles");
+    e.strokeStart(30, 30, false);
+    e.strokeMove(40, 30);
+    e.strokeEnd();
+    expect(e.state.houseDraft?.tiles.filter((p) => p.x >= 32)).toEqual([]);
+  });
+
+  it("houses.yaml and the house names never go in a map patch", async () => {
+    const { e, backend } = houses(true);
+    e.selectHouse("a_old");
+    e.editHouse({ rent: 800 });
+    e.applyHouse();
+    expect(e.changedFiles()).toEqual([]);
+    expect(await e.exportPatch()).toBeUndefined();
+    expect(e.state.status).toBe("editor.patch.empty editor.patch.houses_skipped");
+    expect(backend.exported).toEqual([]);
   });
 });
