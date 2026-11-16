@@ -207,6 +207,27 @@ func TestPvPConditionRunsWhileVictimAway(t *testing.T) {
 	}
 }
 
+// A relog does not cut self-defense: the memory of Ana's attack saved with her poison comes
+// back on its own clock even though the poison ran out while Bea was away, so Bea's hit
+// back within the aggressor time is still justified (no skull for her).
+func TestPvPConditionRelogKeepsSelfDefense(t *testing.T) {
+	g := newPvPCond(t, nil)
+	_, a, bea, s := g.unjustPoison() // t = 11 s, Ana's own hit at t = 0
+	g.sim.RunFor(30 * time.Second)   // the 19 hits left run out meanwhile
+	cb, b := g.rejoin(bea, s, 1000)
+	if left := g.w.ConditionsForTest(b)["poison"]; left != 0 {
+		t.Fatalf("poison hits left %d", left)
+	}
+	if got := g.w.HitByForTest(b); !slices.Equal(got, []int64{a.CharacterID()}) {
+		t.Fatalf("Bea remembers hits from %v, want Ana's (%d)", got, a.CharacterID())
+	}
+	g.unsafe(cb)
+	g.hit(b, a)
+	if b.Skull() != pb.Skull_SKULL_UNSPECIFIED {
+		t.Fatalf("Bea's hit back is not self-defense: skull %v", b.Skull())
+	}
+}
+
 // Away for a while: another player's conditions ran meanwhile and the rest goes on, on the
 // beat it would have had; a monster's condition waited frozen (logging out does not cure).
 // Bea joins 3 s (60 ticks) after her save: Ana's poison, due 10 ticks after it every 20,

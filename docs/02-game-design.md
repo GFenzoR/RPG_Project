@@ -1282,7 +1282,8 @@ conexión:
   con la víctima (`characters.conditions`) junto con lo que la víctima recordaba del ataque
   de ese autor fuera de una arena (cuándo fue el último golpe y si fue injustificado) y la
   hora del guardado. Al volver, ese recuerdo vale solo si no pasó `aggressor_ms` **en el
-  reloj** desde ese golpe, y la condición sigue **como si la víctima no hubiera salido**:
+  reloj** desde ese golpe (aunque la condición haya terminado mientras tanto), y la
+  condición sigue **como si la víctima no hubiera salido**:
   los golpes que habrían caído mientras estaba fuera pasan sin daño, como en una zona de
   protección, y el resto cae a su ritmo. Así salir del juego no corta ni estira un ataque
   (ni la defensa propia): la víctima no puede guardarse los golpes para recibirlos más
@@ -1290,8 +1291,9 @@ conexión:
   mata). Las condiciones sin autor (de monstruos) siguen congeladas mientras no está:
   salir no las cura.
 - **Guardado de antes de un reinicio:** si la hora del guardado no se puede ubicar en el
-  reloj de este servidor (es anterior a su arranque, posterior a ahora o no está, como en
-  una fila guardada antes de esta regla), la condición con autor termina al entrar. Es la
+  reloj de este servidor (es anterior a su arranque, con su edad contada en ticks como la
+  del recuerdo; posterior a ahora; o no está, como en una fila guardada antes de esta
+  regla), la condición con autor termina al entrar. Es la
   opción segura para los dos: la víctima no recibe golpes que quizás cayeron hace mucho y
   el autor no queda marcado, bloqueado ni con una muerte por un ataque que nadie puede
   medir (el recuerdo de ese ataque también se olvida tras un reinicio). Las condiciones

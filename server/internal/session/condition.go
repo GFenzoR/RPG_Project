@@ -490,10 +490,16 @@ func (w *World) conditionStates(p *Player) []ConditionState {
 // out does not cure it. One of another player (T5.2) is that player's attack, which p must
 // not hold back to land later (each hit renews its author's skull and lock, and p could
 // choose the moment it kills): its time runs on while p is away, as in a protection zone,
-// and the hits that would have fallen pass without damage (awayTicks, elapse).
+// and the hits that would have fallen pass without damage (awayTicks, elapse). p's memory
+// of that player's attack, saved with it, comes back on its own terms (recallHit: the
+// aggressor time on the clock) even when the condition ran out meanwhile: a relog does not
+// cut self-defense either.
 func (w *World) loadConditions(ctx *game.TickContext, p *Player, saved []ConditionState) {
 	h := holder{p: p}
 	for _, s := range saved {
+		if s.Author > 0 && s.Author != p.charID && !s.AuthorHit.IsZero() {
+			w.recallHit(ctx, p, s.Author, s.AuthorHit, s.AuthorUnjust)
+		}
 		def := w.cfg.Balance.Conditions[s.ID]
 		if def == nil || !def.Persists || findCond(p.conds, s.ID) != nil {
 			continue
@@ -524,9 +530,6 @@ func (w *World) loadConditions(ctx *game.TickContext, p *Player, saved []Conditi
 		if def.Kind != content.ConditionDamage {
 			w.conditionStarted(ctx, h, c)
 		}
-		if c.author != 0 && c.author != p.charID && !s.AuthorHit.IsZero() {
-			w.recallHit(ctx, p, c.author, s.AuthorHit, s.AuthorUnjust)
-		}
 	}
 	p.conditionsDirty = len(p.conds) > 0 // a new client starts with none
 }
@@ -538,6 +541,9 @@ func (w *World) loadConditions(ctx *game.TickContext, p *Player, saved []Conditi
 // downtime the clock may not measure). Ending it is safe both ways: its holder takes no
 // hit that may have fallen long ago, and its author is not marked, locked or credited by
 // an attack whose time nobody knows (recallHit forgets that attack after a restart too).
+// The server's age is its ticks, as for recallHit: after a stall or a suspended machine
+// (the loop does not catch up) an early save of this run may count as older, which only
+// errs toward ending the condition.
 func awayTicks(ctx *game.TickContext, savedAt time.Time) (game.Tick, bool) {
 	if savedAt.IsZero() {
 		return 0, false

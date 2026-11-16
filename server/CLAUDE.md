@@ -126,8 +126,9 @@ server/
   (`ConditionState.SavedAt`, `World.nowTime`); un autor fuera del mundo no daña. Al
   entrar, una condición con autor descuenta sin daño el tiempo que su víctima estuvo fuera
   (`awayTicks` + `condition.elapse`; termina si esa hora no se puede ubicar en el reloj de
-  este servidor); una sin autor sigue congelada. Un hechizo de condición a distancia sobre
-  un jugador pasa por `conditionPlayer` (`canAttack` + `aggress`, como un golpe). `Leave` con bloqueo deja al jugador link-dead
+  este servidor; el recuerdo del ataque vuelve igual); una sin autor sigue congelada. Un
+  hechizo de condición a distancia sobre un jugador pasa por `conditionPlayer`
+  (`canAttack` + `aggress`, como un golpe). `Leave` con bloqueo deja al jugador link-dead
   (`linkDeadOnLeave`, sin enviarle nada) hasta que `checkPvP` lo saca; un login nuevo lo
   retoma con `pvpCarry`. Un corte de la conexión que decide el servidor (cliente lento,
   `KickAccount`) pasa por `disconnect`, que con bloqueo cierra la conexión una vez

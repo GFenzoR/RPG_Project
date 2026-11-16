@@ -15,8 +15,9 @@ import (
 )
 
 // T5.2: the saver writes a snapshot's conditions with their authors, the holder's memory
-// of each author's attack and when an authored one was saved, and the next login reads them back from Postgres (the
-// gateway turns them into session.ConditionState field by field, gateway's unit test).
+// of each author's attack and when an authored one was saved, and the next login reads
+// them back from Postgres (the gateway turns them into session.ConditionState field by
+// field, gateway's unit test).
 func TestSnapshotConditionAuthorPersists(t *testing.T) {
 	ctx := context.Background()
 	st := storetest.Open(t, "it_app_conditions", true)

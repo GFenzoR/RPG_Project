@@ -121,9 +121,11 @@ func TestKickAccountKeepsLockedLinkDead(t *testing.T) {
 		t.Fatalf("Ana in the world %v, link-dead %v", g.w.PlayerByCharacter(a.CharacterID()) == a, a.LinkDead())
 	}
 	g.sim.Command(g.w.Leave(ca))
+	g.sim.Command(g.w.KickAccount(account)) // a second reset: her connection is closed already
 	g.sim.Step()
-	if g.w.PlayerByCharacter(a.CharacterID()) != a {
-		t.Fatal("the gateway's Leave took link-dead Ana out")
+	if g.w.PlayerByCharacter(a.CharacterID()) != a || ca.closes != 1 {
+		t.Fatalf("after the gateway's Leave and a second reset: in the world %v, closes %d",
+			g.w.PlayerByCharacter(a.CharacterID()) == a, ca.closes)
 	}
 
 	ca2, a2 := g.fighter("Ana", a.CharacterID(), 10, 10, 30, 0, same)
@@ -134,6 +136,33 @@ func TestKickAccountKeepsLockedLinkDead(t *testing.T) {
 	g.sim.Step()
 	if keys := sysKeys(ca2.take()); ca2.closed || !slices.Contains(keys, "pvp.logout_locked") {
 		t.Fatalf("the lock did not carry over: %v", keys)
+	}
+}
+
+// A password reset of a character already link-dead (it closed the connection itself)
+// keeps it in the world: the loop closes that connection once, now, and not again when the
+// lock ends.
+func TestKickAccountOfLinkDead(t *testing.T) {
+	g := newPvPCond(t, nil)
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	_, b := g.fighter("Bea", 0, 11, 10, 30, 0)
+	g.unsafe(ca)
+	g.hit(a, b)
+	g.sim.Command(g.w.Leave(ca))
+	g.sim.Step()
+	if !a.LinkDead() || ca.closes != 0 {
+		t.Fatalf("link-dead %v, closes %d", a.LinkDead(), ca.closes)
+	}
+	g.sim.Command(g.w.KickAccount(a.CharacterID())) // fighter: account = character
+	g.sim.Step()
+	if g.w.PlayerByCharacter(a.CharacterID()) != a || ca.closes != 1 ||
+		ca.reason != pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED {
+		t.Fatalf("in the world %v, closes %d, reason %v", g.w.PlayerByCharacter(a.CharacterID()) == a, ca.closes, ca.reason)
+	}
+	g.sim.RunFor(12 * time.Second) // the lock of her hit ends
+	if g.w.PlayerByCharacter(a.CharacterID()) != nil || g.finalSaves(a.CharacterID()) != 1 || ca.closes != 1 {
+		t.Fatalf("after the lock: in the world %v, final saves %d, closes %d",
+			g.w.PlayerByCharacter(a.CharacterID()) != nil, g.finalSaves(a.CharacterID()), ca.closes)
 	}
 }
 

@@ -74,6 +74,8 @@ func (w *World) checkIdle(ctx *game.TickContext) {
 			left := (w.idleKickFor - min(idle, w.idleKickFor)).Duration()
 			p.emit(systemMsg(msgIdleWarning, num("seconds", int(left.Round(time.Second).Seconds()))))
 		}
+		// inCombat includes the PvP lock (T5.2): a locked player is never cut for idling,
+		// so remove is right here (a cut of a locked player goes through disconnect).
 		if idle >= w.idleKickFor && !w.inCombat(ctx.Tick, p) && w.m.Flags(p.pos)&world.FlagNoLogout == 0 {
 			w.idleBuf = append(w.idleBuf, p)
 		}
