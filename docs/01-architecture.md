@@ -208,8 +208,8 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     outcome="rejected|abandoned|skipped"}` y la alerta `PersistenceDataLost`
     (tabla de alertas de este doc). Al reiniciar se carga lo que tiene la base: los
     marcados pierden todo lo jugado desde su **último guardado escrito** (no solo desde el
-    transfer), que nunca es anterior a lo que dieron al suelo público (ver "Guardado
-    antes del transfer" más abajo).
+    transfer), que no es anterior a lo que dieron al suelo público salvo en una caída o
+    con la base caída al apagar (ver "Guardado antes del transfer" más abajo).
   - **Bajas con guarda:** cerrar una oferta (cancelar, vencer, `/marketcancel`) lleva las
     unidades que el loop cree que quedan (`DeleteMarketOffer ... AND amount = $units`). Si
     un llenado de esa oferta no se guardó, la base tiene más: el cierre falla entero
@@ -327,12 +327,18 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     transfer sin estar en espera (lo tiró a la calle o a un contenedor de la calle, o el
     servidor se lo dejó a los pies fuera de una casa: las monedas de una venta a un NPC,
     una fabricación o una recompensa que no entró) estaría entonces en esa fila y en la
-    de quien lo levantó y se guardó: duplicado. Por eso cada vez que algo suyo llega al
-    suelo público (`MoveItem` de algo que carga; `holdGround` fuera de una casa, también
-    estando en espera) el loop toma su snapshot **en ese momento** y lo deja en memoria
-    (`Player.pre`). Su **próximo transfer** lo encola primero (`transferSnapshot`, delante
-    del trabajo del transfer): el Saver lo escribe antes, así el último guardado escrito
-    nunca es anterior a lo que dio.
+    de quien lo levantó y se guardó: duplicado. Por eso cuando algo suyo llega al suelo
+    público (`MoveItem` de algo que carga; `holdGround` fuera de una casa, también
+    estando en espera) queda marcado (`gaveAway`) y el loop toma su snapshot **al final de
+    ese comando** (`Input`), o del tick si lo soltó el servidor fuera de un comando (una
+    recompensa de quest por una muerte de monstruo): `settleGivers`, en memoria
+    (`Player.pre`). Ahí su estado está entero: las demás acciones del diálogo, el paso de
+    quest que completa al llegar al nodo siguiente, las demás pilas del mismo regalo (si
+    se tomara cuando cae la primera pila, un marcado podría volver a un estado con la
+    quest sin terminar y cobrar dos veces la misma recompensa). Su **próximo transfer** lo
+    encola primero (`transferSnapshot`, delante del trabajo del transfer): el Saver lo
+    escribe antes, así un transfer descartado o saltado no lo devuelve a un guardado
+    anterior a lo que dio.
     - Si el transfer se descarta o se salta (también el intercambio de un compañero
       marcado, por el punto fijo), el personaje vuelve a ese estado: sin lo que dio y sin
       el transfer. Si ya estaba marcado de antes, ese snapshot se salta como cualquier
@@ -342,16 +348,25 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       entra en la cola detrás de lo que dio. Un relogueo, el link-dead y el reinicio no
       cambian nada: el snapshot final lo reemplaza y el login nuevo arranca sin él.
     - Se numera al tomarlo, no al encolarlo: su acuse vale solo por lo anterior. No
-      termina la espera del transfer que va detrás ni libera lo que se reservó después
-      (lo que sacó de una casa en el mismo comando sigue reservado hasta el acuse de la
-      escritura de la casa, `leftHouse`).
+      termina la espera del transfer que va detrás ni libera lo que se reservó en un
+      comando posterior (lo que después sacó de una casa a la calle sigue reservado hasta
+      el acuse de la escritura de la casa, `leftHouse`).
+    - Ningún transfer deja nada en el suelo público en su propio comando: comprueba antes
+      que todo entra (`canBuy`, `canReceive`, `moneyThatFits`). Si lo hiciera, el
+      snapshot (que `transferSnapshot` tomaría en el acto) llevaría medio transfer y se
+      escribiría fuera de su transacción. Si un mismo comando soltara algo a la calle y
+      cambiara una casa (hoy ninguno), el snapshot sale con la escritura de la casa: si
+      esta se descarta, lo dejado en la casa se pierde, pero nada se duplica.
     - En el suelo de una casa no hace falta: lo que se deja ahí se escribe con el
       snapshot de quien lo movió (`flushHouses`, un transfer que también encola antes el
       snapshot pendiente de ese personaje).
     - Costo: una escritura más solo en el primer transfer de un personaje después de
-      soltar algo al suelo público, y un snapshot en memoria por cosa soltada (docs/07).
+      soltar algo al suelo público, y un snapshot en memoria por comando (o tick) en que
+      soltó algo, no por pila (docs/07).
     - **Límite: una caída no es un transfer.** Con la base caída al apagar, el apagado es
-      una caída (ver arriba) y ese snapshot puede no llegar a escribirse. Como en
+      una caída (ver arriba): ese snapshot falla con el transfer de atrás (el Saver lo
+      abandona y después marca al personaje por el transfer). Tampoco cubre que la base
+      rechace ese snapshot mismo (`ErrPermanent` en un guardado no marca a nadie). Como en
       cualquier caída, lo que alguien tiró a la calle y otro levantó puede quedar en las
       dos filas si el guardado de quien lo levantó entró y el de quien lo tiró no: es el
       límite general de guardar por personaje con el suelo en memoria (docs/14).

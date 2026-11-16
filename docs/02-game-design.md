@@ -507,17 +507,18 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   la base caída al apagar), sus personajes salen del juego con un aviso y no pueden
   entrar hasta que el servidor reinicie, y el mercado y el intercambio quedan en solo
   lectura (se puede mirar, no operar) hasta entonces. Al reiniciar, esos personajes
-  vuelven a su último guardado escrito (pierden lo jugado desde ahí), que nunca es
-  anterior a lo que soltaron al suelo fuera de una casa: si un personaje tiró algo a la
-  calle (o el servidor se lo dejó a los pies) desde su último guardado, su estado se
-  guarda antes de su próximo intercambio, compra, venta o cambio en una casa, sin que se
-  note. Para que nada de
-  lo que recibieron llegue a otro antes del aviso, después de cada intercambio, compra,
-  venta, retiro del buzón o cambio en una casa el personaje queda **en espera** hasta que
-  la base confirma ese guardado (normalmente uno o dos ticks): no puede soltar nada en el
-  suelo fuera de una casa (aviso "Espera un momento…", `inventory.saving`), y si muere en
-  ese tiempo, nadie más saca ni mete nada en su cadáver hasta la confirmación (ni después,
-  si el guardado falló). Un cadáver de antes de la espera sigue las reglas de siempre.
+  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Salvo en una caída
+  o con la base caída al apagar (docs/01), ese guardado no es anterior a lo que soltaron
+  al suelo fuera de una casa: si un personaje tiró algo a la calle (o el servidor se lo
+  dejó a los pies) desde su último guardado, su estado del final de esa acción se guarda
+  antes de su próximo intercambio, compra, venta o cambio en una casa, sin que se note.
+  Para que nada de lo que recibieron llegue a otro antes del aviso, después de cada
+  intercambio, compra, venta, retiro del buzón o cambio en una casa el personaje queda
+  **en espera** hasta que la base confirma ese guardado (normalmente uno o dos ticks):
+  no puede soltar nada en el suelo fuera de una casa (aviso "Espera un momento…",
+  `inventory.saving`), y si muere en ese tiempo, nadie más saca ni mete nada en su
+  cadáver hasta la confirmación (ni después, si el guardado falló). Un cadáver de antes
+  de la espera sigue las reglas de siempre.
   Lo que en ese instante cae a sus pies porque no le entra (una fabricación, una
   recompensa, las monedas de una venta a un NPC, el equipo que no cupo en su cadáver)
   queda reservado para él de la misma forma: otro jugador recibe "Eso es de otro jugador

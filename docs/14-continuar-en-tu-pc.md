@@ -108,8 +108,9 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
   mismo libro lo pide (antes, subir `market.push_every_ms`).
 - **Caída con la calle de por medio (límite general, no del comercio):** un transfer
-  descartado ya no duplica lo que su personaje soltó antes al suelo público: su estado de
-  ese momento se escribe antes del transfer (docs/01, "Guardado antes del transfer").
+  descartado ya no duplica lo que su personaje soltó antes al suelo público: su estado del
+  final de ese comando (o tick) se escribe antes del transfer (docs/01, "Guardado antes
+  del transfer").
   Queda el caso de una **caída** (o de la base caída al apagar, que se trata como una):
   lo que alguien tiró a la calle y otro levantó puede quedar en las dos filas si el
   guardado de quien lo levantó entró y el de quien lo tiró no. Es el límite de guardar
