@@ -1018,10 +1018,11 @@ Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/do
   ≥ 1 de la pila), en el mismo piso, a la vista y a `inventory.reach` (si no, `too_far`).
   Un `item_id` que no es el de la casilla (una vista vieja), otro piso o una casilla fuera
   de la vista no son un uso de puerta: siguen como cualquier `UseItem`. Ningún uso de un
-  item del mapa mira una casilla de otro piso o fuera de la vista (tampoco el de las
-  estaciones de crafteo), así que la respuesta es `inventory.not_possible` para cualquier
-  casilla y no dice si la puerta está abierta o cerrada. No hay mensajes nuevos en el
-  protocolo.
+  item del mapa mira una casilla de otro piso o fuera de la vista (ni las puertas, ni las
+  puertas de casas, ni los tableros del mercado, ni las estaciones de crafteo, ni los
+  items del suelo), así que la respuesta es `inventory.not_possible` para cualquier
+  casilla y no dice qué hay ni si la puerta está abierta o cerrada. No hay mensajes nuevos
+  en el protocolo.
 - **Respuesta:** la puerta cambia por su par y quien ve la casilla recibe su
   `TileUpdate`; el cliente decide qué se camina por el item, así que no necesita más. Al
   que la usó, si tiene llave: `door.unlocked` / `door.relocked` (`item`: la llave); si la

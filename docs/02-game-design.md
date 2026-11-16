@@ -693,10 +693,24 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   recorrido.
 - **Sala que no se puede determinar = error:** el servidor no arranca, y `make validate`
   lo rechaza antes (misma regla, mismo recorrido; los dos leen los casos de
-  `packages/map-format/src/testdata/door-rooms.json`), con una puerta con llave que
-  tiene un solo lado (está en campo abierto: se la rodea), más de un lado sin terminar
-  (la sala sería más grande que 4096 casillas) o, si todos terminan, los dos lados más
-  grandes del mismo tamaño (no está claro cuál es el de afuera).
+  `packages/map-format/src/testdata/door-rooms.json`), con una puerta con llave
+  amurallada (ninguna casilla a su alrededor deja pasar), con un solo lado (está en campo
+  abierto: se la rodea), con más de un lado sin terminar (la sala sería más grande que
+  4096 casillas) o, si todos terminan, con los dos lados más grandes del mismo tamaño (no
+  está claro cuál es el de afuera).
+- **Sala compartida:** varias puertas con llave pueden dar a la misma sala (una puerta
+  doble, o un edificio con puerta delantera y trasera), pero solo si tienen **la misma
+  llave** y **el mismo afuera**. Para el afuera, el servidor camina (a lo ancho, sin
+  cruzar puertas con llave) desde las casillas de afuera junto a la primera puerta hasta
+  las de la otra, hasta 4 × 4096 casillas; si no llega, rechaza la puerta (y
+  `make validate` también). Así se rechaza, por ejemplo, una bóveda más grande que la sala
+  que tiene delante: la puerta de la bóveda tomaría la bóveda por su afuera y las dos
+  puertas compartirían la sala del medio, con lo que desde el medio se abriría la bóveda
+  sin llave, la bóveda no estaría en ninguna sala y a quien está adentro lo podrían
+  trabar. Lo mismo con una antesala entre el mundo y una bóveda de más de 4096 casillas,
+  o con dos puertas de distinta llave en la misma sala (la llave de una abriría las dos
+  desde adentro). Una sala dentro de otra vale cuando la de adentro es más chica que la
+  del medio: cada puerta tiene su sala.
 - **La sala no guarda nada de afuera:** ni el templo (donde se despierta), ni NPCs, ni
   casas (casillas o salida), ni llegadas de barco, ni destinos de un teleport de diálogo;
   `make validate` mira además los extremos de los portales (el servidor no los carga).
@@ -732,15 +746,16 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
     podría tomar ese pasillo por la sala: `make validate` lo rechaza porque la sala
     tendría un extremo de portal. Igual conviene revisar una puerta nueva con un test
     como `TestForgeGateOnTheMap`;
-  - una sala de más de 4096 casillas detrás de una puerta cuyo lado de afuera termina
-    antes (es más chico) se toma por el afuera, y el afuera por la sala. Si ese afuera
-    tiene templo, NPCs, casas, portales o llegadas, el servidor no arranca y
-    `make validate` falla (la sala no guarda nada de afuera); si no tiene nada de eso, no
-    se nota. Hoy no pasa (la forja tiene 463 casillas y la mina 1729);
-  - una sala dentro de otra (una puerta con llave en la sala de otra): cada puerta toma a
-    la otra como muro, así que la sala de adentro tiene que ser más chica que la del
-    medio; si no, la del medio pasa por la sala de la puerta de adentro. Hoy no hay
-    ninguna; marcar el lado de adentro en los datos quedaría para cuando haga falta;
+  - una puerta **sola** con una sala de más de 4096 casillas detrás y un afuera que
+    termina antes (más chico) toma el afuera por la sala. Si ese afuera tiene templo,
+    NPCs, casas, portales o llegadas, el servidor no arranca y `make validate` falla (la
+    sala no guarda nada de afuera); si no tiene nada de eso, no se nota. Con una segunda
+    puerta a esa sala lo frena la regla de la sala compartida. Hoy no pasa (la forja
+    tiene 463 casillas y la mina 1729). Marcar el lado de adentro en los datos quedaría
+    para cuando haga falta;
+  - dos puertas a la misma sala cuyos afueras solo se unen por un camino de más de
+    4 × 4096 casillas se rechazan aunque den al mismo mundo: hay que acercarlas o darles
+    salas propias;
   - la llave se puede repetir: quien terminó `ch3_gate` y no la lleva encima pide otra al
     eco, así que tirarla al piso y pedir otra da llaves de más, y una llave tirada la puede
     levantar cualquiera. Lo aceptamos: quien tiene la llave ya puede abrirle la puerta a

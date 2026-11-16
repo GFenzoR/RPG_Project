@@ -370,8 +370,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   lado (8 direcciones, mismo piso, hasta 4096 casillas por lado, las demás puertas con
   llave como muro y las sin llave como abiertas si su casilla deja pasar, regla
   `isPassable`); un lado sin terminar es el de afuera y, si todos terminan, el más grande.
-  Es error una puerta con un solo lado, con más de un lado sin terminar o con los dos
-  lados más grandes del mismo tamaño. La sala no puede tener el templo, NPCs, casas
+  Es error una puerta amurallada (sin lados), con un solo lado, con más de un lado sin
+  terminar o con los dos lados más grandes del mismo tamaño. Varias puertas pueden
+  compartir una sala solo con la misma llave y el mismo afuera (un recorrido a lo ancho
+  de hasta 4 × 4096 casillas, sin cruzar puertas con llave, une los afueras de las dos);
+  si no, es error. La sala no puede tener el templo, NPCs, casas
   (casillas o salida), extremos de portales, llegadas de rutas de barco ni destinos de un
   `teleport` de un diálogo de NPC; los spawns sí. El recorrido es el mismo que el del
   servidor (`packages/map-format/src/doors.ts` y `session/door.go`), y los dos leen los

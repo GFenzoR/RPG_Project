@@ -112,7 +112,15 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - los pozos de lava de la Isla Volcánica son algo rectangulares (solo estético);
   - las escaleras y portales de `portals.yaml` no existen en el servidor (ni en
     `world.bin`): a los pisos 8 (minas de Puerto y Bosque, la mina y la forja de la Isla
-    Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff.
+    Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff;
+  - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit` en
+    `server/internal/session`) ya no entra a la sala de una puerta con llave, pero sí
+    puede dejar a alguien en un bolsillo sellado sin puerta (menos de 10 casillas, que el
+    validador no avisa) si es la casilla libre más cercana. Arreglo posible: un índice de
+    área conexa por casilla armado al arrancar (como `roomOf`), y que la búsqueda solo
+    acepte casillas del área del origen. No se hizo con las puertas porque cuesta memoria
+    por casilla caminable de todo el mundo y hoy no hay bolsillos así junto a templos,
+    llegadas o casas.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

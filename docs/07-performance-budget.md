@@ -37,8 +37,9 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   No está medida con `make bench-tick` (sus benchmarks la tienen apagada); los tests de
   simulación juegan entre 6 y 8 h de juego de un personaje en menos de un segundo cada uno.
 - Puertas con llave (`session/door.go`): la sala detrás de cada puerta se calcula una vez
-  al arrancar (un recorrido de hasta 4096 casillas por lado) y queda un índice casilla →
-  sala (`roomOf`). En el tick, abrir desde adentro es una búsqueda en ese mapa; cerrar con
+  al arrancar (un recorrido de hasta 4096 casillas por lado, y uno de hasta 4 × 4096
+  entre los afueras de dos puertas que comparten sala) y queda un índice casilla → sala
+  (`roomOf`). En el tick, abrir desde adentro es una búsqueda en ese mapa; cerrar con
   llave mira solo a los jugadores de los sectores de la sala (una búsqueda cada uno) y, de
   los que están adentro, busca la llave en sus bolsas cortando al encontrarla. Toda
   búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) suma una búsqueda en
