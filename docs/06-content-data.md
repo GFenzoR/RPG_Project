@@ -108,9 +108,10 @@ items:
   misma clave de su entrada en `world/islands/volcan/texts.yaml`. El cliente empaqueta
   solo las claves que algún item usa como descripción.
 - **Suelos volcánicos** (T5.5, `data/items/ground.yaml`, `speed` = costo de terreno en %):
-  `ash` (ceniza, 150, como el pasto), `basalt` (losas de basalto de Brasal, 100, como la
-  piedra), `cinder_path` (camino de escoria, 110), `cooled_lava` (lava enfriada, 130) y
-  `lava` (fundida, no caminable, como el agua).
+  `ash` (ceniza, 140, como la tierra), `basalt` (losas de basalto de Brasal, 100, como la
+  piedra), `cinder_path` (camino de escoria, 110), `cooled_lava` (lava enfriada, 100, como
+  la piedra) y `lava` (fundida, no caminable, como el agua). Cada uno camina como el suelo
+  que reemplazó en la isla, así que no cambian el ritmo con que se balanceó la caza.
 - **Distancia y munición** (T3.1): un arma `type: distance` exige `range` y `ammo` (el
   `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type: arrow, attack }`,
   apilable, y va en el slot de munición. Cada disparo gasta una y suma su `attack` al del
