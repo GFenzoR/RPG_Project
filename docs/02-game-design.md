@@ -732,6 +732,11 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
     podría tomar ese pasillo por la sala: `make validate` lo rechaza porque la sala
     tendría un extremo de portal. Igual conviene revisar una puerta nueva con un test
     como `TestForgeGateOnTheMap`;
+  - una sala de más de 4096 casillas detrás de una puerta cuyo lado de afuera termina
+    antes (es más chico) se toma por el afuera, y el afuera por la sala. Si ese afuera
+    tiene templo, NPCs, casas, portales o llegadas, el servidor no arranca y
+    `make validate` falla (la sala no guarda nada de afuera); si no tiene nada de eso, no
+    se nota. Hoy no pasa (la forja tiene 463 casillas y la mina 1729);
   - una sala dentro de otra (una puerta con llave en la sala de otra): cada puerta toma a
     la otra como muro, así que la sala de adentro tiene que ser más chica que la del
     medio; si no, la del medio pasa por la sala de la puerta de adentro. Hoy no hay
