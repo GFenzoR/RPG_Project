@@ -363,7 +363,7 @@ export function createTools(o: ServerOptions): Tool[] {
     {
       name: "content_search",
       description:
-        "Searches data/ (read only): items, monsters and NPCs by text (ID or name in any language), kind, item kind (ground, decoration, wall...) or tag. Use it to pick IDs for ops.",
+        "Searches data/ (read only): items, monsters and NPCs by text (ID or name in any language), kind, item kind (ground, decoration, wall...) or tag. Use it to pick IDs for ops. Doors list their pair and the key id that opens a locked one; keys list their key id.",
       inputSchema: {
         type: "object",
         properties: {

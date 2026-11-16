@@ -12,6 +12,11 @@ export interface ItemInfo {
   /** Ground items: whether creatures can stand on it. */
   walkable?: boolean;
   blocksMovement: boolean;
+  /**
+   * A door (a `door` block, docs/02 "Puertas con llave"): it opens in the game, so the
+   * reachability check walks through it even when it blocks movement shut.
+   */
+  door?: boolean;
   /** Sprite path (assets/sprites.yaml key), for renders. */
   sprite?: string;
 }
@@ -85,6 +90,7 @@ export function loadContent(root: string): ContentIndex {
           raw["blocks_movement"] === true || (kind === "wall" && raw["blocks_movement"] !== false),
       };
       if (typeof raw["sprite"] === "string") info.sprite = raw["sprite"];
+      if (isObj(raw["door"])) info.door = true;
       const g = raw["ground"];
       if (isObj(g)) info.walkable = g["walkable"] === true;
       items.set(info.id, info);

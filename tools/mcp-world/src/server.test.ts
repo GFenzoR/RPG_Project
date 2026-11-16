@@ -174,6 +174,16 @@ describe("read tools", () => {
       results: { id: string; walkable: boolean }[];
     };
     expect(grounds.results.find((g) => g.id === "water_shallow")?.walkable).toBe(false);
+    // Doors and their keys (docs/02 "Puertas con llave"): what to place and what opens it.
+    expect(json("content_search", { text: "forge_gate" })).toMatchObject({
+      results: [
+        { id: "forge_gate", door: { key: "forge_gate", open: "forge_gate_open" } },
+        { id: "forge_gate_open", door: { closed: "forge_gate" } },
+      ],
+    });
+    expect(json("content_search", { text: "ember_key" })).toMatchObject({
+      results: [{ id: "ember_key", key: "forge_gate" }],
+    });
   });
 
   it("map_render returns a PNG image and its path", () => {

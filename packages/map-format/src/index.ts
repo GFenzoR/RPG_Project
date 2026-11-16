@@ -27,7 +27,7 @@ export { PREFAB_DIR, checkPrefab, formatPrefab } from "./prefabs.ts";
 export type { PrefabProblem } from "./prefabs.ts";
 export { SCHEMA_DIR, checkSchema } from "./schemas.ts";
 export type { MapSchemaName, SchemaError } from "./schemas.ts";
-export { TileMap, isWalkable } from "./tiles.ts";
+export { TileMap, isPassable, isWalkable } from "./tiles.ts";
 export type { Tile } from "./tiles.ts";
 export { MAX_SPAWN_DENSITY, summarize, validateLoaded, validateWorld } from "./validate.ts";
 export type { MapReport, ValidateLoadedOptions, ValidateWorldOptions } from "./validate.ts";

@@ -329,6 +329,26 @@ describe("validateWorld", () => {
     expect(m.join("\n")).not.toContain("spawn cannot be reached"); // the cave is reached by the stairs
   });
 
+  it("walks through doors, locked or not, to reach what lies behind them", () => {
+    const i = mini();
+    const c = must(i.chunks.get(chunkKey(7, 0, 0)));
+    // The same water corner, with one dirt tile in its wall: a locked forge gate on it
+    // (docs/02 "Puertas con llave") lets the reachability check through, a boulder does not.
+    for (let k = 2; k < 30; k++) {
+      setGround(c, 18, k, k < 18 ? "grass" : "water_shallow");
+      setGround(c, k, 18, k < 18 ? "grass" : "water_shallow");
+    }
+    setGround(c, 18, 20, "dirt");
+    pushItem(c, 18, 20, "forge_gate");
+    expect(content.items.get("forge_gate")?.door).toBe(true);
+    expect(messages(check(i)).join("\n")).not.toContain("cannot be reached");
+    c.items = c.items.filter((e) => !(e.x === 18 && e.y === 20));
+    pushItem(c, 18, 20, "boulder");
+    expect(messages(check(i))).toContainEqual(
+      expect.stringContaining("NPC cannot be reached on foot from the temple"),
+    );
+  });
+
   it("rejects chunks and tiles outside the island rectangle", () => {
     const i = mini();
     i.meta.rect = { x: 0, y: 0, w: 31, h: 32 };

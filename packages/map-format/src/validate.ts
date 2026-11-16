@@ -7,7 +7,7 @@ import type { Diagnostic, PathSegment } from "./diagnostics.ts";
 import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
-import { TileMap, isWalkable } from "./tiles.ts";
+import { TileMap, isPassable, isWalkable } from "./tiles.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
 import type { Island, Position, Rect, World } from "./types.ts";
@@ -589,8 +589,10 @@ class WorldValidator {
   }
 
   /**
-   * BFS from the temple over walkable tiles (8 directions, like player movement) and portals.
-   * Every spawn, NPC and non-community zone must be reachable on foot.
+   * BFS from the temple over passable tiles (8 directions, like player movement) and portals.
+   * Doors count as open (isPassable): a locked door opens with its key, so the room behind
+   * it is reachable (docs/02 "Puertas con llave"). Every spawn, NPC and non-community zone
+   * must be reachable on foot.
    */
   private checkReachability(island: Island): void {
     const meta = island.meta;
@@ -613,7 +615,7 @@ class WorldValidator {
       for (const n of next) {
         const k = formatPos(n);
         if (reached.has(k) || !rectContains(meta.rect, n.x, n.y)) continue;
-        if (!isWalkable(this.tiles.tileAt(n), this.content)) continue;
+        if (!isPassable(this.tiles.tileAt(n), this.content)) continue;
         reached.add(k);
         queue.push(n);
       }
@@ -657,10 +659,10 @@ class WorldValidator {
   }
 
   /**
-   * Warns once per connected walkable area (8 directions, one floor) that the temple BFS
-   * did not reach and that has at least UNREACHABLE_AREA_MIN tiles: a stranded dock, a
-   * sandbar the generator left, a room with no stairs. Areas inside a community_plot are
-   * skipped (they may be unbuilt). Smaller pockets (a tile between two trees) are noise.
+   * Warns once per connected walkable area (8 directions, one floor, doors open) that the
+   * temple BFS did not reach and that has at least UNREACHABLE_AREA_MIN tiles: a stranded
+   * dock, a sandbar the generator left, a room with no stairs. Areas inside a community_plot
+   * are skipped (they may be unbuilt). Smaller pockets (a tile between two trees) are noise.
    */
   private warnUnreachableAreas(island: Island, reached: Set<string>): void {
     const meta = island.meta;
@@ -692,7 +694,8 @@ class WorldValidator {
               for (let dx = -1; dx <= 1; dx++) {
                 const n = { x: p.x + dx, y: p.y + dy, z: p.z };
                 const k = formatPos(n);
-                if (seen.has(k) || !rectContains(meta.rect, n.x, n.y) || !walkable(n)) continue;
+                if (seen.has(k) || !rectContains(meta.rect, n.x, n.y)) continue;
+                if (!isPassable(this.tiles.tileAt(n), this.content)) continue;
                 seen.add(k);
                 queue.push(n);
               }

@@ -19,6 +19,13 @@ export interface ContentEntry {
   /** Items: blocks movement / walkable ground. */
   blocks_movement?: boolean;
   walkable?: boolean;
+  /**
+   * Items: a door (docs/02 "Puertas con llave"): the item it swaps for (open or closed)
+   * and, on a locked closed door, the key id that opens it. Place the closed one.
+   */
+  door?: { key?: string; open?: string; closed?: string };
+  /** Items: a key, with the key id of the doors it opens. */
+  key?: string;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -65,6 +72,13 @@ export function loadContentIndex(root: string): ContentEntry[] {
       )
         e.blocks_movement = true;
       if (isObj(it["ground"])) e.walkable = it["ground"]["walkable"] === true;
+      const door = it["door"];
+      if (isObj(door)) {
+        e.door = {};
+        for (const f of ["key", "open", "closed"] as const)
+          if (typeof door[f] === "string") e.door[f] = door[f];
+      }
+      if (typeof it["key"] === "string") e.key = it["key"];
       out.push(e);
     }
   for (const [dir, kind] of [
