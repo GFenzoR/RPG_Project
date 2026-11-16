@@ -1,6 +1,10 @@
 package session
 
-import "github.com/GFenzoR/RPG_Project/server/internal/world"
+import (
+	"slices"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
+)
 
 // Areas (docs/02-game-design.md "Puertas con llave"): the tiles of the map joined on foot
 // (8 directions, one floor) with every locked door, every house tile and every entrance of
@@ -80,16 +84,47 @@ func (w *World) setArea(p world.Pos, id int32) {
 	a[int(p.Y)%world.SectorSize*world.SectorSize+int(p.X)%world.SectorSize] = id
 }
 
-// areaAllows reports whether a search for a free tile by rings that started on a tile of
-// area from (areaOf, 0 when it started on none: a house tile, a locked door, the entrance
-// of stairs, a hole or a teleport) may put a creature on q: a tile of that same area or,
-// from no area, a tile in no room behind a locked door. The rings do not follow walls:
-// without this, a crowd next to a locked door would put someone in the room behind it
-// (where it opens the door without the key), and a crowded temple someone in a pocket
-// sealed by walls or on the other side of stairs.
-func (w *World) areaAllows(from int32, q world.Pos) bool {
-	if from != 0 {
-		return w.areaOf(q) == from
+// searchFrom is where a search for a free tile by rings that starts on p may put a
+// creature (areaAllows): the area of p or, when p is the entrance of stairs, a hole or a
+// teleport (in no area: stepping onto it moves the player), the areas next to it, the
+// only ones a player there could walk to (none is a room: checkRooms keeps portal ends
+// out of rooms and initDoors refuses a portal end on a locked door). n is 0 when p lies in
+// no area and is no such entrance (a house tile, a locked door) or has no area next to it.
+type searchFrom struct {
+	n     int
+	areas [8]int32
+}
+
+// searchFrom returns where a search for a free tile by rings from p may land.
+func (w *World) searchFrom(p world.Pos) searchFrom {
+	var s searchFrom
+	if a := w.areaOf(p); a != 0 {
+		s.areas[0], s.n = a, 1
+		return s
 	}
-	return w.roomOf[q] == 0
+	if !w.m.MovesOnStep(p) {
+		return s
+	}
+	for e := world.North; e <= world.NorthWest; e++ {
+		if q, ok := p.Step(e); ok {
+			if a := w.areaOf(q); a != 0 && !slices.Contains(s.areas[:s.n], a) {
+				s.areas[s.n] = a
+				s.n++
+			}
+		}
+	}
+	return s
+}
+
+// areaAllows reports whether a search for a free tile by rings that started where from
+// says (searchFrom) may put a creature on q: a tile of one of its areas or, from no area
+// (a house tile, a locked door), a tile in no room behind a locked door. The rings do not
+// follow walls: without this, a crowd next to a locked door would put someone in the room
+// behind it (where it opens the door without the key), and a crowded temple or stairs
+// someone in a pocket sealed by walls or on the other side of stairs.
+func (w *World) areaAllows(from searchFrom, q world.Pos) bool {
+	if from.n == 0 {
+		return w.roomOf[q] == 0
+	}
+	return slices.Contains(from.areas[:from.n], w.areaOf(q))
 }

@@ -66,7 +66,7 @@ func (c doorRoomCase) rows(t *testing.T) []string {
 }
 
 // doorRoomCases is how many cases door-rooms.json has (doors.test.ts checks the same).
-const doorRoomCases = 33
+const doorRoomCases = 39
 
 // The rooms behind locked doors, and the doors that have none, are the same for the
 // server and for make validate: both read door-rooms.json (docs/02 "Puertas con llave").
@@ -85,9 +85,10 @@ func TestDoorRoomsFixture(t *testing.T) {
 	if len(doc.Cases) < doorRoomCases {
 		t.Fatalf("only %d cases", len(doc.Cases))
 	}
-	errs := map[string]error{"blocked": session.ErrDoorBlocked, "walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen,
-		"truncated": session.ErrDoorTruncated, "tie": session.ErrDoorTie, "key": session.ErrDoorOtherKey,
-		"escape": session.ErrDoorNoEscape, "bypass": session.ErrDoorBypassed}
+	errs := map[string]error{"blocked": session.ErrDoorBlocked, "portal": session.ErrDoorOnPortal,
+		"walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen, "truncated": session.ErrDoorTruncated,
+		"tie": session.ErrDoorTie, "key": session.ErrDoorOtherKey, "escape": session.ErrDoorNoEscape,
+		"bypass": session.ErrDoorBypassed}
 	for _, c := range doc.Cases {
 		t.Run(c.Name, func(t *testing.T) {
 			rows := c.rows(t)

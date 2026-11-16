@@ -337,6 +337,7 @@ func (w *World) DoorRoomSize(door world.Pos) int {
 // Why a locked door has no room (doorRoom), for errors.Is in tests.
 var (
 	ErrDoorBlocked   = errDoorBlocked
+	ErrDoorOnPortal  = errDoorOnPortal
 	ErrDoorWalled    = errDoorWalled
 	ErrDoorInTheOpen = errDoorInTheOpen
 	ErrDoorTruncated = errDoorTruncated

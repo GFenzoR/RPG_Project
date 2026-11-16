@@ -47,40 +47,88 @@ func TestFreeTileStaysInItsArea(t *testing.T) {
 	}
 }
 
-// The entrance of a teleport (stairs, a hole) lies in no area: nobody stands on it, and a
-// step onto it moves the player, so the areas go round it, not across it. A search for a
-// free tile from it (a character saved on it) starts in no area, and from no area it still
-// skips the rooms behind locked doors: a crowd round the teleport next to a gate does not
-// put anyone in the room behind it, the first free tile of the second ring, but on the
-// next one outside.
+// A search for a free tile from a tile of no area that is no portal entrance (a locked
+// door placed open, a house tile) still skips the rooms behind locked doors: a crowded
+// open gate does not put anyone in the room behind it, the first free tile of the first
+// ring, but on the next one outside.
 func TestFreeTileFromNoAreaSkipsRooms(t *testing.T) {
 	m := worldtest.Map(t, 0, 0, 7,
-		"#########",
-		"#..#....#",
-		"#..D...T#",
-		"#..#....#",
-		"#########",
+		"###########",
+		"#...#..T..#",
+		"#...d.....#",
+		"#...#.....#",
+		"###########",
 	)
-	tp, room := pos(4, 2), pos(2, 1)
-	m = worldtest.WithPortals(t, m, world.Portal{ID: "tp", Kind: world.PortalTeleport, From: tp, To: pos(7, 3)})
+	gate, room := pos(4, 2), pos(3, 1)
 	h := newHarness(t, m, func(c *session.Config) { c.Items = doorTestItems(true) })
-	if h.w.DoorRoomSize(pos(3, 2)) != 6 || !h.w.InDoorRoom(pos(3, 2), room) {
-		t.Fatalf("room behind the gate: %d tiles", h.w.DoorRoomSize(pos(3, 2)))
+	if h.w.DoorRoomSize(gate) != 9 || !h.w.InDoorRoom(gate, room) || h.w.AreaOf(gate) != 0 {
+		t.Fatalf("room behind the gate: %d tiles, gate in area %d", h.w.DoorRoomSize(gate), h.w.AreaOf(gate))
 	}
-	if a := h.w.AreaOf(pos(4, 1)); a == 0 || h.w.AreaOf(tp) != 0 || h.w.AreaOf(pos(4, 3)) != a || h.w.AreaOf(room) == a {
-		t.Fatalf("areas: teleport %d, beside it %d and %d, room %d", h.w.AreaOf(tp), a, h.w.AreaOf(pos(4, 3)), h.w.AreaOf(room))
+	blocker := withPack(9721, gate)
+	blocker.Name = "Blocker"
+	if _, b := h.joinChar(blocker); b.Pos() != gate {
+		t.Fatalf("blocker at %v, want the open gate %v", b.Pos(), gate)
 	}
-	for i, p := range []world.Pos{pos(4, 1), pos(5, 1), pos(5, 2), pos(4, 3), pos(5, 3)} {
-		c := withPack(int64(9721+i), p)
-		c.Name = fmt.Sprintf("Crowd%d", i)
-		if _, b := h.joinChar(c); b.Pos() != p {
-			t.Fatalf("crowd at %v, want %v", b.Pos(), p)
-		}
-	}
-	late := withPack(9730, tp)
+	late := withPack(9730, gate)
 	late.Name = "Late"
-	if _, p := h.joinChar(late); p.Pos() != pos(6, 1) {
-		t.Fatalf("late logged in at %v, want (6,1) outside the room %v", p.Pos(), room)
+	if _, p := h.joinChar(late); p.Pos() != pos(5, 1) {
+		t.Fatalf("late logged in at %v, want (5,1) outside the room %v", p.Pos(), room)
+	}
+}
+
+// The entrance of a teleport (stairs, a hole) lies in no area: nobody stands on it, and a
+// step onto it moves the player, so the areas go round it, not across it. A search for a
+// free tile from it (a character saved on it, an arrival on it) stays in the areas next to
+// it, the only ones a player there could walk to: with the one tile beside it taken, not
+// in the pocket sealed by walls two rings away, but on the temple further on.
+func TestFreeTileFromAPortalStaysBesideIt(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7,
+		"#######",
+		"#.#####",
+		"###..T#",
+		"#######",
+	)
+	tp, beside, pocket := pos(3, 2), pos(4, 2), pos(1, 1)
+	m = worldtest.WithPortals(t, m, world.Portal{ID: "tp", Kind: world.PortalTeleport, From: tp, To: pos(5, 2)})
+	h := newHarness(t, m)
+	if a := h.w.AreaOf(beside); a == 0 || h.w.AreaOf(tp) != 0 || h.w.AreaOf(pos(5, 2)) != a || h.w.AreaOf(pocket) == 0 {
+		t.Fatalf("areas: teleport %d, beside it %d, pocket %d", h.w.AreaOf(tp), a, h.w.AreaOf(pocket))
+	}
+	blocker := withPack(9731, beside)
+	blocker.Name = "Blocker"
+	if _, b := h.joinChar(blocker); b.Pos() != beside {
+		t.Fatalf("blocker at %v, want %v", b.Pos(), beside)
+	}
+	late := withPack(9732, tp)
+	late.Name = "Late"
+	if _, p := h.joinChar(late); p.Pos() != pos(5, 2) {
+		t.Fatalf("late logged in at %v, want (5,2) past the one beside the teleport, not the pocket %v", p.Pos(), pocket)
+	}
+}
+
+// A ladder is used, not stepped onto: its tile is ground of its area like any other, so a
+// one-tile corridor that holds a ladder up to a sealed pocket still joins a vault with the
+// field of the temple (the teleport of door-rooms.json in the same corridor does not).
+func TestEscapeWalksAcrossALadder(t *testing.T) {
+	m := worldtest.Floors(t, 0, 0,
+		worldtest.Layer{Z: 6, Rows: []string{"###", "#.#", "###"}},
+		worldtest.Layer{Z: 7, Rows: []string{
+			"#################",
+			"#..T..#...#.....#",
+			"#.....D...D.....#",
+			"#.....#...#.....#",
+			"#.#############.#",
+			"#...............#",
+			"#################",
+		}})
+	m = worldtest.WithPortals(t, m, world.Portal{ID: "up", Kind: world.PortalLadder, From: pos(8, 5), To: at3(1, 1, 6)})
+	w, err := session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations,
+		Items: doorTestItems(true), Save: func(session.Snapshot) bool { return true }})
+	if err != nil {
+		t.Fatalf("a vault joined to the field across a ladder: %v", err)
+	}
+	if a := w.AreaOf(pos(7, 5)); a == 0 || w.AreaOf(pos(8, 5)) != a || w.AreaOf(pos(13, 2)) != a {
+		t.Fatalf("areas: west %d, ladder %d, vault %d", a, w.AreaOf(pos(8, 5)), w.AreaOf(pos(13, 2)))
 	}
 }
 

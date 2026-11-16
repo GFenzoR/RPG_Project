@@ -42,15 +42,21 @@ const (
 const doorRoomSearch = 4096
 
 // Why the room behind a locked door cannot be worked out (doorRoom), or cannot be trusted
-// (initDoors: a door nobody gets through, a room shared with a locked door of another key;
-// checkEscapes: a side that leads nowhere, a room a player without its key gets into).
-// The world does not start with such a door, and make validate refuses it first (same
-// rules, same fixture: packages/map-format/src/testdata/door-rooms.json).
+// (initDoors: a door nobody gets through, a door on a portal end, a room shared with a
+// locked door of another key; checkEscapes: a side that leads nowhere, a room a player
+// without its key gets into). The world does not start with such a door, and make
+// validate refuses it first (same rules, same fixture:
+// packages/map-format/src/testdata/door-rooms.json).
 var (
 	// errDoorBlocked: something on the door's tile besides the door blocks the way, so
 	// nobody gets through it even open: its room could only be left by a way the escape
 	// check does not see.
 	errDoorBlocked = errors.New("it lets nobody through, even open: something on its tile besides the door blocks the way")
+	// errDoorOnPortal: a portal leaves from its tile or arrives on it (a door placed open
+	// is walkable, so world.NewMap takes it): stepping onto the door could move a player
+	// past it from the outside once someone locked it, and arriving on it puts a player
+	// in its way. The escape check could not tell who gets through.
+	errDoorOnPortal = errors.New("a portal leaves from its tile or arrives on it: a door is no place to change floor or to land")
 	// errDoorWalled: no tile around the door lets anyone through.
 	errDoorWalled = errors.New("it leads nowhere: no tile around it lets anyone through")
 	// errDoorInTheOpen: every tile around the door is one side, so it keeps nothing apart.
@@ -112,10 +118,10 @@ type room struct {
 // of the map, works out the room behind each locked one and numbers the areas of the map
 // (initAreas). The walls of the map never change, and the walks count every locked door
 // as a wall and every other door as open, so the rooms and areas hold for good. A locked
-// door nobody gets through even open, whose room cannot be worked out, whose room it
-// shares with a locked door of another key, whose room holds what belongs outside
-// (checkRooms) or that fails the escape check (checkEscapes) stops the world from
-// starting.
+// door nobody gets through even open or on an end of a portal, whose room cannot be
+// worked out, whose room it shares with a locked door of another key, whose room holds
+// what belongs outside (checkRooms) or that fails the escape check (checkEscapes) stops
+// the world from starting.
 func (w *World) initDoors() error {
 	if err := content.CheckDoors(w.cfg.Items); err != nil {
 		return fmt.Errorf("session: %w", err)
@@ -165,10 +171,19 @@ func (w *World) initDoors() error {
 			}
 		}
 	}
+	ends := map[world.Pos]bool{} // the tiles portals leave from or arrive on
+	if len(locked) > 0 {
+		for _, pt := range w.m.Portals() {
+			ends[pt.From], ends[pt.To] = true, true
+		}
+	}
 	for _, p := range locked {
 		d := w.doors[p]
 		if !d.through {
 			return fmt.Errorf("session: locked door on %v: %w", p, errDoorBlocked)
+		}
+		if ends[p] {
+			return fmt.Errorf("session: locked door on %v: %w", p, errDoorOnPortal)
 		}
 		sides, err := w.doorRoom(p)
 		if err != nil {
@@ -387,7 +402,8 @@ func escapeWay(k world.PortalKind) bool {
 // teleport, whose tile lies in no area (stepping onto it moves the player), the areas of
 // the tiles next to it and the rooms of a locked door next to it (a player in its room
 // opens it without the key and steps on from the door's tile; initDoors refused every
-// locked door nobody gets through). roomArea is checkEscapes' room id - 1 → area.
+// locked door nobody gets through and every one on a portal's tile, so no portal leaves
+// from the door itself). roomArea is checkEscapes' room id - 1 → area.
 func (w *World) portalSources(pt *world.Portal, roomArea []int32) []int32 {
 	if !pt.Kind.OnStep() {
 		if a := w.areaOf(pt.From); a != 0 {

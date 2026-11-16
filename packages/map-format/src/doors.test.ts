@@ -134,7 +134,7 @@ function draw(c: Case): {
 }
 
 /** How many cases door-rooms.json has (TestDoorRoomsFixture checks the same). */
-const DOOR_ROOM_CASES = 33;
+const DOOR_ROOM_CASES = 39;
 
 describe("doorRooms", () => {
   it("reads the shared cases", () =>
@@ -201,6 +201,26 @@ describe("doorRooms", () => {
     for (const kind of ["rope_spot", "boat"]) expect(findings(out(kind)), kind).toEqual(["escape"]);
     // No temple at all: every side leads nowhere.
     expect(findings({})).toEqual(["escape", "escape"]);
+  });
+
+  // A ladder is used, not stepped onto: its tile stays ground of its area, so a corridor
+  // that holds one still joins the vault with the field; a teleport there splits them (the
+  // server's TestEscapeWalksAcrossALadder).
+  it("walks across a ladder but not across a teleport", () => {
+    const { tiles, locked, world } = draw(
+      must(
+        fixture.cases.find(
+          (c) => c.name === "a vault joined to the field only across a teleport to a sealed pocket",
+        ),
+      ),
+    );
+    const across = (kind: string): DoorRoomError[] =>
+      doorRooms(tiles, content, locked, {
+        ...world,
+        portals: (world.portals ?? []).map((p) => ({ ...p, kind })),
+      }).findings.map((f) => f.error);
+    expect(across("teleport")).toEqual(["escape"]);
+    expect(across("ladder")).toEqual([]);
   });
 
   // Two gates of one hall whose outsides meet only through a house (the server's

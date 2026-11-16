@@ -14,7 +14,8 @@ export const DOOR_ROOM_SEARCH = 4096;
 
 /**
  * Why a locked door is refused. Its own tile: blocked (something on it besides the door
- * blocks the way, so nobody gets through it even open). Its own room: walled (no tile
+ * blocks the way, so nobody gets through it even open) or portal (a portal leaves from it
+ * or arrives on it). Its own room: walled (no tile
  * around it lets anyone through), open (every tile around it is one side), truncated (two
  * sides or more are bigger than DOOR_ROOM_SEARCH) or tie (every side is closed and the two
  * biggest have the same size). A room it shares with an earlier locked door: key (that
@@ -25,7 +26,7 @@ export const DOOR_ROOM_SEARCH = 4096;
  * room).
  */
 export type DoorRoomError =
-  "blocked" | "walled" | "open" | "truncated" | "tie" | "key" | "escape" | "bypass";
+  "blocked" | "portal" | "walled" | "open" | "truncated" | "tie" | "key" | "escape" | "bypass";
 
 /** The room behind a locked door, one list of tiles per side that is not the outside. */
 export type DoorRoom = { rooms: Position[][] } | { error: DoorRoomError };
@@ -34,6 +35,8 @@ export type DoorRoom = { rooms: Position[][] } | { error: DoorRoomError };
 export const DOOR_ROOM_ERRORS: Record<DoorRoomError, string> = {
   blocked:
     "it lets nobody through, even open: something on its tile besides the door blocks the way",
+  portal:
+    "a portal leaves from its tile or arrives on it: a door is no place to change floor or to land",
   walled: "it leads nowhere: no tile around it lets anyone through",
   open: "it keeps nothing apart: every tile around it is one side",
   truncated: `more than one side is bigger than ${DOOR_ROOM_SEARCH} tiles: no room behind it`,
@@ -345,7 +348,9 @@ const posKey = (p: Position): string => `${p.x},${p.y},${p.z}`;
  * The rooms behind the locked doors given in map order (chunk by chunk, row by row, like
  * the server), and the server's checks of them. First, door by door: a door nobody gets
  * through even open is refused (blocked: its room could only be left by a way the escape
- * check does not see), then doorRoom, and a room shared with an earlier door of another
+ * check does not see), and so is one on an end of a portal (portal: a door placed open is
+ * walkable, and stepping onto it could move a player past it from the outside once
+ * someone locked it), then doorRoom, and a room shared with an earlier door of another
  * lock is refused (key). Then, when every door has
  * its room, the escape check (the server's checkEscapes) on the areas of the map: every
  * side of every door reaches a temple (world.temples) the ways a player without keys or
@@ -366,11 +371,17 @@ export function doorRooms(
   const rooms: { door: Position; lock: string; at: Position }[] = [];
   const roomsOf: number[][] = []; // the room ids of each door, in the order given
   const out: DoorRooms = { behind: new Map(), sizes: new Map(), findings: [] };
+  const ends = new Set<string>(); // the tiles portals leave from or arrive on
+  for (const p of world.portals ?? []) ends.add(posKey(p.from)).add(posKey(p.to));
   for (const { pos, lock } of doors) {
     roomsOf.push([]);
     // The server's door.through: walkable ground and no blocker on it but a door.
     if (!isPassable(tiles.tileAt(pos), content)) {
       out.findings.push({ door: pos, error: "blocked" });
+      continue;
+    }
+    if (ends.has(posKey(pos))) {
+      out.findings.push({ door: pos, error: "portal" });
       continue;
     }
     const r = doorRoom(tiles, content, pos);
@@ -553,7 +564,7 @@ function escapeCheck(
  * whose tile lies in no area (stepping onto it moves the player), the areas of the tiles
  * next to it and the rooms of a locked door next to it (a player in its room opens it
  * without the key and steps on from the door's tile; doorRooms refused every locked door
- * nobody gets through).
+ * nobody gets through and every one on a portal's tile).
  */
 function portalSources(
   p: { kind: string; from: Position },
