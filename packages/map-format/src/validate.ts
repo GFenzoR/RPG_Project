@@ -1,6 +1,6 @@
 // World validation (docs/03-world-and-maps.md, "Validación"). The editor, mapcli, the MCP
 // server and `make validate` all call validateWorld, so they agree on what is an error.
-import { loadContent, routesFile } from "./content.ts";
+import { isSignItem, loadContent, routesFile } from "./content.ts";
 import type { ContentIndex } from "./content.ts";
 import { Reporter } from "./diagnostics.ts";
 import type { Diagnostic, PathSegment } from "./diagnostics.ts";
@@ -315,6 +315,23 @@ class WorldValidator {
       else if (!this.tiles.tileAt(t.pos)?.ground)
         this.err(textsFile, [i, "pos"], "text is on a tile without ground", t.pos);
       this.checkI18n(textsFile, [i, "text"], t.text);
+      // A sign item on the tile (T5.5) is what players read: it must say the same text. A
+      // sign without its item is allowed (only texts.yaml knows it; docs/03 "Carteles").
+      if (t.kind !== "sign") continue;
+      const signs = (this.tiles.tileAt(t.pos)?.stack ?? []).filter((id) =>
+        isSignItem(this.content.items.get(id)),
+      );
+      const first = signs[0];
+      if (
+        first !== undefined &&
+        !signs.some((id) => this.content.items.get(id)?.description === t.text)
+      )
+        this.err(
+          textsFile,
+          [i, "text"],
+          `sign "${t.id}" says ${t.text}, but its sign item "${first}" says ${this.content.items.get(first)?.description}`,
+          t.pos,
+        );
     }
 
     this.checkHouses(island, where, needWalkable);
@@ -437,6 +454,13 @@ class WorldValidator {
   private checkChunks(island: Island, floors: Set<number>): void {
     const dir = this.dirOf(island);
     const rect = island.meta.rect;
+    // Sign texts by tile: every sign item must stand on a texts.yaml sign with its text.
+    const signText = new Map<string, string[]>();
+    for (const t of island.texts) {
+      if (t.kind !== "sign") continue;
+      const key = formatPos(t.pos);
+      signText.set(key, [...(signText.get(key) ?? []), t.text]);
+    }
     for (const c of island.chunks.values()) {
       const file = `${dir}/chunks/z${String(c.z).padStart(2, "0")}/c${String(c.cx).padStart(4, "0")}_${String(c.cy).padStart(4, "0")}.json`;
       const ox = c.cx * CHUNK_SIZE;
@@ -486,6 +510,16 @@ class WorldValidator {
                 `stackground:${id}`,
                 ["items"],
                 `ground item "${id}" belongs in the ground layer, not on a stack`,
+                pos,
+              );
+            else if (
+              isSignItem(info) &&
+              !(signText.get(formatPos(pos)) ?? []).includes(info.description ?? "")
+            )
+              once(
+                `sign:${lx},${ly}`,
+                ["items"],
+                `sign item "${id}" says ${info.description}, but ${dir}/texts.yaml has no sign with that text at ${formatPos(pos)}`,
                 pos,
               );
           }

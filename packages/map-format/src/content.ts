@@ -19,7 +19,16 @@ export interface ItemInfo {
   door?: boolean;
   /** Sprite path (assets/sprites.yaml key), for renders. */
   sprite?: string;
+  /**
+   * i18n key shown when the item is looked at. A sign item (T5.5) is one whose description
+   * is a map text (`text.*`): it must stand where texts.yaml puts a sign with that text.
+   */
+  description?: string;
 }
+
+/** Whether an item is a sign: its description is a map text of texts.yaml. */
+export const isSignItem = (info: ItemInfo | undefined): boolean =>
+  info?.description?.startsWith("text.") === true;
 
 export interface ContentIndex {
   items: Map<string, ItemInfo>;
@@ -90,6 +99,7 @@ export function loadContent(root: string): ContentIndex {
           raw["blocks_movement"] === true || (kind === "wall" && raw["blocks_movement"] !== false),
       };
       if (typeof raw["sprite"] === "string") info.sprite = raw["sprite"];
+      if (typeof raw["description"] === "string") info.description = raw["description"];
       if (isObj(raw["door"])) info.door = true;
       const g = raw["ground"];
       if (isObj(g)) info.walkable = g["walkable"] === true;

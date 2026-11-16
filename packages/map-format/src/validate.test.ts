@@ -166,6 +166,43 @@ describe("validateWorld", () => {
     );
   });
 
+  it("keeps a sign item and its texts.yaml sign saying the same text (T5.5)", () => {
+    const signAt = { x: 20, y: 24, z: 7 };
+    const sign = (text: string) => ({ id: "mini_sign", kind: "sign" as const, pos: signAt, text });
+    const withItem = (): Island => {
+      const i = mini();
+      pushItem(must(i.chunks.get(chunkKey(7, 0, 0))), signAt.x, signAt.y, "brasal_temple_sign");
+      return i;
+    };
+
+    // The item and the text agree: fine. A sign text alone (no item yet) is fine too.
+    const ok = withItem();
+    ok.texts = [sign("text.volcan.temple_sign")];
+    expect(messages(check(ok))).toEqual([]);
+    const textOnly = mini();
+    textOnly.texts = [sign("text.volcan.temple_sign")];
+    expect(messages(check(textOnly))).toEqual([]);
+
+    // A sign item with no sign text on its tile.
+    expect(messages(check(withItem()))).toEqual([
+      expect.stringMatching(
+        /sign item "brasal_temple_sign" says text\.volcan\.temple_sign, but \S*mini\/texts\.yaml has no sign with that text at 20,24,7/,
+      ),
+    ]);
+
+    // The text on the tile says something else: both sides are reported.
+    const other = withItem();
+    other.texts = [sign("text.volcan.dock_sign")];
+    const m = messages(check(other));
+    expect(m).toHaveLength(2);
+    expect(m).toContainEqual(
+      expect.stringContaining(
+        'sign "mini_sign" says text.volcan.dock_sign, but its sign item "brasal_temple_sign" says text.volcan.temple_sign',
+      ),
+    );
+    expect(m).toContainEqual(expect.stringContaining('sign item "brasal_temple_sign" says'));
+  });
+
   it("rejects a house id used twice in the world (T5.4)", () => {
     const i = mini();
     const h = {

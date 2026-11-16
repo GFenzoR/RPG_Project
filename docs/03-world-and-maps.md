@@ -113,7 +113,11 @@ level_hint: [1, 15]
 El servidor no carga `texts.yaml` (lo usan el editor, `mapcli` y el validador). Para que
 un cartel se vea y se lea en el juego, la misma casilla lleva un item fijo cuya
 `description` es esa clave (T5.5: `brasal_temple_sign`, ver `06-content-data.md`); mirarlo
-muestra el texto. Los carteles de Puerto y del Bosque todavía no tienen ese item.
+muestra el texto. Los carteles de Puerto y del Bosque todavía no tienen ese item. El
+validador los mantiene de acuerdo: un item de cartel (un item cuya `description` es una
+clave `text.*`) tiene que estar en una casilla con un `kind: sign` de `texts.yaml` con ese
+mismo texto, y un cartel de `texts.yaml` con un item de cartel en su casilla tiene que decir
+lo mismo que el item. Un cartel sin item sigue siendo válido.
 
 `spawns.yaml`:
 ```yaml
@@ -348,6 +352,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del
   origen. `hole` baja, `rope_spot` sube.
 - Zonas de protección cubren el templo. (Depósitos: cuando exista el item, hito 1.)
+- Carteles (T5.5): un item de cartel (`description` = clave `text.*`) está sobre un
+  `kind: sign` de `texts.yaml` con ese texto, y un cartel con item de cartel en su casilla
+  dice lo mismo que el item (ver "Islas", `texts.yaml`).
 - Rectángulos de isla alineados a chunks (múltiplos de 32). Islas no se superponen ni
   salen del mundo; chunks o tiles fuera del rectángulo de
   su isla, o en un piso no listado = error.
