@@ -51,8 +51,12 @@ describe("signs (T5.5)", () => {
     expect(Math.max(Math.abs(sign.pos.x - gate.x), Math.abs(sign.pos.y - gate.y))).toBeLessThan(3);
     const room = doorRoom(tiles, content, gate);
     if ("error" in room) throw new Error(`the forge gate has no room: ${room.error}`);
+    // The sign blocks, so no walk counts its own tile: none of the tiles around it may be
+    // in the forge either.
     const behind = new Set(room.rooms.flat().map((p) => key(p.x, p.y)));
-    expect(behind.has(key(sign.pos.x, sign.pos.y))).toBe(false);
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++)
+        expect(behind.has(key(sign.pos.x + dx, sign.pos.y + dy))).toBe(false);
     // In front of the gate (where the server test and the E2E stand) stays walkable.
     for (const x of [3691, 3692]) expect(isWalkable(tiles.tile(x, 5831, 8), content)).toBe(true);
   });
