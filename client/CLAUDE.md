@@ -454,10 +454,15 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
     hablar, usar, abrir, mirar, mover. Los navegadores móviles mandan además
     `contextmenu` (y a veces cancelan el puntero antes): el canvas y `Game.touchContextMenu`
     lo toman como ese mismo toque largo, sin usar el item. El fondo del menú se cierra en
-    `pointerdown`, no en `click`: al levantar el dedo el navegador puede mandar un click.
-    Por lo mismo sus botones ignoran clicks los primeros `MENU_ARM_MS` (350 ms): en una
-    pantalla baja (teléfono horizontal) el menú ocupa el alto y puede quedar bajo el dedo
-    (`menuPlacement` con `menuHeight`).
+    `pointerdown`, no en `click`: al levantar el dedo el navegador puede mandar un click
+    a lo que quede debajo, lo haya mantenido lo que lo haya mantenido (Chromium con
+    toques de CDP lo hace siempre). En una pantalla baja (teléfono horizontal) el menú
+    ocupa el alto y queda bajo el dedo (`menuPlacement` con `menuHeight`). Por eso sus
+    botones solo aceptan un click después de un `pointerdown` sobre el propio menú
+    (`Game.menuPress`/`menuPressed`, regla pura `menuClickCounts`) o del teclado
+    (`detail` 0). El dedo que lo abrió bajó sobre el mapa o el item, nunca sobre el menú.
+    Sin temporizador: antes eran 350 ms (`MENU_ARM_MS`) y en la CI, más lenta, el dedo se
+    levantó después y el click eligió el botón de abajo.
   - Mover items sin arrastre: tocar el item (`Game.pickItem`, `GameUi.picked`, banner
     `PickBanner`, clase `picking-item` en `body`) y luego el destino: una casilla del mapa
     o cualquier `[data-drop]` (slot vacío o celda de contenedor), con un listener de
@@ -470,6 +475,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
     empieza después (`PAD_RESERVE_PX`) y en vertical el mapa sube y el pad va debajo.
   - Escape cierra primero el menú, después suelta el item elegido. Si un campo de texto
     toma el foco (`focusin`), se sueltan las teclas de movimiento.
+- **Área segura** (muesca, esquinas, barra de inicio; las páginas piden
+  `viewport-fit=cover`): la cuenta una sola vez el padding `env(safe-area-inset-*)` de
+  `.game` (`client.css`). Lo que va sobre el mapa (pad, hotbar, botones de zoom, banner
+  del item elegido, en `touch.css`) cuelga de `.viewport`, que ya está dentro de ese
+  padding: sus márgenes son desde los bordes del mapa y no suman `env()` otra vez. Lo
+  que usa `position: fixed` (ventanas en teléfono, menú del toque largo) se mide contra
+  la pantalla y todavía no respeta el área segura (docs/14). E2E con insets de CDP en
+  `mobile.spec.ts`.
 - **Layout** (`ui/layout.ts`, breakpoints como datos): `.game` lleva `data-layout`
   (`desktop`, `tablet`, `phone-portrait`, `phone-landscape`), `data-panel` (`sidebar`,
   `tabs`, `drawer`) y `data-flow` (`row`, `column`); `client.css` cuelga sus reglas de
@@ -512,7 +525,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   iPhone 13 vertical y horizontal e iPad Mini sobre WebKit, en el proyecto
   `webkit-mobile`, tests con "(webkit)" en el título). Toques con `page.touchscreen`; los
   toques largos y el pellizco usan eventos táctiles de CDP en Chromium y `PointerEvent`
-  sintéticos en WebKit (`fingers`, id 1 para el primer dedo). Test ids:
+  sintéticos en WebKit (`fingers`, id 1 para el primer dedo). El toque largo dura 1,2 s
+  (el dedo se levanta mucho después de abrir el menú) y la casilla de la mochila se
+  compara entera: otro test pudo dejar la suya en el mismo lugar (docs/08). Test ids:
   `touch-pad`, `[data-dir=north]`, `action-menu`, `[data-action=…]`, `pick-banner`,
   `pick-cancel`, `touch-pad-toggle`, `panel-tabs` `[data-tab=…]`, `panel-toggle`,
   `hud-menu`, `notices`. Hook `__rpgClient.monsters()` para tocar un monstruo.

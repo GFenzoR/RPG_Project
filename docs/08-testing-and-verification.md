@@ -93,7 +93,7 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 | `validate` | `make validate` (contenido, i18n, mapas, IDs append-only) y `make test-parity` | — |
 | `actionlint` | lint de `.github/workflows/` (actionlint fijado) | — |
 | `build` | `make build`: bundle de producción del editor y del cliente (`build/client`, con el atlas en `atlas/`) | — |
-| `e2e` | E2E del editor y del cliente en Chromium, y los táctiles de `mobile.spec.ts` también en WebKit (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor | `e2e-screenshots`, `playwright-report` (también si falla) |
+| `e2e` | E2E del editor y del cliente en Chromium, y los táctiles de `mobile.spec.ts` también en WebKit (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor; un reintento por test fallado y 40 min de tope (ver "E2E en la CI") | `e2e-screenshots`, `playwright-report` (también si falla) |
 | `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |
 | `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
 
@@ -153,7 +153,24 @@ acepta en un evento sintético; el pad captura su dedo.
   caminar tocando una casilla y con el pad (un toque = un paso, mantener = varios); mover
   la mochila al suelo con "tocar item → tocar destino" y devolverla con el toque largo
   ("Mover" → slot vacío), comprobando la casilla y el slot que manda el servidor; escribir
-  en la pestaña del chat y ver el eco del servidor.
+  en la pestaña del chat y ver el eco del servidor. La casilla se compara entera (la pila
+  de antes más la mochila, y después la pila de antes): todos los tests táctiles nacen en
+  el mismo lugar y caminan igual, así que uno que falló antes en la corrida (o el primer
+  intento de un reintento) puede haber dejado su mochila ahí. Los items del suelo duran
+  lo que dura el servidor.
+- El toque largo mantiene el dedo 1,2 s: el menú abre a los 500 ms y el dedo se levanta
+  mucho después, como en un runner lento. Con eventos táctiles de CDP, Chromium manda al
+  levantar el dedo un click a lo que esté debajo, lo haya mantenido lo que lo haya
+  mantenido (no hay `contextmenu` de toque largo); en un teléfono horizontal eso es el
+  menú, que ocupa el alto. El menú solo acepta clicks después de un toque que empezó en
+  él (`menuClickCounts`, ver client/CLAUDE.md). Antes ignoraba clicks durante 350 ms, y
+  en la CI el dedo se levantó más tarde: el click eligió "Mirar" y el menú se cerró.
+- En `Pixel 7` vertical y horizontal (Chromium), con un área segura de iPhone 13 puesta
+  por CDP (`Emulation.setSafeAreaInsetsOverride`; la emulación de dispositivos no tiene
+  insets): `.game` toma los insets como padding, la caja del mapa queda dentro y el pad,
+  la hotbar, los botones de zoom y el banner del item elegido guardan su margen desde los
+  bordes del mapa, sin sumar el inset otra vez (antes, 47 px de más en horizontal).
+  Screenshot `mobile-pixel7-*-09-safe-area`.
 - En vertical, la hotbar muestra al menos 4 slots enteros a la derecha del pad, bajo el
   mapa y sin nada encima.
 - En cada dispositivo, el zoom del mapa: `+` sube una escala entera y se recuerda
@@ -178,6 +195,35 @@ dentro de `make e2e`. Los E2E de escritorio siguen igual y deben quedar en verde
 cambio táctil altera el mouse ni el teclado. La PWA no entra en el E2E (Vite de desarrollo
 no registra el service worker); su lógica se prueba con Vitest (`client/src/pwa.test.ts`,
 `client/src/sw/policy.test.ts`).
+
+### E2E en la CI
+El job `e2e` corre en `ubuntu-latest`: 2 CPU y sin GPU, así que cada página dibuja WebGL
+por software (SwiftShader) y la suite va varias veces más lenta que en un PC (en Windows,
+`playwright.config.ts` usa la GPU por ANGLE/D3D11). Lo que pasa en local y falla ahí casi
+siempre es una espera que dependía de la velocidad.
+- **Reintentos:** con `CI` definido (GitHub lo pone), cada test que falla se corre una vez
+  más (`retries: 1`) y, si pasa, el reporte lo marca `flaky`: se ve, no se esconde, y no
+  tumba el job. Un `flaky` se investiga igual. `forbidOnly` hace fallar un `test.only`
+  olvidado.
+- **Trace:** en la CI solo el reintento graba trace (`on-first-retry`); el primer intento
+  deja un screenshot del fallo y el `error-context.md`. Grabar trace filma la página y le
+  quita CPU a un runner que no la tiene. En local se guarda el trace de cada fallo
+  (`retain-on-failure`). Todo va en el artefacto `playwright-report` (con
+  `test-results/`).
+- **Tiempo:** el job tiene 40 min (la suite del cliente sola tardaba 13,5 min antes de
+  los tests de WebKit). Un test con varias páginas de juego a la vez fija su propio
+  `test.setTimeout` (por ejemplo "T5.4": tres jugadores y la lista de casas del sitio, que
+  puede tardar su caché de 60 s), en vez de subir el de todos. `workers: 1`: los tests
+  comparten servidor, base y lugares del mapa.
+- **Reglas para tests nuevos:** nada de esperas fijas; esperar la condición (estado del
+  servidor por `__rpgClient`, un request, `mapDrawn` antes de un screenshot). No suponer
+  que el mapa está limpio: otro test pudo dejar items en el mismo lugar. Un gesto táctil
+  de CDP manda un click al levantar el dedo sobre lo que haya debajo.
+- **Ruido conocido:** líneas `[WebServer] [vite] ws proxy error: read ECONNRESET` (y
+  `ws proxy socket error`). Las escribe el proxy de Vite cuando una página se cierra con
+  su WebSocket abierto: el fin de un test, o el cierre de uno que se pasó de tiempo (en
+  la CI de #80 salieron justo después del timeout de "T5.4" y al final de otro test que
+  pasó). No son la causa de un fallo; el cliente no reconecta solo.
 
 ### E2E de la tienda (T5.7)
 `client/e2e/shop.spec.ts` usa el servidor principal del E2E, que corre con

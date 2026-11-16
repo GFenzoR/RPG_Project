@@ -80,14 +80,23 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - tests que digan lo que prueban y e2e que confirmen la respuesta del servidor, no
     solo el estado local del cliente.
 - **Si la CI falla sin crear jobs**, es un problema de GitHub Actions: relánzala.
+- **E2E en la CI:** el runner (2 CPU, sin GPU: WebGL por software) corre la suite varias
+  veces más lento que tu PC. Cada test que falla se reintenta una vez; si pasa al
+  reintento, el reporte lo marca `flaky`. Un `flaky` es un bug (casi siempre una espera
+  mal puesta en el test, a veces del cliente): baja el artefacto `playwright-report`, mira
+  el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
   (hay que entrar de nuevo en cada arranque) y el selector de servidor reinicia la app.
-  Detalle en `15-movil.md`. El pad (`.touch-pad-dock` en `touch.css`) suma
-  `env(safe-area-inset-*)` aunque `.game` ya tiene ese padding: en un iPhone con barra de
-  inicio o muesca, en horizontal, el margen se cuenta dos veces (la emulación no lo ve:
-  ahí el inset es 0).
+  Detalle en `15-movil.md`. El área segura (muesca, esquinas, barra de inicio) ya se
+  cuenta una sola vez para el pad, la hotbar, los botones de zoom y el banner del item
+  elegido (los mide un E2E con insets de CDP). Falta para lo que se posiciona contra la
+  pantalla entera (`position: fixed`): las ventanas sobre el mapa en teléfono (diálogo,
+  crafteo, mercado, casa, intercambio) y el menú del toque largo (`menuPlacement` deja
+  8 px del borde de la pantalla, no del área segura). En un iPhone horizontal pueden
+  quedar un poco bajo la muesca o la barra de inicio; se ve solo en un dispositivo real
+  o con el override de CDP.
 - **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
