@@ -684,10 +684,17 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await page.keyboard.down("Shift");
   await page.mouse.click(sign.x, sign.y);
   await page.keyboard.up("Shift");
-  await expect(page.getByTestId("game-log")).toContainText(
+  const log = page.getByTestId("game-log");
+  await expect(log).toContainText(
     "Ves cartel. Templo del Farol. Dentro de sus muros nadie puede hacerte daño.",
   );
+  // The log sits at the end of the scrolling side column on desktop: bring it into view
+  // so the screenshot shows the line read, then put the column back for the next shots.
+  await log.scrollIntoViewIfNeeded();
   await shot(page, "12b-puerto-temple-sign");
+  await page.locator(".side-scroll").evaluate((el) => {
+    el.scrollTop = 0;
+  });
 
   // The priestess stands next to the temple: right click opens her dialog.
   const priest = await npc("puerto_priest");
