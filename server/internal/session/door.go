@@ -42,7 +42,8 @@ const (
 const doorRoomSearch = 4096
 
 // sameOutsideSearch bounds the walk sameOutside makes from the outside of one locked door
-// to the outside of another that shares its room.
+// to the outside of another that shares its room, in tiles explored (not in steps: in
+// open ground the walk explores this many within some 60 to 90 tiles of its start).
 const sameOutsideSearch = 4 * doorRoomSearch
 
 // Why the room behind a locked door cannot be worked out (doorRoom), or cannot be trusted
@@ -63,10 +64,16 @@ var (
 	// errDoorOtherKey: it shares its room with a locked door of another key, whose key
 	// would open both from the room.
 	errDoorOtherKey = errors.New("it shares its room with a locked door of another key")
-	// errDoorOtherOutside: it shares its room with a locked door whose outside is not its
-	// own (sameOutside finds no way from one to the other): the room is a hall between two
-	// places, one of them a room no door guards (a vault bigger than the room before it).
-	errDoorOtherOutside = fmt.Errorf("it shares its room with a locked door whose outside is not its own (no way between them within %d tiles)", sameOutsideSearch)
+	// errDoorOtherOutside: it shares its room with a locked door, and the walk from that
+	// door's outside (sameOutside) explored all it could reach without finding its own:
+	// the two outsides meet only through another locked door, or not at all. Either the
+	// room is a hall before a vault no door guards (a vault bigger than the room before
+	// it), or the doors make a cycle (a building whose back door gives onto a yard with its
+	// own gate to the street), which is safe but refused for now (docs/14).
+	errDoorOtherOutside = errors.New("it shares its room with a locked door whose outside meets its own only through another locked door, if at all (a vault no door guards, or a cycle of locked doors, refused for now)")
+	// errDoorOutsideFar: it shares its room with a locked door, and the walk from that
+	// door's outside stopped at sameOutsideSearch explored tiles before it found its own.
+	errDoorOutsideFar = fmt.Errorf("it shares its room with a locked door whose outside a walk of %d explored tiles (some 60 to 90 tiles away in open ground) does not reach", sameOutsideSearch)
 )
 
 // door is a tile of the map with a door item (initDoors).
@@ -169,8 +176,8 @@ func (w *World) initDoors() error {
 				id = w.newRoom(p, side)
 			} else if first := w.rooms[id-1].door; w.doors[first].lock != d.lock {
 				return fmt.Errorf("session: locked door on %v: %w (the door on %v)", p, errDoorOtherKey, first)
-			} else if !w.sameOutside(outsides[first], outside) {
-				return fmt.Errorf("session: locked door on %v: %w (the door on %v)", p, errDoorOtherOutside, first)
+			} else if err := w.sameOutside(outsides[first], outside); err != nil {
+				return fmt.Errorf("session: locked door on %v: %w (the door on %v)", p, err, first)
 			}
 			d.room = append(d.room, id)
 		}
@@ -187,37 +194,42 @@ func (w *World) roomPassable(q world.Pos) bool {
 	return w.m.Walkable(q)
 }
 
-// sameOutside reports whether the outsides of two locked doors that share a room are one
+// sameOutside checks that the outsides of two locked doors that share a room are one
 // area: a walk from the tiles next to the first door on its outside (a, breadth first, 8
-// directions, roomPassable: never through a locked door) reaches one next to the second
-// door on its outside (b) within sameOutsideSearch tiles. A double door, or a front and a
-// back door to the same streets, pass; a hall between the world and a vault, or a room
-// before a vault bigger than it, do not.
-func (w *World) sameOutside(a, b []world.Pos) bool {
+// directions, roomPassable, and never through a house tile: a house is no street) reaches
+// one next to the second door on its outside (b) within sameOutsideSearch explored tiles.
+// A double door, or a front and a back door to the same streets, pass. It fails with
+// errDoorOtherOutside when the walk explored all it could reach (a hall before a vault, or
+// a cycle of locked doors) and with errDoorOutsideFar when it stopped at its bound.
+func (w *World) sameOutside(a, b []world.Pos) error {
 	seen := map[world.Pos]bool{}
 	for _, t := range a {
 		seen[t] = true
 	}
 	for _, t := range b {
 		if seen[t] {
-			return true
+			return nil
 		}
 	}
 	queue := slices.Clone(a)
-	for i := 0; i < len(queue) && i < sameOutsideSearch; i++ {
+	i := 0
+	for ; i < len(queue) && i < sameOutsideSearch; i++ {
 		for e := world.North; e <= world.NorthWest; e++ {
 			q, ok := queue[i].Step(e)
-			if !ok || seen[q] || !w.roomPassable(q) {
+			if !ok || seen[q] || !w.roomPassable(q) || w.m.Flags(q)&world.FlagHouse != 0 {
 				continue
 			}
 			if slices.Contains(b, q) {
-				return true
+				return nil
 			}
 			seen[q] = true
 			queue = append(queue, q)
 		}
 	}
-	return false
+	if i < len(queue) {
+		return errDoorOutsideFar
+	}
+	return errDoorOtherOutside
 }
 
 // roomAllows reports whether a search for a free tile that started in room from (a

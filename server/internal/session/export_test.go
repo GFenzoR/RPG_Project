@@ -334,6 +334,7 @@ var (
 	ErrDoorTie          = errDoorTie
 	ErrDoorOtherKey     = errDoorOtherKey
 	ErrDoorOtherOutside = errDoorOtherOutside
+	ErrDoorOutsideFar   = errDoorOutsideFar
 )
 
 // MarketViewers returns how many open market windows show item's book (mkWatch).

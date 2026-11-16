@@ -54,6 +54,9 @@ func (c doorRoomCase) rows(t *testing.T) []string {
 	return out
 }
 
+// doorRoomCases is how many cases door-rooms.json has (doors.test.ts checks the same).
+const doorRoomCases = 21
+
 // The rooms behind locked doors, and the doors that have none, are the same for the
 // server and for make validate: both read door-rooms.json (docs/02 "Puertas con llave").
 // A locked door whose room cannot be worked out stops the world from starting.
@@ -68,12 +71,12 @@ func TestDoorRoomsFixture(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Cases) < 8 {
+	if len(doc.Cases) < doorRoomCases {
 		t.Fatalf("only %d cases", len(doc.Cases))
 	}
 	errs := map[string]error{"walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen,
 		"truncated": session.ErrDoorTruncated, "tie": session.ErrDoorTie, "key": session.ErrDoorOtherKey,
-		"outside": session.ErrDoorOtherOutside}
+		"outside": session.ErrDoorOtherOutside, "far": session.ErrDoorOutsideFar}
 	for _, c := range doc.Cases {
 		t.Run(c.Name, func(t *testing.T) {
 			rows := c.rows(t)
@@ -337,5 +340,36 @@ func TestRoomsOnTheMap(t *testing.T) {
 				t.Fatalf("%s in the forge: %v", name, err)
 			}
 		})
+	}
+}
+
+// Two gates of one hall whose outsides meet only through a house: a house is no street,
+// so the walk between the outsides (sameOutside) does not cross it and the world refuses
+// to start (make validate refuses it too, doors.test.ts).
+func TestSharedRoomOutsidesDoNotCrossHouses(t *testing.T) {
+	rows := []string{
+		"#############",
+		"#...#...#...#",
+		"#.T.D...D...#",
+		"#...#...#...#",
+		"#...#####...#",
+		"#...........#",
+		"#############",
+	}
+	start := func(m *world.Map) (*session.World, error) {
+		return session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations,
+			Items: doorTestItems(true), Save: func(session.Snapshot) bool { return true }})
+	}
+	w, err := start(worldtest.Map(t, 0, 0, 7, rows...))
+	if err != nil {
+		t.Fatalf("outsides joined by the street below: %v", err)
+	}
+	if w.DoorRoomSize(pos(4, 2)) != 9 || w.DoorRoomSize(pos(8, 2)) != 9 {
+		t.Fatalf("hall: %d and %d tiles", w.DoorRoomSize(pos(4, 2)), w.DoorRoomSize(pos(8, 2)))
+	}
+	m := worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7, rows...), world.House{ID: "nook", Name: "house.nook.name",
+		Rent: 10, Rects: []world.HouseRect{{X: 6, Y: 5, Z: 7, W: 1, H: 1}}, Doors: []world.Pos{pos(6, 5)}, Exit: pos(5, 5)})
+	if _, err := start(m); !errors.Is(err, session.ErrDoorOtherOutside) {
+		t.Fatalf("outsides joined only through a house: %v", err)
 	}
 }
