@@ -22,3 +22,23 @@
   description: item.forge_gate_open.desc
   pickupable: false
   door: { closed: forge_gate }
+
+# The practice gate of the Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): a
+# locked door to try keys on. Its key, pruebas_key, is sold by the island's provisioner.
+- id: pruebas_gate
+  kind: decoration
+  sprite: doors/pruebas_gate
+  name: item.pruebas_gate.name
+  description: item.pruebas_gate.desc
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+  door: { key: pruebas_gate, open: pruebas_gate_open }
+
+- id: pruebas_gate_open
+  kind: decoration
+  sprite: doors/pruebas_gate_open
+  name: item.pruebas_gate_open.name
+  description: item.pruebas_gate_open.desc
+  pickupable: false
+  door: { closed: pruebas_gate }

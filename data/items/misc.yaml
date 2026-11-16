@@ -479,3 +479,14 @@
   tradeable: false
   key: forge_gate
   notes: Opens and locks the forge gate (door key forge_gate, data/items/doors.yaml). volcan_forge_echo shapes it from the ember root in ch3_gate, and shapes another for whoever finished ch3_gate and lacks one. No value, so no NPC buys it.
+
+# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): the key of its practice gate.
+- id: pruebas_key
+  kind: material
+  sprite: tools/brass_key
+  name: item.pruebas_key.name
+  description: item.pruebas_key.desc
+  weight: 100
+  tradeable: false
+  key: pruebas_gate
+  notes: Opens and locks the practice gate of the sandbox island (door key pruebas_gate, data/items/doors.yaml). pruebas_merchant sells it. No value, so no NPC buys it.

@@ -223,3 +223,15 @@ items:
   hole: 220
   rope_spot: 221
   teleport: 222
+  pruebas_temple_sign: 223
+  pruebas_hunt_sign: 224
+  pruebas_craft_sign: 225
+  pruebas_market_sign: 226
+  pruebas_dock_sign: 227
+  pruebas_vault_sign: 228
+  pruebas_portal_sign: 229
+  pruebas_dungeon_sign: 230
+  pruebas_arena_sign: 231
+  pruebas_gate: 232
+  pruebas_gate_open: 233
+  pruebas_key: 234

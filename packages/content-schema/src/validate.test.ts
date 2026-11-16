@@ -555,8 +555,12 @@ describe("validator diagnostics", () => {
       "{ item: driftwood_club, price: 9 }",
     );
     const out = messages(root);
-    expect(out).toContain(
-      'error data/npcs/puerto_provisioner.yaml:44:21 shop.buys[0].price: shop "provisions_shop" buys "rope" for 45 but shop "provisions_shop" sells it for 45: buy prices must be lower than every sell price',
+    // The cheapest seller is named (more than one shop sells rope for 45: the provisioner
+    // and the sandbox island's, whichever file comes first).
+    expect(out).toContainEqual(
+      expect.stringMatching(
+        /^error data\/npcs\/puerto_provisioner\.yaml:44:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "[a-z_]+" sells it for 45: buy prices must be lower than every sell price$/,
+      ),
     );
     expect(
       out.some(

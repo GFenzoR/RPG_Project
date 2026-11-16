@@ -108,6 +108,10 @@ sprites:
   npcs/druid_elder: { source: vendor/dungeon-crawl/mon/siren.png }
   npcs/priest_forest: { source: vendor/dungeon-crawl/UNUSED/monsters/michael.png }
   npcs/tanner: { source: vendor/dungeon-crawl/mon/elf.png }
+  # The sandbox island (docs/16-probar-el-juego.md): instructor, provisioner and ferryman.
+  npcs/sandbox_trainer: { source: vendor/dungeon-crawl/mon/unique/terence.png }
+  npcs/sandbox_merchant: { source: vendor/dungeon-crawl/mon/human.png }
+  npcs/sandbox_ferryman: { source: vendor/dungeon-crawl/mon/unique/harold.png }
 
   # Isla Volcánica (T5.5)
   materials/ash_pelt: { source: vendor/dungeon-crawl/item/armour/silver_dragon_scales.png }
@@ -125,9 +129,12 @@ sprites:
   shields/embersteel_shield: { source: vendor/dungeon-crawl/item/armour/shields/lshield_dd_dk.png }
   armor/wyrmscale_mail: { source: vendor/dungeon-crawl/item/armour/artefact/urand_salamander.png }
 
-  # Doors (docs/02 "Puertas con llave"): the forge gate of the volcanic mine, shut and open.
+  # Doors (docs/02 "Puertas con llave"): the forge gate of the volcanic mine and the practice
+  # gate of the sandbox island, shut and open.
   doors/forge_gate: { source: vendor/dungeon-crawl/dngn/doors/runed_door.png }
   doors/forge_gate_open: { source: vendor/dungeon-crawl/dngn/doors/open_door.png }
+  doors/pruebas_gate: { source: vendor/dungeon-crawl/dngn/doors/closed_door.png }
+  doors/pruebas_gate_open: { source: vendor/dungeon-crawl/dngn/doors/open_door.png }
 
   creatures/ash_hound: { source: vendor/dungeon-crawl/UNUSED/monsters/war_dog.png }
   creatures/cinder_salamander: { source: vendor/dungeon-crawl/mon/salamander.png }

@@ -41,3 +41,7 @@ quest.ch3_warden.name: "Chapter 3: The forge's warden"
 quest.ch3_warden.step_defeat_warden: "The slagbound warden still guards the ancient forge, behind the sealed gate: open it with the ember key and defeat it."
 quest.ch3_warden.step_take_seal: "Take the forge seal the warden was guarding."
 quest.ch3_warden.step_return_seal: "Bring the forge seal to Casia Hollín, in Brasal."
+# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md).
+quest.pruebas_rats.name: "Practice rats"
+quest.pruebas_rats.step_hunt_rats: "Hunt three bilge rats in the first pen of the hunting trail, north of the temple of the Sandbox Isle."
+quest.pruebas_rats.step_report: "Go back to Irene Ensayo, in the temple."

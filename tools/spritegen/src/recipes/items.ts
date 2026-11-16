@@ -1185,6 +1185,31 @@ function emberKey(img: Image, _rand: Rng, seed: number): void {
   outline(img, { amount: 0.45 });
 }
 
+// A brass key for the practice gate of the sandbox island (pruebas_key): the ember key's
+// shape in plain polished brass, with a square bit and a ring at its bow.
+function brassKey(img: Image, _rand: Rng, seed: number): void {
+  const { gold } = PALETTE;
+  const grain = (x: number, y: number): number => (tileNoise(x, y, 4, 2, seed) - 0.5) * 0.15;
+  // The bit: two square teeth hanging off the shaft toward the bottom right.
+  rod(img, [7, 24], [11, 28], 1.6, 1.6, gold, 0.15);
+  rod(img, [11, 20], [14, 23], 1.6, 1.6, gold, 0.15);
+  // The shaft, from the bit up to the bow.
+  eachInCapsule(5, 26, 18, 13, 1.8, 1.8, (x, y, u) =>
+    px(img, x, y, shadeOf(gold, cylinderLight(u) + 0.15 + grain(x, y))),
+  );
+  // The bow: a ring lit on its top-left, with a round hole through it.
+  eachInEllipse(22, 9.5, 6.6, 6.6, (x, y, nx, ny) => {
+    const d = nx * nx + ny * ny;
+    if (d < 0.22) return; // the hole
+    const rim = d < 0.4 ? -0.25 : 0; // the inner face sits in shadow
+    px(img, x, y, shadeOf(gold, domeLight(nx, ny) + 0.2 + rim + grain(x, y)));
+  });
+  // A glint on the shaft and on the bow.
+  px(img, 13, 17, gold.light);
+  px(img, 19, 6, gold.light);
+  outline(img, { amount: 0.45 });
+}
+
 export const ITEMS: RecipeBook = {
   "currency/copper_coin": { kind: "item", draw: coinPile(COIN_COPPER) },
   "currency/silver_coin": { kind: "item", draw: coinPile(silver) },
@@ -1219,4 +1244,5 @@ export const ITEMS: RecipeBook = {
   "armor/stagleather_leggings": { kind: "item", draw: stagleatherLeggings },
   "quest/smuggler_tally": { kind: "item", draw: smugglerTally },
   "quest/ember_key": { kind: "item", draw: emberKey },
+  "tools/brass_key": { kind: "item", draw: brassKey },
 };

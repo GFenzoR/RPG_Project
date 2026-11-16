@@ -1,0 +1,30 @@
+id: pruebas_ferryman
+name: npc.pruebas_ferryman.name
+sprite: npcs/sandbox_ferryman
+notes: >-
+  Ferryman of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md): one-way
+  routes to the Isla del Puerto, the Isla del Bosque and the Isla Volcánica, landing where
+  the real routes land (data/boat_routes.yaml: pruebas_to_*). No route comes back: the
+  sandbox island stays out of normal play.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.pruebas_ferryman.greet
+      options:
+        - text: dialog.ask_travel
+          goto: travel
+        - text: npc.pruebas_ferryman.opt_back
+          goto: back
+        - text: dialog.bye
+          action: close
+    back:
+      text: npc.pruebas_ferryman.back
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    travel:
+      text: npc.pruebas_ferryman.travel
+      boat_routes: true             # data/boat_routes.yaml: routes with captain pruebas_ferryman
+      options:
+        - { text: dialog.back, goto: greet }
