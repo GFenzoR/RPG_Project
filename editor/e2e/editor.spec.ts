@@ -778,6 +778,10 @@ test("the atlas does not load: retries, then an error whose button starts the ma
   expect(
     await page.evaluate(() => (window as unknown as { e2eSamePage?: boolean }).e2eSamePage),
   ).toBe(true);
+  // The new canvas validates the island, and the palette (it comes with the canvas) shows
+  // its icons once their atlas page is decoded.
+  await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
+  await swatchesLoaded(page);
   await shot(page, "53-atlas-retried");
   expect(errors).toEqual([]);
 });
