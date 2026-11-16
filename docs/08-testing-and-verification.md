@@ -101,8 +101,8 @@ Además, dos workflows para los PR de mapas (T2.4, detalle en `04`, "PR de mapas
 CI"): `map-pr.yml` (`pull_request`, solo lectura, con el código de la rama base) corre `mapcli pr-check` y sube los
 artefactos `map-pr-report` y `map-pr-renders`; `map-pr-comment.yml` (`workflow_run`
 `requested` y `completed`, desde la rama por defecto) publica o actualiza un único
-comentario en el PR y pone el status de commit `map-pr/verdict` (pendiente mientras
-`map-pr` corre, después éxito o falla). Ningún workflow usa `pull_request_target` (GitHub
+comentario en el PR y, si el PR va hacia la rama por defecto, pone el status de commit
+`map-pr/verdict` (pendiente mientras `map-pr` corre, después éxito o falla). Ningún workflow usa `pull_request_target` (GitHub
 lo bloquea por defecto en repos públicos desde el 2026-12-02); las reglas de seguridad de
 todos los workflows las comprueba `tools/mapcli/src/workflows.test.ts`, que corre en el
 job `ts` también cuando el cambio solo toca `.github/workflows/`. Para probarlo en local sin GitHub:

@@ -42,7 +42,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuenta de AWS y dominio | T1.18: servidor público | `09-deployment-aws.md` |
 | Apps OAuth de Google y Discord, y SMTP | Login social y emails (T2.1) | `12-local-development.md` |
 | Cuenta bot de GitHub (token classic con `public_repo`, fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
-| Protección de la rama `main` (check requerido: el status `map-pr/verdict`, fuente GitHub Actions) y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `04-map-editor-and-ai.md` "PR de mapas en CI", `09-deployment-aws.md` |
+| Protección de la rama `main` (check requerido: el status `map-pr/verdict`, fuente GitHub Actions; `.github/CODEOWNERS` con "Require review from Code Owners" y "Dismiss stale pull request approvals when new commits are pushed"; "Allow GitHub Actions to create and approve pull requests" apagado) y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `04-map-editor-and-ai.md` "PR de mapas en CI", `09-deployment-aws.md` |
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
@@ -93,11 +93,26 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - 👤 después de mezclar esto en `main`, marcar `map-pr/verdict` como check requerido
     (fuente GitHub Actions). Hasta entonces, un push que borra o renombra `map-pr.yml`
     deja el comentario anterior a la vista, aunque nombra su commit y su pie avisa;
+  - 👤 el status **no es a prueba de falsificación**: un PR (también de un fork) puede
+    agregar un workflow con un job `name: map-pr/verdict`, cuyo check run satisface la
+    regla con el mismo nombre, y cualquiera con permiso Write puede poner el status. El
+    veredicto avisa (🚨 y `failure`) si ve ese check run, pero no lo impide. Lo que lo
+    cierra es crear `.github/CODEOWNERS` (no existe) y activar "Require review from Code
+    Owners" con "Dismiss stale pull request approvals when new commits are pushed";
+    sin lo segundo, una aprobación vieja vale después de un push que agrega el workflow.
+    Dejar apagado "Allow GitHub Actions to create and approve pull requests" (el token
+    de `map-pr-comment` tiene `pull-requests: write`);
   - mirar en el primer PR real que el comentario pase a ⏳ al empujar y que el status
     aparezca en el commit (`pending`, y después `success` o `failure`). Los tests usan un
     GitHub en memoria. Sin verificar en GitHub: si `requested` llega también para la
     corrida de un contribuidor nuevo que espera aprobación (si no llega, el status falta
-    hasta que se apruebe, que también bloquea);
+    hasta que se apruebe, que también bloquea). Tampoco se verificó que el anuncio del
+    2026-12-02 deje fuera a `workflow_run`: por lo que se sabe solo cambia
+    `pull_request_target`, pero vale leerlo antes de esa fecha;
+  - un mismo commit como head de un PR hacia `main` y de otro hacia otra rama: el status
+    lo escribe solo el de `main`, y una corrida que no dice para cuál PR es (el job
+    `pending`, o sin reporte) no escribe nada. Raro, pero el comentario del PR hacia
+    `main` puede quedar sin "pendiente" en ese caso;
   - una merge queue necesitaría que `map-pr` corra en `merge_group` y ponga el status
     sobre ese commit; hoy se usa "Require branches to be up to date".
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
