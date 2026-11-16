@@ -301,8 +301,9 @@ func TestItemFallFromAHouse(t *testing.T) {
 }
 
 // Coins the owner takes out of its house through the stairs land as a pile of their own,
-// reserved to it: never in a public pile of coins on the landing (a reservation must not
-// take over a stranger's pile), but in the owner's own reserved pile there. A player
+// reserved to it: never in a pile of coins on the landing reserved to another player, nor
+// in a public one (a reservation must not take over a stranger's pile), but in the
+// owner's own reserved pile there. A player
 // standing on the landing changes nothing (an item lies under a creature: fallTo). With
 // the landing full (19 swords and that public pile) they land on the next tile of ring 1
 // in scan order, (3,4,8), not in the public pile.
@@ -310,7 +311,11 @@ func TestCoinsFallFromAHouseAsTheirOwnPile(t *testing.T) {
 	floor, landing := pos(3, 3), cellarLanding
 	h, cl, a, pack := cellarHarness(t, stack(coinID, 100, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
 	_, bob := h.join("Bob", ptr(landing))
-	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("copper_coin"), 5, landing) }))
+	h.sim.Command(gameFunc(func() {
+		h.w.DropForTest(h.w.ItemForTest("copper_coin"), 5, landing)
+		h.w.ReserveForTest(h.w.GroundAt(landing)[0], bob, 1<<40)
+		h.w.DropForTest(h.w.ItemForTest("copper_coin"), 7, landing)
+	}))
 	h.sim.Step()
 	down := func(n uint32) []*pb.ServerMessage {
 		h.send(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(floor), n))
@@ -321,16 +326,16 @@ func TestCoinsFallFromAHouseAsTheirOwnPile(t *testing.T) {
 	}
 	evs := down(30)
 	g := h.w.GroundAt(landing)
-	if len(systemKeys(evs)) != 0 || !slices.Equal(h.counts(landing), [][2]int{{coinID, 5}, {coinID, 30}}) ||
-		h.w.ReservedTo(g[0]) != 0 || h.w.ReservedTo(g[1]) != a.CharacterID() {
-		t.Fatalf("out of the house onto a public pile: %v, below %v", systemKeys(evs), h.counts(landing))
+	if len(systemKeys(evs)) != 0 || !slices.Equal(h.counts(landing), [][2]int{{coinID, 5}, {coinID, 7}, {coinID, 30}}) ||
+		h.w.ReservedTo(g[0]) != bob.CharacterID() || h.w.ReservedTo(g[1]) != 0 || h.w.ReservedTo(g[2]) != a.CharacterID() {
+		t.Fatalf("out of the house onto Bob's and a public pile: %v, below %v", systemKeys(evs), h.counts(landing))
 	}
 	if bob.Pos() != landing {
 		t.Fatalf("Bob moved to %v", bob.Pos())
 	}
 	evs = down(10)
 	if g = h.w.GroundAt(landing); len(systemKeys(evs)) != 0 ||
-		!slices.Equal(h.counts(landing), [][2]int{{coinID, 5}, {coinID, 40}}) || h.w.ReservedTo(g[1]) != a.CharacterID() {
+		!slices.Equal(h.counts(landing), [][2]int{{coinID, 5}, {coinID, 7}, {coinID, 40}}) || h.w.ReservedTo(g[2]) != a.CharacterID() {
 		t.Fatalf("onto the owner's reserved pile: %v, below %v", systemKeys(evs), h.counts(landing))
 	}
 	h.checkInvariants()
