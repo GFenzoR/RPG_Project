@@ -41,9 +41,8 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Confirmar CC BY 4.0 para los mapas que manda la comunidad | Portal de mapas (T4.5) | `04-map-editor-and-ai.md` |
 | Cuenta de AWS y dominio | T1.18: servidor público | `09-deployment-aws.md` |
 | Apps OAuth de Google y Discord, y SMTP | Login social y emails (T2.1) | `12-local-development.md` |
-| Cuenta bot de GitHub (token classic con `public_repo`, o `repo` mientras el repo sea privado; fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
+| Cuenta bot de GitHub (token classic con `public_repo`, fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
 | Protección de la rama `main` y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `09-deployment-aws.md` |
-| Decidir cuándo volver a hacer público el repo (privado desde el 2026-11-15) | En privado, con GitHub Free: la CI gasta minutos del plan (2.000/mes), no se puede proteger `main`, el bot de mapas necesita `repo` y las imágenes de GHCR piden `docker login` | `09-deployment-aws.md` |
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
