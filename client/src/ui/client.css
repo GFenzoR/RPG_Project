@@ -1695,6 +1695,9 @@ body.using-item canvas {
    to show it and zooms everything out. */
 .game[data-panel="drawer"] .game-body {
   overflow: hidden;
+  /* clip, where supported: not even a script or a focused field in the sliding drawer can
+     scroll the body sideways (hidden still can, and the map then stays shifted left). */
+  overflow: clip;
 }
 .game[data-panel="drawer"] .side {
   position: absolute;

@@ -449,7 +449,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (`desktop`, `tablet`, `phone-portrait`, `phone-landscape`), `data-panel` (`sidebar`,
   `tabs`, `drawer`) y `data-flow` (`row`, `column`); `client.css` cuelga sus reglas de
   esos atributos. Las pestañas son un `tablist` ARIA; el cajón está `inert` cerrado y
-  recortado (`overflow: hidden`) para que el teléfono no ensanche la página. Un resaltado
+  recortado (`overflow: clip`, con `hidden` de respaldo) para que el teléfono no ensanche
+  la página, ni un script o un campo con foco desplace el mapa de lado. Un resaltado
   del tutorial cambia a su pestaña. El encabezado es siempre una línea: la ayuda de
   controles se corta con "…" y se abre al tocarla; en teléfonos y tablets en vertical, un
   menú ☰ guarda experiencia, ayuda, idioma, opciones y salir.

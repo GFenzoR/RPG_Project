@@ -227,6 +227,8 @@ body.picking-item [data-drop] {
   right: calc(8px + env(safe-area-inset-right, 0px));
   transform: none;
   max-width: none;
+  /* Opaque here: the hotbar's arrows under it would show through. */
+  background: var(--panel);
 }
 
 /* ---- map zoom (ZoomButtons.tsx, touch screens) ----

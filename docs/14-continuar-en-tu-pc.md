@@ -84,7 +84,10 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
 ## Pendientes conocidos (no bloquean)
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
   (hay que entrar de nuevo en cada arranque) y el selector de servidor reinicia la app.
-  Detalle en `15-movil.md`.
+  Detalle en `15-movil.md`. El pad (`.touch-pad-dock` en `touch.css`) suma
+  `env(safe-area-inset-*)` aunque `.game` ya tiene ese padding: en un iPhone con barra de
+  inicio o muesca, en horizontal, el margen se cuenta dos veces (la emulación no lo ve:
+  ahí el inset es 0).
 - **Mundo:**
   - puertas con llave (la puerta sellada de la mina es narrativa);
   - suelos volcánicos y carteles de Brasal.
