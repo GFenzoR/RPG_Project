@@ -1131,6 +1131,10 @@ en una arena. Lo demás es **injustificado**.
   la marca y nunca la baja.
 - Se ve junto al nombre en el mapa y en la lista de batalla. Una muerte quita la marca de
   agresor; la de asesino o proscrito sigue.
+- Cada marca tiene su propio icono, de arte propio, con su silueta y su color: espadas
+  cruzadas para el agresor (desenvainó contra alguien), una gota de sangre para el asesino
+  y un escudo partido para el proscrito (perdió la protección de la ley).
+  Detalle en `assets/README.md`, "Iconos de interfaz".
 - Las muertes injustificadas se cuentan por ventanas de tiempo con el reloj del juego y se
   guardan con el personaje (solo las que caben en la ventana más larga).
 

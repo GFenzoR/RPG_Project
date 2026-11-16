@@ -69,6 +69,7 @@ Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concr
   renderer los ancla en la esquina inferior derecha de su casilla y crecen hacia arriba y a
   la izquierda. Items de inventario: 32x32 centrados con fondo transparente.
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
+- Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo).
 - Todo determinista: ruido con semilla, nunca `Math.random`.
 - Efectos de casilla (`sprites/effects/<nombre>/<n>.png`, `recipes/effects.ts`): tiras de 6
   frames de 32x32 con fondo transparente, una por `effect_id` del servidor; el cliente las
@@ -79,6 +80,46 @@ Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concr
 Para revisar: `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out
 shot.png --scale 4 [--only ground/]` (suelos y muros repetidos 3x3, el resto sobre pasto;
 con `--only effects/`, cada tira en su fila sobre un jugador parado).
+Revisa a 1x además de a 4x: un item que solo se entiende ampliado no se entiende en el
+inventario.
+
+### Sombra de las criaturas
+Los monstruos de Dungeon Crawl traen pintada una sombra proyectada casi negra, hacia abajo
+a la derecha y desde los hombros. Para que las criaturas propias se vean igual en el mapa,
+spritegen agrega la misma sombra a toda receta `kind: creature`: monstruos, NPCs y cada
+frame de outfit. La dibuja `castShadow` de `tools/spritegen/src/draw.ts`, como último paso
+de `render`:
+- empuja la silueta hasta 3 px a la derecha y 1 px hacia abajo, con todos los pasos
+  intermedios, para que nunca quede un trozo de sombra suelto (por ejemplo, el de un carcaj);
+- pinta solo píxeles transparentes, desde el 40 % de la altura de la figura hacia abajo;
+- usa el color `SHADOW` (casi negro y opaco, como todo en un sprite).
+
+Una receta puede ajustarla con `shadow: { dx, dy, from }`.
+
+Se hace en spritegen y no en el renderer por tres razones:
+- los PNG de `vendor/` no se tocan, así que no se les puede quitar la sombra que traen;
+- una sombra del renderer se sumaría a esa, y las de Dungeon Crawl tendrían dos;
+- así cada criatura tiene una sola sombra, pixel-perfect, y el renderer no cambia.
+
+Si algún día se integra un pack de criaturas sin sombra, la decisión se toma ahí. Por
+ejemplo, con una receta que la agregue sobre el recorte del pack.
+
+### Iconos de interfaz (`ui/`)
+`tools/spritegen/src/recipes/ui.ts` dibuja iconos del cliente que ningún archivo de
+`data/` nombra: rutas `ui/<grupo>/<id>`, `kind: ui`. `spritegen check` los acepta sin
+referencia. El atlas trabaja en múltiplos de 32, así que son de 32x32 con el dibujo dentro
+de `UI_ICON_BOX` (12x12 en el centro). El cliente recorta esa caja: `MARK_BOX` en
+`client/src/render/marks.ts`, y un test exige que las dos coincidan.
+
+Hoy son las marcas PvP `ui/marks/{aggressor,murderer,outlaw}`:
+- agresor: espadas cruzadas, ámbar;
+- asesino: una gota de sangre, carmesí;
+- proscrito: un escudo partido, violeta.
+
+Son mapas de píxeles hechos a mano, con un contorno casi negro por fuera. Cada marca tiene
+su propia silueta, para que se distinga también sin color. El canvas las dibuja junto al
+nombre a 1 píxel de pantalla por píxel del sprite (como el texto de 12 px), y la lista de
+batalla las usa como fondo CSS. Sin el sprite en el atlas, vuelven las formas de antes.
 
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:

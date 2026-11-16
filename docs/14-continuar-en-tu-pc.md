@@ -93,8 +93,7 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - suelos volcánicos y carteles de Brasal.
 - **PvP:**
   - una condición de otro jugador pierde a su autor tras un relogueo;
-  - los hechizos de condición a distancia solo afectan a monstruos;
-  - las marcas son placeholders dibujados.
+  - los hechizos de condición a distancia solo afectan a monstruos.
 - **Mercado:**
   - la ventana de quien mira un libro no se refresca con la acción de otro;
   - la falla segura tiene un límite documentado (lo que sale por el suelo antes de que
@@ -234,8 +233,11 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
   armas, armaduras e items de misión. El mapeo está en `assets/sprites.yaml`.
 - **Arte propio** (`tools/spritegen`, CC0): lo que el pack no tenía (madera, muelle,
   yunque, cajón, bolardo, tablero, pino, peñasco, gaviota, jabalí, ciervo, el barquero,
-  materiales, comida, herramientas, monedas de cobre y plata, mochila) y el jugador:
-  outfit `citizen` en `assets/sprites/outfits/citizen/<n|e|s|w>_<0|1|2>.png`.
+  materiales, comida, herramientas, monedas de cobre y plata, mochila), el jugador
+  (outfit `citizen` en `assets/sprites/outfits/citizen/<n|e|s|w>_<0|1|2>.png`, y los
+  atuendos de la tienda) y las marcas PvP (`assets/sprites/ui/marks/`). Las criaturas
+  propias llevan la misma sombra proyectada que las del pack (`assets/README.md`, "Sombra
+  de las criaturas").
 - **Efectos de combate y magia** (arte propio, `tools/spritegen/src/recipes/effects.ts`):
   una tira animada de 6 frames por cada `effect_id` del servidor, en
   `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms

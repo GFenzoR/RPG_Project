@@ -291,10 +291,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 
 ## Notas de T5.2
 - `CreatureState.skull` (de `Creature.skull` y `CreatureSkull`): el canvas dibuja la marca a
-  la izquierda del nombre con formas (`drawSkull`, colores en `state/pvp.ts` `skullColor`)
-  y la lista de batalla un `.skull` del mismo color (`data-skull`). Placeholder hasta tener
-  sprite. La lista de batalla ya no deshabilita a los jugadores: un click = `SetTarget`
-  (el servidor decide); también click derecho en el canvas.
+  la izquierda del nombre y la lista de batalla un `.skull` (`data-skull`, `MarkIcon` en
+  `ui/App.tsx`). La marca es el sprite `ui/marks/<id>` del atlas (arte propio de spritegen,
+  `render/marks.ts`, puro y con tests): en el canvas, un `Sprite` a 1 px de pantalla por
+  px del sprite, anclado en el centro de `MARK_BOX`; en la lista, `Game.markIcon` +
+  `markIconStyle` como fondo CSS de 12x12 (clase `art`, `data-art`). Solo con arte real
+  (origen distinto de `auto` y `placeholder`); si no, las formas de antes (`drawSkull`,
+  colores de `state/pvp.ts` `skullColor`). La lista de batalla ya no deshabilita a los
+  jugadores: un click = `SetTarget` (el servidor decide); también click derecho en el canvas.
 - Modo seguro: `Game.safeMode`/`setSafeMode` (`localStorage` `rpg.safeMode`, activado por
   defecto, `state/pvp.ts`); se manda tras el `Welcome` solo si está apagado (el servidor
   empieza activado). Interruptor `data-testid="safe-mode"` en "Modo de combate".
@@ -388,7 +392,7 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - El canvas usa el outfit solo si el atlas tiene arte real para todos sus frames (origen
   distinto de `auto` y `placeholder`); si no, el bloque. Los sprites de criatura van
   anclados abajo a la derecha de su casilla, como en `MapView` (uno de 64x64 crece hacia
-  arriba y a la izquierda). Alpha de invisible, nombre, barras, calavera y marco de
+  arriba y a la izquierda). Alpha de invisible, nombre, barras, marca PvP y marco de
   objetivo no cambian.
 
 ## Sprites de efectos
