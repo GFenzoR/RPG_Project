@@ -41,12 +41,29 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 // away to the public ground before the transfer (thrown on the street or into a container
 // there, or made for it by the server and fallen at its feet: the coins of an NPC sale,
 // a craft or a reward that did not fit) would then be in that save and in the save of
-// whoever picked it up. So every such give-away keeps the character's snapshot of that
-// moment (gaveAway, Player.pre) and its next transfer submits it first (transferSnapshot):
-// the Saver writes it before the transfer, so the last written save is never older than
-// the give-away. It costs a write only for a transfer that follows a give-away, and only
-// once: any later snapshot of the character (an autosave, the final one, a transfer's)
-// replaces it. Numbered when taken, its ack frees nothing reserved after it (leftHouse).
+// whoever picked it up. So a give-away (gaveAway) keeps the character's snapshot of the
+// end of that command, or of the tick for one the server made outside a command
+// (settleGivers, Player.pre): its state is whole again there (a dialog's later actions,
+// the quest step it completes, the other piles of the same gift). Its next transfer
+// submits that snapshot first (transferSnapshot): the Saver writes it before the
+// transfer, so a dropped or skipped transfer never takes the character back to a save
+// older than the give-away. It costs a write only for a transfer that follows a
+// give-away, and only once: any later snapshot of the character (an autosave, the final
+// one, a transfer's) replaces it. Numbered when taken, its ack frees nothing reserved
+// after it (leftHouse).
+//
+// It does not cover a crash: with the database down at shutdown, that snapshot fails
+// with the transfer behind it (the shutdown abandons it), and a snapshot the database
+// rejects for good (ErrPermanent) taints nobody. Then the character goes back to an older
+// save, as anyone does in a crash (docs/01, docs/14).
+//
+// No transfer may leave anything on the public ground in its own command (it checks
+// first that everything fits: canBuy, canReceive, moneyThatFits): the snapshot taken
+// then (transferSnapshot settles a pending give-away at once) would hold half the
+// transfer and be written outside its database transaction. Nor may one command give
+// something away and change a house (none does): that snapshot would then be taken with
+// the house write, and dropping the write would lose what went into the house (it never
+// duplicates anything).
 
 // groundHold is a reservation of World.heldGround: the character the ground item (or the
 // pile, container or corpse it lies in) is reserved to, and the seq of that character's
@@ -59,10 +76,12 @@ type groundHold struct {
 }
 
 // transferSnapshot is p's snapshot for a transfer; p is held until the database confirms
-// it. If p gave something away since its last snapshot, p's snapshot of that moment is
-// submitted first, before the transfer job (its caller submits it after every snapshot
-// of it): a dropped transfer then takes p back to a save without what it gave away.
+// it. If p gave something away since its last snapshot, p's snapshot from after the
+// give-away is submitted first, before the transfer job (its caller submits it after
+// every snapshot of it): a dropped transfer then takes p back to a save without what it
+// gave away. A give-away of this same command or tick is settled now (see above).
 func (w *World) transferSnapshot(p *Player) Snapshot {
+	w.settleGave(p)
 	if p.pre != nil {
 		w.save(*p.pre)
 	}
@@ -73,12 +92,46 @@ func (w *World) transferSnapshot(p *Player) Snapshot {
 
 // gaveAway is called right after something of p's (carried by p, or made for p by the
 // server) landed on the public ground, where no save has it: whoever picks it up writes it
-// in their own save. p's snapshot of this moment waits in p.pre for p's next transfer
-// (transferSnapshot); a later snapshot of p replaces it. It is numbered now, before any
-// reservation made after it (leftHouse), so its ack frees none of those.
+// in their own save. p's snapshot from the end of this command (or tick) waits in p.pre
+// for p's next transfer (settleGivers, transferSnapshot); a later snapshot of p replaces
+// it.
 func (w *World) gaveAway(p *Player) {
-	s := w.snapshot(p, false)
-	p.pre = &s
+	if !p.gave {
+		p.gave = true
+		w.givers = append(w.givers, p)
+	}
+}
+
+// settleGivers takes, for every player that gave something away in this command or
+// tick, the snapshot its next transfer writes first (Player.pre). It runs at the end of
+// every command (Input, after its house changes are written) and of every tick
+// (flushSystem). The snapshot is numbered then, before any reservation of a later
+// command (leftHouse), so its ack frees none of those.
+func (w *World) settleGivers() {
+	if len(w.givers) == 0 {
+		return
+	}
+	for _, p := range w.givers {
+		if w.byChar[p.charID] == p { // one that left was saved (its final snapshot)
+			w.settleGave(p)
+		}
+	}
+	clear(w.givers)
+	w.givers = w.givers[:0]
+}
+
+// settleGave takes p's snapshot for its next transfer if p gave something away since its
+// last snapshot. A house p changed is written first, with p's snapshot (flushHouses),
+// which already comes after the give-away: then there is nothing to keep.
+func (w *World) settleGave(p *Player) {
+	if !p.gave {
+		return
+	}
+	w.flushHouses()
+	if p.gave {
+		s := w.snapshot(p, false)
+		p.pre = &s
+	}
 }
 
 // confirmed is the ack of character id's snapshot seq (World.Saved): the database has it
@@ -124,7 +177,7 @@ func (w *World) publicGround(to place) bool {
 // write and taints the house if one of them was dropped), also when the drop comes from
 // an event and not from p's command. Elsewhere it is reserved to p until the database
 // has p's transfers so far, and it is a give-away (gaveAway): p's next transfer writes
-// p's state without it first.
+// first p's state from the end of this command or tick, without it.
 //
 // In read-only mode (Tainted) nothing about houses is written (flushHouses): what falls
 // on a house floor then stays in memory only, neither reserved nor saved (docs/01).

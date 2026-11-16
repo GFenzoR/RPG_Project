@@ -307,9 +307,9 @@ func BenchmarkDoorLockRefused(b *testing.B) {
 
 // BenchmarkThrowAway measures one tick in which a player throws one coin on the street and
 // picks it back up (two commands). Throwing something away keeps the player's snapshot of
-// that moment for its next transfer (T5.3 fail-safe, hold.go gaveAway): its cost is one
-// snapshot of a player carrying a 40-item chest, taken in the loop (no write until a
-// transfer follows). Budget: a small fraction of the 10 ms tick (docs/07).
+// the end of that command for its next transfer (T5.3 fail-safe, hold.go gaveAway): its
+// cost is one snapshot of a player carrying a 40-item chest, taken in the loop (no write
+// until a transfer follows). Budget: a small fraction of the 10 ms tick (docs/07).
 func BenchmarkThrowAway(b *testing.B) {
 	items := testItems()
 	var chest content.Item

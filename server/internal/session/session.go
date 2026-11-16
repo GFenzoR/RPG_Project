@@ -382,6 +382,10 @@ type World struct {
 	// what it took out of a house to the public ground (leftHouse).
 	inFlight   map[int64]uint64
 	heldGround map[*Item]groundHold
+	// givers are the players that gave something away to the public ground in this
+	// command or tick (Player.gave): settleGivers takes their snapshot for the next
+	// transfer once the command or the tick is over (hold.go gaveAway).
+	givers []*Player
 	// saveSeq numbers every snapshot of every character, so a character's numbers grow
 	// across its sessions too: an ack retried late from an earlier session can never pass
 	// for a newer snapshot (World.Saved).

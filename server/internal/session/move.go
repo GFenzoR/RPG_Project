@@ -22,6 +22,8 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 		// T5.4: what this command did to a house is written now, with p's snapshot: a
 		// later command never adds a half-done operation to that batch.
 		w.flushHouses()
+		// T5.3: the state after what this command gave away, whole (hold.go gaveAway).
+		w.settleGivers()
 	})
 }
 
@@ -404,6 +406,9 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 		// T5.2: under its PvP lock it stays link-dead (a full queue is no way out of a fight).
 		w.disconnect(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_SLOW_CLIENT, true)
 	}
+	// T5.3: what the server gave away for players outside their commands this tick (a
+	// quest reward of a kill, a gift of questRecheck above), now that their state is whole.
+	w.settleGivers()
 	// Removing slow players may have queued CreatureDisappear for others: they go out
 	// with the next tick's batch.
 }
