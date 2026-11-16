@@ -540,6 +540,7 @@ market:
   mailbox_shown: 30         # items del buzón por ventana
   action_burst: 6           # anti-flood: ráfaga y recarga por acción
   action_refill_ms: 400
+  push_every_ms: 500        # refresco en vivo de una ventana abierta: como mucho uno cada tanto (50..60000)
 trade:
   enabled: true
   max_items: 6              # items (pilas o contenedores vacíos) por lado (1..32)

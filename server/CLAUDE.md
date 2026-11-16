@@ -160,13 +160,19 @@ server/
   `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`):
   un camino nuevo que lleve algo de un personaje al suelo público tiene que respetar
   `heldDrop`, uno que saque algo del suelo de una casa al suelo público llama a
-  `leftHouse`, uno en que el servidor le deje algo a sus pies llama a `holdGround`, uno
-  que tome o use algo del suelo (o meta algo en un contenedor del suelo) mira
-  `groundHeld`, y uno que reemplace los items de una casa va como `HouseItems` (el Saver
-  marca la casa si se descarta). Los `Seq` de los snapshots son del `World` (crecen
-  entre sesiones del personaje): no los reinicies por jugador. Una acción que
+  `leftHouse` y solo lo deja como pila propia o en una pila o contenedor ya reservado a
+  él (`heldFor`; nunca en algo ajeno, que la reserva se quedaría), uno en que el servidor
+  le deje algo a sus pies llama a `holdGround`, uno que tome o use algo del suelo (o meta
+  algo en un contenedor del suelo) mira `groundHeld` y `reserved` (cadáveres), y uno que
+  reemplace los items de una casa va como `HouseItems` (el Saver marca la casa si se
+  descarta). Cada reserva de `heldGround` guarda el `Seq` que la cubre y la libera el
+  acuse de ese `Seq` o mayor (`confirmed`), no el fin de la espera. Los `Seq` de los
+  snapshots son del `World` (crecen entre sesiones del personaje): no los reinicies por
+  jugador; un acuse vale por todos los anteriores de su personaje (el `app` reintenta
+  solo el más alto, `app/acks.go`). Una acción que
   cambie lo que muestra la ventana del mercado de otro llama a `bookChanged` /
-  `marketOwnerChanged` / `queueMarket` (refresco en vivo, `flushMarket`).
+  `marketOwnerChanged` / `queueMarket` (refresco en vivo, `flushMarket`, como mucho uno
+  por ventana cada `market.push_every_ms`).
 
 - **Casas (T5.4):** `session/house.go` + `store/houses.go` + `app/houses.go` +
   `httpapi/houses.go` (`balance.yaml houses`; necesita el mercado). Las casas son datos del

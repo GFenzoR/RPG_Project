@@ -230,13 +230,26 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       final), también los de un transfer. Uno con `Seq` mayor o igual al del último
       transfer termina la espera: el Saver escribe en orden y salta todo lo de un
       personaje marcado, así que si llegó ese guardado, el transfer está en la base.
+      Por lo mismo, un acuse vale por todos los anteriores de su personaje.
+    - Cada **reserva** de abajo (cadáver, lo que cae a sus pies, lo que sale de una casa)
+      es una entrada de `World.heldGround` con el personaje y el `Seq` que la cubre, y la
+      libera un acuse de ese `Seq` o mayor (`World.confirmed`), aunque el personaje siga
+      en espera por transfers más nuevos. Quien encadena transfers más rápido de lo que
+      el Saver los confirma sigue sin poder soltar nada, pero lo reservado para un
+      transfer ya confirmado vuelve a ser de cualquiera.
     - Mientras espera, `MoveItem` rechaza (`inventory.saving`) llevar algo que el
       personaje carga, o que está en su propio cadáver, a una casilla que no es de una
       casa (directo o dentro de un contenedor apoyado ahí). Entre sus propios
       contenedores, a su equipo o a una casa, se mueve como siempre.
-    - Su cadáver queda reservado para él mientras espera, aunque pase
-      `corpse_owner_only_ms`, y para siempre si queda marcado (`World.reserved` mira
-      `inFlight` y `locked`): lo que tiene sale del estado que se descartó, y se pudre.
+    - El cadáver que deja **mientras espera** queda reservado para él (`holdCorpse`, con
+      el `Seq` de su espera al morir) aunque pase `corpse_owner_only_ms`, hasta que la
+      base confirma esos transfers, y para siempre si uno se descartó (`World.reserved`):
+      lo que tiene puede salir del estado descartado, y se pudre. Un cadáver de **antes**
+      de la espera no: sus items salen de un estado que la base tiene (la muerte se guarda
+      al instante, detrás de transfers ya confirmados), así que pasado
+      `corpse_owner_only_ms` es de cualquiera aunque después se descarte un transfer de su
+      dueño. Nadie mete nada en un cadáver reservado a otro (`death.corpse_not_owner`,
+      también dentro de `corpse_owner_only_ms`): quedaría atrapado con él.
     - El **suelo de las casas** sí se guarda, con el transfer de quien lo movió (detrás
       del suyo en la cola). Lo cuida el Saver: un transfer saltado o rechazado marca
       también las casas cuyos items reemplazaba (`HouseItems`), y ningún transfer
@@ -260,12 +273,24 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       quien lo sacó solo puede volver a tomarlo o devolverlo a la casa (llevarlo a otra
       casilla pública es `inventory.saving`). Nadie mete nada en un contenedor del suelo
       reservado a otro (`inventory.not_yours`): quedaría atrapado con él.
+      Lo que sale de una casa queda como **pila propia** en la casilla, o se suma a una
+      pila o entra en un contenedor que **ya** está reservado a quien lo saca. Nunca se
+      suma a una pila ajena de la calle (cae como pila aparte) ni entra en un contenedor
+      ajeno del suelo, sea una mochila o un cadáver (`MoveItem` lo rechaza con
+      `inventory.floor_first`: primero al suelo). Si no, la reserva se quedaría con lo de
+      otro: el dueño de la pila, la mochila o el cadáver no podría tomar lo suyo mientras
+      dure la espera, y nunca si la escritura de la casa se descarta (quien sacó el item
+      queda marcado aunque sea inocente, por ejemplo si la casa quedó marcada por el
+      transfer descartado de un invitado).
     - Normalmente la espera dura uno o dos ticks y no se nota. Con la base caída dura
       hasta que el transfer se escribe (correcto: no está guardado). Con la cola del loop
-      llena, el `app` reintenta el acuse en su propia goroutine (`enqueueRetry`, como el
-      aviso de `Tainted`): no se pierde, y uno que llega tarde no hace daño (`Saved`
-      compara números de secuencia). Un relogueo conserva la espera (es del personaje,
-      no de la conexión).
+      llena, el `app` guarda el acuse para **una sola** goroutine de reintento
+      (`app/acks.go`) que conserva el `Seq` más alto de cada personaje (vale por los
+      anteriores) y los entrega cada tick hasta vaciarse: no se pierde ninguno, cuesta una
+      entrada por personaje y no una goroutine por acuse, y uno que llega tarde no hace
+      daño (`Saved` compara números de secuencia; también olvida el snapshot final en
+      memoria con un acuse de ese `Seq` o mayor). Un relogueo conserva la espera (es del
+      personaje, no de la conexión).
     - Lo que el **servidor** deja a sus pies porque no le entra no pasa por `MoveItem`
       (`giveItem`: una fabricación, una recolección o una recompensa, las monedas de una
       venta a un NPC; y el equipo que no cabe en su cadáver al morir). Si cae fuera de
@@ -277,10 +302,16 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       comando suyo (una recompensa que llega por un evento): si un transfer suyo se
       descartó, el Saver salta esa escritura y marca la casa en vez de guardar ahí lo
       que salió del estado descartado.
-      Una reserva termina con la espera (`endHold`) o cuando el item deja el suelo
-      (`detach`); si el transfer quedó marcado, dura hasta reiniciar, como el cadáver.
-      Las compras del mercado, el retiro del buzón y las compras a un NPC ya exigen que
-      todo entre, así que nunca caen al suelo.
+      Una reserva termina con el acuse que la cubre (`World.Saved`) o cuando el item deja
+      el suelo (`detach`); si el transfer quedó marcado, dura hasta reiniciar (un cadáver,
+      hasta que se pudre). Las compras del mercado, el retiro del buzón y las compras a un
+      NPC ya exigen que todo entre, así que nunca caen al suelo.
+    - **Límite del modo degradado:** en solo lectura (`World.Tainted`) nada de las casas
+      se escribe (`flushHouses` lo descarta) y nadie mueve ni usa nada en una casa. Lo que
+      el servidor deja entonces a los pies de un jugador sobre el piso de una casa (una
+      fabricación, una recompensa, las monedas de una venta a un NPC) no se reserva ni se
+      guarda: queda en memoria, nadie puede sacarlo, y se pierde al reiniciar. No duplica
+      nada; es una pérdida que se acepta mientras el servidor espera el reinicio.
     - **Qué no cubre, y por qué no duplica:** lo que el personaje gasta en ese instante
       (comer, cargas de una runa, materiales de una fabricación) desaparece igual en la
       base, y lo que gana jugando (botín de un monstruo, experiencia) es juego nuevo que
@@ -322,15 +353,18 @@ abiertas que lo muestran), que se mantiene al buscar, abrir, cerrar, alejarse o 
 mundo. Una acción que cambia un libro encola a sus espectadores (`bookChanged`); una que
 cambia las ofertas propias o el buzón de alguien, a ese jugador si tiene la ventana
 abierta (`marketOwnerChanged`; también el alquiler, el traspaso o la liberación de una
-casa); una suspensión, a las ventanas cuyo libro lista ofertas de esa cuenta; un
-intercambio completo, a los dos. `flushMarket` (en `flushSystem`, una vez por tick) manda
-a cada ventana encolada una `MarketUpdate` completa con `refresh: true`, como mucho una
-cada 500 ms (`marketPushEvery`; la que cae antes espera, no se pierde). La respuesta a un
-comando propio también deja la ventana al día y descarta el refresco pendiente. Nada de
-esto toca la base: todo sale de lo que el loop ya tiene en memoria. Costo: encolar es
-recorrer los espectadores del libro (o uno); mandar cuesta lo que una respuesta normal
-(`list_size` por lado, ofertas propias, buzón e historial), y como mucho dos por segundo
-por ventana abierta.
+casa); una suspensión, a los espectadores de los libros donde esa cuenta tiene ofertas
+(`marketAccountChanged` junta esos items de las listas de ofertas por personaje, sin
+recorrer libros); un intercambio completo, a los dos; el paso a solo lectura, a todas
+(una vez: otra marca después no reenvía nada). `flushMarket` (en `flushSystem`, una vez
+por tick) manda a cada ventana encolada una `MarketUpdate` completa con `refresh: true`,
+como mucho una cada `market.push_every_ms` de `balance.yaml` (500 ms; la que cae antes
+espera, no se pierde). La respuesta a un comando propio también deja la ventana al día y
+descarta el refresco pendiente. Nada de esto toca la base: todo sale de lo que el loop ya
+tiene en memoria. Costo: encolar es recorrer los espectadores del libro (o uno); mandar
+cuesta lo que una respuesta normal (`list_size` por lado, ofertas propias, buzón e
+historial: la ventana entera, no un delta), y como mucho una por `push_every_ms` por
+ventana abierta.
 
 ## Autenticación y cuentas
 - Email + contraseña (argon2id), verificación de email, reset de contraseña.

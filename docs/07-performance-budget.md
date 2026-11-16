@@ -271,18 +271,29 @@ fallaron.
 Cada snapshot guardado (también los autoguardados) vuelve al loop como un comando
 `World.Saved` (la espera de la falla segura, docs/01 "Transacciones"): N / 300 por
 segundo más uno por personaje de cada transfer, cada uno un par de búsquedas en un mapa.
-El que termina una espera recorre además `World.heldGround` (lo que el servidor dejó a
-los pies de un personaje en espera y lo que alguien sacó de una casa a la calle hasta
-que se confirma), que casi siempre está vacío o casi: una entrada se borra también
-cuando su item deja el suelo. Tomar o usar algo del suelo mira ese mapa solo si no está
-vacío. Un acuse que no entra en la cola del loop (llena) se reintenta en una goroutine
-propia, una por acuse rechazado, que vuelve a probar cada tick.
+Cada acuse recorre además `World.heldGround` si no está vacío (cada reserva se libera con
+el acuse que la cubre: el cadáver que dejó un personaje en espera, lo que el servidor dejó
+a sus pies y lo que alguien sacó de una casa a la calle hasta que se confirma), que casi
+siempre está vacío o casi: una entrada se borra también cuando su item deja el suelo.
+Tomar, usar o meter algo en el suelo mira ese mapa solo si no está vacío. Un acuse que no
+entra en la cola del loop (llena) queda en el reintento del `app` (`app/acks.go`): una
+sola goroutine mientras haya pendientes y una entrada por personaje (el `Seq` más alto,
+que vale por los anteriores), que vuelve a probar cada tick. Con la cola llena por mucho
+tiempo cuesta lo que tenga ese mapa, no una goroutine por acuse.
 
 **Ventanas del mercado en vivo.** Cada acción del mercado encola a quienes miran ese
 libro; `flushMarket` les manda una `MarketUpdate` completa (lo que cuesta una respuesta
 normal: `list_size` ofertas por lado, las propias, el buzón y el historial) como mucho
-una cada 500 ms por ventana. Con E espectadores de un libro muy activo son a lo sumo 2·E
-mensajes por segundo, sin ninguna lectura de la base.
+una cada `market.push_every_ms` por ventana (500 ms en `balance.yaml`). Con E
+espectadores de un libro muy activo son a lo sumo 2·E mensajes por segundo, sin ninguna
+lectura de la base. Cada refresco es la ventana **entera**, no un delta: mandar solo lo
+que cambió necesitaría un mensaje nuevo y que el cliente fusione listas, y hoy el tope de
+2·E por segundo ya acota el costo. Si una medición con muchos espectadores lo pide, el
+primer ajuste es subir `push_every_ms`; el delta queda pendiente (docs/14). Una
+suspensión (ban o unban) junta los items con ofertas de esa cuenta recorriendo las listas
+de ofertas por personaje (`byOwner`, a lo sumo `max_offers` cada una; ningún libro) y
+encola solo a los espectadores de esos libros. El paso a solo lectura refresca todas las
+ventanas una vez; otra marca después no vuelve a mandar nada.
 
 ### Casas (T5.4)
 - **Transfers de items de casa:** como mucho uno por tick para todas las casas que

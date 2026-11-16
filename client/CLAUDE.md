@@ -325,7 +325,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   traducidos: la búsqueda prefiere el nombre exacto, luego el prefijo (`searchItems`).
 - Una `MarketUpdate` con `refresh` (el servidor la manda solo, por la acción de otro)
   pasa por `applyMarket`: actualiza la ventana si sigue abierta y nunca la reabre. Los
-  formularios no controlados conservan lo escrito al refrescar.
+  formularios no controlados conservan lo escrito al refrescar. El precio que propone el
+  formulario de crear es `MarketView.priceDefault` (el de referencia cuando se abrió ese
+  item), que `applyMarket` mantiene mientras la ventana muestra el mismo item: un
+  `defaultValue` que cambia reescribe el campo si el jugador no lo tocó. El formulario
+  lleva `key` por item, así otro item empieza de cero.
 - `MarketView.readOnly` (`MarketUpdate.read_only`) muestra el aviso
   `data-testid="market-read-only"`; `Disconnect{SAVE_FAILED}` y `{CHARACTER_LOCKED}` usan
   la tabla automática de motivos (`client.disconnect.*`).

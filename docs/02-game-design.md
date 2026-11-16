@@ -419,7 +419,7 @@ Valores iniciales (balance.yaml):
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
 - El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;
-  durante `corpse_owner_only_ms` solo el dueño puede sacar o usar lo que contiene (otros
+  durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros
   pueden abrirlo y mirar), también tras una muerte por PvP. Con marca de asesino o
   proscrito se pierde más ("PvP", "Castigo").
 
@@ -491,10 +491,12 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   mirando; una oferta propia que otro llenó (y el oro o los items que llegan al buzón);
   el buzón que cambia por una casa (alquiler, traspaso o casa liberada); una suspensión
   que oculta o vuelve a mostrar ofertas; y el dinero y los items propios tras un
-  intercambio directo. Un libro muy activo actualiza cada ventana como mucho cada 500 ms;
-  un cambio dentro de ese tiempo sale al terminar, con el libro como esté entonces. Lo que
-  ya escribió el jugador en los formularios no se borra. El vencimiento de una suspensión
-  no avisa: se ve en la siguiente acción.
+  intercambio directo. Un libro muy activo actualiza cada ventana como mucho cada
+  `push_every_ms` (500 ms); un cambio dentro de ese tiempo sale al terminar, con el libro
+  como esté entonces. Lo que ya escribió el jugador en los formularios no se borra, y el
+  precio que propone el formulario (el de referencia cuando se abrió ese item) no cambia
+  mientras se mira el mismo item: nadie publica a un precio que no eligió. El vencimiento
+  de una suspensión no avisa: se ve en la siguiente acción.
 - **Seguridad:** el personal del juego no usa el mercado. Una cuenta suspendida no opera
   y sus ofertas no se listan ni se pueden aceptar mientras dure la suspensión. Anti-flood
   propio (`action_burst` / `action_refill_ms`). Comandos de staff auditados:
@@ -509,17 +511,20 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   lo que recibieron llegue a otro antes del aviso, después de cada intercambio, compra,
   venta, retiro del buzón o cambio en una casa el personaje queda **en espera** hasta que
   la base confirma ese guardado (normalmente uno o dos ticks): no puede soltar nada en el
-  suelo fuera de una casa (aviso "Espera un momento…", `inventory.saving`), y si muere,
-  nadie más saca nada de su cadáver mientras tanto (ni después, si el guardado falló).
+  suelo fuera de una casa (aviso "Espera un momento…", `inventory.saving`), y si muere en
+  ese tiempo, nadie más saca ni mete nada en su cadáver hasta la confirmación (ni después,
+  si el guardado falló). Un cadáver de antes de la espera sigue las reglas de siempre.
   Lo que en ese instante cae a sus pies porque no le entra (una fabricación, una
   recompensa, las monedas de una venta a un NPC, el equipo que no cupo en su cadáver)
   queda reservado para él de la misma forma: otro jugador recibe "Eso es de otro jugador
   por ahora." (`inventory.not_yours`). El suelo de las casas lo cuida el guardado: lo
   que se movió ahí no llega a la base por otro. Lo que alguien saca de una casa a la
-  calle (o a un contenedor que está en la calle) queda reservado para él de la misma
-  forma hasta que la base confirma ese cambio de la casa, un momento: solo él puede
-  volver a tomarlo o devolverlo a la casa. Las alertas de economía (T4.1) siguen como
-  red (docs/01, "Transacciones").
+  calle queda reservado para él de la misma forma hasta que la base confirma ese cambio
+  de la casa, un momento: solo él puede volver a tomarlo o devolverlo a la casa. Sale
+  como una pila aparte: no se suma a la pila de otro ni entra en una mochila o un cadáver
+  ajeno de la calle ("Para sacarlo de la casa, déjalo primero en el suelo.",
+  `inventory.floor_first`), así la reserva nunca se queda con lo de otro. Las alertas de
+  economía (T4.1) siguen como red (docs/01, "Transacciones").
 - Una oferta de un item retirado del juego se cierra al arrancar: el oro de una de
   compra vuelve al buzón.
 - **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).

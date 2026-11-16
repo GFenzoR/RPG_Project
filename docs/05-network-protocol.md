@@ -548,8 +548,8 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `FullMapView`, `CreatureDisappear`/`CreatureAppear` a los observadores) y recibe
   `Inventory`, `PlayerStats`, `PlayerSkills` y el `Message` de sistema `death.died` con
   `experience` (perdida) y `blessings` (las que tenía y se consumieron), ambos `number`.
-  El cliente muestra la pantalla de muerte con ese mensaje. Sacar o usar algo del cuerpo
-  ajeno dentro de `corpse_owner_only_ms` responde `death.corpse_not_owner`.
+  El cliente muestra la pantalla de muerte con ese mensaje. Sacar, usar o meter algo en el
+  cuerpo ajeno dentro de `corpse_owner_only_ms` responde `death.corpse_not_owner`.
 
 ### Items e inventario (T1.8, `server/internal/session/inventory.go`)
 Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
@@ -562,8 +562,9 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `inventory.not_possible` y nada cambia. Otros rechazos: `inventory.too_far`,
   `cannot_move` (`pickupable: false`), `wrong_slot`, `level_required` (`level`),
   `vocation_cannot`, `hands_full`, `slot_occupied`, `container_full`, `too_heavy`,
-  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`, `saving` y
-  `not_yours` (la espera de la falla segura del comercio, ver "Falla segura" en T5.3).
+  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`, `saving`,
+  `not_yours` y `floor_first` (la espera de la falla segura del comercio, ver "Falla
+  segura" en T5.3).
 - **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
   Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
   contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor
@@ -926,10 +927,19 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   completa con `refresh: true` cuando la acción de otro cambia lo que la ventana abierta
   muestra (ofertas del item buscado, ofertas propias, buzón, una suspensión, o el dinero e
   items propios tras un intercambio; también al pasar a solo lectura). Sale al final del
-  tick, una por ventana y como mucho cada 500 ms (lo que cambie entre medio sale al
-  terminar ese plazo); quien actúa recibe solo la respuesta a su comando
-  (`refresh: false`). El cliente aplica un `refresh` solo si la ventana sigue abierta:
-  uno que se cruzó con el `close{}` no la vuelve a abrir. Precios en la moneda más chica, fechas en ms Unix. Mensajes:
+  tick, una por ventana y como mucho cada `market.push_every_ms` de `balance.yaml`
+  (500 ms; lo que cambie entre medio sale al terminar ese plazo); quien actúa recibe solo
+  la respuesta a su comando (`refresh: false`). El cliente aplica un `refresh` solo si la
+  ventana sigue abierta: uno que se cruzó con el `close{}` no la vuelve a abrir. Mientras
+  la ventana muestra el mismo `item_id`, el cliente no cambia el precio que propone el
+  formulario de crear aunque cambie `reference_price`.
+  **Clientes viejos:** `refresh` es un campo nuevo y aditivo, así que no se subió
+  `-min-client-version` (el proyecto nunca lo subió por un campo aditivo: el cliente web se
+  sirve con el servidor y siempre es el actual). Una app de escritorio o móvil anterior lo
+  ignora y trata el refresco como una respuesta: actualiza la ventana abierta igual, y en
+  el caso raro de que el refresco se cruce con su `close{}`, la vuelve a abrir (cosmético;
+  se cierra con el botón o al alejarse). Si hace falta dejarlas fuera, se sube
+  `-min-client-version` junto con `client/package.json` (docs/09). Precios en la moneda más chica, fechas en ms Unix. Mensajes:
   `market.closed`, `staff`, `too_fast`, `not_at_board`, `bad_item`, `bad_amount` (`max`),
   `bad_price` (`max`), `too_many_offers` (`max`), `not_enough_items`, `not_enough_money`
   (`price`), `no_room`, `offer_gone`, `own_offer`, `created` (`item`, `fee`), `cancelled`
@@ -949,7 +959,12 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   que alguien saca del suelo de una casa al suelo público (directo, a una pila o a un
   contenedor apoyado ahí): queda reservado para quien lo sacó hasta que la base confirma
   esa escritura de la casa, y meter algo en un contenedor del suelo reservado a otro
-  también responde `inventory.not_yours`.
+  también responde `inventory.not_yours`. Lo que sale de una casa se suma solo a una pila
+  ya reservada a quien lo saca (si no, cae como pila aparte) y entra solo en un
+  contenedor del suelo ya reservado a él: llevarlo directo a otro contenedor de la calle
+  (una mochila ajena, un cadáver) responde `inventory.floor_first`. El cadáver que el
+  personaje deja mientras espera también queda reservado para él hasta la confirmación;
+  uno de antes de la espera no.
 
 ### Casas (T5.4, `server/internal/session/house.go`)
 Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.

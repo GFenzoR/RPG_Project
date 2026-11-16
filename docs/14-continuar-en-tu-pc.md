@@ -88,6 +88,19 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   `env(safe-area-inset-*)` aunque `.game` ya tiene ese padding: en un iPhone con barra de
   inicio o muesca, en horizontal, el margen se cuenta dos veces (la emulación no lo ve:
   ahí el inset es 0).
+- **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
+  no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
+  cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
+  mismo libro lo pide (antes, subir `market.push_every_ms`).
+- **Falla segura del comercio (a revisar, anterior a esta revisión):** un personaje
+  marcado vuelve a su **último guardado escrito**, que puede ser anterior al transfer
+  descartado. Lo que soltó **sin estar en espera** entre ese guardado y el transfer (algo
+  tirado al suelo que otro levantó, las monedas de una venta a un NPC que cayeron a sus
+  pies) vuelve a estar en su fila de la base y también en la de quien lo levantó. La
+  espera (docs/01) solo cubre lo que pasa mientras hay un transfer sin confirmar. Es raro
+  (un transfer descartado es un bug o la base caída al apagar) y lo ven las alertas de
+  economía; una salida sería escribir el estado del personaje justo antes de cada
+  transfer, a costa de una escritura más por transfer.
 - **Mundo:**
   - el cartel de la puerta sellada (`text.volcan.gate_sign`, piso 8) no tiene item todavía,
     y su texto dice que la puerta no tiene cerradura: hay que reescribirlo para la puerta
