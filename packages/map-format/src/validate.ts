@@ -591,6 +591,21 @@ class WorldValidator {
         reported.add(key);
         this.err(file, path, msg, pos);
       };
+      // A portal item, on the ground or the stack (portalShown takes both), stands on the
+      // entrance of a portal it shows. A warning: it moves nobody, but players will take
+      // it for a way through.
+      const portalItem = (id: string, info: ItemInfo, path: PathSegment[], pos: Position): void => {
+        const key = `portal:${pos.x},${pos.y}`;
+        if (!info.portal || reported.has(key)) return;
+        if (this.portalItemFits(info, portalAt.get(formatPos(pos)))) return;
+        reported.add(key);
+        this.warn(
+          file,
+          path,
+          `"${id}" shows a ${info.portal.kind}${info.portal.leads ? ` leading ${info.portal.leads}` : ""}, but no such portal of ${dir}/portals.yaml leaves from this tile`,
+          pos,
+        );
+      };
       const stacks = new Map(c.items.map((s) => [s.y * CHUNK_SIZE + s.x, s]));
       for (let ly = 0; ly < CHUNK_SIZE; ly++) {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
@@ -611,6 +626,7 @@ class WorldValidator {
                 `"${g}" is a ${info.kind}, not a ground item`,
                 pos,
               );
+            else portalItem(g, info, ["ground", ly, lx], pos);
           }
           if (!s) continue;
           if (g === null)
@@ -626,20 +642,8 @@ class WorldValidator {
                 `ground item "${id}" belongs in the ground layer, not on a stack`,
                 pos,
               );
+            else if (info.portal) portalItem(id, info, ["items"], pos);
             else if (
-              info.portal &&
-              !reported.has(`portal:${lx},${ly}`) &&
-              !this.portalItemFits(info, portalAt.get(formatPos(pos)))
-            ) {
-              // A warning: it moves nobody, but players will take it for a way through.
-              reported.add(`portal:${lx},${ly}`);
-              this.warn(
-                file,
-                ["items"],
-                `"${id}" shows a ${info.portal.kind}${info.portal.leads ? ` leading ${info.portal.leads}` : ""}, but no such portal of ${dir}/portals.yaml leaves from this tile`,
-                pos,
-              );
-            } else if (
               isSignItem(info) &&
               !(signText.get(formatPos(pos)) ?? []).includes(info.description ?? "")
             )

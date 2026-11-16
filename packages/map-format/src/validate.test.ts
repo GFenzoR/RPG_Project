@@ -18,7 +18,7 @@ import { loadContent, showsPortal } from "./content.ts";
 import { formatDiagnostic } from "./diagnostics.ts";
 import { writeIsland, writeWorldMeta } from "./io.ts";
 import { CHUNK_SIZE, chunkKey, emptyChunk } from "./types.ts";
-import type { ContentIndex } from "./content.ts";
+import type { ContentIndex, ItemInfo } from "./content.ts";
 import type { Chunk, Island, Position, WorldMeta } from "./types.ts";
 import { validateWorld } from "./validate.ts";
 
@@ -430,6 +430,35 @@ describe("validateWorld", () => {
       'warning world/islands/mini/chunks/z07/c0000_0000.json items: (22,10,7) "hole" shows a hole, but no such portal of world/islands/mini/portals.yaml leaves from this tile',
       'warning world/islands/mini/chunks/z08/c0000_0000.json items: (12,12,8) "ladder_down" shows a ladder leading down, but no such portal of world/islands/mini/portals.yaml leaves from this tile',
       'error world/islands/mini/portals.yaml:13 [2].from: (12,12,8) ladder "mini_ladder" has no item that shows it on its entrance (one with portal: { kind: ladder, leads: up }, e.g. ladder_up)',
+    ]);
+  });
+
+  it("takes a ground item that shows a portal like one on the stack", () => {
+    // No ground item of data/ shows a portal today: a pit floor that shows a hole.
+    const pit: ItemInfo = {
+      id: "pit_floor",
+      kind: "ground",
+      walkable: true,
+      blocksMovement: false,
+      portal: { kind: "hole" },
+    };
+    const withPit: ContentIndex = { ...content, items: new Map([...content.items, [pit.id, pit]]) };
+    const i = shown(mini());
+    const top = must(i.chunks.get(chunkKey(7, 0, 0)));
+    i.portals.push({
+      id: "mini_pit",
+      kind: "hole",
+      from: { x: 20, y: 24, z: 7 },
+      to: { x: 12, y: 12, z: 8 },
+    });
+    setGround(top, 20, 24, "pit_floor"); // shows the hole that leaves from it
+    setGround(top, 22, 10, "pit_floor"); // no hole leaves from here
+    const root = mkdtempSync(join(tmpdir(), "map-format-"));
+    dirs.push(root);
+    writeWorldMeta(root, worldOf(i));
+    writeIsland(root, i);
+    expect(messages(validateWorld(root, { content: withPit }))).toEqual([
+      'warning world/islands/mini/chunks/z07/c0000_0000.json ground[10][22]: (22,10,7) "pit_floor" shows a hole, but no such portal of world/islands/mini/portals.yaml leaves from this tile',
     ]);
   });
 
