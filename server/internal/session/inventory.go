@@ -538,6 +538,10 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 			p.emit(systemMsg(msgTooFar))
 			return
 		}
+		if w.groundHeld(p, to.cont) { // T5.3: a container reserved to a held player (hold.go)
+			p.emit(systemMsg(msgNotYours))
+			return
+		}
 		if it.contains(to.cont) {
 			p.emit(systemMsg(msgIntoItself))
 			return
@@ -566,6 +570,9 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		p.emit(systemMsg(msgSaving))
 		return
 	}
+	// T5.3 fail-safe: what leaves a house floor for the public ground is reserved to p
+	// until the database has the house write that took it out (leftHouse).
+	leaving := w.itemHouse(it) != nil && w.publicGround(to)
 
 	// Capacity: only what enters p's equipment from outside it weighs on p.
 	var toOwner *Player
@@ -610,12 +617,17 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		w.detach(it)
 		w.changedPlace(p, from)
 	}
+	landed := moving
 	if merge != nil {
 		merge.count += moving.count
 		w.changed(merge)
+		landed = merge
 	} else {
 		w.attach(p, moving, to)
 		w.changedPlace(p, to)
+	}
+	if leaving {
+		w.leftHouse(p, landed.root())
 	}
 	if moving.def.Container != nil {
 		w.closeUnreachable(moving)
@@ -679,6 +691,7 @@ func (w *World) detach(it *Item) {
 			w.ground[it.pos] = g
 		}
 		it.onGround = false
+		delete(w.heldGround, it) // T5.3: a reservation ends when the item leaves the ground
 	}
 }
 

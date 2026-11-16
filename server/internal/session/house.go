@@ -530,7 +530,15 @@ func (w *World) houseTouched(pos world.Pos) {
 		h.dirty = true
 		w.houseDirty = append(w.houseDirty, h)
 	}
-	if p := w.cmdPlayer; p != nil && !slices.Contains(w.houseActors, p) {
+	if p := w.cmdPlayer; p != nil {
+		w.houseActor(p)
+	}
+}
+
+// houseActor writes p's snapshot with this tick's house changes (flushHouses): p's
+// command changed a house, or the server put something of p's on a house floor.
+func (w *World) houseActor(p *Player) {
+	if !slices.Contains(w.houseActors, p) {
 		w.houseActors = append(w.houseActors, p)
 	}
 }

@@ -558,8 +558,14 @@ func (a *App) charactersTainted(ids []int64) {
 }
 
 // snapshotSaved acks every stored snapshot to the loop: a final one lets it forget the
-// unsaved state, and any one ends the character's transfer hold (T5.3, World.Saved). A
-// lost ack (queue full) is harmless: the state stays until the next ack of the character.
+// unsaved state, and any one ends the character's transfer hold (T5.3, World.Saved).
+// With the queue full the ack is retried in its own goroutine (the persistence goroutine
+// never waits for the loop): a lost one would keep the character from dropping anything
+// on the public ground until its next save, minutes later, and under load is when queues
+// fill up. A late ack is harmless (World.Saved compares sequence numbers).
 func (a *App) snapshotSaved(s session.Snapshot) {
-	_ = a.Loop.Enqueue(a.World.Saved(s.CharacterID, s.Seq))
+	cmd := a.World.Saved(s.CharacterID, s.Seq)
+	if a.Loop.Enqueue(cmd) != nil {
+		go a.enqueueRetry(cmd)
+	}
 }

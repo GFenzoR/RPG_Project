@@ -2,11 +2,15 @@ package session_test
 
 import (
 	"context"
+	"fmt"
 	"slices"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -348,5 +352,334 @@ func TestHeldStackTakesNoMerge(t *testing.T) {
 	if evs := h.send(cc, moveItem(onTile(pos(0, 1)), salveID, 3, inContainer(pack, 0), 3)); len(systemKeys(evs)) != 0 ||
 		len(h.w.GroundAt(pos(0, 1))) != 2 {
 		t.Fatalf("taking his salves back: %v", systemKeys(evs))
+	}
+}
+
+// lastSnapshot is the snapshot of character id in the last transfer that carries one.
+func lastSnapshot(t *testing.T, transfers []session.Transfer, id int64) session.Snapshot {
+	t.Helper()
+	for i := len(transfers) - 1; i >= 0; i-- {
+		for _, s := range transfers[i].Snapshots {
+			if s.CharacterID == id {
+				return s
+			}
+		}
+	}
+	t.Fatalf("no transfer carries character %d", id)
+	return session.Snapshot{}
+}
+
+// What leaves a house floor for the public ground is reserved to whoever moved it until
+// the database has the house write that took it out (it carries the mover's snapshot).
+// Here the owner is held (her rent and her drop are not confirmed) and throws her sword
+// out to the street: if her rent was dropped, that write is skipped and the database
+// still has the sword in the house, so nobody else may pick it up before the ack.
+func TestHouseItemLeavingIsReserved(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	h.rent(cl)
+	h.step(cl, N) // the door tile (3,4), a house tile; the street (2..4, 5) is within reach
+	pack := openPack(t, h.harness, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(3, 3)), 1))
+	cc, c := h.tenant("Cid", 0, pos(4, 5), stack(coinID, 1, 0))
+	if !h.w.InFlightForTest(a.CharacterID()) {
+		t.Fatal("Ana is not held")
+	}
+
+	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), swordID, 1, onTile(cottageExit), 1)); len(systemKeys(evs)) != 0 ||
+		len(h.w.GroundAt(cottageExit)) != 1 {
+		t.Fatalf("throwing the sword out: %v", systemKeys(evs))
+	}
+	out := h.transfers[len(h.transfers)-1]
+	if len(out.Houses) != 1 || out.Houses[0].Kind != session.HouseItems || len(out.Houses[0].Items) != 0 ||
+		len(out.Snapshots) != 1 || out.Snapshots[0].CharacterID != a.CharacterID() {
+		t.Fatalf("the write that took it out = %+v", out)
+	}
+
+	cp := openPack(t, h.harness, cc)
+	take := moveItem(onTile(cottageExit), swordID, 1, inContainer(cp, 0), 1)
+	if !hasKey(h.send(cc, take), "inventory.not_yours") || h.w.CountItem(c, "test_sword") != 0 {
+		t.Fatal("another player picked up what left a house before the ack")
+	}
+	if !hasKey(h.send(cc, useItem(onTile(cottageExit), swordID, 1)), "inventory.not_yours") {
+		t.Fatal("another player used it")
+	}
+	on := &pb.ClientMessage{Message: &pb.ClientMessage_UseItemOn{UseItemOn: &pb.UseItemOn{
+		From: onTile(cottageExit), ItemId: swordID, StackIndex: 1,
+		To: &pb.ActionTarget{Target: &pb.ActionTarget_Pos{Pos: &pb.Position{X: 4, Y: 6, Z: 7}}}}}}
+	if !hasKey(h.send(cc, on), "inventory.not_yours") {
+		t.Fatal("another player used it on a tile")
+	}
+	// Ana takes it nowhere else on the street before the ack.
+	if !hasKey(h.send(cl, moveItem(onTile(cottageExit), swordID, 1, onTile(pos(2, 5)), 1)), "inventory.saving") {
+		t.Fatal("the held owner moved it along the street")
+	}
+
+	// An ack of an older snapshot (the drop's) frees nothing; the write's does.
+	h.sim.Command(h.w.Saved(a.CharacterID(), out.Snapshots[0].Seq-1))
+	h.sim.Step()
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("an older ack freed it")
+	}
+	h.sim.Command(h.w.Saved(a.CharacterID(), out.Snapshots[0].Seq))
+	h.sim.Step()
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
+		t.Fatalf("pick up after the ack: %v", systemKeys(evs))
+	}
+}
+
+// The other half: a guest that is held brings a sword into the house and the owner, who
+// is not held, takes it out to the street. If the guest's transfer is dropped the Saver
+// skips every later write of that house, the owner's included: the sword stays reserved
+// to the owner until the owner's own write is confirmed (the guest's ack is not enough).
+func TestHouseItemLeavingIsReservedToTheMover(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	h.rent(cl)
+	h.step(cl, N)
+	h.input(cl, walk(pb.Direction_DIRECTION_NORTH_WEST))
+	h.sim.RunTicks(40) // (2,3), inside
+	cb, b := h.tenant("Beto", 0, pos(2, 5), stack(swordID, 1, 0))
+	h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Beto"}))
+	h.step(cb, NE) // the door tile
+	bp := openPack(t, h.harness, cb)
+	if evs := h.send(cb, moveItem(inContainer(bp, 0), swordID, 0, onTile(pos(3, 3)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("the guest brings a sword: %v", systemKeys(evs))
+	}
+	brought := lastSnapshot(t, h.transfers, b.CharacterID())
+	if !h.w.InFlightForTest(b.CharacterID()) {
+		t.Fatal("the guest is not held")
+	}
+	// Ana's own writes are confirmed; Beto steps back out and Ana takes his place.
+	h.sim.Command(h.w.Saved(a.CharacterID(), lastSnapshot(t, h.transfers, a.CharacterID()).Seq))
+	h.sim.Step()
+	if h.w.InFlightForTest(a.CharacterID()) {
+		t.Fatal("Ana is still held")
+	}
+	h.step(cb, S)
+	h.input(cl, walk(SE))
+	h.sim.RunTicks(40)
+	if a.Pos() != cottageDoor || b.Pos() != cottageExit {
+		t.Fatalf("Ana at %v, Beto at %v", a.Pos(), b.Pos())
+	}
+	cc, c := h.tenant("Cid", 0, pos(5, 5), stack(coinID, 1, 0))
+
+	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), swordID, 1, onTile(pos(4, 5)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("the owner takes it out: %v", systemKeys(evs))
+	}
+	out := lastSnapshot(t, h.transfers, a.CharacterID())
+	if !h.w.InFlightForTest(a.CharacterID()) {
+		t.Fatal("the write that took it out did not hold Ana")
+	}
+	cp := openPack(t, h.harness, cc)
+	take := moveItem(onTile(pos(4, 5)), swordID, 1, inContainer(cp, 0), 1)
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("another player picked it up before the owner's write was confirmed")
+	}
+	h.sim.Command(h.w.Saved(b.CharacterID(), brought.Seq))
+	h.sim.Step()
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("the guest's ack freed what the owner took out")
+	}
+	h.sim.Command(h.w.Saved(a.CharacterID(), out.Seq))
+	h.sim.Step()
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
+		t.Fatalf("pick up after the owner's ack: %v", systemKeys(evs))
+	}
+}
+
+// Nothing goes into a container lying on the ground that is reserved to a held player:
+// it would be stuck there with it (and could change hands with the reservation).
+func TestHeldContainerTakesNothing(t *testing.T) {
+	h, _, cc, b, _ := heldOverflow(t)
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(b, "test_bag", 1) }))
+	h.sim.Step()
+	ground := h.w.GroundAt(pos(0, 1))
+	if len(ground) != 2 || ground[1].Def().Numeric != bagID {
+		t.Fatalf("ground %v", ground)
+	}
+	cc.take()
+	h.input(cc, useItem(onTile(pos(0, 1)), bagID, 2))
+	h.sim.Step()
+	opens := find(cc.take(), (*pb.ServerMessage).GetContainerOpen)
+	if len(opens) != 1 {
+		t.Fatalf("the bag did not open: %v", opens)
+	}
+	pack := openPack(t, h.harness, cc)
+	if !hasKey(h.send(cc, moveItem(inContainer(pack, 1), salveID, 0, inContainer(opens[0].GetContainerId(), 0), 1)),
+		"inventory.not_yours") || len(ground[1].Items()) != 0 {
+		t.Fatal("another player put something into a reserved bag")
+	}
+}
+
+// What the server drops at a player's feet on a house floor is written with that
+// player's snapshot even when no command of the player put it there (an event: a
+// tutorial reward, a craft finishing): if a transfer of the player was dropped, the
+// Saver skips the write and taints the house instead of storing the item there.
+func TestServerDropOnHouseFloorCarriesTheSnapshot(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1), stack(salveID, 5, 2),
+		stack(salveID, 5, 3))
+	h.rent(cl)
+	h.step(cl, N)
+	h.step(cl, N) // (3,3), inside
+	before := len(h.transfers)
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(a, "test_sword", 2) })) // one fits, one falls
+	h.sim.Step()
+	if g := h.w.GroundAt(pos(3, 3)); len(g) != 1 || g[0].Def().Numeric != swordID {
+		t.Fatalf("ground %v", g)
+	}
+	if len(h.transfers) != before+1 {
+		t.Fatalf("%d transfers, want the house write", len(h.transfers)-before)
+	}
+	tr := h.transfers[len(h.transfers)-1]
+	if len(tr.Houses) != 1 || tr.Houses[0].Kind != session.HouseItems || len(tr.Houses[0].Items) != 1 ||
+		len(tr.Snapshots) != 1 || tr.Snapshots[0].CharacterID != a.CharacterID() {
+		t.Fatalf("house write = %+v", tr)
+	}
+}
+
+// A reservation ends when its item leaves the ground: what the owner picks back up keeps
+// no entry (it would stay until a restart after a taint).
+func TestHeldGroundForgetsWhatLeavesTheGround(t *testing.T) {
+	h, cb, _, _, _ := heldOverflow(t)
+	if n := h.w.HeldGroundForTest(); n != 1 {
+		t.Fatalf("reserved %d, want 1", n)
+	}
+	if evs := h.send(cb, moveItem(onTile(pos(0, 1)), swordID, 1, inSlot(slotRight), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("equipping it: %v", systemKeys(evs))
+	}
+	if n := h.w.HeldGroundForTest(); n != 0 {
+		t.Fatalf("reserved %d after it left the ground", n)
+	}
+}
+
+// The hold ends with the Saver's own ack, not one the test makes up: a real Saver writes
+// the purchase and acks the snapshot in it (SaverConfig.Saved, which app wires to
+// World.Saved through the loop's queue), and the buyer drops again. A transfer the
+// database rejects is never acked: the buyer stays held until World.Tainted takes it out.
+func TestHoldEndsWithTheSaversAck(t *testing.T) {
+	acks := make(chan session.Snapshot, 64)
+	tainted := make(chan []int64, 4)
+	var reject atomic.Bool
+	saver, err := session.NewSaver(session.SaverConfig{
+		Write: func(context.Context, session.Snapshot) error { return nil },
+		WriteTransfer: func(context.Context, session.Transfer) error {
+			if reject.Load() {
+				return fmt.Errorf("%w: injected", session.ErrPermanent)
+			}
+			return nil
+		},
+		Saved:   func(s session.Snapshot) { acks <- s },
+		Tainted: func(ids []int64) { tainted <- ids },
+		Clock:   clock.NewFake(clock.Epoch),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saver.Start()
+	t.Cleanup(func() { _ = saver.Stop(context.Background()) })
+	var transfers []session.Transfer
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Transfer = func(tr session.Transfer) bool {
+			transfers = append(transfers, tr)
+			return saver.SubmitTransfer(tr)
+		}
+		c.Save = saver.Submit
+	})
+	// deliver hands the Saver's acks to the loop, as app does, until the one of character
+	// id at seq or later.
+	deliver := func(id int64, seq uint64) {
+		t.Helper()
+		timeout := time.After(10 * time.Second) //nolint:forbidigo // bounds a wait on the Saver's goroutine
+		for {
+			select {
+			case s := <-acks:
+				h.sim.Command(h.w.Saved(s.CharacterID, s.Seq))
+				h.sim.Step()
+				if s.CharacterID == id && s.Seq >= seq {
+					return
+				}
+			case <-timeout:
+				t.Fatalf("no ack of character %d at seq %d", id, seq)
+			}
+		}
+	}
+
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(bagID, 1, 1))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	id := h.w.MarketOffers(s.CharacterID())[0]
+	h.send(cb, acceptOffer(id, 4))
+	bought := lastSnapshot(t, transfers, b.CharacterID())
+	pack := openPack(t, h.harness, cb)
+	drop := moveItem(inContainer(pack, 2), salveID, 0, onTile(pos(0, 2)), 1)
+	if !hasKey(h.send(cb, drop), "inventory.saving") {
+		t.Fatal("Bruno dropped before the database had his purchase")
+	}
+	deliver(b.CharacterID(), bought.Seq)
+	if h.w.InFlightForTest(b.CharacterID()) {
+		t.Fatal("the Saver's ack did not end the hold")
+	}
+	if evs := h.send(cb, drop); len(systemKeys(evs)) != 0 || len(h.w.GroundAt(pos(0, 2))) != 1 {
+		t.Fatalf("drop after the ack: %v", systemKeys(evs))
+	}
+
+	// The next purchase is rejected: no ack ever comes, the hold stays until the taint.
+	reject.Store(true)
+	h.send(cb, acceptOffer(id, 1))
+	rejected := lastSnapshot(t, transfers, b.CharacterID())
+	var ids []int64
+	select {
+	case ids = <-tainted:
+	case <-time.After(10 * time.Second): //nolint:forbidigo // bounds a wait on the Saver's goroutine
+		t.Fatal("the Saver did not report the rejected transfer")
+	}
+	for len(acks) > 0 {
+		if a := <-acks; a.CharacterID == b.CharacterID() && a.Seq >= rejected.Seq {
+			t.Fatalf("a rejected transfer was acked: %+v", a)
+		}
+	}
+	if !h.w.InFlightForTest(b.CharacterID()) || !hasKey(h.send(cb, drop), "inventory.saving") {
+		t.Fatal("Bruno dropped after his purchase was rejected")
+	}
+	h.sim.Command(h.w.Tainted(ids))
+	h.sim.Step()
+	if !slices.Equal(ids, []int64{b.CharacterID()}) || h.w.PlayerByCharacter(b.CharacterID()) != nil {
+		t.Fatalf("tainted %v, Bruno still online: %v", ids, h.w.PlayerByCharacter(b.CharacterID()) != nil)
+	}
+}
+
+// Snapshot numbers grow across a character's sessions: an ack the app retried late, from
+// before a logout and a fresh login, never ends the hold of a newer transfer.
+func TestLateAckFromAnEarlierSessionKeepsTheHold(t *testing.T) {
+	h := newMarketHarness(t)
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	id := h.w.MarketOffers(s.CharacterID())[0]
+	h.send(cb, acceptOffer(id, 2))
+	first := h.transfers[len(h.transfers)-1].Snapshots[0]
+	h.sim.Command(h.w.Leave(cb))
+	h.sim.Step()
+	final := h.saves[len(h.saves)-1]
+	h.sim.Command(h.w.Saved(b.CharacterID(), final.Seq)) // the final save is in: all forgotten
+	h.sim.Step()
+
+	// A fresh login (from the database) buys again; the earlier session's first ack,
+	// retried, arrives only now.
+	c := withPack(b.CharacterID(), pos(0, 1), stack(coinID, 92, 0), stack(salveID, 2, 1))
+	c.Name = "Bruno"
+	again, _ := h.joinChar(c)
+	h.send(again, useBoard())
+	h.send(again, acceptOffer(id, 1))
+	second := h.transfers[len(h.transfers)-1].Snapshots[0]
+	if second.CharacterID != b.CharacterID() || second.Seq <= final.Seq {
+		t.Fatalf("the new session's snapshot %d does not follow the old final %d", second.Seq, final.Seq)
+	}
+	h.sim.Command(h.w.Saved(b.CharacterID(), first.Seq))
+	h.sim.Step()
+	if !h.w.InFlightForTest(b.CharacterID()) {
+		t.Fatal("a late ack of the earlier session ended the new hold")
 	}
 }

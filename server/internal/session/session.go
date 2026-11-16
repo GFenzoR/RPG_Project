@@ -371,6 +371,10 @@ type World struct {
 	// items the server dropped at the feet of a held character, reserved to it (hold.go).
 	inFlight   map[int64]uint64
 	heldGround map[*Item]int64
+	// saveSeq numbers every snapshot of every character, so a character's numbers grow
+	// across its sessions too: an ack retried late from an earlier session can never pass
+	// for a newer snapshot (World.Saved).
+	saveSeq uint64
 	// Trade window (T5.3, trade.go): balance trade (tradeOn = enabled with
 	// Config.Transfer), the open trades and invitations in creation order.
 	tradeOn  bool

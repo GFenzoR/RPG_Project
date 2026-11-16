@@ -320,3 +320,6 @@ func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }
 // InFlightForTest reports whether a transfer of charID waits for the database (its
 // drops outside houses are held).
 func (w *World) InFlightForTest(charID int64) bool { return w.inFlight[charID] != 0 }
+
+// HeldGroundForTest returns how many ground items are reserved to a held character.
+func (w *World) HeldGroundForTest() int { return len(w.heldGround) }

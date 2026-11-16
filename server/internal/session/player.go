@@ -55,7 +55,6 @@ type Player struct {
 	out   []*pb.ServerMessage
 
 	autosave game.EventID
-	saveSeq  uint64
 
 	// Combat (T1.6): the monster being attacked, the stance and chase mode from
 	// SetFightMode, and the first tick of the next attack round.
@@ -285,10 +284,10 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 	// would carry an inventory without the house that explains it). Every site that
 	// numbers a transfer flushes before numbering; inside the flush this is a no-op.
 	w.flushHouses()
-	p.saveSeq++
+	w.saveSeq++
 	return Snapshot{
 		CharacterID: p.charID,
-		Seq:         p.saveSeq,
+		Seq:         w.saveSeq,
 		Level:       p.level,
 		Experience:  p.experience,
 		Health:      p.health,
@@ -328,7 +327,8 @@ func (w *World) Leave(client Client) game.Command {
 // unless a login of that character is reading the database right now. Any snapshot at
 // or after the one of the character's last transfer ends its hold (T5.3): the Saver
 // writes in order and skips everything of a character after a transfer it dropped, so
-// that transfer is in the database too. A lost ack keeps the hold until the next save.
+// that transfer is in the database too. The app retries an ack the full queue refused
+// (a late one is harmless: only a seq at or after the hold's ends it).
 func (w *World) Saved(characterID int64, seq uint64) game.Command {
 	return game.CommandFunc(func(*game.TickContext) {
 		if s, ok := w.unsaved[characterID]; ok && s.Seq == seq && w.loading[characterID] == 0 {
@@ -384,14 +384,12 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		client.Close(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 		return
 	}
-	var seq uint64
 	var carry *Player // T5.2: the player this login replaces, for its PvP locks
 	if old := w.byChar[c.ID]; old != nil {
 		carry = old
 		// Logged in again while online: continue from the in-memory state.
 		c = w.state(old, c)
 		w.remove(ctx, old, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_IN_ELSEWHERE, false)
-		seq = old.saveSeq       // after remove's final snapshot: later seqs must be greater
 		delete(w.unsaved, c.ID) // the new player carries the state; it saves it later
 	} else if s, ok := w.unsaved[c.ID]; ok {
 		// Left recently and the database may not have the final save yet.
@@ -403,7 +401,6 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Conditions = s.Conditions
 		c.PvP = s.PvP
 		c.Cosmetics = s.Cosmetics
-		seq = s.Seq
 	}
 
 	stats := voc.AtLevel(c.Level)
@@ -425,7 +422,6 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		speed:      max(stats.Speed, 1),
 		baseSpeed:  max(stats.Speed, 1),
 		dir:        world.South,
-		saveSeq:    seq,
 		stance:     pb.FightStance_FIGHT_STANCE_BALANCED,
 		safe:       true, // T5.2: until the client says otherwise
 	}
