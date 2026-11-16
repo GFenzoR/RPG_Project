@@ -97,6 +97,9 @@ func TestStepContext(t *testing.T) {
 			t.Errorf("tick %d: ctx does not carry the loop's Rand and Scheduler", i+1)
 		}
 	}
+	if s := l.Scheduler(); s.Now() != 2 || !s.Time().Equal(seen[1].Now) {
+		t.Errorf("scheduler at tick %d, %v; want the last tick's 2, %v", s.Now(), s.Time(), seen[1].Now)
+	}
 }
 
 func TestEnqueueCapacityAndPerTickCap(t *testing.T) {

@@ -40,6 +40,8 @@ const CHORDS: Record<string, string[]> = {
   Em: ["E3", "G3", "B3"],
   D: ["D3", "F#3", "A3"],
   Am: ["A2", "C3", "E3"],
+  Eb: ["Eb3", "G3", "Bb3"],
+  Gm: ["G2", "Bb2", "D3"],
 };
 
 const chord = (name: string): string[] => {
@@ -319,6 +321,127 @@ const TRACKS: Record<string, Track> = {
       }
     },
   },
+  // Isla Volcánica (T5.5): D phrygian dominant over a low drone, slow drums like the
+  // mountain's pulse and a far anvil from the smithies of Brasal, 66 bpm.
+  "music/volcan": {
+    bpm: 66,
+    bars: 8,
+    seed: 600,
+    render(out, beat, rand) {
+      const total = beat(32);
+      const drone = silence(total);
+      for (const n of ["D1", "A1"])
+        mix(
+          drone,
+          tone(
+            {
+              wave: "saw",
+              freq: midi(note(n)),
+              dur: total,
+              attack: 0.01,
+              release: 0.01,
+              gain: 0.1,
+              lowpass: 200,
+            },
+            rand,
+          ),
+          0,
+        );
+      // A slow swell, twice per loop, so the loop point stays smooth.
+      for (let i = 0; i < drone.length; i++)
+        drone[i] = (drone[i] ?? 0) * (0.65 + 0.35 * Math.cos((2 * Math.PI * 2 * i) / drone.length));
+      mix(out, drone, 0);
+      // D phrygian dominant (D Eb F# G A Bb C): the bII–I of Eb to D closes every half.
+      const prog = ["D", "Eb", "D", "C", "D", "Eb", "Gm", "Eb"];
+      prog.forEach((name, bar) => {
+        const tones = chord(name);
+        mix(
+          out,
+          pad(
+            tones.map((n) => midi(note(n))),
+            beat(4) + 0.6,
+            rand,
+            0.06,
+          ),
+          beat(bar * 4),
+          true,
+        );
+        // Drums: a deep hit on 1, a softer one on 3 and a ghost before the next bar.
+        for (const [b, g] of [
+          [0, 0.75],
+          [2, 0.45],
+          [3.5, 0.2],
+        ] as const) {
+          mix(
+            out,
+            tone(
+              {
+                wave: "sine",
+                freq: 110,
+                freqEnd: 42,
+                dur: 0.6,
+                attack: 0.003,
+                decay: 0.2,
+                gain: g,
+              },
+              rand,
+            ),
+            beat(bar * 4 + b),
+            true,
+          );
+          mix(
+            out,
+            tone(
+              { wave: "noise", freq: 1, dur: 0.08, decay: 0.02, lowpass: 500, gain: g * 0.5 },
+              rand,
+            ),
+            beat(bar * 4 + b),
+            true,
+          );
+        }
+        // The anvil: two inharmonic partials, far away, every other bar.
+        if (bar % 2 === 1)
+          for (const [f, g] of [
+            [1568, 0.05],
+            [2321, 0.03],
+          ] as const)
+            mix(
+              out,
+              tone({ wave: "sine", freq: f, dur: 1.2, attack: 0.002, decay: 0.35, gain: g }, rand),
+              beat(bar * 4 + 3),
+              true,
+            );
+      });
+      const melody = line([
+        ["-", 2],
+        ["D4", 1],
+        ["Eb4", 1],
+        ["F#4", 2],
+        ["G4", 1],
+        ["F#4", 1],
+        ["Eb4", 3],
+        ["D4", 1],
+        ["C4", 2],
+        ["D4", 2],
+        ["-", 1],
+        ["A4", 1],
+        ["Bb4", 1],
+        ["A4", 1],
+        ["G4", 1.5],
+        ["F#4", 0.5],
+        ["Eb4", 2],
+        ["D4", 1],
+        ["Eb4", 1],
+        ["F#4", 1],
+        ["G4", 1],
+        ["Bb4", 1],
+        ["G4", 2],
+        ["-", 1],
+      ]);
+      for (const m of melody)
+        mix(out, flute(midi(note(m.n)), beat(m.len), rand, 0.26), beat(m.beat), true);
+    },
+  },
 };
 
 const AMBIENT: Record<
@@ -387,6 +510,100 @@ const AMBIENT: Record<
             at + c * 0.11,
             true,
           );
+      }
+    },
+  },
+  // Isla Volcánica (T5.5): the mountain's deep rumble, lava bubbling, crackling rock and
+  // a vent letting off steam now and then.
+  "ambient/volcan": {
+    seconds: 16,
+    seed: 700,
+    render(out, rand) {
+      const n = out.length;
+      // The bed is rendered half a second longer and its tail crossfaded into its start,
+      // so the filtered noise has no click at the loop point.
+      const xf = 24000;
+      const noise = (): Float32Array =>
+        tone(
+          { wave: "noise", freq: 1, dur: (n + xf) / 48000, attack: 0.001, release: 0.001 },
+          rand,
+        );
+      const rumble = lowpass(lowpass(noise(), 140), 180);
+      const roar = highpass(lowpass(noise(), 900), 250);
+      const bed = (i: number): number => {
+        const ph = (2 * Math.PI * i) / n;
+        const swell = 0.6 + 0.4 * Math.sin(ph) ** 2;
+        return (
+          2.4 * (rumble[i] ?? 0) * (0.75 + 0.25 * Math.cos(2 * ph)) + 0.2 * (roar[i] ?? 0) * swell
+        );
+      };
+      for (let i = 0; i < n; i++) {
+        const w = i < xf ? i / xf : 1;
+        out[i] = w * bed(i) + (1 - w) * bed(n + i);
+      }
+      // Lava bubbles: low blips that rise as they pop.
+      for (let b = 0; b < 14; b++) {
+        const f = 70 + rand() * 60;
+        mix(
+          out,
+          tone(
+            {
+              wave: "sine",
+              freq: f,
+              freqEnd: f * 2.4,
+              dur: 0.12 + rand() * 0.1,
+              attack: 0.005,
+              decay: 0.05,
+              gain: 0.3,
+            },
+            rand,
+          ),
+          rand() * 16,
+          true,
+        );
+      }
+      // Crackles: short ticks in small clusters.
+      for (let c = 0; c < 10; c++) {
+        const at = rand() * 16;
+        const ticks = 2 + Math.floor(rand() * 4);
+        for (let k = 0; k < ticks; k++)
+          mix(
+            out,
+            tone(
+              {
+                wave: "noise",
+                freq: 1,
+                dur: 0.02,
+                decay: 0.004,
+                highpass: 2000,
+                gain: 0.12 + rand() * 0.15,
+              },
+              rand,
+            ),
+            at + k * (0.03 + rand() * 0.06),
+            true,
+          );
+      }
+      // Steam from a vent, twice per loop.
+      for (const at of [3.5, 11]) {
+        mix(
+          out,
+          tone(
+            {
+              wave: "noise",
+              freq: 1,
+              dur: 1.8,
+              attack: 0.4,
+              release: 1,
+              highpass: 3000,
+              lowpass: 9000,
+              gain: 0.1,
+            },
+            rand,
+          ),
+          at,
+          true,
+        );
       }
     },
   },

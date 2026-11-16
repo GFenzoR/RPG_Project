@@ -25,7 +25,8 @@ client/
 - Render de tiles 32x32 con orden de dibujo estilo Tibia: suelo → bordes → items →
   criaturas → efectos → textos flotantes, por fila de abajo hacia arriba.
 - Ventana visible por defecto 15x11 casillas; el canvas escala en múltiplos enteros
-  (pixel-perfect, `roundPixels`, sin suavizado).
+  (pixel-perfect, `roundPixels`, sin suavizado). El jugador puede acercar el mapa por
+  escalas enteras (ver "Zoom del mapa"), nunca alejarlo por debajo de las 15x11.
 - La UI (inventario, chat, diálogos) es DOM con Preact encima del canvas, no Pixi.
   Así es accesible, traducible y testeable con Playwright.
 - Ningún string visible hardcodeado: todo pasa por `t('clave')`.
@@ -51,8 +52,8 @@ client/
 - Click derecho sobre una criatura o click en la lista de batalla = `SetTarget` (otra vez
   la misma = dejar de atacar). Los monstruos usan su sprite del atlas
   (`monsterSprites`, de `data/monsters`).
-- Efectos y números flotantes son formas Pixi procedurales hasta tener sprites de efectos.
-  Capas: mapa+criaturas → efectos → nombres y barras → números.
+- Los efectos son tiras de frames del atlas (ver "Sprites de efectos"); los números
+  flotantes son `Text` de Pixi. Capas: mapa+criaturas → efectos → nombres y barras → números.
 - Los mensajes (`state/messages.ts`) se traducen con su clave y parámetros; los `item`
   repetidos forman `{items}`.
 
@@ -81,8 +82,8 @@ client/
   slot es lo que falta del cooldown propio o de grupo (`SpellCooldown`).
 - La línea "Decir" manda `Say` en el canal local: si son palabras mágicas, el servidor
   lanza el hechizo (el chat completo está en T1.13).
-- `WorldState.projectiles` guarda los `Projectile` 250 ms; efectos y proyectiles mágicos
-  son formas Pixi coloreadas por elemento (`ELEMENTS`).
+- `WorldState.projectiles` guarda los `Projectile` 250 ms; los proyectiles son formas Pixi
+  coloreadas por elemento (`ELEMENTS`) y los efectos mágicos, la tira de su elemento.
 
 ## Notas de T1.10
 - `WorldState.dialog` / `shop` (de `DialogOpen`, `DialogClose`, `ShopOpen`): la tienda se
@@ -105,7 +106,7 @@ client/
   deja `Game.usingItem` y la clase `using-item` en `body` (cursor en cruz); el siguiente
   click en el mapa manda `UseItemOn` a esa casilla. Escape, click derecho o click sobre una
   criatura lo cancelan.
-- Efectos 5 (cosecha) y 6 (intento fallido) son formas Pixi en `drawEffect`.
+- Efectos 5 (cosecha) y 6 (intento fallido): tiras `effects/gather` y `effects/gather_miss`.
 
 ## Notas de T1.13
 - `WorldState.chat` (últimas `CHAT_SIZE` líneas de `Message` no de sistema) aparte del log de
@@ -290,10 +291,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 
 ## Notas de T5.2
 - `CreatureState.skull` (de `Creature.skull` y `CreatureSkull`): el canvas dibuja la marca a
-  la izquierda del nombre con formas (`drawSkull`, colores en `state/pvp.ts` `skullColor`)
-  y la lista de batalla un `.skull` del mismo color (`data-skull`). Placeholder hasta tener
-  sprite. La lista de batalla ya no deshabilita a los jugadores: un click = `SetTarget`
-  (el servidor decide); también click derecho en el canvas.
+  la izquierda del nombre y la lista de batalla un `.skull` (`data-skull`, `MarkIcon` en
+  `ui/App.tsx`). La marca es el sprite `ui/marks/<id>` del atlas (arte propio de spritegen,
+  `render/marks.ts`, puro y con tests): en el canvas, un `Sprite` a 1 px de pantalla por
+  px del sprite, anclado en el centro de `MARK_BOX`; en la lista, `Game.markIcon` +
+  `markIconStyle` como fondo CSS de 12x12 (clase `art`, `data-art`). Solo con arte real
+  (origen distinto de `auto` y `placeholder`); si no, las formas de antes (`drawSkull`,
+  colores de `state/pvp.ts` `skullColor`). La lista de batalla ya no deshabilita a los
+  jugadores: un click = `SetTarget` (el servidor decide); también click derecho en el canvas.
 - Modo seguro: `Game.safeMode`/`setSafeMode` (`localStorage` `rpg.safeMode`, activado por
   defecto, `state/pvp.ts`); se manda tras el `Welcome` solo si está apagado (el servidor
   empieza activado). Interruptor `data-testid="safe-mode"` en "Modo de combate".
@@ -318,6 +323,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   contenedores abiertos. El mercado se abre con click derecho sobre un tablero (es un
   `UseItem` como cualquier item del mapa); la búsqueda es un `<datalist>` de los nombres
   traducidos: la búsqueda prefiere el nombre exacto, luego el prefijo (`searchItems`).
+- Una `MarketUpdate` con `refresh` (el servidor la manda solo, por la acción de otro)
+  pasa por `applyMarket`: actualiza la ventana si sigue abierta y nunca la reabre. Los
+  formularios no controlados conservan lo escrito al refrescar. El precio que propone el
+  formulario de crear es `MarketView.priceDefault` (el de referencia cuando se abrió ese
+  item), que `applyMarket` mantiene mientras la ventana muestra el mismo item: un
+  `defaultValue` que cambia reescribe el campo si el jugador no lo tocó. El formulario
+  lleva `key` por item, así otro item empieza de cero.
 - `MarketView.readOnly` (`MarketUpdate.read_only`) muestra el aviso
   `data-testid="market-read-only"`; `Disconnect{SAVE_FAILED}` y `{CHARACTER_LOCKED}` usan
   la tabla automática de motivos (`client.disconnect.*`).
@@ -387,8 +399,45 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - El canvas usa el outfit solo si el atlas tiene arte real para todos sus frames (origen
   distinto de `auto` y `placeholder`); si no, el bloque. Los sprites de criatura van
   anclados abajo a la derecha de su casilla, como en `MapView` (uno de 64x64 crece hacia
-  arriba y a la izquierda). Alpha de invisible, nombre, barras, calavera y marco de
+  arriba y a la izquierda). Alpha de invisible, nombre, barras, marca PvP y marco de
   objetivo no cambian.
+
+## Sprites de efectos
+- Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames
+  en el atlas: `effects/<nombre>/<n>` (`n` = 0, 1, …), 32x32, arte propio de
+  `tools/spritegen` (`recipes/effects.ts`, 6 frames por tira). Nombres: `hit`, `block`,
+  `heal`, `conjure`, `gather`, `gather_miss`, `buff` y los 7 elementos de `ELEMENTS`
+  (`physical` … `death`, ids 10 + índice).
+- `render/effects.ts` (puro, con tests): `effectFolder(id)` da la carpeta de un id;
+  `effectFrames(id, hasArt)` lista los frames con arte real hasta el primero que falte
+  (máximo `MAX_EFFECT_FRAMES`); `effectFrame(elapsed, frames)` reparte los frames en
+  partes iguales sobre `EFFECT_MS` (600 ms, lo que el mundo guarda un efecto): el primero
+  antes de empezar, el último desde el final. Se juega una vez, sin bucle.
+- `render/effect-layer.ts` (`EffectLayer`, con tests sobre contenedores de Pixi sin
+  render) dibuja efectos, proyectiles y números. Un id sin frames con arte real (id
+  desconocido, o atlas con `auto`/`placeholder`) cae en la forma Pixi procedural de
+  siempre, que se desvanece. Los sprites van anclados abajo a la derecha de su casilla,
+  como los de criatura.
+- Presupuesto (docs/07): todo sale de pools y se reutiliza; las formas procedurales
+  comparten un `GraphicsContext` por id; un frame no asigna nada (los sprites y formas se
+  toman por orden y los sobrantes se ocultan; un número conserva su `Text` mientras el
+  mundo lo guarde y vuelve a una reserva al terminar). `WorldState.expire` filtra las
+  listas en el lugar (`dropFinished`), sin un array nuevo por frame.
+- Para cambiar un efecto: su receta en `tools/spritegen/src/recipes/effects.ts`,
+  `make spritegen ONLY=effects/<nombre>/` y `make sprites`. Para un efecto nuevo del
+  servidor: su carpeta en `FOLDERS` de `render/effects.ts` y su tira en la receta.
+
+## Notas de T5.5 (carteles y descripciones)
+- `ItemDef.desc` es la clave del `description` del item en `data/items`; mirar un item
+  agrega ese texto (sin `desc`, la convención `item.<id>.desc`). El plugin de Vite
+  empaqueta esas claves aunque vivan en un catálogo de solo nombres (`items.yaml`,
+  `world.yaml`): así un cartel (`brasal_dock_sign`, `description: text.volcan.dock_sign`)
+  se lee con Mayús+click.
+- El cliente nombra los items por `item.<id>.name`. Un item con un `name` compartido (las
+  piezas de borde, los carteles con `item.signpost.name`) recibe esa clave con el texto
+  compartido en el plugin; el código sigue pidiendo `item.<id>.name`.
+- E2E: el test "T5.5: wake up at the temple of Brasal" lee el cartel del templo
+  (screenshot `65b-volcan-temple-sign`).
 
 ## Notas de T5.6
 - **Input táctil** (`input/gestures.ts`, `dpad.ts`, `actions.ts`, puros y con tests). Los
@@ -423,7 +472,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (`desktop`, `tablet`, `phone-portrait`, `phone-landscape`), `data-panel` (`sidebar`,
   `tabs`, `drawer`) y `data-flow` (`row`, `column`); `client.css` cuelga sus reglas de
   esos atributos. Las pestañas son un `tablist` ARIA; el cajón está `inert` cerrado y
-  recortado (`overflow: hidden`) para que el teléfono no ensanche la página. Un resaltado
+  recortado (`overflow: clip`, con `hidden` de respaldo) para que el teléfono no ensanche
+  la página, ni un script o un campo con foco desplace el mapa de lado. Un resaltado
   del tutorial cambia a su pestaña. El encabezado es siempre una línea: la ayuda de
   controles se corta con "…" y se abre al tocarla; en teléfonos y tablets en vertical, un
   menú ☰ guarda experiencia, ayuda, idioma, opciones y salir.
@@ -438,8 +488,17 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde zoom 2 no cambia
   nada.
 - Hotbar: con poco ancho muestra los slots enteros que entran, con flechas ‹ › de 44 px y
-  deslizamiento nativo; F1–F12 siguen en el DOM. El tutorial se pliega con "×" sin
-  saltarse.
+  deslizamiento nativo; F1–F12 siguen en el DOM. En vertical con pad (`stacked` en
+  `ui/Hotbar.tsx`) va a la derecha del pad: flechas y lápiz en una línea, y debajo los
+  slots más angostos (3.2rem). Así entran 4 en un teléfono de 390–412 px
+  (`layout.ts` `hotbarRoom`). La franja bajo el mapa (154 px, el alto del pad) es el
+  `padding-bottom` de `.viewport`; el canvas se mide con la caja de contenido. El tutorial
+  se pliega con "×" sin saltarse.
+- Escritorio: en la columna lateral todo menos el chat va en `.side-scroll`, que se
+  desplaza; el chat queda fijo debajo. Antes era `sticky` y tapaba el final del inventario
+  y de "Apariencia" a 1280x800. Con pestañas o cajón, `.side-scroll` es
+  `display: contents`. El log del sistema va al final de esa columna en escritorio y
+  arriba de la pestaña del chat en el resto.
 - **PWA:** `public/manifest.webmanifest`, íconos placeholder (`make pwa-icons`,
   `tools/spritegen/src/pwa-icons.ts`), `src/sw.ts` (emitido como `/sw.js` por
   `vite.config.ts`) con la política pura de `sw/policy.ts`: nunca `/api`, `/ws`,
@@ -447,12 +506,37 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `pwa.ts` lo registra solo en un build de producción, en contexto seguro y fuera de
   Tauri (lo importan `main.tsx` y `site/main.tsx`). Instalación y Tauri mobile:
   `docs/15-movil.md`.
-- E2E: `e2e/mobile.spec.ts` (Pixel 7 vertical y horizontal, iPad Mini, sobre Chromium;
-  toques con `page.touchscreen` y toques largos con eventos táctiles de CDP). Test ids:
+- E2E: `e2e/mobile.spec.ts` (Pixel 7 vertical y horizontal e iPad Mini sobre Chromium;
+  iPhone 13 vertical y horizontal e iPad Mini sobre WebKit, en el proyecto
+  `webkit-mobile`, tests con "(webkit)" en el título). Toques con `page.touchscreen`; los
+  toques largos y el pellizco usan eventos táctiles de CDP en Chromium y `PointerEvent`
+  sintéticos en WebKit (`fingers`, id 1 para el primer dedo). Test ids:
   `touch-pad`, `[data-dir=north]`, `action-menu`, `[data-action=…]`, `pick-banner`,
   `pick-cancel`, `touch-pad-toggle`, `panel-tabs` `[data-tab=…]`, `panel-toggle`,
   `hud-menu`, `notices`. Hook `__rpgClient.monsters()` para tocar un monstruo.
 - Un diálogo de NPC pasa `{name}` (el nombre del jugador) a su texto.
+
+## Zoom del mapa
+- `render/zoom.ts` (puro, con tests) decide la escala. El mínimo es la que muestra las
+  15x11 casillas enteras (la de siempre, `pixelScale`). El máximo es la mayor que todavía
+  muestra 7x5 (`MIN_VIEW`). Siempre escalas enteras. Acercado, el canvas se corta a la
+  caja del mapa en píxeles de sprite enteros (`viewPixels`). `followCamera` centra en el
+  jugador una vista de casillas fraccionarias. El servidor sigue mandando las 15x11 (+1):
+  el zoom es solo de dibujo.
+- Entradas: pellizco (`pinch` del reconocedor de gestos, escala inicial × separación,
+  redondeada); botones +/− (`ui/ZoomButtons.tsx`, sin hooks, solo con puntero grueso,
+  ocultos si la pantalla admite una sola escala); Ctrl+rueda sobre el canvas
+  (`WheelZoom`: una muesca o un pellizco corto de trackpad = un paso, `preventDefault`
+  para que la página no haga zoom). La rueda sin Ctrl no hace nada.
+- Se recuerda por dispositivo en `localStorage` `rpg.zoom` (la escala). La vista ajustada
+  no guarda nada: vuelve a seguir a la ventana. Si la ventana ya no admite la escala
+  guardada, se dibuja la mayor posible y se conserva la elección.
+- `GameUi.zoom` (`{ scale, min, max }`) llega a la UI desde el canvas
+  (`GameCanvasOptions.zoomView`); `Game.zoom(steps)` es lo que llaman los botones. Hook
+  E2E: `__rpgClient.zoom()`.
+- Ubicación de los botones (`touch.css`): abajo a la derecha del mapa, sobre una hotbar
+  de una línea y bajo el cajón. En vertical con pad van en la franja, sobre las flechas de
+  la hotbar. Mientras hay un item elegido, el banner toma su lugar y se ocultan.
 
 ## Notas de T5.7
 - `CreatureState.cosmetics` (de `Creature.cosmetics` y `CreatureCosmetics`, con `""` = el

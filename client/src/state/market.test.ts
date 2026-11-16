@@ -8,6 +8,7 @@ import {
 } from "@rpg/protocol";
 import type { ItemDef } from "../content-types.ts";
 import {
+  applyMarket,
   createProblem,
   marketCost,
   marketFee,
@@ -86,6 +87,54 @@ describe("marketFrom", () => {
     expect(m?.mailbox).toEqual([{ id: 2n, itemId: 68, count: 5 }]);
     expect(m?.history[0]).toMatchObject({ sold: true, price: 7 });
     expect(m?.rules.feeMax).toBe(4000);
+  });
+});
+
+describe("applyMarket", () => {
+  const book = (amount: number, refresh: boolean) =>
+    create(MarketUpdateSchema, {
+      open: true,
+      refresh,
+      money: 30n,
+      itemId: 68,
+      sells: [
+        { offerId: 9n, side: MarketSide.SELL, itemId: 68, amount, price: 7n, ownerName: "Sela" },
+      ],
+    });
+
+  it("refreshes an open window with another player's change", () => {
+    const open = applyMarket(undefined, book(10, false));
+    expect(open?.sells[0]?.amount).toBe(10);
+    const later = applyMarket(open, book(6, true));
+    expect(later?.sells[0]?.amount).toBe(6);
+    expect(later?.money).toBe(30);
+    // A refresh that empties the book still leaves the window open.
+    expect(
+      applyMarket(later, create(MarketUpdateSchema, { open: true, refresh: true }))?.sells,
+    ).toEqual([]);
+  });
+
+  it("keeps the create form's default price while the window shows the same item", () => {
+    const at = (itemId: number, referencePrice: bigint, refresh: boolean) =>
+      create(MarketUpdateSchema, { open: true, refresh, itemId, referencePrice });
+    const open = applyMarket(undefined, at(68, 6n, false));
+    expect(open?.priceDefault).toBe(6);
+    // Another player's sale moves the reference price: the default stays.
+    const later = applyMarket(open, at(68, 9n, true));
+    expect(later?.referencePrice).toBe(9);
+    expect(later?.priceDefault).toBe(6);
+    expect(applyMarket(later, at(68, 9n, false))?.priceDefault).toBe(6);
+    // Another item, or the window opened again, starts from its reference price.
+    expect(applyMarket(later, at(66, 3n, false))?.priceDefault).toBe(3);
+    expect(applyMarket(undefined, at(68, 9n, false))?.priceDefault).toBe(9);
+    expect(applyMarket(undefined, at(68, 0n, false))?.priceDefault).toBe(1);
+  });
+
+  it("never reopens a closed window, but an answer opens it", () => {
+    expect(applyMarket(undefined, book(6, true))).toBeUndefined();
+    expect(applyMarket(undefined, book(6, false))?.itemId).toBe(68);
+    const open = applyMarket(undefined, book(6, false));
+    expect(applyMarket(open, create(MarketUpdateSchema, { open: false }))).toBeUndefined();
   });
 });
 

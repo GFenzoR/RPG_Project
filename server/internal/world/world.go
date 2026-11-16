@@ -3,7 +3,9 @@
 // docs/01-architecture.md). It also answers the spatial questions the game loop asks:
 // can a creature stand here, which path leads there, is there line of sight.
 //
-// A Map is immutable after loading and is only read by the game loop goroutine.
+// A Map is only touched by the game loop goroutine. It is immutable after loading but for
+// one thing: a door that opens or closes swaps its item and blocking flags
+// (Map.ReplaceItem, docs/02-game-design.md "Puertas con llave").
 package world
 
 import "fmt"
@@ -75,7 +77,14 @@ type Sector struct {
 
 // Stack returns the item stack of the tile at local (lx, ly), or nil.
 func (s *Sector) Stack(lx, ly int) []uint16 {
-	idx := uint16(ly*SectorSize + lx)
+	if k := s.stackSlot(uint16(ly*SectorSize + lx)); k >= 0 {
+		return s.Stacks[k].Items
+	}
+	return nil
+}
+
+// stackSlot returns the index in s.Stacks of the tile with index idx, or -1.
+func (s *Sector) stackSlot(idx uint16) int {
 	lo, hi := 0, len(s.Stacks)
 	for lo < hi {
 		mid := (lo + hi) / 2
@@ -86,9 +95,9 @@ func (s *Sector) Stack(lx, ly int) []uint16 {
 		}
 	}
 	if lo < len(s.Stacks) && s.Stacks[lo].Index == idx {
-		return s.Stacks[lo].Items
+		return lo
 	}
-	return nil
+	return -1
 }
 
 // Island is a rectangle of the world with its own sectors. Its rect is aligned to sectors.
@@ -550,6 +559,30 @@ func (m *Map) Stack(p Pos) []uint16 {
 		return nil
 	}
 	return s.Stack(i%SectorSize, i/SectorSize)
+}
+
+// BlockFlags are the flags of a tile that come from what lies on it, the ones
+// ReplaceItem sets.
+const BlockFlags = FlagBlocksMovement | FlagBlocksSight
+
+// ReplaceItem puts item id at index i of p's stack (0 = the bottom item above the
+// ground) and sets the tile's BlockFlags to those of block; its other flags stay. It is
+// the one change a Map takes after loading: a door opening or closing. It writes the
+// stack in place (no allocation): a Map shares its stacks with nothing (a test that
+// copies a sector copies its stacks too, see worldtest.WithHouses). It reports whether p
+// has an item at index i.
+func (m *Map) ReplaceItem(p Pos, i int, id uint16, block Flags) bool {
+	s, t := m.sectorAt(int(p.X), int(p.Y), int(p.Z))
+	if s == nil || s.Ground[t] == 0 {
+		return false
+	}
+	k := s.stackSlot(uint16(t))
+	if k < 0 || i < 0 || i >= len(s.Stacks[k].Items) {
+		return false
+	}
+	s.Stacks[k].Items[i] = id
+	s.Flags[t] = s.Flags[t]&^BlockFlags | block&BlockFlags
+	return true
 }
 
 // speed returns the terrain cost (percent) of entering a tile with the given ground.

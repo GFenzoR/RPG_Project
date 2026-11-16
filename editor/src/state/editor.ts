@@ -6,12 +6,16 @@ import {
   diffWorlds,
   entryAddOp,
   entryRemoveOp,
+  houseContains,
+  houseNameKey,
   rectContains,
+  stableJson,
 } from "@rpg/map-format/ops";
 import type {
   BorderRule,
   EntityList,
   EraseLayer,
+  House,
   Island,
   MapOp,
   NpcPlacement,
@@ -36,6 +40,7 @@ import type { ImportConflict } from "../review/patch.ts";
 import { MAX_PATCH_SIZE } from "../io/wire.ts";
 import type {
   FileChange,
+  NameText,
   PaletteItem,
   ParsedPatch,
   PatchExportRequest,
@@ -49,6 +54,7 @@ import {
   clipToIslands,
   copyRect,
   historyLabel,
+  inIsland,
   line,
   pasteOps,
   rectOf,
@@ -56,6 +62,18 @@ import {
   toolOps,
 } from "../tools/tools.ts";
 import type { BrushSize, Clipboard, ToolName, ToolSettings } from "../tools/tools.ts";
+import {
+  MAX_DRAFT_TILES,
+  draftHouse,
+  draftIssues,
+  draftOf,
+  issueText,
+  newDraft,
+  paintTiles,
+  setExit,
+  toggleDoor,
+} from "../houses/draft.ts";
+import type { DraftIssue, HouseDraft, HouseMode } from "../houses/draft.ts";
 
 /** An entry of one of the auxiliary lists the panels edit. */
 export type Entity = Spawn | NpcPlacement | Zone | Portal;
@@ -98,6 +116,11 @@ export interface EditorState {
   /** Entity panel: list shown and the key of the selected entry. */
   entityTab: EntityList;
   entitySel: string | undefined;
+  /** House panel: the selected house and the draft being edited (new or existing). */
+  houseSel: string | undefined;
+  houseDraft: HouseDraft | undefined;
+  /** What the house tool does on the map: paint tiles, toggle doors or set the exit. */
+  houseMode: HouseMode;
   /** A panel asked for a tile: the next click on the map answers it instead of the tool. */
   picking: boolean;
   hover: { x: number; y: number } | undefined;
@@ -137,10 +160,16 @@ export class PartialSaveError extends Error {
   }
 }
 
+/** An i18n key the validator should take as present (a house name not saved yet). */
+export interface PendingKey {
+  lang: string;
+  key: string;
+}
+
 export interface Backend {
-  validate(world: World): Promise<ValidateResult>;
-  /** Throws ConflictError on a 409. */
-  save(world: World, changes: FileChange[]): Promise<SaveResult>;
+  validate(world: World, pendingKeys?: PendingKey[]): Promise<ValidateResult>;
+  /** Saves the files and the house names. Throws ConflictError on a 409. */
+  save(world: World, changes: FileChange[], texts?: NameText[]): Promise<SaveResult>;
   /** Builds a .rpgpatch.json (an object, ready to serialise) of the files that differ. */
   exportPatch(req: PatchExportRequest): Promise<unknown>;
   /** Checks and parses a .rpgpatch.json; throws with the server's reason if it is refused. */
@@ -164,8 +193,10 @@ async function post<T>(url: string, data: unknown): Promise<T> {
 }
 
 export const httpBackend: Backend = {
-  validate: (world) => post<ValidateResult>("/api/validate", toWire(world)),
-  save: (world, changes) => post<SaveResult>("/api/save", { world: toWire(world), changes }),
+  validate: (world, pendingKeys = []) =>
+    post<ValidateResult>("/api/validate", { ...toWire(world), pendingKeys }),
+  save: (world, changes, texts = []) =>
+    post<SaveResult>("/api/save", { world: toWire(world), changes, texts }),
   exportPatch: (req) => post<unknown>("/api/patch/export", req),
   parsePatch: (text) => post<ParsedPatch>("/api/patch/parse", { text }),
 };
@@ -182,6 +213,11 @@ export interface EditorOptions {
   borders?: BorderRule[];
   monsters?: string[];
   npcs?: string[];
+  /**
+   * House names as loaded: language → house.<id>.name → text (i18n/<lang>/world.yaml). Its
+   * languages are the ones the house panel asks a name in.
+   */
+  houseNames?: Record<string, Record<string, string>>;
   /** Island to open (?island=); the first one in world.yaml otherwise. */
   island?: string | null;
   backend?: Backend;
@@ -193,6 +229,12 @@ export class EditorController {
   readonly t: Translate;
   readonly monsters: string[];
   readonly npcs: string[];
+  /** Languages a house needs a name in. */
+  readonly languages: string[];
+  /** House names as on disk (moved forward by each save): language → key → text. */
+  private readonly names: Map<string, Map<string, string>>;
+  /** House names changed in the panel and not saved: `${lang} ${key}` → text. */
+  private readonly pendingNames = new Map<string, string>();
   private readonly borders: BorderRule[];
   private pickCallback: ((pos: Position) => void) | undefined;
   view: ViewSize = { width: 800, height: 600 };
@@ -229,6 +271,11 @@ export class EditorController {
     this.borders = opts.borders ?? [];
     this.monsters = opts.monsters ?? [];
     this.npcs = opts.npcs ?? [];
+    const names = opts.houseNames ?? {};
+    this.languages = Object.keys(names);
+    this.names = new Map(
+      Object.entries(names).map(([lang, texts]) => [lang, new Map(Object.entries(texts))]),
+    );
     this.history = new History(this.opOptions(), { borders: this.borders });
     const island =
       (opts.island && opts.world.islands.get(opts.island)) ||
@@ -255,6 +302,9 @@ export class EditorController {
       pasting: false,
       entityTab: "spawns",
       entitySel: undefined,
+      houseSel: undefined,
+      houseDraft: undefined,
+      houseMode: "tiles",
       picking: false,
       hover: undefined,
       dirty: false,
@@ -442,17 +492,22 @@ export class EditorController {
 
   /** One-shot edit (rectangle, paste, panels) recorded as one history entry. */
   private commit(label: string, ops: MapOp[], autoborder = true): boolean {
+    return this.tryCommit(label, ops, autoborder) === "done";
+  }
+
+  /** commit(), telling an edit that changed nothing ("same") from a rejected one. */
+  private tryCommit(label: string, ops: MapOp[], autoborder = true): "done" | "same" | "rejected" {
     this.strokeEnd();
-    if (this.readOnly()) return false;
+    if (this.readOnly()) return "rejected";
     try {
       const e = this.edit(ops, autoborder);
-      if (!e) return false;
+      if (!e) return "same";
       this.history.record({ label, ...e });
       this.syncHistory();
-      return true;
+      return "done";
     } catch (e) {
       this.reject(e);
-      return false;
+      return "rejected";
     }
   }
 
@@ -468,7 +523,12 @@ export class EditorController {
 
   /** Whether the current tool works on a dragged rect instead of tile by tile. */
   private get dragging(): boolean {
-    return this.state.tool === "rect" || this.state.tool === "select";
+    const s = this.state;
+    return (
+      s.tool === "rect" ||
+      s.tool === "select" ||
+      (s.tool === "house" && s.houseDraft !== undefined && s.houseMode === "tiles")
+    );
   }
 
   strokeStart(x: number, y: number, secondary: boolean): void {
@@ -486,6 +546,7 @@ export class EditorController {
       this.set({ pasting: false });
       return;
     }
+    if (this.state.tool === "house" && !this.houseClick(x, y, secondary)) return;
     const label = historyLabel(this.state.tool, secondary);
     const at = { x, y };
     this.stroke = { stroke: new Stroke(label), secondary, start: at, last: at, done: new Set() };
@@ -512,6 +573,7 @@ export class EditorController {
       this.set({ drag: undefined });
       if (this.state.tool === "select")
         this.set({ selection: drag, selectionFloor: this.state.floor });
+      else if (this.state.tool === "house") this.paintHouse(drag, this.state.floor, st.secondary);
       else if (this.state.tool === "rect") {
         try {
           const e = this.edit(rectOps(this.state.world, this.settings(), drag, st.secondary));
@@ -674,6 +736,227 @@ export class EditorController {
     return ok;
   }
 
+  // ---- house panel (T5.4 houses.yaml) ----------------------------------------------------
+
+  /** Houses of `island` (the current one by default). */
+  houses(island = this.state.island): House[] {
+    return this.state.world.islands.get(island)?.houses ?? [];
+  }
+
+  private findHouse(id: string): House | undefined {
+    for (const isl of this.state.world.islands.values()) {
+      const h = isl.houses.find((x) => x.id === id);
+      if (h) return h;
+    }
+    return undefined;
+  }
+
+  /** The name of house `id` in `lang`: the unsaved one, else the one on disk, else "". */
+  houseName(id: string, lang: string): string {
+    const key = houseNameKey(id);
+    return this.pendingNames.get(`${lang} ${key}`) ?? this.names.get(lang)?.get(key) ?? "";
+  }
+
+  private namesOf(id: string): Record<string, string> {
+    return Object.fromEntries(this.languages.map((l) => [l, this.houseName(id, l)]));
+  }
+
+  /** Selects a house (any island) and opens it in the panel; undefined closes the panel. */
+  selectHouse(id: string | undefined): void {
+    this.cancelPick();
+    const h = id === undefined ? undefined : this.findHouse(id);
+    this.set({ houseSel: h?.id, houseDraft: h && draftOf(h, this.namesOf(h.id)) });
+  }
+
+  /** Opens an empty draft for a new house of the current island and picks the house tool. */
+  newHouse(): void {
+    this.cancelPick();
+    this.set({
+      houseSel: undefined,
+      houseDraft: newDraft(this.state.world, this.state.island, this.languages),
+      tool: "house",
+      houseMode: "tiles",
+      pasting: false,
+      status: this.t("editor.house.hint.tiles"),
+    });
+  }
+
+  closeHouse(): void {
+    this.set({ houseSel: undefined, houseDraft: undefined });
+  }
+
+  /** Changes fields of the draft (id only while it is new; names per language). */
+  editHouse(patch: {
+    id?: string;
+    rent?: number;
+    notes?: string;
+    names?: Record<string, string>;
+  }): void {
+    const d = this.state.houseDraft;
+    if (!d) return;
+    const next: HouseDraft = { ...d };
+    if (patch.id !== undefined && d.key === undefined) next.id = patch.id;
+    if (patch.rent !== undefined) next.rent = patch.rent;
+    if (patch.notes !== undefined) next.notes = patch.notes;
+    if (patch.names !== undefined) next.names = { ...d.names, ...patch.names };
+    this.set({ houseDraft: next });
+  }
+
+  /** What the house tool does on the map; picks the tool too. */
+  setHouseMode(houseMode: HouseMode): void {
+    this.set({
+      houseMode,
+      tool: "house",
+      pasting: false,
+      status: this.t(`editor.house.hint.${houseMode}`),
+    });
+  }
+
+  /** Adds (or with `remove` takes away) the tiles of `rect` on floor z to the draft. */
+  paintHouse(rect: Rect, z: number, remove: boolean): void {
+    const d = this.state.houseDraft;
+    if (!d) return;
+    const w = this.state.world;
+    const next = paintTiles(d, rect, z, remove, (p) => inIsland(w, p.x, p.y, p.z));
+    if (!next) this.set({ status: this.t("editor.house.too_big", { max: MAX_DRAFT_TILES }) });
+    else if (next !== d) this.set({ houseDraft: next });
+  }
+
+  /** Adds the selected tiles to the draft. */
+  houseFromSelection(): void {
+    const sel = this.state.selection;
+    if (sel) this.paintHouse(sel, this.state.selectionFloor, false);
+  }
+
+  /**
+   * A click with the house tool. Without a draft it opens the house under the cursor; with
+   * one it toggles a door or sets the exit. Returns true when the click starts dragging
+   * tiles (the "tiles" mode).
+   */
+  private houseClick(x: number, y: number, secondary: boolean): boolean {
+    const d = this.state.houseDraft;
+    const p = { x, y, z: this.state.floor };
+    if (!d) {
+      const h = this.houseAt(p);
+      if (h) this.selectHouse(h.id);
+      else this.set({ status: this.t("editor.house.hint_new") });
+      return false;
+    }
+    if (this.state.houseMode === "tiles") return true;
+    if (this.state.houseMode === "doors") this.set({ houseDraft: toggleDoor(d, p, secondary) });
+    else this.set({ houseDraft: setExit(d, secondary ? undefined : p) });
+    return false;
+  }
+
+  private houseAt(p: Position): House | undefined {
+    for (const isl of this.state.world.islands.values()) {
+      const h = isl.houses.find((x) => houseContains(x, p));
+      if (h) return h;
+    }
+    return undefined;
+  }
+
+  /** Problems of the draft, as the panel lists them. */
+  houseIssues(): DraftIssue[] {
+    const d = this.state.houseDraft;
+    return d ? draftIssues(this.state.world, d, this.languages) : [];
+  }
+
+  /**
+   * Applies the draft: add_house for a new house, set_house for an existing one (one
+   * history entry), and keeps its names to save. Refused (with the first problem in the
+   * status bar) while the draft has errors.
+   */
+  applyHouse(): boolean {
+    const d = this.state.houseDraft;
+    if (!d || this.readOnly()) return false;
+    const error = draftIssues(this.state.world, d, this.languages).find(
+      (i) => i.severity === "error",
+    );
+    if (error) {
+      this.set({
+        status: this.t("editor.house.cant_apply", { problem: issueText(this.t, error) }),
+      });
+      return false;
+    }
+    const h = draftHouse(d);
+    const exit = h.exit as Position;
+    const existing = d.key !== undefined && this.findHouse(d.key) !== undefined;
+    const op: MapOp = existing
+      ? {
+          op: "set_house",
+          id: h.id,
+          rent: h.rent,
+          rects: h.rects,
+          doors: h.doors,
+          exit,
+          notes: h.notes ?? null,
+        }
+      : {
+          op: "add_house",
+          id: h.id,
+          rent: h.rent,
+          rects: h.rects,
+          doors: h.doors,
+          exit,
+          ...(h.notes === undefined ? {} : { notes: h.notes }),
+        };
+    const label = existing ? "editor.history.house_edit" : "editor.history.house_add";
+    const result = this.tryCommit(label, [op], false);
+    if (result === "rejected") return false;
+    let renamed = false;
+    for (const lang of this.languages) {
+      const text = d.names[lang] ?? "";
+      if (text === this.houseName(h.id, lang)) continue;
+      const key = houseNameKey(h.id);
+      if (text === this.names.get(lang)?.get(key)) this.pendingNames.delete(`${lang} ${key}`);
+      else this.pendingNames.set(`${lang} ${key}`, text);
+      renamed = true;
+    }
+    if (result === "same" && !renamed) {
+      this.set({ status: this.t("editor.house.unchanged") });
+      return true;
+    }
+    if (renamed) this.scheduleValidation();
+    this.set({
+      houseSel: h.id,
+      houseDraft: { ...d, key: h.id },
+      dirty: this.state.dirty || renamed,
+      status: this.t("editor.house.applied", { id: h.id }),
+    });
+    return true;
+  }
+
+  /** Deletes house `id` (one undoable step); its names stay in world.yaml. */
+  removeHouse(id: string): boolean {
+    const ok = this.commit("editor.history.house_remove", [{ op: "remove_house", id }], false);
+    if (ok && (this.state.houseSel === id || this.state.houseDraft?.key === id)) this.closeHouse();
+    return ok;
+  }
+
+  /** After undo/redo the open house shows what the world has now (or closes if it is gone). */
+  private refreshHouse(): void {
+    const key = this.state.houseDraft?.key;
+    if (key === undefined) return;
+    const h = this.findHouse(key);
+    if (!h) this.closeHouse();
+    else this.set({ houseSel: h.id, houseDraft: draftOf(h, this.namesOf(h.id)) });
+  }
+
+  /** House names changed and not saved, of houses that exist in `world`. */
+  private unsavedNames(world: World): NameText[] {
+    const ids = new Set<string>();
+    for (const isl of world.islands.values()) for (const h of isl.houses) ids.add(h.id);
+    const out: NameText[] = [];
+    for (const [k, text] of this.pendingNames) {
+      const [lang = "", key = ""] = k.split(" ");
+      const id = /^house\.(.+)\.name$/.exec(key)?.[1];
+      if (id === undefined || !ids.has(id)) continue;
+      out.push({ lang, key, text, base: this.names.get(lang)?.get(key) ?? null });
+    }
+    return out.sort((a, b) => (a.key + a.lang < b.key + b.lang ? -1 : 1));
+  }
+
   // ---- review: map patches and diff -------------------------------------------------------
 
   /**
@@ -709,6 +992,16 @@ export class EditorController {
     this.set({ review: true, reviewSide });
   }
 
+  /** Whether a houses.yaml differs from what was loaded (it never goes in a patch). */
+  housesChanged(): boolean {
+    const ids = new Set([...this.baseline.islands.keys(), ...this.state.world.islands.keys()]);
+    return [...ids].some(
+      (id) =>
+        stableJson(this.baseline.islands.get(id)?.houses ?? []) !==
+        stableJson(this.state.world.islands.get(id)?.houses ?? []),
+    );
+  }
+
   /** Paths of the chunk and auxiliary files that differ from what was loaded. */
   changedFiles(): string[] {
     const d = this.diff();
@@ -728,8 +1021,10 @@ export class EditorController {
   async exportPatch(): Promise<string | undefined> {
     this.strokeEnd();
     const files = this.changedFiles();
+    // houses.yaml and the house names are saved, never exported (maintainers only, docs/03).
+    const houses = this.housesChanged() ? ` ${this.t("editor.patch.houses_skipped")}` : "";
     if (files.length === 0) {
-      this.set({ status: this.t("editor.patch.empty") });
+      this.set({ status: this.t("editor.patch.empty") + houses });
       return undefined;
     }
     try {
@@ -738,7 +1033,7 @@ export class EditorController {
         after: toWire(this.state.world),
         files,
       });
-      this.set({ status: this.t("editor.patch.exported", { files: files.length }) });
+      this.set({ status: this.t("editor.patch.exported", { files: files.length }) + houses });
       return `${JSON.stringify(patch, null, 2)}\n`;
     } catch (e) {
       this.set({
@@ -807,6 +1102,7 @@ export class EditorController {
       const step = this.history.undo(this.state.world);
       if (!step) return;
       this.changed(step.world, step.touched, step.touchedAux);
+      this.refreshHouse();
       this.syncHistory(this.t("editor.undone", { action: this.t(step.entry.label) }));
     } catch (e) {
       this.reject(e);
@@ -820,6 +1116,7 @@ export class EditorController {
       const step = this.history.redo(this.state.world);
       if (!step) return;
       this.changed(step.world, step.touched, step.touchedAux);
+      this.refreshHouse();
       this.syncHistory(this.t("editor.redone", { action: this.t(step.entry.label) }));
     } catch (e) {
       this.reject(e);
@@ -864,7 +1161,9 @@ export class EditorController {
     const seq = ++this.validateSeq;
     this.set({ validating: true });
     try {
-      const validation = await this.backend.validate(this.state.world);
+      const world = this.state.world;
+      const pending = this.unsavedNames(world).map(({ lang, key }) => ({ lang, key }));
+      const validation = await this.backend.validate(world, pending);
       if (seq === this.validateSeq) this.set({ validation, validating: false });
     } catch (e) {
       if (seq === this.validateSeq)
@@ -896,11 +1195,21 @@ export class EditorController {
     this.saving = true;
     const world = this.state.world;
     const changes = this.changes();
+    const texts = this.unsavedNames(world);
     try {
-      const r = await this.backend.save(world, changes);
+      const r = await this.backend.save(world, changes, texts);
       this.settle(r, world, false);
+      // The names are on disk now: they are the new base (unless edited again meanwhile).
+      for (const n of texts) {
+        this.names.get(n.lang)?.set(n.key, n.text);
+        if (this.pendingNames.get(`${n.lang} ${n.key}`) === n.text)
+          this.pendingNames.delete(`${n.lang} ${n.key}`);
+      }
       this.set({
-        dirty: this.state.world !== world || this.pending.size > 0,
+        dirty:
+          this.state.world !== world ||
+          this.pending.size > 0 ||
+          this.unsavedNames(this.state.world).length > 0,
         status: this.t("editor.saved", { written: r.written.length, removed: r.removed.length }),
       });
     } catch (e) {

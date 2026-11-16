@@ -1,8 +1,12 @@
 // T5.6: the game on a phone and a tablet (emulated touch screens), and the 1280x800 header
 // with a long name. Every action goes through touch input (pointerType "touch"): taps from
-// page.touchscreen, long presses and held fingers through CDP touch events (Chromium).
-// The checks read what the server answered (positions, tile items, health, dialogs), not
-// only the local UI. Screenshots go to e2e/screenshots/actual/mobile-*.png.
+// page.touchscreen; long presses, held fingers and pinches through CDP touch events on
+// Chromium, and on WebKit (no CDP) through synthetic touch pointer events. The checks read
+// what the server answered (positions, tile items, health, dialogs), not only the local
+// UI. Screenshots go to e2e/screenshots/actual/mobile-*.png.
+//
+// The devices run on Chromium (Pixel 7, iPad Mini) and, in the "webkit-mobile" project of
+// playwright.config.ts, on WebKit (iPhone 13, iPad Mini): those titles say "(webkit)".
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { devices, expect, test } from "@playwright/test";
@@ -13,8 +17,8 @@ import { databaseUrl, serverURL } from "../playwright.config.ts";
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
 
-/** A device of Playwright's list, on the suite's browser (Chromium: CDP touch events). */
-function onChromium(name: string): Omit<(typeof devices)[string], "defaultBrowserType"> {
+/** A device of Playwright's list, on the project's browser (chromium or webkit-mobile). */
+function deviceOptions(name: string): Omit<(typeof devices)[string], "defaultBrowserType"> {
   const found = devices[name];
   if (!found) throw new Error(`unknown device ${name}`);
   // A describe group cannot switch the browser (that needs another worker): leave it out.
@@ -138,13 +142,204 @@ const tapTile = async (page: Page, x: number, y: number): Promise<void> => {
   await page.touchscreen.tap(p.x, p.y);
 };
 
+/** The browser the page runs on ("chromium" or "webkit"). */
+const browserOf = (page: Page): string =>
+  page.context().browser()?.browserType().name() ?? "chromium";
+
+interface Finger {
+  id: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * WebKit has no CDP and Playwright only taps there: a held finger or a pinch is a series
+ * of synthetic touch pointer events, each sent to the element under its finger when it
+ * went down (a real touch is captured there too). Pointer id 1 is the only id
+ * setPointerCapture accepts for a synthetic event (the pad captures its finger), so the
+ * first finger must use it.
+ */
+async function fingers(
+  page: Page,
+  type: "pointerdown" | "pointermove" | "pointerup",
+  list: Finger[],
+): Promise<void> {
+  await page.evaluate(
+    ({ type, list }) => {
+      const w = window as unknown as { e2eFingers?: Map<number, Element> };
+      const held = w.e2eFingers ?? new Map<number, Element>();
+      w.e2eFingers = held;
+      for (const f of list) {
+        let el = held.get(f.id);
+        if (type === "pointerdown" || !el) {
+          el = document.elementFromPoint(f.x, f.y) ?? document.body;
+          held.set(f.id, el);
+        }
+        el.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            pointerId: f.id,
+            pointerType: "touch",
+            isPrimary: f.id === 1,
+            clientX: f.x,
+            clientY: f.y,
+            button: type === "pointermove" ? -1 : 0,
+            buttons: type === "pointerup" ? 0 : 1,
+            width: 10,
+            height: 10,
+            pressure: type === "pointerup" ? 0 : 0.5,
+          }),
+        );
+        if (type === "pointerup") held.delete(f.id);
+      }
+    },
+    { type, list },
+  );
+}
+
 /** A finger held still on (x, y) for `ms` (a long press, or a held pad direction). */
 async function hold(page: Page, x: number, y: number, ms: number): Promise<void> {
+  if (browserOf(page) !== "chromium") {
+    await fingers(page, "pointerdown", [{ id: 1, x, y }]);
+    await page.waitForTimeout(ms);
+    await fingers(page, "pointerup", [{ id: 1, x, y }]);
+    return;
+  }
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
   await page.waitForTimeout(ms);
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await cdp.detach();
+}
+
+/** Two fingers on a horizontal line through (cx, cy) spread from `from` to `to` px apart. */
+async function pinch(page: Page, cx: number, cy: number, from: number, to: number): Promise<void> {
+  const at = (d: number): Finger[] => [
+    { id: 1, x: cx - d / 2, y: cy },
+    { id: 2, x: cx + d / 2, y: cy },
+  ];
+  const steps = [1, 2, 3, 4, 5].map((i) => from + ((to - from) * i) / 5);
+  if (browserOf(page) !== "chromium") {
+    await fingers(page, "pointerdown", at(from));
+    for (const d of steps) await fingers(page, "pointermove", at(d));
+    await fingers(page, "pointerup", at(to));
+    return;
+  }
+  const cdp = await page.context().newCDPSession(page);
+  const points = (d: number): { x: number; y: number; id: number }[] =>
+    at(d).map((f) => ({ x: f.x, y: f.y, id: f.id }));
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: points(from) });
+  for (const d of steps)
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: points(d) });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await cdp.detach();
+}
+
+/** The map's zoom: the scale drawn and the scales the player may choose. */
+const zoomOf = async (page: Page): Promise<{ scale: number; min: number; max: number }> => {
+  const z = await page.evaluate(() => window.__rpgClient?.zoom());
+  if (!z) throw new Error("no canvas");
+  return z;
+};
+
+const rememberedZoom = (page: Page): Promise<string | null> =>
+  page.evaluate(() => localStorage.getItem("rpg.zoom"));
+
+/**
+ * Whether the map's drawing buffer holds a drawn map (a few pixels not of the black
+ * background), read in the next animation frame, right after the renderer's (the buffer
+ * is not preserved). Playwright's WebKit on Windows shows a WebGL canvas black in
+ * screenshots once its size changes (a zoom, or a resize as before zooming existed),
+ * although it is drawn: this checks what the screenshot cannot.
+ */
+const mapDrawn = (page: Page): Promise<boolean> =>
+  page.evaluate(
+    () =>
+      new Promise<boolean>((resolve) => {
+        requestAnimationFrame(() => {
+          const c = document.querySelector<HTMLCanvasElement>('[data-testid="game-canvas"]');
+          const gl = c?.getContext("webgl2") ?? c?.getContext("webgl");
+          if (!c || !gl) return resolve(false);
+          const px = new Uint8Array(4);
+          for (const fx of [0.25, 0.5, 0.75])
+            for (const fy of [0.25, 0.5, 0.75]) {
+              const x = Math.floor(c.width * fx);
+              const y = Math.floor(c.height * fy);
+              gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+              if ((px[0] ?? 0) + (px[1] ?? 0) + (px[2] ?? 0) > 0) return resolve(true);
+            }
+          resolve(false);
+        });
+      }),
+  );
+
+/** Hotbar slots shown whole in the bar (the rest wait behind the slider's arrows). */
+const wholeSlots = (page: Page): Promise<number> =>
+  page.getByTestId("hotbar").evaluate((bar) => {
+    const list = bar.querySelector("ol");
+    if (!list) return 0;
+    const box = list.getBoundingClientRect();
+    return [...list.querySelectorAll("li")].filter((li) => {
+      const b = li.getBoundingClientRect();
+      return b.width > 0 && b.left >= box.left - 0.5 && b.right <= box.right + 0.5;
+    }).length;
+  });
+
+/**
+ * The map's zoom on a touch screen: the + and − buttons step one whole scale and the
+ * choice is remembered on the device; a pinch zooms too. It always comes back to the
+ * fitted view (the other steps count on the whole 15x11 tiles).
+ */
+async function zoomByTouch(page: Page, shot: (name: string) => Promise<Buffer>): Promise<void> {
+  const fit = await zoomOf(page);
+  // The fitted view is the smallest scale: never below what shows the 15x11 tiles.
+  expect(fit.scale).toBe(fit.min);
+  expect(fit.max).toBeGreaterThan(fit.min);
+  const buttons = page.getByTestId("zoom-buttons");
+  await expect(buttons).toBeVisible();
+  await expect(page.getByTestId("zoom-out")).toBeDisabled();
+  const zoomIn = page.getByTestId("zoom-in");
+  for (const b of [zoomIn, page.getByTestId("zoom-out")]) {
+    const box = await b.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+  await zoomIn.tap();
+  await expect.poll(async () => (await zoomOf(page)).scale).toBe(fit.min + 1);
+  expect(await rememberedZoom(page)).toBe(String(fit.min + 1));
+  // Zoomed in, the canvas stays in the map's box: never under the pad or the hotbar.
+  const canvas = await page.getByTestId("game-canvas").boundingBox();
+  const pad = await page.getByTestId("touch-pad").boundingBox();
+  if (!canvas || !pad) throw new Error("no canvas or pad");
+  const vp = page.viewportSize();
+  expect(canvas.x).toBeGreaterThanOrEqual(-0.5);
+  expect(canvas.x + canvas.width).toBeLessThanOrEqual((vp?.width ?? 0) + 0.5);
+  if (await page.locator('.game[data-flow="column"][data-pad]').count())
+    expect(canvas.y + canvas.height).toBeLessThanOrEqual(pad.y + 0.5);
+  // The resized canvas keeps drawing the map (on WebKit its screenshot is black: mapDrawn).
+  await expect.poll(() => mapDrawn(page)).toBe(true);
+  await shot("08-zoomed");
+  await page.getByTestId("zoom-out").tap();
+  await expect.poll(async () => (await zoomOf(page)).scale).toBe(fit.min);
+  expect(await rememberedZoom(page)).toBeNull();
+
+  // Two fingers spread to twice their distance: about twice the scale (whole, clamped).
+  const map = await page.getByTestId("game-canvas").boundingBox();
+  if (!map) throw new Error("no canvas");
+  const cx = map.x + map.width / 2;
+  const cy = map.y + map.height / 2;
+  const spread = Math.min(map.width, map.height) / 4;
+  await pinch(page, cx, cy, spread, 2 * spread);
+  await expect.poll(async () => (await zoomOf(page)).scale).toBeGreaterThan(fit.min);
+  // And back to the fitted view with the − button.
+  for (let i = 0; i < fit.max - fit.min; i++) {
+    if ((await zoomOf(page)).scale <= fit.min) break;
+    await page.getByTestId("zoom-out").tap();
+  }
+  await expect.poll(async () => (await zoomOf(page)).scale).toBe(fit.min);
+  expect(await rememberedZoom(page)).toBeNull();
 }
 
 async function holdElement(page: Page, selector: string, ms: number): Promise<void> {
@@ -193,8 +388,12 @@ async function showTab(page: Page, tab: string): Promise<void> {
 /** Closes the drawer (phone landscape) so the map takes taps again; no-op with tabs. */
 async function closeDrawer(page: Page): Promise<void> {
   const toggle = page.getByTestId("panel-toggle");
-  if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) === "true")
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) === "true") {
     await toggle.tap();
+    // Until its slide out ends the drawer still covers the right of the map (the zoom
+    // buttons): a tap there meanwhile would hit the drawer.
+    await expect(page.locator("#side-panel")).toBeHidden();
+  }
 }
 
 /**
@@ -218,6 +417,26 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   // A touch screen shows the direction pad by default.
   const pad = page.getByTestId("touch-pad");
   await expect(pad).toBeVisible();
+  if (layout === "phone-portrait") {
+    // Under the map, right of the pad: the slots on their own line under the arrows, at
+    // least four whole ones on a 390-412 px phone (one fitted beside the arrows before).
+    await expect.poll(() => wholeSlots(page)).toBeGreaterThanOrEqual(4);
+    const bar = await page.getByTestId("hotbar").boundingBox();
+    const map = await page.getByTestId("game-canvas").boundingBox();
+    const padBox = await pad.boundingBox();
+    if (!bar || !map || !padBox) throw new Error("no hotbar, map or pad");
+    expect(bar.y).toBeGreaterThanOrEqual(map.y + map.height - 0.5);
+    expect(bar.x).toBeGreaterThanOrEqual(padBox.x + padBox.width - 0.5);
+    // Nothing covers the first slot.
+    const first = page.getByTestId("hotbar").locator("li").first();
+    expect(
+      await first.evaluate((li) => {
+        const r = li.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return hit !== null && li.contains(hit);
+      }),
+    ).toBe(true);
+  }
   await shot("01-world");
 
   // Walk: a tap on a tile two steps away (WalkPath, the server walks it).
@@ -300,6 +519,9 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   await expect(page.getByTestId("chat-log")).toContainText("hola desde el teléfono");
   await shot("05-chat");
   await closeDrawer(page);
+
+  // The map zoom: the + and − buttons and a pinch, by whole scales.
+  await zoomByTouch(page, shot);
 }
 
 /** Walks north to the wolves of testisle and targets one with a tap on the map. */
@@ -391,15 +613,39 @@ async function talkToPriestess(page: Page, prefix: string): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
-const DEVICES: { prefix: string; device: string; layout: string }[] = [
-  { prefix: "pixel7-portrait", device: "Pixel 7", layout: "phone-portrait" },
-  { prefix: "pixel7-landscape", device: "Pixel 7 landscape", layout: "phone-landscape" },
-  { prefix: "ipad-mini", device: "iPad Mini", layout: "tablet" },
+/**
+ * Each device runs on one browser: Chromium (an Android phone, and the iPad as before) and
+ * WebKit (the iPhone and the iPad, as Safari on iOS; the "webkit-mobile" project, which
+ * picks the titles with "(webkit)"). Screenshot names of WebKit start with "webkit-".
+ */
+const DEVICES: { prefix: string; device: string; layout: string; browser: string }[] = [
+  { prefix: "pixel7-portrait", device: "Pixel 7", layout: "phone-portrait", browser: "chromium" },
+  {
+    prefix: "pixel7-landscape",
+    device: "Pixel 7 landscape",
+    layout: "phone-landscape",
+    browser: "chromium",
+  },
+  { prefix: "ipad-mini", device: "iPad Mini", layout: "tablet", browser: "chromium" },
+  {
+    prefix: "webkit-iphone13-portrait",
+    device: "iPhone 13",
+    layout: "phone-portrait",
+    browser: "webkit",
+  },
+  {
+    prefix: "webkit-iphone13-landscape",
+    device: "iPhone 13 landscape",
+    layout: "phone-landscape",
+    browser: "webkit",
+  },
+  { prefix: "webkit-ipad-mini", device: "iPad Mini", layout: "tablet", browser: "webkit" },
 ];
 
-for (const { prefix, device, layout } of DEVICES) {
-  test.describe(`T5.6 on ${device}`, () => {
-    test.use(onChromium(device));
+for (const { prefix, device, layout, browser } of DEVICES) {
+  const title = browser === "chromium" ? `T5.6 on ${device}` : `T5.6 on ${device} (${browser})`;
+  test.describe(title, () => {
+    test.use(deviceOptions(device));
 
     test("touch: walk by tap and pad, move an item with tap + destination, chat", async ({
       page,
@@ -453,7 +699,53 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   const header = await page.locator("header.hud").boundingBox();
   expect(header?.height ?? 999).toBeLessThan(80);
   expect(await page.evaluate(() => window.__rpgClient?.scale())).toBe(2);
-  // No touch pad on a PC with a mouse (the Options switch can still turn it on).
+  // No touch pad on a PC with a mouse (the Options switch can still turn it on), and no
+  // zoom buttons: a PC zooms with Ctrl+wheel.
   await expect(page.getByTestId("touch-pad")).toHaveCount(0);
+  await expect(page.getByTestId("zoom-buttons")).toHaveCount(0);
+
+  // The side column: the chat keeps its place at the bottom and the rest scrolls above it,
+  // so the end of the inventory and of the appearance panel can be brought into view
+  // (the chat used to stay over them at 1280x800).
+  const uncovered = (testid: string): Promise<boolean> =>
+    page.getByTestId(testid).evaluate((el) => {
+      el.scrollIntoView({ block: "end" });
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.bottom - 3);
+      return hit !== null && el.contains(hit);
+    });
+  expect(await uncovered("capacity")).toBe(true);
+  expect(await uncovered("appearance-panel")).toBe(true);
+  const chat = await page.getByTestId("say").boundingBox();
+  const side = await page.locator("#side-panel").boundingBox();
+  if (!chat || !side) throw new Error("no chat or side panel");
+  expect(chat.y + chat.height).toBeLessThanOrEqual(side.y + side.height + 0.5);
+  await page.screenshot({ path: join(shots, "mobile-desktop-1280-side-end.png") });
+
+  // Ctrl+wheel over the map zooms by whole scales (and is remembered); a plain wheel
+  // does not, and Ctrl+wheel the other way comes back to the fitted 2x.
+  const map = await page.getByTestId("game-canvas").boundingBox();
+  if (!map) throw new Error("no canvas");
+  await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
+  await page.mouse.wheel(0, -100);
+  expect((await zoomOf(page)).scale).toBe(2);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await expect.poll(async () => (await zoomOf(page)).scale).toBe(3);
+  expect(await rememberedZoom(page)).toBe("3");
+  // Zoomed in, the canvas fills the map's box and stays inside it.
+  const zoomed = await page.getByTestId("game-canvas").boundingBox();
+  const box = await page.locator(".viewport").boundingBox();
+  if (!zoomed || !box) throw new Error("no canvas");
+  expect(zoomed.width).toBeGreaterThan(map.width);
+  expect(zoomed.x).toBeGreaterThanOrEqual(box.x - 0.5);
+  expect(zoomed.y + zoomed.height).toBeLessThanOrEqual(box.y + box.height + 0.5);
+  await page.screenshot({ path: join(shots, "mobile-desktop-1280-zoom3.png") });
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, 100);
+  await page.keyboard.up("Control");
+  await expect.poll(async () => (await zoomOf(page)).scale).toBe(2);
+  expect(await rememberedZoom(page)).toBeNull();
   expect(errors).toEqual([]);
 });

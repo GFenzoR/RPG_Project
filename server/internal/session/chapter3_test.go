@@ -3,19 +3,35 @@ package session_test
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
+	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
+// forgeGate is the sealed gate of the Chapter 3 map: the north wall of the forge room
+// (27–33 × 41–47 inside rock walls), where the warden stands.
+var forgeGate = pos(30, 40)
+
 // chapterThreeHarness is dataHarness with the Brasal NPCs of the Isla Volcánica (T5.5),
-// the forest druid (who keeps the ember root) and spawns of the Chapter 3 monsters.
+// the forest druid (who keeps the ember root), spawns of the Chapter 3 monsters and the
+// forge room with the real forge gate, locked with the ember key (docs/02 "Puertas con
+// llave").
 func chapterThreeHarness(t *testing.T) *harness {
 	t.Helper()
 	return dataHarnessWith(t, func(cfg *session.Config) {
+		dirt, wall := cfg.Items["dirt"].Numeric, cfg.Items["rock_wall"].Numeric
+		const blocks = world.FlagBlocksMovement | world.FlagBlocksSight
+		for i := 26; i <= 34; i++ {
+			for _, p := range []world.Pos{pos(i, 40), pos(i, 48), pos(26, i+14), pos(34, i+14)} {
+				worldtest.SetTile(t, cfg.Map, p, dirt, blocks, wall)
+			}
+		}
+		worldtest.SetTile(t, cfg.Map, forgeGate, dirt, blocks, cfg.Items["forge_gate"].Numeric)
 		is := cfg.Map.Islands()[0]
 		is.NPCs = append(is.NPCs,
 			world.NPCPlacement{NPC: "bosque_druid", Pos: pos(20, 10)},
@@ -186,6 +202,22 @@ func TestChapterThreePlayable(t *testing.T) {
 	if s := step("ch3_gate"); s != "open_gate" {
 		t.Fatalf("after the chart the step is %q", s)
 	}
+	// Down at the sealed gate: it does not let anyone through, and the root is no key.
+	gateID := uint32(items["forge_gate"].Numeric)
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(30, 38)) }))
+	h.sim.Step()
+	h.input(cl, walkPath(S, S))
+	h.sim.RunFor(3 * time.Second)
+	if p.Pos() != pos(30, 39) {
+		t.Fatalf("walked into the sealed gate: at %v", p.Pos())
+	}
+	cl.take()
+	if evs := h.send(cl, useItem(onTile(forgeGate), gateID, 1)); !hasKey(evs, "door.locked") || h.w.Walkable(forgeGate) {
+		t.Fatalf("the gate with the root only: %v", systemKeys(evs))
+	}
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(20, 12)) }))
+	h.sim.Step()
+	cl.take()
 	if !hasOption(echo, "npc.volcan_forge_echo.opt_open") || hasOption(echo, "npc.volcan_forge_echo.opt_no_root") {
 		t.Fatal("the gate does not take the root")
 	}
@@ -214,6 +246,16 @@ func TestChapterThreePlayable(t *testing.T) {
 	if h.w.CountItem(p, "ember_root") != 0 || h.w.Money(p)-money != 1100 || p.Experience()-xp != 22000 {
 		t.Fatalf("part 2 rewards: root %d, +%d coins, +%d xp", h.w.CountItem(p, "ember_root"), h.w.Money(p)-money, p.Experience()-xp)
 	}
+	// The echo shapes the root into the ember key; a lost key is shaped again, one at a time.
+	if h.w.CountItem(p, "ember_key") != 1 || hasOption(echo, "npc.volcan_forge_echo.opt_lost_key") {
+		t.Fatalf("ember keys after the gate: %d", h.w.CountItem(p, "ember_key"))
+	}
+	h.sim.Command(gameFunc(func() { h.w.TakeForTest(p, "ember_key", 1) }))
+	h.sim.Step()
+	d = h.lastDialog(h.send(cl, talkMsg(echo.ID())))
+	if d = h.lastDialog(h.pick(cl, d, "npc.volcan_forge_echo.opt_lost_key")); d.Text.Key != "npc.volcan_forge_echo.key_reshaped" || h.w.CountItem(p, "ember_key") != 1 {
+		t.Fatalf("lost key: %s, %d keys", d.Text.Key, h.w.CountItem(p, "ember_key"))
+	}
 
 	// Once the gate is open the root is spent and the druid keeps no more.
 	if hasOption(druid, "npc.bosque_druid.opt_take_root") {
@@ -236,9 +278,20 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 	// The fight itself is TestVolcanBalance's: this fresh character has base sword skill,
 	// which barely scratches the warden's armour, so it starts nearly broken.
+	// The ember key opens the gate (it stays in the pack) and the forge room is open.
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(30, 39)) }))
+	h.sim.Step()
+	cl.take()
+	if evs := h.send(cl, useItem(onTile(forgeGate), gateID, 1)); !hasKey(evs, "door.unlocked") || !h.w.Walkable(forgeGate) || h.w.CountItem(p, "ember_key") != 1 {
+		t.Fatalf("the gate with the ember key: %v", systemKeys(evs))
+	}
+	h.input(cl, walkPath(S, S, S))
+	h.sim.RunFor(3 * time.Second)
+	if p.Pos() != pos(30, 42) {
+		t.Fatalf("through the forge gate: at %v", p.Pos())
+	}
 	h.sim.Command(gameFunc(func() {
 		arm("embersteel_sabre", "embersteel_shield")
-		h.w.Teleport(p, pos(27, 44))
 		for _, m := range h.w.Monsters() {
 			if m.Kind() == "slagbound_warden" {
 				m.SetHealth(20)

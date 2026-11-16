@@ -4,8 +4,34 @@ import { fileURLToPath } from "node:url";
 import { encodePng } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
-import { canvas, outline, polygon, px, rng, seedOf, tileNoise } from "./draw.ts";
-import { checkPaths, OUTFIT_FRAME, RECIPES, recipePaths, render, spriteFile } from "./index.ts";
+import {
+  canvas,
+  castShadow,
+  get,
+  opaque,
+  outline,
+  polygon,
+  px,
+  rect,
+  rng,
+  seedOf,
+  SHADOW,
+  tileNoise,
+} from "./draw.ts";
+import {
+  checkPaths,
+  EFFECT_FRAME,
+  OUTFIT_FRAME,
+  previewSheet,
+  RECIPES,
+  recipePaths,
+  render,
+  spriteFile,
+  UI_ICON,
+  UI_ICON_BOX,
+} from "./index.ts";
+import { FRONT_SWING } from "./recipes/creatures.ts";
+import { EFFECT_FRAMES } from "./recipes/effects.ts";
 import { PALETTE } from "./palette.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -112,10 +138,160 @@ describe("recipes", () => {
     }
   });
 
-  it("every recipe path is used by data/ or is an outfit frame", () => {
+  it("every recipe path is used by data/ or is an outfit or effect frame or a ui icon", () => {
     expect(checkPaths(root)).toEqual([]);
     expect(OUTFIT_FRAME.test("outfits/citizen/s_0")).toBe(true);
     expect(OUTFIT_FRAME.test("outfits/citizen/south_0")).toBe(false);
     expect(OUTFIT_FRAME.test("outfits/citizen/up_0")).toBe(false);
+    expect(EFFECT_FRAME.test("effects/hit/0")).toBe(true);
+    expect(EFFECT_FRAME.test("effects/gather_miss/12")).toBe(true);
+    expect(EFFECT_FRAME.test("effects/hit")).toBe(false);
+    expect(EFFECT_FRAME.test("effects/hit/first")).toBe(false);
+    expect(UI_ICON.test("ui/marks/aggressor")).toBe(true);
+    expect(UI_ICON.test("ui/aggressor")).toBe(false);
+    expect(UI_ICON.test("items/ui/marks/aggressor")).toBe(false);
+  });
+});
+
+describe("effect strips", () => {
+  const strips = new Map<string, string[]>();
+  for (const p of recipePaths("effects/")) {
+    const name = EFFECT_FRAME.exec(p)?.[1] ?? p;
+    strips.set(name, [...(strips.get(name) ?? []), p]);
+  }
+
+  it("are effect recipes of EFFECT_FRAMES frames, numbered from 0", () => {
+    expect(strips.size).toBeGreaterThan(0);
+    for (const [name, paths] of strips) {
+      expect(paths, name).toEqual(
+        Array.from({ length: EFFECT_FRAMES }, (_, f) => `effects/${name}/${f}`),
+      );
+      for (const p of paths) expect(RECIPES[p]?.kind, p).toBe("effect");
+    }
+  });
+
+  it("animate: no two consecutive frames are the same picture", () => {
+    for (const paths of strips.values()) {
+      for (let f = 1; f < paths.length; f++) {
+        const a = encodePng(render(paths[f - 1] ?? ""));
+        const b = encodePng(render(paths[f] ?? ""));
+        expect(a.equals(b), paths[f]).toBe(false);
+      }
+    }
+  });
+
+  it("preview a strip per row", () => {
+    const hit = strips.get("hit") ?? [];
+    const heal = strips.get("heal") ?? [];
+    const one = previewSheet(root, hit);
+    expect(previewSheet(root, [...hit, ...heal]).height).toBe(one.height * 2);
+    // Without strips the cells still pack row after row.
+    const items = recipePaths()
+      .filter((p) => RECIPES[p]?.kind === "item")
+      .slice(0, 2);
+    expect(items).toHaveLength(2);
+    expect(previewSheet(root, items).height).toBe(one.height);
+  });
+});
+
+/** Same colour (alpha ignored: everything is opaque). */
+const same = (a: readonly number[] | undefined, b: readonly number[]): boolean =>
+  a !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+describe("cast shadow", () => {
+  it("falls to the bottom-right from part-way down, only behind the figure", () => {
+    const img = canvas(16, 16);
+    rect(img, 4, 2, 4, 10, PALETTE.stone.base); // a pillar, rows 2..11
+    castShadow(img, { dx: 3, dy: 1, from: 0.5 });
+    // The pillar keeps its colour; the shadow starts half-way down it (row 7).
+    expect(same(get(img, 5, 5), PALETTE.stone.base)).toBe(true);
+    expect(same(get(img, 8, 9), SHADOW)).toBe(true);
+    expect(same(get(img, 10, 12), SHADOW)).toBe(true); // reaches dx right and dy down
+    expect(opaque(img, 8, 3)).toBe(false); // the top of the pillar casts none
+    expect(opaque(img, 11, 9)).toBe(false); // no further than dx
+    expect(opaque(img, 3, 9)).toBe(false); // nothing to the left
+  });
+
+  it("always touches what casts it: a thin part leaves no loose piece of shadow", () => {
+    const img = canvas(16, 16);
+    rect(img, 4, 0, 2, 12, PALETTE.stone.base); // body
+    rect(img, 7, 4, 1, 3, PALETTE.stone.base); // a 1 px strap, 1 px off the body
+    castShadow(img, { dx: 3, dy: 1, from: 0 });
+    for (let y = 5; y <= 7; y++)
+      for (let x = 8; x <= 10; x++) expect(opaque(img, x, y), `${x},${y}`).toBe(true);
+  });
+
+  it("is on every creature and outfit frame and on nothing else", () => {
+    for (const p of recipePaths()) {
+      const img = render(p);
+      let shadow = 0;
+      for (let y = 0; y < img.height; y++)
+        for (let x = 0; x < img.width; x++) if (same(get(img, x, y), SHADOW)) shadow++;
+      if (RECIPES[p]?.kind === "creature") expect(shadow, p).toBeGreaterThan(10);
+      else expect(shadow, p).toBeLessThan(10);
+    }
+  });
+});
+
+describe("outfit walk cycle", () => {
+  /** The lowest row of column x that is part of the figure (not its shadow). */
+  const lowest = (img: Image, x: number): number => {
+    for (let y = img.height - 1; y >= 0; y--)
+      if (opaque(img, x, y) && !same(get(img, x, y), SHADOW)) return y;
+    return -1;
+  };
+
+  it("swings the arms FRONT_SWING px up and down facing north and south", () => {
+    expect(FRONT_SWING).toBeGreaterThanOrEqual(2);
+    const outfits = new Set(recipePaths("outfits/").map((p) => p.split("/")[1]));
+    expect(outfits.size).toBeGreaterThanOrEqual(4);
+    for (const o of outfits) {
+      for (const dir of ["n", "s"]) {
+        const [stand, step1, step2] = [0, 1, 2].map((f) => render(`outfits/${o}/${dir}_${f}`));
+        if (!stand || !step1 || !step2) throw new Error(`outfits/${o}/${dir}: missing frames`);
+        // Column 10 is the screen-left arm, 21 the screen-right one (outside the torso).
+        for (const [x, sign] of [
+          [10, 1],
+          [21, -1],
+        ] as const) {
+          const at = `outfits/${o}/${dir} column ${x}`;
+          expect(lowest(step2, x) - lowest(stand, x), at).toBe(sign * FRONT_SWING);
+          expect(lowest(step1, x) - lowest(stand, x), at).toBe(-sign * FRONT_SWING);
+        }
+      }
+    }
+  });
+});
+
+describe("ui icons", () => {
+  const icons = recipePaths("ui/");
+
+  it("draw only inside UI_ICON_BOX, which is all the client shows", () => {
+    expect(icons.length).toBeGreaterThan(0);
+    for (const p of icons) {
+      const img = render(p);
+      expect([img.width, img.height], p).toEqual([32, 32]);
+      for (let y = 0; y < img.height; y++)
+        for (let x = 0; x < img.width; x++) {
+          const inBox =
+            x >= UI_ICON_BOX.x &&
+            x < UI_ICON_BOX.x + UI_ICON_BOX.w &&
+            y >= UI_ICON_BOX.y &&
+            y < UI_ICON_BOX.y + UI_ICON_BOX.h;
+          if (!inBox) expect(opaque(img, x, y), `${p} ${x},${y}`).toBe(false);
+        }
+    }
+  });
+
+  it("give each PvP mark its own silhouette, so they read without colour", () => {
+    const marks = ["aggressor", "murderer", "outlaw"].map((id) => `ui/marks/${id}`);
+    for (const m of marks) expect(icons, m).toContain(m);
+    const masks = marks.map((m) => {
+      const img = render(m);
+      let bits = "";
+      for (let i = 3; i < img.data.length; i += 4) bits += img.data[i] ? "1" : "0";
+      return bits;
+    });
+    expect(new Set(masks).size).toBe(marks.length);
   });
 });

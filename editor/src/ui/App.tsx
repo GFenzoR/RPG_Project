@@ -1,9 +1,10 @@
 // Editor layout: toolbar on top, palette on the left, map in the middle, tile info and
 // live validation on the right, status bar at the bottom.
 import { useEffect, useRef, useState } from "preact/hooks";
-import { formatDiagnosticShort } from "./format.ts";
+import { doorNote, formatDiagnosticShort } from "./format.ts";
 import { Palette } from "../palette/Palette.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
+import { HousePanel } from "./HousePanel.tsx";
 import { ReviewPanel } from "../review/ReviewPanel.tsx";
 import { createMapCanvas } from "../canvas/map-canvas.ts";
 import type { MapCanvas } from "../canvas/map-canvas.ts";
@@ -53,6 +54,11 @@ export function App({
   const itemName = (id: string): string => {
     const i = ctl.items.get(id);
     return i ? t(i.name) : id;
+  };
+  /** The name of an item of the stack, with what it is if it is a door or a key. */
+  const stackName = (id: string): string => {
+    const note = doorNote(ctl.items.get(id), t);
+    return note ? `${itemName(id)} (${note})` : itemName(id);
   };
   const tile = s.hover ? tileAt(s.world, s.hover.x, s.hover.y, s.floor) : undefined;
   const jump = (d: WireDiagnostic): void => {
@@ -232,7 +238,7 @@ export function App({
                 <ul>
                   <li>{tile.ground ? itemName(tile.ground) : t("editor.tile_empty")}</li>
                   {tile.stack.map((id, i) => (
-                    <li key={i}>{`↳ ${itemName(id)}`}</li>
+                    <li key={i}>{`↳ ${stackName(id)}`}</li>
                   ))}
                 </ul>
               ) : (
@@ -251,6 +257,11 @@ export function App({
           />
         )}
         <EntityPanel
+          ctl={ctl}
+          s={s}
+          onJump={(p) => canvas && ctl.centerTile(p.x, p.y, p.z, canvas.atlas.tileSize)}
+        />
+        <HousePanel
           ctl={ctl}
           s={s}
           onJump={(p) => canvas && ctl.centerTile(p.x, p.y, p.z, canvas.atlas.tileSize)}

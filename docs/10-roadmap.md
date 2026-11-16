@@ -232,8 +232,13 @@ secundaria.
     `SetSafeMode`, `Creature.skull`/`CreatureSkull`, acciones de guerra en `GuildCommand`
     y `GuildUpdate.wars`, `/unskull` auditado, toda Puerto `no_pvp`, arena en Raigal,
     marca en el mapa y la lista de batalla, modo seguro y guerras en el panel del gremio.
-    Pendiente: que una condición recuerde a su autor tras un relogueo,
-    hechizos de condición a distancia contra jugadores y sprites de las marcas.
+    Después: una condición de otro jugador guarda a su autor (personaje) y el recuerdo de
+    su ataque en `characters.conditions`, sin migración, y sobrevive al relogueo de
+    cualquiera de los dos (su tiempo corre mientras la víctima está fuera); los hechizos de
+    condición a distancia alcanzan a jugadores con las reglas de un ataque directo; un
+    corte de la conexión por el servidor (cliente lento, reseteo de contraseña) con
+    bloqueo deja al personaje link-dead. Las marcas ya tienen sprites propios
+    (`assets/sprites/ui/marks/`, `client/src/render/marks.ts`).
 - [x] **T5.3 Mercado global e intercambio directo.** Ventana de intercambio entre dos
   jugadores adyacentes con confirmación doble, y ofertas de compra y venta de items
   `tradeable` entre jugadores, con depósito, buzón y comisión en oro (sumidero),
@@ -257,15 +262,16 @@ secundaria.
   [T3.6] (PR #73 contenido y monedas de plata y oro; el PR siguiente, mapa y rutas)
   Hecho: Brasal, muelle con rutas al Bosque y al Puerto, llano de ceniza, ladera, cráter y
   la mina del piso 8 con la puerta sellada y la forja antigua; 5 monstruos y un jefe,
-  acero de ascua, Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`). Pendiente:
-  suelos volcánicos propios, música de la isla (hoy placeholders) y los carteles de Brasal
-  (sus textos `text.volcan.*_sign` ya están en i18n), y puertas con llave (la puerta sellada
-  de la mina hoy es narrativa).
+  acero de ascua, Capítulo 3 (`ch3_embers` → `ch3_gate` → `ch3_warden`). Después: suelos
+  volcánicos propios (ceniza, basalto, escoria, lava enfriada y lava fundida, con bordes),
+  la superficie repintada, música y ambiente propios y los carteles de Brasal (templo,
+  muelle y mina, que se leen mirándolos). Fuera de la tarea: puertas con llave (la puerta
+  sellada de la mina se abre con la llave de ascua del Capítulo 3, ver
+  `02-game-design.md` "Puertas con llave"). Pendiente: el cartel de esa puerta (piso 8).
 - [x] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
   en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
   nativas necesitan cuentas de las tiendas (Apple y Google) y su firma. (PR #78)
-  Hecho: gestos puros con tests (toque, toque largo, arrastre; el pellizco se reconoce
-  pero no se usa: el zoom sigue entero y automático) sobre pointer
+  Hecho: gestos puros con tests (toque, toque largo, arrastre y pellizco) sobre pointer
   events; tocar una casilla camina, tocar una criatura la ataca y un NPC lo habla; toque
   largo = menú contextual (usar, abrir, mirar, mover, atacar, hablar); items con "tocar el
   item → tocar el destino" además del arrastre; pad direccional opcional en Opciones
@@ -277,6 +283,11 @@ secundaria.
   íconos placeholder, service worker solo para el shell estático) y `apps/desktop`
   preparado para `tauri android/ios init` (`docs/15-movil.md`). E2E
   `client/e2e/mobile.spec.ts` con Pixel 7 (vertical y horizontal) e iPad Mini.
+  Después (rama `fix/client-ux`): zoom del mapa por escalas enteras con el pellizco, botones
+  +/− en pantallas táctiles y Ctrl+rueda en PC (recordado en el dispositivo, nunca menos
+  que la vista de 15x11); hotbar en dos líneas a la derecha del pad en vertical (4 slots
+  en un teléfono de 390–412 px); el chat del panel lateral ya no tapa el final del
+  inventario a 1280x800; E2E también en WebKit (iPhone 13 e iPad Mini).
   👤 Pendiente: cuentas de Google Play y Apple Developer, firma (keystore, Team ID), y
   compilar y probar el APK/IPA en un dispositivo real (este PC no tiene Rust ni NDK).
 - [x] **T5.7 Tienda cosmética con pasarela de pago.** Moneda premium, catálogo de

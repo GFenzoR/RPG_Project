@@ -19,6 +19,7 @@ editor/
   src/io/          abrir/guardar chunks, exportar "map patch" para enviar a revisión
   src/review/      vista de diff entre el mundo oficial y un patch (antes/después)
   src/ui/          Preact: paneles, propiedades, validación en vivo
+  src/houses/      borrador del panel de casas (casillas, puertas, salida → add/set_house)
   src/state/       EditorController: estado y acciones, sin Preact ni Pixi
   server/          backend local (plugin de Vite, Node): bootstrap, guardar, validar, atlas;
                    solo acepta llamadas del mismo origen (guard.ts) y guarda contra la base
@@ -26,7 +27,10 @@ editor/
 ```
 `src/review/` (T2.3): exportar/importar map patch (merge de `map-format/patch`) y vista de
 diff antes/después. Relleno, rectángulo, selección/copiar/pegar, autoborder automático y
-paneles de entidades: T2.2 (`src/ui/EntityPanel.tsx`).
+paneles de entidades: T2.2 (`src/ui/EntityPanel.tsx`). Panel de casas y herramienta Casa
+(`H`): `src/ui/HousePanel.tsx` + `src/houses/draft.ts`; Guardar escribe `houses.yaml` y los
+nombres `house.<id>.name` de `i18n/*/world.yaml` (las únicas claves de i18n que toca el
+editor). Detalle en docs/04 "Casas en el editor".
 
 ## Correr
 - `make editor` (o `pnpm --filter @rpg/editor dev`): http://localhost:5174, edita `world/`

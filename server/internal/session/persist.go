@@ -81,6 +81,11 @@ type Saver struct {
 	// would store one half of that transfer (the inventory without the market rows, or
 	// the other way round). Guarded by mu.
 	tainted map[int64]bool
+	// taintedHouses are the houses whose item rows a dropped transfer replaced: no later
+	// transfer writes their items (the list in memory has what that transfer moved), so
+	// an item a tainted character left on a house floor reaches nobody's save. Guarded
+	// by mu.
+	taintedHouses map[string]bool
 	// crashed: a transfer failed while shutting down. Nothing after it is written, of any
 	// character, as if the process had crashed right there (the items of that transfer
 	// may already have moved on to others in the loop). Guarded by mu.
@@ -102,7 +107,7 @@ func NewSaver(cfg SaverConfig) (*Saver, error) {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
 	return &Saver{cfg: cfg, ch: make(chan Job, cfg.Queue), done: make(chan struct{}), stop: make(chan struct{}),
-		tainted: map[int64]bool{}}, nil
+		tainted: map[int64]bool{}, taintedHouses: map[string]bool{}}, nil
 }
 
 // Submit queues s without blocking. It returns false if the queue is full or the saver
@@ -176,8 +181,12 @@ func (s *Saver) run() {
 // characters are tainted: no later job that touches one of them is written in this
 // process, and a skipped transfer taints its other characters too (a fixed point: a trade
 // with a tainted character must not reach the database through its partner's next save).
-// The World is told (SaverConfig.Tainted): it takes those characters out of the world and
-// turns the market and the trade window read-only until the server restarts.
+// The houses whose items such a transfer replaced are tainted the same way: a later
+// transfer that writes their items is skipped and taints its characters (an item a
+// tainted character dropped on a house floor must not reach the database through the
+// guest who picks it up). The World is told (SaverConfig.Tainted): it takes those
+// characters out of the world and turns the market, the houses and the trade window
+// read-only until the server restarts.
 
 // jobCharacters returns the characters whose saved state j writes.
 func jobCharacters(j Job) []int64 {
@@ -191,7 +200,22 @@ func jobCharacters(j Job) []int64 {
 	return out
 }
 
-// Tainted reports whether j touches a tainted character.
+// jobHouses returns the houses whose item rows j replaces (HouseItems).
+func jobHouses(j Job) []string {
+	if j.Transfer == nil {
+		return nil
+	}
+	var out []string
+	for _, op := range j.Transfer.Houses {
+		if op.Kind == HouseItems {
+			out = append(out, op.House)
+		}
+	}
+	return out
+}
+
+// Tainted reports whether j touches a tainted character or writes the items of a
+// tainted house.
 func (s *Saver) Tainted(j Job) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -200,10 +224,16 @@ func (s *Saver) Tainted(j Job) bool {
 			return true
 		}
 	}
+	for _, h := range jobHouses(j) {
+		if s.taintedHouses[h] {
+			return true
+		}
+	}
 	return false
 }
 
-// taint marks the characters of j and tells the World about the new ones.
+// taint marks the characters and the houses of j and tells the World about the new
+// characters.
 func (s *Saver) taint(j Job) {
 	var fresh []int64
 	s.mu.Lock()
@@ -212,6 +242,9 @@ func (s *Saver) taint(j Job) {
 			s.tainted[id] = true
 			fresh = append(fresh, id)
 		}
+	}
+	for _, h := range jobHouses(j) {
+		s.taintedHouses[h] = true
 	}
 	s.mu.Unlock()
 	// A dropped market-only transfer (expiry, cancel) taints nobody, but the market in
@@ -226,15 +259,15 @@ func (s *Saver) taint(j Job) {
 	}
 }
 
-// skipTainted reports whether j touches a tainted character; then it taints all of j's
-// characters (the fixed point) and logs and counts the skip.
+// skipTainted reports whether j touches a tainted character or house; then it taints all
+// of j's characters and houses (the fixed point) and logs and counts the skip.
 func (s *Saver) skipTainted(j Job) bool {
 	if !s.Tainted(j) {
 		return false
 	}
 	s.taint(j)
-	s.cfg.Logger.Error("session: save skipped, a character of it is tainted", "characters", jobCharacters(j),
-		"transfer", j.Transfer != nil, "final", j.Transfer == nil && j.Snapshot.Final)
+	s.cfg.Logger.Error("session: save skipped, a character or house of it is tainted", "characters", jobCharacters(j),
+		"houses", jobHouses(j), "transfer", j.Transfer != nil, "final", j.Transfer == nil && j.Snapshot.Final)
 	s.failed(SaveSkipped)
 	return true
 }

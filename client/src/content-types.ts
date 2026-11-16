@@ -25,6 +25,11 @@ export interface ItemDef {
   marketable?: boolean;
   /** tool.use of a tool ("mining", "fishing"...; "" = not a tool): picks its gather sound. */
   toolUse?: string;
+  /**
+   * i18n key of its `description` in data/items ("item.iron_sword.desc", or a sign's
+   * "text.volcan.dock_sign"): looking at the item shows it. Absent when it has none.
+   */
+  desc?: string;
 }
 
 /** A player outfit of data/outfits.yaml (T0.5). */

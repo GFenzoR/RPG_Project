@@ -165,6 +165,7 @@ const market = (over: Partial<MarketView>): MarketView => ({
   },
   owned: 4,
   readOnly: false,
+  priceDefault: 1,
   ...over,
 });
 
@@ -222,6 +223,30 @@ describe("MarketWindow", () => {
     submit(create, { side: "sell", amount: "4", price: "6", duration: "1" });
     submit(create, { side: "buy", amount: "10", price: "10", duration: "0" }); // 100 + fee > money
     expect(sent).toEqual(["cancel 4", "create sell 68 4 6 1"]);
+  });
+});
+
+describe("MarketWindow create form", () => {
+  const price = (tree: unknown): unknown =>
+    nodes(byAttr(tree, "data-testid", "market-create")[0]).find((n) => n.props["name"] === "price")
+      ?.props["defaultValue"];
+
+  it("keeps its default price through a refresh and starts fresh for another item", () => {
+    const { game } = recorder();
+    const render = (m: MarketView) =>
+      MarketWindow({ t, content, game, ui: { market: m } as GameUi });
+    const first = render(market({ itemId: 68, referencePrice: 6, priceDefault: 6 }));
+    expect(price(first)).toBe("6");
+    expect(byAttr(first, "data-testid", "market-create")[0]?.key).toBe(68);
+    // A refresh moved the reference price: the form's default (what the field shows
+    // unless the player typed) does not move with it.
+    const refreshed = render(market({ itemId: 68, referencePrice: 9, priceDefault: 6 }));
+    expect(price(refreshed)).toBe("6");
+    expect(byAttr(refreshed, "data-testid", "market-create")[0]?.key).toBe(68);
+    // Another item is another form (a new key: Preact mounts it fresh).
+    const other = render(market({ itemId: 66, referencePrice: 3, priceDefault: 3 }));
+    expect(byAttr(other, "data-testid", "market-create")[0]?.key).toBe(66);
+    expect(price(other)).toBe("3");
   });
 });
 

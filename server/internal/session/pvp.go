@@ -75,6 +75,8 @@ type pvpHit struct {
 	unjust bool
 	// arena: every hit of the entry was an arena hit (both in a pvp zone).
 	arena bool
+	// when is at on the clock: what a condition of char saves with p (ConditionState).
+	when time.Time
 }
 
 func (w *World) initPvP() {
@@ -400,7 +402,7 @@ func (w *World) hurtPlayer(ctx *game.TickContext, a, v *Player, dmg int, element
 func (w *World) aggress(ctx *game.TickContext, a, v *Player) {
 	arena := w.arena(a, v)
 	unjust := !arena && !w.justified(ctx.Tick, a, v)
-	w.rememberHit(ctx.Tick, v, a.charID, unjust, arena)
+	w.rememberHit(ctx.Tick, ctx.Now, v, a.charID, unjust, arena)
 	if arena {
 		return
 	}
@@ -412,9 +414,10 @@ func (w *World) aggress(ctx *game.TickContext, a, v *Player) {
 	}
 }
 
-// rememberHit records on v a hit by character char. An entry older than the aggressor
-// time starts afresh; with maxHitBy entries the oldest is replaced.
-func (w *World) rememberHit(tick game.Tick, v *Player, char int64, unjust, arena bool) {
+// rememberHit records on v a hit by character char at tick (now on the clock). An entry
+// older than the aggressor time starts afresh; with maxHitBy entries the oldest is
+// replaced.
+func (w *World) rememberHit(tick game.Tick, now time.Time, v *Player, char int64, unjust, arena bool) {
 	oldest := -1
 	for i := range v.hitBy {
 		h := &v.hitBy[i]
@@ -422,38 +425,79 @@ func (w *World) rememberHit(tick game.Tick, v *Player, char int64, unjust, arena
 			if tick-h.at >= w.pvpAggrFor {
 				h.unjust, h.arena = false, true
 			}
-			h.at, h.unjust, h.arena = tick, h.unjust || unjust, h.arena && arena
+			h.at, h.when, h.unjust, h.arena = tick, now, h.unjust || unjust, h.arena && arena
 			return
 		}
 		if oldest < 0 || h.at < v.hitBy[oldest].at {
 			oldest = i
 		}
 	}
+	hit := pvpHit{char: char, at: tick, when: now, unjust: unjust, arena: arena}
 	if len(v.hitBy) < maxHitBy {
-		v.hitBy = append(v.hitBy, pvpHit{char: char, at: tick, unjust: unjust, arena: arena})
+		v.hitBy = append(v.hitBy, hit)
 		return
 	}
-	v.hitBy[oldest] = pvpHit{char: char, at: tick, unjust: unjust, arena: arena}
+	v.hitBy[oldest] = hit
 }
 
-// pvpSource returns the online player that applied a condition to v, if it was another
-// player (c.source is a creature id; monsters and players share the id space).
-func (w *World) pvpSource(source uint32, v *Player) *Player {
-	if !w.pvpOn || source == 0 || source == v.id {
+// hitFrom returns v's entry for the hits of character char, or nil.
+func hitFrom(v *Player, char int64) *pvpHit {
+	if char == 0 {
 		return nil
 	}
-	return w.playerByID(source)
+	for i := range v.hitBy {
+		if v.hitBy[i].char == char {
+			return &v.hitBy[i]
+		}
+	}
+	return nil
+}
+
+// recallHit gives a joining v back what it remembered of char's attack when it left (a
+// condition of char saves it, conditionStates): a hit outside an arena at when, unjustified
+// or not. Only while it is still within the aggressor time on the clock, so a relog changes
+// neither self-defense nor what char's condition may continue. An entry v already has
+// (carried over by a login that took the character over) stays.
+func (w *World) recallHit(ctx *game.TickContext, v *Player, char int64, when time.Time, unjust bool) {
+	if !w.pvpOn || hitFrom(v, char) != nil || len(v.hitBy) >= maxHitBy {
+		return
+	}
+	age := ctx.Now.Sub(when)
+	if age < 0 || age >= w.aggrDur {
+		return
+	}
+	// Rounded up: never younger than it is. A hit older than this server's first tick (a
+	// restart since) cannot be placed on the tick line and is forgotten.
+	ago := game.TicksFor(age)
+	if ago > ctx.Tick {
+		return
+	}
+	v.hitBy = append(v.hitBy, pvpHit{char: char, at: ctx.Tick - ago, when: when, unjust: unjust})
+}
+
+// pvpSource tells whether condition c on v is another player's (pvp) and returns that
+// player if it is in the world (link-dead too) and PvP is on: c.author is a character, so
+// it is found after a relog of either side.
+func (w *World) pvpSource(c *condition, v *Player) (a *Player, pvp bool) {
+	if c.author == 0 || c.author == v.charID {
+		return nil, false
+	}
+	if !w.pvpOn {
+		return nil, true // nobody hurts another player with PvP off (a condition saved before)
+	}
+	return w.byChar[c.author], true
 }
 
 // ---- deaths -----------------------------------------------------------------------
 
 // pvpDeath settles the death of v if players took part in it. killer is the player whose
-// hit killed v (nil: a monster, the world or a condition of nobody online). It is an arena
-// defeat (no penalty, reported) only if v died on a pvp tile by a killer standing on one
-// too. Every player that hurt v within balance pvp.kill_credit_ms gets the kill (its
-// counter, and an unjustified kill if any of its hits was) — arena hits only in an arena
-// defeat —, each war it was fought in scores once, both sides are told, and the kill is
-// logged.
+// hit killed v (for a hit of another player's condition, its author, who is in the world:
+// an author out of it does not hurt); nil for a monster, the world or a condition without
+// an author. It is an arena defeat (no penalty, reported) only if v died on a pvp tile by
+// a killer standing on one too. Every player that hurt v within balance
+// pvp.kill_credit_ms gets the kill (its counter, and an unjustified kill if any of its
+// hits was) — arena hits only in an arena defeat —, each war it was fought in scores once,
+// both sides are told, and the kill is logged.
 func (w *World) pvpDeath(ctx *game.TickContext, v, killer *Player) (arena bool) {
 	if !w.pvpOn || len(v.hitBy) == 0 {
 		return false
@@ -657,20 +701,41 @@ func (w *World) cmdUnskull(ctx *game.TickContext, p *Player, args []string) bool
 // ---- link-dead --------------------------------------------------------------------
 
 // linkDeadOnLeave keeps p in the world when its connection closes while its PvP lock
-// lasts (docs/02 "Bloqueo de combate PvP"): link-dead, it does nothing but can still be
-// attacked (which renews the lock) until the lock ends; checkPvP then saves it and takes it
-// out. It reports whether p stays. A new login of the character takes it over (join).
+// lasts (docs/02 "Bloqueo de combate PvP"): link-dead, it does nothing (Input ignores it)
+// but can still be attacked (which renews the lock) until the lock ends; checkPvP then
+// saves it and takes it out. It reports whether p stays: a player already link-dead stays
+// as it is. A new login of the character takes it over (join).
 func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
-	if !w.pvpOn || p.linkDead || !w.pvpLocked(tick, p) {
+	if p.linkDead {
+		return true
+	}
+	if !w.pvpOn || !w.pvpLocked(tick, p) {
 		return false
 	}
 	p.linkDead = true
 	p.target, p.ptarget = nil, nil
 	p.stopWalk()
 	p.out = p.out[:0]
+	w.dropMarket(p) // T5.3: nobody to refresh its market window for (flushMarket)
 	w.linkDead = append(w.linkDead, p)
 	w.log.Info("pvp link-dead", "character", p.charID)
 	return true
+}
+
+// disconnect closes p's connection with reason because the server ends it (a slow client,
+// a password reset). Under its PvP lock p stays in the world link-dead, as if it had closed
+// the connection itself (Leave): the connection closes now and p leaves when the lock ends.
+// Anyone else leaves the world now (remove). A staff kick or ban, a failed save and a
+// logout do not come here: they take the character out.
+func (w *World) disconnect(ctx *game.TickContext, p *Player, reason pb.DisconnectReason, slow bool) {
+	if !w.linkDeadOnLeave(ctx.Tick, p) {
+		w.remove(ctx, p, reason, slow)
+		return
+	}
+	if !p.dropped {
+		p.dropped = true
+		p.client.Close(reason) // once: remove sends and closes nothing more
+	}
 }
 
 // LinkDead reports whether p lost its connection and stays in the world for its PvP lock.

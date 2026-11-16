@@ -452,7 +452,13 @@
     "inventory": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["start_container", "max_open_containers", "use_cooldown_ms", "reach"],
+      "required": [
+        "start_container",
+        "max_open_containers",
+        "use_cooldown_ms",
+        "door_cooldown_ms",
+        "reach"
+      ],
       "properties": {
         "start_container": {
           "description": "Container item equipped in the backpack slot of a character that never played.",
@@ -463,6 +469,10 @@
         },
         "use_cooldown_ms": {
           "$ref": "common.schema.json#/$defs/durationMs"
+        },
+        "door_cooldown_ms": {
+          "description": "Wait between two uses of a map door by one player, refused or not (docs/02 \"Puertas con llave\").",
+          "$ref": "common.schema.json#/$defs/positiveInt"
         },
         "reach": {
           "description": "Chebyshev distance (same floor) for actions on ground items.",
@@ -775,7 +785,8 @@
         "reference_days",
         "mailbox_shown",
         "action_burst",
-        "action_refill_ms"
+        "action_refill_ms",
+        "push_every_ms"
       ],
       "properties": {
         "enabled": { "type": "boolean" },
@@ -806,7 +817,13 @@
         "reference_days": { "type": "integer", "minimum": 1, "maximum": 60 },
         "mailbox_shown": { "type": "integer", "minimum": 1, "maximum": 200 },
         "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "push_every_ms": {
+          "description": "Shortest time between two refreshes the server pushes to one open market window (another player's action); a change inside it goes out when it ends.",
+          "type": "integer",
+          "minimum": 50,
+          "maximum": 60000
+        }
       }
     },
     "trade": {

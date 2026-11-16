@@ -1,15 +1,18 @@
 // World validation (docs/03-world-and-maps.md, "Validación"). The editor, mapcli, the MCP
 // server and `make validate` all call validateWorld, so they agree on what is an error.
-import { loadContent, routesFile } from "./content.ts";
+import { chunkFileName, floorDir } from "./chunk.ts";
+import { isSignItem, loadContent, routesFile } from "./content.ts";
 import type { ContentIndex } from "./content.ts";
 import { Reporter } from "./diagnostics.ts";
 import type { Diagnostic, PathSegment } from "./diagnostics.ts";
 import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
-import { TileMap, isWalkable } from "./tiles.ts";
+import { TileMap, isPassable, isWalkable } from "./tiles.ts";
+import { DOOR_ROOM_ERRORS, doorRooms, doorsOn } from "./doors.ts";
+import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
-import type { Island, Position, Rect, World } from "./types.ts";
+import type { Chunk, Island, Position, Rect, World } from "./types.ts";
 
 export interface MapReport {
   diagnostics: Diagnostic[];
@@ -143,6 +146,7 @@ class WorldValidator {
     for (const island of this.world.islands.values()) this.checkIsland(island);
     this.checkUniqueAcrossWorld();
     this.checkBoatRoutes();
+    this.checkDoors();
     this.checkPrefabs();
   }
 
@@ -314,6 +318,23 @@ class WorldValidator {
       else if (!this.tiles.tileAt(t.pos)?.ground)
         this.err(textsFile, [i, "pos"], "text is on a tile without ground", t.pos);
       this.checkI18n(textsFile, [i, "text"], t.text);
+      // A sign item on the tile (T5.5) is what players read: it must say the same text. A
+      // sign without its item is allowed (only texts.yaml knows it; docs/03 "Carteles").
+      if (t.kind !== "sign") continue;
+      const signs = (this.tiles.tileAt(t.pos)?.stack ?? []).filter((id) =>
+        isSignItem(this.content.items.get(id)),
+      );
+      const first = signs[0];
+      if (
+        first !== undefined &&
+        !signs.some((id) => this.content.items.get(id)?.description === t.text)
+      )
+        this.err(
+          textsFile,
+          [i, "text"],
+          `sign "${t.id}" says ${t.text}, but its sign item "${first}" says ${this.content.items.get(first)?.description}`,
+          t.pos,
+        );
     }
 
     this.checkHouses(island, where, needWalkable);
@@ -322,10 +343,11 @@ class WorldValidator {
 
   /**
    * Houses (T5.4, docs/03 "Casas"): rects on the island and its floors, no tile in two
-   * houses, doors walkable tiles of the house, the exit a walkable tile outside every
-   * house next to a door, every house tile with ground; nothing else lives inside (NPCs,
-   * spawn centers, texts, portals, no_logout zones). The server (world.NewMap) repeats
-   * the geometric rules.
+   * houses, doors walkable tiles on the edge of the house without a door item (warning:
+   * tiles of a floor that are not one connected area), the exit a walkable tile outside
+   * every house next to a door, every house tile with ground; nothing else lives inside
+   * (NPCs, spawn centers, texts, portals, no_logout zones). The server (world.NewMap)
+   * repeats the geometric rules, and session the door item one.
    */
   private checkHouses(
     island: Island,
@@ -370,8 +392,23 @@ class WorldValidator {
       for (const [j, d] of h.doors.entries()) {
         if (!houseContains(h, d))
           this.err(file, [i, "doors", j], "door is not a tile of the house", d);
-        else needWalkable(file, [i, "doors", j], d, "door");
+        else {
+          needWalkable(file, [i, "doors", j], d, "door");
+          // Using a door item would open it, never the house window (docs/02 "Puertas con
+          // llave"); the server refuses to start with one too.
+          if (this.tiles.tileAt(d)?.stack.some((id) => this.content.items.get(id)?.door === true))
+            this.err(file, [i, "doors", j], "a house door cannot hold a door item", d);
+          if (!onHouseEdge(h.rects, d))
+            this.err(
+              file,
+              [i, "doors", j],
+              "door must be on the edge of the house (next to a tile outside it)",
+              d,
+            );
+        }
       }
+      for (const z of disconnectedFloors(h.rects))
+        this.warn(file, [i, "rects"], `house tiles on floor ${z} are not one connected area`);
       needWalkable(file, [i, "exit"], h.exit, "house exit");
       if (
         !h.doors.some(
@@ -420,8 +457,15 @@ class WorldValidator {
   private checkChunks(island: Island, floors: Set<number>): void {
     const dir = this.dirOf(island);
     const rect = island.meta.rect;
+    // Sign texts by tile: every sign item must stand on a texts.yaml sign with its text.
+    const signText = new Map<string, string[]>();
+    for (const t of island.texts) {
+      if (t.kind !== "sign") continue;
+      const key = formatPos(t.pos);
+      signText.set(key, [...(signText.get(key) ?? []), t.text]);
+    }
     for (const c of island.chunks.values()) {
-      const file = `${dir}/chunks/z${String(c.z).padStart(2, "0")}/c${String(c.cx).padStart(4, "0")}_${String(c.cy).padStart(4, "0")}.json`;
+      const file = chunkFile(dir, c);
       const ox = c.cx * CHUNK_SIZE;
       const oy = c.cy * CHUNK_SIZE;
       if (!floors.has(c.z))
@@ -471,10 +515,124 @@ class WorldValidator {
                 `ground item "${id}" belongs in the ground layer, not on a stack`,
                 pos,
               );
+            else if (
+              isSignItem(info) &&
+              !(signText.get(formatPos(pos)) ?? []).includes(info.description ?? "")
+            )
+              once(
+                `sign:${lx},${ly}`,
+                ["items"],
+                `sign item "${id}" says ${info.description}, but ${dir}/texts.yaml has no sign with that text at ${formatPos(pos)}`,
+                pos,
+              );
           }
         }
       }
     }
+  }
+
+  // ---- doors --------------------------------------------------------------------
+
+  /**
+   * Doors (docs/02 "Puertas con llave"; the server's initDoors refuses the same): one door
+   * item per tile; a warning for a door placed open (it is open again after every
+   * restart); a room behind every locked door (doorRooms, the server's walks), shared only
+   * by locked doors of the same key and the same outside; and nothing of the outside in a
+   * room: no temple (where players wake up), NPC, house, portal end, boat arrival or
+   * dialog teleport. Either the outside was taken for the room, or a player would land
+   * behind the door. Spawns may live in a room (a guarded vault).
+   */
+  private checkDoors(): void {
+    const locked: { pos: Position; lock: string; id: string; file: string }[] = [];
+    for (const island of this.world.islands.values()) {
+      const dir = this.dirOf(island);
+      const chunks = [...island.chunks.values()].sort(
+        (a, b) => a.z - b.z || a.cy - b.cy || a.cx - b.cx,
+      );
+      for (const c of chunks) {
+        const file = chunkFile(dir, c);
+        for (const s of c.items) {
+          const doors = doorsOn(s, this.content);
+          const id = doors[0];
+          if (id === undefined) continue;
+          const pos = { x: c.cx * CHUNK_SIZE + s.x, y: c.cy * CHUNK_SIZE + s.y, z: c.z };
+          if (doors.length > 1) {
+            this.err(
+              file,
+              ["items"],
+              `doors ${doors.map((d) => `"${d}"`).join(" and ")} on the same tile ${formatPos(pos)}: one door per tile`,
+              pos,
+            );
+            continue;
+          }
+          const info = this.content.items.get(id);
+          if (info?.doorOpen === true)
+            this.warn(
+              file,
+              ["items"],
+              `door "${id}" is placed open at ${formatPos(pos)}: it is open again after every restart`,
+              pos,
+            );
+          if (info?.lock !== undefined) locked.push({ pos, lock: info.lock, id, file });
+        }
+      }
+    }
+    // A house is no street: the walk between the outsides of two doors does not cross one.
+    const houses = new Set<string>();
+    for (const island of this.world.islands.values())
+      for (const h of island.houses)
+        for (const r of h.rects)
+          for (const [x, y] of tilesOf(r)) houses.add(formatPos({ x, y, z: r.z }));
+    const { behind, findings } = doorRooms(this.tiles, this.content, locked, houses);
+    for (const f of findings) {
+      const d = locked.find((l) => formatPos(l.pos) === formatPos(f.door));
+      if (!d) continue;
+      const other = f.other ? ` (the door at ${formatPos(f.other)})` : "";
+      this.err(
+        d.file,
+        ["items"],
+        `locked door "${d.id}" at ${formatPos(f.door)}: ${DOOR_ROOM_ERRORS[f.error]}${other}`,
+        f.door,
+      );
+    }
+    if (behind.size === 0) return;
+    const inRoom = (file: string, path: PathSegment[], what: string, p: Position): boolean => {
+      const door = behind.get(formatPos(p));
+      if (door)
+        this.err(
+          file,
+          path,
+          `${what} lies in the room behind the locked door at ${formatPos(door)}`,
+          p,
+        );
+      return door !== undefined;
+    };
+    for (const island of this.world.islands.values()) {
+      const dir = this.dirOf(island);
+      inRoom(`${dir}/island.yaml`, ["temple"], "temple", island.meta.temple);
+      for (const [i, n] of island.npcs.entries())
+        inRoom(`${dir}/npcs.yaml`, [i, "pos"], `NPC "${n.npc}"`, n.pos);
+      for (const [i, p] of island.portals.entries()) {
+        inRoom(`${dir}/portals.yaml`, [i, "from"], `portal entrance "${p.id}"`, p.from);
+        inRoom(`${dir}/portals.yaml`, [i, "to"], `portal destination "${p.id}"`, p.to);
+      }
+      for (const [i, h] of island.houses.entries()) {
+        if (inRoom(`${dir}/houses.yaml`, [i, "exit"], `exit of house "${h.id}"`, h.exit)) continue;
+        const tile = h.rects
+          .flatMap((r) => tilesOf(r).map(([x, y]) => ({ x, y, z: r.z })))
+          .find((t) => behind.has(formatPos(t)));
+        if (tile) inRoom(`${dir}/houses.yaml`, [i, "rects"], `house "${h.id}"`, tile);
+      }
+    }
+    for (const r of this.content.routes)
+      inRoom(routesFile, [r.index, "to"], `arrival of boat route "${r.id}"`, r.to);
+    for (const t of this.content.teleports ?? [])
+      inRoom(
+        t.file,
+        ["dialog", "nodes", t.node],
+        `teleport of NPC "${t.npc}" (node "${t.node}")`,
+        t.to,
+      );
   }
 
   // ---- references across the world -------------------------------------------
@@ -576,8 +734,10 @@ class WorldValidator {
   }
 
   /**
-   * BFS from the temple over walkable tiles (8 directions, like player movement) and portals.
-   * Every spawn, NPC and non-community zone must be reachable on foot.
+   * BFS from the temple over passable tiles (8 directions, like player movement) and portals.
+   * Doors count as open (isPassable): a locked door opens with its key, so the room behind
+   * it is reachable (docs/02 "Puertas con llave"). Every spawn, NPC and non-community zone
+   * must be reachable on foot.
    */
   private checkReachability(island: Island): void {
     const meta = island.meta;
@@ -600,7 +760,7 @@ class WorldValidator {
       for (const n of next) {
         const k = formatPos(n);
         if (reached.has(k) || !rectContains(meta.rect, n.x, n.y)) continue;
-        if (!isWalkable(this.tiles.tileAt(n), this.content)) continue;
+        if (!isPassable(this.tiles.tileAt(n), this.content)) continue;
         reached.add(k);
         queue.push(n);
       }
@@ -644,10 +804,10 @@ class WorldValidator {
   }
 
   /**
-   * Warns once per connected walkable area (8 directions, one floor) that the temple BFS
-   * did not reach and that has at least UNREACHABLE_AREA_MIN tiles: a stranded dock, a
-   * sandbar the generator left, a room with no stairs. Areas inside a community_plot are
-   * skipped (they may be unbuilt). Smaller pockets (a tile between two trees) are noise.
+   * Warns once per connected walkable area (8 directions, one floor, doors open) that the
+   * temple BFS did not reach and that has at least UNREACHABLE_AREA_MIN tiles: a stranded
+   * dock, a sandbar the generator left, a room with no stairs. Areas inside a community_plot
+   * are skipped (they may be unbuilt). Smaller pockets (a tile between two trees) are noise.
    */
   private warnUnreachableAreas(island: Island, reached: Set<string>): void {
     const meta = island.meta;
@@ -679,7 +839,8 @@ class WorldValidator {
               for (let dx = -1; dx <= 1; dx++) {
                 const n = { x: p.x + dx, y: p.y + dy, z: p.z };
                 const k = formatPos(n);
-                if (seen.has(k) || !rectContains(meta.rect, n.x, n.y) || !walkable(n)) continue;
+                if (seen.has(k) || !rectContains(meta.rect, n.x, n.y)) continue;
+                if (!isPassable(this.tiles.tileAt(n), this.content)) continue;
                 seen.add(k);
                 queue.push(n);
               }
@@ -694,6 +855,18 @@ class WorldValidator {
         }
     }
   }
+}
+
+/** The file of chunk c of the island in directory dir. */
+function chunkFile(dir: string, c: Chunk): string {
+  return `${dir}/chunks/${floorDir(c.z)}/${chunkFileName(c.cx, c.cy)}`;
+}
+
+/** The [x, y] of every tile of a rect. */
+function tilesOf(r: { x: number; y: number; w: number; h: number }): [number, number][] {
+  const out: [number, number][] = [];
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) out.push([x, y]);
+  return out;
 }
 
 /** Walkable areas of at least this many tiles that cannot be reached warn (T3.6). */

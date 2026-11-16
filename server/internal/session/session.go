@@ -32,7 +32,9 @@ type Client interface {
 	Send(b *pb.ServerBatch) bool
 	// Close ends the connection after the batches already sent, followed by a
 	// Disconnect with reason (none if reason is UNSPECIFIED). It is called at most once
-	// per player, after the player left the world.
+	// per player: after the player left the world or, for a player under its PvP lock that
+	// stays in the world link-dead (T5.2: a slow client, a password reset), when the loop
+	// ends its connection. Commands from that connection are ignored from then on.
 	Close(reason pb.DisconnectReason)
 }
 
@@ -257,6 +259,14 @@ type World struct {
 	reach          int
 	maxOpen        int
 
+	// Doors (door.go): every tile of the map with a door item, the rooms behind locked
+	// doors and the room of each of their tiles (ids of rooms, 1-based), all worked out at
+	// start, and the wait between two door uses of a player.
+	doors   map[world.Pos]*door
+	rooms   []room
+	roomOf  map[world.Pos]int32
+	doorFor game.Tick
+
 	// Magic (T1.9): spells by normalized words, and the index of the magic skill.
 	spellWords map[string]*content.Spell
 	magicIdx   int
@@ -353,11 +363,29 @@ type World struct {
 	nextMail     int64
 	nextTransfer uint64
 	mkNext       game.Tick
+	// mkWatch are the open windows by browsed item, in the order they started showing it;
+	// mkPush the windows to refresh at the end of the tick (flushMarket), each at most
+	// once every mkPushEvery (market.push_every_ms).
+	mkWatch     map[uint16][]*Player
+	mkPush      []*Player
+	mkPushEvery game.Tick
 	// readOnly: a transfer could not be stored (Tainted): until a restart the market can
 	// only be browsed and nobody trades. locked are the characters whose state in memory
 	// is ahead of the database: out of the world and refused at login until a restart.
 	readOnly bool
 	locked   map[int64]bool
+	// inFlight are the characters with a transfer the database has not confirmed: the
+	// seq of their snapshot in the last one (World.Saved forgets it). Until then they
+	// drop nothing outside a house (heldDrop, docs/01 "Transacciones"). heldGround are the
+	// ground items reserved to a character until the ack of the seq that covers them
+	// (hold.go): the corpse it left while held, what the server dropped at its feet, and
+	// what it took out of a house to the public ground (leftHouse).
+	inFlight   map[int64]uint64
+	heldGround map[*Item]groundHold
+	// saveSeq numbers every snapshot of every character, so a character's numbers grow
+	// across its sessions too: an ack retried late from an earlier session can never pass
+	// for a newer snapshot (World.Saved).
+	saveSeq uint64
 	// Trade window (T5.3, trade.go): balance trade (tradeOn = enabled with
 	// Config.Transfer), the open trades and invitations in creation order.
 	tradeOn  bool
@@ -489,6 +517,8 @@ func New(cfg Config) (*World, error) {
 		jobs:        map[uint64]pendingJob{},
 		banned:      map[int64]time.Time{},
 		locked:      map[int64]bool{},
+		inFlight:    map[int64]uint64{},
+		heldGround:  map[*Item]groundHold{},
 		shopPending: map[int64]pendingShop{},
 		pf:          world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
 	}
@@ -527,6 +557,9 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	if err := w.initGathering(); err != nil {
+		return nil, err
+	}
+	if err := w.initDoors(); err != nil {
 		return nil, err
 	}
 	if err := w.initCrafting(); err != nil {

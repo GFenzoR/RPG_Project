@@ -15,9 +15,21 @@ export {
   stackAt,
 } from "./chunk.ts";
 export { loadContent } from "./content.ts";
-export type { ContentIndex, ItemInfo } from "./content.ts";
+export type { ContentIndex, ItemInfo, TeleportInfo } from "./content.ts";
+export {
+  DOOR_ROOM_ERRORS,
+  DOOR_ROOM_SEARCH,
+  SAME_OUTSIDE_SEARCH,
+  doorRoom,
+  doorRooms,
+  doorsOn,
+  hasLockedDoor,
+  sameOutside,
+} from "./doors.ts";
+export type { DoorRoom, DoorRoomError, DoorRoomFinding, DoorRooms } from "./doors.ts";
 export { Reporter, formatDiagnostic, formatPath } from "./diagnostics.ts";
 export type { Diagnostic, PathSegment } from "./diagnostics.ts";
+export * from "./houses.ts";
 export { islandInfo, worldInfo } from "./info.ts";
 export type { IslandInfo, WorldInfo } from "./info.ts";
 export { AUX_FILES, islandDir, loadWorld, worldFile, writeIsland, writeWorldMeta } from "./io.ts";
@@ -26,7 +38,7 @@ export { PREFAB_DIR, checkPrefab, formatPrefab } from "./prefabs.ts";
 export type { PrefabProblem } from "./prefabs.ts";
 export { SCHEMA_DIR, checkSchema } from "./schemas.ts";
 export type { MapSchemaName, SchemaError } from "./schemas.ts";
-export { TileMap, isWalkable } from "./tiles.ts";
+export { TileMap, isPassable, isWalkable } from "./tiles.ts";
 export type { Tile } from "./tiles.ts";
 export { MAX_SPAWN_DENSITY, summarize, validateLoaded, validateWorld } from "./validate.ts";
 export type { MapReport, ValidateLoadedOptions, ValidateWorldOptions } from "./validate.ts";
@@ -38,6 +50,7 @@ export { changedFiles, saveApplied } from "./save.ts";
 export type { SaveResult } from "./save.ts";
 export type {
   ApplyResult,
+  AuxList,
   BorderRule,
   MapOp,
   OpOptions,

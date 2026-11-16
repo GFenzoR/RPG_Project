@@ -3,6 +3,7 @@
 package worldtest
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -20,6 +21,10 @@ const (
 	Wall      = 10 // item on top of grass that blocks movement and sight
 	// Vein is an ore vein on top of grass that blocks movement (T1.12).
 	Vein = 11
+	// Door is a closed door on grass (blocks movement and sight) and OpenDoor the same
+	// door open (docs/02 "Puertas con llave"). Their items are the test's to define.
+	Door     = 12
+	OpenDoor = 13
 )
 
 // Speeds is the terrain cost table of the drawings, indexed by item id.
@@ -30,6 +35,8 @@ var Speeds = []uint16{0, 0, 50, 200, 0, 0}
 //	.  grass    =  road    m  mud    _  floor    #  wall (grass + Wall item)
 //	~  water (blocks movement only)    T  grass, and the island's temple
 //	f  water with fish (FishWater)     v  vein (grass + Vein item, blocks movement)
+//	D  closed door (grass + Door item, blocks movement and sight)
+//	d  open door (grass + OpenDoor item)
 //	   (space) no tile
 //
 // The island rect is the smallest sector-aligned rect holding the drawing. Without a T
@@ -108,6 +115,12 @@ func Floors(t testing.TB, ox, oy int, layers ...Layer) *world.Map {
 				case 'v':
 					g, f = Grass, world.FlagBlocksMovement
 					stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Vein}})
+				case 'D':
+					g, f = Grass, world.FlagBlocksMovement|world.FlagBlocksSight
+					stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{Door}})
+				case 'd':
+					g = Grass
+					stacks[s] = append(stacks[s], world.TileStack{Index: uint16(i), Items: []uint16{OpenDoor}})
 				case ' ':
 					f = world.FlagBlocksMovement
 				default:
@@ -174,8 +187,8 @@ func Join(t testing.TB, ids []string, maps ...*world.Map) *world.Map {
 	return m
 }
 
-// WithHouses returns m (one island, built by this package) with houses on its island
-// (T5.4): world.NewMap marks their tiles with FlagHouse and FlagProtection.
+// WithHouses returns a copy of m (one island, built by this package) with houses on its
+// island (T5.4): world.NewMap marks their tiles with FlagHouse and FlagProtection.
 func WithHouses(t testing.TB, m *world.Map, houses ...world.House) *world.Map {
 	t.Helper()
 	src := m.Islands()[0]
@@ -188,6 +201,12 @@ func WithHouses(t testing.TB, m *world.Map, houses ...world.House) *world.Map {
 			for x := r.X; x < r.X+r.W; x += world.SectorSize {
 				if s := m.SectorAt(world.Pos{X: uint16(x), Y: uint16(y), Z: z}); s != nil {
 					c := *s
+					// Its own stacks: a door opened in the copy (Map.ReplaceItem writes in
+					// place) must not reach m.
+					c.Stacks = make([]world.TileStack, len(s.Stacks))
+					for i, st := range s.Stacks {
+						c.Stacks[i] = world.TileStack{Index: st.Index, Items: slices.Clone(st.Items)}
+					}
 					list = append(list, &c)
 				}
 			}
@@ -198,4 +217,33 @@ func WithHouses(t testing.TB, m *world.Map, houses ...world.House) *world.Map {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// SetTile gives tile p of m (built by this package, before a World uses it) the ground,
+// flags and item stack given, for items of the real content (data/) whose numeric ids
+// the drawings do not know. The tile must lie in a drawn sector.
+func SetTile(t testing.TB, m *world.Map, p world.Pos, ground uint16, f world.Flags, items ...uint16) {
+	t.Helper()
+	s := m.SectorAt(p)
+	if s == nil {
+		t.Fatalf("worldtest: no sector at %v", p)
+	}
+	const ss = world.SectorSize
+	i := uint16(int(p.Y)%ss*ss + int(p.X)%ss)
+	s.Ground[i], s.Flags[i] = ground, f
+	stacks := make([]world.TileStack, 0, len(s.Stacks)+1)
+	for _, st := range s.Stacks {
+		if st.Index == i {
+			continue
+		}
+		if st.Index > i && len(items) > 0 {
+			stacks = append(stacks, world.TileStack{Index: i, Items: items})
+			items = nil
+		}
+		stacks = append(stacks, st)
+	}
+	if len(items) > 0 {
+		stacks = append(stacks, world.TileStack{Index: i, Items: items})
+	}
+	s.Stacks = stacks
 }

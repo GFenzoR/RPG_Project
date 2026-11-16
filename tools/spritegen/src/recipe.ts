@@ -8,9 +8,23 @@ import type { Rng } from "./draw.ts";
  * - object: map decoration on a transparent background; may be taller/wider than a tile
  *   (the renderer anchors it at the bottom-right corner of its tile, extending up-left).
  * - item: 32x32 inventory/ground icon, centred, transparent background.
- * - creature: monster or NPC, 32x32 (or larger), standing on its tile.
+ * - creature: monster, NPC or outfit frame, 32x32 (or larger), standing on its tile. It
+ *   gets the cast shadow of the Dungeon Crawl monsters (castShadow, see `shadow`).
+ * - effect: one frame of a tile effect (effects/<name>/<frame>), transparent, drawn over
+ *   the creatures of its tile; the client plays the frames in order (recipes/effects.ts).
+ * - ui: a client interface icon (ui/<group>/<id>, such as the PvP marks): 32x32 with the
+ *   drawing inside UI_ICON_BOX, which is all the client shows of it.
  */
-export type RecipeKind = "ground" | "wall" | "object" | "item" | "creature";
+export type RecipeKind = "ground" | "wall" | "object" | "item" | "creature" | "effect" | "ui";
+
+/** castShadow() options of a creature (draw.ts). */
+export interface ShadowOptions {
+  /** Reach toward the bottom-right, px (default SHADOW_DX, SHADOW_DY: 3, 1). */
+  dx?: number;
+  dy?: number;
+  /** Where it starts, a fraction of the figure's height from its top (SHADOW_FROM: 0.4). */
+  from?: number;
+}
 
 export interface Recipe {
   kind: RecipeKind;
@@ -18,6 +32,8 @@ export interface Recipe {
   width?: number;
   /** Pixels, a multiple of 32 (default 32). */
   height?: number;
+  /** Creatures only: the cast shadow's options (default ones when absent). */
+  shadow?: ShadowOptions;
   /**
    * Draws into img (already sized, transparent). rand and seed come from the sprite path,
    * so a recipe is reproducible and independent of the others.
@@ -26,3 +42,9 @@ export interface Recipe {
 }
 
 export type RecipeBook = Record<string, Recipe>;
+
+/**
+ * The part of a 32x32 `ui` sprite the client shows (x, y, width, height). The client keeps
+ * the same numbers (client/src/render/marks.ts MARK_BOX); a test checks both.
+ */
+export const UI_ICON_BOX = { x: 10, y: 10, w: 12, h: 12 } as const;

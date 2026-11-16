@@ -81,7 +81,8 @@ export function formatMessage(m: LogMessage, content: ClientContent, t: Translat
     : undefined;
   if (looked?.value.case === "item") {
     const def = content.items[looked.value.value.itemId];
-    const key = def ? `item.${def.id}.desc` : "";
+    // The key data/items names (a sign's is its text.* key), else the usual item.<id>.desc.
+    const key = def ? (def.desc ?? `item.${def.id}.desc`) : "";
     const desc = key ? t(key) : key;
     if (desc && desc !== key) return `${text} ${desc}`;
   }

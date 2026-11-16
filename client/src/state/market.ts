@@ -78,6 +78,12 @@ export interface MarketView {
   owned: number;
   /** Read-only until the server restarts (a change could not be saved): browse only. */
   readOnly: boolean;
+  /**
+   * The price the create form starts with: the reference price when the item was first
+   * shown in this window. It stays put while the window shows that item (applyMarket), so
+   * a refresh with a new reference price never changes a price the player did not pick.
+   */
+  priceDefault: number;
 }
 
 /** The limits of the create form (balance.yaml market, as the server sends them). */
@@ -139,7 +145,24 @@ export function marketFrom(u: MarketUpdate): MarketView | undefined {
     },
     owned: u.owned,
     readOnly: u.readOnly,
+    priceDefault: Math.max(Number(u.referencePrice), 1),
   };
+}
+
+/**
+ * The market window after u. A refresh (another player's action, sent by the server on
+ * its own) only updates a window that is still open: one the player just closed stays
+ * closed, even if the refresh crossed the close on the wire. While the window keeps
+ * showing the same item, the create form keeps its default price (priceDefault).
+ */
+export function applyMarket(
+  current: MarketView | undefined,
+  u: MarketUpdate,
+): MarketView | undefined {
+  if (u.refresh && !current) return undefined;
+  const next = marketFrom(u);
+  if (next && current && current.itemId === next.itemId) next.priceDefault = current.priceDefault;
+  return next;
 }
 
 /** The posting fee of an offer of amount units at price each (the server's formula). */

@@ -3,13 +3,25 @@
 // pixel (pixel-perfect: no smoothing, no fractional scale), and draws the creatures
 // interleaved with the item stacks (ground → items → creatures, row by row), then effects
 // and floating texts on top, then names and health bars. Input goes back to the caller as
-// tile clicks (left: walk) and creature clicks (right: attack).
+// tile clicks (left: walk) and creature clicks (right: attack). The player may zoom in by
+// whole scales (render/zoom.ts: pinch, the +/- buttons, Ctrl+wheel): the canvas is then
+// cut to the map's box and still centred on the own creature.
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
+import { CreatureKind, Skull } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
 import type { AtlasIcon, Camera } from "@rpg/renderer";
-import { VIEW_TILES, followCamera, pixelScale } from "./viewport.ts";
+import { VIEW_TILES, followCamera } from "./viewport.ts";
+import {
+  WheelZoom,
+  pinchZoom,
+  stepZoom,
+  viewPixels,
+  zoomPref,
+  zoomRange,
+  zoomScale,
+} from "./zoom.ts";
+import type { ZoomRange, ZoomView } from "./zoom.ts";
 import { labelText, placeLabels } from "./labels.ts";
 import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
@@ -21,6 +33,7 @@ import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
 import { skullColor } from "../state/pvp.ts";
 import { lookKey, playerLook } from "./cosmetics.ts";
+import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import {
   DEFAULT_OUTFIT,
@@ -30,27 +43,8 @@ import {
   outfitKeys,
   stepProgress,
 } from "./outfit.ts";
-import {
-  EFFECT_CONJURE,
-  EFFECT_ELEMENT,
-  EFFECT_GATHER,
-  EFFECT_GATHER_MISS,
-  EFFECT_BUFF,
-  EFFECT_HEAL,
-  EFFECT_HIT,
-  EFFECT_MS,
-  ELEMENTS,
-  FLOATING_TEXT_MS,
-  PROJECTILE_ELEMENT,
-  PROJECTILE_MS,
-} from "../state/world.ts";
-import type {
-  CreatureState,
-  EffectState,
-  FloatingTextState,
-  ProjectileState,
-  WorldState,
-} from "../state/world.ts";
+import { EffectLayer } from "./effect-layer.ts";
+import type { CreatureState, WorldState } from "../state/world.ts";
 
 const COLORS = {
   background: 0x000000,
@@ -66,12 +60,6 @@ const COLORS = {
   barHigh: 0x30c030,
   barMid: 0xe0c020,
   barLow: 0xd03020,
-  hit: 0xc01818,
-  block: 0x9ab4d8,
-  damage: 0xff4040,
-  heal: 0x60e060,
-  mana: 0x6090ff,
-  experience: 0xffffff,
 };
 
 /** Health bar size in sprite pixels. */
@@ -81,56 +69,6 @@ const BAR_H = 4;
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
 
-/** Colour of each element (state/world.ts ELEMENTS order), for magic effects and projectiles. */
-const ELEMENT_COLORS = [0xd8d0c0, 0xff7a1a, 0x8fd8ff, 0xc890ff, 0x7fc94a, 0xfff2a0, 0x5a3a6a];
-const elementColor = (i: number): number => ELEMENT_COLORS[i] ?? ELEMENT_COLORS[0] ?? 0xffffff;
-
-/** Procedural drawing of an Effect (until data/effects.yaml brings sprites). */
-function drawEffect(g: Graphics, id: number): void {
-  if (id === EFFECT_HIT)
-    g.circle(16, 16, 7)
-      .fill(COLORS.hit)
-      .circle(9, 11, 3)
-      .fill(COLORS.hit)
-      .circle(23, 21, 3)
-      .fill(COLORS.hit);
-  else if (id === EFFECT_HEAL)
-    g.circle(16, 16, 10)
-      .stroke({ width: 2, color: COLORS.heal })
-      .circle(10, 9, 2)
-      .fill(COLORS.heal)
-      .circle(22, 12, 2)
-      .fill(COLORS.heal)
-      .circle(16, 24, 2)
-      .fill(COLORS.heal);
-  else if (id === EFFECT_CONJURE) g.star(16, 16, 5, 11, 5).fill({ color: 0xb08cff, alpha: 0.85 });
-  else if (id === EFFECT_GATHER)
-    g.circle(16, 16, 11).stroke({ width: 2, color: 0xfff2a0 }).star(16, 16, 4, 7, 3).fill(0xfff2a0);
-  else if (id === EFFECT_BUFF)
-    g.circle(16, 16, 12)
-      .stroke({ width: 2, color: 0x9ff0c8, alpha: 0.9 })
-      .star(16, 16, 4, 8, 3)
-      .fill({ color: 0x9ff0c8, alpha: 0.8 });
-  else if (id === EFFECT_GATHER_MISS)
-    g.circle(16, 16, 6)
-      .stroke({ width: 2, color: 0xe8eef2, alpha: 0.8 })
-      .circle(16, 16, 11)
-      .stroke({ width: 1, color: 0xe8eef2, alpha: 0.5 });
-  else if (id >= EFFECT_ELEMENT && id < EFFECT_ELEMENT + ELEMENTS.length) {
-    const c = elementColor(id - EFFECT_ELEMENT);
-    g.rect(2, 2, 28, 28).fill({ color: c, alpha: 0.35 }).star(16, 16, 6, 12, 6).fill(c);
-  } else g.circle(16, 16, 9).stroke({ width: 3, color: COLORS.block });
-}
-
-const textColor = (k: FloatingTextKind): number =>
-  k === FloatingTextKind.HEAL
-    ? COLORS.heal
-    : k === FloatingTextKind.MANA
-      ? COLORS.mana
-      : k === FloatingTextKind.EXPERIENCE
-        ? COLORS.experience
-        : COLORS.damage;
-
 export interface GameCanvas {
   /** Page coordinates of the centre of tile (x, y) on the current floor (tests, tooling). */
   tileToClient(x: number, y: number): { x: number; y: number };
@@ -138,8 +76,14 @@ export interface GameCanvas {
   clientToTile(clientX: number, clientY: number): Pos | undefined;
   /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
   itemIcon(itemId: number): AtlasIcon | undefined;
+  /** Where a PvP mark's sprite is in the atlas (real art only), for the battle list. */
+  markIcon(mark: Skull): AtlasIcon | undefined;
   /** Current device pixels per sprite pixel. */
   readonly scale: number;
+  /** The scale and the scales the player may choose now. */
+  readonly zoom: ZoomView;
+  /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
+  zoomBy(steps: number): void;
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -167,6 +111,12 @@ export interface GameCanvasOptions {
   longPressTile(x: number, y: number, z: number, cx: number, cy: number): void;
   /** T5.6: a finger went down on the canvas. */
   touched(): void;
+  /** The zoom this device remembers (render/zoom.ts loadZoom); undefined = fit the view. */
+  zoom?: number | undefined;
+  /** The player zoomed (pinch, Ctrl+wheel, zoomBy): remember `pref` (undefined = fit). */
+  zoomed?(pref: number | undefined): void;
+  /** The scale or its limits changed (a zoom, a resize): refresh the zoom buttons. */
+  zoomView?(view: ZoomView): void;
 }
 
 /** How long after a finger press a contextmenu event is that finger's long press, ms. */
@@ -175,18 +125,36 @@ const TOUCH_MENU_MS = 1500;
 /** Pointer travel (canvas pixels) that turns a press into a drag. */
 const DRAG_START_PX = 6;
 
-/** Radius of the skull placeholder (T5.2), in screen pixels. */
-const SKULL_R = 5;
+/** Half the width of a PvP mark beside a name (T5.2), in screen pixels. */
+const MARK_HALF = MARK_BOX.w / 2;
 
-/** Draws a skull icon of the mark's colour (a round head, jaw and dark eyes); none = empty. */
-function drawSkull(g: Graphics, mark: Skull): void {
-  g.clear();
+/**
+ * Draws the PvP mark of a skull centred on the container (none = empty): its sprite
+ * (render/marks.ts) at one screen pixel per sprite pixel, like the 12 px names, or without
+ * it the old placeholder, a skull of the mark's colour drawn with shapes.
+ */
+function drawSkull(g: Container, mark: Skull, art: Texture | undefined): void {
+  for (const child of g.removeChildren()) child.destroy();
   if (mark === Skull.UNSPECIFIED) return;
+  if (art) {
+    // Anchored at the centre of MARK_BOX, the part of the sprite with the drawing.
+    const anchor = {
+      x: (MARK_BOX.x + MARK_HALF) / art.width,
+      y: (MARK_BOX.y + MARK_BOX.h / 2) / art.height,
+    };
+    g.addChild(new Sprite({ texture: art, anchor, roundPixels: true }));
+    return;
+  }
   const fill = skullColor(mark);
-  g.circle(0, -1, SKULL_R).fill(fill).stroke({ color: 0x000000, width: 1 });
-  g.rect(-3, 2, 6, 3).fill(fill).stroke({ color: 0x000000, width: 1 });
-  g.circle(-2, -1, 1.3).fill(0x000000);
-  g.circle(2, -1, 1.3).fill(0x000000);
+  const shapes = new Graphics();
+  shapes
+    .circle(0, -1, MARK_HALF - 1)
+    .fill(fill)
+    .stroke({ color: 0x000000, width: 1 });
+  shapes.rect(-3, 2, 6, 3).fill(fill).stroke({ color: 0x000000, width: 1 });
+  shapes.circle(-2, -1, 1.3).fill(0x000000);
+  shapes.circle(2, -1, 1.3).fill(0x000000);
+  g.addChild(shapes);
 }
 
 interface CreatureSprite {
@@ -196,8 +164,8 @@ interface CreatureSprite {
   label: Text;
   /** The guild name, between the name and the health bar (T5.1); empty = hidden. */
   guild: Text;
-  /** The PvP mark left of the name (T5.2): a placeholder drawn with shapes. */
-  skull: Graphics;
+  /** The PvP mark left of the name (T5.2): its sprite, or shapes without one (drawSkull). */
+  skull: Container;
   drawnSkull: Skull;
   /** A player's outfit sprite (T0.5); its texture follows the facing and the step. */
   outfit: Sprite | undefined;
@@ -254,14 +222,45 @@ export async function createGameCanvas(
 
   let scale = 1;
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
+  // The zoom the player chose (undefined = fit the whole view) and what the map's box
+  // allows; `scale` is the one drawn.
+  let pref = opts.zoom;
+  let range: ZoomRange = { min: 1, max: 1 };
+  let shown: ZoomView | undefined;
   const resize = (): void => {
     const dpr = window.devicePixelRatio || 1;
-    scale = pixelScale(host.clientWidth, host.clientHeight, dpr, T);
-    const w = VIEW_TILES.width * T * scale;
-    const h = VIEW_TILES.height * T * scale;
+    // The map's box is the host's content box: a padding keeps the canvas off a strip of
+    // controls (portrait with the touch pad, touch.css).
+    const style = getComputedStyle(host);
+    const px = (v: string): number => parseFloat(v) || 0;
+    const boxW = Math.max(0, host.clientWidth - px(style.paddingLeft) - px(style.paddingRight));
+    const boxH = Math.max(0, host.clientHeight - px(style.paddingTop) - px(style.paddingBottom));
+    range = zoomRange(boxW, boxH, dpr, T);
+    scale = zoomScale(pref, range);
+    const { width: w, height: h } = viewPixels(
+      Math.floor(boxW * dpr),
+      Math.floor(boxH * dpr),
+      scale,
+      T,
+    );
     if (app.renderer.width !== w || app.renderer.height !== h) app.renderer.resize(w, h);
     canvas.style.width = `${w / dpr}px`;
     canvas.style.height = `${h / dpr}px`;
+    if (!shown || shown.scale !== scale || shown.min !== range.min || shown.max !== range.max) {
+      shown = { scale, ...range };
+      opts.zoomView?.(shown);
+    }
+  };
+  /**
+   * The player chose `p` (undefined = fit the view): draw it and remember it. A choice that
+   * draws the same scale is dropped (a remembered zoom larger than this window allows
+   * stays), except going back to fit.
+   */
+  const choose = (p: number | undefined): void => {
+    if (p === pref || (p !== undefined && zoomScale(p, range) === scale)) return;
+    pref = p;
+    resize();
+    opts.zoomed?.(pref);
   };
   const observer = new ResizeObserver(resize);
   observer.observe(host);
@@ -286,6 +285,15 @@ export async function createGameCanvas(
         : c.kind === CreatureKind.NPC
           ? content.npcSprites?.[c.contentId]
           : undefined;
+    return path ? atlas.texture(path) : undefined;
+  };
+  // PvP marks (T5.2): their sprite when the atlas has real art for it (render/marks.ts).
+  const markPath = (mark: Skull): string | undefined => {
+    const path = markSprite(mark);
+    return path && atlas.has(path) && isMarkArt(atlas.index.sprites[path]) ? path : undefined;
+  };
+  const markTexture = (mark: Skull): Texture | undefined => {
+    const path = markPath(mark);
     return path ? atlas.texture(path) : undefined;
   };
   // Players: the outfit's frames (T0.5), only when the atlas has real art for every one of
@@ -414,7 +422,7 @@ export async function createGameCanvas(
         roundPixels: true,
       });
       labels.addChild(guild);
-      const skull = new Graphics();
+      const skull = new Container();
       labels.addChild(skull);
       s = {
         body,
@@ -439,7 +447,7 @@ export async function createGameCanvas(
     const name = labelText(nameOf(c), scale);
     if (s.label.text !== name) s.label.text = name;
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
-    if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull);
+    if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull, markTexture(c.skull));
     s.drawnSkull = c.skull;
     if (s.drawnDir !== c.dir) drawShape(s, c);
     if (s.outfit) {
@@ -464,93 +472,21 @@ export async function createGameCanvas(
     sprites.delete(id);
   };
 
-  // Effects and floating texts: drawn while the world state keeps them (it expires them).
-  const effectGfx = new Map<EffectState, Graphics>();
-  const textObjs = new Map<FloatingTextState, Text>();
-  const projectileGfx = new Map<ProjectileState, Graphics>();
-  const drawEffects = (now: number, floor: number): void => {
-    const live = new Set(world.effects);
-    for (const [e, g] of effectGfx)
-      if (!live.has(e)) {
-        g.destroy();
-        effectGfx.delete(e);
-      }
-    for (const e of world.effects) {
-      if (e.pos.z !== floor) continue;
-      let g = effectGfx.get(e);
-      if (!g) {
-        g = new Graphics();
-        drawEffect(g, e.effectId);
-        effectLayer.addChild(g);
-        effectGfx.set(e, g);
-      }
-      const p = tileToScreen(cam, e.pos.x, e.pos.y, T);
-      g.position.set(Math.round(p.x), Math.round(p.y));
-      g.scale.set(scale);
-      g.alpha = 1 - Math.min(1, (now - e.start) / EFFECT_MS) * 0.6;
-    }
-    const liveShots = new Set(world.projectiles);
-    for (const [pr, g] of projectileGfx)
-      if (!liveShots.has(pr)) {
-        g.destroy();
-        projectileGfx.delete(pr);
-      }
-    for (const pr of world.projectiles) {
-      if (pr.from.z !== floor) continue;
-      let g = projectileGfx.get(pr);
-      if (!g) {
-        const c = elementColor(pr.projectileId - PROJECTILE_ELEMENT);
-        g = new Graphics().circle(0, 0, 5).fill(c).circle(0, 0, 8).fill({ color: c, alpha: 0.35 });
-        effectLayer.addChild(g);
-        projectileGfx.set(pr, g);
-      }
-      const k = Math.min(1, (now - pr.start) / PROJECTILE_MS);
-      const p = tileToScreen(
-        cam,
-        pr.from.x + 0.5 + (pr.to.x - pr.from.x) * k,
-        pr.from.y + 0.5 + (pr.to.y - pr.from.y) * k,
-        T,
-      );
-      g.position.set(Math.round(p.x), Math.round(p.y));
-      g.scale.set(scale);
-    }
-    const liveTexts = new Set(world.floatingTexts);
-    for (const [f, o] of textObjs)
-      if (!liveTexts.has(f)) {
-        o.destroy();
-        textObjs.delete(f);
-      }
-    for (const f of world.floatingTexts) {
-      if (f.pos.z !== floor) continue;
-      let o = textObjs.get(f);
-      if (!o) {
-        o = new Text({
-          text: String(f.amount),
-          style: {
-            fontFamily: "sans-serif",
-            fontSize: 13,
-            fontWeight: "bold",
-            fill: textColor(f.kind),
-            stroke: { color: 0x000000, width: 3 },
-          },
-          anchor: { x: 0.5, y: 1 },
-          roundPixels: true,
-        });
-        textLayer.addChild(o);
-        textObjs.set(f, o);
-      }
-      const k = Math.min(1, (now - f.start) / FLOATING_TEXT_MS);
-      const p = tileToScreen(cam, f.pos.x + 0.5, f.pos.y + 0.6 - k * 0.9, T);
-      o.position.set(Math.round(p.x), Math.round(p.y));
-    }
-  };
+  // Effects, projectiles and floating numbers (render/effect-layer.ts): pooled, and the
+  // effects play their atlas frames; drawn while the world state keeps them (it expires them).
+  const effects = new EffectLayer({ world, atlas, effects: effectLayer, texts: textLayer });
 
   const draw = (now: number): void => {
     const self = world.self;
     if (!self) return;
     if (view.floor !== self.pos.z) view.setFloor(self.pos.z);
     const sp = world.drawPos(self, now);
-    cam = followCamera(sp.x, sp.y, scale, T);
+    // Zoomed in, the canvas shows fewer (and fractional) tiles: centre those on the player.
+    const tilePx = T * scale;
+    cam = followCamera(sp.x, sp.y, scale, T, {
+      width: app.screen.width / tilePx,
+      height: app.screen.height / tilePx,
+    });
     view.render(cam, { width: app.screen.width, height: app.screen.height });
 
     const seen = new Set<number>();
@@ -580,7 +516,7 @@ export async function createGameCanvas(
         x: Math.round(head.x),
         y: barTop - 1,
         width:
-          Math.max(s.label.width, hasGuild ? s.guild.width : 0) + (hasSkull ? 2 * SKULL_R + 2 : 0),
+          Math.max(s.label.width, hasGuild ? s.guild.width : 0) + (hasSkull ? MARK_BOX.w + 2 : 0),
         nameHeight: s.label.height,
         guildHeight: hasGuild ? s.guild.height : 0,
         self: c.id === world.selfId,
@@ -608,14 +544,14 @@ export async function createGameCanvas(
       }
       if (s.drawnSkull !== Skull.UNSPECIFIED) {
         s.skull.position.set(
-          Math.round(s.label.x - s.label.width / 2 - SKULL_R - 2),
+          Math.round(s.label.x - s.label.width / 2 - MARK_HALF - 2),
           Math.round(s.label.y - s.label.height / 2),
         );
       }
     }
     for (const id of [...sprites.keys()]) if (!seen.has(id)) dropSprite(id);
     world.expire(now);
-    drawEffects(now, self.pos.z);
+    effects.draw(now, self.pos.z, cam, scale);
   };
 
   app.ticker.add(() => {
@@ -650,9 +586,17 @@ export async function createGameCanvas(
     const tile = screenToTile(cam, p.x, p.y, T);
     return { x: tile.x, y: tile.y, z: self.pos.z };
   };
+  /** The scale when the current pinch started (two fingers zoom by whole scales). */
+  let pinchFrom: number | undefined;
   const onGestures = (gs: Gesture[], e: PointerEvent | undefined): void => {
     for (const g of gs) {
-      if (g.kind === "tap") {
+      if (g.kind === "pinchStart") {
+        pinchFrom = scale;
+      } else if (g.kind === "pinch") {
+        if (pinchFrom !== undefined) choose(zoomPref(pinchZoom(pinchFrom, g.scale, range), range));
+      } else if (g.kind === "pinchEnd") {
+        pinchFrom = undefined;
+      } else if (g.kind === "tap") {
         const at = tileUnder(g.x, g.y);
         if (at) opts.tapTile(at.x, at.y, at.z);
       } else if (g.kind === "longPress") {
@@ -750,9 +694,26 @@ export async function createGameCanvas(
     press = undefined;
   });
 
+  // Ctrl+wheel (and a trackpad pinch, which browsers send as Ctrl+wheel) zooms the map
+  // instead of the page; a plain wheel does nothing, as before.
+  const wheel = new WheelZoom();
+  const onWheel = (e: WheelEvent): void => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    const steps = wheel.add(e.deltaY, e.deltaMode, e.timeStamp);
+    if (steps !== 0) choose(stepZoom(scale, steps, range));
+  };
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+
   return {
     get scale() {
       return scale;
+    },
+    get zoom() {
+      return { scale, ...range };
+    },
+    zoomBy(steps) {
+      choose(stepZoom(scale, steps, range));
     },
     element: canvas,
     clientToTile(clientX, clientY) {
@@ -763,6 +724,10 @@ export async function createGameCanvas(
       const p = toCanvas(clientX, clientY);
       const tile = screenToTile(cam, p.x, p.y, T);
       return { x: tile.x, y: tile.y, z: self.pos.z };
+    },
+    markIcon(mark) {
+      const path = markPath(mark);
+      return path ? atlas.icon(path) : undefined;
     },
     itemIcon(itemId) {
       const sprite = content.items[itemId]?.sprite;
@@ -782,9 +747,7 @@ export async function createGameCanvas(
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);
-      for (const g of effectGfx.values()) g.destroy();
-      for (const g of projectileGfx.values()) g.destroy();
-      for (const o of textObjs.values()) o.destroy();
+      effects.destroy();
       view.destroy();
       app.destroy(true, { children: true });
     },

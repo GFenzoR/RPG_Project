@@ -3,9 +3,11 @@
 // world/, data/ and the validator live on disk and in Node.
 //
 //   GET  /api/bootstrap      world + palette items + texts + base hashes of the chunk files
-//   POST /api/validate       body: WireWorld → ValidateResult (the shared validator, in memory)
-//   POST /api/save           body: SaveRequest → SaveResult, 409 SaveConflictBody, 400 if
-//                            invalid, 500 { error, partial?: SaveResult } if it failed
+//   POST /api/validate       body: ValidateRequest → ValidateResult (the shared validator, in
+//                            memory; pendingKeys: house names not saved yet)
+//   POST /api/save           body: SaveRequest (files + house names) → SaveResult, 409
+//                            SaveConflictBody, 400 if invalid, 500 { error, partial?:
+//                            SaveResult } if it failed
 //   POST /api/patch/export   body: PatchExportRequest → .rpgpatch.json (format 2); writes nothing
 //   POST /api/patch/parse    body: { text } → ParsedPatch (checked; the browser merges it)
 //   GET  /atlas/<file>       sprite atlas built from assets/ with tools/spritepack
@@ -22,7 +24,12 @@ import { loadContent } from "@rpg/map-format";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import type { Plugin } from "vite";
 import { fromWire } from "../src/io/wire.ts";
-import type { PatchExportRequest, SaveRequest, WireWorld } from "../src/io/wire.ts";
+import type {
+  PatchExportRequest,
+  SaveRequest,
+  ValidateRequest,
+  WireWorld,
+} from "../src/io/wire.ts";
 import { refuseRequest } from "./guard.ts";
 import {
   BadRequest,
@@ -30,9 +37,11 @@ import {
   SaveConflict,
   bootstrap,
   exportPatch,
+  nodeIo,
   parseEditorPatch,
   saveChanges,
   validateInMemory,
+  withPendingKeys,
 } from "./store.ts";
 
 export function editorRoot(): string {
@@ -105,12 +114,15 @@ export function editorApi(): Plugin {
           if (req.method === "GET" && url.pathname === "/api/bootstrap") {
             send(res, 200, bootstrap(root));
           } else if (req.method === "POST" && url.pathname === "/api/validate") {
-            const world = worldOf(await body(req));
-            send(res, 200, validateInMemory(root, world, loadContent(root)));
+            const data = (await body(req)) as Partial<ValidateRequest> | null;
+            const world = worldOf(data);
+            const content = withPendingKeys(loadContent(root), data?.pendingKeys);
+            send(res, 200, validateInMemory(root, world, content));
           } else if (req.method === "POST" && url.pathname === "/api/save") {
             const data = (await body(req)) as Partial<SaveRequest> | null;
             const world = worldOf(data?.world);
-            send(res, 200, saveChanges(root, world, data?.changes as SaveRequest["changes"]));
+            const changes = data?.changes as SaveRequest["changes"];
+            send(res, 200, saveChanges(root, world, changes, nodeIo, data?.texts));
           } else if (req.method === "POST" && url.pathname === "/api/patch/export") {
             const data = (await body(req)) as Partial<PatchExportRequest> | null;
             send(

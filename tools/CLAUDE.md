@@ -13,6 +13,7 @@ mapcli place <isla> --pos x,y,z --item oak_tree
 mapcli spawn add <isla> --pos x,y,z --monster wolf --count 3 --radius 4 --respawn 60
 mapcli zone add <isla> --rect x,y,w,h --floor 7 --type protection
 mapcli npc place <isla> --pos x,y,z --npc harbor_master
+mapcli house add <isla> --id ID --floor 7 --rects x,y,w,h --doors x,y,z --exit x,y,z --rent 500
 mapcli generate <isla> --recipe island --seed 42 --size 128   generación procedural base
 mapcli validate [isla] [--format text]     mismo validador que el editor y la CI
 mapcli patch create|apply|diff             trabajar con map patches
@@ -73,7 +74,7 @@ commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 
 ## spritegen
 `tools/spritegen` (T0.5) dibuja el pixel art propio en `assets/sprites/<ruta>.png` a partir
-de recetas en código: `src/recipes/{terrain,items,creatures}.ts`, con la paleta de
+de recetas en código: `src/recipes/{terrain,items,creatures,effects,ui}.ts`, con la paleta de
 materiales de `src/palette.ts` (4 tonos + contorno) y las primitivas de `src/draw.ts`
 (rect, line, disc, polygon, box en 3/4, contorno automático, luz desde arriba a la
 izquierda, ruido con semilla que hace mosaico). Determinista: la semilla sale de la ruta.
@@ -81,8 +82,13 @@ Uso: `make spritegen` (o `ONLY=decor/`) y luego `make sprites`; para mirar el re
 `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out shot.png --scale 4
 [--only decor/]` y revisa la imagen con Read (suelos en 3x3, objetos sobre pasto). `check`
 exige que cada receta sea una ruta usada en `data/` (o un frame de outfit
-`outfits/<id>/<dir>_<frame>`). Los PNG se commitean y el test exige que coincidan con las
-recetas. Estilo y reglas: `assets/README.md`, "Arte propio (spritegen)".
+`outfits/<id>/<dir>_<frame>`, o de efecto `effects/<nombre>/<n>`, sin huecos en la tira, o
+un icono de interfaz `ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente
+busca por ruta). El preview pone cada tira de efecto en su propia fila, sobre un jugador
+parado. Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
+(`castShadow`, al final de `render`). Los PNG se commitean y el test exige que coincidan
+con las recetas. Estilo, sombra e iconos:
+`assets/README.md`, "Arte propio (spritegen)".
 
 ## spritepack
 Empaqueta `assets/sprites/**` en atlas PNG + JSON para el cliente y el editor, y genera

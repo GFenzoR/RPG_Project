@@ -143,7 +143,7 @@ export interface Island {
   zones: Zone[];
   portals: Portal[];
   texts: MapText[];
-  /** Player houses (T5.4); not editable by ops or patches: edit houses.yaml. */
+  /** Player houses (T5.4): edited with the house ops (add/remove/set_house), never by patches. */
   houses: House[];
 }
 

@@ -1,8 +1,10 @@
 // Every recipe, by sprite path. A path may live in only one book.
 import type { RecipeBook } from "../recipe.ts";
 import { CREATURES } from "./creatures.ts";
+import { EFFECTS } from "./effects.ts";
 import { ITEMS } from "./items.ts";
 import { TERRAIN } from "./terrain.ts";
+import { UI } from "./ui.ts";
 
 function merge(...books: RecipeBook[]): RecipeBook {
   const out: RecipeBook = {};
@@ -15,4 +17,4 @@ function merge(...books: RecipeBook[]): RecipeBook {
   return out;
 }
 
-export const RECIPES: RecipeBook = merge(TERRAIN, ITEMS, CREATURES);
+export const RECIPES: RecipeBook = merge(TERRAIN, ITEMS, CREATURES, EFFECTS, UI);

@@ -37,6 +37,7 @@ const content: ClientContent = {
     8: def("copper_coin", { stackable: true }),
     20: def("iron_sword"),
     48: def("backpack", { slots: 24 }),
+    60: def("brasal_dock_sign", { blocks: true, desc: "text.volcan.dock_sign" }),
   },
   monsterSprites: {},
   vocations: [],
@@ -121,7 +122,11 @@ describe("look messages", () => {
     "item.iron_sword.name": "iron sword",
     "item.iron_sword.desc": "A reliable sword.",
     "item.copper_coin.name": "copper coin",
+    "item.signpost.name": "sign",
+    "item.brasal_dock_sign.name": "sign",
+    "text.volcan.dock_sign": "Dock of Brasal.",
     "look.item": "You see {items}. It weighs {weight} oz.",
+    "look.ground": "You see {items}.",
     "client.log.item_count": "{count} {name}",
   });
   const look = (key: string, itemId: number, count: number, weight: number): string =>
@@ -153,6 +158,10 @@ describe("look messages", () => {
     );
     expect(look("look.item", 8, 5, 50)).toBe("You see 5 copper coin. It weighs 0.50 oz.");
     expect(formatOz(420000)).toBe("4200.00");
+  });
+
+  it("reads a sign: the description key its data/items entry names, not item.<id>.desc", () => {
+    expect(look("look.ground", 60, 0, 0)).toBe("You see sign. Dock of Brasal.");
   });
 
   it("fills a single {item} parameter (gather.got, shop.bought)", () => {

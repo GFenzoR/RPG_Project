@@ -159,6 +159,15 @@ export function hotbarFit(opts: {
   return { visible, slider: visible < total };
 }
 
+/**
+ * Width (CSS px) the hotbar may take on a map `host` px wide (client.css and touch.css): a
+ * centred bar keeps `margin` free on each side; next to the touch pad it starts after the
+ * pad's `pad` px (which include the left margin) and keeps the margin on the right.
+ */
+export function hotbarRoom(host: number, pad: number, margin: number): number {
+  return Math.max(0, pad > 0 ? host - pad - margin : host - 2 * margin);
+}
+
 /** Width (CSS px) of `n` slots in a row. */
 export const slotsWidth = (n: number, slot: number, gap: number): number =>
   n <= 0 ? 0 : n * slot + (n - 1) * gap;

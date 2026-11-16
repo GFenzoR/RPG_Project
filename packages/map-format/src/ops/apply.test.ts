@@ -299,15 +299,20 @@ describe("ops module", () => {
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".ts") && !n.endsWith(".test.ts"))) {
       const src = readFileSync(new URL(f, dir), "utf8");
       const imports = [...src.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
-      // Only siblings in ops/, the plain model types and the model-level patch merge.
+      // Only siblings in ops/, the plain model types, house geometry and the model-level
+      // patch merge.
       for (const i of imports)
         expect(
-          i === "../types.ts" || i === "../patch/merge.ts" || /^\.\/[a-z-]+\.ts$/.test(i ?? ""),
+          ["../types.ts", "../houses.ts", "../patch/merge.ts"].includes(i ?? "") ||
+            /^\.\/[a-z-]+\.ts$/.test(i ?? ""),
         ).toBe(true);
     }
     // patch/merge.ts (browser half of map patches) only uses the model and the op types.
     const merge = readFileSync(new URL("../patch/merge.ts", dir), "utf8");
     for (const m of merge.matchAll(/from "([^"]+)"/g))
       expect(["../types.ts", "../ops/types.ts"]).toContain(m[1]);
+    // houses.ts (house geometry, also used by the editor) only uses the model.
+    const houses = readFileSync(new URL("../houses.ts", dir), "utf8");
+    for (const m of houses.matchAll(/from "([^"]+)"/g)) expect(m[1]).toBe("./types.ts");
   });
 });

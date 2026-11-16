@@ -24,8 +24,20 @@ type Item struct {
 	Pickupable *bool `yaml:"pickupable"`
 	// MarketBoard: using this map item opens the global market (T5.3).
 	MarketBoard bool `yaml:"market_board"`
-	Value       int  `yaml:"value"`
-	Weapon      *struct {
+	// BlocksMove and BlocksView are blocks_movement and blocks_sight as written (nil =
+	// the default of the kind); BlocksMovement and BlocksSight apply the rule.
+	BlocksMove *bool `yaml:"blocks_movement"`
+	BlocksView *bool `yaml:"blocks_sight"`
+	// Ground is set on ground items: whether creatures can stand on them.
+	Ground *struct {
+		Walkable bool `yaml:"walkable"`
+	} `yaml:"ground"`
+	// Key is the key id this item opens (keys): the door.key of the doors it unlocks.
+	Key string `yaml:"key"`
+	// Door makes a map item a door that opens and closes (docs/02 "Puertas con llave").
+	Door   *Door `yaml:"door"`
+	Value  int   `yaml:"value"`
+	Weapon *struct {
 		// Type is the skill the weapon trains and uses (sword, axe, club...).
 		Type    string `yaml:"type"`
 		Attack  int    `yaml:"attack"`

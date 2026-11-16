@@ -39,8 +39,26 @@ done
 DATABASE_URL="$db" "$bin" -world "$root/build/world.bin" -data "$root/data" \
   -http "127.0.0.1:$port" -metrics-addr "$maddr" -auth-rate-burst 1000 >"$log" 2>&1 &
 server=$!
+
+# Native Windows (Git Bash, docs/12 "Windows nativo"): bash cannot deliver SIGINT or
+# SIGTERM to a native process, only SIGKILL (TerminateProcess), so the server would never
+# stop and make bots would hang after the report. There, wait until the saves of the
+# bots' logouts are written (persistence_backlog 0, at most 20 s) and kill it.
+is_windows=
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) is_windows=1 ;; esac
 stop_server() {
-  kill -INT "$server" 2>/dev/null || true
+  if [[ -n "$is_windows" ]]; then
+    for _ in $(seq 1 40); do
+      kill -0 "$server" 2>/dev/null || break
+      backlog="$(curl -fsS --max-time 2 "http://$maddr/metrics" 2>/dev/null |
+        awk '$1 == "persistence_backlog" { print $2 + 0 }')"
+      [[ "$backlog" == "0" ]] && break
+      sleep 0.5
+    done
+    kill -KILL "$server" 2>/dev/null || true
+  else
+    kill -INT "$server" 2>/dev/null || true
+  fi
   wait "$server" 2>/dev/null || true
 }
 trap stop_server EXIT

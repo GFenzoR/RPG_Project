@@ -35,6 +35,9 @@ const (
 	msgIntoItself     = "inventory.into_itself"
 	msgTooDeep        = "inventory.too_deep"
 	msgTileFull       = "inventory.tile_full"
+	msgSaving         = "inventory.saving"
+	msgNotYours       = "inventory.not_yours"
+	msgFloorFirst     = "inventory.floor_first"
 	msgNotReady       = "inventory.not_ready"
 	msgAte            = "inventory.ate"
 	msgLookItem       = "look.item"
@@ -471,6 +474,10 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		p.emit(systemMsg(msgNotOwner))
 		return
 	}
+	if w.groundHeld(p, it) { // T5.3 fail-safe: fell at the feet of a held player
+		p.emit(systemMsg(msgNotYours))
+		return
+	}
 	if !it.def.CanPickUp() {
 		p.emit(systemMsg(msgCannotMove))
 		return
@@ -488,6 +495,11 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		p.emit(systemMsg(msgNotPossible))
 		return
 	}
+	// T5.3 fail-safe: what leaves a house floor for the public ground is reserved to p
+	// until the database has the house write that took it out (leftHouse). So it lands as
+	// a pile of its own, or in a pile or container already reserved to p: never in
+	// someone else's (a reservation must not take over a stranger's pile, bag or corpse).
+	leaving := w.itemHouse(it) != nil && w.publicGround(to)
 
 	// Where the units go: an existing stack they merge into, or a new place.
 	var merge *Item
@@ -505,7 +517,11 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 			return // dropped where it already is
 		}
 		g := w.ground[to.pos]
-		merge = mergeTarget(g, it, count)
+		// T5.3: never into a stack reserved to another player, and what leaves a house
+		// only into one already reserved to p (hold.go); else it lands as a new pile.
+		merge = mergeTargetIf(g, it, count, func(c *Item) bool {
+			return !w.groundHeld(p, c) && (!leaving || w.heldFor(p, c))
+		})
 		if merge == nil && len(g) >= maxGroundItems {
 			p.emit(systemMsg(msgTileFull))
 			return
@@ -527,6 +543,18 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	case locContainer:
 		if !w.reaches(p, to.cont) {
 			p.emit(systemMsg(msgTooFar))
+			return
+		}
+		if w.reserved(ctx.Tick, p, to.cont) { // another player's corpse, still its owner's
+			p.emit(systemMsg(msgNotOwner))
+			return
+		}
+		if w.groundHeld(p, to.cont) { // T5.3: a container reserved to another player (hold.go)
+			p.emit(systemMsg(msgNotYours))
+			return
+		}
+		if leaving && !w.heldFor(p, to.cont) { // T5.3: see leaving
+			p.emit(systemMsg(msgFloorFirst))
 			return
 		}
 		if it.contains(to.cont) {
@@ -551,7 +579,12 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	if !w.checkHouseMove(ctx, p, it, to, merge, count < it.count) {
 		return
 	}
-
+	// T5.3 fail-safe: nothing p carries goes to the floor while a transfer of p is not
+	// in the database yet (normally a tick or two).
+	if w.heldDrop(p, it, to) {
+		p.emit(systemMsg(msgSaving))
+		return
+	}
 	// Capacity: only what enters p's equipment from outside it weighs on p.
 	var toOwner *Player
 	switch to.kind {
@@ -595,12 +628,17 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		w.detach(it)
 		w.changedPlace(p, from)
 	}
+	landed := moving
 	if merge != nil {
 		merge.count += moving.count
 		w.changed(merge)
+		landed = merge
 	} else {
 		w.attach(p, moving, to)
 		w.changedPlace(p, to)
+	}
+	if leaving {
+		w.leftHouse(p, landed.root())
 	}
 	if moving.def.Container != nil {
 		w.closeUnreachable(moving)
@@ -624,11 +662,16 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 
 // mergeTarget returns the stack among list that count units of it can join, or nil.
 func mergeTarget(list []*Item, it *Item, count int) *Item {
+	return mergeTargetIf(list, it, count, nil)
+}
+
+// mergeTargetIf is mergeTarget among the stacks ok accepts (nil: any).
+func mergeTargetIf(list []*Item, it *Item, count int, ok func(*Item) bool) *Item {
 	if !it.def.Stackable {
 		return nil
 	}
 	for _, c := range list {
-		if c != it && c.def.Numeric == it.def.Numeric && c.count+count <= it.def.StackLimit() {
+		if c != it && c.def.Numeric == it.def.Numeric && c.count+count <= it.def.StackLimit() && (ok == nil || ok(c)) {
 			return c
 		}
 	}
@@ -664,6 +707,7 @@ func (w *World) detach(it *Item) {
 			w.ground[it.pos] = g
 		}
 		it.onGround = false
+		delete(w.heldGround, it) // T5.3: a reservation ends when the item leaves the ground
 	}
 }
 
@@ -831,9 +875,10 @@ func (w *World) forgetContainers(p *Player) {
 // ---- UseItem and LookAt --------------------------------------------------------
 
 // useItem runs a UseItem intent: containers open or close, consumables heal and are
-// eaten, runes are cast (T1.9), crafting stations of the map open (T3.4).
+// eaten, runes are cast (T1.9), crafting stations of the map open (T3.4), doors of the
+// map open and close (door.go).
 func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
-	if w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.useStation(p, m) {
+	if w.useDoor(ctx, p, m) || w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.useStation(p, m) {
 		return
 	}
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())
@@ -847,6 +892,10 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 	}
 	if from.kind == locContainer && it.def.Container == nil && w.reserved(ctx.Tick, p, it) {
 		p.emit(systemMsg(msgNotOwner))
+		return
+	}
+	if it.def.Container == nil && w.groundHeld(p, it) {
+		p.emit(systemMsg(msgNotYours))
 		return
 	}
 	if !w.mayUseInHouse(p, it) {
@@ -940,7 +989,8 @@ func (w *World) useUp(p *Player, it *Item) {
 
 // lookAt answers a LookAt with a system message: the item (the client adds its
 // translated name and description), its weight in grams and its combat numbers. Any
-// visible item can be looked at, including the ground and the map's own items.
+// visible item can be looked at, including the ground and the map's own items; the
+// ground and fixed items (pickupable: false, not containers) say only their name.
 func (w *World) lookAt(p *Player, m *pb.LookAt) {
 	var def *content.Item
 	weight, count := 0, 0
@@ -989,7 +1039,9 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 	params := []*pb.TextParam{{Name: "item", Value: &pb.TextParam_Item{Item: stack}}}
 	key := msgLookItem
 	switch {
-	case def.Kind == "ground":
+	case def.Kind == "ground", !def.CanPickUp() && def.Container == nil:
+		// The ground and the map's fixed items (a sign, an anvil, a tree) have no weight to
+		// tell: their name (the client adds the description, a sign's text) is the answer.
 		p.emit(systemMsg(msgLookGround, params...))
 		return
 	case def.Weapon != nil:

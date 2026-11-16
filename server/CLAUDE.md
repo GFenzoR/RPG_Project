@@ -120,8 +120,21 @@ server/
   (`GuildWar*` en `session` y `store`, mismos valores) y su id lo asigna el loop
   (`war_high`). Pegarle a jugadores no entrena ni alimenta `abHurt` (anti-bot). Una
   condición de un jugador pasa por `conditionMayHurt` (nunca empieza un ataque
-  injustificado). `Leave` con bloqueo deja al jugador link-dead (`linkDeadOnLeave`, sin
-  enviarle nada) hasta que `checkPvP` lo saca; un login nuevo lo retoma con `pvpCarry`.
+  injustificado); su autor es un **personaje** (`condition.author`, por `byChar`, nunca el
+  id de criatura) y se guarda con la condición junto con el recuerdo de su ataque
+  (`ConditionState.Author*`, `recallHit` al entrar) y la hora del guardado
+  (`ConditionState.SavedAt`, `World.nowTime`); un autor fuera del mundo no daña. Al
+  entrar, una condición con autor descuenta sin daño el tiempo que su víctima estuvo fuera
+  (`awayTicks` + `condition.elapse`; termina si esa hora no se puede ubicar en el reloj de
+  este servidor; el recuerdo del ataque vuelve igual); una sin autor sigue congelada. Un
+  hechizo de condición a distancia sobre un jugador pasa por `conditionPlayer`
+  (`canAttack` + `aggress`, como un golpe). `Leave` con bloqueo deja al jugador link-dead
+  (`linkDeadOnLeave`, sin enviarle nada) hasta que `checkPvP` lo saca; un login nuevo lo
+  retoma con `pvpCarry`. Un corte de la conexión que decide el servidor (cliente lento,
+  `KickAccount`) pasa por `disconnect`, que con bloqueo cierra la conexión una vez
+  (`Player.dropped`) y lo deja link-dead; un camino nuevo que corte conexiones tiene que
+  usarlo salvo que sea una sanción de staff o un guardado que falló. `Input` ignora a un
+  link-dead y un `Leave` de un link-dead no cambia nada.
   `kill_credit_ms <= lock_ms` lo valida el balance: quien cobra una muerte sigue en el mundo.
 
 - **Mercado e intercambio (T5.3):** `session/trade.go` + `session/market.go` +
@@ -143,7 +156,23 @@ server/
   y `SaveTransfer` los reclama: un reintento de uno ya confirmado no aplica nada. Cerrar
   una oferta lleva sus unidades (`MarketOfferRemove.Units`, baja con guarda). Un transfer
   que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
-  mide la cola del Saver más `World.PendingJobs`.
+  mide la cola del Saver más `World.PendingJobs`. Todo snapshot de un transfer sale por
+  `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`):
+  un camino nuevo que lleve algo de un personaje al suelo público tiene que respetar
+  `heldDrop`, uno que saque algo del suelo de una casa al suelo público llama a
+  `leftHouse` y solo lo deja como pila propia o en una pila o contenedor ya reservado a
+  él (`heldFor`; nunca en algo ajeno, que la reserva se quedaría), uno en que el servidor
+  le deje algo a sus pies llama a `holdGround`, uno que tome o use algo del suelo (o meta
+  algo en un contenedor del suelo) mira `groundHeld` y `reserved` (cadáveres), y uno que
+  reemplace los items de una casa va como `HouseItems` (el Saver marca la casa si se
+  descarta). Cada reserva de `heldGround` guarda el `Seq` que la cubre y la libera el
+  acuse de ese `Seq` o mayor (`confirmed`), no el fin de la espera. Los `Seq` de los
+  snapshots son del `World` (crecen entre sesiones del personaje): no los reinicies por
+  jugador; un acuse vale por todos los anteriores de su personaje (el `app` reintenta
+  solo el más alto, `app/acks.go`). Una acción que
+  cambie lo que muestra la ventana del mercado de otro llama a `bookChanged` /
+  `marketOwnerChanged` / `queueMarket` (refresco en vivo, `flushMarket`, como mucho uno
+  por ventana cada `market.push_every_ms`).
 
 - **Casas (T5.4):** `session/house.go` + `store/houses.go` + `app/houses.go` +
   `httpapi/houses.go` (`balance.yaml houses`; necesita el mercado). Las casas son datos del
@@ -164,6 +193,25 @@ server/
   `expel`/`expelIntruders`. Al liberar una casa, `mailHouseItems` manda los items
   aplanados (`mailFlat`) al buzón del mercado en el mismo transfer. `/api/houses` es público: solo el
   nombre del dueño, con las exclusiones del ranking (`queries/houses.sql`).
+
+- **Puertas con llave:** `session/door.go` + `content/doors.go` (`CheckDoors`). Una puerta
+  es un par de items del mapa; abrir o cerrar es `Map.ReplaceItem` (el único cambio que
+  acepta un `world.Map` después de cargar, en el lugar; si lo rechaza no se manda nada) +
+  `tileChanged`. La sala detrás de cada puerta con llave se calcula en `initDoors` (los
+  muros no cambian; las demás puertas con llave son muro, así una puerta doble comparte
+  sala) con el mismo recorrido que `packages/map-format/src/doors.ts`: si cambias uno,
+  cambia el otro y `testdata/door-rooms.json` (lo leen los tests de los dos). Una sala
+  que no se puede determinar, compartida por puertas de otra llave o de otro afuera
+  (`sameOutside`, que no cruza puertas con llave ni casas: hoy rechaza los ciclos de
+  puertas con llave) o que tiene algo de afuera (`checkRooms`: templo, NPC, casa, llegada
+  de barco, teleport de diálogo) no deja arrancar. Nada recorre el mapa en el tick:
+  `World.roomOf` (casilla → sala) y los sectores de cada sala. **Toda búsqueda de casilla
+  libre por anillos** (`freeNear`, `houseExit` o una nueva) pasa por `roomAllows`: nunca
+  deja a nadie en una sala si no empezó en ella. `houseEnter` no lo necesita: solo pone
+  al jugador en casillas de la casa, y `checkRooms` no deja ninguna casa en una sala.
+  Desde la sala una puerta trabada se abre sin llave (nadie queda encerrado, tampoco tras
+  un relogueo o un reinicio). Todo uso junto a una puerta, también un rechazo, pasa por
+  `doorReady` (`inventory.door_cooldown_ms`). Su estado no se guarda.
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

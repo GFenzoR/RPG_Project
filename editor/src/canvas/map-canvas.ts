@@ -2,7 +2,7 @@
 // (island bounds, grid, brush cursor) and mouse/keyboard input mapped to controller calls.
 import { Application, Graphics, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { chunkKey } from "@rpg/map-format/ops";
+import { chunkKey, tilesToRects } from "@rpg/map-format/ops";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tilePixels } from "@rpg/renderer";
 import type { TileSource } from "@rpg/renderer";
 import type { EditorController } from "../state/editor.ts";
@@ -16,6 +16,9 @@ const COLORS = {
   background: 0x0e1116,
   island: 0xe0b84a,
   house: 0xd070ff,
+  /** House panel draft: its doors and its exit. */
+  door: 0xffe08a,
+  exit: 0x7dff7a,
   grid: 0xffffff,
   cursor: 0xffffff,
   eraser: 0xff5a5a,
@@ -108,6 +111,7 @@ export async function createMapCanvas(
     w: 0,
     h: 0,
     world: ctl.state.world,
+    houseDraft: ctl.state.houseDraft,
     marks: "",
   };
   /** Selection/drag/paste/entity state the overlays depend on, as one comparable string. */
@@ -123,6 +127,8 @@ export async function createMapCanvas(
       s.review,
       s.reviewSide,
       s.patchConflicts.length,
+      s.houseSel,
+      s.houseMode,
     ]);
   };
   const redrawOverlays = (): void => {
@@ -174,9 +180,11 @@ export async function createMapCanvas(
         s.tool === "fill" ||
         s.tool === "rect" ||
         s.tool === "select" ||
+        s.tool === "house" ||
         s.picking;
       const cells = single ? [s.hover] : brushCells(s.hover.x, s.hover.y, s.brushSize);
-      const color = s.tool === "eraser" ? COLORS.eraser : COLORS.cursor;
+      const color =
+        s.tool === "eraser" ? COLORS.eraser : s.tool === "house" ? COLORS.house : COLORS.cursor;
       for (const c of cells) cursor.rect(c.x * T, c.y * T, T, T);
       cursor.stroke({ width: 2 * px, color, alpha: 0.9 });
     }
@@ -218,8 +226,10 @@ export async function createMapCanvas(
           });
         }
       }
-      // Houses (T5.4): read-only outline, doors and exit (edited in houses.yaml).
+      // Houses (T5.4): outline, doors and exit. The one open in the house panel is drawn
+      // from its draft instead (below).
       for (const h of isl.houses) {
+        if (h.id === s.houseDraft?.key) continue;
         for (const r of h.rects) {
           if (r.z !== s.floor) continue;
           entities
@@ -269,6 +279,7 @@ export async function createMapCanvas(
           .stroke({ width: (on ? 3 : 1) * px, color: on ? COLORS.selected : 0x000000 });
       }
     }
+    drawHouseDraft(px);
     // The selected entity stands out even if it is on another floor than its marker.
     if (s.entitySel !== undefined) {
       const e = ctl.entities(s.entityTab).find((x) => entityKey(x) === s.entitySel);
@@ -278,6 +289,32 @@ export async function createMapCanvas(
           .rect(p.x * T, p.y * T, T, T)
           .stroke({ width: 2 * px, color: COLORS.selected, alpha: 1 });
     }
+  };
+
+  /** The house open in the panel: its tiles (as the rects houses.yaml will get), doors and exit. */
+  const drawHouseDraft = (px: number): void => {
+    const s = ctl.state;
+    const d = s.houseDraft;
+    if (!d) return;
+    for (const r of tilesToRects(d.tiles)) {
+      if (r.z !== s.floor) continue;
+      // At 0.35 the violet averages to grey over grass; 0.5 still reads as a house.
+      entities.rect(r.x * T, r.y * T, r.w * T, r.h * T).fill({ color: COLORS.house, alpha: 0.5 });
+      entities.stroke({ width: 1 * px, color: COLORS.selected, alpha: 0.5 });
+    }
+    for (const p of d.doors) {
+      if (p.z !== s.floor) continue;
+      entities
+        .rect((p.x + 0.2) * T, (p.y + 0.2) * T, T * 0.6, T * 0.6)
+        .fill({ color: COLORS.door, alpha: 0.9 })
+        .stroke({ width: 2 * px, color: 0x000000, alpha: 0.8 });
+    }
+    const e = d.exit;
+    if (e && e.z === s.floor)
+      entities
+        .circle((e.x + 0.5) * T, (e.y + 0.5) * T, T * 0.25)
+        .fill({ color: COLORS.exit, alpha: 0.9 })
+        .stroke({ width: 2 * px, color: 0x000000, alpha: 0.8 });
   };
 
   app.ticker.add(() => {
@@ -296,6 +333,7 @@ export async function createMapCanvas(
       drawn.w !== scr.width ||
       drawn.h !== scr.height ||
       drawn.world !== s.world ||
+      drawn.houseDraft !== s.houseDraft ||
       drawn.marks !== marks()
     ) {
       redrawOverlays();
@@ -309,6 +347,7 @@ export async function createMapCanvas(
         w: scr.width,
         h: scr.height,
         world: s.world,
+        houseDraft: s.houseDraft,
         marks: marks(),
       };
     }

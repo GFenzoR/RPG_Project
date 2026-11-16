@@ -217,6 +217,16 @@ func (w *World) PvPHitForTest(ctx *game.TickContext, a, v *Player, dmg int) {
 // PvPStateForTest is what a snapshot would save of p's PvP state.
 func (w *World) PvPStateForTest(p *Player) PvPState { return w.pvpState(p) }
 
+// HitByForTest returns the characters p remembers a recent hit from (T5.2), one per
+// entry.
+func (w *World) HitByForTest(p *Player) []int64 {
+	var out []int64
+	for _, h := range p.hitBy {
+		out = append(out, h.char)
+	}
+	return out
+}
+
 // SetPvPLockForTest puts p in a PvP fight until tick (tests only, loop goroutine).
 func (w *World) SetPvPLockForTest(p *Player, until game.Tick) { p.fightUntil = until }
 
@@ -286,3 +296,53 @@ func (w *World) ItemForTest(id string) *content.Item { return w.cfg.Items[id] }
 
 // CosmeticsForTest returns what p has equipped (T5.7).
 func (p *Player) CosmeticsForTest() Cosmetics { return p.cos }
+
+// Walkable reports whether the map lets a creature stand on p (tests only).
+func (w *World) Walkable(p world.Pos) bool { return w.m.Walkable(p) }
+
+// LineOfSight reports whether the map has line of sight from a to b (tests only).
+func (w *World) LineOfSight(a, b world.Pos) bool { return w.m.LineOfSight(a, b) }
+
+// InDoorRoom reports whether p lies in the room behind the locked door at door (tests
+// only; false for no door, or a door with no room).
+func (w *World) InDoorRoom(door, p world.Pos) bool {
+	d := w.doors[door]
+	return d != nil && d.inRoom(w.roomOf[p])
+}
+
+// DoorRoomSize returns how many tiles lie in the room behind the locked door at door
+// (tests only; 0 for no door, or a door with no room).
+func (w *World) DoorRoomSize(door world.Pos) int {
+	d := w.doors[door]
+	if d == nil {
+		return 0
+	}
+	n := 0
+	for _, r := range w.roomOf {
+		if d.inRoom(r) {
+			n++
+		}
+	}
+	return n
+}
+
+// Why a locked door has no room (doorRoom), for errors.Is in tests.
+var (
+	ErrDoorWalled       = errDoorWalled
+	ErrDoorInTheOpen    = errDoorInTheOpen
+	ErrDoorTruncated    = errDoorTruncated
+	ErrDoorTie          = errDoorTie
+	ErrDoorOtherKey     = errDoorOtherKey
+	ErrDoorOtherOutside = errDoorOtherOutside
+	ErrDoorOutsideFar   = errDoorOutsideFar
+)
+
+// MarketViewers returns how many open market windows show item's book (mkWatch).
+func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }
+
+// InFlightForTest reports whether a transfer of charID waits for the database (its
+// drops outside houses are held).
+func (w *World) InFlightForTest(charID int64) bool { return w.inFlight[charID] != 0 }
+
+// HeldGroundForTest returns how many ground items are reserved to a held character.
+func (w *World) HeldGroundForTest() int { return len(w.heldGround) }

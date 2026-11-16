@@ -12,6 +12,31 @@ describe("client content (T0.5)", () => {
     expect(content.monsterSprites["bilge_rat"]).toMatch(/\//);
   });
 
+  it("ships item descriptions: the usual item.<id>.desc and a sign's text (T5.5)", () => {
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    expect(byId.get("cooled_lava")?.desc).toBe("item.cooled_lava.desc");
+    expect(byId.get("brasal_dock_sign")?.desc).toBe("text.volcan.dock_sign");
+    expect(byId.get("ash")?.desc).toBeUndefined();
+    for (const lang of ["es", "en"]) {
+      const texts = content.i18n[lang] ?? {};
+      expect(texts["item.cooled_lava.desc"]).toBeTruthy();
+      for (const sign of ["temple", "dock", "mine"])
+        expect(texts[`text.volcan.${sign}_sign`]).toBeTruthy();
+      // Only the descriptions items use: other world.yaml texts stay out of the game.
+      expect(texts["text.puerto.temple_sign"]).toBeUndefined();
+    }
+  });
+
+  it("names items with a shared name key by item.<id>.name, like every other item", () => {
+    for (const lang of ["es", "en"]) {
+      const texts = content.i18n[lang] ?? {};
+      expect(texts["item.brasal_dock_sign.name"]).toBe(texts["item.signpost.name"]);
+      expect(texts["item.border_ash_sand_n.name"]).toBe(texts["item.border_ash_sand.name"]);
+      expect(texts["item.brasal_dock_sign.name"]).toBeTruthy();
+    }
+    expect(content.i18n["es"]?.["item.brasal_dock_sign.name"]).toBe("cartel");
+  });
+
   it("exposes data/outfits.yaml with the default citizen outfit", () => {
     expect(content.outfits).toContainEqual({ id: "citizen", sprite: "outfits/citizen", frames: 3 });
   });

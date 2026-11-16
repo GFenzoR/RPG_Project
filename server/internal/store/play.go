@@ -70,11 +70,21 @@ const unjustKillsHorizon = 1440 * time.Hour
 
 // Condition is one saved condition of a character (T3.2): its time left (to the next hit
 // of a damage condition, or to its end) and, for damage, the hits left and their damage.
+// T5.2: Author is the character of the player that applied it (0: a monster or the
+// world), AuthorHit when that player last hurt this character outside an arena,
+// AuthorUnjust whether any of those hits was unjustified (zero: nothing remembered) and
+// SavedAt when the game saved a condition with an Author (its time runs on while the
+// character is away). The fields are optional in the JSON, so rows saved before them read
+// as zero.
 type Condition struct {
-	ID     string `json:"id"`
-	LeftMs int    `json:"left_ms"`
-	Ticks  int    `json:"ticks,omitempty"`
-	Damage int    `json:"damage,omitempty"`
+	ID           string    `json:"id"`
+	LeftMs       int       `json:"left_ms"`
+	Ticks        int       `json:"ticks,omitempty"`
+	Damage       int       `json:"damage,omitempty"`
+	Author       int64     `json:"author,omitempty"`
+	AuthorHit    time.Time `json:"author_hit,omitzero"`
+	AuthorUnjust bool      `json:"author_unjust,omitempty"`
+	SavedAt      time.Time `json:"saved_at,omitzero"`
 }
 
 // InventoryItem is one row of inventory_items with the rows inside it: Slot is the

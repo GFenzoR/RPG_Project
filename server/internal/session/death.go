@@ -70,12 +70,14 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 				it.parent = corpse.Item
 				corpse.Item.items = append(corpse.Item.items, it)
 			} else {
-				w.drop(it, at) // never lost (unreserved): only if the corpse had fewer slots than the equipment
+				w.drop(it, at)      // never lost (unreserved): only if the corpse had fewer slots than the equipment
+				w.holdGround(p, it) // T5.3 fail-safe: reserved like the corpse while p is held
 			}
 			w.closeUnreachable(it)
 		}
 		w.equipmentChanged(p)
 		w.addCorpse(ctx, at, corpse, w.playerCorpseFor)
+		w.holdCorpse(p, corpse.Item) // T5.3 fail-safe: reserved while p's transfers wait (hold.go)
 	}
 
 	// Experience and skills.
@@ -143,16 +145,28 @@ func (w *World) arenaDefeat(ctx *game.TickContext, p *Player) {
 }
 
 // reserved reports whether it lies in another player's corpse that is still reserved
-// for its owner, so p cannot take it out (or use it).
+// for its owner, so p cannot take it out, use it or put anything into it. Past
+// corpse_owner_only_ms, a corpse its owner left while held stays reserved (hold.go,
+// holdCorpse) until the database has the transfers it may come from, and for good if one
+// was not stored (the owner is locked out until a restart). A corpse left before the hold
+// is not: its items come from a state the database has.
 func (w *World) reserved(tick game.Tick, p *Player, it *Item) bool {
 	r := it.root()
 	if !r.onGround {
 		return false
 	}
 	for _, c := range w.corpses[r.pos] {
-		if c.Item == r {
-			return c.Owner != 0 && c.Owner != p.charID && tick < c.OwnerUntil
+		if c.Item != r {
+			continue
 		}
+		if c.Owner == 0 || c.Owner == p.charID {
+			return false
+		}
+		if tick < c.OwnerUntil {
+			return true
+		}
+		g, held := w.heldGround[r]
+		return held && g.char == c.Owner
 	}
 	return false
 }

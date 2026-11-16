@@ -328,6 +328,7 @@ func (w *World) completeTrade(ctx *game.TickContext, t *trade) {
 		p.questDirty = true
 		p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 		p.emit(systemMsg(msgTradeCompleted))
+		w.queueMarket(p) // an open market window shows its money and items
 	}
 	w.transfer(t.p[:])
 	w.log.Info("trade: completed", "a", t.p[0].charID, "b", t.p[1].charID, "a_items", len(t.offer[0]), "b_items", len(t.offer[1]))

@@ -113,7 +113,9 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
 - "Revoca todas las sesiones" incluye las conexiones abiertas: el reset borra los tokens
   guardados (cuenta y juego) y después el `app` encola `World.KickAccount`, que desconecta
   a **todos** los personajes conectados de la cuenta con `Disconnect{PASSWORD_CHANGED}`
-  (se guardan como en un logout). Vale igual para un enlace de `gameserver admin reset-link`.
+  (se guardan como en un logout). Un personaje con el bloqueo PvP activo pierde la conexión
+  igual, pero queda en el mundo link-dead hasta que el bloqueo vence (02-game-design.md,
+  "Bloqueo de combate PvP"). Vale igual para un enlace de `gameserver admin reset-link`.
   Ventana residual: un token de juego canjeado justo antes del reset cuyo `Hello` llegue al
   loop después del kick (milisegundos) entra igual; no puede volver a entrar después.
 - Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
@@ -546,8 +548,8 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `FullMapView`, `CreatureDisappear`/`CreatureAppear` a los observadores) y recibe
   `Inventory`, `PlayerStats`, `PlayerSkills` y el `Message` de sistema `death.died` con
   `experience` (perdida) y `blessings` (las que tenía y se consumieron), ambos `number`.
-  El cliente muestra la pantalla de muerte con ese mensaje. Sacar o usar algo del cuerpo
-  ajeno dentro de `corpse_owner_only_ms` responde `death.corpse_not_owner`.
+  El cliente muestra la pantalla de muerte con ese mensaje. Sacar, usar o meter algo en el
+  cuerpo ajeno dentro de `corpse_owner_only_ms` responde `death.corpse_not_owner`.
 
 ### Items e inventario (T1.8, `server/internal/session/inventory.go`)
 Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
@@ -560,7 +562,9 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `inventory.not_possible` y nada cambia. Otros rechazos: `inventory.too_far`,
   `cannot_move` (`pickupable: false`), `wrong_slot`, `level_required` (`level`),
   `vocation_cannot`, `hands_full`, `slot_occupied`, `container_full`, `too_heavy`,
-  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`.
+  `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`, `saving`,
+  `not_yours` y `floor_first` (la espera de la falla segura del comercio, ver "Falla
+  segura" en T5.3).
 - **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
   Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
   contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor
@@ -582,8 +586,11 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
 - **`LookAt`:** `Message` de sistema `look.weapon` (`attack`, `defense`), `look.armor`
   (`armor`), `look.shield` (`defense`), `look.container` (`slots`), `look.item` o
   `look.ground`, con el parámetro `item` y, salvo el suelo, `weight` (gramos de la pila con
-  su contenido) y `level` si el item lo exige. El cliente agrega la descripción
-  `item.<id>.desc` si existe y muestra el peso en oz.
+  su contenido) y `level` si el item lo exige. Un item fijo del mapa (`pickupable: false`,
+  que no es contenedor: un cartel, un yunque, un árbol) contesta como el suelo,
+  `look.ground` sin peso (T5.5). El cliente agrega la descripción que nombra el
+  `description` del item en `data/items` (`item.<id>.desc`, o el `text.*` de un cartel) si
+  existe y muestra el peso en oz.
 - **Login:** `Inventory` lleva el equipo guardado; un personaje que nunca jugó recibe
   `inventory.start_container` en el slot de mochila.
 
@@ -631,7 +638,8 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   (equipada o en un contenedor suyo) sobre una casilla cuyo item de arriba con `resource`
   (pila de arriba hacia abajo, luego el suelo) tiene `resource.tool == tool.use`.
 - Respuestas por `Message` de sistema: `gather.nothing` (no hay recurso para esa
-  herramienta), `inventory.too_far` (otro piso o más lejos que `resource.reach`),
+  herramienta), `inventory.not_possible` (otro piso o fuera de la vista; ver "Puertas"),
+  `inventory.too_far` (más lejos que `resource.reach`),
   `magic.no_sight`, `gather.not_ready` (antes de `gathering.use_interval_ms`),
   `gather.depleted` (casilla agotada: no entrena), `gather.failed` y
   `gather.got{item}`. Lo obtenido va a la mochila como una compra (lo que no entra cae al
@@ -851,7 +859,9 @@ Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
 - **Atacar a un jugador:** el mismo `SetTarget`. El servidor valida en cada ronda (zonas,
   niveles, staff, modo seguro); si deja de valer, suelta el objetivo y manda el motivo.
   `CastSpell` con objetivo (`creature_id`, casilla o el objetivo actual) también alcanza a
-  un jugador; las runas igual. Motivos de rechazo: `pvp.off`, `pvp.staff`,
+  un jugador; las runas igual, y los hechizos de condición a distancia (`entangle`: el
+  `Projectile` del elemento, `Effect` 7 en la casilla del jugador y su `PlayerConditions`).
+  Motivos de rechazo: `pvp.off`, `pvp.staff`,
   `pvp.protected_staff`, `pvp.your_level` / `pvp.their_level` (`level`), `pvp.zone`,
   `pvp.safe_mode`. El cliente suelta su objetivo al recibir cualquiera de ellos.
 - **`Creature.skull`** y **`CreatureSkull{id, skull}`** a quienes ven al jugador (él
@@ -913,7 +923,24 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   `owned` (unidades del item buscado en la mochila) y `read_only` (solo se puede buscar
   hasta que el servidor reinicie; las demás acciones responden `market.read_only`).
   `open: false` cierra la ventana (el jugador se alejó). `withdraw` entrega primero los
-  items en orden mientras entren y después todo el oro que entre. Precios en la moneda más chica, fechas en ms Unix. Mensajes:
+  items en orden mientras entren y después todo el oro que entre.
+  **Refresco en vivo:** el servidor también manda, por su cuenta, una `MarketUpdate`
+  completa con `refresh: true` cuando la acción de otro cambia lo que la ventana abierta
+  muestra (ofertas del item buscado, ofertas propias, buzón, una suspensión, o el dinero e
+  items propios tras un intercambio; también al pasar a solo lectura). Sale al final del
+  tick, una por ventana y como mucho cada `market.push_every_ms` de `balance.yaml`
+  (500 ms; lo que cambie entre medio sale al terminar ese plazo); quien actúa recibe solo
+  la respuesta a su comando (`refresh: false`). El cliente aplica un `refresh` solo si la
+  ventana sigue abierta: uno que se cruzó con el `close{}` no la vuelve a abrir. Mientras
+  la ventana muestra el mismo `item_id`, el cliente no cambia el precio que propone el
+  formulario de crear aunque cambie `reference_price`.
+  **Clientes viejos:** `refresh` es un campo nuevo y aditivo, así que no se subió
+  `-min-client-version` (el proyecto nunca lo subió por un campo aditivo: el cliente web se
+  sirve con el servidor y siempre es el actual). Una app de escritorio o móvil anterior lo
+  ignora y trata el refresco como una respuesta: actualiza la ventana abierta igual, y en
+  el caso raro de que el refresco se cruce con su `close{}`, la vuelve a abrir (cosmético;
+  se cierra con el botón o al alejarse). Si hace falta dejarlas fuera, se sube
+  `-min-client-version` junto con `client/package.json` (docs/09). Precios en la moneda más chica, fechas en ms Unix. Mensajes:
   `market.closed`, `staff`, `too_fast`, `not_at_board`, `bad_item`, `bad_amount` (`max`),
   `bad_price` (`max`), `too_many_offers` (`max`), `not_enough_items`, `not_enough_money`
   (`price`), `no_room`, `offer_gone`, `own_offer`, `created` (`item`, `fee`), `cancelled`
@@ -923,7 +950,22 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   `gm.market_none`, `gm.market_cancelled`, `gm.market_unknown`.
 - **Falla segura** (docs/01 "Transacciones"): si un cambio del comercio no se pudo
   guardar, sus personajes reciben `Disconnect{SAVE_FAILED}` y sus logins
-  `Disconnect{CHARACTER_LOCKED}` hasta que el servidor reinicie.
+  `Disconnect{CHARACTER_LOCKED}` hasta que el servidor reinicie. Mientras la base no
+  confirma un cambio de comercio o de casa de un personaje, un `MoveItem` suyo hacia el
+  suelo fuera de una casa (desde lo que lleva, desde su propio cadáver o desde lo que el
+  servidor dejó a sus pies) se rechaza con `inventory.saving`, y su cadáver sigue
+  reservado para él (`death.corpse_not_owner`). Lo que el servidor le deja a sus pies
+  fuera de una casa en ese tiempo (no le entraba) también: el `MoveItem`, `UseItem` o
+  `UseItemOn` de otro sobre eso responde `inventory.not_yours`. Lo mismo vale para lo
+  que alguien saca del suelo de una casa al suelo público (directo, a una pila o a un
+  contenedor apoyado ahí): queda reservado para quien lo sacó hasta que la base confirma
+  esa escritura de la casa, y meter algo en un contenedor del suelo reservado a otro
+  también responde `inventory.not_yours`. Lo que sale de una casa se suma solo a una pila
+  ya reservada a quien lo saca (si no, cae como pila aparte) y entra solo en un
+  contenedor del suelo ya reservado a él: llevarlo directo a otro contenedor de la calle
+  (una mochila ajena, un cadáver) responde `inventory.floor_first`. El cadáver que el
+  personaje deja mientras espera también queda reservado para él hasta la confirmación;
+  uno de antes de la espera no.
 
 ### Casas (T5.4, `server/internal/session/house.go`)
 Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
@@ -970,6 +1012,28 @@ Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.
   el nombre del personaje, o `""` si está libre o el dueño no se muestra (personal,
   cuentas deshabilitadas o suspendidas, como el ranking). Cache de
   60 s, límite por IP y cupos de consulta compartidos con `/api/guilds`.
+
+### Puertas (`server/internal/session/door.go`)
+Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/doors.yaml`.
+- **Usar:** `UseItem{from: pos, item_id, stack_index}` sobre el item de la puerta (índice
+  ≥ 1 de la pila), en el mismo piso, a la vista y a `inventory.reach` (si no, `too_far`).
+  Un `item_id` que no es el de la casilla (una vista vieja), otro piso o una casilla fuera
+  de la vista no son un uso de puerta: siguen como cualquier `UseItem`. Ni `UseItem`
+  (puertas, puertas de casas, tableros del mercado, estaciones de crafteo, items del
+  suelo), ni `UseItemOn` de una herramienta sobre una casilla (recolección), ni `Craft`
+  miran una casilla de otro piso o fuera de la vista: la respuesta es
+  `inventory.not_possible` para cualquier casilla y no dice qué hay ni si la puerta está
+  abierta o cerrada. No hay mensajes nuevos en el protocolo.
+- **Respuesta:** la puerta cambia por su par y quien ve la casilla recibe su
+  `TileUpdate`; el cliente decide qué se camina por el item, así que no necesita más. Al
+  que la usó, si tiene llave: `door.unlocked` / `door.relocked` (`item`: la llave); si la
+  abre sin llave desde la sala de atrás: `door.unbarred`. Una puerta sin llave no manda
+  mensaje.
+- **Rechazos** (la puerta queda como estaba): `door.locked` (trabada y sin llave desde
+  afuera), `door.no_key` (cerrarla con llave sin la llave), `door.blocked` (una criatura o
+  un item en su casilla), `door.shut_in` (un jugador sin la llave en la sala) y
+  `door.not_ready` (usó una puerta hace menos de `inventory.door_cooldown_ms`, 500 ms: la
+  abrió, la cerró o se lo rechazaron; un rechazo también empieza la espera).
 
 ### Gremios (T5.1, `server/internal/session/guild.go`)
 Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.
@@ -1138,7 +1202,8 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 - Cola de salida por sesión acotada (128 batches ≈ 6,4 s de ticks): si un cliente lento
   la llena, el servidor lo saca del mundo, lo guarda y cierra con
   `Disconnect{SLOW_CLIENT}` (sin mandarle los batches pendientes) en vez de consumir
-  memoria.
+  memoria. Con el bloqueo PvP activo cierra igual, pero el personaje queda en el mundo
+  link-dead hasta que el bloqueo vence (lo que esa conexión mandó después no se ejecuta).
 - Orígenes del navegador: por defecto solo el mismo host; otros (servidor de Vite,
   Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas). Un patrón con
   `://` se compara con `esquema://host`: el cliente de escritorio usa

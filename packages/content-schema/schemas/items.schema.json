@@ -48,6 +48,21 @@
           "type": "boolean",
           "description": "Blocks line of sight and projectiles. Defaults to true for kind: wall, false otherwise (docs/03)."
         },
+        "key": {
+          "description": "A key (docs/02 \"Puertas con llave\"): the key id of the doors it opens and locks (their door.key). Carried anywhere, never spent.",
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "door": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "A door (docs/02 \"Puertas con llave\"): a map item that swaps for its pair when a player next to it uses it. The closed door names the open item it becomes (open) and blocks movement; the open one names the closed item (closed) and does not. key (closed door only) locks it: it opens and locks again only for a player carrying an item with that key id.",
+          "properties": {
+            "key": { "$ref": "common.schema.json#/$defs/id" },
+            "open": { "$ref": "common.schema.json#/$defs/itemRef" },
+            "closed": { "$ref": "common.schema.json#/$defs/itemRef" }
+          },
+          "oneOf": [{ "required": ["open"] }, { "required": ["closed"] }]
+        },
         "value": {
           "description": "Base price NPCs use as reference.",
           "$ref": "common.schema.json#/$defs/nonNegativeInt"

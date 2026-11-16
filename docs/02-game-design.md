@@ -316,12 +316,14 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     y los monstruos lo esquivan. Es una pista aceptada.
   - **Relogueo:** las de daño y `slowed` sobreviven a un logout con su tiempo restante
     (`characters.conditions`), para que salir del juego no cure; haste, invisibilidad y
-    puntería son ventajas y terminan. **Morir** termina todas.
+    puntería son ventajas y terminan. **Morir** termina todas. La de otro jugador guarda
+    también a su autor, y su tiempo sigue corriendo mientras la víctima está fuera (ver
+    "PvP", "Daño").
   - **Fuentes:** `swift_stride` (haste 25 s, las cuatro vocaciones) y `purge_venom` (cura el
     veneno) desde nivel 8-9; `keen_eye` (montaraz), `entangle` (druida, `slowed` a un
-    monstruo a 4 casillas), `shroud` (arcanista, invisibilidad). `ember_ring` puede dejar
-    ardiendo y `arc_bolt` electrizado. La araña de musgo (escupitajo) y el escarabajo de
-    mena (mordida) envenenan al hacer daño.
+    monstruo, o con PvP a un jugador, a 4 casillas), `shroud` (arcanista,
+    invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` electrizado. La araña
+    de musgo (escupitajo) y el escarabajo de mena (mordida) envenenan al hacer daño.
   - **Pendiente:** campos en el suelo (fuego o veneno) que apliquen condiciones al pisarlos
     (necesitan items con duración, disparar al entrar a la casilla y su render); items
     de cura (antídoto); que un jugador vea invisibles.
@@ -417,7 +419,7 @@ Valores iniciales (balance.yaml):
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
 - El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;
-  durante `corpse_owner_only_ms` solo el dueño puede sacar o usar lo que contiene (otros
+  durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros
   pueden abrirlo y mirar), también tras una muerte por PvP. Con marca de asesino o
   proscrito se pierde más ("PvP", "Castigo").
 
@@ -484,6 +486,17 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
   historial (lo que compró y vendió) y un **precio de referencia**: el promedio por unidad
   de las ventas de los últimos `reference_days` días. Es solo informativo.
+- **Ventana en vivo:** la ventana abierta se actualiza sola cuando otro jugador cambia lo
+  que muestra: una oferta nueva, cancelada, vencida o llenada en el item que se está
+  mirando; una oferta propia que otro llenó (y el oro o los items que llegan al buzón);
+  el buzón que cambia por una casa (alquiler, traspaso o casa liberada); una suspensión
+  que oculta o vuelve a mostrar ofertas; y el dinero y los items propios tras un
+  intercambio directo. Un libro muy activo actualiza cada ventana como mucho cada
+  `push_every_ms` (500 ms); un cambio dentro de ese tiempo sale al terminar, con el libro
+  como esté entonces. Lo que ya escribió el jugador en los formularios no se borra, y el
+  precio que propone el formulario (el de referencia cuando se abrió ese item) no cambia
+  mientras se mira el mismo item: nadie publica a un precio que no eligió. El vencimiento
+  de una suspensión no avisa: se ve en la siguiente acción.
 - **Seguridad:** el personal del juego no usa el mercado. Una cuenta suspendida no opera
   y sus ofertas no se listan ni se pueden aceptar mientras dure la suspensión. Anti-flood
   propio (`action_burst` / `action_refill_ms`). Comandos de staff auditados:
@@ -494,10 +507,24 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   la base caída al apagar), sus personajes salen del juego con un aviso y no pueden
   entrar hasta que el servidor reinicie, y el mercado y el intercambio quedan en solo
   lectura (se puede mirar, no operar) hasta entonces. Al reiniciar, esos personajes
-  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Límite: lo que uno
-  de ellos soltó en el suelo o dejó en su cadáver en el instante antes del aviso puede
-  quedar con quien lo levantó; las alertas de economía (T4.1) son la red (docs/01,
-  "Transacciones").
+  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Para que nada de
+  lo que recibieron llegue a otro antes del aviso, después de cada intercambio, compra,
+  venta, retiro del buzón o cambio en una casa el personaje queda **en espera** hasta que
+  la base confirma ese guardado (normalmente uno o dos ticks): no puede soltar nada en el
+  suelo fuera de una casa (aviso "Espera un momento…", `inventory.saving`), y si muere en
+  ese tiempo, nadie más saca ni mete nada en su cadáver hasta la confirmación (ni después,
+  si el guardado falló). Un cadáver de antes de la espera sigue las reglas de siempre.
+  Lo que en ese instante cae a sus pies porque no le entra (una fabricación, una
+  recompensa, las monedas de una venta a un NPC, el equipo que no cupo en su cadáver)
+  queda reservado para él de la misma forma: otro jugador recibe "Eso es de otro jugador
+  por ahora." (`inventory.not_yours`). El suelo de las casas lo cuida el guardado: lo
+  que se movió ahí no llega a la base por otro. Lo que alguien saca de una casa a la
+  calle queda reservado para él de la misma forma hasta que la base confirma ese cambio
+  de la casa, un momento: solo él puede volver a tomarlo o devolverlo a la casa. Sale
+  como una pila aparte: no se suma a la pila de otro ni entra en una mochila o un cadáver
+  ajeno de la calle ("Para sacarlo de la casa, déjalo primero en el suelo.",
+  `inventory.floor_first`), así la reserva nunca se queda con lo de otro. Las alertas de
+  economía (T4.1) siguen como red (docs/01, "Transacciones").
 - Una oferta de un item retirado del juego se cierra al arrancar: el oro de una de
   compra vuelve al buzón.
 - **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).
@@ -634,6 +661,130 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
   Viajar todos juntos cuando zarpa el líder queda pendiente: necesita que cada miembro
   acepte el cobro, no es solo una regla.
 
+### Puertas con llave
+Servidor en `server/internal/session/door.go`; las puertas y llaves son items
+(`data/items/doors.yaml`, formato en `06-content-data.md`).
+- **Puertas:** una puerta es un par de items del mapa con bloque `door`. La cerrada
+  (`door.open`: el item en que se convierte) bloquea el paso y la vista; la abierta
+  (`door.closed`) no bloquea nada. Se usa con click derecho, a `inventory.reach` (1)
+  casilla y en el mismo piso: la cerrada se abre y la abierta se cierra, para todos (el
+  servidor cambia el item del mapa y manda la casilla a quien la ve; caminar, el
+  pathfinding y la línea de visión lo ven en el acto). No se levantan ni se mueven.
+- **Con llave:** la cerrada puede llevar `door.key`, un id de llave. Una llave es
+  cualquier item con `key: <id>`; varios items pueden compartir un id (por ejemplo, la
+  copia que da un NPC). **Decisión:** se abre *usando la puerta con la llave encima*
+  (equipada o en cualquier contenedor; no se gasta), no usando la llave sobre la puerta:
+  es un click en vez de dos y no obliga a buscar la llave en la mochila. Sin ella, desde
+  afuera: "Está cerrada con llave". La llave abre de los dos lados.
+- **Abierta, pasa cualquiera:** así un grupo entra detrás de quien tiene la llave.
+  **Cerrarla con llave** también pide la llave; sin ella la puerta queda abierta. Nadie
+  sin llave puede dejar a otros afuera ni adentro.
+- **No cierra sobre algo:** ni con una criatura ni con items en su casilla.
+- **La sala de atrás:** al arrancar, el servidor recorre a pie cada lado de cada puerta
+  con llave (8 direcciones, mismo piso, sin cruzar esa puerta), hasta 4096 casillas por
+  lado. Las **demás puertas con llave cuentan como muro** (aunque estén abiertas en el
+  mapa) y las puertas sin llave como abiertas, si su casilla deja pasar (suelo caminable y
+  nada más que bloquee el paso salvo puertas). Un lado que no termina es terreno abierto:
+  el de afuera. Si todos terminan, el más grande es el de afuera. Los demás son la
+  **sala** de la puerta. Así una **puerta doble** (dos puertas con llave juntas en la
+  misma pared) comparte una sala: cada una toma a la otra como muro. Como los muros no
+  cambian, la sala se calcula una vez; el servidor guarda de cada casilla de una sala a
+  qué sala pertenece, así que usar la puerta cuesta una búsqueda en un mapa, no un
+  recorrido.
+- **Sala que no se puede determinar = error:** el servidor no arranca, y `make validate`
+  lo rechaza antes (misma regla, mismo recorrido; los dos leen los casos de
+  `packages/map-format/src/testdata/door-rooms.json`), con una puerta con llave
+  amurallada (ninguna casilla a su alrededor deja pasar), con un solo lado (está en campo
+  abierto: se la rodea), con más de un lado sin terminar (la sala sería más grande que
+  4096 casillas) o, si todos terminan, con los dos lados más grandes del mismo tamaño (no
+  está claro cuál es el de afuera).
+- **Sala compartida:** varias puertas con llave pueden dar a la misma sala (una puerta
+  doble, o un edificio con puerta delantera y trasera a la misma calle), pero solo si
+  tienen **la misma llave** y **el mismo afuera**. Para el afuera, el servidor camina (a
+  lo ancho, sin cruzar puertas con llave ni casas: una casa no es calle; tampoco dos
+  afueras que quedan dentro de una misma casa sin tocarse) desde las
+  casillas de afuera junto a la primera puerta hasta las de la otra, y explora como mucho
+  4 × 4096 = 16384 casillas: en campo abierto eso alcanza para unas 60 a 90 casillas de
+  distancia, no 16384. Si no llega, rechaza la puerta (y `make validate` también), con
+  uno de dos mensajes: los afueras solo se unen a través de otra puerta con llave (o no se
+  unen), o el recorrido llegó a su cota. **Hoy se rechazan los ciclos de puertas con
+  llave**, aunque sean seguros: un edificio con la puerta delantera al campo y la trasera
+  a un patio que tiene su propio portón al campo, o un hall entre el campo y una bóveda
+  con su propio portón al campo. Es la dirección segura; aceptarlos necesita otro chequeo
+  (`14-continuar-en-tu-pc.md`, pendientes). Así se rechaza, por ejemplo, una bóveda más
+  grande que la sala que tiene delante: la puerta de la bóveda tomaría la bóveda por su
+  afuera y las dos puertas compartirían la sala del medio, con lo que desde el medio se
+  abriría la bóveda sin llave, la bóveda no estaría en ninguna sala y a quien está adentro
+  lo podrían trabar. Lo mismo con una antesala entre el mundo y una bóveda de más de 4096
+  casillas, o con dos puertas de distinta llave en la misma sala (la llave de una abriría
+  las dos desde adentro). Una sala dentro de otra vale cuando la de adentro es más chica
+  que la del medio: cada puerta tiene su sala.
+- **La sala no guarda nada de afuera:** ni el templo (donde se despierta), ni NPCs, ni
+  casas (casillas o salida), ni llegadas de barco, ni destinos de un teleport de diálogo;
+  `make validate` mira además los extremos de los portales (el servidor no los carga).
+  Si una sala tiene algo de eso, o se tomó el lado de afuera por la sala, o alguien
+  llegaría detrás de la puerta: ni el servidor arranca ni pasa `make validate`. Los
+  spawns sí pueden estar en una sala: la forja guarda a su custodio detrás del portón.
+- **Nadie queda encerrado:** desde la sala, una puerta trabada se abre siempre, con o sin
+  llave ("Descorres el cerrojo desde adentro"). Así sale quien volvió a entrar al juego
+  adentro con la puerta trabada (otro la cerró mientras no estaba, o hubo un reinicio) y
+  quien perdió la llave adentro. Desde afuera sigue haciendo falta la llave. Además, la
+  puerta no se cierra con llave mientras haya en la sala un jugador conectado sin la llave
+  ("Alguien sin la llave quedaría encerrado"): encerrar a alguien no es una jugada que
+  tenga quien lleva la llave. Para eso el servidor mira solo a los jugadores de los
+  sectores de la sala y corta la búsqueda de la llave en cuanto la encuentra.
+- **Nadie aparece adentro sin pasar la puerta:** cuando el servidor busca una casilla
+  libre por anillos alrededor de un punto (entrar al juego sobre una casilla ocupada,
+  despertar en el templo, la llegada de un barco, un teleport de diálogo o del personal,
+  salir de una casa), descarta las casillas de una sala si el punto no está en esa misma
+  sala. Los anillos no siguen las paredes: sin esto, con unas pocas casillas ocupadas
+  junto al portón (en la forja bastaban unas 11), quien guardó su posición afuera
+  aparecía adentro y, como desde adentro se abre sin llave, le abría a todos.
+- **Ritmo:** un jugador usa una puerta como mucho cada `inventory.door_cooldown_ms`
+  (500 ms, "Espera un momento"), la abra, la cierre o se lo rechacen: un rechazo también
+  cuenta, así sus chequeos (la llave, la sala) corren a ese ritmo y no al del gateway.
+  Otros jugadores la pueden usar mientras.
+- **Estado:** vive solo en el mapa en memoria. Un reinicio deja todas las puertas como
+  están en el mapa: cerradas y trabadas (una puerta colocada abierta queda abierta otra
+  vez; `make validate` lo advierte). Los monstruos no abren puertas, pero pasan por una
+  abierta.
+- **Límites conocidos:**
+  - el cálculo de la sala no conoce escaleras ni portales (hoy no existen en el
+    servidor). Una puerta cuyo lado de afuera sea un pasillo chico con una escalera
+    podría tomar ese pasillo por la sala: `make validate` lo rechaza porque la sala
+    tendría un extremo de portal. Igual conviene revisar una puerta nueva con un test
+    como `TestForgeGateOnTheMap`;
+  - una puerta **sola** con una sala de más de 4096 casillas detrás y un afuera que
+    termina antes (más chico) toma el afuera por la sala. Si ese afuera tiene templo,
+    NPCs, casas, portales o llegadas, el servidor no arranca y `make validate` falla (la
+    sala no guarda nada de afuera); si no tiene nada de eso, no se nota. Con una segunda
+    puerta a esa sala lo frena la regla de la sala compartida. Hoy no pasa (la forja
+    tiene 463 casillas y la mina 1729). Marcar el lado de adentro en los datos quedaría
+    para cuando haga falta;
+  - dos puertas a la misma sala se rechazan aunque den al mismo mundo si un recorrido que
+    explora hasta 16384 casillas no une sus afueras: en campo abierto son unas 60 a 90
+    casillas de distancia (en un pasillo angosto, mucho más). Hay que acercarlas o
+    darles salas propias;
+  - los ciclos de puertas con llave (la sala compartida de arriba) se rechazan aunque
+    sean seguros;
+  - la llave se puede repetir: quien terminó `ch3_gate` y no la lleva encima pide otra al
+    eco, así que tirarla al piso y pedir otra da llaves de más, y una llave tirada la puede
+    levantar cualquiera. Lo aceptamos: quien tiene la llave ya puede abrirle la puerta a
+    quien quiera, y la llave no se vende ni se comercia (`tradeable: false`). Una llave
+    tiene que poder levantarse (el validador lo exige).
+- **Mapa:** una puerta se coloca como cualquier item (`place_item`, la paleta del editor,
+  que muestra de cada puerta y de cada llave su id de llave). La llave es del tipo de
+  item, no de la casilla: el formato de chunks no tiene atributos
+  por casilla (`03-world-and-maps.md`), así que una puerta con otra llave es otro par de
+  items. Elegimos esto frente a un id por casilla (como hace Tibia) porque mantiene el
+  contenido como datos y no cambia el formato de mapas ni `world.bin`. El
+  validador de mapas cuenta las puertas como abiertas al medir el alcance desde el templo,
+  no deja poner un item de puerta en una casilla de puerta de una casa (usarlo abriría
+  la puerta y nunca la ventana de la casa) ni dos items de puerta en una casilla (cada
+  uno reclamaría el uso y la llave); el servidor tampoco arranca con eso.
+- **Hoy:** la puerta de la forja (`forge_gate` / `forge_gate_open`, piso 8 de la Isla
+  Volcánica, 3692,5832) se abre con la llave de ascua (`ember_key`) del Capítulo 3.
+
 ## Historia (esqueleto)
 Un imperio antiguo se hundió en el mar y dejó un archipiélago. Las islas guardan los
 fragmentos de lo que pasó. La línea principal tiene capítulos, cada uno con **nivel
@@ -682,10 +833,15 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    de la forja antigua. 14 000 XP y 800 monedas.
 2. `ch3_gate` (nivel 35): matar 10 mineros de obsidiana, conseguir un plano de galería
    (botín de los mineros), entregarlo a Casia y bajar hasta la puerta sellada, en lo más
-   hondo de la mina, donde el eco de la forja toma la raíz y la abre (ir a un lugar y
-   abrir = hablar con el eco con la raíz encima). 22 000 XP y 1100 monedas.
+   hondo de la mina, donde el eco de la forja toma la raíz y le devuelve su forma: la
+   **llave de ascua** (`ember_key`, no comerciable), que abre la puerta (ir a un lugar y
+   abrir = hablar con el eco con la raíz encima). 22 000 XP y 1100 monedas. Quien terminó
+   `ch3_gate` y no tiene la llave (la perdió, o terminó antes de que existiera) le pide
+   otra al eco, una a la vez.
 3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo
-   en la forja antigua; en grupo desde el 40, solo desde el 44 y curándose), tomar el sello de la forja de sus restos y llevárselo a Casia.
+   en la forja antigua, detrás de la puerta sellada: se entra abriéndola con la llave de
+   ascua, ver "Puertas con llave"; en grupo desde el 40, solo desde el 44 y curándose),
+   tomar el sello de la forja de sus restos y llevárselo a Casia.
    36 000 XP, 2000 monedas y el flag `lost_expedition_lead`: el sello señala al norte, por
    donde salió la expedición perdida del Capítulo 4 ("Silencio blanco", Heladas; no
    implementado). El custodio deja un solo sello por muerte: en grupo, cada uno espera su
@@ -714,13 +870,18 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   salamandras en la ladera de piedra al sureste, dragoncillos en el cráter amurallado al
   noreste; la mina (piso 8, escalera al este del pueblo) tiene la galería de los mineros al
   oeste, la de los gólems al este (con vetas de ascua) y, al sur, la puerta sellada con el
-  eco y detrás la forja antigua con el custodio (respawn de 20 min). La puerta es
-  narrativa: el paso no se cierra (no hay puertas con llave todavía); el capítulo avanza
-  por el diálogo con el eco. La isla es PvP abierto (el default de T5.2) salvo el templo y
-  la plaza (protección); sin arena. Música y ambiente: placeholders (la de cueva y las olas)
-  hasta tener pistas propias. No hay suelos volcánicos (ceniza, lava) en `data/`: el mapa
-  usa tierra y piedra; agregarlos queda pendiente (el check de mapas valida con el `data/`
-  de la base, así que van en un PR de contenido antes).
+  eco y detrás la forja antigua con el custodio (respawn de 20 min). La puerta sellada
+  (`forge_gate`, 3692,5832) cierra el pasillo de la forja y se abre con la llave de ascua
+  que da el eco (ver "Puertas con llave"). La isla es PvP abierto (el default de T5.2) salvo el templo y
+  la plaza (protección); sin arena. Música y ambiente propios (`music_volcan`: un tambor
+  lento, un yunque lejano y una melodía en re frigio dominante; `amb_volcan`: retumbo,
+  burbujas de lava, crujidos y vapor). Suelos propios: llano de ceniza, losas de basalto
+  en la plaza, caminos de escoria, ladera y cráter de lava enfriada con pozos de lava
+  fundida que no se pisan, y tres carteles (templo, muelle y mina) que se leen mirándolos.
+  Los suelos nuevos se caminan como los que reemplazaron, así que el ritmo con que se
+  balanceó la caza no cambia: la ceniza (140) como la tierra del llano, la lava enfriada
+  (100) como la piedra de la ladera y el cráter, el basalto (100) como piedra; solo los
+  caminos de escoria (110) son más rápidos que la ceniza que cruzan.
 - **Monedas:** las recompensas y precios de este nivel (miles de cobre) se pagan en plata y
   oro (ver "Economía"), así que caben en una mochila normal.
 
@@ -968,8 +1129,8 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   mensajes, UI) no son posicionales.
 - **Música y ambiente**: un loop por isla (`world/world.yaml`) y otro para los pisos
   subterráneos (z > 7). Al cambiar de isla o de zona hay un fundido cruzado (`fade_ms`).
-  Hoy hay tres loops: Puerto, Bosque y Cueva. El ambiente son olas en Puerto y bosque en
-  Bosque; bajo tierra no hay ambiente.
+  Hoy hay cuatro loops: Puerto, Bosque, Volcán y Cueva. El ambiente son olas en Puerto,
+  bosque en Bosque y el volcán en la Isla Volcánica; bajo tierra no hay ambiente.
 - **Autoplay**: nada suena hasta el primer gesto (click, toque o tecla). Así lo exigen los
   navegadores y los webviews de la app de escritorio. Mientras el audio esté suspendido,
   los efectos se descartan, para que no suenen todos juntos al reanudarse.
@@ -1131,6 +1292,10 @@ en una arena. Lo demás es **injustificado**.
   la marca y nunca la baja.
 - Se ve junto al nombre en el mapa y en la lista de batalla. Una muerte quita la marca de
   agresor; la de asesino o proscrito sigue.
+- Cada marca tiene su propio icono, de arte propio, con su silueta y su color: espadas
+  cruzadas para el agresor (desenvainó contra alguien), una gota de sangre para el asesino
+  y un escudo partido para el proscrito (perdió la protección de la ley).
+  Detalle en `assets/README.md`, "Iconos de interfaz".
 - Las muertes injustificadas se cuentan por ventanas de tiempo con el reloj del juego y se
   guardan con el personaje (solo las que caben en la ventana más larga).
 
@@ -1152,7 +1317,12 @@ Las duraciones (60 h y 200 h) obligan a jugar varios días con la marca puesta.
   conexión durante el bloqueo **no** saca al personaje: queda en el mundo sin conexión
   ("link-dead"), sin actuar y atacable, y cada golpe que recibe renueva el bloqueo. Cuando
   vence, se guarda y sale. Si su dueño vuelve a entrar mientras tanto, retoma ese mismo
-  personaje (posición, vida, marca y bloqueo incluidos).
+  personaje (posición, vida, marca y bloqueo incluidos). Lo mismo si es el servidor el que
+  corta la conexión: un cliente que no lee lo que se le manda (cliente lento) o un
+  reseteo de contraseña la cierran igual (el reseteo, por seguridad, siempre), pero el
+  personaje queda link-dead hasta que vence el bloqueo; lo que esa conexión haya mandado
+  después no se ejecuta. Solo una expulsión o un ban de staff, o un guardado que falló
+  (T5.3), lo sacan en el acto.
 - **Recompensa:** matar jugadores no da experiencia ni otra recompensa (sería farmeable
   entre cuentas propias). Golpear jugadores tampoco entrena skills ni el escudo.
 
@@ -1172,6 +1342,45 @@ físicos como contra un monstruo. Una condición de otro jugador (fuego, veneno.
 daña si ese jugador podría atacar ahora (zonas, niveles, staff y su modo seguro) y nunca
 empieza un ataque injustificado: solo continúa uno que su autor ya hizo con la mano. Una
 quemadura de un duelo de arena o de una guerra que terminó deja de dañar.
+
+**Autor de una condición:** cada golpe es un ataque de su autor (se juzga, marca, renueva
+el bloqueo y da crédito de muerte como un golpe directo). El autor es un personaje, no una
+conexión:
+- **Relogueo de cualquiera de los dos:** la condición sigue siendo de su autor. Se guarda
+  con la víctima (`characters.conditions`) junto con lo que la víctima recordaba del ataque
+  de ese autor fuera de una arena (cuándo fue el último golpe y si fue injustificado) y la
+  hora del guardado. Al volver, ese recuerdo vale solo si no pasó `aggressor_ms` **en el
+  reloj** desde ese golpe (aunque la condición haya terminado mientras tanto), y la
+  condición sigue **como si la víctima no hubiera salido**:
+  los golpes que habrían caído mientras estaba fuera pasan sin daño, como en una zona de
+  protección, y el resto cae a su ritmo. Así salir del juego no corta ni estira un ataque
+  (ni la defensa propia): la víctima no puede guardarse los golpes para recibirlos más
+  tarde (cada uno renovaría la marca y el bloqueo del autor, y ella elegiría cuándo la
+  mata). Las condiciones sin autor (de monstruos) siguen congeladas mientras no está:
+  salir no las cura.
+- **Guardado de antes de un reinicio:** si la hora del guardado no se puede ubicar en el
+  reloj de este servidor (es anterior a su arranque, con su edad contada en ticks como la
+  del recuerdo; posterior a ahora; o no está, como en una fila guardada antes de esta
+  regla), la condición con autor termina al entrar. Es la
+  opción segura para los dos: la víctima no recibe golpes que quizás cayeron hace mucho y
+  el autor no queda marcado, bloqueado ni con una muerte por un ataque que nadie puede
+  medir (el recuerdo de ese ataque también se olvida tras un reinicio). Las condiciones
+  duran menos de un minuto (`balance.yaml conditions`): tras un reinicio, lo normal es que
+  ya hubiera terminado igual.
+- **Autor fuera del mundo:** su condición no daña (los golpes pasan, como en una zona de
+  protección): no podría atacar y no habría a quién darle la muerte. Mientras su condición
+  daña, cada golpe renueva su bloqueo, así que quien cierra la conexión queda link-dead y
+  la muerte se le cuenta igual (como a cualquier atacante). Si vuelve antes de que la
+  condición termine, sigue dañando según las reglas de arriba. Consecuencia aceptada: una
+  víctima que espera en una zona de protección hasta que termine el bloqueo del autor, y
+  el autor sale, se queda con un resto inofensivo (antes dañaba completo, como del mundo).
+- **PvP apagado:** una condición de otro jugador guardada de antes no daña a nadie.
+
+**Hechizos de condición a distancia** (`entangle`): alcanzan a un jugador con las reglas de
+un ataque directo (zonas, niveles, staff, modo seguro; a un miembro del propio grupo o
+gremio se le puede apuntar, como con un rayo) y los chequeos de alcance y línea de vista.
+Cuentan como un golpe aunque la condición no prenda: marca, bloqueo, defensa propia y
+crédito de muerte; los golpes de una condición de daño son del lanzador.
 
 ### Modo seguro
 Interruptor del cliente, **activado por defecto** (cada login empieza así hasta que el
@@ -1203,8 +1412,5 @@ jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.
 - Reportes: el contexto incluye `attack_player` y `kill_player` con el nombre del otro.
 
 ### Pendiente
-Que una condición
-de otro jugador recuerde a su autor tras un relogueo (hoy pasa a dañar como una del mundo);
-hechizos de condición
-a distancia contra jugadores (hoy solo contra monstruos); sprites de las marcas (hoy son
-formas dibujadas); un ranking público de guerras.
+Un ranking público de guerras. (Las marcas ya tienen sprites propios:
+`assets/sprites/ui/marks/`, dibujados por `client/src/render/marks.ts`.)

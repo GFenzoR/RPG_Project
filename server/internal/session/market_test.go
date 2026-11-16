@@ -65,7 +65,7 @@ func newMarketHarness(t *testing.T, opts ...option) *marketHarness {
 		c.Items = marketItems(t)
 		c.Balance.Market = content.Market{Enabled: true, FeePermille: 100, FeeMin: 2, FeeMax: 50, MaxOffers: 2,
 			MaxAmount: 100, MaxPrice: 1000, DurationsHours: []int{1, 2}, ListSize: 5, HistorySize: 4,
-			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50}
+			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50, PushEveryMs: 500}
 		c.Balance.Trade = content.Trade{Enabled: true, MaxItems: 2, RequestMs: 5000, ActionBurst: 50, ActionRefillMs: 50}
 		c.Transfer = func(tr session.Transfer) bool { mh.transfers = append(mh.transfers, tr); return true }
 	})
@@ -470,7 +470,7 @@ func TestMarketStaffAndBanned(t *testing.T) {
 		c.Items = marketItems(t)
 		c.Balance.Market = content.Market{Enabled: true, FeePermille: 100, FeeMin: 2, FeeMax: 50, MaxOffers: 2,
 			MaxAmount: 100, MaxPrice: 1000, DurationsHours: []int{1}, ListSize: 5, HistorySize: 4,
-			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50}
+			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50, PushEveryMs: 500}
 		c.Transfer = func(tr session.Transfer) bool { h2.transfers = append(h2.transfers, tr); return true }
 		c.Market = &session.MarketData{
 			Offers: []session.MarketOffer{

@@ -1,0 +1,221 @@
+package session_test
+
+import (
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
+	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
+	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
+)
+
+// Ranged condition spells against players (T5.2): an attack by the rules of a direct one,
+// whose damage condition is the caster's attack. Worlds and numbers as in
+// pvp_condition_test.go (newPvPCond: root slows at 4 tiles, venom poisons at 4 tiles for
+// 4 hits of 20, scaled to 10).
+
+// A ranged condition spell aimed at a player is an attack by the rules of a direct one:
+// zones, levels, staff, safe mode (a marked victim or an arena is fine), range and line
+// of sight; aimed at a party member it is allowed, as a bolt is. The client's hotkey sends
+// no target: the spell then goes to the player Ana attacks (SetTarget), by the same rules.
+func TestPvPConditionSpellRules(t *testing.T) {
+	type side struct{ x, y, level int }
+	open := func(x int) side { return side{x, 10, 30} }
+	cases := []struct {
+		name        string
+		a, v        side
+		safe        bool
+		marked      bool // v hits a third player first (aggressor)
+		party       bool
+		staff       bool // the victim is a GM
+		casterStaff bool // Ana is a GM
+		off         bool
+		wall        bool   // a tile that blocks sight between them
+		hotkey      bool   // Ana targets Bea first and casts without a target
+		reason      string // "" = it lands
+		skull       bool   // Ana ends with the aggressor skull
+		manaUse     bool
+	}{
+		{name: "open field", a: open(10), v: open(12), reason: "", skull: true, manaUse: true},
+		{name: "safe mode, unmarked victim", a: open(10), v: open(12), safe: true, reason: "pvp.safe_mode"},
+		{name: "safe mode, marked victim", a: open(10), v: open(12), safe: true, marked: true, manaUse: true},
+		{name: "party member", a: open(10), v: open(12), party: true, skull: true, manaUse: true},
+		{name: "victim in no_pvp", a: open(38), v: side{40, 10, 30}, reason: "pvp.zone"},
+		{name: "attacker in protection", a: side{10, 45, 30}, v: side{12, 45, 30}, reason: "pvp.zone"},
+		{name: "victim in protection", a: side{12, 45, 30}, v: side{10, 45, 30}, reason: "pvp.zone"},
+		{name: "arena, even in safe mode", a: side{45, 45, 30}, v: side{47, 45, 30}, safe: true, manaUse: true},
+		{name: "victim below the level", a: open(10), v: side{12, 10, 19}, reason: "pvp.their_level"},
+		{name: "caster below the level", a: side{10, 10, 19}, v: open(12), reason: "pvp.your_level"},
+		{name: "staff victim", a: open(10), v: open(12), staff: true, reason: "pvp.protected_staff"},
+		{name: "staff caster", a: open(10), v: open(12), casterStaff: true, reason: "pvp.staff"},
+		{name: "current target, no target sent", a: open(10), v: open(12), hotkey: true, skull: true, manaUse: true},
+		// In safe mode the unjustified target is refused when set: the hotkey finds none.
+		{name: "current target, safe mode", a: open(10), v: open(12), hotkey: true, safe: true, reason: "magic.no_target"},
+		{name: "out of range", a: open(10), v: open(15), reason: "magic.out_of_range"},
+		{name: "no line of sight", a: open(10), v: open(12), wall: true, reason: "magic.no_sight"},
+		{name: "pvp off", a: open(10), v: open(12), off: true, reason: "magic.no_target"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newPvPCond(t, nil, func(c *session.Config) { c.Balance.PvP.Enabled = !tc.off })
+			roleOf := func(staff bool) session.Role {
+				if staff {
+					return session.RoleGM
+				}
+				return session.RolePlayer
+			}
+			ca, a := g.fighter("Ana", 0, tc.a.x, tc.a.y, tc.a.level, roleOf(tc.casterStaff))
+			cb, b := g.fighter("Bea", 0, tc.v.x, tc.v.y, tc.v.level, roleOf(tc.staff))
+			if tc.marked {
+				_, e := g.fighter("Eli", 0, tc.v.x, tc.v.y+1, 30, 0)
+				g.hit(b, e)
+			}
+			if tc.party {
+				g.form(ca, a, member{cb, b})
+			}
+			if tc.wall {
+				zone(g.w.Map(), tc.a.x+1, tc.a.y, tc.a.x+1, tc.a.y, world.FlagBlocksSight)
+			}
+			if !tc.safe {
+				g.unsafe(ca)
+			}
+			if tc.hotkey {
+				g.input(ca, setTarget(b.ID()))
+				g.sim.Step()
+			}
+			speed, mana := b.Speed(), a.Mana()
+			ca.take()
+			if tc.hotkey {
+				g.input(ca, cast("root"))
+			} else {
+				g.input(ca, castAt("root", b.ID()))
+			}
+			g.sim.Step()
+			keys := sysKeys(ca.take())
+			slowed := g.w.ConditionsForTest(b)["slowed"] > 0
+			if tc.reason != "" {
+				if !slices.Contains(keys, tc.reason) || slowed || b.Speed() != speed || a.Mana() != mana {
+					t.Fatalf("messages %v, slowed %v, speed %d → %d, mana %d → %d", keys, slowed, speed, b.Speed(), mana, a.Mana())
+				}
+			} else if !slowed || b.Speed() >= speed {
+				t.Fatalf("not slowed: speed %d → %d, messages %v", speed, b.Speed(), keys)
+			}
+			if got := a.Skull() == pb.Skull_SKULL_AGGRESSOR; got != tc.skull {
+				t.Fatalf("Ana's skull %v", a.Skull())
+			}
+			if tc.manaUse != (a.Mana() < mana) {
+				t.Fatalf("mana %d → %d", mana, a.Mana())
+			}
+		})
+	}
+}
+
+// A ranged condition spell on a player locks both sides like a hit, and its damage
+// condition is the caster's attack: scaled hits, and a death by it is the caster's kill.
+func TestPvPConditionSpellPoisonKills(t *testing.T) {
+	g := newPvPCond(t, nil)
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	cb, b := g.fighter("Bea", 0, 13, 10, 30, 0)
+	g.unsafe(ca)
+	cb.take()
+	g.input(ca, castAt("venom", b.ID()))
+	g.sim.Step()
+	if a.Skull() != pb.Skull_SKULL_AGGRESSOR || g.w.ConditionsForTest(b)["poison"] != 4 {
+		t.Fatalf("Ana %v, Bea's conditions %v", a.Skull(), g.w.ConditionsForTest(b))
+	}
+	g.input(cb, logout())
+	g.sim.Step()
+	if keys := sysKeys(cb.take()); cb.closed || !slices.Contains(keys, "pvp.logout_locked") {
+		t.Fatalf("Bea was not locked: %v", keys)
+	}
+	g.sim.RunFor(2 * time.Second)
+	if hits := damageTexts(cb.take()); !allTen(hits) {
+		t.Fatalf("poison hits %v", hits)
+	}
+	g.do(func(*game.TickContext) { b.SetHealthForTest(5) })
+	g.sim.RunFor(time.Second)
+	if st := g.w.PvPStateForTest(a); st.Kills != 1 || len(st.Unjust) != 1 {
+		t.Fatalf("Ana %+v", st)
+	}
+}
+
+// During a war the members of both guilds aim condition spells at each other without
+// marks, also in safe mode, and a ranged poison of the war hurts as the war's attack; a
+// member of the caster's own guild may be aimed at too (a direct attack), unjustified:
+// refused in safe mode, and without it it lands and marks the caster.
+func TestPvPConditionSpellWar(t *testing.T) {
+	tg := newTwoGuilds(t, withPvPCond)
+	id := tg.pendingWar()
+	tg.war(tg.cc, wAccept, "", id)
+	tg.cb.take()
+	tg.input(tg.cb, castAt("root", tg.d.ID()))
+	tg.sim.Step()
+	if keys := sysKeys(tg.cb.take()); tg.w.ConditionsForTest(tg.d)["slowed"] == 0 {
+		t.Fatalf("Dan not slowed: %v", keys)
+	}
+	tg.input(tg.cb, castAt("venom", tg.d.ID()))
+	tg.sim.Step()
+	before, _ := tg.d.Health()
+	tg.sim.RunFor(2 * time.Second)
+	if cur, _ := tg.d.Health(); cur >= before || tg.b.Skull() != pb.Skull_SKULL_UNSPECIFIED {
+		t.Fatalf("Dan %d → %d, Bea %v", before, cur, tg.b.Skull())
+	}
+
+	// Ana, Bea's own guild, is no enemy: in safe mode the spell is refused.
+	tg.cb.take()
+	tg.input(tg.cb, castAt("root", tg.a.ID()))
+	tg.sim.Step()
+	if keys := sysKeys(tg.cb.take()); !slices.Contains(keys, "pvp.safe_mode") || tg.w.ConditionsForTest(tg.a)["slowed"] > 0 {
+		t.Fatalf("root on Ana: %v", keys)
+	}
+	// Without safe mode it lands: an unjustified attack on her own guild member.
+	tg.unsafe(tg.cb)
+	tg.input(tg.cb, castAt("root", tg.a.ID()))
+	tg.sim.Step()
+	if keys := sysKeys(tg.cb.take()); tg.w.ConditionsForTest(tg.a)["slowed"] == 0 || tg.b.Skull() != pb.Skull_SKULL_AGGRESSOR {
+		t.Fatalf("root on Ana without safe mode: %v, Bea %v", keys, tg.b.Skull())
+	}
+}
+
+// A player on another floor is out of reach of a condition spell: aimed at directly, it is
+// out of range; through the hotkey there is no target, because Ana's attack on Bea ended
+// when the floors parted (as her client's did).
+func TestPvPConditionSpellOtherFloor(t *testing.T) {
+	m := worldtest.Floors(t, 0, 0,
+		worldtest.Layer{Z: 6, Rows: []string{"..........", ".........."}},
+		worldtest.Layer{Z: 7, Rows: []string{"..........", ".........."}})
+	h := condHarness(t, m, func(c *session.Config) { c.Balance.PvP = pvpRules() })
+	join := func(name string, id int64, p world.Pos) (*fakeClient, *session.Player) {
+		return h.joinChar(session.Character{ID: id, AccountID: id, Name: name, Vocation: "guardian", Level: 30,
+			Health: 100000, Mana: 20, HasPos: true, Pos: p})
+	}
+	ca, a := join("Ana", 7_100_001, world.Pos{X: 2, Y: 1, Z: 7})
+	_, b := join("Bea", 7_100_002, world.Pos{X: 4, Y: 1, Z: 7})
+	h.input(ca, safeMode(false))
+	h.input(ca, setTarget(b.ID()))
+	h.sim.Step()
+	if a.Target() != b.ID() {
+		t.Fatalf("Ana attacks %d, not Bea", a.Target())
+	}
+	h.do(func(*game.TickContext) { h.w.Teleport(b, world.Pos{X: 4, Y: 1, Z: 6}) })
+	for _, tc := range []struct {
+		msg    *pb.ClientMessage
+		reason string
+	}{
+		{castAt("root", b.ID()), "magic.out_of_range"},
+		{cast("root"), "magic.no_target"},
+	} {
+		mana := a.Mana()
+		ca.take()
+		h.input(ca, tc.msg)
+		h.sim.Step()
+		keys := sysKeys(ca.take())
+		if !slices.Contains(keys, tc.reason) || h.w.ConditionsForTest(b)["slowed"] > 0 || a.Mana() != mana ||
+			a.Skull() != pb.Skull_SKULL_UNSPECIFIED {
+			t.Fatalf("%v: messages %v, Bea %v, mana %d → %d, Ana %v", tc.msg, keys, h.w.ConditionsForTest(b), mana, a.Mana(), a.Skull())
+		}
+	}
+}

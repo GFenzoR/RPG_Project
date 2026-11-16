@@ -110,6 +110,14 @@ level_hint: [1, 15]
   pos: { x: 3230, y: 6402, z: 7 }
   text: text.puerto.temple_sign
 ```
+El servidor no carga `texts.yaml` (lo usan el editor, `mapcli` y el validador). Para que
+un cartel se vea y se lea en el juego, la misma casilla lleva un item fijo cuya
+`description` es esa clave (T5.5: `brasal_temple_sign`, ver `06-content-data.md`); mirarlo
+muestra el texto. Los carteles de Puerto y del Bosque todavía no tienen ese item. El
+validador los mantiene de acuerdo: un item de cartel (un item cuya `description` es una
+clave `text.*`) tiene que estar en una casilla con un `kind: sign` de `texts.yaml` con ese
+mismo texto, y un cartel de `texts.yaml` con un item de cartel en su casilla tiene que decir
+lo mismo que el item. Un cartel sin item sigue siendo válido.
 
 `spawns.yaml`:
 ```yaml
@@ -182,15 +190,19 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   (a una casilla, mismo piso) a una puerta: ahí va quien no puede quedarse adentro.
 - Validación (`mapcli validate`, editor y CI): rects dentro de la isla y en sus pisos,
   todas sus casillas con suelo, ninguna casilla en dos casas ni en dos rects de la misma, puertas caminables dentro de
-  la casa, salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
+  la casa y en su borde (junto a una casilla de afuera; advertencia si las casillas de un
+  piso no forman un solo bloque) y sin un item de puerta (bloque `door`: usarlo abriría la
+  puerta, nunca la ventana de la casa), salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
   el templo, nombre con texto en todos los idiomas, id único en el mundo. Adentro de una
   casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y
   ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro).
 - **Solo maintainers:** `houses.yaml` no es parte de los map patches (docs/04): un PR que
-  lo cambia queda fuera de las parcelas de comunidad. Se edita como YAML (el editor lo
-  muestra, sin herramienta de edición) con `mapcli fmt` para el formato canónico. Para
-  construir una casa: `stamp` de los prefabs `house_wood_small` / `house_wood_medium` y
-  luego su entrada en `houses.yaml`.
+  lo cambia queda fuera de las parcelas de comunidad. Se edita con el panel de casas del
+  editor (dibuja casillas, puertas y salida, y escribe también los nombres en
+  `i18n/*/world.yaml`), con `mapcli house add|set|remove` o con las ops
+  `add_house`/`set_house`/`remove_house` (docs/04 "Casas"); a mano, con `mapcli fmt` para
+  el formato canónico. Para construir una casa: `stamp` de los prefabs `house_wood_small` /
+  `house_wood_medium` y luego su entrada en `houses.yaml`.
 
 ## Prefabs (`world/prefabs/<id>.yaml`)
 Piezas de mapa reutilizables (muelle, casa) que la op `stamp` copia con su esquina superior
@@ -340,12 +352,36 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del
   origen. `hole` baja, `rope_spot` sube.
 - Zonas de protección cubren el templo. (Depósitos: cuando exista el item, hito 1.)
+- Carteles (T5.5): un item de cartel (`description` = clave `text.*`) está sobre un
+  `kind: sign` de `texts.yaml` con ese texto, y un cartel con item de cartel en su casilla
+  dice lo mismo que el item (ver "Islas", `texts.yaml`).
 - Rectángulos de isla alineados a chunks (múltiplos de 32). Islas no se superponen ni
   salen del mundo; chunks o tiles fuera del rectángulo de
   su isla, o en un piso no listado = error.
 - Conectividad: desde el templo se puede llegar caminando a todo spawn y NPC de la
-  isla (BFS en 8 direcciones por tiles caminables y portales). Zonas sin ningún tile
+  isla (BFS en 8 direcciones por tiles caminables y portales; una **puerta**, item con
+  bloque `door`, cuenta como abierta aunque esté cerrada o con llave: en el juego se abre,
+  ver `02-game-design.md` "Puertas con llave"). Zonas sin ningún tile
   alcanzable = error, salvo `community_plot` (pueden ser áreas sin construir).
+- **Puertas** (`02-game-design.md` "Puertas con llave"; el servidor no arranca con lo que
+  aquí es error): un solo item de puerta (bloque `door`) por casilla; advertencia si una
+  puerta está colocada abierta (vuelve a estar abierta tras cada reinicio). Cada puerta
+  con llave (cerrada o abierta) necesita una **sala** determinable: se recorre a pie cada
+  lado (8 direcciones, mismo piso, hasta 4096 casillas por lado, las demás puertas con
+  llave como muro y las sin llave como abiertas si su casilla deja pasar, regla
+  `isPassable`); un lado sin terminar es el de afuera y, si todos terminan, el más grande.
+  Es error una puerta amurallada (sin lados), con un solo lado, con más de un lado sin
+  terminar o con los dos lados más grandes del mismo tamaño. Varias puertas pueden
+  compartir una sala solo con la misma llave y el mismo afuera: un recorrido a lo ancho
+  que explora hasta 4 × 4096 = 16384 casillas (en campo abierto, unas 60 a 90 casillas de
+  distancia), sin cruzar puertas con llave ni casas, tiene que unir los afueras de las
+  dos. Si no, es error, y el mensaje dice si los afueras solo se unen a través de otra
+  puerta con llave (hoy se rechazan así los ciclos de puertas con llave, aunque sean
+  seguros) o si el recorrido llegó a su cota. La sala no puede tener el templo, NPCs, casas
+  (casillas o salida), extremos de portales, llegadas de rutas de barco ni destinos de un
+  `teleport` de un diálogo de NPC; los spawns sí. El recorrido es el mismo que el del
+  servidor (`packages/map-format/src/doors.ts` y `session/door.go`), y los dos leen los
+  casos de `packages/map-format/src/testdata/door-rooms.json`.
   Advertencia (T3.6): un área caminable conexa (8 direcciones, un piso) de 10 casillas o
   más a la que no se llega desde el templo, fuera de parcelas `community_plot` (un muelle
   suelto, un banco de arena del generador, una sala sin escalera). Una por área, con una
@@ -408,8 +444,8 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   3638–3646, 5784–5792 con la puerta al sur y la sacerdotisa; fragua, yunque y fogón con el
   herrero; el archivo de madera de Casia 3658–3666, 5795–5801, puerta al norte), muelle de
   tablones al oeste (3610–3635, 5794–5796) con la capitana `volcan_ferryman` en 3615,5794:
-  las rutas salen de 3612,5795 y las llegadas caen en 3617,5795. Llano de ceniza (tierra)
-  al norte con sabuesos (26–30), ladera de piedra al sureste con salamandras (29–33) y
+  las rutas salen de 3612,5795 y las llegadas caen en 3617,5795. Llano de ceniza
+  al norte con sabuesos (26–30), ladera de lava enfriada al sureste con salamandras (29–33) y
   algunas vetas de ascua, y el cráter (anillo de `rock_wall` con centro 3712,5760, abierto
   al sur; el anillo es 4-conexo, sin esquinas diagonales abiertas, así que solo se entra por
   el hueco) con dragoncillos (48+). Escalera de la mina en 3692,5796 (`stairs_down` /
@@ -417,12 +453,30 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   sala de entrada, la galería de los mineros de obsidiana al oeste (33–37) y la de los
   gólems de escoria al este (39–44), ambas con vetas de ascua, y al sur la sala de la
   puerta sellada (el eco `volcan_forge_echo` en 3692,5826) y la forja antigua con el
-  custodio de escoria (3692,5845, respawn 1200 s). Protección en el templo y la plaza;
+  custodio de escoria (3692,5845, respawn 1200 s). Entre las dos, el pasillo se angosta a
+  una casilla (`rock_wall` en 3691,5832) con la puerta con llave `forge_gate` en
+  3692,5832: se abre con la llave de ascua del Capítulo 3. Protección en el templo y la plaza;
   `no_logout` en el muelle; el resto es PvP abierto. Casa (T5.4): `volcan_house_cinder`
-  (prefab `house_wood_small` en 3646,5797, puerta al sur). Sin carteles todavía: el
-  check de mapas lee el i18n de la rama base y las claves `text.volcan.*_sign` (templo,
-  muelle, mina y puerta) llegan con este cambio; los carteles van en un cambio de mapa
-  aparte.
+  (prefab `house_wood_small` en 3646,5797, puerta al sur).
+  Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
+  (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
+  en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la
+  plaza al llano del norte, del camino a la boca del cráter y del camino a la ladera); las
+  manchas de arena que el generador había dejado tierra adentro son afloramientos de lava
+  enfriada sobre la ceniza; la ladera y el cráter
+  son de lava enfriada (`cooled_lava`) con seis pozos de lava fundida (`lava`, no
+  caminable) siempre rodeados de costra, fuera de los spawns y sin tapar vetas de ascua.
+  La playa sigue siendo arena (`ash_sand`, `cooled_lava_sand`), también entre la lava
+  enfriada y el mar en la costa sur. Las losas de basalto de la plaza y el final de los
+  caminos de escoria en la ladera y el cráter tienen el borde recto a propósito (un
+  empedrado y un camino que termina), como la piedra de los pueblos. Se pintó con un script de
+  ops (`paint_ground` por celdas, `remove_item` de tres rocas bajo la lava, `place_item`
+  de los carteles y `autoborder` de toda la isla) sobre el mapa anterior, sin mover
+  spawns, NPCs, portales, zonas ni la casa. Carteles (`texts.yaml` y un item
+  `brasal_*_sign` en la misma casilla, que bloquea): templo en 3641,5793 (junto a la
+  puerta), muelle en 3635,5793 (al final de los tablones) y mina en 3691,5794 (junto a la
+  escalera). El de la puerta sellada (`text.volcan.gate_sign`, piso 8) queda para el
+  cambio de las puertas con llave.
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:

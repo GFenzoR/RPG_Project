@@ -13,7 +13,7 @@ import {
   MarketSide,
   PartyAction,
 } from "@rpg/protocol";
-import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
+import type { DisconnectReason, EquipmentSlot, FightStance, Skull } from "@rpg/protocol";
 import { ItemPicker, itemActions, tileActions } from "./input/actions.ts";
 import type { ActionKind } from "./input/actions.ts";
 import { HeldDirection } from "./input/dpad.ts";
@@ -25,6 +25,8 @@ import type { Translate } from "./i18n/i18n.ts";
 import { MovementKeys, isTextField, typingInField } from "./input/keyboard.ts";
 import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
+import { loadZoom, saveZoom } from "./render/zoom.ts";
+import type { ZoomView } from "./render/zoom.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
@@ -110,6 +112,8 @@ export interface GameUi {
   menu?: ActionMenuView | undefined;
   /** T5.7: owned cosmetics, premium balance and what is equipped (undefined until sent). */
   cosmetics?: CosmeticsStateView | undefined;
+  /** The map's zoom and its limits (render/zoom.ts), for the +/- buttons on touch screens. */
+  zoom?: ZoomView | undefined;
 }
 
 /** The contextual menu of a long press (T5.6): where it was pressed and its buttons. */
@@ -135,6 +139,8 @@ export interface ClientTestHooks {
   walkable(x: number, y: number, z: number): boolean;
   tileToClient(x: number, y: number): { x: number; y: number };
   scale(): number;
+  /** The map's zoom: the scale drawn and the scales the player may choose. */
+  zoom(): ZoomView;
   /** The battle list as [id, contentId, health %]. */
   battle(): { id: number; contentId: string; health: number }[];
   target(): number | undefined;
@@ -230,11 +236,15 @@ export class Game {
   private touchAt = Number.NEGATIVE_INFINITY;
   /** The last finger press on a DOM item already opened its menu. */
   private itemMenuOpened = false;
+  /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
+  private zoomPref: number | undefined;
+  private zoomView: ZoomView | undefined;
 
   constructor(opts: GameOptions) {
     this.opts = opts;
     this.hotkeys = loadHotkeys(opts.content.spells, opts.vocation, opts.storage);
     this.safe = loadSafeMode(opts.storage);
+    this.zoomPref = loadZoom(opts.storage);
     this.world = new WorldState(opts.content);
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
@@ -1039,9 +1049,19 @@ export class Game {
     return true;
   }
 
+  /** Zooms the map `steps` whole scales in (+) or out (-) (the +/- buttons). */
+  zoom(steps: number): void {
+    this.canvas?.zoomBy(steps);
+  }
+
   /** Atlas rectangle of an item's sprite, for DOM icons (undefined until the canvas is up). */
   itemIcon(itemId: number): ReturnType<GameCanvas["itemIcon"]> {
     return this.canvas?.itemIcon(itemId);
+  }
+
+  /** Atlas rectangle of a PvP mark's sprite, for the battle list (undefined without art). */
+  markIcon(mark: Skull): ReturnType<GameCanvas["markIcon"]> {
+    return this.canvas?.markIcon(mark);
   }
 
   /** Publishes again when the presence check runs out: no server batch may come then. */
@@ -1093,6 +1113,7 @@ export class Game {
       picked: this.picker.picked,
       menu: this.menu?.view,
       cosmetics: w.cosmetics,
+      zoom: this.zoomView,
     });
     this.armPresenceTimer();
   }
@@ -1161,6 +1182,16 @@ export class Game {
       touched: () => {
         this.touchAt = performance.now();
       },
+      zoom: this.zoomPref,
+      zoomed: (pref) => {
+        this.zoomPref = pref;
+        saveZoom(pref, this.opts.storage);
+      },
+      zoomView: (view) => {
+        this.zoomView = view;
+        // The first one comes before the canvas is up: startCanvas publishes then.
+        if (this.canvas) this.publish();
+      },
     });
     if (this.destroyed) {
       canvas.destroy();
@@ -1179,6 +1210,7 @@ export class Game {
       walkable: (x, y, z) => world.free(x, y, z),
       tileToClient: (x, y) => canvas.tileToClient(x, y),
       scale: () => canvas.scale,
+      zoom: () => canvas.zoom,
       battle: () =>
         world.battleList().map((c) => ({ id: c.id, contentId: c.contentId, health: c.health })),
       target: () => world.target,

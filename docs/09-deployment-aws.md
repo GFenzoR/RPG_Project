@@ -457,9 +457,12 @@ API de GitHub (red `edge`).
    settings → Personal access tokens → Tokens (classic) → Generate new token (classic)*.
    - *Note*: `rpg map PR worker`.
    - *Expiration*: un año como máximo; anota la fecha para rotarlo.
-   - *Scopes*: **solo `public_repo`** (el repo es público). Ni `repo` completo, ni
-     `workflow` (sin él no puede tocar `.github/workflows/`), ni nada de cuenta u
-     organización.
+   - *Scopes*: **solo `public_repo`** si el repo es público. Ni `workflow` (sin él no puede
+     tocar `.github/workflows/`), ni nada de cuenta u organización. **Desde el 2026-11-15
+     el repo es privado**: mientras lo siga siendo, `public_repo` no alcanza y el token
+     necesita `repo` completo (el único alcance classic para repos privados). Lo que puede
+     tocar sigue limitado por el permiso Write de la cuenta del bot en este repo. Lo más
+     simple es volver a hacer público el repo cuando se abra el portal de mapas.
    Lo que ese token puede tocar lo limita el permiso de la cuenta del bot: **Write** en este
    repo (y nada en los demás). El worker, aparte, rechaza toda ruta fuera de `world/`.
 

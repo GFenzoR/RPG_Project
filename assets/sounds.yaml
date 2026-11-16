@@ -43,8 +43,10 @@ sounds:
   music_puerto: { file: sounds/music/puerto.ogg, channel: music, volume: 0.7 }
   music_bosque: { file: sounds/music/bosque.ogg, channel: music, volume: 0.7 }
   music_cueva: { file: sounds/music/cueva.ogg, channel: music, volume: 0.8 }
+  music_volcan: { file: sounds/music/volcan.ogg, channel: music, volume: 0.75 }
   amb_olas: { file: sounds/ambient/olas.ogg, channel: ambient, volume: 0.5 }
   amb_bosque: { file: sounds/ambient/bosque.ogg, channel: ambient, volume: 0.5 }
+  amb_volcan: { file: sounds/ambient/volcan.ogg, channel: ambient, volume: 0.5 }
 
 # Game event → sound id, or a list of ids (one is picked at random). The client names the
 # events (client/src/audio/cues.ts, docs/02 "Sonido"); an event with no entry is silent.
@@ -96,10 +98,8 @@ events:
 # (floors > 7). Changing zone crossfades over fade_ms.
 music:
   fade_ms: 2500
-  # volcan (T5.5): placeholder, it reuses the cave music until it has its own track.
-  islands: { puerto: music_puerto, testisle: music_puerto, bosque: music_bosque, volcan: music_cueva }
+  islands: { puerto: music_puerto, testisle: music_puerto, bosque: music_bosque, volcan: music_volcan }
   underground: music_cueva
 ambient:
   fade_ms: 2000
-  # volcan (T5.5): placeholder, the shore waves until it has its own ambience.
-  islands: { puerto: amb_olas, testisle: amb_olas, bosque: amb_bosque, volcan: amb_olas }
+  islands: { puerto: amb_olas, testisle: amb_olas, bosque: amb_bosque, volcan: amb_volcan }

@@ -1,0 +1,24 @@
+# Doors (docs/02-game-design.md "Puertas con llave"): a pair of map items that swap when a
+# player next to them uses them. The closed one blocks walking and sight; door.key locks it,
+# so it opens and locks again only for a player carrying an item with that key id.
+# Fixed in place: not pickupable.
+
+# The sealed gate of the forge, at the bottom of the volcanic mine (Chapter 3). The ember key
+# the forge echo shapes from the ember root opens it (ch3_gate).
+- id: forge_gate
+  kind: decoration
+  sprite: doors/forge_gate
+  name: item.forge_gate.name
+  description: item.forge_gate.desc
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+  door: { key: forge_gate, open: forge_gate_open }
+
+- id: forge_gate_open
+  kind: decoration
+  sprite: doors/forge_gate_open
+  name: item.forge_gate_open.name
+  description: item.forge_gate_open.desc
+  pickupable: false
+  door: { closed: forge_gate }

@@ -563,6 +563,15 @@ message MarketUpdate {
   // The market is read-only until the server restarts (a change could not be saved): it
   // can be browsed, but nothing is created, accepted, cancelled or withdrawn.
   bool read_only = 20;
+  // Sent by the server on its own, not as the answer to a MarketCommand: something else
+  // changed what the open window shows (another player's action on the browsed item's
+  // offers, on the player's own offers or on its mailbox; a ban or unban that hides or
+  // shows offers; a completed trade that changed the player's money and items; a house
+  // rent, transfer or release that changed its mailbox; the market turning read-only).
+  // At most one per window every market.push_every_ms of data/balance.yaml (500 ms; the
+  // switch to read-only goes out at once). A client whose window is already closed
+  // ignores it (it must not open the window again).
+  bool refresh = 21;
 }
 
 // HouseUpdate opens or refreshes the house window (T5.4); open = false closes it (the

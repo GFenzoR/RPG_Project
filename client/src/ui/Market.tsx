@@ -157,7 +157,11 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
           <OfferTable {...props} m={m} offers={m.sells} sell={true} now={now} />
           <h4>{t("client.market.buys")}</h4>
           <OfferTable {...props} m={m} offers={m.buys} sell={false} now={now} />
+          {/* Keyed by item: browsing another item starts a fresh form. Within one item the
+              default price stays fixed (MarketView.priceDefault), so a refresh never rewrites
+              a field the player left alone; what the player typed is kept either way. */}
           <form
+            key={m.itemId}
             class="create"
             data-testid="market-create"
             onSubmit={(e) => {
@@ -193,7 +197,7 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
               type="number"
               min={1}
               max={r.maxPrice}
-              defaultValue={String(Math.max(m.referencePrice, 1))}
+              defaultValue={String(m.priceDefault)}
               aria-label={t("client.market.price")}
             />
             <select name="duration" aria-label={t("client.market.duration")}>

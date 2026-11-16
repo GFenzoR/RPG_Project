@@ -10,7 +10,8 @@
 #
 # Pack art: Dungeon Crawl Stone Soup tiles (CC0, vendor/dungeon-crawl). What the pack does not
 # cover is original art drawn by tools/spritegen into assets/sprites/ (make spritegen), so it is
-# not listed here.
+# not listed here. That includes the frames no data/ file names: outfit frames
+# (outfits/<id>/<dir>_<n>) and the combat and spell effect strips (effects/<name>/<n>).
 sprites:
   # Ground
   ground/grass: { source: vendor/dungeon-crawl/dngn/floor/grass/grass0.png }
@@ -123,6 +124,10 @@ sprites:
   armor/embersteel_cuirass: { source: vendor/dungeon-crawl/item/armour/plate1.png }
   shields/embersteel_shield: { source: vendor/dungeon-crawl/item/armour/shields/lshield_dd_dk.png }
   armor/wyrmscale_mail: { source: vendor/dungeon-crawl/item/armour/artefact/urand_salamander.png }
+
+  # Doors (docs/02 "Puertas con llave"): the forge gate of the volcanic mine, shut and open.
+  doors/forge_gate: { source: vendor/dungeon-crawl/dngn/doors/runed_door.png }
+  doors/forge_gate_open: { source: vendor/dungeon-crawl/dngn/doors/open_door.png }
 
   creatures/ash_hound: { source: vendor/dungeon-crawl/UNUSED/monsters/war_dog.png }
   creatures/cinder_salamander: { source: vendor/dungeon-crawl/mon/salamander.png }

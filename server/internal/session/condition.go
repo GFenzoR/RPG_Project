@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/combat"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -33,6 +34,18 @@ type ConditionState struct {
 	LeftMs int
 	Ticks  int
 	Damage int
+	// Author is the character of the player that applied it (T5.2), 0 for a monster or the
+	// world: after a relog its hits are still that player's attack.
+	Author int64
+	// AuthorHit is when Author last hurt the holder outside an arena, as the holder
+	// remembered it (self-defense, and the attack a condition may continue), and
+	// AuthorUnjust whether any of those hits was unjustified. Zero: nothing remembered.
+	AuthorHit    time.Time
+	AuthorUnjust bool
+	// SavedAt is the clock time of the snapshot that saved a condition with an Author
+	// (zero for the others): such a condition runs on while its holder is away
+	// (loadConditions), so a relog neither cuts nor defers its author's attack.
+	SavedAt time.Time
 }
 
 // condition is an active condition of a player or a monster. Loop goroutine only.
@@ -41,6 +54,10 @@ type condition struct {
 	// source is the creature that applied it (a player's share of a monster's
 	// experience), 0 for none.
 	source uint32
+	// author is the character of the player that applied it, 0 for a monster or the
+	// world (T5.2). A player's condition on a player is that player's attack: it is found
+	// by character, so a relog of either side (a new creature id) does not lose it.
+	author int64
 	damage int // per hit (damage kind)
 	ticks  int // hits left (damage kind)
 	// at is the tick of the next hit (damage kind) or of the end (the others).
@@ -134,7 +151,8 @@ func (w *World) addCondition(ctx *game.TickContext, h holder, def *content.Condi
 	if def.Kind == content.ConditionDamage {
 		ticks = min(ticks, def.MaxTicks)
 		if c == nil {
-			c = &condition{def: def, source: source, damage: damage, ticks: ticks, every: ticksFor(def.IntervalMs)}
+			c = &condition{def: def, source: source, author: w.authorOf(h, source), damage: damage, ticks: ticks,
+				every: ticksFor(def.IntervalMs)}
 			w.scheduleCondition(ctx, h, c, ctx.Tick+c.every)
 			*list = append(*list, c)
 		} else {
@@ -145,9 +163,10 @@ func (w *World) addCondition(ctx *game.TickContext, h holder, def *content.Condi
 				c.ticks = max(c.ticks, ticks)
 			}
 			// The hits left count for whoever made them: a stronger application, or an
-			// equal one that added hits, takes over the experience share.
+			// equal one that added hits, takes over the experience share (and, on a
+			// player, the attack: T5.2).
 			if damage > c.damage || damage == c.damage && c.ticks > before {
-				c.damage, c.source = damage, source
+				c.damage, c.source, c.author = damage, source, w.authorOf(h, source)
 			}
 		}
 		w.conditionsChanged(h)
@@ -156,13 +175,17 @@ func (w *World) addCondition(ctx *game.TickContext, h holder, def *content.Condi
 	limit := ctx.Tick + ticksFor(def.MaxMs)
 	end := min(ctx.Tick+dur, limit)
 	if c == nil {
-		c = &condition{def: def, source: source}
+		c = &condition{def: def, source: source, author: w.authorOf(h, source)}
 		w.scheduleCondition(ctx, h, c, end)
 		*list = append(*list, c)
 		w.conditionStarted(ctx, h, c)
 		w.conditionsChanged(h)
 		return
 	}
+	// A new application only moves the end: source and author stay those of the first.
+	// Only a damage condition's author acts (its hits are an attack); the author of a slow
+	// is saved with it and only gives back, after a relog, its holder's memory of that
+	// player's attack (recallHit), which an attack of its own keeps anyway.
 	if def.Stacking == content.StackAdd {
 		end = min(c.at+dur, limit)
 	} else {
@@ -213,10 +236,11 @@ func (w *World) conditionHit(ctx *game.TickContext, h holder, c *condition) {
 		if w.inProtection(p.pos) {
 			return
 		}
-		if a := w.pvpSource(c.source, p); a != nil {
-			// T5.2: a player's condition hurts only where that player could attack p now,
-			// and never starts an unjustified attack (see conditionMayHurt).
-			if w.conditionMayHurt(ctx.Tick, a, p) {
+		if a, pvp := w.pvpSource(c, p); pvp {
+			// T5.2: another player's condition is that player's attack. It hurts only while
+			// its author is in the world (link-dead counts) and could attack p now, and it
+			// never starts an unjustified attack (see conditionMayHurt).
+			if a != nil && w.conditionMayHurt(ctx.Tick, a, p) {
 				w.hurtPlayer(ctx, a, p, c.damage, el, false)
 			}
 			return
@@ -435,7 +459,9 @@ func seesPlayer(m *Monster, t *Player) bool { return !t.invisible || m.kind.def.
 
 // ---- persistence --------------------------------------------------------------------
 
-// conditionStates returns p's conditions that survive a logout (def.Persists).
+// conditionStates returns p's conditions that survive a logout (def.Persists), with the
+// player that applied each one, what p remembers of that player's attack and when it was
+// saved (T5.2).
 func (w *World) conditionStates(p *Player) []ConditionState {
 	var out []ConditionState
 	for _, c := range p.conds {
@@ -443,23 +469,43 @@ func (w *World) conditionStates(p *Player) []ConditionState {
 			continue
 		}
 		left := max(int(c.at)-int(w.nowTick()), 1) * int(game.TickDuration.Milliseconds())
-		out = append(out, ConditionState{ID: c.def.ID, LeftMs: left, Ticks: c.ticks, Damage: c.damage})
+		s := ConditionState{ID: c.def.ID, LeftMs: left, Ticks: c.ticks, Damage: c.damage, Author: c.author}
+		if c.author != 0 {
+			s.SavedAt = w.nowTime() // the time of nowTick, which left counts from
+			if hit := hitFrom(p, c.author); hit != nil && !hit.arena {
+				s.AuthorHit, s.AuthorUnjust = hit.when, hit.unjust
+			}
+		}
+		out = append(out, s)
 	}
 	return out
 }
 
 // loadConditions gives a joining p its saved conditions. Unknown ones, or ones that do
 // not persist any more, are dropped; hits and times are clamped to today's balance
-// (max_ticks, interval_ms, max_ms). The saved damage is kept: it came from a source.
+// (max_ticks, interval_ms, max_ms). The saved damage is kept: it came from a source, and
+// so is its author, with p's memory of that author's attack (recallHit).
+//
+// A condition of nobody (a monster's, the world's) waits frozen while p is away: logging
+// out does not cure it. One of another player (T5.2) is that player's attack, which p must
+// not hold back to land later (each hit renews its author's skull and lock, and p could
+// choose the moment it kills): its time runs on while p is away, as in a protection zone,
+// and the hits that would have fallen pass without damage (awayTicks, elapse). p's memory
+// of that player's attack, saved with it, comes back on its own terms (recallHit: the
+// aggressor time on the clock) even when the condition ran out meanwhile: a relog does not
+// cut self-defense either.
 func (w *World) loadConditions(ctx *game.TickContext, p *Player, saved []ConditionState) {
 	h := holder{p: p}
 	for _, s := range saved {
+		if s.Author > 0 && s.Author != p.charID && !s.AuthorHit.IsZero() {
+			w.recallHit(ctx, p, s.Author, s.AuthorHit, s.AuthorUnjust)
+		}
 		def := w.cfg.Balance.Conditions[s.ID]
 		if def == nil || !def.Persists || findCond(p.conds, s.ID) != nil {
 			continue
 		}
 		left := ticksFor(max(s.LeftMs, 1))
-		c := &condition{def: def}
+		c := &condition{def: def, author: max(s.Author, 0)}
 		if def.Kind == content.ConditionDamage {
 			if s.Ticks <= 0 || s.Damage <= 0 {
 				continue
@@ -470,6 +516,15 @@ func (w *World) loadConditions(ctx *game.TickContext, p *Player, saved []Conditi
 		} else {
 			left = min(left, ticksFor(def.MaxMs))
 		}
+		if c.author != 0 {
+			away, ok := awayTicks(ctx, s.SavedAt)
+			if !ok {
+				continue
+			}
+			if left, ok = c.elapse(left, away); !ok {
+				continue // it ran out while p was away
+			}
+		}
 		w.scheduleCondition(ctx, h, c, ctx.Tick+left)
 		p.conds = append(p.conds, c)
 		if def.Kind != content.ConditionDamage {
@@ -479,6 +534,62 @@ func (w *World) loadConditions(ctx *game.TickContext, p *Player, saved []Conditi
 	p.conditionsDirty = len(p.conds) > 0 // a new client starts with none
 }
 
+// awayTicks is how long ago, in ticks, a condition with an author was saved at (rounded
+// up: its hits never fall later than they would have). It is false when that cannot be
+// told, and the condition then ends: no time saved (a row from before SavedAt), a clock
+// behind the save, or a save from before this server's first tick (a restart since, whose
+// downtime the clock may not measure). Ending it is safe both ways: its holder takes no
+// hit that may have fallen long ago, and its author is not marked, locked or credited by
+// an attack whose time nobody knows (recallHit forgets that attack after a restart too).
+// The server's age is its ticks, as for recallHit: after a stall or a suspended machine
+// (the loop does not catch up) an early save of this run may count as older, which only
+// errs toward ending the condition.
+func awayTicks(ctx *game.TickContext, savedAt time.Time) (game.Tick, bool) {
+	if savedAt.IsZero() {
+		return 0, false
+	}
+	away := ctx.Now.Sub(savedAt)
+	if away < 0 {
+		return 0, false
+	}
+	n := game.TicksFor(away)
+	if n > ctx.Tick {
+		return 0, false
+	}
+	return n, true
+}
+
+// elapse runs c, due in left ticks (its next hit, or its end), for away ticks without
+// effect: the hits that fall meanwhile pass. It returns the ticks to c's next due time
+// after that, and false if c ran out.
+func (c *condition) elapse(left, away game.Tick) (game.Tick, bool) {
+	if away < left {
+		return left - away, true
+	}
+	if c.def.Kind != content.ConditionDamage {
+		return 0, false
+	}
+	passed := 1 + (away-left)/c.every // c.every >= 1 (ticksFor)
+	if passed >= game.Tick(c.ticks) {
+		return 0, false
+	}
+	c.ticks -= int(passed)
+	return left + passed*c.every - away, true
+}
+
+// authorOf is the author of a condition that creature source gives h: the character of
+// source if h is a player and source another player in the world, else 0 (a monster's
+// condition, nobody's, h's own, or one on a monster: its share is source).
+func (w *World) authorOf(h holder, source uint32) int64 {
+	if h.p == nil || source == 0 || h.p.id == source {
+		return 0
+	}
+	if a := w.playerByID(source); a != nil {
+		return a.charID
+	}
+	return 0
+}
+
 // nowTick is the current tick outside a TickContext (snapshots, flush): the scheduler's
 // position, which the loop sets before commands run. 0 before anyone joined.
 func (w *World) nowTick() game.Tick {
@@ -486,4 +597,12 @@ func (w *World) nowTick() game.Tick {
 		return 0
 	}
 	return w.sched.Now()
+}
+
+// nowTime is the clock time of nowTick (its TickContext.Now). Zero before anyone joined.
+func (w *World) nowTime() time.Time {
+	if w.sched == nil {
+		return time.Time{}
+	}
+	return w.sched.Time()
 }

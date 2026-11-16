@@ -10,6 +10,7 @@ import type { GameUi } from "../game.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import { creatureName, formatMessage } from "../state/messages.ts";
 import { skullId } from "../state/pvp.ts";
+import { markIconStyle } from "../render/marks.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
@@ -33,6 +34,8 @@ import type { Layout, PanelTab } from "./layout.ts";
 import { activeNotices, nextExpiry } from "./notices.ts";
 import { ActionMenu, PickBanner } from "./ActionMenu.tsx";
 import { PAD_RESERVE_PX, TouchPad } from "./TouchPad.tsx";
+import { ZoomButtons } from "./ZoomButtons.tsx";
+import { coarsePointer } from "../state/touch-prefs.ts";
 
 type Screen =
   | { name: "loading" }
@@ -430,6 +433,10 @@ function GameScreen(props: {
   // drawer over the map) and the important server messages float over the map.
   const layout = useLayout();
   useKeyboardViewport();
+  // A touch screen gets the map's zoom buttons (a PC zooms with Ctrl+wheel).
+  const [touch] = useState(coarsePointer);
+  // Portrait with the pad: the hotbar goes right of the pad, slots under their arrows.
+  const stackedHotbar = props.touchPad && layout.flow === "column";
   const [tab, setTab] = useState<PanelTab>("battle");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [, setNoticeTick] = useState(0);
@@ -516,6 +523,14 @@ function GameScreen(props: {
       {t("client.game.logout")}
     </button>
   );
+  // The system log: at the end of the scrolling column on desktop, atop the chat tab.
+  const log = (
+    <ul class="log" data-testid="game-log" aria-live="polite">
+      {ui.log.map((m, i) => (
+        <li key={`${m.at}-${i}`}>{formatMessage(m, props.content, t)}</li>
+      ))}
+    </ul>
+  );
   const panelToggle = layout.panel === "drawer" && (
     <button
       type="button"
@@ -537,6 +552,7 @@ function GameScreen(props: {
       data-panel={layout.panel}
       data-flow={layout.flow}
       data-pad={props.touchPad ? "" : undefined}
+      data-touch={touch ? "" : undefined}
     >
       <header class={layout.compactHeader ? "hud compact" : "hud"} data-tutorial="stats">
         <span class="name" title={props.character.name}>
@@ -658,6 +674,7 @@ function GameScreen(props: {
               game={game.current}
               ui={ui}
               reserve={props.touchPad ? PAD_RESERVE_PX : 0}
+              stacked={stackedHotbar}
             />
           )}
           {/* T5.6 touch controls, over the map and under the windows: the direction pad
@@ -666,6 +683,12 @@ function GameScreen(props: {
             <div class="touch-pad-dock">
               <TouchPad t={t} game={game.current} />
             </div>
+          )}
+          {/* The map's zoom (pinch does the same): bottom right of the map, or in the strip
+              under it in portrait with the pad (touch.css), where the banner of a picked
+              item takes its place while it shows. */}
+          {entered && touch && !(stackedHotbar && ui.picked) && (
+            <ZoomButtons t={t} game={game.current} zoom={ui.zoom} />
           )}
           {entered && ui.picked && (
             <PickBanner t={t} content={props.content} picked={ui.picked} game={game.current} />
@@ -691,169 +714,170 @@ function GameScreen(props: {
           inert={layout.panel === "drawer" && !drawerOpen ? true : undefined}
         >
           {tabbed && <PanelTabs t={t} tab={tab} onTab={setTab} />}
-          <div {...pane("battle", true)}>
-            <section
-              class="battle"
-              data-testid="battle-list"
-              data-tutorial="battle"
-              aria-label={t("client.battle.title")}
-            >
-              <h2>{t("client.battle.title")}</h2>
-              {ui.battle.length === 0 ? (
-                <p class="empty">{t("client.battle.empty")}</p>
-              ) : (
-                <ul>
-                  {ui.battle.map((c) => (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        class={ui.target === c.id ? "target" : ""}
-                        data-creature={c.id}
-                        aria-pressed={ui.target === c.id}
-                        title={t("client.battle.attack_hint")}
-                        onClick={() => game.current?.attack(c.id)}
-                      >
-                        <span class="cname">
-                          {skullId(c.skull) && (
-                            <span
-                              class={`skull skull-${skullId(c.skull)}`}
-                              data-skull={skullId(c.skull)}
-                              title={t(`client.skull.${skullId(c.skull)}`)}
-                              aria-label={t(`client.skull.${skullId(c.skull)}`)}
-                            />
-                          )}
-                          {creatureName(c, t)}
-                        </span>
-                        <span
-                          class="hp"
-                          aria-label={t("client.battle.health", { health: c.health })}
-                        >
-                          <span style={{ width: `${c.health}%` }} />
-                        </span>
-                      </button>
-                      {c.kind === CreatureKind.PLAYER && canInvite(ui, c.id) && (
+          {/* Desktop: every section but the chat scrolls in this column and the chat keeps
+              its own place under it, so it never covers the inventory or the appearance
+              panel (1280x800). With tabs the wrapper is display: contents. */}
+          <div class="side-scroll">
+            <div {...pane("battle", true)}>
+              <section
+                class="battle"
+                data-testid="battle-list"
+                data-tutorial="battle"
+                aria-label={t("client.battle.title")}
+              >
+                <h2>{t("client.battle.title")}</h2>
+                {ui.battle.length === 0 ? (
+                  <p class="empty">{t("client.battle.empty")}</p>
+                ) : (
+                  <ul>
+                    {ui.battle.map((c) => (
+                      <li key={c.id}>
                         <button
                           type="button"
-                          class="invite"
-                          data-invite={c.id}
-                          title={t("client.battle.invite")}
-                          aria-label={t("client.battle.invite")}
-                          onClick={() => game.current?.partyInvite(c.id)}
+                          class={ui.target === c.id ? "target" : ""}
+                          data-creature={c.id}
+                          aria-pressed={ui.target === c.id}
+                          title={t("client.battle.attack_hint")}
+                          onClick={() => game.current?.attack(c.id)}
                         >
-                          +
+                          <span class="cname">
+                            {skullId(c.skull) && (
+                              <MarkIcon
+                                id={skullId(c.skull) ?? ""}
+                                style={markIconStyle(game.current?.markIcon(c.skull))}
+                                t={t}
+                              />
+                            )}
+                            {creatureName(c, t)}
+                          </span>
+                          <span
+                            class="hp"
+                            aria-label={t("client.battle.health", { health: c.health })}
+                          >
+                            <span style={{ width: `${c.health}%` }} />
+                          </span>
                         </button>
-                      )}
-                      {c.kind === CreatureKind.PLAYER && !ui.trade && (
-                        <button
-                          type="button"
-                          class="trade-with"
-                          data-trade={c.id}
-                          title={t("client.battle.trade")}
-                          aria-label={t("client.battle.trade")}
-                          onClick={() => game.current?.tradeRequest(c.id)}
-                        >
-                          ⇄
-                        </button>
-                      )}
-                      {c.kind === CreatureKind.PLAYER && (
-                        <button
-                          type="button"
-                          class="report"
-                          data-report={c.id}
-                          title={t("client.battle.report")}
-                          aria-label={t("client.battle.report")}
-                          onClick={() => setReporting({ id: c.id, name: creatureName(c, t) })}
-                        >
-                          !
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {reporting && (
-                <ReportForm
-                  key={reporting.id}
-                  t={t}
-                  target={reporting}
-                  onSend={(reason) => {
-                    game.current?.reportPlayer(reporting.id, reason);
-                    setReporting(undefined);
-                  }}
-                  onCancel={() => setReporting(undefined)}
-                />
-              )}
-            </section>
-          </div>
-          <div {...pane("party", true)}>
-            <PartyPanel t={t} game={game.current} ui={ui} />
-          </div>
-          <div {...pane("guild", true)}>
-            <GuildPanel
-              t={t}
-              content={props.content}
-              game={game.current}
-              ui={ui}
-              now={performance.now()}
-            />
-          </div>
-          {/* The fight mode sits after the guild on desktop, as before; in tabs it goes
+                        {c.kind === CreatureKind.PLAYER && canInvite(ui, c.id) && (
+                          <button
+                            type="button"
+                            class="invite"
+                            data-invite={c.id}
+                            title={t("client.battle.invite")}
+                            aria-label={t("client.battle.invite")}
+                            onClick={() => game.current?.partyInvite(c.id)}
+                          >
+                            +
+                          </button>
+                        )}
+                        {c.kind === CreatureKind.PLAYER && !ui.trade && (
+                          <button
+                            type="button"
+                            class="trade-with"
+                            data-trade={c.id}
+                            title={t("client.battle.trade")}
+                            aria-label={t("client.battle.trade")}
+                            onClick={() => game.current?.tradeRequest(c.id)}
+                          >
+                            ⇄
+                          </button>
+                        )}
+                        {c.kind === CreatureKind.PLAYER && (
+                          <button
+                            type="button"
+                            class="report"
+                            data-report={c.id}
+                            title={t("client.battle.report")}
+                            aria-label={t("client.battle.report")}
+                            onClick={() => setReporting({ id: c.id, name: creatureName(c, t) })}
+                          >
+                            !
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {reporting && (
+                  <ReportForm
+                    key={reporting.id}
+                    t={t}
+                    target={reporting}
+                    onSend={(reason) => {
+                      game.current?.reportPlayer(reporting.id, reason);
+                      setReporting(undefined);
+                    }}
+                    onCancel={() => setReporting(undefined)}
+                  />
+                )}
+              </section>
+            </div>
+            <div {...pane("party", true)}>
+              <PartyPanel t={t} game={game.current} ui={ui} />
+            </div>
+            <div {...pane("guild", true)}>
+              <GuildPanel
+                t={t}
+                content={props.content}
+                game={game.current}
+                ui={ui}
+                now={performance.now()}
+              />
+            </div>
+            {/* The fight mode sits after the guild on desktop, as before; in tabs it goes
               with the battle list. */}
-          <div {...pane("battle", false)}>
-            <section class="fight">
-              <label>
-                {t("client.fight.stance")}
-                <select
-                  value={stance}
-                  onChange={(e) => {
-                    const s = Number(e.currentTarget.value) as FightStance;
-                    setStance(s);
-                    game.current?.setFightMode(s, chase);
-                  }}
-                >
-                  <option value={FightStance.OFFENSIVE}>{t("client.fight.offensive")}</option>
-                  <option value={FightStance.BALANCED}>{t("client.fight.balanced")}</option>
-                  <option value={FightStance.DEFENSIVE}>{t("client.fight.defensive")}</option>
-                </select>
-              </label>
-              <label class="check">
-                <input
-                  type="checkbox"
-                  checked={chase}
-                  onChange={(e) => {
-                    const c = e.currentTarget.checked;
-                    setChase(c);
-                    game.current?.setFightMode(stance, c);
-                  }}
-                />
-                {t("client.fight.chase")}
-              </label>
-              <label class="check" title={t("client.pvp.safe_mode_hint")}>
-                <input
-                  type="checkbox"
-                  data-testid="safe-mode"
-                  checked={ui.safeMode}
-                  onChange={(e) => game.current?.setSafeMode(e.currentTarget.checked)}
-                />
-                {t("client.pvp.safe_mode")}
-              </label>
-            </section>
-          </div>
-          <div {...pane("inventory", true)}>
-            <InventoryPanel t={t} content={props.content} game={game.current} ui={ui} />
-          </div>
-          <div {...pane("skills", true)}>
-            <SkillsPanel t={t} skills={ui.skills} />
-          </div>
-          <div {...pane("appearance", true)}>
-            <AppearancePanel t={t} content={props.content} game={game.current} ui={ui} />
+            <div {...pane("battle", false)}>
+              <section class="fight">
+                <label>
+                  {t("client.fight.stance")}
+                  <select
+                    value={stance}
+                    onChange={(e) => {
+                      const s = Number(e.currentTarget.value) as FightStance;
+                      setStance(s);
+                      game.current?.setFightMode(s, chase);
+                    }}
+                  >
+                    <option value={FightStance.OFFENSIVE}>{t("client.fight.offensive")}</option>
+                    <option value={FightStance.BALANCED}>{t("client.fight.balanced")}</option>
+                    <option value={FightStance.DEFENSIVE}>{t("client.fight.defensive")}</option>
+                  </select>
+                </label>
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    checked={chase}
+                    onChange={(e) => {
+                      const c = e.currentTarget.checked;
+                      setChase(c);
+                      game.current?.setFightMode(stance, c);
+                    }}
+                  />
+                  {t("client.fight.chase")}
+                </label>
+                <label class="check" title={t("client.pvp.safe_mode_hint")}>
+                  <input
+                    type="checkbox"
+                    data-testid="safe-mode"
+                    checked={ui.safeMode}
+                    onChange={(e) => game.current?.setSafeMode(e.currentTarget.checked)}
+                  />
+                  {t("client.pvp.safe_mode")}
+                </label>
+              </section>
+            </div>
+            <div {...pane("inventory", true)}>
+              <InventoryPanel t={t} content={props.content} game={game.current} ui={ui} />
+            </div>
+            <div {...pane("skills", true)}>
+              <SkillsPanel t={t} skills={ui.skills} />
+            </div>
+            <div {...pane("appearance", true)}>
+              <AppearancePanel t={t} content={props.content} game={game.current} ui={ui} />
+            </div>
+            {!tabbed && log}
           </div>
           <div {...pane("chat", true)}>
-            <ul class="log" data-testid="game-log" aria-live="polite">
-              {ui.log.map((m, i) => (
-                <li key={`${m.at}-${i}`}>{formatMessage(m, props.content, t)}</li>
-              ))}
-            </ul>
+            {tabbed && log}
             <ChatPanel t={t} content={props.content} game={game.current} ui={ui} />
           </div>
         </aside>
@@ -1116,6 +1140,28 @@ const CONDITION_CLASS: Record<string, string> = {
   invisible: "buff",
   keen_eye: "buff",
 };
+
+/**
+ * A PvP mark before a name in the battle list (T5.2): its sprite as a CSS background
+ * (render/marks.ts markIconStyle), or without it a dot of the mark's colour (client.css).
+ */
+function MarkIcon(props: {
+  id: string;
+  style: Record<string, string> | undefined;
+  t: Translate;
+}): JSX.Element {
+  const label = props.t(`client.skull.${props.id}`);
+  return (
+    <span
+      class={`skull skull-${props.id}${props.style ? " art" : ""}`}
+      data-skull={props.id}
+      data-art={props.style ? "" : undefined}
+      style={props.style}
+      title={label}
+      aria-label={label}
+    />
+  );
+}
 
 /** The player's own conditions as named badges; the tooltip has the time left. */
 function ConditionBar(props: { t: Translate; conditions: GameUi["conditions"] }): JSX.Element {

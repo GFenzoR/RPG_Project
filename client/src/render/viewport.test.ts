@@ -15,4 +15,12 @@ describe("viewport", () => {
     const c = followCamera(100.51, 50, 2, 32);
     expect(c.x * 32).toBe(Math.round(c.x * 32));
   });
+
+  it("centres a cropped (zoomed-in) view on the tile too", () => {
+    // 11.25 x 8.25 tiles shown: the tile's centre is in the middle of the view.
+    const c = followCamera(100, 50, 3, 32, { width: 11.25, height: 8.25 });
+    expect(c).toEqual({ x: 100.5 - 11.25 / 2, y: 50.5 - 8.25 / 2, zoom: 3 });
+    const odd = followCamera(100, 50, 3, 32, { width: 361 / 32, height: 8 });
+    expect(odd.x * 32).toBe(Math.round(odd.x * 32));
+  });
 });

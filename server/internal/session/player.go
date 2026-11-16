@@ -55,7 +55,6 @@ type Player struct {
 	out   []*pb.ServerMessage
 
 	autosave game.EventID
-	saveSeq  uint64
 
 	// Combat (T1.6): the monster being attacked, the stance and chase mode from
 	// SetFightMode, and the first tick of the next attack round.
@@ -77,13 +76,14 @@ type Player struct {
 	regen       game.EventID
 
 	// Items (T1.8): equipment by pb.EquipmentSlot, the armor it adds up to, the open
-	// container windows (oldest first), the last window id and the first tick a
-	// consumable can be used again.
+	// container windows (oldest first), the last window id, the first tick a
+	// consumable can be used again and the first tick p may open or close a door again.
 	equip         [equipSlots]*Item
 	armor         int
 	open          []openContainer
 	nextContainer uint32
 	nextUse       game.Tick
+	nextDoor      game.Tick
 
 	// Chat (T1.13): the anti-flood theoretical arrival tick (GCRA), the tick a flood
 	// mute ends and the first tick p may speak on the global channel again.
@@ -158,6 +158,9 @@ type Player struct {
 	fightUntil game.Tick
 	// linkDead: its connection closed during the lock; it stays until the lock ends.
 	linkDead bool
+	// dropped: the loop closed its connection (Client.Close) while it stayed link-dead (a
+	// slow client, a password reset); nothing is sent or closed when it leaves.
+	dropped bool
 
 	// Travel (T3.5): the last tick p fought (attacked, hurt or hitting a monster; 0 =
 	// never), which blocks sailing for balance travel.combat_block_ms.
@@ -284,10 +287,10 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 	// would carry an inventory without the house that explains it). Every site that
 	// numbers a transfer flushes before numbering; inside the flush this is a no-op.
 	w.flushHouses()
-	p.saveSeq++
+	w.saveSeq++
 	return Snapshot{
 		CharacterID: p.charID,
-		Seq:         p.saveSeq,
+		Seq:         w.saveSeq,
 		Level:       p.level,
 		Experience:  p.experience,
 		Health:      p.health,
@@ -313,7 +316,9 @@ func (w *World) Join(c Character, client Client) game.Command {
 }
 
 // Leave returns the command that removes client's player (connection closed). It is
-// idempotent: a client that already left is ignored.
+// idempotent: a client that already left is ignored. Under its PvP lock the player stays
+// link-dead instead (linkDeadOnLeave), also when the loop closed the connection itself
+// (disconnect): the gateway's Leave that follows changes nothing.
 func (w *World) Leave(client Client) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		if p := w.byClient[client]; p != nil && !w.linkDeadOnLeave(ctx.Tick, p) {
@@ -323,13 +328,21 @@ func (w *World) Leave(client Client) game.Command {
 }
 
 // Saved returns the command the persistence goroutine enqueues after writing a
-// snapshot: the final snapshot of a character is forgotten once it is in the database,
-// unless a login of that character is reading the database right now.
+// snapshot. The Saver writes in order and skips everything of a character after a
+// transfer it dropped, so an ack of seq means the database has that character's state
+// at seq, built on every transfer before it: the final snapshot of a character is
+// forgotten once it (or a later one) is in, unless a login of that character is reading
+// the database right now;
+// the hold ends if seq covers the last transfer, and every reservation it covers is
+// freed (T5.3, hold.go). So one ack stands for every earlier one of its character: the
+// app retries only the highest seq per character the full queue refused, and a late
+// ack is harmless.
 func (w *World) Saved(characterID int64, seq uint64) game.Command {
 	return game.CommandFunc(func(*game.TickContext) {
-		if s, ok := w.unsaved[characterID]; ok && s.Seq == seq && w.loading[characterID] == 0 {
+		if s, ok := w.unsaved[characterID]; ok && s.Seq <= seq && w.loading[characterID] == 0 {
 			delete(w.unsaved, characterID)
 		}
+		w.confirmed(characterID, seq)
 	})
 }
 
@@ -377,14 +390,12 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		client.Close(pb.DisconnectReason_DISCONNECT_REASON_UNSPECIFIED)
 		return
 	}
-	var seq uint64
 	var carry *Player // T5.2: the player this login replaces, for its PvP locks
 	if old := w.byChar[c.ID]; old != nil {
 		carry = old
 		// Logged in again while online: continue from the in-memory state.
 		c = w.state(old, c)
 		w.remove(ctx, old, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_IN_ELSEWHERE, false)
-		seq = old.saveSeq       // after remove's final snapshot: later seqs must be greater
 		delete(w.unsaved, c.ID) // the new player carries the state; it saves it later
 	} else if s, ok := w.unsaved[c.ID]; ok {
 		// Left recently and the database may not have the final save yet.
@@ -396,7 +407,6 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.Conditions = s.Conditions
 		c.PvP = s.PvP
 		c.Cosmetics = s.Cosmetics
-		seq = s.Seq
 	}
 
 	stats := voc.AtLevel(c.Level)
@@ -418,7 +428,6 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		speed:      max(stats.Speed, 1),
 		baseSpeed:  max(stats.Speed, 1),
 		dir:        world.South,
-		saveSeq:    seq,
 		stance:     pb.FightStance_FIGHT_STANCE_BALANCED,
 		safe:       true, // T5.2: until the client says otherwise
 	}
@@ -514,7 +523,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.partyLeftWorld(p)               // T3.3: leaving the world leaves the party
 	w.guildLeftWorld(p)               // T5.1: the guild sees it offline
 	w.cancelTrade(p, tradeCancelLeft) // T5.3
-	p.market = nil
+	w.dropMarket(p)
 	p.house = nil
 	w.unindex(p)
 	delete(w.byClient, p.client)
@@ -538,6 +547,10 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.clearConditions(ctx, holder{p: p}, true)
 	w.unsaved[p.charID] = s
 	w.save(s)
+	if p.dropped {
+		p.out = nil // T5.2: its connection was closed when it went link-dead (disconnect)
+		return
+	}
 	if slow {
 		p.out = nil
 	}
@@ -639,8 +652,12 @@ func (w *World) homeIsland(town string) string {
 	return ""
 }
 
-// freeNear returns the walkable, unoccupied tile closest to p (by rings) within radius.
+// freeNear returns the walkable, unoccupied tile closest to p (by rings) within radius,
+// never one in the room behind a locked door (door.go) unless p is in that same room: the
+// rings do not follow walls, so a crowded tile next to a locked gate must not put anyone
+// on its other side.
 func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
+	from := w.roomOf[p]
 	for r := 0; r <= radius; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -652,7 +669,7 @@ func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: p.Z}
-				if w.m.Walkable(q) && !w.occupied(q) {
+				if w.m.Walkable(q) && !w.occupied(q) && w.roomAllows(from, q) {
 					return q, true
 				}
 			}

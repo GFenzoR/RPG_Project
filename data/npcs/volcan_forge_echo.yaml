@@ -4,7 +4,9 @@ sprite: npcs/forge_echo
 notes: >-
   What is left of the forge's last smith, bound to the sealed gate at the bottom of the
   mine (Chapter 3). Reaching it is the "go to a place" of ch3_gate; it takes the ember
-  root and the gate opens (open_gate), then it starts ch3_warden.
+  root and shapes it into the ember key that opens the forge gate (a locked door,
+  data/items/doors.yaml) (open_gate), then it starts ch3_warden. Whoever finished ch3_gate
+  and lost the key gets another one here, one at a time.
 dialog:
   start: greet
   nodes:
@@ -15,13 +17,21 @@ dialog:
           if:
             - { quest_state: { quest: ch3_gate, state: in_progress, step: open_gate } }
             - { has_item: { item: ember_root } }
-          action: { take_item: { item: ember_root } }
+          action:
+            - { take_item: { item: ember_root } }
+            - { give_item: ember_key }
           goto: ch3_gate_opened
         - text: npc.volcan_forge_echo.opt_no_root
           if:
             - { quest_state: { quest: ch3_gate, state: in_progress, step: open_gate } }
             - { lacks_item: { item: ember_root } }
           goto: no_root
+        - text: npc.volcan_forge_echo.opt_lost_key
+          if:
+            - { quest_state: { quest: ch3_gate, state: completed } }
+            - { lacks_item: { item: ember_key } }
+          action: { give_item: ember_key }
+          goto: key_reshaped
         - text: npc.volcan_forge_echo.opt_warden
           if:
             - { quest_state: { quest: ch3_gate, state: completed } }
@@ -33,6 +43,11 @@ dialog:
           action: close
     no_root:
       text: npc.volcan_forge_echo.no_root
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    key_reshaped:
+      text: npc.volcan_forge_echo.key_reshaped
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }

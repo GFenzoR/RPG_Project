@@ -18,6 +18,7 @@ type fakeClient struct {
 	batches []*pb.ServerBatch
 	closed  bool
 	reason  pb.DisconnectReason
+	closes  int  // calls to Close (the loop makes at most one)
 	full    bool // Send fails (slow client)
 }
 
@@ -29,7 +30,7 @@ func (c *fakeClient) Send(b *pb.ServerBatch) bool {
 	return true
 }
 
-func (c *fakeClient) Close(r pb.DisconnectReason) { c.closed, c.reason = true, r }
+func (c *fakeClient) Close(r pb.DisconnectReason) { c.closed, c.reason, c.closes = true, r, c.closes+1 }
 
 // events returns every event received so far and forgets them.
 func (c *fakeClient) take() []*pb.ServerMessage {
@@ -69,8 +70,12 @@ func testBalance() content.Balance {
 	b.Economy.Outlier.WindowMs = 3600000
 	b.Economy.Outlier.GoldPerHour.Base, b.Economy.Outlier.ItemsPerHour.Base = 1<<40, 1<<40
 	b.Reports = content.Reports{Burst: 2, RefillMs: 60000, SameTargetMs: 600000, MaxReason: 200, Events: 20}
+	b.Inventory.DoorCooldownMs = doorWait
 	return b
 }
+
+// doorWait is the inventory.door_cooldown_ms of the tests (500 in data/balance.yaml).
+const doorWait = 500
 
 var testVocations = content.Vocations{
 	"guardian": {ID: "guardian",

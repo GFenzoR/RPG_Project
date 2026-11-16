@@ -19,7 +19,7 @@ import {
   shadeOf,
 } from "../draw.ts";
 import type { Point } from "../draw.ts";
-import { material, PALETTE } from "../palette.ts";
+import { hex, material, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { Recipe, RecipeBook } from "../recipe.ts";
 
@@ -139,35 +139,55 @@ function thievingGull(img: Image): void {
   ball(img, 10, 11.5, 4.5, 4, feather, 0.2);
   px(img, 8, 11, [30, 26, 22, 255]); // eye
   px(img, 9, 10, gullGrey.base); // brow
-  // Beak, pointing down-left, with the red spot.
+  // The stolen fish, hanging head-up from the beak: a blue back on the left, a silver belly
+  // on the right, a fin on its back and a wide forked tail, big enough to read at 1x.
+  const fishBack = material("#86aac4", "#5a84a2", "#3f627c", "#2a4356");
+  const fishBelly = material("#f4f5ee", "#d6dad2", "#a9aea6", "#787d77");
+  eachInPolygon(
+    [
+      [4, 13],
+      [6.6, 16],
+      [7.4, 19.5],
+      [6.4, 23],
+      [4.6, 26],
+      [3.4, 26],
+      [1.6, 23],
+      [0.8, 19.5],
+      [1.6, 16],
+    ],
+    (x, y) => {
+      const c =
+        x <= 1
+          ? fishBack.shadow
+          : x === 2
+            ? fishBack.base
+            : x === 3
+              ? fishBack.light
+              : x <= 5
+                ? fishBelly.light
+                : fishBelly.shadow;
+      px(img, x, y, y >= 24 && x >= 3 ? fishBelly.shadow : c);
+    },
+  );
+  line(img, 2, 18, 2, 22, fishBack.deep); // the line along its flank
+  px(img, 0, 19, fishBack.base); // the back fin
+  px(img, 0, 20, fishBack.shadow);
+  for (const [x, y, c] of [
+    [3, 27, fishBack.base],
+    [4, 27, fishBack.shadow],
+    [2, 28, fishBack.base],
+    [5, 28, fishBack.shadow],
+    [1, 29, fishBack.light],
+    [6, 29, fishBack.base],
+  ] as const)
+    px(img, x, y, c); // the forked tail
+  px(img, 3, 16, [24, 22, 26, 255]); // fish eye
+  px(img, 5, 17, fishBack.shadow); // the gill
+  // Beak, pointing down-left, clamped on the fish's head, with the red spot.
   rect(img, 3, 13, 4, 1, beak.light);
   rect(img, 3, 14, 4, 1, beak.base);
   px(img, 2, 14, beak.shadow);
   px(img, 4, 14, redCloth.light);
-  // The stolen fish hanging from the beak.
-  const fish = material("#d3e2de", "#93b3ac", "#62847e", "#405955");
-  shape(
-    img,
-    [
-      [4, 14.5],
-      [5.8, 17],
-      [5.6, 20.5],
-      [4, 22.5],
-      [2.4, 20.5],
-      [2.2, 17],
-    ],
-    fish,
-    (x) => (x <= 2 ? 0.3 : x === 3 ? 0.85 : 0.55),
-  );
-  for (const [x, y] of [
-    [2, 24],
-    [3, 23],
-    [5, 23],
-    [6, 24],
-  ] as const)
-    px(img, x, y, fish.shadow); // forked tail
-  px(img, 4, 23, fish.deep);
-  px(img, 4, 16, [30, 26, 22, 255]); // fish eye
   outline(img, { amount: 0.55 });
 }
 
@@ -286,44 +306,83 @@ function brambleStag(img: Image): void {
     stagCoat,
     () => 0.5,
   );
-  // Bramble antlers: crooked thorny branches.
+  // Bramble antlers: crooked thorny branches, each three pixels wide so that after the
+  // outline a lit core with a dark rim is left (a one-pixel line would turn all outline).
   const branches: [number, number, number, number][] = [
-    [9, 6, 7, 1],
-    [8, 3, 4, 2],
-    [7, 4, 5, 5],
-    [11, 6, 14, 1],
-    [13, 3, 17, 2],
-    [12, 4, 15, 5],
+    [9, 6, 4, 1], // the left beam
+    [7, 4, 2, 5], // its tine down to the left
+    [5, 2, 6, 0], // and the one up
+    [12, 6, 18, 1], // the right beam
+    [14, 4, 20, 5], // its tine down to the right
+    [16, 3, 15, 0], // and the one up
   ];
-  for (const [x0, y0, x1, y1] of branches) line(img, x0, y0, x1, y1, thornWood.base);
-  line(img, 10, 6, 7, 2, thornWood.light);
-  line(img, 12, 6, 14, 2, thornWood.shadow);
+  const beam = (fn: (x: number, y: number) => void): void => {
+    for (const [x0, y0, x1, y1] of branches) {
+      const dx = Math.abs(x1 - x0);
+      const dy = Math.abs(y1 - y0);
+      const sx = x0 < x1 ? 1 : -1;
+      const sy = y0 < y1 ? 1 : -1;
+      let [x, y, err] = [x0, y0, dx - dy];
+      for (;;) {
+        fn(x, y);
+        if (x === x1 && y === y1) break;
+        const e2 = 2 * err;
+        if (e2 > -dy) {
+          err -= dy;
+          x += sx;
+        }
+        if (e2 < dx) {
+          err += dx;
+          y += sy;
+        }
+      }
+    }
+  };
+  beam((x, y) => {
+    for (const [ox, oy] of [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ] as const)
+      if (y + oy <= 7) px(img, x + ox, y + oy, thornWood.shadow);
+  });
+  beam((x, y) => px(img, x, y, x < 11 ? thornWood.light : thornWood.base));
+  // Leaf clusters on the branches (a lit pixel survives the outline in the middle).
   for (const [x, y] of [
-    [6, 0],
-    [3, 2],
-    [15, 0],
-    [17, 3],
-    [4, 6],
-  ] as const)
-    px(img, x, y, thornWood.light); // thorns
-  for (const [x, y] of [
-    [5, 1],
-    [16, 1],
-    [16, 5],
+    [3, 3],
+    [18, 3],
+    [10, 2],
   ] as const) {
+    rect(img, x - 1, y - 1, 3, 3, foliage.base);
     px(img, x, y, foliage.light);
-    px(img, x + 1, y, foliage.base);
+    px(img, x + 1, y + 1, foliage.shadow);
   }
-  px(img, 3, 4, redCloth.light); // berries
-  px(img, 18, 2, redCloth.light);
-  // A bramble vine across its back.
+  // A bramble vine across its back: a thick green stem with leaves and pale thorns.
   for (let x = 14; x <= 26; x++) {
     const y = 12 + Math.round(Math.sin(x * 0.9) * 1.2);
     px(img, x, y, foliage.shadow);
-    if (x % 4 === 1) px(img, x, y - 1, foliage.light);
-    if (x % 4 === 3) px(img, x, y + 1, thornWood.light);
+    px(img, x, y + 1, foliage.deep);
+    if (x % 4 === 1) {
+      px(img, x, y - 1, foliage.light);
+      px(img, x + 1, y - 1, foliage.base);
+    }
+    if (x % 4 === 3) px(img, x, y + 2, thornWood.light);
   }
   outline(img, { amount: 0.55 });
+  // Berries after the outline, so they stay bright: on the branch tips and the vine.
+  for (const [x, y] of [
+    [1, 5],
+    [6, 0],
+    [19, 0],
+    [20, 6],
+    [11, 1],
+    [17, 11],
+    [24, 11],
+  ] as const) {
+    px(img, x, y, hex("#d8343a"));
+    if (y > 0) px(img, x, y - 1, hex("#f07a72"));
+  }
 }
 
 // ---- NPCs --------------------------------------------------------------------------------
@@ -461,12 +520,23 @@ function person(look: Look, dir: Dir, frame: number): (img: Image) => void {
 
 const BLACK_EYE: [number, number, number, 255] = [36, 26, 20, 255];
 
-/** Facing the viewer (s) or away (n). A step lifts one foot and swings the opposite arm. */
+/** How far a hand moves up or down in a front or back step, px (FRONT_SWING * 2 between). */
+export const FRONT_SWING = 2;
+
+/**
+ * Facing the viewer (s) or away (n). A step lifts one foot 2 px and swings the arms in
+ * opposition: in 3/4 view the side toward the viewer (south) is lower on the screen.
+ * Facing south the lifted foot is the trailing one, so the arm on its side swings forward,
+ * toward the viewer (hand lower); facing north the lifted foot is the leading one, further
+ * away, and the arm on its side swings back, also toward the viewer (hand lower). Either
+ * way the hand on the lifted leg's side drops FRONT_SWING px and the other one rises.
+ */
 function personFront(img: Image, look: Look, dir: "n" | "s", frame: number): void {
-  // Which leg steps forward (screen left = 1, right = 2). Facing north, screen left is the
-  // character's left, so the same frames alternate the same way.
+  // Which leg is lifted: frame 1 the screen-right one (side 2), frame 2 the screen-left.
   const lift = (side: 1 | 2): number => (frame === 0 ? 0 : frame === side ? 0 : 2);
-  const reach = (side: 1 | 2): number => (frame === 0 ? 0 : frame === side ? -1 : 1);
+  // The arm on the lifted leg's side (frame 1: screen right, side 1 here) drops.
+  const reach = (side: 1 | 2): number =>
+    frame === 0 ? 0 : frame === side ? FRONT_SWING : -FRONT_SWING;
   // Legs and boots: the lifted leg is shorter.
   const legs: [number, 1 | 2][] = [
     [12, 1],
@@ -477,7 +547,7 @@ function personFront(img: Image, look: Look, dir: "n" | "s", frame: number): voi
     limb(img, x, 22, 4, look.bootTop - 22 - up, look.legs, side === 2 ? -0.1 : 0);
     limb(img, x, look.bootTop - up, 4, 30 - look.bootTop, look.boot, side === 2 ? -0.1 : 0);
   }
-  // Arms: the arm opposite the forward leg swings forward (hand lower).
+  // Arms: side = the frame in which the arm's hand drops (see reach).
   const arms: [number, 1 | 2][] = [
     [10, 2],
     [20, 1],
@@ -703,7 +773,8 @@ const NOBLE: Look = {
   belt: () => PALETTE.cloth.light,
   bootTop: 27,
   torso: (img, dir) => {
-    recolor(img, wine, gold, (_x, y) => y === 21); // gold hem
+    // The gold hem, on the torso only: a hand swinging down reaches row 21 too.
+    recolor(img, wine, gold, (x, y) => y === 21 && x >= 12 && x <= 19);
     if (dir === "s") {
       px(img, 16, 17, gold.light);
       px(img, 16, 19, gold.base);

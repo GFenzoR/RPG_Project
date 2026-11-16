@@ -169,9 +169,35 @@ body.picking-item [data-drop] {
   transform: none;
   max-width: calc(100% - 170px - env(safe-area-inset-left, 0px));
 }
+/* The strip is the viewport's bottom padding: game-canvas.ts sizes the map to the content
+   box, so a zoomed-in map is cut above the strip and never slides under the pad. */
 .game[data-flow="column"][data-pad] .viewport {
   align-items: flex-start;
+  box-sizing: border-box;
   height: min(calc(100vw * 11 / 15 + 154px), 72%);
+  padding-bottom: 154px;
+}
+
+/* Portrait with the pad (Hotbar.tsx `stacked`): right of the pad, the arrows and the edit
+   button on a line of their own above the slots, and narrower slots, so a 412 px phone
+   shows four of them (ui/layout.ts hotbarRoom). */
+.game[data-pad] .hotbar.stacked {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.hotbar-controls {
+  display: flex;
+  gap: 0.25rem;
+  height: 44px;
+}
+.hotbar-controls .page,
+.hotbar-controls .edit {
+  width: 44px;
+  height: 44px;
+}
+.game[data-pad] .hotbar.stacked li button,
+.game[data-pad] .hotbar.stacked li select {
+  width: 3.2rem;
 }
 .touch-pad-dock {
   position: absolute;
@@ -191,13 +217,58 @@ body.picking-item [data-drop] {
   max-width: min(calc(100% - 16px), 440px);
 }
 
-/* Portrait with the pad: the banner goes in the strip under the map, above the hotbar, so
-   it never covers the tiles a finger may tap as the destination. */
+/* Portrait with the pad: the banner goes in the strip under the map, over the hotbar's
+   arrows and where the zoom buttons were (App.tsx hides them meanwhile), so it never
+   covers the tiles a finger may tap as the destination. */
 .game[data-flow="column"][data-pad] .viewport > .pick-banner {
   top: auto;
-  bottom: 4.5rem;
+  bottom: 3.4rem;
   left: calc(162px + env(safe-area-inset-left, 0px));
   right: calc(8px + env(safe-area-inset-right, 0px));
   transform: none;
   max-width: none;
+  /* Opaque here: the hotbar's arrows under it would show through. */
+  background: var(--panel);
+}
+
+/* ---- map zoom (ZoomButtons.tsx, touch screens) ----
+   Bottom right of the map, above a one-line hotbar; over the drawer's edge it stays under
+   the drawer (z-index 8) and the picked-item banner (7). */
+.zoom-buttons {
+  position: absolute;
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  bottom: 3.75rem;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zoom-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 10px;
+  background: rgb(29 34 43 / 80%);
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+  touch-action: manipulation;
+}
+
+.zoom-button:disabled {
+  opacity: 0.35;
+}
+
+.zoom-button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Portrait with the pad: side by side in the strip under the map, above the hotbar's
+   arrows (the strip is 154 px: slots, arrows, then these). */
+.game[data-flow="column"][data-pad] .zoom-buttons {
+  flex-direction: row;
+  bottom: 108px;
 }

@@ -620,9 +620,10 @@ func (w *World) hides(a *content.ConditionApply) bool {
 	return def != nil && def.Kind == content.ConditionInvisible
 }
 
-// conditionSpell puts a's condition on p, or with a.Range (T3.2) on the monster p aims
-// at, at up to a.Range tiles in line of sight (the checks of a bolt). A spell aimed at a
-// monster costs its mana even if the monster shrugs the condition off (chance, immunity).
+// conditionSpell puts a's condition on p, or with a.Range (T3.2) on the monster (or, with
+// PvP, the player: T5.2) p aims at, at up to a.Range tiles in line of sight (the checks of
+// a bolt). A spell aimed at a creature costs its mana even if it shrugs the condition off
+// (chance, immunity).
 func (w *World) conditionSpell(ctx *game.TickContext, p *Player, a *content.ConditionApply, target *pb.ActionTarget) bool {
 	if a.Range == 0 {
 		// The effect first, to who sees p now: an invisibility that starts hides p from
@@ -632,7 +633,11 @@ func (w *World) conditionSpell(ctx *game.TickContext, p *Player, a *content.Cond
 		w.applyCondition(ctx, holder{p: p}, a, p.id)
 		return true
 	}
-	m := w.spellTarget(p, target)
+	f := w.spellFoe(p, target)
+	if f.p != nil {
+		return w.conditionPlayer(ctx, p, f.p, a)
+	}
+	m := f.m
 	switch {
 	case m == nil:
 		p.emit(systemMsg(msgNoTarget))
@@ -647,11 +652,7 @@ func (w *World) conditionSpell(ctx *game.TickContext, p *Player, a *content.Cond
 		p.emit(systemMsg(msgNoSight))
 		return false
 	}
-	el := ElementPhysical
-	if def := w.cfg.Balance.Conditions[a.ID]; def != nil && def.Element != "" {
-		el = def.Element
-	}
-	w.projectile(p.pos, m.pos, el)
+	w.projectile(p.pos, m.pos, w.conditionElement(a))
 	w.buffEffect(m.pos)
 	w.applyCondition(ctx, holder{m: m}, a, p.id)
 	w.reveal(ctx, p)
@@ -659,6 +660,42 @@ func (w *World) conditionSpell(ctx *game.TickContext, p *Player, a *content.Cond
 		m.target, m.state = p, StateAlert // like a hit: it fights back
 	}
 	return true
+}
+
+// conditionPlayer is conditionSpell aimed at the player v (T5.2): an attack by the rules
+// of a direct one (canAttack: zones, levels, staff, safe mode; party and guild members
+// may be aimed at, as with a bolt), then the checks of a bolt. It is judged and recorded
+// like a hit (aggress: skull, locks, self-defense, kill credit) even if v shrugs the
+// condition off; a damage condition's later hits are p's attack too (conditionHit).
+func (w *World) conditionPlayer(ctx *game.TickContext, p, v *Player, a *content.ConditionApply) bool {
+	if key, n := w.canAttack(ctx.Tick, p, v); key != "" {
+		p.emit(refuseMsg(key, n))
+		return false
+	}
+	switch {
+	case v.pos.Z != p.pos.Z || chebyshev(p.pos, v.pos) > a.Range:
+		p.emit(systemMsg(msgOutOfRange))
+		return false
+	case !w.m.LineOfSight(p.pos, v.pos):
+		p.emit(systemMsg(msgNoSight))
+		return false
+	}
+	w.projectile(p.pos, v.pos, w.conditionElement(a))
+	w.buffEffect(v.pos)
+	w.aggress(ctx, p, v)
+	w.reveal(ctx, p)
+	w.markFight(ctx, p)
+	w.markFight(ctx, v)
+	w.applyCondition(ctx, holder{p: v}, a, p.id)
+	return true
+}
+
+// conditionElement is the element a condition spell's projectile shows.
+func (w *World) conditionElement(a *content.ConditionApply) string {
+	if def := w.cfg.Balance.Conditions[a.ID]; def != nil && def.Element != "" {
+		return def.Element
+	}
+	return ElementPhysical
 }
 
 // cure removes the listed conditions from p (T3.2); with none of them it fails and
@@ -770,6 +807,10 @@ func (w *World) useItemOn(ctx *game.TickContext, p *Player, m *pb.UseItemOn) {
 	}
 	if from.kind == locContainer && w.reserved(ctx.Tick, p, it) {
 		p.emit(systemMsg(msgNotOwner))
+		return
+	}
+	if w.groundHeld(p, it) { // T5.3 fail-safe
+		p.emit(systemMsg(msgNotYours))
 		return
 	}
 	if !w.mayUseInHouse(p, it) { // T5.4

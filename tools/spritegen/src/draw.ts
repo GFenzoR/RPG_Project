@@ -338,6 +338,61 @@ export function rimLight(img: Image, amount = 0.18): void {
   for (const [x, y, c] of marks) px(img, x, y, c);
 }
 
+/** The colour of cast shadows: the near-black of the Dungeon Crawl creature shadows. */
+export const SHADOW: Rgba = [8, 8, 10, 255];
+
+/** The rows [top, bottom] that hold opaque pixels, or undefined for an empty image. */
+export function opaqueRows(img: Image): [number, number] | undefined {
+  let top = -1;
+  let bottom = -1;
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      if (!opaque(img, x, y)) continue;
+      if (top < 0) top = y;
+      bottom = y;
+      break;
+    }
+  }
+  return top < 0 ? undefined : [top, bottom];
+}
+
+/** Default castShadow() offset toward the bottom-right, px, and where it starts (0..1). */
+export const SHADOW_DX = 3;
+export const SHADOW_DY = 1;
+export const SHADOW_FROM = 0.4;
+
+/**
+ * The cast shadow of a figure lit from the top-left, as the Dungeon Crawl monsters have
+ * it: the silhouette pushed up to (dx, dy) toward the bottom-right (every step between,
+ * so the shadow always touches what casts it, even a thin quiver or a raised arm), drawn
+ * only where the image is transparent (behind the figure) and only from `from` (a fraction
+ * of the figure's height, 0 = its top row) down, so it falls from the shoulders and the
+ * flanks onto the ground. Opaque, like everything else in a sprite. Run it last, after
+ * outline().
+ */
+export function castShadow(
+  img: Image,
+  opts: { dx?: number; dy?: number; from?: number; color?: Rgba } = {},
+): void {
+  const { dx = SHADOW_DX, dy = SHADOW_DY, from = SHADOW_FROM, color = SHADOW } = opts;
+  const rows = opaqueRows(img);
+  const steps = Math.max(Math.abs(dx), Math.abs(dy));
+  if (!rows || steps === 0) return;
+  const startY = rows[0] + Math.round((rows[1] - rows[0]) * from);
+  const shifts = Array.from({ length: steps }, (_, i): [number, number] => [
+    Math.round(((i + 1) * dx) / steps),
+    Math.round(((i + 1) * dy) / steps),
+  ]);
+  const marks: [number, number][] = [];
+  for (let y = startY; y < img.height; y++)
+    for (let x = 0; x < img.width; x++) {
+      if (opaque(img, x, y)) continue;
+      if (shifts.some(([sx, sy]) => y - sy >= startY && opaque(img, x - sx, y - sy)))
+        marks.push([x, y]);
+    }
+  for (const [x, y] of marks) px(img, x, y, color);
+}
+
 /** Copies the opaque pixels of src onto dst with src's top-left at (dx, dy). */
 export function composite(dst: Image, src: Image, dx = 0, dy = 0): void {
   for (let y = 0; y < src.height; y++) {

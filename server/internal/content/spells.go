@@ -62,7 +62,8 @@ type SpellEffect struct {
 	Damage  *SpellDamage  `yaml:"damage"`
 	Heal    *SpellHeal    `yaml:"heal"`
 	Conjure *SpellConjure `yaml:"conjure"`
-	// Condition (T3.2) puts a condition on the caster, or with Range on a monster.
+	// Condition (T3.2) puts a condition on the caster, or with Range on a monster or, with
+	// PvP, a player (by the rules of a direct attack: T5.2).
 	Condition *ConditionApply `yaml:"condition"`
 	// Cure (T3.2) removes these conditions from the caster.
 	Cure []string `yaml:"cure"`

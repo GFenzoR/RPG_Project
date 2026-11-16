@@ -36,6 +36,22 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   personaje por minuto, escalonada, y las medianas de ingreso se calculan una vez por ronda.
   No está medida con `make bench-tick` (sus benchmarks la tienen apagada); los tests de
   simulación juegan entre 6 y 8 h de juego de un personaje en menos de un segundo cada uno.
+- Puertas con llave (`session/door.go`): la sala detrás de cada puerta se calcula una vez
+  al arrancar (un recorrido de hasta 4096 casillas por lado, y uno de hasta 4 × 4096
+  entre los afueras de dos puertas que comparten sala) y queda un índice casilla → sala
+  (`roomOf`). En el tick, abrir desde adentro es una búsqueda en ese mapa; cerrar con
+  llave mira solo a los jugadores de los sectores de la sala (una búsqueda cada uno) y, de
+  los que están adentro, busca la llave en sus bolsas cortando al encontrarla. Toda
+  búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) suma una búsqueda en
+  `roomOf` por casilla, sin asignar. Un jugador usa una puerta como mucho cada
+  `inventory.door_cooldown_ms` (500 ms), **también cuando se lo rechazan**, así que ni la
+  casilla ni los chequeos corren al ritmo del gateway. `BenchmarkDoorLockRefused` (el peor
+  intento: 202 jugadores, 151 en una sala de 3968 casillas, 150 con la llave al fondo de
+  un cofre de 40 items y el que no la tiene mirado último; la espera bajada a un tick para
+  intentar en cada uno): ~39 µs y 10 asignaciones por tick, contra ~19 µs y 2
+  asignaciones del mismo tick sin el intento, o sea ~20 µs y 8 asignaciones (los mensajes)
+  por intento, una vez cada 500 ms por jugador. Antes (jugador sin llave segundo, mochilas
+  vacías, 100 jugadores) medía ~2 µs: no era el peor caso.
 - Ranking público (T4.3, `queries/highscores.sql`): fuera del tick, pero comparte el pool de
   Postgres con los guardados. Hay como mucho 2 consultas a la vez, con 5 s de presupuesto;
   cada página se cachea 60 s por clave. Ninguna consulta ordena todos los personajes:
@@ -67,13 +83,18 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 | Descarga inicial (web) | < 5 MB sin contar sprites; atlas cargados por demanda |
 | Memoria | < 300 MB |
 
+- Efectos, proyectiles y números flotantes (`client/src/render/effect-layer.ts`): los
+  objetos de Pixi salen de pools y se reutilizan; dibujar un frame no crea objetos ni
+  arrays (solo aparece algo nuevo con un efecto o un número nuevo, si el pool no alcanza).
+  Los frames de los efectos salen del atlas (hoy una sola página, junto con el mapa).
+
 ### Audio (T3.7)
 El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez que suena
 (carga perezosa) y queda decodificado en memoria.
 
 | Métrica | Presupuesto | Hoy |
 |---|---|---|
-| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~526 KiB (32 archivos) |
+| Todos los archivos de `assets/sounds.yaml` | ≤ 1,5 MiB | ~645 KiB (34 archivos) |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
 | Un loop de música / de ambiente | ≤ 256 KiB / ≤ 96 KiB | máx. ~154 KiB / ~29 KiB |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
@@ -146,6 +167,67 @@ está dominada por la espera al siguiente tick, no por el servidor. Pendientes:
 - RAM medida con el mundo del hito 1. El presupuesto de 600 MB es para el mundo del
   hito 3: hay que repetir la prueba cuando crezca.
 
+### Resultados del stack T5.5–T5.7 (2026-11-16)
+Medido en la punta del stack de PRs (`feat/volcanic-art`, 313eb38: táctil T5.6, tienda
+cosmética T5.7 con cosméticos en `Creature`, puertas con llave, tiras de efectos,
+condiciones PvP a distancia, arte volcánico) contra `main` (7a89e66) como línea base, el
+mismo día, en la misma máquina y con el mismo script. Notebook con Windows 11 nativo (Git
+Bash), Core i7-13650HX (14 núcleos, 20 hilos) y 32 GB; servidor, bots y Postgres 16
+(Docker Desktop) en la misma máquina. Mundo: las 4 islas (135 sectores). Ventana estable
+de **3 min** (no 10 y 5), con rampa de 20 s (base) y 60 s (stress).
+
+| Métrica | Presupuesto | Base 100 · stack | Base 100 · main | Stress 300 · stack (2 corridas) | Stress 300 · main (2 corridas) |
+|---|---|---|---|---|---|
+| Tick p50 / p95 / p99 (ms) | p99 < 10 (100 jug.) | 0,03 / 0,70 / **1,78** | 0,03 / 0,73 / **1,75** | 0,72 / 4,15 / **5,49** · 0,57 / 2,84 / **3,98** | 0,51 / 2,45 / **3,69** · 0,58 / 2,86 / **3,98** |
+| Tick máx. / ticks lentos (> 50 ms) | — | ≤ 4 / 0 de 3600 | ≤ 4 / 0 de 3600 | ≤ 8 · ≤ 6 / 0 | ≤ 8 · ≤ 6 / 0 |
+| RSS máx. / al final (MB) | < 600 | 108,9 / 72,5 | 108,3 / 68,5 | 121,8 / 90,7 · 120,1 / 87,2 | 184,1 / 140,1 · 120,7 / 86,0 |
+| CPU del servidor (núcleos) | — | 0,12 | 0,11 | 0,26 · 0,27 | 0,27 · 0,21 |
+| Salida por jugador (B/s) | < 4096 | 308 | 318 | 880 · 753 | 800 · 771 |
+| Latencia de comando p50 / p95 / p99 (ms) | p95 < 60 | 26,2 / **48,4** / 50,9 | 26,6 / **48,3** / 50,8 | 27,9 / **49,8** / 53,2 · 27,4 / **48,9** / 52,1 | 26,8 / **48,7** / 51,9 · 26,9 / **49,1** / 52,2 |
+| Desconexiones / fallos al entrar | 0 | 0 / 0 | 0 / 0 (1 logout fallido) | 0 / 0 | 0 / 0 |
+
+Todo dentro del presupuesto, y el stack no empeora a `main`:
+- **Tick.** En stress, la primera corrida del stack dio p99 5,49 ms y la segunda 3,98,
+  igual que la segunda de `main` (3,98; la primera, 3,69). Es ruido entre corridas: el
+  p99 cae en el bucket de 4–8 ms del histograma y se interpola dentro de él. Los
+  benchmarks de `make bench-tick` (`internal/session`) lo confirman sin ruido de red:
+  mismas asignaciones por tick que `main` (332 con 100 jugadores caminando, 1341 con 300,
+  1005 con 256 monstruos, ~1490 con 1024 y ~1496 con las condiciones) y el mismo tiempo
+  dentro del ruido (300 jugadores caminando, 8 muestras de cada uno intercaladas:
+  ~120 µs de mediana en los dos).
+- **RAM.** El máximo se alcanza en la rampa: cada login verifica la contraseña con
+  argon2id (19 MiB por hash) y los bots entran de a varios. Depende de cuántos coinciden
+  y de cuándo devuelve memoria el GC, así que varía entre corridas (en `main`, 184 y
+  121 MB en stress). La primera corrida base del stack, que además creó las 10 cuentas y
+  los 100 personajes, llegó a 163 MB y terminó en 126 (tick p99 1,73 ms, 335 B/s por
+  jugador); la tabla muestra la segunda. Con todos adentro, el heap vivo del servidor
+  anda entre 31 y 52 MB con 100 jugadores.
+- **Red.** Los bots no llevan cosméticos (no tienen saldo), así que la tienda no suma
+  bytes a esta medición. El peor caso: un jugador con los tres cosméticos agrega a su
+  `Creature` unos 45 bytes (tres ids de ≤ 13 caracteres), y eso solo cuando aparece ante
+  alguien o cambia de look (con el anti-flood de `data/cosmetics.yaml`), nunca por paso.
+- **Fuera de esta medición.** Los bots no usan el mercado, las casas, las puertas ni la
+  tienda; esos caminos tienen sus propios costos acotados más arriba y abajo
+  (`BenchmarkDoorLockRefused`, Saver, casas). Las ventanas del mercado en vivo
+  (`fix/market-refresh`) son una rama paralela que no está en este stack.
+- **Windows.** `make bots` quedaba colgado al final: Git Bash no le llega con SIGINT a un
+  proceso nativo. `loadtest.sh` ahora espera a que se escriban los guardados y lo mata
+  (`12-local-development.md`, "Prueba de carga"). El logout fallido de la corrida base de
+  `main` (un bot desconectado durante el `Logout`) no se repitió en el stack.
+
+**Cliente** (`make build-client`; FPS, draw calls y memoria no se midieron en esta
+corrida: no hay instrumentación y piden un navegador real con GPU):
+
+| Métrica | Presupuesto | Stack | `main` |
+|---|---|---|---|
+| JS + CSS de `build/client/assets` (sin sprites ni audio) | < 5 MB | 1,33 MB (381 KB con gzip) | 1,20 MB (347 KB con gzip) |
+| Chunk del juego (`play-*.js`) | — | 681 KB (195 KB con gzip) | 658 KB (190 KB con gzip) |
+| Atlas (aparte, por demanda) | una página por capa | 1 página: 287 KB PNG + 160 KB JSON | 1 página: 38 KB PNG (placeholders) |
+
+El bundle creció 128 KB (34 KB con gzip) con lo nuevo del cliente: el layout táctil y la
+PWA (T5.6), la tienda (T5.7), el zoom y las tiras de efectos. Los efectos siguen saliendo
+del atlas único y de pools (ver "Cliente" arriba).
+
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en
 producción), el dashboard "Neque's Realm — servidor" de Grafana muestra en vivo los mismos
@@ -194,6 +276,36 @@ Saver más lo que retiene el loop, publicado por el loop sin costo en el tick) l
 aunque ninguna escritura falle, y la alerta `PersistenceBacklog` avisa si pasa de 1000
 durante 5 minutos. `persistence_errors_total{outcome="retry"}` solo cuenta escrituras que
 fallaron.
+
+Cada snapshot guardado (también los autoguardados) vuelve al loop como un comando
+`World.Saved` (la espera de la falla segura, docs/01 "Transacciones"): N / 300 por
+segundo más uno por personaje de cada transfer, cada uno un par de búsquedas en un mapa.
+Cada acuse recorre además `World.heldGround` si no está vacío (cada reserva se libera con
+el acuse que la cubre: el cadáver que dejó un personaje en espera, lo que el servidor dejó
+a sus pies y lo que alguien sacó de una casa a la calle hasta que se confirma), que casi
+siempre está vacío o casi: una entrada se borra también cuando su item deja el suelo (las
+de un personaje marcado quedan hasta reiniciar o hasta que el cadáver se pudre; son
+pocas, porque un transfer descartado es un error raro). Tomar, usar o meter algo en el
+suelo mira ese mapa solo si no está vacío. Un acuse que no entra en la cola del loop
+(llena) queda en el reintento del `app` (`app/acks.go`): una sola goroutine mientras haya
+pendientes y una entrada por personaje (el `Seq` más alto, que vale por los anteriores),
+que vuelve a probar cada tick por turnos (cada vuelta empieza después del último
+personaje que entregó). Con la cola llena por mucho tiempo cuesta lo que tenga ese mapa,
+no una goroutine por acuse.
+
+**Ventanas del mercado en vivo.** Cada acción del mercado encola a quienes miran ese
+libro; `flushMarket` les manda una `MarketUpdate` completa (lo que cuesta una respuesta
+normal: `list_size` ofertas por lado, las propias, el buzón y el historial) como mucho
+una cada `market.push_every_ms` por ventana (500 ms en `balance.yaml`). Con E
+espectadores de un libro muy activo son a lo sumo 2·E mensajes por segundo, sin ninguna
+lectura de la base. Cada refresco es la ventana **entera**, no un delta: mandar solo lo
+que cambió necesitaría un mensaje nuevo y que el cliente fusione listas, y hoy el tope de
+2·E por segundo ya acota el costo. Si una medición con muchos espectadores lo pide, el
+primer ajuste es subir `push_every_ms`; el delta queda pendiente (docs/14). Una
+suspensión (ban o unban) junta los items con ofertas de esa cuenta recorriendo las listas
+de ofertas por personaje (`byOwner`, a lo sumo `max_offers` cada una; ningún libro) y
+encola solo a los espectadores de esos libros. El paso a solo lectura refresca todas las
+ventanas una vez; otra marca después no vuelve a mandar nada.
 
 ### Casas (T5.4)
 - **Transfers de items de casa:** como mucho uno por tick para todas las casas que

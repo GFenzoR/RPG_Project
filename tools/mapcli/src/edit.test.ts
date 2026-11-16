@@ -213,6 +213,92 @@ describe("mapcli edit commands", () => {
     expect(mapcli("spawn", "frob", "testisle", "--root", root).code).toBe(2);
   });
 
+  it("house add, set and remove edit houses.yaml", () => {
+    const root = sandbox();
+    const HOUSES = "world/islands/testisle/houses.yaml";
+    const house = (...args: string[]) => mapcli("house", ...args, "--root", root);
+    const shape = [
+      "--floor",
+      "7",
+      "--rects",
+      "1068,1044,4,3;1069,1047,1,1",
+      "--doors",
+      "1069,1047,7",
+      "--exit",
+      "1069,1048,7",
+    ];
+    // Missing fields and malformed lists are usage errors; nothing is written.
+    expect(house("add", "testisle", "--id", "testisle_house_cli", ...shape).code).toBe(2);
+    expect(
+      house("add", "testisle", "--id", "x", "--floor", "7", "--rects", "1,2,3", "--rent", "1").code,
+    ).toBe(2);
+    // The house is on testisle, not on puerto: refused.
+    const elsewhere = house("add", "puerto", "--id", "testisle_house_cli", ...shape, "--rent", "1");
+    expect(elsewhere.code).toBe(1);
+    expect(existsSync(join(root, HOUSES))).toBe(false);
+
+    const add = house(
+      "add",
+      "testisle",
+      "--id",
+      "testisle_house_cli",
+      ...shape,
+      "--rent",
+      "600",
+      "--notes",
+      "by mapcli",
+    );
+    expect(add.code).toBe(0);
+    const out = add.json() as { written: string[]; validation: { diagnostics: string[] } };
+    expect(out.written).toEqual([HOUSES]);
+    // Its name is not in i18n/ yet: the validation in the outcome says so.
+    expect(out.validation.diagnostics.join("\n")).toContain(
+      'i18n key "house.testisle_house_cli.name" is missing',
+    );
+    const text = read(root, HOUSES);
+    expect(text).toContain(
+      [
+        "- id: testisle_house_cli",
+        "  name: house.testisle_house_cli.name",
+        "  rent: 600",
+        "  rects:",
+        "    - { x: 1068, y: 1044, z: 7, w: 4, h: 3 }",
+        "    - { x: 1069, y: 1047, z: 7, w: 1, h: 1 }",
+        "  doors:",
+        "    - { x: 1069, y: 1047, z: 7 }",
+        "  exit: { x: 1069, y: 1048, z: 7 }",
+      ].join("\n"),
+    );
+    expect(text).toContain("by mapcli");
+    expect(mapcli("fmt", "--check", "--root", root).code).toBe(0);
+
+    // set changes only the given fields; --notes "" removes the notes.
+    expect(
+      house("set", "testisle", "--id", "testisle_house_cli", "--rent", "900", "--notes", "").code,
+    ).toBe(0);
+    expect(read(root, HOUSES)).toContain("  rent: 900\n");
+    expect(read(root, HOUSES)).not.toContain("notes");
+    expect(read(root, HOUSES)).toContain("  exit: { x: 1069, y: 1048, z: 7 }");
+    expect(house("set", "testisle", "--id", "testisle_house_cli").code).toBe(2);
+    // An exit inside the house is refused by the op and changes nothing.
+    const before = read(root, HOUSES);
+    const inside = house("set", "testisle", "--id", "testisle_house_cli", "--exit", "1069,1045,7");
+    expect(inside.code).toBe(1);
+    expect(inside.json()).toMatchObject({
+      ok: false,
+      error: "op 0: house exit must be outside the house",
+    });
+    expect(read(root, HOUSES)).toBe(before);
+
+    // Removing the island's only house removes the file.
+    expect(house("remove", "testisle", "--id", "testisle_house_cli").json()).toMatchObject({
+      ok: true,
+      removed: [HOUSES],
+    });
+    expect(house("remove", "testisle", "--id", "testisle_house_cli").code).toBe(1);
+    expect(house("frob", "testisle", "--id", "x").code).toBe(2);
+  });
+
   it("ops apply is all or nothing", () => {
     const root = sandbox();
     const ops = join(root, "ops.json");

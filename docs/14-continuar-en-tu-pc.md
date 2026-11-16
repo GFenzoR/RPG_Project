@@ -41,8 +41,9 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Confirmar CC BY 4.0 para los mapas que manda la comunidad | Portal de mapas (T4.5) | `04-map-editor-and-ai.md` |
 | Cuenta de AWS y dominio | T1.18: servidor público | `09-deployment-aws.md` |
 | Apps OAuth de Google y Discord, y SMTP | Login social y emails (T2.1) | `12-local-development.md` |
-| Cuenta bot de GitHub (token classic con `public_repo`, fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
+| Cuenta bot de GitHub (token classic con `public_repo`, o `repo` mientras el repo sea privado; fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
 | Protección de la rama `main` y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `09-deployment-aws.md` |
+| Decidir cuándo volver a hacer público el repo (privado desde el 2026-11-15) | En privado, con GitHub Free: la CI gasta minutos del plan (2.000/mes), no se puede proteger `main`, el bot de mapas necesita `repo` y las imágenes de GHCR piden `docker login` | `09-deployment-aws.md` |
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
@@ -82,22 +83,61 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
 
 ## Pendientes conocidos (no bloquean)
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
-  (hay que entrar de nuevo en cada arranque), el selector de servidor reinicia la app, y
-  el pellizco se reconoce pero no hace zoom. Detalle en `15-movil.md`.
+  (hay que entrar de nuevo en cada arranque) y el selector de servidor reinicia la app.
+  Detalle en `15-movil.md`. El pad (`.touch-pad-dock` en `touch.css`) suma
+  `env(safe-area-inset-*)` aunque `.game` ya tiene ese padding: en un iPhone con barra de
+  inicio o muesca, en horizontal, el margen se cuenta dos veces (la emulación no lo ve:
+  ahí el inset es 0).
+- **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
+  no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
+  cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
+  mismo libro lo pide (antes, subir `market.push_every_ms`).
+- **Falla segura del comercio (a revisar, anterior a esta revisión):** un personaje
+  marcado vuelve a su **último guardado escrito**, que puede ser anterior al transfer
+  descartado. Lo que soltó **sin estar en espera** entre ese guardado y el transfer (algo
+  tirado al suelo que otro levantó, las monedas de una venta a un NPC que cayeron a sus
+  pies) vuelve a estar en su fila de la base y también en la de quien lo levantó. La
+  espera (docs/01) solo cubre lo que pasa mientras hay un transfer sin confirmar. Es raro
+  (un transfer descartado es un bug o la base caída al apagar) y lo ven las alertas de
+  economía; una salida sería escribir el estado del personaje justo antes de cada
+  transfer, a costa de una escritura más por transfer.
 - **Mundo:**
-  - puertas con llave (la puerta sellada de la mina es narrativa);
-  - suelos volcánicos y carteles de Brasal;
-  - editor de casas (hoy se editan en YAML).
-- **PvP:**
-  - una condición de otro jugador pierde a su autor tras un relogueo;
-  - los hechizos de condición a distancia solo afectan a monstruos;
-  - las marcas son placeholders dibujados.
-- **Mercado:**
-  - la ventana de quien mira un libro no se refresca con la acción de otro;
-  - la falla segura tiene un límite documentado (lo que sale por el suelo antes de que
-    reaccione).
-- **Tests:** "Play leads to the login and into the game" (`site.spec.ts`) falló una vez
-  por un timeout de 5 s al final de un e2e completo. Si se repite, súbele el timeout.
+  - el cartel de la puerta sellada (`text.volcan.gate_sign`, piso 8) no tiene item todavía,
+    y su texto dice que la puerta no tiene cerradura: hay que reescribirlo para la puerta
+    con llave antes de ponerlo;
+  - los carteles de Puerto y del Bosque están solo en `texts.yaml`: falta su item
+    `*_sign` para que se vean y se lean (como los de Brasal). Cada cartel cuesta hoy un
+    item y un ID; a futuro `mapcompile` podría llevar `texts.yaml` a `world.bin` y el
+    servidor leerlo, sin items por cartel;
+  - los pozos de lava de la Isla Volcánica son algo rectangulares (solo estético);
+  - las escaleras y portales de `portals.yaml` no existen en el servidor (ni en
+    `world.bin`): a los pisos 8 (minas de Puerto y Bosque, la mina y la forja de la Isla
+    Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff;
+  - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit` en
+    `server/internal/session`) ya no entra a la sala de una puerta con llave, pero sí
+    puede dejar a alguien en un bolsillo sellado sin puerta (menos de 10 casillas, que el
+    validador no avisa) si es la casilla libre más cercana. Arreglo posible: un índice de
+    área conexa por casilla armado al arrancar (como `roomOf`), y que la búsqueda solo
+    acepte casillas del área del origen. No se hizo con las puertas porque cuesta memoria
+    por casilla caminable de todo el mundo y hoy no hay bolsillos así junto a templos,
+    llegadas o casas;
+  - **puertas con llave en ciclo** (`02-game-design.md`, "Sala compartida"): hoy se
+    rechazan aunque sean seguras (un edificio con puerta trasera a un patio que tiene su
+    propio portón al campo; un hall entre el campo y una bóveda con su propio portón),
+    porque `sameOutside` exige unir los afueras sin cruzar puertas con llave. Mejora
+    futura, igual en `session/door.go` y `packages/map-format/src/doors.ts`, con casos
+    nuevos en `door-rooms.json`: un **chequeo de escape**. Los nodos son las componentes
+    del mapa con las puertas con llave como muro; de la sala de cada puerta `d` hay una
+    arista a todos los lados de `d`; el "mundo" es la componente del templo o de las
+    llegadas. Se exige que cada lado de cada puerta con llave alcance el mundo, más el
+    chequeo de llave entre una sala y el afuera de otra puerta. La cadena R–B–X–E–Y (sala
+    R, puerta B, sala X, puerta E, Y una bóveda más grande que X) se tiene que seguir
+    rechazando;
+  - `resource.reach` e `inventory.reach` no tienen tope en los esquemas
+    (`items.schema.json`, `content/resources.go`, `content/balance.go`). Como recolección y
+    crafteo ya no miran fuera de la vista (±8 x, ±6 y), un alcance de 7 o más respondería
+    `not_possible` sin aviso: falta `maximum: 6` y su chequeo en Go. De paso, sacar las
+    comprobaciones de piso que sobran en `gathering.go` (la guarda de vista ya las cubre).
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).
@@ -233,8 +273,16 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
   armas, armaduras e items de misión. El mapeo está en `assets/sprites.yaml`.
 - **Arte propio** (`tools/spritegen`, CC0): lo que el pack no tenía (madera, muelle,
   yunque, cajón, bolardo, tablero, pino, peñasco, gaviota, jabalí, ciervo, el barquero,
-  materiales, comida, herramientas, monedas de cobre y plata, mochila) y el jugador:
-  outfit `citizen` en `assets/sprites/outfits/citizen/<n|e|s|w>_<0|1|2>.png`.
+  materiales, comida, herramientas, monedas de cobre y plata, mochila), el jugador
+  (outfit `citizen` en `assets/sprites/outfits/citizen/<n|e|s|w>_<0|1|2>.png`, y los
+  atuendos de la tienda) y las marcas PvP (`assets/sprites/ui/marks/`). Las criaturas
+  propias llevan la misma sombra proyectada que las del pack (`assets/README.md`, "Sombra
+  de las criaturas").
+- **Efectos de combate y magia** (arte propio, `tools/spritegen/src/recipes/effects.ts`):
+  una tira animada de 6 frames por cada `effect_id` del servidor, en
+  `assets/sprites/effects/<nombre>/<n>.png`. El cliente la juega en 600 ms
+  (`client/CLAUDE.md`, "Sprites de efectos"); sin arte, la forma Pixi de antes. Los
+  proyectiles y los números flotantes siguen siendo formas y texto de Pixi.
 - **Bordes** (`assets/sprites/borders/`): `gen-borders.ts` recorta la textura del suelo de
   origen.
 

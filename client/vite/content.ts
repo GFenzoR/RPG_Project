@@ -74,6 +74,13 @@ export function loadClientContent(root: string): ClientContent {
   const lock = readYaml(join(root, "data", "ids.lock.yaml"));
   const ids = isObj(lock) && isObj(lock["items"]) ? lock["items"] : {};
   const items: Record<number, ItemDef> = {};
+  /** i18n keys of the item descriptions: looking at an item shows its text. */
+  const descKeys = new Set<string>();
+  /**
+   * Items whose `name` is a shared key (border pieces, the signs' "sign"): the client names
+   * items by item.<id>.name, so that key gets the shared text.
+   */
+  const sharedNames = new Map<string, string>();
   const dir = join(root, "data", "items");
   for (const file of readdirSync(dir)
     .filter((f) => f.endsWith(".yaml"))
@@ -85,6 +92,11 @@ export function loadClientContent(root: string): ClientContent {
       const num = ids[raw["id"]];
       if (typeof num !== "number") continue; // make validate reports items without an ID
       const ground = isObj(raw["ground"]) ? raw["ground"] : undefined;
+      const desc = typeof raw["description"] === "string" ? raw["description"] : "";
+      if (desc !== "") descKeys.add(desc);
+      const name = raw["name"];
+      if (typeof name === "string" && name !== `item.${raw["id"]}.name`)
+        sharedNames.set(`item.${raw["id"]}.name`, name);
       items[num] = {
         id: raw["id"],
         sprite: typeof raw["sprite"] === "string" ? raw["sprite"] : "",
@@ -103,6 +115,7 @@ export function loadClientContent(root: string): ClientContent {
           raw["tradeable"] === true && raw["kind"] !== "currency" && raw["pickupable"] !== false,
         toolUse:
           isObj(raw["tool"]) && typeof raw["tool"]["use"] === "string" ? raw["tool"]["use"] : "",
+        ...(desc !== "" ? { desc } : {}),
       };
     }
   }
@@ -124,7 +137,12 @@ export function loadClientContent(root: string): ClientContent {
       }
       if (isObj(cat))
         for (const [k, v] of Object.entries(cat))
-          if (typeof v === "string" && (!namesOnly || k.endsWith(".name"))) texts[k] = v;
+          if (typeof v === "string" && (!namesOnly || k.endsWith(".name") || descKeys.has(k)))
+            texts[k] = v;
+    }
+    for (const [key, shared] of sharedNames) {
+      const text = texts[shared];
+      if (text !== undefined) texts[key] ??= text;
     }
     i18n[lang] = texts;
   }

@@ -1,7 +1,9 @@
 package session_test
 
 import (
+	"maps"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,7 +65,7 @@ func newHouseHarness(t *testing.T, opts ...option) *houseHarness {
 		c.Items = marketItems(t)
 		c.Balance.Market = content.Market{Enabled: true, FeePermille: 100, FeeMin: 2, FeeMax: 50, MaxOffers: 2,
 			MaxAmount: 100, MaxPrice: 1000, DurationsHours: []int{1, 2}, ListSize: 5, HistorySize: 4,
-			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50}
+			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50, PushEveryMs: 500}
 		c.Balance.Houses = content.Houses{Enabled: true, MinLevel: 5, PeriodDays: 7, MaxPeriods: 2, MaxGuests: 2,
 			ItemsPerTile: 1, TransferMinutes: 5, ActionBurst: 100, ActionRefillMs: 50}
 		c.Transfer = func(tr session.Transfer) bool {
@@ -401,12 +403,17 @@ func TestHouseItemsWrittenWithTheMover(t *testing.T) {
 // The item limit: 1 instance per tile, 7 tiles.
 func TestHouseItemLimit(t *testing.T) {
 	h := newHouseHarness(t)
-	cl, _ := h.tenant("Ana", 0, cottageExit, stack(salveID, 20, 0), stack(swordID, 1, 1), stack(coinID, 100, 2),
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(salveID, 20, 0), stack(swordID, 1, 1), stack(coinID, 100, 2),
 		stack(coinID, 100, 3))
 	h.rent(cl)
 	h.step(cl, N)
 	h.step(cl, N) // (3,3): every tile of the house within reach
 	pack := openPack(t, h.harness, cl)
+	// Renting was a transfer nobody acked (T5.3 hold): a house tile is still allowed, it
+	// is written with the move itself.
+	if !h.w.InFlightForTest(a.CharacterID()) {
+		t.Fatal("renting did not hold its payer")
+	}
 	for _, tile := range []world.Pos{pos(2, 2), pos(3, 2), pos(4, 2), pos(2, 3), pos(3, 3), pos(4, 3), cottageDoor} {
 		if evs := h.send(cl, moveItem(inContainer(pack, 0), salveID, 0, onTile(tile), 1)); len(systemKeys(evs)) != 0 {
 			t.Fatalf("drop on %v: %v", tile, systemKeys(evs))
@@ -823,5 +830,55 @@ func TestHouseEnterAndExitPastBlockers(t *testing.T) {
 	h.send(cl, houseCmd(&pb.HouseExit{}))
 	if h.w.Map().HouseAt(a.Pos()) != nil {
 		t.Fatalf("Ana still inside at %v", a.Pos())
+	}
+}
+
+// A house door or a market board out of view answers like any tile out of view
+// (inventory.not_possible): the server tells nothing of a tile p does not see.
+func TestFarHouseDoorAndBoardSayNothing(t *testing.T) {
+	rows := make([]string, len(houseMap))
+	for i, r := range houseMap {
+		rows[i] = r + strings.Repeat(".", 20)
+	}
+	h := newHouseHarness(t, func(c *session.Config) {
+		c.Map = worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7, rows...), testHouses()...)
+	})
+	cl, _ := h.tenant("Faraway", 0, pos(28, 3))
+	for name, m := range map[string]*pb.ClientMessage{
+		"house door": useItem(onTile(shedDoor), worldtest.Grass, 0),
+		"board":      useItem(onTile(houseBoard), boardID, 1),
+	} {
+		if evs := h.send(cl, m); !maps.Equal(systemKeys(evs), notPossible) || lastHouse(evs) != nil {
+			t.Fatalf("%s out of view: %v", name, systemKeys(evs))
+		}
+	}
+	// In view but out of reach it is still too far.
+	near, _ := h.tenant("Nearer", 0, pos(12, 3))
+	if evs := h.send(near, useItem(onTile(shedDoor), worldtest.Grass, 0)); !hasKey(evs, "inventory.too_far") {
+		t.Fatalf("house door in view: %v", systemKeys(evs))
+	}
+
+	// From the floor above, right over them: the surface floors see each other, so only
+	// the floor tells the door and the board apart from a tile of p's own floor.
+	sky := make([]string, len(houseMap))
+	for i, r := range houseMap {
+		sky[i] = strings.Repeat(".", len(r))
+	}
+	h = newHouseHarness(t, func(c *session.Config) {
+		c.Map = worldtest.WithHouses(t, worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 6, Rows: sky},
+			worldtest.Layer{Z: 7, Rows: houseMap}), testHouses()...)
+	})
+	above := world.Pos{X: 8, Y: 4, Z: 6}
+	if !session.Sees(above, shedDoor) || !session.Sees(above, houseBoard) {
+		t.Fatal("the floor above does not see the floor below")
+	}
+	cl, _ = h.tenant("Above", 0, above)
+	for name, m := range map[string]*pb.ClientMessage{
+		"house door": useItem(onTile(shedDoor), worldtest.Grass, 0),
+		"board":      useItem(onTile(houseBoard), boardID, 1),
+	} {
+		if evs := h.send(cl, m); !maps.Equal(systemKeys(evs), notPossible) || lastHouse(evs) != nil {
+			t.Fatalf("%s from the floor above: %v", name, systemKeys(evs))
+		}
 	}
 }

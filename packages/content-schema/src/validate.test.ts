@@ -395,6 +395,42 @@ describe("validator diagnostics", () => {
     );
   });
 
+  it("checks doors and keys: pairs, blocking, pickup and locks (docs/02 Puertas con llave)", () => {
+    writeFileSync(
+      file("data/items/zz_doors.yaml"),
+      [
+        "- { id: bad_gate, kind: decoration, sprite: doors/forge_gate, name: item.forge_gate.name,",
+        "    pickupable: false, door: { key: nobody, open: bad_gate_open } }",
+        "- { id: bad_gate_open, kind: decoration, sprite: doors/forge_gate_open,",
+        "    name: item.forge_gate_open.name, blocks_movement: true, key: forge_gate,",
+        "    door: { closed: forge_gate } }",
+        "- { id: two_way, kind: decoration, sprite: doors/forge_gate, name: item.forge_gate.name,",
+        "    pickupable: false, blocks_movement: true, door: { open: bad_gate_open, closed: bad_gate } }",
+        "- { id: fixed_key, kind: material, sprite: quest/ember_key, name: item.ember_key.name,",
+        "    pickupable: false, key: forge_gate }",
+        "",
+      ].join("\n"),
+    );
+    const out = messages(root);
+    for (const want of [
+      "a closed door needs blocks_movement: true",
+      'no item has key "nobody", so nothing opens this door',
+      '"bad_gate_open" is not an open door that closes into "bad_gate"',
+      "a door cannot be a key",
+      "a door needs pickupable: false",
+      '"forge_gate" is not a closed door that opens into "bad_gate_open"',
+      "an open door cannot block movement",
+      "a key needs to be pickupable (a player carries it)",
+    ])
+      expect(out.some((m) => m.includes(want))).toBe(true);
+    // Exactly one of open and closed (the schema).
+    expect(
+      out.some((m) => m.includes("zz_doors.yaml:7:47 [2].door: does not match any of the")),
+    ).toBe(true);
+    // The repository's own gate is fine.
+    expect(out.some((m) => m.includes("data/items/doors.yaml"))).toBe(false);
+  });
+
   it("rejects loot counts above 1 for items that do not stack", () => {
     edit(
       "data/monsters/wolf.yaml",

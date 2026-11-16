@@ -102,6 +102,16 @@ items:
   requires: { level: 5 }
   value: 120              # precio base que usan los NPCs como referencia
 ```
+- **Descripción:** `description` es la clave i18n que el cliente muestra al mirar el item
+  (`item.<id>.desc` por convención). Un cartel (T5.5) es un item fijo cuya descripción es
+  su texto del mapa: `brasal_dock_sign` tiene `description: text.volcan.dock_sign`, la
+  misma clave de su entrada en `world/islands/volcan/texts.yaml`. El cliente empaqueta
+  solo las claves que algún item usa como descripción.
+- **Suelos volcánicos** (T5.5, `data/items/ground.yaml`, `speed` = costo de terreno en %):
+  `ash` (ceniza, 140, como la tierra), `basalt` (losas de basalto de Brasal, 100, como la
+  piedra), `cinder_path` (camino de escoria, 110), `cooled_lava` (lava enfriada, 100, como
+  la piedra) y `lava` (fundida, no caminable, como el agua). Cada uno camina como el suelo
+  que reemplazó en la isla, así que no cambian el ritmo con que se balanceó la caza.
 - **Distancia y munición** (T3.1): un arma `type: distance` exige `range` y `ammo` (el
   `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type: arrow, attack }`,
   apilable, y va en el slot de munición. Cada disparo gasta una y suma su `attack` al del
@@ -124,14 +134,17 @@ items:
   (`level`, `vocations`) y `vocations.yaml → weapons` limitan quién lo equipa.
 - **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
-  un personaje nuevo), `max_open_containers`, `use_cooldown_ms` y `reach`.
+  un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
+  entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
+  `reach`.
 - **Recursos** (T1.12): cualquier item del mapa (suelo o pila) puede ser un lugar de
   recolección con un bloque `resource`:
   ```yaml
   resource:
     tool: mining            # tool.use de la herramienta que lo cosecha
     skill: mining           # skill u oficio que da la chance y sube con cada intento
-    reach: 1                # opcional (por defecto inventory.reach), con línea de visión
+    reach: 1                # opcional (por defecto inventory.reach), con línea de visión;
+                            # como mucho 6: más allá de la vista (±8 x, ±6 y) responde not_possible
     charges: 4              # cosechas por casilla antes de agotarse
     regen_ms: 300000        # se llena este tiempo después de la última cosecha
     chance: { base: 0.3, per_level: 0.02, max: 0.85 }
@@ -146,6 +159,43 @@ items:
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
   atravesable (arco, cortina) declara `blocks_movement: false`. El suelo decide con
   `ground.walkable`.
+- **Puertas y llaves** (reglas en `02-game-design.md` "Puertas con llave"): una puerta es
+  un par de items fijos con bloque `door`; la cerrada nombra la abierta (`open`) y puede
+  llevar `key` (id de llave, mismo formato que un id); la abierta nombra la cerrada
+  (`closed`). Una llave es cualquier item con `key` en la raíz: el id de las puertas que
+  abre. Ejemplo (`data/items/doors.yaml` y la llave en `misc.yaml`):
+  ```yaml
+  - id: forge_gate
+    kind: decoration
+    sprite: doors/forge_gate
+    name: item.forge_gate.name
+    pickupable: false
+    blocks_movement: true
+    blocks_sight: true
+    door: { key: forge_gate, open: forge_gate_open }
+  - id: forge_gate_open
+    kind: decoration
+    sprite: doors/forge_gate_open
+    name: item.forge_gate_open.name
+    pickupable: false
+    door: { closed: forge_gate }
+  - id: ember_key
+    kind: material
+    sprite: quest/ember_key
+    name: item.ember_key.name
+    tradeable: false
+    key: forge_gate
+  ```
+  El validador (y `content.CheckDoors` al arrancar el servidor) exige: exactamente uno de
+  `open` y `closed`; que el par se nombre de vuelta; `pickupable: false` en los dos; la
+  cerrada bloquea el paso y la abierta no; `key` solo en la cerrada y con al menos un
+  item llave que lo tenga; que toda llave se pueda levantar (sin `pickupable: false`: un
+  jugador la lleva encima); y que ninguna puerta sea llave. Agregar otra puerta con llave
+  es solo datos: un par nuevo, su llave, textos y sprites; el mapa la coloca como
+  cualquier item. Dónde se coloca lo valida el mapa (`03-world-and-maps.md`,
+  "Validación"): un item de puerta por casilla, una sala determinable detrás de cada
+  puerta con llave y nada de afuera en ella (tampoco el destino de un `teleport` de un
+  diálogo de `data/npcs`).
 
 ## Monstruo
 ```yaml
@@ -341,8 +391,11 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   per_skill`. Los hechizos del montaraz escalan así con la distancia. `light` está en el
   esquema para un hito futuro y el servidor lo rechaza todavía.
 - T3.2: dos efectos más. `condition: { id, duration_ms | ticks + damage, chance, range }`
-  pone una condición al que lanza o, con `range`, a un monstruo a esa distancia con línea
-  de visión (los chequeos de un hechizo de un objetivo). `cure: [ids]` quita esas
+  pone una condición al que lanza o, con `range`, a un monstruo o, con PvP (T5.2), a un
+  jugador, a esa distancia con línea de visión (los chequeos de un hechizo de un objetivo;
+  contra un jugador, además, las reglas de un ataque directo). `range` solo vale en una
+  condición dañina (`kind: damage`, o `speed` con `speed_pct` negativo): el validador lo
+  rechaza en una beneficiosa, que contra un jugador contaría como un ataque. `cure: [ids]` quita esas
   condiciones al que lanza; si no tiene ninguna, falla sin gastar maná. Un `damage` acepta
   también `condition`: se aplica, con su `chance`, a cada monstruo al que el golpe le hizo
   daño. Ver "Condiciones".
@@ -457,7 +510,8 @@ pvp:
 necesitan el mercado, que cobra el alquiler y recibe los items). Reglas: `02-game-design.md`,
 "Casas". Las casas mismas (casillas, puertas, alquiler) son datos del mapa:
 `world/islands/<isla>/houses.yaml` (`03-world-and-maps.md`), y sus nombres van en
-`i18n/*/world.yaml` (`house.<id>.name`). Los números son propios.
+`i18n/*/world.yaml` (`house.<id>.name`; el panel de casas del editor los escribe al guardar,
+docs/04 "Casas en el editor"). Los números son propios.
 ```yaml
 houses:
   enabled: true
@@ -493,6 +547,7 @@ market:
   mailbox_shown: 30         # items del buzón por ventana
   action_burst: 6           # anti-flood: ráfaga y recarga por acción
   action_refill_ms: 400
+  push_every_ms: 500        # refresco en vivo de una ventana abierta: como mucho uno cada tanto (50..60000)
 trade:
   enabled: true
   max_items: 6              # items (pilas o contenedores vacíos) por lado (1..32)
@@ -612,9 +667,13 @@ Cada nombre de pieza dice dónde está el suelo `from` respecto de la casilla `t
 `n`/`s`/`e`/`w` = de ese lado; `ne`/`nw`/`se`/`sw` = solo en esa diagonal (ninguno de los
 dos lados vecinos); `inner_*` = en los dos lados vecinos (si falta, se apilan los dos
 lados). Las piezas son items `kind: decoration`, `pickupable: false`, sin bloquear. Hoy hay
-reglas `grass_sand` y `sand_water`; su arte placeholder propio lo genera
-`tools/spritepack/src/gen-borders.ts` en `assets/sprites/borders/` (un test verifica que
-los PNG commiteados son los que produce).
+reglas `grass_sand` y `sand_water`, y las de la Isla Volcánica (T5.5): `ash_sand`,
+`cooled_lava_sand`, `cooled_lava_ash`, `cinder_path_ash` y `cooled_lava_lava` (la costra
+sobre la lava fundida). Su arte lo genera `tools/spritepack/src/gen-borders.ts` en
+`assets/sprites/borders/`: cada pieza recorta el suelo `from` de su arte propio
+(`assets/sprites/<sprite>.png`, de `tools/spritegen`), de su textura de pack o de su color
+placeholder, en ese orden (un test verifica que los PNG commiteados son los que produce).
+Si cambia la receta de un suelo, corre `make spritegen` y después `gen-borders`.
 
 ## Outfits (T0.5)
 `data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador.

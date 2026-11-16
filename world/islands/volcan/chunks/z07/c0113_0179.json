@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 113, "cy": 179, "z": 7 },
-  "palette": ["water_shallow", "sand", "dirt", "border_sand_water_se", "border_sand_water_e", "border_sand_water_inner_se", "border_sand_water_s", "border_sand_water_sw", "border_sand_water_w", "border_sand_water_inner_sw"],
+  "palette": ["water_shallow", "sand", "ash", "border_sand_water_se", "border_sand_water_e", "border_sand_water_inner_se", "border_sand_water_s", "border_sand_water_sw", "border_sand_water_w", "border_sand_water_inner_sw", "border_ash_sand_se", "border_ash_sand_s", "border_ash_sand_inner_se"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -87,9 +87,13 @@
     { "x": 14, "y": 30, "stack": [3] },
     { "x": 15, "y": 30, "stack": [6] },
     { "x": 16, "y": 30, "stack": [5] },
+    { "x": 30, "y": 30, "stack": [10] },
+    { "x": 31, "y": 30, "stack": [11] },
     { "x": 1, "y": 31, "stack": [8] },
     { "x": 12, "y": 31, "stack": [3] },
     { "x": 13, "y": 31, "stack": [6] },
-    { "x": 14, "y": 31, "stack": [5] }
+    { "x": 14, "y": 31, "stack": [5] },
+    { "x": 29, "y": 31, "stack": [10] },
+    { "x": 30, "y": 31, "stack": [12] }
   ]
 }

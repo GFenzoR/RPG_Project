@@ -3,8 +3,16 @@
 import { CHUNK_SIZE, chunkKey, rectContains } from "@rpg/map-format/ops";
 import type { Cell, EraseLayer, MapOp, Rect, World } from "@rpg/map-format/ops";
 
-export type ToolName = "brush" | "item" | "eraser" | "fill" | "rect" | "select";
-export const TOOLS: readonly ToolName[] = ["brush", "item", "eraser", "fill", "rect", "select"];
+export type ToolName = "brush" | "item" | "eraser" | "fill" | "rect" | "select" | "house";
+export const TOOLS: readonly ToolName[] = [
+  "brush",
+  "item",
+  "eraser",
+  "fill",
+  "rect",
+  "select",
+  "house",
+];
 /** Keyboard shortcut of each tool (docs/04-map-editor-and-ai.md, "Experiencia de usuario"). */
 export const TOOL_KEYS: Readonly<Record<string, ToolName>> = {
   b: "brush",
@@ -13,6 +21,7 @@ export const TOOL_KEYS: Readonly<Record<string, ToolName>> = {
   g: "fill",
   r: "rect",
   v: "select",
+  h: "house",
 };
 export const BRUSH_SIZES = [1, 3, 5] as const;
 export type BrushSize = (typeof BRUSH_SIZES)[number];
@@ -88,7 +97,8 @@ export function toolOps(
   secondary: boolean,
 ): MapOp[] {
   const z = s.floor;
-  if (s.tool === "select" || s.tool === "rect") return []; // they act on a dragged rect
+  // Select and rect act on a dragged rect; the house tool edits the house panel draft.
+  if (s.tool === "select" || s.tool === "rect" || s.tool === "house") return [];
   if (s.tool === "fill") {
     if (!s.ground || !inIsland(world, x, y, z)) return [];
     return tileAt(world, x, y, z)?.ground === s.ground

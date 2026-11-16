@@ -309,9 +309,11 @@ func (w *World) mayEnter(p *Player, to world.Pos) bool {
 }
 
 // houseExit is where a player that may not stay in h goes: its exit, or the closest
-// free tile around it outside every house.
+// free tile around it outside every house and outside the rooms behind locked doors the
+// exit is not in (roomAllows).
 func (w *World) houseExit(h *house) world.Pos {
 	e := h.def.Exit
+	from := w.roomOf[e]
 	for r := 0; r <= 3; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -323,7 +325,7 @@ func (w *World) houseExit(h *house) world.Pos {
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: e.Z}
-				if w.m.Walkable(q) && w.m.Flags(q)&world.FlagHouse == 0 && !w.occupied(q) {
+				if w.m.Walkable(q) && w.m.Flags(q)&world.FlagHouse == 0 && !w.occupied(q) && w.roomAllows(from, q) {
 					return q
 				}
 			}
@@ -530,7 +532,15 @@ func (w *World) houseTouched(pos world.Pos) {
 		h.dirty = true
 		w.houseDirty = append(w.houseDirty, h)
 	}
-	if p := w.cmdPlayer; p != nil && !slices.Contains(w.houseActors, p) {
+	if p := w.cmdPlayer; p != nil {
+		w.houseActor(p)
+	}
+}
+
+// houseActor writes p's snapshot with this tick's house changes (flushHouses): p's
+// command changed a house, or the server put something of p's on a house floor.
+func (w *World) houseActor(p *Player) {
+	if !slices.Contains(w.houseActors, p) {
 		w.houseActors = append(w.houseActors, p)
 	}
 }
@@ -585,7 +595,7 @@ func (w *World) houseTransfer(players []*Player, ops []HouseOp, market ...Market
 	w.nextTransfer++
 	t := Transfer{ID: w.nextTransfer, Houses: ops, Market: market, OfferHigh: w.nextOffer, MailHigh: w.nextMail}
 	for _, p := range players {
-		t.Snapshots = append(t.Snapshots, w.snapshot(p, false))
+		t.Snapshots = append(t.Snapshots, w.transferSnapshot(p))
 	}
 	w.submitJob(Job{Transfer: &t})
 }
@@ -593,10 +603,11 @@ func (w *World) houseTransfer(players []*Player, ops []HouseOp, market ...Market
 // ---- the window -----------------------------------------------------------------------
 
 // useHouseDoor opens the house window if m points at a door tile of a house (any item of
-// the tile). It reports whether m was about a door.
+// the tile) that p sees on its floor. It reports whether m was about such a door: a tile
+// of another floor or out of view is not (like itemAt, no answer about it).
 func (w *World) useHouseDoor(ctx *game.TickContext, p *Player, m *pb.UseItem) bool {
 	pos, ok := posFromMsg(m.GetFrom().GetPos())
-	if !ok || len(w.houseList) == 0 || w.m.Flags(pos)&world.FlagHouse == 0 {
+	if !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) || len(w.houseList) == 0 || w.m.Flags(pos)&world.FlagHouse == 0 {
 		return false
 	}
 	h := w.houseAt(pos)
@@ -610,7 +621,7 @@ func (w *World) useHouseDoor(ctx *game.TickContext, p *Player, m *pb.UseItem) bo
 	switch {
 	case !w.houseOn:
 		p.emit(systemMsg(msgHouseClosed))
-	case pos.Z != p.pos.Z || chebyshev(p.pos, pos) > doorReach:
+	case chebyshev(p.pos, pos) > doorReach:
 		p.emit(systemMsg(msgTooFar))
 	default:
 		p.house = &houseView{h: h}
@@ -1003,6 +1014,7 @@ func (w *World) changeOwner(now time.Time, h *house, to, acc int64, name string,
 	ops = append(ops, HouseOp{Kind: HouseOwnerChange, House: h.def.ID, CharacterID: from, Owner: o})
 	w.houseTransfer(players, ops, append(market, mail...)...)
 	w.mailedNotice(h, from, len(mail))
+	w.marketOwnerChanged(from) // T5.3: its open market window shows the mailbox
 	w.expelIntruders(h)
 }
 
@@ -1016,6 +1028,7 @@ func (w *World) releaseHouse(now time.Time, h *house, players []*Player, market 
 	w.clearOwner(h)
 	w.houseTransfer(players, ops, append(market, mail...)...)
 	w.mailedNotice(h, from, len(mail))
+	w.marketOwnerChanged(from) // T5.3: its open market window shows the mailbox
 	w.expelIntruders(h)
 }
 
@@ -1120,6 +1133,7 @@ func (w *World) renewHouse(now time.Time, h *house) {
 		w.econRecord(nil, EconomyEntry{Kind: EconHouse, CharacterID: owner, Amount: -rent, Ref: "rent"})
 		w.houseTransfer(nil, []HouseOp{{Kind: HousePaid, House: h.def.ID, CharacterID: owner, PaidUntil: h.paidUntil}},
 			MarketOp{Kind: MarketGoldAdd, CharacterID: owner, Gold: -rent})
+		w.marketOwnerChanged(owner) // T5.3: the rent left its mailbox
 		if o := w.byChar[owner]; o != nil {
 			o.emit(systemMsg(msgHouseRenewed, houseParam(h), num("price", int(rent))))
 		}

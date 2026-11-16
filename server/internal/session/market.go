@@ -214,10 +214,14 @@ type priceDay struct {
 	units, total int64
 }
 
-// marketView is the market window a player has open.
+// marketView is the market window a player has open: the board it stands at and the
+// browsed item (0: none, kept in World.mkWatch). queued: a refresh waits in World.mkPush;
+// next: the first tick a pushed refresh may go out (World.mkPushEvery apart).
 type marketView struct {
-	board world.Pos
-	item  uint16
+	board  world.Pos
+	item   uint16
+	queued bool
+	next   game.Tick
 }
 
 func (w *World) initMarket() {
@@ -228,10 +232,12 @@ func (w *World) initMarket() {
 	w.mkOn, w.mk = true, m
 	w.mkRefill = max(game.Tick(m.ActionRefillMs/int(game.TickDuration.Milliseconds())), 1)
 	w.mkBurst = w.mkRefill * game.Tick(m.ActionBurst-1)
+	w.mkPushEvery = ticksFor(m.PushEveryMs)
 	w.offers = map[int64]*offer{}
 	w.books = map[uint16]*book{}
 	w.byOwner = map[int64][]*offer{}
 	w.mail = map[int64]*mailbox{}
+	w.mkWatch = map[uint16][]*Player{}
 	w.history = map[int64][]MarketHistory{}
 	w.sales = map[uint16][]priceDay{}
 	d := w.cfg.Market
@@ -383,7 +389,9 @@ func (w *World) referencePrice(item uint16, now time.Time) int64 {
 // reports whether m was about a board.
 func (w *World) useMarketBoard(ctx *game.TickContext, p *Player, m *pb.UseItem) bool {
 	pos, ok := posFromMsg(m.GetFrom().GetPos())
-	if !ok || int(m.GetStackIndex()) >= w.staticCount(pos) {
+	// A tile of another floor or out of view is no board use (like itemAt): no answer
+	// about a tile p does not see.
+	if !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) || int(m.GetStackIndex()) >= w.staticCount(pos) {
 		return false
 	}
 	id := w.staticAt(pos, int(m.GetStackIndex()))
@@ -401,9 +409,10 @@ func (w *World) useMarketBoard(ctx *game.TickContext, p *Player, m *pb.UseItem) 
 	case w.isBanned(p.accountID, ctx.Now):
 		p.emit(systemMsg(msgMarketClosed))
 	default:
+		w.dropMarket(p) // a window open at another board stops watching its item
 		p.market = &marketView{board: pos}
 		p.active(ctx.Tick, antibot.KindOther)
-		w.sendMarket(ctx.Now, p)
+		w.sendMarket(ctx.Now, p, false)
 	}
 	return true
 }
@@ -442,8 +451,123 @@ func (w *World) closeMarket(p *Player) {
 	if p.market == nil {
 		return
 	}
-	p.market = nil
+	w.dropMarket(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_MarketUpdate{MarketUpdate: &pb.MarketUpdate{}}})
+}
+
+// ---- live refresh -------------------------------------------------------------------
+//
+// A window shows a snapshot of the market: when another player's action changes what it
+// shows (the browsed item's offers, the player's own offers or its mailbox), the loop
+// pushes a fresh MarketUpdate (refresh = true) at the end of the tick. mkWatch indexes
+// the open windows by browsed item, so an action finds its viewers without walking every
+// player; mkPush collects the windows to send, each once per tick at most and
+// mkPushEvery (balance.yaml market.push_every_ms) apart: a busy book costs each viewer at
+// most one MarketUpdate per push_every_ms, and a change inside that time goes out when it
+// ends. A refresh is the whole window (what an answer costs), not a delta. Nothing here
+// reads the database.
+
+// dropMarket forgets p's window (closed, walked away, left the world or link-dead).
+func (w *World) dropMarket(p *Player) {
+	if p.market == nil {
+		return
+	}
+	w.watch(p, 0)
+	p.market = nil
+}
+
+// watch makes p's open window show item (0: none), keeping mkWatch in step.
+func (w *World) watch(p *Player, item uint16) {
+	v := p.market
+	if v.item == item {
+		return
+	}
+	if v.item != 0 {
+		list := w.mkWatch[v.item]
+		if i := slices.Index(list, p); i >= 0 {
+			list = slices.Delete(list, i, i+1)
+		}
+		if len(list) == 0 {
+			delete(w.mkWatch, v.item)
+		} else {
+			w.mkWatch[v.item] = list
+		}
+	}
+	v.item = item
+	if item != 0 {
+		w.mkWatch[item] = append(w.mkWatch[item], p)
+	}
+}
+
+// bookChanged queues a refresh of every window that shows item's offers.
+func (w *World) bookChanged(item uint16) {
+	for _, p := range w.mkWatch[item] {
+		w.queueMarket(p)
+	}
+}
+
+// marketOwnerChanged queues a refresh of the window of character id, if it is online
+// with the market open: its own offers or its mailbox changed.
+func (w *World) marketOwnerChanged(id int64) {
+	if p := w.byChar[id]; p != nil {
+		w.queueMarket(p)
+	}
+}
+
+// marketAccountChanged queues a refresh of every window whose book lists an offer of
+// account (banned or unbanned: its offers are hidden or shown again). It gathers the
+// items the account has offers of (its characters' own lists, at most max_offers each)
+// and queues their viewers: no book is walked.
+func (w *World) marketAccountChanged(account int64) {
+	if !w.mkOn || len(w.mkWatch) == 0 {
+		return
+	}
+	var items []uint16
+	for _, own := range w.byOwner {
+		if len(own) == 0 || own[0].AccountID != account { // a character's offers share its account
+			continue
+		}
+		for _, o := range own {
+			if !slices.Contains(items, o.ItemID) {
+				items = append(items, o.ItemID)
+			}
+		}
+	}
+	slices.Sort(items) // byOwner is a map: queue in a fixed order
+	for _, item := range items {
+		w.bookChanged(item)
+	}
+}
+
+func (w *World) queueMarket(p *Player) {
+	if p.market == nil || p.market.queued {
+		return
+	}
+	p.market.queued = true
+	w.mkPush = append(w.mkPush, p)
+}
+
+// flushMarket sends the queued refreshes; one still inside its mkPushEvery waits for
+// a later tick (it is not lost). Called once per tick, before the batches go out.
+func (w *World) flushMarket(ctx *game.TickContext) {
+	if len(w.mkPush) == 0 {
+		return
+	}
+	keep := w.mkPush[:0]
+	for _, p := range w.mkPush {
+		v := p.market
+		if v == nil || !v.queued || w.byChar[p.charID] != p {
+			continue // closed, already answered by a command this tick, or gone
+		}
+		if ctx.Tick < v.next {
+			keep = append(keep, p)
+			continue
+		}
+		w.sendMarket(ctx.Now, p, true)
+		v.next = ctx.Tick + w.mkPushEvery
+	}
+	clear(w.mkPush[len(keep):])
+	w.mkPush = keep
 }
 
 // marketFlood counts one action against the market anti-flood limit (GCRA).
@@ -460,7 +584,7 @@ func (w *World) marketFlood(ctx *game.TickContext, p *Player) bool {
 // marketCommand runs one MarketCommand.
 func (w *World) marketCommand(ctx *game.TickContext, p *Player, m *pb.MarketCommand) {
 	if _, ok := m.GetAction().(*pb.MarketCommand_Close); ok {
-		p.market = nil
+		w.dropMarket(p)
 		return
 	}
 	if !w.atMarket(ctx, p) || !w.marketFlood(ctx, p) {
@@ -469,15 +593,15 @@ func (w *World) marketCommand(ctx *game.TickContext, p *Player, m *pb.MarketComm
 	p.active(ctx.Tick, antibot.KindOther)
 	if _, browse := m.GetAction().(*pb.MarketCommand_Browse); !browse && w.readOnly {
 		p.emit(systemMsg(msgMarketReadOnly))
-		w.sendMarket(ctx.Now, p)
+		w.sendMarket(ctx.Now, p, false)
 		return
 	}
 	switch a := m.GetAction().(type) {
 	case *pb.MarketCommand_Browse:
 		if def := w.byNum[uint16(min(a.Browse.GetItemId(), 0xFFFF))]; def != nil && marketItem(def) {
-			p.market.item = def.Numeric
+			w.watch(p, def.Numeric)
 		} else {
-			p.market.item = 0
+			w.watch(p, 0)
 		}
 	case *pb.MarketCommand_Create:
 		w.marketCreate(ctx, p, a.Create)
@@ -491,7 +615,7 @@ func (w *World) marketCommand(ctx *game.TickContext, p *Player, m *pb.MarketComm
 		return
 	}
 	if p.market != nil {
-		w.sendMarket(ctx.Now, p)
+		w.sendMarket(ctx.Now, p, false) // also answers a refresh this action queued for p
 	}
 }
 
@@ -650,7 +774,8 @@ func (w *World) marketCreate(ctx *game.TickContext, p *Player, m *pb.MarketCreat
 	w.log.Info("market: offer posted", "character", p.charID, "offer", o.ID, "sell", sell, "item", def.ID,
 		"amount", amount, "price", price, "fee", fee)
 	p.emit(systemMsg(msgMarketCreated, itemParam(def, amount), num("fee", int(fee))))
-	p.market.item = def.Numeric
+	w.watch(p, def.Numeric)
+	w.bookChanged(def.Numeric)
 	w.afterMarket(p)
 }
 
@@ -677,9 +802,8 @@ func (w *World) closeOffer(o *offer, now time.Time) {
 		ops = append(ops, MarketOp{Kind: MarketGoldAdd, CharacterID: o.CharacterID, Gold: gold})
 	}
 	w.transfer(nil, ops...)
-	if owner := w.byChar[o.CharacterID]; owner != nil && owner.market != nil {
-		w.sendMarket(now, owner)
-	}
+	w.bookChanged(o.ItemID)
+	w.marketOwnerChanged(o.CharacterID)
 }
 
 // mailItems puts n units of def in charID's mailbox, one entry per full stack (or per
@@ -773,10 +897,9 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 		"item", o.def.ID, "amount", units, "total", total)
 	if owner := w.byChar[o.CharacterID]; owner != nil {
 		owner.emit(systemMsg(msgMarketFilled, itemParam(o.def, units), num("price", int(total))))
-		if owner.market != nil {
-			w.sendMarket(ctx.Now, owner)
-		}
 	}
+	w.bookChanged(o.ItemID)
+	w.marketOwnerChanged(o.CharacterID)
 	w.afterMarket(p)
 }
 
@@ -866,7 +989,7 @@ func (w *World) transfer(players []*Player, ops ...MarketOp) {
 	w.nextTransfer++
 	t := Transfer{ID: w.nextTransfer, Market: ops, OfferHigh: w.nextOffer, MailHigh: w.nextMail}
 	for _, p := range players {
-		t.Snapshots = append(t.Snapshots, w.snapshot(p, false))
+		t.Snapshots = append(t.Snapshots, w.transferSnapshot(p))
 	}
 	w.submitJob(Job{Transfer: &t})
 }
@@ -906,13 +1029,17 @@ func (w *World) offerMsg(o *offer, p *Player) *pb.MarketOffer {
 }
 
 // sendMarket sends p its market window: the browsed item's best offers (hidden: those
-// of banned accounts), its own offers, its mailbox and its history.
-func (w *World) sendMarket(now time.Time, p *Player) {
+// of banned accounts), its own offers, its mailbox and its history. refresh: pushed by
+// flushMarket, not the answer to p's own command. Either way the window is now current,
+// so a refresh queued for it is no longer needed.
+func (w *World) sendMarket(now time.Time, p *Player, refresh bool) {
 	mk := w.mk
+	p.market.queued = false
 	u := &pb.MarketUpdate{
 		Open: true, Money: uint64(max(w.money(p), 0)), FeePermille: uint32(mk.FeePermille),
 		FeeMin: uint64(mk.FeeMin), FeeMax: uint64(mk.FeeMax), MaxOffers: uint32(mk.MaxOffers),
 		MaxAmount: uint32(mk.MaxAmount), MaxPrice: uint64(mk.MaxPrice), ReadOnly: w.readOnly,
+		Refresh: refresh,
 	}
 	for _, h := range mk.DurationsHours {
 		u.DurationsHours = append(u.DurationsHours, uint32(h))
@@ -1041,10 +1168,14 @@ func sideName(sell bool) string {
 // made safe until a restart: those characters leave the world (SAVE_FAILED), their
 // unsaved state is dropped and their logins are refused (CHARACTER_LOCKED); the market
 // becomes read-only (browse only, no expiry) and every open trade is cancelled. The
-// operator sees the error log, persistence_errors_total{outcome="skipped"} and its alert.
+// corpses they left while held, and what was reserved to them on the ground, stay
+// reserved (locked out, hold.go): the items there may come from the dropped state; a
+// corpse decays. The operator sees the error log,
+// persistence_errors_total{outcome="skipped"} and its alert.
 func (w *World) Tainted(ids []int64) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
-		if !w.readOnly {
+		fresh := !w.readOnly
+		if fresh {
 			w.log.Error("market: a transfer was not stored; market and trades are read-only until a restart")
 		}
 		w.readOnly = true
@@ -1057,11 +1188,15 @@ func (w *World) Tainted(ids []int64) game.Command {
 				w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_SAVE_FAILED, false)
 			}
 			delete(w.unsaved, id)
+			delete(w.inFlight, id)
 			w.log.Error("session: character locked until a restart, a transfer of it was not stored", "character", id)
+		}
+		if !fresh {
+			return // the windows already show it: a later taint changes nothing they show
 		}
 		for _, p := range w.players {
 			if p.market != nil {
-				w.sendMarket(ctx.Now, p)
+				w.sendMarket(ctx.Now, p, true)
 			}
 		}
 	})

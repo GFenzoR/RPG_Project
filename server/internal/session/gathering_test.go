@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"maps"
 	"testing"
 	"time"
 
@@ -239,5 +240,23 @@ func TestGatheringAFK(t *testing.T) {
 	h.try(cl, rodID, pos(3, 1))
 	if s := h.w.Skill(p, "fishing"); s.Tries != 6 {
 		t.Fatalf("after a pause: fishing = %+v, want a full try (6)", s)
+	}
+}
+
+// A tool used on a tile of another floor, or out of view, hears what any such tile
+// answers (inventory.not_possible): nothing about a vein p does not see.
+func TestGatherOutOfViewSaysNothing(t *testing.T) {
+	far := gatherHarness(t, worldtest.Map(t, 0, 0, 7, "T....................v"), 0)
+	cl, _ := gatherer(far, pos(0, 0), pickID)
+	cl.take()
+	if evs := far.try(cl, pickID, pos(21, 0)); !maps.Equal(systemKeys(evs), notPossible) {
+		t.Fatalf("vein out of view: %v", systemKeys(evs))
+	}
+	below := gatherHarness(t, worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 6, Rows: []string{"T...."}},
+		worldtest.Layer{Z: 7, Rows: []string{"....v"}}), 0)
+	cl, _ = gatherer(below, world.Pos{X: 4, Y: 0, Z: 6}, pickID)
+	cl.take()
+	if evs := below.try(cl, pickID, pos(4, 0)); !maps.Equal(systemKeys(evs), notPossible) {
+		t.Fatalf("vein on the floor below: %v", systemKeys(evs))
 	}
 }

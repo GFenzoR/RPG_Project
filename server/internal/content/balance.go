@@ -506,6 +506,9 @@ type Inventory struct {
 	StartContainer    string `yaml:"start_container"`
 	MaxOpenContainers int    `yaml:"max_open_containers"`
 	UseCooldownMs     int    `yaml:"use_cooldown_ms"`
+	// DoorCooldownMs is how long a player waits between two uses of a door of the map,
+	// refused or not (docs/02 "Puertas con llave"): a door's tile goes to everyone around.
+	DoorCooldownMs int `yaml:"door_cooldown_ms"`
 	// Reach is the Chebyshev distance (same floor) for actions on ground items.
 	Reach int `yaml:"reach"`
 }
@@ -694,8 +697,8 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if err := b.Death.check(); err != nil {
 		return Balance{}, err
 	}
-	if i := b.Inventory; i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.Reach <= 0 {
-		return Balance{}, errors.New("inventory: max_open_containers and reach must be > 0, use_cooldown_ms >= 0")
+	if i := b.Inventory; i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.DoorCooldownMs <= 0 || i.Reach <= 0 {
+		return Balance{}, errors.New("inventory: max_open_containers, door_cooldown_ms and reach must be > 0, use_cooldown_ms >= 0")
 	}
 	if err := b.Chat.check(); err != nil {
 		return Balance{}, err

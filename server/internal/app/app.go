@@ -118,6 +118,8 @@ type App struct {
 	economy *economyWriter
 	// loopDone is closed when the game loop stopped (commands can no longer run).
 	loopDone chan struct{}
+	// acks are the snapshot acks a full loop queue refused (acks.go).
+	acks ackRetry
 	// running is true while the game loop runs (GET /api/status).
 	running atomic.Bool
 	handler http.Handler
@@ -483,7 +485,8 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 func storeConditions(in []session.ConditionState) []store.Condition {
 	out := make([]store.Condition, len(in))
 	for i, c := range in {
-		out[i] = store.Condition{ID: c.ID, LeftMs: c.LeftMs, Ticks: c.Ticks, Damage: c.Damage}
+		out[i] = store.Condition{ID: c.ID, LeftMs: c.LeftMs, Ticks: c.Ticks, Damage: c.Damage,
+			Author: c.Author, AuthorHit: c.AuthorHit, AuthorUnjust: c.AuthorUnjust, SavedAt: c.SavedAt}
 	}
 	return out
 }
@@ -554,10 +557,4 @@ func (a *App) charactersTainted(ids []int64) {
 		return
 	}
 	go a.enqueueRetry(a.World.Tainted(ids))
-}
-
-func (a *App) snapshotSaved(s session.Snapshot) {
-	if s.Final {
-		_ = a.Loop.Enqueue(a.World.Saved(s.CharacterID, s.Seq)) // lost ack: harmless
-	}
 }

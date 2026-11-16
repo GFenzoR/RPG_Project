@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 112, "cy": 181, "z": 7 },
-  "palette": ["water_shallow", "dock_planks", "sand", "grass", "border_sand_water_e", "mooring_post", "border_sand_water_ne", "border_sand_water_inner_ne", "border_sand_water_se", "border_sand_water_inner_se", "border_sand_water_s", "border_grass_sand_se", "border_grass_sand_s", "border_grass_sand_sw", "border_grass_sand_inner_se", "border_grass_sand_inner_sw", "border_grass_sand_e", "border_grass_sand_w", "border_grass_sand_inner_nw", "border_grass_sand_nw", "border_grass_sand_ne", "border_grass_sand_n"],
+  "palette": ["water_shallow", "dock_planks", "sand", "ash", "border_sand_water_e", "mooring_post", "border_sand_water_ne", "border_sand_water_inner_ne", "border_sand_water_se", "border_sand_water_inner_se", "border_sand_water_s", "border_ash_sand_se", "border_ash_sand_s", "border_ash_sand_sw", "border_ash_sand_inner_se", "border_ash_sand_inner_sw", "border_ash_sand_e", "border_ash_sand_w", "border_ash_sand_inner_nw", "border_ash_sand_nw", "border_ash_sand_ne", "border_ash_sand_n"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
