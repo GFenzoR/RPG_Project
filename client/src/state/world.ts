@@ -306,6 +306,15 @@ export class WorldState implements TileSource {
   readonly creatures = new Map<number, CreatureState>();
   /** The predicted own step the server has not confirmed yet. */
   pending: { from: Pos; to: Pos } | undefined;
+  /**
+   * The predicted own step the server refused (WalkRejected from where it started, that
+   * way): a held movement key would predict it again as soon as a step can start, and every
+   * refusal brings its message back (portal.blocked: no room on the other side;
+   * house.no_access). predictStep keeps off that very step (same tile, same target) until
+   * retryWalk (a fresh press or a release of a movement key or the pad, a new direction),
+   * an own move or a full map view. Click-to-walk (WalkPath) never looks at it.
+   */
+  private refused: { from: Pos; to: Pos } | undefined;
   /** Whether the player is invisible (its own condition): it is drawn see-through. */
   get invisible(): boolean {
     return this.conditions.some((c) => c.id === "invisible");
@@ -467,6 +476,7 @@ export class WorldState implements TileSource {
         this.chunks.clear();
         this.creatures.clear();
         this.pending = undefined;
+        this.refused = undefined;
         this.target = undefined;
         if (msg.value.area) this.applyArea(msg.value.area);
         break;
@@ -720,10 +730,16 @@ export class WorldState implements TileSource {
         }));
         break;
       case "walkRejected": {
+        const p = this.pending;
         this.pending = undefined;
         const s = this.self;
-        if (s && msg.value.pos) {
-          s.pos = posOf(msg.value.pos);
+        const at = msg.value.pos ? posOf(msg.value.pos) : undefined;
+        // The refusal of the predicted step itself (the server says the refused step's
+        // direction and where the player stands), not of a step of a WalkPath.
+        if (p && at && samePos(at, p.from) && msg.value.dir === directionTo(p.from, p.to))
+          this.refused = p;
+        if (s && at) {
+          s.pos = at;
           s.walk = undefined;
         }
         break;
@@ -825,6 +841,7 @@ export class WorldState implements TileSource {
   }
 
   private move(id: number, from: Pos, to: Pos, duration: number, now: number): void {
+    if (id === this.selfId) this.refused = undefined; // another tile, or the way opened
     const c = this.creatures.get(id);
     if (!c) return;
     const dir = directionTo(from, to);
@@ -887,7 +904,9 @@ export class WorldState implements TileSource {
 
   /**
    * Predicts one own step in `dir` if the client believes it is possible. Returns true when
-   * the step was predicted (the caller then sends Walk), false when it should not be sent.
+   * the step was predicted (the caller then sends Walk), false when it should not be sent:
+   * a tile the client sees blocked, or the step the server just refused (until retryWalk).
+   * Either way the player faces `dir`, so the caller sends at most one Turn.
    */
   predictStep(dir: Direction, now: number): boolean {
     const s = this.self;
@@ -895,11 +914,22 @@ export class WorldState implements TileSource {
     const to = step(s.pos, dir);
     s.dir = dir;
     if (!this.free(to.x, to.y, to.z)) return false;
+    const r = this.refused;
+    if (r && samePos(r.from, s.pos) && samePos(r.to, to)) return false;
     const from = s.pos;
     this.pending = { from, to };
     s.pos = to;
     s.walk = { from, to, start: now, duration: this.stepDuration(to, s.speed, isDiagonal(dir)) };
     return true;
+  }
+
+  /**
+   * Forgets the refused step: the player pressed or released a movement key or the pad, or
+   * changed direction, so the next step that way is tried again (one refusal, one message
+   * per press).
+   */
+  retryWalk(): void {
+    this.refused = undefined;
   }
 
   /** Same formula as the server (docs/05, "Caminar"), used until it sends duration_ms. */

@@ -606,6 +606,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   mano muestra "Trepar" (`client.touch.action.climb`) y, si hay un item encima, también
   sus botones ("Abrir"/"Usar" usan ese item, no trepan). La soga es una herramienta
   "usar con" como el pico. El teclado sí pisa una escalera: es la forma de bajar.
+- Un paso predicho que el servidor rechaza (`WalkRejected` desde donde empezó y en esa
+  dirección: sin lugar del otro lado de la escalera, `portal.blocked`, o la puerta de una
+  casa sin acceso, `house.no_access`) queda en `WorldState` (`refused`): `predictStep` no
+  lo vuelve a predecir ni mandar, así que una tecla mantenida no repite el aviso en cada
+  paso. Se olvida con `retryWalk` (`game.ts`: tecla de movimiento pulsada de nuevo, sin
+  contar la autorrepetición, o soltada; pad con otra dirección, soltado o tocado; pérdida
+  del foco), con cualquier movimiento propio y con un `FullMapView`. El click para caminar
+  no lo mira.
 - E2E "portals" de `e2e/game.spec.ts`: un guardián de nivel 30 de la Isla Volcánica
   sembrado con `psql` en 3690,5796,7 hace click en 3693,5796 (el camino rodea la escalera
   de 3692,5796), baja con la flecha izquierda a 3692,5797,8 (el cliente tiene la

@@ -22,7 +22,7 @@ import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
-import { MovementKeys, isTextField, typingInField } from "./input/keyboard.ts";
+import { MovementKeys, isTextField, keyDirection, typingInField } from "./input/keyboard.ts";
 import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { loadZoom, saveZoom } from "./render/zoom.ts";
@@ -1046,18 +1046,25 @@ export class Game {
     this.publish();
   }
 
-  /** The on-screen pad (T5.6): a finger holds a direction; holding keeps walking. */
+  /**
+   * The on-screen pad (T5.6): a finger holds a direction; holding keeps walking. A new
+   * direction (the pointer moves report the same one again and again) tries a step the
+   * server refused once more, like a fresh key press (WorldState.retryWalk).
+   */
   padPress(dir: Direction): void {
+    if (this.pad.current !== dir) this.world.retryWalk();
     this.pad.press(dir);
   }
 
   padRelease(): void {
     this.pad.release();
+    this.world.retryWalk();
   }
 
   /** One step (a pad button activated from the keyboard). */
   padStep(dir: Direction): void {
     this.pad.tap(dir);
+    this.world.retryWalk();
   }
 
   /**
@@ -1351,16 +1358,22 @@ export class Game {
         return;
       }
     }
-    if (this.keys.down(e.code)) e.preventDefault();
+    if (this.keys.down(e.code)) {
+      e.preventDefault();
+      // A fresh press tries a refused step again; the OS auto-repeat of a held key does not.
+      if (!e.repeat) this.world.retryWalk();
+    }
   };
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
     this.keys.up(e.code);
+    if (keyDirection(e.code) !== undefined) this.world.retryWalk();
   };
 
   private readonly onBlur = (): void => {
     this.keys.clear();
     this.pad.clear();
+    this.world.retryWalk();
   };
 
   /** A text field took the focus (the chat): a movement key held until now stops walking. */
