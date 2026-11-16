@@ -75,8 +75,8 @@ Detalle de las ops de T1.15 (las inversas se expresan siempre con ops primitivas
   archivo y el servidor: alquiler 1..2³²−1, 1 a 16 rects de lado 1..255 sin casillas
   repetidas dentro de la isla y sus pisos, 1 a 8 puertas que sean casillas de la casa y la
   salida fuera de la casa. Lo demás (otra casa encima, suelo, caminable, puerta en el
-  borde, salida junto a una puerta y nunca sobre una puerta con llave, el nombre en
-  `i18n/`) lo reporta el validador, como un
+  borde, salida junto a una puerta y nunca sobre una puerta, el nombre en `i18n/`) lo
+  reporta el validador, como un
   spawn sobre el agua: una casa se puede trazar antes de pintar su suelo. La geometría que
   comparten las ops, el validador y el editor vive en `map-format/src/houses.ts`
   (`houseTiles`, `tilesToRects`, `onHouseEdge`, `disconnectedFloors`, `houseIssues`).
@@ -765,8 +765,8 @@ dibuja (relleno violeta con los rects que va a tener, puertas en amarillo, salid
   que no está en su borde, salida que falta, fuera de la isla, dentro de una casa o lejos de
   una puerta, nombre que falta. Advertencias (no impiden aplicar): casillas de un piso que no
   forman un solo bloque y casillas sin suelo. Lo que depende de los items (caminable,
-  alcanzable desde el templo, salida sobre una puerta con llave, NPCs adentro) lo sigue
-  diciendo el panel de validación.
+  alcanzable desde el templo, salida sobre una puerta, NPCs adentro) lo sigue diciendo el
+  panel de validación.
 - **Aplicar** convierte el borrador en una sola entrada de historial (`add_house` o
   `set_house`; `Ctrl+Z` la deshace) y se niega con el primer error en la barra de estado.
   "Borrar casa" es `remove_house` (también deshacible); su nombre queda en `world.yaml`.

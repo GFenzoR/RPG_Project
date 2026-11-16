@@ -215,9 +215,10 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   la casa y en su borde (junto a una casilla de afuera; advertencia si las casillas de un
   piso no forman un solo bloque) y sin un item de puerta (bloque `door`: usarlo abriría la
   puerta, nunca la ventana de la casa), salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
-  el templo, y nunca sobre una puerta con llave, abierta o cerrada (es el último recurso de
-  sacar a alguien de la casa con todo lleno: quedaría en el umbral, a un paso de la sala
-  sin la llave; el servidor tampoco arranca con eso, `checkArrivals`), nombre con texto en
+  el templo, y nunca sobre una puerta (es el último recurso de sacar a alguien de la casa
+  con todo lleno: sobre una con llave, abierta o cerrada, quedaría en el umbral, a un paso
+  de la sala sin la llave; una común la puede cerrar cualquiera, y quedaría dentro de una
+  puerta cerrada; el servidor tampoco arranca con eso, `checkArrivals`), nombre con texto en
   todos los idiomas, id único en el mundo. Adentro de una
   casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y
   ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro). Un
@@ -481,14 +482,16 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (una llegada no deja a nadie adentro de una casa) ni sobre una puerta con llave colocada
   abierta (una puerta no es lugar para llegar: el que llega quedaría en el umbral). El
   destino de un `teleport` es además una casilla caminable de una isla, como la llegada de
-  un barco (una puerta con llave cerrada no lo es). La salida de una casa tampoco cae
-  sobre una puerta con llave, abierta o cerrada, ni en una casilla no caminable (ver
-  `houses.yaml`). El error de una casa o de una puerta con llave nombra la isla y la
-  casilla; el de una casilla no caminable nombra la ruta, el NPC o la casa, con la casilla
-  en la posición del error, pero no siempre la isla (el destino de un `teleport` puede no
-  estar en ninguna). Lo mismo que los
+  un barco (una puerta con llave cerrada no lo es). La salida de una casa y el templo de
+  cada isla, los últimos recursos de salir de una casa y de despertar con todo lleno,
+  tampoco caen sobre una puerta, con llave o común, abierta o cerrada, ni en una casilla no
+  caminable (ver `houses.yaml`), y el templo tampoco en una casilla de casa. El error de
+  una casa o de una puerta nombra la isla y la casilla; el de una casilla no caminable
+  nombra la ruta, el NPC, la casa o el templo, con la casilla en la posición del error,
+  pero no siempre la isla (el destino de un `teleport` puede no estar en ninguna). Lo mismo que los
   extremos de portal en una casa (`world.NewMap`): el servidor no arranca con eso
-  (`checkArrivals` en `session/travel.go`), y los dos lados leen los casos de
+  (`checkArrivals` en `session/travel.go`, que corre en cuanto `initDoors` encuentra las
+  puertas, antes del chequeo de escape), y los dos lados leen los casos de
   `packages/map-format/src/testdata/arrivals.json`.
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).

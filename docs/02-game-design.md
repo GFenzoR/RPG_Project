@@ -98,10 +98,13 @@ Tibia:
   sobre una (la taparía para siempre). Caminar con el teclado sobre una sí la toma: es
   pisarla. Si no queda ninguna casilla libre en el radio, despertar en el templo y salir de
   una casa comparten la casilla de destino como último recurso: el templo o la salida, que
-  nunca están sobre una escalera, un agujero o un teletransporte (lo rechazan el servidor y
-  `make validate`), ni sobre una puerta con llave (ver "Puertas con llave"). Quien entra al
-  juego con todo lleno y tenía guardada la posición sobre una escalera (de antes de los
-  portales) o sobre una puerta (con llave, o común y cerrada desde entonces) va al templo.
+  nunca están sobre una escalera, un agujero o un teletransporte, ni sobre una puerta (con
+  llave, ver "Puertas con llave"; ni común, que cualquiera puede cerrar y dejaría a alguien
+  dentro de una puerta cerrada), y que son caminables (el templo, además, fuera de toda
+  casa): si no, el servidor no arranca y `make validate` no pasa (`checkArrivals`). Quien
+  entra al juego con todo lleno y tenía guardada la posición sobre una escalera (de antes
+  de los portales) o sobre una puerta (con llave, o común y cerrada desde entonces) va al
+  templo.
 - **Lo que el cliente ve:** lo mismo que un teletransporte del personal (`FullMapView` del
   piso nuevo, docs/05). Solo se dibuja el piso del jugador.
 
@@ -629,8 +632,8 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   se liberó) sale por la puerta a la salida en el acto o, a lo sumo, en un segundo. Quien
   entra al juego dentro de una casa a la que ya no tiene acceso aparece en la salida; con
   acceso, en su casilla o, si está ocupada, en otra de esa casa unida a pie con ella o en
-  la calle de la salida (nunca en otra casa ni del otro lado de una pared, ver "Puertas con
-  llave", "Nadie aparece adentro sin pasar la puerta"). El
+  la calle de la salida (nunca en otra casa ni donde no se llegue caminando desde su
+  casilla, ver "Puertas con llave", "Nadie aparece adentro sin pasar la puerta"). El
   personal del juego entra a cualquier casa. Desde la ventana de la casa (que se abre a
   hasta 3 casillas de una puerta) quien tiene acceso puede **entrar** (lo lleva a una
   casilla libre adentro, junto a la puerta) y quien está adentro, **salir** (a la salida):
@@ -872,9 +875,11 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
     puerta se haya cerrado después (antes iba al templo). Lo mismo con una puerta común
     cerrada después (al reiniciar, toda puerta vuelve a como la dibuja el mapa): está en
     el área de sus dos lados, así que entra junto a ella, de cualquier lado. La salida de
-    una casa nunca está sobre una puerta con llave, abierta o cerrada (ni el servidor
-    arranca ni pasa `make validate`): con todo lleno, quien sale de la casa queda en la
-    salida misma, y desde el umbral daría un paso a la sala sin la llave;
+    una casa y el templo nunca están sobre una puerta con llave, abierta o cerrada (ni el
+    servidor arranca ni pasa `make validate`): con todo lleno, quien sale de la casa o
+    despierta queda en esa casilla misma, y desde el umbral daría un paso a la sala sin la
+    llave. Tampoco sobre una puerta común: cualquiera la puede cerrar, y el último recurso
+    lo dejaría dentro de una puerta cerrada;
   - **cualquier otra casilla** (un muro, ninguna casilla): ninguna. La búsqueda no
     encuentra lugar y vale el último recurso de quien la pidió (el templo, la salida de la
     casa, el rechazo del `/tp` o del teleport) en vez de adivinar.

@@ -153,15 +153,17 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     regla para cada origen fuera de las áreas (casa: su área de casa y la calle de la
     salida; puerta con llave: su afuera; escalera: las áreas de al lado; cualquier otro:
     ninguna, `02-game-design.md` "Nadie aparece adentro sin pasar la puerta"). La salida
-    de una casa sobre una puerta con llave (abierta o cerrada) o en una casilla no
-    caminable ya no deja arrancar ni pasa `make validate` (`checkArrivals`, casos en
-    `testdata/arrivals.json`): con todo lleno, `houseExit` deja al jugador en la salida
-    misma, y desde el umbral de una puerta cerrada daba un paso a la sala sin la llave (el
-    paso solo mira adonde va). Hoy ninguna de las 6 salidas está sobre una puerta. Queda:
-    quien sale del juego en el umbral de una puerta abierta vuelve afuera aunque hubiera
-    entrado con la llave (no sabemos de qué lado venía), y un `Teleport` del servidor
-    (`relocate`) no mira si la casilla es caminable: todo destino de último recurso (el
-    templo, la salida) tiene que serlo por la carga;
+    de una casa o el templo sobre una puerta (con llave o común, abierta o cerrada) o en
+    una casilla no caminable, y el templo en una casa, ya no dejan arrancar ni pasan
+    `make validate` (`checkArrivals`, casos en `testdata/arrivals.json`): con todo lleno,
+    `houseExit` y `wakeAtTemple` dejan al jugador en esa casilla misma, y desde el umbral
+    de una puerta con llave daba un paso a la sala sin la llave (el paso solo mira adonde
+    va); una puerta común la puede cerrar cualquiera. Hoy ninguna de las 6 salidas ni
+    ningún templo está sobre una puerta. Queda: quien sale del juego en el umbral de una
+    puerta abierta vuelve afuera aunque hubiera entrado con la llave (no sabemos de qué
+    lado venía), y un `Teleport` del servidor (`relocate`) no mira si la casilla es
+    caminable: todo destino de último recurso nuevo tiene que quedar garantizado por la
+    carga, como el templo y la salida;
   - **Para que lo decida el dueño (revisión del lote 3):**
     - portales de la comunidad entre islas: hoy el chequeo de parcelas los rechaza
       (`cross_island`, `packages/map-format/src/patch/plots.ts`), la opción segura, porque
