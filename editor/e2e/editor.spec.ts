@@ -554,3 +554,144 @@ test("hito 2: map patches — export, diff view, import with and without conflic
   await expect(page.getByTestId("status")).toContainText("Patch rechazado");
   expect(errors).toEqual([]);
 });
+
+test("houses: draw a house in the panel, check it, save houses.yaml and its names", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const HOUSES = join(root, "world/islands/testisle/houses.yaml");
+  const NAMES = { es: join(root, "i18n/es/world.yaml"), en: join(root, "i18n/en/world.yaml") };
+  const namesBefore = { es: readFileSync(NAMES.es, "utf8"), en: readFileSync(NAMES.en, "utf8") };
+  const issues = page.getByTestId("house-issue");
+
+  await page.goto("/?lang=es&island=testisle");
+  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  // Zoom out around the temple so the house area (east of the wolves) is on screen.
+  const temple = await clientOf(page, 1056, 1056);
+  await page.mouse.move(temple.x, temple.y);
+  await page.mouse.wheel(0, 300);
+  const box = await page.getByTestId("map-canvas").boundingBox();
+  for (const [x, y] of [
+    [1068, 1044],
+    [1071, 1048],
+  ] as const) {
+    const p = await clientOf(page, x, y);
+    expect(p.x).toBeGreaterThan((box?.x ?? 0) + 10);
+    expect(p.x).toBeLessThan((box?.x ?? 0) + (box?.width ?? 0) - 10);
+    expect(p.y).toBeGreaterThan((box?.y ?? 0) + 10);
+  }
+
+  // testisle has no houses yet; "Nueva casa" opens a draft and picks the House tool.
+  await expect(page.getByTestId("houses")).toContainText("(ninguna)");
+  await page.getByTestId("house-new").click();
+  await expect(page.getByTestId("tool-house")).toHaveClass(/active/);
+  await expect(page.getByTestId("house-mode-tiles")).toHaveClass(/active/);
+  await expect(page.getByTestId("house-id")).toHaveValue("testisle_house_1");
+  await expect(issues.first()).toHaveText("La casa no tiene casillas");
+
+  // Tiles: drag the room, click the doorway; a stray tile is added and right-clicked away.
+  await dragTiles(page, [1068, 1044], [1071, 1046]);
+  await clickTile(page, 1069, 1047);
+  await clickTile(page, 1073, 1044);
+  await clickTile(page, 1073, 1044, "right");
+  await expect(page.getByTestId("house-summary")).toHaveText(
+    "13 casillas en 2 rectángulo(s), 0 puerta(s)",
+  );
+  await expect(issues).toContainText(["Falta al menos una puerta", "Falta la salida"]);
+
+  // Doors: one inside the room is flagged (not on the edge); right-click removes it.
+  await page.getByTestId("house-mode-doors").click();
+  await clickTile(page, 1069, 1045);
+  await expect(issues).toContainText(["La puerta 1069,1045,7 no está en el borde de la casa"]);
+  await clickTile(page, 1069, 1045, "right");
+  await clickTile(page, 1069, 1047);
+  // Exit: first inside the house (flagged), then outside next to the door.
+  await page.getByTestId("house-mode-exit").click();
+  await clickTile(page, 1070, 1046);
+  await expect(issues).toContainText([
+    "La salida 1070,1046,7 cae dentro de la casa «testisle_house_1»",
+  ]);
+  await clickTile(page, 1069, 1048);
+  await expect(page.getByTestId("house-exit")).toHaveText("Salida: 1069,1048,7");
+  await page.getByTestId("house-name-es").fill("Casa de la Prueba");
+  await page.getByTestId("house-name-en").fill("Test House");
+  await page.getByTestId("house-rent").fill("650");
+  await expect(page.getByTestId("house-ok")).toHaveText("La casa está bien");
+  await shot(page, "40-house-draft");
+
+  // Apply: one undoable step; the validation counts the names that are not saved yet.
+  await page.getByTestId("house-apply").click();
+  await expect(page.getByTestId("status")).toContainText("Casa «testisle_house_1» aplicada");
+  await expect(page.getByTestId("house-testisle_house_1")).toHaveClass(/active/);
+  await expect(page.getByTestId("house-id")).toBeDisabled();
+  await expect(page.getByTestId("dirty")).toHaveText("Cambios sin guardar");
+  await settled(page);
+  await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
+
+  // A second house over the first one is refused with the reason.
+  await page.getByTestId("house-new").click();
+  await dragTiles(page, [1070, 1046], [1072, 1046]);
+  await expect(issues).toContainText([
+    "La casilla 1070,1046,7 ya es de la casa «testisle_house_1»",
+  ]);
+  await shot(page, "41-house-overlap");
+  await page.getByTestId("house-apply").click();
+  await expect(page.getByTestId("status")).toContainText("No se aplicó la casa");
+  await page.getByTestId("house-cancel").click();
+  await expect(page.getByTestId("houses").locator(".entity-list li")).toHaveCount(1);
+
+  // Save: houses.yaml in canonical form and both names next to the other house names.
+  await page.keyboard.press("Control+s");
+  await expect(page.getByTestId("status")).toContainText("Guardado:");
+  await expect(page.getByTestId("dirty")).toHaveText("Sin cambios");
+  expect(readFileSync(HOUSES, "utf8")).toBe(
+    [
+      "- id: testisle_house_1",
+      "  name: house.testisle_house_1.name",
+      "  rent: 650",
+      "  rects:",
+      "    - { x: 1068, y: 1044, z: 7, w: 4, h: 3 }",
+      "    - { x: 1069, y: 1047, z: 7, w: 1, h: 1 }",
+      "  doors:",
+      "    - { x: 1069, y: 1047, z: 7 }",
+      "  exit: { x: 1069, y: 1048, z: 7 }",
+      "",
+    ].join("\n"),
+  );
+  expect(readFileSync(NAMES.es, "utf8")).toBe(
+    `${namesBefore.es}house.testisle_house_1.name: "Casa de la Prueba"\n`,
+  );
+  expect(readFileSync(NAMES.en, "utf8")).toBe(
+    `${namesBefore.en}house.testisle_house_1.name: "Test House"\n`,
+  );
+  const mapcli = (...args: string[]): string =>
+    execFileSync(
+      process.execPath,
+      [
+        "--experimental-strip-types",
+        join(repo, "tools/mapcli/src/cli.ts"),
+        ...args,
+        "--root",
+        root,
+      ],
+      { encoding: "utf8" },
+    );
+  expect(JSON.parse(mapcli("fmt", "--check"))).toEqual({ check: true, changed: [], errors: [] });
+  expect(JSON.parse(mapcli("validate", "testisle"))).toMatchObject({ errors: 0 });
+  await shot(page, "42-house-saved");
+
+  // Reload: the house and its names come back from disk; delete and undo it.
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await page.getByTestId("house-testisle_house_1").click();
+  await expect(page.getByTestId("house-name-es")).toHaveValue("Casa de la Prueba");
+  await expect(page.getByTestId("house-name-en")).toHaveValue("Test House");
+  await expect(page.getByTestId("house-rent")).toHaveValue("650");
+  await page.getByTestId("house-delete").click();
+  await expect(page.getByTestId("houses")).toContainText("(ninguna)");
+  await page.keyboard.press("Control+z");
+  await expect(page.getByTestId("house-testisle_house_1")).toBeVisible();
+  await expect(page.getByTestId("status")).toContainText("Deshecho: borrar casa");
+  expect(errors).toEqual([]);
+});
