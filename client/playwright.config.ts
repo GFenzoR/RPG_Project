@@ -69,17 +69,31 @@ function webkitProject(): Project[] {
   ];
 }
 
+/**
+ * On CI (GitHub sets CI=true): an ubuntu runner with 2 CPUs and no GPU, so every page draws
+ * WebGL in software and the suite runs a few times slower than on a PC. A failed test runs
+ * once more and the report marks it "flaky" if it then passes: a flake is visible, not
+ * hidden, and does not sink the job. The first attempt records no trace (a trace films the
+ * page, which costs CPU the runner does not have); it keeps a screenshot and the error
+ * context, and the retry records the whole trace. Locally: no retries, a trace of every
+ * failure. A `test.only` left behind fails on CI.
+ */
+const ci = Boolean(process.env["CI"]);
+
 export default defineConfig({
   testDir: "e2e",
   outputDir: "../test-results/client",
   fullyParallel: false,
   workers: 1,
   timeout: 90_000,
+  retries: ci ? 1 : 0,
+  forbidOnly: ci,
   reporter: [["list"]],
   use: {
     baseURL: `http://localhost:${clientPort}`,
     viewport: { width: 1280, height: 800 },
-    trace: "retain-on-failure",
+    trace: ci ? "on-first-retry" : "retain-on-failure",
+    screenshot: "only-on-failure",
   },
   projects: [
     {
