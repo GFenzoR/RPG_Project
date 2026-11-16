@@ -103,26 +103,36 @@ func worldPos(p content.Position) (world.Pos, bool) {
 	return world.Pos{X: uint16(p.X), Y: uint16(p.Y), Z: uint8(p.Z)}, true
 }
 
-// checkArrivals refuses an arrival or a house exit that would put a player where nobody may be put
-// (docs/03 "Validación"; make validate refuses the same, packages/map-format
+// checkArrivals refuses an arrival, a temple or a house exit that would put a player where
+// nobody may be put (docs/03 "Validación"; make validate refuses the same, packages/map-format
 // validate.ts checkArrivals, with the cases of testdata/arrivals.json): a boat arrival
 // or the destination of a dialog teleport on a house tile (an arrival puts nobody inside
 // a house: the search would skip the house, but the destination itself is wrong) or on a
 // locked door placed open (a door is no place to land: the destination would be its
 // doorway, and the search could only put the player on its outside). A dialog teleport
 // must also lead to a walkable tile of an island, as a boat arrival must (initTravel).
-// world.NewMap refuses the same for the ends of portals. The exit of a house is the last
-// resort of putting someone out of it (houseExit: with every tile around taken, the exit
-// itself), so it must be a walkable tile and no locked door, open or closed: whoever is
-// put there would stand in the doorway, one step from its room without the key (a step
-// checks only where it goes). New runs it after initDoors, which finds the locked doors.
+// world.NewMap refuses the same for the ends of portals.
+//
+// The temple and the exit of a house are last resorts (wakeAtTemple, placement, houseExit:
+// with every tile around taken, the tile itself; Teleport does not look at it), so each
+// must be a walkable tile on no door (badLastResort). The temple also lies in no house
+// (nobody wakes up inside one; world.NewMap keeps house exits out of houses). With that and
+// world.NewMap (neither on the entrance of a portal), each lies in an area (areaOf > 0):
+// a search from it finds the free tiles around it (searchFrom). initDoors runs it as soon
+// as it has found the doors, before the rooms and the escape check: a temple on a locked
+// door would otherwise fail the escape check (its area is none) with a misleading error.
 func (w *World) checkArrivals() error {
 	for _, hd := range w.m.Houses() {
-		switch {
-		case w.lockedDoor(hd.Exit):
-			return fmt.Errorf("session: house %q: exit %v (island %q) lies on a locked door: whoever is put out with every tile around taken would stand in its doorway", hd.ID, hd.Exit, hd.Island)
-		case !w.m.Walkable(hd.Exit):
-			return fmt.Errorf("session: house %q: exit %v (island %q) is not on a walkable tile", hd.ID, hd.Exit, hd.Island)
+		if why := w.badLastResort(hd.Exit); why != "" {
+			return fmt.Errorf("session: house %q: exit %v (island %q) %s", hd.ID, hd.Exit, hd.Island, why)
+		}
+	}
+	for _, is := range w.m.Islands() {
+		if why := w.badLastResort(is.Temple); why != "" {
+			return fmt.Errorf("session: temple %v (island %q) %s", is.Temple, is.ID, why)
+		}
+		if h := w.m.HouseAt(is.Temple); h != nil {
+			return fmt.Errorf("session: temple %v (island %q) lies in house %q: nobody wakes up inside a house", is.Temple, is.ID, h.ID)
 		}
 	}
 	for _, r := range w.cfg.BoatRoutes {
@@ -153,6 +163,23 @@ func (w *World) checkArrivals() error {
 		}
 	}
 	return nil
+}
+
+// badLastResort says why p is no last resort (checkArrivals: the temple, a house exit), or
+// "". On a locked door, open or closed, whoever is put there stands in its doorway, one
+// step from its room without the key (a step checks only where it goes); on any other
+// door, anyone may close it in the game (a door does not close on a creature, but nobody
+// needs to stand there), and whoever is put there next stands inside a closed door.
+func (w *World) badLastResort(p world.Pos) string {
+	switch {
+	case w.lockedDoor(p):
+		return "lies on a locked door: whoever is put there with every tile around taken would stand in its doorway"
+	case w.doors[p] != nil:
+		return "lies on a door anyone may close: whoever is put there with every tile around taken could stand in a closed door"
+	case !w.m.Walkable(p):
+		return "is not on a walkable tile"
+	}
+	return ""
 }
 
 // badArrival says why nobody may arrive on the walkable tile p (checkArrivals), or "".

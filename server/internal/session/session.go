@@ -568,10 +568,7 @@ func New(cfg Config) (*World, error) {
 	if err := w.initGathering(); err != nil {
 		return nil, err
 	}
-	if err := w.initDoors(); err != nil {
-		return nil, err
-	}
-	if err := w.checkArrivals(); err != nil {
+	if err := w.initDoors(); err != nil { // with checkArrivals (travel.go)
 		return nil, err
 	}
 	if err := w.initCrafting(); err != nil {

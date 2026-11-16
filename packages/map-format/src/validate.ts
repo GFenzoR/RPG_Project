@@ -533,8 +533,7 @@ class WorldValidator {
       if (other !== island)
         for (const [i, p] of other.portals.entries())
           inside(`${this.dirOf(other)}/portals.yaml`, [i, "to"], p.to, "portal destination");
-    if (inHouse(island.meta.temple) !== undefined)
-      this.err(`${dir}/island.yaml`, ["temple"], "temple is inside a house", island.meta.temple);
+    // A temple in a house: checkArrivals, with the server's words.
     for (const [i, z] of island.zones.entries()) {
       if (z.type !== "no_logout") continue;
       const hit = z.floors.some((f) =>
@@ -934,29 +933,54 @@ class WorldValidator {
   }
 
   /**
-   * Boat arrivals, dialog teleports and house exits (docs/03 "Validación"; the server's
-   * checkArrivals refuses the same, with the cases of testdata/arrivals.json): no arrival
-   * on a house tile (an arrival puts nobody inside a house) nor on a locked door placed
-   * open (a door is no place to land: its doorway). A dialog teleport also needs a walkable
-   * tile of an island, as a boat arrival does (checkRouteTile). A house exit, the last
-   * resort of putting someone out of the house, lies on no locked door, open or closed:
-   * whoever is put there would stand in its doorway, a step from its room (that it is
-   * walkable, checkHouses says).
+   * Boat arrivals, dialog teleports, temples and house exits (docs/03 "Validación"; the
+   * server's checkArrivals refuses the same, with the cases of testdata/arrivals.json): no
+   * arrival on a house tile (an arrival puts nobody inside a house) nor on a locked door
+   * placed open (a door is no place to land: its doorway). A dialog teleport also needs a
+   * walkable tile of an island, as a boat arrival does (checkRouteTile). The temple and a
+   * house exit, the last resorts of waking up and of putting someone out of a house (with
+   * every tile around taken, the tile itself), lie on no door: on a locked one, open or
+   * closed, whoever is put there would stand in its doorway, a step from its room; any
+   * other one anyone may close, and whoever is put there next would stand in a closed door.
+   * The temple lies in no house either (that both are walkable, needWalkable says).
    */
   private checkArrivals(): void {
     const owner = new Map<string, string>(); // house tile → house id, every island
-    for (const island of this.world.islands.values())
+    const lastResort = (file: string, path: PathSegment[], what: string, p: Position): void => {
+      const tile = this.tiles.tileAt(p);
+      const why = hasLockedDoor(tile, this.content)
+        ? "lies on a locked door: whoever is put there with every tile around taken would stand in its doorway"
+        : doorsOn(tile, this.content).length > 0
+          ? "lies on a door anyone may close: whoever is put there with every tile around taken could stand in a closed door"
+          : undefined;
+      if (why) this.err(file, path, `${what} ${why}`, p);
+    };
+    for (const island of this.world.islands.values()) {
+      const at = (p: Position): string => `${formatPos(p)} (island "${island.meta.id}")`;
       for (const [i, h] of island.houses.entries()) {
         for (const r of h.rects)
           for (const [x, y] of tilesOf(r)) owner.set(formatPos({ x, y, z: r.z }), h.id);
-        if (hasLockedDoor(this.tiles.tileAt(h.exit), this.content))
-          this.err(
-            `${this.dirOf(island)}/houses.yaml`,
-            [i, "exit"],
-            `exit of house "${h.id}" at ${formatPos(h.exit)} (island "${island.meta.id}") lies on a locked door: whoever is put out with every tile around taken would stand in its doorway`,
-            h.exit,
-          );
+        lastResort(
+          `${this.dirOf(island)}/houses.yaml`,
+          [i, "exit"],
+          `exit of house "${h.id}" at ${at(h.exit)}`,
+          h.exit,
+        );
       }
+      const t = island.meta.temple;
+      lastResort(`${this.dirOf(island)}/island.yaml`, ["temple"], `temple at ${at(t)}`, t);
+    }
+    for (const island of this.world.islands.values()) {
+      const t = island.meta.temple;
+      const house = owner.get(formatPos(t));
+      if (house !== undefined)
+        this.err(
+          `${this.dirOf(island)}/island.yaml`,
+          ["temple"],
+          `temple at ${formatPos(t)} (island "${island.meta.id}") lies in house "${house}": nobody wakes up inside a house`,
+          t,
+        );
+    }
     const land = (
       file: string,
       path: PathSegment[],

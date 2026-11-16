@@ -13,6 +13,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
+	"go.yaml.in/yaml/v3"
 )
 
 // fixtureHouse is a house of arrivals.json: its rect and door ("x,y,w,h", "x,y" on
@@ -38,13 +39,13 @@ type arrivalsFixture struct {
 }
 
 // arrivalCases is how many cases arrivals.json has (arrivals.test.ts checks the same).
-const arrivalCases = 17
+const arrivalCases = 25
 
 // A boat arrival or a dialog teleport on a house tile, on a locked door placed open or
-// (a dialog teleport) on no walkable tile of an island, and a house exit on a locked door
-// (open or closed) or on no walkable tile, stops the world from starting, with the island
-// and the tile; make validate refuses the same (docs/03 "Validación"): both read
-// arrivals.json.
+// (a dialog teleport) on no walkable tile of an island, and a house exit or a temple on a
+// door (locked or not, open or closed), on no walkable tile or (a temple) in a house,
+// stops the world from starting, with the island and the tile; make validate refuses the
+// same (docs/03 "Validación"): both read arrivals.json.
 func TestArrivalsFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "packages", "map-format", "src", "testdata", "arrivals.json"))
 	if err != nil {
@@ -57,7 +58,8 @@ func TestArrivalsFixture(t *testing.T) {
 	if len(fx.Cases) != arrivalCases {
 		t.Fatalf("%d cases, want %d", len(fx.Cases), arrivalCases)
 	}
-	why := map[string]string{"house": `in house "h0"`, "door": "on a locked door", "walkable": "not a walkable tile"}
+	why := map[string]string{"house": `in house "h0"`, "door": "on a locked door",
+		"plain": "on a door anyone may close", "walkable": "not a walkable tile"}
 	for _, c := range fx.Cases {
 		t.Run(c.Name, func(t *testing.T) {
 			var more []fixtureHouse
@@ -80,6 +82,8 @@ func TestArrivalsFixture(t *testing.T) {
 				if c.House == nil {
 					t.Fatal("an exit case without its house")
 				}
+			case "temple":
+				cfg.Map.Islands()[0].Temple = to
 			default:
 				t.Fatalf("bad arrival kind %q", c.By)
 			}
@@ -94,12 +98,15 @@ func TestArrivalsFixture(t *testing.T) {
 			if !ok {
 				t.Fatalf("unknown error %q", c.Error)
 			}
-			if c.By == "exit" {
-				want = `house "h1"`
+			if c.By == "exit" || c.By == "temple" {
+				want = `temple ` + to.String() + ` (island "test") `
+				if c.By == "exit" {
+					want = `house "h1": exit ` + to.String() + ` (island "test") `
+				}
 				if c.Error == "walkable" {
-					want += ": exit " + to.String() + ` (island "test") is not on a walkable tile`
+					want += "is not on a walkable tile"
 				} else {
-					want += ": exit " + to.String() + ` (island "test") lies ` + why[c.Error]
+					want += "lies " + why[c.Error]
 				}
 			}
 			if err == nil || !strings.Contains(err.Error(), want) {
@@ -120,10 +127,26 @@ func TestArrivalsFixture(t *testing.T) {
 }
 
 // arrivalsConfig is the data harness config (a 64x64 field of real grass with the captain
-// harbor_master) with the drawing and the houses of fx, then the more ones.
+// harbor_master) plus the door pair plain_door (no lock), with the drawing and the houses
+// of fx, then the more ones.
 func arrivalsConfig(t *testing.T, fx arrivalsFixture, more ...fixtureHouse) session.Config {
 	t.Helper()
 	cfg := dataConfig(t, nil)
+	var top uint16 // the plain door pair takes the numeric ids after every item of data/
+	for _, it := range cfg.Items {
+		top = max(top, it.Numeric)
+	}
+	for i, src := range []string{
+		"{id: plain_door, kind: decoration, pickupable: false, blocks_movement: true, blocks_sight: true, door: {open: plain_door_open}}",
+		"{id: plain_door_open, kind: decoration, pickupable: false, door: {closed: plain_door}}",
+	} {
+		var it content.Item
+		if err := yaml.Unmarshal([]byte(src), &it); err != nil {
+			t.Fatal(err)
+		}
+		it.Numeric = top + 1 + uint16(i)
+		cfg.Items[it.ID] = &it
+	}
 	var ox, oy int
 	if _, err := fmt.Sscanf(fx.Origin, "%d,%d", &ox, &oy); err != nil {
 		t.Fatalf("bad origin %q", fx.Origin)
@@ -142,6 +165,8 @@ func arrivalsConfig(t *testing.T, fx arrivalsFixture, more ...fixtureHouse) sess
 				worldtest.SetTile(t, cfg.Map, p, grass, blocks, cfg.Items["forge_gate"].Numeric)
 			case 'd':
 				worldtest.SetTile(t, cfg.Map, p, grass, 0, cfg.Items["forge_gate_open"].Numeric)
+			case 'p':
+				worldtest.SetTile(t, cfg.Map, p, grass, 0, cfg.Items["plain_door_open"].Numeric)
 			default:
 				t.Fatalf("unknown tile %q", ch)
 			}

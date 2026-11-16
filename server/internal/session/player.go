@@ -706,11 +706,12 @@ func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 }
 
 // freeAround is freeNear, also without house tiles if noHouse. noHouse is a second guard
-// that none of today's callers needs: each starts on a tile of a street area (a portal
-// end, a boat arrival, a dialog teleport or a house exit, none on a house tile:
-// world.NewMap, checkArrivals), and areaAllows never puts a search from a street area on
-// a house tile (a house area is negative). It keeps a caller that starts elsewhere out of
-// every house.
+// that none of today's callers needs: each starts on no house tile (a portal end, a boat
+// arrival, a dialog teleport or a house exit: world.NewMap, checkArrivals), so on a tile
+// of a street area or on the entrance of stairs, a hole or a teleport (a boat arrival or
+// a dialog teleport may lie on one), and a search from either looks only at street areas
+// (searchFrom: a house area is negative, and the areas next to an entrance are clipped to
+// street ones by areaOf). It keeps a caller that starts elsewhere out of every house.
 func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bool) {
 	from := w.searchFrom(p)
 	skip := world.FlagBlocksMovement | world.FlagPortalStep

@@ -10,17 +10,18 @@ import type { Chunk, Island, Position, World } from "./types.ts";
 import { validateLoaded } from "./validate.ts";
 
 // The cases the server reads too (server/internal/session, TestArrivalsFixture): both
-// refuse the same boat arrivals, dialog teleports and house exits (docs/03 "Validación").
+// refuse the same boat arrivals, dialog teleports, temples and house exits (docs/03
+// "Validación").
 interface FixtureHouse {
   rect: string;
   door: string;
 }
 interface Case {
   name: string;
-  by: "boat" | "dialog" | "exit";
+  by: "boat" | "dialog" | "exit" | "temple";
   to: string;
   house?: FixtureHouse;
-  error?: "house" | "door" | "walkable";
+  error?: "house" | "door" | "plain" | "walkable";
 }
 const fixture = JSON.parse(
   readFileSync(join(import.meta.dirname, "testdata", "arrivals.json"), "utf8"),
@@ -32,10 +33,28 @@ const fixture = JSON.parse(
 };
 
 /** How many cases arrivals.json has (TestArrivalsFixture checks the same). */
-const ARRIVAL_CASES = 17;
+const ARRIVAL_CASES = 25;
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
-const content = loadContent(repo);
+// The items of data/ plus the door pair plain_door, without a lock (the p of the drawing).
+const data = loadContent(repo);
+const content: ContentIndex = {
+  ...data,
+  items: new Map([
+    ...data.items,
+    ["plain_door", { id: "plain_door", kind: "decoration", blocksMovement: true, door: true }],
+    [
+      "plain_door_open",
+      {
+        id: "plain_door_open",
+        kind: "decoration",
+        blocksMovement: false,
+        door: true,
+        doorOpen: true,
+      },
+    ],
+  ]),
+};
 const priestFile = "data/npcs/puerto_priest.yaml";
 
 /** The numbers of "x,y" (or "x,y,w,h"). */
@@ -56,14 +75,19 @@ const STACKS: Record<string, string[]> = {
   "#": ["stone_wall"],
   D: ["forge_gate"],
   d: ["forge_gate_open"],
+  p: ["plain_door_open"],
 };
 
 /**
  * The world of the fixture: island "test", a 64x64 field of grass on floor 7 with its
- * temple at (0,0) and the captain harbor_master at (8,10), the drawing over it from its
- * origin and its houses, then the more ones.
+ * temple at (0,0) (or at temple) and the captain harbor_master at (8,10), the drawing over
+ * it from its origin and its houses, then the more ones. A protection zone covers the
+ * island, so a temple anywhere is protected.
  */
-function fixtureWorld(more: (FixtureHouse & { exit: string })[] = []): World {
+function fixtureWorld(
+  more: (FixtureHouse & { exit: string })[] = [],
+  temple: Position = { x: 0, y: 0, z: 7 },
+): World {
   const chunks = new Map<string, Chunk>();
   for (let cy = 0; cy < 2; cy++)
     for (let cx = 0; cx < 2; cx++) {
@@ -89,13 +113,13 @@ function fixtureWorld(more: (FixtureHouse & { exit: string })[] = []): World {
       name: "island.testisle.name",
       rect,
       floors: [7],
-      temple: { x: 0, y: 0, z: 7 },
+      temple,
       level_hint: [1, 5],
     },
     chunks,
     spawns: [],
     npcs: [{ npc: "harbor_master", pos: { x: 8, y: 10, z: 7 } }],
-    zones: [],
+    zones: [{ id: "everywhere", type: "protection", floors: [7], rects: [rect] }],
     portals: [],
     texts: [],
     houses: [...fixture.houses, ...more].map((h, i) => {
@@ -142,14 +166,17 @@ describe("arrivals", () => {
     const more = c.house ? [{ ...c.house, exit: c.to }] : [];
     if (c.by === "exit" && more.length === 0) throw new Error(`${c.name}: no house`);
     const exitOf = fixture.houses.length; // the index of the case's house, h1
-    const found = validateLoaded(fixtureWorld(more), index).diagnostics.filter(
+    const temple = c.by === "temple" ? to : undefined;
+    const found = validateLoaded(fixtureWorld(more, temple), index).diagnostics.filter(
       (d) =>
         d.severity === "error" &&
         (c.by === "boat"
           ? d.file === routesFile && d.path[1] === "to"
           : c.by === "dialog"
             ? d.file === priestFile && d.path[0] === "dialog"
-            : d.file.endsWith("/houses.yaml") && d.path[0] === exitOf && d.path[1] === "exit"),
+            : c.by === "temple"
+              ? d.file.endsWith("/island.yaml") && d.path[0] === "temple"
+              : d.file.endsWith("/houses.yaml") && d.path[0] === exitOf && d.path[1] === "exit"),
     );
     if (!c.error) {
       expect(found).toEqual([]);
@@ -158,18 +185,24 @@ describe("arrivals", () => {
     const why = {
       house: 'lies in house "h0"',
       door: "lies on a locked door",
-      walkable: c.by === "exit" ? "house exit is not on a walkable tile" : "not a walkable tile",
+      plain: "lies on a door anyone may close",
+      walkable:
+        c.by === "exit"
+          ? "house exit is not on a walkable tile"
+          : c.by === "temple"
+            ? "temple is not on a walkable tile"
+            : "not a walkable tile",
     }[c.error];
-    // A house exit can break other rules of its own too (out of reach of the temple, on a
-    // closed gate not walkable): the one of the case is among them.
-    if (c.by !== "exit") expect(found).toHaveLength(1);
+    // A house exit or a temple can break other rules of its own too (out of reach of the
+    // temple, on a closed gate not walkable): the one of the case is among them.
+    if (c.by === "boat" || c.by === "dialog") expect(found).toHaveLength(1);
     const hit = found.find((d) => d.message.includes(why));
     expect(hit, `${why} in ${found.map((d) => d.message).join(" | ")}`).toBeDefined();
     expect(hit?.pos).toEqual(to);
-    // The new refusals name the island and the tile (the walkability of a boat arrival and
-    // of a house exit is an older message, by route or house).
+    // The new refusals name the island and the tile (the walkability of a boat arrival, of a
+    // house exit and of a temple is an older message, by route, house or file).
     if (c.error !== "walkable") expect(hit?.message).toContain(`island "test"`);
     if (c.error !== "walkable" || c.by === "dialog") expect(hit?.message).toContain(formatPos(to));
-    if (c.by === "exit" && c.error === "door") expect(hit?.message).toContain('house "h1"');
+    if (c.by === "exit" && c.error !== "walkable") expect(hit?.message).toContain('house "h1"');
   });
 });
