@@ -232,9 +232,11 @@ secundaria.
     `SetSafeMode`, `Creature.skull`/`CreatureSkull`, acciones de guerra en `GuildCommand`
     y `GuildUpdate.wars`, `/unskull` auditado, toda Puerto `no_pvp`, arena en Raigal,
     marca en el mapa y la lista de batalla, modo seguro y guerras en el panel del gremio.
-    Pendiente: que una condición recuerde a su autor tras un relogueo y
-    hechizos de condición a distancia contra jugadores. Las marcas ya tienen sprites
-    propios (`assets/sprites/ui/marks/`, `client/src/render/marks.ts`).
+    Después: una condición de otro jugador guarda a su autor (personaje) y el recuerdo de
+    su ataque en `characters.conditions`, sin migración, y sobrevive al relogueo de
+    cualquiera de los dos; los hechizos de condición a distancia alcanzan a jugadores con
+    las reglas de un ataque directo. Las marcas ya tienen sprites propios
+    (`assets/sprites/ui/marks/`, `client/src/render/marks.ts`).
 - [x] **T5.3 Mercado global e intercambio directo.** Ventana de intercambio entre dos
   jugadores adyacentes con confirmación doble, y ofertas de compra y venta de items
   `tradeable` entre jugadores, con depósito, buzón y comisión en oro (sumidero),

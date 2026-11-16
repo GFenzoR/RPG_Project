@@ -851,7 +851,9 @@ Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
 - **Atacar a un jugador:** el mismo `SetTarget`. El servidor valida en cada ronda (zonas,
   niveles, staff, modo seguro); si deja de valer, suelta el objetivo y manda el motivo.
   `CastSpell` con objetivo (`creature_id`, casilla o el objetivo actual) también alcanza a
-  un jugador; las runas igual. Motivos de rechazo: `pvp.off`, `pvp.staff`,
+  un jugador; las runas igual, y los hechizos de condición a distancia (`entangle`: el
+  `Projectile` del elemento, `Effect` 7 en la casilla del jugador y su `PlayerConditions`).
+  Motivos de rechazo: `pvp.off`, `pvp.staff`,
   `pvp.protected_staff`, `pvp.your_level` / `pvp.their_level` (`level`), `pvp.zone`,
   `pvp.safe_mode`. El cliente suelta su objetivo al recibir cualquiera de ellos.
 - **`Creature.skull`** y **`CreatureSkull{id, skull}`** a quienes ven al jugador (él

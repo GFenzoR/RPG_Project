@@ -91,9 +91,6 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
 - **Mundo:**
   - puertas con llave (la puerta sellada de la mina es narrativa);
   - suelos volcánicos y carteles de Brasal.
-- **PvP:**
-  - una condición de otro jugador pierde a su autor tras un relogueo;
-  - los hechizos de condición a distancia solo afectan a monstruos.
 - **Mercado:**
   - la ventana de quien mira un libro no se refresca con la acción de otro;
   - la falla segura tiene un límite documentado (lo que sale por el suelo antes de que

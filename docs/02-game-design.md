@@ -316,11 +316,12 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     y los monstruos lo esquivan. Es una pista aceptada.
   - **Relogueo:** las de daño y `slowed` sobreviven a un logout con su tiempo restante
     (`characters.conditions`), para que salir del juego no cure; haste, invisibilidad y
-    puntería son ventajas y terminan. **Morir** termina todas.
+    puntería son ventajas y terminan. **Morir** termina todas. La de otro jugador guarda
+    también a su autor (ver "PvP", "Daño").
   - **Fuentes:** `swift_stride` (haste 25 s, las cuatro vocaciones) y `purge_venom` (cura el
     veneno) desde nivel 8-9; `keen_eye` (montaraz), `entangle` (druida, `slowed` a un
-    monstruo a 4 casillas), `shroud` (arcanista, invisibilidad). `ember_ring` puede dejar
-    ardiendo y `arc_bolt` electrizado. La araña de musgo (escupitajo) y el escarabajo de
+    monstruo, o con PvP a un jugador, a 4 casillas), `shroud` (arcanista,
+    invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` electrizado. La araña de musgo (escupitajo) y el escarabajo de
     mena (mordida) envenenan al hacer daño.
   - **Pendiente:** campos en el suelo (fuego o veneno) que apliquen condiciones al pisarlos
     (necesitan items con duración, disparar al entrar a la casilla y su render); items
@@ -1177,6 +1178,28 @@ daña si ese jugador podría atacar ahora (zonas, niveles, staff y su modo segur
 empieza un ataque injustificado: solo continúa uno que su autor ya hizo con la mano. Una
 quemadura de un duelo de arena o de una guerra que terminó deja de dañar.
 
+**Autor de una condición:** cada golpe es un ataque de su autor (se juzga, marca, renueva
+el bloqueo y da crédito de muerte como un golpe directo). El autor es un personaje, no una
+conexión:
+- **Relogueo de cualquiera de los dos:** la condición sigue siendo de su autor. Se guarda
+  con la víctima (`characters.conditions`) junto con lo que la víctima recordaba del ataque
+  de ese autor fuera de una arena: cuándo fue el último golpe y si fue injustificado. Al
+  volver, ese recuerdo vale solo si no pasó `aggressor_ms` **en el reloj** desde ese golpe:
+  salir del juego no corta ni estira un ataque (ni la defensa propia). Un recuerdo anterior
+  al último reinicio del servidor se olvida.
+- **Autor fuera del mundo:** su condición no daña (los golpes pasan, como en una zona de
+  protección): no podría atacar y no habría a quién darle la muerte. Mientras su condición
+  daña, cada golpe renueva su bloqueo, así que quien cierra la conexión queda link-dead y
+  la muerte se le cuenta igual (como a cualquier atacante). Si vuelve antes de que la
+  condición termine, sigue dañando según las reglas de arriba.
+- **PvP apagado:** una condición de otro jugador guardada de antes no daña a nadie.
+
+**Hechizos de condición a distancia** (`entangle`): alcanzan a un jugador con las reglas de
+un ataque directo (zonas, niveles, staff, modo seguro; a un miembro del propio grupo o
+gremio se le puede apuntar, como con un rayo) y los chequeos de alcance y línea de vista.
+Cuentan como un golpe aunque la condición no prenda: marca, bloqueo, defensa propia y
+crédito de muerte; los golpes de una condición de daño son del lanzador.
+
 ### Modo seguro
 Interruptor del cliente, **activado por defecto** (cada login empieza así hasta que el
 cliente diga otra cosa). Con él no se puede atacar a un jugador si sería injustificado, y
@@ -1207,8 +1230,4 @@ jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.
 - Reportes: el contexto incluye `attack_player` y `kill_player` con el nombre del otro.
 
 ### Pendiente
-Que una condición
-de otro jugador recuerde a su autor tras un relogueo (hoy pasa a dañar como una del mundo);
-hechizos de condición
-a distancia contra jugadores (hoy solo contra monstruos); sprites de las marcas (hoy son
-formas dibujadas); un ranking público de guerras.
+Sprites de las marcas (hoy son formas dibujadas); un ranking público de guerras.
