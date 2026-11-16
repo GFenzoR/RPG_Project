@@ -258,23 +258,33 @@ func TestBagFallsWithItsWindowClosed(t *testing.T) {
 	h.checkInvariants()
 }
 
-// What the owner takes out of its house through the stairs by its door is reserved to it
-// where it lands, like anything that leaves a house for the public ground (leftHouse),
-// and it lands as a pile of its own.
-func TestItemFallFromAHouse(t *testing.T) {
+// The cottage of houseMap with stairs by its door (4,5) down to (4,5,8) on an open floor
+// below, an arrival radius of 1, and its owner Ana standing on the door with a backpack
+// holding pack (its window id is returned).
+func cellarHarness(t *testing.T, pack ...session.ItemState) (*houseHarness, *fakeClient, *session.Player, uint32) {
+	t.Helper()
 	under := make([]string, len(houseMap))
 	for i := range under {
 		under[i] = ".........."
 	}
 	m := worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 7, Rows: houseMap}, worldtest.Layer{Z: 8, Rows: under})
 	m = worldtest.WithHouses(t, m, testHouses()...)
-	stairs, landing := pos(4, 5), at3(4, 5, 8)
-	m = worldtest.WithPortals(t, m, world.Portal{ID: "cellar", Kind: world.PortalStairs, From: stairs, To: landing})
-	h := newHouseHarnessOn(t, m)
-	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	m = worldtest.WithPortals(t, m, world.Portal{ID: "cellar", Kind: world.PortalStairs, From: cellarStairs, To: cellarLanding})
+	h := newHouseHarnessOn(t, m, func(c *session.Config) { c.Balance.Travel.ArrivalRadius = 1 })
+	cl, a := h.tenant("Ana", 0, cottageExit, pack...)
 	h.rent(cl)
 	h.step(cl, N) // onto the door, a house tile next to the stairs
-	pack := openPack(t, h.harness, cl)
+	return h, cl, a, openPack(t, h.harness, cl)
+}
+
+// The stairs of cellarHarness and where they lead.
+var cellarStairs, cellarLanding = pos(4, 5), at3(4, 5, 8)
+
+// What the owner takes out of its house through the stairs by its door is reserved to it
+// where it lands, like anything that leaves a house for the public ground (leftHouse).
+func TestItemFallFromAHouse(t *testing.T) {
+	stairs, landing := cellarStairs, cellarLanding
+	h, cl, a, pack := cellarHarness(t, stack(swordID, 1, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
 	h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(3, 3)), 1))
 	if len(h.w.GroundAt(pos(3, 3))) != 1 {
 		t.Fatal("the sword is not on the house floor")
@@ -286,6 +296,56 @@ func TestItemFallFromAHouse(t *testing.T) {
 	}
 	if h.w.ReservedTo(g[0]) != a.CharacterID() {
 		t.Fatalf("the sword below is reserved to %d, want the owner %d", h.w.ReservedTo(g[0]), a.CharacterID())
+	}
+	h.checkInvariants()
+}
+
+// Coins the owner takes out of its house through the stairs land as a pile of their own,
+// reserved to it: never in a public pile of coins on the landing (a reservation must not
+// take over a stranger's pile), but in the owner's own reserved pile there. A player
+// standing on the landing changes nothing (an item lies under a creature: fallTo). With
+// the landing full (19 swords and that public pile) they land on the next tile of ring 1
+// in scan order, (3,4,8), not in the public pile.
+func TestCoinsFallFromAHouseAsTheirOwnPile(t *testing.T) {
+	floor, landing := pos(3, 3), cellarLanding
+	h, cl, a, pack := cellarHarness(t, stack(coinID, 100, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	_, bob := h.join("Bob", ptr(landing))
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("copper_coin"), 5, landing) }))
+	h.sim.Step()
+	down := func(n uint32) []*pb.ServerMessage {
+		h.send(cl, moveItem(inContainer(pack, 0), coinID, 0, onTile(floor), n))
+		if got := h.counts(floor); !slices.Equal(got, [][2]int{{coinID, int(n)}}) {
+			t.Fatalf("on the house floor %v, want %d coins", got, n)
+		}
+		return h.send(cl, moveItem(onTile(floor), coinID, 1, onTile(cellarStairs), n))
+	}
+	evs := down(30)
+	g := h.w.GroundAt(landing)
+	if len(systemKeys(evs)) != 0 || !slices.Equal(h.counts(landing), [][2]int{{coinID, 5}, {coinID, 30}}) ||
+		h.w.ReservedTo(g[0]) != 0 || h.w.ReservedTo(g[1]) != a.CharacterID() {
+		t.Fatalf("out of the house onto a public pile: %v, below %v", systemKeys(evs), h.counts(landing))
+	}
+	if bob.Pos() != landing {
+		t.Fatalf("Bob moved to %v", bob.Pos())
+	}
+	evs = down(10)
+	if g = h.w.GroundAt(landing); len(systemKeys(evs)) != 0 ||
+		!slices.Equal(h.counts(landing), [][2]int{{coinID, 5}, {coinID, 40}}) || h.w.ReservedTo(g[1]) != a.CharacterID() {
+		t.Fatalf("onto the owner's reserved pile: %v, below %v", systemKeys(evs), h.counts(landing))
+	}
+	h.checkInvariants()
+
+	next := at3(3, 4, 8)
+	h, cl, a, pack = cellarHarness(t, stack(coinID, 100, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	h.fill(landing, 19)
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("copper_coin"), 5, landing) }))
+	h.sim.Step()
+	evs = down(30)
+	g = h.w.GroundAt(next)
+	if len(systemKeys(evs)) != 0 || !slices.Equal(h.counts(next), [][2]int{{coinID, 30}}) ||
+		h.w.ReservedTo(g[0]) != a.CharacterID() || len(h.w.GroundAt(landing)) != 20 ||
+		h.w.GroundAt(landing)[19].Count() != 5 {
+		t.Fatalf("onto a full landing: %v, on %v %v, landing %v", systemKeys(evs), next, h.counts(next), h.counts(landing))
 	}
 	h.checkInvariants()
 }
