@@ -152,14 +152,16 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - la búsqueda de casilla libre por anillos (`searchFrom` en `session/area.go`) ya tiene
     regla para cada origen fuera de las áreas (casa: su área de casa y la calle de la
     salida; puerta con llave: su afuera; escalera: las áreas de al lado; cualquier otro:
-    ninguna, `02-game-design.md` "Nadie aparece adentro sin pasar la puerta"). Queda: una
-    **salida de casa** sobre una puerta con llave colocada abierta no se rechaza al cargar
-    (la búsqueda desde la salida usa el afuera de la puerta, así que no deja a nadie en la
-    sala, pero con todo lleno `houseExit` deja al jugador en la salida misma: el umbral).
-    Hoy no hay ninguna; si se quiere, sumarla a `checkArrivals` (Go y `validate.ts`) con un
-    caso en `testdata/arrivals.json` (el fixture necesitaría casas por caso). Y quien sale
-    del juego en el umbral de una puerta abierta vuelve afuera aunque hubiera entrado con
-    la llave: no sabemos de qué lado venía;
+    ninguna, `02-game-design.md` "Nadie aparece adentro sin pasar la puerta"). La salida
+    de una casa sobre una puerta con llave (abierta o cerrada) o en una casilla no
+    caminable ya no deja arrancar ni pasa `make validate` (`checkArrivals`, casos en
+    `testdata/arrivals.json`): con todo lleno, `houseExit` deja al jugador en la salida
+    misma, y desde el umbral de una puerta cerrada daba un paso a la sala sin la llave (el
+    paso solo mira adonde va). Hoy ninguna de las 6 salidas está sobre una puerta. Queda:
+    quien sale del juego en el umbral de una puerta abierta vuelve afuera aunque hubiera
+    entrado con la llave (no sabemos de qué lado venía), y un `Teleport` del servidor
+    (`relocate`) no mira si la casilla es caminable: todo destino de último recurso (el
+    templo, la salida) tiene que serlo por la carga;
   - **Para que lo decida el dueño (revisión del lote 3):**
     - portales de la comunidad entre islas: hoy el chequeo de parcelas los rechaza
       (`cross_island`, `packages/map-format/src/patch/plots.ts`), la opción segura, porque

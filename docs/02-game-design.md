@@ -99,8 +99,9 @@ Tibia:
   pisarla. Si no queda ninguna casilla libre en el radio, despertar en el templo y salir de
   una casa comparten la casilla de destino como último recurso: el templo o la salida, que
   nunca están sobre una escalera, un agujero o un teletransporte (lo rechazan el servidor y
-  `make validate`). Quien entra al juego con todo lleno y tenía guardada la posición sobre
-  una escalera (de antes de los portales) o sobre una puerta con llave va al templo.
+  `make validate`), ni sobre una puerta con llave (ver "Puertas con llave"). Quien entra al
+  juego con todo lleno y tenía guardada la posición sobre una escalera (de antes de los
+  portales) o sobre una puerta (con llave, o común y cerrada desde entonces) va al templo.
 - **Lo que el cliente ve:** lo mismo que un teletransporte del personal (`FullMapView` del
   piso nuevo, docs/05). Solo se dibuja el piso del jugador.
 
@@ -868,7 +869,12 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
     ahí venía de afuera o de la sala, que desde adentro se abre sin llave hacia afuera;
     entrar a la sala pide la llave, así que la búsqueda nunca termina adentro. Quien
     guardó la posición en el umbral entra al juego junto a la puerta, afuera, aunque la
-    puerta se haya cerrado después (antes iba al templo);
+    puerta se haya cerrado después (antes iba al templo). Lo mismo con una puerta común
+    cerrada después (al reiniciar, toda puerta vuelve a como la dibuja el mapa): está en
+    el área de sus dos lados, así que entra junto a ella, de cualquier lado. La salida de
+    una casa nunca está sobre una puerta con llave, abierta o cerrada (ni el servidor
+    arranca ni pasa `make validate`): con todo lleno, quien sale de la casa queda en la
+    salida misma, y desde el umbral daría un paso a la sala sin la llave;
   - **cualquier otra casilla** (un muro, ninguna casilla): ninguna. La búsqueda no
     encuentra lugar y vale el último recurso de quien la pidió (el templo, la salida de la
     casa, el rechazo del `/tp` o del teleport) en vez de adivinar.

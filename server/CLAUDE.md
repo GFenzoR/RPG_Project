@@ -249,8 +249,12 @@ server/
   lo necesita: solo pone al jugador en casillas de la casa, y `checkRooms` no deja
   ninguna casa (ni portal) en una sala. Una llegada de barco o un teleport de diálogo
   sobre una casa o una puerta con llave colocada abierta (y un teleport a una casilla no
-  caminable) no deja arrancar (`checkArrivals` en `travel.go`, igual que `checkArrivals`
+  caminable), o la salida de una casa sobre una puerta con llave (abierta o cerrada) o no
+  caminable, no deja arrancar (`checkArrivals` en `travel.go`, igual que `checkArrivals`
   de `validate.ts`; casos en `testdata/arrivals.json`, que leen los tests de los dos).
+  `Teleport` no mira si el destino es caminable: un último recurso nuevo (como el templo
+  o la salida) tiene que quedar garantizado por la carga. `placement` acepta la posición
+  guardada si `searchFrom` le da algún lugar (una puerta cerrada después también).
   Desde la sala una puerta trabada se abre sin llave (nadie queda encerrado, tampoco tras
   un relogueo o un reinicio). Todo uso junto a una puerta, también un rechazo, pasa por
   `doorReady` (`inventory.door_cooldown_ms`). Su estado no se guarda.
