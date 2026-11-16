@@ -302,7 +302,8 @@ comprar.
 > **Advertencia: nunca pongas `PAYMENTS_PROVIDER=fake` ni `RPG_ENV=development` en
 > `deploy/.env.home`.** El servidor de casa es alcanzable desde internet por los túneles, y
 > el proveedor falso regala moneda premium sin cobrar nada a cualquiera que tenga cuenta.
-> La tienda con el proveedor falso se prueba solo con `make dev` o los tests E2E.
+> La tienda con el proveedor falso se prueba solo en local, con `make play`
+> (`16-probar-el-juego.md`) o los tests E2E.
 
 Para probarla en casa con dinero de mentira usa **Mercado Pago en modo prueba**
 (`PAYMENTS_PROVIDER=mercadopago`, el access token `TEST-…`, la clave del webhook, un

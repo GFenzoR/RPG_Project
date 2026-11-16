@@ -245,6 +245,7 @@ PLAY_HEALTH = http://127.0.0.1:$(lastword $(subst :, ,$(DEV_HTTP_ADDR)))/healthz
 
 .PHONY: play
 play: db-up mapcompile ## Play on the sandbox island (docs/16): Postgres + map + game server + client; prints the URL to open
+	@command -v curl >/dev/null || { echo "[play] needs curl to see when the server and the client answer"; exit 1; }
 	@if curl -sf "$(PLAY_HEALTH)" >/dev/null 2>&1; then \
 		echo "[play] a game server already answers on $(PLAY_HEALTH) (make dev? one left running?"; \
 		echo "       on Windows: taskkill //IM gameserver.exe //F). Stop it first."; exit 1; fi
@@ -252,7 +253,7 @@ play: db-up mapcompile ## Play on the sandbox island (docs/16): Postgres + map +
 	case "$(DEV_HTTP_ADDR)" in 127.0.0.1:*|localhost:*) loopback=1;; *) loopback=0;; esac; \
 	case "$(DATABASE_URL)" in *@localhost:*|*@localhost/*|*@127.0.0.1:*|*@127.0.0.1/*) localdb=1;; *) localdb=0;; esac; \
 	if [ $$loopback = 1 ] && [ $$localdb = 1 ]; then shop_env="RPG_ENV=development PAYMENTS_PROVIDER=fake"; \
-	else echo "[play] the server is not on loopback or the database is not local: no fake payments, the cosmetic shop stays off"; fi; \
+	else shop_env="PAYMENTS_PROVIDER="; echo "[play] the server is not on loopback or the database is not local: no fake payments, the cosmetic shop stays off"; fi; \
 	echo "[play] starting the game server (new characters wake up on '$(PLAY_START_TOWN)') and the client..."; \
 	trap 'kill 0' EXIT; \
 	(cd server && env $$shop_env RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \

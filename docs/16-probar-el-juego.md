@@ -29,7 +29,8 @@ algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó v
   (`RPG_ENV=development`, `PAYMENTS_PROVIDER=fake`): se compra nácar sin dinero real en
   `http://localhost:5173/shop`. Solo lo activa con el servidor en `127.0.0.1` y la base en
   `localhost`; con `DEV_HTTP_ADDR=:8080` (la red de casa) o una `DATABASE_URL` remota, la
-  tienda queda apagada.
+  tienda queda apagada. Ojo con un túnel SSH a una base remota en `localhost`: para
+  `make play` cuenta como local.
 - `PLAY_START_TOWN=puerto make play` juega el inicio normal (Puerto, con tutorial).
 - Con `make dev` (que también levanta el editor y Mailpit) los personajes nuevos despiertan
   en Puerto; `RPG_START_TOWN=pruebas make dev` los manda a la Isla de Pruebas.

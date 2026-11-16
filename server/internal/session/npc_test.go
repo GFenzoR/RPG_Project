@@ -44,18 +44,23 @@ func dataHarnessWith(t *testing.T, edit func(*session.Config), spawns ...world.S
 	return h
 }
 
-// dropDialogTeleports takes the teleport actions out of the dialogs of data/ (the sandbox
-// ferryman's, docs/16): they point at the real islands, not at the 64x64 test maps, where
-// session.New would refuse them (checkArrivals). The real boat routes stay out the same way:
-// dataConfig takes the routes of each test.
-func dropDialogTeleports(npcs content.NPCs) {
+// dropDialogTeleports takes out of the dialogs of data/ the teleports that land on no
+// walkable tile of m (the sandbox ferryman's, docs/16, point at the real islands, not at the
+// 64x64 test maps), which session.New would refuse (checkArrivals). The real boat routes
+// stay out the same way: dataConfig takes the routes of each test. TestRealWorldStarts
+// runs them all on the real map.
+func dropDialogTeleports(npcs content.NPCs, m *world.Map) {
+	onMap := func(p content.Position) bool {
+		return p.X >= 0 && p.X <= 0xFFFF && p.Y >= 0 && p.Y <= 0xFFFF && p.Z >= 0 && p.Z <= 15 &&
+			m.Walkable(world.Pos{X: uint16(p.X), Y: uint16(p.Y), Z: uint8(p.Z)})
+	}
 	for _, n := range npcs {
 		for _, node := range n.Dialog.Nodes {
 			for i, o := range node.Options {
 				var kept content.Actions
 				dropped := false
 				for _, a := range o.Action {
-					if a.Teleport != nil {
+					if a.Teleport != nil && !onMap(*a.Teleport) {
 						dropped = true
 						continue
 					}
@@ -87,12 +92,12 @@ func dataConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) 
 	must(err)
 	monsters, err := content.LoadMonsters(dir)
 	must(err)
-	npcs, err := content.LoadNPCs(dir)
-	must(err)
-	dropDialogTeleports(npcs)
 	quests, err := content.LoadQuests(dir)
 	must(err)
 	m := worldtest.Open(t, 0, 0, 64, 64)
+	npcs, err := content.LoadNPCs(dir)
+	must(err)
+	dropDialogTeleports(npcs, m)
 	is := m.Islands()[0]
 	is.Spawns = spawns
 	is.NPCs = []world.NPCPlacement{
