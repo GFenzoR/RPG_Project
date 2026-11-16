@@ -323,11 +323,11 @@ class WorldValidator {
 
   /**
    * Houses (T5.4, docs/03 "Casas"): rects on the island and its floors, no tile in two
-   * houses, doors walkable tiles on the edge of the house (warning: tiles of a floor that
-   * are not one connected area), the exit a walkable tile outside every
-   * house next to a door, every house tile with ground; nothing else lives inside (NPCs,
-   * spawn centers, texts, portals, no_logout zones). The server (world.NewMap) repeats
-   * the geometric rules.
+   * houses, doors walkable tiles on the edge of the house without a door item (warning:
+   * tiles of a floor that are not one connected area), the exit a walkable tile outside
+   * every house next to a door, every house tile with ground; nothing else lives inside
+   * (NPCs, spawn centers, texts, portals, no_logout zones). The server (world.NewMap)
+   * repeats the geometric rules, and session the door item one.
    */
   private checkHouses(
     island: Island,
@@ -374,6 +374,10 @@ class WorldValidator {
           this.err(file, [i, "doors", j], "door is not a tile of the house", d);
         else {
           needWalkable(file, [i, "doors", j], d, "door");
+          // Using a door item would open it, never the house window (docs/02 "Puertas con
+          // llave"); the server refuses to start with one too.
+          if (this.tiles.tileAt(d)?.stack.some((id) => this.content.items.get(id)?.door === true))
+            this.err(file, [i, "doors", j], "a house door cannot hold a door item", d);
           if (!onHouseEdge(h.rects, d))
             this.err(
               file,

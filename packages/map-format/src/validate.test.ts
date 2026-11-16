@@ -156,6 +156,14 @@ describe("validateWorld", () => {
     );
     expect(m).toContainEqual(expect.stringContaining('NPC is inside house "puerto_house_net"'));
     expect(m).toContainEqual(expect.stringContaining('no_logout zone "mini_nl" covers a house'));
+
+    // An open door item on the house door would take its use (docs/02 "Puertas con llave").
+    const door = mini();
+    door.houses = [house()];
+    pushItem(must(door.chunks.get(chunkKey(7, 0, 0))), 21, 6, "forge_gate_open");
+    expect(messages(check(door))).toContainEqual(
+      expect.stringContaining("a house door cannot hold a door item"),
+    );
   });
 
   it("rejects a house id used twice in the world (T5.4)", () => {
