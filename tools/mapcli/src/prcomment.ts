@@ -28,6 +28,8 @@ const SHA = /^[0-9a-f]{40}$/;
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const ID = /^[a-z][a-z0-9_]{0,63}$/;
 const WORLD_PATH = /^world\/(?:[a-z0-9_-]+\/)*[A-Za-z0-9_.-]{1,100}$/;
+/** A path of world/ or of the content the check reads (bad_mode_files). */
+const CHECKED_PATH = /^(?:world|data|i18n|assets)\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]{1,100}$/;
 const ANY_PATH = /^[A-Za-z0-9_./ +@-]{1,300}$/;
 const TILE = /^\d{1,5},\d{1,5},\d{1,2}$/;
 const PNG = /^(?:before|after)-\d{1,2}\.png$/;
@@ -39,6 +41,14 @@ export const FAILURES = [
   "invalid",
   "rebase",
   "merge_mismatch",
+  "limits",
+] as const;
+/** prcheck.ts NOTE_CODES (this file runs without dependencies, so it has its own copy). */
+export const NOTES = [
+  "base_content",
+  "content_too_large",
+  "content_skipped",
+  "atlas_fallback",
 ] as const;
 export const CONFLICT_CODES = [
   "tiles",
@@ -129,6 +139,7 @@ export interface CheckedReport {
     after?: string;
   }[];
   omitted_areas: number;
+  notes: (typeof NOTES)[number][];
 }
 
 const ids = (v: unknown, what: string): string[] =>
@@ -221,7 +232,7 @@ export function checkReport(raw: unknown): CheckedReport {
       str(p, "noncanonical_files", WORLD_PATH),
     ),
     bad_mode_files: arr(r.bad_mode_files, "bad_mode_files", 100).map((p) =>
-      str(p, "bad_mode_files", WORLD_PATH),
+      str(p, "bad_mode_files", CHECKED_PATH),
     ),
     merge_mismatch: arr(r.merge_mismatch, "merge_mismatch", 100).map((p) =>
       str(p, "merge_mismatch", WORLD_PATH),
@@ -259,6 +270,8 @@ export function checkReport(raw: unknown): CheckedReport {
       return out;
     }),
     omitted_areas: int(r.omitted_areas, "omitted_areas", 1e6),
+    // Absent in reports from before the notes.
+    notes: opt(r.notes, (v) => arr(v, "notes", 10).map((n) => oneOf(n, "notes", NOTES))) ?? [],
   };
 }
 
@@ -394,10 +407,22 @@ const FAILURE_TEXT: Record<(typeof FAILURES)[number], string> = {
   conflicts: "choca con cambios posteriores de la rama base (rebase y vuelve a empujar)",
   validation: "el mapa fusionado tiene errores nuevos del validador",
   invalid:
-    "un archivo de mapa del PR no pasa su esquema, no está en formato canónico (corre `mapcli fmt`) o no es un archivo normal",
+    "un archivo de mapa del PR no pasa su esquema, no está en formato canónico (corre `mapcli fmt`), o un archivo de mapa o de contenido no es un archivo normal",
   rebase: "git no puede fusionar la rama con la base (rebase y vuelve a empujar)",
   merge_mismatch:
     "git fusionaría el texto de un archivo distinto de como se revisó (paletas de chunk): rebase y vuelve a empujar",
+  limits:
+    "el contenido que trae el PR (`data/`, `i18n/`, `assets/`) pasa el límite de archivos o de tamaño del check y no se midió",
+};
+const NOTE_TEXT: Record<(typeof NOTES)[number], string> = {
+  base_content:
+    "el autor no es maintainer y el PR cambia contenido: el mapa también se validó y se dibujó con el contenido de la base",
+  content_too_large:
+    "el contenido del PR pasa el límite del check: el después se midió con el contenido de la base",
+  content_skipped:
+    "algunas rutas de contenido del merge no se podían escribir de forma segura y quedaron fuera de la revisión",
+  atlas_fallback:
+    "los sprites del merge no se pudieron armar: las imágenes del después usan los de la base",
 };
 const CONFLICT_TEXT: Record<(typeof CONFLICT_CODES)[number], string> = {
   tiles: "casillas cambiadas en los dos lados",
@@ -538,7 +563,7 @@ export function buildComment(
     r.noncanonical_files,
   );
   pathList(
-    "**Rutas de `world/` que no son archivos normales** (symlink, ejecutable o submódulo):",
+    "**Rutas de `world/` o de contenido que no son archivos normales** (symlink, ejecutable o submódulo):",
     r.bad_mode_files,
   );
   pathList(
@@ -552,6 +577,9 @@ export function buildComment(
         `- ${code(c.path)}: ${CONFLICT_TEXT[c.code]}${c.at.length > 0 ? ` (${c.at.slice(0, 10).map(code).join(", ")})` : ""}`,
       );
   }
+
+  if (r.notes.length > 0)
+    out.push("", "**Cómo se midió:**", "", ...r.notes.map((n) => `- ${NOTE_TEXT[n]}.`));
 
   out.push("", "### Validación");
   if (r.validation.new_errors_total === 0)

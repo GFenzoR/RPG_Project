@@ -109,9 +109,22 @@ function drawSprite(img: Image, f: Frame, right: number, bottom: number, scale: 
 
 /** Sprite frames by sprite path, from an atlas built in memory (no files written). */
 export function loadFrames(root: string): Map<string, Frame> {
+  return tryLoadFrames(root) ?? new Map();
+}
+
+/**
+ * Like loadFrames, but undefined when the atlas does not build (any error in assets/, or a
+ * throw): the caller can draw with other sprites instead of every one missing.
+ */
+export function tryLoadFrames(root: string): Map<string, Frame> | undefined {
+  let atlas;
+  try {
+    atlas = buildAtlas(root).atlas;
+  } catch {
+    return undefined;
+  }
+  if (!atlas) return undefined;
   const frames = new Map<string, Frame>();
-  const atlas = buildAtlas(root).atlas;
-  if (!atlas) return frames;
   for (const page of atlas.pages)
     for (const [name, fr] of Object.entries(page.json.frames))
       frames.set(name, { page: page.image, ...fr.frame });

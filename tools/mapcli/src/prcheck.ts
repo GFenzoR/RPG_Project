@@ -9,8 +9,7 @@
 // throwaway worktree. Everything is measured against that merge result, not against the
 // head's files, so changes that landed on base after the PR branched are not shown as
 // reverted. The content the map is read with (data/, i18n/, assets/: CONTENT_DIRS) is the
-// one the merge would land: base plus the PR's own changes there, as git merges them. The
-// report has:
+// one in git's merge tree (`landContent`). The report has:
 //   - the `patch diff` summary of every file (status, tiles, bbox, entries, conflicts);
 //   - the community plot check against the plots of base (never of the PR);
 //   - new validator errors of the merged map (with the merged content; for a non-maintainer
@@ -21,13 +20,16 @@
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
+  rmdirSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
+import type { Stats } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import {
@@ -55,7 +57,7 @@ import type {
 } from "@rpg/map-format";
 import { diffPatch, planPatch, writePlanned } from "./patch.ts";
 import type { FileDiff } from "./patch.ts";
-import { loadFrames, renderArea } from "./render.ts";
+import { TILE_SIZES, loadFrames, renderArea, tryLoadFrames } from "./render.ts";
 
 export const REPORT_FORMAT = 2 as const;
 export const MAINTAINERS_FILE = ".github/MAINTAINERS";
@@ -72,9 +74,10 @@ const MAX_LISTED = 50;
  * and the renders, and the sprite atlas (assets/, data/) for the renders.
  */
 export const CONTENT_DIRS = ["data/", "i18n/", "assets/"] as const;
-/** The part of CONTENT_DIRS the validator reads (assets/ only changes the pictures). */
-export const VALIDATED_CONTENT_DIRS = ["data/", "i18n/"] as const;
-const under = (dirs: readonly string[], p: string): boolean => dirs.some((d) => p.startsWith(d));
+/** Limits of the content a PR brings into the check (failure "limits" when over). */
+export const MAX_CONTENT_FILES = 4096;
+export const MAX_CONTENT_BYTES = 64 << 20;
+const isContent = (p: string): boolean => CONTENT_DIRS.some((d) => p.startsWith(d));
 
 export interface PrArea extends FloorRect {
   island: string;
@@ -100,9 +103,11 @@ export interface PrConflict {
 /**
  * Failure codes. plots: outside the community plots and not a maintainer; conflicts: the
  * tile/entry merge conflicts with the current base; validation: new validator errors;
- * invalid: a map file of the PR does not pass its schema (fails for maintainers too);
- * rebase: git itself cannot merge the branch; merge_mismatch: git would merge the text
- * into something else than the tile merge measured here (chunk palettes), so rebase.
+ * invalid: a map file of the PR does not pass its schema, or a path of world/ or of the
+ * content is not a plain file (fails for maintainers too); rebase: git itself cannot merge
+ * the branch; merge_mismatch: git would merge the text into something else than the tile
+ * merge measured here (chunk palettes), so rebase; limits: the PR's content is over
+ * MAX_CONTENT_FILES / MAX_CONTENT_BYTES, so it was not measured (see `notes`).
  */
 export const FAILURE_CODES = [
   "plots",
@@ -111,8 +116,25 @@ export const FAILURE_CODES = [
   "invalid",
   "rebase",
   "merge_mismatch",
+  "limits",
 ] as const;
 export type FailureCode = (typeof FAILURE_CODES)[number];
+
+/**
+ * How the content was measured, as fixed codes (the comment has a text for each).
+ * base_content: a non-maintainer's PR changes content, so its map is also validated with
+ * the base's content and drawn with it; content_too_large: over the limits, the "after"
+ * keeps the base's content; content_skipped: a content path of the merge that cannot be
+ * written safely (`insidePath`) was left out; atlas_fallback: the merge's sprites did not
+ * build, so the "after" pictures use the base's.
+ */
+export const NOTE_CODES = [
+  "base_content",
+  "content_too_large",
+  "content_skipped",
+  "atlas_fallback",
+] as const;
+export type NoteCode = (typeof NOTE_CODES)[number];
 
 export interface PrReport {
   format: typeof REPORT_FORMAT;
@@ -134,8 +156,8 @@ export interface PrReport {
   invalid_files: string[];
   /** Map files of the PR whose text is not their canonical form (failure "invalid"). */
   noncanonical_files: string[];
-  /** world/ paths that are not plain files (mode ≠ 100644) in the head or the merge
-   *  (failure "invalid"): a symlink or an executable bit can hide a change of content. */
+  /** world/ and content paths that are not plain files (mode ≠ 100644) in the head or the
+   *  merge (failure "invalid"): a symlink or an executable bit can hide a change of content. */
   bad_mode_files: string[];
   /** World files git would merge differently from the tile merge (failure "merge_mismatch"). */
   merge_mismatch: string[];
@@ -148,6 +170,8 @@ export interface PrReport {
   other_files_total: number;
   areas: PrArea[];
   omitted_areas: number;
+  /** How the content was measured (NOTE_CODES). */
+  notes: NoteCode[];
 }
 
 export interface PrCheckOptions {
@@ -167,6 +191,8 @@ export interface PrCheckOptions {
   pr?: number;
   /** Size limit of each PNG (MAX_PNG_BYTES; tests lower it). */
   maxPngBytes?: number;
+  /** Content limits (MAX_CONTENT_FILES / MAX_CONTENT_BYTES; tests lower them). */
+  contentLimits?: ContentLimits;
 }
 
 const SHA = /^[0-9a-f]{40}$/;
@@ -223,70 +249,210 @@ export function decodeStrict(b: Buffer): string | undefined {
 const sameBytes = (a: Buffer | null, b: Buffer | null): boolean =>
   a === null || b === null ? a === b : a.equals(b);
 
+export interface ContentLimits {
+  /** Content paths that differ. */
+  files: number;
+  /** Bytes of the blobs to write. */
+  bytes: number;
+}
+
+/** A content path as the `to` side of a diff has it. mode "000000": absent there. */
+export interface ContentEntry {
+  path: string;
+  mode: string;
+  oid: string;
+}
+
 /**
- * Blobs of `paths` at `treeish` in one `git cat-file --batch` (hundreds of sprites would be
- * hundreds of processes). null: missing, or not a blob (a submodule). A symlink's blob is
- * its target text, so it is read as such, never followed.
+ * Content paths (CONTENT_DIRS) that differ from `from` to `to`, two tree-ishes, with the
+ * `to` side (`git diff-tree -r --no-renames`: a file moved on one side is a removal and an
+ * addition, so writing these over a checkout of `from` reproduces `to` exactly).
  */
-function blobsAt(root: string, treeish: string, paths: string[]): Map<string, Buffer | null> {
-  const out = new Map<string, Buffer | null>();
-  const asked = paths.filter((p) => !/[\n\r]/.test(p)); // one object name per line
-  if (asked.length === 0) return out;
+export function contentChanges(root: string, from: string, to: string): ContentEntry[] {
+  const fields = git(root, [
+    "diff-tree",
+    "-r",
+    "-z",
+    "--no-renames",
+    from,
+    to,
+    "--",
+    ...CONTENT_DIRS,
+  ]).split("\0");
+  const out: ContentEntry[] = [];
+  // Each record is ":<mode> <mode> <oid> <oid> <status>" NUL "<path>" NUL.
+  for (let i = 0; i + 1 < fields.length; i += 2) {
+    const meta = /^:\d{6} (\d{6}) [0-9a-f]{40,64} ([0-9a-f]{40,64}) [A-Z]$/.exec(fields[i] ?? "");
+    const path = fields[i + 1];
+    if (meta?.[1] === undefined || meta[2] === undefined || path === undefined) continue;
+    out.push({ path, mode: meta[1], oid: meta[2] });
+  }
+  return out;
+}
+
+/** Modes of a blob: a file, an executable or a symlink (whose blob is its target text). */
+const BLOB_MODES = new Set(["100644", "100755", "120000"]);
+const ABSENT = "000000";
+
+/** Type and size of objects (`git cat-file --batch-check`); a missing one is left out. */
+function objectInfo(root: string, oids: string[]): Map<string, { type: string; size: number }> {
+  const out = new Map<string, { type: string; size: number }>();
+  if (oids.length === 0) return out;
+  const lines = execFileSync("git", ["cat-file", "--batch-check"], {
+    cwd: root,
+    input: oids.map((o) => `${o}\n`).join(""),
+    encoding: "utf8",
+    maxBuffer: 64 << 20,
+    stdio: ["pipe", "pipe", "pipe"],
+  }).split("\n");
+  for (const l of lines) {
+    const m = /^([0-9a-f]{40,64}) (\w+) (\d+)$/.exec(l);
+    if (m?.[1] !== undefined && m[2] !== undefined)
+      out.set(m[1], { type: m[2], size: Number(m[3]) });
+  }
+  return out;
+}
+
+/** Contents of blobs in one `git cat-file --batch`, as views into its output. */
+function blobContents(root: string, oids: string[], bytes: number): Map<string, Buffer> {
+  const out = new Map<string, Buffer>();
+  if (oids.length === 0) return out;
   const raw = execFileSync("git", ["cat-file", "--batch"], {
     cwd: root,
-    input: asked.map((p) => `${treeish}:${p}\n`).join(""),
-    maxBuffer: 1 << 30,
+    input: oids.map((o) => `${o}\n`).join(""),
+    maxBuffer: bytes + oids.length * 160 + (1 << 20), // the contents plus a header each
     stdio: ["pipe", "pipe", "pipe"],
   });
   let at = 0;
-  for (const p of asked) {
+  while (at < raw.length) {
     const eol = raw.indexOf(0x0a, at);
     if (eol < 0) break;
-    const header = /^[0-9a-f]{40,64} (\w+) (\d+)$/.exec(raw.subarray(at, eol).toString("latin1"));
+    const header = /^([0-9a-f]{40,64}) (\w+) (\d+)$/.exec(raw.toString("latin1", at, eol));
     at = eol + 1;
-    if (header === null) {
-      out.set(p, null); // "<name> missing"
-      continue;
-    }
-    const size = Number(header[2]);
-    out.set(p, header[1] === "blob" ? Buffer.from(raw.subarray(at, at + size)) : null);
+    if (header?.[1] === undefined) continue; // "<oid> missing"
+    const size = Number(header[3]);
+    if (header[2] === "blob") out.set(header[1], raw.subarray(at, at + size));
     at += size + 1; // the contents end with a newline
   }
   return out;
 }
 
-/** A path of the PR that stays inside `dir` once written there (no `..`, `.git`, `\`, `:`). */
-function insidePath(dir: string, p: string): string | null {
+/**
+ * Where a path of the PR goes inside `dir`, or null when it is not safe to write: `..`,
+ * `.`, empty segments, `.git` in any case, `\`, `:`, NUL or a line break anywhere.
+ */
+export function insidePath(dir: string, p: string): string | null {
   const parts = p.split("/");
   if (parts.some((s) => s === "" || s === "." || s === ".." || /^\.git$/i.test(s))) return null;
-  if (/[\\:\0]/.test(p)) return null;
+  if (/[\\:\0\n\r]/.test(p)) return null;
   const abs = resolve(dir, p);
   return abs.startsWith(resolve(dir) + sep) ? abs : null;
 }
 
-/**
- * Writes the PR's changes of CONTENT_DIRS into `dir` (a checkout of base) as `treeish` has
- * them (absent: deleted), so `dir` holds the content the merge would land. Each file is
- * written as plain bytes: a symlink of the PR becomes a file holding its target, never a
- * link out of the worktree. Paths that could leave `dir`, or that git cannot be asked for
- * (a newline in the name), are skipped.
- */
-function overlayContent(root: string, dir: string, treeish: string, paths: string[]): void {
-  const blobs = blobsAt(root, treeish, paths);
-  const targets = paths.flatMap((p) => {
-    const abs = insidePath(dir, p);
-    const blob = blobs.get(p);
-    return abs === null || blob === undefined ? [] : [{ abs, blob }];
-  });
-  // Removals first: a file of base can become a directory of the PR and the other way round.
-  for (const t of targets) if (t.blob === null) rmSync(t.abs, { force: true, recursive: true });
-  for (const t of targets) {
-    if (t.blob === null) continue;
-    if (existsSync(t.abs) && statSync(t.abs).isDirectory())
-      rmSync(t.abs, { recursive: true, force: true });
-    mkdirSync(dirname(t.abs), { recursive: true });
-    writeFileSync(t.abs, t.blob);
+/** lstat, or null when nothing is there (or a parent is not a directory). */
+function lstatOrNull(p: string): Stats | null {
+  try {
+    return lstatSync(p);
+  } catch {
+    return null;
   }
+}
+
+/**
+ * Whether the directory of `abs` is really inside `top`: its nearest existing ancestor,
+ * symlinks resolved (checked before creating anything under it, and again after).
+ */
+function realInside(top: string, abs: string): boolean {
+  let d = dirname(abs);
+  while (!existsSync(d) && dirname(d) !== d) d = dirname(d);
+  try {
+    const real = realpathSync(d);
+    return real === top || real.startsWith(top + sep);
+  } catch {
+    return false;
+  }
+}
+
+export interface LandResult {
+  /** Content paths written or removed. */
+  changed: number;
+  /** Over the limits: nothing was written. */
+  tooLarge: boolean;
+  /** Paths left out: unsafe (`insidePath`), not a blob (a gitlink, or a tree under a
+   *  file's mode), or in the way of a directory that still has files. */
+  skipped: string[];
+}
+
+/**
+ * Makes the content of `dir`, a checkout of `from`, the content of `to` (see
+ * contentChanges). Every file is written as plain bytes: a symlink becomes a file holding
+ * its target, never a link. Only a path absent from `to` is removed, and never a
+ * directory: a path can be a file on one side and a directory on the other.
+ */
+export function landContent(
+  root: string,
+  dir: string,
+  from: string,
+  to: string,
+  limits: ContentLimits = { files: MAX_CONTENT_FILES, bytes: MAX_CONTENT_BYTES },
+): LandResult {
+  const entries = contentChanges(root, from, to);
+  const oids = [...new Set(entries.filter((e) => BLOB_MODES.has(e.mode)).map((e) => e.oid))];
+  const info = objectInfo(root, oids);
+  const blobs = oids.filter((o) => info.get(o)?.type === "blob");
+  const bytes = blobs.reduce((n, o) => n + (info.get(o)?.size ?? 0), 0);
+  if (entries.length > limits.files || bytes > limits.bytes)
+    return { changed: 0, tooLarge: true, skipped: [] };
+  const data = blobContents(root, blobs, bytes);
+  const top = realpathSync(dir);
+  const skipped: string[] = [];
+  const targets = entries.flatMap((e) => {
+    const abs = insidePath(dir, e.path);
+    if (abs !== null) return [{ ...e, abs }];
+    skipped.push(e.path);
+    return [];
+  });
+  let changed = 0;
+  // Removals first: what `to` turned into a directory must be gone before writing into it.
+  for (const t of targets) {
+    if (t.mode !== ABSENT) continue;
+    const st = lstatOrNull(t.abs);
+    if (st === null || st.isDirectory()) continue;
+    if (!realInside(top, t.abs)) {
+      skipped.push(t.path);
+      continue;
+    }
+    rmSync(t.abs, { force: true });
+    changed++;
+  }
+  for (const t of targets) {
+    if (t.mode === ABSENT) continue;
+    const blob = BLOB_MODES.has(t.mode) ? data.get(t.oid) : undefined;
+    if (blob === undefined) {
+      skipped.push(t.path);
+      continue;
+    }
+    try {
+      if (!realInside(top, t.abs)) {
+        skipped.push(t.path);
+        continue;
+      }
+      mkdirSync(dirname(t.abs), { recursive: true });
+      if (!realInside(top, t.abs)) {
+        skipped.push(t.path);
+        continue;
+      }
+      const st = lstatOrNull(t.abs);
+      if (st?.isDirectory())
+        rmdirSync(t.abs); // emptied by the removals, or it throws
+      else if (st?.isSymbolicLink()) rmSync(t.abs);
+      writeFileSync(t.abs, blob);
+      changed++;
+    } catch {
+      skipped.push(t.path); // a file of base in the way of a directory of `to`, and so on
+    }
+  }
+  return { changed, tooLarge: false, skipped: skipped.sort() };
 }
 
 /** GitHub logins of the maintainers (shared with the map PR worker: map-format). */
@@ -313,9 +479,9 @@ function conflictCode(c: { reason: string; at?: string[] }): ConflictCode {
   return "invalid_file";
 }
 
-/** world/ paths of a tree-ish whose mode is not a plain file (100644), from git ls-tree. */
+/** world/ and content paths of a tree-ish whose mode is not a plain file (100644). */
 function nonPlainFiles(root: string, treeish: string): string[] {
-  return git(root, ["ls-tree", "-r", "-z", "--full-tree", treeish, "--", "world/"])
+  return git(root, ["ls-tree", "-r", "-z", "--full-tree", treeish, "--", "world/", ...CONTENT_DIRS])
     .split("\0")
     .filter((l) => l !== "")
     .flatMap((l) => {
@@ -336,13 +502,12 @@ function gitMergeTree(root: string, base: string, head: string): string | null {
   }
 }
 
-/** Tile sizes of the renders, largest first (`renderArea` takes these). */
-const TILES = [32, 16, 8, 4] as const;
-const MIN_TILE = 4;
+/** The smallest tile of the renders (TILE_SIZES goes up from it). */
+const MIN_TILE = TILE_SIZES[0];
 
 export function tileFor(a: FloorRect): number {
   const side = Math.max(a.w, a.h);
-  return TILES.find((t) => side * t <= MAX_IMAGE_SIDE) ?? MIN_TILE;
+  return [...TILE_SIZES].reverse().find((t) => side * t <= MAX_IMAGE_SIDE) ?? MIN_TILE;
 }
 
 export function prCheck(opts: PrCheckOptions): PrReport {
@@ -393,6 +558,7 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       validation: { errors: 0, new_errors: [], new_errors_total: 0 },
       areas: [],
       omitted_areas: 0,
+      notes: [],
     };
     writeFileSync(join(opts.out, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
     return report;
@@ -449,12 +615,20 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     // then merges them cleanly into different items.
     const tree = gitMergeTree(root, base, head);
 
-    // The content the merge lands (items, texts, sprites the PR adds or changes): git's merge
-    // of each file the PR changes there, or the head's when git cannot merge (that already
-    // fails with `rebase`). Without it a PR that adds an item and places it fails with
-    // "unknown item". `before` keeps the base's own content.
-    const contentFiles = other.filter((p) => under(CONTENT_DIRS, p)).sort();
-    overlayContent(root, after, tree ?? head, contentFiles);
+    // The content the merge lands (items, texts, sprites the PR adds or changes). `after` is
+    // a checkout of base, so writing what differs from base to git's merge tree makes its
+    // content exactly the merge's, files base moved or turned into directories included.
+    // When git cannot merge (that fails with `rebase`), the PR's own changes, as the head
+    // has them. Without it a PR that adds an item and places it fails with "unknown item".
+    // `before` keeps the base's own content.
+    const notes: NoteCode[] = [];
+    const limits = opts.contentLimits ?? { files: MAX_CONTENT_FILES, bytes: MAX_CONTENT_BYTES };
+    const landed =
+      tree === null
+        ? landContent(root, after, mergeBase, head, limits)
+        : landContent(root, after, base, tree, limits);
+    if (landed.tooLarge) notes.push("content_too_large");
+    if (landed.skipped.length > 0) notes.push("content_skipped");
     const badModes = [
       ...new Set([
         ...nonPlainFiles(root, head),
@@ -496,13 +670,16 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     // Both sides are whole trees with their own content: base as it is, and the merge with
     // the content it lands. Comparing them shows what the PR breaks, content changes too
     // (an item it deletes that the map uses).
-    const old = new Set(errorsOf(before));
+    const baseContent = loadContent(before);
+    const old = new Set(errorsOf(before, baseContent));
     const merged = errorsOf(after);
-    // Content (data/, i18n/) needs a maintainer: a community PR's map must also stand on the
-    // base's content, so it cannot pass by bringing the items or texts it uses. Same content
-    // as `before`, so this comparison is like for like. A union: no error of either is lost.
-    const communityContent = !maintainer && other.some((p) => under(VALIDATED_CONTENT_DIRS, p));
-    const onBase = communityContent ? errorsOf(after, loadContent(before)) : [];
+    // Content (data/, i18n/, assets/) needs a maintainer: a community PR's map must also
+    // stand on the base's content, so it cannot pass by bringing the items or texts it uses.
+    // Same content as `before`, so this comparison is like for like. A union: no error of
+    // either is lost.
+    const communityContent = !maintainer && other.some(isContent);
+    if (communityContent) notes.unshift("base_content");
+    const onBase = communityContent ? errorsOf(after, baseContent) : [];
     const nowErrors = [...new Set([...merged, ...onBase])];
     const newErrors = nowErrors.filter((e) => !old.has(e));
 
@@ -513,13 +690,22 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       maxAreas: MAX_AREAS,
     });
     const maxPng = opts.maxPngBytes ?? MAX_PNG_BYTES;
+    // A community PR's "after" is drawn with the base's content and sprites too, like its map
+    // is measured; so is any "after" when nothing of the content changed.
+    const baseFrames = loadFrames(before);
+    let afterContent = baseContent;
+    let afterFrames = baseFrames;
+    if (!communityContent && landed.changed > 0) {
+      afterContent = loadContent(after);
+      const merged = tryLoadFrames(after);
+      // The merge's sprites do not build (an error in assets/): the base's, not all missing.
+      if (merged === undefined) notes.push("atlas_fallback");
+      else afterFrames = merged;
+    }
     const sides = [
-      { name: "before" as const, dir: before },
-      { name: "after" as const, dir: after },
-    ].map((s) => {
-      const loaded = loadWorld(s.dir);
-      return { ...s, world: loaded.world, content: loadContent(s.dir), frames: loadFrames(s.dir) };
-    });
+      { name: "before" as const, dir: before, content: baseContent, frames: baseFrames },
+      { name: "after" as const, dir: after, content: afterContent, frames: afterFrames },
+    ].map((s) => ({ ...s, world: loadWorld(s.dir).world }));
     const prAreas: PrArea[] = areas.map((a, i) => {
       const draw = (tile: number): Buffer[] =>
         sides.map(
@@ -560,6 +746,7 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     if (tree === null) failures.push("rebase");
     if (mismatch.length > 0) failures.push("merge_mismatch");
     if (newErrors.length > 0) failures.push("validation");
+    if (landed.tooLarge) failures.push("limits");
     const report: PrReport = {
       ...empty,
       ok: failures.length === 0,
@@ -587,6 +774,7 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       },
       areas: prAreas,
       omitted_areas: omitted,
+      notes,
     };
     writeFileSync(join(opts.out, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
     return report;
