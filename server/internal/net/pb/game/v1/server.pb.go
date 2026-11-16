@@ -4485,10 +4485,13 @@ type MarketUpdate struct {
 	// The market is read-only until the server restarts (a change could not be saved): it
 	// can be browsed, but nothing is created, accepted, cancelled or withdrawn.
 	ReadOnly bool `protobuf:"varint,20,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
-	// Sent by the server on its own, not as the answer to a MarketCommand: another
-	// player's action changed the browsed item's offers, the player's own offers or its
-	// mailbox. A client whose window is already closed ignores it (it must not open the
-	// window again).
+	// Sent by the server on its own, not as the answer to a MarketCommand: something else
+	// changed what the open window shows (another player's action on the browsed item's
+	// offers, on the player's own offers or on its mailbox; a ban or unban that hides or
+	// shows offers; a completed trade that changed the player's money and items; a house
+	// rent, transfer or release that changed its mailbox; the market turning read-only).
+	// At most one every 500 ms per window (the switch to read-only goes out at once). A
+	// client whose window is already closed ignores it (it must not open the window again).
 	Refresh       bool `protobuf:"varint,21,opt,name=refresh,proto3" json:"refresh,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
