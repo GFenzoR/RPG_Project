@@ -9,6 +9,7 @@ import {
   type Env,
   type Gh,
   MARKER,
+  REPORT_ERRORS,
   STATUS_CONTEXT,
   checkReport,
   commitStatus,
@@ -24,6 +25,8 @@ import {
 const A = "a".repeat(40);
 const B = "b".repeat(40);
 const C = "c".repeat(40);
+/** The tip of an old branch (content/old): a report of a run into it has this base. */
+const D = "d".repeat(40);
 const CHUNK = "world/islands/puerto/chunks/z07/c0100_0196.json";
 
 const dirs: string[] = [];
@@ -76,10 +79,11 @@ interface Pull {
   headNow?: string;
 }
 
-/** A workflow run of commit B in the listing by head_sha (name map-pr, from someone/r). */
+/** A workflow run of commit B (of map-pr.yml, from someone/r, unless it says otherwise). */
 interface CommitRun {
   id: number;
-  name?: string;
+  /** The workflow file under .github/workflows/: only map-pr.yml's runs are listed. */
+  workflow?: string;
   repo?: string | null;
 }
 
@@ -88,8 +92,10 @@ interface Fake {
   files: Record<number, { filename: string; previous_filename?: string }[]>;
   comments: Record<number, { id: number; body: string; user: { login: string } }[]>;
   runs: Record<string, string>;
-  /** Workflow runs of commit B (null: an answer without the list). */
+  /** Workflow runs of commit B, any order (null: an answer without the list). */
   commitRuns?: CommitRun[] | null;
+  /** The tip of main (default A, the base of report(); null: an answer without a sha). */
+  mainTip?: string | null;
   /** Check runs of the head commit named map-pr/verdict (null: an answer without a count). */
   impostors?: number | null;
   /** Fails the first call whose "METHOD path" starts with this. */
@@ -99,6 +105,7 @@ interface Fake {
 /** An in-memory GitHub with the endpoints prcomment.ts uses; records every write. */
 function fakeGitHub(f: Fake) {
   const writes: { method: string; path: string; body: Record<string, unknown> }[] = [];
+  const reads: string[] = [];
   const gh: Gh = async (method, path, body) => {
     if (f.failOn && `${method} ${path}`.startsWith(f.failOn)) throw new Error("HTTP 502");
     let m: RegExpMatchArray | null;
@@ -106,6 +113,7 @@ function fakeGitHub(f: Fake) {
       writes.push({ method, path, body: body as Record<string, unknown> });
       return {};
     }
+    reads.push(path);
     if ((m = path.match(/^\/repos\/o\/r\/pulls\/(\d+)\/files\?per_page=100&page=(\d+)$/)))
       return (f.files[Number(m[1])] ?? []).slice((Number(m[2]) - 1) * 100, Number(m[2]) * 100);
     if ((m = path.match(/^\/repos\/o\/r\/pulls\/(\d+)$/))) {
@@ -113,16 +121,27 @@ function fakeGitHub(f: Fake) {
       if (!p) throw new Error("HTTP 404");
       return p.headNow === undefined ? p : { ...p, head: { ...p.head, sha: p.headNow } };
     }
-    if (path === `/repos/o/r/actions/runs?head_sha=${B}&event=pull_request&per_page=100`)
-      return f.commitRuns === null
-        ? { total_count: 0 }
-        : {
-            workflow_runs: (f.commitRuns ?? []).map((r) => ({
-              id: r.id,
-              name: r.name ?? "map-pr",
-              head_repository: r.repo === null ? null : { full_name: r.repo ?? "someone/r" },
-            })),
-          };
+    const runsOfB = `/repos/o/r/actions/workflows/map-pr.yml/runs?head_sha=${B}&event=pull_request&per_page=100&page=`;
+    if (path.startsWith(runsOfB) && /^\d+$/.test(path.slice(runsOfB.length))) {
+      if (f.commitRuns === null) return { total_count: 0 };
+      // GitHub's order: newest first.
+      const runs = (f.commitRuns ?? [])
+        .filter((r) => (r.workflow ?? "map-pr.yml") === "map-pr.yml")
+        .sort((x, y) => y.id - x.id);
+      const page = Number(path.slice(runsOfB.length));
+      return {
+        total_count: runs.length,
+        workflow_runs: runs.slice((page - 1) * 100, page * 100).map((r) => ({
+          id: r.id,
+          name: "map-pr",
+          head_repository: r.repo === null ? null : { full_name: r.repo ?? "someone/r" },
+        })),
+      };
+    }
+    if (path === "/repos/o/r/git/ref/heads/main")
+      return f.mainTip === null
+        ? { ref: "refs/heads/main" }
+        : { ref: "refs/heads/main", object: { type: "commit", sha: f.mainTip ?? A } };
     if (/^\/repos\/o\/r\/pulls\?state=open&per_page=100&page=1$/.test(path))
       return f.pulls.filter((p) => p.unlisted !== true);
     if ((m = path.match(/^\/repos\/o\/r\/issues\/(\d+)\/comments\?per_page=100&page=1$/)))
@@ -137,7 +156,7 @@ function fakeGitHub(f: Fake) {
       return f.impostors === null ? {} : { total_count: f.impostors ?? 0 };
     throw new Error(`unexpected ${method} ${path}`);
   };
-  return { gh, writes };
+  return { gh, writes, reads };
 }
 
 const pull = (patch: Partial<Pull> = {}): Pull => ({
@@ -540,6 +559,7 @@ describe("PRs into another branch, late events and impostors", () => {
 });
 
 describe("copies of a PR and late runs of the same commit", () => {
+  const OLD = "content/old";
   const base = (patch: Partial<Fake> = {}): Fake => ({
     pulls: [pull()],
     files: { 5: [{ filename: CHUNK }] },
@@ -564,9 +584,11 @@ describe("copies of a PR and late runs of the same commit", () => {
   });
 
   it("writes no status while someone else's PR into main has the same commit", async () => {
-    // Anyone can open a PR from the owner's branch: PR 6, same head repo and commit, by
-    // someone who is not a maintainer. Its runs fail plots; they must not turn B's status
-    // to failure, and the owner's runs (a pass) wait until the copy is closed.
+    // GitHub allows one open PR per head branch and base, so a copy comes from another
+    // branch with the same tip (here of the repo: PR 6, opened by someone who is not a
+    // maintainer) or from a fork with the same commit (PR 7 below). Its runs fail plots;
+    // they must not turn B's status to failure, and the owner's runs (a pass) wait until
+    // the copy is closed.
     const copy = pull({ number: 6, head: { sha: B, repo: { full_name: "o/r" } } });
     const pulls = [copy, owner];
     const files = { 5: [{ filename: CHUNK }], 6: [{ filename: CHUNK }] };
@@ -608,10 +630,9 @@ describe("copies of a PR and late runs of the same commit", () => {
     expect(statusOf(f.writes)).toHaveLength(1);
   });
 
-  it("never lets an older run of the commit write, even with no comment to tell", async () => {
-    // PR 5 went into an old branch (run 42), then was moved to main (run 50 started). Run
-    // 42 finishes late: there is no comment with a run stamp yet, but its verdict was for
-    // the old branch's plots and must not become B's status.
+  it("holds back an older run of the commit when its PR is the only one with that head from its repo, even with no comment to tell", async () => {
+    // Run 42 of PR 5 finishes late, after run 50 started: there is no comment with a run
+    // stamp yet, and its base is main's tip, so only the newer run tells.
     const f = fakeGitHub(base({ commitRuns: [{ id: 50 }, { id: 42 }] }));
     expect(await markPending(env(), f.gh)).toContain(
       "run 50 of map-pr is newer than 42 for this commit",
@@ -627,7 +648,7 @@ describe("copies of a PR and late runs of the same commit", () => {
     expect([...f.writes, ...g.writes]).toEqual([]);
     // Runs that do not count: another workflow, another head repo, older or this one.
     const others: CommitRun[] = [
-      { id: 60, name: "ci" },
+      { id: 60, workflow: "ci.yml" },
       { id: 61, repo: "other/r" },
       { id: 62, repo: null },
       { id: 42 },
@@ -637,11 +658,93 @@ describe("copies of a PR and late runs of the same commit", () => {
     expect(await postVerdict(withReport(env(), report()), h.gh)).toContain("status success");
   });
 
-  it("does not hold back a run when another open PR of the same repo shares the commit", async () => {
-    // Run 43 is PR 6's (into an old branch); it says nothing about PR 5's run 42.
-    const pulls = [pull({ number: 6, base: { ref: "content/old" } }), pull()];
+  it("does not hold back a run against main's tip when another open PR of the same repo shares the commit", async () => {
+    // Run 43 may be PR 6's (into an old branch), which says nothing about PR 5's run 42,
+    // or a newer run of PR 5, whose verdict against the same tip would be the same.
+    const pulls = [pull({ number: 6, base: { ref: OLD } }), pull()];
     const f = fakeGitHub(base({ pulls, commitRuns: [{ id: 43 }] }));
     expect(await postVerdict(withReport(env(), report()), f.gh)).toContain("status success");
+  });
+
+  it("never sets a status from a verdict against another base, sibling PR or not", async () => {
+    // From a fork, PR 6 (branch b2) and PR 5 (b1) share head B and go into an old branch,
+    // where B passes. Run 42 of PR 5 passes there (its base is D, the old tip). While its
+    // verdict job waits, PR 5's base changes to main: run 50 starts, and its pending job
+    // sees two bases and writes nothing. With two PRs of that head from that repo the
+    // newer run is not asked about; the report's base tells: run 42 is no verdict for main.
+    const pulls = [pull({ number: 6, base: { ref: OLD } }), pull()];
+    const files = { 5: [{ filename: CHUNK }], 6: [{ filename: CHUNK }] };
+    const comments = { 5: [bot(7, stampRun(`${MARKER}\n✅ old`, "42"))] };
+    const late = (): Env => withReport(env(), report({ base: D }));
+    const f = fakeGitHub(base({ pulls, files, comments, commitRuns: [{ id: 50 }, { id: 42 }] }));
+    expect(await postVerdict(late(), f.gh)).toContain("status failure");
+    const body = String(f.writes[0]?.body.body);
+    expect(body).toContain(REPORT_ERRORS.other_base);
+    expect(body).not.toContain("✅");
+    expect(statusOf(f.writes).map((w) => w.body.state)).toEqual(["failure"]);
+    // The same before run 50 exists (the job read the PR right after the base changed),
+    // and for a PR that is the only one with that head.
+    for (const ps of [pulls, [pull()]]) {
+      const g = fakeGitHub(base({ pulls: ps, files }));
+      expect(await postVerdict(late(), g.gh)).toContain("status failure");
+      expect(statusOf(g.writes).map((w) => w.body.state)).toEqual(["failure"]);
+    }
+    // Run 50, against main's tip, sets B's status.
+    const h = fakeGitHub(base({ pulls, files, comments, commitRuns: [{ id: 50 }, { id: 42 }] }));
+    expect(await postVerdict(withReport(env({ RUN_ID: "50" }), report()), h.gh)).toContain(
+      "status success",
+    );
+    // main moved on after the run checked it out: no verdict either, for a maintainer too.
+    const owner = pull({
+      author_association: "OWNER",
+      head: { sha: B, repo: { full_name: "o/r" } },
+    });
+    const k = fakeGitHub(base({ pulls: [owner], mainTip: C }));
+    expect(await postVerdict(withReport(env({ HEAD_REPO: "o/r" }), report()), k.gh)).toContain(
+      "status failure",
+    );
+    // A PR into another branch sets no status, so main's tip is not asked for.
+    const q = fakeGitHub(base({ pulls: [pull({ base: { ref: OLD } })], mainTip: null }));
+    expect(await postVerdict(late(), q.gh)).toContain(
+      `no status (PR into ${OLD}; would be success)`,
+    );
+    // An answer without the tip turns the job red before anything is written.
+    const n = fakeGitHub(base({ mainTip: null }));
+    await expect(postVerdict(withReport(env(), report()), n.gh)).rejects.toThrow("git/ref");
+    expect(n.writes).toEqual([]);
+  });
+
+  it("reads the commit's runs page by page down to its own", async () => {
+    // 100 newer runs from other forks fill the first page; PR 5's newer run 50 is on the
+    // second.
+    const forks: CommitRun[] = Array.from({ length: 100 }, (_, i) => ({
+      id: 100 + i,
+      repo: "other/r",
+    }));
+    const f = fakeGitHub(base({ commitRuns: [...forks, { id: 50 }, { id: 42 }] }));
+    expect(await postVerdict(withReport(env(), report()), f.gh)).toContain(
+      "run 50 of map-pr is newer than 42 for this commit",
+    );
+    expect(f.writes).toEqual([]);
+    // Without a newer run of its own repo it writes; a page that reaches the run itself
+    // is the last one read.
+    const old: CommitRun[] = Array.from({ length: 41 }, (_, i) => ({ id: 41 - i }));
+    const g = fakeGitHub(base({ commitRuns: [...forks, { id: 42 }, ...old] }));
+    expect(await postVerdict(withReport(env(), report()), g.gh)).toContain("status success");
+    expect(g.reads.filter((r) => r.includes("/actions/workflows/"))).toHaveLength(2);
+    const h = fakeGitHub(base({ commitRuns: [...forks.slice(1), { id: 42 }, ...old] }));
+    expect(await postVerdict(withReport(env(), report()), h.gh)).toContain("status success");
+    expect(h.reads.filter((r) => r.includes("/actions/workflows/"))).toHaveLength(1);
+    // More newer runs than GitHub lists (10 pages): the job turns red before writing.
+    const many: CommitRun[] = Array.from({ length: 1000 }, (_, i) => ({
+      id: 1000 + i,
+      repo: "other/r",
+    }));
+    const k = fakeGitHub(base({ commitRuns: many }));
+    await expect(postVerdict(withReport(env(), report()), k.gh)).rejects.toThrow(
+      "more than 1000 runs",
+    );
+    expect(k.writes).toEqual([]);
   });
 
   it("fails (red job) on a runs listing without the list, before writing", async () => {

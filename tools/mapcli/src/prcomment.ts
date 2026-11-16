@@ -9,8 +9,8 @@
 //     PR number, head commit and author checked against the GitHub API;
 //   - writes one comment per PR, found by a hidden marker and updated on every map-pr run;
 //     the comment also records the run that wrote it, and an older run never overwrites it
-//     (nor, when the PR is the only open one with its commit, does any run older than the
-//     newest map-pr run of that commit: newerRunOfCommit);
+//     (nor, when the PR is the only open one with its commit from its repo, does any run
+//     older than the newest map-pr run of that commit: newerRunOfCommit);
 //   - sets the commit status STATUS_CONTEXT on the PR's head commit: pending while map-pr
 //     runs, then success or failure (commitStatus). A status belongs to one commit, so a
 //     push that never gets a map-pr run has none, and an old pass never covers it. The
@@ -18,7 +18,9 @@
 //     only on the commit, so only a PR into the default branch sets it, and only while no
 //     other open PR into that branch has the same commit from another head repo or author
 //     (another PR of the same commit into an old branch, or a copy of a maintainer's PR
-//     opened by someone else, must not reach main's merge box).
+//     opened by someone else, must not reach main's merge box), and only from a report
+//     computed against that branch's tip now (defaultTip: a run of a PR whose base changed
+//     since, or one main moved past, is no verdict for it).
 //
 //   node --experimental-strip-types tools/mapcli/src/prcomment.ts            (in CI, env below)
 //   node --experimental-strip-types tools/mapcli/src/prcomment.ts --pending  (map-pr started)
@@ -33,6 +35,10 @@ const RUN_LINE = /^<!-- map-pr-run (\d{1,20}) -->$/;
 export const STATUS_CONTEXT = "map-pr/verdict";
 /** `name:` of map-pr.yml: the workflow whose runs map-pr-comment follows. */
 export const CHECK_WORKFLOW = "map-pr";
+/** The file of that workflow, under .github/workflows/: whose runs newerRunOfCommit lists. */
+export const CHECK_WORKFLOW_FILE = "map-pr.yml";
+/** Pages of 100 runs newerRunOfCommit reads at most (GitHub lists 1000 with head_sha). */
+export const MAX_RUN_PAGES = 10;
 /**
  * Conclusions of a map-pr run that carry no verdict: it was cancelled (a newer run of the
  * PR follows), or it waits for a maintainer to approve a first-time contributor's run (it
@@ -485,6 +491,8 @@ export const REPORT_ERRORS = {
   other_pr: "el reporte es de otro pull request",
   other_commit: "el reporte es de otro commit",
   other_author: "el reporte nombra a otro autor",
+  other_base:
+    "el reporte se calculó contra otra base, no contra la punta actual de la rama por defecto: hace falta una corrida nueva de `map-pr` (editar el título, cerrar y reabrir el PR o empujar)",
 } as const;
 export type ReportErrorCode = keyof typeof REPORT_ERRORS;
 const IMPOSTOR_TEXT = `🚨 **Otro check de este commit se llama \`${STATUS_CONTEXT}\`** (un job de algún workflow, por ejemplo uno que agrega este PR). La protección de \`main\` busca el check requerido solo por nombre, así que ese job podría pasar por el veredicto: no fusiones sin revisar \`.github/\` a mano.`;
@@ -800,7 +808,10 @@ export type Gh = (method: string, path: string, body?: unknown) => Promise<unkno
 
 /** "owner/name": a GitHub login, then a repo name that is not "." or "..". */
 const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/(?!\.\.?$)[A-Za-z0-9_.-]{1,100}$/;
-/** A plain branch name (it is only compared with the API's base.ref, never put in a path). */
+/**
+ * A plain branch name: compared with the API's base.ref and put in the path of its git ref
+ * (defaultTip), so no "..", "//", trailing "/", spaces, "?", "#" or "%".
+ */
 const BRANCH = /^(?!.*\.\.)(?!.*\/\/)(?!.*\/$)[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}$/;
 
 /** Reads and checks the workflow's environment; throws on anything unexpected. */
@@ -985,41 +996,60 @@ async function setStatus(env: Env, gh: Gh, s: CommitStatus): Promise<void> {
 const runUrlOf = (env: Env): string => `${env.server}/${env.repo}/actions/runs/${env.runId}`;
 
 /**
- * Any map-pr run of the same commit from the same head repo newer than this one. Run ids
- * only grow, so this event is late (GitHub may deliver workflow_run events out of order).
- * Only asked when the PR is the only open one with that head from that repo: then every
- * such run is for this PR (or for a closed PR), and an older one must write nothing, not
- * even where the comment's own stamp cannot tell (no comment yet, or a PR that does not
- * change world/). Example: a run of a PR into an old branch that finishes after the PR
- * was moved to main and its new run started. The listing is newest first, all workflows
- * mixed; an answer without the list turns the job red before anything is written.
+ * Any run of map-pr.yml for the same commit from the same head repo newer than this one.
+ * Run ids only grow, so this event is late (GitHub may deliver workflow_run events out of
+ * order). Only asked when the PR is the only open one with that head from that repo: then
+ * every such run is for this PR (or for a closed PR, or for an open one that moved on to
+ * another commit), and an older one must write nothing, not even where the comment's own
+ * stamp cannot tell (no comment yet, or a PR that does not change world/). With other open
+ * PRs of that head from that repo, a newer run may be theirs and is no reason to hold this
+ * one back; a verdict computed against another base never sets the status (defaultTip).
+ * The listing is newest first: it is read page by page until a run as old as this one (or
+ * its end). Fail closed: an answer without the list, or more than MAX_RUN_PAGES pages of
+ * newer runs (GitHub lists no further), turns the job red before anything is written.
  */
 async function newerRunOfCommit(env: Env, gh: Gh): Promise<string | undefined> {
-  const res = (await gh(
-    "GET",
-    `/repos/${env.repo}/actions/runs?head_sha=${env.headSha}&event=pull_request&per_page=100`,
-  )) as { workflow_runs?: unknown } | null;
-  if (!Array.isArray(res?.workflow_runs)) throw new Error("actions/runs: no workflow_runs");
   const mine = BigInt(env.runId);
-  let newest: bigint | undefined;
-  for (const r of res.workflow_runs as {
-    id?: unknown;
-    name?: unknown;
-    head_repository?: { full_name?: unknown } | null;
-  }[]) {
-    if (
-      r.name !== CHECK_WORKFLOW ||
-      r.head_repository?.full_name !== env.headRepo ||
-      typeof r.id !== "number" ||
-      !Number.isSafeInteger(r.id)
-    )
-      continue;
-    const id = BigInt(r.id);
-    if (id > mine && (newest === undefined || id > newest)) newest = id;
+  for (let page = 1; page <= MAX_RUN_PAGES; page++) {
+    const res = (await gh(
+      "GET",
+      `/repos/${env.repo}/actions/workflows/${CHECK_WORKFLOW_FILE}/runs?head_sha=${env.headSha}&event=pull_request&per_page=100&page=${page}`,
+    )) as { workflow_runs?: unknown } | null;
+    if (!Array.isArray(res?.workflow_runs)) throw new Error("actions/runs: no workflow_runs");
+    const runs = res.workflow_runs as {
+      id?: unknown;
+      head_repository?: { full_name?: unknown } | null;
+    }[];
+    let reachedMine = false;
+    for (const r of runs) {
+      if (typeof r.id !== "number" || !Number.isSafeInteger(r.id)) continue;
+      const id = BigInt(r.id);
+      if (id <= mine) reachedMine = true;
+      else if (r.head_repository?.full_name === env.headRepo)
+        return `run ${id} of map-pr is newer than ${env.runId} for this commit; nothing to do`;
+    }
+    if (reachedMine || runs.length < 100) return undefined;
   }
-  return newest === undefined
-    ? undefined
-    : `run ${newest} of map-pr is newer than ${env.runId} for this commit; nothing to do`;
+  throw new Error(
+    `actions/runs: more than ${MAX_RUN_PAGES * 100} runs of the commit newer than ${env.runId}`,
+  );
+}
+
+/**
+ * The default branch's tip now (its git ref). A report is a verdict against the base tip
+ * its run checked out (report.base, the sha prcheck resolved from base.ref). Only one
+ * against this tip may become the status: the run of a PR that went into another branch
+ * when it started (its base changed to main since), or one that main moved past, never
+ * sets it, however late its event arrives and whatever other PRs share the commit. An
+ * answer without a sha turns the job red before anything is written.
+ */
+async function defaultTip(env: Env, gh: Gh): Promise<string> {
+  const res = (await gh("GET", `/repos/${env.repo}/git/ref/heads/${env.defaultBranch}`)) as {
+    object?: { sha?: unknown };
+  } | null;
+  const sha = res?.object?.sha;
+  if (typeof sha !== "string" || !SHA.test(sha)) throw new Error("git/ref: no sha");
+  return sha;
 }
 
 /** The PR a run is for, as currentPull finds it. */
@@ -1039,10 +1069,11 @@ interface Current {
  * The commit status is written only for a PR into the default branch, and only if no
  * other open PR into it has the same commit from another head repo or author. The status
  * is per commit but the verdict depends on who opened the PR from where (maintainer):
- * anyone can open a PR from a maintainer's branch (or a copy of it in a fork) and, with
- * every run of that copy, turn the commit's status to failure. With such a copy open,
- * neither run writes the status: it keeps what it had (pending or none blocks the merge)
- * until the copy is closed and the PR's map-pr runs again.
+ * GitHub allows one open PR per head branch and base, but anyone can push a maintainer's
+ * commit to a fork, or open a PR from another branch of the repo with the same tip, and
+ * with every run of that copy turn the commit's status to failure. With such a copy
+ * open, neither run writes the status: it keeps what it had (pending or none blocks the
+ * merge) until the copy is closed and the PR's map-pr runs again (a new run).
  */
 async function currentPull(env: Env, gh: Gh, reportPr?: number): Promise<Current | string> {
   const all = await findPulls(env, gh);
@@ -1115,9 +1146,11 @@ export async function markPending(env: Env, gh: Gh): Promise<string> {
 
 /**
  * A map-pr run finished (workflow_run `completed`): the comment gets the verdict and the
- * head commit its final status (when currentPull allows it). The comment is written
- * first; if the status call fails the job is red and the commit keeps the status it had:
- * `pending` when the pending job marked this run, none for a new commit.
+ * head commit its final status (when currentPull allows it). A report computed against
+ * anything but the default branch's tip now is no verdict for a PR into it (other_base:
+ * a failure, never a success of another base). The comment is written first; if the
+ * status call fails the job is red and the commit keeps the status it had: `pending` when
+ * the pending job marked this run, none for a new commit.
  */
 export async function postVerdict(env: Env, gh: Gh): Promise<string> {
   if (NO_VERDICT.includes(env.conclusion))
@@ -1155,6 +1188,15 @@ export async function postVerdict(env: Env, gh: Gh): Promise<string> {
   } else {
     if (report) {
       error = matchReport(report, pull.number, env.headSha, pull.user.login);
+      // Into the default branch the verdict may become the status: only one computed
+      // against its tip now (defaultTip). Not asked for a PR into another branch, which
+      // sets no status.
+      if (
+        !error &&
+        pull.base.ref === env.defaultBranch &&
+        report.base !== (await defaultTip(env, gh))
+      )
+        error = "other_base";
       if (error) report = null;
     }
     const ctx: CommentContext = { runUrl, conclusion: env.conclusion };

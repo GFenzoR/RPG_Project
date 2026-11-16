@@ -243,18 +243,31 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
    sobre el commit head del PR. El veredicto depende de la base y de quién abrió el PR y
    desde dónde (maintainer), pero el status es del commit. Por eso el status lo escribe
    **solo un PR hacia la rama por defecto** (`DEFAULT_BRANCH`, del `repository` del
-   evento), y solo si **ningún otro PR abierto hacia esa rama tiene el mismo commit desde
-   otro repo o con otro autor**:
+   evento), solo si **ningún otro PR abierto hacia esa rama tiene el mismo commit desde
+   otro repo o con otro autor**, y solo con un veredicto **calculado contra la punta actual
+   de esa rama**:
    - el mismo commit puede ser el head de otro PR hacia una rama vieja del repo (con otras
      parcelas o un `prcheck` viejo) cuyo `success` aparecería en el PR hacia `main`. Un
      PR hacia otra rama recibe su comentario y nada más;
-   - cualquiera puede abrir un PR desde la rama de un maintainer (o desde una copia en su
-     fork). Las corridas de esa copia fallan `plots` (su autor no es maintainer) y, con
-     cada `edited`, pasarían a `failure` el status del commit del maintainer. Mientras la
-     copia esté abierta, ninguna de las dos corridas escribe el status: queda el que
-     había (un `pending` o ninguno bloquean el merge). Se cierra la copia y se vuelve a
-     correr `map-pr` del PR bueno. Es solo un bloqueo: nunca da un `success` falso, porque
-     el mismo commit hacia la misma base es el mismo merge.
+   - GitHub deja un solo PR abierto por rama de origen y base, así que una "copia" hacia
+     `main` no sale de la misma rama: sale de un fork al que alguien subió el mismo commit,
+     o de otra rama del repo con la misma punta. Las corridas de esa copia fallan `plots`
+     (su autor no es maintainer) y, con cada `edited`, pasarían a `failure` el status del
+     commit del maintainer. Mientras la copia esté abierta, ninguna de las dos corridas
+     escribe el status: queda el que había (un `pending` o ninguno bloquean el merge). Se
+     cierra la copia y el PR bueno necesita una corrida **nueva** de `map-pr` (abajo). Es
+     solo un bloqueo: nunca da un `success` falso, porque el mismo commit hacia la misma
+     base es el mismo merge;
+   - el reporte dice contra qué commit de la base se calculó (`base`: la punta de
+     `base.ref` cuando la corrida hizo checkout). Para un PR hacia la rama por defecto,
+     `comment` lo compara con la punta actual de esa rama (`GET /git/ref/heads/<rama>`,
+     con `contents: read`). Si no coincide, el reporte no vale (`other_base`): el
+     comentario lo dice y el status queda en `failure`. Cierra el caso de un PR que se
+     calculó hacia una rama vieja y después se pasó a `main`: el `completed` de esa
+     corrida vieja no escribe un `success` de la rama vieja, por tarde que llegue y aunque
+     otros PR compartan el commit. También cae ahí una corrida que `main` dejó atrás
+     mientras corría (con "Require branches to be up to date" ese PR igual necesita
+     actualizarse).
 
    Tiene dos jobs, que corren de a uno por rama del PR (un grupo de `concurrency` a nivel
    de job, compartido):
@@ -276,8 +289,10 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
    El grupo de `concurrency` es más débil de lo que parece: GitHub deja un job corriendo y
    **uno** esperando, y uno nuevo cancela al que espera aunque `cancel-in-progress` sea
    `false`. Con dos PR desde la misma rama (uno hacia `main` y otro hacia otra rama), el
-   veredicto del de `main` se puede perder; su status queda en `pending` y bloquea (falla
-   cerrado: se relanza su `map-pr`). Tampoco está verificado en GitHub que un job saltado
+   veredicto del de `main` se puede perder. Su status queda como estaba: el job `pending`
+   no lo escribe con dos bases, así que es ninguno (bloquea) o un veredicto anterior del
+   mismo commit. Lo corrige una corrida nueva de su `map-pr` (abajo: relanzar una vieja no
+   alcanza si hay una más nueva). Tampoco está verificado en GitHub que un job saltado
    por su `if` no ocupe lugar en el grupo.
 
    Los dos validan los datos del evento con regex (`readEnv` en `prcomment.ts`: sha,
@@ -289,17 +304,20 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
      corrida solo crecen). GitHub puede entregar tarde un evento de `workflow_run`, y una
      corrida vieja del mismo commit (por ejemplo, antes de un `edited` que cambió la base)
      no debe pisar el comentario ni el status de la nueva. Relanzar la última corrida sí
-     escribe (mismo id); relanzar una más vieja no cambia nada;
-   - hay una corrida de `map-pr` más nueva del mismo commit y del mismo repo de origen
-     (`GET /actions/runs?head_sha=…&event=pull_request`, con `actions: read`), cuando el
-     PR es el único abierto con ese head desde ese repo: entonces toda corrida así es de
-     este PR (o de uno cerrado). Cubre lo que el sello del comentario no ve: un PR que
-     todavía no tiene comentario o que no cambia `world/`. Ejemplo: un PR hacia una rama
-     vieja pasa a `main`; si el `completed` de su corrida vieja llega después de que
-     arrancó la nueva, no escribe un `success` calculado con las parcelas de la rama vieja.
-     Con varios PR del mismo commit desde el mismo repo no se pregunta (la corrida más
-     nueva puede ser del otro PR) y queda solo el sello del comentario. Si la respuesta de
-     la API no trae la lista, el job falla sin escribir;
+     escribe (mismo id), salvo que haya una más nueva del mismo commit (por ejemplo, de un
+     PR cerrado: ver el punto siguiente); relanzar una más vieja no cambia nada;
+   - hay una corrida de `map-pr.yml` más nueva del mismo commit y del mismo repo de
+     origen (`GET /actions/workflows/map-pr.yml/runs?head_sha=…&event=pull_request`, con
+     `actions: read`), cuando el PR es el único abierto con ese head desde ese repo:
+     entonces toda corrida así es de este PR, de uno cerrado o de uno abierto que ya
+     avanzó a otro commit. Cubre lo que el sello del comentario no ve: un PR que todavía
+     no tiene comentario o que no cambia `world/`. La lista viene de la más nueva a la
+     más vieja y se lee por páginas hasta la corrida misma (o el final). Con varios PR del
+     mismo commit desde el mismo repo no se pregunta (la corrida más nueva puede ser del
+     otro PR) y quedan el sello del comentario y la base del reporte (arriba): un
+     veredicto calculado contra otra base nunca da `success`. Si la respuesta de la API
+     no trae la lista, o hay más de 1000 corridas más nuevas (GitHub no lista más), el
+     job falla sin escribir;
    - hay varios PR abiertos con ese commit (y ese repo de origen) hacia ramas distintas y
      la corrida no dice para cuál es. El número de PR del reporte elige entre ellos: no
      es de confianza, pero solo puede nombrar otro PR con el mismo commit, cuyos datos de
@@ -323,7 +341,8 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
      podría haber uno de `world/`). No hay mapa que juzgar: lo que ese PR cambie en
      `.github/` u otra parte lo cuida `CODEOWNERS`, no este status;
    - `failure` si no hay un reporte utilizable o si hay alguna falla (`plots` según el
-     maintainer de confianza, no el del reporte);
+     maintainer de confianza, no el del reporte). Un reporte calculado contra otra base
+     que la punta actual de la rama por defecto no es utilizable (`other_base`, arriba);
    - `failure` si el comentario no confía en el veredicto (el PR cambia algo fuera de
      `world/` y `docs/`, o la lista de archivos está cortada), salvo que el autor sea
      maintainer: a él el check ya le confía todo el mapa. El comentario igual dice qué
@@ -509,7 +528,8 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
      al comentario. Lo único libre son los mensajes del validador, sin backticks ni saltos,
      dentro de un bloque de código;
    - busca el PR por `head_sha` y repo de origen del `workflow_run`, y exige que el número,
-     el commit y el autor del reporte coincidan;
+     el commit y el autor del reporte coincidan y, si el PR va hacia la rama por defecto,
+     que su base sea la punta actual de esa rama;
    - pone el status `map-pr/verdict` (solo en un PR hacia la rama por defecto, y sin
      copias de otro autor o repo abiertas) con esos mismos datos de confianza: un PR de
      la comunidad que cambia `world/` y además
@@ -626,12 +646,15 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
   - Un PR de un maintainer que toca `world/` y además otras cosas tiene `success` si su
     reporte no tiene fallas. Uno de la comunidad así queda en `failure` y, después de
     revisarlo a mano, se fusiona con el bypass de administrador.
-  - Si el status de un commit queda en `pending` o no aparece (el job `comment` falló por
-    la API, alguien canceló la corrida de `map-pr`, la `concurrency` canceló el job que
-    esperaba, o hay otro PR abierto hacia `main` con el mismo commit desde otro repo o
-    autor: el log del job lo dice), cierra esa copia si la hay y relanza **la última**
-    corrida de `map-pr` del PR (una más vieja no cambia nada: el comentario guarda qué
-    corrida lo escribió, y se busca una más nueva del mismo commit), o empuja de nuevo.
+  - Si el status de un commit queda en `pending`, no aparece o dice que el reporte es de
+    otra base (el job `comment` falló por la API, alguien canceló la corrida de `map-pr`,
+    la `concurrency` canceló el job que esperaba, `main` avanzó durante la corrida, o hay
+    otro PR abierto hacia `main` con el mismo commit desde otro repo o autor: el log del
+    job lo dice), cierra esa copia si la hay y haz que `map-pr` corra de nuevo con una
+    corrida **nueva**: edita el título del PR, ciérralo y reábrelo, o empuja (un commit
+    vacío sirve). Relanzar desde Actions reusa el id de la corrida: solo sirve para la
+    última, y no escribe nada si hay una más nueva del mismo commit (el comentario guarda
+    qué corrida lo escribió, y se busca una más nueva).
 - Arranque: mientras la base no tenga `tools/mapcli/src/prcheck.ts`, el check se salta y
   lo dice en el resumen. La base es de confianza: un PR no puede quitárselo.
 

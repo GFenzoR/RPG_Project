@@ -10,11 +10,14 @@ name: map-pr-comment
 # renamed or deleted map-pr.yml) leaves its head commit without `map-pr/verdict`, and the
 # branch protection of main requires that status, so an old pass never covers a new
 # commit. The verdict depends on the base and on the author and head repo (maintainer),
-# the status only on the commit: only a PR into the default branch writes it, and not
-# while another open PR into it has the same commit from another head repo or author.
-# A late event (an older run of the same PR) writes nothing. This replaced
-# map-pr-pending.yml (pull_request_target), which GitHub blocks by default in public
-# repositories from 2026-12-02; nothing here needs an event policy.
+# the status only on the commit: only a PR into the default branch writes it, not while
+# another open PR into it has the same commit from another head repo or author, and only
+# from a report computed against the default branch's tip at that moment (a run of a PR
+# whose base changed to main since, or that main moved past, gives failure). A late event
+# (an older run of the same PR) writes nothing when the comment's run stamp tells, or the
+# newer runs of the commit when its PR is the only open one with that head from that
+# repo. This replaced map-pr-pending.yml (pull_request_target), which GitHub blocks by
+# default in public repositories from 2026-12-02; nothing here needs an event policy.
 #
 # Security: this is the only part with a write token, so it never checks out or runs code
 # from the pull request. It runs from the default branch (workflow_run always does: the
@@ -42,11 +45,12 @@ name: map-pr-comment
 #
 # Tokens (GITHUB_TOKEN, nothing else; no secrets): actions: read (the run's status, its
 # artifacts, newer map-pr runs of the commit), checks: read (check runs posing as the
-# status), contents: read (the sparse checkout), pull-requests: write (the comment; it
-# could also edit or close PRs: keep "Allow GitHub Actions to create and approve pull
-# requests" off), statuses: write (the commit status, on any commit of the repo). Nothing
-# can push code, change workflows or releases. The actions are pinned by commit SHA (the
-# tag in the comment): a moved tag cannot put new code next to this token.
+# status), contents: read (the sparse checkout; the default branch's tip), pull-requests:
+# write (the comment; it could also edit or close PRs: keep "Allow GitHub Actions to
+# create and approve pull requests" off), statuses: write (the commit status, on any
+# commit of the repo). Nothing can push code, change workflows or releases. The actions
+# are pinned by commit SHA (the tag in the comment): a moved tag cannot put new code next
+# to this token.
 
 on:
   workflow_run:
@@ -65,10 +69,12 @@ jobs:
     # does not land after the verdict of the same run. It is weaker than it looks: GitHub
     # keeps one job running and ONE waiting per group, and a newer job replaces (cancels)
     # the waiting one even with cancel-in-progress: false. Two PRs from the same branch
-    # (into main and into another branch) can so lose the verdict of the one into main:
-    # its status stays pending, which blocks the merge (fail closed; re-run its map-pr).
-    # At job level so that a job skipped by its `if` should not take a place in the group
-    # (not verified on GitHub).
+    # (into main and into another branch) can so lose the verdict of the one into main.
+    # Its status stays as it was: their pending jobs write none (two bases), so that is
+    # none or an earlier verdict of the commit. A new run of its map-pr writes it (edit
+    # the title, close and reopen, or push; a re-run of an older run is held back by a
+    # newer one). At job level so that a job skipped by its `if` should not take a place
+    # in the group (not verified on GitHub).
     concurrency:
       group: map-pr-comment-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
       cancel-in-progress: false
@@ -111,7 +117,7 @@ jobs:
     permissions:
       actions: read # the run's artifacts; newer runs of the commit
       checks: read # check runs posing as the status
-      contents: read # checkout of the default branch
+      contents: read # checkout of the default branch; its tip
       pull-requests: write # the comment
       statuses: write # the commit status
     steps:

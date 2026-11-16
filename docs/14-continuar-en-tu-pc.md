@@ -116,17 +116,26 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - un mismo commit como head de un PR hacia `main` y de otro hacia otra rama: el status
     lo escribe solo el de `main`, y una corrida que no dice para cuál PR es (el job
     `pending`, o sin reporte) no escribe nada. Raro, pero el comentario del PR hacia
-    `main` puede quedar sin "pendiente" en ese caso. Si los dos salen de la misma rama,
-    sus cuatro eventos comparten el grupo de `concurrency`, que deja uno corriendo y uno
-    esperando (uno nuevo cancela al que espera, aunque `cancel-in-progress` sea `false`):
-    el veredicto del PR hacia `main` se puede perder y su status queda en `pending`.
-    Falla cerrado; se relanza su `map-pr`. No está verificado en GitHub que un job
-    saltado por su `if` no ocupe lugar en el grupo;
-  - una copia de un PR (alguien abre otro PR desde la misma rama o el mismo commit, hacia
-    `main`, con otro autor u otro repo de origen) congela el status del commit: ninguna
-    corrida lo escribe mientras la copia esté abierta. Antes la copia podía pasarlo a
-    `failure` con cada `edited`. Se cierra la copia y se relanza `map-pr` del PR bueno.
-    Abrir y cerrar copias sigue sirviendo para trabar un PR (nunca para pasarlo);
+    `main` puede quedar sin "pendiente" en ese caso, y su status queda como estaba
+    (ninguno, o un veredicto anterior del mismo commit) hasta que termine su corrida. Si
+    los dos salen de la misma rama, sus cuatro eventos comparten el grupo de
+    `concurrency`, que deja uno corriendo y uno esperando (uno nuevo cancela al que
+    espera, aunque `cancel-in-progress` sea `false`): el veredicto del PR hacia `main` se
+    puede perder y su status queda como estaba. Lo corrige una corrida **nueva** de su
+    `map-pr` (editar el título, cerrar y reabrir, o empujar: relanzar una vieja no
+    escribe si hay una más nueva). No está verificado en GitHub que un job saltado por su
+    `if` no ocupe lugar en el grupo;
+  - un PR que se calculó hacia otra rama y después se pasó a `main` ya no puede dejar un
+    `success` de la otra rama: el veredicto solo vale como status si la base del reporte
+    es la punta actual de `main` (si no, `failure` y el comentario pide una corrida
+    nueva). Lo mismo si `main` avanzó mientras corría el check;
+  - una copia de un PR (otro PR hacia `main` con el mismo commit, de otro autor u otro
+    repo de origen: un fork con ese commit u otra rama con la misma punta, porque GitHub
+    no deja dos PR abiertos desde la misma rama hacia la misma base) congela el status
+    del commit: ninguna corrida lo escribe mientras la copia esté abierta. Antes la copia
+    podía pasarlo a `failure` con cada `edited`. Se cierra la copia y el PR bueno
+    necesita una corrida nueva de `map-pr`. Abrir y cerrar copias sigue sirviendo para
+    trabar un PR (nunca para pasarlo);
   - 👤 opcional, ya existía: `release-desktop.yml` (`contents: write`) e `images.yml`
     (`packages: write` al publicar) usan tags mayores flotantes (`actions/checkout@v4`,
     `pnpm/action-setup@v4`, `docker/*@v3`...). Fijarlas por SHA, como `map-pr-comment`,
