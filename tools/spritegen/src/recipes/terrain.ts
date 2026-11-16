@@ -138,25 +138,26 @@ function lattice(
   return out;
 }
 
-/** Fine grey ash in soft drifts, with a few dark cinders and pale pumice grains. */
+/**
+ * Fine grey ash: a soft mottle of small drifts and grain, with a few dark cinders and pale
+ * pumice grains. No mark is bigger or brighter than the rest, so a plain of ash does not
+ * show the 32 px repeat as a grid.
+ */
 function ashGround(img: Image, _rand: Rng, seed: number): void {
   const m = PALETTE.ash;
+  const pale = mix(m.base, m.light, 0.5);
+  const dim = mix(m.base, m.shadow, 0.5);
   eachInRect(0, 0, 32, 32, (x, y) => {
-    const drift = tileNoise(x, y, 16, 8, seed) * 0.6 + tileNoise(x, y, 8, 8, seed + 1) * 0.4;
-    const v = drift + (hash2(x, y, seed + 2) - 0.5) * 0.14;
-    px(img, x, y, v > 0.72 ? m.light : v > 0.27 ? m.base : m.shadow);
+    // Mostly per-pixel grain over a faint drift: the drift only nudges the grain.
+    const drift = tileNoise(x, y, 4, 4, seed + 1) * 0.3 + tileNoise(x, y, 8, 8, seed) * 0.15;
+    const v = drift + hash2(x, y, seed + 2) * 0.55;
+    let c = m.base;
+    if (v > 0.84) c = m.light;
+    else if (v > 0.68) c = pale;
+    else if (v < 0.16) c = m.shadow;
+    else if (v < 0.3) c = dim;
+    px(img, x, y, c);
   });
-  // Ripples the wind leaves: short lit lines with their shadow just below.
-  for (let i = 0; i < 4; i++) {
-    const x0 = Math.floor(hash2(i, 1, seed + 3) * 32);
-    const y0 = Math.floor(hash2(i, 2, seed + 3) * 32);
-    const len = 4 + Math.floor(hash2(i, 3, seed + 3) * 4);
-    for (let k = 0; k < len; k++) {
-      const yy = y0 + (k >= len / 2 ? 1 : 0);
-      pxw(img, x0 + k, yy, m.light);
-      pxw(img, x0 + k, yy + 1, m.shadow);
-    }
-  }
   // Cinders (dark, with a shadow pixel below) and pumice grains.
   eachInRect(0, 0, 32, 32, (x, y) => {
     const h = hash2(x, y, seed + 4);
@@ -192,13 +193,26 @@ function basaltPaving(img: Image, _rand: Rng, seed: number): void {
   });
 }
 
-/** Packed red-brown scoria with loose cinder pebbles: the paths of the island. */
+/**
+ * Packed red-brown scoria with loose cinder pebbles: the paths of the island. The packed
+ * grit is a fine, even mottle (no dark bands), so a long path does not read as a row of
+ * identical tiles.
+ */
 function cinderPath(img: Image, _rand: Rng, seed: number): void {
   const m = PALETTE.cinder;
   const dark = PALETTE.lavaRock;
+  const lit = mix(m.base, m.light, 0.35);
+  const dim = mix(m.shadow, m.deep, 0.4);
   eachInRect(0, 0, 32, 32, (x, y) => {
-    const v = tileNoise(x, y, 8, 8, seed) * 0.55 + (hash2(x, y, seed + 1) - 0.5) * 0.25;
-    px(img, x, y, v > 0.36 ? m.base : v > 0.16 ? m.shadow : m.deep);
+    const v =
+      tileNoise(x, y, 4, 4, seed) * 0.5 +
+      tileNoise(x, y, 8, 8, seed + 3) * 0.3 +
+      (hash2(x, y, seed + 1) - 0.5) * 0.4;
+    let c = m.base;
+    if (v > 0.66) c = lit;
+    else if (v < 0.14) c = dim;
+    else if (v < 0.3) c = m.shadow;
+    px(img, x, y, c);
   });
   // Pebbles: one per 4x4 cell of a jittered lattice, about two in five drawn.
   eachInRect(0, 0, 32, 32, (x, y) => {
@@ -247,36 +261,41 @@ function cooledLava(img: Image, _rand: Rng, seed: number): void {
 /**
  * Molten lava: a red-orange flow marbled into bands that meander (a warped noise read as
  * contour lines), a glowing yellow crest on each band and a darker skin in its troughs,
- * with a few small flecks of black crust. The bands are fine and evenly lit across the
- * tile, so the 32 px repeat does not read as a grid of blobs.
+ * with small flecks of black crust. The noise has no feature wider than a quarter of the
+ * tile and the flecks are many and small, so the 32 px repeat does not read as a grid of
+ * swirls or dots.
  */
 function moltenLava(img: Image, _rand: Rng, seed: number): void {
   const { ember } = PALETTE;
   const crust = PALETTE.lavaRock;
   const flowAt = (x: number, y: number): number => {
     // The warp is periodic too, so the bent field still tiles.
-    const wx = x + (tileNoise(x, y, 8, 8, seed + 5) - 0.5) * 10;
-    const wy = y + (tileNoise(x, y, 8, 8, seed + 6) - 0.5) * 10;
-    return tileNoise(wx, wy, 16, 16, seed) * 0.5 + tileNoise(wx, wy, 8, 8, seed + 1) * 0.5;
+    const wx = x + (tileNoise(x, y, 8, 8, seed + 5) - 0.5) * 8;
+    const wy = y + (tileNoise(x, y, 8, 8, seed + 6) - 0.5) * 8;
+    return (
+      tileNoise(wx, wy, 4, 4, seed + 1) * 0.55 +
+      tileNoise(wx, wy, 8, 8, seed) * 0.3 +
+      tileNoise(wx, wy, 16, 16, seed + 2) * 0.15
+    );
   };
   eachInRect(0, 0, 32, 32, (x, y) => {
-    const band = (flowAt(x, y) * 5 + 0.5) % 1;
+    const band = (flowAt(x, y) * 4 + 0.5) % 1;
     let c: Rgba;
-    if (band < 0.1)
+    if (band < 0.07)
       c = ember.light; // the hot crest of a band
-    else if (band < 0.26) c = mix(ember.light, ember.base, 0.6);
-    else if (band < 0.5) c = ember.base;
-    else if (band < 0.8) c = ember.shadow;
-    else c = mix(ember.shadow, ember.deep, 0.6); // the skin cooling in the trough
+    else if (band < 0.2) c = mix(ember.light, ember.base, 0.6);
+    else if (band < 0.44) c = ember.base;
+    else if (band < 0.76) c = ember.shadow;
+    else c = mix(ember.shadow, ember.deep, 0.4); // the skin cooling in the trough
     px(img, x, y, c);
   });
-  // Crust flecks: one per 8 px cell of a jittered lattice, about one in eight drawn.
+  // Crust flecks: one per 8 px cell of a jittered lattice, about one in three drawn, small.
   eachInRect(0, 0, 32, 32, (x, y) => {
     const f = lattice(x, y, 8, 8, seed + 4, { jitter: 0.7 });
-    if (hash2(f.id, 7, seed) > 0.13) return;
+    if (hash2(f.id, 7, seed) > 0.35) return;
     const r = Math.hypot(f.dx, f.dy * 1.3);
-    const size = 1.2 + hash2(f.id, 8, seed) * 0.8;
-    if (r > size + 0.8) return;
+    const size = 0.6 + hash2(f.id, 8, seed) * 0.6;
+    if (r > size + 0.7) return;
     if (r > size)
       px(img, x, y, ember.deep); // the red-hot rim
     else px(img, x, y, f.dx + f.dy < -0.4 ? crust.light : crust.base);
