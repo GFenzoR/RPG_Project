@@ -226,6 +226,16 @@ export const PROJECTILE_MS = 250;
 /** How long effects and floating texts live, ms. */
 export const EFFECT_MS = 600;
 export const FLOATING_TEXT_MS = 1000;
+
+/** Removes, in place and keeping the order, the entries that started `ms` or more before now. */
+export function dropFinished(list: { start: number }[], now: number, ms: number): void {
+  let kept = 0;
+  for (let i = 0; i < list.length; i++) {
+    const x = list[i];
+    if (x && now - x.start < ms) list[kept++] = x;
+  }
+  list.length = kept;
+}
 /** Status log length. */
 const LOG_SIZE = 5;
 /** Chat lines kept on screen. */
@@ -831,14 +841,14 @@ export class WorldState implements TileSource {
     c.walk = { from, to, start: now, duration };
   }
 
-  /** Forgets effects and floating texts that finished. */
+  /**
+   * Forgets effects, floating texts and projectiles that finished. In place: the canvas
+   * calls this every frame, and a new array per frame would be garbage (docs/07).
+   */
   expire(now: number): void {
-    if (this.effects.length > 0)
-      this.effects = this.effects.filter((e) => now - e.start < EFFECT_MS);
-    if (this.floatingTexts.length > 0)
-      this.floatingTexts = this.floatingTexts.filter((f) => now - f.start < FLOATING_TEXT_MS);
-    if (this.projectiles.length > 0)
-      this.projectiles = this.projectiles.filter((p) => now - p.start < PROJECTILE_MS);
+    dropFinished(this.effects, now, EFFECT_MS);
+    dropFinished(this.floatingTexts, now, FLOATING_TEXT_MS);
+    dropFinished(this.projectiles, now, PROJECTILE_MS);
   }
 
   /** The creatures of the battle list: everyone in view on the own floor but oneself, closest first. */
