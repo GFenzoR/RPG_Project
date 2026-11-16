@@ -368,7 +368,8 @@ type World struct {
 	// inFlight are the characters with a transfer the database has not confirmed: the
 	// seq of their snapshot in the last one (World.Saved forgets it). Until then they
 	// drop nothing outside a house (heldDrop, docs/01 "Transacciones"). heldGround are the
-	// items the server dropped at the feet of a held character, reserved to it (hold.go).
+	// ground items reserved to a held character (hold.go): what the server dropped at its
+	// feet, and what it took out of a house to the public ground (leftHouse).
 	inFlight   map[int64]uint64
 	heldGround map[*Item]int64
 	// saveSeq numbers every snapshot of every character, so a character's numbers grow
