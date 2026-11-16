@@ -373,7 +373,8 @@ func (w *World) HeldGroundForTest() int { return len(w.heldGround) }
 // InputAndGiftForTest is one command of cl's player that runs msg and then drops n of
 // item id at its feet (they do not fit), as one command that changes a house and gives
 // something away does (a rune of the house floor used from the street that kills a quest
-// monster, hold.go). Tests only.
+// monster, hold.go; TestHouseRuneKillsAQuestMonsterFromTheStreet plays that one with the
+// real rune). Tests only.
 func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string, n int) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		p := w.byClient[cl]
