@@ -1,10 +1,11 @@
-// Generates the original placeholder art for the autoborder pieces of data/borders.yaml:
-// assets/sprites/borders/<rule>_<piece>.png. Each piece is the `from` ground (its pack texture,
-// or its placeholder colour) over a transparent tile, shaped by where the `from` ground is,
-// with a slightly wavy edge and a darker rim so map renders read clearly. Deterministic: same
-// input, same bytes. Re-run it when a ground's sprite in assets/sprites.yaml changes.
+// Generates the original art for the autoborder pieces of data/borders.yaml:
+// assets/sprites/borders/<rule>_<piece>.png. Each piece is the `from` ground (its own art from
+// tools/spritegen, its pack texture, or its placeholder colour) over a transparent tile, shaped
+// by where the `from` ground is, with a slightly wavy edge and a darker rim so map renders read
+// clearly. Deterministic: same input, same bytes. Re-run it when a ground's sprite changes
+// (its recipe in tools/spritegen, or its entry in assets/sprites.yaml).
 //   node --experimental-strip-types tools/spritepack/src/gen-borders.ts [--root DIR]
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { parse } from "yaml";
@@ -91,7 +92,7 @@ export function borderSprites(root: string): Map<string, Buffer> {
   for (const rule of rules) {
     const groundSprite = items.get(rule.from);
     const entry = groundSprite ? manifest.sprites.get(groundSprite) : undefined;
-    const fill = groundFill(root, entry);
+    const fill = groundFill(root, entry, groundSprite);
     for (const [piece, item] of Object.entries(rule.pieces)) {
       const sprite = items.get(item);
       if (!sprite) throw new Error(`border piece "${item}" is not in data/items`);
@@ -101,12 +102,18 @@ export function borderSprites(root: string): Map<string, Buffer> {
   return out;
 }
 
-/** The pixels of a ground: the top-left tile of its pack image, or its placeholder colour. */
-function groundFill(root: string, entry: SpriteEntry | undefined): Fill {
-  if (entry?.kind === "source") {
-    const src = decodePng(readFileSync(join(root, "assets", entry.source)));
-    const ox = entry.rect?.x ?? 0;
-    const oy = entry.rect?.y ?? 0;
+/**
+ * The pixels of a ground: its own art (assets/sprites/<sprite>.png, e.g. drawn by
+ * tools/spritegen), else the top-left tile of its pack image, else its placeholder colour.
+ * Run tools/spritegen before this when a ground's recipe changes.
+ */
+function groundFill(root: string, entry: SpriteEntry | undefined, sprite?: string): Fill {
+  const own = sprite ? join(root, "assets/sprites", `${sprite}.png`) : undefined;
+  if (entry?.kind === "source" || (own && existsSync(own))) {
+    const file = entry?.kind === "source" ? join(root, "assets", entry.source) : (own as string);
+    const src = decodePng(readFileSync(file));
+    const ox = entry?.kind === "source" ? (entry.rect?.x ?? 0) : 0;
+    const oy = entry?.kind === "source" ? (entry.rect?.y ?? 0) : 0;
     return (x, y) => {
       const i = ((oy + y) * src.width + ox + x) * 4;
       return [src.data[i] ?? 0, src.data[i + 1] ?? 0, src.data[i + 2] ?? 0, 255];

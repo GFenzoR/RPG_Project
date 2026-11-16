@@ -69,6 +69,15 @@ export const PALETTE = {
   darkStone: material("#77736b", "#595650", "#403d39", "#2b2926"),
   dirt: material("#8d6a3f", "#6e5130", "#523b23", "#382817"),
   sand: material("#d6c08e", "#b9a271", "#957f55", "#6c5b3c"),
+  // Volcanic island (T5.5)
+  /** Fine grey volcanic ash: warmer and flatter than rock. */
+  ash: material("#a39d93", "#8b857c", "#726d65", "#58544e"),
+  /** Dark blue-grey basalt: the hexagonal column tops of the Brasal paving. */
+  basalt: material("#6d717b", "#545861", "#40434b", "#2d2f36"),
+  /** Crushed red-brown scoria: cinder paths. */
+  cinder: material("#a3654c", "#7f4a39", "#5d352b", "#3e241e"),
+  /** Cooled lava crust: near-black, a little warm. */
+  lavaRock: material("#5a5251", "#403a3a", "#2f2a2b", "#1f1b1c"),
   // Metals
   iron: material("#b7bbbf", "#878c92", "#5e6369", "#3d4147"),
   darkIron: material("#6f747a", "#4f5359", "#373a3f", "#24262a"),

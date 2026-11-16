@@ -1,6 +1,6 @@
 // Ground, walls and map decoration (T0.5). Ground and walls tile seamlessly; objects are
 // drawn on transparency in 3/4 view (top and south face visible), lit from the top-left.
-import type { Image } from "@rpg/spritepack";
+import type { Image, Rgba } from "@rpg/spritepack";
 import {
   box,
   cylinderLight,
@@ -19,7 +19,7 @@ import {
   tint,
 } from "../draw.ts";
 import type { Rng } from "../draw.ts";
-import { darken, mix, PALETTE } from "../palette.ts";
+import { darken, lighten, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
@@ -84,6 +84,215 @@ function dockPlanks(img: Image, _rand: Rng, seed: number): void {
       px(img, col * 8 + 2, y, darkIron.base);
       px(img, col * 8 + 5, y, darkIron.base);
     }
+  });
+}
+
+// ---- volcanic grounds (Isla Volcánica, T5.5) ---------------------------------------------
+
+const wrap = (v: number): number => ((v % 32) + 32) % 32;
+
+/** px() that wraps around the tile, for marks that cross the edge of a seamless ground. */
+function pxw(img: Image, x: number, y: number, c: Rgba): void {
+  px(img, wrap(x), wrap(y), c);
+}
+
+/**
+ * Nearest point of a jittered lattice that repeats every 32 px: cells of cellW x cellH, one
+ * point per cell. `squash` stretches y when measuring (2 = cells look half as tall) and
+ * `stagger` shifts every other column half a cell down (hexagons with pointed sides).
+ * Returns the id of the nearest cell and the pixel offset from its point.
+ */
+function lattice(
+  x: number,
+  y: number,
+  cellW: number,
+  cellH: number,
+  seed: number,
+  opts: { jitter?: number; squash?: number; stagger?: boolean } = {},
+): { id: number; dx: number; dy: number } {
+  const { jitter = 1, squash = 1, stagger = false } = opts;
+  const cols = 32 / cellW;
+  const rows = 32 / cellH;
+  let best = Infinity;
+  let out = { id: 0, dx: 0, dy: 0 };
+  const cx0 = Math.floor(x / cellW);
+  for (let gx = cx0 - 1; gx <= cx0 + 1; gx++) {
+    const col = ((gx % cols) + cols) % cols;
+    const shift = stagger && col % 2 === 1 ? cellH / 2 : 0;
+    const cy0 = Math.floor((y - shift) / cellH);
+    for (let gy = cy0 - 1; gy <= cy0 + 1; gy++) {
+      const row = ((gy % rows) + rows) % rows;
+      const id = row * cols + col;
+      const px0 = gx * cellW + cellW / 2 + (hash2(col, row, seed) - 0.5) * jitter * cellW;
+      const py0 =
+        gy * cellH + shift + cellH / 2 + (hash2(col, row, seed + 1) - 0.5) * jitter * cellH;
+      const dx = x + 0.5 - px0;
+      const dy = y + 0.5 - py0;
+      const d = dx * dx + dy * squash * (dy * squash);
+      if (d < best) {
+        best = d;
+        out = { id, dx, dy };
+      }
+    }
+  }
+  return out;
+}
+
+/** Fine grey ash in soft drifts, with a few dark cinders and pale pumice grains. */
+function ashGround(img: Image, _rand: Rng, seed: number): void {
+  const m = PALETTE.ash;
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    const drift = tileNoise(x, y, 16, 8, seed) * 0.6 + tileNoise(x, y, 8, 8, seed + 1) * 0.4;
+    const v = drift + (hash2(x, y, seed + 2) - 0.5) * 0.14;
+    px(img, x, y, v > 0.72 ? m.light : v > 0.27 ? m.base : m.shadow);
+  });
+  // Ripples the wind leaves: short lit lines with their shadow just below.
+  for (let i = 0; i < 4; i++) {
+    const x0 = Math.floor(hash2(i, 1, seed + 3) * 32);
+    const y0 = Math.floor(hash2(i, 2, seed + 3) * 32);
+    const len = 4 + Math.floor(hash2(i, 3, seed + 3) * 4);
+    for (let k = 0; k < len; k++) {
+      const yy = y0 + (k >= len / 2 ? 1 : 0);
+      pxw(img, x0 + k, yy, m.light);
+      pxw(img, x0 + k, yy + 1, m.shadow);
+    }
+  }
+  // Cinders (dark, with a shadow pixel below) and pumice grains.
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    const h = hash2(x, y, seed + 4);
+    if (h < 0.008) {
+      pxw(img, x, y, PALETTE.lavaRock.light);
+      pxw(img, x, y + 1, m.deep);
+    } else if (h > 0.993) px(img, x, y, lighten(m.light, 0.25));
+  });
+}
+
+/** Hexagonal basalt column tops in 3/4: flat-topped hexes, lit rims, dark joints. */
+function basaltPaving(img: Image, _rand: Rng, seed: number): void {
+  const m = PALETTE.basalt;
+  const cellOf = (x: number, y: number): number =>
+    lattice(wrap(x), wrap(y), 16, 8, seed, { jitter: 0, squash: 1.7, stagger: true }).id;
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    const id = cellOf(x, y);
+    const tone = (hash2(id, 5, seed) - 0.5) * 0.36;
+    let c: Rgba;
+    if (cellOf(x, y + 1) !== id || cellOf(x + 1, y) !== id)
+      c = m.outline; // the joint
+    else if (cellOf(x, y + 2) !== id)
+      c = m.shadow; // the south face of the column
+    else if (cellOf(x, y - 1) !== id || cellOf(x - 1, y) !== id)
+      c = m.light; // lit rim
+    else c = shadeOf(m, 0.56 + tone + (tileNoise(x, y, 4, 4, seed + 6) - 0.5) * 0.18);
+    px(img, x, y, c);
+  });
+  // A few pits and chips on the faces.
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    if (hash2(x, y, seed + 7) < 0.015 && img.data[(y * 32 + x) * 4] === m.base[0])
+      px(img, x, y, m.shadow);
+  });
+}
+
+/** Packed red-brown scoria with loose cinder pebbles: the paths of the island. */
+function cinderPath(img: Image, _rand: Rng, seed: number): void {
+  const m = PALETTE.cinder;
+  const dark = PALETTE.lavaRock;
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    const v = tileNoise(x, y, 8, 8, seed) * 0.55 + (hash2(x, y, seed + 1) - 0.5) * 0.25;
+    px(img, x, y, v > 0.36 ? m.base : v > 0.16 ? m.shadow : m.deep);
+  });
+  // Pebbles: one per 4x4 cell of a jittered lattice, about two in five drawn.
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    const p = lattice(x, y, 4, 4, seed + 2, { jitter: 0.6 });
+    if (hash2(p.id, 9, seed) > 0.42) return;
+    const r = 1.1 + hash2(p.id, 10, seed) * 0.7;
+    if (p.dx * p.dx + p.dy * p.dy > r * r) return;
+    const pm = hash2(p.id, 11, seed) < 0.3 ? dark : m;
+    const lit = p.dx + p.dy < -0.6;
+    const shade = p.dx + p.dy > 0.9;
+    px(img, x, y, lit ? pm.light : shade ? pm.deep : pm.base);
+  });
+}
+
+/**
+ * Cooled lava: a near-black crust broken into slabs, each one lit on its top-left rim and
+ * shaded on the bottom-right, mottled, with a dull red glow deep in a few cracks.
+ */
+function cooledLava(img: Image, _rand: Rng, seed: number): void {
+  const m = PALETTE.lavaRock;
+  const { ember } = PALETTE;
+  const slabOf = (x: number, y: number): number =>
+    lattice(wrap(x), wrap(y), 8, 8, seed + 4, { jitter: 0.8 }).id;
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    const id = slabOf(x, y);
+    if (slabOf(x + 1, y) !== id || slabOf(x, y + 1) !== id) {
+      const glow = tileNoise(x, y, 8, 8, seed + 5) > 0.72 && hash2(x, y, seed + 9) < 0.7;
+      px(img, x, y, glow ? mix(m.deep, ember.deep, 0.7) : m.outline);
+      return;
+    }
+    const tone = (hash2(id, 8, seed) - 0.5) * 0.3;
+    const mottle = (tileNoise(x, y, 4, 4, seed + 6) - 0.5) * 0.3;
+    let level = 0.52 + tone + mottle;
+    if (slabOf(x, y + 2) !== id || slabOf(x + 2, y) !== id)
+      level -= 0.25; // far rim
+    else if (slabOf(x, y - 1) !== id || slabOf(x - 1, y) !== id) level += 0.3; // lit rim
+    px(img, x, y, shadeOf(m, level));
+  });
+  // Glassy glints.
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    if (hash2(x, y, seed + 3) < 0.03 && img.data[(y * 32 + x) * 4] === m.light[0])
+      px(img, x, y, lighten(m.light, 0.3));
+  });
+}
+
+/**
+ * Molten lava: a glowing flow in small swirls (fine detail hides the 32 px repeat), a
+ * darker cooling skin on its crests and two small drifting plates of black crust, each with
+ * a red-hot rim.
+ */
+function moltenLava(img: Image, _rand: Rng, seed: number): void {
+  const { ember } = PALETTE;
+  const crust = PALETTE.lavaRock;
+  const flowAt = (x: number, y: number): number =>
+    tileNoise(x, y, 8, 8, seed) * 0.5 +
+    tileNoise(x, y, 16, 8, seed + 1) * 0.3 +
+    tileNoise(x, y, 4, 4, seed + 2) * 0.2;
+  // Thresholds by share of the tile, not by value: the mix of noises bunches up round 0.5.
+  const sorted: number[] = [];
+  eachInRect(0, 0, 32, 32, (x, y) => sorted.push(flowAt(x, y)));
+  sorted.sort((a, b) => a - b);
+  const q = (share: number): number => sorted[Math.floor(share * (sorted.length - 1))] ?? 0.5;
+  const [hot, warm, cooling, skin] = [q(0.3), q(0.48), q(0.72), q(0.88)];
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    const flow = flowAt(x, y);
+    let c: Rgba;
+    if (flow > skin)
+      c = ember.deep; // the cooling skin on the crests
+    else if (flow > cooling) c = ember.shadow;
+    else if (flow > warm) c = ember.base;
+    else if (flow > hot) c = mix(ember.base, ember.light, 0.5);
+    else c = ember.light;
+    px(img, x, y, c);
+  });
+  // Crust plates: two of the four 16 px cells, ragged at the edge.
+  const plates = [0, 1, 2, 3].sort((a, b) => hash2(a, 6, seed) - hash2(b, 6, seed)).slice(0, 2);
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    const cell = lattice(x, y, 16, 16, seed + 4, { jitter: 0.7 });
+    if (!plates.includes(cell.id)) return;
+    const size = 2 + hash2(cell.id, 7, seed) * 1.4;
+    const r = Math.hypot(cell.dx, cell.dy * 1.25) + (tileNoise(x, y, 4, 4, seed + 8) - 0.5) * 2.4;
+    if (r > size + 1) return;
+    if (r > size) {
+      px(img, x, y, ember.shadow); // the cooler halo round a plate
+      return;
+    }
+    const lit = cell.dx + cell.dy < -1.2;
+    const dark = cell.dx + cell.dy > 1.2;
+    px(img, x, y, r > size - 1 ? ember.deep : lit ? crust.light : dark ? crust.deep : crust.base);
+  });
+  // White-hot sparks in the brightest flow.
+  eachInRect(0, 0, 32, 32, (x, y) => {
+    if (hash2(x, y, seed + 3) < 0.03 && img.data[(y * 32 + x) * 4 + 2] === ember.light[2])
+      px(img, x, y, lighten(ember.light, 0.5));
   });
 }
 
@@ -360,9 +569,58 @@ function boulder(img: Image, _rand: Rng, seed: number): void {
   outline(img, { amount: 0.5 });
 }
 
+/** A wooden signpost: a plank board with carved lines, nailed to a charred post. */
+function signpost(img: Image, _rand: Rng, seed: number): void {
+  // Post, lit on the left.
+  eachInRect(14, 13, 5, 16, (x, y) => {
+    const u = (x + 0.5 - 16.5) / 2.5;
+    px(img, x, y, shadeOf(darkWood, cylinderLight(u) + (hash2(x, y >> 2, seed) - 0.5) * 0.15));
+  });
+  rect(img, 13, 28, 7, 1, darkWood.deep); // where it goes into the ground
+  // Board: the lit top edge, two planks on the front, a darker frame.
+  eachInRect(4, 7, 25, 12, (x, y) => {
+    const yy = y - 7;
+    const grain = tileNoise(x, y * 3, 8, 1, seed) - 0.5;
+    let level = 0.5 + grain * 0.35;
+    if (yy === 0) level = 0.85;
+    else if (yy === 6)
+      level = 0.1; // the seam between the planks
+    else if (yy === 11) level = 0.15;
+    px(img, x, y, shadeOf(wood, level));
+  });
+  rect(img, 4, 7, 1, 12, wood.light);
+  rect(img, 28, 7, 1, 12, wood.deep);
+  // Carved letters: short gouges in two lines.
+  for (const [row, from, to] of [
+    [10, 7, 25],
+    [15, 8, 22],
+  ] as const) {
+    for (let x = from; x <= to; x++) {
+      if (hash2(x, row, seed + 1) < 0.22) continue; // gaps between the words
+      px(img, x, row, wood.deep);
+      if (hash2(x, row, seed + 2) < 0.4) px(img, x, row + 1, wood.shadow);
+    }
+  }
+  // Nails.
+  for (const [x, y] of [
+    [6, 9],
+    [26, 9],
+    [6, 16],
+    [26, 16],
+  ] as const)
+    px(img, x, y, darkIron.base);
+  outline(img, { amount: 0.5 });
+}
+
 export const TERRAIN: RecipeBook = {
   "ground/wooden_floor": { kind: "ground", draw: woodenFloor },
   "ground/dock_planks": { kind: "ground", draw: dockPlanks },
+  "ground/ash": { kind: "ground", draw: ashGround },
+  "ground/basalt": { kind: "ground", draw: basaltPaving },
+  "ground/cinder_path": { kind: "ground", draw: cinderPath },
+  "ground/cooled_lava": { kind: "ground", draw: cooledLava },
+  "ground/lava": { kind: "ground", draw: moltenLava },
+  "decor/signpost": { kind: "object", draw: signpost },
   "walls/wooden_wall": { kind: "wall", draw: woodenWall },
   "decor/pine_tree": { kind: "object", width: 64, height: 64, draw: pineTree },
   "decor/anvil": { kind: "object", draw: anvil },

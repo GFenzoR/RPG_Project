@@ -64,3 +64,38 @@
   sprite: ground/wooden_floor
   name: item.wooden_floor.name
   ground: { walkable: true, speed: 100 }
+
+# Volcanic grounds (Isla Volcánica, T5.5). Our own numbers: ash is soft going, cooled
+# lava is rough, the cinder paths and the basalt paving of Brasal are quick. Molten lava
+# cannot be walked, like water.
+- id: ash
+  kind: ground
+  sprite: ground/ash
+  name: item.ash.name
+  ground: { walkable: true, speed: 150 }
+
+- id: basalt
+  kind: ground
+  sprite: ground/basalt
+  name: item.basalt.name
+  ground: { walkable: true, speed: 100 }
+
+- id: cinder_path
+  kind: ground
+  sprite: ground/cinder_path
+  name: item.cinder_path.name
+  ground: { walkable: true, speed: 110 }
+
+- id: cooled_lava
+  kind: ground
+  sprite: ground/cooled_lava
+  name: item.cooled_lava.name
+  description: item.cooled_lava.desc
+  ground: { walkable: true, speed: 130 }
+
+- id: lava
+  kind: ground
+  sprite: ground/lava
+  name: item.lava.name
+  description: item.lava.desc
+  ground: { walkable: false }

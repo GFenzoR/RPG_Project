@@ -324,3 +324,393 @@
       - { item: ember_ore, weight: 4, min_level: 8 }
       - { item: iron_ore, weight: 2 }
   value: 4
+
+# ---- Autoborder pieces of the Isla Volcánica (T5.5, data/borders.yaml). Their art is
+# cut from the `from` ground by tools/spritepack/src/gen-borders.ts.
+
+- id: border_ash_sand_n
+  kind: decoration
+  sprite: borders/ash_sand_n
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_s
+  kind: decoration
+  sprite: borders/ash_sand_s
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_e
+  kind: decoration
+  sprite: borders/ash_sand_e
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_w
+  kind: decoration
+  sprite: borders/ash_sand_w
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_ne
+  kind: decoration
+  sprite: borders/ash_sand_ne
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_nw
+  kind: decoration
+  sprite: borders/ash_sand_nw
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_se
+  kind: decoration
+  sprite: borders/ash_sand_se
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_sw
+  kind: decoration
+  sprite: borders/ash_sand_sw
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_inner_ne
+  kind: decoration
+  sprite: borders/ash_sand_inner_ne
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_inner_nw
+  kind: decoration
+  sprite: borders/ash_sand_inner_nw
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_inner_se
+  kind: decoration
+  sprite: borders/ash_sand_inner_se
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_ash_sand_inner_sw
+  kind: decoration
+  sprite: borders/ash_sand_inner_sw
+  name: item.border_ash_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_n
+  kind: decoration
+  sprite: borders/cooled_lava_sand_n
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_s
+  kind: decoration
+  sprite: borders/cooled_lava_sand_s
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_e
+  kind: decoration
+  sprite: borders/cooled_lava_sand_e
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_w
+  kind: decoration
+  sprite: borders/cooled_lava_sand_w
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_ne
+  kind: decoration
+  sprite: borders/cooled_lava_sand_ne
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_nw
+  kind: decoration
+  sprite: borders/cooled_lava_sand_nw
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_se
+  kind: decoration
+  sprite: borders/cooled_lava_sand_se
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_sw
+  kind: decoration
+  sprite: borders/cooled_lava_sand_sw
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_inner_ne
+  kind: decoration
+  sprite: borders/cooled_lava_sand_inner_ne
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_inner_nw
+  kind: decoration
+  sprite: borders/cooled_lava_sand_inner_nw
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_inner_se
+  kind: decoration
+  sprite: borders/cooled_lava_sand_inner_se
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_sand_inner_sw
+  kind: decoration
+  sprite: borders/cooled_lava_sand_inner_sw
+  name: item.border_cooled_lava_sand.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_n
+  kind: decoration
+  sprite: borders/cooled_lava_ash_n
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_s
+  kind: decoration
+  sprite: borders/cooled_lava_ash_s
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_e
+  kind: decoration
+  sprite: borders/cooled_lava_ash_e
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_w
+  kind: decoration
+  sprite: borders/cooled_lava_ash_w
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_ne
+  kind: decoration
+  sprite: borders/cooled_lava_ash_ne
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_nw
+  kind: decoration
+  sprite: borders/cooled_lava_ash_nw
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_se
+  kind: decoration
+  sprite: borders/cooled_lava_ash_se
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_sw
+  kind: decoration
+  sprite: borders/cooled_lava_ash_sw
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_inner_ne
+  kind: decoration
+  sprite: borders/cooled_lava_ash_inner_ne
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_inner_nw
+  kind: decoration
+  sprite: borders/cooled_lava_ash_inner_nw
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_inner_se
+  kind: decoration
+  sprite: borders/cooled_lava_ash_inner_se
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_ash_inner_sw
+  kind: decoration
+  sprite: borders/cooled_lava_ash_inner_sw
+  name: item.border_cooled_lava_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_n
+  kind: decoration
+  sprite: borders/cinder_path_ash_n
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_s
+  kind: decoration
+  sprite: borders/cinder_path_ash_s
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_e
+  kind: decoration
+  sprite: borders/cinder_path_ash_e
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_w
+  kind: decoration
+  sprite: borders/cinder_path_ash_w
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_ne
+  kind: decoration
+  sprite: borders/cinder_path_ash_ne
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_nw
+  kind: decoration
+  sprite: borders/cinder_path_ash_nw
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_se
+  kind: decoration
+  sprite: borders/cinder_path_ash_se
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_sw
+  kind: decoration
+  sprite: borders/cinder_path_ash_sw
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_inner_ne
+  kind: decoration
+  sprite: borders/cinder_path_ash_inner_ne
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_inner_nw
+  kind: decoration
+  sprite: borders/cinder_path_ash_inner_nw
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_inner_se
+  kind: decoration
+  sprite: borders/cinder_path_ash_inner_se
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cinder_path_ash_inner_sw
+  kind: decoration
+  sprite: borders/cinder_path_ash_inner_sw
+  name: item.border_cinder_path_ash.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_n
+  kind: decoration
+  sprite: borders/cooled_lava_lava_n
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_s
+  kind: decoration
+  sprite: borders/cooled_lava_lava_s
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_e
+  kind: decoration
+  sprite: borders/cooled_lava_lava_e
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_w
+  kind: decoration
+  sprite: borders/cooled_lava_lava_w
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_ne
+  kind: decoration
+  sprite: borders/cooled_lava_lava_ne
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_nw
+  kind: decoration
+  sprite: borders/cooled_lava_lava_nw
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_se
+  kind: decoration
+  sprite: borders/cooled_lava_lava_se
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_sw
+  kind: decoration
+  sprite: borders/cooled_lava_lava_sw
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_inner_ne
+  kind: decoration
+  sprite: borders/cooled_lava_lava_inner_ne
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_inner_nw
+  kind: decoration
+  sprite: borders/cooled_lava_lava_inner_nw
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_inner_se
+  kind: decoration
+  sprite: borders/cooled_lava_lava_inner_se
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+- id: border_cooled_lava_lava_inner_sw
+  kind: decoration
+  sprite: borders/cooled_lava_lava_inner_sw
+  name: item.border_cooled_lava_lava.name
+  pickupable: false
+
+# Signs of Brasal (Isla Volcánica, T5.5). One item per sign: looking at it shows its
+# description, which is the text of the sign (the same key as its entry in
+# world/islands/volcan/texts.yaml).
+- id: brasal_temple_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.volcan.temple_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: brasal_dock_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.volcan.dock_sign
+  pickupable: false
+  blocks_movement: true
+
+- id: brasal_mine_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.volcan.mine_sign
+  pickupable: false
+  blocks_movement: true
