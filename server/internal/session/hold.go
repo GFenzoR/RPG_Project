@@ -12,7 +12,8 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 // or a later one), the character is held:
 //   - nothing it carries, or left in its own corpse, goes to the public ground (a tile
 //     outside a house, or a container lying there);
-//   - nobody else takes anything out of its corpse;
+//   - the corpse it leaves while held is reserved to it (heldGround) until the database
+//     has the transfers the corpse may come from;
 //   - what the server makes fall at its feet (a craft or a reward that does not fit, the
 //     coins of an NPC sale, the equipment a full corpse cannot hold) is reserved to it
 //     outside a house (heldGround), and on a house floor it is written with its snapshot
@@ -24,11 +25,26 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 // every earlier write of that house went in (a dropped one taints the house). Without
 // that, an item a dropped transfer put on a house floor, or one the database still has
 // there because the write that took it out was dropped, would reach someone else's save
-// from the street.
+// from the street. It only ever lands as a pile of its own, or in a pile or a container
+// already reserved to the mover (moveItem): a reservation never takes over what belongs
+// to someone else (a stranger's pile, bag or corpse on the street).
 //
-// The hold normally lasts a tick or two; while the database is down it lasts until the
-// transfer is written, and a dropped transfer turns it into the lock of Tainted (the
-// reservations stay until a restart).
+// Each reservation keeps the seq of the snapshot whose ack frees it (groundHold.seq): a
+// player that keeps making transfers stays held (it drops nothing), but what was reserved
+// for an earlier transfer is anybody's as soon as that one is confirmed. The hold normally
+// lasts a tick or two; while the database is down it lasts until the transfer is written,
+// and a dropped transfer turns it into the lock of Tainted (the reservations it covers
+// are never acked: they stay until a restart, or until the corpse decays).
+
+// groundHold is a reservation of World.heldGround: the character the ground item (or the
+// pile, container or corpse it lies in) is reserved to, and the seq of that character's
+// snapshot whose ack frees it. The database then has every transfer of the character the
+// item may come from (the Saver writes in order and skips everything of a character after
+// a transfer it dropped).
+type groundHold struct {
+	char int64
+	seq  uint64
+}
 
 // transferSnapshot is p's snapshot for a transfer; p is held until the database confirms
 // it.
@@ -38,15 +54,16 @@ func (w *World) transferSnapshot(p *Player) Snapshot {
 	return s
 }
 
-// onHold reports whether a transfer of character id is not confirmed yet or was not stored.
-func (w *World) onHold(id int64) bool { return w.inFlight[id] != 0 || w.locked[id] }
-
-// endHold ends the hold of character id (its transfers are in the database): what fell
-// at its feet meanwhile, or what it took out of a house, is anybody's again.
-func (w *World) endHold(id int64) {
-	delete(w.inFlight, id)
-	for it, owner := range w.heldGround {
-		if owner == id {
+// confirmed is the ack of character id's snapshot seq (World.Saved): the database has it
+// and, written in order, every transfer of id before it. The hold ends if seq covers the
+// last transfer; every reservation seq covers is anybody's again, also while newer
+// transfers keep id held (and after a taint: a late ack is still a write that went in).
+func (w *World) confirmed(id int64, seq uint64) {
+	if h, ok := w.inFlight[id]; ok && seq >= h {
+		delete(w.inFlight, id)
+	}
+	for it, g := range w.heldGround {
+		if g.char == id && g.seq <= seq {
 			delete(w.heldGround, it)
 		}
 	}
@@ -78,29 +95,47 @@ func (w *World) publicGround(to place) bool {
 // holdGround is called after the server dropped it at p's feet (it did not fit). On a
 // house floor it is written with p's snapshot, behind p's transfers (the Saver skips the
 // write and taints the house if one of them was dropped), also when the drop comes from
-// an event and not from p's command. Elsewhere it is reserved to p while p is held.
+// an event and not from p's command. Elsewhere it is reserved to p until the database
+// has p's transfers so far.
+//
+// In read-only mode (Tainted) nothing about houses is written (flushHouses): what falls
+// on a house floor then stays in memory only, neither reserved nor saved (docs/01).
 func (w *World) holdGround(p *Player, it *Item) {
+	h := w.inFlight[p.charID]
 	switch {
 	case !it.onGround:
 	case w.savedHouse(it.pos):
 		w.houseActor(p)
-	case w.inFlight[p.charID] != 0:
-		w.heldGround[it] = p.charID
+	case h != 0:
+		w.heldGround[it] = groundHold{char: p.charID, seq: h}
 	}
 }
 
-// leftHouse reserves root to p: p just moved something from a house floor into it, on the
-// public ground (the item itself, the stack it joined or the container it went into). The
-// write of that house carries p's snapshot (flushHouses at the end of p's command), so p
-// is held until the database has it.
+// holdCorpse reserves the corpse p just left to p while p is held: its items come from
+// p's state, which may rest on a transfer the database does not have yet. A corpse left
+// while p is not held is only the owner's for corpse_owner_only_ms, even if a later
+// transfer of p is dropped (its items come from a state the database has).
+func (w *World) holdCorpse(p *Player, corpse *Item) {
+	if h := w.inFlight[p.charID]; h != 0 && corpse.onGround {
+		w.heldGround[corpse] = groundHold{char: p.charID, seq: h}
+	}
+}
+
+// leftHouse reserves root to p: p just moved something from a house floor onto the public
+// ground, into root (the item itself as a new pile, or a pile or container already
+// reserved to p: moveItem lets it join nothing else). The house write that took it out
+// carries p's next snapshot: flushHouses writes it at the end of p's command, and before
+// any other snapshot of p is taken (snapshot flushes the dirty houses first). So the
+// reservation lasts until the database has that snapshot.
 func (w *World) leftHouse(p *Player, root *Item) {
 	if root.onGround {
-		w.heldGround[root] = p.charID
+		w.heldGround[root] = groundHold{char: p.charID, seq: w.saveSeq + 1}
 	}
 }
 
 // groundHeld reports whether it lies on the ground (loose or inside a container lying
-// there) reserved to another character that is held, so p cannot take or use it.
+// there) reserved to another character, so p cannot take or use it, or put anything
+// into it.
 func (w *World) groundHeld(p *Player, it *Item) bool {
 	if len(w.heldGround) == 0 {
 		return false
@@ -109,8 +144,22 @@ func (w *World) groundHeld(p *Player, it *Item) bool {
 	if !r.onGround {
 		return false
 	}
-	owner, ok := w.heldGround[r]
-	return ok && owner != p.charID && w.onHold(owner)
+	g, ok := w.heldGround[r]
+	return ok && g.char != p.charID
+}
+
+// heldFor reports whether it lies on the ground in a pile, container or corpse reserved
+// to p (heldGround).
+func (w *World) heldFor(p *Player, it *Item) bool {
+	if len(w.heldGround) == 0 {
+		return false
+	}
+	r := it.root()
+	if !r.onGround {
+		return false
+	}
+	g, ok := w.heldGround[r]
+	return ok && g.char == p.charID
 }
 
 // heldDrop reports whether moving it to to would put something of p's (carried by p,
@@ -131,7 +180,7 @@ func (w *World) heldBy(p *Player, it *Item) bool {
 	if !r.onGround {
 		return false
 	}
-	if owner, ok := w.heldGround[r]; ok && owner == p.charID {
+	if w.heldFor(p, r) {
 		return true
 	}
 	for _, c := range w.corpses[r.pos] {

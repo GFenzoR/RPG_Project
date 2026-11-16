@@ -37,6 +37,7 @@ const (
 	msgTileFull       = "inventory.tile_full"
 	msgSaving         = "inventory.saving"
 	msgNotYours       = "inventory.not_yours"
+	msgFloorFirst     = "inventory.floor_first"
 	msgNotReady       = "inventory.not_ready"
 	msgAte            = "inventory.ate"
 	msgLookItem       = "look.item"
@@ -494,6 +495,11 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		p.emit(systemMsg(msgNotPossible))
 		return
 	}
+	// T5.3 fail-safe: what leaves a house floor for the public ground is reserved to p
+	// until the database has the house write that took it out (leftHouse). So it lands as
+	// a pile of its own, or in a pile or container already reserved to p: never in
+	// someone else's (a reservation must not take over a stranger's pile, bag or corpse).
+	leaving := w.itemHouse(it) != nil && w.publicGround(to)
 
 	// Where the units go: an existing stack they merge into, or a new place.
 	var merge *Item
@@ -512,8 +518,8 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 		g := w.ground[to.pos]
 		merge = mergeTarget(g, it, count)
-		if merge != nil && w.groundHeld(p, merge) {
-			merge = nil // T5.3: never into a stack reserved to a held player (hold.go)
+		if merge != nil && (w.groundHeld(p, merge) || leaving && !w.heldFor(p, merge)) {
+			merge = nil // T5.3: never into a stack reserved to another player (hold.go)
 		}
 		if merge == nil && len(g) >= maxGroundItems {
 			p.emit(systemMsg(msgTileFull))
@@ -538,8 +544,16 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 			p.emit(systemMsg(msgTooFar))
 			return
 		}
-		if w.groundHeld(p, to.cont) { // T5.3: a container reserved to a held player (hold.go)
+		if w.reserved(ctx.Tick, p, to.cont) { // another player's corpse, still its owner's
+			p.emit(systemMsg(msgNotOwner))
+			return
+		}
+		if w.groundHeld(p, to.cont) { // T5.3: a container reserved to another player (hold.go)
 			p.emit(systemMsg(msgNotYours))
+			return
+		}
+		if leaving && !w.heldFor(p, to.cont) { // T5.3: see leaving
+			p.emit(systemMsg(msgFloorFirst))
 			return
 		}
 		if it.contains(to.cont) {
@@ -570,10 +584,6 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		p.emit(systemMsg(msgSaving))
 		return
 	}
-	// T5.3 fail-safe: what leaves a house floor for the public ground is reserved to p
-	// until the database has the house write that took it out (leftHouse).
-	leaving := w.itemHouse(it) != nil && w.publicGround(to)
-
 	// Capacity: only what enters p's equipment from outside it weighs on p.
 	var toOwner *Player
 	switch to.kind {

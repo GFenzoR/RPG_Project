@@ -370,10 +370,11 @@ type World struct {
 	// inFlight are the characters with a transfer the database has not confirmed: the
 	// seq of their snapshot in the last one (World.Saved forgets it). Until then they
 	// drop nothing outside a house (heldDrop, docs/01 "Transacciones"). heldGround are the
-	// ground items reserved to a held character (hold.go): what the server dropped at its
-	// feet, and what it took out of a house to the public ground (leftHouse).
+	// ground items reserved to a character until the ack of the seq that covers them
+	// (hold.go): the corpse it left while held, what the server dropped at its feet, and
+	// what it took out of a house to the public ground (leftHouse).
 	inFlight   map[int64]uint64
-	heldGround map[*Item]int64
+	heldGround map[*Item]groundHold
 	// saveSeq numbers every snapshot of every character, so a character's numbers grow
 	// across its sessions too: an ack retried late from an earlier session can never pass
 	// for a newer snapshot (World.Saved).
@@ -510,7 +511,7 @@ func New(cfg Config) (*World, error) {
 		banned:      map[int64]time.Time{},
 		locked:      map[int64]bool{},
 		inFlight:    map[int64]uint64{},
-		heldGround:  map[*Item]int64{},
+		heldGround:  map[*Item]groundHold{},
 		shopPending: map[int64]pendingShop{},
 		pf:          world.NewPathfinder(cfg.Map, cfg.RerouteMaxNodes),
 	}

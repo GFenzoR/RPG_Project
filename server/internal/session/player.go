@@ -328,20 +328,21 @@ func (w *World) Leave(client Client) game.Command {
 }
 
 // Saved returns the command the persistence goroutine enqueues after writing a
-// snapshot: the final snapshot of a character is forgotten once it is in the database,
-// unless a login of that character is reading the database right now. Any snapshot at
-// or after the one of the character's last transfer ends its hold (T5.3): the Saver
-// writes in order and skips everything of a character after a transfer it dropped, so
-// that transfer is in the database too. The app retries an ack the full queue refused
-// (a late one is harmless: only a seq at or after the hold's ends it).
+// snapshot. The Saver writes in order and skips everything of a character after a
+// transfer it dropped, so an ack of seq means the database has that character's state
+// at seq, built on every transfer before it: the final snapshot of a character is
+// forgotten once it (or a later one) is in, unless a login of that character is reading
+// the database right now;
+// the hold ends if seq covers the last transfer, and every reservation it covers is
+// freed (T5.3, hold.go). So one ack stands for every earlier one of its character: the
+// app retries only the highest seq per character the full queue refused, and a late
+// ack is harmless.
 func (w *World) Saved(characterID int64, seq uint64) game.Command {
 	return game.CommandFunc(func(*game.TickContext) {
-		if s, ok := w.unsaved[characterID]; ok && s.Seq == seq && w.loading[characterID] == 0 {
+		if s, ok := w.unsaved[characterID]; ok && s.Seq <= seq && w.loading[characterID] == 0 {
 			delete(w.unsaved, characterID)
 		}
-		if h, ok := w.inFlight[characterID]; ok && seq >= h {
-			w.endHold(characterID)
-		}
+		w.confirmed(characterID, seq)
 	})
 }
 

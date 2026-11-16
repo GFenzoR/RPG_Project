@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
 // The transfer hold of the fail-safe (docs/01 "Transacciones", hold.go): until the
@@ -92,66 +94,43 @@ func TestTransferHoldsDropsUntilSaved(t *testing.T) {
 
 // A held player that dies: its corpse stays reserved past its owner-only time until the
 // transfer is confirmed, and the owner cannot put what lies in it on the ground either.
+// Nobody else puts anything into it meanwhile: it would be stuck there.
 func TestHeldCorpseStaysReserved(t *testing.T) {
-	h := newMarketHarness(t, func(c *session.Config) {
-		c.Monsters = content.Monsters{} // corpses, no monsters
-		c.Balance.Death.CorpseOwnerOnlyMs = 500
-	})
-	cs, s := h.atBoard("Sela", pos(1, 1), stack(salveID, 30, 0), stack(coinID, 50, 1))
-	nextChar++
-	bc := withPack(nextChar, pos(0, 1), stack(coinID, 100, 0))
-	bc.Name, bc.Level = "Bruno", 20 // not a novice: the backpack falls into the corpse
-	cb, b := h.joinChar(bc)
-	h.send(cb, useBoard())
-	cc, _ := h.trader("Caio", pos(0, 2))
-	h.send(cs, createOffer(sell, salveID, 10, 4))
-	h.send(cb, acceptOffer(h.w.MarketOffers(s.CharacterID())[0], 4))
-	bought := h.transfers[len(h.transfers)-1].Snapshots[0]
-	h.kill(b)
-	corpse := h.w.CorpsesAt(pos(0, 1))
-	if len(corpse) != 1 || len(corpse[0].Item.Items()) != 1 {
-		t.Fatalf("corpse %v", corpse)
-	}
-	h.sim.RunTicks(20) // past the owner-only time
-	openCorpse := func(cl *fakeClient) uint32 {
-		t.Helper()
-		cl.take()
-		h.input(cl, useItem(onTile(pos(0, 1)), corpseID, 1))
-		h.sim.Step()
-		opens := find(cl.take(), (*pb.ServerMessage).GetContainerOpen)
-		if len(opens) != 1 {
-			t.Fatalf("corpse not opened: %v", opens)
-		}
-		return opens[0].GetContainerId()
-	}
+	h, cb, cc, b, corpse, bought := heldCorpse(t)
 
 	// Bruno woke at the temple (1, 0), next to it: he cannot drop his backpack out of it.
 	if b.Pos() != pos(1, 0) {
 		t.Fatalf("Bruno woke at %v", b.Pos())
 	}
-	own := openCorpse(cb)
+	own := openCorpseAt(t, h.harness, cb, pos(0, 1))
 	if !hasKey(h.send(cb, moveItem(inContainer(own, 0), packID, 0, onTile(pos(2, 1)), 1)), "inventory.saving") {
 		t.Fatal("the held owner dropped from its corpse")
 	}
-	// Caio cannot take it while Bruno is held.
-	other := openCorpse(cc)
+	// Caio cannot take it while Bruno is held, nor put anything into the corpse.
+	other := openCorpseAt(t, h.harness, cc, pos(0, 1))
 	if !hasKey(h.send(cc, moveItem(inContainer(other, 0), packID, 0, onTile(pos(1, 2)), 1)), "death.corpse_not_owner") ||
-		len(corpse[0].Item.Items()) != 1 {
+		len(corpse.Item.Items()) != 1 {
 		t.Fatal("another player looted a held player's corpse")
+	}
+	pack := openPack(t, h.harness, cc)
+	if !hasKey(h.send(cc, moveItem(inContainer(pack, 0), salveID, 0, inContainer(other, 0), 1)), "death.corpse_not_owner") ||
+		len(corpse.Item.Items()) != 1 {
+		t.Fatal("another player put something into a held player's corpse")
 	}
 	// Confirmed: the corpse is open to everyone as usual.
 	h.sim.Command(h.w.Saved(b.CharacterID(), bought.Seq))
 	h.sim.Step()
 	if evs := h.send(cc, moveItem(inContainer(other, 0), packID, 0, onTile(pos(1, 2)), 1)); len(systemKeys(evs)) != 0 ||
-		len(corpse[0].Item.Items()) != 0 {
+		len(corpse.Item.Items()) != 0 {
 		t.Fatalf("loot after the ack: %v", systemKeys(evs))
 	}
 }
 
-// When a transfer of a character is not stored, the corpses it left stay reserved to it
-// (it is locked out): their items come from the state that was dropped, so they decay
-// instead of reaching someone else's save.
-func TestTaintedCorpsesStayReserved(t *testing.T) {
+// A corpse left before a hold is not reserved by it: its items come from a state the
+// database has (the death is saved at once, behind every confirmed transfer). So when a
+// later transfer of its owner is not stored, the corpse is anybody's after its owner-only
+// time as usual (only a corpse left while held stays reserved, below).
+func TestCorpseBeforeTheHoldIsNotReserved(t *testing.T) {
 	h := deathHarness(t, func(c *session.Config) { c.Balance.Death.EquipmentDropPct = 100 })
 	_, p := h.geared("Owner", 20, 0)
 	other, _ := h.join("Other", at(41, 40))
@@ -173,8 +152,79 @@ func TestTaintedCorpsesStayReserved(t *testing.T) {
 	}
 	h.input(other, moveItem(inContainer(opens[0].GetContainerId(), 0), packID, 0, onTile(pos(41, 40)), 1))
 	h.sim.Step()
-	if !hasKey(other.take(), "death.corpse_not_owner") || len(corpse.Item.Items()) != 4 {
-		t.Fatal("another player looted a tainted character's corpse")
+	if evs := other.take(); len(systemKeys(evs)) != 0 || len(corpse.Item.Items()) != 3 {
+		t.Fatalf("looting a corpse left before the hold: %v", systemKeys(evs))
+	}
+}
+
+// heldCorpse: Bruno buys salves (held) and dies with them next to the board; Caio stands
+// next to the corpse with salves of his own. The owner-only time is 500 ms.
+func heldCorpse(t *testing.T) (h *marketHarness, cb, cc *fakeClient, b *session.Player, corpse *session.Corpse, bought session.Snapshot) {
+	t.Helper()
+	h = newMarketHarness(t, func(c *session.Config) {
+		c.Monsters = content.Monsters{} // corpses, no monsters
+		c.Balance.Death.CorpseOwnerOnlyMs = 500
+	})
+	cs, s := h.atBoard("Sela", pos(1, 1), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	nextChar++
+	bc := withPack(nextChar, pos(0, 1), stack(coinID, 100, 0))
+	bc.Name, bc.Level = "Bruno", 20 // not a novice: the backpack falls into the corpse
+	cb, b = h.joinChar(bc)
+	h.send(cb, useBoard())
+	cc, _ = h.trader("Caio", pos(0, 2), stack(salveID, 3, 0))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	h.send(cb, acceptOffer(h.w.MarketOffers(s.CharacterID())[0], 4))
+	bought = h.transfers[len(h.transfers)-1].Snapshots[0]
+	h.kill(b)
+	corpses := h.w.CorpsesAt(pos(0, 1))
+	if len(corpses) != 1 || len(corpses[0].Item.Items()) != 1 {
+		t.Fatalf("corpse %v", corpses)
+	}
+	h.sim.RunTicks(20) // past the owner-only time
+	return h, cb, cc, b, corpses[0], bought
+}
+
+// openCorpseAt opens the corpse at p for cl and returns its container id.
+func openCorpseAt(t *testing.T, h *harness, cl *fakeClient, p world.Pos) uint32 {
+	t.Helper()
+	return openOnTile(t, h, cl, p, corpseID, 1)
+}
+
+// openOnTile opens the container item (at stack index i of p) for cl and returns its
+// container id.
+func openOnTile(t *testing.T, h *harness, cl *fakeClient, p world.Pos, item, i uint32) uint32 {
+	t.Helper()
+	cl.take()
+	h.input(cl, useItem(onTile(p), item, i))
+	h.sim.Step()
+	opens := find(cl.take(), (*pb.ServerMessage).GetContainerOpen)
+	if len(opens) != 1 {
+		t.Fatalf("container %d at %v not opened: %v", item, p, opens)
+	}
+	return opens[0].GetContainerId()
+}
+
+// When the transfer of a held player is not stored, the corpse it left while held stays
+// reserved to it (it is locked out): its items may come from the state that was dropped,
+// so they decay instead of reaching someone else's save. Nobody puts anything into it
+// either: it would decay with it.
+func TestTaintedHeldCorpseStaysReserved(t *testing.T) {
+	h, _, cc, b, corpse, _ := heldCorpse(t)
+	h.sim.Command(h.w.Tainted([]int64{b.CharacterID()}))
+	h.sim.Step()
+	if h.w.PlayerByCharacter(b.CharacterID()) != nil {
+		t.Fatal("the tainted character is still in the world")
+	}
+	h.sim.RunTicks(100)
+	other := openCorpseAt(t, h.harness, cc, pos(0, 1))
+	if !hasKey(h.send(cc, moveItem(inContainer(other, 0), packID, 0, onTile(pos(1, 2)), 1)), "death.corpse_not_owner") ||
+		len(corpse.Item.Items()) != 1 {
+		t.Fatal("another player looted the corpse a tainted character left while held")
+	}
+	pack := openPack(t, h.harness, cc)
+	if !hasKey(h.send(cc, moveItem(inContainer(pack, 0), salveID, 0, inContainer(other, 0), 1)), "death.corpse_not_owner") ||
+		len(corpse.Item.Items()) != 1 {
+		t.Fatal("another player put something into it")
 	}
 }
 
@@ -488,6 +538,182 @@ func TestHouseItemLeavingIsReservedToTheMover(t *testing.T) {
 	}
 }
 
+// What leaves a house for the street lands as a pile of its own: it never joins a
+// stranger's pile there (the reservation would take that pile over: its owner could not
+// pick it up until the house write is confirmed, or ever if it is dropped), only a pile
+// already reserved to the mover.
+func TestHouseItemLeavingJoinsNoStrangersPile(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(salveID, 5, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	h.rent(cl)
+	h.step(cl, N) // the door tile (3,4); the street (2..4, 5) is within reach
+	pack := openPack(t, h.harness, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), salveID, 0, onTile(pos(3, 3)), 5))
+	cc, c := h.tenant("Cid", 0, pos(2, 6), stack(salveID, 3, 0))
+	cp := openPack(t, h.harness, cc)
+	if evs := h.send(cc, moveItem(inContainer(cp, 0), salveID, 0, onTile(pos(2, 5)), 3)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Cid drops his salves: %v", systemKeys(evs))
+	}
+
+	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), salveID, 1, onTile(pos(2, 5)), 2)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("throwing two salves out: %v", systemKeys(evs))
+	}
+	g := h.w.GroundAt(pos(2, 5))
+	if len(g) != 2 || g[0].Count() != 3 || g[1].Count() != 2 {
+		t.Fatalf("street %v: the salves joined Cid's pile", g)
+	}
+	// Cid's pile is still his to take; Ana's is reserved to her.
+	if evs := h.send(cc, moveItem(onTile(pos(2, 5)), salveID, 1, inContainer(cp, 0), 3)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "test_salve") != 3 {
+		t.Fatalf("Cid takes his salves back: %v", systemKeys(evs))
+	}
+	if !hasKey(h.send(cc, moveItem(onTile(pos(2, 5)), salveID, 1, inContainer(cp, 0), 2)), "inventory.not_yours") {
+		t.Fatal("Cid took what left the house before the ack")
+	}
+	// A pile already reserved to Ana takes more of what she throws out.
+	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), salveID, 1, onTile(pos(2, 5)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("throwing one more out: %v", systemKeys(evs))
+	}
+	if g := h.w.GroundAt(pos(2, 5)); len(g) != 1 || g[0].Count() != 3 {
+		t.Fatalf("street %v, want Ana's pile of 3", g)
+	}
+	h.sim.Command(h.w.Saved(a.CharacterID(), lastSnapshot(t, h.transfers, a.CharacterID()).Seq))
+	h.sim.Step()
+	if evs := h.send(cc, moveItem(onTile(pos(2, 5)), salveID, 1, inContainer(cp, 0), 3)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "test_salve") != 6 {
+		t.Fatalf("pick up after the ack: %v", systemKeys(evs))
+	}
+}
+
+// What leaves a house goes into no container on the street but one already reserved to
+// the mover: in a stranger's bag it would make that bag the mover's until the house write
+// is confirmed, and for good if that write is dropped. The house item goes to the ground
+// first (inventory.floor_first).
+func TestHouseItemLeavingGoesIntoNoStrangersContainer(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(salveID, 5, 0), stack(bagID, 1, 1), stack(coinID, 100, 2),
+		stack(coinID, 100, 3))
+	h.rent(cl)
+	h.step(cl, N)
+	pack := openPack(t, h.harness, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), salveID, 0, onTile(pos(3, 3)), 5))
+	h.send(cl, moveItem(inContainer(pack, 0), bagID, 0, onTile(pos(2, 3)), 1))
+	cc, c := h.tenant("Cid", 0, pos(4, 6), stack(bagID, 1, 0))
+	cp := openPack(t, h.harness, cc)
+	h.send(cc, moveItem(inContainer(cp, 0), bagID, 0, onTile(pos(4, 5)), 1))
+
+	cids := openOnTile(t, h.harness, cl, pos(4, 5), bagID, 1)
+	if !hasKey(h.send(cl, moveItem(onTile(pos(3, 3)), salveID, 1, inContainer(cids, 0), 1)), "inventory.floor_first") ||
+		len(h.w.GroundAt(pos(4, 5))[0].Items()) != 0 {
+		t.Fatal("a house item went into a stranger's bag on the street")
+	}
+	if evs := h.send(cc, moveItem(onTile(pos(4, 5)), bagID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "test_bag") != 1 {
+		t.Fatalf("Cid takes his bag back: %v", systemKeys(evs))
+	}
+
+	// Her own bag, thrown out to the street, is reserved to her: it takes house items.
+	if evs := h.send(cl, moveItem(onTile(pos(2, 3)), bagID, 1, onTile(cottageExit), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("throwing her bag out: %v", systemKeys(evs))
+	}
+	own := openOnTile(t, h.harness, cl, cottageExit, bagID, 1)
+	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), salveID, 1, inContainer(own, 0), 2)); len(systemKeys(evs)) != 0 ||
+		len(h.w.GroundAt(cottageExit)[0].Items()) != 1 {
+		t.Fatalf("into her own reserved bag: %v", systemKeys(evs))
+	}
+	if !hasKey(h.send(cc, moveItem(onTile(cottageExit), bagID, 1, inContainer(cp, 0), 1)), "inventory.not_yours") {
+		t.Fatal("Cid took Ana's bag before the ack")
+	}
+	h.sim.Command(h.w.Saved(a.CharacterID(), lastSnapshot(t, h.transfers, a.CharacterID()).Seq))
+	h.sim.Step()
+	if evs := h.send(cc, moveItem(onTile(cottageExit), bagID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("pick up after the ack: %v", systemKeys(evs))
+	}
+}
+
+// The case of the review: a player dies on the street next to a house and its owner moves
+// something from the house floor into the corpse. That must not make the corpse the
+// owner's: the dead player would get "not yours" for its own equipment while the owner is
+// held, and for good if the owner's house write is dropped. A corpse is reserved to its
+// owner both ways (corpse_not_owner), and past that it is a container like any other on
+// the street (inventory.floor_first); either way it stays the dead player's.
+func TestHouseItemLeavingGoesIntoNoCorpse(t *testing.T) {
+	h := newHouseHarness(t, func(c *session.Config) {
+		c.Monsters = content.Monsters{} // corpses, no monsters
+		c.Balance.Death.CorpseOwnerOnlyMs = 500
+	})
+	cl, _ := h.tenant("Ana", 0, cottageExit, stack(salveID, 5, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	h.rent(cl)
+	h.step(cl, N)
+	pack := openPack(t, h.harness, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), salveID, 0, onTile(pos(3, 3)), 5))
+	nextChar++
+	bc := withPack(nextChar, pos(4, 5), stack(coinID, 10, 0))
+	bc.Name, bc.Level = "Beto", 20 // not a novice: the backpack falls into the corpse
+	_, b := h.joinChar(bc)
+	h.kill(b)
+	corpse := h.w.CorpsesAt(pos(4, 5))
+	if len(corpse) != 1 || len(corpse[0].Item.Items()) != 1 {
+		t.Fatalf("corpse %v", corpse)
+	}
+	into := openCorpseAt(t, h.harness, cl, pos(4, 5))
+	put := moveItem(onTile(pos(3, 3)), salveID, 1, inContainer(into, 0), 1)
+	if !hasKey(h.send(cl, put), "death.corpse_not_owner") || len(corpse[0].Item.Items()) != 1 {
+		t.Fatal("a house item went into a corpse still reserved to its owner")
+	}
+	h.sim.RunTicks(20) // past the owner-only time
+	if !hasKey(h.send(cl, put), "inventory.floor_first") || len(corpse[0].Item.Items()) != 1 {
+		t.Fatal("a house item went into another player's corpse on the street")
+	}
+	// The corpse is nobody's reservation: anyone loots it as usual.
+	cc, c := h.tenant("Cid", 0, pos(5, 5))
+	loot := openCorpseAt(t, h.harness, cc, pos(4, 5))
+	cp := openPack(t, h.harness, cc)
+	if evs := h.send(cc, moveItem(inContainer(loot, 0), packID, 0, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "copper_coin") != 10 {
+		t.Fatalf("looting the corpse: %v", systemKeys(evs))
+	}
+}
+
+// Each reservation waits for the ack of the transfer it may come from, not for the end of
+// the hold: a player that keeps buying stays held (it drops nothing), but what fell at its
+// feet for an earlier purchase is anybody's once that purchase is confirmed.
+func TestReservationEndsWithItsOwnAck(t *testing.T) {
+	h := newMarketHarness(t)
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(bagID, 1, 1), stack(swordID, 1, 2))
+	cc, c := h.trader("Caio", pos(1, 1), stack(coinID, 5, 0))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	id := h.w.MarketOffers(s.CharacterID())[0]
+	h.send(cb, acceptOffer(id, 4))
+	first := lastSnapshot(t, h.transfers, b.CharacterID())
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(b, "test_sword", 1) })) // the backpack is full: it falls
+	h.sim.Step()
+	if len(h.w.GroundAt(pos(0, 1))) != 1 {
+		t.Fatalf("the sword did not fall: %v", h.w.GroundAt(pos(0, 1)))
+	}
+	h.send(cb, acceptOffer(id, 1)) // a newer purchase: Bruno stays held past the first ack
+	second := lastSnapshot(t, h.transfers, b.CharacterID())
+	if second.Seq <= first.Seq {
+		t.Fatalf("second purchase %d after %d", second.Seq, first.Seq)
+	}
+
+	h.sim.Command(h.w.Saved(b.CharacterID(), first.Seq))
+	h.sim.Step()
+	if !h.w.InFlightForTest(b.CharacterID()) {
+		t.Fatal("the first ack ended the hold of the second purchase")
+	}
+	pack := openPack(t, h.harness, cb)
+	if !hasKey(h.send(cb, moveItem(inContainer(pack, 3), salveID, 0, onTile(pos(0, 2)), 1)), "inventory.saving") {
+		t.Fatal("Bruno dropped before his second purchase was confirmed")
+	}
+	cp := openPack(t, h.harness, cc)
+	if evs := h.send(cc, moveItem(onTile(pos(0, 1)), swordID, 1, inContainer(cp, 0), 1)); len(systemKeys(evs)) != 0 ||
+		h.w.CountItem(c, "test_sword") != 1 {
+		t.Fatalf("the sword is still reserved after the ack of its purchase: %v", systemKeys(evs))
+	}
+}
+
 // Nothing goes into a container lying on the ground that is reserved to a held player:
 // it would be stuck there with it (and could change hands with the reservation).
 func TestHeldContainerTakesNothing(t *testing.T) {
@@ -647,6 +873,146 @@ func TestHoldEndsWithTheSaversAck(t *testing.T) {
 	h.sim.Step()
 	if !slices.Equal(ids, []int64{b.CharacterID()}) || h.w.PlayerByCharacter(b.CharacterID()) != nil {
 		t.Fatalf("tainted %v, Bruno still online: %v", ids, h.w.PlayerByCharacter(b.CharacterID()) != nil)
+	}
+}
+
+// End to end with a real Saver: a guest's house write is rejected, which taints the house;
+// the owner, innocent, then takes the guest's sword out to the street. The Saver skips
+// the owner's house write (the house is tainted) and taints the owner too, so no ack of
+// the owner ever comes: the sword stays reserved to the owner for good, even after both
+// are out of the world. Without that, the sword (only in memory: the database still has
+// it nowhere, the guest's write was rejected) would reach a passer-by's save.
+func TestTaintedHouseKeepsWhatLeftItReserved(t *testing.T) {
+	acks := make(chan session.Snapshot, 64)
+	tainted := make(chan []int64, 4)
+	var rejectChar atomic.Int64 // transfers carrying this character are rejected
+	var mu sync.Mutex
+	var written []uint64
+	saver, err := session.NewSaver(session.SaverConfig{
+		Write: func(context.Context, session.Snapshot) error { return nil },
+		WriteTransfer: func(_ context.Context, tr session.Transfer) error {
+			for _, s := range tr.Snapshots {
+				if s.CharacterID == rejectChar.Load() {
+					return fmt.Errorf("%w: injected", session.ErrPermanent)
+				}
+			}
+			mu.Lock()
+			written = append(written, tr.ID)
+			mu.Unlock()
+			return nil
+		},
+		Saved:   func(s session.Snapshot) { acks <- s },
+		Tainted: func(ids []int64) { tainted <- ids },
+		Clock:   clock.NewFake(clock.Epoch),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saver.Start()
+	t.Cleanup(func() { _ = saver.Stop(context.Background()) })
+	var transfers []session.Transfer
+	h := newHouseHarness(t, func(c *session.Config) {
+		c.Transfer = func(tr session.Transfer) bool {
+			transfers = append(transfers, tr)
+			return saver.SubmitTransfer(tr)
+		}
+		c.Save = saver.Submit
+	})
+	// deliver hands the Saver's acks to the loop, as app does, until the one of character
+	// id at seq or later.
+	deliver := func(id int64, seq uint64) {
+		t.Helper()
+		timeout := time.After(10 * time.Second) //nolint:forbidigo // bounds a wait on the Saver's goroutine
+		for {
+			select {
+			case s := <-acks:
+				h.sim.Command(h.w.Saved(s.CharacterID, s.Seq))
+				h.sim.Step()
+				if s.CharacterID == id && s.Seq >= seq {
+					return
+				}
+			case <-timeout:
+				t.Fatalf("no ack of character %d at seq %d", id, seq)
+			}
+		}
+	}
+	taint := func() []int64 {
+		t.Helper()
+		select {
+		case ids := <-tainted:
+			return ids
+		case <-time.After(10 * time.Second): //nolint:forbidigo // bounds a wait on the Saver's goroutine
+			t.Fatal("the Saver reported no taint")
+			return nil
+		}
+	}
+
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	h.rent(cl)
+	h.step(cl, N)
+	h.input(cl, walk(pb.Direction_DIRECTION_NORTH_WEST))
+	h.sim.RunTicks(40) // (2,3), inside
+	cb, b := h.tenant("Beto", 0, pos(2, 5), stack(swordID, 1, 0))
+	h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Beto"}))
+	h.step(cb, NE) // the door tile
+
+	// Beto's house write is rejected: Beto and the cottage are tainted in the Saver. The
+	// loop does not know yet (World.Tainted is still on its way).
+	rejectChar.Store(b.CharacterID())
+	bp := openPack(t, h.harness, cb)
+	if evs := h.send(cb, moveItem(inContainer(bp, 0), swordID, 0, onTile(pos(3, 3)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("the guest brings a sword: %v", systemKeys(evs))
+	}
+	if ids := taint(); !slices.Equal(ids, []int64{b.CharacterID()}) {
+		t.Fatalf("tainted %v, want Beto", ids)
+	}
+	deliver(a.CharacterID(), lastSnapshot(t, transfers, a.CharacterID()).Seq) // Ana's own writes are in
+	if h.w.InFlightForTest(a.CharacterID()) {
+		t.Fatal("Ana is still held")
+	}
+
+	// Ana takes the sword out to the street: her house write is skipped, she is tainted.
+	h.step(cb, S)
+	h.input(cl, walk(SE))
+	h.sim.RunTicks(40)
+	cc, c := h.tenant("Cid", 0, pos(5, 5), stack(coinID, 1, 0))
+	if evs := h.send(cl, moveItem(onTile(pos(3, 3)), swordID, 1, onTile(pos(4, 5)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("the owner takes the sword out: %v", systemKeys(evs))
+	}
+	out := transfers[len(transfers)-1]
+	if ids := taint(); !slices.Equal(ids, []int64{a.CharacterID()}) {
+		t.Fatalf("tainted %v, want Ana", ids)
+	}
+	mu.Lock()
+	if slices.Contains(written, out.ID) {
+		t.Fatal("the Saver wrote the house write of a tainted house")
+	}
+	mu.Unlock()
+
+	cp := openPack(t, h.harness, cc)
+	take := moveItem(onTile(pos(4, 5)), swordID, 1, inContainer(cp, 0), 1)
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("a passer-by took what left a tainted house")
+	}
+	// Every ack the Saver sent reaches the loop; then the taints. The sword stays reserved.
+	for len(acks) > 0 {
+		s := <-acks
+		if s.CharacterID == a.CharacterID() && s.Seq >= out.Snapshots[0].Seq {
+			t.Fatalf("the skipped write was acked: %+v", s)
+		}
+		h.sim.Command(h.w.Saved(s.CharacterID, s.Seq))
+		h.sim.Step()
+	}
+	h.sim.Command(h.w.Tainted([]int64{b.CharacterID()}))
+	h.sim.Command(h.w.Tainted([]int64{a.CharacterID()}))
+	h.sim.Step()
+	if h.w.PlayerByCharacter(a.CharacterID()) != nil || h.w.PlayerByCharacter(b.CharacterID()) != nil {
+		t.Fatal("a tainted character is still in the world")
+	}
+	h.sim.RunTicks(100)
+	if !hasKey(h.send(cc, take), "inventory.not_yours") || h.w.CountItem(c, "test_sword") != 0 ||
+		len(h.w.GroundAt(pos(4, 5))) != 1 {
+		t.Fatal("a passer-by took what a tainted owner took out of a tainted house")
 	}
 }
 
