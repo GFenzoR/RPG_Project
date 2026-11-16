@@ -1,6 +1,6 @@
 // Edit operations (docs/04-map-editor-and-ai.md, "Operaciones"). Plain JSON, so the editor,
 // mapcli and the MCP server can exchange, store and replay them.
-import type { PortalKind, Position, Rect, SpawnMonster, ZoneType } from "../types.ts";
+import type { HouseRect, PortalKind, Position, Rect, SpawnMonster, ZoneType } from "../types.ts";
 import type { BorderRule } from "./borders.ts";
 import type { Prefab } from "./prefab.ts";
 
@@ -154,6 +154,44 @@ export interface StampOp {
   prefab: string;
 }
 
+/**
+ * Adds a player house (houses.yaml, T5.4, docs/03 "Casas"). The island is the one of the
+ * first rect; every rect, door and the exit must be in it. `name` is always
+ * house.<id>.name and is filled in when omitted. Overlaps with other houses, walkability
+ * and the exit's distance to a door are the validator's (and the editor's) job.
+ */
+export interface AddHouseOp {
+  op: "add_house";
+  id: string;
+  name?: string;
+  rent: number;
+  rects: HouseRect[];
+  doors: Position[];
+  exit: Position;
+  notes?: string;
+  index?: number;
+}
+
+export interface RemoveHouseOp {
+  op: "remove_house";
+  id: string;
+}
+
+/**
+ * Changes the given fields of house `id` in place (same index in houses.yaml). The id
+ * never changes: it keys the database rows of the house. `notes: null` removes the notes.
+ * The house must stay in its island.
+ */
+export interface SetHouseOp {
+  op: "set_house";
+  id: string;
+  rent?: number;
+  rects?: HouseRect[];
+  doors?: Position[];
+  exit?: Position;
+  notes?: string | null;
+}
+
 export type MapOp =
   | PaintGroundOp
   | EraseOp
@@ -170,7 +208,10 @@ export type MapOp =
   | RemovePortalOp
   | PlaceNpcOp
   | RemoveNpcOp
-  | StampOp;
+  | StampOp
+  | AddHouseOp
+  | RemoveHouseOp
+  | SetHouseOp;
 export type MapOpName = MapOp["op"];
 
 export const MAP_OP_NAMES: readonly MapOpName[] = [
@@ -190,6 +231,9 @@ export const MAP_OP_NAMES: readonly MapOpName[] = [
   "place_npc",
   "remove_npc",
   "stamp",
+  "add_house",
+  "remove_house",
+  "set_house",
 ];
 
 export interface OpOptions {

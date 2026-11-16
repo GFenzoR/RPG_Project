@@ -3,7 +3,19 @@
 export * from "../types.ts";
 export { applyOps } from "./apply.ts";
 export type { ApplyResult, TouchedAux, TouchedChunk } from "./apply.ts";
-export type { EntityList } from "./draft.ts";
+export type { AuxList, EntityList } from "./draft.ts";
+export {
+  MAX_HOUSE_RENT,
+  disconnectedFloors,
+  houseIssues,
+  houseNameKey,
+  houseTiles,
+  isHouseId,
+  onHouseEdge,
+  sortTiles,
+  tilesToRects,
+} from "../houses.ts";
+export type { HouseInput, HouseIssue, HouseIssueCode, HouseIssueOptions } from "../houses.ts";
 export {
   BORDER_CORNERS,
   BORDER_SIDES,
@@ -17,6 +29,7 @@ export type { Prefab, PrefabLegendEntry } from "./prefab.ts";
 export { seededRandom } from "./rng.ts";
 export { MAP_OP_NAMES, OpError } from "./types.ts";
 export type {
+  AddHouseOp,
   AddPortalOp,
   AddSpawnOp,
   AddZoneOp,
@@ -31,12 +44,14 @@ export type {
   PaintGroundOp,
   PlaceItemOp,
   PlaceNpcOp,
+  RemoveHouseOp,
   RemoveItemOp,
   RemoveNpcOp,
   RemovePortalOp,
   RemoveSpawnOp,
   RemoveZoneOp,
   ScatterOp,
+  SetHouseOp,
   StampOp,
 } from "./types.ts";
 // Patch merge and diff on the model (browser-safe; the text side is in the "." entry).

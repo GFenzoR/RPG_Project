@@ -8,6 +8,7 @@ import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
 import { TileMap, isWalkable } from "./tiles.ts";
+import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
 import type { Island, Position, Rect, World } from "./types.ts";
 
@@ -322,7 +323,8 @@ class WorldValidator {
 
   /**
    * Houses (T5.4, docs/03 "Casas"): rects on the island and its floors, no tile in two
-   * houses, doors walkable tiles of the house, the exit a walkable tile outside every
+   * houses, doors walkable tiles on the edge of the house (warning: tiles of a floor that
+   * are not one connected area), the exit a walkable tile outside every
    * house next to a door, every house tile with ground; nothing else lives inside (NPCs,
    * spawn centers, texts, portals, no_logout zones). The server (world.NewMap) repeats
    * the geometric rules.
@@ -370,8 +372,19 @@ class WorldValidator {
       for (const [j, d] of h.doors.entries()) {
         if (!houseContains(h, d))
           this.err(file, [i, "doors", j], "door is not a tile of the house", d);
-        else needWalkable(file, [i, "doors", j], d, "door");
+        else {
+          needWalkable(file, [i, "doors", j], d, "door");
+          if (!onHouseEdge(h.rects, d))
+            this.err(
+              file,
+              [i, "doors", j],
+              "door must be on the edge of the house (next to a tile outside it)",
+              d,
+            );
+        }
       }
+      for (const z of disconnectedFloors(h.rects))
+        this.warn(file, [i, "rects"], `house tiles on floor ${z} are not one connected area`);
       needWalkable(file, [i, "exit"], h.exit, "house exit");
       if (
         !h.doors.some(

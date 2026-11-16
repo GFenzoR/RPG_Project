@@ -33,6 +33,7 @@ import {
   removeSpawn,
   removeZone,
 } from "./entities.ts";
+import { addHouse, removeHouse, setHouse } from "./houses.ts";
 import { autoborder, fill, scatter, stamp } from "./terrain.ts";
 import { OpError } from "./types.ts";
 import type { Cell, EraseOp, MapOp, OpOptions, PaintGroundOp, RemoveItemOp } from "./types.ts";
@@ -45,7 +46,7 @@ export interface ApplyResult {
   inverse: MapOp[];
   /** Every chunk that changed, was created or was removed, with the island that owns it. */
   touched: TouchedChunk[];
-  /** Every auxiliary list (spawns, zones, portals, npcs) that changed, per island. */
+  /** Every auxiliary list (spawns, zones, portals, npcs, houses) that changed, per island. */
   touchedAux: TouchedAux[];
 }
 
@@ -106,6 +107,12 @@ function applyOne(d: Draft, op: MapOp, opts: OpOptions): MapOp[] {
       return placeNpc(d, op, opts);
     case "remove_npc":
       return removeNpc(d, op);
+    case "add_house":
+      return addHouse(d, op);
+    case "remove_house":
+      return removeHouse(d, op);
+    case "set_house":
+      return setHouse(d, op);
     default: {
       const unknown: { op?: unknown } = op;
       throw new InvalidOp(`unknown op ${JSON.stringify(unknown.op)}`);

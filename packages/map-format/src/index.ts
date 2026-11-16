@@ -18,6 +18,7 @@ export { loadContent } from "./content.ts";
 export type { ContentIndex, ItemInfo } from "./content.ts";
 export { Reporter, formatDiagnostic, formatPath } from "./diagnostics.ts";
 export type { Diagnostic, PathSegment } from "./diagnostics.ts";
+export * from "./houses.ts";
 export { islandInfo, worldInfo } from "./info.ts";
 export type { IslandInfo, WorldInfo } from "./info.ts";
 export { AUX_FILES, islandDir, loadWorld, worldFile, writeIsland, writeWorldMeta } from "./io.ts";
@@ -38,6 +39,7 @@ export { changedFiles, saveApplied } from "./save.ts";
 export type { SaveResult } from "./save.ts";
 export type {
   ApplyResult,
+  AuxList,
   BorderRule,
   MapOp,
   OpOptions,

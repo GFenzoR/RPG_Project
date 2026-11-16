@@ -202,6 +202,30 @@ describe("validateWorld", () => {
     );
   });
 
+  it("wants doors on the edge of the house and warns about split houses", () => {
+    const i = mini();
+    i.houses = [
+      {
+        id: "puerto_house_net",
+        name: "house.puerto_house_net.name",
+        rent: 100,
+        rects: [
+          { x: 20, y: 5, z: 7, w: 3, h: 3 },
+          { x: 24, y: 5, z: 7, w: 1, h: 1 },
+        ],
+        doors: [{ x: 21, y: 6, z: 7 }],
+        exit: { x: 21, y: 8, z: 7 },
+      },
+    ];
+    const r = check(i);
+    expect(messages(r)).toContainEqual(
+      expect.stringContaining("door must be on the edge of the house"),
+    );
+    const split = r.diagnostics.find((d) => d.message.includes("not one connected area"));
+    expect(split?.severity).toBe("warning");
+    expect(split?.message).toBe("house tiles on floor 7 are not one connected area");
+  });
+
   it("rejects unknown items and ground items in the wrong layer", () => {
     const i = mini();
     const c = must(i.chunks.get(chunkKey(7, 0, 0)));

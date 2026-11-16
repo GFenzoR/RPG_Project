@@ -12,13 +12,16 @@ export interface TouchedChunk {
   cy: number;
 }
 
-/** Auxiliary lists ops can edit (one YAML file each). */
+/** Auxiliary lists of entities (spawns, zones, portals, NPCs): one YAML file each. */
 export type EntityList = "spawns" | "zones" | "portals" | "npcs";
+
+/** Every auxiliary list ops can edit: the entity lists and houses.yaml (T5.4). */
+export type AuxList = EntityList | "houses";
 
 /** An auxiliary file an op list changed. */
 export interface TouchedAux {
   island: string;
-  file: EntityList;
+  file: AuxList;
 }
 
 /** Thrown inside an op; applyOps turns it into an OpError with the op's index. */
@@ -179,12 +182,12 @@ export class Draft {
   }
 
   /** Current entries of an island's auxiliary list (do not mutate). */
-  list<K extends EntityList>(island: string, file: K): Island[K] {
+  list<K extends AuxList>(island: string, file: K): Island[K] {
     return this.current(island)[file];
   }
 
   /** Writable copy of an island's auxiliary list, cloned on first write. */
-  editList<K extends EntityList>(island: string, file: K): Island[K] {
+  editList<K extends AuxList>(island: string, file: K): Island[K] {
     const isl = this.island(island);
     const key = `${island}:${file}`;
     if (!this.touchedAux.has(key)) {
