@@ -761,7 +761,9 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   está claro cuál es el de afuera). También se rechaza una puerta con llave que, abierta,
   no deja pasar a nadie (en su casilla hay algo más que bloquea el paso, como un muro, o
   el suelo no es caminable): su sala solo se dejaría por un camino que el chequeo de
-  escape no ve.
+  escape no ve. Y una puerta con llave sobre un extremo de un portal (sale de su casilla o
+  llega a ella; una puerta colocada abierta es caminable): pisarla movería a alguien más
+  allá de la puerta aunque otro la trabara, y llegar a ella deja a alguien en la puerta.
 - **Sala compartida:** varias puertas con llave pueden dar a la misma sala (una puerta
   doble, o un edificio con puerta delantera y trasera), pero solo si tienen **la misma
   llave**: la llave de una abriría las dos desde adentro. Si no, el servidor no arranca y
@@ -838,9 +840,11 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   ocupadas junto al portón (en la forja bastaban unas 11), quien guardó su posición afuera
   aparecía adentro y, como desde adentro se abre sin llave, le abría a todos; y un templo
   lleno podía dejar a alguien en un bolsillo cerrado por paredes o del otro lado de una
-  escalera. Si el punto no está en ningún área (una casilla de casa, la de una puerta con
-  llave, la entrada de una escalera, un agujero o un teletransporte), descarta solo las
-  casillas de las salas.
+  escalera. Si el punto es la entrada de una escalera, un agujero o un teletransporte (que
+  no está en ningún área), acepta solo casillas de las áreas de al lado, las únicas a las
+  que se llega caminando desde ahí. Si el punto no está en ningún área por otra razón
+  (una casilla de casa, la de una puerta con llave), descarta solo las casillas de las
+  salas.
 - **Ritmo:** un jugador usa una puerta como mucho cada `inventory.door_cooldown_ms`
   (500 ms, "Espera un momento"), la abra, la cierre o se lo rechacen: un rechazo también
   cuenta, así sus chequeos (la llave, la sala) corren a ese ritmo y no al del gateway.
@@ -868,8 +872,9 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
     dentro de esa bóveda que den a otra sala);
   - una escalera de mano solo cuenta desde el área de su casilla, aunque se use desde más
     lejos (`inventory.reach`, con línea de visión); y un portal cuyo destino es la entrada
-    de otro que se pisa no lleva a ningún área. Los dos casos son conservadores: a lo sumo
-    rechazan un diseño seguro;
+    de otro que se pisa no lleva a ningún área en el chequeo (la llegada sí cae en las
+    áreas de al lado). Los dos casos son conservadores: a lo sumo rechazan un diseño
+    seguro;
   - la llave se puede repetir: quien terminó `ch3_gate` y no la lleva encima pide otra al
     eco, así que tirarla al piso y pedir otra da llaves de más, y una llave tirada la puede
     levantar cualquiera. Lo aceptamos: quien tiene la llave ya puede abrirle la puerta a

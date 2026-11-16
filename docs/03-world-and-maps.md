@@ -430,7 +430,8 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   llave como muro y las sin llave como abiertas si su casilla deja pasar, regla
   `isPassable`); un lado sin terminar es el de afuera y, si todos terminan, el más grande.
   Es error una puerta que abierta no deja pasar a nadie (en su casilla hay otro bloqueo o
-  el suelo no es caminable), amurallada (sin lados), con un solo lado, con más de un lado
+  el suelo no es caminable), una sobre un extremo de un portal (sale de su casilla o llega
+  a ella), amurallada (sin lados), con un solo lado, con más de un lado
   sin terminar o con los dos lados más grandes del mismo tamaño. Varias puertas pueden
   compartir una sala solo con la misma llave. La sala no puede tener el templo, NPCs, casas
   (casillas o salida), extremos de portales, llegadas de rutas de barco ni destinos de un

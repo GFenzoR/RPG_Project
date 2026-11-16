@@ -153,12 +153,16 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     conservador (supone a un jugador en cualquier área fuera de las salas y en cualquier
     casa), y una escalera de mano cuenta solo desde el área de su casilla;
   - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) solo acepta
-    casillas del área del origen, pero si el origen no está en ningún área (entrar al juego
-    sobre una casilla de casa, de una puerta con llave o de una escalera, un `/tp` del
-    personal) solo descarta las salas (`areaAllows(0, q)` en
-    `server/internal/session/area.go`): todavía puede dejar a alguien en un bolsillo
-    cerrado por paredes o del otro lado de una pared. Arreglo posible: que un origen en una
-    casa use el área de la salida de la casa.
+    casillas del área del origen (desde una escalera, un agujero o un teletransporte, las
+    áreas de al lado), pero si el origen no está en ningún área por otra razón (entrar al
+    juego sobre una casilla de casa o de una puerta con llave, un `/tp` del personal) solo
+    descarta las salas (`searchFrom` y `areaAllows` en `server/internal/session/area.go`):
+    todavía puede dejar a alguien en un bolsillo cerrado por paredes o del otro lado de una
+    pared. Arreglo posible: que un origen en una casa use el área de la salida de la casa.
+    Ningún portal puede salir de una puerta con llave ni llegar a ella, pero una llegada de
+    barco o un teleport de diálogo sobre una puerta con llave colocada abierta todavía se
+    acepta (`checkRooms` solo mira las salas): quien llega queda en la puerta, como quien
+    la cruza abierta; si hace falta, rechazarlos igual que los extremos de portal.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

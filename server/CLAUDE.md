@@ -214,7 +214,8 @@ server/
   que no se puede determinar, compartida por puertas de otra llave o que tiene algo de
   afuera (`checkRooms`: templo, NPC, casa, extremo de portal, llegada de barco, teleport
   de diálogo) no deja arrancar, y tampoco una puerta que abierta no deja pasar a nadie
-  (`errDoorBlocked`) ni una que no pasa el **chequeo de escape**
+  (`errDoorBlocked`), una sobre un extremo de un portal (`errDoorOnPortal`) ni una que no
+  pasa el **chequeo de escape**
   (`checkEscapes`, igual en `doors.ts`): sobre las **áreas** de `session/area.go`
   (casillas unidas a pie con puertas con llave, casas y entradas de escalera, agujero y
   teletransporte como muro; una sala es un área), cada lado de cada puerta con llave
@@ -228,9 +229,10 @@ server/
   (como las casas), súmalo como punto de partida del chequeo de llaves. Nada
   recorre el mapa en el tick: `World.roomOf` (casilla → sala), los sectores de cada sala
   y `World.areas` (por sector, `areaOf`). **Toda búsqueda de casilla libre por anillos**
-  (`freeNear`, `houseExit` o una nueva) pasa por `areaAllows`: solo casillas del área de
-  donde empezó (nunca una sala ajena ni un bolsillo cerrado por paredes; desde fuera de
-  toda área, solo descarta las salas); y por
+  (`freeNear`, `houseExit` o una nueva) pasa por `searchFrom` + `areaAllows`: solo
+  casillas del área de donde empezó (nunca una sala ajena ni un bolsillo cerrado por
+  paredes; desde la entrada de una escalera, un agujero o un teletransporte, las áreas de
+  al lado; desde otra casilla fuera de toda área, solo descarta las salas); y por
   `!Map.MovesOnStep`: nunca deja a nadie sobre una escalera, un agujero o un
   teletransporte. `houseEnter` no lo necesita: solo pone al jugador en casillas de la
   casa, y `checkRooms` no deja ninguna casa (ni portal) en una sala.
