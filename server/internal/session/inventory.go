@@ -831,9 +831,10 @@ func (w *World) forgetContainers(p *Player) {
 // ---- UseItem and LookAt --------------------------------------------------------
 
 // useItem runs a UseItem intent: containers open or close, consumables heal and are
-// eaten, runes are cast (T1.9), crafting stations of the map open (T3.4).
+// eaten, runes are cast (T1.9), crafting stations of the map open (T3.4), doors of the
+// map open and close (door.go).
 func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
-	if w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.useStation(p, m) {
+	if w.useDoor(ctx, p, m) || w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.useStation(p, m) {
 		return
 	}
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())

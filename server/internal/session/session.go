@@ -529,6 +529,9 @@ func New(cfg Config) (*World, error) {
 	if err := w.initGathering(); err != nil {
 		return nil, err
 	}
+	if err := w.initDoors(); err != nil {
+		return nil, err
+	}
 	if err := w.initCrafting(); err != nil {
 		return nil, err
 	}

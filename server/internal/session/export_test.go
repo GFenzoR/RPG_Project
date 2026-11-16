@@ -296,3 +296,9 @@ func (w *World) ItemForTest(id string) *content.Item { return w.cfg.Items[id] }
 
 // CosmeticsForTest returns what p has equipped (T5.7).
 func (p *Player) CosmeticsForTest() Cosmetics { return p.cos }
+
+// Walkable reports whether the map lets a creature stand on p (tests only).
+func (w *World) Walkable(p world.Pos) bool { return w.m.Walkable(p) }
+
+// LineOfSight reports whether the map has line of sight from a to b (tests only).
+func (w *World) LineOfSight(a, b world.Pos) bool { return w.m.LineOfSight(a, b) }
