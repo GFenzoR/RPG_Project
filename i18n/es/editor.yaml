@@ -2,6 +2,7 @@
 editor.title: "Editor de mapas"
 editor.loading: "Cargando mundo…"
 editor.load_failed: "No se pudo cargar el mundo: {error}"
+editor.retry: "Reintentar"
 editor.tool.brush: "Pincel (B)"
 editor.tool.item: "Item (I)"
 editor.tool.eraser: "Borrador (E)"

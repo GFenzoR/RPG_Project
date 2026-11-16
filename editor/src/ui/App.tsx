@@ -31,6 +31,8 @@ export function App({
   const host = useRef<HTMLDivElement>(null);
   const [canvas, setCanvas] = useState<MapCanvas>();
   const [error, setError] = useState<string>();
+  // Bumped by the "Retry" button: the canvas (and its atlas, @rpg/renderer) starts again.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!host.current) return;
@@ -44,12 +46,14 @@ export function App({
         onCanvas(c);
         void ctl.validateNow();
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      });
     return () => {
       cancelled = true;
       made?.destroy();
     };
-  }, [ctl]);
+  }, [ctl, attempt]);
 
   const itemName = (id: string): string => {
     const i = ctl.items.get(id);
@@ -226,7 +230,25 @@ export function App({
 
       <main class="map" ref={host}>
         {!canvas && !error && <div class="overlay-msg">{t("editor.loading")}</div>}
-        {error && <div class="overlay-msg error">{t("editor.load_failed", { error })}</div>}
+        {error && (
+          // The atlas did not load after its retries: try again without reloading the page
+          // (and without losing unsaved edits).
+          <div class="overlay-msg error" role="alert" data-testid="canvas-error">
+            <div class="overlay-box">
+              <p>{t("editor.load_failed", { error })}</p>
+              <button
+                type="button"
+                data-testid="canvas-retry"
+                onClick={() => {
+                  setError(undefined);
+                  setAttempt((n) => n + 1);
+                }}
+              >
+                {t("editor.retry")}
+              </button>
+            </div>
+          </div>
+        )}
       </main>
 
       <aside class="right">

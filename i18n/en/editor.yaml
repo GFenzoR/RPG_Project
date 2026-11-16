@@ -2,6 +2,7 @@
 editor.title: "Map editor"
 editor.loading: "Loading world…"
 editor.load_failed: "Could not load the world: {error}"
+editor.retry: "Retry"
 editor.tool.brush: "Brush (B)"
 editor.tool.item: "Item (I)"
 editor.tool.eraser: "Eraser (E)"

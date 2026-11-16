@@ -38,6 +38,9 @@ editor). Detalle en docs/04 "Casas en el editor".
 - `make e2e`: Playwright sobre una copia temporal del repo; screenshots en
   `e2e/screenshots/actual/` (revisarlos con Read). `window.__rpgEditor` expone ganchos de
   solo lectura para los tests (tile, coordenadas de pantalla de una casilla, estado).
+- El atlas viene de `Atlas.load` de `packages/renderer`, que reintenta cada request
+  (`retry.ts`). Si igual falla, el error del mapa trae "Reintentar" (`canvas-retry`):
+  vuelve a crear el canvas sin recargar la página ni perder lo que no se guardó.
 
 ## Reglas
 - La edición ocurre 100% en el navegador (las ops de map-format corren ahí), sin login
