@@ -701,7 +701,8 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
 - **Sala compartida:** varias puertas con llave pueden dar a la misma sala (una puerta
   doble, o un edificio con puerta delantera y trasera a la misma calle), pero solo si
   tienen **la misma llave** y **el mismo afuera**. Para el afuera, el servidor camina (a
-  lo ancho, sin cruzar puertas con llave ni casas: una casa no es calle) desde las
+  lo ancho, sin cruzar puertas con llave ni casas: una casa no es calle; tampoco dos
+  afueras que quedan dentro de una misma casa sin tocarse) desde las
   casillas de afuera junto a la primera puerta hasta las de la otra, y explora como mucho
   4 × 4096 = 16384 casillas: en campo abierto eso alcanza para unas 60 a 90 casillas de
   distancia, no 16384. Si no llega, rechaza la puerta (y `make validate` también), con

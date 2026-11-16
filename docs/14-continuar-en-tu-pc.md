@@ -132,7 +132,12 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     llegadas. Se exige que cada lado de cada puerta con llave alcance el mundo, más el
     chequeo de llave entre una sala y el afuera de otra puerta. La cadena R–B–X–E–Y (sala
     R, puerta B, sala X, puerta E, Y una bóveda más grande que X) se tiene que seguir
-    rechazando.
+    rechazando;
+  - `resource.reach` e `inventory.reach` no tienen tope en los esquemas
+    (`items.schema.json`, `content/resources.go`, `content/balance.go`). Como recolección y
+    crafteo ya no miran fuera de la vista (±8 x, ±6 y), un alcance de 7 o más respondería
+    `not_possible` sin aviso: falta `maximum: 6` y su chequeo en Go. De paso, sacar las
+    comprobaciones de piso que sobran en `gathering.go` (la guarda de vista ya las cubre).
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

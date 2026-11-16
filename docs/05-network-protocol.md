@@ -638,7 +638,8 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   (equipada o en un contenedor suyo) sobre una casilla cuyo item de arriba con `resource`
   (pila de arriba hacia abajo, luego el suelo) tiene `resource.tool == tool.use`.
 - Respuestas por `Message` de sistema: `gather.nothing` (no hay recurso para esa
-  herramienta), `inventory.too_far` (otro piso o más lejos que `resource.reach`),
+  herramienta), `inventory.not_possible` (otro piso o fuera de la vista; ver "Puertas"),
+  `inventory.too_far` (más lejos que `resource.reach`),
   `magic.no_sight`, `gather.not_ready` (antes de `gathering.use_interval_ms`),
   `gather.depleted` (casilla agotada: no entrena), `gather.failed` y
   `gather.got{item}`. Lo obtenido va a la mochila como una compra (lo que no entra cae al
@@ -1022,8 +1023,7 @@ Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/do
   suelo), ni `UseItemOn` de una herramienta sobre una casilla (recolección), ni `Craft`
   miran una casilla de otro piso o fuera de la vista: la respuesta es
   `inventory.not_possible` para cualquier casilla y no dice qué hay ni si la puerta está
-  abierta o cerrada. No hay mensajes nuevos
-  en el protocolo.
+  abierta o cerrada. No hay mensajes nuevos en el protocolo.
 - **Respuesta:** la puerta cambia por su par y quien ve la casilla recibe su
   `TileUpdate`; el cliente decide qué se camina por el item, así que no necesita más. Al
   que la usó, si tiene llave: `door.unlocked` / `door.relocked` (`item`: la llave); si la

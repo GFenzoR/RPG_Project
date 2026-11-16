@@ -143,7 +143,8 @@ items:
   resource:
     tool: mining            # tool.use de la herramienta que lo cosecha
     skill: mining           # skill u oficio que da la chance y sube con cada intento
-    reach: 1                # opcional (por defecto inventory.reach), con línea de visión
+    reach: 1                # opcional (por defecto inventory.reach), con línea de visión;
+                            # como mucho 6: más allá de la vista (±8 x, ±6 y) responde not_possible
     charges: 4              # cosechas por casilla antes de agotarse
     regen_ms: 300000        # se llena este tiempo después de la última cosecha
     chance: { base: 0.3, per_level: 0.02, max: 0.85 }
