@@ -257,6 +257,7 @@ export function loadClientContent(root: string): ClientContent {
     sounds: loadSounds(root),
     islands: loadIslands(root),
     houseDoors: loadHouseDoors(root),
+    portals: loadPortals(root),
     i18n,
   };
 }
@@ -459,6 +460,37 @@ function loadHouseDoors(root: string): string[] {
 }
 
 const num0 = (v: unknown): number => (typeof v === "number" ? v : 0);
+
+/**
+ * Entrance tile ("x,y,z") → kind of every portal of world/islands/<id>/portals.yaml: the
+ * client keeps its paths off stairs, holes and teleports and uses a bare ladder's ground
+ * (state/portals.ts). make validate checks the files.
+ */
+function loadPortals(root: string): Record<string, string> {
+  const dir = join(root, "world", "islands");
+  let islands: string[];
+  try {
+    islands = readdirSync(dir);
+  } catch {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const id of islands.sort()) {
+    let raw: unknown;
+    try {
+      raw = readYaml(join(dir, id, "portals.yaml"));
+    } catch {
+      continue; // no portals on this island
+    }
+    if (!Array.isArray(raw)) continue;
+    for (const p of raw)
+      if (isObj(p) && isObj(p["from"]) && typeof p["kind"] === "string") {
+        const f = p["from"];
+        out[`${num0(f["x"])},${num0(f["y"])},${num0(f["z"])}`] = p["kind"];
+      }
+  }
+  return out;
+}
 
 /**
  * The sound files to serve or emit: published path (as in SoundDef.url, not encoded) →

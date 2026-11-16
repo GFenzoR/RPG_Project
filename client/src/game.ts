@@ -35,6 +35,7 @@ import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
 import { findPath } from "./state/path.ts";
+import { pathPassable, usedBare } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { cuesOf, loopFor } from "./audio/cues.ts";
@@ -672,15 +673,20 @@ export class Game {
     });
   }
 
-  /** Uses the top item of a tile; a bare house door uses its ground (T5.4). */
+  /** Uses the top item of a tile; a bare house door or ladder uses its ground. */
   private useTop(x: number, y: number, z: number): void {
     const ref =
       topItem(this.world, x, y, z, false) ??
-      // T5.4: a bare door tile opens the house window (UseItem on its ground).
-      (this.opts.content.houseDoors?.includes(doorKey(x, y, z))
-        ? topItem(this.world, x, y, z, true)
-        : undefined);
+      // T5.4: a bare door tile opens the house window (UseItem on its ground); a bare
+      // ladder is climbed, a bare rope spot answers that it needs a rope.
+      (this.usesGround(x, y, z) ? topItem(this.world, x, y, z, true) : undefined);
     if (ref) this.useItem(ref);
+  }
+
+  /** Whether using the bare tile (x, y, z) means something: a house door or a portal used by hand. */
+  private usesGround(x: number, y: number, z: number): boolean {
+    const c = this.opts.content;
+    return (c.houseDoors?.includes(doorKey(x, y, z)) ?? false) || usedBare(c.portals, x, y, z);
   }
 
   /** Looks at the creature on a tile, or else at its top item (the ground counts). */
@@ -961,7 +967,7 @@ export class Game {
     const actions = tileActions({
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
       item: top && { container: (this.opts.content.items[top.itemId]?.slots ?? 0) > 0 },
-      door: this.opts.content.houseDoors?.includes(doorKey(tx, ty, z)) ?? false,
+      door: this.usesGround(tx, ty, z),
       known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
     });
     if (actions.length === 0) return;
@@ -1272,7 +1278,11 @@ export class Game {
     const target = this.clickTarget;
     if (target) {
       this.clickTarget = undefined;
-      const steps = findPath(self.pos, target, (x, y) => this.world.free(x, y, target.z), {
+      // Round stairs, holes and teleports on the way: only the goal may be one.
+      const passable = pathPassable(this.opts.content.portals, target, (x, y) =>
+        this.world.free(x, y, target.z),
+      );
+      const steps = findPath(self.pos, target, passable, {
         diagonalCost: this.opts.content.movement.diagonalCost,
         maxSteps: this.opts.content.movement.maxPathTiles,
       });

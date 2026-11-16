@@ -52,6 +52,12 @@ describe("client content (T0.5)", () => {
     expect(content.i18n["es"]?.["item.brasal_dock_sign.name"]).toBe("cartel");
   });
 
+  it("ships the portals of world/ by their entrance tile, with their kind", () => {
+    expect(content.portals?.["3692,5796,7"]).toBe("stairs");
+    expect(content.portals?.["3692,5796,8"]).toBe("stairs");
+    expect(content.portals?.["3692,5797,8"]).toBeUndefined(); // a destination
+  });
+
   it("exposes data/outfits.yaml with the default citizen outfit", () => {
     expect(content.outfits).toContainEqual({ id: "citizen", sprite: "outfits/citizen", frames: 3 });
   });
