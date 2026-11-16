@@ -2,7 +2,15 @@
 // (world/ → build/world.bin, island testisle) against Postgres, and the client's Vite dev
 // server proxying /api and /ws to it. Postgres must be running (make db-up); the server
 // applies migrations itself. Screenshots go to e2e/screenshots/actual/ (git-ignored).
-import { defineConfig, devices } from "@playwright/test";
+//
+// Two projects: "chromium" runs every spec as before; "webkit-mobile" runs the touch tests
+// of e2e/mobile.spec.ts whose title says "(webkit)" (iPhone and iPad, as Safari on iOS
+// would). WebKit needs `pnpm exec playwright install webkit` (make setup does it; on Linux
+// add --with-deps); without it, or with CLIENT_E2E_WEBKIT=0, the project is left out
+// with a note and Chromium runs alone.
+import { existsSync } from "node:fs";
+import { defineConfig, devices, webkit } from "@playwright/test";
+import type { Project } from "@playwright/test";
 
 const serverPort = Number(process.env["CLIENT_E2E_SERVER_PORT"] ?? 18080);
 const clientPort = Number(process.env["CLIENT_E2E_PORT"] ?? 5176);
@@ -30,6 +38,37 @@ export const smtpMessagesURL = `http://127.0.0.1:${smtpHttpPort}/messages`;
 const fakeOAuthPort = Number(process.env["CLIENT_E2E_FAKE_OAUTH_PORT"] ?? 18027);
 export const fakeOAuthURL = `http://127.0.0.1:${fakeOAuthPort}`;
 
+/** Tests of the WebKit project carry this in their title (mobile.spec.ts). */
+const WEBKIT_TITLE = /\(webkit\)/;
+
+/** The WebKit project, when its browser is installed and not switched off. */
+function webkitProject(): Project[] {
+  if (process.env["CLIENT_E2E_WEBKIT"] === "0") return [];
+  const installed = ((): boolean => {
+    try {
+      return existsSync(webkit.executablePath());
+    } catch {
+      return false;
+    }
+  })();
+  if (!installed) {
+    console.warn(
+      "client e2e: WebKit is not installed (pnpm exec playwright install webkit): " +
+        "the (webkit) touch tests are left out.",
+    );
+    return [];
+  }
+  return [
+    {
+      name: "webkit-mobile",
+      testMatch: /mobile\.spec\.ts$/,
+      grep: WEBKIT_TITLE,
+      // Each describe of mobile.spec.ts sets its device (viewport, touch, scale).
+      use: { browserName: "webkit" },
+    },
+  ];
+}
+
 export default defineConfig({
   testDir: "e2e",
   outputDir: "../test-results/client",
@@ -38,16 +77,28 @@ export default defineConfig({
   timeout: 90_000,
   reporter: [["list"]],
   use: {
-    ...devices["Desktop Chrome"],
     baseURL: `http://localhost:${clientPort}`,
     viewport: { width: 1280, height: 800 },
     trace: "retain-on-failure",
-    // Headless Chromium on Windows draws WebGL in software (SwiftShader), which makes PixiJS
-    // pages several times slower than on Linux: use the GPU through ANGLE/D3D11 there.
-    ...(process.platform === "win32" && {
-      launchOptions: { args: ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"] },
-    }),
   },
+  projects: [
+    {
+      name: "chromium",
+      grepInvert: WEBKIT_TITLE,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 800 },
+        // Headless Chromium on Windows draws WebGL in software (SwiftShader), which makes
+        // PixiJS pages several times slower than on Linux: use the GPU through ANGLE/D3D11.
+        ...(process.platform === "win32" && {
+          launchOptions: {
+            args: ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"],
+          },
+        }),
+      },
+    },
+    ...webkitProject(),
+  ],
   webServer: [
     {
       // mapcompile first, so `pnpm --filter @rpg/client e2e` works on its own too.

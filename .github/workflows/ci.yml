@@ -227,8 +227,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Uses the workspace's pinned @playwright/test (1.63.0), so browser and runner match.
-      - name: install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      # WebKit: the (webkit) touch tests of client/e2e/mobile.spec.ts (iPhone and iPad).
+      - name: install Chromium and WebKit
+        run: pnpm exec playwright install --with-deps chromium webkit
       # Calls the e2e scripts directly: `make e2e` would also run db-up, and here Postgres
       # is the job's service container.
       - name: playwright (editor)

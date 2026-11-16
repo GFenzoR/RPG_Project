@@ -87,13 +87,15 @@ for m in server tools/bots; do
   (cd "$m" && go mod download)
 done
 
-# 4. JS dependencies and the Playwright browser matching @playwright/test
+# 4. JS dependencies and the Playwright browsers matching @playwright/test: Chromium for
+#    every E2E, WebKit for the (webkit) touch tests of client/e2e/mobile.spec.ts (left out
+#    with a note when it is missing).
 log "pnpm install"
 pnpm install --frozen-lockfile
-log "installing Chromium for Playwright"
-if ! pnpm exec playwright install chromium; then
-  log "WARNING: Playwright Chromium install failed. On Linux/WSL you may also need:"
-  log "         sudo pnpm exec playwright install-deps chromium"
+log "installing Chromium and WebKit for Playwright"
+if ! pnpm exec playwright install chromium webkit; then
+  log "WARNING: Playwright browser install failed. On Linux/WSL you may also need:"
+  log "         sudo pnpm exec playwright install-deps chromium webkit"
 fi
 
 log "done. Next: 'make db-up' (Postgres in Docker) and 'make test'."
