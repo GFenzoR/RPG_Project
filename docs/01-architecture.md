@@ -210,14 +210,43 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     apagado (el plazo de `Stop` o en `WritePending`), ningún trabajo posterior se escribe,
     de ningún personaje (se cuentan como `abandoned`), como si el proceso se hubiera caído
     en ese punto.
-  - **Límite conocido (en ejecución).** Entre el transfer que se va a descartar y
-    `World.Tainted` (un tick más lo que tenga la cola del Saver), el personaje sigue
-    jugando: lo que recibió y suelta en el suelo o deja en su cadáver puede levantarlo
-    otro, cuyo guardado normal sí se escribe. Eso duplica lo recibido. Cerrarlo pediría
-    atar cada instancia al ack de su transfer; como solo pasa tras un rechazo permanente
-    (ya un bug), la red son la alerta y la cuadratura del log de economía (T4.1). La falla
-    segura garantiza que no se guarde la mitad de un transfer ni nada construido sobre él
-    por el mercado o el intercambio, no que nunca se duplique nada.
+  - **Espera hasta la confirmación (en ejecución, `session/hold.go`).** Entre el
+    transfer que se va a descartar y `World.Tainted` (un tick más lo que tenga la cola
+    del Saver) el personaje sigue jugando. El intercambio y el mercado ya están cubiertos
+    (la marca del Saver y las bajas con guarda), pero el suelo público y los cadáveres no
+    se guardan: lo que soltara ahí lo levantaría otro, cuyo guardado normal sí se
+    escribe, y eso duplicaría lo recibido. Por eso cada snapshot de un transfer
+    (`transferSnapshot`) deja a su personaje **en espera** (`World.inFlight`, con el `Seq`
+    de ese snapshot) hasta que la base lo confirma:
+    - `SaverConfig.Saved` → `World.Saved` acusa **todo** snapshot guardado (no solo el
+      final), también los de un transfer. Uno con `Seq` mayor o igual al del último
+      transfer termina la espera: el Saver escribe en orden y salta todo lo de un
+      personaje marcado, así que si llegó ese guardado, el transfer está en la base.
+    - Mientras espera, `MoveItem` rechaza (`inventory.saving`) llevar algo que el
+      personaje carga, o que está en su propio cadáver, a una casilla que no es de una
+      casa (directo o dentro de un contenedor apoyado ahí). Entre sus propios
+      contenedores, a su equipo o a una casa, se mueve como siempre.
+    - Su cadáver queda reservado para él mientras espera, aunque pase
+      `corpse_owner_only_ms`, y para siempre si queda marcado (`World.reserved` mira
+      `inFlight` y `locked`): lo que tiene sale del estado que se descartó, y se pudre.
+    - El **suelo de las casas** sí se guarda, con el transfer de quien lo movió (detrás
+      del suyo en la cola). Lo cuida el Saver: un transfer saltado o rechazado marca
+      también las casas cuyos items reemplazaba (`HouseItems`), y ningún transfer
+      posterior escribe los items de una casa marcada (lo salta y marca a sus
+      personajes, como en el punto fijo). Así lo que un marcado dejó en su casa no llega
+      a la base por el invitado que lo levanta. Los demás cambios de esa casa (alquiler,
+      dueño) se siguen escribiendo: tienen su propia guarda.
+    - Normalmente la espera dura uno o dos ticks y no se nota. Con la base caída dura
+      hasta que el transfer se escribe (correcto: no está guardado). Un acuse perdido
+      (cola del loop llena, se descarta) la alarga hasta el próximo guardado escrito del
+      personaje (autoguardado o salida); un relogueo la conserva (es del personaje, no
+      de la conexión).
+    - **Límite que queda:** lo que el servidor crea para el personaje en ese instante y
+      cae a sus pies porque no le entra (una compra a un NPC, una fabricación, el
+      cambio de una venta) no pasa por `MoveItem`. Es valor derivado de lo recibido, en
+      una ventana de uno o dos ticks y solo tras un rechazo permanente (ya un bug); la red
+      siguen siendo la alerta y la cuadratura del log de economía (T4.1). Cerrarlo del
+      todo pediría atar cada instancia al acuse de su transfer.
 - Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
   oferta y, si era de compra, devolver el oro al buzón).
 - **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un
@@ -246,6 +275,21 @@ ordenada por precio) y un buzón; listar recorre a lo sumo `list_size` ofertas v
 lado. El vencimiento barre una vez por segundo la lista ordenada por vencimiento, como
 mucho 64 por barrido. Los intercambios abiertos se revisan cada tick (pocos, con a lo sumo
 `max_items` por lado).
+
+**Ventanas en vivo.** El loop sabe quién mira cada libro: `World.mkWatch` (item → ventanas
+abiertas que lo muestran), que se mantiene al buscar, abrir, cerrar, alejarse o salir del
+mundo. Una acción que cambia un libro encola a sus espectadores (`bookChanged`); una que
+cambia las ofertas propias o el buzón de alguien, a ese jugador si tiene la ventana
+abierta (`marketOwnerChanged`; también el alquiler, el traspaso o la liberación de una
+casa); una suspensión, a las ventanas cuyo libro lista ofertas de esa cuenta; un
+intercambio completo, a los dos. `flushMarket` (en `flushSystem`, una vez por tick) manda
+a cada ventana encolada una `MarketUpdate` completa con `refresh: true`, como mucho una
+cada 500 ms (`marketPushEvery`; la que cae antes espera, no se pierde). La respuesta a un
+comando propio también deja la ventana al día y descarta el refresco pendiente. Nada de
+esto toca la base: todo sale de lo que el loop ya tiene en memoria. Costo: encolar es
+recorrer los espectadores del libro (o uno); mandar cuesta lo que una respuesta normal
+(`list_size` por lado, ofertas propias, buzón e historial), y como mucho dos por segundo
+por ventana abierta.
 
 ## Autenticación y cuentas
 - Email + contraseña (argon2id), verificación de email, reset de contraseña.

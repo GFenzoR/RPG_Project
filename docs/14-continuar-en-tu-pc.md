@@ -100,10 +100,10 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - las escaleras y portales de `portals.yaml` no existen en el servidor (ni en
     `world.bin`): a los pisos 8 (minas de Puerto y Bosque, la mina y la forja de la Isla
     Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff.
-- **Mercado:**
-  - la ventana de quien mira un libro no se refresca con la acción de otro;
-  - la falla segura tiene un límite documentado (lo que sale por el suelo antes de que
-    reaccione).
+- **Mercado:** la falla segura ya no deja salir nada por el suelo ni por el cadáver
+  antes de reaccionar (espera hasta la confirmación); queda un límite chico documentado
+  en docs/01 "Transacciones": lo que el servidor le crea en ese instante a un personaje
+  en espera y cae a sus pies (compra a un NPC, fabricación).
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

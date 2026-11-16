@@ -268,6 +268,16 @@ aunque ninguna escritura falle, y la alerta `PersistenceBacklog` avisa si pasa d
 durante 5 minutos. `persistence_errors_total{outcome="retry"}` solo cuenta escrituras que
 fallaron.
 
+Cada snapshot guardado (también los autoguardados) vuelve al loop como un comando
+`World.Saved` (la espera de la falla segura, docs/01 "Transacciones"): N / 300 por
+segundo más uno por personaje de cada transfer, cada uno un par de búsquedas en un mapa.
+
+**Ventanas del mercado en vivo.** Cada acción del mercado encola a quienes miran ese
+libro; `flushMarket` les manda una `MarketUpdate` completa (lo que cuesta una respuesta
+normal: `list_size` ofertas por lado, las propias, el buzón y el historial) como mucho
+una cada 500 ms por ventana. Con E espectadores de un libro muy activo son a lo sumo 2·E
+mensajes por segundo, sin ninguna lectura de la base.
+
 ### Casas (T5.4)
 - **Transfers de items de casa:** como mucho uno por tick para todas las casas que
   cambiaron en ese tick (`flushHouses`), con la lista entera de items de cada casa sucia y

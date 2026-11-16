@@ -485,6 +485,15 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
   historial (lo que compró y vendió) y un **precio de referencia**: el promedio por unidad
   de las ventas de los últimos `reference_days` días. Es solo informativo.
+- **Ventana en vivo:** la ventana abierta se actualiza sola cuando otro jugador cambia lo
+  que muestra: una oferta nueva, cancelada, vencida o llenada en el item que se está
+  mirando; una oferta propia que otro llenó (y el oro o los items que llegan al buzón);
+  el buzón que cambia por una casa (alquiler, traspaso o casa liberada); una suspensión
+  que oculta o vuelve a mostrar ofertas; y el dinero y los items propios tras un
+  intercambio directo. Un libro muy activo actualiza cada ventana como mucho cada 500 ms;
+  un cambio dentro de ese tiempo sale al terminar, con el libro como esté entonces. Lo que
+  ya escribió el jugador en los formularios no se borra. El vencimiento de una suspensión
+  no avisa: se ve en la siguiente acción.
 - **Seguridad:** el personal del juego no usa el mercado. Una cuenta suspendida no opera
   y sus ofertas no se listan ni se pueden aceptar mientras dure la suspensión. Anti-flood
   propio (`action_burst` / `action_refill_ms`). Comandos de staff auditados:
@@ -495,10 +504,16 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   la base caída al apagar), sus personajes salen del juego con un aviso y no pueden
   entrar hasta que el servidor reinicie, y el mercado y el intercambio quedan en solo
   lectura (se puede mirar, no operar) hasta entonces. Al reiniciar, esos personajes
-  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Límite: lo que uno
-  de ellos soltó en el suelo o dejó en su cadáver en el instante antes del aviso puede
-  quedar con quien lo levantó; las alertas de economía (T4.1) son la red (docs/01,
-  "Transacciones").
+  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Para que nada de
+  lo que recibieron llegue a otro antes del aviso, después de cada intercambio, compra,
+  venta, retiro del buzón o cambio en una casa el personaje queda **en espera** hasta que
+  la base confirma ese guardado (normalmente uno o dos ticks): no puede soltar nada en el
+  suelo fuera de una casa (aviso "Espera un momento…", `inventory.saving`), y si muere,
+  nadie más saca nada de su cadáver mientras tanto (ni después, si el guardado falló). El
+  suelo de las casas lo cuida el guardado: lo que se movió ahí no llega a la base por
+  otro. Límite que queda: lo que el servidor le crea en ese instante y cae a sus pies
+  porque no le entra (una compra a un NPC, una fabricación); las alertas de economía
+  (T4.1) son la red (docs/01, "Transacciones").
 - Una oferta de un item retirado del juego se cierra al arrancar: el oro de una de
   compra vuelve al buzón.
 - **Fuera de alcance:** subastas, mercado entre servidores y tienda cosmética (T5.7).

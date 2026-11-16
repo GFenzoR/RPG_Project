@@ -918,7 +918,15 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   `owned` (unidades del item buscado en la mochila) y `read_only` (solo se puede buscar
   hasta que el servidor reinicie; las demás acciones responden `market.read_only`).
   `open: false` cierra la ventana (el jugador se alejó). `withdraw` entrega primero los
-  items en orden mientras entren y después todo el oro que entre. Precios en la moneda más chica, fechas en ms Unix. Mensajes:
+  items en orden mientras entren y después todo el oro que entre.
+  **Refresco en vivo:** el servidor también manda, por su cuenta, una `MarketUpdate`
+  completa con `refresh: true` cuando la acción de otro cambia lo que la ventana abierta
+  muestra (ofertas del item buscado, ofertas propias, buzón, una suspensión, o el dinero e
+  items propios tras un intercambio; también al pasar a solo lectura). Sale al final del
+  tick, una por ventana y como mucho cada 500 ms (lo que cambie entre medio sale al
+  terminar ese plazo); quien actúa recibe solo la respuesta a su comando
+  (`refresh: false`). El cliente aplica un `refresh` solo si la ventana sigue abierta:
+  uno que se cruzó con el `close{}` no la vuelve a abrir. Precios en la moneda más chica, fechas en ms Unix. Mensajes:
   `market.closed`, `staff`, `too_fast`, `not_at_board`, `bad_item`, `bad_amount` (`max`),
   `bad_price` (`max`), `too_many_offers` (`max`), `not_enough_items`, `not_enough_money`
   (`price`), `no_room`, `offer_gone`, `own_offer`, `created` (`item`, `fee`), `cancelled`
@@ -928,7 +936,10 @@ Reglas y números en `02-game-design.md` ("Economía") y `balance.yaml` `trade` 
   `gm.market_none`, `gm.market_cancelled`, `gm.market_unknown`.
 - **Falla segura** (docs/01 "Transacciones"): si un cambio del comercio no se pudo
   guardar, sus personajes reciben `Disconnect{SAVE_FAILED}` y sus logins
-  `Disconnect{CHARACTER_LOCKED}` hasta que el servidor reinicie.
+  `Disconnect{CHARACTER_LOCKED}` hasta que el servidor reinicie. Mientras la base no
+  confirma un cambio de comercio o de casa de un personaje, un `MoveItem` suyo hacia el
+  suelo fuera de una casa (desde lo que lleva o desde su propio cadáver) se rechaza con
+  `inventory.saving`, y su cadáver sigue reservado para él (`death.corpse_not_owner`).
 
 ### Casas (T5.4, `server/internal/session/house.go`)
 Reglas y números en `02-game-design.md` ("Casas") y `balance.yaml houses`.

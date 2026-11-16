@@ -148,7 +148,13 @@ server/
   y `SaveTransfer` los reclama: un reintento de uno ya confirmado no aplica nada. Cerrar
   una oferta lleva sus unidades (`MarketOfferRemove.Units`, baja con guarda). Un transfer
   que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
-  mide la cola del Saver más `World.PendingJobs`.
+  mide la cola del Saver más `World.PendingJobs`. Todo snapshot de un transfer sale por
+  `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`):
+  un camino nuevo que lleve algo de un personaje al suelo público tiene que respetar
+  `heldDrop`, y uno que reemplace los items de una casa va como `HouseItems` (el Saver
+  marca la casa si se descarta). Una acción que cambie lo que muestra la ventana del
+  mercado de otro llama a `bookChanged` / `marketOwnerChanged` / `queueMarket` (refresco
+  en vivo, `flushMarket`).
 
 - **Casas (T5.4):** `session/house.go` + `store/houses.go` + `app/houses.go` +
   `httpapi/houses.go` (`balance.yaml houses`; necesita el mercado). Las casas son datos del
