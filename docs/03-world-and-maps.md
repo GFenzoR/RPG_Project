@@ -182,15 +182,18 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   (a una casilla, mismo piso) a una puerta: ahí va quien no puede quedarse adentro.
 - Validación (`mapcli validate`, editor y CI): rects dentro de la isla y en sus pisos,
   todas sus casillas con suelo, ninguna casilla en dos casas ni en dos rects de la misma, puertas caminables dentro de
-  la casa, salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
+  la casa y en su borde (junto a una casilla de afuera; advertencia si las casillas de un
+  piso no forman un solo bloque), salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
   el templo, nombre con texto en todos los idiomas, id único en el mundo. Adentro de una
   casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y
   ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro).
 - **Solo maintainers:** `houses.yaml` no es parte de los map patches (docs/04): un PR que
-  lo cambia queda fuera de las parcelas de comunidad. Se edita como YAML (el editor lo
-  muestra, sin herramienta de edición) con `mapcli fmt` para el formato canónico. Para
-  construir una casa: `stamp` de los prefabs `house_wood_small` / `house_wood_medium` y
-  luego su entrada en `houses.yaml`.
+  lo cambia queda fuera de las parcelas de comunidad. Se edita con el panel de casas del
+  editor (dibuja casillas, puertas y salida, y escribe también los nombres en
+  `i18n/*/world.yaml`), con `mapcli house add|set|remove` o con las ops
+  `add_house`/`set_house`/`remove_house` (docs/04 "Casas"); a mano, con `mapcli fmt` para
+  el formato canónico. Para construir una casa: `stamp` de los prefabs `house_wood_small` /
+  `house_wood_medium` y luego su entrada en `houses.yaml`.
 
 ## Prefabs (`world/prefabs/<id>.yaml`)
 Piezas de mapa reutilizables (muelle, casa) que la op `stamp` copia con su esquina superior

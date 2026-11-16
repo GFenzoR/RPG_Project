@@ -29,7 +29,7 @@ dependencias de Node para que el editor la use en el navegador).
 - `touched` lista cada chunk modificado con su isla (`{ island, z, cx, cy }`): los chunks
   son por isla, así que dos islas que compartieran un chunk nunca se mezclan.
   `touchedAux` lista las listas auxiliares cambiadas (`{ island, file }`, con `file` =
-  `spawns`/`zones`/`portals`/`npcs`). `saveApplied(root, world, result)` escribe solo esos
+  `spawns`/`zones`/`portals`/`npcs`/`houses`). `saveApplied(root, world, result)` escribe solo esos
   archivos (temporal + rename) y borra los que quedaron vacíos.
 - `OpOptions` inyecta lo que vive en disco, para que el módulo siga sin Node: `itemKind`,
   `monsterKnown`, `npcKnown`, `borders` (reglas de `data/borders.yaml`, las necesita
@@ -49,6 +49,9 @@ dependencias de Node para que el editor la use en el navegador).
 | `place_npc` / `remove_npc` | `pos`, `npc` | |
 | `add_portal` / `remove_portal` | campos de portals.yaml | |
 | `stamp` | `pos`, `prefab` | Coloca un prefab (casa, muelle, templo) de `world/prefabs/` |
+| `add_house` | `id`, `rent`, `rects[]`, `doors[]`, `exit`, `notes?`, `name?`, `index?` | Agrega una casa a `houses.yaml` (T5.4) |
+| `set_house` | `id` y los campos que cambian (`rent`, `rects`, `doors`, `exit`, `notes`; `notes: null` las quita) | Cambia una casa en su lugar; el `id` nunca cambia |
+| `remove_house` | `id` | Quita una casa |
 
 Detalle de las ops de T1.15 (las inversas se expresan siempre con ops primitivas):
 - `fill`: inundación en 4 direcciones dentro del rectángulo de la isla de `pos`; también
@@ -66,6 +69,16 @@ Detalle de las ops de T1.15 (las inversas se expresan siempre con ops primitivas
   devolver el archivo byte a byte. Que el spawn o NPC esté sobre suelo caminable lo revisa
   el validador, no la op.
 - `stamp`: la esquina superior izquierda del prefab va en `pos`. Formato en `03`.
+- Casas (`houses.yaml`, formato en `03`): la isla es la del primer rect y todo (rects,
+  puertas, salida) debe caer en ella; `set_house` no mueve una casa de isla. `name` es
+  siempre `house.<id>.name` (se completa si falta). La op revisa la forma que necesitan el
+  archivo y el servidor: alquiler 1..2³²−1, 1 a 16 rects de lado 1..255 sin casillas
+  repetidas dentro de la isla y sus pisos, 1 a 8 puertas que sean casillas de la casa y la
+  salida fuera de la casa. Lo demás (otra casa encima, suelo, caminable, puerta en el
+  borde, salida junto a una puerta, el nombre en `i18n/`) lo reporta el validador, como un
+  spawn sobre el agua: una casa se puede trazar antes de pintar su suelo. La geometría que
+  comparten las ops, el validador y el editor vive en `map-format/src/houses.ts`
+  (`houseTiles`, `tilesToRects`, `onHouseEdge`, `disconnectedFloors`, `houseIssues`).
 
 Generación procedural (`generate` en map-format, `mapcli generate`): una receta convierte
 una semilla en una lista de ops, así que pasa por `applyOps` (atómica, reversible). Receta
@@ -620,18 +633,66 @@ panel de revisión (`editor/src/review/`):
   exporta, alterna antes/después, importa con y sin conflicto e intenta un patch
   malicioso.
 
-**Casas (T5.4).** `houses.yaml` (formato en `03-world-and-maps.md`) no tiene ops ni entra
-en map patches (la ruta no es parcheable: un PR que lo cambia es de maintainer). `mapcli
-validate`/`fmt`, el MCP `map_validate` y el editor la cargan y validan (`validateWorld`);
-`mapcli info` y `map_info` listan cada casa con su tamaño, alquiler y salida. El editor la
-dibuja (solo lectura) en el canvas: contorno violeta de sus casillas, puertas y salida;
-se edita a mano en el YAML. Prefabs de casas: `house_wood_small` y `house_wood_medium`.
+**Casas (T5.4).** `houses.yaml` (formato en `03-world-and-maps.md`) se edita con las ops
+`add_house`/`set_house`/`remove_house` y nunca entra en map patches (la ruta no es
+parcheable: un PR que lo cambia es de maintainer). `mapcli validate`/`fmt`, el MCP
+`map_validate` y el editor la cargan y validan (`validateWorld`); `mapcli info` y
+`map_info` listan cada casa con su tamaño, alquiler y salida. Prefabs de casas:
+`house_wood_small` y `house_wood_medium`.
+- **mapcli:** `mapcli house add <isla> --id ID --floor Z --rects x,y,w,h[;x,y,w,h...]
+  --doors x,y,z[;x,y,z...] --exit x,y,z --rent N [--notes TEXTO]`, `mapcli house set <isla>
+  --id ID [...]` (solo los campos dados; `--notes ""` las quita) y `mapcli house remove
+  <isla> --id ID`. El MCP las aplica con `map_apply_ops`. Ninguno escribe el nombre: la
+  clave `house.<id>.name` va a mano en `i18n/{es,en}/world.yaml`, y la validación de la
+  salida la reporta mientras falte.
+
+**Casas en el editor.** Panel "Casas de la isla" (`src/ui/HousePanel.tsx`) y herramienta
+Casa (`H`). La lógica pura es `src/houses/draft.ts` (borrador → casa) sobre
+`map-format/src/houses.ts`; el controlador guarda el borrador en su estado y el canvas lo
+dibuja (relleno violeta con los rects que va a tener, puertas en amarillo, salida en verde).
+- **Lista:** las casas de la isla actual con su tamaño; clic = abrirla y centrar la vista.
+  Con la herramienta Casa y sin borrador, un clic sobre una casa la abre.
+- **Nueva casa:** abre un borrador con un id libre (`<isla>_house_<n>`) y elige la
+  herramienta Casa. Modos en el mapa: **Casillas** (arrastrar agrega el rectángulo; clic
+  derecho o Mayús lo quita; las casillas fuera de toda isla no entran), **Puertas** (clic
+  pone o quita una puerta; clic derecho solo quita) y **Salida** (clic la pone; clic
+  derecho la borra). "Agregar la selección" suma el área de la herramienta Selección. Los
+  `rects` del YAML salen de las casillas (`tilesToRects`: por piso, de arriba abajo y de
+  izquierda a derecha, cada rect crece a la derecha y después hacia abajo), así que nunca se
+  escriben a mano; una casa dibujada como sala + umbral da los mismos dos rects que las
+  casas hechas a mano.
+- **Formulario:** id (editable solo mientras la casa es nueva: es la clave de su dueño en
+  la base), nombre en cada idioma (`house.<id>.name`, una línea de hasta 80 caracteres sin
+  llaves), alquiler por período en cobre y notas.
+- **Problemas en vivo** (`houseIssues`, clic = ir a la casilla): id inválido o repetido,
+  alquiler, sin casillas, más de 16 rects o un lado de más de 255, casillas fuera de la isla
+  o en dos islas, casillas de otra casa, sin puertas o más de 8, puerta fuera de la casa o
+  que no está en su borde, salida que falta, fuera de la isla, dentro de una casa o lejos de
+  una puerta, nombre que falta. Advertencias (no impiden aplicar): casillas de un piso que no
+  forman un solo bloque y casillas sin suelo. Lo que depende de los items (caminable,
+  alcanzable desde el templo, NPCs adentro) lo sigue diciendo el panel de validación.
+- **Aplicar** convierte el borrador en una sola entrada de historial (`add_house` o
+  `set_house`; `Ctrl+Z` la deshace) y se niega con el primer error en la barra de estado.
+  "Borrar casa" es `remove_house` (también deshacible); su nombre queda en `world.yaml`.
+- **Guardar** escribe `houses.yaml` (mismo texto canónico que `mapcli fmt`, revisado contra
+  su hash como cualquier archivo) y los nombres cambiados en `i18n/<idioma>/world.yaml`:
+  solo claves `house.<id>.name`, reemplazando su línea o agregándola después del último
+  nombre de casa, sin tocar comentarios ni el resto. Cada nombre lleva el texto que tenía al
+  cargar: si en disco cambió, es conflicto y no se guarda nada. Hasta guardarlos, la
+  validación en vivo da por presentes los nombres nuevos (`pendingKeys` de
+  `/api/validate`). Exportar un patch no lleva casas ni nombres (la barra de estado lo
+  avisa).
+- Tests: `editor/src/houses/draft.test.ts`, `editor/src/state/editor.test.ts` ("house
+  panel"), `editor/server/store.test.ts` (houses.yaml y nombres, conflictos, textos
+  rechazados) y el E2E "houses", que dibuja una casa con errores a la vista, la aplica,
+  prueba una superpuesta, guarda y compara los archivos.
 
 **Hito 4–5:** prefabs, generación procedural desde el editor, envío de patch a revisión
 con cuenta, cola de moderación, comentarios por casilla.
 
 ## Experiencia de usuario del editor
 - Atajos tipo editores de mapas clásicos: `B` pincel, `E` borrador, `G` relleno,
-  `R` rectángulo, `V` selección, `PgUp/PgDn` piso, rueda = zoom, espacio + arrastrar = mover.
+  `R` rectángulo, `V` selección, `H` casa, `PgUp/PgDn` piso, rueda = zoom, espacio +
+  arrastrar = mover.
 - Panel de validación siempre visible; click en un error lleva a la casilla.
 - Previsualización de la vista del jugador (rectángulo 15x11) para revisar composición.

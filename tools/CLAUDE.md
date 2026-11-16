@@ -13,6 +13,7 @@ mapcli place <isla> --pos x,y,z --item oak_tree
 mapcli spawn add <isla> --pos x,y,z --monster wolf --count 3 --radius 4 --respawn 60
 mapcli zone add <isla> --rect x,y,w,h --floor 7 --type protection
 mapcli npc place <isla> --pos x,y,z --npc harbor_master
+mapcli house add <isla> --id ID --floor 7 --rects x,y,w,h --doors x,y,z --exit x,y,z --rent 500
 mapcli generate <isla> --recipe island --seed 42 --size 128   generación procedural base
 mapcli validate [isla] [--format text]     mismo validador que el editor y la CI
 mapcli patch create|apply|diff             trabajar con map patches

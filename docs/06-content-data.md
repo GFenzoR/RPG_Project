@@ -457,7 +457,8 @@ pvp:
 necesitan el mercado, que cobra el alquiler y recibe los items). Reglas: `02-game-design.md`,
 "Casas". Las casas mismas (casillas, puertas, alquiler) son datos del mapa:
 `world/islands/<isla>/houses.yaml` (`03-world-and-maps.md`), y sus nombres van en
-`i18n/*/world.yaml` (`house.<id>.name`). Los números son propios.
+`i18n/*/world.yaml` (`house.<id>.name`; el panel de casas del editor los escribe al guardar,
+docs/04 "Casas en el editor"). Los números son propios.
 ```yaml
 houses:
   enabled: true
