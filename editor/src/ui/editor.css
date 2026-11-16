@@ -337,6 +337,12 @@ button.primary {
 .houses .diags {
   margin: 4px 0;
 }
+/* A problem without a tile (no doors, no exit, a name) cannot be jumped to, but it is just
+   as blocking: keep it readable instead of dimmed like a disabled button. */
+.houses .diags button:disabled {
+  opacity: 1;
+  cursor: default;
+}
 .houses input[type="number"] {
   width: 100px;
 }

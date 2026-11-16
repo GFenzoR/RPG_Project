@@ -298,7 +298,8 @@ export async function createMapCanvas(
     if (!d) return;
     for (const r of tilesToRects(d.tiles)) {
       if (r.z !== s.floor) continue;
-      entities.rect(r.x * T, r.y * T, r.w * T, r.h * T).fill({ color: COLORS.house, alpha: 0.35 });
+      // At 0.35 the violet averages to grey over grass; 0.5 still reads as a house.
+      entities.rect(r.x * T, r.y * T, r.w * T, r.h * T).fill({ color: COLORS.house, alpha: 0.5 });
       entities.stroke({ width: 1 * px, color: COLORS.selected, alpha: 0.5 });
     }
     for (const p of d.doors) {

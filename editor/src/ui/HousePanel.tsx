@@ -6,6 +6,7 @@
 // and the names to i18n/<lang>/world.yaml).
 import { houseNameKey, houseSize, tilesToRects } from "@rpg/map-format/ops";
 import type { Position } from "@rpg/map-format/ops";
+import { useEffect, useRef } from "preact/hooks";
 import { HOUSE_MODES, housePos, issueText } from "../houses/draft.ts";
 import { MAX_NAME_LENGTH } from "../io/wire.ts";
 import type { EditorController, EditorState } from "../state/editor.ts";
@@ -24,6 +25,13 @@ export function HousePanel({
   const d = s.houseDraft;
   const issues = d ? ctl.houseIssues() : [];
   const sel = s.houseSel;
+  // The form is taller than what is left of the right column under the entity panel: when
+  // a house opens, scroll the column so the whole form (problems and Apply) is on screen.
+  const form = useRef<HTMLFormElement>(null);
+  const opened = d === undefined ? undefined : (d.key ?? "");
+  useEffect(() => {
+    if (opened !== undefined) form.current?.scrollIntoView?.({ block: "nearest" });
+  }, [opened]);
   return (
     <section class="panel houses" data-testid="houses">
       <h2>{t("editor.houses")}</h2>
@@ -57,6 +65,7 @@ export function HousePanel({
       </div>
       {d && (
         <form
+          ref={form}
           class="entity-form"
           data-testid="house-form"
           onSubmit={(ev) => {

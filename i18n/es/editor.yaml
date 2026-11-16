@@ -199,7 +199,7 @@ editor.house.err.exit_in_house: "La salida {x},{y},{z} cae dentro de la casa «{
 editor.house.err.exit_far: "La salida {x},{y},{z} no está junto a una puerta"
 editor.house.err.not_contiguous: "Las casillas del piso {other} no forman un solo bloque"
 editor.house.err.no_ground: "La casilla {x},{y},{z} no tiene suelo"
-editor.house.err.name: "Falta el nombre en {lang} (hasta {max} caracteres, una línea, sin llaves)"
+editor.house.err.name: "Falta el nombre ({lang}): hasta {max} caracteres, una línea, sin llaves"
 editor.history.house_add: "crear casa"
 editor.history.house_edit: "editar casa"
 editor.history.house_remove: "borrar casa"
