@@ -42,7 +42,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuenta de AWS y dominio | T1.18: servidor público | `09-deployment-aws.md` |
 | Apps OAuth de Google y Discord, y SMTP | Login social y emails (T2.1) | `12-local-development.md` |
 | Cuenta bot de GitHub (token classic con `public_repo`, fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
-| Protección de la rama `main` y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `09-deployment-aws.md` |
+| Protección de la rama `main` (check requerido: el status `map-pr/verdict`, fuente GitHub Actions; `.github/CODEOWNERS` con "Require review from Code Owners" y "Dismiss stale pull request approvals when new commits are pushed"; "Allow GitHub Actions to create and approve pull requests" apagado) y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `04-map-editor-and-ai.md` "PR de mapas en CI", `09-deployment-aws.md` |
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
@@ -86,22 +86,81 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **CI de PR de mapas sin `pull_request_target`** (GitHub lo bloquea por defecto en repos
+  públicos desde el 2026-12-02): `map-pr-pending.yml` ya no existe. El aviso de
+  "pendiente" sale ahora del `workflow_run` `requested` de `map-pr`, y el status de commit
+  `map-pr/verdict` cierra el caso del push sin corrida (docs/04, "PR de mapas en CI"). Falta:
+  - 👤 **apenas** se mezcle esto en `main`, marcar `map-pr/verdict` como check requerido
+    (fuente GitHub Actions; en un ruleset se puede escribir el nombre sin esperar a la
+    primera corrida). Hasta entonces, un push que borra o renombra `map-pr.yml` deja el
+    ✅ anterior a la vista, solo con el aviso del pie (nombra su commit). Antes del
+    2026-12-02 `map-pr-pending` lo habría marcado como pendiente (salvo en los cortes de
+    prueba); después, ya no;
+  - 👤 el status **no es a prueba de falsificación**: un PR (también de un fork) puede
+    agregar un workflow con un job `name: map-pr/verdict`, cuyo check run satisface la
+    regla con el mismo nombre, y cualquiera con permiso Write puede poner el status. El
+    veredicto avisa (🚨 y `failure`) si ve ese check run, pero no lo impide. Lo que lo
+    cierra es crear `.github/CODEOWNERS` (no existe) y activar "Require review from Code
+    Owners" con "Dismiss stale pull request approvals when new commits are pushed";
+    sin lo segundo, una aprobación vieja vale después de un push que agrega el workflow.
+    Dejar apagado "Allow GitHub Actions to create and approve pull requests" (el token
+    de `map-pr-comment` tiene `pull-requests: write`);
+  - mirar en el primer PR real que el comentario pase a ⏳ al empujar y que el status
+    aparezca en el commit (`pending`, y después `success` o `failure`). Los tests usan un
+    GitHub en memoria. Sin verificar en GitHub: si `requested` llega también para la
+    corrida de un contribuidor nuevo que espera aprobación (si no llega, el status falta
+    hasta que se apruebe, que también bloquea); un `completed` con `action_required`
+    se ignora, para no escribir `failure` antes de que `map-pr` corra. Tampoco se verificó que el anuncio del
+    2026-12-02 deje fuera a `workflow_run`: por lo que se sabe solo cambia
+    `pull_request_target`, pero vale leerlo antes de esa fecha;
+  - un mismo commit como head de un PR hacia `main` y de otro hacia otra rama: el status
+    lo escribe solo el de `main`, y una corrida que no dice para cuál PR es (el job
+    `pending`, o sin reporte) no escribe nada. Raro, pero el comentario del PR hacia
+    `main` puede quedar sin "pendiente" en ese caso, y su status queda como estaba
+    (ninguno, o un veredicto anterior del mismo commit) hasta que termine su corrida. Si
+    los dos salen de la misma rama, sus cuatro eventos comparten el grupo de
+    `concurrency`, que deja uno corriendo y uno esperando (uno nuevo cancela al que
+    espera, aunque `cancel-in-progress` sea `false`): el veredicto del PR hacia `main` se
+    puede perder y su status queda como estaba. Lo corrige una corrida **nueva** de su
+    `map-pr` (editar el título, cerrar y reabrir, o empujar: relanzar una vieja no
+    escribe si hay una más nueva). No está verificado en GitHub que un job saltado por su
+    `if` no ocupe lugar en el grupo;
+  - un PR que cambia `world/`, se calculó hacia otra rama y después se pasó a `main` ya
+    no puede dejar un `success` de la otra rama: el veredicto solo vale como status si la
+    base del reporte es la punta actual de `main` (si no, `failure` y el comentario pide
+    una corrida nueva). Lo mismo si `main` avanzó mientras corría el check. Y si el PR
+    cambia de base, head o archivos mientras se calcula el veredicto, no se escribe nada.
+    Sin verificar en GitHub: si la API de archivos de un PR tarda en recalcular después
+    de un cambio de base (un PR que no toca `world/` contra la rama vieja podría llevarse
+    un `success` "sin mapa" en ese hueco);
+  - una copia de un PR (otro PR hacia `main` con el mismo commit, de otro autor u otro
+    repo de origen: un fork con ese commit u otra rama con la misma punta, porque GitHub
+    no deja dos PR abiertos desde la misma rama hacia la misma base) congela el status
+    del commit: ninguna corrida lo escribe mientras la copia esté abierta. Antes la copia
+    podía pasarlo a `failure` con cada `edited`. Se cierra la copia y el PR bueno
+    necesita una corrida nueva de `map-pr`. Abrir y cerrar copias sigue sirviendo para
+    trabar un PR (nunca para pasarlo);
+  - 👤 opcional, ya existía: `release-desktop.yml` (`contents: write`) e `images.yml`
+    (`packages: write` al publicar) usan tags mayores flotantes (`actions/checkout@v4`,
+    `pnpm/action-setup@v4`, `docker/*@v3`...). Fijarlas por SHA, como `map-pr-comment`,
+    reduce el riesgo de cadena de suministro, pero sin Dependabot (no hay
+    `.github/dependabot.yml`) nadie las actualiza;
+  - una merge queue necesitaría que `map-pr` corra en `merge_group` y ponga el status
+    sobre ese commit; hoy se usa "Require branches to be up to date".
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
   (hay que entrar de nuevo en cada arranque) y el selector de servidor reinicia la app.
-  Detalle en `15-movil.md`. El área segura (muesca, esquinas, barra de inicio) ya se
-  cuenta una sola vez para el pad, la hotbar, los botones de zoom y el banner del item
-  elegido (los mide un E2E con insets de CDP). Falta para lo que se posiciona contra la
-  pantalla entera (`position: fixed`): las ventanas sobre el mapa en teléfono (diálogo,
-  crafteo, mercado, casa, intercambio) y el menú del toque largo (`menuPlacement` deja
-  8 px del borde de la pantalla, no del área segura). En un iPhone horizontal pueden
-  quedar un poco bajo la muesca o la barra de inicio; se ve solo en un dispositivo real
-  o con el override de CDP.
-- **Atlas sin reintento:** si el `fetch` de `/atlas/atlas.json` falla una vez
-  (`Atlas.load` en `packages/renderer`, llamado por `createGameCanvas`), el canvas no se
-  crea y el juego queda en "Conectando…" para siempre, con la sesión abierta. Se vio una
-  vez en `make e2e` local (Windows: `ERR_CONNECTION_REFUSED` contra el Vite de desarrollo
-  en "T5.1"; la corrida siguiente pasó entera). En una red móvil puede pasarle a un
-  jugador: un par de reintentos con espera, o un aviso con "Reintentar", lo resolvería.
+  Detalle en `15-movil.md`. El área segura (muesca, esquinas, barra de inicio) se cuenta
+  una sola vez en todo el juego: el padding de `.game` para lo que cuelga del mapa, y
+  `env(safe-area-inset-*)` en los bordes de lo que va fijo a la pantalla (las ventanas en
+  teléfono y tablet, el selector de idioma fuera del juego) y en `menuPlacement` para el
+  menú del toque largo. Un E2E con insets de CDP mide el pad, la hotbar, el zoom, el
+  banner, el diálogo de un NPC y el menú; crafteo, mercado, casa e intercambio comparten
+  la regla CSS del diálogo pero no tienen su propia medición. Falta verlo en un iPhone y
+  un Android con muesca de verdad (el override de CDP solo existe en Chromium).
+- **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
+  `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
+  (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace
+  falta, los sonidos podrían usar la misma política.
 - **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
@@ -123,19 +182,30 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     Volcánica, incluido el de la puerta con llave del piso 8, tienen su `*_sign`; solo el
     del templo de `testisle` no). A futuro `mapcompile` podría llevar `texts.yaml` a
     `world.bin` y el servidor leerlo, sin items por cartel;
-  - portales (`02-game-design.md` "Cambiar de piso"): el servidor ya mueve por escaleras,
-    escaleras de mano, agujeros, sogas y teletransportes, pero el mundo solo usa
-    escaleras. Para poner los otros falta su item con arte propio (`add-item` +
-    `tools/spritegen`): hoy solo existen `stairs_down` / `stairs_up`, y un portal sin item
-    es una casilla de suelo cualquiera a la vista (el cliente igual usa una escalera de
-    mano o una soga sin item con click derecho). Tampoco caen por una escalera, un agujero
-    o un teletransporte los items que se tiran sobre su casilla (en Tibia caen): quedan
-    ahí, a la vista, y nadie pisa esa casilla sin moverse. Cada paso por un portal manda
-    un `FullMapView` (hoy unos 950 B/s subiendo y bajando sin parar, docs/07): una isla
-    con pisos sobre el 7 lo haría más pesado, conviene medirlo de nuevo cuando exista. En
-    escritorio el click derecho sobre una escalera de mano siempre trepa: un cadáver
-    encima que no se puede mover solo se abre con el toque largo (hoy no hay escaleras de
-    mano en el mundo; una salida sería que Ctrl+click derecho use el item de arriba);
+  - portales (`02-game-design.md` "Cambiar de piso"): el servidor mueve por escaleras,
+    escaleras de mano, agujeros, sogas y teletransportes, y todos tienen su item con arte
+    propio (`ladder_up`/`ladder_down`, `hole`, `rope_spot`, `teleport`; las escaleras son
+    del pack), pero el mundo solo usa escaleras: poner los otros es diseño de mapa
+    (`build-map-area`; `make validate` y `mapcompile` exigen el item en cada entrada). Sin
+    una escalera de mano en el mundo, Ctrl+click derecho sobre una (usa el item de arriba
+    en vez de trepar) y su toque largo (sin "Usar" ni "Mover" para su propio item) solo
+    tienen tests unitarios (`state/portals.ts` `useMode`, `input/mouse.ts` `mapPress`,
+    `state/items.ts` `menuItem`), no E2E. El teletransporte es estático: el atlas y el
+    renderer no animan items (haría falta una tira de frames por item, como los efectos).
+    Un portal sin su item lo rechazan `make validate` y `mapcompile`; el servidor solo
+    **avisa** en el log (`initPortals`) si el `world.bin` es de antes de cambiar
+    `data/items` (`world.NewMap` no conoce los items y los mapas de los tests de `session`
+    ponen portales en casillas sin nada). `add_portal` (mapcli, MCP, panel del editor) no
+    coloca el item: el editor podría ponerlo solo (hacerlo dentro de la operación cambia su
+    inversa y los patches, por eso quedó aparte). Arrastrar con el mouse el item propio de
+    un portal manda un `MoveItem` que el servidor rechaza (`inventory.not_possible`), como con
+    cualquier item fijo del mapa. Los items tirados sobre una escalera, un agujero o un
+    teletransporte caen al otro extremo (solo por `MoveItem`: el servidor nunca suelta
+    nada en esas casillas, nadie se para ahí), sin efecto visual ni sonido propio; uno que
+    ya está donde caería (un teletransporte del mismo piso) no se mueve ni avisa. Cada paso
+    por un portal manda un `FullMapView` (hoy unos
+    950 B/s subiendo y bajando sin parar, docs/07): una isla con pisos sobre el 7 lo haría
+    más pesado, conviene medirlo de nuevo cuando exista;
   - chequeo de escape de las puertas con llave (`02-game-design.md`, "Chequeo de
     escape"): cuenta como salida de un área solo la puerta de una sala desde adentro y los
     portales que no piden nada (escalera, escalera de mano, agujero, teletransporte); las
@@ -151,17 +221,21 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     `portalSources`), con casos nuevos en `door-rooms.json`. El chequeo de llaves es
     conservador (supone a un jugador en cualquier área fuera de las salas y en cualquier
     casa), y una escalera de mano cuenta solo desde el área de su casilla;
-  - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) solo acepta
-    casillas del área del origen (desde una escalera, un agujero o un teletransporte, las
-    áreas de al lado), pero si el origen no está en ningún área por otra razón (entrar al
-    juego sobre una casilla de casa o de una puerta con llave, un `/tp` del personal) solo
-    descarta las salas (`searchFrom` y `areaAllows` en `server/internal/session/area.go`):
-    todavía puede dejar a alguien en un bolsillo cerrado por paredes o del otro lado de una
-    pared. Arreglo posible: que un origen en una casa use el área de la salida de la casa.
-    Ningún portal puede salir de una puerta con llave ni llegar a ella, pero una llegada de
-    barco o un teleport de diálogo sobre una puerta con llave colocada abierta todavía se
-    acepta (`checkRooms` solo mira las salas): quien llega queda en la puerta, como quien
-    la cruza abierta; si hace falta, rechazarlos igual que los extremos de portal.
+  - la búsqueda de casilla libre por anillos (`searchFrom` en `session/area.go`) ya tiene
+    regla para cada origen fuera de las áreas (casa: su área de casa y la calle de la
+    salida; puerta con llave: su afuera; escalera: las áreas de al lado; cualquier otro:
+    ninguna, `02-game-design.md` "Nadie aparece adentro sin pasar la puerta"). La salida
+    de una casa o el templo sobre una puerta (con llave o común, abierta o cerrada) o en
+    una casilla no caminable, y el templo en una casa, ya no dejan arrancar ni pasan
+    `make validate` (`checkArrivals`, casos en `testdata/arrivals.json`): con todo lleno,
+    `houseExit` y `wakeAtTemple` dejan al jugador en esa casilla misma, y desde el umbral
+    de una puerta con llave daba un paso a la sala sin la llave (el paso solo mira adonde
+    va); una puerta común la puede cerrar cualquiera. Hoy ninguna de las 6 salidas ni
+    ningún templo está sobre una puerta. Queda: quien sale del juego en el umbral de una
+    puerta abierta vuelve afuera aunque hubiera entrado con la llave (no sabemos de qué
+    lado venía), y un `Teleport` del servidor (`relocate`) no mira si la casilla es
+    caminable: todo destino de último recurso nuevo tiene que quedar garantizado por la
+    carga, como el templo y la salida;
   - **Para que lo decida el dueño (revisión del lote 3):**
     - portales de la comunidad entre islas: hoy el chequeo de parcelas los rechaza
       (`cross_island`, `packages/map-format/src/patch/plots.ts`), la opción segura, porque
@@ -189,13 +263,10 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     y ningún `MoveItem` cambia además una casa): es una guarda;
   - el caso real que justificó reservar lo soltado con la escritura de la casa (una runa
     del suelo de la casa usada desde la calle que mata a un monstruo de una quest de
-    muertes cuya recompensa no entra) se prueba con `InputAndGiftForTest`, que lo simula;
-    falta un test de simulación con la runa, el monstruo y la quest de verdad;
-  - una llegada de barco o un `teleport` de diálogo cuyo destino es una casilla de casa
-    ahora deja al jugador fuera de la casa (o el teleport no se ofrece si no hay lugar a 1
-    casilla), pero el servidor no lo rechaza al cargar, como sí rechaza un extremo de
-    portal en una casa (`world.NewMap`). Conviene rechazarlo igual en `session.New` y en
-    `make validate`.
+    muertes cuya recompensa no entra) lo juega `TestHouseRuneKillsAQuestMonsterFromTheStreet`
+    con la runa, el monstruo y la recompensa de `data/`; la quest es del test porque
+    ninguna quest de `data/` termina en una muerte (todas cierran hablando con un NPC). Si
+    alguna llega a terminar en una muerte, conviene pasar el test a ella.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

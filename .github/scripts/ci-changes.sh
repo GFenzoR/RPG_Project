@@ -22,7 +22,8 @@ declare -A RULES=(
 	# emails' templates (T2.1) are i18n/<lang>/email.yaml, read by server/internal/mail.
 	[go-server]='^((server|proto|data|world|packages/map-format/src/patch/testdata)/|i18n/[a-z]+/email\.yaml$)'
 	[go-bots]='^(tools/bots|server|proto)/'
-	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/spritegen|tools/soundgen|data|world|i18n|assets|proto)/'
+	# .github/workflows: tools/mapcli/src/workflows.test.ts checks their security rules.
+	[ts]='^(client|editor|packages|apps/desktop|tools/mapcli|tools/mcp-world|tools/map-pr-worker|tools/spritepack|tools/spritegen|tools/soundgen|data|world|i18n|assets|proto|\.github/workflows)/'
 	[validate]='^(data|world|i18n|assets|packages|tools/mapcli|server/internal/world|server/cmd/mapcompile)/'
 	[actionlint]='^\.github/'
 	[build]='^(client|editor|packages|data|world|i18n|assets|proto|tools/spritepack)/'
@@ -118,9 +119,10 @@ self_test() {
 	# Maps and content: validation, server, E2E.
 	for j in validate go-server e2e ts integration; do check "$j" true world/islands/puerto/chunks/z07/c0100_0196.json; done
 	check desktop false world/islands/puerto/chunks/z07/c0100_0196.json
-	# Workflows other than ci.yml/images.yml: actionlint only.
-	check actionlint true .github/workflows/map-pr.yml
-	check e2e false .github/workflows/map-pr.yml
+	# Workflows other than ci.yml/images.yml: actionlint, and the TS tests of their rules.
+	for j in actionlint ts; do check "$j" true .github/workflows/map-pr-comment.yml; done
+	for j in e2e go-server validate build; do check "$j" false .github/workflows/map-pr.yml; done
+	check ts false .github/MAINTAINERS
 	# deploy/: lint, images, both stacks; a compose change does not build the images.
 	for j in deploy-lint image stack home-stack; do check "$j" true deploy/Dockerfile.gameserver; done
 	check image false deploy/docker-compose.home.yml

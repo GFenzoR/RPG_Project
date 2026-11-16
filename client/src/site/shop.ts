@@ -1,4 +1,7 @@
-// Cosmetic shop page helpers (T5.7). Pure: the page (site/Shop.tsx) and its tests use them.
+// Cosmetic shop page helpers (T5.7). Pure but for loadIcons (it fetches the atlas): the page
+// (site/Shop.tsx) and its tests use them.
+import { fetchJSONWithRetry } from "@rpg/renderer/retry";
+import type { Fetcher, RetryOptions } from "@rpg/renderer/retry";
 import type { ShopHistoryEntry } from "../net/api.ts";
 
 /** How the provider's checkout came back (/shop?checkout=…), or undefined. */
@@ -143,14 +146,22 @@ export function iconsFrom(
   return out;
 }
 
-/** Fetches the site's sprite atlas (/atlas/) and returns the icons of `names`. */
-export async function loadIcons(names: readonly string[]): Promise<Map<string, SpriteIcon>> {
-  const base = new URL("/atlas/", document.baseURI);
-  const index = (await (await fetch(new URL("atlas.json", base))).json()) as { pages?: string[] };
+/**
+ * Fetches the site's sprite atlas (`base`, /atlas/ by default) and returns the icons of
+ * `names`. Each request retries like the game's atlas (@rpg/renderer retry.ts); the page
+ * images are CSS backgrounds the browser loads itself.
+ */
+export async function loadIcons(
+  names: readonly string[],
+  opts: RetryOptions & { base?: string | undefined; fetcher?: Fetcher | undefined } = {},
+): Promise<Map<string, SpriteIcon>> {
+  const base = opts.base ?? new URL("/atlas/", document.baseURI).href;
+  const get = (url: string): Promise<unknown> => fetchJSONWithRetry(url, opts);
+  const index = (await get(new URL("atlas.json", base).href)) as { pages?: string[] };
   const pages = await Promise.all(
     (index.pages ?? []).map(async (p) => {
       const url = new URL(p, base).href;
-      return { url, data: (await (await fetch(url)).json()) as PageData };
+      return { url, data: (await get(url)) as PageData };
     }),
   );
   return iconsFrom(pages, names);

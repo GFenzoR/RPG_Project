@@ -52,13 +52,20 @@ func withPack(id int64, p world.Pos, inPack ...session.ItemState) session.Charac
 		HasPos: true, Pos: p, Inventory: []session.ItemState{{ItemID: packID, Count: 1, Slot: int(slotBackpack), Items: inPack}}}
 }
 
-// openPack opens the backpack and returns its window id.
+// openPack opens the backpack of the test items (packID, 4 slots) and returns its window
+// id.
 func openPack(t *testing.T, h *harness, cl *fakeClient) uint32 {
 	t.Helper()
-	h.input(cl, useItem(inSlot(slotBackpack), packID, 0))
+	return openBackpack(t, h, cl, packID, 4)
+}
+
+// openBackpack opens cl's backpack (item pack, of slots slots) and returns its window id.
+func openBackpack(t *testing.T, h *harness, cl *fakeClient, pack uint16, slots uint32) uint32 {
+	t.Helper()
+	h.input(cl, useItem(inSlot(slotBackpack), uint32(pack), 0))
 	h.sim.Step()
 	opens := find(cl.take(), (*pb.ServerMessage).GetContainerOpen)
-	if len(opens) != 1 || opens[0].GetItemId() != packID || opens[0].GetCapacity() != 4 {
+	if len(opens) != 1 || opens[0].GetItemId() != uint32(pack) || opens[0].GetCapacity() != slots {
 		t.Fatalf("ContainerOpen = %v", opens)
 	}
 	return opens[0].GetContainerId()

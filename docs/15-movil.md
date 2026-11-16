@@ -25,8 +25,9 @@ Lo marcado con 👤 necesita cuentas, pagos o máquinas del dueño: Claude no pu
 - Las dos páginas (`client/index.html` y `client/play/index.html`) enlazan el manifest y
   traen `theme-color` y el viewport móvil:
   `viewport-fit=cover` (la página llega bajo el notch: el padding de `.game` usa
-  `env(safe-area-inset-*)` una vez, y lo que va sobre el mapa mide desde ahí; las ventanas
-  `fixed` todavía no, ver docs/14) e `interactive-widget=resizes-content` (el teclado virtual
+  `env(safe-area-inset-*)` una vez, y lo que va sobre el mapa mide desde ahí; lo que va
+  `fixed` a la pantalla, fuera de ese padding, toma los insets en sus propios bordes: las
+  ventanas en teléfono y el menú del toque largo) e `interactive-widget=resizes-content` (el teclado virtual
   achica la página en vez de taparla, para que el chat se vea al escribir).
 
 ### Service worker: solo el shell estático

@@ -516,13 +516,21 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		if from.kind == locGround && from.pos == to.pos {
 			return // dropped where it already is
 		}
-		g := w.ground[to.pos]
-		// T5.3: never into a stack reserved to another player, and what leaves a house
-		// only into one already reserved to p (hold.go); else it lands as a new pile.
-		merge = mergeTargetIf(g, it, count, func(c *Item) bool {
-			return !w.groundHeld(p, c) && (!leaving || w.heldFor(p, c))
-		})
-		if merge == nil && len(g) >= maxGroundItems {
+		// Dropped onto stairs, a hole or a teleport: it falls through to the other end
+		// (portal.go fallTo), and from here on it is a drop there. Neither end is a house
+		// tile (world.NewMap), nor is where it lands: leaving stays right.
+		if pt := w.stepPortal(to.pos); pt != nil {
+			at, ok := w.fallTo(p, it, count, pt, leaving)
+			if !ok {
+				p.emit(systemMsg(msgPortalNoRoom))
+				return
+			}
+			if to.pos = at; from.kind == locGround && from.pos == to.pos {
+				return // a teleport of one floor back to where it lies
+			}
+		}
+		merge = w.groundMerge(p, it, count, to.pos, leaving)
+		if merge == nil && len(w.ground[to.pos]) >= maxGroundItems {
 			p.emit(systemMsg(msgTileFull))
 			return
 		}
@@ -669,6 +677,15 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	} else if pickedUp {
 		w.tutorialEvent(p, content.TriggerPickUp, moving.def.ID)
 	}
+}
+
+// groundMerge returns the pile of pos that count units of it, dropped there by p, join, or
+// nil (they land as a new pile). T5.3: never a pile reserved to another player, and for
+// what leaves a house (leaving) only one already reserved to p (hold.go).
+func (w *World) groundMerge(p *Player, it *Item, count int, pos world.Pos, leaving bool) *Item {
+	return mergeTargetIf(w.ground[pos], it, count, func(c *Item) bool {
+		return !w.groundHeld(p, c) && (!leaving || w.heldFor(p, c))
+	})
 }
 
 // mergeTarget returns the stack among list that count units of it can join, or nil.

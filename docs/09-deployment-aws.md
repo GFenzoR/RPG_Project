@@ -485,8 +485,8 @@ API de GitHub (red `edge`).
 
 **Por qué no el `GITHUB_TOKEN` de Actions.** Un PR o un push hecho con el `GITHUB_TOKEN` de
 un workflow **no dispara otros workflows** (GitHub lo evita para que no haya ejecuciones en
-cadena). Un PR abierto así no correría `map-pr`, ni `map-pr-pending`, ni la CI, y quedaría
-sin veredicto. Además, ese token solo existe dentro de un job de Actions y el worker corre en
+cadena). Un PR abierto así no correría `map-pr`, ni `map-pr-comment`, ni la CI, y quedaría
+sin veredicto (ni el status `map-pr/verdict`, así que la protección de `main` lo bloquearía). Además, ese token solo existe dentro de un job de Actions y el worker corre en
 el servidor del juego, que es quien ve la cola en Postgres.
 
 `RPG_MAP_PR_WORKER=on` sale de que haya token, no de que el perfil esté activo: pon los dos

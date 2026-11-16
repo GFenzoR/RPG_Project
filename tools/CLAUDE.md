@@ -78,7 +78,8 @@ commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 
 ## spritegen
 `tools/spritegen` (T0.5) dibuja el pixel art propio en `assets/sprites/<ruta>.png` a partir
-de recetas en código: `src/recipes/{terrain,items,creatures,effects,ui}.ts`, con la paleta de
+de recetas en código: `src/recipes/{terrain,portals,items,creatures,effects,ui}.ts`
+(`portals.ts`: escaleras de mano, agujeros, puntos de soga y teletransportes), con la paleta de
 materiales de `src/palette.ts` (4 tonos + contorno) y las primitivas de `src/draw.ts`
 (rect, line, disc, polygon, box en 3/4, contorno automático, luz desde arriba a la
 izquierda, ruido con semilla que hace mosaico). Determinista: la semilla sale de la ruta.

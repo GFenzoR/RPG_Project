@@ -43,6 +43,26 @@ export function climbable(portals: Portals | undefined, x: number, y: number, z:
 }
 
 /**
+ * How using the tile (x, y, z) picks what it uses (state/items.ts tileUse): a ladder is
+ * climbed whatever lies on it ("first", its ground); a bare house door or a bare portal used
+ * by hand uses its ground (`bare`: what usesGround says, "bare"); anything else uses its
+ * top item ("never"). `top` (Ctrl+right click on a desktop, or the touch menu's "Use" and
+ * "Open") asks for the top item even on a ladder: a corpse lying there can then be opened
+ * with the mouse. A bare ladder still climbs: there is nothing else to use.
+ */
+export function useMode(
+  portals: Portals | undefined,
+  bare: boolean,
+  x: number,
+  y: number,
+  z: number,
+  top: boolean,
+): "first" | "bare" | "never" {
+  if (!top && climbable(portals, x, y, z)) return "first";
+  return bare ? "bare" : "never";
+}
+
+/**
  * The passable test of a click-to-walk path to goal: a path never crosses stairs, a hole
  * or a teleport on its way (the player would land elsewhere), only ends on one.
  */

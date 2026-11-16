@@ -31,6 +31,35 @@ export interface ItemInfo {
    * is a map text (`text.*`): it must stand where texts.yaml puts a sign with that text.
    */
   description?: string;
+  /**
+   * The portal the item shows (its `portal` block, docs/03 "Validación"): the kind and,
+   * when given, the way it leads. Every portal but a boat needs such an item on its
+   * entrance; one where no portal of its kind leaves is a warning.
+   */
+  portal?: PortalLook;
+}
+
+/** What a portal item shows: a kind of portals.yaml and, optionally, the way it leads. */
+export interface PortalLook {
+  kind: string;
+  leads?: "up" | "down";
+}
+
+/**
+ * Whether an item shows the portal of kind `kind` from `from` to `to`: same kind, and the
+ * way it leads (if the item says one) is the way the portal changes floor (z grows going
+ * down). A teleport within one floor matches only an item without `leads`.
+ */
+export function showsPortal(
+  info: ItemInfo | undefined,
+  kind: string,
+  from: { z: number },
+  to: { z: number },
+): boolean {
+  const look = info?.portal;
+  if (look?.kind !== kind) return false;
+  if (look.leads === undefined) return true;
+  return look.leads === "down" ? to.z > from.z : to.z < from.z;
 }
 
 /** Whether an item is a sign: its description is a map text of texts.yaml. */
@@ -140,6 +169,12 @@ export function loadContent(root: string): ContentIndex {
       }
       const g = raw["ground"];
       if (isObj(g)) info.walkable = g["walkable"] === true;
+      const portal = raw["portal"];
+      if (isObj(portal) && typeof portal["kind"] === "string") {
+        const leads = portal["leads"];
+        info.portal = { kind: portal["kind"] };
+        if (leads === "up" || leads === "down") info.portal.leads = leads;
+      }
       items.set(info.id, info);
     }
   }

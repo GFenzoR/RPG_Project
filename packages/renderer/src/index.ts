@@ -3,6 +3,7 @@
 // the spritepack atlas; input, entities and editing live in the apps.
 export * from "./camera.ts";
 export { Atlas, MISSING_TEXTURE } from "./atlas.ts";
-export type { AtlasIcon, AtlasIndex } from "./atlas.ts";
+export type { AtlasIcon, AtlasIndex, AtlasLoadOptions } from "./atlas.ts";
 export { MAX_STACK_ORDER, MapView, entityZIndex, itemZIndex } from "./map-view.ts";
 export type { ChunkData, MapViewOptions, TextureLookup, TileSource } from "./map-view.ts";
+export * from "./retry.ts";

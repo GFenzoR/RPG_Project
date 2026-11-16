@@ -12,7 +12,10 @@ export type ActionKind = "attack" | "talk" | "climb" | "use" | "open" | "look" |
 export interface TileFacts {
   /** The creature on it, if any. */
   creature?: { npc: boolean; self: boolean } | undefined;
-  /** Its top item above the ground, if any. */
+  /**
+   * Its top item above the ground, if any, but not the look of a portal (state/items.ts
+   * menuItem): a bare ladder offers "climb", not "use" and "move" of its own item.
+   */
   item?: { container: boolean } | undefined;
   /** A bare house door (T5.4) or rope spot: using its ground opens the house window, or says a rope is needed. */
   door?: boolean;

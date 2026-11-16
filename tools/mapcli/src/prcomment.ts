@@ -1,20 +1,52 @@
 // Comment of the map PR check (T2.4, docs/04-map-editor-and-ai.md "PR de mapas en CI").
 //
 // Runs in the `map-pr-comment` workflow (workflow_run), which has `pull-requests: write`
-// and must never run anything from the pull request. So this file:
+// and `statuses: write` and must never run anything from the pull request. So this file:
 //   - is self-contained (Node built-ins only, no workspace packages, no pnpm install), and
 //     is checked out from the default branch, never from the PR;
 //   - treats report.json (an artifact the PR's own job wrote) as untrusted data: size cap,
 //     every field type-checked and every string matched against a strict pattern, and the
 //     PR number, head commit and author checked against the GitHub API;
-//   - writes one comment per PR, found by a hidden marker and updated on every push.
+//   - writes one comment per PR, found by a hidden marker and updated on every map-pr run;
+//     the comment also records the run that wrote it, and an older run never overwrites it
+//     (nor, when the PR is the only open one with its commit from its repo, does any run
+//     older than the newest map-pr run of that commit: newerRunOfCommit);
+//   - sets the commit status STATUS_CONTEXT on the PR's head commit: pending while map-pr
+//     runs, then success or failure (commitStatus). A status belongs to one commit, so a
+//     push that never gets a map-pr run has none, and an old pass never covers it. The
+//     verdict depends on the base and on the author and head repo (maintainer), the status
+//     only on the commit, so only a PR into the default branch sets it, and only while no
+//     other open PR into that branch has the same commit from another head repo or author
+//     (another PR of the same commit into an old branch, or a copy of a maintainer's PR
+//     opened by someone else, must not reach main's merge box). For a PR that changes
+//     world/, only a report computed against that branch's tip now is a verdict
+//     (defaultTip: a run of a PR whose base changed since, or one main moved past, gives
+//     failure); and nothing is written if the PR's base, head or file count changed while
+//     the verdict was computed.
 //
 //   node --experimental-strip-types tools/mapcli/src/prcomment.ts            (in CI, env below)
+//   node --experimental-strip-types tools/mapcli/src/prcomment.ts --pending  (map-pr started)
 //   node --experimental-strip-types tools/mapcli/src/prcomment.ts --dry-run REPORT.json
 //                                                     prints the Markdown, no network
 import { readFileSync, statSync } from "node:fs";
 
 export const MARKER = "<!-- rpg-map-pr-check -->";
+/** Second hidden line of the comment: the map-pr run that wrote it (stampRun). */
+const RUN_LINE = /^<!-- map-pr-run (\d{1,20}) -->$/;
+/** Commit status the comment workflow sets on the PR's head commit (docs/04). */
+export const STATUS_CONTEXT = "map-pr/verdict";
+/** `name:` of map-pr.yml: the workflow whose runs map-pr-comment follows. */
+export const CHECK_WORKFLOW = "map-pr";
+/** The file of that workflow, under .github/workflows/: whose runs newerRunOfCommit lists. */
+export const CHECK_WORKFLOW_FILE = "map-pr.yml";
+/** Pages of 100 runs newerRunOfCommit reads at most (GitHub lists 1000 with head_sha). */
+export const MAX_RUN_PAGES = 10;
+/**
+ * Conclusions of a map-pr run that carry no verdict: it was cancelled (a newer run of the
+ * PR follows), or it waits for a maintainer to approve a first-time contributor's run (it
+ * runs, and completes again, once approved). The workflow skips them; this is the backstop.
+ */
+export const NO_VERDICT: readonly string[] = ["cancelled", "action_required"];
 export const RENDERS_ARTIFACT = "map-pr-renders";
 export const MAX_REPORT_BYTES = 1 << 20;
 const MAX_BODY = 60000;
@@ -318,6 +350,12 @@ export interface Trusted {
   maintainer: boolean;
   /** The PR changes code or configuration of the check (anything outside world/ and docs/). */
   checkChanged: boolean;
+  /**
+   * The commit has a check run named STATUS_CONTEXT: a job of some workflow (a PR can add
+   * one, also from a fork) posing as the status. Branch protection matches required
+   * checks by name only, so it could satisfy the rule; the comment and the status say so.
+   */
+  impostor: boolean;
 }
 
 /** The API lists at most this many files of a PR. */
@@ -332,6 +370,7 @@ export function trustedFacts(
   files: readonly string[],
   maintainer: boolean,
   changedFiles = files.length,
+  impostor = false,
 ): Trusted {
   const other = [...new Set(files.filter((p) => !p.startsWith("world/")))];
   other.sort((a, b) => Number(isSensitive(b)) - Number(isSensitive(a)) || (a < b ? -1 : 1));
@@ -343,6 +382,7 @@ export function trustedFacts(
     unlisted: Math.max(0, changedFiles - files.length),
     maintainer,
     checkChanged: truncated || files.some((p) => !isHarmless(p)),
+    impostor,
   };
 }
 
@@ -453,8 +493,11 @@ export const REPORT_ERRORS = {
   other_pr: "el reporte es de otro pull request",
   other_commit: "el reporte es de otro commit",
   other_author: "el reporte nombra a otro autor",
+  other_base:
+    "el reporte se calculó contra otra base, no contra la punta actual de la rama por defecto: hace falta una corrida nueva de `map-pr` (editar el título, cerrar y reabrir el PR o empujar)",
 } as const;
 export type ReportErrorCode = keyof typeof REPORT_ERRORS;
+const IMPOSTOR_TEXT = `🚨 **Otro check de este commit se llama \`${STATUS_CONTEXT}\`** (un job de algún workflow, por ejemplo uno que agrega este PR). La protección de \`main\` busca el check requerido solo por nombre, así que ese job podría pasar por el veredicto: no fusiones sin revisar \`.github/\` a mano.`;
 
 export interface CommentContext {
   runUrl: string;
@@ -500,6 +543,7 @@ export function buildComment(
   error?: ReportErrorCode,
 ): string {
   const out: string[] = [MARKER, "## Revisión de mapa (CI)", ""];
+  if (t.impostor) out.push(IMPOSTOR_TEXT, "");
   const conclusion = ctx.conclusion.replace(/[^a-z_]/g, "");
   if (report === null) {
     out.push(
@@ -521,7 +565,7 @@ export function buildComment(
     out.push(
       "⚠️ **El veredicto no es confiable: este PR cambia el código o la configuración del check.** Un maintainer tiene que revisar esos archivos a mano.",
     );
-  else if (failures.length === 0)
+  else if (failures.length === 0 && !t.impostor)
     out.push("✅ **Pasa.** Todos los cambios de mapa se pueden fusionar.");
   if (failures.length > 0)
     out.push(`❌ **No pasa:** ${failures.map((f) => FAILURE_TEXT[f]).join("; ")}.`);
@@ -650,89 +694,233 @@ export function buildComment(
       ...more(t.otherFiles.length + t.unlisted, Math.min(t.otherFiles.length, MAX_ROWS)),
     );
   }
-  out.push("", `<sub>[Ejecución del check](${ctx.runUrl}) · se actualiza en cada push.</sub>`);
+  out.push("", footer(ctx.runUrl));
   let body = out.join("\n");
   if (body.length > MAX_BODY) body = `${body.slice(0, MAX_BODY)}\n\n… (recortado)`;
   return body;
 }
 
+/**
+ * Last line of every comment. The comment changes only when map-pr runs: a push that gets
+ * no run (the PR renamed or deleted map-pr.yml) leaves it as it was, so it says which
+ * commit it is about and where each commit's own verdict is (its commit status).
+ */
+function footer(runUrl: string): string {
+  return `<sub>[Ejecución del check](${runUrl}) · se actualiza con cada corrida de \`map-pr\`. Vale solo para el commit que nombra: si el PR tiene uno más nuevo y esto no pasó a ⏳, el check no corrió para ese commit (le falta el status \`${STATUS_CONTEXT}\`).</sub>`;
+}
+
 /** Body for a PR whose current commit no longer changes world/ (the old verdict is void). */
-export function noMapComment(headSha: string, runUrl: string): string {
+export function noMapComment(headSha: string, runUrl: string, impostor = false): string {
   return [
     MARKER,
     "## Revisión de mapa (CI)",
     "",
+    ...(impostor ? [IMPOSTOR_TEXT, ""] : []),
     `El commit ${code(headSha.slice(0, 12))} ya no cambia nada en \`world/\`: la revisión de mapa anterior no aplica.`,
     "",
-    `<sub>[Ejecución del check](${runUrl}) · se actualiza en cada push.</sub>`,
+    footer(runUrl),
   ].join("\n");
+}
+
+/** Body while map-pr runs for `headSha`: whatever the comment said before no longer applies. */
+export function pendingComment(headSha: string, runUrl: string): string {
+  return [
+    MARKER,
+    "## Revisión de mapa (CI)",
+    "",
+    `⏳ **Pendiente:** revisando el commit ${code(headSha.slice(0, 12))}. El veredicto anterior ya no vale.`,
+    "",
+    footer(runUrl),
+  ].join("\n");
+}
+
+export interface CommitStatus {
+  state: "pending" | "success" | "failure";
+  /** At most 140 characters (GitHub's limit). */
+  description: string;
+}
+
+const status = (state: CommitStatus["state"], description: string): CommitStatus => ({
+  state,
+  description: description.slice(0, 140),
+});
+
+/**
+ * The commit status of the PR's head commit once map-pr finished, from the trusted side
+ * (the API's file list and check runs, the default branch's MAINTAINERS) and the checked
+ * report:
+ * - another check run of the commit is named STATUS_CONTEXT: failure, always;
+ * - the commit does not change world/: success, unless the API did not list every file
+ *   and the author is not a maintainer (a world/ file could be among the unlisted ones).
+ *   There is no map to judge: what such a PR changes in .github/ or elsewhere is for
+ *   CODEOWNERS and the reviewer, not for this status (docs/04);
+ * - no usable report, or any failure: failure;
+ * - a pass the comment does not trust (the PR changes files outside world/ and docs/, or
+ *   the file list is cut short): failure unless the author is a maintainer, whom the
+ *   check already trusts with the whole map. The comment still says what to review;
+ * - otherwise success. So a success is the comment's ✅, a maintainer's pass, or no map.
+ */
+export function commitStatus(
+  report: CheckedReport | null,
+  t: Trusted,
+  touchesWorld: boolean,
+): CommitStatus {
+  if (t.impostor)
+    return status("failure", `Otro check se llama ${STATUS_CONTEXT}: revisar .github/ a mano`);
+  if (!touchesWorld)
+    return t.truncated && !t.maintainer
+      ? status("failure", "La API no lista todos los archivos del PR: revisión a mano")
+      : status("success", "Este commit no cambia world/");
+  if (report === null) return status("failure", "map-pr no dejó un reporte utilizable");
+  const failures = verdict(report, t);
+  if (failures.length > 0) return status("failure", `No pasa: ${failures.join(", ")}`);
+  if (t.truncated || t.checkChanged)
+    return t.maintainer
+      ? status("success", "Pasa (autor maintainer); revisar a mano lo que cambia fuera de world/")
+      : status("failure", "El PR cambia archivos fuera de world/ y docs/: revisión a mano");
+  return status("success", "Pasa");
 }
 
 // ---- GitHub ---------------------------------------------------------------------------------
 
-interface Env {
+/**
+ * What the workflow passes in. Every value comes from the workflow_run event, whose
+ * head_* fields the PR's author controls: readEnv checks each one by pattern, and none of
+ * them is ever run, only compared or used in an API path.
+ */
+export interface Env {
   token: string;
   repo: string;
   runId: string;
   headSha: string;
+  /** "owner/name" of the PR's head repo; empty when the fork is gone. */
   headRepo: string;
   conclusion: string;
   report: string;
   maintainers: string;
   prHint: string;
+  /** The repo's default branch (the event's repository, not the PR's): the status is its. */
+  defaultBranch: string;
   api: string;
   server: string;
 }
 
-async function gh(env: Env, method: string, path: string, body?: unknown): Promise<unknown> {
-  const res = await fetch(`${env.api}${path}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${env.token}`,
-      accept: "application/vnd.github+json",
-      "x-github-api-version": "2022-11-28",
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  if (!res.ok) throw new Error(`${method} ${path}: HTTP ${res.status}`);
-  return res.status === 204 ? null : res.json();
+/** One GitHub API call: method, path under the API root, JSON body. */
+export type Gh = (method: string, path: string, body?: unknown) => Promise<unknown>;
+
+/** "owner/name": a GitHub login, then a repo name that is not "." or "..". */
+const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/(?!\.\.?$)[A-Za-z0-9_.-]{1,100}$/;
+/**
+ * A plain branch name: compared with the API's base.ref and put in the path of its git ref
+ * (defaultTip), so no "..", "//", trailing "/", component starting with "." (a URL would
+ * fold "a/./b"; git refuses it too), spaces, "?", "#" or "%".
+ */
+const BRANCH = /^(?!.*\.\.)(?!.*\/\/)(?!.*\/$)(?!(?:.*\/)?\.)[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}$/;
+
+/** Reads and checks the workflow's environment; throws on anything unexpected. */
+export function readEnv(ev: Record<string, string | undefined>): Env {
+  const env: Env = {
+    token: ev.GITHUB_TOKEN ?? "",
+    repo: ev.GITHUB_REPOSITORY ?? "",
+    runId: ev.RUN_ID ?? "",
+    headSha: ev.HEAD_SHA ?? "",
+    headRepo: ev.HEAD_REPO ?? "",
+    conclusion: ev.CONCLUSION ?? "unknown",
+    report: ev.REPORT ?? "report/report.json",
+    maintainers: ev.MAINTAINERS ?? ".github/MAINTAINERS",
+    prHint: ev.PR_HINT ?? "",
+    defaultBranch: ev.DEFAULT_BRANCH ?? "",
+    api: ev.GITHUB_API_URL ?? "https://api.github.com",
+    server: ev.GITHUB_SERVER_URL ?? "https://github.com",
+  };
+  if (!REPO.test(env.repo) || !/^\d{1,20}$/.test(env.runId) || !SHA.test(env.headSha))
+    throw new Error("GITHUB_REPOSITORY, RUN_ID and HEAD_SHA are required");
+  if (!BRANCH.test(env.defaultBranch)) throw new Error("DEFAULT_BRANCH is required");
+  if (env.headRepo !== "" && !REPO.test(env.headRepo)) throw new Error("bad HEAD_REPO");
+  if (env.prHint !== "" && !/^\d{1,9}$/.test(env.prHint)) throw new Error("bad PR_HINT");
+  return env;
+}
+
+/** The real API, with the workflow's token. Any HTTP error throws (the job turns red). */
+export function fetchGh(env: Env): Gh {
+  return async (method, path, body) => {
+    const res = await fetch(`${env.api}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${env.token}`,
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    if (!res.ok) throw new Error(`${method} ${path}: HTTP ${res.status}`);
+    return res.status === 204 ? null : res.json();
+  };
 }
 
 interface Pull {
   number: number;
+  state: string;
   author_association: string;
   user: { login: string };
   head: { sha: string; repo: { full_name: string } | null };
+  base: { ref: string };
 }
 
-/** The open PR whose head is the run's commit (workflow_run gives no PR for forks). */
-async function findPull(env: Env): Promise<Pull | undefined> {
-  const matches = (p: Pull): boolean =>
-    p.head.sha === env.headSha && p.head.repo?.full_name === env.headRepo;
-  if (/^\d{1,9}$/.test(env.prHint)) {
-    const p = (await gh(env, "GET", `/repos/${env.repo}/pulls/${env.prHint}`)) as Pull;
-    if (matches(p)) return p;
-  }
+const headRepoOf = (p: Pull): string | undefined => p.head.repo?.full_name;
+
+/**
+ * Every open PR whose head is the run's commit, from any head repo (workflow_run gives no
+ * PR for forks). Usually one. The run's own PR is among those from the run's head repo;
+ * the others only matter for the status (currentPull).
+ */
+async function findPulls(env: Env, gh: Gh): Promise<Pull[]> {
+  const out: Pull[] = [];
+  const add = (p: Pull): void => {
+    if (
+      p.state === "open" && // the hint is fetched by number: it may be closed
+      p.head.sha === env.headSha &&
+      !out.some((q) => q.number === p.number)
+    )
+      out.push(p);
+  };
+  // The hint first: it may be past the listing's 1000 newest open PRs.
+  if (env.prHint !== "") add((await gh("GET", `/repos/${env.repo}/pulls/${env.prHint}`)) as Pull);
   for (let page = 1; page <= 10; page++) {
     const list = (await gh(
-      env,
       "GET",
       `/repos/${env.repo}/pulls?state=open&per_page=100&page=${page}`,
     )) as Pull[];
-    const p = list.find(matches);
-    if (p) return p;
+    list.forEach(add);
     if (list.length < 100) break;
   }
-  return undefined;
+  return out;
+}
+
+/**
+ * Which of those PRs the run is for. The report's PR number picks among them: it is
+ * untrusted, but it can only name a PR with this same commit and head repo, whose own
+ * trusted facts then decide, and the report must still match that PR (matchReport).
+ * Without it (the --pending job, a run with no usable report), PRs that all go into one
+ * branch are one case (the first); PRs into different branches cannot be told apart, so
+ * nothing is picked and nothing is written: a run for the PR into an old branch must not
+ * write the verdict, nor a pending status, of the one into main.
+ */
+export function pickPull<P extends { number: number; base: { ref: string } }>(
+  pulls: readonly P[],
+  reportPr?: number,
+): P | undefined {
+  const named = pulls.find((p) => p.number === reportPr);
+  if (named) return named;
+  return new Set(pulls.map((p) => p.base.ref)).size > 1 ? undefined : pulls[0];
 }
 
 /** Changed files of the PR, from the API (at most 3000, GitHub's own limit). */
-async function pullFiles(env: Env, pr: number): Promise<string[]> {
+async function pullFiles(env: Env, gh: Gh, pr: number): Promise<string[]> {
   const out: { filename: string; previous_filename?: string }[] = [];
   for (let page = 1; page <= MAX_API_FILES / 100; page++) {
     const list = (await gh(
-      env,
       "GET",
       `/repos/${env.repo}/pulls/${pr}/files?per_page=100&page=${page}`,
     )) as { filename: string; previous_filename?: string }[];
@@ -742,20 +930,317 @@ async function pullFiles(env: Env, pr: number): Promise<string[]> {
   return filePaths(out);
 }
 
-async function findComment(env: Env, pr: number): Promise<number | undefined> {
+/** The PR's comment: its id and the map-pr run that last wrote it (none: older format). */
+interface OurComment {
+  id: number;
+  run?: bigint;
+}
+
+async function findComment(env: Env, gh: Gh, pr: number): Promise<OurComment | undefined> {
   for (let page = 1; page <= 30; page++) {
     const list = (await gh(
-      env,
       "GET",
       `/repos/${env.repo}/issues/${pr}/comments?per_page=100&page=${page}`,
     )) as { id: number; body?: string; user?: { login?: string } }[];
     const mine = list.find(
       (c) => c.user?.login === "github-actions[bot]" && c.body?.startsWith(MARKER) === true,
     );
-    if (mine) return mine.id;
+    if (mine) {
+      const run = RUN_LINE.exec((mine.body?.split("\n")[1] ?? "").trim())?.[1];
+      return run === undefined ? { id: mine.id } : { id: mine.id, run: BigInt(run) };
+    }
     if (list.length < 100) break;
   }
   return undefined;
+}
+
+/** The body with the run that writes it on its second (hidden) line. */
+export function stampRun(body: string, runId: string): string {
+  return `${MARKER}\n<!-- map-pr-run ${runId} -->${body.slice(MARKER.length)}`;
+}
+
+/**
+ * Run ids only grow, so a comment written by a newer run means this event arrived late
+ * (GitHub may deliver workflow_run events out of order): it must not replace what a newer
+ * run of the same PR wrote, nor that run's status. Re-running the newest run is allowed.
+ */
+function newerRun(c: OurComment | undefined, runId: string): string | undefined {
+  return c?.run !== undefined && c.run > BigInt(runId)
+    ? `run ${c.run} of map-pr is newer than ${runId}; nothing to do`
+    : undefined;
+}
+
+/**
+ * Any check run on the commit named like the status. map-pr-comment only sets a commit
+ * status, so a check run with that name is some workflow's job posing as it (a PR can add
+ * such a workflow, also from a fork). This sees the ones that exist when the verdict is
+ * written, not one a job creates later (`needs:` a slow job): it warns, it cannot prevent.
+ */
+async function impostorCheck(env: Env, gh: Gh): Promise<boolean> {
+  const res = (await gh(
+    "GET",
+    `/repos/${env.repo}/commits/${env.headSha}/check-runs?check_name=${encodeURIComponent(STATUS_CONTEXT)}&filter=all&per_page=1`,
+  )) as { total_count?: unknown } | null;
+  // Fail closed: an answer without the count turns the job red, the status stays unset.
+  if (typeof res?.total_count !== "number") throw new Error("check-runs: no total_count");
+  return res.total_count > 0;
+}
+
+/** Sets STATUS_CONTEXT on the run's head commit, linked to the map-pr run. */
+async function setStatus(env: Env, gh: Gh, s: CommitStatus): Promise<void> {
+  await gh("POST", `/repos/${env.repo}/statuses/${env.headSha}`, {
+    state: s.state,
+    context: STATUS_CONTEXT,
+    description: s.description,
+    target_url: runUrlOf(env),
+  });
+}
+
+const runUrlOf = (env: Env): string => `${env.server}/${env.repo}/actions/runs/${env.runId}`;
+
+/**
+ * Any run of map-pr.yml for the same commit from the same head repo newer than this one.
+ * Run ids only grow, so this event is late (GitHub may deliver workflow_run events out of
+ * order). Only asked when the PR is the only open one with that head from that repo: then
+ * every such run is for this PR (or for a closed PR, or for an open one that moved on to
+ * another commit), and an older one must write nothing, not even where the comment's own
+ * stamp cannot tell (no comment yet, or a PR that does not change world/). With other open
+ * PRs of that head from that repo, a newer run may be theirs and is no reason to hold this
+ * one back; a verdict computed against another base never sets the status (defaultTip).
+ * Only map-pr.yml's runs count: a PR that renames the workflow (keeping `name: map-pr`)
+ * changes .github/, which never gets a success but from a maintainer. Every page is read
+ * up to a short one (GitHub does not document the order, so none is assumed). Fail
+ * closed: an answer without the list, or MAX_RUN_PAGES full pages (GitHub lists no more),
+ * turns the job red before anything is written.
+ */
+async function newerRunOfCommit(env: Env, gh: Gh): Promise<string | undefined> {
+  const mine = BigInt(env.runId);
+  for (let page = 1; page <= MAX_RUN_PAGES; page++) {
+    const res = (await gh(
+      "GET",
+      `/repos/${env.repo}/actions/workflows/${CHECK_WORKFLOW_FILE}/runs?head_sha=${env.headSha}&event=pull_request&per_page=100&page=${page}`,
+    )) as { workflow_runs?: unknown } | null;
+    if (!Array.isArray(res?.workflow_runs)) throw new Error("actions/runs: no workflow_runs");
+    const runs = res.workflow_runs as {
+      id?: unknown;
+      head_repository?: { full_name?: unknown } | null;
+    }[];
+    for (const r of runs) {
+      if (typeof r.id !== "number" || !Number.isSafeInteger(r.id)) continue;
+      const id = BigInt(r.id);
+      if (id > mine && r.head_repository?.full_name === env.headRepo)
+        return `run ${id} of map-pr is newer than ${env.runId} for this commit; nothing to do`;
+    }
+    if (runs.length < 100) return undefined;
+  }
+  throw new Error(
+    `actions/runs: ${MAX_RUN_PAGES * 100} or more runs of the commit, GitHub lists no more`,
+  );
+}
+
+/**
+ * The default branch's tip now (its git ref). A report is a verdict against the base tip
+ * its run checked out (report.base, the sha prcheck resolved from base.ref). Only one
+ * against this tip may become the status: the run of a PR that went into another branch
+ * when it started (its base changed to main since), or one that main moved past, never
+ * sets it, however late its event arrives and whatever other PRs share the commit. An
+ * answer without a sha turns the job red before anything is written.
+ */
+async function defaultTip(env: Env, gh: Gh): Promise<string> {
+  const res = (await gh("GET", `/repos/${env.repo}/git/ref/heads/${env.defaultBranch}`)) as {
+    object?: { sha?: unknown };
+  } | null;
+  const sha = res?.object?.sha;
+  if (typeof sha !== "string" || !SHA.test(sha)) throw new Error("git/ref: no sha");
+  return sha;
+}
+
+/** The PR a run is for, as currentPull finds it. */
+interface Current {
+  pull: Pull;
+  changedFiles: number | undefined;
+  /** Why this run sets no commit status (undefined: it sets it). */
+  noStatus?: string;
+}
+
+/**
+ * The PR this run is for, if its head is still the run's commit. A run for an older
+ * commit changes nothing: its own (newer) run comments, and an old report must never
+ * replace "pending" or a newer verdict. Nor does a run older than the newest map-pr run
+ * of the commit when the PR is the only one with that head (newerRunOfCommit).
+ *
+ * The commit status is written only for a PR into the default branch, and only if no
+ * other open PR into it has the same commit from another head repo or author. The status
+ * is per commit but the verdict depends on who opened the PR from where (maintainer):
+ * GitHub allows one open PR per head branch and base, but anyone can push a maintainer's
+ * commit to a fork, or open a PR from another branch of the repo with the same tip, and
+ * with every run of that copy turn the commit's status to failure. With such a copy
+ * open, neither run writes the status: it keeps what it had (pending or none blocks the
+ * merge) until the copy is closed and the PR's map-pr runs again (a new run).
+ */
+async function currentPull(env: Env, gh: Gh, reportPr?: number): Promise<Current | string> {
+  const all = await findPulls(env, gh);
+  const pulls = all.filter((p) => headRepoOf(p) === env.headRepo);
+  if (pulls.length === 0)
+    return `no open pull request has head ${env.headSha} from the run's repo; nothing to do`;
+  const picked = pickPull(pulls, reportPr);
+  if (!picked)
+    return `PRs ${pulls.map((p) => `#${p.number}`).join(", ")} share head ${env.headSha} and go into different branches, and the run does not say which it is for; nothing to do`;
+  // The single-PR endpoint has the PR's own file count (the list endpoint does not), and
+  // is the freshest view of its head and base.
+  const full = (await gh("GET", `/repos/${env.repo}/pulls/${picked.number}`)) as Pull & {
+    changed_files?: number;
+  };
+  if (full.head.sha !== env.headSha)
+    return `PR #${full.number} moved on to ${full.head.sha}; nothing to do`;
+  if (pulls.length === 1) {
+    const late = await newerRunOfCommit(env, gh);
+    if (late) return `PR #${full.number}: ${late}`;
+  }
+  const who = (p: Pull): string => `${headRepoOf(p) ?? ""} ${p.user.login.toLowerCase()}`;
+  const copies = all.filter(
+    (p) => p.number !== full.number && p.base.ref === env.defaultBranch && who(p) !== who(full),
+  );
+  const noStatus =
+    full.base.ref !== env.defaultBranch
+      ? `PR into ${full.base.ref}`
+      : copies.length > 0
+        ? `${copies.map((p) => `#${p.number}`).join(", ")} into ${env.defaultBranch} has the same commit from another repo or author`
+        : undefined;
+  return {
+    pull: full,
+    changedFiles: full.changed_files,
+    ...(noStatus === undefined ? {} : { noStatus }),
+  };
+}
+
+/**
+ * A map-pr run started (workflow_run `requested`): the head commit gets a pending status
+ * (when currentPull allows it) and the comment, if there is one, turns to "pending".
+ * Nothing is read from the PR's run. If the run already finished, the completed job
+ * writes the verdict, so this does nothing.
+ */
+export async function markPending(env: Env, gh: Gh): Promise<string> {
+  const cur = await currentPull(env, gh);
+  if (typeof cur === "string") return cur;
+  const run = (await gh("GET", `/repos/${env.repo}/actions/runs/${env.runId}`)) as {
+    status?: string;
+  };
+  if (run.status === "completed")
+    return `run ${env.runId} already completed; the verdict job writes the result`;
+  const n = cur.pull.number;
+  const existing = await findComment(env, gh, n);
+  const late = newerRun(existing, env.runId);
+  if (late) return `PR #${n}: ${late}`;
+  const done: string[] = [];
+  if (cur.noStatus === undefined) {
+    await setStatus(env, gh, status("pending", `Revisando el commit ${env.headSha.slice(0, 12)}`));
+    done.push("status pending");
+  } else done.push(`no status (${cur.noStatus})`);
+  if (existing === undefined) done.push("no comment yet");
+  else {
+    await gh("PATCH", `/repos/${env.repo}/issues/comments/${existing.id}`, {
+      body: stampRun(pendingComment(env.headSha, runUrlOf(env)), env.runId),
+    });
+    done.push(`comment ${existing.id} marked pending`);
+  }
+  return `PR #${n}: ${done.join(", ")}`;
+}
+
+/**
+ * A map-pr run finished (workflow_run `completed`): the comment gets the verdict and the
+ * head commit its final status (when currentPull allows it). For a PR into the default
+ * branch that changes world/, a report computed against anything but that branch's tip
+ * now is no verdict (other_base: a failure, never a success of another base). If the PR
+ * changed while this ran (base, head, file count), nothing is written. The comment is
+ * written first; if the status call fails the job is red and the commit keeps the status
+ * it had: `pending` when the pending job marked this run, none for a new commit.
+ */
+export async function postVerdict(env: Env, gh: Gh): Promise<string> {
+  if (NO_VERDICT.includes(env.conclusion))
+    return `run ${env.runId} ended ${env.conclusion}: no verdict; nothing to do`;
+  let { report, error } = readReport(env.report);
+  const cur = await currentPull(env, gh, report?.pr);
+  if (typeof cur === "string") return cur;
+  const { pull } = cur;
+  const existing = await findComment(env, gh, pull.number);
+  const late = newerRun(existing, env.runId);
+  if (late) return `PR #${pull.number}: ${late}`;
+  const runUrl = runUrlOf(env);
+  const files = await pullFiles(env, gh, pull.number);
+  const impostor = await impostorCheck(env, gh);
+  let maintainersText = "";
+  try {
+    maintainersText = readFileSync(env.maintainers, "utf8");
+  } catch {
+    // No file on the default branch: only the owner is a maintainer.
+  }
+  const maintainer = isMaintainer(
+    {
+      author: pull.user.login,
+      association: pull.author_association,
+      headRepo: pull.head.repo?.full_name ?? null,
+      repo: env.repo,
+    },
+    parseMaintainers(maintainersText),
+  );
+  const t = trustedFacts(files, maintainer, cur.changedFiles ?? files.length, impostor);
+  const touchesWorld = files.some((p) => p.startsWith("world/")) || report?.map_changes === true;
+  let body: string | undefined;
+  if (!touchesWorld) {
+    if (existing !== undefined) body = noMapComment(env.headSha, runUrl, impostor);
+  } else {
+    if (report) {
+      error = matchReport(report, pull.number, env.headSha, pull.user.login);
+      // Into the default branch the verdict may become the status: only one computed
+      // against its tip now (defaultTip). Not asked for a PR into another branch, which
+      // sets no status.
+      if (
+        !error &&
+        pull.base.ref === env.defaultBranch &&
+        report.base !== (await defaultTip(env, gh))
+      )
+        error = "other_base";
+      if (error) report = null;
+    }
+    const ctx: CommentContext = { runUrl, conclusion: env.conclusion };
+    const arts = (await gh("GET", `/repos/${env.repo}/actions/runs/${env.runId}/artifacts`)) as {
+      artifacts: { id: number; name: string }[];
+    };
+    const art = arts.artifacts.find((a) => a.name === RENDERS_ARTIFACT);
+    if (art) ctx.artifactUrl = `${runUrl}/artifacts/${art.id}`;
+    body = buildComment(report, ctx, t, error);
+  }
+  // The PR right before writing: the base, head and file count the files and the verdict
+  // were read for. A base changed meanwhile (an `edited`, whose own run follows) must not
+  // get a verdict, nor a "no map" success, of the base it had.
+  const now = (await gh("GET", `/repos/${env.repo}/pulls/${pull.number}`)) as Pull & {
+    changed_files?: number;
+  };
+  if (
+    now.base.ref !== pull.base.ref ||
+    now.head.sha !== pull.head.sha ||
+    now.changed_files !== cur.changedFiles
+  )
+    return `PR #${pull.number} changed while its verdict was computed (into ${now.base.ref} at ${now.head.sha}); nothing to do`;
+  const done: string[] = [];
+  if (body !== undefined && existing !== undefined) {
+    await gh("PATCH", `/repos/${env.repo}/issues/comments/${existing.id}`, {
+      body: stampRun(body, env.runId),
+    });
+    done.push(`updated comment ${existing.id}`);
+  } else if (body !== undefined) {
+    await gh("POST", `/repos/${env.repo}/issues/${pull.number}/comments`, {
+      body: stampRun(body, env.runId),
+    });
+    done.push("created comment");
+  } else done.push("no comment (does not change world/)");
+  const s = commitStatus(report, t, touchesWorld);
+  if (cur.noStatus === undefined) {
+    await setStatus(env, gh, s);
+    done.push(`status ${s.state}`);
+  } else done.push(`no status (${cur.noStatus}; would be ${s.state})`);
+  return `PR #${pull.number}: ${done.join(", ")}`;
 }
 
 /** Reads and checks the report file (missing or invalid: null plus the reason code). */
@@ -801,90 +1286,10 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(`${buildComment(report, { runUrl, conclusion }, t, error)}\n`);
     return report ? 0 : 1;
   }
-  const env: Env = {
-    token: ev.GITHUB_TOKEN ?? "",
-    repo: ev.GITHUB_REPOSITORY ?? "",
-    runId: ev.RUN_ID ?? "",
-    headSha: ev.HEAD_SHA ?? "",
-    headRepo: ev.HEAD_REPO ?? "",
-    conclusion: ev.CONCLUSION ?? "unknown",
-    report: ev.REPORT ?? "report/report.json",
-    maintainers: ev.MAINTAINERS ?? ".github/MAINTAINERS",
-    prHint: ev.PR_HINT ?? "",
-    api: ev.GITHUB_API_URL ?? "https://api.github.com",
-    server: ev.GITHUB_SERVER_URL ?? "https://github.com",
-  };
-  if (!/^[\w.-]+\/[\w.-]+$/.test(env.repo) || !/^\d+$/.test(env.runId) || !SHA.test(env.headSha))
-    throw new Error("GITHUB_REPOSITORY, RUN_ID and HEAD_SHA are required");
-  const pull = await findPull(env);
-  if (!pull) {
-    process.stdout.write(`no open pull request has head ${env.headSha}; nothing to comment\n`);
-    return 0;
-  }
-  const runUrl = `${env.server}/${env.repo}/actions/runs/${env.runId}`;
-  const files = await pullFiles(env, pull.number);
-  // The single-PR endpoint has the PR's own file count (the list endpoint does not).
-  const full = (await gh(env, "GET", `/repos/${env.repo}/pulls/${pull.number}`)) as {
-    changed_files?: number;
-    head: { sha: string };
-  };
-  if (full.head.sha !== env.headSha) {
-    // A newer push: its own run will comment; an old report must not replace "pending".
-    process.stdout.write(`PR #${pull.number} moved on to ${full.head.sha}; nothing to do\n`);
-    return 0;
-  }
-  const existing = await findComment(env, pull.number);
-  let { report, error } = readReport(env.report);
-  const touchesWorld = files.some((p) => p.startsWith("world/")) || report?.map_changes === true;
-  let body: string;
-  if (!touchesWorld) {
-    if (existing === undefined) {
-      process.stdout.write(`PR #${pull.number} does not change world/; no comment\n`);
-      return 0;
-    }
-    body = noMapComment(env.headSha, runUrl);
-  } else {
-    if (report) {
-      error = matchReport(report, pull.number, env.headSha, pull.user.login);
-      if (error) report = null;
-    }
-    let maintainersText = "";
-    try {
-      maintainersText = readFileSync(env.maintainers, "utf8");
-    } catch {
-      // No file on the default branch: only the owner is a maintainer.
-    }
-    const maintainer = isMaintainer(
-      {
-        author: pull.user.login,
-        association: pull.author_association,
-        headRepo: pull.head.repo?.full_name ?? null,
-        repo: env.repo,
-      },
-      parseMaintainers(maintainersText),
-    );
-    const ctx: CommentContext = { runUrl, conclusion: env.conclusion };
-    const arts = (await gh(
-      env,
-      "GET",
-      `/repos/${env.repo}/actions/runs/${env.runId}/artifacts`,
-    )) as { artifacts: { id: number; name: string }[] };
-    const art = arts.artifacts.find((a) => a.name === RENDERS_ARTIFACT);
-    if (art) ctx.artifactUrl = `${runUrl}/artifacts/${art.id}`;
-    body = buildComment(
-      report,
-      ctx,
-      trustedFacts(files, maintainer, full.changed_files ?? files.length),
-      error,
-    );
-  }
-  if (existing !== undefined) {
-    await gh(env, "PATCH", `/repos/${env.repo}/issues/comments/${existing}`, { body });
-    process.stdout.write(`PR #${pull.number}: updated comment ${existing}\n`);
-  } else {
-    await gh(env, "POST", `/repos/${env.repo}/issues/${pull.number}/comments`, { body });
-    process.stdout.write(`PR #${pull.number}: created comment\n`);
-  }
+  const env = readEnv(ev);
+  const gh = fetchGh(env);
+  const out = argv[0] === "--pending" ? await markPending(env, gh) : await postVerdict(env, gh);
+  process.stdout.write(`${out}\n`);
   return 0;
 }
 

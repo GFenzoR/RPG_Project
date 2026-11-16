@@ -30,12 +30,12 @@ import type { ZoomView } from "./render/zoom.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
-import { locationInit, tileUse, topItem } from "./state/items.ts";
+import { locationInit, menuItem, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
 import { findPath } from "./state/path.ts";
-import { climbable, pathPassable, usedBare } from "./state/portals.ts";
+import { climbable, pathPassable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { cuesOf, loopFor } from "./audio/cues.ts";
@@ -198,6 +198,12 @@ export interface GameOptions {
   storage?: Storage | undefined;
   /** The world is on screen. */
   entered(): void;
+  /**
+   * The canvas could not be made (its atlas did not load after the retries of
+   * @rpg/renderer's retry.ts): show the error with a button that calls `retryCanvas`. The
+   * session stays open meanwhile.
+   */
+  loadFailed?(): void;
   /** The session ended (Disconnect or lost connection). */
   ended(reason: DisconnectReason | undefined): void;
   /** New state for the DOM UI (battle list, health, log). */
@@ -210,6 +216,8 @@ export class Game {
   private readonly keys = new MovementKeys();
   private canvas: GameCanvas | undefined;
   private starting = false;
+  /** The canvas failed to start: it waits for `retryCanvas` (the "Retry" button). */
+  private canvasFailed = false;
   private destroyed = false;
   /** A click that arrived while a predicted step was unconfirmed. */
   private clickTarget: Pos | undefined;
@@ -268,7 +276,8 @@ export class Game {
           }
         }
         this.sound(cues);
-        if (this.world.self && !this.canvas && !this.starting) void this.startCanvas();
+        if (this.world.self && !this.canvas && !this.starting && !this.canvasFailed)
+          void this.startCanvas();
         this.publish();
       },
       closed: (reason) => {
@@ -679,16 +688,13 @@ export class Game {
   /**
    * Uses a map tile (a right click): a ladder is climbed whatever lies on it; else its top
    * item, or the ground of a bare house door (T5.4: the house window) or rope spot (it
-   * says a rope is needed). With `item` (the touch menu's "use"/"open") the top item even
-   * on a ladder: the menu climbs with its own button.
+   * says a rope is needed). With `item` (Ctrl+right click, or the touch menu's "use" and
+   * "open", whose menu climbs with its own button) the top item even on a ladder
+   * (state/portals.ts useMode).
    */
   private useTop(x: number, y: number, z: number, item = false): void {
-    const ground =
-      !item && climbable(this.opts.content.portals, x, y, z)
-        ? "first"
-        : this.usesGround(x, y, z)
-          ? "bare"
-          : "never";
+    const portals = this.opts.content.portals;
+    const ground = useMode(portals, this.usesGround(x, y, z), x, y, z, item);
     const ref = tileUse(this.world, x, y, z, ground);
     if (ref) this.useItem(ref);
   }
@@ -969,14 +975,19 @@ export class Game {
     else this.click({ pos });
   }
 
-  /** A long press on a map tile: the menu of what can be done there. */
+  /**
+   * A long press on a map tile: the menu of what can be done there. The look of a portal
+   * (a ladder's own item) gets no "use" or "move" (state/items.ts menuItem), only its name
+   * as the title.
+   */
   private longPressTile(pos: Pos, x: number, y: number): void {
     const { x: tx, y: ty, z } = pos;
     const c = this.world.creatureAt(tx, ty, z);
     const top = topItem(this.world, tx, ty, z, false);
+    const item = menuItem(this.world, tx, ty, z);
     const actions = tileActions({
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
-      item: top && { container: (this.opts.content.items[top.itemId]?.slots ?? 0) > 0 },
+      item: item && { container: (this.opts.content.items[item.itemId]?.slots ?? 0) > 0 },
       door: this.usesGround(tx, ty, z),
       climb: climbable(this.opts.content.portals, tx, ty, z),
       known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
@@ -1042,7 +1053,7 @@ export class Game {
       else if (kind === "use" || kind === "open") this.useTop(x, y, z, true);
       else if (kind === "look") this.lookTileAt(x, y, z);
       else if (kind === "move") {
-        const ref = topItem(this.world, x, y, z, false);
+        const ref = menuItem(this.world, x, y, z);
         if (ref) this.pickItem(ref);
       }
     }
@@ -1195,18 +1206,54 @@ export class Game {
     delete window.__rpgClient;
   }
 
+  /**
+   * Starts the canvas again after it failed (the "Retry" button of the error): the atlas is
+   * fetched again with its retries, and the session, still open, goes on as if nothing
+   * happened. Does nothing unless it failed.
+   */
+  retryCanvas(): void {
+    if (!this.canvasFailed || this.destroyed || this.canvas || this.starting) return;
+    this.canvasFailed = false;
+    void this.startCanvas();
+  }
+
   private async startCanvas(): Promise<void> {
     this.starting = true;
-    const canvas = await createGameCanvas(this.opts.host, {
+    let canvas: GameCanvas;
+    try {
+      canvas = await this.makeCanvas();
+    } catch (e) {
+      this.starting = false;
+      if (this.destroyed) return;
+      // Not again on the next batch: the player retries with the button (a server batch
+      // arrives every few ticks, which would hammer a server that is down).
+      this.canvasFailed = true;
+      console.warn("game canvas failed to start", e);
+      this.opts.loadFailed?.();
+      return;
+    }
+    this.starting = false;
+    if (this.destroyed) {
+      canvas.destroy();
+      return;
+    }
+    this.canvas = canvas;
+    this.publishHooks(canvas);
+    this.publish(); // icons are available now
+    this.opts.entered();
+  }
+
+  private makeCanvas(): Promise<GameCanvas> {
+    return createGameCanvas(this.opts.host, {
       world: this.world,
       content: this.opts.content,
       t: this.opts.t,
       frame: (now) => this.frame(now),
       clickTile: (x, y, z) => this.click({ pos: { x, y, z } }),
       clickCreature: (id) => this.click({ creature: id }),
-      useTile: (x, y, z) => {
+      useTile: (x, y, z, top) => {
         if (this.cancelUse()) return;
-        this.useTop(x, y, z);
+        this.useTop(x, y, z, top);
       },
       lookTile: (x, y, z) => this.lookTileAt(x, y, z),
       dragTile: (x, y, z) => {
@@ -1229,11 +1276,10 @@ export class Game {
         if (this.canvas) this.publish();
       },
     });
-    if (this.destroyed) {
-      canvas.destroy();
-      return;
-    }
-    this.canvas = canvas;
+  }
+
+  /** The read-only E2E hooks, once the canvas is up (`ready`). */
+  private publishHooks(canvas: GameCanvas): void {
     const world = this.world;
     window.__rpgClient = {
       ready: true,
@@ -1287,8 +1333,6 @@ export class Game {
         return found ? Number(found[0]) : undefined;
       },
     };
-    this.publish(); // icons are available now
-    this.opts.entered();
   }
 
   private frame(now: number): void {

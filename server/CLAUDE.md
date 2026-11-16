@@ -168,7 +168,8 @@ server/
   nada en el suelo público en su propio comando (comprueba antes que todo entra:
   `canBuy`, `canReceive`, `moneyThatFits`; `transferSnapshot` lo registra con nivel
   error). Si un mismo comando suelta algo a la calle y cambia una casa (una runa del suelo
-  de la casa usada desde la calle que mata a un monstruo de quest), lo que soltó queda
+  de la casa usada desde la calle que mata a un monstruo de quest; lo juega con la runa
+  real `TestHouseRuneKillsAQuestMonsterFromTheStreet`), lo que soltó queda
   reservado con el `Seq` de la escritura de la casa (`reserveGiven`, como `leftHouse`) y
   no se guarda snapshot aparte; registra (nivel error) solo lo que no se puede reservar
   (una pila o bolsa no reservada a él). `gaveAway` recibe dónde cayó: la pila nueva o
@@ -234,14 +235,29 @@ server/
   y `ESCAPE_WAYS`); si sumas un lugar donde un jugador puede estar fuera de las áreas
   (como las casas), súmalo como punto de partida del chequeo de llaves. Nada
   recorre el mapa en el tick: `World.roomOf` (casilla → sala), los sectores de cada sala
-  y `World.areas` (por sector, `areaOf`). **Toda búsqueda de casilla libre por anillos**
-  (`freeNear`, `houseExit` o una nueva) pasa por `searchFrom` + `areaAllows`: solo
-  casillas del área de donde empezó (nunca una sala ajena ni un bolsillo cerrado por
-  paredes; desde la entrada de una escalera, un agujero o un teletransporte, las áreas de
-  al lado; desde otra casilla fuera de toda área, solo descarta las salas); y por
-  `!Map.MovesOnStep`: nunca deja a nadie sobre una escalera, un agujero o un
-  teletransporte. `houseEnter` no lo necesita: solo pone al jugador en casillas de la
-  casa, y `checkRooms` no deja ninguna casa (ni portal) en una sala.
+  y `World.areas` (por sector, `areaOf`; las casillas de casa llevan ahí su **área de
+  casa** con id negativo, `tileArea`, que el chequeo de escape no ve). **Toda búsqueda de
+  casilla libre por anillos** (`freeNear`, `houseExit`, `fallTo` de los items que caen por
+  un portal o una nueva: `searchRings`) pasa por `searchFrom` + `areaAllows`: solo donde
+  caminaría un jugador parado en el origen (nunca una sala ajena ni un bolsillo cerrado
+  por paredes): su área; desde una casilla de casa,
+  su área de casa y el área de la salida de la casa; desde la entrada de una escalera, un
+  agujero o un teletransporte, las áreas de al lado; desde una puerta con llave, su
+  afuera (las áreas de al lado menos su sala); desde cualquier otra casilla, **ninguna**
+  (el que la pidió cae en su último recurso). Si sumas un lugar donde un jugador puede
+  estar fuera de las áreas, dale su regla en `searchFrom`. Y por `!Map.MovesOnStep`:
+  nunca deja a nadie sobre una escalera, un agujero o un teletransporte. `houseEnter` no
+  lo necesita: solo pone al jugador en casillas de la casa, y `checkRooms` no deja
+  ninguna casa (ni portal) en una sala. Una llegada de barco o un teleport de diálogo
+  sobre una casa o una puerta con llave colocada abierta (y un teleport a una casilla no
+  caminable), o la salida de una casa o el templo sobre una puerta (con llave o común,
+  abierta o cerrada) o no caminable (y el templo en una casa), no deja arrancar
+  (`checkArrivals` en `travel.go`, que `initDoors` corre antes del chequeo de escape;
+  igual que `checkArrivals` de `validate.ts`; casos en `testdata/arrivals.json`, que leen
+  los tests de los dos). `Teleport` no mira si el destino es caminable: un último recurso
+  nuevo (como el templo o la salida) tiene que quedar garantizado por la carga, en
+  `checkArrivals` (`badLastResort`). `placement` acepta la posición
+  guardada si `searchFrom` le da algún lugar (una puerta cerrada después también).
   Desde la sala una puerta trabada se abre sin llave (nadie queda encerrado, tampoco tras
   un relogueo o un reinicio). Todo uso junto a una puerta, también un rechazo, pasa por
   `doorReady` (`inventory.door_cooldown_ms`). Su estado no se guarda.
@@ -264,6 +280,15 @@ server/
   deja: el `FullMapView` lo reemplaza. `checkRooms` rechaza un extremo de portal en una
   sala. Un portal nuevo que se use a mano entra por `usePortal`/`useRope`; uno que se
   pise tiene que ser un `kind` con `OnStep`. `Flags` (un byte) ya no tiene bits libres.
+  Un `MoveItem` a la entrada de un portal que se pisa deja el item del otro lado
+  (`fallTo`: el destino o la casilla con lugar más cercana por `searchRings`, sin casas
+  ni entradas de portales que se pisan, a `travel.arrival_radius`) y desde ahí sigue como
+  un tirar a esa casilla (`groundMerge`, `heldDrop`, `leftHouse`, `gaveAway`). Toda
+  búsqueda nueva por anillos usa `searchRings` (que aplica `searchFrom` + `areaAllows`)
+  con su propia prueba de la casilla. Un portal sin el item que lo muestra
+  (`content.PortalLook`, bloque `portal` de `data/items`) lo rechazan `make validate` y
+  `mapcompile` (`compile.checkPortalLooks`); `initPortals` solo avisa (log), para un
+  `world.bin` compilado antes de cambiar `data/items`.
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

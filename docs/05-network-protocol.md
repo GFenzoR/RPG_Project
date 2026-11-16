@@ -565,11 +565,19 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   `vocation_cannot`, `hands_full`, `slot_occupied`, `container_full`, `too_heavy`,
   `into_itself`, `too_deep`, `tile_full`, `cannot_use`, `not_ready`, `saving`,
   `not_yours` y `floor_first` (la espera de la falla segura del comercio, ver "Falla
-  segura" en T5.3).
+  segura" en T5.3), y `portal.no_room` (un item tirado sobre una escalera, un agujero o un
+  teletransporte no tiene dónde caer del otro lado).
 - **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
   Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
   contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor
-  no reordena (ignorado).
+  no reordena (ignorado). Un destino `pos` que es la entrada de una escalera, un agujero
+  o un teletransporte: el item **cae** al otro extremo (`02-game-design.md`, "Cambiar de
+  piso"): queda en el destino del portal o en la casilla con lugar más cercana a
+  `travel.arrival_radius` (nunca en una casa ni en la sala de una puerta con llave). El
+  `TileUpdate` es de esa casilla y le llega a quien la ve (no al que lo tiró si no la
+  ve: otro piso u otra isla); la casilla del portal no cambia. Sin lugar,
+  `portal.no_room` y nada cambia. Sobre una escalera de mano o un punto de soga el item
+  queda en la casilla.
 - **Respuestas:** cada lugar que cambió manda su estado completo: `TileUpdate` a quien ve
   el tile, `Inventory` (todos los slots ocupados) al dueño y `ContainerUpdate` a cada
   jugador que tiene el contenedor abierto. Si cambió el peso cargado, `PlayerStats`
@@ -1056,7 +1064,8 @@ No hay mensajes nuevos en el protocolo: un portal es un teletransporte.
   importa con un alcance mayor que 1). Un `item_id` que no es el de la casilla →
   `inventory.not_possible`. El cliente manda siempre el suelo, aunque haya items encima
   (un cadáver, monedas): lo de encima no tapa la escalera. Un `UseItem` con el índice de
-  un item tirado encima usa ese item, no trepa. Respuesta: `FullMapView` como arriba.
+  un item tirado encima usa ese item, no trepa: es lo que manda Ctrl+click derecho (y
+  "Abrir"/"Usar" del toque largo). Respuesta: `FullMapView` como arriba.
 - **Punto de soga:** `UseItemOn{from: <la soga>, to: {pos}}` con un item cuyo `tool.use` es
   `rope`, llevado por el jugador, al mismo alcance y con línea de visión. Un `UseItem`
   sobre la casilla responde
@@ -1066,6 +1075,9 @@ No hay mensajes nuevos en el protocolo: un portal es un teletransporte.
   `portal.not_ready` (escalera de mano o soga a mitad de un paso) y
   `pvp.protection_locked` (atacante con bloqueo hacia una zona protegida).
 - Un portal `boat` no hace nada: se camina sobre él como sobre cualquier casilla.
+- **Items:** un `MoveItem` a la entrada de una escalera, un agujero o un teletransporte
+  deja el item del otro lado (ver `MoveItem` en "Items e inventario"): `TileUpdate` de la casilla
+  donde cae a quien la ve, o `portal.no_room` si no hay dónde.
 
 ### Gremios (T5.1, `server/internal/session/guild.go`)
 Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.

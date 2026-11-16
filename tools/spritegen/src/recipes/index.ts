@@ -3,6 +3,7 @@ import type { RecipeBook } from "../recipe.ts";
 import { CREATURES } from "./creatures.ts";
 import { EFFECTS } from "./effects.ts";
 import { ITEMS } from "./items.ts";
+import { PORTALS } from "./portals.ts";
 import { TERRAIN } from "./terrain.ts";
 import { UI } from "./ui.ts";
 
@@ -17,4 +18,4 @@ function merge(...books: RecipeBook[]): RecipeBook {
   return out;
 }
 
-export const RECIPES: RecipeBook = merge(TERRAIN, ITEMS, CREATURES, EFFECTS, UI);
+export const RECIPES: RecipeBook = merge(TERRAIN, PORTALS, ITEMS, CREATURES, EFFECTS, UI);

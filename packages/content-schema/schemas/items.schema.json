@@ -63,6 +63,16 @@
           },
           "oneOf": [{ "required": ["open"] }, { "required": ["closed"] }]
         },
+        "portal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "description": "The look of a portal of portals.yaml (docs/02 \"Cambiar de piso\", docs/03): the kind it shows and, if given, the way it leads (up or down a floor). The map validator wants such an item on the entrance of every portal (but boat ones), and warns about one where no portal of its kind leaves. The item does not move anyone: portals.yaml does.",
+          "properties": {
+            "kind": { "enum": ["stairs", "ladder", "hole", "rope_spot", "teleport"] },
+            "leads": { "enum": ["up", "down"] }
+          }
+        },
         "value": {
           "description": "Base price NPCs use as reference.",
           "$ref": "common.schema.json#/$defs/nonNegativeInt"

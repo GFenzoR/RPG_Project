@@ -9,3 +9,6 @@ items:
   banner: 8
   flower: 9
   coin: 10
+  stairs_down: 11
+  stairs_up: 12
+  teleport: 13

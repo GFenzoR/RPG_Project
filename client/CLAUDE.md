@@ -45,6 +45,22 @@ client/
   T0.5). Solo se dibuja el piso del jugador.
 - Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).
 
+## Atlas: reintentos y "Reintentar"
+- `Atlas.load` (`packages/renderer`) reintenta cada request por su cuenta (`atlas.json`, el
+  JSON de cada página y su imagen) con `ASSET_RETRY` de `packages/renderer/src/retry.ts`
+  (puro, con tests: 4 intentos, esperas de 0,5, 1 y 2 s; un estado HTTP de error cuenta
+  como fallo). Dentro de un mismo `Atlas.load`, lo ya bajado no se pide de nuevo. Con
+  "Reintentar" (un `Atlas.load` nuevo) se vuelven a pedir `atlas.json` y los JSON de las
+  páginas; solo las imágenes ya cargadas salen del caché de `Assets` de PixiJS. Sin
+  PixiJS: el sitio lo importa como `@rpg/renderer/retry` (`loadIcons` de la tienda).
+- Si se agotan los intentos, `Game.startCanvas` no lo vuelve a intentar solo (cada batch
+  del servidor lo haría): avisa `GameOptions.loadFailed` y `ui/LoadStatus.tsx` (sin hooks,
+  con test) cambia "Conectando…" por el error y "Reintentar" (`load-failed`,
+  `load-retry`), que llama a `Game.retryCanvas`. La sesión sigue abierta todo el tiempo:
+  no se recarga la página ni se vuelve a entrar. E2E: `e2e/atlas.spec.ts` (docs/08).
+- El editor usa el mismo `Atlas.load`: su error de carga trae "Reintentar"
+  (`canvas-retry`), que vuelve a crear el canvas sin recargar.
+
 ## Notas de T1.6
 - Combate: `WorldState` guarda vida (%) por criatura, objetivo, efectos, textos flotantes
   y un log corto de mensajes de sistema; `Game` publica un `GameUi` tras cada batch y
@@ -480,9 +496,17 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `.game` (`client.css`). Lo que va sobre el mapa (pad, hotbar, botones de zoom, banner
   del item elegido, en `touch.css`) cuelga de `.viewport`, que ya está dentro de ese
   padding: sus márgenes son desde los bordes del mapa y no suman `env()` otra vez. Lo
-  que usa `position: fixed` (ventanas en teléfono, menú del toque largo) se mide contra
-  la pantalla y todavía no respeta el área segura (docs/14). E2E con insets de CDP en
-  `mobile.spec.ts`.
+  que usa `position: fixed` se mide contra la pantalla, fuera de ese padding, y toma los
+  insets una vez en sus propios bordes: las ventanas en teléfono y tablet (diálogo,
+  crafteo, mercado, casa, intercambio: `left/right/top/bottom: env(...)` en `client.css`),
+  el selector de idioma fuera del juego (`.corner`) y el menú del toque largo, que lee
+  los insets del padding de `.game` (`paddingInsets`, `ui/ActionMenu.tsx`) y deja sus
+  8 px desde el borde del área segura (`menuPlacement`, puro y con tests). Algo nuevo con
+  `position: fixed` hace lo mismo; algo nuevo dentro de `.viewport`, nunca. El pad
+  (`.touch-pad-dock`, z-index 9) va sobre el mapa y el cajón (8) y bajo esas ventanas
+  (12): en vertical la hoja del diálogo puede llegar a su última fila (iPad Mini, iPhone
+  13, y más con muesca). E2E con
+  insets de CDP en `mobile.spec.ts` (también el diálogo de un NPC y el menú).
 - **Layout** (`ui/layout.ts`, breakpoints como datos): `.game` lleva `data-layout`
   (`desktop`, `tablet`, `phone-portrait`, `phone-landscape`), `data-panel` (`sidebar`,
   `tabs`, `drawer`) y `data-flow` (`row`, `column`); `client.css` cuelga sus reglas de
@@ -616,10 +640,27 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   largo) sobre un punto de soga sin items mande `UseItem` con el suelo, como la puerta de
   una casa; `climbable` hace que el click derecho sobre una escalera de mano mande
   siempre el suelo, aunque tenga algo encima (`state/items.ts` `tileUse`, modo
-  `"first"`): un cadáver o una moneda no la tapan. El toque largo sobre una escalera de
-  mano muestra "Trepar" (`client.touch.action.climb`) y, si hay un item encima, también
-  sus botones ("Abrir"/"Usar" usan ese item, no trepan). La soga es una herramienta
-  "usar con" como el pico. El teclado sí pisa una escalera: es la forma de bajar.
+  `"first"`): un cadáver o una moneda no la tapan. **Ctrl+click derecho** (escritorio:
+  `input/mouse.ts` `mapPress`, puro y con tests, da `use` con `top` = `e.ctrlKey`, y el
+  canvas llama `useTile(x, y, z, top)`) usa el item de arriba aunque sea una escalera de
+  mano; sin nada encima usa el item del portal (`ladder_up`/`ladder_down`), y el servidor
+  trepa igual. Lo decide `useMode`
+  (`state/portals.ts`, puro y con tests): `"first"` en una escalera de mano salvo con
+  `top`, `"bare"` si la casilla se usa por el suelo (`Game.usesGround`), `"never"` en el
+  resto. El toque largo sobre una escalera de mano muestra "Trepar"
+  (`client.touch.action.climb`) y "Mirar"; si hay un item tirado encima, también sus
+  botones ("Abrir"/"Usar" usan ese item, no trepan: pasan `top` como Ctrl; "Mover"). El
+  item propio de un portal (`ItemDef.portal`, del bloque `portal` de `data/items`) nunca
+  tiene botones: `state/items.ts` `menuItem` lo salta (el título del menú sí es su
+  nombre). Así una escalera, un agujero o un teletransporte sin nada encima solo ofrecen
+  "Mirar", y un punto de soga "Usar" (el servidor pide la soga) y "Mirar". La soga es
+  una herramienta "usar con" como el pico. El teclado sí pisa una escalera: es la forma
+  de bajar.
+- Los items de los portales (`ladder_up`, `ladder_down`, `hole`, `rope_spot`, `teleport`,
+  `stairs_*`) son items de mapa comunes: se dibujan del atlas como cualquier otro. Tirar
+  un item sobre una escalera, un agujero o un teletransporte es un `MoveItem` normal: el
+  servidor lo deja del otro lado y manda el `TileUpdate` de donde cae (el cliente no
+  predice nada).
 - Un paso predicho que el servidor rechaza (`WalkRejected` desde donde empezó y en esa
   dirección: sin lugar del otro lado de la escalera, `portal.blocked`, o la puerta de una
   casa sin acceso, `house.no_access`) queda en `WorldState` (`refused`): `predictStep` no

@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatYaml, parseYamlText } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
@@ -1219,6 +1219,15 @@ describe("pr comment", () => {
       error: "no_report",
     });
     expect(noMapComment("c".repeat(40), ctx.runUrl)).toContain("ya no cambia nada en `world/`");
+    // A push without a map-pr run leaves the comment as it was: it says which commit it
+    // covers and where a newer commit's own verdict is.
+    for (const body of [
+      noMapComment("c".repeat(40), ctx.runUrl),
+      buildComment(checkReport(good), ctx, mapOnly),
+    ])
+      expect(body).toContain(
+        "Vale solo para el commit que nombra: si el PR tiene uno más nuevo y esto no pasó a ⏳, el check no corrió para ese commit (le falta el status `map-pr/verdict`).",
+      );
   });
   it("counts a rename by its source too, so moving a workflow to docs/ is not harmless (R1)", () => {
     const paths = filePaths([
@@ -1312,99 +1321,5 @@ describe("pr comment", () => {
     const bad = (patch: Record<string, unknown>) => () => checkReport({ ...good, ...patch });
     expect(bad({ skipped_content: ["world/../x y"] })).toThrow();
     expect(bad({ skipped_content_total: "1" })).toThrow();
-  });
-});
-
-describe("map-pr-pending workflow (R5)", () => {
-  const yml = readFileSync(join(repo, ".github/workflows/map-pr-pending.yml"), "utf8");
-  it("runs from the base with a comment-only token and never touches the PR's code", () => {
-    expect(yml).toMatch(/pull_request_target:/);
-    expect(yml).not.toMatch(/actions\/checkout|pnpm|npm |node /);
-    expect(yml).toMatch(/permissions:\s*\n\s*pull-requests: write\s*\n/);
-    expect(yml).not.toMatch(/github\.event\.pull_request\.(title|body|head\.ref|head\.label)/);
-    // Only validated event data reaches the text.
-    expect(yml).toMatch(/\^\[0-9\]\+\$/);
-    expect(yml).toMatch(/\^\[0-9a-f\]\{40\}\$/);
-    expect(yml).toContain("<!-- rpg-map-pr-check -->");
-  });
-
-  /** Runs the step's script with a fake `gh` (F2): returns its exit code and the PATCH body. */
-  function runPending(fake: { list: string; listFails?: boolean; patchFails?: boolean }) {
-    const dir = tmp("pending-");
-    // Forward slashes so the path survives inside the bash fake on Windows (Git Bash).
-    const shDir = dir.replaceAll("\\", "/");
-    const script = (yml.split("run: |\n")[1] ?? "")
-      .split("\n")
-      .map((l) => l.replace(/^ {10}/, ""))
-      .join("\n");
-    writeFileSync(join(dir, "step.sh"), script);
-    writeFileSync(join(dir, "list.json"), fake.list);
-    writeFileSync(
-      join(dir, "gh"),
-      `#!/usr/bin/env bash
-if [ "$1 $2" = "api -X" ]; then
-  ${fake.patchFails ? "exit 1" : `printf '%s' "$@" > "${shDir}/patched"; exit 0`}
-fi
-${fake.listFails ? 'echo "HTTP 403: rate limit" >&2; exit 1' : `cat "${shDir}/list.json"`}
-`,
-      { mode: 0o755 },
-    );
-    let code = 0;
-    try {
-      execFileSync("bash", [join(dir, "step.sh")], {
-        env: {
-          PATH: `${dir}${delimiter}${process.env.PATH ?? ""}`,
-          RUNNER_TEMP: dir,
-          GH_TOKEN: "x",
-          REPO: "o/r",
-          PR: "7",
-          SHA: "a".repeat(40),
-        },
-        stdio: "pipe",
-      });
-    } catch (e) {
-      code = (e as { status?: number }).status ?? 1;
-    }
-    const patched = existsSync(join(dir, "patched"))
-      ? readFileSync(join(dir, "patched"), "utf8")
-      : null;
-    return { code, patched };
-  }
-
-  const bot = (id: number, body: string) => ({ id, user: { login: "github-actions[bot]" }, body });
-
-  // The step needs jq (preinstalled on GitHub runners). Native Windows rarely has it, so
-  // skip there when missing; elsewhere a missing jq still fails loudly.
-  // A native Windows jq.exe prints CRLF (the step's `[[ $id =~ ^[0-9]+$ ]]` would fail), so
-  // on Windows only an LF-printing jq (e.g. MSYS2's) counts.
-  const hasJq = (() => {
-    try {
-      return execFileSync("jq", ["-n", "1"], { encoding: "utf8" }) === "1\n";
-    } catch {
-      return false;
-    }
-  })();
-  const itPending = it.skipIf(process.platform === "win32" && !hasJq);
-
-  itPending("marks the bot's marked comment pending, across pages (F2)", () => {
-    // `gh api --paginate` prints one JSON array per page.
-    const list = `${JSON.stringify([bot(1, "hello"), { id: 2, user: { login: "u" }, body: MARKER }])}\n${JSON.stringify([bot(3, `${MARKER}\nold ✅`)])}`;
-    const r = runPending({ list });
-    expect(r.code).toBe(0);
-    expect(r.patched).toContain("repos/o/r/issues/comments/3");
-    expect(r.patched).toContain("Pendiente:** revisando el commit `aaaaaaaaaaaa`");
-  });
-
-  itPending("exits 0 without a comment, and fails when the API fails (F2)", () => {
-    expect(runPending({ list: JSON.stringify([bot(1, "hi")]) })).toEqual({
-      code: 0,
-      patched: null,
-    });
-    expect(runPending({ list: "[]", listFails: true }).code).not.toBe(0);
-    expect(runPending({ list: JSON.stringify([bot(3, MARKER)]), patchFails: true }).code).not.toBe(
-      0,
-    );
-    expect(yml).not.toMatch(/\|\s*head\b/);
-    expect(yml).toContain("set -euo pipefail");
   });
 });

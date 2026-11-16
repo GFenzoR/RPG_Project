@@ -266,9 +266,11 @@ type World struct {
 	rooms   []room
 	roomOf  map[world.Pos]int32
 	doorFor game.Tick
-	// Areas (area.go): the area of each tile by sector (ids 1-based), worked out at start.
-	areas     map[uint64]*areaTiles
-	areaCount int32
+	// Areas (area.go): the area (or minus the house area) of each tile by sector (ids
+	// 1-based), worked out at start.
+	areas          map[uint64]*areaTiles
+	areaCount      int32
+	houseAreaCount int32
 
 	// Magic (T1.9): spells by normalized words, and the index of the magic skill.
 	spellWords map[string]*content.Spell
@@ -537,6 +539,7 @@ func New(cfg Config) (*World, error) {
 	if err := w.initItems(); err != nil {
 		return nil, err
 	}
+	w.initPortals()
 	if err := w.initMagic(); err != nil {
 		return nil, err
 	}
@@ -566,7 +569,7 @@ func New(cfg Config) (*World, error) {
 	if err := w.initGathering(); err != nil {
 		return nil, err
 	}
-	if err := w.initDoors(); err != nil {
+	if err := w.initDoors(); err != nil { // with checkArrivals (travel.go)
 		return nil, err
 	}
 	if err := w.initCrafting(); err != nil {

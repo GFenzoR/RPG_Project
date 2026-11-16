@@ -56,8 +56,13 @@ type houseHarness struct {
 
 func newHouseHarness(t *testing.T, opts ...option) *houseHarness {
 	t.Helper()
+	return newHouseHarnessOn(t, worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7, houseMap...), testHouses()...), opts...)
+}
+
+// newHouseHarnessOn is newHouseHarness on the map m (with its houses).
+func newHouseHarnessOn(t *testing.T, m *world.Map, opts ...option) *houseHarness {
+	t.Helper()
 	hh := &houseHarness{}
-	m := worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7, houseMap...), testHouses()...)
 	hh.harness = newHarness(t, m, func(c *session.Config) {
 		for _, o := range opts {
 			defer o(c)

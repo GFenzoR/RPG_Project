@@ -1,19 +1,26 @@
 // World validation (docs/03-world-and-maps.md, "Validación"). The editor, mapcli, the MCP
 // server and `make validate` all call validateWorld, so they agree on what is an error.
 import { chunkFileName, floorDir } from "./chunk.ts";
-import { isSignItem, loadContent, routesFile } from "./content.ts";
-import type { ContentIndex } from "./content.ts";
+import { isSignItem, loadContent, routesFile, showsPortal } from "./content.ts";
+import type { ContentIndex, ItemInfo } from "./content.ts";
 import { Reporter } from "./diagnostics.ts";
 import type { Diagnostic, PathSegment } from "./diagnostics.ts";
 import { islandDir, loadWorld, worldFile } from "./io.ts";
 import { PREFAB_DIR, checkPrefab } from "./prefabs.ts";
 import type { LoadResult } from "./io.ts";
 import { TileMap, isPassable, isWalkable } from "./tiles.ts";
-import { DOOR_ROOM_ERRORS, ON_STEP_KINDS, doorRooms, doorsOn, templeReach } from "./doors.ts";
+import {
+  DOOR_ROOM_ERRORS,
+  ON_STEP_KINDS,
+  doorRooms,
+  doorsOn,
+  hasLockedDoor,
+  templeReach,
+} from "./doors.ts";
 import type { DoorWorld, TempleReach } from "./doors.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
-import type { Chunk, Island, Position, Rect, World } from "./types.ts";
+import type { Chunk, Island, Portal, Position, Rect, World } from "./types.ts";
 
 export interface MapReport {
   diagnostics: Diagnostic[];
@@ -42,6 +49,12 @@ const PAIRED_KINDS = new Set(["stairs", "ladder"]);
  * warning when no temple is reached from where they lead (checkPortalExits).
  */
 const ONE_WAY_KINDS = new Set(["hole", "teleport"]);
+
+/** The `portal` block an item needs to show the portal of kind from `from` to `to`. */
+function portalLookHint(kind: string, from: Position, to: Position): string {
+  if (kind === "hole" || kind === "rope_spot" || kind === "teleport") return `{ kind: ${kind} }`;
+  return `{ kind: ${kind}, leads: ${to.z > from.z ? "down" : "up"} }`;
+}
 
 /**
  * The most travel.arrival_radius may be (the balance schema's maximum): the radius of the
@@ -162,6 +175,7 @@ class WorldValidator {
     this.checkPortalExits();
     this.checkBoatRoutes();
     this.checkDoors();
+    this.checkArrivals();
     this.checkPrefabs();
   }
 
@@ -336,6 +350,15 @@ class WorldValidator {
           p.kind === "hole"
             ? "a hole leads down (to.z > from.z)"
             : "a rope spot leads up (to.z < from.z)",
+          p.from,
+        );
+      // The tile is the portal, but players only see an item: the one that shows it
+      // (its `portal` block), never a bare tile that moves whoever steps on it.
+      if (p.kind !== "boat" && !this.portalShown(p.kind, p.from, p.to))
+        this.err(
+          portalsFile,
+          [i, "from"],
+          `${p.kind} "${p.id}" has no item that shows it on its entrance (one with portal: ${portalLookHint(p.kind, p.from, p.to)}, ${this.portalItemsHint(p.kind, p.from, p.to)})`,
           p.from,
         );
       if (PAIRED_KINDS.has(p.kind) && !this.hasPair(p.from, p.to))
@@ -525,8 +548,7 @@ class WorldValidator {
       if (other !== island)
         for (const [i, p] of other.portals.entries())
           inside(`${this.dirOf(other)}/portals.yaml`, [i, "to"], p.to, "portal destination");
-    if (inHouse(island.meta.temple) !== undefined)
-      this.err(`${dir}/island.yaml`, ["temple"], "temple is inside a house", island.meta.temple);
+    // A temple in a house: checkArrivals, with the server's words.
     for (const [i, z] of island.zones.entries()) {
       if (z.type !== "no_logout") continue;
       const hit = z.floors.some((f) =>
@@ -551,6 +573,8 @@ class WorldValidator {
       const key = formatPos(t.pos);
       signText.set(key, [...(signText.get(key) ?? []), t.text]);
     }
+    // Portal items by tile: each must stand on the entrance of a portal it shows.
+    const portalAt = new Map(island.portals.map((p) => [formatPos(p.from), p]));
     for (const c of island.chunks.values()) {
       const file = chunkFile(dir, c);
       const ox = c.cx * CHUNK_SIZE;
@@ -566,6 +590,22 @@ class WorldValidator {
         if (reported.has(key)) return;
         reported.add(key);
         this.err(file, path, msg, pos);
+      };
+      // A portal item, on the ground or the stack (portalShown takes both), stands on the
+      // entrance of a portal it shows. A warning: it moves nobody, but players will take
+      // it for a way through. Called only for an item with a portal block: nothing is
+      // built for the other tiles of the world.
+      const portalItem = (id: string, info: ItemInfo, path: PathSegment[], pos: Position): void => {
+        if (!info.portal) return;
+        const key = `portal:${pos.x},${pos.y}`;
+        if (reported.has(key) || this.portalItemFits(info, portalAt.get(formatPos(pos)))) return;
+        reported.add(key);
+        this.warn(
+          file,
+          path,
+          `"${id}" shows a ${info.portal.kind}${info.portal.leads ? ` leading ${info.portal.leads}` : ""}, but no such portal of ${dir}/portals.yaml leaves from this tile`,
+          pos,
+        );
       };
       const stacks = new Map(c.items.map((s) => [s.y * CHUNK_SIZE + s.x, s]));
       for (let ly = 0; ly < CHUNK_SIZE; ly++) {
@@ -587,6 +627,7 @@ class WorldValidator {
                 `"${g}" is a ${info.kind}, not a ground item`,
                 pos,
               );
+            else if (info.portal) portalItem(g, info, ["ground", ly, lx], pos);
           }
           if (!s) continue;
           if (g === null)
@@ -602,6 +643,7 @@ class WorldValidator {
                 `ground item "${id}" belongs in the ground layer, not on a stack`,
                 pos,
               );
+            else if (info.portal) portalItem(id, info, ["items"], pos);
             else if (
               isSignItem(info) &&
               !(signText.get(formatPos(pos)) ?? []).includes(info.description ?? "")
@@ -925,10 +967,101 @@ class WorldValidator {
     }
   }
 
+  /**
+   * Boat arrivals, dialog teleports, temples and house exits (docs/03 "Validación"; the
+   * server's checkArrivals refuses the same, with the cases of testdata/arrivals.json): no
+   * arrival on a house tile (an arrival puts nobody inside a house) nor on a locked door
+   * placed open (a door is no place to land: its doorway). A dialog teleport also needs a
+   * walkable tile of an island, as a boat arrival does (checkRouteTile). The temple and a
+   * house exit, the last resorts of waking up and of putting someone out of a house (with
+   * every tile around taken, the tile itself), lie on no door: on a locked one, open or
+   * closed, whoever is put there would stand in its doorway, a step from its room; any
+   * other one anyone may close, and whoever is put there next would stand in a closed door.
+   * The temple lies in no house either (that both are walkable, needWalkable says).
+   */
+  private checkArrivals(): void {
+    const owner = new Map<string, string>(); // house tile → house id, every island
+    const lastResort = (file: string, path: PathSegment[], what: string, p: Position): void => {
+      const tile = this.tiles.tileAt(p);
+      const why = hasLockedDoor(tile, this.content)
+        ? "lies on a locked door: whoever is put there with every tile around taken would stand in its doorway"
+        : doorsOn(tile, this.content).length > 0
+          ? "lies on a door anyone may close: whoever is put there with every tile around taken could stand in a closed door"
+          : undefined;
+      if (why) this.err(file, path, `${what} ${why}`, p);
+    };
+    for (const island of this.world.islands.values()) {
+      const at = (p: Position): string => `${formatPos(p)} (island "${island.meta.id}")`;
+      for (const [i, h] of island.houses.entries()) {
+        for (const r of h.rects)
+          for (const [x, y] of tilesOf(r)) owner.set(formatPos({ x, y, z: r.z }), h.id);
+        lastResort(
+          `${this.dirOf(island)}/houses.yaml`,
+          [i, "exit"],
+          `exit of house "${h.id}" at ${at(h.exit)}`,
+          h.exit,
+        );
+      }
+      const t = island.meta.temple;
+      lastResort(`${this.dirOf(island)}/island.yaml`, ["temple"], `temple at ${at(t)}`, t);
+    }
+    for (const island of this.world.islands.values()) {
+      const t = island.meta.temple;
+      const house = owner.get(formatPos(t));
+      if (house !== undefined)
+        this.err(
+          `${this.dirOf(island)}/island.yaml`,
+          ["temple"],
+          `temple at ${formatPos(t)} (island "${island.meta.id}") lies in house "${house}": nobody wakes up inside a house`,
+          t,
+        );
+    }
+    const land = (
+      file: string,
+      path: PathSegment[],
+      what: string,
+      p: Position,
+      own: boolean,
+    ): void => {
+      const island = this.islandAt(p);
+      const tile = this.tiles.tileAt(p);
+      if (!island || !isWalkable(tile, this.content)) {
+        // A boat arrival's own check (checkRouteTile) says it already.
+        if (own)
+          this.err(file, path, `${what} at ${formatPos(p)} is not a walkable tile of an island`, p);
+        return;
+      }
+      const where = `${what} at ${formatPos(p)} (island "${island.meta.id}")`;
+      const house = owner.get(formatPos(p));
+      if (house !== undefined)
+        this.err(
+          file,
+          path,
+          `${where} lies in house "${house}": an arrival puts nobody inside a house`,
+          p,
+        );
+      else if (hasLockedDoor(tile, this.content))
+        this.err(file, path, `${where} lies on a locked door: a door is no place to land`, p);
+    };
+    for (const r of this.content.routes)
+      land(routesFile, [r.index, "to"], `arrival of boat route "${r.id}"`, r.to, false);
+    for (const t of this.content.teleports ?? [])
+      land(
+        t.file,
+        ["dialog", "nodes", t.node],
+        `teleport of NPC "${t.npc}" (node "${t.node}")`,
+        t.to,
+        true,
+      );
+  }
+
+  /** The island whose rect holds p, or undefined. */
+  private islandAt(p: Position): Island | undefined {
+    return [...this.world.islands.values()].find((i) => rectContains(i.meta.rect, p.x, p.y));
+  }
+
   private checkRouteTile(index: number, path: PathSegment[], p: Position, what: string): void {
-    const island = [...this.world.islands.values()].find((i) =>
-      rectContains(i.meta.rect, p.x, p.y),
-    );
+    const island = this.islandAt(p);
     if (!island) this.err(routesFile, [index, ...path], `${what} is outside every island`, p);
     else if (!isWalkable(this.tiles.tileAt(p), this.content))
       this.err(routesFile, [index, ...path], `${what} is not a walkable tile`, p);
@@ -954,6 +1087,29 @@ class WorldValidator {
       for (const p of island.portals)
         if (PAIRED_KINDS.has(p.kind) && near(p.from, to) && near(p.to, from)) return true;
     return false;
+  }
+
+  /** Whether a portal item stands on the entrance of a portal it shows. */
+  private portalItemFits(info: ItemInfo, p: Portal | undefined): boolean {
+    return p !== undefined && showsPortal(info, p.kind, p.from, p.to);
+  }
+
+  /** Whether the tile `from` holds an item that shows the portal of kind to `to`. */
+  private portalShown(kind: string, from: Position, to: Position): boolean {
+    const tile = this.tiles.tileAt(from);
+    if (!tile) return false;
+    return [tile.ground, ...tile.stack].some(
+      (id) => id !== null && showsPortal(this.content.items.get(id), kind, from, to),
+    );
+  }
+
+  /** "e.g. stairs_down" with the items of data/ that show such a portal, or a hint to add one. */
+  private portalItemsHint(kind: string, from: Position, to: Position): string {
+    const ids = [...this.content.items.values()]
+      .filter((info) => showsPortal(info, kind, from, to))
+      .map((info) => info.id)
+      .sort();
+    return ids.length > 0 ? `e.g. ${ids.join(" or ")}` : "none in data/items yet";
   }
 
   private walkableAround(c: Position, radius: number): number {

@@ -274,7 +274,11 @@ secundaria.
   escaleras, escaleras de mano, agujeros, puntos de soga y teletransportes que mueve el
   servidor; las escaleras de la mina volcánica, del Puerto, del Bosque y de la isla de
   prueba ya se usan. Reglas en `02-game-design.md` "Cambiar de piso"; la llegada nunca cae
-  en una casa ni en la sala de una puerta con llave.
+  en una casa ni en la sala de una puerta con llave. Después (rama `feat/portal-items`):
+  arte propio e items de la escalera de mano (y su trampilla), el agujero, el punto de
+  soga y el teletransporte; `make validate` exige en cada portal el item que lo muestra;
+  lo que se tira sobre una escalera, un agujero o un teletransporte cae al otro extremo; y
+  Ctrl+click derecho usa el item de arriba aunque esté sobre una escalera de mano.
 - [x] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
   en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
   nativas necesitan cuentas de las tiendas (Apple y Google) y su firma. (PR #78)

@@ -606,6 +606,39 @@ async function tapWolf(page: Page, prefix: string): Promise<void> {
   await page.screenshot({ path: join(shots, `mobile-${prefix}-06-combat.png`) });
 }
 
+/**
+ * A window over the map (`selector`) is drawn over the touch pad wherever the two meet:
+ * every point of a grid over their overlap, if they overlap, hits the window, not a pad
+ * button (the pad goes under the windows, touch.css). Upright the dialog's sheet can
+ * reach the pad's last row (iPad Mini, iPhone 13, more with a notch); before, the pad was
+ * drawn over the sheet, and with a notch over the dialog's title.
+ */
+async function overThePad(page: Page, selector: string): Promise<void> {
+  const missed = await page.evaluate((sel) => {
+    const win = document.querySelector(sel);
+    const pad = document.querySelector(".touch-pad-dock");
+    if (!win || !pad) return [];
+    const w = win.getBoundingClientRect();
+    const p = pad.getBoundingClientRect();
+    const l = Math.max(w.left, p.left);
+    const r = Math.min(w.right, p.right);
+    const t = Math.max(w.top, p.top);
+    const b = Math.min(w.bottom, p.bottom);
+    if (r - l < 1 || b - t < 1) return [];
+    const out: string[] = [];
+    for (let i = 0; i < 9; i++)
+      for (let j = 0; j < 3; j++) {
+        const x = l + ((r - l) * (i + 0.5)) / 9;
+        const y = t + ((b - t) * (j + 0.5)) / 3;
+        const el = document.elementFromPoint(x, y);
+        if (!el || !win.contains(el))
+          out.push(`(${Math.round(x)}, ${Math.round(y)}): ${el?.className ?? "nothing"}`);
+      }
+    return out;
+  }, selector);
+  expect(missed, `${selector} over the touch pad`).toEqual([]);
+}
+
 /** In Puerto: a tap on the priestess talks to her; the window fits and closes with ×. */
 async function talkToPriestess(page: Page, prefix: string): Promise<void> {
   let priest: { id: number; x: number; y: number } | undefined;
@@ -642,6 +675,7 @@ async function talkToPriestess(page: Page, prefix: string): Promise<void> {
   const closeBox = await close.boundingBox();
   expect(closeBox?.width ?? 0).toBeGreaterThanOrEqual(44);
   expect(closeBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await overThePad(page, ".npc-windows");
   await page.screenshot({ path: join(shots, `mobile-${prefix}-07-dialog.png`) });
   await close.tap();
   await expect(dialog).toBeHidden();
@@ -715,7 +749,11 @@ for (const { prefix, device, layout, browser } of DEVICES) {
  * `.game` keeps the game out of the notch, the rounded corners and the home indicator with
  * its padding, and the touch widgets over the map keep their margin from the map's edges,
  * so the inset counts once. Before, the pad, the hotbar beside it, the zoom buttons and the
- * picked-item banner added it a second time (on a phone on its side, 47 px more).
+ * picked-item banner added it a second time (on a phone on its side, 47 px more). What is
+ * fixed to the screen, outside that padding, takes the insets itself, once: the windows
+ * over the map (an NPC's dialog here) and the long-press menu. Before, the dialog's sheet
+ * reached the screen's edges (under the notch on its side, over the home indicator
+ * upright) and the menu kept 8 px from the screen's edge, under the notch.
  */
 const NOTCHED: {
   prefix: string;
@@ -740,6 +778,8 @@ const NOTCHED: {
 
 /** Hotbar offset beside the pad (PAD_RESERVE_PX in src/ui/TouchPad.tsx, touch.css). */
 const PAD_RESERVE = 162;
+/** The long-press menu's width (MENU_WIDTH in src/ui/ActionMenu.tsx, touch.css). */
+const MENU_WIDTH = 224;
 
 for (const { prefix, device, column, insets } of NOTCHED) {
   test.describe(`T5.6 on ${device} with a notch`, () => {
@@ -749,10 +789,20 @@ for (const { prefix, device, column, insets } of NOTCHED) {
       page,
       playwright,
     }) => {
+      test.setTimeout(120_000);
       const errors = watchErrors(page);
       const who = await newGuardian(playwright, "Notch");
+      // In Puerto, by the priestess: her dialog is one of the windows fixed to the screen.
+      psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
       await enterGame(page, who.email, who.password);
       errors.length = 0;
+      // A new character in Puerto gets the tutorial: fold its hints, which cover part of
+      // the map (the tutorial goes on).
+      const hide = page.getByTestId("tutorial-hide");
+      if (await hide.isVisible()) {
+        await hide.tap();
+        await expect(page.getByTestId("tutorial-show")).toBeVisible();
+      }
       // The override lives as long as this CDP session: it stays attached to the end.
       const cdp = await page.context().newCDPSession(page);
       await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets });
@@ -826,6 +876,99 @@ for (const { prefix, device, column, insets } of NOTCHED) {
       ).toBe(true);
       await expect.poll(() => mapDrawn(page)).toBe(true);
       await page.screenshot({ path: join(shots, `mobile-${prefix}-09-safe-area.png`) });
+
+      /** A box inside the safe area: at least `margin` px from each of its edges. */
+      const inside = (
+        what: string,
+        b: { l: number; t: number; r: number; b: number },
+        margin: number,
+      ): void => {
+        expect(b.l - insets.left, `${what} left`).toBeGreaterThanOrEqual(margin - 0.5);
+        expect(b.t - insets.top, `${what} top`).toBeGreaterThanOrEqual(margin - 0.5);
+        expect(vp.width - insets.right - b.r, `${what} right`).toBeGreaterThanOrEqual(margin - 0.5);
+        expect(vp.height - insets.bottom - b.b, `${what} bottom`).toBeGreaterThanOrEqual(
+          margin - 0.5,
+        );
+      };
+
+      // The priestess's dialog: a sheet fixed to the screen whose edges are the safe
+      // area's (upright: along the bottom; on its side: down the right).
+      let priest: { x: number; y: number } | undefined;
+      await expect
+        .poll(async () => {
+          const list = await page.evaluate(() => window.__rpgClient?.npcs() ?? []);
+          priest = list.find((n) => n.contentId === "puerto_priest");
+          return priest !== undefined;
+        })
+        .toBe(true);
+      if (!priest) throw new Error("no priestess");
+      await tapTile(page, priest.x, priest.y);
+      const dialog = page.getByTestId("dialog");
+      await expect(dialog).toBeVisible();
+      const sheetBox = await page.locator(".npc-windows").boundingBox();
+      if (!sheetBox) throw new Error("no dialog sheet");
+      const sheet = {
+        l: sheetBox.x,
+        t: sheetBox.y,
+        r: sheetBox.x + sheetBox.width,
+        b: sheetBox.y + sheetBox.height,
+      };
+      inside("dialog", sheet, 0);
+      near("dialog right", vp.width - sheet.r, insets.right);
+      near("dialog bottom", vp.height - sheet.b, insets.bottom);
+      if (column) near("dialog left", sheet.l, insets.left);
+      else near("dialog top", sheet.t, insets.top);
+      // Its close button is still where a finger reaches it, inside the safe area.
+      const closeBox = await dialog.getByRole("button", { name: "Cerrar" }).boundingBox();
+      if (!closeBox) throw new Error("no close button");
+      inside(
+        "dialog close",
+        {
+          l: closeBox.x,
+          t: closeBox.y,
+          r: closeBox.x + closeBox.width,
+          b: closeBox.y + closeBox.height,
+        },
+        0,
+      );
+      // Upright the sheet reaches the pad's last row: the sheet is drawn over it.
+      await overThePad(page, ".npc-windows");
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-10-safe-dialog.png`) });
+      await dialog.getByRole("button", { name: "Cerrar" }).tap();
+      await expect(dialog).toBeHidden();
+
+      // The long-press menu by the left edge of the map, zoomed in so the map reaches the
+      // safe area's edge (on its side, the notch): 8 px from that edge, not from the
+      // screen's, and the whole menu inside the safe area.
+      const zoomIn = page.getByTestId("zoom-in");
+      for (let i = 0; i < 8 && (await zoomIn.isEnabled()); i++) {
+        const before = (await zoomOf(page)).scale;
+        await zoomIn.tap();
+        await expect.poll(async () => (await zoomOf(page)).scale).toBe(before + 1);
+      }
+      const zoomed = await zoomOf(page);
+      expect(zoomed.scale).toBe(zoomed.max);
+      const canvas = await page.getByTestId("game-canvas").boundingBox();
+      if (!canvas) throw new Error("no canvas");
+      expect(canvas.x, "zoomed map left").toBeGreaterThanOrEqual(insets.left - 0.5);
+      const press = { x: canvas.x + 6, y: canvas.y + canvas.height / 4 };
+      // Centred on the finger the menu would cross the safe area's edge: the margin from
+      // that edge decides where it goes.
+      expect(press.x - MENU_WIDTH / 2).toBeLessThan(insets.left + 8);
+      const under = await page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.tagName ?? "",
+        press,
+      );
+      expect(under, "the press lands on the map").toBe("CANVAS");
+      await hold(page, press.x, press.y, 1200);
+      const menu = page.getByTestId("action-menu");
+      await expect(menu).toBeVisible();
+      const menuBox = await box("action-menu");
+      inside("menu", menuBox, 8);
+      near("menu left", menuBox.l - insets.left, 8);
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-11-safe-menu.png`) });
+      await menu.locator('[data-action="cancel"]').tap();
+      await expect(menu).toBeHidden();
       await cdp.detach();
       expect(errors).toEqual([]);
     });

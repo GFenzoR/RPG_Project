@@ -17,7 +17,8 @@
 //   - Houses (houses.yaml, T5.4) travel as data; world.NewMap marks their tiles with
 //     FlagHouse and FlagProtection.
 //   - Portals (portals.yaml: stairs, ladders, holes, rope spots, teleports) travel as data
-//     too (world.bin v5); world.NewMap checks and indexes them by their entrance tile.
+//     too (world.bin v5); world.NewMap checks and indexes them by their entrance tile, and
+//     every one but a boat needs the item that shows it on that tile (checkPortalLooks).
 package compile
 
 import (
@@ -33,6 +34,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -43,6 +45,8 @@ type Item struct {
 	BlocksMovement *bool      `yaml:"blocks_movement"`
 	BlocksSight    *bool      `yaml:"blocks_sight"`
 	Ground         *groundDef `yaml:"ground"`
+	// Portal makes the item the look of a portal of portals.yaml (docs/03 "Validación").
+	Portal *content.PortalLook `yaml:"portal"`
 
 	num uint16
 }
@@ -209,7 +213,7 @@ func LoadContent(root string) (*Content, error) {
 
 // Compile reads world/ and data/ under root and builds the map.
 func Compile(root string) (*world.Map, error) {
-	content, err := LoadContent(root)
+	cont, err := LoadContent(root)
 	if err != nil {
 		return nil, err
 	}
@@ -223,21 +227,55 @@ func Compile(root string) (*world.Map, error) {
 	var islands []*world.Island
 	sectors := map[string][]*world.Sector{}
 	for _, entry := range wf.Islands {
-		is, secs, err := compileIsland(root, entry.ID, entry.Rect, content)
+		is, secs, err := compileIsland(root, entry.ID, entry.Rect, cont)
 		if err != nil {
 			return nil, err
 		}
 		islands = append(islands, is)
 		sectors[is.ID] = secs
 	}
-	m, err := world.NewMap(islands, sectors, content.speeds)
+	m, err := world.NewMap(islands, sectors, cont.speeds)
 	if err != nil {
 		return nil, fmt.Errorf("world/world.yaml: %w", err)
+	}
+	if err := checkPortalLooks(m, cont); err != nil {
+		return nil, err
 	}
 	return m, nil
 }
 
-func compileIsland(root, id string, worldRect rect, content *Content) (*world.Island, []*world.Sector, error) {
+// checkPortalLooks refuses a portal (but a boat) whose entrance holds no item that shows
+// it, on its ground or its stack: an item whose portal block names its kind and, if it
+// says one, the way it leads (content.PortalLook.Shows). Players would see plain ground
+// that moves them. make validate refuses the same (packages/map-format); the server warns
+// again at startup (session initPortals) when data/items changed since the compile.
+func checkPortalLooks(m *world.Map, c *Content) error {
+	byNum := make(map[uint16]*Item, len(c.Items))
+	for _, it := range c.Items {
+		if it.num != 0 {
+			byNum[it.num] = it
+		}
+	}
+	for _, is := range m.Islands() {
+		for _, pt := range is.Portals {
+			if pt.Kind == world.PortalBoat {
+				continue
+			}
+			shows := func(id uint16) bool {
+				it := byNum[id]
+				return it != nil && it.Portal.Shows(pt.Kind.String(), pt.From.Z, pt.To.Z)
+			}
+			if ground, _, _ := m.Tile(pt.From); shows(ground) || slices.ContainsFunc(m.Stack(pt.From), shows) {
+				continue
+			}
+			return fmt.Errorf("world/islands/%s/portals.yaml: %s %q has no item that shows it on its entrance %d,%d,%d (an item of data/items with a portal block of that kind and way, docs/03)",
+				is.ID, pt.Kind, pt.ID, pt.From.X, pt.From.Y, pt.From.Z)
+		}
+	}
+	return nil
+}
+
+func compileIsland(root, id string, worldRect rect, cont *Content) (*world.Island, []*world.Sector, error) {
 	dir := filepath.Join(root, "world", "islands", id)
 	islandPath := filepath.Join(dir, "island.yaml")
 	var meta islandFile
@@ -301,7 +339,7 @@ func compileIsland(root, id string, worldRect rect, content *Content) (*world.Is
 			if cm == nil {
 				return nil, nil, fmt.Errorf("%s: chunk files are named cXXXX_YYYY.json", rel(root, path))
 			}
-			s, err := compileChunk(path, rel(root, path), z, atoi(cm[1]), atoi(cm[2]), r, content)
+			s, err := compileChunk(path, rel(root, path), z, atoi(cm[1]), atoi(cm[2]), r, cont)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -346,7 +384,7 @@ func compileIsland(root, id string, worldRect rect, content *Content) (*world.Is
 	return is, sectors, nil
 }
 
-func compileChunk(path, where string, z, cx, cy int, island rect, content *Content) (*world.Sector, error) {
+func compileChunk(path, where string, z, cx, cy int, island rect, cont *Content) (*world.Sector, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", where, err)
@@ -369,7 +407,7 @@ func compileChunk(path, where string, z, cx, cy int, island rect, content *Conte
 	}
 	palette := make([]*Item, len(c.Palette))
 	for i, id := range c.Palette {
-		it := content.Item(id)
+		it := cont.Item(id)
 		if it == nil {
 			return nil, fmt.Errorf("%s: palette[%d]: unknown item %q", where, i, id)
 		}

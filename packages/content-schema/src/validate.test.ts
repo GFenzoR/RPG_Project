@@ -431,6 +431,36 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes("data/items/doors.yaml"))).toBe(false);
   });
 
+  it("checks portal items: fixed, walkable and a way that fits the kind (docs/03)", () => {
+    writeFileSync(
+      file("data/items/zz_portals.yaml"),
+      [
+        "- { id: loose_hole, kind: decoration, sprite: decor/hole, name: item.hole.name,",
+        "    portal: { kind: hole } }",
+        "- { id: wall_ladder, kind: decoration, sprite: decor/ladder_up, name: item.ladder_up.name,",
+        "    pickupable: false, blocks_movement: true, portal: { kind: ladder, leads: up } }",
+        "- { id: up_hole, kind: decoration, sprite: decor/hole, name: item.hole.name,",
+        "    pickupable: false, portal: { kind: hole, leads: up } }",
+        "- { id: down_rope, kind: decoration, sprite: decor/rope_spot, name: item.rope_spot.name,",
+        "    pickupable: false, portal: { kind: rope_spot, leads: down } }",
+        "- { id: boat_look, kind: decoration, sprite: decor/hole, name: item.hole.name,",
+        "    pickupable: false, portal: { kind: boat } }",
+        "",
+      ].join("\n"),
+    );
+    const out = messages(root);
+    for (const want of [
+      "zz_portals.yaml:2:5 [0].portal: a portal item needs pickupable: false",
+      "zz_portals.yaml:4:47 [1].portal: a portal item cannot block movement",
+      "zz_portals.yaml:6:46 [2].portal.leads: a hole only leads down",
+      "zz_portals.yaml:8:51 [3].portal.leads: a rope spot only leads up",
+      '[4].portal.kind: must be one of: "stairs", "ladder", "hole", "rope_spot", "teleport"',
+    ])
+      expect(out.some((m) => m.includes(want))).toBe(true);
+    // The repository's own portal items are fine.
+    expect(out.some((m) => m.includes("data/items/decoration.yaml"))).toBe(false);
+  });
+
   it("rejects loot counts above 1 for items that do not stack", () => {
     edit(
       "data/monsters/wolf.yaml",

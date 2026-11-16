@@ -7,15 +7,18 @@ name: map-pr
 # - The check's code is the BASE branch's (checkout of base.ref, its pnpm install): the PR
 #   is only fetched as git data and read with `git show` / `git cat-file` (the map, and the
 #   data/, i18n/ and assets/ the merge would land), never checked out or run.
-# - Read-only token, no secrets; artifacts only. The comment is posted by
-#   map-pr-comment.yml (workflow_run), which recomputes the key facts from the GitHub API.
+# - Read-only token, no secrets; artifacts only. The comment and the commit status
+#   `map-pr/verdict` are written by map-pr-comment.yml (workflow_run, from the default
+#   branch), which recomputes the key facts from the GitHub API.
 # - In a pull_request run this YAML itself comes from the PR. A PR that edits, renames or
-#   deletes it can fake this check (and a job named `check` in another workflow could
-#   stand in for it). The comment says the verdict is not trustworthy for any PR that
-#   touches .github/, and map-pr-pending.yml (pull_request_target, from the base) marks
-#   the comment as pending on every push, so a push without a map-pr run never keeps an
-#   old pass. The required check must be pinned to GitHub Actions as its source, and
-#   .github/ needs CODEOWNERS review (docs/04).
+#   deletes it can fake this job (and a job named `check` in another workflow could stand
+#   in for it). main requires the status `map-pr/verdict` instead: map-pr-comment sets it
+#   per commit, only for PRs into the default branch, and never to success for a PR that
+#   changes world/ and .github/ unless its author is a maintainer; a push without a
+#   map-pr run gets no status at all, so an old pass never covers it. That status is not
+#   tamper-proof either: a job named `map-pr/verdict` in a workflow the PR adds (also from
+#   a fork) satisfies a required check of that name, and anyone with write access can set
+#   it. What closes .github/ is CODEOWNERS review with stale approvals dismissed (docs/04).
 # Do not add write permissions here and do not switch to pull_request_target.
 #
 # No `paths` filter on purpose: GitHub evaluates it on the first 300 files only, and a push

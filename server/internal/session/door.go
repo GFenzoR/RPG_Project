@@ -115,7 +115,8 @@ type room struct {
 }
 
 // initDoors checks the doors and keys of the items (content.CheckDoors), finds the doors
-// of the map, works out the room behind each locked one and numbers the areas of the map
+// of the map, checks the arrivals, the temples and the house exits against them
+// (checkArrivals), works out the room behind each locked one and numbers the areas of the map
 // (initAreas). The walls of the map never change, and the walks count every locked door
 // as a wall and every other door as open, so the rooms and areas hold for good. A locked
 // door nobody gets through even open or on an end of a portal, whose room cannot be
@@ -170,6 +171,11 @@ func (w *World) initDoors() error {
 				}
 			}
 		}
+	}
+	// The doors are known: the arrivals and the last resorts (travel.go) go before the
+	// rooms, so a temple on a door says so rather than failing the escape check.
+	if err := w.checkArrivals(); err != nil {
+		return err
 	}
 	ends := map[world.Pos]bool{} // the tiles portals leave from or arrive on
 	if len(locked) > 0 {

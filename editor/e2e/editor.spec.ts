@@ -743,3 +743,45 @@ test("doors and keys: the tile info and the palette say which key opens them", a
   await shot(page, "51-ember-key");
   expect(errors).toEqual([]);
 });
+
+test("the atlas does not load: retries, then an error whose button starts the map again", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  // Every request for the atlas index fails until `down` is cleared: the map canvas waits
+  // for its retries (@rpg/renderer retry.ts: 4 attempts), shows the error and starts again
+  // with the button, without reloading the page.
+  let down = true;
+  let requests = 0;
+  await page.route("**/atlas/atlas.json", (route) => {
+    requests++;
+    return down ? route.abort("connectionrefused") : route.continue();
+  });
+  await page.goto("/?lang=es&island=testisle");
+  await page.evaluate(() => {
+    (window as unknown as { e2eSamePage?: boolean }).e2eSamePage = true;
+  });
+  const failed = page.getByTestId("canvas-error");
+  await expect(failed).toBeVisible({ timeout: 20_000 });
+  expect(requests).toBe(4);
+  await expect(page.getByTestId("map-canvas")).toHaveCount(0);
+  await expect(page.getByTestId("canvas-retry")).toHaveText("Reintentar");
+  await shot(page, "52-atlas-failed");
+  down = false;
+  await page.getByTestId("canvas-retry").click();
+  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  await expect(failed).toHaveCount(0);
+  await expect(page.getByTestId("map-canvas")).toHaveCount(1);
+  expect(requests).toBe(5);
+  // The same page: nothing reloaded it.
+  expect(
+    await page.evaluate(() => (window as unknown as { e2eSamePage?: boolean }).e2eSamePage),
+  ).toBe(true);
+  // The new canvas validates the island, and the palette (it comes with the canvas) shows
+  // its icons once their atlas page is decoded.
+  await expect(page.getByTestId("validation-summary")).toHaveText("Sin errores ni advertencias");
+  await swatchesLoaded(page);
+  await shot(page, "53-atlas-retried");
+  expect(errors).toEqual([]);
+});

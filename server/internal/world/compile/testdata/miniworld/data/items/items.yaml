@@ -58,3 +58,25 @@
   sprite: misc/coin
   name: item.coin.name
   currency: { worth: 1 }
+
+# The looks of the portals of portals.yaml: mapcompile wants one on every entrance.
+- id: stairs_down
+  kind: decoration
+  sprite: decor/stairs_down
+  name: item.stairs_down.name
+  pickupable: false
+  portal: { kind: stairs, leads: down }
+
+- id: stairs_up
+  kind: decoration
+  sprite: decor/stairs_up
+  name: item.stairs_up.name
+  pickupable: false
+  portal: { kind: stairs, leads: up }
+
+- id: teleport
+  kind: decoration
+  sprite: decor/teleport
+  name: item.teleport.name
+  pickupable: false
+  portal: { kind: teleport }

@@ -17,7 +17,8 @@ Usa las herramientas MCP `map_*` si están disponibles; si no, `pnpm mapcli ...`
 4. **Bordes y decoración:** `autoborder` y luego `scatter` con semilla.
 5. **Estructuras:** `stamp` de prefabs o paredes/puertas a mano.
 6. **Vida:** spawns acordes al `level_hint` de la isla, NPCs, zonas de protección en
-   ciudades y templos, portales/escaleras con su pareja.
+   ciudades y templos, portales/escaleras con su pareja y, en la entrada de cada uno, el item que lo muestra
+   (`stairs_down`/`stairs_up`, `ladder_up`/`ladder_down`, `hole`, `rope_spot`, `teleport`).
 7. **Validar:** `map_validate` hasta cero errores. Revisa también las advertencias de
    balance.
 8. **Revisión visual obligatoria:** `map_render` de cada área tocada (y de cada piso),

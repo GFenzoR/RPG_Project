@@ -12,7 +12,9 @@ import type { ServerMessage } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
-import { formatOz, locationInit, tileUse, topItem } from "./items.ts";
+import { tileActions } from "../input/actions.ts";
+import { formatOz, locationInit, menuItem, tileUse, topItem } from "./items.ts";
+import { portalKey, useMode } from "./portals.ts";
 import { formatMessage } from "./messages.ts";
 import { WorldState } from "./world.ts";
 
@@ -38,6 +40,7 @@ const content: ClientContent = {
     20: def("iron_sword"),
     48: def("backpack", { slots: 24 }),
     60: def("brasal_dock_sign", { blocks: true, desc: "text.volcan.dock_sign" }),
+    218: def("ladder_up", { portal: true }),
   },
   monsterSprites: {},
   vocations: [],
@@ -129,6 +132,59 @@ describe("inventory state", () => {
     expect(tileUse(w, 5, 6, 7, "never")).toBeUndefined();
     // A tile the client does not know: nothing.
     expect(tileUse(w, 9, 9, 7, "first")).toBeUndefined();
+    // A ladder as the map has it (its ladder_up on the grass) with a backpack (a corpse
+    // would be the same) dropped on it: a right click climbs, a Ctrl+right click opens the
+    // backpack (state/portals.ts useMode gives "first" and "bare"). Without the backpack,
+    // Ctrl uses the ladder_up: the server climbs on any item of the map there.
+    tile([{ itemId: 1 }, { itemId: 218 }, { itemId: 48 }]);
+    const ladder = { [portalKey(5, 6, 7)]: "ladder" };
+    expect(tileUse(w, 5, 6, 7, useMode(ladder, true, 5, 6, 7, false))).toMatchObject(ground);
+    expect(tileUse(w, 5, 6, 7, useMode(ladder, true, 5, 6, 7, true))).toMatchObject({
+      itemId: 48,
+      stackIndex: 2,
+    });
+    tile([{ itemId: 1 }, { itemId: 218 }]);
+    expect(tileUse(w, 5, 6, 7, useMode(ladder, true, 5, 6, 7, false))).toMatchObject(ground);
+    expect(tileUse(w, 5, 6, 7, useMode(ladder, true, 5, 6, 7, true))).toMatchObject({
+      itemId: 218,
+      stackIndex: 1,
+    });
+  });
+
+  it("gives a long press no buttons for a portal's own item, only for what lies on it", () => {
+    const w = new WorldState(content);
+    const tile = (items: { itemId: number }[]): void =>
+      w.apply(
+        {
+          case: "tileUpdate",
+          value: create(TileUpdateSchema, { pos: { x: 5, y: 6, z: 7 }, tile: { items } }),
+        },
+        0,
+      );
+    // A bare ladder: its ladder_up is the top item (the menu's title), but the menu only
+    // climbs and looks: no "use" or "move" of a map item nobody moves.
+    tile([{ itemId: 1 }, { itemId: 218 }]);
+    expect(topItem(w, 5, 6, 7, false)).toMatchObject({ itemId: 218, stackIndex: 1 });
+    expect(menuItem(w, 5, 6, 7)).toBeUndefined();
+    const facts = (x: number, y: number, z: number) => {
+      const item = menuItem(w, x, y, z);
+      return {
+        item: item && { container: (w.item(item.itemId)?.slots ?? 0) > 0 },
+        door: true,
+        climb: true,
+        known: true,
+      };
+    };
+    expect(tileActions(facts(5, 6, 7))).toEqual(["climb", "look"]);
+    // A backpack dropped on it gets its buttons.
+    tile([{ itemId: 1 }, { itemId: 218 }, { itemId: 48 }]);
+    expect(menuItem(w, 5, 6, 7)).toMatchObject({ itemId: 48, stackIndex: 2 });
+    expect(tileActions(facts(5, 6, 7))).toEqual(["climb", "open", "look", "move"]);
+    // Any other top item is the menu's item; a bare tile has none.
+    tile([{ itemId: 1 }, { itemId: 20 }]);
+    expect(menuItem(w, 5, 6, 7)).toMatchObject({ itemId: 20, stackIndex: 1 });
+    tile([{ itemId: 1 }]);
+    expect(menuItem(w, 5, 6, 7)).toBeUndefined();
   });
 
   it("builds protocol locations", () => {

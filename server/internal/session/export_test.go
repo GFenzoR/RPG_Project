@@ -354,6 +354,15 @@ func (w *World) AreaOf(p world.Pos) int32 { return w.areaOf(p) }
 // (tests only: the memory of the index, docs/07).
 func (w *World) Areas() (areas int32, sectors int) { return w.areaCount, len(w.areas) }
 
+// FreeNear is freeNear (tests only): a search for a free tile by rings from p.
+func (w *World) FreeNear(p world.Pos, radius int) (world.Pos, bool) { return w.freeNear(p, radius) }
+
+// HouseAreaOf returns the house area of p (area.go; tests only): 0 for none.
+func (w *World) HouseAreaOf(p world.Pos) int32 { return max(-w.tileArea(p), 0) }
+
+// HouseAreas returns how many house areas the map has (tests only).
+func (w *World) HouseAreas() int32 { return w.houseAreaCount }
+
 // MarketViewers returns how many open market windows show item's book (mkWatch).
 func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }
 
@@ -367,7 +376,8 @@ func (w *World) HeldGroundForTest() int { return len(w.heldGround) }
 // InputAndGiftForTest is one command of cl's player that runs msg and then drops n of
 // item id at its feet (they do not fit), as one command that changes a house and gives
 // something away does (a rune of the house floor used from the street that kills a quest
-// monster, hold.go). Tests only.
+// monster, hold.go; TestHouseRuneKillsAQuestMonsterFromTheStreet plays that one with the
+// real rune). Tests only.
 func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string, n int) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		p := w.byClient[cl]
@@ -403,3 +413,16 @@ func (w *World) UnlistForTest(p *Player) { delete(w.byClient, p.client) }
 
 // RelistForTest undoes UnlistForTest.
 func (w *World) RelistForTest(p *Player) { w.byClient[p.client] = p }
+
+// HoldForTest holds p as if a transfer of it waited for the ack of its snapshot seq
+// (hold.go inFlight; tests only).
+func (w *World) HoldForTest(p *Player, seq uint64) { w.inFlight[p.charID] = seq }
+
+// ReserveForTest reserves the ground item it to p until the ack of p's snapshot seq
+// (hold.go heldGround; tests only).
+func (w *World) ReserveForTest(it *Item, p *Player, seq uint64) {
+	w.heldGround[it] = groundHold{char: p.charID, seq: seq}
+}
+
+// ReservedTo returns the character the ground item it is reserved to, or 0 (tests only).
+func (w *World) ReservedTo(it *Item) int64 { return w.heldGround[it].char }

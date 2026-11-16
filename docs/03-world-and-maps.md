@@ -164,8 +164,18 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   (cualquier isla). Lo que hace cada `kind` en el juego está en `02-game-design.md`
   "Cambiar de piso": `stairs`, `hole` y `teleport` se pisan, `ladder` se usa, `rope_spot`
   pide una soga y `boat` no mueve a nadie (los barcos son `data/boat_routes.yaml`). El
-  portal es la casilla, no un item: la escalera se ve por el item que la decora
-  (`stairs_down` / `stairs_up`), pero el servidor no lo mira.
+  portal es la casilla, no un item, pero se ve por el item que lo muestra, que va en la
+  pila de su `from` o como su suelo (un item con bloque `portal`, `06-content-data.md`):
+  `stairs_down` / `stairs_up`, `ladder_up` (la escalera de mano de abajo, que sube) /
+  `ladder_down` (la trampilla de arriba, que baja), `hole`, `rope_spot` y `teleport`. `make validate` y
+  `mapcompile` lo exigen ("Validación", "Compilación": sin el item no hay `world.bin`); el
+  servidor no lo mira para mover a nadie y al arrancar solo avisa en el log si falta, para
+  un `world.bin` compilado antes de cambiar `data/items` (`world.bin` guarda números de
+  item, no qué son: `NewMap` no puede comprobarlo, y lo hace `session` con el contenido
+  cargado; avisa en vez de no arrancar porque un portal sin su item funciona igual, solo
+  se ve como suelo, y los mapas de los tests de `session` ponen portales en casillas sin
+  nada). `add_portal` no coloca el item: va aparte, con `place`/`place_item`. El atlas no
+  anima items: el teletransporte es estático.
 - Nadie se para sobre la entrada de un `stairs`, `hole` o `teleport`: ningún NPC ahí,
   ningún spawn de radio 0 centrado ahí (los monstruos no la pisan, quedaría vacío) y ni el
   templo ni la salida de una casa (el último recurso de despertar y de salir de una casa
@@ -215,7 +225,11 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   la casa y en su borde (junto a una casilla de afuera; advertencia si las casillas de un
   piso no forman un solo bloque) y sin un item de puerta (bloque `door`: usarlo abriría la
   puerta, nunca la ventana de la casa), salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
-  el templo, nombre con texto en todos los idiomas, id único en el mundo. Adentro de una
+  el templo, y nunca sobre una puerta (es el último recurso de sacar a alguien de la casa
+  con todo lleno: sobre una con llave, abierta o cerrada, quedaría en el umbral, a un paso
+  de la sala sin la llave; una común la puede cerrar cualquiera, y quedaría dentro de una
+  puerta cerrada; el servidor tampoco arranca con eso, `checkArrivals`), nombre con texto en
+  todos los idiomas, id único en el mundo. Adentro de una
   casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y
   ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro). Un
   portal de otra isla tampoco puede llegar a una casa (lo rechazan el servidor y
@@ -278,7 +292,9 @@ La validación completa del mapa (conectividad, spawns, i18n...) sigue siendo la
 `packages/map-format` (`make validate`). `mapcompile` solo rechaza lo que no puede
 compilar: rect no alineado o distinto del de `world.yaml`, chunk fuera de la isla o en un
 piso no listado, nombre de archivo incoherente, item desconocido o sin ID numérico, IDs
-numéricos repetidos en `ids.lock.yaml`, tipo de zona o de portal desconocido, y lo que
+numéricos repetidos en `ids.lock.yaml`, tipo de zona o de portal desconocido, un portal
+(salvo un `boat`) sin el item que lo muestra en su entrada (la misma regla que
+"Validación": un servidor nunca carga un mapa con suelo que mueve sin verse) y lo que
 `world.NewMap` no acepta (ver "Historial" de `world.bin`).
 
 ### Flags de tile
@@ -398,8 +414,13 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   origen. `hole` baja, `rope_spot` sube. Un portal por casilla y ninguno hacia su propia
   casilla (el servidor los indexa por la entrada). Ningún NPC, spawn de radio 0, templo ni
   salida de casa sobre la entrada de un `stairs`/`hole`/`teleport`. Un id de portal no se
-  repite en todo el mundo (como en el servidor). **Llegada:** toda casilla caminable fuera
-  de casas, sin NPC y fuera de las entradas de `stairs`/`hole`/`teleport` a
+  repite en todo el mundo (como en el servidor). **El item que lo muestra:** la entrada de
+  todo portal salvo un `boat` tiene (en su pila o como suelo) un item cuyo bloque `portal`
+  es de su `kind` y, si dice `leads`, del sentido en que cambia de piso (`down` si
+  `to.z > from.z`, `up` si es menor; un teletransporte del mismo piso solo con un item sin
+  `leads`); el error nombra los items de `data/items` que sirven. **Advertencia:** un item
+  de portal en una casilla de la que no sale un portal que muestre (los jugadores lo
+  tomarían por un camino). **Llegada:** toda casilla caminable fuera de casas, sin NPC y fuera de las entradas de `stairs`/`hole`/`teleport` a
   `travel.arrival_radius` del destino (de `data/balance.yaml`; 5, el máximo, si no se
   cargó) se conecta a pie con el destino (8 direcciones, un piso, puertas abiertas, sin
   cruzar esas entradas, casillas de casa ni NPCs: el servidor busca solo en el área del
@@ -473,6 +494,22 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   algún `npcs.yaml` a ≤ 8 casillas (Chebyshev, mismo piso) del muelle `from`, y `from` y
   `to` son casillas caminables de una isla. Los errores llevan la posición; con
   `--island` se muestran los de rutas cuyo muelle o llegada cae en esa isla.
+- **Llegadas de barco y teleports de diálogo**: ni la llegada `to` de una ruta ni el
+  destino de un `teleport` de un diálogo de NPC (`data/npcs`) caen en una casilla de casa
+  (una llegada no deja a nadie adentro de una casa) ni sobre una puerta con llave colocada
+  abierta (una puerta no es lugar para llegar: el que llega quedaría en el umbral). El
+  destino de un `teleport` es además una casilla caminable de una isla, como la llegada de
+  un barco (una puerta con llave cerrada no lo es). La salida de una casa y el templo de
+  cada isla, los últimos recursos de salir de una casa y de despertar con todo lleno,
+  tampoco caen sobre una puerta, con llave o común, abierta o cerrada, ni en una casilla no
+  caminable (ver `houses.yaml`), y el templo tampoco en una casilla de casa. El error de
+  una casa o de una puerta nombra la isla y la casilla; el de una casilla no caminable
+  nombra la ruta, el NPC, la casa o el templo, con la casilla en la posición del error,
+  pero no siempre la isla (el destino de un `teleport` puede no estar en ninguna). Lo mismo que los
+  extremos de portal en una casa (`world.NewMap`): el servidor no arranca con eso
+  (`checkArrivals` en `session/travel.go`, que corre en cuanto `initDoors` encuentra las
+  puertas, antes del chequeo de escape), y los dos lados leen los casos de
+  `packages/map-format/src/testdata/arrivals.json`.
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).
 
@@ -613,8 +650,8 @@ Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable
    `04-map-editor-and-ai.md`, "Map patches".
 3. **Revisión.** Hito 2: el patch se envía como pull request de GitHub (a mano o por la
    herramienta). La CI valida y publica imágenes antes/después del área (T2.4: un
-   comentario en el PR que se actualiza en cada push, ver `04-map-editor-and-ai.md`,
-   "PR de mapas en CI"). Hito 5: portal web con cola
+   comentario en el PR que se actualiza en cada corrida de `map-pr` y un status
+   `map-pr/verdict` por commit, ver `04-map-editor-and-ai.md`, "PR de mapas en CI"). Hito 5: portal web con cola
    de moderación que crea el PR automáticamente al aprobar.
 4. **Contenido nuevo** (monstruos, items) no entra por patch de mapa: va en un PR de
    `data/` revisado por maintainers, porque afecta el balance.

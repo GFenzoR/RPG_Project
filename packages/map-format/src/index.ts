@@ -14,8 +14,8 @@ export {
   setGround,
   stackAt,
 } from "./chunk.ts";
-export { loadContent } from "./content.ts";
-export type { ContentIndex, ItemInfo, TeleportInfo } from "./content.ts";
+export { loadContent, showsPortal } from "./content.ts";
+export type { ContentIndex, ItemInfo, PortalLook, TeleportInfo } from "./content.ts";
 export {
   DOOR_ROOM_ERRORS,
   DOOR_ROOM_SEARCH,

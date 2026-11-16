@@ -1,0 +1,106 @@
+{
+  "_comment": "Where a boat route may arrive, a dialog teleport may lead and a temple or a house exit may lie (docs/03-world-and-maps.md \"Validación\"). Read by arrivals.test.ts here (make validate) and by server/internal/session (TestArrivalsFixture, session.New), so both refuse the same. The field: island \"test\", 64x64 grass on floor 7 from (0,0), its temple at (0,0) and the captain harbor_master at (8,10) with its dock at (8,11). rows are drawn over it from origin: . grass; # stone_wall; D forge_gate, closed; d forge_gate, placed open (a double gate of one room); p a door without a lock, placed open (plain_door_open of the pair plain_door, which both tests add to the items of data/). houses: by \"x,y,w,h\" (rect on floor 7), with a door and an exit by \"x,y\"; the house of index i is h<i>. Each case is one tile, to \"x,y\" on floor 7: the arrival of a boat route, the destination of a dialog teleport (of the NPC puerto_priest), the exit of one more house (by exit: house h1, of rect and door by \"x,y\" as above) or the temple of the island (by temple: it moves there); error: why it is refused (house: on a house tile; door: on a locked door, placed open for an arrival, open or closed for a house exit or a temple; plain: on a door without a lock, for a house exit or a temple; walkable: on no walkable tile), none when it is fine.",
+  "origin": "30,30",
+  "rows": ["#####....", "#...#....", "#...d....", "#...D....", "#####..p."],
+  "houses": [{ "rect": "36,30,2,2", "door": "36,31", "exit": "36,32" }],
+  "cases": [
+    { "name": "a boat arrives on the field", "by": "boat", "to": "40,40" },
+    { "name": "a boat arrives next to a house", "by": "boat", "to": "38,31" },
+    { "name": "a boat arrives in a house", "by": "boat", "to": "36,30", "error": "house" },
+    {
+      "name": "a boat arrives on the door of a house",
+      "by": "boat",
+      "to": "36,31",
+      "error": "house"
+    },
+    {
+      "name": "a boat arrives on a gate placed open",
+      "by": "boat",
+      "to": "34,32",
+      "error": "door"
+    },
+    { "name": "a boat arrives on a closed gate", "by": "boat", "to": "34,33", "error": "walkable" },
+    { "name": "a dialog teleports to the field", "by": "dialog", "to": "40,40" },
+    { "name": "a dialog teleports to the exit of a house", "by": "dialog", "to": "36,32" },
+    { "name": "a dialog teleports into a house", "by": "dialog", "to": "37,31", "error": "house" },
+    {
+      "name": "a dialog teleports onto a gate placed open",
+      "by": "dialog",
+      "to": "34,32",
+      "error": "door"
+    },
+    {
+      "name": "a dialog teleports onto a closed gate",
+      "by": "dialog",
+      "to": "34,33",
+      "error": "walkable"
+    },
+    {
+      "name": "a dialog teleports onto a plain door placed open",
+      "by": "dialog",
+      "to": "37,34"
+    },
+    {
+      "name": "a dialog teleports into a wall",
+      "by": "dialog",
+      "to": "30,30",
+      "error": "walkable"
+    },
+    {
+      "name": "a dialog teleports off every island",
+      "by": "dialog",
+      "to": "100,100",
+      "error": "walkable"
+    },
+    {
+      "name": "a house exit on the field",
+      "by": "exit",
+      "to": "41,40",
+      "house": { "rect": "40,40,1,1", "door": "40,40" }
+    },
+    {
+      "name": "a house exit on a gate placed open",
+      "by": "exit",
+      "to": "34,32",
+      "house": { "rect": "35,32,1,1", "door": "35,32" },
+      "error": "door"
+    },
+    {
+      "name": "a house exit on a closed gate",
+      "by": "exit",
+      "to": "34,33",
+      "house": { "rect": "35,33,1,1", "door": "35,33" },
+      "error": "door"
+    },
+    {
+      "name": "a house exit on a plain door placed open",
+      "by": "exit",
+      "to": "37,34",
+      "house": { "rect": "38,34,1,1", "door": "38,34" },
+      "error": "plain"
+    },
+    {
+      "name": "a house exit in a wall",
+      "by": "exit",
+      "to": "30,32",
+      "house": { "rect": "29,32,1,1", "door": "29,32" },
+      "error": "walkable"
+    },
+    { "name": "the temple on the field", "by": "temple", "to": "40,40" },
+    { "name": "the temple in a house", "by": "temple", "to": "37,30", "error": "house" },
+    {
+      "name": "the temple on a gate placed open",
+      "by": "temple",
+      "to": "34,32",
+      "error": "door"
+    },
+    { "name": "the temple on a closed gate", "by": "temple", "to": "34,33", "error": "door" },
+    {
+      "name": "the temple on a plain door placed open",
+      "by": "temple",
+      "to": "37,34",
+      "error": "plain"
+    },
+    { "name": "the temple in a wall", "by": "temple", "to": "30,31", "error": "walkable" }
+  ]
+}

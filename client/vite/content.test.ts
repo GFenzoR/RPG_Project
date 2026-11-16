@@ -55,6 +55,22 @@ describe("client content (T0.5)", () => {
     expect(content.i18n["es"]?.["item.brasal_dock_sign.name"]).toBe("cartel");
   });
 
+  it("marks the items that show a portal (their portal block), and only those", () => {
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    for (const id of [
+      "stairs_down",
+      "stairs_up",
+      "ladder_up",
+      "ladder_down",
+      "hole",
+      "rope_spot",
+      "teleport",
+    ])
+      expect(byId.get(id)?.portal, id).toBe(true);
+    expect(byId.get("grass")?.portal).toBeUndefined();
+    expect(byId.get("backpack")?.portal).toBeUndefined();
+  });
+
   it("ships the portals of world/ by their entrance tile, with their kind", () => {
     expect(content.portals?.["3692,5796,7"]).toBe("stairs");
     expect(content.portals?.["3692,5796,8"]).toBe("stairs");

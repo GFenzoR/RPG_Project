@@ -116,6 +116,7 @@ export function loadClientContent(root: string): ClientContent {
         toolUse:
           isObj(raw["tool"]) && typeof raw["tool"]["use"] === "string" ? raw["tool"]["use"] : "",
         ...(desc !== "" ? { desc } : {}),
+        ...(isObj(raw["portal"]) ? { portal: true as const } : {}),
       };
     }
   }

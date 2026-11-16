@@ -163,6 +163,29 @@ items:
   usada sobre un punto de soga (`rope_spot` de `portals.yaml`) sube al jugador
   (`02-game-design.md`, "Cambiar de piso"); sobre cualquier otra casilla sigue como una
   herramienta de recolección. El valor `rope` lo nombra el servidor (`session/portal.go`).
+- **Portales** (`portal`): un item fijo del mapa que muestra un portal de `portals.yaml`
+  (`02-game-design.md` "Cambiar de piso"): `kind` (`stairs`, `ladder`, `hole`,
+  `rope_spot`, `teleport`) y, opcional, `leads` (`up` o `down`: el sentido en que cambia
+  de piso). Va en la entrada del portal, en la pila o como suelo; no mueve a nadie.
+  Ejemplo (`data/items/decoration.yaml`):
+  ```yaml
+  - id: ladder_up
+    kind: decoration
+    sprite: decor/ladder_up
+    name: item.ladder_up.name
+    description: item.ladder_up.desc
+    pickupable: false
+    portal: { kind: ladder, leads: up }
+  ```
+  El validador de contenido exige `pickupable: false`, que no bloquee el paso (la entrada
+  de un portal es caminable) y que un `hole` no diga `leads: up` ni un `rope_spot`
+  `leads: down`. Dónde va lo valida el mapa (`03-world-and-maps.md`, "Validación"): todo
+  portal salvo un `boat` tiene en su entrada un item que lo muestre, y un item de portal
+  donde no sale ninguno es advertencia. Hoy: `stairs_down`/`stairs_up`, `ladder_up`/
+  `ladder_down`, `hole`, `rope_spot` y `teleport` (arte propio de
+  `tools/spritegen/src/recipes/portals.ts`, salvo las escaleras). El servidor lo lee como
+  `content.PortalLook`: `mapcompile` rechaza un portal sin su item y la sesión avisa al
+  arrancar si falta (para un `world.bin` compilado antes de cambiar `data/items`).
 - **Paso bloqueado** (regla del contrato, la aplican el validador de mapas y
   `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
@@ -303,7 +326,10 @@ Semántica del motor (T1.10):
 - `teleport` deja al jugador en su destino o, si está ocupado, en la casilla libre más
   cercana a 1 de distancia, solo en el área del destino y nunca en una casilla de casa
   (como la llegada de un barco o de un portal). Si no hay ninguna, el destino cuenta como
-  inexistente.
+  inexistente. El destino tiene que ser una casilla caminable de una isla, fuera de las
+  casas y no sobre una puerta con llave colocada abierta: si no, ni el servidor arranca ni
+  pasa `make validate` (docs/03 "Validación"; lo mismo vale para la llegada `to` de una
+  ruta de barco).
 - `has_item`/`lacks_item` cuentan todo el inventario (equipo y contenedores anidados).
   Un contenedor con algo adentro no cuenta ni se puede quitar o vender (se perdería su
   contenido).

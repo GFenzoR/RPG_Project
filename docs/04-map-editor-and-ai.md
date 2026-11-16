@@ -47,7 +47,7 @@ dependencias de Node para que el editor la use en el navegador).
 | `add_spawn` / `remove_spawn` | campos de spawns.yaml | |
 | `add_zone` / `remove_zone` | campos de zones.yaml | |
 | `place_npc` / `remove_npc` | `pos`, `npc` | |
-| `add_portal` / `remove_portal` | campos de portals.yaml | |
+| `add_portal` / `remove_portal` | campos de portals.yaml | No coloca el item que lo muestra: un `place_item` en su `from` (`stairs_down`, `ladder_up`, `hole`…, los items con bloque `portal`); sin él `make validate` y `make mapcompile` fallan (`03-world-and-maps.md`, "Validación") |
 | `stamp` | `pos`, `prefab` | Coloca un prefab (casa, muelle, templo) de `world/prefabs/` |
 | `add_house` | `id`, `rent`, `rects[]`, `doors[]`, `exit`, `notes?`, `name?`, `index?` | Agrega una casa a `houses.yaml` (T5.4) |
 | `set_house` | `id` y los campos que cambian (`rent`, `rects`, `doors`, `exit`, `notes`; `notes: null` las quita) | Cambia una casa en su lugar; el `id` nunca cambia |
@@ -75,7 +75,8 @@ Detalle de las ops de T1.15 (las inversas se expresan siempre con ops primitivas
   archivo y el servidor: alquiler 1..2³²−1, 1 a 16 rects de lado 1..255 sin casillas
   repetidas dentro de la isla y sus pisos, 1 a 8 puertas que sean casillas de la casa y la
   salida fuera de la casa. Lo demás (otra casa encima, suelo, caminable, puerta en el
-  borde, salida junto a una puerta, el nombre en `i18n/`) lo reporta el validador, como un
+  borde, salida junto a una puerta y nunca sobre una puerta, el nombre en `i18n/`) lo
+  reporta el validador, como un
   spawn sobre el agua: una casa se puede trazar antes de pintar su suelo. La geometría que
   comparten las ops, el validador y el editor vive en `map-format/src/houses.ts`
   (`houseTiles`, `tilesToRects`, `onHouseEdge`, `disconnectedFloors`, `houseIssues`).
@@ -222,7 +223,7 @@ maliciosas están en `packages/map-format/src/patch/merge.test.ts`,
 `tools/mapcli/src/edit.test.ts` (incluido el symlink) y `editor/server/store.test.ts`.
 
 ### PR de mapas en CI (T2.4)
-Todo PR dispara tres workflows (sin filtro `paths`: GitHub solo mira los primeros 300
+Todo PR dispara dos workflows (sin filtro `paths`: GitHub solo mira los primeros 300
 archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto anterior):
 
 1. **`map-pr.yml`** (`pull_request` con `opened`, `synchronize`, `reopened` y `edited`,
@@ -236,22 +237,144 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
    `mapcli pr-check --base <sha base> --head <sha head> --author <login> --association <rel> --head-repo <o/r> --repo <o/r> --pr <n> --out map-pr`.
    Sube dos artefactos, `map-pr-report` (`report.json`) y `map-pr-renders` (PNG), y falla
    si el reporte falla. También deja una vista previa del comentario en el resumen.
-2. **`map-pr-comment.yml`** (`workflow_run` de `map-pr`, `pull-requests: write`,
-   `actions: read`, `contents: read`). Publica **un** comentario por PR, marcado con
-   `<!-- rpg-map-pr-check -->`, y lo edita en cada push. Lo crea solo si el PR cambia
-   `world/` y lo actualiza siempre que ya exista. Si el último commit ya no toca `world/`,
-   lo reemplaza por un aviso de que la revisión anterior no aplica. El comentario vale
-   para el commit que nombra. Si el PR ya avanzó a otro commit, no hace nada: un reporte
-   viejo nunca pisa uno nuevo ni el aviso de "pendiente".
-3. **`map-pr-pending.yml`** (`pull_request_target`, solo `pull-requests: write`). Sale de
-   la base, así que el PR no lo puede quitar. En cada push (y en `edited`), si ya existe
-   el comentario, lo cambia a "⏳ Pendiente: revisando el commit `<sha>`". No hace
-   checkout, no ejecuta ni lee nada del PR, y solo usa el número y el sha del evento,
-   validados con regex. Así, un push que no produce una corrida de `map-pr` (por ejemplo,
-   porque el PR renombró o borró `map-pr.yml`) deja "pendiente", nunca un ✅ viejo. Corre
-   con `set -euo pipefail` y sin pipes a `head`: si falla el listado o el PATCH (por rate
-   limit o un 5xx), el job queda en rojo en vez de "pasar" sin marcar nada. El test
-   ejecuta el script del YAML con un `gh` falso.
+2. **`map-pr-comment.yml`** (`workflow_run` de `map-pr` con `requested` y `completed`;
+   sale siempre de la rama por defecto). Escribe dos cosas: **un** comentario por PR,
+   marcado con `<!-- rpg-map-pr-check -->`, y el **status de commit `map-pr/verdict`**
+   sobre el commit head del PR. El veredicto depende de la base y de quién abrió el PR y
+   desde dónde (maintainer), pero el status es del commit. Por eso el status lo escribe
+   **solo un PR hacia la rama por defecto** (`DEFAULT_BRANCH`, del `repository` del
+   evento), solo si **ningún otro PR abierto hacia esa rama tiene el mismo commit desde
+   otro repo o con otro autor**. Si el PR cambia `world/`, además, solo con un veredicto
+   **calculado contra la punta actual de esa rama** (uno que no cambia `world/` no tiene
+   mapa que juzgar: su `success` no depende de la base). Y no escribe nada si el PR
+   cambió (base, head o cantidad de archivos) mientras se calculaba el veredicto:
+   - el mismo commit puede ser el head de otro PR hacia una rama vieja del repo (con otras
+     parcelas o un `prcheck` viejo) cuyo `success` aparecería en el PR hacia `main`. Un
+     PR hacia otra rama recibe su comentario y nada más;
+   - GitHub deja un solo PR abierto por rama de origen y base, así que una "copia" hacia
+     `main` no sale de la misma rama: sale de un fork al que alguien subió el mismo commit,
+     o de otra rama del repo con la misma punta. Las corridas de esa copia fallan `plots`
+     (su autor no es maintainer) y, con cada `edited`, pasarían a `failure` el status del
+     commit del maintainer. Mientras la copia esté abierta, ninguna de las dos corridas
+     escribe el status: queda el que había (un `pending` o ninguno bloquean el merge). Se
+     cierra la copia y el PR bueno necesita una corrida **nueva** de `map-pr` (abajo). Es
+     solo un bloqueo: nunca da un `success` falso, porque el mismo commit hacia la misma
+     base es el mismo merge;
+   - el reporte dice contra qué commit de la base se calculó (`base`: la punta de
+     `base.ref` cuando la corrida hizo checkout). Para un PR hacia la rama por defecto que
+     cambia `world/`, `comment` lo compara con la punta actual de esa rama
+     (`GET /git/ref/heads/<rama>`, con `contents: read`). Si no coincide, el reporte no
+     vale (`other_base`): el comentario lo dice y el status, si este PR lo escribe (no con
+     una copia abierta), queda en `failure`. Cierra el caso de un PR que se
+     calculó hacia una rama vieja y después se pasó a `main`: el `completed` de esa
+     corrida vieja no escribe un `success` de la rama vieja, por tarde que llegue y aunque
+     otros PR compartan el commit. También cae ahí una corrida que `main` dejó atrás
+     mientras corría (con "Require branches to be up to date" ese PR igual necesita
+     actualizarse). El comentario no muestra el detalle de ese reporte; el resumen de la
+     corrida de `map-pr` sí (la vista previa);
+   - justo antes de escribir, `comment` vuelve a leer el PR: si su base, su head o su
+     cantidad de archivos cambiaron desde que leyó los archivos, no escribe nada (la
+     corrida del `edited` o del push que lo cambió escribe la suya). Así un PR que no
+     cambia `world/` contra una rama vieja no se lleva su `success` "sin mapa" al pasar
+     a `main` y volver. Si la API de archivos tarda en recalcular tras un cambio de base
+     (no verificado en GitHub), esta lectura no lo ve.
+
+   Tiene dos jobs, que corren de a uno por rama del PR (un grupo de `concurrency` a nivel
+   de job, compartido):
+   - `pending` (`requested`, cuando arranca una corrida de `map-pr`): pone el status en
+     `pending` ("Revisando el commit …") y, si el comentario ya existe, lo cambia a
+     "⏳ Pendiente: revisando el commit `<sha>`. El veredicto anterior ya no vale". Si la
+     corrida ya terminó cuando llega, no hace nada: el veredicto lo escribe `comment`.
+   - `comment` (`completed`, salvo corridas canceladas o que esperan que un maintainer
+     apruebe los workflows de un contribuidor nuevo, `action_required`: esas no traen
+     veredicto; `prcomment.ts` también las ignora): crea el comentario solo si el PR
+     cambia `world/` y lo actualiza siempre que ya exista. Si el último commit ya no toca
+     `world/`, lo reemplaza por un aviso de que la revisión anterior no aplica. Después
+     pone el status final (abajo). Primero el comentario y después el status: si el
+     status falla, el job queda en rojo y el commit con el status que tenía (`pending` si
+     el job `pending` marcó esta corrida; ninguno si es un commit nuevo, que igual
+     bloquea; el final anterior solo si es otra corrida del mismo commit y `pending` no
+     alcanzó a correr).
+
+   El grupo de `concurrency` es más débil de lo que parece: GitHub deja un job corriendo y
+   **uno** esperando, y uno nuevo cancela al que espera aunque `cancel-in-progress` sea
+   `false`. Con dos PR desde la misma rama (uno hacia `main` y otro hacia otra rama), el
+   veredicto del de `main` se puede perder. Su status queda como estaba: el job `pending`
+   no lo escribe con dos bases, así que es ninguno (bloquea) o un veredicto anterior del
+   mismo commit. Lo corrige una corrida nueva de su `map-pr` (abajo: relanzar una vieja no
+   alcanza si hay una más nueva). Tampoco está verificado en GitHub que un job saltado
+   por su `if` no ocupe lugar en el grupo.
+
+   Los dos validan los datos del evento con regex (`readEnv` en `prcomment.ts`: sha,
+   repo, número de corrida y de PR, rama por defecto) y no hacen nada si:
+   - el PR ya avanzó a otro commit: un reporte viejo nunca pisa uno nuevo ni el aviso de
+     "pendiente";
+   - el comentario lo escribió una corrida más nueva. Cada comentario lleva en su segunda
+     línea, oculta, la corrida que lo escribió (`<!-- map-pr-run <id> -->`; los id de
+     corrida solo crecen). GitHub puede entregar tarde un evento de `workflow_run`, y una
+     corrida vieja del mismo commit (por ejemplo, antes de un `edited` que cambió la base)
+     no debe pisar el comentario ni el status de la nueva. Relanzar la última corrida sí
+     escribe (mismo id), salvo que haya una más nueva del mismo commit (por ejemplo, de un
+     PR cerrado: ver el punto siguiente); relanzar una más vieja no cambia nada;
+   - hay una corrida de `map-pr.yml` más nueva del mismo commit y del mismo repo de
+     origen (`GET /actions/workflows/map-pr.yml/runs?head_sha=…&event=pull_request`, con
+     `actions: read`), cuando el PR es el único abierto con ese head desde ese repo:
+     entonces toda corrida de `map-pr.yml` así es de este PR, de uno cerrado o de uno
+     abierto que ya avanzó a otro commit. Solo cuentan las de ese archivo: un PR que
+     renombra el workflow (con el mismo `name: map-pr`) toca `.github/`, y eso nunca da
+     `success` salvo a un maintainer. Cubre lo que el sello del comentario no ve: un PR
+     que todavía no tiene comentario o que no cambia `world/`. Se leen todas las páginas
+     hasta una incompleta: GitHub no documenta el orden de la lista, así que no se supone
+     ninguno. Con varios PR del mismo commit desde el mismo repo no se pregunta (la
+     corrida más nueva puede ser del otro PR) y quedan el sello del comentario y la base
+     del reporte (arriba): un veredicto de `world/` calculado contra otra base nunca da
+     `success`. Si la respuesta de la API no trae la lista, o hay 1000 corridas o más del
+     commit (GitHub no lista más), el job falla sin escribir;
+   - hay varios PR abiertos con ese commit (y ese repo de origen) hacia ramas distintas y
+     la corrida no dice para cuál es. El número de PR del reporte elige entre ellos: no
+     es de confianza, pero solo puede nombrar otro PR con el mismo commit, cuyos datos de
+     confianza deciden después, y el reporte tiene que coincidir con ese PR. El job
+     `pending` no tiene reporte, y una corrida sin reporte utilizable tampoco: en ese
+     caso no escriben nada (un `pending` que ningún veredicto reemplazaría dejaría
+     trabado al PR hacia `main`).
+
+   Cualquier error de la API (rate limit, 5xx) deja el job en rojo, nunca "pasa" sin
+   escribir.
+
+   **El status `map-pr/verdict`** (`commitStatus` en `prcomment.ts`) se calcula del lado
+   de confianza (la API y el `MAINTAINERS` de la rama por defecto):
+   - `failure` siempre que el commit tenga un **check run** llamado `map-pr/verdict`
+     (`GET /commits/{sha}/check-runs?check_name=…`, con `checks: read`): nuestro workflow
+     solo pone un status, así que eso es el job de algún workflow haciéndose pasar por él
+     (ver "Límite conocido"). El comentario lo avisa arriba con 🚨 y no muestra ✅. Solo
+     ve los que existen cuando se escribe el veredicto;
+   - `success` si el commit no cambia `world/` (salvo que la API no liste todos los
+     archivos y el autor no sea maintainer: ahí `failure`, porque entre los que faltan
+     podría haber uno de `world/`). No hay mapa que juzgar: lo que ese PR cambie en
+     `.github/` u otra parte lo cuida `CODEOWNERS`, no este status;
+   - `failure` si no hay un reporte utilizable o si hay alguna falla (`plots` según el
+     maintainer de confianza, no el del reporte). Un reporte calculado contra otra base
+     que la punta actual de la rama por defecto no es utilizable (`other_base`, arriba);
+   - `failure` si el comentario no confía en el veredicto (el PR cambia algo fuera de
+     `world/` y `docs/`, o la lista de archivos está cortada), salvo que el autor sea
+     maintainer: a él el check ya le confía todo el mapa. El comentario igual dice qué
+     revisar a mano;
+   - `success` en el resto, que es exactamente el ✅ del comentario.
+
+   **Por qué un status y no otro workflow "pendiente".** Hasta noviembre de 2026 había un
+   tercer workflow, `map-pr-pending.yml` (`pull_request_target`), que marcaba el
+   comentario como pendiente en cada push. GitHub bloquea `pull_request_target` por
+   defecto en los repos públicos desde el 2026-12-02 (ya hubo cortes de prueba: el
+   PR #82 no lo pudo correr), y habilitarlo pediría una política de eventos de Actions.
+   Ahora el aviso sale del `requested` de la corrida de `map-pr`, y el hueco que cubría
+   (un push que **no** produce corrida de `map-pr` porque el PR renombró o borró
+   `map-pr.yml`) lo cierra el status: es **por commit**, así que el commit nuevo queda
+   sin `map-pr/verdict`, y la protección de `main` que lo exige bloquea el merge. Un ✅
+   viejo nunca vale para un commit nuevo. El comentario no cambia en ese caso, pero
+   nombra su commit y su pie lo dice: "si el PR tiene uno más nuevo y esto no pasó a ⏳,
+   el check no corrió para ese commit (le falta el status `map-pr/verdict`)". El status
+   no es a prueba de falsificación (ver "Límite conocido"): lo que impide que un PR
+   cambie los workflows sin revisión es `CODEOWNERS`.
 
 `mapcli pr-check` (`tools/mapcli/src/prcheck.ts`):
 - Arma el PR como map patch desde `merge-base(base, head)` hasta `head` y lo mezcla sobre
@@ -417,40 +540,143 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
      al comentario. Lo único libre son los mensajes del validador, sin backticks ni saltos,
      dentro de un bloque de código;
    - busca el PR por `head_sha` y repo de origen del `workflow_run`, y exige que el número,
-     el commit y el autor del reporte coincidan.
+     el commit y el autor del reporte coincidan y, si el PR va hacia la rama por defecto,
+     que su base sea la punta actual de esa rama;
+   - pone el status `map-pr/verdict` (solo en un PR hacia la rama por defecto, y sin
+     copias de otro autor o repo abiertas) con esos mismos datos de confianza: un PR de
+     la comunidad que cambia `world/` y además
+     `.github/` (o cualquier cosa fuera de `world/` y `docs/`) nunca tiene `success`, ni
+     aunque su `map-pr` falso suba un reporte "perfecto". Uno que no cambia `world/` sí
+     tiene `success`, porque no hay mapa que juzgar: sus cambios a `.github/` los frena
+     `CODEOWNERS`, no este status.
+- **Qué token corre dónde** (solo `GITHUB_TOKEN`; ningún workflow de PR usa otros secretos):
+
+  | Workflow / job | Evento | Código que corre | Permisos del token |
+  |---|---|---|---|
+  | `map-pr` / `check` | `pull_request` (también forks) | **el YAML sale del PR** (del merge con la base), así que un PR que edita `map-pr.yml` corre sus propios steps. Tal como está en la base: checkout de `base.ref` y su `pnpm install` y `mapcli`; del PR, solo datos con git. El token va como cabecera de un único `git fetch`, con `persist-credentials: false` (`setup-node` y `pnpm` lo reciben por su cuenta) | `contents: read` (en un fork, solo lectura igual); sin secretos |
+  | `map-pr-comment` / `pending` | `workflow_run` `requested` | `prcomment.ts --pending` de la rama por defecto (checkout `sparse`, sin credenciales); no descarga nada | `actions: read`, `contents: read`, `pull-requests: write`, `statuses: write` |
+  | `map-pr-comment` / `comment` | `workflow_run` `completed`, salvo `cancelled` y `action_required` | `prcomment.ts` y `MAINTAINERS` de la rama por defecto; el artefacto `map-pr-report` va a `runner.temp` (fuera del checkout) y se trata como dato | `actions: read`, `checks: read`, `contents: read`, `pull-requests: write`, `statuses: write` |
+  | `map-pr-comment` (nivel workflow) | — | — | `permissions: {}` |
+  | `ci.yml` (todos los jobs) | `pull_request`, `push` a `main`, `workflow_dispatch` | el del PR | `contents: read`; sin secretos |
+  | `images.yml` / `image` | `pull_request` (por rutas), `push` a `main` y tags, `workflow_dispatch` | el del PR | `packages: write`: solo lectura en un fork; en una rama del repo es escritura junto al código del PR (sus autores ya tienen Write). El login a ghcr con `secrets.GITHUB_TOKEN` solo corre si publica, nunca en un PR |
+  | `images.yml` (los demás jobs) | igual | el del PR | `contents: read` |
+  | `release-desktop.yml` / `check` | solo `push` de tags `desktop-v*` | el del tag | `contents: read`; ningún PR lo dispara |
+  | `release-desktop.yml` / `build` | igual | el del tag | `contents: write` y `secrets.GITHUB_TOKEN` para `tauri-action`; ningún PR lo dispara |
+
+  El token con escritura nunca hace checkout del PR (el checkout es `sparse` de la rama
+  por defecto, con `persist-credentials: false`), no instala nada y no ejecuta nada del
+  PR. El zip del reporte se descomprime en `runner.temp`, así que no puede pisar
+  `prcomment.ts` ni `MAINTAINERS` antes de que corran. Los campos `head_*` del evento los
+  elige el autor del PR: llegan a `prcomment.ts` solo como variables de entorno y se
+  validan con regex antes de usarse en una ruta de la API. **Qué puede hacer ese token si
+  algo sale mal:** `pull-requests: write` alcanza para comentar, pero también para editar
+  el título y el cuerpo de cualquier PR, cerrarlos y, si está activo "Allow GitHub
+  Actions to create and approve pull requests" (Settings → Actions → General), aprobarlos:
+  ese ajuste tiene que quedar **apagado**. `statuses: write` sirve para cualquier commit
+  del repo, no solo el del PR. No puede empujar código, tocar workflows ni releases.
+  Estas reglas las comprueba `tools/mapcli/src/workflows.test.ts` sobre todos los
+  workflows: ninguno usa `pull_request_target`, ningún `run:` tiene una expresión salvo un
+  valor de `matrix` o `runner.os`/`arch`/`temp` (ni `github.event.*`, ni outputs de steps
+  o jobs), los PR no ven más
+  secreto que `GITHUB_TOKEN` (tampoco con `secrets['X']`, `toJSON(secrets)` ni `secrets:
+  inherit`), y los `workflow_run` solo tienen esos permisos, ese checkout, la descarga en
+  `runner.temp` y actions fijadas por SHA.
 - Los topes nunca son silenciosos: el reporte guarda los totales y el comentario dice
   "… y N más".
-- Las actions están fijadas por versión exacta.
+- Las actions están fijadas por versión exacta. Las de `map-pr-comment` (el único
+  workflow con token de escritura que disparan los PR) van por **SHA de commit**, con la
+  versión en un comentario (`@11bd719… # v4.2.2`): un tag se puede mover a otro código, un
+  SHA no. Para actualizarlas, `git ls-remote https://github.com/actions/checkout
+  refs/tags/vX.Y.Z` da el SHA. `release-desktop.yml` (`contents: write`, solo tags) e
+  `images.yml` (`packages: write` al publicar) usan todavía tags mayores (`@v4`); ver
+  "Pendientes conocidos" en docs/14.
 - **Imágenes:** quedan en el artefacto `map-pr-renders` y el comentario enlaza a él (hace
   falta sesión de GitHub para descargarlo). No se suben a servicios externos ni a una rama
   del repo, porque eso pediría `contents: write` en el workflow con token.
-- **Límite conocido:** en `pull_request`, el YAML de `map-pr.yml` sale del PR. Un PR que lo
-  edite, lo renombre (`name: map-pr2`) o lo borre puede falsear el check `map-pr / check`;
-  además, un job `check` de otro workflow del PR podría ocupar el lugar del requerido. Lo
-  que lo contiene:
+- **Límite conocido: ni el job ni el status son a prueba de falsificación; lo que cierra
+  `.github/` es `CODEOWNERS`.** En `pull_request`, el YAML de los workflows sale del PR
+  (del merge con la base), también desde un fork:
+  - un PR que edite `map-pr.yml`, lo renombre (`name: map-pr2`) o lo borre puede falsear
+    el job `map-pr / check`, y un job `check` de otro workflow del PR podría ocupar su
+    lugar;
+  - un PR puede **agregar un workflow con un job `name: map-pr/verdict`** que pase. Ese
+    job crea un check run con ese nombre, de la app GitHub Actions, sobre el head del PR.
+    La protección de rama busca los checks requeridos **solo por nombre** (status de
+    commit y check runs comparten ese espacio), y fijar la fuente a GitHub Actions no los
+    distingue: los dos son de esa app. Quien arma el PR elige cuál llega último. Pasa
+    también desde un fork: el token de solo lectura no importa, el check run lo crea
+    GitHub para el job;
+  - cualquiera con permiso de escritura (Write) en el repo puede poner el status a mano
+    con la API, o con un workflow en una rama que empuje.
+  Lo que lo contiene:
   - el comentario marca como no confiable a todo PR que toque `.github/` (también por
-    rename);
-  - `map-pr-pending.yml`, que sale de la base, deja el comentario en "pendiente" en cada
-    push;
-  - la configuración de abajo.
+    rename), y el status de un PR así que también cambia `world/` no es `success` salvo
+    que el autor sea maintainer. Si el PR no cambia `world/`, el status es `success` (no
+    hay mapa que juzgar);
+  - el veredicto busca check runs llamados `map-pr/verdict` en el commit: si hay alguno,
+    el status es `failure` y el comentario lo avisa con 🚨. No impide nada (el check run
+    falso igual puede satisfacer la regla) y no ve uno que se cree después (un job con
+    `needs:` de otro lento), pero deja a la vista el caso simple;
+  - un push que no produce corrida de `map-pr` deja su commit sin status (bloqueado), y
+    uno que la produce pasa el comentario a "pendiente" en cuanto arranca;
+  - **`CODEOWNERS` con revisión obligatoria y aprobaciones que caducan** (abajo): ningún
+    PR que agregue o cambie un workflow entra sin que un maintainer lo apruebe después
+    de su último push. Es el único cierre real, para forks y para ramas del repo.
   El token del check es de lectura, así que el daño no pasa del veredicto.
 - **Configuración que hace el dueño del repo** (👤, no la puede hacer la CI):
-  - marcar `map-pr / check` como check requerido en la protección de `main`, con "Require
-    branches to be up to date before merging" (o una merge queue con `merge_group:`), para
-    que un cambio en `main` (cerrar una parcela, quitar un maintainer) obligue a recorrer
-    el check;
-  - en la regla del check requerido, fijar la fuente esperada a **GitHub Actions** (la app),
-    para que no lo satisfaga un status de otra integración;
-  - un `CODEOWNERS` para `.github/`, `tools/` y `packages/`, con "Require review from Code
-    Owners", para que ningún PR que toque los workflows entre sin un maintainer. Es lo que
-    cierra el caso del workflow renombrado o de un job `check` falso.
+  - marcar el status **`map-pr/verdict`** como check requerido en la protección de
+    `main` **apenas se mezcle este cambio**: hasta entonces, un push que borra o renombra
+    `map-pr.yml` deja a la vista el ✅ anterior (solo con el aviso del pie). En la
+    protección de rama clásica aparece en la lista después de la primera corrida de
+    `map-pr-comment` con este cambio ya en `main`; en un ruleset ("Require status checks
+    to pass") se puede escribir el nombre antes. Con "Require branches to be up to date before merging",
+    para que un cambio en `main` (cerrar una parcela, quitar un maintainer) obligue a
+    recorrer el check. `map-pr / check` puede quedar requerido también, pero solo no
+    alcanza: un PR que edita su workflow lo falsea. Una merge queue no sirve tal cual:
+    `map-pr` no corre en `merge_group`, así que el commit de la cola nunca tendría el
+    status;
+  - en la regla del check requerido, fijar la fuente esperada a **GitHub Actions** (la
+    app). Eso solo descarta otras integraciones: un job de cualquier workflow con ese
+    nombre también es de GitHub Actions (ver "Límite conocido");
+  - crear `.github/CODEOWNERS` (no existe todavía) con, por ejemplo, `/.github/ @gfenzor`,
+    `/tools/ @gfenzor` y `/packages/ @gfenzor`, y en la protección de `main` activar
+    "Require a pull request before merging" con **"Require review from Code Owners"** y
+    **"Dismiss stale pull request approvals when new commits are pushed"** (o, en un
+    ruleset, "Require approval of the most recent reviewable push"). Sin lo segundo, una
+    aprobación dada antes sigue valiendo después de un push que agrega el workflow falso.
+    Mientras el dueño sea el único code owner, sus propios PR que tocan esas carpetas
+    (nadie puede aprobar su propio PR) se fusionan con el bypass de administrador;
+  - dejar **apagado** "Allow GitHub Actions to create and approve pull requests"
+    (Settings → Actions → General → Workflow permissions): con eso activo, el token de
+    `map-pr-comment` podría aprobar PRs;
+  - opcional: "Require approval for all external contributors" (Settings → Actions →
+    General → Fork pull request workflows). Así un maintainer ve el PR (y si agrega
+    workflows) antes de que corra cualquier workflow de un fork, incluido `map-pr`. Cuesta
+    un clic por push de la comunidad;
+  - **no hace falta** ninguna política de eventos de Actions: ya no se usa
+    `pull_request_target`.
+  - Un PR de un maintainer que toca `world/` y además otras cosas tiene `success` si su
+    reporte no tiene fallas. Uno de la comunidad así queda en `failure` y, después de
+    revisarlo a mano, se fusiona con el bypass de administrador.
+  - Si el status de un commit queda en `pending`, no aparece o dice que el reporte es de
+    otra base (el job `comment` falló por la API, alguien canceló la corrida de `map-pr`,
+    la `concurrency` canceló el job que esperaba, `main` avanzó durante la corrida, o hay
+    otro PR abierto hacia `main` con el mismo commit desde otro repo o autor: el log del
+    job lo dice), cierra esa copia si la hay y haz que `map-pr` corra de nuevo con una
+    corrida **nueva**: edita el título del PR, ciérralo y reábrelo, o empuja (un commit
+    vacío sirve). Relanzar desde Actions reusa el id de la corrida: solo sirve para la
+    última, y no escribe nada si hay una más nueva del mismo commit (el comentario guarda
+    qué corrida lo escribió, y se busca una más nueva).
 - Arranque: mientras la base no tenga `tools/mapcli/src/prcheck.ts`, el check se salta y
   lo dice en el resumen. La base es de confianza: un PR no puede quitárselo.
 
 Prueba local, sin GitHub: `make map-pr BASE=main HEAD=<rama>` (reporte y PNG en
 `build/map-pr/`, imprime el comentario con `prcomment.ts --dry-run`, que toma los datos de
 confianza del propio reporte y por eso es solo una vista previa). Tests:
-`packages/map-format/src/patch/plots.test.ts` y `tools/mapcli/src/prcheck.test.ts`.
+`packages/map-format/src/patch/plots.test.ts`, `tools/mapcli/src/prcheck.test.ts` (check
+y Markdown), `tools/mapcli/src/prcomment.test.ts` (los dos jobs de `map-pr-comment` contra
+un GitHub en memoria: qué comentario y qué status escribe cada uno, y cuándo nada) y
+`tools/mapcli/src/workflows.test.ts` (las reglas de seguridad de todos los workflows).
 
 ### Portal de envío de mapas (T4.5)
 Para quien no usa git: el editor (o `mapcli patch create`) exporta un map patch y el sitio
@@ -589,7 +815,7 @@ La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y `r
    a mano con `paint_ground` en rectángulos.
 3. `autoborder`, luego `scatter` para vegetación y rocas.
 4. Colocar estructuras con `stamp` y prefabs.
-5. Spawns, NPCs, zonas, portales.
+5. Spawns, NPCs, zonas, portales (cada uno con el item que lo muestra en su entrada).
 6. `map_validate` hasta que no haya errores, y lee las advertencias: p. ej. desde el
    destino de un `hole` o un `teleport` no se llega a ningún templo sin soga (bien para un
    pozo, un error si fue sin querer; `03-world-and-maps.md`, "Validación").
@@ -764,7 +990,8 @@ dibuja (relleno violeta con los rects que va a tener, puertas en amarillo, salid
   que no está en su borde, salida que falta, fuera de la isla, dentro de una casa o lejos de
   una puerta, nombre que falta. Advertencias (no impiden aplicar): casillas de un piso que no
   forman un solo bloque y casillas sin suelo. Lo que depende de los items (caminable,
-  alcanzable desde el templo, NPCs adentro) lo sigue diciendo el panel de validación.
+  alcanzable desde el templo, salida sobre una puerta, NPCs adentro) lo sigue diciendo el
+  panel de validación.
 - **Aplicar** convierte el borrador en una sola entrada de historial (`add_house` o
   `set_house`; `Ctrl+Z` la deshace) y se niega con el primer error en la barra de estado.
   "Borrar casa" es `remove_house` (también deshacible); su nombre queda en `world.yaml`.

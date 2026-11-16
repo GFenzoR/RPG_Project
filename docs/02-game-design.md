@@ -62,8 +62,12 @@ Tibia:
   su casilla, desde ella o a `inventory.reach` (1) casilla, en el mismo piso y con línea de
   visión (como al recolectar: con un alcance mayor, nunca a través de un muro). Pisarla no
   hace nada. Lo que haya encima (un cadáver, monedas que alguien tiró) no la tapa: el
-  click derecho trepa igual. Ese item se abre o se usa desde el toque largo ("Abrir" o
-  "Usar", al lado de "Trepar") o se arrastra fuera.
+  click derecho trepa igual. Ese item se abre o se usa con **Ctrl+click derecho** (en
+  escritorio) o desde el toque largo ("Abrir" o "Usar", al lado de "Trepar"), o se
+  arrastra fuera. Sobre una escalera de mano sin nada encima, Ctrl+click derecho trepa
+  igual: no hay otra cosa que usar. El toque largo nunca ofrece "Usar" ni "Mover" para el
+  item que muestra un portal (la escalera de mano misma, una escalera, un agujero): solo
+  "Trepar" donde corresponde y "Mirar".
 - **Punto de soga (`rope_spot`): hace falta una soga.** Se usa una herramienta con
   `tool.use: rope` (la soga, `data/items/tools.yaml`) sobre su casilla, al mismo alcance y
   con línea de visión.
@@ -98,11 +102,38 @@ Tibia:
   sobre una (la taparía para siempre). Caminar con el teclado sobre una sí la toma: es
   pisarla. Si no queda ninguna casilla libre en el radio, despertar en el templo y salir de
   una casa comparten la casilla de destino como último recurso: el templo o la salida, que
-  nunca están sobre una escalera, un agujero o un teletransporte (lo rechazan el servidor y
-  `make validate`). Quien entra al juego con todo lleno y tenía guardada la posición sobre
-  una escalera (de antes de los portales) va al templo.
+  nunca están sobre una escalera, un agujero o un teletransporte, ni sobre una puerta (con
+  llave, ver "Puertas con llave"; ni común, que cualquiera puede cerrar y dejaría a alguien
+  dentro de una puerta cerrada), y que son caminables (el templo, además, fuera de toda
+  casa): si no, el servidor no arranca y `make validate` no pasa (`checkArrivals`). Quien
+  entra al juego con todo lleno y tenía guardada la posición sobre una escalera (de antes
+  de los portales) o sobre una puerta (con llave, o común y cerrada desde entonces) va al
+  templo.
 - **Lo que el cliente ve:** lo mismo que un teletransporte del personal (`FullMapView` del
   piso nuevo, docs/05). Solo se dibuja el piso del jugador.
+- **Cómo se ve un portal:** la casilla es el portal, pero el jugador ve un item que lo
+  muestra (bloque `portal` de `data/items`, `06-content-data.md`): `stairs_down` /
+  `stairs_up` (escaleras, del pack Dungeon Crawl), `ladder_up` (la escalera de mano vista
+  desde abajo) / `ladder_down` (la trampilla abierta de arriba), `hole` (agujero),
+  `rope_spot` (la luz que entra por un hueco del techo) y `teleport` (un anillo de piedras
+  grabadas alrededor de un remolino de luz). Arte propio de `tools/spritegen`, estático: el
+  atlas no anima items. `make validate` y `mapcompile` exigen el item en la entrada de
+  cada portal (salvo un `boat`), y el servidor avisa en el log al arrancar si falta
+  (`03-world-and-maps.md`, "Validación"). El item no mueve a nadie: lo hace `portals.yaml`.
+- **Items que caen:** lo que se tira (`MoveItem`) sobre una escalera, un agujero o un
+  teletransporte cae al otro extremo, como en Tibia: queda en el destino del portal o, si
+  ahí no entra (`maxGroundItems` items distintos y ninguna pila a la que sumarse), en la
+  casilla más cercana con lugar a `travel.arrival_radius` con las reglas de la llegada de
+  un jugador: solo en el área del destino (nunca en la sala de una puerta con llave ni en
+  un bolsillo cerrado por paredes), nunca en una casilla de casa y nunca sobre otra
+  escalera, agujero o teletransporte (no cae dos veces). Las criaturas no importan: un item
+  queda debajo de ellas. Sin lugar se rechaza ("Del otro lado no hay lugar donde caiga.",
+  `portal.no_room`) y nada cambia. Fuera de eso es un tirar al suelo en esa casilla: un
+  personaje en espera de un intercambio no tira nada (`inventory.saving`), lo que cae
+  nunca se suma a una pila reservada a otro, y lo que el dueño saca de su casa por una
+  escalera junto a la puerta queda reservado a él donde cae ("Falla segura", T5.3). Quien
+  ve la casilla de donde salió lo ve irse y quien ve el destino lo ve caer. Sobre una
+  escalera de mano o un punto de soga lo que se tira queda ahí (se usan a mano).
 
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |
@@ -626,7 +657,10 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   entran (el paso a cualquier casilla de la casa se valida en el servidor), y quien queda
   adentro sin permiso (lo sacaron de la lista, dejó el gremio, la casa cambió de dueño o
   se liberó) sale por la puerta a la salida en el acto o, a lo sumo, en un segundo. Quien
-  entra al juego dentro de una casa a la que ya no tiene acceso aparece en la salida. El
+  entra al juego dentro de una casa a la que ya no tiene acceso aparece en la salida; con
+  acceso, en su casilla o, si está ocupada, en otra de esa casa unida a pie con ella o en
+  la calle de la salida (nunca en otra casa ni donde no se llegue caminando desde su
+  casilla, ver "Puertas con llave", "Nadie aparece adentro sin pasar la puerta"). El
   personal del juego entra a cualquier casa. Desde la ventana de la casa (que se abre a
   hasta 3 casillas de una puerta) quien tiene acceso puede **entrar** (lo lleva a una
   casilla libre adentro, junto a la puerta) y quien está adentro, **salir** (a la salida):
@@ -717,7 +751,10 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
 - **Llegada:** la casilla `to` de la ruta; si está ocupada, la libre y caminable más
   cercana a ≤ `arrival_radius` (2) casillas, nunca una casilla de casa (como la llegada por
   un portal; un teleport de diálogo tampoco deja a nadie en una casa). Si no hay ninguna,
-  se rechaza (`travel.no_room`) sin cobrar.
+  se rechaza (`travel.no_room`) sin cobrar. La casilla `to` misma (y el destino de un
+  teleport de diálogo) nunca es de una casa ni una puerta con llave colocada abierta: ni el
+  servidor arranca ni pasa `make validate` (docs/03 "Validación"), igual que un extremo de
+  portal en una casa.
 - **Cobro atómico:** todo se comprueba antes; luego el jugador se mueve, se consume el
   pasaje (si `consume: true`) y se paga el precio. El vuelto de una moneda grande cae en
   la mochila o, si no cabe, a los pies del jugador en el destino.
@@ -846,11 +883,38 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   ocupadas junto al portón (en la forja bastaban unas 11), quien guardó su posición afuera
   aparecía adentro y, como desde adentro se abre sin llave, le abría a todos; y un templo
   lleno podía dejar a alguien en un bolsillo cerrado por paredes o del otro lado de una
-  escalera. Si el punto es la entrada de una escalera, un agujero o un teletransporte (que
-  no está en ningún área), acepta solo casillas de las áreas de al lado, las únicas a las
-  que se llega caminando desde ahí. Si el punto no está en ningún área por otra razón
-  (una casilla de casa, la de una puerta con llave), descarta solo las casillas de las
-  salas.
+  escalera. Si el punto no está en ningún área, la búsqueda queda donde podría caminar un
+  jugador parado ahí:
+  - **la entrada de una escalera, un agujero o un teletransporte:** solo las áreas de al
+    lado, las únicas a las que se llega caminando desde ahí;
+  - **una casilla de casa** (entrar al juego donde se salió, un `/tp` del personal): las
+    casillas de esa casa unidas a pie con el punto (su **área de casa**: las casillas de
+    una casa con sus paredes y puertas, numeradas aparte; no son áreas del chequeo de
+    escape, donde una casa sigue siendo muro) y el área de la salida de la casa (la calle
+    a la que sale quien está adentro). Nunca otra casa, otra parte de la misma casa
+    separada por una pared ni un bolsillo cerrado del otro lado de la pared;
+  - **una puerta con llave** (abierta o cerrada: quien salió del juego parado en el umbral
+    abierto; o un `/tp` del personal a la puerta abierta, porque uno a una puerta cerrada,
+    que no es caminable, se rechaza): solo su lado de **afuera**, las áreas de al lado que
+    no son su sala. Nunca el umbral (taparía la puerta abierta) ni la sala: quien estaba
+    ahí venía de afuera o de la sala, que desde adentro se abre sin llave hacia afuera;
+    entrar a la sala pide la llave, así que la búsqueda nunca termina adentro. Quien
+    guardó la posición en el umbral entra al juego junto a la puerta, afuera, aunque la
+    puerta se haya cerrado después (antes iba al templo). Lo mismo con una puerta común
+    cerrada después (al reiniciar, toda puerta vuelve a como la dibuja el mapa): está en
+    el área de sus dos lados, así que entra junto a ella, de cualquier lado. La salida de
+    una casa y el templo nunca están sobre una puerta con llave, abierta o cerrada (ni el
+    servidor arranca ni pasa `make validate`): con todo lleno, quien sale de la casa o
+    despierta queda en esa casilla misma, y desde el umbral daría un paso a la sala sin la
+    llave. Tampoco sobre una puerta común: cualquiera la puede cerrar, y el último recurso
+    lo dejaría dentro de una puerta cerrada;
+  - **cualquier otra casilla** (un muro, ninguna casilla): ninguna. La búsqueda no
+    encuentra lugar y vale el último recurso de quien la pidió (el templo, la salida de la
+    casa, el rechazo del `/tp` o del teleport) en vez de adivinar.
+  - **Por qué así y no "el área alcanzable más cercana":** no adivina. Cada punto fuera de
+    las áreas que el juego puede pedir (una casa, una puerta, un portal) tiene su regla, y
+    el resto no deja a nadie en ningún lado. Un `/tp` a una casilla caminable cae siempre
+    en una de las tres primeras (toda otra casilla caminable está en un área).
 - **Ritmo:** un jugador usa una puerta como mucho cada `inventory.door_cooldown_ms`
   (500 ms, "Espera un momento"), la abra, la cierre o se lo rechacen: un rechazo también
   cuenta, así sus chequeos (la llave, la sala) corren a ese ritmo y no al del gateway.
