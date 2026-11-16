@@ -89,12 +89,13 @@ func TestAreasOfDoorsAndHouses(t *testing.T) {
 	}
 }
 
-// The world of the escape check is the areas of the temples and of the boat arrivals, and
-// a portal that moves players leads out of an area (docs/02 "Puertas con llave"). A vault
-// no door guards (bigger than the hall before it, so its door takes it for the outside)
-// stops the world from starting; a boat that arrives in it, or a teleport out of it, lets
-// it start; a boat portal out of it moves nobody, so it does not.
-func TestEscapeReachesTemplesBoatsAndPortals(t *testing.T) {
+// The world of the escape check is the areas of the temples, and a portal a player takes
+// without anything leads out of an area (docs/02 "Puertas con llave"). A vault no door
+// guards (bigger than the hall before it, so its door takes it for the outside) stops the
+// world from starting; a teleport out of it lets it start. A boat that arrives in it does
+// not: an arrival is a way in, not out (whoever slipped into the vault from the hall and
+// got locked in would stay there), and a boat portal out of it moves nobody.
+func TestEscapeReachesTemplesByPortals(t *testing.T) {
 	vault := pos(40, 41)
 	start := func(routes content.BoatRoutes, portals ...world.Portal) error {
 		cfg := dataConfig(t, routes)
@@ -123,7 +124,7 @@ func TestEscapeReachesTemplesBoatsAndPortals(t *testing.T) {
 	}
 	routes := testRoutes()
 	routes[1].To = content.Position{X: 40, Y: 41, Z: 7}
-	if err := start(routes); err != nil {
+	if err := start(routes); !errors.Is(err, session.ErrDoorNoEscape) || !strings.Contains(err.Error(), "locked door on 34,41,7") {
 		t.Fatalf("a boat arrives in the vault: %v", err)
 	}
 	if err := start(nil, world.Portal{ID: "out", Kind: world.PortalTeleport, From: vault, To: pos(10, 20)}); err != nil {
@@ -131,5 +132,40 @@ func TestEscapeReachesTemplesBoatsAndPortals(t *testing.T) {
 	}
 	if err := start(nil, world.Portal{ID: "ferry", Kind: world.PortalBoat, From: vault, To: pos(10, 20)}); !errors.Is(err, session.ErrDoorNoEscape) {
 		t.Fatalf("a boat portal out of the vault: %v", err)
+	}
+}
+
+// A rope spot is no way out of an area for the escape check: it needs a rope, which a
+// player need not carry (docs/02 "Puertas con llave"). The vault of door-rooms.json, bigger
+// than the hall before it, with a way up from it to an open floor 6 that has stairs down
+// to the field of the temple: by a ladder the world starts, by a rope spot it does not.
+func TestEscapeNeedsNoRope(t *testing.T) {
+	floor6 := make([]string, 5)
+	for i := range floor6 {
+		floor6[i] = "................."
+	}
+	start := func(up world.PortalKind) error {
+		// Floors go up the list; the T on floor 7 is the temple all the same.
+		m := worldtest.Floors(t, 0, 0,
+			worldtest.Layer{Z: 6, Rows: floor6},
+			worldtest.Layer{Z: 7, Rows: []string{
+				"#################",
+				"#..T..#...#.....#",
+				"#.....D...D.....#",
+				"#.....#...#.....#",
+				"#################",
+			}})
+		m = worldtest.WithPortals(t, m,
+			world.Portal{ID: "up", Kind: up, From: pos(15, 2), To: at3(15, 2, 6)},
+			world.Portal{ID: "down", Kind: world.PortalStairs, From: at3(2, 2, 6), To: pos(2, 2)})
+		_, err := session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations,
+			Items: doorTestItems(true), Save: func(session.Snapshot) bool { return true }})
+		return err
+	}
+	if err := start(world.PortalLadder); err != nil {
+		t.Fatalf("a ladder up from the vault: %v", err)
+	}
+	if err := start(world.PortalRopeSpot); !errors.Is(err, session.ErrDoorNoEscape) || !strings.Contains(err.Error(), "locked door on 10,2,7") {
+		t.Fatalf("a rope spot up from the vault: %v", err)
 	}
 }

@@ -776,16 +776,16 @@ describe("validateWorld", () => {
     };
     expect(doorErrors(vault().island)).toEqual([
       expect.stringContaining(
-        'locked door "forge_gate" at 23,24,7: a side of it reaches no temple and no boat arrival without keys (on foot, out of rooms, by portals): whoever is there could be locked in (its side at 24,23,7)',
+        'locked door "forge_gate" at 23,24,7: a side of it reaches no temple without keys (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in (its side at 24,23,7)',
       ),
     ]);
-    // A boat that arrives in the vault, or a teleport out of it, is a way out; a boat
-    // portal moves nobody.
+    // A teleport out of the vault is a way out. A boat that arrives in it is not (a way
+    // in: leaving by boat takes the captain), and a boat portal moves nobody.
     const inVault = { x: 26, y: 26, z: 7 };
     const route = { index: 0, id: "r", captain: "harbor_master", from: { x: 8, y: 21, z: 7 } };
-    expect(doorErrors(vault().island, { ...content, routes: [{ ...route, to: inVault }] })).toEqual(
-      [],
-    );
+    expect(
+      doorErrors(vault().island, { ...content, routes: [{ ...route, to: inVault }] }),
+    ).toHaveLength(1);
     const out = (kind: "teleport" | "boat"): Island => {
       const v = vault().island;
       v.portals.push({ id: "mini_out", kind, from: inVault, to: { x: 10, y: 22, z: 7 } });

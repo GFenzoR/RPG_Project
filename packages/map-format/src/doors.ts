@@ -18,9 +18,9 @@ export const DOOR_ROOM_SEARCH = 4096;
  * bigger than DOOR_ROOM_SEARCH) or tie (every side is closed and the two biggest have the
  * same size). A room it shares with an earlier locked door: key (that door has another
  * key). The escape check, once every door has its room: escape (a side of it reaches no
- * temple and no boat arrival without keys: on foot, out of rooms through their doors, by
- * portals) or bypass (a player with every key but its own gets into its room: a locked
- * door of another key opens onto it from its own room).
+ * temple without keys or tools: on foot, out of rooms through their doors, by stairs,
+ * ladders, holes and teleports) or bypass (a player with every key but its own gets into
+ * its room: a locked door of another key opens onto it from its own room).
  */
 export type DoorRoomError = "walled" | "open" | "truncated" | "tie" | "key" | "escape" | "bypass";
 
@@ -35,7 +35,7 @@ export const DOOR_ROOM_ERRORS: Record<DoorRoomError, string> = {
   tie: "its two biggest sides have the same size: which one is the outside is unclear",
   key: "it shares its room with a locked door of another key",
   escape:
-    "a side of it reaches no temple and no boat arrival without keys (on foot, out of rooms, by portals): whoever is there could be locked in",
+    "a side of it reaches no temple without keys (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in",
   bypass:
     "a player without its key gets into its room: a locked door of another key opens onto it from a room such a player reaches",
 };
@@ -295,13 +295,26 @@ export interface DoorRooms {
 
 /** What the escape check needs of the world besides its tiles (doorRooms). */
 export interface DoorWorld {
-  /** The house tiles by x,y,z: walls of the areas (a house is no street). */
+  /**
+   * The house tiles by x,y,z: walls of the areas (a house is no street), where an owner or
+   * a guest stands (next to a locked door, it opens it with its key).
+   */
   houses?: ReadonlySet<string>;
-  /** The world: where a player always gets to, the temples and the boat arrivals. */
-  starts?: readonly Position[];
-  /** The portals that move a player (no boats): from the area of from to that of to. */
-  portals?: readonly { from: Position; to: Position }[];
+  /**
+   * The world: the temples. A boat arrival is no part of it: it is a way in, not out
+   * (leaving by boat takes a captain and whatever the route asks).
+   */
+  temples?: readonly Position[];
+  /** The portals of the map: those of ESCAPE_WAYS lead from the area of from to that of to. */
+  portals?: readonly { kind: string; from: Position; to: Position }[];
 }
+
+/**
+ * The portal kinds that lead out of an area for the escape check (the server's escapeWay):
+ * those every player takes without keys, tools, money or a level. A rope spot needs a rope;
+ * a boat portal moves nobody (the captain's routes need gold, a level, a quest or a ticket).
+ */
+export const ESCAPE_WAYS: ReadonlySet<string> = new Set(["stairs", "ladder", "hole", "teleport"]);
 
 const posKey = (p: Position): string => `${p.x},${p.y},${p.z}`;
 
@@ -310,8 +323,9 @@ const posKey = (p: Position): string => `${p.x},${p.y},${p.z}`;
  * the server), and the server's checks of them. First, door by door: doorRoom, and a room
  * shared with an earlier door of another lock is refused (key). Then, when every door has
  * its room, the escape check (the server's checkEscapes) on the areas of the map: every
- * side of every door reaches the world (world.starts) the ways a player without keys has
- * (escape), and no player with every key but one gets into a room of that key (bypass).
+ * side of every door reaches a temple (world.temples) the ways a player without keys or
+ * tools has (escape), and no player with every key but one gets into a room of that key
+ * (bypass).
  * The server stops at its first refused door; this goes on and reports every door refused
  * by the same step (the first step that refuses one), and indexes a door's rooms only when
  * every side of it passed, so a refused door leaves no room behind that would refuse a
@@ -392,30 +406,42 @@ function escapeCheck(
   const roomArea = rooms.map((r) => areaOf(r.at));
   const areaRoom = new Map<number, number>(); // area → room id, for the areas that are rooms
   for (const [i, a] of roomArea.entries()) areaRoom.set(a, i);
+  const houses = world.houses ?? new Set<string>();
   const sides: { area: number; at: Position }[][] = []; // the sides of each door
   const bySide = new Map<number, number[]>(); // area → the doors (indexes) it is a side of
+  const byHouse: boolean[] = []; // whether a house tile someone stands on is next to each door
   for (const [i, { pos }] of doors.entries()) {
     const list: { area: number; at: Position }[] = [];
+    let house = false;
     for (const [dx, dy] of STEPS) {
       const at = { x: pos.x + dx, y: pos.y + dy, z: pos.z };
+      if (at.x < 0 || at.y < 0 || at.x > MAX || at.y > MAX) continue;
+      if (houses.has(posKey(at)) && roomPassable(tiles, content, at.x, at.y, at.z)) house = true;
       const a = areaOf(at);
       if (a === 0 || list.some((s) => s.area === a)) continue;
       list.push({ area: a, at });
-      bySide.set(a, [...(bySide.get(a) ?? []), i]);
+      const by = bySide.get(a);
+      if (by) by.push(i);
+      else bySide.set(a, [i]);
     }
     sides.push(list);
+    byHouse.push(house);
   }
   // back: area → the areas a player without keys goes to it from.
   const back = new Map<number, number[]>();
   const edge = (from: number, to: number): void => {
-    if (from !== 0 && to !== 0 && from !== to) back.set(to, [...(back.get(to) ?? []), from]);
+    if (from === 0 || to === 0 || from === to) return;
+    const list = back.get(to);
+    if (list) list.push(from);
+    else back.set(to, [from]);
   };
   for (const [i, own] of roomsOf.entries())
     for (const r of own) for (const s of sides[i] ?? []) edge(roomArea[r] ?? 0, s.area);
-  for (const p of world.portals ?? []) edge(areaOf(p.from), areaOf(p.to));
+  for (const p of world.portals ?? [])
+    if (ESCAPE_WAYS.has(p.kind)) edge(areaOf(p.from), areaOf(p.to));
   const escapes = new Set<number>();
   const queue: number[] = [];
-  for (const p of world.starts ?? []) {
+  for (const p of world.temples ?? []) {
     const a = areaOf(p);
     if (a !== 0 && !escapes.has(a)) {
       escapes.add(a);
@@ -448,7 +474,12 @@ function escapeCheck(
         todo.push(a);
       }
     };
-    for (const list of sides) for (const s of list) if (!areaRoom.has(s.area)) push(s.area);
+    for (const [i, list] of sides.entries()) {
+      for (const s of list) if (!areaRoom.has(s.area)) push(s.area); // anywhere outside the rooms
+      // From a house next to it into its room, with its key.
+      if (byHouse[i] === true && doors[i]?.lock !== k)
+        for (const r of roomsOf[i] ?? []) push(roomArea[r] ?? 0);
+    }
     for (let n = 0; n < todo.length; n++) {
       const a = todo[n] ?? 0;
       for (const i of bySide.get(a) ?? []) {

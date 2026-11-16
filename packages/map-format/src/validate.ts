@@ -623,7 +623,7 @@ class WorldValidator {
    * item per tile; a warning for a door placed open (it is open again after every
    * restart); a room behind every locked door (doorRooms, the server's walks), shared only
    * by locked doors of the same key, and the escape check (every side of every locked door
-   * reaches a temple or a boat arrival without keys; no player gets into a room without
+   * reaches a temple without keys or tools; no player gets into a room without
    * its key); and nothing of the outside in a room: no temple (where players wake up), NPC,
    * house, portal end, boat arrival or dialog teleport. Either the outside was taken for
    * the room, or a player would land behind the door. Spawns may live in a room (a guarded
@@ -664,23 +664,23 @@ class WorldValidator {
         }
       }
     }
-    // The escape check: a house is no street (its tiles are walls of the areas), the world
-    // is the temples and the boat arrivals, and a portal that moves players leads out of
-    // an area (a boat portal moves nobody).
+    // The escape check: a house is no street (its tiles are walls of the areas, and its
+    // owner or a guest stands in it), the world is the temples (a boat arrival is a way in,
+    // not out), and doorRooms keeps the portals a player takes without anything (stairs,
+    // ladders, holes, teleports; not a rope spot or a boat).
     const houses = new Set<string>();
-    const starts: Position[] = [];
-    const portals: { from: Position; to: Position }[] = [];
+    const temples: Position[] = [];
+    const portals: { kind: string; from: Position; to: Position }[] = [];
     for (const island of this.world.islands.values()) {
       for (const h of island.houses)
         for (const r of h.rects)
           for (const [x, y] of tilesOf(r)) houses.add(formatPos({ x, y, z: r.z }));
-      starts.push(island.meta.temple);
-      for (const p of island.portals) if (p.kind !== "boat") portals.push(p);
+      temples.push(island.meta.temple);
+      portals.push(...island.portals);
     }
-    for (const r of this.content.routes) starts.push(r.to);
     const { behind, findings } = doorRooms(this.tiles, this.content, locked, {
       houses,
-      starts,
+      temples,
       portals,
     });
     for (const f of findings) {

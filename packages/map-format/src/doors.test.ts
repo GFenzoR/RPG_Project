@@ -16,8 +16,10 @@ interface Case {
   name: string;
   rows: Row[];
   portals?: { from: string; to: string }[];
+  houses?: { rect: string; door: string; exit: string }[];
   rooms?: Record<string, number>;
   error?: DoorRoomError;
+  door?: string;
 }
 const fixture = JSON.parse(
   readFileSync(join(import.meta.dirname, "testdata", "door-rooms.json"), "utf8"),
@@ -75,8 +77,8 @@ function at(xy: string): Position {
 /**
  * The tiles of a drawing on floor 7 from (0,0), its locked doors in map order (chunk by
  * chunk, row by row: the server's order) and what the escape check needs: the temple (its
- * T, else the first tile of . T d P K row by row, as server worldtest draws it) and the
- * portals.
+ * T, else the first tile of . T d P K row by row, as server worldtest draws it), the
+ * portals (teleports) and the house tiles.
  */
 function draw(c: Case): {
   tiles: TileMap;
@@ -115,15 +117,23 @@ function draw(c: Case): {
   });
   const island = { chunks } as unknown as Island;
   const start = temple ?? first;
+  const houses = new Set<string>();
+  for (const h of c.houses ?? []) {
+    const [x = NaN, y = NaN, w = NaN, hh = NaN] = h.rect.split(",").map(Number);
+    if (![x, y, w, hh].every(Number.isInteger)) throw new Error(`bad rect ${h.rect}`);
+    for (let ty = y; ty < y + hh; ty++)
+      for (let tx = x; tx < x + w; tx++) houses.add(`${tx},${ty},7`);
+  }
   const world: DoorWorld = {
-    starts: start ? [start] : [],
-    portals: (c.portals ?? []).map((p) => ({ from: at(p.from), to: at(p.to) })),
+    temples: start ? [start] : [],
+    portals: (c.portals ?? []).map((p) => ({ kind: "teleport", from: at(p.from), to: at(p.to) })),
+    houses,
   };
   return { tiles: new TileMap([island]), locked, world };
 }
 
 /** How many cases door-rooms.json has (TestDoorRoomsFixture checks the same). */
-const DOOR_ROOM_CASES = 26;
+const DOOR_ROOM_CASES = 28;
 
 describe("doorRooms", () => {
   it("reads the shared cases", () =>
@@ -135,6 +145,7 @@ describe("doorRooms", () => {
     if (c.error !== undefined) {
       // The server stops at the first refused door, in the same order.
       expect(r.findings[0]?.error).toBe(c.error);
+      expect(r.findings[0]?.door).toEqual(at(must(c.door)));
       return;
     }
     expect(r.findings).toEqual([]);
@@ -143,7 +154,7 @@ describe("doorRooms", () => {
     expect(got).toEqual(c.rooms);
   });
 
-  it("gives the tiles of the room, never the door's, and the outside next to it", () => {
+  it("gives the tiles of the room, never the door's nor the outside's", () => {
     const { tiles, locked } = draw(must(fixture.cases[0]));
     const r = doorRoom(tiles, content, must(locked[0]).pos);
     if ("error" in r) throw new Error(r.error);
@@ -168,17 +179,26 @@ describe("doorRooms", () => {
     ]);
   });
 
-  it("reaches the world through boat arrivals and portals that move players", () => {
+  // The world is the temples, and only the portals a player takes without anything lead out
+  // of an area (the server's TestEscapeReachesTemplesByPortals and TestEscapeNeedsNoRope).
+  it("reaches the temples by the portals a player takes without keys or tools", () => {
     const { tiles, locked, world } = draw(
       must(fixture.cases.find((c) => c.name === "a vault bigger than the room before it")),
     );
-    const temple = world.starts ?? [];
+    const temples = world.temples ?? [];
     const findings = (w: DoorWorld): DoorRoomError[] =>
       doorRooms(tiles, content, locked, w).findings.map((f) => f.error);
-    expect(findings({ starts: temple })).toEqual(["escape"]);
-    // A boat arrival in the vault (validate.ts passes the arrivals of boat_routes.yaml).
-    expect(findings({ starts: [...temple, { x: 13, y: 2, z: 7 }] })).toEqual([]);
-    // No world at all: every side leads nowhere.
+    expect(findings({ temples })).toEqual(["escape"]);
+    // A way out of the vault to the field by each kind of portal.
+    const out = (kind: string): DoorWorld => ({
+      temples,
+      portals: [{ kind, from: { x: 13, y: 2, z: 7 }, to: { x: 2, y: 2, z: 7 } }],
+    });
+    for (const kind of ["stairs", "ladder", "hole", "teleport"])
+      expect(findings(out(kind)), kind).toEqual([]);
+    // A rope spot needs a rope; a boat portal moves nobody.
+    for (const kind of ["rope_spot", "boat"]) expect(findings(out(kind)), kind).toEqual(["escape"]);
+    // No temple at all: every side leads nowhere.
     expect(findings({})).toEqual(["escape", "escape"]);
   });
 

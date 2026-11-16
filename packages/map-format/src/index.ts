@@ -19,6 +19,7 @@ export type { ContentIndex, ItemInfo, TeleportInfo } from "./content.ts";
 export {
   DOOR_ROOM_ERRORS,
   DOOR_ROOM_SEARCH,
+  ESCAPE_WAYS,
   doorRoom,
   doorRooms,
   doorsOn,

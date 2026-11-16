@@ -24,8 +24,14 @@ type doorRoomCase struct {
 		From string `json:"from"`
 		To   string `json:"to"`
 	} `json:"portals"`
+	Houses []struct {
+		Rect string `json:"rect"`
+		Door string `json:"door"`
+		Exit string `json:"exit"`
+	} `json:"houses"`
 	Rooms map[string]int `json:"rooms"`
 	Error string         `json:"error"`
+	Door  string         `json:"door"`
 }
 
 // rows expands the drawing of c ({"repeat": n, "row": r} is n rows r, {"repeat": n,
@@ -59,7 +65,7 @@ func (c doorRoomCase) rows(t *testing.T) []string {
 }
 
 // doorRoomCases is how many cases door-rooms.json has (doors.test.ts checks the same).
-const doorRoomCases = 26
+const doorRoomCases = 28
 
 // The rooms behind locked doors, and the doors that have none, are the same for the
 // server and for make validate: both read door-rooms.json (docs/02 "Puertas con llave").
@@ -119,6 +125,21 @@ func TestDoorRoomsFixture(t *testing.T) {
 				}
 				m = worldtest.WithPortals(t, m, portals...)
 			}
+			if len(c.Houses) > 0 {
+				var houses []world.House
+				for i, h := range c.Houses {
+					var x, y uint16
+					var wd, ht uint8
+					if _, err := fmt.Sscanf(h.Rect, "%d,%d,%d,%d", &x, &y, &wd, &ht); err != nil {
+						t.Fatalf("bad rect %q", h.Rect)
+					}
+					id := fmt.Sprintf("h%d", i)
+					houses = append(houses, world.House{ID: id, Name: "house." + id + ".name", Rent: 10,
+						Rects: []world.HouseRect{{X: x, Y: y, Z: 7, W: wd, H: ht}},
+						Doors: []world.Pos{fixturePos(t, h.Door)}, Exit: fixturePos(t, h.Exit)})
+				}
+				m = worldtest.WithHouses(t, m, houses...)
+			}
 			w, err := session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations,
 				Items: doorTestItems(true), Save: func(session.Snapshot) bool { return true }})
 			if c.Error != "" {
@@ -128,6 +149,10 @@ func TestDoorRoomsFixture(t *testing.T) {
 				}
 				if !errors.Is(err, want) {
 					t.Fatalf("got %v, want %v", err, want)
+				}
+				// The same door as make validate: the first one refused, in map order.
+				if at := "locked door on " + c.Door + ",7:"; c.Door == "" || !strings.Contains(err.Error(), at) {
+					t.Fatalf("got %v, want the %q", err, at)
 				}
 				return
 			}
