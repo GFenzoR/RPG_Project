@@ -213,15 +213,29 @@ server/
   cambia el otro y `testdata/door-rooms.json` (lo leen los tests de los dos). Una sala
   que no se puede determinar, compartida por puertas de otra llave o de otro afuera
   (`sameOutside`, que no cruza puertas con llave ni casas: hoy rechaza los ciclos de
-  puertas con llave) o que tiene algo de afuera (`checkRooms`: templo, NPC, casa, llegada
-  de barco, teleport de diálogo) no deja arrancar. Nada recorre el mapa en el tick:
-  `World.roomOf` (casilla → sala) y los sectores de cada sala. **Toda búsqueda de casilla
-  libre por anillos** (`freeNear`, `houseExit` o una nueva) pasa por `roomAllows`: nunca
-  deja a nadie en una sala si no empezó en ella. `houseEnter` no lo necesita: solo pone
-  al jugador en casillas de la casa, y `checkRooms` no deja ninguna casa en una sala.
+  puertas con llave) o que tiene algo de afuera (`checkRooms`: templo, NPC, casa, extremo
+  de portal, llegada de barco, teleport de diálogo) no deja arrancar. Nada recorre el mapa
+  en el tick: `World.roomOf` (casilla → sala) y los sectores de cada sala. **Toda búsqueda
+  de casilla libre por anillos** (`freeNear`, `houseExit` o una nueva) pasa por
+  `roomAllows`: nunca deja a nadie en una sala si no empezó en ella; y por
+  `!Map.MovesOnStep`: nunca deja a nadie sobre una escalera, un agujero o un
+  teletransporte. `houseEnter` no lo necesita: solo pone al jugador en casillas de la
+  casa, y `checkRooms` no deja ninguna casa (ni portal) en una sala.
   Desde la sala una puerta trabada se abre sin llave (nadie queda encerrado, tampoco tras
   un relogueo o un reinicio). Todo uso junto a una puerta, también un rechazo, pasa por
   `doorReady` (`inventory.door_cooldown_ms`). Su estado no se guarda.
+
+- **Portales:** `world/portal.go` (`world.Portal`, `world.bin` v5, `Map.PortalAt` y
+  `Map.MovesOnStep`, que `NewMap` indexa y valida como `make validate`) + `session/portal.go`
+  (reglas en `02-game-design.md` "Cambiar de piso"). Escaleras, agujeros y
+  teletransportes se pisan (`stepPlayer`: el paso y luego `Teleport`); la escalera de mano
+  se usa (`usePortal` en la cadena de `useItem`, antes de `useStation`) y el punto de soga
+  pide `UseItemOn` con `tool.use: rope` (`useRope`, antes de `gather`). La llegada es
+  `portalArrival` (`freeAround` sin casas, radio `travel.arrival_radius`, el bloqueo PvP).
+  Nadie más pisa esas casillas: `monsterCanEnter`, la búsqueda A* de los monstruos,
+  `reroute` y `bot.Nav` las esquivan. `checkRooms` rechaza un extremo de portal en una
+  sala. Un portal nuevo que se use a mano entra por `usePortal`/`useRope`; uno que se pise
+  tiene que ser un `kind` con `OnStep`.
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

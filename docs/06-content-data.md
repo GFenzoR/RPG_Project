@@ -157,6 +157,10 @@ items:
   ```
   `balance.yaml → gathering`: `use_interval_ms` (rate limit por jugador) y
   `afk: { after_ms, factor }` (anti-AFK, ver `02-game-design.md`).
+- **Soga:** una herramienta con `tool.use: rope` (la `rope` de `data/items/tools.yaml`)
+  usada sobre un punto de soga (`rope_spot` de `portals.yaml`) sube al jugador
+  (`02-game-design.md`, "Cambiar de piso"); sobre cualquier otra casilla sigue como una
+  herramienta de recolección. El valor `rope` lo nombra el servidor (`session/portal.go`).
 - **Paso bloqueado** (regla del contrato, la aplican el validador de mapas y
   `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
@@ -616,7 +620,8 @@ trade:
 - `-boat-routes <archivo>` (o `RPG_BOAT_ROUTES`) reemplaza `data/boat_routes.yaml`: el
   E2E usa `client/e2e/fixtures/boat_routes.yaml` (Puerto → testisle).
 - Reglas del viaje (combate, cobro, llegada): `02-game-design.md`, "Viajes en barco";
-  números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`).
+  números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`). La llegada
+  por un portal (escaleras y demás) usa el mismo `arrival_radius`.
 - Textos: `travel.*` en `i18n/*/dialog.yaml` y `client.voyage.sailed` en `client.yaml`.
 
 ## Tutorial (T4.2)

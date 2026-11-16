@@ -160,6 +160,17 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   from: { x: 3290, y: 6402, z: 8 }
   to: { x: 3289, y: 6402, z: 7 }
 ```
+- `from` es la casilla del portal (en la isla del archivo) y `to` adonde llega el jugador
+  (cualquier isla). Lo que hace cada `kind` en el juego está en `02-game-design.md`
+  "Cambiar de piso": `stairs`, `hole` y `teleport` se pisan, `ladder` se usa, `rope_spot`
+  pide una soga y `boat` no mueve a nadie (los barcos son `data/boat_routes.yaml`). El
+  portal es la casilla, no un item: la escalera se ve por el item que la decora
+  (`stairs_down` / `stairs_up`), pero el servidor no lo mira.
+- Un portal por casilla de entrada, y nunca hacia su propia casilla. `to` no debería ser
+  la casilla de otro portal que se pisa: el servidor deja al jugador en la libre más
+  cercana (nadie se queda parado sobre una escalera).
+- Lo carga el servidor desde `world.bin` (versión 5, "Formato de `world.bin`"), como las
+  casas: un cambio de `portals.yaml` necesita `make mapcompile` y reiniciar.
 
 `houses.yaml` (T5.4, reglas de juego en `02-game-design.md` "Casas"):
 ```yaml
@@ -197,7 +208,8 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   puerta, nunca la ventana de la casa), salida caminable, fuera de toda casa, junto a una puerta y alcanzable a pie desde
   el templo, nombre con texto en todos los idiomas, id único en el mundo. Adentro de una
   casa no puede haber NPCs, centros de spawn, textos, el templo ni extremos de portales, y
-  ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro).
+  ninguna zona `no_logout` puede cubrir una casa (salir del juego adentro es seguro). El
+  servidor rechaza también un portal que llega a una casa de otra isla.
 - **Solo maintainers:** `houses.yaml` no es parte de los map patches (docs/04): un PR que
   lo cambia queda fuera de las parcelas de comunidad. Se edita con el panel de casas del
   editor (dibuja casillas, puertas y salida, y escribe también los nombres en
@@ -256,7 +268,8 @@ La validación completa del mapa (conectividad, spawns, i18n...) sigue siendo la
 `packages/map-format` (`make validate`). `mapcompile` solo rechaza lo que no puede
 compilar: rect no alineado o distinto del de `world.yaml`, chunk fuera de la isla o en un
 piso no listado, nombre de archivo incoherente, item desconocido o sin ID numérico, IDs
-numéricos repetidos en `ids.lock.yaml`, tipo de zona desconocido.
+numéricos repetidos en `ids.lock.yaml`, tipo de zona o de portal desconocido, y lo que
+`world.NewMap` no acepta (ver "Historial" de `world.bin`).
 
 ### Flags de tile
 Se calculan al compilar, uno por casilla (implementación: `server/internal/world/compile`):
@@ -280,13 +293,13 @@ no de render: el cliente sigue mostrando toda la ventana de 15x11 del piso actua
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
 
-### Formato de `world.bin` (versión 4)
+### Formato de `world.bin` (versión 5)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
 mismas fuentes producen siempre los mismos bytes.
 
 ```text
 magic        8 bytes "RPGWORLD"
-version      u16 = 4
+version      u16 = 5
 speedCount   u32, luego speedCount × u16
              costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
 islandCount  u16, luego por isla (en el orden de world.yaml):
@@ -304,6 +317,9 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
     id u8 largo + bytes, name u8 largo + bytes (clave i18n), rent u32,
     rects u8 cantidad × (x u16, y u16, z u8, w u8, h u8),
     doors u8 cantidad × (x u16, y u16, z u8), exit x u16, y u16, z u8
+  portals    u16 cantidad, luego por portal (en el orden de portals.yaml, v5):
+    id u8 largo + bytes, kind u8 (1 stairs, 2 ladder, 3 hole, 4 rope_spot,
+    5 teleport, 6 boat), from x u16, y u16, z u8, to x u16, y u16, z u8
   sectors    u32 cantidad, luego por sector, ordenados por z, cy, cx:
     z u8, cx u16, cy u16
     ground   1024 × u16   ID numérico del suelo, fila por fila; 0 = sin tile
@@ -314,7 +330,18 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
 crc32        u32 (IEEE) de todos los bytes anteriores
 ```
 
-- Historial: la versión 4 (T5.4) agregó `houses` por isla y el bit 6 (`house`) de
+- Historial: la versión 5 agregó `portals` por isla (escaleras y demás de
+  `portals.yaml`, que antes solo veían el editor y el validador): `NewMap` rechaza ids
+  repetidos en el mundo o fuera del formato de id, un tipo desconocido, una entrada que
+  no es una casilla caminable de su isla en un piso que lista, un destino que no es una
+  casilla caminable de alguna isla, un portal hacia su propia casilla, una escalera,
+  escalera de mano, agujero o soga que no cambia de piso, un agujero que sube, una soga
+  que baja, dos portales en una casilla y un extremo en una casa, y los indexa por su
+  entrada (`Map.PortalAt`, `Map.MovesOnStep`). La pareja de vuelta de escaleras y
+  escaleras de mano la exige solo `make validate`. La prueba de paridad
+  (`make test-parity`) compara también los portales que leen `mapcompile` y
+  `packages/map-format`.
+- La versión 4 (T5.4) agregó `houses` por isla y el bit 6 (`house`) de
   `flags`: `NewMap` rechaza ids repetidos en el mundo, rects fuera de la isla o en pisos
   que no lista, casillas en dos casas, puertas fuera de su casa y salidas dentro de una
   casa, fuera de la isla o lejos de toda puerta, y marca las casillas con `house` y
@@ -352,7 +379,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Portales salen de un tile caminable de la isla y llegan a uno caminable de cualquier
   isla. `stairs`/`ladder` cambian de piso y tienen pareja: otro portal
   `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del
-  origen. `hole` baja, `rope_spot` sube.
+  origen. `hole` baja, `rope_spot` sube. Un portal por casilla y ninguno hacia su propia
+  casilla (el servidor los indexa por la entrada). Advertencia: un portal `boat` no mueve
+  a nadie en el juego.
 - Zonas de protección cubren el templo. (Depósitos: cuando exista el item, hito 1.)
 - Carteles (T5.5): un item de cartel (`description` = clave `text.*`) está sobre un
   `kind: sign` de `texts.yaml` con ese texto, y un cartel con item de cartel en su casilla

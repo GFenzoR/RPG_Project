@@ -124,9 +124,14 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     Volcánica, incluido el de la puerta con llave del piso 8, tienen su `*_sign`; solo el
     del templo de `testisle` no). A futuro `mapcompile` podría llevar `texts.yaml` a
     `world.bin` y el servidor leerlo, sin items por cartel;
-  - las escaleras y portales de `portals.yaml` no existen en el servidor (ni en
-    `world.bin`): a los pisos 8 (minas de Puerto y Bosque, la mina y la forja de la Isla
-    Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff;
+  - portales (`02-game-design.md` "Cambiar de piso"): el servidor ya mueve por escaleras,
+    escaleras de mano, agujeros, sogas y teletransportes, pero el mundo solo usa
+    escaleras. Para poner los otros falta su item con arte propio (`add-item` +
+    `tools/spritegen`): hoy solo existen `stairs_down` / `stairs_up`, y un portal sin item
+    es una casilla de suelo cualquiera a la vista (el cliente igual usa una escalera de
+    mano o una soga sin item con click derecho). Tampoco caen por una escalera, un agujero
+    o un teletransporte los items que se tiran sobre su casilla (en Tibia caen): quedan
+    ahí, a la vista, y nadie pisa esa casilla sin moverse;
   - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit` en
     `server/internal/session`) ya no entra a la sala de una puerta con llave, pero sí
     puede dejar a alguien en un bolsillo sellado sin puerta (menos de 10 casillas, que el

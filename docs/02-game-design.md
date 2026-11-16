@@ -42,7 +42,50 @@ Todos los números de este documento son **valores iniciales** que viven en
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
   nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
 - Click-to-walk con pathfinding A* en el servidor (máx. 100 casillas).
-- Cambiar de piso: escaleras, rampas, cuerdas, agujeros, escaleras de mano.
+- Cambiar de piso: escaleras, escaleras de mano, agujeros, sogas y teletransportes (ver
+  "Cambiar de piso"). Rampas no hay por ahora.
+
+### Cambiar de piso (portales)
+Los portales son datos del mapa (`world/islands/<id>/portals.yaml`, formato en
+`03-world-and-maps.md`); `mapcompile` los lleva a `world.bin` y el servidor
+(`server/internal/session/portal.go`) mueve al jugador. Reglas propias, a la manera de
+Tibia:
+- **Escalera (`stairs`), agujero (`hole`) y teletransporte (`teleport`): se pisan.** Al dar
+  el paso sobre su casilla, el jugador aparece en el otro extremo. El paso ocurre (quienes lo
+  veían lo ven subir a la escalera y desaparecer) y en el mismo tick llega al destino, con el
+  mapa del otro piso. Cuesta lo que un paso. Un agujero solo baja y no tiene vuelta; una
+  escalera tiene su pareja (otra escalera que sale junto al destino y llega junto al origen),
+  así que nunca se aparece sobre la escalera de vuelta. Un teletransporte puede quedar en el
+  mismo piso o llevar a otra isla.
+- **Escalera de mano (`ladder`): se usa.** Click derecho (o "Usar" del toque largo) sobre su
+  casilla, desde ella o a `inventory.reach` (1) casilla, en el mismo piso. Pisarla no hace
+  nada.
+- **Punto de soga (`rope_spot`): hace falta una soga.** Se usa una herramienta con
+  `tool.use: rope` (la soga, `data/items/tools.yaml`) sobre su casilla, al mismo alcance.
+  Usarla sin soga dice "Necesitas una soga para subir por aquí."; otra herramienta no
+  encuentra nada. Solo sube.
+- **Ritmo:** subir o bajar una escalera de mano o una soga cuesta lo que un paso hasta el
+  destino y no se puede en medio de un paso ("Termina de dar el paso antes de subir o
+  bajar."). Así nadie sube y baja más rápido de lo que camina.
+- **Llegada:** la casilla de destino; si está ocupada, la libre más cercana a
+  `travel.arrival_radius` (2) casillas, como la llegada de un barco: nunca en la sala de
+  una puerta con llave, nunca en una casilla de casa y nunca sobre otra escalera, agujero
+  o teletransporte. Sin casilla libre, el paso o el uso se rechaza ("Hay algo del otro lado:
+  no hay lugar para pasar.") y no cambia nada: el jugador ni siquiera pisa la escalera.
+- **PvP:** quien atacó a un jugador y tiene el bloqueo no puede entrar a una zona protegida
+  por un portal si no está ya en una, igual que a pie.
+- **Barco (`boat`):** el formato lo acepta pero no mueve a nadie: los viajes en barco son
+  del capitán (`data/boat_routes.yaml`, "Viajes en barco"). `make validate` lo advierte.
+- **Monstruos:** no usan portales. Nunca pisan la casilla de una escalera, un agujero o un
+  teletransporte, ni para perseguir; tampoco aparecen ahí. Un jugador que persigue a su
+  objetivo tampoco toma una escalera solo.
+- **Nadie se queda parado sobre una escalera:** los caminos por click del cliente y los
+  desvíos del servidor rodean las escaleras, agujeros y teletransportes salvo que sean el
+  destino, y ninguna búsqueda de casilla libre (entrar al juego, despertar, llegar en barco,
+  salir de una casa, `/tp` del personal) deja a alguien sobre una. Caminar con el teclado
+  sobre una sí la toma: es pisarla.
+- **Lo que el cliente ve:** lo mismo que un teletransporte del personal (`FullMapView` del
+  piso nuevo, docs/05). Solo se dibuja el piso del jugador.
 
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |
@@ -726,11 +769,12 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   las dos desde adentro). Una sala dentro de otra vale cuando la de adentro es más chica
   que la del medio: cada puerta tiene su sala.
 - **La sala no guarda nada de afuera:** ni el templo (donde se despierta), ni NPCs, ni
-  casas (casillas o salida), ni llegadas de barco, ni destinos de un teleport de diálogo;
-  `make validate` mira además los extremos de los portales (el servidor no los carga).
-  Si una sala tiene algo de eso, o se tomó el lado de afuera por la sala, o alguien
-  llegaría detrás de la puerta: ni el servidor arranca ni pasa `make validate`. Los
-  spawns sí pueden estar en una sala: la forja guarda a su custodio detrás del portón.
+  casas (casillas o salida), ni extremos de portales (escaleras, agujeros...: se llegaría
+  detrás de la puerta, o se saldría por un camino que la sala no conoce), ni llegadas de
+  barco, ni destinos de un teleport de diálogo. Si una sala tiene algo de eso, o se tomó
+  el lado de afuera por la sala, o alguien llegaría detrás de la puerta: ni el servidor
+  arranca ni pasa `make validate`. Los spawns sí pueden estar en una sala: la forja guarda
+  a su custodio detrás del portón.
 - **Nadie queda encerrado:** desde la sala, una puerta trabada se abre siempre, con o sin
   llave ("Descorres el cerrojo desde adentro"). Así sale quien volvió a entrar al juego
   adentro con la puerta trabada (otro la cerró mientras no estaba, o hubo un reinicio) y
@@ -741,9 +785,9 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   sectores de la sala y corta la búsqueda de la llave en cuanto la encuentra.
 - **Nadie aparece adentro sin pasar la puerta:** cuando el servidor busca una casilla
   libre por anillos alrededor de un punto (entrar al juego sobre una casilla ocupada,
-  despertar en el templo, la llegada de un barco, un teleport de diálogo o del personal,
-  salir de una casa), descarta las casillas de una sala si el punto no está en esa misma
-  sala. Los anillos no siguen las paredes: sin esto, con unas pocas casillas ocupadas
+  despertar en el templo, la llegada de un barco o de un portal, un teleport de diálogo o
+  del personal, salir de una casa), descarta las casillas de una sala si el punto no está
+  en esa misma sala. Los anillos no siguen las paredes: sin esto, con unas pocas casillas ocupadas
   junto al portón (en la forja bastaban unas 11), quien guardó su posición afuera
   aparecía adentro y, como desde adentro se abre sin llave, le abría a todos.
 - **Ritmo:** un jugador usa una puerta como mucho cada `inventory.door_cooldown_ms`
@@ -755,9 +799,9 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   vez; `make validate` lo advierte). Los monstruos no abren puertas, pero pasan por una
   abierta.
 - **Límites conocidos:**
-  - el cálculo de la sala no conoce escaleras ni portales (hoy no existen en el
-    servidor). Una puerta cuyo lado de afuera sea un pasillo chico con una escalera
-    podría tomar ese pasillo por la sala: `make validate` lo rechaza porque la sala
+  - el cálculo de la sala no sigue escaleras ni portales: recorre un solo piso. Una puerta
+    cuyo lado de afuera sea un pasillo chico con una escalera podría tomar ese pasillo
+    por la sala: el servidor no arranca y `make validate` lo rechaza porque la sala
     tendría un extremo de portal. Igual conviene revisar una puerta nueva con un test
     como `TestForgeGateOnTheMap`;
   - una puerta **sola** con una sala de más de 4096 casillas detrás y un afuera que

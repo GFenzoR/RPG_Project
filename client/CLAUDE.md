@@ -589,3 +589,20 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `shop: true` (servidor con proveedor de pagos).
 - E2E: `e2e/shop.spec.ts`; el servidor principal corre con `PAYMENTS_PROVIDER=fake`
   (docs/08 "E2E de la tienda").
+
+## Notas de portales (escaleras, agujeros, sogas, teletransportes)
+- El servidor mueve al jugador (`02-game-design.md` "Cambiar de piso"); el cliente solo ve
+  un teletransporte: `CreatureMove` del paso y `FullMapView` del piso nuevo, que reemplaza
+  todo (también el paso predicho). No hay estado propio de portales.
+- `content.portals` (de `world/islands/*/portals.yaml`, `vite/content.ts` `loadPortals`):
+  casilla de entrada `"x,y,z"` → `kind`. `state/portals.ts` (puro, con tests):
+  `pathPassable` hace que un camino por click rodee escaleras, agujeros y teletransportes
+  salvo que sean el destino; `usedBare` hace que el click derecho (o "Usar" del toque
+  largo) sobre una escalera de mano o un punto de soga sin items mande `UseItem` con el
+  suelo, como la puerta de una casa. La soga es una herramienta "usar con" como el pico.
+  El teclado sí pisa una escalera: es la forma de bajar.
+- E2E "portals" de `e2e/game.spec.ts`: un guardián de nivel 30 de la Isla Volcánica
+  sembrado con `psql` en 3690,5796,7 hace click en 3693,5796 (el camino rodea la escalera
+  de 3692,5796), baja con la flecha izquierda a 3692,5797,8 (el cliente tiene la
+  `stairs_up` de 3692,5796,8) y sube con la flecha arriba a 3692,5797,7 (screenshots
+  73–75: la escalera en la superficie, la mina en el piso 8 y de vuelta arriba).

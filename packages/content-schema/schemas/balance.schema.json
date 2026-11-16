@@ -1061,7 +1061,7 @@
           "maximum": 600000
         },
         "arrival_radius": {
-          "description": "If the arrival tile is taken, the nearest free walkable tile at most this far (Chebyshev).",
+          "description": "If the arrival tile of a boat route or a portal is taken, the nearest free walkable tile at most this far (Chebyshev).",
           "type": "integer",
           "minimum": 0,
           "maximum": 5

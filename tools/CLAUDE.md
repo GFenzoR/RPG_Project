@@ -55,7 +55,8 @@ merge propio: si el formato cambia, se cambia en `packages/map-format`.
 ## bots (Go)
 `tools/bots` (T1.17): prueba de carga con clientes headless (`server/pkg/bot`) que se
 registran, crean personaje y juegan en la Isla del Puerto: caminan con rutas A* sobre
-`build/world.bin` (`bot.Nav`), atacan monstruos, hablan por chat y abren diálogos con NPCs,
+`build/world.bin` (`bot.Nav`, que rodea escaleras, agujeros y teletransportes: cada bot
+queda en su piso), atacan monstruos, hablan por chat y abren diálogos con NPCs,
 con su propio rate limit (`-min-gap`). Escenarios en `cmd/bots/scenario.go`: `base`
 (repartidos por la isla) y `stress` (todos en la ciudad). Reporte JSON (`-report`) y
 resumen Markdown con tick, RAM, CPU (de `/metrics` del servidor), latencia de comando
