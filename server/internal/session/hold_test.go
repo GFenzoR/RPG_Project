@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -206,5 +208,145 @@ func TestSaverTaintsHouseItems(t *testing.T) {
 	cottage := session.Job{Transfer: &session.Transfer{Houses: []session.HouseOp{{Kind: session.HouseItems, House: "cottage"}}}}
 	if !s.Tainted(cottage) {
 		t.Fatal("the cottage is not tainted")
+	}
+}
+
+// heldOverflow: Sela posts salves, Bruno (backpack full after buying 4) is held by the
+// purchase, and the server then gives him a sword that does not fit (a craft, a reward,
+// the coins of an NPC sale): it falls at his feet. Caio stands next to it.
+func heldOverflow(t *testing.T) (h *marketHarness, cb, cc *fakeClient, b *session.Player, bought session.Snapshot) {
+	t.Helper()
+	h = newMarketHarness(t)
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, b = h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(bagID, 1, 1), stack(swordID, 1, 2))
+	cc, _ = h.trader("Caio", pos(1, 1), stack(coinID, 5, 0), stack(salveID, 3, 1))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	h.send(cb, acceptOffer(h.w.MarketOffers(s.CharacterID())[0], 4))
+	bought = h.transfers[len(h.transfers)-1].Snapshots[0]
+	if bought.CharacterID != b.CharacterID() || !h.w.InFlightForTest(b.CharacterID()) {
+		t.Fatalf("Bruno is not held: snapshot of %d", bought.CharacterID)
+	}
+	cb.take()
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(b, "test_sword", 1) }))
+	h.sim.Step()
+	if !hasKey(cb.take(), "dialog.item_on_floor") || len(h.w.GroundAt(pos(0, 1))) != 1 {
+		t.Fatalf("the sword did not fall: ground %v", h.w.GroundAt(pos(0, 1)))
+	}
+	return h, cb, cc, b, bought
+}
+
+// What the server drops at a held player's feet is reserved to it like its corpse: nobody
+// else takes or uses it, and the player itself only takes it back (no other public tile)
+// until the database confirms the transfer; then it is anybody's.
+func TestHeldOverflowIsReserved(t *testing.T) {
+	h, cb, cc, b, bought := heldOverflow(t)
+	pack := openPack(t, h.harness, cc)
+	take := moveItem(onTile(pos(0, 1)), swordID, 1, inContainer(pack, 0), 1)
+	if !hasKey(h.send(cc, take), "inventory.not_yours") || h.w.CountItem(b, "test_sword") != 1 {
+		t.Fatal("another player picked up what fell at a held player's feet")
+	}
+	if !hasKey(h.send(cc, moveItem(onTile(pos(0, 1)), swordID, 1, onTile(pos(2, 1)), 1)), "inventory.not_yours") {
+		t.Fatal("another player moved it")
+	}
+	if !hasKey(h.send(cb, moveItem(onTile(pos(0, 1)), swordID, 1, onTile(pos(0, 2)), 1)), "inventory.saving") ||
+		len(h.w.GroundAt(pos(0, 1))) != 1 {
+		t.Fatal("the held owner moved it to another public tile")
+	}
+
+	// Confirmed: the reservation ends with the hold.
+	h.sim.Command(h.w.Saved(b.CharacterID(), bought.Seq))
+	h.sim.Step()
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || len(h.w.GroundAt(pos(0, 1))) != 0 {
+		t.Fatalf("pick up after the ack: %v", systemKeys(evs))
+	}
+}
+
+// When the transfer is not stored, what fell at the player's feet stays reserved until a
+// restart: it comes from the state that was dropped.
+func TestTaintedOverflowStaysReserved(t *testing.T) {
+	h, _, cc, b, _ := heldOverflow(t)
+	h.sim.Command(h.w.Tainted([]int64{b.CharacterID()}))
+	h.sim.Step()
+	if h.w.PlayerByCharacter(b.CharacterID()) != nil {
+		t.Fatal("the tainted character is still in the world")
+	}
+	pack := openPack(t, h.harness, cc)
+	if !hasKey(h.send(cc, moveItem(onTile(pos(0, 1)), swordID, 1, inContainer(pack, 0), 1)), "inventory.not_yours") ||
+		len(h.w.GroundAt(pos(0, 1))) != 1 {
+		t.Fatal("another player picked up what a tainted character left")
+	}
+}
+
+// The equipment a held player's corpse cannot hold falls next to it, reserved the same
+// way (death.go): nobody else takes it before the transfer is confirmed.
+func TestHeldDeathOverflowIsReserved(t *testing.T) {
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Monsters = content.Monsters{} // corpses, no monsters
+		var corpse content.Item
+		if err := yaml.Unmarshal([]byte("{id: creature_remains, kind: container, pickupable: false, container: {slots: 1}}"),
+			&corpse); err != nil {
+			t.Fatal(err)
+		}
+		corpse.Numeric = corpseID
+		c.Items[corpse.ID] = &corpse
+		c.Balance.Death.EquipmentDropPct, c.Balance.Death.BackpackDropPct = 100, 100
+	})
+	cs, s := h.atBoard("Sela", pos(1, 1), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	nextChar++
+	bc := withPack(nextChar, pos(0, 1), stack(coinID, 100, 0))
+	bc.Name, bc.Level = "Bruno", 20
+	bc.Inventory = append(bc.Inventory, session.ItemState{ItemID: swordID, Count: 1, Slot: int(slotRight)})
+	cb, b := h.joinChar(bc)
+	h.send(cb, useBoard())
+	cc, _ := h.trader("Caio", pos(0, 2))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	h.send(cb, acceptOffer(h.w.MarketOffers(s.CharacterID())[0], 4))
+	bought := h.transfers[len(h.transfers)-1].Snapshots[0]
+	h.kill(b)
+
+	// The backpack went into the one-slot corpse; the sword lies next to it.
+	sword := -1
+	for i, it := range h.w.GroundAt(pos(0, 1)) {
+		if it.Def().Numeric == swordID {
+			sword = i + 1 // the ground tile is index 0
+		}
+	}
+	if sword < 0 {
+		t.Fatalf("no sword on the ground: %v", h.w.GroundAt(pos(0, 1)))
+	}
+	h.sim.RunTicks(20) // past the corpse's owner-only time: the hold is what reserves it
+	pack := openPack(t, h.harness, cc)
+	take := moveItem(onTile(pos(0, 1)), swordID, uint32(sword), inContainer(pack, 0), 1)
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("another player took the overflow of a held player's corpse")
+	}
+	h.sim.Command(h.w.Saved(b.CharacterID(), bought.Seq))
+	h.sim.Step()
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 {
+		t.Fatalf("pick up after the ack: %v", systemKeys(evs))
+	}
+}
+
+// Nobody's units join a stack reserved to a held player: they would be stuck in it.
+func TestHeldStackTakesNoMerge(t *testing.T) {
+	h, _, cc, b, _ := heldOverflow(t)
+	h.sim.Command(gameFunc(func() { h.w.GiveForTest(b, "test_salve", 100) })) // 96 fit, 4 fall
+	h.sim.Step()
+	ground := h.w.GroundAt(pos(0, 1))
+	if len(ground) != 2 || ground[1].Def().Numeric != salveID || ground[1].Count() != 4 {
+		t.Fatalf("ground %v", ground)
+	}
+	pack := openPack(t, h.harness, cc)
+	if evs := h.send(cc, moveItem(inContainer(pack, 1), salveID, 0, onTile(pos(0, 1)), 3)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("drop next to it: %v", systemKeys(evs))
+	}
+	ground = h.w.GroundAt(pos(0, 1))
+	if len(ground) != 3 || ground[1].Count() != 4 || ground[2].Count() != 3 {
+		t.Fatalf("Caio's salves merged into the reserved stack: %v", ground)
+	}
+	// And he takes his own back.
+	if evs := h.send(cc, moveItem(onTile(pos(0, 1)), salveID, 3, inContainer(pack, 0), 3)); len(systemKeys(evs)) != 0 ||
+		len(h.w.GroundAt(pos(0, 1))) != 2 {
+		t.Fatalf("taking his salves back: %v", systemKeys(evs))
 	}
 }

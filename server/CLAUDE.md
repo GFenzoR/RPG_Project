@@ -151,10 +151,11 @@ server/
   mide la cola del Saver más `World.PendingJobs`. Todo snapshot de un transfer sale por
   `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`):
   un camino nuevo que lleve algo de un personaje al suelo público tiene que respetar
-  `heldDrop`, y uno que reemplace los items de una casa va como `HouseItems` (el Saver
-  marca la casa si se descarta). Una acción que cambie lo que muestra la ventana del
-  mercado de otro llama a `bookChanged` / `marketOwnerChanged` / `queueMarket` (refresco
-  en vivo, `flushMarket`).
+  `heldDrop`, uno en que el servidor le deje algo a sus pies llama a `holdGround`, uno
+  que tome o use algo del suelo mira `groundHeld`, y uno que reemplace los items de una
+  casa va como `HouseItems` (el Saver marca la casa si se descarta). Una acción que
+  cambie lo que muestra la ventana del mercado de otro llama a `bookChanged` /
+  `marketOwnerChanged` / `queueMarket` (refresco en vivo, `flushMarket`).
 
 - **Casas (T5.4):** `session/house.go` + `store/houses.go` + `app/houses.go` +
   `httpapi/houses.go` (`balance.yaml houses`; necesita el mercado). Las casas son datos del

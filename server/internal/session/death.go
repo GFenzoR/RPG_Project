@@ -70,7 +70,8 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 				it.parent = corpse.Item
 				corpse.Item.items = append(corpse.Item.items, it)
 			} else {
-				w.drop(it, at) // never lost (unreserved): only if the corpse had fewer slots than the equipment
+				w.drop(it, at)      // never lost (unreserved): only if the corpse had fewer slots than the equipment
+				w.holdGround(p, it) // T5.3 fail-safe: reserved like the corpse while p is held
 			}
 			w.closeUnreachable(it)
 		}

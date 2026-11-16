@@ -335,7 +335,7 @@ func (w *World) Saved(characterID int64, seq uint64) game.Command {
 			delete(w.unsaved, characterID)
 		}
 		if h, ok := w.inFlight[characterID]; ok && seq >= h {
-			delete(w.inFlight, characterID)
+			w.endHold(characterID)
 		}
 	})
 }

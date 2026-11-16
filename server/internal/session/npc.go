@@ -548,6 +548,7 @@ func (w *World) giveItem(p *Player, def *content.Item, n int) {
 				it.count = def.StackLimit()
 			}
 			w.drop(it, p.pos)
+			w.holdGround(p, it) // T5.3 fail-safe: p's own while a transfer of p is unconfirmed
 			w.tileChanged(p.pos)
 			p.ground(measure(it, it.count), -1) // created for p, but it landed on the floor
 			floor = true

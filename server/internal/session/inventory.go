@@ -36,6 +36,7 @@ const (
 	msgTooDeep        = "inventory.too_deep"
 	msgTileFull       = "inventory.tile_full"
 	msgSaving         = "inventory.saving"
+	msgNotYours       = "inventory.not_yours"
 	msgNotReady       = "inventory.not_ready"
 	msgAte            = "inventory.ate"
 	msgLookItem       = "look.item"
@@ -472,6 +473,10 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		p.emit(systemMsg(msgNotOwner))
 		return
 	}
+	if w.groundHeld(p, it) { // T5.3 fail-safe: fell at the feet of a held player
+		p.emit(systemMsg(msgNotYours))
+		return
+	}
 	if !it.def.CanPickUp() {
 		p.emit(systemMsg(msgCannotMove))
 		return
@@ -507,6 +512,9 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		}
 		g := w.ground[to.pos]
 		merge = mergeTarget(g, it, count)
+		if merge != nil && w.groundHeld(p, merge) {
+			merge = nil // T5.3: never into a stack reserved to a held player (hold.go)
+		}
 		if merge == nil && len(g) >= maxGroundItems {
 			p.emit(systemMsg(msgTileFull))
 			return
@@ -855,6 +863,10 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 	}
 	if from.kind == locContainer && it.def.Container == nil && w.reserved(ctx.Tick, p, it) {
 		p.emit(systemMsg(msgNotOwner))
+		return
+	}
+	if it.def.Container == nil && w.groundHeld(p, it) {
+		p.emit(systemMsg(msgNotYours))
 		return
 	}
 	if !w.mayUseInHouse(p, it) {

@@ -809,6 +809,10 @@ func (w *World) useItemOn(ctx *game.TickContext, p *Player, m *pb.UseItemOn) {
 		p.emit(systemMsg(msgNotOwner))
 		return
 	}
+	if w.groundHeld(p, it) { // T5.3 fail-safe
+		p.emit(systemMsg(msgNotYours))
+		return
+	}
 	if !w.mayUseInHouse(p, it) { // T5.4
 		return
 	}
