@@ -1,7 +1,7 @@
 {
   "format": 1,
   "chunk": { "cx": 115, "cy": 182, "z": 7 },
-  "palette": ["ash", "cooled_lava", "lava", "sand", "water_shallow", "border_cooled_lava_ash_ne", "border_cooled_lava_ash_se", "border_cooled_lava_ash_inner_ne", "border_cooled_lava_ash_inner_se", "boulder", "border_cooled_lava_ash_e", "border_cooled_lava_ash_s", "border_cooled_lava_ash_inner_nw", "border_cooled_lava_ash_w", "border_cooled_lava_ash_n", "border_cooled_lava_lava_inner_nw", "border_cooled_lava_lava_n", "border_cooled_lava_lava_inner_ne", "border_cooled_lava_lava_w", "border_cooled_lava_lava_e", "border_cooled_lava_lava_se", "border_cooled_lava_lava_inner_se", "border_cooled_lava_ash_nw", "border_cooled_lava_lava_inner_sw", "ember_vein", "border_cooled_lava_lava_nw", "border_cooled_lava_lava_ne", "border_cooled_lava_lava_s", "border_cooled_lava_lava_sw", "border_cooled_lava_sand_inner_nw", "border_ash_sand_w", "border_cooled_lava_sand_inner_ne", "border_sand_water_ne", "border_sand_water_n", "border_ash_sand_inner_nw", "border_ash_sand_nw", "border_cooled_lava_sand_ne", "border_cooled_lava_sand_n", "border_sand_water_w"],
+  "palette": ["ash", "cooled_lava", "lava", "sand", "water_shallow", "border_cooled_lava_ash_ne", "border_cooled_lava_ash_se", "border_cooled_lava_ash_inner_ne", "border_cooled_lava_ash_inner_se", "boulder", "border_cooled_lava_ash_e", "border_cooled_lava_ash_s", "border_cooled_lava_ash_inner_nw", "border_cooled_lava_ash_w", "border_cooled_lava_ash_n", "border_cooled_lava_lava_inner_nw", "border_cooled_lava_lava_n", "border_cooled_lava_lava_inner_ne", "border_cooled_lava_lava_w", "border_cooled_lava_lava_e", "border_cooled_lava_lava_se", "border_cooled_lava_lava_inner_se", "border_cooled_lava_ash_nw", "border_cooled_lava_lava_inner_sw", "ember_vein", "border_cooled_lava_lava_nw", "border_cooled_lava_lava_ne", "border_cooled_lava_lava_s", "border_cooled_lava_lava_sw", "border_cooled_lava_sand_inner_nw", "border_cooled_lava_sand_n", "border_ash_sand_w", "border_cooled_lava_sand_inner_ne", "border_sand_water_inner_nw", "border_sand_water_n", "border_ash_sand_inner_nw", "border_ash_sand_nw", "border_cooled_lava_sand_ne", "border_sand_water_nw"],
   "ground": [
     [0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
@@ -32,8 +32,8 @@
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,2,2,2,1,1],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,2,2,2,1,1,1,1],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,3],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,1,1,1,1,1,4,4,4],
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,3,3,3],
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,1,1,1,3,3,4,4,4],
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,3,4,4,4,4,4]
   ],
   "items": [
@@ -157,17 +157,24 @@
     { "x": 19, "y": 29, "stack": [5] },
     { "x": 20, "y": 29, "stack": [14] },
     { "x": 21, "y": 29, "stack": [7] },
-    { "x": 31, "y": 29, "stack": [29] },
+    { "x": 29, "y": 29, "stack": [29] },
+    { "x": 30, "y": 29, "stack": [30] },
+    { "x": 31, "y": 29, "stack": [30] },
     { "x": 21, "y": 30, "stack": [5] },
     { "x": 22, "y": 30, "stack": [14] },
-    { "x": 23, "y": 30, "stack": [30, 31] },
-    { "x": 30, "y": 30, "stack": [32] },
-    { "x": 31, "y": 30, "stack": [33] },
-    { "x": 22, "y": 31, "stack": [34] },
-    { "x": 23, "y": 31, "stack": [35, 36] },
-    { "x": 24, "y": 31, "stack": [37] },
-    { "x": 25, "y": 31, "stack": [37] },
-    { "x": 26, "y": 31, "stack": [37] },
-    { "x": 27, "y": 31, "stack": [38] }
+    { "x": 23, "y": 30, "stack": [31, 32] },
+    { "x": 27, "y": 30, "stack": [29] },
+    { "x": 28, "y": 30, "stack": [30] },
+    { "x": 29, "y": 30, "stack": [33] },
+    { "x": 30, "y": 30, "stack": [34] },
+    { "x": 31, "y": 30, "stack": [34] },
+    { "x": 22, "y": 31, "stack": [35] },
+    { "x": 23, "y": 31, "stack": [36, 37] },
+    { "x": 24, "y": 31, "stack": [30] },
+    { "x": 25, "y": 31, "stack": [30] },
+    { "x": 26, "y": 31, "stack": [30] },
+    { "x": 27, "y": 31, "stack": [33] },
+    { "x": 28, "y": 31, "stack": [34] },
+    { "x": 29, "y": 31, "stack": [38] }
   ]
 }

@@ -442,11 +442,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
   (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
   en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la
-  plaza al llano del norte, del camino a la boca del cráter y del camino a la ladera), y manchas de
-  escoria donde el generador había dejado arena tierra adentro; la ladera y el cráter
+  plaza al llano del norte, del camino a la boca del cráter y del camino a la ladera); las
+  manchas de arena que el generador había dejado tierra adentro son afloramientos de lava
+  enfriada sobre la ceniza; la ladera y el cráter
   son de lava enfriada (`cooled_lava`) con seis pozos de lava fundida (`lava`, no
   caminable) siempre rodeados de costra, fuera de los spawns y sin tapar vetas de ascua.
-  La playa sigue siendo arena (`ash_sand`, `cooled_lava_sand`). Se pintó con un script de
+  La playa sigue siendo arena (`ash_sand`, `cooled_lava_sand`), también entre la lava
+  enfriada y el mar en la costa sur. Las losas de basalto de la plaza y el final de los
+  caminos de escoria en la ladera y el cráter tienen el borde recto a propósito (un
+  empedrado y un camino que termina), como la piedra de los pueblos. Se pintó con un script de
   ops (`paint_ground` por celdas, `remove_item` de tres rocas bajo la lava, `place_item`
   de los carteles y `autoborder` de toda la isla) sobre el mapa anterior, sin mover
   spawns, NPCs, portales, zonas ni la casa. Carteles (`texts.yaml` y un item
