@@ -11,7 +11,6 @@ import {
   eachInRect,
   hash2,
   line,
-  opaque,
   outline,
   px,
   rect,
@@ -20,7 +19,7 @@ import {
   tileNoise,
 } from "../draw.ts";
 import type { Rng } from "../draw.ts";
-import { darken, hex, material, mix, PALETTE } from "../palette.ts";
+import { hex, material, mix, PALETTE } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
 const { wood, darkWood, darkIron, dirt, rock, darkStone } = PALETTE;
