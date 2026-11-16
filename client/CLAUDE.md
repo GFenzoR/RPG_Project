@@ -49,8 +49,10 @@ client/
 - `Atlas.load` (`packages/renderer`) reintenta cada request por su cuenta (`atlas.json`, el
   JSON de cada página y su imagen) con `ASSET_RETRY` de `packages/renderer/src/retry.ts`
   (puro, con tests: 4 intentos, esperas de 0,5, 1 y 2 s; un estado HTTP de error cuenta
-  como fallo). Lo ya bajado no se pide de nuevo. Sin PixiJS: el sitio lo importa como
-  `@rpg/renderer/retry` (`loadIcons` de la tienda).
+  como fallo). Dentro de un mismo `Atlas.load`, lo ya bajado no se pide de nuevo. Con
+  "Reintentar" (un `Atlas.load` nuevo) se vuelven a pedir `atlas.json` y los JSON de las
+  páginas; solo las imágenes ya cargadas salen del caché de `Assets` de PixiJS. Sin
+  PixiJS: el sitio lo importa como `@rpg/renderer/retry` (`loadIcons` de la tienda).
 - Si se agotan los intentos, `Game.startCanvas` no lo vuelve a intentar solo (cada batch
   del servidor lo haría): avisa `GameOptions.loadFailed` y `ui/LoadStatus.tsx` (sin hooks,
   con test) cambia "Conectando…" por el error y "Reintentar" (`load-failed`,

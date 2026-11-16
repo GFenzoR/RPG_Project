@@ -2,9 +2,11 @@
 // into PixiJS textures. The renderer only knows sprite paths ("ground/grass"); mapping an
 // item ID to its sprite is the caller's job (it comes from data/items).
 // Every request (the index, each page's JSON and its image) retries on its own with
-// retry.ts's policy: one failed request on a flaky network does not lose the atlas, and a
-// page already loaded is not fetched again. Only after the last attempt does load reject;
-// the client and the editor then show the error with a "Retry" button.
+// retry.ts's policy: one failed request on a flaky network does not lose the atlas, and
+// within one load a request that succeeded is not repeated. Only after the last attempt
+// does load reject; the client and the editor then show the error with a "Retry" button,
+// a new load: it fetches atlas.json and the page JSON files again, and only the page
+// images already loaded come from PixiJS Assets' cache.
 import { Assets, Spritesheet, Texture } from "pixi.js";
 import type { SpritesheetData } from "pixi.js";
 import { fetchJSON, withRetry } from "./retry.ts";

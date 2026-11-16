@@ -893,8 +893,9 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
     escape, donde una casa sigue siendo muro) y el área de la salida de la casa (la calle
     a la que sale quien está adentro). Nunca otra casa, otra parte de la misma casa
     separada por una pared ni un bolsillo cerrado del otro lado de la pared;
-  - **una puerta con llave** (abierta o cerrada; quien salió del juego parado en el umbral
-    abierto, un `/tp` del personal): solo su lado de **afuera**, las áreas de al lado que
+  - **una puerta con llave** (abierta o cerrada: quien salió del juego parado en el umbral
+    abierto; o un `/tp` del personal a la puerta abierta, porque uno a una puerta cerrada,
+    que no es caminable, se rechaza): solo su lado de **afuera**, las áreas de al lado que
     no son su sala. Nunca el umbral (taparía la puerta abierta) ni la sala: quien estaba
     ahí venía de afuera o de la sala, que desde adentro se abre sin llave hacia afuera;
     entrar a la sala pide la llave, así que la búsqueda nunca termina adentro. Quien

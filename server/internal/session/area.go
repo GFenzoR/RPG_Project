@@ -123,8 +123,9 @@ func (w *World) setArea(p world.Pos, id int32) {
 //     the areas next to it, the only ones a player there could walk to (none is a room:
 //     checkRooms keeps portal ends out of rooms and initDoors refuses a portal end on a
 //     locked door).
-//   - A locked door (a player logged out in its doorway, a /tp of the staff): the areas
-//     next to it but its room, its outside. Whoever stood there came from the outside or
+//   - A locked door, open or closed (a player logged out in its open doorway; a /tp of
+//     the staff to the open door: one to a closed door, not walkable, is refused): the
+//     areas next to it but its room, its outside. Whoever stood there came from the outside or
 //     from the room, which the door opens onto the outside without the key; the room needs
 //     the key, so a search never ends there.
 //   - Anything else (a wall, no tile): nowhere. The search finds nothing and its caller

@@ -166,8 +166,8 @@ items:
 - **Portales** (`portal`): un item fijo del mapa que muestra un portal de `portals.yaml`
   (`02-game-design.md` "Cambiar de piso"): `kind` (`stairs`, `ladder`, `hole`,
   `rope_spot`, `teleport`) y, opcional, `leads` (`up` o `down`: el sentido en que cambia
-  de piso). Va en la pila de la entrada del portal; no mueve a nadie. Ejemplo
-  (`data/items/decoration.yaml`):
+  de piso). Va en la entrada del portal, en la pila o como suelo; no mueve a nadie.
+  Ejemplo (`data/items/decoration.yaml`):
   ```yaml
   - id: ladder_up
     kind: decoration
