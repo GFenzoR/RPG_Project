@@ -277,6 +277,20 @@ aunque ninguna escritura falle, y la alerta `PersistenceBacklog` avisa si pasa d
 durante 5 minutos. `persistence_errors_total{outcome="retry"}` solo cuenta escrituras que
 fallaron.
 
+**Guardado antes del transfer (falla segura, docs/01).** Un personaje que soltó algo al
+suelo público desde su último snapshot escribe ese estado justo antes de su próximo
+transfer: como mucho una escritura más por personaje y transfer (lo que cuesta un
+autoguardado), y solo la primera vez después de soltar algo, porque cualquier snapshot
+posterior la reemplaza. Queda acotada por los mismos anti-flood que los transfers
+(`trade.action_*`, `market.action_*`, `houses.action_*`): en el peor caso duplica las
+escrituras de transfers de quien alterna tirar algo a la calle y comerciar o mover cosas
+en su casa (≈ 3 transfers por segundo → 6 escrituras). Sin transfers no se escribe nada
+más. En el loop, cada cosa soltada a la calle toma un snapshot en memoria
+(`BenchmarkThrowAway`, tirar una moneda y levantarla con un cofre de 40 items: ≈ 3 µs y
+≈ 8 KB más por tirada, 11 asignaciones). Con el rate limit de 30 comandos por segundo son
+a lo sumo ≈ 0,1 ms por segundo por jugador que no hace otra cosa que tirar items, y la
+memoria es un snapshot por jugador (el último), hasta su próximo guardado.
+
 Cada snapshot guardado (también los autoguardados) vuelve al loop como un comando
 `World.Saved` (la espera de la falla segura, docs/01 "Transacciones"): N / 300 por
 segundo más uno por personaje de cada transfer, cada uno un par de búsquedas en un mapa.

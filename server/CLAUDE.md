@@ -157,9 +157,12 @@ server/
   una oferta lleva sus unidades (`MarketOfferRemove.Units`, baja con guarda). Un transfer
   que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
   mide la cola del Saver más `World.PendingJobs`. Todo snapshot de un transfer sale por
-  `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`):
-  un camino nuevo que lleve algo de un personaje al suelo público tiene que respetar
-  `heldDrop`, uno que saque algo del suelo de una casa al suelo público llama a
+  `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`,
+  y encola antes el snapshot pendiente de `gaveAway`): un camino nuevo que lleve algo de
+  un personaje al suelo público tiene que respetar `heldDrop` y, ya hecho, llamar a
+  `gaveAway` (su estado sin eso se escribe antes de su próximo transfer, así un transfer
+  descartado no lo devuelve a un guardado que todavía lo tiene; `holdGround` ya lo
+  llama), uno que saque algo del suelo de una casa al suelo público llama a
   `leftHouse` y solo lo deja como pila propia o en una pila o contenedor ya reservado a
   él (`heldFor`; nunca en algo ajeno, que la reserva se quedaría), uno en que el servidor
   le deje algo a sus pies llama a `holdGround`, uno que tome o use algo del suelo (o meta

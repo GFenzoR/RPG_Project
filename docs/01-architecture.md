@@ -208,7 +208,8 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     outcome="rejected|abandoned|skipped"}` y la alerta `PersistenceDataLost`
     (tabla de alertas de este doc). Al reiniciar se carga lo que tiene la base: los
     marcados pierden todo lo jugado desde su **último guardado escrito** (no solo desde el
-    transfer).
+    transfer), que nunca es anterior a lo que dieron al suelo público (ver "Guardado
+    antes del transfer" más abajo).
   - **Bajas con guarda:** cerrar una oferta (cancelar, vencer, `/marketcancel`) lleva las
     unidades que el loop cree que quedan (`DeleteMarketOffer ... AND amount = $units`). Si
     un llenado de esa oferta no se guardó, la base tiene más: el cierre falla entero
@@ -317,13 +318,49 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       base, y lo que gana jugando (botín de un monstruo, experiencia) es juego nuevo que
       el relogueo al último guardado pierde, como en cualquier caída. Fuera de eso, los
       caminos de hoy por los que algo suyo llega a otro personaje (intercambio, mercado,
-      casas, suelo, cadáver) están cubiertos; uno nuevo tiene que respetar la espera
-      (server/CLAUDE.md), y las alertas de economía (T4.1) siguen como red.
+      casas, suelo, cadáver) están cubiertos, mientras espera por la espera y antes por el
+      guardado de abajo; uno nuevo tiene que respetar los dos (server/CLAUDE.md), y las
+      alertas de economía (T4.1) siguen como red.
+  - **Guardado antes del transfer (`session/hold.go`, `gaveAway`).** La espera cubre lo
+    que pasa mientras un transfer no está confirmado, pero un marcado vuelve a su
+    **último guardado escrito**, que puede ser anterior. Lo que dio **antes** del
+    transfer sin estar en espera (lo tiró a la calle o a un contenedor de la calle, o el
+    servidor se lo dejó a los pies fuera de una casa: las monedas de una venta a un NPC,
+    una fabricación o una recompensa que no entró) estaría entonces en esa fila y en la
+    de quien lo levantó y se guardó: duplicado. Por eso cada vez que algo suyo llega al
+    suelo público (`MoveItem` de algo que carga; `holdGround` fuera de una casa, también
+    estando en espera) el loop toma su snapshot **en ese momento** y lo deja en memoria
+    (`Player.pre`). Su **próximo transfer** lo encola primero (`transferSnapshot`, delante
+    del trabajo del transfer): el Saver lo escribe antes, así el último guardado escrito
+    nunca es anterior a lo que dio.
+    - Si el transfer se descarta o se salta (también el intercambio de un compañero
+      marcado, por el punto fijo), el personaje vuelve a ese estado: sin lo que dio y sin
+      el transfer. Si ya estaba marcado de antes, ese snapshot se salta como cualquier
+      otro trabajo suyo (la espera no lo dejó soltar nada desde entonces).
+    - Una sola vez: cualquier snapshot posterior del personaje (un autoguardado, el final
+      al salir o al apagar, el de su muerte, el de un transfer) lo reemplaza, porque ya
+      entra en la cola detrás de lo que dio. Un relogueo, el link-dead y el reinicio no
+      cambian nada: el snapshot final lo reemplaza y el login nuevo arranca sin él.
+    - Se numera al tomarlo, no al encolarlo: su acuse vale solo por lo anterior. No
+      termina la espera del transfer que va detrás ni libera lo que se reservó después
+      (lo que sacó de una casa en el mismo comando sigue reservado hasta el acuse de la
+      escritura de la casa, `leftHouse`).
+    - En el suelo de una casa no hace falta: lo que se deja ahí se escribe con el
+      snapshot de quien lo movió (`flushHouses`, un transfer que también encola antes el
+      snapshot pendiente de ese personaje).
+    - Costo: una escritura más solo en el primer transfer de un personaje después de
+      soltar algo al suelo público, y un snapshot en memoria por cosa soltada (docs/07).
+    - **Límite: una caída no es un transfer.** Con la base caída al apagar, el apagado es
+      una caída (ver arriba) y ese snapshot puede no llegar a escribirse. Como en
+      cualquier caída, lo que alguien tiró a la calle y otro levantó puede quedar en las
+      dos filas si el guardado de quien lo levantó entró y el de quien lo tiró no: es el
+      límite general de guardar por personaje con el suelo en memoria (docs/14).
 - Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
   oferta y, si era de compra, devolver el oro al buzón).
 - **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un
-  autoguardado); por eso el intercambio no se confirma vacío y tiene anti-flood, y el
-  mercado también (docs/07).
+  autoguardado), más el guardado de antes de quien soltó algo al suelo público desde su
+  último snapshot (como mucho uno por personaje y transfer); por eso el intercambio no se
+  confirma vacío y tiene anti-flood, y el mercado también (docs/07).
 - La otra parte de una operación del mercado no necesita snapshot: lo que recibe va a su
   buzón, que es una fila del mercado. Por eso funciona aunque esté desconectada.
 

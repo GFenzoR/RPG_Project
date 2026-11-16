@@ -107,15 +107,17 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
   mismo libro lo pide (antes, subir `market.push_every_ms`).
-- **Falla segura del comercio (a revisar, anterior a esta revisión):** un personaje
-  marcado vuelve a su **último guardado escrito**, que puede ser anterior al transfer
-  descartado. Lo que soltó **sin estar en espera** entre ese guardado y el transfer (algo
-  tirado al suelo que otro levantó, las monedas de una venta a un NPC que cayeron a sus
-  pies) vuelve a estar en su fila de la base y también en la de quien lo levantó. La
-  espera (docs/01) solo cubre lo que pasa mientras hay un transfer sin confirmar. Es raro
-  (un transfer descartado es un bug o la base caída al apagar) y lo ven las alertas de
-  economía; una salida sería escribir el estado del personaje justo antes de cada
-  transfer, a costa de una escritura más por transfer.
+- **Caída con la calle de por medio (límite general, no del comercio):** un transfer
+  descartado ya no duplica lo que su personaje soltó antes al suelo público: su estado de
+  ese momento se escribe antes del transfer (docs/01, "Guardado antes del transfer").
+  Queda el caso de una **caída** (o de la base caída al apagar, que se trata como una):
+  lo que alguien tiró a la calle y otro levantó puede quedar en las dos filas si el
+  guardado de quien lo levantó entró y el de quien lo tiró no. Es el límite de guardar
+  por personaje con el suelo en memoria, igual sin comercio. Lo mismo si la base rechaza
+  el snapshot mismo, no solo el transfer (lo avisa `PersistenceDataLost`). Una salida
+  sería reservar lo que se tira a la calle hasta escribir el estado de quien lo tiró (una
+  escritura por tirada, acotada por jugador, y una demora para levantarlo); hacerlo solo
+  si las alertas de economía lo muestran.
 - **Mundo:**
   - cada cartel cuesta un item y un ID (hoy todos los de Puerto, el Bosque y la Isla
     Volcánica, incluido el de la puerta con llave del piso 8, tienen su `*_sign`; solo el

@@ -507,7 +507,11 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   la base caída al apagar), sus personajes salen del juego con un aviso y no pueden
   entrar hasta que el servidor reinicie, y el mercado y el intercambio quedan en solo
   lectura (se puede mirar, no operar) hasta entonces. Al reiniciar, esos personajes
-  vuelven a su último guardado escrito (pierden lo jugado desde ahí). Para que nada de
+  vuelven a su último guardado escrito (pierden lo jugado desde ahí), que nunca es
+  anterior a lo que soltaron al suelo fuera de una casa: si un personaje tiró algo a la
+  calle (o el servidor se lo dejó a los pies) desde su último guardado, su estado se
+  guarda antes de su próximo intercambio, compra, venta o cambio en una casa, sin que se
+  note. Para que nada de
   lo que recibieron llegue a otro antes del aviso, después de cada intercambio, compra,
   venta, retiro del buzón o cambio en una casa el personaje queda **en espera** hasta que
   la base confirma ese guardado (normalmente uno o dos ticks): no puede soltar nada en el
