@@ -113,6 +113,10 @@ type Island struct {
 	NPCs []NPCPlacement
 	// Houses are the island's player houses (world/islands/<id>/houses.yaml, T5.4).
 	Houses []House
+	// Portals are the island's stairs, ladders, holes, rope spots and teleports
+	// (world/islands/<id>/portals.yaml), in file order: each leaves from a tile of the
+	// island and may lead to any island.
+	Portals []Portal
 
 	cx0, cy0 int                // first sector column/row
 	cw, ch   int                // sectors per row/column
@@ -241,6 +245,9 @@ type Map struct {
 	// houseAt indexes the tiles of every house (T5.4).
 	houseAt map[Pos]*House
 	houses  []*House
+	// portalAt indexes the portals by the tile they leave from.
+	portalAt map[Pos]*Portal
+	portals  []*Portal
 }
 
 // NewMap builds a Map. Island IDs must be unique, rects aligned to SectorSize and disjoint,
@@ -248,7 +255,7 @@ type Map struct {
 // on one of its floors. groundSpeed is indexed by
 // numeric item ID (0 = DefaultGroundSpeed).
 func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint16) (*Map, error) {
-	m := &Map{groundSpeed: groundSpeed, houseAt: map[Pos]*House{}}
+	m := &Map{groundSpeed: groundSpeed, houseAt: map[Pos]*House{}, portalAt: map[Pos]*Portal{}}
 	npcs := map[string]bool{}
 	npcTiles := map[Pos]bool{}
 	for i, is := range islands {
@@ -303,6 +310,9 @@ func NewMap(islands []*Island, sectors map[string][]*Sector, groundSpeed []uint1
 		m.islands = append(m.islands, is)
 	}
 	if err := m.indexHouses(); err != nil {
+		return nil, err
+	}
+	if err := m.indexPortals(); err != nil {
 		return nil, err
 	}
 	m.minSpeed = m.slowestCost()

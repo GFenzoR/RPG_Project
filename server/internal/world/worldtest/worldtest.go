@@ -191,9 +191,26 @@ func Join(t testing.TB, ids []string, maps ...*world.Map) *world.Map {
 // island (T5.4): world.NewMap marks their tiles with FlagHouse and FlagProtection.
 func WithHouses(t testing.TB, m *world.Map, houses ...world.House) *world.Map {
 	t.Helper()
+	return rebuild(t, m, func(is *world.Island) { is.Houses = append([]world.House(nil), houses...) })
+}
+
+// WithPortals returns a copy of m (one island, built by this package) with portals on its
+// island (stairs, ladders, holes, rope spots, teleports): world.NewMap checks and indexes
+// them. Its houses stay.
+func WithPortals(t testing.TB, m *world.Map, portals ...world.Portal) *world.Map {
+	t.Helper()
+	return rebuild(t, m, func(is *world.Island) { is.Portals = append([]world.Portal(nil), portals...) })
+}
+
+// rebuild returns a copy of m (one island, built by this package) with its island changed
+// by edit, its sectors (and their stacks) copied.
+func rebuild(t testing.TB, m *world.Map, edit func(is *world.Island)) *world.Map {
+	t.Helper()
 	src := m.Islands()[0]
 	is := *src
-	is.Houses = append([]world.House(nil), houses...)
+	is.Houses = append([]world.House(nil), src.Houses...)
+	is.Portals = append([]world.Portal(nil), src.Portals...)
+	edit(&is)
 	var list []*world.Sector
 	r := is.Rect
 	for _, z := range is.Floors {

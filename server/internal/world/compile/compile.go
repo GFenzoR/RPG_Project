@@ -16,6 +16,8 @@
 //     matters to the editor and sets no flag.
 //   - Houses (houses.yaml, T5.4) travel as data; world.NewMap marks their tiles with
 //     FlagHouse and FlagProtection.
+//   - Portals (portals.yaml: stairs, ladders, holes, rope spots, teleports) travel as data
+//     too (world.bin v5); world.NewMap checks and indexes them by their entrance tile.
 package compile
 
 import (
@@ -336,6 +338,11 @@ func compileIsland(root, id string, worldRect rect, content *Content) (*world.Is
 		return nil, nil, err
 	}
 	is.Houses = houses
+	portals, err := readPortals(root, dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	is.Portals = portals
 	return is, sectors, nil
 }
 
@@ -611,6 +618,49 @@ func readHouses(root, dir string) ([]world.House, error) {
 		}
 		h.Exit = world.Pos{X: uint16(hf.Exit.X), Y: uint16(hf.Exit.Y), Z: uint8(hf.Exit.Z)}
 		out = append(out, h)
+	}
+	return out, nil
+}
+
+type portalFile struct {
+	ID   string `yaml:"id"`
+	Kind string `yaml:"kind"`
+	From pos    `yaml:"from"`
+	To   pos    `yaml:"to"`
+}
+
+// readPortals reads portals.yaml (optional). The kind must be one the server knows; the
+// rest (ends on walkable tiles, the floor rules of each kind, one portal per tile, no end
+// in a house) is checked by world.NewMap, and the way back of stairs and ladders by make
+// validate.
+func readPortals(root, dir string) ([]world.Portal, error) {
+	path := filepath.Join(dir, "portals.yaml")
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	var list []portalFile
+	if err := readYAML(path, &list); err != nil {
+		return nil, err
+	}
+	where := rel(root, path)
+	inWorld := func(c pos) bool {
+		return c.X >= 0 && c.Y >= 0 && c.X <= 0xFFFF && c.Y <= 0xFFFF && c.Z >= 0 && c.Z <= world.MaxFloor
+	}
+	out := make([]world.Portal, 0, len(list))
+	for i, pf := range list {
+		kind, ok := world.ParsePortalKind(pf.Kind)
+		if !ok {
+			return nil, fmt.Errorf("%s: portals[%d] (%s): unknown kind %q", where, i, pf.ID, pf.Kind)
+		}
+		if !inWorld(pf.From) || !inWorld(pf.To) {
+			return nil, fmt.Errorf("%s: portals[%d] (%s): from %+v or to %+v outside the world", where, i, pf.ID, pf.From, pf.To)
+		}
+		out = append(out, world.Portal{
+			ID:   pf.ID,
+			Kind: kind,
+			From: world.Pos{X: uint16(pf.From.X), Y: uint16(pf.From.Y), Z: uint8(pf.From.Z)},
+			To:   world.Pos{X: uint16(pf.To.X), Y: uint16(pf.To.Y), Z: uint8(pf.To.Z)},
+		})
 	}
 	return out, nil
 }

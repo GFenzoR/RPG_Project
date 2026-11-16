@@ -299,6 +299,7 @@ func seventeenFloors() []byte {
 	w.u16(0) // no spawns
 	w.u16(0) // no NPCs
 	w.u16(0) // no houses
+	w.u16(0) // no portals
 	w.u32(0) // no sectors
 	_ = bw.Flush()
 	return binary.LittleEndian.AppendUint32(buf.Bytes(), crc32.ChecksumIEEE(buf.Bytes()))
