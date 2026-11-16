@@ -115,18 +115,64 @@
   pickupable: false
   blocks_movement: true
 
-# Stairs (T1.16): only the look of a stairs portal (portals.yaml does the moving).
+# Portals (T1.16, docs/02 "Cambiar de piso"): only the look of a portal of portals.yaml,
+# which does the moving. `portal` says which one each item shows: make validate wants it
+# on the entrance of every portal of that kind and way (docs/03 "Validación").
 - id: stairs_down
   kind: decoration
   sprite: decor/stairs_down
   name: item.stairs_down.name
   pickupable: false
+  portal: { kind: stairs, leads: down }
 
 - id: stairs_up
   kind: decoration
   sprite: decor/stairs_up
   name: item.stairs_up.name
   pickupable: false
+  portal: { kind: stairs, leads: up }
+
+# A ladder seen from below (it is climbed up) and its top: an open hatch it goes down from.
+- id: ladder_up
+  kind: decoration
+  sprite: decor/ladder_up
+  name: item.ladder_up.name
+  description: item.ladder_up.desc
+  pickupable: false
+  portal: { kind: ladder, leads: up }
+
+- id: ladder_down
+  kind: decoration
+  sprite: decor/ladder_down
+  name: item.ladder_down.name
+  description: item.ladder_down.desc
+  pickupable: false
+  portal: { kind: ladder, leads: down }
+
+- id: hole
+  kind: decoration
+  sprite: decor/hole
+  name: item.hole.name
+  description: item.hole.desc
+  pickupable: false
+  portal: { kind: hole }
+
+# Under an opening of the floor above: the light that falls through it (a rope climbs it).
+- id: rope_spot
+  kind: decoration
+  sprite: decor/rope_spot
+  name: item.rope_spot.name
+  description: item.rope_spot.desc
+  pickupable: false
+  portal: { kind: rope_spot }
+
+- id: teleport
+  kind: decoration
+  sprite: decor/teleport
+  name: item.teleport.name
+  description: item.teleport.desc
+  pickupable: false
+  portal: { kind: teleport }
 
 # Remains of a slain monster (T1.6). The server places it where the monster died, with
 # the loot inside, and removes it after combat.monster_corpse_ms (balance.yaml). It is a

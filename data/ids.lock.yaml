@@ -218,3 +218,8 @@ items:
   bosque_temple_sign: 215
   bosque_dock_sign: 216
   bosque_cave_sign: 217
+  ladder_up: 218
+  ladder_down: 219
+  hole: 220
+  rope_spot: 221
+  teleport: 222
