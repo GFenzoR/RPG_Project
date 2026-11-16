@@ -436,13 +436,14 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   `teleport` de un diálogo de NPC; los spawns sí. Después, el **chequeo de escape** sobre
   las áreas del mapa (casillas unidas a pie, 8 direcciones, un piso, con las puertas con
   llave y las casas como muro): sin llaves se va de la sala de una puerta a cada lado de
-  ella y por los portales que mueven jugadores (no `boat`) de un área a otra, y el mundo
-  son las áreas de los templos y de las llegadas de `data/boat_routes.yaml`. Es error un
-  lado de una puerta que no llega al mundo así (una bóveda que ninguna puerta guarda: el
-  mensaje da la casilla de ese lado) y una sala a la que entra sin su llave un jugador con
-  todas las demás (un ciclo de puertas de llaves distintas: el mensaje nombra la puerta de
-  otra llave que da a esa sala desde la suya). Los ciclos de puertas de una misma llave
-  valen. El recorrido y el chequeo son los del servidor
+  ella y por los portales que no piden nada (`stairs`, `ladder`, `hole`, `teleport`; no
+  `rope_spot`, que pide una soga, ni `boat`) de un área a otra, y el mundo son las áreas
+  de los templos (una llegada de `data/boat_routes.yaml` no cuenta: es una entrada, no una
+  salida). Es error un lado de una puerta que no llega al mundo así (una bóveda que
+  ninguna puerta guarda: el mensaje da la casilla de ese lado) y una sala a la que entra
+  sin su llave un jugador con todas las demás, parado fuera de las salas o en una casa (un
+  ciclo de puertas de llaves distintas: el mensaje nombra la puerta de otra llave que da
+  a esa sala desde la suya). Los ciclos de puertas de una misma llave valen. El recorrido y el chequeo son los del servidor
   (`packages/map-format/src/doors.ts`, `session/door.go` y `session/area.go`), y los
   dos leen los casos de `packages/map-format/src/testdata/door-rooms.json`.
   Advertencia (T3.6): un área caminable conexa (8 direcciones, un piso) de 10 casillas o

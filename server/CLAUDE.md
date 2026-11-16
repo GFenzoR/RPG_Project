@@ -216,14 +216,19 @@ server/
   de diálogo) no deja arrancar, y tampoco una puerta que no pasa el **chequeo de escape**
   (`checkEscapes`, igual en `doors.ts`): sobre las **áreas** de `session/area.go`
   (casillas unidas a pie con puertas con llave y casas como muro; una sala es un área),
-  cada lado de cada puerta con llave llega a un templo o a una llegada de barco yendo de
-  una sala a los lados de sus puertas y por portales (no `boat`), y nadie con todas las
-  llaves menos una entra a una sala de esa llave. Si sumas una forma de moverse entre
-  áreas que un jugador sin llaves tiene siempre, súmala como arista en los dos lados. Nada
+  cada lado de cada puerta con llave llega a un templo (el mundo; una llegada de barco no
+  lo es) yendo de una sala a los lados de sus puertas y por los portales de `escapeWay`
+  (escalera, escalera de mano, agujero, teletransporte; no `rope_spot` ni `boat`), y
+  nadie con todas las llaves menos una, parado fuera de las salas o en una casa, entra a
+  una sala de esa llave. Si sumas una forma de moverse entre áreas que un jugador sin
+  llaves ni herramientas tiene siempre, súmala como arista en los dos lados (`escapeWay`
+  y `ESCAPE_WAYS`); si sumas un lugar donde un jugador puede estar fuera de las áreas
+  (como las casas), súmalo como punto de partida del chequeo de llaves. Nada
   recorre el mapa en el tick: `World.roomOf` (casilla → sala), los sectores de cada sala
   y `World.areas` (por sector, `areaOf`). **Toda búsqueda de casilla libre por anillos**
   (`freeNear`, `houseExit` o una nueva) pasa por `areaAllows`: solo casillas del área de
-  donde empezó (nunca una sala ajena ni un bolsillo cerrado por paredes); y por
+  donde empezó (nunca una sala ajena ni un bolsillo cerrado por paredes; desde fuera de
+  toda área, solo descarta las salas); y por
   `!Map.MovesOnStep`: nunca deja a nadie sobre una escalera, un agujero o un
   teletransporte. `houseEnter` no lo necesita: solo pone al jugador en casillas de la
   casa, y `checkRooms` no deja ninguna casa (ni portal) en una sala.

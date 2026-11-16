@@ -138,13 +138,27 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     encima que no se puede mover solo se abre con el toque largo (hoy no hay escaleras de
     mano en el mundo; una salida sería que Ctrl+click derecho use el item de arriba);
   - chequeo de escape de las puertas con llave (`02-game-design.md`, "Chequeo de
-    escape"): cuenta como salida de un área solo los portales que mueven jugadores y la
-    puerta de una sala desde adentro; las casas son muro, y los teleports de diálogo y los
-    viajes en barco no son aristas (las llegadas de barco sí son mundo). Un diseño que solo
-    deje salir por ahí se rechaza aunque sea seguro. Si hace falta, sumarlos como aristas,
-    igual en `session/door.go` y `packages/map-format/src/doors.ts`, con casos nuevos en
+    escape"): cuenta como salida de un área solo la puerta de una sala desde adentro y los
+    portales que no piden nada (escalera, escalera de mano, agujero, teletransporte); las
+    casas son muro, y los puntos de soga, los teleports de diálogo y los viajes en barco no
+    son aristas. El mundo son solo los templos: **decisión a confirmar por el dueño**, el
+    brief contaba también las llegadas de barco, pero una llegada es una entrada, no una
+    salida (con ella, una bóveda sin capitán pasaba y quien se colara adentro podía quedar
+    encerrado). Si se quiere de vuelta, hay que sumar también la salida en barco como
+    arista. Un diseño que solo deje salir por esos caminos se rechaza aunque sea seguro; si
+    hace falta, sumarlos como aristas, igual en `session/door.go` (`escapeWay`) y
+    `packages/map-format/src/doors.ts` (`ESCAPE_WAYS`), con casos nuevos en
     `door-rooms.json`. El chequeo de llaves es conservador (supone a un jugador en
-    cualquier área fuera de las salas).
+    cualquier área fuera de las salas y en cualquier casa). Además, las áreas cuentan como
+    camino las casillas de escalera, agujero y teletransporte, que nadie cruza caminando:
+    un portal en el único paso entre dos áreas las une sin que haya camino (viene de cómo
+    se numeran las áreas, no es propio de las puertas);
+  - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) solo acepta
+    casillas del área del origen, pero si el origen no está en ningún área (entrar al juego
+    sobre una casilla de casa o de una puerta con llave, un `/tp` del personal) solo
+    descarta las salas (`areaAllows(0, q)` en `server/internal/session/area.go`): todavía
+    puede dejar a alguien en un bolsillo cerrado por paredes o del otro lado de una pared.
+    Arreglo posible: que un origen en una casa use el área de la salida de la casa.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

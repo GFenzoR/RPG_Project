@@ -768,28 +768,36 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   con el mismo cálculo y los mismos casos de `door-rooms.json`) numera las **áreas** del
   mapa: las casillas unidas a pie (8 direcciones, un piso) con las puertas con llave y las
   casas como muro (una casa no es calle) y las demás puertas abiertas si su casilla deja
-  pasar. Cada sala es un área. Un jugador **sin llaves** va de la sala de una puerta a
-  cada lado de esa puerta (se abre desde adentro) y, por un portal que mueve jugadores
-  (escalera, escalera de mano, agujero, soga, teletransporte; no un `boat`), del área de
-  su entrada a la de su destino. El **mundo** son las áreas de los templos y de las
-  llegadas de barco. Se exige:
+  pasar. Cada sala es un área. Un jugador **sin llaves ni herramientas** va de la sala de
+  una puerta a cada lado de esa puerta (se abre desde adentro) y, por un portal que no
+  pide nada (escalera, escalera de mano, agujero, teletransporte), del área de su entrada
+  a la de su destino. Un punto de soga no cuenta (pide una soga, que no es del equipo
+  inicial) ni un portal `boat` (no mueve a nadie). El **mundo** son las áreas de los
+  templos. **Decisión:** una llegada de barco no es mundo: es una entrada, no una salida
+  (zarpar pide capitán y lo que pida la ruta: oro, nivel, quest, ticket). Si contara, una
+  bóveda con una llegada pasaría, y quien se colara en ella desde la sala de adelante
+  quedaría encerrado cuando otro trabara la puerta desde la sala. Se exige:
   - **que cada lado de cada puerta con llave llegue al mundo** así. Si no, quien esté ahí
     podría quedar encerrado. Es el caso de una bóveda más grande que la sala que tiene
     delante: la puerta de la bóveda la toma por su afuera, las dos puertas comparten la
     sala del medio (desde el medio se abriría la bóveda sin llave) y la bóveda no está en
     ninguna sala, así que a quien está adentro lo podrían trabar. Lo mismo con una antesala
     entre el mundo y una bóveda de más de 4096 casillas, o con un afuera que solo se une al
-    mundo a través de una casa. Un teletransporte que sale de la bóveda, una llegada de
-    barco en ella o un portón propio de la bóveda al campo la arreglan;
+    mundo a través de una casa, un barco o un punto de soga. Un teletransporte (o una
+    escalera) que sale de la bóveda o un portón propio de la bóveda al campo la arreglan;
   - **que nadie entre a una sala sin su llave.** Un jugador con todas las llaves menos la
     de una sala, que puede estar en cualquier lugar fuera de las salas (un relogueo lo deja
-    donde guardó) y cruza con sus llaves las puertas de otra llave hacia su sala, no tiene
-    que llegar a esa sala. Llegaría si una puerta de otra llave da a ella (es su afuera)
-    desde su propia sala y a esa sala se llega: un ciclo de puertas de llaves distintas.
+    donde guardó) o dentro de una casa (es su dueño o un invitado) y cruza con sus llaves
+    las puertas de otra llave hacia su sala (también la que está junto a una casilla de
+    una casa, desde la casa), no tiene que llegar a esa sala. Llegaría si una puerta de
+    otra llave da a ella (es su afuera) desde su propia sala y a esa sala se llega: un
+    ciclo de puertas de llaves distintas.
     Por ejemplo, un edificio con la puerta delantera al campo y la trasera a un patio con
     su propio portón al campo, el portón con otra llave: con la llave del edificio se
     entra, se abre la trasera desde adentro y se sale al patio, que es la sala del portón,
-    y el portón se abre sin su llave.
+    y el portón se abre sin su llave. Lo mismo si la sala de una puerta solo se toca desde
+    una casa: un invitado con su llave sale de la casa a esa sala, la cruza y llega a la
+    sala de una puerta de otra llave.
 
   Así **los ciclos de puertas de una misma llave valen** (ese edificio con su patio; un
   hall entre el campo y una bóveda con su propio portón al campo) y la cadena sala–puerta–
@@ -840,12 +848,19 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
     NPCs, casas, portales o llegadas, el servidor no arranca y `make validate` falla (la
     sala no guarda nada de afuera); si no, casi siempre lo frena el chequeo de escape: la
     sala de verdad, tomada por afuera, no llega al mundo salvo que tenga un portal de
-    salida, una llegada de barco o un templo. Hoy no pasa (la forja tiene 463 casillas y
+    salida o un templo. Hoy no pasa (la forja tiene 463 casillas y
     la mina 1729). Marcar el lado de adentro en los datos quedaría para cuando haga falta;
   - el chequeo de llaves supone que un jugador puede estar en cualquier área fuera de las
-    salas, también en una bóveda a la que solo se llega por una sala: es conservador y
-    podría rechazar algún diseño seguro rebuscado (puertas de otra llave dentro de esa
-    bóveda que den a otra sala);
+    salas, también en una bóveda a la que solo se llega por una sala, y en cualquier casa:
+    es conservador y podría rechazar algún diseño seguro rebuscado (puertas de otra llave
+    dentro de esa bóveda que den a otra sala);
+  - las áreas cuentan como camino las casillas de una escalera, un agujero o un
+    teletransporte, aunque nadie las cruza caminando (quien las pisa se va). Un pasillo de
+    una casilla con un teletransporte une así dos áreas que a pie no se unen: el chequeo
+    de escape puede tomar por salida un camino que no existe. Pasa solo si un portal ocupa
+    el único paso entre dos áreas, y no es propio de las puertas (viene de cómo se
+    numeran las áreas). Arreglo posible: sacar esas casillas de las áreas (como las casas)
+    en `area.go` y en `doors.ts`;
   - la llave se puede repetir: quien terminó `ch3_gate` y no la lleva encima pide otra al
     eco, así que tirarla al piso y pedir otra da llaves de más, y una llave tirada la puede
     levantar cualquiera. Lo aceptamos: quien tiene la llave ya puede abrirle la puerta a

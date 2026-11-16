@@ -204,8 +204,8 @@ items:
   cualquier item. Dónde se coloca lo valida el mapa (`03-world-and-maps.md`,
   "Validación"): un item de puerta por casilla, una sala determinable detrás de cada
   puerta con llave, nada de afuera en ella (tampoco el destino de un `teleport` de un
-  diálogo de `data/npcs`) y el chequeo de escape (cada lado llega a un templo o a una
-  llegada de barco sin llaves; nadie entra a una sala sin su llave).
+  diálogo de `data/npcs`) y el chequeo de escape (cada lado llega a un templo sin llaves
+  ni herramientas; nadie entra a una sala sin su llave).
 
 ## Monstruo
 ```yaml
