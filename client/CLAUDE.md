@@ -323,6 +323,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   contenedores abiertos. El mercado se abre con click derecho sobre un tablero (es un
   `UseItem` como cualquier item del mapa); la búsqueda es un `<datalist>` de los nombres
   traducidos: la búsqueda prefiere el nombre exacto, luego el prefijo (`searchItems`).
+- Una `MarketUpdate` con `refresh` (el servidor la manda solo, por la acción de otro)
+  pasa por `applyMarket`: actualiza la ventana si sigue abierta y nunca la reabre. Los
+  formularios no controlados conservan lo escrito al refrescar.
 - `MarketView.readOnly` (`MarketUpdate.read_only`) muestra el aviso
   `data-testid="market-read-only"`; `Disconnect{SAVE_FAILED}` y `{CHARACTER_LOCKED}` usan
   la tabla automática de motivos (`client.disconnect.*`).

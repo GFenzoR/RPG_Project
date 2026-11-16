@@ -2238,7 +2238,16 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
     await expect(page.getByTestId("trade")).toHaveCount(0);
   }
 
-  // Market: the buyer (now with the fish) uses the board and posts 8 fish at 6 coins.
+  // Market: the seller (now with the coins) opens the board and browses the fish first.
+  const boardA = await a.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
+  if (!boardA) throw new Error("no canvas");
+  await a.mouse.click(boardA.x, boardA.y, { button: "right" });
+  const ma = a.getByTestId("market");
+  await ma.getByTestId("market-search").getByRole("combobox").fill("pescado crudo");
+  await ma.getByTestId("market-search").getByRole("button", { name: "Buscar" }).click();
+  await expect(ma.getByTestId("market-browse")).toHaveAttribute("data-item", "raw_fish");
+
+  // The buyer (now with the fish) uses the board and posts 8 fish at 6 coins.
   const board = await b.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
   if (!board) throw new Error("no canvas");
   await b.mouse.click(board.x, board.y, { button: "right" });
@@ -2257,13 +2266,8 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   await expect(mb.getByTestId("market-own").locator("li")).toHaveCount(1);
   await shot(b, "53-market-offer-posted");
 
-  // The seller (now with the coins) buys 3 of them from the listing.
-  const boardA = await a.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
-  if (!boardA) throw new Error("no canvas");
-  await a.mouse.click(boardA.x, boardA.y, { button: "right" });
-  const ma = a.getByTestId("market");
-  await ma.getByTestId("market-search").getByRole("combobox").fill("pescado crudo");
-  await ma.getByTestId("market-search").getByRole("button", { name: "Buscar" }).click();
+  // The seller (now with the coins) saw the offer appear in its open window without
+  // searching again (live refresh), and buys 3 of them from the listing.
   // Earlier runs against the same database may have left offers: pick this one.
   const offer = ma.getByTestId("market-sells").locator("li", { hasText: buyer.name });
   await expect(offer).toContainText("8 unidades");

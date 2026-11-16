@@ -7,6 +7,7 @@ import {
   MapFloorSchema,
   TileSchema,
   ItemStackSchema,
+  MarketUpdateSchema,
   ActiveConditionSchema,
   PlayerConditionsSchema,
   PlayerStatsSchema,
@@ -468,5 +469,29 @@ describe("cosmetics (T5.7)", () => {
       0,
     );
     expect(w.creatures.get(11)?.cosmetics.color).toBe("color_moss");
+  });
+});
+
+describe("market window (T5.3)", () => {
+  const update = (open: boolean, refresh: boolean, amount: number): Msg => ({
+    case: "marketUpdate",
+    value: create(MarketUpdateSchema, {
+      open,
+      refresh,
+      itemId: 68,
+      sells: [{ offerId: 9n, itemId: 68, amount, price: 7n, ownerName: "Sela" }],
+    }),
+  });
+
+  it("follows the refreshes the server pushes while open, and ignores them once closed", () => {
+    const w = new WorldState(content);
+    w.apply(update(true, false, 10), 0);
+    w.apply(update(true, true, 4), 10); // another player bought 6
+    expect(w.market?.sells[0]?.amount).toBe(4);
+    w.market = undefined; // the player closed it (Game.marketClose)
+    w.apply(update(true, true, 2), 20); // a refresh already on its way
+    expect(w.market).toBeUndefined();
+    w.apply(update(false, false, 0), 30); // the server closes it too
+    expect(w.market).toBeUndefined();
   });
 });

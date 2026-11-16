@@ -142,6 +142,19 @@ export function marketFrom(u: MarketUpdate): MarketView | undefined {
   };
 }
 
+/**
+ * The market window after u. A refresh (another player's action, sent by the server on
+ * its own) only updates a window that is still open: one the player just closed stays
+ * closed, even if the refresh crossed the close on the wire.
+ */
+export function applyMarket(
+  current: MarketView | undefined,
+  u: MarketUpdate,
+): MarketView | undefined {
+  if (u.refresh && !current) return undefined;
+  return marketFrom(u);
+}
+
 /** The posting fee of an offer of amount units at price each (the server's formula). */
 export function marketFee(rules: MarketRules, amount: number, price: number): number {
   const fee = Math.floor((amount * price * rules.feePermille) / 1000);

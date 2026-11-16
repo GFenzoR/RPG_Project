@@ -39,7 +39,7 @@ import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
 import { houseFrom } from "./house.ts";
 import type { HouseView } from "./house.ts";
-import { marketFrom, tradeFrom } from "./market.ts";
+import { applyMarket, tradeFrom } from "./market.ts";
 import type { MarketView, TradeView } from "./market.ts";
 import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
@@ -611,7 +611,7 @@ export class WorldState implements TileSource {
         break;
       }
       case "marketUpdate":
-        this.market = marketFrom(msg.value);
+        this.market = applyMarket(this.market, msg.value);
         break;
       case "houseUpdate":
         this.house = houseFrom(msg.value);
