@@ -2340,6 +2340,10 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   browser,
   playwright,
 }) => {
+  // Three game pages at once, each drawing its map: on the CI runner (2 CPUs, WebGL in
+  // software) the walk to the door alone took the whole default 90 s. The site's house list
+  // may then take up to its cache TTL (60 s) to show the rent: budget both.
+  test.setTimeout(240_000);
   const owner = await newGuardian(playwright, "Inquilino");
   const guest = await newGuardian(playwright, "Visita");
   const stranger = await newGuardian(playwright, "Extrano");
@@ -2492,6 +2496,8 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await arrived(c, 3153, 6402);
   await shot(b, "60-house-guest-inside");
   await shot(c, "61-house-stranger-refused");
+  // The game is done: its three pages stop drawing before the site's part.
+  for (const page of [a, b, c]) await page.close();
 
   // The public list shows the house rented by the owner (and nothing private).
   const site = await browser.newPage();
@@ -2502,7 +2508,6 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await site.close();
 
   expect(errors).toEqual([]);
-  for (const page of [a, b, c]) await page.close();
 });
 
 test("T5.5: sail from the Forest Isle to the Ember Isle and meet its captain", async ({
