@@ -12,11 +12,13 @@ name: map-pr
 #   branch), which recomputes the key facts from the GitHub API.
 # - In a pull_request run this YAML itself comes from the PR. A PR that edits, renames or
 #   deletes it can fake this job (and a job named `check` in another workflow could stand
-#   in for it). That is why main requires the status `map-pr/verdict`, not this job: only
-#   map-pr-comment sets it, per commit, and never to success for a PR that touches
-#   .github/ unless its author is a maintainer. A push without a map-pr run gets no
-#   status at all, so an old pass never covers it. The required status must be pinned to
-#   GitHub Actions as its source, and .github/ needs CODEOWNERS review (docs/04).
+#   in for it). main requires the status `map-pr/verdict` instead: map-pr-comment sets it
+#   per commit, only for PRs into the default branch, and never to success for a PR that
+#   changes world/ and .github/ unless its author is a maintainer; a push without a
+#   map-pr run gets no status at all, so an old pass never covers it. That status is not
+#   tamper-proof either: a job named `map-pr/verdict` in a workflow the PR adds (also from
+#   a fork) satisfies a required check of that name, and anyone with write access can set
+#   it. What closes .github/ is CODEOWNERS review with stale approvals dismissed (docs/04).
 # Do not add write permissions here and do not switch to pull_request_target.
 #
 # No `paths` filter on purpose: GitHub evaluates it on the first 300 files only, and a push

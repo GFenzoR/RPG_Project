@@ -20,6 +20,7 @@ interface Step {
 interface Job {
   if?: string;
   permissions?: unknown;
+  secrets?: unknown;
   concurrency?: { group?: string; "cancel-in-progress"?: unknown };
   steps?: Step[];
 }
@@ -55,6 +56,15 @@ const triggers = (w: Workflow): string[] =>
 const steps = (w: Workflow): Step[] => Object.values(w.jobs).flatMap((j) => j.steps ?? []);
 const checkouts = (w: Workflow): Step[] =>
   steps(w).filter((s) => s.uses?.startsWith("actions/checkout@") === true);
+/** Every `${{ ... }}` expression of the file, comments included (a stricter reading). */
+const expressions = (w: Workflow): string[] =>
+  [...w.text.matchAll(/\$\{\{([\s\S]*?)\}\}/g)].map((m) => m[1] ?? "");
+/**
+ * Every use of the `secrets` context in an expression, as written: `secrets.NAME`, but
+ * also `secrets['NAME']`, `secrets[format(...)]` or a bare `secrets` (`toJSON(secrets)`).
+ */
+const secretRefs = (w: Workflow): string[] =>
+  expressions(w).flatMap((e) => e.match(/\bsecrets\b(?:\.[A-Za-z0-9_-]+|\[[^\]]*\])?/g) ?? []);
 
 describe("workflows", () => {
   it("are all here", () => {
@@ -79,9 +89,25 @@ describe("workflows", () => {
   });
 
   it("give pull_request jobs no secret but the (read-only for forks) GITHUB_TOKEN", () => {
-    for (const w of workflows.filter((x) => triggers(x).includes("pull_request")))
-      for (const m of w.text.matchAll(/secrets\.([A-Za-z0-9_]+)/g))
-        expect(m[1], w.file).toBe("GITHUB_TOKEN");
+    for (const w of workflows.filter((x) => triggers(x).includes("pull_request"))) {
+      for (const ref of secretRefs(w)) expect(ref, w.file).toBe("secrets.GITHUB_TOKEN");
+      // A reusable workflow called with `secrets: inherit` (or a list) would get them all.
+      for (const [id, j] of Object.entries(w.jobs))
+        expect(j.secrets, `${w.file} ${id}`).toBeUndefined();
+    }
+  });
+
+  it("see every way of reading a secret", () => {
+    const fake = (text: string): Workflow => ({ file: "x.yml", text, on: "push", jobs: {} });
+    expect(secretRefs(fake("a: ${{ secrets.GITHUB_TOKEN }}"))).toEqual(["secrets.GITHUB_TOKEN"]);
+    expect(secretRefs(fake("a: ${{ secrets['NPM'] }}"))).toEqual(["secrets['NPM']"]);
+    expect(secretRefs(fake("a: ${{ toJSON(secrets) }}"))).toEqual(["secrets"]);
+    expect(secretRefs(fake("a: ${{ secrets[format('{0}', 'X')] }}"))).toEqual([
+      "secrets[format('{0}', 'X')]",
+    ]);
+    expect(secretRefs(fake("a: ${{\n  secrets.X\n}}"))).toEqual(["secrets.X"]);
+    expect(secretRefs(fake("a: ${{ github.event.mysecrets }}"))).toEqual([]);
+    expect(secretRefs(fake("# no secrets here, ${{ github.token }}"))).toEqual([]);
   });
 });
 
@@ -90,6 +116,7 @@ describe("workflow_run workflows (write token, triggered by fork PRs)", () => {
   // The only writes a PR's run may cause: its comment and its commit status.
   const allowed: Obj = {
     actions: "read",
+    checks: "read",
     contents: "read",
     "pull-requests": "write",
     statuses: "write",
@@ -132,7 +159,9 @@ describe("workflow_run workflows (write token, triggered by fork PRs)", () => {
 
   it("install and run nothing but the checked-out script, and use no secrets", () => {
     for (const w of runs) {
-      expect(w.text).not.toMatch(/secrets\./);
+      expect(secretRefs(w), w.file).toEqual([]);
+      for (const [id, j] of Object.entries(w.jobs))
+        expect(j.secrets, `${w.file} ${id}`).toBeUndefined();
       for (const s of steps(w)) {
         if (s.run !== undefined)
           expect(s.run).toMatch(
@@ -142,6 +171,21 @@ describe("workflow_run workflows (write token, triggered by fork PRs)", () => {
           expect(s.uses).toMatch(
             /^actions\/(checkout|setup-node|download-artifact)@v\d+\.\d+\.\d+$/,
           );
+      }
+    }
+  });
+
+  it("unpack the PR's artifacts outside the checkout, so they cannot replace the script", () => {
+    for (const w of runs) {
+      const downloads = steps(w).filter((s) => s.uses?.startsWith("actions/download-artifact@"));
+      expect(downloads.length, w.file).toBeGreaterThan(0);
+      for (const s of downloads) {
+        // A path in the workspace (".", "tools", "report") would let a zip from the PR's
+        // run overwrite tools/mapcli/src/prcomment.ts before it runs with the write token.
+        expect(String(s.with?.path), w.file).toMatch(/^\$\{\{ runner\.temp \}\}\/[a-z-]+$/);
+        expect(s.with?.name, w.file).toBe("map-pr-report");
+        expect(s.with?.pattern, w.file).toBeUndefined();
+        expect(s.with?.["merge-multiple"], w.file).toBeUndefined();
       }
     }
   });
@@ -172,7 +216,14 @@ describe("map pull request workflows", () => {
     for (const j of [pending, verdict]) {
       expect(j?.if).toContain("github.event.workflow_run.event == 'pull_request'");
       expect(j?.permissions).toMatchObject({ statuses: "write", "pull-requests": "write" });
+      // The status is the default branch's: taken from the event's repository (GitHub's),
+      // never from the PR (base.ref of a workflow_run is not even in the event).
+      expect(j?.steps?.at(-1)?.env?.DEFAULT_BRANCH).toBe(
+        "${{ github.event.repository.default_branch }}",
+      );
     }
+    // The verdict looks for check runs posing as the status.
+    expect(verdict?.permissions).toMatchObject({ checks: "read" });
     expect(pending?.steps?.at(-1)?.run).toContain("prcomment.ts --pending");
     expect(verdict?.steps?.at(-1)?.run).not.toContain("--pending");
   });

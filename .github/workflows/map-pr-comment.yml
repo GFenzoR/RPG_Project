@@ -9,26 +9,40 @@ name: map-pr-comment
 # A commit status belongs to one commit. A push that never produces a map-pr run (the PR
 # renamed or deleted map-pr.yml) leaves its head commit without `map-pr/verdict`, and the
 # branch protection of main requires that status, so an old pass never covers a new
-# commit. This replaced map-pr-pending.yml (pull_request_target), which GitHub blocks by
-# default in public repositories from 2026-12-02; nothing here needs an event policy.
+# commit. Only a PR into the default branch writes the status: the verdict depends on the
+# base, the status only on the commit. This replaced map-pr-pending.yml
+# (pull_request_target), which GitHub blocks by default in public repositories from
+# 2026-12-02; nothing here needs an event policy.
 #
 # Security: this is the only part with a write token, so it never checks out or runs code
 # from the pull request. It runs from the default branch (workflow_run always does: the
 # PR cannot change this file or what it checks out), checks out only
 # tools/mapcli/src/prcomment.ts and .github/MAINTAINERS (default branch; the script is
-# self-contained, no install), downloads the small report artifact of the triggering run and
-# treats it as untrusted: prcomment.ts caps its size, checks every field and string, maps
-# every reason to fixed text, and requires its PR number, head commit and author to match
-# the pull request GitHub reports for that run. The changed files and whether the author
-# is a maintainer come from the GitHub API and the default branch, never from the report;
-# a PR that changes anything outside world/ and docs/ never gets a pass in the comment,
-# nor a success status unless its author is a maintainer. The event's head_* fields (sha,
+# self-contained, no install), downloads the small report artifact of the triggering run
+# into the runner's temp directory, outside the checkout (a zip cannot overwrite the
+# script), and treats it as untrusted: prcomment.ts caps its size, checks every field and
+# string, maps every reason to fixed text, and requires its PR number, head commit and
+# author to match the pull request GitHub reports for that run. The changed files and
+# whether the author is a maintainer come from the GitHub API and the default branch,
+# never from the report: a PR that changes world/ and anything outside world/ and docs/
+# never gets a pass in the comment, nor a success status unless its author is a
+# maintainer. A PR that does not change world/ gets success (no map to judge): .github/
+# is guarded by CODEOWNERS review, not by this status. The event's head_* fields (sha,
 # repo, branch, PR number) are set by the PR's author: they only reach prcomment.ts as
 # environment variables, which it checks by pattern before using them in API paths.
 #
+# What this status does NOT stop (docs/04): branch protection matches a required check by
+# name only, so any workflow job named `map-pr/verdict` (a PR can add one, also from a
+# fork) creates a check run that may satisfy the rule; and anyone with write access (or a
+# workflow on a branch they push) can set the status. prcomment.ts flags such a check run
+# when it sees one; CODEOWNERS review of .github/ with stale approvals dismissed is what
+# closes it.
+#
 # Tokens (GITHUB_TOKEN, nothing else; no secrets): actions: read (the run's status and
-# artifacts), contents: read (the sparse checkout), pull-requests: write (the comment),
-# statuses: write (the commit status). Nothing can push code, change workflows or
+# artifacts), checks: read (check runs posing as the status), contents: read (the sparse
+# checkout), pull-requests: write (the comment; it could also edit or close PRs: keep
+# "Allow GitHub Actions to create and approve pull requests" off), statuses: write (the
+# commit status, on any commit of the repo). Nothing can push code, change workflows or
 # releases.
 
 on:
@@ -72,6 +86,7 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           PR_HINT: ${{ github.event.workflow_run.pull_requests[0].number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: node --experimental-strip-types tools/mapcli/src/prcomment.ts --pending
 
   # A map-pr run finished: the verdict in the comment and the final commit status.
@@ -84,6 +99,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       actions: read # list and download the run's artifacts
+      checks: read # check runs posing as the status
       contents: read # checkout of the default branch
       pull-requests: write # the comment
       statuses: write # the commit status
@@ -103,6 +119,8 @@ jobs:
         uses: actions/download-artifact@v4.3.0
         with:
           name: map-pr-report
+          # Outside the checkout: the zip comes from the PR's run and must not be able to
+          # overwrite prcomment.ts or MAINTAINERS before they run with the write token.
           path: ${{ runner.temp }}/map-pr-report
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
@@ -114,6 +132,7 @@ jobs:
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           PR_HINT: ${{ github.event.workflow_run.pull_requests[0].number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REPORT: ${{ runner.temp }}/map-pr-report/report.json
           MAINTAINERS: .github/MAINTAINERS
         run: node --experimental-strip-types tools/mapcli/src/prcomment.ts
