@@ -263,13 +263,19 @@ func TestPvPConditionAuthorOffline(t *testing.T) {
 }
 
 // With PvP off nobody hurts another player: a condition of a player saved before (or
-// under PvP on) only runs out.
+// under PvP on) only runs out, and the memory of the attack saved with it is not
+// restored.
 func TestPvPConditionSavedWithPvPOff(t *testing.T) {
 	g := newPvPCond(t, nil, func(c *session.Config) { c.Balance.PvP.Enabled = false })
 	_, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	g.sim.RunFor(2 * time.Second) // the server is older than the saved hit: it could be placed
 	cb, b := g.fighter("Bea", 0, 11, 10, 30, 0, func(c *session.Character) {
-		c.Conditions = []session.ConditionState{{ID: "poison", LeftMs: 500, Ticks: 5, Damage: 20, Author: a.CharacterID()}}
+		c.Conditions = []session.ConditionState{{ID: "poison", LeftMs: 500, Ticks: 5, Damage: 20, Author: a.CharacterID(),
+			AuthorHit: g.sim.Now().Add(-time.Second), AuthorUnjust: true}}
 	})
+	if hit := g.w.HitByForTest(b); len(hit) != 0 {
+		t.Fatalf("Bea remembers hits from %v with PvP off", hit)
+	}
 	g.sim.RunFor(3 * time.Second)
 	if hits := damageTexts(cb.take()); len(hits) != 0 {
 		t.Fatalf("hits %v", hits)
@@ -298,7 +304,9 @@ func TestPvPConditionSavedMemory(t *testing.T) {
 	// Cid's poison on Dan, unjustified 30 s ago by the clock, but the server is younger.
 	cc, c := g.fighter("Cid", 0, 20, 20, 30, 0)
 	g.unsafe(cc)
-	if g.sim.Tick() > 600 {
+	// Dan joins on the next tick, and recallHit forgets a hit only if it is older than
+	// the server (30 s = 600 ticks > that tick).
+	if g.sim.Tick()+1 >= 600 {
 		t.Fatalf("tick %d: the server is not young", g.sim.Tick())
 	}
 	cd, _ := g.fighter("Dan", 0, 21, 20, 30, 0, func(ch *session.Character) {
@@ -316,5 +324,88 @@ func TestPvPConditionSavedMemory(t *testing.T) {
 	}
 	if hits := damageTexts(cf.take()); len(hits) != 0 {
 		t.Fatalf("Fay's hits %v", hits)
+	}
+}
+
+// A victim locked in a fight who closes her connection stays link-dead, and a new login
+// takes her over with the memory of the attack (pvpCarry). The poison carried in the same
+// state does not add a second memory of Ana (recallHit keeps the carried entry) and still
+// continues Ana's attack.
+func TestPvPConditionVictimTakesOverLinkDead(t *testing.T) {
+	g := newPvPCond(t, nil)
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	cb, b := g.fighter("Bea", 0, 11, 10, 30, 0)
+	g.unsafe(ca)
+	g.hit(a, b)
+	g.poison(a, b, 30)
+	g.sim.Command(g.w.Leave(cb))
+	g.sim.Step()
+	if !b.LinkDead() {
+		t.Fatal("Bea is not link-dead")
+	}
+	cb2, b2 := g.fighter("Bea", b.CharacterID(), 11, 10, 30, 0)
+	if b2 == b || g.w.ConditionsForTest(b2)["poison"] == 0 {
+		t.Fatalf("the new login did not take the poison over: %v", g.w.ConditionsForTest(b2))
+	}
+	if got := g.w.HitByForTest(b2); !slices.Equal(got, []int64{a.CharacterID()}) {
+		t.Fatalf("Bea remembers hits from %v, want only Ana's (%d)", got, a.CharacterID())
+	}
+	g.sim.RunFor(2 * time.Second)
+	if hits := damageTexts(cb2.take()); !allTen(hits) || a.Skull() != pb.Skull_SKULL_AGGRESSOR {
+		t.Fatalf("hits after the takeover %v, Ana %v", hits, a.Skull())
+	}
+}
+
+// Stacking a damage condition hands its hits to whoever made the stronger application
+// and, on a player, its attack too: a monster's poison taken over by Ana's stronger one is
+// Ana's attack (scaled hits, saved with her as its author), and taken back by a stronger
+// monster's it is the world's again (full hits, no author).
+func TestPvPConditionStackSwitchesAuthor(t *testing.T) {
+	g := newPvPCond(t, nil, withMonster(targetDummyDef(), 60, 60))
+	ca, a := g.fighter("Ana", 0, 10, 10, 30, 0)
+	cb, b := g.fighter("Bea", 0, 11, 10, 30, 0)
+	g.sim.Step() // the monster spawns, far from both
+	m := g.dummy()
+	g.unsafe(ca)
+	g.hit(a, b) // Ana's attack, which her poison may continue
+	poison := func(source uint32, damage int) {
+		g.t.Helper()
+		g.do(func(ctx *game.TickContext) {
+			if !g.w.ApplyConditionForTest(ctx, b, nil, &content.ConditionApply{ID: "poison", Damage: damage, Ticks: 5}, source) {
+				g.t.Fatal("no poison")
+			}
+		})
+	}
+	author := func() int64 {
+		g.t.Helper()
+		g.sim.Command(g.w.ForceSaveForTest(cb))
+		g.sim.Step()
+		s := g.saves[len(g.saves)-1]
+		if len(s.Conditions) != 1 || s.Conditions[0].ID != "poison" {
+			g.t.Fatalf("saved conditions %+v", s.Conditions)
+		}
+		return s.Conditions[0].Author
+	}
+	same := func(hits []uint64, n uint64) bool {
+		return len(hits) > 0 && !slices.ContainsFunc(hits, func(h uint64) bool { return h != n })
+	}
+
+	poison(m.ID(), 20)
+	cb.take()
+	g.sim.RunFor(2 * time.Second)
+	if hits := damageTexts(cb.take()); !same(hits, 20) || author() != 0 {
+		t.Fatalf("the monster's poison: hits %v, author %d", hits, author())
+	}
+	poison(a.ID(), 30) // stronger: Ana's attack now, 30 × 50 %
+	cb.take()
+	g.sim.RunFor(2 * time.Second)
+	if hits := damageTexts(cb.take()); !same(hits, 15) || author() != a.CharacterID() {
+		t.Fatalf("Ana's poison: hits %v, author %d", hits, author())
+	}
+	poison(m.ID(), 40) // stronger again: the world's
+	cb.take()
+	g.sim.RunFor(2 * time.Second)
+	if hits := damageTexts(cb.take()); !same(hits, 40) || author() != 0 {
+		t.Fatalf("the monster's poison again: hits %v, author %d", hits, author())
 	}
 }

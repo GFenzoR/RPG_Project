@@ -178,6 +178,10 @@ func (w *World) addCondition(ctx *game.TickContext, h holder, def *content.Condi
 		w.conditionsChanged(h)
 		return
 	}
+	// A new application only moves the end: source and author stay those of the first.
+	// Only a damage condition's author acts (its hits are an attack); the author of a slow
+	// is saved with it and only gives back, after a relog, its holder's memory of that
+	// player's attack (recallHit), which an attack of its own keeps anyway.
 	if def.Stacking == content.StackAdd {
 		end = min(c.at+dur, limit)
 	} else {

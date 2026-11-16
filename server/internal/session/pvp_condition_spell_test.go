@@ -8,6 +8,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
 // Ranged condition spells against players (T5.2): an attack by the rules of a direct one,
@@ -29,6 +30,7 @@ func TestPvPConditionSpellRules(t *testing.T) {
 		party   bool
 		staff   bool
 		off     bool
+		wall    bool   // a tile that blocks sight between them
 		reason  string // "" = it lands
 		skull   bool   // Ana ends with the aggressor skull
 		manaUse bool
@@ -44,6 +46,7 @@ func TestPvPConditionSpellRules(t *testing.T) {
 		{name: "victim below the level", a: open(10), v: side{12, 10, 19}, reason: "pvp.their_level"},
 		{name: "staff victim", a: open(10), v: open(12), staff: true, reason: "pvp.protected_staff"},
 		{name: "out of range", a: open(10), v: open(15), reason: "magic.out_of_range"},
+		{name: "no line of sight", a: open(10), v: open(12), wall: true, reason: "magic.no_sight"},
 		{name: "pvp off", a: open(10), v: open(12), off: true, reason: "magic.no_target"},
 	}
 	for _, tc := range cases {
@@ -61,6 +64,9 @@ func TestPvPConditionSpellRules(t *testing.T) {
 			}
 			if tc.party {
 				g.form(ca, a, member{cb, b})
+			}
+			if tc.wall {
+				zone(g.w.Map(), tc.a.x+1, tc.a.y, tc.a.x+1, tc.a.y, world.FlagBlocksSight)
 			}
 			if !tc.safe {
 				g.unsafe(ca)

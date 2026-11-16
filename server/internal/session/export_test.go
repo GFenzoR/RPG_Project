@@ -217,6 +217,16 @@ func (w *World) PvPHitForTest(ctx *game.TickContext, a, v *Player, dmg int) {
 // PvPStateForTest is what a snapshot would save of p's PvP state.
 func (w *World) PvPStateForTest(p *Player) PvPState { return w.pvpState(p) }
 
+// HitByForTest returns the characters p remembers a recent hit from (T5.2), one per
+// entry.
+func (w *World) HitByForTest(p *Player) []int64 {
+	var out []int64
+	for _, h := range p.hitBy {
+		out = append(out, h.char)
+	}
+	return out
+}
+
 // SetPvPLockForTest puts p in a PvP fight until tick (tests only, loop goroutine).
 func (w *World) SetPvPLockForTest(p *Player, until game.Tick) { p.fightUntil = until }
 
