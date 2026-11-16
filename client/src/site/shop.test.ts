@@ -6,6 +6,7 @@ import {
   historyLine,
   iconsFrom,
   isLocalCheckout,
+  loadIcons,
   minorDigits,
   shopErrorKey,
 } from "./shop.ts";
@@ -82,5 +83,42 @@ describe("shop page helpers (T5.7)", () => {
     });
     expect(icons.has("outfits/missing/s_0")).toBe(false);
     expect(cssColor(0x0e2a44)).toBe("#0e2a44");
+  });
+
+  it("loads the preview icons although a request of the atlas fails once", async () => {
+    const answers: Record<string, unknown> = {
+      "http://x/atlas/atlas.json": { pages: ["atlas-0.json"] },
+      "http://x/atlas/atlas-0.json": {
+        frames: { "outfits/sailor/s_0": { frame: { x: 64, y: 32, w: 32, h: 32 } } },
+        meta: { image: "atlas-0.png", size: { w: 2048, h: 160 } },
+      },
+    };
+    const requests: string[] = [];
+    const fetcher = (url: string): Promise<Response> => {
+      requests.push(url);
+      // Each URL fails the first time: a refused connection, then a proxy error.
+      if (requests.filter((r) => r === url).length === 1)
+        return url.endsWith("atlas.json")
+          ? Promise.reject(new TypeError("Failed to fetch"))
+          : Promise.resolve(new Response("", { status: 502 }));
+      return Promise.resolve(new Response(JSON.stringify(answers[url])));
+    };
+    const waits: number[] = [];
+    const icons = await loadIcons(["outfits/sailor/s_0"], {
+      base: "http://x/atlas/",
+      fetcher,
+      sleep: (ms) => {
+        waits.push(ms);
+        return Promise.resolve();
+      },
+    });
+    expect(icons.get("outfits/sailor/s_0")?.url).toBe("http://x/atlas/atlas-0.png");
+    expect(requests).toEqual([
+      "http://x/atlas/atlas.json",
+      "http://x/atlas/atlas.json",
+      "http://x/atlas/atlas-0.json",
+      "http://x/atlas/atlas-0.json",
+    ]);
+    expect(waits).toEqual([500, 500]);
   });
 });
