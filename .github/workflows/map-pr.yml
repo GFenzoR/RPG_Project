@@ -5,7 +5,8 @@ name: map-pr
 #
 # Security: pull requests come from community forks.
 # - The check's code is the BASE branch's (checkout of base.ref, its pnpm install): the PR
-#   is only fetched as git data and read with `git show`, never checked out or run.
+#   is only fetched as git data and read with `git show` / `git cat-file` (the map, and the
+#   data/, i18n/ and assets/ the merge would land), never checked out or run.
 # - Read-only token, no secrets; artifacts only. The comment is posted by
 #   map-pr-comment.yml (workflow_run), which recomputes the key facts from the GitHub API.
 # - In a pull_request run this YAML itself comes from the PR. A PR that edits, renames or

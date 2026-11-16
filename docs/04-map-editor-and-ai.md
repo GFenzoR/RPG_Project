@@ -283,7 +283,30 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
   `03-world-and-maps.md`): casillas y entradas fuera de toda parcela `community_plot` de la
   base. Falla si hay alguna y el autor no es maintainer (`.github/MAINTAINERS` de la base u
   OWNER, y dueño del repo del head).
-- **Validación**: errores del validador en el mapa mezclado que la base no tenía.
+- **Contenido del "después".** El mapa se lee con contenido (`data/` e `i18n/` para el
+  validador y los renders, `assets/` para el atlas de los renders), y el "después" lleva
+  **el contenido que dejaría el merge**: la base más los cambios del PR en esas carpetas,
+  tal como los mezcla git (el árbol de `git merge-tree`; si git no puede mezclar, el del
+  head, y el check ya falla con `rebase`). El "antes" sigue siendo el árbol completo de la
+  base, con su propio contenido. Antes de esto, un PR que agrega un item y lo usa en el mapa
+  fallaba siempre con `unknown item` (PR #81: 386 errores falsos), porque el mapa del head
+  se validaba con el `data/` de la base.
+  - Los archivos de contenido del PR se leen como datos (`git cat-file --batch`, nada del
+    PR se ejecuta) y se escriben como archivos comunes: un symlink del PR queda como un
+    archivo con el texto de su destino y nunca se sigue. Las rutas que podrían salir del
+    worktree (`..`, `.git`, `\`, `:`) se saltan.
+- **Validación**: errores del validador en el mapa mezclado que la base no tenía. Los dos
+  lados son árboles completos con su propio contenido, así que también cuenta lo que el PR
+  rompe desde el contenido (un item que borra y el mapa usa), sea o no maintainer.
+  - **Contenido de la comunidad (decisión).** Cambiar `data/` o `i18n/` requiere un
+    maintainer. Si el autor no lo es y el PR cambia algo ahí, el mapa mezclado se valida
+    **también con el contenido de la base**, y los errores nuevos son la unión de las dos
+    validaciones. Así un PR de la comunidad no pasa trayendo los items o textos que usa
+    (falla con `validation`, además de figurar en "Fuera de `world/`" y de que el
+    comentario nunca muestre ✅). La segunda validación usa el mismo contenido que el
+    "antes", así que la comparación es pareja, y la unión no pierde errores de ninguna.
+  - Límite conocido: el validador es el de la base. Si el PR también cambia las reglas de
+    `packages/map-format`, el check mide con las reglas viejas hasta que se mezcle.
 - **Conflictos** con la base actual: falla (hay que hacer rebase). Cada conflicto lleva un
   código fijo (`tiles`, `entries`, `changed_both_sides`, `no_base`, `invalid_file`), nunca
   el texto del parser.
@@ -292,9 +315,11 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
     entrada cambiada (spawn con su radio, ambos extremos del portal, rects de zona);
   - `renderAreas` les suma 4 casillas de margen, fusiona las que se tocan en el mismo piso,
     parte las de más de 64x64 y se queda con 6 como máximo (el resto se cuenta);
-  - cada área se renderiza antes (base) y después (merge) con `renderArea`, a 32/16/8/4 px
-    por casilla para no pasar de 1024 px de lado;
-  - un PNG de más de 2 MB no se sube.
+  - cada área se renderiza antes (base) y después (merge, con su contenido y sus sprites)
+    con `renderArea`, a 32/16/8/4 px por casilla para no pasar de 1024 px de lado;
+  - si un PNG pasa de 2 MB (arte detallado), el tile baja a la mitad hasta que los dos
+    entren, con el mismo tile para ambos así se comparan; en 4 px, el PNG que siga
+    pasando no se sube.
 - Exit code 1 si falla. `report.json` (formato 2) lleva:
   - `ok`, `failures` (`plots`, `invalid`, `conflicts`, `rebase`, `merge_mismatch`,
     `validation`) y `map_changes`;
@@ -304,8 +329,9 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
 
 **Seguridad (los PR vienen de forks).** Modelo de confianza en dos capas:
 1. **El check corre código de la base, no del PR.** `map-pr.yml` hace checkout de la rama
-   base y corre su `pnpm install` y su `mapcli`. Del PR solo lee el mapa con `git show` y
-   `git merge-tree`: un `postinstall`, un cambio a `plots.ts` o a `prcheck.ts` del PR no se
+   base y corre su `pnpm install` y su `mapcli`. Del PR solo lee datos: el mapa y el
+   contenido (`data/`, `i18n/`, `assets/`) con `git show`, `git cat-file` y
+   `git merge-tree`. Un `postinstall`, un cambio a `plots.ts` o a `prcheck.ts` del PR no se
    ejecutan. El token es de solo lectura, no hay secretos y no se usa `pull_request_target`.
 2. **El comentario no cree en el reporte para lo importante.** `map-pr-comment.yml` corre
    desde la rama por defecto y solo hace checkout de `tools/mapcli/src/prcomment.ts`

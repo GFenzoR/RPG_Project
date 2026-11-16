@@ -8,17 +8,28 @@
 // base exactly like `mapcli patch apply` would (tile by tile, entry by entry), in a
 // throwaway worktree. Everything is measured against that merge result, not against the
 // head's files, so changes that landed on base after the PR branched are not shown as
-// reverted. The report has:
+// reverted. The content the map is read with (data/, i18n/, assets/: CONTENT_DIRS) is the
+// one the merge would land: base plus the PR's own changes there, as git merges them. The
+// report has:
 //   - the `patch diff` summary of every file (status, tiles, bbox, entries, conflicts);
 //   - the community plot check against the plots of base (never of the PR);
-//   - new validator errors of the merged map;
+//   - new validator errors of the merged map (with the merged content; for a non-maintainer
+//     whose PR changes content, also with the base's content: see `prCheck`);
 //   - before/after PNGs of every changed area (cropped, margin, size and count capped).
 // The maintainer list is read from base (`.github/MAINTAINERS`), so a PR cannot add itself;
 // the repository owner (author_association OWNER, given by GitHub) always counts as one.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import {
   canonicalPatchText,
   changeBoxes,
@@ -34,6 +45,7 @@ import {
   validateWorld,
 } from "@rpg/map-format";
 import type {
+  ContentIndex,
   FileChange,
   FloorRect,
   MapPatch,
@@ -55,6 +67,14 @@ export const MAX_PNG_BYTES = 2 << 20;
 /** Image width budget in pixels: the tile size is the largest that keeps the side under it. */
 const MAX_IMAGE_SIDE = 1024;
 const MAX_LISTED = 50;
+/**
+ * What the map is read with besides world/: loadContent (data/, i18n/) for the validator
+ * and the renders, and the sprite atlas (assets/, data/) for the renders.
+ */
+export const CONTENT_DIRS = ["data/", "i18n/", "assets/"] as const;
+/** The part of CONTENT_DIRS the validator reads (assets/ only changes the pictures). */
+export const VALIDATED_CONTENT_DIRS = ["data/", "i18n/"] as const;
+const under = (dirs: readonly string[], p: string): boolean => dirs.some((d) => p.startsWith(d));
 
 export interface PrArea extends FloorRect {
   island: string;
@@ -120,6 +140,8 @@ export interface PrReport {
   /** World files git would merge differently from the tile merge (failure "merge_mismatch"). */
   merge_mismatch: string[];
   plots: { count: number; violations: PlotViolation[]; violations_total: number };
+  /** Errors of the merged map (with the content it lands and, for a non-maintainer whose PR
+   *  changes data/ or i18n/, also with the base's), and those base does not have. */
   validation: { errors: number; new_errors: string[]; new_errors_total: number };
   /** Changed files outside world/ (listed for the reviewer; not judged here). */
   other_files: string[];
@@ -143,6 +165,8 @@ export interface PrCheckOptions {
   headRepo?: string;
   repo?: string;
   pr?: number;
+  /** Size limit of each PNG (MAX_PNG_BYTES; tests lower it). */
+  maxPngBytes?: number;
 }
 
 const SHA = /^[0-9a-f]{40}$/;
@@ -199,6 +223,72 @@ export function decodeStrict(b: Buffer): string | undefined {
 const sameBytes = (a: Buffer | null, b: Buffer | null): boolean =>
   a === null || b === null ? a === b : a.equals(b);
 
+/**
+ * Blobs of `paths` at `treeish` in one `git cat-file --batch` (hundreds of sprites would be
+ * hundreds of processes). null: missing, or not a blob (a submodule). A symlink's blob is
+ * its target text, so it is read as such, never followed.
+ */
+function blobsAt(root: string, treeish: string, paths: string[]): Map<string, Buffer | null> {
+  const out = new Map<string, Buffer | null>();
+  const asked = paths.filter((p) => !/[\n\r]/.test(p)); // one object name per line
+  if (asked.length === 0) return out;
+  const raw = execFileSync("git", ["cat-file", "--batch"], {
+    cwd: root,
+    input: asked.map((p) => `${treeish}:${p}\n`).join(""),
+    maxBuffer: 1 << 30,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  let at = 0;
+  for (const p of asked) {
+    const eol = raw.indexOf(0x0a, at);
+    if (eol < 0) break;
+    const header = /^[0-9a-f]{40,64} (\w+) (\d+)$/.exec(raw.subarray(at, eol).toString("latin1"));
+    at = eol + 1;
+    if (header === null) {
+      out.set(p, null); // "<name> missing"
+      continue;
+    }
+    const size = Number(header[2]);
+    out.set(p, header[1] === "blob" ? Buffer.from(raw.subarray(at, at + size)) : null);
+    at += size + 1; // the contents end with a newline
+  }
+  return out;
+}
+
+/** A path of the PR that stays inside `dir` once written there (no `..`, `.git`, `\`, `:`). */
+function insidePath(dir: string, p: string): string | null {
+  const parts = p.split("/");
+  if (parts.some((s) => s === "" || s === "." || s === ".." || /^\.git$/i.test(s))) return null;
+  if (/[\\:\0]/.test(p)) return null;
+  const abs = resolve(dir, p);
+  return abs.startsWith(resolve(dir) + sep) ? abs : null;
+}
+
+/**
+ * Writes the PR's changes of CONTENT_DIRS into `dir` (a checkout of base) as `treeish` has
+ * them (absent: deleted), so `dir` holds the content the merge would land. Each file is
+ * written as plain bytes: a symlink of the PR becomes a file holding its target, never a
+ * link out of the worktree. Paths that could leave `dir`, or that git cannot be asked for
+ * (a newline in the name), are skipped.
+ */
+function overlayContent(root: string, dir: string, treeish: string, paths: string[]): void {
+  const blobs = blobsAt(root, treeish, paths);
+  const targets = paths.flatMap((p) => {
+    const abs = insidePath(dir, p);
+    const blob = blobs.get(p);
+    return abs === null || blob === undefined ? [] : [{ abs, blob }];
+  });
+  // Removals first: a file of base can become a directory of the PR and the other way round.
+  for (const t of targets) if (t.blob === null) rmSync(t.abs, { force: true, recursive: true });
+  for (const t of targets) {
+    if (t.blob === null) continue;
+    if (existsSync(t.abs) && statSync(t.abs).isDirectory())
+      rmSync(t.abs, { recursive: true, force: true });
+    mkdirSync(dirname(t.abs), { recursive: true });
+    writeFileSync(t.abs, t.blob);
+  }
+}
+
 /** GitHub logins of the maintainers (shared with the map PR worker: map-format). */
 export { parseMaintainers };
 
@@ -246,9 +336,13 @@ function gitMergeTree(root: string, base: string, head: string): string | null {
   }
 }
 
+/** Tile sizes of the renders, largest first (`renderArea` takes these). */
+const TILES = [32, 16, 8, 4] as const;
+const MIN_TILE = 4;
+
 export function tileFor(a: FloorRect): number {
   const side = Math.max(a.w, a.h);
-  return [32, 16, 8, 4].find((t) => side * t <= MAX_IMAGE_SIDE) ?? 4;
+  return TILES.find((t) => side * t <= MAX_IMAGE_SIDE) ?? MIN_TILE;
 }
 
 export function prCheck(opts: PrCheckOptions): PrReport {
@@ -354,6 +448,13 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     // (B3). A chunk's palette can change on one side and a tile row on the other, and git
     // then merges them cleanly into different items.
     const tree = gitMergeTree(root, base, head);
+
+    // The content the merge lands (items, texts, sprites the PR adds or changes): git's merge
+    // of each file the PR changes there, or the head's when git cannot merge (that already
+    // fails with `rebase`). Without it a PR that adds an item and places it fails with
+    // "unknown item". `before` keeps the base's own content.
+    const contentFiles = other.filter((p) => under(CONTENT_DIRS, p)).sort();
+    overlayContent(root, after, tree ?? head, contentFiles);
     const badModes = [
       ...new Set([
         ...nonPlainFiles(root, head),
@@ -388,12 +489,21 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     const plots = communityPlots(loadWorld(before).world);
     const violations = checkPlots(plots, changes);
 
-    const errorsOf = (dir: string): string[] =>
-      validateWorld(dir)
+    const errorsOf = (dir: string, content?: ContentIndex): string[] =>
+      validateWorld(dir, content === undefined ? {} : { content })
         .diagnostics.filter((d) => d.severity === "error")
         .map((d) => formatDiagnostic(d));
+    // Both sides are whole trees with their own content: base as it is, and the merge with
+    // the content it lands. Comparing them shows what the PR breaks, content changes too
+    // (an item it deletes that the map uses).
     const old = new Set(errorsOf(before));
-    const nowErrors = errorsOf(after);
+    const merged = errorsOf(after);
+    // Content (data/, i18n/) needs a maintainer: a community PR's map must also stand on the
+    // base's content, so it cannot pass by bringing the items or texts it uses. Same content
+    // as `before`, so this comparison is like for like. A union: no error of either is lost.
+    const communityContent = !maintainer && other.some((p) => under(VALIDATED_CONTENT_DIRS, p));
+    const onBase = communityContent ? errorsOf(after, loadContent(before)) : [];
+    const nowErrors = [...new Set([...merged, ...onBase])];
     const newErrors = nowErrors.filter((e) => !old.has(e));
 
     // Renders.
@@ -402,6 +512,7 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       maxSide: MAX_AREA_SIDE,
       maxAreas: MAX_AREAS,
     });
+    const maxPng = opts.maxPngBytes ?? MAX_PNG_BYTES;
     const sides = [
       { name: "before" as const, dir: before },
       { name: "after" as const, dir: after },
@@ -410,23 +521,35 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       return { ...s, world: loaded.world, content: loadContent(s.dir), frames: loadFrames(s.dir) };
     });
     const prAreas: PrArea[] = areas.map((a, i) => {
-      const tile = tileFor(a);
+      const draw = (tile: number): Buffer[] =>
+        sides.map(
+          (s) =>
+            renderArea(s.world, s.content, s.frames, {
+              floor: a.z,
+              area: { x: a.x, y: a.y, w: a.w, h: a.h },
+              tile,
+            }).png,
+        );
+      // Detailed art can make a PNG go over the limit: halve the tile until both sides fit
+      // (one tile for both, so they compare), down to the smallest with whatever fits.
+      let tile = tileFor(a);
+      let pngs = draw(tile);
+      while (tile > MIN_TILE && pngs.some((p) => p.length > maxPng)) {
+        tile /= 2;
+        pngs = draw(tile);
+      }
       const area: PrArea = {
         ...a,
         island: islandAt((sides[1] ?? sides[0])?.world as World, a),
         tile,
       };
-      for (const s of sides) {
-        const r = renderArea(s.world, s.content, s.frames, {
-          floor: a.z,
-          area: { x: a.x, y: a.y, w: a.w, h: a.h },
-          tile,
-        });
-        if (r.png.length > MAX_PNG_BYTES) continue;
+      sides.forEach((s, k) => {
+        const png = pngs[k];
+        if (png === undefined || png.length > maxPng) return;
         const name = `${s.name}-${i + 1}.png`;
-        writeFileSync(join(opts.out, name), r.png);
+        writeFileSync(join(opts.out, name), png);
         area[s.name] = name;
-      }
+      });
       return area;
     });
 

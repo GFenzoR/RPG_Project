@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  appendFileSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -78,6 +79,17 @@ function sandbox(): {
 }
 
 const PLOT_CHUNK = "world/islands/puerto/chunks/z07/c0100_0196.json";
+const DECOR = "data/items/decoration.yaml";
+/** An item the content tests add: it looks like a boulder. */
+const NEW_ITEM = [
+  "- id: test_crate",
+  "  kind: decoration",
+  "  sprite: decor/boulder",
+  "  name: item.boulder.name",
+  "  pickupable: false",
+  "  blocks_movement: true",
+  "",
+].join("\n");
 
 describe("parseMaintainers", () => {
   it("reads one login per line, ignoring comments, @ and case", () => {
@@ -246,6 +258,141 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     ]);
     expect(r.validation.new_errors.join("\n")).toContain("walkable");
     expect(r.failures).toEqual(["plots", "validation"]);
+  });
+
+  /** Branch "pr": a new item in data/items, placed inside the puerto community plot. */
+  function addsAndPlacesItem(s: ReturnType<typeof sandbox>): void {
+    s.git("checkout", "-qb", "pr");
+    appendFileSync(join(s.root, DECOR), `\n${NEW_ITEM}`);
+    s.edit("place", "puerto", "--pos", "3202,6304,7", "--item", "test_crate");
+    s.git("add", "-A");
+    s.git("commit", "-qm", "item and map");
+  }
+
+  it("validates a maintainer's map with the content the PR brings (PR #81)", () => {
+    const s = sandbox();
+    addsAndPlacesItem(s);
+    const out = tmp("pr-out-");
+    const r = prCheck({ root: s.root, base: "main", head: "pr", out, author: "boss" });
+    expect(r.maintainer).toBe(true);
+    expect(r.failures).toEqual([]);
+    expect(r.validation.new_errors_total).toBe(0);
+    expect(r.other_files).toEqual([DECOR]);
+    // The after render draws it with its sprite: the same picture as a boulder there.
+    s.git("checkout", "-qb", "boulder", "main");
+    s.edit("place", "puerto", "--pos", "3202,6304,7", "--item", "boulder");
+    s.git("commit", "-qam", "boulder");
+    const out2 = tmp("pr-out-");
+    prCheck({ root: s.root, base: "main", head: "boulder", out: out2, author: "boss" });
+    const png = (dir: string): Buffer => readFileSync(join(dir, "after-1.png"));
+    expect(png(out).equals(png(out2))).toBe(true);
+  });
+
+  it("validates a community map against the base's content too", () => {
+    const s = sandbox();
+    addsAndPlacesItem(s);
+    const r = prCheck({ root: s.root, base: "main", head: "pr", out: tmp("pr-out-"), author: "x" });
+    expect(r.maintainer).toBe(false);
+    expect(r.plots.violations).toEqual([]); // inside the plot: only the content is wrong
+    expect(r.failures).toEqual(["validation"]);
+    expect(r.validation.new_errors).toEqual([
+      expect.stringContaining('unknown item "test_crate" (not in data/items/)'),
+    ]);
+    expect(r.other_files).toEqual([DECOR]);
+  });
+
+  it("keeps the errors a content change of the PR causes, for everyone", () => {
+    const s = sandbox();
+    s.git("checkout", "-qb", "pr");
+    // The PR deletes an item the map uses elsewhere, and touches the map inside the plot.
+    const text = readFileSync(join(s.root, DECOR), "utf8");
+    const start = text.search(/^- id: oak_tree\r?$/m);
+    const end = text.indexOf("- id: ", start + 1);
+    expect(start).toBeGreaterThanOrEqual(0);
+    writeFileSync(join(s.root, DECOR), text.slice(0, start) + text.slice(end));
+    s.edit("place", "puerto", "--pos", "3202,6304,7", "--item", "boulder");
+    s.git("commit", "-qam", "drop oak_tree");
+    for (const author of ["boss", "x"]) {
+      const r = prCheck({ root: s.root, base: "main", head: "pr", out: tmp("pr-out-"), author });
+      expect(r.failures).toEqual(["validation"]);
+      expect(r.validation.new_errors.join("\n")).toContain('unknown item "oak_tree"');
+    }
+  });
+
+  it("validates with git's merge of the content, not the head's copy of it", () => {
+    const s = sandbox();
+    addsAndPlacesItem(s);
+    // After the PR branched, base adds another item to the same file and uses it (another
+    // chunk). The head's decoration.yaml lacks it; git's merge has both.
+    s.git("checkout", "-q", "main");
+    const text = readFileSync(join(s.root, DECOR), "utf8");
+    const BASE_ITEM = NEW_ITEM.replaceAll("test_crate", "base_crate");
+    // At the top (the PR appended at the end): git merges both without a conflict.
+    writeFileSync(join(s.root, DECOR), `${BASE_ITEM}\n${text}`);
+    s.edit("place", "puerto", "--pos", "3210,6300,7", "--item", "base_crate");
+    s.git("commit", "-qam", "main moves");
+    const r = prCheck({
+      root: s.root,
+      base: "main",
+      head: "pr",
+      out: tmp("pr-out-"),
+      author: "boss",
+    });
+    expect(r.failures).toEqual([]);
+    expect(r.validation.new_errors_total).toBe(0);
+  });
+
+  it("never follows a symlink of the PR's content", () => {
+    const s = sandbox();
+    s.git("checkout", "-qb", "pr");
+    // The item lives outside data/ and a link in data/items points at it: as plain bytes the
+    // link is a path, not a list of items, so the item stays unknown.
+    const decor = readFileSync(join(s.root, DECOR), "utf8");
+    appendFileSync(join(s.root, DECOR), `\n${NEW_ITEM}`);
+    s.edit("place", "puerto", "--pos", "3202,6304,7", "--item", "test_crate");
+    writeFileSync(join(s.root, DECOR), decor);
+    writeFileSync(join(s.root, "outside.yaml"), NEW_ITEM);
+    s.git("add", "-A");
+    const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], {
+      cwd: s.root,
+      input: "../../outside.yaml",
+      encoding: "utf8",
+    }).trim();
+    s.git("update-index", "--add", "--cacheinfo", `120000,${blob},data/items/linked.yaml`);
+    s.git("commit", "-qm", "linked items");
+    const r = prCheck({
+      root: s.root,
+      base: "main",
+      head: "pr",
+      out: tmp("pr-out-"),
+      author: "boss",
+    });
+    expect(r.other_files).toEqual(["data/items/linked.yaml", "outside.yaml"]);
+    expect(r.failures).toEqual(["validation"]);
+    expect(r.validation.new_errors.join("\n")).toContain('unknown item "test_crate"');
+  });
+
+  it("halves the render tile until both PNGs fit the size limit", () => {
+    const s = sandbox();
+    s.git("checkout", "-qb", "pr");
+    s.edit("place", "puerto", "--pos", "3202,6304,7", "--item", "oak_tree");
+    s.git("commit", "-qam", "inside");
+    const pr = { root: s.root, base: "main", head: "pr" };
+    const fullOut = tmp("pr-out-");
+    const full = prCheck({ ...pr, out: fullOut });
+    const images = { before: "before-1.png", after: "after-1.png" };
+    expect(full.areas).toMatchObject([{ tile: 32, ...images }]);
+    const biggest = Math.max(
+      ...Object.values(images).map((f) => readFileSync(join(fullOut, f)).length),
+    );
+    const out = tmp("pr-out-");
+    const small = prCheck({ ...pr, out, maxPngBytes: biggest - 1 });
+    expect(small.areas).toMatchObject([{ tile: 16, ...images }]);
+    expect(decodePng(readFileSync(join(out, "after-1.png"))).width).toBeLessThan(9 * 32);
+    // Nothing fits even at the smallest tile: no images, and the area is still listed.
+    const none = prCheck({ ...pr, out: tmp("pr-out-"), maxPngBytes: 1 });
+    const { x, y, w, h, z, island } = full.areas[0] ?? {};
+    expect(none.areas).toEqual([{ x, y, w, h, z, island, tile: 4 }]);
   });
 
   it("fails when git would merge the text differently from the tile merge (B3)", () => {
