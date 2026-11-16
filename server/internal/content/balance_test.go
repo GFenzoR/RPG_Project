@@ -1,7 +1,9 @@
 package content
 
 import (
+	"maps"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -201,7 +203,9 @@ func TestReachWithinTheView(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, it := range items {
+	// The first resource by id: the same one every run (items is a map).
+	for _, id := range slices.Sorted(maps.Keys(items)) {
+		it := items[id]
 		if it.Resource == nil {
 			continue
 		}
