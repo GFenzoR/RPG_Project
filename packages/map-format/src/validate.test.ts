@@ -520,6 +520,100 @@ describe("validateWorld", () => {
     expect(m.join("\n")).not.toContain("spawn of radius 0");
   });
 
+  it("keeps the temple and house exits off the entrance of stairs, holes and teleports", () => {
+    const i = mini();
+    i.houses = [
+      {
+        id: "puerto_house_net",
+        name: "house.puerto_house_net.name",
+        rent: 100,
+        rects: [{ x: 20, y: 5, z: 7, w: 1, h: 1 }],
+        doors: [{ x: 20, y: 5, z: 7 }],
+        exit: { x: 20, y: 6, z: 7 },
+      },
+    ];
+    expect(messages(check(i))).toEqual([]);
+    i.portals.push(
+      {
+        id: "mini_gate",
+        from: { x: 16, y: 16, z: 7 },
+        to: { x: 14, y: 14, z: 7 },
+        kind: "teleport",
+      },
+      {
+        id: "mini_porch",
+        from: { x: 20, y: 6, z: 7 },
+        to: { x: 22, y: 8, z: 7 },
+        kind: "teleport",
+      },
+    );
+    const m = messages(check(i));
+    expect(m).toContainEqual(
+      expect.stringContaining('temple lies on the entrance of portal "mini_gate"'),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining('house exit lies on the entrance of portal "mini_porch"'),
+    );
+  });
+
+  it("wants every tile a crowded arrival may take connected on foot with the destination", () => {
+    // The cave of floor 8 split by a water column at x = 12: its east column (13,10..13) is
+    // 2 tiles from where the stairs down land (11,11,8), within travel.arrival_radius (2),
+    // but on the other side of the water.
+    const i = mini();
+    const cave = must(i.chunks.get(chunkKey(8, 0, 0)));
+    for (let y = 10; y < 14; y++) setGround(cave, 12, y, "water_shallow");
+    expect(content.arrivalRadius).toBe(2);
+    expect(messages(check(i))).toContainEqual(
+      expect.stringContaining(
+        "[0].to: (11,11,8) 13,10,8 is within travel.arrival_radius (2) of the destination but not connected to it on foot",
+      ),
+    );
+    // A bridge at the south end: the east column is a walk round, not a pocket.
+    setGround(cave, 12, 13, "dirt");
+    expect(messages(check(i)).join("\n")).not.toContain("not connected to it on foot");
+    // Split again, with the stairs landing at 10,11,8: the east column lies beyond the
+    // radius, so no arrival can take it.
+    setGround(cave, 12, 13, "water_shallow");
+    expect(messages(check(i)).join("\n")).toContain("not connected to it on foot");
+    i.portals[0] = { ...must(i.portals[0]), to: { x: 10, y: 11, z: 8 } };
+    expect(messages(check(i)).join("\n")).not.toContain("not connected to it on foot");
+  });
+
+  it("rejects a portal id used twice in the world, like the server", () => {
+    const a = mini();
+    const b = mini();
+    b.meta = {
+      ...b.meta,
+      id: "mini_two",
+      rect: { x: 32, y: 0, w: 32, h: 32 },
+      temple: { x: 48, y: 16, z: 7 },
+    };
+    const shift = (c: Chunk): Chunk => ({ ...c, cx: c.cx + 1 });
+    b.chunks = new Map(
+      [...b.chunks.values()].map((c) => [chunkKey(c.z, c.cx + 1, c.cy), shift(c)]),
+    );
+    const move = (p: Position): Position => ({ ...p, x: p.x + 32 });
+    b.spawns = [];
+    b.npcs = [];
+    b.zones = [
+      { id: "two_temple", type: "protection", floors: [7], rects: [{ x: 47, y: 15, w: 3, h: 3 }] },
+    ];
+    b.portals = b.portals.map((p) => ({
+      ...p,
+      id: `two_${p.id}`,
+      from: move(p.from),
+      to: move(p.to),
+    }));
+    expect(messages(check(a, worldOf(a, b), [b]))).toEqual([]);
+    must(b.portals[0]).id = "mini_down";
+    expect(messages(check(a, worldOf(a, b), [b]))).toContainEqual(
+      expect.stringContaining(
+        'portal "mini_down" is already defined in world/islands/mini/portals.yaml',
+      ),
+    );
+  });
+
   it("walks through doors, locked or not, to reach what lies behind them", () => {
     const i = mini();
     const c = must(i.chunks.get(chunkKey(7, 0, 0)));

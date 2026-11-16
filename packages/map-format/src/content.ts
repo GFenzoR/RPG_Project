@@ -52,6 +52,11 @@ export interface ContentIndex {
    * the room behind a locked door. Missing when the index was built without them.
    */
   teleports?: TeleportInfo[];
+  /**
+   * travel.arrival_radius of data/balance.yaml: how far from a taken arrival tile a portal
+   * (or a boat) lands. Missing when the index was built without it.
+   */
+  arrivalRadius?: number;
 }
 
 /**
@@ -187,6 +192,9 @@ export function loadContent(root: string): ContentIndex {
         continue;
       routes.push({ index, id, captain, from, to });
     }
+  const balance = readYaml(join(root, "data", "balance.yaml"));
+  const travel = isObj(balance) ? balance["travel"] : undefined;
+  const radius = isObj(travel) ? travel["arrival_radius"] : undefined;
   return {
     items,
     monsters: idsIn("monsters"),
@@ -195,6 +203,9 @@ export function loadContent(root: string): ContentIndex {
     borders,
     routes,
     teleports: loadTeleports(root),
+    ...(Number.isInteger(radius) && (radius as number) >= 0
+      ? { arrivalRadius: radius as number }
+      : {}),
   };
 }
 

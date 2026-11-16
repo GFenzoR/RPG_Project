@@ -42,6 +42,12 @@ const PAIRED_KINDS = new Set(["stairs", "ladder"]);
  */
 const ON_STEP_KINDS = new Set(["stairs", "hole", "teleport"]);
 
+/**
+ * The most travel.arrival_radius may be (the balance schema's maximum): the radius of the
+ * arrival check when the content index does not bring the configured one.
+ */
+export const MAX_ARRIVAL_RADIUS = 5;
+
 export function validateWorld(root: string, opts: ValidateWorldOptions = {}): MapReport {
   const loaded = loadWorld(root);
   const content = opts.content ?? loadContent(root);
@@ -151,6 +157,7 @@ class WorldValidator {
     this.checkWorldIndex();
     for (const island of this.world.islands.values()) this.checkIsland(island);
     this.checkUniqueAcrossWorld();
+    this.checkPortalArrivals();
     this.checkBoatRoutes();
     this.checkDoors();
     this.checkPrefabs();
@@ -361,6 +368,26 @@ class WorldValidator {
           [i, "center"],
           `spawn of radius 0 on the entrance of portal "${id}": monsters keep off it, none would appear`,
           s.center,
+        );
+    }
+    // The temple and a house exit are the last resort of waking up and of leaving a house
+    // when every tile around is taken: never a tile nobody may stand on.
+    const templeOn = stepped.get(formatPos(meta.temple));
+    if (templeOn !== undefined)
+      this.err(
+        file,
+        ["temple"],
+        `temple lies on the entrance of portal "${templeOn}", where nobody may wake up`,
+        meta.temple,
+      );
+    for (const [i, h] of island.houses.entries()) {
+      const id = stepped.get(formatPos(h.exit));
+      if (id !== undefined)
+        this.err(
+          `${dir}/houses.yaml`,
+          [i, "exit"],
+          `house exit lies on the entrance of portal "${id}", where nobody may be put out`,
+          h.exit,
         );
     }
 
@@ -718,6 +745,77 @@ class WorldValidator {
       for (const [i, h] of island.houses.entries())
         claim("house", h.id, `${dir}/houses.yaml`, [i, "id"]);
     }
+  }
+
+  /**
+   * Arrivals through portals (docs/02 "Cambiar de piso"): a player lands on `to` or, if it
+   * is taken, on the nearest free tile within travel.arrival_radius, which the server finds
+   * by rings, not on foot (session freeAround). Every tile that search could pick (walkable,
+   * outside houses, not the entrance of stairs, a hole or a teleport) must be connected on
+   * foot with `to`: otherwise a crowd on `to` could put a player across a wall, in a pocket
+   * it might never leave (a relog comes back to the same tile).
+   */
+  private checkPortalArrivals(): void {
+    const radius = this.content.arrivalRadius ?? MAX_ARRIVAL_RADIUS;
+    const onStep = new Set<string>();
+    const houses = new Set<string>();
+    for (const island of this.world.islands.values()) {
+      for (const p of island.portals) if (ON_STEP_KINDS.has(p.kind)) onStep.add(formatPos(p.from));
+      for (const h of island.houses)
+        for (const r of h.rects)
+          for (const [x, y] of tilesOf(r)) houses.add(formatPos({ x, y, z: r.z }));
+    }
+    for (const island of this.world.islands.values())
+      for (const [i, p] of island.portals.entries()) {
+        if (p.kind === "boat" || !isWalkable(this.tiles.tileAt(p.to), this.content)) continue;
+        const stray = this.strayArrival(p.to, radius, onStep, houses);
+        if (stray)
+          this.err(
+            `${this.dirOf(island)}/portals.yaml`,
+            [i, "to"],
+            `${formatPos(stray)} is within travel.arrival_radius (${radius}) of the destination but not connected to it on foot: a crowded arrival would land a player there`,
+            p.to,
+          );
+      }
+  }
+
+  /**
+   * The nearest tile (by rings) within radius of `to` where a taken arrival could land
+   * that cannot be walked to from `to` (8 directions, one floor, doors open, across no
+   * stairs, hole or teleport), or undefined. The walk stops once it found them all.
+   */
+  private strayArrival(
+    to: Position,
+    radius: number,
+    onStep: Set<string>,
+    houses: Set<string>,
+  ): Position | undefined {
+    const pending = new Map<string, Position>();
+    for (let r = 1; r <= radius; r++)
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const q = { x: to.x + dx, y: to.y + dy, z: to.z };
+          const k = formatPos(q);
+          if (onStep.has(k) || houses.has(k)) continue;
+          if (isWalkable(this.tiles.tileAt(q), this.content)) pending.set(k, q);
+        }
+    const seen = new Set<string>([formatPos(to)]);
+    const queue: Position[] = [to];
+    for (let head = 0; head < queue.length && pending.size > 0; head++) {
+      const p = queue[head] as Position;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const n = { x: p.x + dx, y: p.y + dy, z: p.z };
+          const k = formatPos(n);
+          if (seen.has(k) || onStep.has(k)) continue;
+          if (!isPassable(this.tiles.tileAt(n), this.content)) continue;
+          seen.add(k);
+          pending.delete(k);
+          queue.push(n);
+        }
+    }
+    return pending.values().next().value;
   }
 
   /**
