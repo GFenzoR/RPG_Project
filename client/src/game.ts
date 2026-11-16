@@ -13,7 +13,7 @@ import {
   MarketSide,
   PartyAction,
 } from "@rpg/protocol";
-import type { DisconnectReason, EquipmentSlot, FightStance } from "@rpg/protocol";
+import type { DisconnectReason, EquipmentSlot, FightStance, Skull } from "@rpg/protocol";
 import { ItemPicker, itemActions, tileActions } from "./input/actions.ts";
 import type { ActionKind } from "./input/actions.ts";
 import { HeldDirection } from "./input/dpad.ts";
@@ -1057,6 +1057,11 @@ export class Game {
   /** Atlas rectangle of an item's sprite, for DOM icons (undefined until the canvas is up). */
   itemIcon(itemId: number): ReturnType<GameCanvas["itemIcon"]> {
     return this.canvas?.itemIcon(itemId);
+  }
+
+  /** Atlas rectangle of a PvP mark's sprite, for the battle list (undefined without art). */
+  markIcon(mark: Skull): ReturnType<GameCanvas["markIcon"]> {
+    return this.canvas?.markIcon(mark);
   }
 
   /** Publishes again when the presence check runs out: no server batch may come then. */

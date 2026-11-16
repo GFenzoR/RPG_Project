@@ -10,6 +10,7 @@ import type { GameUi } from "../game.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import { creatureName, formatMessage } from "../state/messages.ts";
 import { skullId } from "../state/pvp.ts";
+import { markIconStyle } from "../render/marks.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, api } from "../net/api.ts";
 import type { Character } from "../net/api.ts";
@@ -741,11 +742,10 @@ function GameScreen(props: {
                         >
                           <span class="cname">
                             {skullId(c.skull) && (
-                              <span
-                                class={`skull skull-${skullId(c.skull)}`}
-                                data-skull={skullId(c.skull)}
-                                title={t(`client.skull.${skullId(c.skull)}`)}
-                                aria-label={t(`client.skull.${skullId(c.skull)}`)}
+                              <MarkIcon
+                                id={skullId(c.skull) ?? ""}
+                                style={markIconStyle(game.current?.markIcon(c.skull))}
+                                t={t}
                               />
                             )}
                             {creatureName(c, t)}
@@ -1140,6 +1140,28 @@ const CONDITION_CLASS: Record<string, string> = {
   invisible: "buff",
   keen_eye: "buff",
 };
+
+/**
+ * A PvP mark before a name in the battle list (T5.2): its sprite as a CSS background
+ * (render/marks.ts markIconStyle), or without it a dot of the mark's colour (client.css).
+ */
+function MarkIcon(props: {
+  id: string;
+  style: Record<string, string> | undefined;
+  t: Translate;
+}): JSX.Element {
+  const label = props.t(`client.skull.${props.id}`);
+  return (
+    <span
+      class={`skull skull-${props.id}${props.style ? " art" : ""}`}
+      data-skull={props.id}
+      data-art={props.style ? "" : undefined}
+      style={props.style}
+      title={label}
+      aria-label={label}
+    />
+  );
+}
 
 /** The player's own conditions as named badges; the tooltip has the time left. */
 function ConditionBar(props: { t: Translate; conditions: GameUi["conditions"] }): JSX.Element {

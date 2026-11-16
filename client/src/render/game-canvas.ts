@@ -33,6 +33,7 @@ import type { Pos } from "../state/geometry.ts";
 import { creatureName } from "../state/messages.ts";
 import { skullColor } from "../state/pvp.ts";
 import { lookKey, playerLook } from "./cosmetics.ts";
+import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
 import {
   DEFAULT_OUTFIT,
@@ -75,6 +76,8 @@ export interface GameCanvas {
   clientToTile(clientX: number, clientY: number): Pos | undefined;
   /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
   itemIcon(itemId: number): AtlasIcon | undefined;
+  /** Where a PvP mark's sprite is in the atlas (real art only), for the battle list. */
+  markIcon(mark: Skull): AtlasIcon | undefined;
   /** Current device pixels per sprite pixel. */
   readonly scale: number;
   /** The scale and the scales the player may choose now. */
@@ -122,18 +125,36 @@ const TOUCH_MENU_MS = 1500;
 /** Pointer travel (canvas pixels) that turns a press into a drag. */
 const DRAG_START_PX = 6;
 
-/** Radius of the skull placeholder (T5.2), in screen pixels. */
-const SKULL_R = 5;
+/** Half the width of a PvP mark beside a name (T5.2), in screen pixels. */
+const MARK_HALF = MARK_BOX.w / 2;
 
-/** Draws a skull icon of the mark's colour (a round head, jaw and dark eyes); none = empty. */
-function drawSkull(g: Graphics, mark: Skull): void {
-  g.clear();
+/**
+ * Draws the PvP mark of a skull centred on the container (none = empty): its sprite
+ * (render/marks.ts) at one screen pixel per sprite pixel, like the 12 px names, or without
+ * it the old placeholder, a skull of the mark's colour drawn with shapes.
+ */
+function drawSkull(g: Container, mark: Skull, art: Texture | undefined): void {
+  for (const child of g.removeChildren()) child.destroy();
   if (mark === Skull.UNSPECIFIED) return;
+  if (art) {
+    // Anchored at the centre of MARK_BOX, the part of the sprite with the drawing.
+    const anchor = {
+      x: (MARK_BOX.x + MARK_HALF) / art.width,
+      y: (MARK_BOX.y + MARK_BOX.h / 2) / art.height,
+    };
+    g.addChild(new Sprite({ texture: art, anchor, roundPixels: true }));
+    return;
+  }
   const fill = skullColor(mark);
-  g.circle(0, -1, SKULL_R).fill(fill).stroke({ color: 0x000000, width: 1 });
-  g.rect(-3, 2, 6, 3).fill(fill).stroke({ color: 0x000000, width: 1 });
-  g.circle(-2, -1, 1.3).fill(0x000000);
-  g.circle(2, -1, 1.3).fill(0x000000);
+  const shapes = new Graphics();
+  shapes
+    .circle(0, -1, MARK_HALF - 1)
+    .fill(fill)
+    .stroke({ color: 0x000000, width: 1 });
+  shapes.rect(-3, 2, 6, 3).fill(fill).stroke({ color: 0x000000, width: 1 });
+  shapes.circle(-2, -1, 1.3).fill(0x000000);
+  shapes.circle(2, -1, 1.3).fill(0x000000);
+  g.addChild(shapes);
 }
 
 interface CreatureSprite {
@@ -143,8 +164,8 @@ interface CreatureSprite {
   label: Text;
   /** The guild name, between the name and the health bar (T5.1); empty = hidden. */
   guild: Text;
-  /** The PvP mark left of the name (T5.2): a placeholder drawn with shapes. */
-  skull: Graphics;
+  /** The PvP mark left of the name (T5.2): its sprite, or shapes without one (drawSkull). */
+  skull: Container;
   drawnSkull: Skull;
   /** A player's outfit sprite (T0.5); its texture follows the facing and the step. */
   outfit: Sprite | undefined;
@@ -264,6 +285,15 @@ export async function createGameCanvas(
         : c.kind === CreatureKind.NPC
           ? content.npcSprites?.[c.contentId]
           : undefined;
+    return path ? atlas.texture(path) : undefined;
+  };
+  // PvP marks (T5.2): their sprite when the atlas has real art for it (render/marks.ts).
+  const markPath = (mark: Skull): string | undefined => {
+    const path = markSprite(mark);
+    return path && atlas.has(path) && isMarkArt(atlas.index.sprites[path]) ? path : undefined;
+  };
+  const markTexture = (mark: Skull): Texture | undefined => {
+    const path = markPath(mark);
     return path ? atlas.texture(path) : undefined;
   };
   // Players: the outfit's frames (T0.5), only when the atlas has real art for every one of
@@ -392,7 +422,7 @@ export async function createGameCanvas(
         roundPixels: true,
       });
       labels.addChild(guild);
-      const skull = new Graphics();
+      const skull = new Container();
       labels.addChild(skull);
       s = {
         body,
@@ -417,7 +447,7 @@ export async function createGameCanvas(
     const name = labelText(nameOf(c), scale);
     if (s.label.text !== name) s.label.text = name;
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
-    if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull);
+    if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull, markTexture(c.skull));
     s.drawnSkull = c.skull;
     if (s.drawnDir !== c.dir) drawShape(s, c);
     if (s.outfit) {
@@ -486,7 +516,7 @@ export async function createGameCanvas(
         x: Math.round(head.x),
         y: barTop - 1,
         width:
-          Math.max(s.label.width, hasGuild ? s.guild.width : 0) + (hasSkull ? 2 * SKULL_R + 2 : 0),
+          Math.max(s.label.width, hasGuild ? s.guild.width : 0) + (hasSkull ? MARK_BOX.w + 2 : 0),
         nameHeight: s.label.height,
         guildHeight: hasGuild ? s.guild.height : 0,
         self: c.id === world.selfId,
@@ -514,7 +544,7 @@ export async function createGameCanvas(
       }
       if (s.drawnSkull !== Skull.UNSPECIFIED) {
         s.skull.position.set(
-          Math.round(s.label.x - s.label.width / 2 - SKULL_R - 2),
+          Math.round(s.label.x - s.label.width / 2 - MARK_HALF - 2),
           Math.round(s.label.y - s.label.height / 2),
         );
       }
@@ -694,6 +724,10 @@ export async function createGameCanvas(
       const p = toCanvas(clientX, clientY);
       const tile = screenToTile(cam, p.x, p.y, T);
       return { x: tile.x, y: tile.y, z: self.pos.z };
+    },
+    markIcon(mark) {
+      const path = markPath(mark);
+      return path ? atlas.icon(path) : undefined;
     },
     itemIcon(itemId) {
       const sprite = content.items[itemId]?.sprite;

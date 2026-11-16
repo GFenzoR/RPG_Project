@@ -2149,6 +2149,8 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
     preyBattle.getByRole("button", { name: hunter.name }).locator('[data-skull="aggressor"]'),
   ).toBeVisible({ timeout: 10_000 });
   await expect(preyBattle.locator('[data-skull="aggressor"]')).toHaveAttribute("title", "agresor");
+  // The mark is its sprite from the atlas (ui/marks/aggressor), not the fallback dot.
+  await expect(preyBattle.locator('[data-skull="aggressor"]')).toHaveAttribute("data-art", "");
   // The prey, in safe mode, may defend itself against a marked attacker. The client sets
   // its target at once, so wait for the server: a refusal (pvp.safe_mode) would clear it
   // and log the reason; the hunter's health bar dropping is the server's own answer.

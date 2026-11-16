@@ -1262,8 +1262,17 @@ body.using-item canvas {
   bottom: 8rem;
 }
 
-/* PvP (T5.2): the skull before a player's name in the battle list (the canvas draws the
-   same colours with shapes). Placeholder until there is an icon sprite. */
+/* PvP (T5.2): the mark before a player's name in the battle list. With its sprite in the
+   atlas it is that (.art: the inline style of render/marks.ts markIconStyle, 12x12); without
+   it, a dot of the mark's colour, like the shapes the canvas falls back to. */
+.battle .skull.art {
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  vertical-align: -0.1rem;
+}
 .battle .skull {
   display: inline-block;
   width: 0.7rem;
