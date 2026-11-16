@@ -652,9 +652,37 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await loginForm.getByLabel("Email").fill(email);
   await loginForm.getByLabel("Contraseña").fill(password);
   await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
+  // Where the own tile is on the screen at the very moment the client publishes its hooks
+  // (ready), before any frame is drawn: the camera was only set by the first frame, which
+  // Pixi may skip on a busy page, and on CI the Shift+click on the sign right after `ready`
+  // went far off the canvas and read nothing.
+  await page.evaluate(() => {
+    type Aim = { x: number; y: number } | null;
+    let hooks: Window["__rpgClient"];
+    Object.defineProperty(window, "__rpgClient", {
+      configurable: true,
+      get: () => hooks,
+      set(v: Window["__rpgClient"]) {
+        hooks = v;
+        const s = v?.ready ? v.self() : undefined;
+        (window as Window & { __firstAim?: Aim }).__firstAim = s
+          ? (v?.tileToClient(s.x, s.y) ?? null)
+          : null;
+      },
+    });
+  });
   await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
   errors.length = 0; // the 401 of opening the page without a session cookie
+  const firstAim = await page.evaluate(
+    () => (window as Window & { __firstAim?: { x: number; y: number } | null }).__firstAim,
+  );
+  const canvasBox = await page.getByTestId("game-canvas").boundingBox();
+  if (!firstAim || !canvasBox) throw new Error("no aim at ready or no canvas");
+  expect(firstAim.x).toBeGreaterThan(canvasBox.x);
+  expect(firstAim.x).toBeLessThan(canvasBox.x + canvasBox.width);
+  expect(firstAim.y).toBeGreaterThan(canvasBox.y);
+  expect(firstAim.y).toBeLessThan(canvasBox.y + canvasBox.height);
 
   const npc = async (id: string): Promise<{ id: number; x: number; y: number }> => {
     let found: { id: number; x: number; y: number } | undefined;

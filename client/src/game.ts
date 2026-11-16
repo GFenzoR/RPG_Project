@@ -132,7 +132,10 @@ type MenuTarget = { tile: Pos; creature: number | undefined } | { ref: ItemRef }
 
 /** Read-only hooks for the E2E tests (client/e2e). */
 export interface ClientTestHooks {
-  /** The first FullMapView arrived and the canvas is drawing. */
+  /**
+   * The first FullMapView arrived and the canvas is drawing; its camera already follows
+   * the player, so `tileToClient` points at the map (before the first frame too).
+   */
   ready: boolean;
   self(): { x: number; y: number; z: number; pending: boolean; walking: boolean } | undefined;
   walkable(x: number, y: number, z: number): boolean;
