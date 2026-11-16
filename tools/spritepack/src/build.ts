@@ -21,6 +21,11 @@ export const SPRITES_DIR = "assets/sprites";
 export const CREDITS_FILE = "assets/CREDITS.md";
 export const DEFAULT_OUT_DIR = "assets/atlas";
 export const DEFAULT_MAX_PAGE = 2048;
+/**
+ * Widest and tallest PNG decoded, read from its header first: a small file can declare a
+ * huge image (a map PR's sprites are decoded by the check, docs/04). A page holds no more.
+ */
+export const MAX_PNG_SIDE = DEFAULT_MAX_PAGE;
 
 export type Origin = "file" | "vendor" | "placeholder" | "auto";
 
@@ -279,9 +284,25 @@ function at(file: string, line: number | undefined): string {
   return line === undefined ? file : `${file}:${line}`;
 }
 
+/** Width and height from a PNG's IHDR (undefined: not a PNG header, decodePng reports it). */
+export function pngSize(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 24 || buf.toString("latin1", 12, 16) !== "IHDR") return undefined;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
 function readPng(abs: string, where: string, diags: Diagnostic[]): Image | undefined {
   try {
-    return decodePng(readFileSync(abs));
+    const buf = readFileSync(abs);
+    const size = pngSize(buf);
+    if (size && (size.width > MAX_PNG_SIDE || size.height > MAX_PNG_SIDE)) {
+      diags.push({
+        severity: "error",
+        where,
+        message: `PNG is ${size.width}x${size.height}; at most ${MAX_PNG_SIDE} per side`,
+      });
+      return undefined;
+    }
+    return decodePng(buf);
   } catch (err) {
     diags.push({
       severity: "error",

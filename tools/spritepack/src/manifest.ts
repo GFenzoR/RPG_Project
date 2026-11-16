@@ -5,6 +5,9 @@ import type { Rgba } from "./image.ts";
 import { TILE } from "./placeholder.ts";
 
 /** Same rule as common.schema.json#/$defs/sprite in packages/content-schema. */
+/** Largest placeholder side in pixels (8 tiles): each one is drawn in memory. */
+export const MAX_PLACEHOLDER_SIDE = 256;
+
 export const SPRITE_PATH = /^[a-z0-9_]+(\/[a-z0-9_]+)*$/;
 /** Placeholder labels use the bitmap font: up to 3 of A-Z, 0-9 (empty = no label). */
 const LABEL = /^[A-Z0-9]{0,3}$/;
@@ -126,8 +129,10 @@ function parseEntry(raw: unknown, fail: (msg: string) => void): SpriteEntry | un
     }
     if (p["size"] !== undefined) {
       const size = intList(p["size"], 2);
-      if (!size || size.some((n) => n <= 0 || n % TILE !== 0)) {
-        fail(`placeholder.size must be [w, h] in pixels, multiples of ${TILE}`);
+      if (!size || size.some((n) => n <= 0 || n % TILE !== 0 || n > MAX_PLACEHOLDER_SIDE)) {
+        fail(
+          `placeholder.size must be [w, h] in pixels, multiples of ${TILE} up to ${MAX_PLACEHOLDER_SIDE}`,
+        );
       } else {
         entry.width = size[0] ?? TILE;
         entry.height = size[1] ?? TILE;

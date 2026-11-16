@@ -2,12 +2,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildAtlas, writeAtlas } from "./build.ts";
+import { MAX_PNG_SIDE, buildAtlas, pngSize, writeAtlas } from "./build.ts";
 import { collectSpriteRefs } from "./content.ts";
 import { registeredPacks } from "./credits.ts";
 import { createImage, decodePng, encodePng, fillRect } from "./image.ts";
 import type { Image } from "./image.ts";
-import { parseManifest } from "./manifest.ts";
+import { MAX_PLACEHOLDER_SIDE, parseManifest } from "./manifest.ts";
 import { packSprites } from "./pack.ts";
 import { defaultColor, defaultLabel, renderPlaceholder } from "./placeholder.ts";
 
@@ -340,5 +340,32 @@ describe("decodePng", () => {
     for (const tail of [iend, Buffer.from("junk")]) {
       expect(decodePng(Buffer.concat([png, tail]))).toEqual(img);
     }
+  });
+});
+
+describe("size limits (a map PR's sprites are decoded by the check)", () => {
+  it("refuses a PNG whose header declares more than a page, without decoding it", () => {
+    const png = encodePng(solid(32, 32, [1, 2, 3]));
+    expect(pngSize(png)).toEqual({ width: 32, height: 32 });
+    const huge = Buffer.from(png);
+    huge.writeUInt32BE(MAX_PNG_SIDE + 32, 16); // IHDR width (the CRC no longer matches)
+    put("assets/sprites/a/huge.png", huge);
+    const r = buildAtlas(root);
+    expect(errors(r)).toEqual([
+      `assets/sprites/a/huge.png PNG is ${MAX_PNG_SIDE + 32}x32; at most ${MAX_PNG_SIDE} per side`,
+    ]);
+    expect(r.atlas).toBeUndefined();
+  });
+
+  it("refuses a placeholder larger than its limit", () => {
+    const side = MAX_PLACEHOLDER_SIDE;
+    const { manifest, errors: errs } = parseManifest(`sprites:
+  a/ok: { placeholder: { size: [${side}, ${side}] } }
+  a/big: { placeholder: { size: [${side + 32}, 32] } }
+`);
+    expect(manifest.sprites.get("a/ok")).toMatchObject({ width: side, height: side });
+    expect(errs.map((e) => `${e.line}: ${e.message}`)).toEqual([
+      expect.stringMatching(/^3: placeholder.size .* up to 256/),
+    ]);
   });
 });
