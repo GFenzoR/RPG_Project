@@ -55,6 +55,11 @@ const (
 	// FlagHouse marks a tile of a house (T5.4). NewMap sets it, with FlagProtection, on
 	// every tile with ground inside a house's rects: houses are protection zones.
 	FlagHouse
+	// FlagPortalStep marks the entrance of a stairs, hole or teleport portal: stepping
+	// onto it moves the player elsewhere (Map.MovesOnStep). NewMap sets it from the
+	// portals, so the searches that keep off those tiles (A*, monsters, free tiles) read
+	// a flag instead of the portal index.
+	FlagPortalStep
 )
 
 // TileStack is the item stack of one tile, bottom to top, as numeric item IDs.

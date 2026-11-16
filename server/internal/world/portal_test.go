@@ -13,6 +13,12 @@ func at(x, y, z int) Pos { return Pos{X: uint16(x), Y: uint16(y), Z: uint8(z)} }
 // a house at 30..31,30 on floor 7) with the portals given.
 func portalMap(t *testing.T, portals ...Portal) (*Map, error) {
 	t.Helper()
+	return portalMapWith(t, func(*Island) {}, portals...)
+}
+
+// portalMapWith is portalMap with its island changed by edit (NPCs, spawns) first.
+func portalMapWith(t *testing.T, edit func(is *Island), portals ...Portal) (*Map, error) {
+	t.Helper()
 	rows := []string{
 		".....",
 		".....",
@@ -25,6 +31,7 @@ func portalMap(t *testing.T, portals ...Portal) (*Map, error) {
 	is.Houses = []House{{ID: "shed", Name: "house.shed.name", Rent: 10,
 		Rects: []HouseRect{{X: 30, Y: 30, Z: 7, W: 2, H: 1}}, Doors: []Pos{pt(30, 30)}, Exit: pt(30, 31)}}
 	is.Portals = portals
+	edit(&is)
 	sectors := append(up.Islands()[0].Sectors(), down.Islands()[0].Sectors()...)
 	return NewMap([]*Island{&is}, map[string][]*Sector{is.ID: sectors}, testSpeeds)
 }
@@ -136,5 +143,61 @@ func TestParsePortalKind(t *testing.T) {
 	}
 	if _, ok := ParsePortalKind(""); ok {
 		t.Error("the empty name is a portal kind")
+	}
+}
+
+// The entrances of stairs, holes and teleports carry FlagPortalStep, which NewMap derives
+// from the portals alone: a stale bit (a world.bin or a test map built with other
+// portals) goes away.
+func TestPortalStepFlag(t *testing.T) {
+	m, err := portalMap(t, testPortals()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[Pos]bool{at(33, 31, 7): true, at(31, 32, 8): false, at(34, 31, 7): false} {
+		if got := m.Flags(p)&FlagPortalStep != 0; got != want {
+			t.Errorf("FlagPortalStep on %v = %v, want %v", p, got, want)
+		}
+	}
+	is := m.Islands()[0]
+	again := *is
+	again.Portals = nil
+	m2, err := NewMap([]*Island{&again}, map[string][]*Sector{is.ID: is.Sectors()}, testSpeeds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m2.MovesOnStep(at(33, 31, 7)) {
+		t.Fatal("the bit of a portal that is gone stayed")
+	}
+}
+
+// Nobody stands for good on the entrance of stairs, a hole or a teleport: an NPC there
+// would block it, and a spawn of radius 0 there would never show a monster (they keep
+// off it). On a ladder, or with a radius to spread over, they may.
+func TestPortalEntranceKeptFree(t *testing.T) {
+	npcOn := func(p Pos) func(is *Island) {
+		return func(is *Island) { is.NPCs = []NPCPlacement{{NPC: "guide", Pos: p}} }
+	}
+	spawnOn := func(p Pos, r uint8) func(is *Island) {
+		return func(is *Island) {
+			is.Spawns = []Spawn{{ID: "rats", Center: p, Radius: r, RespawnSeconds: 60,
+				Monsters: []SpawnMonster{{Monster: "rat", Count: 1}}}}
+		}
+	}
+	for name, c := range map[string]struct {
+		edit func(is *Island)
+		want string
+	}{
+		"npc on stairs":     {npcOn(at(33, 31, 7)), `NPC "guide" stands on the entrance of portal "down"`},
+		"npc on a teleport": {npcOn(at(31, 33, 7)), `portal "gate"`},
+		"npc on a ladder":   {npcOn(at(31, 32, 8)), ""},
+		"spawn on a hole":   {spawnOn(at(32, 32, 7), 0), `spawn "rats" of radius 0 lies on the entrance of portal "pit"`},
+		"spawn around it":   {spawnOn(at(32, 32, 7), 1), ""},
+		"spawn on a rope":   {spawnOn(at(32, 33, 8), 0), ""},
+	} {
+		_, err := portalMapWith(t, c.edit, testPortals()...)
+		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
+			t.Errorf("%s: err = %v, want %q", name, err, c.want)
+		}
 	}
 }
