@@ -8,6 +8,7 @@ import {
   eachInEllipse,
   eachInPolygon,
   eachInRect,
+  get,
   hash2,
   line,
   opaque,
@@ -23,7 +24,7 @@ import { darken, hex, lighten, material, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
-const { wood, darkWood, iron, darkIron, copper, silver, leather, cloth, rope, bone } = PALETTE;
+const { wood, darkWood, iron, darkIron, silver, leather, cloth, rope, bone } = PALETTE;
 
 // One-off materials for single items.
 const BIRCH_BARK = material("#ece8dc", "#d2cdbd", "#a8a291", "#6f6a5c");
@@ -35,9 +36,17 @@ const STAG_LEATHER = material("#c09466", "#9a6e45", "#704e2f", "#4a321d");
 const ANTLER = material("#ddcda8", "#b8a077", "#8c7553", "#5e4d35");
 const IVORY = material("#f5eedb", "#ddd1b0", "#b3a27c", "#7e6f50");
 const CRAB = material("#ec8a5a", "#c75a34", "#923a22", "#5e2215");
-const BAT = material("#8a7774", "#625253", "#45393b", "#2c2427");
+/** The membrane of a bat wing, warm and light enough to read on dark ground. */
+const BAT = material("#a8897d", "#7d6058", "#5a4440", "#3c2c2a");
+const BAT_BONE = material("#efe2cc", "#cdb89a", "#9d8a6e", "#6c5c47");
 const BEETLE = material("#5d9a8a", "#3a675f", "#264540", "#162a28");
-const CHITIN = material("#f3eedf", "#d8d2c0", "#aea690", "#7b7461");
+const CHITIN = material("#f4efdf", "#d9cfb2", "#ab9d7c", "#73654a");
+/** Coin copper: brighter than the copper material so a small pile reads on dark ground. */
+const COIN_COPPER = material("#f2b37c", "#cf7f45", "#9a552b", "#62321a");
+/** Seaweed poultice: bright fronds, the pale linen pad and the dark twine that ties it. */
+const FROND = material("#a3c45e", "#739a3c", "#4e702b", "#30481b");
+const LINEN = material("#f3ecd6", "#d8ccaa", "#ab9e7c", "#776c52");
+const TWINE = material("#a57a4c", "#7d5733", "#5a3d22", "#3b2614");
 const TOAD = material("#b4be66", "#879441", "#5f6a2a", "#3c4319");
 const GLOW = material("#e4fff0", "#9ff0c4", "#56b993", "#2f7462");
 const QUARTZ = material("#f6fdff", "#d3eaf2", "#a0c3d0", "#6a8f9f");
@@ -144,27 +153,33 @@ function blob(
 
 // ---- currency ----------------------------------------------------------------------------
 
-/** One coin lying flat in 3/4 view: a thin edge under an elliptic face with a lit rim. */
+/**
+ * One coin lying flat in 3/4 view: a 2 px edge under an elliptic face with a raised rim,
+ * lit from the top-left, and an embossed ring in the middle (shadow above, light below).
+ */
 function coin(img: Image, cx: number, cy: number, m: Material): void {
-  eachInEllipse(cx, cy + 1.4, 5, 2.7, (x, y, nx) => px(img, x, y, nx < -0.45 ? m.shadow : m.deep));
-  eachInEllipse(cx, cy, 5, 2.7, (x, y, nx, ny) => {
+  eachInEllipse(cx, cy + 2, 6.5, 3.6, (x, y, nx) => px(img, x, y, nx < -0.4 ? m.shadow : m.deep));
+  eachInEllipse(cx, cy, 6.5, 3.6, (x, y, nx, ny) => {
     const d = nx * nx + ny * ny;
     const side = -(nx + ny * 0.8); // > 0 toward the top-left
     let c: Rgba = m.base;
-    if (d > 0.5) c = side > 0.25 ? m.light : side < -0.35 ? m.shadow : m.base;
-    else if (d < 0.12) c = m.shadow; // the stamped mark in the middle
+    if (d > 0.62)
+      c = side > 0.2 ? m.light : side < -0.3 ? m.shadow : m.base; // the rim
+    else if (d > 0.14 && d < 0.34) c = ny < 0 ? m.shadow : m.light; // the embossed ring
     px(img, x, y, c);
   });
-  px(img, Math.floor(cx) - 2, Math.floor(cy) - 1, lighten(m.light, 0.4)); // glint
+  const glint = lighten(m.light, 0.5);
+  px(img, Math.floor(cx) - 3, Math.floor(cy) - 2, glint);
+  px(img, Math.floor(cx) - 2, Math.floor(cy) - 2, glint);
 }
 
-/** A small pile of three coins, the same layout as the gold coin icon. */
+/** A small pile of three coins (the gold coin icon's layout), dark-rimmed to read at 1x. */
 function coinPile(m: Material): (img: Image) => void {
   return (img) => {
-    coin(img, 11, 12.5, m);
-    coin(img, 21, 15.5, m);
-    coin(img, 13, 21, m);
-    outline(img, { amount: 0.45 });
+    coin(img, 10.5, 11.5, m);
+    coin(img, 21.5, 14.5, m);
+    coin(img, 13, 21.5, m);
+    outline(img, { amount: 0.65 });
   };
 }
 
@@ -462,39 +477,51 @@ function crabClaw(img: Image): void {
   outline(img, { amount: 0.5 });
 }
 
+/**
+ * A spread bat wing, seen flat: the forearm rising from the torn-off shoulder (bottom-left)
+ * to the wrist with its hooked thumb claw, three long finger bones fanning out to the right
+ * and the dark leathery membrane between them cut into deep scallops, so it reads as a wing
+ * (not a leaf) even at 1x.
+ */
 function batWing(img: Image): void {
+  const shoulder: Point = [5, 25];
+  const wrist: Point = [13, 9];
   const tips: Point[] = [
-    [27, 6],
-    [27, 15],
-    [21, 24],
-    [11, 27],
+    [30, 6],
+    [29, 17],
+    [21, 27],
   ];
-  const wrist: Point = [7, 9];
-  // Membrane: scalloped between the finger tips.
-  eachInPolygon(
-    [
-      [6, 8],
-      [27, 5],
-      [23, 11],
-      [27, 15],
-      [21, 17],
-      [21, 24],
-      [15, 21],
-      [11, 27],
-      [8, 19],
-    ],
-    (x, y) => {
-      const d = Math.hypot(x - wrist[0], y - wrist[1]) / 24;
-      px(img, x, y, shadeOf(BAT, 0.7 - d * 0.5 + (hash2(x >> 1, y >> 1, 7) - 0.5) * 0.12));
-    },
+  // Membrane: shoulder, along the forearm to the wrist, out to the tips; between two tips
+  // (and from the last tip back to the shoulder) the edge bends in toward the wrist.
+  const edge: Point[] = [shoulder, wrist];
+  let prev: Point = tips[0] ?? wrist;
+  edge.push(prev);
+  for (const b of [...tips.slice(1), [8, 28] as Point]) {
+    const mx = (prev[0] + b[0]) / 2;
+    const my = (prev[1] + b[1]) / 2;
+    edge.push([mx + (wrist[0] - mx) * 0.38, my + (wrist[1] - my) * 0.38], b);
+    prev = b;
+  }
+  eachInPolygon(edge, (x, y) => {
+    const d = Math.hypot(x - wrist[0], y - wrist[1]) / 22;
+    // Lighter by the arm, darker toward the trailing edge, a little mottling.
+    px(img, x, y, shadeOf(BAT, 0.66 - d * 0.5 + (hash2(x >> 1, y >> 1, 7) - 0.5) * 0.1));
+  });
+  // Finger bones from the wrist, thinning out.
+  for (const t of tips) rod(img, wrist, t, 0.9, 0.4, BAT_BONE, -0.12);
+  // The forearm: thick, lit on top, a knuckle at the wrist.
+  rod(img, shoulder, wrist, 1.5, 1.1, BAT_BONE, -0.05);
+  eachInEllipse(wrist[0] + 0.5, wrist[1] + 0.5, 2.1, 2.1, (x, y, nx, ny) =>
+    px(img, x, y, shadeOf(BAT_BONE, domeLight(nx, ny) + 0.1)),
   );
-  // Finger bones from the wrist, and the leading arm bone along the top.
-  for (const t of tips) line(img, wrist[0] + 1, wrist[1] + 1, t[0], t[1], BAT.light);
-  line(img, 6, 8, 27, 5, mix(BAT.light, bone.shadow, 0.4));
-  // The thumb claw.
-  px(img, 5, 7, bone.base);
-  px(img, 4, 6, bone.light);
-  outline(img, { amount: 0.5 });
+  // The thumb claw, hooked over the wrist.
+  px(img, 12, 6, BAT_BONE.base);
+  px(img, 11, 5, BAT_BONE.light);
+  px(img, 10, 5, BAT_BONE.shadow);
+  // The torn shoulder end.
+  px(img, 4, 26, hex("#7a2e2a"));
+  px(img, 5, 27, hex("#4f1d1a"));
+  outline(img, { amount: 0.62 });
 }
 
 /** Thick discs along a path: a curved horn or tusk, shaded per disc from the top-left. */
@@ -584,22 +611,51 @@ function beetleCarapace(img: Image): void {
   outline(img, { amount: 0.45 });
 }
 
+/**
+ * A pale curved shell plate, like a piece of the crawler's back: an arch that ends in two
+ * hooked points, split by dark grooves into four segments, each with a spine on its outer
+ * edge and a lit ridge, so the silhouette (a spiked crescent) reads at 1x.
+ */
 function crawlerChitin(img: Image): void {
-  // Three overlapping arched bands, like the shingled plates of a shell: back to front.
-  for (let i = 0; i < 3; i++) {
-    const cy = 12 + i * 5;
-    const rx = 11 - Math.abs(i - 1) * 1.5;
-    eachInEllipse(16, cy, rx, 4.6, (x, y, nx, ny) => {
-      if (i < 2 && y > cy + 2) return;
-      px(img, x, y, shadeOf(CHITIN, 0.95 - (ny + 1) * 0.42 - nx * nx * 0.25 - nx * 0.12));
-    });
-    // A spine at each end of the band.
-    const spine = Math.ceil(16 - rx - 0.5) - 1;
-    px(img, spine, cy, CHITIN.base);
-    px(img, 31 - spine, cy, CHITIN.shadow);
+  const CX = 16;
+  const CY = 22;
+  const OUT_X = 14;
+  const OUT_Y = 14;
+  const IN_X = 8;
+  const IN_Y = 6.5;
+  // The arch: inside the outer ellipse, outside the inner one, above the centre line.
+  eachInEllipse(CX, CY, OUT_X, OUT_Y, (x, y, nx, ny) => {
+    const ix = (x + 0.5 - CX) / IN_X;
+    const iy = (y + 0.5 - (CY + 1.5)) / IN_Y;
+    if (ix * ix + iy * iy <= 1 || ny > 0.12) return;
+    const rad = Math.sqrt(nx * nx + ny * ny);
+    const ang = Math.atan2(-ny, nx) / Math.PI; // 1 at the left end, 0 at the right end
+    const seg = ang * 4;
+    const inSeg = seg - Math.floor(seg); // 0 .. 1 across a segment
+    // Across the band: lit outer rim, darker inner edge; lit toward the top-left.
+    let lvl = 0.5 + (rad - 0.75) * 1.1 + (ang - 0.5) * 0.3;
+    if (inSeg < 0.12)
+      lvl = 0.02; // the groove between two segments
+    else if (inSeg < 0.25) lvl += 0.3; // the lit edge of the next segment
+    if (Math.abs(rad - 0.86) < 0.05 && inSeg > 0.3) lvl += 0.2; // a ridge along the arch
+    px(img, x, y, shadeOf(CHITIN, lvl));
+  });
+  // A spine on the outer edge of each segment, and the hooked points at both ends.
+  for (const t of [0.125, 0.375, 0.625, 0.875]) {
+    const ang = t * Math.PI;
+    const x = Math.round(CX + Math.cos(ang) * (OUT_X + 1));
+    const y = Math.round(CY - Math.sin(ang) * (OUT_Y + 1));
+    px(img, x, y, t > 0.5 ? CHITIN.light : CHITIN.base);
+    px(img, x + (t > 0.5 ? -1 : 1), y - 1, t > 0.5 ? CHITIN.light : CHITIN.shadow);
   }
-  line(img, 16, 7, 16, 25, CHITIN.light); // the ridge down the middle
-  outline(img, { amount: 0.5 });
+  for (const [x, y, c] of [
+    [3, 24, CHITIN.light],
+    [3, 25, CHITIN.base],
+    [28, 24, CHITIN.shadow],
+    [28, 25, CHITIN.shadow],
+  ] as const)
+    px(img, x, y, c);
+  outline(img, { amount: 0.6 });
 }
 
 function toadGland(img: Image, rand: Rng): void {
@@ -770,38 +826,68 @@ function glowcapBroth(img: Image): void {
   outline(img, { amount: 0.5 });
 }
 
+/**
+ * A healing compress: a folded pale linen pad (3/4 view: lit top, shaded front) with a broad
+ * wavy kelp frond laid across it on the diagonal, tied down with dark twine, salt crystals
+ * on the frond. The pale cloth under the green reads at 1x on grass and in a dark slot.
+ */
 function seaweedPoultice(img: Image, rand: Rng): void {
-  // A kelp-wrapped packet (3/4: lit top, shadowed front) tied with twine.
-  const top: Point[] = [
-    [8, 10],
-    [24, 10],
-    [26, 18],
-    [6, 18],
-  ];
-  eachInPolygon(top, (x, y) =>
-    px(img, x, y, shadeOf(KELP, 0.7 - (x - 6) * 0.012 + (y - 10) * -0.01)),
-  );
-  rect(img, 6, 18, 20, 7, KELP.shadow);
-  rect(img, 6, 18, 20, 1, KELP.deep);
-  rect(img, 25, 18, 1, 7, KELP.deep);
-  // Leaf veins.
-  line(img, 9, 12, 15, 16, KELP.base);
-  line(img, 18, 11, 23, 16, KELP.shadow);
-  // Frond ends poking out at the corners.
-  line(img, 7, 10, 4, 7, KELP.base);
-  line(img, 25, 11, 28, 8, KELP.shadow);
-  // Twine: one band across, one down the front, with a knot on top.
-  line(img, 6, 15, 26, 15, rope.base);
-  line(img, 16, 10, 16, 24, rope.base);
-  line(img, 17, 18, 17, 24, rope.shadow);
-  rect(img, 15, 14, 3, 2, rope.light);
-  // Salt specks.
-  for (let i = 0; i < 6; i++) {
-    const x = 8 + Math.floor(rand() * 16);
-    const y = 11 + Math.floor(rand() * 6);
-    if (x !== 16) px(img, x, y, hex("#f2f2ea"));
+  // The pad: its top face (a soft rectangle with a fold), then its front in shade.
+  eachInRect(6, 10, 20, 12, (x, y) => {
+    const corner = (x === 6 || x === 25) && (y === 10 || y === 21);
+    if (corner) return;
+    let lvl = 0.62 - (x - 6) * 0.012 - (y - 10) * 0.01;
+    if (y === 10 || x === 6) lvl += 0.25;
+    if (y === 15) lvl -= 0.25; // the fold
+    if (y === 16) lvl += 0.12;
+    px(img, x, y, shadeOf(LINEN, lvl));
+  });
+  eachInRect(6, 22, 20, 3, (x, y) => {
+    if ((x === 6 || x === 25) && y === 24) return;
+    px(
+      img,
+      x,
+      y,
+      y === 22 ? LINEN.shadow : x > 22 ? LINEN.deep : mix(LINEN.shadow, LINEN.deep, 0.4),
+    );
+  });
+  // The frond: a broad leaf with wavy edges from bottom-left to top-right, past the pad.
+  eachRotated(16, 16.5, -33, 17, (x, y, lx, ly) => {
+    if (lx < -14 || lx > 14) return;
+    const t = (lx + 14) / 28;
+    const off = ly - Math.sin(lx * 0.55) * 0.9;
+    const w = 3.6 * Math.sin(Math.min(1, t * 1.1 + 0.05) * Math.PI) + 0.4;
+    if (Math.abs(off) > w) return;
+    let lvl = 0.62 - (off / w) * 0.28;
+    if (Math.abs(off) < 0.55) lvl += 0.25; // the midrib
+    if (Math.floor(lx + 20) % 5 === 0 && Math.abs(off) > 1) lvl -= 0.2; // ribs
+    px(img, x, y, shadeOf(FROND, lvl));
+  });
+  // Green stains where the wet frond soaks through the cloth.
+  for (const [x, y] of [
+    [8, 21],
+    [9, 22],
+    [23, 11],
+    [24, 12],
+    [20, 20],
+  ] as const)
+    px(img, x, y, mix(LINEN.shadow, FROND.shadow, 0.6));
+  // Twine: one band across the pad and down its front, knotted on the frond.
+  line(img, 16, 10, 16, 24, TWINE.base);
+  line(img, 17, 22, 17, 24, TWINE.shadow);
+  rect(img, 15, 15, 3, 3, TWINE.shadow);
+  px(img, 15, 15, TWINE.light);
+  px(img, 16, 15, TWINE.base);
+  line(img, 14, 18, 12, 20, TWINE.base); // the loose ends
+  line(img, 18, 18, 19, 20, TWINE.shadow);
+  // Salt crystals on the frond.
+  for (let i = 0; i < 7; i++) {
+    const x = 7 + Math.floor(rand() * 19);
+    const y = 9 + Math.floor(rand() * 14);
+    const onFrond = get(img, x, y)?.[1] === FROND.base[1] || get(img, x, y)?.[1] === FROND.light[1];
+    if (Math.abs(x - 16) > 1 && onFrond) px(img, x, y, hex("#fbfbf4"));
   }
-  outline(img, { amount: 0.5 });
+  outline(img, { amount: 0.62 });
 }
 
 // ---- tools -------------------------------------------------------------------------------
@@ -823,27 +909,48 @@ function fishingRod(img: Image): void {
   outline(img, { amount: 0.5 });
 }
 
+/**
+ * A coil of thick twisted rope in 3/4 view: three stacked turns, each with a dark seam where
+ * it rests on the one below, the hole in the middle in shadow, diagonal strands along the
+ * rope and the loose end lying on the ground at the bottom-right, whipped with twine.
+ */
 function ropeCoil(img: Image): void {
-  // Two stacked turns of a twisted rope, the lower one first.
-  for (const cy of [19.5, 15.5]) {
-    eachInEllipse(16, cy, 11, 6.8, (x, y, nx, ny) => {
-      const ix = (x + 0.5 - 16) / 7.4;
-      const iy = (y + 0.5 - cy) / 3.4;
+  const RX = 12;
+  const RY = 6.6;
+  const HOLE_X = 5;
+  const HOLE_Y = 2.5;
+  // The loose end first: it leaves the bottom turn and lies on the ground.
+  rod(img, [20, 24], [27, 28], 2.2, 2, rope, -0.05);
+  for (const [x, y] of [
+    [22, 25],
+    [24, 26],
+  ] as const)
+    px(img, x, y, rope.deep);
+  rect(img, 26, 27, 2, 2, TWINE.shadow);
+  px(img, 26, 27, TWINE.light);
+  // From the bottom turn up: each one is drawn over the one below it, 3 px higher.
+  for (const cy of [21, 18, 15]) {
+    eachInEllipse(16, cy, RX, RY, (x, y, nx, ny) => {
+      const ix = (x + 0.5 - 16) / HOLE_X;
+      const iy = (y + 0.5 - cy) / HOLE_Y;
       if (ix * ix + iy * iy <= 1) return; // the hole
+      const rad = Math.sqrt(nx * nx + ny * ny);
+      const inner = 0.42;
+      const across = Math.min(1, Math.max(0, (rad - inner) / (1 - inner))); // 0 in .. 1 out
+      // A tube: lit on its top-left, dark toward the hole and the outer bottom.
+      let lvl = 0.5 + (1 - Math.abs(across - 0.45) * 2) * 0.28 - ny * 0.2 - nx * 0.06;
+      // Strands: a dark diagonal every few pixels along the rope.
       const ang = Math.atan2(ny, nx);
-      const rad = Math.sqrt(nx * nx + ny * ny); // 0.55 .. 1 across the rope
-      const across = (rad - 0.55) / 0.45; // 0 inner .. 1 outer
-      const twist = ((ang * 9 + across * 2.6) / Math.PI) % 2;
-      const tube = 1 - Math.abs(across - 0.5) * 2;
-      let lvl = 0.42 + tube * 0.3 - ny * 0.18;
-      if (twist > -0.15 && twist < 0.35) lvl -= 0.3;
+      if (Math.floor(((ang + Math.PI) / (2 * Math.PI)) * 40 + across * 2.2) % 3 === 0) lvl -= 0.28;
+      if (rad > 0.86 && ny > 0.35) lvl = 0.05; // the seam on the turn below
       px(img, x, y, shadeOf(rope, lvl));
     });
   }
-  // The loose end.
-  rod(img, [22, 23], [27, 27], 1.6, 1.4, rope);
-  px(img, 27, 28, rope.light);
-  outline(img, { amount: 0.5 });
+  // The hole: looking down into the coil, in shadow.
+  eachInEllipse(16, 15, HOLE_X, HOLE_Y, (x, y, _nx, ny) =>
+    px(img, x, y, ny < -0.2 ? rope.deep : darken(rope.deep, 0.35)),
+  );
+  outline(img, { amount: 0.6 });
 }
 
 function pickaxe(img: Image): void {
@@ -1045,7 +1152,7 @@ function smugglerTally(img: Image, _rand: Rng, seed: number): void {
 }
 
 export const ITEMS: RecipeBook = {
-  "currency/copper_coin": { kind: "item", draw: coinPile(copper) },
+  "currency/copper_coin": { kind: "item", draw: coinPile(COIN_COPPER) },
   "currency/silver_coin": { kind: "item", draw: coinPile(silver) },
   "materials/birch_log": { kind: "item", draw: birchLog },
   "materials/elm_log": { kind: "item", draw: elmLog },
