@@ -266,6 +266,9 @@ type World struct {
 	rooms   []room
 	roomOf  map[world.Pos]int32
 	doorFor game.Tick
+	// Areas (area.go): the area of each tile by sector (ids 1-based), worked out at start.
+	areas     map[uint64]*areaTiles
+	areaCount int32
 
 	// Magic (T1.9): spells by normalized words, and the index of the magic skill.
 	spellWords map[string]*content.Spell

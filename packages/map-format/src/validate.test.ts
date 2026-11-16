@@ -757,17 +757,80 @@ describe("validateWorld", () => {
     ]);
 
     // A second gate splits the corner: the vault behind it (24..29) is bigger than the
-    // room before it (19..22), so both gates take the small room, each with its own
-    // outside. Refused: the vault would be guarded by no door.
-    const vault = gated();
-    for (let y = 19; y < 30; y++) setGround(vault.chunk, 23, y, "water_shallow");
-    setGround(vault.chunk, 23, 24, "dirt");
-    pushItem(vault.chunk, 23, 24, "forge_gate");
-    expect(messages(check(vault.island))).toContainEqual(
+    // room before it (19..22), so both gates take the small room and the vault is the
+    // second gate's outside. Refused: from the vault no way leads to the temple without
+    // keys (escape check), and the vault would be guarded by no door.
+    const vault = (): ReturnType<typeof gated> => {
+      const v = gated();
+      for (let y = 19; y < 30; y++) setGround(v.chunk, 23, y, "water_shallow");
+      setGround(v.chunk, 23, 24, "dirt");
+      pushItem(v.chunk, 23, 24, "forge_gate");
+      return v;
+    };
+    const doorErrors = (island: Island, c: ContentIndex = content): string[] => {
+      const root = mkdtempSync(join(tmpdir(), "map-format-"));
+      dirs.push(root);
+      writeWorldMeta(root, worldOf(island));
+      writeIsland(root, island);
+      return messages(validateWorld(root, { content: c })).filter((m) => m.includes("locked door"));
+    };
+    expect(doorErrors(vault().island)).toEqual([
       expect.stringContaining(
-        'locked door "forge_gate" at 23,24,7: it shares its room with a locked door whose outside meets its own only through another locked door, if at all (a vault no door guards, or a cycle of locked doors, refused for now) (the door at 18,20,7)',
+        'locked door "forge_gate" at 23,24,7: a side of it reaches no temple and no boat arrival without keys (on foot, out of rooms, by portals): whoever is there could be locked in (its side at 24,23,7)',
       ),
+    ]);
+    // A boat that arrives in the vault, or a teleport out of it, is a way out; a boat
+    // portal moves nobody.
+    const inVault = { x: 26, y: 26, z: 7 };
+    const route = { index: 0, id: "r", captain: "harbor_master", from: { x: 8, y: 21, z: 7 } };
+    expect(doorErrors(vault().island, { ...content, routes: [{ ...route, to: inVault }] })).toEqual(
+      [],
     );
+    const out = (kind: "teleport" | "boat"): Island => {
+      const v = vault().island;
+      v.portals.push({ id: "mini_out", kind, from: inVault, to: { x: 10, y: 22, z: 7 } });
+      return v;
+    };
+    expect(doorErrors(out("teleport"))).toEqual([]);
+    expect(doorErrors(out("boat"))).toHaveLength(1);
+  });
+
+  // A cycle of locked doors of one key is safe (docs/02 "Puertas con llave"): the vault
+  // behind the second gate gets a third gate of its own to the field. With a gate of
+  // another key there, the first key would open the vault's gate from inside it.
+  it("accepts a cycle of locked doors of one key, not of two", () => {
+    const cycle = (gate: string): Island => {
+      const v = gated();
+      for (let y = 19; y < 30; y++) setGround(v.chunk, 23, y, "water_shallow");
+      setGround(v.chunk, 23, 24, "dirt");
+      pushItem(v.chunk, 23, 24, "forge_gate");
+      setGround(v.chunk, 26, 18, "dirt");
+      pushItem(v.chunk, 26, 18, gate);
+      return v.island;
+    };
+    expect(messages(check(cycle("forge_gate"))).filter((m) => m.includes("locked door"))).toEqual(
+      [],
+    );
+    const gate = must(content.items.get("forge_gate"));
+    const items = new Map(content.items).set("vault_gate", {
+      ...gate,
+      id: "vault_gate",
+      lock: "vault",
+    });
+    const root = mkdtempSync(join(tmpdir(), "map-format-"));
+    dirs.push(root);
+    const island = cycle("vault_gate");
+    writeWorldMeta(root, worldOf(island));
+    writeIsland(root, island);
+    expect(
+      messages(validateWorld(root, { content: { ...content, items } })).filter((m) =>
+        m.includes("locked door"),
+      ),
+    ).toEqual([
+      expect.stringContaining(
+        'locked door "vault_gate" at 26,18,7: a player without its key gets into its room: a locked door of another key opens onto it from a room such a player reaches (the door at 23,24,7 opens onto it from its own room)',
+      ),
+    ]);
   });
 
   it("rejects chunks and tiles outside the island rectangle", () => {

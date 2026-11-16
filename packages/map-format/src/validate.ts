@@ -622,10 +622,12 @@ class WorldValidator {
    * Doors (docs/02 "Puertas con llave"; the server's initDoors refuses the same): one door
    * item per tile; a warning for a door placed open (it is open again after every
    * restart); a room behind every locked door (doorRooms, the server's walks), shared only
-   * by locked doors of the same key and the same outside; and nothing of the outside in a
-   * room: no temple (where players wake up), NPC, house, portal end, boat arrival or
-   * dialog teleport. Either the outside was taken for the room, or a player would land
-   * behind the door. Spawns may live in a room (a guarded vault).
+   * by locked doors of the same key, and the escape check (every side of every locked door
+   * reaches a temple or a boat arrival without keys; no player gets into a room without
+   * its key); and nothing of the outside in a room: no temple (where players wake up), NPC,
+   * house, portal end, boat arrival or dialog teleport. Either the outside was taken for
+   * the room, or a player would land behind the door. Spawns may live in a room (a guarded
+   * vault).
    */
   private checkDoors(): void {
     const locked: { pos: Position; lock: string; id: string; file: string }[] = [];
@@ -662,21 +664,39 @@ class WorldValidator {
         }
       }
     }
-    // A house is no street: the walk between the outsides of two doors does not cross one.
+    // The escape check: a house is no street (its tiles are walls of the areas), the world
+    // is the temples and the boat arrivals, and a portal that moves players leads out of
+    // an area (a boat portal moves nobody).
     const houses = new Set<string>();
-    for (const island of this.world.islands.values())
+    const starts: Position[] = [];
+    const portals: { from: Position; to: Position }[] = [];
+    for (const island of this.world.islands.values()) {
       for (const h of island.houses)
         for (const r of h.rects)
           for (const [x, y] of tilesOf(r)) houses.add(formatPos({ x, y, z: r.z }));
-    const { behind, findings } = doorRooms(this.tiles, this.content, locked, houses);
+      starts.push(island.meta.temple);
+      for (const p of island.portals) if (p.kind !== "boat") portals.push(p);
+    }
+    for (const r of this.content.routes) starts.push(r.to);
+    const { behind, findings } = doorRooms(this.tiles, this.content, locked, {
+      houses,
+      starts,
+      portals,
+    });
     for (const f of findings) {
       const d = locked.find((l) => formatPos(l.pos) === formatPos(f.door));
       if (!d) continue;
-      const other = f.other ? ` (the door at ${formatPos(f.other)})` : "";
+      const other =
+        f.error === "bypass" && f.other
+          ? ` (the door at ${formatPos(f.other)} opens onto it from its own room)`
+          : f.other
+            ? ` (the door at ${formatPos(f.other)})`
+            : "";
+      const side = f.side ? ` (its side at ${formatPos(f.side)})` : "";
       this.err(
         d.file,
         ["items"],
-        `locked door "${d.id}" at ${formatPos(f.door)}: ${DOOR_ROOM_ERRORS[f.error]}${other}`,
+        `locked door "${d.id}" at ${formatPos(f.door)}: ${DOOR_ROOM_ERRORS[f.error]}${other}${side}`,
         f.door,
       );
     }

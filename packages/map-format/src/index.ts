@@ -19,14 +19,12 @@ export type { ContentIndex, ItemInfo, TeleportInfo } from "./content.ts";
 export {
   DOOR_ROOM_ERRORS,
   DOOR_ROOM_SEARCH,
-  SAME_OUTSIDE_SEARCH,
   doorRoom,
   doorRooms,
   doorsOn,
   hasLockedDoor,
-  sameOutside,
 } from "./doors.ts";
-export type { DoorRoom, DoorRoomError, DoorRoomFinding, DoorRooms } from "./doors.ts";
+export type { DoorRoom, DoorRoomError, DoorRoomFinding, DoorRooms, DoorWorld } from "./doors.ts";
 export { Reporter, formatDiagnostic, formatPath } from "./diagnostics.ts";
 export type { Diagnostic, PathSegment } from "./diagnostics.ts";
 export * from "./houses.ts";

@@ -336,14 +336,21 @@ func (w *World) DoorRoomSize(door world.Pos) int {
 
 // Why a locked door has no room (doorRoom), for errors.Is in tests.
 var (
-	ErrDoorWalled       = errDoorWalled
-	ErrDoorInTheOpen    = errDoorInTheOpen
-	ErrDoorTruncated    = errDoorTruncated
-	ErrDoorTie          = errDoorTie
-	ErrDoorOtherKey     = errDoorOtherKey
-	ErrDoorOtherOutside = errDoorOtherOutside
-	ErrDoorOutsideFar   = errDoorOutsideFar
+	ErrDoorWalled    = errDoorWalled
+	ErrDoorInTheOpen = errDoorInTheOpen
+	ErrDoorTruncated = errDoorTruncated
+	ErrDoorTie       = errDoorTie
+	ErrDoorOtherKey  = errDoorOtherKey
+	ErrDoorNoEscape  = errDoorNoEscape
+	ErrDoorBypassed  = errDoorBypassed
 )
+
+// AreaOf returns the area of p (area.go; tests only): 0 for none.
+func (w *World) AreaOf(p world.Pos) int32 { return w.areaOf(p) }
+
+// Areas returns how many areas the map has and how many sectors hold a tile of one
+// (tests only: the memory of the index, docs/07).
+func (w *World) Areas() (areas int32, sectors int) { return w.areaCount, len(w.areas) }
 
 // MarketViewers returns how many open market windows show item's book (mkWatch).
 func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }

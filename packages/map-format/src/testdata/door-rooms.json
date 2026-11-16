@@ -1,5 +1,5 @@
 {
-  "_comment": "Rooms behind locked doors (docs/02-game-design.md \"Puertas con llave\"), drawn on floor 7 from (0,0). Read by doors.test.ts here and by server/internal/session (TestDoorRoomsFixture), so make validate and the server agree on every room and on every locked door they refuse. Tiles: . grass; T grass and the island temple (the server wants it outside every room); # wall; D locked door, closed; d locked door, placed open; K locked door of another key, closed; P plain door, closed; X plain door on a tile that a wall blocks too; space: no tile. {\"repeat\": n, \"row\": r} stands for n rows r, and {\"repeat\": n, \"rows\": [r1, r2, ...]} for those rows n times. rooms: tiles behind each locked door by \"x,y\"; error: why the first refused locked door (map order: chunk by chunk, row by row) is refused: walled (no side), open (one side), truncated (two sides or more bigger than 4096 tiles), tie (the two biggest sides have the same size), key (it shares its room with a locked door of another key), outside (it shares its room with a locked door whose outside meets its own only through another locked door, if at all: a vault no door guards, or a cycle of locked doors, refused for now) or far (it shares its room with a locked door whose outside a walk exploring 4 x 4096 tiles does not reach).",
+  "_comment": "Rooms behind locked doors (docs/02-game-design.md \"Puertas con llave\"), drawn on floor 7 from (0,0). Read by doors.test.ts here and by server/internal/session (TestDoorRoomsFixture), so make validate and the server agree on every room and on every locked door they refuse. Tiles: . grass; T grass and the island temple (the world of the escape check; without a T the temple is the first tile of . T d P K, row by row, as server worldtest draws it); # wall; D locked door, closed; d locked door, placed open; K locked door of another key, closed; P plain door, closed; X plain door on a tile that a wall blocks too; space: no tile. {\"repeat\": n, \"row\": r} stands for n rows r, and {\"repeat\": n, \"rows\": [r1, r2, ...]} for those rows n times. portals: teleports on floor 7 by \"x,y\" (an edge of the escape check from the area of from to the area of to). rooms: tiles behind each locked door by \"x,y\"; error: why the first refused locked door is refused. First each door in map order (chunk by chunk, row by row): walled (no side), open (one side), truncated (two sides or more bigger than 4096 tiles), tie (the two biggest sides have the same size) or key (it shares its room with a locked door of another key). Then, with every room worked out, the escape check: escape (a side of a door reaches no temple without keys, on foot, out of rooms through their doors and by portals: a vault no door guards) and then bypass (a player with every key but the door's gets into its room: a locked door of another key opens onto it from its own room).",
   "cases": [
     {
       "name": "a room behind a gate",
@@ -211,7 +211,7 @@
         "#.....#...#.....#",
         "#################"
       ],
-      "error": "outside"
+      "error": "escape"
     },
     {
       "name": "a hall with a front and a back door to the same field",
@@ -254,7 +254,7 @@
           "row": "......................................................................"
         }
       ],
-      "error": "outside"
+      "error": "escape"
     },
     {
       "name": "a cycle: a building with a back door to a yard with its own gate",
@@ -268,7 +268,11 @@
         "#...#.......#",
         "#############"
       ],
-      "error": "outside"
+      "rooms": {
+        "2,3": 9,
+        "9,3": 21,
+        "4,5": 9
+      }
     },
     {
       "name": "a long hall whose two gates are joined by a long walk round it",
@@ -294,7 +298,7 @@
       }
     },
     {
-      "name": "a hall too long for the walk between its gates",
+      "name": "a hall far longer still, its gates joined round it however far",
       "rows": [
         {
           "repeat": 19,
@@ -311,7 +315,94 @@
           "row": ".................................................................................................................................."
         }
       ],
-      "error": "far"
+      "rooms": {
+        "64,19": 151,
+        "64,171": 151
+      }
+    },
+    {
+      "name": "a cycle: a hall between a field and a vault with its own gate",
+      "rows": [
+        "###############",
+        "#.....T.......#",
+        "#.............#",
+        "#.............#",
+        "###D#######D###",
+        "#...#.........#",
+        "#...D.........#",
+        "#...#.........#",
+        "###############"
+      ],
+      "rooms": {
+        "3,4": 9,
+        "11,4": 27,
+        "4,6": 9
+      }
+    },
+    {
+      "name": "a cycle of locked doors of different keys",
+      "rows": [
+        "#############",
+        "#...........#",
+        "#.....T.....#",
+        "##D######K###",
+        "#...#.......#",
+        "#...D.......#",
+        "#...#.......#",
+        "#############"
+      ],
+      "error": "bypass"
+    },
+    {
+      "name": "a vault of another key behind a room behind a gate",
+      "rows": [
+        "##############",
+        "#..T..#...#..#",
+        "#.....D...K..#",
+        "#.....#...#..#",
+        "##############"
+      ],
+      "rooms": {
+        "6,2": 9,
+        "10,2": 6
+      }
+    },
+    {
+      "name": "a vault bigger than the room before it, with a teleport out of it",
+      "rows": [
+        "#################",
+        "#..T..#...#.....#",
+        "#.....D...D.....#",
+        "#.....#...#.....#",
+        "#################"
+      ],
+      "portals": [
+        {
+          "from": "15,2",
+          "to": "2,2"
+        }
+      ],
+      "rooms": {
+        "6,2": 9,
+        "10,2": 9
+      }
+    },
+    {
+      "name": "a vault bigger than the room before it, with a teleport into it only",
+      "rows": [
+        "#################",
+        "#..T..#...#.....#",
+        "#.....D...D.....#",
+        "#.....#...#.....#",
+        "#################"
+      ],
+      "portals": [
+        {
+          "from": "2,1",
+          "to": "15,2"
+        }
+      ],
+      "error": "escape"
     }
   ]
 }
