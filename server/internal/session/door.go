@@ -345,16 +345,6 @@ func (w *World) checkEscapes(locked []world.Pos) error {
 	return nil
 }
 
-// roomAllows reports whether a search for a free tile that started in room from (a
-// roomOf id, 0 for none) may put a creature on q: q lies in no room, or in that same one.
-// The searches by rings (freeNear, houseExit) do not follow walls: without this, a crowd
-// next to a locked door would put someone in the room behind it, where it opens the door
-// without the key.
-func (w *World) roomAllows(from int32, q world.Pos) bool {
-	r := w.roomOf[q]
-	return r == 0 || r == from
-}
-
 // newRoom indexes the tiles of a new room behind the locked door at p and returns its id.
 func (w *World) newRoom(p world.Pos, tiles []world.Pos) int32 {
 	w.rooms = append(w.rooms, room{door: p, at: tiles[0]})

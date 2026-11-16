@@ -674,17 +674,18 @@ func (w *World) homeIsland(town string) string {
 }
 
 // freeNear returns the walkable, unoccupied tile closest to p (by rings) within radius,
-// never one in the room behind a locked door (door.go) unless p is in that same room: the
-// rings do not follow walls, so a crowded tile next to a locked gate must not put anyone
-// on its other side. Nor one that stairs, a hole or a teleport leaves from (portal.go):
-// nobody stands on those.
+// only in the area of p (areaAllows, area.go): the rings do not follow walls, so a crowded
+// tile next to a locked gate must not put anyone on its other side (in the room behind
+// it), nor a crowded temple anyone in a pocket sealed by walls. From a tile of no area (a
+// house, a locked door) any tile in no room will do. Never one that stairs, a hole or a
+// teleport leaves from (portal.go): nobody stands on those.
 func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 	return w.freeAround(p, radius, false)
 }
 
 // freeAround is freeNear, also without house tiles if noHouse.
 func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bool) {
-	from := w.roomOf[p]
+	from := w.areaOf(p)
 	for r := 0; r <= radius; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -696,7 +697,7 @@ func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bo
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: p.Z}
-				if w.m.Walkable(q) && !w.occupied(q) && w.roomAllows(from, q) && !w.m.MovesOnStep(q) &&
+				if w.m.Walkable(q) && !w.occupied(q) && w.areaAllows(from, q) && !w.m.MovesOnStep(q) &&
 					(!noHouse || w.m.Flags(q)&world.FlagHouse == 0) {
 					return q, true
 				}

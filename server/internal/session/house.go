@@ -309,9 +309,10 @@ func (w *World) mayEnter(p *Player, to world.Pos) bool {
 }
 
 // houseExit is where a player that may not stay in h goes: its exit, or the closest
-// free tile around it outside every house, outside the rooms behind locked doors the
-// exit is not in and off stairs, holes and teleports (freeAround). With every tile taken,
-// the exit itself (never a portal's entrance: world.NewMap refuses that).
+// free tile around it outside every house, in the area of the exit (areaAllows: never in
+// the room behind a locked door, nor in a pocket sealed by walls) and off stairs, holes
+// and teleports (freeAround). With every tile taken, the exit itself (never a portal's
+// entrance: world.NewMap refuses that).
 func (w *World) houseExit(h *house) world.Pos {
 	if q, ok := w.freeAround(h.def.Exit, 3, true); ok {
 		return q

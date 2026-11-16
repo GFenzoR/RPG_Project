@@ -21,7 +21,7 @@ import (
 //     the same reach and in sight. Using it bare says a rope is needed.
 //   - A boat portal does nothing: boat travel is the captain's (travel.go).
 // The player lands on the portal's destination or, if it is taken, on the nearest free
-// tile within travel.arrival_radius (freeNear: never in the room behind a locked door, never
+// tile within travel.arrival_radius (freeAround: only in the area of the destination, never
 // on a tile a portal leaves from on step) that is no house tile. With no free tile the
 // move is refused (portal.blocked) and nothing changes. An attacker under its PvP lock
 // cannot reach a protection zone through a portal from outside one, like on foot.

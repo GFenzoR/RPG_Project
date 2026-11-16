@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -10,6 +11,41 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
+
+// pocketRows are a temple at (4,3) and, two rings north-west of it, a tile (2,1) sealed by
+// walls: no door, no way in on foot.
+var pocketRows = []string{
+	"#######",
+	"##.#..#",
+	"####..#",
+	"#...T.#",
+	"#.....#",
+	"#######",
+}
+
+// The search for a free tile by rings stays in the area it starts in (area.go): a crowded
+// temple does not put anyone in a pocket sealed by walls, the first free tile of the
+// second ring, but on the next one of the temple's own area (docs/02 "Puertas con llave").
+func TestFreeTileStaysInItsArea(t *testing.T) {
+	temple, pocket := pos(4, 3), pos(2, 1)
+	h := newHarness(t, worldtest.Map(t, 0, 0, 7, pocketRows...))
+	if a := h.w.AreaOf(temple); a == 0 || h.w.AreaOf(pocket) == 0 || h.w.AreaOf(pocket) == a ||
+		h.w.AreaOf(pos(4, 1)) != a || h.w.AreaOf(pos(1, 1)) != 0 {
+		t.Fatalf("areas: temple %d, pocket %d", h.w.AreaOf(temple), h.w.AreaOf(pocket))
+	}
+	for i, p := range []world.Pos{temple, pos(4, 2), pos(5, 2), pos(3, 3), pos(5, 3), pos(3, 4), pos(4, 4), pos(5, 4)} {
+		c := withPack(int64(9701+i), p)
+		c.Name = fmt.Sprintf("Crowd%d", i)
+		if _, b := h.joinChar(c); b.Pos() != p {
+			t.Fatalf("crowd at %v, want %v", b.Pos(), p)
+		}
+	}
+	late := withPack(9710, temple)
+	late.Name = "Late"
+	if _, p := h.joinChar(late); p.Pos() != pos(4, 1) {
+		t.Fatalf("late logged in at %v, want (4,1) by the temple, not the pocket %v", p.Pos(), pocket)
+	}
+}
 
 // The areas take every locked door and every house tile for a wall, and a plain door for
 // open ground: a room behind a gate is an area of its own, and the tiles of a house and a

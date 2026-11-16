@@ -7,7 +7,8 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 // every other door open when its tile lets creatures through (roomPassable). initAreas
 // numbers them once at start: the walls never change, and doors only open and close. A
 // room behind a locked door is one area (checkRooms keeps houses out of rooms). The escape
-// check of the locked doors (checkEscapes) works on areas. Nothing walks the map in the
+// check of the locked doors (checkEscapes) works on areas, and every search for a free
+// tile by rings stays in the area it starts in (areaAllows). Nothing walks the map in the
 // tick: areaOf is one map lookup.
 
 // areaTiles is the area of each tile of one sector (0: none), indexed like world.Sector.
@@ -73,4 +74,17 @@ func (w *World) setArea(p world.Pos, id int32) {
 		w.areas[k] = a
 	}
 	a[int(p.Y)%world.SectorSize*world.SectorSize+int(p.X)%world.SectorSize] = id
+}
+
+// areaAllows reports whether a search for a free tile by rings that started on a tile of
+// area from (areaOf, 0 when it started on none: a house tile, a locked door, a tile
+// nobody stands on) may put a creature on q: a tile of that same area or, from no area, a
+// tile in no room behind a locked door. The rings do not follow walls: without this, a
+// crowd next to a locked door would put someone in the room behind it (where it opens the
+// door without the key), and a crowded temple someone in a pocket sealed by walls.
+func (w *World) areaAllows(from int32, q world.Pos) bool {
+	if from != 0 {
+		return w.areaOf(q) == from
+	}
+	return w.roomOf[q] == 0
 }
