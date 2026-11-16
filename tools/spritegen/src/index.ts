@@ -16,12 +16,13 @@ import {
   textWidth,
 } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
-import { composite, rng, seedOf } from "./draw.ts";
+import { castShadow, composite, rng, seedOf } from "./draw.ts";
 import type { Recipe } from "./recipe.ts";
 import { RECIPES } from "./recipes/index.ts";
 
 export { RECIPES } from "./recipes/index.ts";
-export type { Recipe, RecipeBook, RecipeKind } from "./recipe.ts";
+export type { Recipe, RecipeBook, RecipeKind, ShadowOptions } from "./recipe.ts";
+export { UI_ICON_BOX } from "./recipe.ts";
 
 export const TILE = 32;
 
@@ -32,11 +33,14 @@ export function recipePaths(only?: string): string[] {
     .sort();
 }
 
-/** Draws one recipe into a fresh image of its size. */
+/** Draws one recipe into a fresh image of its size (a creature with its cast shadow). */
 export function render(path: string, recipe: Recipe = mustGet(path)): Image {
   const img = createImage(recipe.width ?? TILE, recipe.height ?? TILE);
   const seed = seedOf(path);
   recipe.draw(img, rng(seed), seed);
+  // Every creature of ours casts the shadow the Dungeon Crawl monsters have, so both
+  // sit on the map the same way (assets/README.md, "Sombra de las criaturas").
+  if (recipe.kind === "creature") castShadow(img, recipe.shadow);
   return img;
 }
 
@@ -72,18 +76,29 @@ export const OUTFIT_FRAME = /^outfits\/[a-z0-9_]+\/(n|e|s|w)_[0-9]+$/;
 export const EFFECT_FRAME = /^effects\/([a-z0-9_]+)\/([0-9]+)$/;
 
 /**
+ * Client interface icons, which the client finds by path (no data/ file names them):
+ * ui/<group>/<id>, such as the PvP marks ui/marks/aggressor (client/src/render/marks.ts).
+ */
+export const UI_ICON = /^ui\/[a-z0-9_]+\/[a-z0-9_]+$/;
+
+/**
  * Problems with the recipe set: paths no data/ file uses (and that are neither outfit nor
- * effect frames), and effect strips whose frames are not 0, 1, ... without a gap (the
- * client stops at the first missing frame).
+ * effect frames nor ui icons), ui icons that are not of kind "ui" (or the other way
+ * round), and effect strips whose frames are not 0, 1, ... without a gap (the client
+ * stops at the first missing frame).
  */
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
-  const problems = recipePaths()
-    .filter((p) => !used.has(p) && !OUTFIT_FRAME.test(p) && !EFFECT_FRAME.test(p))
-    .map(
-      (p) =>
+  const problems: string[] = [];
+  for (const p of recipePaths()) {
+    const ui = RECIPES[p]?.kind === "ui";
+    if (ui !== UI_ICON.test(p))
+      problems.push(`${p}: ui icons are exactly the ui/<group>/<id> paths of kind "ui"`);
+    else if (!ui && !used.has(p) && !OUTFIT_FRAME.test(p) && !EFFECT_FRAME.test(p))
+      problems.push(
         `${p}: no sprite field in data/ uses this path (and it is not an outfit or effect frame)`,
-    );
+      );
+  }
   const strips = new Map<string, number[]>();
   for (const p of recipePaths()) {
     const m = EFFECT_FRAME.exec(p);
