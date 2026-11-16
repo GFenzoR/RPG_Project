@@ -649,7 +649,13 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		w.equipmentChanged(p)
 	}
 	if gave {
-		w.gaveAway(p)
+		// Reservable only as a pile of its own or into what is reserved to p already
+		// (hold.go reserveGiven): never a stranger's pile or bag.
+		var root *Item
+		if r := landed.root(); r.onGround && (merge == nil && to.kind == locGround || w.heldFor(p, r)) {
+			root = r
+		}
+		w.gaveAway(p, root)
 	}
 	// KindOther, not KindItem: a move has no cooldown, and must not clear a refused use,
 	// gathering or crafting try (earlyTry).

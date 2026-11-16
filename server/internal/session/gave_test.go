@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 )
 
@@ -84,8 +86,11 @@ func (db *rowsDB) put(ss ...session.Snapshot) {
 	}
 }
 
-// wire is a harness option: the World's jobs go to the Saver (and to db.jobs).
+// wire is a harness option: the World's jobs go to the Saver (and to db.jobs). No
+// autosave runs: its first one falls on a random tick, and a row must be the snapshot
+// the test means.
 func (db *rowsDB) wire(c *session.Config) {
+	c.AutosaveEvery = session.DefaultAutosaveEvery * 1000
 	c.Save = func(s session.Snapshot) bool {
 		db.jobs = append(db.jobs, session.Job{Snapshot: s})
 		return db.saver.Submit(s)
@@ -97,8 +102,9 @@ func (db *rowsDB) wire(c *session.Config) {
 }
 
 // sync waits until the Saver has handled every job the loop submitted so far, hands its
-// acks to the loop (as app does) and returns the characters it tainted meanwhile (not
-// yet told to the loop).
+// acks to the loop (as app does) in one tick and returns the characters it tainted
+// meanwhile (not yet told to the loop). The loop does not run while it waits: the tick
+// the acks arrive in does not depend on how fast the Saver's goroutine is.
 func (db *rowsDB) sync(h *harness) []int64 {
 	db.t.Helper()
 	seq := uint64(len(db.jobs) + 1)
@@ -108,18 +114,8 @@ func (db *rowsDB) sync(h *harness) []int64 {
 	deadline := time.Now().Add(10 * time.Second) //nolint:forbidigo // bounds a wait on the Saver's goroutine
 	for {
 		db.mu.Lock()
-		acks := db.acks
-		db.acks = nil
+		done := slices.ContainsFunc(db.acks, func(a session.Snapshot) bool { return a.CharacterID == syncChar && a.Seq == seq })
 		db.mu.Unlock()
-		done := false
-		for _, a := range acks {
-			if a.CharacterID == syncChar {
-				done = done || a.Seq == seq
-				continue
-			}
-			h.sim.Command(h.w.Saved(a.CharacterID, a.Seq))
-		}
-		h.sim.Step()
 		if done {
 			break
 		}
@@ -128,6 +124,16 @@ func (db *rowsDB) sync(h *harness) []int64 {
 		}
 		time.Sleep(time.Millisecond) //nolint:forbidigo // polls the Saver's goroutine
 	}
+	db.mu.Lock()
+	acks := db.acks
+	db.acks = nil
+	db.mu.Unlock()
+	for _, a := range acks {
+		if a.CharacterID != syncChar {
+			h.sim.Command(h.w.Saved(a.CharacterID, a.Seq))
+		}
+	}
+	h.sim.Step()
 	var out []int64
 	for {
 		select {
@@ -147,6 +153,38 @@ func (db *rowsDB) saveNow(h *harness, cl *fakeClient) {
 	if ids := db.sync(h); len(ids) != 0 {
 		db.t.Fatalf("tainted %v", ids)
 	}
+}
+
+// rowSeq is the Seq of the row of character id: which snapshot of it the database has.
+func (db *rowsDB) rowSeq(id int64) uint64 {
+	db.t.Helper()
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	row, ok := db.rows[id]
+	if !ok {
+		db.t.Fatalf("character %d has no row", id)
+	}
+	return row.Seq
+}
+
+// preSeq is the Seq of the plain snapshot of character id the loop submitted last before
+// the last transfer that carries it: the save before that transfer (hold.go
+// transferSnapshot).
+func (db *rowsDB) preSeq(id int64) uint64 {
+	db.t.Helper()
+	last := -1
+	for i, j := range db.jobs {
+		if j.Transfer != nil && slices.ContainsFunc(j.Transfer.Snapshots, func(s session.Snapshot) bool { return s.CharacterID == id }) {
+			last = i
+		}
+	}
+	for i := last - 1; i >= 0; i-- {
+		if j := db.jobs[i]; j.Transfer == nil && j.Snapshot.CharacterID == id {
+			return j.Snapshot.Seq
+		}
+	}
+	db.t.Fatalf("no save of character %d before its last transfer", id)
+	return 0
 }
 
 // count is how many units of item the row of character id holds.
@@ -215,8 +253,9 @@ func TestDroppedTransferKeepsWhatWasThrownAway(t *testing.T) {
 		t.Fatalf("the database holds the sword %d times (Ana %d, Caio %d)", n,
 			db.count(a.CharacterID(), swordID), db.count(c.CharacterID(), swordID))
 	}
-	if db.count(a.CharacterID(), salveID) != 30 || db.count(a.CharacterID(), coinID) != 50 {
-		t.Fatal("Ana's row is not her state right before the rejected offer")
+	if db.count(a.CharacterID(), salveID) != 30 || db.count(a.CharacterID(), coinID) != 50 ||
+		db.rowSeq(a.CharacterID()) != db.preSeq(a.CharacterID()) {
+		t.Fatal("Ana's row is not her save right before the rejected offer")
 	}
 }
 
@@ -258,6 +297,9 @@ func TestDroppedTransferKeepsWhatWasPutInAStreetBag(t *testing.T) {
 	if n := db.count(a.CharacterID(), swordID) + db.count(c.CharacterID(), swordID); n != 1 {
 		t.Fatalf("the database holds the sword %d times (Ana %d, Caio %d)", n,
 			db.count(a.CharacterID(), swordID), db.count(c.CharacterID(), swordID))
+	}
+	if db.rowSeq(a.CharacterID()) != db.preSeq(a.CharacterID()) {
+		t.Fatal("Ana's row is not her save right before the rejected offer")
 	}
 }
 
@@ -329,8 +371,9 @@ func TestDroppedTransferKeepsTheWholeDialog(t *testing.T) {
 	if v := db.storage(a.CharacterID(), questKey); v != 2 {
 		t.Fatalf("Ana's row has the quest at %d, not completed: she can hand a new logbook in", v)
 	}
-	if db.count(a.CharacterID(), uint16(rope)) != 1 || db.count(a.CharacterID(), uint16(itemNum(t, h, nil, "bosun_logbook"))) != 0 {
-		t.Fatal("Ana's row is not her state right before the rejected trade")
+	if db.count(a.CharacterID(), uint16(rope)) != 1 || db.count(a.CharacterID(), uint16(itemNum(t, h, nil, "bosun_logbook"))) != 0 ||
+		db.rowSeq(a.CharacterID()) != db.preSeq(a.CharacterID()) {
+		t.Fatal("Ana's row is not her save right before the rejected trade")
 	}
 }
 
@@ -395,8 +438,8 @@ func TestDroppedTransferKeepsTheNPCSale(t *testing.T) {
 		t.Fatalf("Ana's row still has the %d pelts she sold; Caio's has their coins (%d)", n,
 			db.count(c.CharacterID(), uint16(coin)))
 	}
-	if db.count(a.CharacterID(), uint16(rope)) != 1 {
-		t.Fatal("Ana's row lost the rope of the rejected trade")
+	if db.count(a.CharacterID(), uint16(rope)) != 1 || db.rowSeq(a.CharacterID()) != db.preSeq(a.CharacterID()) {
+		t.Fatal("Ana's row is not her save right before the rejected trade")
 	}
 }
 
@@ -438,8 +481,8 @@ func TestDroppedHouseWriteKeepsWhatWasThrownAway(t *testing.T) {
 	if n := db.count(a.CharacterID(), salveID) + db.count(c.CharacterID(), salveID); n != 5 {
 		t.Fatalf("the database holds %d salves (Ana %d), want the 5 in Caio's row", n, db.count(a.CharacterID(), salveID))
 	}
-	if db.count(a.CharacterID(), swordID) != 1 {
-		t.Fatal("Ana's row lost the sword of the rejected house write")
+	if db.count(a.CharacterID(), swordID) != 1 || db.rowSeq(a.CharacterID()) != db.preSeq(a.CharacterID()) {
+		t.Fatal("Ana's row is not her save between the throw and the rejected house write")
 	}
 }
 
@@ -482,8 +525,9 @@ func TestSkippedTransferKeepsWhatThePartnerThrewAway(t *testing.T) {
 	if n := db.count(b.CharacterID(), swordID) + db.count(c.CharacterID(), swordID); n != 1 {
 		t.Fatalf("the database holds the sword %d times (Beto %d)", n, db.count(b.CharacterID(), swordID))
 	}
-	if db.count(b.CharacterID(), salveID) != 0 || db.count(b.CharacterID(), coinID) != 10 {
-		t.Fatal("Beto's row is not his state right before the skipped trade")
+	if db.count(b.CharacterID(), salveID) != 0 || db.count(b.CharacterID(), coinID) != 10 ||
+		db.rowSeq(b.CharacterID()) != db.preSeq(b.CharacterID()) {
+		t.Fatal("Beto's row is not his save right before the skipped trade")
 	}
 }
 
@@ -650,39 +694,53 @@ func TestSaveBeforeTransferIsFromTheThrowsCommand(t *testing.T) {
 	}
 }
 
-// A relogin while the old login is still online (the new connection takes it over and
-// closes the old one, LOGGED_IN_ELSEWHERE) with the snapshot of a throw pending: the old
-// login's final snapshot comes after the throw and replaces it, and the new login's first
-// transfer writes nothing before it. The takeover of a link-dead (pvpCarry) goes through
-// the same final snapshot.
+// A relogin while the old login is still in the world (the new connection takes it over
+// and closes the old one, LOGGED_IN_ELSEWHERE) with the snapshot of a throw pending: the
+// old login's final snapshot comes after the throw and replaces it, and the new login's
+// first transfer writes nothing before it. The same when the old login is link-dead under
+// its PvP lock (Leave in a fight): its takeover (pvpCarry) goes through the same final
+// snapshot.
 func TestReloginReplacesTheSaveBeforeTransfer(t *testing.T) {
-	log := &jobLog{}
-	h := newMarketHarness(t, log.wire)
-	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
-	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(swordID, 1, 1))
-	h.send(cs, createOffer(sell, salveID, 10, 4))
-	offer := h.w.MarketOffers(s.CharacterID())[0]
+	for _, way := range []string{"online", "link-dead"} {
+		t.Run(way, func(t *testing.T) {
+			log := &jobLog{}
+			h := newMarketHarness(t, log.wire, func(c *session.Config) { c.Balance.PvP = pvpRules() })
+			cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+			cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(swordID, 1, 1))
+			h.send(cs, createOffer(sell, salveID, 10, 4))
+			offer := h.w.MarketOffers(s.CharacterID())[0]
 
-	pack := openPack(t, h.harness, cb)
-	if evs := h.send(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
-		t.Fatalf("Bruno throws the sword away: %v", systemKeys(evs))
-	}
-	n := len(log.jobs)
-	again := withPack(b.CharacterID(), pos(0, 1))
-	again.Name = "Bruno"
-	cb2, _ := h.joinChar(again)
-	jobs := log.since(n)
-	if len(jobs) != 1 || jobs[0].Transfer != nil || !jobs[0].Snapshot.Final ||
-		countState(jobs[0].Snapshot.Inventory, swordID) != 0 || countState(jobs[0].Snapshot.Inventory, coinID) != 100 {
-		t.Fatalf("the relogin wrote %d jobs, want the old login's final snapshot after the throw", len(jobs))
-	}
-	if u := lastMarket(h.send(cb2, useBoard())); !u.GetOpen() {
-		t.Fatal("the market did not open")
-	}
-	n = len(log.jobs)
-	h.send(cb2, acceptOffer(offer, 1))
-	if jobs := log.since(n); len(jobs) != 1 || jobs[0].Transfer == nil {
-		t.Fatalf("the new login's first transfer wrote %d jobs", len(jobs))
+			pack := openPack(t, h.harness, cb)
+			if evs := h.send(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
+				t.Fatalf("Bruno throws the sword away: %v", systemKeys(evs))
+			}
+			n := len(log.jobs)
+			if way == "link-dead" {
+				h.sim.Command(gameFunc(func() { h.w.SetPvPLockForTest(b, h.sim.Tick()+20) }))
+				h.sim.Command(h.w.Leave(cb))
+				h.sim.Step()
+				if !b.LinkDead() || h.w.PlayerByCharacter(b.CharacterID()) != b || len(log.since(n)) != 0 {
+					t.Fatalf("Bruno link-dead %v in the world, %d jobs written", b.LinkDead(), len(log.since(n)))
+				}
+			}
+			again := withPack(b.CharacterID(), pos(0, 1))
+			again.Name = "Bruno"
+			cb2, _ := h.joinChar(again)
+			jobs := log.since(n)
+			if len(jobs) != 1 || jobs[0].Transfer != nil || !jobs[0].Snapshot.Final ||
+				countState(jobs[0].Snapshot.Inventory, swordID) != 0 || countState(jobs[0].Snapshot.Inventory, coinID) != 100 {
+				t.Fatalf("the relogin wrote %d jobs, want the old login's final snapshot after the throw", len(jobs))
+			}
+			h.sim.RunFor(2 * time.Second) // past the lock the link-dead login carried
+			if u := lastMarket(h.send(cb2, useBoard())); !u.GetOpen() {
+				t.Fatal("the market did not open")
+			}
+			n = len(log.jobs)
+			h.send(cb2, acceptOffer(offer, 1))
+			if jobs := log.since(n); len(jobs) != 1 || jobs[0].Transfer == nil {
+				t.Fatalf("the new login's first transfer wrote %d jobs", len(jobs))
+			}
+		})
 	}
 }
 
@@ -874,17 +932,17 @@ func TestGiftOutsideACommandKeepsNothingTakenOutOfTheHouse(t *testing.T) {
 	if ids := db.sync(h.harness); !slices.Equal(ids, []int64{a.CharacterID()}) {
 		t.Fatalf("tainted %v, want Ana", ids)
 	}
-	if db.count(a.CharacterID(), swordID) != 0 {
+	if db.count(a.CharacterID(), swordID) != 0 || db.rowSeq(a.CharacterID()) != db.preSeq(a.CharacterID()) {
 		t.Fatal("Ana's row has the sword the rejected house write took out: the house's row has it too")
 	}
 }
 
-// What leaves a house is freed by the ack of the house write that took it out, whatever
-// snapshot of the mover comes right before it: here one command takes the sword out of
-// the house to the street and gives Ana a gift that falls on the street (no command does
-// both today, hold.go), so the snapshot of the gift is numbered between the move and the
-// house write.
-func TestOnlyTheHouseWriteFreesWhatLeftTheHouse(t *testing.T) {
+// One command takes the sword out of the house to the street and gives Ana a gift that
+// falls on the street (as a rune of the house floor used from the street that kills a
+// quest monster does, hold.go): no snapshot of the gift is written apart. The house write
+// carries her state after both, and the sword and the gift stay reserved to her until
+// that write is confirmed, whatever older ack comes in between.
+func TestGiftAndHouseInOneCommandWaitForTheHouseWrite(t *testing.T) {
 	log := &jobLog{}
 	var logged bytes.Buffer
 	h := newHouseHarness(t, log.wire, logTo(&logged))
@@ -895,37 +953,151 @@ func TestOnlyTheHouseWriteFreesWhatLeftTheHouse(t *testing.T) {
 	if evs := h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(cottageDoor), 1)); len(systemKeys(evs)) != 0 {
 		t.Fatalf("Ana puts her sword in the house: %v", systemKeys(evs))
 	}
-	h.sim.Command(h.w.Saved(a.CharacterID(), lastJobSnapshot(t, log.jobs, a.CharacterID()).Seq))
+	before := lastJobSnapshot(t, log.jobs, a.CharacterID())
+	h.sim.Command(h.w.Saved(a.CharacterID(), before.Seq))
 	h.sim.Step()
-	cc, c := h.tenant("Caio", 0, pos(5, 5), stack(coinID, 1, 0))
+	cc, c := h.tenant("Caio", 0, pos(4, 6), stack(coinID, 1, 0)) // next to the street tiles of both
 
 	n := len(log.jobs)
 	h.sim.Command(h.w.InputAndGiftForTest(cl, moveItem(onTile(cottageDoor), swordID, 1, onTile(pos(4, 5)), 1), "test_bag", 1))
 	h.sim.Step()
 	jobs := log.since(n)
-	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
-		t.Fatalf("the command wrote %d jobs, want the snapshot of the gift then the house write", len(jobs))
+	if len(jobs) != 1 || jobs[0].Transfer == nil || len(jobs[0].Transfer.Houses) != 1 {
+		t.Fatalf("the command wrote %d jobs, want the house write alone", len(jobs))
 	}
 	if len(h.w.GroundAt(pos(4, 5))) != 1 || len(h.w.GroundAt(cottageExit)) != 1 {
 		t.Fatal("the sword is not on the street, or the gift did not fall")
 	}
-	if !strings.Contains(logged.String(), giftAndHouse) {
-		t.Fatalf("a command that gave something away and changed a house was not logged: %q", logged.String())
+	if strings.Contains(logged.String(), giftAndHouse) {
+		t.Fatalf("a gift reserved with the house write was logged: %q", logged.String())
 	}
-	pre, house := jobs[0].Snapshot, jobs0Snapshot(t, jobs[1], a.CharacterID())
+	house := jobs0Snapshot(t, jobs[0], a.CharacterID())
 	cp := openPack(t, h.harness, cc)
-	take := moveItem(onTile(pos(4, 5)), swordID, 1, inContainer(cp, 0), 1)
-	h.sim.Command(h.w.Saved(a.CharacterID(), pre.Seq))
+	takeSword := moveItem(onTile(pos(4, 5)), swordID, 1, inContainer(cp, 0), 1)
+	takeGift := moveItem(onTile(cottageExit), bagID, 1, inContainer(cp, 0), 1)
+	h.sim.Command(h.w.Saved(a.CharacterID(), house.Seq-1)) // an older ack frees neither
 	h.sim.Step()
-	if !hasKey(h.send(cc, take), "inventory.not_yours") {
-		t.Fatal("the ack of the snapshot of the gift freed the sword before the house write's ack")
+	for name, take := range map[string]*pb.ClientMessage{"sword": takeSword, "gift": takeGift} {
+		if !hasKey(h.send(cc, take), "inventory.not_yours") {
+			t.Fatalf("the %s was not reserved to Ana until the house write's ack", name)
+		}
 	}
 	h.sim.Command(h.w.Saved(a.CharacterID(), house.Seq))
 	h.sim.Step()
-	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
-		t.Fatalf("pick up after the house write's ack: %v", systemKeys(evs))
+	if evs := h.send(cc, takeSword); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
+		t.Fatalf("pick the sword up after the house write's ack: %v", systemKeys(evs))
+	}
+	if evs := h.send(cc, takeGift); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_bag") != 1 {
+		t.Fatalf("pick the gift up after the house write's ack: %v", systemKeys(evs))
 	}
 }
+
+// The same command with the sword taken into Ana's backpack, and that house write
+// rejected: Ana goes back to her save before the command, without the sword (the house's
+// row still has it), and the gift that fell on the street stays hers for good. A snapshot
+// of the gift written before the house write would hold the sword: it would be in two
+// rows.
+func TestGiftAndHouseInOneCommandKeepNothingTwice(t *testing.T) {
+	db := newRowsDB(t)
+	h := newHouseHarness(t, db.wire)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(salveID, 5, 1), stack(coinID, 100, 2),
+		stack(coinID, 100, 3))
+	h.rent(cl)
+	pack := openPack(t, h.harness, cl)
+	if evs := h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(cottageDoor), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana puts her sword in the house: %v", systemKeys(evs))
+	}
+	if ids := db.sync(h.harness); len(ids) != 0 {
+		t.Fatalf("tainted %v", ids)
+	}
+	last := db.rowSeq(a.CharacterID())
+	cc, _ := h.tenant("Caio", 0, pos(4, 6), stack(coinID, 1, 0)) // next to the exit
+
+	db.reject.Store(a.CharacterID())
+	n := len(db.jobs)
+	h.sim.Command(h.w.InputAndGiftForTest(cl, moveItem(onTile(cottageDoor), swordID, 1, inContainer(pack, 0), 1), "test_bag", 1))
+	h.sim.Step()
+	if h.w.CountItem(a, "test_sword") != 1 || len(h.w.GroundAt(cottageExit)) != 1 {
+		t.Fatal("Ana did not take her sword out of the house, or the gift did not fall")
+	}
+	if jobs := db.jobs[n:]; len(jobs) != 1 || jobs[0].Transfer == nil {
+		t.Fatalf("the command wrote %d jobs, want the house write alone", len(jobs))
+	}
+	if ids := db.sync(h.harness); !slices.Equal(ids, []int64{a.CharacterID()}) {
+		t.Fatalf("tainted %v, want Ana", ids)
+	}
+	if db.count(a.CharacterID(), swordID) != 0 || db.rowSeq(a.CharacterID()) != last {
+		t.Fatal("Ana's row is not her save before the command: it has the sword the house's row has too")
+	}
+	cp := openPack(t, h.harness, cc)
+	if !hasKey(h.send(cc, moveItem(onTile(cottageExit), bagID, 1, inContainer(cp, 0), 1)), "inventory.not_yours") {
+		t.Fatal("the gift of the rejected command was not kept from Caio")
+	}
+}
+
+// A give-away into something that cannot be reserved (a stranger's pile on the street) in
+// a command that also changes a house (the gift falls on Ana's house floor): the snapshot
+// of the give-away is written before the house write, as before, and the command is
+// logged as an error (hold.go settleGave). No command does this today.
+func TestGiftIntoAStrangersPileWithAHouseIsLogged(t *testing.T) {
+	log := &jobLog{}
+	var logged bytes.Buffer
+	h := newHouseHarness(t, log.wire, logTo(&logged))
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(salveID, 5, 1), stack(coinID, 100, 2),
+		stack(coinID, 100, 3))
+	h.rent(cl)
+	h.step(cl, N) // the door tile (3,4), a house tile, with the street (2..4, 5) within reach
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("test_salve"), 1, pos(2, 5)) }))
+	h.sim.Step()
+	h.sim.Command(h.w.Saved(a.CharacterID(), lastJobSnapshot(t, log.jobs, a.CharacterID()).Seq))
+	h.sim.Step()
+	pack := openPack(t, h.harness, cl)
+
+	n := len(log.jobs)
+	h.sim.Command(h.w.InputAndGiftForTest(cl, moveItem(inContainer(pack, 1), salveID, 0, onTile(pos(2, 5)), 5), "test_bag", 1))
+	h.sim.Step()
+	if g := h.w.GroundAt(pos(2, 5)); len(g) != 1 || len(h.w.GroundAt(cottageDoor)) != 1 {
+		t.Fatalf("the salves did not join the pile (%d piles), or the gift did not fall on the house floor", len(g))
+	}
+	jobs := log.since(n)
+	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
+		t.Fatalf("the command wrote %d jobs, want the snapshot of the give-away then the house write", len(jobs))
+	}
+	if pre := jobs[0].Snapshot; pre.CharacterID != a.CharacterID() || countState(pre.Inventory, salveID) != 0 {
+		t.Fatalf("the snapshot before the house write is not Ana's after the give-away: %+v", pre)
+	}
+	if !strings.Contains(logged.String(), giftAndHouse) {
+		t.Fatalf("a give-away into a stranger's pile with a house change was not logged: %q", logged.String())
+	}
+}
+
+// A command that gives something away and then makes a transfer of its own (no command
+// does: a transfer checks first that everything fits) is logged as an error (hold.go
+// transferSnapshot); a give-away of an earlier command of the same tick is not (the
+// start of the next command settles it).
+func TestTransferAfterAGiftOfItsCommandIsLogged(t *testing.T) {
+	var logged bytes.Buffer
+	h := newMarketHarness(t, logTo(&logged))
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	h.sim.Command(gameFunc(func() {
+		h.w.SetCapacityForTest(s, 0)
+		h.w.GiveForTest(s, "test_sword", 1) // falls at her feet
+		h.w.SetCapacityForTest(s, 1_000_000)
+	}))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	if len(h.w.MarketOffers(s.CharacterID())) != 1 || strings.Contains(logged.String(), giftThenTransfer) {
+		t.Fatalf("%d offers after a gift of another command, logged %q", len(h.w.MarketOffers(s.CharacterID())), logged.String())
+	}
+	h.sim.Command(h.w.GiftAndInputForTest(cs, "test_sword", 1, createOffer(sell, salveID, 10, 4)))
+	h.sim.Step()
+	if len(h.w.MarketOffers(s.CharacterID())) != 2 || !strings.Contains(logged.String(), giftThenTransfer) {
+		t.Fatalf("a transfer after a gift of its own command: %d offers, logged %q", len(h.w.MarketOffers(s.CharacterID())), logged.String())
+	}
+}
+
+// giftThenTransfer is the error logged when a transfer follows a give-away of its own
+// command (hold.go transferSnapshot).
+const giftThenTransfer = "a transfer follows a give-away of its own command"
 
 // giftAndHouse is the error logged when one command gives something away and changes a
 // house (hold.go settleGave).
@@ -979,4 +1151,202 @@ func countState(list []session.ItemState, item uint16) int {
 		n += countState(s.Items, item)
 	}
 	return n
+}
+
+// A quest reward that does not fit falls on Ana's house floor in questRecheck, after
+// checkHouses wrote the tick's house changes: that house write goes out in the same tick,
+// with her snapshot, not with whatever command flushes next (whose player did not change
+// the house).
+func TestQuestRewardOnAHouseFloorIsWrittenInItsTick(t *testing.T) {
+	log := &jobLog{}
+	q, err := content.ParseQuest([]byte(`{id: fetch, name: quest.fetch.name,
+		steps: [{id: salves, complete_when: {has_item: {item: test_salve, count: 6}}}],
+		rewards: [{item: test_sword}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newHouseHarness(t, log.wire, func(c *session.Config) {
+		c.Quests = content.Quests{q.ID: q}
+		c.AutosaveEvery = session.DefaultAutosaveEvery * 1000 // no autosave writes the house first
+	})
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(salveID, 5, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	h.rent(cl)
+	h.step(cl, N) // the door tile (3,4), a house tile
+
+	n := len(log.jobs)
+	h.sim.Command(gameFunc(func() {
+		a.SetStorageForTest("quest.fetch", int64(quest.InProgress))
+		h.w.GiveForTest(a, "test_salve", 1) // the sixth salve: the step is done at the end of the tick
+		h.w.SetCapacityForTest(a, 0)        // and the reward does not fit
+	}))
+	h.sim.Step()
+	if st, _ := h.w.QuestState(a, "fetch"); st != quest.Completed || len(h.w.GroundAt(cottageDoor)) != 1 {
+		t.Fatalf("quest %v, %d items on the house floor", st, len(h.w.GroundAt(cottageDoor)))
+	}
+	jobs := log.since(n)
+	if len(jobs) != 1 || jobs[0].Transfer == nil || len(jobs[0].Transfer.Houses) != 1 ||
+		len(jobs[0].Transfer.Houses[0].Items) != 1 || jobs[0].Transfer.Houses[0].Items[0].Item.ItemID != swordID {
+		t.Fatalf("the tick of the reward wrote %d jobs, want the house write with the sword", len(jobs))
+	}
+	if s := jobs0Snapshot(t, jobs[0], a.CharacterID()); s.Storage["quest.fetch"] != int64(quest.Completed) {
+		t.Fatalf("Ana's snapshot in the house write has the quest at %d", s.Storage["quest.fetch"])
+	}
+}
+
+// The snapshot kept for the next transfer is the state at the end of the command, or of
+// the tick, of the give-away (hold.go settleGivers): a change of the player later in that
+// tick, or in the next one before its command, is not in it.
+func TestSaveBeforeTransferIsFromTheGiftsCommandOrTick(t *testing.T) {
+	for _, way := range []string{"command", "tick"} {
+		t.Run(way, func(t *testing.T) {
+			log := &jobLog{}
+			h := newMarketHarness(t, log.wire)
+			cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+			cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(swordID, 1, 1))
+			h.send(cs, createOffer(sell, salveID, 10, 4))
+			offer := h.w.MarketOffers(s.CharacterID())[0]
+			pack := openPack(t, h.harness, cb)
+			more := gameFunc(func() { h.w.GiveForTest(b, "copper_coin", 7) })
+
+			if way == "command" {
+				// The throw, then 7 coins in the same tick.
+				h.input(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1))
+				h.sim.Command(more)
+				h.sim.Step()
+			} else {
+				// A gift that falls outside a command; 7 coins in the next tick, before the
+				// purchase.
+				h.sim.Command(gameFunc(func() {
+					h.w.SetCapacityForTest(b, 0)
+					h.w.GiveForTest(b, "test_bag", 1)
+					h.w.SetCapacityForTest(b, 1_000_000)
+				}))
+				h.sim.Step()
+				h.sim.Command(more)
+			}
+			n := len(log.jobs)
+			h.send(cb, acceptOffer(offer, 1))
+			jobs := log.since(n)
+			if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
+				t.Fatalf("a transfer after the give-away = %d jobs, want the snapshot then the transfer", len(jobs))
+			}
+			if pre := jobs[0].Snapshot; pre.CharacterID != b.CharacterID() || countState(pre.Inventory, coinID) != 100 {
+				t.Fatalf("the snapshot before the transfer has %d coins, want the 100 from before the later 7",
+					countState(pre.Inventory, coinID))
+			}
+		})
+	}
+}
+
+// queueGate is a harness option: while full is set, the persistence queue takes no job
+// (Config.Save and Config.Transfer refuse it, as a full Saver queue does). Put it before
+// the option it wraps (rowsDB.wire): the harness applies its options last first.
+func queueGate(full *atomic.Bool) option {
+	return func(c *session.Config) {
+		save, transfer := c.Save, c.Transfer
+		c.Save = func(s session.Snapshot) bool { return !full.Load() && save(s) }
+		c.Transfer = func(tr session.Transfer) bool { return !full.Load() && transfer(tr) }
+	}
+}
+
+// With the queue full, the snapshot of a throw and the transfer behind it both wait in
+// the loop (World.retry), in that order, and go out in that order once the queue takes
+// jobs again.
+func TestQueueFullKeepsTheSaveBeforeTheTransferFirst(t *testing.T) {
+	var full atomic.Bool
+	db := newRowsDB(t)
+	h := newMarketHarness(t, queueGate(&full), db.wire)
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(swordID, 1, 1))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	offer := h.w.MarketOffers(s.CharacterID())[0]
+	db.saveNow(h.harness, cb)
+	pack := openPack(t, h.harness, cb)
+	if evs := h.send(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Bruno throws the sword away: %v", systemKeys(evs))
+	}
+
+	full.Store(true)
+	n := len(db.jobs)
+	h.send(cb, acceptOffer(offer, 1))
+	if len(db.jobs) != n || h.w.PendingJobs() != 2 {
+		t.Fatalf("with the queue full: %d jobs taken, %d waiting, want 0 and 2", len(db.jobs)-n, h.w.PendingJobs())
+	}
+	full.Store(false)
+	h.sim.Step()
+	jobs := db.jobs[n:]
+	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
+		t.Fatalf("the retry submitted %d jobs, want the snapshot of the throw then the transfer", len(jobs))
+	}
+	pre, tr := jobs[0].Snapshot, jobs0Snapshot(t, jobs[1], b.CharacterID())
+	if pre.CharacterID != b.CharacterID() || countState(pre.Inventory, swordID) != 0 || pre.Seq >= tr.Seq {
+		t.Fatalf("snapshot before the transfer %+v, transfer's %d", pre, tr.Seq)
+	}
+}
+
+// At shutdown (World.SaveAll, Saver.WritePending) with the snapshot of a throw pending:
+// kept in memory, the final snapshot replaces it; waiting in the loop with the transfer
+// behind it, it is written first, and a rejected transfer then abandons the rest (crash
+// semantics) and leaves Bruno's row at that snapshot, without the sword.
+func TestShutdownWithTheSaveBeforeATransferPending(t *testing.T) {
+	type world struct {
+		db    *rowsDB
+		h     *marketHarness
+		full  *atomic.Bool
+		cb    *fakeClient
+		b     *session.Player
+		offer int64
+	}
+	setup := func(t *testing.T) world {
+		var full atomic.Bool
+		db := newRowsDB(t)
+		h := newMarketHarness(t, queueGate(&full), db.wire)
+		cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+		cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0), stack(swordID, 1, 1))
+		h.send(cs, createOffer(sell, salveID, 10, 4))
+		db.saveNow(h.harness, cb)
+		pack := openPack(t, h.harness, cb)
+		if evs := h.send(cb, moveItem(inContainer(pack, 1), swordID, 0, onTile(pos(0, 2)), 1)); len(systemKeys(evs)) != 0 {
+			t.Fatalf("Bruno throws the sword away: %v", systemKeys(evs))
+		}
+		return world{db: db, h: h, full: &full, cb: cb, b: b, offer: h.w.MarketOffers(s.CharacterID())[0]}
+	}
+
+	t.Run("in memory", func(t *testing.T) {
+		g := setup(t)
+		n := len(g.db.jobs)
+		if pending := g.h.w.SaveAll(); len(pending) != 0 {
+			t.Fatalf("%d jobs pending with the queue free", len(pending))
+		}
+		for _, j := range g.db.jobs[n:] {
+			if j.Transfer != nil || !j.Snapshot.Final {
+				t.Fatalf("the shutdown wrote %+v besides the final snapshots", j)
+			}
+		}
+		g.db.sync(g.h.harness)
+		if g.db.count(g.b.CharacterID(), swordID) != 0 || g.db.count(g.b.CharacterID(), coinID) != 100 {
+			t.Fatal("Bruno's row is not his final snapshot after the throw")
+		}
+	})
+
+	t.Run("in the retry", func(t *testing.T) {
+		g := setup(t)
+		g.full.Store(true)
+		g.h.send(g.cb, acceptOffer(g.offer, 1))
+		pending := g.h.w.SaveAll()
+		if len(pending) != 4 || pending[0].Transfer != nil || pending[0].Snapshot.CharacterID != g.b.CharacterID() ||
+			pending[0].Snapshot.Final || pending[1].Transfer == nil || !pending[2].Snapshot.Final || !pending[3].Snapshot.Final {
+			t.Fatalf("pending at shutdown: %d jobs, want the snapshot of the throw, the transfer and two final ones", len(pending))
+		}
+		g.db.reject.Store(g.b.CharacterID())
+		if err := g.db.saver.Stop(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if err := g.db.saver.WritePending(context.Background(), pending); err == nil {
+			t.Fatal("the rejected transfer at shutdown reported no error")
+		}
+		if g.db.rowSeq(g.b.CharacterID()) != pending[0].Snapshot.Seq || g.db.count(g.b.CharacterID(), swordID) != 0 {
+			t.Fatal("Bruno's row is not the snapshot of the throw")
+		}
+	})
 }

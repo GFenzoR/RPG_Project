@@ -366,7 +366,8 @@ func (w *World) HeldGroundForTest() int { return len(w.heldGround) }
 
 // InputAndGiftForTest is one command of cl's player that runs msg and then drops n of
 // item id at its feet (they do not fit), as one command that changes a house and gives
-// something away would: none does (hold.go). Tests only.
+// something away does (a rune of the house floor used from the street that kills a quest
+// monster, hold.go). Tests only.
 func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string, n int) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		p := w.byClient[cl]
@@ -376,6 +377,22 @@ func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string,
 			p.capacity = 0
 			w.GiveForTest(p, id, n)
 			p.capacity = c
+		})
+	})
+}
+
+// GiftAndInputForTest is one command of cl's player that drops n of item id at its feet
+// (they do not fit) and then runs msg: a give-away before the command's own transfer,
+// which no command makes (hold.go transferSnapshot logs it). Tests only.
+func (w *World) GiftAndInputForTest(cl Client, id string, n int, msg *pb.ClientMessage) game.Command {
+	return game.CommandFunc(func(ctx *game.TickContext) {
+		p := w.byClient[cl]
+		w.playerCommand(p, func() {
+			c := p.capacity
+			p.capacity = 0
+			w.GiveForTest(p, id, n)
+			p.capacity = c
+			w.input(ctx, p, msg)
 		})
 	})
 }

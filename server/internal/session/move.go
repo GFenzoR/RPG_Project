@@ -447,6 +447,10 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 			w.slow = append(w.slow, p)
 		}
 	}
+	// T5.4: what questRecheck put on a house floor (a reward that did not fit, after
+	// checkHouses flushed) is written in this tick, not with whatever command comes next:
+	// that command's player did not change the house.
+	w.flushHouses()
 	for _, p := range w.slow {
 		w.log.Warn("session: slow client dropped", "character", p.charID, "creature", p.id)
 		// T5.2: under its PvP lock it stays link-dead (a full queue is no way out of a fight).

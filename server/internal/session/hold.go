@@ -1,6 +1,10 @@
 package session
 
-import "github.com/GFenzoR/RPG_Project/server/internal/world"
+import (
+	"slices"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
+)
 
 // Transfer hold (T5.3 fail-safe, docs/01 "Transacciones"). A transfer leaves the loop
 // before the database has it; if it is then dropped (World.Tainted), whatever its
@@ -63,13 +67,32 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 // No transfer may leave anything on the public ground in its own command (it checks
 // first that everything fits: canBuy, canReceive, moneyThatFits): the snapshot taken
 // then (transferSnapshot settles a pending give-away at once) would hold half the
-// transfer and be written outside its database transaction. Nor may one command give
-// something away and change a house (settleGave logs it): that snapshot would then be
-// taken with the house write, so dropping the write would lose what went into the house
-// and leave what came out of it in two rows (the house's and the character's). Only the
-// tutorial's last step could do it today, were it a pick-up, an equip or a use of an
-// item of the player's own house floor from outside the house, with a reward that does
-// not fit; it is not (data/tutorial.yaml), and a house needs level 12 (houses.min_level).
+// transfer and be written outside its database transaction. transferSnapshot logs one
+// that does (a give-away still unsettled outside a house write: every player command
+// settles every giver first, and only player commands make transfers of players).
+//
+// One command may give something away and change a house: an owner standing on the street
+// uses a rune lying on its house floor (mayUseInHouse), the monster dies and the reward of
+// the quest kill does not fit, so it falls at the owner's feet; then the rune's charge is
+// taken from the house floor. Its snapshot after the give-away would be taken with the
+// house write (flushHouses, the end of the command) and written apart before it: if that
+// write were dropped, the owner would go back to that snapshot (the kill done) and the
+// house to its last write (the rune with the charge), a charge for free; with something
+// taken out of the house into the owner's backpack, it would be in two rows (the house's
+// and the character's). So no snapshot is kept for such a give-away: what it put on the
+// public ground is reserved to the player the way what leaves a house is (reserveGiven:
+// the seq of its snapshot in that house write, numberLeft), and a dropped write takes the
+// player back to its save before the command, with the reservation never acked. Only a
+// give-away into something that cannot be reserved (a stranger's pile or bag on the
+// street: only a MoveItem does that, and a MoveItem changes no house but through the
+// tutorial's reward) keeps the snapshot, and settleGave logs it as an error.
+//
+// The settlement points: the start of a player command settles every giver (not only the
+// commanding player) before that command can make a transfer or change a house, and
+// transferSnapshot settles its own players; those two are what a transfer relies on. The
+// end of the command and the end of the tick take the snapshot sooner, so it is the state
+// right after the give-away (TestSaveBeforeTransferIsFromTheGiftsCommandOrTick) and the
+// list of givers stays short.
 
 // groundHold is a reservation of World.heldGround: the character the ground item (or the
 // pile, container or corpse it lies in) is reserved to, and the seq of that character's
@@ -87,6 +110,10 @@ type groundHold struct {
 // every snapshot of it): a dropped transfer then takes p back to a save without what it
 // gave away. A give-away of this same command or tick is settled now (see above).
 func (w *World) transferSnapshot(p *Player) Snapshot {
+	if p.gave && !w.houseFlushing {
+		// A give-away no command start settled: this command made it before its transfer.
+		w.log.Error("session: a transfer follows a give-away of its own command", "character", p.charID)
+	}
 	w.settleGave(p)
 	if p.pre != nil {
 		w.save(*p.pre)
@@ -120,8 +147,10 @@ func (w *World) numberLeft(p *Player, seq uint64) {
 // server) landed on the public ground, where no save has it: whoever picks it up writes it
 // in their own save. p's snapshot from the end of this command (or tick) waits in p.pre
 // for p's next transfer (settleGivers, transferSnapshot); a later snapshot of p replaces
-// it.
-func (w *World) gaveAway(p *Player) {
+// it. root is where it landed when that may be reserved to p (a pile of its own, or a pile
+// or container already reserved to p), nil otherwise (Player.given, reserveGiven).
+func (w *World) gaveAway(p *Player, root *Item) {
+	p.given = append(p.given, root)
 	if !p.gave {
 		p.gave = true
 		w.givers = append(w.givers, p)
@@ -149,7 +178,9 @@ func (w *World) settleGivers() {
 
 // settleGave takes p's snapshot for its next transfer if p gave something away since its
 // last snapshot. A house p changed is written first, with p's snapshot (flushHouses),
-// which already comes after the give-away: then there is nothing to keep.
+// which already comes after the give-away: then there is nothing to keep. Inside that
+// house write, when p's own command gave something away and changed the house, what it
+// gave away is reserved to p for the write instead (reserveGiven, see the rule above).
 func (w *World) settleGave(p *Player) {
 	if !p.gave {
 		return
@@ -159,12 +190,35 @@ func (w *World) settleGave(p *Player) {
 		return
 	}
 	if w.houseFlushing && w.cmdPlayer == p {
-		// p's own command gave something away and changed a house: this snapshot goes
-		// out with that house write (see the rule above).
+		if w.reserveGiven(p) {
+			return
+		}
 		w.log.Error("session: a command gave something away and changed a house", "character", p.charID)
 	}
 	s := w.snapshot(p, false)
 	p.pre = &s
+}
+
+// reserveGiven reserves to p what its command gave away to the public ground, with the
+// seq of p's snapshot in the house write being taken (transferSnapshot gives it with
+// numberLeft, like what left the house), and reports whether it could: every give-away
+// landed where it may be reserved to p (Player.given). Then p's give-away is settled: the
+// house write carries the state after it, and a dropped write never frees what it put on
+// the street.
+func (w *World) reserveGiven(p *Player) bool {
+	if slices.Contains(p.given, nil) {
+		return false
+	}
+	for _, r := range p.given {
+		if r.onGround {
+			w.heldGround[r] = groundHold{char: p.charID, seq: w.saveSeq + 1}
+			p.left = append(p.left, r)
+		}
+	}
+	clear(p.given)
+	p.given = p.given[:0]
+	p.gave = false
+	return true
 }
 
 // confirmed is the ack of character id's snapshot seq (World.Saved): the database has it
@@ -223,7 +277,7 @@ func (w *World) holdGround(p *Player, it *Item) {
 		if h := w.inFlight[p.charID]; h != 0 {
 			w.heldGround[it] = groundHold{char: p.charID, seq: h}
 		}
-		w.gaveAway(p)
+		w.gaveAway(p, it) // a pile of its own (drop)
 	}
 }
 
