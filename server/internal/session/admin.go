@@ -629,12 +629,14 @@ func (w *World) checkRoles(ctx *game.TickContext) {
 
 // KickAccount returns the command that disconnects every online character of the
 // account with PASSWORD_CHANGED (T2.1: a password reset revokes every session, live
-// connections included). Characters are saved as on any logout.
+// connections included). Characters are saved as on any logout. One under its PvP lock
+// loses its connection all the same but stays in the world link-dead until the lock ends
+// (T5.2, disconnect): a reset is no way out of a fight.
 func (w *World) KickAccount(accountID int64) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		for _, o := range append([]*Player(nil), w.players...) {
 			if o.accountID == accountID {
-				w.remove(ctx, o, pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED, false)
+				w.disconnect(ctx, o, pb.DisconnectReason_DISCONNECT_REASON_PASSWORD_CHANGED, false)
 			}
 		}
 	})

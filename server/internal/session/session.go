@@ -32,7 +32,9 @@ type Client interface {
 	Send(b *pb.ServerBatch) bool
 	// Close ends the connection after the batches already sent, followed by a
 	// Disconnect with reason (none if reason is UNSPECIFIED). It is called at most once
-	// per player, after the player left the world.
+	// per player: after the player left the world or, for a player under its PvP lock that
+	// stays in the world link-dead (T5.2: a slow client, a password reset), when the loop
+	// ends its connection. Commands from that connection are ignored from then on.
 	Close(reason pb.DisconnectReason)
 }
 

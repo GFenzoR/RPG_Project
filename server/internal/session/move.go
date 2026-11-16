@@ -13,8 +13,8 @@ import (
 func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		p := w.byClient[client]
-		if p == nil {
-			return
+		if p == nil || p.linkDead {
+			return // gone, or link-dead: a command its closed connection sent before (T5.2)
 		}
 		w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
 		defer func() { w.cmdPlayer = nil }()
@@ -116,7 +116,8 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.unequipCosmetic(ctx, p, m.UnequipCosmetic.GetKind())
 	case *pb.ClientMessage_Logout:
 		// T5.2: no logout while the PvP lock lasts (attacked a player, or was attacked by
-		// one). Closing the connection still takes the character out (docs/02 "PvP").
+		// one). Closing the connection leaves the character link-dead until the lock ends
+		// (docs/02 "PvP").
 		if w.pvpLocked(ctx.Tick, p) {
 			p.emit(systemMsg(msgPvPLogoutLocked))
 			return
@@ -400,7 +401,8 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	}
 	for _, p := range w.slow {
 		w.log.Warn("session: slow client dropped", "character", p.charID, "creature", p.id)
-		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_SLOW_CLIENT, true)
+		// T5.2: under its PvP lock it stays link-dead (a full queue is no way out of a fight).
+		w.disconnect(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_SLOW_CLIENT, true)
 	}
 	// Removing slow players may have queued CreatureDisappear for others: they go out
 	// with the next tick's batch.

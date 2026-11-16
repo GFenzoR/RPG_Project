@@ -324,18 +324,31 @@ func TestMarketRefreshCloseAndReopen(t *testing.T) {
 }
 
 // A player that loses its connection in a PvP fight stays in the world link-dead: its
-// market window is forgotten (nobody would get its refreshes).
+// market window is forgotten (nobody would get its refreshes), whether it closed the
+// connection or the server ended it (a slow client, a password reset).
 func TestMarketForgetsLinkDeadWindows(t *testing.T) {
-	h := newMarketHarness(t, func(c *session.Config) { c.Balance.PvP = pvpRules() })
-	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
-	h.send(cb, browse(salveID))
-	if h.w.MarketViewers(salveID) != 1 {
-		t.Fatal("Bruno does not watch the book")
-	}
-	h.sim.Command(gameFunc(func() { h.w.SetPvPLockForTest(b, h.sim.Tick()+1000) }))
-	h.sim.Command(h.w.Leave(cb))
-	h.sim.Step()
-	if !b.LinkDead() || h.w.MarketViewers(salveID) != 0 {
-		t.Fatalf("link-dead %v, viewers %d", b.LinkDead(), h.w.MarketViewers(salveID))
+	for _, way := range []string{"closed", "slow client", "password reset"} {
+		t.Run(way, func(t *testing.T) {
+			h := newMarketHarness(t, func(c *session.Config) { c.Balance.PvP = pvpRules() })
+			cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+			h.send(cb, browse(salveID))
+			if h.w.MarketViewers(salveID) != 1 {
+				t.Fatal("Bruno does not watch the book")
+			}
+			h.sim.Command(gameFunc(func() { h.w.SetPvPLockForTest(b, h.sim.Tick()+1000) }))
+			switch way {
+			case "closed":
+				h.sim.Command(h.w.Leave(cb))
+			case "slow client":
+				cb.full = true
+				h.input(cb, browse(salveID)) // its answer does not fit
+			case "password reset":
+				h.sim.Command(h.w.KickAccount(b.CharacterID())) // withPack: account = character
+			}
+			h.sim.Step()
+			if !b.LinkDead() || h.w.MarketViewers(salveID) != 0 || h.w.PlayerByCharacter(b.CharacterID()) != b {
+				t.Fatalf("link-dead %v, viewers %d", b.LinkDead(), h.w.MarketViewers(salveID))
+			}
+		})
 	}
 }

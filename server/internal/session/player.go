@@ -158,6 +158,9 @@ type Player struct {
 	fightUntil game.Tick
 	// linkDead: its connection closed during the lock; it stays until the lock ends.
 	linkDead bool
+	// dropped: the loop closed its connection (Client.Close) while it stayed link-dead (a
+	// slow client, a password reset); nothing is sent or closed when it leaves.
+	dropped bool
 
 	// Travel (T3.5): the last tick p fought (attacked, hurt or hitting a monster; 0 =
 	// never), which blocks sailing for balance travel.combat_block_ms.
@@ -313,7 +316,9 @@ func (w *World) Join(c Character, client Client) game.Command {
 }
 
 // Leave returns the command that removes client's player (connection closed). It is
-// idempotent: a client that already left is ignored.
+// idempotent: a client that already left is ignored. Under its PvP lock the player stays
+// link-dead instead (linkDeadOnLeave), also when the loop closed the connection itself
+// (disconnect): the gateway's Leave that follows changes nothing.
 func (w *World) Leave(client Client) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
 		if p := w.byClient[client]; p != nil && !w.linkDeadOnLeave(ctx.Tick, p) {
@@ -541,6 +546,10 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.clearConditions(ctx, holder{p: p}, true)
 	w.unsaved[p.charID] = s
 	w.save(s)
+	if p.dropped {
+		p.out = nil // T5.2: its connection was closed when it went link-dead (disconnect)
+		return
+	}
 	if slow {
 		p.out = nil
 	}

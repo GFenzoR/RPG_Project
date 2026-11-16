@@ -18,6 +18,7 @@ type fakeClient struct {
 	batches []*pb.ServerBatch
 	closed  bool
 	reason  pb.DisconnectReason
+	closes  int  // calls to Close (the loop makes at most one)
 	full    bool // Send fails (slow client)
 }
 
@@ -29,7 +30,7 @@ func (c *fakeClient) Send(b *pb.ServerBatch) bool {
 	return true
 }
 
-func (c *fakeClient) Close(r pb.DisconnectReason) { c.closed, c.reason = true, r }
+func (c *fakeClient) Close(r pb.DisconnectReason) { c.closed, c.reason, c.closes = true, r, c.closes+1 }
 
 // events returns every event received so far and forgets them.
 func (c *fakeClient) take() []*pb.ServerMessage {

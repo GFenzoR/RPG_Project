@@ -700,11 +700,15 @@ func (w *World) cmdUnskull(ctx *game.TickContext, p *Player, args []string) bool
 // ---- link-dead --------------------------------------------------------------------
 
 // linkDeadOnLeave keeps p in the world when its connection closes while its PvP lock
-// lasts (docs/02 "Bloqueo de combate PvP"): link-dead, it does nothing but can still be
-// attacked (which renews the lock) until the lock ends; checkPvP then saves it and takes it
-// out. It reports whether p stays. A new login of the character takes it over (join).
+// lasts (docs/02 "Bloqueo de combate PvP"): link-dead, it does nothing (Input ignores it)
+// but can still be attacked (which renews the lock) until the lock ends; checkPvP then
+// saves it and takes it out. It reports whether p stays: a player already link-dead stays
+// as it is. A new login of the character takes it over (join).
 func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
-	if !w.pvpOn || p.linkDead || !w.pvpLocked(tick, p) {
+	if p.linkDead {
+		return true
+	}
+	if !w.pvpOn || !w.pvpLocked(tick, p) {
 		return false
 	}
 	p.linkDead = true
@@ -715,6 +719,22 @@ func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
 	w.linkDead = append(w.linkDead, p)
 	w.log.Info("pvp link-dead", "character", p.charID)
 	return true
+}
+
+// disconnect closes p's connection with reason because the server ends it (a slow client,
+// a password reset). Under its PvP lock p stays in the world link-dead, as if it had closed
+// the connection itself (Leave): the connection closes now and p leaves when the lock ends.
+// Anyone else leaves the world now (remove). A staff kick or ban, a failed save and a
+// logout do not come here: they take the character out.
+func (w *World) disconnect(ctx *game.TickContext, p *Player, reason pb.DisconnectReason, slow bool) {
+	if !w.linkDeadOnLeave(ctx.Tick, p) {
+		w.remove(ctx, p, reason, slow)
+		return
+	}
+	if !p.dropped {
+		p.dropped = true
+		p.client.Close(reason) // once: remove sends and closes nothing more
+	}
 }
 
 // LinkDead reports whether p lost its connection and stays in the world for its PvP lock.
