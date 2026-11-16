@@ -113,7 +113,9 @@ anteriores a T2.1 rechazan campos desconocidos (la app de escritorio puede habla
 - "Revoca todas las sesiones" incluye las conexiones abiertas: el reset borra los tokens
   guardados (cuenta y juego) y después el `app` encola `World.KickAccount`, que desconecta
   a **todos** los personajes conectados de la cuenta con `Disconnect{PASSWORD_CHANGED}`
-  (se guardan como en un logout). Vale igual para un enlace de `gameserver admin reset-link`.
+  (se guardan como en un logout). Un personaje con el bloqueo PvP activo pierde la conexión
+  igual, pero queda en el mundo link-dead hasta que el bloqueo vence (02-game-design.md,
+  "Bloqueo de combate PvP"). Vale igual para un enlace de `gameserver admin reset-link`.
   Ventana residual: un token de juego canjeado justo antes del reset cuyo `Hello` llegue al
   loop después del kick (milisegundos) entra igual; no puede volver a entrar después.
 - Canjear un reset exige que la cuenta siga habilitada y con el email al que se mandó.
@@ -1179,7 +1181,8 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 - Cola de salida por sesión acotada (128 batches ≈ 6,4 s de ticks): si un cliente lento
   la llena, el servidor lo saca del mundo, lo guarda y cierra con
   `Disconnect{SLOW_CLIENT}` (sin mandarle los batches pendientes) en vez de consumir
-  memoria.
+  memoria. Con el bloqueo PvP activo cierra igual, pero el personaje queda en el mundo
+  link-dead hasta que el bloqueo vence (lo que esa conexión mandó después no se ejecuta).
 - Orígenes del navegador: por defecto solo el mismo host; otros (servidor de Vite,
   Tauri) con `-ws-origins` o `RPG_WS_ORIGINS` (lista separada por comas). Un patrón con
   `://` se compara con `esquema://host`: el cliente de escritorio usa

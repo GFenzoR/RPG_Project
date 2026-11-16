@@ -122,11 +122,18 @@ server/
   condición de un jugador pasa por `conditionMayHurt` (nunca empieza un ataque
   injustificado); su autor es un **personaje** (`condition.author`, por `byChar`, nunca el
   id de criatura) y se guarda con la condición junto con el recuerdo de su ataque
-  (`ConditionState.Author*`, `recallHit` al entrar); un autor fuera del mundo no daña. Un
-  hechizo de condición a distancia sobre un jugador pasa por `conditionPlayer`
-  (`canAttack` + `aggress`, como un golpe). `Leave` con bloqueo deja al jugador link-dead
+  (`ConditionState.Author*`, `recallHit` al entrar) y la hora del guardado
+  (`ConditionState.SavedAt`, `World.nowTime`); un autor fuera del mundo no daña. Al
+  entrar, una condición con autor descuenta sin daño el tiempo que su víctima estuvo fuera
+  (`awayTicks` + `condition.elapse`; termina si esa hora no se puede ubicar en el reloj de
+  este servidor); una sin autor sigue congelada. Un hechizo de condición a distancia sobre
+  un jugador pasa por `conditionPlayer` (`canAttack` + `aggress`, como un golpe). `Leave` con bloqueo deja al jugador link-dead
   (`linkDeadOnLeave`, sin enviarle nada) hasta que `checkPvP` lo saca; un login nuevo lo
-  retoma con `pvpCarry`.
+  retoma con `pvpCarry`. Un corte de la conexión que decide el servidor (cliente lento,
+  `KickAccount`) pasa por `disconnect`, que con bloqueo cierra la conexión una vez
+  (`Player.dropped`) y lo deja link-dead; un camino nuevo que corte conexiones tiene que
+  usarlo salvo que sea una sanción de staff o un guardado que falló. `Input` ignora a un
+  link-dead y un `Leave` de un link-dead no cambia nada.
   `kill_credit_ms <= lock_ms` lo valida el balance: quien cobra una muerte sigue en el mundo.
 
 - **Mercado e intercambio (T5.3):** `session/trade.go` + `session/market.go` +

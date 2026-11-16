@@ -317,7 +317,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - **Relogueo:** las de daño y `slowed` sobreviven a un logout con su tiempo restante
     (`characters.conditions`), para que salir del juego no cure; haste, invisibilidad y
     puntería son ventajas y terminan. **Morir** termina todas. La de otro jugador guarda
-    también a su autor (ver "PvP", "Daño").
+    también a su autor, y su tiempo sigue corriendo mientras la víctima está fuera (ver
+    "PvP", "Daño").
   - **Fuentes:** `swift_stride` (haste 25 s, las cuatro vocaciones) y `purge_venom` (cura el
     veneno) desde nivel 8-9; `keen_eye` (montaraz), `entangle` (druida, `slowed` a un
     monstruo, o con PvP a un jugador, a 4 casillas), `shroud` (arcanista,
@@ -1248,7 +1249,12 @@ Las duraciones (60 h y 200 h) obligan a jugar varios días con la marca puesta.
   conexión durante el bloqueo **no** saca al personaje: queda en el mundo sin conexión
   ("link-dead"), sin actuar y atacable, y cada golpe que recibe renueva el bloqueo. Cuando
   vence, se guarda y sale. Si su dueño vuelve a entrar mientras tanto, retoma ese mismo
-  personaje (posición, vida, marca y bloqueo incluidos).
+  personaje (posición, vida, marca y bloqueo incluidos). Lo mismo si es el servidor el que
+  corta la conexión: un cliente que no lee lo que se le manda (cliente lento) o un
+  reseteo de contraseña la cierran igual (el reseteo, por seguridad, siempre), pero el
+  personaje queda link-dead hasta que vence el bloqueo; lo que esa conexión haya mandado
+  después no se ejecuta. Solo una expulsión o un ban de staff, o un guardado que falló
+  (T5.3), lo sacan en el acto.
 - **Recompensa:** matar jugadores no da experiencia ni otra recompensa (sería farmeable
   entre cuentas propias). Golpear jugadores tampoco entrena skills ni el escudo.
 
@@ -1274,10 +1280,23 @@ el bloqueo y da crédito de muerte como un golpe directo). El autor es un person
 conexión:
 - **Relogueo de cualquiera de los dos:** la condición sigue siendo de su autor. Se guarda
   con la víctima (`characters.conditions`) junto con lo que la víctima recordaba del ataque
-  de ese autor fuera de una arena: cuándo fue el último golpe y si fue injustificado. Al
-  volver, ese recuerdo vale solo si no pasó `aggressor_ms` **en el reloj** desde ese golpe:
-  salir del juego no corta ni estira un ataque (ni la defensa propia). Un recuerdo anterior
-  al último reinicio del servidor se olvida.
+  de ese autor fuera de una arena (cuándo fue el último golpe y si fue injustificado) y la
+  hora del guardado. Al volver, ese recuerdo vale solo si no pasó `aggressor_ms` **en el
+  reloj** desde ese golpe, y la condición sigue **como si la víctima no hubiera salido**:
+  los golpes que habrían caído mientras estaba fuera pasan sin daño, como en una zona de
+  protección, y el resto cae a su ritmo. Así salir del juego no corta ni estira un ataque
+  (ni la defensa propia): la víctima no puede guardarse los golpes para recibirlos más
+  tarde (cada uno renovaría la marca y el bloqueo del autor, y ella elegiría cuándo la
+  mata). Las condiciones sin autor (de monstruos) siguen congeladas mientras no está:
+  salir no las cura.
+- **Guardado de antes de un reinicio:** si la hora del guardado no se puede ubicar en el
+  reloj de este servidor (es anterior a su arranque, posterior a ahora o no está, como en
+  una fila guardada antes de esta regla), la condición con autor termina al entrar. Es la
+  opción segura para los dos: la víctima no recibe golpes que quizás cayeron hace mucho y
+  el autor no queda marcado, bloqueado ni con una muerte por un ataque que nadie puede
+  medir (el recuerdo de ese ataque también se olvida tras un reinicio). Las condiciones
+  duran menos de un minuto (`balance.yaml conditions`): tras un reinicio, lo normal es que
+  ya hubiera terminado igual.
 - **Autor fuera del mundo:** su condición no daña (los golpes pasan, como en una zona de
   protección): no podría atacar y no habría a quién darle la muerte. Mientras su condición
   daña, cada golpe renueva su bloqueo, así que quien cierra la conexión queda link-dead y

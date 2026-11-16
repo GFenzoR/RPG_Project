@@ -234,8 +234,10 @@ secundaria.
     marca en el mapa y la lista de batalla, modo seguro y guerras en el panel del gremio.
     Después: una condición de otro jugador guarda a su autor (personaje) y el recuerdo de
     su ataque en `characters.conditions`, sin migración, y sobrevive al relogueo de
-    cualquiera de los dos; los hechizos de condición a distancia alcanzan a jugadores con
-    las reglas de un ataque directo. Las marcas ya tienen sprites propios
+    cualquiera de los dos (su tiempo corre mientras la víctima está fuera); los hechizos de
+    condición a distancia alcanzan a jugadores con las reglas de un ataque directo; un
+    corte de la conexión por el servidor (cliente lento, reseteo de contraseña) con
+    bloqueo deja al personaje link-dead. Las marcas ya tienen sprites propios
     (`assets/sprites/ui/marks/`, `client/src/render/marks.ts`).
 - [x] **T5.3 Mercado global e intercambio directo.** Ventana de intercambio entre dos
   jugadores adyacentes con confirmación doble, y ofertas de compra y venta de items

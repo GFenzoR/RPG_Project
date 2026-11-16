@@ -121,7 +121,15 @@ pocas banderas de casilla y como mucho 8 atacantes recientes por víctima; un ba
 segundo recorre solo a los jugadores con marca y las guerras abiertas (como mucho
 `max_wars` por gremio), nunca a todos los jugadores. Un jugador que pierde la conexión con
 el bloqueo PvP activo sigue en el mundo (link-dead: su lote se descarta en el flush) hasta
-que el bloqueo vence; el mismo barrido lo saca y guarda su snapshot final.
+que el bloqueo vence; el mismo barrido lo saca y guarda su snapshot final. Vale igual si
+la conexión la corta el servidor (cliente lento, `KickAccount` de un reseteo de
+contraseña): `World.disconnect` llama a `Client.Close` una sola vez y deja al jugador
+link-dead; los comandos que todavía lleguen de esa conexión y el `Leave` del gateway se
+ignoran, y `remove` ya no le manda ni cierra nada. Los kicks y bans de staff, el logout y
+un transfer que no se guardó sacan al jugador en el acto con `remove`. Una condición de
+otro jugador se guarda con la hora del tick del snapshot (`Scheduler.Time`, el
+`TickContext.Now` del tick en curso, para código del loop sin contexto) y al entrar se
+descuenta el tiempo que la víctima estuvo fuera.
 
 **Casas (T5.4).** Las casas son datos del mapa (`world.House` en `world.bin` v4); quién
 alquila cada una, sus invitados y los items de su suelo los tiene el loop, que los carga
