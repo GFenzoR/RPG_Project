@@ -30,12 +30,12 @@ import type { ZoomView } from "./render/zoom.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
-import { locationInit, topItem } from "./state/items.ts";
+import { locationInit, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
 import { findPath } from "./state/path.ts";
-import { pathPassable, usedBare } from "./state/portals.ts";
+import { climbable, pathPassable, usedBare } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { cuesOf, loopFor } from "./audio/cues.ts";
@@ -673,13 +673,20 @@ export class Game {
     });
   }
 
-  /** Uses the top item of a tile; a bare house door or ladder uses its ground. */
-  private useTop(x: number, y: number, z: number): void {
-    const ref =
-      topItem(this.world, x, y, z, false) ??
-      // T5.4: a bare door tile opens the house window (UseItem on its ground); a bare
-      // ladder is climbed, a bare rope spot answers that it needs a rope.
-      (this.usesGround(x, y, z) ? topItem(this.world, x, y, z, true) : undefined);
+  /**
+   * Uses a map tile (a right click): a ladder is climbed whatever lies on it; else its top
+   * item, or the ground of a bare house door (T5.4: the house window) or rope spot (it
+   * says a rope is needed). With `item` (the touch menu's "use"/"open") the top item even
+   * on a ladder: the menu climbs with its own button.
+   */
+  private useTop(x: number, y: number, z: number, item = false): void {
+    const ground =
+      !item && climbable(this.opts.content.portals, x, y, z)
+        ? "first"
+        : this.usesGround(x, y, z)
+          ? "bare"
+          : "never";
+    const ref = tileUse(this.world, x, y, z, ground);
     if (ref) this.useItem(ref);
   }
 
@@ -968,6 +975,7 @@ export class Game {
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
       item: top && { container: (this.opts.content.items[top.itemId]?.slots ?? 0) > 0 },
       door: this.usesGround(tx, ty, z),
+      climb: climbable(this.opts.content.portals, tx, ty, z),
       known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
     });
     if (actions.length === 0) return;
@@ -1027,7 +1035,8 @@ export class Game {
       const { x, y, z } = t.tile;
       if ((kind === "attack" || kind === "talk") && t.creature !== undefined)
         this.attack(t.creature);
-      else if (kind === "use" || kind === "open") this.useTop(x, y, z);
+      else if (kind === "climb") this.useTop(x, y, z);
+      else if (kind === "use" || kind === "open") this.useTop(x, y, z, true);
       else if (kind === "look") this.lookTileAt(x, y, z);
       else if (kind === "move") {
         const ref = topItem(this.world, x, y, z, false);

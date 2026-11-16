@@ -46,6 +46,16 @@ describe("tileActions", () => {
   it("bare ground is only looked at, a bare house door also used, an unknown tile nothing", () => {
     expect(tileActions({ known: true })).toEqual(["look"]);
     expect(tileActions({ known: true, door: true })).toEqual(["use", "look"]);
+  });
+
+  it("a ladder is climbed first, and what lies on it keeps its buttons", () => {
+    expect(tileActions({ known: true, door: true, climb: true })).toEqual(["climb", "look"]);
+    expect(tileActions({ item: { container: true }, known: true, climb: true })).toEqual([
+      "climb",
+      "open",
+      "look",
+      "move",
+    ]);
     expect(tileActions({ known: false })).toEqual([]);
   });
 });

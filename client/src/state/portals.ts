@@ -35,6 +35,14 @@ export function usedBare(portals: Portals | undefined, x: number, y: number, z: 
 }
 
 /**
+ * Whether (x, y, z) holds a ladder: using the tile climbs it whatever lies on it (a corpse
+ * or a coin on a ladder must not hide it), by its ground (state/items.ts tileUse).
+ */
+export function climbable(portals: Portals | undefined, x: number, y: number, z: number): boolean {
+  return portals?.[portalKey(x, y, z)] === "ladder";
+}
+
+/**
  * The passable test of a click-to-walk path to goal: a path never crosses stairs, a hole
  * or a teleport on its way (the player would land elsewhere), only ends on one.
  */

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Direction } from "@rpg/protocol";
 import { delta } from "./geometry.ts";
 import { findPath } from "./path.ts";
-import { movesOnStep, pathPassable, portalKey, usedBare } from "./portals.ts";
+import { climbable, movesOnStep, pathPassable, portalKey, usedBare } from "./portals.ts";
 import type { Portals } from "./portals.ts";
 
 const portals: Portals = {
@@ -31,6 +31,13 @@ describe("portals", () => {
     expect(usedBare(portals, 10, 5, 8)).toBe(true);
     expect(usedBare(portals, 5, 2, 7)).toBe(false);
     expect(usedBare(undefined, 2, 5, 8)).toBe(false);
+  });
+
+  it("climbs a ladder whatever lies on it, nothing else", () => {
+    expect(climbable(portals, 2, 5, 8)).toBe(true);
+    expect(climbable(portals, 10, 5, 8)).toBe(false); // a rope spot needs a rope
+    expect(climbable(portals, 5, 2, 7)).toBe(false);
+    expect(climbable(undefined, 2, 5, 8)).toBe(false);
   });
 
   it("walks round stairs on the way, onto them only as the goal", () => {
