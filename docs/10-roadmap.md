@@ -264,8 +264,7 @@ secundaria.
 - [x] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
   en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
   nativas necesitan cuentas de las tiendas (Apple y Google) y su firma. (PR #78)
-  Hecho: gestos puros con tests (toque, toque largo, arrastre; el pellizco se reconoce
-  pero no se usa: el zoom sigue entero y automático) sobre pointer
+  Hecho: gestos puros con tests (toque, toque largo, arrastre y pellizco) sobre pointer
   events; tocar una casilla camina, tocar una criatura la ataca y un NPC lo habla; toque
   largo = menú contextual (usar, abrir, mirar, mover, atacar, hablar); items con "tocar el
   item → tocar el destino" además del arrastre; pad direccional opcional en Opciones
@@ -277,6 +276,11 @@ secundaria.
   íconos placeholder, service worker solo para el shell estático) y `apps/desktop`
   preparado para `tauri android/ios init` (`docs/15-movil.md`). E2E
   `client/e2e/mobile.spec.ts` con Pixel 7 (vertical y horizontal) e iPad Mini.
+  Después (rama `fix/client-ux`): zoom del mapa por escalas enteras con el pellizco, botones
+  +/− en pantallas táctiles y Ctrl+rueda en PC (recordado en el dispositivo, nunca menos
+  que la vista de 15x11); hotbar en dos líneas a la derecha del pad en vertical (4 slots
+  en un teléfono de 390–412 px); el chat del panel lateral ya no tapa el final del
+  inventario a 1280x800; E2E también en WebKit (iPhone 13 e iPad Mini).
   👤 Pendiente: cuentas de Google Play y Apple Developer, firma (keystore, Team ID), y
   compilar y probar el APK/IPA en un dispositivo real (este PC no tiene Rust ni NDK).
 - [x] **T5.7 Tienda cosmética con pasarela de pago.** Moneda premium, catálogo de

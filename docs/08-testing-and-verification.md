@@ -93,7 +93,7 @@ corrida nueva de la misma rama cancela la anterior (`concurrency`). Caché de pn
 | `validate` | `make validate` (contenido, i18n, mapas, IDs append-only) y `make test-parity` | — |
 | `actionlint` | lint de `.github/workflows/` (actionlint fijado) | — |
 | `build` | `make build`: bundle de producción del editor y del cliente (`build/client`, con el atlas en `atlas/`) | — |
-| `e2e` | E2E del editor y del cliente en Chromium (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor | `e2e-screenshots`, `playwright-report` (también si falla) |
+| `e2e` | E2E del editor y del cliente en Chromium, y los táctiles de `mobile.spec.ts` también en WebKit (Playwright 1.63.0 del workspace), con un service container `postgres:16` para el servidor | `e2e-screenshots`, `playwright-report` (también si falla) |
 | `integration` | `make test-integration` contra un service container `postgres:16` (`TEST_DATABASE_URL`) | — |
 | `bench` | `make bench`: benchmarks de `server/internal/game` y `server/internal/world` con `-benchmem` | `bench` (salida compatible con benchstat) + resumen en el run |
 
@@ -124,24 +124,49 @@ junto con los del editor.
 
 ### E2E móvil (T5.6)
 `client/e2e/mobile.spec.ts` corre el juego en dispositivos emulados de Playwright, con el
-mismo servidor y Vite del E2E de escritorio y sobre Chromium (de `devices[...]` se toman
-tamaño, densidad, `isMobile` y `hasTouch`, no el navegador): `Pixel 7` (vertical),
-`Pixel 7 landscape` y `iPad Mini` (vertical). Todo con toques: `page.touchscreen.tap`
-y, para el toque largo y el pad mantenido, eventos táctiles de CDP
-(`Input.dispatchTouchEvent`), que llegan como `pointerType: "touch"`.
+mismo servidor y Vite del E2E de escritorio (de `devices[...]` se toman tamaño, densidad,
+`isMobile` y `hasTouch`; el navegador lo pone el proyecto):
+- **Chromium** (proyecto `chromium`, el de todos los E2E): `Pixel 7` (vertical),
+  `Pixel 7 landscape` y `iPad Mini` (vertical).
+- **WebKit** (proyecto `webkit-mobile`, como Safari en iOS): `iPhone 13` (vertical),
+  `iPhone 13 landscape` e `iPad Mini`. Toma solo los tests de `mobile.spec.ts` cuyo
+  título dice `(webkit)`; sus screenshots empiezan con `mobile-webkit-`. Necesita
+  `pnpm exec playwright install webkit` (`make setup` y el CI lo instalan; en Linux,
+  `--with-deps`). Sin WebKit instalado, o con `CLIENT_E2E_WEBKIT=0`, el proyecto queda
+  fuera con un aviso y Chromium corre solo. El WebKit de Playwright funciona en Windows
+  (WebGL incluido); avisa en consola que no conoce `interactive-widget` del viewport,
+  pero eso pasa al cargar la página, antes de que el test empiece a contar errores.
+
+Todo con toques: `page.touchscreen.tap` en los dos navegadores. El toque largo, el pad
+mantenido y el pellizco usan, en Chromium, eventos táctiles de CDP
+(`Input.dispatchTouchEvent`), que llegan como `pointerType: "touch"`. WebKit no tiene
+CDP y Playwright solo toca: ahí son `PointerEvent` sintéticos de tipo `touch` sobre el
+elemento bajo cada dedo. El primer dedo usa el id 1, el único que `setPointerCapture`
+acepta en un evento sintético; el pad captura su dedo.
 - En cada dispositivo: layout esperado (`data-layout`) y nada que ensanche la página;
   caminar tocando una casilla y con el pad (un toque = un paso, mantener = varios); mover
   la mochila al suelo con "tocar item → tocar destino" y devolverla con el toque largo
   ("Mover" → slot vacío), comprobando la casilla y el slot que manda el servidor; escribir
   en la pestaña del chat y ver el eco del servidor.
+- En vertical, la hotbar muestra al menos 4 slots enteros a la derecha del pad, bajo el
+  mapa y sin nada encima.
+- En cada dispositivo, el zoom del mapa: `+` sube una escala entera y se recuerda
+  (`localStorage` `rpg.zoom`); el canvas sigue dentro de la caja del mapa (en vertical,
+  sobre el pad); `−` vuelve a la escala que muestra las 15x11 casillas y la olvida; un
+  pellizco al doble de distancia acerca, y se vuelve con `−`.
 - Pixel 7 vertical además marca un lobo con un toque y espera golpes (vida que baja).
 - En cada dispositivo, un toque sobre la sacerdotisa de Puerto abre su diálogo (estado
   del cliente y ventana), que entra en pantalla y se cierra con un botón de 44 px.
 - A 1280x800 (escritorio), un nombre de 20 caracteres con experiencia deja el encabezado
-  en una línea y el mapa en 2x (`__rpgClient.scale()`).
+  en una línea y el mapa en 2x (`__rpgClient.scale()`); sin pad ni botones de zoom. El
+  final del inventario y del panel "Apariencia" se ven sobre el chat al desplazar la
+  columna lateral. Ctrl+rueda sobre el mapa sube a 3x (el canvas llena la caja del mapa y
+  queda dentro) y la rueda al revés vuelve a 2x; la rueda sin Ctrl no hace zoom.
 
-Screenshots `client/e2e/screenshots/actual/mobile-<dispositivo>-NN-*.png` y
-`mobile-desktop-1280-long-name.png`; se revisan con Read como los de escritorio. Corre
+Screenshots `client/e2e/screenshots/actual/mobile-<dispositivo>-NN-*.png` (`08-zoomed`: el
+mapa una escala más cerca), `mobile-desktop-1280-long-name.png`,
+`mobile-desktop-1280-side-end.png` (la columna lateral al final) y
+`mobile-desktop-1280-zoom3.png`; se revisan con Read como los de escritorio. Corre
 dentro de `make e2e`. Los E2E de escritorio siguen igual y deben quedar en verde: ningún
 cambio táctil altera el mouse ni el teclado. La PWA no entra en el E2E (Vite de desarrollo
 no registra el service worker); su lógica se prueba con Vitest (`client/src/pwa.test.ts`,
@@ -167,6 +192,19 @@ también que un `GET` del enlace y otra cuenta no cambian nada.
   `__rpgClient.players()`. Al volver al atuendo por defecto, el otro también lo ve.
 - Screenshots `63-shop-desktop`, `64-shop-phone` (375 px, sin scroll horizontal),
   `65-appearance-panel`, `66-shop-buyer` y `67-shop-watcher`.
+- Sin esperas fijas: cada paso espera el request que dispara (el `POST` de la compra y el
+  `GET /api/shop` que la sigue) o el estado que empuja el servidor. Cuenta los `POST` de
+  compra (un `confirm` rechazado no manda ninguno) y revisa el texto del `confirm`
+  fuera del handler del diálogo (un `expect` que falla ahí deja el diálogo abierto y
+  cuelga el click). Equipa de a un cosmético y espera que el segundo jugador vea al
+  comprador antes de cambiar nada. Las cargas de página y los pushes entre navegadores
+  esperan hasta 30 s (el test corre tarde en un E2E completo, con tres contextos y dos
+  sesiones de juego; 180 s en total).
+- La misma regla vale para "Play leads to the login and into the game" de
+  `site.spec.ts`: la primera carga de `/play/` en un contexto nuevo pide a Vite todos los
+  módulos del juego y una vez pasó los 5 s del `expect` por defecto al final de un E2E
+  completo. Ahora espera el `GET /api/characters` del login, hasta 30 s por cada carga, y
+  la casilla propia más dos frames dibujados en vez de 300 ms fijos antes del screenshot.
 
 ### Audio (T3.7)
 - **Unitarias** (`client/src/audio/*.test.ts`): el motor corre sobre un `AudioContext`

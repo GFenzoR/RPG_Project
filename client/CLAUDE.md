@@ -25,7 +25,8 @@ client/
 - Render de tiles 32x32 con orden de dibujo estilo Tibia: suelo → bordes → items →
   criaturas → efectos → textos flotantes, por fila de abajo hacia arriba.
 - Ventana visible por defecto 15x11 casillas; el canvas escala en múltiplos enteros
-  (pixel-perfect, `roundPixels`, sin suavizado).
+  (pixel-perfect, `roundPixels`, sin suavizado). El jugador puede acercar el mapa por
+  escalas enteras (ver "Zoom del mapa"), nunca alejarlo por debajo de las 15x11.
 - La UI (inventario, chat, diálogos) es DOM con Preact encima del canvas, no Pixi.
   Así es accesible, traducible y testeable con Playwright.
 - Ningún string visible hardcodeado: todo pasa por `t('clave')`.
@@ -463,8 +464,17 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde zoom 2 no cambia
   nada.
 - Hotbar: con poco ancho muestra los slots enteros que entran, con flechas ‹ › de 44 px y
-  deslizamiento nativo; F1–F12 siguen en el DOM. El tutorial se pliega con "×" sin
-  saltarse.
+  deslizamiento nativo; F1–F12 siguen en el DOM. En vertical con pad (`stacked` en
+  `ui/Hotbar.tsx`) va a la derecha del pad: flechas y lápiz en una línea, y debajo los
+  slots más angostos (3.2rem). Así entran 4 en un teléfono de 390–412 px
+  (`layout.ts` `hotbarRoom`). La franja bajo el mapa (154 px, el alto del pad) es el
+  `padding-bottom` de `.viewport`; el canvas se mide con la caja de contenido. El tutorial
+  se pliega con "×" sin saltarse.
+- Escritorio: en la columna lateral todo menos el chat va en `.side-scroll`, que se
+  desplaza; el chat queda fijo debajo. Antes era `sticky` y tapaba el final del inventario
+  y de "Apariencia" a 1280x800. Con pestañas o cajón, `.side-scroll` es
+  `display: contents`. El log del sistema va al final de esa columna en escritorio y
+  arriba de la pestaña del chat en el resto.
 - **PWA:** `public/manifest.webmanifest`, íconos placeholder (`make pwa-icons`,
   `tools/spritegen/src/pwa-icons.ts`), `src/sw.ts` (emitido como `/sw.js` por
   `vite.config.ts`) con la política pura de `sw/policy.ts`: nunca `/api`, `/ws`,
@@ -472,12 +482,37 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `pwa.ts` lo registra solo en un build de producción, en contexto seguro y fuera de
   Tauri (lo importan `main.tsx` y `site/main.tsx`). Instalación y Tauri mobile:
   `docs/15-movil.md`.
-- E2E: `e2e/mobile.spec.ts` (Pixel 7 vertical y horizontal, iPad Mini, sobre Chromium;
-  toques con `page.touchscreen` y toques largos con eventos táctiles de CDP). Test ids:
+- E2E: `e2e/mobile.spec.ts` (Pixel 7 vertical y horizontal e iPad Mini sobre Chromium;
+  iPhone 13 vertical y horizontal e iPad Mini sobre WebKit, en el proyecto
+  `webkit-mobile`, tests con "(webkit)" en el título). Toques con `page.touchscreen`; los
+  toques largos y el pellizco usan eventos táctiles de CDP en Chromium y `PointerEvent`
+  sintéticos en WebKit (`fingers`, id 1 para el primer dedo). Test ids:
   `touch-pad`, `[data-dir=north]`, `action-menu`, `[data-action=…]`, `pick-banner`,
   `pick-cancel`, `touch-pad-toggle`, `panel-tabs` `[data-tab=…]`, `panel-toggle`,
   `hud-menu`, `notices`. Hook `__rpgClient.monsters()` para tocar un monstruo.
 - Un diálogo de NPC pasa `{name}` (el nombre del jugador) a su texto.
+
+## Zoom del mapa
+- `render/zoom.ts` (puro, con tests) decide la escala. El mínimo es la que muestra las
+  15x11 casillas enteras (la de siempre, `pixelScale`). El máximo es la mayor que todavía
+  muestra 7x5 (`MIN_VIEW`). Siempre escalas enteras. Acercado, el canvas se corta a la
+  caja del mapa en píxeles de sprite enteros (`viewPixels`). `followCamera` centra en el
+  jugador una vista de casillas fraccionarias. El servidor sigue mandando las 15x11 (+1):
+  el zoom es solo de dibujo.
+- Entradas: pellizco (`pinch` del reconocedor de gestos, escala inicial × separación,
+  redondeada); botones +/− (`ui/ZoomButtons.tsx`, sin hooks, solo con puntero grueso,
+  ocultos si la pantalla admite una sola escala); Ctrl+rueda sobre el canvas
+  (`WheelZoom`: una muesca o un pellizco corto de trackpad = un paso, `preventDefault`
+  para que la página no haga zoom). La rueda sin Ctrl no hace nada.
+- Se recuerda por dispositivo en `localStorage` `rpg.zoom` (la escala). La vista ajustada
+  no guarda nada: vuelve a seguir a la ventana. Si la ventana ya no admite la escala
+  guardada, se dibuja la mayor posible y se conserva la elección.
+- `GameUi.zoom` (`{ scale, min, max }`) llega a la UI desde el canvas
+  (`GameCanvasOptions.zoomView`); `Game.zoom(steps)` es lo que llaman los botones. Hook
+  E2E: `__rpgClient.zoom()`.
+- Ubicación de los botones (`touch.css`): abajo a la derecha del mapa, sobre una hotbar
+  de una línea y bajo el cajón. En vertical con pad van en la franja, sobre las flechas de
+  la hotbar. Mientras hay un item elegido, el banner toma su lugar y se ocultan.
 
 ## Notas de T5.7
 - `CreatureState.cosmetics` (de `Creature.cosmetics` y `CreatureCosmetics`, con `""` = el

@@ -83,8 +83,8 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
 
 ## Pendientes conocidos (no bloquean)
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
-  (hay que entrar de nuevo en cada arranque), el selector de servidor reinicia la app, y
-  el pellizco se reconoce pero no hace zoom. Detalle en `15-movil.md`.
+  (hay que entrar de nuevo en cada arranque) y el selector de servidor reinicia la app.
+  Detalle en `15-movil.md`.
 - **Mundo:**
   - puertas con llave (la puerta sellada de la mina es narrativa);
   - suelos volcánicos y carteles de Brasal.
@@ -96,8 +96,6 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - la ventana de quien mira un libro no se refresca con la acción de otro;
   - la falla segura tiene un límite documentado (lo que sale por el suelo antes de que
     reaccione).
-- **Tests:** "Play leads to the login and into the game" (`site.spec.ts`) falló una vez
-  por un timeout de 5 s al final de un e2e completo. Si se repite, súbele el timeout.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

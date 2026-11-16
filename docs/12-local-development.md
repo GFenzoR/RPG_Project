@@ -21,7 +21,7 @@ próximas tareas están en `14-continuar-en-tu-pc.md`.
 3. Claude Code (CLI o app de escritorio) con tu cuenta.
 4. Clona el repo y corre:
    ```
-   make setup        # instala buf, sqlc, goose, golangci-lint, dependencias y Chromium de Playwright
+   make setup        # instala buf, sqlc, goose, golangci-lint, dependencias, y Chromium y WebKit de Playwright
    make db-up        # levanta Postgres en Docker en el puerto 5432
    make dev          # servidor + cliente + editor
    ```
