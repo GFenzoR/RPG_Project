@@ -223,7 +223,10 @@ func arrivalHarness(t *testing.T, kind world.PortalKind) *harness {
 // door, whatever the order of the rings: from (6,3,8), with the destination and (7,2)
 // taken, ring 1 offers the house tile (6,2) first and ring 2 the room tile (4,1), both
 // free and walkable; the player lands on (6,1), the next free tile of the street. Down
-// stairs (stepped onto) and down a ladder (used) alike.
+// stairs (stepped onto) and down a ladder (used) alike. Both lie outside the area of the
+// destination (area.go: a house tile is a wall of the areas), which is what skips them
+// here; freeAround's noHouse is a second guard for a destination in no area (a portal
+// end never lies in a house: world.NewMap), which TestArrivalsSkipHouses pins.
 func TestPortalArrivalSkipsHousesAndRooms(t *testing.T) {
 	for _, kind := range []world.PortalKind{world.PortalStairs, world.PortalLadder} {
 		t.Run(kind.String(), func(t *testing.T) {

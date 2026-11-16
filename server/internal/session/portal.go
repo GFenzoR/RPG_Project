@@ -13,8 +13,9 @@ import (
 // teleport (FullMapView), as with a boat or a staff /tp.
 //   - Stairs, holes and teleports move whoever steps onto their tile: the step happens
 //     (the ones who see it get the step, then the CreatureDisappear: their client drops
-//     the player at once, without drawing the step) and the player lands on the other end. Only players: monsters never step onto such a tile (monsterCanEnter),
-//     and a walk path or a search for a free tile goes around it.
+//     the player at once, without drawing the step) and the player lands on the other
+//     end. Only players: monsters never step onto such a tile (monsterCanEnter), and a
+//     walk path or a search for a free tile goes around it.
 //   - A ladder is used: UseItem on its tile, from at most inventory.reach tiles away and
 //     in line of sight (like gathering: no ladder across a wall when the reach is above 1).
 //   - A rope spot needs a rope: UseItemOn of a tool with tool.use rope on its tile, from

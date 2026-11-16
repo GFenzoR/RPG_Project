@@ -185,8 +185,17 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - un comando que suelta algo a la calle **dentro** de una pila o bolsa ajena y además
     cambia una casa todavía guarda el snapshot aparte, antes de la escritura de la casa,
     y lo registra con nivel error (`settleGave`): no se le puede reservar lo ajeno. Hoy
-    ningún comando lo hace (solo un `MoveItem` suelta en algo ajeno, y no cambia una casa
-    salvo por la recompensa del tutorial).
+    ningún comando lo hace (solo un `MoveItem` suelta en algo que no se le puede reservar,
+    y ningún `MoveItem` cambia además una casa): es una guarda;
+  - el caso real que justificó reservar lo soltado con la escritura de la casa (una runa
+    del suelo de la casa usada desde la calle que mata a un monstruo de una quest de
+    muertes cuya recompensa no entra) se prueba con `InputAndGiftForTest`, que lo simula;
+    falta un test de simulación con la runa, el monstruo y la quest de verdad;
+  - una llegada de barco o un `teleport` de diálogo cuyo destino es una casilla de casa
+    ahora deja al jugador fuera de la casa (o el teleport no se ofrece si no hay lugar a 1
+    casilla), pero el servidor no lo rechaza al cargar, como sí rechaza un extremo de
+    portal en una casa (`world.NewMap`). Conviene rechazarlo igual en `session.New` y en
+    `make validate`.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

@@ -171,7 +171,8 @@ server/
   de la casa usada desde la calle que mata a un monstruo de quest), lo que soltó queda
   reservado con el `Seq` de la escritura de la casa (`reserveGiven`, como `leftHouse`) y
   no se guarda snapshot aparte; registra (nivel error) solo lo que no se puede reservar
-  (una pila o bolsa ajena). `gaveAway` recibe dónde cayó (la pila propia, o nil). Uno
+  (una pila o bolsa no reservada a él). `gaveAway` recibe dónde cayó: la pila nueva o
+  la pila o contenedor ya reservado a él (`heldFor`), o nil si no se le puede reservar. Uno
   que saque algo del suelo de una casa al suelo público llama a `leftHouse` (la reserva toma el `Seq` del
   snapshot del que lo movió en la escritura de la casa, `numberLeft`) y solo lo deja
   como pila propia o en una pila o contenedor ya reservado a él (`heldFor`; nunca en algo

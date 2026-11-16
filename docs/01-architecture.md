@@ -379,10 +379,14 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       ahí no se guarda ese snapshot: lo que soltó a la calle queda **reservado** al
       personaje como lo que sale de una casa (`reserveGiven`, con el `Seq` de su snapshot
       en esa escritura, `numberLeft`). Si la escritura se descarta, vuelve a su guardado de
-      antes del comando y la reserva no se libera nunca (nadie más lo levanta). Solo si lo
-      soltó en algo que no se le puede reservar (una pila o bolsa ajena de la calle, y eso
-      solo lo hace un `MoveItem`, que no cambia una casa salvo por la recompensa del
-      tutorial) se toma el snapshot como antes y `settleGave` lo registra con nivel error.
+      antes del comando y la reserva no se libera nunca (nadie más lo levanta). Si lo
+      soltara en algo que no se le puede reservar (una pila o bolsa de la calle que no le
+      está reservada, aunque sea suya) se tomaría el snapshot como antes y `settleGave` lo
+      registraría con nivel error; solo un `MoveItem` suelta así y ningún `MoveItem` cambia
+      además una casa, así que es una guarda que hoy ningún flujo alcanza. Otro jugador que
+      va en esa misma escritura (no el del comando) sigue guardando aparte el snapshot de lo
+      que soltó: a la casa solo le llegó algo suyo que el servidor le dejó a los pies, nada
+      de la casa entró en su estado, y si la escritura se descarta como mucho se pierde eso.
     - En el suelo de una casa no hace falta: lo que se deja ahí se escribe con el
       snapshot de quien lo movió (`flushHouses`, un transfer que también encola antes el
       snapshot pendiente de ese personaje).

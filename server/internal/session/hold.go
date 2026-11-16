@@ -1,10 +1,6 @@
 package session
 
-import (
-	"slices"
-
-	"github.com/GFenzoR/RPG_Project/server/internal/world"
-)
+import "github.com/GFenzoR/RPG_Project/server/internal/world"
 
 // Transfer hold (T5.3 fail-safe, docs/01 "Transacciones"). A transfer leaves the loop
 // before the database has it; if it is then dropped (World.Tainted), whatever its
@@ -82,10 +78,17 @@ import (
 // and the character's). So no snapshot is kept for such a give-away: what it put on the
 // public ground is reserved to the player the way what leaves a house is (reserveGiven:
 // the seq of its snapshot in that house write, numberLeft), and a dropped write takes the
-// player back to its save before the command, with the reservation never acked. Only a
-// give-away into something that cannot be reserved (a stranger's pile or bag on the
-// street: only a MoveItem does that, and a MoveItem changes no house but through the
-// tutorial's reward) keeps the snapshot, and settleGave logs it as an error.
+// player back to its save before the command, with the reservation never acked. A
+// give-away into something that cannot be reserved (a pile or a bag on the street that is
+// not reserved to the player, even its own) would keep the snapshot, and settleGave logs
+// it as an error. Only a MoveItem gives away that way, and no MoveItem changes a house
+// besides (a give-away is a move to the public ground, which no tutorial event follows):
+// it is a guard, no flow reaches it today.
+//
+// Another player in that house write (not the one whose command it is) still keeps the
+// snapshot of its give-away apart: only the server's drops at its feet put anything of it
+// in the house (holdGround), nothing of the house goes into its state, so a dropped write
+// loses at most that drop and duplicates nothing.
 //
 // The settlement points: the start of a player command settles every giver (not only the
 // commanding player) before that command can make a transfer or change a house, and
@@ -206,8 +209,13 @@ func (w *World) settleGave(p *Player) {
 // house write carries the state after it, and a dropped write never frees what it put on
 // the street.
 func (w *World) reserveGiven(p *Player) bool {
-	if slices.Contains(p.given, nil) {
-		return false
+	for _, r := range p.given {
+		if r == nil {
+			return false
+		}
+		if g, ok := w.heldGround[r]; ok && g.char != p.charID {
+			return false // never take over another character's reservation
+		}
 	}
 	for _, r := range p.given {
 		if r.onGround {

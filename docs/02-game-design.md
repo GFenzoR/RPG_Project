@@ -54,8 +54,8 @@ Tibia:
   el paso sobre su casilla, el jugador aparece en el otro extremo. El paso ocurre y en el
   mismo tick llega al destino, con el mapa del otro piso. Quienes lo veían reciben el paso y
   enseguida su desaparición: el cliente lo borra en el acto, sin dibujar el paso, así que lo
-  ven desaparecer de la casilla donde estaba. Cuesta lo que un paso. Un agujero solo baja y no tiene vuelta; una
-  escalera tiene su pareja (otra escalera que sale junto al destino y llega junto al origen),
+  ven desaparecer de la casilla donde estaba. Cuesta lo que un paso. Un agujero solo baja
+  y no tiene vuelta; una escalera tiene su pareja (otra escalera que sale junto al destino y llega junto al origen),
   así que nunca se aparece sobre la escalera de vuelta. Un teletransporte puede quedar en el
   mismo piso o llevar a otra isla.
 - **Escalera de mano (`ladder`): se usa.** Click derecho (o "Trepar" del toque largo) sobre

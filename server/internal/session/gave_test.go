@@ -977,9 +977,12 @@ func TestGiftAndHouseInOneCommandWaitForTheHouseWrite(t *testing.T) {
 	takeGift := moveItem(onTile(cottageExit), bagID, 1, inContainer(cp, 0), 1)
 	h.sim.Command(h.w.Saved(a.CharacterID(), house.Seq-1)) // an older ack frees neither
 	h.sim.Step()
-	for name, take := range map[string]*pb.ClientMessage{"sword": takeSword, "gift": takeGift} {
-		if !hasKey(h.send(cc, take), "inventory.not_yours") {
-			t.Fatalf("the %s was not reserved to Ana until the house write's ack", name)
+	for _, c := range []struct {
+		name string
+		take *pb.ClientMessage
+	}{{"sword", takeSword}, {"gift", takeGift}} {
+		if !hasKey(h.send(cc, c.take), "inventory.not_yours") {
+			t.Fatalf("the %s was not reserved to Ana until the house write's ack", c.name)
 		}
 	}
 	h.sim.Command(h.w.Saved(a.CharacterID(), house.Seq))
@@ -1023,11 +1026,17 @@ func TestGiftAndHouseInOneCommandKeepNothingTwice(t *testing.T) {
 	if jobs := db.jobs[n:]; len(jobs) != 1 || jobs[0].Transfer == nil {
 		t.Fatalf("the command wrote %d jobs, want the house write alone", len(jobs))
 	}
-	if ids := db.sync(h.harness); !slices.Equal(ids, []int64{a.CharacterID()}) {
+	ids := db.sync(h.harness)
+	if !slices.Equal(ids, []int64{a.CharacterID()}) {
 		t.Fatalf("tainted %v, want Ana", ids)
 	}
 	if db.count(a.CharacterID(), swordID) != 0 || db.rowSeq(a.CharacterID()) != last {
 		t.Fatal("Ana's row is not her save before the command: it has the sword the house's row has too")
+	}
+	h.sim.Command(h.w.Tainted(ids)) // as app tells the loop: Ana is taken out
+	h.sim.Step()
+	if h.w.HeldGroundForTest() == 0 {
+		t.Fatal("the taint freed the reservation of the gift")
 	}
 	cp := openPack(t, h.harness, cc)
 	if !hasKey(h.send(cc, moveItem(onTile(cottageExit), bagID, 1, inContainer(cp, 0), 1)), "inventory.not_yours") {
