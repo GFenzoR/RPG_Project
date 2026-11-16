@@ -1953,6 +1953,13 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     await help.locator("summary").click();
     await expect(help.locator("p")).toContainText("Camina con las flechas");
     await shot(page, "44-controls-help-960");
+    // The opened help wraps inside its box and the window (the header itself is nowrap).
+    const fits = await help
+      .locator("p")
+      .evaluate(
+        (p) => p.scrollWidth <= p.clientWidth && p.getBoundingClientRect().right <= innerWidth,
+      );
+    expect(fits).toBe(true);
     expect((await hud.boundingBox())?.height ?? 999).toBeLessThan(80);
     expect((await page.getByTestId("game-canvas").boundingBox())?.y).toBe(mapTop);
     await help.locator("summary").click();

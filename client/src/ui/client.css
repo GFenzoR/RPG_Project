@@ -204,6 +204,8 @@ button.link {
   max-width: 28rem;
   margin: 0.25rem 0 0;
   padding: 0.6rem 0.75rem;
+  /* The header is nowrap (one line): the opened help wraps inside its box. */
+  white-space: normal;
   background: var(--panel);
   border: 1px solid var(--muted);
   border-radius: 0.4rem;
