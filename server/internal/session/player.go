@@ -639,12 +639,16 @@ func (w *World) Clients() []Client {
 
 // placement chooses where a joining character appears: its saved position, or its
 // temple, moved to the nearest free walkable tile where a player there could walk
-// (freeNear). A position saved on a locked door (logged out in its open doorway) counts
-// even with the door shut again: the search puts the player on its outside.
+// (freeNear). The saved position counts whenever a search from it finds somewhere a
+// player there walks (searchFrom), even on a tile nobody may stand on now: a door shut
+// since the logout (in its open doorway) puts the player beside it, on its outside if the
+// door is locked, on either side if it is not; a house door, in its house or on the
+// street of its exit. Only a tile of no area with no rule of its own (a wall, no tile:
+// the map changed) sends the character to its temple.
 func (w *World) placement(c Character) world.Pos {
 	temple := w.temple(c.Town)
 	want := temple
-	if c.HasPos && (w.m.Walkable(c.Pos) || w.lockedDoor(c.Pos)) {
+	if c.HasPos && w.searchFrom(c.Pos).n > 0 {
 		want = c.Pos
 	}
 	if p, ok := w.freeNear(want, 3); ok {
@@ -653,9 +657,9 @@ func (w *World) placement(c Character) world.Pos {
 	if p, ok := w.freeNear(temple, 3); ok {
 		return p
 	}
-	if w.tileArea(want) == 0 {
-		// A position saved on stairs (before the server loaded portals, or by a GM) or on
-		// a locked door: the temple rather than a tile nobody stands on.
+	if w.tileArea(want) == 0 || !w.m.Walkable(want) {
+		// A position saved on stairs (before the server loaded portals, or by a GM), on a
+		// locked door or on a closed door: the temple rather than a tile nobody stands on.
 		return temple
 	}
 	return want // crowded: share the tile rather than refuse the login
@@ -701,7 +705,12 @@ func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 	return w.freeAround(p, radius, false)
 }
 
-// freeAround is freeNear, also without house tiles if noHouse.
+// freeAround is freeNear, also without house tiles if noHouse. noHouse is a second guard
+// that none of today's callers needs: each starts on a tile of a street area (a portal
+// end, a boat arrival, a dialog teleport or a house exit, none on a house tile:
+// world.NewMap, checkArrivals), and areaAllows never puts a search from a street area on
+// a house tile (a house area is negative). It keeps a caller that starts elsewhere out of
+// every house.
 func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bool) {
 	from := w.searchFrom(p)
 	skip := world.FlagBlocksMovement | world.FlagPortalStep

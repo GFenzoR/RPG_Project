@@ -105,6 +105,79 @@ func TestStaffTeleportOntoALockedDoorLandsOutside(t *testing.T) {
 	}
 }
 
+// A door that is not locked joins its two sides in one area, shut or open: a character
+// that logged out in its open doorway logs in beside it, on either side (the first free
+// tile of the ring, here in the west room), even with the door shut since (a restart puts
+// every door back as the map draws it), not at the temple.
+func TestLoginOnAShutPlainDoorIsBesideIt(t *testing.T) {
+	h := newHarness(t, worldtest.Map(t, 0, 0, 7, gateRows("D")...),
+		func(c *session.Config) { c.Items = doorTestItems(false) })
+	door := pos(4, 2)
+	if a := h.w.AreaOf(door); a == 0 || h.w.AreaOf(pos(3, 1)) != a || h.w.AreaOf(pos(7, 1)) != a {
+		t.Fatalf("areas: door %d, west %d, temple %d", a, h.w.AreaOf(pos(3, 1)), h.w.AreaOf(pos(7, 1)))
+	}
+	c := withPack(9791, door)
+	c.Name = "Doorway"
+	if _, p := h.joinChar(c); p.Pos() != pos(3, 1) {
+		t.Fatalf("login on the shut door at %v, want (3,1) beside it", p.Pos())
+	}
+}
+
+// With every tile a search may give taken, a character saved on a locked door (open or
+// shut) shares the tile of its temple rather than stand in the doorway, a step from the
+// room without the key: the outside (3,1) and the temple (4,1) are the only tiles of the
+// outside, and the room (1,1) is no place for it. On a shut plain door (its area is both
+// sides) it shares the temple too, rather than stand inside the shut door.
+func TestCrowdedLoginOnADoorSharesTheTemple(t *testing.T) {
+	gate, temple := pos(2, 1), pos(4, 1)
+	for _, tc := range []struct {
+		name, drawn string
+		locked      bool
+		crowd       []world.Pos
+	}{
+		{"locked open", "d", true, []world.Pos{temple, pos(3, 1)}},
+		{"locked shut", "D", true, []world.Pos{temple, pos(3, 1)}},
+		{"plain shut", "D", false, []world.Pos{temple, pos(3, 1), pos(1, 1)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, worldtest.Map(t, 0, 0, 7, "######", "#."+tc.drawn+".T#", "######"),
+				func(c *session.Config) { c.Items = doorTestItems(tc.locked) })
+			if h.w.InDoorRoom(gate, pos(1, 1)) != tc.locked || (h.w.AreaOf(gate) == 0) != tc.locked ||
+				h.w.AreaOf(pos(3, 1)) != h.w.AreaOf(temple) {
+				t.Fatalf("the map: room %v, gate in area %d", h.w.InDoorRoom(gate, pos(1, 1)), h.w.AreaOf(gate))
+			}
+			for i, p := range tc.crowd {
+				c := withPack(int64(9811+i), p)
+				c.Name = fmt.Sprintf("Crowd%d", i)
+				if _, b := h.joinChar(c); b.Pos() != p {
+					t.Fatalf("crowd at %v, want %v", b.Pos(), p)
+				}
+			}
+			late := withPack(9819, gate)
+			late.Name = "Late"
+			if _, p := h.joinChar(late); p.Pos() != temple {
+				t.Fatalf("late logged in at %v, want the temple %v, not the doorway", p.Pos(), temple)
+			}
+		})
+	}
+}
+
+// A search for a free tile from a tile no player may be on with no rule of its own (a
+// wall, no tile at all) finds nothing (area.go searchFrom): it does not guess. Its caller
+// falls back on its last resort (the temple, the exit, a refusal); the ring around the
+// wall (2,1) offers the pocket (1,1) and the house (3,1), both free.
+func TestFreeTileFromAWallFindsNone(t *testing.T) {
+	h := newHarness(t, houseRowsMap(t))
+	for _, from := range []world.Pos{pos(2, 1), pos(0, 0), pos(200, 200)} {
+		if q, ok := h.w.FreeNear(from, 3); ok {
+			t.Fatalf("a search from %v found %v", from, q)
+		}
+	}
+	if q, ok := h.w.FreeNear(pos(1, 1), 3); !ok || q != pos(1, 1) {
+		t.Fatalf("a search from the pocket found %v, %v", q, ok)
+	}
+}
+
 // houseRows are a house (3..4, 1..2, its door (3,2) above its exit (3,3)), a tile (1,1)
 // two rings west of it sealed by walls, and a street with the temple below.
 var houseRows = []string{

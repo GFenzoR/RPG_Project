@@ -354,6 +354,9 @@ func (w *World) AreaOf(p world.Pos) int32 { return w.areaOf(p) }
 // (tests only: the memory of the index, docs/07).
 func (w *World) Areas() (areas int32, sectors int) { return w.areaCount, len(w.areas) }
 
+// FreeNear is freeNear (tests only): a search for a free tile by rings from p.
+func (w *World) FreeNear(p world.Pos, radius int) (world.Pos, bool) { return w.freeNear(p, radius) }
+
 // HouseAreaOf returns the house area of p (area.go; tests only): 0 for none.
 func (w *World) HouseAreaOf(p world.Pos) int32 { return max(-w.tileArea(p), 0) }
 
