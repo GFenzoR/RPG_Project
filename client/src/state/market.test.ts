@@ -114,6 +114,22 @@ describe("applyMarket", () => {
     ).toEqual([]);
   });
 
+  it("keeps the create form's default price while the window shows the same item", () => {
+    const at = (itemId: number, referencePrice: bigint, refresh: boolean) =>
+      create(MarketUpdateSchema, { open: true, refresh, itemId, referencePrice });
+    const open = applyMarket(undefined, at(68, 6n, false));
+    expect(open?.priceDefault).toBe(6);
+    // Another player's sale moves the reference price: the default stays.
+    const later = applyMarket(open, at(68, 9n, true));
+    expect(later?.referencePrice).toBe(9);
+    expect(later?.priceDefault).toBe(6);
+    expect(applyMarket(later, at(68, 9n, false))?.priceDefault).toBe(6);
+    // Another item, or the window opened again, starts from its reference price.
+    expect(applyMarket(later, at(66, 3n, false))?.priceDefault).toBe(3);
+    expect(applyMarket(undefined, at(68, 9n, false))?.priceDefault).toBe(9);
+    expect(applyMarket(undefined, at(68, 0n, false))?.priceDefault).toBe(1);
+  });
+
   it("never reopens a closed window, but an answer opens it", () => {
     expect(applyMarket(undefined, book(6, true))).toBeUndefined();
     expect(applyMarket(undefined, book(6, false))?.itemId).toBe(68);
