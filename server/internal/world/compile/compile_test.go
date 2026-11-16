@@ -361,6 +361,8 @@ func TestCompileErrors(t *testing.T) {
 	const worldYAML = "world/world.yaml"
 	const chunk = "world/islands/mini/chunks/z07/c0001_0001.json"
 	const portals = "world/islands/mini/portals.yaml"
+	const items = "data/items/items.yaml"
+	const cave = "world/islands/mini/chunks/z08/c0002_0001.json"
 	cases := []struct {
 		name    string
 		files   []string
@@ -382,6 +384,11 @@ func TestCompileErrors(t *testing.T) {
 		{"portal outside the world", []string{portals}, "x: 72, y: 54, z: 7", "x: 72, y: 54, z: 16", "outside the world"},
 		{"portal into nothing", []string{portals}, "x: 72, y: 54, z: 7", "x: 72, y: 33, z: 8", "not a walkable tile"},
 		{"stairs on one floor", []string{portals}, "to: { x: 66, y: 55, z: 8 }", "to: { x: 66, y: 55, z: 7 }", "must change floor"},
+		// Every portal but a boat stands under the item that shows it (docs/03).
+		{"portal without its item", []string{cave}, `,
+    { "x": 2, "y": 22, "stack": [2] }`, "", `stairs "mini_cave_up" has no item that shows it on its entrance 66,54,8`},
+		{"portal under an item of another kind", []string{items}, "portal: { kind: teleport }", "portal: { kind: hole }", `teleport "mini_shortcut" has no item that shows it`},
+		{"stairs under the look of the other way", []string{items}, "portal: { kind: stairs, leads: down }", "portal: { kind: stairs, leads: up }", `stairs "mini_cave_down" has no item that shows it`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -115,9 +115,9 @@ Tibia:
   desde abajo) / `ladder_down` (la trampilla abierta de arriba), `hole` (agujero),
   `rope_spot` (la luz que entra por un hueco del techo) y `teleport` (un anillo de piedras
   grabadas alrededor de un remolino de luz). Arte propio de `tools/spritegen`, estático: el
-  atlas no anima items. `make validate` exige el item en la entrada de cada portal (salvo
-  un `boat`) y el servidor avisa en el log al arrancar si falta (`03-world-and-maps.md`,
-  "Validación"). El item no mueve a nadie: lo hace `portals.yaml`.
+  atlas no anima items. `make validate` y `mapcompile` exigen el item en la entrada de
+  cada portal (salvo un `boat`), y el servidor avisa en el log al arrancar si falta
+  (`03-world-and-maps.md`, "Validación"). El item no mueve a nadie: lo hace `portals.yaml`.
 - **Items que caen:** lo que se tira (`MoveItem`) sobre una escalera, un agujero o un
   teletransporte cae al otro extremo, como en Tibia: queda en el destino del portal o, si
   ahí no entra (`maxGroundItems` items distintos y ninguna pila a la que sumarse), en la

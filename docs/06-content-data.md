@@ -184,7 +184,8 @@ items:
   donde no sale ninguno es advertencia. Hoy: `stairs_down`/`stairs_up`, `ladder_up`/
   `ladder_down`, `hole`, `rope_spot` y `teleport` (arte propio de
   `tools/spritegen/src/recipes/portals.ts`, salvo las escaleras). El servidor lo lee como
-  `content.PortalLook` (solo para avisar de un portal sin su item).
+  `content.PortalLook`: `mapcompile` rechaza un portal sin su item y la sesión avisa al
+  arrancar si falta (para un `world.bin` compilado antes de cambiar `data/items`).
 - **Paso bloqueado** (regla del contrato, la aplican el validador de mapas y
   `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro

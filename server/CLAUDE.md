@@ -285,9 +285,10 @@ server/
   ni entradas de portales que se pisan, a `travel.arrival_radius`) y desde ahí sigue como
   un tirar a esa casilla (`groundMerge`, `heldDrop`, `leftHouse`, `gaveAway`). Toda
   búsqueda nueva por anillos usa `searchRings` (que aplica `searchFrom` + `areaAllows`)
-  con su propia prueba de la casilla. `initPortals` avisa (log) de un portal sin el item
-  que lo muestra (`content.PortalLook`, bloque `portal` de `data/items`); `make validate`
-  lo rechaza.
+  con su propia prueba de la casilla. Un portal sin el item que lo muestra
+  (`content.PortalLook`, bloque `portal` de `data/items`) lo rechazan `make validate` y
+  `mapcompile` (`compile.checkPortalLooks`); `initPortals` solo avisa (log), para un
+  `world.bin` compilado antes de cambiar `data/items`.
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

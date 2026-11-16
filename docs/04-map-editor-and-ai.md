@@ -47,7 +47,7 @@ dependencias de Node para que el editor la use en el navegador).
 | `add_spawn` / `remove_spawn` | campos de spawns.yaml | |
 | `add_zone` / `remove_zone` | campos de zones.yaml | |
 | `place_npc` / `remove_npc` | `pos`, `npc` | |
-| `add_portal` / `remove_portal` | campos de portals.yaml | No coloca el item que lo muestra: un `place_item` en su `from` (`stairs_down`, `ladder_up`, `hole`…, los items con bloque `portal`); sin él `make validate` falla (`03-world-and-maps.md`, "Validación") |
+| `add_portal` / `remove_portal` | campos de portals.yaml | No coloca el item que lo muestra: un `place_item` en su `from` (`stairs_down`, `ladder_up`, `hole`…, los items con bloque `portal`); sin él `make validate` y `make mapcompile` fallan (`03-world-and-maps.md`, "Validación") |
 | `stamp` | `pos`, `prefab` | Coloca un prefab (casa, muelle, templo) de `world/prefabs/` |
 | `add_house` | `id`, `rent`, `rects[]`, `doors[]`, `exit`, `notes?`, `name?`, `index?` | Agrega una casa a `houses.yaml` (T5.4) |
 | `set_house` | `id` y los campos que cambian (`rent`, `rects`, `doors`, `exit`, `notes`; `notes: null` las quita) | Cambia una casa en su lugar; el `id` nunca cambia |

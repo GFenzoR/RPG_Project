@@ -167,13 +167,15 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   portal es la casilla, no un item, pero se ve por el item que lo muestra, que va en la
   pila de su `from` (un item con bloque `portal`, `06-content-data.md`): `stairs_down` /
   `stairs_up`, `ladder_up` (la escalera de mano de abajo, que sube) / `ladder_down` (la
-  trampilla de arriba, que baja), `hole`, `rope_spot` y `teleport`. `make validate` lo
-  exige ("Validación"); el servidor no lo mira para mover a nadie, solo avisa en el log al
-  arrancar si falta (`world.bin` guarda números de item, no qué son: `NewMap` no puede
-  comprobarlo, y lo hace `session` con el contenido cargado; avisa en vez de no arrancar
-  porque un portal sin su item funciona igual, solo se ve como suelo, y los mapas de los
-  tests ponen portales en casillas sin nada). `add_portal` no coloca el item: va aparte,
-  con `place`/`place_item`. El atlas no anima items: el teletransporte es estático.
+  trampilla de arriba, que baja), `hole`, `rope_spot` y `teleport`. `make validate` y
+  `mapcompile` lo exigen ("Validación", "Compilación": sin el item no hay `world.bin`); el
+  servidor no lo mira para mover a nadie y al arrancar solo avisa en el log si falta, para
+  un `world.bin` compilado antes de cambiar `data/items` (`world.bin` guarda números de
+  item, no qué son: `NewMap` no puede comprobarlo, y lo hace `session` con el contenido
+  cargado; avisa en vez de no arrancar porque un portal sin su item funciona igual, solo
+  se ve como suelo, y los mapas de los tests de `session` ponen portales en casillas sin
+  nada). `add_portal` no coloca el item: va aparte, con `place`/`place_item`. El atlas no
+  anima items: el teletransporte es estático.
 - Nadie se para sobre la entrada de un `stairs`, `hole` o `teleport`: ningún NPC ahí,
   ningún spawn de radio 0 centrado ahí (los monstruos no la pisan, quedaría vacío) y ni el
   templo ni la salida de una casa (el último recurso de despertar y de salir de una casa
@@ -290,7 +292,9 @@ La validación completa del mapa (conectividad, spawns, i18n...) sigue siendo la
 `packages/map-format` (`make validate`). `mapcompile` solo rechaza lo que no puede
 compilar: rect no alineado o distinto del de `world.yaml`, chunk fuera de la isla o en un
 piso no listado, nombre de archivo incoherente, item desconocido o sin ID numérico, IDs
-numéricos repetidos en `ids.lock.yaml`, tipo de zona o de portal desconocido, y lo que
+numéricos repetidos en `ids.lock.yaml`, tipo de zona o de portal desconocido, un portal
+(salvo un `boat`) sin el item que lo muestra en su entrada (la misma regla que
+"Validación": un servidor nunca carga un mapa con suelo que mueve sin verse) y lo que
 `world.NewMap` no acepta (ver "Historial" de `world.bin`).
 
 ### Flags de tile
@@ -411,7 +415,7 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   casilla (el servidor los indexa por la entrada). Ningún NPC, spawn de radio 0, templo ni
   salida de casa sobre la entrada de un `stairs`/`hole`/`teleport`. Un id de portal no se
   repite en todo el mundo (como en el servidor). **El item que lo muestra:** la entrada de
-  todo portal salvo un `boat` tiene (en su pila) un item cuyo bloque `portal` es de su
+  todo portal salvo un `boat` tiene (en su pila o como suelo) un item cuyo bloque `portal` es de su
   `kind` y, si dice `leads`, del sentido en que cambia de piso (`down` si `to.z > from.z`,
   `up` si es menor; un teletransporte del mismo piso solo con un item sin `leads`); el
   error nombra los items de `data/items` que sirven. **Advertencia:** un item de portal en

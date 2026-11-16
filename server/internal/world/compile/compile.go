@@ -17,7 +17,8 @@
 //   - Houses (houses.yaml, T5.4) travel as data; world.NewMap marks their tiles with
 //     FlagHouse and FlagProtection.
 //   - Portals (portals.yaml: stairs, ladders, holes, rope spots, teleports) travel as data
-//     too (world.bin v5); world.NewMap checks and indexes them by their entrance tile.
+//     too (world.bin v5); world.NewMap checks and indexes them by their entrance tile, and
+//     every one but a boat needs the item that shows it on that tile (checkPortalLooks).
 package compile
 
 import (
@@ -33,6 +34,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -43,6 +45,8 @@ type Item struct {
 	BlocksMovement *bool      `yaml:"blocks_movement"`
 	BlocksSight    *bool      `yaml:"blocks_sight"`
 	Ground         *groundDef `yaml:"ground"`
+	// Portal makes the item the look of a portal of portals.yaml (docs/03 "Validación").
+	Portal *content.PortalLook `yaml:"portal"`
 
 	num uint16
 }
@@ -234,7 +238,41 @@ func Compile(root string) (*world.Map, error) {
 	if err != nil {
 		return nil, fmt.Errorf("world/world.yaml: %w", err)
 	}
+	if err := checkPortalLooks(m, content); err != nil {
+		return nil, err
+	}
 	return m, nil
+}
+
+// checkPortalLooks refuses a portal (but a boat) whose entrance holds no item that shows
+// it, on its ground or its stack: an item whose portal block names its kind and, if it
+// says one, the way it leads (content.PortalLook.Shows). Players would see plain ground
+// that moves them. make validate refuses the same (packages/map-format); the server warns
+// again at startup (session initPortals) when data/items changed since the compile.
+func checkPortalLooks(m *world.Map, c *Content) error {
+	byNum := make(map[uint16]*Item, len(c.Items))
+	for _, it := range c.Items {
+		if it.num != 0 {
+			byNum[it.num] = it
+		}
+	}
+	for _, is := range m.Islands() {
+		for _, pt := range is.Portals {
+			if pt.Kind == world.PortalBoat {
+				continue
+			}
+			shows := func(id uint16) bool {
+				it := byNum[id]
+				return it != nil && it.Portal.Shows(pt.Kind.String(), pt.From.Z, pt.To.Z)
+			}
+			if ground, _, _ := m.Tile(pt.From); shows(ground) || slices.ContainsFunc(m.Stack(pt.From), shows) {
+				continue
+			}
+			return fmt.Errorf("world/islands/%s/portals.yaml: %s %q has no item that shows it on its entrance %d,%d,%d (an item of data/items with a portal block of that kind and way, docs/03)",
+				is.ID, pt.Kind, pt.ID, pt.From.X, pt.From.Y, pt.From.Z)
+		}
+	}
+	return nil
 }
 
 func compileIsland(root, id string, worldRect rect, content *Content) (*world.Island, []*world.Sector, error) {

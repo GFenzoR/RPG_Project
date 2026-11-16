@@ -28,7 +28,6 @@ import (
 // cannot reach a protection zone through a portal from outside one, like on foot: from
 // the tile it takes the portal on (the stairs it steps onto, or where it stands to climb
 // a ladder or a rope).
-
 //
 // What is dropped (MoveItem) onto stairs, a hole or a teleport falls through to the other
 // end (fallTo): it lands on the destination or, if that has no room for it, on the closest
@@ -37,8 +36,9 @@ import (
 // on that tile: the hold of a transfer (heldDrop), the reservations of hold.go, what
 // leaves a house (leftHouse), the economy ledger.
 //
-// Every portal (but a boat) should stand under an item that shows it (content.PortalLook,
-// docs/03): make validate refuses a map without it, the server only warns (initPortals).
+// Every portal (but a boat) stands under an item that shows it (content.PortalLook,
+// docs/03): make validate and mapcompile refuse a map without it; the server warns again
+// at startup (initPortals), for a world.bin compiled before data/items changed.
 
 // i18n keys of the portal messages (i18n/*/client.yaml).
 const (
@@ -49,10 +49,12 @@ const (
 )
 
 // initPortals warns about every portal (but a boat) whose entrance holds no item that
-// shows it (content.PortalLook). make validate refuses such a map; world.NewMap cannot
-// check it (world.bin keeps item numbers, not what they are), and a portal without its
-// item still works: it only looks like plain ground (the client keeps its paths off it
-// all the same, from portals.yaml).
+// shows it (content.PortalLook). make validate and mapcompile (compile.checkPortalLooks)
+// refuse such a map, so only a world.bin compiled before data/items changed gets here;
+// world.NewMap cannot check it (world.bin keeps item numbers, not what they are). It warns
+// rather than stops: a portal without its item still works, it only looks like plain
+// ground (the client keeps its paths off it all the same, from portals.yaml), and the
+// maps of the tests (world.NewMap, no data/items) put portals on bare tiles.
 func (w *World) initPortals() {
 	for _, pt := range w.m.Portals() {
 		if pt.Kind != world.PortalBoat && !w.portalShown(pt) {
