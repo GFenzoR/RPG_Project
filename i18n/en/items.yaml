@@ -186,7 +186,7 @@ item.forge_seal.desc: "A black bronze disc with the mark of the ancient forge. A
 item.ember_key.name: "ember key"
 item.ember_key.desc: "The ember root, back in its true shape: a stone key that never cools. It opens and locks the forge gate."
 item.forge_gate.name: "forge gate"
-item.forge_gate.desc: "Black iron with the mark of the ancient forge. Its lock is shaped like a root, and it is warm."
+item.forge_gate.desc: "Two leaves of blackened wood under a stone arch, crossed by runes that glow blue. Its lock is shaped like a root, and it is warm."
 item.forge_gate_open.name: "open forge gate"
 item.forge_gate_open.desc: "The forge gate, open. The heat of the ancient forge rises from the other side."
 item.ember_vein.name: "ember vein"
