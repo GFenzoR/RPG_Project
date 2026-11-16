@@ -288,8 +288,18 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
   rechaza crudos). Acentos, ñ y el resto de Unicode pasan.
 - **Parcelas** (`checkPlots` en `packages/map-format/src/patch/plots.ts`, reglas en
   `03-world-and-maps.md`): casillas y entradas fuera de toda parcela `community_plot` de la
-  base. Falla si hay alguna y el autor no es maintainer (`.github/MAINTAINERS` de la base u
-  OWNER, y dueño del repo del head).
+  base, y portales entre islas (`cross_island`, abajo). Falla si hay alguno y el autor no es
+  maintainer (`.github/MAINTAINERS` de la base u OWNER, y dueño del repo del head).
+- **Portales de la comunidad (para moderadores).** Un portal mueve jugadores de verdad
+  (escaleras, agujeros, teletransportes), así que un PR de la comunidad solo puede unir
+  casillas de **una misma isla**, con sus dos extremos en parcelas. Un portal con un extremo
+  en una parcela de otra isla es `cross_island` ("portal entre islas" en el comentario) y
+  necesita un maintainer: se saltaría el barco, con su precio, sus requisitos y su bloqueo
+  de combate (`travel.combat_block_ms`: nadie zarpa recién peleado), y serviría para huir
+  de una pelea o para llegar gratis a una isla de nivel alto. Aun dentro de una isla, revisa
+  todo portal de un PR de la comunidad antes de aprobarlo: adónde lleva (que no sea un
+  atajo que se salte una cueva, un jefe o el camino pensado de la isla), si tiene vuelta y
+  si el validador avisa que desde su destino no se llega a ningún templo.
 - **Contenido del "después".** El mapa se lee con contenido (`data/` e `i18n/` para el
   validador y los renders, `assets/` para el atlas de los renders), y el "después" lleva
   **el contenido del árbol del merge** (`landContent`): el worktree sale de la base y se le
@@ -478,9 +488,10 @@ propio):
   formato 2, y cada ruta tiene que ser un archivo de mapa de `world/` (`writablePath`).
   También repite el chequeo de **parcelas** contra las zonas de la base (`checkPlots`):
   el portal es para cambios dentro de `community_plot`, y el autor del PR es el token del
-  worker, no el jugador. El worker se niega a correr con el token del dueño del repo o de
-  alguien de `MAINTAINERS` (docs/09: una cuenta de bot colaboradora con un PAT clásico
-  `public_repo`).
+  worker, no el jugador. Cualquier hallazgo, también un portal entre islas
+  (`cross_island`), termina en la falla `outside_plot`. El worker se niega a correr con el
+  token del dueño del repo o de alguien de `MAINTAINERS` (docs/09: una cuenta de bot
+  colaboradora con un PAT clásico `public_repo`).
 - **Crédito:** el mismo commit agrega a `world/CONTRIBUTORS.md` una fila
   `| <personaje> | <islas> | envío n.º <id> | <fecha de aprobación> |`. Es el archivo que
   `PLOT_FREE_FILES` deja tocar a cualquiera. Va el número de envío y no el del PR porque
@@ -579,7 +590,9 @@ La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y `r
 3. `autoborder`, luego `scatter` para vegetación y rocas.
 4. Colocar estructuras con `stamp` y prefabs.
 5. Spawns, NPCs, zonas, portales.
-6. `map_validate` hasta que no haya errores.
+6. `map_validate` hasta que no haya errores, y lee las advertencias: p. ej. desde el
+   destino de un `hole` o un `teleport` no se llega a ningún templo sin soga (bien para un
+   pozo, un error si fue sin querer; `03-world-and-maps.md`, "Validación").
 7. `map_render` de cada área tocada y revisar las imágenes.
 8. `map_patch_create` y abrir PR. Fuera de una parcela `community_plot` hace falta un
    maintainer (ver "PR de mapas en CI").

@@ -7,7 +7,8 @@
 // radius (where their monsters roam), NPCs and texts
 // by their tile, portals by both ends, zones by every tile of their rects on each floor.
 // Changing a `community_plot` zone itself (adding, moving, removing a plot) is always
-// maintainer-only, wherever it is. Pure apart from parsePatchFile (schemas).
+// maintainer-only, wherever it is, and so is a portal whose ends lie in plots of two
+// islands (it would skip the boat). Pure apart from parsePatchFile (schemas).
 import { CHUNK_SIZE, rectContains } from "../types.ts";
 import type { Chunk, Position, Rect, World, Zone } from "../types.ts";
 import { chunkChanges, listKey } from "./merge.ts";
@@ -43,7 +44,11 @@ export type PlotViolation =
       path: string;
       entry: string;
       change: "added" | "removed" | "changed";
-      reason: "outside_plot" | "plot_definition";
+      /**
+       * outside_plot: a tile of it lies in no plot. plot_definition: it is a plot.
+       * cross_island: a portal (as the change leaves it) between plots of two islands.
+       */
+      reason: "outside_plot" | "plot_definition" | "cross_island";
     }
   | { kind: "file"; path: string; reason: "not_map_file" | "invalid" | "island_meta" };
 
@@ -82,7 +87,26 @@ export function communityPlots(world: World): Plot[] {
 }
 
 export function inPlot(plots: readonly Plot[], x: number, y: number, z: number): boolean {
-  return plots.some((p) => p.floors.includes(z) && p.rects.some((r) => rectContains(r, x, y)));
+  return plotAt(plots, x, y, z) !== undefined;
+}
+
+/** The plot that holds tile (x, y, z), if any. */
+function plotAt(plots: readonly Plot[], x: number, y: number, z: number): Plot | undefined {
+  return plots.find((p) => p.floors.includes(z) && p.rects.some((r) => rectContains(r, x, y)));
+}
+
+/**
+ * Whether e is a portal whose two ends lie in plots of different islands. Portals move
+ * players (stairs, holes, teleports): one between islands would skip the boat, its price
+ * and requirements and its travel.combat_block_ms (no sailing right after a fight), so a
+ * community change may only join tiles of one island. Only for an entry inside the plots
+ * (entryInside): each end then lies in a plot, and a plot lies in its island's rect.
+ */
+function crossesIslands(plots: readonly Plot[], e: ListEntry): boolean {
+  if (!("from" in e)) return false;
+  const a = plotAt(plots, e.from.x, e.from.y, e.from.z);
+  const b = plotAt(plots, e.to.x, e.to.y, e.to.z);
+  return a !== undefined && b !== undefined && a.island !== b.island;
 }
 
 function parse(path: string, text: string | null): { ok: boolean; value: unknown } {
@@ -167,6 +191,9 @@ export function checkPlots(plots: readonly Plot[], files: readonly FileChange[])
         out.push({ kind: "entry", path: f.path, entry: key, change, reason: "plot_definition" });
       else if ((eb && !entryInside(plots, eb)) || (ea && !entryInside(plots, ea)))
         out.push({ kind: "entry", path: f.path, entry: key, change, reason: "outside_plot" });
+      // What the change leaves: removing a maintainer's portal between islands is fine.
+      else if (ea && crossesIslands(plots, ea))
+        out.push({ kind: "entry", path: f.path, entry: key, change, reason: "cross_island" });
     }
   }
   return out;

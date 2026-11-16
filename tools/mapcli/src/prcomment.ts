@@ -198,7 +198,7 @@ export function checkReport(raw: unknown): CheckedReport {
         path,
         entry: str(v.entry, "entry", ID),
         change: oneOf(v.change, "change", ["added", "removed", "changed"]),
-        reason: oneOf(v.reason, "reason", ["outside_plot", "plot_definition"]),
+        reason: oneOf(v.reason, "reason", ["outside_plot", "plot_definition", "cross_island"]),
       };
     if (v.kind === "file")
       return {
@@ -405,6 +405,8 @@ const plain = (s: string): string =>
 const VIOLATION_TEXT: Record<string, string> = {
   outside_plot: "fuera de toda parcela",
   plot_definition: "define, mueve o quita una parcela (solo maintainers)",
+  cross_island:
+    "portal entre islas: se saltaría el barco y su bloqueo de combate (solo maintainers)",
   not_map_file: "archivo de world/ que no es de mapa",
   invalid: "archivo inválido (no pasa su esquema)",
   island_meta: "world.yaml, island.yaml o prefab (solo maintainers)",
@@ -415,7 +417,8 @@ const CHANGE_TEXT: Record<string, string> = {
   changed: "cambiada",
 };
 const FAILURE_TEXT: Record<(typeof FAILURES)[number], string> = {
-  plots: "toca el mapa fuera de las parcelas `community_plot` y el autor no es maintainer",
+  plots:
+    "toca el mapa fuera de las parcelas `community_plot` (o une dos islas con un portal) y el autor no es maintainer",
   conflicts: "choca con cambios posteriores de la rama base (rebase y vuelve a empujar)",
   validation: "el mapa fusionado tiene errores nuevos del validador",
   invalid:

@@ -1111,6 +1111,23 @@ describe("pr comment", () => {
     expect(buildComment(checkReport(good), ctx, asMaintainer)).toContain("✅ **Pasa.**");
   });
 
+  it("names a community portal between islands (cross_island) in the plots table", () => {
+    const cross = {
+      kind: "entry",
+      path: "world/islands/puerto/portals.yaml",
+      entry: "puerto_shortcut",
+      change: "added",
+      reason: "cross_island",
+    };
+    const r = checkReport({ ...good, plots: { ...good.plots, violations: [cross] } });
+    expect(r.plots.violations).toEqual([cross]);
+    const body = buildComment(r, ctx, mapOnly);
+    expect(body).toContain(
+      "| `world/islands/puerto/portals.yaml` | entrada `puerto_shortcut` agregada | portal entre islas: se saltaría el barco y su bloqueo de combate (solo maintainers) |",
+    );
+    expect(body).toContain("o une dos islas con un portal");
+  });
+
   it("never shows a pass when the PR changes the check's code or config (B1)", () => {
     const files = [PLOT_CHUNK, "packages/map-format/src/patch/plots.ts", "docs/03.md"];
     const t = trustedFacts(files, true);

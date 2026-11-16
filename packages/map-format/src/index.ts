@@ -25,8 +25,16 @@ export {
   doorRooms,
   doorsOn,
   hasLockedDoor,
+  templeReach,
 } from "./doors.ts";
-export type { DoorRoom, DoorRoomError, DoorRoomFinding, DoorRooms, DoorWorld } from "./doors.ts";
+export type {
+  DoorRoom,
+  DoorRoomError,
+  DoorRoomFinding,
+  DoorRooms,
+  DoorWorld,
+  TempleReach,
+} from "./doors.ts";
 export { Reporter, formatDiagnostic, formatPath } from "./diagnostics.ts";
 export type { Diagnostic, PathSegment } from "./diagnostics.ts";
 export * from "./houses.ts";

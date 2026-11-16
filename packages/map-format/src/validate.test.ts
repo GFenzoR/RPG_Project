@@ -368,6 +368,85 @@ describe("validateWorld", () => {
     expect(messages(r)).toContainEqual(expect.stringContaining("a boat portal moves nobody"));
   });
 
+  it("warns of a hole or a teleport into a place with no way to a temple", () => {
+    // A pit on floor 8 (20..22, 20..22), apart from the cave, that a hole of floor 7 leads
+    // into. Its only way up is a rope spot: whoever falls in without a rope is stuck.
+    const i = mini();
+    const cave = must(i.chunks.get(chunkKey(8, 0, 0)));
+    for (let y = 20; y < 23; y++) for (let x = 20; x < 23; x++) setGround(cave, x, y, "dirt");
+    i.portals.push(
+      { id: "mini_pit", from: { x: 20, y: 5, z: 7 }, to: { x: 21, y: 21, z: 8 }, kind: "hole" },
+      {
+        id: "mini_pit_rope",
+        from: { x: 21, y: 20, z: 8 },
+        to: { x: 21, y: 6, z: 7 },
+        kind: "rope_spot",
+      },
+    );
+    const warning =
+      'world/islands/mini/portals.yaml:14 [2].to: (21,21,8) from where hole "mini_pit" leads, no temple is reached without keys or tools';
+    const r = check(i);
+    expect(r.errors).toBe(0);
+    expect(messages(r)).toEqual([expect.stringContaining(warning)]);
+    // A teleport there warns the same.
+    i.portals[2] = { ...must(i.portals[2]), kind: "teleport" };
+    expect(messages(check(i))).toEqual([
+      expect.stringContaining('from where teleport "mini_pit" leads, no temple is reached'),
+    ]);
+    // Landing on the entrance of a teleport (in no area) puts the player in an area next to
+    // it: here the pit, which a teleport to the pit itself does not get anyone out of.
+    i.portals[2] = { ...must(i.portals[2]), kind: "hole" };
+    i.portals.push(
+      {
+        id: "mini_pit_loop",
+        from: { x: 22, y: 22, z: 8 },
+        to: { x: 20, y: 20, z: 8 },
+        kind: "teleport",
+      },
+      {
+        id: "mini_pit_gate",
+        from: { x: 5, y: 25, z: 7 },
+        to: { x: 22, y: 22, z: 8 },
+        kind: "teleport",
+      },
+    );
+    const stuck = (m: string[]): string[] =>
+      m.flatMap((x) => /from where (\w+ "\w+") leads, no temple/.exec(x)?.[1] ?? []);
+    expect(stuck(messages(check(i)))).toEqual([
+      'hole "mini_pit"',
+      'teleport "mini_pit_loop"',
+      'teleport "mini_pit_gate"',
+    ]);
+    i.portals.splice(4, 2);
+    // A ladder up instead of the rope (with its way down, like any ladder): no warning.
+    i.portals[3] = { ...must(i.portals[3]), kind: "ladder" };
+    i.portals.push({
+      id: "mini_pit_down",
+      from: { x: 22, y: 6, z: 7 },
+      to: { x: 22, y: 21, z: 8 },
+      kind: "ladder",
+    });
+    expect(messages(check(i))).toEqual([]);
+    // Stairs up from the pit (with their way down) do as well.
+    i.portals.splice(
+      3,
+      2,
+      {
+        id: "mini_pit_stairs",
+        from: { x: 22, y: 22, z: 8 },
+        to: { x: 23, y: 6, z: 7 },
+        kind: "stairs",
+      },
+      {
+        id: "mini_pit_stairs_down",
+        from: { x: 24, y: 6, z: 7 },
+        to: { x: 21, y: 22, z: 8 },
+        kind: "stairs",
+      },
+    );
+    expect(messages(check(i))).toEqual([]);
+  });
+
   it("rejects portals into the void and holes that go up", () => {
     const i = mini();
     i.portals.push({
@@ -572,6 +651,25 @@ describe("validateWorld", () => {
     // A bridge at the south end: the east column is a walk round, not a pocket.
     setGround(cave, 12, 13, "dirt");
     expect(messages(check(i)).join("\n")).not.toContain("not connected to it on foot");
+    // Not across a house tile (a wall of the area the server searches in) ...
+    const stray =
+      "[0].to: (11,11,8) 13,10,8 is within travel.arrival_radius (2) of the destination but not connected to it on foot";
+    i.houses = [
+      {
+        id: "puerto_house_net",
+        name: "house.puerto_house_net.name",
+        rent: 100,
+        rects: [{ x: 12, y: 13, z: 8, w: 1, h: 1 }],
+        doors: [{ x: 12, y: 13, z: 8 }],
+        exit: { x: 11, y: 13, z: 8 },
+      },
+    ];
+    expect(messages(check(i))).toContainEqual(expect.stringContaining(stray));
+    // ... nor past an NPC: it never leaves its tile, so the bridge it stands on is a wall.
+    i.houses = [];
+    i.npcs.push({ npc: "puerto_provisioner", pos: { x: 12, y: 13, z: 8 } });
+    expect(messages(check(i))).toContainEqual(expect.stringContaining(stray));
+    i.npcs.pop();
     // Split again, with the stairs landing at 10,11,8: the east column lies beyond the
     // radius, so no arrival can take it.
     setGround(cave, 12, 13, "water_shallow");

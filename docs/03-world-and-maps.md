@@ -399,12 +399,22 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   casilla (el servidor los indexa por la entrada). Ningún NPC, spawn de radio 0, templo ni
   salida de casa sobre la entrada de un `stairs`/`hole`/`teleport`. Un id de portal no se
   repite en todo el mundo (como en el servidor). **Llegada:** toda casilla caminable fuera
-  de casas y de entradas de `stairs`/`hole`/`teleport` a `travel.arrival_radius` del
-  destino (de `data/balance.yaml`; 5, el máximo, si no se cargó) se conecta a pie con el
-  destino (8 direcciones, un piso, puertas abiertas, sin cruzar esas entradas): el
-  servidor busca la casilla libre por anillos y, con el destino ocupado, podría dejar a
-  alguien del otro lado de un muro. Advertencia: un portal `boat` no mueve a nadie en el
-  juego.
+  de casas, sin NPC y fuera de las entradas de `stairs`/`hole`/`teleport` a
+  `travel.arrival_radius` del destino (de `data/balance.yaml`; 5, el máximo, si no se
+  cargó) se conecta a pie con el destino (8 direcciones, un piso, puertas abiertas, sin
+  cruzar esas entradas, casillas de casa ni NPCs: el servidor busca solo en el área del
+  destino, donde una casa es muro, y un NPC nunca deja su casilla, así que un pasillo que
+  tapa es muro para los jugadores): el servidor busca la casilla libre por anillos y, con
+  el destino ocupado, podría dejar a alguien del otro lado de un muro. Advertencia: un
+  portal `boat` no mueve a nadie en el juego. **Advertencia de salida:** desde el destino
+  de un `hole` o de un `teleport` se llega a algún templo sin llaves ni herramientas: a
+  pie dentro de su área y por `stairs`, `ladder`, `hole` y `teleport` (ni `rope_spot` ni
+  `boat`; las mismas áreas y caminos del chequeo de escape de las puertas con llave, ver
+  "Puertas"). Si el destino es la entrada de otro `stairs`/`hole`/`teleport`, cuenta cada
+  área junto a ella (ahí lo deja el servidor). Es advertencia y no error porque un pozo del
+  que se sale con soga es un diseño válido (un agujero solo baja y no tiene vuelta); uno
+  hecho por descuido deja atrapado a quien cae, y reconectarse lo devuelve al mismo
+  lugar.
 - Alcance a pie desde el templo (spawns, NPCs, salidas de casa, zonas y el aviso de áreas
   inalcanzables): se recorre como el servidor mueve. Una casilla de `stairs`, `hole` o
   `teleport` lleva solo a su destino (nadie la cruza caminando: una escalera en un túnel
@@ -578,6 +588,9 @@ Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable
      spawns por todo el cuadrado centro±radio (donde andan sus monstruos), NPCs y textos
      por su casilla, portales por sus dos extremos
      (`from` y `to`) y zonas por todas las casillas de sus rects en cada piso.
+   - Un **portal** con sus dos extremos en parcelas de **islas distintas** también es de
+     maintainer (`cross_island`): un teletransporte entre islas se saltaría el barco y su
+     `travel.combat_block_ms`. Uno de la comunidad une casillas de una misma isla.
    - Crear, mover o quitar una zona `community_plot`, y cambiar `world.yaml`,
      `island.yaml` o prefabs, es siempre de maintainer.
    - `world/CONTRIBUTORS.md` lo puede tocar cualquiera.

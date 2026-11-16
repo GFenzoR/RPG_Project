@@ -442,10 +442,7 @@ function escapeCheck(
   roomsOf: number[][],
   world: DoorWorld,
 ): DoorRoomFinding[] {
-  const portals = world.portals ?? [];
-  const stepped = portals.filter((p) => ON_STEP_KINDS.has(p.kind)).map((p) => posKey(p.from));
-  const areas = new Areas(tiles, content, [...(world.houses ?? []), ...stepped]);
-  const areaOf = (p: Position): number => areas.areaOf(p.x, p.y, p.z);
+  const areaOf = areasOf(tiles, content, world);
   const roomArea = rooms.map((r) => areaOf(r.at));
   const areaRoom = new Map<number, number>(); // area → room id, for the areas that are rooms
   for (const [i, a] of roomArea.entries()) areaRoom.set(a, i);
@@ -470,38 +467,9 @@ function escapeCheck(
     sides.push(list);
     byHouse.push(house);
   }
-  // back: area → the areas a player without keys goes to it from.
-  const back = new Map<number, number[]>();
-  const edge = (from: number, to: number): void => {
-    if (from === 0 || to === 0 || from === to) return;
-    const list = back.get(to);
-    if (list) list.push(from);
-    else back.set(to, [from]);
-  };
-  for (const [i, own] of roomsOf.entries())
-    for (const r of own) for (const s of sides[i] ?? []) edge(roomArea[r] ?? 0, s.area);
   const doorAt = new Map<string, number>(); // x,y,z → the door (index) on that tile
   for (const [i, { pos }] of doors.entries()) doorAt.set(posKey(pos), i);
-  for (const p of portals) {
-    if (!ESCAPE_WAYS.has(p.kind)) continue;
-    const to = areaOf(p.to);
-    for (const from of portalSources(p, areaOf, doorAt, roomsOf, roomArea)) edge(from, to);
-  }
-  const escapes = new Set<number>();
-  const queue: number[] = [];
-  for (const p of world.temples ?? []) {
-    const a = areaOf(p);
-    if (a !== 0 && !escapes.has(a)) {
-      escapes.add(a);
-      queue.push(a);
-    }
-  }
-  for (let n = 0; n < queue.length; n++)
-    for (const a of back.get(queue[n] ?? 0) ?? [])
-      if (!escapes.has(a)) {
-        escapes.add(a);
-        queue.push(a);
-      }
+  const escapes = templeAreas(areaOf, world, { doorAt, roomsOf, roomArea, sides });
   const findings: DoorRoomFinding[] = [];
   for (const [i, { pos }] of doors.entries()) {
     const stuck = sides[i]?.find((s) => !escapes.has(s.area));
@@ -556,6 +524,105 @@ function escapeCheck(
     }
   }
   return findings;
+}
+
+/**
+ * The area of a tile in the areas of the escape check (Areas) on world: its house tiles and
+ * the entrances of its stairs, holes and teleports are walls.
+ */
+function areasOf(tiles: TileMap, content: ContentIndex, world: DoorWorld): (p: Position) => number {
+  const stepped = (world.portals ?? [])
+    .filter((p) => ON_STEP_KINDS.has(p.kind))
+    .map((p) => posKey(p.from));
+  const areas = new Areas(tiles, content, [...(world.houses ?? []), ...stepped]);
+  return (p) => areas.areaOf(p.x, p.y, p.z);
+}
+
+/** The locked doors and their rooms, for templeAreas (escapeCheck's indexes). */
+interface RoomExits {
+  /** x,y,z → the door (index) on that tile. */
+  doorAt: ReadonlyMap<string, number>;
+  /** The room ids of each door. */
+  roomsOf: readonly number[][];
+  /** The area of each room, by room id. */
+  roomArea: readonly number[];
+  /** The areas next to each door (its sides), by door. */
+  sides: readonly (readonly { area: number }[])[];
+}
+
+/**
+ * The areas from which a player without keys or tools reaches a temple of world.temples
+ * (the walk of the server's checkEscapes): on foot within an area, out of a room through
+ * its door (rooms: a player in one opens its door without the key; without rooms, no area
+ * is left that way), and by the portals of ESCAPE_WAYS, from the areas a player takes them
+ * from (portalSources) to the area of their destination. It walks back from the areas of
+ * the temples.
+ */
+function templeAreas(
+  areaOf: (p: Position) => number,
+  world: DoorWorld,
+  rooms?: RoomExits,
+): Set<number> {
+  const doorAt = rooms?.doorAt ?? new Map<string, number>();
+  const roomsOf = rooms?.roomsOf ?? [];
+  const roomArea = rooms?.roomArea ?? [];
+  // back: area → the areas a player without keys goes to it from.
+  const back = new Map<number, number[]>();
+  const edge = (from: number, to: number): void => {
+    if (from === 0 || to === 0 || from === to) return;
+    const list = back.get(to);
+    if (list) list.push(from);
+    else back.set(to, [from]);
+  };
+  for (const [i, own] of roomsOf.entries())
+    for (const r of own) for (const s of rooms?.sides[i] ?? []) edge(roomArea[r] ?? 0, s.area);
+  for (const p of world.portals ?? []) {
+    if (!ESCAPE_WAYS.has(p.kind)) continue;
+    const to = areaOf(p.to);
+    for (const from of portalSources(p, areaOf, doorAt, roomsOf, roomArea)) edge(from, to);
+  }
+  const escapes = new Set<number>();
+  const queue: number[] = [];
+  for (const p of world.temples ?? []) {
+    const a = areaOf(p);
+    if (a !== 0 && !escapes.has(a)) {
+      escapes.add(a);
+      queue.push(a);
+    }
+  }
+  for (let n = 0; n < queue.length; n++)
+    for (const a of back.get(queue[n] ?? 0) ?? [])
+      if (!escapes.has(a)) {
+        escapes.add(a);
+        queue.push(a);
+      }
+  return escapes;
+}
+
+/** Where a player without keys or tools reaches a temple from (templeReach). */
+export interface TempleReach {
+  /**
+   * The area of a tile in the areas of the escape check, 0 when it lies in none: a wall, a
+   * locked door, a house tile, the entrance of stairs, a hole or a teleport, no tile.
+   */
+  areaOf(p: Position): number;
+  /** The areas from which a player without keys or tools reaches a temple. */
+  escapes: ReadonlySet<number>;
+}
+
+/**
+ * The areas of the escape check on world, and those from which a player without keys or
+ * tools reaches a temple: on foot within an area and by stairs, ladders, holes and
+ * teleports (ESCAPE_WAYS; not a rope spot, not a boat). It is the escape check's walk
+ * (templeAreas) without the rooms behind locked doors, which only a player already in one
+ * leaves through its door: outside the rooms it finds the same areas as long as no portal
+ * leads into a room (validateWorld and the server refuse one that does). make validate
+ * warns of a hole or a teleport from whose destination no temple is reached
+ * (checkPortalExits).
+ */
+export function templeReach(tiles: TileMap, content: ContentIndex, world: DoorWorld): TempleReach {
+  const areaOf = areasOf(tiles, content, world);
+  return { areaOf, escapes: templeAreas(areaOf, world) };
 }
 
 /**
