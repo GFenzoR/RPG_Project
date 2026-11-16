@@ -699,18 +699,25 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
   4096 casillas) o, si todos terminan, con los dos lados más grandes del mismo tamaño (no
   está claro cuál es el de afuera).
 - **Sala compartida:** varias puertas con llave pueden dar a la misma sala (una puerta
-  doble, o un edificio con puerta delantera y trasera), pero solo si tienen **la misma
-  llave** y **el mismo afuera**. Para el afuera, el servidor camina (a lo ancho, sin
-  cruzar puertas con llave) desde las casillas de afuera junto a la primera puerta hasta
-  las de la otra, hasta 4 × 4096 casillas; si no llega, rechaza la puerta (y
-  `make validate` también). Así se rechaza, por ejemplo, una bóveda más grande que la sala
-  que tiene delante: la puerta de la bóveda tomaría la bóveda por su afuera y las dos
-  puertas compartirían la sala del medio, con lo que desde el medio se abriría la bóveda
-  sin llave, la bóveda no estaría en ninguna sala y a quien está adentro lo podrían
-  trabar. Lo mismo con una antesala entre el mundo y una bóveda de más de 4096 casillas,
-  o con dos puertas de distinta llave en la misma sala (la llave de una abriría las dos
-  desde adentro). Una sala dentro de otra vale cuando la de adentro es más chica que la
-  del medio: cada puerta tiene su sala.
+  doble, o un edificio con puerta delantera y trasera a la misma calle), pero solo si
+  tienen **la misma llave** y **el mismo afuera**. Para el afuera, el servidor camina (a
+  lo ancho, sin cruzar puertas con llave ni casas: una casa no es calle) desde las
+  casillas de afuera junto a la primera puerta hasta las de la otra, y explora como mucho
+  4 × 4096 = 16384 casillas: en campo abierto eso alcanza para unas 60 a 90 casillas de
+  distancia, no 16384. Si no llega, rechaza la puerta (y `make validate` también), con
+  uno de dos mensajes: los afueras solo se unen a través de otra puerta con llave (o no se
+  unen), o el recorrido llegó a su cota. **Hoy se rechazan los ciclos de puertas con
+  llave**, aunque sean seguros: un edificio con la puerta delantera al campo y la trasera
+  a un patio que tiene su propio portón al campo, o un hall entre el campo y una bóveda
+  con su propio portón al campo. Es la dirección segura; aceptarlos necesita otro chequeo
+  (`14-continuar-en-tu-pc.md`, pendientes). Así se rechaza, por ejemplo, una bóveda más
+  grande que la sala que tiene delante: la puerta de la bóveda tomaría la bóveda por su
+  afuera y las dos puertas compartirían la sala del medio, con lo que desde el medio se
+  abriría la bóveda sin llave, la bóveda no estaría en ninguna sala y a quien está adentro
+  lo podrían trabar. Lo mismo con una antesala entre el mundo y una bóveda de más de 4096
+  casillas, o con dos puertas de distinta llave en la misma sala (la llave de una abriría
+  las dos desde adentro). Una sala dentro de otra vale cuando la de adentro es más chica
+  que la del medio: cada puerta tiene su sala.
 - **La sala no guarda nada de afuera:** ni el templo (donde se despierta), ni NPCs, ni
   casas (casillas o salida), ni llegadas de barco, ni destinos de un teleport de diálogo;
   `make validate` mira además los extremos de los portales (el servidor no los carga).
@@ -753,9 +760,12 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
     puerta a esa sala lo frena la regla de la sala compartida. Hoy no pasa (la forja
     tiene 463 casillas y la mina 1729). Marcar el lado de adentro en los datos quedaría
     para cuando haga falta;
-  - dos puertas a la misma sala cuyos afueras solo se unen por un camino de más de
-    4 × 4096 casillas se rechazan aunque den al mismo mundo: hay que acercarlas o darles
-    salas propias;
+  - dos puertas a la misma sala se rechazan aunque den al mismo mundo si un recorrido que
+    explora hasta 16384 casillas no une sus afueras: en campo abierto son unas 60 a 90
+    casillas de distancia (en un pasillo angosto, mucho más). Hay que acercarlas o
+    darles salas propias;
+  - los ciclos de puertas con llave (la sala compartida de arriba) se rechazan aunque
+    sean seguros;
   - la llave se puede repetir: quien terminó `ch3_gate` y no la lleva encima pide otra al
     eco, así que tirarla al piso y pedir otra da llaves de más, y una llave tirada la puede
     levantar cualquiera. Lo aceptamos: quien tiene la llave ya puede abrirle la puerta a

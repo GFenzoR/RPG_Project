@@ -120,7 +120,19 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     área conexa por casilla armado al arrancar (como `roomOf`), y que la búsqueda solo
     acepte casillas del área del origen. No se hizo con las puertas porque cuesta memoria
     por casilla caminable de todo el mundo y hoy no hay bolsillos así junto a templos,
-    llegadas o casas.
+    llegadas o casas;
+  - **puertas con llave en ciclo** (`02-game-design.md`, "Sala compartida"): hoy se
+    rechazan aunque sean seguras (un edificio con puerta trasera a un patio que tiene su
+    propio portón al campo; un hall entre el campo y una bóveda con su propio portón),
+    porque `sameOutside` exige unir los afueras sin cruzar puertas con llave. Mejora
+    futura, igual en `session/door.go` y `packages/map-format/src/doors.ts`, con casos
+    nuevos en `door-rooms.json`: un **chequeo de escape**. Los nodos son las componentes
+    del mapa con las puertas con llave como muro; de la sala de cada puerta `d` hay una
+    arista a todos los lados de `d`; el "mundo" es la componente del templo o de las
+    llegadas. Se exige que cada lado de cada puerta con llave alcance el mundo, más el
+    chequeo de llave entre una sala y el afuera de otra puerta. La cadena R–B–X–E–Y (sala
+    R, puerta B, sala X, puerta E, Y una bóveda más grande que X) se tiene que seguir
+    rechazando.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

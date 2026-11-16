@@ -202,8 +202,9 @@ server/
   sala) con el mismo recorrido que `packages/map-format/src/doors.ts`: si cambias uno,
   cambia el otro y `testdata/door-rooms.json` (lo leen los tests de los dos). Una sala
   que no se puede determinar, compartida por puertas de otra llave o de otro afuera
-  (`sameOutside`) o que tiene algo de afuera (`checkRooms`: templo, NPC, casa, llegada de
-  barco, teleport de diálogo) no deja arrancar. Nada recorre el mapa en el tick:
+  (`sameOutside`, que no cruza puertas con llave ni casas: hoy rechaza los ciclos de
+  puertas con llave) o que tiene algo de afuera (`checkRooms`: templo, NPC, casa, llegada
+  de barco, teleport de diálogo) no deja arrancar. Nada recorre el mapa en el tick:
   `World.roomOf` (casilla → sala) y los sectores de cada sala. **Toda búsqueda de casilla
   libre por anillos** (`freeNear`, `houseExit` o una nueva) pasa por `roomAllows`: nunca
   deja a nadie en una sala si no empezó en ella. `houseEnter` no lo necesita: solo pone
