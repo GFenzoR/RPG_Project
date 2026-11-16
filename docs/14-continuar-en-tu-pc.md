@@ -102,14 +102,10 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   economía; una salida sería escribir el estado del personaje justo antes de cada
   transfer, a costa de una escritura más por transfer.
 - **Mundo:**
-  - el cartel de la puerta sellada (`text.volcan.gate_sign`, piso 8) no tiene item todavía,
-    y su texto dice que la puerta no tiene cerradura: hay que reescribirlo para la puerta
-    con llave antes de ponerlo;
-  - los carteles de Puerto y del Bosque están solo en `texts.yaml`: falta su item
-    `*_sign` para que se vean y se lean (como los de Brasal). Cada cartel cuesta hoy un
-    item y un ID; a futuro `mapcompile` podría llevar `texts.yaml` a `world.bin` y el
-    servidor leerlo, sin items por cartel;
-  - los pozos de lava de la Isla Volcánica son algo rectangulares (solo estético);
+  - cada cartel cuesta un item y un ID (hoy todos los de Puerto, el Bosque y la Isla
+    Volcánica, incluido el de la puerta con llave del piso 8, tienen su `*_sign`; solo el
+    del templo de `testisle` no). A futuro `mapcompile` podría llevar `texts.yaml` a
+    `world.bin` y el servidor leerlo, sin items por cartel;
   - las escaleras y portales de `portals.yaml` no existen en el servidor (ni en
     `world.bin`): a los pisos 8 (minas de Puerto y Bosque, la mina y la forja de la Isla
     Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff;

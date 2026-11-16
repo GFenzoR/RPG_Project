@@ -437,7 +437,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   piezas de borde, los carteles con `item.signpost.name`) recibe esa clave con el texto
   compartido en el plugin; el código sigue pidiendo `item.<id>.name`.
 - E2E: el test "T5.5: wake up at the temple of Brasal" lee el cartel del templo
-  (screenshot `65b-volcan-temple-sign`).
+  (screenshot `65b-volcan-temple-sign`) y el de NPCs ("talk to NPCs"), que despierta en
+  el templo del Farol, lee el de Puerto desde adentro (3163,6384, screenshot
+  `12b-puerto-temple-sign`).
 
 ## Notas de T5.6
 - **Input táctil** (`input/gestures.ts`, `dpad.ts`, `actions.ts`, puros y con tests). Los

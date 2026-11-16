@@ -877,7 +877,9 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
   lento, un yunque lejano y una melodía en re frigio dominante; `amb_volcan`: retumbo,
   burbujas de lava, crujidos y vapor). Suelos propios: llano de ceniza, losas de basalto
   en la plaza, caminos de escoria, ladera y cráter de lava enfriada con pozos de lava
-  fundida que no se pisan, y tres carteles (templo, muelle y mina) que se leen mirándolos.
+  fundida que no se pisan (manchas irregulares, no rectángulos), y tres carteles (templo,
+  muelle y mina) que se leen mirándolos; un cuarto, junto a la puerta con llave del piso 8,
+  avisa que solo pasa quien trae su llave.
   Los suelos nuevos se caminan como los que reemplazaron, así que el ritmo con que se
   balanceó la caza no cambia: la ceniza (140) como la tierra del llano, la lava enfriada
   (100) como la piedra de la ladera y el cráter, el basalto (100) como piedra; solo los

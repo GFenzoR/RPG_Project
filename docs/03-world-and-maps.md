@@ -113,7 +113,9 @@ level_hint: [1, 15]
 El servidor no carga `texts.yaml` (lo usan el editor, `mapcli` y el validador). Para que
 un cartel se vea y se lea en el juego, la misma casilla lleva un item fijo cuya
 `description` es esa clave (T5.5: `brasal_temple_sign`, ver `06-content-data.md`); mirarlo
-muestra el texto. Los carteles de Puerto y del Bosque todavía no tienen ese item. El
+muestra el texto. Todos los carteles de Puerto, el Bosque y la Isla Volcánica lo tienen
+(en Puerto y el Bosque el item se llama como su entrada de `texts.yaml`, p. ej.
+`puerto_temple_sign`); solo el del templo de `testisle` queda sin item. El
 validador los mantiene de acuerdo: un item de cartel (un item cuya `description` es una
 clave `text.*`) tiene que estar en una casilla con un `kind: sign` de `texts.yaml` con ese
 mismo texto, y un cartel de `texts.yaml` con un item de cartel en su casilla tiene que decir
@@ -418,6 +420,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Muelle del capitán de puerto (`harbor_master`, 3201,6433): tablones 3200–3202,
   6429–6434; las rutas salen de 3201,6434 (`puerto_to_bosque`) y la vuelta desde el Bosque
   llega a 3201,6432 (la de la Isla Volcánica, `volcan_to_puerto`, a 3201,6431).
+  Carteles (`texts.yaml` y un item `puerto_*_sign` del mismo id en la misma casilla, que
+  bloquea): templo en 3163,6384 (afuera de la puerta este), muelle en 3198,6428 (en el
+  camino de tierra al muelle) y mina en 3175,6328 (en el camino a la escalera).
 - `bosque` (192x192 en 4096,6016; pisos 7–8; nivel 10–30; T3.6): forma base con
   `mapcli generate --recipe island --seed 23 --size 180` y luego una lista de ops
   (scatter con semillas 2301–2304, autoborder al final). Superficie: pueblo de **Raigal**
@@ -436,6 +441,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Casas (T5.4): `bosque_house_moss` (prefab `house_wood_small` en 4156,6087) y
   `bosque_house_resin` (prefab `house_wood_medium` en 4165,6086), en la playa al norte del
   pueblo, con la puerta al sur.
+  Carteles (`texts.yaml` y un item `bosque_*_sign` del mismo id en la misma casilla, que
+  bloquea): templo en 4149,6109 (junto a la puerta sur), muelle en 4128,6099 (al final de
+  los tablones) y cueva en 4247,6144 (junto a la escalera de la cueva).
 
 - `volcan` (192x192 en 3584,5696; pisos 7–8; nivel 25–60; T5.5): forma base con
   `mapcli generate --recipe island --seed 55 --size 180` y una lista de ops (el pasto pasa a
@@ -475,8 +483,17 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   spawns, NPCs, portales, zonas ni la casa. Carteles (`texts.yaml` y un item
   `brasal_*_sign` en la misma casilla, que bloquea): templo en 3641,5793 (junto a la
   puerta), muelle en 3635,5793 (al final de los tablones) y mina en 3691,5794 (junto a la
-  escalera). El de la puerta sellada (`text.volcan.gate_sign`, piso 8) queda para el
-  cambio de las puertas con llave.
+  escalera). El de la puerta con llave (`volcan_gate_sign`, `text.volcan.gate_sign`) está
+  en el piso 8, en 3693,5830: del lado de la mina, junto a la boca del pasillo de la puerta
+  (fuera de la sala de la forja); 3691–3692,5831, delante de la puerta, quedan libres.
+  Pozos de lava (después de T5.5): los seis se redibujaron a mano como manchas irregulares
+  (gota, medialuna, hoja, poroto) con `paint_ground` por celdas y `autoborder` en su
+  rectángulo. Reglas que siguen (`tools/mapcli/src/world.test.ts`): cada pozo llena menos
+  del 70 % de su rectángulo (los viejos, 77–93 %), las 8 vecinas de cada casilla de lava son
+  lava o lava enfriada (siempre hay costra antes de otro suelo), cada casilla de lava está
+  en algún bloque de 2x2 de lava (sin tiras de una casilla, donde la costra pellizcaría) y
+  ninguna cae en el cuadrado de un spawn. Al dibujarlos se dejaron además dos casillas
+  caminables hacia muros y vetas, una hacia rocas, y ningún hueco encerrado.
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:

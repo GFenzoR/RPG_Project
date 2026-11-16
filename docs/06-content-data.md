@@ -105,7 +105,10 @@ items:
 - **Descripción:** `description` es la clave i18n que el cliente muestra al mirar el item
   (`item.<id>.desc` por convención). Un cartel (T5.5) es un item fijo cuya descripción es
   su texto del mapa: `brasal_dock_sign` tiene `description: text.volcan.dock_sign`, la
-  misma clave de su entrada en `world/islands/volcan/texts.yaml`. El cliente empaqueta
+  misma clave de su entrada en `world/islands/volcan/texts.yaml`. Los de Puerto y el
+  Bosque (y el de la puerta con llave, `volcan_gate_sign`) se llaman como su entrada de
+  `texts.yaml` (`puerto_harbour_sign`); todos usan `sprite: decor/signpost`, el nombre
+  compartido `item.signpost.name` y `blocks_movement: true`. El cliente empaqueta
   solo las claves que algún item usa como descripción.
 - **Suelos volcánicos** (T5.5, `data/items/ground.yaml`, `speed` = costo de terreno en %):
   `ash` (ceniza, 140, como la tierra), `basalt` (losas de basalto de Brasal, 100, como la
