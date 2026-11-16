@@ -177,7 +177,7 @@ npc.volcan_keeper.forge: "Una fragua del imperio, más grande que este pueblo, b
 npc.volcan_forge_echo.name: "eco de la forja"
 npc.volcan_forge_echo.greet: "...calor... alguien baja otra vez. Nadie bajó en mucho tiempo."
 npc.volcan_forge_echo.opt_open: "Traigo la raíz de ascua. Abre la puerta."
-npc.volcan_forge_echo.ch3_gate_opened: "La raíz... vuelve a su forma. Tómala: es una llave de ascua, la llave de esta puerta. Úsala en la puerta y pasa, y ciérrala con ella si no quieres compañía. Pero del otro lado el custodio sigue de guardia: lo forjamos para que nadie usara la forja sin nosotros, y nosotros ya no estamos."
+npc.volcan_forge_echo.ch3_gate_opened: "La raíz... vuelve a su forma. Tómala: es una llave de ascua, la llave de esta puerta. Llévala contigo y la puerta se abrirá a tu mano, y se cerrará tras de ti si no quieres compañía. Pero del otro lado el custodio sigue de guardia: lo forjamos para que nadie usara la forja sin nosotros, y nosotros ya no estamos."
 npc.volcan_forge_echo.opt_no_root: "¿Cómo se abre la puerta?"
 npc.volcan_forge_echo.no_root: "Con su llave. Una raíz de piedra, templada. Sin ella, la puerta es solo piedra. La última la vi irse al mar; si alguien la guarda, será en los bosques del sur."
 npc.volcan_forge_echo.opt_lost_key: "Perdí la llave de ascua."

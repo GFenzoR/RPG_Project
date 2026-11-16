@@ -177,7 +177,7 @@ npc.volcan_keeper.forge: "A forge of the empire, bigger than this town, under th
 npc.volcan_forge_echo.name: "forge echo"
 npc.volcan_forge_echo.greet: "...heat... someone comes down again. No one came down in a long time."
 npc.volcan_forge_echo.opt_open: "I bring the ember root. Open the gate."
-npc.volcan_forge_echo.ch3_gate_opened: "The root... goes back to its shape. Take it: an ember key, the key to this gate. Use it on the gate and go through, and lock it with it if you want no company. But on the other side the warden still keeps watch: we forged it so no one would use the forge without us, and we are gone."
+npc.volcan_forge_echo.ch3_gate_opened: "The root... goes back to its shape. Take it: an ember key, the key to this gate. Carry it and the gate opens to your hand, and locks behind you if you want no company. But on the other side the warden still keeps watch: we forged it so no one would use the forge without us, and we are gone."
 npc.volcan_forge_echo.opt_no_root: "How does the gate open?"
 npc.volcan_forge_echo.no_root: "With its key. A stone root, warm. Without it, the gate is only stone. The last one went out to sea; if anyone keeps it, it is in the southern woods."
 npc.volcan_forge_echo.opt_lost_key: "I lost the ember key."
