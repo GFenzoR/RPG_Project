@@ -158,6 +158,67 @@ está dominada por la espera al siguiente tick, no por el servidor. Pendientes:
 - RAM medida con el mundo del hito 1. El presupuesto de 600 MB es para el mundo del
   hito 3: hay que repetir la prueba cuando crezca.
 
+### Resultados del stack T5.5–T5.7 (2026-11-16)
+Medido en la punta del stack de PRs (`feat/volcanic-art`, 313eb38: táctil T5.6, tienda
+cosmética T5.7 con cosméticos en `Creature`, puertas con llave, tiras de efectos,
+condiciones PvP a distancia, arte volcánico) contra `main` (7a89e66) como línea base, el
+mismo día, en la misma máquina y con el mismo script. Notebook con Windows 11 nativo (Git
+Bash), Core i7-13650HX (14 núcleos, 20 hilos) y 32 GB; servidor, bots y Postgres 16
+(Docker Desktop) en la misma máquina. Mundo: las 4 islas (135 sectores). Ventana estable
+de **3 min** (no 10 y 5), con rampa de 20 s (base) y 60 s (stress).
+
+| Métrica | Presupuesto | Base 100 · stack | Base 100 · main | Stress 300 · stack (2 corridas) | Stress 300 · main (2 corridas) |
+|---|---|---|---|---|---|
+| Tick p50 / p95 / p99 (ms) | p99 < 10 (100 jug.) | 0,03 / 0,70 / **1,78** | 0,03 / 0,73 / **1,75** | 0,72 / 4,15 / **5,49** · 0,57 / 2,84 / **3,98** | 0,51 / 2,45 / **3,69** · 0,58 / 2,86 / **3,98** |
+| Tick máx. / ticks lentos (> 50 ms) | — | ≤ 4 / 0 de 3600 | ≤ 4 / 0 de 3600 | ≤ 8 · ≤ 6 / 0 | ≤ 8 · ≤ 6 / 0 |
+| RSS máx. / al final (MB) | < 600 | 108,9 / 72,5 | 108,3 / 68,5 | 121,8 / 90,7 · 120,1 / 87,2 | 184,1 / 140,1 · 120,7 / 86,0 |
+| CPU del servidor (núcleos) | — | 0,12 | 0,11 | 0,26 · 0,27 | 0,27 · 0,21 |
+| Salida por jugador (B/s) | < 4096 | 308 | 318 | 880 · 753 | 800 · 771 |
+| Latencia de comando p50 / p95 / p99 (ms) | p95 < 60 | 26,2 / **48,4** / 50,9 | 26,6 / **48,3** / 50,8 | 27,9 / **49,8** / 53,2 · 27,4 / **48,9** / 52,1 | 26,8 / **48,7** / 51,9 · 26,9 / **49,1** / 52,2 |
+| Desconexiones / fallos al entrar | 0 | 0 / 0 | 0 / 0 (1 logout fallido) | 0 / 0 | 0 / 0 |
+
+Todo dentro del presupuesto, y el stack no empeora a `main`:
+- **Tick.** En stress, la primera corrida del stack dio p99 5,49 ms y la segunda 3,98,
+  igual que la segunda de `main` (3,98; la primera, 3,69). Es ruido entre corridas: el
+  p99 cae en el bucket de 4–8 ms del histograma y se interpola dentro de él. Los
+  benchmarks de `make bench-tick` (`internal/session`) lo confirman sin ruido de red:
+  mismas asignaciones por tick que `main` (332 con 100 jugadores caminando, 1341 con 300,
+  1005 con 256 monstruos, ~1490 con 1024 y ~1496 con las condiciones) y el mismo tiempo
+  dentro del ruido (300 jugadores caminando, 8 muestras de cada uno intercaladas:
+  ~120 µs de mediana en los dos).
+- **RAM.** El máximo se alcanza en la rampa: cada login verifica la contraseña con
+  argon2id (19 MiB por hash) y los bots entran de a varios. Depende de cuántos coinciden
+  y de cuándo devuelve memoria el GC, así que varía entre corridas (en `main`, 184 y
+  121 MB en stress). La primera corrida base del stack, que además creó las 10 cuentas y
+  los 100 personajes, llegó a 163 MB y terminó en 126 (tick p99 1,73 ms, 335 B/s por
+  jugador); la tabla muestra la segunda. Con todos adentro, el heap vivo del servidor
+  anda entre 31 y 52 MB con 100 jugadores.
+- **Red.** Los bots no llevan cosméticos (no tienen saldo), así que la tienda no suma
+  bytes a esta medición. El peor caso: un jugador con los tres cosméticos agrega a su
+  `Creature` unos 45 bytes (tres ids de ≤ 13 caracteres), y eso solo cuando aparece ante
+  alguien o cambia de look (con el anti-flood de `data/cosmetics.yaml`), nunca por paso.
+- **Fuera de esta medición.** Los bots no usan el mercado, las casas, las puertas ni la
+  tienda; esos caminos tienen sus propios costos acotados más arriba y abajo
+  (`BenchmarkDoorLockRefused`, Saver, casas). Las ventanas del mercado en vivo
+  (`fix/market-refresh`) son una rama paralela que no está en este stack.
+- **Windows.** `make bots` quedaba colgado al final: Git Bash no le llega con SIGINT a un
+  proceso nativo. `loadtest.sh` ahora espera a que se escriban los guardados y lo mata
+  (`12-local-development.md`, "Prueba de carga"). El logout fallido de la corrida base de
+  `main` (un bot desconectado durante el `Logout`) no se repitió en el stack.
+
+**Cliente** (`make build-client`; FPS, draw calls y memoria no se midieron en esta
+corrida: no hay instrumentación y piden un navegador real con GPU):
+
+| Métrica | Presupuesto | Stack | `main` |
+|---|---|---|---|
+| JS + CSS de `build/client/assets` (sin sprites ni audio) | < 5 MB | 1,33 MB (381 KB con gzip) | 1,20 MB (347 KB con gzip) |
+| Chunk del juego (`play-*.js`) | — | 681 KB (195 KB con gzip) | 658 KB (190 KB con gzip) |
+| Atlas (aparte, por demanda) | una página por capa | 1 página: 287 KB PNG + 160 KB JSON | 1 página: 38 KB PNG (placeholders) |
+
+El bundle creció 128 KB (34 KB con gzip) con lo nuevo del cliente: el layout táctil y la
+PWA (T5.6), la tienda (T5.7), el zoom y las tiras de efectos. Los efectos siguen saliendo
+del atlas único y de pools (ver "Cliente" arriba).
+
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en
 producción), el dashboard "Neque's Realm — servidor" de Grafana muestra en vivo los mismos
