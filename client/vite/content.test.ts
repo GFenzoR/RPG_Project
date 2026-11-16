@@ -17,13 +17,28 @@ describe("client content (T0.5)", () => {
     expect(byId.get("cooled_lava")?.desc).toBe("item.cooled_lava.desc");
     expect(byId.get("brasal_dock_sign")?.desc).toBe("text.volcan.dock_sign");
     expect(byId.get("ash")?.desc).toBeUndefined();
+    // Every sign of Puerto, Bosque and the Ember Isle has its item (the forge gate's too).
+    const signs = [
+      "volcan.temple",
+      "volcan.dock",
+      "volcan.mine",
+      "volcan.gate",
+      "puerto.temple",
+      "puerto.harbour",
+      "puerto.mine",
+      "bosque.temple",
+      "bosque.dock",
+      "bosque.cave",
+    ];
+    expect(byId.get("puerto_harbour_sign")?.desc).toBe("text.puerto.harbour_sign");
+    expect(byId.get("volcan_gate_sign")?.desc).toBe("text.volcan.gate_sign");
     for (const lang of ["es", "en"]) {
       const texts = content.i18n[lang] ?? {};
       expect(texts["item.cooled_lava.desc"]).toBeTruthy();
-      for (const sign of ["temple", "dock", "mine"])
-        expect(texts[`text.volcan.${sign}_sign`]).toBeTruthy();
-      // Only the descriptions items use: other world.yaml texts stay out of the game.
-      expect(texts["text.puerto.temple_sign"]).toBeUndefined();
+      for (const sign of signs) expect(texts[`text.${sign}_sign`]).toBeTruthy();
+      // Only the descriptions items use: other world.yaml texts stay out of the game (the
+      // test island's temple sign has no item).
+      expect(texts["text.testisle.temple_sign"]).toBeUndefined();
     }
   });
 

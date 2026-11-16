@@ -677,6 +677,18 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
     return p;
   };
 
+  // The sign of Farol's temple stands by its east doorway (puerto_temple_sign, on the
+  // texts.yaml sign of the same id): in view from the temple, Shift+click reads it.
+  const sign = await tileClient(3163, 6384);
+  await page.mouse.move(sign.x, sign.y);
+  await page.keyboard.down("Shift");
+  await page.mouse.click(sign.x, sign.y);
+  await page.keyboard.up("Shift");
+  await expect(page.getByTestId("game-log")).toContainText(
+    "Ves cartel. Templo del Farol. Dentro de sus muros nadie puede hacerte daño.",
+  );
+  await shot(page, "12b-puerto-temple-sign");
+
   // The priestess stands next to the temple: right click opens her dialog.
   const priest = await npc("puerto_priest");
   let p = await tileClient(priest.x, priest.y);
