@@ -36,6 +36,12 @@ export const MAX_DOCK_DISTANCE = 8;
 /** Stairs and ladders that need a way back, with the kinds that can serve as it. */
 const PAIRED_KINDS = new Set(["stairs", "ladder"]);
 
+/**
+ * Portals that move whoever steps onto their tile (docs/02 "Cambiar de piso"): nobody walks
+ * across them (a step there lands on `to`), nobody stands on them.
+ */
+const ON_STEP_KINDS = new Set(["stairs", "hole", "teleport"]);
+
 export function validateWorld(root: string, opts: ValidateWorldOptions = {}): MapReport {
   const loaded = loadWorld(root);
   const content = opts.content ?? loadContent(root);
@@ -331,6 +337,32 @@ class WorldValidator {
           p.from,
         );
     }
+    // Nobody stands for good on stairs, a hole or a teleport (the server, world.NewMap,
+    // refuses the same): an NPC there blocks it, and monsters keep off it, so a spawn of
+    // radius 0 there never shows one.
+    const stepped = new Map<string, string>();
+    for (const p of island.portals)
+      if (ON_STEP_KINDS.has(p.kind)) stepped.set(formatPos(p.from), p.id);
+    for (const [i, n] of island.npcs.entries()) {
+      const id = stepped.get(formatPos(n.pos));
+      if (id !== undefined)
+        this.err(
+          npcsFile,
+          [i, "pos"],
+          `NPC stands on the entrance of portal "${id}", which nobody could take`,
+          n.pos,
+        );
+    }
+    for (const [i, s] of island.spawns.entries()) {
+      const id = stepped.get(formatPos(s.center));
+      if (id !== undefined && s.radius === 0)
+        this.err(
+          spawnsFile,
+          [i, "center"],
+          `spawn of radius 0 on the entrance of portal "${id}": monsters keep off it, none would appear`,
+          s.center,
+        );
+    }
 
     const textsFile = `${dir}/texts.yaml`;
     for (const [i, t] of island.texts.entries()) {
@@ -459,6 +491,11 @@ class WorldValidator {
       inside(`${dir}/portals.yaml`, [i, "from"], p.from, "portal entrance");
       inside(`${dir}/portals.yaml`, [i, "to"], p.to, "portal destination");
     }
+    // A portal of another island may lead here too (world.NewMap refuses it as well).
+    for (const other of this.world.islands.values())
+      if (other !== island)
+        for (const [i, p] of other.portals.entries())
+          inside(`${this.dirOf(other)}/portals.yaml`, [i, "to"], p.to, "portal destination");
     if (inHouse(island.meta.temple) !== undefined)
       this.err(`${dir}/island.yaml`, ["temple"], "temple is inside a house", island.meta.temple);
     for (const [i, z] of island.zones.entries()) {
@@ -755,29 +792,49 @@ class WorldValidator {
   }
 
   /**
-   * BFS from the temple over passable tiles (8 directions, like player movement) and portals.
-   * Doors count as open (isPassable): a locked door opens with its key, so the room behind
-   * it is reachable (docs/02 "Puertas con llave"). Every spawn, NPC and non-community zone
-   * must be reachable on foot.
+   * The portals of the world by entrance tile, as the server moves players through them
+   * (docs/02 "Cambiar de piso"): where each leads, and whether stepping onto it moves the
+   * player (stairs, hole, teleport). Boat portals move nobody and are left out.
+   */
+  private portalMoves(): Map<string, { to: Position[]; onStep: boolean }> {
+    const out = new Map<string, { to: Position[]; onStep: boolean }>();
+    for (const i of this.world.islands.values())
+      for (const p of i.portals) {
+        if (p.kind === "boat") continue;
+        const k = formatPos(p.from);
+        const e = out.get(k) ?? { to: [], onStep: false };
+        e.to.push(p.to);
+        e.onStep ||= ON_STEP_KINDS.has(p.kind);
+        out.set(k, e);
+      }
+    return out;
+  }
+
+  /**
+   * BFS from the temple over passable tiles (8 directions, like player movement) and portals,
+   * as the server moves players: a step onto stairs, a hole or a teleport only leads to its
+   * destination (nobody walks across it), a ladder or a rope spot is a tile like any other
+   * that also leads to its destination, a boat portal leads nowhere. Doors count as open
+   * (isPassable): a locked door opens with its key, so the room behind it is reachable
+   * (docs/02 "Puertas con llave"). Every spawn, NPC and non-community zone must be
+   * reachable on foot.
    */
   private checkReachability(island: Island): void {
     const meta = island.meta;
     if (!isWalkable(this.tiles.tileAt(meta.temple), this.content)) return; // already reported
-    const portals = new Map<string, Position[]>();
-    for (const i of this.world.islands.values())
-      for (const p of i.portals) {
-        const k = formatPos(p.from);
-        portals.set(k, [...(portals.get(k) ?? []), p.to]);
-      }
+    const portals = this.portalMoves();
     const reached = new Set<string>();
     const queue: Position[] = [meta.temple];
     reached.add(formatPos(meta.temple));
     while (queue.length > 0) {
       const p = queue.pop() as Position;
-      const next: Position[] = [...(portals.get(formatPos(p)) ?? [])];
-      for (let dy = -1; dy <= 1; dy++)
-        for (let dx = -1; dx <= 1; dx++)
-          if (dx !== 0 || dy !== 0) next.push({ x: p.x + dx, y: p.y + dy, z: p.z });
+      const moves = portals.get(formatPos(p));
+      const next: Position[] = [...(moves?.to ?? [])];
+      // Off stairs only to their destination (the temple itself is where one starts).
+      if (!moves?.onStep || p === meta.temple)
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++)
+            if (dx !== 0 || dy !== 0) next.push({ x: p.x + dx, y: p.y + dy, z: p.z });
       for (const n of next) {
         const k = formatPos(n);
         if (reached.has(k) || !rectContains(meta.rect, n.x, n.y)) continue;
@@ -813,7 +870,7 @@ class WorldValidator {
           "house exit cannot be reached on foot from the temple",
           h.exit,
         );
-    this.warnUnreachableAreas(island, reached);
+    this.warnUnreachableAreas(island, reached, portals);
     for (const [i, z] of island.zones.entries()) {
       if (z.type === "community_plot") continue;
       const any = z.floors.some((f) =>
@@ -830,8 +887,14 @@ class WorldValidator {
    * dock, a sandbar the generator left, a room with no stairs. Areas inside a community_plot
    * are skipped (they may be unbuilt). Smaller pockets (a tile between two trees) are noise.
    */
-  private warnUnreachableAreas(island: Island, reached: Set<string>): void {
+  private warnUnreachableAreas(
+    island: Island,
+    reached: Set<string>,
+    portals: Map<string, { onStep: boolean }>,
+  ): void {
     const meta = island.meta;
+    // Nobody walks across stairs, a hole or a teleport: they split areas like a wall.
+    const across = (k: string): boolean => portals.get(k)?.onStep !== true;
     const plots = island.zones.filter((z) => z.type === "community_plot");
     const inPlot = (p: Position): boolean =>
       plots.some((z) => z.floors.includes(p.z) && z.rects.some((r) => rectContains(r, p.x, p.y)));
@@ -845,7 +908,12 @@ class WorldValidator {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
           const start = { x: c.cx * CHUNK_SIZE + lx, y: c.cy * CHUNK_SIZE + ly, z: c.z };
           const k0 = formatPos(start);
-          if (seen.has(k0) || reached.has(k0) || !rectContains(meta.rect, start.x, start.y))
+          if (
+            seen.has(k0) ||
+            reached.has(k0) ||
+            !across(k0) ||
+            !rectContains(meta.rect, start.x, start.y)
+          )
             continue;
           if (!walkable(start)) continue;
           seen.add(k0);
@@ -860,7 +928,7 @@ class WorldValidator {
               for (let dx = -1; dx <= 1; dx++) {
                 const n = { x: p.x + dx, y: p.y + dy, z: p.z };
                 const k = formatPos(n);
-                if (seen.has(k) || !rectContains(meta.rect, n.x, n.y)) continue;
+                if (seen.has(k) || !across(k) || !rectContains(meta.rect, n.x, n.y)) continue;
                 if (!isPassable(this.tiles.tileAt(n), this.content)) continue;
                 seen.add(k);
                 queue.push(n);

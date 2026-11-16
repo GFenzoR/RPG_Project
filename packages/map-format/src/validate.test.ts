@@ -409,6 +409,117 @@ describe("validateWorld", () => {
     expect(m.join("\n")).not.toContain("spawn cannot be reached"); // the cave is reached by the stairs
   });
 
+  it("does not walk across stairs, holes or teleports, nor sail a boat portal", () => {
+    // The same water corner with one dirt tile in its wall at (18,20): a teleport on it
+    // (to the open side) leaves the corner unreachable on foot, as in the game, where a
+    // step onto it lands on its destination. A boat portal into the corner moves nobody.
+    const i = mini();
+    const c = must(i.chunks.get(chunkKey(7, 0, 0)));
+    for (let k = 2; k < 30; k++) {
+      setGround(c, 18, k, k < 18 ? "grass" : "water_shallow");
+      setGround(c, k, 18, k < 18 ? "grass" : "water_shallow");
+    }
+    setGround(c, 18, 20, "dirt");
+    expect(messages(check(i)).join("\n")).not.toContain("cannot be reached");
+    i.portals.push(
+      {
+        id: "mini_gate",
+        from: { x: 18, y: 20, z: 7 },
+        to: { x: 14, y: 14, z: 7 },
+        kind: "teleport",
+      },
+      { id: "mini_ferry", from: { x: 12, y: 12, z: 7 }, to: { x: 22, y: 22, z: 7 }, kind: "boat" },
+    );
+    const m = messages(check(i));
+    expect(m).toContainEqual(
+      expect.stringContaining("NPC cannot be reached on foot from the temple"),
+    );
+    // The corner warns as an area of its own: the teleport splits it from the rest.
+    const area = m.filter((x) => x.includes("walkable tiles around here cannot be reached"));
+    expect(area).toEqual([expect.stringContaining("(19,19,7) 121 walkable tiles")]);
+    // A ladder there is a tile like any other: the corner is reached again.
+    i.portals[i.portals.length - 2] = {
+      id: "mini_gate",
+      from: { x: 18, y: 20, z: 7 },
+      to: { x: 12, y: 12, z: 8 },
+      kind: "ladder",
+    };
+    i.portals.push({
+      id: "mini_gate_up",
+      from: { x: 12, y: 13, z: 8 },
+      to: { x: 17, y: 20, z: 7 },
+      kind: "ladder",
+    });
+    expect(messages(check(i)).join("\n")).not.toContain("cannot be reached");
+  });
+
+  it("rejects a portal into a house of another island, like the server", () => {
+    const a = mini();
+    const grass = emptyChunk(1, 0, 7);
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) setGround(grass, x, y, "grass");
+    const b: Island = {
+      meta: {
+        id: "mini_two",
+        name: "island.testisle.name",
+        rect: { x: 32, y: 0, w: 32, h: 32 },
+        floors: [7],
+        temple: { x: 48, y: 16, z: 7 },
+        level_hint: [1, 5],
+      },
+      chunks: new Map([[chunkKey(7, 1, 0), grass]]),
+      spawns: [],
+      npcs: [],
+      zones: [
+        {
+          id: "two_temple",
+          type: "protection",
+          floors: [7],
+          rects: [{ x: 47, y: 15, w: 3, h: 3 }],
+        },
+      ],
+      portals: [],
+      texts: [],
+      houses: [
+        {
+          id: "puerto_house_net",
+          name: "house.puerto_house_net.name",
+          rent: 100,
+          rects: [{ x: 36, y: 5, z: 7, w: 3, h: 2 }],
+          doors: [{ x: 37, y: 6, z: 7 }],
+          exit: { x: 37, y: 7, z: 7 },
+        },
+      ],
+    };
+    expect(messages(check(a, worldOf(a, b), [b]))).toEqual([]);
+    a.portals.push({
+      id: "mini_gate",
+      from: { x: 12, y: 12, z: 7 },
+      to: { x: 37, y: 5, z: 7 },
+      kind: "teleport",
+    });
+    expect(messages(check(a, worldOf(a, b), [b]))).toContainEqual(
+      expect.stringContaining(
+        'world/islands/mini/portals.yaml:14 [2].to: (37,5,7) portal destination is inside house "puerto_house_net"',
+      ),
+    );
+  });
+
+  it("keeps NPCs and radius-0 spawns off the entrance of stairs, holes and teleports", () => {
+    const i = mini();
+    i.npcs = [{ npc: "harbor_master", pos: { x: 10, y: 10, z: 7 } }];
+    i.spawns[0] = { ...must(i.spawns[0]), center: { x: 10, y: 10, z: 8 }, radius: 0 };
+    let m = messages(check(i));
+    expect(m).toContainEqual(
+      expect.stringContaining('NPC stands on the entrance of portal "mini_down"'),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining('spawn of radius 0 on the entrance of portal "mini_up"'),
+    );
+    i.spawns[0] = { ...must(i.spawns[0]), radius: 1 };
+    m = messages(check(i));
+    expect(m.join("\n")).not.toContain("spawn of radius 0");
+  });
+
   it("walks through doors, locked or not, to reach what lies behind them", () => {
     const i = mini();
     const c = must(i.chunks.get(chunkKey(7, 0, 0)));
