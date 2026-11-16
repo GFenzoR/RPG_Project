@@ -4484,7 +4484,12 @@ type MarketUpdate struct {
 	Owned uint32 `protobuf:"varint,19,opt,name=owned,proto3" json:"owned,omitempty"`
 	// The market is read-only until the server restarts (a change could not be saved): it
 	// can be browsed, but nothing is created, accepted, cancelled or withdrawn.
-	ReadOnly      bool `protobuf:"varint,20,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
+	ReadOnly bool `protobuf:"varint,20,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
+	// Sent by the server on its own, not as the answer to a MarketCommand: another
+	// player's action changed the browsed item's offers, the player's own offers or its
+	// mailbox. A client whose window is already closed ignores it (it must not open the
+	// window again).
+	Refresh       bool `protobuf:"varint,21,opt,name=refresh,proto3" json:"refresh,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4655,6 +4660,13 @@ func (x *MarketUpdate) GetOwned() uint32 {
 func (x *MarketUpdate) GetReadOnly() bool {
 	if x != nil {
 		return x.ReadOnly
+	}
+	return false
+}
+
+func (x *MarketUpdate) GetRefresh() bool {
+	if x != nil {
+		return x.Refresh
 	}
 	return false
 }
@@ -6110,7 +6122,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\rR\x06amount\x12\x14\n" +
 	"\x05price\x18\x04 \x01(\x04R\x05price\x12\x0e\n" +
-	"\x02at\x18\x05 \x01(\x04R\x02at\"\xbf\x05\n" +
+	"\x02at\x18\x05 \x01(\x04R\x02at\"\xd9\x05\n" +
 	"\fMarketUpdate\x12\x12\n" +
 	"\x04open\x18\x01 \x01(\bR\x04open\x12\x14\n" +
 	"\x05money\x18\x02 \x01(\x04R\x05money\x12\x17\n" +
@@ -6134,7 +6146,8 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\tmax_price\x18\x11 \x01(\x04R\bmaxPrice\x12'\n" +
 	"\x0fdurations_hours\x18\x12 \x03(\rR\x0edurationsHours\x12\x14\n" +
 	"\x05owned\x18\x13 \x01(\rR\x05owned\x12\x1b\n" +
-	"\tread_only\x18\x14 \x01(\bR\breadOnly\"\x9f\x05\n" +
+	"\tread_only\x18\x14 \x01(\bR\breadOnly\x12\x18\n" +
+	"\arefresh\x18\x15 \x01(\bR\arefresh\"\x9f\x05\n" +
 	"\vHouseUpdate\x12\x12\n" +
 	"\x04open\x18\x01 \x01(\bR\x04open\x12\x19\n" +
 	"\bhouse_id\x18\x02 \x01(\tR\ahouseId\x12\x12\n" +
