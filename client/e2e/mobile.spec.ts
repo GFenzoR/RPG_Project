@@ -606,6 +606,39 @@ async function tapWolf(page: Page, prefix: string): Promise<void> {
   await page.screenshot({ path: join(shots, `mobile-${prefix}-06-combat.png`) });
 }
 
+/**
+ * A window over the map (`selector`) is drawn over the touch pad wherever the two meet:
+ * every point of a grid over their overlap, if they overlap, hits the window, not a pad
+ * button (the pad goes under the windows, touch.css). Upright the dialog's sheet can
+ * reach the pad's last row (iPad Mini, iPhone 13, more with a notch); before, the pad was
+ * drawn over the sheet, and with a notch over the dialog's title.
+ */
+async function overThePad(page: Page, selector: string): Promise<void> {
+  const missed = await page.evaluate((sel) => {
+    const win = document.querySelector(sel);
+    const pad = document.querySelector(".touch-pad-dock");
+    if (!win || !pad) return [];
+    const w = win.getBoundingClientRect();
+    const p = pad.getBoundingClientRect();
+    const l = Math.max(w.left, p.left);
+    const r = Math.min(w.right, p.right);
+    const t = Math.max(w.top, p.top);
+    const b = Math.min(w.bottom, p.bottom);
+    if (r - l < 1 || b - t < 1) return [];
+    const out: string[] = [];
+    for (let i = 0; i < 9; i++)
+      for (let j = 0; j < 3; j++) {
+        const x = l + ((r - l) * (i + 0.5)) / 9;
+        const y = t + ((b - t) * (j + 0.5)) / 3;
+        const el = document.elementFromPoint(x, y);
+        if (!el || !win.contains(el))
+          out.push(`(${Math.round(x)}, ${Math.round(y)}): ${el?.className ?? "nothing"}`);
+      }
+    return out;
+  }, selector);
+  expect(missed, `${selector} over the touch pad`).toEqual([]);
+}
+
 /** In Puerto: a tap on the priestess talks to her; the window fits and closes with ×. */
 async function talkToPriestess(page: Page, prefix: string): Promise<void> {
   let priest: { id: number; x: number; y: number } | undefined;
@@ -642,6 +675,7 @@ async function talkToPriestess(page: Page, prefix: string): Promise<void> {
   const closeBox = await close.boundingBox();
   expect(closeBox?.width ?? 0).toBeGreaterThanOrEqual(44);
   expect(closeBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await overThePad(page, ".npc-windows");
   await page.screenshot({ path: join(shots, `mobile-${prefix}-07-dialog.png`) });
   await close.tap();
   await expect(dialog).toBeHidden();
@@ -897,6 +931,8 @@ for (const { prefix, device, column, insets } of NOTCHED) {
         },
         0,
       );
+      // Upright the sheet reaches the pad's last row: the sheet is drawn over it.
+      await overThePad(page, ".npc-windows");
       await page.screenshot({ path: join(shots, `mobile-${prefix}-10-safe-dialog.png`) });
       await dialog.getByRole("button", { name: "Cerrar" }).tap();
       await expect(dialog).toBeHidden();

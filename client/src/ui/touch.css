@@ -203,11 +203,15 @@ body.picking-item [data-drop] {
 .game[data-pad] .hotbar.stacked li select {
   width: 3.2rem;
 }
+/* Over the map and the phone drawer (z-index 8 in client.css), under the windows over the
+   map (12: dialog, crafting, market, house, trade). Upright the dialog's sheet can reach
+   the pad's last row (iPad Mini, iPhone 13, more with a notch); before, at 20, the pad
+   covered the sheet's edge and, with a notch, its title. */
 .touch-pad-dock {
   position: absolute;
   left: 8px;
   bottom: 8px;
-  z-index: 20;
+  z-index: 9;
 }
 
 .viewport > .pick-banner {

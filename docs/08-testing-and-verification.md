@@ -178,7 +178,10 @@ acepta en un evento sintético; el pad captura su dedo.
   (`position: fixed`, fuera de ese padding) toma los insets una vez: el personaje despierta
   en Puerto (`psql`), habla con la sacerdotisa y la hoja del diálogo termina en los bordes
   del área segura (abajo, derecha y, en vertical, izquierda; en horizontal, arriba), con
-  su "Cerrar" adentro (screenshot `10-safe-dialog`). Después acerca el mapa al máximo y
+  su "Cerrar" adentro (screenshot `10-safe-dialog`). En vertical la hoja llega a la
+  última fila del pad y se dibuja encima (`overThePad`, una grilla de puntos sobre lo que
+  comparten; también en `07-dialog` de cada dispositivo: en iPad Mini e iPhone 13 ya se
+  tocaban, y antes el pad quedaba encima). Después acerca el mapa al máximo y
   mantiene el dedo en la primera columna del mapa: el menú del toque largo queda entero
   dentro del área segura, a 8 px de su borde izquierdo y no del de la pantalla (en
   horizontal, antes quedaba bajo la muesca; screenshot `11-safe-menu`).

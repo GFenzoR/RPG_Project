@@ -500,7 +500,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   el selector de idioma fuera del juego (`.corner`) y el menú del toque largo, que lee
   los insets del padding de `.game` (`paddingInsets`, `ui/ActionMenu.tsx`) y deja sus
   8 px desde el borde del área segura (`menuPlacement`, puro y con tests). Algo nuevo con
-  `position: fixed` hace lo mismo; algo nuevo dentro de `.viewport`, nunca. E2E con
+  `position: fixed` hace lo mismo; algo nuevo dentro de `.viewport`, nunca. El pad
+  (`.touch-pad-dock`, z-index 9) va sobre el mapa y el cajón (8) y bajo esas ventanas
+  (12): en vertical la hoja del diálogo puede llegar a su última fila (iPad Mini, iPhone
+  13, y más con muesca). E2E con
   insets de CDP en `mobile.spec.ts` (también el diálogo de un NPC y el menú).
 - **Layout** (`ui/layout.ts`, breakpoints como datos): `.game` lleva `data-layout`
   (`desktop`, `tablet`, `phone-portrait`, `phone-landscape`), `data-panel` (`sidebar`,
