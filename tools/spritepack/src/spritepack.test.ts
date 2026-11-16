@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MAX_PNG_SIDE, buildAtlas, pngSize, writeAtlas } from "./build.ts";
+import { MAX_PNG_SIDE, MAX_TOTAL_PIXELS, buildAtlas, pngSize, writeAtlas } from "./build.ts";
 import { collectSpriteRefs } from "./content.ts";
 import { registeredPacks } from "./credits.ts";
 import { createImage, decodePng, encodePng, fillRect } from "./image.ts";
@@ -355,6 +355,16 @@ describe("size limits (a map PR's sprites are decoded by the check)", () => {
       `assets/sprites/a/huge.png PNG is ${MAX_PNG_SIDE + 32}x32; at most ${MAX_PNG_SIDE} per side`,
     ]);
     expect(r.atlas).toBeUndefined();
+  });
+
+  it("stops decoding once the build's pixel budget is spent", () => {
+    put("assets/sprites/a/one.png", encodePng(solid(32, 32, [1, 2, 3])));
+    put("assets/sprites/a/two.png", encodePng(solid(32, 32, [4, 5, 6])));
+    expect(errors(buildAtlas(root, { maxPixels: 2 * 32 * 32 }))).toEqual([]);
+    expect(errors(buildAtlas(root, { maxPixels: 32 * 32 + 1 }))).toEqual([
+      "assets/sprites/a/two.png over the pixel budget of a build (MAX_TOTAL_PIXELS of PNGs in total)",
+    ]);
+    expect(MAX_TOTAL_PIXELS).toBeGreaterThanOrEqual(16 * MAX_PNG_SIDE * MAX_PNG_SIDE);
   });
 
   it("refuses a placeholder larger than its limit", () => {
