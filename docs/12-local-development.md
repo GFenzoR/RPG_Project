@@ -198,6 +198,10 @@ del mismo `PREFIX` (por defecto `load`), así que se puede repetir sin limpiar l
 `mine`, porque genera `Botad Mine`, que contiene "admin"). El script falla si algo ya
 responde en sus puertos (`LOAD_PORT`, `LOAD_METRICS_PORT`). Con `URL` en esta máquina, los
 bots leen `/metrics` de `127.0.0.1:9100`; para otro servidor, pasa `METRICS=...`.
+En Windows nativo, Git Bash no puede mandarle SIGINT ni SIGTERM a un proceso nativo (solo
+SIGKILL, que es `TerminateProcess`): ahí el script espera a que se escriban los guardados
+de las salidas de los bots (`persistence_backlog` en 0, 20 s como mucho) y mata el
+servidor. Antes quedaba vivo y `make bots` no terminaba después del reporte.
 Detalle y resultados en `07-performance-budget.md`.
 
 ### Monitoreo (T4.4)
