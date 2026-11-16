@@ -65,7 +65,9 @@ Tibia:
   click derecho trepa igual. Ese item se abre o se usa con **Ctrl+click derecho** (en
   escritorio) o desde el toque largo ("Abrir" o "Usar", al lado de "Trepar"), o se
   arrastra fuera. Sobre una escalera de mano sin nada encima, Ctrl+click derecho trepa
-  igual: no hay otra cosa que usar.
+  igual: no hay otra cosa que usar. El toque largo nunca ofrece "Usar" ni "Mover" para el
+  item que muestra un portal (la escalera de mano misma, una escalera, un agujero): solo
+  "Trepar" donde corresponde y "Mirar".
 - **Punto de soga (`rope_spot`): hace falta una soga.** Se usa una herramienta con
   `tool.use: rope` (la soga, `data/items/tools.yaml`) sobre su casilla, al mismo alcance y
   con línea de visión.

@@ -639,14 +639,20 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   una casa; `climbable` hace que el click derecho sobre una escalera de mano mande
   siempre el suelo, aunque tenga algo encima (`state/items.ts` `tileUse`, modo
   `"first"`): un cadáver o una moneda no la tapan. **Ctrl+click derecho** (escritorio:
-  `useTile(x, y, z, top)` del canvas con `e.ctrlKey`) usa el item de arriba aunque sea una
-  escalera de mano; sin nada encima trepa igual. Lo decide `useMode` (`state/portals.ts`,
-  puro y con tests): `"first"` en una escalera de mano salvo con `top`, `"bare"` si la
-  casilla se usa por el suelo (`Game.usesGround`), `"never"` en el resto. El toque largo
-  sobre una escalera de mano muestra "Trepar" (`client.touch.action.climb`) y, si hay un
-  item encima, también sus botones ("Abrir"/"Usar" usan ese item, no trepan: pasan `top`
-  como Ctrl). La soga es una herramienta "usar con" como el pico. El teclado sí pisa una
-  escalera: es la forma de bajar.
+  `input/mouse.ts` `mapPress`, puro y con tests, da `use` con `top` = `e.ctrlKey`, y el
+  canvas llama `useTile(x, y, z, top)`) usa el item de arriba aunque sea una escalera de
+  mano; sin nada encima usa su `ladder_up`, y el servidor trepa igual. Lo decide `useMode`
+  (`state/portals.ts`, puro y con tests): `"first"` en una escalera de mano salvo con
+  `top`, `"bare"` si la casilla se usa por el suelo (`Game.usesGround`), `"never"` en el
+  resto. El toque largo sobre una escalera de mano muestra "Trepar"
+  (`client.touch.action.climb`) y "Mirar"; si hay un item tirado encima, también sus
+  botones ("Abrir"/"Usar" usan ese item, no trepan: pasan `top` como Ctrl; "Mover"). El
+  item propio de un portal (`ItemDef.portal`, del bloque `portal` de `data/items`) nunca
+  tiene botones: `state/items.ts` `menuItem` lo salta (el título del menú sí es su
+  nombre). Así una escalera, un agujero o un teletransporte sin nada encima solo ofrecen
+  "Mirar", y un punto de soga "Usar" (el servidor pide la soga) y "Mirar". La soga es
+  una herramienta "usar con" como el pico. El teclado sí pisa una escalera: es la forma
+  de bajar.
 - Los items de los portales (`ladder_up`, `ladder_down`, `hole`, `rope_spot`, `teleport`,
   `stairs_*`) son items de mapa comunes: se dibujan del atlas como cualquier otro. Tirar
   un item sobre una escalera, un agujero o un teletransporte es un `MoveItem` normal: el

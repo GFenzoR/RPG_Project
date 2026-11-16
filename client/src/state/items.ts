@@ -69,6 +69,17 @@ export function tileUse(
 }
 
 /**
+ * The item a long press on a map tile offers its buttons for ("use"/"open", "move"): the
+ * top item above the ground, but not the look of a portal (stairs, a ladder, a hole...: a
+ * map item nobody moves, always under what is dropped there, whose use is the menu's
+ * "climb" or nothing). What lies on it (a corpse) is the top item all the same.
+ */
+export function menuItem(world: WorldState, x: number, y: number, z: number): ItemRef | undefined {
+  const top = topItem(world, x, y, z, false);
+  return top && !world.item(top.itemId)?.portal ? top : undefined;
+}
+
+/**
  * The top item of a known tile. With `withGround` false (use, move) a tile with only its
  * ground gives undefined; looking accepts the ground.
  */

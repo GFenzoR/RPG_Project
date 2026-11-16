@@ -26,6 +26,12 @@ export interface ItemDef {
   /** tool.use of a tool ("mining", "fishing"...; "" = not a tool): picks its gather sound. */
   toolUse?: string;
   /**
+   * The look of a portal (a `portal` block in data/items: stairs, a ladder, a hole...): a
+   * map item nobody moves, under whatever is dropped there. The touch menu offers no
+   * "use" or "move" for it (state/items.ts menuItem). Absent on any other item.
+   */
+  portal?: true;
+  /**
    * i18n key of its `description` in data/items ("item.iron_sword.desc", or a sign's
    * "text.volcan.dock_sign"): looking at the item shows it. Absent when it has none.
    */

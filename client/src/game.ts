@@ -30,7 +30,7 @@ import type { ZoomView } from "./render/zoom.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
-import { locationInit, tileUse, topItem } from "./state/items.ts";
+import { locationInit, menuItem, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
@@ -975,14 +975,19 @@ export class Game {
     else this.click({ pos });
   }
 
-  /** A long press on a map tile: the menu of what can be done there. */
+  /**
+   * A long press on a map tile: the menu of what can be done there. The look of a portal
+   * (a ladder's own item) gets no "use" or "move" (state/items.ts menuItem), only its name
+   * as the title.
+   */
   private longPressTile(pos: Pos, x: number, y: number): void {
     const { x: tx, y: ty, z } = pos;
     const c = this.world.creatureAt(tx, ty, z);
     const top = topItem(this.world, tx, ty, z, false);
+    const item = menuItem(this.world, tx, ty, z);
     const actions = tileActions({
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
-      item: top && { container: (this.opts.content.items[top.itemId]?.slots ?? 0) > 0 },
+      item: item && { container: (this.opts.content.items[item.itemId]?.slots ?? 0) > 0 },
       door: this.usesGround(tx, ty, z),
       climb: climbable(this.opts.content.portals, tx, ty, z),
       known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
@@ -1048,7 +1053,7 @@ export class Game {
       else if (kind === "use" || kind === "open") this.useTop(x, y, z, true);
       else if (kind === "look") this.lookTileAt(x, y, z);
       else if (kind === "move") {
-        const ref = topItem(this.world, x, y, z, false);
+        const ref = menuItem(this.world, x, y, z);
         if (ref) this.pickItem(ref);
       }
     }

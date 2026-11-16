@@ -125,17 +125,24 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     escaleras de mano, agujeros, sogas y teletransportes, y todos tienen su item con arte
     propio (`ladder_up`/`ladder_down`, `hole`, `rope_spot`, `teleport`; las escaleras son
     del pack), pero el mundo solo usa escaleras: poner los otros es diseño de mapa
-    (`build-map-area`; `make validate` exige el item en cada entrada). Sin una escalera de
-    mano en el mundo, Ctrl+click derecho sobre una (usa el item de arriba en vez de trepar)
-    solo tiene tests unitarios (`state/portals.ts` `useMode`), no E2E. El teletransporte es
-    estático: el atlas y el renderer no animan items (haría falta una tira de frames por
-    item, como los efectos). El servidor solo **avisa** en el log de un portal sin su item
-    (`initPortals`; `make validate` sí lo rechaza): `world.NewMap` no conoce los items y
-    los mapas de los tests ponen portales en casillas sin nada. `add_portal` (mapcli, MCP,
-    panel del editor) no coloca el item: el editor podría ponerlo solo. Los items tirados
-    sobre una escalera, un agujero o un teletransporte caen al otro extremo (solo por
-    `MoveItem`: el servidor nunca suelta nada en esas casillas, nadie se para ahí), sin
-    efecto visual ni sonido propio. Cada paso por un portal manda un `FullMapView` (hoy unos
+    (`build-map-area`; `make validate` y `mapcompile` exigen el item en cada entrada). Sin
+    una escalera de mano en el mundo, Ctrl+click derecho sobre una (usa el item de arriba
+    en vez de trepar) y su toque largo (sin "Usar" ni "Mover" para su propio item) solo
+    tienen tests unitarios (`state/portals.ts` `useMode`, `input/mouse.ts` `mapPress`,
+    `state/items.ts` `menuItem`), no E2E. El teletransporte es estático: el atlas y el
+    renderer no animan items (haría falta una tira de frames por item, como los efectos).
+    Un portal sin su item lo rechazan `make validate` y `mapcompile`; el servidor solo
+    **avisa** en el log (`initPortals`) si el `world.bin` es de antes de cambiar
+    `data/items` (`world.NewMap` no conoce los items y los mapas de los tests de `session`
+    ponen portales en casillas sin nada). `add_portal` (mapcli, MCP, panel del editor) no
+    coloca el item: el editor podría ponerlo solo (hacerlo dentro de la operación cambia su
+    inversa y los patches, por eso quedó aparte). Arrastrar con el mouse el item propio de
+    un portal manda un `MoveItem` que el servidor rechaza (`inventory.cannot_move`), como con
+    cualquier item fijo del mapa. Los items tirados sobre una escalera, un agujero o un
+    teletransporte caen al otro extremo (solo por `MoveItem`: el servidor nunca suelta
+    nada en esas casillas, nadie se para ahí), sin efecto visual ni sonido propio; uno que
+    ya está donde caería (un teletransporte del mismo piso) no se mueve ni avisa. Cada paso
+    por un portal manda un `FullMapView` (hoy unos
     950 B/s subiendo y bajando sin parar, docs/07): una isla con pisos sobre el 7 lo haría
     más pesado, conviene medirlo de nuevo cuando exista;
   - chequeo de escape de las puertas con llave (`02-game-design.md`, "Chequeo de
