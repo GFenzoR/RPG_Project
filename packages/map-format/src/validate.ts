@@ -593,11 +593,12 @@ class WorldValidator {
       };
       // A portal item, on the ground or the stack (portalShown takes both), stands on the
       // entrance of a portal it shows. A warning: it moves nobody, but players will take
-      // it for a way through.
+      // it for a way through. Called only for an item with a portal block: nothing is
+      // built for the other tiles of the world.
       const portalItem = (id: string, info: ItemInfo, path: PathSegment[], pos: Position): void => {
+        if (!info.portal) return;
         const key = `portal:${pos.x},${pos.y}`;
-        if (!info.portal || reported.has(key)) return;
-        if (this.portalItemFits(info, portalAt.get(formatPos(pos)))) return;
+        if (reported.has(key) || this.portalItemFits(info, portalAt.get(formatPos(pos)))) return;
         reported.add(key);
         this.warn(
           file,
@@ -626,7 +627,7 @@ class WorldValidator {
                 `"${g}" is a ${info.kind}, not a ground item`,
                 pos,
               );
-            else portalItem(g, info, ["ground", ly, lx], pos);
+            else if (info.portal) portalItem(g, info, ["ground", ly, lx], pos);
           }
           if (!s) continue;
           if (g === null)
