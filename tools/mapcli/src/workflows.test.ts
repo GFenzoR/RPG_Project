@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlText } from "@rpg/map-format";
 import { describe, expect, it } from "vitest";
+import { CHECK_WORKFLOW, NO_VERDICT } from "./prcomment.ts";
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const dir = join(repo, ".github/workflows");
@@ -65,6 +66,9 @@ const expressions = (w: Workflow): string[] =>
  */
 const secretRefs = (w: Workflow): string[] =>
   expressions(w).flatMap((e) => e.match(/\bsecrets\b(?:\.[A-Za-z0-9_-]+|\[[^\]]*\])?/g) ?? []);
+/** The `${{ ... }}` expressions of a `run` script, trimmed. */
+const runExpressions = (run: string): string[] =>
+  [...run.matchAll(/\$\{\{([\s\S]*?)\}\}/g)].map((m) => (m[1] ?? "").trim());
 
 describe("workflows", () => {
   it("are all here", () => {
@@ -82,10 +86,27 @@ describe("workflows", () => {
     expect(existsSync(join(dir, "map-pr-pending.yml"))).toBe(false);
   });
 
-  it("pass event data to scripts through env, never inside `run` (script injection)", () => {
+  it("put no expression inside `run` but a matrix or runner value (script injection)", () => {
+    // Event data (a PR title, a branch name), but also step and job outputs or env values
+    // derived from it, reach a script only through env. A matrix value is written in the
+    // workflow itself; runner.os/arch/temp come from the runner.
     for (const w of workflows)
       for (const s of steps(w))
-        expect(s.run ?? "", w.file).not.toMatch(/\$\{\{[^}]*github\.(event|head_ref)/);
+        for (const e of runExpressions(s.run ?? ""))
+          expect(e, `${w.file}: ${s.run ?? ""}`).toMatch(
+            /^(?:matrix\.[A-Za-z0-9_-]+|runner\.(?:os|arch|temp))$/,
+          );
+  });
+
+  it("see every expression of a script", () => {
+    expect(runExpressions('echo "${{ github.event.pull_request.title }}"')).toEqual([
+      "github.event.pull_request.title",
+    ]);
+    expect(runExpressions("x=${{steps.a.outputs.b}}\ny=${{ needs.c.outputs.d }}")).toEqual([
+      "steps.a.outputs.b",
+      "needs.c.outputs.d",
+    ]);
+    expect(runExpressions('echo "$HEAD_REF" ${{ matrix.module }}')).toEqual(["matrix.module"]);
   });
 
   it("give pull_request jobs no secret but the (read-only for forks) GITHUB_TOKEN", () => {
@@ -167,11 +188,13 @@ describe("workflow_run workflows (write token, triggered by fork PRs)", () => {
           expect(s.run).toMatch(
             /^node --experimental-strip-types tools\/mapcli\/src\/prcomment\.ts( --pending)?$/,
           );
+        // Pinned by commit SHA: a tag can be moved to other code, a SHA cannot.
         if (s.uses !== undefined)
-          expect(s.uses).toMatch(
-            /^actions\/(checkout|setup-node|download-artifact)@v\d+\.\d+\.\d+$/,
-          );
+          expect(s.uses).toMatch(/^actions\/(checkout|setup-node|download-artifact)@[0-9a-f]{40}$/);
       }
+      // Each pin says which release it is (`@<sha> # vX.Y.Z`), for whoever updates it.
+      for (const line of w.text.split("\n").filter((l) => /^\s*(- )?uses:/.test(l)))
+        expect(line, w.file).toMatch(/@[0-9a-f]{40} # v\d+\.\d+\.\d+(;|$)/);
     }
   });
 
@@ -209,10 +232,15 @@ describe("map pull request workflows", () => {
   it("map-pr-comment follows the start and the end of every map-pr run", () => {
     const on = (comment.on as Obj).workflow_run as Obj;
     expect(on.workflows).toEqual([check.name]);
+    // prcomment.ts tells map-pr's runs apart from other workflows' by this name.
+    expect(check.name).toBe(CHECK_WORKFLOW);
     expect(on.types).toEqual(["requested", "completed"]);
     const { pending, comment: verdict } = comment.jobs;
     expect(pending?.if).toContain("github.event.action == 'requested'");
     expect(verdict?.if).toContain("github.event.action == 'completed'");
+    // No verdict for a cancelled run, nor for one waiting for a maintainer's approval.
+    for (const c of NO_VERDICT)
+      expect(verdict?.if).toContain(`github.event.workflow_run.conclusion != '${c}'`);
     for (const j of [pending, verdict]) {
       expect(j?.if).toContain("github.event.workflow_run.event == 'pull_request'");
       expect(j?.permissions).toMatchObject({ statuses: "write", "pull-requests": "write" });
