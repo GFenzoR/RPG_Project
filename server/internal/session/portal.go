@@ -15,9 +15,10 @@ import (
 //     (the ones who see it watch the player walk onto the stairs) and the player lands on
 //     the other end. Only players: monsters never step onto such a tile (monsterCanEnter),
 //     and a walk path or a search for a free tile goes around it.
-//   - A ladder is used: UseItem on its tile, from at most inventory.reach tiles away.
+//   - A ladder is used: UseItem on its tile, from at most inventory.reach tiles away and
+//     in line of sight (like gathering: no ladder across a wall when the reach is above 1).
 //   - A rope spot needs a rope: UseItemOn of a tool with tool.use rope on its tile, from
-//     the same reach. Using it bare says a rope is needed.
+//     the same reach and in sight. Using it bare says a rope is needed.
 //   - A boat portal does nothing: boat travel is the captain's (travel.go).
 // The player lands on the portal's destination or, if it is taken, on the nearest free
 // tile within travel.arrival_radius (freeNear: never in the room behind a locked door, never
@@ -82,6 +83,8 @@ func (w *World) usePortal(ctx *game.TickContext, p *Player, m *pb.UseItem) bool 
 		p.emit(systemMsg(msgPortalNeedRope))
 	case !w.near(p, pos):
 		p.emit(systemMsg(msgTooFar))
+	case !w.m.LineOfSight(p.pos, pos):
+		p.emit(systemMsg(msgNoSight)) // with inventory.reach above 1: not across a wall
 	default:
 		w.climb(ctx, p, pt)
 	}
@@ -103,11 +106,14 @@ func (w *World) useRope(ctx *game.TickContext, p *Player, tool *Item, target *pb
 	if pt == nil || pt.Kind != world.PortalRopeSpot {
 		return false
 	}
-	if !w.near(p, pos) {
+	switch {
+	case !w.near(p, pos):
 		p.emit(systemMsg(msgTooFar))
-		return true
+	case !w.m.LineOfSight(p.pos, pos):
+		p.emit(systemMsg(msgNoSight))
+	default:
+		w.climb(ctx, p, pt)
 	}
-	w.climb(ctx, p, pt)
 	return true
 }
 

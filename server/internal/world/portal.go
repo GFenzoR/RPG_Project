@@ -71,10 +71,13 @@ const MaxPortals = 0xFFFF
 // island, the two ends apart, the floor rules of the kinds (stairs, ladders, holes and
 // rope spots change floor; a hole leads down and a rope spot up), one portal per tile, no
 // end inside a house (of any island), and nobody standing for good on the entrance of a
-// stairs, hole or teleport: no NPC there (it would block it) and no spawn of radius 0
-// there (monsters keep off it: it would stay empty). Those entrances get FlagPortalStep.
+// stairs, hole or teleport: no NPC there (it would block it), no spawn of radius 0 there
+// (monsters keep off it: it would stay empty), and neither the temple nor a house exit
+// there (the last resort of waking up and of leaving a house when every tile around is
+// taken). Those entrances get FlagPortalStep.
 // packages/map-format (make validate) checks all of this too, and more (the way back of
-// stairs and ladders, what the temple reaches on foot).
+// stairs and ladders, what the temple reaches on foot, that every tile a crowded arrival
+// may take is connected on foot with the destination).
 func (m *Map) indexPortals() error {
 	for _, is := range m.islands { // NewMap owns the bit: a decoded world.bin carries it
 		for _, s := range is.sectors {
@@ -133,6 +136,14 @@ func (m *Map) indexPortals() error {
 		}
 	}
 	for _, is := range m.islands {
+		if pt := m.stepPortalAt(is.Temple); pt != nil {
+			return fmt.Errorf("island %q: the temple %v lies on the entrance of portal %q, where nobody may wake up", is.ID, is.Temple, pt.ID)
+		}
+		for _, h := range is.Houses {
+			if pt := m.stepPortalAt(h.Exit); pt != nil {
+				return fmt.Errorf("island %q: house %q: its exit %v lies on the entrance of portal %q, where nobody may be put out", is.ID, h.ID, h.Exit, pt.ID)
+			}
+		}
 		for _, n := range is.NPCs {
 			if pt := m.stepPortalAt(n.Pos); pt != nil {
 				return fmt.Errorf("island %q: NPC %q stands on the entrance of portal %q, which nobody could take", is.ID, n.NPC, pt.ID)

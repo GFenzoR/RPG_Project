@@ -186,11 +186,11 @@ func TestStairsArrivalTaken(t *testing.T) {
 	}
 }
 
-// A hole leads down one way: a step onto it from any side (a diagonal here) drops the
-// player to the floor below, beside whoever stands under it; those above see it step onto
-// the hole and vanish. Down there no step leads back up: around the landing and right
-// under the hole every tile is plain floor.
-func TestHoleIsOneWay(t *testing.T) {
+// A hole leads down: a step onto it from any side (a diagonal here) drops the player to
+// the floor below, beside whoever stands under it; those above see it step onto the hole
+// and vanish. That nothing leads back up is the map's rule (world.NewMap refuses a hole
+// that goes up, the "hole up" case of world/portal_test.go), not the session's.
+func TestHoleDropsBesideWhoeverIsUnder(t *testing.T) {
 	h := portalHarness(t, 2)
 	_, under := h.join("Under", ptr(at3(8, 2, 8)))
 	clUp, up := h.join("Watcher", at(10, 4))
@@ -204,16 +204,6 @@ func TestHoleIsOneWay(t *testing.T) {
 	}
 	if !under.Knows(p.ID()) {
 		t.Fatal("the one under the hole does not see the faller")
-	}
-	h.sim.Command(gameFunc(func() { h.w.Teleport(under, at3(1, 1, 8)) }))
-	// 8,1; 8,2 (right under the hole); 7,1; 7,0; 8,0; 9,0; 8,1.
-	for _, d := range []pb.Direction{E, S, nw, N, E, E, sw} {
-		if evs := h.step(cl, d); p.Pos().Z != 8 || len(find(evs, (*pb.ServerMessage).GetFullMapView)) != 0 {
-			t.Fatalf("a step %v below the hole: at %v (%v)", d, p.Pos(), kinds(evs))
-		}
-	}
-	if p.Pos() != at3(8, 1, 8) {
-		t.Fatalf("the walk below the hole ended at %v", p.Pos())
 	}
 	h.checkInvariants()
 }
@@ -512,6 +502,79 @@ func TestVolcanicMineStairsOnTheMap(t *testing.T) {
 	if trips < 20 || rate > 4096 {
 		t.Fatalf("%d trips in 20 s at %.0f B/s", trips, rate)
 	}
+}
+
+// A step onto stairs always ends on the other floor: the step skips the view of the floor
+// it leaves, so the landing does not depend on Teleport's check that the player is still
+// listed (stepPlayer only walks players of the world).
+func TestStairsStepAlwaysLands(t *testing.T) {
+	h := portalHarness(t, 2)
+	cl, p := h.join("Delver", at(4, 1))
+	h.sim.RunFor(time.Second)
+	cl.take()
+	h.send(cl, walkPath(E, S)) // 5,1, then the stairs at 5,2
+	if p.Pos() != pos(5, 1) {
+		t.Fatalf("the first step: at %v", p.Pos())
+	}
+	h.sim.Command(gameFunc(func() { h.w.UnlistForTest(p) }))
+	h.sim.RunFor(time.Second)
+	if p.Pos() != at3(5, 3, 8) {
+		t.Fatalf("after the step onto the stairs: at %v, want 5,3,8", p.Pos())
+	}
+	h.sim.Command(gameFunc(func() { h.w.RelistForTest(p) }))
+	h.sim.Step()
+	h.checkInvariants()
+}
+
+// With a reach above 1 (inventory.reach), a ladder or a rope spot across a wall is out of
+// sight, as for gathering: the climb is refused.
+func TestLadderAndRopeNeedSight(t *testing.T) {
+	rows := []string{
+		"T.#..",
+		"..#..",
+		".....",
+	}
+	m := worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 7, Rows: rows}, worldtest.Layer{Z: 8, Rows: rows})
+	m = worldtest.WithPortals(t, m,
+		world.Portal{ID: "climb", Kind: world.PortalLadder, From: at3(3, 0, 8), To: at3(3, 0, 7)},
+		world.Portal{ID: "rope", Kind: world.PortalRopeSpot, From: at3(3, 1, 8), To: at3(3, 1, 7)})
+	items := testItems()
+	var rope content.Item
+	if err := yaml.Unmarshal([]byte("{id: rope, kind: tool, weight: 1450, tool: {use: rope}}"), &rope); err != nil {
+		t.Fatal(err)
+	}
+	rope.Numeric = ropeID
+	items[rope.ID] = &rope
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Items = items
+		c.Balance.Inventory.Reach = 2
+		c.Balance.Travel.ArrivalRadius = 1
+	})
+	nextChar++
+	c := withPack(nextChar, at3(1, 0, 8))
+	c.Inventory = append(c.Inventory, session.ItemState{ItemID: ropeID, Count: 1, Slot: int(slotRight)})
+	cl, p := h.joinChar(c)
+	h.sim.RunFor(time.Second)
+	cl.take()
+	if evs := h.send(cl, useItem(onTile(at3(3, 0, 8)), worldtest.Grass, 0)); p.Pos() != at3(1, 0, 8) || !hasKey(evs, "magic.no_sight") {
+		t.Fatalf("the ladder across the wall: at %v, %v", p.Pos(), systemKeys(evs))
+	}
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, at3(1, 1, 8)) }))
+	h.sim.RunFor(time.Second)
+	cl.take()
+	if evs := h.send(cl, useOn(ropeID, at3(3, 1, 8))); p.Pos() != at3(1, 1, 8) || !hasKey(evs, "magic.no_sight") {
+		t.Fatalf("the rope across the wall: at %v, %v", p.Pos(), systemKeys(evs))
+	}
+	// Round the wall, two tiles away and in sight: both climb.
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, at3(3, 2, 8)) }))
+	h.sim.RunFor(time.Second)
+	cl.take()
+	landed(t, p, h.send(cl, useOn(ropeID, at3(3, 1, 8))), at3(3, 1, 7))
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, at3(4, 2, 8)) }))
+	h.sim.RunFor(time.Second)
+	cl.take()
+	landed(t, p, h.send(cl, useItem(onTile(at3(3, 0, 8)), worldtest.Grass, 0)), at3(3, 0, 7))
+	h.checkInvariants()
 }
 
 func ptr(p world.Pos) *world.Pos { return &p }

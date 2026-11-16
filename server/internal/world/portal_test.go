@@ -172,8 +172,9 @@ func TestPortalStepFlag(t *testing.T) {
 }
 
 // Nobody stands for good on the entrance of stairs, a hole or a teleport: an NPC there
-// would block it, and a spawn of radius 0 there would never show a monster (they keep
-// off it). On a ladder, or with a radius to spread over, they may.
+// would block it, a spawn of radius 0 there would never show a monster (they keep off
+// it), and the temple or a house exit there would put a player on it when every tile
+// around is taken. On a ladder or a boat portal, or with a radius to spread over, they may.
 func TestPortalEntranceKeptFree(t *testing.T) {
 	npcOn := func(p Pos) func(is *Island) {
 		return func(is *Island) { is.NPCs = []NPCPlacement{{NPC: "guide", Pos: p}} }
@@ -194,6 +195,15 @@ func TestPortalEntranceKeptFree(t *testing.T) {
 		"spawn on a hole":   {spawnOn(at(32, 32, 7), 0), `spawn "rats" of radius 0 lies on the entrance of portal "pit"`},
 		"spawn around it":   {spawnOn(at(32, 32, 7), 1), ""},
 		"spawn on a rope":   {spawnOn(at(32, 33, 8), 0), ""},
+		"temple on stairs": {func(is *Island) { is.Temple = at(33, 31, 7) },
+			`the temple 33,31,7 lies on the entrance of portal "down"`},
+		"temple on a boat": {func(is *Island) { is.Temple = at(34, 31, 7) }, ""},
+		"house exit on a teleport": {func(is *Island) {
+			is.Portals = append(is.Portals, Portal{ID: "porch", Kind: PortalTeleport, From: at(30, 31, 7), To: at(33, 30, 7)})
+		}, `house "shed": its exit 30,31,7 lies on the entrance of portal "porch"`},
+		"house exit on a ladder": {func(is *Island) {
+			is.Portals = append(is.Portals, Portal{ID: "porch", Kind: PortalLadder, From: at(30, 31, 7), To: at(30, 31, 8)})
+		}, ""},
 	} {
 		_, err := portalMapWith(t, c.edit, testPortals()...)
 		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {

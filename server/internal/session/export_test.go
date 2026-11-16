@@ -370,3 +370,10 @@ func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string,
 		})
 	})
 }
+
+// UnlistForTest drops p from the index of clients while it stays in the world: the state
+// in which Teleport does nothing (tests only).
+func (w *World) UnlistForTest(p *Player) { delete(w.byClient, p.client) }
+
+// RelistForTest undoes UnlistForTest.
+func (w *World) RelistForTest(p *Player) { w.byClient[p.client] = p }

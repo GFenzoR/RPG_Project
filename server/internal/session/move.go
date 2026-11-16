@@ -284,7 +284,9 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	p.lastAction, p.idleWarned = ctx.Tick, false
 	w.abStep(ctx.Tick, p, d)
 	if pt != nil {
-		w.Teleport(p, dest)
+		// relocate, not Teleport: p walks, so it is in the world, and the step skipped the
+		// view of this floor (through): p must land, whatever Teleport would check.
+		w.relocate(p, dest)
 	}
 }
 
@@ -376,6 +378,11 @@ func (w *World) Teleport(p *Player, to world.Pos) {
 	if w.byClient[p.client] != p {
 		return
 	}
+	w.relocate(p, to)
+}
+
+// relocate is Teleport for a player known to be in the world.
+func (w *World) relocate(p *Player, to world.Pos) {
 	p.stopWalk()
 	w.disappearFromObservers(p)
 	w.unindex(p)
