@@ -213,7 +213,7 @@ func LoadContent(root string) (*Content, error) {
 
 // Compile reads world/ and data/ under root and builds the map.
 func Compile(root string) (*world.Map, error) {
-	content, err := LoadContent(root)
+	cont, err := LoadContent(root)
 	if err != nil {
 		return nil, err
 	}
@@ -227,18 +227,18 @@ func Compile(root string) (*world.Map, error) {
 	var islands []*world.Island
 	sectors := map[string][]*world.Sector{}
 	for _, entry := range wf.Islands {
-		is, secs, err := compileIsland(root, entry.ID, entry.Rect, content)
+		is, secs, err := compileIsland(root, entry.ID, entry.Rect, cont)
 		if err != nil {
 			return nil, err
 		}
 		islands = append(islands, is)
 		sectors[is.ID] = secs
 	}
-	m, err := world.NewMap(islands, sectors, content.speeds)
+	m, err := world.NewMap(islands, sectors, cont.speeds)
 	if err != nil {
 		return nil, fmt.Errorf("world/world.yaml: %w", err)
 	}
-	if err := checkPortalLooks(m, content); err != nil {
+	if err := checkPortalLooks(m, cont); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -275,7 +275,7 @@ func checkPortalLooks(m *world.Map, c *Content) error {
 	return nil
 }
 
-func compileIsland(root, id string, worldRect rect, content *Content) (*world.Island, []*world.Sector, error) {
+func compileIsland(root, id string, worldRect rect, cont *Content) (*world.Island, []*world.Sector, error) {
 	dir := filepath.Join(root, "world", "islands", id)
 	islandPath := filepath.Join(dir, "island.yaml")
 	var meta islandFile
@@ -339,7 +339,7 @@ func compileIsland(root, id string, worldRect rect, content *Content) (*world.Is
 			if cm == nil {
 				return nil, nil, fmt.Errorf("%s: chunk files are named cXXXX_YYYY.json", rel(root, path))
 			}
-			s, err := compileChunk(path, rel(root, path), z, atoi(cm[1]), atoi(cm[2]), r, content)
+			s, err := compileChunk(path, rel(root, path), z, atoi(cm[1]), atoi(cm[2]), r, cont)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -384,7 +384,7 @@ func compileIsland(root, id string, worldRect rect, content *Content) (*world.Is
 	return is, sectors, nil
 }
 
-func compileChunk(path, where string, z, cx, cy int, island rect, content *Content) (*world.Sector, error) {
+func compileChunk(path, where string, z, cx, cy int, island rect, cont *Content) (*world.Sector, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", where, err)
@@ -407,7 +407,7 @@ func compileChunk(path, where string, z, cx, cy int, island rect, content *Conte
 	}
 	palette := make([]*Item, len(c.Palette))
 	for i, id := range c.Palette {
-		it := content.Item(id)
+		it := cont.Item(id)
 		if it == nil {
 			return nil, fmt.Errorf("%s: palette[%d]: unknown item %q", where, i, id)
 		}
