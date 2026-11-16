@@ -102,6 +102,15 @@ items:
   requires: { level: 5 }
   value: 120              # precio base que usan los NPCs como referencia
 ```
+- **Descripción:** `description` es la clave i18n que el cliente muestra al mirar el item
+  (`item.<id>.desc` por convención). Un cartel (T5.5) es un item fijo cuya descripción es
+  su texto del mapa: `brasal_dock_sign` tiene `description: text.volcan.dock_sign`, la
+  misma clave de su entrada en `world/islands/volcan/texts.yaml`. El cliente empaqueta
+  solo las claves que algún item usa como descripción.
+- **Suelos volcánicos** (T5.5, `data/items/ground.yaml`, `speed` = costo de terreno en %):
+  `ash` (ceniza, 150, como el pasto), `basalt` (losas de basalto de Brasal, 100, como la
+  piedra), `cinder_path` (camino de escoria, 110), `cooled_lava` (lava enfriada, 130) y
+  `lava` (fundida, no caminable, como el agua).
 - **Distancia y munición** (T3.1): un arma `type: distance` exige `range` y `ammo` (el
   `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type: arrow, attack }`,
   apilable, y va en el slot de munición. Cada disparo gasta una y suma su `attack` al del
@@ -649,9 +658,13 @@ Cada nombre de pieza dice dónde está el suelo `from` respecto de la casilla `t
 `n`/`s`/`e`/`w` = de ese lado; `ne`/`nw`/`se`/`sw` = solo en esa diagonal (ninguno de los
 dos lados vecinos); `inner_*` = en los dos lados vecinos (si falta, se apilan los dos
 lados). Las piezas son items `kind: decoration`, `pickupable: false`, sin bloquear. Hoy hay
-reglas `grass_sand` y `sand_water`; su arte placeholder propio lo genera
-`tools/spritepack/src/gen-borders.ts` en `assets/sprites/borders/` (un test verifica que
-los PNG commiteados son los que produce).
+reglas `grass_sand` y `sand_water`, y las de la Isla Volcánica (T5.5): `ash_sand`,
+`cooled_lava_sand`, `cooled_lava_ash`, `cinder_path_ash` y `cooled_lava_lava` (la costra
+sobre la lava fundida). Su arte lo genera `tools/spritepack/src/gen-borders.ts` en
+`assets/sprites/borders/`: cada pieza recorta el suelo `from` de su arte propio
+(`assets/sprites/<sprite>.png`, de `tools/spritegen`), de su textura de pack o de su color
+placeholder, en ese orden (un test verifica que los PNG commiteados son los que produce).
+Si cambia la receta de un suelo, corre `make spritegen` y después `gen-borders`.
 
 ## Outfits (T0.5)
 `data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador.

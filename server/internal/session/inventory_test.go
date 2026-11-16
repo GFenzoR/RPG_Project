@@ -304,6 +304,35 @@ func TestUseAndLook(t *testing.T) {
 	}
 }
 
+// A fixed map item (a sign of Brasal, an anvil) is looked at like the ground: its name,
+// whose description the client adds (a sign's text), and no weight. A fixed container
+// still tells its slots.
+func TestLookAtFixedItem(t *testing.T) {
+	fixed := false
+	items := testItems()
+	items["test_sign"] = &content.Item{ID: "test_sign", Kind: "decoration", Numeric: worldtest.Wall, Pickupable: &fixed}
+	h := newHarness(t, worldtest.Map(t, 8, 8, 7, "T.#"), func(c *session.Config) { c.Items = items })
+	cl, _ := h.joinChar(withPack(8410, pos(8, 8)))
+	h.sim.Command(gameFunc(func() { h.w.DropForTest(h.w.ItemForTest("creature_remains"), 1, pos(9, 8)) }))
+	h.sim.Step()
+	cl.take()
+	h.input(cl, lookAt(onTile(pos(10, 8)), worldtest.Wall, 1))
+	h.input(cl, lookAt(onTile(pos(9, 8)), corpseID, 1))
+	h.sim.Step()
+	msgs := find(cl.take(), (*pb.ServerMessage).GetChatMessage)
+	if len(msgs) != 2 || msgs[0].GetLocalized().GetKey() != "look.ground" || msgs[1].GetLocalized().GetKey() != "look.container" {
+		t.Fatalf("look = %v", msgs)
+	}
+	for _, prm := range msgs[0].GetLocalized().GetParams() {
+		if prm.GetName() == "weight" {
+			t.Errorf("a sign has a weight: %v", prm)
+		}
+		if prm.GetName() == "item" && prm.GetItem().GetItemId() != worldtest.Wall {
+			t.Errorf("looked at %v", prm.GetItem())
+		}
+	}
+}
+
 // The inventory travels in snapshots and comes back on the next login; a character that
 // never played starts with balance.yaml inventory.start_container.
 func TestInventorySavedAndRestored(t *testing.T) {

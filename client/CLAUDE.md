@@ -420,6 +420,18 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `make spritegen ONLY=effects/<nombre>/` y `make sprites`. Para un efecto nuevo del
   servidor: su carpeta en `FOLDERS` de `render/effects.ts` y su tira en la receta.
 
+## Notas de T5.5 (carteles y descripciones)
+- `ItemDef.desc` es la clave del `description` del item en `data/items`; mirar un item
+  agrega ese texto (sin `desc`, la convención `item.<id>.desc`). El plugin de Vite
+  empaqueta esas claves aunque vivan en un catálogo de solo nombres (`items.yaml`,
+  `world.yaml`): así un cartel (`brasal_dock_sign`, `description: text.volcan.dock_sign`)
+  se lee con Mayús+click.
+- El cliente nombra los items por `item.<id>.name`. Un item con un `name` compartido (las
+  piezas de borde, los carteles con `item.signpost.name`) recibe esa clave con el texto
+  compartido en el plugin; el código sigue pidiendo `item.<id>.name`.
+- E2E: el test "T5.5: wake up at the temple of Brasal" lee el cartel del templo
+  (screenshot `65b-volcan-temple-sign`).
+
 ## Notas de T5.6
 - **Input táctil** (`input/gestures.ts`, `dpad.ts`, `actions.ts`, puros y con tests). Los
   listeners de puntero del canvas y de los items del DOM separan por `pointerType`

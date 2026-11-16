@@ -582,8 +582,11 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
 - **`LookAt`:** `Message` de sistema `look.weapon` (`attack`, `defense`), `look.armor`
   (`armor`), `look.shield` (`defense`), `look.container` (`slots`), `look.item` o
   `look.ground`, con el parámetro `item` y, salvo el suelo, `weight` (gramos de la pila con
-  su contenido) y `level` si el item lo exige. El cliente agrega la descripción
-  `item.<id>.desc` si existe y muestra el peso en oz.
+  su contenido) y `level` si el item lo exige. Un item fijo del mapa (`pickupable: false`,
+  que no es contenedor: un cartel, un yunque, un árbol) contesta como el suelo,
+  `look.ground` sin peso (T5.5). El cliente agrega la descripción que nombra el
+  `description` del item en `data/items` (`item.<id>.desc`, o el `text.*` de un cartel) si
+  existe y muestra el peso en oz.
 - **Login:** `Inventory` lleva el equipo guardado; un personaje que nunca jugó recibe
   `inventory.start_container` en el slot de mochila.
 

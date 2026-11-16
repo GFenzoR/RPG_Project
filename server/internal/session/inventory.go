@@ -941,7 +941,8 @@ func (w *World) useUp(p *Player, it *Item) {
 
 // lookAt answers a LookAt with a system message: the item (the client adds its
 // translated name and description), its weight in grams and its combat numbers. Any
-// visible item can be looked at, including the ground and the map's own items.
+// visible item can be looked at, including the ground and the map's own items; the
+// ground and fixed items (pickupable: false, not containers) say only their name.
 func (w *World) lookAt(p *Player, m *pb.LookAt) {
 	var def *content.Item
 	weight, count := 0, 0
@@ -990,7 +991,9 @@ func (w *World) lookAt(p *Player, m *pb.LookAt) {
 	params := []*pb.TextParam{{Name: "item", Value: &pb.TextParam_Item{Item: stack}}}
 	key := msgLookItem
 	switch {
-	case def.Kind == "ground":
+	case def.Kind == "ground", !def.CanPickUp() && def.Container == nil:
+		// The ground and the map's fixed items (a sign, an anvil, a tree) have no weight to
+		// tell: their name (the client adds the description, a sign's text) is the answer.
 		p.emit(systemMsg(msgLookGround, params...))
 		return
 	case def.Weapon != nil:
