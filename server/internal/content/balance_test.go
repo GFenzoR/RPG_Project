@@ -182,3 +182,37 @@ func TestMarketPushEvery(t *testing.T) {
 		t.Error("a disabled market needs no push_every_ms")
 	}
 }
+
+// inventory.reach and resource.reach stay within the view (MaxReach, 6 tiles): the server
+// answers nothing about a tile out of view, so a longer reach could only ever fail.
+func TestReachWithinTheView(t *testing.T) {
+	b, err := LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv := b.Inventory
+	for reach, ok := range map[int]bool{0: false, 1: true, MaxReach: true, MaxReach + 1: false} {
+		inv.Reach = reach
+		if (inv.check() == nil) != ok {
+			t.Errorf("inventory.reach %d: accepted %v, want %v", reach, !ok, ok)
+		}
+	}
+	items, err := LoadItems(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range items {
+		if it.Resource == nil {
+			continue
+		}
+		r := *it.Resource
+		for reach, ok := range map[int]bool{-1: false, 0: true, MaxReach: true, MaxReach + 1: false} {
+			r.Reach = reach
+			if (r.Check(items) == nil) != ok {
+				t.Errorf("%s resource.reach %d: accepted %v, want %v", it.ID, reach, !ok, ok)
+			}
+		}
+		return
+	}
+	t.Fatal("no resource in data/items")
+}

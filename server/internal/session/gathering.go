@@ -96,7 +96,7 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 		return
 	}
 	def := w.resourceAt(pos)
-	if def == nil && pos.Z == p.pos.Z && w.near(p, pos) {
+	if def == nil && w.near(p, pos) {
 		// A tool used on a crafting station (a hammer on the anvil) opens it (T3.4).
 		for i := w.staticCount(pos) - 1; i >= 0; i-- {
 			if id := w.staticAt(pos, i); w.stations[id] != nil {
@@ -114,7 +114,7 @@ func (w *World) gather(ctx *game.TickContext, p *Player, tool *Item, target *pb.
 	if reach == 0 {
 		reach = w.reach
 	}
-	if pos.Z != p.pos.Z || chebyshev(p.pos, pos) > reach {
+	if chebyshev(p.pos, pos) > reach {
 		p.emit(systemMsg(msgTooFar))
 		return
 	}

@@ -509,8 +509,24 @@ type Inventory struct {
 	// DoorCooldownMs is how long a player waits between two uses of a door of the map,
 	// refused or not (docs/02 "Puertas con llave"): a door's tile goes to everyone around.
 	DoorCooldownMs int `yaml:"door_cooldown_ms"`
-	// Reach is the Chebyshev distance (same floor) for actions on ground items.
+	// Reach is the Chebyshev distance (same floor) for actions on ground items, 1 to
+	// MaxReach.
 	Reach int `yaml:"reach"`
+}
+
+// MaxReach bounds inventory.reach and resource.reach: the view half-height
+// (session.ViewHalfH, the smaller half of the view). The server answers nothing about a
+// tile out of the player's view (gathering, crafting stations: not_possible), so a longer
+// reach would only ever answer that.
+const MaxReach = 6
+
+// check verifies the inventory numbers: max_open_containers, door_cooldown_ms and reach
+// above 0 (reach at most MaxReach), use_cooldown_ms not negative.
+func (i Inventory) check() error {
+	if i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.DoorCooldownMs <= 0 || i.Reach <= 0 || i.Reach > MaxReach {
+		return fmt.Errorf("inventory: max_open_containers, door_cooldown_ms and reach must be > 0 (reach at most %d), use_cooldown_ms >= 0", MaxReach)
+	}
+	return nil
 }
 
 // Gathering holds the fishing and mining rules shared by every spot (T1.12); the
@@ -697,8 +713,8 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if err := b.Death.check(); err != nil {
 		return Balance{}, err
 	}
-	if i := b.Inventory; i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.DoorCooldownMs <= 0 || i.Reach <= 0 {
-		return Balance{}, errors.New("inventory: max_open_containers, door_cooldown_ms and reach must be > 0, use_cooldown_ms >= 0")
+	if err := b.Inventory.check(); err != nil {
+		return Balance{}, err
 	}
 	if err := b.Chat.check(); err != nil {
 		return Balance{}, err

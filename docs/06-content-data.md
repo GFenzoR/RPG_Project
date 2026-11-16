@@ -139,7 +139,8 @@ items:
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
   entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
-  `reach`.
+  `reach` (de 1 a 6: el servidor no contesta nada de una casilla fuera de la vista, ±8 x,
+  ±6 y; el esquema y `content.MaxReach` lo exigen).
 - **Recursos** (T1.12): cualquier item del mapa (suelo o pila) puede ser un lugar de
   recolección con un bloque `resource`:
   ```yaml
@@ -147,7 +148,8 @@ items:
     tool: mining            # tool.use de la herramienta que lo cosecha
     skill: mining           # skill u oficio que da la chance y sube con cada intento
     reach: 1                # opcional (por defecto inventory.reach), con línea de visión;
-                            # como mucho 6: más allá de la vista (±8 x, ±6 y) responde not_possible
+                            # como mucho 6 (esquema y content.MaxReach): más allá de la
+                            # vista (±8 x, ±6 y) el servidor solo respondería not_possible
     charges: 4              # cosechas por casilla antes de agotarse
     regen_ms: 300000        # se llena este tiempo después de la última cosecha
     chance: { base: 0.3, per_level: 0.02, max: 0.85 }
@@ -201,8 +203,9 @@ items:
   es solo datos: un par nuevo, su llave, textos y sprites; el mapa la coloca como
   cualquier item. Dónde se coloca lo valida el mapa (`03-world-and-maps.md`,
   "Validación"): un item de puerta por casilla, una sala determinable detrás de cada
-  puerta con llave y nada de afuera en ella (tampoco el destino de un `teleport` de un
-  diálogo de `data/npcs`).
+  puerta con llave, nada de afuera en ella (tampoco el destino de un `teleport` de un
+  diálogo de `data/npcs`) y el chequeo de escape (cada lado llega a un templo o a una
+  llegada de barco sin llaves; nadie entra a una sala sin su llave).
 
 ## Monstruo
 ```yaml

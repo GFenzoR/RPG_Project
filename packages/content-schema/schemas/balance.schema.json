@@ -475,8 +475,10 @@
           "$ref": "common.schema.json#/$defs/positiveInt"
         },
         "reach": {
-          "description": "Chebyshev distance (same floor) for actions on ground items.",
-          "$ref": "common.schema.json#/$defs/positiveInt"
+          "description": "Chebyshev distance (same floor) for actions on ground items, at most 6 (the view half-height: the server answers nothing about a tile out of view).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
         }
       }
     },
