@@ -1,5 +1,5 @@
 {
-  "_comment": "Rooms behind locked doors (docs/02-game-design.md \"Puertas con llave\"), drawn on floor 7 from (0,0). Read by doors.test.ts here and by server/internal/session (TestDoorRoomsFixture), so make validate and the server agree on every room and on every door whose room cannot be worked out. Tiles: . grass; T grass and the island temple (the server wants it outside every room); # wall; D locked door, closed; d locked door, placed open; P plain door, closed; X plain door on a tile that a wall blocks too; space: no tile. {\"repeat\": n, \"row\": r} stands for n rows r. rooms: tiles behind each locked door by \"x,y\"; error: why the first locked door has no room (open: one side; truncated: two sides or more bigger than 4096 tiles; tie: the two biggest sides have the same size).",
+  "_comment": "Rooms behind locked doors (docs/02-game-design.md \"Puertas con llave\"), drawn on floor 7 from (0,0). Read by doors.test.ts here and by server/internal/session (TestDoorRoomsFixture), so make validate and the server agree on every room and on every locked door they refuse. Tiles: . grass; T grass and the island temple (the server wants it outside every room); # wall; D locked door, closed; d locked door, placed open; K locked door of another key, closed; P plain door, closed; X plain door on a tile that a wall blocks too; space: no tile. {\"repeat\": n, \"row\": r} stands for n rows r, and {\"repeat\": n, \"rows\": [r1, r2, ...]} for those rows n times. rooms: tiles behind each locked door by \"x,y\"; error: why the first refused locked door (map order: chunk by chunk, row by row) is refused: walled (no side), open (one side), truncated (two sides or more bigger than 4096 tiles), tie (the two biggest sides have the same size), key (it shares its room with a locked door of another key) or outside (it shares its room with a locked door whose outside is not its own: no way between them within 4 x 4096 tiles).",
   "cases": [
     {
       "name": "a room behind a gate",
@@ -129,6 +129,132 @@
         }
       ],
       "error": "truncated"
+    },
+    {
+      "name": "a gate walled in",
+      "rows": [".....", ".###.", ".#D#.", ".###.", "..T.."],
+      "error": "walled"
+    },
+    {
+      "name": "a gate with two rooms behind it",
+      "rows": [
+        "#########",
+        "#.......#",
+        "#...T...#",
+        "####D####",
+        "###.#.###",
+        "##..#..##",
+        "#########"
+      ],
+      "rooms": {
+        "4,3": 6
+      }
+    },
+    {
+      "name": "a gate on the west edge of the map",
+      "rows": ["..T..", ".....", "D####", "....."],
+      "rooms": {
+        "0,2": 5
+      }
+    },
+    {
+      "name": "a gate in a loop longer than a walk",
+      "rows": [
+        "######################################################################",
+        "#....................................................................#",
+        {
+          "repeat": 17,
+          "rows": [
+            "#.##################################################################.#",
+            "#.#..................................................................#",
+            "#.#.##################################################################",
+            "#.#..................................................................#"
+          ]
+        },
+        "#D##################################################################.#",
+        "#.#..................................................................#",
+        "#.#.##################################################################",
+        "#.#..................................................................#",
+        {
+          "repeat": 17,
+          "rows": [
+            "#.##################################################################.#",
+            "#.#..................................................................#",
+            "#.#.##################################################################",
+            "#.#..................................................................#"
+          ]
+        },
+        "#.##################################################################.#",
+        "#....................................................................#",
+        "######################################################################"
+      ],
+      "error": "open"
+    },
+    {
+      "name": "two locks on one room",
+      "rows": [
+        "###########",
+        "#...#..T..#",
+        "#...D.....#",
+        "#...K.....#",
+        "#...#.....#",
+        "###########"
+      ],
+      "error": "key"
+    },
+    {
+      "name": "a vault bigger than the room before it",
+      "rows": [
+        "#################",
+        "#..T..#...#.....#",
+        "#.....D...D.....#",
+        "#.....#...#.....#",
+        "#################"
+      ],
+      "error": "outside"
+    },
+    {
+      "name": "a hall with a front and a back door to the same field",
+      "rows": [
+        {
+          "repeat": 30,
+          "row": "......................................................................"
+        },
+        "..............................#####D#####.............................",
+        {
+          "repeat": 9,
+          "row": "..............................#.........#............................."
+        },
+        "..............................#####D#####.............................",
+        {
+          "repeat": 29,
+          "row": "......................................................................"
+        }
+      ],
+      "rooms": {
+        "35,30": 81,
+        "35,40": 81
+      }
+    },
+    {
+      "name": "a hall between open ground and a vault too big to walk",
+      "rows": [
+        {
+          "repeat": 64,
+          "row": "......................................................................"
+        },
+        "###################################D##################################",
+        {
+          "repeat": 2,
+          "row": "......................................................................"
+        },
+        "###################################D##################################",
+        {
+          "repeat": 64,
+          "row": "......................................................................"
+        }
+      ],
+      "error": "outside"
     }
   ]
 }

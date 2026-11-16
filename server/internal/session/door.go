@@ -41,10 +41,17 @@ const (
 // map validator (packages/map-format doors.ts) uses the same number.
 const doorRoomSearch = 4096
 
-// Why the room behind a locked door cannot be worked out (doorRoom). The world does not
-// start with such a door, and make validate refuses it first (same rules, same fixture:
+// sameOutsideSearch bounds the walk sameOutside makes from the outside of one locked door
+// to the outside of another that shares its room.
+const sameOutsideSearch = 4 * doorRoomSearch
+
+// Why the room behind a locked door cannot be worked out (doorRoom), or cannot be trusted
+// (initDoors: a room shared with another locked door). The world does not start with such
+// a door, and make validate refuses it first (same rules, same fixture:
 // packages/map-format/src/testdata/door-rooms.json).
 var (
+	// errDoorWalled: no tile around the door lets anyone through.
+	errDoorWalled = errors.New("it leads nowhere: no tile around it lets anyone through")
 	// errDoorInTheOpen: every tile around the door is one side, so it keeps nothing apart.
 	errDoorInTheOpen = errors.New("it keeps nothing apart: every tile around it is one side")
 	// errDoorTruncated: more than one side is bigger than doorRoomSearch, so the room
@@ -53,6 +60,13 @@ var (
 	// errDoorTie: every side is closed and the two biggest have the same size, so neither
 	// is clearly the outside.
 	errDoorTie = errors.New("its two biggest sides have the same size: which one is the outside is unclear")
+	// errDoorOtherKey: it shares its room with a locked door of another key, whose key
+	// would open both from the room.
+	errDoorOtherKey = errors.New("it shares its room with a locked door of another key")
+	// errDoorOtherOutside: it shares its room with a locked door whose outside is not its
+	// own (sameOutside finds no way from one to the other): the room is a hall between two
+	// places, one of them a room no door guards (a vault bigger than the room before it).
+	errDoorOtherOutside = fmt.Errorf("it shares its room with a locked door whose outside is not its own (no way between them within %d tiles)", sameOutsideSearch)
 )
 
 // door is a tile of the map with a door item (initDoors).
@@ -73,9 +87,11 @@ type door struct {
 func (d *door) inRoom(r int32) bool { return r != 0 && slices.Contains(d.room, r) }
 
 // room is one room behind locked doors: a side of a locked door closed off by walls and
-// locked doors (doorRoom). A double door shares its room.
+// locked doors (doorRoom). Doors that share a room (a double door, a front and a back
+// door) have the same key and lead to the same outside (initDoors).
 type room struct {
-	// door is the first locked door (map order) the room lies behind, for messages.
+	// door is the first locked door (map order) the room lies behind: for messages, and
+	// every other door of the room is compared with it.
 	door world.Pos
 	// sectors are the keys (sectorKey) of the sectors the room covers: shutsIn looks at
 	// the players there only.
@@ -85,8 +101,9 @@ type room struct {
 // initDoors checks the doors and keys of the items (content.CheckDoors), finds the doors
 // of the map and works out the room behind each locked one. The walls of the map never
 // change, and the walks count every locked door as a wall and every other door as open,
-// so the rooms hold for good. A locked door whose room cannot be worked out, or whose room
-// holds what belongs outside (checkRooms), stops the world from starting.
+// so the rooms hold for good. A locked door whose room cannot be worked out, whose room it
+// shares with a locked door of another key or of another outside, or whose room holds
+// what belongs outside (checkRooms), stops the world from starting.
 func (w *World) initDoors() error {
 	if err := content.CheckDoors(w.cfg.Items); err != nil {
 		return fmt.Errorf("session: %w", err)
@@ -136,11 +153,13 @@ func (w *World) initDoors() error {
 			}
 		}
 	}
+	outsides := map[world.Pos][]world.Pos{} // locked door → the tiles next to it outside
 	for _, p := range locked {
-		sides, err := w.doorRoom(p)
+		sides, outside, err := w.doorRoom(p)
 		if err != nil {
 			return fmt.Errorf("session: locked door on %v: %w", p, err)
 		}
+		outsides[p] = outside
 		d := w.doors[p]
 		for _, side := range sides {
 			// A finite side is a whole area of the map with every locked door as a wall,
@@ -148,11 +167,57 @@ func (w *World) initDoors() error {
 			id := w.roomOf[side[0]]
 			if id == 0 {
 				id = w.newRoom(p, side)
+			} else if first := w.rooms[id-1].door; w.doors[first].lock != d.lock {
+				return fmt.Errorf("session: locked door on %v: %w (the door on %v)", p, errDoorOtherKey, first)
+			} else if !w.sameOutside(outsides[first], outside) {
+				return fmt.Errorf("session: locked door on %v: %w (the door on %v)", p, errDoorOtherOutside, first)
 			}
 			d.room = append(d.room, id)
 		}
 	}
 	return w.checkRooms()
+}
+
+// roomPassable reports whether the walks of the rooms (doorRoom, sameOutside) go through
+// q: a locked door is a wall, any other door is open if its tile lets creatures through.
+func (w *World) roomPassable(q world.Pos) bool {
+	if d := w.doors[q]; d != nil {
+		return d.lock == "" && d.through
+	}
+	return w.m.Walkable(q)
+}
+
+// sameOutside reports whether the outsides of two locked doors that share a room are one
+// area: a walk from the tiles next to the first door on its outside (a, breadth first, 8
+// directions, roomPassable: never through a locked door) reaches one next to the second
+// door on its outside (b) within sameOutsideSearch tiles. A double door, or a front and a
+// back door to the same streets, pass; a hall between the world and a vault, or a room
+// before a vault bigger than it, do not.
+func (w *World) sameOutside(a, b []world.Pos) bool {
+	seen := map[world.Pos]bool{}
+	for _, t := range a {
+		seen[t] = true
+	}
+	for _, t := range b {
+		if seen[t] {
+			return true
+		}
+	}
+	queue := slices.Clone(a)
+	for i := 0; i < len(queue) && i < sameOutsideSearch; i++ {
+		for e := world.North; e <= world.NorthWest; e++ {
+			q, ok := queue[i].Step(e)
+			if !ok || seen[q] || !w.roomPassable(q) {
+				continue
+			}
+			if slices.Contains(b, q) {
+				return true
+			}
+			seen[q] = true
+			queue = append(queue, q)
+		}
+	}
+	return false
 }
 
 // roomAllows reports whether a search for a free tile that started in room from (a
@@ -440,20 +505,16 @@ func (w *World) swapDoor(p *Player, pos world.Pos, i int, to *content.Item) bool
 }
 
 // doorRoom returns the room behind the locked door at pos (docs/02 "Puertas con llave"),
-// one slice of tiles per side that is not the outside. It walks the map from each
-// passable tile next to the door (8 directions, same floor, never through a locked door,
-// every other door open when its tile lets creatures through) to find the sides the door
-// keeps apart, up to doorRoomSearch tiles each. A side the walk cannot finish is open
-// ground: the outside. When every side finishes, the biggest one is the outside. It fails
-// with errDoorInTheOpen (one side), errDoorTruncated (two sides or more too big to walk)
-// or errDoorTie (the two biggest closed sides have the same size).
-func (w *World) doorRoom(pos world.Pos) ([][]world.Pos, error) {
-	passable := func(q world.Pos) bool {
-		if d := w.doors[q]; d != nil {
-			return d.lock == "" && d.through
-		}
-		return w.m.Walkable(q)
-	}
+// one slice of tiles per side that is not the outside, and the tiles next to the door on
+// its outside, in direction order. It walks the map from each passable tile next to the
+// door (8 directions, same floor, roomPassable: never through a locked door, every other
+// door open when its tile lets creatures through) to find the sides the door keeps apart,
+// up to doorRoomSearch tiles each. A side the walk cannot finish is open ground: the
+// outside. When every side finishes, the biggest one is the outside. It fails with
+// errDoorWalled (no side), errDoorInTheOpen (one side), errDoorTruncated (two sides or
+// more too big to walk) or errDoorTie (the two biggest closed sides have the same size).
+func (w *World) doorRoom(pos world.Pos) ([][]world.Pos, []world.Pos, error) {
+	passable := w.roomPassable
 	side := map[world.Pos]int{} // walked tile → the walk that reached it first
 	var size []int              // tiles of each walk; -1 when it could not finish
 	var parent []int            // union-find over walks that met (the same side)
@@ -514,8 +575,11 @@ func (w *World) doorRoom(pos world.Pos) ([][]world.Pos, error) {
 			total[r] += n
 		}
 	}
-	if len(sides) < 2 {
-		return nil, errDoorInTheOpen
+	switch len(sides) {
+	case 0:
+		return nil, nil, errDoorWalled
+	case 1:
+		return nil, nil, errDoorInTheOpen
 	}
 	outside, open := -1, 0
 	for _, r := range sides {
@@ -526,7 +590,7 @@ func (w *World) doorRoom(pos world.Pos) ([][]world.Pos, error) {
 	}
 	switch {
 	case open > 1:
-		return nil, errDoorTruncated
+		return nil, nil, errDoorTruncated
 	case open == 0:
 		outside = sides[0]
 		for _, r := range sides[1:] {
@@ -536,7 +600,7 @@ func (w *World) doorRoom(pos world.Pos) ([][]world.Pos, error) {
 		}
 		for _, r := range sides {
 			if r != outside && total[r] == total[outside] {
-				return nil, errDoorTie
+				return nil, nil, errDoorTie
 			}
 		}
 	}
@@ -553,5 +617,13 @@ func (w *World) doorRoom(pos world.Pos) ([][]world.Pos, error) {
 			rooms[k] = append(rooms[k], t)
 		}
 	}
-	return rooms, nil
+	var out []world.Pos
+	for d := world.North; d <= world.NorthWest; d++ {
+		if t, ok := pos.Step(d); ok {
+			if s, seen := side[t]; seen && root(s) == outside {
+				out = append(out, t)
+			}
+		}
+	}
+	return rooms, out, nil
 }

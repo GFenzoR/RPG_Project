@@ -16,20 +16,23 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
-// Numeric ids of the keys and of a plain door pair: no other test item has them
-// (testItemDefs grows in init of other files: magic_test.go has 71, ranged_test.go 72).
+// Numeric ids of the keys, of a plain door pair and of a gate of another key: no other
+// test item has them (testItemDefs grows in init of other files: magic_test.go has 71,
+// ranged_test.go 72).
 const (
 	gateKeyID   = 160
 	otherKeyID  = 161
 	plainDoorID = 162
 	plainOpenID = 163
+	otherGateID = 164
+	otherOpenID = 165
 )
 
 const sw = pb.Direction_DIRECTION_SOUTH_WEST
 
 // doorTestItems are testItems plus a walkable grass, the wall of the drawings, a gate
-// (the D and d of the drawings, locked with gate_lock when locked), its key and a plain
-// door pair (never locked, for SetTile).
+// (the D and d of the drawings, locked with gate_lock when locked), its key, and for
+// SetTile a plain door pair (never locked) and a gate locked with other_lock.
 func doorTestItems(locked bool) content.Items {
 	return withDoorItems(testItems(), locked)
 }
@@ -49,6 +52,8 @@ func withDoorItems(items content.Items, locked bool) content.Items {
 		otherKeyID:         "{id: other_key, kind: material, weight: 100, key: other_lock}",
 		plainDoorID:        "{id: plain_door, kind: decoration, pickupable: false, blocks_movement: true, blocks_sight: true, door: {open: plain_door_open}}",
 		plainOpenID:        "{id: plain_door_open, kind: decoration, pickupable: false, door: {closed: plain_door}}",
+		otherGateID:        "{id: other_gate, kind: decoration, pickupable: false, blocks_movement: true, blocks_sight: true, door: {open: other_gate_open, key: other_lock}}",
+		otherOpenID:        "{id: other_gate_open, kind: decoration, pickupable: false, door: {closed: other_gate}}",
 	} {
 		var it content.Item
 		_ = yaml.Unmarshal([]byte(src), &it)
@@ -252,7 +257,8 @@ func field(t testing.TB, w, h, wy, x0, x1, gx int) *world.Map {
 
 // Who would be shut in depends on what the gate keeps apart: behind a wall across a
 // field, the strip too small to be open ground is the room, and the field before it is
-// not. (A gate whose room cannot be worked out does not let the world start: see
+// not. The strip spans three sectors: a player in another sector than the gate's counts
+// too. (A gate whose room cannot be worked out does not let the world start: see
 // door-rooms.json.)
 func TestLockShutsNobodyIn(t *testing.T) {
 	for _, c := range []struct {
@@ -261,6 +267,7 @@ func TestLockShutsNobodyIn(t *testing.T) {
 		wantLock bool
 	}{
 		{"strip behind a wall", pos(35, 68), false},
+		{"strip behind a wall, another sector", pos(5, 68), false},
 		{"field before a wall", pos(35, 60), true},
 	} {
 		t.Run(c.name, func(t *testing.T) {

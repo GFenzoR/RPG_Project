@@ -328,9 +328,12 @@ func (w *World) DoorRoomSize(door world.Pos) int {
 
 // Why a locked door has no room (doorRoom), for errors.Is in tests.
 var (
-	ErrDoorInTheOpen = errDoorInTheOpen
-	ErrDoorTruncated = errDoorTruncated
-	ErrDoorTie       = errDoorTie
+	ErrDoorWalled       = errDoorWalled
+	ErrDoorInTheOpen    = errDoorInTheOpen
+	ErrDoorTruncated    = errDoorTruncated
+	ErrDoorTie          = errDoorTie
+	ErrDoorOtherKey     = errDoorOtherKey
+	ErrDoorOtherOutside = errDoorOtherOutside
 )
 
 // MarketViewers returns how many open market windows show item's book (mkWatch).

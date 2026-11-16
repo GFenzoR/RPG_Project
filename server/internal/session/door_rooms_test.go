@@ -24,7 +24,8 @@ type doorRoomCase struct {
 	Error string            `json:"error"`
 }
 
-// rows expands the drawing of c ({"repeat": n, "row": r} is n rows r).
+// rows expands the drawing of c ({"repeat": n, "row": r} is n rows r, {"repeat": n,
+// "rows": [...]} those rows n times).
 func (c doorRoomCase) rows(t *testing.T) []string {
 	t.Helper()
 	var out []string
@@ -35,14 +36,19 @@ func (c doorRoomCase) rows(t *testing.T) []string {
 			continue
 		}
 		var rep struct {
-			Repeat int    `json:"repeat"`
-			Row    string `json:"row"`
+			Repeat int      `json:"repeat"`
+			Row    string   `json:"row"`
+			Rows   []string `json:"rows"`
 		}
-		if err := json.Unmarshal(raw, &rep); err != nil || rep.Repeat <= 0 {
+		if err := json.Unmarshal(raw, &rep); err != nil || rep.Repeat <= 0 || (rep.Row == "") == (len(rep.Rows) == 0) {
 			t.Fatalf("bad row %s", raw)
 		}
+		block := rep.Rows
+		if rep.Row != "" {
+			block = []string{rep.Row}
+		}
 		for range rep.Repeat {
-			out = append(out, rep.Row)
+			out = append(out, block...)
 		}
 	}
 	return out
@@ -65,12 +71,14 @@ func TestDoorRoomsFixture(t *testing.T) {
 	if len(doc.Cases) < 8 {
 		t.Fatalf("only %d cases", len(doc.Cases))
 	}
-	errs := map[string]error{"open": session.ErrDoorInTheOpen, "truncated": session.ErrDoorTruncated, "tie": session.ErrDoorTie}
+	errs := map[string]error{"walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen,
+		"truncated": session.ErrDoorTruncated, "tie": session.ErrDoorTie, "key": session.ErrDoorOtherKey,
+		"outside": session.ErrDoorOtherOutside}
 	for _, c := range doc.Cases {
 		t.Run(c.Name, func(t *testing.T) {
 			rows := c.rows(t)
-			// worldtest draws the locked pair (D, d); the plain doors go on after.
-			var plain, walled []world.Pos
+			// worldtest draws the gate pair (D, d); the other doors go on after.
+			var plain, walled, other []world.Pos
 			for y, r := range rows {
 				b := []byte(r)
 				for x, ch := range b {
@@ -79,6 +87,8 @@ func TestDoorRoomsFixture(t *testing.T) {
 						plain, b[x] = append(plain, pos(x, y)), '.'
 					case 'X':
 						walled, b[x] = append(walled, pos(x, y)), '#'
+					case 'K':
+						other, b[x] = append(other, pos(x, y)), '.'
 					}
 				}
 				rows[y] = string(b)
@@ -90,6 +100,9 @@ func TestDoorRoomsFixture(t *testing.T) {
 			}
 			for _, p := range walled {
 				worldtest.SetTile(t, m, p, worldtest.Grass, blocks, worldtest.Wall, plainDoorID)
+			}
+			for _, p := range other {
+				worldtest.SetTile(t, m, p, worldtest.Grass, blocks, otherGateID)
 			}
 			w, err := session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations,
 				Items: doorTestItems(true), Save: func(session.Snapshot) bool { return true }})
@@ -143,6 +156,24 @@ func TestCrowdedLoginNextToLockedGate(t *testing.T) {
 	inside.Name = "Inside"
 	if _, q := h.joinChar(inside); q.Pos() != pos(3, 1) {
 		t.Fatalf("inside logged in at %v", q.Pos())
+	}
+
+	// Saved inside a crowded room, the search goes on ring by ring and may still put it
+	// in its own room: (1,3) is the first free tile of the third ring around (3,1).
+	h = newHarness(t, doorMap(t), func(c *session.Config) { c.Items = doorTestItems(true) })
+	crowd := []world.Pos{pos(1, 1), pos(2, 1), pos(3, 1), pos(1, 2), pos(2, 2), pos(3, 2), pos(2, 3), pos(3, 3),
+		pos(5, 1), pos(5, 2)}
+	for i, p := range crowd {
+		c := withPack(int64(9641+i), p)
+		c.Name = fmt.Sprintf("Crowd%d", i)
+		if _, b := h.joinChar(c); b.Pos() != p {
+			t.Fatalf("crowd at %v, want %v", b.Pos(), p)
+		}
+	}
+	late := withPack(9660, pos(3, 1))
+	late.Name = "Late"
+	if _, q := h.joinChar(late); q.Pos() != pos(1, 3) {
+		t.Fatalf("late logged in at %v, want (1,3) in its room", q.Pos())
 	}
 }
 
@@ -236,6 +267,11 @@ func TestRoomHoldsNothingOfTheOutside(t *testing.T) {
 			c.Map = worldtest.WithHouses(t, c.Map, world.House{ID: "vault_house", Name: "house.vault_house.name", Rent: 10,
 				Rects: []world.HouseRect{{X: 40, Y: 40, Z: 7, W: 1, H: 2}}, Doors: []world.Pos{pos(40, 41)}, Exit: inside})
 		}, "house"},
+		// Its exit outside the room, a tile of the house inside it (across the wall).
+		"a house tile": {func(c *session.Config) {
+			c.Map = worldtest.WithHouses(t, c.Map, world.House{ID: "wall_house", Name: "house.wall_house.name", Rent: 10,
+				Rects: []world.HouseRect{{X: 42, Y: 40, Z: 7, W: 3, H: 1}}, Doors: []world.Pos{pos(44, 40)}, Exit: pos(45, 40)})
+		}, `house "wall_house" on 42,40,7`},
 		"a boat arrival": {func(c *session.Config) {
 			c.BoatRoutes = testRoutes()
 			c.BoatRoutes[1].To = at
