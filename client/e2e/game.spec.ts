@@ -2736,3 +2736,71 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   expect(errors).toEqual([]);
   for (const page of [a, b]) await page.close();
 });
+
+test("portals: a path goes round the volcanic mine stairs; down them to floor 8 and back up", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const { email, password, name } = await newGuardian(playwright, "Minero");
+  // A resident of the Ember Isle at level 30 (302760 XP) on the cinder path two tiles west
+  // of the mine stairs (3692,5796; docs/03 "Islas actuales"). Below them, floor 8 lands on
+  // 3692,5797; the stairs up (3692,5796,8) land on 3692,5797,7, next to the stairs down.
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'volcan', level = 30, experience = 302760,
+       pos_x = 3690, pos_y = 5796, pos_z = 7 WHERE name = '${name}';`,
+  ]);
+  await enterGame(page, email, password);
+  const standsOn = async (x: number, y: number, z: number): Promise<void> => {
+    await expect
+      .poll(
+        async () => {
+          const s = await self(page);
+          return s && !s.pending && !s.walking ? `${s.x},${s.y},${s.z}` : "moving";
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(`${x},${y},${z}`);
+  };
+  await standsOn(3690, 5796, 7);
+  const ids = await page.evaluate(() => ({
+    down: window.__rpgClient?.itemNumber("stairs_down"),
+    up: window.__rpgClient?.itemNumber("stairs_up"),
+  }));
+  if (ids.down === undefined || ids.up === undefined) throw new Error("no stairs items");
+  const topOf = (x: number, y: number, z: number): Promise<number | undefined> =>
+    page.evaluate(({ a, b, c }) => window.__rpgClient?.tile(a, b, c)?.at(-1), { a: x, b: y, c: z });
+  expect(await topOf(3692, 5796, 7)).toBe(ids.down);
+  await page.waitForTimeout(300); // let the atlas textures upload before the screenshot
+  await shot(page, "73-volcan-mine-stairs");
+
+  // A click past the stairs walks round them: a path never crosses a portal on its way.
+  expect(await page.evaluate(() => window.__rpgClient?.walkable(3693, 5796, 7) ?? false)).toBe(
+    true,
+  );
+  const past = await page.evaluate(() => window.__rpgClient?.tileToClient(3693, 5796));
+  if (!past) throw new Error("no canvas");
+  await page.mouse.click(past.x, past.y);
+  await standsOn(3693, 5796, 7);
+
+  // One step west, onto the stairs: down to the mine, whose floor the client now draws.
+  await page.keyboard.press("ArrowLeft");
+  await standsOn(3692, 5797, 8);
+  await expect.poll(() => topOf(3692, 5796, 8)).toBe(ids.up);
+  await page.waitForTimeout(300);
+  await shot(page, "74-volcan-mine-floor-8");
+
+  // One step north, onto the stairs up: back on the surface, south of the stairs down.
+  await page.keyboard.press("ArrowUp");
+  await standsOn(3692, 5797, 7);
+  await expect.poll(() => topOf(3692, 5796, 7)).toBe(ids.down);
+  await page.waitForTimeout(300);
+  await shot(page, "75-volcan-mine-back-up");
+  expect(errors).toEqual([]);
+});
