@@ -14,15 +14,17 @@ import "./touch.css";
 const MENU_GAP = 16;
 /** Kept clear of the screen edges, CSS pixels. */
 const MENU_MARGIN = 8;
-/**
- * How long after opening the buttons start taking clicks, ms. On a short screen the menu
- * may open under the finger, and lifting it sends a click to whatever is there.
- */
-export const MENU_ARM_MS = 350;
 
-/** The menu takes clicks (it opened long enough ago, or its opening time is unknown). */
-const armed = (menu: ActionMenuView, now = performance.now()): boolean =>
-  menu.at === undefined || now - menu.at >= MENU_ARM_MS;
+/**
+ * Whether a click on a button of the open menu acts. Lifting the long-press finger makes
+ * the browser click whatever is under it, however long it was held: on a short screen (a
+ * phone on its side) the menu opens under the finger, and that click would choose the
+ * button there. So a click counts only after a press that started on the menu itself
+ * (`pressed`), or when it comes from the keyboard or assistive technology (`detail` 0).
+ * No timer: a slow device lifts the finger whenever it does.
+ */
+export const menuClickCounts = (pressed: boolean, detail: number): boolean =>
+  pressed || detail === 0;
 
 /** The menu's width (matches .touch-menu in touch.css), CSS pixels. */
 export const MENU_WIDTH = 224;
@@ -64,7 +66,7 @@ export function menuPlacement(
 export function ActionMenu(props: {
   t: Translate;
   menu: ActionMenuView;
-  game: Pick<Game, "menuChoose" | "closeMenu"> | undefined;
+  game: Pick<Game, "menuChoose" | "closeMenu" | "menuPress" | "menuPressed"> | undefined;
   /** The screen size (window.innerWidth/innerHeight; fixed values in tests). */
   viewport: { width: number; height: number };
 }): JSX.Element {
@@ -80,6 +82,9 @@ export function ActionMenu(props: {
   if (at.top !== undefined) style.top = `${at.top}px`;
   if (at.bottom !== undefined) style.bottom = `${at.bottom}px`;
   if (at.maxHeight !== undefined) style.maxHeight = `${at.maxHeight}px`;
+  // Read when the click happens, not when the menu was drawn: the press that arms it comes
+  // right before its click, maybe before any new render.
+  const counts = (e: MouseEvent): boolean => menuClickCounts(game?.menuPressed ?? false, e.detail);
   return (
     <div class="touch-menu-layer" data-testid="action-menu-layer">
       <div
@@ -99,6 +104,9 @@ export function ActionMenu(props: {
         aria-label={menu.title || t("client.touch.actions.label")}
         data-testid="action-menu"
         style={style}
+        // A finger (or pen, or mouse) pressed on the menu: its next click is a choice. The
+        // finger that opened the menu went down on the map or the item, never here.
+        onPointerDown={() => game?.menuPress()}
       >
         {menu.title && <div class="touch-menu-title">{menu.title}</div>}
         {menu.actions.map((kind) => (
@@ -108,8 +116,8 @@ export function ActionMenu(props: {
             role="menuitem"
             class="touch-menu-action"
             data-action={kind}
-            onClick={() => {
-              if (armed(menu)) game?.menuChoose(kind);
+            onClick={(e) => {
+              if (counts(e)) game?.menuChoose(kind);
             }}
           >
             {t(`client.touch.action.${kind}`)}
@@ -120,8 +128,8 @@ export function ActionMenu(props: {
           role="menuitem"
           class="touch-menu-action touch-menu-cancel"
           data-action="cancel"
-          onClick={() => {
-            if (armed(menu)) game?.closeMenu();
+          onClick={(e) => {
+            if (counts(e)) game?.closeMenu();
           }}
         >
           {t("client.touch.action.cancel")}

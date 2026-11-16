@@ -5,7 +5,14 @@ import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import type { ActionKind } from "../input/actions.ts";
-import { ActionMenu, MENU_WIDTH, PickBanner, menuHeight, menuPlacement } from "./ActionMenu.tsx";
+import {
+  ActionMenu,
+  MENU_WIDTH,
+  PickBanner,
+  menuClickCounts,
+  menuHeight,
+  menuPlacement,
+} from "./ActionMenu.tsx";
 import { TouchPad, TouchPadToggle } from "./TouchPad.tsx";
 
 const t = (key: string, params?: Record<string, string | number>): string =>
@@ -60,6 +67,16 @@ describe("menuPlacement", () => {
   });
 });
 
+describe("menuClickCounts", () => {
+  it("takes a click only after a press on the menu, or from the keyboard", () => {
+    // The long-press finger lifting: a pointer click (detail 1) with no press on the menu.
+    expect(menuClickCounts(false, 1)).toBe(false);
+    expect(menuClickCounts(true, 1)).toBe(true);
+    // Enter or Space on a focused button, or assistive technology.
+    expect(menuClickCounts(false, 0)).toBe(true);
+  });
+});
+
 describe("ActionMenu", () => {
   const menu = {
     x: 100,
@@ -68,46 +85,79 @@ describe("ActionMenu", () => {
     actions: ["attack", "look"] as ActionKind[],
   };
 
-  it("one big button per action, labelled by its key, plus cancel", () => {
-    const chosen: string[] = [];
-    let closed = 0;
-    const game = {
-      menuChoose: (k: ActionKind) => void chosen.push(k),
-      closeMenu: () => void closed++,
+  /** A Game that records what the menu asks of it. */
+  function fakeGame(): {
+    chosen: ActionKind[];
+    closed: number;
+    menuPressed: boolean;
+    menuChoose(k: ActionKind): void;
+    closeMenu(): void;
+    menuPress(): void;
+  } {
+    return {
+      chosen: [],
+      closed: 0,
+      menuPressed: false,
+      menuChoose(k) {
+        this.chosen.push(k);
+      },
+      closeMenu() {
+        this.closed++;
+      },
+      menuPress() {
+        this.menuPressed = true;
+      },
     };
+  }
+
+  const pressMenu = (tree: unknown): void => {
+    const box = byAttr(tree, "data-testid", "action-menu")[0];
+    (box?.props["onPointerDown"] as (() => void) | undefined)?.();
+  };
+
+  it("one big button per action, labelled by its key, plus cancel", () => {
+    const game = fakeGame();
     const tree = ActionMenu({ t, menu, game, viewport: { width: 800, height: 600 } });
     const buttons = byAttr(tree, "data-action");
     expect(buttons.map((b) => b.props["data-action"])).toEqual(["attack", "look", "cancel"]);
     expect(buttons[0]?.props.children).toBe("client.touch.action.attack");
-    click(buttons[1]);
-    expect(chosen).toEqual(["look"]);
-    click(buttons[2]);
+    pressMenu(tree);
+    click(buttons[1], { detail: 1 });
+    expect(game.chosen).toEqual(["look"]);
+    click(buttons[2], { detail: 1 });
     const backdrop = nodes(tree).find((n) => n.props["class"] === "touch-menu-backdrop");
     // A click (the long-press finger lifting) keeps the menu; a new press beside it closes it.
     expect(backdrop?.props["onClick"]).toBeUndefined();
     (backdrop?.props["onPointerDown"] as ((e: unknown) => void) | undefined)?.({
       preventDefault: () => undefined,
     });
-    expect(closed).toBe(2);
+    expect(game.closed).toBe(2);
     expect(nodes(tree).some((n) => n.props.children === "Lobo")).toBe(true);
   });
 
-  it("a menu that just opened ignores clicks (the long-press finger lifting)", () => {
-    const chosen: string[] = [];
-    let closed = 0;
-    const game = {
-      menuChoose: (k: ActionKind) => void chosen.push(k),
-      closeMenu: () => void closed++,
-    };
-    const tree = ActionMenu({
-      t,
-      menu: { ...menu, at: performance.now() },
-      game,
-      viewport: { width: 800, height: 600 },
-    });
-    for (const b of byAttr(tree, "data-action")) click(b);
-    expect(chosen).toEqual([]);
-    expect(closed).toBe(0);
+  it("ignores the click of the finger that opened it, however late it lifts", () => {
+    // On a phone on its side the menu opens under the finger; a slow device (the CI
+    // runner) lifted it more than the old 350 ms after the menu opened, and the browser's
+    // click chose the button under it. Nothing pressed the menu: no click counts.
+    const game = fakeGame();
+    const tree = ActionMenu({ t, menu, game, viewport: { width: 800, height: 600 } });
+    for (const b of byAttr(tree, "data-action")) click(b, { detail: 1 });
+    expect(game.chosen).toEqual([]);
+    expect(game.closed).toBe(0);
+    // A tap on a button after that is a choice: its press lands on the menu first. The
+    // state is read when the click comes, not when the menu was drawn.
+    pressMenu(tree);
+    click(byAttr(tree, "data-action", "attack")[0], { detail: 1 });
+    expect(game.chosen).toEqual(["attack"]);
+  });
+
+  it("takes keyboard clicks without a press (Enter or Space on a focused button)", () => {
+    const game = fakeGame();
+    const tree = ActionMenu({ t, menu, game, viewport: { width: 800, height: 600 } });
+    click(byAttr(tree, "data-action", "look")[0], { detail: 0 });
+    click(byAttr(tree, "data-action", "cancel")[0], { detail: 0 });
+    expect(game.chosen).toEqual(["look"]);
+    expect(game.closed).toBe(1);
   });
 
   it("a bare tile has no title and the menu is named by its key", () => {

@@ -124,8 +124,6 @@ export interface ActionMenuView {
   /** What was pressed: a creature's or an item's name ("" = a bare tile). */
   title: string;
   actions: ActionKind[];
-  /** performance.now() when it opened (its buttons ignore the lifting finger's click). */
-  at?: number;
 }
 
 /** What a menu acts on: a map tile (resolved again when a button is chosen) or a DOM item. */
@@ -226,8 +224,11 @@ export class Game {
   private readonly pad = new HeldDirection();
   /** T5.6: tap an item, then tap where it goes. */
   private readonly picker = new ItemPicker();
-  /** T5.6: the open contextual menu and what it acts on. */
-  private menu: { view: ActionMenuView; target: MenuTarget } | undefined;
+  /**
+   * T5.6: the open contextual menu, what it acts on, and whether a press started on it
+   * since it opened (only then its buttons take clicks: ui/ActionMenu.tsx menuClickCounts).
+   */
+  private menu: { view: ActionMenuView; target: MenuTarget; pressed: boolean } | undefined;
   /** The pointerup that placed the picked item (the item's own tap must not pick again). */
   private placedBy: Event | undefined;
   /** Where the last pointer went down while an item is picked (a drag is not a tap). */
@@ -981,8 +982,18 @@ export class Game {
   }
 
   private openMenu(view: ActionMenuView, target: MenuTarget): void {
-    this.menu = { view: { ...view, at: performance.now() }, target };
+    this.menu = { view, target, pressed: false };
     this.publish();
+  }
+
+  /** A press started on the open menu (a new finger, a pen or the mouse on its buttons). */
+  menuPress(): void {
+    if (this.menu) this.menu.pressed = true;
+  }
+
+  /** Whether a press started on the open menu since it opened. */
+  get menuPressed(): boolean {
+    return this.menu?.pressed ?? false;
   }
 
   /** Closes the contextual menu without doing anything. */
