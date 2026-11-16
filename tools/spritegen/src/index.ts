@@ -65,12 +65,39 @@ export function buildSprites(root: string, only?: string): { path: string; bytes
 /** Player outfit frames, which no data/ file names: outfits/<id>/<dir>_<frame>. */
 export const OUTFIT_FRAME = /^outfits\/[a-z0-9_]+\/(n|e|s|w)_[0-9]+$/;
 
-/** Problems with the recipe set: paths no data/ file uses (and that are not outfit frames). */
+/**
+ * Tile effect frames, which no data/ file names either: effects/<name>/<frame>. The client
+ * maps each protocol effect id to its folder (client/src/render/effects.ts).
+ */
+export const EFFECT_FRAME = /^effects\/([a-z0-9_]+)\/([0-9]+)$/;
+
+/**
+ * Problems with the recipe set: paths no data/ file uses (and that are neither outfit nor
+ * effect frames), and effect strips whose frames are not 0, 1, ... without a gap (the
+ * client stops at the first missing frame).
+ */
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
-  return recipePaths()
-    .filter((p) => !used.has(p) && !OUTFIT_FRAME.test(p))
-    .map((p) => `${p}: no sprite field in data/ uses this path (and it is not an outfit frame)`);
+  const problems = recipePaths()
+    .filter((p) => !used.has(p) && !OUTFIT_FRAME.test(p) && !EFFECT_FRAME.test(p))
+    .map(
+      (p) =>
+        `${p}: no sprite field in data/ uses this path (and it is not an outfit or effect frame)`,
+    );
+  const strips = new Map<string, number[]>();
+  for (const p of recipePaths()) {
+    const m = EFFECT_FRAME.exec(p);
+    if (!m) continue;
+    const frames = strips.get(m[1] ?? "") ?? [];
+    frames.push(Number(m[2]));
+    strips.set(m[1] ?? "", frames);
+  }
+  for (const [name, frames] of strips) {
+    frames.sort((a, b) => a - b);
+    if (frames.some((f, i) => f !== i))
+      problems.push(`effects/${name}: frames must be 0..${frames.length - 1} without gaps`);
+  }
+  return problems;
 }
 
 // ---- preview -----------------------------------------------------------------------------
@@ -78,10 +105,24 @@ export function checkPaths(root: string): string[] {
 const GRASS = "assets/vendor/dungeon-crawl/dngn/floor/grass/grass0.png";
 const LABEL = [230, 230, 220, 255] as const;
 const BACKDROP = [24, 24, 28, 255] as const;
+/** What effect frames are previewed over. */
+const PREVIEW_CREATURE = "outfits/citizen/s_0";
+
+/** A frame path (…/<name>/<n>) belongs to the strip …/<name>; other paths stand alone. */
+const stripOf = (path: string): string | undefined => /^(.*)\/[0-9]+$/.exec(path)?.[1];
+
+/** The cell caption: the file name, or "<strip> <n>" for a numbered frame. */
+function caption(path: string): string {
+  const parts = path.split("/");
+  const last = parts.at(-1) ?? "";
+  const name = /^[0-9]+$/.test(last) ? `${parts.at(-2) ?? ""} ${last}` : last;
+  return name.toUpperCase().replace(/_/g, " ");
+}
 
 /**
  * A sheet to look at (1x pixels; scale it up): ground and walls repeated 3x3, everything
- * else on Dungeon Crawl grass, one cell per sprite with its path underneath.
+ * else on Dungeon Crawl grass, one cell per sprite with its path underneath. The frames of
+ * a strip (effects/<name>/<n>) start a new row, so each effect reads left to right.
  */
 export function previewSheet(root: string, paths: string[]): Image {
   const grass = decodePng(readFileSync(join(root, GRASS)));
@@ -89,14 +130,28 @@ export function previewSheet(root: string, paths: string[]): Image {
   const cellW = Math.max(96, ...cells.map((c) => c.width)) + 8;
   const cellH = Math.max(...cells.map((c) => c.height), 32) + GLYPH_H + 6;
   const cols = Math.max(1, Math.min(paths.length, Math.floor(640 / cellW)));
-  const rows = Math.ceil(paths.length / cols);
-  const sheet = createImage(cols * cellW, rows * cellH);
+  // Grid slot of each cell: a new strip (or a lone sprite after a strip) starts a new row.
+  const slots: { col: number; row: number }[] = [];
+  let col = 0;
+  let row = 0;
+  paths.forEach((path, i) => {
+    const prev = i > 0 ? stripOf(paths[i - 1] ?? "") : undefined;
+    const strip = stripOf(path);
+    if (i > 0 && (col >= cols || strip !== prev)) {
+      col = 0;
+      row++;
+    }
+    slots.push({ col, row });
+    col++;
+  });
+  const sheet = createImage(cols * cellW, (row + 1) * cellH);
   fillRect(sheet, 0, 0, sheet.width, sheet.height, BACKDROP);
   cells.forEach((c, i) => {
-    const x = (i % cols) * cellW + 4;
-    const y = Math.floor(i / cols) * cellH + 2;
+    const slot = slots[i] ?? { col: 0, row: 0 };
+    const x = slot.col * cellW + 4;
+    const y = slot.row * cellH + 2;
     blit(c, 0, 0, c.width, c.height, sheet, x, y);
-    const label = (paths[i] ?? "").replace(/^.*\//, "").toUpperCase().replace(/_/g, " ");
+    const label = caption(paths[i] ?? "");
     if (textWidth(label, 1) <= cellW) drawText(sheet, label, x, y + c.height + 2, 1, LABEL);
   });
   return sheet;
@@ -121,6 +176,9 @@ function cell(path: string, grass: Image): Image {
     for (let x = 0; x < w; x += TILE) blit(grass, 0, 0, TILE, TILE, out, x, y);
   const tileRight = w - 32;
   const tileBottom = h - 32;
+  // An effect plays over the creature on its tile: show it over a standing player.
+  if (recipe.kind === "effect" && RECIPES[PREVIEW_CREATURE])
+    composite(out, render(PREVIEW_CREATURE), tileRight - TILE, tileBottom - TILE);
   composite(out, sprite, tileRight - sprite.width, tileBottom - sprite.height);
   return out;
 }

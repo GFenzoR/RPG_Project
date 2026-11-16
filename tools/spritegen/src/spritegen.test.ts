@@ -5,7 +5,17 @@ import { encodePng } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
 import { canvas, outline, polygon, px, rng, seedOf, tileNoise } from "./draw.ts";
-import { checkPaths, OUTFIT_FRAME, RECIPES, recipePaths, render, spriteFile } from "./index.ts";
+import {
+  checkPaths,
+  EFFECT_FRAME,
+  OUTFIT_FRAME,
+  previewSheet,
+  RECIPES,
+  recipePaths,
+  render,
+  spriteFile,
+} from "./index.ts";
+import { EFFECT_FRAMES } from "./recipes/effects.ts";
 import { PALETTE } from "./palette.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -117,5 +127,50 @@ describe("recipes", () => {
     expect(OUTFIT_FRAME.test("outfits/citizen/s_0")).toBe(true);
     expect(OUTFIT_FRAME.test("outfits/citizen/south_0")).toBe(false);
     expect(OUTFIT_FRAME.test("outfits/citizen/up_0")).toBe(false);
+    expect(EFFECT_FRAME.test("effects/hit/0")).toBe(true);
+    expect(EFFECT_FRAME.test("effects/gather_miss/12")).toBe(true);
+    expect(EFFECT_FRAME.test("effects/hit")).toBe(false);
+    expect(EFFECT_FRAME.test("effects/hit/first")).toBe(false);
+  });
+});
+
+describe("effect strips", () => {
+  const strips = new Map<string, string[]>();
+  for (const p of recipePaths("effects/")) {
+    const name = EFFECT_FRAME.exec(p)?.[1] ?? p;
+    strips.set(name, [...(strips.get(name) ?? []), p]);
+  }
+
+  it("are effect recipes of EFFECT_FRAMES frames, numbered from 0", () => {
+    expect(strips.size).toBeGreaterThan(0);
+    for (const [name, paths] of strips) {
+      expect(paths, name).toEqual(
+        Array.from({ length: EFFECT_FRAMES }, (_, f) => `effects/${name}/${f}`),
+      );
+      for (const p of paths) expect(RECIPES[p]?.kind, p).toBe("effect");
+    }
+  });
+
+  it("animate: no two consecutive frames are the same picture", () => {
+    for (const paths of strips.values()) {
+      for (let f = 1; f < paths.length; f++) {
+        const a = encodePng(render(paths[f - 1] ?? ""));
+        const b = encodePng(render(paths[f] ?? ""));
+        expect(a.equals(b), paths[f]).toBe(false);
+      }
+    }
+  });
+
+  it("preview a strip per row", () => {
+    const hit = strips.get("hit") ?? [];
+    const heal = strips.get("heal") ?? [];
+    const one = previewSheet(root, hit);
+    expect(previewSheet(root, [...hit, ...heal]).height).toBe(one.height * 2);
+    // Without strips the cells still pack row after row.
+    const items = recipePaths()
+      .filter((p) => RECIPES[p]?.kind === "item")
+      .slice(0, 2);
+    expect(items).toHaveLength(2);
+    expect(previewSheet(root, items).height).toBe(one.height);
   });
 });

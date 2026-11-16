@@ -9,8 +9,10 @@ import type { Rng } from "./draw.ts";
  *   (the renderer anchors it at the bottom-right corner of its tile, extending up-left).
  * - item: 32x32 inventory/ground icon, centred, transparent background.
  * - creature: monster or NPC, 32x32 (or larger), standing on its tile.
+ * - effect: one frame of a tile effect (effects/<name>/<frame>), transparent, drawn over
+ *   the creatures of its tile; the client plays the frames in order (recipes/effects.ts).
  */
-export type RecipeKind = "ground" | "wall" | "object" | "item" | "creature";
+export type RecipeKind = "ground" | "wall" | "object" | "item" | "creature" | "effect";
 
 export interface Recipe {
   kind: RecipeKind;
