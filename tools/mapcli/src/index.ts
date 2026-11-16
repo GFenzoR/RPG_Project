@@ -19,7 +19,17 @@ import {
   viewArea,
   worldInfo,
 } from "@rpg/map-format";
-import type { Diagnostic, MapOp, Position, Rect, Recipe, ZoneType } from "@rpg/map-format";
+import type {
+  Diagnostic,
+  HouseRect,
+  MapOp,
+  Position,
+  Rect,
+  Recipe,
+  ZoneType,
+} from "@rpg/map-format";
+
+type SetHouseOp = Extract<MapOp, { op: "set_house" }>;
 import { applyEdit, editContext, parseOps } from "./edit.ts";
 import type { EditOutcome } from "./edit.ts";
 import { createPatch, diffPatch, parsePatch, planPatch, writePlanned } from "./patch.ts";
@@ -46,6 +56,12 @@ export const USAGE = `usage: mapcli <command> [options]   (global: --root DIR, d
   spawn remove <island> --id ID
   zone add <island> --rect x,y,w,h --floor Z[,Z...] --type ${ZONE_TYPES.join("|")} [--id ID]
   zone remove <island> --id ID
+  house add <island> --id ID --floor Z --rects x,y,w,h[;x,y,w,h...] --doors x,y,z[;x,y,z...]
+                --exit x,y,z --rent N [--notes TEXT]   player house (houses.yaml); its name
+                                                is house.<id>.name of i18n/<lang>/world.yaml
+  house set <island> --id ID [--floor Z --rects ...] [--doors ...] [--exit x,y,z] [--rent N]
+                [--notes TEXT]                  only the given fields; --notes "" removes them
+  house remove <island> --id ID
   npc place <island> --pos x,y,z --npc ID
   npc remove <island> --npc ID
   ops apply <file.json|-> [--island ID]         op list (docs/04), all or nothing
@@ -115,7 +131,7 @@ function parseFloors(s: string | undefined): number[] {
   return (s ?? "").split(",").map((f) => parseFloor(f));
 }
 
-function parsePos(s: string | undefined): Position {
+function parsePos(s: string | undefined, flag = "--pos"): Position {
   const parts = (s ?? "").split(",");
   const [x, y, z] = parts.map((p) => (DECIMAL.test(p) ? Number(p) : NaN));
   if (
@@ -125,8 +141,18 @@ function parsePos(s: string | undefined): Position {
     z === undefined ||
     !(x <= MAX_COORD && y <= MAX_COORD && z <= MAX_FLOOR)
   )
-    throw new UsageError(`--pos must be x,y,z (x,y in 0..${MAX_COORD}, z in 0..${MAX_FLOOR})`);
+    throw new UsageError(`${flag} must be x,y,z (x,y in 0..${MAX_COORD}, z in 0..${MAX_FLOOR})`);
   return { x, y, z };
+}
+
+/** A ";"-separated list of positions (house doors). */
+function parsePositions(s: string, flag: string): Position[] {
+  return s.split(";").map((p) => parsePos(p, flag));
+}
+
+/** A ";"-separated list of x,y,w,h rects on floor z (the rects of a house). */
+function parseHouseRects(s: string, z: number): HouseRect[] {
+  return s.split(";").map((r) => ({ ...parseArea(r, "--rects"), z }));
 }
 
 function parseCount(s: string | undefined, flag: string, def: number, min = 0): number {
@@ -159,7 +185,7 @@ export function run(argv: string[], io: Io = stdio): number {
   }
 }
 
-const WITH_SUBCOMMAND = new Set(["spawn", "zone", "npc", "ops", "patch"]);
+const WITH_SUBCOMMAND = new Set(["spawn", "zone", "house", "npc", "ops", "patch"]);
 
 function dispatch(argv: string[], io: Io): number {
   const { positionals, values } = parseArgs({
@@ -185,6 +211,11 @@ function dispatch(argv: string[], io: Io): number {
       id: { type: "string" },
       type: { type: "string" },
       npc: { type: "string" },
+      rects: { type: "string" },
+      doors: { type: "string" },
+      exit: { type: "string" },
+      rent: { type: "string" },
+      notes: { type: "string" },
       island: { type: "string" },
       recipe: { type: "string" },
       seed: { type: "string" },
@@ -417,6 +448,40 @@ function dispatch(argv: string[], io: Io): number {
       }
       if (sub === "remove") return edit([{ op: "remove_zone", id: need(values.id, "--id") }], [id]);
       throw new UsageError("zone needs add or remove");
+    }
+    case "house": {
+      // Houses (houses.yaml, docs/03 "Casas"): the op checks the shape; the validator in
+      // the outcome reports the rest (overlaps, ground, the name in i18n/<lang>/world.yaml).
+      const isl = needIsland();
+      const id = need(values.id, "--id");
+      if (sub === "remove") return edit([{ op: "remove_house", id }], [isl]);
+      if (sub !== "add" && sub !== "set") throw new UsageError("house needs add, set or remove");
+      const rects =
+        values.rects === undefined
+          ? undefined
+          : parseHouseRects(values.rects, parseFloor(need(values.floor, "--floor")));
+      const doors =
+        values.doors === undefined ? undefined : parsePositions(values.doors, "--doors");
+      const exit = values.exit === undefined ? undefined : parsePos(values.exit, "--exit");
+      const rent = values.rent === undefined ? undefined : parseCount(values.rent, "--rent", 0, 1);
+      if (sub === "add") {
+        if (!rects) throw new UsageError("missing --rects");
+        if (!doors) throw new UsageError("missing --doors");
+        if (!exit) throw new UsageError("missing --exit");
+        if (rent === undefined) throw new UsageError("missing --rent");
+        const notes =
+          values.notes === undefined || values.notes === "" ? {} : { notes: values.notes };
+        return edit([{ op: "add_house", id, rent, rects, doors, exit, ...notes }], [isl]);
+      }
+      const op: SetHouseOp = { op: "set_house", id };
+      if (rects) op.rects = rects;
+      if (doors) op.doors = doors;
+      if (exit) op.exit = exit;
+      if (rent !== undefined) op.rent = rent;
+      if (values.notes !== undefined) op.notes = values.notes === "" ? null : values.notes;
+      if (Object.keys(op).length === 2)
+        throw new UsageError("house set needs --rects, --doors, --exit, --rent or --notes");
+      return edit([op], [isl]);
     }
     case "npc": {
       const id = needIsland();

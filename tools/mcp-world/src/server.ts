@@ -259,7 +259,7 @@ export function createTools(o: ServerOptions): Tool[] {
     },
     {
       name: "map_apply_ops",
-      description: `Applies a list of map ops atomically (all or none) and saves only the touched files of world/. Ops (docs/04-map-editor-and-ai.md): paint_ground {floor, rect|cells, item}, erase {floor, rect|cells, layer: ground|items|all}, place_item {pos, item, index?}, remove_item {pos, item, index?}, fill {pos, item}, autoborder {floor, rect}, scatter {floor, rect, items[], density 0..1, seed, on_ground[]?}, stamp {pos, prefab}, add_spawn {id, center, radius, monsters:[{monster,count}], respawn_seconds}, remove_spawn {id}, add_zone {id, type, floors[], rects[]}, remove_zone {id}, add_portal {id, kind, from, to}, remove_portal {id}, place_npc {npc, pos}, remove_npc {npc}. Positions are global {x, y, z}. At most ${MAX_OPS} ops per call. Returns the files written and the validation of the islands touched. dry_run checks without writing.`,
+      description: `Applies a list of map ops atomically (all or none) and saves only the touched files of world/. Ops (docs/04-map-editor-and-ai.md): paint_ground {floor, rect|cells, item}, erase {floor, rect|cells, layer: ground|items|all}, place_item {pos, item, index?}, remove_item {pos, item, index?}, fill {pos, item}, autoborder {floor, rect}, scatter {floor, rect, items[], density 0..1, seed, on_ground[]?}, stamp {pos, prefab}, add_spawn {id, center, radius, monsters:[{monster,count}], respawn_seconds}, remove_spawn {id}, add_zone {id, type, floors[], rects[]}, remove_zone {id}, add_portal {id, kind, from, to}, remove_portal {id}, place_npc {npc, pos}, remove_npc {npc}, add_house {id, rent, rects:[{x,y,z,w,h}], doors[], exit, notes?} (player house in houses.yaml; its name is house.<id>.name in i18n/<lang>/world.yaml, written by hand), set_house {id, rent?, rects?, doors?, exit?, notes?|null}, remove_house {id}. Positions are global {x, y, z}. At most ${MAX_OPS} ops per call. Returns the files written and the validation of the islands touched. dry_run checks without writing.`,
       inputSchema: {
         type: "object",
         properties: {
@@ -449,7 +449,7 @@ export interface Response {
 }
 
 export const INSTRUCTIONS =
-  "Map tools for Neque's Realm world (docs/04-map-editor-and-ai.md). Flow: map_info and content_search to see what exists; map_apply_ops to edit (atomic, reversible ops; paint, autoborder, scatter, stamp prefabs, spawns, NPCs, zones, portals); map_validate until there are no errors; map_render each touched area and look at the image; map_patch_create to package the change. Writes only world/; never data/.";
+  "Map tools for Neque's Realm world (docs/04-map-editor-and-ai.md). Flow: map_info and content_search to see what exists; map_apply_ops to edit (atomic, reversible ops; paint, autoborder, scatter, stamp prefabs, spawns, NPCs, zones, portals, houses); map_validate until there are no errors; map_render each touched area and look at the image; map_patch_create to package the change. Writes only world/; never data/.";
 
 export class McpServer {
   private readonly tools: Map<string, Tool>;

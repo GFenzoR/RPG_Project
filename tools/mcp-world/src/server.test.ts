@@ -239,6 +239,40 @@ describe("map_apply_ops", () => {
     ).not.toMatch(/data\//);
   });
 
+  it("adds, changes and removes a house (houses.yaml)", () => {
+    const root = sandbox();
+    const { json, call } = client(root);
+    const HOUSES = "world/islands/testisle/houses.yaml";
+    const house = {
+      op: "add_house",
+      id: "testisle_house_mcp",
+      rent: 500,
+      rects: [{ x: 1068, y: 1044, z: 7, w: 4, h: 3 }],
+      doors: [{ x: 1069, y: 1046, z: 7 }],
+      exit: { x: 1069, y: 1047, z: 7 },
+    };
+    const added = json("map_apply_ops", { island: "testisle", ops: [house] });
+    expect(added).toMatchObject({ ok: true, written: [HOUSES] });
+    // The only problem left is the name, which goes in i18n/<lang>/world.yaml by hand.
+    const v = added["validation"] as { diagnostics: string[] };
+    expect(v.diagnostics).toEqual([
+      expect.stringContaining('i18n key "house.testisle_house_mcp.name" is missing'),
+    ]);
+    expect(readFileSync(join(root, HOUSES), "utf8")).toContain("- id: testisle_house_mcp");
+    // A door inside the house (not on its edge) is the validator's error, not the op's.
+    const moved = json("map_apply_ops", {
+      ops: [{ op: "set_house", id: "testisle_house_mcp", doors: [{ x: 1069, y: 1045, z: 7 }] }],
+    });
+    expect((moved["validation"] as { diagnostics: string[] }).diagnostics.join("\n")).toContain(
+      "door must be on the edge of the house",
+    );
+    expect(call("map_apply_ops", { ops: [{ op: "remove_house", id: "nope" }] }).isError).toBe(true);
+    expect(
+      json("map_apply_ops", { ops: [{ op: "remove_house", id: "testisle_house_mcp" }] }),
+    ).toMatchObject({ ok: true, removed: [HOUSES] });
+    expect(existsSync(join(root, HOUSES))).toBe(false);
+  });
+
   it("enforces the op limit and the island scope", () => {
     const { call } = client(sandbox());
     const many = Array.from({ length: MAX_OPS + 1 }, () => ({
