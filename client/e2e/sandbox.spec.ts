@@ -121,12 +121,12 @@ test("sandbox island: wake up in its temple, then /tp to the pens, the yard of p
 
   // The hunting trail, below the pens of the rats and the wolves (log walls, open south).
   await tp(2083, 2081, 7);
-  expect(await topOf(2079, 2079, 7)).toBe(await item("wooden_wall"));
+  expect(await topOf(2078, 2079, 7)).toBe(await item("wooden_wall")); // pen 1, beside its gate
   expect(await topOf(2088, 2079, 7)).toBe(await item("dirt")); // pen 2's gate: no wall
   await shot(page, "91-sandbox-pens");
 
   // The yard of portals: stairs, the trapdoor of the ladder and the hole.
-  await tp(2118, 2097, 7);
+  await tp(2118, 2093, 7);
   expect(await topOf(2121, 2090, 7)).toBe(await item("stairs_down"));
   expect(await topOf(2116, 2090, 7)).toBe(await item("ladder_down"));
   expect(await topOf(2119, 2094, 7)).toBe(await item("hole"));
