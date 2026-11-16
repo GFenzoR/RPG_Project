@@ -354,6 +354,12 @@ func (w *World) AreaOf(p world.Pos) int32 { return w.areaOf(p) }
 // (tests only: the memory of the index, docs/07).
 func (w *World) Areas() (areas int32, sectors int) { return w.areaCount, len(w.areas) }
 
+// HouseAreaOf returns the house area of p (area.go; tests only): 0 for none.
+func (w *World) HouseAreaOf(p world.Pos) int32 { return max(-w.tileArea(p), 0) }
+
+// HouseAreas returns how many house areas the map has (tests only).
+func (w *World) HouseAreas() int32 { return w.houseAreaCount }
+
 // MarketViewers returns how many open market windows show item's book (mkWatch).
 func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }
 

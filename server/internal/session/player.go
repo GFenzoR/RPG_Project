@@ -638,11 +638,13 @@ func (w *World) Clients() []Client {
 }
 
 // placement chooses where a joining character appears: its saved position, or its
-// temple, moved to the nearest free walkable tile.
+// temple, moved to the nearest free walkable tile where a player there could walk
+// (freeNear). A position saved on a locked door (logged out in its open doorway) counts
+// even with the door shut again: the search puts the player on its outside.
 func (w *World) placement(c Character) world.Pos {
 	temple := w.temple(c.Town)
 	want := temple
-	if c.HasPos && w.m.Walkable(c.Pos) {
+	if c.HasPos && (w.m.Walkable(c.Pos) || w.lockedDoor(c.Pos)) {
 		want = c.Pos
 	}
 	if p, ok := w.freeNear(want, 3); ok {
@@ -651,12 +653,18 @@ func (w *World) placement(c Character) world.Pos {
 	if p, ok := w.freeNear(temple, 3); ok {
 		return p
 	}
-	if w.m.MovesOnStep(want) {
-		// A position saved on stairs (before the server loaded portals, or by a GM): the
-		// temple rather than a tile nobody stands on.
+	if w.tileArea(want) == 0 {
+		// A position saved on stairs (before the server loaded portals, or by a GM) or on
+		// a locked door: the temple rather than a tile nobody stands on.
 		return temple
 	}
 	return want // crowded: share the tile rather than refuse the login
+}
+
+// lockedDoor reports whether a locked door stands on p (door.go), open or closed.
+func (w *World) lockedDoor(p world.Pos) bool {
+	d := w.doors[p]
+	return d != nil && d.lock != ""
 }
 
 func (w *World) temple(town string) world.Pos {
@@ -682,12 +690,13 @@ func (w *World) homeIsland(town string) string {
 }
 
 // freeNear returns the walkable, unoccupied tile closest to p (by rings) within radius,
-// only in the area of p (searchFrom, areaAllows, area.go): the rings do not follow walls,
-// so a crowded tile next to a locked gate must not put anyone on its other side (in the
-// room behind it), nor a crowded temple anyone in a pocket sealed by walls. From the
-// entrance of stairs, a hole or a teleport, only in the areas next to it; from another
-// tile of no area (a house, a locked door) any tile in no room will do. Never one that
-// stairs, a hole or a teleport leaves from (portal.go): nobody stands on those.
+// only where a player on p could walk (searchFrom, areaAllows, area.go): the rings do not
+// follow walls, so a crowded tile next to a locked gate must not put anyone on its other
+// side (in the room behind it), nor a crowded temple anyone in a pocket sealed by walls.
+// From the area of p, only in it; from a house tile, in its house area or the street of
+// its exit; from the entrance of stairs, a hole or a teleport, in the areas next to it;
+// from a locked door, on its outside; from anything else, nowhere. Never one that stairs,
+// a hole or a teleport leaves from (portal.go): nobody stands on those.
 func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 	return w.freeAround(p, radius, false)
 }

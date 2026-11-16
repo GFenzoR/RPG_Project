@@ -3,10 +3,12 @@ package session_test
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
@@ -47,32 +49,134 @@ func TestFreeTileStaysInItsArea(t *testing.T) {
 	}
 }
 
-// A search for a free tile from a tile of no area that is no portal entrance (a locked
-// door placed open, a house tile) still skips the rooms behind locked doors: a crowded
-// open gate does not put anyone in the room behind it, the first free tile of the first
-// ring, but on the next one outside.
-func TestFreeTileFromNoAreaSkipsRooms(t *testing.T) {
-	m := worldtest.Map(t, 0, 0, 7,
+// gateRows are a room (1..3, 1..3) behind a locked gate at (4,2), drawn closed (D) or
+// placed open (d), and a hall east of it with the temple.
+func gateRows(gate string) []string {
+	return []string{
 		"###########",
 		"#...#..T..#",
-		"#...d.....#",
+		"#..." + gate + ".....#",
 		"#...#.....#",
 		"###########",
-	)
+	}
+}
+
+// A search for a free tile from a locked door lands on its outside (area.go searchFrom),
+// never in its doorway nor in the room behind it: whoever logged out standing in the open
+// doorway came from the outside, or from the room, which the gate opens onto the outside
+// without the key. With the gate shut again since, the character still logs in beside it,
+// outside, not at the temple. The ring around the gate offers the room tile (3,1) first.
+func TestFreeTileFromALockedDoorIsOutside(t *testing.T) {
 	gate, room := pos(4, 2), pos(3, 1)
-	h := newHarness(t, m, func(c *session.Config) { c.Items = doorTestItems(true) })
-	if h.w.DoorRoomSize(gate) != 9 || !h.w.InDoorRoom(gate, room) || h.w.AreaOf(gate) != 0 {
-		t.Fatalf("room behind the gate: %d tiles, gate in area %d", h.w.DoorRoomSize(gate), h.w.AreaOf(gate))
+	for _, drawn := range []string{"d", "D"} {
+		t.Run(drawn, func(t *testing.T) {
+			h := newHarness(t, worldtest.Map(t, 0, 0, 7, gateRows(drawn)...),
+				func(c *session.Config) { c.Items = doorTestItems(true) })
+			if h.w.DoorRoomSize(gate) != 9 || !h.w.InDoorRoom(gate, room) || h.w.AreaOf(gate) != 0 {
+				t.Fatalf("room behind the gate: %d tiles, gate in area %d", h.w.DoorRoomSize(gate), h.w.AreaOf(gate))
+			}
+			for i, want := range []world.Pos{pos(5, 1), pos(5, 2), pos(5, 3), pos(6, 1)} {
+				c := withPack(int64(9721+i), gate)
+				c.Name = fmt.Sprintf("Doorway%d", i)
+				if _, p := h.joinChar(c); p.Pos() != want {
+					t.Fatalf("login %d on the gate at %v (in the room: %v), want %v outside",
+						i, p.Pos(), h.w.InDoorRoom(gate, p.Pos()), want)
+				}
+			}
+		})
 	}
-	blocker := withPack(9721, gate)
-	blocker.Name = "Blocker"
-	if _, b := h.joinChar(blocker); b.Pos() != gate {
-		t.Fatalf("blocker at %v, want the open gate %v", b.Pos(), gate)
+}
+
+// A staff /tp onto a locked door placed open lands on its outside, like a login there:
+// never in the doorway, where it would hold the gate open.
+func TestStaffTeleportOntoALockedDoorLandsOutside(t *testing.T) {
+	h := newHarness(t, worldtest.Map(t, 0, 0, 7, gateRows("d")...), func(c *session.Config) {
+		c.Items = doorTestItems(true)
+		c.Admin = func(session.AdminJob) bool { return true }
+	})
+	c := withPack(9741, pos(8, 3))
+	c.Name, c.Role = "Warden", session.RoleGM
+	cl, g := h.joinChar(c)
+	cl.take()
+	h.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/tp 4 2 7"))
+	h.sim.Step()
+	if keys := sysKeys(cl.take()); !slices.Equal(keys, []string{"gm.teleported"}) || g.Pos() != pos(5, 1) {
+		t.Fatalf("/tp onto the open gate: %v at %v, want (5,1) outside", keys, g.Pos())
 	}
-	late := withPack(9730, gate)
+}
+
+// houseRows are a house (3..4, 1..2, its door (3,2) above its exit (3,3)), a tile (1,1)
+// two rings west of it sealed by walls, and a street with the temple below.
+var houseRows = []string{
+	"########",
+	"#.#..###",
+	"###..###",
+	"###...T#",
+	"########",
+}
+
+// houseRowsMap is houseRows with the house "nook" on it.
+func houseRowsMap(t *testing.T) *world.Map {
+	t.Helper()
+	return worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7, houseRows...), world.House{ID: "nook",
+		Name: "house.nook.name", Rent: 10, Rects: []world.HouseRect{{X: 3, Y: 1, Z: 7, W: 2, H: 2}},
+		Doors: []world.Pos{pos(3, 2)}, Exit: pos(3, 3)})
+}
+
+// A search for a free tile from a house tile stays in the house (its tiles joined on foot,
+// a house area) or on the street its exit leads to (area.go searchFrom): a crowded house
+// does not log anyone in on the pocket sealed by walls two rings away (offered first),
+// but on the street. The tiles of the house are no area: the escape check takes a house
+// for a wall.
+func TestFreeTileFromAHouseStaysInItOrOnItsStreet(t *testing.T) {
+	h := newHarness(t, houseRowsMap(t))
+	home, pocket, street := pos(3, 1), pos(1, 1), pos(5, 3)
+	if a := h.w.HouseAreaOf(home); a == 0 || h.w.AreaOf(home) != 0 || h.w.HouseAreaOf(pos(4, 2)) != a ||
+		h.w.HouseAreas() != 1 || h.w.AreaOf(pocket) == 0 || h.w.AreaOf(street) != h.w.AreaOf(pos(3, 3)) {
+		t.Fatalf("house area %d (%d of them), pocket %d, street %d", h.w.HouseAreaOf(home), h.w.HouseAreas(),
+			h.w.AreaOf(pocket), h.w.AreaOf(street))
+	}
+	for i, p := range []world.Pos{home, pos(4, 1), pos(3, 2), pos(4, 2), pos(3, 3), pos(4, 3)} {
+		c := withPack(int64(9751+i), p)
+		c.Name = fmt.Sprintf("Crowd%d", i)
+		if _, b := h.joinChar(c); b.Pos() != p {
+			t.Fatalf("crowd at %v, want %v", b.Pos(), p)
+		}
+	}
+	late := withPack(9760, home)
 	late.Name = "Late"
-	if _, p := h.joinChar(late); p.Pos() != pos(5, 1) {
-		t.Fatalf("late logged in at %v, want (5,1) outside the room %v", p.Pos(), room)
+	if _, p := h.joinChar(late); p.Pos() != street {
+		t.Fatalf("late logged in at %v, want %v on the street of the exit, not the pocket %v", p.Pos(), street, pocket)
+	}
+}
+
+// A house split by a wall in two parts that meet only through the street is two house
+// areas: a crowded part does not put anyone in the other one (it could be another
+// house's, or a closet with no door), only on the street of the exit.
+func TestHouseAreasFollowItsWalls(t *testing.T) {
+	m := worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7,
+		"#######",
+		"#.#.###",
+		"#.#.###",
+		"#.....T",
+		"#######",
+	), world.House{ID: "pair", Name: "house.pair.name", Rent: 10,
+		Rects: []world.HouseRect{{X: 1, Y: 1, Z: 7, W: 1, H: 2}, {X: 3, Y: 1, Z: 7, W: 1, H: 2}},
+		Doors: []world.Pos{pos(1, 2), pos(3, 2)}, Exit: pos(2, 3)})
+	h := newHarness(t, m)
+	west, east := h.w.HouseAreaOf(pos(1, 1)), h.w.HouseAreaOf(pos(3, 1))
+	if west == 0 || east == 0 || west == east || h.w.HouseAreas() != 2 {
+		t.Fatalf("house areas: west %d, east %d", west, east)
+	}
+	for i, p := range []world.Pos{pos(3, 1), pos(3, 2), pos(2, 3)} {
+		c := withPack(int64(9771+i), p)
+		c.Name = fmt.Sprintf("Crowd%d", i)
+		h.joinChar(c)
+	}
+	late := withPack(9780, pos(3, 1))
+	late.Name = "Late"
+	if _, p := h.joinChar(late); p.Pos() != pos(1, 3) {
+		t.Fatalf("late logged in at %v, want (1,3) on the street, not the west part (1,1) offered first", p.Pos())
 	}
 }
 
