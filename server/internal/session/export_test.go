@@ -3,6 +3,7 @@ package session
 import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
+	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -346,3 +347,19 @@ func (w *World) InFlightForTest(charID int64) bool { return w.inFlight[charID] !
 
 // HeldGroundForTest returns how many ground items are reserved to a held character.
 func (w *World) HeldGroundForTest() int { return len(w.heldGround) }
+
+// InputAndGiftForTest is one command of cl's player that runs msg and then drops n of
+// item id at its feet (they do not fit), as one command that changes a house and gives
+// something away would: none does (hold.go). Tests only.
+func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string, n int) game.Command {
+	return game.CommandFunc(func(ctx *game.TickContext) {
+		p := w.byClient[cl]
+		w.playerCommand(p, func() {
+			w.input(ctx, p, msg)
+			c := p.capacity
+			p.capacity = 0
+			w.GiveForTest(p, id, n)
+			p.capacity = c
+		})
+	})
+}

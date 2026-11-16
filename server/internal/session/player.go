@@ -142,6 +142,10 @@ type Player struct {
 	// behind the give-away anyway (snapshot).
 	pre  *Snapshot
 	gave bool
+	// left are the piles and containers on the public ground that leftHouse reserved to p
+	// since its last transfer snapshot: the house write that took them out numbers their
+	// reservations with p's snapshot in it (hold.go numberLeft).
+	left []*Item
 
 	// Guilds (T5.1): p's membership (nil: none) and whether a GuildUpdate is queued.
 	gm          *guildMember

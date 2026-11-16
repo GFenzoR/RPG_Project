@@ -16,15 +16,25 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 		if p == nil || p.linkDead {
 			return // gone, or link-dead: a command its closed connection sent before (T5.2)
 		}
-		w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
-		defer func() { w.cmdPlayer = nil }()
-		w.input(ctx, p, msg)
-		// T5.4: what this command did to a house is written now, with p's snapshot: a
-		// later command never adds a half-done operation to that batch.
-		w.flushHouses()
-		// T5.3: the state after what this command gave away, whole (hold.go gaveAway).
-		w.settleGivers()
+		w.playerCommand(p, func() { w.input(ctx, p, msg) })
 	})
+}
+
+// playerCommand runs run, one command of p that may change a house's items.
+func (w *World) playerCommand(p *Player, run func()) {
+	// T5.3: a give-away still waiting for its snapshot (one the server made in a command
+	// that is not an Input, as a Join's tutorial reward, or in one that panicked) takes
+	// it now, before this command changes a house: that snapshot never holds what this
+	// command takes out of a house (hold.go settleGivers).
+	w.settleGivers()
+	w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
+	defer func() { w.cmdPlayer = nil }()
+	run()
+	// T5.4: what this command did to a house is written now, with p's snapshot: a
+	// later command never adds a half-done operation to that batch.
+	w.flushHouses()
+	// T5.3: the state after what this command gave away, whole (hold.go gaveAway).
+	w.settleGivers()
 }
 
 func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {

@@ -1,9 +1,12 @@
 package session_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -647,9 +650,11 @@ func TestSaveBeforeTransferIsFromTheThrowsCommand(t *testing.T) {
 	}
 }
 
-// A relogin (as the takeover of a link-dead) with the snapshot of a throw pending: the old
+// A relogin while the old login is still online (the new connection takes it over and
+// closes the old one, LOGGED_IN_ELSEWHERE) with the snapshot of a throw pending: the old
 // login's final snapshot comes after the throw and replaces it, and the new login's first
-// transfer writes nothing before it.
+// transfer writes nothing before it. The takeover of a link-dead (pvpCarry) goes through
+// the same final snapshot.
 func TestReloginReplacesTheSaveBeforeTransfer(t *testing.T) {
 	log := &jobLog{}
 	h := newMarketHarness(t, log.wire)
@@ -776,6 +781,159 @@ func TestSaveBeforeHouseWriteFreesNothingThatLeftTheHouse(t *testing.T) {
 	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
 		t.Fatalf("pick up after the house write's ack: %v", systemKeys(evs))
 	}
+}
+
+// A gift the server drops on the street outside a command (here a test command, as a
+// Join's tutorial reward does), then in the same tick an Input that takes something out
+// of a house to the street: the snapshot of the gift is written before the house write,
+// and its ack must not free what left the house (the house write is not confirmed yet).
+func TestGiftOutsideACommandFreesNothingThatLeftTheHouse(t *testing.T) {
+	log := &jobLog{}
+	var logged bytes.Buffer
+	h := newHouseHarness(t, log.wire, logTo(&logged))
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(salveID, 5, 1), stack(coinID, 100, 2),
+		stack(coinID, 100, 3))
+	h.rent(cl)
+	pack := openPack(t, h.harness, cl)
+	if evs := h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(cottageDoor), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana puts her sword in the house: %v", systemKeys(evs))
+	}
+	h.sim.Command(h.w.Saved(a.CharacterID(), lastJobSnapshot(t, log.jobs, a.CharacterID()).Seq))
+	h.sim.Step()
+	if h.w.InFlightForTest(a.CharacterID()) {
+		t.Fatal("Ana is still held")
+	}
+	cc, c := h.tenant("Caio", 0, pos(5, 5), stack(coinID, 1, 0))
+
+	n := len(log.jobs)
+	h.sim.Command(gameFunc(func() {
+		h.w.SetCapacityForTest(a, 0)
+		h.w.GiveForTest(a, "test_bag", 1) // falls at her feet, on the street
+		h.w.SetCapacityForTest(a, 1_000_000)
+	}))
+	h.input(cl, moveItem(onTile(cottageDoor), swordID, 1, onTile(pos(4, 5)), 1))
+	h.sim.Step()
+	jobs := log.since(n)
+	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
+		t.Fatalf("the gift and the move wrote %d jobs, want the snapshot of the gift then the house write", len(jobs))
+	}
+	pre, house := jobs[0].Snapshot, jobs0Snapshot(t, jobs[1], a.CharacterID())
+	if pre.CharacterID != a.CharacterID() || pre.Seq >= house.Seq {
+		t.Fatalf("snapshot of the gift %d, house write %d", pre.Seq, house.Seq)
+	}
+	if strings.Contains(logged.String(), giftAndHouse) {
+		t.Fatal("a gift of another command was logged as given in the house's command")
+	}
+	cp := openPack(t, h.harness, cc)
+	take := moveItem(onTile(pos(4, 5)), swordID, 1, inContainer(cp, 0), 1)
+	h.sim.Command(h.w.Saved(a.CharacterID(), pre.Seq))
+	h.sim.Step()
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("the ack of the snapshot of the gift freed the sword before the house write's ack")
+	}
+	h.sim.Command(h.w.Saved(a.CharacterID(), house.Seq))
+	h.sim.Step()
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
+		t.Fatalf("pick up after the house write's ack: %v", systemKeys(evs))
+	}
+}
+
+// The same gift outside a command, then in the same tick an Input that takes the sword
+// out of the house into Ana's backpack; that house write is rejected. The snapshot of the
+// gift, written before it, is her state before that Input: her row must not have the
+// sword, which the house's row still has.
+func TestGiftOutsideACommandKeepsNothingTakenOutOfTheHouse(t *testing.T) {
+	db := newRowsDB(t)
+	h := newHouseHarness(t, db.wire)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(salveID, 5, 1), stack(coinID, 100, 2),
+		stack(coinID, 100, 3))
+	h.rent(cl)
+	pack := openPack(t, h.harness, cl)
+	if evs := h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(cottageDoor), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana puts her sword in the house: %v", systemKeys(evs))
+	}
+	if ids := db.sync(h.harness); len(ids) != 0 {
+		t.Fatalf("tainted %v", ids)
+	}
+
+	db.reject.Store(a.CharacterID())
+	n := len(db.jobs)
+	h.sim.Command(gameFunc(func() {
+		h.w.SetCapacityForTest(a, 0)
+		h.w.GiveForTest(a, "test_bag", 1) // falls at her feet, on the street
+		h.w.SetCapacityForTest(a, 1_000_000)
+	}))
+	h.input(cl, moveItem(onTile(cottageDoor), swordID, 1, inContainer(pack, 0), 1))
+	h.sim.Step()
+	if h.w.CountItem(a, "test_sword") != 1 {
+		t.Fatal("Ana did not take her sword out of the house")
+	}
+	if jobs := db.jobs[n:]; len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
+		t.Fatalf("the gift and the move wrote %d jobs, want the snapshot of the gift then the house write", len(jobs))
+	}
+	if ids := db.sync(h.harness); !slices.Equal(ids, []int64{a.CharacterID()}) {
+		t.Fatalf("tainted %v, want Ana", ids)
+	}
+	if db.count(a.CharacterID(), swordID) != 0 {
+		t.Fatal("Ana's row has the sword the rejected house write took out: the house's row has it too")
+	}
+}
+
+// What leaves a house is freed by the ack of the house write that took it out, whatever
+// snapshot of the mover comes right before it: here one command takes the sword out of
+// the house to the street and gives Ana a gift that falls on the street (no command does
+// both today, hold.go), so the snapshot of the gift is numbered between the move and the
+// house write.
+func TestOnlyTheHouseWriteFreesWhatLeftTheHouse(t *testing.T) {
+	log := &jobLog{}
+	var logged bytes.Buffer
+	h := newHouseHarness(t, log.wire, logTo(&logged))
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(salveID, 5, 1), stack(coinID, 100, 2),
+		stack(coinID, 100, 3))
+	h.rent(cl)
+	pack := openPack(t, h.harness, cl)
+	if evs := h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(cottageDoor), 1)); len(systemKeys(evs)) != 0 {
+		t.Fatalf("Ana puts her sword in the house: %v", systemKeys(evs))
+	}
+	h.sim.Command(h.w.Saved(a.CharacterID(), lastJobSnapshot(t, log.jobs, a.CharacterID()).Seq))
+	h.sim.Step()
+	cc, c := h.tenant("Caio", 0, pos(5, 5), stack(coinID, 1, 0))
+
+	n := len(log.jobs)
+	h.sim.Command(h.w.InputAndGiftForTest(cl, moveItem(onTile(cottageDoor), swordID, 1, onTile(pos(4, 5)), 1), "test_bag", 1))
+	h.sim.Step()
+	jobs := log.since(n)
+	if len(jobs) != 2 || jobs[0].Transfer != nil || jobs[1].Transfer == nil {
+		t.Fatalf("the command wrote %d jobs, want the snapshot of the gift then the house write", len(jobs))
+	}
+	if len(h.w.GroundAt(pos(4, 5))) != 1 || len(h.w.GroundAt(cottageExit)) != 1 {
+		t.Fatal("the sword is not on the street, or the gift did not fall")
+	}
+	if !strings.Contains(logged.String(), giftAndHouse) {
+		t.Fatalf("a command that gave something away and changed a house was not logged: %q", logged.String())
+	}
+	pre, house := jobs[0].Snapshot, jobs0Snapshot(t, jobs[1], a.CharacterID())
+	cp := openPack(t, h.harness, cc)
+	take := moveItem(onTile(pos(4, 5)), swordID, 1, inContainer(cp, 0), 1)
+	h.sim.Command(h.w.Saved(a.CharacterID(), pre.Seq))
+	h.sim.Step()
+	if !hasKey(h.send(cc, take), "inventory.not_yours") {
+		t.Fatal("the ack of the snapshot of the gift freed the sword before the house write's ack")
+	}
+	h.sim.Command(h.w.Saved(a.CharacterID(), house.Seq))
+	h.sim.Step()
+	if evs := h.send(cc, take); len(systemKeys(evs)) != 0 || h.w.CountItem(c, "test_sword") != 1 {
+		t.Fatalf("pick up after the house write's ack: %v", systemKeys(evs))
+	}
+}
+
+// giftAndHouse is the error logged when one command gives something away and changes a
+// house (hold.go settleGave).
+const giftAndHouse = "a command gave something away and changed a house"
+
+// logTo is a harness option: the World logs to buf.
+func logTo(buf *bytes.Buffer) option {
+	return func(c *session.Config) { c.Logger = slog.New(slog.NewTextHandler(buf, nil)) }
 }
 
 // jobs0Snapshot is the snapshot of character id in the transfer job j.

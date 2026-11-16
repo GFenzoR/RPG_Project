@@ -44,13 +44,16 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 // whoever picked it up. So a give-away (gaveAway) keeps the character's snapshot of the
 // end of that command, or of the tick for one the server made outside a command
 // (settleGivers, Player.pre): its state is whole again there (a dialog's later actions,
-// the quest step it completes, the other piles of the same gift). Its next transfer
-// submits that snapshot first (transferSnapshot): the Saver writes it before the
-// transfer, so a dropped or skipped transfer never takes the character back to a save
-// older than the give-away. It costs a write only for a transfer that follows a
+// the quest step it completes, the other piles of the same gift). One still waiting when
+// a player command starts (made in a command that is not an Input, as a Join's tutorial
+// reward) is settled then, before that command changes a house (playerCommand). Its next
+// transfer submits that snapshot first (transferSnapshot): the Saver writes it before
+// the transfer, so a dropped or skipped transfer never takes the character back to a
+// save older than the give-away. It costs a write only for a transfer that follows a
 // give-away, and only once: any later snapshot of the character (an autosave, the final
-// one, a transfer's) replaces it. Numbered when taken, its ack frees nothing reserved
-// after it (leftHouse).
+// one, a transfer's) replaces it. Its ack frees nothing that left a house after the
+// give-away: those reservations take the seq of the house write's own snapshot
+// (numberLeft), not of whatever snapshot comes next.
 //
 // It does not cover a crash: with the database down at shutdown, that snapshot fails
 // with the transfer behind it (the shutdown abandons it), and a snapshot the database
@@ -61,9 +64,12 @@ import "github.com/GFenzoR/RPG_Project/server/internal/world"
 // first that everything fits: canBuy, canReceive, moneyThatFits): the snapshot taken
 // then (transferSnapshot settles a pending give-away at once) would hold half the
 // transfer and be written outside its database transaction. Nor may one command give
-// something away and change a house (none does): that snapshot would then be taken with
-// the house write, and dropping the write would lose what went into the house (it never
-// duplicates anything).
+// something away and change a house (settleGave logs it): that snapshot would then be
+// taken with the house write, so dropping the write would lose what went into the house
+// and leave what came out of it in two rows (the house's and the character's). Only the
+// tutorial's last step could do it today, were it a pick-up, an equip or a use of an
+// item of the player's own house floor from outside the house, with a reward that does
+// not fit; it is not (data/tutorial.yaml), and a house needs level 12 (houses.min_level).
 
 // groundHold is a reservation of World.heldGround: the character the ground item (or the
 // pile, container or corpse it lies in) is reserved to, and the seq of that character's
@@ -87,7 +93,27 @@ func (w *World) transferSnapshot(p *Player) Snapshot {
 	}
 	s := w.snapshot(p, false)
 	w.inFlight[p.charID] = s.Seq
+	w.numberLeft(p, s.Seq)
 	return s
+}
+
+// numberLeft gives what p took out of a house to the public ground since its last
+// transfer snapshot (leftHouse) the seq of this one, p's snapshot in the house write
+// that took it out: that write is p's first transfer after the move (every snapshot and
+// transfer writes the dirty houses before numbering), and a snapshot of a give-away
+// numbered right before it (settleGave) frees none of it.
+func (w *World) numberLeft(p *Player, seq uint64) {
+	if len(p.left) == 0 {
+		return
+	}
+	for _, r := range p.left {
+		if g, ok := w.heldGround[r]; ok && g.char == p.charID && g.seq < seq {
+			g.seq = seq
+			w.heldGround[r] = g
+		}
+	}
+	clear(p.left)
+	p.left = p.left[:0]
 }
 
 // gaveAway is called right after something of p's (carried by p, or made for p by the
@@ -102,11 +128,12 @@ func (w *World) gaveAway(p *Player) {
 	}
 }
 
-// settleGivers takes, for every player that gave something away in this command or
-// tick, the snapshot its next transfer writes first (Player.pre). It runs at the end of
-// every command (Input, after its house changes are written) and of every tick
-// (flushSystem). The snapshot is numbered then, before any reservation of a later
-// command (leftHouse), so its ack frees none of those.
+// settleGivers takes, for every player that gave something away since the last call, the
+// snapshot its next transfer writes first (Player.pre). It runs at the start and at the
+// end of every player command (playerCommand: Input; at the end after the command's house
+// changes are written) and at the end of every tick (flushSystem). Other commands (Join,
+// the acks, the test commands) settle at the next of those: the start of a player
+// command settles what they gave away before that command changes a house.
 func (w *World) settleGivers() {
 	if len(w.givers) == 0 {
 		return
@@ -128,10 +155,16 @@ func (w *World) settleGave(p *Player) {
 		return
 	}
 	w.flushHouses()
-	if p.gave {
-		s := w.snapshot(p, false)
-		p.pre = &s
+	if !p.gave {
+		return
 	}
+	if w.houseFlushing && w.cmdPlayer == p {
+		// p's own command gave something away and changed a house: this snapshot goes
+		// out with that house write (see the rule above).
+		w.log.Error("session: a command gave something away and changed a house", "character", p.charID)
+	}
+	s := w.snapshot(p, false)
+	p.pre = &s
 }
 
 // confirmed is the ack of character id's snapshot seq (World.Saved): the database has it
@@ -210,12 +243,15 @@ func (w *World) holdCorpse(p *Player, corpse *Item) {
 // leftHouse reserves root to p: p just moved something from a house floor onto the public
 // ground, into root (the item itself as a new pile, or a pile or container already
 // reserved to p: moveItem lets it join nothing else). The house write that took it out
-// carries p's next snapshot: flushHouses writes it at the end of p's command, and before
-// any other snapshot of p is taken (snapshot flushes the dirty houses first). So the
-// reservation lasts until the database has that snapshot.
+// carries p's snapshot: flushHouses writes it at the end of p's command, and before any
+// other snapshot of p is taken (snapshot flushes the dirty houses first). So the
+// reservation lasts until the database has that snapshot: numberLeft gives it its seq
+// when the write takes it (no ack runs in between: it is the end of this command). Until
+// then it holds the seq of the next snapshot, which stays only if p is not in that write.
 func (w *World) leftHouse(p *Player, root *Item) {
 	if root.onGround {
 		w.heldGround[root] = groundHold{char: p.charID, seq: w.saveSeq + 1}
+		p.left = append(p.left, root)
 	}
 }
 
