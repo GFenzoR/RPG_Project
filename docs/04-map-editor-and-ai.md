@@ -272,9 +272,12 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
     una decodificación con pérdida convertiría un `0xFF` en U+FFFD y parecería canónico;
   - uno cuyos **bytes** no son exactamente su forma canónica (`mapcli fmt`). Por ejemplo,
     `x: 03207` es 3207 para el parser TS y 1671 (octal) para el `yaml.v3` del servidor;
-  - una ruta de `world/`, `data/`, `i18n/` o `assets/` cuyo modo no es `100644` en el head
-    o en el merge (symlink, ejecutable, submódulo), aunque el blob no cambie
-    (`bad_mode_files`).
+  - una ruta de `world/`, `data/`, `i18n/` o `assets/` que el PR cambia (merge-base → head)
+    o que su merge cambia (base → árbol del merge) y cuyo modo ahí no es `100644`
+    (symlink, ejecutable, submódulo), aunque el blob no cambie (`bad_mode_files`). Solo
+    esas: un archivo raro que ya está en la base no hace fallar todos los PR;
+  - una ruta de contenido del merge que el check no puede escribir como la deja el merge
+    (`skipped_content`, ver "Contenido del después"): el "después" no sería el merge.
 - La comparación con `git merge-tree` compara bytes: el blob crudo de git contra el
   archivo que escribió el merge por casilla, sin canonicalizar.
 - **Caracteres prohibidos (decisión).** `parsePatchFile`, y con él `canonicalPatchText`,
@@ -301,17 +304,34 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
   - Los archivos se leen como datos (`git cat-file --batch`, por id de objeto; nada del PR
     se ejecuta) y se escriben como archivos comunes: un symlink queda como un archivo con
     el texto de su destino y nunca se sigue.
-  - Solo se borra una ruta que falta en el árbol del merge, y nunca una carpeta. Un objeto
-    que no es un blob (un gitlink, o un tree con modo de archivo) no se escribe ni se borra.
+  - Solo se borra un archivo que falta en el árbol del merge, nunca una carpeta con
+    archivos. Las carpetas que quedan vacías se quitan después, de la más honda hacia
+    arriba y siempre dentro del worktree, como en un checkout del merge. Así, si la base
+    tiene `data/x/y/z.yaml` y el merge tiene el archivo `data/x`, el archivo entra.
+  - Un objeto que no es un blob (un gitlink, o un tree con modo de archivo) no se escribe
+    ni se borra.
   - Se saltan las rutas que podrían salir del worktree o nombrar otra cosa: segmentos
     `..`, `.` o vacíos, `.git` en cualquier mayúscula, `\`, `:`, NUL o un salto de línea.
-    También una ruta cuya carpeta real (symlinks resueltos) queda fuera del worktree.
-    Si se salta alguna, el reporte lo anota (`content_skipped`).
-  - **Límites:** como mucho 4096 rutas de contenido distintas y 64 MB de blobs. Si el PR
-    pasa alguno, no se escribe nada, el "después" se mide con el contenido de la base y el
-    check falla con `limits` (nota `content_too_large`), en vez de quedar sin reporte.
-    Además, `spritepack` no decodifica un PNG cuya cabecera declare más de 2048 px de lado
-    (lo mira antes de descomprimir), y un `placeholder.size` va hasta 256 px por lado.
+    También una ruta cuya carpeta real (symlinks resueltos) queda fuera del worktree, y un
+    archivo que choca con una carpeta. Toda ruta saltada **hace fallar el check con
+    `invalid`**, también para maintainers: el "después" ya no sería el merge (un
+    `data/items/x:y.yaml` es válido en Linux y el servidor lo cargaría). El reporte las
+    lista en `skipped_content` (nota `content_skipped`). Cualquier otro error de escritura
+    (disco lleno, permisos) corta el check en vez de contarse como ruta saltada.
+  - En el reporte, toda ruta de `world/` o de contenido (`bad_mode_files`,
+    `skipped_content`, `other_files`) sale con `reportPath`: cada carácter fuera de
+    `[A-Za-z0-9_./-]`, y un punto seguido de otro, se vuelve `?`. Así un nombre raro se
+    muestra y no anula el comentario entero.
+  - **Límites:** como mucho 20 000 rutas de contenido para escribir (los borrados no
+    cuentan) y 64 MB, sumados **por ruta**: mil rutas de un mismo blob grande pesan mil
+    veces. Si el PR pasa alguno, no se escribe nada, el "después" se mide con el contenido
+    de la base y el check falla con `limits` (nota `content_too_large`), en vez de quedar
+    sin reporte. **Un pack de terceros grande** (el de Dungeon Crawl tocó 4396 archivos) va
+    en un PR que no cambia `world/`: ese PR sale del check antes de leer contenido, y el
+    mapa que lo usa llega en otro PR.
+  - Además, `spritepack` no decodifica un PNG cuya cabecera declare más de 2048 px de lado
+    (lo mira antes de descomprimir), ni más de 16 páginas de 2048×2048 px en PNG por
+    armado (`MAX_TOTAL_PIXELS`), y un `placeholder.size` va hasta 256 px por lado.
 - **Validación**: errores del validador en el mapa mezclado que la base no tenía. Cada
   lado se valida con su propio contenido (la base con el suyo; el merge con el que deja el
   merge), así que también cuenta lo que el PR rompe desde el contenido (un item que borra y
@@ -344,7 +364,8 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
 - Exit code 1 si falla. `report.json` (formato 2) lleva:
   - `ok`, `failures` (`plots`, `invalid`, `conflicts`, `rebase`, `merge_mismatch`,
     `validation`, `limits`) y `map_changes`;
-  - `files`, `conflicts`, `invalid_files` y `merge_mismatch`;
+  - `files`, `conflicts`, `invalid_files`, `noncanonical_files`, `bad_mode_files`,
+    `skipped_content` (con su total) y `merge_mismatch`;
   - `plots` y `validation`, con sus totales;
   - `other_files` (con su total), `areas` y `omitted_areas`;
   - `notes`, cómo se midió el contenido, con códigos fijos: `base_content`,

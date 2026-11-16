@@ -23,6 +23,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmdirSync,
@@ -74,8 +75,12 @@ const MAX_LISTED = 50;
  * and the renders, and the sprite atlas (assets/, data/) for the renders.
  */
 export const CONTENT_DIRS = ["data/", "i18n/", "assets/"] as const;
-/** Limits of the content a PR brings into the check (failure "limits" when over). */
-export const MAX_CONTENT_FILES = 4096;
+/**
+ * Limits of the content a PR brings into the check (failure "limits" when over): paths to
+ * write, and their bytes. A vendor pack is thousands of files: it goes in a PR that does not
+ * touch world/, which the check does not measure (docs/04).
+ */
+export const MAX_CONTENT_FILES = 20000;
 export const MAX_CONTENT_BYTES = 64 << 20;
 const isContent = (p: string): boolean => CONTENT_DIRS.some((d) => p.startsWith(d));
 
@@ -103,8 +108,9 @@ export interface PrConflict {
 /**
  * Failure codes. plots: outside the community plots and not a maintainer; conflicts: the
  * tile/entry merge conflicts with the current base; validation: new validator errors;
- * invalid: a map file of the PR does not pass its schema, or a path of world/ or of the
- * content is not a plain file (fails for maintainers too); rebase: git itself cannot merge
+ * invalid: a map file of the PR does not pass its schema, a path of world/ or of the
+ * content it changes is not a plain file, or a content path of the merge cannot be written
+ * as the merge has it (fails for maintainers too); rebase: git itself cannot merge
  * the branch; merge_mismatch: git would merge the text into something else than the tile
  * merge measured here (chunk palettes), so rebase; limits: the PR's content is over
  * MAX_CONTENT_FILES / MAX_CONTENT_BYTES, so it was not measured (see `notes`).
@@ -124,8 +130,8 @@ export type FailureCode = (typeof FAILURE_CODES)[number];
  * How the content was measured, as fixed codes (the comment has a text for each).
  * base_content: a non-maintainer's PR changes content, so its map is also validated with
  * the base's content and drawn with it; content_too_large: over the limits, the "after"
- * keeps the base's content; content_skipped: a content path of the merge that cannot be
- * written safely (`insidePath`) was left out; atlas_fallback: the merge's sprites did not
+ * keeps the base's content; content_skipped: a content path of the merge could not be
+ * written as the merge has it (see skipped_content); atlas_fallback: the merge's sprites did not
  * build, so the "after" pictures use the base's.
  */
 export const NOTE_CODES = [
@@ -156,9 +162,15 @@ export interface PrReport {
   invalid_files: string[];
   /** Map files of the PR whose text is not their canonical form (failure "invalid"). */
   noncanonical_files: string[];
-  /** world/ and content paths that are not plain files (mode ≠ 100644) in the head or the
-   *  merge (failure "invalid"): a symlink or an executable bit can hide a change of content. */
+  /** world/ and content paths the PR or its merge change that are not plain files
+   *  (mode ≠ 100644; failure "invalid"): a symlink or an executable bit can hide a change of
+   *  content. As `reportPath` shows them. */
   bad_mode_files: string[];
+  /** Content paths of the merge that could not be written as it has them (failure
+   *  "invalid"): an unsafe name (`insidePath`), a gitlink or a tree under a file's mode, a
+   *  file in the way of a folder. As `reportPath` shows them. */
+  skipped_content: string[];
+  skipped_content_total: number;
   /** World files git would merge differently from the tile merge (failure "merge_mismatch"). */
   merge_mismatch: string[];
   plots: { count: number; violations: PlotViolation[]; violations_total: number };
@@ -250,13 +262,13 @@ const sameBytes = (a: Buffer | null, b: Buffer | null): boolean =>
   a === null || b === null ? a === b : a.equals(b);
 
 export interface ContentLimits {
-  /** Content paths that differ. */
+  /** Content paths to write (removals do not count: they cost nothing). */
   files: number;
-  /** Bytes of the blobs to write. */
+  /** Bytes to write, counted per path (two paths of one blob are written twice). */
   bytes: number;
 }
 
-/** A content path as the `to` side of a diff has it. mode "000000": absent there. */
+/** A path as the `to` side of a diff has it. mode "000000": absent there. */
 export interface ContentEntry {
   path: string;
   mode: string;
@@ -269,6 +281,16 @@ export interface ContentEntry {
  * addition, so writing these over a checkout of `from` reproduces `to` exactly).
  */
 export function contentChanges(root: string, from: string, to: string): ContentEntry[] {
+  return treeChanges(root, from, to, CONTENT_DIRS);
+}
+
+/** Paths under `dirs` that differ from `from` to `to`, with the `to` side. */
+function treeChanges(
+  root: string,
+  from: string,
+  to: string,
+  dirs: readonly string[],
+): ContentEntry[] {
   const fields = git(root, [
     "diff-tree",
     "-r",
@@ -277,7 +299,7 @@ export function contentChanges(root: string, from: string, to: string): ContentE
     from,
     to,
     "--",
-    ...CONTENT_DIRS,
+    ...dirs,
   ]).split("\0");
   const out: ContentEntry[] = [];
   // Each record is ":<mode> <mode> <oid> <oid> <status>" NUL "<path>" NUL.
@@ -396,14 +418,20 @@ export function landContent(
   to: string,
   limits: ContentLimits = { files: MAX_CONTENT_FILES, bytes: MAX_CONTENT_BYTES },
 ): LandResult {
+  const tooLarge: LandResult = { changed: 0, tooLarge: true, skipped: [] };
   const entries = contentChanges(root, from, to);
-  const oids = [...new Set(entries.filter((e) => BLOB_MODES.has(e.mode)).map((e) => e.oid))];
-  const info = objectInfo(root, oids);
-  const blobs = oids.filter((o) => info.get(o)?.type === "blob");
-  const bytes = blobs.reduce((n, o) => n + (info.get(o)?.size ?? 0), 0);
-  if (entries.length > limits.files || bytes > limits.bytes)
-    return { changed: 0, tooLarge: true, skipped: [] };
-  const data = blobContents(root, blobs, bytes);
+  const writes = entries.filter((e) => e.mode !== ABSENT);
+  if (writes.length > limits.files) return tooLarge;
+  const info = objectInfo(root, [
+    ...new Set(writes.filter((e) => BLOB_MODES.has(e.mode)).map((e) => e.oid)),
+  ]);
+  const isBlob = (e: ContentEntry): boolean =>
+    BLOB_MODES.has(e.mode) && info.get(e.oid)?.type === "blob";
+  // Per path, not per blob: a thousand paths of one big blob are a thousand files on disk.
+  const bytes = writes.reduce((n, e) => n + (isBlob(e) ? (info.get(e.oid)?.size ?? 0) : 0), 0);
+  if (bytes > limits.bytes) return tooLarge;
+  const data = blobContents(root, [...new Set(writes.filter(isBlob).map((e) => e.oid))], bytes);
+  const dirAbs = resolve(dir);
   const top = realpathSync(dir);
   const skipped: string[] = [];
   const targets = entries.flatMap((e) => {
@@ -414,6 +442,7 @@ export function landContent(
   });
   let changed = 0;
   // Removals first: what `to` turned into a directory must be gone before writing into it.
+  const emptied = new Set<string>();
   for (const t of targets) {
     if (t.mode !== ABSENT) continue;
     const st = lstatOrNull(t.abs);
@@ -424,7 +453,17 @@ export function landContent(
     }
     rmSync(t.abs, { force: true });
     changed++;
+    for (let d = dirname(t.abs); d.startsWith(dirAbs + sep); d = dirname(d)) emptied.add(d);
   }
+  // Folders left empty go too, deepest first, as a checkout of `to` has none: a folder of
+  // base that `to` turns into a file is then out of the way.
+  for (const d of [...emptied].sort((a, b) => b.length - a.length))
+    try {
+      const real = realpathSync(d);
+      if (real.startsWith(top + sep) && readdirSync(d).length === 0) rmdirSync(d);
+    } catch {
+      // Gone already, or not a folder we may touch: left as it is.
+    }
   for (const t of targets) {
     if (t.mode === ABSENT) continue;
     const blob = BLOB_MODES.has(t.mode) ? data.get(t.oid) : undefined;
@@ -448,11 +487,28 @@ export function landContent(
       else if (st?.isSymbolicLink()) rmSync(t.abs);
       writeFileSync(t.abs, blob);
       changed++;
-    } catch {
-      skipped.push(t.path); // a file of base in the way of a directory of `to`, and so on
+    } catch (e) {
+      // Only the shapes git trees can disagree on (a file of base in the way of a folder of
+      // `to`, a folder that still has files); a full disk or the like is not a skip.
+      if (!PATH_SHAPE_ERRORS.has((e as NodeJS.ErrnoException).code ?? "")) throw e;
+      skipped.push(t.path);
     }
   }
   return { changed, tooLarge: false, skipped: skipped.sort() };
+}
+
+const PATH_SHAPE_ERRORS = new Set(["ENOTEMPTY", "ENOTDIR", "EEXIST", "EISDIR"]);
+
+/**
+ * A path as the report shows it: characters outside [A-Za-z0-9_.-/] become "?", and so
+ * does a dot before another dot (the comment refuses a report with "..": one odd name must
+ * not void the whole comment), at most 200 of them.
+ */
+export function reportPath(p: string): string {
+  return p
+    .replace(/[^A-Za-z0-9_./-]/g, "?")
+    .replace(/\.(?=\.)/g, "?")
+    .slice(0, 200);
 }
 
 /** GitHub logins of the maintainers (shared with the map PR worker: map-format). */
@@ -479,15 +535,14 @@ function conflictCode(c: { reason: string; at?: string[] }): ConflictCode {
   return "invalid_file";
 }
 
-/** world/ and content paths of a tree-ish whose mode is not a plain file (100644). */
-function nonPlainFiles(root: string, treeish: string): string[] {
-  return git(root, ["ls-tree", "-r", "-z", "--full-tree", treeish, "--", "world/", ...CONTENT_DIRS])
-    .split("\0")
-    .filter((l) => l !== "")
-    .flatMap((l) => {
-      const [meta, path] = l.split("\t");
-      return meta !== undefined && path !== undefined && !meta.startsWith("100644 ") ? [path] : [];
-    });
+/**
+ * world/ and content paths that differ from `from` to `to` and are not a plain file (100644)
+ * in `to`. Only those: an odd file already on base is not the PR's doing.
+ */
+function nonPlainChanges(root: string, from: string, to: string): string[] {
+  return treeChanges(root, from, to, ["world/", ...CONTENT_DIRS])
+    .filter((e) => e.mode !== "100644" && e.mode !== ABSENT)
+    .map((e) => e.path);
 }
 
 /** Tree of the merge git would make (null: git reports a textual conflict). */
@@ -537,7 +592,7 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     base,
     head,
     merge_base: mergeBase,
-    other_files: other.slice(0, MAX_LISTED),
+    other_files: other.slice(0, MAX_LISTED).map(reportPath),
     other_files_total: other.length,
   };
   mkdirSync(opts.out, { recursive: true });
@@ -553,6 +608,8 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       invalid_files: [],
       noncanonical_files: [],
       bad_mode_files: [],
+      skipped_content: [],
+      skipped_content_total: 0,
       merge_mismatch: [],
       plots: { count: 0, violations: [], violations_total: 0 },
       validation: { errors: 0, new_errors: [], new_errors_total: 0 },
@@ -631,8 +688,8 @@ export function prCheck(opts: PrCheckOptions): PrReport {
     if (landed.skipped.length > 0) notes.push("content_skipped");
     const badModes = [
       ...new Set([
-        ...nonPlainFiles(root, head),
-        ...(tree === null ? [] : nonPlainFiles(root, tree)),
+        ...nonPlainChanges(root, mergeBase, head),
+        ...(tree === null ? [] : nonPlainChanges(root, base, tree)),
       ]),
     ].sort();
     const conflicted = new Set(plan.conflicts.map((c) => c.path));
@@ -741,7 +798,10 @@ export function prCheck(opts: PrCheckOptions): PrReport {
 
     const failures: FailureCode[] = [];
     if (violations.length > 0 && !maintainer) failures.push("plots");
-    if (invalid.length + noncanonical.length + badModes.length > 0) failures.push("invalid");
+    // A content path that could not land as the merge has it (an unsafe name, a gitlink):
+    // the "after" is not the merge, so nothing measured on it can pass.
+    if (invalid.length + noncanonical.length + badModes.length + landed.skipped.length > 0)
+      failures.push("invalid");
     if (plan.conflicts.length > 0) failures.push("conflicts");
     if (tree === null) failures.push("rebase");
     if (mismatch.length > 0) failures.push("merge_mismatch");
@@ -760,7 +820,9 @@ export function prCheck(opts: PrCheckOptions): PrReport {
       })),
       invalid_files: invalid.slice(0, MAX_LISTED),
       noncanonical_files: noncanonical.slice(0, MAX_LISTED),
-      bad_mode_files: badModes.slice(0, MAX_LISTED),
+      bad_mode_files: badModes.slice(0, MAX_LISTED).map(reportPath),
+      skipped_content: landed.skipped.slice(0, MAX_LISTED).map(reportPath),
+      skipped_content_total: landed.skipped.length,
       merge_mismatch: mismatch.slice(0, MAX_LISTED),
       plots: {
         count: plots.length,

@@ -28,9 +28,12 @@ const SHA = /^[0-9a-f]{40}$/;
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const ID = /^[a-z][a-z0-9_]{0,63}$/;
 const WORLD_PATH = /^world\/(?:[a-z0-9_-]+\/)*[A-Za-z0-9_.-]{1,100}$/;
-/** A path of world/ or of the content the check reads (bad_mode_files). */
-const CHECKED_PATH = /^(?:world|data|i18n|assets)\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]{1,100}$/;
-const ANY_PATH = /^[A-Za-z0-9_./ +@-]{1,300}$/;
+/**
+ * A path of world/ or of the content the check reads (bad_mode_files, skipped_content), as
+ * prcheck's reportPath writes it: any other character is already "?".
+ */
+const CHECKED_PATH = /^(?:world|data|i18n|assets)\/[A-Za-z0-9_.?/-]{1,200}$/;
+const ANY_PATH = /^[A-Za-z0-9_./ +@?-]{1,300}$/; // "?": reportPath's stand-in
 const TILE = /^\d{1,5},\d{1,5},\d{1,2}$/;
 const PNG = /^(?:before|after)-\d{1,2}\.png$/;
 const STATUSES = ["added", "removed", "modified", "unchanged", "conflict"] as const;
@@ -122,6 +125,8 @@ export interface CheckedReport {
   invalid_files: string[];
   noncanonical_files: string[];
   bad_mode_files: string[];
+  skipped_content: string[];
+  skipped_content_total: number;
   merge_mismatch: string[];
   plots: { count: number; violations: CheckedViolation[]; violations_total: number };
   validation: { errors: number; new_errors: string[]; new_errors_total: number };
@@ -234,6 +239,13 @@ export function checkReport(raw: unknown): CheckedReport {
     bad_mode_files: arr(r.bad_mode_files, "bad_mode_files", 100).map((p) =>
       str(p, "bad_mode_files", CHECKED_PATH),
     ),
+    // Absent in reports from before the content was landed path by path.
+    skipped_content:
+      opt(r.skipped_content, (v) =>
+        arr(v, "skipped_content", 100).map((p) => str(p, "skipped_content", CHECKED_PATH)),
+      ) ?? [],
+    skipped_content_total:
+      opt(r.skipped_content_total, (v) => int(v, "skipped_content_total")) ?? 0,
     merge_mismatch: arr(r.merge_mismatch, "merge_mismatch", 100).map((p) =>
       str(p, "merge_mismatch", WORLD_PATH),
     ),
@@ -407,7 +419,7 @@ const FAILURE_TEXT: Record<(typeof FAILURES)[number], string> = {
   conflicts: "choca con cambios posteriores de la rama base (rebase y vuelve a empujar)",
   validation: "el mapa fusionado tiene errores nuevos del validador",
   invalid:
-    "un archivo de mapa del PR no pasa su esquema, no está en formato canónico (corre `mapcli fmt`), o un archivo de mapa o de contenido no es un archivo normal",
+    "un archivo de mapa del PR no pasa su esquema, no está en formato canónico (corre `mapcli fmt`), un archivo de mapa o de contenido no es un archivo normal, o una ruta de contenido no se pudo escribir como la deja el merge",
   rebase: "git no puede fusionar la rama con la base (rebase y vuelve a empujar)",
   merge_mismatch:
     "git fusionaría el texto de un archivo distinto de como se revisó (paletas de chunk): rebase y vuelve a empujar",
@@ -420,7 +432,7 @@ const NOTE_TEXT: Record<(typeof NOTES)[number], string> = {
   content_too_large:
     "el contenido del PR pasa el límite del check: el después se midió con el contenido de la base",
   content_skipped:
-    "algunas rutas de contenido del merge no se podían escribir de forma segura y quedaron fuera de la revisión",
+    "algunas rutas de contenido del merge no se pudieron escribir como las deja el merge (ver la lista): el después no es el merge",
   atlas_fallback:
     "los sprites del merge no se pudieron armar: las imágenes del después usan los de la base",
 };
@@ -566,6 +578,12 @@ export function buildComment(
     "**Rutas de `world/` o de contenido que no son archivos normales** (symlink, ejecutable o submódulo):",
     r.bad_mode_files,
   );
+  pathList(
+    "**Rutas de contenido que el check no pudo escribir como las deja el merge** (un nombre con `:`, `\\`, un salto de línea, `..` o `.git`, un submódulo, o un archivo donde el merge tiene una carpeta; `?` marca un carácter que no se muestra):",
+    r.skipped_content,
+  );
+  if (r.skipped_content_total > r.skipped_content.length)
+    out.push(`… y ${r.skipped_content_total - r.skipped_content.length} más.`);
   pathList(
     "**Archivos que git fusionaría distinto de lo revisado** (rebase sobre la base):",
     r.merge_mismatch,

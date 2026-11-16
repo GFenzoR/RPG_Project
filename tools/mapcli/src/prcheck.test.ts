@@ -19,7 +19,14 @@ import { formatYaml, parseYamlText } from "@rpg/map-format";
 import { decodePng } from "@rpg/spritepack";
 import { afterEach, describe, expect, it } from "vitest";
 import { run } from "./index.ts";
-import { insidePath, landContent, parseMaintainers, prCheck, tileFor } from "./prcheck.ts";
+import {
+  insidePath,
+  landContent,
+  parseMaintainers,
+  prCheck,
+  reportPath,
+  tileFor,
+} from "./prcheck.ts";
 import { parseMaintainers as parseMaintainersCopy } from "./prcomment.ts";
 import {
   MARKER,
@@ -260,8 +267,54 @@ describe("landContent", () => {
       tooLarge: true,
       skipped: [],
     });
-    expect(landContent(root, dir, base, to, { files: 3, bytes: 1e6 }).tooLarge).toBe(true);
+    expect(landContent(root, dir, base, to, { files: 0, bytes: 1e6 }).tooLarge).toBe(true);
     expect(readFileSync(join(dir, "data/ok.yaml"), "utf8")).toBe("a\n");
+  });
+
+  it("counts the bytes of every path, even when they share one blob", () => {
+    const { root, dir, base, blob, tree } = setup();
+    // 50 paths of one 1 KB blob: a push of 1 KB that would be 50 KB on disk.
+    const kb = blob("x".repeat(1024));
+    const copies = Array.from({ length: 50 }, (_, i): [string, string, string] => [
+      "100644",
+      `copy${i}.yaml`,
+      kb,
+    ]);
+    const to = tree(copies);
+    expect(landContent(root, dir, base, to, { files: 100, bytes: 10_000 }).tooLarge).toBe(true);
+    expect(readdirSync(join(dir, "data")).sort()).toEqual([
+      "fake.yaml",
+      "gone.yaml",
+      "ok.yaml",
+      "sub",
+    ]);
+    expect(landContent(root, dir, base, to, { files: 100, bytes: 60_000 }).tooLarge).toBe(false);
+  });
+
+  it("does not count removals against the file limit", () => {
+    const { root, dir, base, blob, tree } = setup();
+    // Four files of base go, one comes: one path to write.
+    const to = tree([["100644", "new.yaml", blob("new\n")]]);
+    expect(landContent(root, dir, base, to, { files: 1, bytes: 1e6 })).toEqual({
+      changed: 5,
+      tooLarge: false,
+      skipped: [],
+    });
+    expect(readdirSync(join(dir, "data"))).toEqual(["new.yaml"]);
+  });
+
+  it("removes the emptied folders where the target has a file", () => {
+    const { root, dir, blob, tree, literal } = setup();
+    // Base has data/x/y/z.yaml; the target has a file data/x.
+    const from = tree([
+      ["40000", "x", literal([["40000", "y", literal([["100644", "z.yaml", blob("z\n")]])]])],
+    ]);
+    rmSync(join(dir, "data"), { recursive: true });
+    mkdirSync(join(dir, "data/x/y"), { recursive: true });
+    writeFileSync(join(dir, "data/x/y/z.yaml"), "z\n");
+    const to = tree([["100644", "x", blob("now a file\n")]]);
+    expect(landContent(root, dir, from, to)).toEqual({ changed: 2, tooLarge: false, skipped: [] });
+    expect(readFileSync(join(dir, "data/x"), "utf8")).toBe("now a file\n");
   });
 
   it("never writes through a directory that resolves outside", () => {
@@ -671,6 +724,90 @@ describe("mapcli pr-check", { timeout: 60_000 }, () => {
     });
     expect(lstatSync(join(dir, "data/items/linked.yaml")).isFile()).toBe(true);
     expect(readFileSync(join(dir, "data/items/linked.yaml"), "utf8")).toBe("../../outside.yaml");
+  });
+
+  it("fails a content path it cannot write as the merge has it", () => {
+    const s = sandbox();
+    s.git("checkout", "-qb", "pr");
+    // A maintainer adds items in a file named x:y.yaml: valid on Linux, where the server
+    // would load it, but not a path the check writes (insidePath).
+    const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], {
+      cwd: s.root,
+      input: NEW_ITEM,
+      encoding: "utf8",
+    }).trim();
+    s.git(
+      "-c",
+      "core.protectNTFS=false",
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      `100644,${blob},data/items/x:y.yaml`,
+    );
+    s.edit("place", "puerto", "--pos", "3202,6304,7", "--item", "boulder");
+    s.git("add", "world");
+    s.git("commit", "-qm", "items in an odd file");
+    const out = tmp("pr-out-");
+    const r = prCheck({ root: s.root, base: "main", head: "pr", out, author: "boss", pr: 7 });
+    expect(r.failures).toEqual(["invalid"]);
+    expect(r.ok).toBe(false);
+    expect(r.notes).toEqual(["content_skipped"]);
+    expect(r.skipped_content).toEqual(["data/items/x?y.yaml"]);
+    expect(r.skipped_content_total).toBe(1);
+    expect(r.other_files).toEqual(["data/items/x?y.yaml"]); // as the comment can show it
+    const { report, error } = readReport(join(out, "report.json"));
+    expect(error).toBeUndefined();
+    expect(report?.skipped_content).toEqual(["data/items/x?y.yaml"]);
+  });
+
+  it("judges the modes the PR changes, not an odd file already on base", () => {
+    const s = sandbox();
+    // Base already has an executable in data/: not this PR's doing.
+    writeFileSync(join(s.root, "data/items/tool.yaml"), "[]\n");
+    s.git("add", "data/items/tool.yaml");
+    s.git("update-index", "--chmod=+x", "data/items/tool.yaml");
+    s.git("commit", "-qm", "an executable on main");
+    s.git("checkout", "-qb", "pr");
+    s.edit("place", "puerto", "--pos", "3202,6304,7", "--item", "boulder");
+    s.git("commit", "-qam", "map only");
+    const clean = prCheck({ root: s.root, base: "main", head: "pr", out: tmp("pr-out-") });
+    expect(clean.failures).toEqual([]);
+    expect(clean.bad_mode_files).toEqual([]);
+    // The PR adds one, in a folder with a dot and a name with a space: listed as the
+    // comment can show it.
+    const odd = "assets/vendor/Pack.v2/a b.png";
+    mkdirSync(join(s.root, dirname(odd)), { recursive: true });
+    writeFileSync(join(s.root, odd), "not really a png\n");
+    s.git("add", odd);
+    s.git("update-index", "--chmod=+x", odd);
+    s.git("commit", "-qm", "an executable in the PR");
+    const out = tmp("pr-out-");
+    const r = prCheck({ root: s.root, base: "main", head: "pr", out, author: "boss", pr: 7 });
+    expect(r.failures).toEqual(["invalid"]);
+    expect(r.bad_mode_files).toEqual(["assets/vendor/Pack.v2/a?b.png"]);
+    expect(readReport(join(out, "report.json")).report?.bad_mode_files).toEqual([
+      "assets/vendor/Pack.v2/a?b.png",
+    ]);
+  });
+
+  it("lands the head's content when git cannot merge", () => {
+    const s = sandbox();
+    addsAndPlacesItem(s); // appends test_crate to decoration.yaml
+    s.git("checkout", "-q", "main");
+    // Base appends another item at the same place: a textual conflict, no merge tree.
+    appendFileSync(join(s.root, DECOR), `\n${NEW_ITEM.replaceAll("test_crate", "base_crate")}`);
+    s.git("commit", "-qam", "main appends too");
+    expect(() => s.git("merge-tree", "--write-tree", "main", "pr")).toThrow();
+    const r = prCheck({
+      root: s.root,
+      base: "main",
+      head: "pr",
+      out: tmp("pr-out-"),
+      author: "boss",
+    });
+    // Rebase, but the map is still measured with the PR's content: test_crate is known.
+    expect(r.failures).toEqual(["rebase"]);
+    expect(r.validation.new_errors_total).toBe(0);
   });
 
   it("stops at the content limits and says so", () => {
@@ -1132,7 +1269,32 @@ describe("pr comment", () => {
     expect(bad({ notes: ["**evil**"] })).toThrow();
     expect(bad({ notes: "base_content" })).toThrow();
     expect(bad({ bad_mode_files: [".github/workflows/ci.yml"] })).toThrow();
-    expect(bad({ bad_mode_files: ["data/../x"] })).toThrow();
+    // Raw characters prcheck's reportPath would have turned into "?".
+    expect(bad({ bad_mode_files: ["data/a b.yaml"] })).toThrow();
+    expect(bad({ bad_mode_files: ["data/x`y.yaml"] })).toThrow();
+  });
+
+  it("lists the content paths that could not land, as reportPath shows them", () => {
+    expect(reportPath("data/items/x:y.yaml")).toBe("data/items/x?y.yaml");
+    expect(reportPath("data/../.../x")).toBe("data/?./??./x"); // the comment refuses ".."
+    expect(reportPath("assets/vendor/Pack.v2/a b\n`.png")).toBe("assets/vendor/Pack.v2/a?b??.png");
+    const r = checkReport({
+      ...good,
+      ok: false,
+      failures: ["invalid"],
+      skipped_content: ["data/items/x?y.yaml", reportPath("data/..")],
+      skipped_content_total: 60,
+      notes: ["content_skipped"],
+    });
+    const body = buildComment(r, ctx, trustedFacts([PLOT_CHUNK], true));
+    expect(body).toContain("no pudo escribir como las deja el merge");
+    expect(body).toContain("- `data/items/x?y.yaml`");
+    expect(body).toContain("… y 58 más.");
+    // Reports from before these fields still read.
+    expect(checkReport(good)).toMatchObject({ skipped_content: [], skipped_content_total: 0 });
+    const bad = (patch: Record<string, unknown>) => () => checkReport({ ...good, ...patch });
+    expect(bad({ skipped_content: ["world/../x y"] })).toThrow();
+    expect(bad({ skipped_content_total: "1" })).toThrow();
   });
 });
 
