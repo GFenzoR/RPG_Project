@@ -28,6 +28,7 @@ import {
   render,
   spriteFile,
   UI_ICON,
+  UI_ICON_BOX,
 } from "./index.ts";
 import { FRONT_SWING } from "./recipes/creatures.ts";
 import { EFFECT_FRAMES } from "./recipes/effects.ts";
@@ -259,5 +260,38 @@ describe("outfit walk cycle", () => {
         }
       }
     }
+  });
+});
+
+describe("ui icons", () => {
+  const icons = recipePaths("ui/");
+
+  it("draw only inside UI_ICON_BOX, which is all the client shows", () => {
+    expect(icons.length).toBeGreaterThan(0);
+    for (const p of icons) {
+      const img = render(p);
+      expect([img.width, img.height], p).toEqual([32, 32]);
+      for (let y = 0; y < img.height; y++)
+        for (let x = 0; x < img.width; x++) {
+          const inBox =
+            x >= UI_ICON_BOX.x &&
+            x < UI_ICON_BOX.x + UI_ICON_BOX.w &&
+            y >= UI_ICON_BOX.y &&
+            y < UI_ICON_BOX.y + UI_ICON_BOX.h;
+          if (!inBox) expect(opaque(img, x, y), `${p} ${x},${y}`).toBe(false);
+        }
+    }
+  });
+
+  it("give each PvP mark its own silhouette, so they read without colour", () => {
+    const marks = ["aggressor", "murderer", "outlaw"].map((id) => `ui/marks/${id}`);
+    for (const m of marks) expect(icons, m).toContain(m);
+    const masks = marks.map((m) => {
+      const img = render(m);
+      let bits = "";
+      for (let i = 3; i < img.data.length; i += 4) bits += img.data[i] ? "1" : "0";
+      return bits;
+    });
+    expect(new Set(masks).size).toBe(marks.length);
   });
 });
