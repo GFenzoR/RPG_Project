@@ -13,7 +13,7 @@ text.bosque.cave_sign: "Alguien tachó la palabra «peligro» y escribió encima
 text.volcan.temple_sign: "Templo de la Llama Quieta, en Brasal. Aquí ni la montaña puede hacerte daño."
 text.volcan.dock_sign: "Muelle de Brasal. Nerea Vado lleva pasajeros al Bosque y al Puerto. No toques las piedras negras."
 text.volcan.mine_sign: "Mina de la Montaña. Cerrada por orden del archivo. Alguien rayó encima: «abajo hay fuego»."
-text.volcan.gate_sign: "Una puerta de piedra sin cerradura. En el centro, la marca de la forja y un hueco con forma de raíz."
+text.volcan.gate_sign: "Forja antigua. Solo pasa quien trae su llave. Debajo, a cincel: «la raíz es la llave»."
 # Player houses (T5.4, world/islands/<id>/houses.yaml).
 house.puerto_house_net.name: "Casa de la Red Tendida"
 house.puerto_house_oar.name: "Casa del Remo Viejo"

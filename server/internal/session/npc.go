@@ -818,10 +818,11 @@ func (a *actor) Bless(b content.Bless) {
 	a.p.storage.Set(blessKey+b.Blessing, 1)
 }
 
-// teleportDest returns a free tile at or next to pos.
+// teleportDest returns a free tile at or next to pos, never a house tile (like the
+// arrival of a boat or a portal: a dialog does not put anyone inside a house).
 func (w *World) teleportDest(pos content.Position) (world.Pos, bool) {
 	if pos.X < 0 || pos.Y < 0 || pos.X > 0xFFFF || pos.Y > 0xFFFF || pos.Z < 0 || pos.Z > world.MaxFloor {
 		return world.Pos{}, false
 	}
-	return w.freeNear(world.Pos{X: uint16(pos.X), Y: uint16(pos.Y), Z: uint8(pos.Z)}, 1)
+	return w.freeAround(world.Pos{X: uint16(pos.X), Y: uint16(pos.Y), Z: uint8(pos.Z)}, 1, true)
 }

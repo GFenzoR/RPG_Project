@@ -162,6 +162,47 @@ describe("checkPlots", () => {
   });
 });
 
+describe("checkPlots: portals between islands", () => {
+  // A second plot of isle (60..64) and one of another island (100..109).
+  const plots: Plot[] = [
+    ...PLOTS,
+    { island: "isle", id: "isle_cove", floors: [7], rects: [{ x: 60, y: 40, w: 5, h: 5 }] },
+    { island: "far", id: "far_plot", floors: [7], rects: [{ x: 100, y: 40, w: 10, h: 10 }] },
+  ];
+  const portal = (id: string, tx: number): Portal => ({
+    id,
+    kind: "teleport",
+    from: { x: 41, y: 41, z: 7 },
+    to: { x: tx, y: 41, z: 7 },
+  });
+  const PORTALS = "world/islands/isle/portals.yaml";
+
+  it("refuses a community portal whose ends lie in plots of two islands", () => {
+    const v = checkPlots(plots, [
+      {
+        path: PORTALS,
+        before: yaml([portal("moved", 48)]),
+        after: yaml([portal("moved", 105), portal("ferry", 101), portal("cove", 61)]),
+      },
+    ]);
+    expect(v).toEqual([
+      { kind: "entry", path: PORTALS, entry: "moved", change: "changed", reason: "cross_island" },
+      { kind: "entry", path: PORTALS, entry: "ferry", change: "added", reason: "cross_island" },
+    ]);
+  });
+
+  it("lets a portal between islands be taken back to one island or removed", () => {
+    const v = checkPlots(plots, [
+      {
+        path: PORTALS,
+        before: yaml([portal("back", 105), portal("gone", 101)]),
+        after: yaml([portal("back", 48)]),
+      },
+    ]);
+    expect(v).toEqual([]);
+  });
+});
+
 describe("checkPlots: spawn radius", () => {
   it("counts the whole square centre ± radius of a spawn, not only its centre", () => {
     const wide = { ...spawn("wide", 45, 45), radius: 6 }; // 39..51: sticks out of 40..49

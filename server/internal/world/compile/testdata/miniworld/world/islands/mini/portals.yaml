@@ -1,0 +1,14 @@
+- id: mini_cave_down
+  kind: stairs
+  from: { x: 66, y: 54, z: 7 }
+  to: { x: 66, y: 55, z: 8 }
+
+- id: mini_cave_up
+  kind: stairs
+  from: { x: 66, y: 54, z: 8 }
+  to: { x: 66, y: 55, z: 7 }
+
+- id: mini_shortcut
+  kind: teleport
+  from: { x: 70, y: 54, z: 7 }
+  to: { x: 72, y: 54, z: 7 }

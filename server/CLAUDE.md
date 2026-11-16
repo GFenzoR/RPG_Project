@@ -157,26 +157,41 @@ server/
   una oferta lleva sus unidades (`MarketOfferRemove.Units`, baja con guarda). Un transfer
   que falla al apagar abandona todo lo de atrás (semántica de caída). `persistence_backlog`
   mide la cola del Saver más `World.PendingJobs`. Todo snapshot de un transfer sale por
-  `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`):
-  un camino nuevo que lleve algo de un personaje al suelo público tiene que respetar
-  `heldDrop`, uno que saque algo del suelo de una casa al suelo público llama a
-  `leftHouse` y solo lo deja como pila propia o en una pila o contenedor ya reservado a
-  él (`heldFor`; nunca en algo ajeno, que la reserva se quedaría), uno en que el servidor
-  le deje algo a sus pies llama a `holdGround`, uno que tome o use algo del suelo (o meta
-  algo en un contenedor del suelo) mira `groundHeld` y `reserved` (cadáveres), y uno que
-  reemplace los items de una casa va como `HouseItems` (el Saver marca la casa si se
-  descarta). Cada reserva de `heldGround` guarda el `Seq` que la cubre y la libera el
-  acuse de ese `Seq` o mayor (`confirmed`), no el fin de la espera. Los `Seq` de los
-  snapshots son del `World` (crecen entre sesiones del personaje): no los reinicies por
-  jugador; un acuse vale por todos los anteriores de su personaje (el `app` reintenta
-  solo el más alto, `app/acks.go`). Una acción que
+  `transferSnapshot` (deja al personaje en espera hasta `World.Saved`, `session/hold.go`,
+  y encola antes el snapshot pendiente de `gaveAway`): un camino nuevo que lleve algo de
+  un personaje al suelo público tiene que respetar `heldDrop` y, ya hecho, llamar a
+  `gaveAway` (marca al personaje; `settleGivers` toma su estado al principio y al final
+  de cada comando del jugador, `playerCommand`, y al final del tick, y se escribe antes
+  de su próximo transfer, así un transfer descartado no lo devuelve a un guardado que
+  todavía lo tiene; `holdGround` ya lo llama). Un comando nuevo del jugador que pueda
+  cambiar una casa corre por `playerCommand`, como `Input`. Ningún transfer puede dejar
+  nada en el suelo público en su propio comando (comprueba antes que todo entra:
+  `canBuy`, `canReceive`, `moneyThatFits`; `transferSnapshot` lo registra con nivel
+  error). Si un mismo comando suelta algo a la calle y cambia una casa (una runa del suelo
+  de la casa usada desde la calle que mata a un monstruo de quest), lo que soltó queda
+  reservado con el `Seq` de la escritura de la casa (`reserveGiven`, como `leftHouse`) y
+  no se guarda snapshot aparte; registra (nivel error) solo lo que no se puede reservar
+  (una pila o bolsa no reservada a él). `gaveAway` recibe dónde cayó: la pila nueva o
+  la pila o contenedor ya reservado a él (`heldFor`), o nil si no se le puede reservar. Uno
+  que saque algo del suelo de una casa al suelo público llama a `leftHouse` (la reserva toma el `Seq` del
+  snapshot del que lo movió en la escritura de la casa, `numberLeft`) y solo lo deja
+  como pila propia o en una pila o contenedor ya reservado a él (`heldFor`; nunca en algo
+  ajeno, que la reserva se quedaría), uno en que el servidor le deje algo a sus pies
+  llama a `holdGround`, uno que tome o use algo del suelo (o meta algo en un contenedor
+  del suelo) mira `groundHeld` y `reserved` (cadáveres), y uno que reemplace los items
+  de una casa va como `HouseItems` (el Saver marca la casa si se descarta). Cada reserva
+  de `heldGround` guarda el `Seq` que la cubre y la libera el acuse de ese `Seq` o mayor
+  (`confirmed`), no el fin de la espera. Los `Seq` de los snapshots son del `World`
+  (crecen entre sesiones del personaje): no los reinicies por jugador; un acuse vale por
+  todos los anteriores de su personaje (el `app` reintenta solo el más alto,
+  `app/acks.go`). Una acción que
   cambie lo que muestra la ventana del mercado de otro llama a `bookChanged` /
   `marketOwnerChanged` / `queueMarket` (refresco en vivo, `flushMarket`, como mucho uno
   por ventana cada `market.push_every_ms`).
 
 - **Casas (T5.4):** `session/house.go` + `store/houses.go` + `app/houses.go` +
   `httpapi/houses.go` (`balance.yaml houses`; necesita el mercado). Las casas son datos del
-  mapa (`world.House`, `world.bin` v4; `Map.HouseAt` y el bit `FlagHouse`, que `NewMap`
+  mapa (`world.House`, en `world.bin` desde la v4; `Map.HouseAt` y el bit `FlagHouse`, que `NewMap`
   pone con `FlagProtection`). El loop es dueño de dueños, invitados e items de las casas
   (cargados con `LoadHouses`). Todo cambio es un `Transfer` con `HouseOp` (mismos números en
   `session` y `store`, caso en `applyHouseOp`). Los items del suelo de una casa: cualquier
@@ -184,7 +199,8 @@ server/
   para un contenedor en el suelo), que marca la casa sucia; `flushHouses` la escribe
   entera, con los snapshots de los jugadores cuyos comandos la tocaron
   (`World.cmdPlayer`, puesto en `Input`), al final de cada comando, al principio de
-  `transfer`/`houseTransfer` (**antes de numerar**) y de `snapshot`, y al final del tick.
+  `transfer`/`houseTransfer` (**antes de numerar**) y de `snapshot`, y al final del tick
+  (también después de `questRecheck`).
   Todo sitio nuevo que numere un transfer tiene que vaciar las casas antes de
   `nextTransfer++`: `SaveTransfer` rechaza un id menor que el último escrito
   (`ErrTransferOrder`). Un movimiento de items desde o hacia una casa pasa por
@@ -201,17 +217,53 @@ server/
   muros no cambian; las demás puertas con llave son muro, así una puerta doble comparte
   sala) con el mismo recorrido que `packages/map-format/src/doors.ts`: si cambias uno,
   cambia el otro y `testdata/door-rooms.json` (lo leen los tests de los dos). Una sala
-  que no se puede determinar, compartida por puertas de otra llave o de otro afuera
-  (`sameOutside`, que no cruza puertas con llave ni casas: hoy rechaza los ciclos de
-  puertas con llave) o que tiene algo de afuera (`checkRooms`: templo, NPC, casa, llegada
-  de barco, teleport de diálogo) no deja arrancar. Nada recorre el mapa en el tick:
-  `World.roomOf` (casilla → sala) y los sectores de cada sala. **Toda búsqueda de casilla
-  libre por anillos** (`freeNear`, `houseExit` o una nueva) pasa por `roomAllows`: nunca
-  deja a nadie en una sala si no empezó en ella. `houseEnter` no lo necesita: solo pone
-  al jugador en casillas de la casa, y `checkRooms` no deja ninguna casa en una sala.
+  que no se puede determinar, compartida por puertas de otra llave o que tiene algo de
+  afuera (`checkRooms`: templo, NPC, casa, extremo de portal, llegada de barco, teleport
+  de diálogo) no deja arrancar, y tampoco una puerta que abierta no deja pasar a nadie
+  (`errDoorBlocked`), una sobre un extremo de un portal (`errDoorOnPortal`) ni una que no
+  pasa el **chequeo de escape**
+  (`checkEscapes`, igual en `doors.ts`): sobre las **áreas** de `session/area.go`
+  (casillas unidas a pie con puertas con llave, casas y entradas de escalera, agujero y
+  teletransporte como muro; una sala es un área), cada lado de cada puerta con llave
+  llega a un templo (el mundo; una llegada de barco no lo es) yendo de una sala a los
+  lados de sus puertas y por los portales de `escapeWay` (escalera, escalera de mano,
+  agujero, teletransporte; no `rope_spot` ni `boat`), tomados desde `portalSources`, y
+  nadie con todas las llaves menos una, parado fuera de las salas o en una casa, entra a
+  una sala de esa llave. Si sumas una forma de moverse entre áreas que un jugador sin
+  llaves ni herramientas tiene siempre, súmala como arista en los dos lados (`escapeWay`
+  y `ESCAPE_WAYS`); si sumas un lugar donde un jugador puede estar fuera de las áreas
+  (como las casas), súmalo como punto de partida del chequeo de llaves. Nada
+  recorre el mapa en el tick: `World.roomOf` (casilla → sala), los sectores de cada sala
+  y `World.areas` (por sector, `areaOf`). **Toda búsqueda de casilla libre por anillos**
+  (`freeNear`, `houseExit` o una nueva) pasa por `searchFrom` + `areaAllows`: solo
+  casillas del área de donde empezó (nunca una sala ajena ni un bolsillo cerrado por
+  paredes; desde la entrada de una escalera, un agujero o un teletransporte, las áreas de
+  al lado; desde otra casilla fuera de toda área, solo descarta las salas); y por
+  `!Map.MovesOnStep`: nunca deja a nadie sobre una escalera, un agujero o un
+  teletransporte. `houseEnter` no lo necesita: solo pone al jugador en casillas de la
+  casa, y `checkRooms` no deja ninguna casa (ni portal) en una sala.
   Desde la sala una puerta trabada se abre sin llave (nadie queda encerrado, tampoco tras
   un relogueo o un reinicio). Todo uso junto a una puerta, también un rechazo, pasa por
   `doorReady` (`inventory.door_cooldown_ms`). Su estado no se guarda.
+
+- **Portales:** `world/portal.go` (`world.Portal`, `world.bin` v5, `Map.PortalAt` y
+  `Map.MovesOnStep`, que `NewMap` indexa y valida como `make validate`; `MovesOnStep` lee
+  el flag `FlagPortalStep` que pone `NewMap`, porque A* lo pregunta por cada casilla) +
+  `session/portal.go` (reglas en `02-game-design.md` "Cambiar de piso"). Escaleras,
+  agujeros y teletransportes se pisan (`stepPlayer`: el paso y luego `relocate`, el
+  `Teleport` sin su chequeo de "sigue en el mundo": quien camina lo está, y el paso ya se
+  saltó la vista del piso que deja); la escalera de mano se usa (`usePortal` en la cadena
+  de `useItem`, antes de `useStation`) y el punto de soga pide `UseItemOn` con
+  `tool.use: rope` (`useRope`, antes de `gather`); los dos a `reach` y con línea de
+  visión. La llegada es `portalArrival` (`freeAround` sin casas, radio
+  `travel.arrival_radius`, el bloqueo PvP). Nadie más pisa esas casillas:
+  `monsterCanEnter`, la búsqueda A* de los monstruos, `reroute` y `bot.Nav` las esquivan;
+  `NewMap` rechaza un NPC, un spawn de radio 0, el templo o la salida de una casa sobre
+  una (`houseExit` es `freeAround` con casas excluidas, como la llegada). El paso sobre
+  una escalera (`move` con `through`) no le manda al que baja los `MapSlice` del piso que
+  deja: el `FullMapView` lo reemplaza. `checkRooms` rechaza un extremo de portal en una
+  sala. Un portal nuevo que se use a mano entra por `usePortal`/`useRope`; uno que se
+  pise tiene que ser un `kind` con `OnStep`. `Flags` (un byte) ya no tiene bits libres.
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

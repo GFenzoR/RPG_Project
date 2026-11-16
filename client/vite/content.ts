@@ -12,7 +12,7 @@
 //                        `vite build` emits the same files under atlas/
 //
 // The client never reads world/: the map arrives from the server (FullMapView, MapSlice).
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -257,6 +257,7 @@ export function loadClientContent(root: string): ClientContent {
     sounds: loadSounds(root),
     islands: loadIslands(root),
     houseDoors: loadHouseDoors(root),
+    portals: loadPortals(root),
     i18n,
   };
 }
@@ -459,6 +460,34 @@ function loadHouseDoors(root: string): string[] {
 }
 
 const num0 = (v: unknown): number => (typeof v === "number" ? v : 0);
+
+/**
+ * Entrance tile ("x,y,z") → kind of every portal of the islands world.yaml lists
+ * (world/islands/<id>/portals.yaml, like mapcompile): the client keeps its paths off
+ * stairs, holes and teleports and uses a bare ladder's ground (state/portals.ts). An island
+ * without the file has no portals; a file that does not parse fails the build (make
+ * validate names the error), rather than ship a client that walks onto stairs.
+ */
+export function loadPortals(root: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const { id } of loadIslands(root)) {
+    const file = join(root, "world", "islands", id, "portals.yaml");
+    if (!existsSync(file)) continue;
+    let raw: unknown;
+    try {
+      raw = readYaml(file);
+    } catch (e) {
+      throw new Error(`${file}: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+    }
+    if (!Array.isArray(raw)) continue;
+    for (const p of raw)
+      if (isObj(p) && isObj(p["from"]) && typeof p["kind"] === "string") {
+        const f = p["from"];
+        out[`${num0(f["x"])},${num0(f["y"])},${num0(f["z"])}`] = p["kind"];
+      }
+  }
+  return out;
+}
 
 /**
  * The sound files to serve or emit: published path (as in SoundDef.url, not encoded) →

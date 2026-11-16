@@ -198,7 +198,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The client suite alone took 13.5 min on this runner before the WebKit touch tests
+    # (Chromium only, no retries) and the whole job 17: room for WebKit and for the one
+    # retry each failed test gets on CI (the playwright.config.ts files; docs/08).
+    timeout-minutes: 40
     # The client E2E runs the game server, which needs Postgres (it applies migrations).
     services:
       postgres:

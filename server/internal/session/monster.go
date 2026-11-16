@@ -301,10 +301,13 @@ func (w *World) watched(p world.Pos) bool {
 	return seen
 }
 
-// monsterCanEnter reports whether a monster may stand on p: walkable, free and outside
-// protection zones.
+// monsterCanEnter reports whether a monster may stand on p: walkable, free, outside
+// protection zones and not a tile that stairs, a hole or a teleport leaves from
+// (monsters do not use portals, portal.go). A player chasing its target steps by it too.
+// One read of the tile's flags: Walkable, the protection zone and MovesOnStep are bits of
+// it (FlagPortalStep is only ever set on a map with portals).
 func (w *World) monsterCanEnter(p world.Pos) bool {
-	return w.m.Walkable(p) && w.m.Flags(p)&world.FlagProtection == 0 && !w.occupied(p)
+	return w.m.Flags(p)&(world.FlagBlocksMovement|world.FlagProtection|world.FlagPortalStep) == 0 && !w.occupied(p)
 }
 
 // spawnTile picks a random tile a monster can enter within the spawn's radius.
@@ -553,7 +556,7 @@ func (w *World) chaseStep(from, goal world.Pos, astar bool) (world.Direction, bo
 		return best, found
 	}
 	path, ok := w.pf.FindAvoiding(from, goal, w.pathBuf, func(q world.Pos) bool {
-		return q != goal && (w.occupied(q) || w.inProtection(q))
+		return q != goal && (w.occupied(q) || w.inProtection(q) || w.m.MovesOnStep(q))
 	})
 	w.pathBudget -= w.pf.Expanded()
 	w.pathBuf = path[:0]

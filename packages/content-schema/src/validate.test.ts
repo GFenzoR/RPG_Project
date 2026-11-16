@@ -536,6 +536,20 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  // The server answers nothing about a tile out of view (6 tiles up and down), so a longer
+  // reach could only ever fail (server content.MaxReach).
+  it("caps inventory.reach and resource.reach at the view half-height", () => {
+    edit("data/balance.yaml", "  reach: 1 ", "  reach: 7 ");
+    edit("data/items/ground.yaml", "    reach: 3\n", "    reach: 7\n");
+    const out = messages(root);
+    expect(out.some((m) => m.startsWith("error data/balance.yaml:") && m.includes("<= 6"))).toBe(
+      true,
+    );
+    expect(
+      out.some((m) => m.startsWith("error data/items/ground.yaml:") && m.includes("<= 6")),
+    ).toBe(true);
+  });
+
   it("limits the number of different blessings to balance.yaml max_blessings", () => {
     edit("data/balance.yaml", "max_blessings: 5", "max_blessings: 4");
     expect(

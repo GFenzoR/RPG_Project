@@ -16,13 +16,25 @@ func (w *World) Input(client Client, msg *pb.ClientMessage) game.Command {
 		if p == nil || p.linkDead {
 			return // gone, or link-dead: a command its closed connection sent before (T5.2)
 		}
-		w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
-		defer func() { w.cmdPlayer = nil }()
-		w.input(ctx, p, msg)
-		// T5.4: what this command did to a house is written now, with p's snapshot: a
-		// later command never adds a half-done operation to that batch.
-		w.flushHouses()
+		w.playerCommand(p, func() { w.input(ctx, p, msg) })
 	})
+}
+
+// playerCommand runs run, one command of p that may change a house's items.
+func (w *World) playerCommand(p *Player, run func()) {
+	// T5.3: a give-away still waiting for its snapshot (one the server made in a command
+	// that is not an Input, as a Join's tutorial reward, or in one that panicked) takes
+	// it now, before this command changes a house: that snapshot never holds what this
+	// command takes out of a house (hold.go settleGivers).
+	w.settleGivers()
+	w.cmdPlayer = p // T5.4: whose command changes a house's items (flushHouses)
+	defer func() { w.cmdPlayer = nil }()
+	run()
+	// T5.4: what this command did to a house is written now, with p's snapshot: a
+	// later command never adds a half-done operation to that batch.
+	w.flushHouses()
+	// T5.3: the state after what this command gave away, whole (hold.go gaveAway).
+	w.settleGivers()
 }
 
 func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
@@ -245,6 +257,19 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		p.emit(systemMsg(msgPvPProtLocked))
 		return
 	}
+	// Stairs, a hole or a teleport (portal.go): the step happens only if the other end
+	// takes p, and then p lands there.
+	var dest world.Pos
+	pt := w.stepPortal(to)
+	if pt != nil {
+		var refuse string
+		if dest, refuse = w.portalArrival(ctx, p, pt, to); refuse != "" {
+			p.stopWalk()
+			w.reject(p, dirMsg(d))
+			p.emit(systemMsg(refuse))
+			return
+		}
+	}
 
 	p.qhead++
 	if p.qhead == len(p.queue) {
@@ -253,21 +278,30 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	ground, _, _ := w.m.Tile(to)
 	ticks := w.StepTicks(ground, p.speed, d.Diagonal())
 	p.readyAt = ctx.Tick + ticks
-	w.move(p, to, d, ticks)
+	w.move(p, to, d, ticks, pt != nil)
 	// A step resets the idle time but is not a timed action for the bot detection: its
 	// pace is the server's (a held key walks as evenly as a script).
 	p.lastAction, p.idleWarned = ctx.Tick, false
 	w.abStep(ctx.Tick, p, d)
+	if pt != nil {
+		// relocate, not Teleport: p walks, so it is in the world, and the step skipped the
+		// view of this floor (through): p must land, whatever Teleport would check.
+		w.relocate(p, dest)
+	}
 }
 
 // searchCost is the worst case of one reroute search, in expanded tiles: Find may run
 // two passes of RerouteMaxNodes.
 func (w *World) searchCost() int { return 2 * w.cfg.RerouteMaxNodes }
 
-// reroute replaces p's remaining path with one to p.dest around creatures and charges
-// the search to the tick's pathfinding quota. It reports whether p has a new path.
+// reroute replaces p's remaining path with one to p.dest around creatures (and around
+// the tiles of stairs, holes and teleports but its end) and charges the search to the
+// tick's pathfinding quota. It reports whether p has a new path.
 func (w *World) reroute(p *Player) bool {
-	path, ok := w.pf.FindAvoiding(p.pos, p.dest, w.pathBuf, w.occupied)
+	dest := p.dest
+	path, ok := w.pf.FindAvoiding(p.pos, dest, w.pathBuf, func(q world.Pos) bool {
+		return w.occupied(q) || q != dest && w.m.MovesOnStep(q)
+	})
 	w.pathBudget -= w.pf.Expanded()
 	w.pathBuf = path[:0]
 	if !ok || len(path) == 0 {
@@ -279,8 +313,11 @@ func (w *World) reroute(p *Player) bool {
 }
 
 // move takes p one step from its position to `to` (adjacent, same floor) and tells
-// every client that sees either end.
-func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick) {
+// every client that sees either end. With through (a step onto stairs, a hole or a
+// teleport, which Teleport follows in the same tick) p's own client gets only the step:
+// the FullMapView of the other end replaces its view, so the edge of this floor and the
+// creatures that leave it would be bytes it throws away.
+func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick, through bool) {
 	from := p.pos
 	durMs := uint32(ticks.Duration().Milliseconds())
 	w.unindex(p)
@@ -296,8 +333,15 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	w.checkDialog(p)
 	w.checkMarket(p)
 	w.checkHouseView(p)
+	if !through {
+		w.stepView(p, to, d)
+	}
+	w.tutorialEvent(p, content.TriggerWalk, "")
+}
 
-	// The mover's own client: creatures out of view disappear, the new edge arrives.
+// stepView tells p's own client what its step to `to` in d changed: creatures out of view
+// disappear, the new edge arrives.
+func (w *World) stepView(p *Player, to world.Pos, d world.Direction) {
 	kept := p.known[:0]
 	for _, id := range p.known {
 		if c, ok := w.creaturePos(id); !ok || id == p.id || Sees(to, c) {
@@ -325,16 +369,20 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 		}
 		w.sendSlice(p, x0, int(to.Y)+dy*ViewHalfH, wd, 1)
 	}
-	w.tutorialEvent(p, content.TriggerWalk, "")
 }
 
 // Teleport moves p anywhere (another floor included). Loop goroutine only. It does not
-// check the destination: callers (stairs, spells, GM commands) must pass a walkable,
-// free tile.
+// check the destination: callers (portals, boats, GM commands) must pass a walkable,
+// free tile. Landing on it does not trigger a portal there.
 func (w *World) Teleport(p *Player, to world.Pos) {
 	if w.byClient[p.client] != p {
 		return
 	}
+	w.relocate(p, to)
+}
+
+// relocate is Teleport for a player known to be in the world.
+func (w *World) relocate(p *Player, to world.Pos) {
 	p.stopWalk()
 	w.disappearFromObservers(p)
 	w.unindex(p)
@@ -399,11 +447,18 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 			w.slow = append(w.slow, p)
 		}
 	}
+	// T5.4: what questRecheck put on a house floor (a reward that did not fit, after
+	// checkHouses flushed) is written in this tick, not with whatever command comes next:
+	// that command's player did not change the house.
+	w.flushHouses()
 	for _, p := range w.slow {
 		w.log.Warn("session: slow client dropped", "character", p.charID, "creature", p.id)
 		// T5.2: under its PvP lock it stays link-dead (a full queue is no way out of a fight).
 		w.disconnect(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_SLOW_CLIENT, true)
 	}
+	// T5.3: what the server gave away for players outside their commands this tick (a
+	// quest reward of a kill, a gift of questRecheck above), now that their state is whole.
+	w.settleGivers()
 	// Removing slow players may have queued CreatureDisappear for others: they go out
 	// with the next tick's batch.
 }

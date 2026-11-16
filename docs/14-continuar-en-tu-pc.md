@@ -41,9 +41,8 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Confirmar CC BY 4.0 para los mapas que manda la comunidad | Portal de mapas (T4.5) | `04-map-editor-and-ai.md` |
 | Cuenta de AWS y dominio | T1.18: servidor público | `09-deployment-aws.md` |
 | Apps OAuth de Google y Discord, y SMTP | Login social y emails (T2.1) | `12-local-development.md` |
-| Cuenta bot de GitHub (token classic con `public_repo`, o `repo` mientras el repo sea privado; fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
+| Cuenta bot de GitHub (token classic con `public_repo`, fuera de MAINTAINERS) | Que los mapas aprobados se vuelvan PRs | `09-deployment-aws.md` |
 | Protección de la rama `main` y la variable `DESKTOP_SERVER_URL` del repo | Seguridad y builds de escritorio | `09-deployment-aws.md` |
-| Decidir cuándo volver a hacer público el repo (privado desde el 2026-11-15) | En privado, con GitHub Free: la CI gasta minutos del plan (2.000/mes), no se puede proteger `main`, el bot de mapas necesita `repo` y las imágenes de GHCR piden `docker login` | `09-deployment-aws.md` |
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
@@ -80,64 +79,123 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - tests que digan lo que prueban y e2e que confirmen la respuesta del servidor, no
     solo el estado local del cliente.
 - **Si la CI falla sin crear jobs**, es un problema de GitHub Actions: relánzala.
+- **E2E en la CI:** el runner (2 CPU, sin GPU: WebGL por software) corre la suite varias
+  veces más lento que tu PC. Cada test que falla se reintenta una vez; si pasa al
+  reintento, el reporte lo marca `flaky`. Un `flaky` es un bug (casi siempre una espera
+  mal puesta en el test, a veces del cliente): baja el artefacto `playwright-report`, mira
+  el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
 - **Móvil** (T5.6, falta probarlo en un dispositivo real): login de Android sin llavero
   (hay que entrar de nuevo en cada arranque) y el selector de servidor reinicia la app.
-  Detalle en `15-movil.md`. El pad (`.touch-pad-dock` en `touch.css`) suma
-  `env(safe-area-inset-*)` aunque `.game` ya tiene ese padding: en un iPhone con barra de
-  inicio o muesca, en horizontal, el margen se cuenta dos veces (la emulación no lo ve:
-  ahí el inset es 0).
+  Detalle en `15-movil.md`. El área segura (muesca, esquinas, barra de inicio) ya se
+  cuenta una sola vez para el pad, la hotbar, los botones de zoom y el banner del item
+  elegido (los mide un E2E con insets de CDP). Falta para lo que se posiciona contra la
+  pantalla entera (`position: fixed`): las ventanas sobre el mapa en teléfono (diálogo,
+  crafteo, mercado, casa, intercambio) y el menú del toque largo (`menuPlacement` deja
+  8 px del borde de la pantalla, no del área segura). En un iPhone horizontal pueden
+  quedar un poco bajo la muesca o la barra de inicio; se ve solo en un dispositivo real
+  o con el override de CDP.
+- **Atlas sin reintento:** si el `fetch` de `/atlas/atlas.json` falla una vez
+  (`Atlas.load` en `packages/renderer`, llamado por `createGameCanvas`), el canvas no se
+  crea y el juego queda en "Conectando…" para siempre, con la sesión abierta. Se vio una
+  vez en `make e2e` local (Windows: `ERR_CONNECTION_REFUSED` contra el Vite de desarrollo
+  en "T5.1"; la corrida siguiente pasó entera). En una red móvil puede pasarle a un
+  jugador: un par de reintentos con espera, o un aviso con "Reintentar", lo resolvería.
 - **Mercado en vivo:** cada refresco manda la ventana entera (`MarketUpdate` completa),
   no un delta (costo y tope en docs/07). Pasar a deltas necesita un mensaje nuevo y que el
   cliente fusione las listas; hacerlo solo si una medición con muchos espectadores de un
   mismo libro lo pide (antes, subir `market.push_every_ms`).
-- **Falla segura del comercio (a revisar, anterior a esta revisión):** un personaje
-  marcado vuelve a su **último guardado escrito**, que puede ser anterior al transfer
-  descartado. Lo que soltó **sin estar en espera** entre ese guardado y el transfer (algo
-  tirado al suelo que otro levantó, las monedas de una venta a un NPC que cayeron a sus
-  pies) vuelve a estar en su fila de la base y también en la de quien lo levantó. La
-  espera (docs/01) solo cubre lo que pasa mientras hay un transfer sin confirmar. Es raro
-  (un transfer descartado es un bug o la base caída al apagar) y lo ven las alertas de
-  economía; una salida sería escribir el estado del personaje justo antes de cada
-  transfer, a costa de una escritura más por transfer.
+- **Caída con la calle de por medio (límite general, no del comercio):** un transfer
+  descartado ya no duplica lo que su personaje soltó antes al suelo público: su estado del
+  final de ese comando (o tick) se escribe antes del transfer (docs/01, "Guardado antes
+  del transfer").
+  Queda el caso de una **caída** (o de la base caída al apagar, que se trata como una):
+  lo que alguien tiró a la calle y otro levantó puede quedar en las dos filas si el
+  guardado de quien lo levantó entró y el de quien lo tiró no. Es el límite de guardar
+  por personaje con el suelo en memoria, igual sin comercio. Lo mismo si la base rechaza
+  el snapshot mismo, no solo el transfer (lo avisa `PersistenceDataLost`). Una salida
+  sería reservar lo que se tira a la calle hasta escribir el estado de quien lo tiró (una
+  escritura por tirada, acotada por jugador, y una demora para levantarlo); hacerlo solo
+  si las alertas de economía lo muestran.
 - **Mundo:**
-  - el cartel de la puerta sellada (`text.volcan.gate_sign`, piso 8) no tiene item todavía,
-    y su texto dice que la puerta no tiene cerradura: hay que reescribirlo para la puerta
-    con llave antes de ponerlo;
-  - los carteles de Puerto y del Bosque están solo en `texts.yaml`: falta su item
-    `*_sign` para que se vean y se lean (como los de Brasal). Cada cartel cuesta hoy un
-    item y un ID; a futuro `mapcompile` podría llevar `texts.yaml` a `world.bin` y el
-    servidor leerlo, sin items por cartel;
-  - los pozos de lava de la Isla Volcánica son algo rectangulares (solo estético);
-  - las escaleras y portales de `portals.yaml` no existen en el servidor (ni en
-    `world.bin`): a los pisos 8 (minas de Puerto y Bosque, la mina y la forja de la Isla
-    Volcánica, con su puerta con llave) hoy solo se llega con `/tp` de staff;
-  - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit` en
-    `server/internal/session`) ya no entra a la sala de una puerta con llave, pero sí
-    puede dejar a alguien en un bolsillo sellado sin puerta (menos de 10 casillas, que el
-    validador no avisa) si es la casilla libre más cercana. Arreglo posible: un índice de
-    área conexa por casilla armado al arrancar (como `roomOf`), y que la búsqueda solo
-    acepte casillas del área del origen. No se hizo con las puertas porque cuesta memoria
-    por casilla caminable de todo el mundo y hoy no hay bolsillos así junto a templos,
-    llegadas o casas;
-  - **puertas con llave en ciclo** (`02-game-design.md`, "Sala compartida"): hoy se
-    rechazan aunque sean seguras (un edificio con puerta trasera a un patio que tiene su
-    propio portón al campo; un hall entre el campo y una bóveda con su propio portón),
-    porque `sameOutside` exige unir los afueras sin cruzar puertas con llave. Mejora
-    futura, igual en `session/door.go` y `packages/map-format/src/doors.ts`, con casos
-    nuevos en `door-rooms.json`: un **chequeo de escape**. Los nodos son las componentes
-    del mapa con las puertas con llave como muro; de la sala de cada puerta `d` hay una
-    arista a todos los lados de `d`; el "mundo" es la componente del templo o de las
-    llegadas. Se exige que cada lado de cada puerta con llave alcance el mundo, más el
-    chequeo de llave entre una sala y el afuera de otra puerta. La cadena R–B–X–E–Y (sala
-    R, puerta B, sala X, puerta E, Y una bóveda más grande que X) se tiene que seguir
-    rechazando;
-  - `resource.reach` e `inventory.reach` no tienen tope en los esquemas
-    (`items.schema.json`, `content/resources.go`, `content/balance.go`). Como recolección y
-    crafteo ya no miran fuera de la vista (±8 x, ±6 y), un alcance de 7 o más respondería
-    `not_possible` sin aviso: falta `maximum: 6` y su chequeo en Go. De paso, sacar las
-    comprobaciones de piso que sobran en `gathering.go` (la guarda de vista ya las cubre).
+  - cada cartel cuesta un item y un ID (hoy todos los de Puerto, el Bosque y la Isla
+    Volcánica, incluido el de la puerta con llave del piso 8, tienen su `*_sign`; solo el
+    del templo de `testisle` no). A futuro `mapcompile` podría llevar `texts.yaml` a
+    `world.bin` y el servidor leerlo, sin items por cartel;
+  - portales (`02-game-design.md` "Cambiar de piso"): el servidor ya mueve por escaleras,
+    escaleras de mano, agujeros, sogas y teletransportes, pero el mundo solo usa
+    escaleras. Para poner los otros falta su item con arte propio (`add-item` +
+    `tools/spritegen`): hoy solo existen `stairs_down` / `stairs_up`, y un portal sin item
+    es una casilla de suelo cualquiera a la vista (el cliente igual usa una escalera de
+    mano o una soga sin item con click derecho). Tampoco caen por una escalera, un agujero
+    o un teletransporte los items que se tiran sobre su casilla (en Tibia caen): quedan
+    ahí, a la vista, y nadie pisa esa casilla sin moverse. Cada paso por un portal manda
+    un `FullMapView` (hoy unos 950 B/s subiendo y bajando sin parar, docs/07): una isla
+    con pisos sobre el 7 lo haría más pesado, conviene medirlo de nuevo cuando exista. En
+    escritorio el click derecho sobre una escalera de mano siempre trepa: un cadáver
+    encima que no se puede mover solo se abre con el toque largo (hoy no hay escaleras de
+    mano en el mundo; una salida sería que Ctrl+click derecho use el item de arriba);
+  - chequeo de escape de las puertas con llave (`02-game-design.md`, "Chequeo de
+    escape"): cuenta como salida de un área solo la puerta de una sala desde adentro y los
+    portales que no piden nada (escalera, escalera de mano, agujero, teletransporte); las
+    casas y las entradas de escaleras, agujeros y teletransportes son muro, y los puntos de
+    soga, los teleports de diálogo y los viajes en barco no son aristas. El mundo son solo
+    los templos. **Para que lo mire el dueño:** es más estricto que el brief, que contaba
+    también las llegadas de barco; una llegada es una entrada, no una salida (con ella,
+    una bóveda sin capitán pasaba y quien se colara adentro podía quedar encerrado). En el
+    mapa de hoy no cambia nada. Si se quieren de vuelta, hay que sumar también la salida
+    en barco como arista. Un diseño que solo deje salir por esos caminos se rechaza aunque
+    sea seguro; si hace falta, sumarlos como aristas, igual en `session/door.go`
+    (`escapeWay`, `portalSources`) y `packages/map-format/src/doors.ts` (`ESCAPE_WAYS`,
+    `portalSources`), con casos nuevos en `door-rooms.json`. El chequeo de llaves es
+    conservador (supone a un jugador en cualquier área fuera de las salas y en cualquier
+    casa), y una escalera de mano cuenta solo desde el área de su casilla;
+  - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) solo acepta
+    casillas del área del origen (desde una escalera, un agujero o un teletransporte, las
+    áreas de al lado), pero si el origen no está en ningún área por otra razón (entrar al
+    juego sobre una casilla de casa o de una puerta con llave, un `/tp` del personal) solo
+    descarta las salas (`searchFrom` y `areaAllows` en `server/internal/session/area.go`):
+    todavía puede dejar a alguien en un bolsillo cerrado por paredes o del otro lado de una
+    pared. Arreglo posible: que un origen en una casa use el área de la salida de la casa.
+    Ningún portal puede salir de una puerta con llave ni llegar a ella, pero una llegada de
+    barco o un teleport de diálogo sobre una puerta con llave colocada abierta todavía se
+    acepta (`checkRooms` solo mira las salas): quien llega queda en la puerta, como quien
+    la cruza abierta; si hace falta, rechazarlos igual que los extremos de portal.
+  - **Para que lo decida el dueño (revisión del lote 3):**
+    - portales de la comunidad entre islas: hoy el chequeo de parcelas los rechaza
+      (`cross_island`, `packages/map-format/src/patch/plots.ts`), la opción segura, porque
+      un teletransporte entre islas se saltea el barco, su precio y sus requisitos y
+      `travel.combat_block_ms`. Si se quieren, hace falta una regla de viaje para ellos
+      (como mínimo el bloqueo de combate del barco en el servidor) antes de aflojar el
+      chequeo. En "Mis envíos" el rechazo se ve como el genérico de fuera de parcelas
+      (`outside_plot`): un código propio necesita i18n, cliente y servidor;
+    - agujeros y teletransportes sin salida: `make validate` solo **advierte** cuando desde
+      su destino no se llega a un templo sin llaves ni herramientas (un pozo del que se
+      sale con soga es un diseño válido, a la manera de Tibia). Si se prefiere que sea
+      error, o exigir siempre una salida sin soga, es cambiar la advertencia de
+      `checkPortalExits` (`validate.ts`) por un error;
+    - quien veía a un jugador tomar una escalera recibe el paso y enseguida su
+      desaparición, y el cliente lo borra en el acto: no ve el paso sobre la escalera. Se
+      podría diferir el borrado hasta que termine la animación (solo para dibujar, sin que
+      siga en la lista de batalla ni se pueda atacar);
+    - con una tecla de movimiento mantenida, un paso rechazado no se reintenta hasta volver
+      a pulsarla (así no se repite el aviso de la escalera o de la puerta de una casa).
+      Eso incluye un paso rechazado porque alguien estaba en la casilla y después se fue.
+  - un comando que suelta algo a la calle **dentro** de una pila o bolsa ajena y además
+    cambia una casa todavía guarda el snapshot aparte, antes de la escritura de la casa,
+    y lo registra con nivel error (`settleGave`): no se le puede reservar lo ajeno. Hoy
+    ningún comando lo hace (solo un `MoveItem` suelta en algo que no se le puede reservar,
+    y ningún `MoveItem` cambia además una casa): es una guarda;
+  - el caso real que justificó reservar lo soltado con la escritura de la casa (una runa
+    del suelo de la casa usada desde la calle que mata a un monstruo de una quest de
+    muertes cuya recompensa no entra) se prueba con `InputAndGiftForTest`, que lo simula;
+    falta un test de simulación con la runa, el monstruo y la quest de verdad;
+  - una llegada de barco o un `teleport` de diálogo cuyo destino es una casilla de casa
+    ahora deja al jugador fuera de la casa (o el teleport no se ofrece si no hay lugar a 1
+    casilla), pero el servidor no lo rechaza al cargar, como sí rechaza un extremo de
+    portal en una casa (`world.NewMap`). Conviene rechazarlo igual en `session.New` y en
+    `make validate`.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

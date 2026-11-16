@@ -47,6 +47,14 @@ type walkableDump struct {
 	Rows   []string `json:"rows"`
 }
 
+// portalDump is a portal as testdata/walkable.ts prints it.
+type portalDump struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	From [3]int `json:"from"`
+	To   [3]int `json:"to"`
+}
+
 // parityEnv enables TestWalkableParityWithMapFormat. It needs node and the pnpm workspace
 // installed, which plain `go test` does not: run it with `make test-parity`.
 const parityEnv = "RPG_MAPFORMAT_PARITY"
@@ -116,6 +124,28 @@ func TestWalkableParityWithMapFormat(t *testing.T) {
 			if walkable == 0 {
 				t.Fatal("no walkable tiles: the comparison is vacuous")
 			}
+
+			// The portals map-format loads are the ones mapcompile writes to world.bin.
+			cmd = exec.Command(node, "--experimental-strip-types", "--no-warnings", "testdata/walkable.ts", abs, "portals")
+			stderr.Reset()
+			cmd.Stderr = &stderr
+			out, err = cmd.Output()
+			if err != nil {
+				t.Fatalf("map-format portals: %v\n%s", err, stderr.String())
+			}
+			var portals []portalDump
+			if err := json.Unmarshal(out, &portals); err != nil {
+				t.Fatalf("parse map-format portals: %v", err)
+			}
+			var got []portalDump
+			for _, pt := range m.Portals() {
+				got = append(got, portalDump{ID: pt.ID, Kind: pt.Kind.String(),
+					From: [3]int{int(pt.From.X), int(pt.From.Y), int(pt.From.Z)},
+					To:   [3]int{int(pt.To.X), int(pt.To.Y), int(pt.To.Z)}})
+			}
+			if len(portals) == 0 || !reflect.DeepEqual(got, portals) {
+				t.Fatalf("mapcompile portals %+v, map-format %+v", got, portals)
+			}
 		})
 	}
 }
@@ -181,6 +211,36 @@ func TestCompileMiniworldFlags(t *testing.T) {
 	}
 	if n := len(is.Sectors()); n != 3 {
 		t.Errorf("mini has %d sectors, want 3", n)
+	}
+	want := []world.Portal{
+		{ID: "mini_cave_down", Kind: world.PortalStairs, From: p(66, 54, 7), To: p(66, 55, 8)},
+		{ID: "mini_cave_up", Kind: world.PortalStairs, From: p(66, 54, 8), To: p(66, 55, 7)},
+		{ID: "mini_shortcut", Kind: world.PortalTeleport, From: p(70, 54, 7), To: p(72, 54, 7)},
+	}
+	if !reflect.DeepEqual(is.Portals, want) {
+		t.Errorf("portals = %+v, want %+v", is.Portals, want)
+	}
+	if pt := m.PortalAt(p(66, 54, 8)); pt == nil || pt.ID != "mini_cave_up" || !m.MovesOnStep(p(70, 54, 7)) {
+		t.Errorf("PortalAt(66,54,8) = %+v", pt)
+	}
+}
+
+// TestCompilePortals: the stairs of the real islands (portals.yaml) reach world.bin, so the
+// mines on floor 8 are reachable without a staff teleport: the volcanic mine's stairs at
+// 3692,5796 go down and come back up next to where they started.
+func TestCompilePortals(t *testing.T) {
+	m := mustCompile(t, repoRoot(t))
+	down, up := m.PortalAt(p(3692, 5796, 7)), m.PortalAt(p(3692, 5796, 8))
+	if down == nil || down.ID != "volcan_mine_down" || down.Kind != world.PortalStairs || down.To != p(3692, 5797, 8) {
+		t.Fatalf("volcanic mine stairs down = %+v", down)
+	}
+	if up == nil || up.ID != "volcan_mine_up" || up.Kind != world.PortalStairs || up.To != p(3692, 5797, 7) {
+		t.Fatalf("volcanic mine stairs up = %+v", up)
+	}
+	for _, id := range []string{"puerto", "bosque", "volcan", "testisle"} {
+		if is := m.Island(id); is == nil || len(is.Portals) == 0 {
+			t.Errorf("island %s has no portals", id)
+		}
 	}
 }
 
@@ -300,6 +360,7 @@ func TestCompileErrors(t *testing.T) {
 	const island = "world/islands/mini/island.yaml"
 	const worldYAML = "world/world.yaml"
 	const chunk = "world/islands/mini/chunks/z07/c0001_0001.json"
+	const portals = "world/islands/mini/portals.yaml"
 	cases := []struct {
 		name    string
 		files   []string
@@ -317,6 +378,10 @@ func TestCompileErrors(t *testing.T) {
 		{"duplicate numeric id", []string{"data/ids.lock.yaml"}, "coin: 10", "coin: 9", `share numeric ID 9`},
 		{"unknown zone", []string{"world/islands/mini/zones.yaml"}, "type: no_logout", "type: lava", `unknown type "lava"`},
 		{"unknown island dir", []string{worldYAML}, "id: mini", "id: nope", "nope/island.yaml"},
+		{"unknown portal kind", []string{portals}, "kind: teleport", "kind: ramp", `unknown kind "ramp"`},
+		{"portal outside the world", []string{portals}, "x: 72, y: 54, z: 7", "x: 72, y: 54, z: 16", "outside the world"},
+		{"portal into nothing", []string{portals}, "x: 72, y: 54, z: 7", "x: 72, y: 33, z: 8", "not a walkable tile"},
+		{"stairs on one floor", []string{portals}, "to: { x: 66, y: 55, z: 8 }", "to: { x: 66, y: 55, z: 7 }", "must change floor"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -145,7 +145,9 @@ su único dueño. Todo cambio sale como `Transfer` (ver "Transacciones") con `Ho
   reemplaza en la base: idempotente) y los snapshots de esos jugadores. Se vacía al final
   de cada comando (`Input`), antes de numerar cualquier otro transfer (`transfer`,
   `houseTransfer`), antes de tomar cualquier snapshot (`snapshot`), al liberar o
-  transferir una casa, al sacar a un jugador del mundo y al final del tick: los ids de los
+  transferir una casa, al sacar a un jugador del mundo y al final del tick (también después
+  de `questRecheck`, que puede dejar una recompensa en el suelo de una casa cuando
+  `checkHouses` ya vació las de ese tick): los ids de los
   transfers crecen en el orden en que se encolan, un lote nunca lleva un snapshot a mitad
   de otra operación y un autoguardado nunca escribe un inventario sin la casa que lo
   explica. `SaveTransfer` acepta un id igual al último escrito como reintento (no aplica
@@ -208,7 +210,8 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     outcome="rejected|abandoned|skipped"}` y la alerta `PersistenceDataLost`
     (tabla de alertas de este doc). Al reiniciar se carga lo que tiene la base: los
     marcados pierden todo lo jugado desde su **último guardado escrito** (no solo desde el
-    transfer).
+    transfer), que no es anterior a lo que dieron al suelo público salvo en una caída o
+    con la base caída al apagar (ver "Guardado antes del transfer" más abajo).
   - **Bajas con guarda:** cerrar una oferta (cancelar, vencer, `/marketcancel`) lleva las
     unidades que el loop cree que quedan (`DeleteMarketOffer ... AND amount = $units`). Si
     un llenado de esa oferta no se guardó, la base tiene más: el cierre falla entero
@@ -317,13 +320,92 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
       base, y lo que gana jugando (botín de un monstruo, experiencia) es juego nuevo que
       el relogueo al último guardado pierde, como en cualquier caída. Fuera de eso, los
       caminos de hoy por los que algo suyo llega a otro personaje (intercambio, mercado,
-      casas, suelo, cadáver) están cubiertos; uno nuevo tiene que respetar la espera
-      (server/CLAUDE.md), y las alertas de economía (T4.1) siguen como red.
+      casas, suelo, cadáver) están cubiertos, mientras espera por la espera y antes por el
+      guardado de abajo; uno nuevo tiene que respetar los dos (server/CLAUDE.md), y las
+      alertas de economía (T4.1) siguen como red.
+  - **Guardado antes del transfer (`session/hold.go`, `gaveAway`).** La espera cubre lo
+    que pasa mientras un transfer no está confirmado, pero un marcado vuelve a su
+    **último guardado escrito**, que puede ser anterior. Lo que dio **antes** del
+    transfer sin estar en espera (lo tiró a la calle o a un contenedor de la calle, o el
+    servidor se lo dejó a los pies fuera de una casa: las monedas de una venta a un NPC,
+    una fabricación o una recompensa que no entró) estaría entonces en esa fila y en la
+    de quien lo levantó y se guardó: duplicado. Por eso cuando algo suyo llega al suelo
+    público (`MoveItem` de algo que carga; `holdGround` fuera de una casa, también
+    estando en espera) queda marcado (`gaveAway`) y el loop toma su snapshot **al final de
+    ese comando** (`Input`), o del tick si lo soltó el servidor fuera de un comando (una
+    recompensa de quest por una muerte de monstruo): `settleGivers`, en memoria
+    (`Player.pre`). Ahí su estado está entero: las demás acciones del diálogo, el paso de
+    quest que completa al llegar al nodo siguiente, las demás pilas del mismo regalo (si
+    se tomara cuando cae la primera pila, un marcado podría volver a un estado con la
+    quest sin terminar y cobrar dos veces la misma recompensa). Lo que soltó un comando
+    que no es un `Input` (la recompensa del tutorial en un `Join`) y sigue pendiente se
+    asienta también **al principio** del próximo `Input` (`playerCommand`), antes de que
+    ese comando cambie una casa: así ese snapshot nunca lleva lo que el comando saca de
+    una casa. Su **próximo transfer** lo encola primero (`transferSnapshot`, delante del
+    trabajo del transfer): el Saver lo escribe antes, así un transfer descartado o
+    saltado no lo devuelve a un guardado anterior a lo que dio. Lo que garantiza eso es el
+    asentamiento del principio de cada comando del jugador (asienta a todos los que
+    soltaron algo, no solo al que manda el comando) y el de `transferSnapshot`; el del
+    final del comando y el del final del tick solo lo toman antes, así es el estado justo
+    después de lo que dio (lo fija `TestSaveBeforeTransferIsFromTheGiftsCommandOrTick`).
+    - Si el transfer se descarta o se salta (también el intercambio de un compañero
+      marcado, por el punto fijo), el personaje vuelve a ese estado: sin lo que dio y sin
+      el transfer. Si ya estaba marcado de antes, ese snapshot se salta como cualquier
+      otro trabajo suyo (la espera no lo dejó soltar nada desde entonces).
+    - Una sola vez: cualquier snapshot posterior del personaje (un autoguardado, el final
+      al salir o al apagar, el de su muerte, el de un transfer) lo reemplaza, porque ya
+      entra en la cola detrás de lo que dio. Un relogueo, el link-dead y el reinicio no
+      cambian nada: el snapshot final lo reemplaza y el login nuevo arranca sin él.
+    - Se numera al tomarlo, no al encolarlo: su acuse vale solo por lo anterior. No
+      termina la espera del transfer que va detrás ni libera lo que sacó de una casa a la
+      calle: esa reserva (`leftHouse`) toma el `Seq` del snapshot del personaje en la
+      escritura de la casa misma (`numberLeft`, en `transferSnapshot`), no el del próximo
+      snapshot, así que sigue hasta el acuse de esa escritura aunque el guardado de antes
+      se numere entre el movimiento y la escritura.
+    - Ningún transfer deja nada en el suelo público en su propio comando: comprueba antes
+      que todo entra (`canBuy`, `canReceive`, `moneyThatFits`). Si lo hiciera, el
+      snapshot (que `transferSnapshot` tomaría en el acto) llevaría medio transfer y se
+      escribiría fuera de su transacción. `transferSnapshot` registra con nivel error un
+      transfer que encuentra algo soltado sin asentar fuera de la escritura de una casa
+      (solo los comandos del jugador hacen transfers de jugadores, y cada uno asienta antes
+      a todos).
+    - Un mismo comando **sí** puede soltar algo a la calle y cambiar una casa: el dueño,
+      parado en la calle, usa una runa que dejó en el suelo de su casa; el monstruo muere,
+      la recompensa de la quest no entra y cae a sus pies; después la runa pierde la carga
+      en el suelo de la casa. Un snapshot de lo que dio saldría con la escritura de la casa
+      y se escribiría aparte, antes: si esa escritura se descarta, el dueño vuelve a ese
+      snapshot (con la muerte hecha) y la casa a su última escritura (con la carga): una
+      carga gratis; y algo sacado de la casa a la mochila quedaría en dos filas. Por eso
+      ahí no se guarda ese snapshot: lo que soltó a la calle queda **reservado** al
+      personaje como lo que sale de una casa (`reserveGiven`, con el `Seq` de su snapshot
+      en esa escritura, `numberLeft`). Si la escritura se descarta, vuelve a su guardado de
+      antes del comando y la reserva no se libera nunca (nadie más lo levanta). Si lo
+      soltara en algo que no se le puede reservar (una pila o bolsa de la calle que no le
+      está reservada, aunque sea suya) se tomaría el snapshot como antes y `settleGave` lo
+      registraría con nivel error; solo un `MoveItem` suelta así y ningún `MoveItem` cambia
+      además una casa, así que es una guarda que hoy ningún flujo alcanza. Otro jugador que
+      va en esa misma escritura (no el del comando) sigue guardando aparte el snapshot de lo
+      que soltó: a la casa solo le llegó algo suyo que el servidor le dejó a los pies, nada
+      de la casa entró en su estado, y si la escritura se descarta como mucho se pierde eso.
+    - En el suelo de una casa no hace falta: lo que se deja ahí se escribe con el
+      snapshot de quien lo movió (`flushHouses`, un transfer que también encola antes el
+      snapshot pendiente de ese personaje).
+    - Costo: una escritura más solo en el primer transfer de un personaje después de
+      soltar algo al suelo público, y un snapshot en memoria por comando (o tick) en que
+      soltó algo, no por pila (docs/07).
+    - **Límite: una caída no es un transfer.** Con la base caída al apagar, el apagado es
+      una caída (ver arriba): ese snapshot falla con el transfer de atrás (el Saver lo
+      abandona y después marca al personaje por el transfer). Tampoco cubre que la base
+      rechace ese snapshot mismo (`ErrPermanent` en un guardado no marca a nadie). Como en
+      cualquier caída, lo que alguien tiró a la calle y otro levantó puede quedar en las
+      dos filas si el guardado de quien lo levantó entró y el de quien lo tiró no: es el
+      límite general de guardar por personaje con el suelo en memoria (docs/14).
 - Una oferta de un item retirado de `data/` se cierra al arrancar (un transfer: borrar la
   oferta y, si era de compra, devolver el oro al buzón).
 - **Presupuesto de escritura:** cada transfer escribe a sus personajes enteros (como un
-  autoguardado); por eso el intercambio no se confirma vacío y tiene anti-flood, y el
-  mercado también (docs/07).
+  autoguardado), más el guardado de antes de quien soltó algo al suelo público desde su
+  último snapshot (como mucho uno por personaje y transfer); por eso el intercambio no se
+  confirma vacío y tiene anti-flood, y el mercado también (docs/07).
 - La otra parte de una operación del mercado no necesita snapshot: lo que recibe va a su
   buzón, que es una fila del mercado. Por eso funciona aunque esté desconectada.
 

@@ -616,6 +616,8 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	}
 
 	pickedUp := toOwner == p && it.carriedBy() != p
+	// T5.3 fail-safe: something p carries goes where no save has it (hold.go gaveAway).
+	gave := it.carriedBy() == p && w.publicGround(to)
 
 	// Run it: take the units out of their place and put them in the new one.
 	before := p.carried()
@@ -645,6 +647,15 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 	}
 	if from.kind == locSlot || to.kind == locSlot {
 		w.equipmentChanged(p)
+	}
+	if gave {
+		// Reservable only as a pile of its own or into what is reserved to p already
+		// (hold.go reserveGiven): never a stranger's pile or bag.
+		var root *Item
+		if r := landed.root(); r.onGround && (merge == nil && to.kind == locGround || w.heldFor(p, r)) {
+			root = r
+		}
+		w.gaveAway(p, root)
 	}
 	// KindOther, not KindItem: a move has no cooldown, and must not clear a refused use,
 	// gathering or crafting try (earlyTry).
@@ -876,9 +887,10 @@ func (w *World) forgetContainers(p *Player) {
 
 // useItem runs a UseItem intent: containers open or close, consumables heal and are
 // eaten, runes are cast (T1.9), crafting stations of the map open (T3.4), doors of the
-// map open and close (door.go).
+// map open and close (door.go), ladders are climbed (portal.go).
 func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
-	if w.useDoor(ctx, p, m) || w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.useStation(p, m) {
+	if w.useDoor(ctx, p, m) || w.useHouseDoor(ctx, p, m) || w.useMarketBoard(ctx, p, m) || w.usePortal(ctx, p, m) ||
+		w.useStation(p, m) {
 		return
 	}
 	it, from := w.itemAt(p, m.GetFrom(), m.GetItemId(), m.GetStackIndex())

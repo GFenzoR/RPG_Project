@@ -3,6 +3,7 @@ package session
 import (
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
+	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
@@ -230,6 +231,13 @@ func (w *World) HitByForTest(p *Player) []int64 {
 // SetPvPLockForTest puts p in a PvP fight until tick (tests only, loop goroutine).
 func (w *World) SetPvPLockForTest(p *Player, until game.Tick) { p.fightUntil = until }
 
+// SetAttackLockForTest gives p the lock of an attacker until tick: no protection zone
+// (tests only, loop goroutine).
+func (w *World) SetAttackLockForTest(p *Player, until game.Tick) { p.lockUntil = until }
+
+// MonsterCanEnterForTest reports whether a monster may stand on p (tests only).
+func (w *World) MonsterCanEnterForTest(p world.Pos) bool { return w.monsterCanEnter(p) }
+
 // MarketOfferAmount returns the units left of offer id, or -1 if it is not in the book.
 func (w *World) MarketOfferAmount(id int64) int {
 	if o := w.offers[id]; o != nil {
@@ -328,14 +336,23 @@ func (w *World) DoorRoomSize(door world.Pos) int {
 
 // Why a locked door has no room (doorRoom), for errors.Is in tests.
 var (
-	ErrDoorWalled       = errDoorWalled
-	ErrDoorInTheOpen    = errDoorInTheOpen
-	ErrDoorTruncated    = errDoorTruncated
-	ErrDoorTie          = errDoorTie
-	ErrDoorOtherKey     = errDoorOtherKey
-	ErrDoorOtherOutside = errDoorOtherOutside
-	ErrDoorOutsideFar   = errDoorOutsideFar
+	ErrDoorBlocked   = errDoorBlocked
+	ErrDoorOnPortal  = errDoorOnPortal
+	ErrDoorWalled    = errDoorWalled
+	ErrDoorInTheOpen = errDoorInTheOpen
+	ErrDoorTruncated = errDoorTruncated
+	ErrDoorTie       = errDoorTie
+	ErrDoorOtherKey  = errDoorOtherKey
+	ErrDoorNoEscape  = errDoorNoEscape
+	ErrDoorBypassed  = errDoorBypassed
 )
+
+// AreaOf returns the area of p (area.go; tests only): 0 for none.
+func (w *World) AreaOf(p world.Pos) int32 { return w.areaOf(p) }
+
+// Areas returns how many areas the map has and how many sectors hold a tile of one
+// (tests only: the memory of the index, docs/07).
+func (w *World) Areas() (areas int32, sectors int) { return w.areaCount, len(w.areas) }
 
 // MarketViewers returns how many open market windows show item's book (mkWatch).
 func (w *World) MarketViewers(item uint16) int { return len(w.mkWatch[item]) }
@@ -346,3 +363,43 @@ func (w *World) InFlightForTest(charID int64) bool { return w.inFlight[charID] !
 
 // HeldGroundForTest returns how many ground items are reserved to a held character.
 func (w *World) HeldGroundForTest() int { return len(w.heldGround) }
+
+// InputAndGiftForTest is one command of cl's player that runs msg and then drops n of
+// item id at its feet (they do not fit), as one command that changes a house and gives
+// something away does (a rune of the house floor used from the street that kills a quest
+// monster, hold.go). Tests only.
+func (w *World) InputAndGiftForTest(cl Client, msg *pb.ClientMessage, id string, n int) game.Command {
+	return game.CommandFunc(func(ctx *game.TickContext) {
+		p := w.byClient[cl]
+		w.playerCommand(p, func() {
+			w.input(ctx, p, msg)
+			c := p.capacity
+			p.capacity = 0
+			w.GiveForTest(p, id, n)
+			p.capacity = c
+		})
+	})
+}
+
+// GiftAndInputForTest is one command of cl's player that drops n of item id at its feet
+// (they do not fit) and then runs msg: a give-away before the command's own transfer,
+// which no command makes (hold.go transferSnapshot logs it). Tests only.
+func (w *World) GiftAndInputForTest(cl Client, id string, n int, msg *pb.ClientMessage) game.Command {
+	return game.CommandFunc(func(ctx *game.TickContext) {
+		p := w.byClient[cl]
+		w.playerCommand(p, func() {
+			c := p.capacity
+			p.capacity = 0
+			w.GiveForTest(p, id, n)
+			p.capacity = c
+			w.input(ctx, p, msg)
+		})
+	})
+}
+
+// UnlistForTest drops p from the index of clients while it stays in the world: the state
+// in which Teleport does nothing (tests only).
+func (w *World) UnlistForTest(p *Player) { delete(w.byClient, p.client) }
+
+// RelistForTest undoes UnlistForTest.
+func (w *World) RelistForTest(p *Player) { w.byClient[p.client] = p }

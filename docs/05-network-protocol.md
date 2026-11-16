@@ -499,8 +499,9 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
 - Cada paso se valida al ejecutarse: casilla sin suelo, que bloquea o fuera del mundo →
   `WalkRejected{pos, dir}` y se vacía la cola. Si la bloquea **una criatura** durante un
   `WalkPath`, el servidor recalcula con A* hasta el final del camino esquivando
-  criaturas; si no hay camino (o el destino está ocupado) → `WalkRejected`. Un `Walk`
-  de teclado bloqueado por una criatura se rechaza sin recalcular.
+  criaturas (y escaleras, agujeros y teletransportes salvo el final); si no hay camino (o
+  el destino está ocupado) → `WalkRejected`. Un `Walk` de teclado bloqueado por una
+  criatura se rechaza sin recalcular. Un paso sobre una escalera sigue en "Portales".
 - **Cuota de pathfinding por tick:** los recálculos comparten 12 000 nodos expandidos
   por tick y cada búsqueda expande como máximo 2 × 1 500; una búsqueda solo arranca si
   cabe el peor caso. Sin cuota, el jugador espera al tick siguiente (no se rechaza).
@@ -1035,6 +1036,37 @@ Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/do
   `door.not_ready` (usó una puerta hace menos de `inventory.door_cooldown_ms`, 500 ms: la
   abrió, la cerró o se lo rechazaron; un rechazo también empieza la espera).
 
+### Portales (`server/internal/session/portal.go`)
+Reglas en `02-game-design.md` ("Cambiar de piso"); el mapa en `portals.yaml` (docs/03).
+No hay mensajes nuevos en el protocolo: un portal es un teletransporte.
+- **Escalera, agujero, teletransporte:** un paso (`Walk` o un paso de `WalkPath`) sobre su
+  casilla. El paso se valida como cualquiera y además el otro extremo tiene que recibir al
+  jugador. Si lo recibe, el batch de ese tick trae primero el `CreatureMove` del paso
+  (también a quienes lo ven) y después, como un `/tp`: `CreatureDisappear` de lo que el
+  cliente conocía y `FullMapView` del destino (con el piso nuevo); los observadores del
+  origen reciben `CreatureDisappear` y los del destino `CreatureAppear`. Sin `MapSlice`
+  del piso de origen: el `FullMapView` reemplaza la vista. El paso pendiente del cliente
+  queda resuelto por el `FullMapView`, y la cola de pasos se vacía. Subir y bajar sin
+  parar cuesta un `FullMapView` por paso: en la mina volcánica, 471 bytes arriba y 308
+  abajo, unos 950 B/s al ritmo de un nivel 30 (docs/07; lo mide
+  `TestVolcanicMineStairsOnTheMap`).
+- **Escalera de mano:** `UseItem{from: pos, item_id, stack_index}` sobre la casilla con el
+  suelo (índice 0) o un item fijo de su pila, en el mismo piso, a la vista y a
+  `inventory.reach` (si no, `too_far`), con línea de visión (si no, `magic.no_sight`: solo
+  importa con un alcance mayor que 1). Un `item_id` que no es el de la casilla →
+  `inventory.not_possible`. El cliente manda siempre el suelo, aunque haya items encima
+  (un cadáver, monedas): lo de encima no tapa la escalera. Un `UseItem` con el índice de
+  un item tirado encima usa ese item, no trepa. Respuesta: `FullMapView` como arriba.
+- **Punto de soga:** `UseItemOn{from: <la soga>, to: {pos}}` con un item cuyo `tool.use` es
+  `rope`, llevado por el jugador, al mismo alcance y con línea de visión. Un `UseItem`
+  sobre la casilla responde
+  `portal.need_rope`; otra herramienta sigue como recolección (`gather.nothing`).
+- **Rechazos** (nada cambia): `portal.blocked` (ninguna casilla libre en el destino ni a
+  `travel.arrival_radius`; un paso rechazado así llega además con `WalkRejected`),
+  `portal.not_ready` (escalera de mano o soga a mitad de un paso) y
+  `pvp.protection_locked` (atacante con bloqueo hacia una zona protegida).
+- Un portal `boat` no hace nada: se camina sobre él como sobre cualquier casilla.
+
 ### Gremios (T5.1, `server/internal/session/guild.go`)
 Reglas y números en `02-game-design.md` ("Gremios") y `balance.yaml` `guild`.
 - **`GuildCommand{action, name, text, guild_id, war_id}`** (`war_id`: T5.2). Los miembros se nombran por nombre de
@@ -1104,7 +1136,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
 |---|---|
-| `FullMapView` | Área completa visible (al entrar o teletransportarse) |
+| `FullMapView` | Área completa visible (al entrar, teletransportarse o pasar por un portal) |
 | `MapSlice` | Fila o columna nueva al moverse |
 | `TileUpdate` | Cambió la pila de un tile |
 | `CreatureAppear` / `CreatureDisappear` | Entra o sale de la vista |

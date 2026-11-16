@@ -52,6 +52,11 @@ la resuelve en este orden:
 
 Una ruta no puede estar a la vez en `sprites/` y en `sprites.yaml`.
 
+Límites: un PNG (propio o de un pack) puede tener hasta 2048 px de lado, lo que entra en
+una página del atlas. Se mira en la cabecera antes de decodificarlo, porque el check de
+PR de mapas arma el atlas con los sprites del PR (`docs/04`). Un `placeholder.size` llega
+hasta 256 px por lado.
+
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
 sprite píxel a píxel (`tools/spritegen/src/recipes/`). Son obra propia (CC0, ver

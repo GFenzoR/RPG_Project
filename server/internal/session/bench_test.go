@@ -81,68 +81,82 @@ func BenchmarkTickPlayersWalking(b *testing.B) {
 // BenchmarkTickMonsters measures one tick with 100 players walking in a 256x256 area
 // among N aggressive monsters (spawns of 4 every 16 tiles): AI in active sectors,
 // chasing, melee and the AOI events of all of it. Budget as above: p99 < 10 ms at
-// 100 players (docs/07-performance-budget.md).
+// 100 players (docs/07-performance-budget.md). The portal variants add one teleport in a
+// corner: a map with portals reads FlagPortalStep in every A* expansion, reroute and
+// monsterCanEnter (Map.MovesOnStep), which a map without any skips; every island of the
+// real world has portals.
 func BenchmarkTickMonsters(b *testing.B) {
 	for _, n := range []int{256, 1024} {
-		b.Run(fmt.Sprintf("players=100/monsters=%d", n), func(b *testing.B) {
-			m := worldtest.Open(b, 0, 0, 256, 256)
-			step := 256 / int(math.Sqrt(float64(n/4)))
-			var spawns []world.Spawn
-			for y := step / 2; y < 256; y += step {
-				for x := step / 2; x < 256; x += step {
-					spawns = append(spawns, world.Spawn{ID: "s", Center: pos(x, y), Radius: 3, RespawnSeconds: 30,
-						Monsters: []world.SpawnMonster{{Monster: "wolf", Count: 4}}})
-				}
+		for _, portal := range []bool{false, true} {
+			name := fmt.Sprintf("players=100/monsters=%d", n)
+			if portal {
+				name += "/portal"
 			}
-			m.Islands()[0].Spawns = spawns
-			w, err := session.New(session.Config{
-				Map:       m,
-				Balance:   testBalance(),
-				Vocations: testVocations,
-				Monsters:  content.Monsters{"wolf": wolfDef()},
-				Items:     testItems(),
-				Save:      func(session.Snapshot) bool { return true },
-			})
-			if err != nil {
-				b.Fatal(err)
-			}
-			mv, fight, flush := w.Systems()
-			r := rand.New(rand.NewPCG(1, 2))
-			loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: r, Systems: []game.System{mv, fight, flush}})
-			if err != nil {
-				b.Fatal(err)
-			}
-			const players = 100
-			clients := make([]*discardClient, players)
-			for i := range clients {
-				clients[i] = &discardClient{}
-				c := session.Character{ID: int64(i + 1), Name: "P", Vocation: "guardian", Level: 1, Health: 145,
-					HasPos: true, Pos: pos(r.IntN(256), r.IntN(256))}
-				_ = loop.Enqueue(w.Join(c, clients[i]))
-			}
-			loop.Step()
-			byID := map[uint32]*discardClient{}
-			for i, p := range w.Players() {
-				byID[p.ID()] = clients[i]
-			}
-			steps := make([]pb.Direction, 10)
-			b.ReportAllocs()
-			b.ResetTimer()
-			for b.Loop() {
-				for _, p := range w.Players() {
-					if !p.Walking() && r.IntN(4) == 0 {
-						for i := range steps {
-							steps[i] = pb.Direction(1 + r.IntN(8))
-						}
-						_ = loop.Enqueue(w.Input(byID[p.ID()], walkPath(steps...)))
-					}
-				}
-				loop.Step()
-			}
-			b.StopTimer()
-			b.ReportMetric(float64(len(w.Monsters())), "monsters")
-		})
+			b.Run(name, func(b *testing.B) { benchMonsters(b, n, portal) })
+		}
 	}
+}
+
+func benchMonsters(b *testing.B, n int, portal bool) {
+	m := worldtest.Open(b, 0, 0, 256, 256)
+	step := 256 / int(math.Sqrt(float64(n/4)))
+	var spawns []world.Spawn
+	for y := step / 2; y < 256; y += step {
+		for x := step / 2; x < 256; x += step {
+			spawns = append(spawns, world.Spawn{ID: "s", Center: pos(x, y), Radius: 3, RespawnSeconds: 30,
+				Monsters: []world.SpawnMonster{{Monster: "wolf", Count: 4}}})
+		}
+	}
+	m.Islands()[0].Spawns = spawns
+	if portal {
+		m = worldtest.WithPortals(b, m, world.Portal{ID: "gate", Kind: world.PortalTeleport, From: pos(255, 0), To: pos(253, 2)})
+	}
+	w, err := session.New(session.Config{
+		Map:       m,
+		Balance:   testBalance(),
+		Vocations: testVocations,
+		Monsters:  content.Monsters{"wolf": wolfDef()},
+		Items:     testItems(),
+		Save:      func(session.Snapshot) bool { return true },
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	mv, fight, flush := w.Systems()
+	r := rand.New(rand.NewPCG(1, 2))
+	loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: r, Systems: []game.System{mv, fight, flush}})
+	if err != nil {
+		b.Fatal(err)
+	}
+	const players = 100
+	clients := make([]*discardClient, players)
+	for i := range clients {
+		clients[i] = &discardClient{}
+		c := session.Character{ID: int64(i + 1), Name: "P", Vocation: "guardian", Level: 1, Health: 145,
+			HasPos: true, Pos: pos(r.IntN(256), r.IntN(256))}
+		_ = loop.Enqueue(w.Join(c, clients[i]))
+	}
+	loop.Step()
+	byID := map[uint32]*discardClient{}
+	for i, p := range w.Players() {
+		byID[p.ID()] = clients[i]
+	}
+	steps := make([]pb.Direction, 10)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		for _, p := range w.Players() {
+			if !p.Walking() && r.IntN(4) == 0 {
+				for i := range steps {
+					steps[i] = pb.Direction(1 + r.IntN(8))
+				}
+				_ = loop.Enqueue(w.Input(byID[p.ID()], walkPath(steps...)))
+			}
+		}
+		loop.Step()
+	}
+	b.StopTimer()
+	b.ReportMetric(float64(len(w.Monsters())), "monsters")
 }
 
 // BenchmarkTickConditions is BenchmarkTickMonsters with every player and every monster
@@ -302,5 +316,57 @@ func BenchmarkDoorLockRefused(b *testing.B) {
 	}
 	if holder.events < b.N {
 		b.Fatalf("%d answers to %d tries", holder.events, b.N)
+	}
+}
+
+// BenchmarkThrowAway measures one tick in which a player throws one coin on the street and
+// picks it back up (two commands). Throwing something away keeps the player's snapshot of
+// the end of that command for its next transfer (T5.3 fail-safe, hold.go gaveAway): its
+// cost is one snapshot of a player carrying a 40-item chest, taken in the loop (no write
+// until a transfer follows). Budget: a small fraction of the 10 ms tick (docs/07).
+func BenchmarkThrowAway(b *testing.B) {
+	items := testItems()
+	var chest content.Item
+	_ = yaml.Unmarshal([]byte("{id: bench_chest, kind: container, weight: 100, container: {slots: 40}}"), &chest)
+	chest.Numeric = 170
+	items[chest.ID] = &chest
+	w, err := session.New(session.Config{
+		Map: worldtest.Open(b, 0, 0, 32, 32), Balance: testBalance(), Vocations: testVocations, Items: items,
+		Save: func(session.Snapshot) bool { return true },
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	mv, fight, flush := w.Systems()
+	loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: rand.New(rand.NewPCG(1, 2)),
+		Systems: []game.System{mv, fight, flush}})
+	if err != nil {
+		b.Fatal(err)
+	}
+	c := withPack(1, pos(10, 10))
+	in := make([]session.ItemState, 0, 40)
+	in = append(in, session.ItemState{ItemID: coinID, Count: 50, Slot: 0})
+	for i := range 39 {
+		in = append(in, session.ItemState{ItemID: swordID, Count: 1, Slot: i + 1})
+	}
+	c.Inventory = []session.ItemState{{ItemID: chest.Numeric, Count: 1, Slot: int(slotBackpack), Items: in}}
+	cl := &discardClient{}
+	_ = loop.Enqueue(w.Join(c, cl))
+	loop.Step()
+	_ = loop.Enqueue(w.Input(cl, useItem(inSlot(slotBackpack), uint32(chest.Numeric), 0)))
+	loop.Step()
+	const window = 1 // the first container p opens
+	throw := moveItem(inContainer(window, 0), coinID, 0, onTile(pos(11, 10)), 1)
+	back := moveItem(onTile(pos(11, 10)), coinID, 1, inContainer(window, 0), 1)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = loop.Enqueue(w.Input(cl, throw))
+		_ = loop.Enqueue(w.Input(cl, back))
+		loop.Step()
+	}
+	b.StopTimer()
+	if p := w.PlayerByCharacter(1); p == nil || w.CountItem(p, "copper_coin") != 50 {
+		b.Fatal("the coin did not come back")
 	}
 }

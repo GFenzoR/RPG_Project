@@ -55,9 +55,13 @@ merge propio: si el formato cambia, se cambia en `packages/map-format`.
 ## bots (Go)
 `tools/bots` (T1.17): prueba de carga con clientes headless (`server/pkg/bot`) que se
 registran, crean personaje y juegan en la Isla del Puerto: caminan con rutas A* sobre
-`build/world.bin` (`bot.Nav`), atacan monstruos, hablan por chat y abren diálogos con NPCs,
-con su propio rate limit (`-min-gap`). Escenarios en `cmd/bots/scenario.go`: `base`
-(repartidos por la isla) y `stress` (todos en la ciudad). Reporte JSON (`-report`) y
+`build/world.bin` (`bot.Nav`, que rodea escaleras, agujeros y teletransportes: cada bot
+queda en su piso), atacan monstruos, hablan por chat y abren diálogos con NPCs, con su
+propio rate limit (`-min-gap`). Sin ese archivo (`-world`; p. ej. `make bots URL=...`, que
+no corre `make mapcompile`) caminan al azar: no saben dónde hay portales, así que pueden
+pisar una escalera, un agujero o un teletransporte y cambiar de piso o de lugar.
+Escenarios en `cmd/bots/scenario.go`: `base` (repartidos por la isla) y `stress` (todos en
+la ciudad). Reporte JSON (`-report`) y
 resumen Markdown con tick, RAM, CPU (de `/metrics` del servidor), latencia de comando
 (Ping→Pong), bytes por jugador y desconexiones, comparados con `docs/07`. `make bots N=100`
 levanta su propio servidor (`loadtest.sh`); con `URL=` juega contra uno existente. Sale

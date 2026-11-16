@@ -12,7 +12,7 @@ import type { ServerMessage } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
-import { formatOz, locationInit, topItem } from "./items.ts";
+import { formatOz, locationInit, tileUse, topItem } from "./items.ts";
 import { formatMessage } from "./messages.ts";
 import { WorldState } from "./world.ts";
 
@@ -104,6 +104,31 @@ describe("inventory state", () => {
     expect(topItem(w, 5, 6, 7, false)).toBeUndefined();
     expect(topItem(w, 5, 6, 7, true)?.itemId).toBe(1);
     expect(w.tileCounts(5, 6, 7)).toBeUndefined();
+  });
+
+  it("uses a ladder by its ground whatever lies on it, a bare door by its ground", () => {
+    const w = new WorldState(content);
+    const tile = (items: { itemId: number; count?: number }[]): void =>
+      w.apply(
+        {
+          case: "tileUpdate",
+          value: create(TileUpdateSchema, { pos: { x: 5, y: 6, z: 7 }, tile: { items } }),
+        },
+        0,
+      );
+    const ground = { loc: { kind: "pos", pos: { x: 5, y: 6, z: 7 } }, itemId: 1, stackIndex: 0 };
+    // Coins dropped on the tile: a ladder still climbs (its ground), the rest uses the coins.
+    tile([{ itemId: 1 }, { itemId: 8, count: 30 }]);
+    expect(tileUse(w, 5, 6, 7, "first")).toMatchObject(ground);
+    expect(tileUse(w, 5, 6, 7, "bare")).toMatchObject({ itemId: 8, stackIndex: 1 });
+    expect(tileUse(w, 5, 6, 7, "never")).toMatchObject({ itemId: 8, stackIndex: 1 });
+    // Bare: a ladder or a door uses its ground, any other tile nothing.
+    tile([{ itemId: 1 }]);
+    expect(tileUse(w, 5, 6, 7, "first")).toMatchObject(ground);
+    expect(tileUse(w, 5, 6, 7, "bare")).toMatchObject(ground);
+    expect(tileUse(w, 5, 6, 7, "never")).toBeUndefined();
+    // A tile the client does not know: nothing.
+    expect(tileUse(w, 9, 9, 7, "first")).toBeUndefined();
   });
 
   it("builds protocol locations", () => {

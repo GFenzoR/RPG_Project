@@ -227,6 +227,20 @@ export async function createGameCanvas(
   let pref = opts.zoom;
   let range: ZoomRange = { min: 1, max: 1 };
   let shown: ZoomView | undefined;
+  /**
+   * Centres the camera on the player as drawn at `now`. Zoomed in, the canvas shows fewer
+   * (and fractional) tiles: centre those.
+   */
+  const follow = (now: number): void => {
+    const self = world.self;
+    if (!self) return;
+    const sp = world.drawPos(self, now);
+    const tilePx = T * scale;
+    cam = followCamera(sp.x, sp.y, scale, T, {
+      width: app.screen.width / tilePx,
+      height: app.screen.height / tilePx,
+    });
+  };
   const resize = (): void => {
     const dpr = window.devicePixelRatio || 1;
     // The map's box is the host's content box: a padding keeps the canvas off a strip of
@@ -246,6 +260,12 @@ export async function createGameCanvas(
     if (app.renderer.width !== w || app.renderer.height !== h) app.renderer.resize(w, h);
     canvas.style.width = `${w / dpr}px`;
     canvas.style.height = `${h / dpr}px`;
+    // The camera follows at once, not from the next frame: clicks and tileToClient read it
+    // meanwhile. On creation this is what sets it before the game says it is ready: Pixi's
+    // ticker skips a first frame whose time predates its start (a busy page), so the first
+    // draw may come a frame or more later, and until then every tile sat at camera (0, 0),
+    // far off the canvas (an e2e Shift+click right after `ready` read nothing on CI).
+    follow(performance.now());
     if (!shown || shown.scale !== scale || shown.min !== range.min || shown.max !== range.max) {
       shown = { scale, ...range };
       opts.zoomView?.(shown);
@@ -480,13 +500,7 @@ export async function createGameCanvas(
     const self = world.self;
     if (!self) return;
     if (view.floor !== self.pos.z) view.setFloor(self.pos.z);
-    const sp = world.drawPos(self, now);
-    // Zoomed in, the canvas shows fewer (and fractional) tiles: centre those on the player.
-    const tilePx = T * scale;
-    cam = followCamera(sp.x, sp.y, scale, T, {
-      width: app.screen.width / tilePx,
-      height: app.screen.height / tilePx,
-    });
+    follow(now);
     view.render(cam, { width: app.screen.width, height: app.screen.height });
 
     const seen = new Set<number>();

@@ -185,7 +185,9 @@ travel:                     # boat routes (T3.5, docs/02-game-design.md "Viajes 
   # No sailing while in combat: a monster attacked the player, the player took damage or
   # hit a monster within the last combat_block_ms.
   combat_block_ms: 12000
-  arrival_radius: 2         # arrival taken: nearest free walkable tile at most this far
+  # Arrival taken: nearest free walkable tile at most this far. Portals (stairs, ladders,
+  # holes, rope spots, teleports) land with the same radius.
+  arrival_radius: 2
 
 death:
   xp_loss_pct: 10

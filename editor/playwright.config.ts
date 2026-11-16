@@ -20,6 +20,10 @@ if (!process.env["EDITOR_E2E_ROOT"]) {
 }
 const port = Number(process.env["EDITOR_E2E_PORT"] ?? 5175);
 
+// On CI, as in client/playwright.config.ts: one retry (a pass on retry is reported as
+// flaky), a trace of the retry only and a screenshot of each failure.
+const ci = Boolean(process.env["CI"]);
+
 export default defineConfig({
   testDir: "e2e",
   outputDir: "../test-results/editor",
@@ -27,12 +31,15 @@ export default defineConfig({
   workers: 1,
   // The full edit/validate/save test takes ~20 s locally but over 60 s on CI runners.
   timeout: 180_000,
+  retries: ci ? 1 : 0,
+  forbidOnly: ci,
   reporter: [["list"]],
   use: {
     ...devices["Desktop Chrome"],
     baseURL: `http://localhost:${port}`,
     viewport: { width: 1400, height: 860 },
-    trace: "retain-on-failure",
+    trace: ci ? "on-first-retry" : "retain-on-failure",
+    screenshot: "only-on-failure",
     // Headless Chromium on Windows draws WebGL in software (SwiftShader), which makes PixiJS
     // pages several times slower than on Linux: use the GPU through ANGLE/D3D11 there.
     ...(process.platform === "win32" && {

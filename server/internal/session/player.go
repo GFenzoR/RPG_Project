@@ -134,6 +134,24 @@ type Player struct {
 	trade *trade
 	// tradeTAT is the trade anti-flood's theoretical arrival tick (GCRA).
 	tradeTAT game.Tick
+	// pre is p's snapshot from the end of the command (or tick) in which it last gave
+	// something away to the public ground (T5.3 fail-safe, hold.go gaveAway). p's next
+	// transfer writes it first, so a dropped transfer never takes p back to a save that
+	// still has it. gave is set from the give-away until that snapshot is taken
+	// (settleGivers). Both are cleared by any later snapshot of p, which is submitted
+	// behind the give-away anyway (snapshot).
+	pre  *Snapshot
+	gave bool
+	// left are the piles and containers on the public ground that leftHouse reserved to p
+	// since its last transfer snapshot: the house write that took them out numbers their
+	// reservations with p's snapshot in it (hold.go numberLeft). What p gave away in a
+	// command that also changed a house joins them (reserveGiven).
+	left []*Item
+	// given are where p's give-aways since its last snapshot landed on the public ground,
+	// one entry each: the pile or container when it may be reserved to p (a pile of its
+	// own, or one already reserved to p), nil when it may not (a stranger's pile or bag).
+	// Cleared with gave (snapshot).
+	given []*Item
 
 	// Guilds (T5.1): p's membership (nil: none) and whether a GuildUpdate is queued.
 	gm          *guildMember
@@ -288,6 +306,12 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 	// numbers a transfer flushes before numbering; inside the flush this is a no-op.
 	w.flushHouses()
 	w.saveSeq++
+	// T5.3: a snapshot is submitted (a save or a transfer's) behind whatever p gave away
+	// so far: the one kept for p's next transfer (gaveAway) is not needed any more. The one
+	// settleGivers keeps is taken here too, and kept again right after.
+	p.pre, p.gave = nil, false
+	clear(p.given)
+	p.given = p.given[:0]
 	return Snapshot{
 		CharacterID: p.charID,
 		Seq:         w.saveSeq,
@@ -627,6 +651,11 @@ func (w *World) placement(c Character) world.Pos {
 	if p, ok := w.freeNear(temple, 3); ok {
 		return p
 	}
+	if w.m.MovesOnStep(want) {
+		// A position saved on stairs (before the server loaded portals, or by a GM): the
+		// temple rather than a tile nobody stands on.
+		return temple
+	}
 	return want // crowded: share the tile rather than refuse the login
 }
 
@@ -653,11 +682,23 @@ func (w *World) homeIsland(town string) string {
 }
 
 // freeNear returns the walkable, unoccupied tile closest to p (by rings) within radius,
-// never one in the room behind a locked door (door.go) unless p is in that same room: the
-// rings do not follow walls, so a crowded tile next to a locked gate must not put anyone
-// on its other side.
+// only in the area of p (searchFrom, areaAllows, area.go): the rings do not follow walls,
+// so a crowded tile next to a locked gate must not put anyone on its other side (in the
+// room behind it), nor a crowded temple anyone in a pocket sealed by walls. From the
+// entrance of stairs, a hole or a teleport, only in the areas next to it; from another
+// tile of no area (a house, a locked door) any tile in no room will do. Never one that
+// stairs, a hole or a teleport leaves from (portal.go): nobody stands on those.
 func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
-	from := w.roomOf[p]
+	return w.freeAround(p, radius, false)
+}
+
+// freeAround is freeNear, also without house tiles if noHouse.
+func (w *World) freeAround(p world.Pos, radius int, noHouse bool) (world.Pos, bool) {
+	from := w.searchFrom(p)
+	skip := world.FlagBlocksMovement | world.FlagPortalStep
+	if noHouse {
+		skip |= world.FlagHouse
+	}
 	for r := 0; r <= radius; r++ {
 		for dy := -r; dy <= r; dy++ {
 			for dx := -r; dx <= r; dx++ {
@@ -669,7 +710,9 @@ func (w *World) freeNear(p world.Pos, radius int) (world.Pos, bool) {
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: p.Z}
-				if w.m.Walkable(q) && !w.occupied(q) && w.roomAllows(from, q) {
+				// One read of the tile's flags: walkable, no stairs, hole or teleport
+				// (MovesOnStep) and, if noHouse, no house tile.
+				if w.m.Flags(q)&skip == 0 && !w.occupied(q) && w.areaAllows(from, q) {
 					return q, true
 				}
 			}

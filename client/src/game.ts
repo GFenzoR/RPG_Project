@@ -22,7 +22,7 @@ import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
 import type { ClientContent } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
-import { MovementKeys, isTextField, typingInField } from "./input/keyboard.ts";
+import { MovementKeys, isTextField, keyDirection, typingInField } from "./input/keyboard.ts";
 import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { loadZoom, saveZoom } from "./render/zoom.ts";
@@ -30,11 +30,12 @@ import type { ZoomView } from "./render/zoom.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type { GameCanvas } from "./render/game-canvas.ts";
-import { locationInit, topItem } from "./state/items.ts";
+import { locationInit, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
 import { findPath } from "./state/path.ts";
+import { climbable, pathPassable, usedBare } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { cuesOf, loopFor } from "./audio/cues.ts";
@@ -124,8 +125,6 @@ export interface ActionMenuView {
   /** What was pressed: a creature's or an item's name ("" = a bare tile). */
   title: string;
   actions: ActionKind[];
-  /** performance.now() when it opened (its buttons ignore the lifting finger's click). */
-  at?: number;
 }
 
 /** What a menu acts on: a map tile (resolved again when a button is chosen) or a DOM item. */
@@ -133,7 +132,10 @@ type MenuTarget = { tile: Pos; creature: number | undefined } | { ref: ItemRef }
 
 /** Read-only hooks for the E2E tests (client/e2e). */
 export interface ClientTestHooks {
-  /** The first FullMapView arrived and the canvas is drawing. */
+  /**
+   * The first FullMapView arrived and the canvas is drawing; its camera already follows
+   * the player, so `tileToClient` points at the map (before the first frame too).
+   */
   ready: boolean;
   self(): { x: number; y: number; z: number; pending: boolean; walking: boolean } | undefined;
   walkable(x: number, y: number, z: number): boolean;
@@ -226,8 +228,11 @@ export class Game {
   private readonly pad = new HeldDirection();
   /** T5.6: tap an item, then tap where it goes. */
   private readonly picker = new ItemPicker();
-  /** T5.6: the open contextual menu and what it acts on. */
-  private menu: { view: ActionMenuView; target: MenuTarget } | undefined;
+  /**
+   * T5.6: the open contextual menu, what it acts on, and whether a press started on it
+   * since it opened (only then its buttons take clicks: ui/ActionMenu.tsx menuClickCounts).
+   */
+  private menu: { view: ActionMenuView; target: MenuTarget; pressed: boolean } | undefined;
   /** The pointerup that placed the picked item (the item's own tap must not pick again). */
   private placedBy: Event | undefined;
   /** Where the last pointer went down while an item is picked (a drag is not a tap). */
@@ -671,15 +676,27 @@ export class Game {
     });
   }
 
-  /** Uses the top item of a tile; a bare house door uses its ground (T5.4). */
-  private useTop(x: number, y: number, z: number): void {
-    const ref =
-      topItem(this.world, x, y, z, false) ??
-      // T5.4: a bare door tile opens the house window (UseItem on its ground).
-      (this.opts.content.houseDoors?.includes(doorKey(x, y, z))
-        ? topItem(this.world, x, y, z, true)
-        : undefined);
+  /**
+   * Uses a map tile (a right click): a ladder is climbed whatever lies on it; else its top
+   * item, or the ground of a bare house door (T5.4: the house window) or rope spot (it
+   * says a rope is needed). With `item` (the touch menu's "use"/"open") the top item even
+   * on a ladder: the menu climbs with its own button.
+   */
+  private useTop(x: number, y: number, z: number, item = false): void {
+    const ground =
+      !item && climbable(this.opts.content.portals, x, y, z)
+        ? "first"
+        : this.usesGround(x, y, z)
+          ? "bare"
+          : "never";
+    const ref = tileUse(this.world, x, y, z, ground);
     if (ref) this.useItem(ref);
+  }
+
+  /** Whether using the bare tile (x, y, z) means something: a house door or a portal used by hand. */
+  private usesGround(x: number, y: number, z: number): boolean {
+    const c = this.opts.content;
+    return (c.houseDoors?.includes(doorKey(x, y, z)) ?? false) || usedBare(c.portals, x, y, z);
   }
 
   /** Looks at the creature on a tile, or else at its top item (the ground counts). */
@@ -960,7 +977,8 @@ export class Game {
     const actions = tileActions({
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
       item: top && { container: (this.opts.content.items[top.itemId]?.slots ?? 0) > 0 },
-      door: this.opts.content.houseDoors?.includes(doorKey(tx, ty, z)) ?? false,
+      door: this.usesGround(tx, ty, z),
+      climb: climbable(this.opts.content.portals, tx, ty, z),
       known: (this.world.tile(tx, ty, z)?.length ?? 0) > 0,
     });
     if (actions.length === 0) return;
@@ -981,8 +999,18 @@ export class Game {
   }
 
   private openMenu(view: ActionMenuView, target: MenuTarget): void {
-    this.menu = { view: { ...view, at: performance.now() }, target };
+    this.menu = { view, target, pressed: false };
     this.publish();
+  }
+
+  /** A press started on the open menu (a new finger, a pen or the mouse on its buttons). */
+  menuPress(): void {
+    if (this.menu) this.menu.pressed = true;
+  }
+
+  /** Whether a press started on the open menu since it opened. */
+  get menuPressed(): boolean {
+    return this.menu?.pressed ?? false;
   }
 
   /** Closes the contextual menu without doing anything. */
@@ -1010,7 +1038,8 @@ export class Game {
       const { x, y, z } = t.tile;
       if ((kind === "attack" || kind === "talk") && t.creature !== undefined)
         this.attack(t.creature);
-      else if (kind === "use" || kind === "open") this.useTop(x, y, z);
+      else if (kind === "climb") this.useTop(x, y, z);
+      else if (kind === "use" || kind === "open") this.useTop(x, y, z, true);
       else if (kind === "look") this.lookTileAt(x, y, z);
       else if (kind === "move") {
         const ref = topItem(this.world, x, y, z, false);
@@ -1020,18 +1049,25 @@ export class Game {
     this.publish();
   }
 
-  /** The on-screen pad (T5.6): a finger holds a direction; holding keeps walking. */
+  /**
+   * The on-screen pad (T5.6): a finger holds a direction; holding keeps walking. A new
+   * direction (the pointer moves report the same one again and again) tries a step the
+   * server refused once more, like a fresh key press (WorldState.retryWalk).
+   */
   padPress(dir: Direction): void {
+    if (this.pad.current !== dir) this.world.retryWalk();
     this.pad.press(dir);
   }
 
   padRelease(): void {
     this.pad.release();
+    this.world.retryWalk();
   }
 
   /** One step (a pad button activated from the keyboard). */
   padStep(dir: Direction): void {
     this.pad.tap(dir);
+    this.world.retryWalk();
   }
 
   /**
@@ -1261,7 +1297,11 @@ export class Game {
     const target = this.clickTarget;
     if (target) {
       this.clickTarget = undefined;
-      const steps = findPath(self.pos, target, (x, y) => this.world.free(x, y, target.z), {
+      // Round stairs, holes and teleports on the way: only the goal may be one.
+      const passable = pathPassable(this.opts.content.portals, target, (x, y) =>
+        this.world.free(x, y, target.z),
+      );
+      const steps = findPath(self.pos, target, passable, {
         diagonalCost: this.opts.content.movement.diagonalCost,
         maxSteps: this.opts.content.movement.maxPathTiles,
       });
@@ -1321,16 +1361,22 @@ export class Game {
         return;
       }
     }
-    if (this.keys.down(e.code)) e.preventDefault();
+    if (this.keys.down(e.code)) {
+      e.preventDefault();
+      // A fresh press tries a refused step again; the OS auto-repeat of a held key does not.
+      if (!e.repeat) this.world.retryWalk();
+    }
   };
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
     this.keys.up(e.code);
+    if (keyDirection(e.code) !== undefined) this.world.retryWalk();
   };
 
   private readonly onBlur = (): void => {
     this.keys.clear();
     this.pad.clear();
+    this.world.retryWalk();
   };
 
   /** A text field took the focus (the chat): a movement key held until now stops walking. */

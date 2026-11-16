@@ -1,6 +1,9 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { loadClientContent, loadSiteContent } from "./content.ts";
+import { loadClientContent, loadPortals, loadSiteContent } from "./content.ts";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -17,13 +20,28 @@ describe("client content (T0.5)", () => {
     expect(byId.get("cooled_lava")?.desc).toBe("item.cooled_lava.desc");
     expect(byId.get("brasal_dock_sign")?.desc).toBe("text.volcan.dock_sign");
     expect(byId.get("ash")?.desc).toBeUndefined();
+    // Every sign of Puerto, Bosque and the Ember Isle has its item (the forge gate's too).
+    const signs = [
+      "volcan.temple",
+      "volcan.dock",
+      "volcan.mine",
+      "volcan.gate",
+      "puerto.temple",
+      "puerto.harbour",
+      "puerto.mine",
+      "bosque.temple",
+      "bosque.dock",
+      "bosque.cave",
+    ];
+    expect(byId.get("puerto_harbour_sign")?.desc).toBe("text.puerto.harbour_sign");
+    expect(byId.get("volcan_gate_sign")?.desc).toBe("text.volcan.gate_sign");
     for (const lang of ["es", "en"]) {
       const texts = content.i18n[lang] ?? {};
       expect(texts["item.cooled_lava.desc"]).toBeTruthy();
-      for (const sign of ["temple", "dock", "mine"])
-        expect(texts[`text.volcan.${sign}_sign`]).toBeTruthy();
-      // Only the descriptions items use: other world.yaml texts stay out of the game.
-      expect(texts["text.puerto.temple_sign"]).toBeUndefined();
+      for (const sign of signs) expect(texts[`text.${sign}_sign`]).toBeTruthy();
+      // Only the descriptions items use: other world.yaml texts stay out of the game (the
+      // test island's temple sign has no item).
+      expect(texts["text.testisle.temple_sign"]).toBeUndefined();
     }
   });
 
@@ -35,6 +53,48 @@ describe("client content (T0.5)", () => {
       expect(texts["item.brasal_dock_sign.name"]).toBeTruthy();
     }
     expect(content.i18n["es"]?.["item.brasal_dock_sign.name"]).toBe("cartel");
+  });
+
+  it("ships the portals of world/ by their entrance tile, with their kind", () => {
+    expect(content.portals?.["3692,5796,7"]).toBe("stairs");
+    expect(content.portals?.["3692,5796,8"]).toBe("stairs");
+    expect(content.portals?.["3692,5797,8"]).toBeUndefined(); // a destination
+  });
+
+  it("reads the portals of the islands world.yaml lists and fails on a broken file", () => {
+    const root = mkdtempSync(join(tmpdir(), "client-portals-"));
+    try {
+      const island = (id: string, portals: string): void => {
+        mkdirSync(join(root, "world", "islands", id), { recursive: true });
+        writeFileSync(join(root, "world", "islands", id, "portals.yaml"), portals);
+      };
+      mkdirSync(join(root, "world"));
+      writeFileSync(
+        join(root, "world", "world.yaml"),
+        [
+          "format: 1",
+          "islands:",
+          "  - { id: a, rect: { x: 0, y: 0, w: 32, h: 32 } }",
+          "  - { id: b, rect: { x: 32, y: 0, w: 32, h: 32 } }",
+          "",
+        ].join("\n"),
+      );
+      island(
+        "a",
+        "- { id: a_down, kind: stairs, from: { x: 1, y: 2, z: 7 }, to: { x: 1, y: 3, z: 8 } }",
+      );
+      mkdirSync(join(root, "world", "islands", "b"), { recursive: true }); // no portals.yaml
+      // An island directory world.yaml does not list (an old one): mapcompile skips it too.
+      island(
+        "old",
+        "- { id: gate, kind: teleport, from: { x: 5, y: 5, z: 7 }, to: { x: 6, y: 6, z: 7 } }",
+      );
+      expect(loadPortals(root)).toEqual({ "1,2,7": "stairs" });
+      island("b", "- { id: b_down, kind: stairs, from: { x: 33, y: 2, z: 7 }");
+      expect(() => loadPortals(root)).toThrow(/islands[\\/]b[\\/]portals\.yaml/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("exposes data/outfits.yaml with the default citizen outfit", () => {

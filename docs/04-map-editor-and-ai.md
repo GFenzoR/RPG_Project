@@ -227,8 +227,11 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
 
 1. **`map-pr.yml`** (`pull_request` con `opened`, `synchronize`, `reopened` y `edited`,
    `contents: read`, sin secretos). Hace checkout de la **rama base tal como está ahora**
-   (`base.ref`, no el `base.sha` congelado del evento) y trae el head del PR solo como dato
-   (`git fetch refs/pull/N/head`). Si el PR no cambia `world/`, termina ahí, antes de
+   (`base.ref`, no el `base.sha` congelado del evento) con `persist-credentials: false`, y
+   trae el head del PR solo como dato (`git fetch refs/pull/N/head`). El token (de solo
+   lectura) va como cabecera de ese comando y no queda en `.git/config`, así que `pnpm
+   install` y `mapcli` no lo leen de ahí (acciones como `setup-node` igual reciben
+   `github.token` por su cuenta). Si el PR no cambia `world/`, termina ahí, antes de
    `pnpm install`. Si lo cambia, instala las dependencias **de la base** y corre
    `mapcli pr-check --base <sha base> --head <sha head> --author <login> --association <rel> --head-repo <o/r> --repo <o/r> --pr <n> --out map-pr`.
    Sube dos artefactos, `map-pr-report` (`report.json`) y `map-pr-renders` (PNG), y falla
@@ -269,8 +272,12 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
     una decodificación con pérdida convertiría un `0xFF` en U+FFFD y parecería canónico;
   - uno cuyos **bytes** no son exactamente su forma canónica (`mapcli fmt`). Por ejemplo,
     `x: 03207` es 3207 para el parser TS y 1671 (octal) para el `yaml.v3` del servidor;
-  - una ruta de `world/` cuyo modo no es `100644` en el head o en el merge (symlink,
-    ejecutable, submódulo), aunque el blob no cambie.
+  - una ruta de `world/`, `data/`, `i18n/` o `assets/` que el PR cambia (merge-base → head)
+    o que su merge cambia (base → árbol del merge) y cuyo modo ahí no es `100644`
+    (symlink, ejecutable, submódulo), aunque el blob no cambie (`bad_mode_files`). Solo
+    esas: un archivo raro que ya está en la base no hace fallar todos los PR;
+  - una ruta de contenido del merge que el check no puede escribir como la deja el merge
+    (`skipped_content`, ver "Contenido del después"): el "después" no sería el merge.
 - La comparación con `git merge-tree` compara bytes: el blob crudo de git contra el
   archivo que escribió el merge por casilla, sin canonicalizar.
 - **Caracteres prohibidos (decisión).** `parsePatchFile`, y con él `canonicalPatchText`,
@@ -281,9 +288,75 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
   rechaza crudos). Acentos, ñ y el resto de Unicode pasan.
 - **Parcelas** (`checkPlots` en `packages/map-format/src/patch/plots.ts`, reglas en
   `03-world-and-maps.md`): casillas y entradas fuera de toda parcela `community_plot` de la
-  base. Falla si hay alguna y el autor no es maintainer (`.github/MAINTAINERS` de la base u
-  OWNER, y dueño del repo del head).
-- **Validación**: errores del validador en el mapa mezclado que la base no tenía.
+  base, y portales entre islas (`cross_island`, abajo). Falla si hay alguno y el autor no es
+  maintainer (`.github/MAINTAINERS` de la base u OWNER, y dueño del repo del head).
+- **Portales de la comunidad (para moderadores).** Un portal mueve jugadores de verdad
+  (escaleras, agujeros, teletransportes), así que un PR de la comunidad solo puede unir
+  casillas de **una misma isla**, con sus dos extremos en parcelas. Un portal con un extremo
+  en una parcela de otra isla es `cross_island` ("portal entre islas" en el comentario) y
+  necesita un maintainer: se saltaría el barco, con su precio, sus requisitos y su bloqueo
+  de combate (`travel.combat_block_ms`: nadie zarpa recién peleado), y serviría para huir
+  de una pelea o para llegar gratis a una isla de nivel alto. Aun dentro de una isla, revisa
+  todo portal de un PR de la comunidad antes de aprobarlo: adónde lleva (que no sea un
+  atajo que se salte una cueva, un jefe o el camino pensado de la isla), si tiene vuelta y
+  si el validador avisa que desde su destino no se llega a ningún templo.
+- **Contenido del "después".** El mapa se lee con contenido (`data/` e `i18n/` para el
+  validador y los renders, `assets/` para el atlas de los renders), y el "después" lleva
+  **el contenido del árbol del merge** (`landContent`): el worktree sale de la base y se le
+  escribe lo que difiere en esas carpetas entre la base y el árbol de `git merge-tree`
+  (`git diff-tree -r --no-renames`). Así queda idéntico al merge también cuando la base
+  renombró o movió un archivo que el PR edita, o convirtió en carpeta un archivo que el PR
+  borra. Si git no puede mezclar (el check ya falla con `rebase`), se escriben los cambios
+  del PR desde el merge-base, como los tiene el head. El "antes" sigue siendo el árbol
+  completo de la base, con su propio contenido. Antes de esto, un PR que agrega un item y lo
+  usa en el mapa fallaba siempre con `unknown item` (PR #81: 386 errores falsos), porque el
+  mapa del head se validaba con el `data/` de la base.
+  - Los archivos se leen como datos (`git cat-file --batch`, por id de objeto; nada del PR
+    se ejecuta) y se escriben como archivos comunes: un symlink queda como un archivo con
+    el texto de su destino y nunca se sigue.
+  - Solo se borra un archivo que falta en el árbol del merge, nunca una carpeta con
+    archivos. Las carpetas que quedan vacías se quitan después, de la más honda hacia
+    arriba y siempre dentro del worktree, como en un checkout del merge. Así, si la base
+    tiene `data/x/y/z.yaml` y el merge tiene el archivo `data/x`, el archivo entra.
+  - Un objeto que no es un blob (un gitlink, o un tree con modo de archivo) no se escribe
+    ni se borra.
+  - Se saltan las rutas que podrían salir del worktree o nombrar otra cosa: segmentos
+    `..`, `.` o vacíos, `.git` en cualquier mayúscula, `\`, `:`, NUL o un salto de línea.
+    También una ruta cuya carpeta real (symlinks resueltos) queda fuera del worktree, y un
+    archivo que choca con una carpeta. Toda ruta saltada **hace fallar el check con
+    `invalid`**, también para maintainers: el "después" ya no sería el merge (un
+    `data/items/x:y.yaml` es válido en Linux y el servidor lo cargaría). El reporte las
+    lista en `skipped_content` (nota `content_skipped`). Cualquier otro error de escritura
+    (disco lleno, permisos) corta el check en vez de contarse como ruta saltada.
+  - En el reporte, toda ruta de `world/` o de contenido (`bad_mode_files`,
+    `skipped_content`, `other_files`) sale con `reportPath`: cada carácter fuera de
+    `[A-Za-z0-9_./-]`, y un punto seguido de otro, se vuelve `?`. Así un nombre raro se
+    muestra y no anula el comentario entero.
+  - **Límites:** como mucho 20 000 rutas de contenido para escribir (los borrados no
+    cuentan) y 64 MB, sumados **por ruta**: mil rutas de un mismo blob grande pesan mil
+    veces. Si el PR pasa alguno, no se escribe nada, el "después" se mide con el contenido
+    de la base y el check falla con `limits` (nota `content_too_large`), en vez de quedar
+    sin reporte. **Un pack de terceros grande** (el de Dungeon Crawl tocó 4396 archivos) va
+    en un PR que no cambia `world/`: ese PR sale del check antes de leer contenido, y el
+    mapa que lo usa llega en otro PR.
+  - Además, `spritepack` no decodifica un PNG cuya cabecera declare más de 2048 px de lado
+    (lo mira antes de descomprimir), ni más de 16 páginas de 2048×2048 px en PNG por
+    armado (`MAX_TOTAL_PIXELS`), y un `placeholder.size` va hasta 256 px por lado.
+- **Validación**: errores del validador en el mapa mezclado que la base no tenía. Cada
+  lado se valida con su propio contenido (la base con el suyo; el merge con el que deja el
+  merge), así que también cuenta lo que el PR rompe desde el contenido (un item que borra y
+  el mapa usa), sea o no maintainer.
+  - **Contenido de la comunidad (decisión).** Cambiar `data/`, `i18n/` o `assets/` requiere
+    un maintainer. Si el autor no lo es y el PR cambia algo ahí, el mapa mezclado se valida
+    **también con el contenido de la base**, y los errores nuevos son la unión de las dos
+    validaciones. Así un PR de la comunidad no pasa trayendo los items o textos que usa
+    (falla con `validation`, además de figurar en "Fuera de `world/`" y de que el
+    comentario nunca muestre ✅). Su "después" también se dibuja con el contenido y los
+    sprites de la base (nota `base_content`). La segunda validación usa el mismo contenido
+    que el "antes", así que la comparación es pareja, y la unión no pierde errores de
+    ninguna.
+  - Límite conocido: el validador es el de la base. Si el PR también cambia las reglas de
+    `packages/map-format`, el check mide con las reglas viejas hasta que se mezcle.
 - **Conflictos** con la base actual: falla (hay que hacer rebase). Cada conflicto lleva un
   código fijo (`tiles`, `entries`, `changed_both_sides`, `no_base`, `invalid_file`), nunca
   el texto del parser.
@@ -292,20 +365,30 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
     entrada cambiada (spawn con su radio, ambos extremos del portal, rects de zona);
   - `renderAreas` les suma 4 casillas de margen, fusiona las que se tocan en el mismo piso,
     parte las de más de 64x64 y se queda con 6 como máximo (el resto se cuenta);
-  - cada área se renderiza antes (base) y después (merge) con `renderArea`, a 32/16/8/4 px
-    por casilla para no pasar de 1024 px de lado;
-  - un PNG de más de 2 MB no se sube.
+  - cada área se renderiza antes (base) y después (merge, con su contenido y sus sprites;
+    para la comunidad que toca contenido, con los de la base) con `renderArea`, a
+    32/16/8/4 px por casilla para no pasar de 1024 px de lado;
+  - si un PNG pasa de 2 MB (arte detallado), el tile baja a la mitad hasta que los dos
+    entren, con el mismo tile para ambos así se comparan; en 4 px, el PNG que siga
+    pasando no se sube.
 - Exit code 1 si falla. `report.json` (formato 2) lleva:
   - `ok`, `failures` (`plots`, `invalid`, `conflicts`, `rebase`, `merge_mismatch`,
-    `validation`) y `map_changes`;
-  - `files`, `conflicts`, `invalid_files` y `merge_mismatch`;
+    `validation`, `limits`) y `map_changes`;
+  - `files`, `conflicts`, `invalid_files`, `noncanonical_files`, `bad_mode_files`,
+    `skipped_content` (con su total) y `merge_mismatch`;
   - `plots` y `validation`, con sus totales;
-  - `other_files` (con su total), `areas` y `omitted_areas`.
+  - `other_files` (con su total), `areas` y `omitted_areas`;
+  - `notes`, cómo se midió el contenido, con códigos fijos: `base_content`,
+    `content_too_large`, `content_skipped` y `atlas_fallback` (los sprites del merge no se
+    pudieron armar, por ejemplo por un PNG demasiado grande, y el "después" se dibujó con
+    los de la base en vez de dejar todo sin sprite). El comentario los muestra con textos
+    propios en "Cómo se midió".
 
 **Seguridad (los PR vienen de forks).** Modelo de confianza en dos capas:
 1. **El check corre código de la base, no del PR.** `map-pr.yml` hace checkout de la rama
-   base y corre su `pnpm install` y su `mapcli`. Del PR solo lee el mapa con `git show` y
-   `git merge-tree`: un `postinstall`, un cambio a `plots.ts` o a `prcheck.ts` del PR no se
+   base y corre su `pnpm install` y su `mapcli`. Del PR solo lee datos: el mapa y el
+   contenido (`data/`, `i18n/`, `assets/`) con `git show`, `git cat-file`, `git diff-tree`
+   y `git merge-tree`. Un `postinstall`, un cambio a `plots.ts` o a `prcheck.ts` del PR no se
    ejecutan. El token es de solo lectura, no hay secretos y no se usa `pull_request_target`.
 2. **El comentario no cree en el reporte para lo importante.** `map-pr-comment.yml` corre
    desde la rama por defecto y solo hace checkout de `tools/mapcli/src/prcomment.ts`
@@ -317,7 +400,10 @@ archivos, y un push que deja de tocar `world/` tiene que reemplazar el veredicto
      `server/`, `package.json`, lockfile, `.npmrc`) primero;
    - decide si el autor es maintainer con los datos del PR en la API
      (`author_association`, `head.repo`) y el `MAINTAINERS` de la rama por defecto, y con
-     eso decide la falla `plots`; el `maintainer` del reporte se ignora;
+     eso decide la falla `plots` (para eso el `maintainer` del reporte no cuenta). El
+     `maintainer` del check sí decide algo que el comentario no puede recalcular: si el
+     mapa también se valida con el contenido de la base (`validation`). Un error ahí solo
+     relaja a un PR que cambia contenido, y ese PR nunca muestra ✅ (ver abajo);
    - si la API lista menos archivos que el `changed_files` del PR, o llega al tope de
      3000, el veredicto no es confiable: los archivos que no se ven podrían ser cualquier
      cosa. El "… y N más" usa el total del PR;
@@ -402,9 +488,10 @@ propio):
   formato 2, y cada ruta tiene que ser un archivo de mapa de `world/` (`writablePath`).
   También repite el chequeo de **parcelas** contra las zonas de la base (`checkPlots`):
   el portal es para cambios dentro de `community_plot`, y el autor del PR es el token del
-  worker, no el jugador. El worker se niega a correr con el token del dueño del repo o de
-  alguien de `MAINTAINERS` (docs/09: una cuenta de bot colaboradora con un PAT clásico
-  `public_repo`).
+  worker, no el jugador. Cualquier hallazgo, también un portal entre islas
+  (`cross_island`), termina en la falla `outside_plot`. El worker se niega a correr con el
+  token del dueño del repo o de alguien de `MAINTAINERS` (docs/09: una cuenta de bot
+  colaboradora con un PAT clásico `public_repo`).
 - **Crédito:** el mismo commit agrega a `world/CONTRIBUTORS.md` una fila
   `| <personaje> | <islas> | envío n.º <id> | <fecha de aprobación> |`. Es el archivo que
   `PLOT_FREE_FILES` deja tocar a cualquiera. Va el número de envío y no el del PR porque
@@ -503,7 +590,9 @@ La tabla exige `pr_url` y `pr_number` en `pr_opened`, `failure` en `failed` y `r
 3. `autoborder`, luego `scatter` para vegetación y rocas.
 4. Colocar estructuras con `stamp` y prefabs.
 5. Spawns, NPCs, zonas, portales.
-6. `map_validate` hasta que no haya errores.
+6. `map_validate` hasta que no haya errores, y lee las advertencias: p. ej. desde el
+   destino de un `hole` o un `teleport` no se llega a ningún templo sin soga (bien para un
+   pozo, un error si fue sin querer; `03-world-and-maps.md`, "Validación").
 7. `map_render` de cada área tocada y revisar las imágenes.
 8. `map_patch_create` y abrir PR. Fuera de una parcela `community_plot` hace falta un
    maintainer (ver "PR de mapas en CI").

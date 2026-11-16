@@ -21,6 +21,13 @@ export const SPRITES_DIR = "assets/sprites";
 export const CREDITS_FILE = "assets/CREDITS.md";
 export const DEFAULT_OUT_DIR = "assets/atlas";
 export const DEFAULT_MAX_PAGE = 2048;
+/**
+ * Widest and tallest PNG decoded, read from its header first: a small file can declare a
+ * huge image (a map PR's sprites are decoded by the check, docs/04). A page holds no more.
+ */
+export const MAX_PNG_SIDE = DEFAULT_MAX_PAGE;
+/** Pixels decoded from PNGs in one build, all files together (16 full pages). */
+export const MAX_TOTAL_PIXELS = 16 * DEFAULT_MAX_PAGE * DEFAULT_MAX_PAGE;
 
 export type Origin = "file" | "vendor" | "placeholder" | "auto";
 
@@ -32,6 +39,8 @@ export interface Diagnostic {
 }
 
 export interface BuildOptions {
+  /** MAX_TOTAL_PIXELS (tests lower it). */
+  maxPixels?: number;
   /** Treat automatic placeholders (data/ sprites with no mapping) as errors. */
   strict?: boolean;
   maxPageSize?: number;
@@ -86,6 +95,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
   const diags: Diagnostic[] = [];
   const resolved = new Map<string, Resolved>();
   const assetsDir = join(root, "assets");
+  const budget = { pixels: opts.maxPixels ?? MAX_TOTAL_PIXELS };
 
   // 1. Original art under assets/sprites/.
   const spritesDir = join(root, SPRITES_DIR);
@@ -97,7 +107,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       diags.push({ severity: "error", where, message: "file name must be lowercase snake_case" });
       continue;
     }
-    const image = readPng(abs, where, diags);
+    const image = readPng(abs, where, diags, budget);
     if (image && checkSize(image, where, diags)) resolved.set(name, { origin: "file", image });
   }
 
@@ -149,7 +159,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     let src = sourceCache.get(entry.source);
     if (!sourceCache.has(entry.source)) {
       const abs = join(assetsDir, entry.source);
-      src = existsSync(abs) ? readPng(abs, `assets/${entry.source}`, diags) : undefined;
+      src = existsSync(abs) ? readPng(abs, `assets/${entry.source}`, diags, budget) : undefined;
       if (!existsSync(abs)) {
         diags.push({
           severity: "error",
@@ -279,9 +289,33 @@ function at(file: string, line: number | undefined): string {
   return line === undefined ? file : `${file}:${line}`;
 }
 
-function readPng(abs: string, where: string, diags: Diagnostic[]): Image | undefined {
+/** Width and height from a PNG's IHDR (undefined: not a PNG header, decodePng reports it). */
+export function pngSize(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 24 || buf.toString("latin1", 12, 16) !== "IHDR") return undefined;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+/** Decodes a PNG within the limits: its side, and the pixels left in the build's budget. */
+function readPng(
+  abs: string,
+  where: string,
+  diags: Diagnostic[],
+  budget: { pixels: number },
+): Image | undefined {
   try {
-    return decodePng(readFileSync(abs));
+    const buf = readFileSync(abs);
+    const size = pngSize(buf);
+    const fail = (message: string): undefined => {
+      diags.push({ severity: "error", where, message });
+      return undefined;
+    };
+    if (size && (size.width > MAX_PNG_SIDE || size.height > MAX_PNG_SIDE))
+      return fail(`PNG is ${size.width}x${size.height}; at most ${MAX_PNG_SIDE} per side`);
+    if (size && size.width * size.height > budget.pixels)
+      return fail("over the pixel budget of a build (MAX_TOTAL_PIXELS of PNGs in total)");
+    const image = decodePng(buf);
+    budget.pixels -= image.width * image.height;
+    return image;
   } catch (err) {
     diags.push({
       severity: "error",

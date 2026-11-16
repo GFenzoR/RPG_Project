@@ -230,6 +230,10 @@ button.link {
   min-width: 0;
   overflow: hidden;
 }
+/* None: no empty item, so no gap for it in the header. */
+.hud .conditions:empty {
+  display: none;
+}
 .hud .condition {
   padding: 0.05rem 0.4rem;
   border-radius: 0.6rem;
@@ -1749,9 +1753,30 @@ body.using-item canvas {
 .hud.compact .stat {
   font-size: 0.8rem;
 }
-.hud .spacer {
-  flex: 1 1 0;
+/* The header does not widen the page with a wide font (Linux draws system-ui with DejaVu
+   Sans, far wider than Segoe UI or San Francisco: on CI a 390 px iPhone's header stuck out
+   ~20 px), English or bigger numbers. When it is short of room the name gives way first,
+   down to its 3rem, and then the level, with an ellipsis; health and mana stay whole (only
+   they and the menu have to fit). Flex shares a shrink by factor x width, so the name's
+   huge factor makes the level wait for it: a hair taken from the level would already show
+   its ellipsis. */
+.hud.compact .name {
+  flex-shrink: 100000;
+}
+.hud.compact .level {
+  flex-shrink: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The drawer button and the menu sit at the right end, pushed by an auto margin (a spacer
+   item cost one more gap). */
+.hud.compact > .panel-toggle,
+.hud.compact > .hud-menu {
+  margin-inline-start: auto;
+}
+.hud.compact > .panel-toggle + .hud-menu {
+  margin-inline-start: 0;
 }
 .hud-menu summary {
   display: flex;

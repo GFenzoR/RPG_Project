@@ -10,6 +10,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
+	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
 
 // Boat travel (T3.5) on the data harness: the harbor master stands at (8, 10); the dock
@@ -266,4 +267,34 @@ func absT(v int) int {
 		return -v
 	}
 	return v
+}
+
+// A boat and a dialog teleport never put anyone inside a house, like a portal (docs/02
+// "Cambiar de piso", "Llegada"): with the arrival on the one tile of a hut, the traveller
+// lands on the first tile around it, outside the hut.
+func TestArrivalsSkipHouses(t *testing.T) {
+	hut := func(c *session.Config) {
+		c.Map = worldtest.WithHouses(t, c.Map, world.House{ID: "hut", Name: "house.hut.name", Rent: 10,
+			Rects: []world.HouseRect{{X: 50, Y: 50, Z: 7, W: 1, H: 1}}, Doors: []world.Pos{arrival}, Exit: pos(50, 51)})
+	}
+	h := travelHarness(t, hut)
+	cl, p := h.traveller("Sailor", pos(8, 12), 100)
+	h.pick(cl, h.travelWindow(cl), "route.cheap")
+	if p.Pos() != pos(49, 49) {
+		t.Fatalf("the boat landed on %v, want 49,49 outside the hut on %v", p.Pos(), arrival)
+	}
+
+	h = dataHarnessWith(t, func(c *session.Config) {
+		hut(c)
+		d := c.NPCs["puerto_priest"].Dialog
+		n := d.Nodes[d.Start]
+		to := content.Position{X: 50, Y: 50, Z: 7}
+		n.Options = append(n.Options[:len(n.Options):len(n.Options)],
+			content.DialogOption{Text: "dialog.test_teleport", Action: content.Actions{{Teleport: &to}}})
+	})
+	cl, p = h.traveller("Pilgrim", pos(12, 15), 0)
+	h.pick(cl, h.lastDialog(h.send(cl, talkMsg(h.npc("puerto_priest").ID()))), "dialog.test_teleport")
+	if p.Pos() != pos(49, 49) {
+		t.Fatalf("the dialog teleported to %v, want 49,49 outside the hut on %v", p.Pos(), arrival)
+	}
 }

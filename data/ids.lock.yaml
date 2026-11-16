@@ -211,3 +211,10 @@ items:
   cinder_path: 208
   cooled_lava: 209
   lava: 210
+  volcan_gate_sign: 211
+  puerto_temple_sign: 212
+  puerto_harbour_sign: 213
+  puerto_mine_sign: 214
+  bosque_temple_sign: 215
+  bosque_dock_sign: 216
+  bosque_cave_sign: 217

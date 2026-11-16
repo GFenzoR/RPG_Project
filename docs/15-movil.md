@@ -24,8 +24,9 @@ Lo marcado con 👤 necesita cuentas, pagos o máquinas del dueño: Claude no pu
   coincidan con el código). Cuando haya un logo de verdad, reemplaza el dibujo.
 - Las dos páginas (`client/index.html` y `client/play/index.html`) enlazan el manifest y
   traen `theme-color` y el viewport móvil:
-  `viewport-fit=cover` (la página llega bajo el notch: el layout usa
-  `env(safe-area-inset-*)`) e `interactive-widget=resizes-content` (el teclado virtual
+  `viewport-fit=cover` (la página llega bajo el notch: el padding de `.game` usa
+  `env(safe-area-inset-*)` una vez, y lo que va sobre el mapa mide desde ahí; las ventanas
+  `fixed` todavía no, ver docs/14) e `interactive-widget=resizes-content` (el teclado virtual
   achica la página en vez de taparla, para que el chat se vea al escribir).
 
 ### Service worker: solo el shell estático

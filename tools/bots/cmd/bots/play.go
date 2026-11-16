@@ -226,7 +226,9 @@ func (p *player) goTo(ctx context.Context, center bot.Pos, radius int) error {
 	return nil
 }
 
-// wander walks a few tiles within the bot's area (back into it after a death).
+// wander walks a few tiles within the bot's area (back into it after a death). Without a
+// map (nav nil) the steps are random: the bot does not know where the portals are, so it
+// may step onto stairs, a hole or a teleport and land on another floor or elsewhere.
 func (p *player) wander(ctx context.Context) error {
 	from := p.b.Pos()
 	if p.nav == nil {

@@ -12,7 +12,8 @@ type Resource struct {
 	Tool string `yaml:"tool"`
 	// Skill sets the success chance and gains a try with every attempt.
 	Skill string `yaml:"skill"`
-	// Reach is the Chebyshev distance to use the tool from (0 = inventory.reach).
+	// Reach is the Chebyshev distance to use the tool from (0 = inventory.reach), at most
+	// MaxReach.
 	Reach   int `yaml:"reach"`
 	Charges int `yaml:"charges"`
 	RegenMs int `yaml:"regen_ms"`
@@ -49,8 +50,8 @@ func (d ResourceDrop) CountRange() (lo, hi int) {
 
 // Check verifies the numbers the server relies on and that every drop is a known item.
 func (r *Resource) Check(items Items) error {
-	if r.Tool == "" || r.Skill == "" || r.Charges <= 0 || r.RegenMs <= 0 || r.Reach < 0 {
-		return errors.New("resource: tool and skill required, charges and regen_ms > 0, reach >= 0")
+	if r.Tool == "" || r.Skill == "" || r.Charges <= 0 || r.RegenMs <= 0 || r.Reach < 0 || r.Reach > MaxReach {
+		return fmt.Errorf("resource: tool and skill required, charges and regen_ms > 0, 0 <= reach <= %d", MaxReach)
 	}
 	c := r.Chance
 	if c.Base < 0 || c.PerLevel < 0 || c.Max > 1 || c.Base > c.Max {

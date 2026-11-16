@@ -334,6 +334,119 @@ describe("validateWorld", () => {
     );
   });
 
+  it("allows one portal per tile, never to its own tile", () => {
+    const i = mini();
+    i.portals.push({
+      id: "mini_twin",
+      from: { x: 10, y: 10, z: 7 },
+      to: { x: 12, y: 12, z: 7 },
+      kind: "teleport",
+    });
+    i.portals.push({
+      id: "mini_loop",
+      from: { x: 12, y: 12, z: 7 },
+      to: { x: 12, y: 12, z: 7 },
+      kind: "teleport",
+    });
+    const m = messages(check(i));
+    expect(m).toContainEqual(
+      expect.stringContaining('portals "mini_down" and "mini_twin" leave from the same tile'),
+    );
+    expect(m).toContainEqual(expect.stringContaining("portal leads to its own tile"));
+  });
+
+  it("warns that a boat portal moves nobody", () => {
+    const i = mini();
+    i.portals.push({
+      id: "mini_ferry",
+      from: { x: 12, y: 12, z: 7 },
+      to: { x: 13, y: 13, z: 7 },
+      kind: "boat",
+    });
+    const r = check(i);
+    expect(r.diagnostics.filter((x) => x.severity === "error")).toEqual([]);
+    expect(messages(r)).toContainEqual(expect.stringContaining("a boat portal moves nobody"));
+  });
+
+  it("warns of a hole or a teleport into a place with no way to a temple", () => {
+    // A pit on floor 8 (20..22, 20..22), apart from the cave, that a hole of floor 7 leads
+    // into. Its only way up is a rope spot: whoever falls in without a rope is stuck.
+    const i = mini();
+    const cave = must(i.chunks.get(chunkKey(8, 0, 0)));
+    for (let y = 20; y < 23; y++) for (let x = 20; x < 23; x++) setGround(cave, x, y, "dirt");
+    i.portals.push(
+      { id: "mini_pit", from: { x: 20, y: 5, z: 7 }, to: { x: 21, y: 21, z: 8 }, kind: "hole" },
+      {
+        id: "mini_pit_rope",
+        from: { x: 21, y: 20, z: 8 },
+        to: { x: 21, y: 6, z: 7 },
+        kind: "rope_spot",
+      },
+    );
+    const warning =
+      'world/islands/mini/portals.yaml:14 [2].to: (21,21,8) from where hole "mini_pit" leads, no temple is reached without keys or tools';
+    const r = check(i);
+    expect(r.errors).toBe(0);
+    expect(messages(r)).toEqual([expect.stringContaining(warning)]);
+    // A teleport there warns the same.
+    i.portals[2] = { ...must(i.portals[2]), kind: "teleport" };
+    expect(messages(check(i))).toEqual([
+      expect.stringContaining('from where teleport "mini_pit" leads, no temple is reached'),
+    ]);
+    // Landing on the entrance of a teleport (in no area) puts the player in an area next to
+    // it: here the pit, which a teleport to the pit itself does not get anyone out of.
+    i.portals[2] = { ...must(i.portals[2]), kind: "hole" };
+    i.portals.push(
+      {
+        id: "mini_pit_loop",
+        from: { x: 22, y: 22, z: 8 },
+        to: { x: 20, y: 20, z: 8 },
+        kind: "teleport",
+      },
+      {
+        id: "mini_pit_gate",
+        from: { x: 5, y: 25, z: 7 },
+        to: { x: 22, y: 22, z: 8 },
+        kind: "teleport",
+      },
+    );
+    const stuck = (m: string[]): string[] =>
+      m.flatMap((x) => /from where (\w+ "\w+") leads, no temple/.exec(x)?.[1] ?? []);
+    expect(stuck(messages(check(i)))).toEqual([
+      'hole "mini_pit"',
+      'teleport "mini_pit_loop"',
+      'teleport "mini_pit_gate"',
+    ]);
+    i.portals.splice(4, 2);
+    // A ladder up instead of the rope (with its way down, like any ladder): no warning.
+    i.portals[3] = { ...must(i.portals[3]), kind: "ladder" };
+    i.portals.push({
+      id: "mini_pit_down",
+      from: { x: 22, y: 6, z: 7 },
+      to: { x: 22, y: 21, z: 8 },
+      kind: "ladder",
+    });
+    expect(messages(check(i))).toEqual([]);
+    // Stairs up from the pit (with their way down) do as well.
+    i.portals.splice(
+      3,
+      2,
+      {
+        id: "mini_pit_stairs",
+        from: { x: 22, y: 22, z: 8 },
+        to: { x: 23, y: 6, z: 7 },
+        kind: "stairs",
+      },
+      {
+        id: "mini_pit_stairs_down",
+        from: { x: 24, y: 6, z: 7 },
+        to: { x: 21, y: 22, z: 8 },
+        kind: "stairs",
+      },
+    );
+    expect(messages(check(i))).toEqual([]);
+  });
+
   it("rejects portals into the void and holes that go up", () => {
     const i = mini();
     i.portals.push({
@@ -373,6 +486,230 @@ describe("validateWorld", () => {
       expect.stringContaining("NPC cannot be reached on foot from the temple"),
     );
     expect(m.join("\n")).not.toContain("spawn cannot be reached"); // the cave is reached by the stairs
+  });
+
+  it("does not walk across stairs, holes or teleports, nor sail a boat portal", () => {
+    // The same water corner with one dirt tile in its wall at (18,20): a teleport on it
+    // (to the open side) leaves the corner unreachable on foot, as in the game, where a
+    // step onto it lands on its destination. A boat portal into the corner moves nobody.
+    const i = mini();
+    const c = must(i.chunks.get(chunkKey(7, 0, 0)));
+    for (let k = 2; k < 30; k++) {
+      setGround(c, 18, k, k < 18 ? "grass" : "water_shallow");
+      setGround(c, k, 18, k < 18 ? "grass" : "water_shallow");
+    }
+    setGround(c, 18, 20, "dirt");
+    expect(messages(check(i)).join("\n")).not.toContain("cannot be reached");
+    i.portals.push(
+      {
+        id: "mini_gate",
+        from: { x: 18, y: 20, z: 7 },
+        to: { x: 14, y: 14, z: 7 },
+        kind: "teleport",
+      },
+      { id: "mini_ferry", from: { x: 12, y: 12, z: 7 }, to: { x: 22, y: 22, z: 7 }, kind: "boat" },
+    );
+    const m = messages(check(i));
+    expect(m).toContainEqual(
+      expect.stringContaining("NPC cannot be reached on foot from the temple"),
+    );
+    // The corner warns as an area of its own: the teleport splits it from the rest.
+    const area = m.filter((x) => x.includes("walkable tiles around here cannot be reached"));
+    expect(area).toEqual([expect.stringContaining("(19,19,7) 121 walkable tiles")]);
+    // A ladder there is a tile like any other: the corner is reached again.
+    i.portals[i.portals.length - 2] = {
+      id: "mini_gate",
+      from: { x: 18, y: 20, z: 7 },
+      to: { x: 12, y: 12, z: 8 },
+      kind: "ladder",
+    };
+    i.portals.push({
+      id: "mini_gate_up",
+      from: { x: 12, y: 13, z: 8 },
+      to: { x: 17, y: 20, z: 7 },
+      kind: "ladder",
+    });
+    expect(messages(check(i)).join("\n")).not.toContain("cannot be reached");
+  });
+
+  it("rejects a portal into a house of another island, like the server", () => {
+    const a = mini();
+    const grass = emptyChunk(1, 0, 7);
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) setGround(grass, x, y, "grass");
+    const b: Island = {
+      meta: {
+        id: "mini_two",
+        name: "island.testisle.name",
+        rect: { x: 32, y: 0, w: 32, h: 32 },
+        floors: [7],
+        temple: { x: 48, y: 16, z: 7 },
+        level_hint: [1, 5],
+      },
+      chunks: new Map([[chunkKey(7, 1, 0), grass]]),
+      spawns: [],
+      npcs: [],
+      zones: [
+        {
+          id: "two_temple",
+          type: "protection",
+          floors: [7],
+          rects: [{ x: 47, y: 15, w: 3, h: 3 }],
+        },
+      ],
+      portals: [],
+      texts: [],
+      houses: [
+        {
+          id: "puerto_house_net",
+          name: "house.puerto_house_net.name",
+          rent: 100,
+          rects: [{ x: 36, y: 5, z: 7, w: 3, h: 2 }],
+          doors: [{ x: 37, y: 6, z: 7 }],
+          exit: { x: 37, y: 7, z: 7 },
+        },
+      ],
+    };
+    expect(messages(check(a, worldOf(a, b), [b]))).toEqual([]);
+    a.portals.push({
+      id: "mini_gate",
+      from: { x: 12, y: 12, z: 7 },
+      to: { x: 37, y: 5, z: 7 },
+      kind: "teleport",
+    });
+    expect(messages(check(a, worldOf(a, b), [b]))).toContainEqual(
+      expect.stringContaining(
+        'world/islands/mini/portals.yaml:14 [2].to: (37,5,7) portal destination is inside house "puerto_house_net"',
+      ),
+    );
+  });
+
+  it("keeps NPCs and radius-0 spawns off the entrance of stairs, holes and teleports", () => {
+    const i = mini();
+    i.npcs = [{ npc: "harbor_master", pos: { x: 10, y: 10, z: 7 } }];
+    i.spawns[0] = { ...must(i.spawns[0]), center: { x: 10, y: 10, z: 8 }, radius: 0 };
+    let m = messages(check(i));
+    expect(m).toContainEqual(
+      expect.stringContaining('NPC stands on the entrance of portal "mini_down"'),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining('spawn of radius 0 on the entrance of portal "mini_up"'),
+    );
+    i.spawns[0] = { ...must(i.spawns[0]), radius: 1 };
+    m = messages(check(i));
+    expect(m.join("\n")).not.toContain("spawn of radius 0");
+  });
+
+  it("keeps the temple and house exits off the entrance of stairs, holes and teleports", () => {
+    const i = mini();
+    i.houses = [
+      {
+        id: "puerto_house_net",
+        name: "house.puerto_house_net.name",
+        rent: 100,
+        rects: [{ x: 20, y: 5, z: 7, w: 1, h: 1 }],
+        doors: [{ x: 20, y: 5, z: 7 }],
+        exit: { x: 20, y: 6, z: 7 },
+      },
+    ];
+    expect(messages(check(i))).toEqual([]);
+    i.portals.push(
+      {
+        id: "mini_gate",
+        from: { x: 16, y: 16, z: 7 },
+        to: { x: 14, y: 14, z: 7 },
+        kind: "teleport",
+      },
+      {
+        id: "mini_porch",
+        from: { x: 20, y: 6, z: 7 },
+        to: { x: 22, y: 8, z: 7 },
+        kind: "teleport",
+      },
+    );
+    const m = messages(check(i));
+    expect(m).toContainEqual(
+      expect.stringContaining('temple lies on the entrance of portal "mini_gate"'),
+    );
+    expect(m).toContainEqual(
+      expect.stringContaining('house exit lies on the entrance of portal "mini_porch"'),
+    );
+  });
+
+  it("wants every tile a crowded arrival may take connected on foot with the destination", () => {
+    // The cave of floor 8 split by a water column at x = 12: its east column (13,10..13) is
+    // 2 tiles from where the stairs down land (11,11,8), within travel.arrival_radius (2),
+    // but on the other side of the water.
+    const i = mini();
+    const cave = must(i.chunks.get(chunkKey(8, 0, 0)));
+    for (let y = 10; y < 14; y++) setGround(cave, 12, y, "water_shallow");
+    expect(content.arrivalRadius).toBe(2);
+    expect(messages(check(i))).toContainEqual(
+      expect.stringContaining(
+        "[0].to: (11,11,8) 13,10,8 is within travel.arrival_radius (2) of the destination but not connected to it on foot",
+      ),
+    );
+    // A bridge at the south end: the east column is a walk round, not a pocket.
+    setGround(cave, 12, 13, "dirt");
+    expect(messages(check(i)).join("\n")).not.toContain("not connected to it on foot");
+    // Not across a house tile (a wall of the area the server searches in) ...
+    const stray =
+      "[0].to: (11,11,8) 13,10,8 is within travel.arrival_radius (2) of the destination but not connected to it on foot";
+    i.houses = [
+      {
+        id: "puerto_house_net",
+        name: "house.puerto_house_net.name",
+        rent: 100,
+        rects: [{ x: 12, y: 13, z: 8, w: 1, h: 1 }],
+        doors: [{ x: 12, y: 13, z: 8 }],
+        exit: { x: 11, y: 13, z: 8 },
+      },
+    ];
+    expect(messages(check(i))).toContainEqual(expect.stringContaining(stray));
+    // ... nor past an NPC: it never leaves its tile, so the bridge it stands on is a wall.
+    i.houses = [];
+    i.npcs.push({ npc: "puerto_provisioner", pos: { x: 12, y: 13, z: 8 } });
+    expect(messages(check(i))).toContainEqual(expect.stringContaining(stray));
+    i.npcs.pop();
+    // Split again, with the stairs landing at 10,11,8: the east column lies beyond the
+    // radius, so no arrival can take it.
+    setGround(cave, 12, 13, "water_shallow");
+    expect(messages(check(i)).join("\n")).toContain("not connected to it on foot");
+    i.portals[0] = { ...must(i.portals[0]), to: { x: 10, y: 11, z: 8 } };
+    expect(messages(check(i)).join("\n")).not.toContain("not connected to it on foot");
+  });
+
+  it("rejects a portal id used twice in the world, like the server", () => {
+    const a = mini();
+    const b = mini();
+    b.meta = {
+      ...b.meta,
+      id: "mini_two",
+      rect: { x: 32, y: 0, w: 32, h: 32 },
+      temple: { x: 48, y: 16, z: 7 },
+    };
+    const shift = (c: Chunk): Chunk => ({ ...c, cx: c.cx + 1 });
+    b.chunks = new Map(
+      [...b.chunks.values()].map((c) => [chunkKey(c.z, c.cx + 1, c.cy), shift(c)]),
+    );
+    const move = (p: Position): Position => ({ ...p, x: p.x + 32 });
+    b.spawns = [];
+    b.npcs = [];
+    b.zones = [
+      { id: "two_temple", type: "protection", floors: [7], rects: [{ x: 47, y: 15, w: 3, h: 3 }] },
+    ];
+    b.portals = b.portals.map((p) => ({
+      ...p,
+      id: `two_${p.id}`,
+      from: move(p.from),
+      to: move(p.to),
+    }));
+    expect(messages(check(a, worldOf(a, b), [b]))).toEqual([]);
+    must(b.portals[0]).id = "mini_down";
+    expect(messages(check(a, worldOf(a, b), [b]))).toContainEqual(
+      expect.stringContaining(
+        'portal "mini_down" is already defined in world/islands/mini/portals.yaml',
+      ),
+    );
   });
 
   it("walks through doors, locked or not, to reach what lies behind them", () => {
@@ -518,17 +855,80 @@ describe("validateWorld", () => {
     ]);
 
     // A second gate splits the corner: the vault behind it (24..29) is bigger than the
-    // room before it (19..22), so both gates take the small room, each with its own
-    // outside. Refused: the vault would be guarded by no door.
-    const vault = gated();
-    for (let y = 19; y < 30; y++) setGround(vault.chunk, 23, y, "water_shallow");
-    setGround(vault.chunk, 23, 24, "dirt");
-    pushItem(vault.chunk, 23, 24, "forge_gate");
-    expect(messages(check(vault.island))).toContainEqual(
+    // room before it (19..22), so both gates take the small room and the vault is the
+    // second gate's outside. Refused: from the vault no way leads to the temple without
+    // keys (escape check), and the vault would be guarded by no door.
+    const vault = (): ReturnType<typeof gated> => {
+      const v = gated();
+      for (let y = 19; y < 30; y++) setGround(v.chunk, 23, y, "water_shallow");
+      setGround(v.chunk, 23, 24, "dirt");
+      pushItem(v.chunk, 23, 24, "forge_gate");
+      return v;
+    };
+    const doorErrors = (island: Island, c: ContentIndex = content): string[] => {
+      const root = mkdtempSync(join(tmpdir(), "map-format-"));
+      dirs.push(root);
+      writeWorldMeta(root, worldOf(island));
+      writeIsland(root, island);
+      return messages(validateWorld(root, { content: c })).filter((m) => m.includes("locked door"));
+    };
+    expect(doorErrors(vault().island)).toEqual([
       expect.stringContaining(
-        'locked door "forge_gate" at 23,24,7: it shares its room with a locked door whose outside meets its own only through another locked door, if at all (a vault no door guards, or a cycle of locked doors, refused for now) (the door at 18,20,7)',
+        'locked door "forge_gate" at 23,24,7: a side of it reaches no temple without keys (on foot, out of rooms, by stairs, ladders, holes and teleports): whoever is there could be locked in (its side at 24,23,7)',
       ),
+    ]);
+    // A teleport out of the vault is a way out. A boat that arrives in it is not (a way
+    // in: leaving by boat takes the captain), and a boat portal moves nobody.
+    const inVault = { x: 26, y: 26, z: 7 };
+    const route = { index: 0, id: "r", captain: "harbor_master", from: { x: 8, y: 21, z: 7 } };
+    expect(
+      doorErrors(vault().island, { ...content, routes: [{ ...route, to: inVault }] }),
+    ).toHaveLength(1);
+    const out = (kind: "teleport" | "boat"): Island => {
+      const v = vault().island;
+      v.portals.push({ id: "mini_out", kind, from: inVault, to: { x: 10, y: 22, z: 7 } });
+      return v;
+    };
+    expect(doorErrors(out("teleport"))).toEqual([]);
+    expect(doorErrors(out("boat"))).toHaveLength(1);
+  });
+
+  // A cycle of locked doors of one key is safe (docs/02 "Puertas con llave"): the vault
+  // behind the second gate gets a third gate of its own to the field. With a gate of
+  // another key there, the first key would open the vault's gate from inside it.
+  it("accepts a cycle of locked doors of one key, not of two", () => {
+    const cycle = (gate: string): Island => {
+      const v = gated();
+      for (let y = 19; y < 30; y++) setGround(v.chunk, 23, y, "water_shallow");
+      setGround(v.chunk, 23, 24, "dirt");
+      pushItem(v.chunk, 23, 24, "forge_gate");
+      setGround(v.chunk, 26, 18, "dirt");
+      pushItem(v.chunk, 26, 18, gate);
+      return v.island;
+    };
+    expect(messages(check(cycle("forge_gate"))).filter((m) => m.includes("locked door"))).toEqual(
+      [],
     );
+    const gate = must(content.items.get("forge_gate"));
+    const items = new Map(content.items).set("vault_gate", {
+      ...gate,
+      id: "vault_gate",
+      lock: "vault",
+    });
+    const root = mkdtempSync(join(tmpdir(), "map-format-"));
+    dirs.push(root);
+    const island = cycle("vault_gate");
+    writeWorldMeta(root, worldOf(island));
+    writeIsland(root, island);
+    expect(
+      messages(validateWorld(root, { content: { ...content, items } })).filter((m) =>
+        m.includes("locked door"),
+      ),
+    ).toEqual([
+      expect.stringContaining(
+        'locked door "vault_gate" at 26,18,7: a player without its key gets into its room: a locked door of another key opens onto it from a room such a player reaches (the door at 23,24,7 opens onto it from its own room)',
+      ),
+    ]);
   });
 
   it("rejects chunks and tiles outside the island rectangle", () => {

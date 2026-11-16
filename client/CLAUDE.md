@@ -437,7 +437,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   piezas de borde, los carteles con `item.signpost.name`) recibe esa clave con el texto
   compartido en el plugin; el código sigue pidiendo `item.<id>.name`.
 - E2E: el test "T5.5: wake up at the temple of Brasal" lee el cartel del templo
-  (screenshot `65b-volcan-temple-sign`).
+  (screenshot `65b-volcan-temple-sign`) y el de NPCs ("talk to NPCs"), que despierta en
+  el templo del Farol, lee el de Puerto desde adentro (3163,6384, screenshot
+  `12b-puerto-temple-sign`).
 
 ## Notas de T5.6
 - **Input táctil** (`input/gestures.ts`, `dpad.ts`, `actions.ts`, puros y con tests). Los
@@ -452,10 +454,15 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
     hablar, usar, abrir, mirar, mover. Los navegadores móviles mandan además
     `contextmenu` (y a veces cancelan el puntero antes): el canvas y `Game.touchContextMenu`
     lo toman como ese mismo toque largo, sin usar el item. El fondo del menú se cierra en
-    `pointerdown`, no en `click`: al levantar el dedo el navegador puede mandar un click.
-    Por lo mismo sus botones ignoran clicks los primeros `MENU_ARM_MS` (350 ms): en una
-    pantalla baja (teléfono horizontal) el menú ocupa el alto y puede quedar bajo el dedo
-    (`menuPlacement` con `menuHeight`).
+    `pointerdown`, no en `click`: al levantar el dedo el navegador puede mandar un click
+    a lo que quede debajo, lo haya mantenido lo que lo haya mantenido (Chromium con
+    toques de CDP lo hace siempre). En una pantalla baja (teléfono horizontal) el menú
+    ocupa el alto y queda bajo el dedo (`menuPlacement` con `menuHeight`). Por eso sus
+    botones solo aceptan un click después de un `pointerdown` sobre el propio menú
+    (`Game.menuPress`/`menuPressed`, regla pura `menuClickCounts`) o del teclado
+    (`detail` 0). El dedo que lo abrió bajó sobre el mapa o el item, nunca sobre el menú.
+    Sin temporizador: antes eran 350 ms (`MENU_ARM_MS`) y en la CI, más lenta, el dedo se
+    levantó después y el click eligió el botón de abajo.
   - Mover items sin arrastre: tocar el item (`Game.pickItem`, `GameUi.picked`, banner
     `PickBanner`, clase `picking-item` en `body`) y luego el destino: una casilla del mapa
     o cualquier `[data-drop]` (slot vacío o celda de contenedor), con un listener de
@@ -468,6 +475,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
     empieza después (`PAD_RESERVE_PX`) y en vertical el mapa sube y el pad va debajo.
   - Escape cierra primero el menú, después suelta el item elegido. Si un campo de texto
     toma el foco (`focusin`), se sueltan las teclas de movimiento.
+- **Área segura** (muesca, esquinas, barra de inicio; las páginas piden
+  `viewport-fit=cover`): la cuenta una sola vez el padding `env(safe-area-inset-*)` de
+  `.game` (`client.css`). Lo que va sobre el mapa (pad, hotbar, botones de zoom, banner
+  del item elegido, en `touch.css`) cuelga de `.viewport`, que ya está dentro de ese
+  padding: sus márgenes son desde los bordes del mapa y no suman `env()` otra vez. Lo
+  que usa `position: fixed` (ventanas en teléfono, menú del toque largo) se mide contra
+  la pantalla y todavía no respeta el área segura (docs/14). E2E con insets de CDP en
+  `mobile.spec.ts`.
 - **Layout** (`ui/layout.ts`, breakpoints como datos): `.game` lleva `data-layout`
   (`desktop`, `tablet`, `phone-portrait`, `phone-landscape`), `data-panel` (`sidebar`,
   `tabs`, `drawer`) y `data-flow` (`row`, `column`); `client.css` cuelga sus reglas de
@@ -476,7 +491,15 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la página, ni un script o un campo con foco desplace el mapa de lado. Un resaltado
   del tutorial cambia a su pestaña. El encabezado es siempre una línea: la ayuda de
   controles se corta con "…" y se abre al tocarla; en teléfonos y tablets en vertical, un
-  menú ☰ guarda experiencia, ayuda, idioma, opciones y salir.
+  menú ☰ guarda experiencia, ayuda, idioma, opciones y salir. Ese encabezado compacto no
+  ensancha la página con una fuente ancha (Linux dibuja `system-ui` con DejaVu Sans: en la
+  CI se salía ~20 px a 390 px), en inglés o con números más grandes: sin lugar, cede
+  primero el nombre (hasta sus 3rem) y después el nivel (`.stat.level`), con "…"; vida y
+  maná quedan enteros (solo ellos y el ☰ tienen que entrar). El `flex-shrink` enorme del
+  nombre hace que el nivel espere (flex reparte por factor × ancho, y quitarle un pelo al
+  nivel ya muestra su "…"). La barra de condiciones vacía no ocupa lugar (`:empty`) y el
+  ☰ (y "Abrir panel") van a la derecha con margen `auto`, sin un ítem espaciador que
+  costaba otro `gap`.
 - Mientras un campo de texto tiene el foco y solo cambió la altura (teclado virtual), el
   layout no cambia; `--game-height` sigue al `visualViewport` (iOS). El chat hace
   `scrollIntoView` del input y no le llegan teclas al juego.
@@ -510,7 +533,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   iPhone 13 vertical y horizontal e iPad Mini sobre WebKit, en el proyecto
   `webkit-mobile`, tests con "(webkit)" en el título). Toques con `page.touchscreen`; los
   toques largos y el pellizco usan eventos táctiles de CDP en Chromium y `PointerEvent`
-  sintéticos en WebKit (`fingers`, id 1 para el primer dedo). Test ids:
+  sintéticos en WebKit (`fingers`, id 1 para el primer dedo). El toque largo dura 1,2 s
+  (el dedo se levanta mucho después de abrir el menú) y la casilla de la mochila se
+  compara entera: otro test pudo dejar la suya en el mismo lugar (docs/08). Test ids:
   `touch-pad`, `[data-dir=north]`, `action-menu`, `[data-action=…]`, `pick-banner`,
   `pick-cancel`, `touch-pad-toggle`, `panel-tabs` `[data-tab=…]`, `panel-toggle`,
   `hud-menu`, `notices`. Hook `__rpgClient.monsters()` para tocar un monstruo.
@@ -523,6 +548,12 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   caja del mapa en píxeles de sprite enteros (`viewPixels`). `followCamera` centra en el
   jugador una vista de casillas fraccionarias. El servidor sigue mandando las 15x11 (+1):
   el zoom es solo de dibujo.
+- La cámara (`follow` en `game-canvas.ts`) se fija en cada frame y también en cada
+  `resize`, incluido el de la creación: cuando el juego publica `__rpgClient` con
+  `ready`, `tileToClient` y los clicks ya apuntan al mapa. Antes solo la fijaba el primer
+  frame, que el ticker de Pixi se salta si su hora es anterior a su arranque (página
+  ocupada): en la CI un Mayús+click justo después de `ready` cayó a 100.000 px, fuera del
+  canvas. "talk to NPCs" lo comprueba en el instante en que se publican los hooks.
 - Entradas: pellizco (`pinch` del reconocedor de gestos, escala inicial × separación,
   redondeada); botones +/− (`ui/ZoomButtons.tsx`, sin hooks, solo con puntero grueso,
   ocultos si la pantalla admite una sola escala); Ctrl+rueda sobre el canvas
@@ -572,3 +603,33 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `shop: true` (servidor con proveedor de pagos).
 - E2E: `e2e/shop.spec.ts`; el servidor principal corre con `PAYMENTS_PROVIDER=fake`
   (docs/08 "E2E de la tienda").
+
+## Notas de portales (escaleras, agujeros, sogas, teletransportes)
+- El servidor mueve al jugador (`02-game-design.md` "Cambiar de piso"); el cliente solo ve
+  un teletransporte: `CreatureMove` del paso y `FullMapView` del piso nuevo, que reemplaza
+  todo (también el paso predicho). No hay estado propio de portales.
+- `content.portals` (de `world/islands/<id>/portals.yaml` de las islas de `world.yaml`,
+  `vite/content.ts` `loadPortals`; un archivo que no se puede leer corta el build):
+  casilla de entrada `"x,y,z"` → `kind`. `state/portals.ts` (puro, con tests):
+  `pathPassable` hace que un camino por click rodee escaleras, agujeros y teletransportes
+  salvo que sean el destino; `usedBare` hace que el click derecho (o "Usar" del toque
+  largo) sobre un punto de soga sin items mande `UseItem` con el suelo, como la puerta de
+  una casa; `climbable` hace que el click derecho sobre una escalera de mano mande
+  siempre el suelo, aunque tenga algo encima (`state/items.ts` `tileUse`, modo
+  `"first"`): un cadáver o una moneda no la tapan. El toque largo sobre una escalera de
+  mano muestra "Trepar" (`client.touch.action.climb`) y, si hay un item encima, también
+  sus botones ("Abrir"/"Usar" usan ese item, no trepan). La soga es una herramienta
+  "usar con" como el pico. El teclado sí pisa una escalera: es la forma de bajar.
+- Un paso predicho que el servidor rechaza (`WalkRejected` desde donde empezó y en esa
+  dirección: sin lugar del otro lado de la escalera, `portal.blocked`, o la puerta de una
+  casa sin acceso, `house.no_access`) queda en `WorldState` (`refused`): `predictStep` no
+  lo vuelve a predecir ni mandar, así que una tecla mantenida no repite el aviso en cada
+  paso. Se olvida con `retryWalk` (`game.ts`: tecla de movimiento pulsada de nuevo, sin
+  contar la autorrepetición, o soltada; pad con otra dirección, soltado o tocado; pérdida
+  del foco), con cualquier movimiento propio y con un `FullMapView`. El click para caminar
+  no lo mira.
+- E2E "portals" de `e2e/game.spec.ts`: un guardián de nivel 30 de la Isla Volcánica
+  sembrado con `psql` en 3690,5796,7 hace click en 3693,5796 (el camino rodea la escalera
+  de 3692,5796), baja con la flecha izquierda a 3692,5797,8 (el cliente tiene la
+  `stairs_up` de 3692,5796,8) y sube con la flecha arriba a 3692,5797,7 (screenshots
+  73–75: la escalera en la superficie, la mina en el piso 8 y de vuelta arriba).

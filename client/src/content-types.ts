@@ -171,6 +171,12 @@ export interface ClientContent {
    * click on a bare door opens the house window. Optional so fixtures can leave it out.
    */
   houseDoors?: string[];
+  /**
+   * Entrance tile ("x,y,z") → kind of each portal (world/islands/<id>/portals.yaml): paths
+   * go round stairs, holes and teleports; a right click on a bare ladder or rope spot uses
+   * its ground (state/portals.ts). Optional so fixtures can leave it out.
+   */
+  portals?: Record<string, string>;
   /** Language → key → text. */
   i18n: Record<string, Record<string, string>>;
 }

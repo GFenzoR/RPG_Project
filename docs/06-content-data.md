@@ -105,7 +105,10 @@ items:
 - **Descripción:** `description` es la clave i18n que el cliente muestra al mirar el item
   (`item.<id>.desc` por convención). Un cartel (T5.5) es un item fijo cuya descripción es
   su texto del mapa: `brasal_dock_sign` tiene `description: text.volcan.dock_sign`, la
-  misma clave de su entrada en `world/islands/volcan/texts.yaml`. El cliente empaqueta
+  misma clave de su entrada en `world/islands/volcan/texts.yaml`. Los de Puerto y el
+  Bosque (y el de la puerta con llave, `volcan_gate_sign`) se llaman como su entrada de
+  `texts.yaml` (`puerto_harbour_sign`); todos usan `sprite: decor/signpost`, el nombre
+  compartido `item.signpost.name` y `blocks_movement: true`. El cliente empaqueta
   solo las claves que algún item usa como descripción.
 - **Suelos volcánicos** (T5.5, `data/items/ground.yaml`, `speed` = costo de terreno en %):
   `ash` (ceniza, 140, como la tierra), `basalt` (losas de basalto de Brasal, 100, como la
@@ -136,7 +139,8 @@ items:
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
   entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
-  `reach`.
+  `reach` (de 1 a 6: el servidor no contesta nada de una casilla fuera de la vista, ±8 x,
+  ±6 y; el esquema y `content.MaxReach` lo exigen).
 - **Recursos** (T1.12): cualquier item del mapa (suelo o pila) puede ser un lugar de
   recolección con un bloque `resource`:
   ```yaml
@@ -144,7 +148,8 @@ items:
     tool: mining            # tool.use de la herramienta que lo cosecha
     skill: mining           # skill u oficio que da la chance y sube con cada intento
     reach: 1                # opcional (por defecto inventory.reach), con línea de visión;
-                            # como mucho 6: más allá de la vista (±8 x, ±6 y) responde not_possible
+                            # como mucho 6 (esquema y content.MaxReach): más allá de la
+                            # vista (±8 x, ±6 y) el servidor solo respondería not_possible
     charges: 4              # cosechas por casilla antes de agotarse
     regen_ms: 300000        # se llena este tiempo después de la última cosecha
     chance: { base: 0.3, per_level: 0.02, max: 0.85 }
@@ -154,6 +159,10 @@ items:
   ```
   `balance.yaml → gathering`: `use_interval_ms` (rate limit por jugador) y
   `afk: { after_ms, factor }` (anti-AFK, ver `02-game-design.md`).
+- **Soga:** una herramienta con `tool.use: rope` (la `rope` de `data/items/tools.yaml`)
+  usada sobre un punto de soga (`rope_spot` de `portals.yaml`) sube al jugador
+  (`02-game-design.md`, "Cambiar de piso"); sobre cualquier otra casilla sigue como una
+  herramienta de recolección. El valor `rope` lo nombra el servidor (`session/portal.go`).
 - **Paso bloqueado** (regla del contrato, la aplican el validador de mapas y
   `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
@@ -194,8 +203,9 @@ items:
   es solo datos: un par nuevo, su llave, textos y sprites; el mapa la coloca como
   cualquier item. Dónde se coloca lo valida el mapa (`03-world-and-maps.md`,
   "Validación"): un item de puerta por casilla, una sala determinable detrás de cada
-  puerta con llave y nada de afuera en ella (tampoco el destino de un `teleport` de un
-  diálogo de `data/npcs`).
+  puerta con llave, nada de afuera en ella (tampoco el destino de un `teleport` de un
+  diálogo de `data/npcs`) y el chequeo de escape (cada lado llega a un templo sin llaves
+  ni herramientas; nadie entra a una sala sin su llave).
 
 ## Monstruo
 ```yaml
@@ -290,6 +300,10 @@ Semántica del motor (T1.10):
   inexistente): si alguno falla no ejecuta ninguna acción. Si pasan, ejecuta
   las acciones en orden y luego sigue el `goto`. Una opción sin `goto` deja el diálogo en
   el mismo nodo (por ejemplo `open_shop`); `close` y `teleport` lo cierran.
+- `teleport` deja al jugador en su destino o, si está ocupado, en la casilla libre más
+  cercana a 1 de distancia, solo en el área del destino y nunca en una casilla de casa
+  (como la llegada de un barco o de un portal). Si no hay ninguna, el destino cuenta como
+  inexistente.
 - `has_item`/`lacks_item` cuentan todo el inventario (equipo y contenedores anidados).
   Un contenedor con algo adentro no cuenta ni se puede quitar o vender (se perdería su
   contenido).
@@ -613,7 +627,8 @@ trade:
 - `-boat-routes <archivo>` (o `RPG_BOAT_ROUTES`) reemplaza `data/boat_routes.yaml`: el
   E2E usa `client/e2e/fixtures/boat_routes.yaml` (Puerto → testisle).
 - Reglas del viaje (combate, cobro, llegada): `02-game-design.md`, "Viajes en barco";
-  números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`).
+  números en `balance.yaml → travel` (`combat_block_ms`, `arrival_radius`). La llegada
+  por un portal (escaleras y demás) usa el mismo `arrival_radius`.
 - Textos: `travel.*` en `i18n/*/dialog.yaml` y `client.voyage.sailed` en `client.yaml`.
 
 ## Tutorial (T4.2)

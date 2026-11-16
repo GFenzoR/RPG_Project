@@ -43,6 +43,32 @@ export function locationInit(loc: ItemLoc): {
 }
 
 /**
+ * What using a known map tile uses (a right click, the touch menu's "use"):
+ * - "first" (a ladder): its ground (stack index 0), whatever lies on it. The server climbs
+ *   on a UseItem of the ground; what lies on top cannot hide the ladder.
+ * - "bare" (a house door, a rope spot): the top item, or its ground if nothing lies on it.
+ * - "never": the top item; a bare tile uses nothing.
+ */
+export function tileUse(
+  world: WorldState,
+  x: number,
+  y: number,
+  z: number,
+  ground: "first" | "bare" | "never",
+): ItemRef | undefined {
+  if (ground === "first") {
+    const t = world.tile(x, y, z);
+    if (!t || t.length === 0) return undefined;
+    const count = world.tileCounts(x, y, z)?.[0] ?? 0;
+    return { loc: { kind: "pos", pos: { x, y, z } }, itemId: t[0] ?? 0, stackIndex: 0, count };
+  }
+  return (
+    topItem(world, x, y, z, false) ??
+    (ground === "bare" ? topItem(world, x, y, z, true) : undefined)
+  );
+}
+
+/**
  * The top item of a known tile. With `withGround` false (use, move) a tile with only its
  * ground gives undefined; looking accepts the ground.
  */

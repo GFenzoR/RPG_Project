@@ -12,3 +12,8 @@
   kind: sign
   pos: { x: 3691, y: 5794, z: 7 }
   text: text.volcan.mine_sign
+
+- id: volcan_gate_sign
+  kind: sign
+  pos: { x: 3693, y: 5830, z: 8 }
+  text: text.volcan.gate_sign

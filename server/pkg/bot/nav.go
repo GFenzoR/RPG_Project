@@ -36,23 +36,25 @@ func newNav(m *world.Map) *Nav {
 
 func wpos(p Pos) world.Pos { return world.Pos{X: uint16(p.X), Y: uint16(p.Y), Z: uint8(p.Z)} }
 
-// Walkable reports whether p can be stood on (creatures not considered).
+// Walkable reports whether p can be stood on (creatures not considered). The tile of
+// stairs, a hole or a teleport is not: stepping onto it moves the player elsewhere.
 func (n *Nav) Walkable(p Pos) bool {
 	if p.X < 0 || p.Y < 0 || p.X > 0xffff || p.Y > 0xffff || p.Z < 0 || p.Z > 15 {
 		return false
 	}
-	return n.m.Walkable(wpos(p))
+	return n.m.Walkable(wpos(p)) && !n.m.MovesOnStep(wpos(p))
 }
 
 // Path returns the steps from `from` to `to` (at most 100, the server's WalkPath limit),
-// or ok false if there is none.
+// or ok false if there is none. It goes around stairs, holes and teleports, like the
+// client's paths: a bot stays on its floor.
 func (n *Nav) Path(from, to Pos) ([]Direction, bool) {
 	if !n.Walkable(to) {
 		return nil, false
 	}
 	pf := n.pool.Get().(*world.Pathfinder)
 	defer n.pool.Put(pf)
-	path, ok := pf.Find(wpos(from), wpos(to), nil)
+	path, ok := pf.FindAvoiding(wpos(from), wpos(to), nil, n.m.MovesOnStep)
 	if !ok {
 		return nil, false
 	}

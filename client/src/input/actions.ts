@@ -6,7 +6,7 @@
 import type { ItemLoc, ItemRef } from "../state/items.ts";
 
 /** One button of the contextual menu (i18n: client.touch.action.<kind>). */
-export type ActionKind = "attack" | "talk" | "use" | "open" | "look" | "move";
+export type ActionKind = "attack" | "talk" | "climb" | "use" | "open" | "look" | "move";
 
 /** What the client knows of a long-pressed map tile. */
 export interface TileFacts {
@@ -14,8 +14,10 @@ export interface TileFacts {
   creature?: { npc: boolean; self: boolean } | undefined;
   /** Its top item above the ground, if any. */
   item?: { container: boolean } | undefined;
-  /** A bare house door (T5.4): using its ground opens the house window. */
+  /** A bare house door (T5.4) or rope spot: using its ground opens the house window, or says a rope is needed. */
   door?: boolean;
+  /** A ladder: climbing it comes first, whatever lies on it (the item there keeps its own buttons). */
+  climb?: boolean;
   /** There is something to look at (any known tile has at least its ground). */
   known: boolean;
 }
@@ -25,8 +27,9 @@ export function tileActions(f: TileFacts): ActionKind[] {
   const out: ActionKind[] = [];
   const c = f.creature;
   if (c && !c.self) out.push(c.npc ? "talk" : "attack");
+  if (f.climb) out.push("climb");
   if (f.item) out.push(f.item.container ? "open" : "use");
-  else if (f.door) out.push("use");
+  else if (f.door && !f.climb) out.push("use");
   if (c || f.known) out.push("look");
   if (f.item) out.push("move");
   return out;

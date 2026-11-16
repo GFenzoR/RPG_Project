@@ -4,8 +4,38 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
+
+// Bots keep to their floor: a path goes around a teleport (stairs, holes alike), and its
+// tile is no place to walk to.
+func TestNavPathsAroundPortals(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7,
+		".....",
+		".....",
+		"#####",
+	)
+	m = worldtest.WithPortals(t, m, world.Portal{ID: "gate", Kind: world.PortalTeleport,
+		From: world.Pos{X: 2, Y: 1, Z: 7}, To: world.Pos{X: 4, Y: 0, Z: 7}})
+	n := newNav(m)
+	from, to := Pos{X: 0, Y: 1, Z: 7}, Pos{X: 4, Y: 1, Z: 7}
+	path, ok := n.Path(from, to)
+	if !ok {
+		t.Fatal("no path past the teleport")
+	}
+	p := from
+	for _, d := range path {
+		dx, dy := d.Delta()
+		p = Pos{X: p.X + dx, Y: p.Y + dy, Z: p.Z}
+		if p == (Pos{X: 2, Y: 1, Z: 7}) {
+			t.Fatalf("path %v steps on the teleport", path)
+		}
+	}
+	if n.Walkable(Pos{X: 2, Y: 1, Z: 7}) {
+		t.Fatal("the teleport is a place to walk to")
+	}
+}
 
 func TestNavPathsAroundWalls(t *testing.T) {
 	n := newNav(worldtest.Map(t, 0, 0, 7,

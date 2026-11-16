@@ -267,7 +267,14 @@ secundaria.
   la superficie repintada, música y ambiente propios y los carteles de Brasal (templo,
   muelle y mina, que se leen mirándolos). Fuera de la tarea: puertas con llave (la puerta
   sellada de la mina se abre con la llave de ascua del Capítulo 3, ver
-  `02-game-design.md` "Puertas con llave"). Pendiente: el cartel de esa puerta (piso 8).
+  `02-game-design.md` "Puertas con llave"). Después: el cartel de esa puerta (piso 8,
+  junto a ella del lado de la mina, con texto nuevo), los carteles de Puerto y del Bosque
+  con su item y los pozos de lava redibujados como manchas irregulares. Después (rama
+  `feat/portals`): portales para cambiar de piso (`portals.yaml` por isla, `world.bin` v5):
+  escaleras, escaleras de mano, agujeros, puntos de soga y teletransportes que mueve el
+  servidor; las escaleras de la mina volcánica, del Puerto, del Bosque y de la isla de
+  prueba ya se usan. Reglas en `02-game-design.md` "Cambiar de piso"; la llegada nunca cae
+  en una casa ni en la sala de una puerta con llave.
 - [x] **T5.6 Controles táctiles y cliente móvil.** Caminar, atacar y usar items con toques
   en el cliente web; UI que entre en pantallas chicas; build de Tauri mobile. 👤 las apps
   nativas necesitan cuentas de las tiendas (Apple y Google) y su firma. (PR #78)

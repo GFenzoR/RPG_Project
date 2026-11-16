@@ -205,6 +205,49 @@ describe("WorldState", () => {
     expect(w.canStep(30)).toBe(true);
   });
 
+  it("keeps off a refused step until retryWalk, an own move or a new view (B10)", () => {
+    const rejected = (dir: Direction, x = 100, y = 200): Msg => ({
+      case: "walkRejected",
+      value: {
+        $typeName: "game.v1.WalkRejected",
+        pos: { $typeName: "game.v1.Position", x, y, z: 7 },
+        dir,
+      },
+    });
+    const w = entered();
+    // East onto (101,200), say stairs with no room at their other end (portal.blocked).
+    expect(w.predictStep(Direction.EAST, 0)).toBe(true);
+    w.apply(rejected(Direction.EAST), 30);
+    // A held key asks on every frame: no Walk, and no Turn (it already faces east).
+    expect(w.predictStep(Direction.EAST, 40)).toBe(false);
+    expect(w.predictStep(Direction.EAST, 5000)).toBe(false);
+    expect(w.pending).toBeUndefined();
+    expect(w.self?.pos).toEqual({ x: 100, y: 200, z: 7 });
+    expect(w.self?.dir).toBe(Direction.EAST);
+    // A fresh press (or a release, a new pad direction) tries it once more.
+    w.retryWalk();
+    expect(w.predictStep(Direction.EAST, 5000)).toBe(true);
+    w.apply(rejected(Direction.EAST), 5030);
+    expect(w.predictStep(Direction.EAST, 5040)).toBe(false);
+    // Only that step: south walks, and moving off and back forgets the refusal.
+    expect(w.predictStep(Direction.SOUTH, 6000)).toBe(true);
+    w.apply(move(7, [100, 200], [100, 201], 500), 6010);
+    w.apply(move(7, [100, 201], [100, 200], 500), 6600);
+    expect(w.predictStep(Direction.EAST, 7200)).toBe(true);
+    w.apply(rejected(Direction.EAST), 7230);
+    expect(w.predictStep(Direction.EAST, 7240)).toBe(false);
+    // A full map view (a teleport) forgets it too.
+    w.apply(fullView(), 7300);
+    expect(w.predictStep(Direction.EAST, 7300)).toBe(true);
+    // A refusal that is not of the predicted step (a WalkPath's, elsewhere or another
+    // way) leaves the next step alone.
+    w.apply(rejected(Direction.NORTH), 7330);
+    expect(w.predictStep(Direction.EAST, 7340)).toBe(true);
+    w.apply(rejected(Direction.EAST, 100, 201), 7350);
+    w.apply(move(7, [100, 201], [100, 200], 500), 7360);
+    expect(w.predictStep(Direction.EAST, 8000)).toBe(true);
+  });
+
   it("follows the server when it moves the own creature differently", () => {
     const w = entered();
     w.predictStep(Direction.EAST, 0);

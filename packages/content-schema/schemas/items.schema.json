@@ -179,8 +179,10 @@
               "$ref": "common.schema.json#/$defs/skill"
             },
             "reach": {
-              "description": "Chebyshev distance (same floor, line of sight) to use the tool from. Default: inventory.reach.",
-              "$ref": "common.schema.json#/$defs/positiveInt"
+              "description": "Chebyshev distance (same floor, line of sight) to use the tool from, at most 6 (the view half-height: the server answers nothing about a tile out of view). Default: inventory.reach.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6
             },
             "charges": { "$ref": "common.schema.json#/$defs/positiveInt" },
             "regen_ms": { "type": "integer", "minimum": 1 },

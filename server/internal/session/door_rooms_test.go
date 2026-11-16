@@ -18,10 +18,21 @@ import (
 
 // doorRoomCase is a case of packages/map-format/src/testdata/door-rooms.json.
 type doorRoomCase struct {
-	Name  string            `json:"name"`
-	Rows  []json.RawMessage `json:"rows"`
-	Rooms map[string]int    `json:"rooms"`
-	Error string            `json:"error"`
+	Name    string            `json:"name"`
+	Rows    []json.RawMessage `json:"rows"`
+	Portals []struct {
+		Kind string `json:"kind"`
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"portals"`
+	Houses []struct {
+		Rect string `json:"rect"`
+		Door string `json:"door"`
+		Exit string `json:"exit"`
+	} `json:"houses"`
+	Rooms map[string]int `json:"rooms"`
+	Error string         `json:"error"`
+	Door  string         `json:"door"`
 }
 
 // rows expands the drawing of c ({"repeat": n, "row": r} is n rows r, {"repeat": n,
@@ -55,7 +66,7 @@ func (c doorRoomCase) rows(t *testing.T) []string {
 }
 
 // doorRoomCases is how many cases door-rooms.json has (doors.test.ts checks the same).
-const doorRoomCases = 21
+const doorRoomCases = 39
 
 // The rooms behind locked doors, and the doors that have none, are the same for the
 // server and for make validate: both read door-rooms.json (docs/02 "Puertas con llave").
@@ -74,14 +85,15 @@ func TestDoorRoomsFixture(t *testing.T) {
 	if len(doc.Cases) < doorRoomCases {
 		t.Fatalf("only %d cases", len(doc.Cases))
 	}
-	errs := map[string]error{"walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen,
-		"truncated": session.ErrDoorTruncated, "tie": session.ErrDoorTie, "key": session.ErrDoorOtherKey,
-		"outside": session.ErrDoorOtherOutside, "far": session.ErrDoorOutsideFar}
+	errs := map[string]error{"blocked": session.ErrDoorBlocked, "portal": session.ErrDoorOnPortal,
+		"walled": session.ErrDoorWalled, "open": session.ErrDoorInTheOpen, "truncated": session.ErrDoorTruncated,
+		"tie": session.ErrDoorTie, "key": session.ErrDoorOtherKey, "escape": session.ErrDoorNoEscape,
+		"bypass": session.ErrDoorBypassed}
 	for _, c := range doc.Cases {
 		t.Run(c.Name, func(t *testing.T) {
 			rows := c.rows(t)
 			// worldtest draws the gate pair (D, d); the other doors go on after.
-			var plain, walled, other []world.Pos
+			var plain, walled, other, blocked []world.Pos
 			for y, r := range rows {
 				b := []byte(r)
 				for x, ch := range b {
@@ -92,6 +104,8 @@ func TestDoorRoomsFixture(t *testing.T) {
 						walled, b[x] = append(walled, pos(x, y)), '#'
 					case 'K':
 						other, b[x] = append(other, pos(x, y)), '.'
+					case 'B':
+						blocked, b[x] = append(blocked, pos(x, y)), '#'
 					}
 				}
 				rows[y] = string(b)
@@ -107,6 +121,36 @@ func TestDoorRoomsFixture(t *testing.T) {
 			for _, p := range other {
 				worldtest.SetTile(t, m, p, worldtest.Grass, blocks, otherGateID)
 			}
+			for _, p := range blocked {
+				worldtest.SetTile(t, m, p, worldtest.Grass, blocks, worldtest.Wall, worldtest.Door)
+			}
+			if len(c.Portals) > 0 {
+				var portals []world.Portal
+				for i, pt := range c.Portals {
+					kind, ok := world.ParsePortalKind(pt.Kind)
+					if !ok {
+						t.Fatalf("bad portal kind %q", pt.Kind)
+					}
+					portals = append(portals, world.Portal{ID: fmt.Sprintf("p%d", i), Kind: kind,
+						From: fixturePos(t, pt.From), To: fixturePos(t, pt.To)})
+				}
+				m = worldtest.WithPortals(t, m, portals...)
+			}
+			if len(c.Houses) > 0 {
+				var houses []world.House
+				for i, h := range c.Houses {
+					var x, y uint16
+					var wd, ht uint8
+					if _, err := fmt.Sscanf(h.Rect, "%d,%d,%d,%d", &x, &y, &wd, &ht); err != nil {
+						t.Fatalf("bad rect %q", h.Rect)
+					}
+					id := fmt.Sprintf("h%d", i)
+					houses = append(houses, world.House{ID: id, Name: "house." + id + ".name", Rent: 10,
+						Rects: []world.HouseRect{{X: x, Y: y, Z: 7, W: wd, H: ht}},
+						Doors: []world.Pos{fixturePos(t, h.Door)}, Exit: fixturePos(t, h.Exit)})
+				}
+				m = worldtest.WithHouses(t, m, houses...)
+			}
 			w, err := session.New(session.Config{Map: m, Balance: testBalance(), Vocations: testVocations,
 				Items: doorTestItems(true), Save: func(session.Snapshot) bool { return true }})
 			if c.Error != "" {
@@ -117,22 +161,32 @@ func TestDoorRoomsFixture(t *testing.T) {
 				if !errors.Is(err, want) {
 					t.Fatalf("got %v, want %v", err, want)
 				}
+				// The same door as make validate: the first one refused, in map order.
+				if at := "locked door on " + c.Door + ",7:"; c.Door == "" || !strings.Contains(err.Error(), at) {
+					t.Fatalf("got %v, want the %q", err, at)
+				}
 				return
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
 			for at, n := range c.Rooms {
-				var x, y int
-				if _, err := fmt.Sscanf(at, "%d,%d", &x, &y); err != nil {
-					t.Fatalf("bad door %q", at)
-				}
-				if got := w.DoorRoomSize(pos(x, y)); got != n {
+				if got := w.DoorRoomSize(fixturePos(t, at)); got != n {
 					t.Errorf("room behind %s: %d tiles, want %d", at, got, n)
 				}
 			}
 		})
 	}
+}
+
+// fixturePos is the tile "x,y" of floor 7 of door-rooms.json.
+func fixturePos(t *testing.T, at string) world.Pos {
+	t.Helper()
+	var x, y int
+	if _, err := fmt.Sscanf(at, "%d,%d", &x, &y); err != nil {
+		t.Fatalf("bad tile %q", at)
+	}
+	return pos(x, y)
 }
 
 // A crowd next to a locked gate does not log anyone in on its other side: the search for
@@ -236,13 +290,15 @@ func roomConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) 
 			}
 		}
 	}
+	// The gate stands on real grass: worldtest's ground numbers are no items of data/, and
+	// a locked door on a tile nobody walks on is refused (errDoorBlocked).
 	g := pos(43, 41)
-	worldtest.SetTile(t, cfg.Map, g, ground, blocks, cfg.Items["forge_gate"].Numeric)
+	worldtest.SetTile(t, cfg.Map, g, cfg.Items["grass"].Numeric, blocks, cfg.Items["forge_gate"].Numeric)
 	return cfg, g
 }
 
 // A room behind a locked door holds nothing that belongs outside (docs/02 "Puertas con
-// llave"): no temple, NPC, house, boat arrival or dialog teleport. Either the outside was
+// llave"): no temple, NPC, house, portal end, boat arrival or dialog teleport. Either the outside was
 // taken for the room, or a player would land behind the door. Monsters may live there.
 func TestRoomHoldsNothingOfTheOutside(t *testing.T) {
 	inside := pos(41, 41)
@@ -275,6 +331,12 @@ func TestRoomHoldsNothingOfTheOutside(t *testing.T) {
 			c.Map = worldtest.WithHouses(t, c.Map, world.House{ID: "wall_house", Name: "house.wall_house.name", Rent: 10,
 				Rects: []world.HouseRect{{X: 42, Y: 40, Z: 7, W: 3, H: 1}}, Doors: []world.Pos{pos(44, 40)}, Exit: pos(45, 40)})
 		}, `house "wall_house" on 42,40,7`},
+		"a portal entrance": {func(c *session.Config) {
+			c.Map = worldtest.WithPortals(t, c.Map, world.Portal{ID: "out", Kind: world.PortalTeleport, From: inside, To: pos(20, 20)})
+		}, `portal "out"`},
+		"a portal destination": {func(c *session.Config) {
+			c.Map = worldtest.WithPortals(t, c.Map, world.Portal{ID: "in", Kind: world.PortalTeleport, From: pos(20, 20), To: inside})
+		}, `portal "in"`},
 		"a boat arrival": {func(c *session.Config) {
 			c.BoatRoutes = testRoutes()
 			c.BoatRoutes[1].To = at
@@ -344,8 +406,8 @@ func TestRoomsOnTheMap(t *testing.T) {
 }
 
 // Two gates of one hall whose outsides meet only through a house: a house is no street,
-// so the walk between the outsides (sameOutside) does not cross it and the world refuses
-// to start (make validate refuses it too, doors.test.ts).
+// so the areas of the escape check take it for a wall, the east outside reaches no temple
+// and the world refuses to start (make validate refuses it too, doors.test.ts).
 func TestSharedRoomOutsidesDoNotCrossHouses(t *testing.T) {
 	rows := []string{
 		"#############",
@@ -369,7 +431,7 @@ func TestSharedRoomOutsidesDoNotCrossHouses(t *testing.T) {
 	}
 	m := worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7, rows...), world.House{ID: "nook", Name: "house.nook.name",
 		Rent: 10, Rects: []world.HouseRect{{X: 6, Y: 5, Z: 7, W: 1, H: 1}}, Doors: []world.Pos{pos(6, 5)}, Exit: pos(5, 5)})
-	if _, err := start(m); !errors.Is(err, session.ErrDoorOtherOutside) {
+	if _, err := start(m); !errors.Is(err, session.ErrDoorNoEscape) || !strings.Contains(err.Error(), "its side on 9,1,7") {
 		t.Fatalf("outsides joined only through a house: %v", err)
 	}
 }

@@ -36,14 +36,34 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   personaje por minuto, escalonada, y las medianas de ingreso se calculan una vez por ronda.
   No está medida con `make bench-tick` (sus benchmarks la tienen apagada); los tests de
   simulación juegan entre 6 y 8 h de juego de un personaje en menos de un segundo cada uno.
-- Puertas con llave (`session/door.go`): la sala detrás de cada puerta se calcula una vez
-  al arrancar (un recorrido de hasta 4096 casillas por lado, y uno de hasta 4 × 4096
-  entre los afueras de dos puertas que comparten sala) y queda un índice casilla → sala
-  (`roomOf`). En el tick, abrir desde adentro es una búsqueda en ese mapa; cerrar con
-  llave mira solo a los jugadores de los sectores de la sala (una búsqueda cada uno) y, de
-  los que están adentro, busca la llave en sus bolsas cortando al encontrarla. Toda
-  búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) suma una búsqueda en
-  `roomOf` por casilla, sin asignar. Un jugador usa una puerta como mucho cada
+- Portales (`session/portal.go`): que una casilla sea escalera, agujero o teletransporte
+  es el bit `portal_step` de sus flags (lo pone `world.NewMap`), no una búsqueda en un
+  mapa de Go: A* (`reroute`, la persecución, `bot.Nav`) y `monsterCanEnter` lo leen por
+  cada casilla que miran (un mapa sin portales ni lo lee). `BenchmarkTickMonsters` tiene
+  una variante `/portal` (un teletransporte en una esquina) que mide ese costo, porque
+  todas las islas reales tienen portales: sin diferencia medible (≈ 87 µs por tick con
+  256 monstruos y ≈ 340 µs con 1024, con y sin portal). Cada paso por un portal manda un
+  `FullMapView` (y ningún `MapSlice`): subir y bajar sin parar por la mina volcánica son
+  unos 950 B/s con un nivel 30, dentro de los 4 KB/s (`TestVolcanicMineStairsOnTheMap` lo
+  mide y falla por encima). Hoy todas las islas tienen solo los pisos 7 y 8, así que la vista de la
+  superficie lleva un piso; una isla con pisos altos pesaría más por paso.
+- Puertas con llave (`session/door.go`, `session/area.go`): la sala detrás de cada puerta
+  se calcula una vez al arrancar (un recorrido de hasta 4096 casillas por lado) y queda un
+  índice casilla → sala (`roomOf`). También al arrancar se numeran las **áreas** del mapa
+  (un recorrido de cada casilla caminable, una vez) para el chequeo de escape y las
+  búsquedas de casilla libre: un `[1024]int32` (4 KiB) por sector que tiene alguna
+  casilla de un área. En el mundo real (135 sectores, 4 islas de 2 pisos): 12 áreas en 105
+  sectores, unos 420 KiB, y `initAreas` tarda ~7 ms (`session.New` entero, ~8 ms); el
+  chequeo de escape es un recorrido de un grafo de áreas (una por puerta y portal) y no se
+  nota. Crece con los sectores del mundo, no con los jugadores: un mundo 10 veces más
+  grande serían ~4 MiB y ~70 ms al arrancar. `make validate` hace lo mismo en TS solo con
+  las áreas que toca (las de los lados de las puertas, las de los portales y las de los
+  templos): ~35 ms sobre el mundo real. En el tick, abrir desde adentro es una búsqueda
+  en `roomOf`; cerrar con llave mira solo a los jugadores de los sectores de la sala (una
+  búsqueda cada uno) y, de los que están adentro, busca la llave en sus bolsas cortando al
+  encontrarla. Toda búsqueda de casilla libre por anillos (`freeNear`, `houseExit`) suma
+  una búsqueda en el índice de áreas por casilla (un mapa por sector, como antes
+  `roomOf`), sin asignar. Un jugador usa una puerta como mucho cada
   `inventory.door_cooldown_ms` (500 ms), **también cuando se lo rechazan**, así que ni la
   casilla ni los chequeos corren al ritmo del gateway. `BenchmarkDoorLockRefused` (el peor
   intento: 202 jugadores, 151 en una sala de 3968 casillas, 150 con la llave al fondo de
@@ -276,6 +296,26 @@ Saver más lo que retiene el loop, publicado por el loop sin costo en el tick) l
 aunque ninguna escritura falle, y la alerta `PersistenceBacklog` avisa si pasa de 1000
 durante 5 minutos. `persistence_errors_total{outcome="retry"}` solo cuenta escrituras que
 fallaron.
+
+**Guardado antes del transfer (falla segura, docs/01).** Un personaje que soltó algo al
+suelo público desde su último snapshot escribe ese estado justo antes de su próximo
+transfer: como mucho una escritura más por personaje y transfer (lo que cuesta un
+autoguardado), y solo la primera vez después de soltar algo, porque cualquier snapshot
+posterior la reemplaza. Queda acotada por los mismos anti-flood que los transfers: en el
+peor caso duplica las escrituras de transfers de quien alterna tirar algo a la calle con
+cada transfer que le permiten los tres anti-flood juntos (`market.action_*` ≈ 2,5 por
+segundo, `trade.action_*` ≈ 3,3 y `houses.action_*` ≈ 3,3: ≈ 9 transfers por segundo →
+≈ 18 escrituras, 9 de ellas de este guardado). Sin transfers no se escribe nada más. En
+el loop, cada comando (o tick, para lo que el servidor deja caer fuera de un comando) en
+que algo cae a la calle toma un snapshot en memoria al terminar, uno solo aunque caigan
+muchas pilas (`BenchmarkThrowAway`, tirar una moneda y levantarla con un cofre de 40
+items: ≈ 3 µs y ≈ 8 KB más por tirada, 11 asignaciones). Con el rate limit de 30
+comandos por segundo son a lo sumo ≈ 0,1 ms por segundo por jugador que no hace otra cosa
+que tirar items, y la memoria es un snapshot por jugador (el último), hasta su próximo
+guardado. Marcar a quien soltó algo es un bool y una lista que casi siempre está vacía
+(`World.givers`), que se mira al principio y al final de cada comando de un jugador y al
+final de cada tick. Lo que alguien saca de una casa a la calle guarda además un puntero
+por pila hasta la escritura de la casa, al final del mismo comando (`Player.left`).
 
 Cada snapshot guardado (también los autoguardados) vuelve al loop como un comando
 `World.Saved` (la espera de la falla segura, docs/01 "Transacciones"): N / 300 por

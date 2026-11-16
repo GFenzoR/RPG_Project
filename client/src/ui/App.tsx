@@ -569,7 +569,7 @@ function GameScreen(props: {
           </span>
         )}
         {stats && (
-          <span class="stat" data-testid="level">
+          <span class="stat level" data-testid="level">
             {t("client.game.level", { level: stats.level, percent: stats.levelPercent })}
           </span>
         )}
@@ -577,7 +577,6 @@ function GameScreen(props: {
         <ConditionBar t={t} conditions={ui.conditions} />
         {layout.compactHeader ? (
           <>
-            <span class="spacer" />
             {panelToggle}
             {/* Phones: experience, the controls help, language, sound and logout fold into
                 one menu so the header stays one line. */}

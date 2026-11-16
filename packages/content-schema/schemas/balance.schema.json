@@ -475,8 +475,10 @@
           "$ref": "common.schema.json#/$defs/positiveInt"
         },
         "reach": {
-          "description": "Chebyshev distance (same floor) for actions on ground items.",
-          "$ref": "common.schema.json#/$defs/positiveInt"
+          "description": "Chebyshev distance (same floor) for actions on ground items, at most 6 (the view half-height: the server answers nothing about a tile out of view).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
         }
       }
     },
@@ -1061,7 +1063,7 @@
           "maximum": 600000
         },
         "arrival_radius": {
-          "description": "If the arrival tile is taken, the nearest free walkable tile at most this far (Chebyshev).",
+          "description": "If the arrival tile of a boat route or a portal is taken, the nearest free walkable tile at most this far (Chebyshev).",
           "type": "integer",
           "minimum": 0,
           "maximum": 5

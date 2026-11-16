@@ -119,7 +119,9 @@ async function enterGame(page: Page, email: string, password: string): Promise<v
   await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
-  await page.waitForTimeout(300); // let the atlas textures upload before a screenshot
+  // The atlas textures are up and the map is on the canvas before any screenshot (a fixed
+  // 300 ms before: not always enough on a slow runner drawing WebGL in software).
+  await expect.poll(() => mapDrawn(page)).toBe(true);
 }
 
 async function tileClient(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
@@ -275,6 +277,29 @@ const mapDrawn = (page: Page): Promise<boolean> =>
       }),
   );
 
+/**
+ * How the header sits on the screen: nothing sticks out sideways (`page`), its last
+ * control (the ☰ menu) is on screen (`end`), and health and mana show whole (the name and
+ * then the level are the ones that give way, with an ellipsis).
+ */
+const headerFit = (
+  page: Page,
+): Promise<{ page: boolean; end: boolean; health: boolean; mana: boolean }> =>
+  page.evaluate(() => {
+    const root = document.documentElement;
+    const whole = (id: string): boolean => {
+      const el = document.querySelector(`[data-testid="${id}"]`);
+      return el !== null && el.scrollWidth <= el.clientWidth;
+    };
+    const last = document.querySelector(".hud")?.lastElementChild;
+    return {
+      page: root.scrollWidth <= root.clientWidth,
+      end: last ? last.getBoundingClientRect().right <= root.clientWidth + 0.5 : false,
+      health: whole("health"),
+      mana: whole("mana"),
+    };
+  });
+
 /** Hotbar slots shown whole in the bar (the rest wait behind the slider's arrows). */
 const wholeSlots = (page: Page): Promise<number> =>
   page.getByTestId("hotbar").evaluate((bar) => {
@@ -411,6 +436,17 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     ),
   ).toBe(true);
+  // Also with a wide font: Linux draws system-ui with DejaVu Sans, far wider than Segoe UI
+  // or San Francisco, and on CI the header of the 390 px iPhone stuck out ~20 px (Verdana,
+  // as wide, shows it on Windows and macOS).
+  const wide = await page.addStyleTag({
+    content: '.hud { font-family: "DejaVu Sans", Verdana, sans-serif; }',
+  });
+  expect(await headerFit(page)).toEqual({ page: true, end: true, health: true, mana: true });
+  await shot("00-wide-font");
+  await wide.evaluate((el) => {
+    el.parentNode?.removeChild(el);
+  });
   // The map keeps a whole-number zoom and its 15x11 tiles on any screen.
   const scale = await page.evaluate(() => window.__rpgClient?.scale() ?? 0);
   expect(Number.isInteger(scale) && scale >= 1).toBe(true);
@@ -466,6 +502,18 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   // Items without dragging: tap the backpack, then tap the own tile on the map.
   me = after;
   const backpackId = await page.evaluate(() => window.__rpgClient?.itemNumber("backpack"));
+  if (backpackId === undefined) throw new Error("no backpack item");
+  // What the tile holds before: every touch test starts at the same spawn and walks the
+  // same way, so one that failed earlier in the run (or a retry's first attempt) may have
+  // left its backpack here. The checks compare the whole stack, not just the top item.
+  const stack = (): Promise<number[] | undefined> =>
+    page.evaluate(({ a, b, c }) => window.__rpgClient?.tile(a, b, c)?.slice(), {
+      a: me.x,
+      b: me.y,
+      c: me.z,
+    });
+  const ground = await stack();
+  if (!ground) throw new Error("own tile unknown");
   await showTab(page, "inventory");
   const slot = page.getByTestId("slot-backpack");
   await slot.locator("[data-item=backpack]").tap();
@@ -475,21 +523,15 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   await closeDrawer(page);
   await tapTile(page, me.x, me.y);
   await expect(page.getByTestId("pick-banner")).toBeHidden();
-  await expect
-    .poll(() =>
-      page.evaluate(({ a, b, c }) => window.__rpgClient?.tile(a, b, c)?.at(-1), {
-        a: me.x,
-        b: me.y,
-        c: me.z,
-      }),
-    )
-    .toBe(backpackId);
+  await expect.poll(stack).toEqual([...ground, backpackId]);
   await expect(page.getByTestId("slot-backpack").locator("[data-item]")).toHaveCount(0);
 
   // A long press on the tile opens its menu: "Mover" picks the backpack, a tap on the
-  // empty slot equips it again.
+  // empty slot equips it again. The finger lifts well after the menu opened, as on a slow
+  // runner: Chromium then clicks what is under it, and on a phone on its side that is the
+  // menu (it takes the screen's height). The menu ignores that click (menuClickCounts).
   const p = await tileClient(page, me.x, me.y);
-  await hold(page, p.x, p.y, 800);
+  await hold(page, p.x, p.y, 1200);
   const menu = page.getByTestId("action-menu");
   await expect(menu).toBeVisible();
   await expect(menu.locator('[data-action="look"]')).toBeVisible();
@@ -500,15 +542,7 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   await showTab(page, "inventory");
   await page.getByTestId("slot-backpack").tap();
   await expect(page.getByTestId("slot-backpack").locator("[data-item=backpack]")).toBeVisible();
-  await expect
-    .poll(() =>
-      page.evaluate(({ a, b, c }) => window.__rpgClient?.tile(a, b, c)?.at(-1), {
-        a: me.x,
-        b: me.y,
-        c: me.z,
-      }),
-    )
-    .not.toBe(backpackId);
+  await expect.poll(stack).toEqual(ground);
 
   // The chat tab: the input takes the text (the game gets no keys) and the server echoes it.
   await showTab(page, "chat");
@@ -671,6 +705,128 @@ for (const { prefix, device, layout, browser } of DEVICES) {
       await enterGame(page, who.email, who.password);
       errors.length = 0;
       await talkToPriestess(page, prefix);
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
+/**
+ * A notched phone (an iPhone 13's insets, on Chromium: CDP sets them; emulation has none):
+ * `.game` keeps the game out of the notch, the rounded corners and the home indicator with
+ * its padding, and the touch widgets over the map keep their margin from the map's edges,
+ * so the inset counts once. Before, the pad, the hotbar beside it, the zoom buttons and the
+ * picked-item banner added it a second time (on a phone on its side, 47 px more).
+ */
+const NOTCHED: {
+  prefix: string;
+  device: string;
+  /** Portrait: the map on top and the pad in a strip under it. */
+  column: boolean;
+  insets: { top: number; left: number; right: number; bottom: number };
+}[] = [
+  {
+    prefix: "pixel7-landscape",
+    device: "Pixel 7 landscape",
+    column: false,
+    insets: { top: 0, left: 47, right: 47, bottom: 21 },
+  },
+  {
+    prefix: "pixel7-portrait",
+    device: "Pixel 7",
+    column: true,
+    insets: { top: 47, left: 0, right: 0, bottom: 34 },
+  },
+];
+
+/** Hotbar offset beside the pad (PAD_RESERVE_PX in src/ui/TouchPad.tsx, touch.css). */
+const PAD_RESERVE = 162;
+
+for (const { prefix, device, column, insets } of NOTCHED) {
+  test.describe(`T5.6 on ${device} with a notch`, () => {
+    test.use(deviceOptions(device));
+
+    test("touch: the safe area counts once, as the padding of the game", async ({
+      page,
+      playwright,
+    }) => {
+      const errors = watchErrors(page);
+      const who = await newGuardian(playwright, "Notch");
+      await enterGame(page, who.email, who.password);
+      errors.length = 0;
+      // The override lives as long as this CDP session: it stays attached to the end.
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets });
+      // The game takes the insets as its padding (env(safe-area-inset-*) in client.css).
+      await expect
+        .poll(() =>
+          page.getByTestId("game").evaluate((g) => {
+            const s = getComputedStyle(g);
+            return [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft].map(parseFloat);
+          }),
+        )
+        .toEqual([insets.top, insets.right, insets.bottom, insets.left]);
+      const box = async (
+        testid: string,
+      ): Promise<{ l: number; t: number; r: number; b: number }> => {
+        const b = await page.getByTestId(testid).boundingBox();
+        if (!b) throw new Error(`no ${testid}`);
+        return { l: b.x, t: b.y, r: b.x + b.width, b: b.y + b.height };
+      };
+      /** Within a pixel (device pixels are 1/2.625 of a CSS pixel here). */
+      const near = (what: string, actual: number, expected: number): void =>
+        expect(Math.abs(actual - expected), `${what}: ${actual} (want ${expected})`).toBeLessThan(
+          1,
+        );
+      const vp = page.viewportSize();
+      if (!vp) throw new Error("no viewport size");
+      // What the game draws starts and ends where the safe area does: the header at its
+      // top, the body (the map, and in portrait the panel under it) at its bottom.
+      const hud = await page.locator(".game > .hud").boundingBox();
+      if (!hud) throw new Error("no header");
+      near("header top", hud.y, insets.top);
+      const body = await page.locator(".game-body").boundingBox();
+      if (!body) throw new Error("no game body");
+      near("body bottom", vp.height - (body.y + body.height), insets.bottom);
+      // The map's box (the pad's strip included in portrait) is inside the safe area: on its
+      // side the map reaches the bottom one, in portrait the panel lies under it.
+      const mapBox = await page.locator(".viewport").boundingBox();
+      if (!mapBox) throw new Error("no map box");
+      const map = {
+        l: mapBox.x,
+        t: mapBox.y,
+        r: mapBox.x + mapBox.width,
+        b: mapBox.y + mapBox.height,
+      };
+      near("map left", map.l, insets.left);
+      near("map right", vp.width - map.r, insets.right);
+      if (!column) near("map bottom", vp.height - map.b, insets.bottom);
+      // The widgets over it keep 8 px from its edges, not 8 px plus the inset again.
+      const pad = await box("touch-pad");
+      near("pad left", pad.l - map.l, 8);
+      near("pad bottom", map.b - pad.b, 8);
+      const hotbar = await box("hotbar");
+      near("hotbar left", hotbar.l - map.l, PAD_RESERVE);
+      const zoom = await box("zoom-buttons");
+      near("zoom right", map.r - zoom.r, 8);
+      // Picked, the backpack's banner goes top left of the map (in portrait, in the strip
+      // beside the pad, where the zoom buttons were).
+      await showTab(page, "inventory");
+      await page.getByTestId("slot-backpack").locator("[data-item=backpack]").tap();
+      await closeDrawer(page);
+      const banner = await box("pick-banner");
+      near("banner left", banner.l - map.l, column ? PAD_RESERVE : 8);
+      if (column) near("banner right", map.r - banner.r, 8);
+      await page.getByTestId("pick-cancel").tap();
+      await expect(page.getByTestId("pick-banner")).toBeHidden();
+      // Nothing sticks out sideways.
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+      ).toBe(true);
+      await expect.poll(() => mapDrawn(page)).toBe(true);
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-09-safe-area.png`) });
+      await cdp.detach();
       expect(errors).toEqual([]);
     });
   });
