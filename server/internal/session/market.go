@@ -389,7 +389,9 @@ func (w *World) referencePrice(item uint16, now time.Time) int64 {
 // reports whether m was about a board.
 func (w *World) useMarketBoard(ctx *game.TickContext, p *Player, m *pb.UseItem) bool {
 	pos, ok := posFromMsg(m.GetFrom().GetPos())
-	if !ok || int(m.GetStackIndex()) >= w.staticCount(pos) {
+	// A tile of another floor or out of view is no board use (like itemAt): no answer
+	// about a tile p does not see.
+	if !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) || int(m.GetStackIndex()) >= w.staticCount(pos) {
 		return false
 	}
 	id := w.staticAt(pos, int(m.GetStackIndex()))

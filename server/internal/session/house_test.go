@@ -1,7 +1,9 @@
 package session_test
 
 import (
+	"maps"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -828,5 +830,31 @@ func TestHouseEnterAndExitPastBlockers(t *testing.T) {
 	h.send(cl, houseCmd(&pb.HouseExit{}))
 	if h.w.Map().HouseAt(a.Pos()) != nil {
 		t.Fatalf("Ana still inside at %v", a.Pos())
+	}
+}
+
+// A house door or a market board out of view answers like any tile out of view
+// (inventory.not_possible): the server tells nothing of a tile p does not see.
+func TestFarHouseDoorAndBoardSayNothing(t *testing.T) {
+	rows := make([]string, len(houseMap))
+	for i, r := range houseMap {
+		rows[i] = r + strings.Repeat(".", 20)
+	}
+	h := newHouseHarness(t, func(c *session.Config) {
+		c.Map = worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7, rows...), testHouses()...)
+	})
+	cl, _ := h.tenant("Faraway", 0, pos(28, 3))
+	for name, m := range map[string]*pb.ClientMessage{
+		"house door": useItem(onTile(shedDoor), worldtest.Grass, 0),
+		"board":      useItem(onTile(houseBoard), boardID, 1),
+	} {
+		if evs := h.send(cl, m); !maps.Equal(systemKeys(evs), notPossible) || lastHouse(evs) != nil {
+			t.Fatalf("%s out of view: %v", name, systemKeys(evs))
+		}
+	}
+	// In view but out of reach it is still too far.
+	near, _ := h.tenant("Nearer", 0, pos(12, 3))
+	if evs := h.send(near, useItem(onTile(shedDoor), worldtest.Grass, 0)); !hasKey(evs, "inventory.too_far") {
+		t.Fatalf("house door in view: %v", systemKeys(evs))
 	}
 }

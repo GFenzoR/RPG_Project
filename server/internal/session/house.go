@@ -603,10 +603,11 @@ func (w *World) houseTransfer(players []*Player, ops []HouseOp, market ...Market
 // ---- the window -----------------------------------------------------------------------
 
 // useHouseDoor opens the house window if m points at a door tile of a house (any item of
-// the tile). It reports whether m was about a door.
+// the tile) that p sees on its floor. It reports whether m was about such a door: a tile
+// of another floor or out of view is not (like itemAt, no answer about it).
 func (w *World) useHouseDoor(ctx *game.TickContext, p *Player, m *pb.UseItem) bool {
 	pos, ok := posFromMsg(m.GetFrom().GetPos())
-	if !ok || len(w.houseList) == 0 || w.m.Flags(pos)&world.FlagHouse == 0 {
+	if !ok || pos.Z != p.pos.Z || !Sees(p.pos, pos) || len(w.houseList) == 0 || w.m.Flags(pos)&world.FlagHouse == 0 {
 		return false
 	}
 	h := w.houseAt(pos)
@@ -620,7 +621,7 @@ func (w *World) useHouseDoor(ctx *game.TickContext, p *Player, m *pb.UseItem) bo
 	switch {
 	case !w.houseOn:
 		p.emit(systemMsg(msgHouseClosed))
-	case pos.Z != p.pos.Z || chebyshev(p.pos, pos) > doorReach:
+	case chebyshev(p.pos, pos) > doorReach:
 		p.emit(systemMsg(msgTooFar))
 	default:
 		p.house = &houseView{h: h}
