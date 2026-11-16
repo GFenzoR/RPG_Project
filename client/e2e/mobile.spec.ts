@@ -247,6 +247,34 @@ const zoomOf = async (page: Page): Promise<{ scale: number; min: number; max: nu
 const rememberedZoom = (page: Page): Promise<string | null> =>
   page.evaluate(() => localStorage.getItem("rpg.zoom"));
 
+/**
+ * Whether the map's drawing buffer holds a drawn map (a few pixels not of the black
+ * background), read in the next animation frame, right after the renderer's (the buffer
+ * is not preserved). Playwright's WebKit on Windows shows a WebGL canvas black in
+ * screenshots once its size changes (a zoom, or a resize as before zooming existed),
+ * although it is drawn: this checks what the screenshot cannot.
+ */
+const mapDrawn = (page: Page): Promise<boolean> =>
+  page.evaluate(
+    () =>
+      new Promise<boolean>((resolve) => {
+        requestAnimationFrame(() => {
+          const c = document.querySelector<HTMLCanvasElement>('[data-testid="game-canvas"]');
+          const gl = c?.getContext("webgl2") ?? c?.getContext("webgl");
+          if (!c || !gl) return resolve(false);
+          const px = new Uint8Array(4);
+          for (const fx of [0.25, 0.5, 0.75])
+            for (const fy of [0.25, 0.5, 0.75]) {
+              const x = Math.floor(c.width * fx);
+              const y = Math.floor(c.height * fy);
+              gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+              if ((px[0] ?? 0) + (px[1] ?? 0) + (px[2] ?? 0) > 0) return resolve(true);
+            }
+          resolve(false);
+        });
+      }),
+  );
+
 /** Hotbar slots shown whole in the bar (the rest wait behind the slider's arrows). */
 const wholeSlots = (page: Page): Promise<number> =>
   page.getByTestId("hotbar").evaluate((bar) => {
@@ -290,6 +318,8 @@ async function zoomByTouch(page: Page, shot: (name: string) => Promise<Buffer>):
   expect(canvas.x + canvas.width).toBeLessThanOrEqual((vp?.width ?? 0) + 0.5);
   if (await page.locator('.game[data-flow="column"][data-pad]').count())
     expect(canvas.y + canvas.height).toBeLessThanOrEqual(pad.y + 0.5);
+  // The resized canvas keeps drawing the map (on WebKit its screenshot is black: mapDrawn).
+  await expect.poll(() => mapDrawn(page)).toBe(true);
   await shot("08-zoomed");
   await page.getByTestId("zoom-out").tap();
   await expect.poll(async () => (await zoomOf(page)).scale).toBe(fit.min);
@@ -358,8 +388,12 @@ async function showTab(page: Page, tab: string): Promise<void> {
 /** Closes the drawer (phone landscape) so the map takes taps again; no-op with tabs. */
 async function closeDrawer(page: Page): Promise<void> {
   const toggle = page.getByTestId("panel-toggle");
-  if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) === "true")
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) === "true") {
     await toggle.tap();
+    // Until its slide out ends the drawer still covers the right of the map (the zoom
+    // buttons): a tap there meanwhile would hit the drawer.
+    await expect(page.locator("#side-panel")).toBeHidden();
+  }
 }
 
 /**

@@ -106,7 +106,10 @@ export default defineConfig({
         "go run ./cmd/mapcompile -root .. -out ../build/world.bin && " +
         // Every test registers and logs in from 127.0.0.1: raise the per-IP auth burst so the
         // suite does not depend on how fast it runs (production keeps the default).
-        `go run ./cmd/gameserver -http 127.0.0.1:${serverPort} -world ../build/world.bin -seed 1 -auth-rate-burst 1000 -start-town testisle -boat-routes ../client/e2e/fixtures/boat_routes.yaml`,
+        // -cookie-secure=false: Playwright's WebKit drops a Secure cookie on http://localhost
+        // (Chromium keeps it), so the (webkit) tests could not stay logged in; production and
+        // the other servers here keep the flag.
+        `go run ./cmd/gameserver -http 127.0.0.1:${serverPort} -world ../build/world.bin -seed 1 -auth-rate-burst 1000 -cookie-secure=false -start-town testisle -boat-routes ../client/e2e/fixtures/boat_routes.yaml`,
       cwd: `${import.meta.dirname}/../server`,
       url: `${serverURL}/healthz`,
       reuseExistingServer: false,

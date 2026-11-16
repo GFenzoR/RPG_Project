@@ -136,6 +136,12 @@ mismo servidor y Vite del E2E de escritorio (de `devices[...]` se toman tamaño,
   fuera con un aviso y Chromium corre solo. El WebKit de Playwright funciona en Windows
   (WebGL incluido); avisa en consola que no conoce `interactive-widget` del viewport,
   pero eso pasa al cargar la página, antes de que el test empiece a contar errores.
+  Ese WebKit descarta la cookie `Secure` en `http://localhost` (Chromium la guarda): el
+  servidor principal del E2E corre con `-cookie-secure=false`, si no el login no se
+  mantiene. En Windows además muestra negro el canvas WebGL en los screenshots apenas
+  cambia de tamaño (un zoom o un resize, igual que antes del zoom), aunque se dibuje: los
+  `mobile-webkit-*-08-zoomed.png` salen con el mapa negro. Por eso el test lee unos
+  píxeles del buffer justo después del frame (`mapDrawn`) en vez de fiarse de la imagen.
 
 Todo con toques: `page.touchscreen.tap` en los dos navegadores. El toque largo, el pad
 mantenido y el pellizco usan, en Chromium, eventos táctiles de CDP
@@ -153,7 +159,8 @@ acepta en un evento sintético; el pad captura su dedo.
 - En cada dispositivo, el zoom del mapa: `+` sube una escala entera y se recuerda
   (`localStorage` `rpg.zoom`); el canvas sigue dentro de la caja del mapa (en vertical,
   sobre el pad); `−` vuelve a la escala que muestra las 15x11 casillas y la olvida; un
-  pellizco al doble de distancia acerca, y se vuelve con `−`.
+  pellizco al doble de distancia acerca, y se vuelve con `−`. Acercado, el mapa sigue
+  dibujado (`mapDrawn`).
 - Pixel 7 vertical además marca un lobo con un toque y espera golpes (vida que baja).
 - En cada dispositivo, un toque sobre la sacerdotisa de Puerto abre su diálogo (estado
   del cliente y ventana), que entra en pantalla y se cierra con un botón de 44 px.
