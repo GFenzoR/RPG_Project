@@ -641,7 +641,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `"first"`): un cadáver o una moneda no la tapan. **Ctrl+click derecho** (escritorio:
   `input/mouse.ts` `mapPress`, puro y con tests, da `use` con `top` = `e.ctrlKey`, y el
   canvas llama `useTile(x, y, z, top)`) usa el item de arriba aunque sea una escalera de
-  mano; sin nada encima usa su `ladder_up`, y el servidor trepa igual. Lo decide `useMode`
+  mano; sin nada encima usa el item del portal (`ladder_up`/`ladder_down`), y el servidor
+  trepa igual. Lo decide `useMode`
   (`state/portals.ts`, puro y con tests): `"first"` en una escalera de mano salvo con
   `top`, `"bare"` si la casilla se usa por el suelo (`Game.usesGround`), `"never"` en el
   resto. El toque largo sobre una escalera de mano muestra "Trepar"

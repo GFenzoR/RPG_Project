@@ -137,7 +137,7 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     ponen portales en casillas sin nada). `add_portal` (mapcli, MCP, panel del editor) no
     coloca el item: el editor podría ponerlo solo (hacerlo dentro de la operación cambia su
     inversa y los patches, por eso quedó aparte). Arrastrar con el mouse el item propio de
-    un portal manda un `MoveItem` que el servidor rechaza (`inventory.cannot_move`), como con
+    un portal manda un `MoveItem` que el servidor rechaza (`inventory.not_possible`), como con
     cualquier item fijo del mapa. Los items tirados sobre una escalera, un agujero o un
     teletransporte caen al otro extremo (solo por `MoveItem`: el servidor nunca suelta
     nada en esas casillas, nadie se para ahí), sin efecto visual ni sonido propio; uno que

@@ -165,9 +165,9 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   "Cambiar de piso": `stairs`, `hole` y `teleport` se pisan, `ladder` se usa, `rope_spot`
   pide una soga y `boat` no mueve a nadie (los barcos son `data/boat_routes.yaml`). El
   portal es la casilla, no un item, pero se ve por el item que lo muestra, que va en la
-  pila de su `from` (un item con bloque `portal`, `06-content-data.md`): `stairs_down` /
-  `stairs_up`, `ladder_up` (la escalera de mano de abajo, que sube) / `ladder_down` (la
-  trampilla de arriba, que baja), `hole`, `rope_spot` y `teleport`. `make validate` y
+  pila de su `from` o como su suelo (un item con bloque `portal`, `06-content-data.md`):
+  `stairs_down` / `stairs_up`, `ladder_up` (la escalera de mano de abajo, que sube) /
+  `ladder_down` (la trampilla de arriba, que baja), `hole`, `rope_spot` y `teleport`. `make validate` y
   `mapcompile` lo exigen ("Validación", "Compilación": sin el item no hay `world.bin`); el
   servidor no lo mira para mover a nadie y al arrancar solo avisa en el log si falta, para
   un `world.bin` compilado antes de cambiar `data/items` (`world.bin` guarda números de
@@ -415,13 +415,12 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   casilla (el servidor los indexa por la entrada). Ningún NPC, spawn de radio 0, templo ni
   salida de casa sobre la entrada de un `stairs`/`hole`/`teleport`. Un id de portal no se
   repite en todo el mundo (como en el servidor). **El item que lo muestra:** la entrada de
-  todo portal salvo un `boat` tiene (en su pila o como suelo) un item cuyo bloque `portal` es de su
-  `kind` y, si dice `leads`, del sentido en que cambia de piso (`down` si `to.z > from.z`,
-  `up` si es menor; un teletransporte del mismo piso solo con un item sin `leads`); el
-  error nombra los items de `data/items` que sirven. **Advertencia:** un item de portal en
-  una casilla de la que no sale un portal que muestre (los jugadores lo tomarían por un
-  camino). **Llegada:** toda casilla caminable fuera
-  de casas, sin NPC y fuera de las entradas de `stairs`/`hole`/`teleport` a
+  todo portal salvo un `boat` tiene (en su pila o como suelo) un item cuyo bloque `portal`
+  es de su `kind` y, si dice `leads`, del sentido en que cambia de piso (`down` si
+  `to.z > from.z`, `up` si es menor; un teletransporte del mismo piso solo con un item sin
+  `leads`); el error nombra los items de `data/items` que sirven. **Advertencia:** un item
+  de portal en una casilla de la que no sale un portal que muestre (los jugadores lo
+  tomarían por un camino). **Llegada:** toda casilla caminable fuera de casas, sin NPC y fuera de las entradas de `stairs`/`hole`/`teleport` a
   `travel.arrival_radius` del destino (de `data/balance.yaml`; 5, el máximo, si no se
   cargó) se conecta a pie con el destino (8 direcciones, un piso, puertas abiertas, sin
   cruzar esas entradas, casillas de casa ni NPCs: el servidor busca solo en el área del
