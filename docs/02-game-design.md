@@ -321,8 +321,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - **Fuentes:** `swift_stride` (haste 25 s, las cuatro vocaciones) y `purge_venom` (cura el
     veneno) desde nivel 8-9; `keen_eye` (montaraz), `entangle` (druida, `slowed` a un
     monstruo, o con PvP a un jugador, a 4 casillas), `shroud` (arcanista,
-    invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` electrizado. La araña de musgo (escupitajo) y el escarabajo de
-    mena (mordida) envenenan al hacer daño.
+    invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` electrizado. La araña
+    de musgo (escupitajo) y el escarabajo de mena (mordida) envenenan al hacer daño.
   - **Pendiente:** campos en el suelo (fuego o veneno) que apliquen condiciones al pisarlos
     (necesitan items con duración, disparar al entrar a la casilla y su render); items
     de cura (antídoto); que un jugador vea invisibles.
