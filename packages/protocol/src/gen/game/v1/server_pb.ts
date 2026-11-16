@@ -1946,8 +1946,9 @@ export type MarketUpdate = Message$1<"game.v1.MarketUpdate"> & {
    * offers, on the player's own offers or on its mailbox; a ban or unban that hides or
    * shows offers; a completed trade that changed the player's money and items; a house
    * rent, transfer or release that changed its mailbox; the market turning read-only).
-   * At most one every 500 ms per window (the switch to read-only goes out at once). A
-   * client whose window is already closed ignores it (it must not open the window again).
+   * At most one per window every market.push_every_ms of data/balance.yaml (500 ms; the
+   * switch to read-only goes out at once). A client whose window is already closed
+   * ignores it (it must not open the window again).
    *
    * @generated from field: bool refresh = 21;
    */

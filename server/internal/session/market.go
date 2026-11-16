@@ -216,18 +216,13 @@ type priceDay struct {
 
 // marketView is the market window a player has open: the board it stands at and the
 // browsed item (0: none, kept in World.mkWatch). queued: a refresh waits in World.mkPush;
-// next: the first tick a pushed refresh may go out (marketPushEvery apart).
+// next: the first tick a pushed refresh may go out (World.mkPushEvery apart).
 type marketView struct {
 	board  world.Pos
 	item   uint16
 	queued bool
 	next   game.Tick
 }
-
-// marketPushEvery is the shortest time between two refreshes pushed to one window
-// (another player's action, flushMarket): a busy book costs each viewer at most one
-// MarketUpdate every 500 ms, and a change inside that time goes out when it ends.
-const marketPushEvery = game.Tick(500 * time.Millisecond / game.TickDuration)
 
 func (w *World) initMarket() {
 	m := w.cfg.Balance.Market
@@ -237,6 +232,7 @@ func (w *World) initMarket() {
 	w.mkOn, w.mk = true, m
 	w.mkRefill = max(game.Tick(m.ActionRefillMs/int(game.TickDuration.Milliseconds())), 1)
 	w.mkBurst = w.mkRefill * game.Tick(m.ActionBurst-1)
+	w.mkPushEvery = ticksFor(m.PushEveryMs)
 	w.offers = map[int64]*offer{}
 	w.books = map[uint16]*book{}
 	w.byOwner = map[int64][]*offer{}
@@ -464,7 +460,10 @@ func (w *World) closeMarket(p *Player) {
 // pushes a fresh MarketUpdate (refresh = true) at the end of the tick. mkWatch indexes
 // the open windows by browsed item, so an action finds its viewers without walking every
 // player; mkPush collects the windows to send, each once per tick at most and
-// marketPushEvery apart. Nothing here reads the database.
+// mkPushEvery (balance.yaml market.push_every_ms) apart: a busy book costs each viewer at
+// most one MarketUpdate per push_every_ms, and a change inside that time goes out when it
+// ends. A refresh is the whole window (what an answer costs), not a delta. Nothing here
+// reads the database.
 
 // dropMarket forgets p's window (closed, walked away, left the world or link-dead).
 func (w *World) dropMarket(p *Player) {
@@ -514,23 +513,28 @@ func (w *World) marketOwnerChanged(id int64) {
 }
 
 // marketAccountChanged queues a refresh of every window whose book lists an offer of
-// account (banned or unbanned: its offers are hidden or shown again).
+// account (banned or unbanned: its offers are hidden or shown again). It gathers the
+// items the account has offers of (its characters' own lists, at most max_offers each)
+// and queues their viewers: no book is walked.
 func (w *World) marketAccountChanged(account int64) {
-	if !w.mkOn {
+	if !w.mkOn || len(w.mkWatch) == 0 {
 		return
 	}
-	for _, p := range w.players {
-		if p.market == nil || p.market.item == 0 {
+	var items []uint16
+	for _, own := range w.byOwner {
+		if len(own) == 0 || own[0].AccountID != account { // a character's offers share its account
 			continue
 		}
-		if b := w.books[p.market.item]; b != nil && (hasAccount(b.sells, account) || hasAccount(b.buys, account)) {
-			w.queueMarket(p)
+		for _, o := range own {
+			if !slices.Contains(items, o.ItemID) {
+				items = append(items, o.ItemID)
+			}
 		}
 	}
-}
-
-func hasAccount(list []*offer, account int64) bool {
-	return slices.ContainsFunc(list, func(o *offer) bool { return o.AccountID == account })
+	slices.Sort(items) // byOwner is a map: queue in a fixed order
+	for _, item := range items {
+		w.bookChanged(item)
+	}
 }
 
 func (w *World) queueMarket(p *Player) {
@@ -541,7 +545,7 @@ func (w *World) queueMarket(p *Player) {
 	w.mkPush = append(w.mkPush, p)
 }
 
-// flushMarket sends the queued refreshes; one still inside its marketPushEvery waits for
+// flushMarket sends the queued refreshes; one still inside its mkPushEvery waits for
 // a later tick (it is not lost). Called once per tick, before the batches go out.
 func (w *World) flushMarket(ctx *game.TickContext) {
 	if len(w.mkPush) == 0 {
@@ -558,7 +562,7 @@ func (w *World) flushMarket(ctx *game.TickContext) {
 			continue
 		}
 		w.sendMarket(ctx.Now, p, true)
-		v.next = ctx.Tick + marketPushEvery
+		v.next = ctx.Tick + w.mkPushEvery
 	}
 	clear(w.mkPush[len(keep):])
 	w.mkPush = keep
@@ -1161,13 +1165,15 @@ func sideName(sell bool) string {
 // for them, and anything else built on it would be saved by halves. So the failure is
 // made safe until a restart: those characters leave the world (SAVE_FAILED), their
 // unsaved state is dropped and their logins are refused (CHARACTER_LOCKED); the market
-// becomes read-only (browse only, no expiry) and every open trade is cancelled. Their
-// corpses stay reserved to them (locked out, World.reserved) until they decay: the items
-// in them come from the dropped state. The operator sees the error log,
+// becomes read-only (browse only, no expiry) and every open trade is cancelled. The
+// corpses they left while held, and what was reserved to them on the ground, stay
+// reserved (locked out, hold.go): the items there may come from the dropped state; a
+// corpse decays. The operator sees the error log,
 // persistence_errors_total{outcome="skipped"} and its alert.
 func (w *World) Tainted(ids []int64) game.Command {
 	return game.CommandFunc(func(ctx *game.TickContext) {
-		if !w.readOnly {
+		fresh := !w.readOnly
+		if fresh {
 			w.log.Error("market: a transfer was not stored; market and trades are read-only until a restart")
 		}
 		w.readOnly = true
@@ -1182,6 +1188,9 @@ func (w *World) Tainted(ids []int64) game.Command {
 			delete(w.unsaved, id)
 			delete(w.inFlight, id)
 			w.log.Error("session: character locked until a restart, a transfer of it was not stored", "character", id)
+		}
+		if !fresh {
+			return // the windows already show it: a later taint changes nothing they show
 		}
 		for _, p := range w.players {
 			if p.market != nil {

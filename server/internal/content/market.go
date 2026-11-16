@@ -29,6 +29,10 @@ type Market struct {
 	// Anti-flood: a burst of ActionBurst market actions, then one every ActionRefillMs.
 	ActionBurst    int `yaml:"action_burst"`
 	ActionRefillMs int `yaml:"action_refill_ms"`
+	// PushEveryMs is the shortest time between two refreshes the server pushes to one
+	// open window (another player's action changed what it shows): a change inside it
+	// goes out when it ends. It bounds what a busy book costs each viewer.
+	PushEveryMs int `yaml:"push_every_ms"`
 }
 
 // MaxMarketPrice is the largest unit price the balance may allow: amount × price × the
@@ -60,6 +64,9 @@ func (m Market) check() error {
 	}
 	if m.ActionBurst < 1 || m.ActionRefillMs < 1 || m.ActionRefillMs > 60_000 {
 		return errors.New("market: action_burst >= 1 and action_refill_ms in 1..60000")
+	}
+	if m.PushEveryMs < 50 || m.PushEveryMs > 60_000 {
+		return errors.New("market: push_every_ms in 50..60000")
 	}
 	return nil
 }

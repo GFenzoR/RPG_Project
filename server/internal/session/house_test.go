@@ -63,7 +63,7 @@ func newHouseHarness(t *testing.T, opts ...option) *houseHarness {
 		c.Items = marketItems(t)
 		c.Balance.Market = content.Market{Enabled: true, FeePermille: 100, FeeMin: 2, FeeMax: 50, MaxOffers: 2,
 			MaxAmount: 100, MaxPrice: 1000, DurationsHours: []int{1, 2}, ListSize: 5, HistorySize: 4,
-			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50}
+			ReferenceDays: 3, MailboxShown: 10, ActionBurst: 50, ActionRefillMs: 50, PushEveryMs: 500}
 		c.Balance.Houses = content.Houses{Enabled: true, MinLevel: 5, PeriodDays: 7, MaxPeriods: 2, MaxGuests: 2,
 			ItemsPerTile: 1, TransferMinutes: 5, ActionBurst: 100, ActionRefillMs: 50}
 		c.Transfer = func(tr session.Transfer) bool {

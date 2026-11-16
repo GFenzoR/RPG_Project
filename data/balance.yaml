@@ -136,6 +136,7 @@ market:                     # T5.3 (docs/02-game-design.md, "Economía"). Own nu
   mailbox_shown: 30         # mailbox items sent to the window at once
   action_burst: 6           # anti-flood: 6 actions at once, then one every 400 ms
   action_refill_ms: 400
+  push_every_ms: 500        # an open window is refreshed (another player's action) at most this often
 
 trade:                      # T5.3: the trade window between two adjacent players
   enabled: true

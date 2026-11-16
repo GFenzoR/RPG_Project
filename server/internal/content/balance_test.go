@@ -159,3 +159,26 @@ func TestExperiencePace(t *testing.T) {
 		}
 	}
 }
+
+// The live market refresh interval is a balance number (market.push_every_ms): the repo's
+// data sets it and the check bounds it (at least a tick, at most a minute).
+func TestMarketPushEvery(t *testing.T) {
+	b, err := LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Market.PushEveryMs != 500 {
+		t.Errorf("market.push_every_ms = %d, want 500", b.Market.PushEveryMs)
+	}
+	m := b.Market
+	for _, bad := range []int{0, 49, 60_001} {
+		m.PushEveryMs = bad
+		if m.check() == nil {
+			t.Errorf("push_every_ms %d accepted", bad)
+		}
+	}
+	m.Enabled, m.PushEveryMs = false, 0
+	if m.check() != nil {
+		t.Error("a disabled market needs no push_every_ms")
+	}
+}

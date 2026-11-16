@@ -171,8 +171,10 @@ func TestMarketRefreshOnBan(t *testing.T) {
 	})
 	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 5, 0), stack(coinID, 20, 1))
 	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	cc, _ := h.atBoard("Caio", pos(1, 1), stack(coinID, 100, 0))
 	h.send(cs, createOffer(sell, salveID, 2, 3))
 	h.send(cb, browse(salveID))
+	h.send(cc, browse(swordID))
 	nextChar++
 	cg, _ := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Guia", Vocation: "guardian",
 		Level: 1, Health: 145, HasPos: true, Pos: pos(4, 3), Role: session.RoleGM})
@@ -187,6 +189,9 @@ func TestMarketRefreshOnBan(t *testing.T) {
 	h.sim.Step()
 	if u := onlyMarket(t, cb.take()); !u.GetRefresh() || len(u.GetSells()) != 0 {
 		t.Fatalf("Bruno still sees the banned offer: %v", u)
+	}
+	if us := markets(cc.take()); len(us) != 0 {
+		t.Fatalf("a window on a book without the account's offers was refreshed: %v", us)
 	}
 }
 
@@ -277,7 +282,8 @@ func TestMarketRefreshOnRentAndRelease(t *testing.T) {
 }
 
 // When a transfer cannot be stored the market turns read-only: every open window shows
-// it at once, as a refresh.
+// it at once, as a refresh. A later taint (another dropped transfer) changes nothing the
+// windows show: it pushes nothing.
 func TestMarketRefreshOnTaint(t *testing.T) {
 	h := newMarketHarness(t)
 	cs, _ := h.atBoard("Sela", pos(1, 0), stack(salveID, 5, 0))
@@ -289,6 +295,34 @@ func TestMarketRefreshOnTaint(t *testing.T) {
 		if u := onlyMarket(t, cl.take()); !u.GetRefresh() || !u.GetReadOnly() || !u.GetOpen() {
 			t.Fatalf("%s's window %v", name, u)
 		}
+	}
+	h.sim.Command(h.w.Tainted(nil))
+	h.sim.Step()
+	if us := markets(append(cs.take(), cb.take()...)); len(us) != 0 {
+		t.Fatalf("a second taint pushed the windows again: %v", us)
+	}
+}
+
+// The time between two pushed refreshes of a window is market.push_every_ms of the
+// balance: here 2 s, so a change 1 s after the last refresh waits for the other second.
+func TestMarketRefreshEveryFromBalance(t *testing.T) {
+	h := newMarketHarness(t, func(c *session.Config) { c.Balance.Market.PushEveryMs = 2000 })
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	h.send(cb, browse(salveID))
+	h.send(cs, createOffer(sell, salveID, 10, 4))
+	if u := onlyMarket(t, cb.take()); !u.GetRefresh() {
+		t.Fatalf("Bruno's first refresh %v", u)
+	}
+	h.sim.RunTicks(19) // 1 s after it, counting the tick of the next command
+	h.send(cs, cancelOffer(h.w.MarketOffers(s.CharacterID())[0]))
+	h.sim.RunTicks(19)
+	if us := markets(cb.take()); len(us) != 0 {
+		t.Fatalf("refreshed before push_every_ms: %v", us)
+	}
+	h.sim.RunTicks(2)
+	if u := onlyMarket(t, cb.take()); !u.GetRefresh() || len(u.GetSells()) != 0 {
+		t.Fatalf("Bruno's late refresh %v", u)
 	}
 }
 

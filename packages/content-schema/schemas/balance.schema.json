@@ -775,7 +775,8 @@
         "reference_days",
         "mailbox_shown",
         "action_burst",
-        "action_refill_ms"
+        "action_refill_ms",
+        "push_every_ms"
       ],
       "properties": {
         "enabled": { "type": "boolean" },
@@ -806,7 +807,13 @@
         "reference_days": { "type": "integer", "minimum": 1, "maximum": 60 },
         "mailbox_shown": { "type": "integer", "minimum": 1, "maximum": 200 },
         "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "push_every_ms": {
+          "description": "Shortest time between two refreshes the server pushes to one open market window (another player's action); a change inside it goes out when it ends.",
+          "type": "integer",
+          "minimum": 50,
+          "maximum": 60000
+        }
       }
     },
     "trade": {
