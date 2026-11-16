@@ -1191,7 +1191,9 @@ conexión:
   protección): no podría atacar y no habría a quién darle la muerte. Mientras su condición
   daña, cada golpe renueva su bloqueo, así que quien cierra la conexión queda link-dead y
   la muerte se le cuenta igual (como a cualquier atacante). Si vuelve antes de que la
-  condición termine, sigue dañando según las reglas de arriba.
+  condición termine, sigue dañando según las reglas de arriba. Consecuencia aceptada: una
+  víctima que espera en una zona de protección hasta que termine el bloqueo del autor, y
+  el autor sale, se queda con un resto inofensivo (antes dañaba completo, como del mundo).
 - **PvP apagado:** una condición de otro jugador guardada de antes no daña a nadie.
 
 **Hechizos de condición a distancia** (`entangle`): alcanzan a un jugador con las reglas de
@@ -1230,4 +1232,5 @@ jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.
 - Reportes: el contexto incluye `attack_player` y `kill_player` con el nombre del otro.
 
 ### Pendiente
-Sprites de las marcas (hoy son formas dibujadas); un ranking público de guerras.
+Un ranking público de guerras. (Las marcas ya tienen sprites propios:
+`assets/sprites/ui/marks/`, dibujados por `client/src/render/marks.ts`.)
