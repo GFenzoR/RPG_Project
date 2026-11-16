@@ -33,7 +33,9 @@ seguir con Claude Code en tu computador. El entorno local está en
 2. Corre `make setup`, `make db-up` y `make dev`, y abre `http://localhost:5173/` (sitio) y
    `http://localhost:5173/play/` (juego).
 3. Para que otros entren desde tu red o desde internet, usa `make home-up` (`13-hosting-de-pruebas.md`).
-4. Juega 10 minutos y anota lo que se siente mal. Es lo que la IA no puede juzgar sola.
+4. Juega 10 minutos y anota lo que se siente mal. Es lo que la IA no puede juzgar sola. Lo
+   más rápido es `make play`: la Isla de Pruebas tiene todos los sistemas a unos pasos del
+   templo y una instructora que da experiencia y dinero (`16-probar-el-juego.md`).
 
 ## Lo que es tuyo 👤
 | Qué | Para qué | Dónde está explicado |
@@ -56,7 +58,8 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
    `PAYMENTS_PROVIDER`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAYMENTS_REF_SECRET` y
    `PAYMENTS_REF_SECRET_PREVIOUS`, comentadas): los permisos de la IA no le dejan editar
    ese archivo.
-4. Jugar y anotar lo que se siente mal; de ahí salen las próximas tareas.
+4. Jugar y anotar lo que se siente mal (`make play`, `16-probar-el-juego.md`); de ahí salen
+   las próximas tareas.
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
 - **Una tarea, una sesión, un PR.** Usa `/roadmap-task T5.6` o pega el brief. Pide un plan

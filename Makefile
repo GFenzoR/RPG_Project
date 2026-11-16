@@ -233,6 +233,31 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 	$(MAKE) client & \
 	$(MAKE) editor
 
+# The game on the sandbox island (docs/16-probar-el-juego.md): Postgres, the map, the game
+# server on loopback with -start-town (new characters wake up on the Isla de Pruebas) and the
+# client, then the URL to open once both answer. The cosmetic shop runs on the fake payment
+# provider (RPG_ENV=development: only for a server nobody else reaches). Ctrl+C stops it all.
+# PLAY_START_TOWN=puerto plays the normal start instead.
+PLAY_START_TOWN ?= pruebas
+PLAY_URL := http://localhost:5173/play/
+PLAY_HEALTH := http://127.0.0.1:$(lastword $(subst :, ,$(DEV_HTTP_ADDR)))/healthz
+
+.PHONY: play
+play: db-up mapcompile ## Play on the sandbox island (docs/16): Postgres + map + game server + client; prints the URL to open
+	@echo "[play] starting the game server (new characters wake up on '$(PLAY_START_TOWN)') and the client..."
+	@trap 'kill 0' EXIT; \
+	(cd server && RPG_ENV=development PAYMENTS_PROVIDER=fake RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
+		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" \
+		-start-town "$(PLAY_START_TOWN)" $(DEV_SERVER_FLAGS)) & \
+	$(MAKE) client & \
+	ready=0; for i in $$(seq 1 300); do \
+		if curl -sf "$(PLAY_HEALTH)" >/dev/null 2>&1 && curl -sf "$(PLAY_URL)" >/dev/null 2>&1; then ready=1; break; fi; \
+		sleep 1; \
+	done; \
+	if [ $$ready = 1 ]; then echo ""; echo "[play] ready: open $(PLAY_URL)  (Ctrl+C stops everything; guide: docs/16-probar-el-juego.md)"; \
+	else echo "[play] the server or the client did not answer in 5 minutes: look at the log above"; fi; \
+	wait
+
 .PHONY: client
 client: ## Game client dev server on http://localhost:5173 (proxies /api and /ws to RPG_SERVER, default :8080)
 	pnpm --filter @rpg/client dev

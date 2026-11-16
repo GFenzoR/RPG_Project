@@ -24,6 +24,7 @@ próximas tareas están en `14-continuar-en-tu-pc.md`.
    make setup        # instala buf, sqlc, goose, golangci-lint, dependencias, y Chromium y WebKit de Playwright
    make db-up        # levanta Postgres en Docker en el puerto 5432
    make dev          # servidor + cliente + editor
+   make play         # o: jugar en la Isla de Pruebas (16-probar-el-juego.md)
    ```
    `make setup` usa `scripts/local-setup.sh`, que crea la tarea T0.1.
 
@@ -68,7 +69,7 @@ Con CRLF fallan `bash`, `make`, Prettier y los tests que comparan texto.
 - `make dev` se corta con Ctrl+C en la terminal. Si lo matas de otra forma (cerrando la
   pestaña, desde otra herramienta), el `gameserver` puede quedar vivo ocupando `:8080`:
   ciérralo en el Administrador de tareas o con `taskkill /IM gameserver.exe /F`.
-- El servidor de juego de `make dev`, `make run-server`, los E2E y `make bots` escucha solo
+- El servidor de juego de `make dev`, `make play`, `make run-server`, los E2E y `make bots` escucha solo
   en `127.0.0.1`. `go run` compila el `.exe` en una carpeta temporal nueva cada vez, y si
   escuchara en todas las interfaces, el Firewall de Windows preguntaría "¿Permitir?" en
   cada arranque. Para probar desde otro equipo de tu red usa `make home-up`

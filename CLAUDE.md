@@ -56,6 +56,7 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
 - Entorno local → `docs/12-local-development.md`
 - Retomar en tu PC (estado, pendientes, briefs de T5.6 y T5.7, sprites) → `docs/14-continuar-en-tu-pc.md`
 - Móvil: PWA instalable, Tauri Android/iOS, firmas y tiendas → `docs/15-movil.md`
+- Probar el juego a mano en la Isla de Pruebas (`make play`, hacerse staff, PvP) → `docs/16-probar-el-juego.md`
 - Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md`
 
 ## Principios de arquitectura
@@ -92,6 +93,7 @@ make test         # tests Go + TS
 make lint         # golangci-lint + eslint + validación de data/ y world/
 make validate     # valida YAML de contenido y mapas contra los esquemas
 make dev          # postgres + servidor + cliente + editor en modo desarrollo
+make play         # jugar en la Isla de Pruebas (sandbox): postgres + servidor + cliente
 make e2e          # Playwright: levanta todo, juega un login y saca screenshots
 make bots N=100   # prueba de carga con N bots
 ```

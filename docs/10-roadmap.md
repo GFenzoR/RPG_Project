@@ -325,3 +325,13 @@ secundaria.
   Pago solo se probó contra servidores falsos (httptest): falta una compra real en su
   modo prueba (sandbox) con un webhook que llegue desde internet. Copiar las variables
   nuevas a `deploy/.env.example` (la sesión no tenía permiso para editarlo).
+
+## Extras (pedidos fuera de los hitos)
+- [x] **Isla de Pruebas y `make play`.** Isla sandbox `pruebas` (96x96 en 2048,2048, pisos 7
+  y 8) para probar todos los sistemas a mano: templo con instructora (experiencia, dinero,
+  curación y la misión `pruebas_rats`), proveedor con herramientas, runas, equipo de cada
+  vocación y la llave de la puerta de práctica, cinco corrales de caza de débil a fuerte,
+  recolección y oficios, mercado, casa, puerta con llave, patio de portales con sótano (un
+  portal de cada tipo), arena PvP y barquero de ida a las tres islas. Fuera del juego normal:
+  solo `-start-town pruebas` o un `/tp` del personal. Ops `add_text`/`remove_text` para
+  `texts.yaml`. Guía: `16-probar-el-juego.md`.

@@ -674,3 +674,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   de 3692,5796), baja con la flecha izquierda a 3692,5797,8 (el cliente tiene la
   `stairs_up` de 3692,5796,8) y sube con la flecha arriba a 3692,5797,7 (screenshots
   73–75: la escalera en la superficie, la mina en el piso 8 y de vuelta arriba).
+
+## Notas de la Isla de Pruebas (`make play`, docs/16)
+- E2E `e2e/sandbox.spec.ts`: corre en el servidor principal (inicio `testisle`). Un guardián
+  con `town = 'pruebas'` y cuenta `gm` (sembrado con `psql`) despierta en el templo de la
+  isla (2095,2086) junto a `pruebas_trainer`, y con `/tp` va a los corrales, al patio de
+  portales y a la cueva del piso 8 (screenshots 90–93). El `-start-town pruebas` de
+  `make play` se prueba a mano: elige el mismo templo para un personaje sin ciudad.
