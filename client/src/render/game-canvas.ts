@@ -3,13 +3,25 @@
 // pixel (pixel-perfect: no smoothing, no fractional scale), and draws the creatures
 // interleaved with the item stacks (ground → items → creatures, row by row), then effects
 // and floating texts on top, then names and health bars. Input goes back to the caller as
-// tile clicks (left: walk) and creature clicks (right: attack).
+// tile clicks (left: walk) and creature clicks (right: attack). The player may zoom in by
+// whole scales (render/zoom.ts: pinch, the +/- buttons, Ctrl+wheel): the canvas is then
+// cut to the map's box and still centred on the own creature.
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CreatureKind, Skull } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
 import type { AtlasIcon, Camera } from "@rpg/renderer";
-import { VIEW_TILES, followCamera, pixelScale } from "./viewport.ts";
+import { VIEW_TILES, followCamera } from "./viewport.ts";
+import {
+  WheelZoom,
+  pinchZoom,
+  stepZoom,
+  viewPixels,
+  zoomPref,
+  zoomRange,
+  zoomScale,
+} from "./zoom.ts";
+import type { ZoomRange, ZoomView } from "./zoom.ts";
 import { labelText, placeLabels } from "./labels.ts";
 import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
@@ -65,6 +77,10 @@ export interface GameCanvas {
   itemIcon(itemId: number): AtlasIcon | undefined;
   /** Current device pixels per sprite pixel. */
   readonly scale: number;
+  /** The scale and the scales the player may choose now. */
+  readonly zoom: ZoomView;
+  /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
+  zoomBy(steps: number): void;
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -92,6 +108,12 @@ export interface GameCanvasOptions {
   longPressTile(x: number, y: number, z: number, cx: number, cy: number): void;
   /** T5.6: a finger went down on the canvas. */
   touched(): void;
+  /** The zoom this device remembers (render/zoom.ts loadZoom); undefined = fit the view. */
+  zoom?: number | undefined;
+  /** The player zoomed (pinch, Ctrl+wheel, zoomBy): remember `pref` (undefined = fit). */
+  zoomed?(pref: number | undefined): void;
+  /** The scale or its limits changed (a zoom, a resize): refresh the zoom buttons. */
+  zoomView?(view: ZoomView): void;
 }
 
 /** How long after a finger press a contextmenu event is that finger's long press, ms. */
@@ -179,14 +201,45 @@ export async function createGameCanvas(
 
   let scale = 1;
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
+  // The zoom the player chose (undefined = fit the whole view) and what the map's box
+  // allows; `scale` is the one drawn.
+  let pref = opts.zoom;
+  let range: ZoomRange = { min: 1, max: 1 };
+  let shown: ZoomView | undefined;
   const resize = (): void => {
     const dpr = window.devicePixelRatio || 1;
-    scale = pixelScale(host.clientWidth, host.clientHeight, dpr, T);
-    const w = VIEW_TILES.width * T * scale;
-    const h = VIEW_TILES.height * T * scale;
+    // The map's box is the host's content box: a padding keeps the canvas off a strip of
+    // controls (portrait with the touch pad, touch.css).
+    const style = getComputedStyle(host);
+    const px = (v: string): number => parseFloat(v) || 0;
+    const boxW = Math.max(0, host.clientWidth - px(style.paddingLeft) - px(style.paddingRight));
+    const boxH = Math.max(0, host.clientHeight - px(style.paddingTop) - px(style.paddingBottom));
+    range = zoomRange(boxW, boxH, dpr, T);
+    scale = zoomScale(pref, range);
+    const { width: w, height: h } = viewPixels(
+      Math.floor(boxW * dpr),
+      Math.floor(boxH * dpr),
+      scale,
+      T,
+    );
     if (app.renderer.width !== w || app.renderer.height !== h) app.renderer.resize(w, h);
     canvas.style.width = `${w / dpr}px`;
     canvas.style.height = `${h / dpr}px`;
+    if (!shown || shown.scale !== scale || shown.min !== range.min || shown.max !== range.max) {
+      shown = { scale, ...range };
+      opts.zoomView?.(shown);
+    }
+  };
+  /**
+   * The player chose `p` (undefined = fit the view): draw it and remember it. A choice that
+   * draws the same scale is dropped (a remembered zoom larger than this window allows
+   * stays), except going back to fit.
+   */
+  const choose = (p: number | undefined): void => {
+    if (p === pref || (p !== undefined && zoomScale(p, range) === scale)) return;
+    pref = p;
+    resize();
+    opts.zoomed?.(pref);
   };
   const observer = new ResizeObserver(resize);
   observer.observe(host);
@@ -398,7 +451,12 @@ export async function createGameCanvas(
     if (!self) return;
     if (view.floor !== self.pos.z) view.setFloor(self.pos.z);
     const sp = world.drawPos(self, now);
-    cam = followCamera(sp.x, sp.y, scale, T);
+    // Zoomed in, the canvas shows fewer (and fractional) tiles: centre those on the player.
+    const tilePx = T * scale;
+    cam = followCamera(sp.x, sp.y, scale, T, {
+      width: app.screen.width / tilePx,
+      height: app.screen.height / tilePx,
+    });
     view.render(cam, { width: app.screen.width, height: app.screen.height });
 
     const seen = new Set<number>();
@@ -498,9 +556,17 @@ export async function createGameCanvas(
     const tile = screenToTile(cam, p.x, p.y, T);
     return { x: tile.x, y: tile.y, z: self.pos.z };
   };
+  /** The scale when the current pinch started (two fingers zoom by whole scales). */
+  let pinchFrom: number | undefined;
   const onGestures = (gs: Gesture[], e: PointerEvent | undefined): void => {
     for (const g of gs) {
-      if (g.kind === "tap") {
+      if (g.kind === "pinchStart") {
+        pinchFrom = scale;
+      } else if (g.kind === "pinch") {
+        if (pinchFrom !== undefined) choose(zoomPref(pinchZoom(pinchFrom, g.scale, range), range));
+      } else if (g.kind === "pinchEnd") {
+        pinchFrom = undefined;
+      } else if (g.kind === "tap") {
         const at = tileUnder(g.x, g.y);
         if (at) opts.tapTile(at.x, at.y, at.z);
       } else if (g.kind === "longPress") {
@@ -598,9 +664,26 @@ export async function createGameCanvas(
     press = undefined;
   });
 
+  // Ctrl+wheel (and a trackpad pinch, which browsers send as Ctrl+wheel) zooms the map
+  // instead of the page; a plain wheel does nothing, as before.
+  const wheel = new WheelZoom();
+  const onWheel = (e: WheelEvent): void => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    const steps = wheel.add(e.deltaY, e.deltaMode, e.timeStamp);
+    if (steps !== 0) choose(stepZoom(scale, steps, range));
+  };
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+
   return {
     get scale() {
       return scale;
+    },
+    get zoom() {
+      return { scale, ...range };
+    },
+    zoomBy(steps) {
+      choose(stepZoom(scale, steps, range));
     },
     element: canvas,
     clientToTile(clientX, clientY) {

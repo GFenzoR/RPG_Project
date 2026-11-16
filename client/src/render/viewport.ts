@@ -17,12 +17,21 @@ export function pixelScale(
   return Math.max(1, Math.floor(Math.min(sx, sy)));
 }
 
-/** Camera that centres the view on a (fractional) tile, snapped to whole sprite pixels. */
-export function followCamera(x: number, y: number, zoom: number, tileSize: number): Camera {
+/**
+ * Camera that centres a view of `view` tiles (the whole 15x11, or fewer and fractional when
+ * zoomed in: render/zoom.ts) on a (fractional) tile, snapped to whole sprite pixels.
+ */
+export function followCamera(
+  x: number,
+  y: number,
+  zoom: number,
+  tileSize: number,
+  view: { width: number; height: number } = VIEW_TILES,
+): Camera {
   const snap = (v: number): number => Math.round(v * tileSize) / tileSize;
   return {
-    x: snap(x + 0.5 - VIEW_TILES.width / 2),
-    y: snap(y + 0.5 - VIEW_TILES.height / 2),
+    x: snap(x + 0.5 - view.width / 2),
+    y: snap(y + 0.5 - view.height / 2),
     zoom,
   };
 }
