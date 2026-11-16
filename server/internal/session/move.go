@@ -257,6 +257,19 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		p.emit(systemMsg(msgPvPProtLocked))
 		return
 	}
+	// Stairs, a hole or a teleport (portal.go): the step happens only if the other end
+	// takes p, and then p lands there.
+	var dest world.Pos
+	pt := w.stepPortal(to)
+	if pt != nil {
+		var refuse string
+		if dest, refuse = w.portalArrival(ctx, p, pt); refuse != "" {
+			p.stopWalk()
+			w.reject(p, dirMsg(d))
+			p.emit(systemMsg(refuse))
+			return
+		}
+	}
 
 	p.qhead++
 	if p.qhead == len(p.queue) {
@@ -270,16 +283,23 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 	// pace is the server's (a held key walks as evenly as a script).
 	p.lastAction, p.idleWarned = ctx.Tick, false
 	w.abStep(ctx.Tick, p, d)
+	if pt != nil {
+		w.Teleport(p, dest)
+	}
 }
 
 // searchCost is the worst case of one reroute search, in expanded tiles: Find may run
 // two passes of RerouteMaxNodes.
 func (w *World) searchCost() int { return 2 * w.cfg.RerouteMaxNodes }
 
-// reroute replaces p's remaining path with one to p.dest around creatures and charges
-// the search to the tick's pathfinding quota. It reports whether p has a new path.
+// reroute replaces p's remaining path with one to p.dest around creatures (and around
+// the tiles of stairs, holes and teleports but its end) and charges the search to the
+// tick's pathfinding quota. It reports whether p has a new path.
 func (w *World) reroute(p *Player) bool {
-	path, ok := w.pf.FindAvoiding(p.pos, p.dest, w.pathBuf, w.occupied)
+	dest := p.dest
+	path, ok := w.pf.FindAvoiding(p.pos, dest, w.pathBuf, func(q world.Pos) bool {
+		return w.occupied(q) || q != dest && w.m.MovesOnStep(q)
+	})
 	w.pathBudget -= w.pf.Expanded()
 	w.pathBuf = path[:0]
 	if !ok || len(path) == 0 {
@@ -341,8 +361,8 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 }
 
 // Teleport moves p anywhere (another floor included). Loop goroutine only. It does not
-// check the destination: callers (stairs, spells, GM commands) must pass a walkable,
-// free tile.
+// check the destination: callers (portals, boats, GM commands) must pass a walkable,
+// free tile. Landing on it does not trigger a portal there.
 func (w *World) Teleport(p *Player, to world.Pos) {
 	if w.byClient[p.client] != p {
 		return

@@ -325,7 +325,8 @@ func (w *World) houseExit(h *house) world.Pos {
 					continue
 				}
 				q := world.Pos{X: uint16(x), Y: uint16(y), Z: e.Z}
-				if w.m.Walkable(q) && w.m.Flags(q)&world.FlagHouse == 0 && !w.occupied(q) && w.roomAllows(from, q) {
+				if w.m.Walkable(q) && w.m.Flags(q)&world.FlagHouse == 0 && !w.occupied(q) && w.roomAllows(from, q) &&
+					!w.m.MovesOnStep(q) {
 					return q
 				}
 			}

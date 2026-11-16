@@ -822,7 +822,9 @@ func (w *World) useItemOn(ctx *game.TickContext, p *Player, m *pb.UseItemOn) {
 	case it.def.Rune != nil:
 		w.useRune(ctx, p, it, m.GetTo())
 	case it.def.Tool != nil && it.carriedBy() == p:
-		w.gather(ctx, p, it, m.GetTo())
+		if !w.useRope(ctx, p, it, m.GetTo()) { // a rope on a rope spot (portal.go)
+			w.gather(ctx, p, it, m.GetTo())
+		}
 	default:
 		p.emit(systemMsg(msgCannotUse))
 	}

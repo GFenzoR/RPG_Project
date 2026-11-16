@@ -273,11 +273,11 @@ func (w *World) doorThrough(p world.Pos) bool {
 }
 
 // checkRooms refuses a room that holds what belongs outside (docs/02 "Puertas con
-// llave"): a temple (where players wake up), an NPC, a house tile or exit, a boat arrival
-// or the destination of a dialog teleport. Either the outside was taken for the room, or
-// a player would land behind a locked door. Spawns may lie in a room: the forge keeps its
-// warden behind the gate. make validate checks the same (and portals, which the server
-// does not load).
+// llave"): a temple (where players wake up), an NPC, a house tile or exit, a portal end
+// (portal.go), a boat arrival or the destination of a dialog teleport. Either the outside
+// was taken for the room, or a player would land behind a locked door (or leave it by a
+// way the room walk does not know). Spawns may lie in a room: the forge keeps its warden
+// behind the gate. make validate checks the same.
 func (w *World) checkRooms() error {
 	if len(w.rooms) == 0 {
 		return nil
@@ -310,6 +310,13 @@ func (w *World) checkRooms() error {
 						}
 					}
 				}
+			}
+		}
+	}
+	for _, pt := range w.m.Portals() {
+		for _, end := range [2]world.Pos{pt.From, pt.To} {
+			if d, ok := behind(end); ok {
+				return fmt.Errorf("session: portal %q has its end %v in the room behind the locked door on %v", pt.ID, end, d)
 			}
 		}
 	}

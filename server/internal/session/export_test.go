@@ -231,6 +231,13 @@ func (w *World) HitByForTest(p *Player) []int64 {
 // SetPvPLockForTest puts p in a PvP fight until tick (tests only, loop goroutine).
 func (w *World) SetPvPLockForTest(p *Player, until game.Tick) { p.fightUntil = until }
 
+// SetAttackLockForTest gives p the lock of an attacker until tick: no protection zone
+// (tests only, loop goroutine).
+func (w *World) SetAttackLockForTest(p *Player, until game.Tick) { p.lockUntil = until }
+
+// MonsterCanEnterForTest reports whether a monster may stand on p (tests only).
+func (w *World) MonsterCanEnterForTest(p world.Pos) bool { return w.monsterCanEnter(p) }
+
 // MarketOfferAmount returns the units left of offer id, or -1 if it is not in the book.
 func (w *World) MarketOfferAmount(id int64) int {
 	if o := w.offers[id]; o != nil {

@@ -242,7 +242,7 @@ func roomConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) 
 }
 
 // A room behind a locked door holds nothing that belongs outside (docs/02 "Puertas con
-// llave"): no temple, NPC, house, boat arrival or dialog teleport. Either the outside was
+// llave"): no temple, NPC, house, portal end, boat arrival or dialog teleport. Either the outside was
 // taken for the room, or a player would land behind the door. Monsters may live there.
 func TestRoomHoldsNothingOfTheOutside(t *testing.T) {
 	inside := pos(41, 41)
@@ -275,6 +275,12 @@ func TestRoomHoldsNothingOfTheOutside(t *testing.T) {
 			c.Map = worldtest.WithHouses(t, c.Map, world.House{ID: "wall_house", Name: "house.wall_house.name", Rent: 10,
 				Rects: []world.HouseRect{{X: 42, Y: 40, Z: 7, W: 3, H: 1}}, Doors: []world.Pos{pos(44, 40)}, Exit: pos(45, 40)})
 		}, `house "wall_house" on 42,40,7`},
+		"a portal entrance": {func(c *session.Config) {
+			c.Map = worldtest.WithPortals(t, c.Map, world.Portal{ID: "out", Kind: world.PortalTeleport, From: inside, To: pos(20, 20)})
+		}, `portal "out"`},
+		"a portal destination": {func(c *session.Config) {
+			c.Map = worldtest.WithPortals(t, c.Map, world.Portal{ID: "in", Kind: world.PortalTeleport, From: pos(20, 20), To: inside})
+		}, `portal "in"`},
 		"a boat arrival": {func(c *session.Config) {
 			c.BoatRoutes = testRoutes()
 			c.BoatRoutes[1].To = at
