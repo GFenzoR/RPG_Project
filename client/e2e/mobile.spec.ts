@@ -277,6 +277,29 @@ const mapDrawn = (page: Page): Promise<boolean> =>
       }),
   );
 
+/**
+ * How the header sits on the screen: nothing sticks out sideways (`page`), its last
+ * control (the ☰ menu) is on screen (`end`), and health and mana show whole (the name and
+ * then the level are the ones that give way, with an ellipsis).
+ */
+const headerFit = (
+  page: Page,
+): Promise<{ page: boolean; end: boolean; health: boolean; mana: boolean }> =>
+  page.evaluate(() => {
+    const root = document.documentElement;
+    const whole = (id: string): boolean => {
+      const el = document.querySelector(`[data-testid="${id}"]`);
+      return el !== null && el.scrollWidth <= el.clientWidth;
+    };
+    const last = document.querySelector(".hud")?.lastElementChild;
+    return {
+      page: root.scrollWidth <= root.clientWidth,
+      end: last ? last.getBoundingClientRect().right <= root.clientWidth + 0.5 : false,
+      health: whole("health"),
+      mana: whole("mana"),
+    };
+  });
+
 /** Hotbar slots shown whole in the bar (the rest wait behind the slider's arrows). */
 const wholeSlots = (page: Page): Promise<number> =>
   page.getByTestId("hotbar").evaluate((bar) => {
@@ -413,6 +436,17 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     ),
   ).toBe(true);
+  // Also with a wide font: Linux draws system-ui with DejaVu Sans, far wider than Segoe UI
+  // or San Francisco, and on CI the header of the 390 px iPhone stuck out ~20 px (Verdana,
+  // as wide, shows it on Windows and macOS).
+  const wide = await page.addStyleTag({
+    content: '.hud { font-family: "DejaVu Sans", Verdana, sans-serif; }',
+  });
+  expect(await headerFit(page)).toEqual({ page: true, end: true, health: true, mana: true });
+  await shot("00-wide-font");
+  await wide.evaluate((el) => {
+    el.parentNode?.removeChild(el);
+  });
   // The map keeps a whole-number zoom and its 15x11 tiles on any screen.
   const scale = await page.evaluate(() => window.__rpgClient?.scale() ?? 0);
   expect(Number.isInteger(scale) && scale >= 1).toBe(true);
