@@ -290,6 +290,7 @@ Se calculan al compilar, uno por casilla (implementación: `server/internal/worl
 | `blocks_sight` | Algún item **de la pila** tiene `blocks_sight: true`, o es `kind: wall` y **no** declara `blocks_sight: false`. El suelo nunca bloquea la vista. Lo usan la línea de visión y los proyectiles. |
 | `protection`, `no_logout`, `pvp`, `no_pvp` | La casilla tiene suelo y cae en un rect de una zona de ese tipo de `zones.yaml`, en uno de sus `floors`. |
 | `house` (y `protection`) | La casilla tiene suelo y es de una casa de `houses.yaml` (T5.4). Lo calcula `world.NewMap` al cargar a partir de las casas, también en tests con `worldtest.WithHouses`. |
+| `portal_step` | La casilla es la entrada de una escalera, un agujero o un teletransporte de `portals.yaml` (quien la pisa aparece en el otro extremo). Tampoco lo calcula la compilación: lo pone `world.NewMap` al cargar a partir de los portales (también en tests con `worldtest.WithPortals`) y borra el que traiga el archivo. `Map.MovesOnStep` lo lee para que A* y las búsquedas de casilla libre no consulten el índice de portales en cada casilla. |
 
 `community_plot` no marca ningún flag: solo le importa al editor y a los patches.
 La regla de `blocks_movement` es la misma que `isWalkable` de `packages/map-format`:

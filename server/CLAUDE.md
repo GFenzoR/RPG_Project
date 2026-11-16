@@ -186,7 +186,7 @@ server/
 
 - **Casas (T5.4):** `session/house.go` + `store/houses.go` + `app/houses.go` +
   `httpapi/houses.go` (`balance.yaml houses`; necesita el mercado). Las casas son datos del
-  mapa (`world.House`, `world.bin` v4; `Map.HouseAt` y el bit `FlagHouse`, que `NewMap`
+  mapa (`world.House`, en `world.bin` desde la v4; `Map.HouseAt` y el bit `FlagHouse`, que `NewMap`
   pone con `FlagProtection`). El loop es dueño de dueños, invitados e items de las casas
   (cargados con `LoadHouses`). Todo cambio es un `Transfer` con `HouseOp` (mismos números en
   `session` y `store`, caso en `applyHouseOp`). Los items del suelo de una casa: cualquier
