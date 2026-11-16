@@ -451,12 +451,20 @@ export function loadPaletteItems(root: string): PaletteItem[] {
     if (!Array.isArray(list)) continue;
     for (const raw of list) {
       if (!isObj(raw) || typeof raw["id"] !== "string") continue;
-      items.push({
+      const item: PaletteItem = {
         id: raw["id"],
         kind: typeof raw["kind"] === "string" ? raw["kind"] : "",
         sprite: typeof raw["sprite"] === "string" ? raw["sprite"] : "",
         name: typeof raw["name"] === "string" ? raw["name"] : "",
-      });
+      };
+      // Doors and keys (docs/02 "Puertas con llave"): shown in the palette and tile info.
+      const door = raw["door"];
+      if (isObj(door)) {
+        item.door = typeof door["open"] === "string" ? "closed" : "open";
+        if (typeof door["key"] === "string") item.lock = door["key"];
+      }
+      if (typeof raw["key"] === "string") item.key = raw["key"];
+      items.push(item);
     }
   }
   return items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));

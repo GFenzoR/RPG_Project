@@ -3,6 +3,7 @@ import { useMemo, useState } from "preact/hooks";
 import type { Atlas } from "@rpg/renderer";
 import type { Translate } from "../i18n.ts";
 import type { PaletteItem } from "../io/wire.ts";
+import { doorNote } from "../ui/format.ts";
 
 export interface PaletteProps {
   items: PaletteItem[];
@@ -82,20 +83,24 @@ export function Palette({ items, atlas, t, ground, item, onPick }: PaletteProps)
       </div>
       <ul class="items">
         {shown.length === 0 && <li class="empty">{t("editor.no_items")}</li>}
-        {shown.map((i) => (
-          <li key={i.id}>
-            <button
-              data-testid={`palette-${i.id}`}
-              class={i.id === ground || i.id === item ? "selected" : ""}
-              title={i.id}
-              onClick={() => onPick(i.id)}
-            >
-              <Swatch atlas={atlas} sprite={i.sprite} />
-              <span class="name">{name(i)}</span>
-              <span class="id">{i.id}</span>
-            </button>
-          </li>
-        ))}
+        {shown.map((i) => {
+          // Doors and keys say which key id they take or are (docs/02 "Puertas con llave").
+          const note = doorNote(i, t);
+          return (
+            <li key={i.id}>
+              <button
+                data-testid={`palette-${i.id}`}
+                class={i.id === ground || i.id === item ? "selected" : ""}
+                title={note ? `${i.id} (${note})` : i.id}
+                onClick={() => onPick(i.id)}
+              >
+                <Swatch atlas={atlas} sprite={i.sprite} />
+                <span class="name">{name(i)}</span>
+                <span class="id">{note ? `${i.id} · ${note}` : i.id}</span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

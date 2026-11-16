@@ -551,6 +551,11 @@ en http://localhost:5174 y edita `world/` del repo en el lugar.
   espacio + arrastrar o botón central = mover, `Ctrl+Z` / `Ctrl+Y` (o `Ctrl+Shift+Z`),
   `Ctrl+S`. Clic derecho o Mayús+clic con la herramienta Item quita el item de arriba.
   Los atajos se ignoran solo mientras se escribe texto (no con un checkbox o select en foco).
+- Puertas y llaves (`02-game-design.md` "Puertas con llave"): la paleta y el panel de la
+  casilla dicen de cada puerta si está cerrada sin llave, abierta o con llave (y su id de
+  llave), y de cada llave el id que abre. Solo se muestra: la llave es del tipo de item
+  (`data/items`), no de la casilla, así que una puerta con otra llave es otro par de items
+  de la paleta. Se coloca como cualquier item (`place_item`).
 
 **Hito 2:** relleno, rectángulo, selección + copiar/pegar, autoborder automático al
 pintar, spawns, NPCs, zonas y portales con su panel, exportar/importar patch, vista de

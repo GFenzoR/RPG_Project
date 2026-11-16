@@ -43,6 +43,15 @@ export interface PaletteItem {
   sprite: string;
   /** i18n key of the name. */
   name: string;
+  /**
+   * A door (data/items `door`, docs/02 "Puertas con llave"): shut or open. Its lock is part
+   * of the item type, not of the tile, so the editor shows it but does not edit it.
+   */
+  door?: "closed" | "open";
+  /** A closed door: the key id that opens it (the `key` of its data/items door block). */
+  lock?: string;
+  /** A key: the key id of the doors it opens (data/items `key`). */
+  key?: string;
 }
 
 /** Same shape as map-format's Diagnostic (that module pulls in Node). */

@@ -665,11 +665,12 @@ Servidor en `server/internal/session/door.go`; las puertas y llaves son items
 - **Límite conocido:** un jugador desconectado no cuenta para "nadie queda encerrado". Si
   salió adentro sin llave y vuelve con la puerta trabada (otro la cerró, o hubo un
   reinicio), espera a alguien con llave o muere (vuelve al templo).
-- **Mapa:** una puerta se coloca como cualquier item (`place_item`, la paleta del editor).
-  La llave es del tipo de item, no de la casilla: el formato de chunks no tiene atributos
+- **Mapa:** una puerta se coloca como cualquier item (`place_item`, la paleta del editor,
+  que muestra de cada puerta y de cada llave su id de llave). La llave es del tipo de
+  item, no de la casilla: el formato de chunks no tiene atributos
   por casilla (`03-world-and-maps.md`), así que una puerta con otra llave es otro par de
   items. Elegimos esto frente a un id por casilla (como hace Tibia) porque mantiene el
-  contenido como datos y no cambia el formato de mapas, el editor ni `world.bin`. El
+  contenido como datos y no cambia el formato de mapas ni `world.bin`. El
   validador de mapas cuenta las puertas como abiertas al medir el alcance desde el templo.
 - **Hoy:** la puerta de la forja (`forge_gate` / `forge_gate_open`, piso 8 de la Isla
   Volcánica, 3692,5832) se abre con la llave de ascua (`ember_key`) del Capítulo 3.

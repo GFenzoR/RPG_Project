@@ -617,7 +617,17 @@ describe("bootstrap", () => {
       sprite: "ground/grass",
       name: "item.grass.name",
     });
+    // Doors and keys carry what the palette and the tile info say of them.
+    const pick = (id: string) => {
+      const i = b.items.find((x) => x.id === id);
+      return { door: i?.door, lock: i?.lock, key: i?.key };
+    };
+    expect(pick("forge_gate")).toEqual({ door: "closed", lock: "forge_gate", key: undefined });
+    expect(pick("forge_gate_open")).toEqual({ door: "open", lock: undefined, key: undefined });
+    expect(pick("ember_key")).toEqual({ door: undefined, lock: undefined, key: "forge_gate" });
+    expect(pick("grass")).toEqual({ door: undefined, lock: undefined, key: undefined });
     for (const lang of ["es", "en"]) {
+      expect(b.i18n[lang]?.["editor.door_locked"]).toContain("{key}");
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();
       expect(b.i18n[lang]?.["island.testisle.name"]).toBeTruthy();
     }
