@@ -208,3 +208,134 @@ func TestMarketRefreshAfterTrade(t *testing.T) {
 		t.Fatalf("Ana's refresh %v", u)
 	}
 }
+
+// toBoard walks cl from the cottage door (3,4) to (8,5), next to the board of houseMap,
+// and opens the market window there.
+func (h *houseHarness) toBoard(cl *fakeClient) {
+	h.t.Helper()
+	h.step(cl, S)
+	for range 5 {
+		h.step(cl, E)
+	}
+	if u := lastMarket(h.send(cl, useItem(onTile(houseBoard), boardID, 1))); !u.GetOpen() {
+		h.t.Fatal("the market did not open")
+	}
+}
+
+// A house handed over to another player mails its items and the price to the old owner:
+// the old owner's open market window shows the mailbox at once.
+func TestMarketRefreshOnHouseTransfer(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	h.rent(cl)
+	h.step(cl, N)
+	pack := openPack(t, h.harness, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(3, 3)), 1))
+	cb, _ := h.tenant("Beto", 0, pos(2, 5), stack(coinID, 100, 0)) // out of Ana's way to the board
+	h.send(cl, houseCmd(&pb.HouseTransferOffer{Name: "Beto", Price: 80}))
+	h.toBoard(cl)
+
+	h.openDoor(cb, cottageDoor)
+	if evs := h.send(cb, houseCmd(&pb.HouseTransferAccept{HouseId: "cottage", Price: 80})); !hasKey(evs, "house.transfer_done") {
+		t.Fatalf("accept: %v", systemKeys(evs))
+	}
+	u := lastMarket(cl.take())
+	if !u.GetRefresh() || u.GetMailboxGold() != 80 || len(u.GetMailboxItems()) != 1 ||
+		u.GetMailboxItems()[0].GetItem().GetItemId() != swordID {
+		t.Fatalf("Ana's refresh %v", u)
+	}
+	if h.w.MailGoldForTest(a.CharacterID(), 0) != 80 {
+		t.Fatal("the price is not in Ana's mailbox")
+	}
+}
+
+// The rent sweep takes the rent from the owner's mailbox, and frees the house into it
+// when there is not enough: both show in the owner's open market window.
+func TestMarketRefreshOnRentAndRelease(t *testing.T) {
+	h := newHouseHarness(t)
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(swordID, 1, 0), stack(coinID, 100, 1), stack(coinID, 100, 2))
+	h.rent(cl)
+	h.step(cl, N)
+	pack := openPack(t, h.harness, cl)
+	h.send(cl, moveItem(inContainer(pack, 0), swordID, 0, onTile(pos(3, 3)), 1))
+	h.toBoard(cl)
+	h.w.MailGoldForTest(a.CharacterID(), 200)
+
+	h.sim.Clock().Advance(7*24*time.Hour + time.Minute)
+	h.sim.RunTicks(25)
+	evs := cl.take()
+	if u := lastMarket(evs); !hasKey(evs, "house.renewed") || !u.GetRefresh() || u.GetMailboxGold() != 50 {
+		t.Fatalf("after the rent: %v %v", systemKeys(evs), u)
+	}
+	h.sim.Clock().Advance(7 * 24 * time.Hour)
+	h.sim.RunTicks(25)
+	evs = cl.take()
+	if u := lastMarket(evs); !hasKey(evs, "house.lost_unpaid") || !u.GetRefresh() || u.GetMailboxGold() != 50 ||
+		len(u.GetMailboxItems()) != 1 {
+		t.Fatalf("after the release: %v %v", systemKeys(evs), u)
+	}
+}
+
+// When a transfer cannot be stored the market turns read-only: every open window shows
+// it at once, as a refresh.
+func TestMarketRefreshOnTaint(t *testing.T) {
+	h := newMarketHarness(t)
+	cs, _ := h.atBoard("Sela", pos(1, 0), stack(salveID, 5, 0))
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	h.send(cb, browse(salveID))
+	h.sim.Command(h.w.Tainted(nil))
+	h.sim.Step()
+	for name, cl := range map[string]*fakeClient{"Sela": cs, "Bruno": cb} {
+		if u := onlyMarket(t, cl.take()); !u.GetRefresh() || !u.GetReadOnly() || !u.GetOpen() {
+			t.Fatalf("%s's window %v", name, u)
+		}
+	}
+}
+
+// A window closed while its refresh waits out the 500 ms gets nothing; opened again, it
+// is a new window: the next change refreshes it at once.
+func TestMarketRefreshCloseAndReopen(t *testing.T) {
+	h := newMarketHarness(t)
+	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	h.send(cb, browse(salveID))
+	h.send(cs, createOffer(sell, salveID, 5, 4))
+	if u := onlyMarket(t, cb.take()); !u.GetRefresh() {
+		t.Fatalf("first refresh %v", u)
+	}
+	h.send(cs, cancelOffer(h.w.MarketOffers(s.CharacterID())[0])) // Bruno's refresh waits
+	h.send(cb, closeMarketCmd)
+	h.sim.RunTicks(15)
+	if us := markets(cb.take()); len(us) != 0 {
+		t.Fatalf("a closed window was refreshed: %v", us)
+	}
+	if h.w.MarketViewers(salveID) != 1 {
+		t.Fatalf("viewers %d, want Sela only", h.w.MarketViewers(salveID))
+	}
+
+	if u := lastMarket(h.send(cb, useBoard())); !u.GetOpen() || u.GetRefresh() {
+		t.Fatalf("reopened %v", u)
+	}
+	h.send(cb, browse(salveID))
+	h.send(cs, createOffer(sell, salveID, 5, 3))
+	if u := onlyMarket(t, cb.take()); !u.GetRefresh() || len(u.GetSells()) != 1 {
+		t.Fatalf("refresh of the reopened window %v", u)
+	}
+}
+
+// A player that loses its connection in a PvP fight stays in the world link-dead: its
+// market window is forgotten (nobody would get its refreshes).
+func TestMarketForgetsLinkDeadWindows(t *testing.T) {
+	h := newMarketHarness(t, func(c *session.Config) { c.Balance.PvP = pvpRules() })
+	cb, b := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	h.send(cb, browse(salveID))
+	if h.w.MarketViewers(salveID) != 1 {
+		t.Fatal("Bruno does not watch the book")
+	}
+	h.sim.Command(gameFunc(func() { h.w.SetPvPLockForTest(b, h.sim.Tick()+1000) }))
+	h.sim.Command(h.w.Leave(cb))
+	h.sim.Step()
+	if !b.LinkDead() || h.w.MarketViewers(salveID) != 0 {
+		t.Fatalf("link-dead %v, viewers %d", b.LinkDead(), h.w.MarketViewers(salveID))
+	}
+}

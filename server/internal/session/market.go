@@ -466,7 +466,7 @@ func (w *World) closeMarket(p *Player) {
 // player; mkPush collects the windows to send, each once per tick at most and
 // marketPushEvery apart. Nothing here reads the database.
 
-// dropMarket forgets p's window (closed, walked away or left the world).
+// dropMarket forgets p's window (closed, walked away, left the world or link-dead).
 func (w *World) dropMarket(p *Player) {
 	if p.market == nil {
 		return

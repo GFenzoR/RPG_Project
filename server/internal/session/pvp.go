@@ -711,6 +711,7 @@ func (w *World) linkDeadOnLeave(tick game.Tick, p *Player) bool {
 	p.target, p.ptarget = nil, nil
 	p.stopWalk()
 	p.out = p.out[:0]
+	w.dropMarket(p) // T5.3: nobody to refresh its market window for (flushMarket)
 	w.linkDead = append(w.linkDead, p)
 	w.log.Info("pvp link-dead", "character", p.charID)
 	return true
