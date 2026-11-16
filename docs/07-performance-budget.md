@@ -39,10 +39,13 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 - Portales (`session/portal.go`): que una casilla sea escalera, agujero o teletransporte
   es el bit `portal_step` de sus flags (lo pone `world.NewMap`), no una búsqueda en un
   mapa de Go: A* (`reroute`, la persecución, `bot.Nav`) y `monsterCanEnter` lo leen por
-  cada casilla que miran. Cada paso por un portal manda un `FullMapView` (y ningún
-  `MapSlice`): subir y bajar sin parar por la mina volcánica son unos 950 B/s con un
-  nivel 30, dentro de los 4 KB/s (`TestVolcanicMineStairsOnTheMap` lo mide y falla por
-  encima). Hoy todas las islas tienen solo los pisos 7 y 8, así que la vista de la
+  cada casilla que miran (un mapa sin portales ni lo lee). `BenchmarkTickMonsters` tiene
+  una variante `/portal` (un teletransporte en una esquina) que mide ese costo, porque
+  todas las islas reales tienen portales: sin diferencia medible (≈ 87 µs por tick con
+  256 monstruos y ≈ 340 µs con 1024, con y sin portal). Cada paso por un portal manda un
+  `FullMapView` (y ningún `MapSlice`): subir y bajar sin parar por la mina volcánica son
+  unos 950 B/s con un nivel 30, dentro de los 4 KB/s (`TestVolcanicMineStairsOnTheMap` lo
+  mide y falla por encima). Hoy todas las islas tienen solo los pisos 7 y 8, así que la vista de la
   superficie lleva un piso; una isla con pisos altos pesaría más por paso.
 - Puertas con llave (`session/door.go`): la sala detrás de cada puerta se calcula una vez
   al arrancar (un recorrido de hasta 4096 casillas por lado, y uno de hasta 4 × 4096

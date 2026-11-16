@@ -1052,12 +1052,14 @@ No hay mensajes nuevos en el protocolo: un portal es un teletransporte.
   `TestVolcanicMineStairsOnTheMap`).
 - **Escalera de mano:** `UseItem{from: pos, item_id, stack_index}` sobre la casilla con el
   suelo (índice 0) o un item fijo de su pila, en el mismo piso, a la vista y a
-  `inventory.reach` (si no, `too_far`). Un `item_id` que no es el de la casilla →
+  `inventory.reach` (si no, `too_far`), con línea de visión (si no, `magic.no_sight`: solo
+  importa con un alcance mayor que 1). Un `item_id` que no es el de la casilla →
   `inventory.not_possible`. El cliente manda siempre el suelo, aunque haya items encima
   (un cadáver, monedas): lo de encima no tapa la escalera. Un `UseItem` con el índice de
   un item tirado encima usa ese item, no trepa. Respuesta: `FullMapView` como arriba.
 - **Punto de soga:** `UseItemOn{from: <la soga>, to: {pos}}` con un item cuyo `tool.use` es
-  `rope`, llevado por el jugador, al mismo alcance. Un `UseItem` sobre la casilla responde
+  `rope`, llevado por el jugador, al mismo alcance y con línea de visión. Un `UseItem`
+  sobre la casilla responde
   `portal.need_rope`; otra herramienta sigue como recolección (`gather.nothing`).
 - **Rechazos** (nada cambia): `portal.blocked` (ninguna casilla libre en el destino ni a
   `travel.arrival_radius`; un paso rechazado así llega además con `WalkRejected`),

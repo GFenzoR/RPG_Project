@@ -228,18 +228,21 @@ server/
 - **Portales:** `world/portal.go` (`world.Portal`, `world.bin` v5, `Map.PortalAt` y
   `Map.MovesOnStep`, que `NewMap` indexa y valida como `make validate`; `MovesOnStep` lee
   el flag `FlagPortalStep` que pone `NewMap`, porque A* lo pregunta por cada casilla) +
-  `session/portal.go`
-  (reglas en `02-game-design.md` "Cambiar de piso"). Escaleras, agujeros y
-  teletransportes se pisan (`stepPlayer`: el paso y luego `Teleport`); la escalera de mano
-  se usa (`usePortal` en la cadena de `useItem`, antes de `useStation`) y el punto de soga
-  pide `UseItemOn` con `tool.use: rope` (`useRope`, antes de `gather`). La llegada es
-  `portalArrival` (`freeAround` sin casas, radio `travel.arrival_radius`, el bloqueo PvP).
-  Nadie más pisa esas casillas: `monsterCanEnter`, la búsqueda A* de los monstruos,
-  `reroute` y `bot.Nav` las esquivan; `NewMap` rechaza un NPC o un spawn de radio 0 sobre
-  una. El paso sobre una escalera (`move` con `through`) no le manda al que baja los
-  `MapSlice` del piso que deja: el `FullMapView` de `Teleport` los reemplaza.
-  `checkRooms` rechaza un extremo de portal en una sala. Un portal nuevo que se use a mano entra por `usePortal`/`useRope`; uno que se pise
-  tiene que ser un `kind` con `OnStep`.
+  `session/portal.go` (reglas en `02-game-design.md` "Cambiar de piso"). Escaleras,
+  agujeros y teletransportes se pisan (`stepPlayer`: el paso y luego `relocate`, el
+  `Teleport` sin su chequeo de "sigue en el mundo": quien camina lo está, y el paso ya se
+  saltó la vista del piso que deja); la escalera de mano se usa (`usePortal` en la cadena
+  de `useItem`, antes de `useStation`) y el punto de soga pide `UseItemOn` con
+  `tool.use: rope` (`useRope`, antes de `gather`); los dos a `reach` y con línea de
+  visión. La llegada es `portalArrival` (`freeAround` sin casas, radio
+  `travel.arrival_radius`, el bloqueo PvP). Nadie más pisa esas casillas:
+  `monsterCanEnter`, la búsqueda A* de los monstruos, `reroute` y `bot.Nav` las esquivan;
+  `NewMap` rechaza un NPC, un spawn de radio 0, el templo o la salida de una casa sobre
+  una (`houseExit` es `freeAround` con casas excluidas, como la llegada). El paso sobre
+  una escalera (`move` con `through`) no le manda al que baja los `MapSlice` del piso que
+  deja: el `FullMapView` lo reemplaza. `checkRooms` rechaza un extremo de portal en una
+  sala. Un portal nuevo que se use a mano entra por `usePortal`/`useRope`; uno que se
+  pise tiene que ser un `kind` con `OnStep`. `Flags` (un byte) ya no tiene bits libres.
 
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +

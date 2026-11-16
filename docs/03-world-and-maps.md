@@ -166,13 +166,20 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
   pide una soga y `boat` no mueve a nadie (los barcos son `data/boat_routes.yaml`). El
   portal es la casilla, no un item: la escalera se ve por el item que la decora
   (`stairs_down` / `stairs_up`), pero el servidor no lo mira.
-- Nadie se para sobre la entrada de un `stairs`, `hole` o `teleport`: ningún NPC ahí y
-  ningún spawn de radio 0 centrado ahí (los monstruos no la pisan, quedaría vacío).
+- Nadie se para sobre la entrada de un `stairs`, `hole` o `teleport`: ningún NPC ahí,
+  ningún spawn de radio 0 centrado ahí (los monstruos no la pisan, quedaría vacío) y ni el
+  templo ni la salida de una casa (el último recurso de despertar y de salir de una casa
+  con todo lleno).
 - Un portal por casilla de entrada, y nunca hacia su propia casilla. `to` no debería ser
   la casilla de otro portal que se pisa: el servidor deja al jugador en la libre más
   cercana (nadie se queda parado sobre una escalera).
 - Lo carga el servidor desde `world.bin` (versión 5, "Formato de `world.bin`"), como las
-  casas: un cambio de `portals.yaml` necesita `make mapcompile` y reiniciar.
+  casas: un cambio de `portals.yaml` necesita `make mapcompile` y reiniciar. El cliente
+  también lo empaqueta (el plugin de Vite, `loadPortals`, de las islas de `world.yaml`):
+  hay que reiniciar `vite` o reconstruir el cliente. Un `portals.yaml` que no se puede
+  leer corta el build del cliente. El cliente recibe la entrada y el tipo de cada portal
+  (así un camino por click no pisa una escalera ni un teletransporte): no hay portales
+  ocultos.
 
 `houses.yaml` (T5.4, reglas de juego en `02-game-design.md` "Casas"):
 ```yaml
@@ -327,7 +334,7 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
     z u8, cx u16, cy u16
     ground   1024 × u16   ID numérico del suelo, fila por fila; 0 = sin tile
     flags    1024 × u8    bit 0 blocks_movement, 1 blocks_sight, 2 protection,
-                          3 no_logout, 4 pvp, 5 no_pvp, 6 house
+                          3 no_logout, 4 pvp, 5 no_pvp, 6 house, 7 portal_step
     stacks   u16 cantidad, luego por pila (índice ascendente):
              u16 índice (y*32+x), u8 n, n × u16 IDs de abajo hacia arriba
 crc32        u32 (IEEE) de todos los bytes anteriores
@@ -339,11 +346,14 @@ crc32        u32 (IEEE) de todos los bytes anteriores
   no es una casilla caminable de su isla en un piso que lista, un destino que no es una
   casilla caminable de alguna isla, un portal hacia su propia casilla, una escalera,
   escalera de mano, agujero o soga que no cambia de piso, un agujero que sube, una soga
-  que baja, dos portales en una casilla, un extremo en una casa (de cualquier isla), un
-  NPC sobre la entrada de un `stairs`/`hole`/`teleport` y un spawn de radio 0 centrado
-  en una; los indexa por su entrada (`Map.PortalAt`) y marca esas entradas con el bit 7
-  (`portal_step`) de `flags` (`Map.MovesOnStep`). La pareja de vuelta de escaleras y
-  escaleras de mano y el alcance a pie desde el templo los mira solo `make validate`. La
+  que baja, dos portales en una casilla, un extremo en una casa (de cualquier isla), y
+  un NPC, un spawn de radio 0, el templo o la salida de una casa sobre la entrada de un
+  `stairs`/`hole`/`teleport`; los indexa por su entrada (`Map.PortalAt`) y marca esas
+  entradas con el bit 7 (`portal_step`) de `flags` (`Map.MovesOnStep`). Con él, `flags`
+  (un byte) se quedó sin bits libres: el próximo flag ensancha el campo (o va en otra
+  tabla) y sube la versión. La pareja de vuelta de escaleras y escaleras de mano, el
+  alcance a pie desde el templo y que la llegada se conecte a pie los mira solo
+  `make validate`. La
   prueba de paridad (`make test-parity`) compara también los portales que leen
   `mapcompile` y `packages/map-format`.
 - La versión 4 (T5.4) agregó `houses` por isla y el bit 6 (`house`) de
@@ -385,9 +395,15 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   isla. `stairs`/`ladder` cambian de piso y tienen pareja: otro portal
   `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del
   origen. `hole` baja, `rope_spot` sube. Un portal por casilla y ninguno hacia su propia
-  casilla (el servidor los indexa por la entrada). Ningún NPC sobre la entrada de un
-  `stairs`/`hole`/`teleport` ni spawn de radio 0 centrado en una. Advertencia: un portal
-  `boat` no mueve a nadie en el juego.
+  casilla (el servidor los indexa por la entrada). Ningún NPC, spawn de radio 0, templo ni
+  salida de casa sobre la entrada de un `stairs`/`hole`/`teleport`. Un id de portal no se
+  repite en todo el mundo (como en el servidor). **Llegada:** toda casilla caminable fuera
+  de casas y de entradas de `stairs`/`hole`/`teleport` a `travel.arrival_radius` del
+  destino (de `data/balance.yaml`; 5, el máximo, si no se cargó) se conecta a pie con el
+  destino (8 direcciones, un piso, puertas abiertas, sin cruzar esas entradas): el
+  servidor busca la casilla libre por anillos y, con el destino ocupado, podría dejar a
+  alguien del otro lado de un muro. Advertencia: un portal `boat` no mueve a nadie en el
+  juego.
 - Alcance a pie desde el templo (spawns, NPCs, salidas de casa, zonas y el aviso de áreas
   inalcanzables): se recorre como el servidor mueve. Una casilla de `stairs`, `hole` o
   `teleport` lleva solo a su destino (nadie la cruza caminando: una escalera en un túnel

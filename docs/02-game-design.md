@@ -58,12 +58,14 @@ Tibia:
   así que nunca se aparece sobre la escalera de vuelta. Un teletransporte puede quedar en el
   mismo piso o llevar a otra isla.
 - **Escalera de mano (`ladder`): se usa.** Click derecho (o "Trepar" del toque largo) sobre
-  su casilla, desde ella o a `inventory.reach` (1) casilla, en el mismo piso. Pisarla no
+  su casilla, desde ella o a `inventory.reach` (1) casilla, en el mismo piso y con línea de
+  visión (como al recolectar: con un alcance mayor, nunca a través de un muro). Pisarla no
   hace nada. Lo que haya encima (un cadáver, monedas que alguien tiró) no la tapa: el
   click derecho trepa igual. Ese item se abre o se usa desde el toque largo ("Abrir" o
   "Usar", al lado de "Trepar") o se arrastra fuera.
 - **Punto de soga (`rope_spot`): hace falta una soga.** Se usa una herramienta con
-  `tool.use: rope` (la soga, `data/items/tools.yaml`) sobre su casilla, al mismo alcance.
+  `tool.use: rope` (la soga, `data/items/tools.yaml`) sobre su casilla, al mismo alcance y
+  con línea de visión.
   Usarla sin soga dice "Necesitas una soga para subir por aquí."; otra herramienta no
   encuentra nada. Solo sube.
 - **Ritmo:** subir o bajar una escalera de mano o una soga cuesta lo que un paso hasta el
@@ -74,6 +76,8 @@ Tibia:
   una puerta con llave, nunca en una casilla de casa y nunca sobre otra escalera, agujero
   o teletransporte. Sin casilla libre, el paso o el uso se rechaza ("Hay algo del otro lado:
   no hay lugar para pasar.") y no cambia nada: el jugador ni siquiera pisa la escalera.
+  Esa búsqueda va por anillos, no a pie: `make validate` exige que toda casilla del radio
+  donde podría caer se conecte a pie con el destino (nadie cae del otro lado de un muro).
 - **PvP:** quien atacó a un jugador y tiene el bloqueo no puede entrar a una zona protegida
   por un portal si no está ya en una, igual que a pie.
 - **Barco (`boat`):** el formato lo acepta pero no mueve a nadie: los viajes en barco son
@@ -86,11 +90,11 @@ Tibia:
   destino, y las búsquedas de casilla libre (entrar al juego, despertar, llegar en barco o
   por un portal, salir de una casa, `/tp` del personal) las saltean. Un NPC no puede estar
   sobre una (la taparía para siempre). Caminar con el teclado sobre una sí la toma: es
-  pisarla. Límite: si no queda ninguna casilla libre en el radio, despertar en el templo y
-  salir de una casa comparten la casilla de destino como último recurso, que podría ser
-  una escalera si el templo o la salida estuvieran sobre una; quien entra al juego con todo
-  lleno y tenía guardada la posición sobre una escalera (de antes de los portales) va al
-  templo.
+  pisarla. Si no queda ninguna casilla libre en el radio, despertar en el templo y salir de
+  una casa comparten la casilla de destino como último recurso: el templo o la salida, que
+  nunca están sobre una escalera, un agujero o un teletransporte (lo rechazan el servidor y
+  `make validate`). Quien entra al juego con todo lleno y tenía guardada la posición sobre
+  una escalera (de antes de los portales) va al templo.
 - **Lo que el cliente ve:** lo mismo que un teletransporte del personal (`FullMapView` del
   piso nuevo, docs/05). Solo se dibuja el piso del jugador.
 

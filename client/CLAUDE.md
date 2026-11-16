@@ -594,7 +594,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - El servidor mueve al jugador (`02-game-design.md` "Cambiar de piso"); el cliente solo ve
   un teletransporte: `CreatureMove` del paso y `FullMapView` del piso nuevo, que reemplaza
   todo (también el paso predicho). No hay estado propio de portales.
-- `content.portals` (de `world/islands/*/portals.yaml`, `vite/content.ts` `loadPortals`):
+- `content.portals` (de `world/islands/<id>/portals.yaml` de las islas de `world.yaml`,
+  `vite/content.ts` `loadPortals`; un archivo que no se puede leer corta el build):
   casilla de entrada `"x,y,z"` → `kind`. `state/portals.ts` (puro, con tests):
   `pathPassable` hace que un camino por click rodee escaleras, agujeros y teletransportes
   salvo que sean el destino; `usedBare` hace que el click derecho (o "Usar" del toque

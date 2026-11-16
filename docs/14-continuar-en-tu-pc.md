@@ -133,9 +133,10 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     o un teletransporte los items que se tiran sobre su casilla (en Tibia caen): quedan
     ahí, a la vista, y nadie pisa esa casilla sin moverse. Cada paso por un portal manda
     un `FullMapView` (hoy unos 950 B/s subiendo y bajando sin parar, docs/07): una isla
-    con pisos sobre el 7 lo haría más pesado, conviene medirlo de nuevo cuando exista. El
-    cliente (`vite/content.ts` `loadPortals`) ignora en silencio un `portals.yaml` mal
-    formado (`make validate` lo rechaza antes);
+    con pisos sobre el 7 lo haría más pesado, conviene medirlo de nuevo cuando exista. En
+    escritorio el click derecho sobre una escalera de mano siempre trepa: un cadáver
+    encima que no se puede mover solo se abre con el toque largo (hoy no hay escaleras de
+    mano en el mundo; una salida sería que Ctrl+click derecho use el item de arriba);
   - la búsqueda de casilla libre por anillos (`freeNear`, `houseExit` en
     `server/internal/session`) ya no entra a la sala de una puerta con llave, pero sí
     puede dejar a alguien en un bolsillo sellado sin puerta (menos de 10 casillas, que el
