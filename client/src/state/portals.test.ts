@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Direction } from "@rpg/protocol";
 import { delta } from "./geometry.ts";
 import { findPath } from "./path.ts";
-import { climbable, movesOnStep, pathPassable, portalKey, usedBare } from "./portals.ts";
+import { climbable, movesOnStep, pathPassable, portalKey, usedBare, useMode } from "./portals.ts";
 import type { Portals } from "./portals.ts";
 
 const portals: Portals = {
@@ -38,6 +38,20 @@ describe("portals", () => {
     expect(climbable(portals, 10, 5, 8)).toBe(false); // a rope spot needs a rope
     expect(climbable(portals, 5, 2, 7)).toBe(false);
     expect(climbable(undefined, 2, 5, 8)).toBe(false);
+  });
+
+  it("climbs a ladder on a right click, uses its top item on a Ctrl+right click", () => {
+    // usedBare is what Game.usesGround says for a portal (a house door says it too).
+    const bare = (x: number, y: number, z: number): boolean => usedBare(portals, x, y, z);
+    expect(useMode(portals, bare(2, 5, 8), 2, 5, 8, false)).toBe("first"); // climbs
+    // Ctrl+right click (or the touch menu's "Use"/"Open"): the corpse on top; a bare
+    // ladder still climbs by its ground ("bare").
+    expect(useMode(portals, bare(2, 5, 8), 2, 5, 8, true)).toBe("bare");
+    expect(useMode(portals, bare(10, 5, 8), 10, 5, 8, false)).toBe("bare"); // a rope spot
+    expect(useMode(portals, bare(10, 5, 8), 10, 5, 8, true)).toBe("bare");
+    expect(useMode(portals, true, 3, 3, 7, false)).toBe("bare"); // a house door
+    expect(useMode(portals, bare(5, 2, 7), 5, 2, 7, false)).toBe("never"); // stairs
+    expect(useMode(undefined, false, 2, 5, 8, false)).toBe("never");
   });
 
   it("walks round stairs on the way, onto them only as the goal", () => {

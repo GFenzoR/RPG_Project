@@ -99,8 +99,11 @@ export interface GameCanvasOptions {
   clickTile(x: number, y: number, z: number): void;
   /** A creature was right-clicked (attack it). */
   clickCreature(id: number): void;
-  /** A tile without a creature was right-clicked (use its top item). */
-  useTile(x: number, y: number, z: number): void;
+  /**
+   * A tile without a creature was right-clicked (use it: climb a ladder, or its top item).
+   * `top`: Ctrl was held, use the top item even on a ladder.
+   */
+  useTile(x: number, y: number, z: number, top: boolean): void;
   /** A tile was shift-clicked (look at its top item). */
   lookTile(x: number, y: number, z: number): void;
   /** The left button was pressed on a tile and dragged (move its top item). */
@@ -657,7 +660,8 @@ export async function createGameCanvas(
   });
 
   // Left: a click walks, shift+click looks, a drag moves the top item. Right: attack the
-  // creature on the tile, or use the tile's top item.
+  // creature on the tile, or use the tile (a ladder climbs); Ctrl+right uses its top item
+  // even on a ladder.
   let press: { x: number; y: number; z: number; px: number; py: number } | undefined;
   canvas.addEventListener("pointerdown", (e) => {
     if (isTouchPointer(e.pointerType)) {
@@ -673,7 +677,7 @@ export async function createGameCanvas(
     if (e.button === 2) {
       const c = world.creatureAt(tile.x, tile.y, z);
       if (c && c.id !== world.selfId) opts.clickCreature(c.id);
-      else opts.useTile(tile.x, tile.y, z);
+      else opts.useTile(tile.x, tile.y, z, e.ctrlKey);
       return;
     }
     if (e.shiftKey) {

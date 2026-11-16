@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
 import { formatOz, locationInit, tileUse, topItem } from "./items.ts";
+import { portalKey, useMode } from "./portals.ts";
 import { formatMessage } from "./messages.ts";
 import { WorldState } from "./world.ts";
 
@@ -129,6 +130,15 @@ describe("inventory state", () => {
     expect(tileUse(w, 5, 6, 7, "never")).toBeUndefined();
     // A tile the client does not know: nothing.
     expect(tileUse(w, 9, 9, 7, "first")).toBeUndefined();
+    // A backpack (a corpse would be the same) on a ladder: a right click climbs, a
+    // Ctrl+right click opens it (state/portals.ts useMode gives "first" and "bare").
+    tile([{ itemId: 1 }, { itemId: 48 }]);
+    const ladder = { [portalKey(5, 6, 7)]: "ladder" };
+    expect(tileUse(w, 5, 6, 7, useMode(ladder, true, 5, 6, 7, false))).toMatchObject(ground);
+    expect(tileUse(w, 5, 6, 7, useMode(ladder, true, 5, 6, 7, true))).toMatchObject({
+      itemId: 48,
+      stackIndex: 1,
+    });
   });
 
   it("builds protocol locations", () => {

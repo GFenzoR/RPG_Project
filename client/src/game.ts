@@ -35,7 +35,7 @@ import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
 import { findPath } from "./state/path.ts";
-import { climbable, pathPassable, usedBare } from "./state/portals.ts";
+import { climbable, pathPassable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { cuesOf, loopFor } from "./audio/cues.ts";
@@ -688,16 +688,13 @@ export class Game {
   /**
    * Uses a map tile (a right click): a ladder is climbed whatever lies on it; else its top
    * item, or the ground of a bare house door (T5.4: the house window) or rope spot (it
-   * says a rope is needed). With `item` (the touch menu's "use"/"open") the top item even
-   * on a ladder: the menu climbs with its own button.
+   * says a rope is needed). With `item` (Ctrl+right click, or the touch menu's "use" and
+   * "open", whose menu climbs with its own button) the top item even on a ladder
+   * (state/portals.ts useMode).
    */
   private useTop(x: number, y: number, z: number, item = false): void {
-    const ground =
-      !item && climbable(this.opts.content.portals, x, y, z)
-        ? "first"
-        : this.usesGround(x, y, z)
-          ? "bare"
-          : "never";
+    const portals = this.opts.content.portals;
+    const ground = useMode(portals, this.usesGround(x, y, z), x, y, z, item);
     const ref = tileUse(this.world, x, y, z, ground);
     if (ref) this.useItem(ref);
   }
@@ -1249,9 +1246,9 @@ export class Game {
       frame: (now) => this.frame(now),
       clickTile: (x, y, z) => this.click({ pos: { x, y, z } }),
       clickCreature: (id) => this.click({ creature: id }),
-      useTile: (x, y, z) => {
+      useTile: (x, y, z, top) => {
         if (this.cancelUse()) return;
-        this.useTop(x, y, z);
+        this.useTop(x, y, z, top);
       },
       lookTile: (x, y, z) => this.lookTileAt(x, y, z),
       dragTile: (x, y, z) => {
