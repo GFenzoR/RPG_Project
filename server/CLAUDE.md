@@ -166,9 +166,13 @@ server/
   todavía lo tiene; `holdGround` ya lo llama). Un comando nuevo del jugador que pueda
   cambiar una casa corre por `playerCommand`, como `Input`. Ningún transfer puede dejar
   nada en el suelo público en su propio comando (comprueba antes que todo entra:
-  `canBuy`, `canReceive`, `moneyThatFits`), ni un mismo comando soltar algo a la calle y
-  cambiar una casa (`settleGave` lo registra con nivel error). Uno que saque algo del
-  suelo de una casa al suelo público llama a `leftHouse` (la reserva toma el `Seq` del
+  `canBuy`, `canReceive`, `moneyThatFits`; `transferSnapshot` lo registra con nivel
+  error). Si un mismo comando suelta algo a la calle y cambia una casa (una runa del suelo
+  de la casa usada desde la calle que mata a un monstruo de quest), lo que soltó queda
+  reservado con el `Seq` de la escritura de la casa (`reserveGiven`, como `leftHouse`) y
+  no se guarda snapshot aparte; registra (nivel error) solo lo que no se puede reservar
+  (una pila o bolsa ajena). `gaveAway` recibe dónde cayó (la pila propia, o nil). Uno
+  que saque algo del suelo de una casa al suelo público llama a `leftHouse` (la reserva toma el `Seq` del
   snapshot del que lo movió en la escritura de la casa, `numberLeft`) y solo lo deja
   como pila propia o en una pila o contenedor ya reservado a él (`heldFor`; nunca en algo
   ajeno, que la reserva se quedaría), uno en que el servidor le deje algo a sus pies
@@ -194,7 +198,8 @@ server/
   para un contenedor en el suelo), que marca la casa sucia; `flushHouses` la escribe
   entera, con los snapshots de los jugadores cuyos comandos la tocaron
   (`World.cmdPlayer`, puesto en `Input`), al final de cada comando, al principio de
-  `transfer`/`houseTransfer` (**antes de numerar**) y de `snapshot`, y al final del tick.
+  `transfer`/`houseTransfer` (**antes de numerar**) y de `snapshot`, y al final del tick
+  (también después de `questRecheck`).
   Todo sitio nuevo que numere un transfer tiene que vaciar las casas antes de
   `nextTransfer++`: `SaveTransfer` rechaza un id menor que el último escrito
   (`ErrTransferOrder`). Un movimiento de items desde o hacia una casa pasa por

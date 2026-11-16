@@ -145,7 +145,9 @@ su único dueño. Todo cambio sale como `Transfer` (ver "Transacciones") con `Ho
   reemplaza en la base: idempotente) y los snapshots de esos jugadores. Se vacía al final
   de cada comando (`Input`), antes de numerar cualquier otro transfer (`transfer`,
   `houseTransfer`), antes de tomar cualquier snapshot (`snapshot`), al liberar o
-  transferir una casa, al sacar a un jugador del mundo y al final del tick: los ids de los
+  transferir una casa, al sacar a un jugador del mundo y al final del tick (también después
+  de `questRecheck`, que puede dejar una recompensa en el suelo de una casa cuando
+  `checkHouses` ya vació las de ese tick): los ids de los
   transfers crecen en el orden en que se encolan, un lote nunca lleva un snapshot a mitad
   de otra operación y un autoguardado nunca escribe un inventario sin la casa que lo
   explica. `SaveTransfer` acepta un id igual al último escrito como reintento (no aplica
@@ -341,7 +343,11 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     ese comando cambie una casa: así ese snapshot nunca lleva lo que el comando saca de
     una casa. Su **próximo transfer** lo encola primero (`transferSnapshot`, delante del
     trabajo del transfer): el Saver lo escribe antes, así un transfer descartado o
-    saltado no lo devuelve a un guardado anterior a lo que dio.
+    saltado no lo devuelve a un guardado anterior a lo que dio. Lo que garantiza eso es el
+    asentamiento del principio de cada comando del jugador (asienta a todos los que
+    soltaron algo, no solo al que manda el comando) y el de `transferSnapshot`; el del
+    final del comando y el del final del tick solo lo toman antes, así es el estado justo
+    después de lo que dio (lo fija `TestSaveBeforeTransferIsFromTheGiftsCommandOrTick`).
     - Si el transfer se descarta o se salta (también el intercambio de un compañero
       marcado, por el punto fijo), el personaje vuelve a ese estado: sin lo que dio y sin
       el transfer. Si ya estaba marcado de antes, ese snapshot se salta como cualquier
@@ -359,13 +365,24 @@ tick (atómico en memoria: las instancias se mueven, nunca se copian) y sale del
     - Ningún transfer deja nada en el suelo público en su propio comando: comprueba antes
       que todo entra (`canBuy`, `canReceive`, `moneyThatFits`). Si lo hiciera, el
       snapshot (que `transferSnapshot` tomaría en el acto) llevaría medio transfer y se
-      escribiría fuera de su transacción. Tampoco un mismo comando puede soltar algo a la
-      calle y cambiar una casa: el snapshot saldría con la escritura de la casa y, si esta
-      se descarta, lo que dejó en la casa se pierde y lo que sacó de ella queda en dos
-      filas (la de la casa y la del personaje). `settleGave` lo registra con nivel error.
-      Hoy solo podría hacerlo el último paso del tutorial si fuera levantar, equipar o usar
-      un item del suelo de su propia casa desde afuera con una recompensa que no entra; no
-      lo es (`data/tutorial.yaml`) y una casa pide nivel 12.
+      escribiría fuera de su transacción. `transferSnapshot` registra con nivel error un
+      transfer que encuentra algo soltado sin asentar fuera de la escritura de una casa
+      (solo los comandos del jugador hacen transfers de jugadores, y cada uno asienta antes
+      a todos).
+    - Un mismo comando **sí** puede soltar algo a la calle y cambiar una casa: el dueño,
+      parado en la calle, usa una runa que dejó en el suelo de su casa; el monstruo muere,
+      la recompensa de la quest no entra y cae a sus pies; después la runa pierde la carga
+      en el suelo de la casa. Un snapshot de lo que dio saldría con la escritura de la casa
+      y se escribiría aparte, antes: si esa escritura se descarta, el dueño vuelve a ese
+      snapshot (con la muerte hecha) y la casa a su última escritura (con la carga): una
+      carga gratis; y algo sacado de la casa a la mochila quedaría en dos filas. Por eso
+      ahí no se guarda ese snapshot: lo que soltó a la calle queda **reservado** al
+      personaje como lo que sale de una casa (`reserveGiven`, con el `Seq` de su snapshot
+      en esa escritura, `numberLeft`). Si la escritura se descarta, vuelve a su guardado de
+      antes del comando y la reserva no se libera nunca (nadie más lo levanta). Solo si lo
+      soltó en algo que no se le puede reservar (una pila o bolsa ajena de la calle, y eso
+      solo lo hace un `MoveItem`, que no cambia una casa salvo por la recompensa del
+      tutorial) se toma el snapshot como antes y `settleGave` lo registra con nivel error.
     - En el suelo de una casa no hace falta: lo que se deja ahí se escribe con el
       snapshot de quien lo movió (`flushHouses`, un transfer que también encola antes el
       snapshot pendiente de ese personaje).
