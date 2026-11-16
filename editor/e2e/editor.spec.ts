@@ -59,6 +59,24 @@ async function settled(page: Page): Promise<void> {
 const shot = (page: Page, name: string): Promise<Buffer> =>
   page.screenshot({ path: join(shots, `${name}.png`) });
 
+/** Waits until the atlas pages behind the palette swatches (CSS backgrounds) are decoded. */
+async function swatchesLoaded(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const urls = new Set<string>();
+    for (const el of document.querySelectorAll<HTMLElement>(".items .swatch")) {
+      const m = /url\("?([^")]+)"?\)/.exec(el.style.backgroundImage);
+      if (m?.[1]) urls.add(m[1]);
+    }
+    await Promise.all(
+      [...urls].map((src) => {
+        const img = new Image();
+        img.src = src;
+        return img.decode();
+      }),
+    );
+  });
+}
+
 test("edit, undo, validate and save testisle", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -693,5 +711,35 @@ test("houses: draw a house in the panel, check it, save houses.yaml and its name
   await page.keyboard.press("Control+z");
   await expect(page.getByTestId("house-testisle_house_1")).toBeVisible();
   await expect(page.getByTestId("status")).toContainText("Deshecho: borrar casa");
+  expect(errors).toEqual([]);
+});
+
+test("doors and keys: the tile info and the palette say which key opens them", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/?lang=es&island=volcan");
+  await expect.poll(() => page.evaluate(() => window.__rpgEditor?.ready === true)).toBe(true);
+  // The forge gate of the volcanic mine (docs/02 "Puertas con llave"), on floor 8.
+  await page.evaluate(() => window.__rpgEditor?.centerOn(3692, 5832, 8));
+  await expect(page.getByTestId("floor")).toHaveText("Piso 8");
+  expect((await tile(page, 3692, 5832, 8))?.stack).toEqual(["forge_gate"]);
+  const gate = await clientOf(page, 3692, 5832);
+  await page.mouse.move(gate.x, gate.y);
+  await expect(page.getByTestId("tile-info")).toContainText(
+    "puerta de la forja (puerta con llave forge_gate)",
+  );
+  await page.getByTestId("palette-search").fill("forge");
+  await expect(page.getByTestId("palette-forge_gate")).toContainText(
+    "forge_gate · puerta con llave forge_gate",
+  );
+  await expect(page.getByTestId("palette-forge_gate_open")).toContainText(
+    "forge_gate_open · puerta abierta",
+  );
+  await swatchesLoaded(page);
+  await shot(page, "50-forge-gate");
+  await page.getByTestId("palette-search").fill("ember");
+  await expect(page.getByTestId("palette-ember_key")).toContainText("ember_key · llave forge_gate");
+  await swatchesLoaded(page);
+  await shot(page, "51-ember-key");
   expect(errors).toEqual([]);
 });

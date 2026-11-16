@@ -2591,3 +2591,106 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
   await shot(page, "66-volcan-keeper");
   expect(errors).toEqual([]);
 });
+
+test("keyed doors: the forge gate opens with the ember key, does not lock on a stray, and opens from inside", async ({
+  browser,
+  playwright,
+}) => {
+  const holder = await newGuardian(playwright, "Llavero");
+  const stray = await newGuardian(playwright, "Rezagado");
+  // Residents of the Ember Isle at level 30 (302760 XP) on floor 8 of its mine, just north
+  // of the forge gate (3692,5832; docs/02 "Puertas con llave"), each with a backpack (48):
+  // the key holder carries the ember key (142), the stray a coin (8). The stray stands right
+  // north of the gate: the client's paths never cut a blocked corner.
+  const seed = (name: string, x: number, item: number): string =>
+    `UPDATE characters SET town = 'volcan', level = 30, experience = 302760,
+       pos_x = ${x}, pos_y = 5831, pos_z = 8 WHERE name = '${name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, 0, ${item}, 1 FROM bp;`;
+  psql([databaseUrl, "-c", seed(holder.name, 3691, 142) + seed(stray.name, 3692, 8)]);
+  const errors: string[] = [];
+  async function enter(email: string): Promise<Page> {
+    const page = await browser.newPage();
+    await enterGame(page, email, holder.password);
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    return page;
+  }
+  const a = await enter(holder.email);
+  let b = await enter(stray.email);
+  await arrived(a, 3691, 5831);
+  await arrived(b, 3692, 5831);
+  const ids = await a.evaluate(() => ({
+    shut: window.__rpgClient?.itemNumber("forge_gate"),
+    open: window.__rpgClient?.itemNumber("forge_gate_open"),
+  }));
+  if (ids.shut === undefined || ids.open === undefined) throw new Error("no gate items");
+  const gateOn = (page: Page): Promise<number | undefined> =>
+    page.evaluate(() => window.__rpgClient?.tile(3692, 5832, 8)?.at(-1));
+  const useGate = async (page: Page): Promise<void> => {
+    const gate = await page.evaluate(() => window.__rpgClient?.tileToClient(3692, 5832));
+    if (!gate) throw new Error("no canvas");
+    await page.mouse.click(gate.x, gate.y, { button: "right" });
+  };
+  const walkTo = async (page: Page, x: number, y: number): Promise<void> => {
+    const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {
+      tx: x,
+      ty: y,
+    });
+    if (!tile) throw new Error("no canvas");
+    await page.mouse.click(tile.x, tile.y);
+    await arrived(page, x, y);
+  };
+
+  // Shut: looking at it names it, and without the key it does not open.
+  expect(await gateOn(a)).toBe(ids.shut);
+  const gate = await a.evaluate(() => window.__rpgClient?.tileToClient(3692, 5832));
+  if (!gate) throw new Error("no canvas");
+  await a.keyboard.down("Shift");
+  await a.mouse.click(gate.x, gate.y);
+  await a.keyboard.up("Shift");
+  await expect(a.getByTestId("game-log")).toContainText("puerta de la forja");
+  await useGate(b);
+  await expect(b.getByTestId("game-log")).toContainText("Está cerrada con llave.");
+  await shot(a, "69-forge-gate-locked");
+
+  // The ember key in the backpack opens it for everyone; the stray walks into the forge.
+  await useGate(a);
+  await expect(a.getByTestId("game-log")).toContainText("La puerta se abre con tu llave de ascua.");
+  await expect.poll(() => gateOn(a)).toBe(ids.open);
+  await expect.poll(() => gateOn(b)).toBe(ids.open);
+  await walkTo(b, 3692, 5833);
+  await shot(a, "70-forge-gate-open");
+  await useGate(a);
+  await expect(a.getByTestId("game-log")).toContainText(
+    "Alguien sin la llave quedaría encerrado: la puerta no se cierra con llave.",
+  );
+  expect(await gateOn(a)).toBe(ids.open);
+
+  // The stray logs out in the forge: the gate locks. Back in, it lets itself out.
+  await expect(a.getByTestId("battle-list")).toContainText(stray.name);
+  await b.close();
+  await expect(a.getByTestId("battle-list")).not.toContainText(stray.name);
+  await useGate(a);
+  await expect(a.getByTestId("game-log")).toContainText("Cierras la puerta con tu llave de ascua.");
+  await expect.poll(() => gateOn(a)).toBe(ids.shut);
+  b = await enter(stray.email);
+  await arrived(b, 3692, 5833);
+  expect(await gateOn(b)).toBe(ids.shut);
+  await shot(b, "71-forge-gate-shut-inside");
+  await useGate(b);
+  await expect(b.getByTestId("game-log")).toContainText(
+    "Descorres el cerrojo desde adentro: la puerta se abre.",
+  );
+  await expect.poll(() => gateOn(b)).toBe(ids.open);
+  await walkTo(b, 3692, 5831);
+  await shot(b, "72-forge-gate-unbarred");
+
+  expect(errors).toEqual([]);
+  for (const page of [a, b]) await page.close();
+});
