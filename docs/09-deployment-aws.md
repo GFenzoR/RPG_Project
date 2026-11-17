@@ -151,6 +151,16 @@ activo por defecto). El healthcheck solo pasa cuando la API HTTP está arriba, e
 después de migrar, y `deploy.sh` espera ese estado (`up --wait`). Por eso no hay un
 servicio one-shot de migraciones. Antes de reiniciar, `deploy.sh` hace un backup.
 
+### Notas de versión que tocan a los jugadores
+- **Auditoría de contenido M6 (rama `feat/world-capacity`, migración 00018):** el alquiler
+  de las casas pasa a casillas × 60/90/120 por semana (Puerto/Bosque/Volcánica): **las casas
+  ya alquiladas pagan entre 2 y 4 veces más** desde su próximo vencimiento (de 500–1000 a
+  1890–2880 por semana; lo ya pagado por adelantado se respeta). Además, una casa cuyo
+  dueño pasa 28 días sin que entre nadie de su cuenta se libera al vencer: la migración
+  deja `house_owners.away_from` en la hora del deploy, así que nadie la pierde por una
+  ausencia anterior a la regla, y el tiempo con el servidor apagado no cuenta (docs/02,
+  "Casas"). Conviene anunciarlo en las noticias del sitio (`data/news`) al desplegar.
+
 ### Roles de staff (T2.6)
 Los roles (`player`, `gm`, `admin`) se asignan solo desde el servidor, nunca desde el juego.
 Cada cambio queda en el log de auditoría con el usuario del sistema que lo hizo:

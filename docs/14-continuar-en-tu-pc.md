@@ -138,6 +138,9 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     `testisle` dev-only, comisión del mercado; docs/02, docs/07 "Capacidad del mundo" y
     docs/10). De ahí quedó: un aviso por email antes de perder una casa por ausencia, y
     el cliente no muestra la regla en la ventana de la casa (solo el mensaje al entrar);
+    al desplegarla, **los alquileres de las casas ya alquiladas suben entre 2 y 4 veces**
+    desde su próximo vencimiento: anunciarlo (docs/09, "Notas de versión que tocan a los
+    jugadores");
   - en la carrera simulada los magos de nivel 30-40 cazan en el Bosque (reptantes) más
     que en el Volcán: los monstruos del Volcán pegan fuerte para un cuerpo de mago. No es
     un error, pero es una pista (M1 sumó capacidad al Volcán sin tocar el daño);

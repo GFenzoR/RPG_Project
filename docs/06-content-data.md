@@ -640,7 +640,8 @@ houses:
   action_burst: 8           # anti-flood de acciones y movimientos de items en casas
   action_refill_ms: 300
   inactive_days: 28         # M6: sin nadie de la cuenta del dueño en el juego tanto, al
-                            # vencer el alquiler la casa se libera (0..365; 0 = nunca)
+                            # vencer el alquiler la casa se libera (0..365; 0 = nunca;
+                            # el servidor apagado no cuenta)
 ```
 - El alquiler de cada casa es dato del mapa (`houses.yaml → rent`): casillas × 60 en
   Puerto, × 90 en el Bosque, × 120 en la Volcánica (auditoría de contenido M6, lo revisa
@@ -665,7 +666,9 @@ market:
   durations_hours: [12, 48, 120]   # 1..8 opciones, cada una 1..1440
   list_size: 15             # ofertas por lado en una búsqueda
   history_size: 25          # operaciones propias que se ven
-  reference_days: 5         # ventana del precio de referencia (la mediana por unidad, m13)
+  reference_days: 5         # ventana del precio de referencia (mediana de votos, m13)
+  reference_min_votes: 3    # sin referencia con menos votos (uno por cuenta vendedora y día)
+  reference_min_sellers: 2  # ni con menos cuentas vendedoras distintas
   mailbox_shown: 30         # items del buzón por ventana
   action_burst: 6           # anti-flood: ráfaga y recarga por acción
   action_refill_ms: 400

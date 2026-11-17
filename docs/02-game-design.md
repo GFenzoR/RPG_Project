@@ -681,12 +681,20 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   cargas; los apilables, por unidades. Un personaje no acepta ofertas de su propia cuenta.
 - **Lo que se ve:** al buscar un item, sus mejores `list_size` ofertas de venta (más
   baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
-  historial (lo que compró y vendió) y un **precio de referencia**: la mediana del precio
-  por unidad de las unidades vendidas en los últimos `reference_days` días (cada unidad un
-  voto; con un empate, la menor). Es solo informativo. Mediana y no promedio (m13): unas
-  pocas ventas a un precio absurdo entre dos cuentas de un jugador no la mueven salvo que
-  sean más unidades que todas las demás ventas juntas, y con la comisión sin tope bajo eso
-  cuesta de verdad. El intercambio directo no paga comisión ni cuenta para la referencia.
+  historial (lo que compró y vendió) y un **precio de referencia**: cada cuenta vendedora
+  vota una vez por día, con su precio medio por unidad de ese día, y la referencia es la
+  mediana de los votos de los últimos `reference_days` días (con un número par, la menor).
+  Con menos de `reference_min_votes` (3) votos o de `reference_min_sellers` (2) cuentas
+  vendedoras distintas no hay referencia ("Sin precio de referencia"). Es solo
+  informativo. Por qué así (auditoría de contenido m13): con el promedio, una venta
+  absurda entre dos cuentas propias la inflaba; con la mediana por unidad, 2000 unidades a
+  1 moneda vendidas a otra cuenta propia la hundían por 40 de comisión. Por voto, una
+  cuenta que se vende a sí misma, en una venta o en mil, es un voto por día que los
+  demás vendedores superan. Lo que no evita: en un item con poco comercio, varias cuentas
+  propias vendiendo varios días todavía pueden mover la mediana; por eso es solo una guía
+  (el formulario la propone, nadie está obligado a usarla). La calcula el loop una vez
+  por item y día (se recalcula con cada venta). El intercambio directo no paga comisión
+  ni cuenta para la referencia.
 - **Ventana en vivo:** la ventana abierta se actualiza sola cuando otro jugador cambia lo
   que muestra: una oferta nueva, cancelada, vencida o llenada en el item que se está
   mirando; una oferta propia que otro llenó (y el oro o los items que llegan al buzón);
@@ -764,10 +772,15 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   casa se libera aunque el buzón tenga oro (los objetos van al buzón, como siempre). Lo
   pagado por adelantado se respeta: la casa se pierde recién al vencer. El aviso: cada vez
   que el dueño entra al juego, un mensaje le recuerda la regla (`house.away_warning`). El
-  loop guarda la última entrada o salida de la cuenta; al arrancar la toma de
-  `characters.last_login_at` (el último login de la cuenta), así que tras un reinicio
-  cuenta desde el login y no desde la salida (unas horas antes, nunca después). Un aviso
-  por email antes de perderla queda pendiente.
+  loop guarda la última entrada o salida de la cuenta; al arrancar la toma del último
+  login o guardado de cualquier personaje de la cuenta (`characters.last_login_at` y
+  `last_save_at`, que se escribe al salir y en cada autoguardado). Nunca cuenta desde antes
+  de `house_owners.away_from`: las casas ya alquiladas cuando llegó la regla (migración
+  00018) la tienen en ese momento, así nadie la pierde por una ausencia anterior a la
+  regla ni sin haber podido ver el aviso. **El servidor apagado no es ausencia:** al
+  arrancar, el tiempo desde el último guardado de cualquier personaje (≈ el apagado, o
+  más si el servidor estuvo vacío antes) se suma a la última vez visto de cada dueño, una
+  sola vez y sin pasar de ahora. Un aviso por email antes de perderla queda pendiente.
   No agregamos un "fondo de la casa" aparte: sería un segundo buzón de oro con sus propias
   reglas, y pagar por adelantado desde la ventana ya cubre a quien no usa el mercado.
 - **Una casa por cuenta** (no solo por personaje): con pocas casas por pueblo, una cuenta
