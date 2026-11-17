@@ -37,9 +37,14 @@ done
 (cd "$root/tools/bots" && go build -o "$bots" ./cmd/bots)
 
 # build/world.bin from make mapcompile has the dev-only sandbox island: a server refuses
-# it in production (RPG_ENV empty or production), so this one runs as development, with
-# the cosmetic shop off (a load test needs no payments).
-RPG_ENV="${RPG_ENV:-development}" PAYMENTS_PROVIDER= DATABASE_URL="$db" "$bin" -world "$root/build/world.bin" -data "$root/data" \
+# it in production (RPG_ENV empty or production), so with a local database this one runs
+# as development (your own RPG_ENV wins), with the cosmetic shop off (a load test needs no
+# payments). With a database that is not local it is not imposed, as in make play (DEV_RPG_ENV).
+case "$db" in
+  *@localhost:* | *@localhost/* | *@127.0.0.1:* | *@127.0.0.1/*) env_default=development ;;
+  *) env_default= ;;
+esac
+RPG_ENV="${RPG_ENV:-$env_default}" PAYMENTS_PROVIDER= DATABASE_URL="$db" "$bin" -world "$root/build/world.bin" -data "$root/data" \
   -http "127.0.0.1:$port" -metrics-addr "$maddr" -auth-rate-burst 1000 >"$log" 2>&1 &
 server=$!
 

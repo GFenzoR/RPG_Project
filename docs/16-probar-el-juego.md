@@ -17,7 +17,8 @@ make play
 Levanta Postgres (Docker), compila el mapa (`make mapcompile`, con `-dev`), corre el
 servidor en `127.0.0.1:8080` con `-start-town pruebas` (los personajes nuevos despiertan
 en esta isla) y `RPG_ENV=development` (un mundo con la isla no arranca en producción: ver
-el final) y el cliente (Vite, puerto 5173). Cuando los dos contestan imprime:
+el final; solo con la base local, en `localhost`: con otra `DATABASE_URL` no la impone y el
+servidor no arranca con la isla) y el cliente (Vite, puerto 5173). Cuando los dos contestan imprime:
 
 ```
 [play] ready: open http://localhost:5173/play/

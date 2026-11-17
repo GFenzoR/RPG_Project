@@ -138,14 +138,17 @@ LOCAL_PLAY_FLAGS ?= -cookie-secure=false -auth-rate-burst 200
 DEV_HTTP_ADDR ?= 127.0.0.1:8080
 # The servers of make run-server, dev and play (and make bots) load build/world.bin from
 # make mapcompile, which keeps the dev-only sandbox island (-dev): a server refuses such a
-# world in production (RPG_ENV empty or production, docs/09), so they run as development
-# (your own RPG_ENV wins). Development also lets the fake payment provider run: so, as make
-# play always did, the cosmetic shop stays off (PAYMENTS_PROVIDER emptied) unless the
-# server is on loopback and the database is local, never where someone else reaches it or
-# on a database that is not yours to give premium currency away in.
+# world in production (RPG_ENV empty or production, docs/09), so with a local database they
+# run as development (your own RPG_ENV wins). With a database that is not local they do not
+# impose it: that server refuses the sandbox world, as production would, unless you set
+# RPG_ENV=development yourself on a server only you reach. Development also lets the fake
+# payment provider run: so, as make play always did, the cosmetic shop stays off
+# (PAYMENTS_PROVIDER emptied) unless the server is on loopback and the database is local,
+# never where someone else reaches it or on a database that is not yours to give premium
+# currency away in.
 DEV_LOOPBACK = $(or $(filter 127.0.0.1:%,$(DEV_HTTP_ADDR)),$(filter localhost:%,$(DEV_HTTP_ADDR)))
 DEV_LOCAL_DB = $(or $(findstring @localhost:,$(DATABASE_URL)),$(findstring @localhost/,$(DATABASE_URL)),$(findstring @127.0.0.1:,$(DATABASE_URL)),$(findstring @127.0.0.1/,$(DATABASE_URL)))
-DEV_RPG_ENV = RPG_ENV="$${RPG_ENV:-development}"$(if $(and $(DEV_LOOPBACK),$(DEV_LOCAL_DB)),, PAYMENTS_PROVIDER=)
+DEV_RPG_ENV = $(if $(DEV_LOCAL_DB),RPG_ENV="$${RPG_ENV:-development}")$(if $(and $(DEV_LOOPBACK),$(DEV_LOCAL_DB)),, PAYMENTS_PROVIDER=)
 # Account emails in development (T2.1): `make dev` starts Mailpit and points the server at
 # it, so verification and reset links are read at http://localhost:8025. DEV_MAIL=0 = off.
 DEV_MAIL ?= 1
@@ -252,7 +255,8 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 
 # The game on the sandbox island (docs/16-probar-el-juego.md): Postgres, the map, the game
 # server with -start-town (new characters wake up on the Isla de Pruebas) and the client,
-# then the URL to open once both answer. The server runs as development (DEV_RPG_ENV); the
+# then the URL to open once both answer. With a local database the server runs as
+# development (DEV_RPG_ENV); the
 # cosmetic shop runs on the fake payment provider only with the server on loopback and a
 # local database: never where someone else reaches it. Ctrl+C stops it all.
 # PLAY_START_TOWN=puerto plays the normal start.
@@ -270,6 +274,7 @@ play: db-up mapcompile ## Play on the sandbox island (docs/16): Postgres + map +
 	case "$(DATABASE_URL)" in *@localhost:*|*@localhost/*|*@127.0.0.1:*|*@127.0.0.1/*) localdb=1;; *) localdb=0;; esac; \
 	if [ $$loopback = 1 ] && [ $$localdb = 1 ]; then shop_env="PAYMENTS_PROVIDER=fake"; \
 	else shop_env="PAYMENTS_PROVIDER="; echo "[play] the server is not on loopback or the database is not local: no fake payments, the cosmetic shop stays off"; fi; \
+	if [ $$localdb = 0 ] && [ -z "$${RPG_ENV:-}" ]; then echo "[play] the database is not local: the server does not run as development and refuses the sandbox world (set RPG_ENV=development if that database and this server are only yours)"; fi; \
 	echo "[play] starting the game server (new characters wake up on '$(PLAY_START_TOWN)') and the client..."; \
 	trap 'kill 0' EXIT; \
 	(cd server && env $(DEV_RPG_ENV) $$shop_env RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
