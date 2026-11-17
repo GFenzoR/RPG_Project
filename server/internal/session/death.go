@@ -50,6 +50,7 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	pen.EquipmentDropPct, pen.BackpackDropPct = w.deathDrop(ctx.Now, p, pen.EquipmentDropPct, pen.BackpackDropPct)
 
 	// Corpse with the dropped items, in slot order (deterministic with the seeded rand).
+	packDropped := false
 	if w.corpseItem != nil {
 		corpse := &Corpse{Item: newItem(w.corpseItem, 1), Owner: p.charID, OwnerUntil: ctx.Tick + w.corpseOwnerFor}
 		for slot := 1; slot < equipSlots; slot++ {
@@ -65,6 +66,7 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 				continue
 			}
 			w.econTree(p, EconDeath, "", it, -1)
+			packDropped = packDropped || slot == int(pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK)
 			w.detach(it)
 			if len(corpse.Item.items) < w.corpseItem.Slots() {
 				it.parent = corpse.Item
@@ -103,6 +105,9 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 		}
 	}
 
+	if packDropped {
+		w.newBackpack(p)
+	}
 	w.wakeAtTemple(ctx, p, false)
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
@@ -111,6 +116,21 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 		&pb.TextParam{Name: "experience", Value: &pb.TextParam_Number{Number: lostXP}},
 		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}}))
 	w.save(w.snapshot(p, false))
+}
+
+// newBackpack puts an empty inventory.start_container in p's backpack slot after a death
+// dropped its backpack (only then: a character that took its backpack off and died would
+// get backpacks for free): what the old backpack held stays in the corpse, but without a container a
+// player can hold no coin and pick up nothing, so it could never buy another (the
+// playtest's M5: a death above the novice levels left a character stuck for good).
+func (w *World) newBackpack(p *Player) {
+	slot := pb.EquipmentSlot_EQUIPMENT_SLOT_BACKPACK
+	if w.startContainer == nil || p.equip[slot] != nil {
+		return
+	}
+	w.attach(p, newItem(w.startContainer, 1), place{kind: locSlot, slot: slot})
+	w.econItem(p, EconDeath, "new_backpack", w.startContainer, 1)
+	w.equipmentChanged(p)
 }
 
 // wakeAtTemple ends a death: full health and mana, no target, nobody attacking p, and p

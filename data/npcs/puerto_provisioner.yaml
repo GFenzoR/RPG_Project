@@ -2,8 +2,8 @@ id: puerto_provisioner
 name: npc.puerto_provisioner.name
 sprite: npcs/merchant
 notes: >-
-  Tools, food and poultices; buys hunting materials from the island's monsters at about a
-  third of their value.
+  Tools, food, poultices and a spare backpack (a death above level 8 takes the worn one);
+  buys hunting materials from the island's monsters at about a third of their value.
 dialog:
   start: greet
   nodes:
@@ -40,6 +40,7 @@ shop:
     - { item: smithing_hammer, price: 95 }
     - { item: ship_biscuit, price: 3 }
     - { item: seaweed_poultice, price: 25 }
+    - { item: backpack, price: 20 }
   buys:
     - { item: rope, price: 14 }
     - { item: shovel, price: 12 }

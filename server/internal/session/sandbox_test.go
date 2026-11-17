@@ -1605,7 +1605,9 @@ func TestSandboxArcRune(t *testing.T) {
 	}
 	// rune uses the arc rune on the nearest bilge rat of pen 1 and returns it.
 	rune := func() (*session.Monster, []*pb.ServerMessage) {
-		s.walkTo(cl, p, penGap(1))
+		// The rats, home again (combat.monster_leash_tiles), come out to meet her: one of
+		// them may stand in the gap.
+		s.walkWithin(cl, p, penGap(1), 1)
 		rat := s.nearest("bilge_rat", p.Pos(), 6)
 		if rat == nil {
 			t.Fatal("no bilge rat in pen 1")

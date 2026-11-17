@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -86,6 +87,25 @@ func TestValidCharacterName(t *testing.T) {
 	for name, want := range cases {
 		if got := ValidCharacterName(name); got != want {
 			t.Errorf("ValidCharacterName(%q) = %v, want %v", name, got, want)
+		}
+	}
+	// Why a name is refused: a reserved word or part has its own error, whatever its
+	// capitals (the playtest's "GM Tester" got the rules of a malformed name).
+	why := map[string]error{
+		"GM Tester":   ErrReservedName,
+		"Gm Mira":     ErrReservedName,
+		"admin":       ErrReservedName,
+		"Game Master": ErrReservedName,
+		"Mira":        nil,
+		"Gmork":       nil,
+		"MIRA":        ErrInvalidName,
+		"Al":          ErrInvalidName,
+		"Mi  Ra":      ErrInvalidName,
+		"Mira1":       ErrInvalidName,
+	}
+	for name, want := range why {
+		if got := CharacterNameError(name); !errors.Is(got, want) || (want == nil) != (got == nil) {
+			t.Errorf("CharacterNameError(%q) = %v, want %v", name, got, want)
 		}
 	}
 }

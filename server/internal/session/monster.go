@@ -50,6 +50,9 @@ const (
 	spawnTries = 16
 	// targetScanTicks: an idle aggressive monster looks for a target every 250 ms.
 	targetScanTicks = 5
+	// homeRetry is how long a monster that searched for a way home (A*) and found none
+	// waits before it searches again: a search is costly and the way stays blocked a while.
+	homeRetry = game.Tick(1000 / 50)
 )
 
 // monsterKind is a monster definition prepared for the loop.
@@ -96,6 +99,12 @@ type Monster struct {
 	// speed is the effective speed: the kind's with its speed conditions (T3.2).
 	speed int
 	conds []*condition
+	// homeWay is the rest of the A* way home (last step first) that walkHome follows from
+	// homeAt once a wall stopped the greedy step: taking the greedy step again from the
+	// first tile of a detour would lead straight back to the wall (it went back and forth
+	// forever). Its array is reused.
+	homeWay []world.Direction
+	homeAt  world.Pos
 }
 
 // Speed returns the monster's effective speed.
@@ -418,12 +427,15 @@ func (w *World) validTarget(m *Monster, t *Player) bool {
 		seesPlayer(m, t)
 }
 
-// findTarget returns the closest player m can see and reach, or nil.
+// findTarget returns the closest player m can see and reach, or nil. With a leash, only
+// players within m's leash area count.
 func (w *World) findTarget(m *Monster) *Player {
 	var best *Player
 	bestD := 0
+	leash := w.leash(m)
 	w.eachObserver(nil, m.pos, func(o *Player) {
-		if o.pos.Z != m.pos.Z || w.inProtection(o.pos) || !seesPlayer(m, o) {
+		if o.pos.Z != m.pos.Z || w.inProtection(o.pos) || !seesPlayer(m, o) ||
+			leash >= 0 && chebyshev(o.pos, m.slot.spawn.Center) > leash {
 			return
 		}
 		d := chebyshev(m.pos, o.pos)
@@ -438,7 +450,7 @@ func (w *World) findTarget(m *Monster) *Player {
 func (w *World) think(ctx *game.TickContext, m *Monster) {
 	b := m.kind.def.Behavior
 	if m.target != nil && !w.validTarget(m, m.target) {
-		m.target = nil
+		m.target = nil // lost (gone, in a protection zone, out of sight): it walks home
 	}
 	if m.target == nil {
 		// Looking around is the expensive part of idling: once every targetScanTicks,
@@ -451,17 +463,27 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 			}
 		}
 		m.state = StateIdle
-		w.wander(ctx, m)
+		if !w.walkHome(ctx, m) {
+			w.wander(ctx, m)
+		}
 		return
 	}
 	t := m.target
 	ready := ctx.Tick >= m.readyAt
 	d := chebyshev(m.pos, t.pos)
+	leash := w.leash(m)
+	if leash >= 0 && d > m.kind.reach && chebyshev(t.pos, m.slot.spawn.Center) > leash {
+		// Its target left the leash area and its reach: it gives up and goes home.
+		w.giveUp(ctx, m)
+		w.walkHome(ctx, m)
+		return
+	}
+	roam := w.roam(m, leash)
 	switch {
 	case b.FleeAtHealthPct > 0 && m.health*100 <= b.FleeAtHealthPct*m.maxHealth:
 		m.state = StateFlee
 		if ready {
-			if dir, ok := w.fleeStep(m, t.pos); ok {
+			if dir, ok := w.fleeStep(m, t.pos, roam); ok {
 				w.stepMonster(ctx, m, dir)
 				return
 			}
@@ -473,7 +495,7 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 	case d > b.TargetDistance:
 		m.state = StateChase
 		if ready {
-			if dir, ok := w.chaseStep(m.pos, t.pos, true); ok {
+			if dir, ok := w.stepToward(m.pos, t.pos, true, false, roam); ok {
 				w.stepMonster(ctx, m, dir)
 			}
 		}
@@ -536,15 +558,149 @@ func (w *World) wander(ctx *game.TickContext, m *Monster) {
 	w.stepMonster(ctx, m, d)
 }
 
-// chaseStep returns a step from `from` that gets closer to goal: the free neighbour
-// that most reduces the distance, else (monsters only, within the tick's pathfinding
-// quota) the first step of an A* path around creatures.
+// ---- leash ---------------------------------------------------------------------------
+//
+// With balance combat.monster_leash_tiles > 0, a monster's home area is its spawn's
+// radius around the spawn's center (Chebyshev) and its leash area that radius plus the
+// leash. It picks targets, chases and flees only within the leash area; a target beyond
+// it and out of its reach is dropped (giveUp), and an idle monster out of its home area
+// walks back (walkHome) instead of wandering (docs/02-game-design.md, monsters section).
+
+// tileSquare is the square of tiles at most r tiles (Chebyshev) from c; r < 0 is the
+// whole map.
+type tileSquare struct {
+	c world.Pos
+	r int
+}
+
+// anywhere is the tileSquare without bounds.
+var anywhere = tileSquare{r: -1}
+
+func (s tileSquare) has(p world.Pos) bool { return s.r < 0 || chebyshev(p, s.c) <= s.r }
+
+// leash returns the radius of m's leash area around its spawn's center, or -1 without a
+// leash.
+func (w *World) leash(m *Monster) int {
+	l := w.cfg.Balance.Combat.MonsterLeashTiles
+	if l <= 0 || m.slot == nil {
+		return -1
+	}
+	return int(m.slot.spawn.Radius) + l
+}
+
+// roam is where m may step while it fights: its leash area (if a walk home around a wall
+// took it out of it, no farther from its spawn's center than it stands), or anywhere
+// without a leash (leash < 0).
+func (w *World) roam(m *Monster, leash int) tileSquare {
+	if leash < 0 {
+		return anywhere
+	}
+	c := m.slot.spawn.Center
+	return tileSquare{c: c, r: max(leash, chebyshev(m.pos, c))}
+}
+
+// giveUp makes m drop its target: it heals to full health (telling who sees it), its
+// conditions end (a burn would otherwise go on hurting it for whoever cast it, and could
+// kill it from outside the leash), it forgets who hurt it (nobody earns experience for
+// that fight) and goes idle.
+func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
+	m.target, m.state = nil, StateIdle
+	m.damage = m.damage[:0]
+	w.clearConditions(ctx, holder{m: m}, false)
+	if m.health >= m.maxHealth {
+		return
+	}
+	m.health = m.maxHealth
+	pct := healthPercent(m.health, m.maxHealth)
+	w.eachObserver(nil, m.pos, func(o *Player) {
+		if o.Knows(m.id) {
+			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: m.id, HealthPercent: pct}}})
+		}
+	})
+}
+
+// beyondLeash reports whether a player at p fights m from where m may not go and cannot
+// hit back: out of its leash area and out of its attacks' reach. Hits from there train
+// like hits on a target that does not fight back (skills.afk.factor): a monster held by
+// its leash is no training dummy.
+func (w *World) beyondLeash(m *Monster, p world.Pos) bool {
+	l := w.leash(m)
+	return l >= 0 && chebyshev(m.pos, p) > m.kind.reach && chebyshev(p, m.slot.spawn.Center) > l
+}
+
+// walkHome takes an idle monster that stands out of its home area one step towards its
+// spawn's center whenever it may step; it reports whether m is away from home (then it
+// does not wander). Without a leash it does nothing: wander drifts it back. It takes the
+// greedy step while there is one; at a wall it searches a way around (A*, within the
+// tick's quota) and follows all of it (homeWay). With no way home it waits there
+// (homeRetry after a failed search), it never teleports.
+func (w *World) walkHome(ctx *game.TickContext, m *Monster) bool {
+	if w.leash(m) < 0 {
+		return false
+	}
+	sp := m.slot.spawn
+	if chebyshev(m.pos, sp.Center) <= int(sp.Radius) {
+		m.homeWay = m.homeWay[:0]
+		return false
+	}
+	if ctx.Tick < m.readyAt {
+		return true
+	}
+	if n := len(m.homeWay); n > 0 && m.pos == m.homeAt {
+		d := m.homeWay[n-1]
+		m.homeWay = m.homeWay[:n-1]
+		if to, ok := m.pos.Step(d); ok && w.monsterCanEnter(to) {
+			w.stepMonster(ctx, m, d)
+			m.homeAt = m.pos
+			return true
+		}
+	}
+	m.homeWay = m.homeWay[:0] // none, stale (it fought meanwhile) or blocked: plan again
+	if d, ok := w.stepToward(m.pos, sp.Center, false, true, anywhere); ok {
+		w.stepMonster(ctx, m, d)
+		return true
+	}
+	if w.pathBudget < w.searchCost() {
+		return true // the tick's quota is spent: next tick
+	}
+	path, ok := w.pf.FindAvoiding(m.pos, sp.Center, w.pathBuf, func(q world.Pos) bool {
+		return q != sp.Center && (w.occupied(q) || w.inProtection(q) || w.m.MovesOnStep(q))
+	})
+	w.pathBudget -= w.pf.Expanded()
+	w.pathBuf = path[:0]
+	first, free := world.Direction(0), false
+	if ok && len(path) > 0 {
+		first = path[0]
+		to, stepOK := m.pos.Step(first)
+		free = stepOK && w.monsterCanEnter(to)
+	}
+	if !free {
+		m.readyAt = ctx.Tick + homeRetry
+		return true
+	}
+	for i := len(path) - 1; i >= 1; i-- {
+		m.homeWay = append(m.homeWay, path[i])
+	}
+	w.stepMonster(ctx, m, first)
+	m.homeAt = m.pos
+	return true
+}
+
+// chaseStep returns a step from `from` that gets closer to goal (never onto it): the free
+// neighbour that most reduces the distance, else (monsters only, within the tick's
+// pathfinding quota) the first step of an A* path around creatures.
 func (w *World) chaseStep(from, goal world.Pos, astar bool) (world.Direction, bool) {
+	return w.stepToward(from, goal, astar, false, anywhere)
+}
+
+// stepToward is chaseStep that steps only onto tiles of in (the A* path too, but its
+// goal) and, with onto, also onto goal itself (a monster walking to its spawn's center).
+func (w *World) stepToward(from, goal world.Pos, astar, onto bool, in tileSquare) (world.Direction, bool) {
 	best, bestC, bestD := world.Direction(0), chebyshev(from, goal), dist2(from, goal)
 	found := false
 	for d := range world.Direction(8) {
 		to, ok := from.Step(d)
-		if !ok || to == goal || !w.monsterCanEnter(to) {
+		if !ok || to == goal && !onto || !in.has(to) || !w.monsterCanEnter(to) {
 			continue
 		}
 		c, d2 := chebyshev(to, goal), dist2(to, goal)
@@ -556,23 +712,26 @@ func (w *World) chaseStep(from, goal world.Pos, astar bool) (world.Direction, bo
 		return best, found
 	}
 	path, ok := w.pf.FindAvoiding(from, goal, w.pathBuf, func(q world.Pos) bool {
-		return q != goal && (w.occupied(q) || w.inProtection(q) || w.m.MovesOnStep(q))
+		return q != goal && (w.occupied(q) || w.inProtection(q) || w.m.MovesOnStep(q) || !in.has(q))
 	})
 	w.pathBudget -= w.pf.Expanded()
 	w.pathBuf = path[:0]
+	// A one-step path is the step onto goal, which the greedy pass found taken (or not
+	// allowed): A* does not avoid the goal.
 	if !ok || len(path) < 2 {
 		return 0, false
 	}
 	return path[0], true
 }
 
-// fleeStep returns the free neighbour step that most increases the distance to threat.
-func (w *World) fleeStep(m *Monster, threat world.Pos) (world.Direction, bool) {
+// fleeStep returns the free neighbour step within in that most increases the distance to
+// threat.
+func (w *World) fleeStep(m *Monster, threat world.Pos, in tileSquare) (world.Direction, bool) {
 	best, bestC, bestD := world.Direction(0), chebyshev(m.pos, threat), dist2(m.pos, threat)
 	found := false
 	for d := range world.Direction(8) {
 		to, ok := m.pos.Step(d)
-		if !ok || !w.monsterCanEnter(to) {
+		if !ok || !in.has(to) || !w.monsterCanEnter(to) {
 			continue
 		}
 		c, d2 := chebyshev(to, threat), dist2(to, threat)

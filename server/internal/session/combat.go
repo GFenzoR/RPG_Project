@@ -172,7 +172,7 @@ func (w *World) physicalHit(ctx *game.TickContext, p *Player, f foe, maxHit int,
 		w.hurtPlayer(ctx, p, v, dmg, ElementPhysical, true)
 		return
 	}
-	w.train(p, skill, w.afk(ctx, p))
+	w.train(p, skill, w.afk(ctx, p) || w.beyondLeash(f.m, p.pos))
 	w.damageMonster(ctx, f.m, p, combat.HitMonster(ctx.Rand, maxHit, f.m.kind.target), ElementPhysical)
 }
 

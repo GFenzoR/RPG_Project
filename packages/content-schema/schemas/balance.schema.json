@@ -169,6 +169,11 @@
           "minimum": 0,
           "maximum": 1
         },
+        "monster_leash_tiles": {
+          "description": "Leash: a monster chases and flees only within its spawn's radius plus this many tiles (Chebyshev from the spawn's center); a target beyond that and out of its reach is dropped, the monster heals to full and walks home. 0 or absent = no leash.",
+          "type": "integer",
+          "minimum": 0
+        },
         "modes": {
           "type": "object",
           "additionalProperties": false,

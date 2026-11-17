@@ -185,6 +185,24 @@ func TestMarketPushEvery(t *testing.T) {
 	}
 }
 
+// combat.monster_leash_tiles: 6 in data/, 0 (no leash) accepted, negative refused.
+func TestMonsterLeashTiles(t *testing.T) {
+	b, err := LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := b.Combat
+	if c.MonsterLeashTiles != 6 {
+		t.Errorf("combat.monster_leash_tiles = %d, want 6", c.MonsterLeashTiles)
+	}
+	for leash, ok := range map[int]bool{-1: false, 0: true, 6: true} {
+		c.MonsterLeashTiles = leash
+		if (c.check() == nil) != ok {
+			t.Errorf("combat.monster_leash_tiles %d: accepted %v, want %v", leash, !ok, ok)
+		}
+	}
+}
+
 // inventory.reach and resource.reach stay within the view (MaxReach, 6 tiles): the server
 // answers nothing about a tile out of view, so a longer reach could only ever fail.
 func TestReachWithinTheView(t *testing.T) {

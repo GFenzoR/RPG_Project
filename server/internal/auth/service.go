@@ -26,9 +26,12 @@ var (
 	ErrAccountDisabled    = errors.New("auth: account disabled")
 	// ErrAccountBanned means the credentials are right but the account has an active
 	// ban (T2.6).
-	ErrAccountBanned    = errors.New("auth: account banned")
-	ErrUnauthorized     = errors.New("auth: missing, expired or revoked token")
-	ErrInvalidName      = errors.New("auth: invalid character name")
+	ErrAccountBanned = errors.New("auth: account banned")
+	ErrUnauthorized  = errors.New("auth: missing, expired or revoked token")
+	ErrInvalidName   = errors.New("auth: invalid character name")
+	// ErrReservedName means the name poses as staff or the game itself ("GM Tester",
+	// "Admin Bob"): its own message, since the rules of ErrInvalidName do not say why.
+	ErrReservedName     = errors.New("auth: reserved character name")
 	ErrNameTaken        = errors.New("auth: character name taken")
 	ErrInvalidVocation  = errors.New("auth: invalid vocation")
 	ErrCharacterLimit   = errors.New("auth: character limit reached")
@@ -407,8 +410,8 @@ func (s *Service) Characters(ctx context.Context, accountID int64) ([]store.Char
 // CreateCharacter validates the name and vocation and creates a level 1 character with
 // the vocation's starting health and mana.
 func (s *Service) CreateCharacter(ctx context.Context, accountID int64, name, vocation string) (store.Character, error) {
-	if !ValidCharacterName(name) {
-		return store.Character{}, ErrInvalidName
+	if err := CharacterNameError(name); err != nil {
+		return store.Character{}, err
 	}
 	v, ok := s.playable[vocation]
 	if !ok {

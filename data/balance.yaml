@@ -49,6 +49,11 @@ combat:
   level_divisor: 4
   shield_block_divisor: 4
   monster_corpse_ms: 60000    # how long a monster's remains (and its loot) stay
+  # Leash (docs/02-game-design.md, "Monstruos"): a monster chases and flees only within
+  # its spawn's radius + monster_leash_tiles (Chebyshev from the spawn's center). A target
+  # beyond that and out of its attacks' reach is dropped: it heals to full, forgets who hurt
+  # it and walks home; without a target it walks back into its spawn's radius. 0 = no leash.
+  monster_leash_tiles: 6
   # Wands (T1.9): a distance attack of the weapon's element and range that hits
   # random(attack × wand_min_factor, attack) × (1 − resistance %). Armor does not stop it.
   wand_min_factor: 0.5
