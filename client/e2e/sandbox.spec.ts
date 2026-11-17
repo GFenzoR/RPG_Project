@@ -239,8 +239,12 @@ test("sandbox playtest: walls block clicks, arrows after the panel, the shop scr
   const sizes = await shop.evaluate((el) => ({ scroll: el.scrollHeight, client: el.clientHeight }));
   expect(sizes.scroll).toBeGreaterThan(sizes.client); // the list is taller: it scrolls
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.wheel(0, 400);
-  await expect.poll(() => shop.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  // The wheel over the shop takes the list to its end, however long the shop gets (a fixed
+  // 400 px stopped short once the mana draughts, the spark wand and the crossbow came in).
+  await page.mouse.wheel(0, sizes.scroll);
+  await expect
+    .poll(() => shop.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop))
+    .toBeLessThanOrEqual(1);
   const last = shop.locator("li").last();
   await expect(last).toHaveAttribute("data-item", "backpack");
   // m8: a count over the limit shows the limit (100), not what was typed.
