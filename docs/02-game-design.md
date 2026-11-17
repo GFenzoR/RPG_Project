@@ -684,17 +684,23 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   historial (lo que compró y vendió) y un **precio de referencia**: cada cuenta vendedora
   vota una vez por día, con su precio medio por unidad de ese día, y la referencia es la
   mediana de los votos de los últimos `reference_days` días (con un número par, la menor).
-  Con menos de `reference_min_votes` (3) votos o de `reference_min_sellers` (2) cuentas
-  vendedoras distintas no hay referencia ("Sin precio de referencia"). Es solo
-  informativo. Por qué así (auditoría de contenido m13): con el promedio, una venta
-  absurda entre dos cuentas propias la inflaba; con la mediana por unidad, 2000 unidades a
-  1 moneda vendidas a otra cuenta propia la hundían por 40 de comisión. Por voto, una
-  cuenta que se vende a sí misma, en una venta o en mil, es un voto por día que los
-  demás vendedores superan. Lo que no evita: en un item con poco comercio, varias cuentas
-  propias vendiendo varios días todavía pueden mover la mediana; por eso es solo una guía
-  (el formulario la propone, nadie está obligado a usarla). La calcula el loop una vez
-  por item y día (se recalcula con cada venta). El intercambio directo no paga comisión
-  ni cuenta para la referencia.
+  No cuentan las ventas entre dos cuentas que se vendieron una a la otra en la ventana (en
+  los dos sentidos) ni las de cuentas suspendidas. Con menos de `reference_min_votes` (3)
+  votos, de `reference_min_sellers` (2) cuentas vendedoras distintas o de
+  `reference_min_accounts` (3) cuentas en total (vendedoras y compradoras) no hay
+  referencia ("Sin precio de referencia"). Es solo informativo. Por qué así (auditoría de
+  contenido m13): con el promedio, una venta absurda entre dos cuentas propias la inflaba;
+  con la mediana por unidad, 2000 unidades a 1 moneda vendidas a otra cuenta propia la
+  hundían por 40 de comisión; por voto y con mínimos, dos cuentas propias que se venden
+  entre sí en días distintos juntaban 3 votos de 2 vendedores por 3 comisiones. Ahora dos
+  cuentas no alcanzan nunca: se venden una a la otra (no cuenta) o una sola vende (un
+  vendedor). Lo que todavía se puede: con tres cuentas propias en anillo (A le vende a B,
+  B a C, C a A) se arma una referencia mientras nadie más venda ese item, y con más
+  cuentas se superan los votos de los vendedores reales de un item con poco comercio; por
+  eso es solo una guía (el formulario la propone, nadie está obligado a usarla). La
+  calcula el loop una vez por item y día; se recalcula con cada venta, con cada suspensión
+  o levantamiento y cuando vence la suspensión de una cuenta que dejó afuera. El
+  intercambio directo no paga comisión ni cuenta para la referencia.
 - **Ventana en vivo:** la ventana abierta se actualiza sola cuando otro jugador cambia lo
   que muestra: una oferta nueva, cancelada, vencida o llenada en el item que se está
   mirando; una oferta propia que otro llenó (y el oro o los items que llegan al buzón);
@@ -780,7 +786,10 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
   regla ni sin haber podido ver el aviso. **El servidor apagado no es ausencia:** al
   arrancar, el tiempo desde el último guardado de cualquier personaje (≈ el apagado, o
   más si el servidor estuvo vacío antes) se suma a la última vez visto de cada dueño, una
-  sola vez y sin pasar de ahora. Un aviso por email antes de perderla queda pendiente.
+  sola vez y sin pasar de ahora. **La base caída tampoco:** el servidor la consulta cada 30 s
+  (`app/houses.go` `heartbeat`, `World.StoreAlive`); si faltan tres respuestas, no se
+  libera ninguna casa por ausencia (nadie puede entrar), y cuando vuelve a contestar, ese
+  hueco se suma igual que un apagado. Un aviso por email antes de perderla queda pendiente.
   No agregamos un "fondo de la casa" aparte: sería un segundo buzón de oro con sus propias
   reglas, y pagar por adelantado desde la ventana ya cubre a quien no usa el mercado.
 - **Una casa por cuenta** (no solo por personaje): con pocas casas por pueblo, una cuenta

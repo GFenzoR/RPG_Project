@@ -412,7 +412,10 @@ Semántica del motor (T1.10):
   bajo el jugador. `give_gold`/`take_gold` usan el dinero (`currency.worth`).
 - `bless: { blessing, price, per_level }` guarda la bendición en `quest_state`
   (`bless.<id>` = 1) y cobra `price + per_level × nivel` del que la compra (auditoría de
-  contenido M6; `per_level` es opcional, 0 = precio fijo). El texto de la opción recibe ese
+  contenido M6; `per_level` es opcional, 0 = precio fijo; nunca menos de 0). Una opción
+  con `bless` no puede tener `give_xp` (lo rechazan `make validate` y el arranque: cobraría
+  con otro nivel que el que mostró), y si el nivel cambió desde que se mostró el nodo, el
+  servidor no cobra, avisa (`dialog.price_changed`) y lo vuelve a mandar. El texto de la opción recibe ese
   total como `{price}` (la opción de diálogo lleva parámetros, docs/05); al
   morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida (no el maná).
 - `skill_at_least` usa el nivel de skill actual; `level_at_least`, el nivel del jugador.
@@ -641,7 +644,7 @@ houses:
   action_refill_ms: 300
   inactive_days: 28         # M6: sin nadie de la cuenta del dueño en el juego tanto, al
                             # vencer el alquiler la casa se libera (0..365; 0 = nunca;
-                            # el servidor apagado no cuenta)
+                            # el servidor o la base caídos no cuentan)
 ```
 - El alquiler de cada casa es dato del mapa (`houses.yaml → rent`): casillas × 60 en
   Puerto, × 90 en el Bosque, × 120 en la Volcánica (auditoría de contenido M6, lo revisa
@@ -668,7 +671,8 @@ market:
   history_size: 25          # operaciones propias que se ven
   reference_days: 5         # ventana del precio de referencia (mediana de votos, m13)
   reference_min_votes: 3    # sin referencia con menos votos (uno por cuenta vendedora y día)
-  reference_min_sellers: 2  # ni con menos cuentas vendedoras distintas
+  reference_min_sellers: 2  # ni con menos cuentas vendedoras distintas (<= min_votes, make validate)
+  reference_min_accounts: 3 # ni con menos cuentas en total; las que se vendieron entre sí no cuentan
   mailbox_shown: 30         # items del buzón por ventana
   action_burst: 6           # anti-flood: ráfaga y recarga por acción
   action_refill_ms: 400
