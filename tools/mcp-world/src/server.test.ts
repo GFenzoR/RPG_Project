@@ -157,8 +157,8 @@ describe("read tools", () => {
       total: 1,
       results: [{ pos: { x: 1057, y: 1084, z: 7 }, layer: "stack" }],
     });
-    // testisle, Puerto and the sandbox island's pen 2 (puerto has two).
-    expect(json("map_find", { kind: "spawn", id: "wolf" }).total).toBe(4);
+    // testisle, Puerto and the sandbox island's pen 2 (puerto has four since content audit M1).
+    expect(json("map_find", { kind: "spawn", id: "wolf" }).total).toBe(6);
     expect(
       json("map_find", {
         kind: "item",
