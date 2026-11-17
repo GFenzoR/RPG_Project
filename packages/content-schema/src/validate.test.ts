@@ -543,14 +543,16 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
-  it("only lets NPCs placed on dev_only islands use dev-only actions (train_skill, restore_mana)", () => {
+  it("only lets NPCs placed on dev_only islands use dev-only actions (train_skill, restore_mana) or be dev_only", () => {
     const devErrors = (): string[] =>
-      messages(root).filter((m) => m.startsWith("error") && m.includes("dev-only action"));
+      messages(root).filter((m) => m.startsWith("error") && m.includes("dev-only"));
     // The real world: once the instructor stands nowhere, an error.
     mkdirSync(file("world"), { recursive: true });
     cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
     expect(devErrors()).toEqual([
-      expect.stringContaining('NPC "pruebas_trainer" is placed on no dev_only island'),
+      expect.stringMatching(
+        /pruebas_trainer\.yaml:.*dev_only NPC .*: NPC "pruebas_trainer" is placed on no dev_only island/,
+      ),
     ]);
     // On the sandbox island, which is dev_only.
     const npcs = (island: string, list: string): void => {
@@ -562,8 +564,15 @@ describe("validator diagnostics", () => {
     // Placed (also) in Puerto, or the sandbox island no longer dev_only.
     npcs("puerto", "- { npc: pruebas_trainer, pos: { x: 3200, y: 6400, z: 7 } }\n");
     expect(devErrors()).toEqual([
+      expect.stringMatching(/pruebas_trainer\.yaml:.*dev_only NPC.*stands on island "puerto"/),
+    ]);
+    // Without dev_only only her dev-only actions would be caught, not her free gold and
+    // experience (review of lote 5).
+    edit("data/npcs/pruebas_trainer.yaml", "dev_only: true\n", "");
+    expect(devErrors()).toEqual([
       expect.stringMatching(/pruebas_trainer\.yaml:.*dev-only action.*stands on island "puerto"/),
     ]);
+    edit("data/npcs/pruebas_trainer.yaml", "\ndialog:\n", "\ndev_only: true\ndialog:\n");
     npcs("puerto", "[]\n");
     // (testisle is dev_only too, content audit m11: flip the sandbox island's own flag.)
     const sandbox = "level_hint: [1, 60]\n    dev_only:";
@@ -579,6 +588,16 @@ describe("validator diagnostics", () => {
     );
     expect(devErrors()).toEqual([
       expect.stringMatching(/puerto_priest\.yaml:.*"restore_mana".*stands on island "puerto"/),
+    ]);
+    // A dev_only NPC is caught even with no dev-only action.
+    edit(
+      "data/npcs/puerto_priest.yaml",
+      "action: [{ heal: true }, { restore_mana: true }]",
+      "action: { heal: true }",
+    );
+    edit("data/npcs/puerto_priest.yaml", "\ndialog:\n", "\ndev_only: true\ndialog:\n");
+    expect(devErrors()).toEqual([
+      expect.stringMatching(/puerto_priest\.yaml:.*dev_only NPC.*stands on island "puerto"/),
     ]);
     // The schema: a known skill and a level in 1..500.
     edit(

@@ -387,6 +387,15 @@ de islas `dev_only` (`world.yaml`), que la imagen de producción no compila.
   la opción (tampoco sus otras acciones) y contesta `dialog.dev_only` (`dialog.Check`).
   Además, un `world.bin` con islas de desarrollo no carga con `RPG_ENV` de producción
   (`03-world-and-maps.md`, "Compilación").
+- **NPC de desarrollo** (`dev_only: true` a nivel del NPC, revisión del lote 5): vuelve de
+  desarrollo **todas** sus acciones, también las que no lo son por sí solas (el oro y la
+  experiencia gratis de la instructora, `give_gold: 10000` y `give_xp: 50000`, que antes
+  solo protegía que ella también tuviera `train_skill`). Pasa por las mismas tres capas:
+  `make validate` lo rechaza sin colocar o fuera de islas `dev_only`; el servidor no
+  arranca con él en una isla sin la marca `dev` (`content.CheckDevPlacement`); y fuera de
+  una isla de desarrollo `dialog.Check` rechaza con `dialog.dev_only` cualquier opción
+  suya con acciones, salvo `close` (las que solo navegan con `goto` siguen andando).
+  Úsalo en todo NPC pensado solo para probar.
 - Una acción de desarrollo nueva se suma a `content.Action.DevOnly` (Go) y a
   `DEV_ONLY_ACTIONS` (`packages/content-schema/src/validate.ts`).
 Semántica del motor (T1.10):

@@ -817,10 +817,10 @@ class Validator {
   }
 
   /**
-   * Dev-only dialog actions (DEV_ONLY_ACTIONS): an NPC with one must be placed
-   * (world/islands/<id>/npcs.yaml), and only on dev_only islands of world/world.yaml, which
-   * the production image leaves out. The server refuses the same when it starts and again
-   * when the option is picked.
+   * Dev-only dialog actions (DEV_ONLY_ACTIONS), or an NPC marked dev_only (every action of
+   * it is dev-only): such an NPC must be placed (world/islands/<id>/npcs.yaml), and only on
+   * dev_only islands of world/world.yaml, which the production image leaves out. The
+   * server refuses the same when it starts and again when an option is picked.
    */
   private checkDevOnlyActions(): void {
     const placed = this.npcPlacements();
@@ -828,22 +828,25 @@ class Validator {
     for (const src of this.npcs) {
       const npc = isObj(src.data) ? src.data : undefined;
       const id = idOf(npc);
-      const used = actionsOf(npc?.["dialog"], ["dialog"]).find((a) =>
-        DEV_ONLY_ACTIONS.includes(a.key),
-      );
+      const used =
+        npc?.["dev_only"] === true
+          ? { what: "dev_only NPC (every action of it is dev-only)", path: ["dev_only"] }
+          : actionsOf(npc?.["dialog"], ["dialog"])
+              .filter((a) => DEV_ONLY_ACTIONS.includes(a.key))
+              .map((a) => ({ what: `dev-only action "${a.key}"`, path: a.path }))[0];
       if (!used || id === undefined) continue;
       const at = placed.get(id) ?? [];
       if (at.length === 0)
         this.error(
           src,
           used.path,
-          `dev-only action "${used.key}": NPC "${id}" is placed on no dev_only island (world/world.yaml); only the sandbox island may have it`,
+          `${used.what}: NPC "${id}" is placed on no dev_only island (world/world.yaml); only the sandbox island may have it`,
         );
       for (const p of at.filter((p) => !p.dev))
         this.error(
           src,
           used.path,
-          `dev-only action "${used.key}": NPC "${id}" stands on island "${p.island}", which is not dev_only (world/world.yaml); only the sandbox island may have it`,
+          `${used.what}: NPC "${id}" stands on island "${p.island}", which is not dev_only (world/world.yaml); only the sandbox island may have it`,
         );
     }
   }

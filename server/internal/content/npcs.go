@@ -18,6 +18,12 @@ type NPC struct {
 	Sprite string `yaml:"sprite"`
 	Dialog Dialog `yaml:"dialog"`
 	Shop   *Shop  `yaml:"shop"`
+	// DevOnly makes every action of the NPC's dialog dev-only, like Action.DevOnly (the
+	// sandbox instructor, docs/16: her free experience and gold too): make validate
+	// refuses it placed anywhere but on a dev_only island, the server does not start with
+	// it there (CheckDevPlacement) and runs none of its actions but close elsewhere
+	// (dialog.Check).
+	DevOnly bool `yaml:"dev_only"`
 }
 
 // Dialog is an NPC's dialog tree: nodes by id, starting at Start.
@@ -208,11 +214,18 @@ func (n *NPC) DevOnlyAction() string {
 	return ""
 }
 
-// CheckDevPlacement refuses n placed on island when its dialog has a dev-only action
-// (Action.DevOnly) and the island is not dev-only: there the action would hand out in
-// the real game what playing earns. The server runs it for every NPC it places.
+// CheckDevPlacement refuses n placed on island when n is dev_only (NPC.DevOnly) or its
+// dialog has a dev-only action (Action.DevOnly) and the island is not dev-only: there it
+// would hand out in the real game what playing earns. The server runs it for every NPC it
+// places.
 func CheckDevPlacement(n *NPC, island string, devOnly bool) error {
-	if name := n.DevOnlyAction(); name != "" && !devOnly {
+	switch {
+	case devOnly:
+		return nil
+	case n.DevOnly:
+		return fmt.Errorf("npc %q is dev_only (every dialog action of it is dev-only) and stands on island %q, which is not dev_only (world.yaml): only the sandbox island may have it", n.ID, island)
+	}
+	if name := n.DevOnlyAction(); name != "" {
 		return fmt.Errorf("npc %q uses the dev-only dialog action %s and stands on island %q, which is not dev_only (world.yaml): only the sandbox island may have it", n.ID, name, island)
 	}
 	return nil

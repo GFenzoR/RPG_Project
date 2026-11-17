@@ -161,7 +161,7 @@ func TestCostsAreAllOrNothing(t *testing.T) {
 	if r := Choose(prov, "greet", 0, f); r.Node != "greet" || f.did[len(f.did)-1] != "shop:provisions_shop" {
 		t.Fatalf("trade should stay on the node and open the shop: %+v", r)
 	}
-	if Check(content.Actions{{TakeItem: &content.ItemCount{Item: "rope", Count: 2}}}, f) != MsgNoItem {
+	if Check(nil, content.Actions{{TakeItem: &content.ItemCount{Item: "rope", Count: 2}}}, f) != MsgNoItem {
 		t.Fatal("take_item without the items should be refused")
 	}
 }
@@ -234,10 +234,30 @@ func TestDevOnlyActionsNeedADevIsland(t *testing.T) {
 			t.Fatalf("trades training (dev island %v): %+v, ran %v", dev, r, f.did)
 		}
 	}
+	// She is dev_only (review of lote 5): her gold, no dev-only action, runs only there
+	// too; leaving with close always works.
+	gold := option("greet", "npc.pruebas_trainer.opt_gold")
+	bye := option("greet", "dialog.bye")
+	for _, dev := range []bool{false, true} {
+		f := newFake(t, "guardian")
+		f.dev = dev
+		money := f.money
+		r := Choose(trainer, "greet", gold, f)
+		if !dev && (r.Refused != MsgDevOnly || f.money != money) || dev && (r.Refused != "" || f.money != money+10000) {
+			t.Fatalf("gold (dev island %v): %+v, money %d -> %d", dev, r, money, f.money)
+		}
+		if r := Choose(trainer, "greet", bye, f); r.Refused != "" || r.Node != "" {
+			t.Fatalf("bye (dev island %v): %+v", dev, r)
+		}
+	}
 	f := newFake(t, "druid")
-	if Check(content.Actions{{RestoreMana: true}}, f) != MsgDevOnly ||
-		Check(content.Actions{{TrainSkill: &content.SkillLevel{Skill: "magic", Level: 3}}}, f) != MsgDevOnly ||
-		Check(content.Actions{{Heal: true}}, f) != "" {
+	if Check(&content.NPC{DevOnly: true}, content.Actions{{Heal: true}}, f) != MsgDevOnly ||
+		Check(&content.NPC{DevOnly: true}, content.Actions{{Close: true}}, f) != "" {
+		t.Fatal("Check of a dev_only NPC off a dev island")
+	}
+	if Check(nil, content.Actions{{RestoreMana: true}}, f) != MsgDevOnly ||
+		Check(nil, content.Actions{{TrainSkill: &content.SkillLevel{Skill: "magic", Level: 3}}}, f) != MsgDevOnly ||
+		Check(nil, content.Actions{{Heal: true}}, f) != "" {
 		t.Fatal("Check off a dev island")
 	}
 }

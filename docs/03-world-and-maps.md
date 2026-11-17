@@ -378,8 +378,8 @@ crc32        u32 (IEEE) de todos los bytes anteriores
   las lista. Un mundo con alguna es un **mundo de desarrollo**: el servidor no arranca con
   él en producción (`RPG_ENV` vacía, `production` o desconocida; `loadWorld` de
   `cmd/gameserver`, como el proveedor de pagos falso) y solo los NPCs de una isla marcada
-  ejecutan las acciones de diálogo de desarrollo (`train_skill`, `restore_mana`,
-  `06-content-data.md`). Un `world.bin` de la versión 5 no carga: vuelve a compilarlo.
+  ejecutan las acciones de diálogo de desarrollo (`train_skill`, `restore_mana`, y todas
+  las de un NPC `dev_only`; `06-content-data.md`). Un `world.bin` de la versión 5 no carga: vuelve a compilarlo.
 - La versión 5 agregó `portals` por isla (escaleras y demás de
   `portals.yaml`, que antes solo veían el editor y el validador): `NewMap` rechaza ids
   repetidos en el mundo o fuera del formato de id, un tipo desconocido, una entrada que
@@ -538,8 +538,8 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   llega a una ni tiene ahí a su capitán, ningún teleport de un diálogo llega a una (el
   servidor no arrancaría) y ningún portal de otra isla lleva a una (`mapcompile` rechazaría
   el mapa). La primera isla de `world.yaml` no puede ser `dev_only`. Al revés, un NPC con
-  una acción de diálogo de desarrollo (`train_skill`, `restore_mana`) solo puede estar en
-  islas `dev_only`: lo revisa la validación de contenido (`packages/content-schema`, con
+  una acción de diálogo de desarrollo (`train_skill`, `restore_mana`) o marcado
+  `dev_only: true` solo puede estar en islas `dev_only`: lo revisa la validación de contenido (`packages/content-schema`, con
   los `npcs.yaml` de cada isla) y el servidor no arranca si no se cumple
   (`06-content-data.md`, "Diálogos").
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se

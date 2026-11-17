@@ -7,8 +7,10 @@ notes: >-
   mana, and training (the combat skills and magic level of the player's vocation, or the
   trades) so every system can be tried by hand in a few minutes, and the short quest
   pruebas_rats. Only on the sandbox island, which normal play never reaches (no boat goes
-  there): train_skill and restore_mana are dev-only actions (docs/06, "Diálogos"), refused
-  by make validate and by the server anywhere but on a dev_only island.
+  there): dev_only makes every action of hers dev-only, the free experience and gold too,
+  not only train_skill and restore_mana (docs/06, "Diálogos"); make validate and the server
+  refuse them anywhere but on a dev_only island.
+dev_only: true
 dialog:
   start: greet
   nodes:

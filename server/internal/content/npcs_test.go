@@ -112,6 +112,22 @@ func TestDevOnlyActions(t *testing.T) {
 	if mana.DevOnlyAction() != "restore_mana" || CheckDevPlacement(mana, "puerto", false) == nil {
 		t.Fatalf("restore_mana: %q", mana.DevOnlyAction())
 	}
+	// dev_only (review of lote 5) makes every action dev-only: the instructor's free gold
+	// and experience are no dev-only actions, but she may not stand in Puerto for them
+	// either, nor may any NPC marked so.
+	if !trainer.DevOnly {
+		t.Fatal("the sandbox instructor is not dev_only")
+	}
+	gold, err := ParseNPC([]byte("id: a\ndev_only: true\ndialog:\n  start: g\n  nodes:\n    g:\n      text: t\n      options:\n        - { text: x, action: { give_gold: 10000 } }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gold.DevOnlyAction() != "" || CheckDevPlacement(gold, "pruebas", true) != nil {
+		t.Fatalf("a dev_only NPC with give_gold on a dev island: %q", gold.DevOnlyAction())
+	}
+	if err := CheckDevPlacement(gold, "puerto", false); err == nil || !strings.Contains(err.Error(), "is dev_only") {
+		t.Fatalf("a dev_only NPC in Puerto: err = %v", err)
+	}
 	train := func(skill string, level int) string {
 		return fmt.Sprintf("id: a\ndialog:\n  start: g\n  nodes:\n    g:\n      text: t\n      options:\n        - { text: x, action: { train_skill: { skill: %s, level: %d } } }\n", skill, level)
 	}
