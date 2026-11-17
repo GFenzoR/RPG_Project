@@ -15,17 +15,19 @@ import (
 
 // System messages of NPCs, dialogs, shops and quests (i18n keys).
 const (
-	msgNPCTooFar     = "dialog.too_far"
-	msgShopNoMoney   = "shop.no_money"
-	msgShopNotEnough = "shop.not_enough"
-	msgShopNoRoom    = "shop.no_room"
-	msgShopBought    = "shop.bought"
-	msgShopSold      = "shop.sold"
-	msgItemOnFloor   = "dialog.item_on_floor"
-	msgQuestStarted  = "dialog.quest_started"
-	msgQuestUpdated  = "dialog.quest_updated"
-	msgQuestKills    = "dialog.quest_kills"
-	msgQuestDone     = "dialog.quest_completed"
+	msgNPCTooFar = "dialog.too_far"
+	// msgDialogPriceChanged: the price an option showed was for another level (M6).
+	msgDialogPriceChanged = "dialog.price_changed"
+	msgShopNoMoney        = "shop.no_money"
+	msgShopNotEnough      = "shop.not_enough"
+	msgShopNoRoom         = "shop.no_room"
+	msgShopBought         = "shop.bought"
+	msgShopSold           = "shop.sold"
+	msgItemOnFloor        = "dialog.item_on_floor"
+	msgQuestStarted       = "dialog.quest_started"
+	msgQuestUpdated       = "dialog.quest_updated"
+	msgQuestKills         = "dialog.quest_kills"
+	msgQuestDone          = "dialog.quest_completed"
 	// msgQuestDrop: a quest drop (loot each_player) went to the player (content audit m9).
 	msgQuestDrop    = "dialog.quest_drop"
 	msgPaid         = "dialog.paid"
@@ -76,6 +78,9 @@ type openDialog struct {
 	npc  *NPC
 	node string
 	shop bool
+	// level is the player's level when the node was sent: the prices its options showed
+	// ({price} of a blessing, content audit M6) were for it.
+	level int
 }
 
 // NPCs returns the NPCs in the world, ordered by creature id.
@@ -216,6 +221,7 @@ func (w *World) sendDialog(p *Player) {
 	d := p.dialog
 	node := d.npc.def.Dialog.Nodes[d.node]
 	msg := &pb.DialogOpen{DialogId: d.id, NpcCreatureId: d.npc.id, Text: &pb.LocalizedText{Key: node.Text}}
+	d.level = p.level
 	a := &actor{w: w, p: p}
 	if node.BoatRoutes {
 		msg.Options = append(msg.Options, w.routeOptions(d.npc)...)
@@ -226,6 +232,21 @@ func (w *World) sendDialog(p *Player) {
 			Text: &pb.LocalizedText{Key: o.Text, Params: optionParams(o, a)}})
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_DialogOpen{DialogOpen: msg}})
+}
+
+// priceChanged reports whether option index of d's node shows a price (optionParams) that
+// was computed for a level p no longer has.
+func (w *World) priceChanged(d *openDialog, p *Player, index int) bool {
+	node := d.npc.def.Dialog.Nodes[d.node]
+	if node == nil || index < 0 || index >= len(node.Options) || d.level == p.level {
+		return false
+	}
+	for _, a := range node.Options[index].Action {
+		if a.Bless != nil && a.Bless.PerLevel != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // optionParams are the parameters of an option's text: {price}, what its blessing costs
@@ -280,6 +301,13 @@ func (w *World) dialogChoose(ctx *game.TickContext, p *Player, dialogID, optionI
 		return
 	}
 	a := &actor{w: w, p: p, d: d}
+	if w.priceChanged(d, p, int(optionID)-1) {
+		// The option showed a price for another level (one gained or lost since the node
+		// was sent): nothing is charged; the node goes again with the price of now.
+		p.emit(systemMsg(msgDialogPriceChanged))
+		w.sendDialog(p)
+		return
+	}
 	r := dialog.Choose(d.npc.def, d.node, int(optionID)-1, a)
 	if r.Refused != "" {
 		p.emit(systemMsg(r.Refused))
