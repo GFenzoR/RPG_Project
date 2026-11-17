@@ -34,6 +34,14 @@ type Regen struct {
 	IntervalMs int `yaml:"interval_ms"`
 }
 
+// Tick returns the health and mana one regeneration tick gives with the regen conditions
+// (food, content audit m2) adding pct %: Health × (100 + pct) / 100, rounded down, and the
+// same for Mana. The server and the balance simulation both use it.
+func (r Regen) Tick(pct int) (health, mana int) {
+	more := 100 + pct
+	return r.Health * more / 100, r.Mana * more / 100
+}
+
 // SkillFactor returns the vocation's factor for skill id (1 if it has none).
 func (v Vocation) SkillFactor(id string) float64 {
 	if f, ok := v.SkillFactors[id]; ok {

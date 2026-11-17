@@ -13,15 +13,18 @@ package sim_test
 //   - casts its best attack spell whenever the attack group is ready and the mana allows;
 //   - casts its best self-heal under half health (the healing group is apart), and drinks
 //     a seaweed poultice under a third when it cannot;
-//   - regenerates as its vocation, doubled-or-so while fed (balance.yaml well_fed: every
-//     hunter eats, food is cheap), and drinks mana draughts with the consumable cooldown.
+//   - regenerates as its vocation, with the server's integer formula and the bonus of
+//     balance.yaml well_fed (content.Regen.Tick): every hunter eats ship's biscuit, and
+//     pays for it, the whole hunt; and drinks mana draughts with the consumable cooldown.
 // Health and mana carry over from one fight to the next, with the 15 s of walking and
-// looting in between. Two habits are tried and the better one kept:
+// looting in between. Three habits are tried and the best affordable one kept:
 //   - frugal: attack spells only with the mana that regeneration gives, keeping a reserve
-//     for heals; draughts only to keep that reserve;
+//     for heals; draughts only for a heal it needs;
+//   - budget: draughts for attack spells too, while they cost at most budgetShare of what
+//     the hunt has earned so far;
 //   - full: draughts keep the attack spells going.
-// What the draughts, poultices and ammo cost must stay well under what the hunt earns
-// (coins plus a third of the items' value, what NPCs pay).
+// What the food, draughts, poultices and ammo cost must stay well under what the hunt
+// earns (coins plus a third of the items' value, what NPCs pay).
 //
 // The career picks, at each level, the monster and habit with the most XP per hour that
 // a hunter can afford and survive, and adds the mana it spent to its magic level
@@ -155,6 +158,7 @@ type hunter struct {
 	regenPct            int            // extra regeneration while fed (balance.yaml well_fed)
 	draught             *content.Item
 	poultice            *content.Item
+	food                *content.Item // eaten all along: what keeps well_fed going
 }
 
 func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunterKit) *hunter {
@@ -193,6 +197,7 @@ func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunte
 		h.draught = d.item(t, "concentrated_mana_draught")
 	}
 	h.poultice = d.item(t, "seaweed_poultice")
+	h.food = d.item(t, "ship_biscuit") // the cheapest food per minute, sold in Puerto
 	return h
 }
 
@@ -244,8 +249,8 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 	target := combat.MonsterTarget{Armor: m.Armor, Defense: m.Defense, PhysicalResistance: m.Resistances["physical"]}
 	player := combat.PlayerTarget{Armor: h.armor, ShieldDefense: h.shield, ModeDefense: balanced.Defense}
 	regen := h.voc.Regen
-	regenHP := float64(regen.Health) * float64(100+h.regenPct) / 100
-	regenMP := float64(regen.Mana) * float64(100+h.regenPct) / 100
+	tickHP, tickMP := regen.Tick(h.regenPct) // the server's integer formula
+	regenHP, regenMP := float64(tickHP), float64(tickMP)
 	useMs := h.d.balance.Inventory.UseCooldownMs
 
 	// Spells sorted by what they do on m; the best ready and affordable one is cast.
@@ -417,6 +422,9 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 		totalMs += now
 		damage += lost
 		loot += h.d.huntLoot(m)
+		if h.regenPct > 0 { // the food that kept well_fed going through fight and walk
+			spend += float64(h.food.Value) * (float64(now) + overheadSeconds*1000) / float64(h.food.Consumable.FoodMs)
+		}
 		// Walking and looting: regeneration and draughts (as the habit allows) to start the
 		// next fight ready; a frugal hunter drinks only for a heal it needs.
 		ticks := int(overheadSeconds * 1000 / float64(regen.IntervalMs))
