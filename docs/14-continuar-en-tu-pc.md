@@ -139,7 +139,7 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     bendiciones con precio por nivel);
   - m3 (defensa de las armas que no se usa), m4 (items huérfanos: `driftwood_club` sin
     fuente, `quartz_crystal` y `rough_stone` sin comprador, quests que siguen soltando su
-    item), m7 (tablero del mercado en Brasal), m10/m11 (`testisle` en producción), m13
+    item), m7 (tablero del mercado en Brasal), m11 (`testisle` en producción), m13
     (comisión del mercado);
   - en la carrera simulada los magos de nivel 30-40 cazan en el Bosque (reptantes) más
     que en el Volcán: los monstruos del Volcán pegan fuerte para un cuerpo de mago. No es
