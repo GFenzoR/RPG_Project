@@ -754,7 +754,7 @@ func (w *World) rangedReady(ctx *game.TickContext, p *Player, pos world.Pos, rng
 	}
 	if !inRange || !w.m.LineOfSight(p.pos, pos) {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
-			if d, ok := w.chaseStep(p.pos, pos, false); ok {
+			if d, ok := w.chaseStep(p.pos, pos); ok {
 				p.stopWalk()
 				p.queue = append(p.queue, d)
 			}

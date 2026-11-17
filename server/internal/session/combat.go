@@ -146,7 +146,7 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 	}
 	if chebyshev(p.pos, f.pos()) > 1 {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
-			if d, ok := w.chaseStep(p.pos, f.pos(), false); ok {
+			if d, ok := w.chaseStep(p.pos, f.pos()); ok {
 				p.stopWalk()
 				p.queue = append(p.queue, d)
 			}
@@ -172,7 +172,7 @@ func (w *World) physicalHit(ctx *game.TickContext, p *Player, f foe, maxHit int,
 		w.hurtPlayer(ctx, p, v, dmg, ElementPhysical, true)
 		return
 	}
-	w.train(p, skill, w.afk(ctx, p) || w.beyondLeash(f.m, p.pos))
+	w.train(p, skill, w.afk(ctx, p) || w.beyondLeash(ctx.Tick, f.m, p))
 	w.damageMonster(ctx, f.m, p, combat.HitMonster(ctx.Rand, maxHit, f.m.kind.target), ElementPhysical)
 }
 

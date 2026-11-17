@@ -533,11 +533,27 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   - Solo elige objetivos dentro de su área de correa, y nunca sale de ella persiguiendo ni
     huyendo (si huyendo llega al borde, acorralado pelea, como siempre).
   - Si su objetivo queda fuera del área de correa y fuera del alcance de sus ataques, lo
-    suelta: recupera toda la vida, se le terminan las condiciones (una quemadura no sigue
-    sumando daño), olvida el daño recibido de todos (nadie cobra experiencia por esa pelea)
-    y vuelve caminando a casa. Un objetivo fuera del área pero a su alcance (un
-    jugador pegado al borde, o a tiro de un ataque a distancia) se sigue peleando desde
-    adentro.
+    cambia por otro: el más cercano de los que lo hirieron y puede pelear (a la vista,
+    dentro de su correa o a su alcance) o, si es agresivo y no hay ninguno, el que
+    elegiría. Lo hace sin curarse ni olvidar quién lo hirió: que el que tenía el aggro
+    salga del área no le quita la pelea, la experiencia ni el botín de quest al resto del
+    grupo, ni sirve para sabotearlo (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si
+    no queda nadie lo suelta: recupera toda la vida, se le terminan las condiciones (una
+    quemadura no sigue sumando daño), olvida el daño recibido de todos (nadie cobra
+    experiencia por esa pelea) y vuelve caminando a casa. Un objetivo fuera del área pero
+    a su alcance (un jugador pegado al borde, o a tiro de un ataque a distancia) se sigue
+    peleando desde adentro.
+  - Tampoco hay lugares seguros dentro del área: si su objetivo, fuera de su alcance, está
+    donde no llega ningún camino a pie que no salga del área de correa (del otro lado de
+    agua, o detrás de un muro cuyo rodeo sale de ella) durante 2 s, lo trata como fuera de
+    la correa: lo cambia por otro o se rinde, igual que arriba. Criaturas en el camino no
+    cuentan (se mueven): detrás de otro monstruo espera. Durante 30 s ese jugador, fuera
+    de su alcance, cuenta como fuera de la correa para ese monstruo: no lo elige, cada
+    golpe suyo lo hace soltarlo (y curarse si no queda nadie) y entrena como contra un
+    objetivo que no responde (`TestLeashGivesUpATargetItCannotReach`). Para pelearlo en
+    ese lapso hay que entrar a su alcance. Cuando la persecución no encuentra camino,
+    espera 1 s antes de volver a buscar (como el regreso a casa): no gasta en cada tick la
+    cuota de búsquedas de los demás monstruos.
   - Sin objetivo (lo soltó, o el jugador murió, salió, entró a una zona de protección o se
     perdió de vista), si está fuera de su área de casa vuelve caminando hacia el centro del
     spawn a su velocidad, en vez de deambular, hasta entrar en ella (sin curarse en ese
@@ -545,16 +561,14 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     que más acerca; contra un muro o agua busca un rodeo (A*, con la cuota del tick) y lo
     sigue entero. Si no hay camino, espera ahí (1 s entre búsquedas): nunca se
     teletransporta.
-  - Un golpe desde fuera de la correa lo hace responder como siempre, pero en el siguiente
-    tick suelta a ese objetivo y se cura; una condición (quemadura, veneno) cuyo autor está
+  - Un golpe desde fuera de la correa lo hace responder como siempre, pero enseguida
+    suelta a ese objetivo (por otro que lo pelee desde adentro, o se rinde y se cura); una
+    condición (quemadura, veneno) cuyo autor está
     fuera de la correa y de su alcance se termina en su siguiente golpe sin hacer daño (solo
     esa: si otro jugador lo está peleando adentro, la pelea sigue igual). No se puede matar
     a un monstruo desde fuera de su correa. Tampoco sirve de muñeco: los golpes de un jugador que
     está fuera de su correa y de su alcance entrenan como contra un objetivo que no
     responde (`skills.afk.factor`).
-  - Pendiente: a un jugador dentro de la correa al que solo se llega saliendo de ella (un
-    rincón detrás de un muro que el camino rodea por fuera) no lo suelta: se queda quieto
-    mientras le disparan, como frente a cualquier lugar inalcanzable (docs/14).
   - Por qué: en los corrales de la Isla de Pruebas (radio 2, con una abertura al sendero
     común) los lobos, jabalíes y arañas perseguían al jugador por el sendero y nada los
     devolvía: el sendero se llenaba de monstruos que mataban a quien pasaba. La correa los
@@ -1172,9 +1186,12 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    llega el suyo a la mochila (o a los pies si no entra); quien lo pierde antes de
    entregarlo (al morir, al tirarlo) recibe otro del próximo custodio. Antes salía uno por
    muerte y un grupo de cinco esperaba cinco respawns de 20 minutos. Con la correa
-   ("Monstruos"), si el custodio suelta la pelea (su objetivo salió de su área de correa y
-   de su alcance) olvida quién lo hirió: el sello es solo para los que le hagan daño
-   después (`TestQuestDropForgottenWhenTheWardenGivesUp`).
+   ("Monstruos"), si el que tiene el aggro sale de su área de correa y de su alcance, el
+   custodio pasa a otro del grupo que lo pelee desde adentro sin curarse ni olvidar: el
+   sello sigue siendo de todos los que lo hirieron
+   (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si no queda nadie suelta la pelea y
+   olvida quién lo hirió: el sello es para los que le hagan daño después
+   (`TestQuestDropForgottenWhenTheWardenGivesUp`).
 - **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de

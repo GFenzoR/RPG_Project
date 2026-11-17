@@ -121,14 +121,16 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     puede pedir a una ruta que conteste 204 sin sesión.
   - **Dificultad del corral 2:** tres lobos (0–16 cada 2 s) matan a un nivel 3 que sale
     del corral 1. Queda para el lote de balance, con la comida (m4).
-  - **Correa, lo que quedó de la revisión** (`server/internal/session/monster.go`): un
-    jugador dentro de la correa al que solo se llega saliendo de ella no se suelta (el
-    monstruo se queda quieto mientras le disparan; arreglo posible: si no hay paso dentro
-    de la correa durante 2–3 s y sí lo hay por fuera, soltarlo); la persecución sigue
-    yendo y viniendo frente a un muro cuando el paso goloso y el primer paso de A* se
-    alternan (ya pasaba sin correa; `walkHome` ahora sigue el rodeo entero); nada valida
-    que el centro de un spawn sea caminable (hoy todos lo son); la espera tras una
-    búsqueda fallida usa `readyAt`; y `make bench-tick` corre sin correa.
+  - **Correa, lo que quedó de la revisión** (`server/internal/session/monster.go`; el
+    lote 5 resolvió el objetivo inalcanzable dentro de la correa y que el que tiene el
+    aggro saliera del área le quitara la pelea al grupo, docs/02 "Correa"): la
+    persecución sigue yendo y viniendo frente a un muro cuando el paso goloso y el primer
+    paso de A* se alternan (ya pasaba sin correa; `walkHome` sigue el rodeo entero, la
+    persecución no, y como da pasos no cuenta como trabada); nada valida que el centro de
+    un spawn sea caminable (hoy todos lo son); la espera tras una búsqueda fallida (de
+    casa o de la persecución) usa `readyAt`; un jugador que el monstruo dejó por
+    inalcanzable sigue "fuera de la correa" 30 s aunque se mueva a un lugar alcanzable
+    (hay que entrar a su alcance); y `make bench-tick` corre sin correa.
 - **Auditoría de contenido (2026-11), lo que quedó afuera de la rama de balance de
   vocaciones** (`feat/balance-vocations`: maná, escalones de armas, ballesta y escudo del
   montaraz, áreas nuevas, comida, sello por jugador, cuerda y pala, bendiciones desde el

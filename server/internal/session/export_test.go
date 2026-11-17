@@ -126,6 +126,10 @@ func (m *Monster) DamageShareForTest(id uint32) int {
 	return 0
 }
 
+// PathNodesSpentForTest is how many tiles the pathfinding of the last tick expanded (its
+// share of Config.PathNodesPerTick).
+func (w *World) PathNodesSpentForTest() int { return w.cfg.PathNodesPerTick - w.pathBudget }
+
 // PartyForTest returns the creature ids of p's party members (join order), its leader
 // and whether shared experience is on; nil, 0, false without a party.
 func (p *Player) PartyForTest() (members []uint32, leader uint32, shared bool) {

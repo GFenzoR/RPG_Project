@@ -273,7 +273,7 @@ func (w *World) conditionHit(ctx *game.TickContext, h holder, c *condition) {
 		return
 	}
 	m := h.m
-	if src := w.playerByID(c.source); src != nil && w.beyondLeash(m, src.pos) {
+	if src := w.playerByID(c.source); src != nil && w.beyondLeash(ctx.Tick, m, src) {
 		// A burn whose author stands where m may not go and cannot hit back ends without
 		// hurting: no kill from out of its leash. Only that condition: m keeps its fight
 		// (someone inside its leash may be killing it).

@@ -19,7 +19,10 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 - Sectores inactivos no procesan IA ni movimiento de monstruos.
 - Scheduler por min-heap para eventos con tiempo (respawns, condiciones, cooldowns):
   nada de recorrer todas las entidades cada tick.
-- Pathfinding A* con límite de nodos y caché de flags por tile.
+- Pathfinding A* con límite de nodos y caché de flags por tile. Un monstruo cuya búsqueda
+  no encontró camino (de vuelta a casa o hacia su objetivo) espera 1 s antes de buscar
+  otra vez (`pathRetry`): uno trabado frente a agua no gasta la cuota del tick de los
+  demás.
 - Envío por deltas (MapSlice, TileUpdate). Un frame por jugador por tick como máximo.
 - Pools para buffers de serialización.
 - Persistencia fuera del loop con snapshots copiados.

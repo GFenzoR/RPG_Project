@@ -216,6 +216,76 @@ func TestQuestDropForgottenWhenTheWardenGivesUp(t *testing.T) {
 	}
 }
 
+// The leash and a group (review of lote 5): when whoever holds the warden steps out of its
+// leash area and its reach, the warden turns to another player who fights it from inside
+// instead of giving up. It keeps its wounds and who hurt it, so nobody can reset the
+// group's fight (or take its seals and experience) by stepping out; it gives up only with
+// nobody left inside (TestQuestDropForgottenWhenTheWardenGivesUp).
+func TestQuestDropKeptWhenTheHolderStepsOut(t *testing.T) {
+	h := chapterThreeHarness(t)
+	join := func(id int64, name string, at world.Pos) *session.Player {
+		c := session.Character{ID: id, AccountID: id, Name: name, Vocation: "guardian", Level: 44, Health: 1000, Mana: 100}
+		_, p := h.joinFresh(c, at)
+		h.sim.Command(gameFunc(func() {
+			p.SetStorageForTest("quest.ch3_warden", 1)
+			p.SetStorageForTest("quest.ch3_warden.step", 0)
+		}))
+		h.sim.Step()
+		return p
+	}
+	holder := join(971, "Ingot", pos(33, 44))
+	var warden *session.Monster
+	for _, m := range h.w.Monsters() {
+		if m.Kind() == "slagbound_warden" {
+			warden = m
+		}
+	}
+	if warden == nil {
+		t.Fatal("no warden")
+	}
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		h.w.DamageMonsterForTest(ctx, warden, holder, 10)
+	}))
+	h.sim.Step()
+	h.sim.RunUntil(func() bool {
+		return warden.TargetID() == holder.ID() && chebyshev(warden.Pos(), holder.Pos()) == 1
+	}, sim.MaxSeconds(10))
+	// The mate fights from the west of the forge, inside the leash area (3 tiles from the
+	// spawn's center 30,44) and out of the warden's reach (spell range 4).
+	mate := join(972, "Crucible", pos(27, 44))
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		warden.SetHealth(1000)
+		h.w.DamageMonsterForTest(ctx, warden, mate, 10)
+	}))
+	h.sim.Step()
+	if warden.TargetID() != holder.ID() {
+		t.Fatalf("the warden targets %d after the mate's hit, want the holder %d", warden.TargetID(), holder.ID())
+	}
+	// The holder steps out of the leash (9 tiles from the center) and of the reach.
+	h.sim.Command(gameFunc(func() { h.w.Teleport(holder, pos(39, 44)) }))
+	h.sim.Step()
+	h.sim.RunUntil(func() bool { return warden.TargetID() != holder.ID() }, sim.MaxSeconds(5))
+	if warden.TargetID() != mate.ID() {
+		t.Fatalf("the warden targets %d once the holder left, want the mate %d", warden.TargetID(), mate.ID())
+	}
+	if hp, _ := warden.Health(); hp > 990 {
+		t.Errorf("the warden is at %d health after turning to the mate, want at most 990 (it healed)", hp)
+	}
+	if a, b := warden.DamageShareForTest(holder.ID()), warden.DamageShareForTest(mate.ID()); a != 10 || b != 10 {
+		t.Fatalf("the warden remembers %d damage from the holder and %d from the mate, want 10 and 10", a, b)
+	}
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		warden.SetHealth(10)
+		h.w.DamageMonsterForTest(ctx, warden, mate, 10)
+	}))
+	h.sim.Step()
+	for _, p := range []*session.Player{holder, mate} {
+		if n := h.w.CountItem(p, "forge_seal"); n != 1 {
+			t.Errorf("player %d got %d seals, want 1 (both hurt the warden in one fight)", p.ID(), n)
+		}
+	}
+}
+
 // Content audit m9 with death: at return_seal, a death without blessings leaves the
 // backpack, seal inside, in the corpse; the character wakes up with a new backpack, and the
 // next warden puts a new seal in it.
