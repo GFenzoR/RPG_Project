@@ -129,7 +129,8 @@ export default defineConfig({
       url: `${serverURL}/healthz`,
       reuseExistingServer: false,
       timeout: 240_000,
-      // T5.7: the cosmetic shop with the fake payment provider (refused in production).
+      // T5.7: the cosmetic shop with the fake payment provider, and the -dev world (with the
+      // sandbox island): both refused in production.
       env: { DATABASE_URL: databaseUrl, RPG_ENV: "development", PAYMENTS_PROVIDER: "fake" },
       stdout: "pipe",
     },

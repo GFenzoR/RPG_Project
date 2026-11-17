@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
+	"github.com/GFenzoR/RPG_Project/server/internal/payments"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/compile"
 )
@@ -104,7 +106,7 @@ func TestDefaultWorldPath(t *testing.T) {
 // directory is obvious.
 func TestLoadWorldReportsAbsolutePath(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	_, err := loadWorld(logger, filepath.Join("no", "such", "world.bin"))
+	_, err := loadWorld(logger, filepath.Join("no", "such", "world.bin"), payments.EnvProduction)
 	want, _ := filepath.Abs(filepath.Join("no", "such", "world.bin"))
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("err = %v, want it to mention %s", err, want)
@@ -113,7 +115,7 @@ func TestLoadWorldReportsAbsolutePath(t *testing.T) {
 
 func TestLoadWorld(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	if m, err := loadWorld(logger, ""); m != nil || err != nil {
+	if m, err := loadWorld(logger, "", payments.EnvProduction); m != nil || err != nil {
 		t.Fatalf("empty path: %v, %v", m, err)
 	}
 	m, err := compile.Compile(filepath.Join("..", "..", "internal", "world", "compile", "testdata", "miniworld"))
@@ -128,9 +130,64 @@ func TestLoadWorld(t *testing.T) {
 	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got, err := loadWorld(logger, path)
+	got, err := loadWorld(logger, path, payments.EnvProduction)
 	if err != nil || got.Island("mini") == nil {
 		t.Fatalf("loadWorld = %v, %v", got, err)
+	}
+}
+
+// A world.bin built with mapcompile -dev (make mapcompile always passes it: it has the
+// sandbox island) does not start a production server (RPG_ENV production, empty or
+// unknown, as payments.ParseEnv reads it), like the fake payment provider; development
+// and test load it with a warning. A world without dev islands loads anywhere.
+func TestLoadWorldRefusesADevWorldInProduction(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	m, err := compile.Compile(filepath.Join("..", "..", "internal", "world", "compile", "testdata", "miniworld"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(name string) string {
+		path := filepath.Join(t.TempDir(), name)
+		var buf bytes.Buffer
+		if err := world.Encode(&buf, m); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	plain := write("world.bin")
+	m.Islands()[0].Dev = true
+	dev := write("world-dev.bin")
+	for _, raw := range []string{"production", "", "prod", "development", "test"} {
+		env := payments.ParseEnv(raw)
+		if got, err := loadWorld(logger, plain, env); err != nil || got == nil {
+			t.Errorf("RPG_ENV=%q, plain world: %v", raw, err)
+		}
+		got, err := loadWorld(logger, dev, env)
+		if env == payments.EnvProduction {
+			if got != nil || !errors.Is(err, errDevWorld) || !strings.Contains(err.Error(), m.Islands()[0].ID) {
+				t.Errorf("RPG_ENV=%q, dev world: %v, %v", raw, got, err)
+			}
+			continue
+		}
+		if err != nil || got == nil || len(got.DevIslands()) != 1 {
+			t.Errorf("RPG_ENV=%q, dev world: %v", raw, err)
+		}
+	}
+	if !strings.Contains(logs.String(), "development world") {
+		t.Errorf("no warning for the dev world: %s", logs.String())
+	}
+
+	// run reads RPG_ENV for it: unset, the server stops at the world, before the database.
+	t.Setenv("RPG_ENV", "")
+	t.Setenv("PAYMENTS_PROVIDER", "")
+	err = run(logger, options{seed: 1, dataDir: filepath.Join("..", "..", "..", "data"),
+		databaseURL: "postgres://nobody@127.0.0.1:1/none", worldPath: dev})
+	if !errors.Is(err, errDevWorld) {
+		t.Fatalf("run with a dev world and no RPG_ENV: %v", err)
 	}
 }
 

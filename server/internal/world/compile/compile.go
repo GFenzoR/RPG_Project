@@ -249,6 +249,9 @@ func Build(root string, opts Options) (*world.Map, error) {
 		if err != nil {
 			return nil, err
 		}
+		// The mark a production server refuses (gameserver, RPG_ENV) and that lets the
+		// island's NPCs run dev-only dialog actions.
+		is.Dev = entry.DevOnly
 		islands = append(islands, is)
 		sectors[is.ID] = secs
 	}

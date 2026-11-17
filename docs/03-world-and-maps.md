@@ -185,7 +185,7 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
 - Un portal por casilla de entrada, y nunca hacia su propia casilla. `to` no debería ser
   la casilla de otro portal que se pisa: el servidor deja al jugador en la libre más
   cercana (nadie se queda parado sobre una escalera).
-- Lo carga el servidor desde `world.bin` (versión 5, "Formato de `world.bin`"), como las
+- Lo carga el servidor desde `world.bin` (desde la versión 5, "Formato de `world.bin`"), como las
   casas: un cambio de `portals.yaml` necesita `make mapcompile` y reiniciar. El cliente
   también lo empaqueta (el plugin de Vite, `loadPortals`, de las islas de `world.yaml`):
   hay que reiniciar `vite` o reconstruir el cliente. Un `portals.yaml` que no se puede
@@ -294,7 +294,10 @@ para cambiarla; el E2E usa `-start-town testisle` porque sus pruebas dependen de
 `data/ids.lock.yaml`, valida lo necesario para compilar, resuelve IDs y escribe
 `build/world.bin` (binario compacto: tiles por sector, flags precomputados), sin las islas
 `dev_only` de `world.yaml` salvo con `-dev` (`make mapcompile` lo pasa, igual que el E2E; la
-imagen de producción, `deploy/Dockerfile.gameserver`, no). El servidor
+imagen de producción, `deploy/Dockerfile.gameserver`, no). Con `-dev` esas islas quedan
+marcadas en `world.bin` (`flags`, versión 6) y el servidor se niega a cargar ese mundo con
+`RPG_ENV` de producción (vacía o `production`): `make run-server`, `make dev`, `make play`,
+`make bots` y el E2E corren con `RPG_ENV=development`. El servidor
 solo carga `world.bin` (`-world`, por defecto `$RPG_WORLD` o `../build/world.bin` desde
 `server/`). El editor y `mapcli` trabajan siempre con el JSON.
 
@@ -330,13 +333,13 @@ no de render: el cliente sigue mostrando toda la ventana de 15x11 del piso actua
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
 
-### Formato de `world.bin` (versión 5)
+### Formato de `world.bin` (versión 6)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
 mismas fuentes producen siempre los mismos bytes.
 
 ```text
 magic        8 bytes "RPGWORLD"
-version      u16 = 5
+version      u16 = 6
 speedCount   u32, luego speedCount × u16
              costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
 islandCount  u16, luego por isla (en el orden de world.yaml):
@@ -344,6 +347,8 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
   rect       4 × u32: x, y, w, h (alineados a 32)
   floors     u8 cantidad + bytes (ascendentes, sin repetir, 0..15)
   temple     u16 x, u16 y, u8 z
+  flags      u8 (v6): bit 0 dev (isla `dev_only` que dejó entrar `mapcompile -dev`); el
+             resto en 0 (`Decode` rechaza otro bit)
   spawns     u16 cantidad, luego por spawn (en el orden de spawns.yaml):
     id u8 largo + bytes, center u16 x, u16 y, u8 z, radius u8,
     respawn u32 segundos, monsters u8 cantidad, luego por monstruo:
@@ -367,7 +372,14 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
 crc32        u32 (IEEE) de todos los bytes anteriores
 ```
 
-- Historial: la versión 5 agregó `portals` por isla (escaleras y demás de
+- Historial: la versión 6 agregó `flags` por isla, con el bit 0 `dev`: `mapcompile -dev`
+  marca cada isla `dev_only` que deja entrar (hoy la Isla de Pruebas) y `Map.DevIslands`
+  las lista. Un mundo con alguna es un **mundo de desarrollo**: el servidor no arranca con
+  él en producción (`RPG_ENV` vacía, `production` o desconocida; `loadWorld` de
+  `cmd/gameserver`, como el proveedor de pagos falso) y solo los NPCs de una isla marcada
+  ejecutan las acciones de diálogo de desarrollo (`train_skill`, `restore_mana`,
+  `06-content-data.md`). Un `world.bin` de la versión 5 no carga: vuelve a compilarlo.
+- La versión 5 agregó `portals` por isla (escaleras y demás de
   `portals.yaml`, que antes solo veían el editor y el validador): `NewMap` rechaza ids
   repetidos en el mundo o fuera del formato de id, un tipo desconocido, una entrada que
   no es una casilla caminable de su isla en un piso que lista, un destino que no es una
@@ -524,7 +536,11 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   servidor revisa contra su mapa puede necesitarlas: ninguna ruta de barco sale de una,
   llega a una ni tiene ahí a su capitán, ningún teleport de un diálogo llega a una (el
   servidor no arrancaría) y ningún portal de otra isla lleva a una (`mapcompile` rechazaría
-  el mapa). La primera isla de `world.yaml` no puede ser `dev_only`.
+  el mapa). La primera isla de `world.yaml` no puede ser `dev_only`. Al revés, un NPC con
+  una acción de diálogo de desarrollo (`train_skill`, `restore_mana`) solo puede estar en
+  islas `dev_only`: lo revisa la validación de contenido (`packages/content-schema`, con
+  los `npcs.yaml` de cada isla) y el servidor no arranca si no se cumple
+  (`06-content-data.md`, "Diálogos").
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).
 

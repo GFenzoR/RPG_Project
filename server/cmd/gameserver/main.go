@@ -206,7 +206,7 @@ func run(logger *slog.Logger, o options) error {
 		}
 	}
 	// T5.7: RPG_ENV says whether this is production (the default); the fake payment
-	// provider refuses to start there.
+	// provider refuses to start there, and so does a development world (loadWorld).
 	env := payments.ParseEnv(os.Getenv("RPG_ENV"))
 	pay, err := payments.FromEnv(os.Getenv, env, o.publicURL, nil, clk)
 	if err != nil {
@@ -220,7 +220,7 @@ func run(logger *slog.Logger, o options) error {
 		provider = pay.Name()
 	}
 	logger.Info("cosmetic shop", "env", string(env), "payments", provider, "catalog", cosmetics != nil)
-	m, err := loadWorld(logger, o.worldPath)
+	m, err := loadWorld(logger, o.worldPath, env)
 	if err != nil {
 		return err
 	}
@@ -424,8 +424,12 @@ func defaultWorldPath() string {
 }
 
 // loadWorld loads world.bin; an empty path runs without a world (nil map). A missing or
-// invalid file is an error that names the absolute path tried.
-func loadWorld(logger *slog.Logger, path string) (*world.Map, error) {
+// invalid file is an error that names the absolute path tried. A development world (built
+// with mapcompile -dev: it has the sandbox island, whose instructor gives away experience,
+// money and skills) is refused in production (env, RPG_ENV as payments.ParseEnv reads it:
+// empty or unknown is production), like the fake payment provider: make mapcompile always
+// passes -dev, so its world.bin must never reach a real server.
+func loadWorld(logger *slog.Logger, path string, env payments.Env) (*world.Map, error) {
 	if path == "" {
 		logger.Warn("running without a world (-world is empty)")
 		return nil, nil
@@ -438,6 +442,14 @@ func loadWorld(logger *slog.Logger, path string) (*world.Map, error) {
 		}
 		return nil, fmt.Errorf("%w (looked for %s; build it with `make mapcompile`, or use `make run-server`)", err, abs)
 	}
+	if dev := m.DevIslands(); len(dev) > 0 {
+		if env != payments.EnvDevelopment && env != payments.EnvTest {
+			return nil, fmt.Errorf("%w: %s has the dev-only islands %s (mapcompile -dev, as make mapcompile builds it); "+
+				"build it without -dev (the production image does), or set RPG_ENV=development on a server only you reach",
+				errDevWorld, path, strings.Join(dev, ", "))
+		}
+		logger.Warn("development world: it has dev-only islands, never use it in production", "dev_islands", dev, "env", string(env))
+	}
 	sectors := 0
 	for _, is := range m.Islands() {
 		sectors += len(is.Sectors())
@@ -445,6 +457,9 @@ func loadWorld(logger *slog.Logger, path string) (*world.Map, error) {
 	logger.Info("world loaded", "path", path, "islands", len(m.Islands()), "sectors", sectors)
 	return m, nil
 }
+
+// errDevWorld is loadWorld's refusal of a development world in production.
+var errDevWorld = errors.New("world: a development world is refused in production")
 
 const httpShutdownTimeout = 5 * time.Second
 

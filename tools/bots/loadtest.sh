@@ -36,7 +36,10 @@ done
 (cd "$root/server" && go build -o "$bin" ./cmd/gameserver)
 (cd "$root/tools/bots" && go build -o "$bots" ./cmd/bots)
 
-DATABASE_URL="$db" "$bin" -world "$root/build/world.bin" -data "$root/data" \
+# build/world.bin from make mapcompile has the dev-only sandbox island: a server refuses
+# it in production (RPG_ENV empty or production), so this one runs as development, with
+# the cosmetic shop off (a load test needs no payments).
+RPG_ENV="${RPG_ENV:-development}" PAYMENTS_PROVIDER= DATABASE_URL="$db" "$bin" -world "$root/build/world.bin" -data "$root/data" \
   -http "127.0.0.1:$port" -metrics-addr "$maddr" -auth-rate-burst 1000 >"$log" 2>&1 &
 server=$!
 

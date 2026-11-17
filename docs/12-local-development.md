@@ -75,16 +75,25 @@ Con CRLF fallan `bash`, `make`, Prettier y los tests que comparan texto.
   cada arranque. Para probar desde otro equipo de tu red usa `make home-up`
   (`13-hosting-de-pruebas.md`) o `make dev DEV_HTTP_ADDR=:8080`; con este último, Windows
   vuelve a preguntar en cada compilación.
+- Esos servidores corren con `RPG_ENV=development` (su `world.bin` trae la Isla de Pruebas,
+  ver "Mapa del servidor"). Como eso también deja correr el proveedor de pagos falso,
+  `make dev`, `make run-server` y `make play` apagan la tienda cosmética
+  (`PAYMENTS_PROVIDER` vacío) si el servidor no escucha en loopback o la base no es
+  local (`DEV_RPG_ENV` del `Makefile`): el pago falso nunca queda al alcance de otros ni
+  regala moneda en una base ajena.
 - `make desktop-smoke`, `make home-*` y `make monitoring-*` siguen pensados para Linux/WSL2.
 
 ### Base de datos y servidor solo
 ```
 make migrate-status    # estado de las migraciones en DATABASE_URL (por defecto la base rpg)
 make test-integration  # tests Go con Postgres real (base rpg_test)
-cd server && DATABASE_URL=postgres://postgres:postgres@localhost:5432/rpg go run ./cmd/gameserver
+cd server && RPG_ENV=development DATABASE_URL=postgres://postgres:postgres@localhost:5432/rpg go run ./cmd/gameserver
 ```
 El servidor aplica las migraciones pendientes al arrancar y sirve la API HTTP en `:8080`
-(ver "API HTTP" en `05-network-protocol.md`).
+(ver "API HTTP" en `05-network-protocol.md`). `RPG_ENV=development` hace falta con el
+`build/world.bin` de `make mapcompile`: trae la Isla de Pruebas (`-dev`) y un servidor en
+producción (`RPG_ENV` vacía o `production`) no arranca con un mundo así (ver "Mapa del
+servidor"). `make run-server`, `make dev`, `make play` y `make bots` ya la ponen.
 
 ### Sitio público y juego (T4.3)
 `make client` (o `make dev`) levanta un solo Vite en `http://localhost:5173` con las dos
@@ -177,6 +186,11 @@ make run-server   # make mapcompile + gameserver con RPG_WORLD=<repo>/build/worl
 A mano: `make mapcompile` y luego el comando de arriba desde `server/` (por defecto lee
 `../build/world.bin`; otra ruta con `RPG_WORLD` o `-world <ruta>`, y `-world ""` arranca
 sin mundo). Vuelve a compilar el mapa cada vez que cambie `world/` o `data/items/`.
+`make mapcompile` compila con `-dev` (con la Isla de Pruebas, `16-probar-el-juego.md`) y
+`world.bin` lo marca: con `RPG_ENV` vacía o `production` el servidor se niega a cargarlo
+(`world: a development world is refused in production`), igual que con el proveedor de pagos
+falso. En tu PC corre con `RPG_ENV=development` (los `make` de arriba ya lo hacen); para un
+mundo de producción, `go run ./cmd/mapcompile -root .. -out ../build/world.bin` sin `-dev`.
 `make test-parity` compara la caminabilidad que calcula `mapcompile` con la de
 `packages/map-format` (necesita `pnpm install`; forma parte de `make test`).
 

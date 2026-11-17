@@ -277,9 +277,11 @@ func TestCompileTestisle(t *testing.T) {
 // temple in a protection zone, one portal of each kind, an arena where PvP needs no skulls
 // and a house, and the temple reaches the floor 7 portals on foot.
 func TestCompilePruebas(t *testing.T) {
-	// A dev-only island: left out of a plain compile (the production image).
-	if mustCompile(t, repoRoot(t)).Island("pruebas") != nil {
-		t.Fatal("pruebas compiled without DevIslands")
+	// A dev-only island: left out of a plain compile (the production image), which has no
+	// dev mark; with DevIslands it is in, marked dev (a production server refuses that
+	// world, and only its NPCs run dev-only dialog actions), and no other island is.
+	if plain := mustCompile(t, repoRoot(t)); plain.Island("pruebas") != nil || len(plain.DevIslands()) != 0 {
+		t.Fatalf("pruebas compiled without DevIslands (dev islands %v)", plain.DevIslands())
 	}
 	m, err := Build(repoRoot(t), Options{DevIslands: true})
 	if err != nil {
@@ -288,6 +290,9 @@ func TestCompilePruebas(t *testing.T) {
 	is := m.Island("pruebas")
 	if is == nil {
 		t.Fatal("pruebas missing with DevIslands")
+	}
+	if ids := m.DevIslands(); len(ids) != 1 || ids[0] != "pruebas" {
+		t.Errorf("dev islands %v, want [pruebas]", ids)
 	}
 	if !m.Walkable(is.Temple) || m.Flags(is.Temple)&world.FlagProtection == 0 {
 		t.Errorf("temple %v: walkable %v, flags %b", is.Temple, m.Walkable(is.Temple), m.Flags(is.Temple))
