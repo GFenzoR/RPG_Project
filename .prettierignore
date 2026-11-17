@@ -20,5 +20,7 @@ test-results/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 apps/desktop/e2e/screenshots/
+# Workflow scripts run in Claude Code (top-level await and return).
+.claude/workflows/
 # Claude Code writes this per machine (git-ignored globally, not by .gitignore).
 .claude/settings.local.json

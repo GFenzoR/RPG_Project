@@ -57,7 +57,7 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
 - Retomar en tu PC (estado, pendientes, briefs de T5.6 y T5.7, sprites) → `docs/14-continuar-en-tu-pc.md`
 - Móvil: PWA instalable, Tauri Android/iOS, firmas y tiendas → `docs/15-movil.md`
 - Probar el juego a mano en la Isla de Pruebas (`make play`, hacerse staff, PvP) → `docs/16-probar-el-juego.md`
-- Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md`
+- Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md` (lotes)
 
 ## Principios de arquitectura
 1. **Servidor autoritativo.** El cliente envía intenciones (moverse, atacar, usar item);
@@ -83,7 +83,8 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
   del juego; paquetes pequeños bajo `server/internal/`.
 - TS: `strict: true`, sin `any` salvo en límites justificados; ESLint + Prettier.
 - Commits estilo Conventional Commits (`feat(server): ...`, `fix(client): ...`).
-- Un PR = una tarea del roadmap. Incluye en la descripción qué verificaste y cómo.
+- Un PR = una tarea del roadmap, o un lote (`.claude/workflows/lote.js`, docs/11 "Lotes").
+  Incluye en la descripción qué verificaste y cómo.
 
 ## Comandos (Makefile en la raíz)
 ```

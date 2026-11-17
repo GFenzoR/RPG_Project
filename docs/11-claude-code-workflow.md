@@ -24,7 +24,70 @@ vienen en la imagen. El resultado del script queda en caché, así que las sesio
 siguientes arrancan rápido. El hook `SessionStart` del repo (`scripts/session-start.sh`)
 levanta Postgres e instala dependencias en cada sesión.
 
+## Lotes: cómo se desarrolla desde noviembre de 2026
+El roadmap está hecho. El trabajo de ahora (pendientes de `14`, lo que sale de las pruebas y
+de las auditorías) va en **lotes**: varias tareas independientes que se desarrollan juntas,
+se apilan en local y se suben con **un solo push y un PR** (GitHub notifica cada push; ver
+"Regla de oro" más abajo, que quedó para tareas sueltas).
+
+El lote es un workflow reutilizable, `.claude/workflows/lote.js`. Se lanza desde una sesión
+de Claude Code con `Workflow({ scriptPath: ".claude/workflows/lote.js", args })`:
+```js
+args = {
+  base: "fix/lote4",          // la punta anterior: el lote parte de ahí
+  name: "lote5",              // rama de verificación lote5/verify y base rpg_e2e_lote5
+  items: [{
+    slug: "mana", branch: "feat/mana", wt: "mn",   // worktree corto en .wt/ (MAX_PATH)
+    risk: "server",            // high | server | content | client | docs (decide la revisión)
+    from: "feat/otra",         // opcional: parte de otra rama del lote y espera a que exista
+    brief: "Objetivo, archivos y docs a leer, restricciones, criterio de terminado",
+  }],
+}
+```
+Etapas (el script nunca corre más de **2 agentes a la vez**, contando los subagentes):
+1. **Implementar.** Un agente por tarea, en su worktree. Sin Docker ni e2e: `make lint test
+   validate`, tests de Go/vitest, previews de mapcli y spritegen.
+2. **Revisar según el riesgo.** Es lo que más tokens ahorra; no todo necesita dos rondas.
+
+   | Riesgo | Cuándo | Revisión |
+   |---|---|---|
+   | `high` | economía, persistencia, auth, pagos, CI que maneja PRs ajenos | `code-reviewer` + arreglos, y una segunda ronda desde cero |
+   | `server` | toca `server/`, `proto/` o `.github/` | una ronda de `code-reviewer` + arreglos |
+   | `content` | `data/`, `world/`, `i18n/`, arte | una revisión liviana (modelo chico, esfuerzo bajo) |
+   | `client`, `docs` | solo cliente, editor o docs | ninguna (la verificación final igual corre el e2e) |
+
+   Si una tarea marcada `client` o `content` termina tocando `server/`, el script la sube a
+   `server`.
+3. **Apilar.** De a una: `git rebase` sobre la rama anterior, conflictos resueltos uniendo
+   los dos lados, `make lint test validate`. Sin e2e (esfuerzo bajo).
+4. **Revisión final.** Un `code-reviewer` mira el diff entero del lote (foco en servidor,
+   CI, economía y entradas no confiables). Atrapa lo que se rompe al juntar ramas.
+5. **Verificar, una sola vez.** Un agente aplica la revisión final y corre el **único**
+   `make test-integration` + `make e2e` del lote, revisa los screenshots que señalaron las
+   tareas, y al final apaga Docker y WSL. Un test inestable se investiga y se arregla, no
+   se esconde con reintentos.
+
+Después, la sesión principal (no un agente) hace **un** push de la punta como `fix/<lote>`,
+abre **un** PR con base en el lote anterior (una sección por rama), espera la CI de GitHub y
+arregla lo que falle en Linux.
+
+**Cómo escribir el `brief` de cada tarea** (el agente solo sabe lo que dice ahí):
+- objetivo en una frase, y por qué;
+- qué leer: los docs y archivos exactos, no "todo el repo";
+- qué no tocar (lo que hace otra tarea del mismo lote);
+- criterio de terminado concreto (qué test tiene que existir, qué comando, qué screenshot);
+- hallazgos de auditorías o pruebas: un archivo en el scratchpad, no pegados enteros.
+
+**Límites y cortes:**
+- Si se acaba la ventana de 5 horas, se espera a que vuelva y se reanuda con
+  `resumeFromRunId` **sin editar el script** (editar un prompt hace correr de nuevo todo lo
+  que viene después). Si una etapa quedó a medias, la termina un agente suelto que retoma
+  su worktree.
+- Los agentes nunca hacen push, ni abren PRs, ni usan `git stash`, ni lanzan subagentes.
+- Para cosas de 2 minutos (un número de balance, un texto) no hace falta un lote.
+
 ## Regla de oro: una tarea del roadmap = una sesión = un PR
+(Así se hizo el roadmap; para tareas sueltas sigue valiendo. El trabajo en serie va en lotes.)
 - Tareas chicas y bien definidas gastan menos, fallan menos y se revisan fácil.
 - Si una sesión se alarga mucho, pídele que cierre lo que tiene en un PR funcional y
   deje anotado qué falta en el roadmap.
