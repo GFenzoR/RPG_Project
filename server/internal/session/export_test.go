@@ -433,3 +433,9 @@ func (w *World) ReserveForTest(it *Item, p *Player, seq uint64) {
 
 // ReservedTo returns the character the ground item it is reserved to, or 0 (tests only).
 func (w *World) ReservedTo(it *Item) int64 { return w.heldGround[it].char }
+
+// DamageMonsterForTest makes p deal dmg physical damage to m, as a hit would (tests only,
+// loop goroutine): it counts for the experience, the kill and the loot.
+func (w *World) DamageMonsterForTest(ctx *game.TickContext, m *Monster, p *Player, dmg int) {
+	w.damageMonster(ctx, m, p, dmg, ElementPhysical)
+}

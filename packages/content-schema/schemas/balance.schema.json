@@ -1100,7 +1100,7 @@
       "additionalProperties": false,
       "required": ["kind", "stacking"],
       "properties": {
-        "kind": { "enum": ["damage", "speed", "skill", "invisible"] },
+        "kind": { "enum": ["damage", "speed", "skill", "invisible", "regen"] },
         "element": { "$ref": "common.schema.json#/$defs/element" },
         "interval_ms": { "type": "integer", "minimum": 50 },
         "max_ticks": { "$ref": "common.schema.json#/$defs/positiveInt" },
@@ -1108,6 +1108,12 @@
         "speed_pct": { "type": "integer", "exclusiveMinimum": -100, "maximum": 500 },
         "skill": { "enum": ["fist", "sword", "axe", "club", "distance", "shield"] },
         "amount": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "regen_pct": {
+          "description": "Content audit m2: a regen condition makes the vocation regeneration (vocations.yaml regen) this % stronger while it lasts.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
         "stacking": { "enum": ["refresh", "add"] },
         "cancels": {
           "type": "array",
@@ -1129,6 +1135,10 @@
         {
           "if": { "properties": { "kind": { "const": "skill" } } },
           "then": { "required": ["skill", "amount"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "regen" } } },
+          "then": { "required": ["regen_pct"] }
         }
       ]
     },

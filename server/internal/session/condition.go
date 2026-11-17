@@ -362,6 +362,54 @@ func (w *World) leftMs(c *condition) int {
 	return next
 }
 
+// ---- food (content audit m2) -----------------------------------------------------
+
+// foodCondition is the condition eating gives: consumable.food_ms of it, added up to its
+// max_ms. A regen condition: the vocation regeneration grows by its regen_pct.
+const foodCondition = "well_fed"
+
+// fedCondition returns the food condition of balance.yaml, or nil if there is none (food
+// then only heals what it heals).
+func (w *World) fedCondition() *content.ConditionDef {
+	if def := w.cfg.Balance.Conditions[foodCondition]; def != nil && def.Kind == content.ConditionRegen {
+		return def
+	}
+	return nil
+}
+
+// feed gives p foodMs more of the food condition, up to its max_ms.
+func (w *World) feed(ctx *game.TickContext, p *Player, foodMs int) {
+	if def := w.fedCondition(); def != nil {
+		w.addCondition(ctx, holder{p: p}, def, 0, 0, 0, ticksFor(foodMs))
+	}
+}
+
+// stomachFull reports whether p cannot eat def: pure food (it neither heals nor restores
+// mana) whose food_ms would take the food condition past its max_ms. Food that also heals
+// is always eaten (its time is capped).
+func (w *World) stomachFull(p *Player, def *content.Item) bool {
+	c, fed := def.Consumable, w.fedCondition()
+	if c == nil || c.FoodMs <= 0 || c.HealHP > 0 || c.HealMP > 0 || fed == nil {
+		return false
+	}
+	left := 0
+	if cond := findCond(p.conds, foodCondition); cond != nil {
+		left = w.leftMs(cond)
+	}
+	return left+c.FoodMs > fed.MaxMs
+}
+
+// regenPct is the sum of the regen_pct of the regen conditions in list (food).
+func regenPct(list []*condition) int {
+	pct := 0
+	for _, c := range list {
+		if c.def.Kind == content.ConditionRegen {
+			pct += c.def.RegenPct
+		}
+	}
+	return pct
+}
+
 // ---- speed, skills and invisibility ------------------------------------------------
 
 // speedPct is the sum of h's speed conditions.

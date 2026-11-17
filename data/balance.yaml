@@ -269,7 +269,8 @@ antibot:
 #   kind: damage = a hit of `element` every interval_ms (resistances apply), up to
 #         max_ticks hits left; speed = speed × (100 + speed_pct) / 100; skill = +amount
 #         levels of `skill` in combat; invisible = unseen by players and by monsters
-#         without behavior.sees_invisible.
+#         without behavior.sees_invisible; regen = the vocation regeneration is
+#         regen_pct % stronger (food, content audit m2).
 #   stacking: refresh keeps the longer time (or more hits) and the stronger damage;
 #             add sums them, up to max_ticks / max_ms.
 #   persists: kept across a logout with the time left (the others end on logout).
@@ -281,3 +282,7 @@ conditions:
   hasted:    { kind: speed, speed_pct: 35, max_ms: 45000, stacking: refresh, cancels: [slowed] }
   invisible: { kind: invisible, max_ms: 90000, stacking: refresh }
   keen_eye:  { kind: skill, skill: distance, amount: 7, max_ms: 45000, stacking: refresh }
+  # Content audit m2: food. Eating adds its consumable.food_ms (up to max_ms: then the
+  # stomach is full and pure food is refused); while it lasts the vocation regeneration is
+  # regen_pct % stronger. Without it the plain regeneration goes on: nobody starves.
+  well_fed:  { kind: regen, regen_pct: 100, max_ms: 1200000, stacking: add, persists: true }

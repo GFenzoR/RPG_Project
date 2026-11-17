@@ -123,6 +123,21 @@ func NewEngine(quests content.Quests) *Engine {
 // Quest returns a quest definition, or nil.
 func (e *Engine) Quest(id string) *content.Quest { return e.quests[id] }
 
+// Needs reports whether a quest in progress asks for item now: its current step is a
+// has_item of item for more than have units (a quest drop, content audit m9).
+func (e *Engine) Needs(l *Log, item string, have int) bool {
+	for _, id := range e.ids {
+		q, i, ok := e.current(l, id)
+		if !ok {
+			continue
+		}
+		if c := q.Steps[i].CompleteWhen.HasItem; c != nil && c.Item == item && c.N() > have {
+			return true
+		}
+	}
+	return false
+}
+
 // State returns the character's state in quest id and, in progress, its current step.
 func (e *Engine) State(l *Log, id string) (State, string) {
 	q := e.quests[id]

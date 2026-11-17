@@ -40,6 +40,7 @@ const (
 	msgFloorFirst     = "inventory.floor_first"
 	msgNotReady       = "inventory.not_ready"
 	msgAte            = "inventory.ate"
+	msgFull           = "inventory.full_stomach"
 	msgLookItem       = "look.item"
 	msgLookWeapon     = "look.weapon"
 	msgLookArmor      = "look.armor"
@@ -939,10 +940,14 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 			p.emit(systemMsg(msgNotReady))
 			return
 		}
+		if w.stomachFull(p, it.def) {
+			p.emit(systemMsg(msgFull)) // nothing eaten: no cooldown either
+			return
+		}
 		p.activePaced(ctx.Tick, antibot.KindItem, p.nextUse)
 		p.nextUse = ctx.Tick + w.useFor
 		def := it.def
-		w.consume(p, it)
+		w.consume(ctx, p, it)
 		w.tutorialEvent(p, content.TriggerUseItem, def.ID)
 	case it.def.Rune != nil:
 		w.useRune(ctx, p, it, nil) // on the current target, or the caster for a heal
@@ -951,14 +956,18 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 	}
 }
 
-// consume eats or drinks one unit of a consumable.
-func (w *World) consume(p *Player, it *Item) {
+// consume eats or drinks one unit of a consumable: it heals, restores mana and, food,
+// feeds (the well_fed condition, content audit m2).
+func (w *World) consume(ctx *game.TickContext, p *Player, it *Item) {
 	c := it.def.Consumable
 	hp := min(c.HealHP, p.maxHealth-p.health)
 	mp := min(c.HealMP, p.maxMana-p.mana)
 	pct := healthPercent(p.health, p.maxHealth)
 	p.health += hp
 	p.mana += mp
+	if c.FoodMs > 0 {
+		w.feed(ctx, p, c.FoodMs)
+	}
 	w.useUp(p, it)
 	if c.HealHP > 0 {
 		w.abHeal(w.nowTick(), p) // bot detection: how fast p heals after a hit (T4.1)

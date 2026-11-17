@@ -358,6 +358,10 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		}
 	}
 	for _, l := range m.kind.loot {
+		if l.each {
+			w.questDrop(ctx, m, l)
+			continue
+		}
 		if ctx.Rand.Float64() >= l.chance {
 			continue
 		}
@@ -386,6 +390,26 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	}
 	if m.slot != nil {
 		w.scheduleRespawn(ctx, m.slot, game.Tick(m.slot.spawn.RespawnSeconds)*game.Tick(1000/game.TickDuration.Milliseconds()))
+	}
+}
+
+// questDrop gives quest loot l (each_player, content audit m9) to every online player
+// who damaged m and whose quest asks for the item now, one roll of l.chance each: in the
+// backpack, or at the player's feet if it does not fit. The kill already advanced their
+// quests (questKill), so a step right after the kill counts. Nobody else gets one, and
+// the remains get none.
+func (w *World) questDrop(ctx *game.TickContext, m *Monster, l lootItem) {
+	for _, s := range m.damage {
+		p := w.playerByID(s.player)
+		if p == nil || !w.quests.Needs(p.storage, l.def.ID, w.countItem(p, l.def, true)) {
+			continue
+		}
+		if ctx.Rand.Float64() >= l.chance {
+			continue
+		}
+		n := combat.Roll(ctx.Rand, l.lo, l.hi)
+		w.giveItem(p, l.def, n)
+		w.econItem(p, EconLoot, m.kind.def.ID, l.def, n)
 	}
 }
 

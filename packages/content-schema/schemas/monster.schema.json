@@ -66,6 +66,10 @@
         "properties": {
           "item": { "$ref": "common.schema.json#/$defs/itemRef" },
           "chance": { "$ref": "common.schema.json#/$defs/chance" },
+          "each_player": {
+            "description": "Content audit m9: a quest drop. Instead of one in the remains, every player who damaged the monster and whose quest asks for the item now (its current step is has_item of it, not yet held) gets its own in the backpack (or at its feet), rolled for each.",
+            "type": "boolean"
+          },
           "count": {
             "type": "array",
             "prefixItems": [

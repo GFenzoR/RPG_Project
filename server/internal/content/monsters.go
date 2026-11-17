@@ -51,6 +51,10 @@ type LootEntry struct {
 	Item   string  `yaml:"item"`
 	Chance float64 `yaml:"chance"`
 	Count  []int   `yaml:"count"`
+	// EachPlayer (content audit m9) makes a quest drop: instead of one in the remains,
+	// every player who damaged the monster and whose quest asks for the item now (the
+	// current step is has_item of it, not yet held) gets its own, rolled for each.
+	EachPlayer bool `yaml:"each_player"`
 }
 
 // CountRange returns the drop's [min, max] amount.

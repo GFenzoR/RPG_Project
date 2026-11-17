@@ -281,8 +281,10 @@ func (w *World) regenerate(p *Player) {
 		return
 	}
 	pct := healthPercent(p.health, p.maxHealth)
-	p.health = min(p.health+r.Health, p.maxHealth)
-	p.mana = min(p.mana+r.Mana, p.maxMana)
+	// Fed (content audit m2): the regen conditions make every tick regen_pct % stronger.
+	more := 100 + regenPct(p.conds)
+	p.health = min(p.health+r.Health*more/100, p.maxHealth)
+	p.mana = min(p.mana+r.Mana*more/100, p.maxMana)
 	w.healthBar(p, pct)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }

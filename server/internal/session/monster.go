@@ -69,6 +69,8 @@ type lootItem struct {
 	def    *content.Item
 	chance float64
 	lo, hi int
+	// each: a quest drop for each player that damaged the monster and needs it.
+	each bool
 }
 
 // spawnSlot is one monster a spawn keeps alive.
@@ -207,7 +209,7 @@ func (w *World) initCombat() error {
 				return fmt.Errorf("session: monster %q drops unknown item %q", id, l.Item)
 			}
 			lo, hi := l.CountRange()
-			k.loot = append(k.loot, lootItem{def: it, chance: l.Chance, lo: lo, hi: hi})
+			k.loot = append(k.loot, lootItem{def: it, chance: l.Chance, lo: lo, hi: hi, each: l.EachPlayer})
 		}
 		w.kinds[id] = k
 	}

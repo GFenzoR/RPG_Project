@@ -299,10 +299,12 @@ func TestChapterThreePlayable(t *testing.T) {
 		}
 	}))
 	h.huntRested(cl, p, "slagbound_warden", 1)
-	if s := step("ch3_warden"); s != "take_seal" {
-		t.Fatalf("after the warden the step is %q", s)
+	// The seal is a quest drop (each_player, content audit m9): it goes straight to the
+	// pack of whoever hurt the warden and needs it, so take_seal is done at once.
+	if s := step("ch3_warden"); s != "return_seal" || h.w.CountItem(p, "forge_seal") != 1 {
+		t.Fatalf("after the warden the step is %q, %d seals", s, h.w.CountItem(p, "forge_seal"))
 	}
-	give("forge_seal", 1) // it lies in the warden's remains; taking it is looting
+	give("forge_seal", 0) // back to Brasal
 	money, xp = h.w.Money(p), p.Experience()
 	d = h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_warden"))
@@ -329,7 +331,7 @@ func TestBrasalNPCs(t *testing.T) {
 	c := session.Character{ID: 931, AccountID: 931, Name: "Ashwalker", Vocation: "guardian", Level: 45, Health: 500, Mana: 100}
 	cl, p := h.joinFresh(c, pos(20, 12))
 	h.sim.Command(gameFunc(func() {
-		h.w.GiveForTest(p, "gold_coin", 1)
+		h.w.GiveForTest(p, "gold_coin", 2)
 		h.w.GiveForTest(p, "copper_coin", 250)
 		h.w.GiveForTest(p, "ash_pelt", 3)
 		for _, id := range []string{"pickaxe", "rope", "ship_biscuit"} {

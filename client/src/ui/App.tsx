@@ -1156,6 +1156,7 @@ const CONDITION_CLASS: Record<string, string> = {
   hasted: "buff",
   invisible: "buff",
   keen_eye: "buff",
+  well_fed: "buff",
 };
 
 /**
