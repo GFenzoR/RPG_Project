@@ -153,10 +153,18 @@ func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player, arena bool) {
 }
 
 // arenaDefeat is a death in a pvp zone at the hands of a player in it too (T5.2): no
-// corpse, no loss of experience, skills, items or blessings; the conditions end and p
-// wakes up at its temple.
+// corpse, no loss of experience, skills, items or blessings; the conditions end, but for
+// the food (well_fed: it was paid for, and an arena defeat costs nothing), and p wakes up
+// at its temple.
 func (w *World) arenaDefeat(ctx *game.TickContext, p *Player) {
+	fed := 0
+	if c := findCond(p.conds, foodCondition); c != nil {
+		fed = w.leftMs(c)
+	}
 	w.clearConditions(ctx, holder{p: p}, false)
+	if fed > 0 {
+		w.feed(ctx, p, fed)
+	}
 	w.refreshSpeed(holder{p: p})
 	w.wakeAtTemple(ctx, p, true)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})

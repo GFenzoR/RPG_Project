@@ -1538,7 +1538,8 @@ apaga todo y el juego queda como antes de T5.2: nadie puede herir a otro jugador
   (`puerto`, también el tutorial) es `no_pvp` entera.
 - **`pvp` (arena):** si los dos están adentro se pelea sin marcas, sin bloqueo y sin
   castigo: el derrotado despierta en su templo sin perder experiencia, skills, items ni
-  bendiciones. Es una derrota de arena solo si la víctima muere en una casilla `pvp` por el
+  bendiciones. Sus condiciones terminan, salvo la comida (`well_fed`, auditoría de
+  contenido m2): estaba pagada y una derrota de arena no cuesta nada. Es una derrota de arena solo si la víctima muere en una casilla `pvp` por el
   golpe de un jugador que también está en la arena; cualquier otra muerte (un monstruo,
   un golpe desde afuera, fuera de la arena) es una muerte normal, y los golpes de arena no
   dan crédito de muerte fuera de ella. Un duelo en la arena no da derecho a defensa propia

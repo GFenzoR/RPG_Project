@@ -6,6 +6,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
@@ -21,31 +22,43 @@ const (
 // foodItems is testItems with a bread and a stew. They stay out of testItemDefs: food
 // needs the well_fed condition (the server refuses to start without it), which only
 // these tests configure.
-func foodItems() content.Items {
+func foodItems(t *testing.T) content.Items {
+	t.Helper()
 	items := testItems()
 	for n, src := range map[uint16]string{
 		breadID: "{id: test_bread, kind: consumable, weight: 200, stackable: true, max_stack: 100, consumable: {food_ms: 120000}}",
 		stewID:  "{id: test_stew, kind: consumable, weight: 700, stackable: true, max_stack: 100, consumable: {food_ms: 90000, heal_hp: 10}}",
 	} {
 		var it content.Item
-		_ = yaml.Unmarshal([]byte(src), &it)
+		if err := yaml.Unmarshal([]byte(src), &it); err != nil {
+			t.Fatalf("test food %d: %v", n, err)
+		}
 		it.Numeric = n
 		items[it.ID] = &it
 	}
 	return items
 }
 
-func withFood(c *session.Config) {
-	c.Items = foodItems()
-	c.Balance.Inventory.UseCooldownMs = 1000
-	c.Balance.Conditions = content.ConditionDefs{"well_fed": {ID: "well_fed", Kind: content.ConditionRegen,
-		RegenPct: 100, MaxMs: 300000, Stacking: content.StackAdd, Persists: true}}
+// fedCondition is the well_fed of the food tests: 5 minutes at most.
+func fedCondition() *content.ConditionDef {
+	return &content.ConditionDef{ID: "well_fed", Kind: content.ConditionRegen, RegenPct: 100, MaxMs: 300000,
+		Stacking: content.StackAdd, Persists: true}
+}
+
+// withFood is the config of the food tests: the test food, its condition and a 1 s
+// consumable cooldown.
+func withFood(t *testing.T) option {
+	return func(c *session.Config) {
+		c.Items = foodItems(t)
+		c.Balance.Inventory.UseCooldownMs = 1000
+		c.Balance.Conditions = content.ConditionDefs{"well_fed": fedCondition()}
+	}
 }
 
 // Eating feeds and is shown as a condition; fed, a guardian regenerates twice as much
 // (3 health and 1 mana every 7 s become 6 and 2).
 func TestFoodDoublesRegeneration(t *testing.T) {
-	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withFood)
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withFood(t))
 	c := withPack(9101, pos(10, 10), session.ItemState{ItemID: breadID, Count: 3})
 	c.Level, c.Health, c.Mana = 20, 100, 10 // far from the maximums for the whole test
 	cl, p := h.joinChar(c)
@@ -88,7 +101,7 @@ func TestFoodDoublesRegeneration(t *testing.T) {
 // Pure food past max_ms is refused without eating it (nor starting the cooldown); food
 // that also heals is always eaten, its time capped. The condition ends on its own.
 func TestFoodFullStomach(t *testing.T) {
-	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withFood)
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withFood(t))
 	c := withPack(9102, pos(10, 10), session.ItemState{ItemID: breadID, Count: 3},
 		session.ItemState{ItemID: stewID, Count: 1})
 	c.Health = 100
@@ -123,5 +136,38 @@ func TestFoodFullStomach(t *testing.T) {
 	h.sim.RunTicks(300000 / 50)
 	if _, ok := h.w.ConditionsForTest(p)["well_fed"]; ok {
 		t.Fatal("well_fed did not end")
+	}
+}
+
+// well_fed across a logout and a death: a logout saves it with its time left and the next
+// login resumes it (persists; frozen while away, it has no author); dying ends it, as it
+// ends every condition.
+func TestFoodSurvivesALogoutNotADeath(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withFood(t))
+	c := withPack(9103, pos(10, 10), session.ItemState{ItemID: breadID, Count: 2})
+	c.Level, c.Health = 20, 100
+	cl, p := h.joinChar(c)
+	pack := openPack(t, h, cl)
+	h.input(cl, useItem(inContainer(pack, 0), breadID, 0))
+	h.sim.Step()
+	h.sim.RunTicks(10000 / 50)
+	left := h.w.ConditionsForTest(p)["well_fed"]
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	s := h.saves[len(h.saves)-1]
+	if !s.Final || len(s.Conditions) != 1 || s.Conditions[0].ID != "well_fed" || s.Conditions[0].LeftMs < left-100 || s.Conditions[0].LeftMs > left {
+		t.Fatalf("saved conditions %+v, want well_fed with ~%d ms", s.Conditions, left)
+	}
+	h.sim.RunTicks(60000 / 50) // away for a minute: frozen
+	c2 := withPack(9103, pos(10, 10))
+	c2.Level, c2.Health, c2.Conditions = 20, 100, s.Conditions
+	_, p2 := h.joinChar(c2)
+	if back := h.w.ConditionsForTest(p2)["well_fed"]; back < s.Conditions[0].LeftMs-100 || back > s.Conditions[0].LeftMs {
+		t.Fatalf("after the login well_fed has %d ms, want ~%d", back, s.Conditions[0].LeftMs)
+	}
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) { h.w.DieForTest(ctx, p2) }))
+	h.sim.Step()
+	if _, ok := h.w.ConditionsForTest(p2)["well_fed"]; ok {
+		t.Fatal("well_fed survived a death")
 	}
 }
