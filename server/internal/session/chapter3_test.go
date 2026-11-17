@@ -406,21 +406,32 @@ func TestBrasalNPCs(t *testing.T) {
 			t.Fatalf("option %s params %v, want price %d", o.Text.Key, ps, blessPrice)
 		}
 	}
-	// A level gained while the node is open: the shown price is stale, so the pick is
-	// refused without charging and the node comes again with the new price (50 + 20 × 46).
+	// A level gained while the node is open: an option without a price still runs...
 	h.sim.Command(gameFunc(func() { h.w.SetLevelForTest(p, 46) }))
+	h.sim.Step()
+	evs = h.pick(cl, d, "dialog.back")
+	if d = h.lastDialog(evs); messageKeys(evs)["dialog.price_changed"] || d.Text.Key != "npc.volcan_priest.greet" {
+		t.Fatalf("back after a level up: %v, node %s", messageKeys(evs), d.Text.Key)
+	}
+	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_blessings"))
+	if got := d.Options[0].Text.Params[0].GetNumber(); got != blessPrice+20 {
+		t.Fatalf("price at level 46 = %d", got)
+	}
+	// ...but a blessing whose shown price is stale is refused without charging and the node
+	// comes again with the new price (50 + 20 × 47).
+	h.sim.Command(gameFunc(func() { h.w.SetLevelForTest(p, 47) }))
 	h.sim.Step()
 	evs = h.pick(cl, d, "npc.puerto_priest.bless_shore")
 	d = h.lastDialog(evs)
 	if !messageKeys(evs)["dialog.price_changed"] || h.w.Money(p) != money || d.Text.Key != "npc.volcan_priest.blessings" ||
-		d.Options[0].Text.Params[0].GetNumber() != blessPrice+20 {
+		d.Options[0].Text.Params[0].GetNumber() != blessPrice+40 {
 		t.Fatalf("stale price: %v, money %d, node %s %v", messageKeys(evs), h.w.Money(p), d.Text.Key, d.Options[0].Text.Params)
 	}
-	if d = h.lastDialog(h.pick(cl, d, "npc.puerto_priest.bless_shore")); d.Text.Key != "npc.volcan_priest.blessed" || h.w.Money(p) != money-blessPrice-20 {
+	if d = h.lastDialog(h.pick(cl, d, "npc.puerto_priest.bless_shore")); d.Text.Key != "npc.volcan_priest.blessed" || h.w.Money(p) != money-blessPrice-40 {
 		t.Fatalf("blessing: %s, money %d", d.Text.Key, h.w.Money(p))
 	}
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_more"))
-	if evs := h.pick(cl, d, "npc.puerto_priest.bless_shore"); !messageKeys(evs)["dialog.already_blessed"] || h.w.Money(p) != money-blessPrice-20 {
+	if evs := h.pick(cl, d, "npc.puerto_priest.bless_shore"); !messageKeys(evs)["dialog.already_blessed"] || h.w.Money(p) != money-blessPrice-40 {
 		t.Fatalf("second blessing: %v", messageKeys(evs))
 	}
 

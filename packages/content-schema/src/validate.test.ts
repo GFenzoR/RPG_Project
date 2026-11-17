@@ -731,6 +731,22 @@ describe("validator diagnostics", () => {
     ]);
   });
 
+  it("keeps bless and give_xp out of one option, and reference sellers within votes (M6, m13 review)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    edit(
+      "data/npcs/puerto_priest.yaml",
+      "action: { bless: { blessing: shore_light, price: 50, per_level: 20 } }",
+      "action: [{ give_xp: 5 }, { bless: { blessing: shore_light, price: 50, per_level: 20 } }]",
+    );
+    edit("data/balance.yaml", "reference_min_sellers: 2", "reference_min_sellers: 4");
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([
+      expect.stringMatching(
+        /balance\.yaml:.*reference_min_sellers \(4\) is more than reference_min_votes \(3\)/,
+      ),
+      expect.stringMatching(/puerto_priest\.yaml:.*bless and give_xp cannot go in one option/),
+    ]);
+  });
+
   it("accepts lacks_item and checks its item reference", () => {
     edit(
       "data/npcs/puerto_foreman.yaml",

@@ -50,6 +50,8 @@ func TestParseNPCRejectsBrokenTrees(t *testing.T) {
 		"bad start":    "id: a\ndialog:\n  start: x\n  nodes:\n    g:\n      text: t\n      options:\n        - { text: x, action: close }\n",
 		"other shop":   "id: a\ndialog:\n  start: g\n  nodes:\n    g:\n      text: t\n      options:\n        - { text: x, action: { open_shop: s } }\n",
 		"bad action":   "id: a\ndialog:\n  start: g\n  nodes:\n    g:\n      text: t\n      options:\n        - { text: x, action: dance }\n",
+		// Review of M6: the blessing would be charged at the level the experience gives.
+		"bless and xp": "id: a\ndialog:\n  start: g\n  nodes:\n    g:\n      text: t\n      options:\n        - { text: x, action: [{ give_xp: 9 }, { bless: { blessing: b, price: 1, per_level: 2 } }] }\n",
 	} {
 		if _, err := ParseNPC([]byte(src)); err == nil {
 			t.Errorf("%s: accepted", name)

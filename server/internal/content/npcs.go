@@ -162,6 +162,16 @@ type Action struct {
 	RestoreMana bool        `yaml:"restore_mana"`
 }
 
+// blessAndXP reports whether as both sells a blessing and gives experience.
+func (as Actions) blessAndXP() bool {
+	var bless, xp bool
+	for _, a := range as {
+		bless = bless || a.Bless != nil
+		xp = xp || a.GiveXP > 0
+	}
+	return bless && xp
+}
+
 // MaxSkillLevel bounds skill levels (skills.MaxLevel; a train_skill level too).
 const MaxSkillLevel = 500
 
@@ -338,6 +348,11 @@ func ParseNPC(raw []byte) (*NPC, error) {
 			}
 			if o.Goto == "" && len(o.Action) == 0 {
 				return nil, fmt.Errorf("npc %q: node %q option %d: needs goto or action", n.ID, id, i+1)
+			}
+			if o.Action.blessAndXP() {
+				// The blessing would be charged at the level the experience gives, not the
+				// one its {price} showed (content audit M6, review).
+				return nil, fmt.Errorf("npc %q: node %q option %d: bless and give_xp cannot go in one option", n.ID, id, i+1)
 			}
 			for _, a := range o.Action {
 				if a.OpenShop != "" && (n.Shop == nil || n.Shop.ID != a.OpenShop) {

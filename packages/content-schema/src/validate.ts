@@ -438,6 +438,18 @@ class Validator {
     for (const s of [...SKILLS.combat, ...SKILLS.craft]) {
       if (!(s in skills)) this.error(src, ["skills", "base"], `missing skill "${s}"`);
     }
+    // Content audit m13: each vote of the reference price has one seller, so asking for
+    // more seller accounts than votes would never show one (0 counts as 1).
+    const market = isObj(src.data) ? src.data["market"] : undefined;
+    if (isObj(market)) {
+      const n = (k: string): number => (typeof market[k] === "number" ? Math.max(market[k], 1) : 1);
+      if (n("reference_min_sellers") > n("reference_min_votes"))
+        this.error(
+          src,
+          ["market", "reference_min_sellers"],
+          `reference_min_sellers (${n("reference_min_sellers")}) is more than reference_min_votes (${n("reference_min_votes")}): each vote has one seller`,
+        );
+    }
   }
 
   private checkVocation(voc: unknown, src: SourceFile, path: PathSegment[]): void {
@@ -744,6 +756,22 @@ class Validator {
     for (const src of this.npcs) {
       const npc = isObj(src.data) ? src.data : undefined;
       const ownShop = npc ? idOf(npc["shop"]) : undefined;
+      // Content audit M6 (review): a blessing's price grows with the level, so an option
+      // that also gives experience would charge at another level than its {price} shows.
+      const options = new Map<string, { keys: Set<string>; path: PathSegment[] }>();
+      for (const { key, path } of actionsOf(npc?.["dialog"], ["dialog"])) {
+        const at = path.slice(0, path.indexOf("action") + 1);
+        const o = options.get(at.join("/")) ?? { keys: new Set<string>(), path: at };
+        o.keys.add(key);
+        options.set(at.join("/"), o);
+      }
+      for (const o of options.values())
+        if (o.keys.has("bless") && o.keys.has("give_xp"))
+          this.error(
+            src,
+            o.path,
+            "bless and give_xp cannot go in one option: the blessing's price follows the level",
+          );
       for (const { key, value, path } of actionsOf(npc?.["dialog"], ["dialog"])) {
         if (key === "open_shop" && typeof value === "string" && value !== ownShop) {
           const owner = this.index.ids.shop.get(value);
