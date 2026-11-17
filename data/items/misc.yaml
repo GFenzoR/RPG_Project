@@ -39,6 +39,7 @@
   kind: material
   sprite: materials/wolf_pelt
   name: item.wolf_pelt.name
+  description: item.wolf_pelt.desc
   weight: 900
   stackable: true
   max_stack: 100
@@ -49,6 +50,7 @@
   kind: consumable
   sprite: food/raw_fish
   name: item.raw_fish.name
+  description: item.raw_fish.desc
   weight: 500
   stackable: true
   max_stack: 100
@@ -73,6 +75,7 @@
   kind: consumable
   sprite: food/boar_meat
   name: item.boar_meat.name
+  description: item.boar_meat.desc
   weight: 900
   stackable: true
   max_stack: 100
@@ -96,6 +99,7 @@
   kind: material
   sprite: materials/gull_feather
   name: item.gull_feather.name
+  description: item.gull_feather.desc
   weight: 6
   stackable: true
   max_stack: 100
@@ -106,6 +110,7 @@
   kind: material
   sprite: materials/crab_claw
   name: item.crab_claw.name
+  description: item.crab_claw.desc
   weight: 300
   stackable: true
   max_stack: 100
@@ -116,6 +121,7 @@
   kind: material
   sprite: materials/bat_wing
   name: item.bat_wing.name
+  description: item.bat_wing.desc
   weight: 70
   stackable: true
   max_stack: 100
@@ -126,6 +132,7 @@
   kind: material
   sprite: materials/boar_tusk
   name: item.boar_tusk.name
+  description: item.boar_tusk.desc
   weight: 400
   stackable: true
   max_stack: 100
@@ -147,6 +154,7 @@
   kind: material
   sprite: materials/beetle_carapace
   name: item.beetle_carapace.name
+  description: item.beetle_carapace.desc
   weight: 1200
   stackable: true
   max_stack: 100

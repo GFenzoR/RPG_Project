@@ -13,6 +13,7 @@
   kind: weapon
   sprite: weapons/hatchet
   name: item.hatchet.name
+  description: item.hatchet.desc
   weight: 3700
   tradeable: true
   weapon: { type: axe, attack: 11, defense: 5, hands: 1 }
@@ -75,6 +76,7 @@
   kind: weapon
   sprite: weapons/spiked_cudgel
   name: item.spiked_cudgel.name
+  description: item.spiked_cudgel.desc
   weight: 4800
   tradeable: true
   weapon: { type: club, attack: 15, defense: 7, hands: 1 }

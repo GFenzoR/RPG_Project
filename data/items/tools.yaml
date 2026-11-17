@@ -12,6 +12,7 @@
   kind: tool
   sprite: tools/rope
   name: item.rope.name
+  description: item.rope.desc
   weight: 1450
   tradeable: true
   tool: { use: rope }

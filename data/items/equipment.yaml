@@ -2,6 +2,7 @@
   kind: armor
   sprite: armor/patched_tunic
   name: item.patched_tunic.name
+  description: item.patched_tunic.desc
   weight: 5600
   tradeable: true
   armor: { slot: body, armor: 2 }
@@ -11,6 +12,7 @@
   kind: shield
   sprite: shields/plank_shield
   name: item.plank_shield.name
+  description: item.plank_shield.desc
   weight: 5000
   tradeable: true
   shield: { defense: 12 }
@@ -22,6 +24,7 @@
   kind: armor
   sprite: armor/sailcloth_cap
   name: item.sailcloth_cap.name
+  description: item.sailcloth_cap.desc
   weight: 800
   tradeable: true
   armor: { slot: head, armor: 1 }
@@ -42,6 +45,7 @@
   kind: armor
   sprite: armor/canvas_trousers
   name: item.canvas_trousers.name
+  description: item.canvas_trousers.desc
   weight: 1600
   tradeable: true
   armor: { slot: legs, armor: 1 }
@@ -51,6 +55,7 @@
   kind: armor
   sprite: armor/tarred_boots
   name: item.tarred_boots.name
+  description: item.tarred_boots.desc
   weight: 1200
   tradeable: true
   armor: { slot: feet, armor: 1 }
@@ -70,6 +75,7 @@
   kind: shield
   sprite: shields/riveted_round_shield
   name: item.riveted_round_shield.name
+  description: item.riveted_round_shield.desc
   weight: 6400
   tradeable: true
   shield: { defense: 15 }
@@ -116,6 +122,7 @@
   kind: armor
   sprite: armor/stagleather_leggings
   name: item.stagleather_leggings.name
+  description: item.stagleather_leggings.desc
   weight: 2350
   tradeable: true
   armor: { slot: legs, armor: 2 }
