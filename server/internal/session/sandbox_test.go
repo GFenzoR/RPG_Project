@@ -1915,10 +1915,12 @@ func TestSandboxTradesTraining(t *testing.T) {
 	}
 }
 
-// TestSandboxDevOnlyOffTheSandbox: the instructor's training and mana are dev-only. Were
-// she on an island that is not dev-only (past the startup check, which refuses that:
-// TestDevOnlyActionsRefusedOffDevIslands), the server would refuse to run them (and the
-// rest of the option: healing too) with dialog.dev_only.
+// TestSandboxDevOnlyOffTheSandbox: the instructor is dev_only. Were she on an island that
+// is not dev-only (past the startup check, which refuses that:
+// TestDevOnlyActionsRefusedOffDevIslands), the server would refuse every option of hers
+// but "bye" with dialog.dev_only: her healing with mana, and also "Entréname", which only
+// leads to her training (review of lote 5), so nothing of it is reached. Training itself
+// is refused off the island too (dialog.TestDevOnlyActionsNeedADevIsland).
 func TestSandboxDevOnlyOffTheSandbox(t *testing.T) {
 	s := newSandbox(t)
 	cl, p := s.newcomer(5980, "Lejos", "arcanist")
@@ -1937,12 +1939,9 @@ func TestSandboxDevOnlyOffTheSandbox(t *testing.T) {
 	if hp, _ := p.Health(); hp > 10 || p.Mana() > 1 {
 		t.Fatalf("heal off the sandbox ran: health %d, mana %d", hp, p.Mana())
 	}
-	d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_train")
-	for _, opt := range []string{"npc.pruebas_trainer.opt_train_combat", "npc.pruebas_trainer.opt_train_trades"} {
-		_, evs = s.say(cl, d, opt)
-		if !hasKey(evs, "dialog.dev_only") || hasKey(evs, "progress.skill_up") {
-			t.Fatalf("%s off the sandbox: %v", opt, systemKeys(evs))
-		}
+	d, evs = s.say(cl, d, "npc.pruebas_trainer.opt_train")
+	if !hasKey(evs, "dialog.dev_only") || d == nil || d.Text.Key != "npc.pruebas_trainer.greet" {
+		t.Fatalf("Entréname off the sandbox: %v, dialog %v", systemKeys(evs), d)
 	}
 	if s.w.Skill(p, "magic").Level != 0 || s.w.Skill(p, "smithing").Level != 1 {
 		t.Fatalf("training off the sandbox ran: magic %d, smithing %d", s.w.Skill(p, "magic").Level, s.w.Skill(p, "smithing").Level)

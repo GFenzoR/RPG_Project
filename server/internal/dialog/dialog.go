@@ -122,15 +122,18 @@ func Visible(node *content.DialogNode, f Facts) []int {
 }
 
 // Check returns the refusal key if the actions of an option of npc (nil: none in
-// particular) cannot all run for f, or "". Off a dev-only island, a dev-only action, or
-// any action but close of a dev_only NPC, refuses the whole option.
+// particular) cannot all run for f, or "". Off a dev-only island a dev-only action refuses
+// the whole option, and a dev_only NPC refuses every option but one that only closes the
+// dialog, also one that only moves on (goto): off its island it shows nothing but its
+// greeting. Defense in depth: make validate and the server's startup refuse both too.
 func Check(npc *content.NPC, as content.Actions, f Facts) string {
+	if npc != nil && npc.DevOnly && !f.DevIsland() && !onlyCloses(as) {
+		return MsgDevOnly
+	}
 	var gold int64
 	items := map[string]int{}
-	devNPC := npc != nil && npc.DevOnly
 	for _, a := range as {
-		if (a.DevOnly() != "" || devNPC && !a.Close) && !f.DevIsland() {
-			// Defense in depth: make validate and the server's startup refuse it too.
+		if a.DevOnly() != "" && !f.DevIsland() {
 			return MsgDevOnly
 		}
 		switch {
@@ -161,6 +164,16 @@ func Check(npc *content.NPC, as content.Actions, f Facts) string {
 		}
 	}
 	return ""
+}
+
+// onlyCloses reports whether as is close and nothing else.
+func onlyCloses(as content.Actions) bool {
+	for _, a := range as {
+		if !a.Close {
+			return false
+		}
+	}
+	return len(as) > 0
 }
 
 // Result is what picking an option did.

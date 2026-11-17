@@ -238,6 +238,7 @@ func TestDevOnlyActionsNeedADevIsland(t *testing.T) {
 	// too; leaving with close always works.
 	gold := option("greet", "npc.pruebas_trainer.opt_gold")
 	bye := option("greet", "dialog.bye")
+	xp := option("greet", "npc.pruebas_trainer.opt_xp") // only goto: xp
 	for _, dev := range []bool{false, true} {
 		f := newFake(t, "guardian")
 		f.dev = dev
@@ -246,12 +247,19 @@ func TestDevOnlyActionsNeedADevIsland(t *testing.T) {
 		if !dev && (r.Refused != MsgDevOnly || f.money != money) || dev && (r.Refused != "" || f.money != money+10000) {
 			t.Fatalf("gold (dev island %v): %+v, money %d -> %d", dev, r, money, f.money)
 		}
+		// An option that only moves on is refused too off the island (review of lote 5):
+		// nothing of her dialog but her greeting shows there.
+		r = Choose(trainer, "greet", xp, f)
+		if !dev && (r.Refused != MsgDevOnly || r.Node != "greet") || dev && (r.Refused != "" || r.Node != "xp") {
+			t.Fatalf("the xp menu (dev island %v): %+v", dev, r)
+		}
 		if r := Choose(trainer, "greet", bye, f); r.Refused != "" || r.Node != "" {
 			t.Fatalf("bye (dev island %v): %+v", dev, r)
 		}
 	}
 	f := newFake(t, "druid")
 	if Check(&content.NPC{DevOnly: true}, content.Actions{{Heal: true}}, f) != MsgDevOnly ||
+		Check(&content.NPC{DevOnly: true}, nil, f) != MsgDevOnly ||
 		Check(&content.NPC{DevOnly: true}, content.Actions{{Close: true}}, f) != "" {
 		t.Fatal("Check of a dev_only NPC off a dev island")
 	}

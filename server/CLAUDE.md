@@ -313,7 +313,7 @@ server/
   - Las acciones de diálogo de solo desarrollo (`train_skill`, `restore_mana`; lista `DEV_ONLY_ACTIONS` en `packages/content-schema`), y todas las de un NPC con `dev_only: true` (`content.NPC.DevOnly`, la instructora: su oro y experiencia gratis), tienen tres capas:
     - `make validate`: el NPC tiene que estar colocado solo en islas `dev_only`;
     - el arranque: `content.CheckDevPlacement` en `initNPCs`;
-    - la elección: `dialog.Check(npc, ...)` con `Facts.DevIsland()`, que fuera de una isla dev no ejecuta nada de la opción (de un NPC `dev_only`, nada salvo `close`).
+    - la elección: `dialog.Check(npc, ...)` con `Facts.DevIsland()`, que fuera de una isla dev no ejecuta nada de la opción (de un NPC `dev_only` rechaza toda opción salvo la que solo cierra, también una que solo tiene `goto`).
   - Una acción de desarrollo nueva necesita las tres capas; un NPC solo para probar va con `dev_only: true`.
 
 ## Tests

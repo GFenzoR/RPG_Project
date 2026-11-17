@@ -395,7 +395,8 @@ de islas `dev_only` (`world.yaml`), que la imagen de producción no compila.
   `make validate` lo rechaza sin colocar o fuera de islas `dev_only`; el servidor no
   arranca con él en una isla sin la marca `dev` (`content.CheckDevPlacement`); y fuera de
   una isla de desarrollo `dialog.Check` rechaza con `dialog.dev_only` cualquier opción
-  suya con acciones, salvo `close` (las que solo navegan con `goto` siguen andando).
+  suya salvo la que solo cierra (`close`), también la que solo navega con `goto`: de su
+  diálogo no se ve más que el saludo.
   Úsalo en todo NPC pensado solo para probar.
 - Una acción de desarrollo nueva se suma a `content.Action.DevOnly` (Go) y a
   `DEV_ONLY_ACTIONS` (`packages/content-schema/src/validate.ts`).
