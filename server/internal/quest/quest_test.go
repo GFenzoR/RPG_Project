@@ -108,8 +108,9 @@ func TestSetStepAndKillCountReset(t *testing.T) {
 }
 
 // Needs (content audit m9): a quest drop goes to whoever's quest in progress waits for the
-// item at the current step or at one already done (a lost one comes back), and never
-// before its step, after the quest is completed or to whoever holds enough.
+// item at the current step or at the one just done, while its delivery is current (a lost
+// one comes back), and never before its step, after its delivery (the quest goes on, as
+// ch2_coffer after the tallies), after the quest is completed or to whoever holds enough.
 func TestNeeds(t *testing.T) {
 	parse := func(src string) *content.Quest {
 		q, err := content.ParseQuest([]byte(src))
@@ -134,6 +135,15 @@ steps:
   - { id: take_tusks, description: d, complete_when: { has_item: { item: tusk, count: 3 } } }
   - { id: hand_in, description: d, complete_when: { dialog_action: { npc: hunter, node: done } } }
 `),
+		"coffer": parse(`
+id: coffer
+name: n
+steps:
+  - { id: gather_tallies, description: d, complete_when: { has_item: { item: tally, count: 4 } } }
+  - { id: deliver_tallies, description: d, complete_when: { dialog_action: { npc: druid, node: tallies } } }
+  - { id: find_coffer, description: d, complete_when: { has_item: { item: coffer } } }
+  - { id: return_coffer, description: d, complete_when: { dialog_action: { npc: druid, node: opened } } }
+`),
 	})
 	at := func(quest string, state State, step int) *Log {
 		return NewLog(map[string]int64{stateKey(quest): int64(state), stepKey(quest): int64(step)})
@@ -156,6 +166,11 @@ steps:
 		{"count 3, holding 2", at("tusks", InProgress, 0), "tusk", 2, true},
 		{"count 3, holding 3", at("tusks", InProgress, 0), "tusk", 3, false},
 		{"count 3, handing in with 1 left", at("tusks", InProgress, 1), "tusk", 1, true},
+		{"deliver_tallies, lost two", at("coffer", InProgress, 1), "tally", 2, true},
+		{"find_coffer: tallies handed in", at("coffer", InProgress, 2), "tally", 0, false},
+		{"return_coffer: tallies handed in", at("coffer", InProgress, 3), "tally", 0, false},
+		{"find_coffer without it", at("coffer", InProgress, 2), "coffer", 0, true},
+		{"deliver_tallies: before the coffer's step", at("coffer", InProgress, 1), "coffer", 0, false},
 	} {
 		if got := e.Needs(c.log, c.item, c.have); got != c.want {
 			t.Errorf("%s: Needs(%s, %d) = %v, want %v", c.name, c.item, c.have, got, c.want)

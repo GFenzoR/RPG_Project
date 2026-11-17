@@ -742,7 +742,8 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await expect(dialog.locator("[data-option]")).toHaveCount(6);
   await shot(page, "13-dialog");
   await dialog.screenshot({ path: join(shots, "13-dialog-window.png") });
-  // Blessings cost 200 coins: the server refuses a new character.
+  // A blessing costs 50 + 20 per level (230 at level 9, content audit M6): the server
+  // refuses a character with no money.
   await page.keyboard.press("Digit1");
   await expect(page.getByTestId("game-log")).toContainText("No tienes suficiente dinero.");
   await page.keyboard.press("Escape");

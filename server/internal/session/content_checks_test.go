@@ -39,13 +39,19 @@ func TestStartupRefusesBrokenFoodAndQuestDrops(t *testing.T) {
 		{"a quest drop with a value", func(c *session.Config) {
 			c.Items["forge_seal"].Value = 5
 		}, "tradeable: false and value: 0"},
-		{"a step after the delivery of a quest drop", func(c *session.Config) {
-			// [kill, has_item, deliver, kill]: once handed in, every kill would give
-			// another seal (quest.Engine.Needs counts done has_item steps).
+		{"a step between a quest drop and its delivery", func(c *session.Config) {
+			// [kill, has_item, kill, deliver]: at the delivery a lost seal would never
+			// come back (quest.Engine.Needs counts the done has_item step only while the
+			// step right after it is current).
 			q := c.Quests["ch3_warden"]
-			q.Steps = append(q.Steps, content.QuestStepDef{ID: "again", Description: "d",
-				CompleteWhen: content.Completion{Kill: &content.Kill{Monster: "ash_hound", Count: 1}}})
-		}, "only the delivery may be left"},
+			kill := content.QuestStepDef{ID: "again", Description: "d",
+				CompleteWhen: content.Completion{Kill: &content.Kill{Monster: "ash_hound", Count: 1}}}
+			q.Steps = append(q.Steps[:2:2], kill, q.Steps[2])
+		}, "must be followed by its delivery"},
+		{"a quest drop without a delivery", func(c *session.Config) {
+			q := c.Quests["ch3_warden"]
+			q.Steps = q.Steps[:2:2]
+		}, "must be followed by its delivery"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			cfg := dataConfig(t, nil)

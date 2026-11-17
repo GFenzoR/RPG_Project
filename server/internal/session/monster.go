@@ -788,11 +788,11 @@ func (w *World) removeMonster(m *Monster) {
 
 // checkQuestDrop checks the item of a quest drop (loot each_player, content audit m9).
 // quest.Engine.Needs gives it again to whoever no longer holds it while its has_item step
-// is current or done, and cannot tell a lost one from one handed in. So:
+// or the step right after it is current, and cannot tell a lost one from one handed in. So:
 //   - some quest step waits for it (has_item), or it would never drop;
-//   - after each such step only the delivery is left: one last step, a dialog_action (the
-//     NPC takes it with take_item). Handing it in completes the quest, and a completed
-//     quest needs nothing; any later step would give it again with every kill;
+//   - each such step is followed by the delivery: a dialog_action step (the NPC takes it
+//     with take_item). Once handed in, the quest moves past the delivery and the item no
+//     longer drops; a step in between would leave a lost one without a source;
 //   - it is worth nothing and cannot be traded (tradeable: false, value: 0): the copies a
 //     player can pile up, dropping them on the floor, buy nothing and nobody else takes.
 func checkQuestDrop(quests content.Quests, item *content.Item) error {
@@ -807,8 +807,8 @@ func checkQuestDrop(quests content.Quests, item *content.Item) error {
 				continue
 			}
 			asked = true
-			if i != len(steps)-2 || steps[i+1].CompleteWhen.DialogAction == nil {
-				return fmt.Errorf("quest %q step %q: after the has_item of a quest drop only the delivery may be left (one last dialog_action step), or it would drop again once handed in", id, s.ID)
+			if i+1 >= len(steps) || steps[i+1].CompleteWhen.DialogAction == nil {
+				return fmt.Errorf("quest %q step %q: the has_item of a quest drop must be followed by its delivery (a dialog_action step), or a lost one would never come back", id, s.ID)
 			}
 		}
 	}

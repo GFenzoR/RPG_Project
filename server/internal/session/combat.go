@@ -394,8 +394,8 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 
 // questDrop gives quest loot l (each_player, content audit m9) to every online player
 // who damaged m and whose quest in progress asks for the item (quest.Engine.Needs: a
-// has_item step of it, current or already done, not met any more; so a lost one comes
-// back with the next kill), one roll of l.chance each: in the backpack, or at the
+// has_item step of it, current or done with its delivery current, not met any more; so a
+// lost one comes back with the next kill), one roll of l.chance each: in the backpack, or at the
 // player's feet if it does not fit. The kill already advanced their quests (questKill),
 // so a step right after the kill counts. Nobody else gets one, and the remains get none.
 func (w *World) questDrop(ctx *game.TickContext, m *Monster, l lootItem) {
