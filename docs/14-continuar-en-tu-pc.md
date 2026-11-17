@@ -274,10 +274,12 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   docs/16 secciones 4 y 8). Todo el recorrido de la guía funciona; lo que sigue son huecos
   de la herramienta, no errores del servidor:
   - la instructora sube el **nivel**, no las **skills** ni el **nivel mágico**: un guardián
-    de nivel 21 con espada de hierro, escudo y 20 cataplasmas muere en el corral 4 (skills
-    en 10; con espada 32 y escudo 27 sobrevive); la runa de arco (nivel mágico 1) y
-    `mend_other` (2) no se pueden usar recién hecho; el corral 5 pide dos druidas de nivel
-    50 con lanza de escarcha. Propuesta: una acción de diálogo nueva (por ejemplo
+    de nivel 21 con espada de hierro, escudo y 20 cataplasmas muere en el corral 4 con las
+    skills en 10 y con espada 32 y escudo 27 sobrevive (`TestSandboxSkillsGap`); la runa
+    de arco (nivel mágico 1) y `mend_other` (2) no se pueden usar recién hecho. Los
+    corrales 4 y 5 los hace un druida de nivel 50 con lanza de escarcha (los hechizos de
+    daño crecen con el nivel), así que el hueco es de cuerpo a cuerpo y distancia, y de
+    lo que pide nivel mágico. Propuesta: una acción de diálogo nueva (por ejemplo
     `train_skills`, que sume intentos a las skills de la vocación y al nivel mágico) y una
     opción "Quiero entrenar" de la instructora. Es un contrato nuevo (esquema de
     `common.schema.json`, `content.Action`, `dialog`, `session`, docs/06): por eso no entró
@@ -291,7 +293,9 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     proveedor de la isla venda mineral y troncos (sin cambiar el juego real);
   - la **pala** no sirve para nada en todo el juego (`tool.use: shovel` no tiene mecánica:
     usarla dice `gather.nothing`). Se sacó de la tienda de la isla
-    (`TestSandboxToolsHaveAUse`); Puerto la sigue vendiendo (40) y comprando (12);
+    (`TestSandboxToolsHaveAUse`); Puerto la sigue vendiendo (40) y comprando (12); y su
+    proveedor todavía promete que "abre agujeros donde la arena suena hueca"
+    (`npc.puerto_provisioner.tools`, es y en): o se le da la mecánica o se cambia el texto;
   - no es un error, pero sorprende probando: un monstruo no reaparece donde un jugador lo
     ve, así que quien vacía un corral y se queda mirando no ve volver a nadie (docs/16
     lo dice ahora), y los monstruos salen de los corrales por la abertura y siguen al

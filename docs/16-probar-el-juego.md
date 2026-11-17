@@ -68,8 +68,9 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    50 000; dos veces 50 000 te deja en el nivel 20), "Necesito dinero" (una moneda de oro
    por vez), "Cúrame" y "¿Tienes algún encargo?" (misión "Ratas de práctica").
    **Ojo:** la experiencia sube el nivel (vida, maná, capacidad), no las skills ni el nivel
-   mágico: un guardián o un montaraz de nivel 50 hecho así pega como uno de nivel 1 (espada,
-   escudo y distancia en 10, nivel mágico 0). Y "Cúrame" llena la vida, no el maná.
+   mágico: a un guardián o un montaraz hecho así el nivel le suma poco a cada golpe (un
+   cuarto del nivel), y espada, escudo y distancia siguen en 10 y el nivel mágico en 0. Y
+   "Cúrame" llena la vida, no el maná.
 2. **Tienda (plaza).** Con Tobías Muestra, "Quiero comerciar": herramientas (pico, hacha de
    leñador, caña, martillo, cuerda), galleta, cataplasma de algas (la curación que
    existe: no hay pociones de maná todavía), runa de arco (pide nivel mágico 1: ver más
@@ -87,11 +88,12 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    vuelve a la plaza: en la zona de protección nadie ataca.
    - Lo que juegan los tests (sección 8), como referencia: corral 1, un guardián de nivel
      1 con hacha de mano; corral 2, un montaraz de nivel 8 con arco corto y flechas;
-     corral 3, una arcanista de nivel 20 con varita de coral. Un guardián de nivel 21 con
-     espada de hierro, escudo y 20 cataplasmas **muere** en el corral 4 (skills en 10; con
-     espada 32 y escudo 27 sobrevive): para el 4 sirve un druida de nivel 50 que lance
-     "glacies hasta" (lanza de escarcha: crece con el nivel), y para el dragoncillo del 5
-     hacen falta dos (uno solo se queda sin maná).
+     corral 3, una arcanista de nivel 20 con varita de coral; corrales 4 y 5, un druida de
+     nivel 50 que lanza "glacies hasta" (lanza de escarcha: crece con el nivel), uno por
+     corral: el del 4 se trae detrás al otro espinoso, y los dos con el dragoncillo matan a
+     un druida. Un guardián de nivel 21 con espada de hierro, escudo y 20 cataplasmas
+     **muere** en el corral 4 con las skills en 10; con espada 32 y escudo 27 (entrenadas en
+     el test) mata a un espinoso (`TestSandboxSkillsGap`).
    - Los monstruos no reaparecen donde un jugador los ve: si vacías un corral, aléjate
      (unas 8 casillas al sur de su abertura basta) hasta que vuelvan.
    - Los monstruos salen de los corrales por la abertura y te siguen por el sendero.
@@ -175,9 +177,10 @@ un segundo con `go test ./internal/session -run Sandbox` (y en `make test`).
 | Test | Qué juega |
 |---|---|
 | `TestSandboxInstructor` | Despertar en el templo (sin tutorial), experiencia, oro, curación y la misión de las ratas de punta a punta |
-| `TestSandboxProvisioner` | La tienda igual a `data/`, comprar (con cambio de la moneda de oro), equiparse, vender; que no se gane dinero comprando y revendiendo, tampoco pasando por una receta |
+| `TestSandboxProvisioner` | La tienda igual a `data/`, comprar (con cambio de la moneda de oro), equiparse, vender; que en ninguna tienda de `data/` se gane dinero comprando y revendiendo, tampoco pasando por una receta |
 | `TestSandboxPens` | Cada corral con una vocación hasta que deja botín (ver arriba qué hace falta en el 4 y el 5) |
-| `TestSandboxTrades` | Picar, talar y pescar con las herramientas de la tienda; fragua y fogón; el yunque pide herrería 2; vender lo hecho |
+| `TestSandboxSkillsGap` | El guardián de nivel 21 que muere en el corral 4 con las skills en 10 y sobrevive entrenado |
+| `TestSandboxTrades` | Picar, talar y pescar con las herramientas de la tienda; fragua y fogón; ninguna receta del yunque al alcance de un personaje nuevo; vender lo hecho |
 | `TestSandboxHouse` | Casa: nivel 12, alquiler, entrar, dejar un objeto, extraño afuera, invitada adentro que no saca nada |
 | `TestSandboxVault` | Puerta de práctica sin llave, con llave, cerrar desde adentro y salir sin llave |
 | `TestSandboxPortals` | Escaleras, escalera de mano, agujero, murciélagos, punto de soga sin y con cuerda, teletransporte, una galleta tirada a la escalera |

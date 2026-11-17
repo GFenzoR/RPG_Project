@@ -39,6 +39,11 @@ type sandbox struct {
 	casters map[*session.Player]func(target uint32)
 	// seen are the remains huntWith already counted.
 	seen map[*session.Corpse]bool
+	// packs are the open backpack windows (packWindow).
+	packs map[*session.Player]packWin
+	// mayDie lets a hunt end in a death, recorded in deaths, instead of failing the test.
+	mayDie bool
+	deaths []*session.Player
 }
 
 // The places of the sandbox island the tests use (docs/16, "La isla, sector por sector").
@@ -88,7 +93,7 @@ func newSandbox(t *testing.T) *sandbox {
 	tutorial, err := content.LoadTutorial(dir)
 	must(err)
 	s := &sandbox{m: m, pf: world.NewPathfinder(m, 0), healers: map[*session.Player]func(){},
-		casters: map[*session.Player]func(uint32){}, seen: map[*session.Corpse]bool{}}
+		casters: map[*session.Player]func(uint32){}, seen: map[*session.Corpse]bool{}, packs: map[*session.Player]packWin{}}
 	s.harness = dataHarnessWith(t, func(cfg *session.Config) {
 		cfg.Map, cfg.StartTown = m, "pruebas"
 		cfg.NPCs, cfg.BoatRoutes, cfg.Spells, cfg.Recipes, cfg.Tutorial = npcs, routes, spells, recipes, tutorial
@@ -110,11 +115,10 @@ func newSandbox(t *testing.T) *sandbox {
 	return s
 }
 
-// ack acknowledges a written snapshot on the next tick, as the Saver does.
+// ack acknowledges a written snapshot on the next tick, as the Saver does once it wrote
+// it (never in the tick that submitted it: Save and Transfer run on the loop).
 func (s *sandbox) ack(sn session.Snapshot) {
-	if err := s.sim.Loop().Enqueue(s.w.Saved(sn.CharacterID, sn.Seq)); err != nil {
-		s.t.Errorf("ack of %d: %v", sn.CharacterID, err)
-	}
+	s.sim.Schedule(1, func(ctx *game.TickContext) { s.w.Saved(sn.CharacterID, sn.Seq).Execute(ctx) })
 }
 
 // newcomer logs in a character that never played (level 1, its vocation's starting health and
@@ -154,24 +158,16 @@ func (s *sandbox) walkWithin(cl *fakeClient, p *session.Player, to world.Pos, ne
 	cl.take()
 }
 
-// walkGroup walks every player of team to `to` at once (walkTo; a member with a spot
-// within near tiles of `to` to its spot), and settles for tiles at most near tiles from
-// it when creatures (one another, too) keep standing in the way. during runs before
-// every tick of the walk (nil: nothing).
+// walkGroup walks every player of team to `to` at once (walkTo), and settles for tiles at
+// most near tiles from it when creatures (one another, too) keep standing in the way.
+// during runs before every tick of the walk (nil: nothing).
 func (s *sandbox) walkGroup(team []fighter, to world.Pos, near int, during func()) {
 	s.t.Helper()
-	goal := func(f fighter) world.Pos {
-		if f.spot != (world.Pos{}) && f.spot.Z == to.Z && chebyshev(f.spot, to) <= near {
-			return f.spot
-		}
-		return to
-	}
 	for try := 0; ; try++ {
 		var left []fighter
 		for _, f := range team {
-			g := goal(f)
 			nearBy := f.p.Pos().Z == to.Z && chebyshev(f.p.Pos(), to) <= near
-			if f.p.Pos() != g && (try == 0 || !nearBy) {
+			if f.p.Pos() != to && (try == 0 || !nearBy) {
 				left = append(left, f)
 			}
 		}
@@ -179,11 +175,11 @@ func (s *sandbox) walkGroup(team []fighter, to world.Pos, near int, during func(
 			return
 		}
 		if try == 8 {
-			s.t.Fatalf("%v did not get to %v", left[0].p.Pos(), goal(left[0]))
+			s.t.Fatalf("%v did not get to %v", left[0].p.Pos(), to)
 		}
 		for _, f := range left {
 			// No path: a creature stands in a narrow way; the next try waits for it.
-			if steps, ok := s.pathFor(f.p, goal(f)); ok {
+			if steps, ok := s.pathFor(f.p, to); ok {
 				s.input(f.cl, walkPath(steps...))
 			}
 		}
@@ -322,7 +318,7 @@ func TestSandboxInstructor(t *testing.T) {
 			t.Fatalf("the instructor's greeting has no %s: %v", k, d.Options)
 		}
 	}
-	// Experience: 5000 (level 8), then twice 50 000 (level 20, as docs/16 says).
+	// Experience: 5000 is level 8 (TestSandboxArena asks twice for 50 000: level 20).
 	d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_xp")
 	d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_xp_small")
 	if lvl := s.w.Level(p); lvl != 8 {
@@ -455,19 +451,29 @@ func (w *shopWin) sell(id string, n uint32) {
 	}
 }
 
-// packWindow opens p's backpack (a second use closes it: then once more) and returns
-// its window.
+// packWindow returns the window of p's backpack, opening it the first time (the client
+// keeps it open: a second use would close it).
 func (s *sandbox) packWindow(cl *fakeClient, p *session.Player) uint32 {
 	s.t.Helper()
 	pack := p.Equipped(slotBackpack)
+	if w, ok := s.packs[p]; ok && w.pack == pack {
+		return w.id
+	}
 	for range 2 {
 		evs := s.send(cl, useItem(inSlot(slotBackpack), uint32(pack.Def().Numeric), 0))
 		if o := find(evs, (*pb.ServerMessage).GetContainerOpen); len(o) == 1 {
+			s.packs[p] = packWin{pack, o[0].ContainerId}
 			return o[0].ContainerId
 		}
 	}
 	s.t.Fatal("the backpack does not open")
 	return 0
+}
+
+// packWin is an open backpack window: the backpack and the window id.
+type packWin struct {
+	pack *session.Item
+	id   uint32
 }
 
 // packIndex is the index of the first stack of id in p's backpack.
@@ -500,9 +506,6 @@ func (s *sandbox) equip(cl *fakeClient, p *session.Player, id string, slot pb.Eq
 type fighter struct {
 	cl *fakeClient
 	p  *session.Player
-	// spot is where it stands to fight when that is within reach of the hunting place
-	// (zero: the hunting place itself).
-	spot world.Pos
 }
 
 // huntPen walks p to `in` (the gap of a pen) and fights the monsters of kind there, with
@@ -516,7 +519,8 @@ func (s *sandbox) huntPen(cl *fakeClient, p *session.Player, kind string, n int,
 // nearest the first one. When no monster of kind is left in view, they step out to
 // `away` until one is back: monsters do not respawn where a player looks. Below 70 %
 // health each heals itself as its healer says (s.healers), at most once a second, and
-// casters cast at the target every two seconds (s.casters); none may die.
+// casters cast at the target every two seconds (s.casters); none may die (unless
+// s.mayDie: the hunt stops at the first death).
 func (s *sandbox) huntWith(team []fighter, kind string, n int, in, away world.Pos) [][]*pb.ItemStack {
 	s.t.Helper()
 	lead := team[0].p
@@ -622,6 +626,10 @@ func (s *sandbox) huntWith(team []fighter, kind string, n int, in, away world.Po
 		}
 	}
 	if died != nil {
+		if s.mayDie {
+			s.deaths = append(s.deaths, died)
+			return loot
+		}
 		s.t.Fatalf("player %d (level %d) died hunting %s: %s", died.ID(), s.w.Level(died), kind, s.monstersNear(in))
 	}
 	return loot
@@ -640,7 +648,7 @@ func (s *sandbox) nearest(kind string, p world.Pos, within int) *session.Monster
 }
 
 // huntForLoot hunts kind at `in` with team (huntWith) until one of them leaves loot, at
-// most most kills.
+// most most kills (with s.mayDie, until one of the team dies: then nil).
 func (s *sandbox) huntForLoot(kind string, in, away world.Pos, most int, team ...fighter) []*pb.ItemStack {
 	s.t.Helper()
 	for range most {
@@ -648,6 +656,9 @@ func (s *sandbox) huntForLoot(kind string, in, away world.Pos, most int, team ..
 			if len(l) > 0 {
 				return l
 			}
+		}
+		if len(s.deaths) > 0 {
+			return nil
 		}
 	}
 	s.t.Fatalf("%d %s left no loot", most, kind)
@@ -698,10 +709,10 @@ func TestSandboxProvisioner(t *testing.T) {
 		n  uint32
 	}{{"short_bow", 1}, {"arrow", 60}, {"hide_vest", 1}, {"sailcloth_cap", 1}, {"canvas_trousers", 1},
 		{"tarred_boots", 1}, {"seaweed_poultice", 2}, {"ship_biscuit", 5}, {"rope", 1}, {"pruebas_key", 1}} {
-		shop.buy(b.id, b.n)
+		shop.buy(b.id, b.n) // each purchase checks its price
 	}
-	if s.w.CountItem(p, "gold_coin") != 0 || s.w.Money(p) != 10000-40-60-45-10-15-15-50-15-45-10 {
-		t.Fatalf("after shopping: %d money, %d gold coins", s.w.Money(p), s.w.CountItem(p, "gold_coin"))
+	if s.w.CountItem(p, "gold_coin") != 0 || s.w.Money(p) == 0 {
+		t.Fatalf("after shopping: %d money, %d gold coins (the gold coin breaks into change)", s.w.Money(p), s.w.CountItem(p, "gold_coin"))
 	}
 	for _, slot := range []struct {
 		id   string
@@ -721,14 +732,15 @@ func TestSandboxProvisioner(t *testing.T) {
 			t.Fatalf("sold %s back: %v", id, systemKeys(evs))
 		}
 	}
-	// What he buys (the other sandbox tests get it from the pens and the trades).
+	// What he buys (TestSandboxTrades sells him what it gathers and makes).
 	for _, o := range def.Buys {
 		s.sim.Command(gameFunc(func() { s.w.GiveForTest(p, o.Item, 2) }))
 		s.sim.Step()
 		shop.sell(o.Item, 2)
 	}
 
-	// Recipes: what shops pay for the output never reaches what shops ask for the inputs.
+	// Every shop of data/: none buys an item for what one sells it (as make validate
+	// checks), and no recipe pays more for its output than its inputs cost.
 	recipes, err := content.LoadRecipes(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -745,6 +757,11 @@ func TestSandboxProvisioner(t *testing.T) {
 		}
 		for _, o := range n.Shop.Buys {
 			dearest[o.Item] = max(dearest[o.Item], o.Price)
+		}
+	}
+	for item, buys := range dearest {
+		if sells, ok := cheapest[item]; ok && buys >= sells {
+			t.Errorf("%s: a shop sells it for %d and a shop buys it for %d", item, sells, buys)
 		}
 	}
 	for _, r := range recipes {
@@ -859,9 +876,9 @@ func (s *sandbox) hero(id int64, name, voc string, big, small, gold int, kit ...
 	if voc == "druid" {
 		s.healers[p] = func() { s.input(cl, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "viridis cura")) }
 	} else {
+		win := s.packWindow(cl, p) // open now: the healer only sends the use
 		s.healers[p] = func() {
 			if s.w.CountItem(p, "seaweed_poultice") > 0 {
-				win := s.packWindow(cl, p)
 				s.input(cl, useItem(inContainer(win, s.packIndex(p, "seaweed_poultice")), s.num("seaweed_poultice"), 0))
 			}
 		}
@@ -870,9 +887,9 @@ func (s *sandbox) hero(id int64, name, voc string, big, small, gold int, kit ...
 	return cl, p
 }
 
-// TestSandboxPens: each pen of the hunting trail (and the bats of the cellar) is hunted
-// by a vocation with the level the instructor gives and the provisioner's gear, until one
-// of its monsters dies and leaves loot; what the provisioner buys of it is sold.
+// TestSandboxPens: each pen of the hunting trail is hunted by a vocation with the level
+// the instructor gives and the provisioner's gear, until one of its monsters dies and
+// leaves loot (the bats of the cellar: TestSandboxPortals).
 func TestSandboxPens(t *testing.T) {
 	s := newSandbox(t)
 	report := func(what string, loot []*pb.ItemStack) {
@@ -903,19 +920,17 @@ func TestSandboxPens(t *testing.T) {
 	report("pen 3 (arcanist 20)", s.huntForLoot("moss_spider", penGap(3), penAway(3), 10, fighter{cl: cl, p: p}))
 
 	// Pens 4 and 5, thornlings and the ember wyrmling: level 50 druids that cast
-	// frost_lance (ice: spells grow with the level; melee and bows grow with skills, which
-	// the instructor does not give). One does pen 4; the wyrmling outlasts the mana of
-	// one (the instructor heals health, not mana, and there are no mana potions yet), so
-	// two go.
+	// frost_lance (ice; spells grow with the level, while melee and bows grow with skills,
+	// which the instructor does not give). One per pen: the druid of pen 4 would bring the
+	// other thornling along to the wyrmling (monsters follow out of their pen), and those
+	// two together kill a druid.
 	druid := func(id int64, name string) fighter {
 		cl, p := s.hero(id, name, "druid", 29, 0, 1, gear{"sapling_staff", 1, slotRight}, gear{"hide_vest", 1, slotArmor})
 		s.casters[p] = func(target uint32) { s.input(cl, castAt("frost_lance", target)) }
 		return fighter{cl: cl, p: p}
 	}
-	d1, d2 := druid(5104, "Druida"), druid(5105, "Druido")
-	d2.spot = at3(2116, 2079, 7) // the other tile of the gap of pen 5: in sight of the wyrmling
-	report("pen 4 (druid 50)", s.huntForLoot("thornling", penGap(4), penAway(4), 10, d1))
-	report("pen 5 (two druids 50)", s.huntForLoot("ember_wyrmling", penGap(5), penAway(5), 5, d1, d2))
+	report("pen 4 (druid 50)", s.huntForLoot("thornling", penGap(4), penAway(4), 10, druid(5104, "Druida")))
+	report("pen 5 (druid 50)", s.huntForLoot("ember_wyrmling", penGap(5), penAway(5), 5, druid(5105, "Druido")))
 }
 
 // monstersNear describes the monsters within 15 tiles of p (for failures).
@@ -1153,16 +1168,36 @@ func TestSandboxTrades(t *testing.T) {
 	// The hearth: a raw fish grills.
 	s.station(cl, p, "cooking_hearth", sbHearth)
 	s.craftUntil(cl, p, "cook_grilled_fish", sbHearth, 2)
-	// The anvil, with the hammer: its first recipe asks for smithing 2.
+	// The anvil, with the hammer: every recipe of it asks for more smithing than a newcomer
+	// has, even with the inputs of its lowest one.
 	st := s.station(cl, p, "anvil", sbAnvil)
 	if len(st.Tools) == 0 {
 		t.Fatalf("the anvil window does not see the hammer: %v", st)
 	}
-	s.sim.Command(gameFunc(func() { s.w.GiveForTest(p, "iron_ingot", 2) })) // as if smelted twice more
-	s.sim.Step()
-	if evs := s.craft(cl, "smith_felling_axe", sbAnvil); !hasKey(evs, "craft.level") {
-		t.Fatalf("a felling axe at smithing %d: %v", s.w.Skill(p, "smithing").Level, systemKeys(evs))
+	recipes, err := content.LoadRecipes(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
 	}
+	var lowest *content.Recipe
+	for _, id := range recipes.IDs() {
+		if r := recipes[id]; r.Station == "anvil" && (lowest == nil || r.Level < lowest.Level) {
+			lowest = r
+		}
+	}
+	smithing := s.w.Skill(p, "smithing").Level
+	if lowest == nil || lowest.Level <= smithing {
+		t.Fatalf("an anvil recipe at smithing %d: %+v", smithing, lowest)
+	}
+	s.sim.Command(gameFunc(func() {
+		for _, in := range lowest.Inputs {
+			s.w.GiveForTest(p, in.Item, in.Count) // as if gathered and smelted
+		}
+	}))
+	s.sim.Step()
+	if evs := s.craft(cl, lowest.ID, sbAnvil); !hasKey(evs, "craft.level") {
+		t.Fatalf("%s (smithing %d) at smithing %d: %v", lowest.ID, lowest.Level, smithing, systemKeys(evs))
+	}
+	t.Logf("the lowest anvil recipe, %s, asks for smithing %d; a newcomer has %d", lowest.ID, lowest.Level, smithing)
 
 	// The provisioner buys the catch, the ore, the ingot and the logs.
 	shop := s.openShop(cl, p)
@@ -1542,8 +1577,17 @@ func TestSandboxArcRune(t *testing.T) {
 			From: inContainer(win, s.packIndex(p, "arc_rune")), ItemId: s.num("arc_rune"),
 			To: &pb.ActionTarget{Target: &pb.ActionTarget_CreatureId{CreatureId: rat.ID()}}}}})
 	}
-	if evs := rune(); !hasKey(evs, "magic.magic_level_required") {
-		t.Fatalf("the arc rune at magic level 0: %v", systemKeys(evs))
+	// charges is what is left on the rune (4 when bought).
+	charges := func() int {
+		for _, it := range p.Equipped(slotBackpack).Items() {
+			if it.Def().ID == "arc_rune" {
+				return it.Count()
+			}
+		}
+		return 0
+	}
+	if evs := rune(); !hasKey(evs, "magic.magic_level_required") || charges() != 4 {
+		t.Fatalf("the arc rune at magic level 0: %d charges left, %v", charges(), systemKeys(evs))
 	}
 	s.walkTo(cl, p, sbTemple)
 	s.sim.RunUntil(func() bool {
@@ -1557,9 +1601,15 @@ func TestSandboxArcRune(t *testing.T) {
 		t.Fatal("no bilge rat in pen 1")
 	}
 	s.sim.RunFor(2 * time.Second) // the rune's spell group cooldown
-	if evs := rune(); s.nearest("bilge_rat", p.Pos(), 6) == rat {
-		hp, _ := rat.Health()
-		t.Fatalf("the arc rune at magic level 1 left the rat at %d health: %v", hp, systemKeys(evs))
+	evs := rune()
+	if hasKey(evs, "magic.magic_level_required") || charges() != 3 {
+		t.Fatalf("the arc rune at magic level 1: %d charges left, %v", charges(), systemKeys(evs))
+	}
+	for _, m := range s.w.Monsters() {
+		if m == rat {
+			hp, _ := rat.Health()
+			t.Fatalf("the arc rune at magic level 1 left the rat at %d health: %v", hp, systemKeys(evs))
+		}
 	}
 }
 
@@ -1698,6 +1748,32 @@ func TestSandboxToolsHaveAUse(t *testing.T) {
 	for _, o := range npcs["pruebas_merchant"].Shop.Sells {
 		if def := s.items[o.Item]; def.Tool != nil && !uses[def.Tool.Use] {
 			t.Errorf("the provisioner sells %s (tool.use %s) and nothing on the island takes it", o.Item, def.Tool.Use)
+		}
+	}
+}
+
+// TestSandboxSkillsGap: the instructor raises the level, not the skills (docs/14). A
+// guardian of level 21 with the provisioner's iron sword, plank shield, jerkin, cap and 20
+// poultices dies in pen 4 with sword and shield at 10; the same guardian with the skills
+// of one that got there by playing (sword 32, shield 27) kills a thornling.
+func TestSandboxSkillsGap(t *testing.T) {
+	for _, trained := range []bool{false, true} {
+		s := newSandbox(t)
+		s.mayDie = true
+		cl, p := s.hero(5951, "Espada", "guardian", 2, 1, 1, gear{"iron_sword", 1, slotRight},
+			gear{"plank_shield", 1, slotLeft}, gear{"leather_jerkin", 1, slotArmor}, gear{"sailcloth_cap", 1, slotHead},
+			gear{"seaweed_poultice", 20, 0})
+		if trained {
+			s.sim.Command(gameFunc(func() { s.w.TrainForTest(p, "sword", 4000); s.w.TrainForTest(p, "shield", 4000) }))
+			s.sim.Step()
+		}
+		sword, shield := s.w.Skill(p, "sword").Level, s.w.Skill(p, "shield").Level
+		loot := s.huntForLoot("thornling", penGap(4), penAway(4), 3, fighter{cl: cl, p: p})
+		if died := len(s.deaths) > 0; died == trained {
+			t.Fatalf("level %d guardian, sword %d, shield %d: died %v (loot %v)", s.w.Level(p), sword, shield, died, loot)
+		}
+		if trained && (sword != 32 || shield != 27) {
+			t.Fatalf("trained to sword %d, shield %d", sword, shield)
 		}
 	}
 }
