@@ -216,7 +216,6 @@ const loadMarketBans = `-- name: LoadMarketBans :many
 SELECT b.account_id, CASE WHEN bool_or(b.expires_at IS NULL) THEN NULL ELSE max(b.expires_at) END::timestamptz AS until
 FROM account_bans b
 WHERE b.lifted_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > $1)
-  AND b.account_id IN (SELECT c.account_id FROM market_offers o JOIN characters c ON c.id = o.character_id)
 GROUP BY b.account_id
 `
 
@@ -225,8 +224,9 @@ type LoadMarketBansRow struct {
 	Until     pgtype.Timestamptz
 }
 
-// The active bans of the accounts that own offers (their offers are hidden). until is
-// NULL for a permanent ban.
+// The active bans of every account: an offer of a banned account is hidden, and its sales
+// (as seller or buyer) are left out of the reference price (content audit m13), also once
+// it has no offers left. until is NULL for a permanent ban.
 func (q *Queries) LoadMarketBans(ctx context.Context, now pgtype.Timestamptz) ([]LoadMarketBansRow, error) {
 	rows, err := q.db.Query(ctx, loadMarketBans, now)
 	if err != nil {

@@ -194,8 +194,9 @@ type Querier interface {
 	// save), never before away_from or since (content audit M6: the loop releases the house
 	// of an owner away for balance houses.inactive_days).
 	LoadHouseOwners(ctx context.Context) ([]LoadHouseOwnersRow, error)
-	// The active bans of the accounts that own offers (their offers are hidden). until is
-	// NULL for a permanent ban.
+	// The active bans of every account: an offer of a banned account is hidden, and its sales
+	// (as seller or buyer) are left out of the reference price (content audit m13), also once
+	// it has no offers left. until is NULL for a permanent ban.
 	LoadMarketBans(ctx context.Context, now pgtype.Timestamptz) ([]LoadMarketBansRow, error)
 	LoadMarketHigh(ctx context.Context) (LoadMarketHighRow, error)
 	// The newest operations of every character since a time, at most per_character each.

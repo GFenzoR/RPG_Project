@@ -117,8 +117,8 @@ type MarketData struct {
 	Gold    map[int64]int64
 	History []MarketHistory // oldest first
 	Sales   []MarketSale
-	// Bans are the active bans of the accounts with offers (until; zero = permanent):
-	// their offers are hidden.
+	// Bans are the active bans of every account (until; zero = permanent): their offers
+	// are hidden and their sales, as seller or buyer, do not count for reference prices.
 	Bans      map[int64]time.Time
 	OfferHigh int64
 	MailHigh  int64

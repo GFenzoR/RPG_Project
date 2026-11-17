@@ -699,7 +699,9 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   vota una vez por día, con su precio medio por unidad de ese día, y la referencia es la
   mediana de los votos de los últimos `reference_days` días (con un número par, la menor).
   No cuentan las ventas entre dos cuentas que se vendieron una a la otra en la ventana (en
-  los dos sentidos) ni las de cuentas suspendidas. Con menos de `reference_min_votes` (3)
+  los dos sentidos) ni las de cuentas suspendidas, como vendedoras o compradoras (también
+  después de reiniciar, aunque ya no tengan ofertas: el servidor carga todas las
+  suspensiones vigentes). Con menos de `reference_min_votes` (3)
   votos, de `reference_min_sellers` (2) cuentas vendedoras distintas o de
   `reference_min_accounts` (3) cuentas en total (vendedoras y compradoras) no hay
   referencia ("Sin precio de referencia"). Es solo informativo. Por qué así (auditoría de

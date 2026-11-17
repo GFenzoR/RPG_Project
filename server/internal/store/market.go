@@ -241,7 +241,8 @@ func applyMarketOp(ctx context.Context, q *db.Queries, op MarketOp) error {
 
 // LoadMarket reads the whole market: every offer, mailbox and id mark, the history of
 // the last historyDays (at most perCharacter rows each) and the sales of the last
-// salesDays, and the active bans of the accounts with offers.
+// salesDays, and every active ban (hidden offers, and sales left out of the reference
+// price).
 func (s *Store) LoadMarket(ctx context.Context, now time.Time, historyDays, perCharacter, salesDays int) (MarketData, error) {
 	var d MarketData
 	err := s.inTx(ctx, func(q *db.Queries) error {

@@ -265,4 +265,16 @@ func TestMarketTransfers(t *testing.T) {
 	if len(rows) != 1 || rows[0].SellerAccount != acc || rows[0].Units != 3 || rows[0].Total != 2*7+10 {
 		t.Fatalf("sales to the other account %+v (all %+v)", rows, d.Sales)
 	}
+
+	// A suspension of an account without offers (Tres only bought) is loaded too (review
+	// of lote 5): after a restart its sales still stay out of the reference price. An
+	// expired one is not.
+	until := now.Add(time.Hour)
+	if _, err := conn.Exec(ctx, `INSERT INTO account_bans (account_id, reason, created_at, expires_at) VALUES ($1, 'x', $2, $3), ($1, 'old', $4, $5)`,
+		acc2, now, until, now.Add(-48*time.Hour), now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if d, err = st.LoadMarket(ctx, now, 30, 10, 5); err != nil || len(d.Bans) != 2 || !d.Bans[acc2].Equal(until) {
+		t.Fatalf("bans after suspending an account without offers: %v, %v", d.Bans, err)
+	}
 }
