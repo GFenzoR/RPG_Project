@@ -36,6 +36,10 @@
   tradeable: true
   tool: { use: shovel }
   value: 40
+  notes: >-
+    No source in the world since the content audit (m1): nothing is dug yet, and make validate
+    wants a target in the production map for every tool a player can get. The id stays
+    (saved inventories may hold one).
 
 # Carried containers (T1.8). Every character that never played starts with one equipped
 # (balance.yaml inventory.start_container).

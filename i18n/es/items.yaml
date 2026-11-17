@@ -116,7 +116,7 @@ item.ladder_down.desc: "Una trampilla abierta. Una escalera de mano baja hacia l
 item.hole.name: "agujero"
 item.hole.desc: "Un agujero en el suelo. No se ve el fondo."
 item.rope_spot.name: "hueco en el techo"
-item.rope_spot.desc: "Arriba se abre un hueco por donde entra algo de luz. Con una soga se podría subir."
+item.rope_spot.desc: "Arriba se abre un hueco por donde entra algo de luz. Con una cuerda se podría subir."
 item.teleport.name: "portal arcano"
 item.teleport.desc: "Un remolino de luz entre piedras grabadas. Quien lo pisa aparece en otro lugar."
 item.short_bow.name: "arco corto"

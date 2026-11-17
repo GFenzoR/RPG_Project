@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { formatDiagnostic, SchemaSet, validateContent } from "./index.ts";
@@ -587,6 +587,53 @@ describe("validator diagnostics", () => {
     const out = messages(root);
     expect(out.some((m) => m.includes("train_skill.skill"))).toBe(true);
     expect(out.some((m) => m.includes("train_skill.level") && m.includes(">= 1"))).toBe(true);
+  });
+
+  it("wants a target in the production map for every tool a player can get there (m1)", () => {
+    const toolErrors = (): string[] =>
+      messages(root)
+        .filter((m) => m.startsWith("error") && m.includes("nothing in the production map"))
+        .map((m) => /tool "([a-z_]+)"/.exec(m)?.[1] ?? m)
+        .sort();
+    const put = (rel: string, lines: string[]): void => {
+      mkdirSync(file(dirname(rel)), { recursive: true });
+      writeFileSync(file(rel), lines.join("\n") + "\n");
+    };
+    const ropeSpot =
+      "- { id: r, kind: rope_spot, from: { x: 1, y: 1, z: 8 }, to: { x: 1, y: 2, z: 7 } }";
+    // Puerto (production) with its provisioner and nothing else; the sandbox (dev_only)
+    // has a rope spot, which does not count.
+    put("world/world.yaml", [
+      "format: 1",
+      "islands:",
+      "  - id: puerto",
+      "  - id: pruebas",
+      "    dev_only: true",
+    ]);
+    put("world/islands/puerto/npcs.yaml", [
+      "- { npc: puerto_provisioner, pos: { x: 1, y: 1, z: 7 } }",
+    ]);
+    put("world/islands/pruebas/portals.yaml", [ropeSpot]);
+    expect(toolErrors()).toEqual([
+      "felling_axe",
+      "fishing_rod",
+      "pickaxe",
+      "rope",
+      "smithing_hammer",
+    ]);
+    // A rope spot, a vein and an anvil in Puerto: the rope, the pickaxe and the hammer.
+    put("world/islands/puerto/portals.yaml", [ropeSpot]);
+    put("world/islands/puerto/chunks/z07/c0000_0000.json", [
+      JSON.stringify({ palette: ["grass", "iron_vein", "anvil"] }),
+    ]);
+    expect(toolErrors()).toEqual(["felling_axe", "fishing_rod"]);
+    // The shovel back in the shop: nothing in the world is dug.
+    edit(
+      "data/npcs/puerto_provisioner.yaml",
+      "    - { item: rope, price: 45 }",
+      "    - { item: rope, price: 45 }\n    - { item: shovel, price: 40 }",
+    );
+    expect(toolErrors()).toEqual(["felling_axe", "fishing_rod", "shovel"]);
   });
 
   it("rejects buy prices that reach a sell price and warns on buys above the item value", () => {

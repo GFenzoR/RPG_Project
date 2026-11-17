@@ -93,7 +93,7 @@ door.not_ready: "Espera un momento antes de mover la puerta otra vez."
 # Stairs, ladders, holes, rope spots and teleports (portals.yaml)
 portal.blocked: "Hay algo del otro lado: no hay lugar para pasar."
 portal.not_ready: "Termina de dar el paso antes de subir o bajar."
-portal.need_rope: "Necesitas una soga para subir por aquí."
+portal.need_rope: "Necesitas una cuerda para subir por aquí."
 portal.no_room: "Del otro lado no hay lugar donde caiga."
 craft.done: "Has hecho {item}."
 craft.failed: "Se echó a perder: perdiste los materiales."

@@ -3,7 +3,9 @@ name: npc.puerto_provisioner.name
 sprite: npcs/merchant
 notes: >-
   Tools, food, poultices and a spare backpack (a death above level 8 takes the worn one);
-  buys hunting materials from the island's monsters at about a third of their value.
+  buys hunting materials from the island's monsters at about a third of their value. No
+  shovel since the content audit (m1): nothing in the world is dug yet. The rope climbs out
+  of the sinkhole of the wreck beach (portals.yaml).
 dialog:
   start: greet
   nodes:
@@ -33,7 +35,6 @@ shop:
   id: provisions_shop
   sells:
     - { item: rope, price: 45 }
-    - { item: shovel, price: 40 }
     - { item: pickaxe, price: 120 }
     - { item: fishing_rod, price: 140 }
     - { item: felling_axe, price: 110 }
@@ -43,7 +44,6 @@ shop:
     - { item: backpack, price: 20 }
   buys:
     - { item: rope, price: 14 }
-    - { item: shovel, price: 12 }
     - { item: pickaxe, price: 40 }
     - { item: fishing_rod, price: 50 }
     - { item: felling_axe, price: 38 }

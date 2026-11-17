@@ -127,6 +127,7 @@ class Validator {
   /** Every item with where it is defined, for the rules across items (checkDoors). */
   private readonly items: (Owned & { item: Obj })[] = [];
   private balance: SourceFile | undefined;
+  private recipes: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -149,6 +150,7 @@ class Validator {
     this.checkDevOnlyActions();
     this.checkShopPrices();
     this.checkQuestItemSources();
+    this.checkToolTargets();
     this.checkI18n();
     this.checkSounds();
     const lockFile = join(dataDir, "ids.lock.yaml");
@@ -254,6 +256,7 @@ class Validator {
       this.checkUniqueIds(src);
       if (schema === "borders") this.checkBorders(src);
       if (schema === "outfits") outfits = src;
+      if (schema === "recipes") this.recipes = src;
     }
 
     const cosmetics = single("cosmetics.yaml", "cosmetics", false);
@@ -933,6 +936,110 @@ class Validator {
         );
       }
     }
+  }
+
+  /**
+   * Content audit m1: a tool a player can get in production (sold or given by an NPC placed
+   * on an island that is not dev_only, dropped by a monster, crafted or a quest reward) needs
+   * something to be used on in the production map: a placed resource of its kind (fishing,
+   * mining, woodcutting), a placed station of a recipe that asks for it (smithing), or a
+   * rope_spot portal (rope). Any other use (the shovel) has nothing in the world yet. Not
+   * checked without world/ (tests).
+   */
+  private checkToolTargets(): void {
+    const world = this.productionWorld();
+    if (!world) return;
+    const got = new Set<string>();
+    const placed = this.npcPlacements() ?? new Map<string, { island: string; dev: boolean }[]>();
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      const id = typeof npc?.["id"] === "string" ? npc["id"] : "";
+      if (!(placed.get(id) ?? []).some((p) => !p.dev)) continue;
+      const shop = npc?.["shop"];
+      for (const offer of isObj(shop) ? asList(shop["sells"]) : [])
+        if (isObj(offer) && typeof offer["item"] === "string") got.add(offer["item"]);
+      for (const { key, value } of actionsOf(npc?.["dialog"], ["dialog"]))
+        if (key === "give_item" && typeof value === "string") got.add(value);
+    }
+    for (const src of this.monsters)
+      for (const drop of isObj(src.data) ? asList(src.data["loot"]) : [])
+        if (isObj(drop) && typeof drop["item"] === "string") got.add(drop["item"]);
+    for (const src of this.quests)
+      for (const r of isObj(src.data) ? asList(src.data["rewards"]) : [])
+        if (isObj(r) && typeof r["item"] === "string") got.add(r["item"]);
+    const recipes = this.recipes ? asList(this.recipes.data).filter(isObj) : [];
+    for (const r of recipes) {
+      const out = r["output"];
+      if (isObj(out) && typeof out["item"] === "string") got.add(out["item"]);
+    }
+    // What each use can be used on in production.
+    const targets = new Map<string, boolean>();
+    for (const { item } of this.items) {
+      const res = item["resource"];
+      if (isObj(res) && typeof res["tool"] === "string" && typeof item["id"] === "string")
+        if (world.placed.has(item["id"])) targets.set(res["tool"], true);
+    }
+    for (const r of recipes)
+      if (typeof r["tool"] === "string" && typeof r["station"] === "string")
+        if (world.placed.has(r["station"])) targets.set(r["tool"], true);
+    if (world.portalKinds.has("rope_spot")) targets.set("rope", true);
+    for (const { item, src, path } of this.items) {
+      const tool = item["tool"];
+      const id = item["id"];
+      if (!isObj(tool) || typeof tool["use"] !== "string" || typeof id !== "string") continue;
+      if (!got.has(id) || targets.get(tool["use"])) continue;
+      this.error(
+        src,
+        [...path, "tool", "use"],
+        `tool "${id}" can be had in production (a shop, a dialog, loot, a recipe or a reward) but nothing in the production map takes tool.use "${tool["use"]}" (a placed resource or station, or a rope_spot portal for rope): give it a target or no production source`,
+      );
+    }
+  }
+
+  /**
+   * What the islands of world/world.yaml that are not dev_only hold: the ids of their chunk
+   * palettes (grounds and items) and the kinds of their portals; undefined without world/.
+   */
+  private productionWorld(): { placed: Set<string>; portalKinds: Set<string> } | undefined {
+    const worldFile = join(this.root, "world", "world.yaml");
+    if (!existsSync(worldFile)) return undefined;
+    const diags: Diagnostic[] = [];
+    const w = parseYaml(readFileSync(worldFile, "utf8"), "world/world.yaml", diags);
+    const placed = new Set<string>();
+    const portalKinds = new Set<string>();
+    for (const entry of w && isObj(w.data) ? asList(w.data["islands"]) : []) {
+      const island = idOf(entry);
+      if (island === undefined || !/^[a-z0-9_]+$/.test(island)) continue;
+      if (isObj(entry) && entry["dev_only"] === true) continue;
+      const dir = join(this.root, "world", "islands", island);
+      const portals = join(dir, "portals.yaml");
+      if (existsSync(portals)) {
+        const list = parseYaml(
+          readFileSync(portals, "utf8"),
+          `world/islands/${island}/portals.yaml`,
+          diags,
+        );
+        for (const p of list ? asList(list.data) : [])
+          if (isObj(p) && typeof p["kind"] === "string") portalKinds.add(p["kind"]);
+      }
+      const chunks = join(dir, "chunks");
+      if (!existsSync(chunks)) continue;
+      for (const floor of readdirSync(chunks)) {
+        const fdir = join(chunks, floor);
+        if (!statSync(fdir).isDirectory()) continue;
+        for (const name of readdirSync(fdir)) {
+          if (!name.endsWith(".json")) continue;
+          try {
+            const chunk: unknown = JSON.parse(readFileSync(join(fdir, name), "utf8"));
+            for (const id of isObj(chunk) ? asList(chunk["palette"]) : [])
+              if (typeof id === "string") placed.add(id);
+          } catch {
+            // A broken chunk is the map validator's finding (make validate runs it next).
+          }
+        }
+      }
+    }
+    return { placed, portalKinds };
   }
 
   private checkI18n(): void {
