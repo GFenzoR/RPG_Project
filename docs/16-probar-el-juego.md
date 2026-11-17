@@ -93,8 +93,10 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    mágico 1: ver más abajo), el equipo de cada vocación (guardián: hacha de mano o espada
    de hierro desde el nivel 5 y escudos; arcanista: varita de chispa, o de coral desde el
    nivel 6; montaraz: arco corto y flechas, o ballesta de contrabandista y virotes desde el
-   nivel 12, que deja usar escudo; druida: vara de retoño) y la llave de latón. Prueba también vender (compra pescado, mineral, troncos, lingotes y
-   pieles). No vende pala: todavía no hay nada que cavar en el juego.
+   nivel 12, que deja usar escudo; druida: vara de retoño), la llave de latón y una mochila
+   de repuesto (una muerte desde el nivel 9 sin bendiciones deja la tuya en el cadáver; el
+   servidor te da otra vacía). Prueba también vender (compra pescado, mineral, troncos,
+   lingotes y pieles). No vende pala: todavía no hay nada que cavar en el juego.
    - **Runa de arco:** todo personaje empieza en nivel mágico 0 y la runa pide 1. Con
      "Entréname" → "El combate" cualquier vocación pasa de 1 (la arcanista queda en 25) y la
      runa funciona en el acto, sin subir de nivel. Sin entrenar, una arcanista llega a 1
