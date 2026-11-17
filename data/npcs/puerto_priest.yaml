@@ -25,18 +25,23 @@ dialog:
       text: npc.puerto_priest.blessings
       options:
         - text: npc.puerto_priest.bless_shore
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
           action: { bless: { blessing: shore_light, price: 200 } }
           goto: blessed
         - text: npc.puerto_priest.bless_hearth
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
           action: { bless: { blessing: hearth_light, price: 200 } }
           goto: blessed
         - text: npc.puerto_priest.bless_keel
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
           action: { bless: { blessing: keel_light, price: 200 } }
           goto: blessed
         - text: npc.puerto_priest.bless_star
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
           action: { bless: { blessing: star_light, price: 200 } }
           goto: blessed
         - text: npc.puerto_priest.bless_deep
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
           action: { bless: { blessing: deep_light, price: 200 } }
           goto: blessed
         - { text: dialog.back, goto: greet }

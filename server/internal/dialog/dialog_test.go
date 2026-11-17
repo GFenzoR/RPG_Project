@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -219,5 +220,32 @@ func TestDevOnlyActionsNeedADevIsland(t *testing.T) {
 		Check(content.Actions{{TrainSkill: &content.SkillLevel{Skill: "magic", Level: 3}}}, f) != MsgDevOnly ||
 		Check(content.Actions{{Heal: true}}, f) != "" {
 		t.Fatal("Check off a dev island")
+	}
+}
+
+// Content audit m8: novices (up to death.novice_max_level, 8) already die as if they had
+// the five blessings, so the temples only sell them from level 9.
+func TestBlessingsFromLevelNine(t *testing.T) {
+	for _, id := range []string{"puerto_priest", "bosque_priest", "volcan_priest"} {
+		npc := load(t, id)
+		node := npc.Dialog.Nodes["blessings"]
+		f := newFake(t, "guardian")
+		count := func() int {
+			n := 0
+			for _, txt := range texts(node, f) {
+				if strings.Contains(txt, ".bless_") {
+					n++
+				}
+			}
+			return n
+		}
+		f.level = 8
+		if n := count(); n != 0 {
+			t.Errorf("%s: %d blessings offered at level 8", id, n)
+		}
+		f.level = 9
+		if n := count(); n != 5 {
+			t.Errorf("%s: %d blessings offered at level 9, want 5", id, n)
+		}
 	}
 }
