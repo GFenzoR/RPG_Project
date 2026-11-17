@@ -282,11 +282,12 @@ tags: [beast, puerto]
   propia tirada de `chance`, y un mensaje (`dialog.quest_drop`). Nadie más lo recibe y los
   restos no lo llevan. Como no se distingue un item perdido de uno ya entregado,
   `make validate` y el arranque del servidor exigen lo mismo: que sea el `has_item` de
-  algún paso de quest; que el paso siguiente sea su entrega, un paso `dialog_action` a
-  cuyo nodo lleva (`goto`) una opción de ese NPC que lo toma con `take_item` (una vez
-  entregado la quest deja atrás la entrega y el item no cae más, aunque la quest siga,
-  como `ch2_coffer` después de las tarjas; una entrega que no lo tomara se lo dejaría al
-  jugador); y que el item tenga `tradeable: false` y `value: 0` (las copias que alguien
+  algún paso de quest; que el paso siguiente sea su entrega, un paso `dialog_action` cuyo
+  nodo no es el `start` del diálogo de ese NPC (se llega con solo abrirlo) y al que
+  **todas** las opciones que llevan (`goto`, al menos una) lo toman con `take_item` (una
+  vez entregado la quest deja atrás la entrega y el item no cae más, aunque la quest
+  siga, como `ch2_coffer` después de las tarjas; un camino a la entrega que no lo tomara
+  se lo dejaría al jugador); y que el item tenga `tradeable: false` y `value: 0` (las copias que alguien
   junte tirándolas al piso no valen nada ni se comercian). Lo usan el sello de la forja del
   custodio (`ch3_warden`) y, desde m4, la tarja de los contrabandistas y el cofre sellado
   de los reptantes (`ch2_coffer`) y la carta del minero de obsidiana (`ch3_gate`):

@@ -1142,10 +1142,11 @@ class Validator {
    * Content audit m9, the rules the server's startup also checks (session.checkQuestDrop):
    * a quest drop (loot each_player) is worth nothing and cannot be traded (tradeable:
    * false, value: 0); it is the has_item of some quest step; and the step right after each
-   * such step is its delivery, a dialog_action step whose node an option of that NPC leads
-   * to (goto) while taking the item (take_item). A player gets another while the has_item
-   * step, or its delivery, is current: a step in between would leave a lost one without a
-   * source, and a delivery that does not take it would leave one to show again.
+   * such step is its delivery, a dialog_action step whose node is not where that NPC's
+   * dialog starts and that every option leading there (goto, one at least) reaches while
+   * taking the item (take_item). A player gets another while the has_item step, or its
+   * delivery, is current: a step in between would leave a lost one without a source, and a
+   * way into the delivery that does not take it would leave one to show again.
    */
   private checkQuestDrops(): void {
     const items = new Map(this.items.map(({ item }) => [item["id"], item]));
@@ -1182,7 +1183,7 @@ class Validator {
               this.error(
                 src,
                 at,
-                `quest "${quest}" step "${idOf(steps[k + 1]) ?? k + 1}": its delivery must take quest drop "${id}": no option of npc "${String(deliver["npc"])}" that leads to node "${String(deliver["node"])}" has take_item of it`,
+                `quest "${quest}" step "${idOf(steps[k + 1]) ?? k + 1}": its delivery must take quest drop "${id}": every option of npc "${String(deliver["npc"])}" that leads to node "${String(deliver["node"])}" (one at least) needs take_item of it, and the node cannot be where the dialog starts`,
               );
           }
         }
@@ -1195,21 +1196,28 @@ class Validator {
       }
   }
 
-  /** Whether an option of NPC npc leads to node (goto) and takes item (take_item). */
+  /**
+   * Whether node of NPC npc's dialog is a delivery of item: not where the dialog starts,
+   * and every option that leads there (goto, one at least) takes the item (take_item).
+   */
   private deliveryTakes(npc: unknown, node: unknown, item: string): boolean {
     const owned = typeof npc === "string" ? this.index.ids.npc.get(npc) : undefined;
     const dialog = owned && isObj(owned.src.data) ? owned.src.data["dialog"] : undefined;
-    const nodes = isObj(dialog) && isObj(dialog["nodes"]) ? dialog["nodes"] : {};
+    if (!isObj(dialog) || dialog["start"] === node) return false;
+    const nodes = isObj(dialog["nodes"]) ? dialog["nodes"] : {};
+    let leads = false;
     for (const n of Object.values(nodes))
       for (const opt of isObj(n) ? asList(n["options"]) : []) {
         if (!isObj(opt) || opt["goto"] !== node) continue;
+        leads = true;
         const action = opt["action"];
-        for (const a of Array.isArray(action) ? action : [action]) {
+        const takes = (Array.isArray(action) ? action : [action]).some((a) => {
           const take = isObj(a) ? a["take_item"] : undefined;
-          if (isObj(take) && take["item"] === item) return true;
-        }
+          return isObj(take) && take["item"] === item;
+        });
+        if (!takes) return false;
       }
-    return false;
+    return leads;
   }
 
   /**

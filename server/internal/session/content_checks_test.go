@@ -60,7 +60,16 @@ func TestStartupRefusesBrokenFoodAndQuestDrops(t *testing.T) {
 				t.Fatalf("the keeper's first ch3_warden option goes to %q", o.Goto)
 			}
 			o.Action = nil
-		}, `its delivery must take the quest drop: no option of npc "volcan_keeper" that leads to node "ch3_seal_read"`},
+		}, `its delivery must take the quest drop: every option of npc "volcan_keeper" that leads to node "ch3_seal_read"`},
+		{"a second way into the delivery that keeps the quest drop", func(c *session.Config) {
+			// Review of lote 5: one option that takes the seal is not enough if another
+			// reaches the same node (and completes the step) without it.
+			n := c.NPCs["volcan_keeper"].Dialog.Nodes["ch3_north"]
+			n.Options = append(n.Options, content.DialogOption{Text: "dialog.back", Goto: "ch3_seal_read"})
+		}, `every option of npc "volcan_keeper" that leads to node "ch3_seal_read"`},
+		{"a delivery where the dialog starts", func(c *session.Config) {
+			c.NPCs["volcan_keeper"].Dialog.Start = "ch3_seal_read" // reached by opening the dialog
+		}, `the node cannot be where the dialog starts`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			cfg := dataConfig(t, nil)

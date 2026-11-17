@@ -978,11 +978,12 @@ func (w *World) removeMonster(m *Monster) {
 // quest.Engine.Needs gives it again to whoever no longer holds it while its has_item step
 // or the step right after it is current, and cannot tell a lost one from one handed in. So:
 //   - some quest step waits for it (has_item), or it would never drop;
-//   - each such step is followed by the delivery: a dialog_action step whose node an
-//     option of its NPC leads to (goto) while taking the item (take_item). Once handed in,
-//     the quest moves past the delivery and the item no longer drops; a step in between
-//     would leave a lost one without a source, and a delivery that does not take it would
-//     leave it with the player, to show it again;
+//   - each such step is followed by the delivery: a dialog_action step whose node is not
+//     where its NPC's dialog starts, and every option that leads there (goto, at least one)
+//     takes the item (take_item). Once handed in, the quest moves past the delivery and
+//     the item no longer drops; a step in between would leave a lost one without a source,
+//     and a way into the delivery that does not take it would leave it with the player,
+//     to show it again;
 //   - it is worth nothing and cannot be traded (tradeable: false, value: 0): the copies a
 //     player can pile up, dropping them on the floor, buy nothing and nobody else takes.
 //
@@ -1003,7 +1004,7 @@ func checkQuestDrop(quests content.Quests, npcs content.NPCs, item *content.Item
 				return fmt.Errorf("quest %q step %q: the has_item of a quest drop must be followed by its delivery (a dialog_action step), or a lost one would never come back", id, s.ID)
 			}
 			if d := steps[i+1].CompleteWhen.DialogAction; !deliveryTakes(npcs[d.NPC], d.Node, item.ID) {
-				return fmt.Errorf("quest %q step %q: its delivery must take the quest drop: no option of npc %q that leads to node %q has take_item of it", id, steps[i+1].ID, d.NPC, d.Node)
+				return fmt.Errorf("quest %q step %q: its delivery must take the quest drop: every option of npc %q that leads to node %q (one at least) needs take_item of it, and the node cannot be where the dialog starts", id, steps[i+1].ID, d.NPC, d.Node)
 			}
 		}
 	}
@@ -1013,23 +1014,26 @@ func checkQuestDrop(quests content.Quests, npcs content.NPCs, item *content.Item
 	return nil
 }
 
-// deliveryTakes reports whether an option of npc's dialog leads to node (goto) and takes
-// item (take_item).
+// deliveryTakes reports whether node of npc's dialog is a delivery of item: not where the
+// dialog starts, and every option that leads there (goto, one at least) takes the item
+// (take_item).
 func deliveryTakes(npc *content.NPC, node, item string) bool {
-	if npc == nil {
+	if npc == nil || node == npc.Dialog.Start {
 		return false
 	}
+	leads := false
 	for _, n := range npc.Dialog.Nodes {
 		for _, o := range n.Options {
 			if o.Goto != node {
 				continue
 			}
-			for _, a := range o.Action {
-				if a.TakeItem != nil && a.TakeItem.Item == item {
-					return true
-				}
+			leads = true
+			if !slices.ContainsFunc(o.Action, func(a content.Action) bool {
+				return a.TakeItem != nil && a.TakeItem.Item == item
+			}) {
+				return false
 			}
 		}
 	}
-	return false
+	return leads
 }

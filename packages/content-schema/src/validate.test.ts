@@ -784,13 +784,42 @@ describe("validator diagnostics", () => {
         /slagbound_warden\.yaml:.*quest drop "forge_seal" needs tradeable: false and value: 0/,
       ),
       expect.stringMatching(
-        /slagbound_warden\.yaml:.*quest "ch3_warden" step "return_seal": its delivery must take quest drop "forge_seal": no option of npc "volcan_keeper" that leads to node "ch3_seal_read"/,
+        /slagbound_warden\.yaml:.*quest "ch3_warden" step "return_seal": its delivery must take quest drop "forge_seal": every option of npc "volcan_keeper" that leads to node "ch3_seal_read"/,
       ),
       expect.stringMatching(
         /slagbound_warden\.yaml:.*quest drop "wyrm_scale" needs tradeable: false and value: 0/,
       ),
       expect.stringMatching(
         /slagbound_warden\.yaml:.*quest drop "wyrm_scale" is the has_item of no quest step/,
+      ),
+    ]);
+  });
+
+  it("wants every way into a quest drop's delivery to take it, and no delivery at the dialog's start (m9 review)", () => {
+    const deliveryErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("its delivery must take"));
+    expect(deliveryErrors()).toEqual([]);
+    // A second way into the keeper's ch3_seal_read that keeps the seal.
+    edit(
+      "data/npcs/volcan_keeper.yaml",
+      "        - { text: npc.volcan_keeper.opt_north, goto: ch3_north }",
+      "        - { text: npc.volcan_keeper.opt_north, goto: ch3_north }\n        - { text: dialog.back, goto: ch3_seal_read }",
+    );
+    expect(deliveryErrors()).toEqual([
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*"forge_seal".*"volcan_keeper".*"ch3_seal_read"/,
+      ),
+    ]);
+    edit(
+      "data/npcs/volcan_keeper.yaml",
+      "\n        - { text: dialog.back, goto: ch3_seal_read }",
+      "",
+    );
+    // The druid's dialog starting at the tallies' delivery.
+    edit("data/npcs/bosque_druid.yaml", "  start: greet", "  start: ch2_tallies");
+    expect(deliveryErrors()).toEqual([
+      expect.stringMatching(
+        /coffer_smuggler\.yaml:.*"smuggler_tally".*"bosque_druid".*"ch2_tallies"/,
       ),
     ]);
   });
