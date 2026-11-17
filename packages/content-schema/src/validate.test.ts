@@ -653,7 +653,7 @@ describe("validator diagnostics", () => {
     // stay below the sandbox shop's too (its ferry takes players there).
     expect(out).toContainEqual(
       expect.stringMatching(
-        /^error data\/npcs\/puerto_provisioner\.yaml:45:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
+        /^error data\/npcs\/puerto_provisioner\.yaml:46:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
       ),
     );
     expect(
