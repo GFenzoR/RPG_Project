@@ -3,6 +3,8 @@ package session_test
 import (
 	"testing"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
@@ -16,13 +18,25 @@ const (
 	stewID  = 96
 )
 
-func init() {
-	testItemDefs[breadID] = "{id: test_bread, kind: consumable, weight: 200, stackable: true, max_stack: 100, consumable: {food_ms: 120000}}"
-	testItemDefs[stewID] = "{id: test_stew, kind: consumable, weight: 700, stackable: true, max_stack: 100, consumable: {food_ms: 90000, heal_hp: 10}}"
+// foodItems is testItems with a bread and a stew. They stay out of testItemDefs: food
+// needs the well_fed condition (the server refuses to start without it), which only
+// these tests configure.
+func foodItems() content.Items {
+	items := testItems()
+	for n, src := range map[uint16]string{
+		breadID: "{id: test_bread, kind: consumable, weight: 200, stackable: true, max_stack: 100, consumable: {food_ms: 120000}}",
+		stewID:  "{id: test_stew, kind: consumable, weight: 700, stackable: true, max_stack: 100, consumable: {food_ms: 90000, heal_hp: 10}}",
+	} {
+		var it content.Item
+		_ = yaml.Unmarshal([]byte(src), &it)
+		it.Numeric = n
+		items[it.ID] = &it
+	}
+	return items
 }
 
 func withFood(c *session.Config) {
-	c.Items = testItems()
+	c.Items = foodItems()
 	c.Balance.Inventory.UseCooldownMs = 1000
 	c.Balance.Conditions = content.ConditionDefs{"well_fed": {ID: "well_fed", Kind: content.ConditionRegen,
 		RegenPct: 100, MaxMs: 300000, Stacking: content.StackAdd, Persists: true}}
@@ -33,7 +47,7 @@ func withFood(c *session.Config) {
 func TestFoodDoublesRegeneration(t *testing.T) {
 	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), withFood)
 	c := withPack(9101, pos(10, 10), session.ItemState{ItemID: breadID, Count: 3})
-	c.Health, c.Mana = 100, 10
+	c.Level, c.Health, c.Mana = 20, 100, 10 // far from the maximums for the whole test
 	cl, p := h.joinChar(c)
 	pack := openPack(t, h, cl)
 	h.input(cl, useItem(inContainer(pack, 0), breadID, 0))
@@ -57,6 +71,17 @@ func TestFoodDoublesRegeneration(t *testing.T) {
 	h.sim.RunTicks(1)
 	if hp, _ := p.Health(); hp != 106 || h.w.Mana(p) != 12 {
 		t.Fatalf("fed regeneration: health %d mana %d, want 106 and 12", hp, h.w.Mana(p))
+	}
+	// Once it ends (120 s after eating), the plain 3 and 1 again: any 7 s hold one tick.
+	h.sim.RunTicks(120000 / 50)
+	if _, ok := h.w.ConditionsForTest(p)["well_fed"]; ok {
+		t.Fatal("well_fed did not end")
+	}
+	hp0, _ := p.Health()
+	mp0 := h.w.Mana(p)
+	h.sim.RunTicks(7000 / 50)
+	if hp, _ := p.Health(); hp-hp0 != 3 || h.w.Mana(p)-mp0 != 1 {
+		t.Errorf("after well_fed: +%d health +%d mana per tick, want 3 and 1", hp-hp0, h.w.Mana(p)-mp0)
 	}
 }
 

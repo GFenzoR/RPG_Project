@@ -20,7 +20,7 @@ import (
 
 // Sources of the economy log (economy_log.kind).
 const (
-	EconLoot     = "loot"     // a monster's remains were filled (character: the loot owner)
+	EconLoot     = "loot"     // a monster's remains were filled (character: the loot owner), or a quest drop (each_player) went straight to a damager
 	EconNPCBuy   = "npc_buy"  // bought from an NPC: money out, items in
 	EconNPCSell  = "npc_sell" // sold to an NPC: items out, money in
 	EconNPC      = "npc"      // given or taken by an NPC dialog (quest items, blessings)

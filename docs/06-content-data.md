@@ -269,10 +269,12 @@ tags: [beast, puerto]
 ```
 - **Botín de quest** (`each_player: true` en una entrada de `loot`, auditoría de
   contenido m9): en vez de uno en los restos, a cada jugador que le hizo daño al monstruo
-  y cuya quest pide ese item ahora (el paso actual es un `has_item` de ese item que
-  todavía no tiene) le llega el suyo a la mochila, o a los pies si no entra, con su
-  propia tirada de `chance`. Nadie más lo recibe y los restos no lo llevan. Lo usa el
-  sello de la forja del custodio (`ch3_warden`).
+  y cuya quest en curso pide ese item (un paso `has_item` de ese item, el actual o uno ya
+  cumplido, que el jugador ya no cumple: si lo perdió antes de entregarlo, el próximo
+  custodio le da otro) le llega el suyo a la mochila, o a los pies si no entra, con su
+  propia tirada de `chance`. Nadie más lo recibe y los restos no lo llevan. El item tiene
+  que ser el `has_item` de algún paso de quest (lo revisa el arranque). Lo usa el sello de
+  la forja del custodio (`ch3_warden`).
 
 ## NPC con diálogo de ventana
 Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de

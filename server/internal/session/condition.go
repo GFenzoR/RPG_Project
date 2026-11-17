@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -115,6 +116,25 @@ func (w *World) initConditions() error {
 			if _, ok := w.skillIdx[d.Skill]; !ok {
 				return fmt.Errorf("session: condition %q raises unknown skill %q", id, d.Skill)
 			}
+		}
+	}
+	return w.checkFood()
+}
+
+// checkFood: food (consumable.food_ms) needs the food condition, a regen one (content
+// audit m2), and pure food may not last longer than its max_ms (it could never be eaten).
+func (w *World) checkFood() error {
+	fed := w.cfg.Balance.Conditions[foodCondition]
+	for _, id := range slices.Sorted(maps.Keys(w.cfg.Items)) { // a stable first error
+		c := w.cfg.Items[id].Consumable
+		if c == nil || c.FoodMs <= 0 {
+			continue
+		}
+		switch {
+		case fed == nil || fed.Kind != content.ConditionRegen:
+			return fmt.Errorf("session: item %q is food but balance.yaml conditions has no %q of kind %q", id, foodCondition, content.ConditionRegen)
+		case c.HealHP == 0 && c.HealMP == 0 && c.FoodMs > fed.MaxMs:
+			return fmt.Errorf("session: food %q lasts %d ms, more than %s max_ms %d: it could never be eaten", id, c.FoodMs, foodCondition, fed.MaxMs)
 		}
 	}
 	return nil

@@ -208,6 +208,9 @@ func (w *World) initCombat() error {
 			if it == nil {
 				return fmt.Errorf("session: monster %q drops unknown item %q", id, l.Item)
 			}
+			if l.EachPlayer && !questAsks(w.cfg.Quests, l.Item) {
+				return fmt.Errorf("session: monster %q: each_player loot %q is the has_item of no quest step: it would never drop", id, l.Item)
+			}
 			lo, hi := l.CountRange()
 			k.loot = append(k.loot, lootItem{def: it, chance: l.Chance, lo: lo, hi: hi, each: l.EachPlayer})
 		}
@@ -777,4 +780,17 @@ func (w *World) removeMonster(m *Monster) {
 			p.target = nil
 		}
 	}
+}
+
+// questAsks reports whether some quest step waits for item (has_item): what a quest drop
+// (loot each_player, content audit m9) needs to ever drop.
+func questAsks(quests content.Quests, item string) bool {
+	for _, q := range quests {
+		for _, s := range q.Steps {
+			if c := s.CompleteWhen.HasItem; c != nil && c.Item == item {
+				return true
+			}
+		}
+	}
+	return false
 }

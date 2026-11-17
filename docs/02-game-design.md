@@ -1113,8 +1113,9 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    donde salió la expedición perdida del Capítulo 4 ("Silencio blanco", Heladas; no
    implementado). El sello es botín de quest (`each_player`, auditoría de contenido m9):
    a cada uno de los que le hicieron daño al custodio y tienen la quest en ese paso le
-   llega el suyo a la mochila (o a los pies si no entra). Antes salía uno por muerte y un
-   grupo de cinco esperaba cinco respawns de 20 minutos.
+   llega el suyo a la mochila (o a los pies si no entra); quien lo pierde antes de
+   entregarlo (al morir, al tirarlo) recibe otro del próximo custodio. Antes salía uno por
+   muerte y un grupo de cinco esperaba cinco respawns de 20 minutos.
 - **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de
