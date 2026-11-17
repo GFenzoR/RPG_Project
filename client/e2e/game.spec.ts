@@ -2704,7 +2704,7 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
     return page;
   }
   const a = await enter(holder.email);
-  let b = await enter(stray.email);
+  const b = await enter(stray.email);
   await arrived(a, 3691, 5831);
   await arrived(b, 3692, 5831);
   const ids = await a.evaluate(() => ({
@@ -2754,15 +2754,28 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   );
   expect(await gateOn(a)).toBe(ids.open);
 
-  // The stray logs out in the forge: the gate locks. Back in, it lets itself out.
+  // The stray walks deeper into the forge and leaves the game there: the gate locks. Every
+  // use next to a door, refused or not, starts the user's inventory.door_cooldown_ms (500
+  // ms, 10 ticks), so the holder's next use has to come one cooldown after the refusal in
+  // server time. The stray's three steps are paced by the server (about 10 ticks each at
+  // level 30 on dirt): at least two whole steps lie between the two uses, however fast the
+  // browser goes. It used to be the stray's page closing: 0.15-0.25 s without a trace (CI's
+  // first attempt) and 0.6-1.8 s while Playwright saved one (local runs), so the lock got
+  // "Espera un momento antes de mover la puerta otra vez." or passed, by speed alone.
+  await walkTo(b, 3692, 5836);
   await expect(a.getByTestId("battle-list")).toContainText(stray.name);
-  await b.close();
+  await b.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(b.getByRole("status")).toHaveText("Saliste del juego.");
   await expect(a.getByTestId("battle-list")).not.toContainText(stray.name);
   await useGate(a);
   await expect(a.getByTestId("game-log")).toContainText("Cierras la puerta con tu llave de ascua.");
   await expect.poll(() => gateOn(a)).toBe(ids.shut);
-  b = await enter(stray.email);
-  await arrived(b, 3692, 5833);
+
+  // Back in (same page, as a player would), it walks to the gate and lets itself out.
+  await b.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await b.waitForFunction(() => window.__rpgClient?.ready === true);
+  await arrived(b, 3692, 5836);
+  await walkTo(b, 3692, 5833);
   expect(await gateOn(b)).toBe(ids.shut);
   await shot(b, "71-forge-gate-shut-inside");
   await useGate(b);
@@ -2772,6 +2785,11 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   await expect.poll(() => gateOn(b)).toBe(ids.open);
   await walkTo(b, 3692, 5831);
   await shot(b, "72-forge-gate-unbarred");
+
+  // The holder locks it again (long after its last use): the next run, a --repeat-each or a
+  // retry finds the gate as this one did.
+  await useGate(a);
+  await expect.poll(() => gateOn(a)).toBe(ids.shut);
 
   expect(errors).toEqual([]);
   for (const page of [a, b]) await page.close();

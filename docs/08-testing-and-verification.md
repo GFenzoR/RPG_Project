@@ -258,6 +258,15 @@ siempre es una espera que dependía de la velocidad.
   servidor por `__rpgClient`, un request, `mapDrawn` antes de un screenshot). No suponer
   que el mapa está limpio: otro test pudo dejar items en el mismo lugar. Un gesto táctil
   de CDP manda un click al levantar el dedo sobre lo que haya debajo.
+- **Cooldowns del servidor:** se cuentan en ticks, y el reloj del navegador no los mide.
+  Dos acciones seguidas de un mismo jugador que un cooldown separa (dos usos de una
+  puerta, `inventory.door_cooldown_ms`) llevan en el medio algo que el servidor marca en
+  ticks, como los pasos de una caminata, nunca solo lo que tarde la página. "keyed doors"
+  separaba dos usos de la puerta con el cierre de la página de otro jugador: con trace (en
+  local Playwright lo guarda al cerrar) quedaban 0,6–1,8 s; sin trace (el primer intento
+  en la CI) 0,15–0,25 s, y el servidor contestaba "Espera un momento antes de mover la
+  puerta otra vez.". Y un test que cambia el mundo (abre una puerta) lo deja como lo
+  encontró, así un `--repeat-each` o el reintento de la CI empiezan igual.
 - **Fuentes:** el runner dibuja `system-ui` con DejaVu Sans, mucho más ancha que Segoe UI
   (Windows) o San Francisco (iOS). Un texto que "entra" en local puede salirse en la CI: el
   encabezado del iPhone 13 (390 px, WebKit) se salía ~20 px y `scrollWidth <=
