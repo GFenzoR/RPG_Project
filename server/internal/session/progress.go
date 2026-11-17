@@ -149,6 +149,26 @@ func (w *World) addTries(p *Player, i int, n int64) {
 	}
 }
 
+// raiseSkill raises p's skill id to level, never down (the dev-only dialog action
+// train_skill, docs/06): progress toward the next level starts over, and the client hears
+// it as a level gained by use.
+func (w *World) raiseSkill(p *Player, id string, level int) {
+	i, ok := w.skillIdx[id]
+	if !ok {
+		return
+	}
+	s := &p.skills[i]
+	level = min(level, skills.MaxLevel)
+	if s.Level >= level {
+		return
+	}
+	s.Level, s.Tries, s.carry = level, 0, 0
+	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
+	p.emit(systemMsg(msgSkillUp,
+		&pb.TextParam{Name: "skill", Value: &pb.TextParam_ContentId{ContentId: id}},
+		&pb.TextParam{Name: "level", Value: &pb.TextParam_Number{Number: int64(level)}}))
+}
+
 // afk reports whether p's training against its target earns reduced tries: the target
 // has not fought back for skills.afk.after_ms.
 func (w *World) afk(ctx *game.TickContext, p *Player) bool {

@@ -180,6 +180,20 @@
                 "blessing": { "$ref": "#/$defs/id" },
                 "price": { "$ref": "#/$defs/nonNegativeInt" }
               }
+            },
+            "train_skill": {
+              "description": "Dev-only: raises the skill to level (never down). Only an NPC placed on dev_only islands (the sandbox island) may have it.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["skill", "level"],
+              "properties": {
+                "skill": { "$ref": "#/$defs/skill" },
+                "level": { "type": "integer", "minimum": 1, "maximum": 500 }
+              }
+            },
+            "restore_mana": {
+              "description": "Dev-only: fills the mana. Only an NPC placed on dev_only islands (the sandbox island) may have it.",
+              "const": true
             }
           }
         }

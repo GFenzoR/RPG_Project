@@ -75,6 +75,13 @@ func (w *World) Map() *world.Map { return w.m }
 // SetHealthForTest sets p's health (tests only, loop goroutine).
 func (p *Player) SetHealthForTest(h int) { p.health = h }
 
+// SetManaForTest sets p's mana (tests only, loop goroutine).
+func (p *Player) SetManaForTest(m int) { p.mana = m }
+
+// SetDevForTest says whether n stands on a dev-only island, past the startup check
+// (tests of the runtime defense only, loop goroutine).
+func (n *NPC) SetDevForTest(dev bool) { n.dev = dev }
+
 // ApplyConditionForTest gives p (or, if p is nil, m) condition a from source (tests only,
 // loop goroutine). It reports whether it took (chance, immunity).
 func (w *World) ApplyConditionForTest(ctx *game.TickContext, p *Player, m *Monster, a *content.ConditionApply, source uint32) bool {

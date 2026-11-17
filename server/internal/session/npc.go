@@ -47,6 +47,9 @@ type NPC struct {
 	def  *content.NPC
 	pos  world.Pos
 	shop []shopLine
+	// dev: the NPC stands on a dev-only island (world.Island.Dev), the only place where
+	// its dev-only dialog actions run.
+	dev bool
 }
 
 // ID returns the NPC's creature id.
@@ -113,8 +116,12 @@ func (w *World) initNPCs() error {
 			if def == nil {
 				return fmt.Errorf("session: island %q places unknown NPC %q", is.ID, pl.NPC)
 			}
+			// make validate refuses it too; dialogChoose checks again (dialog.Check).
+			if err := content.CheckDevPlacement(def, is.ID, is.Dev); err != nil {
+				return fmt.Errorf("session: %w", err)
+			}
 			w.nextID++
-			n := &NPC{id: w.nextID, def: def, pos: pl.Pos}
+			n := &NPC{id: w.nextID, def: def, pos: pl.Pos, dev: is.Dev}
 			if s := def.Shop; s != nil {
 				byItem := map[string]int{}
 				line := func(item string) *shopLine {
@@ -757,6 +764,9 @@ func (a *actor) CanTeleport(pos content.Position) bool {
 	return ok
 }
 
+// DevIsland reports whether the NPC of the dialog stands on a dev-only island.
+func (a *actor) DevIsland() bool { return a.d != nil && a.d.npc != nil && a.d.npc.dev }
+
 func (a *actor) GiveItem(item string) {
 	a.w.giveItem(a.p, a.w.cfg.Items[item], 1)
 	a.w.econItem(a.p, EconNPC, a.npcID(), a.w.cfg.Items[item], 1)
@@ -803,6 +813,18 @@ func (a *actor) Heal() {
 	a.w.heal(a.p, a.p.maxHealth)
 	a.p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: a.w.stats(a.p)}})
 }
+
+// RestoreMana fills the mana (dev-only: the sandbox instructor).
+func (a *actor) RestoreMana() {
+	if a.p.mana >= a.p.maxMana {
+		return
+	}
+	a.p.mana = a.p.maxMana
+	a.p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: a.w.stats(a.p)}})
+}
+
+// TrainSkill raises a skill to level (dev-only: the sandbox instructor).
+func (a *actor) TrainSkill(skill string, level int) { a.w.raiseSkill(a.p, skill, level) }
 
 func (a *actor) Teleport(pos content.Position) {
 	if to, ok := a.w.teleportDest(pos); ok {

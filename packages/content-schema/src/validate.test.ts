@@ -543,6 +543,52 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  it("only lets NPCs placed on dev_only islands use dev-only actions (train_skill, restore_mana)", () => {
+    const devErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("dev-only action"));
+    // The real world: once the instructor stands nowhere, an error.
+    mkdirSync(file("world"), { recursive: true });
+    cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
+    expect(devErrors()).toEqual([
+      expect.stringContaining('NPC "pruebas_trainer" is placed on no dev_only island'),
+    ]);
+    // On the sandbox island, which is dev_only.
+    const npcs = (island: string, list: string): void => {
+      mkdirSync(file(`world/islands/${island}`), { recursive: true });
+      writeFileSync(file(`world/islands/${island}/npcs.yaml`), list);
+    };
+    npcs("pruebas", "- { npc: pruebas_trainer, pos: { x: 2093, y: 2085, z: 7 } }\n");
+    expect(devErrors()).toEqual([]);
+    // Placed (also) in Puerto, or the sandbox island no longer dev_only.
+    npcs("puerto", "- { npc: pruebas_trainer, pos: { x: 3200, y: 6400, z: 7 } }\n");
+    expect(devErrors()).toEqual([
+      expect.stringMatching(/pruebas_trainer\.yaml:.*dev-only action.*stands on island "puerto"/),
+    ]);
+    npcs("puerto", "[]\n");
+    edit("world/world.yaml", "dev_only: true", "dev_only: false");
+    expect(devErrors()).toEqual([expect.stringContaining('stands on island "pruebas"')]);
+    edit("world/world.yaml", "dev_only: false", "dev_only: true");
+    // Puerto's priest refilling mana for free.
+    npcs("puerto", "- { npc: puerto_priest, pos: { x: 3200, y: 6400, z: 7 } }\n");
+    edit(
+      "data/npcs/puerto_priest.yaml",
+      "action: { heal: true }",
+      "action: [{ heal: true }, { restore_mana: true }]",
+    );
+    expect(devErrors()).toEqual([
+      expect.stringMatching(/puerto_priest\.yaml:.*"restore_mana".*stands on island "puerto"/),
+    ]);
+    // The schema: a known skill and a level in 1..500.
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "{ skill: sword, level: 45 }",
+      "{ skill: juggling, level: 0 }",
+    );
+    const out = messages(root);
+    expect(out.some((m) => m.includes("train_skill.skill"))).toBe(true);
+    expect(out.some((m) => m.includes("train_skill.level") && m.includes(">= 1"))).toBe(true);
+  });
+
   it("rejects buy prices that reach a sell price and warns on buys above the item value", () => {
     edit(
       "data/npcs/puerto_provisioner.yaml",

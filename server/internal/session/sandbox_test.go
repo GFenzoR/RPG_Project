@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"testing"
 	"time"
@@ -313,7 +314,7 @@ func TestSandboxInstructor(t *testing.T) {
 
 	d := s.talk(cl, p, "pruebas_trainer")
 	for _, k := range []string{"npc.pruebas_trainer.opt_quest", "npc.pruebas_trainer.opt_xp",
-		"npc.pruebas_trainer.opt_gold", "npc.pruebas_trainer.opt_heal", "dialog.bye"} {
+		"npc.pruebas_trainer.opt_train", "npc.pruebas_trainer.opt_gold", "npc.pruebas_trainer.opt_heal", "dialog.bye"} {
 		if !hasOption(d, k) {
 			t.Fatalf("the instructor's greeting has no %s: %v", k, d.Options)
 		}
@@ -355,16 +356,16 @@ func TestSandboxInstructor(t *testing.T) {
 		t.Fatalf("after three rats: quest %v at %q", st, step)
 	}
 
-	// Back at the temple: heal, then hand the quest in.
+	// Back at the temple: heal (health and mana), then hand the quest in.
 	d = s.talk(cl, p, "pruebas_trainer")
 	if hasOption(d, "npc.pruebas_trainer.opt_quest") || !hasOption(d, "npc.pruebas_trainer.opt_quest_done") {
 		t.Fatalf("greeting with the rats done: %v", d.Options)
 	}
-	s.sim.Command(gameFunc(func() { p.SetHealthForTest(10) }))
+	s.sim.Command(gameFunc(func() { p.SetHealthForTest(10); p.SetManaForTest(0) }))
 	s.sim.Step()
 	d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_heal")
-	if hp, maxHP := p.Health(); hp != maxHP {
-		t.Fatalf("healed to %d of %d", hp, maxHP)
+	if hp, maxHP := p.Health(); hp != maxHP || p.Mana() != p.MaxMana() {
+		t.Fatalf("healed to %d of %d health, %d of %d mana", hp, maxHP, p.Mana(), p.MaxMana())
 	}
 	d, _ = s.say(cl, d, "dialog.back")
 	xp, money := p.Experience(), s.w.Money(p)
@@ -920,10 +921,10 @@ func TestSandboxPens(t *testing.T) {
 	report("pen 3 (arcanist 20)", s.huntForLoot("moss_spider", penGap(3), penAway(3), 10, fighter{cl: cl, p: p}))
 
 	// Pens 4 and 5, thornlings and the ember wyrmling: level 50 druids that cast
-	// frost_lance (ice; spells grow with the level, while melee and bows grow with skills,
-	// which the instructor does not give). One per pen: the druid of pen 4 would bring the
-	// other thornling along to the wyrmling (monsters follow out of their pen), and those
-	// two together kill a druid.
+	// frost_lance (ice; spells grow with the level, while melee and bows grow with skills:
+	// an untrained guardian dies in pen 4, TestSandboxTraining). One per pen: the druid
+	// of pen 4 would bring the other thornling along to the wyrmling (monsters follow out
+	// of their pen), and those two together kill a druid.
 	druid := func(id int64, name string) fighter {
 		cl, p := s.hero(id, name, "druid", 29, 0, 1, gear{"sapling_staff", 1, slotRight}, gear{"hide_vest", 1, slotArmor})
 		s.casters[p] = func(target uint32) { s.input(cl, castAt("frost_lance", target)) }
@@ -1134,8 +1135,9 @@ func (s *sandbox) craftUntil(cl *fakeClient, p *session.Player, recipe string, a
 // TestSandboxTrades: with the provisioner's tools a newcomer mines the iron veins of the
 // quarry, chops the birches, fishes from the fishing dock, smelts an ingot at the forge
 // and grills a fish at the hearth, and sells the provisioner what he buys of it. The
-// anvil shows its recipes, but none is within reach of a newcomer: they ask for smithing
-// 2 or more, and smithing starts at 1 (docs/14).
+// anvil shows its recipes, but none is within reach of a newcomer (they ask for smithing
+// 2 or more, and smithing starts at 1); trained in the trades by the instructor, the
+// newcomer makes the lowest one there.
 func TestSandboxTrades(t *testing.T) {
 	s := newSandbox(t)
 	cl, p := s.hero(5301, "Artesana", "guardian", 0, 0, 1, gear{"pickaxe", 1, 0}, gear{"felling_axe", 1, 0},
@@ -1199,6 +1201,18 @@ func TestSandboxTrades(t *testing.T) {
 	}
 	t.Logf("the lowest anvil recipe, %s, asks for smithing %d; a newcomer has %d", lowest.ID, lowest.Level, smithing)
 
+	// Trained in the trades by the instructor, the same newcomer makes it at the anvil.
+	s.train(cl, p, "trades")
+	if lvl := s.w.Skill(p, "smithing").Level; lvl < lowest.Level {
+		t.Fatalf("trained to smithing %d", lvl)
+	}
+	made := s.w.CountItem(p, lowest.Output.Item)
+	s.station(cl, p, "anvil", sbAnvil)
+	s.craftUntil(cl, p, lowest.ID, sbAnvil, 3)
+	if n := s.w.CountItem(p, lowest.Output.Item); n != made+lowest.Output.Count {
+		t.Fatalf("%s at the anvil: %d %s, had %d", lowest.ID, n, lowest.Output.Item, made)
+	}
+
 	// The provisioner buys the catch, the ore, the ingot and the logs.
 	shop := s.openShop(cl, p)
 	for _, id := range []string{"grilled_fish", "iron_ingot", "raw_fish", "iron_ore", "birch_log"} {
@@ -1217,6 +1231,29 @@ func (s *sandbox) moreXP(cl *fakeClient, p *session.Player, small int) {
 		d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_xp_small")
 	}
 	s.say(cl, d, "dialog.back")
+}
+
+// train asks the instructor for her training, "combat" (the combat skills and magic level
+// of p's vocation) or "trades", and returns what the client heard.
+func (s *sandbox) train(cl *fakeClient, p *session.Player, what string) []*pb.ServerMessage {
+	s.t.Helper()
+	d := s.talk(cl, p, "pruebas_trainer")
+	d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_train")
+	d, evs := s.say(cl, d, "npc.pruebas_trainer.opt_train_"+what)
+	if d == nil || d.Text.Key != "npc.pruebas_trainer.trained" {
+		s.t.Fatalf("training %s: %v %v", what, d, messageKeys(evs))
+	}
+	s.say(cl, d, "dialog.bye")
+	return evs
+}
+
+// skillLevels is p's level in each of ids.
+func (s *sandbox) skillLevels(p *session.Player, ids ...string) map[string]int {
+	out := map[string]int{}
+	for _, id := range ids {
+		out[id] = s.w.Skill(p, id).Level
+	}
+	return out
 }
 
 // TestSandboxHouse: the Casa de Prueba south of the square asks for level 12; at level 12
@@ -1557,23 +1594,24 @@ func (s *sandbox) beside(at world.Pos) world.Pos {
 }
 
 // TestSandboxArcRune: the provisioner's arc rune asks for magic level 1, and every
-// character starts at magic level 0, whatever level the instructor gives (it gives no
-// skills). An arcanist of level 51 (its mana is above the 1450 a first magic level costs)
-// spends it on light_heal, reaches magic level 1 and then the rune kills a bilge rat.
+// character starts at magic level 0, whatever level the instructor gives. A newcomer
+// arcanist cannot use it; trained by the instructor (magic level 25, without a single
+// level of experience) the same arcanist kills a bilge rat with it at once.
 func TestSandboxArcRune(t *testing.T) {
 	s := newSandbox(t)
-	cl, p := s.hero(5901, "Runera", "arcanist", 31, 0, 1, gear{"arc_rune", 1, 0})
-	if s.w.Level(p) != 51 || s.w.Skill(p, "magic").Level != 0 {
+	cl, p := s.hero(5901, "Runera", "arcanist", 0, 0, 1, gear{"arc_rune", 1, 0})
+	if s.w.Level(p) != 1 || s.w.Skill(p, "magic").Level != 0 {
 		t.Fatalf("level %d, magic level %d", s.w.Level(p), s.w.Skill(p, "magic").Level)
 	}
-	s.walkTo(cl, p, penGap(1))
-	rat := s.nearest("bilge_rat", p.Pos(), 6)
-	if rat == nil {
-		t.Fatal("no bilge rat in pen 1")
-	}
-	rune := func() []*pb.ServerMessage {
+	// rune uses the arc rune on the nearest bilge rat of pen 1 and returns it.
+	rune := func() (*session.Monster, []*pb.ServerMessage) {
+		s.walkTo(cl, p, penGap(1))
+		rat := s.nearest("bilge_rat", p.Pos(), 6)
+		if rat == nil {
+			t.Fatal("no bilge rat in pen 1")
+		}
 		win := s.packWindow(cl, p)
-		return s.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_UseItemOn{UseItemOn: &pb.UseItemOn{
+		return rat, s.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_UseItemOn{UseItemOn: &pb.UseItemOn{
 			From: inContainer(win, s.packIndex(p, "arc_rune")), ItemId: s.num("arc_rune"),
 			To: &pb.ActionTarget{Target: &pb.ActionTarget_CreatureId{CreatureId: rat.ID()}}}}})
 	}
@@ -1586,29 +1624,22 @@ func TestSandboxArcRune(t *testing.T) {
 		}
 		return 0
 	}
-	if evs := rune(); !hasKey(evs, "magic.magic_level_required") || charges() != 4 {
+	if _, evs := rune(); !hasKey(evs, "magic.magic_level_required") || charges() != 4 {
 		t.Fatalf("the arc rune at magic level 0: %d charges left, %v", charges(), systemKeys(evs))
 	}
-	s.walkTo(cl, p, sbTemple)
-	s.sim.RunUntil(func() bool {
-		if p.Mana() >= 25 {
-			s.input(cl, cast("light_heal"))
-		}
-		return s.w.Skill(p, "magic").Level >= 1
-	}, sim.MaxSeconds(900))
-	s.walkTo(cl, p, penGap(1))
-	if rat = s.nearest("bilge_rat", p.Pos(), 6); rat == nil {
-		t.Fatal("no bilge rat in pen 1")
+	evs := s.train(cl, p, "combat")
+	if !hasKey(evs, "progress.skill_up") || s.w.Skill(p, "magic").Level != 25 || s.w.Level(p) != 1 {
+		t.Fatalf("trained: level %d, magic level %d, %v", s.w.Level(p), s.w.Skill(p, "magic").Level, systemKeys(evs))
 	}
 	s.sim.RunFor(2 * time.Second) // the rune's spell group cooldown
-	evs := rune()
+	rat, evs := rune()
 	if hasKey(evs, "magic.magic_level_required") || charges() != 3 {
-		t.Fatalf("the arc rune at magic level 1: %d charges left, %v", charges(), systemKeys(evs))
+		t.Fatalf("the arc rune at magic level 25: %d charges left, %v", charges(), systemKeys(evs))
 	}
 	for _, m := range s.w.Monsters() {
 		if m == rat {
 			hp, _ := rat.Health()
-			t.Fatalf("the arc rune at magic level 1 left the rat at %d health: %v", hp, systemKeys(evs))
+			t.Fatalf("the arc rune at magic level 25 left the rat at %d health: %v", hp, systemKeys(evs))
 		}
 	}
 }
@@ -1752,28 +1783,166 @@ func TestSandboxToolsHaveAUse(t *testing.T) {
 	}
 }
 
-// TestSandboxSkillsGap: the instructor raises the level, not the skills (docs/14). A
-// guardian of level 21 with the provisioner's iron sword, plank shield, jerkin, cap and 20
-// poultices dies in pen 4 with sword and shield at 10; the same guardian with the skills
-// of one that got there by playing (sword 32, shield 27) kills a thornling.
-func TestSandboxSkillsGap(t *testing.T) {
+// TestSandboxTraining: the instructor's experience raises the level, not the skills, and
+// her training raises the skills. A guardian of level 21 with the provisioner's iron
+// sword, plank shield, jerkin, cap and 20 poultices dies in pen 4 with sword and shield
+// at 10; the same guardian trained for combat (sword, axe and club 45, shield 40, magic
+// level 2) kills a thornling and lives. Training never lowers a skill.
+func TestSandboxTraining(t *testing.T) {
+	combat := []string{"sword", "axe", "club", "shield", "magic"}
 	for _, trained := range []bool{false, true} {
 		s := newSandbox(t)
 		s.mayDie = true
 		cl, p := s.hero(5951, "Espada", "guardian", 2, 1, 1, gear{"iron_sword", 1, slotRight},
 			gear{"plank_shield", 1, slotLeft}, gear{"leather_jerkin", 1, slotArmor}, gear{"sailcloth_cap", 1, slotHead},
 			gear{"seaweed_poultice", 20, 0})
-		if trained {
-			s.sim.Command(gameFunc(func() { s.w.TrainForTest(p, "sword", 4000); s.w.TrainForTest(p, "shield", 4000) }))
-			s.sim.Step()
+		if s.w.Level(p) != 21 {
+			t.Fatalf("level %d, want 21", s.w.Level(p))
 		}
-		sword, shield := s.w.Skill(p, "sword").Level, s.w.Skill(p, "shield").Level
+		want := map[string]int{"sword": 10, "axe": 10, "club": 10, "shield": 10, "magic": 0}
+		if trained {
+			evs := s.train(cl, p, "combat")
+			if n := systemKeys(evs)["progress.skill_up"]; n != len(combat) {
+				t.Fatalf("training told %d skill ups, want %d: %v", n, len(combat), systemKeys(evs))
+			}
+			want = map[string]int{"sword": 45, "axe": 45, "club": 45, "shield": 40, "magic": 2}
+		}
+		if got := s.skillLevels(p, combat...); !maps.Equal(got, want) {
+			t.Fatalf("trained %v: skills %v, want %v", trained, got, want)
+		}
 		loot := s.huntForLoot("thornling", penGap(4), penAway(4), 3, fighter{cl: cl, p: p})
 		if died := len(s.deaths) > 0; died == trained {
-			t.Fatalf("level %d guardian, sword %d, shield %d: died %v (loot %v)", s.w.Level(p), sword, shield, died, loot)
+			t.Fatalf("level 21 guardian (trained %v, skills %v): died %v (loot %v)", trained, want, died, loot)
 		}
-		if trained && (sword != 32 || shield != 27) {
-			t.Fatalf("trained to sword %d, shield %d", sword, shield)
+	}
+
+	// Training never lowers a skill: a sword above the instructor's stays where it was,
+	// and asking again changes nothing.
+	s := newSandbox(t)
+	cl, p := s.newcomer(5952, "Veterana", "guardian")
+	s.sim.Command(gameFunc(func() { s.w.TrainForTest(p, "sword", 20000) }))
+	s.sim.Step()
+	sword := s.w.Skill(p, "sword").Level
+	if sword <= 45 {
+		t.Fatalf("20000 sword tries: level %d", sword)
+	}
+	s.train(cl, p, "combat")
+	before := s.skillLevels(p, combat...)
+	if before["sword"] != sword || before["shield"] != 40 {
+		t.Fatalf("after training: %v (sword was %d)", before, sword)
+	}
+	if evs := s.train(cl, p, "combat"); hasKey(evs, "progress.skill_up") || !maps.Equal(s.skillLevels(p, combat...), before) {
+		t.Fatalf("training twice: %v, %v", s.skillLevels(p, combat...), systemKeys(evs))
+	}
+}
+
+// TestSandboxTrainingByVocation: each vocation trains its own combat skills and magic
+// level, and a druid trained at level 8 casts mend_other (magic level 2) on a wounded
+// guardian, which it could not do before.
+func TestSandboxTrainingByVocation(t *testing.T) {
+	s := newSandbox(t)
+	for i, c := range []struct {
+		vocation string
+		want     map[string]int
+	}{
+		{"ranger", map[string]int{"distance": 45, "sword": 30, "axe": 30, "club": 30, "shield": 35, "magic": 5}},
+		{"arcanist", map[string]int{"magic": 25, "shield": 20, "sword": 10, "distance": 10}},
+	} {
+		cl, p := s.newcomer(int64(5960+i), fmt.Sprintf("Voc%d", i), c.vocation)
+		s.train(cl, p, "combat")
+		ids := make([]string, 0, len(c.want))
+		for id := range c.want {
+			ids = append(ids, id)
 		}
+		if got := s.skillLevels(p, ids...); !maps.Equal(got, c.want) {
+			t.Errorf("%s trained: %v, want %v", c.vocation, got, c.want)
+		}
+	}
+
+	gcl, g := s.newcomer(5965, "Herido", "guardian")
+	dcl, d := s.hero(5966, "Sanadora", "druid", 0, 1, 1)
+	if s.w.Level(d) != 8 || s.w.Skill(d, "magic").Level != 0 {
+		t.Fatalf("druid level %d, magic level %d", s.w.Level(d), s.w.Skill(d, "magic").Level)
+	}
+	near := s.beside(d.Pos())
+	s.walkTo(gcl, g, near)
+	mend := func() []*pb.ServerMessage {
+		s.sim.Command(gameFunc(func() { g.SetHealthForTest(20); d.SetManaForTest(d.MaxMana()) }))
+		s.sim.Step()
+		return s.send(dcl, castAt("mend_other", g.ID()))
+	}
+	if evs := mend(); !hasKey(evs, "magic.magic_level_required") {
+		t.Fatalf("mend_other at magic level 0: %v", systemKeys(evs))
+	}
+	s.train(dcl, d, "combat")
+	if s.w.Skill(d, "magic").Level != 25 {
+		t.Fatalf("druid trained to magic level %d", s.w.Skill(d, "magic").Level)
+	}
+	s.walkTo(gcl, g, s.beside(d.Pos()))
+	s.sim.RunFor(2 * time.Second) // the healing group cooldown
+	if evs := mend(); hasKey(evs, "magic.magic_level_required") {
+		t.Fatalf("mend_other at magic level 25: %v", systemKeys(evs))
+	}
+	if hp, _ := g.Health(); hp <= 20 {
+		t.Fatalf("mend_other left the guardian at %d health", hp)
+	}
+}
+
+// TestSandboxTradesTraining: the instructor's trades training (every craft 25, fishing 40)
+// puts every recipe of data/recipes.yaml within reach.
+func TestSandboxTradesTraining(t *testing.T) {
+	s := newSandbox(t)
+	cl, p := s.newcomer(5970, "Oficios", "druid")
+	s.train(cl, p, "trades")
+	want := map[string]int{"mining": 25, "woodcutting": 25, "smithing": 25, "cooking": 25, "alchemy": 25, "fishing": 40}
+	ids := make([]string, 0, len(want))
+	for id := range want {
+		ids = append(ids, id)
+	}
+	if got := s.skillLevels(p, ids...); !maps.Equal(got, want) {
+		t.Fatalf("trades trained: %v, want %v", got, want)
+	}
+	recipes, err := content.LoadRecipes(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range recipes.IDs() {
+		if r := recipes[id]; r.Level > s.w.Skill(p, r.Craft).Level {
+			t.Errorf("recipe %s asks for %s %d, beyond the training", id, r.Craft, r.Level)
+		}
+	}
+}
+
+// TestSandboxDevOnlyOffTheSandbox: the instructor's training and mana are dev-only. Were
+// she on an island that is not dev-only (past the startup check, which refuses that:
+// TestDevOnlyActionsRefusedOffDevIslands), the server would refuse to run them (and the
+// rest of the option: healing too) with dialog.dev_only.
+func TestSandboxDevOnlyOffTheSandbox(t *testing.T) {
+	s := newSandbox(t)
+	cl, p := s.newcomer(5980, "Lejos", "arcanist")
+	trainer := s.npc("pruebas_trainer")
+	s.sim.Command(gameFunc(func() {
+		trainer.SetDevForTest(false)
+		p.SetHealthForTest(10)
+		p.SetManaForTest(0)
+	}))
+	s.sim.Step()
+	d := s.talk(cl, p, "pruebas_trainer")
+	d, evs := s.say(cl, d, "npc.pruebas_trainer.opt_heal")
+	if !hasKey(evs, "dialog.dev_only") || d == nil || d.Text.Key != "npc.pruebas_trainer.greet" {
+		t.Fatalf("heal off the sandbox: %v", systemKeys(evs))
+	}
+	if hp, _ := p.Health(); hp > 10 || p.Mana() > 1 {
+		t.Fatalf("heal off the sandbox ran: health %d, mana %d", hp, p.Mana())
+	}
+	d, _ = s.say(cl, d, "npc.pruebas_trainer.opt_train")
+	for _, opt := range []string{"npc.pruebas_trainer.opt_train_combat", "npc.pruebas_trainer.opt_train_trades"} {
+		_, evs = s.say(cl, d, opt)
+		if !hasKey(evs, "dialog.dev_only") || hasKey(evs, "progress.skill_up") {
+			t.Fatalf("%s off the sandbox: %v", opt, systemKeys(evs))
+		}
+	}
+	if s.w.Skill(p, "magic").Level != 0 || s.w.Skill(p, "smithing").Level != 1 {
+		t.Fatalf("training off the sandbox ran: magic %d, smithing %d", s.w.Skill(p, "magic").Level, s.w.Skill(p, "smithing").Level)
 	}
 }

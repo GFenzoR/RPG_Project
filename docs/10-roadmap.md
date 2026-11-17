@@ -338,5 +338,10 @@ secundaria.
   Guía: `16-probar-el-juego.md`.
   Después (rama `test/sandbox-sim`): el recorrido de la guía jugado por tests de simulación
   sobre el mundo real (`server/internal/session/sandbox_test.go`, docs/16 sección 8); la
-  pala sale de la tienda de la isla (no tiene uso) y la instructora avisa que no sube skills
-  ni maná. Huecos que quedan (skills, maná, yunque) en docs/14, "Pendientes conocidos".
+  pala sale de la tienda de la isla (no tiene uso). Y para probar sin grindear: la
+  instructora entrena el combate de cada vocación (skills y nivel mágico) y los oficios, y
+  "Cúrame" llena también el maná, con las acciones de desarrollo `train_skill` y
+  `restore_mana` (docs/06, "Diálogos"), que solo valen en NPCs de islas `dev_only`
+  (`make validate`, arranque del servidor y al elegir la opción). `mapcompile -dev` marca
+  esas islas en `world.bin` (v6) y el servidor no carga ese mundo con `RPG_ENV` de
+  producción (docs/03).

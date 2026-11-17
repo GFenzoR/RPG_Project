@@ -40,6 +40,13 @@ function codeFiles(dir: string, ext: readonly string[]): string[] {
   return out;
 }
 
+/**
+ * Dialog actions that only run on a dev_only island of world/world.yaml (the sandbox
+ * island's instructor, docs/06 "Diálogos"): anywhere else they would hand out what playing
+ * earns. The server refuses them too (content.Action.DevOnly).
+ */
+export const DEV_ONLY_ACTIONS: readonly string[] = ["train_skill", "restore_mana"];
+
 /** The look of every new character (data/outfits.yaml); free, so never sold. */
 const DEFAULT_OUTFIT = "citizen";
 
@@ -139,6 +146,7 @@ class Validator {
     this.checkDialogs();
     this.checkQuestSteps();
     this.checkNpcActions();
+    this.checkDevOnlyActions();
     this.checkShopPrices();
     this.checkQuestItemSources();
     this.checkI18n();
@@ -771,6 +779,65 @@ class Validator {
         );
       }
     }
+  }
+
+  /**
+   * Dev-only dialog actions (DEV_ONLY_ACTIONS): an NPC with one must be placed
+   * (world/islands/<id>/npcs.yaml), and only on dev_only islands of world/world.yaml, which
+   * the production image leaves out. The server refuses the same when it starts and again
+   * when the option is picked.
+   */
+  private checkDevOnlyActions(): void {
+    const placed = this.npcPlacements();
+    if (!placed) return; // no world/ (tests): the placements are unknown
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      const id = idOf(npc);
+      const used = actionsOf(npc?.["dialog"], ["dialog"]).find((a) =>
+        DEV_ONLY_ACTIONS.includes(a.key),
+      );
+      if (!used || id === undefined) continue;
+      const at = placed.get(id) ?? [];
+      if (at.length === 0)
+        this.error(
+          src,
+          used.path,
+          `dev-only action "${used.key}": NPC "${id}" is placed on no dev_only island (world/world.yaml); only the sandbox island may have it`,
+        );
+      for (const p of at.filter((p) => !p.dev))
+        this.error(
+          src,
+          used.path,
+          `dev-only action "${used.key}": NPC "${id}" stands on island "${p.island}", which is not dev_only (world/world.yaml); only the sandbox island may have it`,
+        );
+    }
+  }
+
+  /**
+   * The islands each NPC is placed on (world/islands/<id>/npcs.yaml) and whether they are
+   * dev_only (world/world.yaml), or undefined when there is no world/ (tests).
+   */
+  private npcPlacements(): Map<string, { island: string; dev: boolean }[]> | undefined {
+    const worldFile = join(this.root, "world", "world.yaml");
+    if (!existsSync(worldFile)) return undefined;
+    const out = new Map<string, { island: string; dev: boolean }[]>();
+    const diags: Diagnostic[] = [];
+    const w = parseYaml(readFileSync(worldFile, "utf8"), "world/world.yaml", diags);
+    for (const entry of w && isObj(w.data) ? asList(w.data["islands"]) : []) {
+      const island = idOf(entry);
+      if (island === undefined || !/^[a-z0-9_]+$/.test(island)) continue;
+      const dev = isObj(entry) && entry["dev_only"] === true;
+      const rel = `world/islands/${island}/npcs.yaml`;
+      const abs = join(this.root, rel);
+      if (!existsSync(abs)) continue;
+      const list = parseYaml(readFileSync(abs, "utf8"), rel, diags);
+      for (const n of list ? asList(list.data) : []) {
+        const npc = isObj(n) ? n["npc"] : undefined;
+        if (typeof npc !== "string") continue;
+        out.set(npc, [...(out.get(npc) ?? []), { island, dev }]);
+      }
+    }
+    return out;
   }
 
   /**

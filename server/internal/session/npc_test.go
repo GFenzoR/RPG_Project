@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -426,4 +427,24 @@ func itemNum(t *testing.T, h *harness, _ *session.Player, id string) uint32 {
 		t.Fatalf("item %s: %v", id, err)
 	}
 	return uint32(items[id].Numeric)
+}
+
+// TestDevOnlyActionsRefusedOffDevIslands: an NPC with a dev-only dialog action (the
+// sandbox instructor's train_skill and restore_mana) does not let the server start on an
+// island that is not dev-only (world.bin's mark, mapcompile -dev); on a dev-only one it
+// does. The runtime check behind it: TestSandboxDevOnlyOffTheSandbox.
+func TestDevOnlyActionsRefusedOffDevIslands(t *testing.T) {
+	for _, dev := range []bool{false, true} {
+		cfg := dataConfig(t, nil)
+		is := cfg.Map.Islands()[0]
+		is.Dev = dev
+		is.NPCs = append(is.NPCs, world.NPCPlacement{NPC: "pruebas_trainer", Pos: pos(20, 20)})
+		_, err := session.New(cfg)
+		if dev && err != nil {
+			t.Fatalf("on a dev-only island: %v", err)
+		}
+		if !dev && (err == nil || !strings.Contains(err.Error(), "dev-only")) {
+			t.Fatalf("off a dev-only island: err = %v", err)
+		}
+	}
 }

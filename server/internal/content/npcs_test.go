@@ -1,6 +1,9 @@
 package content
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -74,4 +77,87 @@ func TestCheckRefsRejectsProfitableLoops(t *testing.T) {
 	if _, err := ParseNPC([]byte("id: c\nshop: { id: sc, sells: [{ item: rope, price: 2000000000 }] }\n")); err == nil {
 		t.Fatal("a price over MaxPrice was accepted")
 	}
+}
+
+// train_skill and restore_mana are dev-only: an NPC with one may only stand on a dev-only
+// island (the server checks every placement with CheckDevPlacement), and a train_skill
+// needs a known skill and a level in 1..MaxSkillLevel.
+func TestDevOnlyActions(t *testing.T) {
+	npcs, err := LoadNPCs(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range npcs.IDs() {
+		got := npcs[id].DevOnlyAction()
+		if want := id == "pruebas_trainer"; (got != "") != want {
+			t.Errorf("npc %s: dev-only action %q", id, got)
+		}
+	}
+	trainer := npcs["pruebas_trainer"]
+	if err := CheckDevPlacement(trainer, "pruebas", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckDevPlacement(trainer, "puerto", false); err == nil || !strings.Contains(err.Error(), "dev-only") {
+		t.Fatalf("the instructor in Puerto: err = %v", err)
+	}
+	if err := CheckDevPlacement(npcs["puerto_priest"], "puerto", false); err != nil {
+		t.Fatalf("the priest's heal is not dev-only: %v", err)
+	}
+	mana, err := ParseNPC([]byte("id: a\ndialog:\n  start: g\n  nodes:\n    g:\n      text: t\n      options:\n        - { text: x, action: { restore_mana: true } }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mana.DevOnlyAction() != "restore_mana" || CheckDevPlacement(mana, "puerto", false) == nil {
+		t.Fatalf("restore_mana: %q", mana.DevOnlyAction())
+	}
+	train := func(skill string, level int) string {
+		return fmt.Sprintf("id: a\ndialog:\n  start: g\n  nodes:\n    g:\n      text: t\n      options:\n        - { text: x, action: { train_skill: { skill: %s, level: %d } } }\n", skill, level)
+	}
+	for _, bad := range []string{train("sword", 0), train("sword", MaxSkillLevel+1), train(`""`, 10)} {
+		if _, err := ParseNPC([]byte(bad)); err == nil {
+			t.Errorf("accepted %s", bad)
+		}
+	}
+	unknown, err := ParseNPC([]byte(train("juggling", 10)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckRefs(NPCs{"a": unknown}, Quests{}, Items{}, nil, []string{"sword"}); err == nil || !strings.Contains(err.Error(), "juggling") {
+		t.Fatalf("unknown skill: err = %v", err)
+	}
+}
+
+// The schema of make validate bounds a train_skill level as ParseNPC does.
+func TestTrainSkillLevelBoundMatchesTheSchema(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "packages", "content-schema", "schemas", "common.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			Action struct {
+				AnyOf []struct {
+					Properties map[string]struct {
+						Properties map[string]struct {
+							Minimum *int `json:"minimum"`
+							Maximum *int `json:"maximum"`
+						} `json:"properties"`
+					} `json:"properties"`
+				} `json:"anyOf"`
+			} `json:"action"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	for _, alt := range schema.Defs.Action.AnyOf {
+		if ts, ok := alt.Properties["train_skill"]; ok {
+			lvl := ts.Properties["level"]
+			if lvl.Minimum == nil || *lvl.Minimum != 1 || lvl.Maximum == nil || *lvl.Maximum != MaxSkillLevel {
+				t.Fatalf("schema train_skill.level %v..%v, want 1..%d", lvl.Minimum, lvl.Maximum, MaxSkillLevel)
+			}
+			return
+		}
+	}
+	t.Fatal("no train_skill in the schema's action")
 }

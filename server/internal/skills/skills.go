@@ -15,7 +15,7 @@ import (
 )
 
 // MaxLevel bounds skill levels (a safety net: the curve makes it unreachable).
-const MaxLevel = 500
+const MaxLevel = content.MaxSkillLevel
 
 // TriesFor returns the tries that level costs to advance to level+1, or 0 if the skill
 // cannot advance (base_tries 0 or out of range).

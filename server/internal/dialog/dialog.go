@@ -4,7 +4,8 @@
 //
 // Picking an option is all or nothing: the conditions are evaluated again (the client
 // may have an old window) and the costs (gold, items) are checked before any action
-// runs.
+// runs. Dev-only actions (train_skill, restore_mana) run only for an NPC of a dev-only
+// island (the sandbox island).
 package dialog
 
 import (
@@ -19,6 +20,7 @@ const (
 	MsgNoItem         = "dialog.no_item"
 	MsgAlreadyBlessed = "dialog.already_blessed"
 	MsgCannotTravel   = "dialog.cannot_travel"
+	MsgDevOnly        = "dialog.dev_only"
 )
 
 // Facts is what conditions and costs read from the player.
@@ -39,6 +41,9 @@ type Facts interface {
 	HasBlessing(id string) bool
 	// CanTeleport reports whether the destination exists and is free.
 	CanTeleport(p content.Position) bool
+	// DevIsland reports whether the NPC of the dialog stands on a dev-only island
+	// (world.bin marks them): only there do dev-only actions (content.Action.DevOnly) run.
+	DevIsland() bool
 }
 
 // Effects applies actions. Costs were checked before any of them is called.
@@ -56,6 +61,10 @@ type Effects interface {
 	Heal()
 	Teleport(p content.Position)
 	Bless(b content.Bless)
+	// TrainSkill raises skill to level, never down (dev-only).
+	TrainSkill(skill string, level int)
+	// RestoreMana fills the mana (dev-only).
+	RestoreMana()
 }
 
 // Holds reports whether every condition holds for f.
@@ -117,6 +126,10 @@ func Check(as content.Actions, f Facts) string {
 	var gold int64
 	items := map[string]int{}
 	for _, a := range as {
+		if a.DevOnly() != "" && !f.DevIsland() {
+			// Defense in depth: make validate and the server's startup refuse it too.
+			return MsgDevOnly
+		}
 		switch {
 		case a.TakeGold > 0:
 			gold += a.TakeGold
@@ -211,5 +224,9 @@ func apply(a content.Action, e Effects) {
 		e.Teleport(*a.Teleport)
 	case a.Bless != nil:
 		e.Bless(*a.Bless)
+	case a.TrainSkill != nil:
+		e.TrainSkill(a.TrainSkill.Skill, a.TrainSkill.Level)
+	case a.RestoreMana:
+		e.RestoreMana()
 	}
 }

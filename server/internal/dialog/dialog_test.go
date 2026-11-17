@@ -1,8 +1,10 @@
 package dialog
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -16,6 +18,7 @@ type fake struct {
 	items        map[string]int
 	money        int64
 	noChangeRoom bool
+	dev          bool // the NPC stands on a dev-only island
 	blessed      map[string]bool
 	engine       *quest.Engine
 	log          *quest.Log
@@ -46,6 +49,9 @@ func (f *fake) OpenShop(id string)                         { f.did = append(f.di
 func (f *fake) Heal()                                      { f.did = append(f.did, "heal") }
 func (f *fake) Teleport(content.Position)                  {}
 func (f *fake) Bless(b content.Bless)                      { f.blessed[b.Blessing] = true; f.money -= b.Price }
+func (f *fake) DevIsland() bool                            { return f.dev }
+func (f *fake) TrainSkill(s string, n int)                 { f.did = append(f.did, fmt.Sprintf("train:%s=%d", s, n)) }
+func (f *fake) RestoreMana()                               { f.did = append(f.did, "mana") }
 func (f *fake) Reward(*content.Quest, content.QuestReward) {}
 func (f *fake) Notify(quest.Event)                         {}
 
@@ -164,5 +170,54 @@ func TestHarborMasterKitForRangerAndDruid(t *testing.T) {
 		if r.Node != c.node || f.items[c.item] != 1 || f.money != c.money || f.items["ship_biscuit"] != 1 {
 			t.Errorf("%s: %+v money %d items %v", c.vocation, r, f.money, f.items)
 		}
+	}
+}
+
+// The sandbox instructor's dev-only actions (train_skill, restore_mana) run only when her
+// island is dev-only, and an option with one runs nothing elsewhere, not even its other
+// actions (all or nothing): the priests' heal is not dev-only.
+func TestDevOnlyActionsNeedADevIsland(t *testing.T) {
+	trainer := load(t, "pruebas_trainer")
+	option := func(node, text string) int {
+		for i, o := range trainer.Dialog.Nodes[node].Options {
+			if o.Text == text {
+				return i
+			}
+		}
+		t.Fatalf("no option %s in %s", text, node)
+		return -1
+	}
+	heal := option("greet", "npc.pruebas_trainer.opt_heal")
+	trades := option("train", "npc.pruebas_trainer.opt_train_trades")
+	for _, dev := range []bool{false, true} {
+		f := newFake(t, "guardian")
+		f.dev = dev
+		r := Choose(trainer, "greet", heal, f)
+		if !dev && (r.Refused != MsgDevOnly || r.Node != "greet" || len(f.did) != 0) {
+			t.Fatalf("heal on a normal island: %+v, ran %v", r, f.did)
+		}
+		if dev && (r.Node != "healed" || !slices.Equal(f.did, []string{"heal", "mana"})) {
+			t.Fatalf("heal on the sandbox island: %+v, ran %v", r, f.did)
+		}
+		f.did = nil
+		combat := Visible(trainer.Dialog.Nodes["train"], f)[0]
+		r = Choose(trainer, "train", combat, f)
+		if !dev && (r.Refused != MsgDevOnly || len(f.did) != 0) {
+			t.Fatalf("train on a normal island: %+v, ran %v", r, f.did)
+		}
+		if dev && (r.Node != "trained" || !slices.Contains(f.did, "train:sword=45") || !slices.Contains(f.did, "train:shield=40")) {
+			t.Fatalf("guardian training on the sandbox island: %+v, ran %v", r, f.did)
+		}
+		f.did = nil
+		r = Choose(trainer, "train", trades, f)
+		if dev != (r.Refused == "") || dev && !slices.Contains(f.did, "train:smithing=25") {
+			t.Fatalf("trades training (dev island %v): %+v, ran %v", dev, r, f.did)
+		}
+	}
+	f := newFake(t, "druid")
+	if Check(content.Actions{{RestoreMana: true}}, f) != MsgDevOnly ||
+		Check(content.Actions{{TrainSkill: &content.SkillLevel{Skill: "magic", Level: 3}}}, f) != MsgDevOnly ||
+		Check(content.Actions{{Heal: true}}, f) != "" {
+		t.Fatal("Check off a dev island")
 	}
 }

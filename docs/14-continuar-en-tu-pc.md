@@ -35,7 +35,8 @@ seguir con Claude Code en tu computador. El entorno local está en
 3. Para que otros entren desde tu red o desde internet, usa `make home-up` (`13-hosting-de-pruebas.md`).
 4. Juega 10 minutos y anota lo que se siente mal. Es lo que la IA no puede juzgar sola. Lo
    más rápido es `make play`: la Isla de Pruebas tiene todos los sistemas a unos pasos del
-   templo y una instructora que da experiencia y dinero (`16-probar-el-juego.md`).
+   templo y una instructora que da experiencia, entrenamiento, dinero y curación
+   (`16-probar-el-juego.md`).
 
 ## Lo que es tuyo 👤
 | Qué | Para qué | Dónde está explicado |
@@ -273,24 +274,30 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
 - **Isla de Pruebas: lo que dejó el recorrido simulado** (`server/internal/session/sandbox_test.go`,
   docs/16 secciones 4 y 8). Todo el recorrido de la guía funciona; lo que sigue son huecos
   de la herramienta, no errores del servidor:
-  - la instructora sube el **nivel**, no las **skills** ni el **nivel mágico**: un guardián
-    de nivel 21 con espada de hierro, escudo y 20 cataplasmas muere en el corral 4 con las
-    skills en 10 y con espada 32 y escudo 27 sobrevive (`TestSandboxSkillsGap`); la runa
-    de arco (nivel mágico 1) y `mend_other` (2) no se pueden usar recién hecho. Los
-    corrales 4 y 5 los hace un druida de nivel 50 con lanza de escarcha (los hechizos de
-    daño crecen con el nivel), así que el hueco es de cuerpo a cuerpo y distancia, y de
-    lo que pide nivel mágico. Propuesta: una acción de diálogo nueva (por ejemplo
-    `train_skills`, que sume intentos a las skills de la vocación y al nivel mágico) y una
-    opción "Quiero entrenar" de la instructora. Es un contrato nuevo (esquema de
-    `common.schema.json`, `content.Action`, `dialog`, `session`, docs/06): por eso no entró
-    con los tests;
-  - "Cúrame" llena la vida, no el maná (la acción `heal` de los sacerdotes), y no hay
-    pociones de maná: las vocaciones mágicas esperan la regeneración. Se puede sumar a la
-    misma acción nueva o a una propia de la instructora, sin cambiar `heal`;
-  - el yunque no tiene receta al alcance de un personaje nuevo (la más baja pide herrería 2,
-    unos 20 intentos de fundición: 40 minerales y 20 troncos). Si se quiere probar en
-    minutos: una receta de herrería 1 en el yunque (cambia también el juego real) o que el
-    proveedor de la isla venda mineral y troncos (sin cambiar el juego real);
+  - **resuelto:** la instructora subía el **nivel**, no las **skills** ni el **nivel
+    mágico** (un guardián de nivel 21 con espada, escudo y 20 cataplasmas moría en el
+    corral 4 con las skills en 10; la runa de arco, nivel mágico 1, y `mend_other`, 2, no se
+    podían usar recién hecho). Ahora "Entréname" → "El combate" deja las skills de la
+    vocación y el nivel mágico en valores fijos (guardián: espada, hacha y maza 45, escudo
+    40; arcanista y druida: nivel mágico 25...; docs/16 paso 1) con la acción de desarrollo
+    `train_skill` (docs/06, "Diálogos"): ese guardián sobrevive al corral 4
+    (`TestSandboxTraining`), la arcanista usa la runa en el acto (`TestSandboxArcRune`) y
+    un druida de nivel 8 lanza `mend_other` (`TestSandboxTrainingByVocation`);
+  - **resuelto:** "Cúrame" llena también el maná (acción de desarrollo `restore_mana`; la
+    `heal` de los sacerdotes no cambió). Pociones de maná sigue sin haber en el juego real:
+    las vocaciones mágicas esperan la regeneración (el sacerdote solo cura la vida);
+  - **resuelto:** el yunque no tenía receta al alcance de un personaje nuevo (la más baja
+    pide herrería 2). "Entréname" → "Los oficios" deja los oficios en 25 y la pesca en 40,
+    y el mismo personaje hace un hacha de leñador en el yunque (`TestSandboxTrades`). No se
+    tocó ninguna receta: el juego real sigue igual;
+  - **las acciones de desarrollo no pueden llegar a producción**: `make validate` las
+    rechaza en un NPC que no esté solo en islas `dev_only`; el servidor no arranca con uno
+    así fuera de una isla marcada en `world.bin`, y al elegir la opción lo vuelve a mirar
+    (`dialog.dev_only`). Y la guarda que pidió la auditoría: `mapcompile -dev` marca las
+    islas de desarrollo en `world.bin` (versión 6) y el servidor no arranca con ese mundo
+    con `RPG_ENV` de producción (vacía o `production`), como con el proveedor de pagos
+    falso; `make run-server`, `make dev`, `make play`, `make bots` y el E2E corren con
+    `RPG_ENV=development`. Un `world.bin` viejo (versión 5) no carga: `make mapcompile`;
   - la **pala** no sirve para nada en todo el juego (`tool.use: shovel` no tiene mecánica:
     usarla dice `gather.nothing`). Se sacó de la tienda de la isla
     (`TestSandboxToolsHaveAUse`); Puerto la sigue vendiendo (40) y comprando (12); y su

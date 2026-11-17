@@ -315,7 +315,41 @@ Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
 `quest_state`, `quest_not_started`, `flag_equals`, `skill_at_least`.
 Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `heal`,
-`teleport`, `bless`. (La acción `travel` de T1.10 se quitó en T3.5: los viajes son rutas.)
+`teleport`, `bless`, y las de desarrollo `train_skill` y `restore_mana` (abajo). (La
+acción `travel` de T1.10 se quitó en T3.5: los viajes son rutas.)
+
+**Acciones de desarrollo** (solo la instructora de la Isla de Pruebas,
+`16-probar-el-juego.md`): en el juego real regalarían lo que se gana jugando (y un maná
+gratis junto al templo entrenaría el nivel mágico sin límite), así que solo existen en NPCs
+de islas `dev_only` (`world.yaml`), que la imagen de producción no compila.
+```yaml
+        - text: npc.pruebas_trainer.opt_train_combat
+          if: { vocation_in: [guardian] }
+          action:
+            - { train_skill: { skill: sword, level: 45 } }   # sube la skill a 45, nunca la baja
+            - { train_skill: { skill: magic, level: 2 } }    # el nivel mágico es la skill magic
+          goto: trained
+        - text: npc.pruebas_trainer.opt_heal
+          action: [{ heal: true }, { restore_mana: true }]   # vida y maná
+          goto: healed
+```
+- `train_skill: { skill, level }`: `skill` es una skill de `balance.yaml` (combate,
+  `magic`, `fishing` u oficio) y `level` va de 1 a 500. Si la skill está más abajo, queda en
+  `level` con el progreso hacia el siguiente en 0 y el cliente recibe `PlayerSkills` y el
+  aviso `progress.skill_up`, como una subida por uso; si ya está en `level` o más arriba, no
+  cambia nada.
+- `restore_mana: true`: llena el maná (`heal` sigue llenando solo la vida).
+- **Dónde valen** (tres capas): `make validate` rechaza un NPC con una de ellas que no
+  esté colocado (`world/islands/<id>/npcs.yaml`) o que esté en alguna isla que no sea
+  `dev_only` (`packages/content-schema`, `checkDevOnlyActions`); el servidor no arranca si
+  coloca un NPC así en una isla sin la marca `dev` de `world.bin` (la pone
+  `mapcompile -dev`; `content.CheckDevPlacement` en `session.initNPCs`), y al elegir la
+  opción vuelve a mirar la isla del NPC: fuera de una isla de desarrollo no corre nada de
+  la opción (tampoco sus otras acciones) y contesta `dialog.dev_only` (`dialog.Check`).
+  Además, un `world.bin` con islas de desarrollo no carga con `RPG_ENV` de producción
+  (`03-world-and-maps.md`, "Compilación").
+- Una acción de desarrollo nueva se suma a `content.Action.DevOnly` (Go) y a
+  `DEV_ONLY_ACTIONS` (`packages/content-schema/src/validate.ts`).
 Semántica del motor (T1.10):
 - Una opción se muestra si se cumplen todas sus condiciones; al elegirla el servidor las
   vuelve a evaluar. Después revisa los costos de todas sus acciones juntas (`take_gold`,
@@ -340,7 +374,7 @@ Semántica del motor (T1.10):
 - `give_item` da una unidad a la mochila; si no cabe (lugar o capacidad) cae al suelo
   bajo el jugador. `give_gold`/`take_gold` usan el dinero (`currency.worth`).
 - `bless` guarda la bendición en `quest_state` (`bless.<id>` = 1) y cobra el precio; al
-  morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida.
+  morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida (no el maná).
 - `skill_at_least` usa el nivel de skill actual; `level_at_least`, el nivel del jugador.
 
 Estado por personaje en `quest_state` (clave → valor; una clave ausente vale 0):
