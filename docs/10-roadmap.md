@@ -336,3 +336,7 @@ secundaria.
   `dev_only` en `world.yaml` (la imagen de producción no la compila; `mapcompile -dev` sí) y
   nada de las otras islas lleva a ella. Ops `add_text`/`remove_text` para `texts.yaml`.
   Guía: `16-probar-el-juego.md`.
+  Después (rama `test/sandbox-sim`): el recorrido de la guía jugado por tests de simulación
+  sobre el mundo real (`server/internal/session/sandbox_test.go`, docs/16 sección 8); la
+  pala sale de la tienda de la isla (no tiene uso) y la instructora avisa que no sube skills
+  ni maná. Huecos que quedan (skills, maná, yunque) en docs/14, "Pendientes conocidos".

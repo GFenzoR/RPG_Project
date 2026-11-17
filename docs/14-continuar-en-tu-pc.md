@@ -270,6 +270,32 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     con la runa, el monstruo y la recompensa de `data/`; la quest es del test porque
     ninguna quest de `data/` termina en una muerte (todas cierran hablando con un NPC). Si
     alguna llega a terminar en una muerte, conviene pasar el test a ella.
+- **Isla de Pruebas: lo que dejó el recorrido simulado** (`server/internal/session/sandbox_test.go`,
+  docs/16 secciones 4 y 8). Todo el recorrido de la guía funciona; lo que sigue son huecos
+  de la herramienta, no errores del servidor:
+  - la instructora sube el **nivel**, no las **skills** ni el **nivel mágico**: un guardián
+    de nivel 21 con espada de hierro, escudo y 20 cataplasmas muere en el corral 4 (skills
+    en 10; con espada 32 y escudo 27 sobrevive); la runa de arco (nivel mágico 1) y
+    `mend_other` (2) no se pueden usar recién hecho; el corral 5 pide dos druidas de nivel
+    50 con lanza de escarcha. Propuesta: una acción de diálogo nueva (por ejemplo
+    `train_skills`, que sume intentos a las skills de la vocación y al nivel mágico) y una
+    opción "Quiero entrenar" de la instructora. Es un contrato nuevo (esquema de
+    `common.schema.json`, `content.Action`, `dialog`, `session`, docs/06): por eso no entró
+    con los tests;
+  - "Cúrame" llena la vida, no el maná (la acción `heal` de los sacerdotes), y no hay
+    pociones de maná: las vocaciones mágicas esperan la regeneración. Se puede sumar a la
+    misma acción nueva o a una propia de la instructora, sin cambiar `heal`;
+  - el yunque no tiene receta al alcance de un personaje nuevo (la más baja pide herrería 2,
+    unos 20 intentos de fundición: 40 minerales y 20 troncos). Si se quiere probar en
+    minutos: una receta de herrería 1 en el yunque (cambia también el juego real) o que el
+    proveedor de la isla venda mineral y troncos (sin cambiar el juego real);
+  - la **pala** no sirve para nada en todo el juego (`tool.use: shovel` no tiene mecánica:
+    usarla dice `gather.nothing`). Se sacó de la tienda de la isla
+    (`TestSandboxToolsHaveAUse`); Puerto la sigue vendiendo (40) y comprando (12);
+  - no es un error, pero sorprende probando: un monstruo no reaparece donde un jugador lo
+    ve, así que quien vacía un corral y se queda mirando no ve volver a nadie (docs/16
+    lo dice ahora), y los monstruos salen de los corrales por la abertura y siguen al
+    jugador por el sendero.
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

@@ -67,21 +67,40 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
    diálogo abierto, las teclas 1–9 eligen opción). Prueba: "Quiero experiencia" (5000 o
    50 000; dos veces 50 000 te deja en el nivel 20), "Necesito dinero" (una moneda de oro
    por vez), "Cúrame" y "¿Tienes algún encargo?" (misión "Ratas de práctica").
+   **Ojo:** la experiencia sube el nivel (vida, maná, capacidad), no las skills ni el nivel
+   mágico: un guardián o un montaraz de nivel 50 hecho así pega como uno de nivel 1 (espada,
+   escudo y distancia en 10, nivel mágico 0). Y "Cúrame" llena la vida, no el maná.
 2. **Tienda (plaza).** Con Tobías Muestra, "Quiero comerciar": herramientas (pico, hacha de
-   leñador, caña, martillo, cuerda, pala), galleta, cataplasma de algas (la curación que
-   existe: no hay pociones de maná todavía), runa de arco, el equipo de cada vocación
+   leñador, caña, martillo, cuerda), galleta, cataplasma de algas (la curación que
+   existe: no hay pociones de maná todavía), runa de arco (pide nivel mágico 1: ver más
+   abajo), el equipo de cada vocación
    (guardián: hacha de mano o espada de hierro desde el nivel 5 y escudos; arcanista: varita
    de coral desde el nivel 6; montaraz: arco corto y flechas; druida: vara de retoño) y la
    llave de latón. Prueba también vender (compra pescado, mineral, troncos, lingotes y
-   pieles).
+   pieles). No vende pala: todavía no hay nada que cavar en el juego.
+   - **Runa de arco:** todo personaje empieza en nivel mágico 0 y la runa pide 1. Un
+     arcanista llega a 1 gastando 1450 de maná: con nivel 51 (dos veces "Mucha" no alcanza;
+     31 veces sí) le basta vaciar el maná con "vita lumen" y la runa ya funciona.
 3. **Caza (norte).** Sube por el camino al oeste del templo. Empieza por el corral 1 (las
    ratas de la misión) y vuelve con la instructora para cerrarla. Sigue hacia el este solo
    si tu nivel da: el corral 5 mata a un personaje de nivel bajo. Si algo te persigue,
    vuelve a la plaza: en la zona de protección nadie ataca.
+   - Lo que juegan los tests (sección 8), como referencia: corral 1, un guardián de nivel
+     1 con hacha de mano; corral 2, un montaraz de nivel 8 con arco corto y flechas;
+     corral 3, una arcanista de nivel 20 con varita de coral. Un guardián de nivel 21 con
+     espada de hierro, escudo y 20 cataplasmas **muere** en el corral 4 (skills en 10; con
+     espada 32 y escudo 27 sobrevive): para el 4 sirve un druida de nivel 50 que lance
+     "glacies hasta" (lanza de escarcha: crece con el nivel), y para el dragoncillo del 5
+     hacen falta dos (uno solo se queda sin maná).
+   - Los monstruos no reaparecen donde un jugador los ve: si vacías un corral, aléjate
+     (unas 8 casillas al sur de su abertura basta) hasta que vuelvan.
+   - Los monstruos salen de los corrales por la abertura y te siguen por el sendero.
 4. **Recolección y oficios (oeste).** Con el pico, usa una veta (hierro y piedra); con el
    hacha de leñador, un abedul; con la caña, el agua con peces desde el muelle de pesca
-   (alcance 3). Usa la fragua (mineral + tronco = lingote), el yunque (con el martillo) y
-   el fogón (pescado) para ver sus recetas.
+   (alcance 3). Usa la fragua (2 minerales + 1 tronco = lingote), el yunque (con el martillo)
+   y el fogón (pescado) para ver sus recetas. En el yunque un personaje nuevo no fabrica
+   nada: su receta más baja pide herrería 2 y se empieza en 1 (sube con unos 20 intentos en
+   la fragua, es decir 40 minerales y 20 troncos).
 5. **Mercado (plaza).** Usa el tablero del mercado: publica una oferta de venta y compra
    con otro personaje. El personal (GM/admin) no puede usar el mercado: prueba con cuentas
    sin rol. El intercambio directo se propone desde la lista de batalla ("Proponer un
@@ -145,6 +164,30 @@ cuentas sin rol.
    en Git Bash, y cierra la ventana de la terminal si Vite sigue en el puerto 5173.
 3. `make db-down` para Postgres (los datos quedan en el volumen de Docker) y cierra Docker
    Desktop si no lo usas.
+
+## 8. Los tests del recorrido
+`server/internal/session/sandbox_test.go` juega este recorrido sin levantar nada: el mundo
+real compilado con la isla (`compile.Build` con `DevIslands`), el contenido de `data/` y
+`-start-town pruebas`, como `make play`, con personajes que hablan, caminan (A* por el
+mapa, como el cliente), compran, usan, fabrican y pelean por mensajes de cliente. Corre en
+un segundo con `go test ./internal/session -run Sandbox` (y en `make test`).
+
+| Test | Qué juega |
+|---|---|
+| `TestSandboxInstructor` | Despertar en el templo (sin tutorial), experiencia, oro, curación y la misión de las ratas de punta a punta |
+| `TestSandboxProvisioner` | La tienda igual a `data/`, comprar (con cambio de la moneda de oro), equiparse, vender; que no se gane dinero comprando y revendiendo, tampoco pasando por una receta |
+| `TestSandboxPens` | Cada corral con una vocación hasta que deja botín (ver arriba qué hace falta en el 4 y el 5) |
+| `TestSandboxTrades` | Picar, talar y pescar con las herramientas de la tienda; fragua y fogón; el yunque pide herrería 2; vender lo hecho |
+| `TestSandboxHouse` | Casa: nivel 12, alquiler, entrar, dejar un objeto, extraño afuera, invitada adentro que no saca nada |
+| `TestSandboxVault` | Puerta de práctica sin llave, con llave, cerrar desde adentro y salir sin llave |
+| `TestSandboxPortals` | Escaleras, escalera de mano, agujero, murciélagos, punto de soga sin y con cuerda, teletransporte, una galleta tirada a la escalera |
+| `TestSandboxFerry` | Los tres viajes del barquero (y sin pasaje no zarpa); morir afuera devuelve a este templo |
+| `TestSandboxMarket` | Una oferta de venta en el tablero, la compra de otro personaje y el retiro del buzón |
+| `TestSandboxArena` | Dos personajes de nivel 20: fuera de la arena nadie ataca en modo seguro; adentro, el que pierde despierta en el templo sin perder nada y el ganador queda sin marca |
+| `TestSandboxArcRune` | La runa de arco pide nivel mágico 1 y cómo se llega |
+| `TestSandboxDialogs` | Toda ventana de los tres NPCs se alcanza y toda opción lleva a algo |
+| `TestSandboxToolsHaveAUse` | Toda herramienta que vende el proveedor tiene en qué usarse en la isla |
+| `TestSandboxEverythingReachable` | Toda casilla caminable se alcanza desde el templo, y todo NPC, veta, árbol, agua con peces, estación y tablero se puede usar desde ahí |
 
 ## Por qué la isla queda fuera del juego
 Decisión: la Isla de Pruebas es una herramienta de desarrollo, no contenido.
