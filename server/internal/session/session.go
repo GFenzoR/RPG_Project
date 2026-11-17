@@ -182,6 +182,12 @@ type Config struct {
 	// autosave of a player is at a random point of the first interval, so players that
 	// joined together (after a restart) do not all save on the same tick.
 	AutosaveEvery game.Tick
+	// StoreHeartbeat is how often the app tells the loop that the database answers
+	// (World.StoreAlive). Content audit M6: while no mark came for storeDownAfter of them
+	// no house is released for its owner's absence, and that gap is not counted as
+	// absence (a database outage with the loop up keeps everyone out). 0: no heartbeat, the
+	// database counts as always up (tests, no database).
+	StoreHeartbeat time.Duration
 	// RerouteMaxNodes and PathNodesPerTick tune the pathfinding quota.
 	RerouteMaxNodes  int
 	PathNodesPerTick int
@@ -422,6 +428,7 @@ type World struct {
 	hsPeriod      time.Duration
 	hsAway        time.Duration // houses.inactive_days (0: off)
 	houseDown     time.Time     // HouseData.LastSave until the first sweep (houseBoot)
+	storeAlive    time.Time     // last StoreAlive mark (or the first sweep), Config.StoreHeartbeat
 	hsRefill      game.Tick
 	hsBurst       game.Tick
 	houseByID     map[string]*house

@@ -1167,11 +1167,20 @@ func (w *World) renewHouse(now time.Time, h *house) {
 // the last save of any character, HouseData.LastSave) is not counted as the owners'
 // absence, so an outage or a long stop releases no house (content audit M6).
 func (w *World) houseBoot(now time.Time) {
+	if w.storeAlive.IsZero() {
+		w.storeAlive = now // the houses were just read: the database answered
+	}
 	if w.houseDown.IsZero() {
 		return
 	}
 	down := now.Sub(w.houseDown)
 	w.houseDown = time.Time{}
+	w.notAbsence(down, now)
+}
+
+// notAbsence adds down to every owner's last-seen time, never past now: that time the
+// server or its database was down and nobody could enter the game.
+func (w *World) notAbsence(down time.Duration, now time.Time) {
 	if down <= 0 {
 		return
 	}
@@ -1183,10 +1192,36 @@ func (w *World) houseBoot(now time.Time) {
 	w.log.Info("house: downtime not counted as absence", "down", down)
 }
 
+// storeDownAfter: with Config.StoreHeartbeat, the database counts as down after this many
+// heartbeats without a StoreAlive mark.
+const storeDownAfter = 3
+
+// StoreAlive is the app's heartbeat: the database just answered (Config.StoreHeartbeat).
+// After an outage (no mark for storeDownAfter heartbeats) the whole gap is not counted as
+// the house owners' absence (content audit M6, review).
+func (w *World) StoreAlive() game.Command {
+	return game.CommandFunc(func(ctx *game.TickContext) {
+		if !w.houseOn {
+			return
+		}
+		if w.storeDown(ctx.Now) {
+			w.notAbsence(ctx.Now.Sub(w.storeAlive), ctx.Now)
+		}
+		w.storeAlive = ctx.Now
+	})
+}
+
+// storeDown reports whether the database has missed storeDownAfter heartbeats.
+func (w *World) storeDown(now time.Time) bool {
+	hb := w.cfg.StoreHeartbeat
+	return hb > 0 && !w.storeAlive.IsZero() && now.Sub(w.storeAlive) > storeDownAfter*hb
+}
+
 // ownerAway reports whether h's owner account has not been in the game for
 // houses.inactive_days: no character of it online now and none entered or left since.
+// Never while the database is down (nobody could enter, storeDown).
 func (w *World) ownerAway(now time.Time, h *house) bool {
-	if w.hsAway <= 0 || now.Before(h.seen.Add(w.hsAway)) {
+	if w.hsAway <= 0 || now.Before(h.seen.Add(w.hsAway)) || w.storeDown(now) {
 		return false
 	}
 	for _, p := range w.players {
