@@ -345,3 +345,13 @@ secundaria.
   (`make validate`, arranque del servidor y al elegir la opción). `mapcompile -dev` marca
   esas islas en `world.bin` (v6) y el servidor no carga ese mundo con `RPG_ENV` de
   producción (docs/03).
+- [x] **Balance de vocaciones e items (auditoría de contenido, rama `feat/balance-vocations`).**
+  Brebajes de maná en las tres ciudades y una carrera simulada del 1 al 50 para arcanista,
+  druida y montaraz con presupuesto de maná real (`sim/balance_vocations_test.go`); maza,
+  arco, ballesta, varita y vara hasta la Isla Volcánica, y piezas de cabeza, piernas y pies;
+  ballestas de una mano para que el montaraz lleve escudo; `tempest_ring` y `rime_burst`
+  para las islas que resisten fuego y tierra; la comida regenera (`well_fed`); el sello de
+  la forja para cada uno del grupo (botín `each_player`); la cuerda con destino (socavón de
+  la playa del naufragio) y la pala fuera de la tienda, con una regla de `make validate`;
+  bendiciones desde el nivel 9; varita inicial del arcanista; hechizos renombrados y textos
+  pulidos. Lo que quedó de la auditoría: docs/14, "Pendientes conocidos".

@@ -149,11 +149,25 @@ Tibia:
 - MVP: Guardián y Arcanista. Montaraz y Druida desde T3.1:
   - **Montaraz:** la distancia es la skill que entrena más rápido de todas las vocaciones, el
     escudo casi como el guardián y algo de magia. Su vida y su maná por nivel quedan entre
-    los del tanque y los del mago. Usa arcos (y también armas cuerpo a cuerpo, que entrena
-    lento). Sus hechizos de daño escalan con la distancia.
+    los del tanque y los del mago. Usa arcos de dos manos o ballestas de una mano, que le
+    dejan la izquierda para el escudo (auditoría de contenido M4, 2026-11), y también armas
+    cuerpo a cuerpo, que entrena lento. Sus hechizos de daño escalan con la distancia.
   - **Druida:** tan frágil como el arcanista y con su mismo ritmo de nivel mágico. Usa varas
     (varitas de tierra o hielo). Es el mejor sanador y el único que cura a otro jugador.
   - Las bandas y los roles los fija `packages/content-schema/src/vocations-balance.test.ts`.
+  - **Carrera de cada vocación (auditoría de contenido M2, 2026-11):**
+    `server/internal/sim/balance_vocations_test.go` juega del nivel 1 al 50 al arcanista,
+    al druida y al montaraz con sus armas, sus hechizos y un presupuesto de maná real
+    (regeneración, comida y brebajes de maná que se pagan con el botín), y al guardián como
+    vara de medir. Exige: cada franja de niveles en 0,5-1,5 veces el tiempo del guardián;
+    que la caza pague brebajes, cataplasmas y munición (como mucho 75 % del botín); que el
+    nivel mágico salga del maná que de verdad se gasta (~20 al nivel 30 y ~35 al 49 para
+    los magos, ~8 y ~12 para el montaraz) y que cada hechizo tenga su nivel mágico pocos
+    niveles después de su nivel; que la ballesta con escudo pierda menos vida por segundo
+    que el arco y no tarde más de 1,3 veces; y que las áreas nuevas (`tempest_ring`,
+    `rime_burst`) le peguen más que las de antes a los monstruos de su isla.
+    `base_tries` de magia (1450) y la regeneración por vocación no cambiaron: el maná que
+    faltaba lo ponen la comida y los brebajes.
 
 ## Experiencia y nivel
 - Experiencia por matar monstruos (repartida según daño; un grupo puede compartirla, ver
@@ -196,7 +210,10 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
   subir, máximos de vida/maná, capacidad y velocidad pasan a los de la vocación en ese
   nivel, y la vida y el maná actuales suben lo mismo que subió el máximo.
 - Regeneración: cada `regen.interval_ms` (evento del scheduler por jugador) recupera
-  `regen.health` y `regen.mana` sin pasar del máximo. No depende de comida todavía.
+  `regen.health` y `regen.mana` sin pasar del máximo. **Comida** (auditoría de contenido
+  m2, 2026-11): con la condición `well_fed` cada tick recupera
+  `regen × (100 + regen_pct) / 100` (entero; `regen_pct` = 100, el doble). Sin comer se
+  sigue regenerando lo de siempre: nadie pasa hambre.
 - Persistencia: el snapshot de guardado lleva todas las skills y se escriben en
   `character_skills` en la misma transacción que el personaje. El inventario (T1.8) va en
   el mismo snapshot y reemplaza las filas de `inventory_items` en esa transacción.
@@ -207,8 +224,8 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
 | Minería | Usar pico sobre vetas | Minerales, piedras preciosas |
 | Leñador | Usar hacha de leña sobre árboles talables | Madera |
 | Herrería | Usar un yunque con materiales y receta | Armas, armaduras, herramientas |
-| Cocina | Usar horno/fogata con ingredientes | Comida con buffs pequeños |
-| Alquimia (hito posterior) | Mesa de alquimia | Pociones |
+| Cocina | Usar horno/fogata con ingredientes | Comida: más tiempo de `well_fed` (regeneración) |
+| Alquimia (hito posterior) | Mesa de alquimia | Pociones (hoy los brebajes de maná los venden NPCs) |
 
 - Recetas en `data/recipes.yaml` con nivel de oficio requerido, materiales y chance de
   éxito que mejora con el nivel.
@@ -340,6 +357,10 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     valor uniforme en ±`spread`; al monstruo se le aplica `× (1 − resistencia del
     elemento %)` (100 % o más = inmune, negativa = debilidad). Armadura y defensa no frenan
     la magia.
+  - Segunda área de cada mago (auditoría de contenido M5, 2026-11): la Isla Volcánica
+    resiste el fuego (70-100) y el Bosque la tierra (20-80), así que el arcanista suma
+    `tempest_ring` (energía, radio 2, nivel 28) a `ember_ring` y el druida `rime_burst`
+    (hielo, radio 1, nivel 16) a `bramble_burst`.
   - Área (`radius`): cada monstruo del círculo (`dx² + dy² ≤ r² + r`) con línea de visión
     desde el que lanza tira su propio daño; lo que queda detrás de un muro no se toca.
   - Varitas: arma a distancia del Arcanista (y las varas del Druida); no entrenan skill ni
@@ -358,8 +379,13 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   distancia y `ataque = arma + munición`, contra la armadura y la defensa del monstruo. Cada
   disparo entrena la distancia, acierte o no, con el mismo anti-AFK. Si persigue, se acerca
   solo hasta tener rango y visión. La flecha se consume: no queda en el suelo.
-  - Los arcos son de dos manos. Sin chance de fallo propia: los ceros salen de la tirada y
-    de la armadura, como en el cuerpo a cuerpo.
+  - Los arcos son de dos manos y disparan flechas; las ballestas (auditoría de contenido
+    M4) son de una mano, disparan virotes (`ammo.type: bolt`) y dejan la izquierda para el
+    escudo: menos ataque que el arco de su escalón y más defensa. Sin chance de fallo
+    propia: los ceros salen de la tirada y de la armadura, como en el cuerpo a cuerpo.
+  - `conjure_arrows` ("tejer flechas") conjura 25 flechas por 35 de maná desde el nivel 3:
+    un montaraz joven dispara lo que conjura su regeneración y no gasta en flechas más de
+    lo que le da la caza. Los virotes se compran o se forjan (hierro y plumas de gaviota).
 - **Hechizos de T3.1:** el daño o la curación pueden sumar `skill × per_skill` (el montaraz
   escala con la distancia). Una curación con `range` cura a **otro** jugador: el objetivo
   (por id o por casilla) debe estar a la vista, en el mismo piso, dentro del rango y con
@@ -379,6 +405,7 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   | Haste | `hasted` | velocidad +35 %, hasta 45 s; quita `slowed` | refresca | termina |
   | Invisibilidad | `invisible` | no lo ven jugadores ni monstruos, hasta 90 s | refresca | termina |
   | Puntería | `keen_eye` | +7 de distancia en combate, hasta 45 s | refresca | termina |
+  | Saciado | `well_fed` | regeneración de la vocación +100 %, hasta 20 min | suma | sobrevive |
   - **Daño periódico:** cada golpe aplica la resistencia del monstruo a su elemento (100 % o
     más = inmune: la condición no se aplica); la armadura no lo frena. En una zona de
     protección el golpe no hace daño (pero cuenta). Al monstruo, el daño suma a la parte
@@ -413,7 +440,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - **Fuentes:** `swift_stride` (haste 25 s, las cuatro vocaciones) y `purge_venom` (cura el
     veneno) desde nivel 8-9; `keen_eye` (montaraz), `entangle` (druida, `slowed` a un
     monstruo, o con PvP a un jugador, a 4 casillas), `shroud` (arcanista,
-    invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` electrizado. La araña
+    invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` y `tempest_ring`
+    electrizado. Comer da `well_fed` (el `food_ms` de la comida). La araña
     de musgo (escupitajo) y el escarabajo de mena (mordida) envenenan al hacer daño.
   - **Pendiente:** campos en el suelo (fuego o veneno) que apliquen condiciones al pisarlos
     (necesitan items con duración, disparar al entrar a la casilla y su render); items
@@ -450,14 +478,27 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   ≤ `inventory.reach` (1); un contenedor del suelo se cierra al alejarse. Mirar alcanza
   todo lo visible. Los items fijos del mapa (`world.bin`) se pueden mirar pero no mover.
 - **Usar:** un contenedor se abre o cierra; un consumible cura (`heal_hp`/`heal_mp`) o se
-  come (`food_ms` aún no tiene efecto: no hay hambre) y gasta una unidad, con
-  `inventory.use_cooldown_ms` entre usos. Las runas (T1.9) y las herramientas (T1.12) se
-  usan sobre una criatura o casilla con `UseItemOn`.
+  come y gasta una unidad, con `inventory.use_cooldown_ms` entre usos. Comer (auditoría
+  de contenido m2) suma su `food_ms` a la condición `well_fed` (regeneración más fuerte,
+  ver "Skills" y "Condiciones"), hasta su `max_ms` (20 min): la comida que solo alimenta
+  y pasaría de ese tope se rechaza sin comerla ni gastar el cooldown ("Estás lleno"); la
+  que además cura se come siempre y su tiempo se recorta. Las runas (T1.9) y las
+  herramientas (T1.12) se usan sobre una criatura o casilla con `UseItemOn`.
 - **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
   slot de mochila. El kit de cada vocación llega con los diálogos (T1.10): al aceptar el
-  capítulo 1, el capitán del puerto da un alfanje al guardián, monedas al arcanista, un arco
-  corto y monedas para flechas al montaraz, y una vara de retoño al druida. El armero vende
-  arcos, flechas y el chaleco de piel; el buzo vende las varas.
+  capítulo 1, el capitán del puerto da un alfanje al guardián, una varita de chispa al
+  arcanista (auditoría de contenido m5; antes, monedas), un arco corto y monedas para
+  flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y el
+  chaleco de piel (para cualquier vocación: ninguna pieza de cuero está restringida, m6);
+  el buzo vende las varitas, las varas y el brebaje de maná. En el Bosque las varas, las
+  varitas y los brebajes los tiene la druida Velia (opción "¿Qué es este lugar?") y el
+  resto la curtidora; en Brasal, el herrero y el templo (brebajes, cataplasmas, la varita
+  de obsidiana y la vara de escarcha negra).
+- **Escalones de equipo (auditoría de contenido M3, 2026-11):** cada línea de arma llega a
+  la Isla Volcánica con su fuente (tienda, botín o receta): maza 15 → 23 (Bosque) → 28
+  (Brasal), arco 7 → 12 → 17, ballesta 7 → 13, varita y vara 13 → 21 → 30; y cada slot
+  crece con las islas: cabeza 1 → 2 (capucha de ciervo) → 3, piernas 1 → 2 → 3 (grebas de
+  acero de ascua), pies 1 → 2 (botas de ciervo) → 3 (escarpes).
 - **Límite conocido:** cada personaje guarda su inventario en su propio snapshot. Si A
   suelta un item, B lo levanta y se guarda, y el servidor cae antes del siguiente guardado
   de A, el item vuelve en ambos. Los items del suelo no se guardan ni desaparecen solos
@@ -524,7 +565,8 @@ Valores iniciales (balance.yaml):
 - **Bendiciones** (hasta 5, se compran con oro del juego a NPCs en templos):
   cada una reduce la pérdida; con las 5 no pierdes items y la pérdida de XP baja a ~3 %.
   En la Isla del Puerto las vende la hermana Liora (templo del Farol) a 200 monedas cada
-  una, precio fijo; las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
+  una, precio fijo, y solo desde el nivel 9 (auditoría de contenido m8: hasta el
+  `novice_max_level` ya se muere como con las cinco, así que antes se desperdiciaban); las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
   y `deep_light`. Se pierden al morir. Un precio que escale con el nivel queda pendiente
   (hito posterior). Se guardan en `quest_state` como `bless.<id>` (no se vende dos veces
   la misma); la columna `characters.blessings` de T1.3 no se usa.
@@ -569,6 +611,11 @@ Valores iniciales (balance.yaml):
   cuentan cada moneda por su valor.
 - NPCs compran y venden con precios en `data/npcs/*.yaml`. Los NPCs compran barato
   para que el comercio entre jugadores tenga sentido.
+- **Brebajes de maná** (auditoría de contenido M2, 2026-11): el combustible de los magos.
+  El brebaje (50 de maná, 22 cobre) lo venden el buzo de Puerto, la druida del Bosque y el
+  templo de Brasal (24); el concentrado (125, 50 cobre) solo Brasal. Nadie los compra de
+  vuelta. Un mago que caza con brebajes gasta en ellos alrededor del 60 % de su botín
+  (`sim/balance_vocations_test.go`): sube más rápido que el guardián y junta menos oro.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
   fundación de un gremio, la comisión del mercado y el alquiler de las casas (T5.4).
 - Log de economía para detectar duplicación y bots.
@@ -797,8 +844,9 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
   servidor arranca ni pasa `make validate` (docs/03 "Validación"), igual que un extremo de
   portal en una casa.
 - **Cobro atómico:** todo se comprueba antes; luego el jugador se mueve, se consume el
-  pasaje (si `consume: true`) y se paga el precio. El vuelto de una moneda grande cae en
-  la mochila o, si no cabe, a los pies del jugador en el destino.
+  pasaje (si `consume: true`) y se paga el precio. El vuelto de una moneda grande va a la
+  mochila: si no entra (huecos o capacidad), el viaje se rechaza antes de zarpar sin cobrar
+  nada (`dialog.no_change_room`, como todo pago con vuelto: ver "Economía").
 - Quienes lo veían en el muelle lo ven desaparecer y quienes están en la llegada lo ven
   aparecer (mismo movimiento que el teleport de staff). El cliente funde el mapa a oscuro
   con "Zarpaste hacia {isla}…".
@@ -1060,11 +1108,13 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
 3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo
    en la forja antigua, detrás de la puerta sellada: se entra abriéndola con la llave de
    ascua, ver "Puertas con llave"; en grupo desde el 40, solo desde el 44 y curándose),
-   tomar el sello de la forja de sus restos y llevárselo a Casia.
+   y llevarle a Casia el sello de la forja.
    36 000 XP, 2000 monedas y el flag `lost_expedition_lead`: el sello señala al norte, por
    donde salió la expedición perdida del Capítulo 4 ("Silencio blanco", Heladas; no
-   implementado). El custodio deja un solo sello por muerte: en grupo, cada uno espera su
-   respawn para el suyo.
+   implementado). El sello es botín de quest (`each_player`, auditoría de contenido m9):
+   a cada uno de los que le hicieron daño al custodio y tienen la quest en ese paso le
+   llega el suyo a la mochila (o a los pies si no entra). Antes salía uno por muerte y un
+   grupo de cinco esperaba cinco respawns de 20 minutos.
 - **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de

@@ -49,6 +49,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
+| Decidir si la vocación "Druida" / "Druid" cambia de nombre: es igual a la de Tibia (regla legal). La auditoría de contenido (m12) renombró los hechizos parecidos, pero el nombre de una vocación es decisión tuya. Si cambia, es solo `vocation.druid.name` en `i18n/*/vocations.yaml` y los textos que la nombran (el id `druid` se queda) | Regla legal | `02-game-design.md` "Vocaciones (nombres provisionales)" |
 
 ## Orden sugerido
 No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
@@ -128,6 +129,23 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     alternan (ya pasaba sin correa; `walkHome` ahora sigue el rodeo entero); nada valida
     que el centro de un spawn sea caminable (hoy todos lo son); la espera tras una
     búsqueda fallida usa `readyAt`; y `make bench-tick` corre sin correa.
+- **Auditoría de contenido (2026-11), lo que quedó afuera de la rama de balance de
+  vocaciones** (`feat/balance-vocations`: maná, escalones de armas, ballesta y escudo del
+  montaraz, áreas nuevas, comida, sello por jugador, cuerda y pala, bendiciones desde el
+  nivel 9, nombres de hechizos y pulido de textos; detalle en `02-game-design.md`):
+  - M1: capacidad de spawns y de abedules para 100 jugadores (más spawns o respawn
+    escalado, abedules en el Bosque, un test de capacidad por franja);
+  - M6: casas (liberar tras semanas sin conectarse, alquiler escalado, más casas,
+    bendiciones con precio por nivel);
+  - m3 (defensa de las armas que no se usa), m4 (items huérfanos: `driftwood_club` sin
+    fuente, `quartz_crystal` y `rough_stone` sin comprador, quests que siguen soltando su
+    item), m7 (tablero del mercado en Brasal), m10/m11 (`testisle` en producción), m13
+    (comisión del mercado);
+  - en la carrera simulada los magos de nivel 30-40 cazan en el Bosque (reptantes) más
+    que en el Volcán: los monstruos del Volcán pegan fuerte para un cuerpo de mago. No es
+    un error, pero es una pista para cuando se mire M1;
+  - la pala sigue en `data/items` sin fuente (inventarios guardados): si algún día se cava,
+    es darle un destino y volver a venderla.
 - **CI de PR de mapas sin `pull_request_target`** (GitHub lo bloquea por defecto en repos
   públicos desde el 2026-12-02): `map-pr-pending.yml` ya no existe. El aviso de
   "pendiente" sale ahora del `workflow_run` `requested` de `map-pr`, y el status de commit

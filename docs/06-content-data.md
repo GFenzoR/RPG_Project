@@ -116,9 +116,10 @@ items:
   la piedra) y `lava` (fundida, no caminable, como el agua). Cada uno camina como el suelo
   que reemplazó en la isla, así que no cambian el ritmo con que se balanceó la caza.
 - **Distancia y munición** (T3.1): un arma `type: distance` exige `range` y `ammo` (el
-  `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type: arrow, attack }`,
-  apilable, y va en el slot de munición. Cada disparo gasta una y suma su `attack` al del
-  arma:
+  `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type, attack }`
+  (`arrow` para los arcos, `bolt` para las ballestas de una mano de la auditoría de
+  contenido M4), apilable, y va en el slot de munición. Cada disparo gasta una y suma su
+  `attack` al del arma:
   ```yaml
   - id: short_bow
     kind: weapon
@@ -163,6 +164,16 @@ items:
   usada sobre un punto de soga (`rope_spot` de `portals.yaml`) sube al jugador
   (`02-game-design.md`, "Cambiar de piso"); sobre cualquier otra casilla sigue como una
   herramienta de recolección. El valor `rope` lo nombra el servidor (`session/portal.go`).
+- **Destino de las herramientas** (auditoría de contenido m1): `make validate` exige que
+  toda herramienta que un jugador puede conseguir en producción (la vende o la da un NPC
+  colocado en una isla que no es `dev_only`, la suelta un monstruo, sale de una receta o
+  de una recompensa) tenga dónde usarse en el mapa de producción: un recurso de su
+  `tool` (pesca, minería, tala) o una estación de una receta que la pide (herrería)
+  colocados en los chunks de esas islas, o un portal `rope_spot` (la cuerda). La pala
+  (`tool.use: shovel`) no tiene nada todavía: por eso ya no se vende.
+- **Consumibles** (`consumable`): `heal_hp` y `heal_mp` curan vida y maná (los brebajes de
+  maná de M2, `data/items/misc.yaml`); `food_ms` (auditoría de contenido m2) es cuánto
+  tiempo de la condición `well_fed` da comerlo (ver "Condiciones").
 - **Portales** (`portal`): un item fijo del mapa que muestra un portal de `portals.yaml`
   (`02-game-design.md` "Cambiar de piso"): `kind` (`stairs`, `ladder`, `hole`,
   `rope_spot`, `teleport`) y, opcional, `leads` (`up` o `down`: el sentido en que cambia
@@ -256,6 +267,12 @@ loot:
   - { item: copper_coin, chance: 0.6, count: [1, 8] }
 tags: [beast, puerto]
 ```
+- **Botín de quest** (`each_player: true` en una entrada de `loot`, auditoría de
+  contenido m9): en vez de uno en los restos, a cada jugador que le hizo daño al monstruo
+  y cuya quest pide ese item ahora (el paso actual es un `has_item` de ese item que
+  todavía no tiene) le llega el suyo a la mochila, o a los pies si no entra, con su
+  propia tirada de `chance`. Nadie más lo recibe y los restos no lo llevan. Lo usa el
+  sello de la forja del custodio (`ch3_warden`).
 
 ## NPC con diálogo de ventana
 Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
@@ -443,7 +460,7 @@ que toma la llave con `take_item`) y las quests secundarias `foreman_ore` y
 - id: light_heal
   name: spell.light_heal.name
   words: "vita lumen"        # palabras propias, nunca las de Tibia
-  vocations: [druid, arcanist]
+  vocations: [arcanist]       # el druida tiene sus propias curas (verdant_mend, mend_other)
   level: 6
   mana: 25
   group: healing
@@ -498,7 +515,9 @@ conditions:
 ```
 - `kind`: `damage` (un golpe de `element` cada `interval_ms`; exige `element`,
   `interval_ms` y `max_ticks`), `speed` (`speed_pct`, negativo frena), `skill` (`skill` +
-  `amount` niveles en combate) o `invisible`. Las que no son de daño exigen `max_ms`.
+  `amount` niveles en combate), `invisible` o `regen` (auditoría de contenido m2: la
+  regeneración de la vocación es `regen_pct` % más fuerte; la da la comida, `well_fed`).
+  Las que no son de daño exigen `max_ms`.
 - `stacking`: `refresh` (queda el tiempo o los golpes mayores y el daño mayor) o `add`
   (se suman hasta `max_ticks` / `max_ms`). `cancels` lista las que quita al aplicarse.
 - `persists: true` = sobrevive a un relogueo (ver `02-game-design.md`, "Condiciones").
