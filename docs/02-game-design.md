@@ -480,6 +480,40 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   `spell` llegan con la magia (T1.9).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
   jugador está mirando el punto (evita aparecer en la cara): se reintenta cada 5 s.
+- **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
+  el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
+  (distancia Chebyshev al centro); su **área de correa**, ese radio más
+  `monster_leash_tiles`. Con correa:
+  - Solo elige objetivos dentro de su área de correa, y nunca sale de ella persiguiendo ni
+    huyendo (si huyendo llega al borde, acorralado pelea, como siempre).
+  - Si su objetivo queda fuera del área de correa y fuera del alcance de sus ataques, lo
+    suelta: recupera toda la vida, se le terminan las condiciones (una quemadura no sigue
+    sumando daño), olvida el daño recibido de todos (nadie cobra experiencia por esa pelea)
+    y vuelve caminando a casa. Un objetivo fuera del área pero a su alcance (un
+    jugador pegado al borde, o a tiro de un ataque a distancia) se sigue peleando desde
+    adentro.
+  - Sin objetivo (lo soltó, o el jugador murió, salió, entró a una zona de protección o se
+    perdió de vista), si está fuera de su área de casa vuelve caminando hacia el centro del
+    spawn a su velocidad, en vez de deambular, hasta entrar en ella (sin curarse en ese
+    caso; si en el camino ve a alguien dentro de su correa, lo puede atacar). Da el paso
+    que más acerca; contra un muro o agua busca un rodeo (A*, con la cuota del tick) y lo
+    sigue entero. Si no hay camino, espera ahí (1 s entre búsquedas): nunca se
+    teletransporta.
+  - Un golpe desde fuera de la correa lo hace responder como siempre, pero en el siguiente
+    tick suelta a ese objetivo y se cura; una condición (quemadura, veneno) cuyo autor está
+    fuera de la correa y de su alcance se termina en su siguiente golpe sin hacer daño (solo
+    esa: si otro jugador lo está peleando adentro, la pelea sigue igual). No se puede matar
+    a un monstruo desde fuera de su correa. Tampoco sirve de muñeco: los golpes de un jugador que
+    está fuera de su correa y de su alcance entrenan como contra un objetivo que no
+    responde (`skills.afk.factor`).
+  - Pendiente: a un jugador dentro de la correa al que solo se llega saliendo de ella (un
+    rincón detrás de un muro que el camino rodea por fuera) no lo suelta: se queda quieto
+    mientras le disparan, como frente a cualquier lugar inalcanzable (docs/14).
+  - Por qué: en los corrales de la Isla de Pruebas (radio 2, con una abertura al sendero
+    común) los lobos, jabalíes y arañas perseguían al jugador por el sendero y nada los
+    devolvía: el sendero se llenaba de monstruos que mataban a quien pasaba. La correa los
+    deja salir unas casillas por la abertura y los devuelve; vale para todo el mundo, no
+    solo para la isla de pruebas.
 
 ## Muerte
 Valores iniciales (balance.yaml):
@@ -507,6 +541,13 @@ Valores iniciales (balance.yaml):
   - Todas las bendiciones `bless.*` se borran al morir (también las de un novato).
 - Reapareces en el templo de tu ciudad de residencia (`characters.town`, o la primera isla)
   con vida y maná completos. La muerte se guarda al instante (no espera al autoguardado).
+- **Mochila nueva:** si la mochila cayó al cuerpo, reapareces con una vacía
+  (`inventory.start_container`) en su slot; la vieja, con todo lo que llevaba, sigue en el
+  cuerpo (se recupera arrastrándola o abriéndolo). Sin un contenedor no se puede tener ni una
+  moneda ni levantar nada, así que no habría forma de comprar otra (hallazgo M5 de la
+  prueba exploratoria). La nueva entra al log de economía como `death` con ref
+  `new_backpack`. Además los proveedores (Puerto y la Isla de Pruebas) venden mochilas
+  (20 de cobre) para tener una de repuesto.
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
 - El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;

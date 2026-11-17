@@ -327,6 +327,7 @@ auth). Pasado el límite responden `429 rate_limited`.
 | `account_banned` | 403 | Cuenta suspendida por el staff (T2.6); solo con la contraseña correcta |
 | `unauthorized` | 401 | Token ausente, vencido o revocado |
 | `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
+| `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
 | `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |

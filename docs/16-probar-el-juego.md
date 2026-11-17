@@ -33,6 +33,11 @@ algo ya contesta en `:8080` (un `make dev` abierto, un `gameserver` que quedó v
   `localhost`; con `DEV_HTTP_ADDR=:8080` (la red de casa) o una `DATABASE_URL` remota, la
   tienda queda apagada. Ojo con un túnel SSH a una base remota en `localhost`: para
   `make play` cuenta como local.
+- `make play` y `make dev` arrancan el servidor con `-cookie-secure=false` (Safari y el
+  WebKit de Playwright descartan una cookie `Secure` en `http://localhost` y no quedan
+  dentro) y `-auth-rate-burst 200` (crear varias cuentas seguidas sin el 429 del límite por
+  IP). Son solo de estos dos comandos (`LOCAL_PLAY_FLAGS` del Makefile): producción usa los
+  valores por defecto.
 - `PLAY_START_TOWN=puerto make play` juega el inicio normal (Puerto, con tutorial).
 - Con `make dev` (que también levanta el editor y Mailpit) los personajes nuevos despiertan
   en Puerto; `RPG_START_TOWN=pruebas make dev` los manda a la Isla de Pruebas.
@@ -108,7 +113,9 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      (espada 45, escudo 40) mata a un espinoso y sale vivo (`TestSandboxTraining`).
    - Los monstruos no reaparecen donde un jugador los ve: si vacías un corral, aléjate
      (unas 8 casillas al sur de su abertura basta) hasta que vuelvan.
-   - Los monstruos salen de los corrales por la abertura y te siguen por el sendero.
+   - Los monstruos salen de los corrales por la abertura y te siguen unas casillas por el
+     sendero, pero no más allá de su correa: si te alejas, te sueltan, recuperan toda la
+     vida y vuelven caminando a su corral.
 4. **Recolección y oficios (oeste).** Con el pico, usa una veta (hierro y piedra); con el
    hacha de leñador, un abedul; con la caña, el agua con peces desde el muelle de pesca
    (alcance 3). Usa la fragua (2 minerales + 1 tronco = lingote), el yunque (con el martillo)

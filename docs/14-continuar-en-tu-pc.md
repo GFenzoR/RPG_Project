@@ -90,6 +90,44 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
+  muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
+  correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la
+  puerta con un jugador encima, la confirmación de "Dejar la casa", el límite de logins de
+  `make play`, la cantidad de la tienda y el pulido de textos. Quedó:
+  - **Dividir pilas (m1), propuesta.** Arrastrar mueve siempre la pila entera
+    (`client/src/game.ts` `moveItem` manda `count: Math.max(ref.count, 1)`), aunque
+    `MoveItem.count` existe y el servidor ya mueve una parte (`inventory.go` lee
+    `GetCount()`). Cliente solo: con Mayús (o Ctrl) al soltar una pila de más de 1, una
+    ventanita sobre el destino con un campo de cantidad (por defecto la mitad, máximo la
+    pila, Enter confirma y Escape cancela) y la misma regla pura de `shopCount`
+    (`ui/Dialog.tsx`); en táctil, un botón "Mover parte" del menú del toque largo. El
+    intercambio necesita protocolo: `TradeOffer` no lleva cantidad (`client.proto`), así
+    que se suma `uint32 count = 6` (0 = la pila entera, compatible), el servidor separa la
+    parte ofrecida al cerrar el trato (y revisa que siga habiendo esa cantidad) y la
+    ventana de intercambio muestra un campo de cantidad junto a cada pila ofrecible. Tests:
+    la regla pura, un test de sesión del trato parcial y el E2E de T5.3 con 10 de 100.
+  - **Sprites de las estaciones:** la fragua parece una fogata y el fogón un horno o un
+    portal (`assets/sprites.yaml`, recetas de `tools/spritegen`).
+  - **Casa de Prueba:** el `wooden_wall` y el `wooden_floor` se confunden (tablones los
+    dos) y la puerta de una casa es solo suelo (`houses.yaml` `doors`), sin nada que la
+    marque en el mapa. Un sprite de muro de troncos más oscuro, o un marco de puerta
+    decorativo que no bloquee, lo resolvería.
+  - **Encimados:** a zoom 2 se pisan los nombres de jugadores contiguos
+    (`render/labels.ts` solo los acomoda a zoom 1).
+  - **Saludo con género fijo:** "Bienvenido, {name}" (sin género del personaje en los datos).
+  - **401 en consola** al cargar `/play/` y `/shop` sin sesión: es el sondeo de sesión; se
+    puede pedir a una ruta que conteste 204 sin sesión.
+  - **Dificultad del corral 2:** tres lobos (0–16 cada 2 s) matan a un nivel 3 que sale
+    del corral 1. Queda para el lote de balance, con la comida (m4).
+  - **Correa, lo que quedó de la revisión** (`server/internal/session/monster.go`): un
+    jugador dentro de la correa al que solo se llega saliendo de ella no se suelta (el
+    monstruo se queda quieto mientras le disparan; arreglo posible: si no hay paso dentro
+    de la correa durante 2–3 s y sí lo hay por fuera, soltarlo); la persecución sigue
+    yendo y viniendo frente a un muro cuando el paso goloso y el primer paso de A* se
+    alternan (ya pasaba sin correa; `walkHome` ahora sigue el rodeo entero); nada valida
+    que el centro de un spawn sea caminable (hoy todos lo son); la espera tras una
+    búsqueda fallida usa `readyAt`; y `make bench-tick` corre sin correa.
 - **CI de PR de mapas sin `pull_request_target`** (GitHub lo bloquea por defecto en repos
   públicos desde el 2026-12-02): `map-pr-pending.yml` ya no existe. El aviso de
   "pendiente" sale ahora del `workflow_run` `requested` de `map-pr`, y el status de commit
@@ -306,7 +344,8 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   - no es un error, pero sorprende probando: un monstruo no reaparece donde un jugador lo
     ve, así que quien vacía un corral y se queda mirando no ve volver a nadie (docs/16
     lo dice ahora), y los monstruos salen de los corrales por la abertura y siguen al
-    jugador por el sendero.
+    jugador unas casillas por el sendero (la correa, `combat.monster_leash_tiles`, los
+    devuelve a su corral: docs/02 "Monstruos").
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

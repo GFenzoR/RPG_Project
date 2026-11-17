@@ -127,6 +127,11 @@ test-parity: ## mapcompile vs packages/map-format walkability on every tile
 DEV_WS_ORIGINS ?= localhost:5173,localhost:4173
 # Local servers let a brand-new account submit maps (T4.5; production waits 24 h).
 DEV_SERVER_FLAGS ?= -map-submit-min-account-age 0
+# make dev and make play only (http://localhost, never production): the session cookie
+# without Secure, or WebKit (Safari, Playwright's WebKit) drops it on plain http and cannot
+# stay logged in; and a per-IP register/login burst for trying many accounts from one
+# machine (the default, 10 and one more every 6 s, answered 429 while making several).
+LOCAL_PLAY_FLAGS ?= -cookie-secure=false -auth-rate-burst 200
 # The dev game server listens on loopback only: Vite proxies /api and /ws to it, and a
 # server on every interface makes the Windows firewall ask again after each `go run` (a new
 # exe path per build). DEV_HTTP_ADDR=:8080 exposes it on the LAN (docs/12).
@@ -241,7 +246,7 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 	else echo "[dev] Mailpit not started (no Docker?): account emails are off (DEV_MAIL=0 skips it)"; fi; \
 	trap 'kill 0' EXIT; \
 	(cd server && env $$mail_env $(DEV_RPG_ENV) RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
-		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)) & \
+		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS) $(LOCAL_PLAY_FLAGS)) & \
 	$(MAKE) client & \
 	$(MAKE) editor
 
@@ -269,7 +274,7 @@ play: db-up mapcompile ## Play on the sandbox island (docs/16): Postgres + map +
 	trap 'kill 0' EXIT; \
 	(cd server && env $(DEV_RPG_ENV) $$shop_env RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
 		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" \
-		-start-town "$(PLAY_START_TOWN)" $(DEV_SERVER_FLAGS)) & srv=$$!; \
+		-start-town "$(PLAY_START_TOWN)" $(DEV_SERVER_FLAGS) $(LOCAL_PLAY_FLAGS)) & srv=$$!; \
 	$(MAKE) client & \
 	ready=0; for i in $$(seq 1 300); do \
 		kill -0 $$srv 2>/dev/null || break; \
