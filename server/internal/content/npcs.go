@@ -121,9 +121,10 @@ type Bless struct {
 	PerLevel int64  `yaml:"per_level"`
 }
 
-// PriceAt is what the blessing costs a character of level.
+// PriceAt is what the blessing costs a character of level: never below zero (the schema
+// forbids negative numbers, but a hand-made value must not pay the buyer).
 func (b Bless) PriceAt(level int) int64 {
-	return b.Price + b.PerLevel*int64(max(level, 0))
+	return max(b.Price+b.PerLevel*int64(max(level, 0)), 0)
 }
 
 // QuestStep names a step of a quest.

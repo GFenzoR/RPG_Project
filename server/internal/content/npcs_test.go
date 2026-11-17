@@ -161,3 +161,21 @@ func TestTrainSkillLevelBoundMatchesTheSchema(t *testing.T) {
 	}
 	t.Fatal("no train_skill in the schema's action")
 }
+
+// Content audit M6: a blessing costs price + per_level × level, never below zero.
+func TestBlessPriceAt(t *testing.T) {
+	for _, c := range []struct {
+		b     Bless
+		level int
+		want  int64
+	}{
+		{Bless{Price: 50, PerLevel: 20}, 9, 230},
+		{Bless{Price: 200}, 60, 200},
+		{Bless{Price: 50, PerLevel: 20}, -3, 50},
+		{Bless{Price: -10, PerLevel: -5}, 30, 0},
+	} {
+		if got := c.b.PriceAt(c.level); got != c.want {
+			t.Errorf("%+v at level %d = %d, want %d", c.b, c.level, got, c.want)
+		}
+	}
+}
