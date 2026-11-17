@@ -28,7 +28,7 @@ func loadHouses(hs HouseStore) (*session.HouseData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load houses: %w", err)
 	}
-	out := &session.HouseData{Guests: d.Guests}
+	out := &session.HouseData{Guests: d.Guests, LastSave: d.LastSave}
 	for _, o := range d.Owners {
 		out.Owners = append(out.Owners, session.HouseOwner{HouseID: o.HouseID, CharacterID: o.CharacterID,
 			AccountID: o.AccountID, Name: o.Name, PaidUntil: o.PaidUntil, Since: o.Since, Seen: o.Seen,

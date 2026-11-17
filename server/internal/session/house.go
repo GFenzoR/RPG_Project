@@ -85,7 +85,8 @@ const (
 )
 
 // HouseOwner is who rents a house (house_owners). Seen, only when loading, is the last
-// time a character of the owner's account entered the game (zero: Since).
+// time a character of the owner's account was in the game (its last login or save, never
+// before the rule arrived; zero: Since).
 type HouseOwner struct {
 	HouseID     string
 	CharacterID int64
@@ -112,6 +113,9 @@ type HouseData struct {
 	// Guests are the guest names by house id.
 	Guests map[string][]string
 	Items  []HouseItem
+	// LastSave is the last save of any character (zero: unknown): the server was down
+	// from about then, and that downtime is not the owners' absence (content audit M6).
+	LastSave time.Time
 }
 
 // HouseOpKind says what a HouseOp changes.
@@ -221,6 +225,7 @@ func (w *World) initHouses() {
 	if d == nil {
 		return
 	}
+	w.houseDown = d.LastSave
 	for _, o := range d.Owners {
 		h := w.houseByID[o.HouseID]
 		if h == nil {
@@ -1093,6 +1098,7 @@ func (w *World) checkHouses(ctx *game.TickContext) {
 	if !w.houseOn {
 		return
 	}
+	w.houseBoot(ctx.Now)
 	w.flushHouses()
 	if ctx.Tick < w.houseNext {
 		return
@@ -1155,6 +1161,26 @@ func (w *World) renewHouse(now time.Time, h *house) {
 	w.log.Info("house: released, rent not paid", "house", h.def.ID, "character", owner)
 	w.releaseHouse(now, h, nil)
 	w.refreshHouse(h)
+}
+
+// houseBoot, once at the first sweep after a start: the time the server was down (since
+// the last save of any character, HouseData.LastSave) is not counted as the owners'
+// absence, so an outage or a long stop releases no house (content audit M6).
+func (w *World) houseBoot(now time.Time) {
+	if w.houseDown.IsZero() {
+		return
+	}
+	down := now.Sub(w.houseDown)
+	w.houseDown = time.Time{}
+	if down <= 0 {
+		return
+	}
+	for _, h := range w.houseList {
+		if h.owner != 0 {
+			h.seen = minTime(h.seen.Add(down), now)
+		}
+	}
+	w.log.Info("house: downtime not counted as absence", "down", down)
 }
 
 // ownerAway reports whether h's owner account has not been in the game for
@@ -1314,6 +1340,13 @@ func (w *World) HouseOwnerOf(id int64) string {
 		return h.def.ID
 	}
 	return ""
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
 }
 
 func maxTime(a, b time.Time) time.Time {

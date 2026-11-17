@@ -98,13 +98,14 @@ type MarketHistory struct {
 	At          time.Time
 }
 
-// MarketSale is the units sold and money paid of one item on one day (UTC) at one unit
-// price (Total / Units), for the reference prices.
+// MarketSale is the units sold and money paid of one item on one day (UTC) by the
+// characters of one seller account, for the reference prices.
 type MarketSale struct {
-	ItemID uint16
-	Day    time.Time
-	Units  int64
-	Total  int64
+	ItemID        uint16
+	Day           time.Time
+	SellerAccount int64
+	Units         int64
+	Total         int64
 }
 
 // MarketData is the market as loaded before the loop starts.
@@ -208,14 +209,18 @@ type mailbox struct {
 	items []MarketMail // oldest first
 }
 
-// priceDay is one day of sales of an item: the units sold at each unit price.
+// priceDay is one day of sales of an item: one vote per seller account.
 type priceDay struct {
-	day    int64        // Unix day
-	points []pricePoint // by price
+	day   int64 // Unix day
+	votes []priceVote
 }
 
-// pricePoint is how many units of an item were sold at one unit price.
-type pricePoint struct{ price, units int64 }
+// priceVote is what one seller account sold of an item on one day: its vote for the
+// reference price is the average unit price, total / units.
+type priceVote struct{ account, units, total int64 }
+
+// refCached is a reference price computed on day (World.refCache).
+type refCached struct{ day, price int64 }
 
 // marketView is the market window a player has open: the board it stands at and the
 // browsed item (0: none, kept in World.mkWatch). queued: a refresh waits in World.mkPush;
@@ -243,6 +248,7 @@ func (w *World) initMarket() {
 	w.mkWatch = map[uint16][]*Player{}
 	w.history = map[int64][]MarketHistory{}
 	w.sales = map[uint16][]priceDay{}
+	w.refCache = map[uint16]refCached{}
 	d := w.cfg.Market
 	if d == nil {
 		return
@@ -280,7 +286,7 @@ func (w *World) initMarket() {
 		w.addHistory(h)
 	}
 	for _, s := range d.Sales {
-		w.addSale(s.ItemID, s.Day, s.Units, s.Total)
+		w.addSale(s.ItemID, s.Day, s.SellerAccount, s.Units, s.Total)
 	}
 	for acc, until := range d.Bans {
 		w.banned[acc] = until
@@ -352,21 +358,23 @@ func (w *World) addHistory(h MarketHistory) {
 
 func unixDay(t time.Time) int64 { return t.Unix() / 86400 }
 
-func (w *World) addSale(item uint16, at time.Time, units, total int64) {
+// addSale records units of item sold for total by a character of account seller.
+func (w *World) addSale(item uint16, at time.Time, seller, units, total int64) {
 	if units <= 0 {
 		return
 	}
-	day, price := unixDay(at), total/units
+	delete(w.refCache, item)
+	day := unixDay(at)
 	days := w.sales[item]
 	if n := len(days); n == 0 || days[n-1].day != day {
 		days = append(days, priceDay{day: day})
 	}
 	d := &days[len(days)-1]
-	i, found := slices.BinarySearchFunc(d.points, price, func(p pricePoint, v int64) int { return cmp.Compare(p.price, v) })
-	if found {
-		d.points[i].units += units
+	if i := slices.IndexFunc(d.votes, func(v priceVote) bool { return v.account == seller }); i >= 0 {
+		d.votes[i].units += units
+		d.votes[i].total += total
 	} else {
-		d.points = slices.Insert(d.points, i, pricePoint{price: price, units: units})
+		d.votes = append(d.votes, priceVote{account: seller, units: units, total: total})
 	}
 	// Keep only the reference window.
 	first := 0
@@ -376,34 +384,43 @@ func (w *World) addSale(item uint16, at time.Time, units, total int64) {
 	w.sales[item] = days[first:]
 }
 
-// referencePrice is the median unit price of the units of item sold in the last
-// reference_days, each unit one vote (0: none). Informative only. A median and not the
-// average (content audit m13): a few sales at an absurd price between two accounts of
-// one player do not move it unless they are more units than all the other sales together.
+// referencePrice is the reference price of item (0: none). Informative only. Content
+// audit m13: each seller account votes once a day, with its average unit price of that
+// day, and the reference is the median vote of the last reference_days (the lower one
+// of an even count); with fewer than reference_min_votes votes or reference_min_sellers
+// different seller accounts there is none. So a player selling to an account of its own,
+// at an absurd price or a ridiculous one, in one sale or a thousand, casts one vote a day
+// that the other sellers outvote. It is cached per item for the day (addSale drops it).
 func (w *World) referencePrice(item uint16, now time.Time) int64 {
-	pts := w.refPoints[:0]
-	var units int64
 	today := unixDay(now)
+	if c, ok := w.refCache[item]; ok && c.day == today {
+		return c.price
+	}
+	price := w.medianVote(item, today)
+	w.refCache[item] = refCached{day: today, price: price}
+	return price
+}
+
+func (w *World) medianVote(item uint16, today int64) int64 {
+	prices := w.refPrices[:0]
+	sellers := w.refSellers[:0]
 	for _, d := range w.sales[item] {
-		if d.day > today-int64(w.mk.ReferenceDays) {
-			pts = append(pts, d.points...)
-			for _, p := range d.points {
-				units += p.units
+		if d.day <= today-int64(w.mk.ReferenceDays) {
+			continue
+		}
+		for _, v := range d.votes {
+			prices = append(prices, v.total/v.units)
+			if !slices.Contains(sellers, v.account) {
+				sellers = append(sellers, v.account)
 			}
 		}
 	}
-	w.refPoints = pts
-	if units == 0 {
+	w.refPrices, w.refSellers = prices, sellers
+	if len(prices) == 0 || len(prices) < max(w.mk.ReferenceMinVotes, 1) || len(sellers) < max(w.mk.ReferenceMinSellers, 1) {
 		return 0
 	}
-	slices.SortFunc(pts, func(a, b pricePoint) int { return cmp.Compare(a.price, b.price) })
-	var seen int64
-	for _, p := range pts {
-		if seen += p.units; 2*seen >= units {
-			return p.price // the lower median when the units split evenly
-		}
-	}
-	return pts[len(pts)-1].price
+	slices.Sort(prices)
+	return prices[(len(prices)-1)/2]
 }
 
 // ---- access -----------------------------------------------------------------------
@@ -910,7 +927,11 @@ func (w *World) marketAccept(ctx *game.TickContext, p *Player, id int64, n uint3
 	bought := MarketHistory{CharacterID: buyer, Other: seller, ItemID: o.ItemID, Amount: units, Price: o.Price, At: ctx.Now}
 	w.addHistory(sold)
 	w.addHistory(bought)
-	w.addSale(o.ItemID, ctx.Now, int64(units), total)
+	sellerAcc := o.AccountID
+	if !o.Sell {
+		sellerAcc = p.accountID
+	}
+	w.addSale(o.ItemID, ctx.Now, sellerAcc, int64(units), total)
 	ops = append(ops, MarketOp{Kind: MarketHistoryAdd, History: sold}, MarketOp{Kind: MarketHistoryAdd, History: bought})
 	if o.Amount == 0 {
 		w.dropOffer(o)

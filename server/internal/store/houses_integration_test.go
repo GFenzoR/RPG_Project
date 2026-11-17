@@ -157,6 +157,23 @@ func TestHouseTransfers(t *testing.T) {
 	if d, err = st.LoadHouses(ctx); err != nil || !d.Owners[0].Seen.Equal(later) {
 		t.Fatalf("seen after another character of the account logged in: %+v, %v", d.Owners, err)
 	}
+	// Its last save counts too (it was in the game until then), and LastSave is the last
+	// save of any character: the loop does not count the downtime after it as absence.
+	saved := later.Add(5 * time.Hour)
+	if _, err := conn.Exec(ctx, `UPDATE characters SET last_save_at = $1 WHERE id = $2`, saved, ana); err != nil {
+		t.Fatal(err)
+	}
+	if d, err = st.LoadHouses(ctx); err != nil || !d.Owners[0].Seen.Equal(saved) || !d.LastSave.Equal(saved) {
+		t.Fatalf("seen and last save after a save: %+v, %v, %v", d.Owners, d.LastSave, err)
+	}
+	// away_from (migration 00018: the rule's arrival for the rows already there) is a floor.
+	floor := saved.Add(24 * time.Hour)
+	if _, err := conn.Exec(ctx, `UPDATE house_owners SET away_from = $1 WHERE house_id = 'cottage'`, floor); err != nil {
+		t.Fatal(err)
+	}
+	if d, err = st.LoadHouses(ctx); err != nil || !d.Owners[0].Seen.Equal(floor) {
+		t.Fatalf("seen under away_from: %+v, %v", d.Owners, err)
+	}
 	pub, err := st.PublicHouses(ctx, now)
 	if err != nil || len(pub) != 1 || pub[0].Name != "Ana" {
 		t.Fatalf("public %+v, %v", pub, err)

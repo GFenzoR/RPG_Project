@@ -62,11 +62,13 @@ type HouseOp struct {
 	Items       []HouseItem
 }
 
-// HouseData is every house row as loaded at start.
+// HouseData is every house row as loaded at start. LastSave is the last save of any
+// character (zero: none), the start of the downtime the loop does not count as absence.
 type HouseData struct {
-	Owners []HouseOwner
-	Guests map[string][]string
-	Items  []HouseItem
+	Owners   []HouseOwner
+	Guests   map[string][]string
+	Items    []HouseItem
+	LastSave time.Time
 }
 
 // PublicHouseOwner is a rented house on /api/houses; Name is empty when the owner may not
@@ -155,6 +157,13 @@ func (s *Store) LoadHouses(ctx context.Context) (HouseData, error) {
 		}
 		for _, g := range guests {
 			d.Guests[g.HouseID] = append(d.Guests[g.HouseID], g.Name)
+		}
+		last, err := q.LastCharacterSave(ctx)
+		if err != nil {
+			return fmt.Errorf("last character save: %w", err)
+		}
+		if last.Valid {
+			d.LastSave = last.Time
 		}
 		items, err := q.LoadHouseItems(ctx)
 		if err != nil {

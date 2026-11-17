@@ -102,8 +102,8 @@ type InsertHouseItemsParams struct {
 }
 
 const insertHouseOwner = `-- name: InsertHouseOwner :exec
-INSERT INTO house_owners (house_id, character_id, account_id, paid_until, since, guild_access)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO house_owners (house_id, character_id, account_id, paid_until, since, guild_access, away_from)
+VALUES ($1, $2, $3, $4, $5, $6, $5)
 `
 
 type InsertHouseOwnerParams struct {
@@ -115,7 +115,8 @@ type InsertHouseOwnerParams struct {
 	GuildAccess bool
 }
 
-// Rents a free house (a row already there is a conflict: the transfer fails).
+// Rents a free house (a row already there is a conflict: the transfer fails). away_from is
+// the rent time, by the loop's clock.
 func (q *Queries) InsertHouseOwner(ctx context.Context, arg InsertHouseOwnerParams) error {
 	_, err := q.db.Exec(ctx, insertHouseOwner,
 		arg.HouseID,
@@ -126,6 +127,20 @@ func (q *Queries) InsertHouseOwner(ctx context.Context, arg InsertHouseOwnerPara
 		arg.GuildAccess,
 	)
 	return err
+}
+
+const lastCharacterSave = `-- name: LastCharacterSave :one
+SELECT max(last_save_at)::timestamptz AS at FROM characters
+`
+
+// When the server last saved any character (content audit M6): after a restart the loop
+// does not count the downtime since then as absence of the house owners, so an outage
+// releases no house. NULL with no save yet.
+func (q *Queries) LastCharacterSave(ctx context.Context) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, lastCharacterSave)
+	var at pgtype.Timestamptz
+	err := row.Scan(&at)
+	return at, err
 }
 
 const loadHouseGuests = `-- name: LoadHouseGuests :many
@@ -200,7 +215,9 @@ func (q *Queries) LoadHouseItems(ctx context.Context) ([]LoadHouseItemsRow, erro
 const loadHouseOwners = `-- name: LoadHouseOwners :many
 
 SELECT h.house_id, h.character_id, h.account_id, c.name, h.paid_until, h.since, h.guild_access,
-    GREATEST(h.since, (SELECT max(o.last_login_at) FROM characters o WHERE o.account_id = h.account_id))::timestamptz AS seen
+    GREATEST(h.since, h.away_from,
+        (SELECT max(o.last_login_at) FROM characters o WHERE o.account_id = h.account_id),
+        (SELECT max(o.last_save_at) FROM characters o WHERE o.account_id = h.account_id))::timestamptz AS seen
 FROM house_owners h JOIN characters c ON c.id = h.character_id
 ORDER BY h.house_id
 `
@@ -218,9 +235,9 @@ type LoadHouseOwnersRow struct {
 
 // Player houses (T5.4). The loop owns them in memory: these queries load them at start and
 // write each change inside the transaction of a session.Transfer.
-// seen: the last login of any character of the owner's account (content audit M6: an
-// owner away for balance houses.inactive_days loses the house at its next rent), or
-// since, the day it got the house, when none is newer.
+// seen: when a character of the owner's account was last in the game (its last login or
+// save), never before away_from or since (content audit M6: the loop releases the house
+// of an owner away for balance houses.inactive_days).
 func (q *Queries) LoadHouseOwners(ctx context.Context) ([]LoadHouseOwnersRow, error) {
 	rows, err := q.db.Query(ctx, loadHouseOwners)
 	if err != nil {

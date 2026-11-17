@@ -198,6 +198,7 @@ type HouseOwner struct {
 	PaidUntil   pgtype.Timestamptz
 	Since       pgtype.Timestamptz
 	GuildAccess bool
+	AwayFrom    pgtype.Timestamptz
 }
 
 type InventoryItem struct {

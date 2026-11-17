@@ -43,7 +43,8 @@ combat:
   #   max_hit = skill * attack / skill_attack_divisor + level / level_divisor, × mode attack
   #   hit = random(0, max_hit) × (1 - physical resistance)
   #   target armor removes random(armor/2, armor); a monster's defense random(0, defense/2);
-  #   a player's shield random(0, shield_defense × mode defense / shield_block_divisor).
+  #   a player's hands random(0, (shield + weapon defense) × mode defense / shield_block_divisor)
+  #   (content audit m3: the weapon's defense counts too).
   fist_attack: 7              # attack value of bare hands (no weapon equipped)
   skill_attack_divisor: 10
   level_divisor: 4
@@ -139,7 +140,10 @@ market:                     # T5.3 (docs/02-game-design.md, "Economía"). Own nu
   durations_hours: [12, 48, 120]
   list_size: 15             # offers per side in a search, best prices first
   history_size: 25          # own operations shown, newest first
-  reference_days: 5         # reference price: median unit price (per unit sold) of these days
+  reference_days: 5         # reference price: the median of these days' votes, one vote per
+                            # seller account and day (its average unit price that day)
+  reference_min_votes: 3    # content audit m13: no reference with fewer votes...
+  reference_min_sellers: 2  # ...or from fewer different seller accounts
   mailbox_shown: 30         # mailbox items sent to the window at once
   action_burst: 6           # anti-flood: 6 actions at once, then one every 400 ms
   action_refill_ms: 400

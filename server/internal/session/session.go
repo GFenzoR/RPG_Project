@@ -364,7 +364,9 @@ type World struct {
 	mail         map[int64]*mailbox
 	history      map[int64][]MarketHistory
 	sales        map[uint16][]priceDay
-	refPoints    []pricePoint // referencePrice's scratch
+	refCache     map[uint16]refCached // reference price by item, for the day it was computed
+	refPrices    []int64              // medianVote's scratch
+	refSellers   []int64
 	nextOffer    int64
 	nextMail     int64
 	nextTransfer uint64
@@ -414,6 +416,7 @@ type World struct {
 	hs            content.Houses
 	hsPeriod      time.Duration
 	hsAway        time.Duration // houses.inactive_days (0: off)
+	houseDown     time.Time     // HouseData.LastSave until the first sweep (houseBoot)
 	hsRefill      game.Tick
 	hsBurst       game.Tick
 	houseByID     map[string]*house

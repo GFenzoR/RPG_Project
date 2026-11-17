@@ -22,8 +22,13 @@ type Market struct {
 	ListSize int `yaml:"list_size"`
 	// HistorySize is how many of its own operations a character sees (newest first).
 	HistorySize int `yaml:"history_size"`
-	// ReferenceDays is the window of the reference price (average of the trades).
+	// ReferenceDays is the window of the reference price: the median of the votes of
+	// those days, one vote per seller account and day (content audit m13).
 	ReferenceDays int `yaml:"reference_days"`
+	// No reference price is shown with fewer votes than ReferenceMinVotes or from fewer
+	// seller accounts than ReferenceMinSellers (0 counts as 1).
+	ReferenceMinVotes   int `yaml:"reference_min_votes"`
+	ReferenceMinSellers int `yaml:"reference_min_sellers"`
 	// MailboxShown bounds the mailbox items sent at once (the rest come after a withdraw).
 	MailboxShown int `yaml:"mailbox_shown"`
 	// Anti-flood: a burst of ActionBurst market actions, then one every ActionRefillMs.
@@ -49,6 +54,10 @@ func (m Market) check() error {
 	if m.MaxOffers < 1 || m.MaxOffers > 100 || m.MaxAmount < 1 || m.MaxAmount > 100_000 ||
 		m.MaxPrice < 1 || m.MaxPrice > MaxMarketPrice {
 		return errors.New("market: max_offers in 1..100, max_amount in 1..100000, max_price in 1..1000000000")
+	}
+	if m.ReferenceMinVotes < 0 || m.ReferenceMinVotes > 1000 || m.ReferenceMinSellers < 0 ||
+		m.ReferenceMinSellers > m.ReferenceMinVotes && m.ReferenceMinVotes > 0 {
+		return errors.New("market: reference_min_votes in 0..1000, reference_min_sellers in 0..reference_min_votes")
 	}
 	if len(m.DurationsHours) == 0 || len(m.DurationsHours) > 8 {
 		return errors.New("market: durations_hours needs 1..8 entries")

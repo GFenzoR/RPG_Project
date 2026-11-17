@@ -822,6 +822,18 @@
         "list_size": { "type": "integer", "minimum": 1, "maximum": 100 },
         "history_size": { "type": "integer", "minimum": 1, "maximum": 200 },
         "reference_days": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "reference_min_votes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Content audit m13: no reference price with fewer votes (one per seller account and day) in the window."
+        },
+        "reference_min_sellers": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Content audit m13: no reference price from fewer different seller accounts."
+        },
         "mailbox_shown": { "type": "integer", "minimum": 1, "maximum": 200 },
         "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
         "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },

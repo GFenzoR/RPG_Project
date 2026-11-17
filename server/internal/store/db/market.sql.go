@@ -427,21 +427,24 @@ func (q *Queries) LoadMarketOffers(ctx context.Context) ([]LoadMarketOffersRow, 
 }
 
 const loadMarketSales = `-- name: LoadMarketSales :many
-SELECT item_id, date_trunc('day', at, 'UTC')::timestamptz AS day, sum(amount)::bigint AS units,
-    sum(amount * price)::bigint AS total
-FROM market_history WHERE side = 1 AND at >= $1
-GROUP BY item_id, day, price ORDER BY item_id, day, price
+SELECT h.item_id, date_trunc('day', h.at, 'UTC')::timestamptz AS day, c.account_id AS seller_account,
+    sum(h.amount)::bigint AS units, sum(h.amount * h.price)::bigint AS total
+FROM market_history h JOIN characters c ON c.id = h.character_id
+WHERE h.side = 1 AND h.at >= $1
+GROUP BY h.item_id, day, c.account_id ORDER BY h.item_id, day, c.account_id
 `
 
 type LoadMarketSalesRow struct {
-	ItemID int32
-	Day    pgtype.Timestamptz
-	Units  int64
-	Total  int64
+	ItemID        int32
+	Day           pgtype.Timestamptz
+	SellerAccount int64
+	Units         int64
+	Total         int64
 }
 
-// Units sold and money paid by item, day and unit price since a time (reference prices:
-// the median unit price, content audit m13).
+// Units sold and money paid by item, day and seller account since a time (reference
+// prices: one vote per seller account and day, content audit m13). side 1 rows are the
+// seller's.
 func (q *Queries) LoadMarketSales(ctx context.Context, since pgtype.Timestamptz) ([]LoadMarketSalesRow, error) {
 	rows, err := q.db.Query(ctx, loadMarketSales, since)
 	if err != nil {
@@ -454,6 +457,7 @@ func (q *Queries) LoadMarketSales(ctx context.Context, since pgtype.Timestamptz)
 		if err := rows.Scan(
 			&i.ItemID,
 			&i.Day,
+			&i.SellerAccount,
 			&i.Units,
 			&i.Total,
 		); err != nil {
