@@ -282,7 +282,8 @@ export interface DialogState {
   /** data/npcs id of the NPC (its name is npc.<id>.name), when the client knows it. */
   npcContentId: string;
   text: string;
-  options: { id: number; text: string }[];
+  /** Each option's i18n key and its parameters (a blessing's {price}, content audit M6). */
+  options: { id: number; text: string; params: TextParam[] }[];
 }
 
 /** One line of an open shop (ShopOpen): prices 0 mean the NPC does not trade it that way. */
@@ -593,7 +594,11 @@ export class WorldState implements TileSource {
           npcId: v.npcCreatureId,
           npcContentId: this.creatures.get(v.npcCreatureId)?.contentId ?? "",
           text: v.text?.key ?? "",
-          options: v.options.map((o) => ({ id: o.optionId, text: o.text?.key ?? "" })),
+          options: v.options.map((o) => ({
+            id: o.optionId,
+            text: o.text?.key ?? "",
+            params: o.text?.params ?? [],
+          })),
         };
         break;
       }

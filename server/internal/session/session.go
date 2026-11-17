@@ -364,6 +364,7 @@ type World struct {
 	mail         map[int64]*mailbox
 	history      map[int64][]MarketHistory
 	sales        map[uint16][]priceDay
+	refPoints    []pricePoint // referencePrice's scratch
 	nextOffer    int64
 	nextMail     int64
 	nextTransfer uint64
@@ -412,6 +413,7 @@ type World struct {
 	houseOn       bool
 	hs            content.Houses
 	hsPeriod      time.Duration
+	hsAway        time.Duration // houses.inactive_days (0: off)
 	hsRefill      game.Tick
 	hsBurst       game.Tick
 	houseByID     map[string]*house

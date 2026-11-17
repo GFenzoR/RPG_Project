@@ -571,6 +571,79 @@ func TestHouseStaffCommands(t *testing.T) {
 	_ = a
 }
 
+// Content audit M6: the mailbox does not keep a house rented for an owner who stopped
+// playing. With no character of the owner's account in the game for houses.inactive_days,
+// the house is released at its next due rent, with the gold still in the mailbox; any
+// character of the account entering or leaving resets the count; the owner hears the rule
+// at every login.
+func TestHouseReleasedWhenOwnerAway(t *testing.T) {
+	const acc = 7700
+	day := 24 * time.Hour
+	h := newHouseHarness(t, func(c *session.Config) { c.Balance.Houses.InactiveDays = 10 })
+	cl, a := h.tenant("Ana", acc, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	owner := a.CharacterID()
+	h.rent(cl)
+	h.w.MailGoldForTest(owner, 1000)
+	leave := func(cl *fakeClient) {
+		h.sim.Command(h.w.Leave(cl))
+		h.sim.Step()
+	}
+	leave(cl)
+	renewedTo := func(when string, gold int64) {
+		t.Helper()
+		h.sim.RunTicks(25)
+		if h.w.HouseOwnerOf(owner) != "cottage" || h.w.MailGoldForTest(owner, 0) != gold {
+			t.Fatalf("%s: house %q, mailbox %d (want cottage, %d)", when, h.w.HouseOwnerOf(owner),
+				h.w.MailGoldForTest(owner, 0), gold)
+		}
+	}
+
+	// Day 1: the owner comes back for a moment and is told the rule.
+	h.sim.Clock().Advance(day)
+	c := withPack(owner, cottageExit)
+	c.Name, c.Level, c.AccountID = "Ana", 10, acc
+	cl, _ = h.joinChar(c)
+	if !hasKey(cl.take(), "house.away_warning") {
+		t.Fatal("the owner was not told the inactivity rule at login")
+	}
+	leave(cl)
+	// Day 7: rent due, away 6 days: renewed from the mailbox.
+	h.sim.Clock().Advance(6*day + time.Minute)
+	renewedTo("day 7", 850)
+	// Day 8: another character of the account enters and leaves (no warning: not the owner).
+	h.sim.Clock().Advance(day)
+	clb, _ := h.tenant("Alt", acc, pos(0, 0))
+	if hasKey(clb.take(), "house.away_warning") {
+		t.Error("a character that owns no house was warned")
+	}
+	leave(clb)
+	// Day 14: away 6 days since: renewed again.
+	h.sim.Clock().Advance(6 * day)
+	renewedTo("day 14", 700)
+	// Day 21: away 13 days (10 allowed): released, the gold stays in the mailbox.
+	h.sim.Clock().Advance(7 * day)
+	h.sim.RunTicks(25)
+	if h.w.HouseOwnerOf(owner) != "" || h.w.MailGoldForTest(owner, 0) != 700 {
+		t.Fatalf("day 21: house %q, mailbox %d (want free, 700)", h.w.HouseOwnerOf(owner), h.w.MailGoldForTest(owner, 0))
+	}
+	if ops := h.houseOps(session.HouseOwnerRemove); len(ops) != 1 || ops[0].CharacterID != owner {
+		t.Fatalf("release ops = %+v", ops)
+	}
+}
+
+// An owner online all along is never away, however long ago it entered.
+func TestHouseOwnerOnlineIsNotAway(t *testing.T) {
+	h := newHouseHarness(t, func(c *session.Config) { c.Balance.Houses.InactiveDays = 3 })
+	cl, a := h.tenant("Ana", 0, cottageExit, stack(coinID, 100, 0), stack(coinID, 100, 1))
+	h.rent(cl)
+	h.w.MailGoldForTest(a.CharacterID(), 500)
+	h.sim.Clock().Advance(7*24*time.Hour + time.Minute)
+	h.sim.RunTicks(25)
+	if h.w.HouseOwnerOf(a.CharacterID()) != "cottage" || !hasKey(cl.take(), "house.renewed") {
+		t.Fatal("the online owner lost the house")
+	}
+}
+
 func TestHousesLoaded(t *testing.T) {
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	h := newHouseHarness(t, func(c *session.Config) {

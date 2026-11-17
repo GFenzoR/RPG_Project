@@ -143,7 +143,7 @@ func Check(as content.Actions, f Facts) string {
 			if f.HasBlessing(a.Bless.Blessing) {
 				return MsgAlreadyBlessed
 			}
-			gold += a.Bless.Price
+			gold += a.Bless.PriceAt(f.Level())
 		}
 	}
 	if gold > f.Money() {

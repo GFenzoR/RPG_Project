@@ -500,6 +500,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	// After the ledger: resuming may end the tutorial and give its reward (T4.2).
 	w.tutorialJoin(p)
 	w.guildJoin(p) // T5.1: its GuildUpdate, and the others see it online
+	if w.houseOn {
+		w.houseSeen(ctx.Now, p, true) // content audit M6: the account is not away
+	}
 
 	// Staggered autosave: first at a random point of the first interval.
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
@@ -549,6 +552,9 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.cancelTrade(p, tradeCancelLeft) // T5.3
 	w.dropMarket(p)
 	p.house = nil
+	if w.houseOn {
+		w.houseSeen(ctx.Now, p, false) // M6: away counts from the last time it left
+	}
 	w.unindex(p)
 	delete(w.byClient, p.client)
 	if w.byChar[p.charID] == p {

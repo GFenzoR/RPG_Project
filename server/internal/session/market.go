@@ -98,8 +98,8 @@ type MarketHistory struct {
 	At          time.Time
 }
 
-// MarketSale is the units sold and money paid of one item on one day (UTC), for the
-// reference prices.
+// MarketSale is the units sold and money paid of one item on one day (UTC) at one unit
+// price (Total / Units), for the reference prices.
 type MarketSale struct {
 	ItemID uint16
 	Day    time.Time
@@ -208,11 +208,14 @@ type mailbox struct {
 	items []MarketMail // oldest first
 }
 
-// priceDay is one day of sales of an item.
+// priceDay is one day of sales of an item: the units sold at each unit price.
 type priceDay struct {
-	day          int64 // Unix day
-	units, total int64
+	day    int64        // Unix day
+	points []pricePoint // by price
 }
+
+// pricePoint is how many units of an item were sold at one unit price.
+type pricePoint struct{ price, units int64 }
 
 // marketView is the market window a player has open: the board it stands at and the
 // browsed item (0: none, kept in World.mkWatch). queued: a refresh waits in World.mkPush;
@@ -350,13 +353,20 @@ func (w *World) addHistory(h MarketHistory) {
 func unixDay(t time.Time) int64 { return t.Unix() / 86400 }
 
 func (w *World) addSale(item uint16, at time.Time, units, total int64) {
-	day := unixDay(at)
+	if units <= 0 {
+		return
+	}
+	day, price := unixDay(at), total/units
 	days := w.sales[item]
-	if n := len(days); n > 0 && days[n-1].day == day {
-		days[n-1].units += units
-		days[n-1].total += total
+	if n := len(days); n == 0 || days[n-1].day != day {
+		days = append(days, priceDay{day: day})
+	}
+	d := &days[len(days)-1]
+	i, found := slices.BinarySearchFunc(d.points, price, func(p pricePoint, v int64) int { return cmp.Compare(p.price, v) })
+	if found {
+		d.points[i].units += units
 	} else {
-		days = append(days, priceDay{day: day, units: units, total: total})
+		d.points = slices.Insert(d.points, i, pricePoint{price: price, units: units})
 	}
 	// Keep only the reference window.
 	first := 0
@@ -366,21 +376,34 @@ func (w *World) addSale(item uint16, at time.Time, units, total int64) {
 	w.sales[item] = days[first:]
 }
 
-// referencePrice is the average unit price of the sales of item in the last
-// reference_days (0: none). Informative only.
+// referencePrice is the median unit price of the units of item sold in the last
+// reference_days, each unit one vote (0: none). Informative only. A median and not the
+// average (content audit m13): a few sales at an absurd price between two accounts of
+// one player do not move it unless they are more units than all the other sales together.
 func (w *World) referencePrice(item uint16, now time.Time) int64 {
-	var units, total int64
+	pts := w.refPoints[:0]
+	var units int64
 	today := unixDay(now)
 	for _, d := range w.sales[item] {
 		if d.day > today-int64(w.mk.ReferenceDays) {
-			units += d.units
-			total += d.total
+			pts = append(pts, d.points...)
+			for _, p := range d.points {
+				units += p.units
+			}
 		}
 	}
+	w.refPoints = pts
 	if units == 0 {
 		return 0
 	}
-	return total / units
+	slices.SortFunc(pts, func(a, b pricePoint) int { return cmp.Compare(a.price, b.price) })
+	var seen int64
+	for _, p := range pts {
+		if seen += p.units; 2*seen >= units {
+			return p.price // the lower median when the units split evenly
+		}
+	}
+	return pts[len(pts)-1].price
 }
 
 // ---- access -----------------------------------------------------------------------

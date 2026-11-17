@@ -32,12 +32,13 @@ const (
 	HouseItems
 )
 
-// HouseOwner is a row of house_owners (Name: the character's, on load).
+// HouseOwner is a row of house_owners (Name: the character's, on load). Seen, only on
+// load, is the last login of any character of the owner's account (or Since if later).
 type HouseOwner struct {
 	HouseID                string
 	CharacterID, AccountID int64
 	Name                   string
-	PaidUntil, Since       time.Time
+	PaidUntil, Since, Seen time.Time
 	GuildAccess            bool
 }
 
@@ -146,7 +147,7 @@ func (s *Store) LoadHouses(ctx context.Context) (HouseData, error) {
 		for _, o := range owners {
 			d.Owners = append(d.Owners, HouseOwner{HouseID: o.HouseID, CharacterID: o.CharacterID,
 				AccountID: o.AccountID, Name: o.Name, PaidUntil: o.PaidUntil.Time, Since: o.Since.Time,
-				GuildAccess: o.GuildAccess})
+				Seen: o.Seen.Time, GuildAccess: o.GuildAccess})
 		}
 		guests, err := q.LoadHouseGuests(ctx)
 		if err != nil {

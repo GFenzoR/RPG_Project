@@ -639,7 +639,7 @@ market:
   enabled: true
   fee_permille: 20          # comisión: milésimas de cantidad × precio, destruida (sumidero)
   fee_min: 5                # y entre fee_min y fee_max, en cobre
-  fee_max: 4000
+  fee_max: 50000
   max_offers: 15            # ofertas activas por personaje (1..100)
   max_amount: 2000          # unidades por oferta (1..100000)
   max_price: 5000000        # cobre por unidad (1..1000000000)

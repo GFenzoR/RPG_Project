@@ -131,14 +131,15 @@ market:                     # T5.3 (docs/02-game-design.md, "Economía"). Own nu
   enabled: true             # false: the market boards answer "closed"
   fee_permille: 20          # posting fee: 2% of amount x unit price, destroyed (gold sink)
   fee_min: 5                # copper coins, at least
-  fee_max: 4000             # and at most
+  fee_max: 50000            # and at most (content audit m13: 4000 was reached at a value of
+                            # 200k, so faking a huge sale between two own accounts was cheap)
   max_offers: 15            # active offers (buy + sell) per character
   max_amount: 2000          # units per offer
   max_price: 5000000        # copper coins per unit
   durations_hours: [12, 48, 120]
   list_size: 15             # offers per side in a search, best prices first
   history_size: 25          # own operations shown, newest first
-  reference_days: 5         # reference price: average unit price of the trades of these days
+  reference_days: 5         # reference price: median unit price (per unit sold) of these days
   mailbox_shown: 30         # mailbox items sent to the window at once
   action_burst: 6           # anti-flood: 6 actions at once, then one every 400 ms
   action_refill_ms: 400
@@ -161,6 +162,10 @@ houses:                     # T5.4 (docs/02-game-design.md, "Casas"). Own number
   transfer_minutes: 10      # a transfer offer waits this long at the door
   action_burst: 8           # anti-flood of house actions and item moves in houses:
   action_refill_ms: 300     # 8 at once, then one every 300 ms (each move writes the house)
+  # Content audit M6: an owner whose account has not entered the game for this many days
+  # loses the house when its rent runs out (no renewal from the mailbox; the items go to
+  # the mailbox). Owners are told at every login. 0 turns it off.
+  inactive_days: 28
 
 pvp:                        # T5.2 (docs/02-game-design.md, "PvP"). Own numbers, see there why.
   enabled: true             # false: no player can hurt another one (PvE only, as before T5.2)

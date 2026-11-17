@@ -31,7 +31,8 @@ func loadHouses(hs HouseStore) (*session.HouseData, error) {
 	out := &session.HouseData{Guests: d.Guests}
 	for _, o := range d.Owners {
 		out.Owners = append(out.Owners, session.HouseOwner{HouseID: o.HouseID, CharacterID: o.CharacterID,
-			AccountID: o.AccountID, Name: o.Name, PaidUntil: o.PaidUntil, Since: o.Since, GuildAccess: o.GuildAccess})
+			AccountID: o.AccountID, Name: o.Name, PaidUntil: o.PaidUntil, Since: o.Since, Seen: o.Seen,
+			GuildAccess: o.GuildAccess})
 	}
 	for _, it := range d.Items {
 		out.Items = append(out.Items, session.HouseItem{HouseID: it.HouseID,

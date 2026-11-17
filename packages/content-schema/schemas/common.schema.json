@@ -185,9 +185,11 @@
               "type": "object",
               "additionalProperties": false,
               "required": ["blessing", "price"],
+              "description": "Sells a blessing for price + per_level × the buyer's level (content audit M6); the option text gets the total as {price}.",
               "properties": {
                 "blessing": { "$ref": "#/$defs/id" },
-                "price": { "$ref": "#/$defs/nonNegativeInt" }
+                "price": { "$ref": "#/$defs/nonNegativeInt" },
+                "per_level": { "$ref": "#/$defs/nonNegativeInt" }
               }
             },
             "train_skill": {

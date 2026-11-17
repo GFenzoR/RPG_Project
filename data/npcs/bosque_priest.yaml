@@ -3,8 +3,8 @@ name: npc.bosque_priest.name
 sprite: npcs/priest_forest
 notes: >-
   Temple of the Root in Raigal (respawn point of the island). Heals for free and sells the
-  same five blessings as the Farol temple (they are the same blessings, so the same flat
-  price: docs/02 "Muerte").
+  same five blessings as the Farol temple (they are the same blessings, so the same
+  price, growing with the level: docs/02 "Muerte").
 dialog:
   start: greet
   nodes:
@@ -25,23 +25,23 @@ dialog:
       options:
         - text: npc.puerto_priest.bless_shore
           if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
-          action: { bless: { blessing: shore_light, price: 200 } }
+          action: { bless: { blessing: shore_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_hearth
           if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
-          action: { bless: { blessing: hearth_light, price: 200 } }
+          action: { bless: { blessing: hearth_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_keel
           if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
-          action: { bless: { blessing: keel_light, price: 200 } }
+          action: { bless: { blessing: keel_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_star
           if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
-          action: { bless: { blessing: star_light, price: 200 } }
+          action: { bless: { blessing: star_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_deep
           if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
-          action: { bless: { blessing: deep_light, price: 200 } }
+          action: { bless: { blessing: deep_light, price: 50, per_level: 20 } }
           goto: blessed
         - { text: dialog.back, goto: greet }
     blessed:

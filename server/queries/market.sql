@@ -23,11 +23,12 @@ WHERE h.n <= sqlc.arg(per_character)::bigint
 ORDER BY h.id;
 
 -- name: LoadMarketSales :many
--- Units sold and money paid by item and day since a time (reference prices).
+-- Units sold and money paid by item, day and unit price since a time (reference prices:
+-- the median unit price, content audit m13).
 SELECT item_id, date_trunc('day', at, 'UTC')::timestamptz AS day, sum(amount)::bigint AS units,
     sum(amount * price)::bigint AS total
 FROM market_history WHERE side = 1 AND at >= sqlc.arg(since)
-GROUP BY item_id, day ORDER BY item_id, day;
+GROUP BY item_id, day, price ORDER BY item_id, day, price;
 
 -- name: LoadMarketBans :many
 -- The active bans of the accounts that own offers (their offers are hidden). until is

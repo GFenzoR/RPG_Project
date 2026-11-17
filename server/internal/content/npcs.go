@@ -113,10 +113,17 @@ func (c *Conditions) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Bless sells a blessing (death rules, T1.11).
+// Bless sells a blessing (death rules, T1.11) for Price + PerLevel × the buyer's level
+// (content audit M6: a flat price was nothing for a high level).
 type Bless struct {
 	Blessing string `yaml:"blessing"`
 	Price    int64  `yaml:"price"`
+	PerLevel int64  `yaml:"per_level"`
+}
+
+// PriceAt is what the blessing costs a character of level.
+func (b Bless) PriceAt(level int) int64 {
+	return b.Price + b.PerLevel*int64(max(level, 0))
 }
 
 // QuestStep names a step of a quest.

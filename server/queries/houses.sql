@@ -2,7 +2,11 @@
 -- write each change inside the transaction of a session.Transfer.
 
 -- name: LoadHouseOwners :many
-SELECT h.house_id, h.character_id, h.account_id, c.name, h.paid_until, h.since, h.guild_access
+-- seen: the last login of any character of the owner's account (content audit M6: an
+-- owner away for balance houses.inactive_days loses the house at its next rent), or
+-- since, the day it got the house, when none is newer.
+SELECT h.house_id, h.character_id, h.account_id, c.name, h.paid_until, h.since, h.guild_access,
+    GREATEST(h.since, (SELECT max(o.last_login_at) FROM characters o WHERE o.account_id = h.account_id))::timestamptz AS seen
 FROM house_owners h JOIN characters c ON c.id = h.character_id
 ORDER BY h.house_id;
 

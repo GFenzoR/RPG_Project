@@ -30,7 +30,9 @@ import (
 //     an item both in an inventory and on the floor of a house, or in neither.
 // Rent is paid in advance from the backpack; when it runs out, the next period is taken
 // from the owner's market mailbox gold (it works offline); without enough, the house is
-// released and its items go to the owner's mailbox, in the same transfer.
+// released and its items go to the owner's mailbox, in the same transfer. So is a house
+// whose owner's account has not been in the game for balance houses.inactive_days
+// (content audit M6): the mailbox does not keep an abandoned house rented forever.
 
 // i18n keys of the house messages (i18n/*/client.yaml).
 const (
@@ -69,6 +71,7 @@ const (
 	msgHouseCrowded      = "house.crowded"
 	msgHouseRenewed      = "house.renewed"
 	msgHouseLost         = "house.lost_unpaid"
+	msgHouseAway         = "house.away_warning"
 	msgHouseEvicted      = "house.evicted"
 	msgHouseItemsMailed  = "house.items_mailed"
 	msgHouseLookFree     = "house.look_free"
@@ -81,7 +84,8 @@ const (
 	msgGMHouseNoTarget   = "gm.house_no_target"
 )
 
-// HouseOwner is who rents a house (house_owners).
+// HouseOwner is who rents a house (house_owners). Seen, only when loading, is the last
+// time a character of the owner's account entered the game (zero: Since).
 type HouseOwner struct {
 	HouseID     string
 	CharacterID int64
@@ -89,6 +93,7 @@ type HouseOwner struct {
 	Name        string
 	PaidUntil   time.Time
 	Since       time.Time
+	Seen        time.Time
 	GuildAccess bool
 }
 
@@ -145,11 +150,14 @@ type HouseOp struct {
 type house struct {
 	def *world.House
 	// owner is the character renting it (0: free).
-	owner       int64
-	ownerAcc    int64
-	ownerName   string
-	paidUntil   time.Time
-	since       time.Time
+	owner     int64
+	ownerAcc  int64
+	ownerName string
+	paidUntil time.Time
+	since     time.Time
+	// seen is the last time a character of the owner's account entered or left the game
+	// (content audit M6, balance houses.inactive_days).
+	seen        time.Time
 	guildAccess bool
 	guests      []string // as typed (validated names), compared ignoring case
 	offer       *houseOffer
@@ -208,6 +216,7 @@ func (w *World) initHouses() {
 	w.hsRefill = max(game.Tick(hs.ActionRefillMs/int(game.TickDuration.Milliseconds())), 1)
 	w.hsBurst = w.hsRefill * game.Tick(hs.ActionBurst-1)
 	w.hsPeriod = time.Duration(hs.PeriodDays) * 24 * time.Hour
+	w.hsAway = time.Duration(hs.InactiveDays) * 24 * time.Hour
 	d := w.cfg.Houses
 	if d == nil {
 		return
@@ -245,6 +254,10 @@ func (w *World) setOwner(h *house, o HouseOwner) {
 	}
 	h.owner, h.ownerAcc, h.ownerName = o.CharacterID, o.AccountID, o.Name
 	h.paidUntil, h.since, h.guildAccess = o.PaidUntil, o.Since, o.GuildAccess
+	h.seen = o.Seen
+	if h.seen.Before(o.Since) {
+		h.seen = o.Since // a new owner is in the game now; an old row has no later login
+	}
 	h.guests, h.offer = nil, nil
 	if h.owner != 0 {
 		w.houseByOwner[h.owner] = h
@@ -1109,10 +1122,18 @@ func (w *World) checkHouses(ctx *game.TickContext) {
 	}
 }
 
-// renewHouse takes the next period from the owner's mailbox gold, or releases h.
+// renewHouse takes the next period from the owner's mailbox gold, or releases h: when
+// the gold is not enough, or when the owner's account has been away from the game for
+// houses.inactive_days (content audit M6).
 func (w *World) renewHouse(now time.Time, h *house) {
 	rent := int64(h.def.Rent)
 	owner := h.owner
+	if w.ownerAway(now, h) {
+		w.log.Info("house: released, owner away", "house", h.def.ID, "character", owner, "seen", h.seen)
+		w.releaseHouse(now, h, nil)
+		w.refreshHouse(h)
+		return
+	}
 	if b := w.mail[owner]; b != nil && b.gold >= rent {
 		b.gold -= rent
 		// After a long downtime the new period starts now (no period per second to catch up).
@@ -1134,6 +1155,35 @@ func (w *World) renewHouse(now time.Time, h *house) {
 	w.log.Info("house: released, rent not paid", "house", h.def.ID, "character", owner)
 	w.releaseHouse(now, h, nil)
 	w.refreshHouse(h)
+}
+
+// ownerAway reports whether h's owner account has not been in the game for
+// houses.inactive_days: no character of it online now and none entered or left since.
+func (w *World) ownerAway(now time.Time, h *house) bool {
+	if w.hsAway <= 0 || now.Before(h.seen.Add(w.hsAway)) {
+		return false
+	}
+	for _, p := range w.players {
+		if p.accountID == h.ownerAcc {
+			h.seen = now
+			return false
+		}
+	}
+	return true
+}
+
+// houseSeen marks that a character of p's account entered or left the game: the house of
+// the account is not abandoned (houses.inactive_days). Entering, its owner is reminded of
+// the rule.
+func (w *World) houseSeen(now time.Time, p *Player, entered bool) {
+	h := w.houseByAcc[p.accountID]
+	if h == nil {
+		return
+	}
+	h.seen = now
+	if entered && h.owner == p.charID && w.hsAway > 0 {
+		p.emit(systemMsg(msgHouseAway, houseParam(h), num("days", w.hs.InactiveDays)))
+	}
 }
 
 // ---- staff ----------------------------------------------------------------------------

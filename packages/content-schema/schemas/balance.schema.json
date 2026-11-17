@@ -870,7 +870,13 @@
         "items_per_tile": { "type": "integer", "minimum": 1, "maximum": 50 },
         "transfer_minutes": { "type": "integer", "minimum": 1, "maximum": 120 },
         "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "inactive_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 365,
+          "description": "Content audit M6: a house whose owner's account was not in the game for this many days is released (not renewed) when its rent runs out. 0 or absent: never."
+        }
       }
     },
     "pvp": {

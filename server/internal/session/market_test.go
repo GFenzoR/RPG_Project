@@ -289,6 +289,33 @@ func (h *marketHarness) countKind(kind, ref string) (gold int64, units int32) {
 	return gold, units
 }
 
+// Content audit m13: the reference price is the median unit price of the units sold, not
+// the average, so one absurd sale between two accounts of a player does not move it.
+func TestMarketReferencePriceIsTheMedian(t *testing.T) {
+	day := func(n int) time.Time { return clock.Epoch.AddDate(0, 0, n).Add(12 * time.Hour) }
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Market = &session.MarketData{Sales: []session.MarketSale{
+			{ItemID: salveID, Day: day(-2), Units: 6, Total: 6 * 4}, // loaded: one row per day and price
+			{ItemID: salveID, Day: day(-2), Units: 1, Total: 1 * 990},
+			{ItemID: salveID, Day: day(-1), Units: 3, Total: 3 * 5},
+		}}
+	})
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	browse := func() int64 {
+		u := lastMarket(h.send(cb, marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: salveID}}})))
+		return int64(u.GetReferencePrice())
+	}
+	// 10 units: 6 at 4, 3 at 5, 1 at 990 (the average would be 104).
+	if got := browse(); got != 4 {
+		t.Fatalf("reference = %d, want the median 4", got)
+	}
+	// A day later the oldest day leaves the window (reference_days 3): 3 at 5 remain.
+	h.sim.Clock().Set(day(1))
+	if got := browse(); got != 5 {
+		t.Fatalf("reference after the window moved = %d, want 5", got)
+	}
+}
+
 func TestMarketSellOfferFlow(t *testing.T) {
 	h := newMarketHarness(t)
 	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))

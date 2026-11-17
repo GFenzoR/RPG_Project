@@ -430,7 +430,7 @@ const loadMarketSales = `-- name: LoadMarketSales :many
 SELECT item_id, date_trunc('day', at, 'UTC')::timestamptz AS day, sum(amount)::bigint AS units,
     sum(amount * price)::bigint AS total
 FROM market_history WHERE side = 1 AND at >= $1
-GROUP BY item_id, day ORDER BY item_id, day
+GROUP BY item_id, day, price ORDER BY item_id, day, price
 `
 
 type LoadMarketSalesRow struct {
@@ -440,7 +440,8 @@ type LoadMarketSalesRow struct {
 	Total  int64
 }
 
-// Units sold and money paid by item and day since a time (reference prices).
+// Units sold and money paid by item, day and unit price since a time (reference prices:
+// the median unit price, content audit m13).
 func (q *Queries) LoadMarketSales(ctx context.Context, since pgtype.Timestamptz) ([]LoadMarketSalesRow, error) {
 	rows, err := q.db.Query(ctx, loadMarketSales, since)
 	if err != nil {

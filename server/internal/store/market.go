@@ -74,7 +74,7 @@ type MarketHistory struct {
 	At                 time.Time
 }
 
-// MarketSale is the sales of one item on one day.
+// MarketSale is the sales of one item on one day at one unit price (Total / Units).
 type MarketSale struct {
 	ItemID       int
 	Day          time.Time

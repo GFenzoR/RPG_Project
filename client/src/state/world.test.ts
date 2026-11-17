@@ -299,13 +299,30 @@ describe("NPC dialogs and shops (T1.10)", () => {
           dialogId: 3,
           npcCreatureId: 9,
           text: { key: "npc.puerto_provisioner.greet", params: [] },
-          options: [{ optionId: 1, text: { key: "dialog.trade", params: [] } }],
+          options: [
+            { optionId: 1, text: { key: "dialog.trade", params: [] } },
+            // A blessing says its price, which grows with the level (content audit M6).
+            {
+              optionId: 2,
+              text: {
+                key: "npc.puerto_priest.bless_shore",
+                params: [{ name: "price", value: { case: "number", value: 230n } }],
+              },
+            },
+          ],
         } as never,
       }),
       0,
     );
     expect(w.dialog?.npcContentId).toBe("puerto_provisioner");
-    expect(w.dialog?.options).toEqual([{ id: 1, text: "dialog.trade" }]);
+    expect(w.dialog?.options).toEqual([
+      { id: 1, text: "dialog.trade", params: [] },
+      {
+        id: 2,
+        text: "npc.puerto_priest.bless_shore",
+        params: [{ name: "price", value: { case: "number", value: 230n } }],
+      },
+    ]);
     w.apply(
       ev({
         case: "shopOpen",

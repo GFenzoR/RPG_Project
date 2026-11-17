@@ -399,11 +399,18 @@ func TestBrasalNPCs(t *testing.T) {
 	money = h.w.Money(p)
 	d = h.lastDialog(h.send(cl, talkMsg(priest.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_blessings"))
-	if d = h.lastDialog(h.pick(cl, d, "npc.puerto_priest.bless_shore")); d.Text.Key != "npc.volcan_priest.blessed" || h.w.Money(p) != money-200 {
+	// Content audit M6: a blessing costs 50 + 20 per level, and each option says how much.
+	const blessPrice = 50 + 20*45
+	for _, o := range d.Options {
+		if ps := o.Text.Params; o.Text.Key != "dialog.back" && (len(ps) != 1 || ps[0].Name != "price" || ps[0].GetNumber() != blessPrice) {
+			t.Fatalf("option %s params %v, want price %d", o.Text.Key, ps, blessPrice)
+		}
+	}
+	if d = h.lastDialog(h.pick(cl, d, "npc.puerto_priest.bless_shore")); d.Text.Key != "npc.volcan_priest.blessed" || h.w.Money(p) != money-blessPrice {
 		t.Fatalf("blessing: %s, money %d", d.Text.Key, h.w.Money(p))
 	}
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_more"))
-	if evs := h.pick(cl, d, "npc.puerto_priest.bless_shore"); !messageKeys(evs)["dialog.already_blessed"] || h.w.Money(p) != money-200 {
+	if evs := h.pick(cl, d, "npc.puerto_priest.bless_shore"); !messageKeys(evs)["dialog.already_blessed"] || h.w.Money(p) != money-blessPrice {
 		t.Fatalf("second blessing: %v", messageKeys(evs))
 	}
 

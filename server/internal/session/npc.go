@@ -221,9 +221,26 @@ func (w *World) sendDialog(p *Player) {
 		msg.Options = append(msg.Options, w.routeOptions(d.npc)...)
 	}
 	for _, i := range dialog.Visible(node, a) {
-		msg.Options = append(msg.Options, &pb.DialogOption{OptionId: uint32(i + 1), Text: &pb.LocalizedText{Key: node.Options[i].Text}})
+		o := node.Options[i]
+		msg.Options = append(msg.Options, &pb.DialogOption{OptionId: uint32(i + 1),
+			Text: &pb.LocalizedText{Key: o.Text, Params: optionParams(o, a)}})
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_DialogOpen{DialogOpen: msg}})
+}
+
+// optionParams are the parameters of an option's text: {price}, what its blessing costs
+// this player (content audit M6, the price grows with the level).
+func optionParams(o content.DialogOption, a *actor) []*pb.TextParam {
+	var price int64
+	for _, act := range o.Action {
+		if act.Bless != nil {
+			price += act.Bless.PriceAt(a.Level())
+		}
+	}
+	if price == 0 {
+		return nil
+	}
+	return []*pb.TextParam{num("price", int(price))}
 }
 
 // closeDialog closes p's dialog (and its shop), if any.
@@ -836,8 +853,8 @@ func (a *actor) Teleport(pos content.Position) {
 }
 
 func (a *actor) Bless(b content.Bless) {
-	if b.Price > 0 {
-		a.TakeGold(b.Price)
+	if price := b.PriceAt(a.Level()); price > 0 {
+		a.TakeGold(price)
 	}
 	a.p.storage.Set(blessKey+b.Blessing, 1)
 }

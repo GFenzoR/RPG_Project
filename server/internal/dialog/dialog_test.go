@@ -37,19 +37,22 @@ func (f *fake) HasBlessing(b string) bool { return f.blessed[b] }
 func (f *fake) CanTeleport(content.Position) bool {
 	return true
 }
-func (f *fake) QuestState(q string) (quest.State, string)  { return f.engine.State(f.log, q) }
-func (f *fake) GiveItem(it string)                         { f.items[it]++; f.did = append(f.did, "give:"+it) }
-func (f *fake) TakeItem(it string, n int)                  { f.items[it] -= n; f.did = append(f.did, "take:"+it) }
-func (f *fake) GiveXP(int64)                               {}
-func (f *fake) GiveGold(n int64)                           { f.money += n }
-func (f *fake) TakeGold(n int64)                           { f.money -= n }
-func (f *fake) StartQuest(id string)                       { f.engine.Start(f.log, id, f) }
-func (f *fake) SetQuestStep(q, s string)                   { f.engine.SetStep(f.log, q, s, f) }
-func (f *fake) SetFlag(k string, v int64)                  { f.engine.SetFlag(f.log, k, v, f) }
-func (f *fake) OpenShop(id string)                         { f.did = append(f.did, "shop:"+id) }
-func (f *fake) Heal()                                      { f.did = append(f.did, "heal") }
-func (f *fake) Teleport(content.Position)                  {}
-func (f *fake) Bless(b content.Bless)                      { f.blessed[b.Blessing] = true; f.money -= b.Price }
+func (f *fake) QuestState(q string) (quest.State, string) { return f.engine.State(f.log, q) }
+func (f *fake) GiveItem(it string)                        { f.items[it]++; f.did = append(f.did, "give:"+it) }
+func (f *fake) TakeItem(it string, n int)                 { f.items[it] -= n; f.did = append(f.did, "take:"+it) }
+func (f *fake) GiveXP(int64)                              {}
+func (f *fake) GiveGold(n int64)                          { f.money += n }
+func (f *fake) TakeGold(n int64)                          { f.money -= n }
+func (f *fake) StartQuest(id string)                      { f.engine.Start(f.log, id, f) }
+func (f *fake) SetQuestStep(q, s string)                  { f.engine.SetStep(f.log, q, s, f) }
+func (f *fake) SetFlag(k string, v int64)                 { f.engine.SetFlag(f.log, k, v, f) }
+func (f *fake) OpenShop(id string)                        { f.did = append(f.did, "shop:"+id) }
+func (f *fake) Heal()                                     { f.did = append(f.did, "heal") }
+func (f *fake) Teleport(content.Position)                 {}
+func (f *fake) Bless(b content.Bless) {
+	f.blessed[b.Blessing] = true
+	f.money -= b.PriceAt(f.level)
+}
 func (f *fake) DevIsland() bool                            { return f.dev }
 func (f *fake) TrainSkill(s string, n int)                 { f.did = append(f.did, fmt.Sprintf("train:%s=%d", s, n)) }
 func (f *fake) RestoreMana()                               { f.did = append(f.did, "mana") }
@@ -116,6 +119,20 @@ func TestHarborMasterOffersByVocation(t *testing.T) {
 	}
 }
 
+// Content audit M6: a blessing costs more the higher the buyer: price + per_level × level.
+func TestBlessingPriceGrowsWithLevel(t *testing.T) {
+	priest := load(t, "puerto_priest")
+	f := newFake(t, "guardian")
+	f.level, f.money = 30, 649 // 50 + 20 × 30 = 650
+	if r := Choose(priest, "blessings", 1, f); r.Refused != MsgNoMoney {
+		t.Fatalf("level 30 with 649: %+v", r)
+	}
+	f.money = 1000
+	if r := Choose(priest, "blessings", 1, f); r.Node != "blessed" || f.money != 350 {
+		t.Fatalf("level 30 blessing: %+v money %d", r, f.money)
+	}
+}
+
 func TestCostsAreAllOrNothing(t *testing.T) {
 	priest := load(t, "puerto_priest")
 	f := newFake(t, "guardian")
@@ -130,10 +147,11 @@ func TestCostsAreAllOrNothing(t *testing.T) {
 		t.Fatalf("blessing without room for the change: %+v", r)
 	}
 	f.noChangeRoom = false
-	if r := Choose(priest, "blessings", 0, f); r.Node != "blessed" || f.money != 200 {
+	// 50 + 20 per level (content audit M6): 230 at level 9.
+	if r := Choose(priest, "blessings", 0, f); r.Node != "blessed" || f.money != 170 {
 		t.Fatalf("blessing: %+v money %d", r, f.money)
 	}
-	if r := Choose(priest, "blessings", 0, f); r.Refused != MsgAlreadyBlessed || f.money != 200 {
+	if r := Choose(priest, "blessings", 0, f); r.Refused != MsgAlreadyBlessed || f.money != 170 {
 		t.Fatalf("second blessing: %+v", r)
 	}
 	if r := Choose(priest, "greet", 1, f); r.Node != "healed" || f.did[len(f.did)-1] != "heal" {

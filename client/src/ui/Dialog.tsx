@@ -8,6 +8,7 @@ import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
+import { formatMessage } from "../state/messages.ts";
 import type { ShopLine, ShopState } from "../state/world.ts";
 
 /** Most units one purchase or sale may move (the server's limit too). */
@@ -54,7 +55,9 @@ export function DialogWindow({ t, content, game, ui }: Props): JSX.Element | nul
           {d.options.map((o, i) => (
             <li key={o.id}>
               <button type="button" data-option={o.id} onClick={() => game?.chooseOption(o.id)}>
-                <kbd>{i + 1}</kbd> {t(o.text)}
+                {/* An option may carry parameters: a blessing's {price} (content audit M6). */}
+                <kbd>{i + 1}</kbd>{" "}
+                {formatMessage({ key: o.text, params: o.params, at: 0 }, content, t)}
               </button>
             </li>
           ))}
