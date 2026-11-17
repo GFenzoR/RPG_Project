@@ -133,17 +133,14 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   vocaciones** (`feat/balance-vocations`: maná, escalones de armas, ballesta y escudo del
   montaraz, áreas nuevas, comida, sello por jugador, cuerda y pala, bendiciones desde el
   nivel 9, nombres de hechizos y pulido de textos; detalle en `02-game-design.md`):
-  - M1: capacidad de spawns y de abedules para 100 jugadores (más spawns o respawn
-    escalado, abedules en el Bosque, un test de capacidad por franja);
-  - M6: casas (liberar tras semanas sin conectarse, alquiler escalado, más casas,
-    bendiciones con precio por nivel);
-  - m3 (defensa de las armas que no se usa), m4 (items huérfanos: `driftwood_club` sin
-    fuente, `quartz_crystal` y `rough_stone` sin comprador, quests que siguen soltando su
-    item), m7 (tablero del mercado en Brasal), m11 (`testisle` en producción), m13
-    (comisión del mercado);
+  - M1, M6, m3, m4, m7, m11 y m13 se hicieron en la rama `feat/world-capacity` (capacidad
+    por franja y abedules, casas, defensa del arma, items huérfanos, tablero de Brasal,
+    `testisle` dev-only, comisión del mercado; docs/02, docs/07 "Capacidad del mundo" y
+    docs/10). De ahí quedó: un aviso por email antes de perder una casa por ausencia, y
+    el cliente no muestra la regla en la ventana de la casa (solo el mensaje al entrar);
   - en la carrera simulada los magos de nivel 30-40 cazan en el Bosque (reptantes) más
     que en el Volcán: los monstruos del Volcán pegan fuerte para un cuerpo de mago. No es
-    un error, pero es una pista para cuando se mire M1;
+    un error, pero es una pista (M1 sumó capacidad al Volcán sin tocar el daño);
   - la pala sigue en `data/items` sin fuente (inventarios guardados): si algún día se cava,
     es darle un destino y volver a venderla.
 - **CI de PR de mapas sin `pull_request_target`** (GitHub lo bloquea por defecto en repos

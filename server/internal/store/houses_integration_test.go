@@ -145,6 +145,18 @@ func TestHouseTransfers(t *testing.T) {
 	if len(d.Guests["cottage"]) != 2 || len(d.Items) != 2 || d.Items[1].Item.ItemID != 67 || len(d.Items[1].Item.Items) != 1 {
 		t.Fatalf("guests %v, items %+v", d.Guests, d.Items)
 	}
+	// Content audit M6: Seen is the last login of any character of the owner's account, or
+	// Since when there is none newer (the loop releases a house of an owner away too long).
+	if !d.Owners[0].Seen.Equal(now) {
+		t.Fatalf("seen %v, want since %v (nobody logged in yet)", d.Owners[0].Seen, now)
+	}
+	later := now.Add(48 * time.Hour)
+	if _, err := conn.Exec(ctx, `UPDATE characters SET last_login_at = $1 WHERE id = $2`, later, alba); err != nil {
+		t.Fatal(err)
+	}
+	if d, err = st.LoadHouses(ctx); err != nil || !d.Owners[0].Seen.Equal(later) {
+		t.Fatalf("seen after another character of the account logged in: %+v, %v", d.Owners, err)
+	}
 	pub, err := st.PublicHouses(ctx, now)
 	if err != nil || len(pub) != 1 || pub[0].Name != "Ana" {
 		t.Fatalf("public %+v, %v", pub, err)

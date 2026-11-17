@@ -99,6 +99,50 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   `ORDER BY`) hacía un seq scan y ordenaba todo: unos 100 ms por página. Peor caso
   sostenido: 2 consultas de ~20 ms a la vez.
 
+## Capacidad del mundo (auditoría de contenido M1, 2026-11)
+La meta de 100 jugadores no es solo del servidor: el mundo tiene que darles de cazar. La
+mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`), que lee
+`data/` y `world/` y falla si una franja queda por debajo de su meta.
+
+- **XP/h teórica de un monstruo:** Σ cantidad × 3600 / `respawn_seconds` × experiencia, sobre
+  sus spawns de las islas de producción (las que no son `dev_only`).
+- **XP/h que pide un jugador de la franja [a, b]:** (xp(b) − xp(a)) / (horas(b) − horas(a)),
+  con la curva y el ritmo de `balance.yaml → experience` (ley de potencia entre los anclajes
+  8 → 1 h, 20 → 8 h, 50 → 80 h; fuera de ellos, el tramo más cercano).
+- **Eficiencia 2/3:** nadie mata a un monstruo en el instante en que reaparece (caminar,
+  saquear, curarse, y un monstruo no reaparece en una casilla que un jugador ve, docs/02
+  "Monstruos"). Jugadores de la franja = XP/h de sus monstruos × 2/3 / XP/h por jugador.
+- Cada monstruo de producción pertenece a una sola franja (el test lo exige: uno nuevo
+  obliga a ubicarlo). El jefe de la forja suma a la de 50–60.
+
+| Franja | Meta | Monstruos | XP/h por jugador | XP/h teórica antes → ahora | Jugadores antes → ahora |
+|---|---|---|---|---|---|
+| 1–8 | 15 | gaviota, cangrejo, lobo, rata, murciélago | 4,7k | 42,6k → 118,6k | 6,0 → 16,7 |
+| 8–15 | 15 | jabalí, araña, saqueador, escarabajo, minero ahogado | 9,7k | 59,3k → 223,7k | 4,1 → 15,4 |
+| 15–20 | 14 | ciervo, sapo, espinoso | 13,4k | 188,3k → 343,6k | 9,4 → 17,1 |
+| 20–25 | 14 | contrabandista, reptante | 14,3k | 109,6k → 307,2k | 5,1 → 14,3 |
+| 25–40 | 16 | sabueso, salamandra | 17,6k | 298,7k → 455,3k | 11,3 → 17,2 |
+| 40–50 | 14 | minero de obsidiana, gólem | 20,7k | 169,2k → 475,2k | 5,5 → 15,3 |
+| 50–60 | 12 | dragoncillo, custodio | 22,9k | 72,6k → 433,0k | 2,1 → 12,6 |
+| **Total** | **100** | 126 → 253 monstruos | | | **43,4 → 108,6** |
+
+- **Cómo se llegó:** respawns más cortos (gaviota y rata 30 s, cangrejo 35, lobo y
+  murciélago 45, jabalí, araña, ciervo, sabueso, salamandra, minero de obsidiana y gólem
+  60, sapo 50, saqueador y escarabajo 70, espinoso y contrabandista 75, dragoncillo 75,
+  minero ahogado y reptante 90; el custodio sigue en 1200), más monstruos por spawn y 20
+  spawns nuevos (`world/islands/*/spawns.yaml`), separados unos 12–20 casilleros para que
+  varios grupos cacen a la vez. Jabalíes y arañas también en el sur del Bosque; en el
+  Volcán, gólems en los campos de lava enfriada del sur y dragoncillos en la ladera oeste
+  del cráter y en el campo sureste.
+- **Abedules:** de 5 a 29 (13 en Puerto fuera del Farol, 16 en arboledas del Bosque).
+  Cada uno da 3 troncos y vuelve a los 6 min: 150 → 870 troncos/h; el test pide 600.
+- **Rendimiento:** 253 monstruos en producción, lejos de los 1024 que mide
+  `BenchmarkTickMonsters` (≈ 340 µs), y solo piensan en sectores activos.
+- **Para retocar:** subir o bajar `count` y `respawn_seconds` con `mapcli ops apply`
+  (`remove_spawn` + `add_spawn` con su `index`; nunca a mano) y correr el test; si cambia el
+  ritmo de `balance.yaml`, la XP por jugador cambia sola. Un respawn que escale con los jugadores cercanos quedó descartado: con la
+  regla de no reaparecer a la vista, más jugadores en el mismo punto no matan más.
+
 ## Cliente
 | Métrica | Presupuesto |
 |---|---|
@@ -355,12 +399,12 @@ ventanas una vez; otra marca después no vuelve a mandar nada.
 - **Transfers de items de casa:** como mucho uno por tick para todas las casas que
   cambiaron en ese tick (`flushHouses`), con la lista entera de items de cada casa sucia y
   el snapshot de quienes las tocaron. Una casa tiene a lo sumo `items_per_tile` (3) ×
-  casillas instancias (hoy, la más grande: 37 × 3 = 111 filas de `house_items`, que se
+  casillas instancias (hoy, la más grande: 38 × 3 = 114 filas de `house_items`, que se
   reescriben con `COPY` dentro de la transacción) y cada movimiento cuenta contra el
   anti-flood de casas (`houses.action_burst` 8, `action_refill_ms` 300): un jugador
   sostiene como mucho ~3 transfers por segundo moviendo cosas en su casa, del orden de un
   intercambio (≈ 4–6 ms cada uno en Postgres local). Cien jugadores ordenando sus casas a
-  la vez (imposible: hay 5 casas) seguirían por debajo del techo del Saver.
+  la vez (imposible: hay 13 casas) seguirían por debajo del techo del Saver.
 - **En el tick:** el paso de un jugador mira un bit de la casilla (`FlagHouse`) y solo en
   casillas de casa busca la casa en un mapa; un cambio de casilla marca su casa sucia con
   el mismo bit. Contar los items de una casa (límite) recorre sus casillas (≤ unas

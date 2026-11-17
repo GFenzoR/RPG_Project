@@ -45,6 +45,13 @@ i18n/
     al que alguna lo vende (bucle de oro infinito); aviso si compra por encima del `value`.
   - Bendiciones: los `blessing` distintos que venden los NPCs no superan
     `death.max_blessings` de `balance.yaml`.
+  - Items que no llevan a ningún lado (auditoría de contenido m4; con `world/`, cuentan
+    solo los NPCs colocados en islas que no son `dev_only`): lo que un NPC compra tiene
+    una fuente (botín, drop de un recurso, receta, tienda, `give_item`, recompensa o
+    hechizo de conjurar); un arma, armadura o escudo comerciable con `value` que se puede
+    conseguir tiene un NPC que lo compra, y un material así, un comprador, una receta o
+    una quest que lo toma; un item de quest (`tradeable: false`, el `has_item` de un paso)
+    que suelta un monstruo va con `each_player: true`.
   - Aviso si una quest no tiene ningún `start_quest` en `data/npcs/`.
   - Un bloque por tipo de item (`weapon:` solo con `kind: weapon`, etc.), `max_stack`
     solo con `stackable: true`, `count` de loot > 1 solo para items apilables,
@@ -278,8 +285,11 @@ tags: [beast, puerto]
   de ese paso solo quede la entrega (un último paso `dialog_action`, donde el NPC lo toma
   con `take_item`: entregarlo completa la quest, y una quest completada no pide nada); y
   que el item tenga `tradeable: false` y `value: 0` (las copias que alguien junte
-  tirándolas al piso no valen nada ni se comercian). Lo usa el sello de la forja del
-  custodio (`ch3_warden`).
+  tirándolas al piso no valen nada ni se comercian). Lo usan el sello de la forja del
+  custodio (`ch3_warden`) y, desde m4, la tarja de los contrabandistas y el cofre sellado
+  de los reptantes (`ch2_coffer`) y la carta del minero de obsidiana (`ch3_gate`):
+  `make validate` exige `each_player` en todo item de quest que cae de un monstruo, así
+  deja de caer cuando la quest terminó.
 - **Comida y `well_fed`:** si algún item tiene `food_ms`, el arranque exige la condición
   `well_fed` de `kind: regen` con `stacking: add` (cada comida suma su tiempo) y que
   ninguna comida pura dure más que su `max_ms` (no se podría comer nunca).
@@ -400,7 +410,10 @@ Semántica del motor (T1.10):
   arranca si no se cumple).
 - `give_item` da una unidad a la mochila; si no cabe (lugar o capacidad) cae al suelo
   bajo el jugador. `give_gold`/`take_gold` usan el dinero (`currency.worth`).
-- `bless` guarda la bendición en `quest_state` (`bless.<id>` = 1) y cobra el precio; al
+- `bless: { blessing, price, per_level }` guarda la bendición en `quest_state`
+  (`bless.<id>` = 1) y cobra `price + per_level × nivel` del que la compra (auditoría de
+  contenido M6; `per_level` es opcional, 0 = precio fijo). El texto de la opción recibe ese
+  total como `{price}` (la opción de diálogo lleva parámetros, docs/05); al
   morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida (no el maná).
 - `skill_at_least` usa el nivel de skill actual; `level_at_least`, el nivel del jugador.
 
@@ -626,7 +639,13 @@ houses:
   transfer_minutes: 10      # una oferta de transferencia espera (1..120)
   action_burst: 8           # anti-flood de acciones y movimientos de items en casas
   action_refill_ms: 300
+  inactive_days: 28         # M6: sin nadie de la cuenta del dueño en el juego tanto, al
+                            # vencer el alquiler la casa se libera (0..365; 0 = nunca)
 ```
+- El alquiler de cada casa es dato del mapa (`houses.yaml → rent`): casillas × 60 en
+  Puerto, × 90 en el Bosque, × 120 en la Volcánica (auditoría de contenido M6, lo revisa
+  `packages/content-schema/src/house-rent.test.ts`; una isla nueva con casas necesita su
+  tarifa ahí).
 - Textos: `house.*` y `gm.house_*` (servidor), `client.house.*` (ventana) en
   `i18n/*/client.yaml`; `site.houses.*` en `site.yaml`.
 
@@ -646,7 +665,7 @@ market:
   durations_hours: [12, 48, 120]   # 1..8 opciones, cada una 1..1440
   list_size: 15             # ofertas por lado en una búsqueda
   history_size: 25          # operaciones propias que se ven
-  reference_days: 5         # ventana del precio de referencia
+  reference_days: 5         # ventana del precio de referencia (la mediana por unidad, m13)
   mailbox_shown: 30         # items del buzón por ventana
   action_burst: 6           # anti-flood: ráfaga y recarga por acción
   action_refill_ms: 400
@@ -660,7 +679,7 @@ trade:
 ```
 - Items: `tradeable: true` permite el intercambio y, si además no es moneda ni fijo del
   mapa, el mercado. `market_board: true` (en un item fijo del mapa) lo hace tablero del
-  mercado (`market_board`, en Puerto y en Raigal).
+  mercado (`market_board`, en Puerto, en Raigal y en Brasal).
 - Textos: `trade.*`, `market.*` y `gm.market_*` (servidor), `client.trade.*`,
   `client.market.*` y `client.battle.trade` (cliente) en `i18n/*/client.yaml`.
 

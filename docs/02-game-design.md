@@ -333,13 +333,17 @@ umbrales en `01-architecture.md`, "Detección de bots"):
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está
   en rango. Modos: ofensivo / equilibrado / defensivo, y perseguir / quedarse quieto.
 - Daño físico: `skill_arma × ataque_arma × factor_modo × aleatorio` contra
-  `armadura` (reducción plana aleatoria) y `defensa` (escudo, bloquea por golpe).
+  `armadura` (reducción plana aleatoria) y `defensa` (escudo y arma, bloquean por golpe).
   Fórmula exacta (T1.6, `server/internal/combat`, constantes en `balance.yaml`):
   `golpe_máx = (skill × ataque / skill_attack_divisor + nivel / level_divisor) × modo`,
   `golpe = aleatorio(0, golpe_máx) × (1 − resistencia física %)`; a un monstruo le restan
   `aleatorio(armadura/2, armadura)` y `aleatorio(0, defensa/2)`; a un jugador
-  `aleatorio(armadura/2, armadura)` y `aleatorio(0, escudo × modo_defensa /
-  shield_block_divisor)` (solo ataques físicos).
+  `aleatorio(armadura/2, armadura)` y `aleatorio(0, (escudo + arma) × modo_defensa /
+  shield_block_divisor)` (solo ataques físicos). **Defensa del arma** (auditoría de
+  contenido m3, 2026-11): la `weapon.defense` se mostraba y no hacía nada; ahora se suma a
+  la del escudo (con escudo o sin él, contra monstruos y en PvP). Solo el escudo entrena la
+  skill de escudo. Para que las primeras peleas sigan costando vida (la simulación de
+  Puerto pide 10-40 %), el lobo, el murciélago y la gaviota pegan uno o dos puntos más.
 - Daño mágico: `nivel_mágico × base_hechizo + nivel × factor` con rango aleatorio.
 - Elementos: físico, fuego, hielo, energía, tierra, sagrado, muerte. Monstruos tienen
   resistencias porcentuales en su YAML.
@@ -462,8 +466,9 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   (`data/vocations.yaml`) se validan al equipar. `ammo` (flechas, T3.1) va en el slot de
   munición.
 - **Combate:** el arma de la mano derecha da el ataque y la skill (`weapon.type`; una
-  varita dispara a distancia desde T1.9), el escudo de la izquierda la defensa y la suma
-  de `armor` de todo el equipo la armadura del jugador contra golpes físicos.
+  varita dispara a distancia desde T1.9), el escudo de la izquierda y el arma la defensa
+  (se suman, m3) y la suma de `armor` de todo el equipo la armadura del jugador contra
+  golpes físicos.
 - **Contenedores:** una mochila (o los restos de un monstruo) tiene `container.slots`
   lugares. Los contenedores se anidan hasta 8 niveles; no se puede meter uno dentro de sí
   mismo. Soltar un item sobre un slot de equipo con un contenedor, o sobre un lugar de una
@@ -564,11 +569,13 @@ Valores iniciales (balance.yaml):
   **100 %** salvo con bendiciones.
 - **Bendiciones** (hasta 5, se compran con oro del juego a NPCs en templos):
   cada una reduce la pérdida; con las 5 no pierdes items y la pérdida de XP baja a ~3 %.
-  En la Isla del Puerto las vende la hermana Liora (templo del Farol) a 200 monedas cada
-  una, precio fijo, y solo desde el nivel 9 (auditoría de contenido m8: hasta el
+  Las venden los tres templos (la hermana Liora en el Farol, Raigal y Brasal), cada una a
+  **50 monedas más 20 por nivel** del que la compra (auditoría de contenido M6: el precio
+  fijo de 200 no era nada para un nivel alto; nivel 9: 230, nivel 30: 650, nivel 50: 1050),
+  y solo desde el nivel 9 (auditoría de contenido m8: hasta el
   `novice_max_level` ya se muere como con las cinco, así que antes se desperdiciaban); las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
-  y `deep_light`. Se pierden al morir. Un precio que escale con el nivel queda pendiente
-  (hito posterior). Se guardan en `quest_state` como `bless.<id>` (no se vende dos veces
+  y `deep_light`. Se pierden al morir. El precio es dato del diálogo (`bless: { price,
+  per_level }`, docs/06) y cada opción lo muestra (`{price}`). Se guardan en `quest_state` como `bless.<id>` (no se vende dos veces
   la misma); la columna `characters.blessings` de T1.3 no se usa.
 - **Reglas exactas (T1.11, `server/internal/skills/death.go`):** con `b` bendiciones
   (tope `max_blessings`) y `f = b / max_blessings`:
@@ -611,6 +618,15 @@ Valores iniciales (balance.yaml):
   cuentan cada moneda por su valor.
 - NPCs compran y venden con precios en `data/npcs/*.yaml`. Los NPCs compran barato
   para que el comercio entre jugadores tenga sentido.
+- **Nada lleva a ningún lado** (auditoría de contenido m4, regla de `make validate`): lo
+  que un NPC compra se puede conseguir; un arma, armadura o escudo con valor que se puede
+  conseguir tiene un NPC que lo compra, y un material con valor, un comprador, una receta
+  o una quest que lo pide; un item de quest (no comerciable) cae solo como botín
+  `each_player`, así deja de caer como basura cuando la quest terminó. Por eso los
+  saqueadores sueltan el garrote de deriva, el armero compra la espada corta forjada, la
+  piedra tosca (500 g, 1-2 por golpe de veta) y el cuarzo, el herrero de Brasal la piedra,
+  la curtidora la hoja de espino, y la tarja, el cofre sellado y la carta del minero salen
+  solo a quien los necesita.
 - **Brebajes de maná** (auditoría de contenido M2, 2026-11): el combustible de los magos.
   El brebaje (50 de maná, 22 cobre) lo venden el buzo de Puerto, la druida del Bosque y el
   templo de Brasal (24); el concentrado (125, 50 cobre) solo Brasal. Nadie los compra de
@@ -643,14 +659,16 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   si a alguno no le entra, se cancela sin mover nada. Lo recibido va a la mochila.
 
 ### Mercado global (T5.3)
-- Se usa en un **tablero del mercado** de cada ciudad (Puerto y Raigal), parado junto a
+- Se usa en un **tablero del mercado** de cada ciudad (Puerto, Raigal y, desde la
+  auditoría de contenido m7, Brasal), parado junto a
   él; alejarse cierra la ventana. Es uno solo para todas las islas.
 - **Ofertas de venta:** las unidades salen de la mochila y quedan en depósito. **Ofertas de
   compra:** cantidad × precio sale en monedas y queda en depósito. Cada oferta tiene
   cantidad (hasta `max_amount`), precio por unidad (hasta `max_price`) y duración (12, 48
   o 120 horas): al vencer se cierra sola.
 - **Comisión:** crear una oferta cuesta el 2 % de cantidad × precio, con mínimo 5 y
-  máximo 4000 monedas. Se destruye (sumidero) y queda en el log de economía (`market`,
+  máximo 50 000 monedas (auditoría de contenido m13: el tope de 4000 se alcanzaba con 200k
+  de valor, y una venta absurda entre dos cuentas propias salía casi gratis). Se destruye (sumidero) y queda en el log de economía (`market`,
   ref `fee`). No se devuelve al cancelar.
 - **Aceptar** una oferta es inmediato y parcial (cualquier cantidad hasta la que queda):
   quien acepta paga o entrega en el momento y recibe en el momento (si le entra; si no,
@@ -663,8 +681,12 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   cargas; los apilables, por unidades. Un personaje no acepta ofertas de su propia cuenta.
 - **Lo que se ve:** al buscar un item, sus mejores `list_size` ofertas de venta (más
   baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
-  historial (lo que compró y vendió) y un **precio de referencia**: el promedio por unidad
-  de las ventas de los últimos `reference_days` días. Es solo informativo.
+  historial (lo que compró y vendió) y un **precio de referencia**: la mediana del precio
+  por unidad de las unidades vendidas en los últimos `reference_days` días (cada unidad un
+  voto; con un empate, la menor). Es solo informativo. Mediana y no promedio (m13): unas
+  pocas ventas a un precio absurdo entre dos cuentas de un jugador no la mueven salvo que
+  sean más unidades que todas las demás ventas juntas, y con la comisión sin tope bajo eso
+  cuesta de verdad. El intercambio directo no paga comisión ni cuenta para la referencia.
 - **Ventana en vivo:** la ventana abierta se actualiza sola cuando otro jugador cambia lo
   que muestra: una oferta nueva, cancelada, vencida o llenada en el item que se está
   mirando; una oferta propia que otro llenó (y el oro o los items que llegan al buzón);
@@ -721,8 +743,11 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 
 - **Qué es una casa:** un área del mapa con nombre, pueblo (su isla), casillas por piso,
   una o más **puertas** (casillas de la casa donde se entra) y una **salida** afuera,
-  junto a una puerta. Hoy hay 6: tres en el Farol (Puerto), dos en Raigal (Bosque) y una
-  en Brasal (Volcánica, T5.5), de 21 a 37 casillas y de 500 a 1000 monedas por semana. Las casas son **zona de
+  junto a una puerta. Hoy hay 13 (auditoría de contenido M6: eran 6): seis en el Farol
+  (Puerto), cuatro en Raigal (Bosque) y tres en Brasal (Volcánica), de 21 a 38 casillas.
+  **Alquiler por tamaño y pueblo:** casillas × 60 monedas en Puerto, × 90 en el Bosque y
+  × 120 en la Volcánica por semana (de 1260 a 3840; antes 500-1000, unos minutos de caza);
+  lo vigila `packages/content-schema/src/house-rent.test.ts`. Las casas son **zona de
   protección**: sin combate y sin PvP (T5.2), y salir del juego adentro es seguro.
 - **Alquilar:** se usa la puerta (click derecho) y se abre la ventana de la casa; mirar la
   puerta dice de quién es o que está libre, con su precio. Elegimos la puerta y no un NPC
@@ -734,6 +759,15 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 - **Renovación sin estar conectado:** al vencer, el servidor cobra el período siguiente
   del **oro del buzón del mercado** del dueño (T5.3): ahí llega lo que vende en el
   mercado, y el servidor lo puede cobrar aunque no esté. Si no alcanza, la casa se libera.
+  **Dueño ausente** (auditoría de contenido M6): si ningún personaje de la cuenta del dueño
+  entró ni salió del juego en `houses.inactive_days` (28) días, al vencer el alquiler la
+  casa se libera aunque el buzón tenga oro (los objetos van al buzón, como siempre). Lo
+  pagado por adelantado se respeta: la casa se pierde recién al vencer. El aviso: cada vez
+  que el dueño entra al juego, un mensaje le recuerda la regla (`house.away_warning`). El
+  loop guarda la última entrada o salida de la cuenta; al arrancar la toma de
+  `characters.last_login_at` (el último login de la cuenta), así que tras un reinicio
+  cuenta desde el login y no desde la salida (unas horas antes, nunca después). Un aviso
+  por email antes de perderla queda pendiente.
   No agregamos un "fondo de la casa" aparte: sería un segundo buzón de oro con sus propias
   reglas, y pagar por adelantado desde la ventana ya cubre a quien no usa el mercado.
 - **Una casa por cuenta** (no solo por personaje): con pocas casas por pueblo, una cuenta

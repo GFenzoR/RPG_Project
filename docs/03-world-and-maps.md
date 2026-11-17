@@ -197,7 +197,7 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
 ```yaml
 - id: puerto_house_net
   name: house.puerto_house_net.name
-  rent: 800
+  rent: 1920
   rects:
     - { x: 3151, y: 6396, z: 7, w: 6, h: 5 }
     - { x: 3153, y: 6401, z: 7, w: 2, h: 1 }
@@ -274,8 +274,9 @@ islands:
     rect: { x: 3072, y: 6272, w: 512, h: 512 }
     level_hint: [1, 15]
 ```
-`dev_only: true` (opcional) marca una isla de desarrollo, hoy solo `pruebas` (la Isla de
-Pruebas, `16-probar-el-juego.md`): `mapcompile` la deja afuera salvo con `-dev`, así que la
+`dev_only: true` (opcional) marca una isla de desarrollo, hoy `pruebas` (la Isla de
+Pruebas, `16-probar-el-juego.md`) y `testisle` (la de los tests y el E2E, auditoría de
+contenido m11): `mapcompile` la deja afuera salvo con `-dev`, así que la
 imagen de producción no la tiene (ver "Compilación" y "Validación"). La primera isla de la
 lista no puede serlo.
 
@@ -545,9 +546,12 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   llegue a todas).
 
 ## Islas actuales
-- `testisle` (64x64, pisos 7–8): isla de pruebas de herramientas, tests y E2E. Va primera en
-  `world.yaml`, así que sigue siendo la isla de inicio de un personaje sin `town`. Desde
-  T1.16 ya no tiene NPCs (cada NPC se coloca una vez en el mundo).
+- `testisle` (64x64, pisos 7–8; "Islote de ensayo"): isla de pruebas de herramientas, tests
+  y E2E. Es `dev_only` desde la auditoría de contenido m11: la imagen de producción no la
+  tiene, y `make mapcompile` (que pasa `-dev`) y el E2E (`-start-town testisle`) sí. Nada de
+  producción depende de ella (sus spawns no cuentan para la capacidad del mundo, docs/07).
+  Su nombre en español era "Isla de pruebas", igual al de la Isla de Pruebas (`pruebas`).
+  Desde T1.16 ya no tiene NPCs (cada NPC se coloca una vez en el mundo).
 - `puerto` (192x192 en 3072,6272; pisos 7–8; nivel 1–15; T1.16): forma base con
   `mapcli generate --recipe island --seed 42 --size 184`, luego ops. Superficie: pueblo del
   Farol (templo, plaza, depósito, armería, casas y almacén con muros), muelle (prefab
@@ -557,12 +561,20 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   al este y mina inundada con mineros ahogados al norte. Los 6 NPCs del Capítulo 1 viven
   aquí. Protección en templo, plaza y depósito (el item depósito aún no existe).
   Oficios (T3.4): fragua, yunque y fogón al norte del templo (3166–3172, 6366) y una
-  arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377). Las
+  arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377), más dos
+  arboledas de 4 (auditoría de contenido M1) en el prado norte (≈3161–3166, 6326–6330) y al
+  este (≈3206–3211, 6354–6358); el Bosque tiene otras cuatro (16 abedules: 4135,6071,
+  4207,6099, 4225,6121 y 4172,6154, cada una en un bloque de 6x6). Spawns y respawns de
+  las tres islas: docs/07, "Capacidad del mundo". Las
   estaciones son items comunes del mapa (`place`): lo que las hace estación es que una
   receta de `data/recipes.yaml` las nombre.
   Casas (T5.4): las casas de madera del pueblo, `puerto_house_net` (3150–3157,
-  6395–6401) y `puerto_house_oar` (3160–3167, 6395–6401), con puerta al sur, y la más
-  grande, `puerto_house_anchor` (3180–3188, 6408–6414), con puerta al norte.
+  6395–6401) y `puerto_house_oar` (3160–3167, 6395–6401), con puerta al sur, y
+  `puerto_house_anchor` (3180–3188, 6408–6414), con puerta al norte. Desde la auditoría
+  de contenido M6 también son casas los tres edificios que estaban vacíos:
+  `puerto_house_buoy` (3150–3157, 6408–6414) y `puerto_house_lantern` (3160–3167,
+  6408–6414), con puerta al norte, y la más grande, `puerto_house_keel` (3180–3187,
+  6391–6398), con puerta al oeste sobre el camino.
   Muelle del capitán de puerto (`harbor_master`, 3201,6433): tablones 3200–3202,
   6429–6434; las rutas salen de 3201,6434 (`puerto_to_bosque`) y la vuelta desde el Bosque
   llega a 3201,6432 (la de la Isla Volcánica, `volcan_to_puerto`, a 3201,6431).
@@ -586,7 +598,10 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Sin depósito (el item todavía no existe).
   Casas (T5.4): `bosque_house_moss` (prefab `house_wood_small` en 4156,6087) y
   `bosque_house_resin` (prefab `house_wood_medium` en 4165,6086), en la playa al norte del
-  pueblo, con la puerta al sur.
+  pueblo, con la puerta al sur; y (auditoría de contenido M6) `bosque_house_fern`
+  (`house_wood_medium` en 4166,6113, al este del camino, puerta al norte) y
+  `bosque_house_heron` (`house_wood_small` en 4155,6122, en la arena al sur de la
+  curtiduría, puerta al este sobre el camino).
   Carteles (`texts.yaml` y un item `bosque_*_sign` del mismo id en la misma casilla, que
   bloquea): templo en 4149,6109 (junto a la puerta sur), muelle en 4128,6099 (al final de
   los tablones) y cueva en 4247,6144 (junto a la escalera de la cueva).
@@ -610,8 +625,12 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   custodio de escoria (3692,5845, respawn 1200 s). Entre las dos, el pasillo se angosta a
   una casilla (`rock_wall` en 3691,5832) con la puerta con llave `forge_gate` en
   3692,5832: se abre con la llave de ascua del Capítulo 3. Protección en el templo y la plaza;
-  `no_logout` en el muelle; el resto es PvP abierto. Casa (T5.4): `volcan_house_cinder`
-  (prefab `house_wood_small` en 3646,5797, puerta al sur).
+  `no_logout` en el muelle; el resto es PvP abierto. Casas: `volcan_house_cinder` (T5.5,
+  prefab `house_wood_small` en 3646,5797, puerta al sur) y, desde la auditoría de
+  contenido M6, `volcan_house_bellows` (`house_wood_medium` en 3637,5797, al lado) y
+  `volcan_house_flint` (`house_wood_small` en 3669,5788, al este de la plaza y fuera de su
+  zona: su salida da al PvP abierto, como las de Raigal). Tablero del mercado en la plaza,
+  3660,5790 (m7).
   Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
   (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
   en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la

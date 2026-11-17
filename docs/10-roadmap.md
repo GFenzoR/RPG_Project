@@ -355,3 +355,12 @@ secundaria.
   la playa del naufragio) y la pala fuera de la tienda, con una regla de `make validate`;
   bendiciones desde el nivel 9; varita inicial del arcanista; hechizos renombrados y textos
   pulidos. Lo que quedó de la auditoría: docs/14, "Pendientes conocidos".
+- [x] **Capacidad del mundo, casas y servicios (auditoría de contenido, rama `feat/world-capacity`).**
+  Capacidad para unos 100 jugadores por franja de nivel (respawns más cortos, más monstruos
+  y 20 spawns nuevos: de 43 a 109 jugadores efectivos, test `world-capacity.test.ts`,
+  docs/07 "Capacidad del mundo") y 24 abedules más; casas: alquiler por tamaño y pueblo,
+  13 casas, liberación tras 28 días sin que entre la cuenta del dueño (con aviso al entrar),
+  bendiciones de 50 + 20 por nivel; la defensa del arma bloquea con la del escudo; regla
+  de `make validate` para items sin fuente, sin comprador o de quest que siguen cayendo;
+  tablero del mercado en Brasal; `testisle` dev-only y renombrada; comisión del mercado
+  con tope de 50 000 y precio de referencia por mediana.

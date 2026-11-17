@@ -797,7 +797,9 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   el anterior. El servidor responde `DialogOpen` con el nodo inicial.
 - `DialogOpen` lleva solo las opciones cuyo `if` se cumple ahora; `option_id` es la
   posición de la opción en el nodo (1..9), así que no cambia mientras el nodo está
-  abierto. Las rutas de barco de un nodo `boat_routes: true` (T3.5) van primero, con
+  abierto. El `text` de una opción puede traer parámetros: una que vende una bendición
+  lleva `{price}` (número), lo que le cuesta a este jugador, que crece con su nivel
+  (auditoría de contenido M6); el cliente los formatea como los de cualquier mensaje. Las rutas de barco de un nodo `boat_routes: true` (T3.5) van primero, con
   `option_id` 100 + su posición entre las rutas del capitán (101, 102…); elegir una no
   reenvía el nodo: si se rechaza llega solo el `Message` (`travel.*`, `dialog.no_money`)
   y la ventana sigue abierta; si zarpa llegan `DialogClose`, la vista nueva y
