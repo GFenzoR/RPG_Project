@@ -227,6 +227,12 @@ func TestDevOnlyActionsNeedADevIsland(t *testing.T) {
 // Content audit m8: novices (up to death.novice_max_level, 8) already die as if they had
 // the five blessings, so the temples only sell them from level 9.
 func TestBlessingsFromLevelNine(t *testing.T) {
+	// The novice protection is balance.yaml's: the temples must follow it.
+	b, err := content.LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	novice := b.Death.NoviceMaxLevel
 	for _, id := range []string{"puerto_priest", "bosque_priest", "volcan_priest"} {
 		npc := load(t, id)
 		node := npc.Dialog.Nodes["blessings"]
@@ -240,13 +246,13 @@ func TestBlessingsFromLevelNine(t *testing.T) {
 			}
 			return n
 		}
-		f.level = 8
+		f.level = novice
 		if n := count(); n != 0 {
-			t.Errorf("%s: %d blessings offered at level 8", id, n)
+			t.Errorf("%s: %d blessings offered at level %d (death.novice_max_level)", id, n, novice)
 		}
-		f.level = 9
-		if n := count(); n != 5 {
-			t.Errorf("%s: %d blessings offered at level 9, want 5", id, n)
+		f.level = novice + 1
+		if n := count(); n != b.Death.MaxBlessings {
+			t.Errorf("%s: %d blessings offered at level %d, want %d", id, n, novice+1, b.Death.MaxBlessings)
 		}
 	}
 }
