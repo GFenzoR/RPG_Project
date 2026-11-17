@@ -6,6 +6,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/sim"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
 // The forge seal is a quest drop (loot each_player, content audit m9): when a group kills
@@ -136,5 +137,74 @@ func TestQuestDropAgainAfterLosingIt(t *testing.T) {
 	if h.w.CountItem(full, "forge_seal") != 0 || onFloor != 1 || step != "take_seal" {
 		t.Errorf("full pack: %d seals carried, %d at its feet, step %q (want 0, 1, take_seal)",
 			h.w.CountItem(full, "forge_seal"), onFloor, step)
+	}
+}
+
+// The leash and the quest drop: a warden that gives up its fight (its target left its
+// leash area and its reach, docs/02 "Correa") forgets who hurt it, so the seal goes only
+// to whoever hurts it after that. Here the runner hits it, draws it to the east wall of
+// the forge and steps out of its leash in its sight; a second player kills it later.
+func TestQuestDropForgottenWhenTheWardenGivesUp(t *testing.T) {
+	h := chapterThreeHarness(t)
+	join := func(id int64, name string, at world.Pos) *session.Player {
+		c := session.Character{ID: id, AccountID: id, Name: name, Vocation: "guardian", Level: 44, Health: 1000, Mana: 100}
+		_, p := h.joinFresh(c, at)
+		return p
+	}
+	// The warden's spawn: center 30,44, radius 1; its leash area reaches 7 tiles (radius +
+	// combat.monster_leash_tiles 6). The forge's walls are x 26 and 34, y 40 and 48.
+	runner := join(961, "Bolt", pos(33, 44))
+	h.sim.Command(gameFunc(func() {
+		runner.SetStorageForTest("quest.ch3_warden", 1)
+		runner.SetStorageForTest("quest.ch3_warden.step", 0)
+	}))
+	h.sim.Step()
+	var warden *session.Monster
+	for _, m := range h.w.Monsters() {
+		if m.Kind() == "slagbound_warden" {
+			warden = m
+		}
+	}
+	if warden == nil {
+		t.Fatal("no warden")
+	}
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		h.w.DamageMonsterForTest(ctx, warden, runner, 10)
+	}))
+	h.sim.Step()
+	h.sim.RunUntil(func() bool {
+		return warden.TargetID() == runner.ID() && chebyshev(warden.Pos(), runner.Pos()) == 1
+	}, sim.MaxSeconds(10))
+	if warden.DamageShareForTest(runner.ID()) != 10 {
+		t.Fatalf("the warden remembers %d damage from the runner, want 10", warden.DamageShareForTest(runner.ID()))
+	}
+	// Out of the leash (9 from the center), out of its reach (spell range 4) and in its
+	// sight (the warden stands at x 32 or more): it gives up, heals and forgets.
+	h.sim.Command(gameFunc(func() { h.w.Teleport(runner, pos(39, 44)) }))
+	h.sim.Step()
+	h.sim.RunUntil(func() bool { return warden.TargetID() == 0 }, sim.MaxSeconds(5))
+	if cur, full := warden.Health(); cur != full || warden.DamageShareForTest(runner.ID()) != 0 {
+		t.Fatalf("after giving up: health %d/%d, runner's damage %d (want full and 0)",
+			cur, full, warden.DamageShareForTest(runner.ID()))
+	}
+	// Far from the forge (no respawn under anyone's eyes is needed: the warden lives).
+	h.sim.Command(gameFunc(func() { h.w.Teleport(runner, pos(18, 12)) }))
+	h.sim.Step()
+	killer := join(962, "Quench", pos(29, 41))
+	h.sim.Command(gameFunc(func() {
+		killer.SetStorageForTest("quest.ch3_warden", 1)
+		killer.SetStorageForTest("quest.ch3_warden.step", 0)
+	}))
+	h.sim.Step()
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		warden.SetHealth(10)
+		h.w.DamageMonsterForTest(ctx, warden, killer, 10)
+	}))
+	h.sim.Step()
+	if n := h.w.CountItem(killer, "forge_seal"); n != 1 {
+		t.Errorf("the killer got %d seals, want 1", n)
+	}
+	if n := h.w.CountItem(runner, "forge_seal"); n != 0 {
+		t.Errorf("the runner, forgotten when the warden gave up, got %d seals", n)
 	}
 }

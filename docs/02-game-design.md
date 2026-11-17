@@ -1115,7 +1115,10 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
    a cada uno de los que le hicieron daño al custodio y tienen la quest en ese paso le
    llega el suyo a la mochila (o a los pies si no entra); quien lo pierde antes de
    entregarlo (al morir, al tirarlo) recibe otro del próximo custodio. Antes salía uno por
-   muerte y un grupo de cinco esperaba cinco respawns de 20 minutos.
+   muerte y un grupo de cinco esperaba cinco respawns de 20 minutos. Con la correa
+   ("Monstruos"), si el custodio suelta la pelea (su objetivo salió de su área de correa y
+   de su alcance) olvida quién lo hirió: el sello es solo para los que le hagan daño
+   después (`TestQuestDropForgottenWhenTheWardenGivesUp`).
 - **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de
