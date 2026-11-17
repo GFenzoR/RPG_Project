@@ -1650,3 +1650,54 @@ func TestSandboxEverythingReachable(t *testing.T) {
 		}
 	}
 }
+
+// TestSandboxToolsHaveAUse: every tool the provisioner sells has something to work on the
+// island: a resource tile for its tool.use (a vein, a tree, a shoal), a rope spot for a
+// rope, or a recipe that asks for it at a station of the island.
+func TestSandboxToolsHaveAUse(t *testing.T) {
+	s := newSandbox(t)
+	npcs, err := content.LoadNPCs(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipes, err := content.LoadRecipes(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	byNum := s.items.ByNumeric()
+	is := s.m.Island("pruebas")
+	uses := map[string]bool{}
+	stations := map[string]bool{}
+	for _, z := range is.Floors {
+		for y := is.Rect.Y; y < is.Rect.Y+is.Rect.H; y++ {
+			for x := is.Rect.X; x < is.Rect.X+is.Rect.W; x++ {
+				at := at3(int(x), int(y), int(z))
+				ground, _, ok := s.m.Tile(at)
+				if !ok {
+					continue
+				}
+				for _, n := range append([]uint16{ground}, s.m.Stack(at)...) {
+					if def := byNum[n]; def != nil {
+						if def.Resource != nil {
+							uses[def.Resource.Tool] = true
+						}
+						stations[def.ID] = true
+					}
+				}
+				if pt := s.m.PortalAt(at); pt != nil && pt.Kind == world.PortalRopeSpot {
+					uses["rope"] = true
+				}
+			}
+		}
+	}
+	for _, r := range recipes {
+		if r.Tool != "" && stations[r.Station] {
+			uses[r.Tool] = true
+		}
+	}
+	for _, o := range npcs["pruebas_merchant"].Shop.Sells {
+		if def := s.items[o.Item]; def.Tool != nil && !uses[def.Tool.Use] {
+			t.Errorf("the provisioner sells %s (tool.use %s) and nothing on the island takes it", o.Item, def.Tool.Use)
+		}
+	}
+}

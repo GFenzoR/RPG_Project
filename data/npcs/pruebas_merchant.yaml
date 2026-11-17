@@ -3,9 +3,10 @@ name: npc.pruebas_merchant.name
 sprite: npcs/sandbox_merchant
 notes: >-
   Provisioner of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md): the
-  tools of every trade, food, poultices, runes, the basic gear of each vocation and the key
-  of the practice gate, at the prices of the real islands. Buys a few hunting and trade
-  goods back at the provisioner's prices, to try selling.
+  tools of every trade (no shovel: nothing digs yet), food, poultices, runes, the basic
+  gear of each vocation and the key of the practice gate, at the prices of the real
+  islands. Buys a few hunting and trade goods back at the provisioner's prices, to try
+  selling.
 dialog:
   start: greet
   nodes:
@@ -40,7 +41,6 @@ shop:
     - { item: fishing_rod, price: 140 }
     - { item: smithing_hammer, price: 95 }
     - { item: rope, price: 45 }
-    - { item: shovel, price: 40 }
     - { item: ship_biscuit, price: 3 }
     - { item: seaweed_poultice, price: 25 }
     - { item: arc_rune, price: 30 }
