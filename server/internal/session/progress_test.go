@@ -153,6 +153,32 @@ func TestNoShieldNoShieldTries(t *testing.T) {
 	}
 }
 
+// Content audit m3: a weapon's defense blocks physical hits like a shield's (the two add
+// up, docs/02 "Combate"), but only a shield trains the shield skill.
+func TestWeaponDefenseBlocks(t *testing.T) {
+	lost := func(weapon string) (int, int64) {
+		biter := &content.Monster{ID: "biter", Health: 1000, Speed: 100,
+			Behavior: content.MonsterBehavior{Aggressive: true, TargetDistance: 1},
+			Attacks:  []content.MonsterAttack{{Type: "melee", Element: "physical", Min: 3, Max: 3, IntervalMs: 500, Chance: 1}},
+		}
+		h := monsterHarness(t, []*content.Monster{biter}, spawnAt("biter", 21, 20, 0, 60))
+		_, p := h.join("Parry", at(20, 20))
+		p.EquipForTest(testItem(t, weapon), nil)
+		before, _ := p.Health()
+		h.sim.RunTicks(100) // 5 s: about 20 bites of 3
+		now, _ := p.Health()
+		return before - now, h.w.Skill(p, "shield").Tries
+	}
+	bare, _ := lost("{id: test_club, kind: weapon, weapon: {type: club, attack: 1}}")
+	parried, tries := lost("{id: test_blade, kind: weapon, weapon: {type: sword, attack: 1, defense: 40}}")
+	if bare < 30 || parried*3 > bare {
+		t.Errorf("health lost in 5 s: %d without weapon defense, %d with defense 40 (want far less)", bare, parried)
+	}
+	if tries != 0 {
+		t.Errorf("a weapon trained the shield: %d tries", tries)
+	}
+}
+
 // A guardian hunting wolves reaches level 3 (144 XP, ~6 wolves): every new level adds
 // the vocation's per-level stats and tells the client.
 func TestLevelUpKillingWolves(t *testing.T) {

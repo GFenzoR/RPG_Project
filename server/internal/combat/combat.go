@@ -5,7 +5,8 @@
 //	max_hit = (skill × attack / skill_attack_divisor + level / level_divisor) × mode attack
 //	hit     = random(0, max_hit) × (1 − physical resistance %)
 //	monster target: − random(armor/2, armor) − random(0, defense/2)
-//	player target:  − random(armor/2, armor) − random(0, shield × mode defense / shield_block_divisor)
+//	player target:  − random(armor/2, armor) − random(0, defense × mode defense / shield_block_divisor)
+//	                (defense: the shield's plus the weapon's, content audit m3)
 //
 // The result never goes below zero.
 package combat
@@ -48,18 +49,19 @@ func HitMonster(r *rand.Rand, maxHit int, m MonsterTarget) int {
 }
 
 // PlayerTarget is what protects a player from a hit: total armor of the equipment, the
-// shield's defense and the stance defense factor.
+// defense of the hands (the shield's plus the weapon's, content audit m3) and the stance
+// defense factor.
 type PlayerTarget struct {
-	Armor, ShieldDefense int
-	ModeDefense          float64
+	Armor, Defense int
+	ModeDefense    float64
 }
 
-// HitPlayer rolls one monster attack of [lo, hi] damage against p. Armor and shield
-// only stop physical attacks.
+// HitPlayer rolls one monster attack of [lo, hi] damage against p. Armor and the hands'
+// defense only stop physical attacks.
 func HitPlayer(r *rand.Rand, c content.Combat, lo, hi int, physical bool, p PlayerTarget) int {
 	dmg := Roll(r, lo, hi)
 	if physical {
-		block := int(math.Floor(float64(p.ShieldDefense) * p.ModeDefense / float64(c.ShieldBlockDivisor)))
+		block := int(math.Floor(float64(p.Defense) * p.ModeDefense / float64(c.ShieldBlockDivisor)))
 		dmg -= Roll(r, p.Armor/2, p.Armor) + Roll(r, 0, block)
 	}
 	return max(dmg, 0)

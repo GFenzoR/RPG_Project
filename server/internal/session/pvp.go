@@ -373,14 +373,24 @@ func (w *World) pvpFoe(ctx *game.TickContext, p *Player) *Player {
 	return v
 }
 
-// playerDefense is what protects v from a physical hit of a player: armor, shield and
-// stance, as against a monster (the shield is not trained by players).
+// playerDefense is what protects v from a physical hit of a player: armor, the hands' defense
+// (shield and weapon) and stance, as against a monster (the shield is not trained by players).
 func (w *World) playerDefense(v *Player) combat.PlayerTarget {
-	pt := combat.PlayerTarget{Armor: v.armor, ModeDefense: w.mode(v).Defense}
-	if v.shield != nil && v.shield.Shield != nil {
-		pt.ShieldDefense = v.shield.Shield.Defense
+	return combat.PlayerTarget{Armor: v.armor, Defense: handsDefense(v), ModeDefense: w.mode(v).Defense}
+}
+
+// handsDefense is the defense of p's hands against a physical hit: the shield's plus the
+// weapon's (content audit m3: a weapon's defense used to show and do nothing). Only the
+// shield trains the shield skill.
+func handsDefense(p *Player) int {
+	d := 0
+	if p.shield != nil && p.shield.Shield != nil {
+		d += p.shield.Shield.Defense
 	}
-	return pt
+	if p.weapon != nil && p.weapon.Weapon != nil {
+		d += p.weapon.Weapon.Defense
+	}
+	return d
 }
 
 // hurtPlayer applies a hit of player a on player v (already rolled, before

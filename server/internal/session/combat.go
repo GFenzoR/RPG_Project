@@ -285,10 +285,9 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		physical := a.Element == ElementPhysical
 		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense}
 		if physical {
-			pt.Armor = t.armor
+			pt.Armor, pt.Defense = t.armor, handsDefense(t)
 		}
 		if physical && t.shield != nil && t.shield.Shield != nil {
-			pt.ShieldDefense = t.shield.Shield.Defense
 			w.trainShield(ctx, t)
 		}
 		dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, a.Min, a.Max, physical, pt)

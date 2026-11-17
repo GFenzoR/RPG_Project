@@ -247,7 +247,7 @@ func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
 	stats := h.voc.AtLevel(h.level)
 	maxHP, maxMP := float64(stats.Health), float64(stats.Mana)
 	target := combat.MonsterTarget{Armor: m.Armor, Defense: m.Defense, PhysicalResistance: m.Resistances["physical"]}
-	player := combat.PlayerTarget{Armor: h.armor, ShieldDefense: h.shield, ModeDefense: balanced.Defense}
+	player := combat.PlayerTarget{Armor: h.armor, Defense: h.shield + h.weapon.Weapon.Defense, ModeDefense: balanced.Defense}
 	regen := h.voc.Regen
 	tickHP, tickMP := regen.Tick(h.regenPct) // the server's integer formula
 	regenHP, regenMP := float64(tickHP), float64(tickMP)
