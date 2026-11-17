@@ -223,3 +223,96 @@
   success_per_level: 0.035
   max_success: 0.75
   xp: 10
+
+# ---- Content audit (2026-11): bolts, the elm maul and the embersteel club, bow, crossbow,
+# greaves and sabatons (M3/M4). Bolts give gull feathers a use.
+- id: smith_bolts
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 3
+  time_ms: 3000
+  inputs: [{ item: iron_ingot, count: 1 }, { item: gull_feather, count: 2 }]
+  output: { item: bolt, count: 20 }
+  base_success: 0.6
+  success_per_level: 0.04
+  max_success: 0.95
+  xp: 2
+
+- id: smith_elmroot_maul
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 7
+  time_ms: 5000
+  inputs: [{ item: elm_log, count: 4 }, { item: iron_ingot, count: 2 }, { item: thorn_heartwood, count: 1 }]
+  output: { item: elmroot_maul, count: 1 }
+  base_success: 0.4
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 5
+
+- id: smith_embersteel_mace
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 14
+  time_ms: 6000
+  inputs: [{ item: embersteel_ingot, count: 4 }, { item: elm_log, count: 1 }]
+  output: { item: embersteel_mace, count: 1 }
+  base_success: 0.36
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 6
+
+- id: smith_embersteel_longbow
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 14
+  time_ms: 6000
+  inputs: [{ item: embersteel_ingot, count: 2 }, { item: elm_log, count: 3 }, { item: salamander_scale, count: 1 }]
+  output: { item: embersteel_longbow, count: 1 }
+  base_success: 0.36
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 6
+
+- id: smith_embersteel_crossbow
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 15
+  time_ms: 6000
+  inputs: [{ item: embersteel_ingot, count: 3 }, { item: elm_log, count: 2 }]
+  output: { item: embersteel_crossbow, count: 1 }
+  base_success: 0.35
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 6
+
+- id: smith_embersteel_greaves
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 15
+  time_ms: 6000
+  inputs: [{ item: embersteel_ingot, count: 4 }, { item: ash_pelt, count: 1 }]
+  output: { item: embersteel_greaves, count: 1 }
+  base_success: 0.35
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 6
+
+- id: smith_embersteel_sabatons
+  craft: smithing
+  station: anvil
+  tool: smithing
+  level: 14
+  time_ms: 6000
+  inputs: [{ item: embersteel_ingot, count: 3 }, { item: ash_pelt, count: 1 }]
+  output: { item: embersteel_sabatons, count: 1 }
+  base_success: 0.36
+  success_per_level: 0.04
+  max_success: 0.85
+  xp: 6

@@ -19,5 +19,7 @@ loot:
   - { item: delver_chart, chance: 0.12 }
   - { item: pickaxe, chance: 0.03 }
   - { item: embersteel_helm, chance: 0.015 }
+  - { item: obsidian_wand, chance: 0.006 }
+  - { item: blackfrost_staff, chance: 0.006 }
 tags: [human, cave, volcan]
 notes: Renegade miners, too stubborn to run, digging toward the old forge (Chapter 3), the mine under the mountain, levels 33-37. Throw obsidian shards (physical) at range.

@@ -65,7 +65,10 @@ shop:
     - { item: coral_wand, price: 300 }
     - { item: sapling_staff, price: 40 }
     - { item: rimewood_staff, price: 300 }
+    - { item: spark_wand, price: 40 }
+    - { item: mana_draught, price: 22 }
   buys:
     - { item: coral_wand, price: 100 }
     - { item: sapling_staff, price: 12 }
     - { item: rimewood_staff, price: 100 }
+    - { item: spark_wand, price: 12 }

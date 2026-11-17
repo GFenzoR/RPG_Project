@@ -1,0 +1,734 @@
+package sim_test
+
+// Balance check for the arcanist, the druid and the ranger (content audit M2-M5): the
+// guardian sims (balance_test.go, balance_bosque_test.go, balance_volcan_test.go) duel
+// with melee only; these play a whole career, level 1 to 50, with each vocation's own
+// weapons, spells and a real mana budget.
+//
+// Each hunt is a Monte Carlo series of duels with the real formulas against one monster
+// of the islands' bestiary (the target levels of the guardian sims), with the kit the
+// shops sell at that level. Inside a fight the hunter:
+//   - shoots its weapon every attack round: a wand or staff (combat.WandHit) or a bow or
+//     crossbow with its ammo (melee formula with the distance skill);
+//   - casts its best attack spell whenever the attack group is ready and the mana allows;
+//   - casts its best self-heal under half health (the healing group is apart), and drinks
+//     a seaweed poultice under a third when it cannot;
+//   - regenerates as its vocation, doubled-or-so while fed (balance.yaml well_fed: every
+//     hunter eats, food is cheap), and drinks mana draughts with the consumable cooldown.
+// Health and mana carry over from one fight to the next, with the 15 s of walking and
+// looting in between. Two habits are tried and the better one kept:
+//   - frugal: attack spells only with the mana that regeneration gives, keeping a reserve
+//     for heals; draughts only to keep that reserve;
+//   - full: draughts keep the attack spells going.
+// What the draughts, poultices and ammo cost must stay well under what the hunt earns
+// (coins plus a third of the items' value, what NPCs pay).
+//
+// The career picks, at each level, the monster and habit with the most XP per hour that
+// a hunter can afford and survive, and adds the mana it spent to its magic level
+// (skills.base.magic: tries = mana spent). So the magic level of each level comes from
+// what the hunting really spends, not from a guess. Weapon skills follow the guardian
+// sims' rule (skillStart + skillPerLevel × (level − 1)).
+//
+// DEBUG_BALANCE=1 prints each career, level by level.
+
+import (
+	"fmt"
+	"math"
+	"math/rand/v2"
+	"os"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/GFenzoR/RPG_Project/server/internal/combat"
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/skills"
+)
+
+const (
+	careerFights   = 400   // duels per hunt
+	careerTo       = 50    // the career ends at this level
+	maxDeaths      = 0.003 // a hunt that kills the hunter more often is skipped
+	maxSpendShare  = 0.75  // draughts, poultices and ammo: at most this share of the loot
+	healBelowPct   = 50    // a self-heal under this % of health...
+	potionBelowPct = 33    // ...and a poultice under this one
+	npcBuyShare    = 1.0 / 3
+)
+
+// hunterKit is what a hunter of a vocation carries at a level.
+type hunterKit struct {
+	weapon, ammo string
+	armor        []string
+	shield       string // "" with a two-handed weapon
+}
+
+// armorAt is the armor and shield the islands' shops sell at level (the guardian's kit:
+// no armor piece is limited to a vocation, content audit m6).
+func armorAt(level int) ([]string, string) {
+	k := volcanKit(level)
+	return k.armor, k.shield
+}
+
+// casterKit: the wand or staff line of each caster (content audit M3, m5).
+func casterKit(voc string, level int) hunterKit {
+	type tier struct {
+		from   int
+		weapon string
+	}
+	lines := map[string][]tier{
+		"arcanist": {{1, "spark_wand"}, {6, "coral_wand"}, {16, "stormglass_wand"}, {32, "obsidian_wand"}},
+		"druid":    {{1, "sapling_staff"}, {6, "rimewood_staff"}, {16, "hoarfrost_staff"}, {32, "blackfrost_staff"}},
+	}
+	k := hunterKit{}
+	for _, t := range lines[voc] {
+		if level >= t.from {
+			k.weapon = t.weapon
+		}
+	}
+	k.armor, k.shield = armorAt(level)
+	return k
+}
+
+// bowKit: the ranger's two-handed bows (no shield).
+func bowKit(level int) hunterKit {
+	k := hunterKit{weapon: "short_bow", ammo: "arrow"}
+	switch {
+	case level >= 32:
+		k.weapon = "embersteel_longbow"
+	case level >= 16:
+		k.weapon = "thornwood_longbow"
+	case level >= 8:
+		k.weapon = "yew_longbow"
+	}
+	k.armor, _ = armorAt(level)
+	return k
+}
+
+// crossbowKit: the ranger's one-handed crossbows and a shield (content audit M4); before
+// the first crossbow (level 12) it is the bow kit.
+func crossbowKit(level int) hunterKit {
+	if level < 12 {
+		return bowKit(level)
+	}
+	k := hunterKit{weapon: "smuggler_crossbow", ammo: "bolt"}
+	if level >= 34 {
+		k.weapon = "embersteel_crossbow"
+	}
+	k.armor, k.shield = armorAt(level)
+	return k
+}
+
+// commonTargets is every common monster of the three islands and its target level.
+func commonTargets() map[string]int {
+	out := map[string]int{}
+	for _, m := range []map[string]int{targetLevel, bosqueTargetLevel, volcanTargetLevel} {
+		for id, l := range m {
+			out[id] = l
+		}
+	}
+	return out
+}
+
+type habit int
+
+const (
+	frugal habit = iota
+	budget
+	full
+)
+
+func (h habit) String() string { return [...]string{"frugal", "budget", "full"}[h] }
+
+// budgetShare is what a hunter of the budget habit spends on draughts, at most, out of
+// what the hunt has earned so far.
+const budgetShare = 0.6
+
+// hunter is a character of a vocation at a level, with its magic level and kit.
+type hunter struct {
+	d                   *balanceData
+	voc                 content.Vocation
+	level, magic, skill int
+	weapon, ammo        *content.Item
+	armor, shield       int
+	attacks, heals      []*content.Spell
+	conjure             *content.Spell // conjures the ammo (the ranger's arrows)
+	regenPct            int            // extra regeneration while fed (balance.yaml well_fed)
+	draught             *content.Item
+	poultice            *content.Item
+}
+
+func (d *balanceData) hunter(t *testing.T, voc string, level, magic int, k hunterKit) *hunter {
+	t.Helper()
+	h := &hunter{d: d, voc: d.vocations[voc], level: level, magic: magic,
+		skill: skillStart + int(math.Floor(skillPerLevel*float64(level-1)))}
+	h.weapon = d.item(t, k.weapon)
+	if k.ammo != "" {
+		h.ammo = d.item(t, k.ammo)
+	}
+	for _, id := range k.armor {
+		h.armor += d.item(t, id).Armor.Armor
+	}
+	if k.shield != "" && h.weapon.Weapon.Hands < 2 {
+		h.shield = d.item(t, k.shield).Shield.Defense
+	}
+	for _, id := range d.spells.IDs() {
+		s := d.spells[id]
+		if !s.CastBy(voc) || s.Level > level || s.MagicLevel > magic {
+			continue
+		}
+		switch {
+		case s.Effect.Damage != nil:
+			h.attacks = append(h.attacks, s)
+		case s.Effect.Heal != nil && s.Effect.Heal.Range == 0:
+			h.heals = append(h.heals, s)
+		case s.Effect.Conjure != nil && k.ammo != "" && s.Effect.Conjure.Item == k.ammo:
+			h.conjure = s
+		}
+	}
+	if c := d.balance.Conditions[fedCondition]; c != nil {
+		h.regenPct = c.RegenPct
+	}
+	h.draught = d.item(t, "mana_draught")
+	if level >= 30 { // Brasal sells the concentrated one: a hunter there carries it
+		h.draught = d.item(t, "concentrated_mana_draught")
+	}
+	h.poultice = d.item(t, "seaweed_poultice")
+	return h
+}
+
+// fedCondition is the condition food gives (content audit m2).
+const fedCondition = "well_fed"
+
+// amount is the average of a spell scaling for h, without spread.
+func (h *hunter) amount(s content.Scaling) float64 {
+	v := s.Base + float64(h.level)*s.PerLevel + float64(h.magic)*s.PerMagicLevel
+	if s.Skill != "" {
+		v += float64(h.skill) * s.PerSkill
+	}
+	return v
+}
+
+// expected is the average damage of attack spell s on m.
+func (h *hunter) expected(s *content.Spell, m *content.Monster) float64 {
+	d := s.Effect.Damage
+	return h.amount(d.Scaling) * (1 - float64(min(m.Resistances[d.Element], 100))/100)
+}
+
+// hunt is what a series of duels against one monster gave.
+type hunt struct {
+	monster       string
+	habit         habit
+	secondsPerKil float64 // fight plus overhead
+	damagePct     float64 // health lost per fight, % of max
+	deaths        float64 // per fight
+	manaPerKill   float64 // spent on spells (magic level tries)
+	spendPerKill  float64 // copper: draughts, poultices and ammo
+	lootPerKill   float64 // copper: coins plus a third of the items' value
+	draughts      float64 // per kill: mana draughts, poultices and ammo bought
+	poultices     float64
+	ammoBought    float64
+	xpPerHour     float64
+}
+
+func (u hunt) affordable() bool {
+	return u.deaths <= maxDeaths && u.spendPerKill <= maxSpendShare*u.lootPerKill
+}
+
+// hunt runs careerFights duels of h against m with habit hb.
+func (h *hunter) hunt(m *content.Monster, hb habit, seed uint64) hunt {
+	r := rand.New(rand.NewPCG(seed, uint64(h.level)<<8|uint64(hb)))
+	c := h.d.balance.Combat
+	balanced := c.Modes["balanced"]
+	stats := h.voc.AtLevel(h.level)
+	maxHP, maxMP := float64(stats.Health), float64(stats.Mana)
+	target := combat.MonsterTarget{Armor: m.Armor, Defense: m.Defense, PhysicalResistance: m.Resistances["physical"]}
+	player := combat.PlayerTarget{Armor: h.armor, ShieldDefense: h.shield, ModeDefense: balanced.Defense}
+	regen := h.voc.Regen
+	regenHP := float64(regen.Health) * float64(100+h.regenPct) / 100
+	regenMP := float64(regen.Mana) * float64(100+h.regenPct) / 100
+	useMs := h.d.balance.Inventory.UseCooldownMs
+
+	// Spells sorted by what they do on m; the best ready and affordable one is cast.
+	attacks := slices.Clone(h.attacks)
+	slices.SortStableFunc(attacks, func(a, b *content.Spell) int {
+		return -cmpFloat(h.expected(a, m), h.expected(b, m))
+	})
+	attacks = slices.DeleteFunc(attacks, func(s *content.Spell) bool { return h.expected(s, m) <= 0 })
+	heals := slices.Clone(h.heals)
+	slices.SortStableFunc(heals, func(a, b *content.Spell) int {
+		return -cmpFloat(h.amount(a.Effect.Heal.Scaling), h.amount(b.Effect.Heal.Scaling))
+	})
+	reserve := 0.0
+	if len(heals) > 0 {
+		reserve = float64(heals[0].Mana)
+	}
+
+	hp, mp := maxHP, maxMP
+	var mana, spend, loot, damage, deaths float64
+	stock := 0 // conjured ammo left
+	var nDraught, nPoultice, nAmmo float64
+	perKill := h.d.huntLoot(m)
+	// mayDrink: a draught for an attack spell (or to refill between fights) fits the habit.
+	mayDrink := func() bool {
+		switch hb {
+		case full:
+			return true
+		case budget:
+			return spend+float64(h.draught.Value) <= budgetShare*(loot+perKill)
+		}
+		return false
+	}
+	totalMs := 0
+	next := make([]int, len(m.Attacks))
+	ready := map[string]int{}
+	for range careerFights {
+		mhp := m.Health
+		now, nextShot, nextAttackGroup, nextHealGroup, nextUse := 0, 0, 0, 0, 0
+		nextRegen := regen.IntervalMs
+		for i, a := range m.Attacks {
+			next[i] = a.IntervalMs
+		}
+		for k := range ready {
+			ready[k] = 0
+		}
+		lost := 0.0
+		drink := func() bool { // a mana draught, if the consumable cooldown allows
+			if now < nextUse || mp >= maxMP {
+				return false
+			}
+			nextUse = now + useMs
+			mp = math.Min(maxMP, mp+float64(h.draught.Consumable.HealMP))
+			spend += float64(h.draught.Value)
+			nDraught++
+			return true
+		}
+		for mhp > 0 && now < maxFightMs {
+			// Heal first: the healing group is apart from the attack group.
+			if hp < maxHP*healBelowPct/100 {
+				healed := false
+				if now >= nextHealGroup {
+					for _, s := range heals {
+						if now < ready[s.ID] {
+							continue
+						}
+						if mp < float64(s.Mana) {
+							drink()
+						}
+						if mp < float64(s.Mana) {
+							break
+						}
+						mp -= float64(s.Mana)
+						mana += float64(s.Mana)
+						hp = math.Min(maxHP, hp+float64(combat.Scaled(r, s.Effect.Heal.Scaling, h.level, h.magic, h.skill)))
+						ready[s.ID] = now + s.CooldownMs
+						nextHealGroup = now + s.GroupCooldownMs
+						healed = true
+						break
+					}
+				}
+				if !healed && hp < maxHP*potionBelowPct/100 && now >= nextUse {
+					nextUse = now + useMs
+					hp = math.Min(maxHP, hp+float64(h.poultice.Consumable.HealHP))
+					spend += float64(h.poultice.Value)
+					nPoultice++
+				}
+			}
+			if now >= nextShot {
+				nextShot = now + c.AttackIntervalMs
+				w := h.weapon.Weapon
+				switch {
+				case w.Type == "wand":
+					mhp -= combat.Resist(combat.WandHit(r, w.Attack, c.WandMinFactor), m.Resistances[w.Element])
+				case h.ammo != nil: // a bow or crossbow and its ammo
+					maxHit := combat.MaxHit(c, h.skill, w.Attack+h.ammo.Ammo.Attack, h.level, balanced.Attack)
+					mhp -= combat.HitMonster(r, maxHit, target)
+					if stock > 0 {
+						stock--
+					} else {
+						spend += float64(h.ammo.Value)
+						nAmmo++
+					}
+				default: // melee: the guardian's reference career
+					mhp -= combat.HitMonster(r, combat.MaxHit(c, h.skill, w.Attack, h.level, balanced.Attack), target)
+				}
+			}
+			if now >= nextAttackGroup && mhp > 0 {
+				for _, s := range attacks {
+					if now < ready[s.ID] {
+						continue
+					}
+					keep := reserve
+					if h.conjure != nil && stock < h.conjure.Effect.Conjure.Count {
+						keep += float64(h.conjure.Mana) // arrows before spells
+					}
+					if mp < float64(s.Mana)+keep && mayDrink() {
+						drink()
+					}
+					if hb == full {
+						keep = 0
+					}
+					if mp < float64(s.Mana)+keep {
+						continue
+					}
+					mp -= float64(s.Mana)
+					mana += float64(s.Mana)
+					d := s.Effect.Damage
+					mhp -= combat.Resist(combat.Scaled(r, d.Scaling, h.level, h.magic, h.skill), m.Resistances[d.Element])
+					ready[s.ID] = now + s.CooldownMs
+					nextAttackGroup = now + s.GroupCooldownMs
+					break
+				}
+			}
+			if mhp <= 0 {
+				break
+			}
+			// The next event: a shot, a spell, a heal, a draught, a monster attack or regen.
+			step := min(nextShot, nextRegen)
+			if nextAttackGroup > now {
+				step = min(step, nextAttackGroup)
+			}
+			step = min(step, max(nextHealGroup, now+50), max(nextUse, now+50))
+			for _, n := range next {
+				step = min(step, n)
+			}
+			now = max(step, now+50)
+			for now >= nextRegen {
+				hp = math.Min(maxHP, hp+regenHP)
+				mp = math.Min(maxMP, mp+regenMP)
+				nextRegen += regen.IntervalMs
+			}
+			for i, a := range m.Attacks {
+				if now < next[i] {
+					continue
+				}
+				next[i] += a.IntervalMs
+				if a.Chance > 0 && r.Float64() >= a.Chance {
+					continue
+				}
+				dmg := float64(combat.HitPlayer(r, c, a.Min, a.Max, a.Element == "" || a.Element == "physical", player))
+				hp -= dmg
+				lost += dmg
+			}
+			if hp <= 0 {
+				deaths++
+				hp, mp = maxHP, maxMP
+			}
+		}
+		totalMs += now
+		damage += lost
+		loot += h.d.huntLoot(m)
+		// Walking and looting: regeneration and draughts (as the habit allows) to start the
+		// next fight ready; a frugal hunter drinks only for a heal it needs.
+		ticks := int(overheadSeconds * 1000 / float64(regen.IntervalMs))
+		hp = math.Min(maxHP, hp+float64(ticks)*regenHP)
+		mp = math.Min(maxMP, mp+float64(ticks)*regenMP)
+		for range int(overheadSeconds * 1000 / float64(max(useMs, 1))) {
+			if mp >= maxMP-float64(h.draught.Consumable.HealMP) || !mayDrink() {
+				break
+			}
+			mp = math.Min(maxMP, mp+float64(h.draught.Consumable.HealMP))
+			spend += float64(h.draught.Value)
+			nDraught++
+		}
+		// Ammo conjured with the mana regeneration left over (draughts would cost more
+		// than buying it).
+		for h.conjure != nil && stock < 2*h.conjure.Effect.Conjure.Count && mp >= float64(h.conjure.Mana)+reserve {
+			mp -= float64(h.conjure.Mana)
+			mana += float64(h.conjure.Mana)
+			stock += h.conjure.Effect.Conjure.Count
+		}
+		for hp < maxHP*0.7 && len(heals) > 0 && mp >= float64(heals[0].Mana) { // patch up
+			mp -= float64(heals[0].Mana)
+			mana += float64(heals[0].Mana)
+			hp = math.Min(maxHP, hp+h.amount(heals[0].Effect.Heal.Scaling))
+		}
+	}
+	n := float64(careerFights)
+	u := hunt{
+		monster: m.ID, habit: hb,
+		secondsPerKil: float64(totalMs)/n/1000 + overheadSeconds,
+		damagePct:     100 * damage / n / maxHP,
+		deaths:        deaths / n,
+		manaPerKill:   mana / n,
+		spendPerKill:  spend / n,
+		lootPerKill:   loot / n,
+		draughts:      nDraught / n,
+		poultices:     nPoultice / n,
+		ammoBought:    nAmmo / n,
+	}
+	u.xpPerHour = float64(m.Experience) * 3600 / u.secondsPerKil
+	return u
+}
+
+func cmpFloat(a, b float64) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
+}
+
+// huntLoot is the average copper a kill of m is worth to a hunter: coins, and a third of
+// the value of the items (what NPCs pay).
+func (d *balanceData) huntLoot(m *content.Monster) float64 {
+	sum := 0.0
+	for _, l := range m.Loot {
+		lo, hi := l.CountRange()
+		v := float64(d.items[l.Item].Value)
+		if d.items[l.Item].Currency == nil {
+			v *= npcBuyShare
+		}
+		sum += l.Chance * float64(lo+hi) / 2 * v
+	}
+	return sum
+}
+
+// careerLevel is one level of a career: where and how it was hunted.
+type careerLevel struct {
+	level, magic int
+	best         hunt
+	hours        float64 // to the next level
+	affordable   bool
+}
+
+type career struct {
+	voc    string
+	levels []careerLevel
+}
+
+// hoursTo sums the hours from level from to level to.
+func (c career) hoursTo(from, to int) float64 {
+	h := 0.0
+	for _, l := range c.levels {
+		if l.level >= from && l.level < to {
+			h += l.hours
+		}
+	}
+	return h
+}
+
+// magicAt is the magic level the career has on reaching level.
+func (c career) magicAt(level int) int {
+	for _, l := range c.levels {
+		if l.level == level {
+			return l.magic
+		}
+	}
+	return c.levels[len(c.levels)-1].magic
+}
+
+// spendShare is what the hunts from level from to level to cost, over what they earned.
+func (c career) spendShare(from, to int) float64 {
+	spend, loot := 0.0, 0.0
+	for _, l := range c.levels {
+		if l.level >= from && l.level < to {
+			kills := l.hours * 3600 / l.best.secondsPerKil
+			spend += kills * l.best.spendPerKill
+			loot += kills * l.best.lootPerKill
+		}
+	}
+	return spend / max(loot, 1)
+}
+
+func (c career) String() string {
+	var b strings.Builder
+	for _, l := range c.levels {
+		fmt.Fprintf(&b, "%s lvl %2d ml %2d  %-17s %-6s %5.1f s/kill %5.1f%% hp  %6.0f xp/h  mana/kill %5.1f  spend %5.1f / loot %5.1f  %5.2f h%s\n",
+			c.voc, l.level, l.magic, l.best.monster, l.best.habit, l.best.secondsPerKil, l.best.damagePct,
+			l.best.xpPerHour, l.best.manaPerKill, l.best.spendPerKill, l.best.lootPerKill, l.hours,
+			map[bool]string{true: "", false: "  (unaffordable)"}[l.affordable])
+	}
+	return b.String()
+}
+
+// runCareer plays voc from level 1 to careerTo with the kit of kitAt.
+func (d *balanceData) runCareer(t *testing.T, voc string, kitAt func(int) hunterKit) career {
+	t.Helper()
+	cv := d.balance.Experience
+	magic := d.balance.Skills.Base["magic"]
+	factor := d.vocations[voc].SkillFactor("magic")
+	ml := skills.Progress{Level: magic.StartLevel}
+	targets := commonTargets()
+	ids := make([]string, 0, len(targets))
+	for id := range targets {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	out := career{voc: voc}
+	for level := 1; level < careerTo; level++ {
+		h := d.hunter(t, voc, level, ml.Level, kitAt(level))
+		var best, fallback hunt
+		for _, id := range ids {
+			if targets[id] > level || targets[id] < level-15 {
+				continue
+			}
+			for _, hb := range []habit{frugal, budget, full} {
+				u := h.hunt(d.monsters[id], hb, uint64(len(id)))
+				if u.affordable() && u.xpPerHour > best.xpPerHour {
+					best = u
+				}
+				if u.deaths <= maxDeaths && u.xpPerHour > fallback.xpPerHour {
+					fallback = u
+				}
+			}
+		}
+		cl := careerLevel{level: level, magic: ml.Level, best: best, affordable: best.xpPerHour > 0}
+		if !cl.affordable {
+			cl.best = fallback
+		}
+		if cl.best.xpPerHour <= 0 {
+			t.Fatalf("%s level %d: no monster to hunt", voc, level)
+		}
+		cl.hours = float64(cv.TotalFor(level+1)-cv.TotalFor(level)) / cl.best.xpPerHour
+		kills := cl.hours * 3600 / cl.best.secondsPerKil
+		ml.Add(magic, factor, int64(kills*cl.best.manaPerKill))
+		out.levels = append(out.levels, cl)
+	}
+	if os.Getenv("DEBUG_BALANCE") != "" {
+		t.Logf("career of the %s:\n%s", voc, out)
+	}
+	return out
+}
+
+func TestVocationCareers(t *testing.T) {
+	d := loadData(t)
+	// The guardian's career is the yardstick: the same harness with its melee kit.
+	guardian := d.runCareer(t, "guardian", func(level int) hunterKit {
+		k := volcanKit(level)
+		return hunterKit{weapon: k.weapon, armor: k.armor, shield: k.shield}
+	})
+	careers := map[string]career{
+		"arcanist": d.runCareer(t, "arcanist", func(l int) hunterKit { return casterKit("arcanist", l) }),
+		"druid":    d.runCareer(t, "druid", func(l int) hunterKit { return casterKit("druid", l) }),
+		"ranger":   d.runCareer(t, "ranger", crossbowKit), // with a shield, as its description says
+	}
+	bowRanger := d.runCareer(t, "ranger", bowKit)
+	vocs := []string{"arcanist", "druid", "ranger"}
+	bands := [][2]int{{1, 8}, {8, 15}, {15, 20}, {20, 25}, {25, 30}, {30, 40}, {40, 50}}
+	if os.Getenv("DEBUG_BALANCE") != "" {
+		for _, b := range bands {
+			line := fmt.Sprintf("levels %2d-%2d: guardian %6.2f h", b[0], b[1], guardian.hoursTo(b[0], b[1]))
+			for _, v := range vocs {
+				line += fmt.Sprintf("  %s %6.2f h (spend %3.0f%%)", v, careers[v].hoursTo(b[0], b[1]), 100*careers[v].spendShare(b[0], b[1]))
+			}
+			t.Log(line + fmt.Sprintf("  bow ranger %6.2f h", bowRanger.hoursTo(b[0], b[1])))
+		}
+		for _, v := range vocs {
+			t.Logf("%s magic level: 8 -> %d, 20 -> %d, 30 -> %d, 40 -> %d, 49 -> %d", v,
+				careers[v].magicAt(8), careers[v].magicAt(20), careers[v].magicAt(30), careers[v].magicAt(40), careers[v].magicAt(49))
+		}
+	}
+
+	t.Run("pace near the guardian's", func(t *testing.T) {
+		// No vocation levels much slower or faster than the tank on any band: the casters
+		// trade gold (draughts) for speed, the ranger arrows for safety.
+		for _, v := range vocs {
+			for _, b := range bands {
+				g, c := guardian.hoursTo(b[0], b[1]), careers[v].hoursTo(b[0], b[1])
+				if r := c / g; r < 0.5 || r > 1.5 {
+					t.Errorf("%s levels %d-%d in %.2f h, %.2f x the guardian's %.2f h (want 0.5-1.5)", v, b[0], b[1], c, r, g)
+				}
+			}
+		}
+	})
+
+	t.Run("hunting pays for its draughts and ammo", func(t *testing.T) {
+		for _, v := range vocs {
+			for _, l := range careers[v].levels {
+				// Levels 1-2: a ranger buys its first arrows (conjure_arrows is level 3).
+				if !l.affordable && l.level >= 3 {
+					t.Errorf("%s level %d: no hunt pays for itself (best %s %s: spend %.1f, loot %.1f per kill)",
+						v, l.level, l.best.monster, l.best.habit, l.best.spendPerKill, l.best.lootPerKill)
+				}
+			}
+			for _, b := range bands[1:] {
+				if s := careers[v].spendShare(b[0], b[1]); s > maxSpendShare {
+					t.Errorf("%s levels %d-%d spend %.0f %% of the loot (want <= %.0f %%)", v, b[0], b[1], 100*s, 100*maxSpendShare)
+				}
+			}
+		}
+	})
+
+	t.Run("magic level from the mana really spent", func(t *testing.T) {
+		want := map[string][4]int{ // magic level at 30 and at 49: [min30, max30, min49, max49]
+			"arcanist": {17, 26, 28, 42},
+			"druid":    {17, 26, 28, 42},
+			"ranger":   {4, 14, 7, 20},
+		}
+		for _, v := range vocs {
+			w, c := want[v], careers[v]
+			if m := c.magicAt(30); m < w[0] || m > w[1] {
+				t.Errorf("%s: magic level %d at level 30 (want %d-%d)", v, m, w[0], w[1])
+			}
+			if m := c.magicAt(49); m < w[2] || m > w[3] {
+				t.Errorf("%s: magic level %d at level 49 (want %d-%d)", v, m, w[2], w[3])
+			}
+			// Every spell's magic level is there within a few levels of its level.
+			for _, id := range d.spells.IDs() {
+				s := d.spells[id]
+				if !s.CastBy(v) || s.MagicLevel == 0 || s.Level+4 >= careerTo {
+					continue
+				}
+				if m := c.magicAt(s.Level + 4); m < s.MagicLevel {
+					t.Errorf("%s: %s needs magic level %d at level %d, the career has %d at level %d",
+						v, id, s.MagicLevel, s.Level, m, s.Level+4)
+				}
+			}
+		}
+	})
+
+	t.Run("crossbow and shield hold up against the bow", func(t *testing.T) {
+		// Content audit M4: the one-handed crossbow leaves the left hand to a shield. It
+		// hits less than the bow of its tier but takes less damage, and levels about as fast.
+		for _, b := range bands[1:] {
+			x, bow := careers["ranger"].hoursTo(b[0], b[1]), bowRanger.hoursTo(b[0], b[1])
+			if r := x / bow; r > 1.3 {
+				t.Errorf("levels %d-%d: the crossbow ranger takes %.2f x the bow ranger's time", b[0], b[1], r)
+			}
+		}
+		// Health lost per second of fight against a monster of the level that hits back.
+		for level, id := range map[int]string{14: "wreck_looter", 22: "coffer_smuggler", 36: "obsidian_delver", 46: "slag_golem"} {
+			ml := careers["ranger"].magicAt(level)
+			x := d.hunter(t, "ranger", level, ml, crossbowKit(level))
+			bow := d.hunter(t, "ranger", level, ml, bowKit(level))
+			if x.shield == 0 {
+				t.Errorf("level %d: the crossbow kit has no shield", level)
+			}
+			hx, hb := x.hunt(d.monsters[id], budget, 7), bow.hunt(d.monsters[id], budget, 7)
+			px := hx.damagePct / (hx.secondsPerKil - overheadSeconds)
+			pb := hb.damagePct / (hb.secondsPerKil - overheadSeconds)
+			if debug := os.Getenv("DEBUG_BALANCE") != ""; debug {
+				t.Logf("level %d vs %s: crossbow %.2f %%/s (%.1f s), bow %.2f %%/s (%.1f s)", level, id, px, hx.secondsPerKil, pb, hb.secondsPerKil)
+			}
+			if px >= pb {
+				t.Errorf("level %d vs %s: crossbow and shield lose %.2f %% health per second of fight, the bow %.2f %%",
+					level, id, px, pb)
+			}
+		}
+	})
+
+	t.Run("each caster has an area its island does not resist", func(t *testing.T) {
+		// Content audit M5: Volcán shrugs off fire (ember_ring), Bosque earth (bramble_burst).
+		check := func(voc string, level int, island map[string]int, newID, oldID string) {
+			h := d.hunter(t, voc, level, careers[voc].magicAt(level), casterKit(voc, level))
+			newS, oldS := d.spells[newID], d.spells[oldID]
+			if newS == nil || oldS == nil || newS.Effect.Damage == nil || newS.Effect.Damage.Radius == 0 {
+				t.Fatalf("%s or %s is not an area spell", newID, oldID)
+			}
+			if newS.Level > level || newS.MagicLevel > h.magic {
+				t.Errorf("%s: %s not castable at level %d (magic level %d)", voc, newID, level, h.magic)
+			}
+			for id := range island {
+				m := d.monsters[id]
+				if h.expected(newS, m) <= h.expected(oldS, m) {
+					t.Errorf("%s level %d vs %s: %s does %.0f, no more than %s's %.0f",
+						voc, level, id, newID, h.expected(newS, m), oldID, h.expected(oldS, m))
+				}
+			}
+		}
+		check("arcanist", 30, volcanTargetLevel, "tempest_ring", "ember_ring")
+		check("druid", 18, bosqueTargetLevel, "rime_burst", "bramble_burst")
+	})
+}

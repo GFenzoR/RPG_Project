@@ -60,6 +60,11 @@ shop:
     - { item: tarred_boots, price: 15 }
     - { item: pruebas_key, price: 10 }
     - { item: backpack, price: 20 }
+    - { item: mana_draught, price: 22 }
+    - { item: concentrated_mana_draught, price: 50 }
+    - { item: spark_wand, price: 40 }
+    - { item: smuggler_crossbow, price: 420 }
+    - { item: bolt, price: 1 }
   buys:
     - { item: raw_fish, price: 1 }
     - { item: grilled_fish, price: 2 }

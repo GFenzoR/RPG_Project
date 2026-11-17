@@ -101,7 +101,7 @@ func TestHarborMasterOffersByVocation(t *testing.T) {
 		t.Fatalf("hidden option ran: %+v", r)
 	}
 	r = Choose(hm, "ch1_offer", 1, f)
-	if r.Node != "ch1_accepted_arcanist" || f.money != 25 || f.items["ship_biscuit"] != 1 {
+	if r.Node != "ch1_accepted_arcanist" || f.items["spark_wand"] != 1 || f.items["ship_biscuit"] != 1 {
 		t.Fatalf("accept: %+v money %d items %v", r, f.money, f.items)
 	}
 	if s, step := f.QuestState("ch1_shipwreck"); s != quest.InProgress || step != "clear_wolves" {

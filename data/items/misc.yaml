@@ -490,3 +490,30 @@
   tradeable: false
   key: pruebas_gate
   notes: Opens and locks the practice gate of the sandbox island (door key pruebas_gate, data/items/doors.yaml). pruebas_merchant sells it. No value, so no NPC buys it.
+
+# Mana draughts (content audit M2, 2026-11): the casters' fuel, sold in every town (a
+# small one in Puerto, Bosque and Brasal, a concentrated one in Brasal). Nobody buys them
+# back. Our own numbers: about 0.4 copper per point of mana (docs/02 "Economía").
+- id: mana_draught
+  kind: consumable
+  sprite: potions/mana_draught
+  name: item.mana_draught.name
+  description: item.mana_draught.desc
+  weight: 300
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { heal_mp: 50 }
+  value: 22
+
+- id: concentrated_mana_draught
+  kind: consumable
+  sprite: potions/concentrated_mana_draught
+  name: item.concentrated_mana_draught.name
+  description: item.concentrated_mana_draught.desc
+  weight: 350
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { heal_mp: 125 }
+  value: 50

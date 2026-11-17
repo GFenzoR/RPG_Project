@@ -41,6 +41,13 @@ shop:
     - { item: smithing_hammer, price: 105 }
     - { item: glowcap_broth, price: 40 }
     - { item: arrow, price: 2 }
+    - { item: elmroot_maul, price: 1000 }
+    - { item: thornwood_longbow, price: 1080 }
+    - { item: smuggler_crossbow, price: 520 }
+    - { item: bolt, price: 2 }
+    - { item: stagleather_hood, price: 230 }
+    - { item: stagleather_boots, price: 220 }
+    - { item: mana_draught, price: 22 }
   buys:
     - { item: stagleather_coat, price: 170 }
     - { item: stagleather_leggings, price: 45 }
@@ -53,3 +60,8 @@ shop:
     - { item: crawler_chitin, price: 18 }
     - { item: spider_silk, price: 6 }
     - { item: wolf_pelt, price: 5 }
+    - { item: elmroot_maul, price: 270 }
+    - { item: thornwood_longbow, price: 290 }
+    - { item: smuggler_crossbow, price: 140 }
+    - { item: stagleather_hood, price: 60 }
+    - { item: stagleather_boots, price: 55 }

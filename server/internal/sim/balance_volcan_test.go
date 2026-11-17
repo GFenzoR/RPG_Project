@@ -27,9 +27,16 @@ var volcanTargetLevel = map[string]int{
 // volcanBoss is the Chapter 3 boss (ch3_warden) and its target level.
 var volcanBoss = map[string]int{"slagbound_warden": 44}
 
-// volcanKit is what Brasal (smith's shop and embersteel recipes) adds to the forest kit.
+// volcanKit is what Brasal (smith's shop and embersteel recipes) adds to the forest kit;
+// the greaves and sabatons arrived with the content audit (M3, 2026-11).
 func volcanKit(level int) kit {
-	legs := []string{"stagleather_leggings", "tarred_boots"}
+	legs := []string{"stagleather_leggings", "stagleather_boots"}
+	switch {
+	case level >= 34:
+		legs = []string{"embersteel_greaves", "embersteel_sabatons"}
+	case level >= 32:
+		legs = []string{"embersteel_greaves", "stagleather_boots"}
+	}
 	switch {
 	case level >= 45:
 		return kit{"wyrmfang_blade", append([]string{"embersteel_helm", "wyrmscale_mail"}, legs...), "embersteel_shield"}

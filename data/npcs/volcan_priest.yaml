@@ -17,6 +17,8 @@ dialog:
           goto: healed
         - text: npc.volcan_priest.opt_mountain
           goto: mountain
+        - text: dialog.trade
+          action: { open_shop: still_flame_shop }
         - text: dialog.bye
           action: close
     blessings:
@@ -53,3 +55,16 @@ dialog:
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }
+# Content audit (2026-11): the temple keeps what a caster needs on the island: draughts,
+# poultices and the obsidian wand and blackfrost staff of the old forge-priests.
+shop:
+  id: still_flame_shop
+  sells:
+    - { item: mana_draught, price: 24 }
+    - { item: concentrated_mana_draught, price: 50 }
+    - { item: seaweed_poultice, price: 25 }
+    - { item: obsidian_wand, price: 2600 }
+    - { item: blackfrost_staff, price: 2600 }
+  buys:
+    - { item: obsidian_wand, price: 690 }
+    - { item: blackfrost_staff, price: 690 }

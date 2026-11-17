@@ -197,3 +197,130 @@
   weapon: { type: sword, attack: 31, defense: 17, hands: 1 }
   requires: { level: 45 }
   value: 4200
+
+# Content audit (2026-11): the club, bow and wand lines reach the Isla Volcánica (M3), the
+# ranger gets one-handed crossbows that leave the left hand to a shield (M4: a crossbow
+# shoots bolts, a little less attack than a bow of its tier) and the arcanist a starting
+# wand (m5). Our own numbers: each tier keeps the ~+4-5 attack of the melee lines.
+- id: spark_wand
+  kind: weapon
+  sprite: weapons/spark_wand
+  name: item.spark_wand.name
+  description: item.spark_wand.desc
+  weight: 1200
+  tradeable: true
+  weapon: { type: wand, attack: 8, range: 4, element: energy, hands: 1 }
+  requires: { vocations: [arcanist] }
+  value: 40
+
+# Isla del Bosque (levels 12-25): the tannery, the forest druid, smugglers' loot and elm.
+- id: elmroot_maul
+  kind: weapon
+  sprite: weapons/elmroot_maul
+  name: item.elmroot_maul.name
+  description: item.elmroot_maul.desc
+  weight: 5400
+  tradeable: true
+  weapon: { type: club, attack: 23, defense: 9, hands: 1 }
+  requires: { level: 16 }
+  value: 820
+
+- id: thornwood_longbow
+  kind: weapon
+  sprite: weapons/thornwood_longbow
+  name: item.thornwood_longbow.name
+  description: item.thornwood_longbow.desc
+  weight: 3500
+  tradeable: true
+  weapon: { type: distance, attack: 12, range: 6, hands: 2, ammo: arrow }
+  requires: { level: 16, vocations: [ranger] }
+  value: 880
+
+- id: smuggler_crossbow
+  kind: weapon
+  sprite: weapons/smuggler_crossbow
+  name: item.smuggler_crossbow.name
+  description: item.smuggler_crossbow.desc
+  weight: 3200
+  tradeable: true
+  weapon: { type: distance, attack: 7, range: 5, hands: 1, ammo: bolt }
+  requires: { level: 12, vocations: [ranger] }
+  value: 420
+
+- id: stormglass_wand
+  kind: weapon
+  sprite: weapons/stormglass_wand
+  name: item.stormglass_wand.name
+  description: item.stormglass_wand.desc
+  weight: 1400
+  tradeable: true
+  weapon: { type: wand, attack: 21, range: 4, element: energy, hands: 1 }
+  requires: { level: 16, vocations: [arcanist] }
+  value: 880
+
+- id: hoarfrost_staff
+  kind: weapon
+  sprite: weapons/hoarfrost_staff
+  name: item.hoarfrost_staff.name
+  description: item.hoarfrost_staff.desc
+  weight: 1600
+  tradeable: true
+  weapon: { type: wand, attack: 21, range: 4, element: ice, hands: 1 }
+  requires: { level: 16, vocations: [druid] }
+  value: 880
+
+# Isla Volcánica (levels 30-50): Brasal's smithy (embersteel) and temple, delvers' loot.
+- id: embersteel_mace
+  kind: weapon
+  sprite: weapons/embersteel_mace
+  name: item.embersteel_mace.name
+  description: item.embersteel_mace.desc
+  weight: 5800
+  tradeable: true
+  weapon: { type: club, attack: 28, defense: 12, hands: 1 }
+  requires: { level: 32 }
+  value: 2000
+
+- id: embersteel_longbow
+  kind: weapon
+  sprite: weapons/embersteel_longbow
+  name: item.embersteel_longbow.name
+  description: item.embersteel_longbow.desc
+  weight: 3800
+  tradeable: true
+  weapon: { type: distance, attack: 17, range: 6, hands: 2, ammo: arrow }
+  requires: { level: 32, vocations: [ranger] }
+  value: 2100
+
+- id: embersteel_crossbow
+  kind: weapon
+  sprite: weapons/embersteel_crossbow
+  name: item.embersteel_crossbow.name
+  description: item.embersteel_crossbow.desc
+  weight: 4200
+  tradeable: true
+  weapon: { type: distance, attack: 13, range: 5, hands: 1, ammo: bolt }
+  requires: { level: 34, vocations: [ranger] }
+  value: 1900
+
+- id: obsidian_wand
+  kind: weapon
+  sprite: weapons/obsidian_wand
+  name: item.obsidian_wand.name
+  description: item.obsidian_wand.desc
+  weight: 1500
+  tradeable: true
+  weapon: { type: wand, attack: 30, range: 4, element: energy, hands: 1 }
+  requires: { level: 32, vocations: [arcanist] }
+  value: 2100
+
+- id: blackfrost_staff
+  kind: weapon
+  sprite: weapons/blackfrost_staff
+  name: item.blackfrost_staff.name
+  description: item.blackfrost_staff.desc
+  weight: 1700
+  tradeable: true
+  weapon: { type: wand, attack: 30, range: 4, element: ice, hands: 1 }
+  requires: { level: 32, vocations: [druid] }
+  value: 2100

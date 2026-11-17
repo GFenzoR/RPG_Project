@@ -315,8 +315,8 @@ func TestChapterOnePlayable(t *testing.T) {
 	}
 }
 
-// The arcanist accepts the same quest and gets coins instead of a weapon; options are
-// checked again on the server.
+// The arcanist accepts the same quest and gets its own weapon, a spark wand (content audit
+// m5; it used to get coins); options are checked again on the server.
 func TestArcanistBranchAndStaleOptions(t *testing.T) {
 	h := dataHarness(t)
 	c := session.Character{ID: 901, AccountID: 901, Name: "Mage", Vocation: "arcanist", Level: 1, Health: 100, Mana: 100}
@@ -329,8 +329,8 @@ func TestArcanistBranchAndStaleOptions(t *testing.T) {
 		t.Fatal("a hidden option ran")
 	}
 	h.pick(cl, d, "dialog.accept")
-	if h.w.Money(p) != 25 || h.w.CountItem(p, "rusty_cutlass") != 0 {
-		t.Fatalf("arcanist kit: %d coins", h.w.Money(p))
+	if h.w.Money(p) != 0 || h.w.CountItem(p, "spark_wand") != 1 || h.w.CountItem(p, "rusty_cutlass") != 0 {
+		t.Fatalf("arcanist kit: %d coins, %d spark wands", h.w.Money(p), h.w.CountItem(p, "spark_wand"))
 	}
 	// A stale dialog id is ignored; option 0 closes.
 	if evs := h.send(cl, chooseMsg(d.DialogId+5, 1)); len(evs) != 0 {

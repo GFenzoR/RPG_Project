@@ -76,7 +76,9 @@
   requires: { level: 8 }
   value: 220
 
-# Light armor for the ranger and the druid (T3.1): less armor than a jerkin, lighter.
+# Light armor (T3.1): less armor than a jerkin, half its weight, and no level. Leather is
+# for every vocation (content audit m6): no leather piece is restricted, as the jerkin
+# and the stag-leather ones never were; the casters, with the least capacity, like it best.
 - id: hide_vest
   kind: armor
   sprite: armor/hide_vest
@@ -85,7 +87,6 @@
   weight: 3650
   tradeable: true
   armor: { slot: body, armor: 3 }
-  requires: { vocations: [ranger, druid] }
   value: 45
 
 # Isla del Bosque gear (T3.6, levels 12-25). Our own numbers.
@@ -166,3 +167,49 @@
   armor: { slot: body, armor: 10 }
   requires: { level: 45 }
   value: 3800
+
+# Content audit M3 (2026-11): head, legs and feet pieces between the starter kit and
+# the Volcán helm, so every slot grows with the islands. Our own numbers.
+- id: stagleather_hood
+  kind: armor
+  sprite: armor/stagleather_hood
+  name: item.stagleather_hood.name
+  description: item.stagleather_hood.desc
+  weight: 1100
+  tradeable: true
+  armor: { slot: head, armor: 2 }
+  requires: { level: 14 }
+  value: 180
+
+- id: stagleather_boots
+  kind: armor
+  sprite: armor/stagleather_boots
+  name: item.stagleather_boots.name
+  description: item.stagleather_boots.desc
+  weight: 1500
+  tradeable: true
+  armor: { slot: feet, armor: 2 }
+  requires: { level: 14 }
+  value: 170
+
+- id: embersteel_greaves
+  kind: armor
+  sprite: armor/embersteel_greaves
+  name: item.embersteel_greaves.name
+  description: item.embersteel_greaves.desc
+  weight: 4200
+  tradeable: true
+  armor: { slot: legs, armor: 3 }
+  requires: { level: 32 }
+  value: 950
+
+- id: embersteel_sabatons
+  kind: armor
+  sprite: armor/embersteel_sabatons
+  name: item.embersteel_sabatons.name
+  description: item.embersteel_sabatons.desc
+  weight: 2800
+  tradeable: true
+  armor: { slot: feet, armor: 3 }
+  requires: { level: 34 }
+  value: 850

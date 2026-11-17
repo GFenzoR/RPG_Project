@@ -147,3 +147,24 @@ sprites:
   npcs/smith_volcanic: { source: vendor/dungeon-crawl/UNUSED/monsters/deep_dwarf_artificer.png }
   npcs/priest_volcanic: { source: vendor/dungeon-crawl/mon/unique/josephine.png }
   npcs/ferryman_volcanic: { source: vendor/dungeon-crawl/mon/unique/margery.png }
+
+  # Content audit (2026-11): weapon tiers to the Isla Volcánica, crossbows and bolts, head,
+  # feet and leg pieces, the arcanist's starting wand and the mana draughts. The embersteel
+  # greaves are spritegen art (assets/sprites/armor), like the other leg pieces.
+  weapons/spark_wand: { source: vendor/dungeon-crawl/item/wand/gem_brass.png }
+  weapons/stormglass_wand: { source: vendor/dungeon-crawl/item/wand/gem_silver.png }
+  weapons/obsidian_wand: { source: vendor/dungeon-crawl/item/wand/gem_iron.png }
+  weapons/hoarfrost_staff: { source: vendor/dungeon-crawl/item/staff/staff02.png }
+  weapons/blackfrost_staff: { source: vendor/dungeon-crawl/item/staff/staff00.png }
+  weapons/elmroot_maul: { source: vendor/dungeon-crawl/item/weapon/club2.png }
+  weapons/embersteel_mace: { source: vendor/dungeon-crawl/item/weapon/morningstar2.png }
+  weapons/thornwood_longbow: { source: vendor/dungeon-crawl/item/weapon/ranged/longbow2.png }
+  weapons/embersteel_longbow: { source: vendor/dungeon-crawl/item/weapon/ranged/longbow3.png }
+  weapons/smuggler_crossbow: { source: vendor/dungeon-crawl/item/weapon/ranged/hand_crossbow.png }
+  weapons/embersteel_crossbow: { source: vendor/dungeon-crawl/item/weapon/ranged/hand_crossbow2.png }
+  ammo/bolt: { source: vendor/dungeon-crawl/effect/bolt2.png }
+  armor/stagleather_hood: { source: vendor/dungeon-crawl/item/armour/headgear/elven_leather_helm.png }
+  armor/stagleather_boots: { source: vendor/dungeon-crawl/item/armour/boots4_green.png }
+  armor/embersteel_sabatons: { source: vendor/dungeon-crawl/UNUSED/armour/boots_iron2.png }
+  potions/mana_draught: { source: vendor/dungeon-crawl/item/potion/sky_blue.png }
+  potions/concentrated_mana_draught: { source: vendor/dungeon-crawl/item/potion/brilliant_blue.png }

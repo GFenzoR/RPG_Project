@@ -65,7 +65,7 @@ dialog:
           if: { vocation_in: [arcanist] }
           action:
             - { start_quest: ch1_shipwreck }
-            - { give_gold: 25 }
+            - { give_item: spark_wand }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_arcanist
         - text: dialog.accept
