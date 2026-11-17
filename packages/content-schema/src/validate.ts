@@ -128,6 +128,7 @@ class Validator {
   private readonly items: (Owned & { item: Obj })[] = [];
   private balance: SourceFile | undefined;
   private recipes: SourceFile | undefined;
+  private spells: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -151,6 +152,7 @@ class Validator {
     this.checkShopPrices();
     this.checkQuestItemSources();
     this.checkToolTargets();
+    this.checkItemTrade();
     this.checkI18n();
     this.checkSounds();
     const lockFile = join(dataDir, "ids.lock.yaml");
@@ -231,6 +233,7 @@ class Validator {
     }
 
     const spells = single("spells.yaml", "spells", false);
+    this.spells = spells;
     if (spells) {
       const words = new Map<string, number>();
       for (const [i, spell] of asList(spells.data).entries()) {
@@ -994,6 +997,113 @@ class Validator {
         `tool "${id}" can be had in production (a shop, a dialog, loot, a recipe or a reward) but nothing in the production map takes tool.use "${tool["use"]}" (a placed resource or station, or a rope_spot portal for rope): give it a target or no production source`,
       );
     }
+  }
+
+  /**
+   * Content audit m4: items that lead nowhere. With world/, only NPCs placed on an island
+   * that is not dev_only count (without it, tests, every NPC):
+   * - an item an NPC buys needs a way to get it (monster loot, a resource's drops, a recipe,
+   *   a shop, a dialog give_item, a quest reward or a conjuring spell);
+   * - a weapon, armor or shield that can be had, is tradeable and has a value needs an NPC
+   *   that buys it (no dead weight in the backpack); a material, an NPC buyer, a recipe or a
+   *   quest or dialog that takes it;
+   * - a quest item (not tradeable, the has_item of a quest step) drops from monsters only as
+   *   each_player loot: as plain loot it keeps dropping as junk after the quest.
+   */
+  private checkItemTrade(): void {
+    const placed = this.npcPlacements();
+    const prodNpc = (id: string): boolean => !placed || (placed.get(id) ?? []).some((p) => !p.dev);
+    const got = new Set<string>();
+    const bought = new Map<string, { src: SourceFile; path: PathSegment[] }>();
+    const used = new Set<string>();
+    for (const src of this.monsters)
+      for (const drop of isObj(src.data) ? asList(src.data["loot"]) : [])
+        if (isObj(drop) && typeof drop["item"] === "string") got.add(drop["item"]);
+    for (const { item } of this.items) {
+      const res = item["resource"];
+      for (const d of isObj(res) ? asList(res["drops"]) : [])
+        if (isObj(d) && typeof d["item"] === "string") got.add(d["item"]);
+    }
+    for (const r of this.recipes ? asList(this.recipes.data).filter(isObj) : []) {
+      const out = r["output"];
+      if (isObj(out) && typeof out["item"] === "string") got.add(out["item"]);
+      for (const i of asList(r["inputs"]))
+        if (isObj(i) && typeof i["item"] === "string") used.add(i["item"]);
+    }
+    for (const sp of this.spells ? asList(this.spells.data).filter(isObj) : []) {
+      const effect = sp["effect"];
+      const conj = isObj(effect) ? effect["conjure"] : undefined;
+      if (isObj(conj) && typeof conj["item"] === "string") got.add(conj["item"]);
+    }
+    const questItems = new Set<string>();
+    for (const src of this.quests) {
+      const q = isObj(src.data) ? src.data : undefined;
+      for (const r of asList(q?.["rewards"]))
+        if (isObj(r) && typeof r["item"] === "string") got.add(r["item"]);
+      for (const step of asList(q?.["steps"])) {
+        const when = isObj(step) ? step["complete_when"] : undefined;
+        const need = isObj(when) ? when["has_item"] : undefined;
+        if (isObj(need) && typeof need["item"] === "string") {
+          used.add(need["item"]);
+          questItems.add(need["item"]);
+        }
+      }
+    }
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      if (!prodNpc(typeof npc?.["id"] === "string" ? npc["id"] : "")) continue;
+      const shop = npc?.["shop"];
+      for (const o of isObj(shop) ? asList(shop["sells"]) : [])
+        if (isObj(o) && typeof o["item"] === "string") got.add(o["item"]);
+      for (const [i, o] of (isObj(shop) ? asList(shop["buys"]) : []).entries())
+        if (isObj(o) && typeof o["item"] === "string" && !bought.has(o["item"]))
+          bought.set(o["item"], { src, path: ["shop", "buys", i, "item"] });
+      for (const { key, value } of actionsOf(npc?.["dialog"], ["dialog"])) {
+        if (key === "give_item" && typeof value === "string") got.add(value);
+        if (key === "take_item" && isObj(value) && typeof value["item"] === "string")
+          used.add(value["item"]);
+      }
+    }
+    for (const [id, at] of bought)
+      if (this.index.ids.item.has(id) && !got.has(id))
+        this.error(
+          at.src,
+          at.path,
+          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest reward or a spell)`,
+        );
+    for (const { item, src, path } of this.items) {
+      const id = item["id"];
+      const kind = item["kind"];
+      const value = item["value"];
+      if (typeof id !== "string" || !got.has(id) || item["tradeable"] !== true) continue;
+      if (typeof value !== "number" || value <= 0 || bought.has(id)) continue;
+      if (kind === "weapon" || kind === "armor" || kind === "shield")
+        this.error(
+          src,
+          [...path, "value"],
+          `"${id}" (${kind}) can be had and has a value, but no NPC buys it: add a buyer (a third of its value or less)`,
+        );
+      else if (kind === "material" && !used.has(id))
+        this.error(
+          src,
+          [...path, "value"],
+          `material "${id}" can be had and has a value, but no NPC buys it and no recipe or quest takes it`,
+        );
+    }
+    const untradeable = new Set(
+      this.items.filter(({ item }) => item["tradeable"] === false).map(({ item }) => item["id"]),
+    );
+    for (const src of this.monsters)
+      for (const [i, drop] of (isObj(src.data) ? asList(src.data["loot"]) : []).entries()) {
+        if (!isObj(drop) || typeof drop["item"] !== "string" || drop["each_player"] === true)
+          continue;
+        if (questItems.has(drop["item"]) && untradeable.has(drop["item"]))
+          this.error(
+            src,
+            ["loot", i, "item"],
+            `quest item "${drop["item"]}" drops as plain loot: make it each_player (only players whose quest needs it get one), or it keeps dropping as junk after the quest`,
+          );
+      }
   }
 
   /**

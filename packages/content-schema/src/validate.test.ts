@@ -565,9 +565,11 @@ describe("validator diagnostics", () => {
       expect.stringMatching(/pruebas_trainer\.yaml:.*dev-only action.*stands on island "puerto"/),
     ]);
     npcs("puerto", "[]\n");
-    edit("world/world.yaml", "dev_only: true", "dev_only: false");
+    // (testisle is dev_only too, content audit m11: flip the sandbox island's own flag.)
+    const sandbox = "level_hint: [1, 60]\n    dev_only:";
+    edit("world/world.yaml", `${sandbox} true`, `${sandbox} false`);
     expect(devErrors()).toEqual([expect.stringContaining('stands on island "pruebas"')]);
-    edit("world/world.yaml", "dev_only: false", "dev_only: true");
+    edit("world/world.yaml", `${sandbox} false`, `${sandbox} true`);
     // Puerto's priest refilling mana for free.
     npcs("puerto", "- { npc: puerto_priest, pos: { x: 3200, y: 6400, z: 7 } }\n");
     edit(
@@ -702,6 +704,31 @@ describe("validator diagnostics", () => {
           m.includes('no way to obtain "tarnished_locket"'),
       ),
     ).toBe(true);
+  });
+
+  it("wants a source for what NPCs buy, a buyer for gear and materials, and quest drops each_player (m4)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    edit("data/monsters/wreck_looter.yaml", "  - { item: driftwood_club, chance: 0.06 }", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: forged_shortsword, price: 50 }\n", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: quartz_crystal, price: 13 }\n", "");
+    edit(
+      "data/monsters/coffer_smuggler.yaml",
+      "chance: 0.35, each_player: true }",
+      "chance: 0.35 }",
+    );
+    const errors = messages(root).filter((m) => m.startsWith("error"));
+    expect(errors).toEqual([
+      expect.stringMatching(
+        /puerto_armorer\.yaml:.*an NPC buys "driftwood_club" but nothing gives it/,
+      ),
+      expect.stringMatching(/misc\.yaml:.*material "quartz_crystal" can be had.*no NPC buys it/),
+      expect.stringMatching(
+        /weapons\.yaml:.*"forged_shortsword" \(weapon\) can be had.*no NPC buys it/,
+      ),
+      expect.stringMatching(
+        /coffer_smuggler\.yaml:.*quest item "smuggler_tally" drops as plain loot/,
+      ),
+    ]);
   });
 
   it("accepts lacks_item and checks its item reference", () => {

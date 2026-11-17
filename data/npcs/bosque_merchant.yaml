@@ -65,3 +65,4 @@ shop:
     - { item: smuggler_crossbow, price: 140 }
     - { item: stagleather_hood, price: 60 }
     - { item: stagleather_boots, price: 55 }
+    - { item: thornwood_blade, price: 280 } # content audit m4: it sells it, now it buys it back

@@ -79,3 +79,4 @@ shop:
     - { item: embersteel_crossbow, price: 620 }
     - { item: embersteel_greaves, price: 310 }
     - { item: embersteel_sabatons, price: 280 }
+    - { item: rough_stone, price: 1 } # content audit m4: the ember veins give it too
