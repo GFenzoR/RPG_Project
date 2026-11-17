@@ -119,6 +119,7 @@ func TestHarborMasterOffersByVocation(t *testing.T) {
 func TestCostsAreAllOrNothing(t *testing.T) {
 	priest := load(t, "puerto_priest")
 	f := newFake(t, "guardian")
+	f.level = 9 // the temples bless from level 9 (content audit m8)
 	f.money = 150
 	if r := Choose(priest, "blessings", 0, f); r.Refused != MsgNoMoney || len(f.blessed) != 0 {
 		t.Fatalf("blessing without money: %+v", r)
