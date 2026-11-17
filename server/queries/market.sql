@@ -23,14 +23,19 @@ WHERE h.n <= sqlc.arg(per_character)::bigint
 ORDER BY h.id;
 
 -- name: LoadMarketSales :many
--- Units sold and money paid by item, day and seller account since a time (reference
--- prices: one vote per seller account and day, content audit m13). side 1 rows are the
--- seller's.
+-- Units sold and money paid by item, day, seller account and buyer account since a time
+-- (reference prices: one vote per seller account and day, leaving out the accounts that
+-- sold to each other; content audit m13). side 1 rows are the seller's. A deleted buyer
+-- (no foreign key) gets an account of its own: minus its character id.
 SELECT h.item_id, date_trunc('day', h.at, 'UTC')::timestamptz AS day, c.account_id AS seller_account,
+    COALESCE(b.account_id, -h.other_character_id)::bigint AS buyer_account,
     sum(h.amount)::bigint AS units, sum(h.amount * h.price)::bigint AS total
-FROM market_history h JOIN characters c ON c.id = h.character_id
+FROM market_history h
+JOIN characters c ON c.id = h.character_id
+LEFT JOIN characters b ON b.id = h.other_character_id
 WHERE h.side = 1 AND h.at >= sqlc.arg(since)
-GROUP BY h.item_id, day, c.account_id ORDER BY h.item_id, day, c.account_id;
+GROUP BY h.item_id, day, c.account_id, buyer_account
+ORDER BY h.item_id, day, c.account_id, buyer_account;
 
 -- name: LoadMarketBans :many
 -- The active bans of the accounts that own offers (their offers are hidden). until is

@@ -832,7 +832,13 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 1000,
-          "description": "Content audit m13: no reference price from fewer different seller accounts."
+          "description": "Content audit m13: no reference price from fewer different seller accounts (at most reference_min_votes: each vote has one seller)."
+        },
+        "reference_min_accounts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Content audit m13: no reference price from fewer different accounts in all, sellers and buyers."
         },
         "mailbox_shown": { "type": "integer", "minimum": 1, "maximum": 200 },
         "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },

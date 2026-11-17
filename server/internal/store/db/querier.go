@@ -205,9 +205,10 @@ type Querier interface {
 	// Global market (T5.3). The loop owns the market in memory: these queries load it at
 	// start and write each change inside the transaction of a session.Transfer.
 	LoadMarketOffers(ctx context.Context) ([]LoadMarketOffersRow, error)
-	// Units sold and money paid by item, day and seller account since a time (reference
-	// prices: one vote per seller account and day, content audit m13). side 1 rows are the
-	// seller's.
+	// Units sold and money paid by item, day, seller account and buyer account since a time
+	// (reference prices: one vote per seller account and day, leaving out the accounts that
+	// sold to each other; content audit m13). side 1 rows are the seller's. A deleted buyer
+	// (no foreign key) gets an account of its own: minus its character id.
 	LoadMarketSales(ctx context.Context, since pgtype.Timestamptz) ([]LoadMarketSalesRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)

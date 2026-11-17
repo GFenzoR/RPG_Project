@@ -143,7 +143,9 @@ market:                     # T5.3 (docs/02-game-design.md, "Economía"). Own nu
   reference_days: 5         # reference price: the median of these days' votes, one vote per
                             # seller account and day (its average unit price that day)
   reference_min_votes: 3    # content audit m13: no reference with fewer votes...
-  reference_min_sellers: 2  # ...or from fewer different seller accounts
+  reference_min_sellers: 2  # ...or from fewer different seller accounts...
+  reference_min_accounts: 3 # ...or fewer accounts in all (sellers and buyers); sales between
+                            # two accounts that sold to each other in the window never count
   mailbox_shown: 30         # mailbox items sent to the window at once
   action_burst: 6           # anti-flood: 6 actions at once, then one every 400 ms
   action_refill_ms: 400

@@ -74,12 +74,13 @@ type MarketHistory struct {
 	At                 time.Time
 }
 
-// MarketSale is the sales of one item on one day by the characters of one seller account.
+// MarketSale is the sales of one item on one day by the characters of one seller account
+// to those of one buyer account.
 type MarketSale struct {
-	ItemID        int
-	Day           time.Time
-	SellerAccount int64
-	Units, Total  int64
+	ItemID                      int
+	Day                         time.Time
+	SellerAccount, BuyerAccount int64
+	Units, Total                int64
 }
 
 // MarketData is the whole market as loaded at start.
@@ -292,7 +293,7 @@ func (s *Store) LoadMarket(ctx context.Context, now time.Time, historyDays, perC
 		}
 		for _, x := range sales {
 			d.Sales = append(d.Sales, MarketSale{ItemID: int(x.ItemID), Day: x.Day.Time,
-				SellerAccount: x.SellerAccount, Units: x.Units, Total: x.Total})
+				SellerAccount: x.SellerAccount, BuyerAccount: x.BuyerAccount, Units: x.Units, Total: x.Total})
 		}
 		bans, err := q.LoadMarketBans(ctx, ts(now))
 		if err != nil {

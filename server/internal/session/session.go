@@ -353,20 +353,25 @@ type World struct {
 	// the anti-flood in ticks, every offer by id, the books by item, the offers by owner
 	// and by expiry, the mailboxes, the recent history by character, the recent sales by
 	// item, the last ids issued, the transfers submitted and the next expiry sweep.
-	mkOn         bool
-	mk           content.Market
-	mkRefill     game.Tick
-	mkBurst      game.Tick
-	offers       map[int64]*offer
-	books        map[uint16]*book
-	byOwner      map[int64][]*offer
-	expiry       []*offer
-	mail         map[int64]*mailbox
-	history      map[int64][]MarketHistory
-	sales        map[uint16][]priceDay
-	refCache     map[uint16]refCached // reference price by item, for the day it was computed
-	refPrices    []int64              // medianVote's scratch
-	refSellers   []int64
+	mkOn     bool
+	mk       content.Market
+	mkRefill game.Tick
+	mkBurst  game.Tick
+	offers   map[int64]*offer
+	books    map[uint16]*book
+	byOwner  map[int64][]*offer
+	expiry   []*offer
+	mail     map[int64]*mailbox
+	history  map[int64][]MarketHistory
+	sales    map[uint16][]priceDay
+	refCache map[uint16]refCached // reference price by item, for the day it was computed
+	// medianVote's scratch, cleared on each use: the seller→buyer pairs of the window, the
+	// votes by seller account and day, the sellers and every account of the counted sales.
+	refPrices    []int64
+	refPairs     map[[2]int64]bool
+	refVotes     map[[2]int64]priceVote
+	refSellers   map[int64]bool
+	refAccounts  map[int64]bool
 	nextOffer    int64
 	nextMail     int64
 	nextTransfer uint64

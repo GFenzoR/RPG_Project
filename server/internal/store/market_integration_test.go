@@ -235,4 +235,34 @@ func TestMarketTransfers(t *testing.T) {
 	if err := st.SaveTransfer(ctx, cancelBuy); err != nil || offerLeft(2) != -1 {
 		t.Fatalf("buy offer closed: %v, left %d", err, offerLeft(2))
 	}
+
+	// Reference prices (content audit m13): the sales of a day go by seller and buyer
+	// account. Uno and Dos (one account) both sell to Tres (another) today: one row.
+	acc2, err := st.CreateAccount(ctx, "market-b@example.org", "h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tc, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: acc2, Name: "Tres", Vocation: "guardian", Health: 1}, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sale := func(seller int64, amount int, price int64) store.MarketOp {
+		return store.MarketOp{Kind: store.MarketHistoryAdd, History: store.MarketHistory{CharacterID: seller, Other: tc.ID,
+			Side: store.MarketSell, ItemID: salve, Amount: amount, Price: price, At: now}}
+	}
+	if err := st.SaveTransfer(ctx, store.Transfer{ID: 105, Market: []store.MarketOp{sale(uno, 2, 7), sale(dos, 1, 10)}}); err != nil {
+		t.Fatal(err)
+	}
+	if d, err = st.LoadMarket(ctx, now, 30, 10, 5); err != nil {
+		t.Fatal(err)
+	}
+	var rows []store.MarketSale
+	for _, s := range d.Sales {
+		if s.BuyerAccount == acc2 {
+			rows = append(rows, s)
+		}
+	}
+	if len(rows) != 1 || rows[0].SellerAccount != acc || rows[0].Units != 3 || rows[0].Total != 2*7+10 {
+		t.Fatalf("sales to the other account %+v (all %+v)", rows, d.Sales)
+	}
 }
