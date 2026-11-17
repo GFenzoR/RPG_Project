@@ -104,7 +104,7 @@ type Snapshot struct {
 // Defaults for Config.
 const (
 	// DefaultAutosaveEvery is the autosave interval of an online player (5 minutes).
-	DefaultAutosaveEvery = game.Tick(5 * 60 * 1000 / 50)
+	DefaultAutosaveEvery = game.Tick(5 * time.Minute / game.TickDuration)
 	// DefaultRerouteMaxNodes bounds one reroute search (A* around creatures).
 	DefaultRerouteMaxNodes = 1500
 	// DefaultPathNodesPerTick is the pathfinding quota of one tick, in expanded tiles.
