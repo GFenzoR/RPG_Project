@@ -53,8 +53,9 @@ type LootEntry struct {
 	Count  []int   `yaml:"count"`
 	// EachPlayer (content audit m9) makes a quest drop: instead of one in the remains,
 	// every player who damaged the monster and whose quest in progress asks for the item
-	// (a has_item step of it, current or already done, that the player no longer meets:
-	// quest.Engine.Needs) gets its own, rolled for each.
+	// (a has_item step of it that the player no longer meets: the current step, or the
+	// one just met while the next, its delivery, is current; quest.Engine.Needs) gets its
+	// own, rolled for each.
 	EachPlayer bool `yaml:"each_player"`
 }
 

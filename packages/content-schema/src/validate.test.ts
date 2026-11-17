@@ -731,6 +731,51 @@ describe("validator diagnostics", () => {
     ]);
   });
 
+  it("checks quest drops as the server does: worthless, asked for and taken by the next step (m9)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    // A step between the tallies and their delivery.
+    edit(
+      "data/quests/ch2_coffer.yaml",
+      "  - id: deliver_tallies\n",
+      "  - id: count_tallies\n    description: quest.ch2_coffer.step_gather_tallies\n" +
+        "    complete_when: { kill: { monster: coffer_smuggler, count: 1 } }\n  - id: deliver_tallies\n",
+    );
+    // A tradeable seal, and a keeper who reads it and gives it back.
+    edit(
+      "data/items/misc.yaml",
+      "  tradeable: false\n  notes: Chapter 3 quest item (ch3_warden).",
+      "  tradeable: true\n  notes: Chapter 3 quest item (ch3_warden).",
+    );
+    edit(
+      "data/npcs/volcan_keeper.yaml",
+      "          action: { take_item: { item: forge_seal } }\n          goto: ch3_seal_read",
+      "          goto: ch3_seal_read",
+    );
+    // A drop for each player that no quest asks for, with a value.
+    edit(
+      "data/monsters/slagbound_warden.yaml",
+      "{ item: wyrm_scale, chance: 0.2 }",
+      "{ item: wyrm_scale, chance: 0.2, each_player: true }",
+    );
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([
+      expect.stringMatching(
+        /coffer_smuggler\.yaml:.*quest "ch2_coffer" step "gather_tallies": the has_item of quest drop "smuggler_tally" must be followed by its delivery/,
+      ),
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*quest drop "forge_seal" needs tradeable: false and value: 0/,
+      ),
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*quest "ch3_warden" step "return_seal": its delivery must take quest drop "forge_seal": no option of npc "volcan_keeper" that leads to node "ch3_seal_read"/,
+      ),
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*quest drop "wyrm_scale" needs tradeable: false and value: 0/,
+      ),
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*quest drop "wyrm_scale" is the has_item of no quest step/,
+      ),
+    ]);
+  });
+
   it("keeps bless and give_xp out of one option, and reference sellers within votes (M6, m13 review)", () => {
     expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
     edit(

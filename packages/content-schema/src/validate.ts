@@ -153,6 +153,7 @@ class Validator {
     this.checkQuestItemSources();
     this.checkToolTargets();
     this.checkItemTrade();
+    this.checkQuestDrops();
     this.checkI18n();
     this.checkSounds();
     const lockFile = join(dataDir, "ids.lock.yaml");
@@ -1132,6 +1133,80 @@ class Validator {
             `quest item "${drop["item"]}" drops as plain loot: make it each_player (only players whose quest needs it get one), or it keeps dropping as junk after the quest`,
           );
       }
+  }
+
+  /**
+   * Content audit m9, the rules the server's startup also checks (session.checkQuestDrop):
+   * a quest drop (loot each_player) is worth nothing and cannot be traded (tradeable:
+   * false, value: 0); it is the has_item of some quest step; and the step right after each
+   * such step is its delivery, a dialog_action step whose node an option of that NPC leads
+   * to (goto) while taking the item (take_item). A player gets another while the has_item
+   * step, or its delivery, is current: a step in between would leave a lost one without a
+   * source, and a delivery that does not take it would leave one to show again.
+   */
+  private checkQuestDrops(): void {
+    const items = new Map(this.items.map(({ item }) => [item["id"], item]));
+    const when = (step: unknown): Obj | undefined =>
+      isObj(step) && isObj(step["complete_when"]) ? step["complete_when"] : undefined;
+    for (const src of this.monsters)
+      for (const [i, drop] of (isObj(src.data) ? asList(src.data["loot"]) : []).entries()) {
+        if (!isObj(drop) || drop["each_player"] !== true || typeof drop["item"] !== "string")
+          continue;
+        const id = drop["item"];
+        const at: PathSegment[] = ["loot", i, "item"];
+        const item = items.get(id);
+        const value = item?.["value"];
+        if (item && (item["tradeable"] === true || (typeof value === "number" && value !== 0)))
+          this.error(src, at, `quest drop "${id}" needs tradeable: false and value: 0`);
+        let asked = false;
+        for (const q of this.quests) {
+          const quest = idOf(q.data) ?? q.file;
+          const steps = isObj(q.data) ? asList(q.data["steps"]) : [];
+          for (const [k, step] of steps.entries()) {
+            const need = when(step)?.["has_item"];
+            if (!isObj(need) || need["item"] !== id) continue;
+            asked = true;
+            const deliver = when(steps[k + 1])?.["dialog_action"];
+            if (!isObj(deliver)) {
+              this.error(
+                src,
+                at,
+                `quest "${quest}" step "${idOf(step) ?? k}": the has_item of quest drop "${id}" must be followed by its delivery (a dialog_action step), or a lost one would never come back`,
+              );
+              continue;
+            }
+            if (!this.deliveryTakes(deliver["npc"], deliver["node"], id))
+              this.error(
+                src,
+                at,
+                `quest "${quest}" step "${idOf(steps[k + 1]) ?? k + 1}": its delivery must take quest drop "${id}": no option of npc "${String(deliver["npc"])}" that leads to node "${String(deliver["node"])}" has take_item of it`,
+              );
+          }
+        }
+        if (!asked)
+          this.error(
+            src,
+            at,
+            `quest drop "${id}" is the has_item of no quest step: it would never drop`,
+          );
+      }
+  }
+
+  /** Whether an option of NPC npc leads to node (goto) and takes item (take_item). */
+  private deliveryTakes(npc: unknown, node: unknown, item: string): boolean {
+    const owned = typeof npc === "string" ? this.index.ids.npc.get(npc) : undefined;
+    const dialog = owned && isObj(owned.src.data) ? owned.src.data["dialog"] : undefined;
+    const nodes = isObj(dialog) && isObj(dialog["nodes"]) ? dialog["nodes"] : {};
+    for (const n of Object.values(nodes))
+      for (const opt of isObj(n) ? asList(n["options"]) : []) {
+        if (!isObj(opt) || opt["goto"] !== node) continue;
+        const action = opt["action"];
+        for (const a of Array.isArray(action) ? action : [action]) {
+          const take = isObj(a) ? a["take_item"] : undefined;
+          if (isObj(take) && take["item"] === item) return true;
+        }
+      }
+    return false;
   }
 
   /**

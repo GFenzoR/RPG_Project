@@ -52,6 +52,15 @@ func TestStartupRefusesBrokenFoodAndQuestDrops(t *testing.T) {
 			q := c.Quests["ch3_warden"]
 			q.Steps = q.Steps[:2:2]
 		}, "must be followed by its delivery"},
+		{"a delivery that does not take the quest drop", func(c *session.Config) {
+			// The keeper reads the seal and gives it back: the done take_seal step would
+			// stop counting at the delivery, but the player keeps a seal to show again.
+			o := &c.NPCs["volcan_keeper"].Dialog.Nodes["ch3_warden"].Options[0]
+			if o.Goto != "ch3_seal_read" {
+				t.Fatalf("the keeper's first ch3_warden option goes to %q", o.Goto)
+			}
+			o.Action = nil
+		}, `its delivery must take the quest drop: no option of npc "volcan_keeper" that leads to node "ch3_seal_read"`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			cfg := dataConfig(t, nil)

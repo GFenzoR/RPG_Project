@@ -232,7 +232,7 @@ func (w *World) initCombat() error {
 				return fmt.Errorf("session: monster %q drops unknown item %q", id, l.Item)
 			}
 			if l.EachPlayer {
-				if err := checkQuestDrop(w.cfg.Quests, it); err != nil {
+				if err := checkQuestDrop(w.cfg.Quests, w.cfg.NPCs, it); err != nil {
 					return fmt.Errorf("session: monster %q: each_player loot %q: %w", id, l.Item, err)
 				}
 			}
@@ -903,12 +903,16 @@ func (w *World) removeMonster(m *Monster) {
 // quest.Engine.Needs gives it again to whoever no longer holds it while its has_item step
 // or the step right after it is current, and cannot tell a lost one from one handed in. So:
 //   - some quest step waits for it (has_item), or it would never drop;
-//   - each such step is followed by the delivery: a dialog_action step (the NPC takes it
-//     with take_item). Once handed in, the quest moves past the delivery and the item no
-//     longer drops; a step in between would leave a lost one without a source;
+//   - each such step is followed by the delivery: a dialog_action step whose node an
+//     option of its NPC leads to (goto) while taking the item (take_item). Once handed in,
+//     the quest moves past the delivery and the item no longer drops; a step in between
+//     would leave a lost one without a source, and a delivery that does not take it would
+//     leave it with the player, to show it again;
 //   - it is worth nothing and cannot be traded (tradeable: false, value: 0): the copies a
 //     player can pile up, dropping them on the floor, buy nothing and nobody else takes.
-func checkQuestDrop(quests content.Quests, item *content.Item) error {
+//
+// make validate checks the same (packages/content-schema, checkQuestDrops).
+func checkQuestDrop(quests content.Quests, npcs content.NPCs, item *content.Item) error {
 	if item.Tradeable || item.Value != 0 {
 		return fmt.Errorf("a quest drop needs tradeable: false and value: 0")
 	}
@@ -923,10 +927,34 @@ func checkQuestDrop(quests content.Quests, item *content.Item) error {
 			if i+1 >= len(steps) || steps[i+1].CompleteWhen.DialogAction == nil {
 				return fmt.Errorf("quest %q step %q: the has_item of a quest drop must be followed by its delivery (a dialog_action step), or a lost one would never come back", id, s.ID)
 			}
+			if d := steps[i+1].CompleteWhen.DialogAction; !deliveryTakes(npcs[d.NPC], d.Node, item.ID) {
+				return fmt.Errorf("quest %q step %q: its delivery must take the quest drop: no option of npc %q that leads to node %q has take_item of it", id, steps[i+1].ID, d.NPC, d.Node)
+			}
 		}
 	}
 	if !asked {
 		return fmt.Errorf("the has_item of no quest step: it would never drop")
 	}
 	return nil
+}
+
+// deliveryTakes reports whether an option of npc's dialog leads to node (goto) and takes
+// item (take_item).
+func deliveryTakes(npc *content.NPC, node, item string) bool {
+	if npc == nil {
+		return false
+	}
+	for _, n := range npc.Dialog.Nodes {
+		for _, o := range n.Options {
+			if o.Goto != node {
+				continue
+			}
+			for _, a := range o.Action {
+				if a.TakeItem != nil && a.TakeItem.Item == item {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
