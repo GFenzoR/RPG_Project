@@ -1,6 +1,6 @@
 - id: volcan_house_cinder
   name: house.volcan_house_cinder.name
-  rent: 900
+  rent: 2520
   rects:
     - { x: 3647, y: 5798, z: 7, w: 5, h: 4 }
     - { x: 3649, y: 5802, z: 7, w: 1, h: 1 }
@@ -8,3 +8,26 @@
     - { x: 3649, y: 5802, z: 7 }
   exit: { x: 3649, y: 5803, z: 7 }
   notes: "Small house on the plaza of Brasal, south of the temple (prefab house_wood_small, T5.4)."
+
+- id: volcan_house_bellows
+  name: house.volcan_house_bellows.name
+  rent: 3840
+  rects:
+    - { x: 3638, y: 5798, z: 7, w: 6, h: 5 }
+    - { x: 3640, y: 5803, z: 7, w: 2, h: 1 }
+  doors:
+    - { x: 3640, y: 5803, z: 7 }
+    - { x: 3641, y: 5803, z: 7 }
+  exit: { x: 3640, y: 5804, z: 7 }
+  notes: "Medium house on the south-west of the plaza of Brasal, next to the Cinder house (prefab house_wood_medium, content audit M6)."
+
+- id: volcan_house_flint
+  name: house.volcan_house_flint.name
+  rent: 2520
+  rects:
+    - { x: 3670, y: 5789, z: 7, w: 5, h: 4 }
+    - { x: 3672, y: 5793, z: 7, w: 1, h: 1 }
+  doors:
+    - { x: 3672, y: 5793, z: 7 }
+  exit: { x: 3672, y: 5794, z: 7 }
+  notes: "Small house east of the plaza, north of the slag path to the mine; its exit is outside the town zone (prefab house_wood_small, content audit M6)."

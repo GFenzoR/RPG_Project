@@ -1576,18 +1576,18 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
   const dialog = page.getByTestId("dialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  const route = dialog.getByRole("button", { name: /isla de pruebas/ });
+  const route = dialog.getByRole("button", { name: /islote de ensayo/ });
   await expect(route).toBeVisible();
   await shot(page, "26-boat-routes");
 
   await route.click();
-  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla de pruebas");
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Islote de ensayo");
   await shot(page, "27-boat-sailing");
   await expect(dialog).toBeHidden();
   await arrived(page, 1058, 1056);
   const log = page.getByTestId("game-log");
   await expect(log).toContainText("Pagaste 30 monedas.");
-  await expect(log).toContainText("Zarpaste hacia Isla de pruebas.");
+  await expect(log).toContainText("Zarpaste hacia Islote de ensayo.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "28-boat-arrived");
   expect(errors).toEqual([]);
@@ -2402,8 +2402,9 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
     await expect(page.getByTestId("game-log")).toContainText(`Liberaste la casa ${house}`);
     await page.close();
   }
-  // Level 15 (35280 XP, min_level 12), a backpack (48) with 10 x 100 copper coins (8) and
-  // 5 raw fish (10) for the owner; the others just a backpack. In Puerto, south of the door.
+  // Level 15 (35280 XP, min_level 12), a backpack (48) with 20 x 100 copper coins (8) and
+  // 5 raw fish (10) for the owner (the rent is 32 tiles × 60 = 1920, content audit M6);
+  // the others just a backpack. In Puerto, south of the door.
   const seed = (name: string, x: number, items: string): string =>
     `UPDATE characters SET town = 'puerto', level = 15, experience = 35280, pos_x = ${x}, pos_y = 6403, pos_z = 7
        WHERE name = '${name}';
@@ -2418,7 +2419,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
     seed(
       owner.name,
       3153,
-      "(0, 10, 5)" + [...Array(10).keys()].map((s) => `, (${s + 1}, 8, 100)`).join(""),
+      "(0, 10, 5)" + [...Array(20).keys()].map((s) => `, (${s + 1}, 8, 100)`).join(""),
     ) +
       seed(guest.name, 3152, "(0, 8, 1)") +
       seed(stranger.name, 3154, "(0, 8, 1)"),
@@ -2460,7 +2461,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await a.mouse.click(doorA.x, doorA.y);
   await a.keyboard.up("Shift");
   await expect(a.getByTestId("game-log")).toContainText(
-    "Casa de la Red Tendida: libre. Alquiler: 800 monedas cada 7 días (32 casillas).",
+    "Casa de la Red Tendida: libre. Alquiler: 1920 monedas cada 7 días (32 casillas).",
   );
   await openDoor(a);
   const win = a.getByTestId("house");
@@ -2469,7 +2470,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await shot(a, "56-house-free");
   await win.getByTestId("house-rent").click();
   await expect(a.getByTestId("game-log")).toContainText(
-    "Alquilaste Casa de la Red Tendida por 7 días (800 monedas).",
+    "Alquilaste Casa de la Red Tendida por 7 días (1920 monedas).",
   );
   await expect(win.getByTestId("house-owner")).toHaveText(`La alquila ${owner.name}.`);
   await expect(win.getByTestId("house-paid")).toContainText("(7 días)");

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -241,18 +242,30 @@ func TestCompilePortals(t *testing.T) {
 	if up == nil || up.ID != "volcan_mine_up" || up.Kind != world.PortalStairs || up.To != p(3692, 5797, 7) {
 		t.Fatalf("volcanic mine stairs up = %+v", up)
 	}
-	for _, id := range []string{"puerto", "bosque", "volcan", "testisle"} {
+	for _, id := range []string{"puerto", "bosque", "volcan"} {
 		if is := m.Island(id); is == nil || len(is.Portals) == 0 {
 			t.Errorf("island %s has no portals", id)
 		}
 	}
 }
 
+// TestCompileTestisle: the tools, tests and E2E island (docs/03) is dev-only (content audit
+// m11): a plain compile, the production image's, leaves it out; with DevIslands (make
+// mapcompile, the E2E) it is in, with its temple, spawns and cave stairs.
 func TestCompileTestisle(t *testing.T) {
-	m := mustCompile(t, repoRoot(t))
+	if plain := mustCompile(t, repoRoot(t)); plain.Island("testisle") != nil {
+		t.Fatal("testisle compiled without DevIslands")
+	}
+	m, err := Build(repoRoot(t), Options{DevIslands: true})
+	if err != nil {
+		t.Fatalf("Build(DevIslands): %v", err)
+	}
 	is := m.Island("testisle")
 	if is == nil {
-		t.Fatal("testisle missing")
+		t.Fatal("testisle missing with DevIslands")
+	}
+	if len(is.Portals) == 0 {
+		t.Error("testisle has no portals")
 	}
 	if !m.Walkable(is.Temple) {
 		t.Errorf("temple %v is not walkable", is.Temple)
@@ -279,7 +292,7 @@ func TestCompileTestisle(t *testing.T) {
 func TestCompilePruebas(t *testing.T) {
 	// A dev-only island: left out of a plain compile (the production image), which has no
 	// dev mark; with DevIslands it is in, marked dev (a production server refuses that
-	// world, and only its NPCs run dev-only dialog actions), and no other island is.
+	// world, and only its NPCs run dev-only dialog actions), like testisle (m11).
 	if plain := mustCompile(t, repoRoot(t)); plain.Island("pruebas") != nil || len(plain.DevIslands()) != 0 {
 		t.Fatalf("pruebas compiled without DevIslands (dev islands %v)", plain.DevIslands())
 	}
@@ -291,8 +304,8 @@ func TestCompilePruebas(t *testing.T) {
 	if is == nil {
 		t.Fatal("pruebas missing with DevIslands")
 	}
-	if ids := m.DevIslands(); len(ids) != 1 || ids[0] != "pruebas" {
-		t.Errorf("dev islands %v, want [pruebas]", ids)
+	if ids := m.DevIslands(); !slices.Equal(ids, []string{"testisle", "pruebas"}) {
+		t.Errorf("dev islands %v, want [testisle pruebas] (world order)", ids)
 	}
 	if !m.Walkable(is.Temple) || m.Flags(is.Temple)&world.FlagProtection == 0 {
 		t.Errorf("temple %v: walkable %v, flags %b", is.Temple, m.Walkable(is.Temple), m.Flags(is.Temple))

@@ -1,6 +1,6 @@
 - id: bosque_house_moss
   name: house.bosque_house_moss.name
-  rent: 500
+  rent: 1890
   rects:
     - { x: 4157, y: 6088, z: 7, w: 5, h: 4 }
     - { x: 4159, y: 6092, z: 7, w: 1, h: 1 }
@@ -11,7 +11,7 @@
 
 - id: bosque_house_resin
   name: house.bosque_house_resin.name
-  rent: 750
+  rent: 2880
   rects:
     - { x: 4166, y: 6087, z: 7, w: 6, h: 5 }
     - { x: 4168, y: 6092, z: 7, w: 2, h: 1 }
@@ -20,3 +20,26 @@
     - { x: 4169, y: 6092, z: 7 }
   exit: { x: 4168, y: 6093, z: 7 }
   notes: "House on the beach north of Raigal (prefab house_wood_medium, T5.4)."
+
+- id: bosque_house_fern
+  name: house.bosque_house_fern.name
+  rent: 2880
+  rects:
+    - { x: 4167, y: 6114, z: 7, w: 6, h: 5 }
+    - { x: 4169, y: 6113, z: 7, w: 2, h: 1 }
+  doors:
+    - { x: 4169, y: 6113, z: 7 }
+    - { x: 4170, y: 6113, z: 7 }
+  exit: { x: 4169, y: 6112, z: 7 }
+  notes: "Medium house east of the road in Raigal, door to the north (prefab house_wood_medium, content audit M6)."
+
+- id: bosque_house_heron
+  name: house.bosque_house_heron.name
+  rent: 1890
+  rects:
+    - { x: 4156, y: 6123, z: 7, w: 5, h: 4 }
+    - { x: 4161, y: 6124, z: 7, w: 1, h: 1 }
+  doors:
+    - { x: 4161, y: 6124, z: 7 }
+  exit: { x: 4162, y: 6124, z: 7 }
+  notes: "Small cabin on the sand south of the tannery, door to the road (prefab house_wood_small, content audit M6)."

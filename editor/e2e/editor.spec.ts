@@ -87,7 +87,7 @@ test("edit, undo, validate and save testisle", async ({ page }) => {
   await expect(page.getByTestId("island")).toHaveValue("testisle");
   await expect(page.getByTestId("island").locator("option")).toHaveText([
     "Isla del Puerto (puerto)",
-    "Isla de pruebas (testisle)",
+    "Islote de ensayo (testisle)",
     "Isla del Bosque (bosque)",
     "Isla Volcánica (volcan)",
     "Isla de Pruebas (pruebas)",
