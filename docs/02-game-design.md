@@ -149,11 +149,25 @@ Tibia:
 - MVP: Guardián y Arcanista. Montaraz y Druida desde T3.1:
   - **Montaraz:** la distancia es la skill que entrena más rápido de todas las vocaciones, el
     escudo casi como el guardián y algo de magia. Su vida y su maná por nivel quedan entre
-    los del tanque y los del mago. Usa arcos (y también armas cuerpo a cuerpo, que entrena
-    lento). Sus hechizos de daño escalan con la distancia.
+    los del tanque y los del mago. Usa arcos de dos manos o ballestas de una mano, que le
+    dejan la izquierda para el escudo (auditoría de contenido M4, 2026-11), y también armas
+    cuerpo a cuerpo, que entrena lento. Sus hechizos de daño escalan con la distancia.
   - **Druida:** tan frágil como el arcanista y con su mismo ritmo de nivel mágico. Usa varas
     (varitas de tierra o hielo). Es el mejor sanador y el único que cura a otro jugador.
   - Las bandas y los roles los fija `packages/content-schema/src/vocations-balance.test.ts`.
+  - **Carrera de cada vocación (auditoría de contenido M2, 2026-11):**
+    `server/internal/sim/balance_vocations_test.go` juega del nivel 1 al 50 al arcanista,
+    al druida y al montaraz con sus armas, sus hechizos y un presupuesto de maná real
+    (regeneración, comida y brebajes de maná que se pagan con el botín), y al guardián como
+    vara de medir. Exige: cada franja de niveles en 0,5-1,5 veces el tiempo del guardián;
+    que la caza pague brebajes, cataplasmas y munición (como mucho 75 % del botín); que el
+    nivel mágico salga del maná que de verdad se gasta (~20 al nivel 30 y ~35 al 49 para
+    los magos, ~8 y ~12 para el montaraz) y que cada hechizo tenga su nivel mágico pocos
+    niveles después de su nivel; que la ballesta con escudo pierda menos vida por segundo
+    que el arco y no tarde más de 1,3 veces; y que las áreas nuevas (`tempest_ring`,
+    `rime_burst`) le peguen más que las de antes a los monstruos de su isla.
+    `base_tries` de magia (1450) y la regeneración por vocación no cambiaron: el maná que
+    faltaba lo ponen la comida y los brebajes.
 
 ## Experiencia y nivel
 - Experiencia por matar monstruos (repartida según daño; un grupo puede compartirla, ver
@@ -196,7 +210,10 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
   subir, máximos de vida/maná, capacidad y velocidad pasan a los de la vocación en ese
   nivel, y la vida y el maná actuales suben lo mismo que subió el máximo.
 - Regeneración: cada `regen.interval_ms` (evento del scheduler por jugador) recupera
-  `regen.health` y `regen.mana` sin pasar del máximo. No depende de comida todavía.
+  `regen.health` y `regen.mana` sin pasar del máximo. **Comida** (auditoría de contenido
+  m2, 2026-11): con la condición `well_fed` cada tick recupera
+  `regen × (100 + regen_pct) / 100` (entero; `regen_pct` = 100, el doble). Sin comer se
+  sigue regenerando lo de siempre: nadie pasa hambre.
 - Persistencia: el snapshot de guardado lleva todas las skills y se escriben en
   `character_skills` en la misma transacción que el personaje. El inventario (T1.8) va en
   el mismo snapshot y reemplaza las filas de `inventory_items` en esa transacción.
@@ -207,8 +224,8 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
 | Minería | Usar pico sobre vetas | Minerales, piedras preciosas |
 | Leñador | Usar hacha de leña sobre árboles talables | Madera |
 | Herrería | Usar un yunque con materiales y receta | Armas, armaduras, herramientas |
-| Cocina | Usar horno/fogata con ingredientes | Comida con buffs pequeños |
-| Alquimia (hito posterior) | Mesa de alquimia | Pociones |
+| Cocina | Usar horno/fogata con ingredientes | Comida: más tiempo de `well_fed` (regeneración) |
+| Alquimia (hito posterior) | Mesa de alquimia | Pociones (hoy los brebajes de maná los venden NPCs) |
 
 - Recetas en `data/recipes.yaml` con nivel de oficio requerido, materiales y chance de
   éxito que mejora con el nivel.
@@ -316,13 +333,17 @@ umbrales en `01-architecture.md`, "Detección de bots"):
 - Seleccionas un objetivo (click o hotkey) y el personaje ataca solo cada **2 s** si está
   en rango. Modos: ofensivo / equilibrado / defensivo, y perseguir / quedarse quieto.
 - Daño físico: `skill_arma × ataque_arma × factor_modo × aleatorio` contra
-  `armadura` (reducción plana aleatoria) y `defensa` (escudo, bloquea por golpe).
+  `armadura` (reducción plana aleatoria) y `defensa` (escudo y arma, bloquean por golpe).
   Fórmula exacta (T1.6, `server/internal/combat`, constantes en `balance.yaml`):
   `golpe_máx = (skill × ataque / skill_attack_divisor + nivel / level_divisor) × modo`,
   `golpe = aleatorio(0, golpe_máx) × (1 − resistencia física %)`; a un monstruo le restan
   `aleatorio(armadura/2, armadura)` y `aleatorio(0, defensa/2)`; a un jugador
-  `aleatorio(armadura/2, armadura)` y `aleatorio(0, escudo × modo_defensa /
-  shield_block_divisor)` (solo ataques físicos).
+  `aleatorio(armadura/2, armadura)` y `aleatorio(0, (escudo + arma) × modo_defensa /
+  shield_block_divisor)` (solo ataques físicos). **Defensa del arma** (auditoría de
+  contenido m3, 2026-11): la `weapon.defense` se mostraba y no hacía nada; ahora se suma a
+  la del escudo (con escudo o sin él, contra monstruos y en PvP). Solo el escudo entrena la
+  skill de escudo. Para que las primeras peleas sigan costando vida (la simulación de
+  Puerto pide 10-40 %), el lobo, el murciélago y la gaviota pegan uno o dos puntos más.
 - Daño mágico: `nivel_mágico × base_hechizo + nivel × factor` con rango aleatorio.
 - Elementos: físico, fuego, hielo, energía, tierra, sagrado, muerte. Monstruos tienen
   resistencias porcentuales en su YAML.
@@ -340,6 +361,10 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     valor uniforme en ±`spread`; al monstruo se le aplica `× (1 − resistencia del
     elemento %)` (100 % o más = inmune, negativa = debilidad). Armadura y defensa no frenan
     la magia.
+  - Segunda área de cada mago (auditoría de contenido M5, 2026-11): la Isla Volcánica
+    resiste el fuego (70-100) y el Bosque la tierra (20-80), así que el arcanista suma
+    `tempest_ring` (energía, radio 2, nivel 28) a `ember_ring` y el druida `rime_burst`
+    (hielo, radio 1, nivel 16) a `bramble_burst`.
   - Área (`radius`): cada monstruo del círculo (`dx² + dy² ≤ r² + r`) con línea de visión
     desde el que lanza tira su propio daño; lo que queda detrás de un muro no se toca.
   - Varitas: arma a distancia del Arcanista (y las varas del Druida); no entrenan skill ni
@@ -358,8 +383,13 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   distancia y `ataque = arma + munición`, contra la armadura y la defensa del monstruo. Cada
   disparo entrena la distancia, acierte o no, con el mismo anti-AFK. Si persigue, se acerca
   solo hasta tener rango y visión. La flecha se consume: no queda en el suelo.
-  - Los arcos son de dos manos. Sin chance de fallo propia: los ceros salen de la tirada y
-    de la armadura, como en el cuerpo a cuerpo.
+  - Los arcos son de dos manos y disparan flechas; las ballestas (auditoría de contenido
+    M4) son de una mano, disparan virotes (`ammo.type: bolt`) y dejan la izquierda para el
+    escudo: menos ataque que el arco de su escalón y más defensa. Sin chance de fallo
+    propia: los ceros salen de la tirada y de la armadura, como en el cuerpo a cuerpo.
+  - `conjure_arrows` ("tejer flechas") conjura 25 flechas por 35 de maná desde el nivel 3:
+    un montaraz joven dispara lo que conjura su regeneración y no gasta en flechas más de
+    lo que le da la caza. Los virotes se compran o se forjan (hierro y plumas de gaviota).
 - **Hechizos de T3.1:** el daño o la curación pueden sumar `skill × per_skill` (el montaraz
   escala con la distancia). Una curación con `range` cura a **otro** jugador: el objetivo
   (por id o por casilla) debe estar a la vista, en el mismo piso, dentro del rango y con
@@ -379,6 +409,7 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   | Haste | `hasted` | velocidad +35 %, hasta 45 s; quita `slowed` | refresca | termina |
   | Invisibilidad | `invisible` | no lo ven jugadores ni monstruos, hasta 90 s | refresca | termina |
   | Puntería | `keen_eye` | +7 de distancia en combate, hasta 45 s | refresca | termina |
+  | Saciado | `well_fed` | regeneración de la vocación +100 %, hasta 20 min | suma | sobrevive |
   - **Daño periódico:** cada golpe aplica la resistencia del monstruo a su elemento (100 % o
     más = inmune: la condición no se aplica); la armadura no lo frena. En una zona de
     protección el golpe no hace daño (pero cuenta). Al monstruo, el daño suma a la parte
@@ -413,7 +444,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - **Fuentes:** `swift_stride` (haste 25 s, las cuatro vocaciones) y `purge_venom` (cura el
     veneno) desde nivel 8-9; `keen_eye` (montaraz), `entangle` (druida, `slowed` a un
     monstruo, o con PvP a un jugador, a 4 casillas), `shroud` (arcanista,
-    invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` electrizado. La araña
+    invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` y `tempest_ring`
+    electrizado. Comer da `well_fed` (el `food_ms` de la comida). La araña
     de musgo (escupitajo) y el escarabajo de mena (mordida) envenenan al hacer daño.
   - **Pendiente:** campos en el suelo (fuego o veneno) que apliquen condiciones al pisarlos
     (necesitan items con duración, disparar al entrar a la casilla y su render); items
@@ -434,8 +466,9 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   (`data/vocations.yaml`) se validan al equipar. `ammo` (flechas, T3.1) va en el slot de
   munición.
 - **Combate:** el arma de la mano derecha da el ataque y la skill (`weapon.type`; una
-  varita dispara a distancia desde T1.9), el escudo de la izquierda la defensa y la suma
-  de `armor` de todo el equipo la armadura del jugador contra golpes físicos.
+  varita dispara a distancia desde T1.9), el escudo de la izquierda y el arma la defensa
+  (se suman, m3) y la suma de `armor` de todo el equipo la armadura del jugador contra
+  golpes físicos.
 - **Contenedores:** una mochila (o los restos de un monstruo) tiene `container.slots`
   lugares. Los contenedores se anidan hasta 8 niveles; no se puede meter uno dentro de sí
   mismo. Soltar un item sobre un slot de equipo con un contenedor, o sobre un lugar de una
@@ -450,14 +483,27 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   ≤ `inventory.reach` (1); un contenedor del suelo se cierra al alejarse. Mirar alcanza
   todo lo visible. Los items fijos del mapa (`world.bin`) se pueden mirar pero no mover.
 - **Usar:** un contenedor se abre o cierra; un consumible cura (`heal_hp`/`heal_mp`) o se
-  come (`food_ms` aún no tiene efecto: no hay hambre) y gasta una unidad, con
-  `inventory.use_cooldown_ms` entre usos. Las runas (T1.9) y las herramientas (T1.12) se
-  usan sobre una criatura o casilla con `UseItemOn`.
+  come y gasta una unidad, con `inventory.use_cooldown_ms` entre usos. Comer (auditoría
+  de contenido m2) suma su `food_ms` a la condición `well_fed` (regeneración más fuerte,
+  ver "Skills" y "Condiciones"), hasta su `max_ms` (20 min): la comida que solo alimenta
+  y pasaría de ese tope se rechaza sin comerla ni gastar el cooldown ("Estás lleno"); la
+  que además cura se come siempre y su tiempo se recorta. Las runas (T1.9) y las
+  herramientas (T1.12) se usan sobre una criatura o casilla con `UseItemOn`.
 - **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
   slot de mochila. El kit de cada vocación llega con los diálogos (T1.10): al aceptar el
-  capítulo 1, el capitán del puerto da un alfanje al guardián, monedas al arcanista, un arco
-  corto y monedas para flechas al montaraz, y una vara de retoño al druida. El armero vende
-  arcos, flechas y el chaleco de piel; el buzo vende las varas.
+  capítulo 1, el capitán del puerto da un alfanje al guardián, una varita de chispa al
+  arcanista (auditoría de contenido m5; antes, monedas), un arco corto y monedas para
+  flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y el
+  chaleco de piel (para cualquier vocación: ninguna pieza de cuero está restringida, m6);
+  el buzo vende las varitas, las varas y el brebaje de maná. En el Bosque las varas, las
+  varitas y los brebajes los tiene la druida Velia (opción "¿Qué es este lugar?") y el
+  resto la curtidora; en Brasal, el herrero y el templo (brebajes, cataplasmas, la varita
+  de obsidiana y la vara de escarcha negra).
+- **Escalones de equipo (auditoría de contenido M3, 2026-11):** cada línea de arma llega a
+  la Isla Volcánica con su fuente (tienda, botín o receta): maza 15 → 23 (Bosque) → 28
+  (Brasal), arco 7 → 12 → 17, ballesta 7 → 13, varita y vara 13 → 21 → 30; y cada slot
+  crece con las islas: cabeza 1 → 2 (capucha de ciervo) → 3, piernas 1 → 2 → 3 (grebas de
+  acero de ascua), pies 1 → 2 (botas de ciervo) → 3 (escarpes).
 - **Límite conocido:** cada personaje guarda su inventario en su propio snapshot. Si A
   suelta un item, B lo levanta y se guarda, y el servidor cae antes del siguiente guardado
   de A, el item vuelve en ambos. Los items del suelo no se guardan ni desaparecen solos
@@ -480,6 +526,65 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   `spell` llegan con la magia (T1.9).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
   jugador está mirando el punto (evita aparecer en la cara): se reintenta cada 5 s.
+- **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
+  el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
+  (distancia Chebyshev al centro); su **área de correa**, ese radio más
+  `monster_leash_tiles`. Con correa:
+  - Solo elige objetivos dentro de su área de correa, y nunca sale de ella persiguiendo ni
+    huyendo (si huyendo llega al borde, acorralado pelea, como siempre).
+  - Si su objetivo queda fuera del área de correa y fuera del alcance de sus ataques, lo
+    cambia por otro: el más cercano de los que lo hirieron y puede pelear (a la vista,
+    dentro de su correa o a su alcance) o, si es agresivo y no hay ninguno, el que
+    elegiría. Lo hace sin curarse ni olvidar quién lo hirió: que el que tenía el aggro
+    salga del área no le quita la pelea, la experiencia ni el botín de quest al resto del
+    grupo, ni sirve para sabotearlo (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si
+    no queda nadie lo suelta: recupera toda la vida, se le terminan las condiciones (una
+    quemadura no sigue sumando daño), olvida el daño recibido de todos (nadie cobra
+    experiencia por esa pelea) y vuelve caminando a casa. Un objetivo fuera del área pero
+    a su alcance (un jugador pegado al borde, o a tiro de un ataque a distancia) se sigue
+    peleando desde adentro.
+  - Tampoco hay lugares seguros dentro del área. Mientras su objetivo está fuera de su
+    alcance, una vez por `combat.monster_path_retry_ms` (1 s), dé pasos o no, el monstruo
+    busca un camino a pie hasta él que rodee criaturas y no salga del área de correa. Solo
+    encontrarlo (o tener al objetivo a su alcance) reinicia la cuenta: un paso que no lleva
+    a ningún lado, como seguir por su orilla a un arquero que camina por la otra, no
+    cuenta (`TestLeashGivesUpATargetWalkingAlongTheShore`). Sin camino durante
+    `combat.monster_stuck_ms` (2 s):
+    - si tampoco lo hay atravesando criaturas (del otro lado de agua, o detrás de un muro
+      cuyo rodeo sale del área), lo trata como fuera de la correa: lo cambia por otro o se
+      rinde, igual que arriba;
+    - si solo criaturas tapan el paso (un NPC, un muñeco o un jugador quieto en la boca de
+      un rincón pueden no moverse nunca), se vuelve contra un jugador al que sus ataques
+      llegan desde donde está, normalmente el que tapa; si no hay ninguno, lo trata igual
+      como inalcanzable (`TestLeashCreatureInTheWay`).
+    Un objetivo dejado así cuenta como fuera de la correa para ese monstruo durante
+    `combat.monster_shun_ms` (30 s), **solo en esa casilla** y fuera de su alcance: no lo
+    elige, cada golpe suyo lo hace soltarlo (y curarse si no queda nadie) y entrena como
+    contra un objetivo que no responde (`TestLeashGivesUpATargetItCannotReach`). En otra
+    casilla es un objetivo como cualquiera: si tampoco se llega, vuelve a costar los 2 s
+    (`TestLeashShunsATile`); a los 30 s vence (`TestLeashShunExpires`). Cuando la
+    persecución no encuentra camino, espera 1 s antes de volver a buscar (como el regreso
+    a casa): no gasta en cada tick la cuota de búsquedas de los demás monstruos.
+  - Sin objetivo (lo soltó, o el jugador murió, salió, entró a una zona de protección o se
+    perdió de vista), si está fuera de su área de casa vuelve caminando hacia el centro del
+    spawn a su velocidad, en vez de deambular, hasta entrar en ella (sin curarse en ese
+    caso; si en el camino ve a alguien dentro de su correa, lo puede atacar). Da el paso
+    que más acerca; contra un muro o agua busca un rodeo (A*, con la cuota del tick) y lo
+    sigue entero. Si no hay camino, espera ahí (`monster_path_retry_ms` entre búsquedas):
+    nunca se teletransporta.
+  - Un golpe desde fuera de la correa lo hace responder como siempre, pero enseguida
+    suelta a ese objetivo (por otro que lo pelee desde adentro, o se rinde y se cura); una
+    condición (quemadura, veneno) cuyo autor está
+    fuera de la correa y de su alcance se termina en su siguiente golpe sin hacer daño (solo
+    esa: si otro jugador lo está peleando adentro, la pelea sigue igual). No se puede matar
+    a un monstruo desde fuera de su correa. Tampoco sirve de muñeco: los golpes de un jugador que
+    está fuera de su correa y de su alcance entrenan como contra un objetivo que no
+    responde (`skills.afk.factor`).
+  - Por qué: en los corrales de la Isla de Pruebas (radio 2, con una abertura al sendero
+    común) los lobos, jabalíes y arañas perseguían al jugador por el sendero y nada los
+    devolvía: el sendero se llenaba de monstruos que mataban a quien pasaba. La correa los
+    deja salir unas casillas por la abertura y los devuelve; vale para todo el mundo, no
+    solo para la isla de pruebas.
 
 ## Muerte
 Valores iniciales (balance.yaml):
@@ -489,10 +594,13 @@ Valores iniciales (balance.yaml):
   **100 %** salvo con bendiciones.
 - **Bendiciones** (hasta 5, se compran con oro del juego a NPCs en templos):
   cada una reduce la pérdida; con las 5 no pierdes items y la pérdida de XP baja a ~3 %.
-  En la Isla del Puerto las vende la hermana Liora (templo del Farol) a 200 monedas cada
-  una, precio fijo; las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
-  y `deep_light`. Se pierden al morir. Un precio que escale con el nivel queda pendiente
-  (hito posterior). Se guardan en `quest_state` como `bless.<id>` (no se vende dos veces
+  Las venden los tres templos (la hermana Liora en el Farol, Raigal y Brasal), cada una a
+  **50 monedas más 20 por nivel** del que la compra (auditoría de contenido M6: el precio
+  fijo de 200 no era nada para un nivel alto; nivel 9: 230, nivel 30: 650, nivel 50: 1050),
+  y solo desde el nivel 9 (auditoría de contenido m8: hasta el
+  `novice_max_level` ya se muere como con las cinco, así que antes se desperdiciaban); las cinco son `shore_light`, `hearth_light`, `keel_light`, `star_light`
+  y `deep_light`. Se pierden al morir. El precio es dato del diálogo (`bless: { price,
+  per_level }`, docs/06) y cada opción lo muestra (`{price}`). Se guardan en `quest_state` como `bless.<id>` (no se vende dos veces
   la misma); la columna `characters.blessings` de T1.3 no se usa.
 - **Reglas exactas (T1.11, `server/internal/skills/death.go`):** con `b` bendiciones
   (tope `max_blessings`) y `f = b / max_blessings`:
@@ -507,6 +615,13 @@ Valores iniciales (balance.yaml):
   - Todas las bendiciones `bless.*` se borran al morir (también las de un novato).
 - Reapareces en el templo de tu ciudad de residencia (`characters.town`, o la primera isla)
   con vida y maná completos. La muerte se guarda al instante (no espera al autoguardado).
+- **Mochila nueva:** si la mochila cayó al cuerpo, reapareces con una vacía
+  (`inventory.start_container`) en su slot; la vieja, con todo lo que llevaba, sigue en el
+  cuerpo (se recupera arrastrándola o abriéndolo). Sin un contenedor no se puede tener ni una
+  moneda ni levantar nada, así que no habría forma de comprar otra (hallazgo M5 de la
+  prueba exploratoria). La nueva entra al log de economía como `death` con ref
+  `new_backpack`. Además los proveedores (Puerto y la Isla de Pruebas) venden mochilas
+  (20 de cobre) para tener una de repuesto.
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
 - El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;
@@ -528,6 +643,20 @@ Valores iniciales (balance.yaml):
   cuentan cada moneda por su valor.
 - NPCs compran y venden con precios en `data/npcs/*.yaml`. Los NPCs compran barato
   para que el comercio entre jugadores tenga sentido.
+- **Nada lleva a ningún lado** (auditoría de contenido m4, regla de `make validate`): lo
+  que un NPC compra se puede conseguir; un arma, armadura o escudo con valor que se puede
+  conseguir tiene un NPC que lo compra, y un material con valor, un comprador, una receta
+  o una quest que lo pide; un item de quest (no comerciable) cae solo como botín
+  `each_player`, así deja de caer como basura cuando la quest terminó. Por eso los
+  saqueadores sueltan el garrote de deriva, el armero compra la espada corta forjada, la
+  piedra tosca (500 g, 1-2 por golpe de veta) y el cuarzo, el herrero de Brasal la piedra,
+  la curtidora la hoja de espino, y la tarja, el cofre sellado y la carta del minero salen
+  solo a quien los necesita.
+- **Brebajes de maná** (auditoría de contenido M2, 2026-11): el combustible de los magos.
+  El brebaje (50 de maná, 22 cobre) lo venden el buzo de Puerto, la druida del Bosque y el
+  templo de Brasal (24); el concentrado (125, 50 cobre) solo Brasal. Nadie los compra de
+  vuelta. Un mago que caza con brebajes gasta en ellos alrededor del 60 % de su botín
+  (`sim/balance_vocations_test.go`): sube más rápido que el guardián y junta menos oro.
 - Sumideros de oro: bendiciones, viajes en barco, reparaciones, recetas de oficio, la
   fundación de un gremio, la comisión del mercado y el alquiler de las casas (T5.4).
 - Log de economía para detectar duplicación y bots.
@@ -555,14 +684,16 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   si a alguno no le entra, se cancela sin mover nada. Lo recibido va a la mochila.
 
 ### Mercado global (T5.3)
-- Se usa en un **tablero del mercado** de cada ciudad (Puerto y Raigal), parado junto a
+- Se usa en un **tablero del mercado** de cada ciudad (Puerto, Raigal y, desde la
+  auditoría de contenido m7, Brasal), parado junto a
   él; alejarse cierra la ventana. Es uno solo para todas las islas.
 - **Ofertas de venta:** las unidades salen de la mochila y quedan en depósito. **Ofertas de
   compra:** cantidad × precio sale en monedas y queda en depósito. Cada oferta tiene
   cantidad (hasta `max_amount`), precio por unidad (hasta `max_price`) y duración (12, 48
   o 120 horas): al vencer se cierra sola.
 - **Comisión:** crear una oferta cuesta el 2 % de cantidad × precio, con mínimo 5 y
-  máximo 4000 monedas. Se destruye (sumidero) y queda en el log de economía (`market`,
+  máximo 50 000 monedas (auditoría de contenido m13: el tope de 4000 se alcanzaba con 200k
+  de valor, y una venta absurda entre dos cuentas propias salía casi gratis). Se destruye (sumidero) y queda en el log de economía (`market`,
   ref `fee`). No se devuelve al cancelar.
 - **Aceptar** una oferta es inmediato y parcial (cualquier cantidad hasta la que queda):
   quien acepta paga o entrega en el momento y recibe en el momento (si le entra; si no,
@@ -575,8 +706,28 @@ propios (`balance.yaml → trade` y `→ market`, docs/06).
   cargas; los apilables, por unidades. Un personaje no acepta ofertas de su propia cuenta.
 - **Lo que se ve:** al buscar un item, sus mejores `list_size` ofertas de venta (más
   baratas primero) y de compra (mejor pago primero), sus propias ofertas, el buzón, su
-  historial (lo que compró y vendió) y un **precio de referencia**: el promedio por unidad
-  de las ventas de los últimos `reference_days` días. Es solo informativo.
+  historial (lo que compró y vendió) y un **precio de referencia**: cada cuenta vendedora
+  vota una vez por día, con su precio medio por unidad de ese día, y la referencia es la
+  mediana de los votos de los últimos `reference_days` días (con un número par, la menor).
+  No cuentan las ventas entre dos cuentas que se vendieron una a la otra en la ventana (en
+  los dos sentidos) ni las de cuentas suspendidas, como vendedoras o compradoras (también
+  después de reiniciar, aunque ya no tengan ofertas: el servidor carga todas las
+  suspensiones vigentes). Con menos de `reference_min_votes` (3)
+  votos, de `reference_min_sellers` (2) cuentas vendedoras distintas o de
+  `reference_min_accounts` (3) cuentas en total (vendedoras y compradoras) no hay
+  referencia ("Sin precio de referencia"). Es solo informativo. Por qué así (auditoría de
+  contenido m13): con el promedio, una venta absurda entre dos cuentas propias la inflaba;
+  con la mediana por unidad, 2000 unidades a 1 moneda vendidas a otra cuenta propia la
+  hundían por 40 de comisión; por voto y con mínimos, dos cuentas propias que se venden
+  entre sí en días distintos juntaban 3 votos de 2 vendedores por 3 comisiones. Ahora dos
+  cuentas no alcanzan nunca: se venden una a la otra (no cuenta) o una sola vende (un
+  vendedor). Lo que todavía se puede: con tres cuentas propias en anillo (A le vende a B,
+  B a C, C a A) se arma una referencia mientras nadie más venda ese item, y con más
+  cuentas se superan los votos de los vendedores reales de un item con poco comercio; por
+  eso es solo una guía (el formulario la propone, nadie está obligado a usarla). La
+  calcula el loop una vez por item y día; se recalcula con cada venta, con cada suspensión
+  o levantamiento y cuando vence la suspensión de una cuenta que dejó afuera. El
+  intercambio directo no paga comisión ni cuenta para la referencia.
 - **Ventana en vivo:** la ventana abierta se actualiza sola cuando otro jugador cambia lo
   que muestra: una oferta nueva, cancelada, vencida o llenada en el item que se está
   mirando; una oferta propia que otro llenó (y el oro o los items que llegan al buzón);
@@ -633,8 +784,11 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 
 - **Qué es una casa:** un área del mapa con nombre, pueblo (su isla), casillas por piso,
   una o más **puertas** (casillas de la casa donde se entra) y una **salida** afuera,
-  junto a una puerta. Hoy hay 6: tres en el Farol (Puerto), dos en Raigal (Bosque) y una
-  en Brasal (Volcánica, T5.5), de 21 a 37 casillas y de 500 a 1000 monedas por semana. Las casas son **zona de
+  junto a una puerta. Hoy hay 13 (auditoría de contenido M6: eran 6): seis en el Farol
+  (Puerto), cuatro en Raigal (Bosque) y tres en Brasal (Volcánica), de 21 a 38 casillas.
+  **Alquiler por tamaño y pueblo:** casillas × 60 monedas en Puerto, × 90 en el Bosque y
+  × 120 en la Volcánica por semana (de 1260 a 3840; antes 500-1000, unos minutos de caza);
+  lo vigila `packages/content-schema/src/house-rent.test.ts`. Las casas son **zona de
   protección**: sin combate y sin PvP (T5.2), y salir del juego adentro es seguro.
 - **Alquilar:** se usa la puerta (click derecho) y se abre la ventana de la casa; mirar la
   puerta dice de quién es o que está libre, con su precio. Elegimos la puerta y no un NPC
@@ -646,6 +800,23 @@ alquiler) es un dato del mapa, `world/islands/<isla>/houses.yaml` (docs/03).
 - **Renovación sin estar conectado:** al vencer, el servidor cobra el período siguiente
   del **oro del buzón del mercado** del dueño (T5.3): ahí llega lo que vende en el
   mercado, y el servidor lo puede cobrar aunque no esté. Si no alcanza, la casa se libera.
+  **Dueño ausente** (auditoría de contenido M6): si ningún personaje de la cuenta del dueño
+  entró ni salió del juego en `houses.inactive_days` (28) días, al vencer el alquiler la
+  casa se libera aunque el buzón tenga oro (los objetos van al buzón, como siempre). Lo
+  pagado por adelantado se respeta: la casa se pierde recién al vencer. El aviso: cada vez
+  que el dueño entra al juego, un mensaje le recuerda la regla (`house.away_warning`). El
+  loop guarda la última entrada o salida de la cuenta; al arrancar la toma del último
+  login o guardado de cualquier personaje de la cuenta (`characters.last_login_at` y
+  `last_save_at`, que se escribe al salir y en cada autoguardado). Nunca cuenta desde antes
+  de `house_owners.away_from`: las casas ya alquiladas cuando llegó la regla (migración
+  00018) la tienen en ese momento, así nadie la pierde por una ausencia anterior a la
+  regla ni sin haber podido ver el aviso. **El servidor apagado no es ausencia:** al
+  arrancar, el tiempo desde el último guardado de cualquier personaje (≈ el apagado, o
+  más si el servidor estuvo vacío antes) se suma a la última vez visto de cada dueño, una
+  sola vez y sin pasar de ahora. **La base caída tampoco:** el servidor la consulta cada 30 s
+  (`app/houses.go` `heartbeat`, `World.StoreAlive`); si faltan tres respuestas, no se
+  libera ninguna casa por ausencia (nadie puede entrar), y cuando vuelve a contestar, ese
+  hueco se suma igual que un apagado. Un aviso por email antes de perderla queda pendiente.
   No agregamos un "fondo de la casa" aparte: sería un segundo buzón de oro con sus propias
   reglas, y pagar por adelantado desde la ventana ya cubre a quien no usa el mercado.
 - **Una casa por cuenta** (no solo por personaje): con pocas casas por pueblo, una cuenta
@@ -756,8 +927,9 @@ Rutas en `data/boat_routes.yaml` (formato en `06-content-data.md`); números en
   servidor arranca ni pasa `make validate` (docs/03 "Validación"), igual que un extremo de
   portal en una casa.
 - **Cobro atómico:** todo se comprueba antes; luego el jugador se mueve, se consume el
-  pasaje (si `consume: true`) y se paga el precio. El vuelto de una moneda grande cae en
-  la mochila o, si no cabe, a los pies del jugador en el destino.
+  pasaje (si `consume: true`) y se paga el precio. El vuelto de una moneda grande va a la
+  mochila: si no entra (huecos o capacidad), el viaje se rechaza antes de zarpar sin cobrar
+  nada (`dialog.no_change_room`, como todo pago con vuelto: ver "Economía").
 - Quienes lo veían en el muelle lo ven desaparecer y quienes están en la llegada lo ven
   aparecer (mismo movimiento que el teleport de staff). El cliente funde el mapa a oscuro
   con "Zarpaste hacia {isla}…".
@@ -1019,11 +1191,20 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
 3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo
    en la forja antigua, detrás de la puerta sellada: se entra abriéndola con la llave de
    ascua, ver "Puertas con llave"; en grupo desde el 40, solo desde el 44 y curándose),
-   tomar el sello de la forja de sus restos y llevárselo a Casia.
+   y llevarle a Casia el sello de la forja.
    36 000 XP, 2000 monedas y el flag `lost_expedition_lead`: el sello señala al norte, por
    donde salió la expedición perdida del Capítulo 4 ("Silencio blanco", Heladas; no
-   implementado). El custodio deja un solo sello por muerte: en grupo, cada uno espera su
-   respawn para el suyo.
+   implementado). El sello es botín de quest (`each_player`, auditoría de contenido m9):
+   a cada uno de los que le hicieron daño al custodio y tienen la quest en ese paso le
+   llega el suyo a la mochila (o a los pies si no entra); quien lo pierde antes de
+   entregarlo (al morir, al tirarlo) recibe otro del próximo custodio. Antes salía uno por
+   muerte y un grupo de cinco esperaba cinco respawns de 20 minutos. Con la correa
+   ("Monstruos"), si el que tiene el aggro sale de su área de correa y de su alcance, el
+   custodio pasa a otro del grupo que lo pelee desde adentro sin curarse ni olvidar: el
+   sello sigue siendo de todos los que lo hirieron
+   (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si no queda nadie suelta la pelea y
+   olvida quién lo hirió: el sello es para los que le hagan daño después
+   (`TestQuestDropForgottenWhenTheWardenGivesUp`).
 - **Bestiario de la Isla Volcánica** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas), gólem de
@@ -1443,7 +1624,8 @@ apaga todo y el juego queda como antes de T5.2: nadie puede herir a otro jugador
   (`puerto`, también el tutorial) es `no_pvp` entera.
 - **`pvp` (arena):** si los dos están adentro se pelea sin marcas, sin bloqueo y sin
   castigo: el derrotado despierta en su templo sin perder experiencia, skills, items ni
-  bendiciones. Es una derrota de arena solo si la víctima muere en una casilla `pvp` por el
+  bendiciones. Sus condiciones terminan, salvo la comida (`well_fed`, auditoría de
+  contenido m2): estaba pagada y una derrota de arena no cuesta nada. Es una derrota de arena solo si la víctima muere en una casilla `pvp` por el
   golpe de un jugador que también está en la arena; cualquier otra muerte (un monstruo,
   un golpe desde afuera, fuera de la arena) es una muerte normal, y los golpes de arena no
   dan crédito de muerte fuera de ella. Un duelo en la arena no da derecho a defensa propia

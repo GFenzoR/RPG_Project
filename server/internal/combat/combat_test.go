@@ -36,7 +36,7 @@ func TestHitsStayInRange(t *testing.T) {
 		if d := HitMonster(r, 10, MonsterTarget{PhysicalResistance: -50}); d < 0 || d > 15 {
 			t.Fatalf("HitMonster with weakness = %d", d)
 		}
-		if d := HitPlayer(r, cfg, 0, 16, true, PlayerTarget{Armor: 4, ShieldDefense: 12, ModeDefense: 1.5}); d < 0 || d > 16 {
+		if d := HitPlayer(r, cfg, 0, 16, true, PlayerTarget{Armor: 4, Defense: 12, ModeDefense: 1.5}); d < 0 || d > 16 {
 			t.Fatalf("HitPlayer = %d", d)
 		}
 		if d := HitPlayer(r, cfg, 10, 25, false, PlayerTarget{Armor: 40}); d < 10 || d > 25 {
@@ -58,8 +58,8 @@ func TestDefenseLowersAverageDamage(t *testing.T) {
 		return float64(sum) / 20000
 	}
 	none := avg(PlayerTarget{ModeDefense: 1})
-	balanced := avg(PlayerTarget{ShieldDefense: 12, ModeDefense: 1})
-	defensive := avg(PlayerTarget{ShieldDefense: 12, ModeDefense: 1.5})
+	balanced := avg(PlayerTarget{Defense: 12, ModeDefense: 1})
+	defensive := avg(PlayerTarget{Defense: 12, ModeDefense: 1.5})
 	if !(none > balanced && balanced > defensive) {
 		t.Fatalf("average damage: no shield %.2f, balanced %.2f, defensive %.2f", none, balanced, defensive)
 	}

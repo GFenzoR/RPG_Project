@@ -65,6 +65,9 @@ describe("house ops", () => {
     expect(w.islands.get("puerto")?.houses.map((h) => h.id)).toEqual([
       "puerto_house_net",
       "puerto_house_anchor",
+      "puerto_house_buoy",
+      "puerto_house_lantern",
+      "puerto_house_keel",
     ]);
   });
 

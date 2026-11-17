@@ -123,6 +123,27 @@ func NewEngine(quests content.Quests) *Engine {
 // Quest returns a quest definition, or nil.
 func (e *Engine) Quest(id string) *content.Quest { return e.quests[id] }
 
+// Needs reports whether a quest in progress asks for item: a has_item step of item for
+// more than have units that is the current step or the one just before it (a quest drop,
+// content audit m9). The step after a quest drop's has_item is its delivery (the startup
+// checks it), so the done step counts while the delivery is current: whoever lost the
+// item before handing it in (a death, a drop) can get another from the next kill, as a
+// done step never goes back. Once handed in, the delivery is done and nothing is asked.
+func (e *Engine) Needs(l *Log, item string, have int) bool {
+	for _, id := range e.ids {
+		q, i, ok := e.current(l, id)
+		if !ok {
+			continue
+		}
+		for k := max(0, i-1); k <= i; k++ {
+			if c := q.Steps[k].CompleteWhen.HasItem; c != nil && c.Item == item && c.N() > have {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // State returns the character's state in quest id and, in progress, its current step.
 func (e *Engine) State(l *Log, id string) (State, string) {
 	q := e.quests[id]

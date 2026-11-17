@@ -71,3 +71,7 @@ shop:
     - { item: short_bow, price: 12 }
     - { item: yew_longbow, price: 120 }
     - { item: hide_vest, price: 15 }
+    - { item: forged_shortsword, price: 50 }
+    # Content audit m4: what the iron veins give besides ore (whetstones and flux).
+    - { item: rough_stone, price: 1 }
+    - { item: quartz_crystal, price: 13 }

@@ -160,12 +160,15 @@ describe("skill pace bands", () => {
 
 describe("spell roles", () => {
   // A mid-game character of each vocation: level 30 with the magic level and weapon skill
-  // its vocation reaches there (rough, but in the right order).
+  // its vocation reaches there. The magic levels are what the career simulation of
+  // server/internal/sim/balance_vocations_test.go gets from the mana a hunter really
+  // spends (regeneration, food and mana draughts): ~20 for the casters and ~8 for the
+  // ranger at level 30 (content audit M2; 40 was out of reach).
   const profile: Record<string, { magic: number; skill: number }> = {
-    guardian: { magic: 4, skill: 60 },
-    arcanist: { magic: 40, skill: 15 },
-    ranger: { magic: 12, skill: 60 },
-    druid: { magic: 40, skill: 15 },
+    guardian: { magic: 2, skill: 53 },
+    arcanist: { magic: 20, skill: 15 },
+    ranger: { magic: 8, skill: 53 },
+    druid: { magic: 20, skill: 15 },
   };
   const castBy = (v: string): Spell[] => spells.filter((s) => s.vocations.includes(v));
   const best = (v: string, pick: (s: Spell) => Scaling | undefined): number => {
@@ -178,13 +181,14 @@ describe("spell roles", () => {
     return Math.max(0, ...amounts);
   };
 
-  it("every vocation but the guardian has 3-5 spells of its own", () => {
+  it("every vocation but the guardian has 3-6 spells of its own", () => {
     // Own = only it casts them; the support spells every vocation shares (haste and the
-    // poison cure, T3.2) do not count.
+    // poison cure, T3.2) do not count. Six since the content audit (M5): each caster has
+    // a second area spell of another element for the island that resists the first.
     const own = (v: string) => castBy(v).filter((s) => s.vocations.length === 1);
     for (const v of ["arcanist", "ranger", "druid"]) {
       expect(own(v).length, v).toBeGreaterThanOrEqual(3);
-      expect(own(v).length, v).toBeLessThanOrEqual(5);
+      expect(own(v).length, v).toBeLessThanOrEqual(6);
     }
   });
 

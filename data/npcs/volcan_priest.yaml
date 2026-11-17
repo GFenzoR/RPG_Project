@@ -3,7 +3,7 @@ name: npc.volcan_priest.name
 sprite: npcs/priest_volcanic
 notes: >-
   Temple of the Still Flame in Brasal (respawn point of the island). Heals for free and sells
-  the same five blessings as the other temples at the same flat price (docs/02 "Muerte").
+  the same five blessings as the other temples at the same level-based price (docs/02 "Muerte").
 dialog:
   start: greet
   nodes:
@@ -17,25 +17,32 @@ dialog:
           goto: healed
         - text: npc.volcan_priest.opt_mountain
           goto: mountain
+        - text: dialog.trade
+          action: { open_shop: still_flame_shop }
         - text: dialog.bye
           action: close
     blessings:
       text: npc.volcan_priest.blessings
       options:
         - text: npc.puerto_priest.bless_shore
-          action: { bless: { blessing: shore_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: shore_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_hearth
-          action: { bless: { blessing: hearth_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: hearth_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_keel
-          action: { bless: { blessing: keel_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: keel_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_star
-          action: { bless: { blessing: star_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: star_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_deep
-          action: { bless: { blessing: deep_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: deep_light, price: 50, per_level: 20 } }
           goto: blessed
         - { text: dialog.back, goto: greet }
     blessed:
@@ -53,3 +60,16 @@ dialog:
       options:
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }
+# Content audit (2026-11): the temple keeps what a caster needs on the island: draughts,
+# poultices and the obsidian wand and blackfrost staff of the old forge-priests.
+shop:
+  id: still_flame_shop
+  sells:
+    - { item: mana_draught, price: 24 }
+    - { item: concentrated_mana_draught, price: 50 }
+    - { item: seaweed_poultice, price: 25 }
+    - { item: obsidian_wand, price: 2600 }
+    - { item: blackfrost_staff, price: 2600 }
+  buys:
+    - { item: obsidian_wand, price: 690 }
+    - { item: blackfrost_staff, price: 690 }

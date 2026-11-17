@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { formatDiagnostic, SchemaSet, validateContent } from "./index.ts";
@@ -543,6 +543,120 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  it("only lets NPCs placed on dev_only islands use dev-only actions (train_skill, restore_mana) or be dev_only", () => {
+    const devErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("dev-only"));
+    // The real world: once the instructor stands nowhere, an error.
+    mkdirSync(file("world"), { recursive: true });
+    cpSync(join(REPO, "world", "world.yaml"), file("world/world.yaml"));
+    expect(devErrors()).toEqual([
+      expect.stringMatching(
+        /pruebas_trainer\.yaml:.*dev_only NPC .*: NPC "pruebas_trainer" is placed on no dev_only island/,
+      ),
+    ]);
+    // On the sandbox island, which is dev_only.
+    const npcs = (island: string, list: string): void => {
+      mkdirSync(file(`world/islands/${island}`), { recursive: true });
+      writeFileSync(file(`world/islands/${island}/npcs.yaml`), list);
+    };
+    npcs("pruebas", "- { npc: pruebas_trainer, pos: { x: 2093, y: 2085, z: 7 } }\n");
+    expect(devErrors()).toEqual([]);
+    // Placed (also) in Puerto, or the sandbox island no longer dev_only.
+    npcs("puerto", "- { npc: pruebas_trainer, pos: { x: 3200, y: 6400, z: 7 } }\n");
+    expect(devErrors()).toEqual([
+      expect.stringMatching(/pruebas_trainer\.yaml:.*dev_only NPC.*stands on island "puerto"/),
+    ]);
+    // Without dev_only only her dev-only actions would be caught, not her free gold and
+    // experience (review of lote 5).
+    edit("data/npcs/pruebas_trainer.yaml", "dev_only: true\n", "");
+    expect(devErrors()).toEqual([
+      expect.stringMatching(/pruebas_trainer\.yaml:.*dev-only action.*stands on island "puerto"/),
+    ]);
+    edit("data/npcs/pruebas_trainer.yaml", "\ndialog:\n", "\ndev_only: true\ndialog:\n");
+    npcs("puerto", "[]\n");
+    // (testisle is dev_only too, content audit m11: flip the sandbox island's own flag.)
+    const sandbox = "level_hint: [1, 60]\n    dev_only:";
+    edit("world/world.yaml", `${sandbox} true`, `${sandbox} false`);
+    expect(devErrors()).toEqual([expect.stringContaining('stands on island "pruebas"')]);
+    edit("world/world.yaml", `${sandbox} false`, `${sandbox} true`);
+    // Puerto's priest refilling mana for free.
+    npcs("puerto", "- { npc: puerto_priest, pos: { x: 3200, y: 6400, z: 7 } }\n");
+    edit(
+      "data/npcs/puerto_priest.yaml",
+      "action: { heal: true }",
+      "action: [{ heal: true }, { restore_mana: true }]",
+    );
+    expect(devErrors()).toEqual([
+      expect.stringMatching(/puerto_priest\.yaml:.*"restore_mana".*stands on island "puerto"/),
+    ]);
+    // A dev_only NPC is caught even with no dev-only action.
+    edit(
+      "data/npcs/puerto_priest.yaml",
+      "action: [{ heal: true }, { restore_mana: true }]",
+      "action: { heal: true }",
+    );
+    edit("data/npcs/puerto_priest.yaml", "\ndialog:\n", "\ndev_only: true\ndialog:\n");
+    expect(devErrors()).toEqual([
+      expect.stringMatching(/puerto_priest\.yaml:.*dev_only NPC.*stands on island "puerto"/),
+    ]);
+    // The schema: a known skill and a level in 1..500.
+    edit(
+      "data/npcs/pruebas_trainer.yaml",
+      "{ skill: sword, level: 45 }",
+      "{ skill: juggling, level: 0 }",
+    );
+    const out = messages(root);
+    expect(out.some((m) => m.includes("train_skill.skill"))).toBe(true);
+    expect(out.some((m) => m.includes("train_skill.level") && m.includes(">= 1"))).toBe(true);
+  });
+
+  it("wants a target in the production map for every tool a player can get there (m1)", () => {
+    const toolErrors = (): string[] =>
+      messages(root)
+        .filter((m) => m.startsWith("error") && m.includes("nothing in the production map"))
+        .map((m) => /tool "([a-z_]+)"/.exec(m)?.[1] ?? m)
+        .sort();
+    const put = (rel: string, lines: string[]): void => {
+      mkdirSync(file(dirname(rel)), { recursive: true });
+      writeFileSync(file(rel), lines.join("\n") + "\n");
+    };
+    const ropeSpot =
+      "- { id: r, kind: rope_spot, from: { x: 1, y: 1, z: 8 }, to: { x: 1, y: 2, z: 7 } }";
+    // Puerto (production) with its provisioner and nothing else; the sandbox (dev_only)
+    // has a rope spot, which does not count.
+    put("world/world.yaml", [
+      "format: 1",
+      "islands:",
+      "  - id: puerto",
+      "  - id: pruebas",
+      "    dev_only: true",
+    ]);
+    put("world/islands/puerto/npcs.yaml", [
+      "- { npc: puerto_provisioner, pos: { x: 1, y: 1, z: 7 } }",
+    ]);
+    put("world/islands/pruebas/portals.yaml", [ropeSpot]);
+    expect(toolErrors()).toEqual([
+      "felling_axe",
+      "fishing_rod",
+      "pickaxe",
+      "rope",
+      "smithing_hammer",
+    ]);
+    // A rope spot, a vein and an anvil in Puerto: the rope, the pickaxe and the hammer.
+    put("world/islands/puerto/portals.yaml", [ropeSpot]);
+    put("world/islands/puerto/chunks/z07/c0000_0000.json", [
+      JSON.stringify({ palette: ["grass", "iron_vein", "anvil"] }),
+    ]);
+    expect(toolErrors()).toEqual(["felling_axe", "fishing_rod"]);
+    // The shovel back in the shop: nothing in the world is dug.
+    edit(
+      "data/npcs/puerto_provisioner.yaml",
+      "    - { item: rope, price: 45 }",
+      "    - { item: rope, price: 45 }\n    - { item: shovel, price: 40 }",
+    );
+    expect(toolErrors()).toEqual(["felling_axe", "fishing_rod", "shovel"]);
+  });
+
   it("rejects buy prices that reach a sell price and warns on buys above the item value", () => {
     edit(
       "data/npcs/puerto_provisioner.yaml",
@@ -555,8 +669,13 @@ describe("validator diagnostics", () => {
       "{ item: driftwood_club, price: 9 }",
     );
     const out = messages(root);
-    expect(out).toContain(
-      'error data/npcs/puerto_provisioner.yaml:44:21 shop.buys[0].price: shop "provisions_shop" buys "rope" for 45 but shop "provisions_shop" sells it for 45: buy prices must be lower than every sell price',
+    // The cheapest seller is named: the first file, pruebas_merchant.yaml before
+    // puerto_provisioner.yaml, when both sell rope for 45. Buy prices on the real islands
+    // stay below the sandbox shop's too (its ferry takes players there).
+    expect(out).toContainEqual(
+      expect.stringMatching(
+        /^error data\/npcs\/puerto_provisioner\.yaml:46:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
+      ),
     );
     expect(
       out.some(
@@ -604,6 +723,121 @@ describe("validator diagnostics", () => {
           m.includes('no way to obtain "tarnished_locket"'),
       ),
     ).toBe(true);
+  });
+
+  it("wants a source for what NPCs buy, a buyer for gear and materials, and quest drops each_player (m4)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    edit("data/monsters/wreck_looter.yaml", "  - { item: driftwood_club, chance: 0.06 }", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: forged_shortsword, price: 50 }\n", "");
+    edit("data/npcs/puerto_armorer.yaml", "    - { item: quartz_crystal, price: 13 }\n", "");
+    edit(
+      "data/monsters/coffer_smuggler.yaml",
+      "chance: 0.35, each_player: true }",
+      "chance: 0.35 }",
+    );
+    const errors = messages(root).filter((m) => m.startsWith("error"));
+    expect(errors).toEqual([
+      expect.stringMatching(
+        /puerto_armorer\.yaml:.*an NPC buys "driftwood_club" but nothing gives it/,
+      ),
+      expect.stringMatching(/misc\.yaml:.*material "quartz_crystal" can be had.*no NPC buys it/),
+      expect.stringMatching(
+        /weapons\.yaml:.*"forged_shortsword" \(weapon\) can be had.*no NPC buys it/,
+      ),
+      expect.stringMatching(
+        /coffer_smuggler\.yaml:.*quest item "smuggler_tally" drops as plain loot/,
+      ),
+    ]);
+  });
+
+  it("checks quest drops as the server does: worthless, asked for and taken by the next step (m9)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    // A step between the tallies and their delivery.
+    edit(
+      "data/quests/ch2_coffer.yaml",
+      "  - id: deliver_tallies\n",
+      "  - id: count_tallies\n    description: quest.ch2_coffer.step_gather_tallies\n" +
+        "    complete_when: { kill: { monster: coffer_smuggler, count: 1 } }\n  - id: deliver_tallies\n",
+    );
+    // A tradeable seal, and a keeper who reads it and gives it back.
+    edit(
+      "data/items/misc.yaml",
+      "  tradeable: false\n  notes: Chapter 3 quest item (ch3_warden).",
+      "  tradeable: true\n  notes: Chapter 3 quest item (ch3_warden).",
+    );
+    edit(
+      "data/npcs/volcan_keeper.yaml",
+      "          action: { take_item: { item: forge_seal } }\n          goto: ch3_seal_read",
+      "          goto: ch3_seal_read",
+    );
+    // A drop for each player that no quest asks for, with a value.
+    edit(
+      "data/monsters/slagbound_warden.yaml",
+      "{ item: wyrm_scale, chance: 0.2 }",
+      "{ item: wyrm_scale, chance: 0.2, each_player: true }",
+    );
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([
+      expect.stringMatching(
+        /coffer_smuggler\.yaml:.*quest "ch2_coffer" step "gather_tallies": the has_item of quest drop "smuggler_tally" must be followed by its delivery/,
+      ),
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*quest drop "forge_seal" needs tradeable: false and value: 0/,
+      ),
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*quest "ch3_warden" step "return_seal": its delivery must take quest drop "forge_seal": every option of npc "volcan_keeper" that leads to node "ch3_seal_read"/,
+      ),
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*quest drop "wyrm_scale" needs tradeable: false and value: 0/,
+      ),
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*quest drop "wyrm_scale" is the has_item of no quest step/,
+      ),
+    ]);
+  });
+
+  it("wants every way into a quest drop's delivery to take it, and no delivery at the dialog's start (m9 review)", () => {
+    const deliveryErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("its delivery must take"));
+    expect(deliveryErrors()).toEqual([]);
+    // A second way into the keeper's ch3_seal_read that keeps the seal.
+    edit(
+      "data/npcs/volcan_keeper.yaml",
+      "        - { text: npc.volcan_keeper.opt_north, goto: ch3_north }",
+      "        - { text: npc.volcan_keeper.opt_north, goto: ch3_north }\n        - { text: dialog.back, goto: ch3_seal_read }",
+    );
+    expect(deliveryErrors()).toEqual([
+      expect.stringMatching(
+        /slagbound_warden\.yaml:.*"forge_seal".*"volcan_keeper".*"ch3_seal_read"/,
+      ),
+    ]);
+    edit(
+      "data/npcs/volcan_keeper.yaml",
+      "\n        - { text: dialog.back, goto: ch3_seal_read }",
+      "",
+    );
+    // The druid's dialog starting at the tallies' delivery.
+    edit("data/npcs/bosque_druid.yaml", "  start: greet", "  start: ch2_tallies");
+    expect(deliveryErrors()).toEqual([
+      expect.stringMatching(
+        /coffer_smuggler\.yaml:.*"smuggler_tally".*"bosque_druid".*"ch2_tallies"/,
+      ),
+    ]);
+  });
+
+  it("keeps bless and give_xp out of one option, and reference sellers within votes (M6, m13 review)", () => {
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
+    edit(
+      "data/npcs/puerto_priest.yaml",
+      "action: { bless: { blessing: shore_light, price: 50, per_level: 20 } }",
+      "action: [{ give_xp: 5 }, { bless: { blessing: shore_light, price: 50, per_level: 20 } }]",
+    );
+    edit("data/balance.yaml", "reference_min_sellers: 2", "reference_min_sellers: 4");
+    expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([
+      expect.stringMatching(
+        /balance\.yaml:.*reference_min_sellers \(4\) is more than reference_min_votes \(3\)/,
+      ),
+      expect.stringMatching(/puerto_priest\.yaml:.*bless and give_xp cannot go in one option/),
+    ]);
   });
 
   it("accepts lacks_item and checks its item reference", () => {

@@ -31,6 +31,8 @@ export interface ItemDef {
    * "use" or "move" for it (state/items.ts menuItem). Absent on any other item.
    */
   portal?: true;
+  /** A map door (a `door` block in data/items: open or shut). Absent on any other item. */
+  door?: true;
   /**
    * i18n key of its `description` in data/items ("item.iron_sword.desc", or a sign's
    * "text.volcan.dock_sign"): looking at the item shows it. Absent when it has none.

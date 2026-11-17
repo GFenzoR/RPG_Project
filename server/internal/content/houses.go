@@ -25,6 +25,10 @@ type Houses struct {
 	// ActionRefillMs.
 	ActionBurst    int `yaml:"action_burst"`
 	ActionRefillMs int `yaml:"action_refill_ms"`
+	// InactiveDays (content audit M6): a house whose owner's account has not been in the
+	// game for this many days is not renewed from the mailbox when its rent runs out: it
+	// is released (its items go to the mailbox). 0 turns the rule off.
+	InactiveDays int `yaml:"inactive_days"`
 }
 
 func (h Houses) check() error {
@@ -40,6 +44,9 @@ func (h Houses) check() error {
 	}
 	if h.ActionBurst < 1 || h.ActionRefillMs < 1 || h.ActionRefillMs > 60_000 {
 		return errors.New("houses: action_burst >= 1 and action_refill_ms in 1..60000")
+	}
+	if h.InactiveDays < 0 || h.InactiveDays > 365 {
+		return errors.New("houses: inactive_days in 0..365")
 	}
 	return nil
 }

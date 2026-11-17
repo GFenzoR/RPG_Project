@@ -142,6 +142,9 @@
         "level_divisor",
         "shield_block_divisor",
         "monster_corpse_ms",
+        "monster_path_retry_ms",
+        "monster_stuck_ms",
+        "monster_shun_ms",
         "modes"
       ],
       "properties": {
@@ -168,6 +171,26 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "monster_leash_tiles": {
+          "description": "Leash: a monster chases and flees only within its spawn's radius plus this many tiles (Chebyshev from the spawn's center); a target beyond that and out of its reach is dropped for another player fighting it from inside, or else the monster heals to full and walks home. 0 or absent = no leash.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "monster_path_retry_ms": {
+          "description": "How long a monster whose search for a way (A*: home, or to its target) found none waits before it steps or searches again; with a leash, how often a chase checks the way to a target out of its reach.",
+          "type": "integer",
+          "minimum": 50
+        },
+        "monster_stuck_ms": {
+          "description": "With a leash: a target out of reach that no way within the leash area reaches around creatures for this long is dropped like one beyond the leash (with only creatures in the way, swapped for a player within reach).",
+          "type": "integer",
+          "minimum": 50
+        },
+        "monster_shun_ms": {
+          "description": "How long a target given up that way counts as beyond the leash for that monster, while it stands on the same tile and out of reach.",
+          "type": "integer",
+          "minimum": 50
         },
         "modes": {
           "type": "object",
@@ -817,6 +840,24 @@
         "list_size": { "type": "integer", "minimum": 1, "maximum": 100 },
         "history_size": { "type": "integer", "minimum": 1, "maximum": 200 },
         "reference_days": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "reference_min_votes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Content audit m13: no reference price with fewer votes (one per seller account and day) in the window."
+        },
+        "reference_min_sellers": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Content audit m13: no reference price from fewer different seller accounts (at most reference_min_votes: each vote has one seller)."
+        },
+        "reference_min_accounts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Content audit m13: no reference price from fewer different accounts in all, sellers and buyers."
+        },
         "mailbox_shown": { "type": "integer", "minimum": 1, "maximum": 200 },
         "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
         "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
@@ -865,7 +906,13 @@
         "items_per_tile": { "type": "integer", "minimum": 1, "maximum": 50 },
         "transfer_minutes": { "type": "integer", "minimum": 1, "maximum": 120 },
         "action_burst": { "$ref": "common.schema.json#/$defs/positiveInt" },
-        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 }
+        "action_refill_ms": { "type": "integer", "minimum": 1, "maximum": 60000 },
+        "inactive_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 365,
+          "description": "Content audit M6: a house whose owner's account was not in the game for this many days is released (not renewed) when its rent runs out. 0 or absent: never."
+        }
       }
     },
     "pvp": {
@@ -1095,7 +1142,7 @@
       "additionalProperties": false,
       "required": ["kind", "stacking"],
       "properties": {
-        "kind": { "enum": ["damage", "speed", "skill", "invisible"] },
+        "kind": { "enum": ["damage", "speed", "skill", "invisible", "regen"] },
         "element": { "$ref": "common.schema.json#/$defs/element" },
         "interval_ms": { "type": "integer", "minimum": 50 },
         "max_ticks": { "$ref": "common.schema.json#/$defs/positiveInt" },
@@ -1103,6 +1150,12 @@
         "speed_pct": { "type": "integer", "exclusiveMinimum": -100, "maximum": 500 },
         "skill": { "enum": ["fist", "sword", "axe", "club", "distance", "shield"] },
         "amount": { "$ref": "common.schema.json#/$defs/positiveInt" },
+        "regen_pct": {
+          "description": "Content audit m2: a regen condition makes the vocation regeneration (vocations.yaml regen) this % stronger while it lasts.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
         "stacking": { "enum": ["refresh", "add"] },
         "cancels": {
           "type": "array",
@@ -1124,6 +1177,10 @@
         {
           "if": { "properties": { "kind": { "const": "skill" } } },
           "then": { "required": ["skill", "amount"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "regen" } } },
+          "then": { "required": ["regen_pct"] }
         }
       ]
     },

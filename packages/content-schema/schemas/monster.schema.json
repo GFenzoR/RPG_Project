@@ -66,6 +66,10 @@
         "properties": {
           "item": { "$ref": "common.schema.json#/$defs/itemRef" },
           "chance": { "$ref": "common.schema.json#/$defs/chance" },
+          "each_player": {
+            "description": "Content audit m9: a quest drop. Instead of one in the remains, every player who damaged the monster and whose quest in progress asks for the item (a has_item step of it that the player no longer meets: the current step, or the step just met while the next step, its delivery, is current; a lost one comes back with the next kill, and once handed in no more drop) gets its own in the backpack (or at its feet), rolled for each. make validate and the server require that the item is the has_item of some quest step, that the step right after it is its delivery (a dialog_action step whose node an option of that NPC leads to with take_item of the item), and tradeable: false and value: 0.",
+            "type": "boolean"
+          },
           "count": {
             "type": "array",
             "prefixItems": [

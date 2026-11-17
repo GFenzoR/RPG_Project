@@ -111,8 +111,10 @@ map-pr: ## Map PR check of HEAD=<ref> against BASE=<ref> (default main) into bui
 	  code=$$?; node --experimental-strip-types tools/mapcli/src/prcomment.ts --dry-run build/map-pr/report.json; exit $$code
 
 .PHONY: mapcompile
-mapcompile: ## Compile world/ + data/items into build/world.bin (server map)
-	cd server && go run ./cmd/mapcompile -root .. -out ../build/world.bin
+# -dev keeps the dev-only islands of world.yaml (the sandbox island, docs/16): every local
+# build has them; the production image (deploy/Dockerfile.gameserver) leaves them out.
+mapcompile: ## Compile world/ + data/items into build/world.bin (server map, with the dev-only islands)
+	cd server && go run ./cmd/mapcompile -root .. -out ../build/world.bin -dev
 
 # Needs node and the pnpm workspace (pnpm install): compares mapcompile's walkability with
 # packages/map-format on every tile of world/ and of the server's test fixture.
@@ -125,10 +127,28 @@ test-parity: ## mapcompile vs packages/map-format walkability on every tile
 DEV_WS_ORIGINS ?= localhost:5173,localhost:4173
 # Local servers let a brand-new account submit maps (T4.5; production waits 24 h).
 DEV_SERVER_FLAGS ?= -map-submit-min-account-age 0
+# make dev and make play only (http://localhost, never production): the session cookie
+# without Secure, or WebKit (Safari, Playwright's WebKit) drops it on plain http and cannot
+# stay logged in; and a per-IP register/login burst for trying many accounts from one
+# machine (the default, 10 and one more every 6 s, answered 429 while making several).
+LOCAL_PLAY_FLAGS ?= -cookie-secure=false -auth-rate-burst 200
 # The dev game server listens on loopback only: Vite proxies /api and /ws to it, and a
 # server on every interface makes the Windows firewall ask again after each `go run` (a new
 # exe path per build). DEV_HTTP_ADDR=:8080 exposes it on the LAN (docs/12).
 DEV_HTTP_ADDR ?= 127.0.0.1:8080
+# The servers of make run-server, dev and play (and make bots) load build/world.bin from
+# make mapcompile, which keeps the dev-only sandbox island (-dev): a server refuses such a
+# world in production (RPG_ENV empty or production, docs/09), so with a local database they
+# run as development (your own RPG_ENV wins). With a database that is not local they do not
+# impose it: that server refuses the sandbox world, as production would, unless you set
+# RPG_ENV=development yourself on a server only you reach. Development also lets the fake
+# payment provider run: so, as make play always did, the cosmetic shop stays off
+# (PAYMENTS_PROVIDER emptied) unless the server is on loopback and the database is local,
+# never where someone else reaches it or on a database that is not yours to give premium
+# currency away in.
+DEV_LOOPBACK = $(or $(filter 127.0.0.1:%,$(DEV_HTTP_ADDR)),$(filter localhost:%,$(DEV_HTTP_ADDR)))
+DEV_LOCAL_DB = $(or $(findstring @localhost:,$(DATABASE_URL)),$(findstring @localhost/,$(DATABASE_URL)),$(findstring @127.0.0.1:,$(DATABASE_URL)),$(findstring @127.0.0.1/,$(DATABASE_URL)))
+DEV_RPG_ENV = $(if $(DEV_LOCAL_DB),RPG_ENV="$${RPG_ENV:-development}")$(if $(and $(DEV_LOOPBACK),$(DEV_LOCAL_DB)),, PAYMENTS_PROVIDER=)
 # Account emails in development (T2.1): `make dev` starts Mailpit and points the server at
 # it, so verification and reset links are read at http://localhost:8025. DEV_MAIL=0 = off.
 DEV_MAIL ?= 1
@@ -136,7 +156,7 @@ DEV_MAIL_ENV := SMTP_HOST=127.0.0.1 SMTP_PORT=1025 SMTP_SECURITY=none SMTP_FROM=
 
 .PHONY: run-server
 run-server: mapcompile ## Compile the map and run the game server on it (RPG_WORLD, DATABASE_URL, RPG_WS_ORIGINS)
-	cd server && RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver \
+	cd server && $(DEV_RPG_ENV) RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" go run ./cmd/gameserver \
 		-http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)
 
 # Operator tools (T2.6): roles are never granted from the game. Recorded in the audit log.
@@ -228,10 +248,48 @@ dev: db-up mapcompile ## Postgres + map + game server (:8080, /ws) + client (:51
 		mail_env="$(DEV_MAIL_ENV)"; echo "[dev] account emails go to Mailpit: http://localhost:8025"; \
 	else echo "[dev] Mailpit not started (no Docker?): account emails are off (DEV_MAIL=0 skips it)"; fi; \
 	trap 'kill 0' EXIT; \
-	(cd server && env $$mail_env RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
-		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS)) & \
+	(cd server && env $$mail_env $(DEV_RPG_ENV) RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
+		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" $(DEV_SERVER_FLAGS) $(LOCAL_PLAY_FLAGS)) & \
 	$(MAKE) client & \
 	$(MAKE) editor
+
+# The game on the sandbox island (docs/16-probar-el-juego.md): Postgres, the map, the game
+# server with -start-town (new characters wake up on the Isla de Pruebas) and the client,
+# then the URL to open once both answer. With a local database the server runs as
+# development (DEV_RPG_ENV); the
+# cosmetic shop runs on the fake payment provider only with the server on loopback and a
+# local database: never where someone else reaches it. Ctrl+C stops it all.
+# PLAY_START_TOWN=puerto plays the normal start.
+PLAY_START_TOWN ?= pruebas
+PLAY_HEALTH = http://127.0.0.1:$(lastword $(subst :, ,$(DEV_HTTP_ADDR)))/healthz
+
+.PHONY: play
+play: db-up mapcompile ## Play on the sandbox island (docs/16): Postgres + map + game server + client; prints the URL to open
+	@command -v curl >/dev/null || { echo "[play] needs curl to see when the server and the client answer"; exit 1; }
+	@if curl -sf "$(PLAY_HEALTH)" >/dev/null 2>&1; then \
+		echo "[play] a game server already answers on $(PLAY_HEALTH) (make dev? one left running?"; \
+		echo "       on Windows: taskkill //IM gameserver.exe //F). Stop it first."; exit 1; fi
+	@url="http://localhost:$${CLIENT_PORT:-5173}/play/"; shop_env=""; \
+	case "$(DEV_HTTP_ADDR)" in 127.0.0.1:*|localhost:*) loopback=1;; *) loopback=0;; esac; \
+	case "$(DATABASE_URL)" in *@localhost:*|*@localhost/*|*@127.0.0.1:*|*@127.0.0.1/*) localdb=1;; *) localdb=0;; esac; \
+	if [ $$loopback = 1 ] && [ $$localdb = 1 ]; then shop_env="PAYMENTS_PROVIDER=fake"; \
+	else shop_env="PAYMENTS_PROVIDER="; echo "[play] the server is not on loopback or the database is not local: no fake payments, the cosmetic shop stays off"; fi; \
+	if [ $$localdb = 0 ] && [ -z "$${RPG_ENV:-}" ]; then echo "[play] the database is not local: the server does not run as development and refuses the sandbox world (set RPG_ENV=development if that database and this server are only yours)"; fi; \
+	echo "[play] starting the game server (new characters wake up on '$(PLAY_START_TOWN)') and the client..."; \
+	trap 'kill 0' EXIT; \
+	(cd server && env $(DEV_RPG_ENV) $$shop_env RPG_WORLD="$(CURDIR)/build/world.bin" DATABASE_URL="$(DATABASE_URL)" \
+		go run ./cmd/gameserver -http "$(DEV_HTTP_ADDR)" -ws-origins "$${RPG_WS_ORIGINS:-$(DEV_WS_ORIGINS)}" \
+		-start-town "$(PLAY_START_TOWN)" $(DEV_SERVER_FLAGS) $(LOCAL_PLAY_FLAGS)) & srv=$$!; \
+	$(MAKE) client & \
+	ready=0; for i in $$(seq 1 300); do \
+		kill -0 $$srv 2>/dev/null || break; \
+		if curl -sf "$(PLAY_HEALTH)" >/dev/null 2>&1 && curl -sf "$$url" >/dev/null 2>&1; then ready=1; break; fi; \
+		sleep 1; \
+	done; \
+	if [ $$ready = 1 ]; then echo ""; echo "[play] ready: open $$url  (Ctrl+C stops everything; guide: docs/16-probar-el-juego.md)"; \
+	elif ! kill -0 $$srv 2>/dev/null; then echo "[play] the game server stopped: look at its log above"; exit 1; \
+	else echo "[play] the server or the client did not answer in 5 minutes: look at the log above"; fi; \
+	wait
 
 .PHONY: client
 client: ## Game client dev server on http://localhost:5173 (proxies /api and /ws to RPG_SERVER, default :8080)

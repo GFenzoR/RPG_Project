@@ -188,14 +188,22 @@ export function HouseWindow(props: Props & { now?: number }): JSX.Element | null
 
           <h3>{t("client.house.leave_title")}</h3>
           <p class="hint">{t("client.house.leave_hint")}</p>
-          <button
-            type="button"
-            class="danger"
-            data-testid="house-leave"
-            onClick={() => game?.houseLeave()}
-          >
-            {t("client.house.leave")}
-          </button>
+          {/* Two steps (a native <details>, no state): one click on a window that also
+              pays and invites must not give the house up. */}
+          <details class="leave" data-testid="house-leave-ask">
+            <summary>{t("client.house.leave")}</summary>
+            <p class="hint" data-testid="house-leave-confirm">
+              {t("client.house.leave_confirm", { days: daysLeft(h, now) })}
+            </p>
+            <button
+              type="button"
+              class="danger"
+              data-testid="house-leave"
+              onClick={() => game?.houseLeave()}
+            >
+              {t("client.house.leave_yes")}
+            </button>
+          </details>
         </div>
       )}
     </section>

@@ -650,6 +650,7 @@ var errorStatus = []struct {
 	{auth.ErrAccountBanned, http.StatusForbidden, "account_banned"},
 	{auth.ErrUnauthorized, http.StatusUnauthorized, "unauthorized"},
 	{auth.ErrInvalidName, http.StatusBadRequest, "invalid_name"},
+	{auth.ErrReservedName, http.StatusBadRequest, "reserved_name"},
 	{auth.ErrNameTaken, http.StatusConflict, "name_taken"},
 	{auth.ErrInvalidVocation, http.StatusBadRequest, "invalid_vocation"},
 	{auth.ErrCharacterLimit, http.StatusConflict, "character_limit"},

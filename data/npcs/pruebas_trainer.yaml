@@ -1,0 +1,135 @@
+id: pruebas_trainer
+name: npc.pruebas_trainer.name
+sprite: npcs/sandbox_trainer
+notes: >-
+  Instructor of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md), in its
+  temple: free experience (houses ask for level 12, PvP for level 20), money, healing with
+  mana, and training (the combat skills and magic level of the player's vocation, or the
+  trades) so every system can be tried by hand in a few minutes, and the short quest
+  pruebas_rats. Only on the sandbox island, which normal play never reaches (no boat goes
+  there): dev_only makes every action of hers dev-only, the free experience and gold too,
+  not only train_skill and restore_mana (docs/06, "Diálogos"); make validate and the server
+  refuse them anywhere but on a dev_only island.
+dev_only: true
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.pruebas_trainer.greet
+      options:
+        - text: npc.pruebas_trainer.opt_quest
+          if: { quest_not_started: pruebas_rats }
+          goto: quest_offer
+        - text: npc.pruebas_trainer.opt_quest_done
+          if: { quest_state: { quest: pruebas_rats, state: in_progress, step: report } }
+          goto: quest_done
+        - text: npc.pruebas_trainer.opt_xp
+          goto: xp
+        - text: npc.pruebas_trainer.opt_train
+          goto: train
+        - text: npc.pruebas_trainer.opt_gold
+          action: { give_gold: 10000 }
+          goto: gold
+        - text: npc.pruebas_trainer.opt_heal
+          action: [{ heal: true }, { restore_mana: true }]
+          goto: healed
+        - text: dialog.bye
+          action: close
+    quest_offer:
+      text: npc.pruebas_trainer.quest_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: pruebas_rats }
+          goto: quest_accepted
+        - text: dialog.decline
+          goto: greet
+    quest_accepted:
+      text: npc.pruebas_trainer.quest_accepted
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    quest_done:
+      text: npc.pruebas_trainer.quest_done
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    xp:
+      text: npc.pruebas_trainer.xp
+      options:
+        - text: npc.pruebas_trainer.opt_xp_small
+          action: { give_xp: 5000 }
+          goto: xp_given
+        - text: npc.pruebas_trainer.opt_xp_big
+          action: { give_xp: 50000 }
+          goto: xp_given
+        - { text: dialog.back, goto: greet }
+    xp_given:
+      text: npc.pruebas_trainer.xp_given
+      options:
+        - text: npc.pruebas_trainer.opt_xp_small
+          action: { give_xp: 5000 }
+          goto: xp_given
+        - text: npc.pruebas_trainer.opt_xp_big
+          action: { give_xp: 50000 }
+          goto: xp_given
+        - { text: dialog.back, goto: greet }
+    # Training raises skills to these levels and never lowers one. Combat: the skills of
+    # the vocation's weapons, its shield and its magic level, about what a character that
+    # got to pens 4 and 5 by playing has (a level 21 guardian holds pen 4 with them;
+    # TestSandboxTraining). Trades: past every recipe of data/recipes.yaml (the highest
+    # asks for smithing 22).
+    train:
+      text: npc.pruebas_trainer.train
+      options:
+        - text: npc.pruebas_trainer.opt_train_combat
+          if: { vocation_in: [guardian] }
+          action:
+            - { train_skill: { skill: sword, level: 45 } }
+            - { train_skill: { skill: axe, level: 45 } }
+            - { train_skill: { skill: club, level: 45 } }
+            - { train_skill: { skill: shield, level: 40 } }
+            - { train_skill: { skill: magic, level: 2 } }
+          goto: trained
+        - text: npc.pruebas_trainer.opt_train_combat
+          if: { vocation_in: [ranger] }
+          action:
+            - { train_skill: { skill: distance, level: 45 } }
+            - { train_skill: { skill: sword, level: 30 } }
+            - { train_skill: { skill: axe, level: 30 } }
+            - { train_skill: { skill: club, level: 30 } }
+            - { train_skill: { skill: shield, level: 35 } }
+            - { train_skill: { skill: magic, level: 5 } }
+          goto: trained
+        - text: npc.pruebas_trainer.opt_train_combat
+          if: { vocation_in: [arcanist, druid] }
+          action:
+            - { train_skill: { skill: magic, level: 25 } }
+            - { train_skill: { skill: shield, level: 20 } }
+          goto: trained
+        - text: npc.pruebas_trainer.opt_train_trades
+          action:
+            - { train_skill: { skill: mining, level: 25 } }
+            - { train_skill: { skill: woodcutting, level: 25 } }
+            - { train_skill: { skill: smithing, level: 25 } }
+            - { train_skill: { skill: cooking, level: 25 } }
+            - { train_skill: { skill: alchemy, level: 25 } }
+            - { train_skill: { skill: fishing, level: 40 } }
+          goto: trained
+        - { text: dialog.back, goto: greet }
+    trained:
+      text: npc.pruebas_trainer.trained
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    gold:
+      text: npc.pruebas_trainer.gold
+      options:
+        - text: npc.pruebas_trainer.opt_gold
+          action: { give_gold: 10000 }
+          goto: gold
+        - { text: dialog.back, goto: greet }
+    healed:
+      text: npc.pruebas_trainer.healed
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }

@@ -186,6 +186,8 @@ func CheckRefs(npcs NPCs, quests Quests, items Items, monsters Monsters, skills 
 						err = questStep(where, a.StartQuest, "")
 					case a.SetQuestStep != nil:
 						err = questStep(where, a.SetQuestStep.Quest, a.SetQuestStep.Step)
+					case a.TrainSkill != nil && !hasSkill(a.TrainSkill.Skill):
+						err = fmt.Errorf("%s: train_skill: unknown skill %q", where, a.TrainSkill.Skill)
 					}
 					if err != nil {
 						return err

@@ -211,6 +211,7 @@ func TestErrors(t *testing.T) {
 		{"basic, no cookie", req{method: "GET", path: "/api/characters", authorization: "Basic dXNlcjpwYXNz"}, 401, "unauthorized"},
 		{"empty bearer", req{method: "GET", path: "/api/characters", authorization: "Bearer "}, 401, "unauthorized"},
 		{"invalid name", req{method: "POST", path: "/api/characters", token: token, body: `{"name":"x","vocation":"guardian"}`}, 400, "invalid_name"},
+		{"reserved name", req{method: "POST", path: "/api/characters", token: token, body: `{"name":"GM Tester","vocation":"guardian"}`}, 400, "reserved_name"},
 		{"invalid vocation", req{method: "POST", path: "/api/characters", token: token, body: `{"name":"Mira","vocation":"pirate"}`}, 400, "invalid_vocation"},
 		{"unknown api path", req{method: "GET", path: "/api/nope"}, 404, "not_found"},
 	}

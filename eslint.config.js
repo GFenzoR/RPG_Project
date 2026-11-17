@@ -16,6 +16,8 @@ export default tseslint.config(
       "test-results/**",
       ".claude/worktrees/**",
       ".wt/**",
+      // Workflow scripts run in Claude Code: top-level await and return (docs/11 "Lotes").
+      ".claude/workflows/**",
     ],
   },
   js.configs.recommended,

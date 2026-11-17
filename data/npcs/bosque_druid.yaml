@@ -152,5 +152,22 @@ dialog:
     grove:
       text: npc.bosque_druid.grove
       options:
+        - text: dialog.trade
+          action: { open_shop: grove_shop }
         - { text: dialog.back, goto: greet }
         - { text: dialog.bye, action: close }
+# Content audit (2026-11): the forest's staffs and wands and the mana draught, where a
+# caster looks for them (before, the druid's staffs were only at the Puerto diver's).
+shop:
+  id: grove_shop
+  sells:
+    - { item: sapling_staff, price: 40 }
+    - { item: rimewood_staff, price: 300 }
+    - { item: hoarfrost_staff, price: 1080 }
+    - { item: stormglass_wand, price: 1080 }
+    - { item: mana_draught, price: 22 }
+  buys:
+    - { item: sapling_staff, price: 12 }
+    - { item: rimewood_staff, price: 100 }
+    - { item: hoarfrost_staff, price: 290 }
+    - { item: stormglass_wand, price: 290 }

@@ -11,7 +11,7 @@ behavior:
   target_distance: 1
   sees_invisible: true   # T3.2: finds its prey by sound
 attacks:
-  - { type: melee, min: 0, max: 14, interval_ms: 2000 }
+  - { type: melee, min: 0, max: 16, interval_ms: 2000 }
 resistances: { death: 20, holy: -10, earth: -10 }
 loot:
   - { item: bat_wing, chance: 0.3 }

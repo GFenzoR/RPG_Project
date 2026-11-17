@@ -4460,7 +4460,8 @@ type MarketUpdate struct {
 	// Money the player carries, in the smallest coin.
 	Money uint64 `protobuf:"varint,2,opt,name=money,proto3" json:"money,omitempty"`
 	// The browsed item (0: none), its best offers per side and its reference price
-	// (average unit price of the recent sales; 0 = no sales).
+	// (the median of the recent votes, one per seller account and day; 0 = none, too few
+	// votes or sellers: balance market.reference_min_votes / reference_min_sellers).
 	ItemId         uint32         `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	Sells          []*MarketOffer `protobuf:"bytes,4,rep,name=sells,proto3" json:"sells,omitempty"`
 	Buys           []*MarketOffer `protobuf:"bytes,5,rep,name=buys,proto3" json:"buys,omitempty"`

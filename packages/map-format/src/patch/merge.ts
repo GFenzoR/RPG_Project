@@ -286,7 +286,7 @@ export function listEntryPos(e: ListEntry): Position {
   return { x: r.x + Math.floor(r.w / 2), y: r.y + Math.floor(r.h / 2), z: e.floors[0] ?? 7 };
 }
 
-/** Lists the editor (and its ops) can change; texts.yaml has no ops yet. */
+/** Lists the editor's entity panels change (texts.yaml has ops, add_text/remove_text, but no panel). */
 export type OpList = Exclude<MergeList, "texts">;
 
 /** Op that adds an entry to `list` (fields copied, so the op never aliases the entry). */

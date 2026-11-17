@@ -1,16 +1,17 @@
-// Ops on the auxiliary lists: spawns.yaml, zones.yaml, portals.yaml and npcs.yaml. The
-// island is the one that owns the entity's position (spawn center, zone rects, portal
-// origin, NPC tile). IDs are unique in the whole world, and each NPC is placed once.
+// Ops on the auxiliary lists: spawns.yaml, zones.yaml, portals.yaml, npcs.yaml and
+// texts.yaml. The island is the one that owns the entity's position (spawn center, zone
+// rects, portal origin, NPC or text tile). IDs are unique in the whole world, and each NPC is placed once.
 // Inverses carry `index`, so undo puts an entry back where it was (same bytes on disk).
 // Whether a spawn or NPC stands on a walkable tile is the validator's job, not the op's:
 // an AI or a human may place the spawn first and paint the ground afterwards.
 import { PORTAL_KINDS, ZONE_TYPES, samePos } from "../types.ts";
-import type { NpcPlacement, Portal, Position, Spawn, Zone } from "../types.ts";
+import type { MapText, NpcPlacement, Portal, Position, Spawn, Zone } from "../types.ts";
 import { InvalidOp, checkId, checkPos, checkRect, insertIndex } from "./draft.ts";
 import type { EntityList, Draft } from "./draft.ts";
 import type {
   AddPortalOp,
   AddSpawnOp,
+  AddTextOp,
   AddZoneOp,
   MapOp,
   OpOptions,
@@ -18,6 +19,7 @@ import type {
   RemoveNpcOp,
   RemovePortalOp,
   RemoveSpawnOp,
+  RemoveTextOp,
   RemoveZoneOp,
 } from "./types.ts";
 
@@ -31,7 +33,7 @@ function checkNotes(notes: unknown): void {
 /** Where an entry with this key is, in any island. */
 function find(
   d: Draft,
-  file: EntityList,
+  file: EntityList | "texts",
   match: (e: { id?: string; npc?: string }) => boolean,
 ): { island: string; index: number } | undefined {
   for (const island of d.islandIds()) {
@@ -41,7 +43,7 @@ function find(
   return undefined;
 }
 
-function checkUnique(d: Draft, file: EntityList, id: string, what: string): void {
+function checkUnique(d: Draft, file: EntityList | "texts", id: string, what: string): void {
   const at = find(d, file, (e) => e.id === id);
   if (at) throw new InvalidOp(`${what} "${id}" already exists in island "${at.island}"`);
 }
@@ -187,4 +189,31 @@ export function removeNpc(d: Draft, op: RemoveNpcOp): MapOp[] {
   }
   const [n] = d.editList(at.island, "npcs").splice(at.index, 1) as [NpcPlacement];
   return [{ op: "place_npc", ...n, index: at.index }];
+}
+
+// ---- texts (signs and books) ------------------------------------------------------------
+
+const TEXT_KINDS: readonly MapText["kind"][] = ["sign", "book"];
+
+export function addText(d: Draft, op: AddTextOp): MapOp[] {
+  const id = checkId(op.id, "text id");
+  if (!TEXT_KINDS.includes(op.kind))
+    throw new InvalidOp(`text kind must be one of ${TEXT_KINDS.join(", ")}`);
+  checkPos(op.pos);
+  if (typeof op.text !== "string" || op.text === "")
+    throw new InvalidOp("text must be an i18n key");
+  checkNotes(op.notes);
+  checkUnique(d, "texts", id, "text");
+  const island = d.islandAt(op.pos.x, op.pos.y, op.pos.z);
+  const entry: MapText = { id, pos: pos(op.pos), kind: op.kind, text: op.text };
+  if (op.notes !== undefined) entry.notes = op.notes;
+  insert(d.editList(island, "texts"), entry, op.index);
+  return [{ op: "remove_text", id }];
+}
+
+export function removeText(d: Draft, op: RemoveTextOp): MapOp[] {
+  const at = find(d, "texts", (e) => e.id === op.id);
+  if (!at) throw new InvalidOp(`no text "${String(op.id)}"`);
+  const [t] = d.editList(at.island, "texts").splice(at.index, 1) as [MapText];
+  return [{ op: "add_text", ...t, index: at.index }];
 }

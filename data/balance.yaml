@@ -43,12 +43,28 @@ combat:
   #   max_hit = skill * attack / skill_attack_divisor + level / level_divisor, × mode attack
   #   hit = random(0, max_hit) × (1 - physical resistance)
   #   target armor removes random(armor/2, armor); a monster's defense random(0, defense/2);
-  #   a player's shield random(0, shield_defense × mode defense / shield_block_divisor).
+  #   a player's hands random(0, (shield + weapon defense) × mode defense / shield_block_divisor)
+  #   (content audit m3: the weapon's defense counts too).
   fist_attack: 7              # attack value of bare hands (no weapon equipped)
   skill_attack_divisor: 10
   level_divisor: 4
   shield_block_divisor: 4
   monster_corpse_ms: 60000    # how long a monster's remains (and its loot) stay
+  # Leash (docs/02-game-design.md, "Monstruos"): a monster chases and flees only within
+  # its spawn's radius + monster_leash_tiles (Chebyshev from the spawn's center). A target
+  # beyond that and out of its attacks' reach is dropped for another player fighting it
+  # from inside, or else it heals to full, forgets who hurt it and walks home; without a
+  # target it walks back into its spawn's radius. 0 = no leash.
+  monster_leash_tiles: 6
+  # A search for a way (A*) that found none waits this long before the next one; a chase
+  # with a leash checks the way to a target out of its reach this often.
+  monster_path_retry_ms: 1000
+  # With a leash, a target out of reach that no way within the leash area reaches (around
+  # creatures) for this long is dropped like one beyond the leash (only creatures in the
+  # way: swapped for a player within reach)...
+  monster_stuck_ms: 2000
+  # ...and, on that tile and out of reach, counts as beyond the leash for that monster.
+  monster_shun_ms: 30000
   # Wands (T1.9): a distance attack of the weapon's element and range that hits
   # random(attack × wand_min_factor, attack) × (1 − resistance %). Armor does not stop it.
   wand_min_factor: 0.5
@@ -126,14 +142,20 @@ market:                     # T5.3 (docs/02-game-design.md, "Economía"). Own nu
   enabled: true             # false: the market boards answer "closed"
   fee_permille: 20          # posting fee: 2% of amount x unit price, destroyed (gold sink)
   fee_min: 5                # copper coins, at least
-  fee_max: 4000             # and at most
+  fee_max: 50000            # and at most (content audit m13: 4000 was reached at a value of
+                            # 200k, so faking a huge sale between two own accounts was cheap)
   max_offers: 15            # active offers (buy + sell) per character
   max_amount: 2000          # units per offer
   max_price: 5000000        # copper coins per unit
   durations_hours: [12, 48, 120]
   list_size: 15             # offers per side in a search, best prices first
   history_size: 25          # own operations shown, newest first
-  reference_days: 5         # reference price: average unit price of the trades of these days
+  reference_days: 5         # reference price: the median of these days' votes, one vote per
+                            # seller account and day (its average unit price that day)
+  reference_min_votes: 3    # content audit m13: no reference with fewer votes...
+  reference_min_sellers: 2  # ...or from fewer different seller accounts...
+  reference_min_accounts: 3 # ...or fewer accounts in all (sellers and buyers); sales between
+                            # two accounts that sold to each other in the window never count
   mailbox_shown: 30         # mailbox items sent to the window at once
   action_burst: 6           # anti-flood: 6 actions at once, then one every 400 ms
   action_refill_ms: 400
@@ -156,6 +178,10 @@ houses:                     # T5.4 (docs/02-game-design.md, "Casas"). Own number
   transfer_minutes: 10      # a transfer offer waits this long at the door
   action_burst: 8           # anti-flood of house actions and item moves in houses:
   action_refill_ms: 300     # 8 at once, then one every 300 ms (each move writes the house)
+  # Content audit M6: an owner whose account has not entered the game for this many days
+  # loses the house when its rent runs out (no renewal from the mailbox; the items go to
+  # the mailbox). Owners are told at every login. 0 turns it off.
+  inactive_days: 28
 
 pvp:                        # T5.2 (docs/02-game-design.md, "PvP"). Own numbers, see there why.
   enabled: true             # false: no player can hurt another one (PvE only, as before T5.2)
@@ -264,7 +290,8 @@ antibot:
 #   kind: damage = a hit of `element` every interval_ms (resistances apply), up to
 #         max_ticks hits left; speed = speed × (100 + speed_pct) / 100; skill = +amount
 #         levels of `skill` in combat; invisible = unseen by players and by monsters
-#         without behavior.sees_invisible.
+#         without behavior.sees_invisible; regen = the vocation regeneration is
+#         regen_pct % stronger (food, content audit m2).
 #   stacking: refresh keeps the longer time (or more hits) and the stronger damage;
 #             add sums them, up to max_ticks / max_ms.
 #   persists: kept across a logout with the time left (the others end on logout).
@@ -276,3 +303,7 @@ conditions:
   hasted:    { kind: speed, speed_pct: 35, max_ms: 45000, stacking: refresh, cancels: [slowed] }
   invisible: { kind: invisible, max_ms: 90000, stacking: refresh }
   keen_eye:  { kind: skill, skill: distance, amount: 7, max_ms: 45000, stacking: refresh }
+  # Content audit m2: food. Eating adds its consumable.food_ms (up to max_ms: then the
+  # stomach is full and pure food is refused); while it lasts the vocation regeneration is
+  # regen_pct % stronger. Without it the plain regeneration goes on: nobody starves.
+  well_fed:  { kind: regen, regen_pct: 100, max_ms: 1200000, stacking: add, persists: true }

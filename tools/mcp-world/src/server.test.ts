@@ -128,7 +128,7 @@ describe("protocol", () => {
     const info = JSON.parse((lines[1]?.result as CallResult).content[0]?.text ?? "") as {
       islands: unknown[];
     };
-    expect(info.islands).toHaveLength(4);
+    expect(info.islands).toHaveLength(5);
   }, 20000);
 });
 
@@ -157,7 +157,8 @@ describe("read tools", () => {
       total: 1,
       results: [{ pos: { x: 1057, y: 1084, z: 7 }, layer: "stack" }],
     });
-    expect(json("map_find", { kind: "spawn", id: "wolf" }).total).toBe(3);
+    // testisle, Puerto and the sandbox island's pen 2 (puerto has four since content audit M1).
+    expect(json("map_find", { kind: "spawn", id: "wolf" }).total).toBe(6);
     expect(
       json("map_find", {
         kind: "item",

@@ -111,6 +111,10 @@ type Island struct {
 	Rect   Rect
 	Floors []uint8
 	Temple Pos
+	// Dev marks an island world.yaml calls dev_only (the sandbox island), which only a
+	// mapcompile -dev build keeps: a world with one is a development world (Map.DevIslands),
+	// and only its NPCs run the dev-only dialog actions.
+	Dev bool
 	// Spawns are the island's monster spawns (world/islands/<id>/spawns.yaml).
 	Spawns []Spawn
 	// NPCs are the NPCs placed on the island (world/islands/<id>/npcs.yaml), in file
@@ -513,6 +517,19 @@ func (m *Map) Island(id string) *Island {
 		}
 	}
 	return nil
+}
+
+// DevIslands returns the ids of the dev-only islands (Island.Dev), in world order: a
+// world with any is a development world (mapcompile -dev), which a production server
+// refuses to load.
+func (m *Map) DevIslands() []string {
+	var ids []string
+	for _, is := range m.islands {
+		if is.Dev {
+			ids = append(ids, is.ID)
+		}
+	}
+	return ids
 }
 
 // GroundSpeeds returns the terrain cost table indexed by numeric item ID (0 = default).

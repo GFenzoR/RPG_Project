@@ -18,6 +18,12 @@ type NPC struct {
 	Sprite string `yaml:"sprite"`
 	Dialog Dialog `yaml:"dialog"`
 	Shop   *Shop  `yaml:"shop"`
+	// DevOnly makes every action of the NPC's dialog dev-only, like Action.DevOnly (the
+	// sandbox instructor, docs/16: her free experience and gold too): make validate
+	// refuses it placed anywhere but on a dev_only island, the server does not start with
+	// it there (CheckDevPlacement) and runs none of its actions but close elsewhere
+	// (dialog.Check).
+	DevOnly bool `yaml:"dev_only"`
 }
 
 // Dialog is an NPC's dialog tree: nodes by id, starting at Start.
@@ -113,10 +119,18 @@ func (c *Conditions) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Bless sells a blessing (death rules, T1.11).
+// Bless sells a blessing (death rules, T1.11) for Price + PerLevel × the buyer's level
+// (content audit M6: a flat price was nothing for a high level).
 type Bless struct {
 	Blessing string `yaml:"blessing"`
 	Price    int64  `yaml:"price"`
+	PerLevel int64  `yaml:"per_level"`
+}
+
+// PriceAt is what the blessing costs a character of level: never below zero (the schema
+// forbids negative numbers, but a hand-made value must not pay the buyer).
+func (b Bless) PriceAt(level int) int64 {
+	return max(b.Price+b.PerLevel*int64(max(level, 0)), 0)
 }
 
 // QuestStep names a step of a quest.
@@ -147,6 +161,74 @@ type Action struct {
 	Heal         bool       `yaml:"heal"`
 	Teleport     *Position  `yaml:"teleport"`
 	Bless        *Bless     `yaml:"bless"`
+	// TrainSkill and RestoreMana are dev-only (DevOnly): the sandbox island's instructor
+	// (docs/16) raises a skill to a level and fills the mana, which in the real game
+	// would hand out what playing earns.
+	TrainSkill  *SkillLevel `yaml:"train_skill"`
+	RestoreMana bool        `yaml:"restore_mana"`
+}
+
+// blessAndXP reports whether as both sells a blessing and gives experience.
+func (as Actions) blessAndXP() bool {
+	var bless, xp bool
+	for _, a := range as {
+		bless = bless || a.Bless != nil
+		xp = xp || a.GiveXP > 0
+	}
+	return bless && xp
+}
+
+// MaxSkillLevel bounds skill levels (skills.MaxLevel; a train_skill level too).
+const MaxSkillLevel = 500
+
+// DevOnly returns the name of a's action if it may only run on a dev-only island
+// (world.yaml dev_only, the sandbox island), or "": make validate refuses it in an NPC
+// placed anywhere else, the server does not start with one there and refuses to run it.
+func (a Action) DevOnly() string {
+	switch {
+	case a.TrainSkill != nil:
+		return "train_skill"
+	case a.RestoreMana:
+		return "restore_mana"
+	}
+	return ""
+}
+
+// DevOnlyAction returns the first dev-only action (Action.DevOnly) of n's dialog, in
+// node id order, or "".
+func (n *NPC) DevOnlyAction() string {
+	ids := make([]string, 0, len(n.Dialog.Nodes))
+	for id := range n.Dialog.Nodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		for _, o := range n.Dialog.Nodes[id].Options {
+			for _, a := range o.Action {
+				if name := a.DevOnly(); name != "" {
+					return name
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// CheckDevPlacement refuses n placed on island when n is dev_only (NPC.DevOnly) or its
+// dialog has a dev-only action (Action.DevOnly) and the island is not dev-only: there it
+// would hand out in the real game what playing earns. The server runs it for every NPC it
+// places.
+func CheckDevPlacement(n *NPC, island string, devOnly bool) error {
+	switch {
+	case devOnly:
+		return nil
+	case n.DevOnly:
+		return fmt.Errorf("npc %q is dev_only (every dialog action of it is dev-only) and stands on island %q, which is not dev_only (world.yaml): only the sandbox island may have it", n.ID, island)
+	}
+	if name := n.DevOnlyAction(); name != "" {
+		return fmt.Errorf("npc %q uses the dev-only dialog action %s and stands on island %q, which is not dev_only (world.yaml): only the sandbox island may have it", n.ID, name, island)
+	}
+	return nil
 }
 
 // UnmarshalYAML accepts the bare string "close" or a one-key mapping.
@@ -280,9 +362,17 @@ func ParseNPC(raw []byte) (*NPC, error) {
 			if o.Goto == "" && len(o.Action) == 0 {
 				return nil, fmt.Errorf("npc %q: node %q option %d: needs goto or action", n.ID, id, i+1)
 			}
+			if o.Action.blessAndXP() {
+				// The blessing would be charged at the level the experience gives, not the
+				// one its {price} showed (content audit M6, review).
+				return nil, fmt.Errorf("npc %q: node %q option %d: bless and give_xp cannot go in one option", n.ID, id, i+1)
+			}
 			for _, a := range o.Action {
 				if a.OpenShop != "" && (n.Shop == nil || n.Shop.ID != a.OpenShop) {
 					return nil, fmt.Errorf("npc %q: node %q option %d: opens shop %q, not its own", n.ID, id, i+1, a.OpenShop)
+				}
+				if t := a.TrainSkill; t != nil && (t.Skill == "" || t.Level < 1 || t.Level > MaxSkillLevel) {
+					return nil, fmt.Errorf("npc %q: node %q option %d: train_skill needs a skill and a level in 1..%d", n.ID, id, i+1, MaxSkillLevel)
 				}
 			}
 		}

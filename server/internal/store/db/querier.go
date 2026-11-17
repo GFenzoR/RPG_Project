@@ -140,7 +140,8 @@ type Querier interface {
 	InsertGuildWar(ctx context.Context, arg InsertGuildWarParams) error
 	InsertHouseGuest(ctx context.Context, arg InsertHouseGuestParams) error
 	InsertHouseItems(ctx context.Context, arg []InsertHouseItemsParams) (int64, error)
-	// Rents a free house (a row already there is a conflict: the transfer fails).
+	// Rents a free house (a row already there is a conflict: the transfer fails). away_from is
+	// the rent time, by the loop's clock.
 	InsertHouseOwner(ctx context.Context, arg InsertHouseOwnerParams) error
 	InsertIdentity(ctx context.Context, arg InsertIdentityParams) error
 	InsertInventoryItem(ctx context.Context, arg InsertInventoryItemParams) (int64, error)
@@ -155,6 +156,10 @@ type Querier interface {
 	InsertPaymentEvent(ctx context.Context, arg InsertPaymentEventParams) (int64, error)
 	InsertPremiumLedger(ctx context.Context, arg InsertPremiumLedgerParams) (int64, error)
 	InsertReport(ctx context.Context, arg InsertReportParams) (int64, error)
+	// When the server last saved any character (content audit M6): after a restart the loop
+	// does not count the downtime since then as absence of the house owners, so an outage
+	// releases no house. NULL with no save yet.
+	LastCharacterSave(ctx context.Context) (pgtype.Timestamptz, error)
 	// Lifts every active ban of the account.
 	LiftBans(ctx context.Context, arg LiftBansParams) (int64, error)
 	ListAccountCosmetics(ctx context.Context, accountID int64) ([]string, error)
@@ -185,9 +190,13 @@ type Querier interface {
 	LoadHouseItems(ctx context.Context) ([]LoadHouseItemsRow, error)
 	// Player houses (T5.4). The loop owns them in memory: these queries load them at start and
 	// write each change inside the transaction of a session.Transfer.
+	// seen: when a character of the owner's account was last in the game (its last login or
+	// save), never before away_from or since (content audit M6: the loop releases the house
+	// of an owner away for balance houses.inactive_days).
 	LoadHouseOwners(ctx context.Context) ([]LoadHouseOwnersRow, error)
-	// The active bans of the accounts that own offers (their offers are hidden). until is
-	// NULL for a permanent ban.
+	// The active bans of every account: an offer of a banned account is hidden, and its sales
+	// (as seller or buyer) are left out of the reference price (content audit m13), also once
+	// it has no offers left. until is NULL for a permanent ban.
 	LoadMarketBans(ctx context.Context, now pgtype.Timestamptz) ([]LoadMarketBansRow, error)
 	LoadMarketHigh(ctx context.Context) (LoadMarketHighRow, error)
 	// The newest operations of every character since a time, at most per_character each.
@@ -197,7 +206,10 @@ type Querier interface {
 	// Global market (T5.3). The loop owns the market in memory: these queries load it at
 	// start and write each change inside the transaction of a session.Transfer.
 	LoadMarketOffers(ctx context.Context) ([]LoadMarketOffersRow, error)
-	// Units sold and money paid by item and day since a time (reference prices).
+	// Units sold and money paid by item, day, seller account and buyer account since a time
+	// (reference prices: one vote per seller account and day, leaving out the accounts that
+	// sold to each other; content audit m13). side 1 rows are the seller's. A deleted buyer
+	// (no foreign key) gets an account of its own: minus its character id.
 	LoadMarketSales(ctx context.Context, since pgtype.Timestamptz) ([]LoadMarketSalesRow, error)
 	// Serializes per-account writes (e.g. character creation vs. the per-account limit).
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)

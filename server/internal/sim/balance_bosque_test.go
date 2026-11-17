@@ -20,13 +20,14 @@ var bosqueTargetLevel = map[string]int{
 	"hollow_crawler":  24,
 }
 
-// bosqueKit is what Puerto and the forest town (shop and elm recipes) provide.
+// bosqueKit is what Puerto and the forest town (shop and elm recipes) provide; the hood
+// and the boots arrived with the content audit (M3, 2026-11).
 func bosqueKit(level int) kit {
 	switch {
 	case level >= 16:
-		return kit{"thornwood_blade", []string{"sailcloth_cap", "stagleather_coat", "stagleather_leggings", "tarred_boots"}, "elmwood_shield"}
+		return kit{"thornwood_blade", []string{"stagleather_hood", "stagleather_coat", "stagleather_leggings", "stagleather_boots"}, "elmwood_shield"}
 	case level >= 14:
-		return kit{"boarding_saber", []string{"sailcloth_cap", "stagleather_coat", "stagleather_leggings", "tarred_boots"}, "elmwood_shield"}
+		return kit{"boarding_saber", []string{"stagleather_hood", "stagleather_coat", "stagleather_leggings", "stagleather_boots"}, "elmwood_shield"}
 	case level >= 12:
 		return kit{"boarding_saber", []string{"sailcloth_cap", "leather_jerkin", "stagleather_leggings", "tarred_boots"}, "elmwood_shield"}
 	default:

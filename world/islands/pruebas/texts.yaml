@@ -1,0 +1,53 @@
+- id: pruebas_temple_sign
+  kind: sign
+  pos: { x: 2093, y: 2092, z: 7 }
+  text: text.pruebas.temple_sign
+  notes: "Outside the temple door: what each sector is for."
+
+- id: pruebas_hunt_sign
+  kind: sign
+  pos: { x: 2084, y: 2082, z: 7 }
+  text: text.pruebas.hunt_sign
+  notes: "Where the north road meets the hunting trail."
+
+- id: pruebas_craft_sign
+  kind: sign
+  pos: { x: 2080, y: 2096, z: 7 }
+  text: text.pruebas.craft_sign
+  notes: "West road, where the gathering sector starts."
+
+- id: pruebas_market_sign
+  kind: sign
+  pos: { x: 2092, y: 2103, z: 7 }
+  text: text.pruebas.market_sign
+  notes: "Next to the market board."
+
+- id: pruebas_dock_sign
+  kind: sign
+  pos: { x: 2093, y: 2132, z: 7 }
+  text: text.pruebas.dock_sign
+  notes: "At the end of the street, by the dock."
+
+- id: pruebas_vault_sign
+  kind: sign
+  pos: { x: 2115, y: 2100, z: 7 }
+  text: text.pruebas.vault_sign
+  notes: "In front of the vault wall, beside the practice gate."
+
+- id: pruebas_portal_sign
+  kind: sign
+  pos: { x: 2114, y: 2096, z: 7 }
+  text: text.pruebas.portal_sign
+  notes: "Where the east road enters the yard of portals."
+
+- id: pruebas_arena_sign
+  kind: sign
+  pos: { x: 2099, y: 2113, z: 7 }
+  text: text.pruebas.arena_sign
+  notes: "Beside the path to the arena gate."
+
+- id: pruebas_dungeon_sign
+  kind: sign
+  pos: { x: 2124, y: 2088, z: 8 }
+  text: text.pruebas.dungeon_sign
+  notes: "In the stairs hall: how to use each portal down here."

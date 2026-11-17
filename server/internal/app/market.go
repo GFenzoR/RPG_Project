@@ -48,7 +48,8 @@ func loadMarket(ms MarketStore, now time.Time, cfg content.Market) (*session.Mar
 			Sold: h.Side == store.MarketSell, ItemID: uint16(h.ItemID), Amount: h.Amount, Price: h.Price, At: h.At})
 	}
 	for _, x := range d.Sales {
-		out.Sales = append(out.Sales, session.MarketSale{ItemID: uint16(x.ItemID), Day: x.Day, Units: x.Units, Total: x.Total})
+		out.Sales = append(out.Sales, session.MarketSale{ItemID: uint16(x.ItemID), Day: x.Day,
+			SellerAccount: x.SellerAccount, BuyerAccount: x.BuyerAccount, Units: x.Units, Total: x.Total})
 	}
 	return out, nil
 }

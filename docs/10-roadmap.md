@@ -325,3 +325,42 @@ secundaria.
   Pago solo se probó contra servidores falsos (httptest): falta una compra real en su
   modo prueba (sandbox) con un webhook que llegue desde internet. Copiar las variables
   nuevas a `deploy/.env.example` (la sesión no tenía permiso para editarlo).
+
+## Extras (pedidos fuera de los hitos)
+- [x] **Isla de Pruebas y `make play`.** Isla sandbox `pruebas` (96x96 en 2048,2048, pisos 7
+  y 8) para probar todos los sistemas a mano: templo con instructora (experiencia, dinero,
+  curación y la misión `pruebas_rats`), proveedor con herramientas, runas, equipo de cada
+  vocación y la llave de la puerta de práctica, cinco corrales de caza de débil a fuerte,
+  recolección y oficios, mercado, casa, puerta con llave, patio de portales con sótano (un
+  portal de cada tipo), arena PvP y barquero de ida a las tres islas. Fuera del juego normal:
+  `dev_only` en `world.yaml` (la imagen de producción no la compila; `mapcompile -dev` sí) y
+  nada de las otras islas lleva a ella. Ops `add_text`/`remove_text` para `texts.yaml`.
+  Guía: `16-probar-el-juego.md`.
+  Después (rama `test/sandbox-sim`): el recorrido de la guía jugado por tests de simulación
+  sobre el mundo real (`server/internal/session/sandbox_test.go`, docs/16 sección 8); la
+  pala sale de la tienda de la isla (no tiene uso). Y para probar sin grindear: la
+  instructora entrena el combate de cada vocación (skills y nivel mágico) y los oficios, y
+  "Cúrame" llena también el maná, con las acciones de desarrollo `train_skill` y
+  `restore_mana` (docs/06, "Diálogos"), que solo valen en NPCs de islas `dev_only`
+  (`make validate`, arranque del servidor y al elegir la opción). `mapcompile -dev` marca
+  esas islas en `world.bin` (v6) y el servidor no carga ese mundo con `RPG_ENV` de
+  producción (docs/03).
+- [x] **Balance de vocaciones e items (auditoría de contenido, rama `feat/balance-vocations`).**
+  Brebajes de maná en las tres ciudades y una carrera simulada del 1 al 50 para arcanista,
+  druida y montaraz con presupuesto de maná real (`sim/balance_vocations_test.go`); maza,
+  arco, ballesta, varita y vara hasta la Isla Volcánica, y piezas de cabeza, piernas y pies;
+  ballestas de una mano para que el montaraz lleve escudo; `tempest_ring` y `rime_burst`
+  para las islas que resisten fuego y tierra; la comida regenera (`well_fed`); el sello de
+  la forja para cada uno del grupo (botín `each_player`); la cuerda con destino (socavón de
+  la playa del naufragio) y la pala fuera de la tienda, con una regla de `make validate`;
+  bendiciones desde el nivel 9; varita inicial del arcanista; hechizos renombrados y textos
+  pulidos. Lo que quedó de la auditoría: docs/14, "Pendientes conocidos".
+- [x] **Capacidad del mundo, casas y servicios (auditoría de contenido, rama `feat/world-capacity`).**
+  Capacidad para unos 100 jugadores por franja de nivel (respawns más cortos, más monstruos
+  y 20 spawns nuevos: de 43 a 109 jugadores efectivos, test `world-capacity.test.ts`,
+  docs/07 "Capacidad del mundo") y 24 abedules más; casas: alquiler por tamaño y pueblo,
+  13 casas, liberación tras 28 días sin que entre la cuenta del dueño (con aviso al entrar),
+  bendiciones de 50 + 20 por nivel; la defensa del arma bloquea con la del escudo; regla
+  de `make validate` para items sin fuente, sin comprador o de quest que siguen cayendo;
+  tablero del mercado en Brasal; `testisle` dev-only y renombrada; comisión del mercado
+  con tope de 50 000 y precio de referencia por mediana.

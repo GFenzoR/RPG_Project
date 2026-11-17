@@ -1,8 +1,11 @@
 package dialog
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -16,6 +19,7 @@ type fake struct {
 	items        map[string]int
 	money        int64
 	noChangeRoom bool
+	dev          bool // the NPC stands on a dev-only island
 	blessed      map[string]bool
 	engine       *quest.Engine
 	log          *quest.Log
@@ -33,19 +37,25 @@ func (f *fake) HasBlessing(b string) bool { return f.blessed[b] }
 func (f *fake) CanTeleport(content.Position) bool {
 	return true
 }
-func (f *fake) QuestState(q string) (quest.State, string)  { return f.engine.State(f.log, q) }
-func (f *fake) GiveItem(it string)                         { f.items[it]++; f.did = append(f.did, "give:"+it) }
-func (f *fake) TakeItem(it string, n int)                  { f.items[it] -= n; f.did = append(f.did, "take:"+it) }
-func (f *fake) GiveXP(int64)                               {}
-func (f *fake) GiveGold(n int64)                           { f.money += n }
-func (f *fake) TakeGold(n int64)                           { f.money -= n }
-func (f *fake) StartQuest(id string)                       { f.engine.Start(f.log, id, f) }
-func (f *fake) SetQuestStep(q, s string)                   { f.engine.SetStep(f.log, q, s, f) }
-func (f *fake) SetFlag(k string, v int64)                  { f.engine.SetFlag(f.log, k, v, f) }
-func (f *fake) OpenShop(id string)                         { f.did = append(f.did, "shop:"+id) }
-func (f *fake) Heal()                                      { f.did = append(f.did, "heal") }
-func (f *fake) Teleport(content.Position)                  {}
-func (f *fake) Bless(b content.Bless)                      { f.blessed[b.Blessing] = true; f.money -= b.Price }
+func (f *fake) QuestState(q string) (quest.State, string) { return f.engine.State(f.log, q) }
+func (f *fake) GiveItem(it string)                        { f.items[it]++; f.did = append(f.did, "give:"+it) }
+func (f *fake) TakeItem(it string, n int)                 { f.items[it] -= n; f.did = append(f.did, "take:"+it) }
+func (f *fake) GiveXP(int64)                              {}
+func (f *fake) GiveGold(n int64)                          { f.money += n }
+func (f *fake) TakeGold(n int64)                          { f.money -= n }
+func (f *fake) StartQuest(id string)                      { f.engine.Start(f.log, id, f) }
+func (f *fake) SetQuestStep(q, s string)                  { f.engine.SetStep(f.log, q, s, f) }
+func (f *fake) SetFlag(k string, v int64)                 { f.engine.SetFlag(f.log, k, v, f) }
+func (f *fake) OpenShop(id string)                        { f.did = append(f.did, "shop:"+id) }
+func (f *fake) Heal()                                     { f.did = append(f.did, "heal") }
+func (f *fake) Teleport(content.Position)                 {}
+func (f *fake) Bless(b content.Bless) {
+	f.blessed[b.Blessing] = true
+	f.money -= b.PriceAt(f.level)
+}
+func (f *fake) DevIsland() bool                            { return f.dev }
+func (f *fake) TrainSkill(s string, n int)                 { f.did = append(f.did, fmt.Sprintf("train:%s=%d", s, n)) }
+func (f *fake) RestoreMana()                               { f.did = append(f.did, "mana") }
 func (f *fake) Reward(*content.Quest, content.QuestReward) {}
 func (f *fake) Notify(quest.Event)                         {}
 
@@ -95,7 +105,7 @@ func TestHarborMasterOffersByVocation(t *testing.T) {
 		t.Fatalf("hidden option ran: %+v", r)
 	}
 	r = Choose(hm, "ch1_offer", 1, f)
-	if r.Node != "ch1_accepted_arcanist" || f.money != 25 || f.items["ship_biscuit"] != 1 {
+	if r.Node != "ch1_accepted_arcanist" || f.items["spark_wand"] != 1 || f.items["ship_biscuit"] != 1 {
 		t.Fatalf("accept: %+v money %d items %v", r, f.money, f.items)
 	}
 	if s, step := f.QuestState("ch1_shipwreck"); s != quest.InProgress || step != "clear_wolves" {
@@ -109,9 +119,24 @@ func TestHarborMasterOffersByVocation(t *testing.T) {
 	}
 }
 
+// Content audit M6: a blessing costs more the higher the buyer: price + per_level × level.
+func TestBlessingPriceGrowsWithLevel(t *testing.T) {
+	priest := load(t, "puerto_priest")
+	f := newFake(t, "guardian")
+	f.level, f.money = 30, 649 // 50 + 20 × 30 = 650
+	if r := Choose(priest, "blessings", 1, f); r.Refused != MsgNoMoney {
+		t.Fatalf("level 30 with 649: %+v", r)
+	}
+	f.money = 1000
+	if r := Choose(priest, "blessings", 1, f); r.Node != "blessed" || f.money != 350 {
+		t.Fatalf("level 30 blessing: %+v money %d", r, f.money)
+	}
+}
+
 func TestCostsAreAllOrNothing(t *testing.T) {
 	priest := load(t, "puerto_priest")
 	f := newFake(t, "guardian")
+	f.level = 9 // the temples bless from level 9 (content audit m8)
 	f.money = 150
 	if r := Choose(priest, "blessings", 0, f); r.Refused != MsgNoMoney || len(f.blessed) != 0 {
 		t.Fatalf("blessing without money: %+v", r)
@@ -122,10 +147,11 @@ func TestCostsAreAllOrNothing(t *testing.T) {
 		t.Fatalf("blessing without room for the change: %+v", r)
 	}
 	f.noChangeRoom = false
-	if r := Choose(priest, "blessings", 0, f); r.Node != "blessed" || f.money != 200 {
+	// 50 + 20 per level (content audit M6): 230 at level 9.
+	if r := Choose(priest, "blessings", 0, f); r.Node != "blessed" || f.money != 170 {
 		t.Fatalf("blessing: %+v money %d", r, f.money)
 	}
-	if r := Choose(priest, "blessings", 0, f); r.Refused != MsgAlreadyBlessed || f.money != 200 {
+	if r := Choose(priest, "blessings", 0, f); r.Refused != MsgAlreadyBlessed || f.money != 170 {
 		t.Fatalf("second blessing: %+v", r)
 	}
 	if r := Choose(priest, "greet", 1, f); r.Node != "healed" || f.did[len(f.did)-1] != "heal" {
@@ -135,7 +161,7 @@ func TestCostsAreAllOrNothing(t *testing.T) {
 	if r := Choose(prov, "greet", 0, f); r.Node != "greet" || f.did[len(f.did)-1] != "shop:provisions_shop" {
 		t.Fatalf("trade should stay on the node and open the shop: %+v", r)
 	}
-	if Check(content.Actions{{TakeItem: &content.ItemCount{Item: "rope", Count: 2}}}, f) != MsgNoItem {
+	if Check(nil, content.Actions{{TakeItem: &content.ItemCount{Item: "rope", Count: 2}}}, f) != MsgNoItem {
 		t.Fatal("take_item without the items should be refused")
 	}
 }
@@ -163,6 +189,116 @@ func TestHarborMasterKitForRangerAndDruid(t *testing.T) {
 		r := Choose(hm, "ch1_offer", accept, f)
 		if r.Node != c.node || f.items[c.item] != 1 || f.money != c.money || f.items["ship_biscuit"] != 1 {
 			t.Errorf("%s: %+v money %d items %v", c.vocation, r, f.money, f.items)
+		}
+	}
+}
+
+// The sandbox instructor's dev-only actions (train_skill, restore_mana) run only when her
+// island is dev-only, and an option with one runs nothing elsewhere, not even its other
+// actions (all or nothing): the priests' heal is not dev-only.
+func TestDevOnlyActionsNeedADevIsland(t *testing.T) {
+	trainer := load(t, "pruebas_trainer")
+	option := func(node, text string) int {
+		for i, o := range trainer.Dialog.Nodes[node].Options {
+			if o.Text == text {
+				return i
+			}
+		}
+		t.Fatalf("no option %s in %s", text, node)
+		return -1
+	}
+	heal := option("greet", "npc.pruebas_trainer.opt_heal")
+	trades := option("train", "npc.pruebas_trainer.opt_train_trades")
+	for _, dev := range []bool{false, true} {
+		f := newFake(t, "guardian")
+		f.dev = dev
+		r := Choose(trainer, "greet", heal, f)
+		if !dev && (r.Refused != MsgDevOnly || r.Node != "greet" || len(f.did) != 0) {
+			t.Fatalf("heal on a normal island: %+v, ran %v", r, f.did)
+		}
+		if dev && (r.Node != "healed" || !slices.Equal(f.did, []string{"heal", "mana"})) {
+			t.Fatalf("heal on the sandbox island: %+v, ran %v", r, f.did)
+		}
+		f.did = nil
+		combat := Visible(trainer.Dialog.Nodes["train"], f)[0]
+		r = Choose(trainer, "train", combat, f)
+		if !dev && (r.Refused != MsgDevOnly || len(f.did) != 0) {
+			t.Fatalf("train on a normal island: %+v, ran %v", r, f.did)
+		}
+		if dev && (r.Node != "trained" || !slices.Contains(f.did, "train:sword=45") || !slices.Contains(f.did, "train:shield=40")) {
+			t.Fatalf("guardian training on the sandbox island: %+v, ran %v", r, f.did)
+		}
+		f.did = nil
+		r = Choose(trainer, "train", trades, f)
+		if dev != (r.Refused == "") || dev && !slices.Contains(f.did, "train:smithing=25") {
+			t.Fatalf("trades training (dev island %v): %+v, ran %v", dev, r, f.did)
+		}
+	}
+	// She is dev_only (review of lote 5): her gold, no dev-only action, runs only there
+	// too; leaving with close always works.
+	gold := option("greet", "npc.pruebas_trainer.opt_gold")
+	bye := option("greet", "dialog.bye")
+	xp := option("greet", "npc.pruebas_trainer.opt_xp") // only goto: xp
+	for _, dev := range []bool{false, true} {
+		f := newFake(t, "guardian")
+		f.dev = dev
+		money := f.money
+		r := Choose(trainer, "greet", gold, f)
+		if !dev && (r.Refused != MsgDevOnly || f.money != money) || dev && (r.Refused != "" || f.money != money+10000) {
+			t.Fatalf("gold (dev island %v): %+v, money %d -> %d", dev, r, money, f.money)
+		}
+		// An option that only moves on is refused too off the island (review of lote 5):
+		// nothing of her dialog but her greeting shows there.
+		r = Choose(trainer, "greet", xp, f)
+		if !dev && (r.Refused != MsgDevOnly || r.Node != "greet") || dev && (r.Refused != "" || r.Node != "xp") {
+			t.Fatalf("the xp menu (dev island %v): %+v", dev, r)
+		}
+		if r := Choose(trainer, "greet", bye, f); r.Refused != "" || r.Node != "" {
+			t.Fatalf("bye (dev island %v): %+v", dev, r)
+		}
+	}
+	f := newFake(t, "druid")
+	if Check(&content.NPC{DevOnly: true}, content.Actions{{Heal: true}}, f) != MsgDevOnly ||
+		Check(&content.NPC{DevOnly: true}, nil, f) != MsgDevOnly ||
+		Check(&content.NPC{DevOnly: true}, content.Actions{{Close: true}}, f) != "" {
+		t.Fatal("Check of a dev_only NPC off a dev island")
+	}
+	if Check(nil, content.Actions{{RestoreMana: true}}, f) != MsgDevOnly ||
+		Check(nil, content.Actions{{TrainSkill: &content.SkillLevel{Skill: "magic", Level: 3}}}, f) != MsgDevOnly ||
+		Check(nil, content.Actions{{Heal: true}}, f) != "" {
+		t.Fatal("Check off a dev island")
+	}
+}
+
+// Content audit m8: novices (up to death.novice_max_level, 8) already die as if they had
+// the five blessings, so the temples only sell them from level 9.
+func TestBlessingsFromLevelNine(t *testing.T) {
+	// The novice protection is balance.yaml's: the temples must follow it.
+	b, err := content.LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	novice := b.Death.NoviceMaxLevel
+	for _, id := range []string{"puerto_priest", "bosque_priest", "volcan_priest"} {
+		npc := load(t, id)
+		node := npc.Dialog.Nodes["blessings"]
+		f := newFake(t, "guardian")
+		count := func() int {
+			n := 0
+			for _, txt := range texts(node, f) {
+				if strings.Contains(txt, ".bless_") {
+					n++
+				}
+			}
+			return n
+		}
+		f.level = novice
+		if n := count(); n != 0 {
+			t.Errorf("%s: %d blessings offered at level %d (death.novice_max_level)", id, n, novice)
+		}
+		f.level = novice + 1
+		if n := count(); n != b.Death.MaxBlessings {
+			t.Errorf("%s: %d blessings offered at level %d, want %d", id, n, novice+1, b.Death.MaxBlessings)
 		}
 	}
 }

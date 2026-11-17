@@ -216,7 +216,6 @@ const loadMarketBans = `-- name: LoadMarketBans :many
 SELECT b.account_id, CASE WHEN bool_or(b.expires_at IS NULL) THEN NULL ELSE max(b.expires_at) END::timestamptz AS until
 FROM account_bans b
 WHERE b.lifted_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > $1)
-  AND b.account_id IN (SELECT c.account_id FROM market_offers o JOIN characters c ON c.id = o.character_id)
 GROUP BY b.account_id
 `
 
@@ -225,8 +224,9 @@ type LoadMarketBansRow struct {
 	Until     pgtype.Timestamptz
 }
 
-// The active bans of the accounts that own offers (their offers are hidden). until is
-// NULL for a permanent ban.
+// The active bans of every account: an offer of a banned account is hidden, and its sales
+// (as seller or buyer) are left out of the reference price (content audit m13), also once
+// it has no offers left. until is NULL for a permanent ban.
 func (q *Queries) LoadMarketBans(ctx context.Context, now pgtype.Timestamptz) ([]LoadMarketBansRow, error) {
 	rows, err := q.db.Query(ctx, loadMarketBans, now)
 	if err != nil {
@@ -427,20 +427,30 @@ func (q *Queries) LoadMarketOffers(ctx context.Context) ([]LoadMarketOffersRow, 
 }
 
 const loadMarketSales = `-- name: LoadMarketSales :many
-SELECT item_id, date_trunc('day', at, 'UTC')::timestamptz AS day, sum(amount)::bigint AS units,
-    sum(amount * price)::bigint AS total
-FROM market_history WHERE side = 1 AND at >= $1
-GROUP BY item_id, day ORDER BY item_id, day
+SELECT h.item_id, date_trunc('day', h.at, 'UTC')::timestamptz AS day, c.account_id AS seller_account,
+    COALESCE(b.account_id, -h.other_character_id)::bigint AS buyer_account,
+    sum(h.amount)::bigint AS units, sum(h.amount * h.price)::bigint AS total
+FROM market_history h
+JOIN characters c ON c.id = h.character_id
+LEFT JOIN characters b ON b.id = h.other_character_id
+WHERE h.side = 1 AND h.at >= $1
+GROUP BY h.item_id, day, c.account_id, buyer_account
+ORDER BY h.item_id, day, c.account_id, buyer_account
 `
 
 type LoadMarketSalesRow struct {
-	ItemID int32
-	Day    pgtype.Timestamptz
-	Units  int64
-	Total  int64
+	ItemID        int32
+	Day           pgtype.Timestamptz
+	SellerAccount int64
+	BuyerAccount  int64
+	Units         int64
+	Total         int64
 }
 
-// Units sold and money paid by item and day since a time (reference prices).
+// Units sold and money paid by item, day, seller account and buyer account since a time
+// (reference prices: one vote per seller account and day, leaving out the accounts that
+// sold to each other; content audit m13). side 1 rows are the seller's. A deleted buyer
+// (no foreign key) gets an account of its own: minus its character id.
 func (q *Queries) LoadMarketSales(ctx context.Context, since pgtype.Timestamptz) ([]LoadMarketSalesRow, error) {
 	rows, err := q.db.Query(ctx, loadMarketSales, since)
 	if err != nil {
@@ -453,6 +463,8 @@ func (q *Queries) LoadMarketSales(ctx context.Context, since pgtype.Timestamptz)
 		if err := rows.Scan(
 			&i.ItemID,
 			&i.Day,
+			&i.SellerAccount,
+			&i.BuyerAccount,
 			&i.Units,
 			&i.Total,
 		); err != nil {

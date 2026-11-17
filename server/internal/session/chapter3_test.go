@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/sim"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
@@ -299,10 +301,12 @@ func TestChapterThreePlayable(t *testing.T) {
 		}
 	}))
 	h.huntRested(cl, p, "slagbound_warden", 1)
-	if s := step("ch3_warden"); s != "take_seal" {
-		t.Fatalf("after the warden the step is %q", s)
+	// The seal is a quest drop (each_player, content audit m9): it goes straight to the
+	// pack of whoever hurt the warden and needs it, so take_seal is done at once.
+	if s := step("ch3_warden"); s != "return_seal" || h.w.CountItem(p, "forge_seal") != 1 {
+		t.Fatalf("after the warden the step is %q, %d seals", s, h.w.CountItem(p, "forge_seal"))
 	}
-	give("forge_seal", 1) // it lies in the warden's remains; taking it is looting
+	give("forge_seal", 0) // back to Brasal
 	money, xp = h.w.Money(p), p.Experience()
 	d = h.lastDialog(h.send(cl, talkMsg(keeper.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_keeper.opt_warden"))
@@ -319,6 +323,29 @@ func TestChapterThreePlayable(t *testing.T) {
 	if hasOption(keeper, "npc.volcan_keeper.opt_warden") || hasOption(keeper, "npc.volcan_keeper.opt_progress") || hasOption(echo, "npc.volcan_forge_echo.opt_warden") {
 		t.Fatal("finished chapter still offered")
 	}
+	// Handed in, the seal is done with: another warden gives no more (content audit m9).
+	var warden *session.Monster
+	h.sim.RunUntil(func() bool { // Brasal is out of sight of the forge: it respawns
+		for _, m := range h.w.Monsters() {
+			if m.Kind() == "slagbound_warden" {
+				warden = m
+			}
+		}
+		return warden != nil
+	}, sim.MaxSeconds(700))
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		warden.SetHealth(10)
+		h.w.DamageMonsterForTest(ctx, warden, p, 10)
+	}))
+	h.sim.Step()
+	for _, m := range h.w.Monsters() {
+		if m == warden {
+			t.Fatal("the second warden did not die")
+		}
+	}
+	if n := h.w.CountItem(p, "forge_seal"); n != 0 || len(h.w.GroundAt(p.Pos())) != 0 {
+		t.Fatalf("a warden after the quest gave %d seals (or one at the feet)", n)
+	}
 }
 
 // The Brasal smith sells every line of its shop to a normal pack (paying breaks the big
@@ -329,7 +356,7 @@ func TestBrasalNPCs(t *testing.T) {
 	c := session.Character{ID: 931, AccountID: 931, Name: "Ashwalker", Vocation: "guardian", Level: 45, Health: 500, Mana: 100}
 	cl, p := h.joinFresh(c, pos(20, 12))
 	h.sim.Command(gameFunc(func() {
-		h.w.GiveForTest(p, "gold_coin", 1)
+		h.w.GiveForTest(p, "gold_coin", 2)
 		h.w.GiveForTest(p, "copper_coin", 250)
 		h.w.GiveForTest(p, "ash_pelt", 3)
 		for _, id := range []string{"pickaxe", "rope", "ship_biscuit"} {
@@ -372,11 +399,39 @@ func TestBrasalNPCs(t *testing.T) {
 	money = h.w.Money(p)
 	d = h.lastDialog(h.send(cl, talkMsg(priest.ID())))
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_blessings"))
-	if d = h.lastDialog(h.pick(cl, d, "npc.puerto_priest.bless_shore")); d.Text.Key != "npc.volcan_priest.blessed" || h.w.Money(p) != money-200 {
+	// Content audit M6: a blessing costs 50 + 20 per level, and each option says how much.
+	const blessPrice = 50 + 20*45
+	for _, o := range d.Options {
+		if ps := o.Text.Params; o.Text.Key != "dialog.back" && (len(ps) != 1 || ps[0].Name != "price" || ps[0].GetNumber() != blessPrice) {
+			t.Fatalf("option %s params %v, want price %d", o.Text.Key, ps, blessPrice)
+		}
+	}
+	// A level gained while the node is open: an option without a price still runs...
+	h.sim.Command(gameFunc(func() { h.w.SetLevelForTest(p, 46) }))
+	h.sim.Step()
+	evs = h.pick(cl, d, "dialog.back")
+	if d = h.lastDialog(evs); messageKeys(evs)["dialog.price_changed"] || d.Text.Key != "npc.volcan_priest.greet" {
+		t.Fatalf("back after a level up: %v, node %s", messageKeys(evs), d.Text.Key)
+	}
+	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_blessings"))
+	if got := d.Options[0].Text.Params[0].GetNumber(); got != blessPrice+20 {
+		t.Fatalf("price at level 46 = %d", got)
+	}
+	// ...but a blessing whose shown price is stale is refused without charging and the node
+	// comes again with the new price (50 + 20 × 47).
+	h.sim.Command(gameFunc(func() { h.w.SetLevelForTest(p, 47) }))
+	h.sim.Step()
+	evs = h.pick(cl, d, "npc.puerto_priest.bless_shore")
+	d = h.lastDialog(evs)
+	if !messageKeys(evs)["dialog.price_changed"] || h.w.Money(p) != money || d.Text.Key != "npc.volcan_priest.blessings" ||
+		d.Options[0].Text.Params[0].GetNumber() != blessPrice+40 {
+		t.Fatalf("stale price: %v, money %d, node %s %v", messageKeys(evs), h.w.Money(p), d.Text.Key, d.Options[0].Text.Params)
+	}
+	if d = h.lastDialog(h.pick(cl, d, "npc.puerto_priest.bless_shore")); d.Text.Key != "npc.volcan_priest.blessed" || h.w.Money(p) != money-blessPrice-40 {
 		t.Fatalf("blessing: %s, money %d", d.Text.Key, h.w.Money(p))
 	}
 	d = h.lastDialog(h.pick(cl, d, "npc.volcan_priest.opt_more"))
-	if evs := h.pick(cl, d, "npc.puerto_priest.bless_shore"); !messageKeys(evs)["dialog.already_blessed"] || h.w.Money(p) != money-200 {
+	if evs := h.pick(cl, d, "npc.puerto_priest.bless_shore"); !messageKeys(evs)["dialog.already_blessed"] || h.w.Money(p) != money-blessPrice-40 {
 		t.Fatalf("second blessing: %v", messageKeys(evs))
 	}
 

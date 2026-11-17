@@ -1838,7 +1838,8 @@ export type MarketUpdate = Message$1<"game.v1.MarketUpdate"> & {
 
   /**
    * The browsed item (0: none), its best offers per side and its reference price
-   * (average unit price of the recent sales; 0 = no sales).
+   * (the median of the recent votes, one per seller account and day; 0 = none, too few
+   * votes or sellers: balance market.reference_min_votes / reference_min_sellers).
    *
    * @generated from field: uint32 item_id = 3;
    */

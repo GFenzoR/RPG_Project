@@ -86,8 +86,9 @@ type pos struct {
 type worldFile struct {
 	Format  int `yaml:"format"`
 	Islands []struct {
-		ID   string `yaml:"id"`
-		Rect rect   `yaml:"rect"`
+		ID      string `yaml:"id"`
+		Rect    rect   `yaml:"rect"`
+		DevOnly bool   `yaml:"dev_only"`
 	} `yaml:"islands"`
 }
 
@@ -211,8 +212,22 @@ func LoadContent(root string) (*Content, error) {
 	return c, nil
 }
 
-// Compile reads world/ and data/ under root and builds the map.
+// Options change what Compile builds.
+type Options struct {
+	// DevIslands keeps the islands world.yaml marks dev_only (the sandbox island,
+	// docs/16-probar-el-juego.md). Without it they are left out: the production image is
+	// built that way, so nothing there can reach them (make validate keeps the rest of the
+	// world from needing one: routes, dialog teleports and portals).
+	DevIslands bool
+}
+
+// Compile reads world/ and data/ under root and builds the map, without dev-only islands.
 func Compile(root string) (*world.Map, error) {
+	return Build(root, Options{})
+}
+
+// Build is Compile with options.
+func Build(root string, opts Options) (*world.Map, error) {
 	cont, err := LoadContent(root)
 	if err != nil {
 		return nil, err
@@ -227,10 +242,16 @@ func Compile(root string) (*world.Map, error) {
 	var islands []*world.Island
 	sectors := map[string][]*world.Sector{}
 	for _, entry := range wf.Islands {
+		if entry.DevOnly && !opts.DevIslands {
+			continue
+		}
 		is, secs, err := compileIsland(root, entry.ID, entry.Rect, cont)
 		if err != nil {
 			return nil, err
 		}
+		// The mark a production server refuses (gameserver, RPG_ENV) and that lets the
+		// island's NPCs run dev-only dialog actions.
+		is.Dev = entry.DevOnly
 		islands = append(islands, is)
 		sectors[is.ID] = secs
 	}

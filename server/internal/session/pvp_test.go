@@ -558,6 +558,24 @@ func TestPvPPersistence(t *testing.T) {
 	}
 }
 
+// A defeat in an arena costs nothing (content audit m2): the conditions end, but the food
+// it paid for (well_fed) stays with the time it had.
+func TestPvPArenaKeepsTheFood(t *testing.T) {
+	g := newPvP(t, nil, func(c *session.Config) { c.Balance.Conditions["well_fed"] = fedCondition() })
+	_, a := g.fighter("Ana", 0, 45, 45, 30, 0)
+	_, v := g.fighter("Bea", 0, 46, 45, 30, 0)
+	g.do(func(ctx *game.TickContext) {
+		g.w.ApplyConditionForTest(ctx, v, nil, &content.ConditionApply{ID: "well_fed", DurationMs: 120000}, 0)
+		g.w.ApplyConditionForTest(ctx, v, nil, &content.ConditionApply{ID: "poison", Ticks: 5, Damage: 1}, 0)
+	})
+	left := g.w.ConditionsForTest(v)["well_fed"]
+	g.kill(a, v)
+	got := g.w.ConditionsForTest(v)
+	if _, ok := got["poison"]; ok || got["well_fed"] < left-200 || got["well_fed"] > left {
+		t.Fatalf("after the arena defeat: %v, want well_fed ~%d ms and no poison", got, left)
+	}
+}
+
 // A defeat in an arena costs nothing and marks nobody.
 func TestPvPArena(t *testing.T) {
 	g := newPvP(t, nil)

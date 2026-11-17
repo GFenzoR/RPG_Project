@@ -98,8 +98,8 @@ events:
 # (floors > 7). Changing zone crossfades over fade_ms.
 music:
   fade_ms: 2500
-  islands: { puerto: music_puerto, testisle: music_puerto, bosque: music_bosque, volcan: music_volcan }
+  islands: { puerto: music_puerto, testisle: music_puerto, bosque: music_bosque, volcan: music_volcan, pruebas: music_puerto }
   underground: music_cueva
 ambient:
   fade_ms: 2000
-  islands: { puerto: amb_olas, testisle: amb_olas, bosque: amb_bosque, volcan: amb_volcan }
+  islands: { puerto: amb_olas, testisle: amb_olas, bosque: amb_bosque, volcan: amb_volcan, pruebas: amb_olas }

@@ -3,7 +3,8 @@ name: npc.puerto_priest.name
 sprite: npcs/priestess
 notes: >-
   Temple of the Lantern (respawn point of the island). Sells the five blessings
-  (balance.yaml death.max_blessings) at a flat 200 coins each and heals for free.
+  (balance.yaml death.max_blessings) for 50 coins plus 20 per level of the buyer each
+  (content audit M6) and heals for free.
   Refusing a blessing the player already holds is the death/blessing engine's job (T1.11):
   there is no "has blessing" condition yet.
 dialog:
@@ -25,19 +26,24 @@ dialog:
       text: npc.puerto_priest.blessings
       options:
         - text: npc.puerto_priest.bless_shore
-          action: { bless: { blessing: shore_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: shore_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_hearth
-          action: { bless: { blessing: hearth_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: hearth_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_keel
-          action: { bless: { blessing: keel_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: keel_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_star
-          action: { bless: { blessing: star_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: star_light, price: 50, per_level: 20 } }
           goto: blessed
         - text: npc.puerto_priest.bless_deep
-          action: { bless: { blessing: deep_light, price: 200 } }
+          if: { level_at_least: 9 } # novices (death.novice_max_level) are covered already
+          action: { bless: { blessing: deep_light, price: 50, per_level: 20 } }
           goto: blessed
         - { text: dialog.back, goto: greet }
     blessed:

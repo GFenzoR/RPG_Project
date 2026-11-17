@@ -170,7 +170,7 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await expect(backpackWindow).toBeVisible();
   await expect(backpackWindow.locator(".slot")).toHaveCount(24);
   await backpackSlot.locator("[data-item]").click({ modifiers: ["Shift"] });
-  await expect(page.getByTestId("game-log")).toContainText("Ves mochila (24 lugares)");
+  await expect(page.getByTestId("game-log")).toContainText("Ves: mochila (24 lugares)");
   await expect(inventory.getByTestId("capacity")).toContainText("Capacidad libre");
   await inventory.screenshot({ path: join(shots, "09-inventory.png") });
 
@@ -644,8 +644,13 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   ).toBe(201);
   await apiCtx.dispose();
   // Puerto's NPCs live on Isla del Puerto (T1.16): this character's residence is Farol, so
-  // it wakes up at that temple, next to the priestess and the provisioner.
-  psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${name}'`]);
+  // it wakes up at that temple, next to the priestess and the provisioner. Level 9: the
+  // temples bless from there on (content audit m8; novices are covered already).
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto', level = 9, experience = 6912 WHERE name = '${name}'`,
+  ]);
 
   await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
@@ -714,7 +719,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await page.keyboard.up("Shift");
   const log = page.getByTestId("game-log");
   await expect(log).toContainText(
-    "Ves cartel. Templo del Farol. Dentro de sus muros nadie puede hacerte daño.",
+    "Ves: cartel. Templo del Farol. Dentro de sus muros nadie puede hacerte daño.",
   );
   // The log sits at the end of the scrolling side column on desktop: bring it into view
   // so the screenshot shows the line read, then put the column back for the next shots.
@@ -737,7 +742,8 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await expect(dialog.locator("[data-option]")).toHaveCount(6);
   await shot(page, "13-dialog");
   await dialog.screenshot({ path: join(shots, "13-dialog-window.png") });
-  // Blessings cost 200 coins: the server refuses a new character.
+  // A blessing costs 50 + 20 per level (230 at level 9, content audit M6): the server
+  // refuses a character with no money.
   await page.keyboard.press("Digit1");
   await expect(page.getByTestId("game-log")).toContainText("No tienes suficiente dinero.");
   await page.keyboard.press("Escape");
@@ -1208,6 +1214,9 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   await form.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(again.getByTestId("login-form")).toContainText("Esta cuenta está suspendida.");
   await shot(again, "21-banned-login");
+  // Close them, like every test with pages of its own: left open, the GM's game kept
+  // running beside every later test of the suite.
+  for (const p of [gmPage, plPage, again]) await p.close();
 });
 
 test("T3.2: a guardian casts haste: condition badge, faster speed and steps", async ({
@@ -1571,18 +1580,18 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
   const dialog = page.getByTestId("dialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Quiero viajar." }).click();
-  const route = dialog.getByRole("button", { name: /isla de pruebas/ });
+  const route = dialog.getByRole("button", { name: /islote de ensayo/ });
   await expect(route).toBeVisible();
   await shot(page, "26-boat-routes");
 
   await route.click();
-  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Isla de pruebas");
+  await expect(page.getByTestId("voyage")).toContainText("Zarpaste hacia Islote de ensayo");
   await shot(page, "27-boat-sailing");
   await expect(dialog).toBeHidden();
   await arrived(page, 1058, 1056);
   const log = page.getByTestId("game-log");
   await expect(log).toContainText("Pagaste 30 monedas.");
-  await expect(log).toContainText("Zarpaste hacia Isla de pruebas.");
+  await expect(log).toContainText("Zarpaste hacia Islote de ensayo.");
   await expect(page.getByTestId("voyage")).toBeHidden({ timeout: 5000 });
   await shot(page, "28-boat-arrived");
   expect(errors).toEqual([]);
@@ -2329,7 +2338,11 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   await offer.getByRole("button", { name: "Comprar" }).click();
   await expect(a.getByTestId("game-log")).toContainText(/Compraste .+ por 18 monedas\./);
   await expect(offer).toContainText("5 unidades");
-  await expect(ma.getByTestId("market-reference")).toContainText("Precio de referencia: 6 c/u");
+  // One sale is one vote: the reference needs 3 votes from 2 seller accounts in 5 days
+  // (content audit m13), which earlier runs against the same database may have left.
+  await expect(ma.getByTestId("market-reference")).toContainText(
+    /Precio de referencia: 6 c\/u|Sin precio de referencia/,
+  );
   await expect(ma.getByTestId("market-history")).toContainText("Compraste");
   await shot(a, "54-market-bought");
 
@@ -2397,8 +2410,9 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
     await expect(page.getByTestId("game-log")).toContainText(`Liberaste la casa ${house}`);
     await page.close();
   }
-  // Level 15 (35280 XP, min_level 12), a backpack (48) with 10 x 100 copper coins (8) and
-  // 5 raw fish (10) for the owner; the others just a backpack. In Puerto, south of the door.
+  // Level 15 (35280 XP, min_level 12), a backpack (48) with 20 x 100 copper coins (8) and
+  // 5 raw fish (10) for the owner (the rent is 32 tiles × 60 = 1920, content audit M6);
+  // the others just a backpack. In Puerto, south of the door.
   const seed = (name: string, x: number, items: string): string =>
     `UPDATE characters SET town = 'puerto', level = 15, experience = 35280, pos_x = ${x}, pos_y = 6403, pos_z = 7
        WHERE name = '${name}';
@@ -2413,7 +2427,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
     seed(
       owner.name,
       3153,
-      "(0, 10, 5)" + [...Array(10).keys()].map((s) => `, (${s + 1}, 8, 100)`).join(""),
+      "(0, 10, 5)" + [...Array(20).keys()].map((s) => `, (${s + 1}, 8, 100)`).join(""),
     ) +
       seed(guest.name, 3152, "(0, 8, 1)") +
       seed(stranger.name, 3154, "(0, 8, 1)"),
@@ -2455,7 +2469,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await a.mouse.click(doorA.x, doorA.y);
   await a.keyboard.up("Shift");
   await expect(a.getByTestId("game-log")).toContainText(
-    "Casa de la Red Tendida: libre. Alquiler: 800 monedas cada 7 días (32 casillas).",
+    "Casa de la Red Tendida: libre. Alquiler: 1920 monedas cada 7 días (32 casillas).",
   );
   await openDoor(a);
   const win = a.getByTestId("house");
@@ -2464,7 +2478,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await shot(a, "56-house-free");
   await win.getByTestId("house-rent").click();
   await expect(a.getByTestId("game-log")).toContainText(
-    "Alquilaste Casa de la Red Tendida por 7 días (800 monedas).",
+    "Alquilaste Casa de la Red Tendida por 7 días (1920 monedas).",
   );
   await expect(win.getByTestId("house-owner")).toHaveText(`La alquila ${owner.name}.`);
   await expect(win.getByTestId("house-paid")).toContainText("(7 días)");
@@ -2636,7 +2650,7 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
   await page.mouse.click(sign.x, sign.y);
   await page.keyboard.up("Shift");
   await expect(page.getByTestId("game-log")).toContainText(
-    "Ves cartel. Templo de la Llama Quieta, en Brasal.",
+    "Ves: cartel. Templo de la Llama Quieta, en Brasal.",
   );
   await shot(page, "65b-volcan-temple-sign");
   for (const [x, y] of [
@@ -2699,7 +2713,7 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
     return page;
   }
   const a = await enter(holder.email);
-  let b = await enter(stray.email);
+  const b = await enter(stray.email);
   await arrived(a, 3691, 5831);
   await arrived(b, 3692, 5831);
   const ids = await a.evaluate(() => ({
@@ -2749,15 +2763,28 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   );
   expect(await gateOn(a)).toBe(ids.open);
 
-  // The stray logs out in the forge: the gate locks. Back in, it lets itself out.
+  // The stray walks deeper into the forge and leaves the game there: the gate locks. Every
+  // use next to a door, refused or not, starts the user's inventory.door_cooldown_ms (500
+  // ms, 10 ticks), so the holder's next use has to come one cooldown after the refusal in
+  // server time. The stray's three steps are paced by the server (about 10 ticks each at
+  // level 30 on dirt): at least two whole steps lie between the two uses, however fast the
+  // browser goes. It used to be the stray's page closing: 0.15-0.25 s without a trace (CI's
+  // first attempt) and 0.6-1.8 s while Playwright saved one (local runs), so the lock got
+  // "Espera un momento antes de mover la puerta otra vez." or passed, by speed alone.
+  await walkTo(b, 3692, 5836);
   await expect(a.getByTestId("battle-list")).toContainText(stray.name);
-  await b.close();
+  await b.getByRole("button", { name: "Salir del juego" }).click();
+  await expect(b.getByRole("status")).toHaveText("Saliste del juego.");
   await expect(a.getByTestId("battle-list")).not.toContainText(stray.name);
   await useGate(a);
   await expect(a.getByTestId("game-log")).toContainText("Cierras la puerta con tu llave de ascua.");
   await expect.poll(() => gateOn(a)).toBe(ids.shut);
-  b = await enter(stray.email);
-  await arrived(b, 3692, 5833);
+
+  // Back in (same page, as a player would), it walks to the gate and lets itself out.
+  await b.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
+  await b.waitForFunction(() => window.__rpgClient?.ready === true);
+  await arrived(b, 3692, 5836);
+  await walkTo(b, 3692, 5833);
   expect(await gateOn(b)).toBe(ids.shut);
   await shot(b, "71-forge-gate-shut-inside");
   await useGate(b);
@@ -2767,6 +2794,11 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   await expect.poll(() => gateOn(b)).toBe(ids.open);
   await walkTo(b, 3692, 5831);
   await shot(b, "72-forge-gate-unbarred");
+
+  // The holder locks it again (long after its last use): the next run, a --repeat-each or a
+  // retry finds the gate as this one did.
+  await useGate(a);
+  await expect.poll(() => gateOn(a)).toBe(ids.shut);
 
   expect(errors).toEqual([]);
   for (const page of [a, b]) await page.close();

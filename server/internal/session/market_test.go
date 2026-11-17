@@ -289,6 +289,187 @@ func (h *marketHarness) countKind(kind, ref string) (gold int64, units int32) {
 	return gold, units
 }
 
+// Content audit m13: the reference price is the median vote, one per seller account and
+// day (its average unit price), not per unit: a flood of 2000 units at 1 coin from one
+// account is one vote. With fewer than reference_min_votes votes or reference_min_sellers
+// seller accounts there is none, and a new sale refreshes the cached value at once.
+func TestMarketReferencePriceIsTheMedianVote(t *testing.T) {
+	day := func(n int) time.Time { return clock.Epoch.AddDate(0, 0, n).Add(12 * time.Hour) }
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Balance.Market.ReferenceMinVotes, c.Balance.Market.ReferenceMinSellers = 3, 2
+		c.Market = &session.MarketData{Sales: []session.MarketSale{ // loaded: by day and seller account
+			{ItemID: salveID, Day: day(-2), SellerAccount: 801, Units: 6, Total: 6 * 4},
+			{ItemID: salveID, Day: day(-2), SellerAccount: 802, Units: 1, Total: 1 * 990},
+			{ItemID: salveID, Day: day(-1), SellerAccount: 801, Units: 3, Total: 3 * 5},
+			{ItemID: salveID, Day: day(-1), SellerAccount: 803, Units: 2000, Total: 2000 * 1},
+		}}
+	})
+	cs, sela := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	browse := func() int64 {
+		u := lastMarket(h.send(cb, marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: salveID}}})))
+		return int64(u.GetReferencePrice())
+	}
+	// Votes 1, 4, 5 and 990 (by unit, the 2000 units at 1 would be the median).
+	if got := browse(); got != 4 {
+		t.Fatalf("reference = %d, want the median vote 4", got)
+	}
+	// A day later the first day leaves the window (reference_days 3): two votes, none.
+	h.sim.Clock().Set(day(1))
+	if got := browse(); got != 0 {
+		t.Fatalf("reference with two votes = %d, want none", got)
+	}
+	// Sela sells one at 7 to Bruno: a third vote (1, 5, 7), shown right away.
+	h.send(cs, createOffer(pb.MarketSide_MARKET_SIDE_SELL, salveID, 1, 7))
+	ids := h.w.MarketOffers(sela.CharacterID())
+	if len(ids) != 1 {
+		t.Fatalf("offers %v", ids)
+	}
+	h.send(cb, acceptOffer(ids[0], 1))
+	if got := browse(); got != 5 {
+		t.Fatalf("reference after a third seller = %d, want 5", got)
+	}
+}
+
+// One seller account alone makes no reference, however many days it sells.
+func TestMarketReferenceNeedsSellers(t *testing.T) {
+	day := func(n int) time.Time { return clock.Epoch.AddDate(0, 0, n).Add(12 * time.Hour) }
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Balance.Market.ReferenceMinVotes, c.Balance.Market.ReferenceMinSellers = 3, 2
+		c.Market = &session.MarketData{Sales: []session.MarketSale{
+			{ItemID: salveID, Day: day(-2), SellerAccount: 801, Units: 1, Total: 9},
+			{ItemID: salveID, Day: day(-1), SellerAccount: 801, Units: 1, Total: 9},
+			{ItemID: salveID, Day: day(0), SellerAccount: 801, Units: 1, Total: 9},
+		}}
+	})
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	u := lastMarket(h.send(cb, marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: salveID}}})))
+	if u.GetReferencePrice() != 0 {
+		t.Fatalf("reference from one seller = %d, want none", u.GetReferencePrice())
+	}
+}
+
+// referenceOf browses item at cl's board and returns its reference price.
+func referenceOf(h *marketHarness, cl *fakeClient, item uint32) int64 {
+	h.t.Helper()
+	u := lastMarket(h.send(cl, marketCmd(&pb.MarketCommand{Action: &pb.MarketCommand_Browse{Browse: &pb.MarketBrowse{ItemId: item}}})))
+	return int64(u.GetReferencePrice())
+}
+
+// Review of m13: two accounts that sold to each other in the window are left out both
+// ways. A sold to B and to C, B sold to A, and A sold to B again: only A→C counts, one
+// vote, so there is no reference (without the rule: 3 votes, 2 sellers, 3 accounts).
+func TestMarketReferenceSkipsAccountsThatSoldToEachOther(t *testing.T) {
+	day := func(n int) time.Time { return clock.Epoch.AddDate(0, 0, n).Add(12 * time.Hour) }
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Balance.Market.ReferenceMinVotes, c.Balance.Market.ReferenceMinSellers = 3, 2
+		c.Balance.Market.ReferenceMinAccounts = 3
+		c.Market = &session.MarketData{Sales: []session.MarketSale{
+			{ItemID: salveID, Day: day(-1), SellerAccount: 901, BuyerAccount: 902, Units: 1, Total: 50},
+			{ItemID: salveID, Day: day(-1), SellerAccount: 901, BuyerAccount: 903, Units: 1, Total: 50},
+			{ItemID: salveID, Day: day(-1), SellerAccount: 902, BuyerAccount: 901, Units: 1, Total: 50},
+			{ItemID: salveID, Day: day(0), SellerAccount: 901, BuyerAccount: 902, Units: 1, Total: 50},
+		}}
+	})
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	if got := referenceOf(h, cb, salveID); got != 0 {
+		t.Fatalf("reference made by two accounts selling to each other = %d, want none", got)
+	}
+}
+
+// Fewer accounts in all than reference_min_accounts: none, even with the votes and sellers.
+func TestMarketReferenceNeedsAccounts(t *testing.T) {
+	day := func(n int) time.Time { return clock.Epoch.AddDate(0, 0, n).Add(12 * time.Hour) }
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Balance.Market.ReferenceMinVotes, c.Balance.Market.ReferenceMinSellers = 3, 2
+		c.Balance.Market.ReferenceMinAccounts = 4
+		c.Market = &session.MarketData{Sales: []session.MarketSale{
+			{ItemID: salveID, Day: day(-1), SellerAccount: 911, BuyerAccount: 913, Units: 1, Total: 8},
+			{ItemID: salveID, Day: day(-1), SellerAccount: 912, BuyerAccount: 913, Units: 1, Total: 8},
+			{ItemID: salveID, Day: day(0), SellerAccount: 911, BuyerAccount: 913, Units: 1, Total: 8},
+		}}
+	})
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 100, 0))
+	if got := referenceOf(h, cb, salveID); got != 0 {
+		t.Fatalf("reference from 3 accounts (4 asked) = %d, want none", got)
+	}
+}
+
+// Review of m13: a sale into a buy offer is the accepting player's. Sela sells one to
+// Bruno through her sell offer; then Bruno sells one to Sela through her buy offer: they
+// sold to each other and neither sale counts (taking the buy offer's owner, Sela, as the
+// seller would leave her a vote of 8).
+func TestMarketSaleIntoABuyOfferIsTheSellers(t *testing.T) {
+	h := newMarketHarness(t)
+	cs, sela := h.atBoard("Sela", pos(1, 0), stack(salveID, 5, 0), stack(coinID, 50, 1))
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(salveID, 5, 0), stack(coinID, 50, 1))
+	h.send(cs, createOffer(pb.MarketSide_MARKET_SIDE_SELL, salveID, 1, 9))
+	h.send(cb, acceptOffer(h.w.MarketOffers(sela.CharacterID())[0], 1))
+	if got := referenceOf(h, cb, salveID); got != 9 {
+		t.Fatalf("reference after Sela's sale = %d, want 9", got)
+	}
+	h.send(cs, createOffer(pb.MarketSide_MARKET_SIDE_BUY, salveID, 1, 7))
+	if evs := h.send(cb, acceptOffer(h.w.MarketOffers(sela.CharacterID())[0], 1)); !hasKey(evs, "market.sold") {
+		t.Fatalf("Bruno did not sell into the buy offer: %v", systemKeys(evs))
+	}
+	if got := referenceOf(h, cb, salveID); got != 0 {
+		t.Fatalf("reference after they sold to each other = %d, want none", got)
+	}
+}
+
+// Review of m13: the sales of a suspended account do not count, until its suspension
+// ends (the cached value expires with it) or is added (the cache is dropped at once).
+func TestMarketReferenceLeavesOutSuspendedAccounts(t *testing.T) {
+	day := func(n int) time.Time { return clock.Epoch.AddDate(0, 0, n).Add(12 * time.Hour) }
+	var jobs []session.AdminJob
+	h := newMarketHarness(t, func(c *session.Config) {
+		c.Balance.Market.ReferenceMinVotes, c.Balance.Market.ReferenceMinSellers = 3, 2
+		c.Market = &session.MarketData{
+			Sales: []session.MarketSale{
+				{ItemID: salveID, Day: day(-1), SellerAccount: 921, BuyerAccount: 929, Units: 1, Total: 10},
+				{ItemID: salveID, Day: day(-1), SellerAccount: 922, BuyerAccount: 929, Units: 1, Total: 20},
+				{ItemID: salveID, Day: day(-1), SellerAccount: 923, BuyerAccount: 929, Units: 1, Total: 30},
+			},
+			Bans: map[int64]time.Time{923: clock.Epoch.Add(time.Hour)},
+		}
+		c.Admin = func(j session.AdminJob) bool {
+			if j.Kind == session.AdminBan {
+				jobs = append(jobs, j)
+			}
+			return true
+		}
+	})
+	cs, sela := h.atBoard("Sela", pos(1, 0), stack(salveID, 5, 0), stack(coinID, 50, 1))
+	cb, _ := h.atBoard("Bruno", pos(0, 1), stack(coinID, 50, 0))
+	if got := referenceOf(h, cb, salveID); got != 0 {
+		t.Fatalf("reference with a suspended seller = %d, want none (two votes)", got)
+	}
+	h.sim.Clock().Advance(2 * time.Hour) // the suspension ends
+	if got := referenceOf(h, cb, salveID); got != 20 {
+		t.Fatalf("reference after the suspension = %d, want 20", got)
+	}
+	// Sela sells at 5: votes 5, 10, 20, 30, median 10. Suspending her drops the cached value
+	// at once: 10, 20, 30, median 20.
+	h.send(cs, createOffer(pb.MarketSide_MARKET_SIDE_SELL, salveID, 1, 5))
+	h.send(cb, acceptOffer(h.w.MarketOffers(sela.CharacterID())[0], 1))
+	if got := referenceOf(h, cb, salveID); got != 10 {
+		t.Fatalf("reference with Sela's sale = %d, want 10", got)
+	}
+	nextChar++
+	cg, _ := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "Guia", Vocation: "guardian",
+		Level: 1, Health: 145, HasPos: true, Pos: pos(4, 3), Role: session.RoleGM})
+	h.send(cg, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/ban Sela 1d spam"))
+	if len(jobs) != 1 {
+		t.Fatalf("ban jobs %v", jobs)
+	}
+	h.sim.Command(h.w.AdminDone(session.AdminResult{ID: jobs[0].ID, Result: session.AdminOK,
+		AccountID: sela.CharacterID(), Name: "Sela"}))
+	h.sim.Step()
+	if got := referenceOf(h, cb, salveID); got != 20 {
+		t.Fatalf("reference after suspending Sela = %d, want 20", got)
+	}
+}
+
 func TestMarketSellOfferFlow(t *testing.T) {
 	h := newMarketHarness(t)
 	cs, s := h.atBoard("Sela", pos(1, 0), stack(salveID, 30, 0), stack(coinID, 50, 1))

@@ -151,6 +151,79 @@ func TestDeathNovice(t *testing.T) {
 	}
 }
 
+// A backpack that falls into the corpse leaves a new empty start container in its slot
+// (playtest M5: without a container a player can hold no coin, so it could never buy
+// another); the old one, with what it held, is in the corpse, and the ledger matches.
+// With every blessing the backpack stays and nothing new is given.
+func TestDeathLeavesAnEmptyBackpack(t *testing.T) {
+	withStart := func(c *session.Config) { c.Balance.Inventory.StartContainer = "backpack" }
+	h := deathHarness(t, withStart)
+	cl, p := h.geared("Packless", 20, 0)
+	old := p.Equipped(slotBackpack)
+	h.kill(p)
+	bp := p.Equipped(slotBackpack)
+	if bp == nil || bp == old || bp.Def().ID != "backpack" || len(bp.Items()) != 0 {
+		t.Fatalf("backpack slot after the death: %+v (old %p)", bp, old)
+	}
+	var inCorpse *session.Item
+	for _, c := range h.w.CorpsesAt(pos(40, 40)) {
+		for _, it := range c.Item.Items() {
+			if it.Def().ID == "backpack" {
+				inCorpse = it
+			}
+		}
+	}
+	if inCorpse != old || len(inCorpse.Items()) != 1 || inCorpse.Items()[0].Count() != 50 {
+		t.Fatalf("the old backpack and its coins are not in the corpse: %v", corpseItems(h))
+	}
+	if inv := find(cl.take(), (*pb.ServerMessage).GetInventory); len(inv) == 0 {
+		t.Error("no Inventory after the death")
+	} else {
+		got := false
+		for _, e := range inv[len(inv)-1].GetSlots() {
+			got = got || e.GetSlot() == slotBackpack
+		}
+		if !got {
+			t.Errorf("the last Inventory has no backpack: %v", inv[len(inv)-1])
+		}
+	}
+	if es := h.entries(session.EconDeath); len(es) == 0 || es[len(es)-1].Count != 1 || es[len(es)-1].Ref != "new_backpack" {
+		t.Errorf("economy log of the death: %+v", es)
+	}
+	h.checkInvariants()
+
+	h2 := deathHarness(t, withStart)
+	_, blessed := h2.geared("Blessed", 20, 5)
+	kept := blessed.Equipped(slotBackpack)
+	h2.kill(blessed)
+	if blessed.Equipped(slotBackpack) != kept {
+		t.Error("a death that kept the backpack swapped it")
+	}
+}
+
+// Only a death that dropped the backpack gives a new one: a novice that took its backpack
+// off (nothing drops below novice_max_level) and died stays without one, or anyone could
+// mint backpacks by dying.
+func TestDeathWithoutBackpackGivesNone(t *testing.T) {
+	h := deathHarness(t, func(c *session.Config) { c.Balance.Inventory.StartContainer = "backpack" })
+	nextChar++
+	c := session.Character{ID: nextChar, AccountID: nextChar, Name: "Mint", Vocation: "guardian", Level: 5,
+		Experience: testBalance().Experience.TotalFor(5), Health: 1, Pos: pos(40, 40), HasPos: true,
+		InventoryLoaded: true, Inventory: []session.ItemState{{ItemID: swordID, Count: 1, Slot: int(slotRight)}}}
+	_, p := h.joinChar(c)
+	if p.Equipped(slotBackpack) != nil {
+		t.Fatal("joined with a backpack")
+	}
+	h.kill(p)
+	if bp := p.Equipped(slotBackpack); bp != nil {
+		t.Errorf("a death that dropped no backpack gave a %s", bp.Def().ID)
+	}
+	if es := h.entries(session.EconDeath); len(es) != 0 {
+		t.Errorf("economy log of the death: %+v", es)
+	}
+	h.checkInvariants()
+}
+
 // Losing experience can cost levels: the maximums follow the new level.
 func TestDeathLosesLevel(t *testing.T) {
 	h := deathHarness(t)

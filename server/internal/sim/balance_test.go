@@ -81,10 +81,12 @@ func kitFor(level int) kit {
 }
 
 type balanceData struct {
-	monsters content.Monsters
-	items    content.Items
-	guardian content.Vocation
-	balance  content.Balance
+	monsters  content.Monsters
+	items     content.Items
+	guardian  content.Vocation
+	vocations content.Vocations
+	spells    content.Spells
+	balance   content.Balance
 }
 
 func loadData(t *testing.T) *balanceData {
@@ -105,7 +107,11 @@ func loadData(t *testing.T) *balanceData {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &balanceData{monsters: ms, items: items, guardian: vs["guardian"], balance: b}
+	spells, err := content.LoadSpells(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &balanceData{monsters: ms, items: items, guardian: vs["guardian"], vocations: vs, spells: spells, balance: b}
 }
 
 func (d *balanceData) item(t *testing.T, id string) *content.Item {
@@ -148,7 +154,7 @@ func (d *balanceData) simulateWith(t *testing.T, m *content.Monster, level int, 
 	skill := skillStart + int(math.Floor(skillPerLevel*float64(level-1)))
 	maxHit := combat.MaxHit(c, skill, weapon.Attack, level, balanced.Attack)
 	target := combat.MonsterTarget{Armor: m.Armor, Defense: m.Defense, PhysicalResistance: m.Resistances["physical"]}
-	player := combat.PlayerTarget{Armor: armor, ShieldDefense: shield, ModeDefense: balanced.Defense}
+	player := combat.PlayerTarget{Armor: armor, Defense: shield + weapon.Defense, ModeDefense: balanced.Defense}
 
 	totalMs, totalDmg := 0, 0
 	next := make([]int, len(m.Attacks))

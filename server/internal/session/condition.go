@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -115,6 +116,29 @@ func (w *World) initConditions() error {
 			if _, ok := w.skillIdx[d.Skill]; !ok {
 				return fmt.Errorf("session: condition %q raises unknown skill %q", id, d.Skill)
 			}
+		}
+	}
+	return w.checkFood()
+}
+
+// checkFood: food (consumable.food_ms) needs the food condition, a regen one (content
+// audit m2) that adds up (stacking: add: with refresh a second meal would not lengthen
+// it, and stomachFull counts on the sum), and pure food may not last longer than its
+// max_ms (it could never be eaten).
+func (w *World) checkFood() error {
+	fed := w.cfg.Balance.Conditions[foodCondition]
+	for _, id := range slices.Sorted(maps.Keys(w.cfg.Items)) { // a stable first error
+		c := w.cfg.Items[id].Consumable
+		if c == nil || c.FoodMs <= 0 {
+			continue
+		}
+		switch {
+		case fed == nil || fed.Kind != content.ConditionRegen:
+			return fmt.Errorf("session: item %q is food but balance.yaml conditions has no %q of kind %q", id, foodCondition, content.ConditionRegen)
+		case fed.Stacking != content.StackAdd:
+			return fmt.Errorf("session: condition %q must stack with add: every meal adds its food_ms", foodCondition)
+		case c.HealHP == 0 && c.HealMP == 0 && c.FoodMs > fed.MaxMs:
+			return fmt.Errorf("session: food %q lasts %d ms, more than %s max_ms %d: it could never be eaten", id, c.FoodMs, foodCondition, fed.MaxMs)
 		}
 	}
 	return nil
@@ -249,6 +273,13 @@ func (w *World) conditionHit(ctx *game.TickContext, h holder, c *condition) {
 		return
 	}
 	m := h.m
+	if src := w.playerByID(c.source); src != nil && w.beyondLeash(ctx.Tick, m, src) {
+		// A burn whose author stands where m may not go and cannot hit back ends without
+		// hurting: no kill from out of its leash. Only that condition: m keeps its fight
+		// (someone inside its leash may be killing it).
+		w.dropCondition(ctx, h, c)
+		return
+	}
 	dmg := min(combat.Resist(c.damage, m.kind.def.Resistances[el]), m.health)
 	m.health -= dmg
 	if dmg > 0 && c.source != 0 {
@@ -353,6 +384,54 @@ func (w *World) leftMs(c *condition) int {
 		return next + (c.ticks-1)*int(c.every)*tickMs
 	}
 	return next
+}
+
+// ---- food (content audit m2) -----------------------------------------------------
+
+// foodCondition is the condition eating gives: consumable.food_ms of it, added up to its
+// max_ms. A regen condition: the vocation regeneration grows by its regen_pct.
+const foodCondition = "well_fed"
+
+// fedCondition returns the food condition of balance.yaml, or nil if there is none (food
+// then only heals what it heals).
+func (w *World) fedCondition() *content.ConditionDef {
+	if def := w.cfg.Balance.Conditions[foodCondition]; def != nil && def.Kind == content.ConditionRegen {
+		return def
+	}
+	return nil
+}
+
+// feed gives p foodMs more of the food condition, up to its max_ms.
+func (w *World) feed(ctx *game.TickContext, p *Player, foodMs int) {
+	if def := w.fedCondition(); def != nil {
+		w.addCondition(ctx, holder{p: p}, def, 0, 0, 0, ticksFor(foodMs))
+	}
+}
+
+// stomachFull reports whether p cannot eat def: pure food (it neither heals nor restores
+// mana) whose food_ms would take the food condition past its max_ms. Food that also heals
+// is always eaten (its time is capped).
+func (w *World) stomachFull(p *Player, def *content.Item) bool {
+	c, fed := def.Consumable, w.fedCondition()
+	if c == nil || c.FoodMs <= 0 || c.HealHP > 0 || c.HealMP > 0 || fed == nil {
+		return false
+	}
+	left := 0
+	if cond := findCond(p.conds, foodCondition); cond != nil {
+		left = w.leftMs(cond)
+	}
+	return left+c.FoodMs > fed.MaxMs
+}
+
+// regenPct is the sum of the regen_pct of the regen conditions in list (food).
+func regenPct(list []*condition) int {
+	pct := 0
+	for _, c := range list {
+		if c.def.Kind == content.ConditionRegen {
+			pct += c.def.RegenPct
+		}
+	}
+	return pct
 }
 
 // ---- speed, skills and invisibility ------------------------------------------------

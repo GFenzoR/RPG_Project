@@ -4,7 +4,8 @@
 //
 // Picking an option is all or nothing: the conditions are evaluated again (the client
 // may have an old window) and the costs (gold, items) are checked before any action
-// runs.
+// runs. Dev-only actions (train_skill, restore_mana) run only for an NPC of a dev-only
+// island (the sandbox island).
 package dialog
 
 import (
@@ -19,6 +20,7 @@ const (
 	MsgNoItem         = "dialog.no_item"
 	MsgAlreadyBlessed = "dialog.already_blessed"
 	MsgCannotTravel   = "dialog.cannot_travel"
+	MsgDevOnly        = "dialog.dev_only"
 )
 
 // Facts is what conditions and costs read from the player.
@@ -39,6 +41,9 @@ type Facts interface {
 	HasBlessing(id string) bool
 	// CanTeleport reports whether the destination exists and is free.
 	CanTeleport(p content.Position) bool
+	// DevIsland reports whether the NPC of the dialog stands on a dev-only island
+	// (world.bin marks them): only there do dev-only actions (content.Action.DevOnly) run.
+	DevIsland() bool
 }
 
 // Effects applies actions. Costs were checked before any of them is called.
@@ -56,6 +61,10 @@ type Effects interface {
 	Heal()
 	Teleport(p content.Position)
 	Bless(b content.Bless)
+	// TrainSkill raises skill to level, never down (dev-only).
+	TrainSkill(skill string, level int)
+	// RestoreMana fills the mana (dev-only).
+	RestoreMana()
 }
 
 // Holds reports whether every condition holds for f.
@@ -112,11 +121,21 @@ func Visible(node *content.DialogNode, f Facts) []int {
 	return out
 }
 
-// Check returns the refusal key if the actions cannot all run for f, or "".
-func Check(as content.Actions, f Facts) string {
+// Check returns the refusal key if the actions of an option of npc (nil: none in
+// particular) cannot all run for f, or "". Off a dev-only island a dev-only action refuses
+// the whole option, and a dev_only NPC refuses every option but one that only closes the
+// dialog, also one that only moves on (goto): off its island it shows nothing but its
+// greeting. Defense in depth: make validate and the server's startup refuse both too.
+func Check(npc *content.NPC, as content.Actions, f Facts) string {
+	if npc != nil && npc.DevOnly && !f.DevIsland() && !onlyCloses(as) {
+		return MsgDevOnly
+	}
 	var gold int64
 	items := map[string]int{}
 	for _, a := range as {
+		if a.DevOnly() != "" && !f.DevIsland() {
+			return MsgDevOnly
+		}
 		switch {
 		case a.TakeGold > 0:
 			gold += a.TakeGold
@@ -130,7 +149,7 @@ func Check(as content.Actions, f Facts) string {
 			if f.HasBlessing(a.Bless.Blessing) {
 				return MsgAlreadyBlessed
 			}
-			gold += a.Bless.Price
+			gold += a.Bless.PriceAt(f.Level())
 		}
 	}
 	if gold > f.Money() {
@@ -145,6 +164,16 @@ func Check(as content.Actions, f Facts) string {
 		}
 	}
 	return ""
+}
+
+// onlyCloses reports whether as is close and nothing else.
+func onlyCloses(as content.Actions) bool {
+	for _, a := range as {
+		if !a.Close {
+			return false
+		}
+	}
+	return len(as) > 0
 }
 
 // Result is what picking an option did.
@@ -170,7 +199,7 @@ func Choose(npc *content.NPC, node string, index int, e Effects) Result {
 	if !Holds(o.If, e) {
 		return Result{Node: node, Refused: ""}
 	}
-	if key := Check(o.Action, e); key != "" {
+	if key := Check(npc, o.Action, e); key != "" {
 		return Result{Node: node, Refused: key}
 	}
 	for _, a := range o.Action {
@@ -211,5 +240,9 @@ func apply(a content.Action, e Effects) {
 		e.Teleport(*a.Teleport)
 	case a.Bless != nil:
 		e.Bless(*a.Bless)
+	case a.TrainSkill != nil:
+		e.TrainSkill(a.TrainSkill.Skill, a.TrainSkill.Level)
+	case a.RestoreMana:
+		e.RestoreMana()
 	}
 }

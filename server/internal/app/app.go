@@ -118,6 +118,8 @@ type App struct {
 	economy *economyWriter
 	// loopDone is closed when the game loop stopped (commands can no longer run).
 	loopDone chan struct{}
+	// storeBeat is the database heartbeat (houses.go heartbeat; 0: none).
+	storeBeat time.Duration
 	// acks are the snapshot acks a full loop queue refused (acks.go).
 	acks ackRetry
 	// running is true while the game loop runs (GET /api/status).
@@ -272,30 +274,34 @@ func New(cfg Config) (*App, error) {
 				}
 			}
 		}
+		if houseData != nil && cfg.Store != nil {
+			a.storeBeat = storeHeartbeat // content audit M6: a database outage is not absence
+		}
 		w, err := session.New(session.Config{
-			Transfer:      transfer,
-			Market:        market,
-			Houses:        houseData,
-			Map:           cfg.Map,
-			StartTown:     cfg.StartTown,
-			Balance:       cfg.Balance,
-			Vocations:     cfg.Vocations,
-			Monsters:      cfg.Monsters,
-			Items:         cfg.Items,
-			Spells:        cfg.Spells,
-			Recipes:       cfg.Recipes,
-			BoatRoutes:    cfg.BoatRoutes,
-			Tutorial:      cfg.Tutorial,
-			Cosmetics:     cfg.Cosmetics,
-			NPCs:          cfg.NPCs,
-			Quests:        cfg.Quests,
-			Save:          saver.Submit,
-			Admin:         a.admin.Submit,
-			Guilds:        guilds,
-			Economy:       a.economy.Submit,
-			Alert:         economyAlert(cfg.Metrics),
-			AutosaveEvery: cfg.AutosaveEvery,
-			Logger:        cfg.Logger,
+			StoreHeartbeat: a.storeBeat,
+			Transfer:       transfer,
+			Market:         market,
+			Houses:         houseData,
+			Map:            cfg.Map,
+			StartTown:      cfg.StartTown,
+			Balance:        cfg.Balance,
+			Vocations:      cfg.Vocations,
+			Monsters:       cfg.Monsters,
+			Items:          cfg.Items,
+			Spells:         cfg.Spells,
+			Recipes:        cfg.Recipes,
+			BoatRoutes:     cfg.BoatRoutes,
+			Tutorial:       cfg.Tutorial,
+			Cosmetics:      cfg.Cosmetics,
+			NPCs:           cfg.NPCs,
+			Quests:         cfg.Quests,
+			Save:           saver.Submit,
+			Admin:          a.admin.Submit,
+			Guilds:         guilds,
+			Economy:        a.economy.Submit,
+			Alert:          economyAlert(cfg.Metrics),
+			AutosaveEvery:  cfg.AutosaveEvery,
+			Logger:         cfg.Logger,
 		})
 		if err != nil {
 			return nil, err
@@ -413,6 +419,9 @@ func (a *App) Run(ctx context.Context) error {
 		a.economy.Start()
 	}
 	a.running.Store(true)
+	if a.storeBeat > 0 {
+		go a.heartbeat()
+	}
 	runErr := a.Loop.Run(ctx)
 	a.running.Store(false)
 	close(a.loopDone)

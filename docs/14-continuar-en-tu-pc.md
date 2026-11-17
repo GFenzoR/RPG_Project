@@ -33,7 +33,10 @@ seguir con Claude Code en tu computador. El entorno local está en
 2. Corre `make setup`, `make db-up` y `make dev`, y abre `http://localhost:5173/` (sitio) y
    `http://localhost:5173/play/` (juego).
 3. Para que otros entren desde tu red o desde internet, usa `make home-up` (`13-hosting-de-pruebas.md`).
-4. Juega 10 minutos y anota lo que se siente mal. Es lo que la IA no puede juzgar sola.
+4. Juega 10 minutos y anota lo que se siente mal. Es lo que la IA no puede juzgar sola. Lo
+   más rápido es `make play`: la Isla de Pruebas tiene todos los sistemas a unos pasos del
+   templo y una instructora que da experiencia, entrenamiento, dinero y curación
+   (`16-probar-el-juego.md`).
 
 ## Lo que es tuyo 👤
 | Qué | Para qué | Dónde está explicado |
@@ -46,6 +49,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Copiar a `deploy/.env.example` las variables nuevas que lista docs/09 | Configuración del deploy | `09-deployment-aws.md` |
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
+| Decidir si la vocación "Druida" / "Druid" cambia de nombre: es igual a la de Tibia (regla legal). La auditoría de contenido (m12) renombró los hechizos parecidos, pero el nombre de una vocación es decisión tuya. Si cambia, es solo `vocation.druid.name` en `i18n/*/vocations.yaml` y los textos que la nombran (el id `druid` se queda) | Regla legal | `02-game-design.md` "Vocaciones (nombres provisionales)" |
 
 ## Orden sugerido
 No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
@@ -56,7 +60,8 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
    `PAYMENTS_PROVIDER`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `PAYMENTS_REF_SECRET` y
    `PAYMENTS_REF_SECRET_PREVIOUS`, comentadas): los permisos de la IA no le dejan editar
    ese archivo.
-4. Jugar y anotar lo que se siente mal; de ahí salen las próximas tareas.
+4. Jugar y anotar lo que se siente mal (`make play`, `16-probar-el-juego.md`); de ahí salen
+   las próximas tareas.
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
 - **Una tarea, una sesión, un PR.** Usa `/roadmap-task T5.6` o pega el brief. Pide un plan
@@ -86,6 +91,63 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
+  muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
+  correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la
+  puerta con un jugador encima, la confirmación de "Dejar la casa", el límite de logins de
+  `make play`, la cantidad de la tienda y el pulido de textos. Quedó:
+  - **Dividir pilas (m1), propuesta.** Arrastrar mueve siempre la pila entera
+    (`client/src/game.ts` `moveItem` manda `count: Math.max(ref.count, 1)`), aunque
+    `MoveItem.count` existe y el servidor ya mueve una parte (`inventory.go` lee
+    `GetCount()`). Cliente solo: con Mayús (o Ctrl) al soltar una pila de más de 1, una
+    ventanita sobre el destino con un campo de cantidad (por defecto la mitad, máximo la
+    pila, Enter confirma y Escape cancela) y la misma regla pura de `shopCount`
+    (`ui/Dialog.tsx`); en táctil, un botón "Mover parte" del menú del toque largo. El
+    intercambio necesita protocolo: `TradeOffer` no lleva cantidad (`client.proto`), así
+    que se suma `uint32 count = 6` (0 = la pila entera, compatible), el servidor separa la
+    parte ofrecida al cerrar el trato (y revisa que siga habiendo esa cantidad) y la
+    ventana de intercambio muestra un campo de cantidad junto a cada pila ofrecible. Tests:
+    la regla pura, un test de sesión del trato parcial y el E2E de T5.3 con 10 de 100.
+  - **Sprites de las estaciones:** la fragua parece una fogata y el fogón un horno o un
+    portal (`assets/sprites.yaml`, recetas de `tools/spritegen`).
+  - **Casa de Prueba:** el `wooden_wall` y el `wooden_floor` se confunden (tablones los
+    dos) y la puerta de una casa es solo suelo (`houses.yaml` `doors`), sin nada que la
+    marque en el mapa. Un sprite de muro de troncos más oscuro, o un marco de puerta
+    decorativo que no bloquee, lo resolvería.
+  - **Encimados:** a zoom 2 se pisan los nombres de jugadores contiguos
+    (`render/labels.ts` solo los acomoda a zoom 1).
+  - **Saludo con género fijo:** "Bienvenido, {name}" (sin género del personaje en los datos).
+  - **401 en consola** al cargar `/play/` y `/shop` sin sesión: es el sondeo de sesión; se
+    puede pedir a una ruta que conteste 204 sin sesión.
+  - **Dificultad del corral 2:** tres lobos (0–16 cada 2 s) matan a un nivel 3 que sale
+    del corral 1. Queda para el lote de balance, con la comida (m4).
+  - **Correa, lo que quedó de la revisión** (`server/internal/session/monster.go`; el
+    lote 5 resolvió el objetivo inalcanzable dentro de la correa y que el que tiene el
+    aggro saliera del área le quitara la pelea al grupo, docs/02 "Correa"): la
+    persecución sigue yendo y viniendo frente a un muro cuando el paso goloso y el primer
+    paso de A* se alternan (ya pasaba sin correa; `walkHome` sigue el rodeo entero, la
+    persecución no, y como da pasos no cuenta como trabada); nada valida que el centro de
+    un spawn sea caminable (hoy todos lo son); la espera tras una búsqueda fallida (de
+    casa o de la persecución) usa `readyAt`; un arquero que va pisando casillas
+    inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada una (el rechazo
+    vale por casilla); y `make bench-tick` corre sin correa.
+- **Auditoría de contenido (2026-11), lo que quedó afuera de la rama de balance de
+  vocaciones** (`feat/balance-vocations`: maná, escalones de armas, ballesta y escudo del
+  montaraz, áreas nuevas, comida, sello por jugador, cuerda y pala, bendiciones desde el
+  nivel 9, nombres de hechizos y pulido de textos; detalle en `02-game-design.md`):
+  - M1, M6, m3, m4, m7, m11 y m13 se hicieron en la rama `feat/world-capacity` (capacidad
+    por franja y abedules, casas, defensa del arma, items huérfanos, tablero de Brasal,
+    `testisle` dev-only, comisión del mercado; docs/02, docs/07 "Capacidad del mundo" y
+    docs/10). De ahí quedó: un aviso por email antes de perder una casa por ausencia, y
+    el cliente no muestra la regla en la ventana de la casa (solo el mensaje al entrar);
+    al desplegarla, **los alquileres de las casas ya alquiladas suben entre 2 y 4 veces**
+    desde su próximo vencimiento: anunciarlo (docs/09, "Notas de versión que tocan a los
+    jugadores");
+  - en la carrera simulada los magos de nivel 30-40 cazan en el Bosque (reptantes) más
+    que en el Volcán: los monstruos del Volcán pegan fuerte para un cuerpo de mago. No es
+    un error, pero es una pista (M1 sumó capacidad al Volcán sin tocar el daño);
+  - la pala sigue en `data/items` sin fuente (inventarios guardados): si algún día se cava,
+    es darle un destino y volver a venderla.
 - **CI de PR de mapas sin `pull_request_target`** (GitHub lo bloquea por defecto en repos
   públicos desde el 2026-12-02): `map-pr-pending.yml` ya no existe. El aviso de
   "pendiente" sale ahora del `workflow_run` `requested` de `map-pr`, y el status de commit
@@ -267,6 +329,43 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     con la runa, el monstruo y la recompensa de `data/`; la quest es del test porque
     ninguna quest de `data/` termina en una muerte (todas cierran hablando con un NPC). Si
     alguna llega a terminar en una muerte, conviene pasar el test a ella.
+- **Isla de Pruebas: lo que dejó el recorrido simulado** (`server/internal/session/sandbox_test.go`,
+  docs/16 secciones 4 y 8). Todo el recorrido de la guía funciona; lo que sigue son huecos
+  de la herramienta, no errores del servidor:
+  - **resuelto:** la instructora subía el **nivel**, no las **skills** ni el **nivel
+    mágico** (un guardián de nivel 21 con espada, escudo y 20 cataplasmas moría en el
+    corral 4 con las skills en 10; la runa de arco, nivel mágico 1, y `mend_other`, 2, no se
+    podían usar recién hecho). Ahora "Entréname" → "El combate" deja las skills de la
+    vocación y el nivel mágico en valores fijos (guardián: espada, hacha y maza 45, escudo
+    40; arcanista y druida: nivel mágico 25...; docs/16 paso 1) con la acción de desarrollo
+    `train_skill` (docs/06, "Diálogos"): ese guardián sobrevive al corral 4
+    (`TestSandboxTraining`), la arcanista usa la runa en el acto (`TestSandboxArcRune`) y
+    un druida de nivel 8 lanza `mend_other` (`TestSandboxTrainingByVocation`);
+  - **resuelto:** "Cúrame" llena también el maná (acción de desarrollo `restore_mana`; la
+    `heal` de los sacerdotes no cambió). Pociones de maná sigue sin haber en el juego real:
+    las vocaciones mágicas esperan la regeneración (el sacerdote solo cura la vida);
+  - **resuelto:** el yunque no tenía receta al alcance de un personaje nuevo (la más baja
+    pide herrería 2). "Entréname" → "Los oficios" deja los oficios en 25 y la pesca en 40,
+    y el mismo personaje hace un hacha de leñador en el yunque (`TestSandboxTrades`). No se
+    tocó ninguna receta: el juego real sigue igual;
+  - **las acciones de desarrollo no pueden llegar a producción**: `make validate` las
+    rechaza en un NPC que no esté solo en islas `dev_only`; el servidor no arranca con uno
+    así fuera de una isla marcada en `world.bin`, y al elegir la opción lo vuelve a mirar
+    (`dialog.dev_only`). Y la guarda que pidió la auditoría: `mapcompile -dev` marca las
+    islas de desarrollo en `world.bin` (versión 6) y el servidor no arranca con ese mundo
+    con `RPG_ENV` de producción (vacía o `production`), como con el proveedor de pagos
+    falso; `make run-server`, `make dev`, `make play`, `make bots` y el E2E corren con
+    `RPG_ENV=development`. Un `world.bin` viejo (versión 5) no carga: `make mapcompile`;
+  - la **pala** no sirve para nada en todo el juego (`tool.use: shovel` no tiene mecánica:
+    usarla dice `gather.nothing`). Se sacó de la tienda de la isla
+    (`TestSandboxToolsHaveAUse`); Puerto la sigue vendiendo (40) y comprando (12); y su
+    proveedor todavía promete que "abre agujeros donde la arena suena hueca"
+    (`npc.puerto_provisioner.tools`, es y en): o se le da la mecánica o se cambia el texto;
+  - no es un error, pero sorprende probando: un monstruo no reaparece donde un jugador lo
+    ve, así que quien vacía un corral y se queda mirando no ve volver a nadie (docs/16
+    lo dice ahora), y los monstruos salen de los corrales por la abertura y siguen al
+    jugador unas casillas por el sendero (la correa, `combat.monster_leash_tiles`, los
+    devuelve a su corral: docs/02 "Monstruos").
 
 ## T5.6: brief (hecha, se deja como referencia)
 Implementa **T5.6 Controles táctiles y cliente móvil** de docs/10-roadmap.md (Hito 5). docs/00 dice: plataforma PC primero, móvil secundario. Esta tarea hace que el cliente web se juegue bien en un teléfono o una tablet y en ventanas chicas de escritorio, y deja preparado Tauri mobile. Las apps nativas firmadas para las tiendas son 👤 del dueño (cuentas de Apple y Google).

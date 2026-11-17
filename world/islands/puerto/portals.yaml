@@ -7,3 +7,15 @@
   kind: stairs
   from: { x: 3176, y: 6322, z: 8 }
   to: { x: 3176, y: 6323, z: 7 }
+
+- id: puerto_beach_hole
+  kind: hole
+  from: { x: 3142, y: 6312, z: 7 }
+  to: { x: 3142, y: 6313, z: 8 }
+  notes: "Wreck beach: a sinkhole into the bats' gallery of the mine."
+
+- id: puerto_mine_rope_up
+  kind: rope_spot
+  from: { x: 3142, y: 6312, z: 8 }
+  to: { x: 3142, y: 6313, z: 7 }
+  notes: "Bats' gallery: light under the sinkhole; a rope climbs back to the beach."

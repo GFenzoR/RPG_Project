@@ -75,6 +75,13 @@ func (w *World) Map() *world.Map { return w.m }
 // SetHealthForTest sets p's health (tests only, loop goroutine).
 func (p *Player) SetHealthForTest(h int) { p.health = h }
 
+// SetManaForTest sets p's mana (tests only, loop goroutine).
+func (p *Player) SetManaForTest(m int) { p.mana = m }
+
+// SetDevForTest says whether n stands on a dev-only island, past the startup check
+// (tests of the runtime defense only, loop goroutine).
+func (n *NPC) SetDevForTest(dev bool) { n.dev = dev }
+
 // ApplyConditionForTest gives p (or, if p is nil, m) condition a from source (tests only,
 // loop goroutine). It reports whether it took (chance, immunity).
 func (w *World) ApplyConditionForTest(ctx *game.TickContext, p *Player, m *Monster, a *content.ConditionApply, source uint32) bool {
@@ -118,6 +125,10 @@ func (m *Monster) DamageShareForTest(id uint32) int {
 	}
 	return 0
 }
+
+// PathNodesSpentForTest is how many tiles the pathfinding of the last tick expanded (its
+// share of Config.PathNodesPerTick).
+func (w *World) PathNodesSpentForTest() int { return w.cfg.PathNodesPerTick - w.pathBudget }
 
 // PartyForTest returns the creature ids of p's party members (join order), its leader
 // and whether shared experience is on; nil, 0, false without a party.
@@ -426,3 +437,9 @@ func (w *World) ReserveForTest(it *Item, p *Player, seq uint64) {
 
 // ReservedTo returns the character the ground item it is reserved to, or 0 (tests only).
 func (w *World) ReservedTo(it *Item) int64 { return w.heldGround[it].char }
+
+// DamageMonsterForTest makes p deal dmg physical damage to m, as a hit would (tests only,
+// loop goroutine): it counts for the experience, the kill and the loot.
+func (w *World) DamageMonsterForTest(ctx *game.TickContext, m *Monster, p *Player, dmg int) {
+	w.damageMonster(ctx, m, p, dmg, ElementPhysical)
+}

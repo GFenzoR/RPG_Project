@@ -57,11 +57,39 @@ export function typingInField(e: KeyboardEvent): boolean {
   return isTextField(e.target);
 }
 
-/** True for an element that takes typed text (an input, a text area, a select, editable). */
+/**
+ * Input types that take no typed text: a checkbox, a radio, a button, a slider... With the
+ * focus on one (after clicking it), the arrows and WASD still walk.
+ */
+const NO_TEXT_INPUTS = new Set([
+  "checkbox",
+  "radio",
+  "button",
+  "submit",
+  "reset",
+  "image",
+  "range",
+  "color",
+  "file",
+]);
+
+/**
+ * True for an element that takes typed text: a text input, a text area or editable text.
+ * A select is not one: after picking with the mouse it keeps the focus, and the arrows
+ * changed the option (the fight stance, the language) instead of walking. With the
+ * keyboard it still opens with Alt+Down, Space or Enter.
+ */
+export function takesText(el: {
+  readonly tagName: string;
+  readonly type?: string;
+  readonly isContentEditable?: boolean;
+}): boolean {
+  if (el.isContentEditable === true) return true;
+  if (el.tagName === "TEXTAREA") return true;
+  return el.tagName === "INPUT" && !NO_TEXT_INPUTS.has((el.type ?? "text").toLowerCase());
+}
+
+/** True for an element that takes typed text (takesText), so typing never walks. */
 export function isTextField(el: EventTarget | null): boolean {
-  return (
-    typeof HTMLElement !== "undefined" &&
-    el instanceof HTMLElement &&
-    (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))
-  );
+  return typeof HTMLElement !== "undefined" && el instanceof HTMLElement && takesText(el);
 }

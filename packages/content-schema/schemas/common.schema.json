@@ -32,7 +32,16 @@
     "chance": { "type": "number", "minimum": 0, "maximum": 1 },
     "conditionId": {
       "description": "T3.2: a condition of balance.yaml conditions.",
-      "enum": ["poison", "burning", "shocked", "slowed", "hasted", "invisible", "keen_eye"]
+      "enum": [
+        "poison",
+        "burning",
+        "shocked",
+        "slowed",
+        "hasted",
+        "invisible",
+        "keen_eye",
+        "well_fed"
+      ]
     },
     "conditionApply": {
       "description": "T3.2: a condition this source applies. A damage condition takes ticks hits of damage; the others last duration_ms. No chance = always.",
@@ -176,10 +185,26 @@
               "type": "object",
               "additionalProperties": false,
               "required": ["blessing", "price"],
+              "description": "Sells a blessing for price + per_level × the buyer's level (content audit M6); the option text gets the total as {price}.",
               "properties": {
                 "blessing": { "$ref": "#/$defs/id" },
-                "price": { "$ref": "#/$defs/nonNegativeInt" }
+                "price": { "$ref": "#/$defs/nonNegativeInt" },
+                "per_level": { "$ref": "#/$defs/nonNegativeInt" }
               }
+            },
+            "train_skill": {
+              "description": "Dev-only: raises the skill to level (never down). Only an NPC placed on dev_only islands (the sandbox island) may have it.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["skill", "level"],
+              "properties": {
+                "skill": { "$ref": "#/$defs/skill" },
+                "level": { "type": "integer", "minimum": 1, "maximum": 500 }
+              }
+            },
+            "restore_mana": {
+              "description": "Dev-only: fills the mana. Only an NPC placed on dev_only islands (the sandbox island) may have it.",
+              "const": true
             }
           }
         }

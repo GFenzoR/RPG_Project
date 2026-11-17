@@ -77,7 +77,7 @@ function bytes(world: World): Map<string, string> {
   const out = new Map<string, string>();
   for (const [id, isl] of world.islands) {
     for (const [k, c] of isl.chunks) out.set(`${id}:${k}`, formatChunk(c));
-    for (const aux of ["spawns", "zones", "portals", "npcs"] as const)
+    for (const aux of ["spawns", "zones", "portals", "npcs", "texts"] as const)
       out.set(`${id}:${aux}`, formatYaml(isl[aux]));
   }
   return out;
@@ -431,6 +431,54 @@ describe("entity ops", () => {
         opts,
       ),
     ).toThrow(/op 1: unknown NPC/);
+  });
+
+  it("adds and removes signs and books, ids unique in the world", () => {
+    const added = roundTrip(testisle(), [
+      {
+        op: "add_text",
+        id: "testisle_beach_book",
+        kind: "book",
+        pos: { x: 1050, y: 1050, z: 7 },
+        text: "text.testisle.temple_sign",
+        notes: "a book on the beach",
+      },
+    ]);
+    expect(added.islands.get("testisle")?.texts.at(-1)).toEqual({
+      id: "testisle_beach_book",
+      pos: { x: 1050, y: 1050, z: 7 },
+      kind: "book",
+      text: "text.testisle.temple_sign",
+      notes: "a book on the beach",
+    });
+    // Removing a sign and undoing puts it back in its place, byte for byte: the only one of
+    // testisle and one from the middle of Puerto's list.
+    roundTrip(testisle(), [{ op: "remove_text", id: "testisle_temple_sign" }]);
+    const harbour = roundTrip(testisle(), [{ op: "remove_text", id: "puerto_harbour_sign" }]);
+    expect(harbour.islands.get("puerto")?.texts.map((t) => t.id)).toEqual([
+      "puerto_temple_sign",
+      "puerto_mine_sign",
+    ]);
+    const r = applyOps(testisle(), [{ op: "remove_text", id: "testisle_temple_sign" }], opts);
+    expect(r.touchedAux).toEqual([{ island: "testisle", file: "texts" }]);
+    const sign = (over: object): MapOp =>
+      ({
+        op: "add_text",
+        id: "testisle_new_sign",
+        kind: "sign",
+        pos: { x: 1050, y: 1050, z: 7 },
+        text: "text.testisle.temple_sign",
+        ...over,
+      }) as MapOp;
+    const fails = (op: MapOp, why: RegExp): void => {
+      expect(() => applyOps(testisle(), [op], opts)).toThrow(why);
+    };
+    fails(sign({ id: "testisle_temple_sign" }), /already exists in island "testisle"/);
+    fails(sign({ id: "puerto_temple_sign" }), /already exists in island "puerto"/);
+    fails(sign({ kind: "scroll" }), /kind must be one of sign, book/);
+    fails(sign({ text: "" }), /i18n key/);
+    fails(sign({ pos: { x: 1, y: 1, z: 7 } }), /not inside any island/);
+    fails({ op: "remove_text", id: "nope" }, /no text "nope"/);
   });
 
   it("reports the aux files it touched", () => {

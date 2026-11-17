@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -89,7 +90,11 @@ func TestWalkableParityWithMapFormat(t *testing.T) {
 			if err := json.Unmarshal(out, &dumps); err != nil {
 				t.Fatalf("parse map-format dump: %v", err)
 			}
-			m := mustCompile(t, abs)
+			// map-format reads every island of world.yaml, the dev-only ones too.
+			m, err := Build(abs, Options{DevIslands: true})
+			if err != nil {
+				t.Fatalf("Build(%s): %v", abs, err)
+			}
 			if len(dumps) == 0 {
 				t.Fatal("map-format reported no floors")
 			}
@@ -237,18 +242,30 @@ func TestCompilePortals(t *testing.T) {
 	if up == nil || up.ID != "volcan_mine_up" || up.Kind != world.PortalStairs || up.To != p(3692, 5797, 7) {
 		t.Fatalf("volcanic mine stairs up = %+v", up)
 	}
-	for _, id := range []string{"puerto", "bosque", "volcan", "testisle"} {
+	for _, id := range []string{"puerto", "bosque", "volcan"} {
 		if is := m.Island(id); is == nil || len(is.Portals) == 0 {
 			t.Errorf("island %s has no portals", id)
 		}
 	}
 }
 
+// TestCompileTestisle: the tools, tests and E2E island (docs/03) is dev-only (content audit
+// m11): a plain compile, the production image's, leaves it out; with DevIslands (make
+// mapcompile, the E2E) it is in, with its temple, spawns and cave stairs.
 func TestCompileTestisle(t *testing.T) {
-	m := mustCompile(t, repoRoot(t))
+	if plain := mustCompile(t, repoRoot(t)); plain.Island("testisle") != nil {
+		t.Fatal("testisle compiled without DevIslands")
+	}
+	m, err := Build(repoRoot(t), Options{DevIslands: true})
+	if err != nil {
+		t.Fatalf("Build(DevIslands): %v", err)
+	}
 	is := m.Island("testisle")
 	if is == nil {
-		t.Fatal("testisle missing")
+		t.Fatal("testisle missing with DevIslands")
+	}
+	if len(is.Portals) == 0 {
+		t.Error("testisle has no portals")
 	}
 	if !m.Walkable(is.Temple) {
 		t.Errorf("temple %v is not walkable", is.Temple)
@@ -266,6 +283,57 @@ func TestCompileTestisle(t *testing.T) {
 	path, ok := pf.Find(is.Temple, p(1068, 1056, 7), nil)
 	if !ok || len(path) == 0 {
 		t.Fatalf("no path from the temple to the cave stairs")
+	}
+}
+
+// TestCompilePruebas: the sandbox island (docs/16-probar-el-juego.md) compiles with its
+// temple in a protection zone, one portal of each kind, an arena where PvP needs no skulls
+// and a house, and the temple reaches the floor 7 portals on foot.
+func TestCompilePruebas(t *testing.T) {
+	// A dev-only island: left out of a plain compile (the production image), which has no
+	// dev mark; with DevIslands it is in, marked dev (a production server refuses that
+	// world, and only its NPCs run dev-only dialog actions), like testisle (m11).
+	if plain := mustCompile(t, repoRoot(t)); plain.Island("pruebas") != nil || len(plain.DevIslands()) != 0 {
+		t.Fatalf("pruebas compiled without DevIslands (dev islands %v)", plain.DevIslands())
+	}
+	m, err := Build(repoRoot(t), Options{DevIslands: true})
+	if err != nil {
+		t.Fatalf("Build(DevIslands): %v", err)
+	}
+	is := m.Island("pruebas")
+	if is == nil {
+		t.Fatal("pruebas missing with DevIslands")
+	}
+	if ids := m.DevIslands(); !slices.Equal(ids, []string{"testisle", "pruebas"}) {
+		t.Errorf("dev islands %v, want [testisle pruebas] (world order)", ids)
+	}
+	if !m.Walkable(is.Temple) || m.Flags(is.Temple)&world.FlagProtection == 0 {
+		t.Errorf("temple %v: walkable %v, flags %b", is.Temple, m.Walkable(is.Temple), m.Flags(is.Temple))
+	}
+	kinds := map[world.PortalKind]int{}
+	for _, pt := range is.Portals {
+		kinds[pt.Kind]++
+	}
+	want := map[world.PortalKind]int{world.PortalStairs: 2, world.PortalLadder: 2, world.PortalHole: 1,
+		world.PortalRopeSpot: 1, world.PortalTeleport: 1}
+	for k, n := range want {
+		if kinds[k] != n {
+			t.Errorf("%d portals of kind %v, want %d", kinds[k], k, n)
+		}
+	}
+	// The arena (2102..2112, 2111..2119) is a pvp zone without protection.
+	if f := m.Flags(p(2107, 2115, 7)); f&world.FlagPvP == 0 || f&world.FlagProtection != 0 {
+		t.Errorf("arena flags = %b, want pvp and no protection", f)
+	}
+	if f := m.Flags(p(2088, 2111, 7)); f&world.FlagHouse == 0 {
+		t.Errorf("house tile flags = %b, want house", f)
+	}
+	// On foot from the temple to beside the stairs down, the trapdoor and the hole.
+	pf := world.NewPathfinder(m, 0)
+	for _, to := range []world.Pos{p(2121, 2091, 7), p(2116, 2091, 7), p(2119, 2095, 7)} {
+		if path, ok := pf.Find(is.Temple, to, nil); !ok || len(path) == 0 {
+			t.Errorf("no path from the temple to %v", to)
+		}
 	}
 }
 

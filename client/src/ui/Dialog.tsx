@@ -8,10 +8,20 @@ import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
+import { formatMessage } from "../state/messages.ts";
 import type { ShopLine, ShopState } from "../state/world.ts";
 
 /** Most units one purchase or sale may move (the server's limit too). */
 const MAX_COUNT = 100;
+
+/**
+ * The units a shop line's field asks for: its whole number, from 1 to `max` (at least 1).
+ * The field shows this number too: it showed 250 and bought 100 (the playtest's m8).
+ */
+export function shopCount(text: string, max: number): number {
+  const n = Math.floor(Number(text));
+  return Number.isFinite(n) ? Math.min(Math.max(n, 1), Math.max(max, 1)) : 1;
+}
 
 interface Props {
   t: Translate;
@@ -45,7 +55,9 @@ export function DialogWindow({ t, content, game, ui }: Props): JSX.Element | nul
           {d.options.map((o, i) => (
             <li key={o.id}>
               <button type="button" data-option={o.id} onClick={() => game?.chooseOption(o.id)}>
-                <kbd>{i + 1}</kbd> {t(o.text)}
+                {/* An option may carry parameters: a blessing's {price} (content audit M6). */}
+                <kbd>{i + 1}</kbd>{" "}
+                {formatMessage({ key: o.text, params: o.params, at: 0 }, content, t)}
               </button>
             </li>
           ))}
@@ -145,8 +157,16 @@ function ShopRow(props: {
         value={count}
         aria-label={t("client.shop.count", { name })}
         onInput={(e) => {
-          const n = Math.floor(Number(e.currentTarget.value));
-          setCount(Number.isFinite(n) ? Math.min(Math.max(n, 1), Math.max(max, 1)) : 1);
+          const el = e.currentTarget;
+          if (el.value === "") return; // being retyped: the count stays until a number
+          const n = shopCount(el.value, max);
+          setCount(n);
+          // Over the limit (or not a whole number): show what a click buys. The state may
+          // not change (100 again), so the field is set by hand.
+          if (String(n) !== el.value) el.value = String(n);
+        }}
+        onBlur={(e) => {
+          if (e.currentTarget.value === "") e.currentTarget.value = String(count);
         }}
       />
       <button

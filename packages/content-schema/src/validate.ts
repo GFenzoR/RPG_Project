@@ -40,6 +40,13 @@ function codeFiles(dir: string, ext: readonly string[]): string[] {
   return out;
 }
 
+/**
+ * Dialog actions that only run on a dev_only island of world/world.yaml (the sandbox
+ * island's instructor, docs/06 "Diálogos"): anywhere else they would hand out what playing
+ * earns. The server refuses them too (content.Action.DevOnly).
+ */
+export const DEV_ONLY_ACTIONS: readonly string[] = ["train_skill", "restore_mana"];
+
 /** The look of every new character (data/outfits.yaml); free, so never sold. */
 const DEFAULT_OUTFIT = "citizen";
 
@@ -120,6 +127,8 @@ class Validator {
   /** Every item with where it is defined, for the rules across items (checkDoors). */
   private readonly items: (Owned & { item: Obj })[] = [];
   private balance: SourceFile | undefined;
+  private recipes: SourceFile | undefined;
+  private spells: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -139,8 +148,12 @@ class Validator {
     this.checkDialogs();
     this.checkQuestSteps();
     this.checkNpcActions();
+    this.checkDevOnlyActions();
     this.checkShopPrices();
     this.checkQuestItemSources();
+    this.checkToolTargets();
+    this.checkItemTrade();
+    this.checkQuestDrops();
     this.checkI18n();
     this.checkSounds();
     const lockFile = join(dataDir, "ids.lock.yaml");
@@ -221,6 +234,7 @@ class Validator {
     }
 
     const spells = single("spells.yaml", "spells", false);
+    this.spells = spells;
     if (spells) {
       const words = new Map<string, number>();
       for (const [i, spell] of asList(spells.data).entries()) {
@@ -246,6 +260,7 @@ class Validator {
       this.checkUniqueIds(src);
       if (schema === "borders") this.checkBorders(src);
       if (schema === "outfits") outfits = src;
+      if (schema === "recipes") this.recipes = src;
     }
 
     const cosmetics = single("cosmetics.yaml", "cosmetics", false);
@@ -423,6 +438,18 @@ class Validator {
     if (!isObj(skills)) return;
     for (const s of [...SKILLS.combat, ...SKILLS.craft]) {
       if (!(s in skills)) this.error(src, ["skills", "base"], `missing skill "${s}"`);
+    }
+    // Content audit m13: each vote of the reference price has one seller, so asking for
+    // more seller accounts than votes would never show one (0 counts as 1).
+    const market = isObj(src.data) ? src.data["market"] : undefined;
+    if (isObj(market)) {
+      const n = (k: string): number => (typeof market[k] === "number" ? Math.max(market[k], 1) : 1);
+      if (n("reference_min_sellers") > n("reference_min_votes"))
+        this.error(
+          src,
+          ["market", "reference_min_sellers"],
+          `reference_min_sellers (${n("reference_min_sellers")}) is more than reference_min_votes (${n("reference_min_votes")}): each vote has one seller`,
+        );
     }
   }
 
@@ -730,6 +757,22 @@ class Validator {
     for (const src of this.npcs) {
       const npc = isObj(src.data) ? src.data : undefined;
       const ownShop = npc ? idOf(npc["shop"]) : undefined;
+      // Content audit M6 (review): a blessing's price grows with the level, so an option
+      // that also gives experience would charge at another level than its {price} shows.
+      const options = new Map<string, { keys: Set<string>; path: PathSegment[] }>();
+      for (const { key, path } of actionsOf(npc?.["dialog"], ["dialog"])) {
+        const at = path.slice(0, path.indexOf("action") + 1);
+        const o = options.get(at.join("/")) ?? { keys: new Set<string>(), path: at };
+        o.keys.add(key);
+        options.set(at.join("/"), o);
+      }
+      for (const o of options.values())
+        if (o.keys.has("bless") && o.keys.has("give_xp"))
+          this.error(
+            src,
+            o.path,
+            "bless and give_xp cannot go in one option: the blessing's price follows the level",
+          );
       for (const { key, value, path } of actionsOf(npc?.["dialog"], ["dialog"])) {
         if (key === "open_shop" && typeof value === "string" && value !== ownShop) {
           const owner = this.index.ids.shop.get(value);
@@ -771,6 +814,68 @@ class Validator {
         );
       }
     }
+  }
+
+  /**
+   * Dev-only dialog actions (DEV_ONLY_ACTIONS), or an NPC marked dev_only (every action of
+   * it is dev-only): such an NPC must be placed (world/islands/<id>/npcs.yaml), and only on
+   * dev_only islands of world/world.yaml, which the production image leaves out. The
+   * server refuses the same when it starts and again when an option is picked.
+   */
+  private checkDevOnlyActions(): void {
+    const placed = this.npcPlacements();
+    if (!placed) return; // no world/ (tests): the placements are unknown
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      const id = idOf(npc);
+      const used =
+        npc?.["dev_only"] === true
+          ? { what: "dev_only NPC (every action of it is dev-only)", path: ["dev_only"] }
+          : actionsOf(npc?.["dialog"], ["dialog"])
+              .filter((a) => DEV_ONLY_ACTIONS.includes(a.key))
+              .map((a) => ({ what: `dev-only action "${a.key}"`, path: a.path }))[0];
+      if (!used || id === undefined) continue;
+      const at = placed.get(id) ?? [];
+      if (at.length === 0)
+        this.error(
+          src,
+          used.path,
+          `${used.what}: NPC "${id}" is placed on no dev_only island (world/world.yaml); only the sandbox island may have it`,
+        );
+      for (const p of at.filter((p) => !p.dev))
+        this.error(
+          src,
+          used.path,
+          `${used.what}: NPC "${id}" stands on island "${p.island}", which is not dev_only (world/world.yaml); only the sandbox island may have it`,
+        );
+    }
+  }
+
+  /**
+   * The islands each NPC is placed on (world/islands/<id>/npcs.yaml) and whether they are
+   * dev_only (world/world.yaml), or undefined when there is no world/ (tests).
+   */
+  private npcPlacements(): Map<string, { island: string; dev: boolean }[]> | undefined {
+    const worldFile = join(this.root, "world", "world.yaml");
+    if (!existsSync(worldFile)) return undefined;
+    const out = new Map<string, { island: string; dev: boolean }[]>();
+    const diags: Diagnostic[] = [];
+    const w = parseYaml(readFileSync(worldFile, "utf8"), "world/world.yaml", diags);
+    for (const entry of w && isObj(w.data) ? asList(w.data["islands"]) : []) {
+      const island = idOf(entry);
+      if (island === undefined || !/^[a-z0-9_]+$/.test(island)) continue;
+      const dev = isObj(entry) && entry["dev_only"] === true;
+      const rel = `world/islands/${island}/npcs.yaml`;
+      const abs = join(this.root, rel);
+      if (!existsSync(abs)) continue;
+      const list = parseYaml(readFileSync(abs, "utf8"), rel, diags);
+      for (const n of list ? asList(list.data) : []) {
+        const npc = isObj(n) ? n["npc"] : undefined;
+        if (typeof npc !== "string") continue;
+        out.set(npc, [...(out.get(npc) ?? []), { island, dev }]);
+      }
+    }
+    return out;
   }
 
   /**
@@ -866,6 +971,299 @@ class Validator {
         );
       }
     }
+  }
+
+  /**
+   * Content audit m1: a tool a player can get in production (sold or given by an NPC placed
+   * on an island that is not dev_only, dropped by a monster, crafted or a quest reward) needs
+   * something to be used on in the production map: a placed resource of its kind (fishing,
+   * mining, woodcutting), a placed station of a recipe that asks for it (smithing), or a
+   * rope_spot portal (rope). Any other use (the shovel) has nothing in the world yet. Not
+   * checked without world/ (tests).
+   */
+  private checkToolTargets(): void {
+    const world = this.productionWorld();
+    if (!world) return;
+    const got = new Set<string>();
+    const placed = this.npcPlacements() ?? new Map<string, { island: string; dev: boolean }[]>();
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      const id = typeof npc?.["id"] === "string" ? npc["id"] : "";
+      if (!(placed.get(id) ?? []).some((p) => !p.dev)) continue;
+      const shop = npc?.["shop"];
+      for (const offer of isObj(shop) ? asList(shop["sells"]) : [])
+        if (isObj(offer) && typeof offer["item"] === "string") got.add(offer["item"]);
+      for (const { key, value } of actionsOf(npc?.["dialog"], ["dialog"]))
+        if (key === "give_item" && typeof value === "string") got.add(value);
+    }
+    for (const src of this.monsters)
+      for (const drop of isObj(src.data) ? asList(src.data["loot"]) : [])
+        if (isObj(drop) && typeof drop["item"] === "string") got.add(drop["item"]);
+    for (const src of this.quests)
+      for (const r of isObj(src.data) ? asList(src.data["rewards"]) : [])
+        if (isObj(r) && typeof r["item"] === "string") got.add(r["item"]);
+    const recipes = this.recipes ? asList(this.recipes.data).filter(isObj) : [];
+    for (const r of recipes) {
+      const out = r["output"];
+      if (isObj(out) && typeof out["item"] === "string") got.add(out["item"]);
+    }
+    // What each use can be used on in production.
+    const targets = new Map<string, boolean>();
+    for (const { item } of this.items) {
+      const res = item["resource"];
+      if (isObj(res) && typeof res["tool"] === "string" && typeof item["id"] === "string")
+        if (world.placed.has(item["id"])) targets.set(res["tool"], true);
+    }
+    for (const r of recipes)
+      if (typeof r["tool"] === "string" && typeof r["station"] === "string")
+        if (world.placed.has(r["station"])) targets.set(r["tool"], true);
+    if (world.portalKinds.has("rope_spot")) targets.set("rope", true);
+    for (const { item, src, path } of this.items) {
+      const tool = item["tool"];
+      const id = item["id"];
+      if (!isObj(tool) || typeof tool["use"] !== "string" || typeof id !== "string") continue;
+      if (!got.has(id) || targets.get(tool["use"])) continue;
+      this.error(
+        src,
+        [...path, "tool", "use"],
+        `tool "${id}" can be had in production (a shop, a dialog, loot, a recipe or a reward) but nothing in the production map takes tool.use "${tool["use"]}" (a placed resource or station, or a rope_spot portal for rope): give it a target or no production source`,
+      );
+    }
+  }
+
+  /**
+   * Content audit m4: items that lead nowhere. With world/, only NPCs placed on an island
+   * that is not dev_only count (without it, tests, every NPC):
+   * - an item an NPC buys needs a way to get it (monster loot, a resource's drops, a recipe,
+   *   a shop, a dialog give_item, a quest reward or a conjuring spell);
+   * - a weapon, armor or shield that can be had, is tradeable and has a value needs an NPC
+   *   that buys it (no dead weight in the backpack); a material, an NPC buyer, a recipe or a
+   *   quest or dialog that takes it;
+   * - a quest item (not tradeable, the has_item of a quest step) drops from monsters only as
+   *   each_player loot: as plain loot it keeps dropping as junk after the quest.
+   */
+  private checkItemTrade(): void {
+    const placed = this.npcPlacements();
+    const prodNpc = (id: string): boolean => !placed || (placed.get(id) ?? []).some((p) => !p.dev);
+    const got = new Set<string>();
+    const bought = new Map<string, { src: SourceFile; path: PathSegment[] }>();
+    const used = new Set<string>();
+    for (const src of this.monsters)
+      for (const drop of isObj(src.data) ? asList(src.data["loot"]) : [])
+        if (isObj(drop) && typeof drop["item"] === "string") got.add(drop["item"]);
+    for (const { item } of this.items) {
+      const res = item["resource"];
+      for (const d of isObj(res) ? asList(res["drops"]) : [])
+        if (isObj(d) && typeof d["item"] === "string") got.add(d["item"]);
+    }
+    for (const r of this.recipes ? asList(this.recipes.data).filter(isObj) : []) {
+      const out = r["output"];
+      if (isObj(out) && typeof out["item"] === "string") got.add(out["item"]);
+      for (const i of asList(r["inputs"]))
+        if (isObj(i) && typeof i["item"] === "string") used.add(i["item"]);
+    }
+    for (const sp of this.spells ? asList(this.spells.data).filter(isObj) : []) {
+      const effect = sp["effect"];
+      const conj = isObj(effect) ? effect["conjure"] : undefined;
+      if (isObj(conj) && typeof conj["item"] === "string") got.add(conj["item"]);
+    }
+    const questItems = new Set<string>();
+    for (const src of this.quests) {
+      const q = isObj(src.data) ? src.data : undefined;
+      for (const r of asList(q?.["rewards"]))
+        if (isObj(r) && typeof r["item"] === "string") got.add(r["item"]);
+      for (const step of asList(q?.["steps"])) {
+        const when = isObj(step) ? step["complete_when"] : undefined;
+        const need = isObj(when) ? when["has_item"] : undefined;
+        if (isObj(need) && typeof need["item"] === "string") {
+          used.add(need["item"]);
+          questItems.add(need["item"]);
+        }
+      }
+    }
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      if (!prodNpc(typeof npc?.["id"] === "string" ? npc["id"] : "")) continue;
+      const shop = npc?.["shop"];
+      for (const o of isObj(shop) ? asList(shop["sells"]) : [])
+        if (isObj(o) && typeof o["item"] === "string") got.add(o["item"]);
+      for (const [i, o] of (isObj(shop) ? asList(shop["buys"]) : []).entries())
+        if (isObj(o) && typeof o["item"] === "string" && !bought.has(o["item"]))
+          bought.set(o["item"], { src, path: ["shop", "buys", i, "item"] });
+      for (const { key, value } of actionsOf(npc?.["dialog"], ["dialog"])) {
+        if (key === "give_item" && typeof value === "string") got.add(value);
+        if (key === "take_item" && isObj(value) && typeof value["item"] === "string")
+          used.add(value["item"]);
+      }
+    }
+    for (const [id, at] of bought)
+      if (this.index.ids.item.has(id) && !got.has(id))
+        this.error(
+          at.src,
+          at.path,
+          `an NPC buys "${id}" but nothing gives it in the game (loot, a resource, a recipe, a shop, a dialog, a quest reward or a spell)`,
+        );
+    for (const { item, src, path } of this.items) {
+      const id = item["id"];
+      const kind = item["kind"];
+      const value = item["value"];
+      if (typeof id !== "string" || !got.has(id) || item["tradeable"] !== true) continue;
+      if (typeof value !== "number" || value <= 0 || bought.has(id)) continue;
+      if (kind === "weapon" || kind === "armor" || kind === "shield")
+        this.error(
+          src,
+          [...path, "value"],
+          `"${id}" (${kind}) can be had and has a value, but no NPC buys it: add a buyer (a third of its value or less)`,
+        );
+      else if (kind === "material" && !used.has(id))
+        this.error(
+          src,
+          [...path, "value"],
+          `material "${id}" can be had and has a value, but no NPC buys it and no recipe or quest takes it`,
+        );
+    }
+    const untradeable = new Set(
+      this.items.filter(({ item }) => item["tradeable"] === false).map(({ item }) => item["id"]),
+    );
+    for (const src of this.monsters)
+      for (const [i, drop] of (isObj(src.data) ? asList(src.data["loot"]) : []).entries()) {
+        if (!isObj(drop) || typeof drop["item"] !== "string" || drop["each_player"] === true)
+          continue;
+        if (questItems.has(drop["item"]) && untradeable.has(drop["item"]))
+          this.error(
+            src,
+            ["loot", i, "item"],
+            `quest item "${drop["item"]}" drops as plain loot: make it each_player (only players whose quest needs it get one), or it keeps dropping as junk after the quest`,
+          );
+      }
+  }
+
+  /**
+   * Content audit m9, the rules the server's startup also checks (session.checkQuestDrop):
+   * a quest drop (loot each_player) is worth nothing and cannot be traded (tradeable:
+   * false, value: 0); it is the has_item of some quest step; and the step right after each
+   * such step is its delivery, a dialog_action step whose node is not where that NPC's
+   * dialog starts and that every option leading there (goto, one at least) reaches while
+   * taking the item (take_item). A player gets another while the has_item step, or its
+   * delivery, is current: a step in between would leave a lost one without a source, and a
+   * way into the delivery that does not take it would leave one to show again.
+   */
+  private checkQuestDrops(): void {
+    const items = new Map(this.items.map(({ item }) => [item["id"], item]));
+    const when = (step: unknown): Obj | undefined =>
+      isObj(step) && isObj(step["complete_when"]) ? step["complete_when"] : undefined;
+    for (const src of this.monsters)
+      for (const [i, drop] of (isObj(src.data) ? asList(src.data["loot"]) : []).entries()) {
+        if (!isObj(drop) || drop["each_player"] !== true || typeof drop["item"] !== "string")
+          continue;
+        const id = drop["item"];
+        const at: PathSegment[] = ["loot", i, "item"];
+        const item = items.get(id);
+        const value = item?.["value"];
+        if (item && (item["tradeable"] === true || (typeof value === "number" && value !== 0)))
+          this.error(src, at, `quest drop "${id}" needs tradeable: false and value: 0`);
+        let asked = false;
+        for (const q of this.quests) {
+          const quest = idOf(q.data) ?? q.file;
+          const steps = isObj(q.data) ? asList(q.data["steps"]) : [];
+          for (const [k, step] of steps.entries()) {
+            const need = when(step)?.["has_item"];
+            if (!isObj(need) || need["item"] !== id) continue;
+            asked = true;
+            const deliver = when(steps[k + 1])?.["dialog_action"];
+            if (!isObj(deliver)) {
+              this.error(
+                src,
+                at,
+                `quest "${quest}" step "${idOf(step) ?? k}": the has_item of quest drop "${id}" must be followed by its delivery (a dialog_action step), or a lost one would never come back`,
+              );
+              continue;
+            }
+            if (!this.deliveryTakes(deliver["npc"], deliver["node"], id))
+              this.error(
+                src,
+                at,
+                `quest "${quest}" step "${idOf(steps[k + 1]) ?? k + 1}": its delivery must take quest drop "${id}": every option of npc "${String(deliver["npc"])}" that leads to node "${String(deliver["node"])}" (one at least) needs take_item of it, and the node cannot be where the dialog starts`,
+              );
+          }
+        }
+        if (!asked)
+          this.error(
+            src,
+            at,
+            `quest drop "${id}" is the has_item of no quest step: it would never drop`,
+          );
+      }
+  }
+
+  /**
+   * Whether node of NPC npc's dialog is a delivery of item: not where the dialog starts,
+   * and every option that leads there (goto, one at least) takes the item (take_item).
+   */
+  private deliveryTakes(npc: unknown, node: unknown, item: string): boolean {
+    const owned = typeof npc === "string" ? this.index.ids.npc.get(npc) : undefined;
+    const dialog = owned && isObj(owned.src.data) ? owned.src.data["dialog"] : undefined;
+    if (!isObj(dialog) || dialog["start"] === node) return false;
+    const nodes = isObj(dialog["nodes"]) ? dialog["nodes"] : {};
+    let leads = false;
+    for (const n of Object.values(nodes))
+      for (const opt of isObj(n) ? asList(n["options"]) : []) {
+        if (!isObj(opt) || opt["goto"] !== node) continue;
+        leads = true;
+        const action = opt["action"];
+        const takes = (Array.isArray(action) ? action : [action]).some((a) => {
+          const take = isObj(a) ? a["take_item"] : undefined;
+          return isObj(take) && take["item"] === item;
+        });
+        if (!takes) return false;
+      }
+    return leads;
+  }
+
+  /**
+   * What the islands of world/world.yaml that are not dev_only hold: the ids of their chunk
+   * palettes (grounds and items) and the kinds of their portals; undefined without world/.
+   */
+  private productionWorld(): { placed: Set<string>; portalKinds: Set<string> } | undefined {
+    const worldFile = join(this.root, "world", "world.yaml");
+    if (!existsSync(worldFile)) return undefined;
+    const diags: Diagnostic[] = [];
+    const w = parseYaml(readFileSync(worldFile, "utf8"), "world/world.yaml", diags);
+    const placed = new Set<string>();
+    const portalKinds = new Set<string>();
+    for (const entry of w && isObj(w.data) ? asList(w.data["islands"]) : []) {
+      const island = idOf(entry);
+      if (island === undefined || !/^[a-z0-9_]+$/.test(island)) continue;
+      if (isObj(entry) && entry["dev_only"] === true) continue;
+      const dir = join(this.root, "world", "islands", island);
+      const portals = join(dir, "portals.yaml");
+      if (existsSync(portals)) {
+        const list = parseYaml(
+          readFileSync(portals, "utf8"),
+          `world/islands/${island}/portals.yaml`,
+          diags,
+        );
+        for (const p of list ? asList(list.data) : [])
+          if (isObj(p) && typeof p["kind"] === "string") portalKinds.add(p["kind"]);
+      }
+      const chunks = join(dir, "chunks");
+      if (!existsSync(chunks)) continue;
+      for (const floor of readdirSync(chunks)) {
+        const fdir = join(chunks, floor);
+        if (!statSync(fdir).isDirectory()) continue;
+        for (const name of readdirSync(fdir)) {
+          if (!name.endsWith(".json")) continue;
+          try {
+            const chunk: unknown = JSON.parse(readFileSync(join(fdir, name), "utf8"));
+            for (const id of isObj(chunk) ? asList(chunk["palette"]) : [])
+              if (typeof id === "string") placed.add(id);
+          } catch {
+            // A broken chunk is the map validator's finding (make validate runs it next).
+          }
+        }
+      }
+    }
+    return { placed, portalKinds };
   }
 
   private checkI18n(): void {

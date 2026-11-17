@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-// world.bin, format version 5. Little endian throughout:
+// world.bin, format version 6. Little endian throughout:
 //
 //	magic        "RPGWORLD"
 //	version      u16
@@ -20,6 +20,7 @@ import (
 //	  rect       4 × u32 (x, y, w, h)
 //	  floors     u8 count + bytes
 //	  temple     u16 x, u16 y, u8 z
+//	  flags      u8 (v6): bit 0 dev (world.yaml dev_only, kept by mapcompile -dev); others 0
 //	  spawns     u16 count, then per spawn:
 //	    id u8 length + bytes, center u16 x, u16 y, u8 z, radius u8, respawn u32 seconds,
 //	    monsters u8 count, then per monster: id u8 length + bytes, count u16
@@ -39,9 +40,12 @@ import (
 // Encoding the same Map always produces the same bytes.
 
 // BinaryVersion is the world.bin format version this package reads and writes.
-const BinaryVersion = 5
+const BinaryVersion = 6
 
 var binaryMagic = [8]byte{'R', 'P', 'G', 'W', 'O', 'R', 'L', 'D'}
+
+// islandDev is bit 0 of an island's flags byte: a dev-only island (Island.Dev).
+const islandDev = 1
 
 // maxStackItems is the largest stack world.bin can hold (u8 count).
 const maxStackItems = 255
@@ -154,6 +158,11 @@ func Encode(w io.Writer, m *Map) error {
 		b.u16(is.Temple.X)
 		b.u16(is.Temple.Y)
 		b.u8(is.Temple.Z)
+		var flags uint8
+		if is.Dev {
+			flags |= islandDev
+		}
+		b.u8(flags)
 		b.u16(uint16(len(is.Spawns)))
 		for _, sp := range is.Spawns {
 			b.u8(uint8(len(sp.ID)))
@@ -323,6 +332,11 @@ func Decode(data []byte) (*Map, error) {
 		is.Rect = Rect{X: b.u32(), Y: b.u32(), W: b.u32(), H: b.u32()}
 		is.Floors = append([]uint8(nil), b.take(int(b.u8()))...)
 		is.Temple = Pos{X: b.u16(), Y: b.u16(), Z: b.u8()}
+		flags := b.u8()
+		if flags&^islandDev != 0 && b.err == nil {
+			b.err = fmt.Errorf("island %q: unknown flags %#x", is.ID, flags)
+		}
+		is.Dev = flags&islandDev != 0
 		spawns := int(b.u16())
 		for range spawns {
 			if b.err != nil {

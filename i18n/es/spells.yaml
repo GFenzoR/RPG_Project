@@ -1,18 +1,22 @@
-# Spell names (data/spells.yaml).
+# Spell names (data/spells.yaml). Our own: light_heal, conjure_arrows and swift_stride were
+# renamed in the content audit (m12) for sounding like another game's spells; their ids stay
+# (hotbars and saved data name spells by id).
 spell.arc_bolt.name: "rayo de arco"
 spell.ember_ring.name: "anillo de brasas"
-spell.light_heal.name: "luz curativa"
+spell.light_heal.name: "fulgor reparador"
 spell.conjure_arc_rune.name: "conjurar runa de arco"
 spell.sure_shot.name: "tiro certero"
 spell.briar_arrow.name: "flecha de zarza"
 spell.ranger_mend.name: "alivio del bosque"
-spell.conjure_arrows.name: "conjurar flechas"
+spell.conjure_arrows.name: "tejer flechas"
 spell.frost_lance.name: "lanza de escarcha"
 spell.verdant_mend.name: "cura verde"
 spell.mend_other.name: "curar a otro"
 spell.bramble_burst.name: "estallido de zarzas"
-spell.swift_stride.name: "paso veloz"
+spell.swift_stride.name: "viento a favor"
 spell.purge_venom.name: "purgar veneno"
 spell.keen_eye.name: "ojo certero"
 spell.entangle.name: "enredar"
 spell.shroud.name: "manto de sombra"
+spell.tempest_ring.name: "anillo de tormenta"
+spell.rime_burst.name: "estallido de escarcha"

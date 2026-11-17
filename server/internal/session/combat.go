@@ -146,7 +146,7 @@ func (w *World) playerFight(ctx *game.TickContext, p *Player) {
 	}
 	if chebyshev(p.pos, f.pos()) > 1 {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
-			if d, ok := w.chaseStep(p.pos, f.pos(), false); ok {
+			if d, ok := w.chaseStep(p.pos, f.pos()); ok {
 				p.stopWalk()
 				p.queue = append(p.queue, d)
 			}
@@ -172,7 +172,7 @@ func (w *World) physicalHit(ctx *game.TickContext, p *Player, f foe, maxHit int,
 		w.hurtPlayer(ctx, p, v, dmg, ElementPhysical, true)
 		return
 	}
-	w.train(p, skill, w.afk(ctx, p))
+	w.train(p, skill, w.afk(ctx, p) || w.beyondLeash(ctx.Tick, f.m, p))
 	w.damageMonster(ctx, f.m, p, combat.HitMonster(ctx.Rand, maxHit, f.m.kind.target), ElementPhysical)
 }
 
@@ -216,7 +216,8 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 		return
 	}
 	if m.target == nil && w.validTarget(m, p) {
-		m.target, m.state = p, StateAlert // even a passive monster fights back
+		m.setTarget(p) // even a passive monster fights back
+		m.state = StateAlert
 	}
 }
 
@@ -285,10 +286,9 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 		physical := a.Element == ElementPhysical
 		pt := combat.PlayerTarget{ModeDefense: w.mode(t).Defense}
 		if physical {
-			pt.Armor = t.armor
+			pt.Armor, pt.Defense = t.armor, handsDefense(t)
 		}
 		if physical && t.shield != nil && t.shield.Shield != nil {
-			pt.ShieldDefense = t.shield.Shield.Defense
 			w.trainShield(ctx, t)
 		}
 		dmg := combat.HitPlayer(ctx.Rand, w.cfg.Balance.Combat, a.Min, a.Max, physical, pt)
@@ -358,6 +358,10 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		}
 	}
 	for _, l := range m.kind.loot {
+		if l.each {
+			w.questDrop(ctx, m, l)
+			continue
+		}
 		if ctx.Rand.Float64() >= l.chance {
 			continue
 		}
@@ -386,6 +390,28 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	}
 	if m.slot != nil {
 		w.scheduleRespawn(ctx, m.slot, game.Tick(m.slot.spawn.RespawnSeconds)*game.Tick(1000/game.TickDuration.Milliseconds()))
+	}
+}
+
+// questDrop gives quest loot l (each_player, content audit m9) to every online player
+// who damaged m and whose quest in progress asks for the item (quest.Engine.Needs: a
+// has_item step of it, current or done with its delivery current, not met any more; so a
+// lost one comes back with the next kill), one roll of l.chance each: in the backpack, or at the
+// player's feet if it does not fit. The kill already advanced their quests (questKill),
+// so a step right after the kill counts. Nobody else gets one, and the remains get none.
+func (w *World) questDrop(ctx *game.TickContext, m *Monster, l lootItem) {
+	for _, s := range m.damage {
+		p := w.playerByID(s.player)
+		if p == nil || !w.quests.Needs(p.storage, l.def.ID, w.countItem(p, l.def, true)) {
+			continue
+		}
+		if ctx.Rand.Float64() >= l.chance {
+			continue
+		}
+		n := combat.Roll(ctx.Rand, l.lo, l.hi)
+		p.emit(systemMsg(msgQuestDrop, itemParam(l.def, n)))
+		w.giveItem(p, l.def, n) // tells "on the floor" itself if it does not fit
+		w.econItem(p, EconLoot, m.kind.def.ID, l.def, n)
 	}
 }
 

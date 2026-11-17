@@ -610,7 +610,13 @@ describe("bootstrap", () => {
   it("sends the world, the palette and the editor texts", () => {
     const b = bootstrap(repo);
     expect(b.loadErrors).toEqual([]);
-    expect(b.world.islands.map((i) => i.meta.id)).toEqual(["puerto", "testisle", "bosque", "volcan"]);
+    expect(b.world.islands.map((i) => i.meta.id)).toEqual([
+      "puerto",
+      "testisle",
+      "bosque",
+      "volcan",
+      "pruebas",
+    ]);
     expect(b.items.find((i) => i.id === "grass")).toEqual({
       id: "grass",
       kind: "ground",
@@ -631,9 +637,11 @@ describe("bootstrap", () => {
       expect(b.i18n[lang]?.["editor.title"]).toBeTruthy();
       expect(b.i18n[lang]?.["island.testisle.name"]).toBeTruthy();
     }
-    // testisle + puerto + bosque + volcan chunks, and their spawns/npcs/zones/portals.yaml and
-    // houses.yaml (not texts.yaml).
-    expect(Object.keys(b.base).filter((f) => f.endsWith(".json"))).toHaveLength(6 + 43 + 40 + 46);
+    // testisle + puerto + bosque + volcan + pruebas chunks, and their spawns/npcs/zones/portals.yaml
+    // and houses.yaml (not texts.yaml).
+    expect(Object.keys(b.base).filter((f) => f.endsWith(".json"))).toHaveLength(
+      6 + 43 + 40 + 46 + 11,
+    );
     const lists = ["houses", "npcs", "portals", "spawns", "zones"];
     expect(
       Object.keys(b.base)
@@ -641,6 +649,7 @@ describe("bootstrap", () => {
         .sort(),
     ).toEqual([
       ...lists.map((f) => `world/islands/bosque/${f}.yaml`),
+      ...lists.map((f) => `world/islands/pruebas/${f}.yaml`),
       ...lists.map((f) => `world/islands/puerto/${f}.yaml`),
       ...["portals", "spawns", "zones"].map((f) => `world/islands/testisle/${f}.yaml`),
       ...lists.map((f) => `world/islands/volcan/${f}.yaml`),

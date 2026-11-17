@@ -1114,6 +1114,55 @@ function stagleatherLeggings(img: Image): void {
   outline(img, { amount: 0.5 });
 }
 
+/**
+ * Embersteel greaves (content audit M3): dark plates over ash-hound leather, a plate on
+ * each thigh and knee, the plate edges glowing like the ingots they came from.
+ */
+function embersteelGreaves(img: Image): void {
+  const { darkIron, ember } = PALETTE;
+  const houndLeather = material("#8d8478", "#6a6259", "#4b453f", "#302c28");
+  trousers(img, houndLeather, 14, 2.9);
+  // Belt with an embersteel buckle.
+  rect(img, 8, 5, 16, 3, darkWood.base);
+  rect(img, 8, 5, 16, 1, darkWood.light);
+  rect(img, 14, 5, 4, 3, darkIron.base);
+  px(img, 15, 6, ember.base);
+  px(img, 16, 6, ember.shadow);
+  // Plates: a thigh plate and a knee cop on each leg, lit from the top left.
+  for (const [cx, side] of [
+    [11.5, -1],
+    [20.5, 1],
+  ] as const) {
+    eachInEllipse(cx, 12.5, 3.3, 3, (x, y, nx, ny) =>
+      px(img, x, y, shadeOf(darkIron, domeLight(nx, ny) + (side > 0 ? -0.08 : 0.05))),
+    );
+    eachInEllipse(cx + side * 0.6, 20, 2.6, 2.2, (x, y, nx, ny) =>
+      px(img, x, y, shadeOf(darkIron, domeLight(nx, ny) + 0.12)),
+    );
+    // Shin plate down to the cuff.
+    for (let y = 23; y <= 26; y++) {
+      const half = 2.2 - (y - 23) * 0.15;
+      const mid = cx + side * (1 + (y - 23) * 0.35);
+      for (let x = Math.ceil(mid - half); x < mid + half; x++) {
+        const u = (x + 0.5 - mid) / half;
+        px(img, x, y, shadeOf(darkIron, cylinderLight(u) - (side > 0 ? 0.1 : 0)));
+      }
+    }
+    // The glowing lower edges of the plates.
+    for (const [ex, ey] of [
+      [cx - 2, 15],
+      [cx - 1, 15],
+      [cx, 15],
+      [cx + 1, 15],
+      [cx + side * 0.6 - 1, 22],
+      [cx + side * 0.6, 22],
+      [cx + side * 0.6 + 1, 22],
+    ] as const)
+      px(img, Math.round(ex), ey, ember.shadow);
+  }
+  outline(img, { amount: 0.5, color: darken(ember.deep, 0.45) });
+}
+
 // ---- quest -------------------------------------------------------------------------------
 
 function smugglerTally(img: Image, _rand: Rng, seed: number): void {
@@ -1185,6 +1234,31 @@ function emberKey(img: Image, _rand: Rng, seed: number): void {
   outline(img, { amount: 0.45 });
 }
 
+// A brass key for the practice gate of the sandbox island (pruebas_key): the ember key's
+// shape in plain polished brass, with a square bit and a ring at its bow.
+function brassKey(img: Image, _rand: Rng, seed: number): void {
+  const { gold } = PALETTE;
+  const grain = (x: number, y: number): number => (tileNoise(x, y, 4, 2, seed) - 0.5) * 0.15;
+  // The bit: two square teeth hanging off the shaft toward the bottom right.
+  rod(img, [7, 24], [11, 28], 1.6, 1.6, gold, 0.15);
+  rod(img, [11, 20], [14, 23], 1.6, 1.6, gold, 0.15);
+  // The shaft, from the bit up to the bow.
+  eachInCapsule(5, 26, 18, 13, 1.8, 1.8, (x, y, u) =>
+    px(img, x, y, shadeOf(gold, cylinderLight(u) + 0.15 + grain(x, y))),
+  );
+  // The bow: a ring lit on its top-left, with a round hole through it.
+  eachInEllipse(22, 9.5, 6.6, 6.6, (x, y, nx, ny) => {
+    const d = nx * nx + ny * ny;
+    if (d < 0.22) return; // the hole
+    const rim = d < 0.4 ? -0.25 : 0; // the inner face sits in shadow
+    px(img, x, y, shadeOf(gold, domeLight(nx, ny) + 0.2 + rim + grain(x, y)));
+  });
+  // A glint on the shaft and on the bow.
+  px(img, 13, 17, gold.light);
+  px(img, 19, 6, gold.light);
+  outline(img, { amount: 0.45 });
+}
+
 export const ITEMS: RecipeBook = {
   "currency/copper_coin": { kind: "item", draw: coinPile(COIN_COPPER) },
   "currency/silver_coin": { kind: "item", draw: coinPile(silver) },
@@ -1217,6 +1291,8 @@ export const ITEMS: RecipeBook = {
   "containers/backpack": { kind: "item", draw: backpack },
   "armor/canvas_trousers": { kind: "item", draw: canvasTrousers },
   "armor/stagleather_leggings": { kind: "item", draw: stagleatherLeggings },
+  "armor/embersteel_greaves": { kind: "item", draw: embersteelGreaves },
   "quest/smuggler_tally": { kind: "item", draw: smugglerTally },
   "quest/ember_key": { kind: "item", draw: emberKey },
+  "tools/brass_key": { kind: "item", draw: brassKey },
 };

@@ -327,6 +327,7 @@ auth). Pasado el límite responden `429 rate_limited`.
 | `account_banned` | 403 | Cuenta suspendida por el staff (T2.6); solo con la contraseña correcta |
 | `unauthorized` | 401 | Token ausente, vencido o revocado |
 | `invalid_name` / `invalid_vocation` | 400 | Creación de personaje inválida |
+| `reserved_name` | 400 | El nombre tiene una palabra reservada (se hace pasar por staff o por el juego: "GM", "Admin", "Soporte"...) |
 | `name_taken` | 409 | Nombre en uso |
 | `character_limit` | 409 | La cuenta ya tiene el máximo de personajes |
 | `character_not_found` | 404 | `POST /api/play` con un personaje que no es de la cuenta |
@@ -591,7 +592,9 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   alcance o cuando los restos desaparecen.
 - **Consumibles:** `UseItem` cura (`FloatingText{HEAL}` a quien ve, `CreatureHealth` si
   cambió el %, `PlayerStats` al jugador) o, si solo es comida, `inventory.ate` con el
-  item. Gasta una unidad.
+  item. Gasta una unidad. La comida (`food_ms`, auditoría de contenido m2) además suma
+  tiempo a la condición `well_fed` (`PlayerConditions` al jugador); si es solo comida y
+  pasaría del tope, el servidor contesta `inventory.full_stomach` y no gasta nada.
 - **`LookAt`:** `Message` de sistema `look.weapon` (`attack`, `defense`), `look.armor`
   (`armor`), `look.shield` (`defense`), `look.container` (`slots`), `look.item` o
   `look.ground`, con el parámetro `item` y, salvo el suelo, `weight` (gramos de la pila con
@@ -794,7 +797,9 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   el anterior. El servidor responde `DialogOpen` con el nodo inicial.
 - `DialogOpen` lleva solo las opciones cuyo `if` se cumple ahora; `option_id` es la
   posición de la opción en el nodo (1..9), así que no cambia mientras el nodo está
-  abierto. Las rutas de barco de un nodo `boat_routes: true` (T3.5) van primero, con
+  abierto. El `text` de una opción puede traer parámetros: una que vende una bendición
+  lleva `{price}` (número), lo que le cuesta a este jugador, que crece con su nivel
+  (auditoría de contenido M6); el cliente los formatea como los de cualquier mensaje. Las rutas de barco de un nodo `boat_routes: true` (T3.5) van primero, con
   `option_id` 100 + su posición entre las rutas del capitán (101, 102…); elegir una no
   reenvía el nodo: si se rechaza llega solo el `Message` (`travel.*`, `dialog.no_money`)
   y la ventana sigue abierta; si zarpa llegan `DialogClose`, la vista nueva y

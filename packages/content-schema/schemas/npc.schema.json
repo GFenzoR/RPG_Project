@@ -33,7 +33,11 @@
         "buys": { "type": "array", "items": { "$ref": "#/$defs/offer" } }
       }
     },
-    "notes": { "$ref": "common.schema.json#/$defs/notes" }
+    "notes": { "$ref": "common.schema.json#/$defs/notes" },
+    "dev_only": {
+      "description": "Every action of this NPC's dialog is dev-only, like train_skill and restore_mana (the sandbox instructor, docs/16: her free experience and gold too): make validate refuses the NPC placed anywhere but on dev_only islands of world/world.yaml, the server does not start with it there and runs none of its actions but close elsewhere.",
+      "type": "boolean"
+    }
   },
   "$defs": {
     "node": {

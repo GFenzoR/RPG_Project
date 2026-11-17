@@ -296,6 +296,7 @@ func seventeenFloors() []byte {
 	w.u16(0)
 	w.u16(0)
 	w.u8(7)
+	w.u8(0)  // flags (v6)
 	w.u16(0) // no spawns
 	w.u16(0) // no NPCs
 	w.u16(0) // no houses
@@ -303,6 +304,40 @@ func seventeenFloors() []byte {
 	w.u32(0) // no sectors
 	_ = bw.Flush()
 	return binary.LittleEndian.AppendUint32(buf.Bytes(), crc32.ChecksumIEEE(buf.Bytes()))
+}
+
+// A dev-only island (mapcompile -dev) keeps its mark through world.bin: that is how a
+// production server tells a development world (DevIslands) and the sandbox NPCs apart.
+// A flag this version does not know is refused.
+func TestBinaryKeepsDevIslands(t *testing.T) {
+	m := asciiMap(t, 0, 0, 7, "...")
+	if ids := m.DevIslands(); len(ids) != 0 {
+		t.Fatalf("a map without dev islands: %v", ids)
+	}
+	m.Islands()[0].Dev = true
+	var buf bytes.Buffer
+	if err := Encode(&buf, m); err != nil {
+		t.Fatal(err)
+	}
+	back, err := Decode(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ids := back.DevIslands(); len(ids) != 1 || ids[0] != m.Islands()[0].ID || !back.Islands()[0].Dev {
+		t.Fatalf("decoded dev islands %v", ids)
+	}
+	// The flags byte follows the temple: magic 8, version 2, speeds 4 + 2n, island count 2,
+	// id 1 + n, rect 16, floors 1 + n, temple 5.
+	is := m.Islands()[0]
+	at := 8 + 2 + 4 + 2*len(m.GroundSpeeds()) + 2 + 1 + len(is.ID) + 16 + 1 + len(is.Floors) + 5
+	raw := append([]byte(nil), buf.Bytes()...)
+	if raw[at] != 1 {
+		t.Fatalf("flags byte at %d is %d", at, raw[at])
+	}
+	raw[at] = 3
+	if _, err := Decode(reseal(raw)); err == nil || !strings.Contains(err.Error(), "unknown flags") {
+		t.Fatalf("unknown flags: err = %v", err)
+	}
 }
 
 func TestDecodeRejectsSeventeenFloors(t *testing.T) {

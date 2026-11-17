@@ -64,32 +64,39 @@ func ValidPassword(p string) bool {
 // ValidCharacterName reports whether name follows the naming rules: 3–20 characters,
 // 1–3 words of ASCII letters separated by single spaces, each word capitalized
 // ("Mira", "Old Tom"), and no reserved word. ASCII only avoids look-alike names.
-func ValidCharacterName(name string) bool {
+func ValidCharacterName(name string) bool { return CharacterNameError(name) == nil }
+
+// CharacterNameError says why name breaks the naming rules: ErrReservedName when it has a
+// reserved word or part, whatever its capitals ("GM Tester"), else ErrInvalidName when it
+// breaks the rest of them (ValidCharacterName); nil for a valid name.
+func CharacterNameError(name string) error {
 	if len(name) < MinNameLen || len(name) > MaxNameLen {
-		return false
+		return ErrInvalidName
 	}
 	words := strings.Split(name, " ")
-	if len(words) > maxNameWords {
-		return false
-	}
 	joined := strings.ToLower(strings.Join(words, ""))
 	for _, part := range reservedNameParts {
 		if strings.Contains(joined, part) {
-			return false
+			return ErrReservedName
 		}
 	}
 	for _, w := range words {
-		if len(w) < 2 || reservedNameWords[strings.ToLower(w)] {
-			return false
+		if reservedNameWords[strings.ToLower(w)] {
+			return ErrReservedName
 		}
-		if w[0] < 'A' || w[0] > 'Z' {
-			return false
+	}
+	if len(words) > maxNameWords {
+		return ErrInvalidName
+	}
+	for _, w := range words {
+		if len(w) < 2 || w[0] < 'A' || w[0] > 'Z' {
+			return ErrInvalidName
 		}
 		for i := 1; i < len(w); i++ {
 			if w[i] < 'a' || w[i] > 'z' {
-				return false
+				return ErrInvalidName
 			}
 		}
 	}
-	return true
+	return nil
 }

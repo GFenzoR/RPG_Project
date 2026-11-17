@@ -104,7 +104,7 @@ type Snapshot struct {
 // Defaults for Config.
 const (
 	// DefaultAutosaveEvery is the autosave interval of an online player (5 minutes).
-	DefaultAutosaveEvery = game.Tick(5 * 60 * 1000 / 50)
+	DefaultAutosaveEvery = game.Tick(5 * time.Minute / game.TickDuration)
 	// DefaultRerouteMaxNodes bounds one reroute search (A* around creatures).
 	DefaultRerouteMaxNodes = 1500
 	// DefaultPathNodesPerTick is the pathfinding quota of one tick, in expanded tiles.
@@ -182,6 +182,12 @@ type Config struct {
 	// autosave of a player is at a random point of the first interval, so players that
 	// joined together (after a restart) do not all save on the same tick.
 	AutosaveEvery game.Tick
+	// StoreHeartbeat is how often the app tells the loop that the database answers
+	// (World.StoreAlive). Content audit M6: while no mark came for storeDownAfter of them
+	// no house is released for its owner's absence, and that gap is not counted as
+	// absence (a database outage with the loop up keeps everyone out). 0: no heartbeat, the
+	// database counts as always up (tests, no database).
+	StoreHeartbeat time.Duration
 	// RerouteMaxNodes and PathNodesPerTick tune the pathfinding quota.
 	RerouteMaxNodes  int
 	PathNodesPerTick int
@@ -246,6 +252,12 @@ type World struct {
 	corpseItem *content.Item
 	corpseFor  game.Tick
 	attackFor  game.Tick
+	// The leash's pathfinding (balance.yaml combat.monster_*_ms, monster.go): the wait
+	// after a failed search and between a chase's checks, how long a target out of reach
+	// may stand where no way leads before it is given up, and how long it stays shunned.
+	pathRetry game.Tick
+	stuckFor  game.Tick
+	shunFor   game.Tick
 
 	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner.
 	playerCorpseFor game.Tick
@@ -353,17 +365,25 @@ type World struct {
 	// the anti-flood in ticks, every offer by id, the books by item, the offers by owner
 	// and by expiry, the mailboxes, the recent history by character, the recent sales by
 	// item, the last ids issued, the transfers submitted and the next expiry sweep.
-	mkOn         bool
-	mk           content.Market
-	mkRefill     game.Tick
-	mkBurst      game.Tick
-	offers       map[int64]*offer
-	books        map[uint16]*book
-	byOwner      map[int64][]*offer
-	expiry       []*offer
-	mail         map[int64]*mailbox
-	history      map[int64][]MarketHistory
-	sales        map[uint16][]priceDay
+	mkOn     bool
+	mk       content.Market
+	mkRefill game.Tick
+	mkBurst  game.Tick
+	offers   map[int64]*offer
+	books    map[uint16]*book
+	byOwner  map[int64][]*offer
+	expiry   []*offer
+	mail     map[int64]*mailbox
+	history  map[int64][]MarketHistory
+	sales    map[uint16][]priceDay
+	refCache map[uint16]refCached // reference price by item, for the day it was computed
+	// medianVote's scratch, cleared on each use: the seller→buyer pairs of the window, the
+	// votes by seller account and day, the sellers and every account of the counted sales.
+	refPrices    []int64
+	refPairs     map[[2]int64]bool
+	refVotes     map[[2]int64]priceVote
+	refSellers   map[int64]bool
+	refAccounts  map[int64]bool
 	nextOffer    int64
 	nextMail     int64
 	nextTransfer uint64
@@ -412,6 +432,9 @@ type World struct {
 	houseOn       bool
 	hs            content.Houses
 	hsPeriod      time.Duration
+	hsAway        time.Duration // houses.inactive_days (0: off)
+	houseDown     time.Time     // HouseData.LastSave until the first sweep (houseBoot)
+	storeAlive    time.Time     // last StoreAlive mark (or the first sweep), Config.StoreHeartbeat
 	hsRefill      game.Tick
 	hsBurst       game.Tick
 	houseByID     map[string]*house

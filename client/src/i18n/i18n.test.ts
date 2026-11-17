@@ -28,6 +28,19 @@ describe("i18n", () => {
     expect(en("k", { n: 2 })).toBe("2 seconds");
   });
 
+  it("groups the digits of numbers by the language, not coordinates or ids (playtest)", () => {
+    const text = "{price} at {x},{y},{z} #{id}; {n, plural, one {# coin} other {# coins}}";
+    const es = translator({ k: text }, "es");
+    const en = translator({ k: text }, "en");
+    const p = { price: 20000, x: 2095, y: 2086, z: 7, id: 12345, n: 10000 };
+    expect(es("k", p)).toBe("20.000 at 2095,2086,7 #12345; 10.000 coins");
+    expect(en("k", p)).toBe("20,000 at 2095,2086,7 #12345; 10,000 coins");
+    // Spanish groups from five digits (CLDR); English from four. Text stays text.
+    expect(es("k", { ...p, price: 1990 })).toMatch(/^1990 /);
+    expect(en("k", { ...p, price: 1990 })).toMatch(/^1,990 /);
+    expect(en("k", { ...p, price: "1990" })).toMatch(/^1990 /);
+  });
+
   it("never parses parameter values again", () => {
     const t = translator({ k: "{name}: {text}" });
     expect(t("k", { name: "A", text: "{name} <b>#</b> {n, plural, other {x}}" })).toBe(

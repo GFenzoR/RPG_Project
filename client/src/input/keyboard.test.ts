@@ -1,6 +1,6 @@
 import { Direction } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
-import { MovementKeys, isTextField } from "./keyboard.ts";
+import { MovementKeys, isTextField, takesText } from "./keyboard.ts";
 
 describe("MovementKeys", () => {
   it("maps arrows and WASD, the last held key wins", () => {
@@ -29,5 +29,24 @@ describe("isTextField", () => {
   it("is false for anything that is not an element (no DOM, the window, null)", () => {
     expect(isTextField(null)).toBe(false);
     expect(isTextField({} as EventTarget)).toBe(false);
+  });
+});
+
+describe("takesText (playtest M3)", () => {
+  it("is true for what takes typed text: text inputs, text areas, editable elements", () => {
+    expect(takesText({ tagName: "INPUT", type: "text" })).toBe(true);
+    expect(takesText({ tagName: "INPUT", type: "number" })).toBe(true);
+    expect(takesText({ tagName: "INPUT", type: "password" })).toBe(true);
+    expect(takesText({ tagName: "INPUT" })).toBe(true); // no type: a text input
+    expect(takesText({ tagName: "TEXTAREA" })).toBe(true);
+    expect(takesText({ tagName: "DIV", isContentEditable: true })).toBe(true);
+  });
+
+  it("is false for a checkbox, a radio, a button, a slider and a select: the arrows walk", () => {
+    for (const type of ["checkbox", "radio", "button", "submit", "range", "CHECKBOX"])
+      expect(takesText({ tagName: "INPUT", type }), type).toBe(false);
+    expect(takesText({ tagName: "SELECT", type: "select-one" })).toBe(false);
+    expect(takesText({ tagName: "BUTTON", type: "button" })).toBe(false);
+    expect(takesText({ tagName: "DIV", isContentEditable: false })).toBe(false);
   });
 });

@@ -327,6 +327,9 @@ button.link {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* clip, where supported: a focused control in a window over the map (Tab through the
+     shop) must not scroll the whole map up and leave a black band. */
+  overflow: clip;
   background: #000;
 }
 .viewport canvas {
@@ -602,24 +605,48 @@ body.using-item canvas {
   border: 1px solid #555;
   border-radius: 3px;
 }
+/* Desktop: a slimmer bar closer to the edge, and the canvas keeps the strip it takes clear
+   when the window has room, or moves up as far as it can (--map-reserve-bottom, read by
+   render/game-canvas.ts; px, the bar's height plus its bottom gap). At 1280x800 the bar
+   covered most of the last row of tiles, and a click to walk there cast F1 or F2. */
+.game[data-layout="desktop"]:not([data-pad]) .viewport {
+  --map-reserve-bottom: 40px;
+}
+.game[data-layout="desktop"]:not([data-pad]) .hotbar {
+  bottom: 0.2rem;
+}
+.game[data-layout="desktop"]:not([data-pad]) .hotbar li button,
+.game[data-layout="desktop"]:not([data-pad]) .hotbar li select {
+  height: 2.3rem;
+}
 
 /* ---- NPC dialog and shop (T1.10) ------------------------------------------------- */
+/* The box reaches down to the hotbar (bottom, not max-height): a definite height, so the
+   max-height: 100% of the dialog and the shop applies and each scrolls inside it (the shop
+   of the provisioner was taller than a 1280x800 window). The box itself lets clicks
+   through to the map; only its windows take them. */
 .npc-windows {
   position: absolute;
   top: 0.5rem;
+  bottom: 5rem;
   left: 0.5rem;
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
   max-width: calc(100% - 1rem);
-  max-height: calc(100% - 5rem);
   z-index: 2;
+  pointer-events: none;
+}
+.npc-windows > * {
+  pointer-events: auto;
 }
 .dialog,
 .shop {
   width: 20rem;
-  max-height: 100%;
+  /* The box of .npc-windows, less this window's padding and border (content-box). */
+  max-height: calc(100% - 1rem - 2px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.5rem 0.6rem;
   color: #eee;
   background: rgba(20, 20, 30, 0.94);
@@ -723,6 +750,11 @@ body.using-item canvas {
 .crafting h2 {
   margin: 0;
   font-size: 0.95rem;
+}
+/* The title is the station's item name, lower case in Spanish ("fragua"): a title starts
+   with a capital. */
+.crafting h2::first-letter {
+  text-transform: uppercase;
 }
 .crafting > ul {
   list-style: none;
@@ -1615,6 +1647,13 @@ body.using-item canvas {
 .notices.raised {
   bottom: 12rem;
 }
+/* Desktop: under the windows over the map (shop, market, crafting...), which now reach
+   down to here and scroll: a notice covered the last lines of the shop and the market.
+   The log beside the map has every notice too. Phones keep them over the map (their
+   windows are sheets above everything). */
+.game[data-layout="desktop"] .notices {
+  z-index: 1;
+}
 .notices:empty {
   display: none;
 }
@@ -1905,6 +1944,7 @@ body.using-item canvas {
 }
 /* The dialog and its shop one under the other, each full width. */
 .game:not([data-layout="desktop"]) .npc-windows {
+  pointer-events: auto;
   flex-direction: column;
   align-items: stretch;
   gap: 0.25rem;

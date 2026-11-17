@@ -17,6 +17,7 @@ loot:
   - { item: copper_coin, chance: 0.8, count: [5, 25] }
   - { item: ship_biscuit, chance: 0.3, count: [1, 3] }
   - { item: rusty_cutlass, chance: 0.05 }
+  - { item: driftwood_club, chance: 0.06 } # content audit m4: its only source
   - { item: sailcloth_cap, chance: 0.04 }
   - { item: tarnished_locket, chance: 0.08 }
 tags: [human, shore, puerto]

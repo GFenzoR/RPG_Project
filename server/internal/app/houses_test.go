@@ -34,15 +34,19 @@ func TestHouseConversions(t *testing.T) {
 	now := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
 	bag := store.InventoryItem{ItemID: 67, Count: 1, Items: []store.InventoryItem{{ItemID: 68, Count: 5}}}
 	d, err := loadHouses(fakeHouses{store.HouseData{
-		Owners: []store.HouseOwner{{HouseID: "cottage", CharacterID: 4, AccountID: 2, Name: "Ana", PaidUntil: now, Since: now}},
+		Owners: []store.HouseOwner{{HouseID: "cottage", CharacterID: 4, AccountID: 2, Name: "Ana", PaidUntil: now, Since: now,
+			Seen: now.Add(-2 * time.Hour)}},
 		Guests: map[string][]string{"cottage": {"Beto"}},
 		Items:  []store.HouseItem{{HouseID: "cottage", X: 3, Y: 4, Z: 7, Seq: 1, Item: bag}},
+		// Content audit M6: the last save (downtime) and the owner's last time seen reach the loop.
+		LastSave: now.Add(-time.Hour),
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(d.Owners) != 1 || d.Owners[0].AccountID != 2 || d.Guests["cottage"][0] != "Beto" || len(d.Items) != 1 ||
-		d.Items[0].Pos != (world.Pos{X: 3, Y: 4, Z: 7}) || d.Items[0].Seq != 1 || len(d.Items[0].Item.Items) != 1 {
+		d.Items[0].Pos != (world.Pos{X: 3, Y: 4, Z: 7}) || d.Items[0].Seq != 1 || len(d.Items[0].Item.Items) != 1 ||
+		!d.LastSave.Equal(now.Add(-time.Hour)) || !d.Owners[0].Seen.Equal(now.Add(-2*time.Hour)) {
 		t.Fatalf("loaded %+v", d)
 	}
 	op := storeHouseOp(session.HouseOp{Kind: session.HouseItems, House: "cottage", Items: d.Items})

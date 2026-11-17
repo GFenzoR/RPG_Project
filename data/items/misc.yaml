@@ -39,6 +39,7 @@
   kind: material
   sprite: materials/wolf_pelt
   name: item.wolf_pelt.name
+  description: item.wolf_pelt.desc
   weight: 900
   stackable: true
   max_stack: 100
@@ -49,6 +50,7 @@
   kind: consumable
   sprite: food/raw_fish
   name: item.raw_fish.name
+  description: item.raw_fish.desc
   weight: 500
   stackable: true
   max_stack: 100
@@ -73,6 +75,7 @@
   kind: consumable
   sprite: food/boar_meat
   name: item.boar_meat.name
+  description: item.boar_meat.desc
   weight: 900
   stackable: true
   max_stack: 100
@@ -96,6 +99,7 @@
   kind: material
   sprite: materials/gull_feather
   name: item.gull_feather.name
+  description: item.gull_feather.desc
   weight: 6
   stackable: true
   max_stack: 100
@@ -106,6 +110,7 @@
   kind: material
   sprite: materials/crab_claw
   name: item.crab_claw.name
+  description: item.crab_claw.desc
   weight: 300
   stackable: true
   max_stack: 100
@@ -116,6 +121,7 @@
   kind: material
   sprite: materials/bat_wing
   name: item.bat_wing.name
+  description: item.bat_wing.desc
   weight: 70
   stackable: true
   max_stack: 100
@@ -126,6 +132,7 @@
   kind: material
   sprite: materials/boar_tusk
   name: item.boar_tusk.name
+  description: item.boar_tusk.desc
   weight: 400
   stackable: true
   max_stack: 100
@@ -147,6 +154,7 @@
   kind: material
   sprite: materials/beetle_carapace
   name: item.beetle_carapace.name
+  description: item.beetle_carapace.desc
   weight: 1200
   stackable: true
   max_stack: 100
@@ -164,13 +172,14 @@
   tradeable: true
   value: 10
 
-# Mining byproducts (T1.12).
+# Mining byproducts (T1.12). The smiths buy them (content audit m4); the stone is a
+# hand-sized chunk, light enough not to fill a miner's capacity in a few swings.
 - id: rough_stone
   kind: material
   sprite: materials/rough_stone
   name: item.rough_stone.name
   description: item.rough_stone.desc
-  weight: 1200
+  weight: 500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -479,3 +488,41 @@
   tradeable: false
   key: forge_gate
   notes: Opens and locks the forge gate (door key forge_gate, data/items/doors.yaml). volcan_forge_echo shapes it from the ember root in ch3_gate, and shapes another for whoever finished ch3_gate and lacks one. No value, so no NPC buys it.
+
+# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): the key of its practice gate.
+- id: pruebas_key
+  kind: material
+  sprite: tools/brass_key
+  name: item.pruebas_key.name
+  description: item.pruebas_key.desc
+  weight: 100
+  tradeable: false
+  key: pruebas_gate
+  notes: Opens and locks the practice gate of the sandbox island (door key pruebas_gate, data/items/doors.yaml). pruebas_merchant sells it. No value, so no NPC buys it.
+
+# Mana draughts (content audit M2, 2026-11): the casters' fuel, sold in every town (a
+# small one in Puerto, Bosque and Brasal, a concentrated one in Brasal). Nobody buys them
+# back. Our own numbers: about 0.4 copper per point of mana (docs/02 "Economía").
+- id: mana_draught
+  kind: consumable
+  sprite: potions/mana_draught
+  name: item.mana_draught.name
+  description: item.mana_draught.desc
+  weight: 300
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { heal_mp: 50 }
+  value: 22
+
+- id: concentrated_mana_draught
+  kind: consumable
+  sprite: potions/concentrated_mana_draught
+  name: item.concentrated_mana_draught.name
+  description: item.concentrated_mana_draught.desc
+  weight: 350
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { heal_mp: 125 }
+  value: 50

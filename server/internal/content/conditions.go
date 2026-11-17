@@ -17,6 +17,9 @@ const (
 	ConditionSkill = "skill"
 	// ConditionInvisible hides the holder from players and monsters that cannot see it.
 	ConditionInvisible = "invisible"
+	// ConditionRegen makes the holder's vocation regeneration regen_pct % stronger while it
+	// lasts (content audit m2: eating food).
+	ConditionRegen = "regen"
 )
 
 // Stacking rules: what a new application of a condition the holder already has does.
@@ -43,6 +46,8 @@ type ConditionDef struct {
 	// Skill and Amount: the skill a skill condition raises and by how many levels.
 	Skill  string `yaml:"skill"`
 	Amount int    `yaml:"amount"`
+	// RegenPct is the extra vocation regeneration of a regen condition, in percent.
+	RegenPct int `yaml:"regen_pct"`
 	// Stacking is StackRefresh or StackAdd.
 	Stacking string `yaml:"stacking"`
 	// Cancels lists the conditions an application of this one removes (haste ends a
@@ -91,7 +96,7 @@ func (cs ConditionDefs) check() error {
 			if c.Element == "" || c.IntervalMs <= 0 || c.MaxTicks <= 0 {
 				return fmt.Errorf("conditions.%s: a damage condition needs element, interval_ms > 0 and max_ticks > 0", id)
 			}
-		case ConditionSpeed, ConditionSkill, ConditionInvisible:
+		case ConditionSpeed, ConditionSkill, ConditionInvisible, ConditionRegen:
 			if c.MaxMs <= 0 {
 				return fmt.Errorf("conditions.%s: max_ms must be > 0", id)
 			}
@@ -100,6 +105,9 @@ func (cs ConditionDefs) check() error {
 			}
 			if c.Kind == ConditionSkill && (c.Skill == "" || c.Amount <= 0) {
 				return fmt.Errorf("conditions.%s: a skill condition needs skill and amount > 0", id)
+			}
+			if c.Kind == ConditionRegen && c.RegenPct <= 0 {
+				return fmt.Errorf("conditions.%s: a regen condition needs regen_pct > 0", id)
 			}
 		default:
 			return fmt.Errorf("conditions.%s: unknown kind %q", id, c.Kind)

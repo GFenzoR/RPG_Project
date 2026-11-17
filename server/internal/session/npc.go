@@ -15,19 +15,23 @@ import (
 
 // System messages of NPCs, dialogs, shops and quests (i18n keys).
 const (
-	msgNPCTooFar     = "dialog.too_far"
-	msgShopNoMoney   = "shop.no_money"
-	msgShopNotEnough = "shop.not_enough"
-	msgShopNoRoom    = "shop.no_room"
-	msgShopBought    = "shop.bought"
-	msgShopSold      = "shop.sold"
-	msgItemOnFloor   = "dialog.item_on_floor"
-	msgQuestStarted  = "dialog.quest_started"
-	msgQuestUpdated  = "dialog.quest_updated"
-	msgQuestKills    = "dialog.quest_kills"
-	msgQuestDone     = "dialog.quest_completed"
-	msgPaid          = "dialog.paid"
-	msgReceivedGold  = "dialog.received_gold"
+	msgNPCTooFar = "dialog.too_far"
+	// msgDialogPriceChanged: the price an option showed was for another level (M6).
+	msgDialogPriceChanged = "dialog.price_changed"
+	msgShopNoMoney        = "shop.no_money"
+	msgShopNotEnough      = "shop.not_enough"
+	msgShopNoRoom         = "shop.no_room"
+	msgShopBought         = "shop.bought"
+	msgShopSold           = "shop.sold"
+	msgItemOnFloor        = "dialog.item_on_floor"
+	msgQuestStarted       = "dialog.quest_started"
+	msgQuestUpdated       = "dialog.quest_updated"
+	msgQuestKills         = "dialog.quest_kills"
+	msgQuestDone          = "dialog.quest_completed"
+	// msgQuestDrop: a quest drop (loot each_player) went to the player (content audit m9).
+	msgQuestDrop    = "dialog.quest_drop"
+	msgPaid         = "dialog.paid"
+	msgReceivedGold = "dialog.received_gold"
 )
 
 const (
@@ -47,6 +51,9 @@ type NPC struct {
 	def  *content.NPC
 	pos  world.Pos
 	shop []shopLine
+	// dev: the NPC stands on a dev-only island (world.Island.Dev), the only place where
+	// its dev-only dialog actions run.
+	dev bool
 }
 
 // ID returns the NPC's creature id.
@@ -71,6 +78,9 @@ type openDialog struct {
 	npc  *NPC
 	node string
 	shop bool
+	// level is the player's level when the node was sent: the prices its options showed
+	// ({price} of a blessing, content audit M6) were for it.
+	level int
 }
 
 // NPCs returns the NPCs in the world, ordered by creature id.
@@ -113,8 +123,12 @@ func (w *World) initNPCs() error {
 			if def == nil {
 				return fmt.Errorf("session: island %q places unknown NPC %q", is.ID, pl.NPC)
 			}
+			// make validate refuses it too; dialogChoose checks again (dialog.Check).
+			if err := content.CheckDevPlacement(def, is.ID, is.Dev); err != nil {
+				return fmt.Errorf("session: %w", err)
+			}
 			w.nextID++
-			n := &NPC{id: w.nextID, def: def, pos: pl.Pos}
+			n := &NPC{id: w.nextID, def: def, pos: pl.Pos, dev: is.Dev}
 			if s := def.Shop; s != nil {
 				byItem := map[string]int{}
 				line := func(item string) *shopLine {
@@ -207,14 +221,47 @@ func (w *World) sendDialog(p *Player) {
 	d := p.dialog
 	node := d.npc.def.Dialog.Nodes[d.node]
 	msg := &pb.DialogOpen{DialogId: d.id, NpcCreatureId: d.npc.id, Text: &pb.LocalizedText{Key: node.Text}}
+	d.level = p.level
 	a := &actor{w: w, p: p}
 	if node.BoatRoutes {
 		msg.Options = append(msg.Options, w.routeOptions(d.npc)...)
 	}
 	for _, i := range dialog.Visible(node, a) {
-		msg.Options = append(msg.Options, &pb.DialogOption{OptionId: uint32(i + 1), Text: &pb.LocalizedText{Key: node.Options[i].Text}})
+		o := node.Options[i]
+		msg.Options = append(msg.Options, &pb.DialogOption{OptionId: uint32(i + 1),
+			Text: &pb.LocalizedText{Key: o.Text, Params: optionParams(o, a)}})
 	}
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_DialogOpen{DialogOpen: msg}})
+}
+
+// priceChanged reports whether option index of d's node shows a price (optionParams) that
+// was computed for a level p no longer has.
+func (w *World) priceChanged(d *openDialog, p *Player, index int) bool {
+	node := d.npc.def.Dialog.Nodes[d.node]
+	if node == nil || index < 0 || index >= len(node.Options) || d.level == p.level {
+		return false
+	}
+	for _, a := range node.Options[index].Action {
+		if a.Bless != nil && a.Bless.PerLevel != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// optionParams are the parameters of an option's text: {price}, what its blessing costs
+// this player (content audit M6, the price grows with the level).
+func optionParams(o content.DialogOption, a *actor) []*pb.TextParam {
+	var price int64
+	for _, act := range o.Action {
+		if act.Bless != nil {
+			price += act.Bless.PriceAt(a.Level())
+		}
+	}
+	if price == 0 {
+		return nil
+	}
+	return []*pb.TextParam{num("price", int(price))}
 }
 
 // closeDialog closes p's dialog (and its shop), if any.
@@ -254,6 +301,13 @@ func (w *World) dialogChoose(ctx *game.TickContext, p *Player, dialogID, optionI
 		return
 	}
 	a := &actor{w: w, p: p, d: d}
+	if w.priceChanged(d, p, int(optionID)-1) {
+		// The option showed a price for another level (one gained or lost since the node
+		// was sent): nothing is charged; the node goes again with the price of now.
+		p.emit(systemMsg(msgDialogPriceChanged))
+		w.sendDialog(p)
+		return
+	}
 	r := dialog.Choose(d.npc.def, d.node, int(optionID)-1, a)
 	if r.Refused != "" {
 		p.emit(systemMsg(r.Refused))
@@ -757,6 +811,9 @@ func (a *actor) CanTeleport(pos content.Position) bool {
 	return ok
 }
 
+// DevIsland reports whether the NPC of the dialog stands on a dev-only island.
+func (a *actor) DevIsland() bool { return a.d != nil && a.d.npc != nil && a.d.npc.dev }
+
 func (a *actor) GiveItem(item string) {
 	a.w.giveItem(a.p, a.w.cfg.Items[item], 1)
 	a.w.econItem(a.p, EconNPC, a.npcID(), a.w.cfg.Items[item], 1)
@@ -804,6 +861,18 @@ func (a *actor) Heal() {
 	a.p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: a.w.stats(a.p)}})
 }
 
+// RestoreMana fills the mana (dev-only: the sandbox instructor).
+func (a *actor) RestoreMana() {
+	if a.p.mana >= a.p.maxMana {
+		return
+	}
+	a.p.mana = a.p.maxMana
+	a.p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: a.w.stats(a.p)}})
+}
+
+// TrainSkill raises a skill to level (dev-only: the sandbox instructor).
+func (a *actor) TrainSkill(skill string, level int) { a.w.raiseSkill(a.p, skill, level) }
+
 func (a *actor) Teleport(pos content.Position) {
 	if to, ok := a.w.teleportDest(pos); ok {
 		a.moved = true
@@ -812,8 +881,8 @@ func (a *actor) Teleport(pos content.Position) {
 }
 
 func (a *actor) Bless(b content.Bless) {
-	if b.Price > 0 {
-		a.TakeGold(b.Price)
+	if price := b.PriceAt(a.Level()); price > 0 {
+		a.TakeGold(price)
 	}
 	a.p.storage.Set(blessKey+b.Blessing, 1)
 }

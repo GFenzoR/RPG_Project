@@ -45,6 +45,13 @@ i18n/
     al que alguna lo vende (bucle de oro infinito); aviso si compra por encima del `value`.
   - Bendiciones: los `blessing` distintos que venden los NPCs no superan
     `death.max_blessings` de `balance.yaml`.
+  - Items que no llevan a ningún lado (auditoría de contenido m4; con `world/`, cuentan
+    solo los NPCs colocados en islas que no son `dev_only`): lo que un NPC compra tiene
+    una fuente (botín, drop de un recurso, receta, tienda, `give_item`, recompensa o
+    hechizo de conjurar); un arma, armadura o escudo comerciable con `value` que se puede
+    conseguir tiene un NPC que lo compra, y un material así, un comprador, una receta o
+    una quest que lo toma; un item de quest (`tradeable: false`, el `has_item` de un paso)
+    que suelta un monstruo va con `each_player: true`.
   - Aviso si una quest no tiene ningún `start_quest` en `data/npcs/`.
   - Un bloque por tipo de item (`weapon:` solo con `kind: weapon`, etc.), `max_stack`
     solo con `stackable: true`, `count` de loot > 1 solo para items apilables,
@@ -116,9 +123,10 @@ items:
   la piedra) y `lava` (fundida, no caminable, como el agua). Cada uno camina como el suelo
   que reemplazó en la isla, así que no cambian el ritmo con que se balanceó la caza.
 - **Distancia y munición** (T3.1): un arma `type: distance` exige `range` y `ammo` (el
-  `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type: arrow, attack }`,
-  apilable, y va en el slot de munición. Cada disparo gasta una y suma su `attack` al del
-  arma:
+  `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type, attack }`
+  (`arrow` para los arcos, `bolt` para las ballestas de una mano de la auditoría de
+  contenido M4), apilable, y va en el slot de munición. Cada disparo gasta una y suma su
+  `attack` al del arma:
   ```yaml
   - id: short_bow
     kind: weapon
@@ -163,6 +171,16 @@ items:
   usada sobre un punto de soga (`rope_spot` de `portals.yaml`) sube al jugador
   (`02-game-design.md`, "Cambiar de piso"); sobre cualquier otra casilla sigue como una
   herramienta de recolección. El valor `rope` lo nombra el servidor (`session/portal.go`).
+- **Destino de las herramientas** (auditoría de contenido m1): `make validate` exige que
+  toda herramienta que un jugador puede conseguir en producción (la vende o la da un NPC
+  colocado en una isla que no es `dev_only`, la suelta un monstruo, sale de una receta o
+  de una recompensa) tenga dónde usarse en el mapa de producción: un recurso de su
+  `tool` (pesca, minería, tala) o una estación de una receta que la pide (herrería)
+  colocados en los chunks de esas islas, o un portal `rope_spot` (la cuerda). La pala
+  (`tool.use: shovel`) no tiene nada todavía: por eso ya no se vende.
+- **Consumibles** (`consumable`): `heal_hp` y `heal_mp` curan vida y maná (los brebajes de
+  maná de M2, `data/items/misc.yaml`); `food_ms` (auditoría de contenido m2) es cuánto
+  tiempo de la condición `well_fed` da comerlo (ver "Condiciones").
 - **Portales** (`portal`): un item fijo del mapa que muestra un portal de `portals.yaml`
   (`02-game-design.md` "Cambiar de piso"): `kind` (`stairs`, `ladder`, `hole`,
   `rope_spot`, `teleport`) y, opcional, `leads` (`up` o `down`: el sentido en que cambia
@@ -256,6 +274,28 @@ loot:
   - { item: copper_coin, chance: 0.6, count: [1, 8] }
 tags: [beast, puerto]
 ```
+- **Botín de quest** (`each_player: true` en una entrada de `loot`, auditoría de
+  contenido m9): en vez de uno en los restos, a cada jugador que le hizo daño al monstruo
+  y cuya quest en curso pide ese item (un paso `has_item` de ese item, el actual o el
+  recién cumplido mientras su entrega es el paso actual, que el jugador ya no cumple: si lo
+  perdió antes de entregarlo, el próximo custodio le da otro) le llega el suyo a la mochila, o a los pies si no entra, con su
+  propia tirada de `chance`, y un mensaje (`dialog.quest_drop`). Nadie más lo recibe y los
+  restos no lo llevan. Como no se distingue un item perdido de uno ya entregado,
+  `make validate` y el arranque del servidor exigen lo mismo: que sea el `has_item` de
+  algún paso de quest; que el paso siguiente sea su entrega, un paso `dialog_action` cuyo
+  nodo no es el `start` del diálogo de ese NPC (se llega con solo abrirlo) y al que
+  **todas** las opciones que llevan (`goto`, al menos una) lo toman con `take_item` (una
+  vez entregado la quest deja atrás la entrega y el item no cae más, aunque la quest
+  siga, como `ch2_coffer` después de las tarjas; un camino a la entrega que no lo tomara
+  se lo dejaría al jugador); y que el item tenga `tradeable: false` y `value: 0` (las copias que alguien
+  junte tirándolas al piso no valen nada ni se comercian). Lo usan el sello de la forja del
+  custodio (`ch3_warden`) y, desde m4, la tarja de los contrabandistas y el cofre sellado
+  de los reptantes (`ch2_coffer`) y la carta del minero de obsidiana (`ch3_gate`):
+  `make validate` exige `each_player` en todo item de quest que cae de un monstruo, así
+  deja de caer cuando la quest terminó.
+- **Comida y `well_fed`:** si algún item tiene `food_ms`, el arranque exige la condición
+  `well_fed` de `kind: regen` con `stacking: add` (cada comida suma su tiempo) y que
+  ninguna comida pura dure más que su `max_ms` (no se podría comer nunca).
 
 ## NPC con diálogo de ventana
 Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
@@ -315,7 +355,51 @@ Condiciones disponibles (`if`): `level_at_least`, `vocation_in`, `has_item`,
 `quest_state`, `quest_not_started`, `flag_equals`, `skill_at_least`.
 Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `take_gold`, `start_quest`, `set_quest_step`, `set_flag`, `open_shop`, `heal`,
-`teleport`, `bless`. (La acción `travel` de T1.10 se quitó en T3.5: los viajes son rutas.)
+`teleport`, `bless`, y las de desarrollo `train_skill` y `restore_mana` (abajo). (La
+acción `travel` de T1.10 se quitó en T3.5: los viajes son rutas.)
+
+**Acciones de desarrollo** (solo la instructora de la Isla de Pruebas,
+`16-probar-el-juego.md`): en el juego real regalarían lo que se gana jugando (y un maná
+gratis junto al templo entrenaría el nivel mágico sin límite), así que solo existen en NPCs
+de islas `dev_only` (`world.yaml`), que la imagen de producción no compila.
+```yaml
+        - text: npc.pruebas_trainer.opt_train_combat
+          if: { vocation_in: [guardian] }
+          action:
+            - { train_skill: { skill: sword, level: 45 } }   # sube la skill a 45, nunca la baja
+            - { train_skill: { skill: magic, level: 2 } }    # el nivel mágico es la skill magic
+          goto: trained
+        - text: npc.pruebas_trainer.opt_heal
+          action: [{ heal: true }, { restore_mana: true }]   # vida y maná
+          goto: healed
+```
+- `train_skill: { skill, level }`: `skill` es una skill de `balance.yaml` (combate,
+  `magic`, `fishing` u oficio) y `level` va de 1 a 500. Si la skill está más abajo, queda en
+  `level` con el progreso hacia el siguiente en 0 y el cliente recibe `PlayerSkills` y el
+  aviso `progress.skill_up`, como una subida por uso; si ya está en `level` o más arriba, no
+  cambia nada.
+- `restore_mana: true`: llena el maná (`heal` sigue llenando solo la vida).
+- **Dónde valen** (tres capas): `make validate` rechaza un NPC con una de ellas que no
+  esté colocado (`world/islands/<id>/npcs.yaml`) o que esté en alguna isla que no sea
+  `dev_only` (`packages/content-schema`, `checkDevOnlyActions`); el servidor no arranca si
+  coloca un NPC así en una isla sin la marca `dev` de `world.bin` (la pone
+  `mapcompile -dev`; `content.CheckDevPlacement` en `session.initNPCs`), y al elegir la
+  opción vuelve a mirar la isla del NPC: fuera de una isla de desarrollo no corre nada de
+  la opción (tampoco sus otras acciones) y contesta `dialog.dev_only` (`dialog.Check`).
+  Además, un `world.bin` con islas de desarrollo no carga con `RPG_ENV` de producción
+  (`03-world-and-maps.md`, "Compilación").
+- **NPC de desarrollo** (`dev_only: true` a nivel del NPC, revisión del lote 5): vuelve de
+  desarrollo **todas** sus acciones, también las que no lo son por sí solas (el oro y la
+  experiencia gratis de la instructora, `give_gold: 10000` y `give_xp: 50000`, que antes
+  solo protegía que ella también tuviera `train_skill`). Pasa por las mismas tres capas:
+  `make validate` lo rechaza sin colocar o fuera de islas `dev_only`; el servidor no
+  arranca con él en una isla sin la marca `dev` (`content.CheckDevPlacement`); y fuera de
+  una isla de desarrollo `dialog.Check` rechaza con `dialog.dev_only` cualquier opción
+  suya salvo la que solo cierra (`close`), también la que solo navega con `goto`: de su
+  diálogo no se ve más que el saludo.
+  Úsalo en todo NPC pensado solo para probar.
+- Una acción de desarrollo nueva se suma a `content.Action.DevOnly` (Go) y a
+  `DEV_ONLY_ACTIONS` (`packages/content-schema/src/validate.ts`).
 Semántica del motor (T1.10):
 - Una opción se muestra si se cumplen todas sus condiciones; al elegirla el servidor las
   vuelve a evaluar. Después revisa los costos de todas sus acciones juntas (`take_gold`,
@@ -339,8 +423,14 @@ Semántica del motor (T1.10):
   arranca si no se cumple).
 - `give_item` da una unidad a la mochila; si no cabe (lugar o capacidad) cae al suelo
   bajo el jugador. `give_gold`/`take_gold` usan el dinero (`currency.worth`).
-- `bless` guarda la bendición en `quest_state` (`bless.<id>` = 1) y cobra el precio; al
-  morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida.
+- `bless: { blessing, price, per_level }` guarda la bendición en `quest_state`
+  (`bless.<id>` = 1) y cobra `price + per_level × nivel` del que la compra (auditoría de
+  contenido M6; `per_level` es opcional, 0 = precio fijo; nunca menos de 0). Una opción
+  con `bless` no puede tener `give_xp` (lo rechazan `make validate` y el arranque: cobraría
+  con otro nivel que el que mostró), y si el nivel cambió desde que se mostró el nodo, el
+  servidor no cobra, avisa (`dialog.price_changed`) y lo vuelve a mandar. El texto de la opción recibe ese
+  total como `{price}` (la opción de diálogo lleva parámetros, docs/05); al
+  morir reduce la pérdida y se consume (reglas en `02-game-design.md`, "Muerte"). `heal` cura toda la vida (no el maná).
 - `skill_at_least` usa el nivel de skill actual; `level_at_least`, el nivel del jugador.
 
 Estado por personaje en `quest_state` (clave → valor; una clave ausente vale 0):
@@ -409,7 +499,7 @@ que toma la llave con `take_item`) y las quests secundarias `foreman_ore` y
 - id: light_heal
   name: spell.light_heal.name
   words: "vita lumen"        # palabras propias, nunca las de Tibia
-  vocations: [druid, arcanist]
+  vocations: [arcanist]       # el druida tiene sus propias curas (verdant_mend, mend_other)
   level: 6
   mana: 25
   group: healing
@@ -464,7 +554,9 @@ conditions:
 ```
 - `kind`: `damage` (un golpe de `element` cada `interval_ms`; exige `element`,
   `interval_ms` y `max_ticks`), `speed` (`speed_pct`, negativo frena), `skill` (`skill` +
-  `amount` niveles en combate) o `invisible`. Las que no son de daño exigen `max_ms`.
+  `amount` niveles en combate), `invisible` o `regen` (auditoría de contenido m2: la
+  regeneración de la vocación es `regen_pct` % más fuerte; la da la comida, `well_fed`).
+  Las que no son de daño exigen `max_ms`.
 - `stacking`: `refresh` (queda el tiempo o los golpes mayores y el daño mayor) o `add`
   (se suman hasta `max_ticks` / `max_ms`). `cancels` lista las que quita al aplicarse.
 - `persists: true` = sobrevive a un relogueo (ver `02-game-design.md`, "Condiciones").
@@ -563,7 +655,14 @@ houses:
   transfer_minutes: 10      # una oferta de transferencia espera (1..120)
   action_burst: 8           # anti-flood de acciones y movimientos de items en casas
   action_refill_ms: 300
+  inactive_days: 28         # M6: sin nadie de la cuenta del dueño en el juego tanto, al
+                            # vencer el alquiler la casa se libera (0..365; 0 = nunca;
+                            # el servidor o la base caídos no cuentan)
 ```
+- El alquiler de cada casa es dato del mapa (`houses.yaml → rent`): casillas × 60 en
+  Puerto, × 90 en el Bosque, × 120 en la Volcánica (auditoría de contenido M6, lo revisa
+  `packages/content-schema/src/house-rent.test.ts`; una isla nueva con casas necesita su
+  tarifa ahí).
 - Textos: `house.*` y `gm.house_*` (servidor), `client.house.*` (ventana) en
   `i18n/*/client.yaml`; `site.houses.*` en `site.yaml`.
 
@@ -576,14 +675,17 @@ market:
   enabled: true
   fee_permille: 20          # comisión: milésimas de cantidad × precio, destruida (sumidero)
   fee_min: 5                # y entre fee_min y fee_max, en cobre
-  fee_max: 4000
+  fee_max: 50000
   max_offers: 15            # ofertas activas por personaje (1..100)
   max_amount: 2000          # unidades por oferta (1..100000)
   max_price: 5000000        # cobre por unidad (1..1000000000)
   durations_hours: [12, 48, 120]   # 1..8 opciones, cada una 1..1440
   list_size: 15             # ofertas por lado en una búsqueda
   history_size: 25          # operaciones propias que se ven
-  reference_days: 5         # ventana del precio de referencia
+  reference_days: 5         # ventana del precio de referencia (mediana de votos, m13)
+  reference_min_votes: 3    # sin referencia con menos votos (uno por cuenta vendedora y día)
+  reference_min_sellers: 2  # ni con menos cuentas vendedoras distintas (<= min_votes, make validate)
+  reference_min_accounts: 3 # ni con menos cuentas en total; las que se vendieron entre sí no cuentan
   mailbox_shown: 30         # items del buzón por ventana
   action_burst: 6           # anti-flood: ráfaga y recarga por acción
   action_refill_ms: 400
@@ -597,7 +699,7 @@ trade:
 ```
 - Items: `tradeable: true` permite el intercambio y, si además no es moneda ni fijo del
   mapa, el mercado. `market_board: true` (en un item fijo del mapa) lo hace tablero del
-  mercado (`market_board`, en Puerto y en Raigal).
+  mercado (`market_board`, en Puerto, en Raigal y en Brasal).
 - Textos: `trade.*`, `market.*` y `gm.market_*` (servidor), `client.trade.*`,
   `client.market.*` y `client.battle.trade` (cliente) en `i18n/*/client.yaml`.
 
@@ -643,6 +745,9 @@ trade:
   `bosque_to_volcan` (Tavin Rema, 150, nivel 25), `volcan_to_bosque` (Nerea Vado, 100) y
   `volcan_to_puerto` (Nerea Vado, 140), sin requisitos de vuelta. El texto de la
   opción dice destino y precio (`npc.<capitán>.to_*`).
+- Una isla `dev_only` (la Isla de Pruebas, docs/03) no puede tener rutas: el servidor de
+  producción las revisa contra un mapa sin ella. Su barquero (`pruebas_ferryman`) usa
+  opciones con `take_gold` y `teleport` a las llegadas de las rutas de verdad.
 - El NPC necesita un nodo con `boat_routes: true`: ahí el servidor agrega una opción por
   ruta (antes de las del nodo, `option_id` 101, 102…). Rutas + opciones del nodo ≤ 9.
   Todas las rutas se muestran; un requisito que falla se explica al elegirla.

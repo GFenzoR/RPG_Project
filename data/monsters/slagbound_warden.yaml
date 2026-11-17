@@ -15,7 +15,7 @@ attacks:
       condition: { id: burning, chance: 0.5, ticks: 5, damage: 8 } }
 resistances: { physical: 10, fire: 100, earth: 30, ice: -20 }
 loot:
-  - { item: forge_seal, chance: 1 }
+  - { item: forge_seal, chance: 1, each_player: true }
   - { item: copper_coin, chance: 1, count: [200, 500] }
   - { item: slag_core, chance: 0.5, count: [1, 2] }
   - { item: wyrm_scale, chance: 0.2 }

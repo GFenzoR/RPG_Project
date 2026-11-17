@@ -41,3 +41,7 @@ quest.ch3_warden.name: "Capítulo 3: El custodio de la forja"
 quest.ch3_warden.step_defeat_warden: "El custodio de escoria todavía guarda la forja antigua, tras la puerta sellada: ábrela con la llave de ascua y derrótalo."
 quest.ch3_warden.step_take_seal: "Toma el sello de la forja que guardaba el custodio."
 quest.ch3_warden.step_return_seal: "Lleva el sello de la forja a Casia Hollín, en Brasal."
+# Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md).
+quest.pruebas_rats.name: "Ratas de práctica"
+quest.pruebas_rats.step_hunt_rats: "Caza tres ratas de sentina en el primer corral del sendero de caza, al norte del templo de la Isla de Pruebas."
+quest.pruebas_rats.step_report: "Vuelve con Irene Ensayo, en el templo."

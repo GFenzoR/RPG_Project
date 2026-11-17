@@ -46,7 +46,7 @@ const (
 const (
 	// shopPendingFor is how long an update for an account that is not online is kept,
 	// for a login whose database read ran before the purchase committed.
-	shopPendingFor = game.Tick(120 * 1000 / 50)
+	shopPendingFor = game.Tick(120 * time.Second / game.TickDuration)
 )
 
 type pendingShop struct {
@@ -234,7 +234,7 @@ func (w *World) pruneShopPending(tick game.Tick) {
 	if len(w.shopPending) == 0 || tick < w.shopPrune {
 		return
 	}
-	w.shopPrune = tick + game.Tick(60*1000/50)
+	w.shopPrune = tick + game.Tick(time.Minute/game.TickDuration)
 	for id, pend := range w.shopPending {
 		if tick-pend.tick > shopPendingFor {
 			delete(w.shopPending, id)

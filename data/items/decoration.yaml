@@ -30,7 +30,7 @@
     regen_ms: 300000        # grows back 5 min after its last swing
     chance: { base: 0.3, per_level: 0.02, max: 0.85 }
     drops:
-      - { item: rough_stone, weight: 6, count: [1, 3] }
+      - { item: rough_stone, weight: 6, count: [1, 2] }
       - { item: iron_ore, weight: 4 }
       - { item: quartz_crystal, weight: 1, min_level: 5 }
 
@@ -818,3 +818,86 @@
   description: text.bosque.cave_sign
   pickupable: false
   blocks_movement: true
+
+# Signs of the Isla de Pruebas (sandbox island, docs/16-probar-el-juego.md): one per sector,
+# saying what to try there. The id is the one of the sign in world/islands/pruebas/texts.yaml.
+- id: pruebas_temple_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.temple_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "By the temple door: what each sector of the island is for."
+
+- id: pruebas_hunt_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.hunt_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "At the start of the hunting trail: the pens from weak to strong."
+
+- id: pruebas_craft_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.craft_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "In the gathering and crafting sector."
+
+- id: pruebas_market_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.market_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "By the market board: market and house."
+
+- id: pruebas_dock_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.dock_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "At the dock: the ferry to the real islands."
+
+- id: pruebas_vault_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.vault_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "By the practice gate."
+
+- id: pruebas_portal_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.portal_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "In the yard of portals (floor 7)."
+
+- id: pruebas_dungeon_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.dungeon_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "In the dungeon (floor 8)."
+
+- id: pruebas_arena_sign
+  kind: decoration
+  sprite: decor/signpost
+  name: item.signpost.name
+  description: text.pruebas.arena_sign
+  pickupable: false
+  blocks_movement: true
+  notes: "At the arena entrance."

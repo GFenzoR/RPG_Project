@@ -53,6 +53,13 @@ shop:
     - { item: smithing_hammer, price: 105 }
     - { item: pickaxe, price: 60 }
     - { item: elm_log, price: 12 }
+    - { item: embersteel_mace, price: 2500 }
+    - { item: embersteel_longbow, price: 2600 }
+    - { item: embersteel_crossbow, price: 2400 }
+    - { item: embersteel_greaves, price: 1200 }
+    - { item: embersteel_sabatons, price: 1100 }
+    - { item: arrow, price: 2 }
+    - { item: bolt, price: 2 }
   buys:
     - { item: embersteel_sabre, price: 600 }
     - { item: embersteel_axe, price: 620 }
@@ -67,3 +74,9 @@ shop:
     - { item: salamander_scale, price: 16 }
     - { item: slag_core, price: 36 }
     - { item: wyrm_scale, price: 45 }
+    - { item: embersteel_mace, price: 650 }
+    - { item: embersteel_longbow, price: 680 }
+    - { item: embersteel_crossbow, price: 620 }
+    - { item: embersteel_greaves, price: 310 }
+    - { item: embersteel_sabatons, price: 280 }
+    - { item: rough_stone, price: 1 } # content audit m4: the ember veins give it too

@@ -6,9 +6,14 @@ islands:
   - id: testisle
     rect: { x: 1024, y: 1024, w: 64, h: 64 }
     level_hint: [1, 8]
+    dev_only: true
   - id: bosque
     rect: { x: 4096, y: 6016, w: 192, h: 192 }
     level_hint: [10, 30]
   - id: volcan
     rect: { x: 3584, y: 5696, w: 192, h: 192 }
     level_hint: [25, 60]
+  - id: pruebas
+    rect: { x: 2048, y: 2048, w: 96, h: 96 }
+    level_hint: [1, 60]
+    dev_only: true

@@ -26,11 +26,13 @@ import type { TouchedAux, TouchedChunk } from "./draft.ts";
 import {
   addPortal,
   addSpawn,
+  addText,
   addZone,
   placeNpc,
   removeNpc,
   removePortal,
   removeSpawn,
+  removeText,
   removeZone,
 } from "./entities.ts";
 import { addHouse, removeHouse, setHouse } from "./houses.ts";
@@ -46,7 +48,7 @@ export interface ApplyResult {
   inverse: MapOp[];
   /** Every chunk that changed, was created or was removed, with the island that owns it. */
   touched: TouchedChunk[];
-  /** Every auxiliary list (spawns, zones, portals, npcs, houses) that changed, per island. */
+  /** Every auxiliary list (spawns, zones, portals, npcs, texts, houses) that changed, per island. */
   touchedAux: TouchedAux[];
 }
 
@@ -107,6 +109,10 @@ function applyOne(d: Draft, op: MapOp, opts: OpOptions): MapOp[] {
       return placeNpc(d, op, opts);
     case "remove_npc":
       return removeNpc(d, op);
+    case "add_text":
+      return addText(d, op);
+    case "remove_text":
+      return removeText(d, op);
     case "add_house":
       return addHouse(d, op);
     case "remove_house":

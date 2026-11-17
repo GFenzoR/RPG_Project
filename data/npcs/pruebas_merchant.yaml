@@ -1,0 +1,75 @@
+id: pruebas_merchant
+name: npc.pruebas_merchant.name
+sprite: npcs/sandbox_merchant
+notes: >-
+  Provisioner of the Isla de Pruebas, the sandbox island (docs/16-probar-el-juego.md): the
+  tools of every trade (no shovel: nothing digs yet), food, poultices, runes, the basic
+  gear of each vocation, the key of the practice gate and a spare backpack, at the
+  prices of the real islands. Buys a few hunting and trade goods back at the
+  provisioner's prices, to try selling.
+dialog:
+  start: greet
+  nodes:
+    greet:
+      text: npc.pruebas_merchant.greet
+      options:
+        - text: dialog.trade
+          action: { open_shop: pruebas_shop }
+        - text: npc.pruebas_merchant.opt_gear
+          goto: gear
+        - text: npc.pruebas_merchant.opt_key
+          goto: key
+        - text: dialog.bye
+          action: close
+    gear:
+      text: npc.pruebas_merchant.gear
+      options:
+        - text: dialog.trade
+          action: { open_shop: pruebas_shop }
+        - { text: dialog.back, goto: greet }
+    key:
+      text: npc.pruebas_merchant.key
+      options:
+        - text: dialog.trade
+          action: { open_shop: pruebas_shop }
+        - { text: dialog.back, goto: greet }
+shop:
+  id: pruebas_shop
+  sells:
+    - { item: pickaxe, price: 120 }
+    - { item: felling_axe, price: 110 }
+    - { item: fishing_rod, price: 140 }
+    - { item: smithing_hammer, price: 95 }
+    - { item: rope, price: 45 }
+    - { item: ship_biscuit, price: 3 }
+    - { item: seaweed_poultice, price: 25 }
+    - { item: mana_draught, price: 22 }
+    - { item: concentrated_mana_draught, price: 50 }
+    - { item: arc_rune, price: 30 }
+    - { item: hatchet, price: 60 }
+    - { item: iron_sword, price: 120 }
+    - { item: spark_wand, price: 40 }
+    - { item: coral_wand, price: 300 }
+    - { item: short_bow, price: 40 }
+    - { item: arrow, price: 1 }
+    - { item: smuggler_crossbow, price: 420 }
+    - { item: bolt, price: 1 }
+    - { item: sapling_staff, price: 40 }
+    - { item: barrel_lid_shield, price: 10 }
+    - { item: plank_shield, price: 25 }
+    - { item: patched_tunic, price: 20 }
+    - { item: hide_vest, price: 45 }
+    - { item: leather_jerkin, price: 150 }
+    - { item: sailcloth_cap, price: 10 }
+    - { item: canvas_trousers, price: 15 }
+    - { item: tarred_boots, price: 15 }
+    - { item: pruebas_key, price: 10 }
+    - { item: backpack, price: 20 }
+  buys:
+    - { item: raw_fish, price: 1 }
+    - { item: grilled_fish, price: 2 }
+    - { item: iron_ore, price: 3 }
+    - { item: iron_ingot, price: 11 }
+    - { item: birch_log, price: 1 }
+    - { item: wolf_pelt, price: 5 }
+    - { item: bat_wing, price: 1 }

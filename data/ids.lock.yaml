@@ -223,3 +223,33 @@ items:
   hole: 220
   rope_spot: 221
   teleport: 222
+  pruebas_temple_sign: 223
+  pruebas_hunt_sign: 224
+  pruebas_craft_sign: 225
+  pruebas_market_sign: 226
+  pruebas_dock_sign: 227
+  pruebas_vault_sign: 228
+  pruebas_portal_sign: 229
+  pruebas_dungeon_sign: 230
+  pruebas_arena_sign: 231
+  pruebas_gate: 232
+  pruebas_gate_open: 233
+  pruebas_key: 234
+  bolt: 235
+  stagleather_hood: 236
+  stagleather_boots: 237
+  embersteel_greaves: 238
+  embersteel_sabatons: 239
+  mana_draught: 240
+  concentrated_mana_draught: 241
+  spark_wand: 242
+  elmroot_maul: 243
+  thornwood_longbow: 244
+  smuggler_crossbow: 245
+  stormglass_wand: 246
+  hoarfrost_staff: 247
+  embersteel_mace: 248
+  embersteel_longbow: 249
+  embersteel_crossbow: 250
+  obsidian_wand: 251
+  blackfrost_staff: 252

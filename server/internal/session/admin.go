@@ -141,11 +141,11 @@ const (
 	AdminMaxBan = 3650 * 24 * time.Hour
 	// Staff command rate: a burst of cmdBurst, then one per cmdRefill.
 	cmdBurst  = 10
-	cmdRefill = game.Tick(1000 / 50) // 1 s
+	cmdRefill = game.Tick(time.Second / game.TickDuration)
 	// RoleCheckEvery is how often the roles of online staff are read again from the
 	// database (5 s): a role taken away with set-role is lost within that time even if
 	// the character stays connected.
-	RoleCheckEvery = game.Tick(5000 / 50)
+	RoleCheckEvery = game.Tick(5 * time.Second / game.TickDuration)
 )
 
 // Message keys of the commands.

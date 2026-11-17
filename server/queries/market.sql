@@ -23,19 +23,27 @@ WHERE h.n <= sqlc.arg(per_character)::bigint
 ORDER BY h.id;
 
 -- name: LoadMarketSales :many
--- Units sold and money paid by item and day since a time (reference prices).
-SELECT item_id, date_trunc('day', at, 'UTC')::timestamptz AS day, sum(amount)::bigint AS units,
-    sum(amount * price)::bigint AS total
-FROM market_history WHERE side = 1 AND at >= sqlc.arg(since)
-GROUP BY item_id, day ORDER BY item_id, day;
+-- Units sold and money paid by item, day, seller account and buyer account since a time
+-- (reference prices: one vote per seller account and day, leaving out the accounts that
+-- sold to each other; content audit m13). side 1 rows are the seller's. A deleted buyer
+-- (no foreign key) gets an account of its own: minus its character id.
+SELECT h.item_id, date_trunc('day', h.at, 'UTC')::timestamptz AS day, c.account_id AS seller_account,
+    COALESCE(b.account_id, -h.other_character_id)::bigint AS buyer_account,
+    sum(h.amount)::bigint AS units, sum(h.amount * h.price)::bigint AS total
+FROM market_history h
+JOIN characters c ON c.id = h.character_id
+LEFT JOIN characters b ON b.id = h.other_character_id
+WHERE h.side = 1 AND h.at >= sqlc.arg(since)
+GROUP BY h.item_id, day, c.account_id, buyer_account
+ORDER BY h.item_id, day, c.account_id, buyer_account;
 
 -- name: LoadMarketBans :many
--- The active bans of the accounts that own offers (their offers are hidden). until is
--- NULL for a permanent ban.
+-- The active bans of every account: an offer of a banned account is hidden, and its sales
+-- (as seller or buyer) are left out of the reference price (content audit m13), also once
+-- it has no offers left. until is NULL for a permanent ban.
 SELECT b.account_id, CASE WHEN bool_or(b.expires_at IS NULL) THEN NULL ELSE max(b.expires_at) END::timestamptz AS until
 FROM account_bans b
 WHERE b.lifted_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > sqlc.arg(now))
-  AND b.account_id IN (SELECT c.account_id FROM market_offers o JOIN characters c ON c.id = o.character_id)
 GROUP BY b.account_id;
 
 -- name: LoadMarketHigh :one

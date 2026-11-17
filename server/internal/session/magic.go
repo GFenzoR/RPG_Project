@@ -657,7 +657,8 @@ func (w *World) conditionSpell(ctx *game.TickContext, p *Player, a *content.Cond
 	w.applyCondition(ctx, holder{m: m}, a, p.id)
 	w.reveal(ctx, p)
 	if m.target == nil && w.validTarget(m, p) {
-		m.target, m.state = p, StateAlert // like a hit: it fights back
+		m.setTarget(p) // like a hit: it fights back
+		m.state = StateAlert
 	}
 	return true
 }
@@ -754,7 +755,7 @@ func (w *World) rangedReady(ctx *game.TickContext, p *Player, pos world.Pos, rng
 	}
 	if !inRange || !w.m.LineOfSight(p.pos, pos) {
 		if p.chase && !p.Walking() && ctx.Tick >= p.readyAt {
-			if d, ok := w.chaseStep(p.pos, pos, false); ok {
+			if d, ok := w.chaseStep(p.pos, pos); ok {
 				p.stopWalk()
 				p.queue = append(p.queue, d)
 			}

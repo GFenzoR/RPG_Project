@@ -24,6 +24,10 @@
           },
           "level_hint": {
             "$ref": "common.schema.json#/$defs/levelHint"
+          },
+          "dev_only": {
+            "description": "A development island (the sandbox island): mapcompile leaves it out unless run with -dev, so the production image never has it.",
+            "type": "boolean"
           }
         }
       }

@@ -110,11 +110,13 @@ level_hint: [1, 15]
   pos: { x: 3230, y: 6402, z: 7 }
   text: text.puerto.temple_sign
 ```
-El servidor no carga `texts.yaml` (lo usan el editor, `mapcli` y el validador). Para que
-un cartel se vea y se lea en el juego, la misma casilla lleva un item fijo cuya
-`description` es esa clave (T5.5: `brasal_temple_sign`, ver `06-content-data.md`); mirarlo
-muestra el texto. Todos los carteles de Puerto, el Bosque y la Isla Volcánica lo tienen
-(en Puerto y el Bosque el item se llama como su entrada de `texts.yaml`, p. ej.
+Se edita con las ops `add_text`/`remove_text` (`04-map-editor-and-ai.md`; el editor todavía
+no tiene panel de textos). El servidor no carga `texts.yaml` (lo usan el editor, `mapcli`
+y el validador). Para que un cartel se vea y se lea en el juego, la misma casilla lleva un
+item fijo cuya `description` es esa clave (T5.5: `brasal_temple_sign`, ver
+`06-content-data.md`); mirarlo muestra el texto. Todos los carteles de Puerto, el Bosque,
+la Isla Volcánica y la Isla de Pruebas lo tienen (en Puerto, el Bosque y la Isla de
+Pruebas el item se llama como su entrada de `texts.yaml`, p. ej.
 `puerto_temple_sign`); solo el del templo de `testisle` queda sin item. El
 validador los mantiene de acuerdo: un item de cartel (un item cuya `description` es una
 clave `text.*`) tiene que estar en una casilla con un `kind: sign` de `texts.yaml` con ese
@@ -183,7 +185,7 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
 - Un portal por casilla de entrada, y nunca hacia su propia casilla. `to` no debería ser
   la casilla de otro portal que se pisa: el servidor deja al jugador en la libre más
   cercana (nadie se queda parado sobre una escalera).
-- Lo carga el servidor desde `world.bin` (versión 5, "Formato de `world.bin`"), como las
+- Lo carga el servidor desde `world.bin` (desde la versión 5, "Formato de `world.bin`"), como las
   casas: un cambio de `portals.yaml` necesita `make mapcompile` y reiniciar. El cliente
   también lo empaqueta (el plugin de Vite, `loadPortals`, de las islas de `world.yaml`):
   hay que reiniciar `vite` o reconstruir el cliente. Un `portals.yaml` que no se puede
@@ -195,7 +197,7 @@ una escalera necesita su pareja de vuelta, ver "Validación"):
 ```yaml
 - id: puerto_house_net
   name: house.puerto_house_net.name
-  rent: 800
+  rent: 1920
   rects:
     - { x: 3151, y: 6396, z: 7, w: 6, h: 5 }
     - { x: 3153, y: 6401, z: 7, w: 2, h: 1 }
@@ -272,6 +274,12 @@ islands:
     rect: { x: 3072, y: 6272, w: 512, h: 512 }
     level_hint: [1, 15]
 ```
+`dev_only: true` (opcional) marca una isla de desarrollo, hoy `pruebas` (la Isla de
+Pruebas, `16-probar-el-juego.md`) y `testisle` (la de los tests y el E2E, auditoría de
+contenido m11): `mapcompile` la deja afuera salvo con `-dev`, así que la
+imagen de producción no la tiene (ver "Compilación" y "Validación"). La primera isla de la
+lista no puede serlo.
+
 Las rutas de barco no van aquí: desde T3.5 viven en `data/boat_routes.yaml` (las vende un
 NPC, con precio y requisitos, como el resto del contenido; formato en
 `06-content-data.md`). El campo `boat_routes` de este archivo quedó obsoleto en T3.5 y se
@@ -279,12 +287,18 @@ quitó en T3.6 (el esquema todavía lo acepta, opcional y vacío, para no romper
 **Isla inicial:** un personaje sin ciudad de residencia (`characters.town` vacío, como uno
 recién creado) despierta en el templo de la **primera isla de `world.yaml`** (hoy `puerto`,
 la isla inicial de `docs/02`). El servidor acepta `-start-town <isla>` (o `RPG_START_TOWN`)
-para cambiarla; el E2E usa `-start-town testisle` porque sus pruebas dependen de esa isla.
+para cambiarla; el E2E usa `-start-town testisle` porque sus pruebas dependen de esa isla, y
+`make play` usa `-start-town pruebas` (la Isla de Pruebas, `16-probar-el-juego.md`).
 
 ## Compilación
 `server/cmd/mapcompile` (`make mapcompile`) lee `world/` + `data/items/` +
 `data/ids.lock.yaml`, valida lo necesario para compilar, resuelve IDs y escribe
-`build/world.bin` (binario compacto: tiles por sector, flags precomputados). El servidor
+`build/world.bin` (binario compacto: tiles por sector, flags precomputados), sin las islas
+`dev_only` de `world.yaml` salvo con `-dev` (`make mapcompile` lo pasa, igual que el E2E; la
+imagen de producción, `deploy/Dockerfile.gameserver`, no). Con `-dev` esas islas quedan
+marcadas en `world.bin` (`flags`, versión 6) y el servidor se niega a cargar ese mundo con
+`RPG_ENV` de producción (vacía o `production`): `make run-server`, `make dev`, `make play`,
+`make bots` y el E2E corren con `RPG_ENV=development`. El servidor
 solo carga `world.bin` (`-world`, por defecto `$RPG_WORLD` o `../build/world.bin` desde
 `server/`). El editor y `mapcli` trabajan siempre con el JSON.
 
@@ -320,13 +334,13 @@ no de render: el cliente sigue mostrando toda la ventana de 15x11 del piso actua
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
 
-### Formato de `world.bin` (versión 5)
+### Formato de `world.bin` (versión 6)
 Binario little endian. Lo escribe y lee `server/internal/world` (`Encode`/`Decode`). Las
 mismas fuentes producen siempre los mismos bytes.
 
 ```text
 magic        8 bytes "RPGWORLD"
-version      u16 = 5
+version      u16 = 6
 speedCount   u32, luego speedCount × u16
              costo de terreno (ground.speed) indexado por ID numérico; 0 = 100 por defecto
 islandCount  u16, luego por isla (en el orden de world.yaml):
@@ -334,6 +348,8 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
   rect       4 × u32: x, y, w, h (alineados a 32)
   floors     u8 cantidad + bytes (ascendentes, sin repetir, 0..15)
   temple     u16 x, u16 y, u8 z
+  flags      u8 (v6): bit 0 dev (isla `dev_only` que dejó entrar `mapcompile -dev`); el
+             resto en 0 (`Decode` rechaza otro bit)
   spawns     u16 cantidad, luego por spawn (en el orden de spawns.yaml):
     id u8 largo + bytes, center u16 x, u16 y, u8 z, radius u8,
     respawn u32 segundos, monsters u8 cantidad, luego por monstruo:
@@ -357,7 +373,14 @@ islandCount  u16, luego por isla (en el orden de world.yaml):
 crc32        u32 (IEEE) de todos los bytes anteriores
 ```
 
-- Historial: la versión 5 agregó `portals` por isla (escaleras y demás de
+- Historial: la versión 6 agregó `flags` por isla, con el bit 0 `dev`: `mapcompile -dev`
+  marca cada isla `dev_only` que deja entrar (hoy la Isla de Pruebas) y `Map.DevIslands`
+  las lista. Un mundo con alguna es un **mundo de desarrollo**: el servidor no arranca con
+  él en producción (`RPG_ENV` vacía, `production` o desconocida; `loadWorld` de
+  `cmd/gameserver`, como el proveedor de pagos falso) y solo los NPCs de una isla marcada
+  ejecutan las acciones de diálogo de desarrollo (`train_skill`, `restore_mana`, y todas
+  las de un NPC `dev_only`; `06-content-data.md`). Un `world.bin` de la versión 5 no carga: vuelve a compilarlo.
+- La versión 5 agregó `portals` por isla (escaleras y demás de
   `portals.yaml`, que antes solo veían el editor y el validador): `NewMap` rechaza ids
   repetidos en el mundo o fuera del formato de id, un tipo desconocido, una entrada que
   no es una casilla caminable de su isla en un piso que lista, un destino que no es una
@@ -510,13 +533,25 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   (`checkArrivals` en `session/travel.go`, que corre en cuanto `initDoors` encuentra las
   puertas, antes del chequeo de escape), y los dos lados leen los casos de
   `packages/map-format/src/testdata/arrivals.json`.
+- **Islas `dev_only`**: como la imagen de producción no las tiene, nada de lo que el
+  servidor revisa contra su mapa puede necesitarlas: ninguna ruta de barco sale de una,
+  llega a una ni tiene ahí a su capitán, ningún teleport de un diálogo llega a una (el
+  servidor no arrancaría) y ningún portal de otra isla lleva a una (`mapcompile` rechazaría
+  el mapa). La primera isla de `world.yaml` no puede ser `dev_only`. Al revés, un NPC con
+  una acción de diálogo de desarrollo (`train_skill`, `restore_mana`) o marcado
+  `dev_only: true` solo puede estar en islas `dev_only`: lo revisa la validación de contenido (`packages/content-schema`, con
+  los `npcs.yaml` de cada isla) y el servidor no arranca si no se cumple
+  (`06-content-data.md`, "Diálogos").
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).
 
 ## Islas actuales
-- `testisle` (64x64, pisos 7–8): isla de pruebas de herramientas, tests y E2E. Va primera en
-  `world.yaml`, así que sigue siendo la isla de inicio de un personaje sin `town`. Desde
-  T1.16 ya no tiene NPCs (cada NPC se coloca una vez en el mundo).
+- `testisle` (64x64, pisos 7–8; "Islote de ensayo"): isla de pruebas de herramientas, tests
+  y E2E. Es `dev_only` desde la auditoría de contenido m11: la imagen de producción no la
+  tiene, y `make mapcompile` (que pasa `-dev`) y el E2E (`-start-town testisle`) sí. Nada de
+  producción depende de ella (sus spawns no cuentan para la capacidad del mundo, docs/07).
+  Su nombre en español era "Isla de pruebas", igual al de la Isla de Pruebas (`pruebas`).
+  Desde T1.16 ya no tiene NPCs (cada NPC se coloca una vez en el mundo).
 - `puerto` (192x192 en 3072,6272; pisos 7–8; nivel 1–15; T1.16): forma base con
   `mapcli generate --recipe island --seed 42 --size 184`, luego ops. Superficie: pueblo del
   Farol (templo, plaza, depósito, armería, casas y almacén con muros), muelle (prefab
@@ -526,12 +561,20 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   al este y mina inundada con mineros ahogados al norte. Los 6 NPCs del Capítulo 1 viven
   aquí. Protección en templo, plaza y depósito (el item depósito aún no existe).
   Oficios (T3.4): fragua, yunque y fogón al norte del templo (3166–3172, 6366) y una
-  arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377). Las
+  arboleda de abedules talables al borde del bosque (≈3145–3150, 6369–6377), más dos
+  arboledas de 4 (auditoría de contenido M1) en el prado norte (≈3161–3166, 6326–6330) y al
+  este (≈3206–3211, 6354–6358); el Bosque tiene otras cuatro (16 abedules: 4135,6071,
+  4207,6099, 4225,6121 y 4172,6154, cada una en un bloque de 6x6). Spawns y respawns de
+  las tres islas: docs/07, "Capacidad del mundo". Las
   estaciones son items comunes del mapa (`place`): lo que las hace estación es que una
   receta de `data/recipes.yaml` las nombre.
   Casas (T5.4): las casas de madera del pueblo, `puerto_house_net` (3150–3157,
-  6395–6401) y `puerto_house_oar` (3160–3167, 6395–6401), con puerta al sur, y la más
-  grande, `puerto_house_anchor` (3180–3188, 6408–6414), con puerta al norte.
+  6395–6401) y `puerto_house_oar` (3160–3167, 6395–6401), con puerta al sur, y
+  `puerto_house_anchor` (3180–3188, 6408–6414), con puerta al norte. Desde la auditoría
+  de contenido M6 también son casas los tres edificios que estaban vacíos:
+  `puerto_house_buoy` (3150–3157, 6408–6414) y `puerto_house_lantern` (3160–3167,
+  6408–6414), con puerta al norte, y la más grande, `puerto_house_keel` (3180–3187,
+  6391–6398), con puerta al oeste sobre el camino.
   Muelle del capitán de puerto (`harbor_master`, 3201,6433): tablones 3200–3202,
   6429–6434; las rutas salen de 3201,6434 (`puerto_to_bosque`) y la vuelta desde el Bosque
   llega a 3201,6432 (la de la Isla Volcánica, `volcan_to_puerto`, a 3201,6431).
@@ -555,7 +598,10 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   Sin depósito (el item todavía no existe).
   Casas (T5.4): `bosque_house_moss` (prefab `house_wood_small` en 4156,6087) y
   `bosque_house_resin` (prefab `house_wood_medium` en 4165,6086), en la playa al norte del
-  pueblo, con la puerta al sur.
+  pueblo, con la puerta al sur; y (auditoría de contenido M6) `bosque_house_fern`
+  (`house_wood_medium` en 4166,6113, al este del camino, puerta al norte) y
+  `bosque_house_heron` (`house_wood_small` en 4155,6122, en la arena al sur de la
+  curtiduría, puerta al este sobre el camino).
   Carteles (`texts.yaml` y un item `bosque_*_sign` del mismo id en la misma casilla, que
   bloquea): templo en 4149,6109 (junto a la puerta sur), muelle en 4128,6099 (al final de
   los tablones) y cueva en 4247,6144 (junto a la escalera de la cueva).
@@ -579,8 +625,12 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   custodio de escoria (3692,5845, respawn 1200 s). Entre las dos, el pasillo se angosta a
   una casilla (`rock_wall` en 3691,5832) con la puerta con llave `forge_gate` en
   3692,5832: se abre con la llave de ascua del Capítulo 3. Protección en el templo y la plaza;
-  `no_logout` en el muelle; el resto es PvP abierto. Casa (T5.4): `volcan_house_cinder`
-  (prefab `house_wood_small` en 3646,5797, puerta al sur).
+  `no_logout` en el muelle; el resto es PvP abierto. Casas: `volcan_house_cinder` (T5.5,
+  prefab `house_wood_small` en 3646,5797, puerta al sur) y, desde la auditoría de
+  contenido M6, `volcan_house_bellows` (`house_wood_medium` en 3637,5797, al lado) y
+  `volcan_house_flint` (`house_wood_small` en 3669,5788, al este de la plaza y fuera de su
+  zona: su salida da al PvP abierto, como las de Raigal). Tablero del mercado en la plaza,
+  3660,5790 (m7).
   Suelos propios (T5.5, piso 7): ceniza (`ash`) en todo el interior, losas de basalto
   (`basalt`) en la plaza (el templo conserva su piso de piedra), escoria (`cinder_path`)
   en el camino de la plaza a la escalera de la mina y en tres caminos de 2 de ancho (de la
@@ -609,6 +659,32 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
   en algún bloque de 2x2 de lava (sin tiras de una casilla, donde la costra pellizcaría) y
   ninguna cae en el cuadrado de un spawn. Al dibujarlos se dejaron además dos casillas
   caminables hacia muros y vetas, una hacia rocas, y ningún hueco encerrado.
+- `pruebas` (96x96 en 2048,2048; pisos 7–8; nivel 1–60): **Isla de Pruebas**, el sandbox
+  para probar el juego a mano (`16-probar-el-juego.md`, `make play`). Fuera del juego normal
+  a propósito: es `dev_only` (la imagen de producción no la tiene) y ninguna ruta de barco,
+  portal ni diálogo de otra isla llega a ella (lo comprueban `tools/mapcli/src/world.test.ts`
+  y `TestCompilePruebas`); en local se entra con `-start-town pruebas` o con un `/tp` del
+  personal. Su barquero lleva de ida con teleports de diálogo, no con rutas de barco. Forma base con `mapcli generate --recipe island --seed 11 --size 90` y luego una lista
+  de ops (el parche de arena del centro pasa a pasto; scatter con semillas 1601–1608 en
+  bosquecillos; `autoborder` al final). Superficie: templo de piedra (2090–2100 ×
+  2083–2091, puerta al sur; despertar en 2095,2086) con la instructora `pruebas_trainer`
+  (experiencia, dinero, curación y la misión `pruebas_rats`), plaza de piedra (2083–2107 ×
+  2092–2103) con el proveedor `pruebas_merchant` (2086,2100) y el tablero del mercado
+  (2091,2103); protección `pruebas_town` en 2081–2109 × 2083–2104. Al norte, cinco corrales
+  de troncos (2076–2119 × 2073–2079, abiertos al sendero de y 2080–2081) de débil a fuerte:
+  ratas, lobos, jabalíes con una araña, espinosos y un dragoncillo. Al oeste, cantera de
+  vetas de hierro, abedules, taller con fragua, yunque y fogón, y un muelle de pesca con
+  agua con peces (nunca junto a la arena: los bordes quedan enteros). Al este, el patio de
+  portales (2113–2124 × 2088–2100: escalera, trampilla `ladder_down` y agujero) y la bóveda
+  de la puerta de práctica (`pruebas_gate` en 2117,2101, llave `pruebas_key`). Al sur, la
+  casa `pruebas_house` (prefab `house_wood_medium` en 2085,2108), la arena `pruebas_arena`
+  (zona `pvp`, 2102–2112 × 2111–2119, entrada por el oeste) y el muelle (prefab
+  `small_dock` en 2093,2133) con el barquero `pruebas_ferryman` (2097,2133), que por 20
+  monedas deja donde llegan los barcos de Puerto, el Bosque y la Isla Volcánica. Piso 8: cueva
+  de tierra y `rock_wall` bajo el patio con la escalera de vuelta, la escalera de mano, el
+  pozo bajo el agujero con su `rope_spot` (2119,2094), murciélagos y un teletransporte
+  (2113,2104) que vuelve a la plaza (2095,2094). Carteles: uno por sector
+  (`pruebas_*_sign`, mismo id en `texts.yaml`).
 
 ## Contribuciones de la comunidad al mapa principal
 Elegiste que los aportes se integren al mapa oficial. Para que eso sea manejable:

@@ -1,18 +1,22 @@
-# Spell names (data/spells.yaml).
+# Spell names (data/spells.yaml). Our own: light_heal, conjure_arrows and swift_stride were
+# renamed in the content audit (m12) for sounding like another game's spells; their ids stay
+# (hotbars and saved data name spells by id).
 spell.arc_bolt.name: "arc bolt"
 spell.ember_ring.name: "ember ring"
-spell.light_heal.name: "light heal"
+spell.light_heal.name: "mending glow"
 spell.conjure_arc_rune.name: "conjure arc rune"
 spell.sure_shot.name: "sure shot"
 spell.briar_arrow.name: "briar arrow"
 spell.ranger_mend.name: "forest relief"
-spell.conjure_arrows.name: "conjure arrows"
+spell.conjure_arrows.name: "weave arrows"
 spell.frost_lance.name: "frost lance"
 spell.verdant_mend.name: "verdant mend"
 spell.mend_other.name: "mend other"
 spell.bramble_burst.name: "bramble burst"
-spell.swift_stride.name: "swift stride"
+spell.swift_stride.name: "tailwind"
 spell.purge_venom.name: "purge venom"
 spell.keen_eye.name: "keen eye"
 spell.entangle.name: "entangle"
 spell.shroud.name: "shroud"
+spell.tempest_ring.name: "tempest ring"
+spell.rime_burst.name: "rime burst"

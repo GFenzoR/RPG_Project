@@ -174,6 +174,7 @@ class WorldValidator {
     this.checkPortalArrivals();
     this.checkPortalExits();
     this.checkBoatRoutes();
+    this.checkDevIslands();
     this.checkDoors();
     this.checkArrivals();
     this.checkPrefabs();
@@ -964,6 +965,81 @@ class WorldValidator {
         );
       this.checkRouteTile(r.index, ["from"], r.from, "dock");
       this.checkRouteTile(r.index, ["to"], r.to, "arrival");
+    }
+  }
+
+  /**
+   * Dev-only islands (world.yaml `dev_only`, the sandbox island): mapcompile leaves them out
+   * of a build without -dev, the production image's, so nothing the server checks against
+   * the map may need one. No boat route leaves from or lands on one or has its captain
+   * there (the server would not start), no dialog teleport lands on one (same), no portal
+   * of another island leads into one (mapcompile would refuse the map), and the first
+   * island of world.yaml, where characters with no town start, is not one.
+   */
+  private checkDevIslands(): void {
+    const entries = this.world.meta.islands;
+    const dev = new Set(entries.filter((e) => e.dev_only === true).map((e) => e.id));
+    if (dev.size === 0) return;
+    if (entries[0] && dev.has(entries[0].id))
+      this.err(
+        worldFile,
+        ["islands", 0, "dev_only"],
+        `the first island is where characters with no town start: "${entries[0].id}" cannot be dev-only`,
+      );
+    const devAt = (p: Position): string | undefined => {
+      const id = this.islandAt(p)?.meta.id;
+      return id !== undefined && dev.has(id) ? id : undefined;
+    };
+    const left = "a build without -dev (the production image) leaves it out";
+    const placed = new Map<string, Position>();
+    for (const island of this.world.islands.values())
+      for (const n of island.npcs) placed.set(n.npc, n.pos);
+    for (const r of this.content.routes) {
+      for (const [key, p] of [
+        ["from", r.from],
+        ["to", r.to],
+      ] as const) {
+        const id = devAt(p);
+        if (id)
+          this.err(
+            routesFile,
+            [r.index, key],
+            `boat route "${r.id}" ${key === "from" ? "leaves from" : "lands on"} dev-only island "${id}": ${left} and the server would not start`,
+            p,
+          );
+      }
+      const at = placed.get(r.captain);
+      const id = at && devAt(at);
+      if (at && id)
+        this.err(
+          routesFile,
+          [r.index, "captain"],
+          `captain "${r.captain}" of boat route "${r.id}" stands on dev-only island "${id}": ${left} and the server would not start`,
+          at,
+        );
+    }
+    for (const t of this.content.teleports ?? []) {
+      const id = devAt(t.to);
+      if (id)
+        this.err(
+          t.file,
+          ["dialog", "nodes", t.node],
+          `teleport of NPC "${t.npc}" (node "${t.node}") lands on dev-only island "${id}": ${left} and the server would not start`,
+          t.to,
+        );
+    }
+    for (const island of this.world.islands.values()) {
+      if (dev.has(island.meta.id)) continue;
+      for (const [i, p] of island.portals.entries()) {
+        const id = devAt(p.to);
+        if (id)
+          this.err(
+            `${this.dirOf(island)}/portals.yaml`,
+            [i, "to"],
+            `portal "${p.id}" leads into dev-only island "${id}": ${left} and mapcompile would refuse that map`,
+            p.to,
+          );
+      }
     }
   }
 

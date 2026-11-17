@@ -1,6 +1,6 @@
 // The repository's own islands (docs/03 "Islas actuales"): what the validator allows but
 // the world should keep. Signs that can be read, the forge gate's sign on the mine side,
-// and molten pools shaped like pools.
+// molten pools shaped like pools, and a sandbox island that normal play never reaches.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,7 +27,7 @@ const island = (id: string): Island => {
 const key = (x: number, y: number): string => `${x},${y}`;
 
 describe("signs (T5.5)", () => {
-  it.each(["puerto", "bosque", "volcan"])(
+  it.each(["puerto", "bosque", "volcan", "pruebas"])(
     "every sign of %s has its sign item on its tile, saying its text",
     (id) => {
       const signs = island(id).texts.filter((t) => t.kind === "sign");
@@ -148,5 +148,105 @@ describe("molten pools of the Ember Isle", () => {
             `${key(x, y)} in spawn ${s.id}`,
           ).toBeGreaterThan(s.radius);
       }
+  });
+});
+
+// The Isla de Pruebas (docs/16-probar-el-juego.md): every system within a short walk of the
+// temple, and no way in from the real islands (only -start-town pruebas or a staff /tp).
+describe("the sandbox island", () => {
+  const pruebas = island("pruebas");
+  const { temple } = pruebas.meta;
+  const inside = (p: Position): boolean => {
+    const r = pruebas.meta.rect;
+    return p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h;
+  };
+  const far = (p: Position): number => Math.max(Math.abs(p.x - temple.x), Math.abs(p.y - temple.y));
+
+  it("wakes characters in a protected temple, with everything a short walk away", () => {
+    const zones = pruebas.zones.filter(
+      (z) => z.type === "protection" && z.floors.includes(temple.z),
+    );
+    const covered = zones.some((z) =>
+      z.rects.some(
+        (r) => temple.x >= r.x && temple.y >= r.y && temple.x < r.x + r.w && temple.y < r.y + r.h,
+      ),
+    );
+    expect(covered).toBe(true);
+    const spots: [string, Position][] = [
+      ...pruebas.npcs.map((n): [string, Position] => [n.npc, n.pos]),
+      ...pruebas.spawns.map((sp): [string, Position] => [sp.id, sp.center]),
+      ...pruebas.texts.map((t): [string, Position] => [t.id, t.pos]),
+      ...pruebas.portals.map((p): [string, Position] => [p.id, p.from]),
+      ...pruebas.houses.map((h): [string, Position] => [h.id, h.exit]),
+    ];
+    for (const [what, pos] of spots) expect(far(pos), what).toBeLessThanOrEqual(50);
+    expect(pruebas.npcs.map((n) => n.npc).sort()).toEqual([
+      "pruebas_ferryman",
+      "pruebas_merchant",
+      "pruebas_trainer",
+    ]);
+  });
+
+  it("has one of each portal, each with its way back to the temple", () => {
+    expect(pruebas.portals.map((p) => p.kind).sort()).toEqual([
+      "hole",
+      "ladder",
+      "ladder",
+      "rope_spot",
+      "stairs",
+      "stairs",
+      "teleport",
+    ]);
+    // The teleport at the back of the cave lands on the square, in the protection zone.
+    const teleport = pruebas.portals.find((p) => p.kind === "teleport");
+    expect(teleport && far(teleport.to)).toBeLessThanOrEqual(10);
+  });
+
+  it("has a market board, crafting stations, ore, trees and fish", () => {
+    const stacks = new Map<string, number>();
+    let shoals = 0;
+    const { x: rx, y: ry, w, h } = pruebas.meta.rect;
+    for (let y = ry; y < ry + h; y++)
+      for (let x = rx; x < rx + w; x++) {
+        const t = tiles.tile(x, y, 7);
+        if (t?.ground === "water_shoal") shoals++;
+        for (const item of t?.stack ?? []) stacks.set(item, (stacks.get(item) ?? 0) + 1);
+      }
+    for (const item of ["market_board", "smelting_forge", "anvil", "cooking_hearth"])
+      expect(stacks.get(item), item).toBe(1);
+    expect(stacks.get("iron_vein")).toBeGreaterThanOrEqual(4);
+    expect(stacks.get("birch_tree")).toBeGreaterThanOrEqual(4);
+    expect(shoals).toBeGreaterThanOrEqual(4);
+  });
+
+  it("keeps its practice gate shut on a room, with a key the provisioner sells", () => {
+    const gate = { x: 2117, y: 2101, z: 7 };
+    expect(tiles.tileAt(gate)?.stack).toContain("pruebas_gate");
+    const room = doorRoom(tiles, content, gate);
+    if ("error" in room) throw new Error(`the practice gate has no room: ${room.error}`);
+    const file = join(repo, "data", "npcs", "pruebas_merchant.yaml");
+    const npc = parseYamlText(readFileSync(file, "utf8"), file, [])?.data as {
+      shop: { sells: { item: string }[] };
+    };
+    expect(npc.shop.sells.map((o) => o.item)).toContain("pruebas_key");
+  });
+
+  it("is dev-only and cannot be reached from the real islands", () => {
+    // mapcompile leaves it out of the production image (world.yaml dev_only).
+    expect(world.meta.islands.find((e) => e.id === "pruebas")?.dev_only).toBe(true);
+    // No boat route touches it: its ferryman travels by dialog teleports.
+    for (const r of content.routes) {
+      expect(inside(r.from), `route ${r.id} leaves from the sandbox island`).toBe(false);
+      expect(inside(r.to), `route ${r.id} lands on the sandbox island`).toBe(false);
+    }
+    const ferry = (content.teleports ?? []).filter((t) => t.npc === "pruebas_ferryman");
+    expect(ferry).toHaveLength(3);
+    for (const t of ferry) expect(inside(t.to), t.node).toBe(false);
+    // No portal of another island and no NPC dialog teleport leads there.
+    for (const other of world.islands.values()) {
+      if (other.meta.id === "pruebas") continue;
+      for (const p of other.portals) expect(inside(p.to), p.id).toBe(false);
+    }
+    for (const t of content.teleports ?? []) expect(inside(t.to), `${t.npc} ${t.node}`).toBe(false);
   });
 });

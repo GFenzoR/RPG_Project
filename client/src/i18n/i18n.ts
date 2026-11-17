@@ -3,7 +3,9 @@
 // Texts take {param} placeholders and ICU plurals:
 //   "{seconds, plural, one {# segundo} other {# segundos}}"  (=N exact matches first).
 // Parameter values are inserted as they are, never parsed again: a player's chat text
-// cannot inject placeholders or markup (the UI renders it as text).
+// cannot inject placeholders or markup (the UI renders it as text). Numbers (and the # of
+// a plural) take the language's digit grouping (Intl.NumberFormat: "20.000" in Spanish,
+// "20,000" in English), except coordinates and ids (NOT_GROUPED).
 export type Translate = (key: string, params?: Record<string, string | number>) => string;
 
 export const DEFAULT_LANGUAGE = "es";
@@ -38,22 +40,41 @@ export function takeLangParam(search: string): { lang: string | null; rest: stri
   return { lang, rest: s === "" ? "" : `?${s}` };
 }
 
+/** Number parameters shown as they are: tile coordinates, sizes of an area, ids, years. */
+const NOT_GROUPED = new Set(["x", "y", "z", "w", "h", "id", "year", "version"]);
+
+/** The language's plural rules and number format. */
+interface Locale {
+  rules: Intl.PluralRules;
+  num: Intl.NumberFormat;
+}
+
 /** Looks keys up in `texts`; an unknown key is returned as is so it shows up in review. */
 export function translator(
   texts: Readonly<Record<string, string>>,
   lang = DEFAULT_LANGUAGE,
 ): Translate {
-  let rules: Intl.PluralRules;
+  let loc: Locale;
   try {
-    rules = new Intl.PluralRules(lang);
+    loc = { rules: new Intl.PluralRules(lang), num: new Intl.NumberFormat(lang) };
   } catch {
-    rules = new Intl.PluralRules(DEFAULT_LANGUAGE);
+    loc = {
+      rules: new Intl.PluralRules(DEFAULT_LANGUAGE),
+      num: new Intl.NumberFormat(DEFAULT_LANGUAGE),
+    };
   }
   return (key, params) => {
     const text = texts[key] ?? key;
     if (!params) return text;
-    return format(text, params, rules, undefined);
+    return format(text, params, loc, undefined);
   };
+}
+
+/** A parameter as text: a number with the language's grouping, unless NOT_GROUPED. */
+function show(name: string, v: string | number, loc: Locale): string {
+  return typeof v === "number" && Number.isFinite(v) && !NOT_GROUPED.has(name)
+    ? loc.num.format(v)
+    : String(v);
 }
 
 /** Index of the "}" that closes the "{" at `open`, or -1. */
@@ -69,15 +90,15 @@ function closing(text: string, open: number): number {
 function format(
   text: string,
   params: Record<string, string | number>,
-  rules: Intl.PluralRules,
-  hash: number | undefined,
+  loc: Locale,
+  hash: string | undefined,
 ): string {
   let out = "";
   let i = 0;
   while (i < text.length) {
     const c = text[i] ?? "";
     if (c === "#" && hash !== undefined) {
-      out += String(hash);
+      out += hash;
       i++;
       continue;
     }
@@ -87,26 +108,24 @@ function format(
       i++;
       continue;
     }
-    out += placeholder(text.slice(i, end + 1), params, rules);
+    out += placeholder(text.slice(i, end + 1), params, loc);
     i = end + 1;
   }
   return out;
 }
 
 /** Fills one "{...}": a plain {name} or {name, plural, ...}; anything else stays as is. */
-function placeholder(
-  whole: string,
-  params: Record<string, string | number>,
-  rules: Intl.PluralRules,
-): string {
+function placeholder(whole: string, params: Record<string, string | number>, loc: Locale): string {
   const inner = whole.slice(1, -1);
   const plain = /^\s*(\w+)\s*$/.exec(inner);
   if (plain) {
-    const v = params[plain[1] ?? ""];
-    return v === undefined ? whole : String(v);
+    const name = plain[1] ?? "";
+    const v = params[name];
+    return v === undefined ? whole : show(name, v, loc);
   }
   const plural = /^\s*(\w+)\s*,\s*plural\s*,/.exec(inner);
-  const value = plural ? params[plural[1] ?? ""] : undefined;
+  const name = plural?.[1] ?? "";
+  const value = plural ? params[name] : undefined;
   if (!plural || value === undefined) return whole;
   const n = Number(value);
   const options = new Map<string, string>();
@@ -120,6 +139,6 @@ function placeholder(
     options.set(sel[1] ?? "", rest.slice(open + 1, end));
     i = end + 1;
   }
-  const body = options.get(`=${n}`) ?? options.get(rules.select(n)) ?? options.get("other");
-  return body === undefined ? whole : format(body, params, rules, n);
+  const body = options.get(`=${n}`) ?? options.get(loc.rules.select(n)) ?? options.get("other");
+  return body === undefined ? whole : format(body, params, loc, show(name, n, loc));
 }

@@ -185,6 +185,46 @@ func TestMarketPushEvery(t *testing.T) {
 	}
 }
 
+// combat.monster_leash_tiles: 6 in data/, 0 (no leash) accepted, negative refused.
+func TestMonsterLeashTiles(t *testing.T) {
+	b, err := LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := b.Combat
+	if c.MonsterLeashTiles != 6 {
+		t.Errorf("combat.monster_leash_tiles = %d, want 6", c.MonsterLeashTiles)
+	}
+	for leash, ok := range map[int]bool{-1: false, 0: true, 6: true} {
+		c.MonsterLeashTiles = leash
+		if (c.check() == nil) != ok {
+			t.Errorf("combat.monster_leash_tiles %d: accepted %v, want %v", leash, !ok, ok)
+		}
+	}
+}
+
+// The leash's pathfinding times (combat.monster_path_retry_ms, monster_stuck_ms and
+// monster_shun_ms; review of lote 5): 1 s, 2 s and 30 s in data/, each required > 0.
+func TestMonsterPathTimes(t *testing.T) {
+	b, err := LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := b.Combat
+	if c.MonsterPathRetryMs != 1000 || c.MonsterStuckMs != 2000 || c.MonsterShunMs != 30000 {
+		t.Errorf("combat.monster_path_retry_ms, stuck_ms, shun_ms = %d, %d, %d; want 1000, 2000, 30000",
+			c.MonsterPathRetryMs, c.MonsterStuckMs, c.MonsterShunMs)
+	}
+	for _, f := range []*int{&c.MonsterPathRetryMs, &c.MonsterStuckMs, &c.MonsterShunMs} {
+		was := *f
+		*f = 0
+		if c.check() == nil {
+			t.Errorf("a combat block with one of the leash's times at 0 was accepted: %+v", c)
+		}
+		*f = was
+	}
+}
+
 // inventory.reach and resource.reach stay within the view (MaxReach, 6 tiles): the server
 // answers nothing about a tile out of view, so a longer reach could only ever fail.
 func TestReachWithinTheView(t *testing.T) {

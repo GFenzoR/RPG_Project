@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -44,6 +45,36 @@ func dataHarnessWith(t *testing.T, edit func(*session.Config), spawns ...world.S
 	return h
 }
 
+// dropDialogTeleports takes out of the dialogs of data/ the teleports that land on no
+// walkable tile of m (the sandbox ferryman's, docs/16, point at the real islands, not at the
+// 64x64 test maps), which session.New would refuse (checkArrivals). The real boat routes
+// stay out the same way: dataConfig takes the routes of each test. TestRealWorldStarts
+// runs them all on the real map.
+func dropDialogTeleports(npcs content.NPCs, m *world.Map) {
+	onMap := func(p content.Position) bool {
+		return p.X >= 0 && p.X <= 0xFFFF && p.Y >= 0 && p.Y <= 0xFFFF && p.Z >= 0 && p.Z <= 15 &&
+			m.Walkable(world.Pos{X: uint16(p.X), Y: uint16(p.Y), Z: uint8(p.Z)})
+	}
+	for _, n := range npcs {
+		for _, node := range n.Dialog.Nodes {
+			for i, o := range node.Options {
+				var kept content.Actions
+				dropped := false
+				for _, a := range o.Action {
+					if a.Teleport != nil && !onMap(*a.Teleport) {
+						dropped = true
+						continue
+					}
+					kept = append(kept, a)
+				}
+				if dropped {
+					node.Options[i].Action = kept
+				}
+			}
+		}
+	}
+}
+
 // dataConfig is the config of dataHarness, with routes as its boat routes.
 func dataConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) session.Config {
 	t.Helper()
@@ -62,11 +93,12 @@ func dataConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) 
 	must(err)
 	monsters, err := content.LoadMonsters(dir)
 	must(err)
-	npcs, err := content.LoadNPCs(dir)
-	must(err)
 	quests, err := content.LoadQuests(dir)
 	must(err)
 	m := worldtest.Open(t, 0, 0, 64, 64)
+	npcs, err := content.LoadNPCs(dir)
+	must(err)
+	dropDialogTeleports(npcs, m)
 	is := m.Islands()[0]
 	is.Spawns = spawns
 	is.NPCs = []world.NPCPlacement{
@@ -283,8 +315,8 @@ func TestChapterOnePlayable(t *testing.T) {
 	}
 }
 
-// The arcanist accepts the same quest and gets coins instead of a weapon; options are
-// checked again on the server.
+// The arcanist accepts the same quest and gets its own weapon, a spark wand (content audit
+// m5; it used to get coins); options are checked again on the server.
 func TestArcanistBranchAndStaleOptions(t *testing.T) {
 	h := dataHarness(t)
 	c := session.Character{ID: 901, AccountID: 901, Name: "Mage", Vocation: "arcanist", Level: 1, Health: 100, Mana: 100}
@@ -297,8 +329,8 @@ func TestArcanistBranchAndStaleOptions(t *testing.T) {
 		t.Fatal("a hidden option ran")
 	}
 	h.pick(cl, d, "dialog.accept")
-	if h.w.Money(p) != 25 || h.w.CountItem(p, "rusty_cutlass") != 0 {
-		t.Fatalf("arcanist kit: %d coins", h.w.Money(p))
+	if h.w.Money(p) != 0 || h.w.CountItem(p, "spark_wand") != 1 || h.w.CountItem(p, "rusty_cutlass") != 0 {
+		t.Fatalf("arcanist kit: %d coins, %d spark wands", h.w.Money(p), h.w.CountItem(p, "spark_wand"))
 	}
 	// A stale dialog id is ignored; option 0 closes.
 	if evs := h.send(cl, chooseMsg(d.DialogId+5, 1)); len(evs) != 0 {
@@ -395,4 +427,24 @@ func itemNum(t *testing.T, h *harness, _ *session.Player, id string) uint32 {
 		t.Fatalf("item %s: %v", id, err)
 	}
 	return uint32(items[id].Numeric)
+}
+
+// TestDevOnlyActionsRefusedOffDevIslands: an NPC with a dev-only dialog action (the
+// sandbox instructor's train_skill and restore_mana) does not let the server start on an
+// island that is not dev-only (world.bin's mark, mapcompile -dev); on a dev-only one it
+// does. The runtime check behind it: TestSandboxDevOnlyOffTheSandbox.
+func TestDevOnlyActionsRefusedOffDevIslands(t *testing.T) {
+	for _, dev := range []bool{false, true} {
+		cfg := dataConfig(t, nil)
+		is := cfg.Map.Islands()[0]
+		is.Dev = dev
+		is.NPCs = append(is.NPCs, world.NPCPlacement{NPC: "pruebas_trainer", Pos: pos(20, 20)})
+		_, err := session.New(cfg)
+		if dev && err != nil {
+			t.Fatalf("on a dev-only island: %v", err)
+		}
+		if !dev && (err == nil || !strings.Contains(err.Error(), "dev-only")) {
+			t.Fatalf("off a dev-only island: err = %v", err)
+		}
+	}
 }

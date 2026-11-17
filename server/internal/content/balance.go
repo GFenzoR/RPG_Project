@@ -552,6 +552,21 @@ type Combat struct {
 	MonsterCorpseMs    int                   `yaml:"monster_corpse_ms"`
 	WandMinFactor      float64               `yaml:"wand_min_factor"`
 	Modes              map[string]CombatMode `yaml:"modes"`
+	// MonsterLeashTiles is how far (Chebyshev) beyond its spawn's radius a monster
+	// follows a target; it gives up beyond that and walks home (docs/02-game-design.md,
+	// monsters section). 0 or absent: no leash.
+	MonsterLeashTiles int `yaml:"monster_leash_tiles"`
+	// MonsterPathRetryMs is how long a monster whose search for a way (home, or to its
+	// target) found none waits before it steps or searches again, and how often a chase
+	// with a leash checks the way to a target out of its reach.
+	MonsterPathRetryMs int `yaml:"monster_path_retry_ms"`
+	// MonsterStuckMs: with a leash, a target out of reach that no way within the leash
+	// area reaches around creatures for this long is given up (or, with only creatures
+	// in the way, swapped for a player within reach).
+	MonsterStuckMs int `yaml:"monster_stuck_ms"`
+	// MonsterShunMs is how long a player given up that way stays beyond the leash for
+	// that monster while it stands on the same tile.
+	MonsterShunMs int `yaml:"monster_shun_ms"`
 }
 
 // CombatMode scales attack and shield defense for a fight stance.
@@ -780,6 +795,12 @@ func (c Combat) check() error {
 	if c.AttackIntervalMs <= 0 || c.FistAttack <= 0 || c.SkillAttackDivisor <= 0 ||
 		c.LevelDivisor <= 0 || c.ShieldBlockDivisor <= 0 || c.MonsterCorpseMs <= 0 {
 		return errors.New("combat: attack_interval_ms, fist_attack, divisors and monster_corpse_ms must be > 0")
+	}
+	if c.MonsterLeashTiles < 0 {
+		return errors.New("combat: monster_leash_tiles must be >= 0")
+	}
+	if c.MonsterPathRetryMs <= 0 || c.MonsterStuckMs <= 0 || c.MonsterShunMs <= 0 {
+		return errors.New("combat: monster_path_retry_ms, monster_stuck_ms and monster_shun_ms must be > 0")
 	}
 	for _, s := range Stances {
 		m, ok := c.Modes[s]

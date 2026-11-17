@@ -104,3 +104,20 @@ func TestConditionApplyRangeOnlyHarmful(t *testing.T) {
 		}
 	}
 }
+
+// A regen condition (food, content audit m2) needs a positive regen_pct and a max_ms.
+func TestRegenConditionCheck(t *testing.T) {
+	for i, c := range []*ConditionDef{
+		{Kind: ConditionRegen, Stacking: StackAdd, MaxMs: 1000},                // no regen_pct
+		{Kind: ConditionRegen, Stacking: StackAdd, MaxMs: 1000, RegenPct: -50}, // negative
+		{Kind: ConditionRegen, Stacking: StackAdd, RegenPct: 100},              // no max_ms
+	} {
+		if err := (ConditionDefs{"well_fed": c}).check(); err == nil {
+			t.Errorf("case %d accepted", i)
+		}
+	}
+	ok := ConditionDefs{"well_fed": {Kind: ConditionRegen, Stacking: StackAdd, MaxMs: 1000, RegenPct: 100}}
+	if err := ok.check(); err != nil {
+		t.Fatal(err)
+	}
+}

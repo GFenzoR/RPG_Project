@@ -102,7 +102,11 @@ export function loadClientContent(root: string): ClientContent {
         sprite: typeof raw["sprite"] === "string" ? raw["sprite"] : "",
         ground: ground !== undefined,
         walkable: ground?.["walkable"] === true,
-        blocks: raw["blocks_movement"] === true,
+        // A wall blocks unless it says otherwise, as in packages/map-format, the content
+        // validator and mapcompile (content.test.ts checks the parity).
+        blocks:
+          raw["blocks_movement"] === true ||
+          (raw["kind"] === "wall" && raw["blocks_movement"] !== false),
         speed: typeof ground?.["speed"] === "number" ? ground["speed"] : 100,
         stackable: raw["stackable"] === true,
         slots:
@@ -117,6 +121,7 @@ export function loadClientContent(root: string): ClientContent {
           isObj(raw["tool"]) && typeof raw["tool"]["use"] === "string" ? raw["tool"]["use"] : "",
         ...(desc !== "" ? { desc } : {}),
         ...(isObj(raw["portal"]) ? { portal: true as const } : {}),
+        ...(isObj(raw["door"]) ? { door: true as const } : {}),
       };
     }
   }

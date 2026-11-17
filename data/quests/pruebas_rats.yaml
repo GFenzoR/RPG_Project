@@ -1,0 +1,17 @@
+id: pruebas_rats
+name: quest.pruebas_rats.name
+min_level: 1
+notes: >-
+  Quest of the sandbox island (docs/16-probar-el-juego.md): the whole quest cycle (offer,
+  kills, report, reward) in two minutes. The bilge rats live in pen 1 of the hunting trail,
+  north of the temple; pruebas_trainer gives and closes it.
+steps:
+  - id: hunt_rats
+    description: quest.pruebas_rats.step_hunt_rats
+    complete_when: { kill: { monster: bilge_rat, count: 3 } }
+  - id: report
+    description: quest.pruebas_rats.step_report
+    complete_when: { dialog_action: { npc: pruebas_trainer, node: quest_done } }
+rewards:
+  - { xp: 200 }
+  - { gold: 50 }

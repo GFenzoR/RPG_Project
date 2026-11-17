@@ -147,6 +147,27 @@ export interface RemoveNpcOp {
   pos?: Position;
 }
 
+/**
+ * Adds a sign or a book to texts.yaml (docs/03 "texts.yaml"); the island is the one of
+ * `pos`. Text ids are unique in the whole world, like the other entities. Whether `text`
+ * is in i18n/ and whether the sign item on the tile says it is the validator's job: the
+ * entry may come before its translation or its item.
+ */
+export interface AddTextOp {
+  op: "add_text";
+  id: string;
+  kind: "sign" | "book";
+  pos: Position;
+  text: string;
+  notes?: string;
+  index?: number;
+}
+
+export interface RemoveTextOp {
+  op: "remove_text";
+  id: string;
+}
+
 /** Stamps prefab `prefab` (world/prefabs/, passed in OpOptions.prefab) with its top-left at `pos`. */
 export interface StampOp {
   op: "stamp";
@@ -208,6 +229,8 @@ export type MapOp =
   | RemovePortalOp
   | PlaceNpcOp
   | RemoveNpcOp
+  | AddTextOp
+  | RemoveTextOp
   | StampOp
   | AddHouseOp
   | RemoveHouseOp
@@ -230,6 +253,8 @@ export const MAP_OP_NAMES: readonly MapOpName[] = [
   "remove_portal",
   "place_npc",
   "remove_npc",
+  "add_text",
+  "remove_text",
   "stamp",
   "add_house",
   "remove_house",

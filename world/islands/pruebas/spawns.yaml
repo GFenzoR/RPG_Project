@@ -1,0 +1,42 @@
+- id: pruebas_pen1_rats
+  center: { x: 2079, y: 2076, z: 7 }
+  radius: 2
+  monsters:
+    - { monster: bilge_rat, count: 3 }
+  respawn_seconds: 30
+
+- id: pruebas_pen2_wolves
+  center: { x: 2088, y: 2076, z: 7 }
+  radius: 2
+  monsters:
+    - { monster: wolf, count: 3 }
+  respawn_seconds: 45
+
+- id: pruebas_pen3_boars
+  center: { x: 2097, y: 2076, z: 7 }
+  radius: 2
+  monsters:
+    - { monster: bristleback_boar, count: 2 }
+    - { monster: moss_spider, count: 1 }
+  respawn_seconds: 60
+
+- id: pruebas_pen4_thornlings
+  center: { x: 2106, y: 2076, z: 7 }
+  radius: 2
+  monsters:
+    - { monster: thornling, count: 2 }
+  respawn_seconds: 90
+
+- id: pruebas_pen5_wyrmling
+  center: { x: 2115, y: 2076, z: 7 }
+  radius: 2
+  monsters:
+    - { monster: ember_wyrmling, count: 1 }
+  respawn_seconds: 180
+
+- id: pruebas_dungeon_bats
+  center: { x: 2125, y: 2096, z: 8 }
+  radius: 2
+  monsters:
+    - { monster: gloom_bat, count: 2 }
+  respawn_seconds: 60

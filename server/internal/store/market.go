@@ -74,11 +74,13 @@ type MarketHistory struct {
 	At                 time.Time
 }
 
-// MarketSale is the sales of one item on one day.
+// MarketSale is the sales of one item on one day by the characters of one seller account
+// to those of one buyer account.
 type MarketSale struct {
-	ItemID       int
-	Day          time.Time
-	Units, Total int64
+	ItemID                      int
+	Day                         time.Time
+	SellerAccount, BuyerAccount int64
+	Units, Total                int64
 }
 
 // MarketData is the whole market as loaded at start.
@@ -239,7 +241,8 @@ func applyMarketOp(ctx context.Context, q *db.Queries, op MarketOp) error {
 
 // LoadMarket reads the whole market: every offer, mailbox and id mark, the history of
 // the last historyDays (at most perCharacter rows each) and the sales of the last
-// salesDays, and the active bans of the accounts with offers.
+// salesDays, and every active ban (hidden offers, and sales left out of the reference
+// price).
 func (s *Store) LoadMarket(ctx context.Context, now time.Time, historyDays, perCharacter, salesDays int) (MarketData, error) {
 	var d MarketData
 	err := s.inTx(ctx, func(q *db.Queries) error {
@@ -290,7 +293,8 @@ func (s *Store) LoadMarket(ctx context.Context, now time.Time, historyDays, perC
 			return fmt.Errorf("market sales: %w", err)
 		}
 		for _, x := range sales {
-			d.Sales = append(d.Sales, MarketSale{ItemID: int(x.ItemID), Day: x.Day.Time, Units: x.Units, Total: x.Total})
+			d.Sales = append(d.Sales, MarketSale{ItemID: int(x.ItemID), Day: x.Day.Time,
+				SellerAccount: x.SellerAccount, BuyerAccount: x.BuyerAccount, Units: x.Units, Total: x.Total})
 		}
 		bans, err := q.LoadMarketBans(ctx, ts(now))
 		if err != nil {
