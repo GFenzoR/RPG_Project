@@ -11,16 +11,17 @@ import (
 
 // The forge seal is a quest drop (loot each_player, content audit m9): when a group kills
 // the slagbound warden, everyone who hurt it and is on ch3_warden gets a seal of its own;
-// a helper without the quest gets none, and none is left in the remains.
+// a helper without the quest gets none, and none is left in the remains. Each receiver
+// is told (dialog.quest_drop), the helper is not.
 func TestQuestDropForEveryoneWhoNeedsIt(t *testing.T) {
 	h := chapterThreeHarness(t)
 	join := func(id int64, name string, x int) (*fakeClient, *session.Player) {
 		c := session.Character{ID: id, AccountID: id, Name: name, Vocation: "guardian", Level: 44, Health: 1000, Mana: 100}
 		return h.joinFresh(c, pos(x, 44))
 	}
-	_, a := join(941, "Anvil", 29)
-	_, b := join(942, "Bellows", 31)
-	_, helper := join(943, "Tongs", 30)
+	ca, a := join(941, "Anvil", 29)
+	cb, b := join(942, "Bellows", 31)
+	ch, helper := join(943, "Tongs", 30)
 	h.sim.Command(gameFunc(func() {
 		for _, p := range []*session.Player{a, b} {
 			p.SetStorageForTest("quest.ch3_warden", 1) // in progress
@@ -43,7 +44,13 @@ func TestQuestDropForEveryoneWhoNeedsIt(t *testing.T) {
 		h.w.DamageMonsterForTest(ctx, warden, b, 10)
 		h.w.DamageMonsterForTest(ctx, warden, a, 10) // the killing blow
 	}))
+	for _, cl := range []*fakeClient{ca, cb, ch} {
+		cl.take()
+	}
 	h.sim.Step()
+	if !hasKey(ca.take(), "dialog.quest_drop") || !hasKey(cb.take(), "dialog.quest_drop") || hasKey(ch.take(), "dialog.quest_drop") {
+		t.Error("the receivers (and only they) should be told about their seal")
+	}
 	for _, p := range []*session.Player{a, b} {
 		_, step := h.w.QuestState(p, "ch3_warden")
 		if n := h.w.CountItem(p, "forge_seal"); n != 1 || step != "return_seal" {
@@ -206,5 +213,63 @@ func TestQuestDropForgottenWhenTheWardenGivesUp(t *testing.T) {
 	}
 	if n := h.w.CountItem(runner, "forge_seal"); n != 0 {
 		t.Errorf("the runner, forgotten when the warden gave up, got %d seals", n)
+	}
+}
+
+// Content audit m9 with death: at return_seal, a death without blessings leaves the
+// backpack, seal inside, in the corpse; the character wakes up with a new backpack, and the
+// next warden puts a new seal in it.
+func TestQuestDropAfterDyingWithTheSeal(t *testing.T) {
+	h := chapterThreeHarness(t)
+	c := session.Character{ID: 961, AccountID: 961, Name: "Clinker", Vocation: "guardian", Level: 44, Health: 1000, Mana: 100}
+	cl, p := h.joinFresh(c, pos(29, 44))
+	h.sim.Command(gameFunc(func() {
+		p.SetStorageForTest("quest.ch3_warden", 1)
+		p.SetStorageForTest("quest.ch3_warden.step", 2) // return_seal
+		h.w.GiveForTest(p, "forge_seal", 1)
+	}))
+	h.sim.Step()
+	inPack := func() int {
+		n := 0
+		if bp := p.Equipped(slotBackpack); bp != nil {
+			for _, it := range bp.Items() {
+				if it.Def().ID == "forge_seal" {
+					n += it.Count()
+				}
+			}
+		}
+		return n
+	}
+	if inPack() != 1 {
+		t.Fatal("no seal in the pack to lose")
+	}
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) { h.w.DieForTest(ctx, p) }))
+	h.sim.Step()
+	if n := h.w.CountItem(p, "forge_seal"); n != 0 || p.Equipped(slotBackpack) == nil {
+		t.Fatalf("after dying: %d seals carried, backpack %v (want 0 and a new one)", n, p.Equipped(slotBackpack))
+	}
+	// Far from the forge (a monster does not respawn under a player's eyes), then the warden.
+	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(20, 12)) }))
+	h.sim.Step()
+	var warden *session.Monster
+	h.sim.RunUntil(func() bool {
+		for _, m := range h.w.Monsters() {
+			if m.Kind() == "slagbound_warden" {
+				warden = m
+			}
+		}
+		return warden != nil
+	}, sim.MaxSeconds(700))
+	cl.take()
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		warden.SetHealth(10)
+		h.w.DamageMonsterForTest(ctx, warden, p, 10)
+	}))
+	h.sim.Step()
+	if _, step := h.w.QuestState(p, "ch3_warden"); inPack() != 1 || step != "return_seal" {
+		t.Fatalf("after the next warden: %d seals in the new pack, step %q", inPack(), step)
+	}
+	if !hasKey(cl.take(), "dialog.quest_drop") {
+		t.Error("not told about the new seal")
 	}
 }

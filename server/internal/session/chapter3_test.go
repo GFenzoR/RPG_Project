@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/sim"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
@@ -320,6 +322,29 @@ func TestChapterThreePlayable(t *testing.T) {
 	}
 	if hasOption(keeper, "npc.volcan_keeper.opt_warden") || hasOption(keeper, "npc.volcan_keeper.opt_progress") || hasOption(echo, "npc.volcan_forge_echo.opt_warden") {
 		t.Fatal("finished chapter still offered")
+	}
+	// Handed in, the seal is done with: another warden gives no more (content audit m9).
+	var warden *session.Monster
+	h.sim.RunUntil(func() bool { // Brasal is out of sight of the forge: it respawns
+		for _, m := range h.w.Monsters() {
+			if m.Kind() == "slagbound_warden" {
+				warden = m
+			}
+		}
+		return warden != nil
+	}, sim.MaxSeconds(700))
+	h.sim.Command(game.CommandFunc(func(ctx *game.TickContext) {
+		warden.SetHealth(10)
+		h.w.DamageMonsterForTest(ctx, warden, p, 10)
+	}))
+	h.sim.Step()
+	for _, m := range h.w.Monsters() {
+		if m == warden {
+			t.Fatal("the second warden did not die")
+		}
+	}
+	if n := h.w.CountItem(p, "forge_seal"); n != 0 || len(h.w.GroundAt(p.Pos())) != 0 {
+		t.Fatalf("a warden after the quest gave %d seals (or one at the feet)", n)
 	}
 }
 

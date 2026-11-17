@@ -409,7 +409,8 @@ func (w *World) questDrop(ctx *game.TickContext, m *Monster, l lootItem) {
 			continue
 		}
 		n := combat.Roll(ctx.Rand, l.lo, l.hi)
-		w.giveItem(p, l.def, n)
+		p.emit(systemMsg(msgQuestDrop, itemParam(l.def, n)))
+		w.giveItem(p, l.def, n) // tells "on the floor" itself if it does not fit
 		w.econItem(p, EconLoot, m.kind.def.ID, l.def, n)
 	}
 }

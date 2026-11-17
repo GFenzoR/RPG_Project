@@ -26,8 +26,10 @@ const (
 	msgQuestUpdated  = "dialog.quest_updated"
 	msgQuestKills    = "dialog.quest_kills"
 	msgQuestDone     = "dialog.quest_completed"
-	msgPaid          = "dialog.paid"
-	msgReceivedGold  = "dialog.received_gold"
+	// msgQuestDrop: a quest drop (loot each_player) went to the player (content audit m9).
+	msgQuestDrop    = "dialog.quest_drop"
+	msgPaid         = "dialog.paid"
+	msgReceivedGold = "dialog.received_gold"
 )
 
 const (

@@ -106,3 +106,59 @@ func TestSetStepAndKillCountReset(t *testing.T) {
 		t.Fatalf("step %q: kills before re-entering counted", step)
 	}
 }
+
+// Needs (content audit m9): a quest drop goes to whoever's quest in progress waits for the
+// item at the current step or at one already done (a lost one comes back), and never
+// before its step, after the quest is completed or to whoever holds enough.
+func TestNeeds(t *testing.T) {
+	parse := func(src string) *content.Quest {
+		q, err := content.ParseQuest([]byte(src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return q
+	}
+	e := NewEngine(content.Quests{
+		"warden": parse(`
+id: warden
+name: n
+steps:
+  - { id: defeat_warden, description: d, complete_when: { kill: { monster: warden, count: 1 } } }
+  - { id: take_seal, description: d, complete_when: { has_item: { item: seal } } }
+  - { id: return_seal, description: d, complete_when: { dialog_action: { npc: keeper, node: read } } }
+`),
+		"tusks": parse(`
+id: tusks
+name: n
+steps:
+  - { id: take_tusks, description: d, complete_when: { has_item: { item: tusk, count: 3 } } }
+  - { id: hand_in, description: d, complete_when: { dialog_action: { npc: hunter, node: done } } }
+`),
+	})
+	at := func(quest string, state State, step int) *Log {
+		return NewLog(map[string]int64{stateKey(quest): int64(state), stepKey(quest): int64(step)})
+	}
+	for _, c := range []struct {
+		name string
+		log  *Log
+		item string
+		have int
+		want bool
+	}{
+		{"not started", NewLog(nil), "seal", 0, false},
+		{"defeat_warden: before its step", at("warden", InProgress, 0), "seal", 0, false},
+		{"take_seal without one", at("warden", InProgress, 1), "seal", 0, true},
+		{"take_seal holding one", at("warden", InProgress, 1), "seal", 1, false},
+		{"return_seal, lost it", at("warden", InProgress, 2), "seal", 0, true},
+		{"return_seal holding it", at("warden", InProgress, 2), "seal", 1, false},
+		{"completed: handed in", at("warden", Completed, 0), "seal", 0, false},
+		{"another item", at("warden", InProgress, 1), "tusk", 0, false},
+		{"count 3, holding 2", at("tusks", InProgress, 0), "tusk", 2, true},
+		{"count 3, holding 3", at("tusks", InProgress, 0), "tusk", 3, false},
+		{"count 3, handing in with 1 left", at("tusks", InProgress, 1), "tusk", 1, true},
+	} {
+		if got := e.Needs(c.log, c.item, c.have); got != c.want {
+			t.Errorf("%s: Needs(%s, %d) = %v, want %v", c.name, c.item, c.have, got, c.want)
+		}
+	}
+}
