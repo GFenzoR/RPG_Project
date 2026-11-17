@@ -644,8 +644,13 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   ).toBe(201);
   await apiCtx.dispose();
   // Puerto's NPCs live on Isla del Puerto (T1.16): this character's residence is Farol, so
-  // it wakes up at that temple, next to the priestess and the provisioner.
-  psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${name}'`]);
+  // it wakes up at that temple, next to the priestess and the provisioner. Level 9: the
+  // temples bless from there on (content audit m8; novices are covered already).
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto', level = 9, experience = 6912 WHERE name = '${name}'`,
+  ]);
 
   await page.goto("/play/?lang=es");
   const loginForm = page.getByTestId("login-form");
