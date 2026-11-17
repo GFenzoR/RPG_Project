@@ -20,9 +20,11 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 - Scheduler por min-heap para eventos con tiempo (respawns, condiciones, cooldowns):
   nada de recorrer todas las entidades cada tick.
 - Pathfinding A* con límite de nodos y caché de flags por tile. Un monstruo cuya búsqueda
-  no encontró camino (de vuelta a casa o hacia su objetivo) espera 1 s antes de buscar
-  otra vez (`pathRetry`): uno trabado frente a agua no gasta la cuota del tick de los
-  demás.
+  no encontró camino (de vuelta a casa o hacia su objetivo) espera
+  `combat.monster_path_retry_ms` (1 s) antes de buscar otra vez: uno trabado frente a
+  agua no gasta la cuota del tick de los demás. Con correa, el que persigue a un objetivo
+  fuera de su alcance hace una búsqueda por ese lapso aunque dé pasos (dos cuando decide
+  que no llega), siempre dentro de su área de correa.
 - Envío por deltas (MapSlice, TileUpdate). Un frame por jugador por tick como máximo.
 - Pools para buffers de serialización.
 - Persistencia fuera del loop con snapshots copiados.

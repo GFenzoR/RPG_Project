@@ -128,9 +128,9 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
     paso de A* se alternan (ya pasaba sin correa; `walkHome` sigue el rodeo entero, la
     persecución no, y como da pasos no cuenta como trabada); nada valida que el centro de
     un spawn sea caminable (hoy todos lo son); la espera tras una búsqueda fallida (de
-    casa o de la persecución) usa `readyAt`; un jugador que el monstruo dejó por
-    inalcanzable sigue "fuera de la correa" 30 s aunque se mueva a un lugar alcanzable
-    (hay que entrar a su alcance); y `make bench-tick` corre sin correa.
+    casa o de la persecución) usa `readyAt`; un arquero que va pisando casillas
+    inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada una (el rechazo
+    vale por casilla); y `make bench-tick` corre sin correa.
 - **Auditoría de contenido (2026-11), lo que quedó afuera de la rama de balance de
   vocaciones** (`feat/balance-vocations`: maná, escalones de armas, ballesta y escudo del
   montaraz, áreas nuevas, comida, sello por jugador, cuerda y pala, bendiciones desde el

@@ -569,7 +569,7 @@ func (w *World) remove(ctx *game.TickContext, p *Player, reason pb.DisconnectRea
 	w.pvpLeftWorld(p)
 	for _, m := range w.monsters {
 		if m.target == p {
-			m.target = nil // do not keep the gone player alive from a sleeping monster
+			m.setTarget(nil) // do not keep the gone player alive from a sleeping monster
 		}
 	}
 

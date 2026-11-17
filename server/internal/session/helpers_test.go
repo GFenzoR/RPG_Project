@@ -54,7 +54,8 @@ func testBalance() content.Balance {
 	b.Death = content.Death{XPLossPct: 10, SkillLossPct: 10, EquipmentDropPct: 10, BackpackDropPct: 100, MaxBlessings: 5,
 		XPLossPctAllBlessings: 3, NoviceMaxLevel: 8, CorpseMs: 600000, CorpseOwnerOnlyMs: 120000}
 	b.Combat = content.Combat{AttackIntervalMs: 2000, FistAttack: 7, SkillAttackDivisor: 10, LevelDivisor: 4,
-		ShieldBlockDivisor: 4, MonsterCorpseMs: 60000, Modes: map[string]content.CombatMode{
+		ShieldBlockDivisor: 4, MonsterCorpseMs: 60000, MonsterPathRetryMs: 1000, MonsterStuckMs: 2000, MonsterShunMs: 30000,
+		Modes: map[string]content.CombatMode{
 			"offensive": {Attack: 1.25, Defense: 0.55}, "balanced": {Attack: 1, Defense: 1}, "defensive": {Attack: 0.65, Defense: 1.5}}}
 	b.Chat.MaxLength = 255
 	b.Chat.Ranges.Whisper = content.ChatRange{X: 1, Y: 1}

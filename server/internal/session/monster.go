@@ -52,17 +52,6 @@ const (
 	spawnTries = 16
 	// targetScanTicks: an idle aggressive monster looks for a target every 250 ms.
 	targetScanTicks = 5
-	// pathRetry is how long a monster that searched for a way (A*: home, or to its target)
-	// and found none waits before it steps or searches again: a search is costly and the
-	// way stays blocked a while.
-	pathRetry = game.Tick(time.Second / game.TickDuration)
-	// stuckFor: a monster with a leash whose target, out of its reach, stands where no
-	// way on foot within its leash area leads (creatures aside) for this long gives it up
-	// (chase): it would stand still while being shot.
-	stuckFor = game.Tick(2 * time.Second / game.TickDuration)
-	// shunFor is how long a monster remembers a player it gave up that way: meanwhile,
-	// out of its reach, that player is beyond its leash (beyondLeash).
-	shunFor = game.Tick(30 * time.Second / game.TickDuration)
 )
 
 // monsterKind is a monster definition prepared for the loop.
@@ -117,19 +106,29 @@ type Monster struct {
 	// forever). Its array is reused.
 	homeWay []world.Direction
 	homeAt  world.Pos
-	// stuckOn is the target that m, with a leash, found no way to on foot within its leash
-	// area since stuckSince (chase), or 0.
+	// stuckOn is the target to which m, with a leash, has found no way within its leash
+	// area around creatures since stuckSince (chase's check, every pathRetry from
+	// checkAt), or 0. Any change of target clears it (setTarget).
 	stuckOn    uint32
 	stuckSince game.Tick
-	// shunned are the players m gave up because it could not get to them (chase): until
-	// each one's tick, out of its reach, that player is beyond its leash.
+	checkAt    game.Tick
+	// shunned are the players m gave up because no way led to them (chase), each on the
+	// tile where it stood: until its tick, on that tile and out of m's reach, that player
+	// is beyond its leash.
 	shunned []shun
 }
 
-// shun is a player a monster gave up as out of its way, until a tick.
+// shun is a player a monster gave up on a tile no way led to, until a tick.
 type shun struct {
 	player uint32
+	pos    world.Pos
 	until  game.Tick
+}
+
+// setTarget makes p (nil: nobody) m's target and starts its chase afresh: whatever m
+// found about the way to its old target does not hold for the new one.
+func (m *Monster) setTarget(p *Player) {
+	m.target, m.stuckOn, m.checkAt = p, 0, 0
 }
 
 // Speed returns the monster's effective speed.
@@ -190,7 +189,8 @@ func ticksFor(ms int) game.Tick {
 func (w *World) initCombat() error {
 	c := w.cfg.Balance.Combat
 	if c.AttackIntervalMs <= 0 || c.FistAttack <= 0 || c.SkillAttackDivisor <= 0 || c.LevelDivisor <= 0 ||
-		c.ShieldBlockDivisor <= 0 || c.MonsterCorpseMs <= 0 {
+		c.ShieldBlockDivisor <= 0 || c.MonsterCorpseMs <= 0 ||
+		c.MonsterPathRetryMs <= 0 || c.MonsterStuckMs <= 0 || c.MonsterShunMs <= 0 {
 		return fmt.Errorf("session: invalid combat balance %+v", c)
 	}
 	for _, s := range content.Stances {
@@ -200,6 +200,9 @@ func (w *World) initCombat() error {
 	}
 	w.attackFor = ticksFor(c.AttackIntervalMs)
 	w.corpseFor = ticksFor(c.MonsterCorpseMs)
+	w.pathRetry = ticksFor(c.MonsterPathRetryMs)
+	w.stuckFor = ticksFor(c.MonsterStuckMs)
+	w.shunFor = ticksFor(c.MonsterShunMs)
 	w.monByID = map[uint32]*Monster{}
 	w.msectors = map[uint64][]*Monster{}
 	w.kinds = map[string]*monsterKind{}
@@ -458,15 +461,22 @@ func (w *World) validTarget(m *Monster, t *Player) bool {
 }
 
 // findTarget returns the closest player m can see and reach, or nil. With a leash, only
-// players within m's leash area count, and not one it gave up as out of its way while
-// out of its reach (beyondLeash).
+// players within m's leash area count, and not one it gave up as out of its way while it
+// stands on that tile out of m's reach (beyondLeash).
 func (w *World) findTarget(tick game.Tick, m *Monster) *Player {
+	return w.pickTarget(tick, m, nil, false)
+}
+
+// pickTarget is findTarget but for skip and, with inReach, only among the players m's
+// attacks reach from where it stands (hits).
+func (w *World) pickTarget(tick game.Tick, m *Monster, skip *Player, inReach bool) *Player {
 	var best *Player
 	bestD := 0
 	leash := w.leash(m)
 	w.eachObserver(nil, m.pos, func(o *Player) {
-		if o.pos.Z != m.pos.Z || w.inProtection(o.pos) || !seesPlayer(m, o) ||
-			leash >= 0 && (chebyshev(o.pos, m.slot.spawn.Center) > leash || w.beyondLeash(tick, m, o)) {
+		if o == skip || o.pos.Z != m.pos.Z || w.inProtection(o.pos) || !seesPlayer(m, o) ||
+			leash >= 0 && (chebyshev(o.pos, m.slot.spawn.Center) > leash || w.beyondLeash(tick, m, o)) ||
+			inReach && !w.hits(m, o) {
 			return
 		}
 		d := chebyshev(m.pos, o.pos)
@@ -477,11 +487,18 @@ func (w *World) findTarget(tick game.Tick, m *Monster) *Player {
 	return best
 }
 
+// hits reports whether one of m's attacks reaches p from where m stands: next to it, or
+// within its reach and line of sight (distance attacks and spells, monsterAttacks).
+func (w *World) hits(m *Monster, p *Player) bool {
+	d := chebyshev(m.pos, p.pos)
+	return d <= 1 || d <= m.kind.reach && w.m.LineOfSight(m.pos, p.pos)
+}
+
 // think runs one tick of monster m's state machine.
 func (w *World) think(ctx *game.TickContext, m *Monster) {
 	b := m.kind.def.Behavior
 	if m.target != nil && !w.validTarget(m, m.target) {
-		m.target = nil // lost (gone, in a protection zone, out of sight): it walks home
+		m.setTarget(nil) // lost (gone, in a protection zone, out of sight): it walks home
 	}
 	if len(m.shunned) > 0 {
 		m.shunned = slices.DeleteFunc(m.shunned, func(s shun) bool { return ctx.Tick >= s.until })
@@ -491,7 +508,8 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 		// staggered by id so monsters spread the work over ticks.
 		if b.Aggressive && (uint64(ctx.Tick)+uint64(m.id))%targetScanTicks == 0 {
 			if t := w.findTarget(ctx.Tick, m); t != nil {
-				m.target, m.state = t, StateAlert
+				m.setTarget(t)
+				m.state = StateAlert
 				w.face(m, t.pos)
 				return
 			}
@@ -506,8 +524,8 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 	ready := ctx.Tick >= m.readyAt
 	d := chebyshev(m.pos, t.pos)
 	if w.beyondLeash(ctx.Tick, m, t) {
-		// Its target left the leash area and its reach (or stands where m gave it up as out
-		// of its way): it turns to someone it may fight, or gives up and goes home.
+		// Its target left the leash area and its reach (or stands on a tile where m gave it
+		// up as out of its way): it turns to someone it may fight, or gives up and goes home.
 		w.dropTarget(ctx, m)
 		if m.target == nil {
 			w.walkHome(ctx, m)
@@ -534,12 +552,22 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 		// Cornered next to its target: it fights back.
 	case d > b.TargetDistance:
 		m.state = StateChase
-		if ready && w.chase(ctx, m, t, roam, leash >= 0 && d > m.kind.reach) {
+		switch w.chase(ctx, m, t, roam, leash >= 0 && d > m.kind.reach) {
+		case chaseBlocked:
+			// Only creatures stand in its way, and have for a while (an NPC, a monster or a
+			// player in the mouth of a nook may never move): it turns to a player its attacks
+			// reach, likely whoever blocks it...
+			if w.retarget(ctx, m, t, true) {
+				return
+			}
+			fallthrough // ...or else its target stands where it cannot get
+		case chaseUnreachable:
 			// No way to its target, out of its reach, within its leash area: it would stand
-			// there being shot. It gives it up and keeps away from it a while.
-			m.shunned = append(m.shunned, shun{player: t.id, until: ctx.Tick + shunFor})
-			w.dropTarget(ctx, m)
-			if m.target == nil {
+			// there being shot. It gives it up and, while it stands on that tile, keeps away
+			// from it a while.
+			m.shunned = append(m.shunned, shun{player: t.id, pos: t.pos, until: ctx.Tick + w.shunFor})
+			if !w.retarget(ctx, m, t, false) {
+				w.giveUp(ctx, m)
 				w.walkHome(ctx, m)
 			}
 			return
@@ -647,19 +675,27 @@ func (w *World) roam(m *Monster, leash int) tileSquare {
 }
 
 // dropTarget is what m does when its target fights it from where it may not go
-// (beyondLeash, or a target it cannot get to: chase). It turns to the closest player who
-// hurt it and whom it may fight (a valid target, not beyond its leash), else, if
-// aggressive, to the player it would pick (findTarget), keeping its wounds and who hurt
-// it: a group does not lose its fight, its experience or a quest drop because whoever
+// (beyondLeash): it turns to another player (retarget), keeping its wounds and who hurt
+// it, so a group does not lose its fight, its experience or a quest drop because whoever
 // held the monster stepped away. With nobody left it gives up (giveUp).
 func (w *World) dropTarget(ctx *game.TickContext, m *Monster) {
-	old := m.target
-	m.target, m.stuckOn = nil, 0
+	if !w.retarget(ctx, m, m.target, false) {
+		w.giveUp(ctx, m)
+	}
+}
+
+// retarget drops m's target for the closest player who hurt it and whom it may fight (a
+// valid target, not beyond its leash; the first who hurt it wins a tie), else, if
+// aggressive, the player it would pick (pickTarget); never old, and with inReach only a
+// player its attacks reach from where it stands. It keeps m's wounds and who hurt it. It
+// reports whether it found one; if not, m has no target.
+func (w *World) retarget(ctx *game.TickContext, m *Monster, old *Player, inReach bool) bool {
+	m.setTarget(nil)
 	var next *Player
 	best := 0
-	for _, s := range m.damage { // the first who hurt it wins a tie
+	for _, s := range m.damage {
 		p := w.playerByID(s.player)
-		if p == nil || p == old || !w.validTarget(m, p) || w.beyondLeash(ctx.Tick, m, p) {
+		if p == nil || p == old || !w.validTarget(m, p) || w.beyondLeash(ctx.Tick, m, p) || inReach && !w.hits(m, p) {
 			continue
 		}
 		if d := chebyshev(m.pos, p.pos); next == nil || d < best {
@@ -667,14 +703,15 @@ func (w *World) dropTarget(ctx *game.TickContext, m *Monster) {
 		}
 	}
 	if next == nil && m.kind.def.Behavior.Aggressive {
-		next = w.findTarget(ctx.Tick, m) // never old: it is beyond the leash
+		next = w.pickTarget(ctx.Tick, m, old, inReach)
 	}
 	if next == nil {
-		w.giveUp(ctx, m)
-		return
+		return false
 	}
-	m.target, m.state = next, StateAlert
+	m.setTarget(next)
+	m.state = StateAlert
 	w.face(m, next.pos)
+	return true
 }
 
 // giveUp makes m drop its target: it heals to full health (telling who sees it), its
@@ -682,7 +719,8 @@ func (w *World) dropTarget(ctx *game.TickContext, m *Monster) {
 // kill it from outside the leash), it forgets who hurt it (nobody earns experience for
 // that fight) and goes idle. It still keeps away from whom it shunned.
 func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
-	m.target, m.state, m.stuckOn = nil, StateIdle, 0
+	m.setTarget(nil)
+	m.state = StateIdle
 	m.damage = m.damage[:0]
 	w.clearConditions(ctx, holder{m: m}, false)
 	if m.health >= m.maxHealth {
@@ -698,10 +736,11 @@ func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 }
 
 // beyondLeash reports whether player p fights m from where m may not go and cannot hit
-// back: out of its attacks' reach, and out of its leash area or shunned (m gave p up
-// because no way within its leash area led to p, chase). Hits from there train like hits
-// on a target that does not fight back (skills.afk.factor): a monster held by its leash
-// is no training dummy.
+// back: out of its attacks' reach, and out of its leash area or on a tile where m shunned
+// it (no way within its leash area led there, chase). Hits from there train like hits on
+// a target that does not fight back (skills.afk.factor): a monster held by its leash is
+// no training dummy. On another tile a shunned player is a target like any other: an
+// unreachable one costs stuckFor again.
 func (w *World) beyondLeash(tick game.Tick, m *Monster, p *Player) bool {
 	l := w.leash(m)
 	if l < 0 || chebyshev(m.pos, p.pos) <= m.kind.reach {
@@ -711,7 +750,7 @@ func (w *World) beyondLeash(tick game.Tick, m *Monster, p *Player) bool {
 		return true
 	}
 	for _, s := range m.shunned {
-		if s.player == p.id && tick < s.until {
+		if s.player == p.id && s.pos == p.pos && tick < s.until {
 			return true
 		}
 	}
@@ -761,7 +800,7 @@ func (w *World) walkHome(ctx *game.TickContext, m *Monster) bool {
 		free = stepOK && w.monsterCanEnter(to)
 	}
 	if !free {
-		m.readyAt = ctx.Tick + pathRetry
+		m.readyAt = ctx.Tick + w.pathRetry
 		return true
 	}
 	for i := len(path) - 1; i >= 1; i-- {
@@ -808,42 +847,78 @@ func (w *World) monsterPath(from, goal world.Pos, in tileSquare, creatures bool)
 	return path, ok
 }
 
-// chase takes m one step towards its target t within roam: the step that most closes in
-// (stepToward) or, with none, the first step of a way around creatures (A*, within the
-// tick's quota). With no way it waits pathRetry before stepping or searching again, as
-// walkHome does. With unreachable (a leash, t out of its reach) it then searches a way
-// that ignores creatures: when there is none either, t stands where m cannot get within
-// its leash area (water, or a wall whose way round leaves it). Once that has lasted
-// stuckFor, chase reports true: t fights it from where m may not go.
-func (w *World) chase(ctx *game.TickContext, m *Monster, t *Player, roam tileSquare, unreachable bool) bool {
+// chaseVerdict is what chase found about the way to its target.
+type chaseVerdict uint8
+
+const (
+	// chaseOn: it goes on chasing.
+	chaseOn chaseVerdict = iota
+	// chaseUnreachable: for stuckFor no way within its leash area has led to the target,
+	// not even through creatures (water, or a wall whose way round leaves the area).
+	chaseUnreachable
+	// chaseBlocked: for stuckFor only creatures have stood in that way.
+	chaseBlocked
+)
+
+// chase takes m one step towards its target t within roam when it may (readyAt): the step
+// that most closes in (stepToward) or, with none, the first step of a way around
+// creatures (A*, within the tick's quota); with no way it waits pathRetry before stepping
+// or searching again, as walkHome does.
+//
+// With check (a leash, t out of its reach) it also checks, every pathRetry and whether it
+// steps or not, that a way within roam leads to t around creatures. Only finding one (or
+// t coming within its reach, think) clears stuckOn: a step that leads nowhere, along a
+// shore after a target that walks along the far one, does not. After stuckFor without
+// one it reports chaseUnreachable, or chaseBlocked if a way through creatures exists.
+func (w *World) chase(ctx *game.TickContext, m *Monster, t *Player, roam tileSquare, check bool) chaseVerdict {
+	var way []world.Direction
+	searched := false
+	if check && ctx.Tick >= m.checkAt && w.pathBudget >= w.searchCost() {
+		m.checkAt = ctx.Tick + w.pathRetry
+		searched = true
+		// A one-step path is the step onto t, which the greedy pass does not take: A* does
+		// not avoid the goal (and t, out of reach, is not next to m).
+		if path, ok := w.monsterPath(m.pos, t.pos, roam, true); ok && len(path) >= 2 {
+			way, m.stuckOn = path, 0
+		} else if m.stuckOn != t.id {
+			m.stuckOn, m.stuckSince = t.id, ctx.Tick
+		} else if ctx.Tick-m.stuckSince >= w.stuckFor {
+			if w.pathBudget < w.searchCost() {
+				m.checkAt = ctx.Tick + 1 // the tick's quota is spent: next tick
+				return chaseOn
+			}
+			if _, ok := w.monsterPath(m.pos, t.pos, roam, false); ok {
+				return chaseBlocked
+			}
+			return chaseUnreachable
+		}
+	}
+	if ctx.Tick < m.readyAt {
+		return chaseOn
+	}
 	if d, ok := w.stepToward(m.pos, t.pos, false, roam); ok {
 		w.stepMonster(ctx, m, d)
-		m.stuckOn = 0
-		return false
+		return chaseOn
 	}
-	if w.pathBudget < w.searchCost() {
-		return false // the tick's quota is spent: next tick
+	if !searched {
+		if check && m.stuckOn == t.id {
+			// Its last check found no way: the next one (checkAt) searches again.
+			m.readyAt = max(m.readyAt, m.checkAt)
+			return chaseOn
+		}
+		if w.pathBudget < w.searchCost() {
+			return chaseOn // the tick's quota is spent: next tick
+		}
+		if path, ok := w.monsterPath(m.pos, t.pos, roam, true); ok && len(path) >= 2 {
+			way = path
+		}
 	}
-	// A one-step path is the step onto t, which the greedy pass does not take: A* does
-	// not avoid the goal.
-	if path, ok := w.monsterPath(m.pos, t.pos, roam, true); ok && len(path) >= 2 {
-		w.stepMonster(ctx, m, path[0])
-		m.stuckOn = 0
-		return false
+	if len(way) >= 2 {
+		w.stepMonster(ctx, m, way[0])
+		return chaseOn
 	}
-	m.readyAt = ctx.Tick + pathRetry
-	if !unreachable || w.pathBudget < w.searchCost() {
-		return false
-	}
-	if _, ok := w.monsterPath(m.pos, t.pos, roam, false); ok {
-		m.stuckOn = 0 // creatures are in the way, and creatures move
-		return false
-	}
-	if m.stuckOn != t.id {
-		m.stuckOn, m.stuckSince = t.id, ctx.Tick
-		return false
-	}
-	return ctx.Tick-m.stuckSince >= stuckFor
+	m.readyAt = ctx.Tick + w.pathRetry
+	return chaseOn
 }
 
 // fleeStep returns the free neighbour step within in that most increases the distance to

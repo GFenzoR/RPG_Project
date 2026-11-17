@@ -252,6 +252,12 @@ type World struct {
 	corpseItem *content.Item
 	corpseFor  game.Tick
 	attackFor  game.Tick
+	// The leash's pathfinding (balance.yaml combat.monster_*_ms, monster.go): the wait
+	// after a failed search and between a chase's checks, how long a target out of reach
+	// may stand where no way leads before it is given up, and how long it stays shunned.
+	pathRetry game.Tick
+	stuckFor  game.Tick
+	shunFor   game.Tick
 
 	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner.
 	playerCorpseFor game.Tick

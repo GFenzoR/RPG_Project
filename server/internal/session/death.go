@@ -140,7 +140,7 @@ func (w *World) wakeAtTemple(ctx *game.TickContext, p *Player, arena bool) {
 	p.target = nil
 	for _, m := range w.monsters {
 		if m.target == p {
-			m.target = nil
+			m.setTarget(nil)
 		}
 	}
 	w.pvpDied(ctx.Now, p, arena)

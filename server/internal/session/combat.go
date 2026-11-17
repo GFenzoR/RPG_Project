@@ -216,7 +216,8 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 		return
 	}
 	if m.target == nil && w.validTarget(m, p) {
-		m.target, m.state = p, StateAlert // even a passive monster fights back
+		m.setTarget(p) // even a passive monster fights back
+		m.state = StateAlert
 	}
 }
 

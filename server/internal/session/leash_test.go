@@ -265,27 +265,23 @@ func TestLeashWalksHomeAroundWater(t *testing.T) {
 	}
 }
 
-// A leash makes no safe spot inside its own area (review of lote 5): a ranger across a row
-// of water from a wolf, inside the wolf's leash area but where the wolf could only get by
-// leaving it, shoots the wolf, which stands at the water. Its chase searches a way once a
-// second (pathRetry), not every tick; after stuckFor without one it gives the ranger up
-// (full health, damage forgotten) and walks home. Then, for shunFor, the ranger is beyond
-// its leash: the wolf does not pick it again, each arrow makes it turn and give up again
-// (it cannot be killed from there) and trains as against a target that does not fight
-// back (skills.afk.factor, 0.25 in testBalance: 4 shots, 1 try).
-func TestLeashGivesUpATargetItCannotReach(t *testing.T) {
+// waterHarness is a leash harness (combat.monster_leash_tiles 6) with a wolf of 1000
+// health that never flees, spawned at 20,20 with radius 0 (leash area x and y 14-26), and
+// a row of water at y 22 from x 0 to 30: its way round, x 31, is out of the leash area, so
+// no way within it reaches the south shore.
+func waterHarness(t *testing.T) (*harness, *session.Monster) {
+	t.Helper()
 	rows := make([]string, 64)
 	for y := range rows {
 		row := []byte(strings.Repeat(".", 64))
 		if y == 22 {
-			for x := 0; x <= 30; x++ { // the way round, x 31, is out of the leash area (14-26)
+			for x := 0; x <= 30; x++ {
 				row[x] = '~'
 			}
 		}
 		rows[y] = string(row)
 	}
 	m := worldtest.Map(t, 0, 0, 7, rows...)
-	center := pos(20, 20)
 	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 20, 20, 0, 60)}
 	def := wolfDef()
 	def.Health, def.Behavior.FleeAtHealthPct = 1000, 0
@@ -296,8 +292,22 @@ func TestLeashGivesUpATargetItCannotReach(t *testing.T) {
 		c.Balance.Skills.Base["distance"] = content.SkillBase{StartLevel: 10, BaseTries: 1000}
 		c.Balance.Combat.MonsterLeashTiles = 6
 	})
+	h.sim.Step()
+	return h, onlyMonster(t, h)
+}
+
+// A leash makes no safe spot inside its own area (review of lote 5): a ranger across the
+// water from a wolf, inside the wolf's leash area but where the wolf could only get by
+// leaving it, shoots the wolf, which stands at the water. Its chase checks the way once a
+// second (pathRetry), not every tick; after stuckFor without one it gives the ranger up
+// (full health, damage forgotten) and walks home. Then, for shunFor and on that tile, the
+// ranger is beyond its leash: the wolf does not pick it again, each arrow makes it turn
+// and give up again (it cannot be killed from there) and trains as against a target that
+// does not fight back (skills.afk.factor, 0.25 in testBalance: 4 shots, 1 try).
+func TestLeashGivesUpATargetItCannotReach(t *testing.T) {
+	h, wolf := waterHarness(t)
+	center := pos(20, 20)
 	cl, p := ranger(t, h, pos(20, 23), 60) // 3 tiles from the wolf's spawn: in its leash area
-	wolf := onlyMonster(t, h)
 	h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
 	h.input(cl, setTarget(wolf.ID()))
 	searching := 0 // ticks in which a monster searched a way
@@ -338,51 +348,201 @@ func TestLeashGivesUpATargetItCannotReach(t *testing.T) {
 	}
 }
 
-// Creatures in the way are no unreachable spot: they move. A ranger in a nook whose only
-// way in is taken by a dummy shoots a wolf that cannot get past it; the wolf waits there
-// (its search finds a way through the dummy's tile) and keeps its fight and its wounds.
-func TestLeashWaitsBehindACreature(t *testing.T) {
-	rows := make([]string, 40)
-	for y := range rows {
-		row := []byte(strings.Repeat(".", 40))
-		switch y {
-		case 23, 24:
-			row[19], row[21] = '#', '#'
-		case 25:
-			row[19], row[20], row[21] = '#', '#', '#'
-		}
-		rows[y] = string(row)
-	}
-	m := worldtest.Map(t, 0, 0, 7, rows...)
-	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 20, 18, 0, 60), spawnAt("dummy", 20, 23, 0, 60)}
-	def := wolfDef()
-	def.Health, def.Behavior.FleeAtHealthPct = 1000, 0
-	h := newHarness(t, m, func(c *session.Config) {
-		c.Monsters = content.Monsters{"wolf": def, "dummy": targetDummyDef()}
-		c.Items = testItems()
-		c.Spells = rangerSpells()
-		c.Balance.Skills.Base["distance"] = content.SkillBase{StartLevel: 10, BaseTries: 1000}
-		c.Balance.Combat.MonsterLeashTiles = 6
-	})
-	cl, p := ranger(t, h, pos(20, 24), 60) // the nook; the dummy stands in its mouth, 20,23
-	var wolf *session.Monster
-	for _, mo := range h.w.Monsters() {
-		if mo.Kind() == "wolf" {
-			wolf = mo
-		}
-	}
+// Walking along the far shore is no way out of that (review of lote 5): the ranger steps
+// between 20,23 and 21,23 every 1.5 s, the wolf follows it step by step along its own
+// shore, and those steps lead nowhere. Only a way found clears the wolf's count: it gives
+// the ranger up after stuckFor anyway.
+func TestLeashGivesUpATargetWalkingAlongTheShore(t *testing.T) {
+	h, wolf := waterHarness(t)
+	cl, p := ranger(t, h, pos(20, 23), 0)
 	h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
-	h.input(cl, setTarget(wolf.ID()))
-	end := h.sim.Tick() + 160 // 8 s: four times stuckFor
-	h.sim.RunUntil(func() bool {
-		if wolf.TargetID() != p.ID() {
-			t.Fatalf("tick %d: the wolf at %v dropped the ranger, who stands behind a creature", h.sim.Tick(), wolf.Pos())
+	from := wolf.Pos()
+	moved := false
+	for i := 0; ; i++ {
+		if i%30 == 0 {
+			if i/30%2 == 0 {
+				h.input(cl, walkPath(E))
+			} else {
+				h.input(cl, walkPath(W))
+			}
 		}
-		return h.sim.Tick() >= end
-	}, sim.MaxSeconds(9))
-	if wolf.Pos() != pos(20, 22) || wolf.DamageShareForTest(p.ID()) == 0 {
-		t.Errorf("the wolf is at %v remembering %d damage, want it waiting at 20,22 and hurt", wolf.Pos(), wolf.DamageShareForTest(p.ID()))
+		h.sim.Step()
+		moved = moved || wolf.Pos().X != from.X
+		if wolf.TargetID() != p.ID() {
+			t.Logf("the wolf gave the walking ranger up after %d ticks", i)
+			break
+		}
+		if i >= 200 { // 10 s
+			t.Fatalf("the wolf still chases the ranger along the shore after 10 s (it stands at %v)", wolf.Pos())
+		}
 	}
+	if !moved {
+		t.Error("the wolf never stepped along its shore: the scenario does not test a step that leads nowhere")
+	}
+}
+
+// The shun holds on one tile (review of lote 5): on the tile where the wolf gave it up the
+// ranger is ignored; one step away, along the same shore, it is a target again and costs
+// stuckFor again before the wolf gives it up there too.
+func TestLeashShunsATile(t *testing.T) {
+	h, wolf := waterHarness(t)
+	cl, p := ranger(t, h, pos(20, 23), 0)
+	h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+	h.sim.RunUntil(func() bool { return wolf.TargetID() == 0 }, sim.MaxSeconds(8))
+	h.sim.RunFor(2e9)
+	if wolf.TargetID() != 0 {
+		t.Fatalf("the wolf picked the ranger again on the tile where it gave it up")
+	}
+	h.input(cl, walkPath(E)) // 21,23: as unreachable, but another tile
+	h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+	start := h.sim.Tick()
+	h.sim.RunUntil(func() bool { return wolf.TargetID() == 0 }, sim.MaxSeconds(8))
+	if held := h.sim.Tick() - start; held < 30 {
+		t.Errorf("on a new tile the wolf gave the ranger up after %d ticks, want stuckFor (40) or about", held)
+	}
+}
+
+// The shun lasts shunFor (combat.monster_shun_ms, 30 s in testBalance): the ranger keeps
+// still on its tile, ignored until then, and is the wolf's target again right after.
+func TestLeashShunExpires(t *testing.T) {
+	h, wolf := waterHarness(t)
+	_, p := ranger(t, h, pos(20, 23), 0)
+	h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+	h.sim.RunUntil(func() bool { return wolf.TargetID() == 0 }, sim.MaxSeconds(8))
+	shunned := h.sim.Tick()
+	const shunFor = 30 * 20
+	for h.sim.Tick() < shunned+shunFor-1 {
+		h.sim.Step()
+		if wolf.TargetID() == p.ID() {
+			t.Fatalf("the wolf picked the shunned ranger again %d ticks after giving it up, before shunFor (%d)", h.sim.Tick()-shunned, shunFor)
+		}
+	}
+	h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(1))
+}
+
+// After giving up a target it cannot reach, the wolf turns to a companion who hurt it and
+// whom it can reach, without healing or forgetting.
+func TestLeashUnreachableTurnsToACompanion(t *testing.T) {
+	h, wolf := waterHarness(t)
+	_, p := ranger(t, h, pos(20, 23), 0)
+	h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+	_, mate := h.join("Mate", at(25, 18)) // the wolf's shore, in its leash area
+	h.sim.Command(ctxFunc(func(ctx *game.TickContext) {
+		wolf.SetHealth(500)
+		h.w.DamageMonsterForTest(ctx, wolf, mate, 10)
+	}))
+	h.sim.Step()
+	if wolf.TargetID() != p.ID() {
+		t.Fatalf("the wolf targets %d after the mate's hit, want the ranger %d", wolf.TargetID(), p.ID())
+	}
+	h.sim.RunUntil(func() bool { return wolf.TargetID() != p.ID() }, sim.MaxSeconds(8))
+	if wolf.TargetID() != mate.ID() {
+		t.Fatalf("the wolf turned to %d after giving the ranger up, want the mate %d", wolf.TargetID(), mate.ID())
+	}
+	if hp, _ := wolf.Health(); hp > 490 || wolf.DamageShareForTest(mate.ID()) != 10 {
+		t.Errorf("after turning to the mate: health %d (want at most 490), the mate's damage %d (want 10)", hp, wolf.DamageShareForTest(mate.ID()))
+	}
+}
+
+// When its target steps out of the leash, a monster turns to the closest player who hurt
+// it; between two as close, to the one who hurt it first.
+func TestLeashDropTargetTie(t *testing.T) {
+	def := wolfDef()
+	def.Health, def.Behavior.FleeAtHealthPct, def.Behavior.Aggressive = 1000, 0, false
+	h := leashHarness(t, 4, []*content.Monster{def}, spawnAt("wolf", 20, 20, 0, 60))
+	_, holder := h.join("Holder", at(21, 20))
+	_, second := h.join("Second", at(20, 22))
+	_, first := h.join("First", at(22, 20))
+	h.sim.Step()
+	wolf := onlyMonster(t, h)
+	if wolf.Pos() != pos(20, 20) || wolf.TargetID() != 0 {
+		t.Fatalf("the passive wolf is at %v targeting %d, want home and idle", wolf.Pos(), wolf.TargetID())
+	}
+	h.sim.Command(ctxFunc(func(ctx *game.TickContext) {
+		h.w.DamageMonsterForTest(ctx, wolf, holder, 5) // its target
+		h.w.DamageMonsterForTest(ctx, wolf, first, 5)  // 2 tiles away, hurt it first
+		h.w.DamageMonsterForTest(ctx, wolf, second, 5) // 2 tiles away too
+		h.w.Teleport(holder, pos(26, 20))              // out of the leash (4) and of its bite, in view
+	}))
+	h.sim.Step()
+	if wolf.TargetID() != first.ID() {
+		t.Errorf("the wolf turned to %d, want %d (as close as %d and hurt it first)", wolf.TargetID(), first.ID(), second.ID())
+	}
+}
+
+// A creature in the way is no safe spot either (review of lote 5): an NPC, a training
+// dummy or a still friend may never move. A ranger in a nook whose only way in a creature
+// takes shoots a wolf that cannot get past it. After stuckFor the wolf turns to a player
+// its bite reaches (the friend in the way), or, with none (a dummy), gives the ranger up
+// as unreachable.
+func TestLeashCreatureInTheWay(t *testing.T) {
+	nook := func(t *testing.T, dummy bool) (*harness, *session.Monster) {
+		t.Helper()
+		rows := make([]string, 40)
+		for y := range rows {
+			row := []byte(strings.Repeat(".", 40))
+			switch y {
+			case 23, 24:
+				row[19], row[21] = '#', '#'
+			case 25:
+				row[19], row[20], row[21] = '#', '#', '#'
+			}
+			rows[y] = string(row)
+		}
+		m := worldtest.Map(t, 0, 0, 7, rows...)
+		spawns := []world.Spawn{spawnAt("wolf", 20, 18, 0, 60)}
+		if dummy {
+			spawns = append(spawns, spawnAt("dummy", 20, 23, 0, 60)) // the nook's mouth
+		}
+		m.Islands()[0].Spawns = spawns
+		def := wolfDef()
+		def.Health, def.Behavior.FleeAtHealthPct = 1000, 0
+		h := newHarness(t, m, func(c *session.Config) {
+			c.Monsters = content.Monsters{"wolf": def, "dummy": targetDummyDef()}
+			c.Items = testItems()
+			c.Spells = rangerSpells()
+			c.Balance.Skills.Base["distance"] = content.SkillBase{StartLevel: 10, BaseTries: 1000}
+			c.Balance.Combat.MonsterLeashTiles = 6
+		})
+		h.sim.Step()
+		for _, mo := range h.w.Monsters() {
+			if mo.Kind() == "wolf" {
+				return h, mo
+			}
+		}
+		t.Fatal("no wolf")
+		return nil, nil
+	}
+	t.Run("a dummy", func(t *testing.T) {
+		h, wolf := nook(t, true)
+		cl, p := ranger(t, h, pos(20, 24), 60)
+		h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+		h.input(cl, setTarget(wolf.ID()))
+		h.sim.RunUntil(func() bool { return wolf.TargetID() == 0 }, sim.MaxSeconds(8))
+		if hp, maxHP := wolf.Health(); hp != maxHP || wolf.DamageShareForTest(p.ID()) != 0 {
+			t.Errorf("the wolf gave the ranger up at %d/%d health remembering %d damage, want full and 0", hp, maxHP, wolf.DamageShareForTest(p.ID()))
+		}
+	})
+	t.Run("a friend", func(t *testing.T) {
+		h, wolf := nook(t, false)
+		cl, p := ranger(t, h, pos(20, 24), 60)
+		h.sim.RunUntil(func() bool { return wolf.TargetID() == p.ID() }, sim.MaxSeconds(2))
+		clF, friend := h.join("Friend", at(20, 23)) // stands in the nook's mouth
+		h.input(cl, setTarget(wolf.ID()))
+		h.sim.RunUntil(func() bool { return wolf.TargetID() != p.ID() }, sim.MaxSeconds(8))
+		if wolf.TargetID() != friend.ID() {
+			t.Fatalf("the wolf turned to %d, want the friend in its way %d", wolf.TargetID(), friend.ID())
+		}
+		if hp, maxHP := wolf.Health(); hp == maxHP || wolf.DamageShareForTest(p.ID()) == 0 {
+			t.Errorf("after turning to the friend: health %d/%d, the ranger's damage %d (want it kept)", hp, maxHP, wolf.DamageShareForTest(p.ID()))
+		}
+		// The ranger was not given up (a way to it exists): once the friend is gone, the
+		// wolf goes for it into the nook.
+		h.sim.Command(h.w.Leave(clF))
+		h.sim.RunUntil(func() bool {
+			return wolf.TargetID() == p.ID() && chebyshev(wolf.Pos(), p.Pos()) == 1
+		}, sim.MaxSeconds(3))
+	})
 }
 
 // A burn whose caster stands beyond the leash and the reach of the monster ends without

@@ -52,9 +52,19 @@ combat:
   monster_corpse_ms: 60000    # how long a monster's remains (and its loot) stay
   # Leash (docs/02-game-design.md, "Monstruos"): a monster chases and flees only within
   # its spawn's radius + monster_leash_tiles (Chebyshev from the spawn's center). A target
-  # beyond that and out of its attacks' reach is dropped: it heals to full, forgets who hurt
-  # it and walks home; without a target it walks back into its spawn's radius. 0 = no leash.
+  # beyond that and out of its attacks' reach is dropped for another player fighting it
+  # from inside, or else it heals to full, forgets who hurt it and walks home; without a
+  # target it walks back into its spawn's radius. 0 = no leash.
   monster_leash_tiles: 6
+  # A search for a way (A*) that found none waits this long before the next one; a chase
+  # with a leash checks the way to a target out of its reach this often.
+  monster_path_retry_ms: 1000
+  # With a leash, a target out of reach that no way within the leash area reaches (around
+  # creatures) for this long is dropped like one beyond the leash (only creatures in the
+  # way: swapped for a player within reach)...
+  monster_stuck_ms: 2000
+  # ...and, on that tile and out of reach, counts as beyond the leash for that monster.
+  monster_shun_ms: 30000
   # Wands (T1.9): a distance attack of the weapon's element and range that hits
   # random(attack × wand_min_factor, attack) × (1 − resistance %). Armor does not stop it.
   wand_min_factor: 0.5

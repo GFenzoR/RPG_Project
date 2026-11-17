@@ -543,24 +543,35 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     experiencia por esa pelea) y vuelve caminando a casa. Un objetivo fuera del área pero
     a su alcance (un jugador pegado al borde, o a tiro de un ataque a distancia) se sigue
     peleando desde adentro.
-  - Tampoco hay lugares seguros dentro del área: si su objetivo, fuera de su alcance, está
-    donde no llega ningún camino a pie que no salga del área de correa (del otro lado de
-    agua, o detrás de un muro cuyo rodeo sale de ella) durante 2 s, lo trata como fuera de
-    la correa: lo cambia por otro o se rinde, igual que arriba. Criaturas en el camino no
-    cuentan (se mueven): detrás de otro monstruo espera. Durante 30 s ese jugador, fuera
-    de su alcance, cuenta como fuera de la correa para ese monstruo: no lo elige, cada
-    golpe suyo lo hace soltarlo (y curarse si no queda nadie) y entrena como contra un
-    objetivo que no responde (`TestLeashGivesUpATargetItCannotReach`). Para pelearlo en
-    ese lapso hay que entrar a su alcance. Cuando la persecución no encuentra camino,
-    espera 1 s antes de volver a buscar (como el regreso a casa): no gasta en cada tick la
-    cuota de búsquedas de los demás monstruos.
+  - Tampoco hay lugares seguros dentro del área. Mientras su objetivo está fuera de su
+    alcance, una vez por `combat.monster_path_retry_ms` (1 s), dé pasos o no, el monstruo
+    busca un camino a pie hasta él que rodee criaturas y no salga del área de correa. Solo
+    encontrarlo (o tener al objetivo a su alcance) reinicia la cuenta: un paso que no lleva
+    a ningún lado, como seguir por su orilla a un arquero que camina por la otra, no
+    cuenta (`TestLeashGivesUpATargetWalkingAlongTheShore`). Sin camino durante
+    `combat.monster_stuck_ms` (2 s):
+    - si tampoco lo hay atravesando criaturas (del otro lado de agua, o detrás de un muro
+      cuyo rodeo sale del área), lo trata como fuera de la correa: lo cambia por otro o se
+      rinde, igual que arriba;
+    - si solo criaturas tapan el paso (un NPC, un muñeco o un jugador quieto en la boca de
+      un rincón pueden no moverse nunca), se vuelve contra un jugador al que sus ataques
+      llegan desde donde está, normalmente el que tapa; si no hay ninguno, lo trata igual
+      como inalcanzable (`TestLeashCreatureInTheWay`).
+    Un objetivo dejado así cuenta como fuera de la correa para ese monstruo durante
+    `combat.monster_shun_ms` (30 s), **solo en esa casilla** y fuera de su alcance: no lo
+    elige, cada golpe suyo lo hace soltarlo (y curarse si no queda nadie) y entrena como
+    contra un objetivo que no responde (`TestLeashGivesUpATargetItCannotReach`). En otra
+    casilla es un objetivo como cualquiera: si tampoco se llega, vuelve a costar los 2 s
+    (`TestLeashShunsATile`); a los 30 s vence (`TestLeashShunExpires`). Cuando la
+    persecución no encuentra camino, espera 1 s antes de volver a buscar (como el regreso
+    a casa): no gasta en cada tick la cuota de búsquedas de los demás monstruos.
   - Sin objetivo (lo soltó, o el jugador murió, salió, entró a una zona de protección o se
     perdió de vista), si está fuera de su área de casa vuelve caminando hacia el centro del
     spawn a su velocidad, en vez de deambular, hasta entrar en ella (sin curarse en ese
     caso; si en el camino ve a alguien dentro de su correa, lo puede atacar). Da el paso
     que más acerca; contra un muro o agua busca un rodeo (A*, con la cuota del tick) y lo
-    sigue entero. Si no hay camino, espera ahí (1 s entre búsquedas): nunca se
-    teletransporta.
+    sigue entero. Si no hay camino, espera ahí (`monster_path_retry_ms` entre búsquedas):
+    nunca se teletransporta.
   - Un golpe desde fuera de la correa lo hace responder como siempre, pero enseguida
     suelta a ese objetivo (por otro que lo pelee desde adentro, o se rinde y se cura); una
     condición (quemadura, veneno) cuyo autor está
