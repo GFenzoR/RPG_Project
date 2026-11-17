@@ -140,3 +140,121 @@ test("sandbox island: wake up in its temple, then /tp to the pens, the yard of p
   await shot(page, "93-sandbox-cave");
   expect(errors).toEqual([]);
 });
+
+// The fixes of the sandbox playtest (docs/16): M1, the client knows walls block (a click
+// beyond the temple wall walks around it); M3, the arrows walk after a checkbox or a select
+// of the side panel took the focus; M2, the provisioner's shop scrolls inside the window at
+// 1280x800 and its last line (the spare backpack) is bought; m8, a count over the limit
+// shows the limit.
+test("sandbox playtest: walls block clicks, arrows after the panel, the shop scrolls (M1-M3)", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Revisor");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'admin' WHERE email = lower('${who.email}');`,
+  ]);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const at = async (): Promise<string> => {
+    const s = await page.evaluate(() => window.__rpgClient?.self());
+    return s && !s.pending && !s.walking ? `${s.x},${s.y},${s.z}` : "moving";
+  };
+  const standsOn = async (x: number, y: number, z: number): Promise<void> => {
+    await expect.poll(at, { timeout: 20_000 }).toBe(`${x},${y},${z}`);
+  };
+  const clickTile = async (x: number, y: number): Promise<void> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    if (!p) throw new Error("no canvas");
+    await page.mouse.click(p.x, p.y);
+  };
+  await standsOn(2095, 2086, 7);
+
+  // M1: the temple's stone wall blocks for the client too, so a click on the other side of
+  // it walks around through the door (it used to take one step into the wall and stop).
+  expect(await page.evaluate(() => window.__rpgClient?.walkable(2090, 2088, 7))).toBe(false);
+  await clickTile(2092, 2089);
+  await standsOn(2092, 2089, 7);
+  await clickTile(2091, 2093);
+  await standsOn(2091, 2093, 7);
+  await shot(page, "94-sandbox-around-the-wall");
+
+  // M3: after a click on a checkbox of the panel, and with a select focused, the arrows
+  // walk and the select keeps its option.
+  const chase = page.getByRole("checkbox", { name: "Perseguir al objetivo" });
+  await chase.click();
+  await expect(chase).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await standsOn(2091, 2094, 7);
+  const stance = page.getByRole("combobox", { name: "Modo de combate" });
+  const before = await stance.inputValue();
+  await stance.focus();
+  await page.keyboard.press("ArrowRight");
+  await standsOn(2092, 2094, 7);
+  expect(await stance.inputValue()).toBe(before);
+
+  // M2: the provisioner's shop at 1280x800 scrolls inside its window, which stays on the
+  // screen; the wheel scrolls it and its last line is bought. The map never scrolls.
+  const say = page.getByTestId("say").getByRole("textbox");
+  await say.fill("/item gold_coin 1");
+  await say.press("Enter");
+  await expect(page.getByTestId("game-log")).toContainText("Creaste");
+  await say.fill("/tp 2088 2098 7");
+  await say.press("Enter");
+  await standsOn(2088, 2098, 7);
+  // The camera follows the teleport on the next frame: tileToClient before it would point
+  // at the old view.
+  await page.waitForTimeout(300);
+  const merchant = await page.evaluate(() =>
+    window.__rpgClient?.npcs().find((n) => n.contentId === "pruebas_merchant"),
+  );
+  if (!merchant) throw new Error("no provisioner in view");
+  const m = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+    a: merchant.x,
+    b: merchant.y,
+  });
+  if (!m) throw new Error("no canvas");
+  await page.mouse.click(m.x, m.y, { button: "right" });
+  const dialog = page.getByTestId("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /Quiero comerciar/ }).click();
+  const shop = page.getByTestId("shop");
+  await expect(shop).toBeVisible();
+  await expect(page.getByTestId("shop-money")).toHaveText("Dinero: 10.000");
+  const box = await shop.boundingBox();
+  if (!box) throw new Error("no shop box");
+  expect(box.y + box.height).toBeLessThanOrEqual(800);
+  const sizes = await shop.evaluate((el) => ({ scroll: el.scrollHeight, client: el.clientHeight }));
+  expect(sizes.scroll).toBeGreaterThan(sizes.client); // the list is taller: it scrolls
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => shop.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  const last = shop.locator("li").last();
+  await expect(last).toHaveAttribute("data-item", "backpack");
+  // m8: a count over the limit shows the limit (100), not what was typed.
+  const count = last.getByRole("spinbutton");
+  await count.fill("250");
+  await expect(count).toHaveValue("100");
+  await count.fill("1");
+  await last.getByRole("button", { name: "Comprar" }).click();
+  await expect(page.getByTestId("game-log")).toContainText("Compraste mochila por 20 monedas.");
+  const lastBox = await last.boundingBox();
+  if (!lastBox) throw new Error("no last line");
+  expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(box.y + box.height + 1);
+  expect(await page.locator(".viewport").evaluate((el) => el.scrollTop)).toBe(0);
+  await page.waitForTimeout(300);
+  await shot(page, "95-sandbox-shop-scrolled");
+  expect(errors).toEqual([]);
+});

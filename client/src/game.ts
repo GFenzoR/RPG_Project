@@ -1256,6 +1256,9 @@ export class Game {
         this.useTop(x, y, z, top);
       },
       lookTile: (x, y, z) => this.lookTileAt(x, y, z),
+      doorAt: (x, y, z) =>
+        (this.opts.content.houseDoors?.includes(doorKey(x, y, z)) ?? false) ||
+        (this.world.tile(x, y, z)?.some((id) => this.world.item(id)?.door === true) ?? false),
       dragTile: (x, y, z) => {
         const ref = topItem(this.world, x, y, z, false);
         if (ref) this.startDrag(ref);

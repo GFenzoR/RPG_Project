@@ -114,6 +114,14 @@ describe("HouseWindow", () => {
       currentTarget: { checked: true },
     });
     submit(byAttr(tree, "class", "transfer")[0], { name: "Dora", price: "50" });
+    // Leaving asks first: the button is inside a closed <details> with the paid days.
+    const ask = byAttr(tree, "data-testid", "house-leave-ask")[0];
+    expect(ask?.type).toBe("details");
+    expect(ask?.props["open"]).toBeUndefined();
+    expect(byAttr(ask?.props.children, "data-testid", "house-leave")).toHaveLength(1);
+    expect(byAttr(tree, "data-testid", "house-leave-confirm")[0]?.props.children).toBe(
+      'client.house.leave_confirm{"days":1}',
+    );
     click(byAttr(tree, "data-testid", "house-leave")[0]);
     expect(sent).toEqual([
       "extend",

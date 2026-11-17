@@ -11,7 +11,7 @@ import type { Texture } from "pixi.js";
 import { CreatureKind, Skull } from "@rpg/protocol";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tileToScreen } from "@rpg/renderer";
 import type { AtlasIcon, Camera } from "@rpg/renderer";
-import { VIEW_TILES, followCamera } from "./viewport.ts";
+import { VIEW_TILES, followCamera, mapLift } from "./viewport.ts";
 import {
   WheelZoom,
   pinchZoom,
@@ -107,6 +107,8 @@ export interface GameCanvasOptions {
   useTile(x: number, y: number, z: number, top: boolean): void;
   /** A tile was shift-clicked (look at its top item). */
   lookTile(x: number, y: number, z: number): void;
+  /** The tile is a door (a map door item or a house door): right-clicked, it is used. */
+  doorAt?(x: number, y: number, z: number): boolean;
   /** The left button was pressed on a tile and dragged (move its top item). */
   dragTile(x: number, y: number, z: number, e: PointerEvent): void;
   /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
@@ -264,6 +266,11 @@ export async function createGameCanvas(
     if (app.renderer.width !== w || app.renderer.height !== h) app.renderer.resize(w, h);
     canvas.style.width = `${w / dpr}px`;
     canvas.style.height = `${h / dpr}px`;
+    // A strip at the bottom of the box that the canvas keeps clear when it can: the desktop
+    // hotbar (--map-reserve-bottom in client.css, px). A click on the last row of tiles
+    // cast F1 at 1280x800.
+    const lift = mapLift(boxH, h / dpr, px(style.getPropertyValue("--map-reserve-bottom")));
+    canvas.style.marginBottom = lift > 0 ? `${lift}px` : "";
     // The camera follows at once, not from the next frame: clicks and tileToClient read it
     // meanwhile. On creation this is what sets it before the game says it is ready: Pixi's
     // ticker skips a first frame whose time predates its start (a busy page), so the first
@@ -676,7 +683,10 @@ export async function createGameCanvas(
     const tile = screenToTile(cam, p.x, p.y, T);
     const z = self.pos.z;
     const c = e.button === 2 ? world.creatureAt(tile.x, tile.y, z) : undefined;
-    const act = mapPress(e.button, e, c && c.id !== world.selfId ? c.id : undefined);
+    const other = c && c.id !== world.selfId ? c : undefined;
+    const inDoor =
+      other?.kind === CreatureKind.PLAYER && (opts.doorAt?.(tile.x, tile.y, z) ?? false);
+    const act = mapPress(e.button, e, other?.id, inDoor);
     if (act.kind === "attack") opts.clickCreature(act.creature);
     else if (act.kind === "use") opts.useTile(tile.x, tile.y, z, act.top);
     else if (act.kind === "look") opts.lookTile(tile.x, tile.y, z);

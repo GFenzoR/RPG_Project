@@ -21,6 +21,12 @@ describe("mapPress", () => {
     expect(mapPress(2, ctrl, 7)).toEqual({ kind: "attack", creature: 7 });
   });
 
+  it("uses a door another player stands in instead of attacking him (playtest m5)", () => {
+    expect(mapPress(2, plain, 7, true)).toEqual({ kind: "use", top: false });
+    expect(mapPress(2, ctrl, 7, true)).toEqual({ kind: "use", top: true });
+    expect(mapPress(2, plain, 7, false)).toEqual({ kind: "attack", creature: 7 });
+  });
+
   it("looks on Shift+left, walks or drags on a plain left press, ignores other buttons", () => {
     expect(mapPress(0, shift, 7)).toEqual({ kind: "look" });
     expect(mapPress(0, plain, undefined)).toEqual({ kind: "press" });

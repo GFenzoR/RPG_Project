@@ -170,7 +170,7 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await expect(backpackWindow).toBeVisible();
   await expect(backpackWindow.locator(".slot")).toHaveCount(24);
   await backpackSlot.locator("[data-item]").click({ modifiers: ["Shift"] });
-  await expect(page.getByTestId("game-log")).toContainText("Ves mochila (24 lugares)");
+  await expect(page.getByTestId("game-log")).toContainText("Ves: mochila (24 lugares)");
   await expect(inventory.getByTestId("capacity")).toContainText("Capacidad libre");
   await inventory.screenshot({ path: join(shots, "09-inventory.png") });
 
@@ -714,7 +714,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await page.keyboard.up("Shift");
   const log = page.getByTestId("game-log");
   await expect(log).toContainText(
-    "Ves cartel. Templo del Farol. Dentro de sus muros nadie puede hacerte daño.",
+    "Ves: cartel. Templo del Farol. Dentro de sus muros nadie puede hacerte daño.",
   );
   // The log sits at the end of the scrolling side column on desktop: bring it into view
   // so the screenshot shows the line read, then put the column back for the next shots.
@@ -2636,7 +2636,7 @@ test("T5.5: wake up at the temple of Brasal and start Chapter 3 with the keeper"
   await page.mouse.click(sign.x, sign.y);
   await page.keyboard.up("Shift");
   await expect(page.getByTestId("game-log")).toContainText(
-    "Ves cartel. Templo de la Llama Quieta, en Brasal.",
+    "Ves: cartel. Templo de la Llama Quieta, en Brasal.",
   );
   await shot(page, "65b-volcan-temple-sign");
   for (const [x, y] of [

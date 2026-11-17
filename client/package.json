@@ -19,6 +19,7 @@
     "preact": "10.29.8"
   },
   "devDependencies": {
+    "@rpg/map-format": "workspace:*",
     "@rpg/spritepack": "workspace:*",
     "yaml": "2.9.1"
   }

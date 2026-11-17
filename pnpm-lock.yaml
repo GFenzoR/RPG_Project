@@ -66,6 +66,9 @@ importers:
         specifier: 10.29.8
         version: 10.29.8
     devDependencies:
+      '@rpg/map-format':
+        specifier: workspace:*
+        version: link:../packages/map-format
       '@rpg/spritepack':
         specifier: workspace:*
         version: link:../tools/spritepack

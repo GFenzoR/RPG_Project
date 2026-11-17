@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { loadContent } from "@rpg/map-format";
 import { loadClientContent, loadPortals, loadSiteContent } from "./content.ts";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
@@ -111,6 +112,32 @@ describe("client content (T0.5)", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  // The client walks by click around what it thinks blocks: it must agree with the map
+  // tools (and so with mapcompile, which `make test-parity` compares with map-format) on
+  // every item. A wall blocks by default (kind: wall without blocks_movement).
+  it("blocks and walks on every item like packages/map-format (playtest M1)", () => {
+    const map = loadContent(REPO);
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    expect(byId.size).toBeGreaterThan(0);
+    for (const [id, info] of map.items) {
+      const def = byId.get(id);
+      if (!def) continue; // an item without a numeric ID (make validate reports it)
+      expect(def.blocks, `${id} blocks`).toBe(info.blocksMovement);
+      if (def.ground) expect(def.walkable, `${id} walkable`).toBe(info.walkable === true);
+    }
+    // The temple walls of the Isla de Pruebas (kind: wall, no blocks_movement).
+    expect(byId.get("stone_wall")?.blocks).toBe(true);
+    expect(byId.get("wooden_wall")?.blocks).toBe(true);
+  });
+
+  it("marks the map doors, open or shut, and only those (playtest m5)", () => {
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    expect(byId.get("pruebas_gate")?.door).toBe(true);
+    expect(byId.get("pruebas_gate_open")?.door).toBe(true);
+    expect(byId.get("stone_wall")?.door).toBeUndefined();
+    expect(byId.get("backpack")?.door).toBeUndefined();
   });
 
   it("exposes data/outfits.yaml with the default citizen outfit", () => {
