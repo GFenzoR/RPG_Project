@@ -122,7 +122,9 @@ func (w *World) initConditions() error {
 }
 
 // checkFood: food (consumable.food_ms) needs the food condition, a regen one (content
-// audit m2), and pure food may not last longer than its max_ms (it could never be eaten).
+// audit m2) that adds up (stacking: add: with refresh a second meal would not lengthen
+// it, and stomachFull counts on the sum), and pure food may not last longer than its
+// max_ms (it could never be eaten).
 func (w *World) checkFood() error {
 	fed := w.cfg.Balance.Conditions[foodCondition]
 	for _, id := range slices.Sorted(maps.Keys(w.cfg.Items)) { // a stable first error
@@ -133,6 +135,8 @@ func (w *World) checkFood() error {
 		switch {
 		case fed == nil || fed.Kind != content.ConditionRegen:
 			return fmt.Errorf("session: item %q is food but balance.yaml conditions has no %q of kind %q", id, foodCondition, content.ConditionRegen)
+		case fed.Stacking != content.StackAdd:
+			return fmt.Errorf("session: condition %q must stack with add: every meal adds its food_ms", foodCondition)
 		case c.HealHP == 0 && c.HealMP == 0 && c.FoodMs > fed.MaxMs:
 			return fmt.Errorf("session: food %q lasts %d ms, more than %s max_ms %d: it could never be eaten", id, c.FoodMs, foodCondition, fed.MaxMs)
 		}

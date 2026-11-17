@@ -272,9 +272,17 @@ tags: [beast, puerto]
   y cuya quest en curso pide ese item (un paso `has_item` de ese item, el actual o uno ya
   cumplido, que el jugador ya no cumple: si lo perdió antes de entregarlo, el próximo
   custodio le da otro) le llega el suyo a la mochila, o a los pies si no entra, con su
-  propia tirada de `chance`. Nadie más lo recibe y los restos no lo llevan. El item tiene
-  que ser el `has_item` de algún paso de quest (lo revisa el arranque). Lo usa el sello de
-  la forja del custodio (`ch3_warden`).
+  propia tirada de `chance`, y un mensaje (`dialog.quest_drop`). Nadie más lo recibe y los
+  restos no lo llevan. Como no se distingue un item perdido de uno ya entregado, el
+  arranque del servidor exige: que sea el `has_item` de algún paso de quest; que después
+  de ese paso solo quede la entrega (un último paso `dialog_action`, donde el NPC lo toma
+  con `take_item`: entregarlo completa la quest, y una quest completada no pide nada); y
+  que el item tenga `tradeable: false` y `value: 0` (las copias que alguien junte
+  tirándolas al piso no valen nada ni se comercian). Lo usa el sello de la forja del
+  custodio (`ch3_warden`).
+- **Comida y `well_fed`:** si algún item tiene `food_ms`, el arranque exige la condición
+  `well_fed` de `kind: regen` con `stacking: add` (cada comida suma su tiempo) y que
+  ninguna comida pura dure más que su `max_ms` (no se podría comer nunca).
 
 ## NPC con diálogo de ventana
 Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de

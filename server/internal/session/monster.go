@@ -3,6 +3,8 @@ package session
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/combat"
@@ -208,8 +210,10 @@ func (w *World) initCombat() error {
 			if it == nil {
 				return fmt.Errorf("session: monster %q drops unknown item %q", id, l.Item)
 			}
-			if l.EachPlayer && !questAsks(w.cfg.Quests, l.Item) {
-				return fmt.Errorf("session: monster %q: each_player loot %q is the has_item of no quest step: it would never drop", id, l.Item)
+			if l.EachPlayer {
+				if err := checkQuestDrop(w.cfg.Quests, it); err != nil {
+					return fmt.Errorf("session: monster %q: each_player loot %q: %w", id, l.Item, err)
+				}
 			}
 			lo, hi := l.CountRange()
 			k.loot = append(k.loot, lootItem{def: it, chance: l.Chance, lo: lo, hi: hi, each: l.EachPlayer})
@@ -782,15 +786,34 @@ func (w *World) removeMonster(m *Monster) {
 	}
 }
 
-// questAsks reports whether some quest step waits for item (has_item): what a quest drop
-// (loot each_player, content audit m9) needs to ever drop.
-func questAsks(quests content.Quests, item string) bool {
-	for _, q := range quests {
-		for _, s := range q.Steps {
-			if c := s.CompleteWhen.HasItem; c != nil && c.Item == item {
-				return true
+// checkQuestDrop checks the item of a quest drop (loot each_player, content audit m9).
+// quest.Engine.Needs gives it again to whoever no longer holds it while its has_item step
+// is current or done, and cannot tell a lost one from one handed in. So:
+//   - some quest step waits for it (has_item), or it would never drop;
+//   - after each such step only the delivery is left: one last step, a dialog_action (the
+//     NPC takes it with take_item). Handing it in completes the quest, and a completed
+//     quest needs nothing; any later step would give it again with every kill;
+//   - it is worth nothing and cannot be traded (tradeable: false, value: 0): the copies a
+//     player can pile up, dropping them on the floor, buy nothing and nobody else takes.
+func checkQuestDrop(quests content.Quests, item *content.Item) error {
+	if item.Tradeable || item.Value != 0 {
+		return fmt.Errorf("a quest drop needs tradeable: false and value: 0")
+	}
+	asked := false
+	for _, id := range slices.Sorted(maps.Keys(quests)) { // a stable first error
+		steps := quests[id].Steps
+		for i, s := range steps {
+			if c := s.CompleteWhen.HasItem; c == nil || c.Item != item.ID {
+				continue
+			}
+			asked = true
+			if i != len(steps)-2 || steps[i+1].CompleteWhen.DialogAction == nil {
+				return fmt.Errorf("quest %q step %q: after the has_item of a quest drop only the delivery may be left (one last dialog_action step), or it would drop again once handed in", id, s.ID)
 			}
 		}
 	}
-	return false
+	if !asked {
+		return fmt.Errorf("the has_item of no quest step: it would never drop")
+	}
+	return nil
 }
