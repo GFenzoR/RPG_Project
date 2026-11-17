@@ -43,12 +43,17 @@ shop:
     - { item: rope, price: 45 }
     - { item: ship_biscuit, price: 3 }
     - { item: seaweed_poultice, price: 25 }
+    - { item: mana_draught, price: 22 }
+    - { item: concentrated_mana_draught, price: 50 }
     - { item: arc_rune, price: 30 }
     - { item: hatchet, price: 60 }
     - { item: iron_sword, price: 120 }
+    - { item: spark_wand, price: 40 }
     - { item: coral_wand, price: 300 }
     - { item: short_bow, price: 40 }
     - { item: arrow, price: 1 }
+    - { item: smuggler_crossbow, price: 420 }
+    - { item: bolt, price: 1 }
     - { item: sapling_staff, price: 40 }
     - { item: barrel_lid_shield, price: 10 }
     - { item: plank_shield, price: 25 }
@@ -60,11 +65,6 @@ shop:
     - { item: tarred_boots, price: 15 }
     - { item: pruebas_key, price: 10 }
     - { item: backpack, price: 20 }
-    - { item: mana_draught, price: 22 }
-    - { item: concentrated_mana_draught, price: 50 }
-    - { item: spark_wand, price: 40 }
-    - { item: smuggler_crossbow, price: 420 }
-    - { item: bolt, price: 1 }
   buys:
     - { item: raw_fish, price: 1 }
     - { item: grilled_fish, price: 2 }
