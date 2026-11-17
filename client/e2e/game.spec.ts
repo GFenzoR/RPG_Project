@@ -1214,6 +1214,9 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   await form.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(again.getByTestId("login-form")).toContainText("Esta cuenta está suspendida.");
   await shot(again, "21-banned-login");
+  // Close them, like every test with pages of its own: left open, the GM's game kept
+  // running beside every later test of the suite.
+  for (const p of [gmPage, plPage, again]) await p.close();
 });
 
 test("T3.2: a guardian casts haste: condition badge, faster speed and steps", async ({
