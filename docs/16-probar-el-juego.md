@@ -88,12 +88,12 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      el corral 4) y "El combate"; para la runa de arco (nivel mágico 1) o "mend_other"
      (nivel mágico 2, druida de nivel 8), "El combate" basta; para el yunque, "Los oficios".
 2. **Tienda (plaza).** Con Tobías Muestra, "Quiero comerciar": herramientas (pico, hacha de
-   leñador, caña, martillo, cuerda), galleta, cataplasma de algas (la curación que
-   existe: no hay pociones de maná en el juego; el maná lo llena "Cúrame"), runa de arco
-   (pide nivel mágico 1: ver más abajo), el equipo de cada vocación
-   (guardián: hacha de mano o espada de hierro desde el nivel 5 y escudos; arcanista: varita
-   de coral desde el nivel 6; montaraz: arco corto y flechas; druida: vara de retoño) y la
-   llave de latón. Prueba también vender (compra pescado, mineral, troncos, lingotes y
+   leñador, caña, martillo, cuerda), galleta, cataplasma de algas, brebajes de maná (el
+   común y el concentrado; "Cúrame" también llena el maná), runa de arco (pide nivel
+   mágico 1: ver más abajo), el equipo de cada vocación (guardián: hacha de mano o espada
+   de hierro desde el nivel 5 y escudos; arcanista: varita de chispa, o de coral desde el
+   nivel 6; montaraz: arco corto y flechas, o ballesta de contrabandista y virotes desde el
+   nivel 12, que deja usar escudo; druida: vara de retoño) y la llave de latón. Prueba también vender (compra pescado, mineral, troncos, lingotes y
    pieles). No vende pala: todavía no hay nada que cavar en el juego.
    - **Runa de arco:** todo personaje empieza en nivel mágico 0 y la runa pide 1. Con
      "Entréname" → "El combate" cualquier vocación pasa de 1 (la arcanista queda en 25) y la
