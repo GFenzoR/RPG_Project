@@ -7,7 +7,7 @@ import { engineFrames } from "./book.ts";
 import { allowedColors, canvasOf, colorKey, toneColor } from "./render.ts";
 import { specMaterials, validateSpec } from "./spec.ts";
 import type { SpriteSpec } from "./spec.ts";
-import { DITHER_MAX_SHARE, OUTLINE, VALUE_BAND } from "./style.ts";
+import { DITHER_MAX_SHARE, GLOW_OUTLINE, OUTLINE, VALUE_BAND } from "./style.ts";
 import type { Tone } from "./style.ts";
 
 const TONE_I: Record<Tone, number> = { light: 0, base: 1, shadow: 2, deep: 3, outline: 5 };
@@ -173,7 +173,7 @@ export function outlineColors(spec: SpriteSpec): Set<string> {
   const out = new Set<string>();
   for (const name of specMaterials(spec)) {
     const m = PALETTE[name];
-    for (const pol of [OUTLINE[size.kind], OUTLINE.object])
+    for (const pol of [OUTLINE[size.kind], OUTLINE.object, GLOW_OUTLINE])
       for (const t of [pol.lit, pol.dark]) out.add(colorKey(toneColor(m, TONE_I[t])));
   }
   return out;

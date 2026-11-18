@@ -118,6 +118,12 @@ export const PALETTE = {
   // Liquids and glows
   water: material("#5d93b5", "#3e7398", "#2c5677", "#1d3b55"),
   ember: material("#ffd36b", "#f39a35", "#c4581f", "#7e2e12"),
+  /**
+   * The forge echo (engine/specs/forge-echo.ts): a white-hot core (body, head, arms) inside
+   * flames that go from yellow to orange to a red rim (hair, beard, tongues, the tail).
+   */
+  fireCore: material("#fff8d8", "#ffe070", "#ffab30", "#f0661c"),
+  flame: material("#ffd447", "#ff9021", "#e9511a", "#b3260f"),
 } as const satisfies Record<string, Material>;
 
 export type MaterialName = keyof typeof PALETTE;

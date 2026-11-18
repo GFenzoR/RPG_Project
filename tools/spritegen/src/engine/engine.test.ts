@@ -29,7 +29,16 @@ import { contactSheet, reviewLineup } from "./sheet.ts";
 import { validateSpec } from "./spec.ts";
 import type { PartSpec, ShapeSpec, SpriteSpec } from "./spec.ts";
 import { ENGINE_SPECS } from "./specs/index.ts";
-import { ACTIONS, CLIENT, FACING_YAW, LIGHT, OUTLINE, SIZES, VIEW_DIR } from "./style.ts";
+import {
+  ACTIONS,
+  CLIENT,
+  FACING_YAW,
+  GLOW_OUTLINE,
+  LIGHT,
+  OUTLINE,
+  SIZES,
+  VIEW_DIR,
+} from "./style.ts";
 
 const root = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 /** The value, or a thrown error naming what was missing (no non-null assertions). */
@@ -402,6 +411,31 @@ describe("the renderer", () => {
     expect(crease).toBeGreaterThan(3);
   });
 
+  it("creases fire in its shadow shade where a nearer glowing part overlaps it", () => {
+    const glowing = (name: string, shape: ShapeSpec): PartSpec => ({
+      name,
+      material: "flame",
+      glow: true,
+      shapes: [shape],
+    });
+    const flat = (front: boolean): SpriteSpec => ({
+      sprite: "decor/test_fire_crease",
+      size: "object",
+      parts: [
+        glowing("back", { type: "box", min: [-8, 4, 0], max: [8, 8, 12] }),
+        ...(front ? [glowing("front", { type: "box", min: [-3, -6, 0], max: [3, -2, 8] })] : []),
+      ],
+    });
+    const shade = colorKey(PALETTE.flame[GLOW_OUTLINE.crease]);
+    const count = (img: Image): number => {
+      let n = 0;
+      for (let y = 0; y < img.height; y++)
+        for (let x = 0; x < img.width; x++) if (key(img, x, y) === shade) n++;
+      return n;
+    };
+    expect(count(renderSpec(flat(true)))).toBeGreaterThan(count(renderSpec(flat(false))) + 3);
+  });
+
   it("paints a mark where it is seen and not through what is in front of it", () => {
     const mark = { at: [0, -6, 6] as Vec3, material: "berry" as const, tone: "base" as const };
     const red = colorKey(PALETTE.berry.base);
@@ -432,6 +466,10 @@ describe("the renderer", () => {
     const b = must(box(img));
     const mid = key(img, Math.round((b[0] + b[2]) / 2), Math.round((b[1] + b[3]) / 2));
     expect(mid).toBe(colorKey(PALETTE.ember.light));
+    // Its own outline, in any sprite: the red rim on the lit side, a dark ember on the other.
+    const row = Math.round((b[1] + b[3]) / 2);
+    expect(key(img, b[0], row)).toBe(colorKey(PALETTE.ember[GLOW_OUTLINE.lit]));
+    expect(key(img, b[2], row)).toBe(colorKey(PALETTE.ember[GLOW_OUTLINE.dark]));
     const metal = renderSpec(
       still(
         { type: "ellipsoid", center: [0, 0, 6], radii: [6, 6, 6] },

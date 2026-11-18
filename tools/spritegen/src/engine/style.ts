@@ -72,6 +72,19 @@ export const OUTLINE: Record<SpriteKind, { lit: Tone; dark: Tone; crease: Tone }
 export const CREASE_DEPTH = 2.5;
 
 /**
+ * Fire (a `glow` part) keeps its own outline in any sprite: its deep shade (the red rim of a
+ * flame) on the lit side and its outline (a dark ember) on the shadow side, so a fire spirit
+ * stands out from rock and ash the way a flame does (docs/17 ART-5, ART-6: a glow reads by
+ * its hot core against a dark edge). Its crease, where a nearer glowing part overlaps it (an
+ * arm before the chest), is its shadow shade: a darker flame, never a black line.
+ */
+export const GLOW_OUTLINE: { lit: Tone; dark: Tone; crease: Tone } = {
+  lit: "deep",
+  dark: "outline",
+  crease: "shadow",
+};
+
+/**
  * ART-5 light from the top-left, on the silhouette: a pixel of the figure with nothing above
  * it or to its left (the lit rim, just inside the lighter outline) is this many shades
  * lighter. It is what makes a round back or a head read as lit from that side at 1x.

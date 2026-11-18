@@ -8,7 +8,7 @@
 //   3. creases: where a part overlaps a farther one, the farther one gets a dark line;
 //   4. marks: single pixels (eyes, nostrils, berries) where they are visible;
 //   5. outline: 1 px around the silhouette, dark on the shadow side and lighter on the lit
-//      side, by the size class's policy (ART-5).
+//      side, by the size class's policy (ART-5), or fire's own (GLOW_OUTLINE).
 // Everything is opaque or transparent, and the same spec and seed give the same pixels.
 import { createImage } from "@rpg/spritepack";
 import type { Image, Rgba } from "@rpg/spritepack";
@@ -24,6 +24,7 @@ import {
   ACTIONS,
   CREASE_DEPTH,
   GLOW,
+  GLOW_OUTLINE,
   LIGHT,
   OUTLINE,
   PROJECTION,
@@ -284,13 +285,14 @@ export function renderSpec(spec: SpriteSpec, ref?: FrameRef, seed = seedOf(spec.
 
   // 4. Creases: the farther of two overlapping parts gets a dark line along the nearer one.
   const policy = OUTLINE[size.kind];
-  const creaseT = TONE_INDEX[policy.crease];
+  const glowCreaseT = TONE_INDEX[GLOW_OUTLINE.crease];
   const creased = Int8Array.from(tone);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       const pi = partOf[i] ?? -1;
-      if (pi < 0 || fixed[i] || spec.parts[pi]?.glow) continue;
+      if (pi < 0 || fixed[i]) continue;
+      const creaseT = spec.parts[pi]?.glow ? glowCreaseT : TONE_INDEX[policy.crease];
       const di = depth[i] ?? 0;
       const near = (j: number, ok: boolean): boolean => {
         if (!ok) return false;
@@ -357,7 +359,6 @@ export function renderSpec(spec: SpriteSpec, ref?: FrameRef, seed = seedOf(spec.
     const t = tone[i] ?? -1;
     if (m && t >= 0) put(i, toneColor(m, t));
   }
-  const soft = OUTLINE.object;
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
@@ -374,7 +375,7 @@ export function renderSpec(spec: SpriteSpec, ref?: FrameRef, seed = seedOf(spec.
         const m = mat[j];
         if (!m) continue;
         const glow = spec.parts[partOf[j] ?? -1]?.glow ?? false;
-        const pol = glow ? soft : policy;
+        const pol = glow ? GLOW_OUTLINE : policy;
         put(i, toneColor(m, TONE_INDEX[dark ? pol.dark : pol.lit]));
         break;
       }
