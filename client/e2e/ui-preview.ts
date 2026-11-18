@@ -20,8 +20,13 @@ const shots = join(client, "e2e", "screenshots", "actual", "ui-preview");
 const args = process.argv.slice(2);
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : undefined;
 
-/** Puerto's temple square: grass, walls, cobbles, a sign and the market board. */
-const MAP_AREA = "3155,6376,15,11";
+/**
+ * Puerto's temple square (grass, walls, cobbles, a sign and the market board) in the
+ * middle of the server's 31x21 window with its margin of one tile: 33x23 tiles
+ * (src/preview/main.tsx PICTURE).
+ */
+const MAP_TILES = { width: 33, height: 23 };
+const MAP_AREA = `${3162 - 16},${6381 - 11},${MAP_TILES.width},${MAP_TILES.height}`;
 
 if (!args.includes("--no-build")) {
   // Vite as the client resolves it (hoisted to the workspace root), run by this same node.
@@ -57,10 +62,10 @@ execFileSync(
   ],
   { cwd: root, stdio: "ignore" },
 );
-// The rulers mapcli draws on the left and the top: whatever exceeds 15x11 tiles.
+// The rulers mapcli draws on the left and the top: whatever exceeds the area's tiles.
 const png = readFileSync(mapPng);
-const mapx = png.readUInt32BE(16) - 15 * 32;
-const mapy = png.readUInt32BE(20) - 11 * 32;
+const mapx = png.readUInt32BE(16) - MAP_TILES.width * 32;
+const mapy = png.readUInt32BE(20) - MAP_TILES.height * 32;
 
 const TYPES: Record<string, string> = {
   ".html": "text/html",
