@@ -37,8 +37,8 @@ client/
   (ver "Zoom del mapa").
 - La UI (inventario, chat, diálogos) es DOM con Preact encima del canvas, no Pixi.
   Así es accesible, traducible y testeable con Playwright. En escritorio no hay encabezado
-  ni columna fija: el mapa, el dock a su derecha y ventanas separadas (ver "Notas de la UI
-  oscura").
+  ni columna fija: el mapa a pantalla completa, la barra gótica de abajo y ventanas que
+  flotan sobre el mapa (ver "Notas de la pantalla completa").
 - Ningún string visible hardcodeado: todo pasa por `t('clave')`.
 - Pensado para PC primero (teclado + mouse). Mantén el input desacoplado para poder
   sumar controles táctiles sin reescribir.
@@ -213,8 +213,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 
 ## Notas de T3.2
 - `WorldState.conditions` (de `PlayerConditions`, solo las propias) alimenta la barra de
-  condiciones (`ConditionBar` en `ui/GameView.tsx`, bajo los orbes en escritorio y en el
-  encabezado de los teléfonos; nombres `condition.<id>.name`).
+  condiciones (`ConditionBar` en `ui/GameView.tsx`; en escritorio va en la placa sobre el
+  orbe de vida, arriba del nombre, y en los teléfonos en el encabezado; nombres
+  `condition.<id>.name`).
   La velocidad aplicada llega en `PlayerStats.speed` / `CreatureSpeed`: el paso predicho y
   la interpolación ya la usan. Invisible: el propio cliente dibuja su criatura con alpha
   0.4 (los demás no la reciben). Efecto 7 = hechizo de condición o cura.
@@ -330,7 +331,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 ## Notas de T4.2
 - `WorldState.tutorial` (de `TutorialStep`, `state/tutorial.ts`, puro y con tests) es el paso
   que dice el servidor; `undefined` cuando terminó. `ui/Tutorial.tsx` dibuja el panel de
-  pistas arriba a la derecha del mapa (no toma teclas) con "Saltar tutorial"
+  pistas arriba a la derecha del mapa (en escritorio, a la izquierda de la columna del
+  inventario y bajo las ventanas; no toma teclas) con "Saltar tutorial"
   (`Game.skipTutorial` → `TutorialSkip`; el panel se cierra cuando el servidor confirma).
   Se oculta mientras hay `dialog`, `shop` o `station` abiertos: en pantallas angostas
   (la app de escritorio a 960 px) la tienda llega a esa esquina.
@@ -1109,8 +1111,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   desplazan adentro; `.viewport` usa `overflow: clip` (Tab no corre el mapa) y los avisos
   van debajo de las ventanas (`z-index: 1`).
 - Hotbar de escritorio más baja y el canvas sube sobre ella cuando hay lugar
-  (`--map-reserve-bottom` en `client.css`, `mapLift` de `render/viewport.ts`, puro y con
-  tests): a 1280x800 tapaba la última fila del mapa.
+  (`--map-reserve-bottom` en `client.css`, `mapLift` de `render/viewport.ts`): a 1280x800
+  tapaba la última fila del mapa. Ya no existen: desde la pantalla completa la hotbar va
+  en la barra de abajo y el mapa termina en su techo ("Notas de la pantalla completa").
 - Click derecho sobre una puerta (item `door` o puerta de casa) con otro jugador encima usa
   la puerta (`mapPress` con `playerInDoor`); la lista de batalla sigue apuntándole.
 - `translator` agrupa los números con `Intl.NumberFormat` del idioma (no `x`, `y`, `z`,
@@ -1181,7 +1184,7 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   construye `preview/index.html` (`src/preview/`, solo con `RPG_UI_PREVIEW=1`: nunca va
   al build normal), dibuja un pedazo de Puerto con `mapcli render` en lugar del canvas
   (las 33x23 casillas de la ventana con su margen, del tamaño del canvas en la vista
-  ajustada: `zoomRange`, `viewPixels` y `mapLift`, como `render/game-canvas.ts`) y
+  ajustada: `zoomRange` con `cover` y `viewPixels`, como `render/game-canvas.ts`) y
   saca screenshots de cada escena (game, windows, options, dialog, danger, death, login,
   characters) a 1920x1080, 1280x800, 1280x720, 960x700, teléfono vertical y horizontal y
   tablet, en `e2e/screenshots/actual/ui-preview/`. Playwright contesta cada pedido desde el
@@ -1280,11 +1283,11 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   final de `others` el contenedor que cambia, y `saveWindows` y `loadWindows` se quedan
   con los últimos. "Restablecer ventanas" (`resetWindows`) deja abiertas
   las del servidor que lo estaban, en su lugar de fábrica.
-- **Dónde salen la primera vez** (`windows.css`; cambió con la pantalla completa: ver "Notas
-  de la pantalla completa"): los contenedores acoplados bajo lo que
-  haya (como en Tibia); el diálogo abajo al centro sobre la hotbar; con la tienda, los dos
-  lado a lado centrados (`.game-body[data-shop]`, `--shop-w`); crafteo, mercado y casa
-  arriba a la izquierda; el intercambio arriba a la derecha. Movidas, guardan su lugar.
+- **Dónde salen la primera vez** (`windows.css`): desde la pantalla completa, los lugares de
+  "Notas de la pantalla completa" (los contenedores bajo el inventario, arriba a la
+  derecha; diálogo, crafteo, mercado y casa abajo al centro sobre la barra, con la tienda a
+  la izquierda del diálogo, `.game-body[data-shop]`, `--shop-w`; el intercambio arriba al
+  centro). Movidas, guardan su lugar.
 - **Componentes `framed`:** `DialogView`/`ShopView`, `CraftingWindow`, `MarketWindow`,
   `HouseWindow`, `TradeWindow` y `ContainerView` (`ui/Inventory.tsx`) toman `framed`: sin
   su encabezado (la barra del `GameWindow` lo nombra y lo cierra) y **sin su `data-testid`,
@@ -1296,25 +1299,23 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   (envuelto en `.inventory.container-window` para heredar los slots). En tablets y
   teléfonos todo sigue como antes: hojas sobre el mapa y los contenedores bajo el equipo
   (`InventoryPanel` con `containers`).
-- **Mover y cambiar el tamaño** (`GameWindow`, `useWindows` de `GameView`; sin acoplar desde
-  la pantalla completa, con el imán): la barra
-  arrastra como antes; la esquina de abajo a la derecha (`.gwin-resize`; en una acoplada,
-  el borde de abajo y solo el alto) cambia el tamaño (`resizeWindow`, `clampSize` con
-  `MIN_SIZE`); el botón ✥ de la barra (`.gwin-move`, `window-move-<id>`) toma el teclado
-  (`windowNudge`): flechas mueven 16 px, Mayús+flechas cambian el tamaño, en una acoplada
-  arriba y abajo la cambian de lugar (`moveInDock`), Enter o Espacio la acoplan o la sueltan
-  junto al dock. El botón para la tecla (`preventDefault` + `stopPropagation`) para que la
-  flecha no camine; Alt no se toma (Alt+← es "atrás" del navegador). Después de acoplar o
-  soltar, el foco vuelve al ✥ de la ventana. La ayuda (H) lo explica (`client.help.windows`).
+- **Mover y cambiar el tamaño** (`GameWindow`, `useWindows` de `GameView` y
+  `ui/window-dom.ts`; desde la pantalla completa nada se acopla y hay imán): la barra
+  arrastra (`dragWindow`); la esquina de abajo a la derecha (`.gwin-resize`, `resizeDrag`)
+  cambia el tamaño (`resizeWindow`, `clampSize` con `MIN_SIZE`); el botón ✥ de la barra
+  (`.gwin-move`, `window-move-<id>`) toma el teclado (`windowNudge`): flechas mueven 16 px
+  y Mayús+flechas cambian el tamaño. El botón para la tecla (`preventDefault` +
+  `stopPropagation`) para que la flecha no camine; Alt no se toma (Alt+← es "atrás" del
+  navegador). La ayuda (H) lo explica (`client.help.windows`).
 - **Escala de la interfaz y tamaño del texto** (UI-3, `state/ui-prefs.ts`,
   `ui/InterfaceOptions.tsx`, Opciones → Interfaz y el menú ☰ del teléfono): `rpg.ui-scale`
-  (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de `.dock` y las ventanas flotantes (`--ui-zoom`
-  en `<html>`; la hotbar no: mide sus slots para paginarlos, y su texto sigue al tamaño
-  del texto); `rpg.text-scale` (`TEXT_SCALES`, 90 % a 130 %) es el
-  tamaño de letra de la raíz (`--ui-text-scale`), así todo lo que está en `rem` crece. El
-  ancho del dock (`--dock-w`) pasó a px para que el texto grande no le quite un paso de zoom
-  al mapa; la escala sí (el dock crece y el mapa toma lo que queda). Los lugares y tamaños
-  de `rpg.windows` son px de pantalla: `GameWindow` los divide por la escala (`zoom`).
+  (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de la barra de abajo (con la hotbar
+  adentro, que mide sus slots en sus propios px: `cssZoom` de `ui/Hotbar.tsx`) y de las
+  ventanas flotantes (`--ui-zoom` en `<html>`); `rpg.text-scale` (`TEXT_SCALES`, 90 % a
+  130 %) es el tamaño de letra de la raíz (`--ui-text-scale`), así todo lo que está en
+  `rem` crece. La escala agranda la barra (`--bar-px`) y el mapa se mide sobre ella. Los
+  lugares y tamaños de `rpg.windows` son px de pantalla: `GameWindow` los divide por la
+  escala (`zoom`, `placeStyle` de `ui/window-dom.ts`).
 - **Sacudida de cámara y destello de la hotbar** (UI-9): `WorldState.heavyHitAt` se marca
   cuando un `PlayerStats` baja la vida un 10 % del máximo o más (`render/shake.ts`
   `heavyHit`); `game-canvas.ts` corre la cámara `shakeOffset` (2 px, 120 ms, un patrón fijo
@@ -1474,11 +1475,31 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   (hasta el 50 % del alto), grupo a su derecha, habilidades debajo (desde el 50 %);
   inventario arriba a la derecha, gremio y apariencia a su izquierda, los contenedores debajo
   del inventario (`top: 15rem`, el n-ésimo un paso más abajo y a la izquierda: `--nth`, que
-  pone `GameWindow`); el chat abajo a la izquierda pasando la placa; opciones y ayuda al
+  pone `GameWindow`; nunca más abajo que `100% - 2rem`, así su barra de título se ve aunque
+  haya muchos abiertos en una pantalla baja); el chat abajo a la izquierda pasando la placa; opciones y ayuda al
   medio; el intercambio arriba al centro; diálogo, crafteo, mercado y casa abajo al centro
   sobre la barra, y la tienda a la izquierda del diálogo, los dos sin pisar la columna del
   inventario (`--pair-left`). Movida, `GameWindow` pone `left`/`top` y un `max-height` de
-  `calc(100% - top)`: nunca baja de la barra.
+  `calc(100% - top)`: nunca baja de la barra (`placeStyle` de `ui/window-dom.ts`).
+  - **Arrastrar y cambiar el tamaño** (`dragWindow`, `resizeDrag` de `ui/window-dom.ts`,
+    con tests sin DOM): mientras dura, el elemento sigue al puntero con estilos en línea;
+    al soltar, `settleStyle` le escribe los largos de su lugar nuevo (los mismos de
+    `placeStyle`) en vez de borrarlos: Preact solo escribe las propiedades de `style` que
+    cambiaron desde su render anterior, y una que el arrastre pisó y el estado conservó (la
+    `x` de una ventana deslizada por un borde, todo menos el tamaño en un resize, o soltarla
+    donde estaba) quedaba vacía y la ventana saltaba a la esquina de arriba a la izquierda.
+    Los tests aplican la regla de Preact (`preact/src/diff/props.js`) a lo que dibuja
+    `GameWindow`.
+  - **Pila y orden en la página:** la pila (`openWindows`) es solo el `z-index` de cada una
+    (20 + su lugar); en la página van siempre en el mismo orden (`pageOrder`: las de la
+    botonera, las del servidor y los contenedores por clave), así traer una al frente no
+    mueve su nodo (movido, repetía su animación de entrada y perdía el foco y el scroll de
+    adentro). Tab las recorre en ese orden fijo.
+  - **Qué tapa a qué:** `.win-layer` tiene `z-index: 20` (su propio contexto de
+    apilamiento): sobre la barra (15), los avisos, el tutorial y la subida de nivel; bajo
+    el chequeo de presencia (21) y la pantalla de muerte (22), que ninguna ventana puede
+    tapar (un chequeo escondido vence y cuenta como fallado). `ui/windows-css.test.ts` lo
+    comprueba leyendo `windows.css`.
   - **Imán** (`snapPlace`, puro): al arrastrar (y con las flechas del ✥), cada eje va al
     borde más cercano a menos de `SNAP_PX` (10): los de la pantalla, el techo de la barra y
     los de las otras ventanas, de lado (la izquierda de una con la derecha de la otra) o
@@ -1486,7 +1507,10 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
     `clampPlace` la deja entera dentro del área (antes bastaba que se viera la barra).
   - **Al achicar la pantalla** (o subir la escala), un `ResizeObserver` sobre `.win-layer`
     mete adentro las ventanas movidas que quedaron afuera (`placeWindow`, sin cambiar la
-    pila); lo mismo al cargar un lugar guardado en una pantalla más grande.
+    pila); lo mismo al cargar un lugar guardado en una pantalla más grande. Se engancha por
+    el ref (`watchedRef` de `ui/window-dom.ts`, `ref={win.layer.set}`), no en un efecto del
+    primer render: la capa solo existe en el layout de escritorio, así que un juego que
+    arranca angosto la monta tarde y cada vuelta de tablet a escritorio monta una nueva.
   - **Migración:** una `rpg.windows` v1 o v2 se sigue leyendo; lo que estaba acoplado vuelve a
     su lugar de fábrica (pierde `x`, `y`, `w` y `h`, que eran del dock); lo que flotaba
     conserva todo. Se guarda como v3, con los últimos `MAX_CONTAINER_PLACES` (24)

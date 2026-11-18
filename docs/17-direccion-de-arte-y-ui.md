@@ -1945,10 +1945,13 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   | 1280x800 (la del E2E) | 1280x712 | 2x: 20x11,1 | 1x: 31x21 |
   | 1280x720 | 1280x632 | 2x: 20x9,9 | 1x: 31x19,75 |
   | 960x700 (la app) | 960x612 | 1x: 30x19,1 | — |
+  | 2560x1080 (ultra ancha) | 2560x992 | 3x: 26,7x10,3 | 1x: 31x21 |
+  | 3440x1440 (ultra ancha) | 3440x1352 | 4x: 26,9x10,6 | 2x: 31x21 |
 
   A 1280x720 la vista ajustada muestra menos filas que las 11 clásicas: la otra opción
   era 1x con franjas oscuras a los lados, que es justo lo que el dueño no quiere. Alejando
-  se ve casi toda la ventana.
+  se ve casi toda la ventana. Lo mismo en las pantallas ultra anchas (21:9): cubrir el
+  ancho pide una escala que deja unas 10 filas; alejando un paso se ve la ventana entera.
 - **La barra gótica (UI-4, respuesta del dueño).** Orbe de vida abajo a la izquierda, de
   maná abajo a la derecha, cada uno en un engaste de hierro con remaches y dos pináculos que
   sale por encima de la barra; en el medio la barra de experiencia y, en un pozo tallado,
@@ -1974,7 +1977,9 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   "Restablecer ventanas" las devuelve ahí. Un `rpg.windows` guardado con el dock se sigue
   leyendo: lo acoplado vuelve a su lugar de fábrica, lo que flotaba conserva el suyo.
   Escape cierra la de arriba (la última abierta o tocada); en una pantalla recién abierta
-  sigue abriendo Opciones.
+  sigue abriendo Opciones. Ninguna ventana tapa el chequeo de presencia (un chequeo
+  escondido vencería y contaría como fallado, docs/02) ni la pantalla de muerte: las dos
+  van por encima de todas; el tutorial, que se pliega y no vence, va por debajo.
 - **El chat (UI-10)** flota translúcido, como en Ragnarok Online, y se aclara con el mouse
   encima o al escribir; nunca se cierra (se pliega), y sus pestañas Chat y Registro van en
   su barra de título.
