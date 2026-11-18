@@ -122,10 +122,11 @@ items:
   piedra), `cinder_path` (camino de escoria, 110), `cooled_lava` (lava enfriada, 100, como
   la piedra) y `lava` (fundida, no caminable, como el agua). Cada uno camina como el suelo
   que reemplazó en la isla, así que no cambian el ritmo con que se balanceó la caza.
-- **Distancia y munición** (T3.1): un arma `type: distance` exige `range` y `ammo` (el
-  `ammo.type` que dispara). La munición es `kind: ammo` con `ammo: { type, attack }`
-  (`arrow` para los arcos, `bolt` para las ballestas de una mano de la auditoría de
-  contenido M4), apilable, y va en el slot de munición. Cada disparo gasta una y suma su
+- **Distancia y munición** (T3.1): un arma `type: distance` exige `range` (de 1 a 6, ver
+  "Tope de los rangos" en Hechizos) y `ammo` (el `ammo.type` que dispara). La munición
+  es `kind: ammo` con `ammo: { type, attack }` (`arrow` para los arcos, `bolt` para las
+  ballestas de una mano de la auditoría de contenido M4), apilable, y va en el slot de
+  munición. Cada disparo gasta una y suma su
   `attack` al del arma:
   ```yaml
   - id: short_bow
@@ -147,8 +148,9 @@ items:
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
   entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
-  `reach` (de 1 a 6: el servidor no contesta nada de una casilla fuera de la vista, ±8 x,
-  ±6 y; el esquema y `content.MaxReach` lo exigen).
+  `reach` (de 1 a 6: el medio alto de la ventana clásica de 15x11 + 1, lo que nota un
+  monstruo; la vista ancha de 31x21 no lo estiró, `02-game-design.md` "La vista"; el esquema
+  y `content.MaxReach` lo exigen).
 - **Recursos** (T1.12): cualquier item del mapa (suelo o pila) puede ser un lugar de
   recolección con un bloque `resource`:
   ```yaml
@@ -156,8 +158,7 @@ items:
     tool: mining            # tool.use de la herramienta que lo cosecha
     skill: mining           # skill u oficio que da la chance y sube con cada intento
     reach: 1                # opcional (por defecto inventory.reach), con línea de visión;
-                            # como mucho 6 (esquema y content.MaxReach): más allá de la
-                            # vista (±8 x, ±6 y) el servidor solo respondería not_possible
+                            # como mucho 6 (esquema y content.MaxReach), como las manos
     charges: 4              # cosechas por casilla antes de agotarse
     regen_ms: 300000        # se llena este tiempo después de la última cosecha
     chance: { base: 0.3, per_level: 0.02, max: 0.85 }
@@ -358,6 +359,25 @@ Acciones: `goto`, `close`, `give_item`, `take_item`, `give_xp`, `give_gold`,
 `teleport`, `bless`, y las de desarrollo `train_skill` y `restore_mana` (abajo). (La
 acción `travel` de T1.10 se quitó en T3.5: los viajes son rutas.)
 
+**Tema de una opción (`tag`, opcional; docs/17 UI-8).** La ventana del diálogo agrupa los
+botones por tema, con un ícono y un borde de color: Misiones, Comercio, Viajes, Servicios y
+Conversación (más "Volver" y "Adiós" en su fila). El cliente lo deduce al compilar
+(`client/vite/content.ts` `dialogTopics`, por NPC): `close` o `dialog.bye` → Adiós;
+`dialog.back` → Volver; `open_shop` → Comercio; una condición o acción `quest_*` →
+Misiones; `heal`, `bless`, `train_skill` o `restore_mana` → Servicios; `teleport` o un
+nodo con `boat_routes` → Viajes; lo demás, Conversación. Una opción de conversación con
+`goto` mira el nodo siguiente: si ahí hay misiones, viajes o servicios, toma ese tema.
+`tag` manda sobre todo eso cuando la deducción se equivoca:
+```yaml
+        - text: npc.puerto_armorer.opt_advice
+          tag: trade                 # quests | trade | travel | services | talk
+          goto: advice
+```
+Es solo de presentación: el servidor lo ignora. Una misma clave de texto con dos temas en un
+mismo NPC hace fallar el test del cliente (`vite/content.test.ts`): ponle `tag` a una de
+las dos. Guía de escritura: como mucho 300 caracteres por texto de nodo y textos de opción
+cortos (el botón muestra 2 líneas y el resto va al `title`).
+
 **Acciones de desarrollo** (solo la instructora de la Isla de Pruebas,
 `16-probar-el-juego.md`): en el juego real regalarían lo que se gana jugando (y un maná
 gratis junto al templo entrenaría el nivel mágico sin límite), así que solo existen en NPCs
@@ -529,6 +549,12 @@ Implementado en T1.9 (`data/spells.yaml`, `server/internal/content/spells.go`):
   condiciones al que lanza; si no tiene ninguna, falla sin gastar maná. Un `damage` acepta
   también `condition`: se aplica, con su `chance`, a cada monstruo al que el golpe le hizo
   daño. Ver "Condiciones".
+- **Tope de los rangos:** el `range` de un arma (`weapon.range`), de `damage`, de `heal` y
+  de una `condition` va de 1 a 6, y el `radius` de un `damage` de área de 0 a 6 (el
+  esquema y `content.MaxRange`): el medio alto de la ventana clásica de 15x11 + 1, lo que
+  nota un monstruo. Así un monstruo golpeado desde tan lejos como apunta un jugador, o
+  por un área, siempre lo nota y devuelve el golpe; la vista ancha de 31x21 no lo estiró
+  (`02-game-design.md` "La vista").
 - `group` es `attack`, `healing` o `support`; `cooldown_ms` bloquea el hechizo y
   `group_cooldown_ms` a todo su grupo. `magic_level` es el nivel mágico mínimo.
 - Las palabras deben ser únicas (el validador lo revisa) y propias. Los nombres van en
@@ -825,16 +851,41 @@ Si cambia la receta de un suelo, corre `make spritegen` y después `gen-borders`
 `data/outfits.yaml` (esquema `outfits`): cómo se dibuja un personaje jugador.
 ```yaml
 - id: citizen
-  sprite: outfits/citizen   # carpeta: un PNG de 32x32 por dirección y frame
+  sprite: outfits/citizen   # carpeta de frames
   frames: 3                 # 0 = parado, 1 y 2 = los dos pasos (máximo 3)
 ```
 - El `sprite` de un outfit es una carpeta: el atlas tiene `<sprite>/<dir>_<frame>`
-  (`assets/sprites/outfits/citizen/s_0.png`), con `dir` en `n`, `e`, `s`, `w`.
-  spritepack cuenta cada frame como un sprite usado por `data/` (un frame sin arte recibe
-  el placeholder automático, como cualquier sprite).
+  (`outfits/citizen/s_0`), con `dir` en `n`, `e`, `s`, `w`. spritepack cuenta cada frame
+  como un sprite usado por `data/` (un frame sin arte recibe el placeholder automático,
+  como cualquier sprite).
+- **Desde docs/17 (A12) los cuatro atuendos son personajes animados de LPC:** la entrada
+  `animations` de su `sprite` en `assets/sprites.yaml` arma sus frames (quieto, caminar,
+  atacar y caer, de 64x64) y los nombres `<sprite>/<dir>_<frame>` de arriba pasan a ser
+  alias de esos frames (0 = la pose quieta, 1.. = el ciclo de caminar). `frames` sigue en
+  el esquema y en el servidor; con una animación, el cliente usa la animación
+  (`assets/README.md`, "Sprites animados").
 - Todos los jugadores usan `citizen` hasta que `Outfit.look_id` elija otro. El cliente
-  elige el frame según la dirección y el avance del paso (`client/CLAUDE.md`, T0.5).
+  elige el frame según la dirección y el avance del paso (`client/CLAUDE.md`, "Animación de
+  criaturas").
 - IDs únicos; el validador no exige que los PNG existan (eso lo revisa spritepack).
+
+## Animación de criaturas (docs/17 ANI)
+El `sprite` de un monstruo, un NPC o un outfit sigue siendo una ruta lógica: **cómo se
+anima es un dato del sprite, no del monstruo**, y vive en `assets/sprites.yaml`
+(`palettes` y `animations`; formato en `assets/README.md`, "Sprites animados"). Así dos
+monstruos con el mismo sprite se mueven igual y el servidor no se entera: el YAML de
+`data/monsters` y `data/npcs` no cambia.
+- **Con frames:** una entrada con `layers` compone hojas de un pack (personajes de LPC) en
+  frames `<sprite>/<acción>_<dir>_<n>` (`idle`, `walk`, `attack`, `death`). Arte propio:
+  archivos con esos nombres en `assets/sprites/` (un ciclo de spritegen, como
+  `creatures/bristleback_boar/walk_w_0..3`).
+- **Sin frames:** el cliente mueve el sprite único (salto por casilla, inclinación,
+  respiración, embestida, golpe y caída: ANI-5). Una entrada sin `layers` le da pistas:
+  `facing: left | right` (hacia dónde mira el dibujo; se espeja para caminar al otro lado)
+  y `flying: true` (flota y nunca salta).
+- Un monstruo humanoide o un NPC nuevo: su `sprite:` en `data/` y su entrada en
+  `animations` con las capas de `assets/vendor/ulpc/` (o arte propio), revisada con el
+  preview de `assets/README.md`.
 
 ## Tienda cosmética (T5.7)
 `data/cosmetics.yaml` (esquema `cosmetics`; reglas de juego en `02-game-design.md`, "Tienda
@@ -861,8 +912,9 @@ cosmetics:
 - `cosmetics[].kind`: `outfit`, `outfit_color` o `name_effect` (los valores del `CHECK` de
   `cosmetics.kind`; `mount` queda reservado). Cada tipo lleva solo su campo: `outfit` (id de
   `data/outfits.yaml`), `tint` (`#rrggbb` en minúsculas) o `style`. `price` es en nácar.
-- Un atuendo nuevo: su receta en `tools/spritegen` (los mismos frames que `citizen`), su
-  entrada en `data/outfits.yaml` y después el cosmético que lo vende.
+- Un atuendo nuevo: su entrada en `animations` de `assets/sprites.yaml` (capas de LPC y
+  paletas, como `outfits/citizen`), su entrada en `data/outfits.yaml` y después el
+  cosmético que lo vende.
 - Textos en `i18n/<idioma>/cosmetics.yaml`, con claves que salen del id (no se escriben en
   el YAML): `cosmetic.<id>.name` y `cosmetic.<id>.desc`, `cosmetic_pack.<id>.name`, y
   `premium.name` / `premium.amount` (`{count}`) para la moneda. El servidor lee

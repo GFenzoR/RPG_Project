@@ -145,8 +145,8 @@ func (a *ConditionApply) Check(cs ConditionDefs) error {
 		return fmt.Errorf("condition %s needs ticks and damage > 0", a.ID)
 	case def.Kind != ConditionDamage && a.DurationMs <= 0:
 		return fmt.Errorf("condition %s needs duration_ms > 0", a.ID)
-	case a.Range < 0:
-		return fmt.Errorf("condition %s: range must be >= 0", a.ID)
+	case a.Range < 0 || a.Range > MaxRange:
+		return fmt.Errorf("condition %s: range must be 0 to %d", a.ID, MaxRange)
 	case a.Range > 0 && !def.Harmful():
 		return fmt.Errorf("condition %s: only a harmful condition (damage or a slow) may have range", a.ID)
 	}

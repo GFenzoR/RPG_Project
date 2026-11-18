@@ -49,9 +49,19 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   todas las islas reales tienen portales: sin diferencia medible (≈ 87 µs por tick con
   256 monstruos y ≈ 340 µs con 1024, con y sin portal). Cada paso por un portal manda un
   `FullMapView` (y ningún `MapSlice`): subir y bajar sin parar por la mina volcánica son
-  unos 950 B/s con un nivel 30, dentro de los 4 KB/s (`TestVolcanicMineStairsOnTheMap` lo
+  unos 2260 B/s con un nivel 30 y la vista de 31x21 (950 con la de 15x11), dentro de los
+  4 KB/s (`TestVolcanicMineStairsOnTheMap` lo
   mide y falla por encima). Hoy todas las islas tienen solo los pisos 7 y 8, así que la vista de la
   superficie lleva un piso; una isla con pisos altos pesaría más por paso.
+- Movimiento fluido (cola de pasos de teclado y época, `session/move.go`): no agrega
+  mensajes. Sigue siendo un `Walk` por paso (antes también: el cliente lo manda 50 ms
+  antes, no más seguido) y un `CreatureMove` por paso; `walk_epoch` suma ~2 bytes a cada
+  `Walk`, `WalkRejected` y `FullMapView`, y `seq`/`walk_seq` ~2-4 bytes a cada `Walk` y al
+  `CreatureMove` del propio jugador (los de los observadores no cambian). En el tick, un `Walk` es un append a la cola del
+  jugador (tope 4, sin asignar una vez que la cola creció) y una comparación de época;
+  `moveSystem` no cambió. El rate limit del gateway (30/s) no se acerca: a la velocidad
+  más alta (un paso por tick) son 20 `Walk` por segundo, y un cliente que manda de más
+  solo llena la cola y la reinicia.
 - Puertas con llave (`session/door.go`, `session/area.go`): la sala detrás de cada puerta
   se calcula una vez al arrancar (un recorrido de hasta 4096 casillas por lado) y queda un
   índice casilla → sala (`roomOf`). También al arrancar se numeran las **áreas** del mapa
@@ -115,8 +125,9 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
   con la curva y el ritmo de `balance.yaml → experience` (ley de potencia entre los anclajes
   8 → 1 h, 20 → 8 h, 50 → 80 h; fuera de ellos, el tramo más cercano).
 - **Eficiencia 2/3:** nadie mata a un monstruo en el instante en que reaparece (caminar,
-  saquear, curarse, y un monstruo no reaparece en una casilla que un jugador ve, docs/02
-  "Monstruos"). Jugadores de la franja = XP/h de sus monstruos × 2/3 / XP/h por jugador.
+  saquear, curarse, y un monstruo no reaparece cerca de un jugador: dentro de la ventana
+  clásica de 15x11 + 1, también con la vista de 31x21, docs/02 "Monstruos" y "La vista").
+  Jugadores de la franja = XP/h de sus monstruos × 2/3 / XP/h por jugador.
 - Cada monstruo de producción pertenece a una sola franja (el test lo exige: uno nuevo
   obliga a ubicarlo). El jefe de la forja suma a la de 50–60.
 
@@ -156,10 +167,33 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
 | Descarga inicial (web) | < 5 MB sin contar sprites; atlas cargados por demanda |
 | Memoria | < 300 MB |
 
+- Movimiento fluido (`client/src/state/motion.ts`, `world.ts`): por frame y criatura,
+  `drawPos`/`facing`/`activeWalk` miran a lo sumo la cadena de pasos que se dibujan (uno o
+  dos) y no recorren nada más; el colchón de jitter (`Playout`) es una cuenta por batch
+  sobre 8 baldes fijos (no asigna).
+  El rastro de posiciones para el E2E (`MotionTrail`) es un `Float64Array` fijo de 1024
+  frames (24 KiB): grabar un frame no asigna. Costo visible: las demás criaturas se
+  dibujan ~40 ms (más el jitter de la red) después de que llega su paso, nunca más de
+  240 ms (`PLAYOUT_MAX_JITTER_MS` + margen); tras un corte de la red vuelven a eso en
+  unos 4 s.
 - Efectos, proyectiles y números flotantes (`client/src/render/effect-layer.ts`): los
   objetos de Pixi salen de pools y se reutilizan; dibujar un frame no crea objetos ni
   arrays (solo aparece algo nuevo con un efecto o un número nuevo, si el pool no alcanza).
   Los frames de los efectos salen del atlas (hoy una sola página, junto con el mapa).
+- Animación de criaturas (docs/17 ANI, `client/CLAUDE.md` "Animación de criaturas"): cada
+  criatura tiene un estado de animación (uno por criatura, mientras está en vista) y todas
+  comparten una entrada y una pose que `animate` sobrescribe; las texturas de cada sprite
+  se indexan una sola vez (`render/clips.ts`) y las sombras de contacto comparten un
+  `GraphicsContext`. Dibujar un frame no crea objetos para animar. Con los personajes de LPC
+  el atlas pasó a **2 páginas** (2048x2048 y 2048x640): Pixi agrupa hasta 16 texturas por
+  batch, así que no suma draw calls por página.
+- Arte del mapa (docs/17 ART-3 a ART-7): los looks de suelo y las piezas de muro se eligen
+  al armar el chunk, no por frame. Los tiles animados (agua, lava, espuma, copas, fuego) van
+  en una lista plana que `MapView.render` recorre una vez por frame: por cada uno, una
+  cuenta (`frameAt`) y, solo si cambió el frame, un cambio de textura. Sin asignar. La
+  capa de sombras proyectadas es un render group más (un batch). La luz de las cuevas
+  (z ≥ 8) suma un pase a un render texture de un cuarto de la pantalla, con un sprite de
+  brillo por luz sacado de un pool; en la superficie no dibuja.
 
 ### Audio (T3.7)
 El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez que suena
@@ -300,6 +334,98 @@ corrida: no hay instrumentación y piden un navegador real con GPU):
 El bundle creció 128 KB (34 KB con gzip) con lo nuevo del cliente: el layout táctil y la
 PWA (T5.6), la tienda (T5.7), el zoom y las tiras de efectos. Los efectos siguen saliendo
 del atlas único y de pools (ver "Cliente" arriba).
+
+**Atlas con criaturas animadas** (2026-11-17, `feat/creature-animation`): 2 páginas,
+1,84 MB + 652 KB de PNG y 374 KB + 209 KB de JSON, más 158 KB de `atlas.json` (antes, 1
+página de 287 KB). Son ~1300 frames de 64x64 de los personajes de LPC: 4 atuendos y 4
+monstruos con quieto, caminar, atacar y caer, y 17 NPCs con quieto y caminar. Se bajan
+aparte del bundle (el presupuesto de 5 MB no cuenta sprites), pero es lo primero que espera
+el juego. Pendiente si molesta: PNG indexado (las capas usan pocas decenas de colores) o
+una página por demanda para los NPCs.
+
+**Atlas con el arte del mapa** (2026-11-18, `feat/world-art`): sigue en 2 páginas (2048x2016
+y 2048x896), 1,83 MB + 884 KB de PNG y 358 KB + 289 KB de JSON, más 176 KB de
+`atlas.json`: unos 220 KB más de PNG y 80 KB más de JSON que con las criaturas. Son ~200
+sprites nuevos del mapa: 16 piezas de 32x64 por muro (5 materiales), looks de suelo, frames de
+agua, lava, espuma, copas y fuego, y sombras.
+
+### Vista ancha (31x21, 2026-11)
+La ventana de cada jugador pasó de 15x11 + 1 (17x13 = 221 casillas) a 31x21 + 1 (33x23 =
+759): 3,4 veces más área, así que cada paso y cada golpe en una zona llena llega a más
+clientes (`02-game-design.md`, "La vista"). Sin Docker en esa tarea, se midió en proceso
+con `TestCrowdBandwidth` (`internal/session/crowd_test.go`, corre con `make test` y falla
+por encima de 4 KB/s): los escenarios de `tools/bots` (base: 100 bots repartidos en las 9
+zonas de Puerto, 60 s; stress: 300 en el pueblo, 30 s; ambos tras 10 s de rampa) sobre el
+mundo y los datos reales, con el reloj simulado y el mismo comportamiento de los bots
+(vagar 45 %, pelear 25 %, NPC 12 %, chat 10 %, nada 8 %; descansos de 1–4 s; un ping cada
+2 s). Los bytes son `proto.Size` de cada `ServerBatch` (lo que escribe el gateway, sin los
+2–4 B del frame). Con 15x11 da lo mismo que `make bots` (base 309 B/s contra 308; stress
+785 contra 753–880), así que el modelo sirve. Mismo notebook (i7-13650HX), Windows nativo;
+tiempos de `go test -bench` (mediana de 3):
+
+| Métrica | 15x11 | 31x21 | Presupuesto |
+|---|---|---|---|
+| Salida por jugador, base 100 (B/s) | 309 | 490 | < 4096 |
+| Salida por jugador, stress 300 (B/s) | 785 | 1676 | < 4096 |
+| Tick, base 100 (`BenchmarkCrowdTick`, µs) | 87 | 98 | p99 < 10 ms |
+| Tick, stress 300 (µs / asignaciones) | 912 / 1733 | 1020 / 1045 | sin crecimiento |
+| `BenchmarkTickPlayersWalking` 300 (µs / asignaciones) | 140 / 1341 | 177 / 1392 | |
+| `BenchmarkTickMonsters` 100 + 256 (µs / asignaciones) | 250 / 1005 | 237 / 589 | |
+| `FullMapView` en el Farol, superficie (bytes / µs para armarlo) | 352 / 14 | 967 / 42 | < 20 KB |
+| `FullMapView` en la mina volcánica, piso 8 (bytes / µs) | 295 / 6 | 843 / 13 | |
+| Subir y bajar sin parar por la mina (B/s) | 950 | 2262 | < 4096 |
+
+- **Optimización:** con la vista ancha un paso en una multitud va a cientos de clientes.
+  `observeMove` (pasos de jugadores y monstruos) y `hitEvents` (efecto, número y barra de
+  un golpe) arman cada mensaje una vez y se lo dan a todos los que lo ven: los batches
+  solo se leen después del tick, y protobuf deja serializar el mismo mensaje desde varias
+  goroutines. Por eso las asignaciones por tick bajaron aunque se mandan más mensajes.
+- **Tick:** +12 a 15 % en los escenarios de bots, por el área 3,4 veces mayor, y muy lejos
+  de los 10 ms. En stress el 70 % del tick es el A* de los rodeos (300 bots en ~300
+  casillas libres), no el AOI; el tiempo medido incluye `proto.Size` de cada batch, que en
+  producción corre en las goroutines de escritura. `BenchmarkTickPlayersWalking` (todos
+  caminando sin pausa, el peor caso) sube más: +26 % con 300 jugadores.
+- **El índice espacial no cambió:** sectores de 32x32. La ventana de 33x23 toca a lo sumo
+  2x2 sectores por piso (el rectángulo de un paso, 34x24, hasta 3x2) y `eachInRect` filtra
+  por casilla. Armar un `FullMapView` busca cada pila en la paleta del área en forma
+  lineal: con unas pocas decenas de pilas distintas, 42 µs en el pueblo, una vez por
+  teletransporte. Cada piso se arma en un búfer del `World` y solo se copia si tiene
+  casillas: los 7 pisos vacíos de la superficie no asignan (5,8 KB por vista, no 27).
+- **Monstruos:** lo que nota un monstruo sigue siendo la ventana clásica (`InSight`) y
+  `pickTarget` recorre solo ese rectángulo: la IA no cuesta más. Los sectores activos (2
+  sectores alrededor de cada jugador, 64 casillas o más) ya cubrían la ventana ancha.
+- **Respawns:** el bloqueo de un respawn (`watched`) mira la ventana clásica, no la
+  ancha: con la ancha, quien caza en un spawn frenaba los vecinos (a 12–20 casillas) y la
+  "Eficiencia 2/3" de "Capacidad del mundo" quedaba optimista. Así la capacidad sigue
+  como se midió con 15x11 (`TestRespawnWaitsOnlyForTheClassicWindow`).
+- **`make bots` contra un servidor real (lote 6, 2026-11-18).** Punta del lote
+  (`lote6/verify`), mismo notebook y mismo script que "Resultados del stack T5.5–T5.7":
+  Windows nativo, servidor, bots y Postgres (Docker) en la misma máquina, 5 islas (146
+  sectores), ventana estable de 3 min con rampa de 20 s (base) y 60 s (stress). Sin
+  Grafana: los números salen del `/metrics` interno, como en las corridas anteriores.
+
+  | Métrica | Presupuesto | Base 100 · 31x21 | Stress 300 · 31x21 | 15x11 (stack T5.5–T5.7) |
+  |---|---|---|---|---|
+  | Tick p50 / p95 / p99 (ms) | p99 < 10 (100 jug.) | 0,03 / 1,03 / **1,95** | 0,73 / 3,69 / **4,77** | base 1,78 · stress 3,98–5,49 (p99) |
+  | Tick máx. / ticks lentos (> 50 ms) | — | ≤ 6 / 0 de 3600 | ≤ 8 / 0 de 3600 | ≤ 4 · ≤ 8 / 0 |
+  | RSS máx. / al final (MB) | < 600 | 163,3 / 125,1 | 125,7 / 91,7 | 108,9 · 120–122 |
+  | CPU del servidor (núcleos) | — | 0,13 | 0,32 | 0,12 · 0,26–0,27 |
+  | Salida por jugador (B/s) | < 4096 | **624** | **1580** | 308 · 753–880 |
+  | Latencia de comando p50 / p95 / p99 (ms) | p95 < 60 | 26,4 / **48,6** / 51,0 | 27,8 / **49,8** / 52,8 | p95 48,4 · 48,9–49,8 |
+  | Desconexiones / fallos al entrar | 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+  Todo dentro del presupuesto. Stress da lo que predijo `TestCrowdBandwidth` (1580 contra
+  1676 B/s). Base da más que el modelo (624 contra 490), y la diferencia no se investigó:
+  el modelo cuenta 60 s con el reloj simulado y la corrida real, 3 min de bots reales. Es
+  el doble que con 15x11 y queda en un 15 % de los 4 KB/s. El RSS máximo de base incluye la
+  primera corrida sobre la base nueva, que creó las cuentas y los 100 personajes (argon2id
+  en la rampa, como en "Resultados del stack T5.5–T5.7"). El tick sube poco: p99 de 1,78 a
+  1,95 ms en base, y stress queda dentro del ruido de las corridas de 15x11.
+- **Pendiente, el cliente:** a 1x en 1920x1080 se dibuja la ventana entera, unas 650
+  casillas por capa en vez de las 165 de 15x11, más las etiquetas de una multitud. No se
+  midieron FPS ni draw calls (no hay instrumentación y piden un navegador real con GPU,
+  como en "Cliente" arriba): anotar FPS y draw calls a 1x y a la escala por defecto en
+  1920x1080, en el pueblo con bots, contra el presupuesto (60 fps, < 50 draw calls).
 
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en

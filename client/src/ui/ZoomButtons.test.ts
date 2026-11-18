@@ -28,7 +28,7 @@ describe("ZoomButtons", () => {
   it("zooms one whole scale per press", () => {
     const steps: number[] = [];
     const game = { zoom: (s: number) => void steps.push(s) };
-    const tree = ZoomButtons({ t, game, zoom: { scale: 3, min: 2, max: 4 } });
+    const tree = ZoomButtons({ t, game, zoom: { scale: 3, min: 2, fit: 2, max: 4 } });
     (button(tree, "zoom-in").props["onClick"] as () => void)();
     (button(tree, "zoom-out").props["onClick"] as () => void)();
     expect(steps).toEqual([1, -1]);
@@ -37,18 +37,24 @@ describe("ZoomButtons", () => {
   });
 
   it("greys out the button at each end of the range", () => {
-    const fit = ZoomButtons({ t, game: undefined, zoom: { scale: 2, min: 2, max: 4 } });
+    const fit = ZoomButtons({ t, game: undefined, zoom: { scale: 2, min: 2, fit: 2, max: 4 } });
     expect(button(fit, "zoom-out").props["disabled"]).toBe(true);
     expect(button(fit, "zoom-in").props["disabled"]).toBe(false);
-    const top = ZoomButtons({ t, game: undefined, zoom: { scale: 4, min: 2, max: 4 } });
+    const top = ZoomButtons({ t, game: undefined, zoom: { scale: 4, min: 2, fit: 2, max: 4 } });
     expect(button(top, "zoom-in").props["disabled"]).toBe(true);
     expect(button(top, "zoom-out").props["disabled"]).toBe(false);
     const none = ZoomButtons({ t, game: undefined, zoom: undefined });
     expect(button(none, "zoom-in").props["disabled"]).toBe(true);
     expect(button(none, "zoom-out").props["disabled"]).toBe(true);
+    // The fitted view of the wide view (docs/17): both ways open.
+    const wide = ZoomButtons({ t, game: undefined, zoom: { scale: 2, min: 1, fit: 2, max: 5 } });
+    expect(button(wide, "zoom-out").props["disabled"]).toBe(false);
+    expect(button(wide, "zoom-in").props["disabled"]).toBe(false);
   });
 
   it("hides when the screen allows a single scale", () => {
-    expect(ZoomButtons({ t, game: undefined, zoom: { scale: 1, min: 1, max: 1 } })).toBeNull();
+    expect(
+      ZoomButtons({ t, game: undefined, zoom: { scale: 1, min: 1, fit: 1, max: 1 } }),
+    ).toBeNull();
   });
 });

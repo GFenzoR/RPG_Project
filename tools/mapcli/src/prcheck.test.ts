@@ -45,9 +45,17 @@ const repo = fileURLToPath(new URL("../../../", import.meta.url));
 // Sandboxes leave out the vendor PNGs that assets/sprites.yaml does not use: a pack has
 // thousands of files, and copying them all makes every sandbox seconds slower.
 const spriteManifest = readFileSync(join(repo, "assets/sprites.yaml"), "utf8");
+/** Animation layers name one file per action: vendor/.../<sheet>.png (assets/README.md). */
+const layerFiles = [...spriteManifest.matchAll(/vendor\/[^\s,{}]*<sheet>[^\s,{}]*\.png/g)].map(
+  (m) => new RegExp(`^${m[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("<sheet>", "[^/]+")}$`),
+);
 const usedFiles = (src: string): boolean => {
   const rel = src.slice(repo.length).replaceAll("\\", "/");
-  return !/^assets\/vendor\/.+\.png$/.test(rel) || spriteManifest.includes(rel.slice(7));
+  return (
+    !/^assets\/vendor\/.+\.png$/.test(rel) ||
+    spriteManifest.includes(rel.slice(7)) ||
+    layerFiles.some((re) => re.test(rel.slice(7)))
+  );
 };
 const dirs: string[] = [];
 afterEach(() => {

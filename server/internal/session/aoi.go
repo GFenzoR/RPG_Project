@@ -1,19 +1,31 @@
 package session
 
 import (
+	"slices"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 )
 
-// Area of interest (docs/01-architecture.md): a player sees 15x11 tiles plus a margin of
-// one tile on every side, so the client can animate creatures walking in. The area is
-// centred on the player.
+// Area of interest (docs/01-architecture.md "Área de interés"): a player sees a window of
+// ViewTilesW x ViewTilesH tiles centred on itself (31x21 since 2026-11, the wide view of
+// docs/00; it was Tibia's 15x11) plus a margin of one tile on every side, so the client
+// can animate creatures walking in. Its client draws as much of the window as its screen
+// holds (client/CLAUDE.md "Zoom del mapa"); Welcome tells it the window.
 const (
-	ViewHalfW = 7 + 1 // tiles left and right of the player (margin included)
-	ViewHalfH = 5 + 1 // tiles above and below
-	ViewW     = 2*ViewHalfW + 1
-	ViewH     = 2*ViewHalfH + 1
+	ViewTilesW = 31
+	ViewTilesH = 21
+	ViewHalfW  = ViewTilesW/2 + 1 // tiles left and right of the player (margin included)
+	ViewHalfH  = ViewTilesH/2 + 1 // tiles above and below
+	ViewW      = 2*ViewHalfW + 1
+	ViewH      = 2*ViewHalfH + 1
+	// SightHalfW and SightHalfH bound what a monster notices and keeps chasing: the
+	// classic 15x11 window plus its margin (what Sees was before the wide view), not the
+	// player's window. A wider view shows more of the world; it does not make a monster
+	// notice a player from farther away or follow one that ran (docs/02 "La vista").
+	SightHalfW = 7 + 1
+	SightHalfH = 5 + 1
 	// SeaLevel is the surface floor. From floor SeaLevel and above (z <= 7) a player
 	// sees every floor from 0 to SeaLevel; underground only its own floor.
 	SeaLevel = 7
@@ -28,6 +40,13 @@ func sameView(a, b uint8) bool { return a == b || (a <= SeaLevel && b <= SeaLeve
 func Sees(viewer, p world.Pos) bool {
 	dx, dy := int(p.X)-int(viewer.X), int(p.Y)-int(viewer.Y)
 	return dx >= -ViewHalfW && dx <= ViewHalfW && dy >= -ViewHalfH && dy <= ViewHalfH && sameView(viewer.Z, p.Z)
+}
+
+// InSight reports whether a monster at a notices a creature at b (or the other way
+// round: it is symmetric): the same floor, within SightHalfW x SightHalfH tiles.
+func InSight(a, b world.Pos) bool {
+	dx, dy := int(b.X)-int(a.X), int(b.Y)-int(a.Y)
+	return a.Z == b.Z && dx >= -SightHalfW && dx <= SightHalfW && dy >= -SightHalfH && dy <= SightHalfH
 }
 
 // viewFloors returns the floors visible from floor z, top (lowest number) first.
@@ -144,7 +163,10 @@ func (w *World) creaturePos(id uint32) (world.Pos, bool) {
 // observeMove tells every client around either end of a step of a creature (the player
 // pl or the monster mo) what it needs: CreatureMove if it keeps seeing it,
 // CreatureDisappear if it stops, CreatureAppear if it starts. The mover's own client is
-// the caller's job. fromMsg and toMsg are shared by every CreatureMove.
+// the caller's job. Every client gets the same CreatureMove, CreatureDisappear or
+// CreatureAppear (built once, on first need): with the wide view a step in a crowd goes
+// to a few hundred clients, and the batches are only read after the tick (the gateway's
+// writers marshal them, which protobuf allows concurrently).
 func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg, toMsg *pb.Position, durMs uint32) {
 	var id uint32
 	if pl != nil {
@@ -152,6 +174,7 @@ func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg
 	} else {
 		id = mo.id
 	}
+	var moved, gone, appeared *pb.ServerMessage
 	x0, x1 := int(min(from.X, to.X))-ViewHalfW, int(max(from.X, to.X))+ViewHalfW
 	y0, y1 := int(min(from.Y, to.Y))-ViewHalfH, int(max(from.Y, to.Y))+ViewHalfH
 	w.eachInRect(x0, y0, x1, y1, to.Z, func(o *Player) {
@@ -161,21 +184,30 @@ func (w *World) observeMove(pl *Player, mo *Monster, from, to world.Pos, fromMsg
 		sees := Sees(o.pos, to) && (pl == nil || !pl.invisible)
 		switch knows := o.Knows(id); {
 		case knows && sees:
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureMove{CreatureMove: &pb.CreatureMove{
-				Id: id, From: fromMsg, To: toMsg, DurationMs: durMs,
-			}}})
+			if moved == nil {
+				moved = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureMove{CreatureMove: &pb.CreatureMove{
+					Id: id, From: fromMsg, To: toMsg, DurationMs: durMs,
+				}}}
+			}
+			o.emit(moved)
 		case knows:
 			o.forget(id)
-			o.emit(disappearMsg(id))
+			if gone == nil {
+				gone = disappearMsg(id)
+			}
+			o.emit(gone)
 		case sees:
 			o.remember(id)
-			c := (*pb.Creature)(nil)
-			if pl != nil {
-				c = w.creatureMsg(pl)
-			} else {
-				c = w.monsterMsg(mo)
+			if appeared == nil {
+				c := (*pb.Creature)(nil)
+				if pl != nil {
+					c = w.creatureMsg(pl)
+				} else {
+					c = w.monsterMsg(mo)
+				}
+				appeared = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: c}}}
 			}
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: c}}})
+			o.emit(appeared)
 		}
 	})
 }
@@ -186,18 +218,26 @@ func (w *World) appearToObservers(c *Player) {
 	if c.invisible {
 		return // T3.2: an invisible player is sent to nobody
 	}
+	var msg *pb.ServerMessage // built once, for every observer (creatureMsg is the same for all)
 	w.eachObserver(c, c.pos, func(o *Player) {
 		if !o.Knows(c.id) {
 			o.remember(c.id)
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.creatureMsg(c)}}})
+			if msg == nil {
+				msg = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.creatureMsg(c)}}}
+			}
+			o.emit(msg)
 		}
 	})
 }
 
 func (w *World) disappearFromObservers(c *Player) {
+	var gone *pb.ServerMessage // built once, for every observer that knew c
 	w.eachObserver(c, c.pos, func(o *Player) {
 		if o.forget(c.id) {
-			o.emit(disappearMsg(c.id))
+			if gone == nil {
+				gone = disappearMsg(c.id)
+			}
+			o.emit(gone)
 		}
 	})
 }
@@ -219,7 +259,7 @@ func (w *World) sendFullView(p *Player) {
 	p.known = p.known[:0]
 	x0, y0 := int(p.pos.X)-ViewHalfW, int(p.pos.Y)-ViewHalfH
 	area := w.mapArea(p, x0, y0, ViewW, ViewH)
-	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FullMapView{FullMapView: &pb.FullMapView{Area: area}}})
+	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FullMapView{FullMapView: &pb.FullMapView{Area: area, WalkEpoch: p.walkEpoch}}})
 }
 
 // sendSlice sends p the rectangle (x0, y0, wd, ht) that just came into view.
@@ -251,7 +291,10 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 	var floors [SeaLevel + 1]uint8
 	var stack []tileEntry
 	for _, z := range viewFloors(p.pos.Z, floors[:0]) {
-		tiles := make([]int32, wd*ht)
+		if cap(w.tileBuf) < wd*ht {
+			w.tileBuf = make([]int32, wd*ht)
+		}
+		tiles := w.tileBuf[:wd*ht]
 		any := false
 		for y := range ht {
 			for x := range wd {
@@ -274,7 +317,7 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 			}
 		}
 		if any {
-			area.Floors = append(area.Floors, &pb.MapFloor{Z: uint32(z), Tiles: tiles})
+			area.Floors = append(area.Floors, &pb.MapFloor{Z: uint32(z), Tiles: slices.Clone(tiles)})
 		}
 	}
 	w.eachInRect(x0, y0, x0+wd-1, y0+ht-1, p.pos.Z, func(c *Player) {
@@ -298,8 +341,9 @@ func (w *World) mapArea(p *Player, x0, y0, wd, ht int) *pb.MapArea {
 	return area
 }
 
-// paletteIndex returns the index of stack in area's palette, adding it if new. Areas
-// are small (a view has at most 221 tiles per floor), so a linear search is enough.
+// paletteIndex returns the index of stack in area's palette, adding it if new. A linear
+// search: a view has at most 759 tiles per floor but few distinct stacks (a few dozen on
+// the real map, BenchmarkFullMapView in docs/07).
 // tileEntry is one item of a tile stack while building an area (no allocation).
 type tileEntry struct{ id, count uint32 }
 

@@ -1,0 +1,1300 @@
+# 17 — Dirección de arte, animación, movimiento y UI
+
+Este doc nace de la primera prueba del dueño (2026-11-17). Fija cómo se tiene que ver,
+moverse y manejarse Neque's Realm. Cada regla tiene un id (`ART-n`, `ANI-n`, `MOV-n`,
+`UI-n`, `SRC-n`) para citarla en tareas y PRs. Lo que todavía es código está en el plan
+del final (§7): nada de este doc está implementado salvo lo que dice "hoy" y las tareas
+que §7 marca como hechas (A2 y A3: tema, fuentes, dock y ventanas; "Hecho: A2 y A3"; A4 y
+A5: menú del click derecho con la ficha, diálogo y tienda sin scroll, y los botones del
+gremio; "Hecho: A4, A5 y los botones del gremio"; y A6 en parte: movimiento fluido,
+"Hecho: A6 (parcial)" en §4; y A8 con la parte de criaturas de A10 y A12, el
+2026-11-17; y el arte del mundo de A10, A11 y la luz de A13, rama `feat/world-art`, el
+2026-11-18).
+
+## Lo que pidió el dueño
+Textual, de la prueba del 2026-11-17:
+
+> el movimiento tiene que ser más fluido; las gráficas no están mal pero necesitamos
+> mejorarlas; aprende de todos los sprites de Tibia, ahí están mejor logrados, las paredes
+> se ven mejor y todo está más pulido; los enemigos tienen que tener sprites de movimiento;
+> genera una UI buena, bonita y oscura estilo Diablo 2 pero con las funcionalidades
+> actuales; debiese verse más pantalla; todo debiese tener animaciones o el juego se ve
+> aburrido; click derecho en los items debería mostrar una descripción; el menú para hablar
+> es muy incómodo, no quiero hacer scroll para buscar las cosas; los gremios debiesen tener
+> su menú aparte o botoncitos como en Tibia; fluidez de movimiento como en Diablo 2;
+> considera otros juegos 2D de este estilo.
+
+Decisiones del dueño del mismo día (ya están en `00-vision.md`, `CLAUDE.md` y
+`assets/CREDITS.md`):
+- Los assets de terceros pueden ser también **CC-BY-SA** (por ejemplo, Liberated Pixel
+  Cup), y las fuentes, **OFL**.
+- La vista llega **hasta 31x21 casillas**.
+- **La regla legal no cambia.** De Tibia copiamos mecánicas, y de Tibia y Diablo
+  aprendemos estilo. Nunca copiamos sus sprites, nombres, mapas, textos ni fuentes. Nada de
+  este doc se dibujó mirando un sprite concreto de esos juegos, y ninguna tarea que salga
+  de aquí puede hacerlo.
+
+## 0. Diagnóstico: lo que muestran los screenshots de hoy
+Revisados con Read en `client/e2e/screenshots/actual/` (corrida del 2026-11-15).
+
+| Problema | Dónde se ve | Causa | Se arregla en |
+|---|---|---|---|
+| Los muros parecen otro suelo | `65-volcan-temple`, `14-shop` | `walls/stone_wall` es `dngn/wall/brick_gray0` de Dungeon Crawl: una textura de ladrillo vista desde arriba que llena la casilla, sin cara frontal ni altura | ART-3 |
+| El pasto "hierve" y aplana todo | `04-world`, `07-combat`, `32-bosque-plaza` | `ground/grass` es ruido saturado de alta frecuencia, el mismo tile repetido. El lobo de `07-combat` casi no se distingue del fondo | ART-4, ART-6 |
+| Personajes chicos y de escalas mezcladas | `04-world`, `14-shop` | El atuendo `citizen` es una figura de unos 10x25 px en una casilla de 32. Los NPCs y monstruos de Dungeon Crawl tienen cada uno su escala | ART-2, SRC-4 |
+| Nada se mueve solo | todos | Monstruos y NPCs de un solo frame que se deslizan. Agua, árboles y fuego quietos (`29-bosque-dock`) | ART-7, ANI |
+| La UI se ve como una página web | todos | Encabezado de 68 px, columna fija de 240 px, `system-ui`, botones dorados planos. Mapa de 960x704 en una ventana de 1280x800 | UI |
+| El gremio ocupa la columna aunque no tengas | `04-world`, `46-guild-panel` | El formulario "Fundar" vive siempre en la columna lateral | UI-7 |
+| Diálogo y tienda tapan el mapa con listas largas | `13-dialog-window`, `14-shop` | Opciones en una lista vertical. La tienda tiene un campo de cantidad y un botón por fila | UI-6 |
+| Paso, pausa, paso | (al jugar) | Ver §4: el cliente espera la confirmación del servidor antes del paso siguiente, y los demás arrancan su paso cuando llega el paquete | MOV |
+
+## 1. Qué aprendimos de cada referencia (y qué no copiamos)
+Las fuentes consultadas están al final. Donde no hubo documentación pública (Tibia no
+publica cómo dibuja), lo que sigue es observación de estilo y discusión de la comunidad,
+no datos internos.
+
+### Tibia: lectura del mapa
+- **Grilla de 32x32 con proyección oblicua.** Lo que es más grande que una casilla (64x64)
+  se ancla en una esquina de su casilla y crece hacia arriba y a la izquierda, sobre las
+  casillas vecinas. Nuestro renderer ya lo hace (`packages/renderer/src/map-view.ts`).
+- **Las criaturas "se paran" en la casilla.** Los clientes abiertos de Tibia (OTClient)
+  manejan para cada sprite un *displacement* (cuánto se corre el dibujo de la criatura) y
+  una *elevation* (cuánto suben los items y criaturas apilados sobre una mesa o una caja,
+  con un tope). Además, *animation phases* por sprite, y los pasos del ciclo de caminar
+  van atados al paso.
+- **Muros por piezas.** Hay piezas horizontales, verticales, esquinas y postes, y su altura
+  se dibuja sobre la casilla de atrás. Las puertas son parte del muro. Ahí está casi todo
+  el "se ve mejor" de las paredes: hay **altura y cara frontal**, y el muro tapa lo que
+  tiene detrás.
+- **Suelos como rompecabezas.** Muchas variantes por suelo, bordes de transición entre
+  todos los pares, detalles sueltos (piedras, flores, pasto alto) y tiles animados (agua,
+  fuego, banderas). Las cuevas son oscuras y la luz viene de antorchas.
+- **Interfaz.** Una columna derecha de miniventanas apiladas (lista de batalla, skills,
+  contenedores) que se minimizan, y una barra de botones que abre cada una. Se elige entre
+  controles "clásicos" (click derecho = usar) y menú contextual.
+
+### Diablo II: sensación y UI oscura
+- El postmortem cuenta que renderizaron a los personajes en **16 direcciones** y a los
+  monstruos en **8**, y que un monstruo tiene **hasta 14 modos de animación** (caminar,
+  atacar, morir, etc.). La variedad de animación es lo que da vida al mundo.
+- El objetivo de la interfaz era que fuera "lo más transparente posible": clicks simples
+  para moverse, atacar, abrir puertas y tomar items. **Mantener el botón** hace que el
+  personaje siga caminando hacia el cursor, y al soltar termina su paso.
+- Marcos de piedra y metal oscuros, dos orbes (vida y maná) y un cinturón abajo. Los
+  paneles (personaje e inventario) se abren sobre una mitad de la pantalla y se cierran al
+  instante. Las fichas de item usan colores para el tipo de item.
+- La remasterización sumó fuentes más grandes, escalado de UI, interruptores (sacudida de
+  cámara, indicador de "falló") y sliders por canal de sonido. Accesibilidad =
+  personalizar.
+
+### Ultima Online: ventanas e items
+- Las ventanas ("gumps") se ponen donde uno quiere. El equipo se ve sobre una figura del
+  personaje (*paperdoll*).
+- Casi todo tiene **menú contextual**, y los items muestran sus propiedades en un tooltip.
+
+### Otros juegos 2D cenitales
+- **Stardew Valley:** fichas de item al pasar el mouse (nombre, categoría, descripción,
+  efectos). El entorno siempre se mueve un poco: el pasto se agita al pisarlo, los árboles
+  tiemblan y el agua está animada. Las acciones tienen pequeños rebotes de respuesta.
+  **Lección:** una ficha legible y un mundo que respira valen más que más detalle por
+  sprite.
+- **Realm of the Mad God:** personajes de muy pocos píxeles con contorno oscuro y ciclos
+  de caminar y atacar muy cortos, y la acción se lee igual. **Lección:** con 2 frames bien
+  puestos y buen contorno alcanza. Lo que mata la lectura es que algo no se mueva.
+- **Old School RuneScape** (3D, pero sus convenciones de interfaz son 2D y muy probadas):
+  el menú del click derecho lista todas las acciones, con la de por defecto arriba y
+  "Examinar" al final. El panel lateral tiene una pestaña por sistema, con botones de
+  ícono. **Lección:** el texto de la acción por defecto al pasar el mouse ("Hablar con
+  Tilde", "Atacar a lobo") enseña los controles sin manual.
+- **Liberated Pixel Cup (LPC):** es un estilo y a la vez una fuente de assets (§6). La guía
+  derivada de su guía de estilo pide:
+  - proyección ortográfica, cámara a unos 60°, grilla de 32x32;
+  - luz desde arriba y apenas desde la izquierda;
+  - contorno fuerte en personajes y más suave en objetos;
+  - tramado casi nunca;
+  - personajes en frames de 64x64.
+
+  LPC Revised usa una paleta de unos 170 colores y personajes más grandes que el promedio.
+
+## 2. Arte del mundo (ART)
+
+### ART-1 Proyección (decisión)
+**3/4 frontal, la de LPC y la de nuestro spritegen.** La altura sube recta en pantalla:
+se ve la cara de arriba y la cara sur de cada objeto. **No** adoptamos el corrimiento en
+diagonal de Tibia, por tres razones:
+- los packs que podemos usar (LPC, Dungeon Crawl) están en 3/4 frontal;
+- el ancla de abajo a la derecha que ya tenemos funciona igual;
+- el autotile de muros (ART-3) queda más simple.
+
+De Tibia tomamos lo otro: altura que tapa la casilla de atrás, piezas por orientación y
+variedad.
+- 1 píxel de sprite = 1 píxel de arte. Nada de mezclar densidades: un pack de 16x16 no se
+  escala a 32 sin decisión del dueño (`assets/README.md`).
+
+### ART-2 Tamaños y anclas
+El atlas exige lados múltiplos de 32: un objeto de 32x48 va en un lienzo de 32x64 con la
+parte de arriba transparente.
+
+| Tipo | Lienzo | Ancla | Notas |
+|---|---|---|---|
+| Suelo, borde | 32x32 | la casilla | Mosaico sin costuras (test de spritegen) |
+| Item chico (moneda, poción, hierba) | 32x32 | la casilla | Dibujo de ≤ 20x20 apoyado abajo y centrado: así se apila |
+| Mueble u objeto (mesa, cofre, yunque) | 32x32 o 32x64 | abajo a la derecha (hoy) | Puede tener *elevation* (ART-8) |
+| Muro (una pieza) | 32x64; 32x96 para murallas | abajo a la derecha | Cara de 32 px y tapa sobre la casilla de atrás (ART-3) |
+| Árbol | 64x64, 64x96 o 96x96 | abajo, tronco centrado (ver abajo) | Copa animada por viento (ART-7) |
+| Criatura chica (rata, murciélago) | 32x32 | abajo, centrada | Figura de 16–28 px |
+| Humanoide (jugador, NPC, bandido) | frames de 64x64 | pies centrados en la casilla | Figura de 40–48 px de alto (1,25 a 1,5 casillas), como LPC |
+| Criatura grande o jefe | 64x64 o 96x96 | pies centrados | Ocupa una casilla en el servidor, aunque se vea más grande |
+
+- **Ancla por sprite** (hecho para criaturas, 2026-11-17): `anchor: br` (abajo a la
+  derecha, el de siempre) o `anchor: bc` (centrado; los pies `FEET_LINE` = 4 px por encima
+  del borde de abajo de la casilla, donde va la sombra de contacto). `foot` (filas vacías
+  bajo los pies) y `top` (alto del dibujo) no se escriben: spritepack los mide en los
+  frames de caminar y los pone en `atlas.json` `anims`. Toda animación con capas es `bc`.
+  En el mapa (hecho, 2026-11-18): un sprite con `anchor: bc` en la sección `tiles` de
+  `assets/sprites.yaml` se centra en su casilla (los árboles); el resto de los items y
+  muebles sigue abajo a la derecha.
+- **Click sobre sprites altos:** un click en la cabeza de un humanoide (que cae en la
+  casilla de arriba) tiene que elegir a la criatura. Primero se prueban las cajas de las
+  criaturas dibujadas (de la última a la primera) y después la casilla (pendiente, A10).
+- **Nombres y barras** van sobre la cabeza real (la parte opaca más alta del frame), no
+  sobre la casilla (hecho: suben `lift` px, `client/CLAUDE.md`).
+
+### ART-3 Muros con altura y autotile
+- **Un muro ocupa su casilla** (el formato de mapa no cambia). Su sprite de 32x64 se
+  dibuja así:
+  - los 32 px de abajo son la **cara sur**: ladrillo, piedra o troncos, con la luz de ART-5;
+  - los 32 px de arriba son la **tapa**: la cara de arriba del muro, más clara, con un
+    borde iluminado arriba y a la izquierda y uno oscuro donde termina.
+- El orden de dibujo de hoy (fila por fila, de arriba hacia abajo) resuelve la oclusión:
+  - en un muro norte-sur, la tapa de cada pieza tapa la cara de la de atrás, así que se ve
+    una franja de tapas con una sola cara abajo, como en cualquier 3/4;
+  - una criatura detrás del muro queda tapada por él.
+- **Autotile en el render, no en el mapa.** El item sigue siendo uno por material
+  (`stone_wall`, `wooden_wall`, `rock_wall`) con un campo nuevo `autotile: wall` en
+  `data/items` (contenido como datos). El renderer mira los 4 vecinos del mismo material y
+  arma el muro con dos partes:
+  - tapa: `walls/<material>/cap_<máscara>`, 16 piezas (máscara N, E, S, O);
+  - cara: `walls/<material>/face_<0..3>` (sola, extremo izquierdo, medio, extremo derecho),
+    solo si al sur no hay muro.
+
+  Así se pinta un muro con un solo item y el editor ve lo mismo (usa el mismo renderer).
+- **Puertas:** pieza de 32x64 con marco y dintel, que continúa la tapa. Una puerta de casa
+  (`houses.yaml` `doors`) que hoy es solo suelo recibe un marco decorativo que no bloquea.
+- **Muros altos** (murallas, acantilados): cara de 64 px (sprite de 32x96).
+- **Detrás de un muro:** el jugador propio, si queda tapado, se dibuja además como
+  **silueta** (contorno claro al 50 %) sobre los muros. Así nunca se pierde. A los demás no
+  se les hace nada: esconderse detrás de un muro es parte del juego. No hacemos los muros
+  transparentes como Diablo 2, porque dejaría ver los interiores.
+- Techos y pisos de arriba (en Tibia se ocultan al entrar) **quedan fuera** de este plan.
+  Hoy solo se dibuja el piso del jugador.
+
+**Hecho (A11, 2026-11-18), con estas diferencias con lo de arriba:**
+- **Una pieza entera por máscara, no tapa y cara por separado.** Cada material tiene 16
+  sprites de 32x64, `walls/<material>/wall_<máscara>` (N=1, E=2, S=4, O=8), con la tapa y la
+  cara ya juntas: menos sprites por casilla, y las esquinas y uniones se dibujan a mano en
+  la receta. El sprite del material (`walls/stone_wall`) es la pieza este-oeste, la que ven
+  el inventario y la paleta del editor.
+- **Sin campo `autotile` en `data/items`.** Que un sprite es un muro lo dicen los nombres de
+  sus piezas: spritepack las encuentra y escribe `wall: true` en `atlas.json` `tiles`. Una
+  puerta en un muro (`doors/forge_gate`, `doors/pruebas_gate` y sus abiertas) lleva
+  `joins_walls: true` en la sección `tiles` de `sprites.yaml`: no tiene piezas, pero sus
+  vecinos la cuentan como muro y la tapa sigue de corrido. Las dos puertas son arcos
+  propios metidos en su muro, con la misma altura.
+- **Dos formas** (`tools/spritegen/src/recipes/walls.ts`):
+  - **muros construidos** (piedra, troncos): delgados, de 10 px. Un muro este-oeste se para
+    en el borde sur de su casilla: su cara la llena y su tapa ocupa solo las últimas 10
+    filas de la casilla de atrás, así que lo que está ahí se sigue viendo casi entero. Un
+    tramo norte-sur es una franja de tapas por el medio, con suelo a los lados;
+  - **roca** (paredes de cueva, vetas de hierro y de brasa): un bloque de todo el ancho y
+    20 filas de fondo, con tapa rugosa y cara de acantilado solo donde no sigue roca al sur.
+- **Orden de dibujo:** el de siempre (fila por fila; `MapView` ordena items y criaturas por
+  `itemZIndex` y `entityZIndex` a través de los bordes de chunk), así que la tapa de un muro
+  tapa a la criatura de la casilla de atrás y la criatura de adelante tapa la cara. Las
+  piezas se eligen mirando los vecinos también en el chunk de al lado, y un chunk se
+  rearma si cambia un vecino del que dependen sus bordes.
+- **Silueta:** cuando el muro de la casilla de al sur tapa al jugador propio, el cliente
+  dibuja encima del mapa una copia de su frame, aclarada y al 45 %
+  (`BEHIND_WALL_ALPHA` y `BEHIND_WALL_TINT` en `game-canvas.ts`). Los demás quedan
+  tapados.
+- **Pendiente:** muros altos de 32x96, ventanas y el marco decorativo de las puertas de
+  casa (`houses.yaml` `doors` siguen siendo un hueco en el muro: ponerlo cambia mapas).
+
+### ART-4 Suelos: variantes, textura y transiciones
+- **Al menos 4 variantes por suelo** (la principal en ~70 % de las casillas), elegidas en
+  el render con un hash de (x, y, z): `ground/grass/0..3`. El mapa no cambia y el resultado
+  es determinista.
+- **Textura de baja frecuencia:** manchas de 6–12 px y detalles sueltos de 1–2 px. Máximo
+  5 tonos por suelo, y dentro de un mismo suelo **ΔL\* ≤ 15** (CIELAB) entre el tono más
+  claro y el más oscuro. El pasto de hoy salta mucho más.
+- **Detalles sueltos:**
+  - los decorativos (matas, piedritas, flores) los esparce el cliente con el mismo hash:
+    no se pueden tocar y no pesan en el mapa;
+  - lo que tiene sentido de juego (un arbusto que bloquea) sigue siendo un item del mapa.
+- **Bordes** (`gen-borders`): entre todos los pares de suelos que se tocan, con orilla
+  irregular (nunca recta), y en el agua con espuma animada.
+
+**Hecho (A10, 2026-11-18):** pasto, tierra, arena y piedra de piso tienen 4 looks y la arena
+mojada 2 (`ground/<suelo>/var_<n>`, recetas en `tools/spritegen/src/recipes/ground.ts`). El
+renderer elige con `tileHash(x, y, z)` y deja el principal en el 70 % (`weight` en
+`tiles`). Los detalles sueltos (flores, matas, piedritas, una raíz, una concha, musgo) van
+en esos looks, lejos de los bordes, en vez de esparcirlos el cliente. Cada borde tiene una
+orilla de tres ondas que se repiten por casilla (nunca recta y sin dientes) y las orillas
+del agua, espuma que rompe en 4 frames (`borders/sand_water_<pieza>/frame_<n>`). Un test de
+spritegen exige la banda de valor de ART-6 a cada suelo (la lava no: brilla).
+
+### ART-5 Contorno, sombra y luz
+- **Luz principal desde arriba a la izquierda** (como hoy). Por material, 3–4 tonos más un
+  brillo. Corrimiento de matiz ≤ 15°: las sombras van hacia el azul o el violeta y las luces
+  hacia el amarillo. Nada de "más oscuro = más negro".
+- **Contorno selectivo:**
+  - criaturas y personajes: 1 px oscuro del color local, casi negro abajo y a la derecha
+    (lado de la sombra) y más claro o cortado en el borde iluminado. Es lo que los separa
+    del fondo;
+  - objetos: contorno más suave;
+  - suelos: sin contorno;
+  - el negro puro (`#000`) solo en la sombra.
+- **Sombras:**
+  - las de Dungeon Crawl vienen pintadas (abajo a la derecha) y se quedan (`assets/README.md`,
+    "Sombra de las criaturas");
+  - los sprites nuevos con animación no la pintan: el renderer dibuja una **sombra de
+    contacto** (elipse de 20x6 px, negro al 35 %) bajo los pies. Así no tiembla con los
+    frames ni se duplica. Un campo `shadow: baked | ellipse | none` por sprite decide
+    (A10);
+  - árboles y edificios: una **capa de sombras** del renderer, después del suelo y antes
+    de los items, con blend multiply, a partir de un sprite de sombra propio
+    (`<sprite>.shadow`). La sombra cae sobre cualquier suelo sin pintarla en el árbol.
+    **Hecho (2026-11-18)** como `<sprite>/shadow`, sin multiply: la capa entera va al 32 %
+    (`CAST_SHADOW_ALPHA`) y cada sombra va teñida hacia el azul violeta
+    (`CAST_SHADOW_TINT`), así dos sombras que se pisan no se oscurecen el doble. La tienen
+    los árboles, el arbusto, la roca, la fragua, la fuente y el brasero.
+
+### ART-6 Paleta y valores
+- **Paleta maestra:** si se integra LPC, la de LPC Revised (~170 colores) es la referencia.
+  Las rampas de `tools/spritegen/src/palette.ts` se acercan a ella para que el arte propio y
+  el de LPC convivan.
+- **Bandas de valor** (L\* de CIELAB; si una pantalla pasada a grises no las respeta, falla
+  la revisión visual):
+
+  | Capa | L\* | Saturación (C\*) |
+  |---|---|---|
+  | Suelos | 20–50 | baja a media (≤ 35) |
+  | Muros y objetos | 25–65 (la tapa más clara que la cara) | media |
+  | Criaturas y personajes | 10–85: el mayor contraste de la pantalla | media, alta en acentos |
+  | Efectos, números y marcas | 60–100 | alta |
+
+- **Una paleta por isla:** el tono dominante y el acento.
+  - Puerto: arena y piedra cálidas, mar azul verdoso.
+  - Bosque: verdes profundos, musgo y ocre.
+  - Volcán: grises de ceniza y naranja de brasa.
+- **Tramado:** nunca para degradados. Como textura intencional, como mucho el 10 % de los
+  píxeles. En damero, solo en transiciones de áreas grandes (profundidad del agua, sombra
+  en piedra).
+- **Alfa 0 o 255** en los sprites (regla de hoy). La transparencia parcial es del renderer:
+  sombras, luz y desvanecidos.
+
+### ART-7 Tiles e items animados
+- **Formato:** frames como carpetas, igual que los efectos (`ground/water/0..n`,
+  `decor/torch/0..n`), y en `sprites.yaml` o en la receta
+  `animation: { frames, ms, sync: world | tile | random }`:
+  - `world`: todos en fase (agua, lava);
+  - `tile`: con desfase por hash de la casilla (antorchas, banderas), para que no parpadeen
+    juntas;
+  - `random`: destellos sueltos.
+- **Tiempos:**
+
+  | Elemento | Frames | ms por frame | Sincronía |
+  |---|---|---|---|
+  | Agua de mar o río | 4–8 | 200–250 | world, más espuma de orilla |
+  | Lava | 4–6 | 250–300 | world |
+  | Antorcha, fogata, fragua | 3–4 | 100–140 | tile |
+  | Bandera, ropa colgada | 3–4 | 150–180 | tile |
+  | Fuente, cascada | 4 | 120–160 | world |
+  | Copa de árbol (viento) | 2–3 | 600–900 | tile |
+  | Pasto alto, juncos | 2 | 700 | tile |
+  | Teletransporte | 6–8 | 100 | world |
+  | Veta de mineral | 1 destello cada 3–5 s | 80 | random |
+
+- **Ambiente solo del cliente** (sin servidor, pool de ≤ 100 partículas en pantalla):
+  - motas de polvo en cuevas, brasas en el Volcán, hojas en el Bosque, niebla y gaviotas
+    sobre el mar;
+  - polvo al pisar tierra o arena (3 frames, 200 ms) y ondas al pisar agua baja;
+  - el pasto alto se agita al pasar.
+- **Luz:**
+  - los pisos subterráneos (z ≥ 8) van oscuros, con un radio de luz alrededor del jugador
+    y de cada antorcha (capa de oscuridad en multiply y luces aditivas);
+  - día y noche no entran en este plan.
+
+**Hecho (A10 y la luz de A13, 2026-11-18):**
+- **Formato:** frames `<sprite>/frame_<n>` (el sprite es el frame 0) y, en la sección
+  `tiles` de `assets/sprites.yaml`, `ms` y `sync` (por defecto 250 ms y `world`).
+  spritepack los pasa a `atlas.json` `tiles` y `MapView` los avanza en
+  `render(cam, view, now)` desde una lista plana: no asigna nada por frame y solo toca un
+  sprite cuando cambia su frame. El editor anima igual; `mapcli render` muestra el frame 0.
+- **Animados hoy:** agua y bajío (240 ms, `world`), lava (280 ms, `world`), espuma de
+  orilla (250 ms, `world`), copas de roble, olmo, abedul y pino y el arbusto (700–900 ms,
+  `tile`), fragua y fogón (110–120 ms, `tile`), y cuatro props nuevos para los pueblos:
+  antorcha y estandarte de pared (cuelgan en la cara de un muro este-oeste: van en su
+  casilla, después del muro), brasero y fuente. Los props todavía no están en ningún mapa.
+- **Luz en cuevas:** `client/src/render/light-layer.ts`. Un mapa de luz a un cuarto de la
+  pantalla, borrado a un gris frío (`AMBIENT`), con un brillo suave por luz, encima del
+  mapa con blend multiply y debajo de efectos y nombres. Da luz el jugador (4,5 casillas) y
+  cada item con `light` en `tiles` (radio en casillas: fragua y brasero 3,5, fogón y
+  antorcha 3). Los brillos salen de un pool: un frame no asigna. En la superficie no dibuja
+  nada.
+- **Pendiente:** partículas de ambiente, polvo y ondas al pisar, pasto que se agita, vetas
+  con destello (`sync: random` ya existe, falta el arte) y poner los props nuevos en los
+  pueblos.
+
+### ART-8 Elevación
+Una propiedad `elevation: <px>` en `data/items` (mesas, cajones, barriles: 8 px) sube lo
+que se apila encima, hasta 24 px. Es solo de dibujo. La criatura que pisa la casilla
+también sube.
+
+## 3. Animación de criaturas y personajes (ANI)
+
+### ANI-1 Direcciones
+4 (N, E, S, O), como hoy (`render/outfit.ts` lleva las diagonales a la horizontal). No hace
+falta llegar a 8. E puede ser el espejo de O solo si el sprite declara `mirror: true`: con
+un escudo en un brazo, no.
+
+### ANI-2 Acciones, frames y tiempos
+
+| Acción | Frames por dirección | Duración | Qué la dispara | Bucle |
+|---|---|---|---|---|
+| Quieto | 2–4 | 400–600 ms por frame (ciclo de 1,6–2,4 s) | 150 ms sin paso | sí, con fase por id de criatura |
+| Caminar | 4 (mínimo 2) más la pose quieta | 2 frames por casilla: un ciclo cada 2 pasos | `CreatureMove` | por distancia, no por tiempo |
+| Atacar cuerpo a cuerpo | 3–4 (anticipación, golpe, recuperación) | 300–400 ms | evento de ataque (proto pendiente, ANI-7) | no |
+| Atacar a distancia | 3 | 300 ms | `Projectile` que sale de su casilla | no |
+| Conjurar | 3–4 | 400 ms | efecto de conjuro o de elemento sobre ella | no |
+| Recibir golpe | 1 (o el procedural) | 150 ms | `Effect` 1 o `FloatingText` de daño en su casilla | no |
+| Morir | 4–6 | 500–700 ms, después el cadáver | desaparición por muerte (ANI-7) | no |
+| Aparecer | procedural | 300 ms | `CreatureAppear` que no viene del borde de la vista | no |
+
+- **Equivalencias con LPC** (convención de las hojas LPC clásicas; LPC Revised cambió en
+  algunos casos la cantidad y el orden de los frames, así que se cuentan en la hoja al
+  integrarla):
+
+  | Hoja LPC | Frames | Nuestra acción | Cómo se usa |
+  |---|---|---|---|
+  | walk | 9 por dirección (1 quieto + 8) | caminar | 4 frames por casilla |
+  | slash | 6 | cuerpo a cuerpo | |
+  | thrust | 8 | lanza | |
+  | spellcast | 7 | conjurar | 7 x 60 ms |
+  | shoot | 13 | arco | se recorta a 300–400 ms |
+  | hurt | 6, solo hacia el sur | morir | |
+
+- **Caminar por distancia** (como hace `outfitFrame` hoy): el frame sale del avance del
+  paso, así los pies no patinan si cambia la velocidad. En pasos encadenados no vuelve al
+  frame quieto (ANI-3).
+
+### ANI-3 Continuidad
+- El frame quieto aparece solo después de 100 ms sin paso. Hoy, entre dos pasos, puede
+  aparecer un frame quieto suelto.
+- Girar sin caminar cambia el sprite al instante.
+- La fase del ciclo quieto sale de un hash del id de la criatura, para que una manada no
+  respire al unísono.
+
+### ANI-4 Nombres en el atlas
+`<sprite>/<acción>_<dir>_<n>`, por ejemplo `creatures/wolf/walk_s_0` o
+`outfits/citizen/attack_e_2`.
+- Los nombres T0.5 de los atuendos (`outfits/<id>/<dir>_<0|1|2>`) se siguen leyendo como
+  `walk`, con el 0 como pose quieta, sin migrar nada. Desde A12 los cuatro atuendos son de
+  LPC y esos nombres son alias de sus frames (`assets/README.md`, "Sprites animados").
+- Un monstruo con `sprite: creatures/wolf` usa sus frames si el atlas los tiene, y si no,
+  la imagen única con el procedural (ANI-5). Los frames salen de capas de un pack
+  (`animations` en `assets/sprites.yaml`) o de archivos propios con esos nombres (el trote
+  de spritegen del jabalí y del ciervo).
+
+### ANI-5 Animación procedural para sprites de un solo frame
+Es para los monstruos y NPCs de Dungeon Crawl de hoy, y para cualquier sprite futuro sin
+frames. Todo se redondea a píxel entero de sprite, para que siga siendo pixel-perfect.
+
+**Hecho (A8, 2026-11-17)** en `packages/renderer/src/anim.ts`, con estas diferencias con la
+tabla: el golpe destella en rojo (un tinte multiplicado: sin textura ni filtro extra) en vez
+de una silueta blanca, y morir y aparecer se desvanecen con alfa en vez del tramado Bayer.
+El golpe, la embestida y la aparición también valen para los sprites con frames; la muerte
+de un sprite con `death` juega su clip y se desvanece.
+
+| Estado | Qué hace | Tiempos |
+|---|---|---|
+| Caminar | Salto: y = −round(2 · sin(π·t)) px, con t el avance del paso. Inclina la parte de arriba 1 px hacia donde va (skew) | Un salto por casilla |
+| Mirar al costado | Espejo horizontal al ir al este o al oeste si el monstruo declara `facing: left \| right` (dato en `data/monsters`). Al norte o al sur conserva el último | Instantáneo |
+| Quieto | "Respira": sube 1 px | 400 ms cada 1,6–2,4 s, fase por id |
+| Volador (`flying: true`) | Oscila ±2 px siempre, y su sombra de contacto se achica cuando sube | 600 ms por ciclo |
+| Atacar | Embestida: avanza 6 px hacia el objetivo y vuelve | 90 ms de ida y 160 ms de vuelta |
+| Recibir golpe | Silueta blanca (textura generada al cargar el atlas) y retroceso de 2 px | 60 ms y después 120 ms |
+| Morir | Destello blanco, se aplasta hasta la mitad del alto contra el piso y se disuelve con tramado ordenado (Bayer 4x4). Después aparece el cadáver que manda el servidor | 400 ms |
+| Aparecer | La disolución al revés | 300 ms |
+
+### ANI-6 Atuendos y cosméticos
+Con humanoides de LPC (SRC-4), un atuendo es una **pila de capas** (cuerpo, ropa, pelo,
+arma) que se compone en spritegen o en una herramienta de importación, y se guarda como
+frames ya armados en el atlas: cero costo en el cliente. Los tintes de T5.7 (`tintFor`)
+siguen igual.
+
+### ANI-7 Lo que falta del servidor
+- **Quién ataca a quién.** `Effect` solo trae la casilla. Para animar el golpe del atacante
+  hace falta `attacker_id` (y la víctima) en un mensaje nuevo o en `Effect`. Es protocolo:
+  docs/05 y revisión con `code-reviewer`. Mientras tanto el cliente lo deduce
+  (`client/src/render/creature-events.ts`): el `Projectile` sale de la casilla del
+  atacante, y un golpe cuerpo a cuerpo se atribuye a la criatura del otro bando que está al
+  lado (primero el jugador propio si su objetivo está ahí, después la que mira esa casilla).
+  Puede equivocarse con varios monstruos alrededor de un jugador.
+- **Muerte o salida de la vista.** Si `CreatureDisappear` no lo distingue, se suma un
+  motivo. Mientras tanto el cliente toma como muerte la salida de una criatura con la barra
+  en 0 (el servidor manda `CreatureHealth` 0 antes de `CreatureDisappear`).
+
+## 4. Sensación de movimiento (MOV)
+
+### Hecho: A6 (parcial) (2026-11-18, rama `feat/movement-feel`)
+Lo que se hizo y lo que cambió respecto del plan de abajo. El detalle técnico está en
+`client/CLAUDE.md` ("Movimiento fluido"), `server/CLAUDE.md` ("Caminar") y docs/05
+("Caminar"). **Donde el plan y esto no coinciden, vale esto.**
+- **El servidor sí cambió** (el plan decía que no hacía falta). Con "`Walk` reemplaza la
+  cola por un paso", el cliente tenía que esperar la confirmación de N para mandar N+1 y
+  calcular con el RTT cuándo mandarlo; con RTT alto igual quedaban huecos. Ahora:
+  - **Cola de teclado en el servidor.** Cada `Walk` se encola detrás de los pasos de
+    teclado que esperan, con tope `movement.max_queued_steps` (`balance.yaml`, 4; el
+    `Welcome` se lo dice al cliente). Si en la cola hay un camino por click o un paso de
+    persecución, se descarta. Uno más que el tope reinicia la caminata (`WalkRejected` con
+    `dir` `UNSPECIFIED`). El ritmo sigue siendo del servidor (`readyAt` por paso).
+  - **Época de la caminata (`walk_epoch`).** Cada `WalkRejected` y cada teletransporte
+    (`FullMapView`) empiezan una época nueva. Un `Walk` de otra época se descarta sin
+    contestar.
+  - **Número de cada paso** (`Walk.seq`, que vuelve en `CreatureMove.walk_seq` solo en la
+    copia del propio jugador). El cliente empareja cada respuesta con su predicción aunque
+    el servidor haya dado antes un paso de un camino o de persecución, o se haya perdido un
+    `Walk`.
+  - **Sin `StopWalk` al soltar la tecla.** Soltar no manda nada: los pasos ya mandados se
+    dan. Garantía (docs/05): todo `Walk` aceptado termina en `CreatureMove`, `WalkRejected`
+    o `FullMapView`. **Ningún camino nuevo puede vaciar la cola en silencio**
+    (`server/CLAUDE.md`). Un `StopWalk` con pasos sin confirmar deja al cliente esperando
+    respuestas que no llegan, hasta que las abandona a los 3 s (`PREDICT_TIMEOUT_MS`).
+- **MOV-1, cambio.** El cliente va hasta `max_queued_steps` pasos sin confirmar (4, no 2).
+  Manda cada `Walk` apenas lo decide, `STEP_LEAD_MS` (50 ms) antes de que termine el paso
+  dibujado, sin esperar la confirmación del anterior ni medir el RTT. Cada paso empieza en
+  el `fin` del anterior.
+- **MOV-2, en parte.** Un toque durante un paso camina apenas termina
+  (`MovementKeys.take`), y soltar en los últimos 50 ms todavía da el siguiente. No se hizo
+  el toque corto que solo gira.
+- **MOV-5, cambio.** No es `scheduleStep`: es un colchón de jitter (`Playout`) sobre la
+  línea de ticks del servidor. Cada paso se encadena tras el que se dibuja y, si va
+  atrasado, se dibuja hasta 25 % más rápido. Vale para las demás criaturas y para el
+  camino propio por click.
+- **MOV-6.** Cámara y criaturas a píxel de pantalla (la prueba que proponía); quedó.
+- **Además:**
+  - dos flechas perpendiculares caminan en diagonal y, contra un muro, se desliza por la
+    mitad libre;
+  - toda corrección se desliza en 160 ms (`SLIDE_MS`), también la del propio jugador desde
+    los 4 pasos predichos;
+  - un giro (`Turn`) sale solo sin pasos sin confirmar: el servidor gira en el acto y cada
+    paso de su cola vuelve a fijar la dirección;
+  - las criaturas sin frames de caminar dan un saltito de 1 px por paso (`walkBob`).
+- **Pendiente:**
+  - MOV-3 (caminar manteniendo el mouse);
+  - MOV-4 (click previsto). Hoy el click espera a que no queden pasos sin confirmar, manda
+    `WalkPath` y sus pasos se dibujan con MOV-5, sin predicción;
+  - MOV-7 (respuesta visual);
+  - el E2E de MOV-9 con 150 ms de latencia simulada en el WebSocket. Hoy lo cubre la
+    simulación de `client/src/state/walking.test.ts` (RTT de 2 a 300 ms con jitter);
+    `e2e/movement.spec.ts` corre sin latencia;
+  - lo que quedó anotado en docs/14 ("Movimiento fluido"), por ejemplo que una flecha
+    apretada durante un camino por click casi nunca entra.
+- MOV-8 es una decisión del dueño: no se tocó.
+
+### Por qué se sentía "paso, pausa, paso" (antes de A6)
+- **El cliente espera la confirmación.**
+  - `Game.frame` (`client/src/game.ts`) no hace nada mientras `world.pending` exista, y
+    `WorldState.canStep` exige `pending === undefined`. El paso siguiente sale cuando
+    terminó la animación del anterior **y** llegó el `CreatureMove` que lo confirma.
+  - Al nivel 1 un paso dura 500 ms (`base_step_ms` 1000, velocidad 205, terreno 100,
+    redondeado a ticks de 50 ms), así que casi no se nota.
+  - A nivel alto o con haste (pasos de 200–300 ms), un RTT de 150 ms más la espera al tick
+    alcanzan para frenar al jugador en cada casilla.
+- **Cada paso pierde un frame.** `predictStep` empieza el paso nuevo en `now` (la hora del
+  frame), no donde terminó el anterior. Se pierden hasta 16 ms por casilla a 60 Hz, o 33 ms
+  a 30 FPS: un tirón chico y regular, más un atraso que se acumula.
+- **Los demás arrancan cuando llega el paquete.** `WorldState.move` empieza el paso de otra
+  criatura al recibirlo. Los batches salen cada 50 ms y con jitter de red:
+  - si el paso siguiente llega antes de que termine el anterior, la criatura salta hacia
+    adelante;
+  - si llega tarde, se para.
+- **Click para caminar sin predicción.** El cliente arma el camino con A* (`findPath`) y lo
+  manda como `WalkPath`, pero no mueve nada hasta el primer `CreatureMove`.
+- **Cámara y criaturas a píxel de sprite.** `followCamera` y el dibujo redondean a píxel de
+  sprite: a 2x se mueven de a 2 px de pantalla. A velocidad baja y 144 Hz, unos frames no
+  se mueven y otros sí.
+
+### Propuestas
+El plan, con lo que A6 hizo marcado. Antes de A6, `Walk` reemplazaba la cola por **un**
+paso y por eso el plan era solo del cliente. Ya no: el servidor encola los pasos de
+teclado (ver "Hecho: A6 (parcial)" y docs/05 "Caminar").
+
+- **MOV-1 Pasos encadenados (✅ A6, distinto del plan original).**
+  - El paso N+1 previsto empieza exactamente en `fin(N)`, no en `now`. Si el frame llega
+    tarde, la interpolación arranca ya avanzada.
+  - El cliente puede ir **hasta `max_queued_steps` pasos sin confirmar** (4) delante del
+    servidor. Con ese tope, espera.
+  - `Walk(N+1)` sale cuando el cliente decide el paso, `STEP_LEAD_MS` (50 ms) antes de
+    `fin(N)`, **sin esperar la confirmación de N**: el servidor lo encola detrás de N (no
+    lo reemplaza) y lo da el tick en que N termina. Cada `Walk` lleva la época y su número
+    (`walk_epoch`, `seq`).
+  - Si el jugador cambia de dirección, el paso siguiente va hacia la nueva; los ya
+    mandados se dan. Al soltar la tecla **no** sale `StopWalk`: los pasos ya mandados se
+    dan. `StopWalk` vacía la cola sin contestar y el cliente se quedaría esperando sus
+    confirmaciones.
+  - `WalkRejected` descarta todo lo previsto y vuelve a la posición del servidor,
+    deslizándose.
+- **MOV-2 Buffer de entrada (A6, en parte: el toque durante un paso).**
+  - Una tecla apretada en el último 40 % del paso (o en sus últimos 150 ms) se guarda y se
+    ejecuta en el borde de la casilla.
+  - Cambiar de dirección con la tecla mantenida vale en el próximo borde.
+  - Un toque de otra dirección de menos de 80 ms estando quieto solo gira (o Ctrl+flecha,
+    como en Tibia).
+- **MOV-3 Mantener el mouse (Diablo 2).**
+  - Con el botón izquierdo mantenido sobre el mapa, en cada borde de casilla el cliente
+    elige la dirección (de 8) hacia la casilla bajo el cursor. Si está bloqueada, usa el
+    primer paso de su A* hacia ella. Lo predice y lo manda como un paso de teclado
+    (`chooseStep` y `Walk` con época y `seq`, MOV-1).
+  - Al soltar, se dan los pasos ya mandados, como con la tecla: nada de `StopWalk`.
+  - Un click corto (menos de 200 ms y sin arrastre) sigue siendo "caminar hasta ahí".
+- **MOV-4 Click para caminar, previsto.** El camino lo arma el cliente, que manda los
+  pasos. Puede ir prediciendo esos pasos con MOV-1 (como mucho `max_queued_steps`
+  adelante, cada uno como `Walk`) mientras los `CreatureMove` coincidan. Hoy un `WalkPath`
+  reemplaza la cola: el click lo manda solo sin pasos de teclado sin confirmar. Si el servidor rodea a una criatura (recalcula con A*), el
+  cliente acepta sus pasos con la corrección de siempre. Como mínimo, predecir el primer
+  paso para que el click responda en el acto.
+- **MOV-5 Línea de tiempo para los demás (✅ A6, como colchón de jitter: `Playout`).**
+  El plan era una función pura `scheduleStep(prev, move, now)`, con tests:
+  - un `CreatureMove` empieza en `max(llegada, fin del paso anterior de esa criatura)`;
+  - si va atrasado más de un paso, empieza ya y dura hasta un 40 % menos, para alcanzar;
+  - nunca se salta hacia atrás. Solo se teletransporta si `from` no es el último `to`
+    conocido;
+  - opcional: retraso de dibujo de 50 ms (un tick) para absorber el jitter de los batches.
+- **MOV-6 Cámara y redondeo (✅ A6).**
+  - Velocidad constante dentro de la casilla: nada de suavizado por casilla, que frena y
+    acelera en cada una.
+  - Cámara clavada en la posición interpolada del jugador (Tibia y Diablo 2 la centran
+    igual). Sin "mirar adelante", para que la vista sea igual para todos.
+  - Probar a redondear cámara y criaturas a **píxel de pantalla** en vez de píxel de
+    sprite, y comparar en 60 y 144 Hz. Si se ve mejor, queda.
+- **MOV-7 Respuesta visual.**
+  - Una marca animada en la casilla destino del click (anillo de 300 ms).
+  - Polvo y ondas al pisar (ART-7).
+  - El texto de la acción por defecto junto al cursor (UI-5).
+- **MOV-8 Velocidad (👤 decisión del dueño, no cambia sin él).** Al nivel 1 se camina a 2
+  casillas por segundo. Bajar `base_step_ms` de 1000 a 800 da 400 ms por paso (2,5
+  casillas/s). Toca balance:
+  - la persecución de los monstruos;
+  - el kiteo de los arqueros;
+  - el ritmo de horas por nivel que usa la detección de bots (`balance.yaml` `pace`).
+
+  Por eso queda propuesto y no aplicado.
+- **MOV-9 Criterio de aceptación** (falta el E2E con latencia; hoy lo cubre la simulación
+  de `client/src/state/walking.test.ts`):
+  - Con 150 ms de latencia simulada en el WebSocket (parámetro de desarrollo), mantener una
+    flecha 10 casillas tarda 10 × la duración del paso ± 1 frame, y no hay frames con el
+    sprite propio quieto.
+  - Tests unitarios con reloj falso para MOV-1, MOV-2 y MOV-5.
+  - Un E2E que muestree `__rpgClient` por frame.
+
+## 5. UI (UI)
+
+### UI-1 Principios
+- **El mapa primero.** No hay UI opaca fija sobre casillas visibles. Las ventanas flotan,
+  se mueven y se cierran.
+- **Oscura y gótica** (piedra, hierro y oro viejo, como referencia Diablo 2) con **todas**
+  las funciones de hoy. Nada de lo que hoy se puede hacer se pierde.
+- **Sin scroll para elegir:** conversación, tienda y botonera entran enteras.
+- **Animaciones cortas** (≤ 240 ms), solo `transform` y `opacity`. Se apagan con
+  `prefers-reduced-motion` y con la opción "Animaciones reducidas".
+- **Accesible y traducible:** contraste ≥ 4.5:1 en el texto, foco visible, todo con
+  teclado, textos con i18n y lugar para un 25 % más de largo, ventanas con
+  `role="dialog"`.
+- **Táctil:** la lógica de `ui/layout.ts` (T5.6) se mantiene. En teléfono, la botonera es
+  la barra de pestañas y las ventanas son hojas.
+
+### UI-2 Tokens de diseño
+Van en `:root` de `client/src/ui/client.css` y reemplazan a `--bg`, `--panel`, `--text`,
+`--muted`, `--accent` y `--error` (que se vuelven alias durante la migración).
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--ui-void` | `#090807` | Fondo detrás del mapa y de la página |
+| `--ui-stone-950` | `#0f0d0b` | Fondo de slots y pozos |
+| `--ui-stone-900` | `#171410` | Fondo de ventana |
+| `--ui-stone-800` | `#211c17` | Barra de título, HUD |
+| `--ui-stone-700` | `#2e2720` | Botón |
+| `--ui-stone-600` | `#40362c` | Botón con hover |
+| `--ui-iron-900` | `#1a1816` | Contorno exterior de los marcos |
+| `--ui-iron-600` | `#4a4540` | Marco |
+| `--ui-iron-400` | `#7a7268` | Bisel claro (arriba a la izquierda) |
+| `--ui-iron-200` | `#a9a094` | Remaches, brillo |
+| `--ui-gold-700` | `#6e5422` | Oro en sombra |
+| `--ui-gold-500` | `#b8923f` | Títulos, borde activo |
+| `--ui-gold-300` | `#e2c47a` | Hover, foco, selección |
+| `--ui-text` | `#ddd2b8` | Texto (pergamino); 12:1 sobre `stone-900` |
+| `--ui-text-muted` | `#9c917c` | Texto secundario; 5,9:1 |
+| `--ui-text-dim` | `#6f6656` | Solo lo deshabilitado (3,2:1, no para texto que haya que leer) |
+| `--ui-life-700` / `-500` / `-300` | `#5a0f0f` / `#a3201b` / `#e0523f` | Orbe y barras de vida |
+| `--ui-mana-700` / `-500` / `-300` | `#0e1e4d` / `#2347a8` / `#5d86e6` | Orbe y barras de maná |
+| `--ui-xp` | `#c9a646` | Barra de experiencia |
+| `--ui-ok` / `--ui-warn` / `--ui-danger` | `#5f9e4f` / `#d29a2e` / `#e5574a` | Estados y requisito no cumplido; los tres ≥ 5:1 sobre `stone-900` |
+| `--ui-item-quest` | `#e2c47a` | Nombre de item de misión |
+| `--ui-chat-party` / `-guild` / `-private` / `-system` / `-broadcast` | `#7fb2ff` / `#7fd07a` / `#d48cff` / `#d9b44a` / `#ff8a5c` | Canales del chat |
+| `--ui-radius` | `2px` | Esquinas casi rectas (gótico, no "app") |
+| `--ui-slot` | `36px` | Slot de item (32 de ícono + 2 de borde) |
+| `--ui-shadow` | `0 6px 18px rgb(0 0 0 / 0.6)` | Ventana flotante |
+| `--ui-dur-fast` / `--ui-dur` / `--ui-dur-slow` | `80ms` / `140ms` / `240ms` | Duraciones |
+| `--ui-ease-out` / `--ui-ease-in` | `cubic-bezier(.2,.8,.2,1)` / `cubic-bezier(.4,0,1,1)` | Curvas |
+
+**Marco de hierro** (CSS puro, el respaldo de todo):
+`border: 2px solid var(--ui-iron-600)` y
+`box-shadow: 0 0 0 1px var(--ui-iron-900), inset 1px 1px 0 var(--ui-iron-400), inset -1px -1px 0 var(--ui-iron-900), var(--ui-shadow)`.
+
+**Texturas y ornamentos.** Todo es propio: nada se toma de Diablo.
+- **Piedra:** un SVG en línea con `feTurbulence` (`baseFrequency` ≈ 0.9, 2 octavas) como
+  `data:` en el CSS, al 6–8 % de opacidad sobre el color de piedra. La CSP de escritorio
+  permite `img-src data:` y prohíbe `<style>` en línea: va en `client.css`.
+- **Esquinas con remaches:** `border-image` 9-slice de un PNG propio de spritegen
+  (`ui/frame/iron`, 24x24 con esquinas de 8 px), a 2x con `image-rendering: pixelated`. Si
+  no está, queda el marco de CSS de arriba.
+- **Orbes:** gradiente radial más una ola SVG que se desplaza (bucle de 4 s), brillo de
+  vidrio arriba a la izquierda y el nivel con `clip-path`.
+- **Íconos:** pixel art propio de 16x16 o 24x24 dentro de lienzos de 32x32
+  (`ui/icons/*`), como las marcas PvP de hoy (`UI_ICON_BOX`).
+
+### UI-3 Fuentes (OFL)
+Rutas verificadas el 2026-11-17 en `https://github.com/google/fonts`. Las cinco elegidas
+**no tienen nombre reservado** (Reserved Font Name) en su `OFL.txt`, así que se pueden
+recortar y pasar a woff2 con su nombre.
+
+| Uso | Familia | Ruta en google/fonts | Archivos |
+|---|---|---|---|
+| Títulos de ventana, botones principales | Cinzel | `ofl/cinzel` | `Cinzel[wght].ttf` |
+| Logo, pantalla de muerte, subida de nivel | Grenze Gotisch | `ofl/grenzegotisch` | `GrenzeGotisch[wght].ttf` |
+| Texto de interfaz (listas, botones, chat) | Alegreya Sans | `ofl/alegreyasans` | `AlegreyaSans-Regular.ttf`, `-Italic`, `-Medium`, `-Bold` |
+| Diálogos de NPC, descripciones, libros | Alegreya | `ofl/alegreya` | `Alegreya[wght].ttf`, `Alegreya-Italic[wght].ttf` |
+| Canvas: nombres, números de daño | Pixelify Sans | `ofl/pixelifysans` | `PixelifySans[wght].ttf` |
+
+- **Alternativas** (también OFL):
+  - Spectral (`ofl/spectral`), para cuerpo.
+  - Silkscreen (`ofl/silkscreen`) y Tiny5 (`ofl/tiny5`), pixel de 5 px. Tiny5 es la
+    alternativa para nombres a zoom 1x si Pixelify Sans no queda nítida.
+  - Fondamento (`ofl/fondamento`) y Almendra (`ofl/almendra`) **tienen nombre reservado**:
+    no se recortan ni se convierten con su nombre. Se usan tal cual o no se usan.
+- **Exocet,** la de Diablo, es propietaria: ni se usa ni se imita.
+- **Auto-alojadas** (la CSP de escritorio dice `font-src 'self'`; nada de Google Fonts por
+  red):
+  - los `.ttf` originales con su `OFL.txt` en `assets/vendor/font-<familia>/` (§6, SRC-3);
+  - un plugin de build genera woff2 recortados (latín básico, Latin-1 y Latin
+    Extended-A: alcanza para "¿¡ñáü" y para el inglés) y los sirve en `/fonts/`;
+  - `font-display: swap` y fallback `Georgia, serif` o `system-ui`.
+- **Escala:** títulos de 15–16 px en Cinzel 600 con `letter-spacing: .04em`; interfaz de 14
+  px con interlineado 1.35; diálogos de 16 px con 1.45. Números con
+  `font-variant-numeric: tabular-nums` (vida, oro, pesos).
+- **Tamaño de fuente** como opción: del 90 % al 130 %, en `rem`.
+
+### UI-4 Layout de escritorio y "ver más pantalla"
+**Hoy (A3, ver "Hecho: A2 y A3" en §7):** el layout de escritorio quedó distinto del dibujo
+de abajo: los orbes, la botonera y el chat van en la columna derecha (el dock) y no hay
+HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1080 con
+15x11. Con la vista ancha (A7, "Hecho: A7" en §7) la escala por defecto cambió: 1920x1080
+va a 2x con 24x16 casillas.
+```
+┌──────────────────────────────────────────────────────────┬──────────────┐
+│ [avisos: arriba al centro, sin tomar clicks]              │ Columna      │
+│                                                          │ (230 px,     │
+│                 MAPA: de 15x11 a 31x21 casillas          │  se oculta)  │
+│                                                          │ · Batalla    │
+│ [chat flotante abajo a la izquierda: semitransparente,   │ · Grupo      │
+│  de 1 a 8 líneas, pestañas de canal, se pliega]          │ · ventanas   │
+│                                                          │   acopladas  │
+├─────┬──────────────────────────────────────────────┬─────┴──────────────┤
+│Vida │ [condiciones]  ═════ barra de XP ═════        │ Maná               │
+│orbe │ F1 … F12              [I][K][P][G][M][A][⚙]   │ orbe               │
+└─────┴──────────────────────────────────────────────┴────────────────────┘
+```
+- **Se va el encabezado de hoy:**
+  - nombre, nivel y experiencia pasan al HUD (sobre la barra de XP, o al pasar el mouse por
+    los orbes);
+  - idioma, sonido y "Salir del juego" van a la ventana Opciones (y Escape la abre si no
+    hay nada que cerrar);
+  - la ayuda de controles va a un botón "?".
+- **HUD abajo, de 88 px:** orbes de 76 px que sobresalen 16 px por arriba del HUD, como en
+  Diablo 2; en el centro la hotbar y a la derecha la botonera.
+- **La columna derecha** (lista de batalla, grupo y ventanas acopladas) se oculta con un
+  botón y vuelve con otro. Oculta, el mapa gana sus 230 px.
+- **Casillas visibles (decisión del dueño: hasta 31x21):**
+  - la vista es la más grande que entra en el área del mapa, con lados impares para que el
+    jugador quede al centro, **mínimo 15x11 y máximo 31x21**. Lo que sobra queda en
+    `--ui-void`;
+  - la escala por defecto es la más grande que muestra al menos 15x11;
+  - el jugador puede alejar hasta la escala más chica disponible, sin pasar de 31x21, y
+    acercar hasta 7x5 como hoy (`render/zoom.ts`);
+  - además de las escalas enteras, se propone **1,5x** con escalado "sharp-bilinear":
+    dibujar a 2x (vecino más cercano) y bajar a 1,5x con filtro lineal. Los píxeles quedan
+    parejos con un desenfoque mínimo. Es una opción de Opciones → Gráficos, apagada por
+    defecto.
+
+  Ejemplos con la columna visible (230 px) y el HUD (88 px), en CSS px con el escalado del
+  sistema al 100 %:
+
+  | Ventana | Por defecto | Alejando | Con la opción 1,5x |
+  |---|---|---|---|
+  | 1280x800 (la del E2E) | 2x: 15x11, como hoy | 1x: 31x21 | 21x13 |
+  | 1280x720 | 1x: 31x19 (a 2x no entran 11 filas) | — | 21x13 |
+  | 1920x1080 | 2x: 25x15 | 1x: 31x21 | 31x19 |
+  | 2560x1440 | 3x: 23x13 | 2x: 31x21 | — |
+
+- **Servidor (A7):**
+  - el cliente pide su vista (de 15x11 a 31x21) y el servidor manda esa área más 1 de
+    margen;
+  - hoy `server/internal/session/aoi.go` fija 15x11 + 1 (17x13 = 221 casillas). A 31x21
+    son 33x23 = 759 casillas por `FullMapView`, y cada `MapSlice` lleva una fila o columna
+    de 33 en vez de 17. También hay más criaturas a la vista;
+  - hay que volver a medir "< 4 KB/s por jugador" (`docs/07`) con bots a 31x21;
+  - ni el rango de hechizos ni el de los monstruos cambia;
+  - ver más lejos es igual para todos los que eligen la vista grande.
+
+### UI-5 Botonera y ventanas separadas
+- **La botonera** (a la Tibia: botones de 32x32 con marco de hierro e ícono propio; la
+  tecla va en el tooltip y en `aria-keyshortcuts`):
+
+  | Botón | Tecla | Abre |
+  |---|---|---|
+  | Inventario | I | Ventana de equipo y contenedores |
+  | Habilidades | K | Nivel, experiencia, skills y oficios |
+  | Grupo | P | Grupo (miembros con vida y maná, invitar, salir) |
+  | Gremio | G | La ventana del gremio (UI-7) |
+  | Mercado | M | La ventana del mercado si hay un tablero al lado. Si no, deshabilitado con el tooltip "Usa un tablero de mercado" |
+  | Apariencia | O | Cosméticos (T5.7), con vista previa animada en 4 direcciones |
+  | Opciones | Esc | Sonido, Gráficos, Controles, Interfaz, Idioma, Créditos y Salir |
+  | Ayuda | H | Controles y teclas |
+
+  Ninguna tecla choca con WASD. Las teclas valen solo si el foco no está en un campo de
+  texto (`takesText`, `input/keyboard.ts`). Los números 1–9 siguen siendo de los diálogos.
+- **`GameWindow`** (componente nuevo): título con ícono, ×, arrastre, foco y orden
+  (z-index).
+  - Escape cierra la ventana de arriba.
+  - Se acopla a la columna (estilo Tibia: se pliega a su título) o flota sobre el mapa.
+  - Recuerda posición, tamaño y si estaba plegada en `localStorage` `rpg.windows`
+    (comodidad de cada jugador: si se pierde, vuelve al valor por defecto).
+  - Tiene un tamaño mínimo y nunca queda fuera de la pantalla.
+- **Inventario:**
+  - el equipo va sobre una **figura** (como el paperdoll de Ultima Online): cabeza arriba,
+    las manos a los costados, el torso al centro, piernas y botas abajo, munición y
+    mochila al lado;
+  - barra de capacidad;
+  - cada contenedor abierto es **su propia ventana** (como hoy, una por contenedor), con
+    una grilla de 4 o 5 columnas de `--ui-slot`.
+- **Las ventanas que ya existen** pasan a `GameWindow` con el mismo marco: diálogo,
+  tienda, crafteo, casa, intercambio, presencia, tutorial, reporte y muerte. Los
+  `data-testid` y los `data-tutorial` se mantienen.
+- **Texto de la acción por defecto** junto al cursor sobre el mapa ("Hablar con Tilde",
+  "Atacar a lobo", "Trepar"), con `client.action.*` en i18n. Sale de las mismas reglas
+  puras de hoy (`mapPress`, `useMode`).
+
+### UI-6 Click derecho en items: menú y ficha
+**Hecho (A4), con cambios:** ver "Hecho: A4, A5 y los botones del gremio" en §7. Sobre todo:
+el click derecho sobre una criatura sigue atacando o hablando (el menú de la criatura es
+Mayús+click derecho), y en el menú las acciones van arriba y la ficha debajo.
+- **Opción de controles** (Opciones → Controles, `localStorage` `rpg.controls`):
+  - `menu`: **por defecto** para jugadores nuevos, porque es lo que pidió el dueño;
+  - `classic`: click derecho = usar, como hoy y como en Tibia.
+- **En modo `menu`:**
+  - el click derecho sobre un item (mapa, equipo, contenedor, tienda, intercambio,
+    mercado) abre el menú del item, que extiende el `ui/ActionMenu.tsx` del toque largo
+    (T5.6). Arriba va el ícono a 2x con el nombre, debajo **la ficha**, y después las
+    acciones: Usar, Abrir, Equipar, Comer, Usar con…, Mirar, Mover parte (pendiente m1) y
+    Cancelar. La acción por defecto va primera y en negrita;
+  - el doble click izquierdo sobre un item = su acción por defecto (como en Ultima Online);
+  - el click izquierdo sobre el mapa sigue siendo caminar;
+  - el click derecho sobre una criatura abre su menú: Atacar, Seguir, Hablar, Mirar,
+    Invitar al grupo, Comerciar, Reportar (las mismas reglas de hoy deciden qué aparece).
+- **En modo `classic`:** todo como hoy. La ficha sale igual en el tooltip, y Mayús+click
+  derecho abre el menú.
+- **Tooltip** en los dos modos: después de 350 ms de mouse sobre un item del DOM sale la
+  ficha. También con el foco del teclado. Se va al salir o con Escape.
+- **La ficha** (estilo Diablo 2, de 260–320 px de ancho, ubicada con `menuPlacement` para
+  no salirse):
+  1. Nombre en Cinzel: `--ui-text`, o `--ui-item-quest` si es de misión. Cantidad si es
+     una pila.
+  2. Tipo: "Arma — espada, una mano", "Comida", "Material".
+  3. Stats en `tabular-nums`: ataque, defensa, armadura, alcance, peso.
+  4. Requisitos (nivel, vocación) en `--ui-danger` si no se cumplen.
+  5. Efectos (cura, condición, duración).
+  6. La descripción del item (`ItemDef.desc`) en Alegreya itálica.
+  7. Marcas: "No comerciable", "No se vende en el mercado".
+- **Datos:** hoy el cliente no tiene los stats. El plugin de Vite (`vite/content.ts`) suma
+  al `ItemDef` lo que la ficha muestra, sacado de `data/items`. "Mirar" sigue mandando
+  `LookAt`: el texto del servidor es el que manda, porque puede tener datos vivos (dueño de
+  una casa, cargas).
+
+### UI-7 Gremios: ventana propia
+**Hecho:** A3 hizo la ventana; los botones con ícono (Resumen, Miembros, Rangos, Invitar,
+Guerras, Mensaje) y el "⋯" por miembro están en "Hecho: A4, A5 y los botones del gremio".
+- Sale de la columna lateral. El botón **Gremio** (G) abre su ventana, con pestañas:
+  - **Resumen:** nombre, mensaje del día, rango propio y la acción de salir;
+  - **Miembros:** lista con punto de conectado, insignia de rango y un botón "⋯" por fila
+    con las acciones que `memberActions` permite;
+  - **Invitar:** campo con el nombre;
+  - **Guerras:** lo de `warActions`;
+  - **Administración:** solo con poderes.
+- **Sin gremio,** la ventana muestra "Fundar" (costo y nivel de `content.guild`) y las
+  invitaciones pendientes.
+- **Una invitación nueva** sale además como aviso con Aceptar y Rechazar, y el botón
+  Gremio muestra un punto.
+- `ui/Guild.tsx` sigue sin hooks y `ui/Guild.test.ts` sigue recorriendo su árbol (las
+  reglas de T5.1).
+
+### UI-8 Diálogo de NPC y tienda sin scroll
+**Hecho (A5), con cambios:** ver "Hecho: A4, A5 y los botones del gremio" en §7 (sin texto
+letra por letra todavía; retrato a 2x; categorías deducidas por NPC).
+**Diálogo:**
+- **Lugar y tamaño:** abajo al centro, sobre el HUD, de `min(760px, 70vw)` de ancho y
+  hasta el 65 % del alto. Retrato del NPC a la izquierda (su sprite a 3x, animado si tiene
+  frames); nombre y título arriba.
+- **Texto** en Alegreya de 16 px. Aparece a 90 caracteres/s; un click o Espacio lo
+  completa, y con movimiento reducido sale entero. Si no entra, se pagina con "▼ más":
+  nunca scroll.
+  - Guía de escritura (docs/06): como mucho 300 caracteres por nodo.
+- **Opciones como grilla de botones:**
+  - `grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr))`, botones de 36 px con
+    el número (1–9) a la izquierda y el ícono de su categoría;
+  - el texto ocupa hasta 2 líneas (el botón crece a 52 px). Si es más largo, "…" y el
+    texto completo en el `title`: precios y nombres tienen que verse enteros, por eso no
+    se corta en una línea;
+  - **ordenadas por categoría:** Misiones, Comercio, Viajes, Servicios (bendiciones,
+    curación, entrenamiento) y Conversación. Sin encabezados, que robarían filas: la
+    categoría la dicen el ícono y un borde de color a la izquierda del botón;
+  - abajo, siempre en su fila: "Volver" a la izquierda y "Adiós" a la derecha (0 y
+    Escape).
+- **Garantía:** 18 opciones entran sin scroll a 1280x720. Son 3 columnas por 6 filas
+  (de 250 a 340 px según las líneas), más 3 líneas de texto, el título y la fila de
+  Volver/Adiós: como mucho ≈ 460 px, dentro del 65 % de 720 (468 px).
+  - Con más de 9 opciones aparece "Buscar tema…", que filtra los botones por su texto. Es
+    del cliente y no manda nada.
+  - Si aun así no entran, la ventana se ensancha hasta el 90 % y suma columnas.
+- **Categorías (dato, no código):**
+  - una función pura `optionCategory(opción)` las deduce del `dialog` de
+    `data/npcs/*.yaml`. Corre en el build: el plugin de Vite (que hoy solo lee el sprite
+    de cada NPC) arma un mapa de clave de texto de la opción → categoría, y el cliente la
+    busca con el `LocalizedText` que llega:
+    - acción de tienda → Comercio;
+    - viaje en barco → Viajes;
+    - condiciones o acciones de `quest_*` → Misiones;
+    - bendición o curación → Servicios;
+    - `dialog.back` → Volver;
+    - `close` o `dialog.bye` → Adiós;
+    - lo demás → Conversación;
+  - un `tag:` opcional en la opción del YAML manda sobre la deducción (esquema y
+    docs/06). Si una misma clave cae en dos categorías, el test del plugin falla y se
+    resuelve con `tag:`. El protocolo no cambia (`DialogOption` sigue con `option_id` y
+    texto).
+
+**Tienda:**
+- **Ventana propia** junto al diálogo, con pestañas Comprar y Vender. Filtros por categoría
+  con ícono (Todo, Armas, Armaduras, Herramientas, Consumibles, Materiales, según el `kind`
+  del item) y búsqueda instantánea por el nombre traducido.
+- **Grilla de celdas** de 72 px: ícono a 2x y precio debajo. 24 celdas a 1280x720 (6 por
+  4). Si no entran, las categorías parten la lista, y como último recurso se pagina
+  ("‹ 1/2 ›"): nunca scroll.
+- **Barra de compra** abajo, fija: la ficha corta del item elegido, cantidad con −, campo,
+  + y "Máx." (las reglas puras de `shopCount`), el total, el dinero que se tiene (en rojo
+  si no alcanza) y "Comprar" o "Vender". Enter confirma. Se va el par campo + botón de cada
+  fila.
+- **Vender** muestra solo lo que se lleva, con la cantidad y el precio de venta. Lo que el
+  NPC no compra se ve en gris.
+
+### UI-9 Animaciones de la interfaz
+
+| Elemento | Animación | Duración y curva | Con movimiento reducido |
+|---|---|---|---|
+| Abrir ventana | escala 0.96 → 1 y opacidad 0 → 1 | 140 ms, `ease-out` | solo opacidad, 80 ms |
+| Cerrar ventana | opacidad 1 → 0 | 100 ms, `ease-in` | instantáneo |
+| Botón | hover: borde oro; apretado: baja 1 px con sombra interior | 80 ms | igual, sin desplazamiento |
+| Orbes | el nivel baja o sube; un "fantasma" claro marca lo que se perdió y se va | 250 ms; el fantasma espera 200 ms y tarda 400 | sin fantasma |
+| Superficie de los orbes | ola que se desplaza | bucle de 4 s | quieta |
+| Vida < 25 % | el orbe late y una viñeta roja en el borde del mapa | 1,2 s de bucle | viñeta fija |
+| Subida de nivel | destello dorado en la barra de XP y aviso grande en Grenze Gotisch | 600 ms | aviso sin destello |
+| Avisos | entran desde arriba y se desvanecen | 160 ms y 300 ms | solo opacidad |
+| Tooltip o ficha | aparece | espera 350 ms y entra en 80 ms | igual |
+| Hotbar | barrido cónico del cooldown y destello al quedar lista | continuo y 150 ms | sin destello |
+| Arrastrar item | el ícono sigue al cursor al 90 % y el destino brilla | — | igual |
+| Números de daño (canvas) | sale grande (1.2 → 1 en 100 ms) y sube 20 px | 800 ms, `ease-out`; un golpe fuerte sale más grande | sin crecer |
+| Golpe fuerte al jugador | sacudida de cámara de 2 px | 120 ms | **apagada**, y es opción aparte como en D2R |
+
+### UI-10 Chat
+**Hoy (A3):** el chat quedó abajo del dock, con el log como segunda pestaña ("Registro"),
+y no flota sobre el mapa. Mientras el log no se ve, todos los mensajes del servidor flotan
+sobre el mapa (no solo los importantes).
+- Flota sobre el mapa abajo a la izquierda con pestañas por canal (Local, Grupo, Gremio,
+  Comercio, Sistema).
+- Fondo `--ui-stone-950` al 70 %, opacidad configurable. Plegado, muestra 1 línea; se
+  despliega con Enter o con un click. Los colores son los tokens `--ui-chat-*`.
+- El log del sistema es una pestaña más. Los avisos importantes siguen saliendo sobre el
+  mapa (`ui/notices.ts`).
+
+## 6. Assets: de dónde salen y cómo se registran (SRC)
+
+### SRC-1 Licencias (desde el 2026-11-17, por decisión del dueño)
+- **Se aceptan:**
+  - arte y sonido: CC0, CC-BY 3.0/4.0, OGA-BY 3.0 y **CC-BY-SA 3.0/4.0**;
+  - fuentes: **SIL OFL 1.1**.
+- **Se rechazan:** solo GPL (o GPL como única licencia del archivo), "no comercial" (NC),
+  "sin derivados" (ND), "uso personal", licencias de tienda que no dejan redistribuir (el
+  repo es público), lo que no tiene licencia clara y todo lo que sale de otros juegos.
+- **Archivo con varias licencias:** se elige una aceptada y se anota cuál.
+- **Obligaciones:**
+  - **Atribución** (CC-BY, CC-BY-SA, OGA-BY): autor, título, licencia y enlace. Van en
+    `assets/CREDITS.md` y en la página `/credits` del sitio, que se arma con ese archivo
+    y con el `CREDITS.csv` de cada pack (A1, versión mínima: ver "Hecho: A1").
+  - **CC-BY-SA:** lo que se derive de un archivo BY-SA (recoloreado, recortado o
+    combinado) queda BY-SA y se dice en su fila de créditos. No contagia al código ni al
+    arte propio CC0: una página del atlas que junta sprites es una colección, y cada
+    sprite conserva su licencia.
+  - **Medidas técnicas (DRM):** CC-BY y CC-BY-SA no dejan imponer restricciones técnicas
+    al material. La web y la app de escritorio no tienen. Antes de publicar en tiendas
+    móviles (docs/15), revisar esto; OGA-BY sí lo permite.
+
+### SRC-2 Liberated Pixel Cup: repositorios y reglas
+| Repositorio | Qué tiene | Licencias |
+|---|---|---|
+| `https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator` (organización oficial) | `spritesheets/`: cuerpos, ropa, pelo, armas y herramientas en frames de 64x64 (algunas armas en 128 o 192) | **Por archivo, en `CREDITS.csv`**: CC0, CC-BY-SA, CC-BY, OGA-BY y GPL. El código del repo es GPL-3.0: **no se copia código**, solo arte |
+| `https://github.com/ElizaWy/LPC` (LPC Revised; el README del generador dice que "revised and expanded the LPC paradigm" y enlaza su guía de animación) | `Characters/`, `Terrain/`, `Structure/`, `Objects/`, `FX/`; 3/4 de 32 px y paleta de ~170 colores | Su README: "All of our assets are licensed under the Creative Commons Attribution 3.0 (CC-BY-3.0) or OGA-by 3.0 License". Autores en `Credits.txt` por carpeta |
+| `https://github.com/LiberatedPixelCup/RPG_Maker_MZ_LPC_Starter_Kit` | Kit para RPG Maker MZ y Tiled | El repo no muestra licencia y pide respetar la de cada archivo: solo lo que tenga la licencia escrita al lado |
+| `https://github.com/LiberatedPixelCup/LPC-list` | Lista de juegos que usan LPC | Texto CC0. No trae assets |
+
+Las páginas de OpenGameArt de la colección LPC valen con las mismas reglas: la licencia se
+lee en la página de cada entrada y por archivo.
+
+### SRC-3 Cómo se integra un pack (pasos)
+1. **Fijar el commit** de origen y anotarlo (URL con SHA).
+2. **Elegir los archivos y buscar su licencia** uno por uno: fila de `CREDITS.csv`
+   (generador) o `Credits.txt` (Revised). Se descarta el que solo tiene GPL o no tiene
+   fila.
+3. **Copiar sin modificar** a `assets/vendor/<pack>/` con las rutas de arriba, por
+   ejemplo `assets/vendor/lpc-revised/Terrain/…` o `assets/vendor/ulpc/spritesheets/…`.
+   La carpeta va en minúsculas y sin espacios; adentro se respetan los nombres del pack.
+4. **Agregar los textos de licencia** en un archivo que empiece por `LICENSE` (spritepack
+   y `make validate` lo exigen: `LICENSE.txt` con el texto de cada licencia que aparece) y
+   el **subconjunto de créditos** de lo copiado (`CREDITS.csv` con solo esas filas, o los
+   `Credits.txt`).
+5. **Fila en `assets/CREDITS.md`:**
+   - Autor: "varios, ver `CREDITS.csv` de la carpeta";
+   - Licencia: "por archivo: CC-BY-SA 3.0, OGA-BY 3.0…";
+   - Fuente: URL con commit;
+   - Carpeta y "Atribución requerida: Sí".
+6. **Derivados** (capas de LPC compuestas en un atuendo, recoloreados):
+   - los genera `tools/spritepack` desde `vendor/` con la receta de `animations` en
+     `assets/sprites.yaml` (capas y paletas), con tests del compositor. No se commitean como
+     PNG: salen en el atlas generado (decisión del 2026-11-17, en vez de
+     `assets/sprites/derived/<pack>/`: la receta es el dato y el atlas no se commitea);
+   - tienen una fila en la sección "Obras derivadas" de `CREDITS.md` que dice su licencia
+     (la del origen; BY-SA sigue BY-SA) y de qué archivos salen;
+   - no van como "Obra propia CC0".
+7. **Fuentes:**
+   - `assets/vendor/font-<familia>/` con los `.ttf` de google/fonts tal cual, su `OFL.txt`
+     y una copia como `LICENSE.txt`;
+   - fila en `CREDITS.md` con el copyright de la primera línea del `OFL.txt`, licencia
+     "OFL 1.1" y la fuente
+     `https://github.com/google/fonts/tree/main/ofl/<familia>` con commit;
+   - los woff2 recortados se generan en el build, no se commitean.
+8. `make sprites STRICT=1`, `make validate`, revisión con Read a 1x y a 4x, y un
+   screenshot del E2E en el PR.
+
+### SRC-4 Qué reemplazar primero
+Por impacto en pantalla y por costo:
+
+| # | Hoy | Qué va | De dónde | Necesita |
+|---|---|---|---|---|
+| 1 | Muros `stone_wall` (`brick_gray0`), `rock_wall` (`lab-rock0`), `wooden_wall` (propio) | Juegos de piezas con altura (ART-3) | `Structure/` de LPC Revised, o recetas nuevas de spritegen | **Hecho** con spritegen (2026-11-18), también las vetas y las dos puertas |
+| 2 | `ground/grass` (`grass0`), `dirt`, `sand`, `stone_floor` (`cobble_blood1`: revisar que no muestre sangre en el templo) | 4 variantes, textura de baja frecuencia y bordes | `Terrain/` de LPC Revised o spritegen | **Hecho** con spritegen, más `wet_sand` |
+| 3 | `water_shallow`, `water_shoal` (quietas) | Agua animada y espuma de orilla | LPC Revised o spritegen | **Hecho** con spritegen |
+| 4 | Atuendos `citizen`, `noble`, `ranger`, `sailor` (3 frames, figura de ~10x25) | Humanoides de 64x64 con caminar, atacar, conjurar y morir | Capas de ULPC (solo archivos con licencia aceptada) | **Hecho** (quieto, caminar, atacar y caer; conjurar pendiente) |
+| 5 | NPCs (Dungeon Crawl, quietos) | Humanoides con el mismo pipeline, más idle | ULPC | **Hecho** (17 NPCs con quieto y caminar; el eco de la forja sigue de Dungeon Crawl, flotando) |
+| 6 | Monstruos más vistos: `wolf`, `bilge_rat`, `tide_crab`, `gloom_bat`, `moss_spider`, `mire_toad` | 4 direcciones con caminar y atacar | Hojas LPC de criaturas (licencia por archivo) o spritegen. Mientras tanto, todos con ANI-5 | **Parcial:** ANI-5 para todos; los cuatro humanoides (`wreck_looter`, `coffer_smuggler`, `obsidian_delver`, `drowned_miner`) son de ULPC con todo; jabalí y ciervo, trote de spritegen. Ningún repo oficial de LPC en GitHub trae animales con licencia verificable (el lobo del Starter Kit no la tiene al lado) |
+| 7 | Árboles (`mangrove1`, `mangrove3`, `tree2_yellow`) y arbustos | Árboles de 64x96 o 96x96 con sombra en capa y viento | LPC Revised o spritegen | **Hecho** con spritegen: copas 3/4 centradas, sombra y viento |
+| 8 | Fragua (`makhleb_flame1`) y fogón (`return_vestibule`) | Estaciones que se entiendan, animadas | spritegen | **Hecho** |
+| 9 | UI | Marcos, íconos de la botonera y orbes propios | spritegen y CSS | A2, A3 |
+
+**Por qué spritegen y no LPC para el mundo (2026-11-18):** las recetas propias dan las 16
+piezas de muro, los looks de suelo y los frames que pide el renderer con la paleta de
+`palette.ts`, sin recortar ni recomponer hojas de terceros y sin sumar filas a
+`CREDITS.md` ni atribución visible. Si más adelante se quiere LPC para algún suelo, entra por
+la misma convención de nombres (`var_`, `frame_`, `wall_`, `shadow`) como entradas de
+`sprites.yaml`.
+
+Se quedan:
+- los íconos de items de Dungeon Crawl, que se leen bien a 32x32;
+- los efectos propios (`effects/*`);
+- las marcas PvP.
+
+## 7. Plan de implementación propuesto
+Cada tarea es un PR con sus tests y screenshots (CLAUDE.md, "Definición de terminado").
+Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
+
+| Id | Tarea | Toca | Depende de |
+|---|---|---|---|
+| A1 ✅ (mínima) | Página de créditos (sitio `/credits` desde `assets/CREDITS.md`) y enlace en Opciones. Hecho: la página, el enlace del pie del sitio y el de Opciones ("Hecho: A1"). Falta: los créditos dentro de la app de escritorio (hoy muestra la dirección) | cliente, sitio | — |
+| A2 ✅ | Fuentes OFL auto-alojadas, tokens de UI-2 y marco de hierro (sin cambiar el layout) | cliente, `assets/vendor/font-*` | — |
+| A3 ✅ | HUD con orbes, botonera, `GameWindow`; inventario, habilidades, grupo, gremio (UI-7), apariencia, opciones y mercado como ventanas; sin encabezado ni columna fija; chat flotante | cliente | A2 |
+| A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
+| A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
+| A6 ✅ (parcial) | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-5 y MOV-6 (§4, "Hecho: A6 (parcial)"). Falta: MOV-3, MOV-4, MOV-7 y el E2E con latencia | cliente, servidor, proto, docs/02, 05 y 07 | — |
+| A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
+| A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
+| A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
+| A10 | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **casi hecho:** todo salvo `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
+| A11 | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18); faltan muros de 32x96, ventanas y marcos de puerta de casa | renderer, spritegen o LPC, `data/items` | A10 |
+| A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |
+| A13 | Luz en cuevas y partículas de ambiente — **parcial:** la luz, hecha; faltan las partículas | cliente | A10 |
+
+### Hecho: A1, versión mínima (2026-11-18, lote 6)
+La revisión final del lote 6 lo marcó como importante: es el primer lote que entrega arte
+que pide atribución (los personajes de LPC, OGA-BY 3.0 y CC-BY-SA 3.0) y fuentes OFL.
+- **Página `/credits` del sitio** (`client/src/site/Credits.tsx`, sin hooks). Los datos los
+  arma `client/vite/credits.ts` al construir, como parte de `virtual:rpg-site`. Salen de
+  `assets/CREDITS.md` (tabla de packs, "Fuentes" y "Obras derivadas de terceros") y del
+  `CREDITS.csv` de cada pack con licencia por archivo. Usa los mismos lectores que
+  spritepack (`parseCreditsRows`, `markdownTableRows`, `usedLicense`).
+- **Qué muestra:**
+  - cada pack, con su licencia enlazada a su texto y su fuente;
+  - los archivos de LPC agrupados por autores, con la licencia bajo la que se usan y sus
+    enlaces;
+  - los sprites compuestos, por licencia;
+  - las fuentes, con su copyright;
+  - una línea sobre la obra propia CC0.
+- **Textos:** todo es i18n (`site.credits.*`). El nombre y el autor de cada pack van por
+  su carpeta (`site.credits.pack.<pack>.*`, guiones como `_`); un test exige esas claves para cada pack de
+  la tabla y un enlace para cada licencia nombrada. Solo se enlazan direcciones http(s)
+  (`site/credits.ts` `safeLink`).
+- **Enlaces:** desde el pie de cada página del sitio y desde Opciones en el juego, en la
+  ventana de escritorio y en el panel del login y del menú ☰ (`ui/CreditsLink.tsx`). En la
+  app de escritorio se muestra la dirección como texto, como la tienda.
+- **Fuentes:** los woff2 servidos conservan el copyright (name id 0) y la descripción y la
+  URL de la licencia (13 y 14), como pide la OFL (`KEPT_NAME_IDS` de
+  `client/vite/fonts.ts`, con test).
+- **Falta:** mostrar los créditos dentro de la app de escritorio (y de las móviles, docs/15)
+  sin depender del sitio.
+
+### Hecho: A2 y A3 (2026-11-17, rama `feat/ui-theme`)
+Lo que se hizo, con las decisiones que cambian o dejan para después partes de UI-2 a UI-10
+(el detalle técnico está en `client/CLAUDE.md`, "Notas de la UI oscura"):
+- **Fuentes (UI-3):** Cinzel, Grenze Gotisch, Alegreya Sans y Alegreya, de google/fonts con
+  commit fijo, en `assets/vendor/font-*/` con su `OFL.txt` y fila en `CREDITS.md`. El
+  plugin `client/vite/fonts.ts` las recorta a latín y las sirve como woff2 en `/fonts/`.
+  Pixelify Sans (canvas) no se agregó todavía: el canvas sigue con su fuente.
+- **Tokens y marco (UI-2):** los de la tabla, con los nombres viejos como alias. El marco
+  de hierro es CSS (sin el PNG 9-slice de spritegen), la piedra es una veta SVG en línea.
+  Los íconos de la botonera son pixel art propio de 16x16 escrito como texto en
+  `client/src/ui/icons.tsx` (no en el atlas: así se ven antes de que cargue).
+- **Layout (UI-4), cambio:** sin encabezado ni columna fija. A la derecha del mapa, el
+  **dock**: orbes de vida y maná con nombre, nivel y experiencia en el medio, la botonera,
+  las ventanas acopladas y el chat. No hay HUD abajo: el mapa usa todo el alto y toma la
+  escala entera más grande (2x a 1280x720, 3x a 1920x1080). La hotbar sigue sobre el borde
+  de abajo del mapa, como una correa. Ocultar el dock no se hizo: con 15x11 casillas solo
+  ganaría donde el ancho limita, y A7 (31x21) lo va a cambiar todo.
+- **Botonera y ventanas (UI-5):** como se pidió, salvo:
+  - el mercado no se abre desde la botonera (se abre con un tablero): su botón está
+    deshabilitado con la pista "usa un tablero" y, abierto, lo cierra;
+  - "Salir del juego" es un botón más de la botonera, no de Opciones;
+  - el modo de combate (postura, perseguir, modo seguro) va arriba de la ventana Batalla;
+  - los contenedores siguen dentro de la ventana Inventario, no como ventanas propias;
+  - las ventanas del servidor (diálogo, tienda, crafteo, mercado, casa, intercambio)
+    tienen el mismo marco pero siguen donde estaban (A5 rehace diálogo y tienda);
+  - mover ventanas con el teclado y cambiarles el tamaño no se hizo.
+- **Gremio (UI-7):** ventana propia con pestañas Resumen, Miembros y Guerras. La
+  administración quedó en Resumen (mensaje del día y disolver) y la invitación en Miembros.
+  Una invitación al jugador sale sobre el mapa con Aceptar y Rechazar, como antes, y el
+  botón Gremio muestra un punto mientras espera.
+- **Chat (UI-10), cambio:** abajo del dock, no flotante (ver UI-10).
+- **Animaciones (UI-9):** abrir y cerrar ventanas, botones, orbes con ola y "fantasma",
+  latido y viñeta roja con poca vida, barras con `transform`, avisos que entran y se van,
+  subida de nivel con destello en la barra de experiencia y aviso en Grenze Gotisch, y la
+  pantalla de muerte. Se apagan con `prefers-reduced-motion` o con "Animaciones reducidas"
+  (Opciones → Interfaz). La sacudida de cámara y el destello de la hotbar no se hicieron.
+- **Teléfonos:** encabezado compacto, pestañas y cajón como en T5.6, con el tema.
+- **Verificación sin servidor:** `make ui-preview` (docs/08) saca screenshots de la UI en
+  varios tamaños sin levantar nada.
+
+### Hecho: A6 (parcial) (2026-11-18, rama `feat/movement-feel`)
+Está en §4, al principio, porque cambia el plan de MOV-1: el servidor encola los pasos de
+teclado (tope `max_queued_steps`, época `walk_epoch`, número `seq`/`walk_seq`) y soltar la
+tecla no manda `StopWalk`. Quedan MOV-3, MOV-4, MOV-7 y el E2E de MOV-9 con latencia
+simulada.
+
+
+### Hecho: A4, A5 y los botones del gremio (2026-11-18, rama `feat/ui-interactions`)
+Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk` y
+`LookAt` ya existían). El detalle técnico está en `client/CLAUDE.md`, "Notas de A4 y A5".
+- **Controles (UI-6).** Opciones → Controles → "Clic derecho sobre objetos": `menu` (por
+  defecto) o `classic` (`localStorage` `rpg.controls`). En los dos modos:
+  - **sobre una criatura, el click derecho ataca o habla, como siempre**: pelear sigue
+    siendo un click. Es un cambio sobre UI-6, que pedía un menú también para las
+    criaturas; ese menú (atacar o hablar, mirar) sale con **Mayús+click derecho**;
+  - **Ctrl+click derecho** usa al instante el item de arriba (en el mapa, también el que
+    está sobre una escalera de mano, como antes);
+  - **doble click** hace la acción por defecto: en el equipo, los contenedores, la tienda
+    (compra o vende una unidad) y, en modo `menu`, en el mapa. En el mapa el primer click
+    del doble ya mandó caminar: el doble click manda `StopWalk` si ese camino salió hace
+    menos de 700 ms, y después usa;
+  - Mayús+click izquierdo sigue mirando (`LookAt`: el texto del servidor, con datos vivos).
+- **El menú del item** (`ui/ActionMenu.tsx`, el del toque largo de T5.6): título con el
+  ícono a 2x, **las acciones arriba** (la primera es la acción por defecto, en negrita y
+  dorada) y **la ficha debajo**. Arriba y no abajo porque así la acción por defecto queda
+  junto al cursor y, en un teléfono acostado, los botones nunca se cortan. Acciones:
+  Abrir (contenedor), Usar con… (herramienta), Comer (comida), Equipar (lo mueve a su slot
+  con `MoveItem`; el servidor revisa manos, nivel y vocación), Usar, Mirar, Mover (el
+  siguiente click o toque en una casilla, un slot o una celda lo deja ahí) y Mover parte…
+  (un campo con cuántos; manda `MoveItem.count`: resuelve el m1 de la prueba exploratoria
+  para el inventario y el mapa). Los objetos fijos del mapa (estaciones, tableros:
+  `pickupable: false`) no ofrecen Mover. Con el mouse el menú se abre en el cursor, con
+  botones compactos; con el dedo, como antes.
+- **La ficha** (`state/item-card.ts` puro + `ui/ItemCard.tsx`): tipo ("Arma — espada, una
+  mano"), ataque, defensa, armadura, alcance, lugares, cargas, peso (y el de toda la pila),
+  requisitos en rojo si no se cumplen (nivel, vocación, nivel mágico de una runa), efectos
+  (cura, maná, comida, elemento, munición), la descripción en itálica y las marcas "No se
+  puede intercambiar" / "No se vende en el mercado". Los datos los suma el plugin de Vite
+  al `ItemDef` (`cardFields`). **No se hizo:** el color de item de misión
+  (`--ui-item-quest`): `data/items` no marca los items de misión.
+- **Tooltip** (`ui/ItemTooltip.tsx`): la misma ficha a los 350 ms de mouse quieto sobre un
+  item del DOM (equipo, contenedores, tienda, intercambio, recetas) o con el foco del
+  teclado (los items del inventario toman el foco: Enter = acción por defecto, la tecla de
+  menú o Mayús+F10 = menú). No toma clicks y se va con cualquier click, la rueda o Escape.
+  Sobre el canvas no hay tooltip: ahí está el menú.
+- **Diálogo (UI-8):** abajo al centro, `min(47.5rem, 100%)` de ancho; retrato del NPC a 2x
+  (no 3x: los sprites de NPC son de 32 px y a 3x tapaban texto); el texto entra con un
+  fundido corto (**no** letra por letra: queda pendiente, y rompería las esperas de los
+  E2E); opciones en grilla `repeat(auto-fill, minmax(12rem, 1fr))` con número, ícono y
+  borde de color por tema, hasta 2 líneas y el texto completo en el `title`. Orden:
+  Misiones, Comercio, Viajes, Servicios, Conversación; dentro de cada tema, el orden del
+  servidor. Fila de abajo: Volver (0) y Adiós (Escape; si el nodo no tiene "Adiós",
+  cierra). Con 10 opciones o más aparece "Buscar tema…". 18 opciones entran sin scroll a
+  1280x720 (`make ui-preview`, escena `dialog18`). Las teclas 1–9 eligen el botón con ese
+  número (`state/dialog.ts` `dialogLayout`, el mismo orden que la ventana).
+- **Temas de las opciones:** el plugin de Vite los deduce **por NPC** (no por clave global:
+  `dialog.accept` es una misión en un NPC y podría ser otra cosa en otro) con
+  `dialogTopics`: `tag` → Adiós (`close`, `dialog.bye`) → Volver (`dialog.back`) →
+  Comercio (`open_shop`) → Misiones (condición o acción `quest_*`) → Servicios (`heal`,
+  `bless`, `train_skill`, `restore_mana`) → Viajes (`teleport`, o un nodo con
+  `boat_routes`) → Conversación. Una opción de conversación que lleva a otro nodo mira un
+  paso adelante: si allí hay misiones, viajes o servicios, toma ese tema ("¿Bendiciones?" →
+  Servicios). Las rutas de `boat_routes.yaml` son Viajes de su capitán. Una misma clave
+  con dos temas en un NPC hace fallar `vite/content.test.ts`; se resuelve con `tag`
+  (docs/06). Hoy no hay ningún conflicto.
+- **Tienda (UI-8):** ventana propia; en escritorio va a la izquierda del diálogo (que se
+  angosta a una columna). Pestañas Comprar y Vender, búsqueda por el nombre traducido (sin
+  mayúsculas ni tildes), filtros con ícono solo de las categorías que hay (Todo, Armas,
+  Armaduras, Herramientas, Consumibles, Materiales, por `kind`), grilla de celdas de 72 px
+  (ícono a 2x y precio). Columnas: las que entran, hasta 6; filas: hasta 4 según el alto
+  (24 a 1280x720 y 1280x800, 15 a 960x700). Lo que no entra se pagina ("‹ 1/2 ›"), nunca
+  scroll. Barra de abajo: el item elegido con su tipo, −, cantidad, + y Máx. (lo que paga
+  el dinero o lo que se lleva, hasta 100), el total (en rojo si no alcanza) y
+  Comprar/Vender; Enter confirma. Vender muestra primero lo que se lleva (con su cantidad)
+  y en gris lo que no. Click derecho en una celda: la ficha. En teléfonos la tienda va
+  primero en la hoja y el diálogo deja solo sus botones; ahí la hoja sí se desplaza.
+- **Gremio (UI-7):** una fila de botones con ícono propio (16x16, `ui/icons.tsx`):
+  Resumen (tu rango, miembros en línea, guerras, salir o disolver), Miembros (punto de
+  conectado, insignia de rango y "⋯" con lo que tu rango permite sobre cada uno), Rangos
+  (quién tiene cada rango y qué puede hacer), Invitar (el campo y las invitaciones
+  enviadas; a un miembro le dice quién invita), Guerras y Mensaje (el mensaje del día). Se
+  abre con el botón Gremio de la botonera o la G.
+- **Pendiente de esta parte:** texto letra por letra del diálogo; retrato animado;
+  color de items de misión; arrastrar con Mayús para dividir una pila (hoy es "Mover
+  parte…" del menú); el intercambio con cantidad (`TradeOffer` no la lleva, sigue en
+  docs/14); tooltip sobre el canvas; cada contenedor como ventana propia.
+
+
+### Hecho: A7 (2026-11-18, rama `feat/wide-view`)
+Las reglas de juego están en `02-game-design.md`, "La vista"; el protocolo en
+`05-network-protocol.md` (`Welcome.view_width`/`view_height`, áreas de 33x23); el costo en
+`07-performance-budget.md`, "Vista ancha"; el zoom en `client/CLAUDE.md`, "Zoom del mapa".
+Cambios respecto de UI-4:
+- **Una ventana para todos, no una por cliente.** El servidor manda a cada jugador 31x21
+  + 1 de margen, tenga la pantalla que tenga. UI-4 pedía que el cliente eligiera su vista
+  de 15x11 a 31x21 y el servidor mandara esa área. Con una sola, "A ve a B" sigue
+  simétrico, un cliente modificado no gana nada pidiendo más y el ancho de banda entra en
+  el presupuesto igual (1,7 KB/s por jugador en el peor escenario medido). Si algún día
+  pesa (datos móviles), el `Hello` podría pedir una ventana menor y el servidor recortar
+  solo lo que manda.
+- **La escala por defecto.** UI-4 decía "la más grande que muestra al menos 15x11". Con el
+  dock de A3 eso da 3x a 1920x1080, que muestra 16x11: casi nada más que antes. Quedó la
+  **vista más grande que llena la caja del mapa a escala entera**: la escala más chica a la
+  que la ventana de 31x21 cubre la caja, sin bajar nunca de las 15x11 (`render/zoom.ts`,
+  `min(pixelScale, fillScale)`). Así se ve más sin franjas vacías y una pantalla chica
+  conserva la escala de antes. Con el dock, en CSS px al 100 %:
+
+  | Ventana | Por defecto | Alejando hasta |
+  |---|---|---|
+  | 1280x800 | 2x: 15x12 | 1x: 30x21 (la caja tiene 960 px) |
+  | 1280x720 | 2x: 15x11 | 1x: 30x21 |
+  | 1920x1080 | 2x: 24x16 (antes 3x: 16x11) | 1x: 31x21 |
+  | 2560x1440 | 3x: 22x14 (antes 4x: 17x11) | 2x: 31x21 |
+  | 960x700 (la app) | 1x: 21x21 | — |
+  | Teléfonos | la escala de antes, con la caja llena hasta 31x21 | 1x |
+
+- **Los bordes.** El canvas llena la caja con casillas fraccionarias en los bordes,
+  centrado en el jugador, como el zoom de antes; no se recorta a lados impares con
+  `--ui-void` alrededor. Solo alejado más allá de la ventana entera queda caja oscura.
+- **Lo que no cambia** (como decía UI-4): ni los rangos de armas y hechizos ni lo que nota
+  un monstruo, que sigue siendo la ventana clásica de 15x11 + 1 (`session.InSight`). Los
+  rangos con que apunta un jugador quedaron topados en 6 (`content.MaxRange`): con la vista
+  ancha se elige un objetivo a 15 casillas, pero no se le pega desde donde no lo nota.
+- **Sin hacer:** la escala 1,5x "sharp-bilinear" y repetir `make bots` contra un servidor
+  real (la medición fue en proceso, `TestCrowdBandwidth`). Están en docs/14.
+
+Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
+y se pueden hacer ya.
+Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A12 y A7.
+
+## 8. Cómo se verifica
+- **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**
+  (`assets/README.md`). Un screenshot del E2E pasado a grises cumple las bandas de ART-6:
+  la criatura es lo que más contrasta.
+- **Screenshots del E2E** que cambian y hay que mirar:
+  - `04-world`, `07-combat`, `09-inventory`, `13-dialog-window`, `14-shop`,
+    `29-bosque-dock`, `46-guild-panel` y `65-volcan-temple`;
+  - más los nuevos de cada tarea: ficha de item, menú del click derecho, HUD, cada
+    ventana, la tienda con 24 items y el diálogo con 18 opciones.
+- **Movimiento:** tests con reloj falso (MOV-1, MOV-2, MOV-5) y el criterio de MOV-9.
+- **UI:**
+  - tests sin DOM de los componentes nuevos, con el mismo estilo de `ui/Guild.test.ts`;
+  - los E2E de escritorio a 1280x800 y 1280x720 sin scroll en diálogo y tienda: el alto
+    del contenido ≤ el alto de la ventana;
+  - los E2E móviles de T5.6 sin regresiones.
+
+## Fuentes consultadas
+Consultadas el 2026-11-17. No se bajó ni se incrustó ninguna imagen de estas páginas.
+- Diablo II, postmortem en Game Developer (copia):
+  https://www.cs.hmc.edu/~markk/SWE_copies/postmortem__diablo_ii.html
+- Diablo II: Resurrected, accesibilidad y modernización:
+  https://www.gamedeveloper.com/marketing/exploring-modernity-legacy-and-accessibility-in-diablo-ii-resurrected
+- Controles de Diablo II (Battle.net clásico):
+  https://classic.battle.net/diablo2exp/basics/controls.shtml
+- Movimiento estilo Diablo con mantener el botón (GameDev.net):
+  https://gamedev.net/forums/topic/603156-walking-logic/
+- OTClient, atributos de sprite (displacement, elevation, animation phases) y caminar:
+  https://otland.net/threads/customized-elevation.280025/ ,
+  https://otland.net/threads/fix-smooth-walking-otc.279716/ ,
+  https://otland.net/threads/improved-animations-working-but-when-walking-out-animation-unsynchronizes.274294/
+- Proyección oblicua y tiles de 64x64 (OpenGameArt):
+  https://opengameart.org/content/oblique-projection-all-assets
+- Guía de estilo derivada de LPC (perspectiva, luz, contorno, tramado, frames de 64x64):
+  https://rprepository.com/help/maps-avatar-style-guide
+- Universal LPC Spritesheet Character Generator (licencias por archivo, `CREDITS.csv`):
+  https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator
+- LPC Revised: https://github.com/ElizaWy/LPC
+- Organización oficial: https://github.com/LiberatedPixelCup
+- Ultima Online, guía del cliente clásico (menú, paperdoll) y menús contextuales de NPCs
+  y jugadores:
+  https://uo.com/wiki/ultima-online-wiki/technical/classic-client-user-guide/ ,
+  https://uo.com/wiki/ultima-online-wiki/technical/previous-publishes/2001-2/2001-publish-14-14th-november/
+- Old School RuneScape, menú "Choose Option" y Examinar:
+  https://oldschool.runescape.wiki/w/Choose_Option
+- Interpolación y buffer de entrada en juegos en red:
+  https://www.gamedeveloper.com/programming/unet-unity-5-networking-entity-interpolation-part-2-of-6-clientside-input-buffering
+- Fuentes: `METADATA.pb` y `OFL.txt` de cada familia en https://github.com/google/fonts
+  (rutas de UI-3).

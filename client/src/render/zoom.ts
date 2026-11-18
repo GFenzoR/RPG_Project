@@ -1,17 +1,28 @@
 // Map zoom (pure, unit-tested): pinch, the +/- buttons on touch screens and Ctrl+wheel on
-// a PC. Only whole device pixels per sprite pixel (pixel-perfect, like the fitted view):
-// from the scale that fits the whole 15x11 view (never less) up to the largest one that
-// still shows MIN_VIEW tiles around the player. Zoomed in, the canvas is cropped to the
-// map's box and stays centred on the player. The choice is remembered per device
-// (localStorage) as a scale; none = fit the view, so it follows the window again.
-import { VIEW_TILES, pixelScale } from "./viewport.ts";
+// a PC. Only whole device pixels per sprite pixel (pixel-perfect). The fitted view is the
+// largest view the map's box shows at a whole scale with none of it empty: the smallest
+// scale at which the server's window (31x21) fills the box (fillScale), but never one
+// that shows less than the classic 15x11 (render/viewport.ts pixelScale, the zoom from
+// before the wide view: small screens keep it). The canvas fills the box with as much of
+// the window as fits (docs/17 UI-4). The player zooms out down to the largest scale that
+// shows the whole window (at least 1) and in up to the largest one that still shows
+// MIN_VIEW tiles around the player. The canvas is cut to the map's box, centred on the
+// player. The choice is remembered per device (localStorage) as a scale; none = fit the
+// view, so it follows the window again.
+import { pixelScale, wholeScale } from "./viewport.ts";
+import { CLASSIC_VIEW } from "../state/view.ts";
+import type { ViewTiles } from "../state/view.ts";
 
 /** Fewest tiles a zoomed-in view keeps showing (the player and 3 or 2 tiles around). */
 export const MIN_VIEW = { width: 7, height: 5 } as const;
 
-/** Scales a player may choose: device pixels per sprite pixel, from `min` to `max`. */
+/**
+ * Scales a player may choose: device pixels per sprite pixel, from `min` to `max`; `fit`
+ * is the fitted view, in between.
+ */
 export interface ZoomRange {
   min: number;
+  fit: number;
   max: number;
 }
 
@@ -21,35 +32,57 @@ export interface ZoomView extends ZoomRange {
 }
 
 /**
- * The scales that fit a map box of cssWidth x cssHeight CSS px: `min` shows the whole
- * view (the zoom of the client before zooming existed), `max` still shows MIN_VIEW.
+ * The smallest whole scale (at least 1) at which `view` covers a box of cssWidth x
+ * cssHeight CSS px: at a smaller one the box would show more than the window, and the
+ * rest of it would be empty.
+ */
+export function fillScale(
+  cssWidth: number,
+  cssHeight: number,
+  dpr: number,
+  tileSize: number,
+  view: ViewTiles,
+): number {
+  const sx = (cssWidth * dpr) / (view.width * tileSize);
+  const sy = (cssHeight * dpr) / (view.height * tileSize);
+  // A hair over a whole number is that number (rounding with a fractional devicePixelRatio).
+  const s = Math.ceil(Math.max(sx, sy) - 1e-9);
+  return Number.isFinite(s) ? Math.max(1, s) : 1;
+}
+
+/**
+ * The scales of a map box of cssWidth x cssHeight CSS px for the server's window `view`:
+ * `fit` is the largest view with no empty part (fillScale), never less than the classic
+ * 15x11 (pixelScale); `min` shows the whole window (or 1: the most of it the box holds)
+ * and `max` still MIN_VIEW. From a server with the classic window, `fit` is pixelScale
+ * and `min` is `fit`: nothing to zoom out to.
  */
 export function zoomRange(
   cssWidth: number,
   cssHeight: number,
   dpr: number,
   tileSize: number,
+  view: ViewTiles = CLASSIC_VIEW,
 ): ZoomRange {
-  const min = pixelScale(cssWidth, cssHeight, dpr, tileSize);
-  const max = Math.floor(
-    Math.min(
-      (cssWidth * dpr) / (MIN_VIEW.width * tileSize),
-      (cssHeight * dpr) / (MIN_VIEW.height * tileSize),
-    ),
+  const fit = Math.min(
+    pixelScale(cssWidth, cssHeight, dpr, tileSize),
+    fillScale(cssWidth, cssHeight, dpr, tileSize, view),
   );
-  return { min, max: Math.max(min, max) };
+  const min = Math.min(fit, Math.max(1, wholeScale(cssWidth, cssHeight, dpr, tileSize, view)));
+  const max = wholeScale(cssWidth, cssHeight, dpr, tileSize, MIN_VIEW);
+  return { min, fit, max: Math.max(fit, max) };
 }
 
 /** The scale to draw for the remembered choice (undefined = fit the view). */
 export function zoomScale(pref: number | undefined, range: ZoomRange): number {
-  if (pref === undefined || !Number.isFinite(pref)) return range.min;
+  if (pref === undefined || !Number.isFinite(pref)) return range.fit;
   return Math.min(range.max, Math.max(range.min, Math.round(pref)));
 }
 
 /** What to remember for a scale: undefined at the fitted one (it follows the window). */
 export function zoomPref(scale: number, range: ZoomRange): number | undefined {
   const s = zoomScale(scale, range);
-  return s <= range.min ? undefined : s;
+  return s === range.fit ? undefined : s;
 }
 
 /** The choice after `steps` whole steps from `scale` (+ zooms in), within the range. */
@@ -68,18 +101,41 @@ export function pinchZoom(start: number, ratio: number, range: ZoomRange): numbe
 
 /**
  * Canvas size in device pixels at `scale` in a box of devWidth x devHeight device pixels:
- * the whole view when it fits, else the box cut to whole sprite pixels (the camera keeps
- * the player in the middle).
+ * the server's whole window `view` where it fits, else the box cut to whole sprite pixels
+ * (the camera keeps the player in the middle). Cut, it also leaves a strip of `reserve`
+ * device px at the bottom of the box free (the desktop hotbar: a click on the last row of
+ * tiles cast F1), but never cuts into the classic 11 rows for it, and the whole window
+ * never shrinks for it (render/viewport.ts mapLift moves the canvas up instead).
  */
 export function viewPixels(
   devWidth: number,
   devHeight: number,
   scale: number,
   tileSize: number,
+  view: ViewTiles = CLASSIC_VIEW,
+  reserve = 0,
 ): { width: number; height: number } {
   const cut = (box: number, tiles: number): number =>
     Math.max(scale, Math.min(tiles * tileSize * scale, Math.floor(box / scale) * scale));
-  return { width: cut(devWidth, VIEW_TILES.width), height: cut(devHeight, VIEW_TILES.height) };
+  const whole = view.height * tileSize * scale;
+  const height =
+    whole <= devHeight
+      ? whole
+      : Math.max(
+          cut(devHeight - Math.max(0, reserve), view.height),
+          cut(devHeight, Math.min(view.height, CLASSIC_VIEW.height)),
+        );
+  return { width: cut(devWidth, view.width), height };
+}
+
+/** The tiles a canvas of width x height device pixels shows at `scale` (fractional when cut). */
+export function shownTiles(
+  width: number,
+  height: number,
+  scale: number,
+  tileSize: number,
+): ViewTiles {
+  return { width: width / (scale * tileSize), height: height / (scale * tileSize) };
 }
 
 /** Wheel travel (px) per zoom step: one mouse notch, or a short trackpad pinch. */

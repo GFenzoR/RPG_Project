@@ -7,9 +7,15 @@ de esa tabla sin que el usuario lo pida; si algo te parece un error, propónlo e
 
 ## Regla legal (no negociable)
 - Copiamos MECÁNICAS de Tibia, nunca sus assets: ni sprites, ni nombres de ciudades, NPCs,
-  monstruos, items, ni mapas, ni textos, ni fórmulas copiadas literalmente.
-- Todo asset de terceros debe tener licencia compatible (CC0, CC-BY, OGA-BY) y quedar
-  registrado en `assets/CREDITS.md`. Si no puedes verificar la licencia, no lo agregues.
+  monstruos, items, ni mapas, ni textos, ni fórmulas copiadas literalmente. De Tibia,
+  Diablo y los demás juegos de referencia (`docs/17-direccion-de-arte-y-ui.md`) se aprende
+  el estilo; nunca se calcan sus sprites, fuentes ni interfaces.
+- Todo asset de terceros debe tener licencia compatible y quedar registrado en
+  `assets/CREDITS.md`: CC0, CC-BY, OGA-BY y, desde el 2026-11-17 por decisión del dueño,
+  CC-BY-SA (arte y sonido, p. ej. Liberated Pixel Cup) y OFL (fuentes). Nunca GPL como
+  única licencia, "no comercial", sin derivados ni sacado de otros juegos. En packs con
+  licencia por archivo (LPC), cada archivo cuenta. Si no puedes verificar la licencia, no
+  lo agregues.
 
 ## Stack (decidido)
 | Pieza | Tecnología |
@@ -57,6 +63,8 @@ docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un á
 - Retomar en tu PC (estado, pendientes, briefs de T5.6 y T5.7, sprites) → `docs/14-continuar-en-tu-pc.md`
 - Móvil: PWA instalable, Tauri Android/iOS, firmas y tiendas → `docs/15-movil.md`
 - Probar el juego a mano en la Isla de Pruebas (`make play`, hacerse staff, PvP) → `docs/16-probar-el-juego.md`
+- Dirección de arte, animación, sensación de movimiento, UI y de dónde sacar assets →
+  `docs/17-direccion-de-arte-y-ui.md`
 - Qué construir ahora → `docs/10-roadmap.md` y `docs/11-claude-code-workflow.md` (lotes)
 
 ## Principios de arquitectura

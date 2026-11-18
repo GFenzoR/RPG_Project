@@ -5,6 +5,7 @@ movement:
   base_step_ms: 1000        # step = base_step_ms * terrain% / speed (see 02-game-design)
   diagonal_cost: 1.5
   max_path_tiles: 100
+  max_queued_steps: 4       # keyboard steps the client predicts and the server queues ahead
 
 experience:
   # Total XP for level n = a*n^3 + b*n^2 + c*n (+ d). Own curve, zero at level 1.
@@ -91,7 +92,7 @@ chat:                       # T1.13 (docs/02-game-design.md, "Chat")
   # Who hears each local mode: players within this many tiles (x and y), same floor.
   ranges:
     whisper: { x: 1, y: 1 }
-    say: { x: 7, y: 5 }     # the visible screen
+    say: { x: 7, y: 5 }     # the classic 15x11 screen (the 31x21 view sees farther than one hears)
     yell: { x: 18, y: 14 }
   # Anti-flood, all channels together: a bucket of `burst` messages that refills one
   # every `refill_ms`; sending with it empty mutes the player for `mute_ms`.

@@ -76,6 +76,21 @@ export const OUTFIT_FRAME = /^outfits\/[a-z0-9_]+\/(n|e|s|w)_[0-9]+$/;
 export const EFFECT_FRAME = /^effects\/([a-z0-9_]+)\/([0-9]+)$/;
 
 /**
+ * Animation frames of a creature sprite (docs/17 ANI-4): <sprite>/<action>_<dir>_<n>, such as
+ * creatures/bristleback_boar/walk_w_0. Valid when data/ uses <sprite>; tools/spritepack
+ * turns them into that sprite's clips.
+ */
+export const ANIM_FRAME = /^(.+)\/(idle|walk|attack|death)_(n|e|s|w)_[0-9]+$/;
+
+/**
+ * Map tile art (docs/17 ART-3, ART-4, ART-7, tools/spritepack tiles.ts): a ground's other
+ * looks <sprite>/var_<n>, an animation's frames <sprite>/frame_<n>, a wall's pieces
+ * <sprite>/wall_<mask> and a cast shadow <sprite>/shadow. Valid when data/ uses <sprite>.
+ */
+export const TILE_PART =
+  /^(.+)\/(?:var_[1-9][0-9]*|frame_[1-9][0-9]*|wall_(?:[0-9]|1[0-5])|shadow)$/;
+
+/**
  * Client interface icons, which the client finds by path (no data/ file names them):
  * ui/<group>/<id>, such as the PvP marks ui/marks/aggressor (client/src/render/marks.ts).
  */
@@ -94,9 +109,16 @@ export function checkPaths(root: string): string[] {
     const ui = RECIPES[p]?.kind === "ui";
     if (ui !== UI_ICON.test(p))
       problems.push(`${p}: ui icons are exactly the ui/<group>/<id> paths of kind "ui"`);
-    else if (!ui && !used.has(p) && !OUTFIT_FRAME.test(p) && !EFFECT_FRAME.test(p))
+    else if (
+      !ui &&
+      !used.has(p) &&
+      !OUTFIT_FRAME.test(p) &&
+      !EFFECT_FRAME.test(p) &&
+      !used.has(ANIM_FRAME.exec(p)?.[1] ?? "") &&
+      !used.has(TILE_PART.exec(p)?.[1] ?? "")
+    )
       problems.push(
-        `${p}: no sprite field in data/ uses this path (and it is not an outfit or effect frame)`,
+        `${p}: no sprite field in data/ uses this path (and it is not an outfit, animation, effect or tile art frame)`,
       );
   }
   const strips = new Map<string, number[]>();
@@ -121,7 +143,7 @@ const GRASS = "assets/vendor/dungeon-crawl/dngn/floor/grass/grass0.png";
 const LABEL = [230, 230, 220, 255] as const;
 const BACKDROP = [24, 24, 28, 255] as const;
 /** What effect frames are previewed over. */
-const PREVIEW_CREATURE = "outfits/citizen/s_0";
+const PREVIEW_CREATURE = "creatures/bristleback_boar";
 
 /** A frame path (…/<name>/<n>) belongs to the strip …/<name>; other paths stand alone. */
 const stripOf = (path: string): string | undefined => /^(.*)\/[0-9]+$/.exec(path)?.[1];

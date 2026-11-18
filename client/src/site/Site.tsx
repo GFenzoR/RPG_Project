@@ -10,6 +10,7 @@ import { MinePage, ReviewPage, SubmitPage } from "./Maps.tsx";
 import { ForgotPage, ResetPage, VerifyPage } from "./Account.tsx";
 import { AccountPage, OAuthConfirmPage, OAuthErrorPage } from "./OAuth.tsx";
 import { ShopPage } from "./Shop.tsx";
+import { CreditsPage } from "./Credits.tsx";
 import { authConfig } from "../net/api.ts";
 import { excerpt } from "./markdown.ts";
 import {
@@ -238,6 +239,12 @@ export function Site(props: SiteProps): JSX.Element {
       </main>
       <footer class="site-footer">
         <p>{t("site.footer")}</p>
+        {/* docs/17 A1: the licences of the third-party art and fonts ask for this. */}
+        <p>
+          <Link href="/credits" current={section === "credits"}>
+            {t("site.nav.credits")}
+          </Link>
+        </p>
       </footer>
     </>
   );
@@ -265,6 +272,7 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       shop: t("site.shop.title"),
       oauth_confirm: t("site.oauth.confirm.title"),
       oauth_error: t("site.oauth.error.title"),
+      credits: t("site.credits.title"),
     };
     let title = titles[route.page];
     if (route.page === "post") {
@@ -320,6 +328,8 @@ function Page(props: SiteProps & { route: Route; search: string; playHref: strin
       return (
         <OAuthErrorPage t={t} lang={props.lang} playHref={props.playHref} search={props.search} />
       );
+    case "credits":
+      return <CreditsPage t={t} credits={props.site.credits} />;
     default:
       return (
         <section class="card" data-testid="not-found">

@@ -10,9 +10,12 @@ import { initDesktop } from "./net/desktop.ts";
 import { LANGUAGE_STORAGE_KEY, pickLanguage, takeLangParam, translator } from "./i18n/i18n.ts";
 import { App } from "./ui/App.tsx";
 import { LanguagePicker } from "./ui/LanguagePicker.tsx";
-import { AudioOptions } from "./ui/AudioOptions.tsx";
+import { AudioOptions, SoundOptions } from "./ui/AudioOptions.tsx";
 import { TouchPadToggle } from "./ui/TouchPad.tsx";
+import { ControlsOptions } from "./ui/ControlsOptions.tsx";
+import { loadControls, saveControls } from "./state/controls.ts";
 import { coarsePointer, loadTouchPad, saveTouchPad } from "./state/touch-prefs.ts";
+import { applyReducedMotion, loadReducedMotion, saveReducedMotion } from "./state/ui-prefs.ts";
 import { AudioEngine, browserPorts } from "./audio/engine.ts";
 import { loadPrefs } from "./audio/prefs.ts";
 import "./ui/client.css";
@@ -90,30 +93,44 @@ function Root(): JSX.Element {
   const t = useMemo(() => translator(content.i18n[lang] ?? {}, lang), [lang]);
   // T5.6: the on-screen direction pad, switched in Options (on by default on touch screens).
   const [touchPad, setTouchPad] = useState(() => loadTouchPad(storage, coarsePointer()));
+  // docs/17 UI-6: what the right button does on items (Options → Controls).
+  const [controls, setControls] = useState(() => loadControls(storage));
+  // docs/17 UI-9: "reduced animations" (Options), on top of prefers-reduced-motion.
+  const [reducedMotion, setReducedMotion] = useState(() => loadReducedMotion(storage));
+  useEffect(() => {
+    applyReducedMotion(document.documentElement, reducedMotion);
+  }, [reducedMotion]);
   useEffect(() => {
     document.documentElement.lang = lang;
     document.title = t("client.title");
   }, [lang, t]);
+  const language = (): JSX.Element => (
+    <LanguagePicker
+      t={t}
+      lang={lang}
+      languages={languages}
+      onChange={(l) => {
+        store(l);
+        setLang(l);
+      }}
+    />
+  );
+  const padToggle = (): JSX.Element => (
+    <TouchPadToggle
+      t={t}
+      on={touchPad}
+      onChange={(on) => {
+        saveTouchPad(on, storage);
+        setTouchPad(on);
+      }}
+    />
+  );
+  // The login screen's corner and the phone menu: the language and the Options button.
   const picker = (
     <>
-      <LanguagePicker
-        t={t}
-        lang={lang}
-        languages={languages}
-        onChange={(l) => {
-          store(l);
-          setLang(l);
-        }}
-      />
+      {language()}
       <AudioOptions t={t} audio={audio} storage={storage}>
-        <TouchPadToggle
-          t={t}
-          on={touchPad}
-          onChange={(on) => {
-            saveTouchPad(on, storage);
-            setTouchPad(on);
-          }}
-        />
+        {padToggle()}
       </AudioOptions>
     </>
   );
@@ -123,6 +140,27 @@ function Root(): JSX.Element {
       t={t}
       locale={lang}
       languagePicker={picker}
+      settings={{
+        language: language(),
+        sound: <SoundOptions t={t} audio={audio} storage={storage} />,
+        touchPad: padToggle(),
+        controlsMode: controls,
+        controls: (
+          <ControlsOptions
+            t={t}
+            mode={controls}
+            onChange={(m) => {
+              saveControls(m, storage);
+              setControls(m);
+            }}
+          />
+        ),
+        reducedMotion,
+        setReducedMotion: (on) => {
+          saveReducedMotion(on, storage);
+          setReducedMotion(on);
+        },
+      }}
       audio={audio}
       touchPad={touchPad}
     />

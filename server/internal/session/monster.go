@@ -336,10 +336,15 @@ func healthPercent(cur, maxHealth int) uint32 {
 
 // ---- spawns ----------------------------------------------------------------------
 
-// watched reports whether any player sees tile p.
+// watched reports whether a player stands within the classic window of tile p (the
+// rectangle of InSight, on the floors seen together with p's): no monster appears there.
+// Not the wide view (Sees): a player hunting one spawn would hold back the respawns of
+// its neighbours 12-20 tiles away and cut the world's capacity (docs/07). A monster may
+// appear in a player's view instead, beyond the classic window (docs/02 "Respawns").
 func (w *World) watched(p world.Pos) bool {
 	seen := false
-	w.eachObserver(nil, p, func(*Player) { seen = true })
+	x, y := int(p.X), int(p.Y)
+	w.eachInRect(x-SightHalfW, y-SightHalfH, x+SightHalfW, y+SightHalfH, p.Z, func(*Player) { seen = true })
 	return seen
 }
 
@@ -392,10 +397,14 @@ func (w *World) spawnMonster(ctx *game.TickContext, slot *spawnSlot, initial boo
 	w.monsters = append(w.monsters, m) // ids grow: the slice stays ordered
 	w.monByID[m.id] = m
 	w.mindex(m)
+	var msg *pb.ServerMessage // built once, for every observer
 	w.eachObserver(nil, pos, func(o *Player) {
 		if !o.Knows(m.id) {
 			o.remember(m.id)
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.monsterMsg(m)}}})
+			if msg == nil {
+				msg = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureAppear{CreatureAppear: &pb.CreatureAppear{Creature: w.monsterMsg(m)}}}
+			}
+			o.emit(msg)
 		}
 	})
 	return true
@@ -454,15 +463,18 @@ func dist2(a, b world.Pos) int {
 
 func (w *World) inProtection(p world.Pos) bool { return w.m.Flags(p)&world.FlagProtection != 0 }
 
-// validTarget reports whether monster m may keep fighting player t.
+// validTarget reports whether monster m may keep fighting player t: still in the world, on
+// its floor and in its sight (InSight: a player the wide view shows farther away is lost),
+// out of protection zones and not invisible to it.
 func (w *World) validTarget(m *Monster, t *Player) bool {
-	return t != nil && w.byClient[t.client] == t && t.pos.Z == m.pos.Z && Sees(m.pos, t.pos) && !w.inProtection(t.pos) &&
+	return t != nil && w.byClient[t.client] == t && t.pos.Z == m.pos.Z && InSight(m.pos, t.pos) && !w.inProtection(t.pos) &&
 		seesPlayer(m, t)
 }
 
-// findTarget returns the closest player m can see and reach, or nil. With a leash, only
-// players within m's leash area count, and not one it gave up as out of its way while it
-// stands on that tile out of m's reach (beyondLeash).
+// findTarget returns the closest player m can see (in its sight, InSight, and in line of
+// sight) and reach, or nil. With a leash, only players within m's leash area count, and
+// not one it gave up as out of its way while it stands on that tile out of m's reach
+// (beyondLeash).
 func (w *World) findTarget(tick game.Tick, m *Monster) *Player {
 	return w.pickTarget(tick, m, nil, false)
 }
@@ -473,7 +485,8 @@ func (w *World) pickTarget(tick game.Tick, m *Monster, skip *Player, inReach boo
 	var best *Player
 	bestD := 0
 	leash := w.leash(m)
-	w.eachObserver(nil, m.pos, func(o *Player) {
+	x, y := int(m.pos.X), int(m.pos.Y)
+	w.eachInRect(x-SightHalfW, y-SightHalfH, x+SightHalfW, y+SightHalfH, m.pos.Z, func(o *Player) {
 		if o == skip || o.pos.Z != m.pos.Z || w.inProtection(o.pos) || !seesPlayer(m, o) ||
 			leash >= 0 && (chebyshev(o.pos, m.slot.spawn.Center) > leash || w.beyondLeash(tick, m, o)) ||
 			inReach && !w.hits(m, o) {
@@ -608,9 +621,13 @@ func (w *World) face(m *Monster, p world.Pos) {
 		return
 	}
 	m.dir = d
+	var msg *pb.ServerMessage // built once, for every observer that knows m
 	w.eachObserver(nil, m.pos, func(o *Player) {
 		if o.Knows(m.id) {
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: m.id, Dir: dirMsg(d)}}})
+			if msg == nil {
+				msg = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureTurn{CreatureTurn: &pb.CreatureTurn{Id: m.id, Dir: dirMsg(d)}}}
+			}
+			o.emit(msg)
 		}
 	})
 }
@@ -728,9 +745,13 @@ func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 	}
 	m.health = m.maxHealth
 	pct := healthPercent(m.health, m.maxHealth)
+	var msg *pb.ServerMessage // built once, for every observer that knows m
 	w.eachObserver(nil, m.pos, func(o *Player) {
 		if o.Knows(m.id) {
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: m.id, HealthPercent: pct}}})
+			if msg == nil {
+				msg = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: m.id, HealthPercent: pct}}}
+			}
+			o.emit(msg)
 		}
 	})
 }
@@ -954,9 +975,13 @@ func (w *World) stepMonster(ctx *game.TickContext, m *Monster, d world.Direction
 
 // removeMonster takes m out of the world (it died).
 func (w *World) removeMonster(m *Monster) {
+	var gone *pb.ServerMessage // built once, for every observer that knew m
 	w.eachObserver(nil, m.pos, func(o *Player) {
 		if o.forget(m.id) {
-			o.emit(disappearMsg(m.id))
+			if gone == nil {
+				gone = disappearMsg(m.id)
+			}
+			o.emit(gone)
 		}
 	})
 	w.munindex(m)

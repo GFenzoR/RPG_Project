@@ -16,7 +16,7 @@ body.picking-item [data-drop] {
   outline-offset: -2px;
 }
 .item.picked {
-  outline: 3px solid var(--accent);
+  outline: 2px solid var(--ui-gold-300);
   outline-offset: 1px;
   border-radius: 2px;
 }
@@ -40,17 +40,18 @@ body.picking-item [data-drop] {
   min-width: 44px;
   min-height: 44px;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 25%);
-  border-radius: 10px;
-  background: rgb(29 34 43 / 80%);
-  color: var(--text);
+  border: 1px solid var(--ui-iron-900);
+  border-radius: 4px;
+  background: rgb(33 28 23 / 85%);
+  box-shadow: inset 0 0 0 1px var(--ui-iron-600);
+  color: var(--ui-gold-300);
   font-size: 22px;
   line-height: 1;
   touch-action: none;
 }
 
 .touch-pad-button:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 2px solid var(--ui-gold-300);
   outline-offset: 1px;
 }
 
@@ -62,8 +63,8 @@ body.picking-item [data-drop] {
 .touch-pad[data-held="south_west"] [data-dir="south_west"],
 .touch-pad[data-held="west"] [data-dir="west"],
 .touch-pad[data-held="north_west"] [data-dir="north_west"] {
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--ui-gold-500);
+  color: var(--ui-void);
 }
 
 .touch-pad-centre {
@@ -92,18 +93,21 @@ body.picking-item [data-drop] {
   width: 224px; /* MENU_WIDTH in ActionMenu.tsx */
   box-sizing: border-box;
   padding: 8px;
-  border: 1px solid rgb(255 255 255 / 20%);
-  border-radius: 10px;
-  background: var(--panel);
-  color: var(--text);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 50%);
+  border: 2px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  background-color: var(--ui-stone-900);
+  background-image: var(--ui-grain);
+  color: var(--ui-text);
+  box-shadow: var(--ui-frame-shadow);
+  animation: gwin-in var(--ui-dur) var(--ui-ease-out);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .touch-menu-title {
   padding: 2px 4px 4px;
-  color: var(--accent);
+  font-family: var(--ui-font-title);
+  color: var(--ui-gold-300);
   font-weight: bold;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -113,22 +117,20 @@ body.picking-item [data-drop] {
 .touch-menu-action {
   min-height: 48px;
   padding: 0 12px;
-  border: 1px solid rgb(255 255 255 / 20%);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
+  border-radius: var(--ui-radius);
+  color: var(--ui-text);
   font-size: 16px;
   text-align: left;
 }
 
 .touch-menu-action:focus-visible,
 .pick-banner-cancel:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 2px solid var(--ui-gold-300);
   outline-offset: 1px;
 }
 
 .touch-menu-cancel {
-  color: var(--muted);
+  color: var(--ui-text-muted);
 }
 
 /* ---- picked item banner ---- */
@@ -137,14 +139,15 @@ body.picking-item [data-drop] {
   align-items: center;
   gap: 10px;
   padding: 6px 8px 6px 12px;
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  background: rgb(29 34 43 / 92%);
-  color: var(--text);
+  border: 2px solid var(--ui-gold-700);
+  border-radius: var(--ui-radius);
+  background: rgb(23 20 16 / 94%);
+  box-shadow: var(--ui-shadow);
+  color: var(--ui-text);
 }
 
 .pick-banner-item {
-  color: var(--accent);
+  color: var(--ui-gold-300);
   font-weight: bold;
 }
 
@@ -256,10 +259,11 @@ body.picking-item [data-drop] {
   min-width: 44px;
   min-height: 44px;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 25%);
-  border-radius: 10px;
-  background: rgb(29 34 43 / 80%);
-  color: var(--text);
+  border: 1px solid var(--ui-iron-900);
+  border-radius: 4px;
+  background: rgb(33 28 23 / 85%);
+  box-shadow: inset 0 0 0 1px var(--ui-iron-600);
+  color: var(--ui-gold-300);
   font-size: 24px;
   line-height: 1;
   touch-action: manipulation;
@@ -270,7 +274,7 @@ body.picking-item [data-drop] {
 }
 
 .zoom-button:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 2px solid var(--ui-gold-300);
   outline-offset: 1px;
 }
 
@@ -279,4 +283,58 @@ body.picking-item [data-drop] {
 .game[data-flow="column"][data-pad] .zoom-buttons {
   flex-direction: row;
   bottom: 108px;
+}
+
+/* ---- the right-click menu (docs/17 UI-6): compact for the mouse, with the item's card ---- */
+.touch-menu.with-card {
+  width: 288px; /* CARD_MENU_WIDTH in ActionMenu.tsx */
+}
+.touch-menu[data-pointer="mouse"] {
+  gap: 2px;
+}
+.touch-menu[data-pointer="mouse"] .touch-menu-action {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+.touch-menu-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.touch-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.touch-menu-name::first-letter {
+  text-transform: uppercase;
+}
+/* The default action: the one a double click does. */
+.touch-menu-action.default {
+  font-weight: 700;
+  color: var(--ui-gold-300);
+}
+.touch-menu-split > summary {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  cursor: pointer;
+}
+.touch-menu-split > summary::-webkit-details-marker {
+  display: none;
+}
+.touch-menu-split-form {
+  display: flex;
+  gap: 6px;
+  padding: 4px 4px 2px;
+}
+.touch-menu-split-form input {
+  width: 4.5rem;
+}
+.touch-menu .item-card {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-gold-700);
 }

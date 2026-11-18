@@ -76,7 +76,7 @@ func dropDialogTeleports(npcs content.NPCs, m *world.Map) {
 }
 
 // dataConfig is the config of dataHarness, with routes as its boat routes.
-func dataConfig(t *testing.T, routes content.BoatRoutes, spawns ...world.Spawn) session.Config {
+func dataConfig(t testing.TB, routes content.BoatRoutes, spawns ...world.Spawn) session.Config {
 	t.Helper()
 	dir := filepath.Join("..", "..", "..", "data")
 	must := func(err error) {

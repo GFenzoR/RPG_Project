@@ -4,8 +4,19 @@ import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MAX_PNG_SIDE, MAX_TOTAL_PIXELS, buildAtlas, pngSize, writeAtlas } from "./build.ts";
 import { collectSpriteRefs } from "./content.ts";
-import { registeredPacks } from "./credits.ts";
+import {
+  derivedLicense,
+  fileLicenses,
+  markdownSection,
+  markdownTableRows,
+  parseCreditsCsv,
+  parseCreditsRows,
+  plainCell,
+  registeredPacks,
+  usedLicense,
+} from "./credits.ts";
 import { createImage, decodePng, encodePng, fillRect } from "./image.ts";
+import { licenceProblems } from "./licences.ts";
 import type { Image } from "./image.ts";
 import { MAX_PLACEHOLDER_SIDE, parseManifest } from "./manifest.ts";
 import { packSprites } from "./pack.ts";
@@ -149,6 +160,145 @@ describe("credits", () => {
       "| | | | | `assets/vendor/...` | |\n" + CREDITS_ROW("kenney_tiny") + "assets/vendor/prose\n";
     expect([...registeredPacks(md)]).toEqual(["kenney_tiny"]);
   });
+
+  it("reads per-file licences from an LPC CREDITS.csv", () => {
+    const csv =
+      "filename,notes,authors,licenses,urls\r\n" +
+      '"hair/long/walk.png","a ""quoted"" note, with a comma" ,"A,B" ,"CC-BY-SA 3.0,GPL 3.0" ,"u"\r\n' +
+      '"body/male/walk.png","" ,"C" ,"OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0" ,"u"\r\n';
+    const rows = parseCreditsCsv(csv);
+    expect([...rows.keys()]).toEqual(["hair/long/walk.png", "body/male/walk.png"]);
+    expect(rows.get("hair/long/walk.png")).toEqual(["CC-BY-SA 3.0", "GPL 3.0"]);
+    // A path inside the pack matches the row named from its spritesheets/ folder.
+    expect(fileLicenses(rows, "spritesheets/body/male/walk.png")).toEqual([
+      "OGA-BY 3.0",
+      "CC-BY-SA 3.0",
+      "GPL 3.0",
+    ]);
+    expect(fileLicenses(rows, "spritesheets/body/female/walk.png")).toBeUndefined();
+  });
+
+  it("reads each CREDITS.csv row's authors, licences and links for the credits page", () => {
+    const csv =
+      "filename,notes,authors,licenses,urls\r\n" +
+      '"hair/long/walk.png","a ""quoted"" note, with a comma" ,"A,B (b)" ,"CC-BY-SA 3.0,GPL 3.0" ,"https://x/1,https://x/2"\r\n' +
+      '"","" ,"nobody" ,"CC0" ,""\r\n';
+    expect(parseCreditsRows(csv)).toEqual([
+      {
+        file: "hair/long/walk.png",
+        authors: ["A", "B (b)"],
+        licenses: ["CC-BY-SA 3.0", "GPL 3.0"],
+        urls: ["https://x/1", "https://x/2"],
+      },
+    ]);
+    // Without a licences column there is nothing to check a file against.
+    expect(parseCreditsCsv("filename,authors\na.png,A\n").size).toBe(0);
+    expect(parseCreditsRows("filename,authors\na.png,A\n")).toEqual([
+      { file: "a.png", authors: ["A"], licenses: [], urls: [] },
+    ]);
+  });
+
+  it("reads the rows of a CREDITS.md section's tables", () => {
+    const md =
+      "# Credits\n\n| a | b |\n|---|:-:|\n| `x` | **y** |\n\n## Fonts\n\n| f | l |\n|---|---|\n| F | OFL 1.1 |\n\n## Next\n| n |\n";
+    expect(markdownTableRows(md)).toEqual([
+      ["a", "b"],
+      ["`x`", "**y**"],
+      ["f", "l"],
+      ["F", "OFL 1.1"],
+      ["n"],
+    ]);
+    expect(markdownTableRows(markdownSection(md, "## Fonts"))).toEqual([
+      ["f", "l"],
+      ["F", "OFL 1.1"],
+    ]);
+    expect(markdownSection(md, "## Missing")).toBe("");
+    expect(plainCell(" `x`  **y** ")).toBe("x y");
+  });
+
+  it("uses each file under its most permissive accepted licence, never GPL", () => {
+    expect(usedLicense(["CC-BY-SA 3.0", "GPL 3.0", "OGA-BY 3.0"])).toBe("OGA-BY 3.0");
+    expect(usedLicense(["CC-BY 3.0", "OGA-BY 3.0"])).toBe("OGA-BY 3.0");
+    expect(usedLicense(["CC-BY-SA 3.0", "GPL 3.0"])).toBe("CC-BY-SA 3.0");
+    expect(usedLicense(["CC0"])).toBe("CC0");
+    expect(usedLicense(["GPL 3.0", "GPL 2.0"])).toBeUndefined();
+    expect(usedLicense(["CC-BY-NC 3.0"])).toBeUndefined();
+    // One CC-BY-SA layer makes the composed frame CC-BY-SA.
+    expect(derivedLicense(["OGA-BY 3.0", "CC0", "OGA-BY 3.0"])).toBe("OGA-BY 3.0");
+    expect(derivedLicense(["OGA-BY 3.0", "CC-BY-SA 3.0"])).toBe("CC-BY-SA 3.0");
+    expect(derivedLicense([])).toBeUndefined();
+  });
+});
+
+describe("licence audit", () => {
+  const CSV = [
+    "filename,notes,authors,licenses,urls",
+    '"body/walk.png","" ,"A" ,"OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0" ,"u"',
+    '"beard/walk.png","" ,"B" ,"CC-BY-SA 3.0,GPL 3.0" ,"u"',
+    "",
+  ].join("\n");
+  const WALK =
+    "    actions: { walk: { sheet: walk, frame: [32, 32], rows: { s: 0 }, col: 0, count: 1 } }";
+  const ANIMS = [
+    "animations:",
+    "  npcs/plain:",
+    WALK,
+    "    layers: [{ file: vendor/lpc/spritesheets/body/<sheet>.png }]",
+    "  npcs/bearded:",
+    WALK,
+    "    layers:",
+    "      - { file: vendor/lpc/spritesheets/body/<sheet>.png }",
+    "      - { file: vendor/lpc/spritesheets/beard/<sheet>.png }",
+    "",
+  ].join("\n");
+  const credits = (...rows: string[]): string =>
+    [
+      "| Pack | ... |",
+      "|---|---|",
+      "| LPC | x | por archivo | u | `assets/vendor/lpc/` | Sí |",
+      "",
+      "## Obras derivadas de terceros",
+      "",
+      "| Archivos | Sale de | Licencia | Herramienta |",
+      "|---|---|---|---|",
+      ...rows,
+      "",
+      "## Otra",
+      "",
+    ].join("\n");
+  function lpcPack(): void {
+    put("assets/vendor/lpc/CREDITS.csv", CSV);
+    put("assets/vendor/lpc/LICENSE.txt", "per file");
+    put("assets/vendor/lpc/spritesheets/body/walk.png", encodePng(createImage(32, 32)));
+    put("assets/vendor/lpc/spritesheets/beard/walk.png", encodePng(createImage(32, 32)));
+    put("assets/sprites.yaml", ANIMS);
+  }
+
+  it("accepts each sprite under the licence its layers give it", () => {
+    lpcPack();
+    put(
+      "assets/CREDITS.md",
+      credits(
+        "| `npcs/plain` | capas | OGA-BY 3.0 | spritepack |",
+        "| `npcs/bearded` | capas | **CC-BY-SA 3.0** | spritepack |",
+      ),
+    );
+    expect(licenceProblems(root)).toEqual([]);
+  });
+
+  it("refuses a blanket licence, a missing sprite and a GPL-only or unlisted file", () => {
+    lpcPack();
+    put("assets/CREDITS.md", credits("| `npcs/plain` | capas | CC-BY-SA 3.0 | spritepack |"));
+    put("assets/vendor/lpc/spritesheets/gpl/walk.png", encodePng(createImage(32, 32)));
+    put("assets/vendor/lpc/spritesheets/stray.png", encodePng(createImage(32, 32)));
+    put("assets/vendor/lpc/CREDITS.csv", CSV + '"gpl/walk.png","" ,"C" ,"GPL 3.0" ,"u"\n');
+    expect(licenceProblems(root)).toEqual([
+      "assets/vendor/lpc/spritesheets/gpl/walk.png: lists no accepted licence (GPL 3.0)",
+      "assets/vendor/lpc/spritesheets/stray.png: no row in its CREDITS.csv",
+      "npcs/plain: assets/CREDITS.md says CC-BY-SA 3.0, its layers make it OGA-BY 3.0",
+      'npcs/bearded: its frames come from vendor layers (CC-BY-SA 3.0); name it in "Obras derivadas de terceros" of assets/CREDITS.md',
+    ]);
+  });
 });
 
 describe("packer", () => {
@@ -244,6 +394,76 @@ describe("buildAtlas", () => {
     expect(r.diagnostics.filter((d) => d.severity === "warning")).toHaveLength(4);
   });
 
+  it("describes map tile art in atlas.json tiles (docs/17 ART-3, ART-4, ART-7)", () => {
+    const tile = encodePng(solid(32, 32, [9, 9, 9]));
+    const tall = encodePng(solid(32, 64, [9, 9, 9]));
+    put("assets/sprites/ground/grass.png", tile);
+    for (const n of [1, 2, 3]) put(`assets/sprites/ground/grass/var_${n}.png`, tile);
+    put("assets/sprites/ground/water.png", tile);
+    for (const n of [1, 2, 3]) put(`assets/sprites/ground/water/frame_${n}.png`, tile);
+    put("assets/sprites/walls/stone.png", tall);
+    for (let m = 0; m < 16; m++) put(`assets/sprites/walls/stone/wall_${m}.png`, tall);
+    put("assets/sprites/decor/tree.png", tall);
+    put("assets/sprites/decor/tree/shadow.png", tall);
+    put("assets/sprites/doors/gate.png", tall);
+    put(
+      "assets/sprites.yaml",
+      `sprites: {}
+tiles:
+  ground/water: { ms: 220, sync: world }
+  ground/grass: { weight: 0.6 }
+  decor/tree: { anchor: bc }
+  doors/gate: { joins_walls: true }
+`,
+    );
+    const r = buildAtlas(root);
+    expect(errors(r)).toEqual([]);
+    expect(r.atlas?.index.tiles).toEqual({
+      "decor/tree": { anchor: "bc", shadow: true },
+      "doors/gate": { joins: true },
+      "ground/grass": { variants: 3, weight: 0.6 },
+      "ground/water": { frames: 4, ms: 220, sync: "world" },
+      "walls/stone": { wall: true },
+    });
+  });
+
+  it("refuses tile art with gaps, missing pieces or no sprite to belong to", () => {
+    const tile = encodePng(solid(32, 32, [9, 9, 9]));
+    put("assets/sprites/ground/grass.png", tile);
+    put("assets/sprites/ground/grass/var_2.png", tile);
+    put("assets/sprites/walls/stone.png", tile);
+    put("assets/sprites/walls/stone/wall_0.png", tile);
+    put("assets/sprites/decor/lost/shadow.png", tile);
+    put("assets/sprites/ground/sand.png", tile);
+    put(
+      "assets/sprites.yaml",
+      `sprites: {}
+tiles:
+  ground/sand: { ms: 200 }
+  ground/nothing: { anchor: bc }
+  ground/grass: { sync: sometimes }
+`,
+    );
+    expect(errors(buildAtlas(root))).toContainEqual(
+      expect.stringMatching(/ground\/grass: sync must be world, tile or random/),
+    );
+    put(
+      "assets/sprites.yaml",
+      `sprites: {}
+tiles:
+  ground/sand: { ms: 200 }
+  ground/nothing: { anchor: bc }
+`,
+    );
+    expect(errors(buildAtlas(root))).toEqual([
+      expect.stringMatching(/decor\/lost: decor\/lost\/shadow needs the sprite decor\/lost itself/),
+      expect.stringMatching(/ground\/grass: var_<n> must be var_1..var_1 without gaps/),
+      expect.stringMatching(/ground\/nothing: a tiles entry needs a sprite of that name/),
+      expect.stringMatching(/ground\/sand: ms and sync need frames/),
+      expect.stringMatching(/walls\/stone: a wall needs all 16 pieces/),
+    ]);
+  });
+
   it("strict mode turns automatic placeholders into errors", () => {
     put("data/monsters/wolf.yaml", "id: wolf\nsprite: creatures/wolf\n");
     const r = buildAtlas(root, { strict: true });
@@ -327,6 +547,10 @@ describe("repository content", () => {
     const used = new Set(collectSpriteRefs(REPO).map((ref) => ref.sprite));
     expect(used.size).toBeGreaterThan(0);
     for (const sprite of used) expect(r.atlas?.index.sprites[sprite]).toBeDefined();
+  });
+
+  it("credits every vendor file and every derived sprite under the right licence", () => {
+    expect(licenceProblems(REPO)).toEqual([]);
   });
 });
 

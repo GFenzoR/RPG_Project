@@ -19,6 +19,7 @@ export type Route =
   | { page: "shop" }
   | { page: "oauth_confirm" }
   | { page: "oauth_error" }
+  | { page: "credits" }
   | { page: "not_found" };
 
 /** The website's route for a path. The game is /play/ (another page, not routed here). */
@@ -40,6 +41,7 @@ export function parseRoute(pathname: string): Route {
   if (path === "/reset-password") return { page: "reset_password" };
   if (path === "/account") return { page: "account" };
   if (path === "/shop") return { page: "shop" };
+  if (path === "/credits") return { page: "credits" };
   if (path === "/oauth/confirm") return { page: "oauth_confirm" };
   if (path === "/oauth/error") return { page: "oauth_error" };
   if (path === "/maps/review") return { page: "maps_review" };

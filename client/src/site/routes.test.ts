@@ -26,6 +26,10 @@ describe("site routes", () => {
     });
     expect(parseRoute("/news/../etc")).toEqual({ page: "not_found" });
     expect(parseRoute("/elsewhere")).toEqual({ page: "not_found" });
+    // docs/17 A1: the credits the art and font licences ask to show.
+    expect(parseRoute("/credits")).toEqual({ page: "credits" });
+    expect(parseRoute("/credits/")).toEqual({ page: "credits" });
+    expect(parseRoute("/credits/x")).toEqual({ page: "not_found" });
   });
 });
 

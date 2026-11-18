@@ -1,7 +1,7 @@
 // The map's zoom buttons on touch screens (pinch does the same; a PC uses Ctrl+wheel).
-// Whole scales only (render/zoom.ts): a button greys out at its end of the range, and the
-// pair hides when the screen allows a single scale. No hooks: the scale and its limits
-// come in GameUi.zoom.
+// Whole scales only (render/zoom.ts), in from the fitted view or out to the whole 31x21
+// window: a button greys out at its end of the range, and the pair hides when the screen
+// allows a single scale. No hooks: the scale and its limits come in GameUi.zoom.
 import type { JSX } from "preact";
 import type { Game } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";

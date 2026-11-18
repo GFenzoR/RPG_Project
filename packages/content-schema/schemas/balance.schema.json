@@ -29,7 +29,7 @@
     "movement": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["base_step_ms", "diagonal_cost", "max_path_tiles"],
+      "required": ["base_step_ms", "diagonal_cost", "max_path_tiles", "max_queued_steps"],
       "properties": {
         "base_step_ms": {
           "$ref": "common.schema.json#/$defs/positiveInt"
@@ -40,6 +40,12 @@
         },
         "max_path_tiles": {
           "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "max_queued_steps": {
+          "description": "Keyboard steps (Walk) the client predicts and the server queues ahead (docs/05 \"Caminar\").",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
         }
       }
     },
@@ -498,7 +504,7 @@
           "$ref": "common.schema.json#/$defs/positiveInt"
         },
         "reach": {
-          "description": "Chebyshev distance (same floor) for actions on ground items, at most 6 (the view half-height: the server answers nothing about a tile out of view).",
+          "description": "Chebyshev distance (same floor) for actions on ground items, at most 6 (the half-height of the classic 15x11 window, what a monster notices; the 31x21 view did not stretch it).",
           "type": "integer",
           "minimum": 1,
           "maximum": 6

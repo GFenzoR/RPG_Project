@@ -71,7 +71,12 @@ function RecipeRow(props: {
     : {};
   const missing = new Map(view.missing.map((m) => [m.itemId, m.count]));
   return (
-    <li class={view.ready ? "recipe ready" : "recipe"} data-recipe={r.id}>
+    <li
+      class={view.ready ? "recipe ready" : "recipe"}
+      data-recipe={r.id}
+      data-tip-item={r.output.itemId}
+      data-tip-count={r.output.count}
+    >
       <span class={icon ? "item" : "item missing"} style={style} aria-hidden="true">
         {!icon && name(r.output.itemId).slice(0, 2)}
       </span>

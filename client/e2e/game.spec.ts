@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { psql } from "./psql.ts";
+import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
@@ -39,6 +40,28 @@ const self = (page: Page): Promise<Self | undefined> =>
  * expect.poll's default 5 s on a slow CI runner, so allow a generous timeout: it still
  * fails if the creature never gets there.
  */
+/**
+ * Uses the map tile at client point (x, y) at once: Ctrl+right click (docs/17 UI-6). A plain
+ * right click on a tile without a creature opens its menu with the item's card.
+ */
+async function useAt(page: Page, x: number, y: number): Promise<void> {
+  await page.keyboard.down("Control");
+  await page.mouse.click(x, y, { button: "right" });
+  await page.keyboard.up("Control");
+}
+
+/**
+ * Keys go to the game: the focus leaves whatever took it (a text field takes the arrow keys,
+ * input/keyboard.ts takesText). Not a click: since docs/17 UI-4 the map starts at the
+ * page's top left corner, and a click there walks towards that tile.
+ */
+async function keysToGame(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const el = document.activeElement;
+    if (el instanceof HTMLElement && el !== document.body) el.blur();
+  });
+}
+
 async function arrived(page: Page, x: number, y: number): Promise<void> {
   await expect
     .poll(
@@ -103,7 +126,9 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   await shot(page, "03-characters");
   await list.getByRole("button", { name: "Jugar" }).click();
 
-  // The world: FullMapView drawn on a pixel-perfect canvas.
+  // The world: FullMapView drawn on a pixel-perfect canvas: the largest view of the 31x21
+  // window that fills the map's box at a whole scale, never less than the classic 15x11
+  // (client/CLAUDE.md "Zoom del mapa").
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
   const canvas = page.getByTestId("game-canvas");
   await expect(canvas).toBeVisible();
@@ -115,8 +140,14 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   }));
   const scale = await page.evaluate(() => window.__rpgClient?.scale() ?? 0);
   expect(Number.isInteger(scale) && scale >= 1).toBe(true);
-  expect(size.width).toBe(15 * 32 * scale);
-  expect(size.height).toBe(11 * 32 * scale);
+  expect(size.width % scale).toBe(0);
+  expect(size.height % scale).toBe(0);
+  const view = await page.evaluate(() => window.__rpgClient?.view());
+  expect(view?.server).toEqual({ width: 31, height: 21 });
+  expect(view?.shown.width ?? 0).toBeGreaterThanOrEqual(15);
+  expect(view?.shown.height ?? 0).toBeGreaterThanOrEqual(11);
+  expect(view?.shown.width ?? 99).toBeLessThanOrEqual(31);
+  expect(view?.shown.height ?? 99).toBeLessThanOrEqual(21);
   expect(size.css * size.dpr).toBe(size.width);
   const start = await self(page);
   if (!start) throw new Error("no own creature");
@@ -160,12 +191,30 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   expect({ x: x - start.x, y: y - start.y }).toEqual({ x: 4, y: 1 });
   await shot(page, "06-walked-click");
 
-  // Inventory (T1.8): a new character starts with an equipped backpack. Right click opens
-  // it, shift+click looks at it, and it can be dragged onto the map and back.
+  // Inventory (T1.8): a new character starts with an equipped backpack. A right click
+  // opens its menu with its card (docs/17 UI-6) and "Abrir" (the default action, in bold)
+  // opens it; shift+click looks at it, and it can be dragged onto the map and back.
   const inventory = page.getByTestId("inventory");
   const backpackSlot = inventory.getByTestId("slot-backpack");
   await expect(backpackSlot.locator("[data-item=backpack]")).toBeVisible();
   await backpackSlot.locator("[data-item]").click({ button: "right" });
+  const itemMenu = page.getByTestId("action-menu");
+  await expect(itemMenu).toBeVisible();
+  await expect(itemMenu.getByTestId("item-card")).toContainText("Contenedor");
+  await expect(itemMenu.getByTestId("item-card")).toContainText("Lugares");
+  await expect(itemMenu.locator('[data-action="open"]')).toHaveClass(/default/);
+  await shot(page, "09a-item-menu");
+  await itemMenu.locator('[data-action="open"]').click();
+  await expect(itemMenu).toBeHidden();
+  // The same card shows under a resting mouse (350 ms), and goes when it leaves.
+  await page.mouse.move(1, 1);
+  await backpackSlot.locator("[data-item]").hover();
+  const tooltip = page.getByTestId("item-tooltip");
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("mochila");
+  await shot(page, "09b-item-tooltip");
+  await page.mouse.move(1, 1);
+  await expect(tooltip).toBeHidden();
   const backpackWindow = inventory.locator('[data-container-item="backpack"]');
   await expect(backpackWindow).toBeVisible();
   await expect(backpackWindow.locator(".slot")).toHaveCount(24);
@@ -254,9 +303,16 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   // Opening the page without a session cookie answers 401 (logged by the browser): expected.
   errors.length = 0;
   const battle = page.getByTestId("battle-list");
-  await expect(battle.getByText("No hay criaturas a la vista.")).toBeVisible();
+  // The wolves of testisle roam 11-19 tiles north of the temple: with the 31x21 view one
+  // on the south edge of its spawn is already in view (11 tiles is the margin).
+  await expect(
+    battle
+      .getByText("No hay criaturas a la vista.")
+      .or(battle.getByRole("button", { name: /lobo/ }))
+      .first(),
+  ).toBeVisible();
 
-  // The wolves of testisle roam 11-19 tiles north of the temple: walk towards them.
+  // Walk towards the wolves.
   const start = await self(page);
   if (!start) throw new Error("no own creature");
   const click = async (x: number, y: number): Promise<void> => {
@@ -269,9 +325,11 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   };
   await click(start.x, start.y - 5);
   await arrived(page, start.x, start.y - 5);
-  await click(start.x, start.y - 9);
 
-  // A wolf shows up in the battle list (and comes for us): attack it from there.
+  // A wolf shows up in the battle list: attack it from there. With the 31x21 view it may be
+  // farther than a wolf notices us (8 tiles to the sides, 6 up and down), so chase it; from
+  // here the northern rows of the spawn stay out of view, where a killed wolf respawns.
+  await page.getByLabel("Perseguir al objetivo").check();
   const wolf = battle.getByRole("button", { name: /lobo/ }).first();
   await expect(wolf).toBeVisible({ timeout: 30_000 });
   await wolf.click();
@@ -303,7 +361,9 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     .toBeGreaterThan(0);
   await shot(page, "07-combat");
 
-  // Every swing trains fists (no weapon yet): the skills panel shows the progress.
+  // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
+  // progress.
+  await openWindow(page, "skills");
   const skills = page.getByTestId("skills-panel");
   await expect(skills.getByText("Puños")).toBeVisible();
   await expect
@@ -327,13 +387,15 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
 });
 
 /**
- * Where to wait for a wolf when none is in view: 7 tiles south of the centre of
+ * Where to wait for a wolf when none is in view: 11 tiles south of the centre of
  * testisle_wolves ((1056, 1041), radius 4, world/islands/testisle/spawns.yaml). The server
- * never respawns a monster on a tile a player sees (ViewHalfH is 6), so standing on the
- * spawn would keep it empty; from here most of it is out of view, and a respawned wolf
- * that wanders a step or two comes into view and, aggressive, comes for us.
+ * never respawns a monster on a tile a player sees (the 31x21 view: 11 rows up and down
+ * with the margin), so standing on the spawn would keep it empty; from here its 4 northern
+ * rows are out of view and the other 5 in it. A wolf notices us only within the classic
+ * 15x11 window (8 tiles to the sides, 6 up and down), so one in view but farther away is
+ * chased ("Perseguir al objetivo").
  */
-const WOLF_WAIT = { x: 1056, y: 1048 };
+const WOLF_WAIT = { x: 1056, y: 1052 };
 
 test("an arcanist casts a spell with F1 and by its words", async ({ page, playwright }) => {
   // Finding a wolf can take one respawn (respawn_seconds 60) when earlier tests (or
@@ -441,7 +503,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
         { timeout: 90_000, intervals: [250] },
       )
       .toBe(true);
-    await page.locator("body").click({ position: { x: 1, y: 1 } }); // keys go to the game
+    await keysToGame(page);
   };
 
   // F1 until the bolt flies (the wolf must be within 4 tiles and in sight), then catch
@@ -578,7 +640,7 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   await expect(hotbar.locator('[data-hotkey="F1"] [data-spell="frost_lance"]')).toBeVisible();
   await expect(hotbar.locator('[data-hotkey="F2"] [data-spell="verdant_mend"]')).toBeVisible();
   await expect(hotbar.locator('[data-hotkey="F3"] [data-spell="mend_other"]')).toBeVisible();
-  await page.locator("body").click({ position: { x: 1, y: 1 } }); // keys go to the game
+  await keysToGame(page);
 
   // F2 heals the druid itself: the server spends 20 mana and starts the cooldown.
   const mana = (): Promise<number | undefined> =>
@@ -721,13 +783,11 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await expect(log).toContainText(
     "Ves: cartel. Templo del Farol. Dentro de sus muros nadie puede hacerte daño.",
   );
-  // The log sits at the end of the scrolling side column on desktop: bring it into view
-  // so the screenshot shows the line read, then put the column back for the next shots.
-  await log.scrollIntoViewIfNeeded();
+  // The log is a tab of the chat box on desktop (docs/17 UI-10): show it for the
+  // screenshot, then go back to the chat for the next shots.
+  await page.locator('[data-chat-tab="log"]').click();
   await shot(page, "12b-puerto-temple-sign");
-  await page.locator(".side-scroll").evaluate((el) => {
-    el.scrollTop = 0;
-  });
+  await page.locator('[data-chat-tab="chat"]').click();
 
   // The priestess stands next to the temple: right click opens her dialog.
   const priest = await npc("puerto_priest");
@@ -764,11 +824,15 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await expect(shop.locator('[data-item="rope"]')).toContainText("45");
   await page.waitForTimeout(300); // let the icons load before the screenshot
   await shot(page, "14-shop");
+  // No scroll bar: the grid pages instead (docs/17 UI-8).
+  expect(await shop.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
   await shop.getByRole("tab", { name: "Vender" }).click();
-  await expect(shop.locator('[data-item="wolf_pelt"]')).toContainText("Tienes 0");
+  await shop.getByTestId("shop-search").fill("piel de lobo");
+  await expect(shop.locator('[data-item="wolf_pelt"]')).toContainText("×0");
+  await shot(page, "14b-shop-sell");
 
   // Walking away (keyboard: the windows cover part of the map) closes both windows.
-  await page.locator("body").click({ position: { x: 1, y: 1 } });
+  await keysToGame(page);
   for (let i = 0; i < 3; i++) {
     const before = await self(page);
     await page.keyboard.press("ArrowLeft");
@@ -783,6 +847,8 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
 });
 
 test("die to a wolf: death screen and wake up at the temple", async ({ page, playwright }) => {
+  // Finding a wolf can take one respawn (respawn_seconds 60) when earlier tests killed them.
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -836,7 +902,7 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
   const screen = page.getByTestId("death-screen");
   await click(start.x, start.y - 5);
   // A roaming wolf may bite first, on the way: then the character is already back at the
-  // temple and the second click is not needed.
+  // temple and nothing else is needed.
   await expect
     .poll(
       async () => {
@@ -847,9 +913,24 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
       { timeout: 20_000 },
     )
     .toBe(true);
-  if (!(await screen.isVisible())) await click(start.x, start.y - 9);
-
-  await expect(screen).toBeVisible({ timeout: 60_000 });
+  // Then chase the nearest wolf in view (as in the fight test): with the 31x21 view it may
+  // be farther than a wolf notices us, and from here the northern rows of the spawn stay
+  // out of view, where a killed wolf respawns.
+  if (!(await screen.isVisible())) await page.getByLabel("Perseguir al objetivo").check();
+  const wolf = page.getByTestId("battle-list").getByRole("button", { name: /lobo/ }).first();
+  await expect
+    .poll(
+      async () => {
+        if (await screen.isVisible()) return true;
+        const target = await page.evaluate(() => window.__rpgClient?.target());
+        // It may leave the list (dies, walks out of view) right now: try again then.
+        if (target === undefined && (await wolf.isVisible()))
+          await wolf.click({ timeout: 1_000 }).catch(() => undefined);
+        return false;
+      },
+      { timeout: 100_000, intervals: [500] },
+    )
+    .toBe(true);
   await expect(screen).toContainText("Has muerto");
   await page.waitForTimeout(300);
   await shot(page, "13-death");
@@ -988,7 +1069,8 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
     .toBe("there");
   let p: { x: number; y: number };
 
-  // Right click on the pickaxe picks "use with"; the next click on the map uses it there.
+  // A double click on the pickaxe does its default action, "use with" (docs/17 UI-6); the
+  // next click on the map uses it there.
   // A vein is spent after 4 good swings and grows back 5 minutes after its last one
   // (data/items/decoration.yaml). The world is shared by the suite and by --repeat-each,
   // so earlier miners may have spent the first vein: swinging at it again only answers
@@ -1000,7 +1082,7 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
   const log = page.getByTestId("game-log");
   let vein = 0;
   for (let i = 0; i < 16; i++) {
-    await pickaxe.click({ button: "right" });
+    await pickaxe.dblclick();
     await expect(page.locator("body")).toHaveClass(/using-item/);
     const v = veins[vein];
     if (!v) throw new Error("no vein");
@@ -1084,8 +1166,10 @@ test("chat on the local and global channels, then switch the language", async ({
   );
   await page.locator(".side").screenshot({ path: join(shots, "16-chat.png") });
 
-  // Switching the language translates every screen at once, the running game included.
-  await page.getByTestId("language").selectOption("en");
+  // Switching the language (the Options window of the toolbar) translates every screen at
+  // once, the running game included.
+  await openWindow(page, "options");
+  await page.getByTestId("options").getByTestId("language").selectOption("en");
   await expect(chat).toContainText(`${name} says: <b>hola</b> {name}`);
   await expect(chat).toContainText(`[Global] ${name}: hola a todos`);
   await expect(page.getByRole("button", { name: "Leave game" })).toBeVisible();
@@ -1294,7 +1378,7 @@ test("T3.2: a guardian casts haste: condition badge, faster speed and steps", as
   }
   expect(Date.now() - t0).toBeLessThan(10_000);
   await shot(page, "22-haste");
-  await page.locator(".hud").screenshot({ path: join(shots, "23-conditions-hud.png") });
+  await page.locator(".vitals").screenshot({ path: join(shots, "23-conditions-hud.png") });
   expect(errors).toEqual([]);
 });
 
@@ -1339,7 +1423,9 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   const leadPage = await enter(lead.email);
   const matePage = await enter(mate.email);
 
-  // Both wake up at the temple: the mate is in the leader's battle list, with "+".
+  // Both wake up at the temple: the mate is in the leader's battle list, with "+". The
+  // party window (toolbar, P) docks under the battle list.
+  for (const page of [leadPage, matePage]) await openWindow(page, "party");
   const leadPanel = leadPage.getByTestId("party-panel");
   await expect(leadPanel).toContainText("No estás en un grupo.");
   const invite = leadPage
@@ -1491,10 +1577,16 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
   errors.length = 0;
   await arrived(page, 3172, 6367);
 
-  // Right click on the hearth opens its recipes.
+  // A right click on the hearth opens its menu (docs/17 UI-6) with its card; "Usar",
+  // first and in bold, opens its recipes.
   const hearth = await page.evaluate(() => window.__rpgClient?.tileToClient(3172, 6366));
   if (!hearth) throw new Error("no canvas");
   await page.mouse.click(hearth.x, hearth.y, { button: "right" });
+  const hearthMenu = page.getByTestId("action-menu");
+  await expect(hearthMenu.locator('[data-action="use"]')).toHaveClass(/default/);
+  await expect(hearthMenu.getByTestId("item-card")).toBeVisible();
+  await expect(hearthMenu.locator('[data-action="move"]')).toHaveCount(0); // a fixture
+  await hearthMenu.locator('[data-action="use"]').click();
   const win = page.getByTestId("crafting");
   await expect(win).toBeVisible();
   await expect(win.locator("h2")).toHaveText("fogón");
@@ -1514,6 +1606,7 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
     await page.waitForTimeout(1800); // the recipe's time_ms
   }
   await expect(log).toContainText(/Has hecho [^{}]+\./);
+  await openWindow(page, "skills");
   await expect(page.getByTestId("skills-panel")).toContainText("Cocina");
   await shot(page, "17-crafting-done");
   await page.keyboard.press("Escape");
@@ -1793,12 +1886,12 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   expect(await history()).toContain("step");
   expect(await starts()).toBeGreaterThanOrEqual(3); // two loops and a step
 
-  // Options: lower the music, mute the effects.
-  await page.locator(".hud").getByTestId("options-button").click();
+  // Options (the toolbar's gear, docs/17 UI-5): lower the music, mute the effects.
+  await page.getByTestId("options-button").click();
   const options = page.getByTestId("options");
-  await expect(options.getByRole("heading").first()).toHaveText("Sonido");
+  await expect(options.locator("h3").first()).toHaveText("Sonido");
   // T5.6: the controls section follows with the on-screen pad switch (off with a mouse).
-  await expect(options.getByRole("heading").nth(1)).toHaveText("Controles");
+  await expect(options.locator("h3").nth(1)).toHaveText("Controles");
   await expect(options.getByTestId("touch-pad-toggle")).not.toBeChecked();
   await options.getByTestId("volume-music").fill("20");
   await options.getByTestId("mute-sfx").check();
@@ -1806,7 +1899,11 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await expect(options.locator(".channel").nth(1).locator(".value")).toHaveText("20");
   await options.screenshot({ path: join(shots, "34-sound-options.png") });
   await shot(page, "35-sound-options-game");
-  // Muted effects spend no voice: a step is silent now.
+  // docs/17 A1: the credits of the art and fonts, on the website in another tab.
+  await expect(options.getByTestId("credits-link")).toHaveAttribute("href", "/credits");
+  await expect(options.getByTestId("credits-link")).toHaveAttribute("target", "_blank");
+  // Muted effects spend no voice: a step is silent now. The window closes with its ×
+  // ("Cerrar Opciones").
   await options.getByRole("button", { name: "Cerrar" }).click();
   await expect(options).toHaveCount(0);
   const before = (await history()).length;
@@ -1816,7 +1913,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   // Buttons sound on the interface channel, which is not muted. "Entrar" and "Jugar" may
   // have been dropped while the file loaded (see above); after the options clicks it is
   // cached, so one more button click plays.
-  await page.locator(".hud").getByTestId("options-button").click();
+  await page.getByTestId("options-button").click();
   await expect(options).toHaveCount(1);
   await options.getByRole("button", { name: "Cerrar" }).click();
   await expect.poll(history).toContain("click");
@@ -1827,15 +1924,19 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await expect(page.getByTestId("volume-music")).toHaveValue("20");
   await expect(page.getByTestId("mute-sfx")).toBeChecked();
   await expect(page.getByTestId("volume-master")).toHaveValue("80");
+  await expect(page.locator(".corner").getByTestId("credits-link")).toHaveAttribute(
+    "href",
+    "/credits",
+  );
   await shot(page, "36-sound-options-login");
 
-  // The panel moves from the corner to the game's header: it must show what is in use
-  // now, not what the page loaded with (no reload this time).
+  // The panel moves from the corner to the game's Options window: it must show what is in
+  // use now, not what the page loaded with (no reload this time).
   await page.getByTestId("mute-ambient").check();
   await page.getByTestId("characters").getByRole("button", { name: "Jugar" }).click();
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
-  await page.locator(".hud").getByTestId("options-button").click();
-  const hud = page.locator(".hud").getByTestId("options");
+  await page.getByTestId("options-button").click();
+  const hud = page.getByTestId("options");
   await expect(hud.getByTestId("mute-ambient")).toBeChecked();
   await expect(hud.getByTestId("volume-music")).toHaveValue("20");
   await expect(hud.getByTestId("mute-sfx")).toBeChecked();
@@ -1876,7 +1977,7 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
 
     // Walking advances it: find a free direction, then step back and forth. The server
     // counts each confirmed step.
-    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    await keysToGame(page);
     const still = async (): Promise<Self> => {
       let s: Self | undefined;
       await expect
@@ -1951,28 +2052,23 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     // At the desktop app's minimum width the shop reaches the top right corner: the panel
     // hides while it is open and comes back after.
     await page.setViewportSize({ width: 960, height: 700 });
-    // The header stays one line: the controls help folds into a button, which opens it
-    // over the map without pushing the map down.
-    const hud = page.locator("header.hud");
-    const help = page.getByTestId("controls-help");
-    await expect(hud.locator(".hint")).toBeHidden();
-    await expect(help.locator("summary")).toHaveText("Controles");
-    expect((await hud.boundingBox())?.height ?? 999).toBeLessThan(80);
+    // No header on desktop (docs/17 UI-4): the controls help is the toolbar's "?" window,
+    // which floats over the map without moving it.
+    await expect(page.locator("header.hud")).toHaveCount(0);
     const mapTop = (await page.getByTestId("game-canvas").boundingBox())?.y ?? -1;
-    await help.locator("summary").click();
+    await openWindow(page, "help");
+    const help = page.getByTestId("controls-help");
     await expect(help.locator("p")).toContainText("Camina con las flechas");
     await shot(page, "44-controls-help-960");
-    // The opened help wraps inside its box and the window (the header itself is nowrap).
+    // The help wraps inside its window, and the window stays inside the screen.
     const fits = await help
       .locator("p")
       .evaluate(
         (p) => p.scrollWidth <= p.clientWidth && p.getBoundingClientRect().right <= innerWidth,
       );
     expect(fits).toBe(true);
-    expect((await hud.boundingBox())?.height ?? 999).toBeLessThan(80);
     expect((await page.getByTestId("game-canvas").boundingBox())?.y).toBe(mapTop);
-    await help.locator("summary").click();
-    await expect(help.locator("p")).toBeHidden();
+    await closeWindow(page, "help");
     let prov: { id: number; x: number; y: number } | undefined;
     await expect
       .poll(async () => {
@@ -2007,7 +2103,6 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
     await expect(page.getByTestId("shop")).toBeHidden();
     await expect(panel).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
-    await expect(hud.locator(".hint")).toBeVisible();
     await expect(help).toBeHidden();
 
     // Skipping ends it for good: the server confirms and the panel and highlight go away.
@@ -2061,7 +2156,8 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   const lead = await enter(founder.email);
   const mateP = await enter(mate.email);
 
-  // Found it from the panel.
+  // Found it from the guild window (the toolbar's G, docs/17 UI-7).
+  for (const page of [lead, mateP]) await openWindow(page, "guild");
   const panel = lead.getByTestId("guild-panel");
   await expect(panel).toContainText("No estás en un gremio.");
   await expect(panel).toContainText("Cuesta 2000 monedas de cobre y pide nivel 18.");
@@ -2071,7 +2167,8 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   await expect(panel.locator("h2")).toContainText(guildName);
   await expect(panel.locator("h2")).toContainText("Líder");
 
-  // Invite the mate by name; the invitation shows over the mate's map.
+  // Invite the mate by name (the Invite button); the invitation shows over the mate's map.
+  await panel.locator('[data-guild-tab="invite"]').click();
   await panel.getByLabel("Nombre del personaje").fill(mate.name);
   await panel.getByRole("button", { name: "Invitar" }).click();
   await expect(lead.getByTestId("game-log")).toContainText(`Invitaste a ${mate.name} a tu gremio.`);
@@ -2084,10 +2181,16 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
 
   for (const page of [lead, mateP]) {
     const p = page.getByTestId("guild-panel");
+    await p.locator('[data-guild-tab="members"]').click();
     await expect(p.locator("li[data-member]")).toHaveCount(2);
     await expect(p).toContainText("Miembros (2 en línea de 2)");
   }
+  // Leaving is on the summary; the message of the day has its own button.
+  await mateP.getByTestId("guild-panel").locator('[data-guild-tab="summary"]').click();
   await expect(mateP.getByTestId("guild-leave")).toBeVisible();
+  await panel.locator('[data-guild-tab="ranks"]').click();
+  await expect(panel.getByTestId("guild-ranks")).toContainText(mate.name);
+  await panel.locator('[data-guild-tab="motd"]').click();
   await panel.getByPlaceholder("Mensaje del día").fill("Cacería al amanecer");
   await panel.getByRole("button", { name: "Cambiar" }).click();
   await expect(mateP.getByTestId("guild-motd")).toHaveText("Cacería al amanecer");
@@ -2098,7 +2201,11 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   await input.fill("hola gremio");
   await input.press("Enter");
   await expect(lead.getByTestId("chat-log")).toContainText(`[Gremio] ${mate.name}: hola gremio`);
-  await lead.locator(".side").screenshot({ path: join(shots, "46-guild-panel.png") });
+  await lead
+    .locator('.gwin[data-window="guild"]')
+    .screenshot({ path: join(shots, "46-guild-panel.png") });
+  // The guild window floats over the map: out of the way of the Shift+click below.
+  for (const page of [lead, mateP]) await closeWindow(page, "guild");
 
   // The founder looks at the mate (Shift+click on its tile) and sees the guild.
   const at = await self(mateP);
@@ -2275,7 +2382,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   await arrived(b, 3167, 6383);
   for (const page of [a, b]) {
     const slot = page.getByTestId("inventory").getByTestId("slot-backpack");
-    await slot.locator("[data-item]").click({ button: "right" });
+    await slot.locator("[data-item]").dblclick();
     await expect(
       page.getByTestId("inventory").locator('[data-container-item="backpack"]'),
     ).toBeVisible();
@@ -2304,7 +2411,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   // Market: the seller (now with the coins) opens the board and browses the fish first.
   const boardA = await a.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
   if (!boardA) throw new Error("no canvas");
-  await a.mouse.click(boardA.x, boardA.y, { button: "right" });
+  await useAt(a, boardA.x, boardA.y);
   const ma = a.getByTestId("market");
   await ma.getByTestId("market-search").getByRole("combobox").fill("pescado crudo");
   await ma.getByTestId("market-search").getByRole("button", { name: "Buscar" }).click();
@@ -2313,7 +2420,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   // The buyer (now with the fish) uses the board and posts 8 fish at 6 coins.
   const board = await b.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
   if (!board) throw new Error("no canvas");
-  await b.mouse.click(board.x, board.y, { button: "right" });
+  await useAt(b, board.x, board.y);
   const mb = b.getByTestId("market");
   await expect(mb).toBeVisible();
   await mb.getByTestId("market-search").getByRole("combobox").fill("pescado crudo");
@@ -2450,14 +2557,14 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await arrived(b, 3152, 6403);
   await arrived(c, 3154, 6403);
   const step = async (page: Page, key: string, x: number, y: number): Promise<void> => {
-    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    await keysToGame(page);
     await page.keyboard.press(key);
     await arrived(page, x, y);
   };
   const openDoor = async (page: Page): Promise<void> => {
     const door = await page.evaluate(() => window.__rpgClient?.tileToClient(3153, 6401));
     if (!door) throw new Error("no canvas");
-    await page.mouse.click(door.x, door.y, { button: "right" });
+    await useAt(page, door.x, door.y);
     await expect(page.getByTestId("house")).toBeVisible();
   };
 
@@ -2537,7 +2644,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await step(b, "ArrowUp", 3153, 6400);
   await step(c, "ArrowLeft", 3153, 6403);
   await step(c, "ArrowUp", 3153, 6402);
-  await c.locator("body").click({ position: { x: 1, y: 1 } });
+  await keysToGame(c);
   await c.keyboard.press("ArrowUp");
   await expect(c.getByTestId("game-log")).toContainText(
     "La puerta de esta casa no se abre para ti.",
@@ -2726,7 +2833,7 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   const useGate = async (page: Page): Promise<void> => {
     const gate = await page.evaluate(() => window.__rpgClient?.tileToClient(3692, 5832));
     if (!gate) throw new Error("no canvas");
-    await page.mouse.click(gate.x, gate.y, { button: "right" });
+    await useAt(page, gate.x, gate.y);
   };
   const walkTo = async (page: Page, x: number, y: number): Promise<void> => {
     const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {

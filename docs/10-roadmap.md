@@ -295,9 +295,12 @@ secundaria.
   preparado para `tauri android/ios init` (`docs/15-movil.md`). E2E
   `client/e2e/mobile.spec.ts` con Pixel 7 (vertical y horizontal) e iPad Mini.
   Después (rama `fix/client-ux`): zoom del mapa por escalas enteras con el pellizco, botones
-  +/− en pantallas táctiles y Ctrl+rueda en PC (recordado en el dispositivo, nunca menos
-  que la vista de 15x11); hotbar en dos líneas a la derecha del pad en vertical (4 slots
-  en un teléfono de 390–412 px); el chat del panel lateral ya no tapa el final del
+  +/− en pantallas táctiles y Ctrl+rueda en PC (recordado en el dispositivo; desde la
+  vista ancha de 2026-11, rama `feat/wide-view`, por defecto la vista más grande que llena
+  la caja a escala entera sin bajar de 15x11, y alejando hasta la ventana entera de 31x21,
+  docs/02 "La vista");
+  hotbar en dos líneas a la derecha del pad en vertical (4 slots en un teléfono de
+  390–412 px); el chat del panel lateral ya no tapa el final del
   inventario a 1280x800; E2E también en WebKit (iPhone 13 e iPad Mini).
   👤 Pendiente: cuentas de Google Play y Apple Developer, firma (keystore, Team ID), y
   compilar y probar el APK/IPA en un dispositivo real (este PC no tiene Rust ni NDK).
@@ -364,3 +367,9 @@ secundaria.
   de `make validate` para items sin fuente, sin comprador o de quest que siguen cayendo;
   tablero del mercado en Brasal; `testisle` dev-only y renombrada; comisión del mercado
   con tope de 50 000 y precio de referencia por mediana.
+- [x] **Movimiento fluido (docs/17 A6, en parte; rama `feat/movement-feel`).** Pasos de
+  teclado predichos hasta `max_queued_steps` (4) y encolados en el servidor detrás de una
+  época de caminata, con su número (`seq`/`walk_seq`, docs/05 "Caminar"); los pasos del
+  servidor sobre su línea de ticks con colchón de jitter; cámara y criaturas a píxel de
+  pantalla; diagonal con dos flechas; correcciones que se deslizan. Falta (docs/17 §4,
+  "Hecho: A6 (parcial)"): MOV-3, MOV-4, MOV-7 y el E2E de MOV-9 con latencia simulada.

@@ -199,6 +199,17 @@ func (s *Spell) check() error {
 	if d := e.Damage; d != nil && (d.Range > 0) == (d.Radius > 0) {
 		return errors.New("damage needs either range (one target) or radius (area)")
 	}
+	if d := e.Damage; d != nil && d.Range > MaxRange {
+		return fmt.Errorf("damage range %d above %d", d.Range, MaxRange)
+	}
+	// An area hits every monster within radius: past MaxRange one would not notice the
+	// caster (session.InSight) and never fight back.
+	if d := e.Damage; d != nil && (d.Radius < 0 || d.Radius > MaxRange) {
+		return fmt.Errorf("damage radius must be 0 to %d", MaxRange)
+	}
+	if h := e.Heal; h != nil && (h.Range < 0 || h.Range > MaxRange) {
+		return fmt.Errorf("heal range must be 0 to %d", MaxRange)
+	}
 	for _, sc := range []*Scaling{damageScaling(e.Damage), healScaling(e.Heal)} {
 		if sc != nil && (sc.Skill == "") != (sc.PerSkill == 0) {
 			return errors.New("skill and per_skill go together")

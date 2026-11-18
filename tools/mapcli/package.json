@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@rpg/map-format": "workspace:*",
+    "@rpg/renderer": "workspace:*",
     "@rpg/spritepack": "workspace:*"
   },
   "bin": {

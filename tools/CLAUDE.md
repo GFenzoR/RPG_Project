@@ -78,19 +78,28 @@ commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 
 ## spritegen
 `tools/spritegen` (T0.5) dibuja el pixel art propio en `assets/sprites/<ruta>.png` a partir
-de recetas en código: `src/recipes/{terrain,portals,items,creatures,effects,ui}.ts`
-(`portals.ts`: escaleras de mano, agujeros, puntos de soga y teletransportes), con la paleta de
+de recetas en código: `src/recipes/{terrain,ground,walls,trees,props,portals,items,creatures,effects,ui}.ts`
+(`ground.ts`: suelos con sus looks y el agua y la lava animadas; `walls.ts`: las 16 piezas de
+cada muro y las puertas metidas en él; `trees.ts`: árboles y arbusto con viento y sombra;
+`props.ts`: fragua, fogón, antorcha, estandarte, brasero y fuente animados; `portals.ts`:
+escaleras de mano, agujeros, puntos de soga y teletransportes; arte del mapa en
+`assets/README.md`, "Arte del mapa"), con la paleta de
 materiales de `src/palette.ts` (4 tonos + contorno) y las primitivas de `src/draw.ts`
 (rect, line, disc, polygon, box en 3/4, contorno automático, luz desde arriba a la
 izquierda, ruido con semilla que hace mosaico). Determinista: la semilla sale de la ruta.
 Uso: `make spritegen` (o `ONLY=decor/`) y luego `make sprites`; para mirar el resultado,
 `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out shot.png --scale 4
 [--only decor/]` y revisa la imagen con Read (suelos en 3x3, objetos sobre pasto). `check`
-exige que cada receta sea una ruta usada en `data/` (o un frame de outfit
-`outfits/<id>/<dir>_<frame>`, o de efecto `effects/<nombre>/<n>`, sin huecos en la tira, o
-un icono de interfaz `ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente
-busca por ruta). El preview pone cada tira de efecto en su propia fila, sobre un jugador
-parado. Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
+exige que cada receta sea una ruta usada en `data/` (o un frame de animación
+`<sprite>/<acción>_<dir>_<n>` de un sprite que `data/` usa, como el trote del jabalí, o de
+efecto `effects/<nombre>/<n>`, sin huecos en la tira, o un icono de interfaz
+`ui/<grupo>/<id>` de `kind: ui`, como las marcas PvP que el cliente busca por ruta, o una
+parte de arte del mapa `var_<n>`, `frame_<n>`, `wall_<m>` o `shadow` de un sprite que
+`data/` usa). Un test exige además a cada suelo una media de L* entre 20 y 50 (docs/17
+ART-6; la lava no). El
+preview pone cada tira de efecto en su propia fila, sobre el jabalí parado. Los atuendos y
+los NPCs humanos ya no son de spritegen: son personajes de LPC (`assets/sprites.yaml`
+`animations`). Toda receta `kind: creature` sale con la sombra proyectada de Dungeon Crawl
 (`castShadow`, al final de `render`). Los PNG se commitean y el test exige que coincidan
 con las recetas. Estilo, sombra e iconos:
 `assets/README.md`, "Arte propio (spritegen)".
@@ -101,6 +110,10 @@ placeholders (cuadros de color con la sigla del item) cuando falta un sprite.
 Los PNG de bordes de `assets/sprites/borders/` salen de
 `node --experimental-strip-types tools/spritepack/src/gen-borders.ts` (regenéralos si
 cambia `data/borders.yaml` o el sprite de un suelo: cada pieza recorta la textura del suelo
-de origen, o su color si es placeholder). Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
+de origen, o su color si es placeholder; las orillas del agua salen con 3 frames más de
+espuma, `<pieza>/frame_<n>`). Uso: `make sprites` (`STRICT=1` falla si algún sprite de `data/` no tiene arte ni entrada en
 `assets/sprites.yaml`). Formato del manifiesto, del atlas y cómo integrar un pack de
-terceros: `assets/README.md`.
+terceros: `assets/README.md`. También arma las animaciones de criaturas (`src/anims.ts`,
+docs/17 ANI): compone capas de un pack con paletas (`palettes`, `animations`), corta los
+frames `<sprite>/<acción>_<dir>_<n>`, arma los clips de los archivos con esos nombres y
+escribe `anims` en `atlas.json` ("Sprites animados" en `assets/README.md`).

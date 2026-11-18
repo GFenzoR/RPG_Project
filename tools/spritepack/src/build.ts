@@ -6,6 +6,15 @@
 //   3. automatic placeholder                for data/ sprites nobody mapped yet (warning)
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import {
+  ANIM_ACTIONS,
+  ANIM_DIRS,
+  frameName,
+  layerOver,
+  measureFrames,
+  recolorImage,
+} from "./anims.ts";
+import type { AnimAction, AnimDir, AnimEntry, AnimMeta } from "./anims.ts";
 import { collectSpriteRefs, listFiles } from "./content.ts";
 import type { SpriteRef } from "./content.ts";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
@@ -14,6 +23,8 @@ import type { Image } from "./image.ts";
 import { parseManifest, SPRITE_PATH } from "./manifest.ts";
 import type { SpriteEntry } from "./manifest.ts";
 import { packSprites } from "./pack.ts";
+import { tileMetas } from "./tiles.ts";
+import type { TileEntry, TileMeta } from "./tiles.ts";
 import { defaultColor, defaultLabel, renderPlaceholder, TILE } from "./placeholder.ts";
 
 export const MANIFEST_FILE = "assets/sprites.yaml";
@@ -74,6 +85,10 @@ export interface AtlasIndex {
   tileSize: number;
   pages: string[];
   sprites: Record<string, { page: number; origin: Origin }>;
+  /** Animated and hinted creature sprites (assets/sprites.yaml `animations`, docs/17 ANI). */
+  anims: Record<string, AnimMeta>;
+  /** Map sprites with variants, frames, wall pieces, an anchor or a shadow (tiles.ts). */
+  tiles: Record<string, TileMeta>;
 }
 
 export interface BuildResult {
@@ -115,6 +130,11 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
   const manifestPath = join(root, MANIFEST_FILE);
   const entries = new Map<string, SpriteEntry>();
   const lines = new Map<string, number>();
+  let animations = new Map<string, AnimEntry>();
+  let animLines = new Map<string, number>();
+  let palettes = new Map<string, number[]>();
+  let tileEntries = new Map<string, TileEntry>();
+  let tileLines = new Map<string, number>();
   if (existsSync(manifestPath)) {
     const { manifest, errors } = parseManifest(readFileSync(manifestPath, "utf8"));
     for (const e of errors) {
@@ -127,6 +147,11 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     }
     for (const [k, v] of manifest.sprites) entries.set(k, v);
     for (const [k, v] of manifest.lines) lines.set(k, v);
+    animations = manifest.animations;
+    animLines = manifest.animationLines;
+    palettes = manifest.palettes;
+    tileEntries = manifest.tiles;
+    tileLines = manifest.tileLines;
   }
   const creditsPath = join(root, CREDITS_FILE);
   const packs = registeredPacks(existsSync(creditsPath) ? readFileSync(creditsPath, "utf8") : "");
@@ -185,6 +210,98 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       resolved.set(name, { origin: "vendor", image });
   }
 
+  // 2b. Animations with layers: frames composed from vendor sheets (anims.ts).
+  const anims: Record<string, AnimMeta> = {};
+  /** Atlas names that point at another sprite's pixels (alias -> sprite). */
+  const aliases = new Map<string, string>();
+  const sortedAnims = [...animations].sort(([a], [b]) => (a < b ? -1 : 1));
+  const layerCache = new Map<string, Image | undefined>();
+  const loadLayer = (name: string, file: string, where: string): Image | undefined => {
+    if (!layerCache.has(file)) {
+      const abs = join(assetsDir, file);
+      if (!existsSync(abs)) {
+        diags.push({ severity: "error", where, message: `${name}: assets/${file} not found` });
+        layerCache.set(file, undefined);
+      } else layerCache.set(file, readPng(abs, `assets/${file}`, diags, budget));
+    }
+    return layerCache.get(file);
+  };
+  for (const [name, entry] of sortedAnims) {
+    if (entry.layers.length === 0) continue;
+    const where = at(MANIFEST_FILE, animLines.get(name));
+    const taken = [...resolved.keys(), ...entries.keys()].find(
+      (k) => k === name || k.startsWith(`${name}/`),
+    );
+    if (taken !== undefined) {
+      diags.push({
+        severity: "error",
+        where,
+        message: `${name}: the animation's frames would clash with sprite ${taken}; keep only one`,
+      });
+      continue;
+    }
+    const packsOk = entry.layers.map((l) =>
+      checkPack(l.pack, assetsDir, packs, checkedPacks, where, diags),
+    );
+    if (packsOk.includes(false)) continue;
+    const built = buildLayered(
+      name,
+      entry,
+      palettes,
+      (file) => loadLayer(name, file, where),
+      where,
+      diags,
+    );
+    if (!built) continue;
+    for (const [frame, image] of built.frames) resolved.set(frame, { origin: "vendor", image });
+    aliases.set(name, built.base);
+    anims[name] = built.meta;
+  }
+
+  // 2c. Frames by name (docs/17 ANI-4): files <sprite>/<action>_<dir>_<n> (own art, such as
+  // a spritegen walk cycle) animate <sprite>; and hints-only entries for a sprite that exists.
+  const fileFrames = new Map<string, Map<string, Image>>();
+  for (const [name, r] of resolved) {
+    const m = FRAME_NAME.exec(name);
+    if (!m?.[1] || r.origin !== "file" || anims[m[1]]) continue;
+    const list = fileFrames.get(m[1]) ?? new Map<string, Image>();
+    list.set(name, r.image);
+    fileFrames.set(m[1], list);
+  }
+  const hinted = new Map<string, AnimEntry>();
+  for (const [name, entry] of sortedAnims) if (entry.layers.length === 0) hinted.set(name, entry);
+  const bases = [...new Set([...fileFrames.keys(), ...hinted.keys()])].sort();
+  for (const name of bases) {
+    const entry = hinted.get(name);
+    const where = at(MANIFEST_FILE, animLines.get(name));
+    const frames = fileFrames.get(name);
+    const r = resolved.get(name);
+    if (entry && (!r || r.origin === "auto") && !frames) {
+      diags.push({
+        severity: "error",
+        where,
+        message: `${name}: hints need a sprite of that name (a file in ${SPRITES_DIR} or a sprites entry)`,
+      });
+      continue;
+    }
+    const found = frames ? framesByName(name, frames) : undefined;
+    const image = r?.image ?? found?.first;
+    if (!image) continue;
+    const m = measureFrames(found?.walk.length ? found.walk : [image]);
+    anims[name] = {
+      w: image.width,
+      h: image.height,
+      anchor: "br",
+      foot: m.foot,
+      top: m.top,
+      shadow: entry?.shadow ?? "baked",
+      ...(entry?.facing ? { facing: entry.facing } : {}),
+      ...(entry?.flying ? { flying: true } : {}),
+      actions: found?.actions ?? {},
+    };
+    if (!r && found) aliases.set(name, found.base);
+  }
+
   // 3. Sprites used by data/ that nothing provides.
   const refs = collectSpriteRefs(root);
   const refsBySprite = new Map<string, SpriteRef[]>();
@@ -194,7 +311,14 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     refsBySprite.set(ref.sprite, list);
   }
   for (const [name, list] of [...refsBySprite].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    if (resolved.has(name) || entries.has(name) || !SPRITE_PATH.test(name)) continue;
+    if (resolved.has(name) || entries.has(name) || aliases.has(name) || !SPRITE_PATH.test(name))
+      continue;
+    // A legacy outfit frame (outfits/<id>/<dir>_<n>, T0.5) of an animated outfit.
+    const legacy = legacyFrame(name, anims);
+    if (legacy && resolved.has(legacy)) {
+      aliases.set(name, legacy);
+      continue;
+    }
     const first = list[0];
     diags.push({
       severity: opts.strict ? "error" : "warning",
@@ -212,9 +336,25 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     });
   }
 
+  // 3b. Map tile art (tiles.ts): variants, frames, wall pieces and shadows by name, plus the
+  // tiles entries of the manifest. Automatic placeholders do not count as art.
+  const tileNames = [...resolved].filter(([, r]) => r.origin !== "auto").map(([k]) => k);
+  const { tiles, problems } = tileMetas([...tileNames, ...aliases.keys()], tileEntries);
+  for (const p of problems)
+    diags.push({
+      severity: "error",
+      where: at(MANIFEST_FILE, tileLines.get(p.sprite)),
+      message: `${p.sprite}: ${p.message}`,
+    });
+
   const sprites = new Map<string, { origin: Origin; refs: SpriteRef[] }>();
   for (const [name, r] of resolved)
     sprites.set(name, { origin: r.origin, refs: refsBySprite.get(name) ?? [] });
+  for (const [alias, target] of aliases)
+    sprites.set(alias, {
+      origin: resolved.get(target)?.origin ?? "vendor",
+      refs: refsBySprite.get(alias) ?? [],
+    });
   if (diags.some((d) => d.severity === "error")) return { diagnostics: diags, sprites };
 
   // 4. Pack and render.
@@ -247,7 +387,14 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       },
     } as AtlasPageJson,
   }));
-  const index: AtlasIndex = { version: 1, tileSize: TILE, pages: jsonFiles, sprites: {} };
+  const index: AtlasIndex = {
+    version: 1,
+    tileSize: TILE,
+    pages: jsonFiles,
+    sprites: {},
+    anims: {},
+    tiles: {},
+  };
   const byName = [...packed.placements].sort((a, b) => (a.name < b.name ? -1 : 1));
   for (const p of byName) {
     const r = resolved.get(p.name);
@@ -263,6 +410,19 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     };
     index.sprites[p.name] = { page: p.page, origin: r.origin };
   }
+  // Aliases share their sprite's rectangle: an animation's base name and legacy frames.
+  for (const [alias, target] of [...aliases].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const t = index.sprites[target];
+    const page = t && pages[t.page];
+    const frame = page?.json.frames[target];
+    if (!t || !page || !frame) continue;
+    page.json.frames[alias] = frame;
+    index.sprites[alias] = t;
+  }
+  index.sprites = sortedRecord(index.sprites);
+  for (const page of pages) page.json.frames = sortedRecord(page.json.frames);
+  index.anims = anims;
+  index.tiles = tiles;
   return { diagnostics: diags, atlas: { index, pages }, sprites };
 }
 
@@ -283,6 +443,178 @@ export function writeAtlas(atlas: NonNullable<BuildResult["atlas"]>, outDir: str
   }
   write("atlas.json", JSON.stringify(atlas.index, null, 2) + "\n");
   return written;
+}
+
+/** An animation frame's name: <sprite>/<action>_<dir>_<n> (docs/17 ANI-4). */
+const FRAME_NAME = /^(.+)\/(idle|walk|attack|death)_([nesw])_([0-9]+)$/;
+
+/** Default ms per frame of an action whose frames are files (walk plays by distance). */
+const FILE_FRAME_MS: Record<AnimAction, number> = { idle: 500, walk: 0, attack: 60, death: 100 };
+
+/**
+ * The clips that files named <sprite>/<action>_<dir>_<n> make: per action, the facings
+ * that have frame 0, and as many frames as every one of them has from 0 without a gap.
+ */
+function framesByName(
+  sprite: string,
+  frames: Map<string, Image>,
+): { actions: AnimMeta["actions"]; base: string; first: Image | undefined; walk: Image[] } {
+  const actions: AnimMeta["actions"] = {};
+  for (const action of ANIM_ACTIONS) {
+    const dirs = ANIM_DIRS.filter((d) => frames.has(frameName(sprite, action, d, 0)));
+    if (dirs.length === 0) continue;
+    let count = Infinity;
+    for (const d of dirs) {
+      let n = 0;
+      while (frames.has(frameName(sprite, action, d, n))) n++;
+      count = Math.min(count, n);
+    }
+    actions[action] = {
+      frames: count,
+      ms: FILE_FRAME_MS[action],
+      ...(action === "walk" ? { perTile: Math.max(1, Math.floor(count / 2)) } : {}),
+      dirs,
+    };
+  }
+  const order = ["idle", "walk", "attack", "death"] as const;
+  let base = "";
+  for (const action of order) {
+    const a = actions[action];
+    if (!a) continue;
+    base = frameName(sprite, action, a.dirs.includes("s") ? "s" : (a.dirs[0] ?? "s"), 0);
+    break;
+  }
+  const walk = actions.walk
+    ? [...frames].filter(([k]) => k.startsWith(`${sprite}/walk_`)).map(([, v]) => v)
+    : [];
+  return { actions, base, first: frames.get(base), walk };
+}
+
+const sortedRecord = <T>(r: Record<string, T>): Record<string, T> =>
+  Object.fromEntries(Object.entries(r).sort(([a], [b]) => (a < b ? -1 : 1)));
+
+/**
+ * Composes an animation's frames: for every action and facing, each frame is its layers
+ * (recoloured) drawn in order. Undefined (with diagnostics) when a sheet is missing or
+ * too small.
+ */
+function buildLayered(
+  name: string,
+  entry: AnimEntry,
+  palettes: Map<string, number[]>,
+  load: (file: string) => Image | undefined,
+  where: string,
+  diags: Diagnostic[],
+): { frames: Map<string, Image>; base: string; meta: AnimMeta } | undefined {
+  const frames = new Map<string, Image>();
+  const meta: AnimMeta = {
+    w: 0,
+    h: 0,
+    anchor: "bc",
+    foot: 0,
+    top: 0,
+    shadow: entry.shadow,
+    ...(entry.facing ? { facing: entry.facing } : {}),
+    ...(entry.flying ? { flying: true } : {}),
+    actions: {},
+  };
+  const recolored = new Map<string, Image>();
+  let ok = true;
+  for (const action of ANIM_ACTIONS) {
+    const spec = entry.actions.get(action);
+    if (!spec) continue;
+    const { w, h } = spec.frame;
+    if (meta.w === 0) {
+      meta.w = w;
+      meta.h = h;
+    } else if (meta.w !== w || meta.h !== h) {
+      diags.push({
+        severity: "error",
+        where,
+        message: `${name}: every action needs the same frame size`,
+      });
+      return undefined;
+    }
+    const dirs = ANIM_DIRS.filter((d) => spec.rows[d] !== undefined);
+    const maxRow = Math.max(...dirs.map((d) => spec.rows[d] ?? 0));
+    const layers: Image[] = [];
+    for (const layer of entry.layers) {
+      const file = layer.file.split("<sheet>").join(spec.sheet);
+      const key = `${file}|${layer.recolor.map(([a, b]) => `${a}>${b}`).join(",")}`;
+      let img = recolored.get(key);
+      if (!img) {
+        const src = load(file);
+        if (!src) {
+          ok = false;
+          continue;
+        }
+        const swaps = layer.recolor.map(
+          ([a, b]) => [palettes.get(a) ?? [], palettes.get(b) ?? []] as [number[], number[]],
+        );
+        img = recolorImage(src, swaps);
+        recolored.set(key, img);
+      }
+      if ((spec.col + spec.count) * w > img.width || (maxRow + 1) * h > img.height) {
+        diags.push({
+          severity: "error",
+          where,
+          message: `${name}: ${action} needs ${(spec.col + spec.count) * w}x${(maxRow + 1) * h} px but assets/${file} is ${img.width}x${img.height}`,
+        });
+        ok = false;
+        continue;
+      }
+      layers.push(img);
+    }
+    if (!ok) continue;
+    for (const dir of dirs) {
+      for (let n = 0; n < spec.count; n++) {
+        const frame = createImage(w, h);
+        const row = spec.rows[dir] ?? 0;
+        for (const img of layers) layerOver(img, (spec.col + n) * w, row * h, frame);
+        frames.set(frameName(name, action, dir, n), frame);
+      }
+    }
+    meta.actions[action] = {
+      frames: spec.count,
+      ms: spec.ms,
+      ...(action === "walk" ? { perTile: spec.perTile } : {}),
+      dirs,
+    };
+  }
+  if (!ok || frames.size === 0) return undefined;
+  // Feet and height from the walk (the pose drawn most), else from every frame.
+  const walk = [...frames].filter(([k]) => k.startsWith(`${name}/walk_`)).map(([, v]) => v);
+  const m = measureFrames(walk.length > 0 ? walk : [...frames.values()]);
+  meta.foot = m.foot;
+  meta.top = m.top;
+  const base =
+    [frameName(name, "idle", "s", 0), frameName(name, "walk", "s", 0)].find((k) => frames.has(k)) ??
+    [...frames.keys()][0] ??
+    "";
+  return { frames, base, meta };
+}
+
+/**
+ * The frame a legacy outfit frame name stands for when its outfit is animated (T0.5 names,
+ * outfits/<id>/<dir>_<n>: 0 standing, 1.. walking): 0 is the idle (or walk) pose, 1 and up
+ * the walk cycle half a cycle apart.
+ */
+export function legacyFrame(name: string, anims: Record<string, AnimMeta>): string | undefined {
+  const m = /^(.+)\/([nesw])_([0-9]+)$/.exec(name);
+  const sprite = m?.[1];
+  const meta = sprite === undefined ? undefined : anims[sprite];
+  if (!m || sprite === undefined || !meta) return undefined;
+  const dir = m[2] as AnimDir;
+  const k = Number(m[3]);
+  const pick = (action: "idle" | "walk", n: number): string | undefined => {
+    const a = meta.actions[action];
+    if (!a) return undefined;
+    const d = a.dirs.includes(dir) ? dir : (a.dirs[0] ?? "s");
+    return frameName(sprite, action, d, n % a.frames);
+  };
+  const walk = meta.actions.walk;
+  if (k === 0) return pick("idle", 0) ?? pick("walk", 0);
+  return walk ? pick("walk", (k - 1) * Math.max(1, Math.floor(walk.frames / 2))) : pick("idle", 0);
 }
 
 function at(file: string, line: number | undefined): string {

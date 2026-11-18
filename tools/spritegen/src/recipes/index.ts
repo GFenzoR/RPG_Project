@@ -2,10 +2,14 @@
 import type { RecipeBook } from "../recipe.ts";
 import { CREATURES } from "./creatures.ts";
 import { EFFECTS } from "./effects.ts";
+import { GROUND } from "./ground.ts";
 import { ITEMS } from "./items.ts";
 import { PORTALS } from "./portals.ts";
+import { PROPS } from "./props.ts";
 import { TERRAIN } from "./terrain.ts";
+import { TREES } from "./trees.ts";
 import { UI } from "./ui.ts";
+import { WALLS } from "./walls.ts";
 
 function merge(...books: RecipeBook[]): RecipeBook {
   const out: RecipeBook = {};
@@ -18,4 +22,15 @@ function merge(...books: RecipeBook[]): RecipeBook {
   return out;
 }
 
-export const RECIPES: RecipeBook = merge(TERRAIN, PORTALS, ITEMS, CREATURES, EFFECTS, UI);
+export const RECIPES: RecipeBook = merge(
+  TERRAIN,
+  GROUND,
+  WALLS,
+  TREES,
+  PROPS,
+  PORTALS,
+  ITEMS,
+  CREATURES,
+  EFFECTS,
+  UI,
+);

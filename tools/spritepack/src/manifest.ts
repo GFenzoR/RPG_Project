@@ -1,6 +1,10 @@
 // assets/sprites.yaml: where the pixels of each logical sprite path come from.
 import { isMap, isScalar, LineCounter, parseDocument } from "yaml";
+import { parseAnimEntry, parsePalettes } from "./anims.ts";
+import type { AnimEntry } from "./anims.ts";
 import { parseHexColor } from "./image.ts";
+import { parseTileEntry } from "./tiles.ts";
+import type { TileEntry } from "./tiles.ts";
 import type { Rgba } from "./image.ts";
 import { TILE } from "./placeholder.ts";
 
@@ -36,6 +40,16 @@ export interface Manifest {
   sprites: Map<string, SpriteEntry>;
   /** 1-based line of each sprite key, for error messages. */
   lines: Map<string, number>;
+  /** Palettes for recolouring animation layers: name -> 0xrrggbb colours. */
+  palettes: Map<string, number[]>;
+  /** Animated (or hinted) creature sprites, docs/17 ANI (anims.ts). */
+  animations: Map<string, AnimEntry>;
+  /** 1-based line of each animation key. */
+  animationLines: Map<string, number>;
+  /** Timing, anchor and joins of map sprites with tile art, docs/17 ART-7 (tiles.ts). */
+  tiles: Map<string, TileEntry>;
+  /** 1-based line of each tiles key. */
+  tileLines: Map<string, number>;
 }
 
 export interface ManifestError {
@@ -49,7 +63,15 @@ const PLACEHOLDER_KEYS = new Set(["label", "color", "size"]);
 
 export function parseManifest(text: string): { manifest: Manifest; errors: ManifestError[] } {
   const errors: ManifestError[] = [];
-  const manifest: Manifest = { sprites: new Map(), lines: new Map() };
+  const manifest: Manifest = {
+    sprites: new Map(),
+    lines: new Map(),
+    palettes: new Map(),
+    animations: new Map(),
+    animationLines: new Map(),
+    tiles: new Map(),
+    tileLines: new Map(),
+  };
   const lc = new LineCounter();
   const doc = parseDocument(text, { lineCounter: lc, uniqueKeys: true, prettyErrors: false });
   for (const err of doc.errors) {
@@ -61,20 +83,24 @@ export function parseManifest(text: string): { manifest: Manifest; errors: Manif
   if (!isRecord(root))
     return { manifest, errors: [{ message: "expected a mapping at top level" }] };
   for (const key of Object.keys(root)) {
-    if (key !== "sprites") errors.push({ message: `unknown top-level key "${key}"` });
+    if (!TOP_KEYS.has(key)) errors.push({ message: `unknown top-level key "${key}"` });
   }
   const sprites = root["sprites"] ?? {};
   if (!isRecord(sprites))
     return { manifest, errors: [...errors, { message: '"sprites" must be a mapping' }] };
 
-  const node = doc.get("sprites", true);
-  if (isMap(node)) {
+  const keyLines = (section: string, into: Map<string, number>): void => {
+    const node = doc.get(section, true);
+    if (!isMap(node)) return;
     for (const pair of node.items) {
       if (isScalar(pair.key) && pair.key.range) {
-        manifest.lines.set(String(pair.key.value), lc.linePos(pair.key.range[0]).line);
+        into.set(String(pair.key.value), lc.linePos(pair.key.range[0]).line);
       }
     }
-  }
+  };
+  keyLines("sprites", manifest.lines);
+  keyLines("animations", manifest.animationLines);
+  keyLines("tiles", manifest.tileLines);
 
   for (const [sprite, raw] of Object.entries(sprites)) {
     const line = manifest.lines.get(sprite);
@@ -88,8 +114,46 @@ export function parseManifest(text: string): { manifest: Manifest; errors: Manif
     const entry = parseEntry(raw, fail);
     if (entry) manifest.sprites.set(sprite, entry);
   }
+
+  manifest.palettes = parsePalettes(root["palettes"], (message) => errors.push({ message }));
+  const animations = root["animations"] ?? {};
+  if (!isRecord(animations)) {
+    errors.push({ message: '"animations" must be a mapping' });
+    return { manifest, errors };
+  }
+  for (const [sprite, raw] of Object.entries(animations)) {
+    const line = manifest.animationLines.get(sprite);
+    const fail = (message: string): void => {
+      errors.push({ sprite, message, ...(line === undefined ? {} : { line }) });
+    };
+    if (!SPRITE_PATH.test(sprite)) {
+      fail("sprite path must be lowercase snake_case segments separated by /");
+      continue;
+    }
+    const entry = parseAnimEntry(raw, manifest.palettes, fail);
+    if (entry) manifest.animations.set(sprite, entry);
+  }
+  const tiles = root["tiles"] ?? {};
+  if (!isRecord(tiles)) {
+    errors.push({ message: '"tiles" must be a mapping' });
+    return { manifest, errors };
+  }
+  for (const [sprite, raw] of Object.entries(tiles)) {
+    const line = manifest.tileLines.get(sprite);
+    const fail = (message: string): void => {
+      errors.push({ sprite, message, ...(line === undefined ? {} : { line }) });
+    };
+    if (!SPRITE_PATH.test(sprite)) {
+      fail("sprite path must be lowercase snake_case segments separated by /");
+      continue;
+    }
+    const entry = parseTileEntry(raw, fail);
+    if (entry) manifest.tiles.set(sprite, entry);
+  }
   return { manifest, errors };
 }
+
+const TOP_KEYS = new Set(["sprites", "palettes", "animations", "tiles"]);
 
 function parseEntry(raw: unknown, fail: (msg: string) => void): SpriteEntry | undefined {
   if (!isRecord(raw)) {

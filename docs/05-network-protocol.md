@@ -38,7 +38,7 @@
 2. Cliente → HTTP GET /api/characters                  → lista de personajes
 3. Cliente → HTTP POST /api/play {character_id}        → session_token (vive 60 s)
 4. Cliente abre WS y envía Hello {session_token, client_version, locale}
-5. Servidor → Welcome {creature_id, server_time, tick_ms} + FullMapView + Stats + Inventory + Skills
+5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height} + FullMapView + Stats + Inventory + Skills
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
@@ -56,6 +56,9 @@ Detalles (T1.4, `server/internal/net/gateway`):
 - **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
   `Inventory` (equipo guardado, T1.8) y `PlayerSkills` (todas las skills de
   `balance.yaml → skills.base`, con el nivel guardado del personaje).
+  `view_width`/`view_height` (31 y 21) son la ventana de casillas que el servidor le
+  mantiene al día, sin el margen (ver "Formato de mapa"): el cliente dibuja como mucho
+  eso. Un servidor anterior a la vista ancha no los manda (0): el cliente toma 15x11.
 - **Posición inicial:** la guardada; si el personaje nunca jugó (o su casilla dejó de
   ser caminable) el templo de su isla (`town`, o la primera isla del mundo). Si está
   ocupada, la casilla libre más cercana (hasta 3 de distancia).
@@ -454,7 +457,7 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 ## Mensajes cliente → servidor (intenciones)
 | Mensaje | Campos |
 |---|---|
-| `Walk` | `dir` (N, NE, E, SE, S, SW, W, NW) |
+| `Walk` | `dir` (N, NE, E, SE, S, SW, W, NW), `walk_epoch`, `seq` |
 | `WalkPath` | `steps[]` (máx. 100) |
 | `StopWalk` | — |
 | `Turn` | `dir` |
@@ -491,14 +494,47 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `ground.speed` de la casilla **de destino** (100 por defecto), redondeada hacia arriba
   a ticks de 50 ms. `CreatureMove.duration_ms` es esa duración ya redondeada. La
   posición cambia al **empezar** el paso.
-- `Walk` reemplaza lo que hubiera en cola (también un `WalkPath`) por un paso; si el
-  personaje está a mitad de un paso, sale al terminarlo. Mandar `Walk` cada tick no
-  acelera nada.
+- **`Walk` encola un paso de teclado** detrás de los pasos de teclado que ya esperan, como
+  mucho `movement.max_queued_steps` (`balance.yaml`, 4; el `Welcome` se lo dice al
+  cliente, así un cambio del YAML no necesita recompilar el cliente); si en la cola hay un
+  `WalkPath` o un paso de persecución (`chase`), lo descarta. Si el personaje está a mitad de un paso,
+  el siguiente sale el tick en que termina. Así el cliente predice unos pasos adelante y
+  manda cada uno un poco antes de que termine el que dibuja (`client/CLAUDE.md`
+  "Movimiento fluido"): el servidor camina sin huecos entre casillas aunque la red los
+  junte o los atrase. Uno más que el tope no es un cliente honesto (el cliente nunca tiene
+  más de `max_queued_steps` sin confirmar): **reinicia la caminata** (`WalkRejected` con
+  `dir` = `UNSPECIFIED`: no se rechazó un paso, y el cliente no debe evitar esa casilla).
+  Mandar `Walk` cada tick no acelera nada: el ritmo es del servidor, la cola se llena y
+  el siguiente la vacía.
+- **Número del `Walk` (`seq`).** El cliente numera sus `Walk` (uno más cada vez, desde 1;
+  0 = sin número, bots y clientes viejos). El `CreatureMove` del paso que ejecuta ese
+  `Walk` lo devuelve en `walk_seq`, **solo en la copia del propio jugador** (los demás
+  reciben 0); un paso de un `WalkPath` o de persecución lleva 0. Así el cliente empareja
+  cada respuesta con su predicción aunque el servidor haya dado antes un paso que el
+  cliente no esperaba (el siguiente de un camino por click, uno de persecución) o un
+  `Walk` se haya perdido (el gateway descarta lo que pasa del rate limit, o la cola del
+  loop llena): un `walk_seq` k responde también a los `Walk` anteriores a k que no
+  volvieron. El servidor no decide nada con `seq`: solo lo copia.
+- **Época de la caminata (`walk_epoch`, desde 1).** Toda vez que el servidor vacía la cola
+  y se lo dice al cliente, empieza una época nueva: cada `WalkRejected` (lleva
+  `walk_epoch`) y cada teletransporte (el `FullMapView` lleva `walk_epoch`; el del login
+  trae la 1). El cliente manda en cada `Walk` la época del último de esos mensajes. Un
+  `Walk` de otra época salió antes de que el cliente supiera del reinicio, y el cliente ya
+  lo olvidó: el servidor lo descarta **sin contestar** (no lo ejecuta desde una casilla que
+  el cliente no esperaba). `walk_epoch` 0 no se revisa (clientes y bots anteriores a la
+  cola). Garantía: todo `Walk` aceptado termina en un `CreatureMove` (con su `seq`), un
+  `WalkRejected` o un `FullMapView` (teletransporte, muerte); el servidor no vacía la cola
+  en silencio por su cuenta. Solo lo hacen, sin contestar, lo que pide el propio cliente
+  (`StopWalk`, y un `WalkPath`, que la reemplaza: el cliente lo manda sin pasos de teclado
+  sin confirmar) y la desconexión. Un `Walk` que el gateway descarta no llega nunca: lo
+  responde el `walk_seq` de uno posterior, y si no hay otro, el cliente lo da por perdido
+  a los 3 s (`PREDICT_TIMEOUT_MS`).
 - `WalkPath` reemplaza la cola. Vacío = `StopWalk`. Más de `max_path_tiles` pasos
   (`balance.yaml`, 100) o una dirección inválida → `WalkRejected` con `dir` =
   `UNSPECIFIED` y nada se encola. En los demás rechazos `dir` es el paso rechazado.
 - Cada paso se valida al ejecutarse: casilla sin suelo, que bloquea o fuera del mundo →
-  `WalkRejected{pos, dir}` y se vacía la cola. Si la bloquea **una criatura** durante un
+  `WalkRejected{pos, dir, walk_epoch}`, se vacía la cola (los pasos de teclado de atrás
+  también) y empieza otra época. Si la bloquea **una criatura** durante un
   `WalkPath`, el servidor recalcula con A* hasta el final del camino esquivando
   criaturas (y escaleras, agujeros y teletransportes salvo el final); si no hay camino (o
   el destino está ocupado) → `WalkRejected`. Un `Walk` de teclado bloqueado por una
@@ -1059,7 +1095,9 @@ No hay mensajes nuevos en el protocolo: un portal es un teletransporte.
   cliente conocía y `FullMapView` del destino (con el piso nuevo); los observadores del
   origen reciben `CreatureDisappear` y los del destino `CreatureAppear`. Sin `MapSlice`
   del piso de origen: el `FullMapView` reemplaza la vista. El paso pendiente del cliente
-  queda resuelto por el `FullMapView`, y la cola de pasos se vacía. Subir y bajar sin
+  queda resuelto por el `FullMapView`, la cola de pasos se vacía y empieza otra época de
+  caminata (`walk_epoch`). El cliente no predice pasos más allá de una escalera, un agujero
+  o un teletransporte. Subir y bajar sin
   parar cuesta un `FullMapView` por paso: en la mina volcánica, 471 bytes arriba y 308
   abajo, unos 950 B/s al ritmo de un nivel 30 (docs/07; lo mide
   `TestVolcanicMineStairsOnTheMap`).
@@ -1153,11 +1191,11 @@ Reglas en `02-game-design.md` ("Condiciones").
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
 |---|---|
-| `FullMapView` | Área completa visible (al entrar, teletransportarse o pasar por un portal) |
+| `FullMapView` | Área completa visible (al entrar, teletransportarse o pasar por un portal) y la época de la caminata (`walk_epoch`) |
 | `MapSlice` | Fila o columna nueva al moverse |
 | `TileUpdate` | Cambió la pila de un tile |
 | `CreatureAppear` / `CreatureDisappear` | Entra o sale de la vista |
-| `CreatureMove` | `id`, `from`, `to`, `duration_ms` |
+| `CreatureMove` | `id`, `from`, `to`, `duration_ms`, `walk_seq` (solo el propio: el `seq` del `Walk` que ejecuta) |
 | `CreatureTurn`, `CreatureHealth`, `CreatureOutfit`, `CreatureSpeed` | |
 | `Effect` | Efecto visual en posición (`effect_id`) |
 | `Projectile` | De A a B (`projectile_id`) |
@@ -1178,7 +1216,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `HouseUpdate` | La ventana de una casa, o su cierre (T5.4) |
 | `CreatureCosmetics` | Cambiaron los cosméticos equipados de un jugador visible (T5.7) |
 | `CosmeticsState` | Cosméticos de la cuenta, saldo premium y lo equipado (T5.7) |
-| `WalkRejected` | El cliente corrige su predicción |
+| `WalkRejected` | El cliente corrige su predicción: posición, paso rechazado y época nueva de la caminata (`walk_epoch`) |
 | `Pong`, `Disconnect` | |
 
 Los textos del servidor viajan como **clave i18n + parámetros** (`LocalizedText`), no
@@ -1196,18 +1234,24 @@ Ambos llevan un `MapArea {x, y, width, height, palette[], floors[], creatures[]}
 - `creatures`: criaturas paradas dentro del área.
 `MapSlice` usa el mismo formato con la fila o columna nueva (`width` o `height` = 1).
 
-Reglas del área de interés (T1.4):
-- El área es de 17x13 casillas centrada en el jugador: las 15x11 visibles más 1 de
-  margen por lado. `MapArea.x/y` es la esquina superior izquierda; cerca del borde del
-  mundo (coordenada 0) el área se recorta y `width`/`height` lo dicen.
+Reglas del área de interés (T1.4; vista ancha desde 2026-11):
+- El área es de 33x23 casillas centrada en el jugador: la ventana de 31x21
+  (`Welcome.view_width`/`view_height`) más 1 de margen por lado. Antes de la vista ancha
+  era de 17x13 (15x11 + 1): el formato no cambió, solo el tamaño, así que un cliente viejo
+  la recibe igual y dibuja sus 15x11 del centro. `MapArea.x/y` es la esquina superior
+  izquierda; cerca del borde del mundo (coordenada 0) el área se recorta y
+  `width`/`height` lo dicen.
+- La ventana es la misma para todos los jugadores, sea cual sea su pantalla o su zoom (que
+  son solo de dibujo): así "A ve a B" es simétrico. Lo que nota un monstruo no es esta
+  ventana, sino la clásica de 15x11 + 1 (`02-game-design.md`, "La vista").
 - **Pisos:** en la superficie o arriba (z ≤ 7) se mandan los pisos 0–7; bajo tierra solo
   el piso actual. Un piso sin ninguna casilla en el área no se manda. Las criaturas se
   ven con la misma regla, así que "A ve a B" es simétrico.
 - Tile = suelo y luego la pila de items de `world.bin`, de abajo arriba, y encima los
   items del servidor (T1.8) con su `count` si son apilables (0 en los demás).
-- **Paso ortogonal:** un `MapSlice` con la columna (13 de alto) o la fila (17 de ancho) nueva. **Paso
-  diagonal:** dos `MapSlice`, primero la columna completa (13) y después la fila sin la
-  esquina (16).
+- **Paso ortogonal:** un `MapSlice` con la columna (23 de alto) o la fila (33 de ancho) nueva. **Paso
+  diagonal:** dos `MapSlice`, primero la columna completa (23) y después la fila sin la
+  esquina (32).
 - `MapArea.creatures` de un `MapSlice` trae las criaturas que entran a la vista por ese
   movimiento propio; las que salen llegan como `CreatureDisappear`. Cuando otra
   criatura se mueve: si el cliente la conocía y la sigue viendo → `CreatureMove`; si
@@ -1242,7 +1286,8 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 
 ## Límites
 - Tamaño máximo de mensaje entrante: 4 KB (más grande → cierre WebSocket 1009). Saliente:
-  sin límite fijo, pero `FullMapView` se comprime con la paleta y suele quedar < 20 KB.
+  sin límite fijo, pero `FullMapView` se comprime con la paleta y suele quedar < 20 KB
+  (~1 KB en el pueblo del Farol con la vista de 31x21).
 - Frames de texto o protobuf inválido después del `Hello` → `Disconnect{KICKED}`.
 - Rate limit: 30 comandos/s por conexión (ráfaga 60). Un mensaje sin ficha se descarta
   y suma deuda; la deuda se paga con la misma recarga. Con más de 30 de deuda →
@@ -1261,3 +1306,8 @@ UPDATE_GOLDEN=1 pnpm --filter @rpg/protocol test
 ## Presupuesto de ancho de banda
 Objetivo: < 4 KB/s promedio por jugador en zona concurrida. Con 100 jugadores ≈ 400 KB/s
 de salida, cómodo para una instancia chica.
+
+Con la vista de 31x21 (`07-performance-budget.md`, "Vista ancha"), los escenarios de la
+prueba de carga jugados en proceso dan 490 B/s por jugador (100 repartidos por Puerto) y
+1676 B/s (300 en el pueblo, donde todos ven a todos); con 15x11 eran 309 y 785. Un
+`FullMapView` en el pueblo del Farol pesa ~1 KB (antes ~350 B).

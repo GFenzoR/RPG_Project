@@ -1,13 +1,17 @@
-// T5.6: the contextual menu of a long press (what the right click and Shift+click do with a
-// mouse: use, open, look, attack, talk, move) and the banner of an item picked by a tap,
-// waiting for a tap on its destination. Both are plain functions without hooks, so
-// ActionMenu.test.ts walks their trees without a DOM. Every button sends the same intent as
-// the mouse; the server validates it.
+// The contextual menu: a finger's long press (T5.6) and, since docs/17 UI-6, the mouse's
+// right click on an item (menu controls) or Shift+right click (classic). It lists what can
+// be done there (attack, talk, climb, use, open, use with, eat, equip, look, move, move part),
+// the default action first and in bold, and under the buttons the card of the item. Also the
+// banner of an item picked by a tap, waiting for a tap on its destination. Both are plain
+// functions without hooks, so ActionMenu.test.ts walks their trees without a DOM. Every
+// button sends the same intent as the mouse; the server validates it.
 import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import type { ActionMenuView, Game } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import type { ItemRef } from "../state/items.ts";
+import { cardLines } from "../state/item-card.ts";
+import { BigIcon, ItemCard } from "./ItemCard.tsx";
 import "./touch.css";
 
 /** Gap between the finger and the menu, CSS pixels. */
@@ -62,11 +66,56 @@ export const menuClickCounts = (pressed: boolean, detail: number): boolean =>
 
 /** The menu's width (matches .touch-menu in touch.css), CSS pixels. */
 export const MENU_WIDTH = 224;
+/** The width of a menu with an item card (.touch-menu.with-card), CSS pixels. */
+export const CARD_MENU_WIDTH = 288;
+/** Height of one line of the card in the menu (touch.css .item-card), CSS pixels. */
+const CARD_LINE = 19;
 
-/** Height of a menu with `buttons` buttons (cancel included) and maybe a title, CSS px
- * (the sizes of .touch-menu in touch.css). */
-export function menuHeight(buttons: number, title: boolean): number {
-  return 2 * 8 + 2 + (title ? 34 : 0) + buttons * 48 + Math.max(0, buttons - 1) * 6;
+/**
+ * Height of a menu with `buttons` buttons (cancel included) and maybe a title, CSS px
+ * (the sizes of .touch-menu in touch.css). `mouse`: the compact buttons of a menu opened
+ * by the mouse; `cardLines`: the lines of an item card under the buttons (cardLines).
+ */
+export function menuHeight(buttons: number, title: boolean, mouse = false, cardLines = 0): number {
+  const button = mouse ? 30 : 48;
+  const gap = mouse ? 2 : 6;
+  const card = cardLines > 0 ? 12 + cardLines * CARD_LINE : 0;
+  // With a card the title carries the item's icon at 2x (64 px).
+  const head = title ? (cardLines > 0 ? 68 : 34) : 0;
+  return (
+    2 * 8 +
+    2 +
+    head +
+    buttons * button +
+    Math.max(0, buttons - 1) * gap +
+    (card > 0 ? gap + card : 0)
+  );
+}
+
+/**
+ * Where a menu (or a tooltip) opened by the mouse at (x, y) goes on a vw x vh screen: its
+ * top left corner a little right of and below the pointer, as desktop context menus open;
+ * left of it where the right edge is near, above it where the bottom is near; never off
+ * the screen (a margin from each edge). When it fits on neither side vertically it takes
+ * the screen's height and scrolls inside.
+ */
+export function mousePlacement(
+  x: number,
+  y: number,
+  vw: number,
+  vh: number,
+  width: number,
+  height: number,
+): { left: number; top: number; maxHeight?: number } {
+  const gap = 4;
+  const m = MENU_MARGIN;
+  let left = x + gap;
+  if (left + width > vw - m) left = x - gap - width;
+  left = Math.round(Math.min(Math.max(left, m), Math.max(m, vw - m - width)));
+  if (y + gap + height <= vh - m) return { left, top: Math.round(y + gap) };
+  if (y - gap - height >= m) return { left, top: Math.round(y - gap - height) };
+  if (height <= vh - 2 * m) return { left, top: Math.round(vh - m - height) };
+  return { left, top: m, maxHeight: vh - 2 * m };
 }
 
 /**
@@ -85,10 +134,11 @@ export function menuPlacement(
   vh: number,
   height = 0,
   insets: Insets = NO_INSETS,
+  width = MENU_WIDTH,
 ): { left: number; top?: number; bottom?: number; maxHeight?: number } {
   const minLeft = insets.left + MENU_MARGIN;
-  const maxLeft = Math.max(minLeft, vw - insets.right - MENU_WIDTH - MENU_MARGIN);
-  const left = Math.round(Math.min(maxLeft, Math.max(minLeft, x - MENU_WIDTH / 2)));
+  const maxLeft = Math.max(minLeft, vw - insets.right - width - MENU_MARGIN);
+  const left = Math.round(Math.min(maxLeft, Math.max(minLeft, x - width / 2)));
   // The safe area's top and bottom edges, as distances from the screen's top.
   const top = insets.top;
   const bottom = vh - insets.bottom;
@@ -112,28 +162,55 @@ export function menuPlacement(
 export function ActionMenu(props: {
   t: Translate;
   menu: ActionMenuView;
-  game: Pick<Game, "menuChoose" | "closeMenu" | "menuPress" | "menuPressed"> | undefined;
+  game:
+    | (Pick<Game, "menuChoose" | "closeMenu" | "menuPress" | "menuPressed"> &
+        Partial<Pick<Game, "menuSplit" | "itemIcon">>)
+    | undefined;
   /** The screen size (window.innerWidth/innerHeight; fixed values in tests). */
   viewport: { width: number; height: number };
   /** The safe area's insets (paddingInsets of .game); none by default. */
   insets?: Insets | undefined;
 }): JSX.Element {
   const { t, menu, game } = props;
-  const at = menuPlacement(
-    menu.x,
-    menu.y,
-    props.viewport.width,
-    props.viewport.height,
-    menuHeight(menu.actions.length + 1, menu.title !== ""),
-    props.insets ?? NO_INSETS,
+  const card = menu.card;
+  const width = card ? CARD_MENU_WIDTH : MENU_WIDTH;
+  const height = menuHeight(
+    menu.actions.length + 1,
+    menu.title !== "",
+    menu.mouse === true,
+    card ? cardLines(card, false) : 0,
   );
+  const at = menu.mouse
+    ? mousePlacement(menu.x, menu.y, props.viewport.width, props.viewport.height, width, height)
+    : menuPlacement(
+        menu.x,
+        menu.y,
+        props.viewport.width,
+        props.viewport.height,
+        height,
+        props.insets ?? NO_INSETS,
+        width,
+      );
   const style: JSX.CSSProperties = { left: `${at.left}px` };
   if (at.top !== undefined) style.top = `${at.top}px`;
-  if (at.bottom !== undefined) style.bottom = `${at.bottom}px`;
-  if (at.maxHeight !== undefined) style.maxHeight = `${at.maxHeight}px`;
+  if ("bottom" in at && at.bottom !== undefined) style.bottom = `${at.bottom}px`;
+  // The height above is an estimate (a card's description wraps as it wraps): the menu
+  // never goes past the safe area's edge on its side, it scrolls inside instead.
+  const insets = props.insets ?? NO_INSETS;
+  const vh = props.viewport.height;
+  const room =
+    at.top !== undefined
+      ? vh - insets.bottom - MENU_MARGIN - at.top
+      : "bottom" in at && at.bottom !== undefined
+        ? vh - at.bottom - insets.top - MENU_MARGIN
+        : undefined;
+  const maxHeight = Math.min(at.maxHeight ?? Infinity, room ?? Infinity);
+  if (Number.isFinite(maxHeight)) style.maxHeight = `${Math.max(0, maxHeight)}px`;
   // Read when the click happens, not when the menu was drawn: the press that arms it comes
   // right before its click, maybe before any new render.
   const counts = (e: MouseEvent): boolean => menuClickCounts(game?.menuPressed ?? false, e.detail);
+  const icon = card ? game?.itemIcon?.(card.itemId) : undefined;
+  const stack = menu.stack ?? 1;
   return (
     <div class="touch-menu-layer" data-testid="action-menu-layer">
       <div
@@ -148,30 +225,73 @@ export function ActionMenu(props: {
         onContextMenu={(e) => e.preventDefault()}
       />
       <div
-        class="touch-menu"
+        class={card ? "touch-menu with-card" : "touch-menu"}
         role="menu"
         aria-label={menu.title || t("client.touch.actions.label")}
         data-testid="action-menu"
+        data-pointer={menu.mouse ? "mouse" : undefined}
         style={style}
         // A finger (or pen, or mouse) pressed on the menu: its next click is a choice. The
         // finger that opened the menu went down on the map or the item, never here.
         onPointerDown={() => game?.menuPress()}
+        onContextMenu={(e) => e.preventDefault()}
       >
-        {menu.title && <div class="touch-menu-title">{menu.title}</div>}
-        {menu.actions.map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            role="menuitem"
-            class="touch-menu-action"
-            data-action={kind}
-            onClick={(e) => {
-              if (counts(e)) game?.menuChoose(kind);
-            }}
-          >
-            {t(`client.touch.action.${kind}`)}
-          </button>
-        ))}
+        {menu.title && (
+          <div class="touch-menu-title">
+            {icon && <BigIcon icon={icon} class="touch-menu-icon" />}
+            <span class="touch-menu-name">{menu.title}</span>
+          </div>
+        )}
+        {menu.actions.map((kind, i) =>
+          kind === "split" ? (
+            // "Move part…": how many units, then the stack is picked with that count (the
+            // next click or tap on a slot, a cell or a tile places them). A form without
+            // hooks: the field is read when OK is pressed.
+            <details key={kind} class="touch-menu-split">
+              <summary role="menuitem" class="touch-menu-action" data-action="split">
+                {t("client.touch.action.split")}
+              </summary>
+              <form
+                class="touch-menu-split-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  // The field (no instanceof: the tests run without a DOM).
+                  const el = e.currentTarget.elements.namedItem("count") as {
+                    value?: string;
+                  } | null;
+                  const n = Number(el?.value ?? NaN);
+                  game?.menuSplit?.(splitCount(n, stack));
+                }}
+              >
+                <input
+                  type="number"
+                  name="count"
+                  min={1}
+                  max={Math.max(1, stack - 1)}
+                  defaultValue={String(Math.max(1, Math.floor(stack / 2)))}
+                  aria-label={t("client.touch.split_count")}
+                  data-testid="split-count"
+                />
+                <button type="submit" data-testid="split-ok">
+                  {t("client.touch.split_ok")}
+                </button>
+              </form>
+            </details>
+          ) : (
+            <button
+              key={kind}
+              type="button"
+              role="menuitem"
+              class={i === 0 ? "touch-menu-action default" : "touch-menu-action"}
+              data-action={kind}
+              onClick={(e) => {
+                if (counts(e)) game?.menuChoose(kind);
+              }}
+            >
+              {t(`client.touch.action.${kind}`)}
+            </button>
+          ),
+        )}
         <button
           type="button"
           role="menuitem"
@@ -183,9 +303,16 @@ export function ActionMenu(props: {
         >
           {t("client.touch.action.cancel")}
         </button>
+        {card && <ItemCard t={t} card={card} name={false} />}
       </div>
     </div>
   );
+}
+
+/** The units "Move part…" takes: a whole number from 1 to the stack less one. */
+export function splitCount(n: number, stack: number): number {
+  const max = Math.max(1, stack - 1);
+  return Number.isFinite(n) ? Math.min(max, Math.max(1, Math.floor(n))) : 1;
 }
 
 /** The item picked by a tap: "tap where it goes", with a big button to drop the pick. */

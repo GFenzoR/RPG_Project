@@ -1,6 +1,7 @@
 // Keyboard movement: arrows and WASD. Kept apart from the game so touch controls can feed
 // the same `held()` later without touching the movement code.
 import { Direction } from "@rpg/protocol";
+import { combine } from "../state/motion.ts";
 
 const KEYS: Record<string, Direction> = {
   ArrowUp: Direction.NORTH,
@@ -16,7 +17,10 @@ const KEYS: Record<string, Direction> = {
 /** Direction of a KeyboardEvent.code, or undefined if it is not a movement key. */
 export const keyDirection = (code: string): Direction | undefined => KEYS[code];
 
-/** Tracks the movement keys held down; the most recent one wins. */
+/**
+ * Tracks the movement keys held down: the most recent one wins, and with a perpendicular
+ * one also held they walk the diagonal between them (up + right = north-east).
+ */
 export class MovementKeys {
   private readonly held_: Direction[] = [];
   /** Presses since the last take(): a quick tap still walks one step. */
@@ -42,12 +46,19 @@ export class MovementKeys {
   }
 
   /**
-   * The direction to walk now: a tap since the last call, else the last key still held.
-   * Call it only when a step can start, so a tap during a step walks right after it.
+   * The direction to walk now: a tap since the last call, else the last key still held;
+   * combined with the newest perpendicular key held, their diagonal. Call it only when a
+   * step can start, so a tap during a step walks right after it.
    */
   take(): Direction | undefined {
     const d = this.tapped ?? this.held_[this.held_.length - 1];
     this.tapped = undefined;
+    if (d === undefined) return undefined;
+    for (let i = this.held_.length - 1; i >= 0; i--) {
+      const other = this.held_[i];
+      const diagonal = other === undefined ? undefined : combine(d, other);
+      if (diagonal !== undefined) return diagonal;
+    }
     return d;
   }
 }

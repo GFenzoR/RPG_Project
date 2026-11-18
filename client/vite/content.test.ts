@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadContent } from "@rpg/map-format";
-import { loadClientContent, loadPortals, loadSiteContent } from "./content.ts";
+import { dialogTopics, loadClientContent, loadPortals, loadSiteContent } from "./content.ts";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -174,6 +174,86 @@ describe("client content (T5.7)", () => {
         expect(site.i18n[lang]?.[`cosmetic.${c.id}.name`]).toBeTruthy();
       }
       expect(site.i18n[lang]?.["premium.amount"]).toContain("{count}");
+    }
+  });
+});
+
+describe("client content (docs/17 UI-6, UI-8)", () => {
+  const content = loadClientContent(REPO);
+  const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+
+  it("ships what the item card shows: kind, weight, stats and requirements", () => {
+    expect(byId.get("iron_sword")).toMatchObject({
+      kind: "weapon",
+      weight: 3300,
+      weapon: { type: "sword", attack: 13, defense: 9, hands: 1, range: 0, element: "", ammo: "" },
+      requires: { level: 5, vocations: [] },
+    });
+    expect(byId.get("coral_wand")?.weapon).toMatchObject({ range: 4, element: "ice" });
+    expect(byId.get("coral_wand")?.requires?.vocations).toEqual(["arcanist"]);
+    expect(byId.get("short_bow")?.weapon).toMatchObject({ hands: 2, ammo: "arrow" });
+    expect(byId.get("patched_tunic")?.armor).toEqual({ slot: "body", armor: 2 });
+    expect(byId.get("plank_shield")?.shield).toEqual({ defense: 12 });
+    expect(byId.get("raw_fish")?.consumable).toEqual({ healHp: 0, healMp: 0, foodMs: 60000 });
+    // Fields an item does not have stay out of the bundle.
+    expect(byId.get("raw_fish")?.weapon).toBeUndefined();
+    expect(byId.get("grass")?.weight).toBeUndefined();
+  });
+
+  it("marks the map fixtures nobody carries (pickupable: false)", () => {
+    const fixed = Object.values(content.items).filter((d) => d.fixed);
+    expect(fixed.length).toBeGreaterThan(0);
+    expect(byId.get("backpack")?.fixed).toBeUndefined();
+  });
+
+  it("files every dialog option under one topic per NPC, with no conflicts", () => {
+    const { topics, conflicts } = dialogTopics(REPO);
+    expect(conflicts).toEqual([]);
+    expect(content.dialogTopics).toEqual(topics);
+    // Trade, blessings (one step ahead), healing, travel and a quest, by what they do.
+    expect(topics["puerto_armorer"]?.["dialog.trade"]).toBe("trade");
+    expect(topics["puerto_priest"]?.["npc.puerto_priest.opt_blessings"]).toBe("services");
+    expect(topics["puerto_priest"]?.["npc.puerto_priest.opt_heal"]).toBe("services");
+    expect(topics["puerto_priest"]?.["npc.puerto_priest.opt_faith"]).toBe("talk");
+    expect(topics["harbor_master"]?.["dialog.ask_travel"]).toBe("travel");
+    expect(topics["harbor_master"]?.["npc.harbor_master.to_forest"]).toBe("travel");
+    expect(topics["pruebas_ferryman"]?.["npc.pruebas_ferryman.to_harbour"]).toBe("travel");
+    expect(topics["bosque_ferryman"]?.["npc.bosque_ferryman.opt_ch2_boat"]).toBe("quests");
+    expect(topics["puerto_priest"]?.["dialog.back"]).toBe("back");
+    expect(topics["puerto_priest"]?.["dialog.bye"]).toBe("bye");
+  });
+
+  it("an option's tag wins, and the same text with two topics in one NPC is a conflict", () => {
+    const root = mkdtempSync(join(tmpdir(), "client-topics-"));
+    try {
+      mkdirSync(join(root, "data", "npcs"), { recursive: true });
+      writeFileSync(
+        join(root, "data", "npcs", "a.yaml"),
+        [
+          "id: a",
+          "dialog:",
+          "  start: greet",
+          "  nodes:",
+          "    greet:",
+          "      text: t",
+          "      options:",
+          "        - { text: x.heal, action: { heal: true }, tag: talk }",
+          "        - { text: x.same, action: { heal: true } }",
+          "        - { text: x.same, action: { open_shop: s } }",
+          "        - { text: x.camp, goto: camp }",
+          "    camp:",
+          "      text: t",
+          "      options:",
+          "        - { text: x.go, action: { start_quest: q } }",
+          "",
+        ].join("\n"),
+      );
+      const { topics, conflicts } = dialogTopics(root);
+      expect(topics["a"]?.["x.heal"]).toBe("talk");
+      expect(topics["a"]?.["x.camp"]).toBe("quests");
+      expect(conflicts).toEqual(["a: x.same (services, trade)"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

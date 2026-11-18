@@ -25,7 +25,7 @@
 
 ### Reemplazar sonidos por un pack de terceros
 1. Copia el pack sin modificar a `assets/vendor/<pack>/` con su `LICENSE` (o `COPYING`), y
-   agrega su fila en la tabla de `CREDITS.md` (CC0, CC-BY o OGA-BY). Son las mismas reglas
+   agrega su fila en la tabla de `CREDITS.md` (CC0, CC-BY, OGA-BY o CC-BY-SA). Son las mismas reglas
    que para los sprites, y `make validate` comprueba las dos cosas. Se mantienen los
    nombres del pack (mayúsculas, espacios, subcarpetas como `Audio/impactMetal_000.ogg`);
    solo la carpeta `<pack>` va en minúsculas y sin espacios.
@@ -57,6 +57,113 @@ una página del atlas. Se mira en la cabecera antes de decodificarlo, porque el 
 PR de mapas arma el atlas con los sprites del PR (`docs/04`). Un `placeholder.size` llega
 hasta 256 px por lado.
 
+## Sprites animados (docs/17 ANI)
+Los monstruos, NPCs y atuendos se animan con datos de `sprites.yaml`, no con código. El
+detalle de cómo los juega el cliente está en `client/CLAUDE.md`, "Animación de criaturas".
+
+**Frames y nombres.** Cada frame es un sprite del atlas llamado
+`<sprite>/<acción>_<dir>_<n>` (ANI-4): `acción` es `idle`, `walk`, `attack` o `death`, `dir`
+es `n`, `e`, `s` o `w`, y `n` arranca en 0. Hay tres maneras de tenerlos:
+1. **Capas de un pack** (`animations` con `layers`): spritepack compone las hojas en orden
+   (abajo primero), recolorea con `palettes` y corta los frames. Así salen los personajes
+   de LPC (`vendor/ulpc`).
+2. **Arte propio con esos nombres** en `sprites/` (por ejemplo, de spritegen:
+   `sprites/creatures/bristleback_boar/walk_w_0.png` a `walk_w_3.png`). spritepack arma los
+   clips solo: por acción, las direcciones que tienen frame 0 y tantos frames como tengan
+   todas sin huecos.
+3. **Ninguno:** el sprite único se anima por código (ANI-5). Una entrada de `animations`
+   sin `layers` le da pistas.
+
+```yaml
+palettes:                                  # colores de claro a oscuro
+  ulpc_cloth: ["#ffffff", "#e5e6c7", "#c4b59f", "#958080", "#4d4a5d"]   # base de las hojas ULPC
+  cloth_navy: ["#7c96c4", "#5a76a8", "#435a87", "#304064", "#1d263e"]   # propia
+animations:
+  outfits/sailor:
+    preset: lpc                            # hojas del generador ULPC: idle, walk, slash, hurt
+    actions: [idle, walk]                  # opcional: un subconjunto del preset (NPCs)
+    layers:                                # "<sheet>" = la hoja de cada acción
+      - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
+      - { file: vendor/ulpc/spritesheets/legs/pants/male/<sheet>.png, recolor: { ulpc_cloth: cloth_navy } }
+  creatures/gloom_bat: { flying: true }    # pistas para un sprite de un solo frame
+  creatures/wolf: { facing: left }
+```
+- **Preset `lpc`** (`tools/spritepack/src/anims.ts`, `PRESETS`): frames de 64x64, filas
+  norte, oeste, sur y este. `idle` = 2 frames de 500 ms; `walk` = columnas 1 a 8 (la 0 es
+  la pose quieta), 4 frames por casilla; `attack` = `slash`, 6 de 60 ms; `death` = `hurt`,
+  6 de 100 ms y solo hacia el sur (las otras direcciones usan esa).
+- **Sin preset**, cada acción se describe entera:
+  `walk: { sheet: walk, frame: [64, 64], rows: { n: 0, w: 1, s: 2, e: 3 }, col: 1, count: 8, per_tile: 4 }`
+  (`ms` para las demás acciones).
+- **`recolor`** cambia cada color de la paleta de origen por el del mismo lugar de la de
+  destino (mismo largo). Los píxeles de las capas quedan con alfa 0 o 255: lo que tiene
+  menos de la mitad de opacidad se descarta.
+- **Pistas** (con o sin capas): `facing: left | right` (hacia dónde mira el dibujo: se
+  espeja para ir al otro lado), `flying: true` (flota, su sombra se achica, no salta),
+  `shadow: baked | ellipse | none`. Con capas, la sombra por defecto es `ellipse` (la sombra
+  de contacto del renderer, ART-5: los frames de LPC no traen sombra); sin capas,
+  `baked` (Dungeon Crawl y spritegen la pintan).
+- **Alias:** el nombre del sprite (`outfits/sailor`) apunta a su primer frame quieto (para
+  las referencias de `data/`, los íconos y la tienda del sitio), y los frames viejos de un
+  atuendo (`outfits/sailor/s_0`, `e_2`, T0.5) a la pose quieta y al ciclo de caminar.
+  Comparten el rectángulo del atlas: no ocupan lugar.
+- **Errores** (`make sprites`): una animación con capas no puede pisar un sprite que ya
+  existe (archivo o entrada de `sprites`); una entrada con pistas tiene que nombrar uno que
+  exista; falta una hoja o es más chica que lo que piden la acción y sus filas.
+- **atlas.json** suma `anims`: por sprite, `w`, `h`, `anchor` (`bc` con capas: los pies
+  sobre la casilla; `br`, el de siempre), `foot` (filas vacías bajo los pies), `top` (alto
+  del dibujo), `shadow`, `facing`, `flying` y por acción `frames`, `ms`, `perTile` y `dirs`.
+  `foot` y `top` se miden en los frames de caminar.
+- **Revisar:** `node --experimental-strip-types tools/spritepack/src/cli.ts preview --page 1
+  --scale 2 --out shot.png` muestra la página donde caen los personajes. Mirarlos a 1x y a
+  2x con Read, y en el juego (screenshots del E2E).
+
+### Personajes de LPC (`vendor/ulpc`)
+92 capas del Universal LPC Spritesheet Character Generator (commit fijado en `CREDITS.md` y
+en `vendor/ulpc/LICENSE.txt`), copiadas sin tocar con sus rutas: cuerpos (hombre, mujer,
+esqueleto), cabezas (hombre, mujer, anciano), camisa de manga larga, armaduras de cuero, placas
+y cota de malla, pantalones, botas y zapatos, cinco peinados, barba, capucha y pañuelo. Solo
+entraron archivos cuya fila de `CREDITS.csv` lista OGA-BY o CC-BY-SA (el cuerpo zombi y los ojos
+sueltos no tienen fila: quedaron afuera). Las hojas base vienen en colores neutros (piel
+clara, tela blanca, pelo naranja): la variedad sale de las paletas propias de `palettes`.
+
+Para un personaje nuevo: elegir capas de esa carpeta (o sumar otras del mismo commit, con su
+fila de `CREDITS.csv` copiada al subconjunto de la carpeta), escribir su entrada en
+`animations` en el orden cuerpo, piernas, pies, torso, cabeza, barba, pelo y sombrero, y
+revisar el preview. El lobo del "RPG Maker MZ LPC Starter Kit" quedó afuera: no trae
+licencia al lado del archivo (docs/17, SRC-2).
+
+## Arte del mapa: looks, frames, muros, sombras y luz (docs/17 ART-3 a ART-7)
+Un sprite que `data/` pone en el mapa (suelo o item) puede tener partes al lado, que
+spritepack encuentra por nombre (arte propio o entradas de `sprites.yaml`):
+
+| Parte | Qué es | Quién la usa |
+|---|---|---|
+| `<sprite>/var_<n>` (n = 1..) | Otro look del suelo; el sprite es el look 0 | El renderer elige uno por casilla con `tileHash(x, y, z)`, el 0 en el 70 % |
+| `<sprite>/frame_<n>` (n = 1..) | Otro frame de un suelo o item animado; el sprite es el frame 0 | `MapView` los avanza con el reloj; `mapcli render` muestra el 0 |
+| `<sprite>/wall_<m>` (m = 0..15, las 16) | La pieza de muro para cada máscara de vecinos muro (N=1, E=2, S=4, O=8), de 32x64 | El renderer pone en cada casilla la de sus vecinos |
+| `<sprite>/shadow` | Su sombra proyectada, en negro, del tamaño del sprite | La capa de sombras, teñida y translúcida, entre el suelo y los items |
+
+Lo que los nombres no dicen va en la sección `tiles` de `sprites.yaml`:
+```yaml
+tiles:
+  ground/water_shallow: { ms: 240, sync: world }   # ms por frame y sincronía
+  decor/oak_tree: { anchor: bc, ms: 800, sync: tile }   # centrado en su casilla
+  decor/wall_torch: { ms: 110, sync: tile, light: 3 }   # da luz en cuevas (radio en casillas)
+  doors/forge_gate: { joins_walls: true }   # los muros de al lado lo cuentan como muro
+```
+- `sync`: `world` (todas las casillas en fase: agua, lava, espuma), `tile` (una fase por
+  casilla: fuego, copas, estandartes) o `random` (un destello cada 3–5 s por casilla). Sin
+  entrada: 250 ms y `world`.
+- `weight`: la parte de las casillas que muestra el look 0 (por defecto 0,7).
+- `ms` y `sync` sin frames, `weight` sin looks, piezas de muro incompletas o partes sin su
+  sprite son errores de `make sprites`.
+
+spritepack escribe lo que tiene cada sprite en `atlas.json` `tiles` (`TileMeta` de
+`packages/renderer/src/tile-art.ts`, puro y compartido con `mapcli render`). Los bordes de
+orilla (`borders/sand_water_*`) traen 3 frames de espuma que hace `gen-borders`, no
+spritegen.
+
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
 sprite píxel a píxel (`tools/spritegen/src/recipes/`). Son obra propia (CC0, ver
@@ -65,17 +172,29 @@ y después `make sprites` rearma el atlas. Al pasar una ruta a spritegen hay que
 entrada de `sprites.yaml` (la regla de arriba). El test de spritegen falla si un PNG
 commiteado no coincide con su receta.
 
-Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concreto):
+Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concreto). La
+dirección de arte acordada el 2026-11-17 está en `docs/17-direccion-de-arte-y-ui.md`:
+proyección, muros con altura, variantes de suelo, valores, animación y el orden en que se
+reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tareas.
 - 32x32, vista cenital oblicua 3/4: se ve la cara de arriba y la frontal (sur).
 - Contorno de 1 px en un tono oscuro del color local (no negro puro), luz desde arriba a la
   izquierda, 3-4 tonos por material, poco o nada de tramado, alfa solo 0 o 255.
 - Paleta apagada y algo oscura que combine con Dungeon Crawl (`tools/spritegen/src/palette.ts`).
-- Objetos más altos que una casilla (árboles, carteles) pueden medir 64x64 o 32x64: el
+- Objetos más altos que una casilla (carteles, la fragua) pueden medir 64x64 o 32x64: el
   renderer los ancla en la esquina inferior derecha de su casilla y crecen hacia arriba y a
-  la izquierda. Items de inventario: 32x32 centrados con fondo transparente.
+  la izquierda. Los árboles (`recipes/trees.ts`, 64x96) van centrados en su
+  casilla (`anchor: bc`), con la copa en 3/4, sombra proyectada y 4 frames de viento.
+  Items de inventario: 32x32 centrados con fondo transparente.
+- Muros (`recipes/walls.ts`): 16 piezas de 32x64 por material, la tapa levantada 32 px
+  sobre la cara (ver "Arte del mapa" arriba y docs/17 ART-3).
+- Suelos (`recipes/ground.ts`): textura de baja frecuencia, looks con detalles lejos de los
+  bordes y una media de L* entre 20 y 50 (ART-6, lo revisa el test; la lava no, brilla).
 - Suelos y muros hacen mosaico sin costuras (el test lo comprueba).
 - Las criaturas proyectan sombra, como las de Dungeon Crawl (ver abajo).
 - Todo determinista: ruido con semilla, nunca `Math.random`.
+- Ciclos de animación: frames `<sprite>/<acción>_<dir>_<n>` (ver "Sprites animados"). El
+  jabalí y el ciervo tienen un trote de 4 frames mirando a la izquierda (`walk_w_0..3`,
+  `TROT` en `recipes/creatures.ts`): las patas van en pares diagonales.
 - Efectos de casilla (`sprites/effects/<nombre>/<n>.png`, `recipes/effects.ts`): tiras de 6
   frames de 32x32 con fondo transparente, una por `effect_id` del servidor; el cliente las
   reparte en partes iguales sobre 600 ms (`client/CLAUDE.md`, "Sprites de efectos"). Los
@@ -84,15 +203,14 @@ Estilo (el de los MMORPG 2D clásicos, sin copiar ni calcar ningún sprite concr
 
 Para revisar: `node --experimental-strip-types tools/spritegen/src/cli.ts preview --out
 shot.png --scale 4 [--only ground/]` (suelos y muros repetidos 3x3, el resto sobre pasto;
-con `--only effects/`, cada tira en su fila sobre un jugador parado).
+con `--only effects/`, cada tira en su fila sobre el jabalí parado).
 Revisa a 1x además de a 4x: un item que solo se entiende ampliado no se entiende en el
 inventario.
 
 ### Sombra de las criaturas
 Los monstruos de Dungeon Crawl traen pintada una sombra proyectada casi negra, hacia abajo
 a la derecha y desde los hombros. Para que las criaturas propias se vean igual en el mapa,
-spritegen agrega la misma sombra a toda receta `kind: creature`: monstruos, NPCs y cada
-frame de outfit. La dibuja `castShadow` de `tools/spritegen/src/draw.ts`, como último paso
+spritegen agrega la misma sombra a toda receta `kind: creature`: monstruos y cada frame de sus ciclos. La dibuja `castShadow` de `tools/spritegen/src/draw.ts`, como último paso
 de `render`:
 - empuja la silueta hasta 3 px a la derecha y 1 px hacia abajo, con todos los pasos
   intermedios, para que nunca quede un trozo de sombra suelto (por ejemplo, el de un carcaj);
@@ -106,8 +224,9 @@ Se hace en spritegen y no en el renderer por tres razones:
 - una sombra del renderer se sumaría a esa, y las de Dungeon Crawl tendrían dos;
 - así cada criatura tiene una sola sombra, pixel-perfect, y el renderer no cambia.
 
-Si algún día se integra un pack de criaturas sin sombra, la decisión se toma ahí. Por
-ejemplo, con una receta que la agregue sobre el recorte del pack.
+Los personajes de LPC no traen sombra: los dibuja el renderer con la sombra de contacto
+(`shadow: ellipse`, una elipse de 20x6 al 35 % bajo los pies, ART-5), que no tiembla con
+los frames.
 
 ### Iconos de interfaz (`ui/`)
 `tools/spritegen/src/recipes/ui.ts` dibuja iconos del cliente que ningún archivo de
@@ -129,7 +248,9 @@ batalla las usa como fondo CSS. Sin el sprite en el atlas, vuelven las formas de
 ## Atlas generado
 `make sprites` escribe en `assets/atlas/`:
 - `atlas.json`: índice para cliente y editor: `tileSize`, lista de páginas y, por sprite,
-  `{page, origin}` con `origin` = `file | vendor | placeholder | auto`.
+  `{page, origin}` con `origin` = `file | vendor | placeholder | auto` (un frame compuesto
+  de capas de un pack es `vendor`). `anims`: las animaciones y pistas (ver "Sprites
+  animados"). `tiles`: el arte del mapa de cada sprite (ver "Arte del mapa").
 - `atlas-N.png` + `atlas-N.json`: páginas de hasta 2048x2048 en formato Spritesheet de
   PixiJS (hash). Las claves de `frames` son las rutas lógicas. Cada página lista a las
   demás en `meta.related_multi_packs`.
@@ -140,9 +261,12 @@ La salida es determinista: mismo input, mismos bytes. Para revisar el atlas con 
 ## Integrar un pack de terceros (checklist)
 1. Copia el pack sin modificar a `assets/vendor/<pack>/` (nombre en minúsculas, sin
    espacios) junto con su texto de licencia como `LICENSE` o `LICENSE.txt`.
-2. Agrega una fila a `CREDITS.md` con autor, licencia (CC0, CC-BY 3.0/4.0, OGA-BY), URL de
-   origen y la carpeta `` `assets/vendor/<pack>/` ``. Sin esa fila spritepack rechaza el
-   pack.
+2. Agrega una fila a `CREDITS.md` con autor, licencia (CC0, CC-BY 3.0/4.0, OGA-BY 3.0 o,
+   desde el 2026-11-17, CC-BY-SA 3.0/4.0), URL de origen y la carpeta
+   `` `assets/vendor/<pack>/` ``. Sin esa fila spritepack rechaza el pack. Si el pack trae
+   licencia por archivo, mira "Packs con licencia por archivo" abajo. La fila sale también
+   en la página `/credits` del sitio: agrega `site.credits.pack.<pack>.title` y `.author` (guiones como `_`)
+   en `i18n/es/site.yaml` y `i18n/en/site.yaml` (`client/vite/credits.test.ts` lo exige).
 3. En `sprites.yaml`, cambia `placeholder` por `source` en cada sprite que el pack cubra:
    ```yaml
    weapons/iron_sword: { source: vendor/<pack>/items.png, tile: [4, 2] }   # columna, fila (32 px)
@@ -154,3 +278,37 @@ La salida es determinista: mismo input, mismos bytes. Para revisar el atlas con 
    consultar con el usuario.
 4. `make sprites` y revisa la imagen con Read; `make test` comprueba que todo sprite de
    `data/` sigue resolviéndose.
+
+### Packs con licencia por archivo (Liberated Pixel Cup)
+Los packs de LPC no tienen una licencia para todo el pack: cada archivo trae la suya en el
+`CREDITS.csv` del Universal LPC Spritesheet Character Generator o en los `Credits.txt` de
+LPC Revised. Repositorios y detalle en `docs/17-direccion-de-arte-y-ui.md` (SRC-2 y SRC-3).
+1. Anota el commit de origen.
+2. Copia solo los archivos con una licencia aceptada (CC0, CC-BY, OGA-BY, CC-BY-SA). Si un
+   archivo tiene varias, elige una aceptada. Si solo tiene GPL o no tiene fila, no entra.
+   Del repo del generador se copia arte, nunca código (es GPL-3.0).
+3. Respeta las rutas del origen dentro de `assets/vendor/<pack>/`. Deja al lado un
+   `LICENSE.txt` con el texto de cada licencia que aparece y el subconjunto de créditos de
+   lo copiado (`CREDITS.csv` solo con esas filas, o los `Credits.txt`).
+4. La fila de `CREDITS.md` dice "por archivo" en la licencia, remite a ese archivo de
+   créditos y pone la URL con el commit.
+5. Lo que una herramienta propia derive de esos archivos (capas compuestas, recoloreados)
+   va en `assets/sprites/derived/<pack>/`, con una fila en "Obras derivadas de terceros"
+   de `CREDITS.md`. Lleva la licencia del origen: un derivado de CC-BY-SA sigue siendo
+   CC-BY-SA. Los sprites que spritepack compone desde capas (`animations`) van nombrados uno
+   por uno en la fila de su licencia; `make test` la calcula desde `CREDITS.csv` (la capa más
+   restrictiva) y falla si no coincide (`tools/spritepack/src/licences.ts`).
+
+## Fuentes (OFL)
+Las fuentes de la interfaz son OFL 1.1 y van auto-alojadas: la CSP de escritorio solo
+deja `font-src 'self'`. Las elegidas y sus rutas en `https://github.com/google/fonts` están
+en `docs/17-direccion-de-arte-y-ui.md` (UI-3).
+- `assets/vendor/font-<familia>/`: los `.ttf` tal como están en google/fonts, su `OFL.txt` y
+  una copia como `LICENSE.txt` (el validador busca un archivo que empiece por `LICENSE`).
+- Una fila en la tabla "Fuentes" de `CREDITS.md`: el copyright de la primera línea del
+  `OFL.txt`, OFL 1.1 y la URL de la carpeta con el commit.
+- Los woff2 recortados que usa el cliente los genera `client/vite/fonts.ts` (tabla `FONTS`:
+  una fila por archivo, con su `@font-face` en `client/src/ui/fonts.css`) al servirlos en
+  `/fonts/` y en el build, y no se commitean. Recortar
+  o convertir es crear una versión modificada: no se hace con las familias que declaran un
+  "Reserved Font Name" en su `OFL.txt`.

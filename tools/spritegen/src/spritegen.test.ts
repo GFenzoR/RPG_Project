@@ -30,7 +30,6 @@ import {
   UI_ICON,
   UI_ICON_BOX,
 } from "./index.ts";
-import { FRONT_SWING } from "./recipes/creatures.ts";
 import { EFFECT_FRAMES } from "./recipes/effects.ts";
 import { PALETTE } from "./palette.ts";
 
@@ -88,14 +87,19 @@ describe("recipes", () => {
       const img = render(p);
       expect(img.width % 32, p).toBe(0);
       expect(img.height % 32, p).toBe(0);
+      // One expect per image, not per pixel: with the wall pieces, looks and frames of the
+      // world art there are hundreds of recipes, and a per-pixel expect timed out on CI.
       let opaque = 0;
+      let partial = -1;
       for (let i = 3; i < img.data.length; i += 4) {
-        expect([0, 255], p).toContain(img.data[i]);
-        if (img.data[i] === 255) opaque++;
+        const a = img.data[i] ?? 0;
+        if (a === 255) opaque++;
+        else if (a !== 0 && partial < 0) partial = a;
       }
+      expect(partial, `${p}: alpha that is neither 0 nor 255`).toBe(-1);
       expect(opaque, p).toBeGreaterThan(20);
     }
-  });
+  }, 30_000);
 
   it("ground and walls are opaque and tile seamlessly", () => {
     for (const p of paths) {
@@ -124,6 +128,28 @@ describe("recipes", () => {
         for (let j = 0; j < 31; j++) worstInside = Math.max(worstInside, boundary(j));
         expect(boundary(31), `${p} ${name} seam`).toBeLessThanOrEqual(worstInside * 1.1 + 2);
       }
+    }
+  });
+
+  it("grounds stay in the value band of docs/17 ART-6 (mean L* 20-50), but lava, which glows", () => {
+    const linear = (c: number): number => {
+      const v = c / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    for (const p of paths) {
+      if (RECIPES[p]?.kind !== "ground" || /^ground\/lava(\/|$)/.test(p)) continue;
+      const img = render(p);
+      let sum = 0;
+      for (let i = 0; i < img.data.length; i += 4) {
+        const y =
+          0.2126 * linear(img.data[i] ?? 0) +
+          0.7152 * linear(img.data[i + 1] ?? 0) +
+          0.0722 * linear(img.data[i + 2] ?? 0);
+        sum += y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y;
+      }
+      const mean = sum / (img.data.length / 4);
+      expect(mean, p).toBeGreaterThanOrEqual(20);
+      expect(mean, p).toBeLessThanOrEqual(50);
     }
   });
 
@@ -221,7 +247,7 @@ describe("cast shadow", () => {
       for (let x = 8; x <= 10; x++) expect(opaque(img, x, y), `${x},${y}`).toBe(true);
   });
 
-  it("is on every creature and outfit frame and on nothing else", () => {
+  it("is on every creature and on nothing else", () => {
     for (const p of recipePaths()) {
       const img = render(p);
       let shadow = 0;
@@ -229,36 +255,6 @@ describe("cast shadow", () => {
         for (let x = 0; x < img.width; x++) if (same(get(img, x, y), SHADOW)) shadow++;
       if (RECIPES[p]?.kind === "creature") expect(shadow, p).toBeGreaterThan(10);
       else expect(shadow, p).toBeLessThan(10);
-    }
-  });
-});
-
-describe("outfit walk cycle", () => {
-  /** The lowest row of column x that is part of the figure (not its shadow). */
-  const lowest = (img: Image, x: number): number => {
-    for (let y = img.height - 1; y >= 0; y--)
-      if (opaque(img, x, y) && !same(get(img, x, y), SHADOW)) return y;
-    return -1;
-  };
-
-  it("swings the arms FRONT_SWING px up and down facing north and south", () => {
-    expect(FRONT_SWING).toBeGreaterThanOrEqual(2);
-    const outfits = new Set(recipePaths("outfits/").map((p) => p.split("/")[1]));
-    expect(outfits.size).toBeGreaterThanOrEqual(4);
-    for (const o of outfits) {
-      for (const dir of ["n", "s"]) {
-        const [stand, step1, step2] = [0, 1, 2].map((f) => render(`outfits/${o}/${dir}_${f}`));
-        if (!stand || !step1 || !step2) throw new Error(`outfits/${o}/${dir}: missing frames`);
-        // Column 10 is the screen-left arm, 21 the screen-right one (outside the torso).
-        for (const [x, sign] of [
-          [10, 1],
-          [21, -1],
-        ] as const) {
-          const at = `outfits/${o}/${dir} column ${x}`;
-          expect(lowest(step2, x) - lowest(stand, x), at).toBe(sign * FRONT_SWING);
-          expect(lowest(step1, x) - lowest(stand, x), at).toBe(-sign * FRONT_SWING);
-        }
-      }
     }
   });
 });

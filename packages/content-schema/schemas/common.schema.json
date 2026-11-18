@@ -56,13 +56,19 @@
         "duration_ms": { "$ref": "#/$defs/durationMs" },
         "range": {
           "description": "Spells only: aims at a monster or, with PvP, a player (by the rules of a direct attack, T5.2) at up to range tiles in line of sight instead of the caster. Only for a harmful condition (kind damage, or speed with a negative speed_pct): the server rejects it on a beneficial one.",
-          "$ref": "#/$defs/positiveInt"
+          "$ref": "#/$defs/aimRange"
         }
       },
       "oneOf": [{ "required": ["ticks", "damage"] }, { "required": ["duration_ms"] }]
     },
     "percent": { "type": "number", "minimum": 0, "maximum": 100 },
     "positiveInt": { "type": "integer", "minimum": 1 },
+    "aimRange": {
+      "description": "Chebyshev tiles (same floor, line of sight) an attack, heal or condition is aimed from, at most 6: the half-height of the classic 15x11 window, what a monster notices (server content.MaxRange). The 31x21 view did not stretch it: a monster hit from that far always fights back.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
     "nonNegativeInt": { "type": "integer", "minimum": 0 },
     "durationMs": { "type": "integer", "minimum": 0 },
     "element": {

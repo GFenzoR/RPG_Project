@@ -247,6 +247,9 @@ type World struct {
 	active     map[uint64]struct{}
 	activeKeys []uint64
 	thinkBuf   []*Monster
+	// tileBuf holds one floor of a map area while it is built (mapArea): a floor with no
+	// tile in the area (most of the 8 surface floors today) costs no allocation.
+	tileBuf    []int32
 	ground     map[world.Pos][]*Item // items on tiles at runtime, above world.bin's
 	corpses    map[world.Pos][]*Corpse
 	corpseItem *content.Item
@@ -517,7 +520,8 @@ func New(cfg Config) (*World, error) {
 		return nil, errors.New("session: Config.Save is required")
 	}
 	mv := cfg.Balance.Movement
-	if mv.BaseStepMs <= 0 || mv.DiagonalCost < 1 || mv.MaxPathTiles <= 0 || mv.MaxPathTiles > world.MaxPathLength {
+	if mv.BaseStepMs <= 0 || mv.DiagonalCost < 1 || mv.MaxPathTiles <= 0 || mv.MaxPathTiles > world.MaxPathLength ||
+		mv.MaxQueuedSteps <= 0 || mv.MaxQueuedSteps > content.MaxQueuedSteps {
 		return nil, fmt.Errorf("session: invalid movement balance %+v", mv)
 	}
 	if len(cfg.Vocations) == 0 {

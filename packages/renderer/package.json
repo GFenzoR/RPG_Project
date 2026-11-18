@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./camera": "./src/camera.ts",
-    "./retry": "./src/retry.ts"
+    "./retry": "./src/retry.ts",
+    "./tile-art": "./src/tile-art.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

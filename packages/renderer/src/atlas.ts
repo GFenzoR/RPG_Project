@@ -9,6 +9,9 @@
 // images already loaded come from PixiJS Assets' cache.
 import { Assets, Spritesheet, Texture } from "pixi.js";
 import type { SpritesheetData } from "pixi.js";
+import type { AnimMeta } from "./anim.ts";
+import { resolveTileArt } from "./tile-art.ts";
+import type { TileArt, TileMeta } from "./tile-art.ts";
 import { fetchJSON, withRetry } from "./retry.ts";
 import type { Fetcher, RetryOptions } from "./retry.ts";
 
@@ -19,6 +22,10 @@ export interface AtlasIndex {
   /** Page JSON files, relative to atlas.json. */
   pages: string[];
   sprites: Record<string, { page: number; origin: string }>;
+  /** Animated and hinted creature sprites (docs/17 ANI); absent in atlases built before them. */
+  anims?: Record<string, AnimMeta>;
+  /** Map sprites with variants, frames, wall pieces, an anchor or a shadow (tile-art.ts). */
+  tiles?: Record<string, TileMeta>;
 }
 
 /** A sprite's rectangle in its page image (pixels). */
@@ -36,6 +43,7 @@ export class Atlas {
   private readonly textures = new Map<string, Texture>();
   /** Image URL of the page each sprite is on (for DOM icons). */
   private readonly pageImage = new Map<string, string>();
+  private readonly tileArts = new Map<string, TileArt<Texture> | null>();
 
   private constructor(index: AtlasIndex) {
     this.index = index;
@@ -84,6 +92,20 @@ export class Atlas {
     if (!tex || !url) return undefined;
     const f = tex.frame;
     return { url, x: f.x, y: f.y, width: f.width, height: f.height };
+  }
+
+  /**
+   * The tile art of a map sprite (docs/17 ART-3, ART-4, ART-7): its looks, frames, wall
+   * pieces, anchor and shadow as textures, or undefined when it has none (draw its texture).
+   * Resolved once per sprite.
+   */
+  tileArt(sprite: string): TileArt<Texture> | undefined {
+    let art = this.tileArts.get(sprite);
+    if (art === undefined) {
+      art = resolveTileArt(sprite, this.index.tiles?.[sprite], (n) => this.textures.get(n)) ?? null;
+      this.tileArts.set(sprite, art);
+    }
+    return art ?? undefined;
   }
 
   has(sprite: string): boolean {

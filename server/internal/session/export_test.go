@@ -443,3 +443,23 @@ func (w *World) ReservedTo(it *Item) int64 { return w.heldGround[it].char }
 func (w *World) DamageMonsterForTest(ctx *game.TickContext, m *Monster, p *Player, dmg int) {
 	w.damageMonster(ctx, m, p, dmg, ElementPhysical)
 }
+
+// QueueCapForTest is the capacity of p's step queue (it must not grow while a key is held).
+func (p *Player) QueueCapForTest() int { return cap(p.queue) }
+
+// FullViewForTest builds the MapArea of p's whole view as sendFullView does, without
+// sending it or changing what p's client knows (benchmarks, loop goroutine).
+func (w *World) FullViewForTest(p *Player) *pb.MapArea {
+	kept := p.known
+	p.known = nil
+	area := w.mapArea(p, int(p.pos.X)-ViewHalfW, int(p.pos.Y)-ViewHalfH, ViewW, ViewH)
+	p.known = kept
+	return area
+}
+
+// FaceForTest turns m towards p as a fight does (tests only, loop goroutine).
+func (w *World) FaceForTest(m *Monster, p world.Pos) { w.face(m, p) }
+
+// GiveUpForTest makes m give up its fight: full health, told to who sees it (tests only,
+// loop goroutine).
+func (w *World) GiveUpForTest(ctx *game.TickContext, m *Monster) { w.giveUp(ctx, m) }

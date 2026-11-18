@@ -24,6 +24,8 @@ Nombre: **Neque's Realm** (hasta noviembre de 2026 se llamó "RPG Project", nomb
 | Tema | Decisión |
 |---|---|
 | Vista y gráficos | Cenital, 2D, tiles de 32x32, estilo pixel art tipo Tibia |
+| Área visible | Mínimo 15x11 casillas y hasta 31x21 según la ventana (decisión del dueño, 2026-11-17): el servidor manda lo que el cliente puede ver. Hecho (A7 de `17-direccion-de-arte-y-ui.md`): el servidor manda a todos la ventana de 31x21 y cada cliente dibuja la mayor parte que su pantalla llena a escala entera, sin bajar de 15x11; los monstruos siguen notando la ventana clásica. Reglas en `02-game-design.md`, "La vista" |
+| Estilo de interfaz | Oscura y gótica (referencia Diablo 2) con las funciones de Tibia: botonera que abre ventanas separadas. Detalle en `17-direccion-de-arte-y-ui.md` (pedido del dueño, 2026-11-17) |
 | Plataforma | PC primero (navegador + instalable con Tauri). Móvil secundario, más adelante |
 | Trampas | Sin anticheat en el cliente, que siempre se considera manipulable. Todo se valida en el servidor y los bots se detectan ahí (`01-architecture.md`, "Trampas y anti-bot") |
 | Cliente | TypeScript + PixiJS v8, UI DOM con Preact |
@@ -32,7 +34,7 @@ Nombre: **Neque's Realm** (hasta noviembre de 2026 se llamó "RPG Project", nomb
 | Protocolo | WebSocket binario + Protobuf |
 | Escala inicial | Hasta 100 jugadores simultáneos en un solo servidor |
 | Hosting | Una instancia AWS con Docker Compose (~USD 10–20/mes) |
-| Arte | Packs libres CC0/CC-BY + placeholders; se reemplaza después |
+| Arte | Arte propio más packs libres: CC0, CC-BY, OGA-BY y, desde el 2026-11-17 (decisión del dueño), CC-BY-SA (p. ej. Liberated Pixel Cup); fuentes OFL. Licencias y obligaciones en `assets/CREDITS.md`; dirección de arte en `17-direccion-de-arte-y-ui.md` |
 | Combate | Como Tibia: movimiento por casillas, auto-ataque al objetivo, hechizos y runas con hotkeys |
 | Vocaciones | 4 fijas, con nombres propios (equivalentes a knight, paladin, sorcerer, druid) |
 | Skills | Como Tibia (puños, espada, hacha, maza, distancia, escudo, nivel mágico, pesca) **más oficios** (minería, herrería, cocina, etc.) |
@@ -64,6 +66,7 @@ llegue su tarea, siguen como estaban:
 - Sigue fuera de alcance, sin tarea: mazmorras instanciadas.
 
 ## Lo que NO vamos a hacer
-- Usar sprites, mapas, nombres o textos de Tibia.
+- Usar sprites, mapas, nombres o textos de Tibia (ni sprites, fuentes o interfaces de Diablo
+  u otros juegos de referencia: de ellos se aprende el estilo, no se calca).
 - Vender poder (experiencia, items, stats, bendiciones con dinero real).
 - Arquitectura distribuida antes de necesitarla.

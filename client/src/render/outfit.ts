@@ -2,11 +2,12 @@
 //
 // An outfit of data/outfits.yaml is a sprite folder with one file per facing and frame:
 // "<sprite>/<dir>_<frame>" (outfits/citizen/s_0), dir in n|e|s|w, frame 0 = standing and
-// 1..frames-1 = the walking steps.
+// 1..frames-1 = the walking steps. An outfit animated in atlas.json (docs/17 ANI-6) has its
+// own clips instead, and those names are aliases of its frames (tools/spritepack): either
+// way render/clips.ts builds what the canvas plays.
 import type { Direction } from "@rpg/protocol";
 import type { OutfitDef } from "../content-types.ts";
 import { delta } from "../state/geometry.ts";
-import type { Walk } from "../state/world.ts";
 
 export type OutfitDir = "n" | "e" | "s" | "w";
 export const OUTFIT_DIRS: readonly OutfitDir[] = ["n", "e", "s", "w"];
@@ -23,23 +24,6 @@ export function outfitDir(d: Direction): OutfitDir {
   if (dx > 0) return "e";
   if (dx < 0) return "w";
   return dy < 0 ? "n" : "s";
-}
-
-/** How far through its step a creature is, 0..1, or undefined when it is not walking. */
-export function stepProgress(walk: Walk | undefined, now: number): number | undefined {
-  if (!walk || walk.duration <= 0 || now >= walk.start + walk.duration) return undefined;
-  return Math.max(0, (now - walk.start) / walk.duration);
-}
-
-/**
- * The frame to draw: 0 when standing; while walking, the walking frames split the step in
- * equal parts (with 3 frames: 1 for the first half, 2 for the second), so steps in a row
- * alternate 1, 2, 1, 2.
- */
-export function outfitFrame(progress: number | undefined, frames: number): number {
-  const walking = Math.floor(frames) - 1;
-  if (progress === undefined || walking < 1) return 0;
-  return 1 + Math.min(walking - 1, Math.floor(Math.max(0, progress) * walking));
 }
 
 /** Atlas key of one frame ("outfits/citizen/s_0"). */

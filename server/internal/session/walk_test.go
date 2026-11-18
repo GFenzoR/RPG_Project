@@ -28,19 +28,19 @@ func TestJoinSendsWelcomeAndFullView(t *testing.T) {
 	if got := kinds(evs); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[4] != want[4] {
 		t.Fatalf("join events %v, want %v", got, want)
 	}
-	if evs[0].GetWelcome().GetCreatureId() != p.ID() || evs[0].GetWelcome().GetTickMs() != 50 {
+	if wl := evs[0].GetWelcome(); wl.GetCreatureId() != p.ID() || wl.GetTickMs() != 50 || wl.GetViewWidth() != 31 || wl.GetViewHeight() != 21 {
 		t.Fatalf("welcome %v", evs[0])
 	}
 	area := evs[1].GetFullMapView().GetArea()
-	if area.GetX() != 102-8 || area.GetY() != 101-6 || area.GetWidth() != 17 || area.GetHeight() != 13 {
+	if area.GetX() != 102-16 || area.GetY() != 101-11 || area.GetWidth() != 33 || area.GetHeight() != 23 {
 		t.Fatalf("area %d,%d %dx%d", area.GetX(), area.GetY(), area.GetWidth(), area.GetHeight())
 	}
-	if len(area.GetFloors()) != 1 || area.GetFloors()[0].GetZ() != 7 || len(area.GetFloors()[0].GetTiles()) != 17*13 {
+	if len(area.GetFloors()) != 1 || area.GetFloors()[0].GetZ() != 7 || len(area.GetFloors()[0].GetTiles()) != 33*23 {
 		t.Fatalf("floors %v", area.GetFloors())
 	}
 	// The wall east of the temple: grass with the wall item on top.
 	tiles := area.GetFloors()[0].GetTiles()
-	wall := area.GetPalette()[tiles[6*17+9]]
+	wall := area.GetPalette()[tiles[11*33+17]]
 	if len(wall.GetItems()) != 2 || wall.GetItems()[0].GetItemId() != worldtest.Grass || wall.GetItems()[1].GetItemId() != worldtest.Wall {
 		t.Fatalf("wall tile %v", wall)
 	}
@@ -67,15 +67,35 @@ func TestWalkSpeedIsServerPaced(t *testing.T) {
 	h := newHarness(t, worldtest.Open(t, 0, 0, 64, 16))
 	cl, p := h.join("Mira", at(1, 8))
 	cl.take()
-	// 10 s of a client asking for a step every tick (a speed hack): speed 200 on 100 %
-	// terrain is 1000*100/200 = 500 ms = 10 ticks per step, so 20 steps.
+	// 10 s of a client asking for a step every tick (a speed hack), following every
+	// walk epoch the server starts: speed 200 on 100 % terrain is 1000*100/200 = 500 ms =
+	// 10 ticks per step, so 20 steps at most. Its queue overflows max_queued_steps over
+	// and over, and every overflow resets the walk (docs/05 "Caminar").
+	epoch := uint32(1)
+	var ms []*pb.CreatureMove
+	var last uint64
+	rejected := 0
 	for range 200 {
-		h.input(cl, walk(E))
+		h.input(cl, walkIn(E, epoch))
 		h.sim.Step()
+		for _, b := range cl.batches {
+			for _, e := range b.GetEvents() {
+				if r := e.GetWalkRejected(); r != nil {
+					epoch = r.GetWalkEpoch()
+					rejected++
+				}
+				if m := e.GetCreatureMove(); m != nil {
+					if len(ms) > 0 && b.GetTick()-last < 10 {
+						t.Fatalf("a step at tick %d, %d ticks after the last", b.GetTick(), b.GetTick()-last)
+					}
+					ms, last = append(ms, m), b.GetTick()
+				}
+			}
+		}
+		cl.batches = nil
 	}
-	ms := moves(cl.take())
-	if len(ms) != 20 || p.Pos() != pos(21, 8) {
-		t.Fatalf("%d steps, at %v; want 20 steps to 21,8", len(ms), p.Pos())
+	if len(ms) > 20 || len(ms) < 10 || p.Pos() != pos(1+len(ms), 8) || rejected == 0 {
+		t.Fatalf("%d steps, %d resets, at %v", len(ms), rejected, p.Pos())
 	}
 	for _, m := range ms {
 		if m.GetDurationMs() != 500 || m.GetId() != p.ID() {

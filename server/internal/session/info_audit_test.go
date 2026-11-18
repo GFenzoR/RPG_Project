@@ -115,25 +115,25 @@ func TestInfoAuditOutsideWindow(t *testing.T) {
 	m := worldtest.Open(t, 0, 0, 96, 32)
 	wolf := wolfDef()
 	wolf.Behavior.Aggressive = false
-	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 60, 12, 0, 600)}
+	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 68, 12, 0, 600)}
 	h := newHarness(t, m, func(c *session.Config) {
 		c.Monsters = content.Monsters{"wolf": wolf}
 		c.Items = testItems()
 		c.Balance.Death.BackpackDropPct = 100
 	})
-	vcl, viewer := h.join("Viewer", at(10, 10))
-	ocl, other := h.joinChar(withPack(980, pos(58, 10), stack(coinID, 30, 0), stack(swordID, 1, 1)))
+	vcl, viewer := h.join("Viewer", at(40, 10)) // the temple (0,0) and the others: out of view and earshot
+	ocl, other := h.joinChar(withPack(980, pos(66, 10), stack(coinID, 30, 0), stack(swordID, 1, 1)))
 	h.sim.RunTicks(5)
 	vcl.take()
 	open := openPack(t, h, ocl)
-	h.input(ocl, moveItem(inContainer(open, 1), swordID, 0, onTile(pos(58, 11)), 1)) // an item on the ground
+	h.input(ocl, moveItem(inContainer(open, 1), swordID, 0, onTile(pos(66, 11)), 1)) // an item on the ground
 	h.input(ocl, say(pb.ChatChannel_CHAT_CHANNEL_YELL, "secret"))
 	h.input(ocl, walkPath(E, E, S))
 	h.sim.RunFor(5 * time.Second)
 	h.sim.Command(ctxFunc(func(ctx *game.TickContext) { h.w.DieForTest(ctx, other) })) // remains at its tile
 	h.sim.RunFor(3 * time.Second)
-	if len(h.w.Monsters()) != 1 || len(h.w.CorpsesAt(pos(60, 11))) == 0 {
-		t.Fatalf("setup: monsters %d, remains %v", len(h.w.Monsters()), h.w.CorpsesAt(pos(60, 11)))
+	if len(h.w.Monsters()) != 1 || len(h.w.CorpsesAt(pos(68, 11))) == 0 {
+		t.Fatalf("setup: monsters %d, remains %v", len(h.w.Monsters()), h.w.CorpsesAt(pos(68, 11)))
 	}
 
 	s := scan(vcl.take())
@@ -277,7 +277,7 @@ func repeat(d pb.Direction, n int) []pb.Direction {
 func TestInfoAuditYellFromOutsideWindow(t *testing.T) {
 	h := newHarness(t, worldtest.Open(t, 0, 0, 64, 32))
 	lcl, listener := h.join("Listener", at(10, 10))
-	ycl, yeller := h.join("Yeller", at(25, 10)) // 15 tiles away: out of view, within yell range
+	ycl, yeller := h.join("Yeller", at(27, 10)) // 17 tiles away: out of view, within yell range
 	h.sim.Step()
 	lcl.take()
 	h.input(ycl, say(pb.ChatChannel_CHAT_CHANNEL_YELL, "over here"))
@@ -300,7 +300,7 @@ func TestInfoAuditProjectileFromOutsideWindow(t *testing.T) {
 	cl, p := h.join("Target", at(20, 10))
 	h.sim.Step()
 	cl.take()
-	h.sim.Command(gameFunc(func() { h.w.ProjectileForTest(pos(20, 18), pos(20, 11)) })) // 8 rows below: out of view
+	h.sim.Command(gameFunc(func() { h.w.ProjectileForTest(pos(20, 22), pos(20, 11)) })) // 12 rows below: out of view
 	h.sim.Step()
 	evs := cl.take()
 	shots := find(evs, (*pb.ServerMessage).GetProjectile)
@@ -320,7 +320,7 @@ func TestInfoAuditProjectileOffColumn(t *testing.T) {
 	cl, p := h.join("Viewer", at(20, 10))
 	h.sim.Step()
 	cl.take()
-	h.sim.Command(gameFunc(func() { h.w.ProjectileForTest(pos(23, 17), pos(21, 13)) }))
+	h.sim.Command(gameFunc(func() { h.w.ProjectileForTest(pos(23, 23), pos(21, 13)) }))
 	h.sim.Step()
 	evs := cl.take()
 	shots := find(evs, (*pb.ServerMessage).GetProjectile)
@@ -340,7 +340,7 @@ func TestInfoAuditProjectileToOutsideWindow(t *testing.T) {
 	cl, p := h.join("Watcher", at(14, 10))
 	h.sim.Step()
 	cl.take()
-	h.sim.Command(gameFunc(func() { h.w.ProjectileForTest(pos(20, 10), pos(24, 12)) })) // dx 10: out of view
+	h.sim.Command(gameFunc(func() { h.w.ProjectileForTest(pos(20, 10), pos(31, 12)) })) // dx 17: out of view
 	h.sim.Step()
 	evs := cl.take()
 	shots := find(evs, (*pb.ServerMessage).GetProjectile)

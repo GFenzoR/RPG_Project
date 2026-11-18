@@ -1592,8 +1592,17 @@ type Welcome struct {
 	// CreatureMove, SetTarget and the rest). It is not the database character id.
 	CreatureId uint32 `protobuf:"varint,1,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
 	// Server clock in Unix milliseconds.
-	ServerTime    uint64 `protobuf:"varint,2,opt,name=server_time,json=serverTime,proto3" json:"server_time,omitempty"`
-	TickMs        uint32 `protobuf:"varint,3,opt,name=tick_ms,json=tickMs,proto3" json:"tick_ms,omitempty"`
+	ServerTime uint64 `protobuf:"varint,2,opt,name=server_time,json=serverTime,proto3" json:"server_time,omitempty"`
+	TickMs     uint32 `protobuf:"varint,3,opt,name=tick_ms,json=tickMs,proto3" json:"tick_ms,omitempty"`
+	// How many keyboard steps (Walk) may wait in the player's queue (balance.yaml
+	// movement.max_queued_steps): the client predicts no more ahead (docs/05 "Caminar").
+	MaxQueuedSteps uint32 `protobuf:"varint,4,opt,name=max_queued_steps,json=maxQueuedSteps,proto3" json:"max_queued_steps,omitempty"`
+	// The window of tiles the server keeps the client up to date with, centred on the
+	// player, without the margin of one tile on every side that FullMapView and MapSlice
+	// also carry (docs/05 "Formato de mapa"): 31x21. The client draws at most this much.
+	// 0 = a server from before the wide view: 15x11.
+	ViewWidth     uint32 `protobuf:"varint,5,opt,name=view_width,json=viewWidth,proto3" json:"view_width,omitempty"`
+	ViewHeight    uint32 `protobuf:"varint,6,opt,name=view_height,json=viewHeight,proto3" json:"view_height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1645,6 +1654,27 @@ func (x *Welcome) GetServerTime() uint64 {
 func (x *Welcome) GetTickMs() uint32 {
 	if x != nil {
 		return x.TickMs
+	}
+	return 0
+}
+
+func (x *Welcome) GetMaxQueuedSteps() uint32 {
+	if x != nil {
+		return x.MaxQueuedSteps
+	}
+	return 0
+}
+
+func (x *Welcome) GetViewWidth() uint32 {
+	if x != nil {
+		return x.ViewWidth
+	}
+	return 0
+}
+
+func (x *Welcome) GetViewHeight() uint32 {
+	if x != nil {
+		return x.ViewHeight
 	}
 	return 0
 }
@@ -1842,10 +1872,12 @@ func (x *MapArea) GetCreatures() []*Creature {
 	return nil
 }
 
-// FullMapView is the whole visible area, sent on login and after a teleport.
+// FullMapView is the whole visible area, sent on login and after a teleport. walk_epoch
+// is the walk epoch from now on (see Walk): a teleport drops the step queue too.
 type FullMapView struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Area          *MapArea               `protobuf:"bytes,1,opt,name=area,proto3" json:"area,omitempty"`
+	WalkEpoch     uint32                 `protobuf:"varint,2,opt,name=walk_epoch,json=walkEpoch,proto3" json:"walk_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1885,6 +1917,13 @@ func (x *FullMapView) GetArea() *MapArea {
 		return x.Area
 	}
 	return nil
+}
+
+func (x *FullMapView) GetWalkEpoch() uint32 {
+	if x != nil {
+		return x.WalkEpoch
+	}
+	return 0
 }
 
 // MapSlice is the new row or column (on every visible floor) after a step.
@@ -2527,12 +2566,16 @@ func (x *CreatureDisappear) GetId() uint32 {
 	return 0
 }
 
+// CreatureMove is one step. walk_seq, only in the mover's own copy, is the seq of the Walk
+// this step executes (docs/05 "Caminar"); 0 for a step of a WalkPath or a chase, or of a
+// Walk without one.
 type CreatureMove struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	From          *Position              `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
 	To            *Position              `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
 	DurationMs    uint32                 `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	WalkSeq       uint32                 `protobuf:"varint,5,opt,name=walk_seq,json=walkSeq,proto3" json:"walk_seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2591,6 +2634,13 @@ func (x *CreatureMove) GetTo() *Position {
 func (x *CreatureMove) GetDurationMs() uint32 {
 	if x != nil {
 		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *CreatureMove) GetWalkSeq() uint32 {
+	if x != nil {
+		return x.WalkSeq
 	}
 	return 0
 }
@@ -4920,11 +4970,14 @@ func (x *HouseUpdate) GetInside() bool {
 	return false
 }
 
-// WalkRejected tells the client its predicted step failed; it snaps back to pos.
+// WalkRejected tells the client its predicted steps failed; it snaps back to pos. The
+// server dropped its step queue and starts walk_epoch: Walks of an older epoch (sent
+// before the client heard of this) are dropped.
 type WalkRejected struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Pos           *Position              `protobuf:"bytes,1,opt,name=pos,proto3" json:"pos,omitempty"`
 	Dir           Direction              `protobuf:"varint,2,opt,name=dir,proto3,enum=game.v1.Direction" json:"dir,omitempty"`
+	WalkEpoch     uint32                 `protobuf:"varint,3,opt,name=walk_epoch,json=walkEpoch,proto3" json:"walk_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4971,6 +5024,13 @@ func (x *WalkRejected) GetDir() Direction {
 		return x.Dir
 	}
 	return Direction_DIRECTION_UNSPECIFIED
+}
+
+func (x *WalkRejected) GetWalkEpoch() uint32 {
+	if x != nil {
+		return x.WalkEpoch
+	}
+	return 0
 }
 
 type Pong struct {
@@ -5909,13 +5969,18 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\bquestion\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\bquestion\x12/\n" +
 	"\aoptions\x18\x03 \x03(\v2\x15.game.v1.DialogOptionR\aoptions\x12\x1d\n" +
 	"\n" +
-	"timeout_ms\x18\x04 \x01(\rR\ttimeoutMs\"d\n" +
+	"timeout_ms\x18\x04 \x01(\rR\ttimeoutMs\"\xce\x01\n" +
 	"\aWelcome\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
 	"creatureId\x12\x1f\n" +
 	"\vserver_time\x18\x02 \x01(\x04R\n" +
 	"serverTime\x12\x17\n" +
-	"\atick_ms\x18\x03 \x01(\rR\x06tickMs\"0\n" +
+	"\atick_ms\x18\x03 \x01(\rR\x06tickMs\x12(\n" +
+	"\x10max_queued_steps\x18\x04 \x01(\rR\x0emaxQueuedSteps\x12\x1d\n" +
+	"\n" +
+	"view_width\x18\x05 \x01(\rR\tviewWidth\x12\x1f\n" +
+	"\vview_height\x18\x06 \x01(\rR\n" +
+	"viewHeight\"0\n" +
 	"\x04Tile\x12(\n" +
 	"\x05items\x18\x01 \x03(\v2\x12.game.v1.ItemStackR\x05items\".\n" +
 	"\bMapFloor\x12\f\n" +
@@ -5928,9 +5993,11 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x06height\x18\x04 \x01(\rR\x06height\x12'\n" +
 	"\apalette\x18\x05 \x03(\v2\r.game.v1.TileR\apalette\x12)\n" +
 	"\x06floors\x18\x06 \x03(\v2\x11.game.v1.MapFloorR\x06floors\x12/\n" +
-	"\tcreatures\x18\a \x03(\v2\x11.game.v1.CreatureR\tcreatures\"3\n" +
+	"\tcreatures\x18\a \x03(\v2\x11.game.v1.CreatureR\tcreatures\"R\n" +
 	"\vFullMapView\x12$\n" +
-	"\x04area\x18\x01 \x01(\v2\x10.game.v1.MapAreaR\x04area\"0\n" +
+	"\x04area\x18\x01 \x01(\v2\x10.game.v1.MapAreaR\x04area\x12\x1d\n" +
+	"\n" +
+	"walk_epoch\x18\x02 \x01(\rR\twalkEpoch\"0\n" +
 	"\bMapSlice\x12$\n" +
 	"\x04area\x18\x01 \x01(\v2\x10.game.v1.MapAreaR\x04area\"T\n" +
 	"\n" +
@@ -5980,13 +6047,14 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x0eCreatureAppear\x12-\n" +
 	"\bcreature\x18\x01 \x01(\v2\x11.game.v1.CreatureR\bcreature\"#\n" +
 	"\x11CreatureDisappear\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\rR\x02id\"\x89\x01\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\"\xa4\x01\n" +
 	"\fCreatureMove\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12%\n" +
 	"\x04from\x18\x02 \x01(\v2\x11.game.v1.PositionR\x04from\x12!\n" +
 	"\x02to\x18\x03 \x01(\v2\x11.game.v1.PositionR\x02to\x12\x1f\n" +
 	"\vduration_ms\x18\x04 \x01(\rR\n" +
-	"durationMs\"D\n" +
+	"durationMs\x12\x19\n" +
+	"\bwalk_seq\x18\x05 \x01(\rR\awalkSeq\"D\n" +
 	"\fCreatureTurn\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12$\n" +
 	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\"G\n" +
@@ -6183,10 +6251,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x05money\x18\x15 \x01(\x04R\x05money\x12\x1b\n" +
 	"\tread_only\x18\x16 \x01(\bR\breadOnly\x12\x16\n" +
 	"\x06access\x18\x17 \x01(\bR\x06access\x12\x16\n" +
-	"\x06inside\x18\x18 \x01(\bR\x06inside\"Y\n" +
+	"\x06inside\x18\x18 \x01(\bR\x06inside\"x\n" +
 	"\fWalkRejected\x12#\n" +
 	"\x03pos\x18\x01 \x01(\v2\x11.game.v1.PositionR\x03pos\x12$\n" +
-	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\"H\n" +
+	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\x12\x1d\n" +
+	"\n" +
+	"walk_epoch\x18\x03 \x01(\rR\twalkEpoch\"H\n" +
 	"\x04Pong\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x04R\n" +
 	"clientTime\x12\x1f\n" +

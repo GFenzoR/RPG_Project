@@ -205,8 +205,9 @@ test("sandbox playtest: walls block clicks, arrows after the panel, the shop scr
   await standsOn(2092, 2094, 7);
   expect(await stance.inputValue()).toBe(before);
 
-  // M2: the provisioner's shop at 1280x800 scrolls inside its window, which stays on the
-  // screen; the wheel scrolls it and its last line is bought. The map never scrolls.
+  // M2: the provisioner's shop at 1280x800 stays on the screen; since docs/17 UI-8 its
+  // grid pages instead of scrolling, the search finds the backpack and the bar buys it.
+  // The map never scrolls.
   const say = page.getByTestId("say").getByRole("textbox");
   await say.fill("/item gold_coin 1");
   await say.press("Enter");
@@ -236,27 +237,28 @@ test("sandbox playtest: walls block clicks, arrows after the panel, the shop scr
   const box = await shop.boundingBox();
   if (!box) throw new Error("no shop box");
   expect(box.y + box.height).toBeLessThanOrEqual(800);
+  // docs/17 UI-8: the whole shop fits; its grid pages instead of scrolling. The merchant
+  // sells more than a page: the arrows go to the next one.
   const sizes = await shop.evaluate((el) => ({ scroll: el.scrollHeight, client: el.clientHeight }));
-  expect(sizes.scroll).toBeGreaterThan(sizes.client); // the list is taller: it scrolls
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  // The wheel over the shop takes the list to its end, however long the shop gets (a fixed
-  // 400 px stopped short once the mana draughts, the spark wand and the crossbow came in).
-  await page.mouse.wheel(0, sizes.scroll);
-  await expect
-    .poll(() => shop.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop))
-    .toBeLessThanOrEqual(1);
-  const last = shop.locator("li").last();
-  await expect(last).toHaveAttribute("data-item", "backpack");
+  expect(sizes.scroll).toBeLessThanOrEqual(sizes.client + 1);
+  await expect(shop.getByTestId("shop-next")).toBeEnabled();
+  await shop.getByTestId("shop-next").click();
+  await expect(shop.getByTestId("shop-prev")).toBeEnabled();
+  // The search finds the backpack wherever it is; a click picks it for the bar below.
+  await shop.getByTestId("shop-search").fill("mochila");
+  const cell = shop.locator('[data-item="backpack"]');
+  await expect(cell).toHaveCount(1);
+  await cell.getByRole("button").click();
+  const bar = shop.getByTestId("shop-bar");
+  await expect(bar).toContainText("mochila");
   // m8: a count over the limit shows the limit (100), not what was typed.
-  const count = last.getByRole("spinbutton");
+  const count = bar.getByTestId("shop-count");
   await count.fill("250");
   await expect(count).toHaveValue("100");
   await count.fill("1");
-  await last.getByRole("button", { name: "Comprar" }).click();
+  await expect(bar.getByTestId("shop-total")).toContainText("20");
+  await bar.getByTestId("shop-act").click();
   await expect(page.getByTestId("game-log")).toContainText("Compraste mochila por 20 monedas.");
-  const lastBox = await last.boundingBox();
-  if (!lastBox) throw new Error("no last line");
-  expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(box.y + box.height + 1);
   expect(await page.locator(".viewport").evaluate((el) => el.scrollTop)).toBe(0);
   await page.waitForTimeout(300);
   await shot(page, "95-sandbox-shop-scrolled");

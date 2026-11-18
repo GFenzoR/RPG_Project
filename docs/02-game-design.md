@@ -37,11 +37,47 @@ Todos los números de este documento son **valores iniciales** que viven en
   - La app de escritorio no ofrece OAuth (necesitaría abrir el navegador del sistema y
     volver por deep link o loopback; pendiente): muestra que se haga en el sitio.
 
+## Controles del mouse (docs/17 UI-6)
+Desde A4 el click derecho sobre un **objeto** abre su menú con la ficha (tipo, stats,
+requisitos, efectos, descripción) y sus acciones: la primera, en negrita, es la acción por
+defecto (abrir, usar con, comer, equipar o usar). Para usar al instante: **doble click** o
+**Ctrl+click derecho**. Opciones → Controles → "Clic derecho sobre objetos" vuelve al modo
+**clásico** (click derecho = usar; Mayús+click derecho abre el menú). En los dos modos:
+- el click derecho sobre una **criatura** la ataca, o le habla si es un NPC (un solo click
+  para pelear); Mayús+click derecho abre su menú;
+- Mayús+click izquierdo mira (el texto del servidor); pasar el mouse sobre un objeto del
+  inventario, la tienda o el intercambio muestra su ficha;
+- con el dedo, el toque largo abre el mismo menú (T5.6).
+
+Donde este doc dice "click derecho" para usar algo del mapa (una escalera de mano, una
+estación, una puerta, un tablero), en el modo de menú es la acción por defecto de ese menú,
+el doble click o Ctrl+click derecho.
+
 ## Movimiento
 - Por casillas, 8 direcciones (diagonal más lenta: ×1.5 de costo como en Tibia clásico).
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
   nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
 - Click-to-walk con pathfinding A* en el servidor (máx. 100 casillas).
+- **Movimiento fluido** (al estilo de Diablo 2, pero por casillas y con el servidor como
+  juez). Mantener una tecla camina casilla tras casilla sin detenerse entre ellas: el
+  cliente predice hasta `max_queued_steps` pasos (`balance.yaml`, 4) y decide el siguiente
+  50 ms antes de que termine el que dibuja; el servidor los encola y empieza cada uno el
+  tick en que termina el anterior (`05-network-protocol.md` "Caminar"). La velocidad no
+  cambia: cada paso dura lo que dice la fórmula de arriba y el servidor valida cada paso
+  y su ritmo. Soltar la tecla en los últimos 50 ms de un paso todavía da el siguiente.
+  - Dos flechas perpendiculares a la vez caminan en diagonal (arriba + derecha = noreste,
+    con su costo de ×1.5); si la diagonal está bloqueada, se camina por su mitad
+    horizontal o vertical libre (se "desliza" junto a un muro).
+  - Un paso rechazado (una criatura que el cliente todavía no veía, una puerta de casa
+    sin acceso) devuelve al personaje a su casilla deslizándose en ~160 ms, sin saltos,
+    aunque el cliente ya dibujara los `max_queued_steps` pasos predichos.
+  - Las demás criaturas y el camino del click se dibujan sobre la línea de ticks del
+    servidor con un colchón contra el jitter de la red (~40 ms): los pasos seguidos del
+    servidor se ven seguidos, sin pausas ni tirones.
+  - La cámara y las criaturas se mueven de a un píxel de pantalla (no de a un píxel del
+    sprite, que a escala 3 eran saltos de 3 píxeles cada pocos frames); los sprites siguen
+    enteros y a escala entera. Las criaturas sin frames de caminar (monstruos, NPCs) dan
+    un saltito de 1 px en medio de cada paso.
 - Cambiar de piso: escaleras, escaleras de mano, agujeros, sogas y teletransportes (ver
   "Cambiar de piso"). Rampas no hay por ahora.
 
@@ -58,7 +94,8 @@ Tibia:
   y no tiene vuelta; una escalera tiene su pareja (otra escalera que sale junto al destino y llega junto al origen),
   así que nunca se aparece sobre la escalera de vuelta. Un teletransporte puede quedar en el
   mismo piso o llevar a otra isla.
-- **Escalera de mano (`ladder`): se usa.** Click derecho (o "Trepar" del toque largo) sobre
+- **Escalera de mano (`ladder`): se usa.** Click derecho ("Trepar" del menú, o el doble
+  click, en los controles de menú; "Trepar" del toque largo) sobre
   su casilla, desde ella o a `inventory.reach` (1) casilla, en el mismo piso y con línea de
   visión (como al recolectar: con un alcance mayor, nunca a través de un muro). Pisarla no
   hace nada. Lo que haya encima (un cadáver, monedas que alguien tiró) no la tapa: el
@@ -134,6 +171,61 @@ Tibia:
   escalera junto a la puerta queda reservado a él donde cae ("Falla segura", T5.3). Quien
   ve la casilla de donde salió lo ve irse y quien ve el destino lo ve caer. Sobre una
   escalera de mano o un punto de soga lo que se tira queda ahí (se usan a mano).
+
+## La vista (decisión del dueño, 2026-11-17)
+El dueño eligió ver más mapa: la vista llega a **31x21 casillas** (antes 15x11, como en
+Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
+- **Qué manda el servidor.** A cada jugador, la ventana de 31x21 centrada en él más 1
+  casilla de margen por lado (33x23): mapa, criaturas, efectos y proyectiles
+  (`05-network-protocol.md`, "Formato de mapa"). Es la misma para todos, tenga la pantalla
+  que tenga: "A ve a B" sigue siendo simétrico, y nadie ve más por tener un monitor grande
+  o un cliente modificado (todo lo que manda el servidor se puede leer: `01-architecture.md`,
+  "Trampas y anti-bot").
+- **Qué dibuja el cliente.** Siempre a escala entera (pixel-perfect). Por defecto, la
+  vista más grande que llena la caja del mapa sin dejar parte vacía (la escala entera más
+  chica a la que la ventana de 31x21 cubre la caja), pero nunca menos de las 15x11 de
+  siempre: una pantalla chica (un teléfono, la app de escritorio a 960 px) se queda con la
+  escala de antes. Con el dock de la UI oscura: 1920x1080 muestra unas 24x16 a 2x (la
+  escala de las 15x11 sería 3x: 16x11), 2560x1440 unas 22x14 a 3x y 1280x800 15x12 a 2x,
+  como antes. Alejando (Ctrl+rueda, el botón − o un pellizco) llega a la ventana entera
+  (31x21 a 1x en 1920x1080, 30x21 en 1280x800, donde el dock deja 960 px), con el resto
+  de la caja oscuro; acercando, a 7x5, como antes (`client/CLAUDE.md`, "Zoom del mapa").
+  La elección se recuerda por dispositivo.
+- **Depende de la ventana entera** (aunque el cliente dibuje menos): elegir un objetivo
+  (monstruo, o jugador con PvP) y conservarlo, mirar una casilla o una criatura, reportar
+  a un jugador y la vida y el maná de los miembros del grupo. Un objetivo a 15 casillas
+  se conserva; para pegarle hay que llegar a su rango (con "perseguir", el personaje
+  camina). Proponer un intercambio sigue pidiendo estar al lado: la ventana solo cambia
+  la respuesta ("no es posible" a quien no se ve, también a un invisible aunque esté al
+  lado; "muy lejos" a quien se ve y no está al lado).
+- **No cambia con la vista:**
+  - **Los rangos:** cada arma a distancia, hechizo y ataque de monstruo tiene su `range`
+    en `data/`. Ver más lejos no los alarga. El de un arma, un hechizo de daño o de
+    curación y una condición a distancia es como mucho 6 (el esquema y
+    `content.MaxRange`), el medio alto de la ventana clásica, y el `radius` de un hechizo
+    de área también: un monstruo golpeado desde tan lejos como apunta un jugador siempre
+    lo nota y devuelve el golpe (si no, se lo mataría gratis desde fuera de lo que nota). El de un ataque de monstruo no tiene ese
+    tope: un monstruo solo ataca a un objetivo que nota.
+  - **Lo que nota un monstruo:** un agresivo elige objetivo, y lo sigue persiguiendo, solo
+    dentro de la ventana clásica: 15x11 + 1 de margen, 8 casillas a los lados y 6 arriba y
+    abajo, en su piso (`session.InSight`). Un jugador lo ve desde 15 casillas sin que lo
+    note, y quien escapa a más de 8 lo pierde, como antes de la vista ancha.
+  - **El alcance de las manos** (`inventory.reach`, `resource.reach`: como mucho 6).
+  - **Lo que se oye:** decir llega a 7x5 casillas y gritar a 18x14 (`balance.yaml
+    chat.ranges`): a alguien a 12 casillas se lo ve, pero no se lo oye hablar. El sonido
+    se oye hasta 8 casillas ("Sonido").
+- **PvP:** la visión es la ventana entera, igual para todos. Quien juega con el mapa
+  acercado (o en un teléfono, que por defecto muestra menos) tiene en la lista de batalla
+  todo lo que su cliente conoce. La cámara va centrada en el jugador, sin "mirar adelante".
+- **Respawns:** un monstruo no reaparece en una casilla con algún jugador dentro de su
+  ventana clásica (8 casillas a los lados y 6 arriba y abajo, en los pisos que se ven
+  juntos; `session.watched`), no de la ventana entera. Si fuera la entera, quien caza en
+  un spawn frenaría los respawns de los spawns vecinos (están a unas 12–20 casillas) y la
+  capacidad del mundo (`07`, "Capacidad del mundo", medida con 15x11) quedaría corta. A
+  cambio, un monstruo puede aparecer dentro de lo que ve un jugador, a 9–16 casillas a
+  los lados o 7–11 arriba y abajo. Cada spawn bloqueado reintenta cada 5 s en otra casilla
+  de su radio. Es reversible en una línea (`watched` con `eachObserver`) si el dueño
+  prefiere que nada aparezca a la vista.
 
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |
@@ -517,7 +609,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   área), resistencias, loot con probabilidades, experiencia, comportamiento.
 - IA simple por estados: `idle → alerta → perseguir → atacar → huir (con poca vida)`.
   Implementada en T1.6 (`server/internal/session/monster.go`): en idle deambula dentro del
-  radio de su spawn; los agresivos eligen al jugador visible más cercano con línea de
+  radio de su spawn; los agresivos eligen al jugador más cercano a su vista (la ventana
+  clásica de 15x11 + 1, no la vista ancha de los jugadores: "La vista") con línea de
   visión (alerta: se gira hacia él), lo persiguen (paso que más acerca; si no hay, A* con
   la cuota de pathfinding del tick) y atacan pegados con los temporizadores de cada
   ataque. Con `flee_at_health_pct` se alejan; acorralados, pelean. Los pasivos solo
@@ -525,7 +618,8 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   Solo piensan en sectores activos. En T1.6 solo hay ataques `melee`; `distance` y
   `spell` llegan con la magia (T1.9).
 - Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
-  jugador está mirando el punto (evita aparecer en la cara): se reintenta cada 5 s.
+  jugador está dentro de la ventana clásica de 15x11 + 1 alrededor del punto (evita
+  aparecer en la cara; no la vista ancha: "La vista", "Respawns"): se reintenta cada 5 s.
 - **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
   el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
   (distancia Chebyshev al centro); su **área de correa**, ese radio más
@@ -1257,8 +1351,9 @@ manda a buscarla a Raigal. Tres quests encadenadas, todo en datos (`data/quests/
 ## Chat (T1.13)
 Números en `data/balance.yaml` (`chat`), nunca en código.
 - **Canal local**, mismo piso, alcance en casillas por eje (x, y) desde quien habla:
-  susurrar 1×1, decir 7×5 (la pantalla visible), gritar 18×14. Fuera de ese rectángulo
-  no se oye nada. Quien habla siempre recibe su propia línea.
+  susurrar 1×1, decir 7×5 (la pantalla clásica de 15x11, no la vista ancha: "La vista"),
+  gritar 18×14. Fuera de ese rectángulo no se oye nada. Quien habla siempre recibe su
+  propia línea.
 - **Canal global**: lo oyen todos los jugadores conectados; además del anti-flood, cada
   jugador espera `global_interval_ms` (10 s) entre dos mensajes globales
   (`chat.global_wait`).

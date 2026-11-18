@@ -38,7 +38,48 @@ export interface ItemDef {
    * "text.volcan.dock_sign"): looking at the item shows it. Absent when it has none.
    */
   desc?: string;
+  // ---- What the item card shows (docs/17 UI-6: right click, tooltip, shop). Optional so
+  // fixtures can leave them out; the server keeps every rule, these are for display. ----
+  /** data/items `kind` ("weapon", "armor", "consumable"...): the card's type line and the
+   * shop's category. */
+  kind?: string;
+  /** Grams (docs/06), shown in oz. Absent for 0. */
+  weight?: number;
+  weapon?: WeaponStats;
+  /** Ammunition: the type of the bows that shoot it and the attack it adds. */
+  ammo?: { type: string; attack: number };
+  armor?: { slot: string; armor: number };
+  shield?: { defense: number };
+  /** What eating or drinking it does (each field 0 when it does not). */
+  consumable?: { healHp: number; healMp: number; foodMs: number };
+  /** A rune: the spell it casts, its charges and the magic level it asks for. */
+  rune?: { spell: string; charges: number; magicLevel: number };
+  /** Equipping it asks for a level and maybe a vocation (vocations empty = any). */
+  requires?: { level: number; vocations: string[] };
+  /** `pickupable: false`: a map fixture nobody carries (a station, a board). */
+  fixed?: true;
 }
+
+/** The `weapon` block of an item (data/items). */
+export interface WeaponStats {
+  /** sword | axe | club | distance | wand */
+  type: string;
+  attack: number;
+  defense: number;
+  hands: number;
+  /** Tiles; 0 for melee weapons. */
+  range: number;
+  /** Element of a wand's shot ("" = none). */
+  element: string;
+  /** The ammo type a distance weapon shoots ("" = none). */
+  ammo: string;
+}
+
+/**
+ * The topic of an NPC dialog option (docs/17 UI-8): the dialog groups its buttons by it,
+ * with an icon and a colour each. "back" and "bye" go to their own row.
+ */
+export type DialogTopic = "quests" | "trade" | "travel" | "services" | "talk" | "back" | "bye";
 
 /** A player outfit of data/outfits.yaml (T0.5). */
 export interface OutfitDef {
@@ -146,6 +187,13 @@ export interface ClientContent {
   /** Atlas sprite path of each monster (data/monsters id → "creatures/wolf"). */
   monsterSprites: Record<string, string>;
   /**
+   * NPC id → option text key → topic (docs/17 UI-8), deduced at build time from the
+   * dialogs of data/npcs and the routes of data/boat_routes.yaml (vite/content.ts
+   * dialogTopics); an option's `tag` wins. Optional so fixtures can leave it out (every
+   * option is then "talk", but "dialog.back" and "dialog.bye").
+   */
+  dialogTopics?: Record<string, Record<string, DialogTopic>>;
+  /**
    * Atlas sprite path of each NPC (data/npcs id → "npcs/ferryman", T0.5). Optional so
    * fixtures can leave it out.
    */
@@ -163,6 +211,10 @@ export interface ClientContent {
   spells: SpellDef[];
   /** data/recipes.yaml in file order (T3.4). */
   recipes: RecipeDef[];
+  /**
+   * balance.yaml movement: the step formula and the click-to-walk limit. How many keyboard
+   * steps the client predicts ahead comes from the server (Welcome.max_queued_steps).
+   */
   movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
   /** balance.yaml chat (T1.13): the server enforces it, the input only caps to it. */
   chat: { maxLength: number };
@@ -212,4 +264,56 @@ export interface SiteContent {
   cosmetics?: CosmeticDef[];
   /** data/outfits.yaml (T5.7): the shop previews an outfit with its south-facing frame. */
   outfits?: OutfitDef[];
+  /** The /credits page (docs/17 A1), read from assets/CREDITS.md and the packs' CSVs. */
+  credits?: Credits;
+}
+
+/**
+ * Third-party art and fonts the game ships and their attribution (docs/17 A1), built by
+ * client/vite/credits.ts from assets/CREDITS.md and each pack's per-file CREDITS.csv.
+ */
+export interface Credits {
+  /** The pack rows of the first table of CREDITS.md. */
+  packs: PackCredit[];
+  /** Per-file credits of the packs that have them, files with the same credit grouped. */
+  files: FileCredit[];
+  /** Sprites composed from vendor files ("Obras derivadas de terceros"), by licence. */
+  derived: DerivedCredit[];
+  /** The "Fuentes (OFL 1.1)" table. */
+  fonts: FontCredit[];
+}
+
+export interface PackCredit {
+  /** Its folder, assets/vendor/<pack>/; its name and author are site.credits.pack.<pack>.* */
+  pack: string;
+  /** The licences its row names, GPL left out ("CC0 1.0", "OGA-BY 3.0"...). */
+  licences: string[];
+  /** Where it comes from. */
+  url: string;
+  /** Its files carry their own credits (entries of `files`). */
+  perFile: boolean;
+}
+
+export interface FileCredit {
+  pack: string;
+  /** The works: the folders of the files inside the pack ("hair/long/adult"). */
+  works: string[];
+  authors: string[];
+  /** The one licence the files are used under (CREDITS.md "Licencia por archivo"). */
+  licence: string;
+  urls: string[];
+}
+
+export interface DerivedCredit {
+  licence: string;
+  /** Sprite ids ("outfits/citizen", "npcs/merchant"). */
+  sprites: string[];
+}
+
+export interface FontCredit {
+  family: string;
+  /** The copyright line of its OFL.txt. */
+  copyright: string;
+  licence: string;
+  url: string;
 }

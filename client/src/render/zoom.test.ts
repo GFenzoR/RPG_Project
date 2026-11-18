@@ -3,9 +3,11 @@ import {
   MIN_VIEW,
   WHEEL_IDLE_MS,
   WheelZoom,
+  fillScale,
   loadZoom,
   pinchZoom,
   saveZoom,
+  shownTiles,
   stepZoom,
   viewPixels,
   zoomPref,
@@ -16,16 +18,16 @@ import {
 const T = 32;
 
 describe("zoomRange", () => {
-  it("starts at the scale that fits the whole 15x11 view", () => {
+  it("starts at the scale that fits the whole 15x11 view (a server from before the wide view)", () => {
     // 1280x800 desktop: the map box is about 1000x730 CSS px at 1 device px per CSS px.
-    expect(zoomRange(1000, 730, 1, T)).toEqual({ min: 2, max: 4 });
+    expect(zoomRange(1000, 730, 1, T)).toEqual({ min: 2, fit: 2, max: 4 });
     // Pixel 7 portrait: a 412x302 map box at 2.625 device px per CSS px.
-    expect(zoomRange(412, 302, 2.625, T)).toEqual({ min: 2, max: 4 });
+    expect(zoomRange(412, 302, 2.625, T)).toEqual({ min: 2, fit: 2, max: 4 });
   });
 
-  it("never goes below 1, and max is never below min", () => {
-    expect(zoomRange(100, 80, 1, T)).toEqual({ min: 1, max: 1 });
-    expect(zoomRange(0, 0, 1, T)).toEqual({ min: 1, max: 1 });
+  it("never goes below 1, and max is never below fit", () => {
+    expect(zoomRange(100, 80, 1, T)).toEqual({ min: 1, fit: 1, max: 1 });
+    expect(zoomRange(0, 0, 1, T)).toEqual({ min: 1, fit: 1, max: 1 });
   });
 
   it("keeps MIN_VIEW tiles in view at the largest scale", () => {
@@ -37,13 +39,13 @@ describe("zoomRange", () => {
 });
 
 describe("zoomScale and zoomPref", () => {
-  const range = { min: 2, max: 4 };
+  const range = { min: 2, fit: 2, max: 4 };
 
   it("fits the view without a choice and clamps a remembered one", () => {
     expect(zoomScale(undefined, range)).toBe(2);
     expect(zoomScale(3, range)).toBe(3);
     expect(zoomScale(9, range)).toBe(4);
-    expect(zoomScale(1, range)).toBe(2); // never below what fits the 15x11 view
+    expect(zoomScale(1, range)).toBe(2); // never below the fitted view
     expect(zoomScale(Number.NaN, range)).toBe(2);
   });
 
@@ -56,7 +58,7 @@ describe("zoomScale and zoomPref", () => {
 });
 
 describe("stepZoom", () => {
-  const range = { min: 2, max: 4 };
+  const range = { min: 2, fit: 2, max: 4 };
 
   it("moves one whole scale per step and stops at the ends", () => {
     expect(stepZoom(2, 1, range)).toBe(3);
@@ -69,7 +71,7 @@ describe("stepZoom", () => {
 });
 
 describe("pinchZoom", () => {
-  const range = { min: 2, max: 5 };
+  const range = { min: 2, fit: 2, max: 5 };
 
   it("rounds the spread fingers to a whole scale", () => {
     expect(pinchZoom(2, 1, range)).toBe(2);
@@ -103,6 +105,85 @@ describe("viewPixels", () => {
 
   it("keeps at least one sprite pixel", () => {
     expect(viewPixels(0, 0, 2, T)).toEqual({ width: 2, height: 2 });
+  });
+});
+
+describe("the wide view (31x21, Welcome.view_width/height)", () => {
+  const WIDE = { width: 31, height: 21 };
+
+  it("fits the largest view with no empty part, and zooms out to the whole window", () => {
+    // 1920x1080 with the dock (ui/windows.css --dock-w, 384 px): a 1536x1080 box. 3x is
+    // the largest scale that shows 15x11, but only 16x11 of the window; 2x fills the box
+    // with 24x16 of it (above the hotbar strip); 1x shows all of it with a dark border.
+    expect(zoomRange(1536, 1080, 1, T, WIDE)).toEqual({ min: 1, fit: 2, max: 6 });
+    // 2560x1440: a 2176x1440 box. 3x (22x14), not the 4x of 15x11; out to 2x, which
+    // already shows the whole window.
+    expect(zoomRange(2176, 1440, 1, T, WIDE)).toEqual({ min: 2, fit: 3, max: 9 });
+    // A 1440x900 laptop at 2 device px per CSS px: a 1056x900 box, 3x (22x17), not 4x.
+    expect(zoomRange(1056, 900, 2, T, WIDE)).toEqual({ min: 2, fit: 3, max: 9 });
+    // 1280x800: a 960x800 box. 2x (15x12), as before: at 1x the window (30x21 of it)
+    // leaves part of the box empty.
+    expect(zoomRange(960, 800, 1, T, WIDE)).toEqual({ min: 1, fit: 2, max: 4 });
+    // The layout from before the dock (1920x1080 gave a 1680x1043 box, 1280x800 1040x732):
+    // the same 2x.
+    expect(zoomRange(1680, 1043, 1, T, WIDE)).toEqual({ min: 1, fit: 2, max: 6 });
+    expect(zoomRange(1040, 732, 1, T, WIDE)).toEqual({ min: 1, fit: 2, max: 4 });
+    // A server with the classic window: the classic scale, nothing to zoom out to.
+    expect(zoomRange(1536, 1080, 1, T)).toEqual({ min: 3, fit: 3, max: 6 });
+    expect(zoomRange(1680, 1043, 1, T)).toEqual({ min: 2, fit: 2, max: 6 });
+  });
+
+  it("never fits a view smaller than 15x11: small windows keep the classic scale", () => {
+    // 960x700 (the desktop app's narrow window): a 688x700 box. 1x shows 21x21; 2x would
+    // fill it with about 11x11.
+    expect(zoomRange(688, 700, 1, T, WIDE)).toEqual({ min: 1, fit: 1, max: 3 });
+    // Pixel 7 on its side: a 915x330 box at 2.625 device px per CSS px. 2x shows the whole
+    // width of the window (31 tiles) and 13 rows; 3x would fill it with 25x9.
+    expect(zoomRange(915, 330, 2.625, T, WIDE)).toEqual({ min: 1, fit: 2, max: 5 });
+  });
+
+  it("finds the smallest whole scale at which the window covers the box", () => {
+    expect(fillScale(1536, 1080, 1, T, WIDE)).toBe(2);
+    expect(fillScale(992, 672, 1, T, WIDE)).toBe(1); // exactly the window
+    expect(fillScale(993, 672, 1, T, WIDE)).toBe(2);
+    // 1240x840 CSS px at 1.25 device px per CSS px: 1550x1050, a hair over 1.5625.
+    expect(fillScale(1240, 840, 1.25, T, WIDE)).toBe(2);
+    // 793.6 x 537.6 at 1.25 is the window exactly: no rounding up to 2.
+    expect(fillScale(793.6, 537.6, 1.25, T, WIDE)).toBe(1);
+    expect(fillScale(0, 0, 1, T, WIDE)).toBe(1);
+    expect(fillScale(100, 100, Number.NaN, T, WIDE)).toBe(1);
+  });
+
+  it("keeps the scale of before on a phone, and zooms out to 1", () => {
+    // iPhone 13 portrait: a 390x480 box at 3 device px per CSS px.
+    expect(zoomRange(390, 480, 3, T, WIDE)).toEqual({ min: 1, fit: 2, max: 5 });
+  });
+
+  it("remembers a zoom out and forgets the fitted view", () => {
+    const r = { min: 1, fit: 2, max: 6 };
+    expect(zoomScale(undefined, r)).toBe(2);
+    expect(stepZoom(2, -1, r)).toBe(1);
+    expect(stepZoom(1, -1, r)).toBe(1);
+    expect(stepZoom(1, 1, r)).toBeUndefined();
+    expect(stepZoom(2, 1, r)).toBe(3);
+    expect(zoomPref(0, r)).toBe(1);
+    expect(pinchZoom(2, 0.4, r)).toBe(1);
+  });
+
+  it("fills the box with as much of the window as fits, the hotbar strip left free", () => {
+    // 1920x1080 at 2x: 1680 px wide; 1043 tall less the strip of 40: 1002 (the canvas then
+    // sits at the top of the box, render/viewport.ts mapLift).
+    expect(viewPixels(1680, 1043, 2, T, WIDE, 40)).toEqual({ width: 1680, height: 1002 });
+    expect(shownTiles(1680, 1002, 2, T)).toEqual({ width: 26.25, height: 15.65625 });
+    // 1280x800 at 2x: a box of 1040x732; the strip never cuts into the classic 11 rows
+    // (mapLift moves them up: the strip covers 12 px of the last one, as before).
+    expect(viewPixels(1040, 732, 2, T, WIDE, 40)).toEqual({ width: 1040, height: 704 });
+    // At 1x the whole window fits: it never shrinks for the strip.
+    expect(viewPixels(1680, 1043, 1, T, WIDE, 40)).toEqual({ width: 992, height: 672 });
+    expect(viewPixels(1040, 690, 1, T, WIDE, 40)).toEqual({ width: 992, height: 672 });
+    expect(shownTiles(992, 672, 1, T)).toEqual({ width: 31, height: 21 });
+    // iPhone 13 portrait at 2x: cut to the box.
+    expect(viewPixels(1170, 1440, 2, T, WIDE)).toEqual({ width: 1170, height: 1344 });
   });
 });
 

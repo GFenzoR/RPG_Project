@@ -117,7 +117,8 @@ func (w *World) tradeRequest(ctx *game.TickContext, p *Player, m *pb.TradeReques
 	}
 	o := w.playerByID(m.GetCreatureId())
 	switch {
-	case o == nil || o == p || o.linkDead || !Sees(p.pos, o.pos):
+	case o == nil || o == p || o.linkDead || !Sees(p.pos, o.pos) || !p.Knows(o.id):
+		// Unknown (an invisible player) answers as out of view: "too far" would tell where.
 		p.emit(systemMsg(msgNotPossible))
 		return
 	case p.role > RolePlayer || o.role > RolePlayer:

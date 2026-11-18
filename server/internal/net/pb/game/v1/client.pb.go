@@ -990,9 +990,18 @@ func (x *Hello) GetLocale() string {
 	return ""
 }
 
+// Walk asks for one step in dir (docs/05 "Caminar"). It goes after the keyboard steps
+// already queued, at most Welcome.max_queued_steps of them (one more resets the walk
+// with WalkRejected), and drops a queued WalkPath or chase step. walk_epoch is the one of
+// the last WalkRejected or FullMapView the client got: a Walk of another epoch was sent
+// before that reset, and the server drops it without an answer. 0 skips the check. seq
+// numbers the client's Walks (one more each): the CreatureMove of the step it becomes
+// carries it back (walk_seq), so the client pairs each answer with its Walk. 0: no number.
 type Walk struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Dir           Direction              `protobuf:"varint,1,opt,name=dir,proto3,enum=game.v1.Direction" json:"dir,omitempty"`
+	WalkEpoch     uint32                 `protobuf:"varint,2,opt,name=walk_epoch,json=walkEpoch,proto3" json:"walk_epoch,omitempty"`
+	Seq           uint32                 `protobuf:"varint,3,opt,name=seq,proto3" json:"seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1032,6 +1041,20 @@ func (x *Walk) GetDir() Direction {
 		return x.Dir
 	}
 	return Direction_DIRECTION_UNSPECIFIED
+}
+
+func (x *Walk) GetWalkEpoch() uint32 {
+	if x != nil {
+		return x.WalkEpoch
+	}
+	return 0
+}
+
+func (x *Walk) GetSeq() uint32 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
 }
 
 // WalkPath queues up to 100 steps (auto-walk after a click).
@@ -3984,9 +4007,12 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12%\n" +
 	"\x0eclient_version\x18\x02 \x01(\tR\rclientVersion\x12\x16\n" +
-	"\x06locale\x18\x03 \x01(\tR\x06locale\",\n" +
+	"\x06locale\x18\x03 \x01(\tR\x06locale\"]\n" +
 	"\x04Walk\x12$\n" +
-	"\x03dir\x18\x01 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\"4\n" +
+	"\x03dir\x18\x01 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\x12\x1d\n" +
+	"\n" +
+	"walk_epoch\x18\x02 \x01(\rR\twalkEpoch\x12\x10\n" +
+	"\x03seq\x18\x03 \x01(\rR\x03seq\"4\n" +
 	"\bWalkPath\x12(\n" +
 	"\x05steps\x18\x01 \x03(\x0e2\x12.game.v1.DirectionR\x05steps\"\n" +
 	"\n" +

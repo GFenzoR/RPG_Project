@@ -50,9 +50,11 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 | Decidir si la vocación "Druida" / "Druid" cambia de nombre: es igual a la de Tibia (regla legal). La auditoría de contenido (m12) renombró los hechizos parecidos, pero el nombre de una vocación es decisión tuya. Si cambia, es solo `vocation.druid.name` en `i18n/*/vocations.yaml` y los textos que la nombran (el id `druid` se queda) | Regla legal | `02-game-design.md` "Vocaciones (nombres provisionales)" |
+| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (`base_step_ms` 1000 → 800, MOV-8); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
 
 ## Orden sugerido
-No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
+No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba), salvo
+el punto 5:
 1. Elegir el proveedor de pagos y cargar sus claves (T5.7, `09-deployment-aws.md`
    "Tienda y pagos"); probar una compra en su modo prueba con el webhook expuesto.
 2. T1.18: cuenta de AWS, dominio y deploy.
@@ -62,6 +64,11 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
    ese archivo.
 4. Jugar y anotar lo que se siente mal (`make play`, `16-probar-el-juego.md`); de ahí salen
    las próximas tareas.
+5. De la primera prueba (2026-11-17) salió `17-direccion-de-arte-y-ui.md`. Su plan (§7, tareas
+   A1–A13) es trabajo para la IA en lotes. Lo primero, por impacto y poco riesgo: A6
+   (movimiento fluido, hecho en parte en la rama `feat/movement-feel`) y A8 (animación de
+   los monstruos de un solo frame; hecho, junto con los personajes de LPC: ver "Pendientes
+   conocidos").
 
 ## Cómo trabajar en local (lo que aprendimos en la nube)
 - **Una tarea, una sesión, un PR.** Usa `/roadmap-task T5.6` o pega el brief. Pide un plan
@@ -91,29 +98,213 @@ No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba):
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Dirección de arte y UI (prueba del dueño, 2026-11-17).** `17-direccion-de-arte-y-ui.md`
+  deja escrito qué cambiar y cómo. A2 y A3 (la UI oscura: fuentes, tokens, dock con orbes,
+  botonera y ventanas) ya están (rama `feat/ui-theme`, docs/17 §7 "Hecho: A2 y A3"), y A4 y
+  A5 también (rama `feat/ui-interactions`, "Hecho: A4, A5 y los botones del gremio"): menú
+  del click derecho con la ficha del item, tooltip, doble click, opción de controles,
+  diálogo por temas y tienda sin scroll, y la ventana del gremio con botones; y A8 con la
+  parte de criaturas de A10 y A12 (rama `feat/creature-animation`, abajo); y (rama
+  `feat/world-art`) el arte del mundo de A10, A11 y A12 y la luz de A13 (abajo). Lo que falta,
+  en el orden de su §7:
+  - **A6, movimiento fluido:** hecho en parte en la rama `feat/movement-feel` (ver abajo y
+    docs/17 §4 "Hecho: A6 (parcial)"). No fue solo del cliente como decía el plan: el
+    servidor encola los pasos de teclado (protocolo en docs/05 "Caminar"). Faltan MOV-3
+    (caminar manteniendo el mouse), MOV-4 (click previsto), MOV-7 (respuesta visual) y el
+    E2E de MOV-9 con 150 ms de latencia simulada.
+  - **Criaturas animadas (hecho).** Todas se mueven: animación por frames
+    (`packages/renderer/src/anim.ts`, `client/src/render/creature-body.ts`) y, para los
+    sprites de un solo frame, la procedural de ANI-5. Los atuendos, los 17 NPCs humanos y
+    cuatro monstruos humanoides son personajes de LPC de 64x64 (`assets/vendor/ulpc`,
+    `animations` de `assets/sprites.yaml`); jabalí y ciervo trotan con frames de spritegen.
+    Lo que quedó pendiente de eso:
+    - **A9 (protocolo):** quién ataca a quién y si una criatura murió o salió de la vista
+      (ANI-7). Hasta entonces el cliente lo deduce (`render/creature-events.ts`) y puede
+      animar al monstruo equivocado cuando varios rodean a un jugador.
+    - **Conjurar y disparar:** las hojas `spellcast` y `shoot` de LPC no se usan todavía;
+      un hechizo o un arco juega el ataque (`slash`).
+    - **Animales:** los monstruos de Dungeon Crawl siguen con un frame y la animación
+      procedural. Ningún repo oficial de LPC en GitHub trae animales con licencia al lado
+      (el lobo del Starter Kit no la tiene); faltan ciclos propios de spritegen o hojas de
+      OpenGameArt con licencia por archivo.
+    - **Escala mezclada:** los personajes de LPC miden ~1,4 casillas y los monstruos de
+      Dungeon Crawl, una (ART-2 lo acepta).
+    - **Click sobre la cabeza** de un personaje alto (cae en la casilla de arriba): sigue
+      eligiendo la casilla, no a la criatura (ART-2, A10).
+    - **Atlas:** pasó de 1 a 2 páginas (docs/07).
+    - **Pantalla de créditos (A1):** hecha en su versión mínima (lote 6): la página
+      `/credits` del sitio, enlazada desde el pie del sitio y desde Opciones. La app de
+      escritorio solo muestra la dirección para abrirla en el navegador.
+  - **Lo que A4 y A5 dejaron** (docs/17 §7): texto del NPC letra por letra y retrato
+    animado; color de los items de misión (`data/items` no los marca); tooltip sobre el
+    canvas; arrastrar con Mayús para dividir una pila (hoy: "Mover parte…" del menú).
+  - **Revisar en el E2E final de A4 y A5:** el click derecho sobre un item ya no lo usa
+    (abre el menú): los specs usan doble click o Ctrl+click derecho (`useAt` en
+    `e2e/game.spec.ts`) y el de la mochila y el del fogón pasan por el menú. La tienda ya
+    no se desplaza: el E2E de la Isla de Pruebas busca la mochila y pagina.
+  - **Lo que A3 dejó para después** (docs/17 §7, "Hecho: A2 y A3"): cada contenedor como
+    ventana propia (hoy van dentro de Inventario); las ventanas del servidor (diálogo,
+    tienda, crafteo, mercado, casa, intercambio) como `GameWindow` acoplables (hoy solo
+    tienen el marco nuevo); mover ventanas con el teclado y cambiarles el tamaño; tamaño de
+    fuente y escala de la UI (UI-3); Pixelify Sans en el canvas; íconos de slot vacío en el
+    equipo; sacudida de cámara y destello de la hotbar (UI-9). El marco de hierro es CSS:
+    el PNG 9-slice de spritegen (`ui/frame/iron`) queda como mejora.
+  - **Revisar en el E2E final de la UI:** las ventanas flotantes (gremio, apariencia,
+    opciones, ayuda) aparecen sobre el mapa: los specs las abren con `e2e/windows.ts` y
+    cierran la del gremio antes de hacer click en el mapa. Un spec nuevo que abra una y
+    después haga click en una casilla tiene que cerrarla o moverla.
+  - **A7, vista de hasta 31x21:** hecha en la rama `feat/wide-view` (ver abajo).
+  - **Arte del mundo (hecho, A10, A11, A12 y la luz de A13).** Muros con altura en 16
+    piezas por material que el renderer elige por sus vecinos (también en el editor y en
+    `mapcli render`), con la silueta del jugador propio detrás de un muro; suelos con
+    looks; agua, bajío, lava, espuma de orilla, copas, fragua, fogón y cuatro props nuevos
+    animados; árboles centrados con sombra proyectada; cuevas oscuras con luz del jugador
+    y de los fuegos. Todo es spritegen propio (CC0): no hizo falta LPC para el mundo
+    (docs/17 SRC-4). Lo que quedó:
+    - **Props sin poner:** `wall_torch`, `wall_banner`, `brazier` y `fountain` existen
+      (ids, i18n, arte animado) pero ningún mapa los usa todavía: es una tarea de mapa
+      (`build-map-area`), por ejemplo antorchas en la mina y una fuente en cada plaza.
+    - **Marco de puerta de casa:** la puerta de una casa (`houses.yaml` `doors`) sigue
+      siendo un hueco en el muro. Un item de marco que no bloquea y `joins_walls` lo
+      resolvería, pero cambia mapas.
+    - **Muros altos (32x96), ventanas y `elevation`** (ART-3, ART-8): sin hacer.
+    - **Bordes que faltan:** la tierra no tiene regla con el pasto ni con la arena
+      (`data/borders.yaml`), así que los caminos y la herrería del Bosque terminan en línea
+      recta. Sumar las reglas es fácil (gen-borders hace los sprites), pero ponerlas en las
+      islas es `mapcli autoborder`: cambia mapas.
+    - **Partículas de ambiente** (A13): polvo, brasas, hojas, ondas al pisar.
+    - **Suelos viejos de la Isla Volcánica:** el basalto de Brasal (hexágonos muy
+      contrastados) y la lava (muy cargada) son de T5.5; no tienen looks. La ceniza y la
+      lava enfriada ya entran en la banda de valor de ART-6.
+    - **Cara exterior de los muros delgados:** el suelo de la casilla del muro se ve a los
+      dos lados de un tramo norte-sur (una franja de empedrado afuera del templo). Se lee
+      como un zócalo; si molesta, la solución es de mapa (pasto bajo el muro) o un muro
+      más ancho.
+  - **A1** dentro de la app de escritorio: hoy Opciones solo muestra la dirección de
+    `/credits`. Antes de distribuir la app (o publicarla en tiendas, docs/15), mostrar
+    los créditos dentro de ella.
+  - **Las herramientas casi no leen la licencia.** spritepack y `make validate` solo piden
+    la fila de `CREDITS.md` y el `LICENSE`. La excepción es la licencia por archivo de LPC:
+    `make test` (spritepack, `src/licences.ts`) exige una licencia aceptada en
+    `CREDITS.csv` para cada PNG del pack y que "Obras derivadas de terceros" de
+    `CREDITS.md` dé a cada sprite compuesto la licencia de sus capas (OGA-BY 3.0, o
+    CC-BY-SA 3.0 si una capa solo es BY-SA: hoy 2 monstruos y 13 NPCs). El resto de la
+    política nueva (CC-BY-SA, OFL) la hace cumplir la revisión, igual que antes. El texto de las reglas que
+    reciben los agentes del lote (`RULES` en `.claude/workflows/lote.js`) todavía dice
+    "CC0/CC-BY/OGA-BY": hay que agregar CC-BY-SA y OFL.
+  - Lo 👤 está en "Lo que es tuyo".
+- **Vista ancha de 31x21 (rama `feat/wide-view`, apilada sobre `feat/movement-feel`;
+  docs/17 A7).** Hecho: el servidor manda a todos una ventana de 31x21 (+1) y el `Welcome`
+  se la dice al cliente; los monstruos
+  siguen notando y persiguiendo solo la ventana clásica de 15x11 (+1); el cliente llena la
+  caja del mapa con la vista más grande que la cubre a escala entera, sin bajar de 15x11
+  (24x16 a 2x en 1920x1080 con el dock), y deja alejar hasta la ventana entera; medido en
+  proceso dentro del presupuesto (docs/07 "Vista ancha"; reglas en docs/02 "La vista").
+  Tras la revisión, los rangos con que apunta un jugador (armas, hechizos, condiciones)
+  quedaron topados en 6 (`content.MaxRange`, esquema y carga): un monstruo golpeado desde
+  tan lejos siempre lo nota y contesta. La segunda revisión topó también el `radius` de
+  los hechizos de área, dejó que proponer un intercambio a un invisible conteste "no es
+  posible" (antes "muy lejos" decía dónde estaba) y devolvió el bloqueo de los respawns a
+  la ventana clásica (abajo). Quedó:
+  - **Repetir `make e2e`:** la rama se rebasó sobre la punta de `feat/movement-feel`
+    (`d9d80ca`, con f29dcc9 y f88d92a de `feat/ui-theme`); los screenshots de A7 (97b, 98b
+    y los de teléfonos) se sacaron sin el CSS de hotbar y condiciones de f88d92a.
+  - **`make bots` a 31x21:** hecho en el cierre del lote 6 contra un servidor real (docs/07,
+    "Vista ancha"): base 624 B/s por jugador y tick p99 1,95 ms; stress 1580 B/s y 4,77
+    ms. Todo dentro del presupuesto. Falta repetirlo con el monitoreo (Grafana) y con los
+    bots en otra máquina.
+  - **Ventana por cliente, descartada por ahora:** docs/17 proponía que el cliente pida su
+    vista (de 15x11 a 31x21) y el servidor mande esa área. Se dejó una sola para todos:
+    "A ve a B" sigue simétrico, nadie gana nada con un cliente modificado y el ancho de banda
+    entra en el presupuesto (1,7 KB/s en el peor escenario). Si un día molesta (teléfonos
+    con datos móviles), el `Hello` podría pedir una ventana menor y el servidor recortar
+    solo lo que manda, sin tocar las reglas.
+  - **Escala 1,5x "sharp-bilinear" (docs/17 UI-4), sin hacer:** dibujar a 2x y bajar a 1,5x
+    con filtro lineal, como opción de Gráficos apagada por defecto.
+  - **La escala por defecto, para que la pruebe el dueño:** es la vista más grande que
+    llena la caja a escala entera sin bajar de 15x11 (docs/17 "Hecho: A7": a 1920x1080, 2x
+    con 24x16; la regla de UI-4 daba 3x con 16x11 con el dock). Si prefiere ver las 31x21
+    enteras de entrada (1x a 1920x1080, con caja oscura alrededor), basta con que
+    `zoomRange` (`client/src/render/zoom.ts`) devuelva su `min` como `fit`; cada jugador
+    ya puede alejar hasta ahí y queda recordado.
+  - **Bordes de la vista, para decidir:** docs/17 pedía casillas enteras con lados impares
+    y el resto en `--ui-void`; quedó el canvas lleno hasta los bordes con casillas
+    fraccionarias, centrado en el jugador (como el zoom de antes). Revisarlo en el playtest
+    con la UI oscura.
+  - **Respawns y la vista ancha, para que lo confirme el dueño:** un monstruo no reaparece
+    con un jugador dentro de la ventana clásica de 15x11 + 1 (`session.watched`), como
+    antes de la vista ancha. Con la ventana entera, quien caza en un spawn frenaba los
+    respawns de los vecinos (están a 12–20) y la capacidad del mundo (docs/07) quedaba
+    optimista sin medirlo. El costo: un monstruo puede aparecer dentro de lo que se ve, a
+    9–16 casillas a los lados o 7–11 arriba y abajo. Si el dueño prefiere que nada aparezca a la vista, es una línea
+    (`watched` con `eachObserver`) más medir la capacidad (telemetría o un test
+    espacial) y ajustar respawns y distancias.
+  - **El cliente a 31x21 sin medir:** a 1x se dibujan unas 650 casillas por capa (165 con
+    15x11) más las etiquetas. Anotar FPS y draw calls a 1x y a la escala por defecto en
+    1920x1080 (docs/07 "Vista ancha"); pide un navegador real con GPU.
+  - **Etiquetas a 1x:** alejado a la ventana entera los nombres se acomodan con la regla de
+    zoom 1x (`render/labels.ts`); en una multitud se ocultan muchos. Revisarlo en el
+    playtest.
+- **Movimiento fluido (rama `feat/movement-feel`, apilada sobre `feat/ui-theme`: se mergea
+  después de ella o con ella).** Hecho: pasos de teclado predichos
+  hasta 4 adelante y encolados en el servidor detrás de una época de caminata (protocolo
+  en docs/05 "Caminar"), la cámara y las criaturas de a 1 px de pantalla, los pasos del
+  servidor sobre su línea de ticks con colchón de jitter, correcciones que se deslizan,
+  diagonal con dos flechas y deslizarse junto a un muro (docs/02 "Movimiento",
+  client/CLAUDE.md "Movimiento fluido"). Quedó:
+  - **Caminar manteniendo el click (como Diablo 2), propuesta.** Hoy el click izquierdo
+    camina al soltar y, si se arrastra, mueve el item de arriba. Propuesta: un click
+    mantenido sobre una casilla sin item movible (o con Ctrl) sigue al cursor: cada vez que
+    la casilla bajo el cursor cambia, `WalkPath` nuevo (el servidor ya reemplaza el camino
+    y termina el paso en curso), como mucho uno por paso. Cliente solo; choca con el
+    arrastre de items, por eso queda para decidir.
+  - **Frames de caminar de los monstruos y NPCs:** hoy tienen un solo sprite; mientras
+    tanto dan un saltito de 1 px por paso (`walkBob`). Cuando tengan frames, que usen el
+    mismo esquema que los outfits (`outfitFrame`) y se apaga el saltito.
+  - **Velocidad base:** a nivel 1 un paso dura 500 ms (2 casillas/s). Se siente lento al
+    lado de Diablo 2, pero es balance (`base_step_ms`, `speed` de las vocaciones): no se
+    tocó.
+  - **Medirlo en una red real:** la simulación cubre RTT de 2 a 300 ms con jitter, un
+    corte de 1 s y `Walk` perdidos; falta jugarlo por el hosting de pruebas (docs/13) con
+    el E2E `e2e/movement.spec.ts` como referencia y mirar si los 40 ms de colchón alcanzan
+    con Wi-Fi.
+  - **Diagonal con dos flechas, para decidir:** hoy dos flechas perpendiculares
+    mantenidas dan la diagonal, y también un toque perpendicular con otra mantenida
+    (derecha mantenida + toque de arriba = un paso noreste, no uno al norte). Al cambiar
+    de dirección con las teclas solapadas (se aprieta la nueva antes de soltar la vieja),
+    si eso cae en los 50 ms en que se decide el paso, sale un paso diagonal que no se
+    buscó (×1,5 de duración, otra casilla). Opciones: dejarlo; que un toque ya soltado
+    dé el paso lateral; o que la diagonal pida las dos teclas juntas un instante (~60 ms,
+    a costa de que el primer paso de una diagonal buscada salga recto).
+  - **Una flecha durante un camino por click casi nunca entra** (viene de antes, no lo
+    trajo A6). El frame solo lee las teclas cuando `canStep`, y durante un camino por
+    click el paso dibujado casi siempre está lejos de terminar: en una simulación con un
+    camino de 16 pasos (~450 frames), `canStep` estuvo abierto de 2 a 12 frames (antes de
+    A6, de 2 a 10). La tecla suele esperar a que termine el camino. Para la sensación de
+    Diablo 2, una pulsación nueva (no la autorrepetición) debería predecir desde el próximo
+    paso del camino: mandar el `Walk` (que descarta el camino en el servidor) y dibujarlo
+    detrás del paso en curso.
+  - **Eventos y pasos de los demás:** los pasos se dibujan sobre la línea de ticks
+    (~40 ms después de llegar, como mucho 240 ms), pero los efectos, golpes, giros y
+    desapariciones se aplican al llegar: una criatura puede girar o recibir un golpe
+    ~40 ms antes de que se dibuje su paso. No se nota; se dejó así.
 - **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
   muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
   correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la
   puerta con un jugador encima, la confirmación de "Dejar la casa", el límite de logins de
   `make play`, la cantidad de la tienda y el pulido de textos. Quedó:
-  - **Dividir pilas (m1), propuesta.** Arrastrar mueve siempre la pila entera
-    (`client/src/game.ts` `moveItem` manda `count: Math.max(ref.count, 1)`), aunque
-    `MoveItem.count` existe y el servidor ya mueve una parte (`inventory.go` lee
-    `GetCount()`). Cliente solo: con Mayús (o Ctrl) al soltar una pila de más de 1, una
-    ventanita sobre el destino con un campo de cantidad (por defecto la mitad, máximo la
-    pila, Enter confirma y Escape cancela) y la misma regla pura de `shopCount`
-    (`ui/Dialog.tsx`); en táctil, un botón "Mover parte" del menú del toque largo. El
-    intercambio necesita protocolo: `TradeOffer` no lleva cantidad (`client.proto`), así
+  - **Dividir pilas (m1), a medias.** Desde A4 el menú de una pila (click derecho o toque
+    largo) tiene "Mover parte…": un campo con cuántos (la mitad por defecto) y el siguiente
+    click o toque en una casilla, un slot o una celda manda `MoveItem` con ese `count`.
+    Arrastrar sigue moviendo la pila entera; falta Mayús al soltar (una ventanita con la
+    cantidad, la regla pura `shopCount` de `state/shop.ts`). El intercambio necesita
+    protocolo: `TradeOffer` no lleva cantidad (`client.proto`), así
     que se suma `uint32 count = 6` (0 = la pila entera, compatible), el servidor separa la
     parte ofrecida al cerrar el trato (y revisa que siga habiendo esa cantidad) y la
     ventana de intercambio muestra un campo de cantidad junto a cada pila ofrecible. Tests:
     la regla pura, un test de sesión del trato parcial y el E2E de T5.3 con 10 de 100.
-  - **Sprites de las estaciones:** la fragua parece una fogata y el fogón un horno o un
-    portal (`assets/sprites.yaml`, recetas de `tools/spritegen`).
-  - **Casa de Prueba:** el `wooden_wall` y el `wooden_floor` se confunden (tablones los
-    dos) y la puerta de una casa es solo suelo (`houses.yaml` `doors`), sin nada que la
-    marque en el mapa. Un sprite de muro de troncos más oscuro, o un marco de puerta
-    decorativo que no bloquee, lo resolvería.
+  - **Casa de Prueba:** los muros de troncos ya tienen altura y cara, y el piso es más
+    oscuro: no se confunden. La puerta sigue siendo un hueco (falta el marco, arriba).
   - **Encimados:** a zoom 2 se pisan los nombres de jugadores contiguos
     (`render/labels.ts` solo los acomoda a zoom 1).
   - **Saludo con género fijo:** "Bienvenido, {name}" (sin género del personaje en los datos).
@@ -517,3 +708,8 @@ T0.5 quedó hecha (PR #77) y ya no hay placeholders:
 Para cambiar un sprite: otro tile del pack en `sprites.yaml`, o una receta nueva en
 `tools/spritegen/src/recipes/` y `make spritegen ONLY=<ruta>` (estilo y reglas en
 `assets/README.md`, "Arte propio"). Después, `make sprites` y revisar con Read.
+
+Qué reemplazar primero y con qué está en `17-direccion-de-arte-y-ui.md` (SRC-4): muros,
+pasto y suelos, agua, atuendos, NPCs, monstruos y árboles. Desde el 2026-11-17 también se
+pueden usar assets CC-BY-SA (Liberated Pixel Cup, con licencia por archivo) y fuentes OFL
+(`assets/README.md`).

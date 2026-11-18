@@ -137,7 +137,10 @@ línea) escrito a mano, sin SDK, para no sumar dependencias; usa las funciones d
 - `content_search` y el resto solo leen.
 
 `mapcli render` / `map_render`: mismo orden de dibujo que `packages/renderer`, con el atlas
-de `tools/spritepack` armado en memoria (no hace falta `make sprites`). Agrega reglas con
+de `tools/spritepack` armado en memoria (no hace falta `make sprites`), y el mismo arte del
+mapa que el juego (`tile-art.ts`, docs/17): el look de suelo de cada casilla, la pieza de
+cada muro según sus vecinos, árboles centrados, sombras proyectadas y el frame 0 de lo
+animado; también dibuja las filas de abajo del área cuyos sprites altos entran en ella. Agrega reglas con
 coordenadas absolutas, grilla y overlays: zonas (cian protección, naranja no_logout, rojo
 pvp, verde no_pvp, violeta community_plot), spawns (anillo rojo del radio), NPCs (rombo
 amarillo), portales (cuadro magenta; triángulo abajo = baja, arriba = sube), carteles
@@ -1017,4 +1020,7 @@ con cuenta, cola de moderación, comentarios por casilla.
   `R` rectángulo, `V` selección, `H` casa, `PgUp/PgDn` piso, rueda = zoom, espacio +
   arrastrar = mover.
 - Panel de validación siempre visible; click en un error lleva a la casilla.
-- Previsualización de la vista del jugador (rectángulo 15x11) para revisar composición.
+- Previsualización de la vista del jugador (rectángulos de 15x11 y 31x21: la vista
+  mínima, la de un teléfono o una ventana chica, y la entera, a la que se llega alejando;
+  por defecto cada cliente ve la mayor que llena su pantalla, p. ej. 24x16 a 1920x1080,
+  `02-game-design.md` "La vista") para revisar composición.

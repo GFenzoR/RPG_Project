@@ -1,14 +1,19 @@
-# Player outfits (T0.5). Each outfit is a sprite folder with one 32x32 file per facing and
-# frame: <sprite>/<dir>_<frame> (assets/sprites/outfits/citizen/s_0.png), dir in n|e|s|w,
-# frame 0 = standing, 1..frames-1 = the walking steps. Every player wears "citizen" until
-# Outfit.look_id picks one (docs/06-content-data.md).
+# Player outfits (T0.5). Each outfit is a sprite folder of frames: <sprite>/<dir>_<frame>,
+# dir in n|e|s|w, frame 0 = standing, 1..frames-1 = the walking steps. Since docs/17 (A12)
+# the four outfits are animated Liberated Pixel Cup characters (`animations` in
+# assets/sprites.yaml): those names are aliases of their idle and walk frames, and the client
+# plays the animation. `frames` (at most 3) still counts those T0.5 names, not the animation:
+# 0 is the idle pose and 1 and 2 are two walk frames half a cycle apart (tools/spritepack,
+# legacyFrame). The full walk cycle (8 frames: the LPC sheet's 9 columns minus the standing
+# one) lives in the animation. Every player wears "citizen" until Outfit.look_id picks one
+# (docs/06-content-data.md).
 - id: citizen
   sprite: outfits/citizen
   frames: 3
   notes: Plain tunic and trousers; the default look of every new character.
 
 # Shop outfits (T5.7): sold for premium currency in data/cosmetics.yaml, looks only. The same
-# body, frames and walk cycle as citizen, drawn by tools/spritegen (recipes/creatures.ts).
+# body and animations as citizen, other LPC clothes and colours (assets/sprites.yaml).
 - id: sailor
   sprite: outfits/sailor
   frames: 3

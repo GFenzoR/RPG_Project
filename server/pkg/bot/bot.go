@@ -123,6 +123,7 @@ type Bot struct {
 	mu         sync.Mutex
 	creatureID uint32
 	pos        Pos
+	walkEpoch  uint32 // of the last WalkRejected or FullMapView (docs/05 "Caminar")
 	stats      Stats
 	disconnect string
 	changed    chan struct{} // closed and replaced on every received batch
@@ -352,6 +353,7 @@ func (b *Bot) apply(e *pb.ServerMessage) {
 	case *pb.ServerMessage_Welcome:
 		b.creatureID = m.Welcome.GetCreatureId()
 	case *pb.ServerMessage_FullMapView:
+		b.walkEpoch = m.FullMapView.GetWalkEpoch()
 		clear(b.creatures)
 		for _, c := range m.FullMapView.GetArea().GetCreatures() {
 			b.see(c)
@@ -369,6 +371,7 @@ func (b *Bot) apply(e *pb.ServerMessage) {
 		}
 	case *pb.ServerMessage_WalkRejected:
 		b.pos = toPos(m.WalkRejected.GetPos())
+		b.walkEpoch = m.WalkRejected.GetWalkEpoch()
 		b.stats.Rejected++
 	case *pb.ServerMessage_CreatureAppear:
 		b.see(m.CreatureAppear.GetCreature())
@@ -591,9 +594,12 @@ func (b *Bot) AnswerPresence(ctx context.Context, id, option uint32) error {
 	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_PresenceAnswer{PresenceAnswer: &pb.PresenceAnswer{CheckId: id, OptionId: option}}})
 }
 
-// Walk asks for one step.
+// Walk asks for one step, queued after the steps already asked for (docs/05 "Caminar").
 func (b *Bot) Walk(ctx context.Context, d Direction) error {
-	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Walk{Walk: &pb.Walk{Dir: d.msg()}}})
+	b.mu.Lock()
+	epoch := b.walkEpoch
+	b.mu.Unlock()
+	return b.send(ctx, &pb.ClientMessage{Message: &pb.ClientMessage_Walk{Walk: &pb.Walk{Dir: d.msg(), WalkEpoch: epoch}}})
 }
 
 // WalkPath asks for a sequence of steps (at most 100).

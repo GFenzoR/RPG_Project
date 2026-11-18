@@ -7,13 +7,34 @@ describe("MovementKeys", () => {
     const k = new MovementKeys();
     expect(k.down("KeyQ")).toBe(false);
     k.down("ArrowUp");
-    k.down("KeyD");
-    expect(k.take()).toBe(Direction.EAST);
-    expect(k.take()).toBe(Direction.EAST);
-    k.up("KeyD");
+    k.down("KeyS");
+    expect(k.take()).toBe(Direction.SOUTH);
+    expect(k.take()).toBe(Direction.SOUTH);
+    k.up("KeyS");
     expect(k.take()).toBe(Direction.NORTH);
     k.up("ArrowUp");
     expect(k.take()).toBeUndefined();
+  });
+
+  it("walks the diagonal of two perpendicular keys held together", () => {
+    const k = new MovementKeys();
+    k.down("ArrowUp");
+    k.down("KeyD");
+    expect(k.take()).toBe(Direction.NORTH_EAST);
+    // Up, right and down: the newest (down) with the newest perpendicular one (right).
+    k.down("ArrowDown");
+    expect(k.take()).toBe(Direction.SOUTH_EAST);
+    k.up("KeyD");
+    expect(k.take()).toBe(Direction.SOUTH); // up and down cancel no diagonal
+    k.down("ArrowLeft");
+    expect(k.take()).toBe(Direction.SOUTH_WEST);
+    k.clear();
+    // A tap of up while right is held: one step north-east.
+    k.down("ArrowRight");
+    k.down("ArrowUp");
+    k.up("ArrowUp");
+    expect(k.take()).toBe(Direction.NORTH_EAST);
+    expect(k.take()).toBe(Direction.EAST);
   });
 
   it("keeps a quick tap until it can be used", () => {

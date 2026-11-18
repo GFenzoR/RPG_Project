@@ -685,9 +685,9 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
-  // The server answers nothing about a tile out of view (6 tiles up and down), so a longer
-  // reach could only ever fail (server content.MaxReach).
-  it("caps inventory.reach and resource.reach at the view half-height", () => {
+  // Hands reach the half-height of the classic 15x11 window (6 tiles up and down, server
+  // content.MaxReach): the 31x21 view did not stretch it.
+  it("caps inventory.reach and resource.reach at the classic window's half-height", () => {
     edit("data/balance.yaml", "  reach: 1 ", "  reach: 7 ");
     edit("data/items/ground.yaml", "    reach: 3\n", "    reach: 7\n");
     const out = messages(root);
@@ -696,6 +696,29 @@ describe("validator diagnostics", () => {
     );
     expect(
       out.some((m) => m.startsWith("error data/items/ground.yaml:") && m.includes("<= 6")),
+    ).toBe(true);
+  });
+
+  // Aimed ranges stop at the same 6 tiles (server content.MaxRange), what a monster
+  // notices: a monster hit from that far always fights back, never a free kill.
+  it("caps weapon, spell and condition ranges at the classic window's half-height", () => {
+    edit("data/items/weapons.yaml", "attack: 7, range: 6,", "attack: 7, range: 7,");
+    edit("data/spells.yaml", "{ element: energy, range: 4,", "{ element: energy, range: 7,");
+    edit("data/spells.yaml", "heal: { range: 5,", "heal: { range: 7,");
+    edit("data/spells.yaml", "{ id: slowed, range: 4,", "{ id: slowed, range: 7,");
+    const out = messages(root);
+    expect(
+      out.some((m) => m.startsWith("error data/items/weapons.yaml:118:") && m.includes("<= 6")),
+    ).toBe(true);
+    const spells = out.filter((m) => m.startsWith("error data/spells.yaml:") && m.includes("<= 6"));
+    expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);
+  });
+
+  // An area spell's radius too: a monster hit 7 tiles straight north would not notice.
+  it("caps an area spell's radius at the classic window's half-height", () => {
+    edit("data/spells.yaml", "{ element: earth, radius: 1,", "{ element: earth, radius: 7,");
+    expect(
+      messages(root).some((m) => m.startsWith("error data/spells.yaml:160:") && m.includes("<= 6")),
     ).toBe(true);
   });
 

@@ -22,8 +22,8 @@ text.pruebas.craft_sign: "Gathering and crafts. North of the road, iron veins (w
 text.pruebas.market_sign: "Market board: use it to buy and sell with other players. To the south-west there is a house for rent: use its door to rent it (from level 12)."
 text.pruebas.dock_sign: "Sandbox dock. Remo Vaivén sails to the Harbour Isle, the Forest Isle and the Ember Isle. One way only: no boat comes back here."
 text.pruebas.vault_sign: "Practice gate. It opens and locks with the brass key Tobías Muestra sells on the square. Locked, nobody gets in without the key; open, anyone walks through until someone with the key locks it, and from inside it always opens."
-text.pruebas.portal_sign: "Yard of portals. The stairs take you down to floor 8 when you step on them. The trapdoor is used (right click) to climb down the ladder. Step on the hole and you fall. Below, a patch of light to climb with a rope and a teleport are waiting."
-text.pruebas.dungeon_sign: "Floor 8. The ladder takes you up with a right click. Light falls under the hole: use a rope there to climb. At the far end, the teleport takes you back to the square. Mind the bats to the east."
+text.pruebas.portal_sign: "Yard of portals. The stairs take you down to floor 8 when you step on them. The trapdoor is used (double click, or right-click and «Climb») to climb down the ladder. Step on the hole and you fall. Below, a patch of light to climb with a rope and a teleport are waiting."
+text.pruebas.dungeon_sign: "Floor 8. The ladder takes you up with a double click (or right-click and «Climb»). Light falls under the hole: use a rope there to climb. At the far end, the teleport takes you back to the square. Mind the bats to the east."
 text.pruebas.arena_sign: "Arena. If both fighters are inside, they fight with no skulls and no punishment. Outside the arena and the square, open PvP with skulls applies. It takes level 20, and staff cannot fight."
 # Player houses (T5.4, world/islands/<id>/houses.yaml).
 house.puerto_house_net.name: "Hanging Net House"

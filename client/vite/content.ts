@@ -7,7 +7,8 @@
 //   /audio/<file>        sound files of assets/sounds.yaml (T3.7), served as they are;
 //                        `vite build` emits them under audio/
 //   virtual:rpg-site     the public website (T4.3): its i18n catalogs, vocations, skill ids
-//                        (highscore categories) and the posts of data/news
+//                        (highscore categories), the posts of data/news and the credits
+//                        of /credits (vite/credits.ts)
 //   /atlas/<file>        sprite atlas built from assets/ with tools/spritepack (dev server);
 //                        `vite build` emits the same files under atlas/
 //
@@ -17,11 +18,13 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
+import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
 import type {
   ClientContent,
   CosmeticDef,
+  DialogTopic,
   NameEffectStyle,
   IslandRect,
   ItemDef,
@@ -122,6 +125,7 @@ export function loadClientContent(root: string): ClientContent {
         ...(desc !== "" ? { desc } : {}),
         ...(isObj(raw["portal"]) ? { portal: true as const } : {}),
         ...(isObj(raw["door"]) ? { door: true as const } : {}),
+        ...cardFields(raw),
       };
     }
   }
@@ -242,6 +246,9 @@ export function loadClientContent(root: string): ClientContent {
   return {
     items,
     monsterSprites: monsters,
+    // A topic conflict is the content test's to report (vite/content.test.ts): the build
+    // keeps the first topic.
+    dialogTopics: dialogTopics(root).topics,
     npcSprites: npcs,
     outfits,
     cosmetics: loadCosmetics(root),
@@ -323,7 +330,137 @@ export function loadSiteContent(root: string): SiteContent {
     news,
     cosmetics: loadCosmetics(root),
     outfits: loadOutfits(root),
+    credits: loadCredits(root),
   };
+}
+
+/**
+ * What the item card shows of an item of data/items (docs/17 UI-6): kind, weight and the
+ * blocks of its kind. Display only: the server keeps the rules. Fields that are empty
+ * stay out, so the content module does not grow with zeros.
+ */
+export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
+  const n = (v: unknown): number => (typeof v === "number" ? v : 0);
+  const s = (v: unknown): string => (typeof v === "string" ? v : "");
+  const out: Partial<ItemDef> = {};
+  if (typeof raw["kind"] === "string") out.kind = raw["kind"];
+  if (n(raw["weight"]) > 0) out.weight = n(raw["weight"]);
+  const w = raw["weapon"];
+  if (isObj(w))
+    out.weapon = {
+      type: s(w["type"]),
+      attack: n(w["attack"]),
+      defense: n(w["defense"]),
+      hands: n(w["hands"]) || 1,
+      range: n(w["range"]),
+      element: s(w["element"]),
+      ammo: s(w["ammo"]),
+    };
+  const a = raw["ammo"];
+  if (isObj(a)) out.ammo = { type: s(a["type"]), attack: n(a["attack"]) };
+  const ar = raw["armor"];
+  if (isObj(ar)) out.armor = { slot: s(ar["slot"]), armor: n(ar["armor"]) };
+  const sh = raw["shield"];
+  if (isObj(sh)) out.shield = { defense: n(sh["defense"]) };
+  const c = raw["consumable"];
+  if (isObj(c))
+    out.consumable = { healHp: n(c["heal_hp"]), healMp: n(c["heal_mp"]), foodMs: n(c["food_ms"]) };
+  const r = raw["rune"];
+  if (isObj(r))
+    out.rune = { spell: s(r["spell"]), charges: n(r["charges"]), magicLevel: n(r["magic_level"]) };
+  const q = raw["requires"];
+  if (isObj(q))
+    out.requires = {
+      level: n(q["level"]),
+      vocations: Array.isArray(q["vocations"])
+        ? q["vocations"].filter((v): v is string => typeof v === "string")
+        : [],
+    };
+  if (raw["pickupable"] === false) out.fixed = true;
+  return out;
+}
+
+/** The topics a dialog option leads to, in the order they win when one looks ahead. */
+const LOOKAHEAD: readonly DialogTopic[] = ["quests", "travel", "services"];
+const TAGS = new Set<string>(["quests", "trade", "travel", "services", "talk"]);
+const QUEST_ACTIONS = ["start_quest", "set_quest_step"];
+const QUEST_CONDITIONS = ["quest_state", "quest_not_started"];
+const SERVICE_ACTIONS = ["heal", "bless", "train_skill", "restore_mana"];
+
+/** The objects of a field that is one object or a list of them (a dialog's if/action). */
+const each = (v: unknown): unknown[] => (Array.isArray(v) ? v : v === undefined ? [] : [v]);
+const hasKey = (v: unknown, keys: readonly string[]): boolean =>
+  each(v).some((o) => isObj(o) && keys.some((k) => k in o));
+
+/**
+ * The topic of one option by what it does itself (docs/17 UI-8): its `tag`, then "bye"
+ * (close, dialog.bye), "back" (dialog.back), "trade" (open_shop), "quests" (a quest
+ * condition or action), "services" (heal, bless...), "travel" (a teleport, or to a node with
+ * boat routes), else "talk". `nodes` are the NPC's dialog nodes.
+ */
+export function ownTopic(o: Record<string, unknown>, nodes: Record<string, unknown>): DialogTopic {
+  const tag = o["tag"];
+  if (typeof tag === "string" && TAGS.has(tag)) return tag as DialogTopic;
+  if (o["text"] === "dialog.bye" || each(o["action"]).includes("close")) return "bye";
+  if (o["text"] === "dialog.back") return "back";
+  if (hasKey(o["action"], ["open_shop"])) return "trade";
+  if (hasKey(o["action"], QUEST_ACTIONS) || hasKey(o["if"], QUEST_CONDITIONS)) return "quests";
+  if (hasKey(o["action"], SERVICE_ACTIONS)) return "services";
+  if (hasKey(o["action"], ["teleport"])) return "travel";
+  const to = typeof o["goto"] === "string" ? nodes[o["goto"]] : undefined;
+  if (isObj(to) && to["boat_routes"] === true) return "travel";
+  return "talk";
+}
+
+/**
+ * The topic of each option text of each NPC (ClientContent.dialogTopics). A "talk" option
+ * that leads to a node looks one step ahead: a quest, travel or service option there makes
+ * it that topic ("Blessings?" → services). Trade does not count: a shop button sits in
+ * many conversations. The options of a captain's boat routes are "travel". A text with two
+ * topics in one NPC is an error (`conflicts`): an option `tag` settles it.
+ */
+export function dialogTopics(root: string): {
+  topics: Record<string, Record<string, DialogTopic>>;
+  conflicts: string[];
+} {
+  const topics: Record<string, Record<string, DialogTopic>> = {};
+  const conflicts: string[] = [];
+  const put = (npc: string, text: string, topic: DialogTopic): void => {
+    const m = (topics[npc] ??= {});
+    const had = m[text];
+    if (had !== undefined && had !== topic) conflicts.push(`${npc}: ${text} (${had}, ${topic})`);
+    else m[text] = topic;
+  };
+  const dir = join(root, "data", "npcs");
+  for (const file of readdirSync(dir)
+    .filter((f) => f.endsWith(".yaml"))
+    .sort()) {
+    const npc = readYaml(join(dir, file));
+    if (!isObj(npc) || typeof npc["id"] !== "string" || !isObj(npc["dialog"])) continue;
+    const nodes = isObj(npc["dialog"]["nodes"]) ? npc["dialog"]["nodes"] : {};
+    const optionsOf = (node: unknown): Record<string, unknown>[] =>
+      isObj(node) && Array.isArray(node["options"]) ? node["options"].filter(isObj) : [];
+    for (const node of Object.values(nodes))
+      for (const o of optionsOf(node)) {
+        if (typeof o["text"] !== "string") continue;
+        let topic = ownTopic(o, nodes);
+        if (topic === "talk" && typeof o["tag"] !== "string" && typeof o["goto"] === "string") {
+          const ahead = optionsOf(nodes[o["goto"]]).map((x) => ownTopic(x, nodes));
+          topic = LOOKAHEAD.find((t) => ahead.includes(t)) ?? "talk";
+        }
+        put(npc["id"], o["text"], topic);
+      }
+  }
+  let routes: unknown;
+  try {
+    routes = readYaml(join(root, "data", "boat_routes.yaml"));
+  } catch {
+    routes = [];
+  }
+  for (const r of each(routes))
+    if (isObj(r) && typeof r["captain"] === "string" && typeof r["text"] === "string")
+      put(r["captain"], r["text"], "travel");
+  return { topics, conflicts };
 }
 
 /** data/outfits.yaml (T0.5); [] without the file. The site shop previews them (T5.7). */

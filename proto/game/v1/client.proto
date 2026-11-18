@@ -59,8 +59,17 @@ message Hello {
   string locale = 3;
 }
 
+// Walk asks for one step in dir (docs/05 "Caminar"). It goes after the keyboard steps
+// already queued, at most Welcome.max_queued_steps of them (one more resets the walk
+// with WalkRejected), and drops a queued WalkPath or chase step. walk_epoch is the one of
+// the last WalkRejected or FullMapView the client got: a Walk of another epoch was sent
+// before that reset, and the server drops it without an answer. 0 skips the check. seq
+// numbers the client's Walks (one more each): the CreatureMove of the step it becomes
+// carries it back (walk_seq), so the client pairs each answer with its Walk. 0: no number.
 message Walk {
   Direction dir = 1;
+  uint32 walk_epoch = 2;
+  uint32 seq = 3;
 }
 
 // WalkPath queues up to 100 steps (auto-walk after a click).

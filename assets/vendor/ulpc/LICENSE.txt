@@ -1,0 +1,29 @@
+Universal LPC Spritesheet Character Generator: character art (Liberated Pixel Cup)
+https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator
+Commit 04140673ec02906f8233523639733c83690df750 (2026-11-11)
+
+Only artwork is copied here, unmodified, from the repository's spritesheets/ folder, with
+the same paths. The repository's code is GPL-3.0 and none of it is used.
+
+Every file has its own authors and licences: see CREDITS.csv in this folder (the rows of
+the repository's CREDITS.csv for exactly these files). Each file lists one or more of the
+licences below; the repository's README says each image "is licensed under one or more of
+the following" and that following every term of CC-BY-SA lets you use all of its art.
+Neque's Realm uses these files under the licence picked per file in assets/CREDITS.md:
+OGA-BY 3.0 when the file lists it, else CC-BY-SA 3.0. Never under GPL only (no file here
+lists GPL alone). Sprites composed from them (layers drawn together and recoloured by
+tools/spritepack from assets/sprites.yaml `animations`) are works derived from these files
+under the most restrictive licence of their layers: OGA-BY 3.0 when every layer lists it,
+else CC-BY-SA 3.0 (assets/CREDITS.md, "Obras derivadas de terceros", names each one).
+
+Licences (their full text is at these addresses):
+- Creative Commons Attribution-ShareAlike 3.0 Unported (CC-BY-SA 3.0)
+  https://creativecommons.org/licenses/by-sa/3.0/legalcode
+- OpenGameArt.org Attribution 3.0 (OGA-BY 3.0)
+  https://static.opengameart.org/OGA-BY-3.0.txt
+- Creative Commons Attribution 3.0 Unported (CC-BY 3.0)
+  https://creativecommons.org/licenses/by/3.0/legalcode
+- GNU General Public License 2.0 / 3.0 (listed as an alternative by some files; not used)
+  https://www.gnu.org/licenses/gpl-3.0.txt
+
+Attribution: the authors of each file are in CREDITS.csv (columns "authors" and "urls").

@@ -12,7 +12,7 @@ func TestLoadBalanceRepoData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadBalance: %v", err)
 	}
-	if b.Movement.BaseStepMs <= 0 || b.Movement.DiagonalCost < 1 || b.Movement.MaxPathTiles != 100 {
+	if b.Movement.BaseStepMs <= 0 || b.Movement.DiagonalCost < 1 || b.Movement.MaxPathTiles != 100 || b.Movement.MaxQueuedSteps != 4 {
 		t.Errorf("movement = %+v", b.Movement)
 	}
 	if len(b.SkillIDs()) == 0 || b.Skills.Base["sword"].StartLevel <= 0 {
@@ -56,7 +56,9 @@ func TestParseBalanceErrors(t *testing.T) {
 	for name, src := range map[string]string{
 		"no movement":   "skills: {}",
 		"bad diagonal":  "movement: {base_step_ms: 1000, diagonal_cost: 0.5, max_path_tiles: 100}",
-		"too long path": "movement: {base_step_ms: 1000, diagonal_cost: 1.5, max_path_tiles: 101}",
+		"too long path": "movement: {base_step_ms: 1000, diagonal_cost: 1.5, max_path_tiles: 101, max_queued_steps: 4}",
+		"no queue":      "movement: {base_step_ms: 1000, diagonal_cost: 1.5, max_path_tiles: 100}",
+		"deep queue":    "movement: {base_step_ms: 1000, diagonal_cost: 1.5, max_path_tiles: 100, max_queued_steps: 9}",
 		"not yaml":      "movement: [",
 	} {
 		if _, err := ParseBalance([]byte(src)); err == nil {

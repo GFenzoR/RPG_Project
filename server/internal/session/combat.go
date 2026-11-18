@@ -232,7 +232,8 @@ func (w *World) addShare(m *Monster, id uint32, dmg int) {
 }
 
 // hitEvents tells everyone who sees pos about a hit of element on creature id: the
-// effect, the damage number and the new health bar.
+// effect, the damage number and the new health bar. Everyone gets the same messages,
+// built once (observeMove explains why that is safe).
 func (w *World) hitEvents(id uint32, pos world.Pos, dmg int, pct uint32, element string) {
 	effect := uint32(EffectBlock)
 	switch {
@@ -241,16 +242,25 @@ func (w *World) hitEvents(id uint32, pos world.Pos, dmg int, pct uint32, element
 	case dmg > 0:
 		effect = EffectHit
 	}
+	var shown, number, health *pb.ServerMessage
 	w.eachObserver(nil, pos, func(o *Player) {
 		if !o.Knows(id) {
 			return // T3.2: hits on an invisible player reach only who sees it
 		}
-		o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: posMsg(pos), EffectId: effect}}})
+		if shown == nil {
+			at := posMsg(pos)
+			shown = &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: at, EffectId: effect}}}
+			if dmg > 0 {
+				number = &pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
+					Pos: at, Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_DAMAGE, Amount: uint64(dmg),
+				}}}
+				health = &pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: id, HealthPercent: pct}}}
+			}
+		}
+		o.emit(shown)
 		if dmg > 0 {
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_FloatingText{FloatingText: &pb.FloatingText{
-				Pos: posMsg(pos), Kind: pb.FloatingTextKind_FLOATING_TEXT_KIND_DAMAGE, Amount: uint64(dmg),
-			}}})
-			o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_CreatureHealth{CreatureHealth: &pb.CreatureHealth{Id: id, HealthPercent: pct}}})
+			o.emit(number)
+			o.emit(health)
 		}
 	})
 }

@@ -2,9 +2,11 @@
 // servidor → cliente"): known tiles by chunk, the creatures in view and how they move.
 // Pure logic over plain data: no PixiJS, no DOM, no clock (callers pass `now` in ms).
 //
-// Own movement is predicted one step ahead (client/CLAUDE.md): a step the player asks for
-// moves the own creature at once; the server's CreatureMove confirms it (and gives the
-// real duration) and WalkRejected puts the creature back where the server says it is.
+// Own movement is predicted a few steps ahead (client/CLAUDE.md "Movimiento fluido"): a
+// step the player asks for is drawn right after the one before; the server's CreatureMove
+// confirms each (and gives the real duration) and WalkRejected puts the creature back
+// where the server says it is, gliding. Steps the server takes (other creatures, a
+// click-to-walk path) are drawn on the server's tick timeline (state/motion.ts Playout).
 import type { StationState } from "./recipes.ts";
 
 /** How long before its time a presence check closes (covers the latency). */
@@ -34,6 +36,19 @@ import type { ChunkData, TileSource } from "@rpg/renderer";
 import type { ClientContent, ItemDef } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { directionTo, isDiagonal, samePos, step } from "./geometry.ts";
+import {
+  PLAYOUT_CATCH_UP,
+  PLAYOUT_MAX_LAG_MS,
+  PREDICT_TIMEOUT_MS,
+  Playout,
+  STEP_LEAD_MS,
+  ownSlideMaxTiles,
+  slideBetween,
+  slideLeft,
+  stepChoices,
+} from "./motion.ts";
+import type { Slide } from "./motion.ts";
+import { movesOnStep } from "./portals.ts";
 import { PartyState } from "./party.ts";
 import { GuildState } from "./guild.ts";
 import { tutorialFrom } from "./tutorial.ts";
@@ -43,13 +58,26 @@ import { applyMarket, tradeFrom } from "./market.ts";
 import type { MarketView, TradeView } from "./market.ts";
 import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
+import { CLASSIC_VIEW, serverView } from "./view.ts";
+import type { ViewTiles } from "./view.ts";
 
 export interface Walk {
   from: Pos;
   to: Pos;
-  /** Local time the step started, ms. */
+  /** Local time the step starts, ms (it may be ahead: then `prev` is still drawn). */
   start: number;
   duration: number;
+  /** The step before, while it is still being drawn (it ends when this one starts). */
+  prev?: Walk | undefined;
+}
+
+/** An own step the client predicted and sent, until the server confirms it. */
+export interface PredictedStep {
+  from: Pos;
+  to: Pos;
+  walk: Walk;
+  /** Its Walk's number (Walk.seq): the CreatureMove of the step carries it back. */
+  seq: number;
 }
 
 /** System messages that mean the server dropped (or refused) the player's target. */
@@ -77,6 +105,8 @@ export interface CreatureState {
   /** Health bar, 0-100. */
   health: number;
   walk: Walk | undefined;
+  /** A correction of where it is drawn, gliding out (state/motion.ts). */
+  slide?: Slide | undefined;
   /** A player's guild name (T5.1), "" for none. */
   guild: string;
   /** A player's PvP mark (T5.2). */
@@ -305,8 +335,28 @@ export interface ShopState {
 export class WorldState implements TileSource {
   selfId = 0;
   readonly creatures = new Map<number, CreatureState>();
-  /** The predicted own step the server has not confirmed yet. */
-  pending: { from: Pos; to: Pos } | undefined;
+  /**
+   * The own steps predicted and sent that the server has not confirmed yet, oldest first
+   * (at most Welcome.max_queued_steps: the server queues no more).
+   */
+  predicted: PredictedStep[] = [];
+  /** The seq of the last Walk predicted (docs/05 "Caminar"): one more for each. */
+  private walkSeq = 0;
+  /** Welcome.max_queued_steps: how many own steps may wait for the server. */
+  private maxQueued = 0;
+  /**
+   * The window the server keeps this client up to date with (Welcome.view_width and
+   * view_height, 31x21; 15x11 before the Welcome or from an older server): the canvas
+   * draws at most this much (render/viewport.ts).
+   */
+  view: ViewTiles = CLASSIC_VIEW;
+  /**
+   * The walk epoch of the last WalkRejected or FullMapView (docs/05 "Caminar"), sent with
+   * every Walk: the server drops Walks sent before the client heard of a reset.
+   */
+  walkEpoch = 0;
+  /** Server ticks to local time for the steps the server takes. */
+  readonly playout = new Playout();
   /**
    * The predicted own step the server refused (WalkRejected from where it started, that
    * way): a held movement key would predict it again as soon as a step can start, and every
@@ -468,15 +518,30 @@ export class WorldState implements TileSource {
     return p && p.until - PRESENCE_GRACE_MS - now;
   }
 
-  apply(msg: ServerMessage["message"], now: number): void {
+  /**
+   * Local time at which the steps of a batch of server tick `tick`, arriving at `now`,
+   * start (the `at` of apply). Call once per batch.
+   */
+  batchTime(tick: number, now: number): number {
+    return this.playout.time(tick, now);
+  }
+
+  /**
+   * Applies one server event at `now`. `at` is when the steps the server took in its
+   * batch start (batchTime); by default now.
+   */
+  apply(msg: ServerMessage["message"], now: number, at = now): void {
     switch (msg.case) {
       case "welcome":
         this.selfId = msg.value.creatureId;
+        this.maxQueued = msg.value.maxQueuedSteps;
+        this.view = serverView(msg.value.viewWidth, msg.value.viewHeight);
         break;
       case "fullMapView":
         this.chunks.clear();
         this.creatures.clear();
-        this.pending = undefined;
+        this.predicted = [];
+        this.walkEpoch = msg.value.walkEpoch;
         this.refused = undefined;
         this.target = undefined;
         if (msg.value.area) this.applyArea(msg.value.area);
@@ -695,7 +760,9 @@ export class WorldState implements TileSource {
           posOf(msg.value.from),
           posOf(msg.value.to),
           msg.value.durationMs,
+          at,
           now,
+          msg.value.walkSeq,
         );
         break;
       case "creatureTurn": {
@@ -735,17 +802,24 @@ export class WorldState implements TileSource {
         }));
         break;
       case "walkRejected": {
-        const p = this.pending;
-        this.pending = undefined;
+        const steps = this.predicted;
+        this.predicted = [];
+        this.walkEpoch = msg.value.walkEpoch;
         const s = this.self;
-        const at = msg.value.pos ? posOf(msg.value.pos) : undefined;
-        // The refusal of the predicted step itself (the server says the refused step's
+        const back = msg.value.pos ? posOf(msg.value.pos) : undefined;
+        // The refusal of a predicted step itself (the server says the refused step's
         // direction and where the player stands), not of a step of a WalkPath.
-        if (p && at && samePos(at, p.from) && msg.value.dir === directionTo(p.from, p.to))
-          this.refused = p;
-        if (s && at) {
-          s.pos = at;
+        const p = steps.find(
+          (q) => back && samePos(back, q.from) && msg.value.dir === directionTo(q.from, q.to),
+        );
+        if (p) this.refused = { from: p.from, to: p.to };
+        if (s && back) {
+          const before = this.drawPos(s, now);
+          s.pos = back;
           s.walk = undefined;
+          // Back to where the server says, gliding (no snap under normal latency), from
+          // as far ahead as the predictions go.
+          s.slide = slideBetween(before, back, now, this.ownSlideMax);
         }
         break;
       }
@@ -845,22 +919,141 @@ export class WorldState implements TileSource {
     });
   }
 
-  private move(id: number, from: Pos, to: Pos, duration: number, now: number): void {
+  /**
+   * A step the server took: `at` is when it starts on the server's timeline (batchTime).
+   * An own step while steps are predicted is ownStep's. Any other step is drawn from `at`
+   * after the one still drawn (`prev`): if that one ends later, the new one waits for it
+   * and is drawn faster until it is back on time (PLAYOUT_CATCH_UP); much later
+   * (PLAYOUT_MAX_LAG_MS), it skips ahead. A jump in the drawing glides.
+   */
+  private move(
+    id: number,
+    from: Pos,
+    to: Pos,
+    duration: number,
+    at: number,
+    now: number,
+    seq = 0,
+  ): void {
     if (id === this.selfId) this.refused = undefined; // another tile, or the way opened
     const c = this.creatures.get(id);
     if (!c) return;
+    if (id === this.selfId && this.ownStep(c, from, to, duration, seq, now)) return;
     const dir = directionTo(from, to);
     if (dir !== Direction.UNSPECIFIED) c.dir = dir;
-    const p = this.pending;
-    if (id === this.selfId && p && samePos(p.from, from) && samePos(p.to, to)) {
-      // Our prediction, confirmed: keep the local start, take the server's duration.
-      this.pending = undefined;
-      if (c.walk) c.walk.duration = duration;
-      return;
+    const before = this.drawPos(c, now);
+    c.slide = undefined; // folded into the new one
+    const old = c.walk;
+    let start = Math.max(at, now);
+    let drawn = duration;
+    let prev: Walk | undefined;
+    if (old && old.start + old.duration > now && samePos(old.to, from)) {
+      const lag = old.start + old.duration - start;
+      if (lag <= PLAYOUT_MAX_LAG_MS) {
+        prev = pruned(old, now);
+        if (lag > 0) {
+          start += lag;
+          drawn = duration - Math.min(lag, duration * PLAYOUT_CATCH_UP);
+        }
+      }
     }
-    if (id === this.selfId) this.pending = undefined;
     c.pos = to;
-    c.walk = { from, to, start: now, duration };
+    c.walk = { from, to, start, duration: drawn, prev };
+    c.slide = slideBetween(
+      before,
+      this.drawPos(c, now),
+      now,
+      id === this.selfId ? this.ownSlideMax : undefined,
+    );
+  }
+
+  /**
+   * An own step of the server while steps are predicted (docs/05 "Caminar"). The oldest
+   * prediction, confirmed (its Walk's seq, the same tiles): it keeps its local start and
+   * takes the server's duration (the ones after it shift with it). Otherwise the server's
+   * step and the predictions part ways: the Walks before `seq` never came back (lost on
+   * the way), and the step is the server's in their place; a step without seq (a path's,
+   * a chase's) or of a Walk given up (expirePredicted) came before the Walks still on
+   * their way. Either way the server takes those next, back to back, from where this step
+   * ends: the step is drawn in the oldest prediction's place, the predictions left move
+   * after it, and the drawing glides over the difference. False when nothing is
+   * predicted: a plain step of the server.
+   */
+  private ownStep(
+    c: CreatureState,
+    from: Pos,
+    to: Pos,
+    duration: number,
+    seq: number,
+    now: number,
+  ): boolean {
+    const ps = this.predicted;
+    const first = ps[0];
+    if (!first) return false;
+    // How many predictions this step answers: the lost ones before it and its own.
+    let n = 0;
+    if (seq !== 0) while (n < ps.length && (ps[n]?.seq ?? 0) <= seq) n++;
+    if (n === 1 && first.seq === seq && samePos(first.from, from) && samePos(first.to, to)) {
+      // Confirmed: it keeps its local start (and the facing of the newest step predicted).
+      ps.shift();
+      const shift = duration - first.walk.duration;
+      first.walk.duration = duration;
+      if (shift !== 0) for (const q of ps) q.walk.start += shift;
+      return true;
+    }
+    const rest = ps.slice(n);
+    if (rest.length === 0 && ps[n - 1]?.seq !== seq) {
+      this.predicted = []; // all lost, and this one was not predicted: a plain step
+      return false;
+    }
+    const before = this.drawPos(c, now);
+    // The server's step takes the place of the oldest prediction in the drawing.
+    const slot = first.walk;
+    let last: Walk = {
+      from,
+      to,
+      start: slot.start,
+      duration,
+      prev: slot.prev && pruned(slot.prev, now),
+    };
+    let cur = to;
+    for (const q of rest) {
+      const d = directionTo(q.from, q.to);
+      q.from = cur;
+      q.to = step(cur, d);
+      q.walk.from = q.from;
+      q.walk.to = q.to;
+      q.walk.start = last.start + last.duration; // back to back, as the server takes them
+      q.walk.prev = last;
+      last = q.walk;
+      cur = q.to;
+    }
+    this.predicted = rest;
+    const facing = directionTo(last.from, last.to);
+    if (facing !== Direction.UNSPECIFIED) c.dir = facing;
+    c.pos = cur;
+    c.walk = last;
+    c.slide = undefined;
+    c.slide = slideBetween(before, this.drawPos(c, now), now, this.ownSlideMax);
+    return true;
+  }
+
+  /**
+   * Gives up the own steps the server never answered PREDICT_TIMEOUT_MS after the oldest
+   * was drawn: its Walk was lost on the way, and nothing else would end the wait (a click
+   * waits for `unconfirmed` 0). The player glides back to where the server last had it.
+   * Call it every frame.
+   */
+  expirePredicted(now: number): void {
+    const first = this.predicted[0];
+    if (!first || now < first.walk.start + first.walk.duration + PREDICT_TIMEOUT_MS) return;
+    this.predicted = [];
+    const s = this.self;
+    if (!s) return;
+    const before = this.drawPos(s, now);
+    s.pos = first.from;
+    s.walk = undefined;
+    s.slide = slideBetween(before, first.from, now, this.ownSlideMax);
   }
 
   /**
@@ -896,36 +1089,118 @@ export class WorldState implements TileSource {
 
   // ---- own movement -------------------------------------------------------------------
 
-  /** True while a creature's step is still being animated. */
+  /** True while a creature has a step still to draw (running, or waiting to start). */
   walking(c: CreatureState, now: number): boolean {
     return c.walk !== undefined && now < c.walk.start + c.walk.duration;
   }
 
-  /** The own creature can start a new step: no step running and nothing unconfirmed. */
-  canStep(now: number): boolean {
-    const s = this.self;
-    return s !== undefined && this.pending === undefined && !this.walking(s, now);
+  /** The step being drawn at `now`: the latest, or the one before while it lasts. */
+  activeWalk(c: CreatureState, now: number): Walk | undefined {
+    let w = c.walk;
+    while (w && now < w.start && w.prev) w = w.prev;
+    return w;
+  }
+
+  /** The direction to draw a creature facing: its step's while walking, else its own. */
+  facing(c: CreatureState, now: number): Direction {
+    const w = this.activeWalk(c, now);
+    if (w && now >= w.start && now < w.start + w.duration) {
+      const d = directionTo(w.from, w.to);
+      if (d !== Direction.UNSPECIFIED) return d;
+    }
+    return c.dir;
+  }
+
+  /** How many own steps were sent and not confirmed yet. */
+  get unconfirmed(): number {
+    return this.predicted.length;
   }
 
   /**
-   * Predicts one own step in `dir` if the client believes it is possible. Returns true when
-   * the step was predicted (the caller then sends Walk), false when it should not be sent:
-   * a tile the client sees blocked, or the step the server just refused (until retryWalk).
-   * Either way the player faces `dir`, so the caller sends at most one Turn.
+   * The own creature can start deciding its next step: the step drawn now ends within
+   * STEP_LEAD_MS (or none runs), fewer than max_queued_steps wait for the server, and the
+   * last one predicted is not onto stairs, a hole or a teleport (the server moves the
+   * player elsewhere there: the FullMapView says where).
    */
-  predictStep(dir: Direction, now: number): boolean {
+  canStep(now: number): boolean {
     const s = this.self;
-    if (!s || !this.canStep(now)) return false;
+    if (!s || this.predicted.length >= this.maxPredicted) return false;
+    const last = this.predicted[this.predicted.length - 1];
+    if (last && movesOnStep(this.content.portals, last.to.x, last.to.y, last.to.z)) return false;
+    const w = s.walk;
+    return !w || now >= w.start + w.duration - STEP_LEAD_MS;
+  }
+
+  private get maxPredicted(): number {
+    return Math.max(1, this.maxQueued);
+  }
+
+  /** The longest correction of the own creature that glides (motion.ts ownSlideMaxTiles). */
+  private get ownSlideMax(): number {
+    return ownSlideMaxTiles(this.maxPredicted);
+  }
+
+  /** Whether an own step in `dir` looks possible: a free tile, not the step just refused. */
+  stepOpen(dir: Direction): boolean {
+    const s = this.self;
+    if (!s) return false;
     const to = step(s.pos, dir);
-    s.dir = dir;
     if (!this.free(to.x, to.y, to.z)) return false;
     const r = this.refused;
-    if (r && samePos(r.from, s.pos) && samePos(r.to, to)) return false;
+    return !(r && samePos(r.from, s.pos) && samePos(r.to, to));
+  }
+
+  /**
+   * Predicts one own step in `dir` if the client believes it is possible (canStep and
+   * stepOpen). It starts when the step drawn now ends, so the drawing never stops between
+   * tiles. Returns the step's seq when it was predicted (the caller then sends Walk with
+   * it and walkEpoch), undefined when it should not be sent.
+   */
+  predictStep(dir: Direction, now: number): number | undefined {
+    const s = this.self;
+    if (!s || !this.canStep(now) || !this.stepOpen(dir)) return undefined;
     const from = s.pos;
-    this.pending = { from, to };
+    const to = step(from, dir);
+    const old = s.walk;
+    const end = old ? old.start + old.duration : now;
+    const start = Math.max(end, now);
+    const walk: Walk = {
+      from,
+      to,
+      start,
+      duration: this.stepDuration(to, s.speed, isDiagonal(dir)),
+      prev: old && start > now ? pruned(old, now) : undefined,
+    };
+    const seq = ++this.walkSeq;
+    this.predicted.push({ from, to, walk, seq });
     s.pos = to;
-    s.walk = { from, to, start: now, duration: this.stepDuration(to, s.speed, isDiagonal(dir)) };
-    return true;
+    s.dir = dir;
+    s.walk = walk;
+    return seq;
+  }
+
+  /**
+   * The own step for a wanted direction (a key, the pad): the direction, or for a diagonal
+   * one of its halves when the diagonal is blocked (sliding along a wall). Nothing open:
+   * the player turns that way (`turn`, sent only when the facing changes), but only with
+   * every step confirmed. The server turns at once and each step still queued there sets
+   * the facing again: the player would face the turn here and the last step for everyone
+   * else. A held key turns once the steps are confirmed.
+   */
+  chooseStep(
+    dir: Direction,
+    now: number,
+  ): { kind: "walk"; dir: Direction; seq: number } | { kind: "turn"; dir: Direction } | undefined {
+    const s = this.self;
+    if (!s || !this.canStep(now)) return undefined;
+    for (const d of stepChoices(dir)) {
+      const seq = this.predictStep(d, now);
+      if (seq !== undefined) return { kind: "walk", dir: d, seq };
+    }
+    if (this.predicted.length > 0) return undefined;
+    if (s.dir === dir || dir === Direction.UNSPECIFIED) return undefined;
+    s.dir = dir;
+    return { kind: "turn", dir };
   }
 
   /**
@@ -948,13 +1223,37 @@ export class WorldState implements TileSource {
     return Math.max(Math.ceil(ms / 50), 1) * 50;
   }
 
-  /** Where to draw a creature (fractional tiles), interpolated along its current step. */
+  /**
+   * Where to draw a creature (fractional tiles): along the step drawn now (waiting at its
+   * start before it begins), plus what is left of a correction gliding out.
+   */
   drawPos(c: CreatureState, now: number): { x: number; y: number } {
-    const w = c.walk;
-    if (!w || now >= w.start + w.duration || w.duration <= 0) return { x: c.pos.x, y: c.pos.y };
-    const t = Math.max(0, (now - w.start) / w.duration);
-    return { x: w.from.x + (w.to.x - w.from.x) * t, y: w.from.y + (w.to.y - w.from.y) * t };
+    const w = this.activeWalk(c, now);
+    let x = c.pos.x;
+    let y = c.pos.y;
+    if (w && now < w.start) {
+      x = w.from.x;
+      y = w.from.y;
+    } else if (w && now < w.start + w.duration && w.duration > 0) {
+      const t = (now - w.start) / w.duration;
+      x = w.from.x + (w.to.x - w.from.x) * t;
+      y = w.from.y + (w.to.y - w.from.y) * t;
+    } else if (w && w !== c.walk) {
+      x = w.to.x;
+      y = w.to.y;
+    }
+    const left = slideLeft(c.slide, now);
+    if (left) return { x: x + left.x, y: y + left.y };
+    if (c.slide) c.slide = undefined;
+    return { x, y };
   }
+}
+
+/** The step with the steps before it that ended by now cut off: only those still drawn stay. */
+function pruned(w: Walk, now: number): Walk {
+  for (let n: Walk | undefined = w; n; n = n.prev)
+    if (n.prev && n.prev.start + n.prev.duration <= now) n.prev = undefined;
+  return w;
 }
 
 export const isPlayer = (c: CreatureState): boolean => c.kind === CreatureKind.PLAYER;

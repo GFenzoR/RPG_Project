@@ -137,7 +137,7 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
 7. **Puerta con llave (este).** Sin la llave no abre; con la llave de latón en la mochila,
    úsala para abrir y cerrar. La bóveda está vacía salvo unas cajas.
 8. **Portales (este y sótano).** Pisa la escalera para bajar y la de abajo para subir. Usa la
-   trampilla (click derecho) para bajar por la escalera de mano y la escalera de mano de
+   trampilla (doble click, o click derecho y "Trepar") para bajar por la escalera de mano y la escalera de mano de
    abajo para subir. Pisa el agujero: caes al pozo; sal por la sala de la escalera o compra
    una cuerda y úsala sobre el punto de luz para subir. Al fondo, el teletransporte te deja
    en la plaza.

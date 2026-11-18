@@ -36,7 +36,12 @@ export function ItemLabel(props: {
       }
     : {};
   return (
-    <span class="item-label" data-item={def?.id ?? itemId}>
+    <span
+      class="item-label"
+      data-item={def?.id ?? itemId}
+      data-tip-item={itemId}
+      data-tip-count={count}
+    >
       <span class={icon ? "item" : "item missing"} style={style} aria-hidden="true">
         {!icon && name.slice(0, 2)}
       </span>

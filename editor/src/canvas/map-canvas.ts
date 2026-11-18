@@ -4,7 +4,7 @@ import { Application, Graphics, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { chunkKey, tilesToRects } from "@rpg/map-format/ops";
 import { Atlas, MISSING_TEXTURE, MapView, screenToTile, tilePixels } from "@rpg/renderer";
-import type { TileSource } from "@rpg/renderer";
+import type { TileArt, TileSource } from "@rpg/renderer";
 import type { EditorController } from "../state/editor.ts";
 import { TOOL_KEYS, brushCells } from "../tools/tools.ts";
 import { entityKey, entityPos } from "../state/editor.ts";
@@ -86,7 +86,18 @@ export async function createMapCanvas(
       return undefined;
     },
   };
-  const view = new MapView({ source, texture, tileSize: T, floor: ctl.state.floor });
+  // The same tile art as the game (docs/17): wall pieces, ground looks, animations, shadows.
+  const arts = new Map<string, TileArt<Texture> | null>();
+  const art = (id: string): TileArt<Texture> | undefined => {
+    let a = arts.get(id);
+    if (a === undefined) {
+      const sprite = ctl.items.get(id)?.sprite;
+      a = (sprite && atlas.tileArt(sprite)) || null;
+      arts.set(id, a);
+    }
+    return a ?? undefined;
+  };
+  const view = new MapView({ source, texture, art, tileSize: T, floor: ctl.state.floor });
   const bounds = new Graphics();
   const grid = new Graphics();
   const cursor = new Graphics();
@@ -322,7 +333,7 @@ export async function createMapCanvas(
     const scr = size();
     if (scr.width !== drawn.w || scr.height !== drawn.h) ctl.setView(scr, T);
     view.setFloor(s.floor);
-    view.render(s.camera, scr);
+    view.render(s.camera, scr, performance.now());
     if (
       drawn.camera !== s.camera ||
       drawn.floor !== s.floor ||

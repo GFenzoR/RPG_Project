@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, BrowserContext, Page, Response } from "@playwright/test";
 import { serverURL } from "../playwright.config.ts";
+import { openWindow } from "./windows.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -229,6 +230,8 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
       SLOW,
     )
     .toBe(true);
+  // The appearance window of the toolbar (O, docs/17 UI-5).
+  await openWindow(game, "appearance");
   const panel = game.getByTestId("appearance-panel");
   await expect(panel.getByTestId("appearance-balance")).toHaveText("Saldo: 250 de nácar");
   await expect(panel.locator('[data-cosmetic="default-outfit"]')).toHaveAttribute(
@@ -281,7 +284,7 @@ test("T5.7: buy nacre through the fake checkout, buy cosmetics, equip them and b
   await expect
     .poll(() => game.evaluate(() => window.__rpgClient?.cosmetics()?.equipped), SLOW)
     .toEqual({ outfit: "outfit_sailor", color: "", nameEffect: "name_frost" });
-  // The side column scrolls under the chat: bring the whole panel into view for its shot.
+  // The window scrolls inside when it is short: bring the whole panel into view for its shot.
   await panel.evaluate((e) => e.scrollIntoView({ block: "start" }));
   await expect(panel.getByTestId("appearance-shop")).toHaveAttribute("href", "/shop");
   await panel.screenshot({ path: join(shots, "65-appearance-panel.png") });

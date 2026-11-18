@@ -56,7 +56,15 @@ function world(): WorldState {
   w.apply(
     {
       case: "welcome",
-      value: { $typeName: "game.v1.Welcome", creatureId: 1, serverTime: 0n, tickMs: 50 },
+      value: {
+        $typeName: "game.v1.Welcome",
+        creatureId: 1,
+        serverTime: 0n,
+        tickMs: 50,
+        maxQueuedSteps: 4,
+        viewWidth: 31,
+        viewHeight: 21,
+      },
     },
     0,
   );
@@ -67,6 +75,7 @@ function world(): WorldState {
       case: "fullMapView",
       value: {
         $typeName: "game.v1.FullMapView",
+        walkEpoch: 1,
         area: {
           $typeName: "game.v1.MapArea",
           x: 0,

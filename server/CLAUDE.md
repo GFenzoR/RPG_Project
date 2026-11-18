@@ -290,6 +290,37 @@ server/
   `mapcompile` (`compile.checkPortalLooks`); `initPortals` solo avisa (log), para un
   `world.bin` compilado antes de cambiar `data/items`.
 
+- **Caminar (cola de teclado y época, `session/move.go`, docs/05 "Caminar"):** `Walk`
+  encola detrás de los pasos de teclado (`Player.keyWalk`; un camino o un paso de
+  persecución se descarta), con tope `movement.max_queued_steps` (uno más reinicia), y
+  compacta la cola para que una tecla mantenida no la haga crecer. `Player.walkEpoch`
+  (desde 1, nunca 0) numera los reinicios: `reject` y `relocate` llaman a `resetWalk` y
+  el `WalkRejected`/`FullMapView` lleva la época nueva; un `Walk` de otra época se
+  descarta sin contestar (0 no se revisa: bots y clientes viejos). El desborde rechaza
+  con `dir` `UNSPECIFIED` (no hay paso rechazado). `Player.qseq` guarda el `Walk.seq` de
+  cada paso de teclado, paralelo a `queue` mientras `keyWalk` (se compacta con ella), y
+  `move` lo pone en `walk_seq` del `CreatureMove` del propio jugador (los observadores
+  reciben 0): el cliente empareja así cada predicción; el servidor no decide nada con
+  él. `Welcome.max_queued_steps` le dice el tope al cliente. El cliente tiene pasos
+  predichos esperando respuesta: **ningún camino nuevo puede vaciar la cola de un jugador
+  conectado en silencio** (`stopWalk` solo); usa `reject` (o `relocate`, que manda el
+  `FullMapView`), o su cliente se queda esperando confirmaciones que no llegan. El ritmo
+  sigue siendo del servidor (`readyAt`).
+
+- **Vista (AOI, `session/aoi.go`, `docs/02` "La vista"):** la ventana de cada jugador es
+  31x21 + 1 de margen (`ViewTilesW`/`ViewTilesH`, `Sees`, `eachObserver`): lo que se le
+  manda y lo que puede elegir como objetivo, mirar o usar (con su `reach`). Lo que **nota y
+  persigue un monstruo** es la ventana clásica de 15x11 + 1 (`InSight`, `SightHalfW`/`H`):
+  una regla nueva de "ver" de un monstruo usa `InSight`, nunca `Sees`. Los rangos de armas,
+  hechizos y ataques salen de `data/`; `content.MaxReach` y `content.MaxRange` (6, el
+  alcance de las manos y el rango o radio con que apunta un jugador) siguen a la ventana
+  clásica: un monstruo golpeado desde tan lejos como se apunta siempre devuelve el golpe.
+  El bloqueo de un respawn (`watched`) también mira la ventana clásica, no la ancha (la
+  capacidad del mundo de docs/07). Una respuesta que dependa de dónde está otro jugador
+  pide `Sees` **y** `Knows` (un invisible no se ve aunque esté en la ventana).
+  Un mensaje que va a todos los observadores de un paso o un golpe se arma una vez y se
+  comparte (`observeMove`, `hitEvents`): no modifiques un mensaje después de emitirlo.
+
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +
   `store/shop.go` + `httpapi/shop.go` + `app/shop.go` + `session/cosmetics.go`. Todo cambio

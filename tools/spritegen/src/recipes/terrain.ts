@@ -19,17 +19,23 @@ import {
   tint,
 } from "../draw.ts";
 import type { Rng } from "../draw.ts";
-import { darken, lighten, mix, PALETTE } from "../palette.ts";
+import { darken, lighten, material, mix, PALETTE } from "../palette.ts";
 import type { Material } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
 
-const { wood, darkWood, weatheredWood, iron, darkIron, rope, paper, redCloth, moss, pine, bark } =
-  PALETTE;
+const { wood, darkWood, weatheredWood, iron, darkIron, rope, paper, redCloth, moss } = PALETTE;
 
 // ---- ground ------------------------------------------------------------------------------
 
+/**
+ * Floorboards: darker and duller than the furniture wood, so a room reads as a floor under
+ * what stands on it (docs/17 ART-6: grounds L* 20-50, low chroma).
+ */
+const floorWood = material("#6f5238", "#5b432e", "#483424", "#35261b");
+
 /** Horizontal planks, 8 px wide, one staggered butt joint per row. */
 function woodenFloor(img: Image, _rand: Rng, seed: number): void {
+  const wood = floorWood;
   const joints = [5, 21, 13, 29];
   eachInRect(0, 0, 32, 32, (x, y) => {
     const row = Math.floor(y / 8);
@@ -49,8 +55,8 @@ function woodenFloor(img: Image, _rand: Rng, seed: number): void {
     px(img, x, y, c);
   });
   // A couple of knots.
-  knot(img, 24, 3, wood);
-  knot(img, 9, 19, wood);
+  knot(img, 24, 3, floorWood);
+  knot(img, 9, 19, floorWood);
 }
 
 function knot(img: Image, x: number, y: number, m: Material): void {
@@ -245,7 +251,7 @@ function cooledLava(img: Image, _rand: Rng, seed: number): void {
     }
     const tone = (hash2(id, 8, seed) - 0.5) * 0.3;
     const mottle = (tileNoise(x, y, 4, 4, seed + 6) - 0.5) * 0.3;
-    let level = 0.52 + tone + mottle;
+    let level = 0.62 + tone + mottle;
     if (slabOf(x, y + 2) !== id || slabOf(x + 2, y) !== id)
       level -= 0.25; // far rim
     else if (slabOf(x, y - 1) !== id || slabOf(x - 1, y) !== id) level += 0.3; // lit rim
@@ -258,113 +264,7 @@ function cooledLava(img: Image, _rand: Rng, seed: number): void {
   });
 }
 
-/**
- * Molten lava: a red-orange flow marbled into bands that meander (a warped noise read as
- * contour lines), a glowing yellow crest on each band and a darker skin in its troughs,
- * with small flecks of black crust. The noise has no feature wider than a quarter of the
- * tile and the flecks are many and small, so the 32 px repeat does not read as a grid of
- * swirls or dots.
- */
-function moltenLava(img: Image, _rand: Rng, seed: number): void {
-  const { ember } = PALETTE;
-  const crust = PALETTE.lavaRock;
-  const flowAt = (x: number, y: number): number => {
-    // The warp is periodic too, so the bent field still tiles.
-    const wx = x + (tileNoise(x, y, 8, 8, seed + 5) - 0.5) * 8;
-    const wy = y + (tileNoise(x, y, 8, 8, seed + 6) - 0.5) * 8;
-    return (
-      tileNoise(wx, wy, 4, 4, seed + 1) * 0.55 +
-      tileNoise(wx, wy, 8, 8, seed) * 0.3 +
-      tileNoise(wx, wy, 16, 16, seed + 2) * 0.15
-    );
-  };
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    const band = (flowAt(x, y) * 4 + 0.5) % 1;
-    let c: Rgba;
-    if (band < 0.07)
-      c = ember.light; // the hot crest of a band
-    else if (band < 0.2) c = mix(ember.light, ember.base, 0.6);
-    else if (band < 0.44) c = ember.base;
-    else if (band < 0.76) c = ember.shadow;
-    else c = mix(ember.shadow, ember.deep, 0.4); // the skin cooling in the trough
-    px(img, x, y, c);
-  });
-  // Crust flecks: one per 8 px cell of a jittered lattice, about one in three drawn, small.
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    const f = lattice(x, y, 8, 8, seed + 4, { jitter: 0.7 });
-    if (hash2(f.id, 7, seed) > 0.35) return;
-    const r = Math.hypot(f.dx, f.dy * 1.3);
-    const size = 0.6 + hash2(f.id, 8, seed) * 0.6;
-    if (r > size + 0.7) return;
-    if (r > size)
-      px(img, x, y, ember.deep); // the red-hot rim
-    else px(img, x, y, f.dx + f.dy < -0.4 ? crust.light : crust.base);
-  });
-  // White-hot sparks on the crests.
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    if (hash2(x, y, seed + 3) < 0.06 && img.data[(y * 32 + x) * 4 + 2] === ember.light[2])
-      px(img, x, y, lighten(ember.light, 0.5));
-  });
-}
-
-// ---- walls -------------------------------------------------------------------------------
-
-/** Stacked round logs (8 px each) with dark chinking between them. */
-function woodenWall(img: Image, _rand: Rng, seed: number): void {
-  const levels = [0, 0.85, 0.7, 0.6, 0.52, 0.45, 0.3, 0.12];
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    const yy = y % 8;
-    if (yy === 0) return px(img, x, y, mix(PALETTE.cloth.shadow, darkWood.deep, 0.3));
-    const grain = tileNoise(x, y * 4, 8, 1, seed) - 0.5;
-    px(img, x, y, shadeOf(wood, (levels[yy] ?? 0) + grain * 0.28));
-  });
-  knot(img, 7, 4, wood);
-  knot(img, 22, 20, wood);
-  // Split end-grain checks catching the light.
-  line(img, 14, 12, 18, 12, wood.shadow);
-  line(img, 26, 28, 29, 28, wood.shadow);
-}
-
 // ---- objects -----------------------------------------------------------------------------
-
-/** 64x64 conifer: four tiers of needles over a short trunk in the bottom-right tile. */
-function pineTree(img: Image, rand: Rng, seed: number): void {
-  const cx = 44;
-  // Trunk.
-  eachInRect(41, 46, 7, 16, (x, y) => {
-    const u = (x + 0.5 - 44.5) / 3.5;
-    px(img, x, y, shadeOf(bark, cylinderLight(u) + (hash2(x, y >> 1, seed) - 0.5) * 0.2));
-  });
-  rect(img, 40, 60, 9, 2, bark.deep); // root flare
-  px(img, 39, 61, bark.deep);
-  px(img, 49, 61, bark.deep);
-  // Tiers from the bottom up, so the upper ones overlap and shade the lower ones.
-  const tiers: [top: number, bottom: number, half: number][] = [
-    [30, 53, 20],
-    [21, 43, 16],
-    [12, 32, 12],
-    [3, 21, 8],
-  ];
-  for (const [top, bottom, half] of tiers) {
-    const jag = (x: number): number => (((x + top) % 4) - 1.5) * 1.1 + (rand() - 0.5);
-    for (let x = cx - half; x <= cx + half; x++) {
-      const u = (x + 0.5 - cx) / half; // -1 .. 1
-      // Slanted sides: a tier is a triangle with a drooping, jagged hem.
-      const yTop = top + Math.abs(u) * (bottom - top) * 0.78;
-      const yBot = bottom - (1 - Math.abs(u)) * 1.5 + jag(x);
-      for (let y = Math.floor(yTop); y <= yBot; y++) {
-        const v = (y - yTop) / Math.max(1, yBot - yTop); // 0 at the top, 1 at the hem
-        let level = 0.86 - u * 0.5 - v * 0.32 + (tileNoise(x, y, 4, 2, seed, 64) - 0.5) * 0.24;
-        if (yBot - y < 1.2) level -= 0.25; // underside of the hem
-        px(img, x, y, shadeOf(pine, level));
-      }
-      // The hem casts a 1-2 px shadow on what is below it.
-      for (let d = 1; d <= 3; d++)
-        tint(img, x, Math.floor(yBot) + d, (c) => darken(c, d === 3 ? 0.2 : 0.4));
-    }
-  }
-  outline(img, { amount: 0.55 });
-}
 
 /** Iron anvil with a horn to the left, on its foot. */
 function anvil(img: Image): void {
@@ -630,10 +530,7 @@ export const TERRAIN: RecipeBook = {
   "ground/basalt": { kind: "ground", draw: basaltPaving },
   "ground/cinder_path": { kind: "ground", draw: cinderPath },
   "ground/cooled_lava": { kind: "ground", draw: cooledLava },
-  "ground/lava": { kind: "ground", draw: moltenLava },
   "decor/signpost": { kind: "object", draw: signpost },
-  "walls/wooden_wall": { kind: "wall", draw: woodenWall },
-  "decor/pine_tree": { kind: "object", width: 64, height: 64, draw: pineTree },
   "decor/anvil": { kind: "object", draw: anvil },
   "decor/cargo_crate": { kind: "object", draw: cargoCrate },
   "decor/market_board": { kind: "object", height: 64, draw: marketBoard },

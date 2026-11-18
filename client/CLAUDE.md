@@ -13,25 +13,40 @@ client/
   src/state/             estado local del juego reconstruido desde eventos del servidor
   src/render/            capa de juego sobre packages/renderer (tiles, criaturas, efectos)
   src/input/             teclado (flechas/WASD, hotkeys), mouse y táctil (T5.6)
-  src/ui/                Preact: inventario, chat, diálogos de NPC, skills, login
+  src/ui/                Preact: pantalla de juego (GameView), ventanas, inventario, chat...
+  src/preview/           vista previa de la UI sin servidor (make ui-preview)
   src/i18n/              carga de textos desde i18n/
-  e2e/                   Playwright: tests y screenshots
+  vite/fonts.ts          plugin: fuentes OFL recortadas a woff2 en /fonts/
+  vite/credits.ts        créditos de /credits desde assets/CREDITS.md y los CREDITS.csv
+  e2e/                   Playwright: tests y screenshots (y e2e/ui-preview.ts, un script)
 ```
 
 ## Reglas del cliente
 - El cliente es "tonto": envía intenciones y dibuja lo que el servidor dice.
-  Solo predice el movimiento propio (un paso) y lo corrige si el servidor lo rechaza.
-- Interpolación de movimiento entre casillas según la velocidad que manda el servidor.
+  Solo predice los pasos propios de teclado (hasta `max_queued_steps`, ver "Movimiento
+  fluido") y los corrige si el servidor los rechaza.
+- Interpolación de movimiento entre casillas según la velocidad que manda el servidor;
+  los pasos que da el servidor se dibujan sobre su línea de ticks, uno detrás del otro.
 - Render de tiles 32x32 con orden de dibujo estilo Tibia: suelo → bordes → items →
   criaturas → efectos → textos flotantes, por fila de abajo hacia arriba.
-- Ventana visible por defecto 15x11 casillas; el canvas escala en múltiplos enteros
-  (pixel-perfect, `roundPixels`, sin suavizado). El jugador puede acercar el mapa por
-  escalas enteras (ver "Zoom del mapa"), nunca alejarlo por debajo de las 15x11.
+- El servidor manda una ventana de 31x21 casillas (+1 de margen; `WorldState.view`, del
+  `Welcome`). El canvas escala en múltiplos enteros (pixel-perfect, `roundPixels`, sin
+  suavizado): por defecto la vista más grande que llena la caja del mapa a escala entera,
+  sin bajar de 15x11; el jugador puede alejar hasta la ventana entera y acercar hasta 7x5
+  (ver "Zoom del mapa").
 - La UI (inventario, chat, diálogos) es DOM con Preact encima del canvas, no Pixi.
-  Así es accesible, traducible y testeable con Playwright.
+  Así es accesible, traducible y testeable con Playwright. En escritorio no hay encabezado
+  ni columna fija: el mapa, el dock a su derecha y ventanas separadas (ver "Notas de la UI
+  oscura").
 - Ningún string visible hardcodeado: todo pasa por `t('clave')`.
 - Pensado para PC primero (teclado + mouse). Mantén el input desacoplado para poder
   sumar controles táctiles sin reescribir.
+- Dirección de arte, animación, sensación de movimiento y UI acordadas con el dueño el
+  2026-11-17: `docs/17-direccion-de-arte-y-ui.md`. Las reglas de arriba cambian cuando se
+  haga cada tarea de su plan (§7). A2 y A3 (tema, fuentes, dock y ventanas) ya están, A6
+  en parte (movimiento), A7 (vista de 31x21), y A4 y A5 (menú del click derecho con la
+  ficha, diálogo y tienda sin scroll; ver "Notas de A4 y A5"): el click derecho sobre un
+  item ya no lo usa por defecto.
 
 ## Notas de T1.5
 - Sin servidor propio de assets: el plugin de Vite empaqueta el contenido de `data/` e
@@ -41,6 +56,14 @@ client/
   origin, como detrás de Caddy, así la cookie `rpg_session` funciona sin pedir el token.
 - Las criaturas se dibujan dentro de la capa de items de `MapView` (`placeEntity`), por
   casilla: sobre los items de su casilla y bajo los de las casillas siguientes.
+- Arte del mapa (docs/17 ART-3 a ART-7; `assets/README.md`, "Arte del mapa"): el canvas
+  le pasa a `MapView` el `TileArt` de cada item (`atlas.tileArt`, resuelto una vez por id)
+  y la hora del frame, y `MapView` pone los looks de suelo, las piezas de muro, las anclas
+  centradas, las sombras proyectadas (capa entre el suelo y los items) y avanza los tiles
+  animados sin asignar. Encima del mapa: la silueta del jugador propio cuando lo tapa el
+  muro de la casilla de al sur (`behindWall`, `view.wallAt`), y en los pisos z ≥ 8 la luz
+  de `render/light-layer.ts` (multiply, bajo efectos y nombres; da luz el jugador y cada
+  item con `light`). Orden de capas del stage: mapa → luz → efectos → nombres → textos.
 - Una criatura sin sprite es un bloque de color con una marca hacia donde mira (ver
   T0.5). Solo se dibuja el piso del jugador.
 - Hooks de solo lectura para E2E en `window.__rpgClient` (`game.ts`).
@@ -90,6 +113,8 @@ client/
   DOM): `Game.pressItem` / `startDrag` y `dropTarget` (un `[data-drop]` o un tile del
   canvas). En el canvas: arrastrar el item de arriba, click derecho = usar (o atacar si
   hay criatura), Mayús+click = mirar. En el DOM: click derecho = usar, Mayús+click = mirar.
+  Desde A4 eso es el modo `classic`; por defecto el click derecho abre el menú (ver "Notas
+  de A4 y A5").
 
 ## Notas de T1.9
 - `content.spells` (de `data/spells.yaml`) alimenta la barra de hotkeys `ui/Hotbar.tsx`:
@@ -104,9 +129,10 @@ client/
 ## Notas de T1.10
 - `WorldState.dialog` / `shop` (de `DialogOpen`, `DialogClose`, `ShopOpen`): la tienda se
   cierra con el `DialogClose` de su diálogo. `ui/Dialog.tsx` dibuja ambas ventanas sobre
-  el mapa (arriba a la izquierda).
+  el mapa (arriba a la izquierda; desde A5, abajo al centro).
 - Click derecho sobre un NPC (o `Game.attack` con un NPC) = `NpcTalk`. Con un diálogo
-  abierto, 1–9 eligen la n-ésima opción mostrada y Escape manda `DialogChoose` 0.
+  abierto, 1–9 eligen el botón con ese número (desde A5 los botones van por tema:
+  `state/dialog.ts` `dialogLayout`), 0 "Volver" y Escape manda `DialogChoose` 0.
 - Los NPCs no van en la lista de batalla. El plugin de Vite incluye `dialog.yaml` y
   `npcs.yaml` completos y los nombres de `quests.yaml`; un `content_id` llamado `quest`
   se traduce como `quest.<id>.name`.
@@ -130,7 +156,8 @@ client/
   selector de canal y la línea para escribir. Todo es texto DOM: nunca `innerHTML`.
 - Idioma: `pickLanguage` = `?lang=` → `localStorage` `rpg.lang` → navegador → es. `main.tsx`
   guarda el idioma en estado y `ui/LanguagePicker.tsx` lo cambia en vivo (esquina fuera del
-  juego, header dentro); el `Game` recibe `t` por un ref y el canvas renombra etiquetas.
+  juego; dentro, la ventana Opciones en escritorio y el menú ☰ en teléfonos); el `Game`
+  recibe `t` por un ref y el canvas renombra etiquetas.
 - `translator(texts, lang)` soporta plurales ICU; `make validate` revisa las claves literales
   del código (cliente, editor y servidor).
 
@@ -161,7 +188,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 
 ## Notas de T3.2
 - `WorldState.conditions` (de `PlayerConditions`, solo las propias) alimenta la barra de
-  condiciones del header (`ConditionBar` en `ui/App.tsx`, nombres `condition.<id>.name`).
+  condiciones (`ConditionBar` en `ui/GameView.tsx`, bajo los orbes en escritorio y en el
+  encabezado de los teléfonos; nombres `condition.<id>.name`).
   La velocidad aplicada llega en `PlayerStats.speed` / `CreatureSpeed`: el paso predicho y
   la interpolación ya la usan. Invisible: el propio cliente dibuja su criatura con alpha
   0.4 (los demás no la reciben). Efecto 7 = hechizo de condición o cura.
@@ -266,6 +294,21 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   "Jugar" → login → juego conservando el idioma elegido en el juego tras recargar). Los E2E
   del juego van a `/play/?lang=es`.
 
+## Créditos (docs/17 A1)
+- `/credits` del sitio (`site/Credits.tsx`, sin hooks): `SiteContent.credits` lo arma
+  `vite/credits.ts` (`loadCredits`, puro en `creditsFrom`, con tests) desde
+  `assets/CREDITS.md` y el `CREDITS.csv` de cada pack, con los lectores de spritepack.
+  Cada frase es i18n (`site.credits.*`); el nombre y autor de un pack,
+  `site.credits.pack.<carpeta>.*` (guiones como `_`; `vite/credits.test.ts` exige las dos claves en es y en
+  para cada pack, y un enlace en `site/credits.ts` `licenceUrl` para cada licencia).
+- Enlaces: el pie del sitio (`site.nav.credits`) y `ui/CreditsLink.tsx` en Opciones (la
+  ventana de escritorio y `AudioOptions` del login y del menú ☰), otra pestaña; en la app
+  de escritorio, la dirección como texto (`client.options.credits_desktop`).
+- Fuentes: `buildFont` conserva los name ids 0–6, 13 y 14 (`KEPT_NAME_IDS`): el
+  copyright y la licencia OFL viajan en cada woff2.
+- E2E: "credits" de `e2e/site.spec.ts` (screenshots `site-09` y `site-10`) y el enlace
+  en el test de sonido de `e2e/game.spec.ts`.
+
 ## Notas de T4.5
 - Portal de mapas en el sitio (`src/site/Maps.tsx`): `/maps/submit`, `/maps/mine` y
   `/maps/review[/<id>]` (rutas en `site/routes.ts`). Helpers puros con tests en
@@ -289,7 +332,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - `WorldState.guild` (`state/guild.ts`, puro y con tests) guarda el gremio y las
   invitaciones de `GuildUpdate`; `guildPowers`/`memberActions` deciden qué botones mostrar
   con las mismas reglas que el servidor (que igual valida todo). `ui/Guild.tsx`: panel del
-  gremio en la columna lateral y las invitaciones sobre el mapa (`.guild-invitations`, más
+  gremio (su propia ventana con pestañas en escritorio, docs/17 UI-7; una pestaña del panel
+  en teléfonos) y las invitaciones sobre el mapa (`.guild-invitations`, más
   arriba que las del grupo). El panel no usa hooks (formularios no controlados que leen sus
   campos al enviar): `ui/Guild.test.ts` recorre su árbol sin DOM. Si le agregas estado,
   mantén ese test posible o muévelo a otro componente.
@@ -409,14 +453,43 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Jugadores (propio y ajenos): outfit `citizen` de `content.outfits` (`data/outfits.yaml`).
   Frames en el atlas: `<sprite>/<dir>_<frame>` (`outfits/citizen/s_0`). `render/outfit.ts`
   (puro, con tests): `outfitDir` lleva las 8 direcciones a n/e/s/w (las diagonales usan
-  la horizontal: noreste mira al este); `outfitFrame` da 0 parado y, mientras interpola
-  un paso, reparte los frames de caminar por el avance (con 3 frames: 1 la primera
-  mitad, 2 la segunda), así pasos seguidos alternan 1, 2, 1, 2.
-- El canvas usa el outfit solo si el atlas tiene arte real para todos sus frames (origen
-  distinto de `auto` y `placeholder`); si no, el bloque. Los sprites de criatura van
-  anclados abajo a la derecha de su casilla, como en `MapView` (uno de 64x64 crece hacia
-  arriba y a la izquierda). Alpha de invisible, nombre, barras, marca PvP y marco de
-  objetivo no cambian.
+  la horizontal: noreste mira al este). El frame lo elige la animación ("Animación de
+  criaturas"): con 3 frames T0.5, 0 parado y, durante un paso, 1 la primera mitad y 2 la
+  segunda, así pasos seguidos alternan 1, 2, 1, 2.
+- El canvas usa el outfit solo si el atlas lo anima (`anims`) o tiene arte real para todos
+  sus frames (origen distinto de `auto` y `placeholder`); si no, el bloque. Desde docs/17
+  los cuatro atuendos son personajes de LPC: ver "Animación de criaturas". Alpha de
+  invisible, nombre, barras, marca PvP y marco de objetivo no cambian.
+
+## Animación de criaturas (docs/17 ANI)
+- Todo cuerpo de criatura (monstruo, NPC o el atuendo de un jugador) es un `CreatureBody`
+  (`render/creature-body.ts`): la sombra de contacto (solo `shadow: ellipse`) y un sprite
+  anclado abajo al centro. Los `br` conservan la esquina de abajo a la derecha en la de su
+  casilla (como `MapView`); los `bc` (personajes de LPC de 64x64) pisan `FEET_LINE` px por
+  encima del borde de abajo. Nombre, gremio y barra suben `lift` px (el alto del dibujo
+  sobre su casilla, de `top` y `foot` de `atlas.json`).
+- `render/clips.ts` (puro, con tests) arma una vez por sprite sus texturas por acción,
+  dirección y frame: las de `atlas.json` `anims`; para un atuendo T0.5 sin animación, sus
+  `<dir>_<n>` como quieto (0) y caminar (1..); si no, la textura única. Una acción sin todas
+  sus texturas se descarta.
+- Cada frame, `animate` (`packages/renderer/src/anim.ts`, puro, con tests) escribe la pose
+  en un único objeto reutilizado: caminar por distancia (el ciclo sigue entre casillas,
+  `perTile` frames por casilla), quieto con fase por id, el frame de caminar se sostiene
+  100 ms entre pasos encadenados (ANI-3), ataque y muerte una vez. Sin clip, lo procedural
+  de ANI-5: salto de 2 px por casilla, inclinación de 1 px, aplastado al aterrizar,
+  respiración, embestida de 6 px, flotar (`flying`), espejo según `facing`, caída aplastada
+  con desvanecido. Además, para todos: destello rojo y empujón de 2 px al recibir un golpe
+  y aparición con fundido de 300 ms. Un frame no crea objetos para esto (docs/07).
+- Quién ataca a quién (`render/creature-events.ts`, puro, con tests) se deduce de lo que
+  llegó desde el frame anterior, hasta que el protocolo lo diga (ANI-7, tarea A9): un
+  `Projectile` anima a la criatura de su casilla de salida; un efecto de golpe, bloqueo o
+  elemento sin proyectil en el mismo batch, al atacante cuerpo a cuerpo (el propio jugador
+  si su objetivo está ahí y al lado; si no, una criatura del otro bando al lado, primero la
+  que mira esa casilla); un número de daño hace destellar a la víctima.
+- Muerte: una criatura que sale de la vista con la barra en 0 murió ahí (el servidor manda
+  `CreatureHealth` 0 antes de `CreatureDisappear`). Su cuerpo queda como "fantasma" sin
+  nombre ni barra mientras juega su caída (`death` de LPC, o la procedural) sobre el
+  cadáver, y se borra al terminar o si la criatura vuelve.
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames
@@ -541,11 +614,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (`layout.ts` `hotbarRoom`). La franja bajo el mapa (154 px, el alto del pad) es el
   `padding-bottom` de `.viewport`; el canvas se mide con la caja de contenido. El tutorial
   se pliega con "×" sin saltarse.
-- Escritorio: en la columna lateral todo menos el chat va en `.side-scroll`, que se
-  desplaza; el chat queda fijo debajo. Antes era `sticky` y tapaba el final del inventario
-  y de "Apariencia" a 1280x800. Con pestañas o cajón, `.side-scroll` es
-  `display: contents`. El log del sistema va al final de esa columna en escritorio y
-  arriba de la pestaña del chat en el resto.
+- Con pestañas o cajón, `.side-scroll` es `display: contents` y el log del sistema va
+  arriba de la pestaña del chat. El escritorio ya no tiene columna lateral (ver "Notas de
+  la UI oscura").
 - **PWA:** `public/manifest.webmanifest`, íconos placeholder (`make pwa-icons`,
   `tools/spritegen/src/pwa-icons.ts`), `src/sw.ts` (emitido como `/sw.js` por
   `vite.config.ts`) con la política pura de `sw/policy.ts`: nunca `/api`, `/ws`,
@@ -566,12 +637,29 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Un diálogo de NPC pasa `{name}` (el nombre del jugador) a su texto.
 
 ## Zoom del mapa
-- `render/zoom.ts` (puro, con tests) decide la escala. El mínimo es la que muestra las
-  15x11 casillas enteras (la de siempre, `pixelScale`). El máximo es la mayor que todavía
-  muestra 7x5 (`MIN_VIEW`). Siempre escalas enteras. Acercado, el canvas se corta a la
-  caja del mapa en píxeles de sprite enteros (`viewPixels`). `followCamera` centra en el
-  jugador una vista de casillas fraccionarias. El servidor sigue mandando las 15x11 (+1):
-  el zoom es solo de dibujo.
+- **Vista ancha** (decisión del dueño, `docs/02` "La vista", `docs/17` UI-4): el servidor
+  manda 31x21 (+1) a todos (`Welcome.view_width`/`view_height` → `WorldState.view`,
+  `state/view.ts`; 0 = un servidor viejo: 15x11). El zoom es solo de dibujo.
+- `render/zoom.ts` (puro, con tests) decide la escala (`ZoomRange {min, fit, max}`):
+  - `fit`, la vista ajustada (sin elección guardada): la vista más grande sin parte vacía,
+    es decir la escala más chica a la que la ventana cubre la caja (`fillScale`), pero
+    nunca una que muestre menos que las 15x11 clásicas (`pixelScale`, la de antes de la
+    vista ancha): `min(pixelScale, fillScale)`. Con el dock: 1920x1080 (caja de
+    1536x1080) 2x, no 3x; 2560x1440 3x, no 4x; 1280x800 (960x800) y 1280x720 2x; la app
+    a 960x700 1x, como antes. En un teléfono `pixelScale` suele ser la menor: no cambia.
+    Con un servidor de 15x11, `fit` es `pixelScale`.
+  - `min`: la mayor que muestra la ventana entera (`wholeScale`), al menos 1 y como mucho
+    `fit`. A 1280x800 y 1920x1080, 1x (31x21, o 30x21 en los 960 px de 1280x800); a
+    2560x1440, 2x.
+  - `max`: la mayor que todavía muestra 7x5 (`MIN_VIEW`).
+  Siempre escalas enteras. El canvas muestra la ventana entera si entra y si no se corta
+  a la caja del mapa en píxeles de sprite enteros (`viewPixels`): a 2x en 1920x1080 son
+  24x16 casillas. Cortado, deja libre la franja de la hotbar de escritorio
+  (`--map-reserve-bottom`) salvo que eso le quite filas a las 11 clásicas; la ventana
+  entera nunca se achica por ella (`mapLift` la sube). `followCamera` centra en el
+  jugador una vista de casillas fraccionarias (`shownTiles`), con la cámara en píxeles de
+  pantalla enteros (ver "Movimiento fluido"). Si llegara otra ventana, el canvas se
+  reajusta en el siguiente frame.
 - La cámara (`follow` en `game-canvas.ts`) se fija en cada frame y también en cada
   `resize`, incluido el de la creación: cuando el juego publica `__rpgClient` con
   `ready`, `tileToClient` y los clicks ya apuntan al mapa. Antes solo la fijaba el primer
@@ -583,15 +671,100 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   ocultos si la pantalla admite una sola escala); Ctrl+rueda sobre el canvas
   (`WheelZoom`: una muesca o un pellizco corto de trackpad = un paso, `preventDefault`
   para que la página no haga zoom). La rueda sin Ctrl no hace nada.
-- Se recuerda por dispositivo en `localStorage` `rpg.zoom` (la escala). La vista ajustada
-  no guarda nada: vuelve a seguir a la ventana. Si la ventana ya no admite la escala
-  guardada, se dibuja la mayor posible y se conserva la elección.
-- `GameUi.zoom` (`{ scale, min, max }`) llega a la UI desde el canvas
-  (`GameCanvasOptions.zoomView`); `Game.zoom(steps)` es lo que llaman los botones. Hook
-  E2E: `__rpgClient.zoom()`.
+- Se recuerda por dispositivo en `localStorage` `rpg.zoom` (la escala, también alejada).
+  La vista ajustada no guarda nada: vuelve a seguir a la ventana. Si la ventana ya no
+  admite la escala guardada, se dibuja la más cercana posible y se conserva la elección.
+- `GameUi.zoom` (`{ scale, min, fit, max }`) llega a la UI desde el canvas
+  (`GameCanvasOptions.zoomView`); `Game.zoom(steps)` es lo que llaman los botones. Hooks
+  E2E: `__rpgClient.zoom()` y `__rpgClient.view()` (`{ server, shown }`: la ventana del
+  `Welcome` y las casillas, fraccionarias, que muestra el canvas).
 - Ubicación de los botones (`touch.css`): abajo a la derecha del mapa, sobre una hotbar
   de una línea y bajo el cajón. En vertical con pad van en la franja, sobre las flechas de
   la hotbar. Mientras hay un item elegido, el banner toma su lugar y se ocultan.
+
+## Movimiento fluido
+Pedido del dueño: "fluidez de movimiento como en Diablo 2", por casillas y con el servidor
+como juez. Medido antes del cambio (simulación de `state/walking.test.ts` con la lógica
+vieja): a escala 3 la cámara saltaba de a 3 px de pantalla y 6 cada ~15 frames (7 % de
+los frames) porque se fijaba a píxeles de sprite; un camino por click y las demás
+criaturas arrancaban cada paso al llegar su batch (con 20–60 ms de jitter: 4–10 frames
+disparejos cada 10 pasos y tirones hacia adelante); con RTT alto el teclado esperaba la
+confirmación de cada paso (6 frames quietos y 3 ticks de hueco en el servidor cada 12
+pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
+- **Pasos de teclado** (`state/world.ts`): `predicted` guarda hasta
+  `movement.max_queued_steps` (`balance.yaml`, 4; llega en `Welcome.max_queued_steps`, no
+  en el contenido empaquetado) pasos mandados sin confirmar. `canStep` deja decidir el siguiente cuando al paso
+  dibujado le faltan `STEP_LEAD_MS` (50 ms, `state/motion.ts`) o menos; `chooseStep`
+  prueba la dirección y, si es una diagonal bloqueada, su mitad horizontal y luego la
+  vertical (`stepChoices`); si nada está libre, gira (manda `Turn` solo si cambia y sin
+  pasos sin confirmar: el servidor gira en el acto y cada paso de su cola vuelve a fijar
+  la dirección, así que uno se vería girado y los demás no; una tecla mantenida gira
+  cuando se confirman). El
+  paso nuevo empieza cuando termina el dibujado (`Walk.prev` mantiene el anterior hasta
+  entonces) y se manda con `walkEpoch` y su número (`seq`, `PredictedStep.seq`, uno más
+  por paso). El `CreatureMove` propio con el `walk_seq` del más viejo y sus mismas
+  casillas lo confirma: conserva su inicio local y toma la duración del servidor (corre
+  los de atrás). Cualquier otro paso propio con predicciones pendientes es `ownStep`: un
+  paso sin `walk_seq` (el siguiente de un camino por click, uno de persecución, que el
+  servidor dio antes de recibir el `Walk`) o con el de una predicción ya abandonada va
+  antes de los `Walk` pendientes; uno con `walk_seq` k responde también a los anteriores
+  a k, que se perdieron. El paso del servidor se dibuja en el lugar de la predicción más
+  vieja, las que quedan se mueven tras él (mismas direcciones, desde donde termina, una
+  detrás de otra) y el dibujo se desliza. Así nunca queda una confirmación desfasada (antes
+  el paso del camino "confirmaba" el `Walk`, y cada confirmación siguiente era la del
+  `Walk` anterior). `expirePredicted` (cada `frame`) abandona las predicciones si la más
+  vieja no tuvo respuesta `PREDICT_TIMEOUT_MS` (3 s) después de dibujada: su `Walk` se
+  perdió y ninguno lo sigue; el personaje vuelve deslizándose. Un `WalkRejected` vacía
+  `predicted`. `game.ts` `frame` solo pide `keys.take() ?? pad.take()` cuando `canStep`;
+  un click espera `unconfirmed === 0` para mandar el camino desde donde está el
+  servidor.
+- **Época** (docs/05 "Caminar"): `walkEpoch` sale del último `WalkRejected` o
+  `FullMapView` y va en cada `Walk`; el servidor descarta los de otra época sin contestar.
+- **Pasos del servidor** (las demás criaturas y el camino propio por click): `Game` pide
+  `world.batchTime(batch.tick, now)` por batch y pasa ese `at` a `apply`; el paso empieza
+  en `at` y se encadena tras el que se sigue dibujando (`prev`, sin saltos): si ese
+  termina después de `at`, el nuevo lo espera y se dibuja hasta `PLAYOUT_CATCH_UP` (25 %)
+  más rápido hasta volver a su hora; más de `PLAYOUT_MAX_LAG_MS` (500) atrasado, salta
+  deslizándose. `Playout` es un colchón de jitter: retraso = la llegada más tardía de los
+  últimos `PLAYOUT_WINDOW_MS` (2 s, en 8 baldes fijos), pero no más de
+  `PLAYOUT_MAX_JITTER_MS` (200) sobre la más temprana, + `PLAYOUT_MARGIN_MS` (40). Una
+  llegada más tardía lo sube de golpe; cuando la ventana la olvida, baja a
+  `PLAYOUT_FALL` (100 ms/s), y la cadena con alcance hace que esa bajada no se vea. Un
+  batch más tarde que el retraso arranca al llegar (la única pausa que queda) y ninguno
+  espera más de 240 ms tras llegar: un corte de la red cuesta una pausa, no un atraso
+  que dura. Antes la envolvente olvidaba a 5 ms/s y un corte de 1 s dejaba el mundo
+  dibujado ~1 s tarde durante minutos (con `c.pos`, los clicks y los efectos a tiempo).
+- **Correcciones**: `CreatureState.slide` (`slideBetween`/`slideLeft`) desliza en
+  `SLIDE_MS` (160 ms, ease-out) cualquier salto del dibujo de hasta `SLIDE_MAX_TILES` (3);
+  más es un teletransporte y salta. Las del propio jugador (`WalkRejected`,
+  `expirePredicted`, `ownStep`) llegan hasta `ownSlideMaxTiles` (`max_queued_steps` + 1,
+  5 con 4): con 4 pasos predichos el dibujo puede ir casi 4 casillas adelante del
+  servidor, y eso también se desliza.
+- **Dibujo**: `drawPos` usa `activeWalk` (el paso que se dibuja ahora: el último o los de
+  antes mientras duren) más lo que queda del deslizamiento; `facing` es la dirección de
+  ese paso mientras camina; `stepProgress` es `undefined` antes de empezar (parado). La
+  cámara (`followCamera`) y las criaturas (`devicePixels`) se fijan a píxeles de
+  pantalla, no de sprite: el mapa se mueve de a 1 px y la criatura seguida queda quieta
+  en pantalla; los sprites siguen enteros (escala entera, desplazamientos enteros). Una
+  criatura sin frames de caminar (sin outfit) sube 1 px en la mitad central de cada paso
+  (`walkBob`).
+- **Teclado**: dos teclas perpendiculares a la vez dan la diagonal (`MovementKeys.take`
+  con `combine`), también un toque perpendicular con otra tecla mantenida. Falta que el
+  dueño decida si un cambio de dirección con las teclas solapadas debe dar ese paso
+  diagonal (docs/14).
+- **Tests**: `state/motion.test.ts` (puros), `state/world.test.ts` y
+  `state/walking.test.ts`: este último simula cliente (el `WorldState` real y el `frame`
+  de `game.ts`), un observador y las reglas de la cola del servidor sobre enlaces de 2 a
+  300 ms con jitter, a 60, 144 y 40 fps, y exige cero frames quietos con tecla mantenida,
+  camino por click y para el observador, cero huecos en el servidor y un rechazo sin
+  saltos; además un click y después una flecha (cada `Walk` respondido por su paso),
+  `Walk` perdidos y un corte de 1 s de la red del observador (sin atraso que dure). Si
+  cambias tiempos de `motion.ts`, córrelo. E2E `e2e/movement.spec.ts`: mantiene una
+  flecha 2 s (4 o 5 pasos; como mucho los que entran en el tiempo medido) sobre una recta
+  libre y lee `__rpgClient.trail(ms)` (el `drawPos` del modelo en cada `frame`,
+  `MotionTrail`, un anillo fijo): ningún frame quieto ni hacia atrás (screenshot
+  `96-movement-held-key`, sacado al soltar la tecla). Mide el modelo, no el sprite ni la
+  cámara en pantalla: su redondeo a píxeles de pantalla lo cubre `render/viewport.test.ts`.
 
 ## Notas de T5.7
 - `CreatureState.cosmetics` (de `Creature.cosmetics` y `CreatureCosmetics`, con `""` = el
@@ -603,8 +776,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (`nameStyleFor`, se mezcla en el `TextStyle`). `outfitReady` se calcula y guarda por
   atuendo: uno sin arte real cae a citizen y después al bloque. Cuando cambia el `lookKey`
   de un jugador, se tiran sus sprites y se arman de nuevo.
-- Panel `ui/Appearance.tsx`, sin hooks (`ui/Appearance.test.ts` recorre su árbol). Va en la
-  columna lateral y es una pestaña más (`appearance` en `PANEL_TABS`). Muestra por tipo lo
+- Panel `ui/Appearance.tsx`, sin hooks (`ui/Appearance.test.ts` recorre su árbol). Es la
+  ventana Apariencia de la botonera en escritorio y una pestaña más en teléfonos
+  (`appearance` en `PANEL_TABS`). Muestra por tipo lo
   que la cuenta tiene, con la opción por defecto primero (manda `UnequipCosmetic`) y
   botones de 44 px con `aria-pressed`; tocar lo que ya se lleva no manda nada.
   El enlace a `/shop` se abre en otra pestaña; en la app de escritorio se muestra la
@@ -631,7 +805,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 ## Notas de portales (escaleras, agujeros, sogas, teletransportes)
 - El servidor mueve al jugador (`02-game-design.md` "Cambiar de piso"); el cliente solo ve
   un teletransporte: `CreatureMove` del paso y `FullMapView` del piso nuevo, que reemplaza
-  todo (también el paso predicho). No hay estado propio de portales.
+  todo (también los pasos predichos, y trae la época de caminata nueva). No hay estado
+  propio de portales; solo `canStep` no predice más allá de un paso sobre una escalera,
+  un agujero o un teletransporte (`movesOnStep`).
 - `content.portals` (de `world/islands/<id>/portals.yaml` de las islas de `world.yaml`,
   `vite/content.ts` `loadPortals`; un archivo que no se puede leer corta el build):
   casilla de entrada `"x,y,z"` → `kind`. `state/portals.ts` (puro, con tests):
@@ -704,3 +880,134 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `id`...). "Dejar la casa" pide confirmación con un `<details>` (sin hooks). La cantidad
   de la tienda se limita y se muestra con `shopCount` (`ui/Dialog.tsx`).
 - E2E: el segundo test de `e2e/sandbox.spec.ts` (screenshots 94 y 95).
+
+## Notas de la UI oscura (docs/17, A2 y A3)
+- **Fuentes OFL** (UI-3): Cinzel (títulos), Grenze Gotisch (logo, subida de nivel, muerte),
+  Alegreya Sans (interfaz) y Alegreya (lo que dicen los NPCs, ayuda). Los `.ttf` de
+  google/fonts están tal cual en `assets/vendor/font-*/` (`CREDITS.md`); `vite/fonts.ts`
+  (tabla `FONTS`) los recorta al latín del juego, los sirve como woff2 en `/fonts/` y los
+  emite en el build; `ui/fonts.css` tiene un `@font-face` por fila (`vite/fonts.test.ts`
+  compara los dos). Nada se baja de la red: la CSP de escritorio es `font-src 'self'`.
+- **Tokens** (UI-2) en `:root` de `client.css` (`--ui-*`; `--bg`, `--panel`, `--text`,
+  `--muted`, `--accent` y `--error` quedan como alias para el sitio). El marco de hierro
+  (`--ui-frame-shadow`) y la veta de piedra (`--ui-grain`, SVG en línea) los comparten
+  todas las ventanas: la lista de selectores de "Frames" en `client.css`. Una ventana nueva
+  se suma ahí. No uses colores sueltos: usa un token.
+- **Escritorio** (`layout.panel === "sidebar"`, `.game[data-ui="windows"]`, `windows.css`):
+  sin encabezado. `ui/GameView.tsx` dibuja el mapa y a su derecha el dock (`aside.side`,
+  `#side-panel`, ancho `--dock-w`: el más angosto que deja a las 15x11 clásicas su
+  próxima escala entera, 2x a 1280 px y 3x a 1920x1080; con la ventana de 31x21 la vista
+  ajustada a 1920x1080 es 2x con 24x16, ver "Zoom del mapa") con:
+  - `ui/Vitals.tsx`: orbes de vida y maná (se llenan con `transform`, el "fantasma" marca
+    lo perdido, laten bajo el 25 %; `orbFill`/`lowHealth` puros), nombre, nivel, barra de
+    experiencia y condiciones. Los test ids `health`, `mana`, `level`, `experience` y
+    `conditions` siguen ahí con los mismos textos;
+  - `ui/Toolbar.tsx`: botones con íconos propios (`ui/icons.tsx`, pixel art de 16x16 como
+    texto, 1x en el dock angosto y 2x desde 1344 px) que abren y cierran las ventanas, el
+    mercado (solo lo cierra: se abre desde un tablero) y "Salir del juego";
+  - las ventanas acopladas (`.dock-stack`, se desplaza si no entran) y el chat con el log
+    como segunda pestaña (`ChatBox`; mientras el log no se ve, todos los avisos flotan sobre
+    el mapa, no solo los importantes).
+- **Ventanas** (UI-5): `ui/windows.ts` (puro, con tests) guarda cuáles están abiertas,
+  acopladas o flotando, dónde, plegadas y en qué orden; se recuerda por dispositivo en
+  `localStorage` `rpg.windows` (si no se puede leer, vuelven las de fábrica: batalla e
+  inventario acopladas). `ui/GameWindow.tsx` es el marco (barra con ícono, título, plegar
+  y cerrar; `role="dialog"` flotando, `region` acoplada). Se arrastran por la barra: una
+  flotante sigue al puntero, una acoplada deja un fantasma; soltada sobre el dock se acopla
+  antes de la ventana bajo el puntero. Doble click en la barra la pliega. Cierran con un
+  fundido de 100 ms (`CLOSE_MS`, `[data-closing]`). Teclas (`WINDOW_KEYS`, solo fuera de
+  un campo de texto y después del listener del `Game`): I inventario, K habilidades,
+  B batalla, P grupo, G gremio, O apariencia, H ayuda, M cierra el mercado; Escape cierra
+  la flotante de arriba o, si no hay, abre Opciones. Un resaltado del tutorial abre su
+  ventana (`windowForHighlight`). Las ventanas del servidor (diálogo, tienda, crafteo,
+  mercado, casa, intercambio) siguen donde estaban, con el mismo marco.
+- **Gremio** (UI-7): ventana propia con pestañas Resumen, Miembros y Guerras
+  (`GuildPanel` con `tab`; sin `tab` muestra todo, como en la pestaña de los teléfonos).
+  Sigue sin hooks y `ui/Guild.test.ts` recorre las pestañas.
+- **Opciones**: Sonido (`SoundOptions` de `ui/AudioOptions.tsx`; la esquina del login y el
+  menú ☰ siguen con `AudioOptions`), Controles (pad), Interfaz (idioma, "Animaciones
+  reducidas" y "Restablecer ventanas"). `main.tsx` arma esas piezas (`GameSettings`).
+- **Animaciones** (UI-9): solo `transform` y `opacity`, ≤ 240 ms salvo los bucles (ola de
+  los orbes, latido). `prefers-reduced-motion` o la opción (`state/ui-prefs.ts`,
+  `localStorage` `rpg.motion`, `data-motion="reduced"` en `<html>`) las cortan con una
+  regla global al final de `windows.css`; el viaje en barco conserva su fundido.
+- **Teléfonos y tablets**: el encabezado compacto, las pestañas y el cajón de T5.6 con el
+  tema nuevo. La hotbar solo lleva su correa en escritorio: en el teléfono con pad cada
+  píxel cuenta para sus 4 slots (`Hotbar` resta el padding y el borde de la barra).
+- **Vista previa sin servidor**: `make ui-preview [ONLY=<escena>]` (`e2e/ui-preview.ts`)
+  construye `preview/index.html` (`src/preview/`, solo con `RPG_UI_PREVIEW=1`: nunca va
+  al build normal), dibuja un pedazo de Puerto con `mapcli render` en lugar del canvas
+  (las 33x23 casillas de la ventana con su margen, del tamaño del canvas en la vista
+  ajustada: `zoomRange`, `viewPixels` y `mapLift`, como `render/game-canvas.ts`) y
+  saca screenshots de cada escena (game, windows, options, dialog, danger, death, login,
+  characters) a 1920x1080, 1280x800, 1280x720, 960x700, teléfono vertical y horizontal y
+  tablet, en `e2e/screenshots/actual/ui-preview/`. Playwright contesta cada pedido desde el
+  build: no levanta servidores. Los estados están en `src/preview/fixtures.ts`.
+- **E2E**: `e2e/windows.ts` (`openWindow`, `closeWindow`) abre las ventanas desde la
+  botonera. Test ids nuevos: `toolbar`, `toolbar-<id>` (`options-button` para Opciones,
+  `toolbar-market`, `logout`), `window-<id>` (`options` para Opciones),
+  `window-close-<id>`, `window-fold-<id>`, `[data-window-button]`, `[data-chat-tab]`,
+  `[data-guild-tab]`, `reduced-motion`, `windows-reset`; la ayuda es `controls-help`.
+  El mapa empieza en la esquina de arriba a la izquierda de la página: un click en (1, 1)
+  camina hacia esa casilla. Para que las teclas vayan al juego, `keysToGame`
+  (`e2e/game.spec.ts`) le quita el foco al campo de texto, sin clicks. El dock angosto
+  dice "Perseguir"; la casilla conserva su nombre entero (`aria-label`, "Perseguir al
+  objetivo"). `.viewport` lleva `min-width: 0`: con `overflow: clip` (que no es un
+  contenedor de scroll) el canvas fijaba su ancho mínimo y, al achicar la ventana, el mapa
+  empujaba el dock fuera de la pantalla.
+
+## Notas de A4 y A5 (docs/17 UI-6, UI-7 y UI-8)
+- **Controles** (`state/controls.ts`, `localStorage` `rpg.controls`, `menu` por defecto o
+  `classic`): Opciones → Controles (`ui/ControlsOptions.tsx`, `data-testid="controls-mode"`,
+  radios `[data-controls=…]`). `main.tsx` guarda la elección y la pasa por
+  `GameSettings.controlsMode`; `App.tsx` se la da al `Game` como `GameOptions.controls()`
+  (la lee en cada click). Las reglas son puras en `input/mouse.ts`: `mapPress` (con el modo
+  como quinto argumento: `menu` en una casilla sin criatura, Mayús+derecho siempre menú,
+  Ctrl+derecho usa) e `itemContext` (el click derecho en un item del DOM). La criatura
+  sigue con un click derecho: ataca o habla.
+- **Menú del item** (`ui/ActionMenu.tsx`, el del toque largo): `ActionMenuView` suma
+  `card` (la ficha), `mouse` (abierto con el mouse: `mousePlacement`, en el cursor, botones
+  de 30 px, `data-pointer="mouse"`) y `stack` (para "Mover parte…"). Las acciones van
+  arriba (la primera con la clase `default`), la ficha debajo y el alto nunca pasa el borde
+  del área segura (se desplaza adentro). Acciones nuevas (`input/actions.ts`): `use_with`,
+  `eat`, `equip` (`equipSlot` de `state/item-card.ts`; `MoveItem` al slot) y `split`
+  (un `<details>` con un campo: `Game.menuSplit` elige la parte con `ItemPicker`).
+  `ItemFacts.fixed` (`pickupable: false`) quita Mover. "Mover" y "Mover parte…" funcionan
+  con el mouse: el siguiente click en una casilla (`clickTile` mira `picker.picked`), un
+  slot o una celda deja el item.
+- **Doble click**: en un item del DOM, `Game.itemDefault` (la primera acción); en el mapa
+  (solo modo `menu`), el `dblclick` del canvas va a `Game.doubleClickTile`: manda
+  `StopWalk` si el primer click mandó un `WalkPath` hace menos de `DOUBLE_CLICK_STOP_MS`
+  y hace lo del click derecho clásico. Un toque de dedo reciente lo ignora.
+- **Ficha** (`state/item-card.ts` `itemCard`, puro, y `ui/ItemCard.tsx`, sin hooks): los
+  datos salen de `ItemDef` (`vite/content.ts` `cardFields`: `kind`, `weight`, `weapon`,
+  `ammo`, `armor`, `shield`, `consumable`, `rune`, `requires`, `fixed`; opcionales).
+  Quién mira (nivel, vocación, nivel mágico) decide si un requisito está en rojo
+  (`GameUi.vocation`). `BigIcon` dibuja un ícono del atlas a 2x (`.big-icon`).
+- **Tooltip** (`ui/ItemTooltip.tsx`, montado en `GameView` junto al menú): delegación en
+  `document` sobre `[data-tip-item]` (+ `data-tip-count`), 350 ms de mouse, o foco del
+  teclado con `:focus-visible`. Los items del inventario tienen `tabIndex=0`: Enter =
+  acción por defecto, tecla de menú o Mayús+F10 = menú. Test id `item-tooltip`.
+- **Diálogo** (`ui/Dialog.tsx`): `DialogView` y `ShopView` son funciones sin hooks
+  (`ui/Dialog.test.ts`); `DialogBox` (el filtro) y `ShopWindow` (pestaña, filtro,
+  búsqueda, página, elegido, cantidad, columnas medidas con `ResizeObserver`) tienen el
+  estado. `.npc-windows` va de lado a lado sobre el mapa, abajo al centro; con la tienda,
+  `data-shop` pone la tienda a la izquierda y el diálogo en una columna. Los temas vienen de
+  `content.dialogTopics` (por NPC, `vite/content.ts` `dialogTopics`, `tag` del YAML) y
+  `state/dialog.ts` arma la grilla. El retrato del NPC cabe en 64 px (`BigIcon` con `fit`,
+  `PORTRAIT_PX`): un sprite de 32 px a 2x y un personaje de LPC de 64 px a 1x (a 2x medía
+  128 px y el diálogo no entraba en un teléfono horizontal). Test ids: `dialog-filter`, `dialog-bye`,
+  `[data-topic]`, `shop-search`, `[data-filter]`, `[data-shop-tab]`, `shop-grid`,
+  `shop-prev`/`shop-next`, `shop-bar`, `shop-count`, `shop-minus`/`shop-plus`/`shop-max`,
+  `shop-total`, `shop-act`. Las reglas de la tienda son puras en `state/shop.ts`
+  (`shopLines`, `shopFilters`, `filterShop`, `shopPage`, `shopMax`, `shopCount`,
+  `shopGrid`).
+- **Gremio** (`ui/Guild.tsx`, sigue sin hooks): `GUILD_TABS` = summary, members, ranks,
+  invite, wars, motd, cada botón con su ícono (`ui/icons.tsx`: `ranks`, `invite`, `motd`
+  nuevos); las acciones sobre un miembro bajo un `<details class="member-menu">` "⋯". Test
+  ids nuevos: `guild-summary`, `guild-ranks` (`[data-rank]`), `guild-motd-form`.
+- **Vista previa:** escenas `shop`, `dialog18`, `itemmenu`, `tooltip` y `guild` en
+  `make ui-preview` (`src/preview/fixtures.ts`).
+- **E2E:** `useAt` (Ctrl+click derecho) en `e2e/game.spec.ts` para usar algo del mapa; la
+  mochila y el fogón pasan por el menú, el pico y las mochilas del intercambio por el doble
+  click. Screenshots nuevos: `09a-item-menu`, `09b-item-tooltip` y `14b-shop-sell`.
