@@ -40,6 +40,16 @@ const self = (page: Page): Promise<Self | undefined> =>
  * expect.poll's default 5 s on a slow CI runner, so allow a generous timeout: it still
  * fails if the creature never gets there.
  */
+/**
+ * Uses the map tile at client point (x, y) at once: Ctrl+right click (docs/17 UI-6). A plain
+ * right click on a tile without a creature opens its menu with the item's card.
+ */
+async function useAt(page: Page, x: number, y: number): Promise<void> {
+  await page.keyboard.down("Control");
+  await page.mouse.click(x, y, { button: "right" });
+  await page.keyboard.up("Control");
+}
+
 async function arrived(page: Page, x: number, y: number): Promise<void> {
   await expect
     .poll(
@@ -161,12 +171,30 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   expect({ x: x - start.x, y: y - start.y }).toEqual({ x: 4, y: 1 });
   await shot(page, "06-walked-click");
 
-  // Inventory (T1.8): a new character starts with an equipped backpack. Right click opens
-  // it, shift+click looks at it, and it can be dragged onto the map and back.
+  // Inventory (T1.8): a new character starts with an equipped backpack. A right click
+  // opens its menu with its card (docs/17 UI-6) and "Abrir" (the default action, in bold)
+  // opens it; shift+click looks at it, and it can be dragged onto the map and back.
   const inventory = page.getByTestId("inventory");
   const backpackSlot = inventory.getByTestId("slot-backpack");
   await expect(backpackSlot.locator("[data-item=backpack]")).toBeVisible();
   await backpackSlot.locator("[data-item]").click({ button: "right" });
+  const itemMenu = page.getByTestId("action-menu");
+  await expect(itemMenu).toBeVisible();
+  await expect(itemMenu.getByTestId("item-card")).toContainText("Contenedor");
+  await expect(itemMenu.getByTestId("item-card")).toContainText("Lugares");
+  await expect(itemMenu.locator('[data-action="open"]')).toHaveClass(/default/);
+  await shot(page, "09a-item-menu");
+  await itemMenu.locator('[data-action="open"]').click();
+  await expect(itemMenu).toBeHidden();
+  // The same card shows under a resting mouse (350 ms), and goes when it leaves.
+  await page.mouse.move(1, 1);
+  await backpackSlot.locator("[data-item]").hover();
+  const tooltip = page.getByTestId("item-tooltip");
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("mochila");
+  await shot(page, "09b-item-tooltip");
+  await page.mouse.move(1, 1);
+  await expect(tooltip).toBeHidden();
   const backpackWindow = inventory.locator('[data-container-item="backpack"]');
   await expect(backpackWindow).toBeVisible();
   await expect(backpackWindow.locator(".slot")).toHaveCount(24);
@@ -765,8 +793,12 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
   await expect(shop.locator('[data-item="rope"]')).toContainText("45");
   await page.waitForTimeout(300); // let the icons load before the screenshot
   await shot(page, "14-shop");
+  // No scroll bar: the grid pages instead (docs/17 UI-8).
+  expect(await shop.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
   await shop.getByRole("tab", { name: "Vender" }).click();
-  await expect(shop.locator('[data-item="wolf_pelt"]')).toContainText("Tienes 0");
+  await shop.getByTestId("shop-search").fill("piel de lobo");
+  await expect(shop.locator('[data-item="wolf_pelt"]')).toContainText("×0");
+  await shot(page, "14b-shop-sell");
 
   // Walking away (keyboard: the windows cover part of the map) closes both windows.
   await page.locator("body").click({ position: { x: 1, y: 1 } });
@@ -989,7 +1021,8 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
     .toBe("there");
   let p: { x: number; y: number };
 
-  // Right click on the pickaxe picks "use with"; the next click on the map uses it there.
+  // A double click on the pickaxe does its default action, "use with" (docs/17 UI-6); the
+  // next click on the map uses it there.
   // A vein is spent after 4 good swings and grows back 5 minutes after its last one
   // (data/items/decoration.yaml). The world is shared by the suite and by --repeat-each,
   // so earlier miners may have spent the first vein: swinging at it again only answers
@@ -1001,7 +1034,7 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
   const log = page.getByTestId("game-log");
   let vein = 0;
   for (let i = 0; i < 16; i++) {
-    await pickaxe.click({ button: "right" });
+    await pickaxe.dblclick();
     await expect(page.locator("body")).toHaveClass(/using-item/);
     const v = veins[vein];
     if (!v) throw new Error("no vein");
@@ -1496,10 +1529,16 @@ test("T3.4: cook a fish at the hearth of Farol from the station window", async (
   errors.length = 0;
   await arrived(page, 3172, 6367);
 
-  // Right click on the hearth opens its recipes.
+  // A right click on the hearth opens its menu (docs/17 UI-6) with its card; "Usar",
+  // first and in bold, opens its recipes.
   const hearth = await page.evaluate(() => window.__rpgClient?.tileToClient(3172, 6366));
   if (!hearth) throw new Error("no canvas");
   await page.mouse.click(hearth.x, hearth.y, { button: "right" });
+  const hearthMenu = page.getByTestId("action-menu");
+  await expect(hearthMenu.locator('[data-action="use"]')).toHaveClass(/default/);
+  await expect(hearthMenu.getByTestId("item-card")).toBeVisible();
+  await expect(hearthMenu.locator('[data-action="move"]')).toHaveCount(0); // a fixture
+  await hearthMenu.locator('[data-action="use"]').click();
   const win = page.getByTestId("crafting");
   await expect(win).toBeVisible();
   await expect(win.locator("h2")).toHaveText("fogón");
@@ -2073,8 +2112,8 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
   await expect(panel.locator("h2")).toContainText(guildName);
   await expect(panel.locator("h2")).toContainText("Líder");
 
-  // Invite the mate by name (the members tab); the invitation shows over the mate's map.
-  await panel.locator('[data-guild-tab="members"]').click();
+  // Invite the mate by name (the Invite button); the invitation shows over the mate's map.
+  await panel.locator('[data-guild-tab="invite"]').click();
   await panel.getByLabel("Nombre del personaje").fill(mate.name);
   await panel.getByRole("button", { name: "Invitar" }).click();
   await expect(lead.getByTestId("game-log")).toContainText(`Invitaste a ${mate.name} a tu gremio.`);
@@ -2091,10 +2130,12 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
     await expect(p.locator("li[data-member]")).toHaveCount(2);
     await expect(p).toContainText("Miembros (2 en línea de 2)");
   }
-  // Leaving and the message of the day are on the summary tab.
+  // Leaving is on the summary; the message of the day has its own button.
   await mateP.getByTestId("guild-panel").locator('[data-guild-tab="summary"]').click();
   await expect(mateP.getByTestId("guild-leave")).toBeVisible();
-  await panel.locator('[data-guild-tab="summary"]').click();
+  await panel.locator('[data-guild-tab="ranks"]').click();
+  await expect(panel.getByTestId("guild-ranks")).toContainText(mate.name);
+  await panel.locator('[data-guild-tab="motd"]').click();
   await panel.getByPlaceholder("Mensaje del día").fill("Cacería al amanecer");
   await panel.getByRole("button", { name: "Cambiar" }).click();
   await expect(mateP.getByTestId("guild-motd")).toHaveText("Cacería al amanecer");
@@ -2286,7 +2327,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   await arrived(b, 3167, 6383);
   for (const page of [a, b]) {
     const slot = page.getByTestId("inventory").getByTestId("slot-backpack");
-    await slot.locator("[data-item]").click({ button: "right" });
+    await slot.locator("[data-item]").dblclick();
     await expect(
       page.getByTestId("inventory").locator('[data-container-item="backpack"]'),
     ).toBeVisible();
@@ -2315,7 +2356,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   // Market: the seller (now with the coins) opens the board and browses the fish first.
   const boardA = await a.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
   if (!boardA) throw new Error("no canvas");
-  await a.mouse.click(boardA.x, boardA.y, { button: "right" });
+  await useAt(a, boardA.x, boardA.y);
   const ma = a.getByTestId("market");
   await ma.getByTestId("market-search").getByRole("combobox").fill("pescado crudo");
   await ma.getByTestId("market-search").getByRole("button", { name: "Buscar" }).click();
@@ -2324,7 +2365,7 @@ test("T5.3: two players trade, one posts a market offer, the other buys it, the 
   // The buyer (now with the fish) uses the board and posts 8 fish at 6 coins.
   const board = await b.evaluate(() => window.__rpgClient?.tileToClient(3168, 6382));
   if (!board) throw new Error("no canvas");
-  await b.mouse.click(board.x, board.y, { button: "right" });
+  await useAt(b, board.x, board.y);
   const mb = b.getByTestId("market");
   await expect(mb).toBeVisible();
   await mb.getByTestId("market-search").getByRole("combobox").fill("pescado crudo");
@@ -2468,7 +2509,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   const openDoor = async (page: Page): Promise<void> => {
     const door = await page.evaluate(() => window.__rpgClient?.tileToClient(3153, 6401));
     if (!door) throw new Error("no canvas");
-    await page.mouse.click(door.x, door.y, { button: "right" });
+    await useAt(page, door.x, door.y);
     await expect(page.getByTestId("house")).toBeVisible();
   };
 
@@ -2737,7 +2778,7 @@ test("keyed doors: the forge gate opens with the ember key, does not lock on a s
   const useGate = async (page: Page): Promise<void> => {
     const gate = await page.evaluate(() => window.__rpgClient?.tileToClient(3692, 5832));
     if (!gate) throw new Error("no canvas");
-    await page.mouse.click(gate.x, gate.y, { button: "right" });
+    await useAt(page, gate.x, gate.y);
   };
   const walkTo = async (page: Page, x: number, y: number): Promise<void> => {
     const tile = await page.evaluate(({ tx, ty }) => window.__rpgClient?.tileToClient(tx, ty), {

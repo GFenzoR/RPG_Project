@@ -14,6 +14,7 @@ import type { ClientContent } from "../content-types.ts";
 import type { GameUi } from "../game.ts";
 import type { CreatureState, ItemView } from "../state/world.ts";
 import { emptyGameUi } from "../ui/GameView.tsx";
+import { itemCard } from "../state/item-card.ts";
 
 /** Numeric id of an item by its content id (0 when the item is gone from data/). */
 export function itemNumber(content: ClientContent, id: string): number {
@@ -281,4 +282,84 @@ export function withDeath(s: Scene, now: number): Scene {
   if (ui.stats) ui.stats = { ...ui.stats, health: 0 };
   ui.death = { experience: 4120, blessings: 0, at: now };
   return { ui, name: "death" };
+}
+
+/** The armorer's shop with many items (docs/17 UI-8: categories, a second page). */
+export function withShop(content: ClientContent, s: Scene): Scene {
+  const ui = { ...s.ui };
+  const kinds = new Set(["weapon", "armor", "shield", "ammo", "tool", "consumable", "rune"]);
+  const ids = Object.entries(content.items)
+    .filter(([, d]) => kinds.has(d.kind ?? "") && d.sprite !== "")
+    .slice(0, 30)
+    .map(([n]) => Number(n));
+  ui.dialog = {
+    id: 8,
+    npcId: 51,
+    npcContentId: "puerto_armorer",
+    text: "npc.puerto_armorer.greet",
+    options: [
+      { id: 1, text: "dialog.trade", params: [] },
+      { id: 2, text: "npc.puerto_armorer.opt_advice", params: [] },
+      { id: 3, text: "npc.puerto_armorer.opt_salvage", params: [] },
+      { id: 4, text: "dialog.bye", params: [] },
+    ],
+  };
+  ui.shop = {
+    dialogId: 8,
+    npcId: 51,
+    money: 310,
+    lines: ids.map((itemId, i) => ({
+      itemId,
+      buyPrice: 10 + ((i * 37) % 400),
+      sellPrice: 3 + ((i * 13) % 120),
+      owned: i % 4 === 0 ? 2 : 0,
+    })),
+  };
+  return { ui, name: "shop" };
+}
+
+/** A dialog with 18 options (docs/17 UI-8: they fit without scrolling at 1280x720). */
+export function withManyOptions(content: ClientContent, s: Scene): Scene {
+  const ui = { ...s.ui };
+  const texts = Object.keys(content.i18n["es"] ?? {}).filter((k) => /^npc\.[a-z_]+\.opt_/.test(k));
+  const own = texts.filter((k) => k.startsWith("npc.harbor_master."));
+  const other = texts.filter((k) => !k.startsWith("npc.harbor_master."));
+  const options = [...own, "dialog.ask_travel", ...other]
+    .slice(0, 16)
+    .map((text, i) => ({ id: i + 1, text, params: [] }));
+  options.push(
+    { id: 17, text: "dialog.back", params: [] },
+    { id: 18, text: "dialog.bye", params: [] },
+  );
+  ui.dialog = {
+    id: 9,
+    npcId: 52,
+    npcContentId: "harbor_master",
+    text: "npc.harbor_master.greet",
+    options,
+  };
+  return { ui, name: "dialog18" };
+}
+
+/** The right-click menu of a sword in the backpack, with its card (docs/17 UI-6). */
+export function withItemMenu(
+  content: ClientContent,
+  s: Scene,
+  name: (id: string) => string,
+  at: { x: number; y: number },
+): Scene {
+  const id = itemNumber(content, "boarding_saber");
+  const card = itemCard(content.items[id], id, 1, { level: 9, vocation: "guardian" });
+  const ui: GameUi = {
+    ...s.ui,
+    menu: {
+      ...at,
+      title: name("boarding_saber"),
+      actions: ["equip", "look", "move"],
+      card,
+      mouse: true,
+      stack: 1,
+    },
+  };
+  return { ui, name: "itemmenu" };
 }

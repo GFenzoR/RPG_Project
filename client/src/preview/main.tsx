@@ -3,7 +3,7 @@
 // server, Postgres or a character (docs/08). Only built with RPG_UI_PREVIEW=1
 // (vite.config.ts): it never ships.
 //
-//   /preview/?scene=game|windows|dialog|danger|death|login|characters&lang=es|en
+//   /preview/?scene=game|windows|dialog|shop|dialog18|itemmenu|danger|death|login|characters&lang=es|en
 //
 // The windows' state comes from localStorage (rpg.windows), as in the game: the screenshot
 // script (e2e/ui-preview.ts) writes it for each scene.
@@ -28,7 +28,15 @@ import { loadIcons } from "../site/shop.ts";
 import type { SpriteIcon } from "../site/shop.ts";
 import type { Game } from "../game.ts";
 import type { ItemDef } from "../content-types.ts";
-import { baseScene, withDanger, withDeath, withDialog } from "./fixtures.ts";
+import {
+  baseScene,
+  withDanger,
+  withDeath,
+  withDialog,
+  withItemMenu,
+  withManyOptions,
+  withShop,
+} from "./fixtures.ts";
 import "../ui/client.css";
 
 const params = new URLSearchParams(location.search);
@@ -45,6 +53,8 @@ function stubGame(icons: Map<string, SpriteIcon>): Game {
       return sprite ? icons.get(sprite) : undefined;
     },
     markIcon: () => undefined,
+    spriteIcon: (path: string) => icons.get(path),
+    menuPressed: false,
     spellCooldown: (id: string) => (id === content.spells[1]?.id ? 0.6 : 0),
   };
   return new Proxy({} as Game, {
@@ -107,6 +117,13 @@ function Preview(props: { game: Game }): JSX.Element {
   const now = performance.now();
   let s = baseScene(content, now);
   if (scene === "dialog") s = withDialog(content, s);
+  if (scene === "shop") s = withShop(content, s);
+  if (scene === "dialog18") s = withManyOptions(content, s);
+  if (scene === "itemmenu")
+    s = withItemMenu(content, s, (id) => t(`item.${id}.name`), {
+      x: Math.round(window.innerWidth * 0.45),
+      y: Math.round(window.innerHeight * 0.3),
+    });
   if (scene === "danger") s = withDanger(s, now);
   if (scene === "death") s = withDeath(s, now);
   const settings: GameSettings = {
@@ -148,7 +165,10 @@ if (root) {
     render(<App content={content} t={t} locale={lang} />, root);
   } else {
     const defs: ItemDef[] = Object.values(content.items);
-    const names = defs.flatMap((d) => (d.sprite ? [d.sprite] : []));
+    const names: string[] = [
+      ...defs.flatMap((d) => (d.sprite ? [d.sprite] : [])),
+      ...Object.values<string>(content.npcSprites ?? {}),
+    ];
     loadIcons(names, { base: new URL("/atlas/", location.href).href }).then(
       (icons) => render(<Preview game={stubGame(icons)} />, root),
       () => render(<Preview game={stubGame(new Map())} />, root),

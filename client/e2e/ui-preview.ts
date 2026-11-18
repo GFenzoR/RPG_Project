@@ -110,6 +110,25 @@ const WINDOWS: Record<string, unknown> = {
       guild: { open: true, dock: false, collapsed: false },
     },
   },
+  guild: {
+    v: 1,
+    order: ["battle", "inventory", "skills", "party"],
+    z: ["guild"],
+    win: {
+      battle: { open: true, dock: true, collapsed: false },
+      inventory: { open: true, dock: true, collapsed: false },
+      guild: { open: true, dock: false, collapsed: false, x: 40, y: 40 },
+    },
+  },
+  tooltip: {
+    v: 1,
+    order: ["inventory", "battle", "skills", "party"],
+    z: [],
+    win: {
+      inventory: { open: true, dock: true, collapsed: false },
+      battle: { open: true, dock: true, collapsed: true },
+    },
+  },
   options: {
     v: 1,
     order: ["battle", "inventory", "skills", "party"],
@@ -120,7 +139,21 @@ const WINDOWS: Record<string, unknown> = {
     },
   },
 };
-const SCENES = ["game", "windows", "options", "dialog", "danger", "death", "login", "characters"];
+const SCENES = [
+  "game",
+  "windows",
+  "options",
+  "dialog",
+  "shop",
+  "dialog18",
+  "itemmenu",
+  "tooltip",
+  "guild",
+  "danger",
+  "death",
+  "login",
+  "characters",
+];
 
 mkdirSync(shots, { recursive: true });
 const browser = await chromium.launch();
@@ -158,12 +191,22 @@ try {
         localStorage.clear();
         if (w) localStorage.setItem("rpg.windows", JSON.stringify(w));
       }, windows ?? null);
-      const sceneParam = scene === "windows" || scene === "options" ? "game" : scene;
+      const sceneParam = ["windows", "options", "tooltip", "guild"].includes(scene)
+        ? "game"
+        : scene;
       await page.goto(`http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}`);
       await page.waitForSelector(".game, .panel");
       await page.evaluate(() => document.fonts.ready);
       // Let the open animations end (and the icons arrive).
       await page.waitForTimeout(700);
+      if (scene === "tooltip") {
+        // docs/17 UI-6: the card of an item of the backpack, under a resting mouse.
+        const cell = page.locator("[data-tip-item]").nth(3);
+        if (await cell.isVisible()) {
+          await cell.hover();
+          await page.waitForTimeout(600);
+        }
+      }
       await page.screenshot({ path: join(shots, `${scene}-${size.name}.png`) });
       await context.close();
     }
