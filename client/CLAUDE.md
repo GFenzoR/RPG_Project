@@ -83,7 +83,7 @@ client/
     (MOV-7): cuando una criatura empieza un paso (`animateBody` ve cambiar
     `AnimState.walkStart`), la casilla que deja patea lo de su suelo (`steps` de
     `atlas.json` `tiles`, `stepKindOf`) a la altura de los pies: `ParticleLayer.kick`
-    (`dust`: 4 motas; `ripple`: un anillo de 8 gotas achatado). Las de ambiente dejan
+    (`dust`: 6 motas; `ripple`: un anillo de 8 gotas achatado). Las de ambiente dejan
     `STEP_RESERVE` (16) de las 100 libres para los pasos; los voladores no patean nada.
   - **Marco de puertas de casa:** `MapView` lee el mundo a través de un `DecoratedSource`
     (`packages/renderer`) que agrega `house_door_frame` en cada `content.houseDoors`; el

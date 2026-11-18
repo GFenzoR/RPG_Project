@@ -20,7 +20,7 @@ export const MAX_PARTICLES = 100;
 /** Room kept for the particles of steps (MOV-7): ambient ones stop short of it. */
 export const STEP_RESERVE = 16;
 /** MOV-7: particles a step kicks up. */
-export const STEP_PARTICLES: Readonly<Record<StepKind, number>> = { dust: 4, ripple: 8 };
+export const STEP_PARTICLES: Readonly<Record<StepKind, number>> = { dust: 6, ripple: 8 };
 
 /** Every kind the sim draws: the ambient ones of tile art, then the steps' puff and ripple. */
 export const SIM_KINDS = [...PARTICLE_KINDS, "puff", "ripple"] as const;
@@ -154,22 +154,23 @@ export const STYLES: Readonly<Record<SimKind, Style>> = {
   // MOV-7: a puff at the feet that rises a little and settles (about 3 frames, 200 ms).
   puff: {
     rate: 0,
-    lifeMs: 200,
+    lifeMs: 220,
     lifeSpreadMs: 120,
     x0: 0,
     xw: 0,
     y0: 0,
     yh: 0,
     vx: 0,
-    vxSpread: 14,
-    vy: -14,
-    vySpread: 6,
+    vxSpread: 18,
+    vy: -20,
+    vySpread: 8,
     gravity: 50,
     sway: 0,
-    alpha: 0.85,
+    alpha: 0.95,
     fadeInMs: 30,
     fadeOutMs: 150,
-    colors: [0xe4d8be, 0xcabda2, 0xaea287],
+    // Paler than the grounds it rises from (sand, dirt, ash), so it reads on them.
+    colors: [0xfbf6ea, 0xece2cc, 0xd6caae],
   },
   // MOV-7: a ring of drops spreading flat round the feet on wet ground.
   ripple: {
@@ -261,7 +262,7 @@ export class ParticleSim {
     for (let k = 0; k < n && this.count < MAX_PARTICLES; k++) {
       const i = this.count++;
       if (kind === "dust") {
-        this.x[i] = px + (r() * 2 - 1) * 4;
+        this.x[i] = px + (r() * 2 - 1) * 5;
         this.y[i] = py - r() * 2;
         this.vx[i] = (r() * 2 - 1) * s.vxSpread;
         this.vy[i] = s.vy + (r() * 2 - 1) * s.vySpread;

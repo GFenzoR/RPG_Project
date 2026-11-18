@@ -92,7 +92,7 @@ describe("ParticleSim", () => {
     expect(sim.count).toBe(STEP_PARTICLES.dust);
     for (let i = 0; i < sim.count; i++) {
       expect(SIM_KINDS[sim.kind[i] ?? 0]).toBe("puff");
-      expect(Math.abs((sim.x[i] ?? 0) - 100)).toBeLessThanOrEqual(4);
+      expect(Math.abs((sim.x[i] ?? 0) - 100)).toBeLessThanOrEqual(5);
       expect(sim.y[i]).toBeLessThanOrEqual(200);
       expect(sim.y[i]).toBeGreaterThanOrEqual(198);
       expect(sim.vy[i]).toBeLessThan(0); // it rises

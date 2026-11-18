@@ -1258,8 +1258,8 @@ protocolo no cambian.
   sección `tiles` de `assets/sprites.yaml` (`dust` o `ripple`), que spritepack lleva a
   `atlas.json`. Hoy: polvo en arena, tierra, ceniza y senda de escoria; ondas en la arena
   mojada (el agua baja no se camina). Cuando una criatura empieza un paso, la casilla que
-  deja patea lo suyo a la altura de los pies (`ParticleLayer.kick`): 4 motas de polvo que
-  suben un poco y se asientan (200–320 ms) o un anillo de 8 gotas que se abre achatado
+  deja patea lo suyo a la altura de los pies (`ParticleLayer.kick`): 6 motas de polvo que
+  suben un poco y se asientan (220–340 ms) o un anillo de 8 gotas que se abre achatado
   (380–460 ms). Usa el pool de A13: las partículas de ambiente dejan 16 de las 100 libres
   para los pasos (`STEP_RESERVE`). Los voladores no patean nada; con movimiento reducido,
   nada.
