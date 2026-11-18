@@ -64,7 +64,7 @@ import {
   pushFrom,
 } from "./creature-events.ts";
 import type { Fighter, LeaveStyle } from "./creature-events.ts";
-import { devicePixels, followCamera, mapLift } from "./viewport.ts";
+import { devicePixels, followCamera } from "./viewport.ts";
 import {
   WheelZoom,
   pinchZoom,
@@ -528,25 +528,21 @@ export async function createGameCanvas(
     const boxW = Math.max(0, host.clientWidth - px(style.paddingLeft) - px(style.paddingRight));
     const boxH = Math.max(0, host.clientHeight - px(style.paddingTop) - px(style.paddingBottom));
     sizedFor = world.view;
-    range = zoomRange(boxW, boxH, dpr, T, sizedFor);
+    // The full-screen desktop map covers its box (--map-cover: 1 in windows.css, docs/17
+    // UI-4); its box is the screen above the bottom bar (the viewport's bottom padding).
+    const cover = style.getPropertyValue("--map-cover").trim() === "1";
+    range = zoomRange(boxW, boxH, dpr, T, sizedFor, cover);
     scale = zoomScale(pref, range);
-    // A strip at the bottom of the box that the canvas keeps clear when it can: the desktop
-    // hotbar (--map-reserve-bottom in client.css, px). A click on the last row of tiles
-    // cast F1 at 1280x800. A window cut to the box leaves it out; the whole one moves up.
-    const reserve = px(style.getPropertyValue("--map-reserve-bottom"));
     const { width: w, height: h } = viewPixels(
       Math.floor(boxW * dpr),
       Math.floor(boxH * dpr),
       scale,
       T,
       sizedFor,
-      Math.ceil(reserve * dpr),
     );
     if (app.renderer.width !== w || app.renderer.height !== h) app.renderer.resize(w, h);
     canvas.style.width = `${w / dpr}px`;
     canvas.style.height = `${h / dpr}px`;
-    const lift = mapLift(boxH, h / dpr, reserve);
-    canvas.style.marginBottom = lift > 0 ? `${lift}px` : "";
     // The camera follows at once, not from the next frame: clicks and tileToClient read it
     // meanwhile. On creation this is what sets it before the game says it is ready: Pixi's
     // ticker skips a first frame whose time predates its start (a busy page), so the first

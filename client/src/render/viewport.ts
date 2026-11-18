@@ -62,17 +62,3 @@ export function followCamera(
 /** A position in tiles as sprite pixels (what Pixi takes), snapped to whole device pixels. */
 export const devicePixels = (v: number, tileSize: number, zoom: number): number =>
   Math.round(v * tileSize * zoom) / zoom;
-
-/**
- * Bottom margin of the canvas in a box `boxHeight` CSS px tall for a view `viewHeight`
- * tall, so a strip of `reserve` px at the bottom of the box (the desktop hotbar) covers
- * no map when the box has room for it, and as little as it can when not: the canvas,
- * centred, moves up (at most to the top). The whole window never shrinks for the strip;
- * a window cut to the box already leaves it out (render/zoom.ts viewPixels).
- */
-export function mapLift(boxHeight: number, viewHeight: number, reserve: number): number {
-  const free = boxHeight - viewHeight;
-  if (!(free > 0) || !(reserve > 0)) return 0;
-  // Centred with a bottom margin m, the gap under the canvas is (free + m) / 2.
-  return Math.min(free, Math.max(0, 2 * reserve - free));
-}

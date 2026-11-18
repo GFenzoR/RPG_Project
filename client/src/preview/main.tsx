@@ -24,7 +24,6 @@ import { defaultPrefs } from "../audio/prefs.ts";
 import type { AudioPrefs } from "../audio/prefs.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import { ControlsOptions } from "../ui/ControlsOptions.tsx";
-import { mapLift } from "../render/viewport.ts";
 import { viewPixels, zoomRange } from "../render/zoom.ts";
 import { loadIcons } from "../site/shop.ts";
 import type { SpriteIcon } from "../site/shop.ts";
@@ -98,8 +97,8 @@ const PICTURE = { width: PREVIEW_VIEW.width + 2, height: PREVIEW_VIEW.height + 2
 
 /**
  * The map picture where the canvas goes, as large as the canvas would be at the fitted
- * zoom (render/zoom.ts, the same math as render/game-canvas.ts) and centred on the
- * picture's middle tile. mapcli render draws rulers on the top and left of its PNG: ?mapx=
+ * zoom (render/zoom.ts, the same math as render/game-canvas.ts: the full-screen desktop
+ * map covers the screen above the bar) and centred on the picture's middle tile. mapcli render draws rulers on the top and left of its PNG: ?mapx=
  * and ?mapy= are their size, cut off.
  */
 function MapPicture(props: { host: { current: HTMLDivElement | null } }): null {
@@ -121,23 +120,20 @@ function MapPicture(props: { host: { current: HTMLDivElement | null } }): null {
       const px = (v: string): number => parseFloat(v) || 0;
       const boxW = Math.max(0, host.clientWidth - px(style.paddingLeft) - px(style.paddingRight));
       const boxH = Math.max(0, host.clientHeight - px(style.paddingTop) - px(style.paddingBottom));
-      const scale = zoomRange(boxW, boxH, dpr, 32, PREVIEW_VIEW).fit;
-      const reserve = px(style.getPropertyValue("--map-reserve-bottom"));
+      const cover = style.getPropertyValue("--map-cover").trim() === "1";
+      const scale = zoomRange(boxW, boxH, dpr, 32, PREVIEW_VIEW, cover).fit;
       const view = viewPixels(
         Math.floor(boxW * dpr),
         Math.floor(boxH * dpr),
         scale,
         32,
         PREVIEW_VIEW,
-        Math.ceil(reserve * dpr),
       );
       const k = scale / dpr; // CSS px per sprite px
       const w = view.width / dpr;
       const h = view.height / dpr;
       map.style.width = `${w}px`;
       map.style.height = `${h}px`;
-      const lift = mapLift(boxH, h, reserve);
-      map.style.marginBottom = lift > 0 ? `${lift}px` : "";
       map.style.backgroundSize = `${(PICTURE.width * 32 + ox) * k}px ${(PICTURE.height * 32 + oy) * k}px`;
       const cx = (ox + (PICTURE.width / 2) * 32) * k;
       const cy = (oy + (PICTURE.height / 2) * 32) * k;
