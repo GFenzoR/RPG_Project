@@ -289,7 +289,11 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   archivo que no llega o que el elemento no decodifica (`error` del `<audio>`,
   `StreamLike.onError`) queda `failed` y se pide de nuevo a los `STREAM_RETRY_MS` (5 s),
   doblando hasta `STREAM_RETRY_MAX_MS` (60 s); una voz sin elemento con su archivo
-  fallado se suelta (`lost`). Un tema sin `seconds` (soundgen, el `none` de un lugar) se
+  fallado se suelta (`lost`). Uno que el elemento no sabe tocar (`onError` con
+  `unsupported`: `MEDIA_ERR_SRC_NOT_SUPPORTED` o un `play()` con `NotSupportedError`) no se
+  vuelve a pedir en la sesión, y si `AudioPorts.canStream()` (`canPlayType` de Ogg Opus,
+  una vez al crear el motor) dice que no, ningún tema con `seconds` cuenta como listo ni
+  se baja: antes cada uno se bajaba entero (~1 MB) y fallaba otra vez en cada reintento. Un tema sin `seconds` (soundgen, el `none` de un lugar) se
   decodifica y suena en un buffer source con `loop` (sin el hueco del `loop` de un
   `<audio>`), y se suelta apenas deja de sonar.
 - **WebKit y los gestos** (Safari, iOS y el WKWebView de macOS): `unlock()` (cada gesto)
@@ -941,8 +945,11 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `decideStep` pasa la dirección de las teclas o del pad por `TurnTap.decide` con
   `WorldState.standingStill` (sin paso dibujado ni predicho) y la dirección propia. Quieto
   y hacia otro lado: `turn` (manda `Turn` en el acto) y después `wait` hasta que la tecla
-  lleve `TURN_TAP_MS` (80 ms) apretada; soltada antes, solo giró. Mirando ya hacia ahí, o
-  caminando, `walk` como antes. Ctrl+flecha (`turnKeyDirection`, WASD no) solo gira. Un
+  lleve `TURN_TAP_MS` (80 ms) apretada; soltada antes, solo giró. Un segundo toque antes
+  de esos 80 ms (soltar y volver a apretar entre dos cuadros: `MovementKeys.fresh` y
+  `HeldDirection.fresh` dicen si `take()` dio una pulsación nueva) no espera con el
+  primero: ya mira hacia ahí, así que camina. Mirando ya hacia ahí, o caminando, `walk`
+  como antes. Ctrl+flecha (`turnKeyDirection`, WASD no) solo gira. Un
   botón del pad activado con el teclado (`padStep`) es un paso siempre. En el E2E, un paso
   es `stepKey` / `stepToward` (`e2e/keys.ts`): un toque para girar si hace falta (y
   comprueba que no se movió) y otro para caminar; `faceKey` solo gira (los tests de tecla
@@ -1252,7 +1259,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `closeStation`, `marketClose`, `houseClose`, `tradeCancel`, `closeContainer`); la tienda
   no tiene × (se cierra con su diálogo). `rpg.windows` pasa a `v: 2` con `others` (sin
   `open`: el servidor las vuelve a abrir); una `v: 1` se sigue leyendo. Se recuerdan hasta
-  `MAX_CONTAINER_PLACES` contenedores. "Restablecer ventanas" (`resetWindows`) deja abiertas
+  `MAX_CONTAINER_PLACES` contenedores (24), los que cambiaron último: `withPlace` deja al
+  final de `others` el contenedor que cambia, y `saveWindows` y `loadWindows` se quedan
+  con los últimos. "Restablecer ventanas" (`resetWindows`) deja abiertas
   las del servidor que lo estaban, en su lugar de fábrica.
 - **Dónde salen la primera vez** (`windows.css`): los contenedores acoplados bajo lo que
   haya (como en Tibia); el diálogo abajo al centro sobre la hotbar; con la tienda, los dos

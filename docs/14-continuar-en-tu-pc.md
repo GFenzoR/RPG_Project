@@ -161,10 +161,17 @@ el punto 5:
       Hojas enteras nuevas del cangrejo, el sapo y el espinoso con su frame del juego como
       referencia tampoco trajeron esos ataques y cambiaron el aspecto: no se usaron ni se
       volverán a pedir así. El espinoso a 64x64 queda con algo de ruido de corteza.
-    - **Revisar en el E2E** (no se corrió en las ramas): las catorce criaturas en el juego,
-      su tamaño al lado de los personajes, el murciélago (oscuro) sobre los suelos de la mina,
-      el sabueso de ceniza sobre la ceniza del Volcán (gris sobre gris: en la fila de prueba
-      se lee por el lomo negro, pero contrasta poco) y el custodio en la forja.
+    - **Revisado en la verificación del lote 8** (2026-11-18): el E2E no llega a ningún
+      spawn de la segunda tanda, así que se sacaron capturas a mano (un gm de nivel 30 con
+      `/tp` al centro de cada spawn, `client/e2e/screenshots/actual/manual-*.png` del
+      worktree `.wt/vf`, no commiteadas). Todas pisan su casilla con la sombra de contacto
+      y a escala con la persona de LPC; el custodio (96x96) en la forja, con nombre y barra
+      sobre la cabeza y sin recortes; el jabalí y el ciervo de 64x64, el ciervo adulto; el
+      reptante hueco se lee bien sobre la cueva. Para el dueño: el sabueso de ceniza mirando
+      al norte (su primer frame de caminar) es una silueta angosta y vertical y contrasta
+      poco sobre la ceniza; el escarabajo de mena fuera de la luz del jugador casi no se ve
+      (solo su nombre); la sombra de 20 px bajo el custodio queda chica pero no rara. Los
+      martillazos del custodio y los golpes del gólem no se miraron cuadro a cuadro.
     - **Escala (decidida, docs/17 ART-2 "Animales medianos"):** los animales se miden
       contra la persona de LPC, no contra la casilla. El jabalí y el ciervo de spritegen
       pasaron a 64x64, más grandes (el ciervo ya no parece una cría al lado del lobo), con
@@ -539,6 +546,10 @@ el punto 5:
       primer gesto y les hace un `play()`/`pause()` vacío ahí mismo, y si igual rechaza un
       `play()` lo vuelve a llamar en el gesto siguiente (desde donde va el tema; mientras
       tanto esa voz calla). Falta probarlo en un iPhone y en la app de escritorio de macOS.
+      Un WebKit sin Ogg Opus en `<audio>` (`canPlayType` vacío; versiones viejas) queda sin
+      música y sin bajar nada (lote 8); si eso pasa en algún dispositivo que importe, la
+      salida es una segunda copia de los temas en otro códec (AAC en `.m4a`), con su costo
+      de presupuesto.
   - **Presupuesto de audio (revisado el 2026-11-18, docs/07 "Audio"):** temas enteros en
     estéreo a 48 kbps (40 las cuevas): ~13,3 MiB de música en total, ~6 MiB la pool de las
     cuevas, dentro de los nuevos topes de 16 MiB en total y 8 MiB por pool. Nada de eso
@@ -562,6 +573,11 @@ el punto 5:
     cercano. Un muestreo por moda del bloque lo limpia un poco (probado a mano, no está en
     la herramienta).
 
+- **Tutorial sobre la ayuda a 960x700** (visto en `44-controls-help-960` del lote 8): el
+  panel del tutorial (arriba a la derecha del mapa) tapa la punta de la barra de la
+  ventana Ayuda flotante, con sus botones ✥, plegar y cerrar. Se cierra igual con H o
+  Escape; si molesta, la ayuda puede salir más abajo o el panel ocultarse mientras está
+  abierta, como hace con el diálogo y la tienda.
 - **Sonidos sin reintento:** un sonido que no se pudo bajar (`/audio/`, `audio/engine.ts`
   `load`) queda mudo el resto de la sesión (el fallo se guarda). El atlas sí reintenta
   (`packages/renderer/src/retry.ts`, y "Reintentar" en el juego y en el editor); si hace
