@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { layerOver, measureFrames, recolorImage } from "./anims.ts";
+import { layerOver, measureFrames, recolorImage, specColumns } from "./anims.ts";
 import { buildAtlas, legacyFrame } from "./build.ts";
 import { createImage, encodePng, fillRect } from "./image.ts";
 import type { Image } from "./image.ts";
@@ -96,6 +96,28 @@ animations:
       perTile: 4,
     });
     expect(citizen?.actions.get("death")?.rows).toEqual({ s: 0 });
+    // Without `actions`, the preset gives every action: the bow and the spell too (ANI-2).
+    const { manifest: all } = parseManifest(`sprites: {}
+animations:
+  outfits/mage:
+    preset: lpc
+    layers: [vendor/ulpc/body/<sheet>.png]
+`);
+    const mage = all.animations.get("outfits/mage");
+    expect([...(mage?.actions.keys() ?? [])]).toEqual([
+      "idle",
+      "walk",
+      "attack",
+      "shoot",
+      "cast",
+      "death",
+    ]);
+    // The 13 columns of the shoot sheet cut to every other one: 7 frames over columns 0..12.
+    expect(mage?.actions.get("shoot")).toMatchObject({ sheet: "shoot", count: 7, step: 2, ms: 50 });
+    expect(mage?.actions.get("cast")).toMatchObject({ sheet: "spellcast", count: 7, step: 1 });
+    const shootSpec = mage?.actions.get("shoot");
+    if (!shootSpec) throw new Error("no shoot");
+    expect(specColumns(shootSpec)).toBe(13);
     expect(citizen?.layers[1]).toEqual({
       file: "vendor/ulpc/hair/<sheet>.png",
       pack: "ulpc",
@@ -203,6 +225,52 @@ describe("buildAtlas with animations", () => {
     expect(pixel(img, f.x + 12, f.y + 4)).toEqual([0, 0, 255, 255]);
     expect(pixel(img, f.x + 12, f.y + 10)).toEqual([128, 128, 128, 255]);
     expect(pixel(img, f.x + 2, f.y + 10)).toEqual([0, 0, 0, 0]);
+  });
+
+  it("cuts a clip short with step: every other column of its sheet (the LPC bow)", () => {
+    layeredPack();
+    // A shoot sheet of 5 columns, one row: column c has a mark c + 1 pixels tall.
+    const shoot = createImage(5 * 32, 32);
+    for (let c = 0; c < 5; c++) fillRect(shoot, c * 32 + 4, 0, 2, c + 1, GREY);
+    put("assets/vendor/lpcish/body/shoot.png", encodePng(shoot));
+    put("assets/vendor/lpcish/hat/shoot.png", encodePng(createImage(5 * 32, 32)));
+    put(
+      "assets/sprites.yaml",
+      ANIM_YAML +
+        "      shoot: { sheet: shoot, frame: [32, 32], rows: { s: 0 }, count: 3, step: 2, ms: 50 }\n",
+    );
+    put("data/outfits.yaml", "- id: hero\n  sprite: outfits/hero\n  frames: 3\n");
+    const r = buildAtlas(root, { strict: true });
+    expect(errors(r)).toEqual([]);
+    expect(r.atlas?.index.anims["outfits/hero"]?.actions.shoot).toEqual({
+      frames: 3,
+      ms: 50,
+      dirs: ["s"],
+    });
+    const img = r.atlas?.pages[0]?.image;
+    const page = r.atlas?.pages[0]?.json.frames;
+    if (!img || !page) throw new Error("no page");
+    // Frames 0, 1 and 2 are columns 0, 2 and 4: marks 1, 3 and 5 pixels tall.
+    for (const [n, tall] of [
+      [0, 1],
+      [1, 3],
+      [2, 5],
+    ] as const) {
+      const f = page[`outfits/hero/shoot_s_${n}`]?.frame;
+      if (!f) throw new Error(`no shoot frame ${n}`);
+      expect(pixel(img, f.x + 4, f.y + tall - 1)).toEqual([128, 128, 128, 255]);
+      expect(pixel(img, f.x + 4, f.y + tall)).toEqual([0, 0, 0, 0]);
+    }
+    // A sheet too narrow for the columns a step spans is an error.
+    put(
+      "assets/sprites.yaml",
+      ANIM_YAML +
+        "      shoot: { sheet: shoot, frame: [32, 32], rows: { s: 0 }, count: 3, step: 3, ms: 50 }\n",
+    );
+    expect(errors(buildAtlas(root)).filter((e) => e.includes(" needs "))).toEqual([
+      "assets/sprites.yaml:6 outfits/hero: shoot needs 224x32 px but assets/vendor/lpcish/body/shoot.png is 160x32",
+      "assets/sprites.yaml:6 outfits/hero: shoot needs 224x32 px but assets/vendor/lpcish/hat/shoot.png is 160x32",
+    ]);
   });
 
   it("gives hints to existing sprites and refuses clashes and missing sheets", () => {
@@ -351,7 +419,7 @@ animations:
       "3 x/one: mirror: only for frames from files (an entry without layers)",
       "4 x/two: mirror must be true or false",
       "4 x/two: anchor must be br or bc",
-      "4 x/two: ms.walk: only idle, attack, death play by time",
+      "4 x/two: ms.walk: only idle, attack, shoot, cast, death play by time",
       "4 x/two: ms.attack must be an integer >= 1",
     ]);
     put("assets/sprites/creatures/still.png", encodePng(createImage(32, 32)));

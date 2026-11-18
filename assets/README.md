@@ -99,8 +99,9 @@ Los monstruos, NPCs y atuendos se animan con datos de `sprites.yaml`, no con có
 detalle de cómo los juega el cliente está en `client/CLAUDE.md`, "Animación de criaturas".
 
 **Frames y nombres.** Cada frame es un sprite del atlas llamado
-`<sprite>/<acción>_<dir>_<n>` (ANI-4): `acción` es `idle`, `walk`, `attack` o `death`, `dir`
-es `n`, `e`, `s` o `w`, y `n` arranca en 0. Hay tres maneras de tenerlos:
+`<sprite>/<acción>_<dir>_<n>` (ANI-4): `acción` es `idle`, `walk`, `attack` (cuerpo a
+cuerpo), `shoot` (a distancia), `cast` (conjurar) o `death`, `dir` es `n`, `e`, `s` o `w`, y
+`n` arranca en 0. Hay tres maneras de tenerlos:
 1. **Capas de un pack** (`animations` con `layers`): spritepack compone las hojas en orden
    (abajo primero), recolorea con `palettes` y corta los frames. Así salen los personajes
    de LPC (`vendor/ulpc`).
@@ -119,7 +120,7 @@ palettes:                                  # colores de claro a oscuro
   cloth_navy: ["#7c96c4", "#5a76a8", "#435a87", "#304064", "#1d263e"]   # propia
 animations:
   outfits/sailor:
-    preset: lpc                            # hojas del generador ULPC: idle, walk, slash, hurt
+    preset: lpc                            # hojas ULPC: idle, walk, slash, shoot, spellcast, hurt
     actions: [idle, walk]                  # opcional: un subconjunto del preset (NPCs)
     layers:                                # "<sheet>" = la hoja de cada acción
       - vendor/ulpc/spritesheets/body/bodies/male/<sheet>.png
@@ -129,11 +130,16 @@ animations:
 ```
 - **Preset `lpc`** (`tools/spritepack/src/anims.ts`, `PRESETS`): frames de 64x64, filas
   norte, oeste, sur y este. `idle` = 2 frames de 500 ms; `walk` = columnas 1 a 8 (la 0 es
-  la pose quieta), 4 frames por casilla; `attack` = `slash`, 6 de 60 ms; `death` = `hurt`,
-  6 de 100 ms y solo hacia el sur (las otras direcciones usan esa).
+  la pose quieta), 4 frames por casilla; `attack` = `slash`, 6 de 60 ms; `shoot` = `shoot`
+  (el arco), sus 13 columnas tomadas de a una sí y una no (`step: 2`): 7 de 50 ms; `cast` =
+  `spellcast`, 7 de 60 ms; `death` = `hurt`, 6 de 100 ms y solo hacia el sur (las otras
+  direcciones usan esa). Un monstruo lista en `actions` solo las que usa: sus ataques de
+  `data/monsters` (`distance` juega `shoot`, `spell` juega `cast`); los NPCs, `idle` y `walk`.
+  El cliente elige el clip por `CreatureAttack.kind` (docs/17 ANI-2) y, si el sprite no lo
+  tiene, juega `attack`.
 - **Sin preset**, cada acción se describe entera:
   `walk: { sheet: walk, frame: [64, 64], rows: { n: 0, w: 1, s: 2, e: 3 }, col: 1, count: 8, per_tile: 4 }`
-  (`ms` para las demás acciones).
+  (`ms` para las demás acciones; `step`, columnas de un frame al siguiente, 1 por defecto).
 - **`recolor`** cambia cada color de la paleta de origen por el del mismo lugar de la de
   destino (mismo largo). Los píxeles de las capas quedan con alfa 0 o 255: lo que tiene
   menos de la mitad de opacidad se descarta.
@@ -151,7 +157,8 @@ animations:
   - `anchor: br | bc` (por defecto `br`): `bc` para frames de 64x64 o que no llenan la
     casilla: los pies van a `FEET_LINE`, medidos en los frames de caminar;
   - `ms: { idle: 500, attack: 110, death: 200 }`: ms por frame de cada acción que se juega
-    por tiempo (sin esto, 500, 60 y 100; caminar va por distancia). Un `ms` de una acción
+    por tiempo (sin esto, 500 quieto, 60 atacar y conjurar, 50 disparar y 100 morir;
+    caminar va por distancia). Un `ms` de una acción
     sin frames es error.
 - **Quieto y atacar solo hacia sus lados** (`OWN_FACINGS`, `packages/renderer/src/anim.ts`):
   una criatura que mira hacia un lado sin frames de `idle` o de `attack` no toma los de
@@ -175,11 +182,12 @@ animations:
   2x con Read, y en el juego (screenshots del E2E).
 
 ### Personajes de LPC (`vendor/ulpc`)
-92 capas del Universal LPC Spritesheet Character Generator (commit fijado en `CREDITS.md` y
+23 capas del Universal LPC Spritesheet Character Generator (commit fijado en `CREDITS.md` y
 en `vendor/ulpc/LICENSE.txt`), copiadas sin tocar con sus rutas: cuerpos (hombre, mujer,
 esqueleto), cabezas (hombre, mujer, anciano), camisa de manga larga, armaduras de cuero, placas
-y cota de malla, pantalones, botas y zapatos, cinco peinados, barba, capucha y pañuelo. Solo
-entraron archivos cuya fila de `CREDITS.csv` lista OGA-BY o CC-BY-SA (el cuerpo zombi y los ojos
+y cota de malla, pantalones, botas y zapatos, cinco peinados, barba, capucha y pañuelo. Cada
+capa trae seis hojas (138 archivos): `walk`, `idle`, `slash`, `shoot`, `spellcast` y `hurt`
+(las de disparar y conjurar se sumaron el 2026-11-18, del mismo commit). Solo entraron archivos cuya fila de `CREDITS.csv` lista OGA-BY o CC-BY-SA (el cuerpo zombi y los ojos
 sueltos no tienen fila: quedaron afuera). Las hojas base vienen en colores neutros (piel
 clara, tela blanca, pelo naranja): la variedad sale de las paletas propias de `palettes`.
 
