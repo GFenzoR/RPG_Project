@@ -194,9 +194,10 @@ el punto 5:
   docs/17 A7).** Hecho: el servidor manda a todos una ventana de 31x21 (+1) y el `Welcome`
   se la dice al cliente; los monstruos
   siguen notando y persiguiendo solo la ventana clásica de 15x11 (+1); el cliente llena la
-  caja del mapa con la ventana a la escala de siempre (la que muestra 15x11) y deja alejar
-  hasta la ventana entera; medido en proceso dentro del presupuesto (docs/07 "Vista
-  ancha"; reglas en docs/02 "La vista"). Quedó:
+  caja del mapa con la vista más grande que la cubre a escala entera, sin bajar de 15x11
+  (24x16 a 2x en 1920x1080 con el dock), y deja alejar hasta la ventana entera; medido en
+  proceso dentro del presupuesto (docs/07 "Vista ancha"; reglas en docs/02 "La vista").
+  Quedó:
   - **`make bots` a 31x21:** la medición es en proceso (`TestCrowdBandwidth`, que con 15x11
     dio lo mismo que `make bots`); falta repetir base y stress contra un servidor real con
     el monitoreo y anotar los números en docs/07.
@@ -208,10 +209,16 @@ el punto 5:
     solo lo que manda, sin tocar las reglas.
   - **Escala 1,5x "sharp-bilinear" (docs/17 UI-4), sin hacer:** dibujar a 2x y bajar a 1,5x
     con filtro lineal, como opción de Gráficos apagada por defecto.
-  - **Bordes de la vista, para decidir:** docs/17 pide casillas enteras con lados impares y
-    el resto en `--ui-void`; hoy el canvas cortado muestra casillas fraccionarias en los
-    bordes (como el zoom de antes), centradas en el jugador, y llena toda la caja. Con el
-    marco de la UI oscura (A2–A5) se ve cuál queda mejor.
+  - **La escala por defecto, para que la pruebe el dueño:** es la vista más grande que
+    llena la caja a escala entera sin bajar de 15x11 (docs/17 "Hecho: A7": a 1920x1080, 2x
+    con 24x16; la regla de UI-4 daba 3x con 16x11 con el dock). Si prefiere ver las 31x21
+    enteras de entrada (1x a 1920x1080, con caja oscura alrededor), basta con que
+    `zoomRange` (`client/src/render/zoom.ts`) devuelva su `min` como `fit`; cada jugador
+    ya puede alejar hasta ahí y queda recordado.
+  - **Bordes de la vista, para decidir:** docs/17 pedía casillas enteras con lados impares
+    y el resto en `--ui-void`; quedó el canvas lleno hasta los bordes con casillas
+    fraccionarias, centrado en el jugador (como el zoom de antes). Revisarlo en el playtest
+    con la UI oscura.
   - **Respawns y la vista ancha:** un monstruo no reaparece donde un jugador lo ve, y ahora
     se ve hasta 16 casillas a los lados: quien caza en un spawn frena los respawns de los
     vecinos (están a 12–20). La capacidad del mundo (docs/07) no lo modela; mirarlo con

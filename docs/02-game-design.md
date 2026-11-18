@@ -181,11 +181,16 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
   que tenga: "A ve a B" sigue siendo simétrico, y nadie ve más por tener un monitor grande
   o un cliente modificado (todo lo que manda el servidor se puede leer: `01-architecture.md`,
   "Trampas y anti-bot").
-- **Qué dibuja el cliente.** Por defecto, la escala entera más grande que muestra las
-  15x11 de siempre, con el resto de la caja del mapa lleno de la ventana (en 1920x1080,
-  unas 26x15 a 2x). Alejando (Ctrl+rueda, el botón − o un pellizco) llega a la ventana
-  entera (31x21 a 1x en 1920x1080 y en 1280x800); acercando, a 7x5, como antes
-  (`client/CLAUDE.md`, "Zoom del mapa"). La elección se recuerda por dispositivo.
+- **Qué dibuja el cliente.** Siempre a escala entera (pixel-perfect). Por defecto, la
+  vista más grande que llena la caja del mapa sin dejar parte vacía (la escala entera más
+  chica a la que la ventana de 31x21 cubre la caja), pero nunca menos de las 15x11 de
+  siempre: una pantalla chica (un teléfono, la app de escritorio a 960 px) se queda con la
+  escala de antes. Con el dock de la UI oscura: 1920x1080 muestra unas 24x16 a 2x (la
+  escala de las 15x11 sería 3x: 16x11), 2560x1440 unas 22x14 a 3x y 1280x800 15x12 a 2x,
+  como antes. Alejando (Ctrl+rueda, el botón − o un pellizco) llega a la ventana entera
+  (31x21 a 1x en 1920x1080, 30x21 en 1280x800, donde el dock deja 960 px), con el resto
+  de la caja oscuro; acercando, a 7x5, como antes (`client/CLAUDE.md`, "Zoom del mapa").
+  La elección se recuerda por dispositivo.
 - **Depende de la ventana entera** (aunque el cliente dibuje menos): elegir un objetivo
   (monstruo, o jugador con PvP) y conservarlo, mirar una casilla o una criatura, proponer
   un intercambio, reportar a un jugador, la vida y el maná de los miembros del grupo y que

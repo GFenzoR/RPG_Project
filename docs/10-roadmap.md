@@ -296,8 +296,9 @@ secundaria.
   `client/e2e/mobile.spec.ts` con Pixel 7 (vertical y horizontal) e iPad Mini.
   Después (rama `fix/client-ux`): zoom del mapa por escalas enteras con el pellizco, botones
   +/− en pantallas táctiles y Ctrl+rueda en PC (recordado en el dispositivo; desde la
-  vista ancha de 2026-11, rama `feat/wide-view`, por defecto la escala que muestra 15x11
-  con la caja llena y alejando hasta la ventana entera de 31x21, docs/02 "La vista");
+  vista ancha de 2026-11, rama `feat/wide-view`, por defecto la vista más grande que llena
+  la caja a escala entera sin bajar de 15x11, y alejando hasta la ventana entera de 31x21,
+  docs/02 "La vista");
   hotbar en dos líneas a la derecha del pad en vertical (4 slots en un teléfono de
   390–412 px); el chat del panel lateral ya no tapa el final del
   inventario a 1280x800; E2E también en WebKit (iPhone 13 e iPad Mini).

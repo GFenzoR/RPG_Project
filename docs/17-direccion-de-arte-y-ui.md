@@ -699,7 +699,9 @@ recortar y pasar a woff2 con su nombre.
 ### UI-4 Layout de escritorio y "ver más pantalla"
 **Hoy (A3, ver "Hecho: A2 y A3" en §7):** el layout de escritorio quedó distinto del dibujo
 de abajo: los orbes, la botonera y el chat van en la columna derecha (el dock) y no hay
-HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1080.
+HUD abajo. Así el mapa usa todo el alto: 2x a 1280x720 (antes 1x) y 3x a 1920x1080 con
+15x11. Con la vista ancha (A7, "Hecho: A7" en §7) la escala por defecto cambió: 1920x1080
+va a 2x con 24x16 casillas.
 ```
 ┌──────────────────────────────────────────────────────────┬──────────────┐
 │ [avisos: arriba al centro, sin tomar clicks]              │ Columna      │
@@ -1042,7 +1044,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A4 ✅ | Menú del click derecho, ficha, tooltip y opción de controles (UI-6); stats en `ItemDef` | cliente | A3 |
 | A5 ✅ | Diálogo y tienda sin scroll (UI-8); `tag` opcional en el YAML de diálogos | cliente, esquema, docs/06 | A3 |
 | A6 ✅ (parcial) | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-5 y MOV-6 (§4, "Hecho: A6 (parcial)"). Falta: MOV-3, MOV-4, MOV-7 y el E2E con latencia | cliente, servidor, proto, docs/02, 05 y 07 | — |
-| A7 | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
+| A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
 | A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
 | A10 | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **casi hecho:** todo salvo `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
@@ -1177,7 +1179,45 @@ Solo cliente: el servidor y el protocolo no cambian (`MoveItem.count`, `StopWalk
   parte…" del menú); el intercambio con cantidad (`TradeOffer` no la lleva, sigue en
   docs/14); tooltip sobre el canvas; cada contenedor como ventana propia.
 
-Orden sugerido. A6 y A8 son lo que más se nota con menos riesgo y se pueden hacer ya.
+
+### Hecho: A7 (2026-11-18, rama `feat/wide-view`)
+Las reglas de juego están en `02-game-design.md`, "La vista"; el protocolo en
+`05-network-protocol.md` (`Welcome.view_width`/`view_height`, áreas de 33x23); el costo en
+`07-performance-budget.md`, "Vista ancha"; el zoom en `client/CLAUDE.md`, "Zoom del mapa".
+Cambios respecto de UI-4:
+- **Una ventana para todos, no una por cliente.** El servidor manda a cada jugador 31x21
+  + 1 de margen, tenga la pantalla que tenga. UI-4 pedía que el cliente eligiera su vista
+  de 15x11 a 31x21 y el servidor mandara esa área. Con una sola, "A ve a B" sigue
+  simétrico, un cliente modificado no gana nada pidiendo más y el ancho de banda entra en
+  el presupuesto igual (1,7 KB/s por jugador en el peor escenario medido). Si algún día
+  pesa (datos móviles), el `Hello` podría pedir una ventana menor y el servidor recortar
+  solo lo que manda.
+- **La escala por defecto.** UI-4 decía "la más grande que muestra al menos 15x11". Con el
+  dock de A3 eso da 3x a 1920x1080, que muestra 16x11: casi nada más que antes. Quedó la
+  **vista más grande que llena la caja del mapa a escala entera**: la escala más chica a la
+  que la ventana de 31x21 cubre la caja, sin bajar nunca de las 15x11 (`render/zoom.ts`,
+  `min(pixelScale, fillScale)`). Así se ve más sin franjas vacías y una pantalla chica
+  conserva la escala de antes. Con el dock, en CSS px al 100 %:
+
+  | Ventana | Por defecto | Alejando hasta |
+  |---|---|---|
+  | 1280x800 | 2x: 15x12 | 1x: 30x21 (la caja tiene 960 px) |
+  | 1280x720 | 2x: 15x11 | 1x: 30x21 |
+  | 1920x1080 | 2x: 24x16 (antes 3x: 16x11) | 1x: 31x21 |
+  | 2560x1440 | 3x: 22x14 (antes 4x: 17x11) | 2x: 31x21 |
+  | 960x700 (la app) | 1x: 21x21 | — |
+  | Teléfonos | la escala de antes, con la caja llena hasta 31x21 | 1x |
+
+- **Los bordes.** El canvas llena la caja con casillas fraccionarias en los bordes,
+  centrado en el jugador, como el zoom de antes; no se recorta a lados impares con
+  `--ui-void` alrededor. Solo alejado más allá de la ventana entera queda caja oscura.
+- **Lo que no cambia** (como decía UI-4): ni los rangos de armas y hechizos ni lo que nota
+  un monstruo, que sigue siendo la ventana clásica de 15x11 + 1 (`session.InSight`).
+- **Sin hacer:** la escala 1,5x "sharp-bilinear" y repetir `make bots` contra un servidor
+  real (la medición fue en proceso, `TestCrowdBandwidth`). Están en docs/14.
+
+Orden sugerido (de antes de A2, A3 y A6). A6 y A8 son lo que más se nota con menos riesgo
+y se pueden hacer ya.
 Después A2, A3, A4 y A5 (la UI), luego A10 y A11 (muros y suelos), y al final A12 y A7.
 
 ## 8. Cómo se verifica

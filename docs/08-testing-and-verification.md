@@ -51,7 +51,9 @@ Para iterar sobre la interfaz sin Docker, Postgres ni el servidor del juego:
 (`client/preview/`, `client/src/preview/`: solo con `RPG_UI_PREVIEW=1`, nunca va al build
 normal) que monta la pantalla de juego con estados inventados
 (`client/src/preview/fixtures.ts`) y un pedazo de Puerto dibujado por `mapcli render` en
-lugar del canvas. `client/e2e/ui-preview.ts` la abre en Chromium respondiendo cada pedido
+lugar del canvas: las 33x23 casillas de la ventana del servidor con su margen, al tamaño y
+la escala que tendría el canvas en la vista ajustada (la misma cuenta de
+`render/zoom.ts`). `client/e2e/ui-preview.ts` la abre en Chromium respondiendo cada pedido
 desde el build (no levanta servidores) y guarda en
 `client/e2e/screenshots/actual/ui-preview/` las escenas `game`, `windows`, `options`,
 `dialog`, `shop` (la tienda con dos páginas), `dialog18` (18 opciones sin scroll),
@@ -159,12 +161,14 @@ regla, con red simulada (latencia, jitter, 40 a 144 fps, un click y después una
 `make test`.
 
 `client/e2e/view.spec.ts` revisa la vista ancha (`02-game-design.md`, "La vista"): a
-1920x1080 entra a 2x con unas 26x15 casillas (`__rpgClient.view()`: la ventana del
-`Welcome` y las casillas que muestra el canvas), casillas a 12 a los lados y 6 arriba y
+1920x1080 (caja de 1536x1080 con el dock) entra a 2x, no a la 3x de las 15x11, con unas
+24x16 casillas (`__rpgClient.view()`: la ventana del `Welcome` y las casillas que muestra
+el canvas; `zoom()` da `{min 1, fit 2, max 6}`), casillas a 11 a los lados y 7 arriba y
 abajo en el canvas; Ctrl+rueda hacia abajo aleja a 1x con la ventana entera de 31x21
 (992x672 px, casillas a 15 y 10 en el canvas, a 17 no) y se recuerda; hacia arriba
-vuelve y lo olvida. A 1280x800, 2x con al menos 15x11, y 1x con las 31x21. Screenshots
-`97-view-1920x1080`, `97b-view-1920x1080-1x`, `98-view-1280x800` y `98b-view-1280x800-1x`.
+vuelve y lo olvida. A 1280x800 (caja de 960x800), 2x con 15 columnas y más de 11 filas,
+y 1x con 30x21 (casillas a 14 y 10 en el canvas). Screenshots `97-view-1920x1080`,
+`97b-view-1920x1080-1x`, `98-view-1280x800` y `98b-view-1280x800-1x`.
 
 ### E2E móvil (T5.6)
 `client/e2e/mobile.spec.ts` corre el juego en dispositivos emulados de Playwright, con el
@@ -233,9 +237,10 @@ acepta en un evento sintético; el pad captura su dedo.
   mapa y sin nada encima.
 - En cada dispositivo, el zoom del mapa: `+` sube una escala entera y se recuerda
   (`localStorage` `rpg.zoom`); el canvas sigue dentro de la caja del mapa (en vertical,
-  sobre el pad); `−` vuelve a la escala que muestra las 15x11 casillas y la olvida; si se
-  puede, `−` aleja una escala más (más casillas de la ventana de 31x21, se recuerda,
-  screenshot `08b-zoomed-out`) y `+` vuelve; un pellizco al doble de distancia acerca, y
+  sobre el pad); `−` vuelve a la vista ajustada y la olvida; si se puede, `−` aleja una
+  escala más (más casillas de la ventana de 31x21: en horizontal el ancho ya puede ser el
+  de la ventana entera y gana filas; se recuerda, screenshot `08b-zoomed-out`) y `+`
+  vuelve; un pellizco al doble de distancia acerca, y
   se vuelve con `−`. La vista ajustada muestra entre 15x11 y 31x21 casillas. Acercado, el mapa sigue
   dibujado (`mapDrawn`).
 - Pixel 7 vertical además marca un lobo con un toque y espera golpes (vida que baja).
@@ -244,10 +249,10 @@ acepta en un evento sintético; el pad captura su dedo.
 - A 1280x800 (escritorio), un nombre de 20 caracteres con experiencia deja el encabezado
   en una línea y el mapa en 2x (`__rpgClient.scale()`); sin pad ni botones de zoom. El
   final del inventario y del panel "Apariencia" se ven sobre el chat al desplazar la
-  columna lateral. A 2x el canvas llena la caja con más de 15x11 casillas. Ctrl+rueda sobre
-  el mapa sube a 3x (el canvas queda dentro de la caja y muestra menos casillas), la rueda
-  al revés vuelve a 2x y luego aleja a 1x con la ventana entera de 31x21 (se recuerda),
-  y vuelve; la rueda sin Ctrl no hace zoom.
+  columna lateral. A 2x el canvas llena la caja (15 columnas y más de 11 filas). Ctrl+rueda
+  sobre el mapa sube a 3x (el canvas queda dentro de la caja y muestra menos casillas), la
+  rueda al revés vuelve a 2x y luego aleja a 1x con las 21 filas de la ventana y las 30
+  columnas que entran en la caja (se recuerda), y vuelve; la rueda sin Ctrl no hace zoom.
 
 Screenshots `client/e2e/screenshots/actual/mobile-<dispositivo>-NN-*.png` (`08-zoomed`: el
 mapa una escala más cerca), `mobile-desktop-1280-long-name.png`,

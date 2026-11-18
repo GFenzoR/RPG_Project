@@ -24,7 +24,7 @@ Nombre: **Neque's Realm** (hasta noviembre de 2026 se llamó "RPG Project", nomb
 | Tema | Decisión |
 |---|---|
 | Vista y gráficos | Cenital, 2D, tiles de 32x32, estilo pixel art tipo Tibia |
-| Área visible | Mínimo 15x11 casillas y hasta 31x21 según la ventana (decisión del dueño, 2026-11-17): el servidor manda lo que el cliente puede ver. Hasta su tarea (A7 de `17-direccion-de-arte-y-ui.md`) se ven 15x11 |
+| Área visible | Mínimo 15x11 casillas y hasta 31x21 según la ventana (decisión del dueño, 2026-11-17): el servidor manda lo que el cliente puede ver. Hecho (A7 de `17-direccion-de-arte-y-ui.md`): el servidor manda a todos la ventana de 31x21 y cada cliente dibuja la mayor parte que su pantalla llena a escala entera, sin bajar de 15x11; los monstruos siguen notando la ventana clásica. Reglas en `02-game-design.md`, "La vista" |
 | Estilo de interfaz | Oscura y gótica (referencia Diablo 2) con las funciones de Tibia: botonera que abre ventanas separadas. Detalle en `17-direccion-de-arte-y-ui.md` (pedido del dueño, 2026-11-17) |
 | Plataforma | PC primero (navegador + instalable con Tauri). Móvil secundario, más adelante |
 | Trampas | Sin anticheat en el cliente, que siempre se considera manipulable. Todo se valida en el servidor y los bots se detectan ahí (`01-architecture.md`, "Trampas y anti-bot") |

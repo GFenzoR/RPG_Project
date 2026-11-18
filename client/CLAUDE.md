@@ -30,8 +30,8 @@ client/
   criaturas → efectos → textos flotantes, por fila de abajo hacia arriba.
 - El servidor manda una ventana de 31x21 casillas (+1 de margen; `WorldState.view`, del
   `Welcome`). El canvas escala en múltiplos enteros (pixel-perfect, `roundPixels`, sin
-  suavizado): por defecto la escala más grande que muestra 15x11, con la caja del mapa
-  llena de la ventana; el jugador puede alejar hasta la ventana entera y acercar hasta 7x5
+  suavizado): por defecto la vista más grande que llena la caja del mapa a escala entera,
+  sin bajar de 15x11; el jugador puede alejar hasta la ventana entera y acercar hasta 7x5
   (ver "Zoom del mapa").
 - La UI (inventario, chat, diálogos) es DOM con Preact encima del canvas, no Pixi.
   Así es accesible, traducible y testeable con Playwright. En escritorio no hay encabezado
@@ -41,10 +41,11 @@ client/
 - Pensado para PC primero (teclado + mouse). Mantén el input desacoplado para poder
   sumar controles táctiles sin reescribir.
 - Dirección de arte, animación, sensación de movimiento y UI acordadas con el dueño el
-  2026-11-17: `docs/17-direccion-de-arte-y-ui.md`. Las reglas de arriba (vista de 15x11)
-  cambian cuando se haga cada tarea de su plan (§7). A2 y A3 (tema, fuentes, dock y
-  ventanas) ya están, y A4 y A5 (menú del click derecho con la ficha, diálogo y tienda sin
-  scroll; ver "Notas de A4 y A5"): el click derecho sobre un item ya no lo usa por defecto.
+  2026-11-17: `docs/17-direccion-de-arte-y-ui.md`. Las reglas de arriba cambian cuando se
+  haga cada tarea de su plan (§7). A2 y A3 (tema, fuentes, dock y ventanas) ya están, A6
+  en parte (movimiento), A7 (vista de 31x21), y A4 y A5 (menú del click derecho con la
+  ficha, diálogo y tienda sin scroll; ver "Notas de A4 y A5"): el click derecho sobre un
+  item ya no lo usa por defecto.
 
 ## Notas de T1.5
 - Sin servidor propio de assets: el plugin de Vite empaqueta el contenido de `data/` e
@@ -624,14 +625,20 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   manda 31x21 (+1) a todos (`Welcome.view_width`/`view_height` → `WorldState.view`,
   `state/view.ts`; 0 = un servidor viejo: 15x11). El zoom es solo de dibujo.
 - `render/zoom.ts` (puro, con tests) decide la escala (`ZoomRange {min, fit, max}`):
-  - `fit`, la vista ajustada (sin elección guardada): la mayor escala que muestra las 15x11
-    clásicas (`pixelScale`, la de antes de la vista ancha). A 1280x800 y 1920x1080, 2x.
+  - `fit`, la vista ajustada (sin elección guardada): la vista más grande sin parte vacía,
+    es decir la escala más chica a la que la ventana cubre la caja (`fillScale`), pero
+    nunca una que muestre menos que las 15x11 clásicas (`pixelScale`, la de antes de la
+    vista ancha): `min(pixelScale, fillScale)`. Con el dock: 1920x1080 (caja de
+    1536x1080) 2x, no 3x; 2560x1440 3x, no 4x; 1280x800 (960x800) y 1280x720 2x; la app
+    a 960x700 1x, como antes. En un teléfono `pixelScale` suele ser la menor: no cambia.
+    Con un servidor de 15x11, `fit` es `pixelScale`.
   - `min`: la mayor que muestra la ventana entera (`wholeScale`), al menos 1 y como mucho
-    `fit`. A 1280x800 y 1920x1080, 1x con las 31x21; a 2560x1440, 2x.
+    `fit`. A 1280x800 y 1920x1080, 1x (31x21, o 30x21 en los 960 px de 1280x800); a
+    2560x1440, 2x.
   - `max`: la mayor que todavía muestra 7x5 (`MIN_VIEW`).
   Siempre escalas enteras. El canvas muestra la ventana entera si entra y si no se corta
   a la caja del mapa en píxeles de sprite enteros (`viewPixels`): a 2x en 1920x1080 son
-  unas 26x15 casillas. Cortado, deja libre la franja de la hotbar de escritorio
+  24x16 casillas. Cortado, deja libre la franja de la hotbar de escritorio
   (`--map-reserve-bottom`) salvo que eso le quite filas a las 11 clásicas; la ventana
   entera nunca se achica por ella (`mapLift` la sube). `followCamera` centra en el
   jugador una vista de casillas fraccionarias (`shownTiles`), con la cámara en píxeles de
@@ -872,8 +879,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   se suma ahí. No uses colores sueltos: usa un token.
 - **Escritorio** (`layout.panel === "sidebar"`, `.game[data-ui="windows"]`, `windows.css`):
   sin encabezado. `ui/GameView.tsx` dibuja el mapa y a su derecha el dock (`aside.side`,
-  `#side-panel`, ancho `--dock-w`: el más angosto que deja al mapa su próxima escala
-  entera; a 1280 px el mapa va a 2x, a 1920x1080 a 3x) con:
+  `#side-panel`, ancho `--dock-w`: el más angosto que deja a las 15x11 clásicas su
+  próxima escala entera, 2x a 1280 px y 3x a 1920x1080; con la ventana de 31x21 la vista
+  ajustada a 1920x1080 es 2x con 24x16, ver "Zoom del mapa") con:
   - `ui/Vitals.tsx`: orbes de vida y maná (se llenan con `transform`, el "fantasma" marca
     lo perdido, laten bajo el 25 %; `orbFill`/`lowHealth` puros), nombre, nivel, barra de
     experiencia y condiciones. Los test ids `health`, `mana`, `level`, `experience` y
@@ -912,7 +920,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   píxel cuenta para sus 4 slots (`Hotbar` resta el padding y el borde de la barra).
 - **Vista previa sin servidor**: `make ui-preview [ONLY=<escena>]` (`e2e/ui-preview.ts`)
   construye `preview/index.html` (`src/preview/`, solo con `RPG_UI_PREVIEW=1`: nunca va
-  al build normal), dibuja un pedazo de Puerto con `mapcli render` en lugar del canvas y
+  al build normal), dibuja un pedazo de Puerto con `mapcli render` en lugar del canvas
+  (las 33x23 casillas de la ventana con su margen, del tamaño del canvas en la vista
+  ajustada: `zoomRange`, `viewPixels` y `mapLift`, como `render/game-canvas.ts`) y
   saca screenshots de cada escena (game, windows, options, dialog, danger, death, login,
   characters) a 1920x1080, 1280x800, 1280x720, 960x700, teléfono vertical y horizontal y
   tablet, en `e2e/screenshots/actual/ui-preview/`. Playwright contesta cada pedido desde el
