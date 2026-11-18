@@ -2,7 +2,8 @@
 // and a title bar (icon, title, move handle, fold and close), floating over the full-screen
 // map. Where it is, how big and whether it is open is ui/windows.ts; this only draws it and
 // reports what the player does with it. Dragging (with the magnet), resizing and the keys
-// of the move handle are GameView.tsx's (it knows the screen and the other windows).
+// of the move handle are GameView.tsx's (it knows the screen and the other windows), with
+// ui/window-dom.ts.
 //
 // The toolbar's windows, the chat, the server's (dialog, shop, crafting, market, house,
 // trade) and each open container use this same frame.
@@ -11,6 +12,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import { Icon } from "./icons.tsx";
 import type { IconName } from "./icons.tsx";
 import type { WinKey, WindowPlace } from "./windows.ts";
+import { placeStyle } from "./window-dom.ts";
 
 export interface GameWindowProps {
   t: Translate;
@@ -64,18 +66,12 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
   const titleId = `gwin-${id}-title`;
   const hintId = `gwin-${id}-move-hint`;
   const placed = place.x !== undefined && place.y !== undefined;
-  const zoom = props.zoom && props.zoom > 0 ? props.zoom : 1;
-  const px = (v: number): string => `${Math.round((v / zoom) * 100) / 100}px`;
-  const style: JSX.CSSProperties = { zIndex: 20 + props.stack };
-  if (placed) {
-    style.left = px(place.x ?? 0);
-    style.top = px(place.y ?? 0);
-    // Never under the bar: as tall as the room under its top at most (100 % is the
-    // windows' area, the screen above the bar).
-    style.maxHeight = `calc(100% - ${px(place.y ?? 0)})`;
-  }
-  if (place.w !== undefined) style.width = px(place.w);
-  if (place.h !== undefined && !place.collapsed) style.height = px(place.h);
+  // Left, top and a max-height that never reaches under the bar, and the player's size
+  // (ui/window-dom.ts: a drag that ends writes the same lengths).
+  const style: JSX.CSSProperties = {
+    zIndex: 20 + props.stack,
+    ...placeStyle(place, props.zoom ?? 1),
+  };
   if (props.nth !== undefined && props.nth > 0) style["--nth"] = String(props.nth);
   const sized = place.w !== undefined || place.h !== undefined;
   return (

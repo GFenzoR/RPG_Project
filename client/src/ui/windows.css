@@ -480,12 +480,17 @@
 }
 
 /* ---- Windows: the area above the bar, and the frame -------------------------------- */
+/* Its own stacking context: the windows' z-index (20 + their place in the stack,
+   GameWindow) orders them inside it, and the whole layer sits at 20, where the lowest
+   window was: over the bar and the map's own pieces (the notices, the tutorial, the level
+   up), under the presence check and the death screen (below), which no window may hide. */
 .win-layer {
   position: absolute;
   left: 0;
   top: 0;
   right: 0;
   bottom: var(--bar-px);
+  z-index: 20;
   pointer-events: none;
 }
 /* (.win-layer > .gwin: over the frame of client.css, which lists every window.) */
@@ -728,9 +733,11 @@ body.dragging-window * {
   max-height: calc(100% - 3rem);
 }
 /* Under the equipment (about 15rem tall today), the n-th one a step down and left of the
-   first (--nth, set by GameWindow). */
+   first (--nth, set by GameWindow), but never lower than its title bar can show: on a
+   short screen with a large interface scale and text the 4th one already fell under the
+   bar (the ResizeObserver of GameView only moves the windows the player placed). */
 .gwin:not([data-placed])[data-window^="container-"] {
-  --container-top: calc(15rem + var(--nth, 0) * 1.75rem);
+  --container-top: min(calc(15rem + var(--nth, 0) * 1.75rem), calc(100% - 2rem));
   top: var(--container-top);
   right: calc(var(--nth, 0) * 1rem);
   max-height: calc(100% - var(--container-top));
@@ -1027,7 +1034,16 @@ body.dragging-window * {
 .game[data-ui="windows"] .invitations {
   bottom: calc(var(--bar-px) + 1rem);
 }
-/* The tutorial's hint: left of the equipment's column (top right). */
+/* Over every window (.win-layer is at 20): a presence check hidden under one would run
+   out and count as failed (docs/02, anti-bot), and the death screen asks for a click. */
+.game[data-ui="windows"] .presence {
+  z-index: 21;
+}
+.game[data-ui="windows"] .death {
+  z-index: 22;
+}
+/* The tutorial's hint: left of the equipment's column (top right), under the windows (it
+   folds, and nothing runs out while it waits); the guild and the appearance open there. */
 .game[data-ui="windows"] .tutorial,
 .game[data-ui="windows"] .tutorial-show {
   right: calc(16rem * var(--ui-zoom, 1) + 0.75rem);

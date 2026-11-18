@@ -153,6 +153,19 @@ describe("the wide view (31x21, Welcome.view_width/height)", () => {
     // 960x700 (the desktop app): 960x612, 1x with 30x19.1.
     expect(zoomRange(960, 612, 1, T, WIDE, true)).toEqual({ min: 1, fit: 1, max: 3 });
     expect(viewPixels(960, 612, 1, T, WIDE)).toEqual({ width: 960, height: 612 });
+    // Ultra-wide screens: covering the width takes a scale that leaves fewer rows than the
+    // classic 11 (the owner's choice: no empty strips; zooming out shows the whole window).
+    // 2560x1080: 2560x992, 3x with 26.7x10.3; 3440x1440: 3440x1352, 4x with 26.9x10.6.
+    expect(zoomRange(2560, 992, 1, T, WIDE, true)).toEqual({ min: 1, fit: 3, max: 6 });
+    expect(shownTiles(...sizeOf(viewPixels(2560, 992, 3, T, WIDE)), 3, T)).toEqual({
+      width: 26.65625,
+      height: 10.3125,
+    });
+    expect(zoomRange(3440, 1352, 1, T, WIDE, true)).toEqual({ min: 2, fit: 4, max: 8 });
+    expect(shownTiles(...sizeOf(viewPixels(3440, 1352, 4, T, WIDE)), 4, T)).toEqual({
+      width: 26.875,
+      height: 10.5625,
+    });
     // A server with the classic window keeps the classic scale.
     expect(zoomRange(1920, 992, 1, T, undefined, true)).toEqual({ min: 2, fit: 2, max: 6 });
   });

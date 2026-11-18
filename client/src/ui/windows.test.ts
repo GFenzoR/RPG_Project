@@ -19,6 +19,7 @@ import {
   moveWindow,
   openWindow,
   openWindows,
+  pageOrder,
   placeOf,
   placeWindow,
   resetWindows,
@@ -71,6 +72,31 @@ describe("opening, closing and stacking", () => {
     s = focusWindow(s, "battle");
     expect(openWindows(s).at(-1)).toBe("battle");
     expect(topWindow(s)).toBe("battle");
+  });
+
+  it("raising a window changes only its stacking: in the page they keep one order", () => {
+    let s = syncWindows(openWindow(defaultWindows(), "skills"), [
+      "dialog",
+      "container-bag-2",
+      "container-bag",
+    ]);
+    const page = pageOrder(openWindows(s));
+    expect(page).toEqual([
+      "battle",
+      "inventory",
+      "skills",
+      "chat",
+      "dialog",
+      "container-bag",
+      "container-bag-2",
+    ]);
+    // Touched, the battle list and a container come on top; their nodes stay where they
+    // were (moved, a node replays its opening animation and loses its focus and scroll).
+    for (const id of ["battle", "container-bag", "chat"] as const) {
+      s = focusWindow(s, id);
+      expect(openWindows(s).at(-1)).toBe(id);
+      expect(pageOrder(openWindows(s))).toEqual(page);
+    }
   });
 
   it("never closes the chat: it only folds, and Escape skips it", () => {

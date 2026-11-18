@@ -288,6 +288,21 @@ export function openWindows(s: WindowsState): WinKey[] {
 }
 
 /**
+ * The windows in the order they go in the page: always the same (the toolbar's, the
+ * server's, then the containers by key), whatever their stacking, which is only their
+ * z-index (openWindows). A window brought to the front keeps its node where it is: moved,
+ * the node replayed its opening animation, lost the focus inside it and its scroll.
+ */
+export function pageOrder(ids: readonly WinKey[]): WinKey[] {
+  const fixed: readonly string[] = [...WINDOW_IDS, ...SERVER_WINDOWS];
+  const rank = (id: WinKey): number => {
+    const i = fixed.indexOf(id);
+    return i < 0 ? fixed.length : i;
+  };
+  return [...ids].sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0));
+}
+
+/**
  * The window Escape closes: the one on top of the stack (the last opened or touched) that
  * can close; undefined when there is none (Escape then opens the options). The windows a
  * new player starts with (battle, equipment) sit under the stack until they are touched,

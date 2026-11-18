@@ -49,12 +49,13 @@ import { Toolbar, windowIcon } from "./Toolbar.tsx";
 import { lowHealth } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
 import { ornamentStyle } from "./ornaments.ts";
+import { dragWindow, resizeDrag, watchedRef } from "./window-dom.ts";
+import type { DragEnv, WatchedRef } from "./window-dom.ts";
 import {
   WINDOWS_STORAGE_KEY,
   WINDOW_KEYS,
   WINDOW_TITLE,
   clampPlace,
-  clampSize,
   closeWindow,
   collapseWindow,
   containerKeys,
@@ -66,13 +67,13 @@ import {
   moveWindow,
   openWindow,
   openWindows,
+  pageOrder,
   placeOf,
   placeWindow,
   resetWindows,
   resizeWindow,
   saveWindows,
   serverWindows,
-  snapPlace,
   syncWindows,
   toggleWindow,
   windowForHighlight,
@@ -804,10 +805,11 @@ export function GameView(props: GameViewProps): JSX.Element {
         </GameWindow>
       );
     };
-    // Bottom to top (Tab goes through them in that order too); a closing one stays drawn
-    // for its fade.
-    const shown = openWindows(win.state);
-    for (const id of win.closing) if (!shown.includes(id)) shown.push(id);
+    // The stacking, bottom to top (a closing one stays drawn for its fade, on top), is
+    // each window's z-index; in the page they keep one order (pageOrder).
+    const stack = openWindows(win.state);
+    for (const id of win.closing) if (!stack.includes(id)) stack.push(id);
+    const shown = pageOrder(stack);
     return (
       <div
         ref={gameBox}
@@ -850,8 +852,8 @@ export function GameView(props: GameViewProps): JSX.Element {
             }
           />
           {/* The windows' area: the screen above the bar (windows never go under it). */}
-          <div class="win-layer" key="windows" ref={win.layerRef}>
-            {shown.map((id, i) => frame(id, i))}
+          <div class="win-layer" key="windows" ref={win.layer.set}>
+            {shown.map((id) => frame(id, stack.indexOf(id)))}
           </div>
         </div>
         {menu}
@@ -998,9 +1000,6 @@ const WINDOW_SIZE: Record<Exclude<WindowId, "chat">, "narrow" | "normal" | "wide
 
 const isPanelTab = (id: string): id is PanelTab => (PANEL_TABS as readonly string[]).includes(id);
 
-/** Pointer travel (CSS px) before a press on a title bar becomes a drag. */
-const DRAG_START_PX = 5;
-
 /** How long a closing window fades out (matches .gwin[data-closing] in windows.css), ms. */
 const CLOSE_MS = 100;
 
@@ -1020,8 +1019,11 @@ interface WindowsApi {
   resize(id: WinKey, e: PointerEvent, el: HTMLElement): void;
   /** A key on the move handle (ui/windows.ts windowNudge): true when it was the window's. */
   moveKey(id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean;
-  /** The windows' area (.win-layer: the screen above the bar). */
-  layerRef: Ref<HTMLDivElement>;
+  /**
+   * The windows' area (.win-layer: the screen above the bar), watched while it is in the
+   * page: only the desktop layout has one, and each switch back to it mounts a new one.
+   */
+  layer: WatchedRef<HTMLDivElement>;
 }
 
 /** A box on screen in px from the top left of `area`. */
@@ -1031,6 +1033,25 @@ const rectIn = (r: DOMRect, area: DOMRect): Rect => ({
   width: r.width,
   height: r.height,
 });
+
+/**
+ * The windows the player placed that are (partly) out of the area now, and where they go
+ * back inside (their stacking stays).
+ */
+function outsiders(layer: HTMLElement, s: WindowsState): [WinKey, number, number][] {
+  const area = layer.getBoundingClientRect();
+  const moves: [WinKey, number, number][] = [];
+  for (const el of layer.children) {
+    if (!(el instanceof HTMLElement) || !el.hasAttribute("data-placed")) continue;
+    const id = el.dataset["window"] as WinKey | undefined;
+    if (!id) continue;
+    const p = placeOf(s, id);
+    if (p.x === undefined || p.y === undefined) continue;
+    const at = clampPlace(p.x, p.y, el.getBoundingClientRect(), area);
+    if (at.x !== p.x || at.y !== p.y) moves.push([id, at.x, at.y]);
+  }
+  return moves;
+}
 
 /** The boxes of the other windows in the area, for the magnet (not those fading out). */
 function otherRects(layer: HTMLElement, el: HTMLElement, area: DOMRect): Rect[] {
@@ -1068,7 +1089,27 @@ function useWindows(
   stateRef.current = state;
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom > 0 ? zoom : 1;
-  const layerRef = useRef<HTMLDivElement>(null);
+  // Never off the screen nor under the bar (docs/17 UI-5): when the area shrinks (a smaller
+  // window, a larger interface scale) or a remembered place came from a larger screen, the
+  // windows the player placed move back inside, all of them. Watched through the ref, not
+  // an effect of the first render: the area comes and goes with the desktop layout.
+  const [layer] = useState(() =>
+    watchedRef<HTMLDivElement>((el) => {
+      if (typeof ResizeObserver === "undefined") return () => {};
+      const observer = new ResizeObserver(() => {
+        const moves = outsiders(el, stateRef.current);
+        if (moves.length > 0)
+          setState((s) => moves.reduce((acc, [id, x, y]) => placeWindow(acc, id, x, y), s));
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+    }),
+  );
+  const dragEnv: DragEnv = {
+    pointer: window,
+    body: document.body.classList,
+    zoom: () => zoomRef.current,
+  };
   useEffect(() => {
     try {
       storage?.setItem(WINDOWS_STORAGE_KEY, saveWindows(state));
@@ -1079,32 +1120,6 @@ function useWindows(
   useEffect(() => () => timers.current.forEach((t) => clearTimeout(t)), []);
 
   const update = (f: (s: WindowsState) => WindowsState): void => setState((s) => f(s));
-
-  // Never off the screen nor under the bar (docs/17 UI-5): when the area shrinks (a smaller
-  // window, a larger interface scale) or a remembered place came from a larger screen, the
-  // windows the player placed move back inside, all of them.
-  useEffect(() => {
-    const layer = layerRef.current;
-    if (!layer || typeof ResizeObserver === "undefined") return undefined;
-    const keepInside = (): void => {
-      const area = layer.getBoundingClientRect();
-      const moves: [WinKey, number, number][] = [];
-      for (const el of layer.children) {
-        if (!(el instanceof HTMLElement) || !el.hasAttribute("data-placed")) continue;
-        const id = el.dataset["window"] as WinKey | undefined;
-        if (!id) continue;
-        const p = placeOf(stateRef.current, id);
-        if (p.x === undefined || p.y === undefined) continue;
-        const at = clampPlace(p.x, p.y, el.getBoundingClientRect(), area);
-        if (at.x !== p.x || at.y !== p.y) moves.push([id, at.x, at.y]);
-      }
-      if (moves.length > 0)
-        update((s) => moves.reduce((acc, [id, x, y]) => placeWindow(acc, id, x, y), s));
-    };
-    const observer = new ResizeObserver(keepInside);
-    observer.observe(layer);
-    return () => observer.disconnect();
-  }, []);
 
   const stopClosing = (id: WinKey): void => {
     const timer = timers.current.get(id);
@@ -1169,128 +1184,50 @@ function useWindows(
   };
 
   const grab = (id: WinKey, e: PointerEvent, el: HTMLElement): void => {
-    const layer = layerRef.current;
-    if (e.button !== 0 || !layer) return;
+    const area = layer.current;
+    if (e.button !== 0 || !area) return;
     e.preventDefault();
-    const area = layer.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    const off = { x: e.clientX - r.left, y: e.clientY - r.top };
-    // Measured once: the others do not move while this one does.
-    const others = otherRects(layer, el, area);
-    let place = { x: r.left - area.left, y: r.top - area.top };
-    let moved = false;
-    const onMove = (ev: PointerEvent): void => {
-      if (!moved) {
-        if (Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < DRAG_START_PX) return;
-        moved = true;
-        document.body.classList.add("dragging-window");
-        el.dataset["dragging"] = "";
-        // Its default place may hang from the right or the bottom (windows.css): from now
-        // on only left and top place it.
-        el.style.right = "auto";
-        el.style.bottom = "auto";
-      }
-      place = snapPlace(
-        {
-          x: ev.clientX - area.left - off.x,
-          y: ev.clientY - area.top - off.y,
-          width: r.width,
-          height: r.height,
-        },
-        area,
-        others,
-      );
-      // A window's own px are screen px / zoom.
-      const k = zoomRef.current;
-      el.style.left = `${place.x / k}px`;
-      el.style.top = `${place.y / k}px`;
-    };
-    const onUp = (): void => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      if (!moved) return;
-      document.body.classList.remove("dragging-window");
-      delete el.dataset["dragging"];
-      // The state places the window from now on.
-      el.style.left = "";
-      el.style.top = "";
-      el.style.right = "";
-      el.style.bottom = "";
-      update((s) => moveWindow(s, id, place.x, place.y));
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    const box = area.getBoundingClientRect();
+    // The others are measured once: they do not move while this one does.
+    dragWindow(
+      dragEnv,
+      el,
+      e,
+      box,
+      otherRects(area, el, box),
+      placeOf(stateRef.current, id),
+      (x, y) => update((s) => moveWindow(s, id, x, y)),
+    );
   };
 
   const resize = (id: WinKey, e: PointerEvent, el: HTMLElement): void => {
-    const layer = layerRef.current;
-    if (e.button !== 0 || !layer) return;
+    const area = layer.current;
+    if (e.button !== 0 || !area) return;
     e.preventDefault();
     e.stopPropagation();
-    const area = layer.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    // As far as the area goes from where the window starts (never under the bar).
-    const room = { width: area.right - r.left, height: area.bottom - r.top };
-    // The top left corner stays: a window at a default place that hangs from the bottom
-    // (the chat, the dialog) is pinned where it is, or it would grow upwards.
-    const at = { x: r.left - area.left, y: r.top - area.top };
-    let size = { width: r.width, height: r.height };
-    let moved = false;
-    const onMove = (ev: PointerEvent): void => {
-      size = clampSize(r.width + ev.clientX - e.clientX, r.height + ev.clientY - e.clientY, room);
-      const k = zoomRef.current;
-      if (!moved) {
-        document.body.classList.add("resizing-window");
-        el.style.left = `${at.x / k}px`;
-        el.style.top = `${at.y / k}px`;
-        el.style.right = "auto";
-        el.style.bottom = "auto";
-        el.style.maxHeight = "none";
-      }
-      el.style.width = `${size.width / k}px`;
-      el.style.height = `${size.height / k}px`;
-      moved = true;
-    };
-    const onUp = (): void => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      if (!moved) return;
-      document.body.classList.remove("resizing-window");
-      for (const prop of [
-        "width",
-        "height",
-        "left",
-        "top",
-        "right",
-        "bottom",
-        "maxHeight",
-      ] as const)
-        el.style[prop] = "";
-      update((s) => resizeWindow(placeWindow(s, id, at.x, at.y), id, size.width, size.height));
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    resizeDrag(
+      dragEnv,
+      el,
+      e,
+      area.getBoundingClientRect(),
+      placeOf(stateRef.current, id),
+      (x, y, w, h) => update((s) => resizeWindow(placeWindow(s, id, x, y), id, w, h)),
+    );
   };
 
   const moveKey = (id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean => {
-    const layer = layerRef.current;
-    if (!layer) return false;
-    const area = layer.getBoundingClientRect();
+    const area = layer.current;
+    if (!area) return false;
+    const box = area.getBoundingClientRect();
     const next = windowNudge(stateRef.current, id, e, {
-      rect: rectIn(el.getBoundingClientRect(), area),
-      area: { width: area.width, height: area.height },
-      others: otherRects(layer, el, area),
+      rect: rectIn(el.getBoundingClientRect(), box),
+      area: { width: box.width, height: box.height },
+      others: otherRects(area, el, box),
     });
     if (!next) return false;
+    // A move raises the window: only its z-index changes (pageOrder), so the focus stays
+    // on its handle.
     update(() => next);
-    // A move raises the window (it is drawn later in the layer): keep the focus on its handle.
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLElement>(`.gwin[data-window="${id}"] .gwin-move`)?.focus(),
-    );
     return true;
   };
 
@@ -1305,7 +1242,7 @@ function useWindows(
     grab,
     resize,
     moveKey,
-    layerRef,
+    layer,
   };
 }
 
