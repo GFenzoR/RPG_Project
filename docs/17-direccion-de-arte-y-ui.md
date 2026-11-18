@@ -382,11 +382,11 @@ animados"); lo usan las criaturas de Gemini.
 |---|---|---|---|---|
 | Quieto | 2–4 | 400–600 ms por frame (ciclo de 1,6–2,4 s) | 150 ms sin paso | sí, con fase por id de criatura |
 | Caminar | 4 (mínimo 2) más la pose quieta | 2 frames por casilla: un ciclo cada 2 pasos | `CreatureMove` | por distancia, no por tiempo |
-| Atacar cuerpo a cuerpo | 3–4 (anticipación, golpe, recuperación) | 300–400 ms | evento de ataque (proto pendiente, ANI-7) | no |
-| Atacar a distancia | 3 | 300 ms | `Projectile` que sale de su casilla | no |
-| Conjurar | 3–4 | 400 ms | efecto de conjuro o de elemento sobre ella | no |
+| Atacar cuerpo a cuerpo | 3–4 (anticipación, golpe, recuperación) | 300–400 ms | `CreatureAttack{MELEE}` (ANI-7) | no |
+| Atacar a distancia | 3 | 300 ms | `CreatureAttack{RANGED}` (ANI-7) | no |
+| Conjurar | 3–4 | 400 ms | `CreatureAttack{SPELL}` (ANI-7); curar y conjurar, el efecto sobre ella | no |
 | Recibir golpe | 1 (o el procedural) | 150 ms | `Effect` 1 o `FloatingText` de daño en su casilla | no |
-| Morir | 4–6 | 500–700 ms, después el cadáver | desaparición por muerte (ANI-7) | no |
+| Morir | 4–6 | 500–700 ms, después el cadáver | `CreatureDisappear{reason: DEATH}` (ANI-7) | no |
 | Aparecer | procedural | 300 ms | `CreatureAppear` que no viene del borde de la vista | no |
 
 - **Equivalencias con LPC** (convención de las hojas LPC clásicas; LPC Revised cambió en
@@ -456,6 +456,31 @@ frames ya armados en el atlas: cero costo en el cliente. Los tintes de T5.7 (`ti
 siguen igual.
 
 ### ANI-7 Lo que falta del servidor
+**Hecho (A9, 2026-11-18).** El servidor dice quién ataca a quién y por qué sale una
+criatura (docs/05, "Quién ataca y por qué sale una criatura"; `server/internal/session/
+attack.go`), y el cliente anima con eso (`client/src/render/creature-events.ts` y
+`game-canvas.ts`):
+- **`CreatureAttack{id, kind, target_id, to, radius}`** antes del `Projectile`, el
+  `Effect` y el `FloatingText` del ataque: `MELEE`, `RANGED` o `SPELL`, con el objetivo (si
+  el cliente lo conoce), su casilla (o el borde de la ventana de su lado) o el centro y el
+  radio de un área. El atacante juega su clip `attack` hacia el objetivo (los humanoides
+  LPC, el `slash`; todavía no hay clips propios de disparo ni de conjuro, así que los tres
+  usan ese) y un sprite de un solo frame, la embestida de ANI-5. Un área se juega hacia
+  donde mira. La víctima retrocede alejándose del atacante o del centro del área.
+- **`CreatureDisappear.reason`**: `OUT_OF_VIEW`, `DEATH`, `DESPAWN`, `TELEPORT`,
+  `LOGOUT`. Solo `DEATH` deja el cuerpo cayendo (LPC: el clip `death`, el `hurt` de la
+  hoja; un solo frame: la caída de ANI-5); el resto lo saca en el momento.
+- **Sin filtrar nada:** el ataque llega solo a quien conoce al atacante (el de un
+  invisible lo hace visible antes), nunca habla de un objetivo invisible y de uno fuera de
+  la ventana da solo el lado. Volverse invisible sale como `TELEPORT`.
+- **Servidor viejo:** `Welcome.attack_events` en `false` y el cliente sigue deduciéndolo
+  como antes (abajo).
+- **Pendiente:** clips propios de disparo (`shoot`) y de conjuro (`spellcast`) para LPC;
+  un jugador que muere a la vista y reaparece en un templo también a la vista no deja
+  su cuerpo cayendo (el mismo id vuelve en el mismo batch); un efecto de desvanecerse para
+  `TELEPORT` y `LOGOUT`.
+
+Lo que había antes, y queda como respaldo con un servidor sin `attack_events`:
 - **Quién ataca a quién.** `Effect` solo trae la casilla. Para animar el golpe del atacante
   hace falta `attacker_id` (y la víctima) en un mensaje nuevo o en `Effect`. Es protocolo:
   docs/05 y revisión con `code-reviewer`. Mientras tanto el cliente lo deduce
@@ -1179,7 +1204,7 @@ Las que tocan `server/` o `proto/` pasan por `code-reviewer`.
 | A6 ✅ | Movimiento: MOV-1 a MOV-6, con latencia simulada para el E2E. Hecho: MOV-1, MOV-2 en parte, MOV-3, MOV-4, MOV-5, MOV-6, MOV-7 en parte y el E2E de MOV-9 con latencia (§4, "Hecho: A6, primera parte" y "segunda parte"). Falta: el toque corto que solo gira (MOV-2) y el polvo y las ondas al pisar (MOV-7, con ART-7) | cliente, servidor, proto, docs/02, 05 y 07 | — |
 | A7 ✅ | Vista de hasta 31x21: el cliente pide su vista, el servidor ajusta el AOI, escala 1,5x opcional, medición de ancho de banda. Hecho, con una ventana para todos en vez de una por cliente ("Hecho: A7"). Falta: la escala 1,5x y `make bots` contra un servidor real | servidor, proto, cliente, docs/01, 05 y 07 | A3 |
 | A8 ✅ | Animación procedural de criaturas (ANI-5) — **hecho** (2026-11-17) | cliente | — |
-| A9 | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte | servidor, proto, cliente | A8 |
+| A9 ✅ | Evento de ataque y motivo de desaparición (ANI-7); animaciones de ataque y muerte — **hecho** (2026-11-18) | servidor, proto, cliente | A8 |
 | A10 ✅ | Renderer y atlas: anclas por sprite, frames por acción, tiles animados, variantes de suelo, sombra de contacto y capa de sombras, `elevation` — **hecho** (2026-11-18), con `elevation` (ART-8) y el click sobre la cabeza (ART-2) | renderer, spritepack, cliente, editor | — |
 | A11 ✅ | Muros por piezas con autotile y silueta del jugador detrás de un muro (ART-3) — **hecho** (2026-11-18), con la muralla de 32x96, los muros con ventana y el marco de las puertas de casa (que todavía no se ponen en los mapas: la muralla y las ventanas esperan una tarea de mapa) | renderer, spritegen o LPC, `data/items` | A10 |
 | A12 | Integración LPC: humanoides (jugador, NPCs, cosméticos), suelos, agua y árboles — **hecho:** humanoides de LPC; suelos, agua y árboles con spritegen (SRC-4) | assets, herramienta de composición, `CREDITS.md` | A10 y la política de §6 |

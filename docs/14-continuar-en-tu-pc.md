@@ -119,9 +119,14 @@ el punto 5:
     cuatro monstruos humanoides son personajes de LPC de 64x64 (`assets/vendor/ulpc`,
     `animations` de `assets/sprites.yaml`); jabalí y ciervo trotan con frames de spritegen.
     Lo que quedó pendiente de eso:
-    - **A9 (protocolo):** quién ataca a quién y si una criatura murió o salió de la vista
-      (ANI-7). Hasta entonces el cliente lo deduce (`render/creature-events.ts`) y puede
-      animar al monstruo equivocado cuando varios rodean a un jugador.
+    - **A9 (hecho, rama `feat/attack-events`):** el servidor manda quién ataca a quién
+      (`CreatureAttack`) y por qué sale una criatura (`CreatureDisappear.reason`), y el
+      cliente anima con eso en vez de deducirlo (docs/05 "Quién ataca y por qué sale una
+      criatura", docs/17 ANI-7). La deducción queda para un servidor viejo. Pendiente de
+      A9: `make bots` contra un servidor real con los eventos (docs/07 "Eventos de
+      ataque"); un jugador que muere a la vista y reaparece en un templo también a la
+      vista no deja su cuerpo cayendo; un desvanecerse para `TELEPORT` y `LOGOUT`;
+      `DESPAWN` no lo usa ningún camino todavía.
     - **Conjurar y disparar:** las hojas `spellcast` y `shoot` de LPC no se usan todavía;
       un hechizo o un arco juega el ataque (`slash`).
     - **Animales:** siete ya tienen frames hechos con el Gemini del dueño (rama

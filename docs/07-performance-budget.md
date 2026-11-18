@@ -443,6 +443,37 @@ tiempos de `go test -bench` (mediana de 3):
   como en "Cliente" arriba): anotar FPS y draw calls a 1x y a la escala por defecto en
   1920x1080, en el pueblo con bots, contra el presupuesto (60 fps, < 50 draw calls).
 
+### Eventos de ataque (A9, 2026-11-18)
+`CreatureAttack` por cada ataque que ocurre (a quien conoce al atacante) y el motivo de
+cada `CreatureDisappear` (docs/05, "Quién ataca y por qué sale una criatura"). Medido como
+la vista ancha: `TestCrowdBandwidth` y `go test -bench` en proceso (sin Docker en esa
+tarea), mismo notebook, Windows nativo, antes y después en la misma sesión (mediana de 3;
+otra tarea del lote corría en paralelo, así que los µs tienen ruido; los bytes y las
+asignaciones no):
+
+| Métrica | Antes | Con A9 | Presupuesto |
+|---|---|---|---|
+| Salida por jugador, base 100 (B/s) | 490 | 532 (+8,6 %) | < 4096 |
+| Salida por jugador, stress 300 (B/s) | 1676 | 1684 (+0,5 %) | < 4096 |
+| Tick medio en `TestCrowdBandwidth`, base / stress (µs) | 105 / 954 | 108 / 970 | p99 < 10 ms |
+| `BenchmarkCrowdTick` base (µs / asignaciones) | 98,6 / 308 | 96,7 / 310 | |
+| `BenchmarkCrowdTick` stress (µs / asignaciones) | 1036 / 1005 | 1033 / 1005 | |
+| `BenchmarkTickMonsters` 100 + 256 (µs / asignaciones) | 278 / 486 | 234 / 489 | |
+| `BenchmarkTickMonsters` 100 + 1024 (µs / asignaciones) | 613 / 563 | 505 / 576 | |
+| `BenchmarkTickPlayersWalking` 300 (µs / asignaciones) | 180 / 1152 | 160 / 1151 | |
+
+- **Bytes:** un `CreatureAttack` pesa unos 23 B (con el campo del `oneof`) por cliente
+  que lo recibe; el motivo de un `CreatureDisappear`, 2 B. Base sube más que stress porque
+  ahí los bots pelean con monstruos y cada ronda (de ellos y de los monstruos) es un
+  ataque más para todos los que miran; en el pueblo de stress casi no hay monstruos. Queda
+  muy lejos de los 4 KB/s.
+- **Tick:** el ataque se arma una vez y se comparte entre todos los que lo ven (como
+  `hitEvents`); solo un cliente que ve al atacante pero no al objetivo recibe uno propio
+  (el borde de su ventana). Las asignaciones suben de 2 a 13 por tick en los benchmarks con
+  monstruos peleando; los tiempos quedan dentro del ruido.
+- **Pendiente:** `make bots` contra un servidor real con A9 (base y stress), para
+  confirmar los números de arriba como en "`make bots` contra un servidor real".
+
 ## Medir con el dashboard (T4.4)
 Con el profile `monitoring` (`make monitoring-up` en local; `09-deployment-aws.md` en
 producción), el dashboard "Neque's Realm — servidor" de Grafana muestra en vivo los mismos

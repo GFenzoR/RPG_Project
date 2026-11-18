@@ -516,16 +516,23 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   respiración, embestida de 6 px, flotar (`flying`), espejo según `facing`, caída aplastada
   con desvanecido. Además, para todos: destello rojo y empujón de 2 px al recibir un golpe
   y aparición con fundido de 300 ms. Un frame no crea objetos para esto (docs/07).
-- Quién ataca a quién (`render/creature-events.ts`, puro, con tests) se deduce de lo que
-  llegó desde el frame anterior, hasta que el protocolo lo diga (ANI-7, tarea A9): un
-  `Projectile` anima a la criatura de su casilla de salida; un efecto de golpe, bloqueo o
-  elemento sin proyectil en el mismo batch, al atacante cuerpo a cuerpo (el propio jugador
-  si su objetivo está ahí y al lado; si no, una criatura del otro bando al lado, primero la
-  que mira esa casilla); un número de daño hace destellar a la víctima.
-- Muerte: una criatura que sale de la vista con la barra en 0 murió ahí (el servidor manda
-  `CreatureHealth` 0 antes de `CreatureDisappear`). Su cuerpo queda como "fantasma" sin
-  nombre ni barra mientras juega su caída (`death` de LPC, o la procedural) sobre el
-  cadáver, y se borra al terminar o si la criatura vuelve.
+- Quién ataca a quién (`render/creature-events.ts`, puro, con tests; ANI-7, A9): con
+  `Welcome.attack_events` lo dice el servidor. Cada `CreatureAttack` que llegó desde el
+  frame anterior (`WorldState.attacks`) juega el ataque de su atacante hacia el objetivo
+  donde el cliente lo dibuja, o hacia `to` (`attackDir`; un área, hacia donde mira); un
+  número de daño hace destellar a la víctima y la empuja lejos del ataque de ese batch que
+  la apuntó o del centro del área que la cubre (`attackerOf`, `pushFrom`). Con un servidor
+  viejo (sin `attack_events`) se deduce como antes: un `Projectile` anima a la criatura de
+  su casilla de salida; un efecto de golpe, bloqueo o elemento sin proyectil en el mismo
+  batch, al atacante cuerpo a cuerpo (el propio jugador si su objetivo está ahí y al lado;
+  si no, una criatura del otro bando al lado, primero la que mira esa casilla).
+- Muerte: una criatura cuyo `CreatureDisappear` dice `DEATH` (`WorldState.departures`,
+  `leavesDying`; con un servidor viejo, la que sale con la barra en 0) murió ahí. Su
+  cuerpo queda como "fantasma" sin nombre ni barra mientras juega su caída (`death` de
+  LPC, o la procedural) sobre el cadáver, y se borra al terminar o si la criatura vuelve.
+  Cualquier otro motivo la saca en el momento.
+- E2E: `__rpgClient.attacks(ms)` y `poses()` (quién está en pose de ataque y quién cae);
+  `shotPose` de `e2e/game.spec.ts` saca la captura mientras la pose dura.
 
 ## Sprites de efectos
 - Cada `effect_id` que manda el servidor (1–7 y 10–16, docs/05) tiene una tira de frames

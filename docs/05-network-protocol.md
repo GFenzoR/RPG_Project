@@ -38,7 +38,7 @@
 2. Cliente → HTTP GET /api/characters                  → lista de personajes
 3. Cliente → HTTP POST /api/play {character_id}        → session_token (vive 60 s)
 4. Cliente abre WS y envía Hello {session_token, client_version, locale}
-5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height} + FullMapView + Stats + Inventory + Skills
+5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height, attack_events} + FullMapView + Stats + Inventory + Skills
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
@@ -59,6 +59,9 @@ Detalles (T1.4, `server/internal/net/gateway`):
   `view_width`/`view_height` (31 y 21) son la ventana de casillas que el servidor le
   mantiene al día, sin el margen (ver "Formato de mapa"): el cliente dibuja como mucho
   eso. Un servidor anterior a la vista ancha no los manda (0): el cliente toma 15x11.
+  `attack_events` (A9) dice que el servidor manda `CreatureAttack` y el motivo de cada
+  `CreatureDisappear` ("Quién ataca y por qué sale una criatura"); un servidor anterior
+  no lo manda (`false`) y el cliente lo deduce de efectos, proyectiles y barras de vida.
 - **Posición inicial:** la guardada; si el personaje nunca jugó (o su casilla dejó de
   ser caminable) el templo de su isla (`town`, o la primera isla del mundo). Si está
   ocupada, la casilla libre más cercana (hasta 3 de distancia).
@@ -569,12 +572,14 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `combat.attack_interval_ms` (2000 ms). Fórmulas en `server/internal/combat` (doc 02).
   Sin arma golpea con los puños (`combat.fist_attack`, con su skill `fist`); con arma,
   con la de la mano derecha (T1.8).
-- Cada golpe (de jugador o de monstruo) manda a quien ve la casilla: `Effect`
-  (`effect_id` 1 = golpe con daño, 2 = bloqueado o fallado) y, si hubo daño,
-  `FloatingText{DAMAGE}` y `CreatureHealth`. El jugador golpeado recibe además
+- Cada golpe (de jugador o de monstruo) manda antes `CreatureAttack{MELEE}` a quien
+  conoce al atacante (A9, "Quién ataca y por qué sale una criatura") y después, a quien ve
+  la casilla: `Effect` (`effect_id` 1 = golpe con daño, 2 = bloqueado o fallado) y, si
+  hubo daño, `FloatingText{DAMAGE}` y `CreatureHealth`. El jugador golpeado recibe además
   `PlayerStats`. Los `effect_id` son constantes del protocolo hasta que exista
   `data/effects.yaml`.
-- Muerte de un monstruo: `CreatureDisappear`, `TileUpdate` con `creature_remains` encima
+- Muerte de un monstruo: `CreatureDisappear{reason: DEATH}` (después de su
+  `CreatureHealth` 0), `TileUpdate` con `creature_remains` encima
   de la pila (dura `combat.monster_corpse_ms`; es un contenedor con el botín, T1.8),
   `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
   se reparte según el daño de los que siguen conectados) y, al que más daño hizo,
@@ -591,7 +596,8 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   cambió el %) solo cuando le faltaba vida o maná.
 - Muerte de un jugador (T1.11, reglas en `02-game-design.md`): `TileUpdate` con el cuerpo
   (`creature_remains`) donde murió, el jugador reaparece en su templo (como un teleport:
-  `FullMapView`, `CreatureDisappear`/`CreatureAppear` a los observadores) y recibe
+  `FullMapView`, `CreatureDisappear{reason: DEATH}` a quienes lo veían morir y
+  `CreatureAppear` a quienes ven el templo) y recibe
   `Inventory`, `PlayerStats`, `PlayerSkills` y el `Message` de sistema `death.died` con
   `experience` (perdida) y `blessings` (las que tenía y se consumieron), ambos `number`.
   El cliente muestra la pantalla de muerte con ese mensaje. Sacar, usar o meter algo en el
@@ -677,6 +683,11 @@ Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
   que ve, movida en un eje hasta el borde de su ventana del lado por donde cruza el disparo
   (T4.1): no viaja la casilla de un tirador ni la de un blanco fuera de la ventana, solo el
   lado.
+- **Quién ataca** (A9): un hechizo o una runa sobre una criatura y un hechizo de área
+  mandan antes `CreatureAttack{SPELL}` (el de área sin objetivo, con su centro y su radio);
+  una varita o un arma a distancia, `CreatureAttack{RANGED}`; los ataques a distancia y
+  los hechizos de los monstruos, `RANGED` y `SPELL` ("Quién ataca y por qué sale una
+  criatura").
 - **Curación**: `Effect` 3, `FloatingText{HEAL}` si curó algo y `CreatureHealth` si cambió
   el %.
 - **Conjurar**: la runa aparece en la mochila equipada (`ContainerUpdate` a quien la tiene
@@ -1188,7 +1199,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 - **Efecto 7** (`EffectBuff`): un hechizo de condición sobre su objetivo o una cura.
 - `magic.nothing_to_cure`: una cura sin nada que curar (no gasta maná).
 - **Invisibilidad, filtrada en el servidor**: al volverse invisible, quien lo conocía recibe
-  `CreatureDisappear`. Mientras dure, nadie más lo recibe: ni en `FullMapView` /
+  `CreatureDisappear{reason: TELEPORT}` (como si se hubiera ido: nada dice que sigue ahí). Mientras dure, nadie más lo recibe: ni en `FullMapView` /
   `MapSlice`, ni `CreatureAppear` o `CreatureMove`, ni sus golpes, curas o vida
   (`Effect`, `FloatingText`, `CreatureHealth`), ni un `Projectile` hacia él. Su chat local
   llega con su nombre pero sin `pos`. Al terminar le llega `CreatureAppear` a quien ve su
@@ -1196,13 +1207,60 @@ Reglas en `02-game-design.md` ("Condiciones").
   Un invisible sigue ocupando su casilla: quien intente pisarla recibe `WalkRejected` (un
   camino por click vuelve y lo rodea) y los monstruos lo esquivan. Es una pista aceptada.
 
+### Quién ataca y por qué sale una criatura (A9, `server/internal/session/attack.go`)
+Para que el cliente anime el golpe, el disparo o el conjuro del atacante y la caída de
+quien muere (`17-direccion-de-arte-y-ui.md`, ANI-7) sin adivinarlos. `Welcome.attack_events`
+dice que el servidor los manda.
+- **`CreatureAttack{id, kind, target_id, to, radius}`**: la criatura `id` atacó. Sale
+  solo cuando el ataque ocurre (la ronda tocó, pasó los chequeos de rango, línea de visión
+  y PvP, y, en un monstruo, su `chance`), en el batch del ataque y **antes** de su
+  `Projectile`, `Effect` y `FloatingText`.
+  - `kind`: `MELEE` (un golpe a una casilla: arma, puños, el ataque `melee` de un
+    monstruo), `RANGED` (un disparo: arma a distancia, varita, el ataque `distance` de un
+    monstruo), `SPELL` (un hechizo o una runa sobre una criatura, un hechizo de área, el
+    ataque `spell` de un monstruo).
+  - `target_id`: la criatura atacada, si el cliente la conoce; 0 en un hechizo de área o
+    si el objetivo está fuera de su ventana.
+  - `to`: la casilla del objetivo; con el objetivo fuera de la ventana, el borde de la
+    ventana de su lado, en línea con el atacante (como `Projectile`); en un área, su centro
+    (la casilla de quien lo lanza). `radius`: el radio del área; 0 si es a un objetivo.
+  - Un hechizo de área es **un** `CreatureAttack`, no uno por criatura alcanzada.
+  - No son ataques (no lo mandan): curar, conjurar, un hechizo de condición sobre uno
+    mismo (también la invisibilidad), el daño periódico de una condición.
+- **Lo que no se filtra** (el mismo criterio que el resto del AOI):
+  - Solo lo recibe quien conoce al atacante (`Knows`): un invisible no ataca sin dejar de
+    serlo, y el ataque de un jugador termina su invisibilidad **antes** de mandarse, así
+    los demás reciben su `CreatureAppear` primero y nunca un ataque de alguien que no
+    conocen.
+  - Un ataque a alguien que el cliente no conoce no le llega si el objetivo es un
+    invisible o está en una casilla que ve (un golpe a una casilla vacía delataría al
+    invisible: el de un monstruo que ve invisibles solo le llega al invisible). Si el
+    objetivo está fuera de su ventana, le llega sin `target_id` y con `to` en el borde.
+  - Quien ve al objetivo pero no al atacante no recibe `CreatureAttack` (no tiene a quién
+    animar): le llegan, como antes, el `Projectile` desde el borde y el golpe.
+- **`CreatureDisappear{id, reason}`**: por qué salió de la vista, sin decir más de lo que
+  quien mira ya ve.
+
+  | `reason` | Cuándo |
+  |---|---|
+  | `OUT_OF_VIEW` | Caminó fuera de la ventana, o quien mira caminó o fue movido lejos (lo que se borra antes de un `FullMapView`) |
+  | `DEATH` | Murió ahí: un monstruo (después de su `CreatureHealth` 0) o un jugador, también en una arena (reaparece en su templo con `CreatureAppear`) |
+  | `DESPAWN` | El servidor sacó a un monstruo o NPC sin que muera. Hoy ningún camino lo hace: queda en el protocolo para monstruos de eventos o invocados |
+  | `TELEPORT` | Dejó su casilla sin caminar ni morir: un portal (escalera, agujero, teletransporte, escalera de mano, soga), un barco, `/tp`, el teleport de un NPC, la expulsión de una casa. **Volverse invisible también** manda `TELEPORT`: para quien mira se fue, y nada dice que sigue ahí |
+  | `LOGOUT` | El jugador salió del juego: `Logout`, la conexión cerrada, una expulsión o un ban, la inactividad, un cliente lento, entrar desde otra conexión, el fin del bloqueo de un link-dead |
+  | `UNSPECIFIED` | Un servidor anterior (`attack_events` en `false`) |
+- **Cliente:** con `attack_events`, el atacante juega su clip de ataque (o la embestida
+  procedural) hacia su objetivo y una criatura cae solo con `DEATH`; sin él, lo deduce
+  (`client/src/render/creature-events.ts`, ANI-7).
+
 ## Mensajes servidor → cliente (eventos)
 | Mensaje | Uso |
 |---|---|
 | `FullMapView` | Área completa visible (al entrar, teletransportarse o pasar por un portal) y la época de la caminata (`walk_epoch`) |
 | `MapSlice` | Fila o columna nueva al moverse |
 | `TileUpdate` | Cambió la pila de un tile |
-| `CreatureAppear` / `CreatureDisappear` | Entra o sale de la vista |
+| `CreatureAppear` / `CreatureDisappear` | Entra o sale de la vista; `CreatureDisappear.reason` dice por qué (A9) |
+| `CreatureAttack` | Quién atacó, cómo (`MELEE`, `RANGED`, `SPELL`) y a quién o a qué área (A9) |
 | `CreatureMove` | `id`, `from`, `to`, `duration_ms`, `walk_seq` (solo el propio: el `seq` del `Walk` que ejecuta) |
 | `CreatureTurn`, `CreatureHealth`, `CreatureOutfit`, `CreatureSpeed` | |
 | `Effect` | Efecto visual en posición (`effect_id`) |
@@ -1318,4 +1376,6 @@ de salida, cómodo para una instancia chica.
 Con la vista de 31x21 (`07-performance-budget.md`, "Vista ancha"), los escenarios de la
 prueba de carga jugados en proceso dan 490 B/s por jugador (100 repartidos por Puerto) y
 1676 B/s (300 en el pueblo, donde todos ven a todos); con 15x11 eran 309 y 785. Un
-`FullMapView` en el pueblo del Farol pesa ~1 KB (antes ~350 B).
+`FullMapView` en el pueblo del Farol pesa ~1 KB (antes ~350 B). Los eventos de ataque y
+los motivos de A9 suben eso a 532 y 1684 B/s (`07-performance-budget.md`, "Eventos de
+ataque"): un `CreatureAttack` pesa unos 23 B por cliente que lo recibe y un motivo, 2 B.

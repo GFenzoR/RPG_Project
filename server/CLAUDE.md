@@ -321,6 +321,18 @@ server/
   Un mensaje que va a todos los observadores de un paso o un golpe se arma una vez y se
   comparte (`observeMove`, `hitEvents`): no modifiques un mensaje después de emitirlo.
 
+- **Quién ataca y por qué sale una criatura (A9, `session/attack.go`, docs/05):** todo
+  camino nuevo de ataque llama, cuando el ataque ya ocurre y antes de su `Projectile` y su
+  golpe, a `playerAttack` (que termina la invisibilidad primero) o, en un monstruo, a
+  `attackEvent` (con `hidden` = el objetivo es un invisible). Un hechizo de área es un
+  solo `areaAttack`. Curar, conjurar y el daño de una condición no son ataques. Todo
+  `CreatureDisappear` lleva su motivo (`disappearMsg(id, why)`): `removeMonster`,
+  `disappearFromObservers` y `relocate` lo piden; un camino nuevo que saque o mueva una
+  criatura elige el que corresponde (`goneDeath`, `goneTeleport`, `goneLogout`,
+  `goneDespawn`, `goneOutOfView`) sin decir más de lo que quien mira ya ve (volverse
+  invisible es `goneTeleport`). Los tests (`attack_test.go`) revisan que ningún cliente
+  reciba un ataque de o a una criatura que no conoce.
+
 - **Tienda cosmética (T5.7):** `payments` (proveedores: `Fake`, que se niega a arrancar sin
   `RPG_ENV=development|test`, y `MercadoPago`; todo HTTP por un cliente inyectable) +
   `store/shop.go` + `httpapi/shop.go` + `app/shop.go` + `session/cosmetics.go`. Todo cambio
