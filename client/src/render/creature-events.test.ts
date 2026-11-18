@@ -1,6 +1,7 @@
 import { AttackKind, CreatureKind, Direction, DisappearReason } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import {
+  attackAction,
   attackDir,
   attackerOf,
   faces,
@@ -111,6 +112,13 @@ describe("what the server says", () => {
     expect(inArea(at(4, 4), 2, at(6, 6))).toBe(false);
     expect(inArea(at(4, 4), 2, at(6, 5))).toBe(true);
     expect(inArea(at(4, 4), 2, { x: 5, y: 4, z: 6 })).toBe(false);
+  });
+
+  it("plays the bow for a ranged attack, the spell for a spell, the swing for a blow", () => {
+    expect(attackAction(AttackKind.RANGED)).toBe("shoot");
+    expect(attackAction(AttackKind.SPELL)).toBe("cast");
+    expect(attackAction(AttackKind.MELEE)).toBe("attack");
+    expect(attackAction(AttackKind.UNSPECIFIED)).toBe("attack");
   });
 
   it("pushes the victim away from the attacker or the area's centre", () => {

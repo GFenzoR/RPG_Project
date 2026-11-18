@@ -14,8 +14,7 @@
 // render/particles.ts).
 import { Application, Container, Graphics, Sprite, Text, TextureStyle } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
-import type { Direction } from "@rpg/protocol";
+import { CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol";
 import {
   Atlas,
   DEATH_FADE_MS,
@@ -28,6 +27,8 @@ import {
   MapView,
   extrasByChunk,
   animate,
+  attackClip,
+  attackClipAction,
   clipMs,
   entityZIndex,
   newAnimInput,
@@ -50,6 +51,7 @@ import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer } from "./particles.ts";
 import type { ParticleView } from "./particles.ts";
 import {
+  attackAction,
   attackDir,
   attackerOf,
   isBlowEffect,
@@ -171,6 +173,8 @@ export interface PoseTime {
   id: number;
   ms: number;
   of: number;
+  /** The clip it plays: attack, shoot or cast (lunge: a single image's), death. */
+  action: string;
 }
 
 export interface GameCanvasOptions {
@@ -665,7 +669,8 @@ export async function createGameCanvas(
         if (!by || by.pos.z !== z) continue;
         const target = a.targetId !== 0 ? world.creatures.get(a.targetId) : undefined;
         const [dx, dy] = attackDir(by, target, a.to);
-        startAttack(stateOf(by.id, now), now, dx, dy);
+        // Its own clip by kind (the bow, the spell), else the swing (docs/17 ANI-2).
+        startAttack(stateOf(by.id, now), now, dx, dy, attackAction(a.kind));
       }
     } else newest = Math.max(newest, inferAttacks(now, z));
     for (const f of world.floatingTexts) {
@@ -1366,15 +1371,24 @@ export async function createGameCanvas(
       const now = performance.now();
       const attacking: PoseTime[] = [];
       for (const [id, st] of animStates) {
-        const of =
-          clipMs(sprites.get(id)?.figure?.clips.meta, "attack") || LUNGE_OUT_MS + LUNGE_BACK_MS;
+        const meta = sprites.get(id)?.figure?.clips.meta;
+        const c = world.creatures.get(id);
+        const dir = outfitDir(c ? world.facing(c, now) : Direction.SOUTH);
+        const clip = attackClip(meta, st.attackAction, dir);
+        const action = clip ? attackClipAction(meta, st.attackAction, dir) : "lunge";
+        const of = clip ? clip.frames * clip.ms : LUNGE_OUT_MS + LUNGE_BACK_MS;
         const ms = now - st.attackAt;
-        if (ms >= 0 && ms < of) attacking.push({ id, ms, of });
+        if (ms >= 0 && ms < of) attacking.push({ id, ms, of, action });
       }
       const dying: PoseTime[] = [];
       for (const [id, g] of ghosts) {
         const clip = clipMs(g.figure.clips.meta, "death");
-        dying.push({ id, ms: now - g.state.diedAt, of: clip ? clip + DEATH_FADE_MS : DEATH_MS });
+        dying.push({
+          id,
+          ms: now - g.state.diedAt,
+          of: clip ? clip + DEATH_FADE_MS : DEATH_MS,
+          action: "death",
+        });
       }
       return { attacking, dying };
     },

@@ -6,7 +6,12 @@
 // motion of ANI-5 (a hop per tile, a lean, breathing, a lunge, a fall), so every creature
 // moves.
 
-export type AnimAction = "idle" | "walk" | "attack" | "death";
+export type AnimAction = "idle" | "walk" | "attack" | "shoot" | "cast" | "death";
+/**
+ * The clip an attack plays (ANI-2, ANI-7): attack for a melee blow (the LPC slash), shoot
+ * for a ranged one (the bow), cast for a spell. A sprite without that clip plays attack.
+ */
+export type AttackAction = "attack" | "shoot" | "cast";
 export type AnimDir = "n" | "e" | "s" | "w";
 export const ANIM_DIRS: readonly AnimDir[] = ["n", "e", "s", "w"];
 
@@ -30,7 +35,12 @@ export interface AnimActionMeta {
  * side and none to the front (the Gemini monsters, assets/README.md): turning the creature
  * sideways to bite south would be wrong, so it lunges with its own facing's frame (ANI-5).
  */
-export const OWN_FACINGS: ReadonlySet<AnimAction> = new Set<AnimAction>(["idle", "attack"]);
+export const OWN_FACINGS: ReadonlySet<AnimAction> = new Set<AnimAction>([
+  "idle",
+  "attack",
+  "shoot",
+  "cast",
+]);
 
 /** The action's clip when it may be drawn facing `dir` (see OWN_FACINGS). */
 export function clipFacing(
@@ -101,8 +111,9 @@ export interface AnimState {
   stepEnd: number;
   /** Walk frame drawn last, held between chained steps. */
   walkFrame: number;
-  /** Last lunge: when, and the unit direction towards the target. */
+  /** Last attack: when, its clip, and the unit direction towards the target (the lunge). */
   attackAt: number;
+  attackAction: AttackAction;
   attackDx: number;
   attackDy: number;
   /** Last hit taken: when, and the unit direction it is pushed. */
@@ -125,6 +136,7 @@ export function newAnimState(id: number, now: number): AnimState {
     stepEnd: Number.NEGATIVE_INFINITY,
     walkFrame: 0,
     attackAt: Number.NEGATIVE_INFINITY,
+    attackAction: "attack",
     attackDx: 0,
     attackDy: 0,
     hitAt: Number.NEGATIVE_INFINITY,
@@ -191,9 +203,19 @@ export const newPose = (): Pose => ({
   done: false,
 });
 
-/** A lunge: the creature attacks towards (dx, dy) (any length; only the sign counts). */
-export function startAttack(s: AnimState, now: number, dx: number, dy: number): void {
+/**
+ * An attack towards (dx, dy) (any length; only the sign counts): its clip (`action`, else
+ * attack) or, without one, the lunge.
+ */
+export function startAttack(
+  s: AnimState,
+  now: number,
+  dx: number,
+  dy: number,
+  action: AttackAction = "attack",
+): void {
   s.attackAt = now;
+  s.attackAction = action;
   s.attackDx = Math.sign(dx);
   s.attackDy = Math.sign(dy);
 }
@@ -214,6 +236,28 @@ export function clipMs(meta: AnimMeta | undefined, action: AnimAction): number {
   const a = meta?.actions[action];
   return a ? a.frames * a.ms : 0;
 }
+
+/**
+ * The clip an attack of `action` plays facing `dir`: its own (shoot, cast), else attack
+ * (the melee swing), else none (the lunge). Which of the two it is: attackClipAction.
+ */
+export function attackClip(
+  meta: AnimMeta | undefined,
+  action: AttackAction,
+  dir: AnimDir,
+): AnimActionMeta | undefined {
+  return (
+    clipFacing(meta, action, dir) ??
+    (action === "attack" ? undefined : clipFacing(meta, "attack", dir))
+  );
+}
+
+/** The action whose frames attackClip gives (its own, or attack in its place). */
+export const attackClipAction = (
+  meta: AnimMeta | undefined,
+  action: AttackAction,
+  dir: AnimDir,
+): AttackAction => (clipFacing(meta, action, dir) ? action : "attack");
 
 /**
  * Fills `out` with the pose of a creature at `in_.now`: the clip frame (walk by distance,
@@ -255,9 +299,9 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
     dying(meta, now - s.diedAt, out);
   } else {
     const sinceAttack = now - s.attackAt;
-    const attack = clipFacing(meta, "attack", in_.dir);
+    const attack = attackClip(meta, s.attackAction, in_.dir);
     if (attack && sinceAttack >= 0 && sinceAttack < attack.frames * attack.ms) {
-      out.action = "attack";
+      out.action = attackClipAction(meta, s.attackAction, in_.dir);
       out.frame = Math.min(attack.frames - 1, Math.floor(sinceAttack / attack.ms));
     } else if (t !== undefined || now - s.stepEnd < IDLE_AFTER_MS) {
       walking(s, meta, in_, t, top, out);

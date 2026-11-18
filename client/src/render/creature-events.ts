@@ -11,8 +11,9 @@
 //     strike monsters), the one facing the tile first, then the lowest id.
 //   - A damage number on a tile: the creature there flashes and is pushed away from its
 //     attacker (or back from where it faces).
-import { CreatureKind, DisappearReason } from "@rpg/protocol";
-import type { AttackKind, Direction } from "@rpg/protocol";
+import { AttackKind, CreatureKind, DisappearReason } from "@rpg/protocol";
+import type { Direction } from "@rpg/protocol";
+import type { AttackAction } from "@rpg/renderer";
 import { delta } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
 
@@ -110,6 +111,16 @@ export function attackDir(
   if (dx !== 0 || dy !== 0) return [dx, dy];
   const [fx, fy] = delta(attacker.dir);
   return [fx, fy];
+}
+
+/**
+ * The clip an attack plays (docs/17 ANI-2): a ranged attack shoots (the LPC bow), a spell
+ * casts (spellcast) and a melee blow, or a kind this client does not know, swings.
+ */
+export function attackAction(kind: AttackKind): AttackAction {
+  if (kind === AttackKind.RANGED) return "shoot";
+  if (kind === AttackKind.SPELL) return "cast";
+  return "attack";
 }
 
 /** Whether an area of `radius` around `centre` covers `p` (the server's round area). */

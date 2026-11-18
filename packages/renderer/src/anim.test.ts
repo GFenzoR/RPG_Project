@@ -9,6 +9,8 @@ import {
   LUNGE_OUT_MS,
   LUNGE_PX,
   animate,
+  attackClip,
+  attackClipAction,
   clipMs,
   hashId,
   newAnimInput,
@@ -122,6 +124,45 @@ describe("clips", () => {
     expect(animate(s, LPC, in_, out)).toMatchObject({ action: "attack", frame: 2, x: 0 });
     in_.now = 1000 + clipMs(LPC, "attack");
     expect(animate(s, LPC, in_, out).action).toBe("idle");
+  });
+
+  it("plays its own clip for a ranged attack or a spell, else the melee swing (ANI-2)", () => {
+    // An LPC humanoid with every action: the bow (7 x 50 ms) and the spell (7 x 60 ms).
+    const ALL: AnimMeta = {
+      ...LPC,
+      actions: {
+        ...LPC.actions,
+        shoot: { frames: 7, ms: 50, dirs: DIRS },
+        cast: { frames: 7, ms: 60, dirs: DIRS },
+      },
+    };
+    const { s, in_, out } = setup();
+    in_.dir = "e";
+    startAttack(s, 1000, 1, 0, "shoot");
+    in_.now = 1000 + 120;
+    expect(animate(s, ALL, in_, out)).toMatchObject({ action: "shoot", frame: 2, x: 0 });
+    in_.now = 1000 + clipMs(ALL, "shoot") - 1;
+    expect(animate(s, ALL, in_, out)).toMatchObject({ action: "shoot", frame: 6 });
+    in_.now = 1000 + clipMs(ALL, "shoot");
+    expect(animate(s, ALL, in_, out).action).toBe("idle");
+    startAttack(s, 2000, 0, 1, "cast");
+    in_.now = 2000 + 400;
+    expect(animate(s, ALL, in_, out)).toMatchObject({ action: "cast", frame: 6 });
+    // A melee blow after them plays the swing again.
+    startAttack(s, 3000, 0, 1);
+    in_.now = 3000 + 130;
+    expect(animate(s, ALL, in_, out)).toMatchObject({ action: "attack", frame: 2 });
+    // Without a cast clip (a monster that only throws), a spell swings; without any attack
+    // clip it lunges (ANI-5).
+    startAttack(s, 4000, 0, 1, "cast");
+    in_.now = 4000 + 130;
+    expect(animate(s, LPC, in_, out)).toMatchObject({ action: "attack", frame: 2, y: 0 });
+    expect(attackClipAction(LPC, "cast", "s")).toBe("attack");
+    expect(attackClipAction(ALL, "cast", "s")).toBe("cast");
+    expect(attackClip(STILL, "shoot", "s")).toBeUndefined();
+    startAttack(s, 5000, 0, 1, "shoot");
+    in_.now = 5000 + LUNGE_OUT_MS;
+    expect(animate(s, STILL, in_, out)).toMatchObject({ x: 0, y: LUNGE_PX });
   });
 
   it("bites and idles only facing its own ways: else the lunge and the standing frame", () => {

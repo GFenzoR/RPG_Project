@@ -213,11 +213,11 @@ export interface ClientTestHooks {
   departures(ms: number): { id: number; reason: string }[];
   /**
    * A9 (docs/17 ANI-7): creatures in an attack pose now and the ones falling dead (`ms`
-   * into it, `of` its length).
+   * into it, `of` its length, `action` the clip: attack, shoot, cast or lunge; death).
    */
   poses(): {
-    attacking: { id: number; ms: number; of: number }[];
-    dying: { id: number; ms: number; of: number }[];
+    attacking: { id: number; ms: number; of: number; action: string }[];
+    dying: { id: number; ms: number; of: number; action: string }[];
   };
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
