@@ -37,7 +37,7 @@ const content: ClientContent = {
   vocations: [],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100, maxQueuedSteps: 4 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -56,7 +56,13 @@ function world(): WorldState {
   w.apply(
     {
       case: "welcome",
-      value: { $typeName: "game.v1.Welcome", creatureId: 1, serverTime: 0n, tickMs: 50 },
+      value: {
+        $typeName: "game.v1.Welcome",
+        creatureId: 1,
+        serverTime: 0n,
+        tickMs: 50,
+        maxQueuedSteps: 4,
+      },
     },
     0,
   );

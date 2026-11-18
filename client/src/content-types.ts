@@ -164,15 +164,10 @@ export interface ClientContent {
   /** data/recipes.yaml in file order (T3.4). */
   recipes: RecipeDef[];
   /**
-   * balance.yaml movement: the step formula, the click-to-walk limit and how many keyboard
-   * steps the client predicts ahead (the server queues as many, docs/05 "Caminar").
+   * balance.yaml movement: the step formula and the click-to-walk limit. How many keyboard
+   * steps the client predicts ahead comes from the server (Welcome.max_queued_steps).
    */
-  movement: {
-    baseStepMs: number;
-    diagonalCost: number;
-    maxPathTiles: number;
-    maxQueuedSteps: number;
-  };
+  movement: { baseStepMs: number; diagonalCost: number; maxPathTiles: number };
   /** balance.yaml chat (T1.13): the server enforces it, the input only caps to it. */
   chat: { maxLength: number };
   /**

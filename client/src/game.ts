@@ -133,8 +133,9 @@ export interface ClientTestHooks {
   ready: boolean;
   self(): { x: number; y: number; z: number; pending: boolean; walking: boolean } | undefined;
   /**
-   * Where the own creature was drawn on each frame of the last `ms` (fractional tiles,
-   * oldest first): continuous motion means it moves on every frame while walking.
+   * Where the own creature was on each frame of the last `ms` (`WorldState.drawPos` in
+   * `frame`, what the canvas draws from: fractional tiles, oldest first, before rounding
+   * to screen pixels): continuous motion means it moves on every frame while walking.
    */
   trail(ms: number): { t: number; x: number; y: number }[];
   walkable(x: number, y: number, z: number): boolean;
@@ -1345,6 +1346,7 @@ export class Game {
   private frame(now: number): void {
     const self = this.world.self;
     if (!self) return;
+    this.world.expirePredicted(now);
     const drawn = this.world.drawPos(self, now);
     this.trail.record(now, drawn.x, drawn.y);
     const target = this.clickTarget;
@@ -1372,7 +1374,7 @@ export class Game {
     if (step?.kind === "walk")
       this.conn.send({
         case: "walk",
-        value: { dir: step.dir, walkEpoch: this.world.walkEpoch },
+        value: { dir: step.dir, walkEpoch: this.world.walkEpoch, seq: step.seq },
       });
     else if (step?.kind === "turn") this.conn.send({ case: "turn", value: { dir: step.dir } });
   }

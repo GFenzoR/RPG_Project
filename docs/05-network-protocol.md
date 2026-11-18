@@ -38,7 +38,7 @@
 2. Cliente → HTTP GET /api/characters                  → lista de personajes
 3. Cliente → HTTP POST /api/play {character_id}        → session_token (vive 60 s)
 4. Cliente abre WS y envía Hello {session_token, client_version, locale}
-5. Servidor → Welcome {creature_id, server_time, tick_ms} + FullMapView + Stats + Inventory + Skills
+5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps} + FullMapView + Stats + Inventory + Skills
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
@@ -454,7 +454,7 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 ## Mensajes cliente → servidor (intenciones)
 | Mensaje | Campos |
 |---|---|
-| `Walk` | `dir` (N, NE, E, SE, S, SW, W, NW), `walk_epoch` |
+| `Walk` | `dir` (N, NE, E, SE, S, SW, W, NW), `walk_epoch`, `seq` |
 | `WalkPath` | `steps[]` (máx. 100) |
 | `StopWalk` | — |
 | `Turn` | `dir` |
@@ -492,15 +492,26 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   a ticks de 50 ms. `CreatureMove.duration_ms` es esa duración ya redondeada. La
   posición cambia al **empezar** el paso.
 - **`Walk` encola un paso de teclado** detrás de los pasos de teclado que ya esperan, como
-  mucho `movement.max_queued_steps` (`balance.yaml`, 4); si en la cola hay un `WalkPath`
-  o un paso de persecución (`chase`), lo descarta. Si el personaje está a mitad de un paso,
+  mucho `movement.max_queued_steps` (`balance.yaml`, 4; el `Welcome` se lo dice al
+  cliente, así un cambio del YAML no necesita recompilar el cliente); si en la cola hay un
+  `WalkPath` o un paso de persecución (`chase`), lo descarta. Si el personaje está a mitad de un paso,
   el siguiente sale el tick en que termina. Así el cliente predice unos pasos adelante y
   manda cada uno un poco antes de que termine el que dibuja (`client/CLAUDE.md`
   "Movimiento fluido"): el servidor camina sin huecos entre casillas aunque la red los
   junte o los atrase. Uno más que el tope no es un cliente honesto (el cliente nunca tiene
-  más de `max_queued_steps` sin confirmar): **reinicia la caminata** (`WalkRejected`, ver
-  abajo). Mandar `Walk` cada tick no acelera nada: el ritmo es del servidor, la cola se
-  llena y el siguiente la vacía.
+  más de `max_queued_steps` sin confirmar): **reinicia la caminata** (`WalkRejected` con
+  `dir` = `UNSPECIFIED`: no se rechazó un paso, y el cliente no debe evitar esa casilla).
+  Mandar `Walk` cada tick no acelera nada: el ritmo es del servidor, la cola se llena y
+  el siguiente la vacía.
+- **Número del `Walk` (`seq`).** El cliente numera sus `Walk` (uno más cada vez, desde 1;
+  0 = sin número, bots y clientes viejos). El `CreatureMove` del paso que ejecuta ese
+  `Walk` lo devuelve en `walk_seq`, **solo en la copia del propio jugador** (los demás
+  reciben 0); un paso de un `WalkPath` o de persecución lleva 0. Así el cliente empareja
+  cada respuesta con su predicción aunque el servidor haya dado antes un paso que el
+  cliente no esperaba (el siguiente de un camino por click, uno de persecución) o un
+  `Walk` se haya perdido (el gateway descarta lo que pasa del rate limit, o la cola del
+  loop llena): un `walk_seq` k responde también a los `Walk` anteriores a k que no
+  volvieron. El servidor no decide nada con `seq`: solo lo copia.
 - **Época de la caminata (`walk_epoch`, desde 1).** Toda vez que el servidor vacía la cola
   y se lo dice al cliente, empieza una época nueva: cada `WalkRejected` (lleva
   `walk_epoch`) y cada teletransporte (el `FullMapView` lleva `walk_epoch`; el del login
@@ -508,9 +519,13 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `Walk` de otra época salió antes de que el cliente supiera del reinicio, y el cliente ya
   lo olvidó: el servidor lo descarta **sin contestar** (no lo ejecuta desde una casilla que
   el cliente no esperaba). `walk_epoch` 0 no se revisa (clientes y bots anteriores a la
-  cola). Garantía: todo `Walk` aceptado termina en un `CreatureMove`, un `WalkRejected` o
-  un `FullMapView` (teletransporte, muerte); nada vacía la cola en silencio (salvo
-  `StopWalk`, que pide el cliente, y un jugador sin conexión).
+  cola). Garantía: todo `Walk` aceptado termina en un `CreatureMove` (con su `seq`), un
+  `WalkRejected` o un `FullMapView` (teletransporte, muerte); el servidor no vacía la cola
+  en silencio por su cuenta. Solo lo hacen, sin contestar, lo que pide el propio cliente
+  (`StopWalk`, y un `WalkPath`, que la reemplaza: el cliente lo manda sin pasos de teclado
+  sin confirmar) y la desconexión. Un `Walk` que el gateway descarta no llega nunca: lo
+  responde el `walk_seq` de uno posterior, y si no hay otro, el cliente lo da por perdido
+  a los 3 s (`PREDICT_TIMEOUT_MS`).
 - `WalkPath` reemplaza la cola. Vacío = `StopWalk`. Más de `max_path_tiles` pasos
   (`balance.yaml`, 100) o una dirección inválida → `WalkRejected` con `dir` =
   `UNSPECIFIED` y nada se encola. En los demás rechazos `dir` es el paso rechazado.
@@ -1177,7 +1192,7 @@ Reglas en `02-game-design.md` ("Condiciones").
 | `MapSlice` | Fila o columna nueva al moverse |
 | `TileUpdate` | Cambió la pila de un tile |
 | `CreatureAppear` / `CreatureDisappear` | Entra o sale de la vista |
-| `CreatureMove` | `id`, `from`, `to`, `duration_ms` |
+| `CreatureMove` | `id`, `from`, `to`, `duration_ms`, `walk_seq` (solo el propio: el `seq` del `Walk` que ejecuta) |
 | `CreatureTurn`, `CreatureHealth`, `CreatureOutfit`, `CreatureSpeed` | |
 | `Effect` | Efecto visual en posición (`effect_id`) |
 | `Projectile` | De A a B (`projectile_id`) |

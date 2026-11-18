@@ -17,7 +17,7 @@ import type { ServerMessage } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
 import { PRESENCE_GRACE_MS, WorldState } from "./world.ts";
-import { PLAYOUT_MARGIN_MS, SLIDE_MS, STEP_LEAD_MS } from "./motion.ts";
+import { PLAYOUT_MARGIN_MS, PREDICT_TIMEOUT_MS, SLIDE_MS, STEP_LEAD_MS } from "./motion.ts";
 import type { CreatureState } from "./world.ts";
 
 const content: ClientContent = {
@@ -71,7 +71,7 @@ const content: ClientContent = {
   vocations: ["guardian"],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100, maxQueuedSteps: 4 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -123,7 +123,13 @@ function entered(): WorldState {
   w.apply(
     {
       case: "welcome",
-      value: { $typeName: "game.v1.Welcome", creatureId: 7, serverTime: 0n, tickMs: 50 },
+      value: {
+        $typeName: "game.v1.Welcome",
+        creatureId: 7,
+        serverTime: 0n,
+        tickMs: 50,
+        maxQueuedSteps: 4,
+      },
     },
     0,
   );
@@ -141,11 +147,13 @@ const rejected = (dir: Direction, x = 100, y = 200, walkEpoch = 2): Msg => ({
   },
 });
 
+/** A step of creature id; walkSeq: the own Walk it executes (0: a path's, a chase's). */
 const move = (
   id: number,
   from: [number, number],
   to: [number, number],
   durationMs: number,
+  walkSeq = 0,
 ): Msg => ({
   case: "creatureMove",
   value: {
@@ -154,6 +162,7 @@ const move = (
     from: { $typeName: "game.v1.Position", x: from[0], y: from[1], z: 7 },
     to: { $typeName: "game.v1.Position", x: to[0], y: to[1], z: 7 },
     durationMs,
+    walkSeq,
   },
 });
 
@@ -176,12 +185,12 @@ describe("WorldState", () => {
 
   it("predicts a step, keeps it on confirmation and takes the server's duration", () => {
     const w = entered();
-    expect(w.predictStep(Direction.EAST, 1000)).toBe(true);
+    expect(w.predictStep(Direction.EAST, 1000)).toBe(1); // its Walk's seq
     expect(w.self?.pos).toEqual({ x: 101, y: 200, z: 7 });
     expect(w.self?.walk?.duration).toBe(500); // 1000 * 100% / 200
     expect(w.unconfirmed).toBe(1);
     expect(w.canStep(1100)).toBe(false);
-    w.apply(move(7, [100, 200], [101, 200], 550), 1040);
+    w.apply(move(7, [100, 200], [101, 200], 550, 1), 1040);
     expect(w.unconfirmed).toBe(0);
     expect(w.self?.walk).toMatchObject({ start: 1000, duration: 550 });
     expect(w.drawPos(w.self as CreatureState, 1275)).toEqual({ x: 100.5, y: 200 });
@@ -192,8 +201,8 @@ describe("WorldState", () => {
 
   it("does not predict into blocked tiles or creatures; a blocked diagonal slides", () => {
     const w = entered();
-    expect(w.predictStep(Direction.SOUTH_EAST, 0)).toBe(false); // crate
-    expect(w.predictStep(Direction.NORTH, 0)).toBe(false); // unknown tile
+    expect(w.predictStep(Direction.SOUTH_EAST, 0)).toBeUndefined(); // crate
+    expect(w.predictStep(Direction.NORTH, 0)).toBeUndefined(); // unknown tile
     expect(w.self?.dir).toBe(Direction.SOUTH);
     expect(w.unconfirmed).toBe(0);
     // Nothing open: the player turns, once.
@@ -201,7 +210,11 @@ describe("WorldState", () => {
     expect(w.self?.dir).toBe(Direction.NORTH);
     expect(w.chooseStep(Direction.NORTH, 0)).toBeUndefined();
     // South-east is the crate: its east half is open.
-    expect(w.chooseStep(Direction.SOUTH_EAST, 0)).toEqual({ kind: "walk", dir: Direction.EAST });
+    expect(w.chooseStep(Direction.SOUTH_EAST, 0)).toEqual({
+      kind: "walk",
+      dir: Direction.EAST,
+      seq: 1,
+    });
     expect(w.self?.pos).toEqual({ x: 101, y: 200, z: 7 });
   });
 
@@ -225,46 +238,100 @@ describe("WorldState", () => {
   it("keeps off a refused step until retryWalk, an own move or a new view (B10)", () => {
     const w = entered();
     // East onto (101,200), say stairs with no room at their other end (portal.blocked).
-    expect(w.predictStep(Direction.EAST, 0)).toBe(true);
+    expect(w.predictStep(Direction.EAST, 0)).toBe(1);
     w.apply(rejected(Direction.EAST), 30);
     // A held key asks on every frame: no Walk, and no Turn (it already faces east).
-    expect(w.predictStep(Direction.EAST, 40)).toBe(false);
+    expect(w.predictStep(Direction.EAST, 40)).toBeUndefined();
     expect(w.chooseStep(Direction.EAST, 40)).toBeUndefined();
-    expect(w.predictStep(Direction.EAST, 5000)).toBe(false);
+    expect(w.predictStep(Direction.EAST, 5000)).toBeUndefined();
     expect(w.unconfirmed).toBe(0);
     expect(w.self?.pos).toEqual({ x: 100, y: 200, z: 7 });
     expect(w.self?.dir).toBe(Direction.EAST);
     // A fresh press (or a release, a new pad direction) tries it once more.
     w.retryWalk();
-    expect(w.predictStep(Direction.EAST, 5000)).toBe(true);
+    expect(w.predictStep(Direction.EAST, 5000)).toBe(2);
     w.apply(rejected(Direction.EAST), 5030);
-    expect(w.predictStep(Direction.EAST, 5040)).toBe(false);
+    expect(w.predictStep(Direction.EAST, 5040)).toBeUndefined();
     // Only that step: south walks, and moving off and back forgets the refusal.
-    expect(w.predictStep(Direction.SOUTH, 6000)).toBe(true);
-    w.apply(move(7, [100, 200], [100, 201], 500), 6010);
+    expect(w.predictStep(Direction.SOUTH, 6000)).toBe(3);
+    w.apply(move(7, [100, 200], [100, 201], 500, 3), 6010);
     w.apply(move(7, [100, 201], [100, 200], 500), 6600);
-    expect(w.predictStep(Direction.EAST, 7200)).toBe(true);
+    expect(w.predictStep(Direction.EAST, 7200)).toBe(4);
     w.apply(rejected(Direction.EAST), 7230);
-    expect(w.predictStep(Direction.EAST, 7240)).toBe(false);
+    expect(w.predictStep(Direction.EAST, 7240)).toBeUndefined();
     // A full map view (a teleport) forgets it too.
     w.apply(fullView(), 7300);
-    expect(w.predictStep(Direction.EAST, 7300)).toBe(true);
+    expect(w.predictStep(Direction.EAST, 7300)).toBe(5);
     // A refusal that is not of the predicted step (a WalkPath's, elsewhere or another
     // way) leaves the next step alone.
     w.apply(rejected(Direction.NORTH), 7330);
-    expect(w.predictStep(Direction.EAST, 7340)).toBe(true);
+    expect(w.predictStep(Direction.EAST, 7340)).toBe(6);
     w.apply(rejected(Direction.EAST, 100, 201), 7350);
     w.apply(move(7, [100, 201], [100, 200], 500), 7360);
-    expect(w.predictStep(Direction.EAST, 8000)).toBe(true);
+    expect(w.predictStep(Direction.EAST, 8000)).toBe(7);
   });
 
-  it("follows the server when it moves the own creature differently", () => {
+  it("pairs each own step with its Walk: a path's step first is not the key's (click, then arrow)", () => {
     const w = entered();
-    w.predictStep(Direction.EAST, 0);
-    w.apply(move(7, [100, 200], [100, 201], 500), 20);
+    const s = w.self as CreatureState;
+    // A click-to-walk path east; the server took its next step before the arrow's Walk
+    // arrived. The client, which had not heard of it yet, predicted east from 100,200.
+    expect(w.predictStep(Direction.EAST, 0)).toBe(1);
+    // The path's step (no walk_seq), the same tiles as the prediction: not its answer.
+    w.apply(move(7, [100, 200], [101, 200], 500), 20);
+    expect(w.unconfirmed).toBe(1);
+    expect(s.pos).toEqual({ x: 102, y: 200, z: 7 }); // the Walk goes on from 101,200
+    expect(w.drawPos(s, 250).x).toBeCloseTo(100.5); // the path's step, drawn in its place
+    expect(w.drawPos(s, 750).x).toBeCloseTo(101.5); // then the key's
+    // The Walk's own step answers it.
+    w.apply(move(7, [101, 200], [102, 200], 500, 1), 520);
     expect(w.unconfirmed).toBe(0);
-    expect(w.self?.pos).toEqual({ x: 100, y: 201, z: 7 });
-    expect(w.self?.dir).toBe(Direction.SOUTH);
+    expect(s.pos).toEqual({ x: 102, y: 200, z: 7 });
+  });
+
+  it("follows the server when it moves the own creature otherwise, gliding", () => {
+    const w = entered();
+    const s = w.self as CreatureState;
+    w.predictStep(Direction.EAST, 0);
+    // A chase step south came first: the Walk east goes on from 100,201 (the server will
+    // refuse it there, the crate, and say so).
+    w.apply(move(7, [100, 200], [100, 201], 500), 100);
+    expect(w.unconfirmed).toBe(1);
+    expect(s.pos).toEqual({ x: 101, y: 201, z: 7 });
+    expect(s.dir).toBe(Direction.EAST);
+    // Drawn a fifth of the way east, now a fifth of the way south: it glides over.
+    expect(w.drawPos(s, 100).x).toBeCloseTo(100.2);
+    expect(w.drawPos(s, 100 + SLIDE_MS).x).toBeCloseTo(100);
+    expect(w.drawPos(s, 100 + SLIDE_MS).y).toBeCloseTo(200 + (100 + SLIDE_MS) / 500);
+  });
+
+  it("a lost Walk: the next one's step answers it and the drawing loses that step", () => {
+    const w = entered();
+    const s = w.self as CreatureState;
+    expect(w.predictStep(Direction.EAST, 0)).toBe(1);
+    expect(w.predictStep(Direction.EAST, 460)).toBe(2);
+    // Walk 1 never reached the server: Walk 2 is its first step, from 100,200.
+    w.apply(move(7, [100, 200], [101, 200], 500, 2), 480);
+    expect(w.unconfirmed).toBe(0);
+    expect(s.pos).toEqual({ x: 101, y: 200, z: 7 });
+    expect(w.drawPos(s, 480).x).toBeCloseTo(100.96); // no jump
+    expect(w.drawPos(s, 600)).toEqual({ x: 101, y: 200 });
+  });
+
+  it("gives up a step the server never answers, and still takes a late answer", () => {
+    const w = entered();
+    const s = w.self as CreatureState;
+    expect(w.predictStep(Direction.EAST, 0)).toBe(1);
+    w.expirePredicted(500 + PREDICT_TIMEOUT_MS - 1);
+    expect(w.unconfirmed).toBe(1);
+    w.expirePredicted(500 + PREDICT_TIMEOUT_MS);
+    expect(w.unconfirmed).toBe(0); // a click may walk again
+    expect(s.pos).toEqual({ x: 100, y: 200, z: 7 });
+    expect(w.drawPos(s, 500 + PREDICT_TIMEOUT_MS).x).toBeCloseTo(101); // gliding back
+    expect(w.drawPos(s, 500 + PREDICT_TIMEOUT_MS + SLIDE_MS)).toEqual({ x: 100, y: 200 });
+    // It was only late: the server's step comes through as any step of the server.
+    w.apply(move(7, [100, 200], [101, 200], 500, 1), 4000);
+    expect(s.pos).toEqual({ x: 101, y: 200, z: 7 });
   });
 
   it("interpolates other creatures by duration_ms", () => {

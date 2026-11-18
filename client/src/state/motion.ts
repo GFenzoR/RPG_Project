@@ -19,62 +19,103 @@ export const SLIDE_MS = 160;
 export const SLIDE_MAX_TILES = 3;
 
 /**
+ * How long an own step may go unanswered after it was drawn before the client gives it up:
+ * its Walk was lost on the way (the gateway drops what a client sends over its rate), and
+ * nothing would answer it. A late answer still comes through (WorldState: a step of the
+ * server that no prediction waits for).
+ */
+export const PREDICT_TIMEOUT_MS = 3000;
+
+/**
  * The jitter buffer for the steps the server takes (Playout): its delay aims at the
- * latest arrivals (their envelope, which forgets a late one at 5 ms a second) plus this
- * margin, so a batch somewhat later than the ones before still starts its steps when
- * the steps before end.
+ * latest arrival of the last PLAYOUT_WINDOW_MS (but no more than PLAYOUT_MAX_JITTER_MS
+ * after the earliest one) plus this margin, so a batch somewhat later than the ones
+ * before still starts its steps when the steps before end.
  */
 export const PLAYOUT_MARGIN_MS = 40;
 
-/** How fast the envelope of the arrivals forgets a late one, ms per ms. */
-export const PLAYOUT_FORGET = 0.005;
+/** How long an arrival counts for the delay's aim: a late one is forgotten after this. */
+export const PLAYOUT_WINDOW_MS = 2000;
 
 /**
- * How fast the delay moves toward its aim, ms per ms: up 5 ms a second, down 10. Moving
- * it shifts the next step by as much: a few ms per step, under a frame, so no frame
- * stands still for it.
+ * The most jitter the delay covers. An arrival later than this after the earliest of the
+ * window (a stall of the link, a resend, a tab back from the background) does not move
+ * the delay: its steps start when they arrive. And no batch waits more than this plus the
+ * margin after it arrived, whatever came before.
  */
-export const PLAYOUT_RISE = 0.005;
-export const PLAYOUT_FALL = 0.01;
+export const PLAYOUT_MAX_JITTER_MS = 200;
+
+/**
+ * How fast the delay falls to its aim once a late arrival is forgotten, ms per ms (100 ms
+ * a second). Steps then start a bit before the one drawn ends: they follow it and catch up
+ * (PLAYOUT_CATCH_UP), so the fall shows no jump.
+ */
+export const PLAYOUT_FALL = 0.1;
+
+/**
+ * A step of the server drawn behind its time (it follows one that is still drawn) is
+ * drawn up to this much faster than its duration until the drawing is back on time.
+ */
+export const PLAYOUT_CATCH_UP = 0.25;
+
+/**
+ * A drawing further behind its time than this skips ahead (gliding, `slideBetween`)
+ * instead of catching up: a burst of steps after a stall of the link.
+ */
+export const PLAYOUT_MAX_LAG_MS = 500;
+
+const PLAYOUT_BUCKETS = 8;
+const PLAYOUT_BUCKET_MS = PLAYOUT_WINDOW_MS / PLAYOUT_BUCKETS;
 
 /**
  * Server ticks to local time for the steps of other creatures (and the own steps the
  * server takes, a click-to-walk path): a jitter buffer. A step starts at
  * `tick × tickMs + delay`; steps the server takes back to back are drawn back to back,
- * whatever jitter the network adds, at the cost of a delay a bit longer than that jitter
- * (`delay` = local time − tick time of the latest arrivals, plus PLAYOUT_MARGIN_MS). A batch
- * later than the delay moves it up at once (that step starts late: the only stop left).
+ * whatever jitter the network adds, at the cost of a delay a bit longer than that jitter.
+ * `delay` (local time − tick time) aims at the latest arrivals of the last
+ * PLAYOUT_WINDOW_MS, capped to PLAYOUT_MAX_JITTER_MS over the earliest, plus
+ * PLAYOUT_MARGIN_MS. A later arrival raises it at once (within the cap); it falls back at
+ * PLAYOUT_FALL when the window forgets that arrival. A batch later than the delay starts
+ * its steps when it arrives (the only stop left), and none waits more than the cap and
+ * the margin after it arrived: a stall of the link costs a stop, never a lasting lag.
  */
 export class Playout {
   private delay: number | undefined;
-  private envelope = 0;
   private at = 0;
+  /** The arrivals of the window by bucket of PLAYOUT_BUCKET_MS: their latest and earliest. */
+  private readonly ids: number[] = new Array<number>(PLAYOUT_BUCKETS).fill(-Infinity);
+  private readonly his: number[] = new Array<number>(PLAYOUT_BUCKETS).fill(0);
+  private readonly los: number[] = new Array<number>(PLAYOUT_BUCKETS).fill(0);
 
   constructor(private readonly tickMs = 50) {}
 
   /** Local time at which the events of `tick`, arriving at `now`, start (never before now). */
   time(tick: number, now: number): number {
     const sample = now - tick * this.tickMs;
+    const b = Math.floor(now / PLAYOUT_BUCKET_MS);
+    const i = ((b % PLAYOUT_BUCKETS) + PLAYOUT_BUCKETS) % PLAYOUT_BUCKETS;
+    if (this.ids[i] !== b) {
+      this.ids[i] = b;
+      this.his[i] = sample;
+      this.los[i] = sample;
+    } else {
+      this.his[i] = Math.max(this.his[i] ?? sample, sample);
+      this.los[i] = Math.min(this.los[i] ?? sample, sample);
+    }
+    let hi = sample;
+    let lo = sample;
+    for (let k = 0; k < PLAYOUT_BUCKETS; k++) {
+      if ((this.ids[k] ?? -Infinity) <= b - PLAYOUT_BUCKETS) continue;
+      hi = Math.max(hi, this.his[k] ?? hi);
+      lo = Math.min(lo, this.los[k] ?? lo);
+    }
+    const aim = Math.min(hi, lo + PLAYOUT_MAX_JITTER_MS) + PLAYOUT_MARGIN_MS;
     const dt = Math.max(0, now - this.at);
     this.at = now;
-    if (this.delay === undefined) {
-      this.envelope = sample;
-      this.delay = sample + PLAYOUT_MARGIN_MS;
-    } else {
-      this.envelope = Math.max(sample, this.envelope - dt * PLAYOUT_FORGET);
-      const aim = this.envelope + PLAYOUT_MARGIN_MS;
-      this.delay =
-        this.delay < aim
-          ? Math.min(aim, this.delay + dt * PLAYOUT_RISE)
-          : Math.max(aim, this.delay - dt * PLAYOUT_FALL);
-      this.delay = Math.max(this.delay, sample);
-    }
-    return tick * this.tickMs + this.delay;
-  }
-
-  /** Forgets the delay (a new connection: a new server clock). */
-  reset(): void {
-    this.delay = undefined;
+    if (this.delay === undefined || aim >= this.delay) this.delay = aim;
+    else this.delay = Math.max(aim, this.delay - dt * PLAYOUT_FALL);
+    this.delay = Math.min(this.delay, sample + PLAYOUT_MAX_JITTER_MS + PLAYOUT_MARGIN_MS);
+    return Math.max(tick * this.tickMs + this.delay, now);
   }
 }
 

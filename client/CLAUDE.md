@@ -615,26 +615,45 @@ disparejos cada 10 pasos y tirones hacia adelante); con RTT alto el teclado espe
 confirmación de cada paso (6 frames quietos y 3 ticks de hueco en el servidor cada 12
 pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **Pasos de teclado** (`state/world.ts`): `predicted` guarda hasta
-  `movement.max_queued_steps` (`balance.yaml`, 4; `ClientContent.movement.maxQueuedSteps`)
-  pasos mandados sin confirmar. `canStep` deja decidir el siguiente cuando al paso
+  `movement.max_queued_steps` (`balance.yaml`, 4; llega en `Welcome.max_queued_steps`, no
+  en el contenido empaquetado) pasos mandados sin confirmar. `canStep` deja decidir el siguiente cuando al paso
   dibujado le faltan `STEP_LEAD_MS` (50 ms, `state/motion.ts`) o menos; `chooseStep`
   prueba la dirección y, si es una diagonal bloqueada, su mitad horizontal y luego la
   vertical (`stepChoices`); si nada está libre, gira (manda `Turn` solo si cambia). El
   paso nuevo empieza cuando termina el dibujado (`Walk.prev` mantiene el anterior hasta
-  entonces) y se manda con `walkEpoch`. El `CreatureMove` que confirma el más viejo
-  conserva su inicio local y toma la duración del servidor (corre los de atrás). Un
-  `WalkRejected` o un movimiento propio distinto vacía `predicted`. `game.ts` `frame`
-  solo pide `keys.take() ?? pad.take()` cuando `canStep`; un click espera
-  `unconfirmed === 0` para mandar el camino desde donde está el servidor.
+  entonces) y se manda con `walkEpoch` y su número (`seq`, `PredictedStep.seq`, uno más
+  por paso). El `CreatureMove` propio con el `walk_seq` del más viejo y sus mismas
+  casillas lo confirma: conserva su inicio local y toma la duración del servidor (corre
+  los de atrás). Cualquier otro paso propio con predicciones pendientes es `ownStep`: un
+  paso sin `walk_seq` (el siguiente de un camino por click, uno de persecución, que el
+  servidor dio antes de recibir el `Walk`) o con el de una predicción ya abandonada va
+  antes de los `Walk` pendientes; uno con `walk_seq` k responde también a los anteriores
+  a k, que se perdieron. El paso del servidor se dibuja en el lugar de la predicción más
+  vieja, las que quedan se mueven tras él (mismas direcciones, desde donde termina, una
+  detrás de otra) y el dibujo se desliza. Así nunca queda una confirmación desfasada (antes
+  el paso del camino "confirmaba" el `Walk`, y cada confirmación siguiente era la del
+  `Walk` anterior). `expirePredicted` (cada `frame`) abandona las predicciones si la más
+  vieja no tuvo respuesta `PREDICT_TIMEOUT_MS` (3 s) después de dibujada: su `Walk` se
+  perdió y ninguno lo sigue; el personaje vuelve deslizándose. Un `WalkRejected` vacía
+  `predicted`. `game.ts` `frame` solo pide `keys.take() ?? pad.take()` cuando `canStep`;
+  un click espera `unconfirmed === 0` para mandar el camino desde donde está el
+  servidor.
 - **Época** (docs/05 "Caminar"): `walkEpoch` sale del último `WalkRejected` o
   `FullMapView` y va en cada `Walk`; el servidor descarta los de otra época sin contestar.
 - **Pasos del servidor** (las demás criaturas y el camino propio por click): `Game` pide
   `world.batchTime(batch.tick, now)` por batch y pasa ese `at` a `apply`; el paso empieza
-  en `at` y se encadena tras el que se sigue dibujando (`prev`, sin saltos). `Playout`
-  es un colchón de jitter: retraso = envolvente de las llegadas (olvida una tardía a
-  5 ms/s) + `PLAYOUT_MARGIN_MS` (40), que se mueve a 5 ms/s (sube) y 10 ms/s (baja), menos
-  de un frame por paso; un batch más tarde que el retraso lo sube de golpe (ese paso
-  arranca tarde: la única pausa que queda).
+  en `at` y se encadena tras el que se sigue dibujando (`prev`, sin saltos): si ese
+  termina después de `at`, el nuevo lo espera y se dibuja hasta `PLAYOUT_CATCH_UP` (25 %)
+  más rápido hasta volver a su hora; más de `PLAYOUT_MAX_LAG_MS` (500) atrasado, salta
+  deslizándose. `Playout` es un colchón de jitter: retraso = la llegada más tardía de los
+  últimos `PLAYOUT_WINDOW_MS` (2 s, en 8 baldes fijos), pero no más de
+  `PLAYOUT_MAX_JITTER_MS` (200) sobre la más temprana, + `PLAYOUT_MARGIN_MS` (40). Una
+  llegada más tardía lo sube de golpe; cuando la ventana la olvida, baja a
+  `PLAYOUT_FALL` (100 ms/s), y la cadena con alcance hace que esa bajada no se vea. Un
+  batch más tarde que el retraso arranca al llegar (la única pausa que queda) y ninguno
+  espera más de 240 ms tras llegar: un corte de la red cuesta una pausa, no un atraso
+  que dura. Antes la envolvente olvidaba a 5 ms/s y un corte de 1 s dejaba el mundo
+  dibujado ~1 s tarde durante minutos (con `c.pos`, los clicks y los efectos a tiempo).
 - **Correcciones**: `CreatureState.slide` (`slideBetween`/`slideLeft`) desliza en
   `SLIDE_MS` (160 ms, ease-out) cualquier salto del dibujo de hasta `SLIDE_MAX_TILES` (3);
   más es un teletransporte y salta.
@@ -647,16 +666,21 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   criatura sin frames de caminar (sin outfit) sube 1 px en la mitad central de cada paso
   (`walkBob`).
 - **Teclado**: dos teclas perpendiculares a la vez dan la diagonal (`MovementKeys.take`
-  con `combine`).
+  con `combine`), también un toque perpendicular con otra tecla mantenida. Falta que el
+  dueño decida si un cambio de dirección con las teclas solapadas debe dar ese paso
+  diagonal (docs/14).
 - **Tests**: `state/motion.test.ts` (puros), `state/world.test.ts` y
   `state/walking.test.ts`: este último simula cliente (el `WorldState` real y el `frame`
   de `game.ts`), un observador y las reglas de la cola del servidor sobre enlaces de 2 a
   300 ms con jitter, a 60, 144 y 40 fps, y exige cero frames quietos con tecla mantenida,
   camino por click y para el observador, cero huecos en el servidor y un rechazo sin
-  saltos. Si cambias tiempos de `motion.ts`, córrelo. E2E `e2e/movement.spec.ts`: mantiene
-  una flecha ~4 pasos sobre una recta libre y lee `__rpgClient.trail(ms)` (las
-  posiciones dibujadas por frame, `MotionTrail`, un anillo fijo): ningún frame quieto ni
-  hacia atrás (screenshot `96-movement-held-key`).
+  saltos; además un click y después una flecha (cada `Walk` respondido por su paso),
+  `Walk` perdidos y un corte de 1 s de la red del observador (sin atraso que dure). Si
+  cambias tiempos de `motion.ts`, córrelo. E2E `e2e/movement.spec.ts`: mantiene una
+  flecha ~4 pasos sobre una recta libre y lee `__rpgClient.trail(ms)` (el `drawPos` del
+  modelo en cada `frame`, `MotionTrail`, un anillo fijo): ningún frame quieto ni hacia
+  atrás (screenshot `96-movement-held-key`). Mide el modelo, no el sprite ni la cámara
+  en pantalla: su redondeo a píxeles de pantalla lo cubre `render/viewport.test.ts`.
 
 ## Notas de T5.7
 - `CreatureState.cosmetics` (de `Creature.cosmetics` y `CreatureCosmetics`, con `""` = el

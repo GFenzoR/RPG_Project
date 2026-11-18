@@ -152,9 +152,22 @@ el punto 5:
   - **Velocidad base:** a nivel 1 un paso dura 500 ms (2 casillas/s). Se siente lento al
     lado de Diablo 2, pero es balance (`base_step_ms`, `speed` de las vocaciones): no se
     tocó.
-  - **Medirlo en una red real:** la simulación cubre RTT de 2 a 300 ms con jitter; falta
-    jugarlo por el hosting de pruebas (docs/13) con el E2E `e2e/movement.spec.ts` como
-    referencia y mirar si los 40 ms de colchón alcanzan con Wi-Fi.
+  - **Medirlo en una red real:** la simulación cubre RTT de 2 a 300 ms con jitter, un
+    corte de 1 s y `Walk` perdidos; falta jugarlo por el hosting de pruebas (docs/13) con
+    el E2E `e2e/movement.spec.ts` como referencia y mirar si los 40 ms de colchón alcanzan
+    con Wi-Fi.
+  - **Diagonal con dos flechas, para decidir:** hoy dos flechas perpendiculares
+    mantenidas dan la diagonal, y también un toque perpendicular con otra mantenida
+    (derecha mantenida + toque de arriba = un paso noreste, no uno al norte). Al cambiar
+    de dirección con las teclas solapadas (se aprieta la nueva antes de soltar la vieja),
+    si eso cae en los 50 ms en que se decide el paso, sale un paso diagonal que no se
+    buscó (×1,5 de duración, otra casilla). Opciones: dejarlo; que un toque ya soltado
+    dé el paso lateral; o que la diagonal pida las dos teclas juntas un instante (~60 ms,
+    a costa de que el primer paso de una diagonal buscada salga recto).
+  - **Eventos y pasos de los demás:** los pasos se dibujan sobre la línea de ticks
+    (~40 ms después de llegar, como mucho 240 ms), pero los efectos, golpes, giros y
+    desapariciones se aplican al llegar: una criatura puede girar o recibir un golpe
+    ~40 ms antes de que se dibuje su paso. No se nota; se dejó así.
 - **Prueba exploratoria de la Isla de Pruebas (rama `fix/playtest`).** Se arreglaron los
   muros en el cliente, el scroll de las ventanas, el foco tras un checkbox o un select, la
   correa de los monstruos, la mochila tras morir, la hotbar sobre la última fila, la

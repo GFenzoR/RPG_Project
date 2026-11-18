@@ -1592,10 +1592,13 @@ type Welcome struct {
 	// CreatureMove, SetTarget and the rest). It is not the database character id.
 	CreatureId uint32 `protobuf:"varint,1,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
 	// Server clock in Unix milliseconds.
-	ServerTime    uint64 `protobuf:"varint,2,opt,name=server_time,json=serverTime,proto3" json:"server_time,omitempty"`
-	TickMs        uint32 `protobuf:"varint,3,opt,name=tick_ms,json=tickMs,proto3" json:"tick_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ServerTime uint64 `protobuf:"varint,2,opt,name=server_time,json=serverTime,proto3" json:"server_time,omitempty"`
+	TickMs     uint32 `protobuf:"varint,3,opt,name=tick_ms,json=tickMs,proto3" json:"tick_ms,omitempty"`
+	// How many keyboard steps (Walk) may wait in the player's queue (balance.yaml
+	// movement.max_queued_steps): the client predicts no more ahead (docs/05 "Caminar").
+	MaxQueuedSteps uint32 `protobuf:"varint,4,opt,name=max_queued_steps,json=maxQueuedSteps,proto3" json:"max_queued_steps,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Welcome) Reset() {
@@ -1645,6 +1648,13 @@ func (x *Welcome) GetServerTime() uint64 {
 func (x *Welcome) GetTickMs() uint32 {
 	if x != nil {
 		return x.TickMs
+	}
+	return 0
+}
+
+func (x *Welcome) GetMaxQueuedSteps() uint32 {
+	if x != nil {
+		return x.MaxQueuedSteps
 	}
 	return 0
 }
@@ -2536,12 +2546,16 @@ func (x *CreatureDisappear) GetId() uint32 {
 	return 0
 }
 
+// CreatureMove is one step. walk_seq, only in the mover's own copy, is the seq of the Walk
+// this step executes (docs/05 "Caminar"); 0 for a step of a WalkPath or a chase, or of a
+// Walk without one.
 type CreatureMove struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	From          *Position              `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
 	To            *Position              `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
 	DurationMs    uint32                 `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	WalkSeq       uint32                 `protobuf:"varint,5,opt,name=walk_seq,json=walkSeq,proto3" json:"walk_seq,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2600,6 +2614,13 @@ func (x *CreatureMove) GetTo() *Position {
 func (x *CreatureMove) GetDurationMs() uint32 {
 	if x != nil {
 		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *CreatureMove) GetWalkSeq() uint32 {
+	if x != nil {
+		return x.WalkSeq
 	}
 	return 0
 }
@@ -5928,13 +5949,14 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\bquestion\x18\x02 \x01(\v2\x16.game.v1.LocalizedTextR\bquestion\x12/\n" +
 	"\aoptions\x18\x03 \x03(\v2\x15.game.v1.DialogOptionR\aoptions\x12\x1d\n" +
 	"\n" +
-	"timeout_ms\x18\x04 \x01(\rR\ttimeoutMs\"d\n" +
+	"timeout_ms\x18\x04 \x01(\rR\ttimeoutMs\"\x8e\x01\n" +
 	"\aWelcome\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
 	"creatureId\x12\x1f\n" +
 	"\vserver_time\x18\x02 \x01(\x04R\n" +
 	"serverTime\x12\x17\n" +
-	"\atick_ms\x18\x03 \x01(\rR\x06tickMs\"0\n" +
+	"\atick_ms\x18\x03 \x01(\rR\x06tickMs\x12(\n" +
+	"\x10max_queued_steps\x18\x04 \x01(\rR\x0emaxQueuedSteps\"0\n" +
 	"\x04Tile\x12(\n" +
 	"\x05items\x18\x01 \x03(\v2\x12.game.v1.ItemStackR\x05items\".\n" +
 	"\bMapFloor\x12\f\n" +
@@ -6001,13 +6023,14 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x0eCreatureAppear\x12-\n" +
 	"\bcreature\x18\x01 \x01(\v2\x11.game.v1.CreatureR\bcreature\"#\n" +
 	"\x11CreatureDisappear\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\rR\x02id\"\x89\x01\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\"\xa4\x01\n" +
 	"\fCreatureMove\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12%\n" +
 	"\x04from\x18\x02 \x01(\v2\x11.game.v1.PositionR\x04from\x12!\n" +
 	"\x02to\x18\x03 \x01(\v2\x11.game.v1.PositionR\x02to\x12\x1f\n" +
 	"\vduration_ms\x18\x04 \x01(\rR\n" +
-	"durationMs\"D\n" +
+	"durationMs\x12\x19\n" +
+	"\bwalk_seq\x18\x05 \x01(\rR\awalkSeq\"D\n" +
 	"\fCreatureTurn\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12$\n" +
 	"\x03dir\x18\x02 \x01(\x0e2\x12.game.v1.DirectionR\x03dir\"G\n" +

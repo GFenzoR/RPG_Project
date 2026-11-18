@@ -115,6 +115,9 @@ message Welcome {
   // Server clock in Unix milliseconds.
   uint64 server_time = 2;
   uint32 tick_ms = 3;
+  // How many keyboard steps (Walk) may wait in the player's queue (balance.yaml
+  // movement.max_queued_steps): the client predicts no more ahead (docs/05 "Caminar").
+  uint32 max_queued_steps = 4;
 }
 
 // ---- map --------------------------------------------------------------------
@@ -259,11 +262,15 @@ message CreatureDisappear {
   uint32 id = 1;
 }
 
+// CreatureMove is one step. walk_seq, only in the mover's own copy, is the seq of the Walk
+// this step executes (docs/05 "Caminar"); 0 for a step of a WalkPath or a chase, or of a
+// Walk without one.
 message CreatureMove {
   uint32 id = 1;
   Position from = 2;
   Position to = 3;
   uint32 duration_ms = 4;
+  uint32 walk_seq = 5;
 }
 
 message CreatureTurn {

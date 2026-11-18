@@ -296,7 +296,12 @@ server/
   compacta la cola para que una tecla mantenida no la haga crecer. `Player.walkEpoch`
   (desde 1, nunca 0) numera los reinicios: `reject` y `relocate` llaman a `resetWalk` y
   el `WalkRejected`/`FullMapView` lleva la época nueva; un `Walk` de otra época se
-  descarta sin contestar (0 no se revisa: bots y clientes viejos). El cliente tiene pasos
+  descarta sin contestar (0 no se revisa: bots y clientes viejos). El desborde rechaza
+  con `dir` `UNSPECIFIED` (no hay paso rechazado). `Player.qseq` guarda el `Walk.seq` de
+  cada paso de teclado, paralelo a `queue` mientras `keyWalk` (se compacta con ella), y
+  `move` lo pone en `walk_seq` del `CreatureMove` del propio jugador (los observadores
+  reciben 0): el cliente empareja así cada predicción; el servidor no decide nada con
+  él. `Welcome.max_queued_steps` le dice el tope al cliente. El cliente tiene pasos
   predichos esperando respuesta: **ningún camino nuevo puede vaciar la cola de un jugador
   conectado en silencio** (`stopWalk` solo); usa `reject` (o `relocate`, que manda el
   `FullMapView`), o su cliente se queda esperando confirmaciones que no llegan. El ritmo

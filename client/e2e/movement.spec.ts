@@ -1,6 +1,9 @@
 // Fluid movement (client/CLAUDE.md "Movimiento fluido"): a held arrow key walks several
 // tiles and the own creature moves on every frame, with no stop between tiles and no
-// jump back. Reads the drawn positions the client recorded (`__rpgClient.trail`).
+// jump back. Reads the positions the client recorded (`__rpgClient.trail`): the model's
+// `WorldState.drawPos` in each `frame`, what the canvas draws from, in fractional tiles.
+// Not the sprite or the camera on screen: their rounding to screen pixels is
+// `render/viewport.test.ts`'s.
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";

@@ -145,8 +145,11 @@ junto con los del editor.
 `client/e2e/movement.spec.ts` mide la fluidez: mantiene una flecha ~4 pasos por una recta
 libre y lee las posiciones que el cliente dibujó en cada frame (`__rpgClient.trail`).
 Falla si algún frame entre la primera y la última casilla se quedó quieto o volvió atrás
-(screenshot `96-movement-held-key`, a mitad de camino). La misma regla, con red simulada
-(latencia, jitter, 40 a 144 fps), la cubre `client/src/state/walking.test.ts` en
+(screenshot `96-movement-held-key`, a mitad de camino). Mide las posiciones del modelo
+(`WorldState.drawPos` en cada `frame`), no el sprite ni la cámara en pantalla: su
+redondeo a píxeles de pantalla lo cubre `client/src/render/viewport.test.ts`. La misma
+regla, con red simulada (latencia, jitter, 40 a 144 fps, un click y después una flecha,
+`Walk` perdidos, un corte de la red), la cubre `client/src/state/walking.test.ts` en
 `make test`.
 
 ### E2E móvil (T5.6)

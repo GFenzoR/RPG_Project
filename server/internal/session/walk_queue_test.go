@@ -11,7 +11,12 @@ import (
 
 // walkIn is a keyboard step of the client's walk epoch (docs/05 "Caminar").
 func walkIn(d pb.Direction, epoch uint32) *pb.ClientMessage {
-	return &pb.ClientMessage{Message: &pb.ClientMessage_Walk{Walk: &pb.Walk{Dir: d, WalkEpoch: epoch}}}
+	return walkSeq(d, epoch, 0)
+}
+
+// walkSeq is walkIn with the client's number for the Walk.
+func walkSeq(d pb.Direction, epoch, seq uint32) *pb.ClientMessage {
+	return &pb.ClientMessage{Message: &pb.ClientMessage_Walk{Walk: &pb.Walk{Dir: d, WalkEpoch: epoch, Seq: seq}}}
 }
 
 // stepTicks returns the tick of every CreatureMove of creature id the client got, and
@@ -111,6 +116,11 @@ func TestWalkQueueOverflowResets(t *testing.T) {
 	if len(rej) != 1 || rej[0].GetWalkEpoch() != 2 || rej[0].GetPos().GetX() != 5 || p.Walking() || p.WalkEpoch() != 2 {
 		t.Fatalf("overflow: %v, epoch %d, walking %v", kinds(evs), p.WalkEpoch(), p.Walking())
 	}
+	// No step was refused: with the step's direction the client would keep off a free tile
+	// (WorldState.refused) until the key is pressed again.
+	if rej[0].GetDir() != pb.Direction_DIRECTION_UNSPECIFIED {
+		t.Fatalf("overflow refused %v, want no direction", rej[0].GetDir())
+	}
 	h.input(cl, walkIn(E, 1)) // sent before the client heard of the reset
 	h.sim.RunTicks(30)
 	if evs := cl.take(); len(evs) != 0 || p.Pos() != pos(5, 8) {
@@ -200,5 +210,42 @@ func TestHeldKeyQueueDoesNotGrow(t *testing.T) {
 	}
 	if p.Pos().X < 150 || !p.Walking() || p.QueueCapForTest() > 8 {
 		t.Fatalf("at %v, walking %v, queue capacity %d", p.Pos(), p.Walking(), p.QueueCapForTest())
+	}
+}
+
+// Every keyboard step's CreatureMove carries back, in the walker's own copy only, the seq
+// of the Walk it executes, also across the compaction of a held key's queue; a step of a
+// path carries none. The client pairs its predictions with them (docs/05 "Caminar"), and
+// Welcome tells it how many it may have waiting.
+func TestOwnMoveCarriesTheWalkSeq(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 16))
+	cl, p := h.join("Mira", at(4, 8))
+	if wl := find(cl.take(), (*pb.ServerMessage).GetWelcome); len(wl) != 1 || wl[0].GetMaxQueuedSteps() != 4 {
+		t.Fatalf("welcome %v: want max_queued_steps 4", wl)
+	}
+	obs, _ := h.join("Obs", at(2, 8))
+	cl.take()
+	obs.take()
+	h.input(cl, walkSeq(E, 1, 5))
+	h.input(cl, walkSeq(E, 1, 6))
+	h.sim.Step()                  // 5 runs, 6 waits
+	h.input(cl, walkSeq(S, 1, 7)) // the queue drops the step taken before it appends
+	h.sim.RunTicks(30)
+	h.input(cl, walkPath(E, E))
+	h.sim.RunTicks(30)
+	own := moves(cl.take())
+	var got []uint32
+	for _, m := range own {
+		if m.GetId() == p.ID() {
+			got = append(got, m.GetWalkSeq())
+		}
+	}
+	if p.Pos() != pos(8, 9) || len(got) != 5 || got[0] != 5 || got[1] != 6 || got[2] != 7 || got[3] != 0 || got[4] != 0 {
+		t.Fatalf("at %v, own steps carried %v; want 5 6 7 0 0", p.Pos(), got)
+	}
+	for _, m := range moves(obs.take()) {
+		if m.GetId() == p.ID() && m.GetWalkSeq() != 0 {
+			t.Fatalf("an observer got walk_seq %d", m.GetWalkSeq())
+		}
 	}
 }

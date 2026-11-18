@@ -2,10 +2,9 @@ import { Direction } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import {
   MotionTrail,
-  PLAYOUT_FALL,
-  PLAYOUT_FORGET,
   PLAYOUT_MARGIN_MS,
-  PLAYOUT_RISE,
+  PLAYOUT_MAX_JITTER_MS,
+  PLAYOUT_WINDOW_MS,
   Playout,
   SLIDE_MAX_TILES,
   SLIDE_MS,
@@ -33,11 +32,9 @@ describe("Playout", () => {
   it("never starts a step before its batch arrived; a later batch moves the delay up at once", () => {
     const p = new Playout(50);
     expect(p.time(10, 500)).toBe(500 + PLAYOUT_MARGIN_MS);
-    expect(p.time(20, 1080)).toBe(1080); // 80 ms late: starts now
-    // Early again: it waits, by the late one (forgotten slowly) and the margin it regains.
-    expect(p.time(30, 1500)).toBeCloseTo(1500 + 80 + 420 * PLAYOUT_RISE);
-    p.reset();
-    expect(p.time(5000, 3)).toBe(3 + PLAYOUT_MARGIN_MS);
+    // 80 ms later than the first: the delay covers it (and the margin) from now on.
+    expect(p.time(20, 1080)).toBe(1080 + PLAYOUT_MARGIN_MS);
+    expect(p.time(30, 1500)).toBe(1500 + 80 + PLAYOUT_MARGIN_MS);
   });
 
   it("settles at the arrivals' jitter plus the margin, after a spike too", () => {
@@ -46,7 +43,49 @@ describe("Playout", () => {
     let start = 0;
     for (let i = 1; i <= 1200; i++) start = p.time(2 * i, 100 * i + 10); // 2 minutes, 10 ms late
     expect(start - (100 * 1200 + 10)).toBeCloseTo(PLAYOUT_MARGIN_MS);
-    expect(PLAYOUT_FALL).toBeGreaterThan(PLAYOUT_FORGET);
+  });
+
+  // A batch every tick, 20 ms one way plus 0-20 ms of jitter, and a cut of the link: what
+  // the server sent meanwhile arrives at once when it ends. The worst wait after arrival
+  // over each stretch of time after the cut.
+  function cut(cutMs: number): { during: number; after5s: number; after20s: number } {
+    const p = new Playout(50);
+    const rand = (k: number) => ((k * 7919) % 21) / 1; // 0..20, deterministic
+    const waits: { at: number; wait: number }[] = [];
+    const cutAt = 30_000;
+    for (let tick = 0; tick < 1600; tick++) {
+      const sent = tick * 50;
+      let arrival = sent + 20 + rand(tick);
+      if (sent >= cutAt && sent < cutAt + cutMs) arrival = cutAt + cutMs + 20;
+      waits.push({ at: arrival, wait: p.time(tick, arrival) - arrival });
+    }
+    const worst = (from: number, to: number) =>
+      Math.max(...waits.filter((w) => w.at >= from && w.at < to).map((w) => w.wait));
+    const end = cutAt + cutMs;
+    return {
+      during: worst(end, end + 1000),
+      after5s: worst(end + 5000, end + 6000),
+      after20s: worst(end + 20_000, end + 21_000),
+    };
+  }
+
+  it.each([250, 1000, 3000])("forgets a %i ms cut of the link within seconds", (ms) => {
+    const r = cut(ms);
+    // Right after it: never more than the jitter it covers and the margin.
+    expect(r.during).toBeLessThanOrEqual(PLAYOUT_MAX_JITTER_MS + PLAYOUT_MARGIN_MS);
+    // Before the fix a 1 s cut still drew the world 945 ms late 20 s later.
+    expect(r.after5s).toBeLessThanOrEqual(150);
+    expect(r.after20s).toBeLessThanOrEqual(PLAYOUT_MARGIN_MS + 20);
+  });
+
+  it("forgets a late arrival after its window", () => {
+    const p = new Playout(50);
+    p.time(0, 20);
+    p.time(1, 50 + 20 + 150); // 150 ms late: within the jitter it covers
+    let wait = 0;
+    for (let t = 2; t * 50 < PLAYOUT_WINDOW_MS + 3000; t++)
+      wait = p.time(t, t * 50 + 20) - (t * 50 + 20);
+    expect(wait).toBeCloseTo(PLAYOUT_MARGIN_MS);
   });
 });
 

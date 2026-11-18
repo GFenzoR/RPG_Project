@@ -55,7 +55,8 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
 - Movimiento fluido (cola de pasos de teclado y época, `session/move.go`): no agrega
   mensajes. Sigue siendo un `Walk` por paso (antes también: el cliente lo manda 50 ms
   antes, no más seguido) y un `CreatureMove` por paso; `walk_epoch` suma ~2 bytes a cada
-  `Walk`, `WalkRejected` y `FullMapView`. En el tick, un `Walk` es un append a la cola del
+  `Walk`, `WalkRejected` y `FullMapView`, y `seq`/`walk_seq` ~2-4 bytes a cada `Walk` y al
+  `CreatureMove` del propio jugador (los de los observadores no cambian). En el tick, un `Walk` es un append a la cola del
   jugador (tope 4, sin asignar una vez que la cola creció) y una comparación de época;
   `moveSystem` no cambió. El rate limit del gateway (30/s) no se acerca: a la velocidad
   más alta (un paso por tick) son 20 `Walk` por segundo, y un cliente que manda de más
@@ -166,10 +167,13 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
 
 - Movimiento fluido (`client/src/state/motion.ts`, `world.ts`): por frame y criatura,
   `drawPos`/`facing`/`activeWalk` miran a lo sumo la cadena de pasos que se dibujan (uno o
-  dos) y no recorren nada más; el colchón de jitter (`Playout`) es una cuenta por batch.
+  dos) y no recorren nada más; el colchón de jitter (`Playout`) es una cuenta por batch
+  sobre 8 baldes fijos (no asigna).
   El rastro de posiciones para el E2E (`MotionTrail`) es un `Float64Array` fijo de 1024
   frames (24 KiB): grabar un frame no asigna. Costo visible: las demás criaturas se
-  dibujan ~40 ms (más el jitter de la red) después de que llega su paso.
+  dibujan ~40 ms (más el jitter de la red) después de que llega su paso, nunca más de
+  240 ms (`PLAYOUT_MAX_JITTER_MS` + margen); tras un corte de la red vuelven a eso en
+  unos 4 s.
 - Efectos, proyectiles y números flotantes (`client/src/render/effect-layer.ts`): los
   objetos de Pixi salen de pools y se reutilizan; dibujar un frame no crea objetos ni
   arrays (solo aparece algo nuevo con un efecto o un número nuevo, si el pool no alcanza).

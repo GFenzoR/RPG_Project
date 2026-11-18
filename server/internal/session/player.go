@@ -52,6 +52,9 @@ type Player struct {
 	// keyWalk: the queue holds only keyboard steps (Walk), which a Walk queues after;
 	// a path or a chase step is dropped by the next Walk instead.
 	keyWalk bool
+	// qseq is the Walk.seq of each keyboard step, parallel to queue while keyWalk (empty
+	// otherwise): the step's CreatureMove carries it back to the client (walk_seq).
+	qseq []uint32
 	// walkEpoch numbers the resets of the walk (WalkRejected, FullMapView): a Walk of
 	// another epoch was sent before the client heard of the last one. Never 0 (a Walk
 	// with 0 skips the check).
@@ -303,6 +306,7 @@ func (p *Player) emit(m *pb.ServerMessage) { p.out = append(p.out, m) }
 
 func (p *Player) stopWalk() {
 	p.queue = p.queue[:0]
+	p.qseq = p.qseq[:0]
 	p.qhead = 0
 	p.hasDest = false
 	p.keyWalk = false
@@ -506,9 +510,10 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.index(p)
 
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
-		CreatureId: p.id,
-		ServerTime: uint64(max(ctx.Now.UnixMilli(), 0)),
-		TickMs:     uint32(game.TickDuration.Milliseconds()),
+		CreatureId:     p.id,
+		ServerTime:     uint64(max(ctx.Now.UnixMilli(), 0)),
+		TickMs:         uint32(game.TickDuration.Milliseconds()),
+		MaxQueuedSteps: uint32(w.mv.MaxQueuedSteps),
 	}}})
 	// Saved conditions first (T3.2): the first stats, and what observers get, already
 	// carry their speed (and an invisible player is never shown).
