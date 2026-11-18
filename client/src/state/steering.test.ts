@@ -77,6 +77,7 @@ function world(rows: string[], portals?: Record<string, string>): WorldState {
         maxQueuedSteps: 4,
         viewWidth: 31,
         viewHeight: 21,
+        attackEvents: false,
       },
     },
     0,
