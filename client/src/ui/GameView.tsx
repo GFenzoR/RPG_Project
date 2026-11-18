@@ -1358,18 +1358,23 @@ function ConditionBar(props: { t: Translate; conditions: GameUi["conditions"] })
   const now = performance.now();
   return (
     <span class="conditions" data-testid="conditions" aria-label={t("client.conditions.title")}>
-      {props.conditions.map((c) => (
-        <span
-          key={c.id}
-          class={`condition condition-${CONDITION_CLASS[c.id] ?? "buff"}`}
-          data-condition={c.id}
-          title={t("client.conditions.left", {
-            seconds: Math.max(0, Math.ceil((c.until - now) / 1000)),
-          })}
-        >
-          {t(`condition.${c.id}.name`)}
-        </span>
-      ))}
+      {props.conditions.map((c) => {
+        const name = t(`condition.${c.id}.name`);
+        const left = t("client.conditions.left", {
+          seconds: Math.max(0, Math.ceil((c.until - now) / 1000)),
+        });
+        // The name too: a phone's header may cut the badge to "Sac…".
+        return (
+          <span
+            key={c.id}
+            class={`condition condition-${CONDITION_CLASS[c.id] ?? "buff"}`}
+            data-condition={c.id}
+            title={`${name} · ${left}`}
+          >
+            {name}
+          </span>
+        );
+      })}
     </span>
   );
 }

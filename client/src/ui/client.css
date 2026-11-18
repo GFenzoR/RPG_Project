@@ -491,6 +491,13 @@ kbd {
   border: 1px solid currentColor;
   background: rgb(0 0 0 / 0.35);
   white-space: nowrap;
+  /* A phone's one-line header has little room: a badge gets "…" inside its own border
+     instead of being cut through it. */
+  flex-shrink: 1;
+  box-sizing: border-box;
+  min-width: 2.6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
   animation: notice-in var(--ui-dur) var(--ui-ease-out);
 }
 .condition-damage {
@@ -931,8 +938,14 @@ body.using-item canvas {
   font-size: 0.68rem;
   color: var(--ui-gold-500);
 }
+/* Two lines at most, with "…": a third ("conjurar runa de arco") was cut through. */
 .hotbar .spell {
   text-align: left;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 .hotbar .cd {
   position: absolute;
@@ -960,6 +973,11 @@ body.using-item canvas {
 .game[data-layout="desktop"]:not([data-pad]) .hotbar li button,
 .game[data-layout="desktop"]:not([data-pad]) .hotbar li select {
   height: 2.3rem;
+}
+/* The key and two lines of the name fit the slimmer slot whole. */
+.game[data-layout="desktop"]:not([data-pad]) .hotbar li button {
+  padding-block: 1px 0;
+  line-height: 1.02;
 }
 
 /* ---- NPC dialog and shop (T1.10) ------------------------------------------------- */
@@ -1067,8 +1085,13 @@ body.using-item canvas {
   color: var(--ui-text-muted);
   font-size: 0.75rem;
 }
+/* The count fills its 3.2rem column, padding and border included: content-box made it
+   ~4.5rem and a phone's 44 px field went under the Buy button. */
 .shop li input {
-  width: 3.2rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-inline: 0.4rem;
 }
 .shop li + li {
   border-top: 1px solid rgb(74 69 64 / 0.35);
